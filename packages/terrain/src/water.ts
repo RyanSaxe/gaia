@@ -187,3 +187,46 @@ export function carvePond(l: Lattice, heights: Float32Array, level: Float32Array
     }
   }
 }
+
+/** The shore field stops counting this far from the water, meters. */
+export const SHORE_CAP = 12;
+
+/**
+ * Distance from each lattice sample to the nearest sample under water, meters,
+ * capped at SHORE_CAP: 0 in the water, growing about a meter per meter away.
+ * Sand banks and the grass's edge both read it, so they always agree.
+ */
+export function shoreField(l: Lattice, heights: Float32Array, level: Float32Array): Float32Array {
+  const { n, spacing } = l;
+  const d = new Float32Array(n * n);
+  for (let i = 0; i < n * n; i++) d[i] = (level[i] as number) > (heights[i] as number) ? 0 : SHORE_CAP;
+  // Two chamfer passes: straight steps cost one spacing, diagonal ones root two.
+  const diag = Math.SQRT2 * spacing;
+  const relax = (i: number, j: number, cost: number): void => {
+    const v = (d[j] as number) + cost;
+    if (v < (d[i] as number)) d[i] = v;
+  };
+  for (let iz = 0; iz < n; iz++) {
+    for (let ix = 0; ix < n; ix++) {
+      const i = iz * n + ix;
+      if (ix > 0) relax(i, i - 1, spacing);
+      if (iz > 0) {
+        relax(i, i - n, spacing);
+        if (ix > 0) relax(i, i - n - 1, diag);
+        if (ix < n - 1) relax(i, i - n + 1, diag);
+      }
+    }
+  }
+  for (let iz = n - 1; iz >= 0; iz--) {
+    for (let ix = n - 1; ix >= 0; ix--) {
+      const i = iz * n + ix;
+      if (ix < n - 1) relax(i, i + 1, spacing);
+      if (iz < n - 1) {
+        relax(i, i + n, spacing);
+        if (ix < n - 1) relax(i, i + n + 1, diag);
+        if (ix > 0) relax(i, i + n - 1, diag);
+      }
+    }
+  }
+  return d;
+}

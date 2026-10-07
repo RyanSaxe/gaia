@@ -21,62 +21,119 @@ attribute vec4 aBlade; // x, z as a share of the blade's patch, rotation, height
 attribute vec4 aSeed; // tint, flower, keep, cover pick
 attribute vec2 aThin; // how far out the blade still grows, as a share of the thinning band; its reach
 varying vec3 vWorld;
+varying vec3 vNormal;
+varying vec3 vGroundNormal;
 varying float vT;
 varying float vTint;
 varying float vFlower;
+varying float vGust;
 varying vec3 vLow;
 varying vec3 vHigh;
 varying vec3 vTip;
 varying vec3 vBloom;
-float windAt(vec2 p, float t) {
-  return sin(t * 1.35 + p.x * 0.21 + p.y * 0.17) + 0.35 * sin(t * 2.9 + p.y * 0.43);
+
+// The wind blows from one side of the world. Gusts travel downwind as broad,
+// soft bands, so waves roll across the field; a slower sway and a little
+// flutter ride on top.
+const vec2 WIND_DIR = vec2(0.94, 0.34);
+float gustAt(vec2 p, float t) {
+  float along = dot(p, WIND_DIR) * 0.1 - t * 0.85 + tuftNoise(p * 0.025) * 3.0;
+  return smoothstep(0.35, 1.0, 0.5 + 0.5 * sin(along));
 }
+
+// A blade's spine: it leans along its facing, arcs over toward the tip and
+// bends with the wind, integrated in four steps so its length never changes.
+vec3 spine(float t, vec2 facing, float lean, float arc, vec2 wind, out vec3 tangent) {
+  vec3 p = vec3(0.0);
+  float dt = t / 4.0;
+  for (int i = 0; i < 4; i++) {
+    float u = (float(i) + 0.5) * dt;
+    vec2 v = facing * (lean + arc * u) + wind * u * u;
+    float a = min(length(v), 1.45);
+    vec2 dir = v / max(length(v), 1e-4);
+    p += vec3(dir.x * sin(a), cos(a), dir.y * sin(a)) * dt;
+  }
+  vec2 v = facing * (lean + arc * t) + wind * t * t;
+  float a = min(length(v), 1.45);
+  vec2 dir = v / max(length(v), 1e-4);
+  tangent = vec3(dir.x * sin(a), cos(a), dir.y * sin(a));
+  return p;
+}
+
 void main() {
   // Each blade wraps to stay within its reach of the viewer, so the field
   // travels with them while every blade keeps a fixed spot on the ground.
-  // Some blades reach only half as far, so the grass is densest close by.
   float reach = aThin.y;
   vec2 xz = uCenter.xz + mod(aBlade.xy * reach * 2.0 - uCenter.xz + reach, reach * 2.0) - reach;
-  vec2 g = groundAt(xz);
+  vec3 g = groundSample(xz);
   float e = 0.6;
   float sx = groundAt(xz + vec2(e, 0.0)).x - groundAt(xz - vec2(e, 0.0)).x;
   float sz = groundAt(xz + vec2(0.0, e)).x - groundAt(xz - vec2(0.0, e)).x;
   float grade = length(vec2(sx, sz)) / (2.0 * e);
-  float dry = 1.0 - smoothstep(-0.35, -0.05, g.y - g.x);
-  // A blade never grows or shrinks with distance. Each one has its own
-  // threshold and disappears whole once the viewer is farther than that, so
-  // the field thins out from 55% of its reach over ground painted the same.
-  // It thins the same way toward the hand-over to the wild land.
+  vGroundNormal = normalize(vec3(-sx / (2.0 * e), 1.0, -sz / (2.0 * e)));
+
+  // A blade never grows or shrinks with distance, slope or shore. Each one has
+  // its own thresholds and is there whole or not at all: the field thins out
+  // from 55% of its reach over ground painted the same, toward the hand-over
+  // to the wild land, on steep risers, and over the sand toward the water.
+  float r2 = fract(aSeed.x * 7.13 + aSeed.z * 3.71);
+  float r3 = fract(aSeed.y * 5.31 + aThin.x * 9.17);
   float near = step(length(xz - uCenter.xz), reach * mix(0.55, 1.0, aThin.x));
   float inland = step(length(xz), uLand - 2.0 - 26.0 * aThin.x);
+  float banks = step(mix(1.3, 3.0, r2), g.z);
+  float steep = step(r3, 1.0 - smoothstep(0.35, 0.7, grade) * 0.8);
 
-  // The blade grows one region's cover: its height, width, density, clumping and flowers.
+  // The blade grows one region's cover: its height, width, density, clumping, form and flowers.
   int k = coverPick(xz, aSeed.w);
   vec4 shape = uCoverShape[k];
-  float keep = step(aSeed.z, shape.z) * near * inland;
-  float clump = mix(1.0, tuftMask(xz), shape.w);
+  vec3 form = uCoverForm[k];
+  float tuft = tuftMask(xz);
+  float tufted = step(fract(aBlade.w * 13.7 + aSeed.w * 5.3) * 0.999, mix(1.0, tuft, shape.w));
+  float keep = step(aSeed.z, shape.z) * near * inland * banks * steep * tufted;
   float flowers = uCoverFlowers[k];
   float flower = step(aSeed.y, flowers);
-  float h = aBlade.w * shape.x * dry * keep * clump * (1.0 - smoothstep(0.35, 0.65, grade) * 0.7) * (1.0 + flower * 0.25);
-  float t = position.y;
-  float c = cos(aBlade.z);
-  float s = sin(aBlade.z);
-  // A flower blade opens a small head just below its tip. Seen at eye
-  // height, a head any larger reads as confetti.
-  float wide = shape.y * keep * (1.0 + flower * 1.6 * step(0.7, t) * step(t, 0.9));
-  vec3 local = vec3(position.x * wide * c, t * h, position.x * wide * s);
-  float w = windAt(xz, uTime * 0.95) + 0.3 * sin(uTime * 3.7 + xz.x * 0.7 + xz.y * 1.3);
-  local.x += w * 0.09 * uWind * t * t * h;
-  local.z += w * 0.05 * uWind * t * t * h;
+  // Tufts dome: their middles stand a little taller than their edges.
+  float h = aBlade.w * shape.x * keep * mix(1.0, 0.72 + 0.28 * tuft, shape.w) * (1.0 + flower * 0.25);
+
+  float side = position.x;
+  // A flower's rows crowd toward its top, so its head is a small round dab on a long stem.
+  float t = mix(position.y, position.y < 0.75 ? position.y * 1.24 : 0.88 + (position.y - 0.71) * 0.41, flower);
+  // Outline: a pointed blade that stays full to near its soft tip, or a round leaf.
+  float lance = pow(1.0 - t, 0.7) * (1.0 + 0.6 * t);
+  float leaf = sqrt(max(0.0, 1.0 - pow(2.0 * t - 1.0, 2.0))) * 1.15 + 0.12 * (1.0 - t);
+  float outline = mix(lance, leaf, form.y);
+  // A flower is a slim stem that opens a small round head at its top. Seen
+  // at eye height, a head any larger reads as confetti.
+  float head = smoothstep(0.9, 0.94, t);
+  float wide = shape.y * keep * mix(outline, mix(0.18, 0.95, head), flower);
+
+  vec2 facing = vec2(-sin(aBlade.z), cos(aBlade.z));
+  vec3 across = vec3(cos(aBlade.z), 0.0, sin(aBlade.z));
+  // Flowers hold their heads up even where their cover's leaves lie low.
+  float lean = form.x * 1.25 * (0.45 + 1.1 * aSeed.x) * (1.0 - flower * 0.7);
+  float arc = form.z * (0.6 + 0.8 * r3);
+  float gust = gustAt(xz, uTime);
+  float sway = sin(uTime * 1.3 + xz.x * 0.21 + xz.y * 0.17) * 0.5 + 0.5;
+  float flutter = sin(uTime * 3.7 + xz.x * 0.9 + xz.y * 1.3 + aSeed.x * 6.28);
+  // Low leaves lying near the ground barely move; tall blades bow with each gust.
+  float give = uWind * (1.0 - form.x * 0.7);
+  vec2 wind = WIND_DIR * give * (0.1 + 0.12 * sway + 0.5 * gust) + vec2(-WIND_DIR.y, WIND_DIR.x) * flutter * 0.05 * give;
+  vec3 tangent;
+  vec3 local = spine(t, facing, lean, arc, wind, tangent) * h + across * side * wide;
   vec3 world = vec3(xz.x, g.x - 0.02, xz.y) + local;
+  // The blade's face, rounded across its width so it shades like a soft leaf.
+  vNormal = normalize(cross(across, tangent) + across * side * 0.55);
   vWorld = world;
   vT = t;
   vTint = aSeed.x;
+  vGust = gust;
   float pick = aSeed.y / max(flowers, 1e-4);
   vFlower = flower;
   vBloom = pick < 0.4 ? uFlowerA[k] : pick < 0.75 ? uFlowerB[k] : uFlowerC[k];
-  vLow = uCoverLow[k];
-  vHigh = uCoverHigh[k];
+  // Broad patches shift a cover between its low and high colors, so a field never reads as one flat green.
+  float patchy = tuftNoise(xz * 0.07 + 3.0) - 0.5;
+  vLow = uCoverLow[k] * (1.0 + patchy * 0.16);
+  vHigh = mix(uCoverHigh[k], uCoverLow[k], max(-patchy, 0.0) * 0.35);
   vTip = uCoverTip[k];
   gl_Position = projectionMatrix * viewMatrix * vec4(world, 1.0);
 }
@@ -87,28 +144,46 @@ precision highp float;
 ${LIGHT_GLSL}
 uniform vec3 uDry;
 varying vec3 vWorld;
+varying vec3 vNormal;
+varying vec3 vGroundNormal;
 varying float vT;
 varying float vTint;
 varying float vFlower;
+varying float vGust;
 varying vec3 vLow;
 varying vec3 vHigh;
 varying vec3 vTip;
 varying vec3 vBloom;
 void main() {
-  vec3 albedo = mix(vLow, vHigh, clamp(vT * 0.8 + vTint * 0.4, 0.0, 1.0));
-  albedo = mix(albedo, vTip, smoothstep(0.55, 1.0, vT) * 0.75);
-  albedo = mix(albedo, uDry, step(0.93, vTint) * 0.45);
-  albedo *= 0.82 + 0.25 * vT;
+  // Deep at the base, the cover's own green through the middle, a soft warm tip.
+  vec3 albedo = mix(vLow, vHigh, smoothstep(0.05, 0.85, vT * 0.85 + (vTint - 0.5) * 0.35));
+  albedo = mix(albedo, vTip, smoothstep(0.7, 1.0, vT) * 0.45);
+  albedo = mix(albedo, uDry, step(0.94, vTint) * 0.35);
+  albedo *= mix(0.68, 1.0, smoothstep(0.0, 0.55, vT)) * (0.94 + 0.12 * vTint);
+  // A gust bows the blades over and shows their paler sheen.
+  albedo = mix(albedo, vTip, vGust * 0.14 * smoothstep(0.2, 0.9, vT));
   // Flowers fade into their blades at night, so the dark meadow never reads as confetti.
-  if (vFlower > 0.5 && vT > 0.8) albedo = mix(vBloom * (0.9 + 0.1 * vT), albedo, uNightness * 0.75);
+  if (vFlower > 0.5 && vT > 0.86) albedo = mix(vBloom * (0.9 + 0.1 * vT), albedo, uNightness * 0.75);
+
+  // Blades take the light of the ground they stand on, turned a little by
+  // their own face, so the field reads as one painted surface that ripples.
+  vec3 face = normalize(gl_FrontFacing ? vNormal : -vNormal);
+  vec3 n = normalize(vGroundNormal + face * 0.45);
+  float level = max(uSunDirection.y, 0.05);
+  float nDotL = max(level + (dot(n, uSunDirection) - level) * 1.3, 0.0);
   float shadow = mix(0.45, 1.0, sunShadow(vWorld, 0.0015));
-  float light = softCel(max(uSunDirection.y, 0.0) * shadow) * sunUp();
+  float direct = nDotL * shadow;
+  float light = mix(direct, softCel(direct), 0.5) * sunUp();
   vec3 toned = nightTone(albedo);
   vec3 lit = toned * (uSunColor * uSunIntensity * light + uAmbientColor * uAmbientIntensity);
   vec3 shadowed = toned * uShadowColor * (uAmbientIntensity + 0.75);
   vec3 color = mix(shadowed, lit, clamp(light + 0.35, 0.0, 1.0));
+  // Looking toward the sun, thin blades glow a little where light comes through.
+  vec3 view = normalize(vWorld - cameraPosition);
+  float through = pow(max(dot(view, uSunDirection), 0.0), 3.0) * smoothstep(0.3, 1.0, vT) * shadow * sunUp();
+  color += toned * uSunColor * through * 0.22;
   // Blades scatter light, so the moon and the lantern wrap well around them.
-  color += nightLight(albedo, vec3(0.0, 1.0, 0.0), vWorld, 0.6, mix(1.0, shadow, uMoonShadow));
+  color += nightLight(albedo, n, vWorld, 0.6, mix(1.0, shadow, uMoonShadow));
   gl_FragColor = vec4(aerial(shoulder(color), vWorld), 1.0);
 }
 `;
@@ -119,20 +194,36 @@ export interface Grass {
 }
 
 /**
+ * Tiers of blades by reach: a quarter reach only 14 m and another third 30 m,
+ * so the grass is densest close by, where each blade can be seen.
+ */
+const TIERS = [
+  { share: 0.25, reach: 14 },
+  { share: 0.32, reach: 30 },
+] as const;
+
+/**
  * Wind-swayed blades around the viewer; each region's cover decides what
- * grows where. Blades keep their full height at every distance: the far ones
- * thin out whole, each at its own seeded distance.
+ * grows where and in what form. Blades keep their full height at every
+ * distance: the far ones thin out whole, each at its own seeded distance.
  */
 export function createGrass(light: SceneLight, ground: GroundTexture, covers: RegionCovers, land: number, count = 150000, radius = 60): Grass {
-  // A third of the blades reach only 26 m, so the grass is densest close by.
-  const close = Math.round(count * 0.3);
-  // One tapered blade, one unit wide: the cover sets its width.
+  // One blade, one unit wide and tall: five rows and a soft tip. The vertex
+  // shader gives it its cover's outline, lean and arc.
+  const rows = [0, 0.26, 0.5, 0.71, 0.87];
   const blade = new THREE.BufferGeometry();
-  blade.setAttribute(
-    "position",
-    new THREE.Float32BufferAttribute([-1, 0, 0, 1, 0, 0, -0.7, 0.4, 0, 0.7, 0.4, 0, -0.35, 0.75, 0, 0.35, 0.75, 0, 0, 1, 0], 3),
-  );
-  blade.setIndex([0, 1, 2, 2, 1, 3, 2, 3, 4, 4, 3, 5, 4, 5, 6]);
+  const verts: number[] = [];
+  for (const t of rows) verts.push(-1, t, 0, 1, t, 0);
+  verts.push(0, 1, 0);
+  const index: number[] = [];
+  for (let r = 0; r + 1 < rows.length; r++) {
+    const a = r * 2;
+    index.push(a, a + 1, a + 2, a + 2, a + 1, a + 3);
+  }
+  const top = (rows.length - 1) * 2;
+  index.push(top, top + 1, top + 2);
+  blade.setAttribute("position", new THREE.Float32BufferAttribute(verts, 3));
+  blade.setIndex(index);
   const geometry = new THREE.InstancedBufferGeometry();
   geometry.index = blade.index;
   geometry.setAttribute("position", blade.getAttribute("position"));
@@ -144,14 +235,22 @@ export function createGrass(light: SceneLight, ground: GroundTexture, covers: Re
     seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
     return seed / 4294967296;
   };
+  const reachOf = (i: number): number => {
+    let edge = 0;
+    for (const tier of TIERS) {
+      edge += tier.share * count;
+      if (i < edge) return tier.reach;
+    }
+    return radius;
+  };
   for (let i = 0; i < count; i++) {
     data[i * 4] = next();
     data[i * 4 + 1] = next();
-    data[i * 4 + 2] = next() * Math.PI;
-    data[i * 4 + 3] = 0.55 + next() * 0.75;
+    data[i * 4 + 2] = next() * Math.PI * 2;
+    data[i * 4 + 3] = 0.6 + next() * 0.7;
     for (let k = 0; k < 4; k++) seeds[i * 4 + k] = next();
     thin[i * 2] = next();
-    thin[i * 2 + 1] = i < close ? 26 : radius;
+    thin[i * 2 + 1] = reachOf(i);
   }
   geometry.setAttribute("aBlade", new THREE.InstancedBufferAttribute(data, 4));
   geometry.setAttribute("aSeed", new THREE.InstancedBufferAttribute(seeds, 4));

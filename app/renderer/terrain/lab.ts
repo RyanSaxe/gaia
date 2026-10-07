@@ -116,7 +116,7 @@ export function createTerrainLab(root: HTMLElement): Lab {
     if (r === undefined) throw new Error(`No region ${i}.`);
     return realizeRegion({ blueprint: r.biome, kind: biome }, lib, seedOf(r.id), NO_SEASON).ground;
   };
-  const updateCovers = (): void => covers.update(world, world.regions.map((_, i) => coverOf(i)));
+  const updateCovers = (): void => covers.update(world, world.regions.map((_, i) => coverOf(i)), terrain);
   updateCovers();
 
   const scene = new THREE.Scene();

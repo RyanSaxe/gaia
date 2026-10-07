@@ -5,11 +5,11 @@
 
 import * as THREE from "three";
 import { LIGHT_GLSL, type SceneLight, hexToVec3 } from "@gaia/render";
-import { DRY, type Terrain, landRadius, wildsRing } from "@gaia/terrain";
+import { DRY, SHORE_CAP, type Terrain, landRadius, wildsRing } from "@gaia/terrain";
 import { SWARD_GLSL } from "../world/environment.ts";
 import { REGIONS_GLSL, type RegionCovers, TUFT_GLSL } from "./regions.ts";
 
-/** Height and water level per lattice sample, for shaders that sample the ground. */
+/** Height, water level and distance to the water per lattice sample, for shaders that sample the ground. */
 export interface GroundTexture {
   readonly texture: THREE.DataTexture;
   readonly uniforms: {
@@ -23,8 +23,8 @@ export interface GroundTexture {
 
 export function createGroundTexture(t: Terrain): GroundTexture {
   const { n } = t.lattice;
-  const data = new Float32Array(n * n * 2);
-  const texture = new THREE.DataTexture(data, n, n, THREE.RGFormat, THREE.FloatType);
+  const data = new Float32Array(n * n * 4);
+  const texture = new THREE.DataTexture(data, n, n, THREE.RGBAFormat, THREE.FloatType);
   texture.minFilter = THREE.NearestFilter;
   texture.magFilter = THREE.NearestFilter;
   const uniforms = {
@@ -35,8 +35,9 @@ export function createGroundTexture(t: Terrain): GroundTexture {
   };
   const update = (next: Terrain): void => {
     for (let i = 0; i < n * n; i++) {
-      data[i * 2] = next.lattice.heights[i] as number;
-      data[i * 2 + 1] = next.waterLevel[i] as number;
+      data[i * 4] = next.lattice.heights[i] as number;
+      data[i * 4 + 1] = next.waterLevel[i] as number;
+      data[i * 4 + 2] = next.shore[i] as number;
     }
     texture.needsUpdate = true;
   };
@@ -50,32 +51,34 @@ uniform sampler2D uGround;
 uniform float uGroundN;
 uniform float uGroundOrigin;
 uniform float uGroundSpacing;
-vec2 groundAt(vec2 xz) {
+// Height, water level and distance to the water (x, y, z).
+vec3 groundSample(vec2 xz) {
   vec2 g = clamp((xz - uGroundOrigin) / uGroundSpacing, vec2(0.0), vec2(uGroundN - 1.001));
   ivec2 i = ivec2(floor(g));
   vec2 f = g - vec2(i);
-  vec2 h00 = texelFetch(uGround, i, 0).rg;
-  vec2 h10 = texelFetch(uGround, i + ivec2(1, 0), 0).rg;
-  vec2 h01 = texelFetch(uGround, i + ivec2(0, 1), 0).rg;
-  vec2 h11 = texelFetch(uGround, i + ivec2(1, 1), 0).rg;
+  vec3 h00 = texelFetch(uGround, i, 0).rgb;
+  vec3 h10 = texelFetch(uGround, i + ivec2(1, 0), 0).rgb;
+  vec3 h01 = texelFetch(uGround, i + ivec2(0, 1), 0).rgb;
+  vec3 h11 = texelFetch(uGround, i + ivec2(1, 1), 0).rgb;
   if (f.x + f.y <= 1.0) return h00 + f.x * (h10 - h00) + f.y * (h01 - h00);
   return h11 + (1.0 - f.x) * (h01 - h11) + (1.0 - f.y) * (h10 - h11);
 }
+vec2 groundAt(vec2 xz) { return groundSample(xz).xy; }
 `;
 
 const VERT = /* glsl */ `
 attribute float aWater;
-attribute float aRegion;
+attribute float aShore;
 varying vec3 vWorld;
 varying vec3 vNormal;
 varying float vWater;
-varying float vRegion;
+varying float vShore;
 void main() {
   vec4 world = modelMatrix * vec4(position, 1.0);
   vWorld = world.xyz;
   vNormal = normal;
   vWater = aWater;
-  vRegion = aRegion;
+  vShore = aShore;
   gl_Position = projectionMatrix * viewMatrix * world;
 }
 `;
@@ -96,7 +99,7 @@ uniform vec2 uHeightRange;
 varying vec3 vWorld;
 varying vec3 vNormal;
 varying float vWater;
-varying float vRegion;
+varying float vShore;
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float noise(vec2 p) {
   vec2 i = floor(p);
@@ -132,9 +135,10 @@ void main() {
   albedo = mix(albedo, uBare, smoothstep(0.075, 0.17, steep + (fine - 0.5) * 0.05) * 0.8);
   // Hollows hold a deeper green; the broad patches carry more contrast.
   albedo *= 0.94 + 0.12 * smoothstep(0.2, 0.8, broad);
-  // Wet sand at the waterline, a darker bed beneath the water.
-  float shore = smoothstep(-0.55, -0.1, vWater) * (1.0 - smoothstep(0.05, 0.3, vWater));
-  albedo = mix(albedo, uSand, shore * 0.8);
+  // Sand banks a meter or two wide, darker and wet at the waterline, with a
+  // ragged edge where the grass (which reads the same distance) thins out.
+  float sand = 1.0 - smoothstep(1.2, 2.6, vShore + (fine - 0.5) * 1.2);
+  albedo = mix(albedo, uSand * mix(0.82, 1.0, smoothstep(0.2, 1.0, vShore)), sand * 0.85);
   albedo = mix(albedo, uBed, smoothstep(0.1, 0.5, vWater));
   albedo *= 0.94 + 0.1 * fine;
 
@@ -153,12 +157,13 @@ void main() {
   color += nightLight(albedo, n, vWorld, 0.3, mix(1.0, shadow, uMoonShadow));
 
 #ifndef WILDS
-  // The selected region glows faintly; region edges draw as soft lines in the overview.
-  float selected = 1.0 - step(0.5, abs(vRegion - uSelected));
-  // At night the glow stays faint, so the selection never reads as a lit field.
-  color = mix(color, color * vec3(1.1, 1.08, 0.92) + vec3(0.03, 0.03, 0.0), selected * 0.7 * uOutline * (1.0 - uNightness * 0.6));
-  float edge = clamp(fwidth(vRegion) * 2.0, 0.0, 1.0);
-  color = mix(color, color * 1.25 + vec3(0.04), edge * 0.35 * uOutline);
+  // In the overview the selected region's ground glows faintly, by its share
+  // of the cover, so the glow fades out at its organic edge. No lines anywhere.
+  // At night the glow stays fainter still, so it never reads as a lit field.
+  if (uOutline > 0.0 && uSelected >= 0.0) {
+    float mine = smoothstep(0.2, 0.9, coverShare(vWorld.xz, int(uSelected + 0.5)));
+    color = mix(color, color * vec3(1.08, 1.07, 0.94) + vec3(0.025, 0.025, 0.0), mine * 0.8 * uOutline * (1.0 - uNightness * 0.6));
+  }
 #endif
   gl_FragColor = vec4(aerial(shoulder(color), vWorld), 1.0);
 }
@@ -181,7 +186,7 @@ function geometryFor(t: Terrain, stride: number): THREE.BufferGeometry {
   g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(m * m * 3), 3));
   g.setAttribute("normal", new THREE.BufferAttribute(new Float32Array(m * m * 3), 3));
   g.setAttribute("aWater", new THREE.BufferAttribute(new Float32Array(m * m), 1));
-  g.setAttribute("aRegion", new THREE.BufferAttribute(new Float32Array(m * m), 1));
+  g.setAttribute("aShore", new THREE.BufferAttribute(new Float32Array(m * m), 1));
   const index = new Uint32Array((m - 1) * (m - 1) * 6);
   let k = 0;
   for (let j = 0; j < m - 1; j++) {
@@ -207,7 +212,7 @@ function fill(g: THREE.BufferGeometry, t: Terrain): void {
   const pos = g.getAttribute("position").array as Float32Array;
   const nor = g.getAttribute("normal").array as Float32Array;
   const water = g.getAttribute("aWater").array as Float32Array;
-  const region = g.getAttribute("aRegion").array as Float32Array;
+  const shore = g.getAttribute("aShore").array as Float32Array;
   const h = (ix: number, iz: number): number =>
     heights[Math.min(n - 1, Math.max(0, iz)) * n + Math.min(n - 1, Math.max(0, ix))] as number;
   for (let j = 0; j < m; j++) {
@@ -227,21 +232,21 @@ function fill(g: THREE.BufferGeometry, t: Terrain): void {
       nor[v * 3 + 2] = -gz / len;
       const level = t.waterLevel[iz * n + ix] as number;
       water[v] = level > DRY / 2 ? level - y : -5;
-      region[v] = t.region[iz * n + ix] as number;
+      shore[v] = t.shore[iz * n + ix] as number;
     }
   }
-  for (const name of ["position", "normal", "aWater", "aRegion"]) g.getAttribute(name).needsUpdate = true;
+  for (const name of ["position", "normal", "aWater", "aShore"]) g.getAttribute(name).needsUpdate = true;
   g.computeBoundingSphere();
 }
 
-/** The wild ring as geometry the ground material can draw: no water, no region of its own. */
+/** The wild ring as geometry the ground material can draw: no water anywhere near. */
 function wildsGeometry(t: Terrain): THREE.BufferGeometry {
   const ring = wildsRing(t);
   const count = ring.positions.length / 3;
   const g = new THREE.BufferGeometry();
   g.setAttribute("position", new THREE.BufferAttribute(ring.positions, 3));
   g.setAttribute("aWater", new THREE.BufferAttribute(new Float32Array(count).fill(-5), 1));
-  g.setAttribute("aRegion", new THREE.BufferAttribute(new Float32Array(count).fill(-1), 1));
+  g.setAttribute("aShore", new THREE.BufferAttribute(new Float32Array(count).fill(SHORE_CAP), 1));
   g.setIndex(new THREE.BufferAttribute(ring.indices, 1));
   g.computeVertexNormals();
   return g;

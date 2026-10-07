@@ -48,17 +48,21 @@ interface Cover {
   readonly width: number;
   readonly density: number;
   readonly clump: number;
+  /** Lean from upright, outline roundness and arc, each 0 to 1: blades, sprigs or low round leaves. */
+  readonly lean: number;
+  readonly round: number;
+  readonly bend: number;
   readonly flowers: readonly [number, number, number];
 }
 
 const COVERS = {
-  "lush grass": { soil: 0x6f8f4a, low: 0x5a9146, high: 0x9ccc68, tip: 0xb6da80, height: 0.4, width: 0.045, density: 1, clump: 0, flowers: [0xf6f1e0, 0xf5d45c, 0xb9a5e8] },
-  "golden steppe": { soil: 0xa69660, low: 0x9a8c4c, high: 0xd6c07a, tip: 0xecdb9e, height: 0.5, width: 0.035, density: 0.85, clump: 0.15, flowers: [0xf3e6c4, 0xe9a24c, 0xc96a5a] },
-  "silver grass": { soil: 0x7c875a, low: 0x748658, high: 0xb4c09c, tip: 0xeae6da, height: 0.85, width: 0.03, density: 0.62, clump: 0.35, flowers: [0xf2efe6, 0xd8c9e6, 0xf0d9a0] },
-  moss: { soil: 0x4f7a3c, low: 0x4c7c3a, high: 0x86b04e, tip: 0xa6c660, height: 0.09, width: 0.06, density: 1, clump: 0.1, flowers: [0xf4f0e2, 0xe8c45a, 0xd88aa0] },
-  heather: { soil: 0x6a6048, low: 0x6a5a6c, high: 0xa47cae, tip: 0xc89cd0, height: 0.26, width: 0.05, density: 0.95, clump: 0.3, flowers: [0xd9a8de, 0xf2d7f0, 0x9c6fb8] },
-  "sand and scrub": { soil: 0xd4c19a, low: 0x87905c, high: 0xb1b278, tip: 0xcdc694, height: 0.3, width: 0.04, density: 0.45, clump: 0.8, flowers: [0xf2c45a, 0xe8836a, 0xf4efe0] },
-  "clover meadow": { soil: 0x5e8944, low: 0x4f8b42, high: 0x8ec45e, tip: 0xa4d07a, height: 0.18, width: 0.07, density: 1, clump: 0, flowers: [0xf3f0f2, 0xe7a5c8, 0xc9b6ec] },
+  "lush grass": { soil: 0x6f8f4a, low: 0x5a9146, high: 0x9ccc68, tip: 0xb6da80, height: 0.42, width: 0.05, density: 1, clump: 0, lean: 0.12, round: 0.2, bend: 0.5, flowers: [0xf6f1e0, 0xf5d45c, 0xb9a5e8] },
+  "golden steppe": { soil: 0xa69660, low: 0x9a8c4c, high: 0xd6c07a, tip: 0xecdb9e, height: 0.5, width: 0.045, density: 0.85, clump: 0.15, lean: 0.1, round: 0.1, bend: 0.4, flowers: [0xf3e6c4, 0xe9a24c, 0xc96a5a] },
+  "silver grass": { soil: 0x7c875a, low: 0x748658, high: 0xb4c09c, tip: 0xeae6da, height: 0.85, width: 0.04, density: 0.62, clump: 0.35, lean: 0.08, round: 0.05, bend: 0.6, flowers: [0xf2efe6, 0xd8c9e6, 0xf0d9a0] },
+  moss: { soil: 0x4f7a3c, low: 0x4c7c3a, high: 0x86b04e, tip: 0xa6c660, height: 0.06, width: 0.05, density: 1, clump: 0.35, lean: 0.8, round: 1, bend: 0.1, flowers: [0xf4f0e2, 0xe8c45a, 0xd88aa0] },
+  heather: { soil: 0x5e5644, low: 0x585a44, high: 0x9a6fa6, tip: 0xc48ad0, height: 0.36, width: 0.055, density: 1, clump: 0.5, lean: 0.42, round: 0.6, bend: 0.15, flowers: [0xd9a8de, 0xf2d7f0, 0x9c6fb8] },
+  "sand and scrub": { soil: 0xd4c19a, low: 0x87905c, high: 0xb1b278, tip: 0xcdc694, height: 0.3, width: 0.05, density: 0.45, clump: 0.8, lean: 0.25, round: 0.3, bend: 0.3, flowers: [0xf2c45a, 0xe8836a, 0xf4efe0] },
+  "clover meadow": { soil: 0x5e8944, low: 0x4f8b42, high: 0x8ec45e, tip: 0xa4d07a, height: 0.1, width: 0.036, density: 1, clump: 0, lean: 0.72, round: 0.95, bend: 0.1, flowers: [0xf3f0f2, 0xe7a5c8, 0xc9b6ec] },
 } as const satisfies Record<string, Cover>;
 
 export const groundCover = primitive({
@@ -89,6 +93,9 @@ export const groundCover = primitive({
       width: c.width,
       density: c.density,
       clump: c.clump,
+      lean: c.lean,
+      round: c.round,
+      bend: c.bend,
       flowers: p.wildflowers,
       flowerColors: c.flowers.map(hex),
     };

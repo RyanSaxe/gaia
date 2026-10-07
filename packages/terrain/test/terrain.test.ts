@@ -6,17 +6,21 @@ import { validate } from "@gaia/world";
 import { FLORA_PRESETS, realize } from "@gaia/realize";
 import {
   RELIEF_BUDGET,
+  SHORE_CAP,
   type Station,
+  TERRAIN,
   WADE,
   WILDS,
   type Terrain,
   bakeTerrain,
   composer,
+  coverWeights,
   groundedBase,
   heightAt,
   landRadius,
   landformsOf,
   randomWorld,
+  regionWeights,
   sampleWorld,
   scatterPlants,
   sightlines,
@@ -82,10 +86,14 @@ describe("terrain", () => {
     }
   });
 
-  it("has no seams at region edges: the composed ground is continuous", () => {
+  it("has no seams at region edges: the composed ground and the cover blend are continuous", () => {
+    // The band, widened by how far the warp can carry a border off the bisector.
+    const reach = TERRAIN.blend / 2 + TERRAIN.warp + 10;
     for (const w of [sampleWorld(), ...draws.slice(0, 6)]) {
       const h = composer(w, landformsOf(w, lib));
-      // Walk the line between every pair of region centers in 1 mm steps across the blend band and the bisector.
+      const c0 = new Float64Array(w.regions.length);
+      const c1 = new Float64Array(w.regions.length);
+      // Walk the line between every pair of region centers in 1 mm steps across the whole blend band.
       for (const a of w.regions) {
         for (const b of w.regions) {
           if (a === b) continue;
@@ -93,15 +101,140 @@ describe("terrain", () => {
           const len = Math.hypot(b.x - a.x, b.z - a.z);
           const dx = (b.x - a.x) / len;
           const dz = (b.z - a.z) / len;
-          for (let s = -30; s <= 30; s += 0.25) {
+          for (let s = -reach; s <= reach; s += 0.5) {
             const x = mid.x + dx * s;
             const z = mid.z + dz * s;
             const jump = Math.abs(h(x + dx * 0.001, z + dz * 0.001) - h(x, z));
             expect(jump, `${a.id}|${b.id} at ${s}`).toBeLessThan(0.002);
+            coverWeights(w, x, z, c0);
+            coverWeights(w, x + dx * 0.001, z + dz * 0.001, c1);
+            let total = 0;
+            c0.forEach((v, i) => {
+              total += v;
+              expect(Math.abs(v - (c1[i] as number)), `cover ${i} at ${s}`).toBeLessThan(0.002);
+            });
+            expect(total).toBeCloseTo(1, 9);
           }
         }
       }
     }
+  });
+
+  /** Pairs of regions whose cells meet, with the unit step from a toward b. */
+  const neighbors = (w: (typeof draws)[number]) =>
+    w.regions.flatMap((a, i) =>
+      w.regions.slice(i + 1).flatMap((b) => {
+        const len = Math.hypot(b.x - a.x, b.z - a.z);
+        const mid = { x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 };
+        // They meet when the midpoint is nearer to them than to any other center.
+        const meet = w.regions.every((r) => r === a || r === b || Math.hypot(r.x - mid.x, r.z - mid.z) > len / 2 + 20);
+        return meet ? [{ a: i, b: w.regions.indexOf(b), len, dx: (b.x - a.x) / len, dz: (b.z - a.z) / len, mid }] : [];
+      }),
+    );
+
+  it("eases neighboring landforms into each other over a band of 90 m or more", () => {
+    let pairs = 0;
+    for (const w of [sampleWorld(), ...draws.slice(0, 6)]) {
+      const weights = new Float64Array(w.regions.length);
+      for (const p of neighbors(w)) {
+        if (p.len < TERRAIN.blend + 20) continue;
+        pairs++;
+        // Walk from a's center to b's: where b first counts and where a last does.
+        let first = Infinity;
+        let last = -Infinity;
+        for (let s = 0; s <= p.len; s += 1) {
+          regionWeights(w, w.regions[p.a]!.x + p.dx * s, w.regions[p.a]!.z + p.dz * s, weights);
+          if ((weights[p.b] as number) > 0.01) first = Math.min(first, s);
+          if ((weights[p.a] as number) > 0.01) last = Math.max(last, s);
+        }
+        expect(last - first, `${p.a}|${p.b}`).toBeGreaterThanOrEqual(90);
+      }
+    }
+    expect(pairs).toBeGreaterThan(5);
+  });
+
+  it("curves region borders: the line where neighbors weigh equally wanders off the straight bisector", () => {
+    let wandering = 0;
+    let pairs = 0;
+    for (const w of [sampleWorld(), ...draws.slice(0, 6)]) {
+      const weights = new Float64Array(w.regions.length);
+      for (const p of neighbors(w)) {
+        pairs++;
+        // Along lines parallel to a-b, find where b's weight first reaches a's.
+        const crossings: number[] = [];
+        for (let offset = -40; offset <= 40; offset += 10) {
+          for (let s = -p.len / 2; s <= p.len / 2; s += 0.5) {
+            const x = p.mid.x + p.dx * s - p.dz * offset;
+            const z = p.mid.z + p.dz * s + p.dx * offset;
+            regionWeights(w, x, z, weights);
+            if ((weights[p.b] as number) >= (weights[p.a] as number) - 1e-9 && (weights[p.a] as number) < 1) {
+              crossings.push(s);
+              break;
+            }
+          }
+        }
+        if (crossings.length > 0 && Math.max(...crossings) - Math.min(...crossings) > 8) wandering++;
+      }
+    }
+    expect(wandering / pairs).toBeGreaterThan(0.6);
+  });
+
+  it("drifts one cover into the next in patches, while each region's middle stays its own", () => {
+    let islands = 0;
+    for (const t of baked.slice(0, 7)) {
+      const w = t.spec;
+      const weights = new Float64Array(w.regions.length);
+      w.regions.forEach((r, i) => {
+        coverWeights(w, r.x, r.z, weights);
+        expect(weights[i], `${r.id} at its middle`).toBeGreaterThan(0.8);
+      });
+      for (const p of neighbors(w)) {
+        // Across the band the dominant cover changes more than once when a patch of one lies in the other.
+        let switches = 0;
+        let was = -1;
+        for (let s = -p.len / 2; s <= p.len / 2; s += 1) {
+          coverWeights(w, p.mid.x + p.dx * s, p.mid.z + p.dz * s, weights);
+          const now = (weights[p.a] as number) >= (weights[p.b] as number) ? p.a : p.b;
+          if (was !== -1 && now !== was) switches++;
+          was = now;
+        }
+        if (switches > 1) islands++;
+      }
+      // The bake keeps each sample's cover weights, summing to 1, and names the dominant one.
+      const { n } = t.lattice;
+      const count = w.regions.length;
+      for (let k = 0; k < n * n; k += 997) {
+        let total = 0;
+        let best = 0;
+        for (let i = 0; i < count; i++) {
+          total += t.cover[k * count + i]!;
+          if (t.cover[k * count + i]! > t.cover[k * count + best]!) best = i;
+        }
+        expect(total).toBeCloseTo(1, 5);
+        expect(t.region[k]).toBe(best);
+      }
+    }
+    expect(islands).toBeGreaterThan(3);
+  });
+
+  it("measures the shore: zero under water, rising at most a meter per meter, capped", () => {
+    let wet = 0;
+    for (const t of baked.slice(0, 6)) {
+      const { n, heights, spacing } = t.lattice;
+      const wrong: number[] = [];
+      for (let i = 0; i < n * n; i++) {
+        const shore = t.shore[i]!;
+        if (t.waterLevel[i]! > heights[i]!) wet++;
+        const ok =
+          (shore === 0) === t.waterLevel[i]! > heights[i]! &&
+          shore <= SHORE_CAP &&
+          (i % n === n - 1 || Math.abs(t.shore[i + 1]! - shore) <= spacing + 1e-5) &&
+          (i + n >= n * n || Math.abs(t.shore[i + n]! - shore) <= spacing + 1e-5);
+        if (!ok) wrong.push(i);
+      }
+      expect(wrong).toEqual([]);
+    }
+    expect(wet).toBeGreaterThan(0);
   });
 
   it("never leaves a crack in the baked lattice: neighbors differ by less than the steepest slope allows", () => {

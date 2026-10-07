@@ -39,9 +39,19 @@ float tuftMask(vec2 xz) {
  * Uses the includer's \`noise(vec2)\` and \`cameraPosition\`.
  */
 export const SWARD_GLSL = /* glsl */ `
+float swardDab(vec2 p, mat2 turn) {
+  vec2 q = turn * p;
+  return noise(vec2(q.x * 2.4, q.y * 5.5)) * 0.6 + noise(vec2(q.x * 5.0, q.y * 11.0) + 3.7) * 0.4;
+}
 vec3 sward(vec3 world, vec3 low, vec3 high, vec3 tip, float lift) {
-  vec2 q = mat2(0.8, 0.6, -0.6, 0.8) * world.xz;
-  float stroke = noise(vec2(q.x * 1.6, q.y * 7.0)) * 0.6 + noise(vec2(q.x * 3.7, q.y * 15.0) + 3.7) * 0.4;
+  // Short dabs in three directions, crossfaded by a broad field, so no one
+  // stroke direction runs on long enough to read as streaks across the land.
+  vec2 p = world.xz;
+  float a = swardDab(p, mat2(0.8, 0.6, -0.6, 0.8));
+  float b = swardDab(p + 31.0, mat2(-0.5, 0.866, -0.866, -0.5));
+  float c = swardDab(p - 57.0, mat2(0.259, -0.966, 0.966, 0.259));
+  float stroke = mix(mix(a, b, smoothstep(0.3, 0.7, noise(p * 0.23))), c, smoothstep(0.35, 0.75, noise(p * 0.19 + 9.0)) * 0.7);
+  stroke = 0.5 + (stroke - 0.5) * 1.3;
   // Only close by, looking down into the sward, does its shaded base show.
   vec3 view = world - cameraPosition;
   float under = (1.0 - smoothstep(0.86, 0.975, 1.0 - abs(normalize(view).y))) * (1.0 - smoothstep(12.0, 40.0, length(view)));
