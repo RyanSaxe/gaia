@@ -7,12 +7,14 @@ import { watchEngine } from "./engine-status.ts";
 import { createFloraLab } from "./flora/lab.ts";
 import type { Lab } from "./lab.ts";
 import { createTerrainLab } from "./terrain/lab.ts";
+import { createWorldLab } from "./world/lab.ts";
 
 THREE.ColorManagement.enabled = false;
 
 const LABS = {
   flora: createFloraLab,
   terrain: createTerrainLab,
+  world: createWorldLab,
 } as const satisfies Record<string, (root: HTMLElement) => Lab>;
 type Tab = keyof typeof LABS;
 const TABS = Object.keys(LABS) as Tab[];
