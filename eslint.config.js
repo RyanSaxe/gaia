@@ -12,7 +12,7 @@ const three = { group: ["three", "three/*"], message: "Only @gaia/render and the
 const node = { group: ["node:*", "fs", "path", "os", "child_process"], message: "This code runs in workers and the renderer. Files and processes belong to the Rust engine." };
 
 export default tseslint.config(
-  { ignores: ["**/dist/**", "**/node_modules/**", "tools/**/*.html"] },
+  { ignores: ["**/dist/**", "**/node_modules/**", "**/out/**", "engine/target/**", "tools/**/*.html"] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
@@ -79,5 +79,31 @@ export default tseslint.config(
   {
     files: ["packages/realize/src/**"],
     rules: restrict([], [three, node, gaia("world", "Realizing is a pure function of a blueprint; it never asks Jev.")]),
+  },
+
+  // Tests: few and strong. They check behavior through public entry points,
+  // so changing an internal never breaks a test that should not care.
+  {
+    files: ["packages/*/test/**", "app/**/*.test.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["**/src", "**/src/**"],
+              message: "Test through the package's entry point (@gaia/<name>), never its internals.",
+            },
+          ],
+        },
+      ],
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "CallExpression[callee.property.name=/^(toMatchSnapshot|toMatchInlineSnapshot|toThrowErrorMatchingSnapshot|toThrowErrorMatchingInlineSnapshot)$/]",
+          message: "No snapshots: they freeze whatever the code printed. Assert the behavior that matters.",
+        },
+      ],
+    },
   },
 );
