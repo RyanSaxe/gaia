@@ -245,14 +245,66 @@ and it leans on its post. All signs draw as one instanced mesh.
 
 Tapping a building, a tree or a sign walks the person up to it (to the end
 of a building's walk, or just outside a tree's crown on their side), and
-when they arrive a card opens: in the panel on a wide screen, in the sheet
-on a phone. A thing already close is shown at once. A new tap or a key
+when they arrive a card opens: in the immersive world, a page laid over the
+world (at the top right on a wide screen, along the bottom on a phone); in
+the Terrain view, in the panel or the sheet. A thing already close is shown
+at once. A new tap or a key
 cancels the walk and the card stays shut. The view never turns on its
 own. The card reads like a page from a field guide: what kind of thing it
 is, its name, what it does, where it lives in the code, its size, what it
 leans on and what leans on it, what it stands as in the world, and its
 vitality in words (thriving, healthy, tired, failing, in ruins) with the
 signals behind it, each with its reading.
+
+## Knowing where you are
+
+The lab opens into the world, full screen, at eye height. Nothing sits on
+it but the world and one quiet way of knowing where you are: no panels, no
+readouts. A small round of paper in the top corner opens a slip that
+chooses that way and leads back to the debugging views (Components, Terrain
+and Skies). The hour follows the person's clock (`?hour=22` pins it).
+Everything a person reads here looks like the world's own things: warm
+paper, brown ink, a serif with italic names and small capitals for paths,
+and slow, soft motion.
+
+Where a person is comes from one function, `placeAt` in `@gaia/terrain`:
+the area (a directory) whose land they stand on, and the file whose patch
+of ground is underfoot, if any. An area's border runs where its region's
+landform gives way to the next, so the islands where ground covers drift
+across a border never flicker a name. Past the codebase's land is the
+wild, which names nothing. In the sample world a file's patch is the ground
+around the tree that stands for it, out to most of its crown.
+
+There are three ways, for the reviewer to choose between:
+
+- **Arrival titles.** Entering an area, after a moment there, its name
+  rises softly over the land under a fine rule, with its parent directories
+  in small capitals above it, holds, and fades, as a region's name does in
+  Breath of the Wild. An area left and re-entered within half a minute is
+  not announced again. Standing still brings up a quieter line near the
+  ground: the file underfoot and the area's path.
+- **The field map.** A map button in the lower corner (or M) unfolds a
+  hand-drawn map on warm paper: each area a watercolor wash, every area
+  under one top-level directory sharing a hue, inside a thin ink border;
+  hills shaded from the northwest, water washed blue and inked at its edge,
+  trails dotted, trees as small dabs browning with their files' vitality,
+  buildings and landmarks as drawn marks, wild brush past the land's edge,
+  and a vermilion arrow for "you are here". Names stay one size at any zoom
+  and the larger area's name wins where two would collide. It pans and
+  zooms by drag, pinch or scroll; a phone opens it close around the person,
+  a wide screen shows it whole. Its paper is painted a few milliseconds at a
+  time while the page is idle after a bake, so it never holds up a frame.
+- **Markers in the world.** Where a trail crosses from one area into the
+  next, a fingerpost stands beside it with an arm pointing each way along
+  the trail, each painted with the name of the area that way, and across
+  the tread a boundary stone is carved with both names, the one to the left
+  above a cut line and the one to the right below it. An arm's paint fades,
+  its wood greys and it droops on its nail with the vitality of the area it
+  names (the mean of its files'); the stone's moss recedes and the stone
+  bleaches with both areas'. Posts and stones stop a walker, and no grass
+  grows through a stone. A compass strip at the top names the area ahead:
+  the first one along the way the person faces that is not the one they
+  stand in. Markers draw as three instanced meshes and cast no shadow.
 
 ## Trails
 

@@ -27,6 +27,7 @@ import {
   createRenderer,
   createSceneLight,
   createSunShadow,
+  type SceneLight,
 } from "@gaia/render";
 import {
   COVER_TAPS,
@@ -36,6 +37,10 @@ import {
   SHORE_CAP,
   SMALL_WORLD,
   type Trail,
+  type Capsule,
+  type FilePatch,
+  type Place,
+  type WorldPlaces,
   NO_SOLIDS,
   RELIEF_BUDGET,
   type SolidShape,
@@ -49,6 +54,8 @@ import {
   type WorldSpec,
   heightAt,
   landRadius,
+  placeAt,
+  worldPlaces,
   latticeOf,
   randomWorld,
   sampleWorld,
@@ -175,6 +182,47 @@ interface Tree {
   readonly represented: Represented;
 }
 
+/** The world as it stands after a bake: what a map draws and what markers stand beside. */
+export interface StoodWorld {
+  readonly terrain: Terrain;
+  readonly trails: readonly Trail[];
+  readonly buildings: readonly { readonly x: number; readonly z: number; readonly name: string; readonly kind: string }[];
+  readonly landmarks: readonly { readonly x: number; readonly z: number; readonly name: string }[];
+  readonly trees: readonly { readonly x: number; readonly z: number; readonly vitality: number }[];
+}
+
+/** Things another layer stands in the world on each bake: the ground they keep bare and what stops a walker. */
+export interface Furnishing {
+  readonly capsules: readonly Capsule[];
+  readonly solids: readonly SolidShape[];
+}
+const UNFURNISHED: Furnishing = { capsules: [], solids: [] };
+
+/** What the immersive world reads from the terrain lab's world, and the few ways it steers it. */
+export interface WorldHandle {
+  readonly scene: THREE.Scene;
+  readonly light: SceneLight;
+  readonly camera: THREE.PerspectiveCamera;
+  /** Where the person stands and which way they look (radians, 0 looking toward -z), and whether they are on the move. */
+  person(): { readonly x: number; readonly z: number; readonly yaw: number; readonly walking: boolean };
+  /** Where a point is: its area and the file underfoot. */
+  placeAt(x: number, z: number): Place;
+  /** The world as it stands now. */
+  stood(): StoodWorld;
+  /** Calls `listener` after every bake the lab takes on. */
+  onStood(listener: () => void): void;
+  /** Asked on every bake, after the trails are routed and before anything else stands: what to stand beside them. */
+  furnish(furnisher: (stood: StoodWorld) => Furnishing): void;
+  /** Whether the furnishing stops a walker, as it should while it shows. */
+  furnishingSolid(on: boolean): void;
+  /** Shows only the world: no panel, no bars, walking only. */
+  immersive(on: boolean): void;
+}
+
+export interface TerrainLab extends Lab {
+  readonly world: WorldHandle;
+}
+
 /** The full world, or the small one with `?world=small` in the page's address, to compare the two. */
 const SCALE = new URLSearchParams(location.search).get("world") === "small" ? SMALL_WORLD : FULL_WORLD;
 /** The air's density walking, and over the overview, which thins with the world's size so the whole of it stays legible. */
@@ -205,7 +253,7 @@ function levelGround(spec: WorldSpec): Terrain {
   };
 }
 
-export function createTerrainLab(root: HTMLElement): Lab {
+export function createTerrainLab(root: HTMLElement): TerrainLab {
   root.innerHTML = TEMPLATE;
   const $ = refs(root);
   const sheet = createSheet($("panel"));
@@ -217,6 +265,14 @@ export function createTerrainLab(root: HTMLElement): Lab {
   let world: WorldSpec = sampleWorld(SCALE);
   let terrain: Terrain = levelGround(world);
   let bakeMs = 0;
+  // What another layer stands beside the trails, and where a person is.
+  /** What stops a walker without the furnishing. */
+  let bodies: SolidShape[] = [];
+  let places: WorldPlaces = worldPlaces(terrain, []);
+  let furnisher: ((stood: StoodWorld) => Furnishing) | null = null;
+  let furnished: Furnishing = UNFURNISHED;
+  let furnishSolid = true;
+  const stoodListeners: (() => void)[] = [];
 
   // ---------- landmarks and trails ----------
   // A few landmarks stand on the most prominent ground of regions spread
@@ -317,7 +373,7 @@ export function createTerrainLab(root: HTMLElement): Lab {
       return { ax: s.site.x, az: s.site.z, bx: s.site.x + 0.01, bz: s.site.z, radius: r };
     });
     // However many buildings and landmarks a world has, they clear the grass through the one mask.
-    clearings.setCapsules([...settlement.clearings(), ...feet]);
+    clearings.setCapsules([...settlement.clearings(), ...feet, ...furnished.capsules]);
   }
   placeBuildings();
   const signs = createSigns(light);
@@ -442,7 +498,16 @@ export function createTerrainLab(root: HTMLElement): Lab {
       const beside = e === null ? [] : [{ points: [[e.x0, e.z0], [e.x1, e.z0], [e.x1, e.z1], [e.x0, e.z1]].flatMap(([lx, lz]) => siteToWorld(b.site, lx as number, lz as number)) }];
       return [wallsShape(b.plan, b.site), ...beside];
     });
-    solids = solidsOf([...trunks, ...components, ...standing, ...buildings]);
+    bodies = [...trunks, ...components, ...standing, ...buildings];
+    solids = solidsOf(furnishSolid ? [...bodies, ...furnished.solids] : bodies);
+    // Each tree's file is the ground around it, out to most of its crown.
+    const patches: FilePatch[] = trees.map((t) => ({
+      x: t.x,
+      z: t.z,
+      reach: Math.max(4, Math.min(7, (variants[t.variant] as TreeVariant).radius * t.scale * 0.8)),
+      file: { path: t.represented.id, name: t.represented.name, vitality: t.represented.report.vitality },
+    }));
+    places = worldPlaces(terrain, patches);
     warm();
     placeSigns();
   }
@@ -815,9 +880,12 @@ export function createTerrainLab(root: HTMLElement): Lab {
   function adopt(next: WorldSpec, baked: Terrain, stood: Stand): void {
     world = next;
     terrain = baked;
+    // Areas first, so whatever stands beside the trails knows where it is; files join when the trees stand.
+    places = worldPlaces(terrain, []);
     settlement.seat(stood.sites);
     ways = { sites: stood.landmarks, trails: stood.trails };
     placeWays();
+    furnished = furnisher?.(stoodWorld()) ?? UNFURNISHED;
     placeBuildings();
     updateCovers();
     groundTex.update(terrain, stood.ground);
@@ -828,6 +896,17 @@ export function createTerrainLab(root: HTMLElement): Lab {
     walker.moved = true;
     refreshStats();
     refreshPanel();
+    for (const listener of stoodListeners) listener();
+  }
+
+  function stoodWorld(): StoodWorld {
+    return {
+      terrain,
+      trails: ways.trails,
+      buildings: settlement.buildings.map((b) => ({ x: b.site.x, z: b.site.z, name: b.represented.name, kind: b.kindName })),
+      landmarks: ways.sites.map((s) => ({ x: s.site.x, z: s.site.z, name: landmarks[s.landmark]?.name ?? "" })),
+      trees: trees.map((t) => ({ x: t.x, z: t.z, vitality: t.represented.report.vitality })),
+    };
   }
 
   // Bakes run on the workers while the old world stays on screen; the newest
@@ -1038,7 +1117,31 @@ export function createTerrainLab(root: HTMLElement): Lab {
     frozen = 8;
   }
 
+  const handle: WorldHandle = {
+    scene,
+    light,
+    camera,
+    person: () => ({ x: walker.x, z: walker.z, yaw: walker.yaw, walking: goal !== null || [...keys].some((k) => k !== "ShiftLeft" && k !== "ShiftRight") }),
+    placeAt: (x, z) => placeAt(places, x, z),
+    stood: stoodWorld,
+    onStood: (listener) => stoodListeners.push(listener),
+    furnish: (f) => {
+      furnisher = f;
+    },
+    furnishingSolid: (on) => {
+      if (on === furnishSolid) return;
+      furnishSolid = on;
+      solids = solidsOf(on ? [...bodies, ...furnished.solids] : bodies);
+    },
+    immersive: (on) => {
+      root.classList.toggle("immersive", on);
+      if (on && mode !== "walk") setMode("walk");
+      resize();
+    },
+  };
+
   return {
+    world: handle,
     renderer,
     ready,
     report: () => ({
