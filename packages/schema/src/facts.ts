@@ -50,6 +50,18 @@ export interface RegionFacts {
   readonly extent: number;
 }
 
+/** Facts about one dependency, an import from one file to another, which the link kind reads. */
+export interface LinkFacts {
+  /** The importing file's project-relative path. */
+  readonly from: string;
+  /** The imported file's project-relative path. */
+  readonly to: string;
+  /** How many of the importing file's symbols use the imported file. */
+  readonly uses: number;
+  /** Whether the two files are in different regions. */
+  readonly crossesRegions: boolean;
+}
+
 /** Facts about the whole repository, which the world kind reads. */
 export interface RepositoryFacts {
   readonly name: string;

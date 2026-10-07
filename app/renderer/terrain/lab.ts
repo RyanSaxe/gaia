@@ -5,15 +5,25 @@
 
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { type BuildingPlan, type GroundSpec, Library, type SeasonSpec, blueprintOf, seedOf } from "@gaia/schema";
-import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, NO_SHIFT, RELIEF_PRIMITIVES, ROCK_PRIMITIVES, STRUCTURE_PRIMITIVES, WILDFLOWER_PRIMITIVES, WORLD_PRIMITIVES, hex, mixLab } from "@gaia/primitives";
-import { biome, flora, structure, world as worldKind } from "@gaia/kinds";
+import { type BuildingPlan, type GroundSpec, Library, type RouteSpec, type SeasonSpec, blueprintOf, seedOf } from "@gaia/schema";
+import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, LANDMARK_PRIMITIVES, NO_SHIFT, ROUTE_PRIMITIVES, RELIEF_PRIMITIVES, ROCK_PRIMITIVES, STRUCTURE_PRIMITIVES, WILDFLOWER_PRIMITIVES, WORLD_PRIMITIVES, hex, mixLab } from "@gaia/primitives";
+import { biome, flora, landmark, link, structure, world as worldKind } from "@gaia/kinds";
 import { defaultParams, validate } from "@gaia/world";
-import { FLORA_PRESETS, STRUCTURE_PRESETS, WORLD_PRESETS, mergeParts, realize, realizeRegion, realizeSky } from "@gaia/realize";
+import { FLORA_PRESETS, LANDMARK_PRESETS, STRUCTURE_PRESETS, TRAIL_PRESETS, WORLD_PRESETS, buildSlots, mergeParts, realize, realizeRegion, realizeSky } from "@gaia/realize";
 import { type PlantView, applyLight, createLantern, createPlant, createRenderer, createSceneLight, createSunShadow } from "@gaia/render";
 import {
   type BuildingSite,
   EYE_HEIGHT,
+  type LandmarkSite,
+  type Occupied,
+  type Trail,
+  type TrailEnd,
+  type TrailRequest,
+  findLandmarkSite,
+  levelTrails,
+  planTrails,
+  trailDiscs,
+  trailField,
   RELIEF_BUDGET,
   clearingsOf,
   findSite,
@@ -29,6 +39,7 @@ import {
   sampleWorld,
   scatterPlants,
   sightlines,
+  siteToWorld,
   WALK_TO,
   walkStep,
   walkToward,
@@ -45,6 +56,7 @@ import { createRegionCovers } from "./regions.ts";
 import { createWater } from "./water.ts";
 import { createUnderstory } from "./understory.ts";
 import { createClearings } from "./clearings.ts";
+import { type Ways, createWays, trailWear } from "./trails.ts";
 
 const TEMPLATE = /* html */ `
 <main class="stage">
@@ -129,6 +141,100 @@ export function createTerrainLab(root: HTMLElement): Lab {
   };
   let site = settle(terrain);
 
+  // ---------- landmarks and trails ----------
+  // A few landmarks stand on the most prominent ground of regions spread
+  // across the world, and trails tie them and the cottage together. Counts
+  // follow the world's size and region count, so the same rules fill a
+  // 320 m world or a kilometer.
+  const landmarkLib = new Library([...LANDMARK_PRIMITIVES, ...FLORA_PRIMITIVES]);
+  const routeLib = new Library(ROUTE_PRIMITIVES);
+  const landmarks = LANDMARK_PRESETS.map((preset, i) => {
+    const built = realize(preset.blueprint, landmark, landmarkLib, { seed: seedOf(`terrain-lab/landmark-${i}`), facts: { scale: 1 } });
+    // The footprint at the ground: how far the landmark reaches within a meter of it.
+    let base = 1;
+    for (const part of built.parts) {
+      for (let k = 0; k < part.positions.length; k += 3) {
+        if ((part.positions[k + 1] as number) < 1) base = Math.max(base, Math.hypot(part.positions[k] as number, part.positions[k + 2] as number));
+      }
+    }
+    return { name: preset.name, built, base: Math.min(base, 10) };
+  });
+  const trailStyles = TRAIL_PRESETS.map((p) => buildSlots(p.blueprint, link, routeLib, { seed: 1, facts: {} }).get("route")?.output as RouteSpec);
+  interface Settled {
+    readonly sites: { readonly landmark: number; readonly site: LandmarkSite }[];
+    readonly trails: Trail[];
+  }
+  const door = (s: BuildingSite): TrailEnd => {
+    const d = cottagePlan.openings.find((o) => o.kind === "door");
+    const [x, z] = siteToWorld(s, d?.position[0] ?? 0, (d?.position[2] ?? cottagePlan.depth / 2) + 5.6);
+    return { id: "cottage", x, z };
+  };
+  function settleWays(t: Terrain, home: BuildingSite): Settled {
+    const regions = t.spec.regions;
+    const want = Math.min(regions.length, landmarks.length, Math.max(2, Math.round(Math.sqrt(regions.length) * 1.4)));
+    const spacing = t.spec.size * 0.24;
+    const home_: Occupied = { x: home.x, z: home.z, radius: Math.hypot(cottagePlan.width, cottagePlan.depth) / 2 + 22 };
+    // Regions spread apart: farthest first from the cottage, then from every landmark placed.
+    const sites: Settled["sites"][number][] = [];
+    const avoid: Occupied[] = [home_];
+    const taken = new Set<number>();
+    while (sites.length < want && taken.size < regions.length) {
+      let pick = -1;
+      let far = -1;
+      regions.forEach((r, i) => {
+        if (taken.has(i)) return;
+        const d = Math.min(Math.hypot(r.x - home.x, r.z - home.z), ...sites.map((s) => Math.hypot(r.x - s.site.x, r.z - s.site.z)));
+        if (d > far) {
+          far = d;
+          pick = i;
+        }
+      });
+      taken.add(pick);
+      const k = sites.length;
+      const lm = landmarks[k];
+      if (lm === undefined) break;
+      const site = findLandmarkSite(t, pick, lm.base + 1.5, avoid);
+      if (site === null) continue;
+      sites.push({ landmark: k, site });
+      avoid.push({ x: site.x, z: site.z, radius: spacing });
+    }
+    // The places to tie together, and the trails Jev would want between them:
+    // a spanning tree by distance (most wanted), then a loop or two (less).
+    const places: TrailEnd[] = [door(home), ...sites.map((s) => ({ id: landmarks[s.landmark]?.name ?? "", x: s.site.x, z: s.site.z }))];
+    const foot = (p: TrailEnd, toward: TrailEnd, i: number): TrailEnd => {
+      if (i === 0) return p;
+      const lm = landmarks[sites[i - 1]?.landmark ?? 0];
+      const d = Math.hypot(toward.x - p.x, toward.z - p.z) || 1;
+      const r = (lm?.base ?? 2) + 1.8;
+      return { id: p.id, x: p.x + ((toward.x - p.x) / d) * r, z: p.z + ((toward.z - p.z) / d) * r };
+    };
+    const edges: [number, number, number][] = [];
+    for (let a = 0; a < places.length; a++) for (let b = a + 1; b < places.length; b++) edges.push([a, b, Math.hypot(places[a]!.x - places[b]!.x, places[a]!.z - places[b]!.z)]);
+    edges.sort((p, q) => p[2] - q[2]);
+    const group = places.map((_, i) => i);
+    const root = (i: number): number => (group[i] === i ? i : (group[i] = root(group[i] as number)));
+    const requests: TrailRequest[] = [];
+    let loops = 0;
+    for (const [a, b] of edges) {
+      const joined = root(a) !== root(b);
+      if (!joined && loops >= Math.floor(places.length / 3)) continue;
+      if (joined) group[root(a)] = root(b);
+      else loops++;
+      const pa = places[a] as TrailEnd;
+      const pb = places[b] as TrailEnd;
+      const style = (joined ? (a === 0 ? trailStyles[1] : trailStyles[0]) : trailStyles[2]) as RouteSpec;
+      requests.push({ id: `${pa.id}->${pb.id}`, from: foot(pa, pb, a), to: foot(pb, pa, b), style, want: joined ? 0.9 - requests.length * 0.02 : 0.45 });
+    }
+    const keepOut: Occupied[] = [
+      { x: home.x, z: home.z, radius: Math.hypot(cottagePlan.width, cottagePlan.depth) / 2 + 0.6 },
+      ...sites.map((s) => ({ x: s.site.x, z: s.site.z, radius: (landmarks[s.landmark]?.base ?? 2) + 0.8 })),
+    ];
+    const trails = planTrails(t, requests, 41, keepOut);
+    levelTrails(t, trails);
+    return { sites, trails };
+  }
+  let ways = settleWays(terrain, site);
+
   const canvas = root.querySelector("canvas") as HTMLCanvasElement;
   const stage = root.querySelector(".stage") as HTMLElement;
   const renderer = createRenderer(canvas);
@@ -152,18 +258,50 @@ export function createTerrainLab(root: HTMLElement): Lab {
   const scene = new THREE.Scene();
   const sky = createSky(light);
   const groundTex = createGroundTexture(terrain);
-  const ground = createGround(terrain, light, covers);
+  const ground = createGround(terrain, light, covers, groundTex);
   const clearings = createClearings(terrain);
   const grass = createGrass(light, groundTex, covers, landRadius(terrain), clearings);
   const water = createWater(terrain, light, groundTex);
   const marker = createWalkMarker();
   scene.add(sky.mesh, ground.wilds, ground.fine, ground.coarse, grass.mesh, water.group, marker.mesh);
+  const landmarkViews = landmarks.map((lm) => {
+    const view = createPlant({ ...lm.built, parts: mergeParts(lm.built.parts) }, light);
+    scene.add(view.object);
+    return view;
+  });
+  let built: Ways | null = null;
+  /** Stands each landmark on its site, paints and parts the trails, and builds their crossings. */
+  function placeWays(): void {
+    landmarkViews.forEach((view, k) => {
+      const s = ways.sites.find((w) => w.landmark === k);
+      view.object.visible = s !== undefined;
+      if (s !== undefined) {
+        view.object.position.set(s.site.x, s.site.y - 0.05, s.site.z);
+        // The door faces where its first trail arrives, or the cottage.
+        const near = ways.trails.flatMap((t) => [[t.points[0], t.points[1]], [t.points[t.points.length - 2], t.points[t.points.length - 1]]]).find(([x, z]) => Math.hypot((x ?? 0) - s.site.x, (z ?? 0) - s.site.z) < 14);
+        const [fx, fz] = near ?? [site.x, site.z];
+        view.object.rotation.y = Math.atan2((fx ?? 0) - s.site.x, (fz ?? 0) - s.site.z);
+      }
+    });
+    const field = trailField(terrain, ways.trails);
+    groundTex.setTrails(field);
+    ground.setTrails(field);
+    trailWear.value = ways.trails.length === 0 ? 0 : ways.trails.reduce((n, t) => n + t.style.wear, 0) / ways.trails.length;
+    built?.dispose();
+    built = createWays(scene, light, landmarkLib, terrain, ways.trails);
+  }
+  placeWays();
   const cottage = createPlant({ ...cottageBuilt, parts: mergeParts(cottageBuilt.parts) }, light);
   scene.add(cottage.object);
   function placeCottage(): void {
     cottage.object.position.set(site.x, site.level, site.z);
     cottage.object.rotation.y = site.yaw;
-    grass.clear(clearingsOf(cottagePlan, site));
+    // No grass inside a landmark's footprint: a hollow tower or a great trunk.
+    const feet = ways.sites.map((s) => {
+      const r = Math.min(landmarks[s.landmark]?.base ?? 2, 4);
+      return { ax: s.site.x, az: s.site.z, bx: s.site.x + 0.01, bz: s.site.z, radius: r };
+    });
+    grass.clear([...clearingsOf(cottagePlan, site), ...feet]);
   }
   placeCottage();
 
@@ -202,9 +340,14 @@ export function createTerrainLab(root: HTMLElement): Lab {
 
   function plant(): void {
     const spots = scatterPlants(terrain, planted.length, 9);
+    // Trees keep off the trails and out from under a landmark.
+    const clear: Occupied[] = [
+      ...trailDiscs(ways.trails, 1.6),
+      ...ways.sites.map((s) => ({ x: s.site.x, z: s.site.z, radius: (landmarks[s.landmark]?.base ?? 2) + (landmarks[s.landmark]?.name.startsWith("Great") ? 12 : 5) })),
+    ];
     planted.forEach((p, i) => {
       const s = spots[i];
-      p.view.object.visible = s !== undefined && !insideFootprint(cottagePlan, site, s.x, s.z, 6);
+      p.view.object.visible = s !== undefined && !insideFootprint(cottagePlan, site, s.x, s.z, 6) && !clear.some((o) => Math.hypot(o.x - s.x, o.z - s.z) < o.radius);
       if (s === undefined) return;
       p.view.object.position.set(s.x, groundedBase(terrain.lattice, s.x, s.z, p.base), s.z);
     });
@@ -214,7 +357,8 @@ export function createTerrainLab(root: HTMLElement): Lab {
       const steps = Math.max(1, Math.ceil(Math.hypot(c.bx - c.ax, c.bz - c.az)));
       return Array.from({ length: steps + 1 }, (_, k) => ({ x: c.ax + ((c.bx - c.ax) * k) / steps, z: c.az + ((c.bz - c.az) * k) / steps, radius: c.radius + 0.5 }));
     });
-    understory.place(terrain, world, [...trees, ...cottageGround]);
+    const ways_ = [...trailDiscs(ways.trails, 0.5), ...ways.sites.map((s) => ({ x: s.site.x, z: s.site.z, radius: (landmarks[s.landmark]?.base ?? 2) + 1 }))];
+    understory.place(terrain, world, [...trees, ...cottageGround, ...ways_]);
   }
   plant();
 
@@ -447,7 +591,9 @@ export function createTerrainLab(root: HTMLElement): Lab {
     const t0 = performance.now();
     terrain = bakeTerrain(world, lib);
     site = settle(terrain);
+    ways = settleWays(terrain, site);
     bakeMs = performance.now() - t0;
+    placeWays();
     placeCottage();
     updateCovers();
     groundTex.update(terrain);
@@ -582,7 +728,7 @@ export function createTerrainLab(root: HTMLElement): Lab {
 
   let frozen: number | null = null;
   const shadowCenter = new THREE.Vector3();
-  const views = [...planted.map((p) => p.view), cottage];
+  const views = (): PlantView[] => [...planted.map((p) => p.view), cottage, ...landmarkViews, ...(built?.views ?? [])];
   const lanternEye = new THREE.Vector3();
   // The water mirrors the sky, the coarse ground, trees and the cottage, and
   // never grass or the understory: its reflection is soft, so fine detail
@@ -609,7 +755,7 @@ export function createTerrainLab(root: HTMLElement): Lab {
     }
     marker.frame(dt, camera.position, light.uNightness.value);
     refreshSight(now);
-    shadow.render(renderer, scene, [...views, ...understory.casters()], [sky.mesh, ground.wilds, ground.fine, ground.coarse, grass.mesh, water.group, marker.mesh, ...understory.quiet()]);
+    shadow.render(renderer, scene, [...views(), ...understory.casters()], [sky.mesh, ground.wilds, ground.fine, ground.coarse, grass.mesh, water.group, marker.mesh, ...understory.quiet()]);
     frameCalls = renderer.info.render.calls;
     frameCalls += water.mirror(renderer, scene, camera, [...mirrorHide, ...understory.quiet(), ...understory.casters().map((c) => c.object)], mirrorShow, dt);
     renderer.render(scene, camera);
@@ -652,6 +798,20 @@ export function createTerrainLab(root: HTMLElement): Lab {
     shots: (): Shot[] => RELIEF_PRIMITIVES.map((p) => ({ name: `terrain-${slug(p.id)}`, stage: () => showcase(p.id) })),
     hook: {
       cottage: () => ({ ...site, triangles: cottage.triangles, width: cottagePlan.width, depth: cottagePlan.depth }),
+      /** Each standing landmark: its name, site, height and triangles. */
+      landmarks: () =>
+        ways.sites.map((s) => ({ name: landmarks[s.landmark]?.name, ...s.site, height: landmarkViews[s.landmark]?.height, triangles: landmarkViews[s.landmark]?.triangles })),
+      /** Sets every landmark's vitality, 0 to 1. */
+      landmarkVitality: (v: number) => landmarkViews.forEach((view) => view.setVitality(v)),
+      /** Each trail: its ends, length, crossings and a point every 10 m. */
+      trails: () =>
+        ways.trails.map((t) => ({
+          id: t.id,
+          length: t.length,
+          width: t.style.width,
+          crossings: t.crossings.map((c) => ({ x: Math.round(c.x), z: Math.round(c.z), span: +c.span.toFixed(1) })),
+          points: Array.from({ length: Math.ceil(t.points.length / 20) }, (_, k) => [Math.round(t.points[k * 20] ?? 0), Math.round(t.points[k * 20 + 1] ?? 0)]),
+        })),
       walk: (x: number, z: number, yawDeg: number, pitchDeg = -3) => walkTo(x, z, (yawDeg * Math.PI) / 180, (pitchDeg * Math.PI) / 180),
       valley: () => valleyView(),
       walker: () => ({ x: walker.x, z: walker.z, yawDeg: (walker.yaw * 180) / Math.PI, pitchDeg: (walker.pitch * 180) / Math.PI, eye: walker.eye }),

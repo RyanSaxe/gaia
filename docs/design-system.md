@@ -67,7 +67,7 @@ instance within it:
 | Small tree | 3 to 6 m |
 | Tall tree | 8 to 16 m |
 | House | 5 to 9 m |
-| Landmark | 12 to 30 m |
+| Landmark | 12 to 30 m; a ring of standing stones 3 to 8 m, 10 to 20 m across |
 
 ## Terrain
 
@@ -168,6 +168,50 @@ under the house and along the walk to its door, and its walls stop the
 walk. A cottage stays under 25,000 triangles and draws one mesh per
 swatch, about ten calls.
 
+## Trails
+
+A trail is a `link`: a dependency between two files that Jev judges a
+person would walk between. Jev fills only the trail's look, through
+`trail@1`'s closed fields: its width (a narrow footpath to a broad cart
+track), how worn its tread is, whether stones line its edges, how freely
+it wanders, and whether it crosses a stream on stepping stones or a small
+footbridge. Jev never draws the route. `planTrails` in `@gaia/terrain`
+finds it over the baked ground: the cheapest way at a gentle grade, around
+steep ground, ponds and deep water, across a stream where it is narrow, and
+wandering off the easiest line by a seeded field as far as the winding
+allows. A later trail prefers ground an earlier one wore, so trails meet
+at junctions instead of running side by side. The same terrain, requests
+and seed always give the same trails.
+
+The ground under a tread eases toward the tread's own grade, averaged over
+14 m, and blends back into the land over 2.6 m, as a cottage's pad does; a
+trail on a hillside benches gently into it, and no sample moves more than
+55 cm. Water and its banks are never touched. The tread is worn earth from
+the cover's own soil, darker down the trodden middle, with a ragged edge;
+just outside it the grass is dulled and trampled shorter. Blades part along
+the tread: each stands only past its own seeded edge, so the border is
+ragged, and a faint trail keeps more blades on it. Trees keep 1.6 m off a
+tread and the understory half a meter. A footbridge's deck and stepping
+stones are walkable. Planks go missing and rails sag as vitality falls.
+
+## Landmarks
+
+A landmark is a great thing a person steers by: a lookout tower, a ring of
+standing stones, or a great old tree. It stands for the one file a region
+is organized around, and Jev chooses the form. `findLandmarkSite` puts it
+on the most prominent gentle, dry ground of its region, a knoll or a rise
+near the region's heart, and levels its footprint into the land. Each
+reads as a silhouette through the haze from 300 m and more, and declines
+by breaking, not by fading:
+
+- A tower's blocks fall from the top down, each at its own seeded
+  threshold, so a failing tower is a jagged stump. Its roof goes first and
+  its lit windows go out one by one; an open lantern room glows at night
+  like a beacon.
+- A ring of standing stones loses its lintels first; then stones lean and
+  break off at a seeded height.
+- A great tree drops its leaves, sags and greys to a bare snag.
+
 ## Composition budgets
 
 | Budget | Starting value |
@@ -178,8 +222,10 @@ swatch, about ten calls.
 | Tree spacing | at least one crown width between trunks |
 
 Jev decides which dependencies become routes; when it wants more than the
-budget allows, the most probable win. The world must never be dominated by
-paths.
+budget allows, the most probable win. `planTrails` routes trails most wanted
+first and keeps each only while every region it crosses stays within both
+route budgets, so the world is never dominated by paths. Landmarks stand
+about a quarter of the world's width apart.
 
 ## Understory
 
