@@ -54,8 +54,9 @@ void main() {
   float t = position.y;
   float c = cos(aBlade.z);
   float s = sin(aBlade.z);
-  // A flower blade opens a small diamond head around its upper vertices.
-  float wide = shape.y * (1.0 + flower * 2.4 * step(0.7, t) * step(t, 0.9));
+  // A flower blade opens a small head just below its tip. Seen at eye
+  // height, a head any larger reads as confetti.
+  float wide = shape.y * (1.0 + flower * 1.6 * step(0.7, t) * step(t, 0.9));
   vec3 local = vec3(position.x * wide * c, t * h, position.x * wide * s);
   float w = windAt(xz, uTime * 0.95) + 0.3 * sin(uTime * 3.7 + xz.x * 0.7 + xz.y * 1.3);
   local.x += w * 0.09 * uWind * t * t * h;
@@ -91,7 +92,7 @@ void main() {
   albedo = mix(albedo, vTip, smoothstep(0.55, 1.0, vT) * 0.75);
   albedo = mix(albedo, uDry, step(0.93, vTint) * 0.45);
   albedo *= 0.82 + 0.25 * vT;
-  if (vFlower > 0.5 && vT > 0.55) albedo = vBloom;
+  if (vFlower > 0.5 && vT > 0.8) albedo = vBloom * (0.9 + 0.1 * vT);
   float shadow = mix(0.45, 1.0, sunShadow(vWorld, 0.0015));
   float light = softCel(max(uSunDirection.y, 0.0) * shadow);
   vec3 lit = albedo * (uSunColor * uSunIntensity * light + uAmbientColor * uAmbientIntensity);
