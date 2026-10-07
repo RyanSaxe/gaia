@@ -39,11 +39,13 @@
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); }
+html { -webkit-text-size-adjust: 100%; }
 body { font: 12.5px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; overflow: hidden; }
 [hidden] { display: none !important; }
 
 /* ---------- shell: tabs, labs, status bar ---------- */
-#shell { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; height: 100vh; }
+/* A phone's browser bars cover part of 100vh; 100dvh is the height left visible. */
+#shell { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; height: 100vh; height: 100dvh; }
 #tabs { display: flex; align-items: center; gap: 12px; padding: 6px 10px; background: var(--panel); border-bottom: 1px solid var(--line); -webkit-app-region: drag; }
 #tabs .brand { font-weight: 650; padding-left: 4px; }
 #tabs .brand span { color: var(--muted); font-weight: 400; margin-left: 5px; }
@@ -157,6 +159,9 @@ details.json pre { font: 11px/1.45 ui-monospace, "SF Mono", Menlo, monospace; ba
 }
 :where(:root.touch .stage:has(> .pad:not([hidden]))) > .bar.bottom { left: 164px; }
 
+/* ---------- the panel's sheet handle, shown only on a narrow screen ---------- */
+.sheet-handle { display: none; }
+
 /* ---------- world ---------- */
 .panel > header select.preset { font-size: 14px; font-weight: 650; padding: 5px 8px; }
 .plant-row { display: grid; grid-template-columns: auto 1fr; gap: 4px 8px; align-items: center; padding: 6px 8px; background: var(--seg); border-radius: 7px; }
@@ -166,7 +171,42 @@ details.json pre { font: 11px/1.45 ui-monospace, "SF Mono", Menlo, monospace; ba
 .plant-row.empty .range { opacity: 0.45; }
 .world-space { font-size: 11px; color: var(--muted); }
 
-@media (max-width: 640px) {
-  .lab { grid-template-columns: 1fr; grid-template-rows: 55vh 1fr; }
-  .panel { border-left: 0; border-top: 1px solid var(--line); }
+/* ---------- a narrow screen: the stage takes the width, the panel is a bottom sheet ---------- */
+@media (max-width: 699px) {
+  #tabs { gap: 8px; padding: 4px 8px; }
+  #tabs .seg { padding: 0 14px; }
+  #status { padding: 4px 12px; }
+
+  .lab { display: block; overflow: hidden; --handle: 52px; }
+  .stage { position: absolute; inset: 0 0 var(--handle); }
+  .panel {
+    position: absolute; left: 0; right: 0; bottom: 0; height: 78%; z-index: 1;
+    border-left: 0; border-top: 1px solid var(--line); border-radius: 14px 14px 0 0;
+    box-shadow: 0 -6px 20px rgba(0, 0, 0, 0.14);
+    transform: translateY(calc(100% - var(--handle))); transition: transform 0.25s ease;
+  }
+  .panel.open { transform: none; }
+  .sheet-handle {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; flex: none;
+    height: var(--handle); width: 100%; padding: 6px 16px 8px; border: 0; border-bottom: 1px solid var(--line); border-radius: 14px 14px 0 0;
+    background: transparent; touch-action: none; user-select: none; -webkit-user-select: none;
+  }
+  .sheet-handle, .sheet-handle:hover { border-color: var(--line); }
+  .sheet-handle::before { content: ""; width: 36px; height: 4px; border-radius: 2px; background: var(--line); flex: none; }
+  .sheet-name { font-size: 14px; font-weight: 650; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* Touch targets of at least 44 px; 16 px selects keep iOS from zooming in on focus. */
+  button, select { min-height: 44px; }
+  select { font-size: 16px; }
+  .range input { height: 44px; }
+  .check { min-height: 44px; }
+  .check input { width: 20px; height: 20px; }
+  details.json summary { padding: 12px 0; }
+  .switch { width: 50px; height: 44px; }
+  .switch-track { inset: 7px 0; border-radius: 15px; }
+  .switch-track::after { width: 26px; height: 26px; }
+  .switch input:checked + .switch-track::after { transform: translateX(20px); }
+
+  /* The terrain stats move to the top, leaving the bottom left to the walk pad. */
+  .lab-terrain .bar.bottom { top: 64px; bottom: auto; left: 10px; }
 }

@@ -11,6 +11,7 @@ import { FLORA_PRESETS, realize } from "@gaia/realize";
 import { type PlantView, createPlant, createSceneLight, createSunShadow } from "@gaia/render";
 import { renderInspector } from "../inspector.ts";
 import { type Lab, type Shot, onTap, refs, slug } from "../lab.ts";
+import { createSheet } from "../sheet.ts";
 import { createGrass, createGround, createSky } from "./environment.ts";
 
 const TEMPLATE = /* html */ `
@@ -65,6 +66,7 @@ interface Entry {
 export function createFloraLab(root: HTMLElement): Lab {
   root.innerHTML = TEMPLATE;
   const $ = refs(root);
+  const sheet = createSheet($("panel"));
   const lib = new Library(FLORA_PRIMITIVES);
   const space = blueprintCount(flora, lib);
   let active = false;
@@ -181,6 +183,7 @@ export function createFloraLab(root: HTMLElement): Lab {
 
   function refreshPanel(): void {
     $("panel").classList.toggle("empty", selected === null);
+    sheet.name(selected?.name ?? "No plant selected");
     if (selected === null) {
       $("name").textContent = "No plant selected";
       $("bp-id").textContent = "Click a plant in the meadow.";

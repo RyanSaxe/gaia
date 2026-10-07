@@ -27,6 +27,7 @@ import {
 import { createSky } from "../flora/environment.ts";
 import { renderInspector } from "../inspector.ts";
 import { type Lab, type Shot, onTap, refs, slug } from "../lab.ts";
+import { createSheet } from "../sheet.ts";
 import { createGrass, createWater } from "./cover.ts";
 import { createGround, createGroundTexture, createMist } from "./ground.ts";
 import { createRegionCovers } from "./regions.ts";
@@ -50,7 +51,7 @@ const TEMPLATE = /* html */ `
   </div>
   <div class="pad touch-only" data-ref="pad" aria-hidden="true"><div class="pad-knob" data-ref="pad-knob"></div></div>
 </main>
-<aside class="panel">
+<aside class="panel" data-ref="panel">
   <header>
     <div class="regions" data-ref="regions"></div>
     <div class="title" data-ref="region-name"></div>
@@ -84,6 +85,7 @@ interface Planted {
 export function createTerrainLab(root: HTMLElement): Lab {
   root.innerHTML = TEMPLATE;
   const $ = refs(root);
+  const sheet = createSheet($("panel"));
   const lib = new Library([...RELIEF_PRIMITIVES, ...BIOME_PRIMITIVES]);
   const floraLib = new Library(FLORA_PRIMITIVES);
   let active = false;
@@ -397,6 +399,7 @@ export function createTerrainLab(root: HTMLElement): Lab {
     );
     const region = world.regions[selected];
     if (region === undefined) return;
+    sheet.name(region.id);
     $("region-name").textContent = region.id;
     $("bp-id").textContent = `${region.biome.id} · ground level ${fmt(region.base)} m`;
     $("problems").textContent = validate(region.biome, biome, lib).join(" ");
