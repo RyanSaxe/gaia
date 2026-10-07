@@ -9,9 +9,9 @@ import { applyVitality, resolveParams } from "@gaia/realize";
 
 const lib = new Library(PRIMITIVES);
 const facts = { scale: 1, age: 120 };
-const GEOMETRY_ROLES = new Set(["Surface", "Foliage", "Ornament", "Walls", "Roof", "Openings", "Dressing", "Rock", "Overgrowth", "Drift"]);
+const GEOMETRY_ROLES = new Set(["Surface", "Foliage", "Ornament", "Walls", "Roof", "Openings", "Dressing", "Feature", "Rock", "Overgrowth", "Drift"]);
 /** Roles that build against a building's plan. */
-const PLAN_ROLES = new Set(["Walls", "Roof", "Openings", "Dressing"]);
+const PLAN_ROLES = new Set(["Walls", "Roof", "Openings", "Dressing", "Feature"]);
 /** Roles that build from nothing. */
 const SOURCE_ROLES = new Set(["Skeleton", "Motion", "Palette", "Footprint", "Rock", "Drift"]);
 const TRIANGLE_BUDGET = 40_000;
@@ -95,6 +95,10 @@ describe.each(PRIMITIVES.map((p) => [p.id, p] as const))("%s", (_id, p) => {
           const c = part.channels;
           expect([c.loss, c.droop, c.wither, c.glow, c.close, part.shade].every(inUnit)).toBe(true);
           expect(c.close.length).toBe(part.shade.length);
+          // Optional channels, when present, cover every vertex and stay in range.
+          expect([c.grow, c.rot].every((a) => a === undefined || (a.length === part.shade.length && inUnit(a)))).toBe(true);
+          expect(c.fall === undefined || (c.fall.length === part.shade.length * 4 && allFinite(c.fall) && c.fall.every((x, i) => i % 4 !== 3 || (x >= 0 && x <= 1)))).toBe(true);
+          expect(c.spin === undefined || (c.spin.length === part.shade.length * 3 && allFinite(c.spin))).toBe(true);
           expect(part.tint.every((x) => x >= -0.1 && x <= 0.1)).toBe(true);
           expect(cutsKnown(part)).toBe(true);
           expect(part.indices.length / 3).toBeLessThanOrEqual(TRIANGLE_BUDGET);

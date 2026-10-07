@@ -22,3 +22,4 @@ One file per decision the reviewer settled in the pair sessions that designed Ga
 - [Edit primitives in place until release](18-edit-primitives-in-place.md)
 - [The lab on your phone](19-lab-on-your-phone.md)
 - [Click or tap to walk](20-click-to-walk.md)
+- [Buildings stand for entities, and fall to ruin](21-structures-stand-for-entities.md)

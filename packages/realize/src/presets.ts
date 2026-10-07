@@ -62,7 +62,7 @@ export const FLORA_PRESETS: readonly Preset[] = [
   },
 ];
 
-/** Hand-filled structure blueprints: cottages Jev might choose for central files. */
+/** Hand-filled structure blueprints: buildings Jev might choose for entities, from cottages to a mill and an archive tower. */
 export const STRUCTURE_PRESETS: readonly Preset[] = [
   {
     name: "Thatched cottage",
@@ -104,6 +104,36 @@ export const STRUCTURE_PRESETS: readonly Preset[] = [
       openings: { use: "casements@1", params: { panes: "four panes", shutters: true, door: "arched" } },
       ornaments: { use: "cottage-garden@1", params: { extras: ["flower boxes", "fence", "lantern"], walk: "stepping stones" } },
       palette: { use: "palette@1", params: { family: "autumn-ember", contrast: "balanced" } },
+    }),
+  },
+  {
+    name: "Watermill",
+    blueprint: identify("structure", {
+      footprint: {
+        use: "cottage-plan@1",
+        params: { shape: "long", size: "roomy", roofline: "steep", windows: "several", base: "on a stone plinth", character: "gently settled" },
+      },
+      body: { use: "fieldstone@1", params: { stones: "mixed sizes", gables: "boards" } },
+      roof: { use: "tiles@1", params: { covering: "shingles", overhang: "sheltering", chimney: "gable" } },
+      feature: { use: "waterwheel@1", params: { wheel: "a great wheel", drive: "overshot" } },
+      openings: { use: "casements@1", params: { panes: "six panes", shutters: true, door: "plank" } },
+      ornaments: { use: "cottage-garden@1", params: { extras: ["lantern", "woodpile"], walk: "flagstones" } },
+      palette: { use: "palette@1", params: { family: "teal-gold", contrast: "balanced" } },
+    }),
+  },
+  {
+    name: "Archive tower",
+    blueprint: identify("structure", {
+      footprint: {
+        use: "cottage-plan@1",
+        params: { shape: "snug", size: "modest", roofline: "tall and steep", windows: "several", base: "raised up steps", character: "gently settled" },
+      },
+      body: { use: "timber-frame@1", params: { framing: "close studding", plaster: "hand-laid" } },
+      roof: { use: "tiles@1", params: { covering: "slates", overhang: "sheltering", chimney: "gable" } },
+      feature: { use: "tower@1", params: { height: "tall", cap: "lantern" } },
+      openings: { use: "casements@1", params: { panes: "six panes", shutters: false, door: "arched" } },
+      ornaments: { use: "cottage-garden@1", params: { extras: ["flower boxes", "lantern"], walk: "flagstones" } },
+      palette: { use: "palette@1", params: { family: "bluebell-wood", contrast: "balanced" } },
     }),
   },
 ];

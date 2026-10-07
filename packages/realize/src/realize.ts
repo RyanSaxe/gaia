@@ -142,6 +142,9 @@ export function mergeParts(parts: readonly Part[]): Part[] {
       base += p.shade.length;
     }
     const first = list[0] as Part;
+    /** An optional channel joins only if some part has it; parts without it read zeros. */
+    const optional = (name: "fall" | "grow" | "rot" | "spin", size: number): Partial<Part["channels"]> =>
+      list.some((p) => p.channels[name] !== undefined) ? { [name]: join((p) => p.channels[name] ?? new Float32Array(p.shade.length * size)) } : {};
     return {
       swatch: first.swatch,
       collision: first.collision,
@@ -158,6 +161,10 @@ export function mergeParts(parts: readonly Part[]): Part[] {
         glow: join((p) => p.channels.glow),
         pivot: join((p) => p.channels.pivot),
         close: join((p) => p.channels.close),
+        ...optional("fall", 4),
+        ...optional("grow", 1),
+        ...optional("rot", 1),
+        ...optional("spin", 3),
       },
     };
   });

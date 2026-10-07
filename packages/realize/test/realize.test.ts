@@ -3,7 +3,7 @@ import { type AnyPrimitive, type Built, type Part, Library, type Skeleton, bluep
 import { FLORA_PRIMITIVES, PRIMITIVES, STRUCTURE_PRIMITIVES } from "@gaia/primitives";
 import { flora, rock, structure, wildflowers } from "@gaia/kinds";
 import { randomSlots, validate } from "@gaia/world";
-import { FLORA_PRESETS, FLOWER_PRESETS, ROCK_PRESETS, SHRUB_PRESETS, STRUCTURE_PRESETS, applyVitality, mergeParts, realize, resolveParams, triangleCount } from "@gaia/realize";
+import { FLORA_PRESETS, FLOWER_PRESETS, ROCK_PRESETS, SHRUB_PRESETS, STRUCTURE_PRESETS, applyVitality, mergeParts, realize, resolveParams, rotAt, spinAt, triangleCount } from "@gaia/realize";
 
 const lib = new Library(FLORA_PRIMITIVES);
 const facts = { scale: 1, age: 120 };
@@ -147,27 +147,57 @@ describe("presets", () => {
 
 describe("structures", () => {
   const structureLib = new Library([...STRUCTURE_PRIMITIVES, ...FLORA_PRIMITIVES]);
-  const facts = { size: 1.25, floors: 2 };
+  const facts = { size: 1.25, floors: 2, reach: 1 };
 
   for (const { name, blueprint } of STRUCTURE_PRESETS) {
     it(`${name} is a valid structure blueprint`, () => {
       expect(validate(blueprint, structure, structureLib)).toEqual([]);
     });
 
-    it(`${name} stays within 25k triangles and draws in at most 11 calls`, () => {
+    it(`${name} stays within 32k triangles and draws in at most 11 calls`, () => {
       const built = realize(blueprint, structure, structureLib, { seed: 4, facts });
-      expect(triangleCount(built.parts)).toBeLessThan(25_000);
+      expect(triangleCount(built.parts)).toBeLessThan(32_000);
       expect(mergeParts(built.parts).length).toBeLessThanOrEqual(11);
       expect(triangleCount(mergeParts(built.parts))).toBe(triangleCount(built.parts));
     });
+
+    it(`${name} falls to ruin as vitality drops, and shows none of it while healthy`, () => {
+      const parts = mergeParts(realize(blueprint, structure, structureLib, { seed: 4, facts }).parts);
+      /** How far the pieces carrying a channel stand from where they were built, at most. */
+      const moved = (v: number, has: (p: Part) => Float32Array | undefined): number =>
+        Math.max(
+          ...parts.filter((p) => has(p) !== undefined).map((p) => {
+            const at = applyVitality(p, v).positions;
+            return at.reduce((m, x, i) => Math.max(m, Math.abs(x - (p.positions[i] as number))), 0);
+          }),
+        );
+      // Overgrowth and rubble are gone into their pivots while healthy, and spread out when failing.
+      const grown = (v: number): number =>
+        Math.max(
+          ...parts.map((p) => {
+            const grow = p.channels.grow;
+            if (grow === undefined) return 0;
+            const at = applyVitality(p, v).positions;
+            return at.reduce((m, x, i) => ((grow[Math.floor(i / 3)] as number) > 0 ? Math.max(m, Math.abs(x - (p.channels.pivot[i] as number))) : m), 0);
+          }),
+        );
+      expect(grown(1)).toBe(0);
+      expect(grown(0.05)).toBeGreaterThan(0.3);
+      // Doors swing, shutters hang and chimneys topple: whole meters, not a tremble.
+      expect(moved(0.05, (p) => p.channels.fall) - moved(1, (p) => p.channels.fall)).toBeGreaterThan(1);
+      // Walls and roofs rot through: no holes while healthy, deep ones when failing.
+      const rotMost = Math.max(...parts.flatMap((p) => (p.channels.rot === undefined ? [] : [Math.max(...p.channels.rot)])));
+      expect(rotAt(1)).toBe(0);
+      expect(rotMost * rotAt(0.05)).toBeGreaterThan(0.6);
+    });
   }
 
-  it("keeps any cottage in the type space within 25k triangles and 11 draw calls, at its largest", () => {
+  it("keeps any building in the type space within 32k triangles and 11 draw calls, at its largest", () => {
     const r = rand(99);
     for (let i = 0; i < 80; i++) {
       const bp = blueprintOf(structure.id, randomSlots(structure, structureLib, () => r.next()));
       const built = realize(bp, structure, structureLib, { seed: i, facts });
-      expect(triangleCount(built.parts), JSON.stringify(bp.slots)).toBeLessThan(25_000);
+      expect(triangleCount(built.parts), JSON.stringify(bp.slots)).toBeLessThan(32_000);
       expect(mergeParts(built.parts).length).toBeLessThanOrEqual(11);
     }
   });
@@ -175,7 +205,18 @@ describe("structures", () => {
   it("builds every part of a cottage on the footprint's one plan", () => {
     const built = realize((STRUCTURE_PRESETS[0] as (typeof STRUCTURE_PRESETS)[number]).blueprint, structure, structureLib, { seed: 4, facts });
     expect(built.slots.get("footprint")?.role).toBe("Footprint");
-    expect(new Set(built.parts.map((p) => p.swatch))).toEqual(new Set(["masonry", "wall", "timber", "roof", "smoke", "glass", "trim", "leaf", "bloom"]));
+    expect(new Set(built.parts.map((p) => p.swatch))).toEqual(new Set(["masonry", "wall", "timber", "roof", "smoke", "glass", "trim", "leaf", "bloom", "moss"]));
+  });
+
+  it("turns a mill's wheel while healthy, slows it as it fails and stops it near the bottom", () => {
+    const mill = STRUCTURE_PRESETS.find((p) => p.blueprint.slots.feature?.use === "waterwheel@1");
+    expect(mill).toBeDefined();
+    const parts = realize((mill as (typeof STRUCTURE_PRESETS)[number]).blueprint, structure, structureLib, { seed: 4, facts }).parts;
+    expect(parts.some((p) => p.channels.spin?.some((x) => x !== 0))).toBe(true);
+    expect(spinAt(1)).toBe(1);
+    expect(spinAt(0.4)).toBeGreaterThan(0);
+    expect(spinAt(0.4)).toBeLessThan(1);
+    expect(spinAt(0.05)).toBe(0);
   });
 
   it("lights windows and smokes only while healthy", () => {

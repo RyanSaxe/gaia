@@ -56,9 +56,18 @@ export interface Channels {
   readonly tint?: number;
   /** How far the piece folds toward its pivot at night, 0 to 1. Zero when absent. */
   readonly close?: number;
+  /** How the piece falls about its pivot as vitality drops: axis times radians, then the vitality it starts at. */
+  readonly fall?: readonly [number, number, number, number];
+  /** The vitality below which the piece grows out of its pivot. Zero when absent. */
+  readonly grow?: number;
+  /** How far the surface rots through into holes as vitality drops, 0 to 1. Zero when absent. */
+  readonly rot?: number;
+  /** How the piece turns about its pivot while alive: axis times turns per second. */
+  readonly spin?: Vec3;
 }
 
 const SOLID: Vec3 = [0, 0, 0];
+const NO_FALL = [0, 0, 0, 0] as const;
 
 /** Accumulates vertices with every channel, then freezes into a Part. */
 export class PartBuilder {
@@ -73,6 +82,12 @@ export class PartBuilder {
   readonly #glow: number[] = [];
   readonly #pivot: number[] = [];
   readonly #close: number[] = [];
+  readonly #fall: number[] = [];
+  readonly #grow: number[] = [];
+  readonly #rot: number[] = [];
+  readonly #spin: number[] = [];
+  /** Which optional channels some vertex wrote, so a part without them carries none. */
+  readonly #uses = { fall: false, grow: false, rot: false, spin: false };
   readonly #idx: number[] = [];
 
   constructor(
@@ -101,6 +116,16 @@ export class PartBuilder {
     this.#glow.push(clamp(c.glow, 0, 1));
     this.#pivot.push(c.pivot[0], c.pivot[1], c.pivot[2]);
     this.#close.push(clamp(c.close ?? 0, 0, 1));
+    const fall = c.fall ?? NO_FALL;
+    this.#fall.push(fall[0], fall[1], fall[2], clamp(fall[3], 0, 1));
+    this.#grow.push(clamp(c.grow ?? 0, 0, 1));
+    this.#rot.push(clamp(c.rot ?? 0, 0, 1));
+    const spin = c.spin ?? SOLID;
+    this.#spin.push(spin[0], spin[1], spin[2]);
+    if (c.fall !== undefined && fall[3] > 0) this.#uses.fall = true;
+    if ((c.grow ?? 0) > 0) this.#uses.grow = true;
+    if ((c.rot ?? 0) > 0) this.#uses.rot = true;
+    if (c.spin !== undefined) this.#uses.spin = true;
     return this.#shade.length - 1;
   }
 
@@ -124,6 +149,10 @@ export class PartBuilder {
         glow: new Float32Array(this.#glow),
         pivot: new Float32Array(this.#pivot),
         close: new Float32Array(this.#close),
+        ...(this.#uses.fall ? { fall: new Float32Array(this.#fall) } : {}),
+        ...(this.#uses.grow ? { grow: new Float32Array(this.#grow) } : {}),
+        ...(this.#uses.rot ? { rot: new Float32Array(this.#rot) } : {}),
+        ...(this.#uses.spin ? { spin: new Float32Array(this.#spin) } : {}),
       },
       collision: this.collision,
     };

@@ -1,60 +1,20 @@
 // A cottage, built against one plan. The footprint lays out the plan; walls,
 // roof, openings and dressing each read it, so they meet without gaps. Every
-// vertex carries its vitality response: plaster falls away in patches,
-// stones go missing, the roof's eaves sag and moss creeps up from the
-// ground, shutters hang crooked, window lights go out one by one, flowers
-// vanish and the chimney stops smoking.
+// vertex carries its vitality response, and a failing house falls to ruin:
+// plaster falls away and walls rot through, worst at one weak corner where
+// timbers topple and rubble gathers; the roof sags and rots into holes over
+// bare rafters; the chimney topples; the door hangs ajar, panes break and
+// boards cover windows; ivy climbs the walls and weeds grow tall; window
+// lights go out one by one, flower boxes fall and the smoke stops.
 
 import type { BuildContext, BuildingPlan, Built, Opening, Rand, Resolved, Vec3 } from "@gaia/schema";
 import type { casementsParams, cottageGardenParams, cottagePlanParams, fieldstoneParams, thatchParams, tilesParams, timberFrameParams } from "../structure.ts";
 import { type Channels, PartBuilder, type V3, addScaled, clamp, cross, fbm3, icosphere, lossThreshold, normalize, sub } from "./kit.ts";
-import { UP, beam, box, flatStone, log, pillow, quad, tri } from "./blocks.ts";
+import { UP, beam, box, flatStone, log, pillow, quad } from "./blocks.ts";
+import { type Ruin, type Wall, chimneyEnd, clearings, on, placeOf, ruinAt, ruinOf, sameWall, still, topAt, wallRot, wallTop, wallsOf, wobble } from "./plan.ts";
+import { ivy, lump, rubble, wallSheet, weedSpots, weeds } from "./ruin.ts";
 
 // ---------- the plan ----------
-
-/** One wall seen from outside: its left end at ground level, the direction to its right end, and its outward normal. */
-interface Wall {
-  readonly o: V3;
-  readonly u: V3;
-  readonly n: V3;
-  readonly length: number;
-  /** A gable wall rises to the ridge. */
-  readonly gable: boolean;
-}
-
-function wallsOf(plan: BuildingPlan): Wall[] {
-  const hw = plan.width / 2;
-  const hd = plan.depth / 2;
-  return [
-    { o: [-hw, 0, hd], u: [1, 0, 0], n: [0, 0, 1], length: plan.width, gable: plan.ridge === "z" },
-    { o: [hw, 0, hd], u: [0, 0, -1], n: [1, 0, 0], length: plan.depth, gable: plan.ridge === "x" },
-    { o: [hw, 0, -hd], u: [-1, 0, 0], n: [0, 0, -1], length: plan.width, gable: plan.ridge === "z" },
-    { o: [-hw, 0, -hd], u: [0, 0, 1], n: [-1, 0, 0], length: plan.depth, gable: plan.ridge === "x" },
-  ];
-}
-
-/** A point on a wall: `s` along it, `y` up, `d` out from its face. */
-const on = (w: Wall, s: number, y: number, d = 0): V3 => [w.o[0] + w.u[0] * s + w.n[0] * d, y, w.o[2] + w.u[2] * s + w.n[2] * d];
-
-const wallTop = (plan: BuildingPlan): number => plan.floor + plan.wallHeight;
-
-/** Height of a wall's top at `s`: level under the eaves, rising to the ridge on a gable. */
-function topAt(plan: BuildingPlan, w: Wall, s: number): number {
-  const top = wallTop(plan);
-  if (!w.gable) return top;
-  const half = w.length / 2;
-  return top + plan.rise * Math.max(0, 1 - Math.abs(s - half) / half);
-}
-
-/** The wall an opening is in, and how far along it. */
-function placeOf(plan: BuildingPlan, o: Opening): { wall: Wall; s: number } {
-  const walls = wallsOf(plan);
-  const wall = walls.reduce((best, w) => (w.n[0] * o.normal[0] + w.n[2] * o.normal[2] > best.n[0] * o.normal[0] + best.n[2] * o.normal[2] ? w : best));
-  const s = (o.position[0] - wall.o[0]) * wall.u[0] + (o.position[2] - wall.o[2]) * wall.u[2];
-  return { wall, s };
-}
-
-const sameWall = (a: Wall, b: Wall): boolean => a.n[0] === b.n[0] && a.n[2] === b.n[2];
 
 export function layOutCottage(p: Resolved<typeof cottagePlanParams>, ctx: BuildContext): BuildingPlan {
   const r = ctx.rand.fork("plan");
@@ -119,19 +79,6 @@ export function layOutCottage(p: Resolved<typeof cottagePlanParams>, ctx: BuildC
 
 // ---------- shared ----------
 
-const still = (pivot: Vec3, wither: number, extra: Partial<Channels> = {}): Channels => ({ loss: 0, droop: 0, wither, glow: 0, pivot, ...extra });
-
-/** Rectangles on a wall that stonework and studs keep clear of. */
-function clearings(plan: BuildingPlan, w: Wall, margin: number): { s0: number; s1: number; y0: number; y1: number }[] {
-  return plan.openings
-    .map((o) => ({ o, at: placeOf(plan, o) }))
-    .filter((x) => sameWall(x.at.wall, w))
-    .map(({ o, at }) => ({ s0: at.s - o.width / 2 - margin, s1: at.s + o.width / 2 + margin, y0: o.position[1] - margin, y1: o.position[1] + o.height + margin }));
-}
-
-/** The settled lean of a building: a gentle, seeded wobble that grows with `settle`. */
-const wobble = (plan: BuildingPlan, seed: number, p: Vec3, amount: number): number => plan.settle * amount * fbm3(p[0] * 0.35, p[1] * 0.35, p[2] * 0.35, seed, 2);
-
 /** A plinth of squared stones under the walls, from the footing up to the floor. */
 function plinth(b: PartBuilder, plan: BuildingPlan, r: Rand): void {
   const rows = Math.max(1, Math.round((plan.floor + 0.1) / 0.24));
@@ -154,15 +101,22 @@ function plinth(b: PartBuilder, plan: BuildingPlan, r: Rand): void {
   }
 }
 
-/** The wall's core: a plain face set just behind the surface, which shows where plaster has fallen. */
-function core(b: PartBuilder, plan: BuildingPlan, inset: number, from: number): void {
+/** The wall's core: a plain face set just behind the surface, which shows where plaster has fallen and rots through as the house declines. */
+function core(b: PartBuilder, plan: BuildingPlan, ruin: Ruin, inset: number, from: number): void {
   for (const w of wallsOf(plan)) {
-    const top = wallTop(plan);
-    const pivot = on(w, w.length / 2, top / 2);
-    const c = still(pivot, 0.6);
-    quad(b, [on(w, 0, from, -inset), on(w, w.length, from, -inset), on(w, w.length, top, -inset), on(w, 0, top, -inset)], w.n, 0.38, c);
-    if (w.gable) tri(b, [on(w, 0, top, -inset), on(w, w.length, top, -inset), on(w, w.length / 2, top + plan.rise, -inset)], w.n, 0.38, c);
+    const pivot = on(w, w.length / 2, wallTop(plan) / 2);
+    wallSheet(b, plan, w, from, -inset, 0.75, (p) => ({ shade: 0.38, c: still(pivot, 0.6, { rot: wallRot(plan, ruin, p) }) }));
   }
+}
+
+/** Ivy, weeds and rubble around any walls as the house declines. */
+function overgrowth(plan: BuildingPlan, ruin: Ruin, r: Rand, stones: PartBuilder, size: number): { moss: PartBuilder; weed: PartBuilder } {
+  const moss = new PartBuilder("moss");
+  const weed = new PartBuilder("leaf");
+  ivy(moss, plan, ruin, r.fork("ivy"));
+  weeds(weed, weedSpots(plan, ruin, r.fork("weeds"), 46), r.fork("tufts"));
+  rubble(stones, plan, ruin, r.fork("rubble"), size, 30);
+  return { moss, weed };
 }
 
 // ---------- timber frame ----------
@@ -173,8 +127,9 @@ export function buildTimberFrame(p: Resolved<typeof timberFrameParams>, ctx: Bui
   const masonry = new PartBuilder("masonry", "solid");
   const plaster = new PartBuilder("wall", "solid");
   const timber = new PartBuilder("timber", "solid");
+  const ruin = ruinOf(plan);
   plinth(masonry, plan, r.fork("plinth"));
-  core(masonry, plan, 0.03, plan.floor);
+  core(masonry, plan, ruin, 0.03, plan.floor);
   const top = wallTop(plan);
   const beamW = 0.17;
   const out = 0.03;
@@ -203,7 +158,10 @@ export function buildTimberFrame(p: Resolved<typeof timberFrameParams>, ctx: Bui
     const rail = plan.floor + 0.84 - 0.06;
     const lean = (s: number, y: number): V3 => on(w, s + wobble(plan, seed, on(w, s, y), 0.09), y, out);
     const pivotOf = (s: number): V3 => on(w, s < w.length / 2 ? 0 : w.length, top);
-    const ch = (s: number, sag = 0): Channels => still(pivotOf(s), 0.5, { droop: sag * Math.sin((Math.PI * clamp(s / w.length, 0, 1))), tint: (r.next() - 0.5) * 0.03 });
+    const zoneAt = (s: number, y = top): number => ruinAt(ruin, on(w, s, y));
+    // In the collapse, timbers go: lost below a threshold that rises toward the weak corner.
+    const gone = (s: number, y = top): number => (zoneAt(s, y) > 0.3 ? lossThreshold(r.next(), 0.14 + 0.3 * zoneAt(s, y), 0.05) : 0);
+    const ch = (s: number, sag = 0, y = top): Channels => still(pivotOf(s), 0.5, { droop: sag * Math.sin((Math.PI * clamp(s / w.length, 0, 1))), tint: (r.next() - 0.5) * 0.03, loss: gone(s, y) });
 
     // Sill and wall plate run the whole length; the plate sags a little as the house declines.
     beam(timber, lean(-0.05, sill), lean(w.length + 0.05, sill), beamW, 0.09, w.n, 0.42, ch(w.length / 2));
@@ -221,7 +179,17 @@ export function buildTimberFrame(p: Resolved<typeof timberFrameParams>, ctx: Bui
         y = Math.max(y, h.y1);
       }
       if (plate > y) spans.push([y, plate]);
-      for (const [a, b2] of spans) if (b2 - a > 0.12) beam(timber, lean(s, a), lean(s, b2), beamW * 0.9, 0.09, w.n, 0.44 + 0.08 * r.next(), ch(s));
+      for (const [a, b2] of spans) {
+        if (b2 - a <= 0.12) continue;
+        const zone = zoneAt(s);
+        if (a === sill && zone > 0.3) {
+          // A post in the collapse topples outward off its sill and comes to rest on the ground.
+          const base = lean(s, a);
+          const tip = 1.62 + 0.18 * r.next();
+          const c: Channels = { loss: 0, droop: 0, wither: 0.6, glow: 0, pivot: base, tint: (r.next() - 0.5) * 0.03, fall: [w.u[0] * tip, w.u[1] * tip, w.u[2] * tip, clamp(0.16 + 0.3 * zone * r.next(), 0.12, 0.42)] };
+          beam(timber, base, lean(s, b2), beamW * 0.9, 0.09, w.n, 0.44 + 0.08 * r.next(), c);
+        } else beam(timber, lean(s, a), lean(s, b2), beamW * 0.9, 0.09, w.n, 0.44 + 0.08 * r.next(), ch(s, 0, (a + b2) / 2));
+      }
     }
     // Rails at window-sill height between posts, and braces in the end bays.
     if (p.framing !== "close studding") {
@@ -230,10 +198,10 @@ export function buildTimberFrame(p: Resolved<typeof timberFrameParams>, ctx: Bui
         const a = all[i] as number;
         const b2 = all[i + 1] as number;
         const mid = (a + b2) / 2;
-        if (!blocked(mid, rail - 0.08, rail + 0.08)) beam(timber, lean(a, rail), lean(b2, rail), beamW * 0.8, 0.08, w.n, 0.42, ch(mid));
+        if (!blocked(mid, rail - 0.08, rail + 0.08)) beam(timber, lean(a, rail), lean(b2, rail), beamW * 0.8, 0.08, w.n, 0.42, ch(mid, 0, rail));
         if (p.framing === "crossed braces" && (i === 0 || i === all.length - 2) && !blocked(mid, rail, plate)) {
           const [s0, s1] = i === 0 ? [a, b2] : [b2, a];
-          beam(timber, lean(s0, plate - 0.05), lean(s1, rail + 0.05), beamW * 0.75, 0.08, w.n, 0.4, ch(mid));
+          beam(timber, lean(s0, plate - 0.05), lean(s1, rail + 0.05), beamW * 0.75, 0.08, w.n, 0.4, ch(mid, 0, (rail + plate) / 2));
         }
       }
     }
@@ -242,8 +210,8 @@ export function buildTimberFrame(p: Resolved<typeof timberFrameParams>, ctx: Bui
       const half = w.length / 2;
       const collar = top + plan.rise * 0.45;
       const reachAt = half * (1 - 0.45) - 0.1;
-      beam(timber, lean(half, top), lean(half, top + plan.rise - 0.12), beamW, 0.09, w.n, 0.44, ch(half));
-      beam(timber, lean(half - reachAt, collar), lean(half + reachAt, collar), beamW * 0.9, 0.09, w.n, 0.42, ch(half));
+      beam(timber, lean(half, top), lean(half, top + plan.rise - 0.12), beamW, 0.09, w.n, 0.44, ch(half, 0, top + plan.rise));
+      beam(timber, lean(half - reachAt, collar), lean(half + reachAt, collar), beamW * 0.9, 0.09, w.n, 0.42, ch(half, 0, collar));
     }
 
     // Plaster panels between the timbers. Some are loose, and fall away as the house declines.
@@ -254,29 +222,35 @@ export function buildTimberFrame(p: Resolved<typeof timberFrameParams>, ctx: Bui
       const s1 = verticals[i + 1] as number;
       if (s1 - s0 < 0.05) continue;
       for (let j = 0; j + 1 < levels.length; j++) {
-        panel(plaster, plan, w, s0, s1, levels[j] as number, levels[j + 1] as number, p.plaster, r, seed);
+        // A panel stops at a door or window in its bay, above and below it.
+        let spans: [number, number][] = [[levels[j] as number, levels[j + 1] as number]];
+        for (const h of holes.filter((h) => s0 < h.s1 - 0.02 && s1 > h.s0 + 0.02)) {
+          spans = spans.flatMap(([a, b2]): [number, number][] => (h.y1 <= a || h.y0 >= b2 ? [[a, b2]] : ([[a, h.y0], [h.y1, b2]] as [number, number][]).filter(([x, y]) => y - x > 0.06)));
+        }
+        for (const [a, b2] of spans) panel(plaster, plan, ruin, w, s0, s1, a, b2, p.plaster, r, seed);
       }
     }
     if (w.gable) {
-      const half = w.length / 2;
-      for (const [s0, s1] of [[0, half], [half, w.length]] as const) {
-        const apex = s0 === 0 ? on(w, half, top + plan.rise, 0.008) : on(w, half, top + plan.rise, 0.008);
-        const a = on(w, s0, top, 0.008);
-        const b2 = on(w, s1, top, 0.008);
-        tri(plaster, [a, b2, apex], w.n, 0.58, still(on(w, half, top + plan.rise / 2), 0.55));
-      }
+      // The gable's plaster, in cells so it can rot through from the peak.
+      const pivot = on(w, w.length / 2, top + plan.rise / 2);
+      wallSheet(plaster, plan, w, top, 0.008, 0.6, (q) => ({ shade: 0.58, c: still(pivot, 0.55, { rot: wallRot(plan, ruin, q) }) }));
     }
   }
-  return { parts: [masonry.part(), plaster.part(), timber.part()], anchors: [] };
+  // Chunks of plaster and stone lie where the corner gave way.
+  const { moss, weed } = overgrowth(plan, ruin, r.fork("overgrowth"), masonry, 0.2);
+  rubble(plaster, plan, ruin, r.fork("plaster-rubble"), 0.16, 14);
+  return { parts: [masonry.part(), plaster.part(), timber.part(), moss.part(), weed.part()], anchors: [] };
 }
 
 /** One plaster panel: a slightly bulging 3x3 sheet, its shade hand-laid. */
-function panel(b: PartBuilder, plan: BuildingPlan, w: Wall, s0: number, s1: number, y0: number, y1: number, rough: number, r: Rand, seed: number): void {
-  const loose = r.next() < 0.4;
-  const u = r.next();
+function panel(b: PartBuilder, plan: BuildingPlan, ruin: Ruin, w: Wall, s0: number, s1: number, y0: number, y1: number, rough: number, r: Rand, seed: number): void {
   const center = on(w, (s0 + s1) / 2, (y0 + y1) / 2, 0.01);
+  // Panels near the weak corner are loose more often, and go earlier.
+  const zone = ruinAt(ruin, center);
+  const loose = r.next() < 0.4 + 0.5 * zone;
+  const u = r.next();
   const c: Channels = {
-    loss: loose ? lossThreshold(u, 0.42, 0.06) : 0,
+    loss: loose ? lossThreshold(u, 0.42 + 0.12 * zone, 0.06) : 0,
     droop: 0,
     wither: 0.45 + 0.35 * r.next(),
     glow: 0,
@@ -294,7 +268,7 @@ function panel(b: PartBuilder, plan: BuildingPlan, w: Wall, s0: number, s1: numb
       const d = 0.008 + inner * 0.014 * rough + n * 0.006 * rough;
       const q = on(w, s + wobble(plan, seed, on(w, s, y), 0.09), y, d);
       const normal = normalize(addScaled(w.n, w.u, n * 0.12 * rough));
-      idx.push(b.vertex(q, normal, base + n * 0.12 * rough + inner * 0.04, c));
+      idx.push(b.vertex(q, normal, base + n * 0.12 * rough + inner * 0.04, { ...c, rot: wallRot(plan, ruin, q) }));
     }
   }
   for (let j = 0; j < 2; j++) {
@@ -318,7 +292,8 @@ export function buildFieldstone(p: Resolved<typeof fieldstoneParams>, ctx: Build
   const mortar = new PartBuilder("wall", "solid");
   const stones = new PartBuilder("masonry", "solid");
   const boards = new PartBuilder("timber", "solid");
-  core(mortar, plan, -0.005, -plan.footing);
+  const ruin = ruinOf(plan);
+  core(mortar, plan, ruin, -0.005, -plan.footing);
   const top = wallTop(plan);
   // Stones grow on a big house, so the walls stay within about 450 stones.
   const area = 2 * (plan.width + plan.depth) * (top + 0.12) + (plan.ridge === "x" ? plan.depth : plan.width) * plan.rise;
@@ -341,9 +316,11 @@ export function buildFieldstone(p: Resolved<typeof fieldstoneParams>, ctx: Build
         if (clear && mid > -0.02 && mid < w.length + 0.02) {
           const c = on(w, clamp(mid, 0.05, w.length - 0.05) + wobble(plan, seed, on(w, mid, cy), 0.07), cy, 0);
           const ground = clamp(cy / 1.8, 0, 1);
-          const missing = r.next() < 0.05;
+          // Stones fall from the top of the walls, and from the weak corner most.
+          const fallen = wallRot(plan, ruin, c);
+          const missing = r.next() < 0.05 + 0.9 * Math.max(0, fallen - 0.35);
           pillow(stones, c, w.u, w.n, len * 0.94, h * 0.9, 0.05 + 0.05 * r.next(), 0.4 + 0.25 * r.next(), {
-            loss: missing ? lossThreshold(r.next(), 0.3, 0.05) : 0,
+            loss: missing ? lossThreshold(r.next(), 0.22 + 0.3 * fallen, 0.05) : 0,
             droop: 0,
             wither: 0.3 + 0.55 * (1 - ground) + 0.15 * r.next(),
             glow: 0,
@@ -363,12 +340,14 @@ export function buildFieldstone(p: Resolved<typeof fieldstoneParams>, ctx: Build
         const h = topAt(plan, w, s) - top - 0.05;
         if (h < 0.1) continue;
         const c = on(w, s, top - 0.15 + (h + 0.15) / 2, 0.04);
-        box(boards, c, [w.u, UP, w.n], [bw / 2 - 0.012, (h + 0.15) / 2, 0.03], 0.42 + 0.14 * r.next(), still(c, 0.55, { tint: (r.next() - 0.5) * 0.03 }));
+        const zone = ruinAt(ruin, c);
+        box(boards, c, [w.u, UP, w.n], [bw / 2 - 0.012, (h + 0.15) / 2, 0.03], 0.42 + 0.14 * r.next(), still(c, 0.55, { tint: (r.next() - 0.5) * 0.03, loss: r.next() < 0.25 + zone ? lossThreshold(r.next(), 0.2 + 0.25 * zone, 0.05) : 0 }));
       }
       beam(boards, on(w, -0.05, top - 0.12, 0.06), on(w, w.length + 0.05, top - 0.12, 0.06), 0.18, 0.1, w.n, 0.38, still(on(w, w.length / 2, top), 0.5));
     }
   }
-  const parts = [mortar.part(), stones.part()];
+  const { moss, weed } = overgrowth(plan, ruin, r.fork("overgrowth"), stones, 0.26);
+  const parts = [mortar.part(), stones.part(), moss.part(), weed.part()];
   if (boards.vertexCount > 0) parts.push(boards.part());
   return { parts, anchors: [] };
 }
@@ -528,20 +507,19 @@ function chimney(stack: PartBuilder, plan: BuildingPlan, f: RoofFrame, where: "g
   let foot: number;
   let width: number;
   let deep: number;
+  let topple: V3;
   if (where === "gable") {
-    // The end with fewer openings, against its outside face.
-    const ends = [-1, 1].map((sign) => ({
-      sign,
-      count: plan.openings.filter((o) => o.normal[0] * f.ax[0] + o.normal[2] * f.ax[2] > 0.9 * sign && sign * (o.normal[0] * f.ax[0] + o.normal[2] * f.ax[2]) > 0.5).length,
-    }));
-    const sign = (ends[0] as { count: number }).count <= (ends[1] as { count: number }).count ? -1 : 1;
+    // The end with fewer openings, against its outside face; it topples back over the roof.
+    const sign = chimneyEnd(plan);
     base = roofPoint(f, sign * (f.halfLength + 0.34), 0, 0);
+    topple = [-sign * f.ax[0], 0, -sign * f.ax[2]];
     foot = -0.4;
     width = 1.15;
     deep = 0.68;
   } else {
     const sign = r.next() < 0.5 ? -1 : 1;
     base = roofPoint(f, sign * f.halfLength * 0.48, 0, 0);
+    topple = [sign * f.bx[0], 0, sign * f.bx[2]];
     foot = top - 0.2;
     width = 0.78;
     deep = 0.66;
@@ -550,6 +528,15 @@ function chimney(stack: PartBuilder, plan: BuildingPlan, f: RoofFrame, where: "g
   const lean = plan.settle * 0.05 * (r.next() - 0.5);
   const courses = Math.max(3, Math.round((crown - foot) / 0.42));
   const shoulder = where === "gable" ? top * 0.8 : foot;
+  // Above the break, the stack topples as one piece as the house fails:
+  // back over the ridge from a gable end, or down the slope from the ridge.
+  const breakAt = where === "gable" ? ridgeY - 0.3 : ridgeY + 0.05;
+  const hinge = addScaled(addScaled(base, f.ax, lean * (breakAt - foot)), UP, breakAt);
+  const pitch = Math.atan2(f.rise, f.halfSpan);
+  const tip = where === "gable" ? 1.38 : Math.PI / 2 - pitch + 0.08;
+  const turnAxis = normalize(cross(UP, topple));
+  const falls = (y: number, wither: number): Channels =>
+    y >= breakAt - 1e-3 ? still(hinge, wither, { tint: (r.next() - 0.5) * 0.04, fall: [turnAxis[0] * tip, turnAxis[1] * tip, turnAxis[2] * tip, 0.3] }) : still(addScaled(base, UP, y), wither, { tint: (r.next() - 0.5) * 0.04 });
   for (let k = 0; k < courses; k++) {
     const y0 = foot + ((crown - foot) * k) / courses;
     const y1 = foot + ((crown - foot) * (k + 1)) / courses;
@@ -557,12 +544,12 @@ function chimney(stack: PartBuilder, plan: BuildingPlan, f: RoofFrame, where: "g
     const w = width * narrow + 0.03 * (r.next() - 0.5);
     const d = (where === "gable" && y0 >= shoulder ? deep * 0.8 : deep) + 0.02 * r.next();
     const c = addScaled(addScaled(base, f.ax, lean * (y0 - foot) + (where === "gable" && y0 >= shoulder ? -Math.sign(base[0] * f.ax[0] + base[2] * f.ax[2]) * 0.06 : 0)), UP, (y0 + y1) / 2);
-    box(stack, c, [f.bx, UP, f.ax], [w / 2, (y1 - y0) / 2 + 0.004, d / 2], 0.42 + 0.16 * r.next(), still(c, 0.35 + 0.3 * (1 - clamp(y0 / 3, 0, 1)), { tint: (r.next() - 0.5) * 0.04 }), { bottom: k > 0 });
+    box(stack, c, [f.bx, UP, f.ax], [w / 2, (y1 - y0) / 2 + 0.004, d / 2], 0.42 + 0.16 * r.next(), falls(y0, 0.35 + 0.3 * (1 - clamp(y0 / 3, 0, 1))), { bottom: k > 0 });
   }
   const capC = addScaled(addScaled(base, f.ax, lean * (crown - foot)), UP, crown + 0.06);
-  box(stack, capC, [f.bx, UP, f.ax], [width * 0.66 / 2 + 0.08, 0.06, deep * 0.8 / 2 + 0.08], 0.55, still(capC, 0.45));
+  box(stack, capC, [f.bx, UP, f.ax], [width * 0.66 / 2 + 0.08, 0.06, deep * 0.8 / 2 + 0.08], 0.55, falls(crown, 0.45));
   const potFrom = addScaled(capC, UP, 0.06);
-  log(stack, potFrom, addScaled(potFrom, UP, 0.32), 0.13, 0.4, still(potFrom, 0.5), 7);
+  log(stack, potFrom, addScaled(potFrom, UP, 0.32), 0.13, 0.4, falls(crown, 0.5), 7);
   return addScaled(potFrom, UP, 0.4);
 }
 
@@ -580,6 +567,52 @@ function smoke(b: PartBuilder, at: V3, r: Rand): void {
   }
 }
 
+/**
+ * The rafters under a roof's covering, a ridge beam and a purlin each side:
+ * hidden while the roof is whole, bare where it rots through. Over the
+ * collapse they sag with the covering and some are lost. `under` is the
+ * covering's underside at a distance across the span.
+ */
+function rafters(b: PartBuilder, debris: PartBuilder, f: RoofFrame, ruin: Ruin, reach: number, a0: number, a1: number, under: (bv: number) => number, r: Rand): void {
+  const ridge = roofPoint(f, 0, 0, f.top + f.rise);
+  const count = Math.max(4, Math.round((a1 - a0 - 0.3) / 0.62));
+  for (let i = 0; i <= count; i++) {
+    const a = a0 + 0.15 + ((a1 - a0 - 0.3) * i) / count;
+    for (const sign of [-1, 1]) {
+      const zone = ruinAt(ruin, roofPoint(f, a, sign * f.halfSpan, 0));
+      const pivot = roofPoint(f, a, 0, f.top + f.rise);
+      const c: Channels = {
+        loss: zone > 0.35 && r.next() < 0.5 ? lossThreshold(r.next(), 0.2, 0.04) : 0,
+        droop: 0.06 + 0.3 * zone,
+        wither: 0.55,
+        glow: 0,
+        pivot,
+        tint: (r.next() - 0.5) * 0.03,
+      };
+      beam(b, roofPoint(f, a, sign * 0.06, under(0) - 0.09), roofPoint(f, a, sign * (reach - 0.06), under(reach) - 0.09), 0.09, 0.13, UP, 0.4 + 0.1 * r.next(), c);
+    }
+  }
+  beam(b, roofPoint(f, a0 + 0.05, 0, under(0) - 0.1), roofPoint(f, a1 - 0.05, 0, under(0) - 0.1), 0.16, 0.16, UP, 0.42, still(ridge, 0.55, { droop: 0.04 }));
+  for (const sign of [-1, 1]) {
+    const bv = sign * f.halfSpan * 0.5;
+    const y = under(Math.abs(bv)) - 0.2;
+    beam(b, roofPoint(f, a0 + 0.1, bv, y), roofPoint(f, a1 - 0.1, bv, y), 0.12, 0.12, UP, 0.4, still(ridge, 0.55, { droop: 0.1 }));
+  }
+  // Below the collapsed eaves, fallen covering lies on the ground.
+  for (let i = 0; i < 9; i++) {
+    const a = ruin.x * f.ax[0] + ruin.z * f.ax[2] + (r.next() - 0.5) * 3.2;
+    const sign = ruin.x * f.bx[0] + ruin.z * f.bx[2] >= 0 ? 1 : -1;
+    const p = roofPoint(f, clamp(a, a0, a1), sign * (reach + 0.2 + r.next() * 1.4), 0);
+    const zone = ruinAt(ruin, p);
+    const size = 0.22 + 0.2 * r.next();
+    lump(debris, [p[0], size * 0.02, p[2]], [size, size * 0.3, size * 0.7], r.next() * Math.PI, 0.45, { loss: 0, droop: 0, wither: 0.7, glow: 0, pivot: [p[0], 0, p[2]], grow: clamp(0.1 + 0.25 * zone * r.next(), 0.06, 0.4) }, r);
+  }
+}
+
+/** How readily a roof rots through at (a, b): most at the eaves and over the collapse, least along the ridge. */
+const roofRot = (f: RoofFrame, ruin: Ruin, a: number, bv: number, reach: number): number =>
+  clamp(0.34 + 0.42 * clamp(Math.abs(bv) / reach, 0, 1) + 0.5 * ruinAt(ruin, roofPoint(f, a, bv, 0)), 0, 1);
+
 export function buildThatch(p: Resolved<typeof thatchParams>, ctx: BuildContext, plan: BuildingPlan): Built {
   const r = ctx.rand.fork("thatch");
   const seed = Math.floor(r.next() * 1e6);
@@ -587,6 +620,8 @@ export function buildThatch(p: Resolved<typeof thatchParams>, ctx: BuildContext,
   const roof = new PartBuilder("roof", "solid");
   const stack = new PartBuilder("masonry", "solid");
   const puffs = new PartBuilder("smoke");
+  const bare = new PartBuilder("timber", "solid");
+  const ruin = ruinOf(plan);
   const k = f.rise / f.halfSpan;
   const secant = Math.sqrt(1 + k * k);
   const T = p.thickness;
@@ -652,13 +687,22 @@ export function buildThatch(p: Resolved<typeof thatchParams>, ctx: BuildContext,
       const shade = pt.top === true ? 0.52 + 0.1 * n + 0.08 * (1 - e) : 0.3;
       return {
         shade,
-        c: { loss: 0, droop: sagOf(f, a, pt.b, reach), wither: clamp(0.5 + 0.35 * e + 0.2 * n, 0, 1), glow: 0, pivot: roofPoint(f, a, 0, f.top + f.rise), tint: 0.025 * n },
+        c: {
+          loss: 0,
+          droop: sagOf(f, a, pt.b, reach) + 0.28 * ruinAt(ruin, roofPoint(f, a, pt.b, 0)),
+          wither: clamp(0.5 + 0.35 * e + 0.2 * n, 0, 1),
+          glow: 0,
+          pivot: roofPoint(f, a, 0, f.top + f.rise),
+          tint: 0.025 * n,
+          rot: roofRot(f, ruin, a, pt.b, reach),
+        },
       };
     },
   );
+  rafters(bare, roof, f, ruin, reach, a0, a1, under, r.fork("rafters"));
   const vent = chimney(stack, plan, f, p.chimney, r.fork("chimney"));
   if (vent !== null) smoke(puffs, vent, r.fork("smoke"));
-  const parts = [roof.part(), stack.part()].filter((part) => part.indices.length > 0);
+  const parts = [roof.part(), stack.part(), bare.part()].filter((part) => part.indices.length > 0);
   if (vent !== null) parts.push(puffs.part());
   return { parts, anchors: [] };
 }
@@ -670,6 +714,8 @@ export function buildTiles(p: Resolved<typeof tilesParams>, ctx: BuildContext, p
   const roof = new PartBuilder("roof", "solid");
   const stack = new PartBuilder("masonry", "solid");
   const puffs = new PartBuilder("smoke");
+  const bare = new PartBuilder("timber", "solid");
+  const ruin = ruinOf(plan);
   const k = f.rise / f.halfSpan;
   const secant = Math.sqrt(1 + k * k);
   const T = 0.16;
@@ -735,13 +781,22 @@ export function buildTiles(p: Resolved<typeof tilesParams>, ctx: BuildContext, p
       const shade = pt.top === true ? 0.5 + vary * cell + 0.06 * n : 0.28;
       return {
         shade,
-        c: { loss: 0, droop: sagOf(f, a, pt.b, reach), wither: clamp(0.45 + 0.4 * e * e + 0.25 * n, 0, 1), glow: 0, pivot: roofPoint(f, a, 0, f.top + f.rise), tint: 0.03 * cell },
+        c: {
+          loss: 0,
+          droop: sagOf(f, a, pt.b, reach) + 0.28 * ruinAt(ruin, roofPoint(f, a, pt.b, 0)),
+          wither: clamp(0.45 + 0.4 * e * e + 0.25 * n, 0, 1),
+          glow: 0,
+          pivot: roofPoint(f, a, 0, f.top + f.rise),
+          tint: 0.03 * cell,
+          rot: roofRot(f, ruin, a, pt.b, reach),
+        },
       };
     },
   );
+  rafters(bare, roof, f, ruin, reach, a0, a1, under, r.fork("rafters"));
   const vent = chimney(stack, plan, f, p.chimney, r.fork("chimney"));
   if (vent !== null) smoke(puffs, vent, r.fork("smoke"));
-  const parts = [roof.part(), stack.part()].filter((part) => part.indices.length > 0);
+  const parts = [roof.part(), stack.part(), bare.part()].filter((part) => part.indices.length > 0);
   if (vent !== null) parts.push(puffs.part());
   return { parts, anchors: [] };
 }
@@ -764,8 +819,9 @@ export function buildCasements(p: Resolved<typeof casementsParams>, ctx: BuildCo
     const pivot = at(0, o.height / 2, 0);
     const wood = (): Channels => still(pivot, 0.5, { tint: (wr.next() - 0.5) * 0.02 });
     if (o.kind === "window") {
-      // A dark pane, and in front of it the lamplit pane, which goes out below its threshold.
-      quad(glass, [at(-hw, 0, 0.035), at(hw, 0, 0.035), at(hw, o.height, 0.035), at(-hw, o.height, 0.035)], w.n, 0.2, still(pivot, 1));
+      // A dark pane, which breaks as the house fails, and in front of it the
+      // lamplit pane, which goes out below its threshold.
+      quad(glass, [at(-hw, 0, 0.035), at(hw, 0, 0.035), at(hw, o.height, 0.035), at(-hw, o.height, 0.035)], w.n, 0.2, still(pivot, 1, { rot: 0.85 }));
       const lit: Channels = { loss: lossThreshold(wr.next(), 0.62, 0.2), droop: 0, wither: 0.25, glow: 0.7 + 0.3 * wr.next(), pivot };
       quad(glass, [at(-hw, 0, 0.045), at(hw, 0, 0.045), at(hw, o.height, 0.045), at(-hw, o.height, 0.045)], w.n, [0.55, 0.55, 0.85, 0.85], lit);
       // Frame, glazing bars, sill and lintel.
@@ -774,8 +830,19 @@ export function buildCasements(p: Resolved<typeof casementsParams>, ctx: BuildCo
       box(frame, at(0, -fw / 2 + 0.01, 0.07), axes, [hw + fw, fw / 2, 0.05], 0.4, wood());
       for (const sign of [-1, 1]) box(frame, at(sign * (hw + fw / 2), o.height / 2, 0.07), axes, [fw / 2, o.height / 2 + fw, 0.05], 0.42, wood());
       const bars = p.panes === "four panes" ? { v: 1, h: 1 } : p.panes === "six panes" ? { v: 1, h: 2 } : { v: 0, h: 0 };
-      for (let i = 1; i <= bars.v; i++) box(frame, at(-hw + (o.width * i) / (bars.v + 1), o.height / 2, 0.06), axes, [0.018, o.height / 2, 0.02], 0.5, wood());
-      for (let i = 1; i <= bars.h; i++) box(frame, at(0, (o.height * i) / (bars.h + 1), 0.06), axes, [hw, 0.018, 0.02], 0.5, wood());
+      const bar = (): Channels => ({ ...wood(), loss: wr.next() < 0.6 ? lossThreshold(wr.next(), 0.3, 0.05) : 0 });
+      for (let i = 1; i <= bars.v; i++) box(frame, at(-hw + (o.width * i) / (bars.v + 1), o.height / 2, 0.06), axes, [0.018, o.height / 2, 0.02], 0.5, bar());
+      for (let i = 1; i <= bars.h; i++) box(frame, at(0, (o.height * i) / (bars.h + 1), 0.06), axes, [hw, 0.018, 0.02], 0.5, bar());
+      // Some windows are boarded up as the house is abandoned.
+      if (wr.next() < 0.55) {
+        const from = 0.24 + 0.14 * wr.next();
+        for (let k = 0; k < 3; k++) {
+          const c = at((wr.next() - 0.5) * 0.08, o.height * (0.2 + 0.3 * k) + (wr.next() - 0.5) * 0.06, 0.13);
+          const tilt = (wr.next() - 0.5) * 0.32;
+          const along = normalize(addScaled(w.u, UP, Math.tan(tilt)));
+          box(frame, c, [along, normalize(cross(w.n, along)), w.n], [hw + 0.2, 0.065, 0.016], 0.5 + 0.12 * wr.next(), { loss: 0, droop: 0, wither: 0.75, glow: 0, pivot: c, tint: (wr.next() - 0.5) * 0.04, grow: from - 0.04 * k });
+        }
+      }
       const sillC = at(0, -0.06, 0.1);
       box(stone, sillC, axes, [hw + 0.14, 0.045, 0.12], 0.62, still(sillC, 0.5));
       // Shutters: upright boards with a ledge; one may hang off its hinge as the house declines.
@@ -784,14 +851,17 @@ export function buildCasements(p: Resolved<typeof casementsParams>, ctx: BuildCo
           const sw = hw + 0.02;
           const inner = sign * (hw + fw);
           const hinge = at(inner, o.height + fw, 0.05);
-          const loose = wr.next() < 0.35;
+          // A loose shutter hangs from its top hinge, swung down and askew.
+          const loose = wr.next() < 0.6;
+          const swing = -sign * (0.45 + 0.3 * wr.next());
           const ch: Channels = {
-            loss: wr.next() < 0.12 ? lossThreshold(wr.next(), 0.22, 0.04) : 0,
-            droop: loose ? 0.3 : 0.04,
+            loss: wr.next() < 0.2 ? lossThreshold(wr.next(), 0.22, 0.04) : 0,
+            droop: 0.04,
             wither: 0.55 + 0.3 * wr.next(),
             glow: 0,
             pivot: hinge,
             tint: (wr.next() - 0.5) * 0.02,
+            ...(loose ? { fall: [w.n[0] * swing, w.n[1] * swing, w.n[2] * swing, 0.42 + 0.16 * wr.next()] as const } : {}),
           };
           const boards = 3;
           for (let k = 0; k < boards; k++) {
@@ -805,16 +875,20 @@ export function buildCasements(p: Resolved<typeof casementsParams>, ctx: BuildCo
     } else {
       const h = o.height;
       const arched = p.door === "arched";
+      // The door leaf swings ajar on its hinges, into the dark, as the house is abandoned.
+      const hinge = at(-hw, 0, 0.035);
+      const ajar = 1.0 + 0.2 * wr.next();
+      const leaf = (wither: number, extra: Partial<Channels> = {}): Channels => ({ loss: 0, droop: 0, wither, glow: 0, pivot: hinge, tint: (wr.next() - 0.5) * 0.02, fall: [0, ajar, 0, 0.46], ...extra });
       // Planks; an arched door's tops follow its arch.
       const planks = 5;
       for (let k = 0; k < planks; k++) {
         const x = -hw + (o.width * (k + 0.5)) / planks;
         const ph = arched ? h - hw + Math.sqrt(Math.max(0, hw * hw - x * x)) : h;
-        box(trim, at(x, ph / 2, 0.035), axes, [o.width / planks / 2 - 0.008, ph / 2, 0.03], 0.46 + 0.1 * wr.next(), still(pivot, 0.55, { tint: (wr.next() - 0.5) * 0.02 }));
+        box(trim, at(x, ph / 2, 0.035), axes, [o.width / planks / 2 - 0.008, ph / 2, 0.03], 0.46 + 0.1 * wr.next(), leaf(0.55, { loss: k === 3 || k === 1 ? lossThreshold(wr.next(), 0.16, 0.04) : 0 }));
       }
-      for (const ly of [0.28, 0.74]) box(frame, at(0, h * ly, 0.08), axes, [hw - 0.06, 0.06, 0.018], 0.48, wood());
+      for (const ly of [0.28, 0.74]) box(frame, at(0, h * ly, 0.08), axes, [hw - 0.06, 0.06, 0.018], 0.48, leaf(0.5));
       const knob = at(hw * 0.62, h * 0.48, 0.11);
-      box(frame, knob, axes, [0.03, 0.03, 0.03], 0.3, wood());
+      box(frame, knob, axes, [0.03, 0.03, 0.03], 0.3, leaf(0.5));
       // Frame and lintel; an arched door's frame is a ring of short beams.
       const fw = 0.11;
       if (arched) {
@@ -911,20 +985,23 @@ export function buildGarden(p: Resolved<typeof cottageGardenParams>, ctx: BuildC
       const y = o.position[1] - 0.12;
       const hw = o.width / 2 + 0.06;
       const boxC = on(w, s, y - 0.1, 0.24);
-      box(paint, boxC, [w.u, UP, w.n], [hw, 0.1, 0.11], 0.5, still(boxC, 0.5));
-      const pivot = on(w, s, y, 0.24);
+      // As the house fails, a box tips forward off its brackets, its dead plants with it.
+      const pivot = on(w, s, y - 0.2, 0.13);
+      const tip = 0.85 + 0.3 * r.next();
+      const fall = [w.u[0] * tip, w.u[1] * tip, w.u[2] * tip, 0.26 + 0.1 * r.next()] as const;
+      box(paint, boxC, [w.u, UP, w.n], [hw, 0.1, 0.11], 0.5, still(pivot, 0.5, { fall }));
       for (let i = 0; i < 6; i++) {
         const x = -hw + 0.1 + ((2 * hw - 0.2) * i) / 5;
         const c = on(w, s + x, y + 0.03 + 0.03 * r.next(), 0.24 + (r.next() - 0.5) * 0.08);
-        sphere(leaf, c, [0.12, 0.09, 0.1], 0.45 + 0.15 * r.next(), { loss: lossThreshold(r.next(), 0.3, 0.04), droop: 0.5, wither: 0.85, glow: 0, pivot, tint: (r.next() - 0.5) * 0.04 });
+        sphere(leaf, c, [0.12, 0.09, 0.1], 0.45 + 0.15 * r.next(), { loss: lossThreshold(r.next(), 0.3, 0.04), droop: 0.5, wither: 0.85, glow: 0, pivot, tint: (r.next() - 0.5) * 0.04, fall });
       }
       for (let i = 0; i < 3; i++) {
         const c = on(w, s - hw + 0.15 + (2 * hw - 0.3) * r.next(), y - 0.12, 0.36);
-        sphere(leaf, c, [0.07, 0.14, 0.05], 0.4, { loss: lossThreshold(r.next(), 0.35, 0.04), droop: 0.6, wither: 0.85, glow: 0, pivot, tint: 0 });
+        sphere(leaf, c, [0.07, 0.14, 0.05], 0.4, { loss: lossThreshold(r.next(), 0.35, 0.04), droop: 0.6, wither: 0.85, glow: 0, pivot, tint: 0, fall });
       }
       for (let i = 0; i < 9; i++) {
         const c = on(w, s - hw + 0.08 + (2 * hw - 0.16) * r.next(), y + 0.09 + 0.05 * r.next(), 0.2 + 0.12 * r.next());
-        sphere(bloom, c, [0.055, 0.045, 0.055], 0.62, { loss: lossThreshold(r.next(), 0.72, 0.25), droop: 0.3, wither: 0.9, glow: 0, pivot, tint: (r.next() - 0.5) * 0.12 });
+        sphere(bloom, c, [0.055, 0.045, 0.055], 0.62, { loss: lossThreshold(r.next(), 0.72, 0.25), droop: 0.3, wither: 0.9, glow: 0, pivot, tint: (r.next() - 0.5) * 0.12, fall });
       }
     }
   }
@@ -937,11 +1014,15 @@ export function buildGarden(p: Resolved<typeof cottageGardenParams>, ctx: BuildC
     const side = free(1) ? 1 : -1;
     const ls = s + side * (door.width / 2 + 0.38);
     const ly = plan.floor + door.height * 0.92;
-    beam(wood, on(w, ls, ly + 0.25, 0), on(w, ls, ly + 0.25, 0.42), 0.05, 0.05, w.u, 0.35, still(on(w, ls, ly, 0), 0.5));
+    // The bracket works loose from the wall and the lantern hangs askew.
+    const mount = on(w, ls, ly + 0.25, 0);
+    const sag = 0.55;
+    const hang = { fall: [w.u[0] * sag, w.u[1] * sag, w.u[2] * sag, 0.36] as const };
+    beam(wood, mount, on(w, ls, ly + 0.25, 0.42), 0.05, 0.05, w.u, 0.35, still(mount, 0.5, hang));
     const c = on(w, ls, ly, 0.4);
-    box(wood, addScaled(c, UP, 0.16), [w.u, UP, w.n], [0.11, 0.025, 0.11], 0.35, still(c, 0.5));
-    box(wood, addScaled(c, UP, -0.15), [w.u, UP, w.n], [0.09, 0.02, 0.09], 0.35, still(c, 0.5));
-    box(lamp, c, [w.u, UP, w.n], [0.075, 0.13, 0.075], 0.8, { loss: lossThreshold(r.next(), 0.42, 0.25), droop: 0, wither: 0.4, glow: 1, pivot: c });
+    box(wood, addScaled(c, UP, 0.16), [w.u, UP, w.n], [0.11, 0.025, 0.11], 0.35, still(mount, 0.5, hang));
+    box(wood, addScaled(c, UP, -0.15), [w.u, UP, w.n], [0.09, 0.02, 0.09], 0.35, still(mount, 0.5, hang));
+    box(lamp, c, [w.u, UP, w.n], [0.075, 0.13, 0.075], 0.8, { loss: lossThreshold(r.next(), 0.42, 0.25), droop: 0, wither: 0.4, glow: 1, pivot: mount, ...hang });
   }
 
   // Split logs stacked against the longest bare stretch of a side wall, end grain out.
@@ -1000,7 +1081,17 @@ export function buildGarden(p: Resolved<typeof cottageGardenParams>, ctx: BuildC
         if (Math.abs(q[2] - front) < 0.01 && Math.abs(q[0] - gateX) < 0.62) continue;
         const h = 0.78 + 0.06 * Math.sin(i * 0.9);
         const base: V3 = [q[0], -0.25, q[2]];
-        const ch: Channels = { loss: r.next() < 0.18 ? lossThreshold(r.next(), 0.32, 0.04) : 0, droop: 0.12 + 0.1 * r.next(), wither: 0.6, glow: 0, pivot: base, tint: 0 };
+        // Pickets lean every which way as the garden is left, then some fall.
+        const leanBy = (r.next() < 0.5 ? -1 : 1) * (0.2 + 0.55 * r.next());
+        const ch: Channels = {
+          loss: r.next() < 0.22 ? lossThreshold(r.next(), 0.32, 0.04) : 0,
+          droop: 0.04,
+          wither: 0.6,
+          glow: 0,
+          pivot: base,
+          tint: 0,
+          fall: [u[0] * leanBy, 0, u[2] * leanBy, 0.3 + 0.32 * r.next()],
+        };
         box(fence, [q[0], (h - 0.25) / 2, q[2]], [u, UP, n], [0.035, (h + 0.25) / 2, 0.014], 0.55 + 0.08 * r.next(), ch);
       }
       for (const ry of [0.22, 0.58]) {

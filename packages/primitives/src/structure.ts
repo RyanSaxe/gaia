@@ -1,10 +1,12 @@
-// Structure primitives: a cottage's plan, walls, roof, openings and dressing.
-// Every part builds against the one plan the footprint lays out, so walls,
-// roof, windows and flower boxes agree by construction. Geometry lives in
-// ./geometry/building.ts.
+// Structure primitives: a building's plan, walls, roof, openings, dressing
+// and feature. Every part builds against the one plan the footprint lays
+// out, so walls, roof, windows, flower boxes and a mill's wheel agree by
+// construction. Geometry lives in ./geometry/building.ts and
+// ./geometry/features.ts.
 
 import { primitive, t } from "@gaia/schema";
 import { buildCasements, buildFieldstone, buildGarden, buildThatch, buildTiles, buildTimberFrame, layOutCottage } from "./geometry/building.ts";
+import { buildTower, buildWaterwheel } from "./geometry/features.ts";
 
 export const cottagePlanParams = {
   shape: t.choice("The cottage's shape on the ground", {
@@ -167,4 +169,36 @@ export const cottageGarden = primitive({
   build: (p, ctx, plan) => buildGarden(p, ctx, plan),
 });
 
-export const STRUCTURE_PRIMITIVES = [cottagePlan, timberFrame, fieldstone, thatch, tiles, casements, cottageGarden];
+export const waterwheelParams = {
+  wheel: t.scale("How big the wheel is", { "a small wheel": 1.5, "a tall wheel": 1.9, "a great wheel": 2.35 }),
+  drive: t.choice("How the water drives it", {
+    overshot: "Fed from above by a wooden flume on trestles, so it turns away from the flume",
+    undershot: "Pushed round at its foot by the race running under it",
+  }),
+};
+
+export const waterwheel = primitive({
+  id: "waterwheel@1",
+  role: "Feature",
+  doc: "A mill's wooden waterwheel turning slowly beside the house in a stone-lined pit, for an entity that turns what it is given into something new. It slows to a stop as the code fails.",
+  params: waterwheelParams,
+  build: (p, ctx, plan) => buildWaterwheel(p, ctx, plan),
+});
+
+export const towerParams = {
+  height: t.scale("How far the tower rises above the house's roof", { "a storey above": 2.6, tall: 4.6, soaring: 7 }),
+  cap: t.choice("What crowns it", {
+    pyramid: "A steep four-sided cap with a finial",
+    lantern: "An open lantern room whose lamp burns at night, under a small cap",
+  }),
+};
+
+export const tower = primitive({
+  id: "tower@1",
+  role: "Feature",
+  doc: "A tall square tower at the back corner of the house, rendered with stone quoins and narrow lamplit windows, for an entity that keeps records or watches over others. Taller the more the code depends on it; it crumbles from the top as the code fails.",
+  params: towerParams,
+  build: (p, ctx, plan) => buildTower(p, ctx, plan),
+});
+
+export const STRUCTURE_PRIMITIVES = [cottagePlan, timberFrame, fieldstone, thatch, tiles, casements, cottageGarden, waterwheel, tower];
