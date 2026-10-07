@@ -38,6 +38,8 @@ export const TRAILS = {
   maxCut: 0.55,
   /** The trail field's reach past an edge, meters; farther reads as this. */
   reach: 6,
+  /** A second trail counts at a sample when its edge is within this many meters of the nearest one's, so where trails meet the more worn one shows. */
+  meet: 1.2,
 } as const;
 
 /** One end of a trail: a place, such as a cottage's door or a landmark's foot. */
@@ -73,6 +75,9 @@ export interface Crossing {
 
 export interface Trail {
   readonly id: string;
+  /** The ids of the places it joins: the first end, where `points` start, and the second. */
+  readonly from: string;
+  readonly to: string;
   readonly style: RouteSpec;
   /** The tread's center line, x and z pairs about a meter apart, from the first end to the second. */
   readonly points: Float32Array;
@@ -369,7 +374,7 @@ export function planTrails(t: Terrain, requests: readonly TrailRequest[], seed: 
       const j = Math.round((z - g.origin) / TRAILS.cell);
       if (i >= 0 && j >= 0 && i < g.n && j < g.n) g.worn[j * g.n + i] = 1;
     }
-    out.push({ id: req.id, style: req.style, points, length: count - 1, crossings: crossingsOf(t, points), regions: [...perRegion.keys()].sort((a, b) => a - b) });
+    out.push({ id: req.id, from: req.from.id, to: req.to.id, style: req.style, points, length: count - 1, crossings: crossingsOf(t, points), regions: [...perRegion.keys()].sort((a, b) => a - b) });
   }
   return out;
 }
@@ -471,6 +476,92 @@ export function trailField(t: Terrain, trails: readonly Trail[]): Float32Array {
   }
   return field;
 }
+
+/** A trail's place packed in one number: its index, plus how far along it (0 to 1) in the fraction. */
+const packPlace = (index: number, along: number): number => index + 0.999 * Math.max(0, Math.min(1, along));
+
+/** Unpacks `trailPlaces`' numbers: the trail's index and how far along it, from its first end (0) to its second (1); null for none. */
+export function unpackPlace(packed: number): { trail: number; along: number } | null {
+  if (packed < 0) return null;
+  const trail = Math.floor(packed);
+  return { trail, along: (packed - trail) / 0.999 };
+}
+
+/**
+ * Which trails each lattice sample lies on, two numbers per sample: the
+ * nearest trail within `TRAILS.reach` of its edge and, where another trail's
+ * edge is within `TRAILS.meet` meters of that one's (where trails meet or
+ * share a tread), that one too; -1 for none. Each packs the trail's index in
+ * `trails` and how far along it the sample lies, 0 at its first end and 1 at
+ * its second (see `unpackPlace`), so a shader can read the vitality of the
+ * two entities a trail joins live and blend it along the trail.
+ */
+export function trailPlaces(t: Terrain, trails: readonly Trail[]): Float32Array {
+  const l = t.lattice;
+  const n = l.n * l.n;
+  const d1 = new Float32Array(n).fill(Infinity);
+  const d2 = new Float32Array(n).fill(Infinity);
+  const p1 = new Float32Array(n).fill(-1);
+  const p2 = new Float32Array(n).fill(-1);
+  const mine = new Float32Array(n).fill(Infinity);
+  const along = new Float32Array(n);
+  trails.forEach((trail, index) => {
+    const half = trail.style.width / 2;
+    const last = Math.max(1, trail.points.length / 2 - 1);
+    const touched: number[] = [];
+    nearSegments(t, trail, half + TRAILS.reach, (i, d, k) => {
+      if ((t.waterLevel[i] as number) > DRY / 2) return;
+      if ((mine[i] as number) === Infinity) touched.push(i);
+      if (d - half < (mine[i] as number)) {
+        mine[i] = d - half;
+        along[i] = k / last;
+      }
+    });
+    for (const i of touched) {
+      const d = mine[i] as number;
+      const p = packPlace(index, along[i] as number);
+      if (d < (d1[i] as number)) {
+        d2[i] = d1[i] as number;
+        p2[i] = p1[i] as number;
+        d1[i] = d;
+        p1[i] = p;
+      } else if (d < (d2[i] as number)) {
+        d2[i] = d;
+        p2[i] = p;
+      }
+      mine[i] = Infinity;
+    }
+  });
+  const out = new Float32Array(n * 2);
+  for (let i = 0; i < n; i++) {
+    out[i * 2] = p1[i] as number;
+    out[i * 2 + 1] = (d2[i] as number) <= (d1[i] as number) + TRAILS.meet ? (p2[i] as number) : -1;
+  }
+  return out;
+}
+
+const smooth = (a: number, b: number, x: number): number => {
+  const u = Math.max(0, Math.min(1, (x - a) / (b - a)));
+  return u * u * (3 - 2 * u);
+};
+
+/**
+ * The vitality a trail shows at a point `along` it (0 at its first end, 1 at
+ * its second): each end's entity's vitality holds near its end and blends
+ * across the middle.
+ */
+export const trailVitalityAt = (fromVitality: number, toVitality: number, along: number): number =>
+  fromVitality + (toVitality - fromVitality) * smooth(0.15, 0.85, along);
+
+/**
+ * How worn a trail's tread is at a point `along` it, from its blueprint's
+ * `wear` and the vitality of the entities at its ends: a thriving pair's
+ * trail is worn bare, a failing one's grows over until only a faint trace is
+ * left, so its route still reads. The ground and grass shaders apply the same numbers live
+ * (`TRAIL_GLSL` in the terrain lab), so a vitality change never rebakes.
+ */
+export const trailWearAt = (wear: number, fromVitality: number, toVitality: number, along: number): number =>
+  wear * (0.2 + 0.8 * smooth(0.05, 0.75, trailVitalityAt(fromVitality, toVitality, along)));
 
 /** Discs along each trail's tread, so trees and the understory keep off it. */
 export function trailDiscs(trails: readonly Trail[], margin: number): Occupied[] {

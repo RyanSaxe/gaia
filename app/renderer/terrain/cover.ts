@@ -7,7 +7,7 @@ import { CLEARINGS_GLSL, type Clearing, LIGHT_GLSL, type SceneLight, createClear
 import { GROUND_SAMPLE_GLSL, type GroundTexture } from "./ground.ts";
 import { REGIONS_GLSL, type RegionCovers, TUFT_GLSL } from "./regions.ts";
 import { CLEARING_GLSL, type Clearings } from "./clearings.ts";
-import { trailWear } from "./trails.ts";
+import { TRAIL_GLSL, trailUniforms } from "./trails.ts";
 
 const GRASS_VERT = /* glsl */ `
 ${CLEARINGS_GLSL}
@@ -16,7 +16,7 @@ uniform float uWind;
 uniform vec3 uCenter;
 uniform float uLand;
 ${GROUND_SAMPLE_GLSL}
-uniform float uTrailWear;
+${TRAIL_GLSL}
 ${REGIONS_GLSL}
 ${TUFT_GLSL}
 ${CLEARING_GLSL}
@@ -103,10 +103,13 @@ void main() {
   // A trail parts the grass: each blade stands only past its own seeded edge,
   // so the tread's border is ragged, and a faint trail keeps more blades on
   // it. Blades along the margin are trampled a little shorter.
+  // Each trail's wear follows the vitality of the two entities it joins: a
+  // failing entity's trail grows over, its blades returning across the tread.
   float edge = g4.w;
+  float wear = edge < 2.0 ? trailWearAt(xz) : 0.0;
   float r4 = fract(aSeed.z * 11.3 + aBlade.x * 7.1 + aBlade.y * 3.7);
-  h *= step(mix(-0.45, 0.55, r4) - (1.0 - uTrailWear) * 1.3, edge);
-  h *= mix(0.55, 1.0, smoothstep(-0.3, 1.3, edge + (1.0 - uTrailWear)));
+  h *= step(mix(-0.45, 0.55, r4) - (1.0 - wear) * 1.3, edge);
+  h *= mix(0.55, 1.0, smoothstep(-0.3, 1.3, edge + (1.0 - wear)));
 
   float side = position.x;
   // A flower's rows crowd toward its top, so its head is a small round dab on a long stem.
@@ -282,7 +285,7 @@ export function createGrass(light: SceneLight, ground: GroundTexture, covers: Re
       ...ground.uniforms,
       ...covers.uniforms,
       uCenter: center,
-      uTrailWear: trailWear,
+      ...trailUniforms,
       uLand: { value: land },
       ...under.uniforms,
       uDry: { value: hexToVec3(0xc4b47e) },

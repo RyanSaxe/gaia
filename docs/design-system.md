@@ -280,6 +280,20 @@ ragged, and a faint trail keeps more blades on it. Trees keep 1.6 m off a
 tread and the understory half a meter. A footbridge's deck and stepping
 stones are walkable. Planks go missing and rails sag as vitality falls.
 
+A trail's wear follows the vitality of the two entities it joins, live.
+Near each end it takes that end's entity's vitality, and it blends between
+the two across the middle. Between thriving entities the tread is worn to
+bare earth, as far as its blueprint's wear says; toward a failing entity
+the grass grows back across it, its ragged edge closes and its earth fades
+into the cover, until a faint trace and its edging stones are all that mark
+the way. Where trails meet or share a tread, the more worn one shows, so
+no seam appears. A trail's footbridges, stepping stones and edging stones
+take its vitality where they stand. `trailWearAt` in `@gaia/terrain` is the
+CPU reference: the bake records which trail each ground sample lies on and
+how far along it (`trailPlaces`), and the ground and grass shaders read each
+trail's ends' vitality from a small texture, so a change in vitality never
+rebakes anything.
+
 ## Landmarks
 
 A landmark is a great thing a person steers by: a lookout tower, a ring of
