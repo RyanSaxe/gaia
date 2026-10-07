@@ -70,7 +70,7 @@ body { font: 12.5px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; overfl
 #status[data-state="standalone"] .dot { background: var(--muted); }
 @keyframes pulse { from { opacity: 0.35; } to { opacity: 1; } }
 /* The dev readout: off by default, a quiet button at the status bar's end. */
-#stats { margin-left: auto; min-width: 0; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#stats { margin-left: auto; min-width: 0; color: var(--ink); line-height: 1.35; text-align: right; }
 #status .stats-toggle { flex: none; margin-left: auto; padding: 0 7px; font-size: 10.5px; line-height: 16px; background: transparent; color: var(--muted); border: 1px solid var(--line); border-radius: 5px; }
 #stats:not([hidden]) + .stats-toggle { margin-left: 0; }
 #status .stats-toggle.on { color: var(--accent); border-color: var(--accent); }

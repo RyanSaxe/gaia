@@ -5,8 +5,8 @@ import type { WebGLRenderer } from "three";
 
 export interface Shot {
   readonly name: string;
-  /** Sets the view up at once: no camera flights, no easing. */
-  stage(): void;
+  /** Sets the view up at once: no camera flights, no easing. A view that waits on a bake resolves when it shows. */
+  stage(): void | Promise<void>;
 }
 
 export interface Lab {
@@ -18,6 +18,10 @@ export interface Lab {
   readonly hook: Readonly<Record<string, unknown>>;
   /** The lab's renderer, so the shell's dev readout can count its draw calls. */
   readonly renderer?: WebGLRenderer;
+  /** Settles once the lab has something to show, such as its first baked world. */
+  readonly ready?: Promise<void>;
+  /** What the lab shows right now, for smoothness reports: plain numbers, words and flags. */
+  readonly report?: () => Readonly<Record<string, string | number | boolean>>;
 }
 
 /** Finds the element marked `data-ref="name"` inside a lab. */

@@ -5,3 +5,4 @@ shots/
 target/
 *.local
 .DS_Store
+.lab/

@@ -1,17 +1,26 @@
 // Serves the lab to a phone over Tailscale: the same one-page bundle as
 // `pnpm lab:html`, rebuilt whenever the renderer's source changes. It listens
 // on this machine's Tailscale address only, never on every interface, so the
-// LAN and localhost cannot reach it. Reload the page to see a change.
-// Usage: pnpm lab:serve
+// LAN and localhost cannot reach it. Reload the page to see a change. The
+// page it serves posts a smoothness report every ten seconds to /telemetry,
+// which appends each to .lab/telemetry.jsonl at the repository's root.
+// Usage: pnpm lab:serve   (LAB_PORT=5181 pnpm lab:serve for a second server)
 
 import { createServer } from "node:http";
 import { networkInterfaces } from "node:os";
+import { resolve } from "node:path";
 import { gzipSync } from "node:zlib";
 import { context } from "esbuild";
 import { LAB_BUILD, type LabBundle, labBundle, labPage } from "./lab-page.ts";
 import { tailscaleAddress } from "./tailscale.ts";
+import { handleTelemetry } from "./telemetry.ts";
 
-const PORT = 5180;
+const PORT = Number(process.env.LAB_PORT ?? 5180);
+if (!Number.isInteger(PORT) || PORT < 1 || PORT > 65535) {
+  console.error(`LAB_PORT must be a port number; it is ${process.env.LAB_PORT}.`);
+  process.exit(1);
+}
+const TELEMETRY = resolve(import.meta.dirname, "../.lab/telemetry.jsonl");
 
 const host = tailscaleAddress(networkInterfaces());
 if (host === null) {
@@ -48,6 +57,10 @@ const server = createServer((req, res) => {
     res.writeHead(204).end();
     return;
   }
+  if (path === "/telemetry") {
+    handleTelemetry(req, res, TELEMETRY);
+    return;
+  }
   if (path !== "/" && path !== "/index.html") {
     res.writeHead(404, { "content-type": "text/plain" }).end("Not found");
     return;
@@ -56,7 +69,8 @@ const server = createServer((req, res) => {
     res.writeHead(503, { "content-type": "text/plain" }).end("The lab has not built yet. The terminal running pnpm lab:serve shows why.");
     return;
   }
-  const html = labPage(bundle);
+  // The tag tells the page to post its smoothness reports here.
+  const html = labPage(bundle).replace("</head>", () => '<meta name="gaia-telemetry" content="/telemetry">\n</head>');
   const gzip = /\bgzip\b/.test(String(req.headers["accept-encoding"] ?? ""));
   const body = gzip ? gzipSync(html) : Buffer.from(html);
   res.writeHead(200, {
@@ -74,7 +88,7 @@ server.on("error", (error: NodeJS.ErrnoException) => {
 });
 server.listen(PORT, host, () => {
   console.log(`Serving the lab on Tailscale only: http://${host}:${PORT}/`);
-  console.log("Reload the page after a change. Ctrl-C stops the server.");
+  console.log(`Reload the page after a change. Smoothness reports append to ${TELEMETRY}. Ctrl-C stops the server.`);
 });
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {

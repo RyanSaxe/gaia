@@ -8,6 +8,7 @@ import { watchEngine } from "./engine-status.ts";
 import { createFloraLab } from "./flora/lab.ts";
 import type { Lab } from "./lab.ts";
 import { createStats } from "./stats.ts";
+import { startTelemetry } from "./telemetry.ts";
 import { createTerrainLab } from "./terrain/lab.ts";
 import { createWorldLab } from "./world/lab.ts";
 
@@ -89,6 +90,21 @@ function loop(now: number): void {
 open("flora");
 requestAnimationFrame(loop);
 
+// Served to a device by `pnpm lab:serve`, the lab reports how smooth it runs there.
+if (
+  startTelemetry(() => ({
+    userAgent: navigator.userAgent,
+    dpr: window.devicePixelRatio,
+    viewport: [window.innerWidth, window.innerHeight],
+    tab: current,
+    ...labOf(current).report?.(),
+    smooth: stats.smoothness(),
+    ...stats.passes(),
+  }))
+) {
+  stats.count(true);
+}
+
 // A hook for scripted checks and `pnpm shots`.
 const frames = (n: number): Promise<void> =>
   new Promise((resolve) => {
@@ -107,8 +123,10 @@ declare global {
   }
 }
 window.__lab = {
+  /** Opens a tab and waits until it has something to show, such as its first baked world. */
   open: async (tab: Tab) => {
     open(tab);
+    await labOf(tab).ready;
     await frames(3);
   },
   tab: () => current,
@@ -118,15 +136,18 @@ window.__lab = {
     await frames(3);
   },
   status: () => statusLine?.textContent ?? "",
-  /** The dev readout's latest frame time and draw calls, or null while it is off. */
+  /** The dev readout's latest frame time, draw calls and the last ten seconds' smoothness, or null while it is off. */
   stats: () => stats.read(),
+  /** The smoothness probe's last ten seconds, whether or not the readout shows. */
+  smoothness: () => stats.smoothness(),
   frames,
   shots: () => allShots().map((s) => s.shot.name),
   stage: async (name: string) => {
     const found = allShots().find((s) => s.shot.name === name);
     if (found === undefined) throw new Error(`No shot named ${name}.`);
     open(found.tab);
-    found.shot.stage();
+    await labOf(found.tab).ready;
+    await found.shot.stage();
     await frames(6);
   },
   ...Object.fromEntries(TABS.map((tab) => [tab, new Proxy({}, { get: (_, key: string) => labOf(tab).hook[key] })])),
