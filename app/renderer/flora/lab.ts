@@ -62,7 +62,7 @@ const UNDERSTORY: readonly { preset: Preset | undefined; kind: AnyKind; at: [num
   { preset: FLOWER_PRESETS[2], kind: wildflowers, at: [-4.2, 10.8] },
   { preset: FLOWER_PRESETS[1], kind: wildflowers, at: [8.8, 10.4] },
   { preset: ROCK_PRESETS[2], kind: rock, at: [-8.4, 13.2] },
-  { preset: ROCK_PRESETS[4], kind: rock, at: [3.6, 15.2] },
+  { preset: ROCK_PRESETS[4], kind: rock, at: [14.5, 11.5] },
 ];
 const ROW = [
   ...FLORA_PRESETS.map((preset, i) => ({ preset, kind: flora as AnyKind, at: SPOTS[i] ?? [0, 0] })),

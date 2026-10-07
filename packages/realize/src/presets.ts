@@ -224,7 +224,7 @@ export const ROCK_PRESETS: readonly Preset[] = [
   },
   {
     name: "Shale ledge",
-    blueprint: rockOf("outcrop@1", { length: "long", height: "knee-high", layering: "layered" }, { cover: "thickly overgrown", growth: "cushions" }, "deep-forest"),
+    blueprint: rockOf("outcrop@1", { length: "long", height: "knee-high", layering: "layered" }, { cover: "a cap on top", growth: "cushions" }, "deep-forest"),
   },
   {
     name: "Sandstone",
