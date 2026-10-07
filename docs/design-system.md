@@ -47,8 +47,8 @@ each card to its leaves, with no textures. Every card shades with the crown's
 blended normal, so the canopy lights as one volume. As a card shrinks on
 screen its leaves merge into its plain outline, so distant canopies never
 sparkle, and a card seen edge-on fades out. Cards drop and wither one by one
-as vitality falls, so a failing canopy thins before it goes bare. Leaf cards
-cast leafy shadows.
+as vitality falls, so a failing canopy thins before it goes bare. Cards cast
+their scalloped outlines as shadows, so sun falls through between them.
 
 ## Scale
 

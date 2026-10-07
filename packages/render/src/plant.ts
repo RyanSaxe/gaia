@@ -78,6 +78,9 @@ float leafShape(vec2 q, float len, float wide) {
 
 // Broad leaves fanned around the card's middle.
 float clusterCut(vec2 p, float seed, float far) {
+  // Far away, the cluster is a soft scalloped round.
+  float outline = 0.78 + 0.08 * cos(atan(p.y, p.x) * 7.0 + seed * 6.2832) - length(p);
+  if (far > 0.999) return outline;
   float d = 0.16 - length(p);
   for (int k = 0; k < 7; k++) {
     float fk = float(k);
@@ -87,14 +90,12 @@ float clusterCut(vec2 p, float seed, float far) {
     float len = 0.68 + 0.3 * leafHash(seed * 7.3 + fk * 3.1);
     d = max(d, leafShape(q, len, 0.2 + 0.06 * leafHash(seed * 3.7 + fk)));
   }
-  // Far away, the cluster is a soft scalloped round.
-  float ang = atan(p.y, p.x);
-  float outline = 0.78 + 0.08 * cos(ang * 7.0 + seed * 6.2832) - length(p);
   return mix(d, outline, far);
 }
 
 // Small lance leaves hanging from a stem, alternating sides.
 float strandCut(vec2 p, float seed, float far) {
+  if (far > 0.999) return 0.55 - abs(p.x);
   float d = 0.05 - abs(p.x);
   float cell = 0.42;
   float i0 = floor(p.y / cell);
@@ -116,6 +117,8 @@ float needleCut(vec2 p, float seed, float far) {
   float v = clamp(p.y, 0.0, 1.0);
   float edge = (1.0 - pow(v, 2.2)) * (0.8 + 0.2 * smoothstep(0.0, 0.25, v)) + 0.06;
   float u = abs(p.x) / edge;
+  float plain = min((0.84 - u) * edge, min(p.y + 0.02, 1.0 - p.y));
+  if (far > 0.999) return plain;
   // Needles sweep toward the tip; each reaches a slightly different length.
   float row = p.y * 15.0 - u * 1.3 + seed * 5.0;
   float comb = fract(row);
@@ -124,7 +127,7 @@ float needleCut(vec2 p, float seed, float far) {
   float body = (reach - u) * edge;
   float d = u < 0.62 ? body : min(body, needle);
   d = min(d, min(p.y + 0.02, 1.02 - p.y));
-  return mix(d, min((0.84 - u) * edge, min(p.y + 0.02, 1.0 - p.y)), far);
+  return mix(d, plain, far);
 }
 
 // The card's leaves at this fragment: x is coverage, y a brightness that
@@ -135,8 +138,12 @@ vec2 leafCut() {
   if (form < 0.5) return vec2(1.0);
   float seed = fract(vCut.z);
   vec2 p = vCut.xy;
-  float span = length(fwidth(p));
-  float far = smoothstep(0.05, 0.16, span);
+#ifdef SHADOW_PASS
+  // Shadows are too soft to show single leaves: cards cast their outline.
+  float far = 1.0;
+#else
+  float far = smoothstep(0.05, 0.16, length(fwidth(p)));
+#endif
   float d = form < 1.5 ? clusterCut(p, seed, far) : form < 2.5 ? strandCut(p, seed, far) : needleCut(p, seed, far);
   float rim = 0.86 + 0.14 * smoothstep(0.0, 0.07, d);
   if (form > 2.5) rim *= 0.9 + 0.1 * smoothstep(0.15, 0.45, abs(fract(p.y * 15.0 - abs(p.x) * 1.3 + seed * 5.0) - 0.5));
@@ -242,9 +249,10 @@ void main() {
 }
 `;
 
-// Leaf cards cast leafy shadows: the sun shines through the gaps.
+// Leaf cards cast scalloped shadows: the sun shines through between them.
 const DEPTH_FRAG = /* glsl */ `
 precision highp float;
+#define SHADOW_PASS
 ${LEAF_MASK_GLSL}
 void main() {
   if (leafCut().x < 0.5) discard;

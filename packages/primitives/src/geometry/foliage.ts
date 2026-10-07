@@ -259,7 +259,7 @@ export function buildLeafClumps(p: Resolved<typeof leafClumpsParams>, ctx: Build
   // edges up close. Very full crowns on dense frames first thin their cards,
   // then lose interior fill clumps (added last), so a tree stays inside its budget.
   const blobs = p.shape === "tufts" ? 3 : 1;
-  const cardsFor = (radius: number): number => Math.round(clamp(6.3 * (radius / cardHalf(radius, s)) ** 2, 10, 90));
+  const cardsFor = (radius: number): number => Math.round(clamp(4.6 * (radius / cardHalf(radius, s)) ** 2, 8, 70));
   const blobRadius = (clump: Clump): number => (blobs === 1 ? clump.radius : clump.radius * 0.68);
   let density = 1;
   const triangles = (): number => clumps.reduce((n, c) => n + blobs * (80 + 2 * Math.round(cardsFor(blobRadius(c)) * density)), 0);
