@@ -41,8 +41,6 @@ const MARGIN = 70;
 const AREA_CELL = 5;
 const HILL_CELL = 5;
 const WATER_CELL = 2.5;
-/** While the map is open and the person walks, it redraws at most this often, ms. */
-const FOLLOW_MS = 150;
 /** Where an area's name may step to, in pixels, when its own spot is taken. */
 const NUDGES: readonly (readonly [number, number])[] = [[0, 0], [0, 26], [0, -26], [34, 10], [-34, 10], [0, 48], [0, -48]];
 /** The paper is painted in steps of a millisecond or two, as many as fit in the page's idle time with this much to spare, ms. */
@@ -414,6 +412,7 @@ export function createFieldMap(root: HTMLElement, source: MapSource): FieldMap {
   sheet.setAttribute("aria-label", "Field map");
   sheet.innerHTML = /* html */ `
     <canvas class="field-map-view"></canvas>
+    <svg class="field-map-here-arrow" viewBox="-14 -14 28 28" aria-hidden="true"><circle r="13" fill="rgba(246,238,219,0.82)"/><path d="M0 -11 7 7 0 3 -7 7Z" fill="#b8452c" stroke="#6e2a1a" stroke-width="1.2" stroke-linejoin="round"/></svg>
     <div class="field-map-title"><span>Field map</span></div>
     <div class="field-map-here"><span class="here-file"></span><span class="here-area"></span></div>
     <div class="field-map-tools">
@@ -426,6 +425,7 @@ export function createFieldMap(root: HTMLElement, source: MapSource): FieldMap {
   const hereFile = sheet.querySelector(".here-file") as HTMLElement;
   const hereArea = sheet.querySelector(".here-area") as HTMLElement;
   const title = sheet.querySelector(".field-map-title span") as HTMLElement;
+  const arrow = sheet.querySelector(".field-map-here-arrow") as SVGElement;
 
   let paper: Paper | null = null;
   /** Whether the world changed since the paper was painted. */
@@ -492,10 +492,22 @@ export function createFieldMap(root: HTMLElement, source: MapSource): FieldMap {
     view.z = Math.max(-hz, Math.min(hz, view.z));
   }
 
-  let lastDraw = 0;
+  /**
+   * You are here: a vermilion arrow in a paper halo, pointing the way the
+   * person looks. It is its own element, moved by a transform, so walking with
+   * the map open never redraws the sheet. Out in the wilds past the sheet it
+   * waits at the edge nearest them, above the place cartouche.
+   */
+  function placeArrow(): void {
+    const w = canvas.clientWidth;
+    const h = canvas.clientHeight;
+    const x = Math.max(22, Math.min(w - 22, (person.x - view.x) * view.zoom + w / 2));
+    const y = Math.max(22, Math.min(h - 76, (person.z - view.z) * view.zoom + h / 2));
+    arrow.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) rotate(${(-person.yaw * 180) / Math.PI}deg)`;
+  }
+
   function draw(): void {
     const t0 = performance.now();
-    lastDraw = t0;
     const { w, h, dpr } = size();
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.fillStyle = PAPER_TONE;
@@ -685,28 +697,7 @@ export function createFieldMap(root: HTMLElement, source: MapSource): FieldMap {
       }
     }
 
-    // You are here: a vermilion arrow in a paper halo, pointing the way the person looks;
-    // out in the wilds past the sheet, it waits at the sheet's edge nearest them.
-    ctx.save();
-    // The arrow keeps above the place cartouche at the sheet's foot.
-    ctx.translate(Math.max(22, Math.min(w - 22, sx(person.x))), Math.max(22, Math.min(h - 76, sy(person.z))));
-    ctx.rotate(-person.yaw);
-    ctx.beginPath();
-    ctx.arc(0, 0, 13, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(246,238,219,0.82)";
-    ctx.fill();
-    ctx.beginPath();
-    ctx.moveTo(0, -11);
-    ctx.lineTo(7, 7);
-    ctx.lineTo(0, 3);
-    ctx.lineTo(-7, 7);
-    ctx.closePath();
-    ctx.fillStyle = "#b8452c";
-    ctx.fill();
-    ctx.strokeStyle = "#6e2a1a";
-    ctx.lineWidth = 1.2;
-    ctx.stroke();
-    ctx.restore();
+    placeArrow();
 
     // A compass rose and a scale, inked in the lower corners.
     ctx.save();
@@ -869,7 +860,7 @@ export function createFieldMap(root: HTMLElement, source: MapSource): FieldMap {
         hereArea.textContent = place.area.depth < 0 ? place.area.name : place.area.depth === 0 ? source.places().name : place.area.path.split("/").join(" / ");
       }
       // Walking with the map open moves the arrow a fraction of a pixel a frame: a few redraws a second keep up.
-      if (isOpen && moved && performance.now() - lastDraw > FOLLOW_MS) draw();
+      if (isOpen && moved) placeArrow();
     },
     show(on) {
       shown = on;
