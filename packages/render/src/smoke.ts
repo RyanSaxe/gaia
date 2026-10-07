@@ -12,9 +12,10 @@ const SMOKE_VERT = /* glsl */ `
 uniform float uTime;
 uniform float uWind;
 uniform float uVitality;
-attribute float aShade;
-attribute float aLoss;
+attribute vec4 aLook;
 attribute vec3 aPivot;
+#define aShade aLook.x
+#define aLoss aLook.z
 varying float vAlpha;
 varying vec2 vCorner;
 varying vec3 vWorld;

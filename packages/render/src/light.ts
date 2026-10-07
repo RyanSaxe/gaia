@@ -41,6 +41,8 @@ export interface SceneLight {
   readonly uSkyHorizon: { value: THREE.Vector3 };
   readonly uSkyGlow: { value: THREE.Vector3 };
   readonly uSkyGlowAmount: { value: number };
+  /** Where the person's eyes are. Every pass thins distant detail from here, so shadows and the mirror agree with the view. */
+  readonly uEye: { value: THREE.Vector3 };
 }
 
 /** The lantern's warm pool: about 12 m across, fading smoothly to nothing by `LANTERN.reach`. */
@@ -163,6 +165,7 @@ export function createSceneLight(): SceneLight {
     uSkyHorizon: { value: hexToVec3(0xcfe6f2) },
     uSkyGlow: { value: hexToVec3(0xffffff) },
     uSkyGlowAmount: { value: 0 },
+    uEye: { value: new THREE.Vector3() },
   };
 }
 

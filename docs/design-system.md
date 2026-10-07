@@ -168,6 +168,28 @@ under the house and along the walk to its door, and its walls stop the
 walk. A cottage stays under 25,000 triangles and draws one mesh per
 swatch, about ten calls.
 
+## Detail at a distance
+
+A person sees everything around them, near things in full and far things
+thinned, and nothing ever appears, vanishes or changes shape as they move.
+Every piece of a component (a leaf card, a limb, a petal) leaves whole at
+its own seeded distance from the eye, smaller pieces first: a piece starts to
+thin 720 times its size away, where it covers about a pixel, shrinks to its
+center over the last 15% before it leaves, and draws nothing past that. Of
+the pieces of one size, the share still there at a distance d past their
+start is (start / d)², and each has grown by d / start, so together they
+cover what the full detail would: a drift of daisies keeps its white far off
+while its petals thin. A drift's petals start to thin about 14 m off; a
+tree's finest twigs and blossoms between 30 and 120 m, and most of its leaf
+cards near 300 m. A copy switches to a coarser level only where every piece that
+level leaves out has already left, so the switch changes no pixel. Shadows
+and the mirror show the same pieces as the view, measured from the same eye.
+
+A pass draws only the cells its camera sees. The sun's shadow map covers a
+box around the person, so only casters inside that box draw into it: its cost
+stays bounded however large the world grows, and nothing outside it could
+cast into it.
+
 ## Composition budgets
 
 | Budget | Starting value |
@@ -197,7 +219,7 @@ falls; the stone bleaches, and a boulder's two halves slump apart along a
 fissure, so it cracks. No blade of grass grows under a stone or through a bush's heart: a
 mask of each one's outline at the ground clears it, so grass grows up
 against a rock and never pierces it. Each blueprint draws as one instanced
-mesh per part, and drifts cast no shadow.
+mesh per part and level of detail, and drifts cast no shadow.
 
 ## Clouds
 

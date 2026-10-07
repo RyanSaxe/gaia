@@ -41,7 +41,7 @@ never crosses, because the renderer builds it. `EngineMethods` in
 | `@gaia/kinds` | The flora, structure, rock, wildflowers, biome and world kinds | schema |
 | `@gaia/world` | The question planner, answer rules, context gathering, vitality, type-space tools, `WorldChange` | schema |
 | `@gaia/realize` | Blueprint to parts, world and region looks at an hour, the light between a day's keys, the sky and air references, presets, channel math, detail by distance | schema, primitives |
-| `@gaia/render` | Three.js materials, light and shadow, and instanced copies of a component | schema, realize, three |
+| `@gaia/render` | Three.js materials, light and shadow, and instanced copies of a component, culled by cell and thinned by distance | schema, realize, three |
 | `@gaia/terrain` | Relief composition, the baked heightfield, water, the wild land past the rim, walking and wading, sight lines, where plants and the understory stand | schema, primitives, realize |
 | `@gaia/app` | Electron main, preload, world service, and the renderer (the lab) | Every package |
 
@@ -98,8 +98,9 @@ below which a piece collapses to its pivot), `droop`, `wither`, `glow` and
 leaf card, and `close`, how far a piece folds toward its pivot at night (a
 flower's petals). The plant shader combines them with each instance's live
 vitality, so a change in vitality never rebuilds geometry. A component placed
-many times, such as a rock or a drift of flowers, draws as one instanced mesh
-per part, with each copy's vitality read per instance.
+many times, such as a tree, a rock or a drift of flowers, draws as one
+instanced mesh per part and level of detail, with each copy's vitality, seed
+and hue read per instance.
 `applyVitality` in `packages/realize/src/channels.ts` is the CPU reference the
 tests run against.
 
@@ -108,11 +109,20 @@ tests run against.
 Every part also carries `piece`: the connected run of triangles each vertex
 belongs to (one leaf card, one limb, one petal) and that piece's size.
 `PartBuilder` writes it, so every primitive has it without work of its own.
-Distance thins detail by whole pieces: `pieceReach` and `detailAt` in
-`packages/realize/src/detail.ts` are the rule and the CPU reference. A
+Distance thins detail by whole pieces, from the person's eye in every pass:
+`pieceReach` and `detailAt` in `packages/realize/src/detail.ts` are the rule
+and the CPU reference, and the plant shader applies the same numbers. A
 coarser level of detail is the full build with the pieces that have left by
 its distance taken out, every kept vertex bit-identical, so detail is computed
 from one build and never shifts a primitive's random streams.
+
+`createPlantInstances` in `@gaia/render` sorts copies into 32 m cells. Before
+each pass (the sun's shadow, the water's mirror, the view) the scene's
+`onBeforeRender` calls `cull` with that pass's camera, which packs only the
+cells the camera sees into each level's instance buffer. A cell draws a
+coarser level only when its nearest point is past that level's distance, where
+every piece the level leaves out has already left on screen, so the two draw
+the same pixels.
 
 ## Time
 

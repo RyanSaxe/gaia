@@ -1,7 +1,8 @@
 // The terrain lab's understory: rocks in groups, bushes in thickets and
 // drifts of wildflowers, scattered by @gaia/terrain and drawn as one
-// InstancedMesh per part of each blueprint, so a hundred bushes cost a
-// handful of draw calls. Placement reruns whenever the land is rebaked.
+// InstancedMesh per part and level of detail of each blueprint, so a hundred
+// bushes cost a handful of draw calls, and each pass draws only the cells it
+// can see. Placement reruns whenever the land is rebaked.
 
 import * as THREE from "three";
 import { type AnyKind, type Library, seedOf } from "@gaia/schema";
@@ -93,16 +94,19 @@ function footprintOf(plant: Realized): number {
 }
 
 export interface Understory {
-  /** Scatters everything again over freshly baked land, keeping clear of the trees. */
-  place(terrain: Terrain, world: WorldSpec, trees: readonly Occupied[]): void;
+  /** Scatters everything again over freshly baked land, keeping clear of the trees; `density` multiplies every group's count. */
+  place(terrain: Terrain, world: WorldSpec, trees: readonly Occupied[], density?: number): void;
   /** Instances that cast into the sun's shadow map. */
   readonly casters: () => readonly PlantInstances[];
   /** Objects the shadow pass hides: drifts of flowers are too fine to cast. */
   readonly quiet: () => readonly THREE.Object3D[];
+  /** Every instanced blueprint, for culling each pass and forcing detail. */
+  readonly all: () => readonly PlantInstances[];
   readonly placements: () => readonly Placement[];
   /** Shows or hides everything, for comparing frame costs. */
   show(on: boolean): void;
-  readonly stats: () => { placed: Record<string, number>; triangles: number; meshes: number };
+  /** What was placed, its triangles at full detail, its meshes, and the triangles the last pass drew. */
+  readonly stats: () => { placed: Record<string, number>; triangles: number; meshes: number; drawn: number };
 }
 
 export function createUnderstory(scene: THREE.Scene, light: SceneLight, lib: Library, clearings: Clearings): Understory {
@@ -114,11 +118,12 @@ export function createUnderstory(scene: THREE.Scene, light: SceneLight, lib: Lib
   let placed: Placement[] = [];
 
   return {
-    place(terrain, world, trees) {
+    place(terrain, world, trees, density = 1) {
       for (const v of views) v.view.dispose();
       views = [];
       const rules: ScatterRule[] = built.map(({ group, radii }) => ({
         ...group.rule,
+        groups: group.rule.groups * density,
         id: group.id,
         variants: radii.map((radius, i) => ({ radius, weight: group.weights[i] ?? 1 })),
         regions: world.regions.map((r) => group.landforms[r.biome.slots.relief?.use ?? ""] ?? 1),
@@ -145,6 +150,7 @@ export function createUnderstory(scene: THREE.Scene, light: SceneLight, lib: Lib
     },
     casters: () => views.filter((v) => v.group.casts).map((v) => v.view),
     quiet: () => views.filter((v) => !v.group.casts).map((v) => v.view.object),
+    all: () => views.map((v) => v.view),
     placements: () => placed,
     show(on) {
       for (const v of views) v.view.object.visible = on;
@@ -153,6 +159,7 @@ export function createUnderstory(scene: THREE.Scene, light: SceneLight, lib: Lib
       placed: Object.fromEntries(GROUPS.map((g) => [g.id, placed.filter((p) => p.rule === g.id).length])),
       triangles: views.reduce((n, v) => n + v.view.triangles, 0),
       meshes: views.reduce((n, v) => n + v.view.object.children.length, 0),
+      drawn: views.reduce((n, v) => n + v.view.drawn().triangles, 0),
     }),
   };
 }

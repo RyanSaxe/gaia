@@ -4,22 +4,31 @@
 
 import * as THREE from "three";
 import type { Part, Swatch } from "@gaia/schema";
-import { CHANNEL_MATH, type Realized } from "@gaia/realize";
+import { CHANNEL_MATH, DETAIL, type Realized, pieceFrames } from "@gaia/realize";
 import { LIGHT_GLSL, type SceneLight } from "./light.ts";
 import { createSmokeMaterial } from "./smoke.ts";
 
 const f = (x: number): string => x.toFixed(4);
 
+// The scalar channels ride four to an attribute (see \`geometryOf\`), so an
+// instanced plant stays well inside WebGL's 16 attribute slots.
 const CHANNELS_GLSL = /* glsl */ `
-attribute float aShade;
-attribute float aTint;
-attribute float aLoss;
-attribute float aDroop;
-attribute float aWither;
-attribute float aGlow;
+attribute vec4 aLook;
+attribute vec4 aLife;
 attribute vec3 aPivot;
-attribute float aClose;
+attribute vec4 aPiece;
+#define aShade aLook.x
+#define aTint aLook.y
+#define aLoss aLook.z
+#define aDroop aLook.w
+#define aWither aLife.x
+#define aGlow aLife.y
+#define aClose aLife.z
+#define aLeave aLife.w
 uniform float uVitality;
+uniform float uSeed;
+uniform vec3 uEye;
+uniform float uDetail;
 uniform float uNightness;
 uniform float uSway;
 uniform float uFrequency;
@@ -43,6 +52,21 @@ vec3 applyChannels(vec3 p) {
   return aPivot + off * keep;
 }
 
+// Distance thins detail (DETAIL in @gaia/realize): each piece leaves whole at
+// its own seeded distance from the person's eye, smallest first, shrinking to
+// its center over the last stretch. Until then a piece past its start grows
+// with distance, so it keeps covering about a pixel and a drift keeps its
+// color. Every pass measures from the eye, so shadows and the mirror show the
+// same pieces. Returns how much to scale the piece about its center, or -1
+// once it has left.
+float pieceScale(mat4 model) {
+  if (uDetail < 0.5) return 1.0;
+  float d = distance((model * vec4(aPiece.xyz, 1.0)).xyz, uEye);
+  if (d >= aLeave) return -1.0;
+  float grow = max(1.0, d / max(aPiece.w, 1e-3));
+  return grow * (1.0 - smoothstep(aLeave * ${f(1 - DETAIL.band)}, aLeave, d));
+}
+
 // The one wind field (v2's windAt), with the plant's response on top.
 float windAt(vec2 p, float t) {
   return sin(t * 1.35 + p.x * 0.21 + p.y * 0.17) + 0.35 * sin(t * 2.9 + p.y * 0.43);
@@ -54,7 +78,7 @@ vec3 applyWind(vec3 p, vec3 root) {
   float w = windAt(root.xz + p.xz * 0.08, t);
   vec3 lean = vec3(w, 0.0, w * 0.55) * uSway * uWind * 0.22 * h * h;
   float reach = min(length(p - aPivot), 2.5);
-  float flutter = sin(t * 3.1 + dot(aPivot, vec3(1.7, 2.3, 1.3))) * uFlutter * uSway * uWind * 0.05 * reach;
+  float flutter = sin(t * 3.1 + dot(aPivot, vec3(1.7, 2.3, 1.3)) + uSeed * 6.2832) * uFlutter * uSway * uWind * 0.05 * reach;
   return p + lean + vec3(flutter, 0.0, flutter * 0.6);
 }
 `;
@@ -166,8 +190,14 @@ varying float vTint;
 varying float vWither;
 varying float vGlow;
 void main() {
+  float k = pieceScale(modelMatrix);
+  // A piece that has left sits wholly outside the view, so it draws nothing.
+  if (k < 0.0) {
+    gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+    return;
+  }
   vec3 root = (modelMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
-  vec3 p = applyWind(applyChannels(position), root);
+  vec3 p = applyWind(applyChannels(aPiece.xyz + (position - aPiece.xyz) * k), root);
   vec4 world = modelMatrix * vec4(p, 1.0);
   vWorld = world.xyz;
   vNormal = normalize(mat3(modelMatrix) * normal);
@@ -252,8 +282,13 @@ ${CHANNELS_GLSL}
 ${CUTOUT_GLSL}
 void main() {
   vCut = aCutout;
+  float k = pieceScale(modelMatrix);
+  if (k < 0.0) {
+    gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+    return;
+  }
   vec3 root = (modelMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
-  vec3 p = applyWind(applyChannels(position), root);
+  vec3 p = applyWind(applyChannels(aPiece.xyz + (position - aPiece.xyz) * k), root);
   gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4(p, 1.0);
 }
 `;
@@ -286,19 +321,37 @@ export interface PlantView {
 
 const vec3Of = (c: readonly number[]): THREE.Vector3 => new THREE.Vector3(c[0] ?? 0, c[1] ?? 0, c[2] ?? 0);
 
+/** Interleaves four per-vertex scalars into one vec4 attribute. */
+function four(a: Float32Array, b: Float32Array, c: Float32Array, d: Float32Array): THREE.BufferAttribute {
+  const out = new Float32Array(a.length * 4);
+  for (let i = 0; i < a.length; i++) {
+    out[i * 4] = a[i] as number;
+    out[i * 4 + 1] = b[i] as number;
+    out[i * 4 + 2] = c[i] as number;
+    out[i * 4 + 3] = d[i] as number;
+  }
+  return new THREE.BufferAttribute(out, 4);
+}
+
 export function geometryOf(part: Part): THREE.BufferGeometry {
   const g = new THREE.BufferGeometry();
+  const ch = part.channels;
+  const n = part.shade.length;
+  const frames = pieceFrames(part);
+  const start = new Float32Array(n);
+  const leave = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    start[i] = frames.reach[i * 2] as number;
+    leave[i] = frames.reach[i * 2 + 1] as number;
+  }
+  const center = (k: number): Float32Array => frames.center.filter((_, i) => i % 3 === k);
   g.setAttribute("position", new THREE.BufferAttribute(part.positions, 3));
   g.setAttribute("normal", new THREE.BufferAttribute(part.normals, 3));
-  g.setAttribute("aShade", new THREE.BufferAttribute(part.shade, 1));
-  g.setAttribute("aTint", new THREE.BufferAttribute(part.tint, 1));
   g.setAttribute("aCutout", new THREE.BufferAttribute(part.cutout, 3));
-  g.setAttribute("aLoss", new THREE.BufferAttribute(part.channels.loss, 1));
-  g.setAttribute("aDroop", new THREE.BufferAttribute(part.channels.droop, 1));
-  g.setAttribute("aWither", new THREE.BufferAttribute(part.channels.wither, 1));
-  g.setAttribute("aGlow", new THREE.BufferAttribute(part.channels.glow, 1));
-  g.setAttribute("aPivot", new THREE.BufferAttribute(part.channels.pivot, 3));
-  g.setAttribute("aClose", new THREE.BufferAttribute(part.channels.close, 1));
+  g.setAttribute("aPivot", new THREE.BufferAttribute(ch.pivot, 3));
+  g.setAttribute("aLook", four(part.shade, part.tint, ch.loss, ch.droop));
+  g.setAttribute("aLife", four(ch.wither, ch.glow, ch.close, leave));
+  g.setAttribute("aPiece", four(center(0), center(1), center(2), start));
   g.setIndex(new THREE.BufferAttribute(part.indices, 1));
   g.computeBoundingSphere();
   g.computeBoundingBox();
@@ -330,6 +383,9 @@ export function createPlant(plant: Realized, light: SceneLight): PlantView {
 
   const shared = {
     uVitality: { value: 1 },
+    // A single plant keeps its full detail: thinning is for the many copies a world places.
+    uDetail: { value: 0 },
+    uSeed: { value: 0 },
     uSway: { value: plant.motion.sway },
     uFrequency: { value: plant.motion.frequency },
     uHeight: { value: height },
@@ -371,7 +427,7 @@ export function createPlant(plant: Realized, light: SceneLight): PlantView {
     const depth = new THREE.ShaderMaterial({
       vertexShader: DEPTH_VERT,
       fragmentShader: DEPTH_FRAG,
-      uniforms: { uTime: light.uTime, uWind: light.uWind, uNightness: light.uNightness, ...shared, ...perPart },
+      uniforms: { uTime: light.uTime, uWind: light.uWind, uNightness: light.uNightness, uEye: light.uEye, ...shared, ...perPart },
       side: THREE.DoubleSide,
     });
     const mesh = new THREE.Mesh(geometries[i], color);
