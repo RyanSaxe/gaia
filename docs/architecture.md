@@ -29,8 +29,27 @@ the engine's stdin and stdout, relayed by the main process. Only small data
 crosses: code facts, Jev requests and answers, and store records. Geometry
 never crosses, because the renderer builds it. `EngineMethods` in
 `packages/schema/src/engine.ts` is the TypeScript side of the protocol, and
-`engine/src/rpc.rs` the Rust side. In slice 1 the engine answers only
-`engine.ping`.
+`engine/src/rpc.rs` the Rust side. The engine answers `engine.ping`,
+`project.open`, and Jev's `jev.estimate`, `jev.ask` and `jev.batch`.
+
+`project.open` walks a directory, respecting `.gitignore`, and reports each
+file's facts, the entities, and the repository (`CodeModel`). Each file is
+read by a careful line-based pass for TypeScript, JavaScript and Rust
+(`engine/src/source.rs`), with a small lexer that keeps strings and comments
+apart from code: its language and kind (source, test, config, data, docs,
+script), lines, leading comment, exported symbols with their doc comments,
+imports, a rough complexity and its TODO markers. Imports resolve relative
+paths, workspace packages by name through their `exports`, and Rust `mod`
+declarations. A test covers every file it reaches through imports; a crate's
+integration tests reach its entry, and a Rust file with a `#[cfg(test)]`
+module covers itself. Entities come from `package.json` and `Cargo.toml`, from
+directories whose index file is no package's entry (modules), and from
+directories with a `main` or `server` file (apps and services). An entity
+depends on another through its manifest or when one of its files imports one
+of the other's. History comes from one `git log`. Nothing runs the compiler,
+the linter or the tests yet, so diagnostics and failing tests read 0, and
+nothing watches the project for `facts.changed`. On Gaia's own repository
+(about 210 files, 31,000 lines) `project.open` takes about 0.15 s.
 
 ## Packages
 

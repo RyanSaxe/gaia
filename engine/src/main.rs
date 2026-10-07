@@ -1,7 +1,11 @@
 //! The gaia-engine binary. `--version` prints its version; `rpc` serves the
 //! engine protocol over stdin and stdout until stdin closes.
 
+mod git;
+mod jev;
+mod project;
 mod rpc;
+mod source;
 
 use std::io::{self, BufRead, Write};
 use std::process::ExitCode;

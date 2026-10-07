@@ -8,10 +8,15 @@ export interface SymbolFact {
   readonly doc?: string;
 }
 
+/** The part a file plays, which says what kind of ground its patch is. */
+export type FileKind = "source" | "test" | "config" | "data" | "docs" | "script";
+
 export interface FileFacts {
   /** Project-relative path. This is the item's identity. */
   readonly path: string;
   readonly language: string;
+  /** What part the file plays; the engine always reports it. */
+  readonly kind?: FileKind;
   readonly contentHash: string;
   readonly lines: number;
   readonly symbols: readonly SymbolFact[];
