@@ -11,8 +11,6 @@ import {
   SHORE_CAP,
   type Station,
   TERRAIN,
-  WADE,
-  WALK_TO,
   WILDS,
   type Terrain,
   bakeTerrain,
@@ -32,11 +30,7 @@ import {
   scatterPlants,
   sightlines,
   streamFlow,
-  EYE_HEIGHT,
   surfaceHalfWidth,
-  wadeSpeed,
-  walkStep,
-  walkToward,
   waterDepthAt,
   wildsRing,
   withinBudget,
@@ -363,143 +357,6 @@ describe("wild land past the rim", () => {
       }
       expect(high - low).toBeLessThanOrEqual(variation + 1e-4);
     }
-  });
-});
-
-describe("wading", () => {
-  const t = baked[0]!;
-  const pond = t.ponds[0]!;
-  const dt = 1 / 60;
-  const walkFrom = (x: number, z: number, dx: number, dz: number, steps: number, speed = 4.2) => {
-    const path = [{ x, z }];
-    for (let i = 0; i < steps; i++) path.push(walkStep(t, path[path.length - 1]!, { dx, dz, speed }, dt));
-    return path;
-  };
-
-  it("measures water depth as the surface above the ground, and none on dry land", () => {
-    expect(waterDepthAt(t, pond.x, pond.z)).toBeGreaterThan(WADE.deepest);
-    expect(waterDepthAt(t, pond.x + pond.reach * 2.5, pond.z)).toBe(0);
-    for (let k = 0; k < 400; k++) {
-      const x = ((k * 37) % 300) - 150;
-      const z = ((k * 91) % 300) - 150;
-      expect(waterDepthAt(t, x, z)).toBeGreaterThanOrEqual(0);
-    }
-  });
-
-  it("never ends a step in water 1.2 m deep or more, so eyes stay above the surface", () => {
-    expect(WADE.deepest).toBeLessThan(EYE_HEIGHT);
-    for (let a = 0; a < 16; a++) {
-      const ang = (a / 16) * Math.PI * 2;
-      const start = { x: pond.x + Math.cos(ang) * pond.reach * 1.6, z: pond.z + Math.sin(ang) * pond.reach * 1.6 };
-      for (const p of walkFrom(start.x, start.z, -Math.cos(ang), -Math.sin(ang), 900)) {
-        expect(waterDepthAt(t, p.x, p.z)).toBeLessThan(WADE.deepest);
-      }
-    }
-  });
-
-  it("slows as the water deepens", () => {
-    expect(wadeSpeed(0)).toBe(1);
-    expect(wadeSpeed(1.1)).toBeCloseTo(0.4, 6);
-    const dry = walkStep(t, { x: pond.x + pond.reach * 2, z: pond.z }, { dx: 0, dz: 1, speed: 4 }, 0.1);
-    const dryStep = Math.hypot(dry.x - pond.x - pond.reach * 2, dry.z - pond.z);
-    // A point in shallow water at the pond's edge.
-    let wet = { x: pond.x, z: pond.z };
-    for (let r = pond.reach; r > 0; r -= 0.25) {
-      const d = waterDepthAt(t, pond.x + r, pond.z);
-      if (d > 0.5 && d < 1) {
-        wet = { x: pond.x + r, z: pond.z };
-        break;
-      }
-    }
-    const depth = waterDepthAt(t, wet.x, wet.z);
-    expect(depth).toBeGreaterThan(0.5);
-    const moved = walkStep(t, wet, { dx: 0, dz: 1, speed: 4 }, 0.1);
-    const wetStep = Math.hypot(moved.x - wet.x, moved.z - wet.z);
-    expect(wetStep).toBeLessThan(dryStep * 0.85);
-    expect(wetStep).toBeCloseTo(dryStep * wadeSpeed(depth), 6);
-  });
-
-  it("slides along the deep water's edge instead of stopping dead", () => {
-    // Walk straight across the pond's near side: the deep middle turns the
-    // walker aside, and they slide around it and come out past the pond.
-    // The farthest line from the middle that still crosses deep water.
-    const crosses = (z: number): boolean =>
-      Array.from({ length: 200 }, (_, k) => pond.x + (k / 100 - 1) * pond.reach).some((x) => waterDepthAt(t, x, z) >= WADE.deepest + 0.05);
-    let z = pond.z;
-    while (crosses(z - 0.5)) z -= 0.5;
-    const path = walkFrom(pond.x - pond.reach * 1.5, z, 1, 0, 3600);
-    expect(path.some((p) => Math.abs(p.z - z) > 0.2)).toBe(true);
-    expect(path[path.length - 1]!.x).toBeGreaterThan(pond.x + pond.reach * 0.5);
-    for (const p of path) expect(waterDepthAt(t, p.x, p.z)).toBeLessThan(WADE.deepest);
-  });
-
-});
-
-describe("walking to a tapped point", () => {
-  const t = baked[0]!;
-  const pond = t.ponds[0]!;
-  const dt = 1 / 60;
-  type Point = { x: number; z: number };
-  /** Steps toward `target` until the walk ends, at most a minute of it. */
-  const walkTo = (from: Point, target: Point) => {
-    let at = from;
-    const path = [at];
-    for (let i = 0; i < 3600; i++) {
-      const next = walkToward(t, at, target, dt);
-      at = next.walker;
-      path.push(at);
-      if (next.state !== "walking") return { state: next.state, at, path, seconds: (i + 1) * dt };
-    }
-    return { state: "walking" as const, at, path, seconds: 60 };
-  };
-  // The sample world's pond lies near its east edge, so the dry ground to walk on is west of it.
-  const dry = { x: pond.x - pond.reach * 2.5, z: pond.z };
-  const firstStep = (target: Point): number => {
-    const { walker } = walkToward(t, dry, target, dt);
-    return Math.hypot(walker.x - dry.x, walker.z - dry.z);
-  };
-
-  it("walks to a point on dry ground and ends the walk within reach of it", () => {
-    const target = { x: dry.x - 12, z: dry.z + 5 };
-    expect(waterDepthAt(t, dry.x, dry.z)).toBe(0);
-    expect(waterDepthAt(t, target.x, target.z)).toBe(0);
-    const walk = walkTo(dry, target);
-    expect(walk.state).toBe("arrived");
-    expect(Math.hypot(walk.at.x - target.x, walk.at.z - target.z)).toBeLessThanOrEqual(WALK_TO.reach);
-    // At walking pace, straight there.
-    expect(walk.seconds).toBeCloseTo((13 - WALK_TO.reach) / WALK_TO.pace, 1);
-  });
-
-  it("walks to a near point at walking pace and jogs toward a far one", () => {
-    expect(firstStep({ x: dry.x - 10, z: dry.z })).toBeCloseTo(WALK_TO.pace * dt, 6);
-    expect(firstStep({ x: dry.x - 60, z: dry.z })).toBeCloseTo(WALK_TO.pace * WALK_TO.jog * dt, 6);
-  });
-
-  it("stops at the edge of deep water across the way instead of pushing into it", () => {
-    const west = { x: pond.x - pond.reach * 1.6, z: pond.z };
-    const walk = walkTo(west, { x: pond.x + pond.reach * 1.6, z: pond.z });
-    expect(walk.state).toBe("stalled");
-    for (const p of walk.path) expect(waterDepthAt(t, p.x, p.z)).toBeLessThan(WADE.deepest);
-    // At the shore: the deep water starts within a stride ahead.
-    expect(walk.at.x).toBeGreaterThan(west.x + pond.reach * 0.3);
-    expect(waterDepthAt(t, walk.at.x + 1, walk.at.z)).toBeGreaterThanOrEqual(WADE.deepest);
-    // Asked again, the walk stays where it stopped.
-    expect(walkToward(t, walk.at, { x: pond.x + pond.reach * 1.6, z: pond.z }, dt)).toEqual({ walker: walk.at, state: "stalled" });
-  });
-
-  it("slides past deep water it only brushes and still arrives", () => {
-    const crosses = (z: number): boolean =>
-      Array.from({ length: 200 }, (_, k) => pond.x + (k / 100 - 1) * pond.reach).some((x) => waterDepthAt(t, x, z) >= WADE.deepest + 0.05);
-    let z = pond.z;
-    while (crosses(z - 0.5)) z -= 0.5;
-    const target = { x: pond.x + pond.reach * 1.8, z };
-    const walk = walkTo({ x: pond.x - pond.reach * 1.8, z }, target);
-    expect(walk.state).toBe("arrived");
-    for (const p of walk.path) expect(waterDepthAt(t, p.x, p.z)).toBeLessThan(WADE.deepest);
-  });
-
-  it("ends the walk where it stands when the point is within reach", () => {
-    expect(walkToward(t, dry, { x: dry.x + 1, z: dry.z + 0.5 }, dt)).toEqual({ walker: dry, state: "arrived" });
   });
 });
 

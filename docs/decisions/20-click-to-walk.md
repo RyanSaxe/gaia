@@ -3,7 +3,8 @@
 Walking works the same on a desktop and a phone: tap or click the ground to
 walk there, and drag to look. A far spot is jogged to. A faint ring marks the
 spot and fades when the walk ends. Tapping somewhere new changes course, and
-tapping where you stand stops you. Deep water still stops a walk at its edge.
+tapping where you stand stops you. Deep water still stops a walk at its edge
+(round 10 changed this: see [21](21-solid-things-and-swimming.md)).
 The view never turns on its own. The on-screen walk pad is gone; on a desktop
 WASD, the arrows and Shift still work, and any of them ends a tap's walk. The
 terrain lab's stats fold into a small Stats toggle.

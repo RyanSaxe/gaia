@@ -98,20 +98,37 @@ world's edge is a gentle rim. Past it, one ring of low-detail wild land runs
 on to 1.5 km, continuing the rim's height and settling into a gentle roll of
 at most 6 m, colored by the nearest region's cover. It is never walkable.
 
-A person can wade but never goes under water. Walking slows as the water
-deepens, to 40% of its pace at 1.1 m, and a step that would end where the
-water is 1.2 m deep slides along the edge instead; eyes stay 1.6 m above the
-ground. `walkStep` and `waterDepthAt` in `@gaia/terrain` are pure, so tests
+Water never stops a person, and they never go under. Walking slows as the
+water deepens, to 40% of its pace at 1.1 m; deeper, the feet leave the
+bottom by 1.5 m and the person swims at 30% of the pace. Eyes stay 1.6 m
+above the ground until the water nears them, then ease down as the bottom
+falls away until they float 0.3 m above the surface, and rise again the same
+way climbing out: the eye height is a smooth function of depth, so it never
+jumps. A swimmer bobs gently, 3 cm every 2.8 s, and the wading rings go on.
+At night a swimmer holds the lantern just above the water.
+
+Solid things stop a person: tree trunks at the bark of their base, rocks and
+bushes by their outlines at the ground (all of a rock; the heart of a bush,
+so the walk brushes its outer leaves), and a house's walls. A stone lower
+than half a meter is stepped over, and drifts of flowers are walked through.
+Each solid is the convex hull of its outline, so a step that would end in one
+slides along its edge without catching: pushing straight at a trunk stops,
+pushing at an angle slides around it. The body keeps 0.4 m from every edge.
+`walkStep`, `stanceAt` and `solidsOf` in `@gaia/terrain` are pure, so tests
 check every step.
 
 A person walks by tapping or clicking the ground, the same with a mouse, a
-trackpad or a thumb, and drags to look. The walk goes straight to the spot at
-4.2 m/s, jogs at 1.8 times that while more than 25 m remain, easing back to a
-walk by 15 m, and ends within 1.5 m of the spot, so a tap that close to where
-the person stands stops them. A glancing brush with deep water slides past
-it; deep water across the way ends the walk at its edge. The view never turns
-on its own. A faint ring marks the spot and fades when the walk ends.
-`walkToward` in `@gaia/terrain` takes each step.
+trackpad or a thumb, and drags to look. The walk plans its way around
+whatever stands between (straight when nothing does), follows it at 4.2 m/s,
+jogs at 1.8 times that while more than 25 m remain, easing back to a walk by
+15 m, and ends within 1.5 m of the spot, so a tap that close to where the
+person stands stops them. It heads for a point 1.2 m ahead along its way, so
+it rounds each corner in a curve. A tap across a pond swims all the way
+across. A tap on a rock or a bush walks up to the face that was tapped; when
+solids ring the spot, the walk ends at the nearest place it can reach. The
+view never turns on its own. A faint ring marks where the walk will end and
+fades when it does. `planWalk` and `walkToward` in `@gaia/terrain` plan and
+take each step.
 
 Streams run downstream along the flow solved from their bed (`streamFlow`
 and `flowAt` in `@gaia/terrain`), faster where the channel narrows or the

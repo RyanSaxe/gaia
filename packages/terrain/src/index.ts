@@ -11,3 +11,4 @@ export * from "./walk.ts";
 export * from "./flow.ts";
 export * from "./site.ts";
 export * from "./scatter.ts";
+export * from "./solids.ts";

@@ -100,6 +100,8 @@ export interface Understory {
   /** Objects the shadow pass hides: drifts of flowers are too fine to cast. */
   readonly quiet: () => readonly THREE.Object3D[];
   readonly placements: () => readonly Placement[];
+  /** A placed component's reach at the ground in 48 directions and its top above its origin, at scale 1, by the rule and variant its placement names. */
+  readonly footprint: (rule: string, variant: number) => { readonly outline: Float32Array; readonly top: number } | undefined;
   /** Shows or hides everything, for comparing frame costs. */
   show(on: boolean): void;
   readonly stats: () => { placed: Record<string, number>; triangles: number; meshes: number };
@@ -108,7 +110,9 @@ export interface Understory {
 export function createUnderstory(scene: THREE.Scene, light: SceneLight, lib: Library, clearings: Clearings): Understory {
   const built = GROUPS.map((g) => {
     const plants = g.presets.map((p, i) => realize(p.blueprint, g.kind, lib, { seed: seedOf(`terrain-lab/${g.id}/${i}`), facts: { scale: 1, age: 120 } }));
-    return { group: g, plants, radii: plants.map(footprintOf), outlines: plants.map((p) => outlineOf(p).map((r) => r * g.clears)) };
+    const reach = plants.map(outlineOf);
+    const tops = plants.map((p) => p.parts.reduce((top, part) => part.positions.reduce((t, v, i) => (i % 3 === 1 ? Math.max(t, v) : t), top), 0));
+    return { group: g, plants, radii: plants.map(footprintOf), reach, tops, outlines: reach.map((o) => o.map((r) => r * g.clears)) };
   });
   let views: { group: Group; view: PlantInstances }[] = [];
   let placed: Placement[] = [];
@@ -146,6 +150,11 @@ export function createUnderstory(scene: THREE.Scene, light: SceneLight, lib: Lib
     casters: () => views.filter((v) => v.group.casts).map((v) => v.view),
     quiet: () => views.filter((v) => !v.group.casts).map((v) => v.view.object),
     placements: () => placed,
+    footprint: (rule, variant) => {
+      const b = built.find((x) => x.group.id === rule);
+      const outline = b?.reach[variant];
+      return b === undefined || outline === undefined ? undefined : { outline, top: b.tops[variant] ?? 0 };
+    },
     show(on) {
       for (const v of views) v.view.object.visible = on;
     },
