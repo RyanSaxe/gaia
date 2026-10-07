@@ -351,6 +351,7 @@ export function createFloraLab(root: HTMLElement): Lab {
   }
 
   return {
+    renderer,
     setActive(on) {
       active = on;
       controls.enabled = on;

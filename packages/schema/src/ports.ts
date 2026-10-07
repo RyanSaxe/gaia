@@ -222,6 +222,12 @@ export interface GroundSpec {
   readonly density: number;
   /** 0 is an even carpet; 1 is tufts on bare soil. */
   readonly clump: number;
+  /** How far each blade leans from upright: 0 stands straight, 1 lies flat. */
+  readonly lean: number;
+  /** A blade's outline: 0 is a pointed blade, 1 a round leaf. */
+  readonly round: number;
+  /** How far a blade arcs over toward its tip, 0 to 1. */
+  readonly bend: number;
   /** Fraction of blades that carry a flower. */
   readonly flowers: number;
   readonly flowerColors: readonly Rgb[];

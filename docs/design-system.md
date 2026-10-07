@@ -23,8 +23,8 @@ Color works at three levels:
 
 1. **The world** sets light, sky, season and wind for everything.
 2. **Each region's biome** sets its ground cover, wildflowers, air, drifting
-   accents and the palette families native to it. Ground colors blend across
-   region edges.
+   accents and the palette families native to it. Ground covers drift into
+   each other across region edges (see Terrain).
 3. **Each component** has one palette family. Components never blend.
 
 There are eight palette families in `packages/primitives/src/palettes.ts`
@@ -54,7 +54,18 @@ instance within it:
 
 No mountains. Landforms (rolling hills, valley, terraces, basin, dunes,
 meadow) are relief primitives in each region's biome, blended into one baked
-heightfield that every consumer samples. The bake enforces a relief budget:
+heightfield that every consumer samples.
+
+A region never shows its shape. Region cells are domain-warped, so their
+borders curve and wander, and neighboring landforms ease into each other
+across a band 130 m wide. Ground covers blend by the same weights broken into
+seeded patches about 30 m across, so one cover drifts into the next in
+islands rather than along a gradient. The overview marks the selected region
+with a faint glow that follows its cover and fades at its edge; walking shows
+nothing. `regionWeights` and `coverWeights` in `@gaia/terrain` are the
+references, and the bake keeps each sample's cover weights for the shaders.
+
+The bake enforces a relief budget:
 
 | Budget | Value |
 | --- | --- |
@@ -97,10 +108,20 @@ sparkle.
 
 Grass keeps its full height at every distance, so it never grows out of the
 ground. Each blade has a seeded threshold and disappears whole once the
-viewer is farther than that, thinning from 55% of its reach of 60 m; a third
-of the blades reach only 26 m, so grass is densest close by. The ground
-beneath is painted in the cover's own colors with short brushed strokes, so
-where blades thin out the ground still reads as the same cover.
+viewer is farther than that, thinning from 55% of its reach of 60 m; a
+quarter of the blades reach only 14 m and a third only 30 m, so grass is
+densest close by. Blades thin the same way, whole, on steep risers and over
+the sand banks within one to three meters of water, which the ground paints
+from the same shore distance. The ground beneath is painted in the cover's
+own colors with short dabs in three directions, so where blades thin out the
+ground still reads as the same cover and no stroke runs on into a streak.
+
+Each cover sets its blades' form: how far they lean, how round their outline
+is (a pointed blade or a round leaf) and how far they arc over. Lush grass is
+soft arcing blades with blunt tips; heather is splayed sprigs with purple
+tops in bushy tufts; moss and clover are low round leaves. Blades bend as
+arcs that keep their length. The wind rolls across the field in broad, soft
+gusts that bow the blades and show their paler sheen.
 
 ## Sky and distance
 

@@ -1,16 +1,19 @@
 // Composes one heightfield from per-region landforms. Each region's landform
 // is blended with its neighbors' by weights that fall smoothly to zero across
-// a band at every region edge, so heights are continuous by construction. The
-// world's edge closes in with a gentle rim, which ends every sight line on
-// the world's own ground. The result is fitted into the relief budget, then
-// water is solved and cut into it. Everything here is pure and deterministic.
+// a wide band at every region edge, so heights are continuous by construction.
+// Region cells are domain-warped, so their borders curve and wander instead of
+// running straight; ground covers blend by the same weights broken into seeded
+// patches, so one cover drifts into the next. The world's edge closes in with
+// a gentle rim, which ends every sight line on the world's own ground. The
+// result is fitted into the relief budget, then water is solved and cut into
+// it. Everything here is pure and deterministic.
 
 import { type AnyPrimitive, type BuildContext, type Blueprint, type Landform, type Library, rand, seedOf } from "@gaia/schema";
-import { fieldAt } from "@gaia/primitives";
+import { fbm, fieldAt } from "@gaia/primitives";
 import { resolveParams } from "@gaia/realize";
 import { RELIEF_BUDGET, type ReliefReport, measureRelief, withinBudget } from "./budget.ts";
 import { type Lattice, createLattice, worldOf } from "./lattice.ts";
-import { type SolvedPond, type SolvedStream, carvePond, carveStream, solvePond, solveStream } from "./water.ts";
+import { type SolvedPond, type SolvedStream, carvePond, carveStream, shoreField, solvePond, solveStream } from "./water.ts";
 
 export interface RegionSpec {
   /** The directory the region stands for. */
@@ -34,8 +37,17 @@ export const TERRAIN = {
   spacing: 1,
   /** Land drawn beyond the walkable square on every side, meters. */
   skirt: 80,
-  /** Width of the band over which neighboring regions' landforms blend, meters. */
-  blend: 40,
+  /** Width of the band over which neighboring regions' landforms and covers blend, meters. */
+  blend: 130,
+  /** How far region borders wander from straight lines, meters, and over what wavelength. */
+  warp: 34,
+  warpWavelength: 150,
+  /** How strongly covers break into patches across a blend; 0 is a plain gradient. */
+  drift: 1.2,
+  /** How abruptly one cover's patch gives way to the next's. */
+  driftEdge: 3,
+  /** Wavelength of the cover patches, meters. */
+  driftWavelength: 30,
   /** How high the world's edge rises, meters. */
   rim: 7,
   /** Width of the rim's climb, meters, ending this far past the walkable edge. */
@@ -53,8 +65,15 @@ export interface Terrain {
   readonly lattice: Lattice;
   /** Water surface height per lattice sample, DRY where there is none. */
   readonly waterLevel: Float32Array;
-  /** Index of the region with the strongest weight per lattice sample. */
+  /** Meters from each lattice sample to the nearest water, up to SHORE_CAP. */
+  readonly shore: Float32Array;
+  /** Index of the region whose cover dominates each lattice sample. */
   readonly region: Uint8Array;
+  /**
+   * Each region's share of the ground cover per lattice sample: `regions.length`
+   * values per sample, summing to 1. Covers blend by these weights.
+   */
+  readonly cover: Float32Array;
   readonly streams: readonly SolvedStream[];
   readonly ponds: readonly SolvedPond[];
   /** The vertical scale applied to fit the budget; 1 means the landforms fit as chosen. */
@@ -87,16 +106,53 @@ const smooth = (t: number): number => {
   return c * c * (3 - 2 * c);
 };
 
-/** Each region's blend weight at a point: 1 for the nearest, falling to 0 across the blend band. */
+const WARP_SEEDS = [5101, 5203] as const;
+const DRIFT_SEED = 6007;
+
+/**
+ * Each region's blend weight at a point: 1 for the nearest, falling smoothly to
+ * 0 across the blend band. Distances are measured from a domain-warped point,
+ * so the cells' borders curve and wander. Heights blend by these weights.
+ */
 export function regionWeights(spec: WorldSpec, x: number, z: number, out: Float64Array): void {
+  const u = x / TERRAIN.warpWavelength;
+  const v = z / TERRAIN.warpWavelength;
+  const wx = x + TERRAIN.warp * fbm(WARP_SEEDS[0], u, v, 2, 0.4);
+  const wz = z + TERRAIN.warp * fbm(WARP_SEEDS[1], u, v, 2, 0.4);
   let nearest = Infinity;
   for (let i = 0; i < spec.regions.length; i++) {
     const r = spec.regions[i] as RegionSpec;
-    const d = Math.hypot(x - r.x, z - r.z);
+    const d = Math.hypot(wx - r.x, wz - r.z);
     out[i] = d;
     if (d < nearest) nearest = d;
   }
   for (let i = 0; i < spec.regions.length; i++) out[i] = 1 - smooth(((out[i] as number) - nearest) / TERRAIN.blend);
+}
+
+/**
+ * Each region's share of the ground cover at a point, summing to 1. The blend
+ * weights are broken into seeded patches, so across a band one cover drifts
+ * into the next in islands rather than along a gradient. A region whose blend
+ * weight is 0 has no share, so every region's core is its own cover.
+ */
+export function coverWeights(spec: WorldSpec, x: number, z: number, out: Float64Array): void {
+  regionWeights(spec, x, z, out);
+  coverFromBlend(spec, x, z, out);
+}
+
+function coverFromBlend(spec: WorldSpec, x: number, z: number, out: Float64Array): void {
+  const u = x / TERRAIN.driftWavelength;
+  const v = z / TERRAIN.driftWavelength;
+  let total = 0;
+  for (let i = 0; i < spec.regions.length; i++) {
+    const w = out[i] as number;
+    if (w <= 0) continue;
+    const patch = Math.exp(TERRAIN.drift * fbm(DRIFT_SEED + i * 131, u, v, 2, 0.5));
+    const c = (w * patch) ** TERRAIN.driftEdge;
+    out[i] = c;
+    total += c;
+  }
+  for (let i = 0; i < spec.regions.length; i++) out[i] = (out[i] as number) / total;
 }
 
 /** The world's edge: a gentle rise around a rounded square, with a little wander. */
@@ -110,43 +166,54 @@ export function rimAt(size: number, x: number, z: number): number {
   return TERRAIN.rim * rise * (0.8 + 0.3 * wander);
 }
 
+/** The ground blended from every region's landform by its weight, before the rim. */
+function blended(spec: WorldSpec, landforms: readonly Landform[], weights: Float64Array, x: number, z: number): number {
+  let total = 0;
+  let sum = 0;
+  for (let i = 0; i < spec.regions.length; i++) {
+    const w = weights[i] as number;
+    if (w <= 0) continue;
+    const r = spec.regions[i] as RegionSpec;
+    const lf = landforms[i] as Landform;
+    sum += w * (r.base + fieldAt(lf.height, x - r.x, z - r.z));
+    total += w;
+  }
+  return sum / total;
+}
+
 /** The composed ground before fitting and water: continuous everywhere. */
 export function composer(spec: WorldSpec, landforms: readonly Landform[]): (x: number, z: number) => number {
   const weights = new Float64Array(spec.regions.length);
   return (x, z) => {
     regionWeights(spec, x, z, weights);
-    let total = 0;
-    let sum = 0;
-    for (let i = 0; i < spec.regions.length; i++) {
-      const w = weights[i] as number;
-      if (w <= 0) continue;
-      const r = spec.regions[i] as RegionSpec;
-      const lf = landforms[i] as Landform;
-      sum += w * (r.base + fieldAt(lf.height, x - r.x, z - r.z));
-      total += w;
-    }
-    return sum / total + rimAt(spec.size, x, z);
+    return blended(spec, landforms, weights, x, z) + rimAt(spec.size, x, z);
   };
 }
 
 /** Bakes the world's one height truth. */
 export function bakeTerrain(spec: WorldSpec, lib: Library): Terrain {
   const landforms = landformsOf(spec, lib);
-  const compose = composer(spec, landforms);
   const lattice = createLattice(spec.size + TERRAIN.skirt * 2, TERRAIN.spacing);
   const { n } = lattice;
+  const count = spec.regions.length;
   const raw = new Float32Array(n * n);
   const region = new Uint8Array(n * n);
-  const weights = new Float64Array(spec.regions.length);
+  const cover = new Float32Array(n * n * count);
+  const weights = new Float64Array(count);
   for (let iz = 0; iz < n; iz++) {
     const z = worldOf(lattice, iz);
     for (let ix = 0; ix < n; ix++) {
       const x = worldOf(lattice, ix);
-      raw[iz * n + ix] = compose(x, z);
+      const k = iz * n + ix;
       regionWeights(spec, x, z, weights);
+      raw[k] = blended(spec, landforms, weights, x, z) + rimAt(spec.size, x, z);
+      coverFromBlend(spec, x, z, weights);
       let best = 0;
-      for (let i = 1; i < weights.length; i++) if ((weights[i] as number) > (weights[best] as number)) best = i;
-      region[iz * n + ix] = best;
+      for (let i = 0; i < count; i++) {
+        cover[k * count + i] = weights[i] as number;
+        if ((weights[i] as number) > (weights[best] as number)) best = i;
+      }
+      region[k] = best;
     }
   }
 
@@ -201,7 +268,9 @@ export function bakeTerrain(spec: WorldSpec, lib: Library): Terrain {
     spec,
     lattice: final,
     waterLevel,
+    shore: shoreField(final, heights, waterLevel),
     region,
+    cover,
     streams,
     ponds,
     fit,
@@ -231,7 +300,7 @@ function keptRun(spec: WorldSpec, ri: number, local: Float32Array): Float32Array
       weights.forEach((w, i) => {
         if (i !== ri) others = Math.max(others, w);
       });
-      ok = Math.abs(x) < limit && Math.abs(z) < limit && others < 0.3;
+      ok = Math.abs(x) < limit && Math.abs(z) < limit && others < 0.75;
     }
     if (ok && start < 0) start = k;
     if (!ok && start >= 0) {
