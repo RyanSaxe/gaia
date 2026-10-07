@@ -41,8 +41,8 @@ never crosses, because the renderer builds it. `EngineMethods` in
 | `@gaia/kinds` | The flora, rock, wildflowers, biome and world kinds | schema |
 | `@gaia/world` | The question planner, answer rules, context gathering, vitality, type-space tools, `WorldChange` | schema |
 | `@gaia/realize` | Blueprint to parts, world and region looks at an hour, the light between a day's keys, the sky and air references, presets, channel math | schema, primitives |
-| `@gaia/render` | Three.js materials, light and shadow | schema, realize, three |
-| `@gaia/terrain` | Relief composition, the baked heightfield, water, the wild land past the rim, walking and wading, sight lines | schema, primitives, realize |
+| `@gaia/render` | Three.js materials, light and shadow, and instanced copies of a component | schema, realize, three |
+| `@gaia/terrain` | Relief composition, the baked heightfield, water, the wild land past the rim, walking and wading, sight lines, where plants and the understory stand | schema, primitives, realize |
 | `@gaia/app` | Electron main, preload, world service, and the renderer (the lab) | Every package |
 
 ESLint enforces these boundaries and the purity rules; `eslint.config.js`
@@ -94,7 +94,9 @@ below which a piece collapses to its pivot), `droop`, `wither`, `glow` and
 `pivot`, plus a `tint` hue offset and `close`, how far a piece folds toward
 its pivot at night (a flower's petals). The plant shader combines them with
 each instance's live vitality, so a change in vitality never rebuilds
-geometry.
+geometry. A component placed many times, such as a rock or a drift of
+flowers, draws as one instanced mesh per part, with each copy's vitality
+read per instance.
 `applyVitality` in `packages/realize/src/channels.ts` is the CPU reference the
 tests run against.
 

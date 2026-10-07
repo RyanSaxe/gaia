@@ -6,7 +6,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { type GroundSpec, Library, type SeasonSpec, blueprintOf, seedOf } from "@gaia/schema";
-import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, NO_SHIFT, RELIEF_PRIMITIVES, WORLD_PRIMITIVES, hex, mixLab } from "@gaia/primitives";
+import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, NO_SHIFT, RELIEF_PRIMITIVES, ROCK_PRIMITIVES, WILDFLOWER_PRIMITIVES, WORLD_PRIMITIVES, hex, mixLab } from "@gaia/primitives";
 import { biome, flora, world as worldKind } from "@gaia/kinds";
 import { defaultParams, validate } from "@gaia/world";
 import { FLORA_PRESETS, WORLD_PRESETS, realize, realizeRegion, realizeSky } from "@gaia/realize";
@@ -34,6 +34,7 @@ import { createSheet } from "../sheet.ts";
 import { createGrass, createWater } from "./cover.ts";
 import { createGround, createGroundTexture } from "./ground.ts";
 import { createRegionCovers } from "./regions.ts";
+import { createUnderstory } from "./understory.ts";
 
 const TEMPLATE = /* html */ `
 <main class="stage">
@@ -158,6 +159,9 @@ export function createTerrainLab(root: HTMLElement): Lab {
     return { view, base };
   });
 
+  // Rocks, bushes and wildflowers, scattered around the trees.
+  const understory = createUnderstory(scene, light, new Library([...FLORA_PRIMITIVES, ...ROCK_PRIMITIVES, ...WILDFLOWER_PRIMITIVES]));
+
   function plant(): void {
     const spots = scatterPlants(terrain, planted.length, 9);
     planted.forEach((p, i) => {
@@ -166,6 +170,7 @@ export function createTerrainLab(root: HTMLElement): Lab {
       if (s === undefined) return;
       p.view.object.position.set(s.x, groundedBase(terrain.lattice, s.x, s.z, p.base), s.z);
     });
+    understory.place(terrain, world, spots.slice(0, planted.length).map((s) => ({ x: s.x, z: s.z, radius: 1.6 })));
   }
   plant();
 
@@ -503,7 +508,7 @@ export function createTerrainLab(root: HTMLElement): Lab {
       shadow.frame(shadowCenter.set(0, 0, 0), world.size * 0.62);
     }
     refreshSight(now);
-    shadow.render(renderer, scene, views, [sky.mesh, ground.wilds, ground.fine, ground.coarse, grass.mesh, water.group]);
+    shadow.render(renderer, scene, [...views, ...understory.casters()], [sky.mesh, ground.wilds, ground.fine, ground.coarse, grass.mesh, water.group, ...understory.quiet()]);
     renderer.render(scene, camera);
   }
 
@@ -564,6 +569,7 @@ export function createTerrainLab(root: HTMLElement): Lab {
         return { max: s.max, median: s.median };
       },
       info: () => renderer.info.render,
+      understory: () => understory.stats(),
       /** Walks straight ahead for `seconds` at walking pace, as if W were held, and reports where the walk ended. */
       stride: (seconds: number) => {
         for (let k = 0; k < Math.round(seconds * 60); k++) {

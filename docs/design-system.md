@@ -112,6 +112,20 @@ Jev decides which dependencies become routes; when it wants more than the
 budget allows, the most probable win. The world must never be dominated by
 paths.
 
+## Understory
+
+Rocks lie in groups, bushes in thickets, and wildflowers in drifts of one
+species. `scatterComponents` in `@gaia/terrain` places them: a seeded number
+of groups per hectare of each region, weighted by its landform (rocks crowd
+terraces and basins, flowers favor open meadow), with no two footprints
+overlapping, nothing on ground steeper than its rule allows, and nothing
+within a meter or two of water. A solid thing sits below the lowest ground
+under its footprint, so on a slope its uphill side is buried and its
+downhill side still touches the soil; a drift lies on the ground's plane, so
+its stems stay upright. Rocks are half sunk by construction. Moss caps their
+upward faces and recedes, edges first, drying to lichen grey as vitality
+falls. Each blueprint draws as one instanced mesh per part, and drifts cast
+no shadow.
 
 ## Clouds
 
