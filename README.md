@@ -17,7 +17,7 @@ flowchart LR
   end
   subgraph renderer [Renderer]
     direction TB
-    realize["Realizer workers"] --> draw["Three.js"]
+    realize["Realizer"] --> draw["Three.js"]
   end
   engine --> service
   service --> doc[("World document")]
@@ -29,8 +29,8 @@ flowchart LR
 
 The Rust engine turns files into the code model and holds the Jev key. The
 world service asks Jev typed questions about that model and writes validated
-answers into the world document. The renderer's realizer workers build
-geometry from the document, and vitality comes straight from the code model,
+answers into the world document. The renderer's realizer builds geometry from
+the document, and vitality comes straight from the code model,
 so a failing test changes the world without a Jev call. Electron's main
 process starts the engine and the world service and opens the window.
 `docs/architecture.md` explains each part.
