@@ -61,6 +61,12 @@ export interface PlantInstances extends PlantView {
    * frame, never later as a level first comes into view. The next `cull` undoes it.
    */
   warm(): void;
+  /**
+   * Moves the copies to new spots, as many as there are: a world's new bake
+   * stands the same blueprints elsewhere. The geometry, its levels and the
+   * materials stay, so this costs only the copies' matrices and cells.
+   */
+  respot(spots: readonly InstanceSpot[]): void;
   /** How copies choose their detail; "auto" outside of tests. */
   detail: DetailMode;
   /** Copies and triangles the last culled pass drew. */
@@ -120,29 +126,12 @@ interface Level {
   readonly at: number;
   readonly meshes: { mesh: THREE.InstancedMesh; color: THREE.ShaderMaterial; depth: THREE.ShaderMaterial; triangles: number }[];
   /** One instance buffer every part of the level shares, and which cells it holds now. */
-  readonly attribute: THREE.InstancedBufferAttribute;
+  attribute: THREE.InstancedBufferAttribute;
   key: string;
 }
 
 export function createPlantInstances(plant: Realized, light: SceneLight, spots: readonly InstanceSpot[]): PlantInstances {
   const object = new THREE.Group();
-  const count = spots.length;
-
-  // Every copy's matrix, with vitality, hue and seed in its bottom row.
-  const source = new Float32Array(Math.max(1, count) * 16);
-  const matrix = new THREE.Matrix4();
-  const shear = new THREE.Matrix4();
-  const turn = new THREE.Matrix4();
-  spots.forEach((s, k) => {
-    const [gx, gz] = s.slope ?? [0, 0];
-    shear.set(1, 0, 0, 0, gx, 1, gz, 0, 0, 0, 1, 0, 0, 0, 0, 1);
-    turn.makeRotationY(s.yaw).scale(new THREE.Vector3(s.scale, s.scale, s.scale));
-    matrix.makeTranslation(s.x, s.y, s.z).multiply(shear).multiply(turn);
-    matrix.elements[3] = s.vitality ?? 1;
-    matrix.elements[7] = s.hue ?? 0;
-    matrix.elements[11] = s.seed ?? (((Math.sin(s.x * 12.9898 + s.z * 78.233) * 43758.5453) % 1) + 1) % 1;
-    source.set(matrix.elements, k * 16);
-  });
 
   const box = new THREE.Box3();
   const point = new THREE.Vector3();
@@ -158,10 +147,28 @@ export function createPlantInstances(plant: Realized, light: SceneLight, spots: 
   // and far pieces grow toward a pixel's size: the drawn bounds allow for all.
   const reach = 3 + 0.15 * height;
 
-  const cells: Cell[] = [];
-  {
+  // Every copy's matrix, with vitality, hue and seed in its bottom row, and the cells they stand in.
+  let count = 0;
+  let source = new Float32Array(16);
+  let cells: Cell[] = [];
+  const matrix = new THREE.Matrix4();
+  const shear = new THREE.Matrix4();
+  const turn = new THREE.Matrix4();
+  const place = (next: readonly InstanceSpot[]): void => {
+    count = next.length;
+    source = new Float32Array(Math.max(1, count) * 16);
+    next.forEach((s, k) => {
+      const [gx, gz] = s.slope ?? [0, 0];
+      shear.set(1, 0, 0, 0, gx, 1, gz, 0, 0, 0, 1, 0, 0, 0, 0, 1);
+      turn.makeRotationY(s.yaw).scale(new THREE.Vector3(s.scale, s.scale, s.scale));
+      matrix.makeTranslation(s.x, s.y, s.z).multiply(shear).multiply(turn);
+      matrix.elements[3] = s.vitality ?? 1;
+      matrix.elements[7] = s.hue ?? 0;
+      matrix.elements[11] = s.seed ?? (((Math.sin(s.x * 12.9898 + s.z * 78.233) * 43758.5453) % 1) + 1) % 1;
+      source.set(matrix.elements, k * 16);
+    });
     const byCell = new Map<string, number[]>();
-    spots.forEach((s, k) => {
+    next.forEach((s, k) => {
       const key = `${Math.floor(s.x / INSTANCE_CELL)},${Math.floor(s.z / INSTANCE_CELL)}`;
       const list = byCell.get(key);
       if (list === undefined) byCell.set(key, [k]);
@@ -169,10 +176,11 @@ export function createPlantInstances(plant: Realized, light: SceneLight, spots: 
     });
     const center = new THREE.Vector3();
     const size = new THREE.Vector3();
+    cells = [];
     for (const copies of byCell.values()) {
       const built = new THREE.Box3();
       for (const k of copies) {
-        const s = spots[k] as InstanceSpot;
+        const s = next[k] as InstanceSpot;
         const tilt = 1 + Math.hypot(...(s.slope ?? [0, 0]));
         center.copy(sphere.center).multiplyScalar(s.scale).add(point.set(s.x, s.y, s.z));
         built.union(new THREE.Box3().setFromCenterAndSize(center, size.setScalar(sphere.radius * 2 * s.scale * tilt)));
@@ -180,7 +188,8 @@ export function createPlantInstances(plant: Realized, light: SceneLight, spots: 
       const b = built.getBoundingSphere(new THREE.Sphere());
       cells.push({ copies, built: b, bounds: new THREE.Sphere(b.center.clone(), b.radius + reach) });
     }
-  }
+  };
+  place(spots);
 
   const shared = {
     uSway: { value: plant.motion.sway },
@@ -223,9 +232,14 @@ export function createPlantInstances(plant: Realized, light: SceneLight, spots: 
     return made;
   };
 
-  const levels: Level[] = levelsOf(plant.parts).map(({ at, parts }) => {
-    const attribute = new THREE.InstancedBufferAttribute(new Float32Array(Math.max(1, count) * 16), 16);
+  /** An instance buffer for `n` copies, with room to grow, so a new bake rarely needs a new one. */
+  const bufferFor = (n: number): THREE.InstancedBufferAttribute => {
+    const attribute = new THREE.InstancedBufferAttribute(new Float32Array(Math.max(1, Math.ceil(n * 1.25)) * 16), 16);
     attribute.setUsage(THREE.DynamicDrawUsage);
+    return attribute;
+  };
+  const levels: Level[] = levelsOf(plant.parts).map(({ at, parts }) => {
+    const attribute = bufferFor(count);
     return {
       at,
       attribute,
@@ -305,9 +319,13 @@ export function createPlantInstances(plant: Realized, light: SceneLight, spots: 
     object,
     height,
     radius,
-    count,
+    get count() {
+      return count;
+    },
     levels: levels.map((l) => l.at),
-    triangles: perCopy * count,
+    get triangles() {
+      return perCopy * count;
+    },
     get vitality() {
       return all;
     },
@@ -327,6 +345,17 @@ export function createPlantInstances(plant: Realized, light: SceneLight, spots: 
       generation++;
     },
     cull,
+    respot(next) {
+      place(next);
+      for (const level of levels) {
+        if (level.attribute.count < Math.max(1, count)) {
+          level.attribute = bufferFor(count);
+          for (const m of level.meshes) m.mesh.instanceMatrix = level.attribute;
+        }
+        level.key = "";
+      }
+      generation++;
+    },
     warm() {
       for (const level of levels) {
         level.attribute.array.set(source.subarray(0, 16), 0);

@@ -277,23 +277,31 @@ export function createTerrainLab(root: HTMLElement): Lab {
   scene.add(sky.mesh, ground.wilds, ground.fine, ground.coarse, grass.mesh, water.group, marker.mesh);
   /** Each standing landmark's view, in the order of `ways.sites`; a kind may stand more than once. */
   let landmarkViews: PlantView[] = [];
+  /** Every landmark view made so far, by its kind and which of that kind it is, reused from bake to bake. */
+  const landmarkPool = new Map<string, PlantView>();
   let built: Ways | null = null;
   /** Stands each landmark on its site and builds the trails' crossings; the ground texture already carries the trails. */
   function placeWays(): void {
-    for (const v of landmarkViews) {
-      scene.remove(v.object);
-      v.dispose();
-    }
+    for (const v of landmarkPool.values()) v.object.visible = false;
+    const seen = new Map<number, number>();
     landmarkViews = ways.sites.map((s) => {
       const lm = landmarks[s.landmark] as (typeof landmarks)[number];
-      const view = createPlant({ ...lm.built, parts: mergeParts(lm.built.parts) }, light);
+      const nth = seen.get(s.landmark) ?? 0;
+      seen.set(s.landmark, nth + 1);
+      const key = `${s.landmark}#${nth}`;
+      let view = landmarkPool.get(key);
+      if (view === undefined) {
+        view = createPlant({ ...lm.built, parts: mergeParts(lm.built.parts) }, light);
+        landmarkPool.set(key, view);
+        scene.add(view.object);
+      }
+      view.object.visible = true;
       view.object.position.set(s.site.x, s.site.y - 0.05, s.site.z);
       // The door faces where its first trail arrives, or the first building.
       const near = ways.trails.flatMap((t) => [[t.points[0], t.points[1]], [t.points[t.points.length - 2], t.points[t.points.length - 1]]]).find(([x, z]) => Math.hypot((x ?? 0) - s.site.x, (z ?? 0) - s.site.z) < 14);
       const home = settlement.buildings[0]?.site;
       const [fx, fz] = near ?? [home?.x ?? 0, home?.z ?? 0];
       view.object.rotation.y = Math.atan2((fx ?? 0) - s.site.x, (fz ?? 0) - s.site.z);
-      scene.add(view.object);
       return view;
     });
     trailWear.value = ways.trails.length === 0 ? 0 : ways.trails.reduce((n, t) => n + t.style.wear, 0) / ways.trails.length;
@@ -353,6 +361,8 @@ export function createTerrainLab(root: HTMLElement): Lab {
   let treeCount = TREES;
   let trees: readonly Tree[] = [];
   let treeViews: PlantInstances[] = [];
+  /** Each build's instances by variant, kept for the life of the lab. */
+  const groves = new Map<number, PlantInstances>();
 
   // Rocks, bushes and wildflowers, scattered around the trees.
   const understory = createUnderstory(scene, light, new Library([...FLORA_PRIMITIVES, ...ROCK_PRIMITIVES, ...WILDFLOWER_PRIMITIVES]), clearings);
@@ -391,12 +401,18 @@ export function createTerrainLab(root: HTMLElement): Lab {
   function plant(stood: Stand): void {
     // Trees keep off the trails, the buildings and the landmarks; the bake thread kept them off.
     trees = stood.trees.map((t) => ({ ...t, represented: representFile(SAMPLE_FILES[t.index % SAMPLE_FILES.length] as (typeof SAMPLE_FILES)[number]) }));
-    for (const v of treeViews) v.dispose();
+    // Each build keeps its instances from bake to bake and only moves its copies.
     treeViews = variants.flatMap((v, k) => {
       const spots = trees.filter((t) => t.variant === k).map((t) => ({ x: t.x, y: t.y, z: t.z, yaw: t.yaw, scale: t.scale, vitality: t.represented.report.vitality }));
+      const had = groves.get(k);
+      if (had !== undefined) {
+        had.respot(spots);
+        return [had];
+      }
       if (spots.length === 0) return [];
       const view = createPlantInstances(v.plant, light, spots);
       scene.add(view.object);
+      groves.set(k, view);
       return [view];
     });
     // Nothing of the understory stands in a building, on its walk, on a trail or under a landmark: the bake thread kept it clear.

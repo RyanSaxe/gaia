@@ -131,7 +131,9 @@ export function createUnderstory(scene: THREE.Scene, light: SceneLight, lib: Lib
     const tops = plants.map((p) => p.parts.reduce((top, part) => part.positions.reduce((t, v, i) => (i % 3 === 1 ? Math.max(t, v) : t), top), 0));
     return { group: g, plants, radii: plants.map(footprintOf), reach, tops, outlines: reach.map((o) => o.map((r) => r * g.clears)) };
   });
-  let views: { group: Group; view: PlantInstances }[] = [];
+  const views: { group: Group; view: PlantInstances }[] = [];
+  /** Each blueprint's instances by rule and variant, kept for the life of the lab. */
+  const kept = new Map<string, { group: Group; view: PlantInstances }>();
   let placed: readonly Placement[] = [];
   const plan = (world: WorldSpec, density = 1): { rules: ScatterRule[]; seed: number } => ({
     rules: built.map(({ group, radii }) => ({
@@ -147,8 +149,6 @@ export function createUnderstory(scene: THREE.Scene, light: SceneLight, lib: Lib
   return {
     plan,
     place(terrain, world, trees, density = 1, given) {
-      for (const v of views) v.view.dispose();
-      views = [];
       if (given !== undefined) placed = given;
       else {
         const { rules, seed } = plan(world, density);
@@ -161,15 +161,25 @@ export function createUnderstory(scene: THREE.Scene, light: SceneLight, lib: Lib
           return b === undefined || outline === undefined || b.group.clears === 0 ? [] : [{ x: p.x, z: p.z, yaw: p.yaw, scale: p.scale, outline }];
         }),
       );
+      // Each blueprint keeps its instances from bake to bake and only moves its
+      // copies, so a new world never rebuilds a blueprint's geometry or levels.
       for (const { group, plants } of built) {
         plants.forEach((plant, variant) => {
           const spots = placed
             .filter((p) => p.rule === group.id && p.variant === variant)
             .map((p) => ({ x: p.x, y: p.y, z: p.z, yaw: p.yaw, scale: p.scale, slope: p.slope, hue: ((((p.x * 12.9898 + p.z * 78.233) % 1) + 1) % 1) * 0.04 - 0.02 }));
+          const key = `${group.id}/${variant}`;
+          const had = kept.get(key);
+          if (had !== undefined) {
+            had.view.respot(spots);
+            return;
+          }
           if (spots.length === 0) return;
           const view = createPlantInstances(plant, light, spots);
           scene.add(view.object);
-          views.push({ group, view });
+          const entry = { group, view };
+          kept.set(key, entry);
+          views.push(entry);
         });
       }
     },

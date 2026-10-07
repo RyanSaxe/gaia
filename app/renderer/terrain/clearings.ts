@@ -27,7 +27,7 @@ export interface Clearings {
   };
   /** Clears the ground under each component's outline, and the capsules set last. */
   update(clearings: readonly Clearing[]): void;
-  /** Ground kept bare whatever the components are, such as buildings and their walks; kept until set again. */
+  /** Ground kept bare whatever the components are, such as buildings and their walks; drawn by the next `update`, and kept until set again. */
   setCapsules(capsules: readonly Capsule[]): void;
 }
 
@@ -98,7 +98,6 @@ export function createClearings(t: Terrain): Clearings {
     },
     setCapsules(next) {
       capsules = next;
-      draw();
     },
   };
 }
