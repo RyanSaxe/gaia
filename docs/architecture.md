@@ -90,8 +90,9 @@ commits, is a separate channel that never lowers vitality.
 
 Every primitive writes five per-vertex vitality channels: `loss` (the vitality
 below which a piece collapses to its pivot), `droop`, `wither`, `glow` and
-`pivot`, plus a `tint` hue offset. The plant shader combines them with each
-instance's live vitality, so a change in vitality never rebuilds geometry.
+`pivot`, plus a `tint` hue offset and a `cutout` that places a vertex on a
+leaf card. The plant shader combines them with each instance's live
+vitality, so a change in vitality never rebuilds geometry.
 `applyVitality` in `packages/realize/src/channels.ts` is the CPU reference the
 tests run against.
 

@@ -2,7 +2,7 @@
 // covered as soon as it is listed in PRIMITIVES; nobody writes these tests per primitive.
 
 import { describe, expect, it } from "vitest";
-import { type AnyPrimitive, type Built, type Field, Library, type Part, type Skeleton, rand } from "@gaia/schema";
+import { type AnyPrimitive, type Built, CUT, type Field, Library, type Part, type Skeleton, rand } from "@gaia/schema";
 import * as primitivesModule from "@gaia/primitives";
 import { PRIMITIVES } from "@gaia/primitives";
 import { applyVitality, resolveParams } from "@gaia/realize";
@@ -42,6 +42,11 @@ const inputFor = (p: AnyPrimitive): unknown[] => (p.role === "Ornament" ? [ancho
 
 const allFinite = (a: Float32Array): boolean => a.every(Number.isFinite);
 const inUnit = (a: Float32Array): boolean => a.every((x) => x >= 0 && x <= 1);
+const CUTS = new Set<number>(Object.values(CUT));
+/** Every vertex sits across its card within -1 to 1 and names a cut the renderer knows. */
+const cutsKnown = (part: Part): boolean =>
+  part.cutout.length === part.shade.length * 3 &&
+  part.cutout.every((x, i) => Number.isFinite(x) && (i % 3 !== 0 || Math.abs(x) <= 1) && (i % 3 !== 2 || CUTS.has(Math.floor(x))));
 
 describe("manifest", () => {
   it("lists every exported primitive", () => {
@@ -78,6 +83,7 @@ describe.each(PRIMITIVES.map((p) => [p.id, p] as const))("%s", (_id, p) => {
           const c = part.channels;
           expect([c.loss, c.droop, c.wither, c.glow, part.shade].every(inUnit)).toBe(true);
           expect(part.tint.every((x) => x >= -0.1 && x <= 0.1)).toBe(true);
+          expect(cutsKnown(part)).toBe(true);
           expect(part.indices.length / 3).toBeLessThanOrEqual(TRIANGLE_BUDGET);
         }
       }

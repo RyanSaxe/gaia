@@ -55,9 +55,99 @@ vec3 applyWind(vec3 p, vec3 root) {
 }
 `;
 
+// Leaf cards: each card is cut to its leaves by a procedural mask, so a
+// canopy has leafy edges with no texture. Values are signed, about a leaf's
+// width: positive inside. As a card shrinks on screen its leaves merge into
+// the card's plain outline, so distant canopies stay soft painted masses
+// instead of sparkling. CUT in @gaia/schema names the cuts.
+const CUTOUT_GLSL = /* glsl */ `
+attribute vec3 aCutout;
+varying vec3 vCut;
+`;
+
+const LEAF_MASK_GLSL = /* glsl */ `
+varying vec3 vCut;
+float leafHash(float x) { return fract(sin(x * 91.3458) * 47453.5453); }
+
+// A pointed leaf from the origin along +x, \`len\` long and \`wide\` at its widest.
+float leafShape(vec2 q, float len, float wide) {
+  float t = clamp(q.x / len, 0.0, 1.0);
+  float profile = wide * pow(sin(3.14159 * pow(t, 0.8)), 0.7);
+  return min(profile - abs(q.y), min(q.x, len - q.x) * 0.6);
+}
+
+// Broad leaves fanned around the card's middle.
+float clusterCut(vec2 p, float seed, float far) {
+  float d = 0.16 - length(p);
+  for (int k = 0; k < 7; k++) {
+    float fk = float(k);
+    float a = seed * 6.2832 + fk * 0.8976 + (leafHash(seed * 13.1 + fk) - 0.5) * 0.6;
+    vec2 dir = vec2(cos(a), sin(a));
+    vec2 q = vec2(dot(p, dir), dot(p, vec2(-dir.y, dir.x)));
+    float len = 0.68 + 0.3 * leafHash(seed * 7.3 + fk * 3.1);
+    d = max(d, leafShape(q, len, 0.2 + 0.06 * leafHash(seed * 3.7 + fk)));
+  }
+  // Far away, the cluster is a soft scalloped round.
+  float ang = atan(p.y, p.x);
+  float outline = 0.78 + 0.08 * cos(ang * 7.0 + seed * 6.2832) - length(p);
+  return mix(d, outline, far);
+}
+
+// Small lance leaves hanging from a stem, alternating sides.
+float strandCut(vec2 p, float seed, float far) {
+  float d = 0.05 - abs(p.x);
+  float cell = 0.42;
+  float i0 = floor(p.y / cell);
+  for (int k = -2; k <= 0; k++) {
+    float i = i0 + float(k);
+    float side = mod(i, 2.0) < 1.0 ? 1.0 : -1.0;
+    float h = leafHash(i * 1.37 + seed * 17.0);
+    vec2 dir = normalize(vec2(side * (0.55 + 0.35 * h), 1.0));
+    vec2 q = p - vec2(0.0, i * cell);
+    q = vec2(dot(q, dir), dot(q, vec2(-dir.y, dir.x)));
+    d = max(d, leafShape(q, 0.95 + 0.2 * h, 0.2));
+  }
+  return mix(d, 0.55 - abs(p.x), far);
+}
+
+// A needle spray: solid along the limb, combed into needles toward a jagged
+// fringe, tapering to the tip.
+float needleCut(vec2 p, float seed, float far) {
+  float v = clamp(p.y, 0.0, 1.0);
+  float edge = (1.0 - pow(v, 2.2)) * (0.8 + 0.2 * smoothstep(0.0, 0.25, v)) + 0.06;
+  float u = abs(p.x) / edge;
+  // Needles sweep toward the tip; each reaches a slightly different length.
+  float row = p.y * 15.0 - u * 1.3 + seed * 5.0;
+  float comb = fract(row);
+  float reach = 0.88 + 0.12 * leafHash(floor(row) + seed * 31.0);
+  float needle = (0.3 - abs(comb - 0.5)) * 0.35;
+  float body = (reach - u) * edge;
+  float d = u < 0.62 ? body : min(body, needle);
+  d = min(d, min(p.y + 0.02, 1.02 - p.y));
+  return mix(d, min((0.84 - u) * edge, min(p.y + 0.02, 1.0 - p.y)), far);
+}
+
+// The card's leaves at this fragment: x is coverage, y a brightness that
+// darkens each leaf's rim a little, so overlapping leaves read apart up close.
+// Solid surfaces are (1, 1).
+vec2 leafCut() {
+  float form = floor(vCut.z + 0.5 / 1024.0);
+  if (form < 0.5) return vec2(1.0);
+  float seed = fract(vCut.z);
+  vec2 p = vCut.xy;
+  float span = length(fwidth(p));
+  float far = smoothstep(0.05, 0.16, span);
+  float d = form < 1.5 ? clusterCut(p, seed, far) : form < 2.5 ? strandCut(p, seed, far) : needleCut(p, seed, far);
+  float rim = 0.86 + 0.14 * smoothstep(0.0, 0.07, d);
+  if (form > 2.5) rim *= 0.9 + 0.1 * smoothstep(0.15, 0.45, abs(fract(p.y * 15.0 - abs(p.x) * 1.3 + seed * 5.0) - 0.5));
+  return vec2(clamp(d / max(fwidth(d), 1e-4) + 0.5, 0.0, 1.0), mix(rim, 1.0, far));
+}
+`;
+
 const PLANT_VERT = /* glsl */ `
 uniform float uTime;
 ${CHANNELS_GLSL}
+${CUTOUT_GLSL}
 varying vec3 vNormal;
 varying vec3 vWorld;
 varying float vShade;
@@ -72,6 +162,7 @@ void main() {
   vNormal = normalize(mat3(modelMatrix) * normal);
   vShade = aShade;
   vTint = aTint;
+  vCut = aCutout;
   vWither = aWither * (1.0 - uVitality);
   vGlow = aGlow * uVitality * ${f(CHANNEL_MATH.glowStrength)} * (0.85 + 0.15 * sin(uTime * 1.3 + aPivot.x * 3.0 + aPivot.z * 2.0));
   gl_Position = projectionMatrix * viewMatrix * world;
@@ -81,6 +172,7 @@ void main() {
 const PLANT_FRAG = /* glsl */ `
 precision highp float;
 ${LIGHT_GLSL}
+${LEAF_MASK_GLSL}
 // Same YIQ rotation as hueRotate in @gaia/realize.
 vec3 hueRotate(vec3 c, float turns) {
   float y = dot(c, vec3(0.299, 0.587, 0.114));
@@ -101,7 +193,15 @@ varying float vTint;
 varying float vWither;
 varying float vGlow;
 void main() {
-  float bright = mix(${f(CHANNEL_MATH.shadeLow)}, ${f(CHANNEL_MATH.shadeHigh)}, vShade);
+  vec2 cut = leafCut();
+  float cover = cut.x;
+  // A card seen edge-on would show as a sliver: it fades out as it turns away.
+  if (vCut.z > 0.5) {
+    vec3 face = normalize(cross(dFdx(vWorld), dFdy(vWorld)));
+    cover *= smoothstep(0.06, 0.28, abs(dot(face, normalize(cameraPosition - vWorld))));
+  }
+  if (cover < 0.02) discard;
+  float bright = mix(${f(CHANNEL_MATH.shadeLow)}, ${f(CHANNEL_MATH.shadeHigh)}, vShade) * cut.y;
   vec3 albedo = mix(hueRotate(uHealthy, vTint), uDecline, vWither) * bright;
   vec3 n = normalize(vNormal);
   if (uFoliage < 0.5 && !gl_FrontFacing) n = -n;
@@ -126,23 +226,30 @@ void main() {
   // The world's own glow shows by contrast: a touch stronger in the dark,
   // and it carries through the night air a little farther than lit color.
   vec3 glow = uHealthy * vGlow * (1.0 + uNightness * 0.6);
-  gl_FragColor = vec4(aerial(shoulder(color), vWorld) + glow * (1.0 - uNightness * 0.35), 1.0);
+  gl_FragColor = vec4(aerial(shoulder(color), vWorld) + glow * (1.0 - uNightness * 0.35), cover);
 }
 `;
 
 const DEPTH_VERT = /* glsl */ `
 uniform float uTime;
 ${CHANNELS_GLSL}
+${CUTOUT_GLSL}
 void main() {
+  vCut = aCutout;
   vec3 root = (modelMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
   vec3 p = applyWind(applyChannels(position), root);
   gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4(p, 1.0);
 }
 `;
 
+// Leaf cards cast leafy shadows: the sun shines through the gaps.
 const DEPTH_FRAG = /* glsl */ `
 precision highp float;
-void main() { gl_FragColor = vec4(1.0); }
+${LEAF_MASK_GLSL}
+void main() {
+  if (leafCut().x < 0.5) discard;
+  gl_FragColor = vec4(1.0);
+}
 `;
 
 export interface PlantView {
@@ -168,6 +275,7 @@ function geometryOf(part: Part): THREE.BufferGeometry {
   g.setAttribute("normal", new THREE.BufferAttribute(part.normals, 3));
   g.setAttribute("aShade", new THREE.BufferAttribute(part.shade, 1));
   g.setAttribute("aTint", new THREE.BufferAttribute(part.tint, 1));
+  g.setAttribute("aCutout", new THREE.BufferAttribute(part.cutout, 3));
   g.setAttribute("aLoss", new THREE.BufferAttribute(part.channels.loss, 1));
   g.setAttribute("aDroop", new THREE.BufferAttribute(part.channels.droop, 1));
   g.setAttribute("aWither", new THREE.BufferAttribute(part.channels.wither, 1));
@@ -214,6 +322,8 @@ export function createPlant(plant: Realized, light: SceneLight): PlantView {
         uFoliage: { value: foliage },
       },
       side: part.swatch === "bark" ? THREE.FrontSide : THREE.DoubleSide,
+      // Leaf edges resolve through the multisampled canvas, not a hard alpha test.
+      alphaToCoverage: part.cutout.some((c) => c !== 0),
     });
     const depth = new THREE.ShaderMaterial({
       vertexShader: DEPTH_VERT,
@@ -249,4 +359,15 @@ export function createPlant(plant: Realized, light: SceneLight): PlantView {
       object.removeFromParent();
     },
   };
+}
+
+/**
+ * A renderer on an opaque canvas. Three always asks for a canvas with alpha,
+ * and leaf-card edges resolve to partial alpha, so on such a canvas the page
+ * behind would show through every leaf's edge as a pale outline.
+ */
+export function createRenderer(canvas: HTMLCanvasElement): THREE.WebGLRenderer {
+  const context = canvas.getContext("webgl2", { alpha: false, antialias: true });
+  if (context === null) throw new Error("WebGL 2 is unavailable.");
+  return new THREE.WebGLRenderer({ canvas, context });
 }

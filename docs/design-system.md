@@ -36,6 +36,20 @@ each family's identity, and pushes each shifted color a fixed distance away
 from its decline color. The `tint` channel varies hue within one swatch across
 a canopy; it never touches decline.
 
+## Leaves
+
+Canopies are painted masses from afar and leaves up close. Each clump of
+leaves is a soft core under a shell of leaf cards; willow strands are crossed
+ribbons of small hanging leaves; fir sprays are layered tents of needles with
+jagged, combed fringes. A primitive only places cards and names their cut
+(`CUT` in `@gaia/schema`: cluster, strand or needles); the plant shader cuts
+each card to its leaves, with no textures. Every card shades with the crown's
+blended normal, so the canopy lights as one volume. As a card shrinks on
+screen its leaves merge into its plain outline, so distant canopies never
+sparkle, and a card seen edge-on fades out. Cards drop and wither one by one
+as vitality falls, so a failing canopy thins before it goes bare. Leaf cards
+cast leafy shadows.
+
 ## Scale
 
 World units are meters; a person's eyes are 1.6 m above the ground, and there
