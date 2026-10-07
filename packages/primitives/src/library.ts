@@ -6,5 +6,6 @@ import { FLORA_PRIMITIVES } from "./flora.ts";
 import { RELIEF_PRIMITIVES } from "./relief.ts";
 import { WORLD_PRIMITIVES } from "./world.ts";
 import { BIOME_PRIMITIVES } from "./biome.ts";
+import { STRUCTURE_PRIMITIVES } from "./structure.ts";
 
-export const PRIMITIVES: readonly AnyPrimitive[] = [...FLORA_PRIMITIVES, ...RELIEF_PRIMITIVES, ...WORLD_PRIMITIVES, ...BIOME_PRIMITIVES];
+export const PRIMITIVES: readonly AnyPrimitive[] = [...FLORA_PRIMITIVES, ...RELIEF_PRIMITIVES, ...WORLD_PRIMITIVES, ...BIOME_PRIMITIVES, ...STRUCTURE_PRIMITIVES];

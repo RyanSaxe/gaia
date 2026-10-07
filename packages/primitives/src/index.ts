@@ -6,3 +6,4 @@ export { fieldAt, troughOffset } from "./geometry/field.ts";
 export * from "./color.ts";
 export * from "./world.ts";
 export * from "./biome.ts";
+export * from "./structure.ts";

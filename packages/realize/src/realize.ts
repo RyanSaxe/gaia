@@ -30,6 +30,8 @@ export interface Realized {
   readonly parts: Part[];
   readonly motion: MotionSpec;
   readonly palette: Palette;
+  /** Every slot's built output, such as a building's plan, for placing it in the world. */
+  readonly slots: ReadonlyMap<string, BuiltSlot>;
 }
 
 const STILL: MotionSpec = { sway: 0, frequency: 0 };
@@ -96,13 +98,65 @@ export function realize(bp: Blueprint, k: AnyKind, lib: Library, opts: RealizeOp
   const parts: Part[] = [];
   let motion: MotionSpec | undefined;
   let palette: Palette | undefined;
-  for (const { role, output } of buildSlots(bp, k, lib, opts).values()) {
+  const slots = buildSlots(bp, k, lib, opts);
+  for (const { role, output } of slots.values()) {
     if (role === "Motion") motion = output as MotionSpec;
     else if (role === "Palette") palette = output as Palette;
-    else if (role === "Surface" || role === "Foliage" || role === "Ornament") parts.push(...(output as Built).parts);
+    else if (isBuilt(output)) parts.push(...output.parts);
   }
   if (palette === undefined) throw new Error(`Blueprint ${bp.id} has no Palette slot to color it.`);
-  return { parts, motion: motion ?? STILL, palette };
+  return { parts, motion: motion ?? STILL, palette, slots };
 }
 
 export const triangleCount = (parts: readonly Part[]): number => parts.reduce((n, p) => n + p.indices.length / 3, 0);
+
+/**
+ * Joins parts that share a swatch and a collision into one, so a building of
+ * many pieces draws in a few calls. Order follows each swatch's first part.
+ */
+export function mergeParts(parts: readonly Part[]): Part[] {
+  const groups = new Map<string, Part[]>();
+  for (const p of parts) {
+    const key = `${p.swatch}|${p.collision}`;
+    const list = groups.get(key);
+    if (list === undefined) groups.set(key, [p]);
+    else list.push(p);
+  }
+  return [...groups.values()].map((list) => {
+    if (list.length === 1) return list[0] as Part;
+    const join = (pick: (p: Part) => Float32Array): Float32Array => {
+      const out = new Float32Array(list.reduce((n, p) => n + pick(p).length, 0));
+      let at = 0;
+      for (const p of list) {
+        out.set(pick(p), at);
+        at += pick(p).length;
+      }
+      return out;
+    };
+    const indices = new Uint32Array(list.reduce((n, p) => n + p.indices.length, 0));
+    let at = 0;
+    let base = 0;
+    for (const p of list) {
+      for (let i = 0; i < p.indices.length; i++) indices[at + i] = (p.indices[i] as number) + base;
+      at += p.indices.length;
+      base += p.shade.length;
+    }
+    const first = list[0] as Part;
+    return {
+      swatch: first.swatch,
+      collision: first.collision,
+      positions: join((p) => p.positions),
+      normals: join((p) => p.normals),
+      indices,
+      shade: join((p) => p.shade),
+      tint: join((p) => p.tint),
+      channels: {
+        loss: join((p) => p.channels.loss),
+        droop: join((p) => p.channels.droop),
+        wither: join((p) => p.channels.wither),
+        glow: join((p) => p.channels.glow),
+        pivot: join((p) => p.channels.pivot),
+      },
+    };
+  });
+}

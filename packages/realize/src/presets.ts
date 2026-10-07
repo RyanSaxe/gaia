@@ -62,6 +62,52 @@ export const FLORA_PRESETS: readonly Preset[] = [
   },
 ];
 
+/** Hand-filled structure blueprints: cottages Jev might choose for central files. */
+export const STRUCTURE_PRESETS: readonly Preset[] = [
+  {
+    name: "Thatched cottage",
+    blueprint: identify("structure", {
+      footprint: {
+        use: "cottage-plan@1",
+        params: { shape: "long", size: "modest", roofline: "steep", windows: "several", base: "on a stone plinth", character: "gently settled" },
+      },
+      body: { use: "timber-frame@1", params: { framing: "posts and rails", plaster: "hand-laid" } },
+      roof: { use: "thatch@1", params: { thickness: "plump", overhang: "sheltering", chimney: "gable" } },
+      openings: { use: "casements@1", params: { panes: "four panes", shutters: true, door: "hooded" } },
+      ornaments: { use: "cottage-garden@1", params: { extras: ["flower boxes", "lantern", "woodpile"], walk: "stepping stones" } },
+      palette: { use: "palette@1", params: { family: "spring-meadow", contrast: "balanced" } },
+    }),
+  },
+  {
+    name: "Stone croft",
+    blueprint: identify("structure", {
+      footprint: {
+        use: "cottage-plan@1",
+        params: { shape: "snug", size: "modest", roofline: "low and spreading", windows: "a few", base: "low on the ground", character: "trim and square" },
+      },
+      body: { use: "fieldstone@1", params: { stones: "mixed sizes", gables: "boards" } },
+      roof: { use: "tiles@1", params: { covering: "slates", overhang: "neat and close", chimney: "ridge" } },
+      openings: { use: "casements@1", params: { panes: "six panes", shutters: false, door: "plank" } },
+      ornaments: { use: "cottage-garden@1", params: { extras: ["lantern", "woodpile"], walk: "flagstones" } },
+      palette: { use: "palette@1", params: { family: "deep-forest", contrast: "balanced" } },
+    }),
+  },
+  {
+    name: "Storybook house",
+    blueprint: identify("structure", {
+      footprint: {
+        use: "cottage-plan@1",
+        params: { shape: "gable-fronted", size: "modest", roofline: "tall and steep", windows: "several", base: "raised up steps", character: "crooked, like a storybook" },
+      },
+      body: { use: "timber-frame@1", params: { framing: "crossed braces", plaster: "lumpy and old" } },
+      roof: { use: "tiles@1", params: { covering: "pantiles", overhang: "sheltering", chimney: "gable" } },
+      openings: { use: "casements@1", params: { panes: "four panes", shutters: true, door: "arched" } },
+      ornaments: { use: "cottage-garden@1", params: { extras: ["flower boxes", "fence", "lantern"], walk: "stepping stones" } },
+      palette: { use: "palette@1", params: { family: "autumn-ember", contrast: "balanced" } },
+    }),
+  },
+];
+
 /** A named world for the lab: the shared world blueprint and the biome of the region the lab shows. */
 export interface WorldPreset {
   readonly name: string;

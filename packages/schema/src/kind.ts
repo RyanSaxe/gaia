@@ -29,6 +29,11 @@ const ROLE_IO: Readonly<Record<Role, { input: string | null; output: string }>> 
   Accents: { input: null, output: "AccentSpec" },
   Wind: { input: null, output: "WindSpec" },
   Natives: { input: null, output: "NativeFamilies" },
+  Footprint: { input: null, output: "BuildingPlan" },
+  Walls: { input: "BuildingPlan", output: "Built" },
+  Roof: { input: "BuildingPlan", output: "Built" },
+  Openings: { input: "BuildingPlan", output: "Built" },
+  Dressing: { input: "BuildingPlan", output: "Built" },
 };
 
 /** Anchors come from a Skeleton's tips or a Built's anchors. */
