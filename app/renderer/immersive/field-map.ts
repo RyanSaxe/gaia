@@ -659,9 +659,11 @@ export function createFieldMap(root: HTMLElement, source: MapSource): FieldMap {
       }
     }
 
-    // You are here: a vermilion arrow in a paper halo, pointing the way the person looks.
+    // You are here: a vermilion arrow in a paper halo, pointing the way the person looks;
+    // out in the wilds past the sheet, it waits at the sheet's edge nearest them.
     ctx.save();
-    ctx.translate(sx(person.x), sy(person.z));
+    // The arrow keeps above the place cartouche at the sheet's foot.
+    ctx.translate(Math.max(22, Math.min(w - 22, sx(person.x))), Math.max(22, Math.min(h - 76, sy(person.z))));
     ctx.rotate(-person.yaw);
     ctx.beginPath();
     ctx.arc(0, 0, 13, 0, Math.PI * 2);
