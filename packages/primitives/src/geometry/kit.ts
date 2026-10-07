@@ -130,6 +130,33 @@ export class PartBuilder {
   }
 }
 
+/** A leaf card's cut, with the card's own seed (0 to 1) in its fraction. */
+export const cutOf = (form: number, seed: number): number => form + 0.999 * clamp(seed, 0, 1);
+
+/** One vertex of a leaf card: where it is, its place on the card, its normal and shade. */
+export interface CardPoint {
+  readonly p: V3;
+  readonly across: number;
+  readonly along: number;
+  readonly n: V3;
+  readonly shade: number;
+}
+
+/** A leaf card as a grid of rows (along the card) of points (across it). */
+export function emitCard(out: PartBuilder, rows: readonly (readonly CardPoint[])[], cut: number, ch: Channels): void {
+  const first = out.vertexCount;
+  const cols = rows[0]?.length ?? 0;
+  for (const row of rows) for (const v of row) out.vertex(v.p, v.n, v.shade, ch, [v.across, v.along, cut]);
+  for (let i = 0; i + 1 < rows.length; i++) {
+    for (let j = 0; j + 1 < cols; j++) {
+      const a = first + i * cols + j;
+      const b = a + cols;
+      out.triangle(a, b, a + 1);
+      out.triangle(a + 1, b, b + 1);
+    }
+  }
+}
+
 export interface SphereTemplate {
   readonly points: readonly V3[];
   readonly triangles: readonly (readonly [number, number, number])[];

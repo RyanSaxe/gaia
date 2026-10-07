@@ -463,9 +463,9 @@ function emitLintel(b: PartBuilder, x: number, y: number, z: number, yaw: number
 // ---------- great tree ----------
 
 const GREAT_TREE_HABITS = {
-  "a spreading oak": { habit: "spreading", spread: 44, stature: 0.95, crown: "clumps" },
-  "a tall elm": { habit: "upright", spread: 34, stature: 1.25, crown: "clumps" },
-  "a great willow": { habit: "weeping", spread: 46, stature: 0.95, crown: "strands" },
+  "a spreading oak": { habit: "spreading", spread: 44, stature: 0.95, crown: "clumps", leaf: "lobed" },
+  "a tall elm": { habit: "upright", spread: 34, stature: 1.25, crown: "clumps", leaf: "oval" },
+  "a great willow": { habit: "weeping", spread: 46, stature: 0.95, crown: "strands", leaf: "pointed" },
 } as const;
 
 /**
@@ -486,6 +486,6 @@ export function buildGreatTree(p: Resolved<typeof greatTreeParams>, ctx: BuildCo
   const crown =
     form.crown === "strands"
       ? buildLeafStrands({ length: 2.2, fullness: p.fullness }, { ...inner, rand: inner.rand.fork("crown") }, skeleton)
-      : buildLeafClumps({ shape: "round", size: 1, fullness: p.fullness }, { ...inner, rand: inner.rand.fork("crown") }, skeleton);
+      : buildLeafClumps({ shape: "round", leaf: form.leaf, size: 1, fullness: p.fullness }, { ...inner, rand: inner.rand.fork("crown") }, skeleton);
   return { parts: [...bark.parts, ...crown.parts], anchors: crown.anchors };
 }

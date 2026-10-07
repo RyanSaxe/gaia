@@ -219,4 +219,24 @@ describe("understory presets", () => {
       expect(low).toBeGreaterThanOrEqual(0);
     }
   });
+
+  it("thins a declining bush to bare twigs: most leaves fall by vitality 0.1, few by 0.6, and the stems stay", () => {
+    for (const { name, blueprint } of SHRUB_PRESETS) {
+      const parts = realize(blueprint, flora, all, { seed: 3, facts: { scale: 1, age: 0 } }).parts;
+      const fallen = (part: Part, v: number): number => {
+        const pos = applyVitality(part, v).positions;
+        let gone = 0;
+        for (let i = 0; i < pos.length; i += 3) {
+          const d = Math.hypot(pos[i]! - part.channels.pivot[i]!, pos[i + 1]! - part.channels.pivot[i + 1]!, pos[i + 2]! - part.channels.pivot[i + 2]!);
+          if (d < 1e-5) gone++;
+        }
+        return gone / (pos.length / 3);
+      };
+      const leaf = parts.find((p) => p.swatch === "leaf")!;
+      const bark = parts.find((p) => p.swatch === "bark")!;
+      expect(fallen(leaf, 0.6), name).toBeLessThan(0.25);
+      expect(fallen(leaf, 0.1), name).toBeGreaterThan(0.6);
+      expect(fallen(bark, 0.1), name).toBe(0);
+    }
+  });
 });

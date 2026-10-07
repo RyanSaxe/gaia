@@ -101,7 +101,8 @@ leaf card, and `close`, how far a piece folds toward its pivot at night (a
 flower's petals). The plant shader combines them with each instance's live
 vitality, so a change in vitality never rebuilds geometry. A component placed
 many times, such as a rock or a drift of flowers, draws as one instanced mesh
-per part, with each copy's vitality read per instance.
+per part, with each copy's vitality read per instance and its shape varied
+a little by where it stands.
 `applyVitality` in `packages/realize/src/channels.ts` is the CPU reference the
 tests run against.
 

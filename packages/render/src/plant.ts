@@ -3,7 +3,7 @@
 // never rebuilds geometry.
 
 import * as THREE from "three";
-import type { Part, Swatch } from "@gaia/schema";
+import { CUT, type Part, type Swatch } from "@gaia/schema";
 import { CHANNEL_MATH, type Realized } from "@gaia/realize";
 import { LIGHT_GLSL, type SceneLight } from "./light.ts";
 import { createSmokeMaterial } from "./smoke.ts";
@@ -43,6 +43,23 @@ vec3 applyChannels(vec3 p) {
   return aPivot + off * keep;
 }
 
+// Copies of one component vary their shape a little, seeded by where each
+// stands: taller or squatter, a lean, and a bulge to one side that grows from
+// nothing at the ground, so neighbors never look stamped and the footprint
+// the grass is cleared from stays put. uVariety is 0 unless the material sets
+// it, as instanced copies do.
+uniform float uVariety;
+vec3 applyVariety(vec3 p, vec3 root) {
+  if (uVariety <= 0.0) return p;
+  vec3 h = fract(sin(vec3(dot(root.xz, vec2(12.9898, 78.233)), dot(root.xz, vec2(39.346, 11.135)), dot(root.xz, vec2(73.156, 52.235)))) * 43758.5453);
+  float up = clamp(p.y / uHeight, 0.0, 1.2);
+  float squash = (h.x - 0.5) * 0.26 * uVariety;
+  float bulge = 1.0 + 0.09 * uVariety * sin(atan(p.z, p.x) * 2.0 + h.y * 6.2832) * up;
+  vec3 q = vec3(p.x * (1.0 - squash * 0.3) * bulge, p.y * (1.0 + squash), p.z * (1.0 - squash * 0.3) * bulge);
+  q.xz += (h.yz - 0.5) * 0.12 * uVariety * uHeight * up * up;
+  return q;
+}
+
 // The one wind field (v2's windAt), with the plant's response on top.
 float windAt(vec2 p, float t) {
   return sin(t * 1.35 + p.x * 0.21 + p.y * 0.17) + 0.35 * sin(t * 2.9 + p.y * 0.43);
@@ -67,6 +84,13 @@ vec3 applyWind(vec3 p, vec3 root) {
 const CUTOUT_GLSL = /* glsl */ `
 attribute vec3 aCutout;
 varying vec3 vCut;
+// A patch (moss) recedes from its edge as vitality falls: its depth shrinks
+// before the fragment cuts it, so the edge creeps back smoothly.
+vec3 cardCut() {
+  vec3 c = aCutout;
+  if (abs(floor(c.z) - ${CUT.patch.toFixed(1)}) < 0.5) c.x -= 0.5 * (1.0 - uVitality);
+  return c;
+}
 `;
 
 const LEAF_MASK_GLSL = /* glsl */ `
@@ -95,6 +119,73 @@ float clusterCut(vec2 p, float seed, float far) {
     d = max(d, leafShape(q, len, 0.2 + 0.06 * leafHash(seed * 3.7 + fk)));
   }
   return mix(d, outline, far);
+}
+
+// A rounded oval leaf from the origin along +x.
+float ovalShape(vec2 q, float len, float wide) {
+  float t = clamp(q.x / len, 0.0, 1.0);
+  float profile = wide * pow(4.0 * t * (1.0 - t), 0.55) * (1.0 - 0.2 * t);
+  return min(profile - abs(q.y), min(q.x, len - q.x) * 0.7);
+}
+
+// Small oval leaves on short stalks, each starting a little off the card's
+// middle, so a cluster reads as leaves on twigs rather than a rosette.
+float ovalCut(vec2 p, float seed, float far) {
+  float outline = 0.8 + 0.07 * cos(atan(p.y, p.x) * 9.0 + seed * 6.2832) - length(p);
+  if (far > 0.999) return outline;
+  float d = 0.1 - length(p);
+  for (int k = 0; k < 8; k++) {
+    float fk = float(k);
+    float a = seed * 6.2832 + fk * 0.785 + (leafHash(seed * 11.3 + fk) - 0.5) * 0.5;
+    vec2 dir = vec2(cos(a), sin(a));
+    vec2 side = vec2(-dir.y, dir.x);
+    vec2 r = p - dir * (0.06 + 0.12 * leafHash(seed * 5.1 + fk * 2.3)) - side * (leafHash(seed * 2.9 + fk) - 0.5) * 0.2;
+    vec2 q = vec2(dot(r, dir), dot(r, side));
+    d = max(d, ovalShape(q, 0.48 + 0.24 * leafHash(seed * 7.7 + fk * 3.3), 0.19 + 0.05 * leafHash(seed * 4.1 + fk)));
+  }
+  return mix(d, outline, far);
+}
+
+// A palmate leaf facing +x from its stalk: five pointed lobes, the side ones
+// shorter, with deep sinuses between them.
+float lobedShape(vec2 q, float size) {
+  vec2 c = q - vec2(size * 0.4, 0.0);
+  float th = atan(c.y, c.x);
+  float lobes = pow(0.5 + 0.5 * cos(th * 8.4), 2.2);
+  float reach = size * (0.3 + 0.34 * lobes * (1.0 - 0.45 * smoothstep(0.5, 1.6, abs(th))));
+  reach = mix(reach, size * 0.24, smoothstep(1.75, 2.5, abs(th)));
+  return reach - length(c);
+}
+
+// A few maple-like leaves splayed from the card's middle.
+float lobedCut(vec2 p, float seed, float far) {
+  float outline = 0.76 + 0.1 * cos(atan(p.y, p.x) * 5.0 + seed * 6.2832) - length(p);
+  if (far > 0.999) return outline;
+  float d = 0.08 - length(p);
+  for (int k = 0; k < 4; k++) {
+    float fk = float(k);
+    float a = seed * 6.2832 + fk * 1.5708 + (leafHash(seed * 9.7 + fk) - 0.5) * 0.9;
+    vec2 dir = vec2(cos(a), sin(a));
+    vec2 q = vec2(dot(p, dir), dot(p, vec2(-dir.y, dir.x)));
+    d = max(d, lobedShape(q, 0.6 + 0.22 * leafHash(seed * 3.3 + fk * 1.7)));
+  }
+  return mix(d, outline, far);
+}
+
+// Moss on stone: the patch ends where its depth, jittered per vertex, falls
+// below a fifth, so the edge follows a soft winding contour.
+float patchCut(vec2 p) {
+  return (p.x + 0.24 * (p.y - 0.5) - 0.2) * 0.25;
+}
+
+// A five-petaled flower: rounded petals around its heart, a plain round far away.
+float blossomCut(vec2 p, float seed, float far) {
+  float r = length(p);
+  float outline = 0.86 - r;
+  if (far > 0.999) return outline;
+  float th = atan(p.y, p.x) + seed * 6.2832;
+  float petal = pow(abs(cos(th * 2.5)), 0.7);
+  return mix((0.5 + 0.46 * petal - r) * 0.6, outline, far);
 }
 
 // Small lance leaves hanging from a stem, alternating sides.
@@ -148,9 +239,15 @@ vec2 leafCut() {
 #else
   float far = smoothstep(0.05, 0.16, length(fwidth(p)));
 #endif
-  float d = form < 1.5 ? clusterCut(p, seed, far) : form < 2.5 ? strandCut(p, seed, far) : needleCut(p, seed, far);
+  float d = form < 1.5 ? clusterCut(p, seed, far)
+    : form < 2.5 ? strandCut(p, seed, far)
+    : form < 3.5 ? needleCut(p, seed, far)
+    : form < 4.5 ? ovalCut(p, seed, far)
+    : form < 5.5 ? lobedCut(p, seed, far)
+    : form < 6.5 ? patchCut(p)
+    : blossomCut(p, seed, far);
   float rim = 0.86 + 0.14 * smoothstep(0.0, 0.07, d);
-  if (form > 2.5) rim *= 0.9 + 0.1 * smoothstep(0.15, 0.45, abs(fract(p.y * 15.0 - abs(p.x) * 1.3 + seed * 5.0) - 0.5));
+  if (form > 2.5 && form < 3.5) rim *= 0.9 + 0.1 * smoothstep(0.15, 0.45, abs(fract(p.y * 15.0 - abs(p.x) * 1.3 + seed * 5.0) - 0.5));
   return vec2(clamp(d / max(fwidth(d), 1e-4) + 0.5, 0.0, 1.0), mix(rim, 1.0, far));
 }
 `;
@@ -167,13 +264,13 @@ varying float vWither;
 varying float vGlow;
 void main() {
   vec3 root = (modelMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
-  vec3 p = applyWind(applyChannels(position), root);
+  vec3 p = applyWind(applyVariety(applyChannels(position), root), root);
   vec4 world = modelMatrix * vec4(p, 1.0);
   vWorld = world.xyz;
   vNormal = normalize(mat3(modelMatrix) * normal);
   vShade = aShade;
   vTint = aTint;
-  vCut = aCutout;
+  vCut = cardCut();
   vWither = aWither * (1.0 - uVitality);
   vGlow = aGlow * uVitality * ${f(CHANNEL_MATH.glowStrength)} * (0.85 + 0.15 * sin(uTime * 1.3 + aPivot.x * 3.0 + aPivot.z * 2.0));
   gl_Position = projectionMatrix * viewMatrix * world;
@@ -208,7 +305,7 @@ void main() {
   vec2 cut = leafCut();
   float cover = cut.x;
   // A card seen edge-on would show as a sliver: it fades out as it turns away.
-  if (vCut.z > 0.5) {
+  if (vCut.z > 0.5 && abs(floor(vCut.z) - ${CUT.patch.toFixed(1)}) > 0.5) {
     vec3 face = normalize(cross(dFdx(vWorld), dFdy(vWorld)));
     cover *= smoothstep(0.06, 0.28, abs(dot(face, normalize(cameraPosition - vWorld))));
   }
@@ -251,9 +348,9 @@ uniform float uTime;
 ${CHANNELS_GLSL}
 ${CUTOUT_GLSL}
 void main() {
-  vCut = aCutout;
+  vCut = cardCut();
   vec3 root = (modelMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
-  vec3 p = applyWind(applyChannels(position), root);
+  vec3 p = applyWind(applyVariety(applyChannels(position), root), root);
   gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4(p, 1.0);
 }
 `;

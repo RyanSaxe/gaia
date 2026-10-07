@@ -25,12 +25,21 @@ interface Group {
   readonly landforms: Readonly<Record<string, number>>;
 }
 
+/**
+ * Each preset built from `n` seeds, so neighbors of one blueprint differ in
+ * shape and not only in turn, size and hue. A variant is one more build and
+ * one more instanced mesh per part; the shader varies each copy a little more.
+ */
+const seeded = (presets: readonly Preset[], weights: readonly number[], n: number): { presets: readonly Preset[]; weights: readonly number[] } => ({
+  presets: Array.from({ length: n }, () => presets).flat(),
+  weights: Array.from({ length: n }, () => weights.map((w) => w / n)).flat(),
+});
+
 const GROUPS: readonly Group[] = [
   {
     id: "rocks",
     kind: rock,
-    presets: ROCK_PRESETS,
-    weights: [3, 0.5, 1, 2, 1, 0.7],
+    ...seeded(ROCK_PRESETS, [3, 0.5, 1, 2, 1, 0.7], 2),
     casts: true,
     clears: 0.92,
     rule: { groups: 3.5, members: [1, 4], spread: 6, mix: "member", scale: [0.7, 1.25], maxSlope: 22, waterClearance: 1.5, ground: "lowest", sink: 0.05 },
@@ -39,8 +48,7 @@ const GROUPS: readonly Group[] = [
   {
     id: "shrubs",
     kind: flora,
-    presets: SHRUB_PRESETS,
-    weights: [1, 1, 0.7, 0.6],
+    ...seeded(SHRUB_PRESETS, [1, 1, 0.7, 0.6], 3),
     casts: true,
     clears: 0.55,
     rule: { groups: 5, members: [1, 5], spread: 5, mix: "member", scale: [0.75, 1.2], maxSlope: 24, waterClearance: 2, ground: "lowest", sink: 0.06 },
@@ -49,8 +57,7 @@ const GROUPS: readonly Group[] = [
   {
     id: "flowers",
     kind: wildflowers,
-    presets: FLOWER_PRESETS,
-    weights: [1.2, 1, 0.8, 0.8, 0.8, 0.7],
+    ...seeded(FLOWER_PRESETS, [1.2, 1, 0.8, 0.8, 0.8, 0.7], 1),
     casts: false,
     clears: 0,
     rule: { groups: 6.5, members: [2, 5], spread: 7, mix: "group", scale: [0.8, 1.15], maxSlope: 20, waterClearance: 1, ground: "plane", sink: 0.02 },

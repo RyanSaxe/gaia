@@ -5,6 +5,7 @@
 import { type Anchor, type BuildContext, type Built, CUT, type Limb, type Rand, type Resolved, type Skeleton, type Vec3 } from "@gaia/schema";
 import type { barkParams, blossomsParams, leafClumpsParams, leafStrandsParams, needlesParams } from "../flora.ts";
 import {
+  type CardPoint,
   type Channels,
   PartBuilder,
   type V3,
@@ -13,6 +14,8 @@ import {
   basis,
   clamp,
   cross,
+  cutOf,
+  emitCard,
   fbm3,
   icosphere,
   length,
@@ -57,33 +60,6 @@ function crownPlace(c: Crown, p: Vec3): { out: V3; depth: number } {
 
 /** Blends a surface normal toward the crown's outward direction, so a canopy shades as one soft volume. */
 const blendNormal = (n: Vec3, out: Vec3, k: number): V3 => normalize(lerp(n, out, k));
-
-/** A leaf card's cut, with the card's own seed (0 to 1) in its fraction. */
-const cutOf = (form: number, seed: number): number => form + 0.999 * clamp(seed, 0, 1);
-
-/** One vertex of a leaf card: where it is, its place on the card, its normal and shade. */
-interface CardPoint {
-  readonly p: V3;
-  readonly across: number;
-  readonly along: number;
-  readonly n: V3;
-  readonly shade: number;
-}
-
-/** A leaf card as a grid of rows (along the card) of points (across it). */
-function emitCard(out: PartBuilder, rows: readonly (readonly CardPoint[])[], cut: number, ch: Channels): void {
-  const first = out.vertexCount;
-  const cols = rows[0]?.length ?? 0;
-  for (const row of rows) for (const v of row) out.vertex(v.p, v.n, v.shade, ch, [v.across, v.along, cut]);
-  for (let i = 0; i + 1 < rows.length; i++) {
-    for (let j = 0; j + 1 < cols; j++) {
-      const a = first + i * cols + j;
-      const b = a + cols;
-      out.triangle(a, b, a + 1);
-      out.triangle(a + 1, b, b + 1);
-    }
-  }
-}
 
 /** Mean distance from each point to its nearest neighbor. */
 function meanNearest(points: readonly Vec3[]): number {
@@ -254,15 +230,18 @@ export function buildLeafClumps(p: Resolved<typeof leafClumpsParams>, ctx: Build
   }
 
   const anchors: Anchor[] = [];
-  // Each clump is a once-subdivided core (80 triangles), the soft mass seen from
-  // afar, under a shell of leaf cards (2 triangles each) that gives it leafy
-  // edges up close. Very full crowns on dense frames first thin their cards,
-  // then lose interior fill clumps (added last), so a tree stays inside its budget.
+  // Leaf cards build each clump: an outer shell that gives it a leafy outline
+  // and an inner layer, darker, that gives it depth where light falls between.
+  // A small dark core (80 triangles) sits deep inside, read only as shadow in
+  // the gaps. Very full crowns on dense frames first thin their cards, then
+  // lose interior fill clumps (added last), so a tree stays inside its budget.
   const blobs = p.shape === "tufts" ? 3 : 1;
-  const cardsFor = (radius: number): number => Math.round(clamp(4.6 * (radius / cardHalf(radius, s)) ** 2, 8, 70));
+  const leaf = LEAF_CUTS[p.leaf];
+  const half = (radius: number): number => cardHalf(radius, s) * leaf.card;
+  const cardsFor = (radius: number): number => Math.round(clamp(6.4 * (radius / half(radius)) ** 2, 12, 110));
   const blobRadius = (clump: Clump): number => (blobs === 1 ? clump.radius : clump.radius * 0.68);
   let density = 1;
-  const triangles = (): number => clumps.reduce((n, c) => n + blobs * (80 + 2 * Math.round(cardsFor(blobRadius(c)) * density)), 0);
+  const triangles = (): number => clumps.reduce((n, c) => n + blobs * (80 + 2 * Math.round(cardsFor(blobRadius(c)) * density * (1 + INNER_SHARE))), 0);
   while (triangles() > CLUMP_TRIANGLE_BUDGET && density > 0.55) density -= 0.05;
   while (triangles() > CLUMP_TRIANGLE_BUDGET) clumps.pop();
   for (const clump of clumps) {
@@ -279,8 +258,12 @@ export function buildLeafClumps(p: Resolved<typeof leafClumpsParams>, ctx: Build
       const rad = blobs === 1 ? clump.radius : clump.radius * clump.r.range(0.55, 0.8);
       const look = { loss, droop, wither, tint, pivot: clump.pivot };
       // The core thins first, so a declining canopy turns airy before it goes bare.
-      emitBlob(out, crown, center, rad * 0.8, p.shape, 1, seed + b * 31, { ...look, loss: Math.min(0.95, loss + 0.1) }, -0.06);
-      emitLeafCards(out, crown, center, rad, p.shape, seed + b * 31, Math.round(cardsFor(rad) * density), clump.r.fork(`cards${b}`), look, s);
+      emitBlob(out, crown, center, rad * 0.56, p.shape, 1, seed + b * 31, { ...look, loss: Math.min(0.95, loss + 0.1) }, -0.2);
+      const cards = Math.round(cardsFor(rad) * density);
+      const cr = clump.r.fork(`cards${b}`);
+      const shell = { center, radius: rad, shape: p.shape, seed: seed + b * 31, cut: leaf.cut, half: half(rad) };
+      emitLeafCards(out, crown, shell, cards, cr, look, { from: 0.86, to: 1, shade: 0 });
+      emitLeafCards(out, crown, shell, Math.round(cards * INNER_SHARE), cr, look, { from: 0.55, to: 0.8, shade: -0.12 });
     }
     // Anchors on the sunlit outer face of each clump, where blossoms show.
     for (let k = 0; k < 5; k++) {
@@ -295,6 +278,16 @@ export function buildLeafClumps(p: Resolved<typeof leafClumpsParams>, ctx: Build
 
 /** Half the width of a leaf card: a cluster of a few leaves, a little larger on larger clumps. */
 const cardHalf = (radius: number, s: number): number => Math.min(0.2 * s + 0.1 * radius, 0.6 * radius);
+
+/** Each leaf shape's cut, and its cards' size: a few broad maple leaves fill a larger card than many small ovals. */
+const LEAF_CUTS = {
+  pointed: { cut: CUT.cluster, card: 1 },
+  oval: { cut: CUT.oval, card: 0.85 },
+  lobed: { cut: CUT.lobed, card: 1.15 },
+} as const;
+
+/** The inner layer of cards, as a share of the outer shell's. */
+const INNER_SHARE = 0.35;
 
 interface BlobLook {
   readonly loss: number;
@@ -353,32 +346,42 @@ function emitBlob(
   for (const [a, b, c] of sphere.triangles) out.triangle(first + a, first + b, first + c);
 }
 
+/** The clump a layer of cards builds. */
+interface Shell {
+  readonly center: V3;
+  readonly radius: number;
+  readonly shape: ClumpShape;
+  readonly seed: number;
+  readonly cut: number;
+  /** Half a card's width. */
+  readonly half: number;
+}
+
 /**
- * A shell of leaf cards over a clump. Each card leans out of the mass like a
- * spray of leaves, turned at random about the clump's outward direction, so
- * the clump's edge is leafy from every side. Cards shade with the clump's
- * outward normal blended toward the crown, so the canopy still lights as one
- * volume; each card drops and withers on its own, so decline thins it.
+ * A layer of leaf cards over a clump, between `from` and `to` of its radius.
+ * Each card leans out of the mass like a spray of leaves, turned at random
+ * about the clump's outward direction, so the clump's edge is leafy from
+ * every side. Cards shade with the clump's outward normal blended toward the
+ * crown, so the canopy still lights as one volume; deeper layers shade
+ * darker, and each card drops and withers on its own, so decline thins it.
  */
 function emitLeafCards(
   out: PartBuilder,
   crown: Crown,
-  center: V3,
-  radius: number,
-  shape: ClumpShape,
-  seed: number,
+  shell: Shell,
   count: number,
   r: Rand,
   look: BlobLook,
-  s: number,
+  layer: { readonly from: number; readonly to: number; readonly shade: number },
 ): void {
+  const { center } = shell;
   for (let k = 0; k < count; k++) {
     // Spread evenly over the shell (a Fibonacci sphere), jittered.
     const y = 1 - (2 * (k + r.range(0.2, 0.8))) / count;
     const ring = Math.sqrt(Math.max(0, 1 - y * y));
     const phi = k * 2.39996 + r.range(-0.4, 0.4);
     const dir = normalize([Math.cos(phi) * ring, y, Math.sin(phi) * ring]);
-    const { q: onShell } = shellPoint(center, radius * r.range(0.86, 1.0), shape, dir, seed);
+    const { q: onShell } = shellPoint(center, shell.radius * r.range(layer.from, layer.to), shell.shape, dir, shell.seed);
     const outward = normalize(sub(onShell, center));
     const [u, v] = basis(outward);
     const turn = r.next() * Math.PI * 2;
@@ -386,11 +389,11 @@ function emitLeafCards(
     const lean = r.range(0.6, 1.3);
     const along = normalize(add(scale(outward, Math.cos(lean)), scale(tangent, Math.sin(lean))));
     const across = normalize(cross(along, outward));
-    const half = cardHalf(radius, s) * r.range(0.85, 1.15);
+    const half = shell.half * r.range(0.85, 1.15);
     const tint = clamp(look.tint * 0.4 + r.range(-0.025, 0.025), -0.1, 0.1);
-    const lift = r.range(-0.05, 0.08);
+    const lift = r.range(-0.05, 0.08) + layer.shade;
     const ch: Channels = {
-      loss: clamp(look.loss + r.range(-0.1, 0.1), 0.01, 0.95),
+      loss: clamp(look.loss + r.range(-0.1, 0.1) + (layer.shade < 0 ? 0.06 : 0), 0.01, 0.95),
       droop: look.droop,
       wither: clamp(look.wither + r.range(-0.15, 0.1), 0, 1),
       glow: 0,
@@ -404,7 +407,7 @@ function emitLeafCards(
         return { p, across: a, along: b, n: blendNormal(fromCenter, crownPlace(crown, p).out, 0.6), shade: canopyShade(crown, p, fromCenter[1], look.tint) + lift };
       }),
     );
-    emitCard(out, rows, cutOf(CUT.cluster, r.next()), ch);
+    emitCard(out, rows, cutOf(shell.cut, r.next()), ch);
   }
 }
 
@@ -574,10 +577,12 @@ function acrossOf(dir: Vec3): V3 {
 }
 
 /**
- * A spray of needles along a limb's polyline: a slim dark core for its mass,
- * and two layered tents of needle cards over it whose combed, jagged fringes
- * droop to either side, so the spray reads as layered needles from the side
- * and from below.
+ * A spray of needles along a limb's polyline, built like a fir's frond: a
+ * slim dark core for its mass, a narrow ridge of needles along its top, and
+ * branchlets to either side that reach toward the tip and droop, each a
+ * small creased needle card. The branchlets alternate and vary, so a spray
+ * reads as layered, feathery needles from the side and from below rather
+ * than as one flat plate.
  */
 function emitSpray(
   out: PartBuilder,
@@ -596,19 +601,19 @@ function emitSpray(
   const wither = 0.7 + 0.3 * r.next();
   const tint = r.range(-0.06, 0.06);
   const lift = 0.12 * (p.fullness < 0.9 ? 1 : 0.5) * heightFrac;
-  const core = width * 0.5;
+  const core = width * 0.36;
   for (const n of sphere.points) {
     // x runs along the limb from just past its base to its tip.
-    const t = 0.08 + (n[0] * 0.5 + 0.5) * 0.9;
+    const t = 0.08 + (n[0] * 0.5 + 0.5) * 0.85;
     const { at, dir } = pointOnPolyline(points, t);
     const side = acrossOf(dir);
     const up = normalize(cross(side, dir));
     const profile = Math.sin(Math.PI * clamp(t * 0.92 + 0.04, 0, 1)) * 0.75 + 0.25;
     const w = core * profile * (1 + 0.18 * fbm3(n[0] * 2.5 + seed * 0.01, n[1] * 2.5, n[2] * 2.5, seed, 2));
-    const q = add(at, add(scale(side, n[2] * w), scale(up, (n[1] * 0.4 - 0.28) * w)));
+    const q = add(at, add(scale(side, n[2] * w), scale(up, (n[1] * 0.45 - 0.3) * w)));
     const place = crownPlace(crown, q);
     const normal = blendNormal([side[0] * n[2] + up[0] * n[1], side[1] * n[2] + up[1] * n[1], side[2] * n[2] + up[2] * n[1]], place.out, 0.5);
-    const shade = 0.22 + 0.42 * clamp(place.depth - 0.25, 0, 1) + 0.2 * Math.max(0, n[1]) + 0.5 * tint + lift;
+    const shade = 0.14 + 0.36 * clamp(place.depth - 0.25, 0, 1) + 0.16 * Math.max(0, n[1]) + 0.5 * tint + lift;
     out.vertex(q, normal, shade, {
       loss: Math.max(0.01, loss + 0.08 * t),
       droop: 0.35,
@@ -620,42 +625,77 @@ function emitSpray(
   }
   for (const [a, b, c] of sphere.triangles) out.triangle(first + a, first + b, first + c);
 
-  // Two tents: the upper one broad and lifted, the lower one narrower and
-  // steeper, so each spray shows a second layer of fringe beneath the first.
-  const tents = [
-    { from: 0.02, to: 1.0, wide: 1, rise: 0.1, slope: r.range(0.38, 0.55) },
-    { from: 0.1, to: 0.92, wide: 0.8, rise: -0.2, slope: r.range(0.7, 0.9) },
-  ];
-  const rowsAlong = 7;
-  for (const tent of tents) {
-    const cut = cutOf(CUT.needles, r.next());
-    const tentTint = clamp(tint * 0.4 + r.range(-0.02, 0.02), -0.1, 0.1);
-    const firstTent = out.vertexCount;
-    for (let k = 0; k <= rowsAlong; k++) {
-      const v = k / rowsAlong;
-      const t = tent.from + (tent.to - tent.from) * v;
+  const channelsAt = (t: number, edge: number, cardTint: number): Channels => ({
+    loss: Math.max(0.01, loss + 0.08 * t + 0.03 * edge),
+    droop: 0.35,
+    wither: clamp(wither + 0.1 * edge, 0, 1),
+    glow: 0,
+    pivot: pointOnPolyline(points, t).at,
+    tint: cardTint,
+  });
+
+  // The ridge: a narrow needle card along the top of the limb.
+  const ridgeRows = 5;
+  const ridgeCut = cutOf(CUT.needles, r.next());
+  const ridgeTint = clamp(tint * 0.4 + r.range(-0.02, 0.02), -0.1, 0.1);
+  const ridgeFirst = out.vertexCount;
+  for (let k = 0; k <= ridgeRows; k++) {
+    const v = k / ridgeRows;
+    const t = 0.04 + 0.94 * v;
+    const { at, dir } = pointOnPolyline(points, t);
+    const side = acrossOf(dir);
+    const up = normalize(cross(side, dir));
+    const w = width * 0.62 * (1 - 0.5 * v);
+    for (const a of [-1, 0, 1]) {
+      const q = add(at, add(scale(side, a * w * 0.85), scale(up, width * 0.12 - Math.abs(a) * w * 0.5)));
+      const place = crownPlace(crown, q);
+      const normal = blendNormal(normalize(add(up, scale(side, a * 0.6))), place.out, 0.5);
+      const shade = 0.34 + 0.42 * clamp(place.depth - 0.25, 0, 1) + 0.1 * (1 - Math.abs(a)) + 0.5 * tint + lift;
+      out.vertex(q, normal, shade, channelsAt(t, Math.abs(a), ridgeTint), [a, v, ridgeCut]);
+    }
+  }
+  for (let k = 0; k < ridgeRows; k++) {
+    for (let j = 0; j < 2; j++) {
+      const a = ridgeFirst + k * 3 + j;
+      out.triangle(a, a + 3, a + 1);
+      out.triangle(a + 1, a + 3, a + 4);
+    }
+  }
+
+  // Branchlets, alternating sides, shorter and more drooping toward the tip.
+  const span = points.slice(1).reduce((n, q, i) => n + length(sub(q, points[i] as Vec3)), 0);
+  const count = Math.round(clamp(span / (width * 0.3), 5, 11));
+  for (let k = 0; k < count; k++) {
+    for (const sideSign of [-1, 1]) {
+      const t = 0.1 + 0.84 * ((k + (sideSign > 0 ? 0.25 : 0.75)) / count) + r.range(-0.03, 0.03);
       const { at, dir } = pointOnPolyline(points, t);
       const side = acrossOf(dir);
       const up = normalize(cross(side, dir));
-      const w = width * tent.wide * (1 - 0.45 * v);
-      for (const a of [-1, 0, 1]) {
-        const q = add(at, add(scale(side, a * w * Math.cos(tent.slope)), scale(up, tent.rise * width - Math.abs(a) * w * Math.sin(tent.slope))));
-        const place = crownPlace(crown, q);
-        const normal = blendNormal(normalize(add(up, scale(side, a * 0.6))), place.out, 0.5);
-        const shade = 0.3 + 0.42 * clamp(place.depth - 0.25, 0, 1) + 0.1 * (1 - Math.abs(a)) + 0.5 * tint + lift;
-        out.vertex(q, normal, shade, {
-          loss: Math.max(0.01, loss + 0.08 * t + 0.03 * Math.abs(a)),
-          droop: 0.35,
-          wither: clamp(wither + 0.1 * Math.abs(a), 0, 1),
-          glow: 0,
-          pivot: at,
-          tint: tentTint,
-        }, [a, v, cut]);
+      const reach = width * (0.8 - 0.4 * t) * r.range(0.8, 1.15);
+      const forward = r.range(0.6, 0.95);
+      const drop = r.range(0.1, 0.3) + 0.25 * t + 0.2 * (1 - heightFrac);
+      const flat = normalize(add(scale(side, sideSign * Math.cos(forward)), scale(dir, Math.sin(forward))));
+      const along = normalize(add(scale(flat, Math.cos(drop)), scale(up, -Math.sin(drop))));
+      // The card's width lies nearly level, rolled a little, creased along its middle.
+      const roll = r.range(-0.35, 0.35);
+      const wide = normalize(rotate(normalize(cross(up, along)), along, roll));
+      const crest = normalize(cross(along, wide));
+      const halfWide = reach * r.range(0.36, 0.44);
+      const cut = cutOf(CUT.needles, r.next());
+      const cardTint = clamp(tint * 0.4 + r.range(-0.03, 0.03), -0.1, 0.1);
+      const firstCard = out.vertexCount;
+      for (const v of [0, 1]) {
+        const base = addScaled(at, along, v * reach);
+        for (const a of [-1, 0, 1]) {
+          const q = add(base, add(scale(wide, a * halfWide * (1 - 0.35 * v)), scale(crest, (0.18 - 0.3 * Math.abs(a)) * halfWide)));
+          const place = crownPlace(crown, q);
+          const normal = blendNormal(normalize(add(crest, scale(wide, a * 0.5))), place.out, 0.5);
+          const shade = 0.28 + 0.42 * clamp(place.depth - 0.25, 0, 1) + 0.12 * Math.max(0, crest[1]) + 0.08 * v + 0.5 * tint + lift;
+          out.vertex(q, normal, shade, channelsAt(Math.min(1, t + 0.1 * v), Math.abs(a) * 0.5 + v * 0.5, cardTint), [a, v, cut]);
+        }
       }
-    }
-    for (let k = 0; k < rowsAlong; k++) {
       for (let j = 0; j < 2; j++) {
-        const a = firstTent + k * 3 + j;
+        const a = firstCard + j;
         out.triangle(a, a + 3, a + 1);
         out.triangle(a + 1, a + 3, a + 4);
       }
@@ -683,12 +723,13 @@ export function buildBlossoms(p: Resolved<typeof blossomsParams>, ctx: BuildCont
     const loss = 0.3 + 0.45 * ar.next();
     const size = s * (0.75 + 0.35 * a.size);
     if (p.form === "petals") {
-      const flowers = 3 + Math.floor(ar.next() * 3);
+      // A loose truss of small cupped flowers, each facing out and a little up.
+      const flowers = 4 + Math.floor(ar.next() * 3);
       for (let f = 0; f < flowers; f++) {
-        const offset: V3 = [ar.range(-0.3, 0.3) * size, ar.range(-0.15, 0.15) * size, ar.range(-0.3, 0.3) * size];
+        const offset: V3 = [ar.range(-0.2, 0.2) * size, ar.range(-0.1, 0.12) * size, ar.range(-0.2, 0.2) * size];
         const center = add(a.position, offset);
-        const facing = normalize(add(a.normal, [ar.range(-0.4, 0.4), 0.5, ar.range(-0.4, 0.4)]));
-        emitFlower(out, center, facing, 0.17 * size * ar.range(0.8, 1.2), ar.next() * Math.PI * 2, loss + ar.range(-0.04, 0.04));
+        const facing = normalize(add(add(a.normal, scale(normalize(offset), 0.6)), [ar.range(-0.3, 0.3), 0.45, ar.range(-0.3, 0.3)]));
+        emitFlower(out, center, facing, 0.085 * size * ar.range(0.8, 1.2), ar.next(), loss + ar.range(-0.04, 0.04));
       }
     } else if (p.form === "pods") {
       const hang = 0.12 * size;
@@ -700,7 +741,7 @@ export function buildBlossoms(p: Resolved<typeof blossomsParams>, ctx: BuildCont
       const out2 = normalize(add(a.normal, [0, -0.6, 0]));
       for (let b = 0; b < berries; b++) {
         const c = add(addScaled(a.position, out2, 0.1 * size), [ar.range(-0.08, 0.08) * size, ar.range(-0.1, 0.04) * size, ar.range(-0.08, 0.08) * size]);
-        const rad = 0.045 * size * ar.range(0.8, 1.2);
+        const rad = 0.028 * size * ar.range(0.8, 1.2);
         emitBall(out, c, [rad, rad, rad], 0, { loss: loss + ar.range(-0.03, 0.03), droop: 0.3, wither: 1, glow: 0, pivot: a.position }, 0.45);
       }
     }
@@ -708,23 +749,18 @@ export function buildBlossoms(p: Resolved<typeof blossomsParams>, ctx: BuildCont
   return { parts: [out.part()], anchors: [] };
 }
 
-function emitFlower(out: PartBuilder, center: V3, facing: V3, radius: number, spin: number, loss: number): void {
+/** A flower card, cut to five rounded petals and cupped: its heart sits back from its rim. */
+function emitFlower(out: PartBuilder, center: V3, facing: V3, radius: number, seed: number, loss: number): void {
   const [u, v] = basis(facing);
   const ch: Channels = { loss: clamp(loss, 0.01, 1), droop: 0.5, wither: 1, glow: 0, pivot: center };
-  const hub = out.vertex(addScaled(center, facing, radius * 0.15), facing, 0.45, ch);
-  for (let k = 0; k < 5; k++) {
-    const a0 = spin + (k / 5) * Math.PI * 2;
-    const dirAt = (a: number): V3 => add(scale(u, Math.cos(a)), scale(v, Math.sin(a)));
-    const tip = addScaled(addScaled(center, dirAt(a0), radius), facing, radius * 0.25);
-    const l = addScaled(center, dirAt(a0 - 0.5), radius * 0.6);
-    const rr = addScaled(center, dirAt(a0 + 0.5), radius * 0.6);
-    const n = normalize(addScaled(facing, dirAt(a0), 0.35));
-    const il = out.vertex(l, n, 0.8, ch);
-    const it = out.vertex(tip, n, 1, ch);
-    const ir = out.vertex(rr, n, 0.8, ch);
-    out.triangle(hub, il, it);
-    out.triangle(hub, it, ir);
-  }
+  const rows = [-1, 0, 1].map((b) =>
+    [-1, 0, 1].map((a): CardPoint => {
+      const rim = Math.hypot(a, b) / Math.SQRT2;
+      const p = add(add(center, scale(u, a * radius)), scale(v, b * radius));
+      return { p: addScaled(p, facing, radius * 0.45 * rim), across: a, along: b, n: normalize(addScaled(facing, normalize(add(scale(u, a), scale(v, b))), 0.35 * rim)), shade: 0.62 + 0.38 * rim };
+    }),
+  );
+  emitCard(out, rows, cutOf(CUT.blossom, seed), ch);
 }
 
 function emitBall(out: PartBuilder, center: V3, radii: V3, subdiv: number, ch: Channels, shadeBase: number): void {
