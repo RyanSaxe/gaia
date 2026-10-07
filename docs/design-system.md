@@ -248,8 +248,10 @@ grass and water agree:
   sinks past the point where its light ends, so the switch never shows.
 - **The lantern.** The person carries a candle-orange lantern at hand height,
   a little ahead and to the right. Its pool is about 12 m across and fades
-  smoothly to nothing, with no edge; colors come back inside it. It lights
-  surfaces only, never the air. It fades in through dusk, sways a few
+  smoothly to nothing, with no edge; colors come back inside it. On pale,
+  muted surfaces such as stone it reads as warm amber rather than full
+  orange, which over the moon's blue floor would look salmon, and its
+  brightest light rolls off. It lights surfaces only, never the air. It fades in through dusk, sways a few
   centimeters with each stride and settles when the person stops. The Flora
   tab carries none, so plants are judged under the moon alone.
 - **The night sky** deepens to blue, keeping a trace of the world's own sky

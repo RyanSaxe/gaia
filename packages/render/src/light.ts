@@ -260,13 +260,21 @@ float lanternReach(vec3 worldPosition) {
   return k * k / (1.0 + d * 0.12);
 }
 
+// On pale, muted surfaces (stone, plaster) the candle reads as warm amber
+// rather than its full orange, which over the moon's blue floor would
+// turn them salmon; green turf keeps the orange, so the pool never reads
+// olive. Where it falls brightest it rolls off.
 vec3 lanternLight(vec3 albedo, vec3 n, vec3 worldPosition, float wrap) {
   if (uLanternIntensity <= 0.0) return vec3(0.0);
   vec3 toL = uLanternPosition - worldPosition;
   float d = max(length(toL), 1e-3);
   float facing = dot(n, toL / d);
   float lambert = mix(max(facing, 0.0), facing * 0.5 + 0.5, wrap);
-  return albedo * uLanternColor * uLanternIntensity * lanternReach(worldPosition) * lambert;
+  vec3 lit = albedo * uLanternIntensity * lanternReach(worldPosition) * lambert;
+  float pale = smoothstep(0.3, 0.55, dot(albedo, vec3(0.299, 0.587, 0.114))) * (1.0 - smoothstep(0.15, 0.4, max(albedo.r, max(albedo.g, albedo.b)) - min(albedo.r, min(albedo.g, albedo.b))));
+  vec3 hue = mix(uLanternColor, vec3(1.0, 0.8, 0.5), pale);
+  float bright = dot(lit, vec3(0.299, 0.587, 0.114));
+  return lit * hue / (1.0 + 0.9 * max(bright - 0.3, 0.0));
 }
 
 vec3 nightLight(vec3 albedo, vec3 n, vec3 worldPosition, float wrap, float shadow) {
