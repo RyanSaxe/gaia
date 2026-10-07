@@ -7,6 +7,7 @@ import { CLEARINGS_GLSL, type Clearing, LIGHT_GLSL, type SceneLight, createClear
 import { GROUND_SAMPLE_GLSL, type GroundTexture } from "./ground.ts";
 import { REGIONS_GLSL, type RegionCovers, TUFT_GLSL } from "./regions.ts";
 import { CLEARING_GLSL, type Clearings } from "./clearings.ts";
+import { trailWear } from "./trails.ts";
 
 const GRASS_VERT = /* glsl */ `
 ${CLEARINGS_GLSL}
@@ -15,6 +16,7 @@ uniform float uWind;
 uniform vec3 uCenter;
 uniform float uLand;
 ${GROUND_SAMPLE_GLSL}
+uniform float uTrailWear;
 ${REGIONS_GLSL}
 ${TUFT_GLSL}
 ${CLEARING_GLSL}
@@ -66,7 +68,8 @@ void main() {
   // travels with them while every blade keeps a fixed spot on the ground.
   float reach = aThin.y;
   vec2 xz = uCenter.xz + mod(aBlade.xy * reach * 2.0 - uCenter.xz + reach, reach * 2.0) - reach;
-  vec3 g = groundSample(xz);
+  vec4 g4 = groundSample4(xz);
+  vec3 g = g4.xyz;
   float e = 0.6;
   float sx = groundAt(xz + vec2(e, 0.0)).x - groundAt(xz - vec2(e, 0.0)).x;
   float sz = groundAt(xz + vec2(0.0, e)).x - groundAt(xz - vec2(0.0, e)).x;
@@ -97,6 +100,13 @@ void main() {
   float h = aBlade.w * shape.x * keep * mix(1.0, 0.72 + 0.28 * tuft, shape.w) * (1.0 + flower * 0.25) * clearing(xz);
   // Nothing grows under a stone or a bush.
   h *= step(clearingAt(xz), 0.5);
+  // A trail parts the grass: each blade stands only past its own seeded edge,
+  // so the tread's border is ragged, and a faint trail keeps more blades on
+  // it. Blades along the margin are trampled a little shorter.
+  float edge = g4.w;
+  float r4 = fract(aSeed.z * 11.3 + aBlade.x * 7.1 + aBlade.y * 3.7);
+  h *= step(mix(-0.45, 0.55, r4) - (1.0 - uTrailWear) * 1.3, edge);
+  h *= mix(0.55, 1.0, smoothstep(-0.3, 1.3, edge + (1.0 - uTrailWear)));
 
   float side = position.x;
   // A flower's rows crowd toward its top, so its head is a small round dab on a long stem.
@@ -272,6 +282,7 @@ export function createGrass(light: SceneLight, ground: GroundTexture, covers: Re
       ...ground.uniforms,
       ...covers.uniforms,
       uCenter: center,
+      uTrailWear: trailWear,
       uLand: { value: land },
       ...under.uniforms,
       uDry: { value: hexToVec3(0xc4b47e) },

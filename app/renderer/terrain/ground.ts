@@ -5,11 +5,12 @@
 
 import * as THREE from "three";
 import { LIGHT_GLSL, type SceneLight, hexToVec3 } from "@gaia/render";
-import { DRY, SHORE_CAP, type Terrain, landRadius, wildsRing } from "@gaia/terrain";
+import { DRY, SHORE_CAP, TRAILS, type Terrain, landRadius, wildsRing } from "@gaia/terrain";
 import { SWARD_GLSL } from "../world/environment.ts";
 import { REGIONS_GLSL, type RegionCovers, TUFT_GLSL } from "./regions.ts";
+import { TRAIL_GLSL, trailWear } from "./trails.ts";
 
-/** Height, water level and distance to the water per lattice sample, for shaders that sample the ground. */
+/** Height, water level, distance to the water and to the nearest trail's edge per lattice sample, for shaders that sample the ground. */
 export interface GroundTexture {
   readonly texture: THREE.DataTexture;
   readonly uniforms: {
@@ -19,6 +20,8 @@ export interface GroundTexture {
     readonly uGroundSpacing: { value: number };
   };
   update(t: Terrain): void;
+  /** The trail field from `trailField`, or null for no trails. */
+  setTrails(field: Float32Array | null): void;
 }
 
 export function createGroundTexture(t: Terrain): GroundTexture {
@@ -41,8 +44,13 @@ export function createGroundTexture(t: Terrain): GroundTexture {
     }
     texture.needsUpdate = true;
   };
+  const setTrails = (field: Float32Array | null): void => {
+    for (let i = 0; i < n * n; i++) data[i * 4 + 3] = field?.[i] ?? TRAILS.reach;
+    texture.needsUpdate = true;
+  };
   update(t);
-  return { texture, uniforms, update };
+  setTrails(null);
+  return { texture, uniforms, update, setTrails };
 }
 
 /** GLSL that reads the ground texture with the mesh's own triangle interpolation. */
@@ -51,24 +59,27 @@ uniform sampler2D uGround;
 uniform float uGroundN;
 uniform float uGroundOrigin;
 uniform float uGroundSpacing;
-// Height, water level and distance to the water (x, y, z).
-vec3 groundSample(vec2 xz) {
+// Height, water level, distance to the water and signed distance to a trail's edge (x, y, z, w).
+vec4 groundSample4(vec2 xz) {
   vec2 g = clamp((xz - uGroundOrigin) / uGroundSpacing, vec2(0.0), vec2(uGroundN - 1.001));
   ivec2 i = ivec2(floor(g));
   vec2 f = g - vec2(i);
-  vec3 h00 = texelFetch(uGround, i, 0).rgb;
-  vec3 h10 = texelFetch(uGround, i + ivec2(1, 0), 0).rgb;
-  vec3 h01 = texelFetch(uGround, i + ivec2(0, 1), 0).rgb;
-  vec3 h11 = texelFetch(uGround, i + ivec2(1, 1), 0).rgb;
+  vec4 h00 = texelFetch(uGround, i, 0);
+  vec4 h10 = texelFetch(uGround, i + ivec2(1, 0), 0);
+  vec4 h01 = texelFetch(uGround, i + ivec2(0, 1), 0);
+  vec4 h11 = texelFetch(uGround, i + ivec2(1, 1), 0);
   if (f.x + f.y <= 1.0) return h00 + f.x * (h10 - h00) + f.y * (h01 - h00);
   return h11 + (1.0 - f.x) * (h01 - h11) + (1.0 - f.y) * (h10 - h11);
 }
+vec3 groundSample(vec2 xz) { return groundSample4(xz).xyz; }
 vec2 groundAt(vec2 xz) { return groundSample(xz).xy; }
 `;
 
 const VERT = /* glsl */ `
 attribute float aWater;
 attribute float aShore;
+attribute float aTrail;
+varying float vTrail;
 varying vec3 vWorld;
 varying vec3 vNormal;
 varying float vWater;
@@ -79,6 +90,7 @@ void main() {
   vNormal = normal;
   vWater = aWater;
   vShore = aShore;
+  vTrail = aTrail;
   gl_Position = projectionMatrix * viewMatrix * world;
 }
 `;
@@ -88,6 +100,10 @@ precision highp float;
 ${LIGHT_GLSL}
 ${REGIONS_GLSL}
 ${TUFT_GLSL}
+${GROUND_SAMPLE_GLSL}
+${TRAIL_GLSL}
+uniform vec3 uTrailEarth;
+varying float vTrail;
 uniform vec3 uDry;
 uniform vec3 uBare;
 uniform vec3 uSand;
@@ -139,6 +155,25 @@ void main() {
   // ragged edge where the grass (which reads the same distance) thins out.
   float sand = 1.0 - smoothstep(1.2, 2.6, vShore + (fine - 0.5) * 1.2);
   albedo = mix(albedo, uSand * mix(0.82, 1.0, smoothstep(0.2, 1.0, vShore)), sand * 0.85);
+  // Trails: worn earth with a ragged, grassy edge, darker and smoother down
+  // the trodden middle, with a dulled, trampled margin just outside.
+  // The fine mesh's vertices are the lattice's own samples, so its varying is
+  // exact; the coarse overview mesh reads the texture at full resolution.
+#ifdef TRAIL_TEXTURE
+  float edge = trailAt(vWorld.xz);
+#else
+  float edge = vTrail;
+#endif
+  if (edge < 2.0 && uTrailWear > 0.0) {
+    float ragged = (fine - 0.5) * 0.8 + (noise(vWorld.xz * 2.3) - 0.5) * 0.45;
+    float tread = (1.0 - smoothstep(-0.4, 0.35, edge + ragged * (0.6 + 0.5 * (1.0 - uTrailWear)))) * uTrailWear;
+    vec3 earth = mix(uTrailEarth, cover.soil, 0.22) * (0.88 + 0.22 * fine);
+    earth *= 1.0 - 0.12 * (1.0 - smoothstep(-0.9, -0.25, edge));
+    earth = mix(earth, earth * 1.22 + 0.03, step(0.8, noise(vWorld.xz * 7.0)) * 0.6);
+    albedo = mix(albedo, earth, tread);
+    float margin = (1.0 - smoothstep(0.0, 1.6, edge + ragged)) * (1.0 - tread) * 0.4 * uTrailWear;
+    albedo = mix(albedo, mix(albedo, uDry, 0.55), margin);
+  }
   albedo = mix(albedo, uBed, smoothstep(0.1, 0.5, vWater));
   albedo *= 0.94 + 0.1 * fine;
 
@@ -176,6 +211,8 @@ export interface GroundMesh {
   readonly wilds: THREE.Mesh;
   readonly material: THREE.ShaderMaterial;
   update(t: Terrain): void;
+  /** The trail field from `trailField`, sample for sample with the lattice. */
+  setTrails(field: Float32Array): void;
   select(region: number, outline: boolean): void;
 }
 
@@ -187,6 +224,7 @@ function geometryFor(t: Terrain, stride: number): THREE.BufferGeometry {
   g.setAttribute("normal", new THREE.BufferAttribute(new Float32Array(m * m * 3), 3));
   g.setAttribute("aWater", new THREE.BufferAttribute(new Float32Array(m * m), 1));
   g.setAttribute("aShore", new THREE.BufferAttribute(new Float32Array(m * m), 1));
+  g.setAttribute("aTrail", new THREE.BufferAttribute(new Float32Array(m * m).fill(TRAILS.reach), 1));
   const index = new Uint32Array((m - 1) * (m - 1) * 6);
   let k = 0;
   for (let j = 0; j < m - 1; j++) {
@@ -247,15 +285,19 @@ function wildsGeometry(t: Terrain): THREE.BufferGeometry {
   g.setAttribute("position", new THREE.BufferAttribute(ring.positions, 3));
   g.setAttribute("aWater", new THREE.BufferAttribute(new Float32Array(count).fill(-5), 1));
   g.setAttribute("aShore", new THREE.BufferAttribute(new Float32Array(count).fill(SHORE_CAP), 1));
+  g.setAttribute("aTrail", new THREE.BufferAttribute(new Float32Array(count).fill(TRAILS.reach), 1));
   g.setIndex(new THREE.BufferAttribute(ring.indices, 1));
   g.computeVertexNormals();
   return g;
 }
 
-export function createGround(t: Terrain, light: SceneLight, covers: RegionCovers): GroundMesh {
+export function createGround(t: Terrain, light: SceneLight, covers: RegionCovers, tex: GroundTexture): GroundMesh {
   const uniforms = {
     ...light,
     ...covers.uniforms,
+    ...tex.uniforms,
+    uTrailWear: trailWear,
+    uTrailEarth: { value: hexToVec3(0x9c8462) },
     uDry: { value: hexToVec3(0xbba878) },
     uBare: { value: hexToVec3(0x9a7d58) },
     uSand: { value: hexToVec3(0xcdbb8a) },
@@ -267,7 +309,7 @@ export function createGround(t: Terrain, light: SceneLight, covers: RegionCovers
   };
   const material = new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: FRAG, uniforms });
   const fine = new THREE.Mesh(geometryFor(t, 1), material);
-  const coarse = new THREE.Mesh(geometryFor(t, 4), material);
+  const coarse = new THREE.Mesh(geometryFor(t, 4), new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: FRAG, uniforms, defines: { TRAIL_TEXTURE: "" } }));
   const wilds = new THREE.Mesh(
     wildsGeometry(t),
     new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: FRAG, uniforms, defines: { WILDS: "" } }),
@@ -288,6 +330,11 @@ export function createGround(t: Terrain, light: SceneLight, covers: RegionCovers
     wilds,
     material,
     update,
+    setTrails(field) {
+      const a = fine.geometry.getAttribute("aTrail");
+      (a.array as Float32Array).set(field);
+      a.needsUpdate = true;
+    },
     select(region, outline) {
       uniforms.uSelected.value = region;
       uniforms.uOutline.value = outline ? 1 : 0;
