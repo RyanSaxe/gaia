@@ -1,8 +1,8 @@
 // Turns the world's and a region's blueprints into the numbers every material
-// reads. The slots are chosen independently; this is where they meet: the
-// hour tints the sky, the region's air pulls the horizon and fog toward its
-// own color, the season turns the region's ground, and the light colors the
-// clouds.
+// reads at one hour. The slots are chosen independently; this is where they
+// meet: the hour tints the sky and night deepens it, the region's air pulls
+// the horizon and fog toward its own color, the season turns the region's
+// ground, and the sun or moon colors the clouds.
 
 import type {
   AccentSpec,
@@ -10,16 +10,20 @@ import type {
   AtmosphereSpec,
   Blueprint,
   CloudSpec,
+  DaySpec,
   GroundSpec,
   Library,
   LightSpec,
+  MoonSpec,
   NativeFamilies,
   Rgb,
   SeasonSpec,
   SkySpec,
+  StarSpec,
   WindSpec,
 } from "@gaia/schema";
 import { hex, mixLab, seasonGround, shiftColor } from "@gaia/primitives";
+import { lightAt } from "./day.ts";
 import { buildSlots } from "./realize.ts";
 
 /** A blueprint with the kind it fills. */
@@ -28,7 +32,7 @@ export interface Filled {
   readonly kind: AnyKind;
 }
 
-/** What the whole world shares: one sky over every region. */
+/** What the whole world shares at one hour: one sky over every region. */
 export interface SkyLook {
   readonly light: LightSpec;
   readonly sky: {
@@ -37,6 +41,8 @@ export interface SkyLook {
     readonly clouds: CloudSpec;
     readonly cloudLit: Rgb;
     readonly cloudShade: Rgb;
+    readonly moon: MoonSpec;
+    readonly stars: StarSpec;
   };
   readonly season: SeasonSpec;
   readonly wind: WindSpec;
@@ -74,6 +80,9 @@ export const CLEAR_AIR: AtmosphereSpec = { tint: hex(0xc8dcec), tintAmount: 0, d
 
 const DEEP_ZENITH: Rgb = hex(0x2c3a78);
 const CLOUD_WHITE: Rgb = hex(0xfdfcf8);
+/** The night sky: a deep blue that lightens toward the horizon, never black. */
+const NIGHT_ZENITH: Rgb = hex(0x0f1b44);
+const NIGHT_HORIZON: Rgb = hex(0x2c4475);
 const NO_SHIFT = { hue: 0, pull: 0, maxTurn: 0, chroma: 1, lightness: 0 };
 
 function slotOutput<T>(built: ReturnType<typeof buildSlots>, name: string): T {
@@ -82,17 +91,25 @@ function slotOutput<T>(built: ReturnType<typeof buildSlots>, name: string): T {
   return out as T;
 }
 
-export function realizeSky(world: Filled, lib: Library, seed: number): SkyLook {
+export function realizeSky(world: Filled, lib: Library, seed: number, hour: number): SkyLook {
   const built = buildSlots(world.blueprint, world.kind, lib, { seed, facts: {} });
-  const light = slotOutput<LightSpec>(built, "light");
+  const day = slotOutput<DaySpec>(built, "light");
+  const light = lightAt(day, hour);
   const sky = slotOutput<SkySpec>(built, "sky");
-  const zenith = mixLab(mixLab(sky.zenith, DEEP_ZENITH, light.zenithDim), light.horizonGlow, light.glow * 0.12);
-  const horizon = mixLab(sky.horizon, light.horizonGlow, light.glow);
-  const cloudLit = mixLab(CLOUD_WHITE, light.sunColor, 0.12 + light.glow * 0.45);
-  const cloudShade = mixLab(mixLab(cloudLit, light.shadowColor, 0.6), zenith, 0.2);
+  const night = light.nightness;
+  const dayZenith = mixLab(mixLab(sky.zenith, DEEP_ZENITH, light.zenithDim), light.horizonGlow, light.glow * 0.12);
+  const dayHorizon = mixLab(sky.horizon, light.horizonGlow, light.glow);
+  // Night keeps a trace of the world's own sky, so a lavender world has a lavender night.
+  const zenith = mixLab(dayZenith, NIGHT_ZENITH, night * 0.94);
+  const horizon = mixLab(dayHorizon, mixLab(NIGHT_HORIZON, light.moonColor, 0.12), night * 0.92);
+  // By night, clouds are silvered by the moon instead of whitened by the sun.
+  const dayLit = mixLab(CLOUD_WHITE, light.sunColor, 0.12 + light.glow * 0.45);
+  const nightLit = mixLab(mixLab(horizon, zenith, 0.25), light.moonColor, 0.32);
+  const cloudLit = mixLab(dayLit, nightLit, night);
+  const cloudShade = mixLab(mixLab(cloudLit, light.shadowColor, 0.6), zenith, 0.2 + night * 0.3);
   return {
     light,
-    sky: { zenith, horizon, clouds: sky.clouds, cloudLit, cloudShade },
+    sky: { zenith, horizon, clouds: sky.clouds, cloudLit, cloudShade, moon: day.moon, stars: day.stars },
     season: slotOutput<SeasonSpec>(built, "season"),
     wind: slotOutput<WindSpec>(built, "wind"),
   };
@@ -116,13 +133,14 @@ export function realizeRegion(region: Filled, lib: Library, seed: number, season
   };
 }
 
-/** Composes the shared sky with one region's air and ground, as seen from inside that region. */
-export function realizeWorld(world: Filled, region: Filled, lib: Library, seed: number): WorldLook {
-  const sky = realizeSky(world, lib, seed);
+/** Composes the shared sky at `hour` with one region's air and ground, as seen from inside that region. */
+export function realizeWorld(world: Filled, region: Filled, lib: Library, seed: number, hour: number): WorldLook {
+  const sky = realizeSky(world, lib, seed, hour);
   const local = realizeRegion(region, lib, seed, sky.season);
-  // The air sits in front of the sunset.
-  const horizon = mixLab(sky.sky.horizon, local.air.tint, local.air.tintAmount * 0.5);
-  const fog = mixLab(horizon, local.air.tint, local.air.tintAmount * 0.5);
+  // The air sits in front of the sunset; at night its color fades into the dark.
+  const tint = mixLab(local.air.tint, sky.sky.horizon, sky.light.nightness * 0.75);
+  const horizon = mixLab(sky.sky.horizon, tint, local.air.tintAmount * 0.5);
+  const fog = mixLab(horizon, tint, local.air.tintAmount * 0.5);
   return {
     light: sky.light,
     sky: { ...sky.sky, horizon, mid: mixLab(sky.sky.zenith, horizon, 0.5) },

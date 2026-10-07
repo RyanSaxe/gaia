@@ -6,11 +6,11 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { type GroundSpec, Library, type SeasonSpec, blueprintOf, seedOf } from "@gaia/schema";
-import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, NO_SHIFT, RELIEF_PRIMITIVES, hex } from "@gaia/primitives";
-import { biome, flora } from "@gaia/kinds";
+import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, NO_SHIFT, RELIEF_PRIMITIVES, WORLD_PRIMITIVES, hex, mixLab } from "@gaia/primitives";
+import { biome, flora, world as worldKind } from "@gaia/kinds";
 import { defaultParams, validate } from "@gaia/world";
-import { FLORA_PRESETS, realize, realizeRegion } from "@gaia/realize";
-import { type PlantView, createPlant, createSceneLight, createSunShadow } from "@gaia/render";
+import { FLORA_PRESETS, WORLD_PRESETS, realize, realizeRegion, realizeSky } from "@gaia/realize";
+import { type PlantView, applyLight, createLantern, createPlant, createSceneLight, createSunShadow } from "@gaia/render";
 import {
   EYE_HEIGHT,
   RELIEF_BUDGET,
@@ -24,7 +24,7 @@ import {
   scatterPlants,
   sightlines,
 } from "@gaia/terrain";
-import { createSky } from "../flora/environment.ts";
+import { createSky } from "../world/environment.ts";
 import { renderInspector } from "../inspector.ts";
 import { type Lab, type Shot, refs, slug } from "../lab.ts";
 import { createGrass, createWater } from "./cover.ts";
@@ -64,8 +64,9 @@ const TEMPLATE = /* html */ `
 </aside>
 `;
 
-/** The terrain lab has no world, so its covers wear no season. */
+/** The terrain lab's covers wear no season; its light and sky are the first named world's, at the shell's hour. */
 const NO_SEASON: SeasonSpec = { swatches: {}, ground: NO_SHIFT, frost: 0, fall: hex(0xd9a04a) };
+const SKY_WORLD = WORLD_PRESETS[0];
 const FOG = { walk: 0.0042, overview: 0.0008 };
 const MOVE = new Set(["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "ShiftLeft", "ShiftRight"]);
 
@@ -94,9 +95,9 @@ export function createTerrainLab(root: HTMLElement): Lab {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
   const light = createSceneLight();
-  // A lower sun than the flora lab's, so gentle slopes read in light and shade.
-  light.uSunDirection.value.set(0.55, 0.5, 0.35).normalize();
   light.uFogDensity.value = FOG.walk;
+  const worldLib = new Library(WORLD_PRIMITIVES);
+  const lantern = createLantern(light);
 
   const covers = createRegionCovers();
   const coverOf = (i: number): GroundSpec => {
@@ -114,7 +115,19 @@ export function createTerrainLab(root: HTMLElement): Lab {
   const grass = createGrass(light, groundTex, covers);
   const water = createWater(terrain, light, groundTex);
   const mist = createMist(terrain, light);
-  scene.add(sky, mist.mesh, ground.fine, ground.coarse, grass.mesh, water.group);
+  scene.add(sky.mesh, mist.mesh, ground.fine, ground.coarse, grass.mesh, water.group);
+
+  /** The hour's light, sky, air and water reflection, from the sky world's day. */
+  let hour = Number.NaN;
+  function applyHour(h: number): void {
+    hour = h;
+    if (SKY_WORLD === undefined) return;
+    const look = realizeSky({ blueprint: SKY_WORLD.world, kind: worldKind }, worldLib, seedOf("terrain-lab/sky"), h);
+    applyLight(light, look.light);
+    light.uFogColor.value.set(...look.sky.horizon);
+    sky.apply({ light: look.light, sky: { ...look.sky, mid: mixLab(look.sky.zenith, look.sky.horizon, 0.5) }, fog: { color: look.sky.horizon, density: 0, mist: 0 } });
+    water.reflect(mixLab(look.sky.horizon, look.sky.zenith, 0.3));
+  }
   const shadow = createSunShadow(light, 2048);
 
   // ---------- plants ----------
@@ -244,7 +257,10 @@ export function createTerrainLab(root: HTMLElement): Lab {
   }
 
   const forward = new THREE.Vector3();
+  let walked = 0;
   function updateWalk(dt: number): void {
+    const fromX = walker.x;
+    const fromZ = walker.z;
     const run = keys.has("ShiftLeft") || keys.has("ShiftRight") ? 2.4 : 1;
     const speed = 4.2 * run * dt;
     let f = 0;
@@ -268,6 +284,7 @@ export function createTerrainLab(root: HTMLElement): Lab {
     camera.position.set(walker.x, walker.eye, walker.z);
     forward.set(-sy * Math.cos(walker.pitch), Math.sin(walker.pitch), -cy * Math.cos(walker.pitch));
     camera.lookAt(camera.position.clone().add(forward));
+    walked = Math.hypot(walker.x - fromX, walker.z - fromZ);
   }
 
   // ---------- panel ----------
@@ -407,19 +424,25 @@ export function createTerrainLab(root: HTMLElement): Lab {
   let frozen: number | null = null;
   const shadowCenter = new THREE.Vector3();
   const views = planted.map((p) => p.view);
-  function frame(dt: number, now: number): void {
+  const lanternEye = new THREE.Vector3();
+  function frame(dt: number, now: number, at: number): void {
+    if (at !== hour) applyHour(at);
     light.uTime.value = frozen ?? light.uTime.value + dt;
     if (mode === "walk") {
       updateWalk(dt);
+      lantern.follow(camera.position, forward, walker.eye - EYE_HEIGHT, walked, dt);
       grass.follow(camera.position);
       shadowCenter.set(walker.x - Math.sin(walker.yaw) * 18, walker.eye, walker.z - Math.cos(walker.yaw) * 18);
       shadow.frame(shadowCenter, 40);
     } else {
       orbit.update();
+      // The lantern waits where the person stood.
+      lanternEye.set(walker.x, walker.eye, walker.z);
+      lantern.follow(lanternEye, forward, walker.eye - EYE_HEIGHT, 0, dt);
       shadow.frame(shadowCenter.set(0, 0, 0), world.size * 0.62);
     }
     refreshSight(now);
-    shadow.render(renderer, scene, views, [sky, mist.mesh, ground.fine, ground.coarse, grass.mesh, water.group]);
+    shadow.render(renderer, scene, views, [sky.mesh, mist.mesh, ground.fine, ground.coarse, grass.mesh, water.group]);
     renderer.render(scene, camera);
   }
 
@@ -452,8 +475,8 @@ export function createTerrainLab(root: HTMLElement): Lab {
       if (!on) keys.clear();
       if (on) resize();
     },
-    frame: (dt, now) => {
-      if (active) frame(dt, now);
+    frame: (dt, now, h) => {
+      if (active) frame(dt, now, h);
     },
     shots: (): Shot[] => RELIEF_PRIMITIVES.map((p) => ({ name: `terrain-${slug(p.id)}`, stage: () => showcase(p.id) })),
     hook: {

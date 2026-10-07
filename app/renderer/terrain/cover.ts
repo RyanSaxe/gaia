@@ -94,10 +94,13 @@ void main() {
   albedo *= 0.82 + 0.25 * vT;
   if (vFlower > 0.5 && vT > 0.8) albedo = vBloom * (0.9 + 0.1 * vT);
   float shadow = mix(0.45, 1.0, sunShadow(vWorld, 0.0015));
-  float light = softCel(max(uSunDirection.y, 0.0) * shadow);
-  vec3 lit = albedo * (uSunColor * uSunIntensity * light + uAmbientColor * uAmbientIntensity);
-  vec3 shadowed = albedo * uShadowColor * (uAmbientIntensity + 0.75);
+  float light = softCel(max(uSunDirection.y, 0.0) * shadow) * sunUp();
+  vec3 toned = nightTone(albedo);
+  vec3 lit = toned * (uSunColor * uSunIntensity * light + uAmbientColor * uAmbientIntensity);
+  vec3 shadowed = toned * uShadowColor * (uAmbientIntensity + 0.75);
   vec3 color = mix(shadowed, lit, clamp(light + 0.35, 0.0, 1.0));
+  // Blades scatter light, so the moon and the lantern wrap well around them.
+  color += nightLight(albedo, vec3(0.0, 1.0, 0.0), vWorld, 0.6, mix(1.0, shadow, uMoonShadow));
   gl_FragColor = vec4(aerial(shoulder(color), vWorld), 1.0);
 }
 `;
@@ -191,10 +194,17 @@ void main() {
   vec3 toEye = normalize(cameraPosition - vWorld);
   float fresnel = pow(1.0 - max(dot(n, toEye), 0.0), 3.0);
   vec3 body = mix(uShallow, uDeep, smoothstep(0.05, 0.9, depth));
-  vec3 color = body * (uSunColor * uSunIntensity * 0.55 * max(uSunDirection.y, 0.0) + uAmbientColor * uAmbientIntensity * 0.9);
+  vec3 color = nightTone(body) * (uSunColor * uSunIntensity * 0.55 * max(uSunDirection.y, 0.0) + uAmbientColor * uAmbientIntensity * 0.9);
   color = mix(color, uSky, fresnel * 0.55);
   float glint = pow(max(dot(reflect(-uSunDirection, n), toEye), 0.0), 120.0);
-  color += uSunColor * glint * 0.35;
+  color += uSunColor * glint * 0.35 * min(uSunIntensity, 1.0);
+  // At night the moon lays a soft path across the water, the lantern warms
+  // what is near, and living water glows faintly where its ripples gather.
+  float moonGlint = pow(max(dot(reflect(-uMoonDirection, n), toEye), 0.0), 40.0);
+  color += uMoonColor * moonGlint * uMoonIntensity * 1.4;
+  color += lanternLight(body, n, vWorld, 0.5) * 0.8;
+  float bloom = smoothstep(0.78, 0.98, noise(p * 2.3 + vec2(t * 0.35, -t * 0.2))) * (0.6 + 0.4 * sin(uTime * 0.9 + p.x * 1.7));
+  color += vec3(0.32, 0.78, 0.72) * bloom * smoothstep(0.08, 0.4, depth) * uNightness * 0.16;
   // A thin, soft line of foam where the water meets the shore.
   float foam = (1.0 - smoothstep(0.0, 0.07, depth)) * (0.6 + 0.4 * noise(p * 3.0 + t));
   color = mix(color, vec3(0.93, 0.95, 0.92), foam * 0.45);
@@ -206,6 +216,8 @@ void main() {
 export interface Water {
   readonly group: THREE.Group;
   update(t: Terrain): void;
+  /** The sky color the water reflects at grazing angles. */
+  reflect(sky: readonly [number, number, number]): void;
 }
 
 function ribbon(t: Terrain): THREE.BufferGeometry[] {
@@ -266,5 +278,6 @@ export function createWater(t: Terrain, light: SceneLight, ground: GroundTexture
     for (const m of group.children) m.renderOrder = 2;
   };
   update(t);
-  return { group, update };
+  const sky = material.uniforms.uSky as { value: THREE.Vector3 };
+  return { group, update, reflect: (c) => sky.value.set(c[0], c[1], c[2]) };
 }

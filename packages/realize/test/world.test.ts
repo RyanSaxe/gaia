@@ -36,8 +36,8 @@ const finite = (value: unknown): boolean => {
 };
 
 describe("world and biome kinds", () => {
-  const look = (w: Parameters<typeof identify>[1], b: Parameters<typeof identify>[1]) =>
-    realizeWorld({ blueprint: identify("world", w), kind: world }, { blueprint: identify("biome", b), kind: biome }, lib, SEED);
+  const look = (w: Parameters<typeof identify>[1], b: Parameters<typeof identify>[1], hour = 12.5) =>
+    realizeWorld({ blueprint: identify("world", w), kind: world }, { blueprint: identify("biome", b), kind: biome }, lib, SEED, hour);
 
   it("realizes the same look for the same blueprints and seed", () => {
     for (const p of WORLD_PRESETS) {
@@ -55,11 +55,12 @@ describe("world and biome kinds", () => {
     const random = seeded(7);
     const ids = new Set<string>();
     for (let i = 0; i < 1000; i++) {
+      const hour = random() * 24;
       const w = identify("world", randomSlots(world, lib, random));
       const b = identify("biome", randomSlots(biome, lib, random));
       expect(validate(w, world, lib)).toEqual([]);
       expect(validate(b, biome, lib)).toEqual([]);
-      const l = look(w.slots, b.slots);
+      const l = look(w.slots, b.slots, hour);
       expect(finite(l)).toBe(true);
       for (const c of [l.sky.zenith, l.sky.horizon, l.fog.color, l.ground.low, l.ground.high, l.light.sunColor]) {
         for (const x of c) expect(x >= 0 && x <= 1).toBe(true);
@@ -81,8 +82,8 @@ describe("world and biome kinds", () => {
     const size = (role: string): number =>
       lib.forRole(role as never).reduce((sum, p) => sum + Object.values(p.params).reduce((n, f) => n * fieldSize(f), 1), 0);
     expect(blueprintCount(world, lib)).toBe(size("Light") * size("Sky") * size("Season") * size("Wind"));
-    // 162 light x 72 sky x 18 season x 4 wind.
-    expect(blueprintCount(world, lib)).toBe(839_808);
+    // 243 light x 72 sky x 18 season x 4 wind.
+    expect(blueprintCount(world, lib)).toBe(1_259_712);
     expect(blueprintCount(biome, lib)).toBe(size("Relief") * size("Ground") * (1 + size("Atmosphere")) * (1 + size("Accents")) * size("Natives"));
   });
 
@@ -92,11 +93,11 @@ describe("world and biome kinds", () => {
     expect(Object.keys(s.request.questions)).toEqual([]);
     const structure = readStructure(world, lib, s, {});
     const first = planDetails(world, lib, structure, target, { stage: 0 });
-    expect(Object.keys(first.request.questions).sort()).toEqual(["light.brush", "light.hour", "light.path", "light.warmth", "season.season", "season.strength"]);
+    expect(Object.keys(first.request.questions).sort()).toEqual(["light.brush", "light.moon", "light.path", "light.stars", "light.warmth", "season.season", "season.strength"]);
     const firstAnswers = fakeJev(first.request);
-    const second = planDetails(world, lib, structure, target, { stage: 1, earlier: { light: "dusk", season: "deep autumn" } });
+    const second = planDetails(world, lib, structure, target, { stage: 1, earlier: { light: "warm", season: "deep autumn" } });
     expect(Object.keys(second.request.questions).sort()).toEqual(["sky.character", "sky.clouds", "sky.cover", "wind.strength"]);
-    expect((second.request.state as { earlier?: unknown }).earlier).toEqual({ light: "dusk", season: "deep autumn" });
+    expect((second.request.state as { earlier?: unknown }).earlier).toEqual({ light: "warm", season: "deep autumn" });
     const bp = assemble(world, lib, structure, [first, second], { ...firstAnswers, ...fakeJev(second.request) });
     expect(validate(bp, world, lib)).toEqual([]);
   });

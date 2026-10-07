@@ -11,7 +11,7 @@ import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, RELIEF_PRIMITIVES, WORLD_PRIMITIVES
 import { biome, flora, world as worldKind } from "@gaia/kinds";
 import { blueprintCount, randomSlots, validate } from "@gaia/world";
 import { FLORA_PRESETS, WORLD_PRESETS, type WorldLook, realize, realizeWorld } from "@gaia/realize";
-import { type PlantView, createPlant, createSceneLight, createSunShadow } from "@gaia/render";
+import { type PlantView, applyLight, createLantern, createPlant, createSceneLight, createSunShadow } from "@gaia/render";
 import { renderInspector } from "../inspector.ts";
 import { type Lab, type Shot, refs, slug } from "../lab.ts";
 import { createDrift, createGround, createGroundCover, createSky } from "./environment.ts";
@@ -99,6 +99,7 @@ export function createWorldLab(root: HTMLElement): Lab {
   const specks = createDrift(light, 4242);
   scene.add(sky.mesh, ground.mesh, cover.mesh, drift.points, specks.points);
   const shadow = createSunShadow(light, 2048);
+  const lantern = createLantern(light);
 
   const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 900);
   camera.position.copy(OVERVIEW.position);
@@ -114,33 +115,33 @@ export function createWorldLab(root: HTMLElement): Lab {
   const first = WORLD_PRESETS[0];
   if (first === undefined) throw new Error("There are no named worlds.");
   let current: WorldEntry = { name: first.name, world: first.world, biome: first.biome };
-  const lookOf = (e: WorldEntry): WorldLook =>
-    realizeWorld({ blueprint: e.world, kind: worldKind }, { blueprint: e.biome, kind: biome }, lib, WORLD_SEED);
-  let look: WorldLook = lookOf(current);
-  /** 0 with the sun on the horizon, 1 with it high. */
+  /** The hour shown, from the shell's clock; NaN until the first frame. */
+  let hour = Number.NaN;
+  const lookOf = (e: WorldEntry, h: number): WorldLook =>
+    realizeWorld({ blueprint: e.world, kind: worldKind }, { blueprint: e.biome, kind: biome }, lib, WORLD_SEED, Number.isNaN(h) ? 12.5 : h);
+  let look: WorldLook = lookOf(current, hour);
+  /** 0 with the sun on the horizon or below, 1 with it high. */
   let daylight = 1;
 
-  function applyLook(next: WorldLook): void {
+  /** The hour's light, sky and air: no plant is rebuilt. */
+  function applyHour(next: WorldLook): void {
     look = next;
     const l = next.light;
-    light.uSunDirection.value.set(...l.sunDirection).normalize();
-    light.uSunColor.value.set(...l.sunColor);
-    light.uSunIntensity.value = l.sunIntensity;
-    light.uAmbientColor.value.set(...l.ambientColor);
-    light.uAmbientIntensity.value = l.ambientIntensity;
-    light.uShadowColor.value.set(...l.shadowColor);
-    light.uCelBands.value = l.celBands;
-    light.uCelSoftness.value = l.celSoftness;
+    applyLight(light, l);
     light.uFogColor.value.set(...next.fog.color);
     light.uFogDensity.value = next.fog.density;
     light.uMist.value = next.fog.mist;
-    daylight = Math.min(1, Math.max(0, (l.sunDirection[1] - 0.1) / 0.55));
+    daylight = Math.min(1, Math.max(0, (l.sunDirection[1] - 0.1) / 0.55)) * Math.min(1, l.sunIntensity);
     shadow.frame(new THREE.Vector3(0, 0, 0), 20);
     sky.apply(next);
-    ground.apply(next);
-    cover.apply(next);
     drift.apply(next.drift, daylight);
     specks.apply(next.specks > 0 ? { form: "pollen", color: [0.98, 0.88, 0.5], count: Math.round(520 * next.specks), size: 0.028, glow: 0.3 } : null, daylight);
+  }
+
+  function applyLook(next: WorldLook): void {
+    applyHour(next);
+    ground.apply(next);
+    cover.apply(next);
     entries.forEach(build);
   }
 
@@ -273,7 +274,7 @@ export function createWorldLab(root: HTMLElement): Lab {
     $("problems").textContent = problems.join(" ");
     if (problems.length > 0) return false;
     current = entry;
-    applyLook(lookOf(entry));
+    applyLook(lookOf(entry, hour));
     refreshWorldPanel();
     return true;
   }
@@ -344,7 +345,11 @@ export function createWorldLab(root: HTMLElement): Lab {
   new ResizeObserver(resize).observe(stage);
 
   let frozen: number | null = null;
-  function frame(dt: number): void {
+  const eye = new THREE.Vector3();
+  const lastEye = new THREE.Vector3();
+  const facing = new THREE.Vector3();
+  function frame(dt: number, at: number): void {
+    if (at !== hour) applyHour(lookOf(current, (hour = at)));
     const time = frozen ?? light.uTime.value + dt;
     light.uTime.value = time;
     // Gusts: slow surges on top of the world's steady wind.
@@ -368,6 +373,11 @@ export function createWorldLab(root: HTMLElement): Lab {
       camera.position.lerpVectors(fly.camFrom, fly.camTo, k);
     }
     controls.update();
+    // The person stands where the camera is, lantern in hand, on the flat ground.
+    eye.copy(camera.position);
+    camera.getWorldDirection(facing);
+    lantern.follow(eye, facing, 0, Math.hypot(eye.x - lastEye.x, eye.z - lastEye.z), dt);
+    lastEye.copy(eye);
     const views = entries.flatMap((e) => (e.view === null ? [] : [e.view]));
     shadow.render(renderer, scene, views, [sky.mesh, ground.mesh, cover.mesh, drift.points, specks.points]);
     renderer.render(scene, camera);
@@ -400,8 +410,8 @@ export function createWorldLab(root: HTMLElement): Lab {
       controls.enabled = on;
       if (on) resize();
     },
-    frame: (dt) => {
-      if (active) frame(dt);
+    frame: (dt, _now, h) => {
+      if (active) frame(dt, h);
     },
     shots: (): Shot[] => WORLD_PRESETS.map((p, i) => ({ name: `world-${slug(p.name)}`, stage: () => showcase(i) })),
     hook: {
@@ -423,6 +433,7 @@ export function createWorldLab(root: HTMLElement): Lab {
       space: () => worldSpace,
       look: () => look,
       name: () => current.name,
+      hour: () => hour,
     },
   };
 }

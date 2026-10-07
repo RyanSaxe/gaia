@@ -80,7 +80,7 @@ const worldOf = (
   wind: string,
 ): Omit<WorldPreset, "name"> => ({
   world: identify("world", {
-    light: { use: "daylight@1", params: light },
+    light: { use: "daylight@2", params: light },
     sky: { use: "sky@1", params: sky },
     season: { use: "season@1", params: season },
     wind: { use: "wind@1", params: { strength: wind } },
@@ -98,7 +98,7 @@ export const WORLD_PRESETS: readonly WorldPreset[] = [
   {
     name: "Meadow morning",
     ...worldOf(
-      { hour: "morning", path: "middling", warmth: "neutral", brush: "painterly" },
+      { path: "middling", warmth: "neutral", brush: "painterly", moon: "silver moon", stars: "many" },
       { character: "powder blue", clouds: "fair-weather puffs", cover: "scattered" },
       { season: "spring", strength: "clearly" },
       { air: "clear", distance: "for miles" },
@@ -110,7 +110,7 @@ export const WORLD_PRESETS: readonly WorldPreset[] = [
   {
     name: "Amber steppe",
     ...worldOf(
-      { hour: "golden hour", path: "middling", warmth: "warm", brush: "soft watercolor" },
+      { path: "middling", warmth: "warm", brush: "soft watercolor", moon: "amber harvest moon", stars: "a scattered few" },
       { character: "apricot", clouds: "cirrus streaks", cover: "scattered" },
       { season: "early autumn", strength: "clearly" },
       { air: "hazy gold", distance: "softened distance" },
@@ -122,7 +122,7 @@ export const WORLD_PRESETS: readonly WorldPreset[] = [
   {
     name: "Frost hollow",
     ...worldOf(
-      { hour: "morning", path: "low, like winter", warmth: "cool", brush: "soft watercolor" },
+      { path: "low, like winter", warmth: "cool", brush: "soft watercolor", moon: "thin pale crescent", stars: "a river of stars" },
       { character: "watercolor wash", clouds: "low drifting banks", cover: "many, but with blue between" },
       { season: "first frost", strength: "in full" },
       { air: "morning mist", distance: "softened distance" },
@@ -134,7 +134,7 @@ export const WORLD_PRESETS: readonly WorldPreset[] = [
   {
     name: "Firefly dusk",
     ...worldOf(
-      { hour: "dusk", path: "middling", warmth: "warm", brush: "painterly" },
+      { path: "middling", warmth: "warm", brush: "painterly", moon: "silver moon", stars: "a river of stars" },
       { character: "lavender", clouds: "low drifting banks", cover: "scattered" },
       { season: "high summer", strength: "clearly" },
       { air: "blue haze", distance: "softened distance" },
@@ -146,7 +146,7 @@ export const WORLD_PRESETS: readonly WorldPreset[] = [
   {
     name: "Monsoon terraces",
     ...worldOf(
-      { hour: "afternoon", path: "high, like midsummer", warmth: "neutral", brush: "bold gouache" },
+      { path: "high, like midsummer", warmth: "neutral", brush: "bold gouache", moon: "amber harvest moon", stars: "many" },
       { character: "teal lagoon", clouds: "towering cumulus", cover: "many, but with blue between" },
       { season: "monsoon green", strength: "in full" },
       { air: "blue haze", distance: "for miles" },
@@ -158,7 +158,7 @@ export const WORLD_PRESETS: readonly WorldPreset[] = [
   {
     name: "Heather moor",
     ...worldOf(
-      { hour: "dawn", path: "low, like winter", warmth: "neutral", brush: "painterly" },
+      { path: "low, like winter", warmth: "neutral", brush: "painterly", moon: "thin pale crescent", stars: "many" },
       { character: "cobalt", clouds: "low drifting banks", cover: "many, but with blue between" },
       { season: "deep autumn", strength: "in full" },
       { air: "clear", distance: "softened distance" },

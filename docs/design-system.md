@@ -87,13 +87,36 @@ Fair-weather puffs, towering cumulus, cirrus streaks and low drifting banks.
 Cirrus suits only some worlds, and Jev chooses where. Mackerel dapples were
 removed.
 
+## Day and night
+
+A world's hour follows the person's own clock. Jev chooses how each world's
+light looks (the sun's path, its warmth, the brush, the moon and the stars)
+but never the hour. `daylight@2` lights eight keys: dawn 6:00, morning 8:30,
+midday 12:30, afternoon 15:30, golden hour 18:00, dusk 19:30, moonlit 22:00
+and deep night 2:00. Between keys, colors mix in OKLab and the sun and moon
+turn at a constant rate; a body below the horizon lends no direct light.
+
+Night follows four rules, all in the shared light chunk so plants, ground,
+grass and water agree:
+
+- **Moonlight is a floor.** Night ambient and shadow colors are cool blue,
+  never black, and hues fade toward a cool grey under the moon, so the land
+  always reads as blue shapes. The moon is a dim soft-cel key, and it casts
+  the shadows once the sun has set.
+- **The lantern.** The person carries a warm lantern at hand height, a little
+  ahead and to the right. Its pool is about 12 m across and fades smoothly to
+  nothing, with no edge; colors come back inside it. It fades in through dusk,
+  sways a few centimeters with each stride and settles when the person stops.
+- **The night sky** deepens to blue, keeping a trace of the world's own sky
+  color. The chosen moon, the chosen stars, and clouds silvered by the moon.
+- **The world's own glow** (the vitality `glow` channel, fireflies, living
+  water) reads by contrast in the dark, a little stronger than by day and
+  still below what draws the eye on its own.
+
 ## Planned for slice 2
 
 Not built yet:
 
-- **Night hours.** Moonlit and deep night, lit by a lantern the person
-  carries, moonlight as a floor so the land always reads, and the world's own
-  glow from vitality and accents.
 - **A horizon that seems infinite.** Fog colored by the sky along each view
   ray, and wild land continuing past the rim at low detail.
 - **Grass that never grows out of the ground** at the edge of its radius.

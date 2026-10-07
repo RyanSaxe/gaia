@@ -3,6 +3,7 @@
 
 import "./lab.css";
 import * as THREE from "three";
+import { createClock } from "./clock.ts";
 import { watchEngine } from "./engine-status.ts";
 import { createFloraLab } from "./flora/lab.ts";
 import type { Lab } from "./lab.ts";
@@ -58,11 +59,15 @@ watchEngine((text, state) => {
   if (statusBar !== null) statusBar.dataset.state = state;
 });
 
+const clockRoot = document.getElementById("clock");
+if (clockRoot === null) throw new Error("Missing the time control's container.");
+const clock = createClock(clockRoot);
+
 let last = performance.now();
 function loop(now: number): void {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
-  labOf(current).frame(dt, now);
+  labOf(current).frame(dt, now, clock.hour());
   requestAnimationFrame(loop);
 }
 
@@ -92,6 +97,11 @@ window.__lab = {
     await frames(3);
   },
   tab: () => current,
+  /** Pins the hour every world shows, or `null` to follow the clock. */
+  hour: async (h: number | null) => {
+    clock.pin(h);
+    await frames(3);
+  },
   status: () => statusLine?.textContent ?? "",
   frames,
   shots: () => allShots().map((s) => s.shot.name),

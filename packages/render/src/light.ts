@@ -2,6 +2,7 @@
 // frame, every shader sees it. Values follow v2's ghibli-default style pack.
 
 import * as THREE from "three";
+import type { LightSpec } from "@gaia/schema";
 
 export interface SceneLight {
   readonly uSunDirection: { value: THREE.Vector3 };
@@ -22,6 +23,87 @@ export interface SceneLight {
   readonly uShadowMatrix: { value: THREE.Matrix4 };
   readonly uShadowMap: { value: THREE.Texture | null };
   readonly uShadowTexel: { value: number };
+  readonly uMoonDirection: { value: THREE.Vector3 };
+  readonly uMoonColor: { value: THREE.Vector3 };
+  readonly uMoonIntensity: { value: number };
+  /** 0 by day, 1 in deep night. */
+  readonly uNightness: { value: number };
+  /** The lantern the person carries: where it hangs, its color, and its strength (0 by day). */
+  readonly uLanternPosition: { value: THREE.Vector3 };
+  readonly uLanternColor: { value: THREE.Vector3 };
+  readonly uLanternIntensity: { value: number };
+  /** How strongly the shadow map darkens moonlight: 0 while the map follows the sun. */
+  readonly uMoonShadow: { value: number };
+}
+
+/** The lantern's warm pool: about 12 m across, fading smoothly to nothing by `LANTERN.reach`. */
+export const LANTERN = {
+  color: 0xff9448,
+  /** Strength at full night. */
+  intensity: 1.8,
+  /** Distance in meters where its light reaches zero. */
+  reach: 7.5,
+  /** Carried at hand height (eye height less this), a little ahead and to the right, in meters. */
+  drop: 0.75,
+  ahead: 0.6,
+  side: 0.28,
+  /** Nightness over which the lantern fades in through dusk. */
+  fadeIn: [0.25, 0.75],
+  /** Sway while walking: meters side to side and up and down, and strides per meter walked. */
+  sway: 0.07,
+  bob: 0.025,
+  stride: 0.75,
+} as const;
+
+const EYE = 1.6;
+const smooth = (lo: number, hi: number, x: number): number => {
+  const t = Math.min(1, Math.max(0, (x - lo) / (hi - lo)));
+  return t * t * (3 - 2 * t);
+};
+
+/** Writes one hour's light into the shared uniforms; the lantern's strength follows the night. */
+export function applyLight(light: SceneLight, l: LightSpec): void {
+  light.uSunDirection.value.set(...l.sunDirection).normalize();
+  light.uSunColor.value.set(...l.sunColor);
+  light.uSunIntensity.value = l.sunIntensity;
+  light.uAmbientColor.value.set(...l.ambientColor);
+  light.uAmbientIntensity.value = l.ambientIntensity;
+  light.uShadowColor.value.set(...l.shadowColor);
+  light.uCelBands.value = l.celBands;
+  light.uCelSoftness.value = l.celSoftness;
+  light.uMoonDirection.value.set(...l.moonDirection).normalize();
+  light.uMoonColor.value.set(...l.moonColor);
+  light.uMoonIntensity.value = l.moonIntensity;
+  light.uNightness.value = l.nightness;
+  light.uLanternIntensity.value = LANTERN.intensity * smooth(LANTERN.fadeIn[0], LANTERN.fadeIn[1], l.nightness);
+}
+
+export interface Lantern {
+  /**
+   * Hangs the lantern from the person at `eye` facing `forward`, over ground
+   * at `ground`. `walked` is the distance moved since the last frame; the
+   * lantern sways with each stride and settles when the person stops.
+   */
+  follow(eye: THREE.Vector3, forward: THREE.Vector3, ground: number, walked: number, dt: number): void;
+}
+
+export function createLantern(light: SceneLight): Lantern {
+  let phase = 0;
+  let swing = 0;
+  const flat = new THREE.Vector3();
+  return {
+    follow(eye, forward, ground, walked, dt) {
+      phase += (walked / LANTERN.stride) * Math.PI;
+      const moving = dt > 0 ? Math.min(1, walked / dt / 4) : 0;
+      swing += (moving - swing) * (1 - Math.exp(-dt * 3));
+      flat.set(forward.x, 0, forward.z);
+      if (flat.lengthSq() < 1e-6) flat.set(0, 0, -1);
+      flat.normalize();
+      const side = LANTERN.side + Math.sin(phase) * LANTERN.sway * swing;
+      const y = ground + EYE - LANTERN.drop + Math.cos(phase * 2) * LANTERN.bob * swing;
+      light.uLanternPosition.value.set(eye.x + flat.x * LANTERN.ahead - flat.z * side, y, eye.z + flat.z * LANTERN.ahead + flat.x * side);
+    },
+  };
 }
 
 export const hexToVec3 = (hex: number): THREE.Vector3 =>
@@ -45,6 +127,14 @@ export function createSceneLight(): SceneLight {
     uShadowMatrix: { value: new THREE.Matrix4() },
     uShadowMap: { value: null },
     uShadowTexel: { value: 1 / 2048 },
+    uMoonDirection: { value: new THREE.Vector3(0, 1, 0) },
+    uMoonColor: { value: new THREE.Vector3(0.66, 0.74, 0.9) },
+    uMoonIntensity: { value: 0 },
+    uNightness: { value: 0 },
+    uLanternPosition: { value: new THREE.Vector3(0, -1000, 0) },
+    uLanternColor: { value: hexToVec3(LANTERN.color) },
+    uLanternIntensity: { value: 0 },
+    uMoonShadow: { value: 0 },
   };
 }
 
@@ -64,6 +154,14 @@ uniform float uMist;
 uniform mat4 uShadowMatrix;
 uniform sampler2D uShadowMap;
 uniform float uShadowTexel;
+uniform vec3 uMoonDirection;
+uniform vec3 uMoonColor;
+uniform float uMoonIntensity;
+uniform float uNightness;
+uniform vec3 uLanternPosition;
+uniform vec3 uLanternColor;
+uniform float uLanternIntensity;
+uniform float uMoonShadow;
 
 float softCel(float x) {
   float scaled = clamp(x, 0.0, 1.0) * uCelBands;
@@ -94,11 +192,62 @@ vec3 shoulder(vec3 c) {
   return c / (1.0 + max(c - 0.75, 0.0) * 0.9);
 }
 
+// ---------- night ----------
+// By day every term below is zero. At night the hour's ambient and shadow
+// colors are the floor (cool blue, never black); these add the moon as a dim
+// soft-cel key and the lantern's warm pool. \`wrap\` softens the terminator:
+// 0 for solid surfaces, up to 1 for leaves and blades that scatter light.
+
+// The eye loses color at night: hues fade toward a cool grey under the moon.
+vec3 nightTone(vec3 albedo) {
+  float luma = dot(albedo, vec3(0.299, 0.587, 0.114));
+  return mix(albedo, vec3(luma) * vec3(0.92, 0.98, 1.08), uNightness * 0.7);
+}
+
+// How much the sun's own terms count: 1 by day, 0 once it has set, so the
+// day's light-and-shadow split never runs off a sun below the horizon.
+float sunUp() {
+  return smoothstep(0.0, 0.3, uSunIntensity);
+}
+
+vec3 moonLight(vec3 albedo, vec3 n, float wrap, float shadow) {
+  float d = dot(n, uMoonDirection);
+  float lambert = mix(max(d, 0.0), d * 0.5 + 0.5, wrap);
+  return nightTone(albedo) * uMoonColor * uMoonIntensity * softCel(lambert * shadow);
+}
+
+// The lantern's pool: brightest under it, fading smoothly to nothing at
+// LANTERN.reach, with no hard edge anywhere. Colors come back inside it.
+float lanternReach(vec3 worldPosition) {
+  float d = length(uLanternPosition - worldPosition);
+  float k = clamp(1.0 - (d * d) / (${LANTERN.reach.toFixed(2)} * ${LANTERN.reach.toFixed(2)}), 0.0, 1.0);
+  return k * k / (1.0 + d * 0.12);
+}
+
+vec3 lanternLight(vec3 albedo, vec3 n, vec3 worldPosition, float wrap) {
+  if (uLanternIntensity <= 0.0) return vec3(0.0);
+  vec3 toL = uLanternPosition - worldPosition;
+  float d = max(length(toL), 1e-3);
+  float facing = dot(n, toL / d);
+  float lambert = mix(max(facing, 0.0), facing * 0.5 + 0.5, wrap);
+  return albedo * uLanternColor * uLanternIntensity * lanternReach(worldPosition) * lambert;
+}
+
+vec3 nightLight(vec3 albedo, vec3 n, vec3 worldPosition, float wrap, float shadow) {
+  return moonLight(albedo, n, wrap, shadow) + lanternLight(albedo, n, worldPosition, wrap);
+}
+
 vec3 aerial(vec3 color, vec3 worldPosition) {
   float dist = length(worldPosition - cameraPosition);
   float lift = 1.0 - exp(-dist * uFogDensity);
   // Mist lies low: thickest at the ground, gone a few units up, and only with distance.
   float mist = uMist * exp(-max(worldPosition.y, 0.0) * 0.45) * (1.0 - exp(-dist * 0.035));
-  return mix(color, uFogColor, clamp(lift * 0.65 + mist * 0.7, 0.0, 1.0));
+  color = mix(color, uFogColor, clamp(lift * 0.65 + mist * 0.7, 0.0, 1.0));
+  // The air right around the lantern holds a faint warm glow, so the person
+  // feels it in hand even when it hangs below the view.
+  vec3 ray = worldPosition - cameraPosition;
+  float t = clamp(dot(uLanternPosition - cameraPosition, ray) / max(dot(ray, ray), 1e-4), 0.0, 1.0);
+  float near = length(cameraPosition + ray * t - uLanternPosition);
+  return color + uLanternColor * uLanternIntensity * exp(-near * near * 2.5) * 0.035;
 }
 `;

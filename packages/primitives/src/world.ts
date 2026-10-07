@@ -2,13 +2,15 @@
 // world shares. Every option is authored as words with colors behind them, and
 // each axis is chosen to stay beautiful beside every option of every other axis.
 
-import type { ColorShift, CloudSpec, GroundSpec, LightSpec, Rgb, SeasonSpec } from "@gaia/schema";
+import type { ColorShift, CloudSpec, DayKey, DaySpec, GroundSpec, Rgb, SeasonSpec, Vec3 } from "@gaia/schema";
 import { primitive, t } from "@gaia/schema";
 import { hex, mixLab, shiftColor } from "./color.ts";
 
 // ---------- light ----------
 
 interface Hour {
+  /** The local hour this key stands for. */
+  readonly at: number;
   /** Sun elevation and azimuth in degrees; azimuth 0 faces +z. */
   readonly elevation: number;
   readonly azimuth: number;
@@ -20,15 +22,24 @@ interface Hour {
   readonly glowColor: number;
   readonly glow: number;
   readonly zenithDim: number;
+  /** Moon elevation and azimuth in degrees, and how much of the moon's light reaches the land, 0 to 1. */
+  readonly moonElevation: number;
+  readonly moonAzimuth: number;
+  readonly moon: number;
+  readonly nightness: number;
 }
 
+// The night keys keep a cool blue ambient and shadow well above black: the
+// land always reads as shapes under the moon, whatever moon the world has.
 const HOURS = {
-  dawn: { elevation: 8, azimuth: 235, sun: 0xffc4a2, intensity: 1.0, ambient: 0xb3b5dc, ambientIntensity: 0.64, shadow: 0x7c78aa, glowColor: 0xf7c7b2, glow: 0.7, zenithDim: 0.22 },
-  morning: { elevation: 26, azimuth: 300, sun: 0xffe9c0, intensity: 1.16, ambient: 0xb6cde6, ambientIntensity: 0.56, shadow: 0x7489ab, glowColor: 0xf3e6cf, glow: 0.25, zenithDim: 0 },
-  midday: { elevation: 58, azimuth: 35, sun: 0xfff2d4, intensity: 1.2, ambient: 0xb2cbe2, ambientIntensity: 0.52, shadow: 0x7386a5, glowColor: 0xffffff, glow: 0, zenithDim: 0 },
-  afternoon: { elevation: 38, azimuth: 70, sun: 0xffe08c, intensity: 1.24, ambient: 0xb2c6dc, ambientIntensity: 0.52, shadow: 0x7183a6, glowColor: 0xf6e3c0, glow: 0.15, zenithDim: 0 },
-  "golden hour": { elevation: 13, azimuth: 118, sun: 0xffc878, intensity: 1.34, ambient: 0xabaacb, ambientIntensity: 0.6, shadow: 0x6c6b9e, glowColor: 0xffd49a, glow: 0.6, zenithDim: 0.1 },
-  dusk: { elevation: 7, azimuth: 205, sun: 0xffa27e, intensity: 0.98, ambient: 0x9c9aca, ambientIntensity: 0.72, shadow: 0x62639a, glowColor: 0xf4ab8e, glow: 0.8, zenithDim: 0.32 },
+  "deep night": { at: 2, elevation: -32, azimuth: 222, sun: 0x7a6a9a, intensity: 0, ambient: 0x4c5e98, ambientIntensity: 0.38, shadow: 0x2b386c, glowColor: 0x34487c, glow: 0.1, zenithDim: 0.6, moonElevation: 40, moonAzimuth: 235, moon: 1, nightness: 1 },
+  dawn: { at: 6, elevation: 8, azimuth: 235, sun: 0xffc4a2, intensity: 1.0, ambient: 0xb3b5dc, ambientIntensity: 0.64, shadow: 0x7c78aa, glowColor: 0xf7c7b2, glow: 0.7, zenithDim: 0.22, moonElevation: 8, moonAzimuth: 265, moon: 0.06, nightness: 0.1 },
+  morning: { at: 8.5, elevation: 26, azimuth: 300, sun: 0xffe9c0, intensity: 1.16, ambient: 0xb6cde6, ambientIntensity: 0.56, shadow: 0x7489ab, glowColor: 0xf3e6cf, glow: 0.25, zenithDim: 0, moonElevation: -14, moonAzimuth: 280, moon: 0, nightness: 0 },
+  midday: { at: 12.5, elevation: 58, azimuth: 35, sun: 0xfff2d4, intensity: 1.2, ambient: 0xb2cbe2, ambientIntensity: 0.52, shadow: 0x7386a5, glowColor: 0xffffff, glow: 0, zenithDim: 0, moonElevation: -50, moonAzimuth: 320, moon: 0, nightness: 0 },
+  afternoon: { at: 15.5, elevation: 38, azimuth: 70, sun: 0xffe08c, intensity: 1.24, ambient: 0xb2c6dc, ambientIntensity: 0.52, shadow: 0x7183a6, glowColor: 0xf6e3c0, glow: 0.15, zenithDim: 0, moonElevation: -40, moonAzimuth: 20, moon: 0, nightness: 0 },
+  "golden hour": { at: 18, elevation: 13, azimuth: 118, sun: 0xffc878, intensity: 1.34, ambient: 0xabaacb, ambientIntensity: 0.6, shadow: 0x6c6b9e, glowColor: 0xffd49a, glow: 0.6, zenithDim: 0.1, moonElevation: -12, moonAzimuth: 95, moon: 0, nightness: 0 },
+  dusk: { at: 19.5, elevation: 7, azimuth: 205, sun: 0xffa27e, intensity: 0.98, ambient: 0x9c9aca, ambientIntensity: 0.72, shadow: 0x62639a, glowColor: 0xf4ab8e, glow: 0.8, zenithDim: 0.32, moonElevation: 5, moonAzimuth: 135, moon: 0.05, nightness: 0.3 },
+  moonlit: { at: 22, elevation: -18, azimuth: 215, sun: 0x8a6f9a, intensity: 0, ambient: 0x5669a6, ambientIntensity: 0.44, shadow: 0x313e72, glowColor: 0x41568e, glow: 0.18, zenithDim: 0.5, moonElevation: 14, moonAzimuth: 165, moon: 1, nightness: 0.92 },
 } as const satisfies Record<string, Hour>;
 
 const WARMTH = {
@@ -43,19 +54,24 @@ const BRUSH = {
   "bold gouache": { bands: 3, softness: 0.1 },
 } as const;
 
+/** The disc a world's moon shows, and the light it lends the land. */
+const MOONS = {
+  "silver moon": { disc: 0xeef1f8, light: 0xa9bce6, brightness: 0.4, size: 0.026, phase: 1 },
+  "amber harvest moon": { disc: 0xf7cd8e, light: 0xc4b9a8, brightness: 0.42, size: 0.036, phase: 1 },
+  "thin pale crescent": { disc: 0xf1f1ea, light: 0x97a8d6, brightness: 0.2, size: 0.024, phase: 0.2 },
+} as const;
+
+const toward = (elevationDeg: number, azimuthDeg: number): Vec3 => {
+  const e = (elevationDeg * Math.PI) / 180;
+  const a = (azimuthDeg * Math.PI) / 180;
+  return [Math.sin(a) * Math.cos(e), Math.sin(e), Math.cos(a) * Math.cos(e)];
+};
+
 export const daylight = primitive({
-  id: "daylight@1",
+  id: "daylight@2",
   role: "Light",
-  doc: "The sun's hour, its path across the sky, the warmth of its light, and how the light is painted.",
+  doc: "A whole day and night: the sun's path, the warmth of its light, how the light is painted, the moon and the stars. The hour follows the person's own clock.",
   params: {
-    hour: t.choice("What hour does the world always rest at?", {
-      dawn: "First light: a low rosy sun, lavender shadows",
-      morning: "Clear fresh light from a climbing sun",
-      midday: "High, even light with short shadows",
-      afternoon: "Warm side light that models every form",
-      "golden hour": "A low amber sun and long violet shadows",
-      dusk: "The sun just setting, the sky glowing rose",
-    }),
     path: t.scale("How high the sun rides", { "low, like winter": 0.62, middling: 1, "high, like midsummer": 1.3 }),
     warmth: t.choice("The temperature of the light", {
       cool: "Silvery, blue-leaning light",
@@ -67,26 +83,47 @@ export const daylight = primitive({
       painterly: "A few clear steps of light with soft edges",
       "bold gouache": "Few flat steps of light with crisp edges",
     }),
+    moon: t.choice("The moon that lights the world's nights", {
+      "silver moon": "A bright full moon that silvers the land",
+      "amber harvest moon": "A large, low, honey-colored full moon",
+      "thin pale crescent": "A slim crescent; dark nights where the lantern matters",
+    }),
+    stars: t.scale("How many stars the night shows", { "a scattered few": 0.2, many: 0.55, "a river of stars": 1 }),
   },
-  build: (p): LightSpec => {
-    const hour: Hour = HOURS[p.hour];
+  build: (p): DaySpec => {
     const warmth = WARMTH[p.warmth];
     const brush = BRUSH[p.brush];
-    const elevation = (Math.min(76, Math.max(5, hour.elevation * p.path)) * Math.PI) / 180;
-    const azimuth = (hour.azimuth * Math.PI) / 180;
+    const moon = MOONS[p.moon];
     const warm = (c: number): Rgb => shiftColor(hex(c), warmth);
+    const keyOf = (hour: Hour): DayKey => {
+      // The path lifts or lowers the sun by day; at night it stays below the horizon.
+      const elevation = hour.elevation > 0 ? Math.min(76, Math.max(5, hour.elevation * p.path)) : hour.elevation;
+      return {
+        hour: hour.at,
+        light: {
+          sunDirection: toward(elevation, hour.azimuth),
+          sunColor: warm(hour.sun),
+          sunIntensity: hour.intensity,
+          moonDirection: toward(hour.moonElevation, hour.moonAzimuth),
+          moonColor: shiftColor(hex(moon.light), { ...warmth, pull: warmth.pull * 0.5 }),
+          moonIntensity: hour.moon * moon.brightness,
+          nightness: hour.nightness,
+          ambientColor: shiftColor(hex(hour.ambient), { ...warmth, pull: warmth.pull * 0.5 }),
+          ambientIntensity: hour.ambientIntensity,
+          shadowColor: shiftColor(hex(hour.shadow), { ...warmth, pull: warmth.pull * 0.4, chroma: 1 }),
+          celBands: brush.bands,
+          celSoftness: brush.softness,
+          horizonGlow: warm(hour.glowColor),
+          glow: hour.glow,
+          zenithDim: hour.zenithDim,
+        },
+      };
+    };
+    const keys = (Object.values(HOURS) as Hour[]).map(keyOf).sort((a, b) => a.hour - b.hour);
     return {
-      sunDirection: [Math.sin(azimuth) * Math.cos(elevation), Math.sin(elevation), Math.cos(azimuth) * Math.cos(elevation)],
-      sunColor: warm(hour.sun),
-      sunIntensity: hour.intensity,
-      ambientColor: shiftColor(hex(hour.ambient), { ...warmth, pull: warmth.pull * 0.5 }),
-      ambientIntensity: hour.ambientIntensity,
-      shadowColor: shiftColor(hex(hour.shadow), { ...warmth, pull: warmth.pull * 0.4, chroma: 1 }),
-      celBands: brush.bands,
-      celSoftness: brush.softness,
-      horizonGlow: warm(hour.glowColor),
-      glow: hour.glow,
-      zenithDim: hour.zenithDim,
+      keys,
+      moon: { color: hex(moon.disc), size: moon.size, phase: moon.phase },
+      stars: { density: p.stars, river: Math.min(1, Math.max(0, (p.stars - 0.7) / 0.3)) },
     };
   },
 });

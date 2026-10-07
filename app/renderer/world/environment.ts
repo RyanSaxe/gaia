@@ -1,5 +1,5 @@
 // The world around the plants, driven entirely by a WorldLook: a sky dome
-// (gradient, hour glow, sun, one parametric cloud shader), painted ground,
+// (gradient, hour glow, sun, moon, stars, one parametric cloud shader), painted ground,
 // wind-swayed ground cover with wildflowers, and drifting accents.
 
 import * as THREE from "three";
@@ -67,7 +67,29 @@ uniform float uCells;
 uniform float uStand;
 uniform float uTime;
 uniform float uWind;
+uniform float uSunIntensity;
+uniform vec3 uMoonDirection;
+uniform vec3 uMoonColor;
+uniform float uNightness;
+uniform vec3 uMoonDisc;
+uniform float uMoonSize;
+uniform float uMoonPhase;
+uniform float uStars;
+uniform float uStarRiver;
 ${NOISE_GLSL}
+float hash3(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
+// One layer of stars: a few cells of a grid around the sky hold a star each.
+vec3 starLayer(vec3 dir, float scale, float density, float size) {
+  vec3 p = dir * scale;
+  vec3 cell = floor(p);
+  float h = hash3(cell);
+  if (h > density) return vec3(0.0);
+  vec3 c = vec3(hash3(cell + 1.7), hash3(cell + 3.1), hash3(cell + 5.3)) * 0.6 + 0.2;
+  float b = smoothstep(size, size * 0.2, length(fract(p) - c));
+  float twinkle = 0.8 + 0.2 * sin(uTime * (0.7 + h * 2.3) + h * 61.0);
+  vec3 tint = mix(vec3(0.78, 0.86, 1.0), vec3(1.0, 0.92, 0.8), hash3(cell + 9.1));
+  return tint * b * twinkle * (0.55 + 0.45 * hash3(cell + 7.7));
+}
 void main() {
   vec3 dir = normalize(vDirection);
   float y = dir.y;
@@ -77,12 +99,24 @@ void main() {
 
   vec3 sun = normalize(uSunDirection);
   float sunDot = max(dot(dir, sun), 0.0);
+  // The sun's own light in the sky goes out once it is below the horizon.
+  float sunUp = smoothstep(-0.08, 0.02, sun.y);
   vec2 flatDir = normalize(dir.xz + vec2(1e-4));
   vec2 flatSun = normalize(sun.xz + vec2(1e-4));
   float toward = dot(flatDir, flatSun) * 0.5 + 0.5;
   // The hour's glow gathers along the horizon on the sun's side.
   color = mix(color, uGlow, exp(-e * 5.0) * (0.35 + 0.65 * toward * toward) * uGlowAmount * 0.75);
-  color = mix(color, uSunColor, pow(sunDot, 10.0) * 0.28);
+  color = mix(color, uSunColor, pow(sunDot, 10.0) * 0.28 * sunUp);
+
+  // Stars come out as the night deepens and thin toward the hazy horizon. A
+  // river of stars crosses the sky as a soft band, denser and faintly milky.
+  float starsOut = smoothstep(0.4, 0.9, uNightness) * smoothstep(0.02, 0.3, e);
+  vec3 bandNormal = normalize(vec3(1.0, 0.62, 0.12));
+  float river = exp(-pow(dot(dir, bandNormal) / 0.17, 2.0)) * uStarRiver;
+  float milk = river * (0.45 + 0.55 * fbm(vec2(dot(dir, vec3(0.7, 0.1, -0.7)), dir.y) * 9.0));
+  vec3 stars = starLayer(dir, 90.0, uStars * 0.5 + river * 0.3, 0.17);
+  stars += starLayer(dir, 170.0, uStars * 0.7 + river * 0.8, 0.16) * 0.6;
+  color += (stars + vec3(0.42, 0.48, 0.7) * milk * 0.13) * starsOut;
 
   // One parametric cloud layer. Dome clouds use a stereographic projection
   // (stretch draws streaks, cells break the cover into dapples); horizon
@@ -115,14 +149,35 @@ void main() {
   // Against a glowing low-sun horizon they turn to soft violet silhouettes.
   shade = mix(shade, (0.6 + 0.4 * lit) * (0.82 + 0.18 * smoothstep(0.0, uHigh * 0.3, e)) * (1.0 - uGlowAmount * 0.5), uStand);
   vec3 cloud = mix(uCloudShade, uCloudLit, clamp(shade, 0.0, 1.0));
-  // Thin cloud edges near the sun light up.
-  cloud += uSunColor * pow(sunDot, 5.0) * (1.0 - d) * 0.22;
+  // Thin cloud edges near the sun light up; at night, near the moon.
+  vec3 moon = normalize(uMoonDirection);
+  float moonDot = max(dot(dir, moon), 0.0);
+  float moonUp = smoothstep(0.15, 0.6, uNightness) * smoothstep(-0.03, 0.03, moon.y);
+  cloud += uSunColor * pow(sunDot, 5.0) * (1.0 - d) * 0.22 * sunUp;
+  cloud += uMoonColor * pow(moonDot, 24.0) * (1.0 - d * 0.5) * 0.35 * moonUp;
   color = mix(color, cloud, d * uOpacity);
 
   // The sun itself: a soft disc with a narrow halo.
   float disc = smoothstep(0.99935, 0.99965, sunDot);
-  color = mix(color, mix(uSunColor, vec3(1.0), 0.6), disc * (1.0 - d * uOpacity * 0.85));
-  color += uSunColor * pow(sunDot, 180.0) * 0.18;
+  color = mix(color, mix(uSunColor, vec3(1.0), 0.6), disc * (1.0 - d * uOpacity * 0.85) * sunUp);
+  color += uSunColor * pow(sunDot, 180.0) * 0.18 * sunUp;
+
+  // The moon: a soft disc with faint maria, a crescent's dark part a shade
+  // above the sky, and a wide pale halo.
+  vec3 right = normalize(cross(moon, vec3(0.0, 1.0, 0.0)) + vec3(1e-4, 0.0, 0.0));
+  vec3 upward = cross(right, moon);
+  vec2 q = vec2(dot(dir, right), dot(dir, upward)) / uMoonSize;
+  float r = length(q);
+  float face = step(0.0, dot(dir, moon));
+  float moonDisc = smoothstep(1.0, 0.9, r) * face;
+  float slide = mix(0.45, 2.3, uMoonPhase);
+  float dark = smoothstep(1.02, 0.9, length(q - vec2(-slide, slide * 0.35)));
+  float maria = smoothstep(0.45, 0.75, noise(q * 1.6 + 4.0));
+  vec3 face3 = uMoonDisc * (1.0 - maria * 0.13);
+  float clear = 1.0 - d * uOpacity * 0.8;
+  color = mix(color, mix(face3, color * 1.15 + uMoonDisc * 0.04, dark), moonDisc * moonUp * clear);
+  float halo = exp(-max(r - 1.0, 0.0) * 0.45) * (1.0 - moonDisc) * 0.16 + exp(-r * 0.06) * 0.05;
+  color += uMoonColor * halo * moonUp * mix(0.35, 1.0, uMoonPhase) * clear;
 
   // The horizon melts into the air the ground's distance dissolves into.
   color = mix(color, uFog, exp(-e * 30.0) * 0.6);
@@ -133,7 +188,7 @@ void main() {
 
 export interface Sky {
   readonly mesh: THREE.Mesh;
-  apply(look: WorldLook): void;
+  apply(look: Pick<WorldLook, "light" | "sky" | "fog">): void;
 }
 
 export function createSky(light: SceneLight): Sky {
@@ -156,11 +211,26 @@ export function createSky(light: SceneLight): Sky {
     uBillow: { value: 0.5 },
     uCells: { value: 0 },
     uStand: { value: 0 },
+    uMoonDisc: { value: new THREE.Vector3(1, 1, 1) },
+    uMoonSize: { value: 0.026 },
+    uMoonPhase: { value: 1 },
+    uStars: { value: 0.5 },
+    uStarRiver: { value: 0 },
   };
   const material = new THREE.ShaderMaterial({
     vertexShader: SKY_VERT,
     fragmentShader: SKY_FRAG,
-    uniforms: { ...u, uSunDirection: light.uSunDirection, uSunColor: light.uSunColor, uTime: light.uTime, uWind: light.uWind },
+    uniforms: {
+      ...u,
+      uSunDirection: light.uSunDirection,
+      uSunColor: light.uSunColor,
+      uSunIntensity: light.uSunIntensity,
+      uMoonDirection: light.uMoonDirection,
+      uMoonColor: light.uMoonColor,
+      uNightness: light.uNightness,
+      uTime: light.uTime,
+      uWind: light.uWind,
+    },
     side: THREE.BackSide,
     depthWrite: false,
   });
@@ -190,6 +260,11 @@ export function createSky(light: SceneLight): Sky {
       u.uBillow.value = c.billow;
       u.uCells.value = c.cells;
       u.uStand.value = c.horizon;
+      u.uMoonDisc.value.copy(v3(s.moon.color));
+      u.uMoonSize.value = s.moon.size;
+      u.uMoonPhase.value = s.moon.phase;
+      u.uStars.value = s.stars.density;
+      u.uStarRiver.value = s.stars.river;
     },
   };
 }
@@ -205,15 +280,17 @@ void main() {
 }
 `;
 
-/** Ground light: a gentle wrap so a low sun still reads as light, not dusk. */
+/** Ground light: a gentle wrap so a low sun still reads as light, not dusk; at night, the moon and the lantern. */
 const GROUND_LIGHT_GLSL = /* glsl */ `
 vec3 groundLit(vec3 albedo, vec3 world) {
   float nDotL = clamp(uSunDirection.y * 1.1 + 0.22, 0.0, 1.0);
   float shadow = mix(0.42, 1.0, sunShadow(world, 0.0015));
-  float light = softCel(nDotL * shadow);
-  vec3 lit = albedo * (uSunColor * uSunIntensity * light + uAmbientColor * uAmbientIntensity);
-  vec3 shadowed = albedo * uShadowColor * (uAmbientIntensity + 0.75);
-  return mix(shadowed, lit, clamp(light + 0.35, 0.0, 1.0));
+  float light = softCel(nDotL * shadow) * sunUp();
+  vec3 toned = nightTone(albedo);
+  vec3 lit = toned * (uSunColor * uSunIntensity * light + uAmbientColor * uAmbientIntensity);
+  vec3 shadowed = toned * uShadowColor * (uAmbientIntensity + 0.75);
+  vec3 color = mix(shadowed, lit, clamp(light + 0.35, 0.0, 1.0));
+  return color + nightLight(albedo, vec3(0.0, 1.0, 0.0), world, 0.45, mix(1.0, shadow, uMoonShadow));
 }
 `;
 
@@ -365,7 +442,7 @@ void main() {
   vec3 color = groundLit(albedo, vWorld);
   // Looking toward a low sun, blade tips glow with the light shining through them.
   float toward = clamp(dot(normalize(vWorld - cameraPosition), uSunDirection), 0.0, 1.0);
-  color += albedo * uSunColor * pow(toward, 3.0) * vT * 0.45 * (1.0 - smoothstep(0.15, 0.6, uSunDirection.y));
+  color += albedo * uSunColor * pow(toward, 3.0) * vT * 0.45 * (1.0 - smoothstep(0.15, 0.6, uSunDirection.y)) * min(uSunIntensity, 1.0);
   gl_FragColor = vec4(aerial(shoulder(color), vWorld), 1.0);
 }
 `;
@@ -466,6 +543,7 @@ uniform float uWander;
 uniform float uHover;
 uniform vec3 uBox;
 uniform float uCenterZ;
+uniform float uHalo;
 attribute vec4 aSeed;
 varying float vPhase;
 varying float vFade;
@@ -480,7 +558,7 @@ void main() {
   xz = mod(xz + uBox.xz, uBox.xz * 2.0) - uBox.xz;
   vec4 mv = viewMatrix * vec4(xz.x, y, xz.y + uCenterZ, 1.0);
   gl_Position = projectionMatrix * mv;
-  gl_PointSize = uSize * uPixels / max(-mv.z, 0.5);
+  gl_PointSize = uSize * uPixels / max(-mv.z, 0.5) * (1.0 + uHalo * 3.0);
   vPhase = phase;
   float edge = min(uBox.x - abs(xz.x), uBox.z - abs(xz.y));
   vFade = smoothstep(0.0, 2.5, edge) * smoothstep(0.0, 0.6, y - uLow) * smoothstep(0.0, 0.6, uHigh - y);
@@ -492,27 +570,36 @@ precision highp float;
 uniform float uTime;
 uniform vec3 uColor;
 uniform vec3 uSunColor;
+uniform float uSunIntensity;
 uniform vec3 uAmbientColor;
+uniform float uAmbientIntensity;
+uniform vec3 uMoonColor;
+uniform float uMoonIntensity;
 uniform float uGlow;
 uniform float uShape;
 uniform float uBlink;
 uniform float uOpacity;
+uniform float uHalo;
 varying float vPhase;
 varying float vFade;
 void main() {
   vec2 c = gl_PointCoord - 0.5;
+  // In the dark a glowing mote keeps its small core and gains a soft halo.
+  float grow = 1.0 + uHalo * 3.0;
   float a = vPhase * 6.283 + uTime * (0.6 + vPhase);
   float ca = cos(a);
   float sa = sin(a);
   vec2 r = vec2(ca * c.x - sa * c.y, sa * c.x + ca * c.y);
   // 0: soft dot, 1: petal, 2: leaf. Petals and leaves tumble, so their width breathes.
   float tumble = 0.35 + 0.65 * abs(sin(uTime * 2.1 + vPhase * 13.0));
-  float disc = exp(-dot(c, c) * 28.0);
+  float disc = exp(-dot(c, c) * 28.0 * grow * grow) + exp(-dot(c, c) * 18.0) * uHalo * 0.4;
   float petal = smoothstep(0.5, 0.42, length(vec2(r.x / (0.42 * tumble), r.y / 0.95)) );
   float leaf = smoothstep(0.5, 0.44, length(vec2(r.x / (0.36 * tumble), r.y)) + abs(r.x) * 0.6);
   float shape = uShape < 0.5 ? disc : uShape < 1.5 ? petal : leaf;
   float blink = mix(1.0, smoothstep(0.2, 1.0, sin(uTime * 1.6 + vPhase * 41.0)), uBlink);
-  vec3 lit = uColor * mix(uAmbientColor * 0.7 + uSunColor * 0.55, vec3(1.0), uGlow);
+  // Lit like everything else, so petals darken at night while glowing things shine.
+  vec3 sky = uAmbientColor * uAmbientIntensity * 1.35 + uSunColor * uSunIntensity * 0.46 + uMoonColor * uMoonIntensity * 0.6;
+  vec3 lit = uColor * mix(sky, vec3(1.0), uGlow);
   float alpha = shape * vFade * blink * uOpacity;
   if (alpha < 0.01) discard;
   gl_FragColor = vec4(lit * (1.0 + uGlow * 0.6), alpha);
@@ -585,11 +672,22 @@ export function createDrift(light: SceneLight, seedBase: number): Drift {
     uShape: { value: 0 },
     uBlink: { value: 0 },
     uOpacity: { value: 1 },
+    uHalo: { value: 0 },
   };
   const material = new THREE.ShaderMaterial({
     vertexShader: DRIFT_VERT,
     fragmentShader: DRIFT_FRAG,
-    uniforms: { ...u, uTime: light.uTime, uWind: light.uWind, uSunColor: light.uSunColor, uAmbientColor: light.uAmbientColor },
+    uniforms: {
+      ...u,
+      uTime: light.uTime,
+      uWind: light.uWind,
+      uSunColor: light.uSunColor,
+      uSunIntensity: light.uSunIntensity,
+      uAmbientColor: light.uAmbientColor,
+      uAmbientIntensity: light.uAmbientIntensity,
+      uMoonColor: light.uMoonColor,
+      uMoonIntensity: light.uMoonIntensity,
+    },
     transparent: true,
     depthWrite: false,
   });
@@ -618,6 +716,7 @@ export function createDrift(light: SceneLight, seedBase: number): Drift {
       // Glowing things show by contrast: faint at noon, bright at dusk.
       u.uGlow.value = spec.glow * (0.35 + 0.65 * (1 - daylight));
       u.uOpacity.value = b.opacity * (spec.glow > 0.5 ? 0.45 + 0.55 * (1 - daylight) : 1);
+      u.uHalo.value = b.shape === 0 ? spec.glow * (1 - daylight) : 0;
       u.uColor.value.set(spec.color[0], spec.color[1], spec.color[2]);
       draw();
     },

@@ -110,16 +110,23 @@ void main() {
   float nDotL = dot(n, uSunDirection);
   float wrapped = mix(max(nDotL, 0.0), nDotL * 0.5 + 0.5, uFoliage * 0.85);
   float shadow = mix(0.4 + uFoliage * 0.15, 1.0, sunShadow(vWorld, 0.0025 + uFoliage * 0.007));
-  float light = softCel(wrapped * shadow);
-  vec3 lit = albedo * (uSunColor * uSunIntensity * light + uAmbientColor * uAmbientIntensity);
-  vec3 shadowed = albedo * uShadowColor * (uAmbientIntensity + 0.75);
+  float light = softCel(wrapped * shadow) * sunUp();
+  vec3 toned = nightTone(albedo);
+  vec3 lit = toned * (uSunColor * uSunIntensity * light + uAmbientColor * uAmbientIntensity);
+  vec3 shadowed = toned * uShadowColor * (uAmbientIntensity + 0.75);
   vec3 color = mix(shadowed, lit, clamp(light + 0.35 + uFoliage * 0.12, 0.0, 1.0));
   // Backlit leaves glow warm, faintly.
   vec3 toEye = normalize(cameraPosition - vWorld);
-  float back = pow(clamp(dot(-toEye, uSunDirection), 0.0, 1.0), 4.0) * uFoliage * 0.22 * shadow;
+  float back = pow(clamp(dot(-toEye, uSunDirection), 0.0, 1.0), 4.0) * uFoliage * 0.22 * shadow * min(uSunIntensity, 1.0);
   color += albedo * uSunColor * back;
-  color += uHealthy * vGlow;
-  gl_FragColor = vec4(aerial(shoulder(color), vWorld), 1.0);
+  // Leaves between the eye and the moon catch a faint silver rim.
+  float moonBack = pow(clamp(dot(-toEye, uMoonDirection), 0.0, 1.0), 3.0) * uFoliage * 0.5 * uMoonIntensity;
+  color += nightTone(albedo) * uMoonColor * moonBack;
+  color += nightLight(albedo, n, vWorld, uFoliage * 0.85, mix(1.0, shadow, uMoonShadow));
+  // The world's own glow shows by contrast: a touch stronger in the dark,
+  // and it carries through the night air a little farther than lit color.
+  vec3 glow = uHealthy * vGlow * (1.0 + uNightness * 0.6);
+  gl_FragColor = vec4(aerial(shoulder(color), vWorld) + glow * (1.0 - uNightness * 0.35), 1.0);
 }
 `;
 

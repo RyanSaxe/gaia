@@ -22,7 +22,7 @@ the document that did not change renders exactly as it did before.
 | Main | TypeScript (Electron) | The window and the app's lifecycle. It starts the engine and the world service and restarts the engine if it exits. |
 | Engine | Rust (`gaia-engine`) | Files, parsing, git, test reports, the code model, the app-data store and the Jev client with the key from the macOS Keychain. |
 | World service | TypeScript (Electron utility process) | Kinds and primitives, the question planner, answer rules, vitality and the world document. |
-| Renderer | TypeScript | The UI, the Three.js scene and the realizer. In slice 1 the renderer is the lab, and it realizes geometry on its main thread; the realizer is pure and worker-safe, so it can move into workers when whole worlds need it. |
+| Renderer | TypeScript | The UI, the Three.js scene, the realizer and the clock. In slice 1 the renderer is the lab, and it realizes geometry on its main thread; the realizer is pure and worker-safe, so it can move into workers when whole worlds need it. |
 
 The world service talks to the engine in newline-delimited JSON-RPC 2.0 over
 the engine's stdin and stdout, relayed by the main process. Only small data
@@ -40,7 +40,7 @@ never crosses, because the renderer builds it. `EngineMethods` in
 | `@gaia/primitives` | Primitive declarations and geometry, palettes, the manifest `PRIMITIVES` | schema |
 | `@gaia/kinds` | The flora, biome and world kinds | schema |
 | `@gaia/world` | The question planner, answer rules, context gathering, vitality, type-space tools, `WorldChange` | schema |
-| `@gaia/realize` | Blueprint to parts, world and region looks, presets, channel math | schema, primitives |
+| `@gaia/realize` | Blueprint to parts, world and region looks at an hour, the light between a day's keys, presets, channel math | schema, primitives |
 | `@gaia/render` | Three.js materials, light and shadow | schema, realize, three |
 | `@gaia/terrain` | Relief composition, the baked heightfield, water, sight lines | schema, primitives, realize |
 | `@gaia/app` | Electron main, preload, world service, and the renderer (the lab) | Every package |
@@ -94,6 +94,13 @@ below which a piece collapses to its pivot), `droop`, `wither`, `glow` and
 instance's live vitality, so a change in vitality never rebuilds geometry.
 `applyVitality` in `packages/realize/src/channels.ts` is the CPU reference the
 tests run against.
+
+## Time
+
+A world's hour is the person's local time. Only the renderer reads the clock
+(once a minute); it passes the hour to `lightAt` and `realizeWorld` in
+`@gaia/realize`, which stay pure functions of it. The Light role's output is
+a `DaySpec`: the light at each key hour, with the world's moon and stars.
 
 ## Continuity
 

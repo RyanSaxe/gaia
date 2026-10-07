@@ -74,7 +74,9 @@ float mistNoise(vec2 p) {
 vec3 mistAt(vec2 xz, float t) {
   vec2 p = xz * 0.012 + vec2(t * 0.004, t * 0.002);
   float m = mistNoise(p) * 0.6 + mistNoise(p * 2.3 + 5.0) * 0.3 + mistNoise(p * 5.1 + 9.0) * 0.1;
-  return mix(uFogColor, vec3(0.97, 0.97, 0.95), 0.35 + 0.3 * smoothstep(0.35, 0.75, m));
+  // By night the mist is lit only by the moon: a shade above the dark air, never white.
+  vec3 pale = mix(vec3(0.97, 0.97, 0.95), uFogColor * 1.08 + uMoonColor * uMoonIntensity * 0.06, uNightness);
+  return mix(uFogColor, pale, 0.35 + 0.3 * smoothstep(0.35, 0.75, m));
 }
 `;
 
@@ -157,10 +159,12 @@ void main() {
   float shadow = mix(0.45, 1.0, sunShadow(vWorld, 0.0015));
   float direct = nDotL * shadow;
   // Half cel, half smooth: slopes read as painted planes without hard contour bands.
-  float light = mix(direct, softCel(direct), 0.5);
-  vec3 lit = albedo * (uSunColor * uSunIntensity * light + uAmbientColor * uAmbientIntensity);
-  vec3 shadowed = albedo * uShadowColor * (uAmbientIntensity + 0.75);
+  float light = mix(direct, softCel(direct), 0.5) * sunUp();
+  vec3 toned = nightTone(albedo);
+  vec3 lit = toned * (uSunColor * uSunIntensity * light + uAmbientColor * uAmbientIntensity);
+  vec3 shadowed = toned * uShadowColor * (uAmbientIntensity + 0.75);
   vec3 color = mix(shadowed, lit, clamp(light + 0.3, 0.0, 1.0));
+  color += nightLight(albedo, n, vWorld, 0.3, mix(1.0, shadow, uMoonShadow));
 
   // The selected region glows faintly; region edges draw as soft lines in the overview.
   float selected = 1.0 - step(0.5, abs(vRegion - uSelected));

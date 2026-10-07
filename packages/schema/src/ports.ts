@@ -98,12 +98,20 @@ export interface ColorShift {
   readonly lightness: number;
 }
 
-/** The sun at one hour, and what that hour does to the sky. */
+/** The sun and moon at one hour, and what that hour does to the sky. */
 export interface LightSpec {
-  /** Unit vector toward the sun. */
+  /** Unit vector toward the sun; below the horizon at night. */
   readonly sunDirection: Vec3;
   readonly sunColor: Rgb;
+  /** Zero once the sun is below the horizon. */
   readonly sunIntensity: number;
+  /** Unit vector toward the moon. */
+  readonly moonDirection: Vec3;
+  /** The moon's light on the land, a dim cool key. */
+  readonly moonColor: Rgb;
+  readonly moonIntensity: number;
+  /** 0 by day, 1 in deep night. Fades in the lantern, the stars and the world's own glow. */
+  readonly nightness: number;
   readonly ambientColor: Rgb;
   readonly ambientIntensity: number;
   /** Shadows are tinted, never black. */
@@ -115,6 +123,42 @@ export interface LightSpec {
   readonly glow: number;
   /** How far the hour deepens the zenith, 0 to 1. */
   readonly zenithDim: number;
+}
+
+/** The light at one hour of the day. */
+export interface DayKey {
+  /** Local hour, 0 to 24. */
+  readonly hour: number;
+  readonly light: LightSpec;
+}
+
+/** The moon a world shows at night. */
+export interface MoonSpec {
+  /** The disc's own color. */
+  readonly color: Rgb;
+  /** Angular radius of the disc, in radians. */
+  readonly size: number;
+  /** 0 is a thin crescent, 1 is full. */
+  readonly phase: number;
+}
+
+/** The stars a world shows at night. */
+export interface StarSpec {
+  /** Share of the sky's star cells that hold a star, 0 to 1. */
+  readonly density: number;
+  /** How strongly a milky river of stars crosses the sky, 0 to 1. */
+  readonly river: number;
+}
+
+/**
+ * A world's whole day. The hour is never chosen: it follows the person's own
+ * clock, and `lightAt` in @gaia/realize reads the light between the keys.
+ */
+export interface DaySpec {
+  /** Ordered by hour; the light wraps from the last key to the first across midnight. */
+  readonly keys: readonly DayKey[];
+  readonly moon: MoonSpec;
+  readonly stars: StarSpec;
 }
 
 /** Cloud shape as numbers one shader reads: no per-form branches. */
@@ -213,7 +257,7 @@ export interface Roles {
   Motion: { input: null; output: MotionSpec };
   Palette: { input: null; output: Palette };
   Relief: { input: null; output: Landform };
-  Light: { input: null; output: LightSpec };
+  Light: { input: null; output: DaySpec };
   Sky: { input: null; output: SkySpec };
   Season: { input: null; output: SeasonSpec };
   Atmosphere: { input: null; output: AtmosphereSpec };

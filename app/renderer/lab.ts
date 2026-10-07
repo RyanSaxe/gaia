@@ -10,8 +10,8 @@ export interface Shot {
 export interface Lab {
   /** A hidden lab draws nothing and ignores input. */
   setActive(on: boolean): void;
-  /** Draws one frame; `dt` is seconds since the last. */
-  frame(dt: number, now: number): void;
+  /** Draws one frame; `dt` is seconds since the last, `hour` the local hour the world shows. */
+  frame(dt: number, now: number, hour: number): void;
   readonly shots: () => readonly Shot[];
   readonly hook: Readonly<Record<string, unknown>>;
 }
