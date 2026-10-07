@@ -1,3 +1,3 @@
 export * from "./flora.ts";
-export * from "./ground.ts";
+export * from "./biome.ts";
 export * from "./world.ts";

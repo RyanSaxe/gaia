@@ -220,6 +220,12 @@ export interface Roles {
   Ground: { input: null; output: GroundSpec };
   Accents: { input: null; output: AccentSpec };
   Wind: { input: null; output: WindSpec };
+  Natives: { input: null; output: NativeFamilies };
+}
+
+/** The palette families native to a region. Empty means every family. */
+export interface NativeFamilies {
+  readonly families: readonly string[];
 }
 
 export type Role = keyof Roles;

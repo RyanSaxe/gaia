@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Library } from "@gaia/schema";
+import { Library, kind, slot } from "@gaia/schema";
 import { FLORA_PRIMITIVES } from "@gaia/primitives";
 import { flora } from "@gaia/kinds";
 import { assemble, planDetails, planStructure, readStructure, validate } from "@gaia/world";
@@ -19,12 +19,7 @@ describe("flora blueprint in two requests", () => {
     const wave = planStructure(flora, lib, subject);
     const types = Object.values(wave.request.questions).map((q) => q.type);
     expect(types.every((t) => t === "choice" || t === "noul" || t === "score")).toBe(true);
-    expect(Object.keys(wave.request.questions).sort()).toEqual([
-      "bloom.present",
-      "crown.present",
-      "crown.use",
-      "form.use",
-    ]);
+    expect(Object.keys(wave.request.questions).sort()).toEqual(["bloom.present", "crown.use", "form.use"]);
   });
 
   it("assembles a valid blueprint, and equal answers name the same blueprint", () => {
@@ -68,11 +63,20 @@ describe("representation", () => {
 });
 
 describe("slot dependencies", () => {
-  it("drops a bloom when Jev chose no crown for it to grow on", () => {
-    const s = planStructure(flora, lib, subject);
-    const structure = readStructure(flora, lib, s, fakeJev(s.request, { "crown.present": false, "bloom.present": true }));
+  it("drops a slot whose source slot Jev left out", () => {
+    // A kind with an optional crown, so the dependency rule has something to drop.
+    const shrub = kind({ ...flora, id: "shrub", slots: { ...flora.slots, crown: slot("Foliage", { on: "form", optional: true }) } });
+    const s = planStructure(shrub, lib, subject);
+    const structure = readStructure(shrub, lib, s, fakeJev(s.request, { "crown.present": false, "bloom.present": true }));
     expect(structure.crown).toBeUndefined();
     expect(structure.bloom).toBeUndefined();
+  });
+
+  it("never offers a crownless tree, because a bare tree reads as a dying one", () => {
+    const s = planStructure(flora, lib, subject);
+    expect(s.request.questions["crown.present"]).toBeUndefined();
+    const structure = readStructure(flora, lib, s, fakeJev(s.request));
+    expect(structure.crown).toBeDefined();
   });
 
   it("rejects a stored blueprint with a bloom and no crown", () => {
@@ -83,5 +87,17 @@ describe("slot dependencies", () => {
     const { crown: _crown, ...rest } = bp.slots;
     const broken = { ...bp, slots: { ...rest, bloom: { use: "blossoms@1" as const, params: { form: "petals", count: "plenty" } } } };
     expect(validate(broken, flora, lib)).toContain("bloom is on crown, which is absent.");
+  });
+});
+
+describe("narrowing a choice to a region's native families", () => {
+  it("offers only the native families, and every family when the region names none", () => {
+    const structure = { form: "branching@1", bark: "bark@1", crown: "leaf-clumps@1", motion: "sway@1", palette: "palette@1" };
+    const family = (narrow: readonly string[]) => {
+      const q = planDetails(flora, lib, structure, subject, { narrow: { "palette.family": narrow } }).request.questions["palette.family"];
+      return Object.keys((q as { criteria: object }).criteria).sort();
+    };
+    expect(family(["deep-forest", "silver-birch"])).toEqual(["deep-forest", "silver-birch"]);
+    expect(family([]).length).toBe(8);
   });
 });

@@ -19,8 +19,8 @@ export interface RegionSpec {
   readonly z: number;
   /** The region's ground level, meters, from the world layout. */
   readonly base: number;
-  /** A blueprint of the `ground` kind. */
-  readonly ground: Blueprint;
+  /** A blueprint of the `biome` kind. Terrain reads its relief slot. */
+  readonly biome: Blueprint;
 }
 
 export interface WorldSpec {
@@ -68,11 +68,11 @@ type ErasedBuild = (params: unknown, ctx: BuildContext, input: unknown) => unkno
 
 export const regionExtent = (spec: WorldSpec): number => spec.size / Math.sqrt(Math.max(1, spec.regions.length));
 
-/** Builds each region's landform from its stored ground blueprint. */
+/** Builds each region's landform from its stored biome blueprint. */
 export function landformsOf(spec: WorldSpec, lib: Library): Landform[] {
   const extent = regionExtent(spec);
   return spec.regions.map((r) => {
-    const slot = r.ground.slots.relief;
+    const slot = r.biome.slots.relief;
     if (slot === undefined) throw new Error(`Region ${r.id} has no relief.`);
     const p: AnyPrimitive = lib.get(slot.use);
     if (p.role !== "Relief") throw new Error(`${p.id} is not a Relief primitive.`);

@@ -7,7 +7,7 @@ import {
   type Blueprint,
   type BuildContext,
   type Built,
-  type Kind,
+  type AnyKind,
   type Library,
   type MotionSpec,
   type Palette,
@@ -67,7 +67,7 @@ export interface BuiltSlot {
  * Builds every filled slot of a blueprint in dependency order, feeding each
  * slot its `on` slot's output. Kinds then gather the outputs they need.
  */
-export function buildSlots(bp: Blueprint, k: Kind, lib: Library, opts: RealizeOptions): Map<string, BuiltSlot> {
+export function buildSlots(bp: Blueprint, k: AnyKind, lib: Library, opts: RealizeOptions): Map<string, BuiltSlot> {
   if (bp.kind !== k.id) throw new Error(`Blueprint ${bp.id} is a ${bp.kind}, not a ${k.id}.`);
   const root = rand(opts.seed);
   const built = new Map<string, BuiltSlot>();
@@ -92,7 +92,7 @@ export function buildSlots(bp: Blueprint, k: Kind, lib: Library, opts: RealizeOp
   return built;
 }
 
-export function realize(bp: Blueprint, k: Kind, lib: Library, opts: RealizeOptions): Realized {
+export function realize(bp: Blueprint, k: AnyKind, lib: Library, opts: RealizeOptions): Realized {
   const parts: Part[] = [];
   let motion: MotionSpec | undefined;
   let palette: Palette | undefined;

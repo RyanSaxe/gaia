@@ -6,6 +6,8 @@ import type { FileFacts } from "./facts.ts";
 import type { JevRequest, JevResponse } from "./jev.ts";
 
 export interface EngineMethods {
+  /** Answers with the engine's version; the app's first sign the engine is alive. */
+  "engine.ping": { params: Record<string, never>; result: { version: string } };
   /** Scans the project, starts watching it, and returns every file's facts. */
   "project.open": { params: { root: string }; result: { projectId: string; files: FileFacts[] } };
   /** Sends one request to Jev with the key from the macOS Keychain. */

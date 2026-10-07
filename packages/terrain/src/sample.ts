@@ -8,21 +8,29 @@ import type { WorldSpec } from "./world.ts";
 export const WORLD_SIZE = 320;
 const NAMES = ["src/core", "src/ui", "docs", "tests", "tools"];
 
-const ground = (use: string, params: FilledSlot["params"]) => blueprintOf("ground", { relief: { use: use as PrimitiveId, params } });
+/** A biome blueprint with the given relief and ground cover; natives empty means every palette family. */
+const biome = (use: string, params: FilledSlot["params"], cover = "lush grass") =>
+  blueprintOf("biome", {
+    relief: { use: use as PrimitiveId, params },
+    cover: { use: "ground-cover@1", params: { cover, length: "natural", wildflowers: "a scattering" } },
+    natives: { use: "native-families@1", params: { families: [] } },
+  });
+
+const COVERS = ["lush grass", "clover meadow", "silver grass", "moss", "heather", "golden steppe", "sand and scrub"];
 
 /** A hand-filled world: the stored words, as Jev would have answered them. */
 export function sampleWorld(): WorldSpec {
   const sites = layoutSites(11, 5, WORLD_SIZE);
-  const grounds = [
-    ground("valley@1", { depth: "moderate", width: "open", run: "north-south", fall: "gentle", meander: "winding", stream: "brook" }),
-    ground("rolling-hills@1", { height: "rolling", breadth: "moderately spaced", roughness: "softly uneven", grain: "round" }),
-    ground("terraces@1", { form: "terraced hill", rise: "waist-high", climb: "a hillside", facing: "south", edge: "soft and grassy" }),
-    ground("basin@1", { depth: "a bowl", size: "medium", rim: "a soft rim", pond: true }),
-    ground("meadow@1", { undulation: "softly undulating", tilt: "slightly tilted", facing: "east" }),
+  const biomes = [
+    biome("valley@1", { depth: "moderate", width: "open", run: "north-south", fall: "gentle", meander: "winding", stream: "brook" }, "lush grass"),
+    biome("rolling-hills@1", { height: "rolling", breadth: "moderately spaced", roughness: "softly uneven", grain: "round" }, "clover meadow"),
+    biome("terraces@1", { form: "terraced hill", rise: "waist-high", climb: "a hillside", facing: "south", edge: "soft and grassy" }, "silver grass"),
+    biome("basin@1", { depth: "a bowl", size: "medium", rim: "a soft rim", pond: true }, "moss"),
+    biome("meadow@1", { undulation: "softly undulating", tilt: "slightly tilted", facing: "east" }, "heather"),
   ];
   return {
     size: WORLD_SIZE,
-    regions: sites.map((s, i) => ({ id: NAMES[i] ?? `region-${i}`, ...s, ground: grounds[i] ?? grounds[0]! })),
+    regions: sites.map((s, i) => ({ id: NAMES[i] ?? `region-${i}`, ...s, biome: biomes[i] ?? biomes[0]! })),
   };
 }
 
@@ -46,7 +54,7 @@ export function randomWorld(lib: Library, seed: number): WorldSpec {
         else if (f.type === "flag") params[name] = random() < 0.5;
         else params[name] = Object.keys(f.members).filter(() => random() < 0.5);
       }
-      return { id: NAMES[i] ?? `region-${i}`, ...s, ground: ground(p.id, params) };
+      return { id: NAMES[i] ?? `region-${i}`, ...s, biome: biome(p.id, params, pick(COVERS, random)) };
     }),
   };
 }

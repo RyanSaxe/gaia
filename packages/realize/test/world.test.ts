@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { type ChoiceField, Library, type ScaleField, rand, resolveScale, seedOf } from "@gaia/schema";
 import {
+  BIOME_PRIMITIVES,
   DECLINE_MARGIN,
   PALETTE_FAMILIES,
   type PaletteFamily,
+  RELIEF_PRIMITIVES,
   WORLD_PRIMITIVES,
   deltaE,
   paletteOf,
@@ -12,13 +14,13 @@ import {
   seasonPalette,
   toLch,
 } from "@gaia/primitives";
-import { world } from "@gaia/kinds";
-import { blueprintCount, fieldSize, planDetails, planStructure, randomSlots, readStructure, validate } from "@gaia/world";
+import { biome, world } from "@gaia/kinds";
+import { assemble, blueprintCount, fieldSize, planDetails, planStructure, randomSlots, readStructure, validate } from "@gaia/world";
 import { WORLD_PRESETS, realizeWorld } from "@gaia/realize";
 import { blueprintOf as identify } from "@gaia/schema";
 import { fakeJev } from "@gaia/world/testing";
 
-const lib = new Library(WORLD_PRIMITIVES);
+const lib = new Library([...WORLD_PRIMITIVES, ...BIOME_PRIMITIVES, ...RELIEF_PRIMITIVES]);
 const SEED = seedOf("lab/world");
 
 const seeded = (seed: number): (() => number) => {
@@ -33,11 +35,14 @@ const finite = (value: unknown): boolean => {
   return true;
 };
 
-describe("world kind", () => {
-  it("realizes the same look for the same blueprint and seed", () => {
-    for (const { blueprint } of WORLD_PRESETS) {
-      expect(realizeWorld(blueprint, world, lib, SEED)).toEqual(realizeWorld(blueprint, world, lib, SEED));
-      expect(identify("world", blueprint.slots).id).toBe(blueprint.id);
+describe("world and biome kinds", () => {
+  const look = (w: Parameters<typeof identify>[1], b: Parameters<typeof identify>[1]) =>
+    realizeWorld({ blueprint: identify("world", w), kind: world }, { blueprint: identify("biome", b), kind: biome }, lib, SEED);
+
+  it("realizes the same look for the same blueprints and seed", () => {
+    for (const p of WORLD_PRESETS) {
+      expect(look(p.world.slots, p.biome.slots)).toEqual(look(p.world.slots, p.biome.slots));
+      expect(identify("world", p.world.slots).id).toBe(p.world.id);
     }
     const draw = (): string[] => {
       const random = seeded(99);
@@ -46,48 +51,54 @@ describe("world kind", () => {
     expect(draw()).toEqual(draw());
   });
 
-  it("validates and realizes every uniformly sampled world", () => {
+  it("validates and realizes every uniformly sampled world and region", () => {
     const random = seeded(7);
     const ids = new Set<string>();
     for (let i = 0; i < 1000; i++) {
-      const bp = identify("world", randomSlots(world, lib, random));
-      expect(validate(bp, world, lib)).toEqual([]);
-      const look = realizeWorld(bp, world, lib, SEED);
-      expect(finite(look)).toBe(true);
-      for (const c of [look.sky.zenith, look.sky.horizon, look.fog.color, look.ground.low, look.ground.high, look.light.sunColor]) {
+      const w = identify("world", randomSlots(world, lib, random));
+      const b = identify("biome", randomSlots(biome, lib, random));
+      expect(validate(w, world, lib)).toEqual([]);
+      expect(validate(b, biome, lib)).toEqual([]);
+      const l = look(w.slots, b.slots);
+      expect(finite(l)).toBe(true);
+      for (const c of [l.sky.zenith, l.sky.horizon, l.fog.color, l.ground.low, l.ground.high, l.light.sunColor]) {
         for (const x of c) expect(x >= 0 && x <= 1).toBe(true);
       }
-      ids.add(bp.id);
+      ids.add(`${w.id}/${b.id}`);
     }
-    // A space of billions: a thousand draws should essentially never repeat.
     expect(ids.size).toBeGreaterThan(995);
   });
 
   it("names six distinct, valid preset worlds", () => {
-    expect(new Set(WORLD_PRESETS.map((p) => p.blueprint.id)).size).toBe(WORLD_PRESETS.length);
-    for (const { blueprint } of WORLD_PRESETS) expect(validate(blueprint, world, lib)).toEqual([]);
+    expect(new Set(WORLD_PRESETS.map((p) => `${p.world.id}/${p.biome.id}`)).size).toBe(WORLD_PRESETS.length);
+    for (const p of WORLD_PRESETS) {
+      expect(validate(p.world, world, lib)).toEqual([]);
+      expect(validate(p.biome, biome, lib)).toEqual([]);
+    }
   });
 
-  it("counts exactly the worlds its declarations admit", () => {
+  it("counts exactly the worlds and regions their declarations admit", () => {
     const size = (role: string): number =>
       lib.forRole(role as never).reduce((sum, p) => sum + Object.values(p.params).reduce((n, f) => n * fieldSize(f), 1), 0);
-    // Six required slots multiply; the optional drift slot adds an "absent" option.
-    const expected = size("Light") * size("Sky") * size("Season") * size("Atmosphere") * size("Ground") * size("Wind") * (1 + size("Accents"));
-    expect(blueprintCount(world, lib)).toBe(expected);
-    // 162 light x 90 sky x 18 season x 15 air x 63 ground x 4 wind x (1 + 15) drift.
-    expect(expected).toBe(15_872_371_200);
+    expect(blueprintCount(world, lib)).toBe(size("Light") * size("Sky") * size("Season") * size("Wind"));
+    // 162 light x 72 sky x 18 season x 4 wind.
+    expect(blueprintCount(world, lib)).toBe(839_808);
+    expect(blueprintCount(biome, lib)).toBe(size("Relief") * size("Ground") * (1 + size("Atmosphere")) * (1 + size("Accents")) * size("Natives"));
   });
 
-  it("asks Jev only closed questions, and assembles a valid world from its answers", () => {
-    const subject = { id: "repo", state: { languages: ["TypeScript"], files: 412, ageDays: 900 } };
-    const s = planStructure(world, lib, subject);
-    expect(Object.keys(s.request.questions)).toEqual(["drift.present"]);
-    const structure = readStructure(world, lib, s, fakeJev(s.request, { "drift.present": true }));
-    const d = planDetails(world, lib, structure, subject);
-    const types = new Set(Object.values(d.request.questions).map((q) => q.type));
-    expect([...types].every((t) => t === "choice" || t === "score" || t === "noul")).toBe(true);
-    // Every param of every chosen primitive: 4 light, 3 sky, 2 season, 2 air, 3 ground, 2 drift, 1 wind.
-    expect(Object.keys(d.request.questions).length).toBe(17);
+  it("asks for light and season first, then sky and wind with those answers in the state", () => {
+    const target = { id: "repo", state: { languages: ["TypeScript"], files: 412, ageDays: 900 } };
+    const s = planStructure(world, lib, target);
+    expect(Object.keys(s.request.questions)).toEqual([]);
+    const structure = readStructure(world, lib, s, {});
+    const first = planDetails(world, lib, structure, target, { stage: 0 });
+    expect(Object.keys(first.request.questions).sort()).toEqual(["light.brush", "light.hour", "light.path", "light.warmth", "season.season", "season.strength"]);
+    const firstAnswers = fakeJev(first.request);
+    const second = planDetails(world, lib, structure, target, { stage: 1, earlier: { light: "dusk", season: "deep autumn" } });
+    expect(Object.keys(second.request.questions).sort()).toEqual(["sky.character", "sky.clouds", "sky.cover", "wind.strength"]);
+    expect((second.request.state as { earlier?: unknown }).earlier).toEqual({ light: "dusk", season: "deep autumn" });
+    const bp = assemble(world, lib, structure, [first, second], { ...firstAnswers, ...fakeJev(second.request) });
+    expect(validate(bp, world, lib)).toEqual([]);
   });
 });
 

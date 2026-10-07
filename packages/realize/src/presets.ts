@@ -62,7 +62,14 @@ export const FLORA_PRESETS: readonly Preset[] = [
   },
 ];
 
-/** Hand-filled world blueprints: the words Jev might choose for six different repositories. */
+/** A named world for the lab: the shared world blueprint and the biome of the region the lab shows. */
+export interface WorldPreset {
+  readonly name: string;
+  readonly world: Blueprint;
+  readonly biome: Blueprint;
+}
+
+/** Hand-filled blueprints: the words Jev might choose for six different repositories. */
 const worldOf = (
   light: Record<string, string>,
   sky: Record<string, string>,
@@ -71,21 +78,26 @@ const worldOf = (
   ground: Record<string, string>,
   drift: Record<string, string> | null,
   wind: string,
-): Blueprint =>
-  identify("world", {
+): Omit<WorldPreset, "name"> => ({
+  world: identify("world", {
     light: { use: "daylight@1", params: light },
     sky: { use: "sky@1", params: sky },
     season: { use: "season@1", params: season },
-    air: { use: "air@1", params: air },
-    ground: { use: "ground-cover@1", params: ground },
-    ...(drift === null ? {} : { drift: { use: "drift@1", params: drift } }),
     wind: { use: "wind@1", params: { strength: wind } },
-  });
+  }),
+  biome: identify("biome", {
+    relief: { use: "meadow@1", params: { undulation: "softly undulating", tilt: "level", facing: "south" } },
+    cover: { use: "ground-cover@1", params: ground },
+    air: { use: "air@1", params: air },
+    ...(drift === null ? {} : { accents: { use: "drift@1", params: drift } }),
+    natives: { use: "native-families@1", params: { families: [] } },
+  }),
+});
 
-export const WORLD_PRESETS: readonly Preset[] = [
+export const WORLD_PRESETS: readonly WorldPreset[] = [
   {
     name: "Meadow morning",
-    blueprint: worldOf(
+    ...worldOf(
       { hour: "morning", path: "middling", warmth: "neutral", brush: "painterly" },
       { character: "powder blue", clouds: "fair-weather puffs", cover: "scattered" },
       { season: "spring", strength: "clearly" },
@@ -97,7 +109,7 @@ export const WORLD_PRESETS: readonly Preset[] = [
   },
   {
     name: "Amber steppe",
-    blueprint: worldOf(
+    ...worldOf(
       { hour: "golden hour", path: "middling", warmth: "warm", brush: "soft watercolor" },
       { character: "apricot", clouds: "cirrus streaks", cover: "scattered" },
       { season: "early autumn", strength: "clearly" },
@@ -109,9 +121,9 @@ export const WORLD_PRESETS: readonly Preset[] = [
   },
   {
     name: "Frost hollow",
-    blueprint: worldOf(
+    ...worldOf(
       { hour: "morning", path: "low, like winter", warmth: "cool", brush: "soft watercolor" },
-      { character: "watercolor wash", clouds: "mackerel dapples", cover: "many, but with blue between" },
+      { character: "watercolor wash", clouds: "low drifting banks", cover: "many, but with blue between" },
       { season: "first frost", strength: "in full" },
       { air: "morning mist", distance: "softened distance" },
       { cover: "moss", length: "natural", wildflowers: "none" },
@@ -121,7 +133,7 @@ export const WORLD_PRESETS: readonly Preset[] = [
   },
   {
     name: "Firefly dusk",
-    blueprint: worldOf(
+    ...worldOf(
       { hour: "dusk", path: "middling", warmth: "warm", brush: "painterly" },
       { character: "lavender", clouds: "low drifting banks", cover: "scattered" },
       { season: "high summer", strength: "clearly" },
@@ -133,7 +145,7 @@ export const WORLD_PRESETS: readonly Preset[] = [
   },
   {
     name: "Monsoon terraces",
-    blueprint: worldOf(
+    ...worldOf(
       { hour: "afternoon", path: "high, like midsummer", warmth: "neutral", brush: "bold gouache" },
       { character: "teal lagoon", clouds: "towering cumulus", cover: "many, but with blue between" },
       { season: "monsoon green", strength: "in full" },
@@ -145,7 +157,7 @@ export const WORLD_PRESETS: readonly Preset[] = [
   },
   {
     name: "Heather moor",
-    blueprint: worldOf(
+    ...worldOf(
       { hour: "dawn", path: "low, like winter", warmth: "neutral", brush: "painterly" },
       { character: "cobalt", clouds: "low drifting banks", cover: "many, but with blue between" },
       { season: "deep autumn", strength: "in full" },

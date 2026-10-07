@@ -3,3 +3,4 @@ export * from "./answers.ts";
 export * from "./vitality.ts";
 export * from "./context.ts";
 export * from "./space.ts";
+export type * from "./changes.ts";

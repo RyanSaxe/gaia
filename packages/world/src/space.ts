@@ -1,7 +1,7 @@
 // The type space a kind and a library declare: its size, defaults, and a
 // uniform sample. Everything here is read off the field declarations.
 
-import type { AnyPrimitive, Field, FilledSlot, Kind, Library } from "@gaia/schema";
+import type { AnyPrimitive, Field, FilledSlot, AnyKind, Library } from "@gaia/schema";
 
 type StoredParams = Record<string, string | boolean | string[]>;
 
@@ -21,7 +21,7 @@ export function fieldSize(f: Field): number {
 export const primitiveSize = (p: AnyPrimitive): number => Object.values(p.params).reduce((n, f) => n * fieldSize(f), 1);
 
 /** How many distinct blueprints the kind admits with this library. A slot can be present only if its `on` slot is. */
-export function blueprintCount(k: Kind, lib: Library): number {
+export function blueprintCount(k: AnyKind, lib: Library): number {
   const names = Object.keys(k.slots);
   const optional = names.filter((n) => k.slots[n]?.optional);
   let total = 0;
@@ -51,7 +51,7 @@ export function defaultParams(p: AnyPrimitive): StoredParams {
 const pick = <T>(items: readonly T[], random: () => number): T => items[Math.floor(random() * items.length)] as T;
 
 /** Samples every field uniformly: presence, primitive, and each parameter. */
-export function randomSlots(k: Kind, lib: Library, random: () => number): Record<string, FilledSlot> {
+export function randomSlots(k: AnyKind, lib: Library, random: () => number): Record<string, FilledSlot> {
   const slots: Record<string, FilledSlot> = {};
   for (const [name, s] of Object.entries(k.slots)) {
     if (s.optional && random() < 0.5) continue;

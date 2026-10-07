@@ -39,3 +39,25 @@ export interface FileFacts {
     readonly commitsLast14Days: number;
   };
 }
+
+/** Facts about one directory, which becomes a region. */
+export interface RegionFacts {
+  readonly path: string;
+  readonly files: number;
+  readonly lines: number;
+  readonly languages: readonly string[];
+  /** Meters across, from the world layout. */
+  readonly extent: number;
+}
+
+/** Facts about the whole repository, which the world kind reads. */
+export interface RepositoryFacts {
+  readonly name: string;
+  readonly files: number;
+  readonly lines: number;
+  /** Lines per language. */
+  readonly languages: Readonly<Record<string, number>>;
+  readonly ageDays: number;
+  readonly commitsLast30Days: number;
+  readonly contributors: number;
+}

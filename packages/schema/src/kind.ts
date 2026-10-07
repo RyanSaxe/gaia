@@ -1,4 +1,4 @@
-import type { FileFacts } from "./facts.ts";
+import type { FileFacts, RegionFacts, RepositoryFacts } from "./facts.ts";
 import type { Role } from "./ports.ts";
 
 export interface Slot<R extends Role = Role> {
@@ -28,6 +28,7 @@ const ROLE_IO: Readonly<Record<Role, { input: string | null; output: string }>> 
   Ground: { input: null, output: "GroundSpec" },
   Accents: { input: null, output: "AccentSpec" },
   Wind: { input: null, output: "WindSpec" },
+  Natives: { input: null, output: "NativeFamilies" },
 };
 
 /** Anchors come from a Skeleton's tips or a Built's anchors. */
@@ -35,21 +36,48 @@ function feeds(output: string, input: string): boolean {
   return output === input || (input === "Anchors" && (output === "Built" || output === "Skeleton"));
 }
 
+/** What a kind stands for: one file, one directory's region, or the whole repository. */
+export type Subject = "file" | "region" | "repository";
+
+export interface SubjectFacts {
+  file: FileFacts;
+  region: RegionFacts;
+  repository: RepositoryFacts;
+}
+
 /**
  * A kind of world component. Code, and few of them. Its slots say what a
  * blueprint must fill; `represents` is what Jev reads when it decides which
  * kind should stand for a piece of code.
  */
-export interface Kind {
+export interface Kind<S extends Subject = Subject> {
   readonly id: string;
+  readonly subject: S;
   readonly doc: string;
   readonly represents: string;
   readonly slots: Readonly<Record<string, Slot>>;
-  /** Numbers bound from code facts. Jev never answers these. */
-  readonly facts: Readonly<Record<string, (f: FileFacts) => number>>;
+  /** Slot groups Jev answers in order; each group sees the earlier groups' answers. One group if absent. */
+  readonly stages?: readonly (readonly string[])[];
+  /** Numbers bound from the subject's facts. Jev never answers these. */
+  readonly facts: Readonly<Record<string, (f: SubjectFacts[S]) => number>>;
 }
 
-export function kind(def: Kind): Kind {
+/** Any kind, for code that reads slots and stages but never binds facts. */
+export type AnyKind = Kind<"file"> | Kind<"region"> | Kind<"repository">;
+
+/** The slot groups Jev answers in order: the kind's stages, or every slot at once. */
+export function stagesOf(k: AnyKind): readonly (readonly string[])[] {
+  return k.stages ?? [Object.keys(k.slots)];
+}
+
+export function kind<S extends Subject>(def: Kind<S>): Kind<S> {
+  if (def.stages !== undefined) {
+    const staged = def.stages.flat();
+    const names = Object.keys(def.slots);
+    if (staged.length !== names.length || !names.every((n) => staged.includes(n))) {
+      throw new Error(`${def.id}'s stages must list every slot exactly once.`);
+    }
+  }
   for (const [name, s] of Object.entries(def.slots)) {
     const io = ROLE_IO[s.role];
     if (s.on === undefined) {
@@ -67,7 +95,7 @@ export function kind(def: Kind): Kind {
 }
 
 /** Slot names in an order where every slot comes after the slot it is on. */
-export function slotOrder(k: Kind): string[] {
+export function slotOrder(k: AnyKind): string[] {
   const done = new Set<string>();
   const order: string[] = [];
   const visit = (name: string): void => {

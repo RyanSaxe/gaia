@@ -11,18 +11,20 @@ import {
   type JevAnswer,
   type JevQuestion,
   type JevRequest,
+  type AnyKind,
   type Kind,
   type Library,
   isStoredValue,
   rand,
   seedOf,
   slotOrder,
+  stagesOf,
 } from "@gaia/schema";
 
 export const MODEL = "typesafe/jev-1.13";
 
 /** Who the blueprint is for and what Jev may know while deciding. */
-export interface Subject {
+export interface Target {
   /** Stable ID that seeds option order, such as a region path. */
   readonly id: string;
   readonly state: Readonly<Record<string, unknown>>;
@@ -44,10 +46,10 @@ export type Structure = Readonly<Record<string, string>>;
 
 /**
  * Jev leans toward the first option of a choice. Shuffling in an order seeded
- * by the subject spreads that lean evenly across the world.
+ * by the target spreads that lean evenly across the world.
  */
-function shuffled<T>(items: readonly T[], label: string, subject: Subject): T[] {
-  const r = rand(seedOf(subject.id)).fork(label);
+function shuffled<T>(items: readonly T[], label: string, target: Target): T[] {
+  const r = rand(seedOf(target.id)).fork(label);
   const out = [...items];
   for (let i = out.length - 1; i > 0; i--) {
     const j = Math.floor(r.next() * (i + 1));
@@ -56,11 +58,11 @@ function shuffled<T>(items: readonly T[], label: string, subject: Subject): T[] 
   return out;
 }
 
-function questionFor(field: Field, context: string, label: string, subject: Subject): JevQuestion {
+function questionFor(field: Field, context: string, label: string, target: Target): JevQuestion {
   const instructions = `${context} ${field.ask}`;
   switch (field.type) {
     case "choice": {
-      const keys = shuffled(Object.keys(field.options), label, subject);
+      const keys = shuffled(Object.keys(field.options), label, target);
       return {
         type: "choice",
         instructions,
@@ -76,7 +78,7 @@ function questionFor(field: Field, context: string, label: string, subject: Subj
   }
 }
 
-export function planStructure(k: Kind, lib: Library, subject: Subject): Wave {
+export function planStructure(k: AnyKind, lib: Library, target: Target): Wave {
   const questions: Record<string, JevQuestion> = {};
   const refs: Record<string, Ref> = {};
   for (const [name, s] of Object.entries(k.slots)) {
@@ -89,7 +91,7 @@ export function planStructure(k: Kind, lib: Library, subject: Subject): Wave {
       };
       refs[`${name}.present`] = { is: "present", slot: name };
     }
-    const candidates = shuffled(lib.forRole(s.role), `${name}.use`, subject);
+    const candidates = shuffled(lib.forRole(s.role), `${name}.use`, target);
     if (candidates.length === 1) continue;
     questions[`${name}.use`] = {
       type: "choice",
@@ -98,13 +100,13 @@ export function planStructure(k: Kind, lib: Library, subject: Subject): Wave {
     };
     refs[`${name}.use`] = { is: "use", slot: name };
   }
-  return { request: { model: MODEL, state: subject.state, questions }, refs };
+  return { request: { model: MODEL, state: target.state, questions }, refs };
 }
 
-export function readStructure(k: Kind, lib: Library, wave: Wave, answers: Readonly<Record<string, JevAnswer>>): Structure {
+export function readStructure(k: AnyKind, lib: Library, wave: Wave, answers: Readonly<Record<string, JevAnswer>>): Structure {
   const out: Record<string, string> = {};
   for (const name of slotOrder(k)) {
-    const s = k.slots[name] as Kind["slots"][string];
+    const s = k.slots[name] as AnyKind["slots"][string];
     if (s.optional && !yes(answers[`${name}.present`])) continue;
     // A slot fed by an absent slot has nothing to grow on, whatever Jev said.
     if (s.on !== undefined && !(s.on in out)) continue;
@@ -120,15 +122,28 @@ export function readStructure(k: Kind, lib: Library, wave: Wave, answers: Readon
   return out;
 }
 
-export function planDetails(k: Kind, lib: Library, structure: Structure, subject: Subject): Wave {
+export interface DetailOptions {
+  /** Which of the kind's stages to ask; 0 when the kind has one stage. */
+  readonly stage?: number;
+  /** Allowed keys per field path, such as a region's native families for "palette.family". */
+  readonly narrow?: Readonly<Record<string, readonly string[]>>;
+  /** Values settled in earlier stages, which this stage's questions see in the state. */
+  readonly earlier?: Readonly<Record<string, unknown>>;
+}
+
+export function planDetails(k: AnyKind, lib: Library, structure: Structure, target: Target, options: DetailOptions = {}): Wave {
+  const { stage = 0, narrow = {}, earlier } = options;
+  const inStage = new Set(stagesOf(k)[stage] ?? []);
   const questions: Record<string, JevQuestion> = {};
   const refs: Record<string, Ref> = {};
   const chosen = Object.fromEntries(Object.entries(structure).map(([slot, id]) => [slot, lib.get(id)]));
-  const state = { ...subject.state, decided: describe(chosen) };
+  const state = { ...target.state, decided: describe(chosen), ...(earlier === undefined ? {} : { earlier }) };
   for (const [slotName, p] of Object.entries(chosen)) {
+    if (!inStage.has(slotName)) continue;
     const context = `${k.doc} Its ${slotName} is ${p.doc.replace(/\.$/, "").toLowerCase()}.`;
-    for (const [param, field] of Object.entries(p.params)) {
+    for (const [param, raw] of Object.entries(p.params)) {
       const id = `${slotName}.${param}`;
+      const field = narrowed(raw, narrow[id]);
       if (field.type === "set") {
         for (const [member, desc] of Object.entries(field.members as Record<string, string>)) {
           questions[`${id}:${member}`] = {
@@ -140,22 +155,36 @@ export function planDetails(k: Kind, lib: Library, structure: Structure, subject
         }
         continue;
       }
-      questions[id] = questionFor(field, context, id, subject);
+      questions[id] = questionFor(field, context, id, target);
       refs[id] = { is: "param", slot: slotName, param, field };
     }
   }
   return { request: { model: MODEL, state, questions }, refs };
 }
 
+/** A choice or set limited to the allowed keys; an empty or missing list leaves it whole. */
+function narrowed(field: Field, allowed: readonly string[] | undefined): Field {
+  if (allowed === undefined || allowed.length === 0) return field;
+  const keep = <V>(entries: Readonly<Record<string, V>>): Record<string, V> =>
+    Object.fromEntries(Object.entries(entries).filter(([key]) => allowed.includes(key)));
+  if (field.type === "choice") {
+    const options = keep(field.options);
+    return Object.keys(options).length >= 2 ? { ...field, options } : field;
+  }
+  if (field.type === "set") return { ...field, members: keep(field.members) };
+  return field;
+}
+
 export function assemble(
-  k: Kind,
+  k: AnyKind,
   lib: Library,
   structure: Structure,
-  details: Wave,
+  details: Wave | readonly Wave[],
   answers: Readonly<Record<string, JevAnswer>>,
 ): Blueprint {
   const params: Record<string, Record<string, string | boolean | string[]>> = {};
-  for (const [qid, ref] of Object.entries(details.refs)) {
+  const waves: readonly Wave[] = Array.isArray(details) ? details : [details as Wave];
+  for (const [qid, ref] of waves.flatMap((w) => Object.entries(w.refs))) {
     const bucket = (params[ref.slot] ??= {});
     const answer = answers[qid];
     if (ref.is === "member") {
@@ -174,7 +203,7 @@ export function assemble(
 }
 
 /** Every problem with a blueprint, so a bad answer never reaches the document. */
-export function validate(bp: Blueprint, k: Kind, lib: Library): string[] {
+export function validate(bp: Blueprint, k: AnyKind, lib: Library): string[] {
   const problems: string[] = [];
   for (const [name, s] of Object.entries(k.slots)) {
     const filled = bp.slots[name];
@@ -251,19 +280,19 @@ export const GROUND = "ground";
  * Jev decides which kind stands for a file, so the mapping from code to world
  * is a judgment, not a rule table. Kinds describe themselves in `represents`.
  */
-export function planRepresentation(kinds: readonly Kind[], subject: Subject): Wave {
+export function planRepresentation(kinds: readonly Kind<"file">[], target: Target): Wave {
   const options = shuffled(
     [
       ...kinds.map((k) => [k.id, `${k.doc} Suits: ${k.represents}`] as const),
       [GROUND, "No single thing stands for it; it enriches the ground of its region."] as const,
     ],
     "represent",
-    subject,
+    target,
   );
   return {
     request: {
       model: MODEL,
-      state: subject.state,
+      state: target.state,
       questions: {
         represent: {
           type: "choice",

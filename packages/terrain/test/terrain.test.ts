@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { Library, seedOf } from "@gaia/schema";
-import { FLORA_PRIMITIVES, RELIEF_PRIMITIVES, fieldAt } from "@gaia/primitives";
-import { flora, ground } from "@gaia/kinds";
+import { Library, blueprintOf, seedOf } from "@gaia/schema";
+import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, RELIEF_PRIMITIVES, fieldAt } from "@gaia/primitives";
+import { biome, flora } from "@gaia/kinds";
 import { validate } from "@gaia/world";
 import { FLORA_PRESETS, realize } from "@gaia/realize";
 import {
@@ -21,7 +21,7 @@ import {
   withinBudget,
 } from "@gaia/terrain";
 
-const lib = new Library(RELIEF_PRIMITIVES);
+const lib = new Library([...RELIEF_PRIMITIVES, ...BIOME_PRIMITIVES]);
 const bytes = (a: ArrayBufferView): Buffer => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
 const draws = Array.from({ length: 16 }, (_, i) => randomWorld(lib, 7000 + i));
 const baked: Terrain[] = [sampleWorld(), ...draws].map((w) => bakeTerrain(w, lib));
@@ -36,8 +36,13 @@ describe("landforms", () => {
           else if (f.type === "choice") params[name] = Object.keys(f.options)[end === "first" ? 0 : Object.keys(f.options).length - 1] ?? "";
           else if (f.type === "flag") params[name] = end === "last";
         }
-        const world = { size: 320, regions: [{ id: "r", x: 0, z: 0, base: 0, ground: { id: "bp-x" as const, kind: "ground", slots: { relief: { use: p.id, params } } } }] };
-        expect(validate(world.regions[0]!.ground, ground, lib), p.id).toEqual([]);
+        const region = blueprintOf("biome", {
+          relief: { use: p.id, params },
+          cover: { use: "ground-cover@1", params: { cover: "lush grass", length: "natural", wildflowers: "none" } },
+          natives: { use: "native-families@1", params: { families: [] } },
+        });
+        const world = { size: 320, regions: [{ id: "r", x: 0, z: 0, base: 0, biome: region }] };
+        expect(validate(region, biome, lib), p.id).toEqual([]);
         const [lf] = landformsOf(world, lib);
         expect(lf).toBeDefined();
         for (let k = 0; k < 200; k++) expect(Number.isFinite(fieldAt(lf!.height, (k % 20) * 9 - 90, Math.floor(k / 20) * 18 - 90)), p.id).toBe(true);
