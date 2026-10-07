@@ -1,0 +1,28 @@
+{
+  "name": "@gaia/app",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "shots": "electron-vite build && electron . --shots"
+  },
+  "dependencies": {
+    "@gaia/kinds": "workspace:*",
+    "@gaia/primitives": "workspace:*",
+    "@gaia/realize": "workspace:*",
+    "@gaia/render": "workspace:*",
+    "@gaia/schema": "workspace:*",
+    "@gaia/terrain": "workspace:*",
+    "@gaia/world": "workspace:*",
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "@types/three": "^0.186.0",
+    "electron": "^44.5.1",
+    "electron-vite": "^5.0.0",
+    "vite": "^7.3.7"
+  }
+}
