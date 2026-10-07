@@ -2,6 +2,6 @@ node_modules/
 out/
 dist/
 shots/
-engine/target/
+target/
 *.local
 .DS_Store

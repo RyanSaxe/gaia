@@ -3,7 +3,9 @@
   "private": true,
   "type": "module",
   "packageManager": "pnpm@10.34.6",
-  "engines": { "node": ">=26" },
+  "engines": {
+    "node": ">=26"
+  },
   "scripts": {
     "dev": "pnpm --filter @gaia/app dev",
     "shots": "pnpm --filter @gaia/app shots",
@@ -13,7 +15,8 @@
     "lint": "eslint .",
     "test": "vitest run",
     "check": "tsc --noEmit -p . && eslint . && vitest run",
-    "prepare": "git config core.hooksPath .githooks"
+    "prepare": "git config core.hooksPath .githooks",
+    "engine": "cargo build -p gaia-engine"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

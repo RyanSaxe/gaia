@@ -1,0 +1,8 @@
+#!/bin/sh
+# Runs every check before a commit. Fix a failing check; never skip it.
+set -e
+# Prefer rustup's toolchain: on some Macs Homebrew's rustc comes first on PATH and is broken.
+if [ -d "$HOME/.cargo/bin" ]; then PATH="$HOME/.cargo/bin:$PATH"; fi
+pnpm check
+cargo test --quiet
+cargo clippy --all-targets --quiet -- -D warnings
