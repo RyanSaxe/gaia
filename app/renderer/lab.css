@@ -63,15 +63,15 @@ body { font: 12.5px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; overfl
 .clock .quick .seg { padding: 2px 6px; font-size: 11px; background: transparent; }
 .clock .quick .seg.on { background: var(--accent); color: var(--accent-ink); }
 .lab { position: absolute; inset: 0; display: grid; grid-template-columns: minmax(0, 1fr) 288px; }
-#status { display: flex; align-items: center; gap: 7px; padding: 3px 12px; font-size: 11px; color: var(--muted); background: var(--panel); border-top: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+#status { display: flex; align-items: center; min-width: 0; gap: 7px; padding: 3px 12px; font-size: 11px; color: var(--muted); background: var(--panel); border-top: 1px solid var(--line); font-variant-numeric: tabular-nums; }
 #status .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--line); flex: none; }
 #status[data-state="connected"] .dot { background: var(--accent); }
 #status[data-state="starting"] .dot, #status[data-state="restarting"] .dot { background: var(--warn); animation: pulse 0.9s ease-in-out infinite alternate; }
 #status[data-state="standalone"] .dot { background: var(--muted); }
 @keyframes pulse { from { opacity: 0.35; } to { opacity: 1; } }
 /* The dev readout: off by default, a quiet button at the status bar's end. */
-#stats { margin-left: auto; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-#status .stats-toggle { margin-left: auto; padding: 0 7px; font-size: 10.5px; line-height: 16px; background: transparent; color: var(--muted); border: 1px solid var(--line); border-radius: 5px; }
+#stats { margin-left: auto; min-width: 0; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#status .stats-toggle { flex: none; margin-left: auto; padding: 0 7px; font-size: 10.5px; line-height: 16px; background: transparent; color: var(--muted); border: 1px solid var(--line); border-radius: 5px; }
 #stats:not([hidden]) + .stats-toggle { margin-left: 0; }
 #status .stats-toggle.on { color: var(--accent); border-color: var(--accent); }
 
