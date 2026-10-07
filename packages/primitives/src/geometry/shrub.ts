@@ -76,14 +76,14 @@ export function growThicket(p: Resolved<typeof thicketParams>, ctx: BuildContext
 }
 
 /**
- * How each kind of leaf builds a mound: its cut, its cards' size and share,
- * how lumpy its clumps are and how bright. Feathery sprays are long cards of
- * small lance leaves.
+ * How each kind of leaf builds a mound: its cut, its cards' size, length and
+ * share, how lumpy its clumps are and how bright. Feathery sprays are long,
+ * tapering cards of fine needles combed toward their tips.
  */
 const LEAVES = {
   rounded: { cut: CUT.oval, card: 1, long: 1, cards: 1, lump: 0.24, shade: 0 },
   glossy: { cut: CUT.oval, card: 0.82, long: 1, cards: 1.2, lump: 0.14, shade: 0.06 },
-  feathery: { cut: CUT.strand, card: 0.62, long: 2.6, cards: 0.75, lump: 0.34, shade: -0.03 },
+  feathery: { cut: CUT.needles, card: 0.7, long: 2.2, cards: 0.8, lump: 0.34, shade: -0.12 },
 } as const;
 
 /** A bush is placed by the hundred, so its mound stays small. */
@@ -219,7 +219,8 @@ export function buildLeafMound(p: Resolved<typeof leafMoundParams>, ctx: BuildCo
             // Skirt cards that would dip into the soil lie on it instead.
             p: atLeast(add(add(at, scale(across, a * half)), scale(along, b * length)), 0.01),
             across: a,
-            along: look.long > 1 ? ((b + 1) * length) / half : b,
+            // A needle spray runs from its base (0) to its tip (1); a cluster of leaves from -1 to 1.
+            along: look.cut === CUT.needles ? (b + 1) / 2 : b,
             n: normal,
             shade,
           })),
