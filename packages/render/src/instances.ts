@@ -81,6 +81,7 @@ export function createPlantInstances(plant: Realized, light: SceneLight, spots: 
     uSway: { value: plant.motion.sway },
     uFrequency: { value: plant.motion.frequency },
     uHeight: { value: height },
+    uVariety: { value: 1 },
   };
   const meshes: { mesh: THREE.InstancedMesh; color: THREE.ShaderMaterial; depth: THREE.ShaderMaterial }[] = [];
   plant.parts.forEach((part, i) => {
@@ -99,6 +100,7 @@ export function createPlantInstances(plant: Realized, light: SceneLight, spots: 
         uFoliage: { value: foliage },
       },
       side: foliage === 0 ? THREE.FrontSide : THREE.DoubleSide,
+      alphaToCoverage: part.cutout.some((c) => c !== 0),
     });
     const depth = new THREE.ShaderMaterial({
       vertexShader: INSTANCED_DEPTH,

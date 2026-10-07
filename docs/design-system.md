@@ -41,17 +41,30 @@ a canopy; it never touches decline.
 
 ## Leaves
 
-Canopies are painted masses from afar and leaves up close. Each clump of
-leaves is a soft core under a shell of leaf cards; willow strands are crossed
-ribbons of small hanging leaves; fir sprays are layered tents of needles with
-jagged, combed fringes. A primitive only places cards and names their cut
-(`CUT` in `@gaia/schema`: cluster, strand or needles); the plant shader cuts
-each card to its leaves, with no textures. Every card shades with the crown's
+Canopies are painted masses from afar and leaves up close. Leaf cards build
+each clump themselves: an outer shell gives it a leafy outline and an inner,
+darker layer gives it depth, over a small dark core that reads only as
+shadow in the gaps. Each family has its own leaf: a canopy's leaves are
+pointed, oval (cherry) or lobed (maple), chosen as a parameter of
+`leaf-clumps@1`. Willow strands are crossed ribbons of small hanging lance
+leaves. A fir spray is a frond: a ridge of needles along the limb and
+branchlets to either side that reach toward the tip and droop, so a fir reads
+as layered, feathery needles rather than flat plates. A primitive only places
+cards and names their cut (`CUT` in `@gaia/schema`: cluster, oval, lobed,
+strand, needles, blossom or patch); the plant shader cuts each card to its
+leaves, with no textures. Every card shades with the crown's
 blended normal, so the canopy lights as one volume. As a card shrinks on
 screen its leaves merge into its plain outline, so distant canopies never
 sparkle, and a card seen edge-on fades out. Cards drop and wither one by one
 as vitality falls, so a failing canopy thins before it goes bare. Cards cast
 their scalloped outlines as shadows, so sun falls through between them.
+
+Bushes are leafy mounds built the same way: layered leaf cards over clumps
+at every stem tip, down to the soil, over a dark core that hides the frame.
+They shade as one volume, bright on top and at the rim, dark underneath and
+inside, so they sit in the turf. Their blossoms are small cupped five-petaled
+flowers in loose trusses, and berries are small. As vitality falls the cards
+drop one by one and brown, the core goes, and bare twigs show.
 
 ## Scale
 
@@ -194,10 +207,15 @@ downhill side still touches the soil; a drift lies on the ground's plane, so
 its stems stay upright. Rocks are half sunk by construction. Moss caps their
 upward faces and recedes, edges first, drying to lichen grey as vitality
 falls; the stone bleaches, and a boulder's two halves slump apart along a
-fissure, so it cracks. No blade of grass grows under a stone or through a bush's heart: a
+fissure, so it cracks. Moss ends along a soft, winding edge that follows its
+own depth across the stone, never the stone's facets, and that edge creeps
+back toward each patch's heart as vitality falls. No blade of grass grows under a stone or through a bush's heart: a
 mask of each one's outline at the ground clears it, so grass grows up
 against a rock and never pierces it. Each blueprint draws as one instanced
-mesh per part, and drifts cast no shadow.
+mesh per part, and drifts cast no shadow. Instanced copies vary their own
+shape in the shader, seeded by where each stands: a little taller or
+squatter, a lean, and a bulge to one side that grows from nothing at the
+ground, so the cleared footprint still fits.
 
 ## Clouds
 

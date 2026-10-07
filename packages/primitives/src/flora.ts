@@ -89,6 +89,11 @@ export const leafClumpsParams = {
     plates: "Flat-topped layered plates, like a stone pine",
     tufts: "Small loose tufts at every twig",
   }),
+  leaf: t.choice("The shape of each leaf", {
+    pointed: "Slender pointed leaves, like a birch's or a beech's",
+    oval: "Small rounded ovals, like a cherry's or an apple's",
+    lobed: "Broad leaves with pointed lobes, like a maple's or a sycamore's",
+  }),
   size: t.scale("Size of each clump", { small: 0.6, medium: 1, large: 1.5, "very large": 2.1 }),
   fullness: t.scale("How much of the frame the leaves hide", {
     "sparse, frame visible": 0.4,
@@ -204,7 +209,7 @@ export const leafMoundParams = {
 export const leafMound = primitive({
   id: "leaf-mound@1",
   role: "Foliage",
-  doc: "Leaf clumps that hug a shrub's frame down to the ground, so it reads as one soft mound.",
+  doc: "Layered leaves that hug a shrub's frame down to the ground, so it reads as one soft, leafy mound.",
   params: leafMoundParams,
   build: (p, ctx, skeleton) => buildLeafMound(p, ctx, skeleton),
 });
