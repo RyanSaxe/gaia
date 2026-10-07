@@ -35,7 +35,7 @@ export interface GroundTexture {
 }
 
 export function createGroundTexture(t: Terrain): GroundTexture {
-  const { n } = t.lattice;
+  let { n } = t.lattice;
   let data: Float32Array = new Float32Array(n * n * 4);
   const texture = new THREE.DataTexture(data, n, n, THREE.RGBAFormat, THREE.FloatType);
   texture.minFilter = THREE.NearestFilter;
@@ -47,6 +47,15 @@ export function createGroundTexture(t: Terrain): GroundTexture {
     uGroundSpacing: { value: t.lattice.spacing },
   };
   const update = (next: Terrain, packed?: Float32Array): void => {
+    // A world of another size: a texture of its size.
+    if (next.lattice.n !== n || next.lattice.origin !== uniforms.uGroundOrigin.value) {
+      n = next.lattice.n;
+      data = new Float32Array(n * n * 4).fill(TRAILS.reach);
+      texture.dispose();
+      texture.image = { data, width: n, height: n };
+      uniforms.uGroundN.value = n;
+      uniforms.uGroundOrigin.value = next.lattice.origin;
+    }
     if (packed !== undefined && packed.length === n * n * 4) {
       data = packed;
       texture.image = { data, width: n, height: n };
@@ -400,16 +409,25 @@ export function createGround(t: Terrain, light: SceneLight, covers: RegionCovers
   // The overview's coarse grid reads the trails from the texture at full resolution.
   const coarseMaterial = new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: FRAG, uniforms: coarseUniforms, defines: { TRAIL_TEXTURE: "" } });
   // The whole lattice: the same grid, one level, centered on the world.
-  const coarseQuads = 2 * Math.ceil(((t.lattice.n - 1) * t.lattice.spacing) / (2 * RINGS.coarse * t.lattice.spacing));
-  const into = { pos: [] as number[], index: [] as number[] };
-  grid(coarseQuads, 0, () => true, into);
-  const coarse = meshOf(into.pos, into.index, coarseMaterial);
+  const coarseOf = (l: Terrain["lattice"]): THREE.Mesh => {
+    const quads = 2 * Math.ceil(((l.n - 1) * l.spacing) / (2 * RINGS.coarse * l.spacing));
+    const into = { pos: [] as number[], index: [] as number[] };
+    grid(quads, 0, () => true, into);
+    return meshOf(into.pos, into.index, coarseMaterial);
+  };
+  const coarse = coarseOf(t.lattice);
+  let coarseN = t.lattice.n;
   const wilds = new THREE.Mesh(
     wildsGeometry(t),
     new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: FRAG, uniforms, defines: { WILDS: "" } }),
   );
   wilds.frustumCulled = false;
   const update = (next: Terrain, made?: WildsRing): void => {
+    if (next.lattice.n !== coarseN) {
+      coarseN = next.lattice.n;
+      coarse.geometry.dispose();
+      coarse.geometry = coarseOf(next.lattice).geometry;
+    }
     wilds.geometry.dispose();
     wilds.geometry = wildsGeometry(next, made);
     uniforms.uHeightRange.value.set(next.report.min, next.report.max);

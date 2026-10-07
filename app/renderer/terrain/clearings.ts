@@ -27,15 +27,16 @@ export interface Clearings {
   };
   /** Clears the ground under each component's outline, and the capsules set last. */
   update(clearings: readonly Clearing[]): void;
+  /** Takes on a bake of another size; the mask is drawn again by the next `update`. */
+  fit(t: Terrain): void;
   /** Ground kept bare whatever the components are, such as buildings and their walks; drawn by the next `update`, and kept until set again. */
   setCapsules(capsules: readonly Capsule[]): void;
 }
 
 export function createClearings(t: Terrain): Clearings {
-  const l = t.lattice;
-  const extent = (l.n - 1) * l.spacing;
-  const n = Math.ceil(extent / RESOLUTION);
-  const data = new Uint8Array(n * n);
+  let l = t.lattice;
+  let n = Math.ceil(((l.n - 1) * l.spacing) / RESOLUTION);
+  let data = new Uint8Array(n * n);
   const texture = new THREE.DataTexture(data, n, n, THREE.RedFormat, THREE.UnsignedByteType);
   texture.minFilter = THREE.LinearFilter;
   texture.magFilter = THREE.LinearFilter;
@@ -92,6 +93,16 @@ export function createClearings(t: Terrain): Clearings {
   };
   return {
     uniforms,
+    fit(next) {
+      if (next.lattice.n === l.n && next.lattice.origin === l.origin) return;
+      l = next.lattice;
+      n = Math.ceil(((l.n - 1) * l.spacing) / RESOLUTION);
+      data = new Uint8Array(n * n);
+      texture.dispose();
+      texture.image = { data, width: n, height: n };
+      uniforms.uClearingOrigin.value = l.origin;
+      uniforms.uClearingSize.value = n * RESOLUTION;
+    },
     update(next) {
       outlines = next;
       draw();

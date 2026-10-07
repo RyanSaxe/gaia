@@ -51,6 +51,8 @@ export function createRegionCovers() {
     const { n, origin, spacing } = t.lattice;
     if (COVER_TAPS !== 4) throw new Error("The cover textures hold four regions per lattice sample.");
     for (const [map, data] of [[uniforms.uCoverRegions.value, t.coverRegions], [uniforms.uCoverShares.value, t.coverShares]] as const) {
+      // A world of another size needs a texture of its size.
+      if (map.image.width !== n) map.dispose();
       map.image = { data, width: n, height: n };
       map.needsUpdate = true;
     }

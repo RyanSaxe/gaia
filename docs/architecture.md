@@ -49,7 +49,8 @@ depends on another through its manifest or when one of its files imports one
 of the other's. History comes from one `git log`. Nothing runs the compiler,
 the linter or the tests yet, so diagnostics and failing tests read 0, and
 nothing watches the project for `facts.changed`. On Gaia's own repository
-(about 210 files, 31,000 lines) `project.open` takes about 0.15 s.
+(about 220 files, 33,000 lines) `project.open` takes about 70 ms in a release
+build.
 
 ## Packages
 
@@ -58,10 +59,10 @@ nothing watches the project for `facts.changed`. On Gaia's own repository
 | `@gaia/schema` | The type builder, ports and vitality channels, primitive and kind contracts, code facts, the world document, Jev's wire format, the engine protocol, content identity | Nothing |
 | `@gaia/primitives` | Primitive declarations and geometry, palettes, the manifest `PRIMITIVES` | schema |
 | `@gaia/kinds` | The flora, structure, rock, wildflowers, landmark, link, biome and world kinds | schema |
-| `@gaia/world` | The question planner, answer rules, context gathering, file and entity vitality, type-space tools, `WorldChange` | schema |
+| `@gaia/world` | The question planner, answer rules, context gathering, file and entity vitality, type-space tools, `WorldChange`, and the world laid out from code: the requests Jev answers about it, the stand-in judge and the layout | schema |
 | `@gaia/realize` | Blueprint to parts, world and region looks at an hour, the light between a day's keys, the sky and air references, presets, channel math, detail by distance | schema, primitives |
 | `@gaia/render` | Three.js materials, light and shadow, and instanced copies of a component, culled by cell and thinned by distance | schema, realize, three |
-| `@gaia/terrain` | Relief composition, the baked heightfield, water, the wild land past the rim, walking, wading and swimming, the solids that stop a walk and the way around them, sight lines, where plants, the understory and landmarks stand, and the routes of trails | schema, primitives, realize |
+| `@gaia/terrain` | Relief composition, the baked heightfield, water, the wild land past the rim, walking, wading and swimming, the solids that stop a walk and the way around them, sight lines, where plants, the understory and landmarks stand, the routes of trails, and where a person is (`placeAt`) | schema, primitives, realize |
 | `@gaia/app` | Electron main, preload, world service, and the renderer (the lab) | Every package |
 
 ESLint enforces these boundaries and the purity rules; `eslint.config.js`
@@ -102,6 +103,47 @@ flag or a set. A blueprint stores the words Jev chose. A primitive's `build`
 receives numbers, which the seed picks between neighboring levels, so
 instances of one blueprint vary and each is identical on every run.
 
+## A world from code
+
+`@gaia/world` turns a code model (`CodeModel`, what `project.open` returns)
+into a world document (`CodeWorld`, in `packages/world/src/code-world.ts`).
+The repository is the world. Each directory is an area, a circle of ground
+nested inside its parent's. Each file is a patch inside its directory's area,
+its size set by its lines (2.5 m² a line, capped at 1,200 lines). Each entity
+stands on a lot in its root directory's area, as a building or a landmark.
+A dependency between two entities that Jev would walk becomes a trail
+request. `layoutWorld` packs a directory's lot first, then its files, then
+its subdirectories' areas around them, and fits each in its smallest circle,
+so the world's side grows with the code (Gaia's own is 1.3 km). A directory
+whose own lines, with those of subdirectories that have no land of their
+own, reach 3% of the code gets its own land: a terrain region centered on
+its files, reaching as far as their ground (`RegionSpec.reach`, which weighs
+the borders between regions). Smaller directories are areas on their
+parent's land.
+
+Jev judges every look: the repository's art direction, each region's land,
+what grows on each file's patch, whether each entity is a building or a
+landmark and which, and which dependencies become trails and how they look.
+`planWorldRequests` builds one request per thing, from facts and doc
+comments only, with options shuffled by the thing's path. `judgeWorld` asks
+them through any `JevClient`, eight at a time. Until the reviewer approves
+live calls, `standInJev` answers: a deterministic stand-in that scores each
+option by the fact tags its look suits, with a tie-break seeded by the
+question. `engineJev` in the world service is the live client; swapping it in
+is one line in `app/renderer/terrain/code-world.ts`.
+
+`placeAt(world, x, z)` in `@gaia/terrain` says where a person is: the
+deepest area whose circle holds the point and the file patch underfoot, if
+any (`WorldPlaces`, in `@gaia/schema`). Past every area is the repository's
+own wild land.
+
+The terrain lab's "This codebase" button (or `?world=code`) shows Gaia's own
+world from `app/renderer/terrain/fixtures/gaia.json`, a snapshot `pnpm
+snapshot` writes through the engine's `project.open`. `standWorld` takes the
+layout (`StandRequest.code`): each building and landmark on its lot, trees of
+the chosen species on each file's patch with that file's vitality, and the
+trails between lots. The ground textures take a world of any size.
+
 ## Jev
 
 Jev answers three question types about one JSON state: `choice` (up to 255
@@ -118,6 +160,17 @@ answers can vary between identical calls. Gaia therefore:
 - stores every accepted answer, keyed by the question, the pinned model and
   the coarse facts it reads, and asks again only when those facts change;
 - keeps a stored answer unless a fresh one wins by a margin (`reconcile`).
+
+The engine is Jev's only client (`engine/src/jev.rs`). It posts each request
+to OpenRouter's Decisions API with curl, the key read from the macOS Keychain
+(service `gaia-openrouter`) and handed to curl on stdin, never on a command
+line or over the protocol. `jev.batch` sends many requests eight at a time;
+`jev.ask` sends one. Both refuse unless the engine runs with `GAIA_JEV=live`.
+`jev.estimate` returns what a batch would send and cost without reading the
+key or touching the network: tokens are estimated at 1.8 bytes each, from
+OpenRouter's published example, and priced at Jev 1.13's $0.042 per million
+input tokens (output is free). `pnpm print-world-requests` prints every
+request judging Gaia's own world would make, with that estimate.
 
 ## Vitality
 

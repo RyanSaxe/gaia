@@ -22,6 +22,12 @@ export interface RegionSpec {
   readonly z: number;
   /** The region's ground level, meters, from the world layout. */
   readonly base: number;
+  /**
+   * How far the region's own ground reaches from its middle, meters: a
+   * larger region claims more land before its neighbor's begins. Absent, 0,
+   * which divides the land evenly between neighboring middles.
+   */
+  readonly reach?: number;
   /** A blueprint of the `biome` kind. Terrain reads its relief slot. */
   readonly biome: Blueprint;
 }
@@ -124,7 +130,7 @@ export function regionWeights(spec: WorldSpec, x: number, z: number, out: Float6
   let nearest = Infinity;
   for (let i = 0; i < spec.regions.length; i++) {
     const r = spec.regions[i] as RegionSpec;
-    const d = Math.hypot(wx - r.x, wz - r.z);
+    const d = Math.hypot(wx - r.x, wz - r.z) - (r.reach ?? 0);
     out[i] = d;
     if (d < nearest) nearest = d;
   }

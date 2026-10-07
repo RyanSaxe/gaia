@@ -62,3 +62,41 @@ export interface WorldDocument {
   readonly links: Readonly<Record<string, Link>>;
   readonly placements: Readonly<Record<Path, Placement>>;
 }
+
+/** A directory's land: the circle of ground it holds, its own and its subdirectories'. */
+export interface AreaPlace {
+  /** The directory's project-relative path; "" is the repository's root. */
+  readonly path: string;
+  readonly name: string;
+  /** 0 for the root, 1 for its subdirectories, and so on. */
+  readonly depth: number;
+  readonly parent: Path | null;
+  readonly x: number;
+  readonly z: number;
+  readonly radius: number;
+}
+
+/** A file's patch of ground inside its directory's area. */
+export interface PatchPlace {
+  readonly path: string;
+  readonly name: string;
+  /** Its directory's path. */
+  readonly area: Path;
+  readonly x: number;
+  readonly z: number;
+  readonly radius: number;
+  /** The file's vitality now, 0 to 1. */
+  readonly vitality: number;
+}
+
+/**
+ * Where every directory's area and every file's patch lies in a world, so
+ * anything can ask what stands under a point (`placeAt` in @gaia/terrain).
+ * Areas nest: a subdirectory's circle lies inside its parent's.
+ */
+export interface WorldPlaces {
+  /** The repository's name, which names the world. */
+  readonly name: string;
+  readonly areas: readonly AreaPlace[];
+  readonly patches: readonly PatchPlace[];
+}

@@ -43,6 +43,7 @@ import {
   clearanceAt,
   outlineShape,
   piecesShapes,
+  placeAt,
   planWalk,
   type Terrain,
   type Walk,
@@ -75,7 +76,8 @@ import { createUnderstory } from "./understory.ts";
 import { createClearings } from "./clearings.ts";
 import { type Ways, createWays, trailWear } from "./trails.ts";
 import { createCard } from "./card.ts";
-import { type Represented, SAMPLE_FILES, representFile } from "./samples.ts";
+import { type Represented, SAMPLE_ENTITIES, SAMPLE_FILES, representEntity, representFile } from "./samples.ts";
+import { type CodeLab, codeWorld } from "./code-world.ts";
 import { createSettlement } from "./settlement.ts";
 import { createSigns } from "./signs.ts";
 import { createBaker } from "./baker.ts";
@@ -90,6 +92,7 @@ const TEMPLATE = /* html */ `
       <button data-ref="mode-walk" class="seg on" type="button">Walk</button>
       <button data-ref="mode-overview" class="seg" type="button">Overview</button>
     </div>
+    <button data-ref="codebase" title="Gaia's own world, from the engine's facts about this repository">This codebase</button>
     <button data-ref="random" class="primary" title="Draw every region's landform, fields and cover uniformly, then fit the budget">Random terrain</button>
   </div>
   <div class="bar bottom">
@@ -173,6 +176,8 @@ interface Tree {
   readonly yaw: number;
   /** The file it stands for. */
   readonly represented: Represented;
+  /** In the codebase's world, the file patch it grows on. */
+  readonly patch?: number;
 }
 
 /** The full world, or the small one with `?world=small` in the page's address, to compare the two. */
@@ -252,7 +257,11 @@ export function createTerrainLab(root: HTMLElement): Lab {
   const light = createSceneLight();
   light.uFogDensity.value = FOG.walk;
   // A building for each sample entity, near the stream, each on a pad leveled into the bake.
-  const settlement = createSettlement(light);
+  let settlement = createSettlement(light);
+  /** Gaia's own world when "This codebase" is shown: what every area, patch, building, landmark and trail stands for. */
+  let code: CodeLab | null = null;
+  /** The world whose light, sky and air the lab shows: the codebase's own once it is shown. */
+  let skyWorld = SKY_WORLD;
   let ways: Settled = { sites: [], trails: [] };
   const worldLib = new Library(WORLD_PRIMITIVES);
   const lantern = createLantern(light);
@@ -327,8 +336,8 @@ export function createTerrainLab(root: HTMLElement): Lab {
   let hour = Number.NaN;
   function applyHour(h: number): void {
     hour = h;
-    if (SKY_WORLD === undefined) return;
-    const look = realizeSky({ blueprint: SKY_WORLD.world, kind: worldKind }, worldLib, seedOf("terrain-lab/sky"), h);
+    if (skyWorld === undefined) return;
+    const look = realizeSky({ blueprint: skyWorld.world, kind: worldKind }, worldLib, seedOf("terrain-lab/sky"), h);
     applyLight(light, look.light);
     sky.apply({ light: look.light, sky: { ...look.sky, mid: mixLab(look.sky.zenith, look.sky.horizon, 0.5) }, fog: { color: look.sky.horizon, density: FOG[mode], mist: 0 } });
   }
@@ -396,11 +405,17 @@ export function createTerrainLab(root: HTMLElement): Lab {
     trailStyles: [trailStyles[0], trailStyles[1], trailStyles[2]] as [RouteSpec, RouteSpec, RouteSpec],
     trees: { count: treeCount, seed: 9, presets: FLORA_PRESETS.length, builds: TREE_BUILDS, bases: variants.map((v) => v.base) },
     understory: understory.plan(next, understoryDensity),
+    ...(code === null ? {} : { code: code.stand }),
   });
   /** Stands the bake's trees and understory, placed on the bake thread, and what stops a walker. */
   function plant(stood: Stand): void {
     // Trees keep off the trails, the buildings and the landmarks; the bake thread kept them off.
-    trees = stood.trees.map((t) => ({ ...t, represented: representFile(SAMPLE_FILES[t.index % SAMPLE_FILES.length] as (typeof SAMPLE_FILES)[number]) }));
+    // In the codebase's world each tree grows on its file's patch and takes that file's vitality.
+    const fileOf = (t: (typeof stood.trees)[number]) => {
+      const patch = t.patch === undefined ? undefined : code?.world.patches[t.patch];
+      return (patch === undefined ? undefined : code?.files.get(patch.path)) ?? (SAMPLE_FILES[t.index % SAMPLE_FILES.length] as (typeof SAMPLE_FILES)[number]);
+    };
+    trees = stood.trees.map((t) => ({ ...t, represented: representFile(fileOf(t)) }));
     // Each build keeps its instances from bake to bake and only moves its copies.
     treeViews = variants.flatMap((v, k) => {
       const spots = trees.filter((t) => t.variant === k).map((t) => ({ x: t.x, y: t.y, z: t.z, yaw: t.yaw, scale: t.scale, vitality: t.represented.report.vitality }));
@@ -451,7 +466,14 @@ export function createTerrainLab(root: HTMLElement): Lab {
   // ---------- signs, and walking up to see what a thing is ----------
 
   let subjects: Subject[] = [];
-  /** A building's signboard at the end of its walk, and a plaque at the foot of each tree facing the middle of the world. */
+  /** The subject each sign names, by the sign's instance. */
+  let signSubjects: Subject[] = [];
+  /**
+   * A building's signboard at the end of its walk, a landmark's at its foot,
+   * and a plaque at the foot of a tree facing the middle of the world: every
+   * tree in the sample world, and in the codebase's world the first tree on
+   * each file's patch, which names the file.
+   */
   function placeSigns(): void {
     const buildingSubjects: Subject[] = settlement.buildings.map((b) => ({
       represented: b.represented,
@@ -460,6 +482,26 @@ export function createTerrainLab(root: HTMLElement): Lab {
       z: b.site.z,
       stand: () => settlement.standOf(b),
     }));
+    // A landmark stands for an entity in the codebase's world: walk up to its foot to read it.
+    const landmarkSubjects: Subject[] = code === null
+      ? []
+      : ways.sites.flatMap((s, i) => {
+          const facts = code?.landmarks[i]?.facts;
+          const lm = landmarks[s.landmark];
+          if (facts === undefined || lm === undefined) return [];
+          const { x, z } = s.site;
+          return [{
+            represented: representEntity(facts),
+            standsAs: `A ${lm.name.toLowerCase()}`,
+            x,
+            z,
+            stand: (fx: number, fz: number) => {
+              const d = Math.hypot(fx - x, fz - z) || 1;
+              const off = lm.base + 7;
+              return { x: x + ((fx - x) / d) * off, z: z + ((fz - z) / d) * off };
+            },
+          }];
+        });
     const treeSubjects: Subject[] = trees.map((tree) => {
       const { x, z } = tree;
       const crown = (variants[tree.variant] as TreeVariant).radius * tree.scale;
@@ -476,13 +518,31 @@ export function createTerrainLab(root: HTMLElement): Lab {
         },
       };
     });
-    subjects = [...buildingSubjects, ...treeSubjects];
+    subjects = [...buildingSubjects, ...landmarkSubjects, ...treeSubjects];
+    const named = new Set<number>();
+    const plaqued = trees.flatMap((tree, i) => {
+      if (tree.patch !== undefined) {
+        if (named.has(tree.patch)) return [];
+        named.add(tree.patch);
+      }
+      return [{ tree, subject: treeSubjects[i] as Subject }];
+    });
+    signSubjects = [...buildingSubjects, ...landmarkSubjects, ...plaqued.map((p) => p.subject)];
     signs.set([
       ...settlement.buildings.map((b) => {
         const at = settlement.signOf(b);
         return { ...at, y: heightAt(terrain.lattice, at.x, at.z), scale: 1, name: b.represented.name, note: b.represented.what, vitality: b.represented.report.vitality };
       }),
-      ...trees.map((tree) => {
+      ...landmarkSubjects.map((l, i) => {
+        const view = landmarkViews[i];
+        const yaw = view?.object.rotation.y ?? 0;
+        const lm = landmarks[ways.sites[i]?.landmark ?? 0];
+        const r = (lm?.base ?? 2) + 3;
+        const x = l.x + Math.sin(yaw) * r + Math.cos(yaw) * 1.6;
+        const z = l.z + Math.cos(yaw) * r - Math.sin(yaw) * 1.6;
+        return { x, y: heightAt(terrain.lattice, x, z), z, yaw, scale: 1, name: l.represented.name, note: l.represented.what, vitality: l.represented.report.vitality };
+      }),
+      ...plaqued.map(({ tree }) => {
         const { x, z } = tree;
         const base = (variants[tree.variant] as TreeVariant).base * tree.scale;
         const d = Math.hypot(x, z) || 1;
@@ -690,11 +750,15 @@ export function createTerrainLab(root: HTMLElement): Lab {
     const land = groundHit(ray);
     const tree = treeHit(ray);
     const building = raycaster.intersectObjects(settlement.views().map((v) => v.object), true)[0];
+    const rise = code === null ? undefined : raycaster.intersectObjects(landmarkViews.map((v) => v.object), true)[0];
+    const riseAt = rise === undefined ? undefined : landmarkViews.findIndex((v) => v.object.getObjectById(rise.object.id) !== undefined);
+    const riseSite = riseAt === undefined ? undefined : ways.sites[riseAt]?.site;
     const sign = raycaster.intersectObject(signs.mesh)[0];
     const hits = [
       ...(tree === null ? [] : [{ distance: tree.distance, subject: subjects.find((s) => s.x === tree.tree.x && s.z === tree.tree.z) }]),
       ...(building === undefined ? [] : [{ distance: building.distance, subject: subjects.find((s) => settlement.buildings.some((b) => b.view.object.getObjectById(building.object.id) !== undefined && s.x === b.site.x && s.z === b.site.z)) }]),
-      ...(sign === undefined ? [] : [{ distance: sign.distance, subject: subjects[sign.instanceId ?? -1] }]),
+      ...(sign === undefined ? [] : [{ distance: sign.distance, subject: signSubjects[sign.instanceId ?? -1] }]),
+      ...(rise === undefined || riseSite === undefined ? [] : [{ distance: rise.distance, subject: subjects.find((s) => s.x === riseSite.x && s.z === riseSite.z) }]),
     ].sort((a, b) => a.distance - b.distance);
     const nearest = hits[0];
     if (nearest !== undefined && nearest.subject !== undefined && (land === null || nearest.distance < land.distance + 0.5)) {
@@ -815,9 +879,13 @@ export function createTerrainLab(root: HTMLElement): Lab {
   function adopt(next: WorldSpec, baked: Terrain, stood: Stand): void {
     world = next;
     terrain = baked;
+    clearings.fit(terrain);
+    (grass.mesh.material as THREE.ShaderMaterial).uniforms.uLand!.value = landRadius(terrain);
     settlement.seat(stood.sites);
     ways = { sites: stood.landmarks, trails: stood.trails };
     placeWays();
+    // In the codebase's world a landmark stands for an entity and takes its vitality.
+    landmarkViews.forEach((v, i) => v.setVitality(code === null ? 1 : (code.world.things.filter((t) => t.as === "landmark")[i]?.vitality ?? 1)));
     placeBuildings();
     updateCovers();
     groundTex.update(terrain, stood.ground);
@@ -878,7 +946,13 @@ export function createTerrainLab(root: HTMLElement): Lab {
       `${mode === "walk" ? "From here" : `From the middle of ${world.regions[selected]?.id ?? ""}`}, at eye height: ` +
       `farthest visible ground <b>${fmt(s.max, 0)} m</b>, median over bearings <b>${fmt(s.median, 0)} m</b>`;
     const here = regionAt(walker.x, walker.z);
-    $("here").textContent = mode === "walk" ? `${world.regions[here]?.id ?? ""} · ${landformName(here)} · ${coverName(here)}` : "";
+    if (code !== null) {
+      // Where you are in the code: the directory whose ground this is, and the file underfoot.
+      const place = placeAt(code.world, walker.x, walker.z);
+      $("here").textContent = mode === "walk" ? `${place.area.path === "" ? code.world.name : place.area.path} · ${place.file === null ? "common ground" : place.file.name}` : "";
+    } else {
+      $("here").textContent = mode === "walk" ? `${world.regions[here]?.id ?? ""} · ${landformName(here)} · ${coverName(here)}` : "";
+    }
   }
 
   function refreshPanel(): void {
@@ -1013,14 +1087,36 @@ export function createTerrainLab(root: HTMLElement): Lab {
     passes.view = { calls: renderer.info.render.calls, triangles: renderer.info.render.triangles };
   }
 
+  /**
+   * Shows Gaia's own world, judged and laid out from the engine's snapshot
+   * of this repository, or goes back to the sample world. The buildings are
+   * the codebase's entities, so the settlement is rebuilt; the rest follows
+   * the bake.
+   */
+  async function showCodebase(on: boolean): Promise<void> {
+    code = on ? await codeWorld() : null;
+    for (const v of settlement.views()) scene.remove(v.object);
+    settlement = createSettlement(light, code?.buildings ?? SAMPLE_ENTITIES);
+    for (const v of settlement.views()) scene.add(v.object);
+    skyWorld = code?.sky ?? SKY_WORLD;
+    hour = Number.NaN;
+    const next = code?.spec ?? sampleWorld(SCALE);
+    orbit.maxDistance = Math.max(700, next.size * 1.1);
+    selected = 0;
+    $("codebase").textContent = on ? "Sample world" : "This codebase";
+    ($("random") as HTMLButtonElement).disabled = on;
+    if (await rebake(next)) valleyView();
+  }
+
   setMode("walk");
   refreshStats();
   refreshPanel();
   // The first world bakes behind a quiet veil, which lifts once it stands.
-  const ready = rebake(world).then(() => {
-    valleyView();
+  const startWithCode = new URLSearchParams(location.search).get("world") === "code";
+  const ready = (startWithCode ? showCodebase(true) : rebake(world).then(() => valleyView())).then(() => {
     $("veil").classList.add("lifted");
   });
+  $("codebase").addEventListener("click", () => void showCodebase(code === null));
 
   // ---------- shots: each relief primitive under every region, from above ----------
 
@@ -1200,6 +1296,24 @@ export function createTerrainLab(root: HTMLElement): Lab {
         drawnTriangles: instanced().reduce((n, v) => n + v.drawn().triangles, 0),
       }),
       selected: () => selected,
+      /** Shows Gaia's own world (true) or the sample world (false). */
+      codebase: (on: boolean) => showCodebase(on),
+      /** Where the walker is in the code: the area and file patch underfoot, or null outside the codebase's world. */
+      place: (x?: number, z?: number) => (code === null ? null : placeAt(code.world, x ?? walker.x, z ?? walker.z)),
+      /** The codebase's world: its size, areas, patches, buildings, landmarks and trails. */
+      code: () =>
+        code === null
+          ? null
+          : {
+              name: code.world.name,
+              size: code.world.size,
+              sky: code.sky?.name,
+              regions: code.world.regions.map((r) => ({ area: r.area, land: r.land, x: Math.round(r.x), z: Math.round(r.z) })),
+              areas: code.world.areas.map((a) => ({ path: a.path, x: Math.round(a.x), z: Math.round(a.z), radius: Math.round(a.radius), depth: a.depth })),
+              patches: code.world.patches.length,
+              things: code.world.things.map((t) => ({ path: t.path, name: t.name, as: t.as, look: t.look, x: Math.round(t.x), z: Math.round(t.z), vitality: +t.vitality.toFixed(2) })),
+              trails: code.world.trails.map((t) => `${t.from}->${t.to}`),
+            },
       lantern: () => ({ position: light.uLanternPosition.value.toArray(), intensity: light.uLanternIntensity.value, nightness: light.uNightness.value }),
       camera: () => ({ position: camera.position.toArray(), target: orbit.target.toArray() }),
     },
