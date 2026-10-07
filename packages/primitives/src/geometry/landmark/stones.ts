@@ -7,7 +7,7 @@
 import type { BuildContext, Built, Rand, Resolved } from "@gaia/schema";
 import type { standingStonesParams } from "../../landmark.ts";
 import { type Channels, PartBuilder, type V3, clamp, cross, fbm3, icosphere, lossThreshold, normalize, rotate } from "../kit.ts";
-import { lump, nonEmpty, smoothNormals, still } from "./shared.ts";
+import { lump, smoothNormals, still } from "./shared.ts";
 
 type StonesParams = Resolved<typeof standingStonesParams>;
 
@@ -105,7 +105,7 @@ function shadeOf(p: V3, height: number, n: V3, seed: number): { shade: number; m
  * A standing stone. It leans or falls whole about its toe, never bending;
  * or it snaps, and its top lies broken at its foot once it has gone.
  */
-function emitStone(b: PartBuilder, fallen: PartBuilder, s: Stone, facets: number, r: Rand, subdiv: number): void {
+function emitStone(b: PartBuilder, s: Stone, facets: number, r: Rand, subdiv: number): void {
   const shape = slabShape(s, facets, 0.55, r, subdiv);
   const place = placer(s);
   const points = shape.points.map(place.at);
@@ -140,7 +140,7 @@ function emitStone(b: PartBuilder, fallen: PartBuilder, s: Stone, facets: number
     const len = s.height * (1 - d.at);
     const away = r.next() * Math.PI * 2;
     const reach = len * 0.55 + s.depth * 0.6;
-    emitFallen(fallen, { x: s.x + Math.cos(away) * reach, z: s.z + Math.sin(away) * reach, yaw: away + Math.PI / 2, width: s.width * 0.85, depth: s.depth, length: len }, facets, d.loss, r);
+    emitFallen(b, { x: s.x + Math.cos(away) * reach, z: s.z + Math.sin(away) * reach, yaw: away + Math.PI / 2, width: s.width * 0.85, depth: s.depth, length: len }, facets, d.loss, r);
   }
 }
 
@@ -170,7 +170,7 @@ function emitFallen(b: PartBuilder, f: { x: number; z: number; yaw: number; widt
 }
 
 /** A slab lying across two stones' tops. It falls away first, and then lies broken in the grass below. */
-function emitLintel(b: PartBuilder, fallen: PartBuilder, a: Stone, c: Stone, thick: number, depth: number, facets: number, r: Rand): void {
+function emitLintel(b: PartBuilder, a: Stone, c: Stone, thick: number, depth: number, facets: number, r: Rand): void {
   const sphere = icosphere(2);
   const seed = Math.floor(r.next() * 1e6);
   const x = (a.x + c.x) / 2;
@@ -201,7 +201,7 @@ function emitLintel(b: PartBuilder, fallen: PartBuilder, a: Stone, c: Stone, thi
   // Outward of the gateway, it lies where it slid off.
   const out = Math.hypot(x, z) > 0.5 ? Math.atan2(z, x) : r.next() * Math.PI * 2;
   const reach = thick + 1.2 + r.next() * 1.2;
-  emitFallen(fallen, { x: x + Math.cos(out) * reach, z: z + Math.sin(out) * reach, yaw: yaw + r.range(-0.4, 0.4), width: depth, depth: thick, length: span * 0.9 }, facets, loss, r);
+  emitFallen(b, { x: x + Math.cos(out) * reach, z: z + Math.sin(out) * reach, yaw: yaw + r.range(-0.4, 0.4), width: depth, depth: thick, length: span * 0.9 }, facets, loss, r);
 }
 
 /** How each stone of a group gives way, drawn from its own stream: about two in five lean, one in three snaps, the rest fall flat. */
@@ -236,9 +236,8 @@ function stoneAt(sr: Rand, x: number, z: number, yaw: number, size: { width: num
 export function buildStandingStones(p: StonesParams, ctx: BuildContext): Built {
   const r = ctx.rand.fork("stones");
   const scale = ctx.facts.scale ?? 1;
+  // What has fallen grows in only once it has fallen, and stops no walker.
   const out = new PartBuilder("stone", "solid");
-  // What has fallen lies in the grass only once it has fallen, so it never stops a walk.
-  const fallen = new PartBuilder("stone", "none");
   const h = p.height * scale;
   const size = { width: h * 0.42, depth: h * 0.22, height: h };
   const count = Math.max(4, Math.round(p.count));
@@ -314,7 +313,7 @@ export function buildStandingStones(p: StonesParams, ctx: BuildContext): Built {
       const z = Math.sin(a) * d;
       if (placed.some(([px, pz, pr]) => Math.hypot(px - x, pz - z) < pr + tall * 0.6 + 0.8)) continue;
       placed.push([x, z, tall * 0.6]);
-      emitCairn(out, fallen, x, z, tall, p.facets, cr);
+      emitCairn(out, x, z, tall, p.facets, cr);
       k++;
     }
     heart = [spread * 0.9, 0];
@@ -336,8 +335,8 @@ export function buildStandingStones(p: StonesParams, ctx: BuildContext): Built {
     if (stones.some((s) => Math.hypot(s.x, s.z) < h)) heart = [spread + h * 0.6, 0];
   }
 
-  stones.forEach((s, k) => emitStone(out, fallen, s, p.facets, r.fork(`emit${k}`), s.height > h * 0.4 ? 3 : 2));
-  for (const [i, j] of lintels) emitLintel(out, fallen, stones[i] as Stone, stones[j] as Stone, h * 0.17, size.depth * 1.05, p.facets, r.fork(`lintel${i}`));
+  stones.forEach((s, k) => emitStone(out, s, p.facets, r.fork(`emit${k}`), s.height > h * 0.4 ? 3 : 2));
+  for (const [i, j] of lintels) emitLintel(out, stones[i] as Stone, stones[j] as Stone, h * 0.17, size.depth * 1.05, p.facets, r.fork(`lintel${i}`));
 
   if (p.centre !== "nothing" && p.arrangement !== "dolmen") {
     const cr = r.fork("centre");
@@ -353,9 +352,9 @@ export function buildStandingStones(p: StonesParams, ctx: BuildContext): Built {
       lean: king ? cr.range(0, 0.06) : 0,
       decline: king ? { kind: "tilt", most: cr.range(0.25, 0.4), from: cr.range(0.28, 0.4) } : { kind: "firm" },
     };
-    emitStone(out, fallen, centre, p.facets, cr, 3);
+    emitStone(out, centre, p.facets, cr, 3);
   }
-  return { parts: nonEmpty([out.part(), fallen.part()]), anchors: [] };
+  return { parts: [out.part()], anchors: [] };
 }
 
 /**
@@ -394,7 +393,7 @@ function emitCapstone(b: PartBuilder, legs: readonly Stone[], length: number, wi
  * A cairn: small stones piled in a rounded cone, `tall` meters high. Its top
  * stones tumble first as vitality falls, coming to rest around its foot.
  */
-function emitCairn(b: PartBuilder, fallen: PartBuilder, x: number, z: number, tall: number, facets: number, r: Rand): void {
+function emitCairn(b: PartBuilder, x: number, z: number, tall: number, facets: number, r: Rand): void {
   const base = tall * 0.55;
   const stone = clamp(tall * 0.13, 0.2, 0.45);
   const rows = Math.max(3, Math.round(tall / (stone * 1.3)));
@@ -418,6 +417,6 @@ function emitCairn(b: PartBuilder, fallen: PartBuilder, x: number, z: number, ta
     const d = base + stone + r.next() * tall * 0.5;
     const s = stone * r.range(0.7, 1.1);
     const at: V3 = [x + Math.cos(a) * d, s * 0.12, z + Math.sin(a) * d];
-    lump(fallen, at, [s, s * 0.55, s * 0.8], a, 0.45 + 0.15 * r.next(), still([at[0], 0, at[2]], 0.6, { grow: r.range(0.12, 0.5) }), r);
+    lump(b, at, [s, s * 0.55, s * 0.8], a, 0.45 + 0.15 * r.next(), still([at[0], 0, at[2]], 0.6, { grow: r.range(0.12, 0.5) }), r);
   }
 }

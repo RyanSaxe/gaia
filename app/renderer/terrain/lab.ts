@@ -230,9 +230,9 @@ export function createTerrainLab(root: HTMLElement): Lab {
     // The footprint at the ground: how far the landmark reaches within a meter of it.
     let base = 1;
     for (const part of built.parts) {
-      // Only what stands counts: fallen stone that grows in at its foot is walked over.
-      if (part.collision !== "solid") continue;
       for (let k = 0; k < part.positions.length; k += 3) {
+        // Only what stands counts: fallen stone that grows in at its foot is walked over.
+        if ((part.channels.grow?.[k / 3] ?? 0) > 0) continue;
         if ((part.positions[k + 1] as number) < 1) base = Math.max(base, Math.hypot(part.positions[k] as number, part.positions[k + 2] as number));
       }
     }

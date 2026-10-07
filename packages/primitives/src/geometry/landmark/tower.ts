@@ -195,8 +195,6 @@ export function buildLookoutTower(p: TowerParams, ctx: BuildContext): Built {
   const timber = new PartBuilder("timber", "solid");
   const roof = new PartBuilder("roof", "solid");
   const glass = new PartBuilder("glass");
-  // Fallen stone lies at the foot only once it has fallen, so it never stops a walk.
-  const fallen = new PartBuilder("masonry", "none");
   const thick = wallAt(0) * 0.32;
   const blockLen = p.masonry * 1.1;
   const broken = p.crown === "a broken top";
@@ -345,17 +343,18 @@ export function buildLookoutTower(p: TowerParams, ctx: BuildContext): Built {
   }
 
   // Fallen stone at the foot: it gathers as the tower crumbles, and a ruin has always had some.
+  // It grows in, and never stops a walker.
   for (let i = 0; i < 26; i++) {
     const a = r.next() * Math.PI * 2;
     const d = wallAt(0) * (sides === 0 ? 1 : 1.1) + 0.3 + Math.pow(r.next(), 1.6) * Math.max(2.5, height * 0.2);
     const s = (0.22 + 0.3 * r.next()) * p.masonry;
     const at: V3 = [Math.cos(a) * d, 0, Math.sin(a) * d];
     const grow = broken && i % 3 === 0 ? 0 : clamp(0.08 + 0.5 * r.next(), 0.06, 0.55);
-    lump(fallen, [at[0], s * 0.1, at[2]], [s, s * 0.6, s * 0.8], r.next() * Math.PI, 0.42 + 0.15 * r.next(), still(at, 0.6, { grow, tint: (r.next() - 0.5) * 0.04 }), r);
+    lump(stone, [at[0], s * 0.1, at[2]], [s, s * 0.6, s * 0.8], r.next() * Math.PI, 0.42 + 0.15 * r.next(), still(at, 0.6, { grow, tint: (r.next() - 0.5) * 0.04 }), r);
   }
 
   const anchors: Anchor[] = [{ position: [0, height, 0], normal: [0, 1, 0], size: 1 }];
-  return { parts: nonEmpty([stone.part(), timber.part(), roof.part(), glass.part(), fallen.part()]), anchors };
+  return { parts: nonEmpty([stone.part(), timber.part(), roof.part(), glass.part()]), anchors };
 }
 
 /**
