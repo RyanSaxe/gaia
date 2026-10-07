@@ -22,12 +22,13 @@ import {
   coverWeights,
   findSite,
   finishTerrain,
+  groundHeightAt,
   latticeOf,
   levelPad,
   siteToWorld,
   groundedBase,
   heightAt,
-  landRadius,
+  landHalf,
   landformsOf,
   randomWorld,
   regionWeights,
@@ -37,6 +38,7 @@ import {
   streamFlow,
   surfaceHalfWidth,
   waterDepthAt,
+  wildPast,
   wildsRing,
   withinBudget,
 } from "@gaia/terrain";
@@ -372,26 +374,45 @@ describe("full worlds", () => {
 });
 
 describe("wild land past the rim", () => {
-  it("meets the baked ground at the hand-over circle and rolls at most 6 m once settled", () => {
-    const { rings, segments, settle, variation } = WILDS;
+  it("goes on without end from the land's edge, with no step, and rolls at most 6 m near the land, swelling into soft hills farther out", () => {
+    const { settle, variation, hills, hillsIn } = WILDS;
     for (const t of baked) {
+      const h = landHalf(t);
+      for (let k = 0; k < 24; k++) {
+        const a = (k / 24) * Math.PI * 2;
+        const [cx, cz] = [Math.cos(a), Math.sin(a)];
+        // Across the land's edge the ground never jumps: no step between neighbors a quarter meter apart.
+        const cross = h / Math.max(Math.abs(cx), Math.abs(cz));
+        for (let r = cross - 20; r < cross + 20; r += 0.25) {
+          const step = Math.abs(groundHeightAt(t, cx * (r + 0.25), cz * (r + 0.25)) - groundHeightAt(t, cx * r, cz * r));
+          expect(step).toBeLessThan(0.12);
+        }
+        expect(wildPast(t, cx * cross, cz * cross)).toBeCloseTo(0, 6);
+      }
+      // Everything the land stands on is the lattice: the walkable square lies well inside the hand-over.
+      expect(groundHeightAt(t, t.spec.size / 2, -t.spec.size / 2)).toBe(heightAt(t.lattice, t.spec.size / 2, -t.spec.size / 2));
+      // Settled, near the land the wild land rolls gently; kilometers out it is still there, in soft hills.
+      const range = (from: number, to: number): number => {
+        let low = Infinity;
+        let high = -Infinity;
+        for (let k = 0; k < 4000; k++) {
+          const a = k * 2.399;
+          const [cx, cz] = [Math.cos(a), Math.sin(a)];
+          const r = h / Math.max(Math.abs(cx), Math.abs(cz)) + from + ((k % 97) / 96) * (to - from);
+          const y = groundHeightAt(t, cx * r, cz * r);
+          low = Math.min(low, y);
+          high = Math.max(high, y);
+        }
+        expect(Number.isFinite(low) && Number.isFinite(high)).toBe(true);
+        return high - low;
+      };
+      expect(range(settle, hillsIn[0])).toBeLessThanOrEqual(variation + 1e-4);
+      expect(range(settle, 6000)).toBeLessThanOrEqual(variation + hills + 1e-4);
+      // The coarse ring drawn from above is the same ground.
       const { positions } = wildsRing(t);
-      expect(positions.length).toBe(rings * segments * 3);
-      const r0 = landRadius(t);
-      for (let s = 0; s < segments; s++) {
-        const v = (segments + s) * 3;
-        const [x, y, z] = [positions[v]!, positions[v + 1]!, positions[v + 2]!];
-        expect(Math.hypot(x, z)).toBeCloseTo(r0, 2);
-        expect(y).toBeCloseTo(heightAt(t.lattice, x, z), 3);
+      for (let v = 0; v < positions.length; v += 3 * 37) {
+        expect(positions[v + 1]!).toBeCloseTo(groundHeightAt(t, positions[v]!, positions[v + 2]!), 5);
       }
-      let low = Infinity;
-      let high = -Infinity;
-      for (let v = 0; v < positions.length; v += 3) {
-        if (Math.hypot(positions[v]!, positions[v + 2]!) < r0 + settle) continue;
-        low = Math.min(low, positions[v + 1]!);
-        high = Math.max(high, positions[v + 1]!);
-      }
-      expect(high - low).toBeLessThanOrEqual(variation + 1e-4);
     }
   });
 });

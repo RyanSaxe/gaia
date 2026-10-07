@@ -12,6 +12,8 @@ import {
   WALK_TO,
   type Walker,
   bakeTerrain,
+  groundHeightAt,
+  landHalf,
   clearanceAt,
   heightAt,
   outlineShape,
@@ -276,5 +278,27 @@ describe("walking to a tapped point", () => {
   it("ends the walk where it stands when the point is within reach", () => {
     const walk = planWalk(t, NO_SOLIDS, dry, { x: dry.x + 1, z: dry.z + 0.5 });
     expect(walkToward(t, NO_SOLIDS, dry, walk, dt)).toEqual({ walker: dry, walk, state: "arrived" });
+  });
+});
+
+describe("walking off the land", () => {
+  it("walks straight off the codebase's land and on for two kilometers without stopping, eyes always on the ground", () => {
+    let at: Walker = { x: 0, z: t.spec.size / 4 };
+    let farthest = 0;
+    for (let i = 0; i < 2200 / (WALK_TO.pace * dt * 2.4); i++) {
+      const next = walkStep(t, NO_SOLIDS, at, { dx: 0.6, dz: 0.8, speed: WALK_TO.pace * 2.4 }, dt);
+      expect(Math.hypot(next.x - at.x, next.z - at.z)).toBeGreaterThan(0);
+      at = next;
+      farthest = Math.max(farthest, Math.hypot(at.x, at.z));
+    }
+    expect(farthest).toBeGreaterThan(landHalf(t) * Math.SQRT2 + 1800);
+    expect(stanceAt(t, at.x, at.z).eye).toBeCloseTo(groundHeightAt(t, at.x, at.z) + EYE_HEIGHT, 6);
+  });
+
+  it("takes a tap far out in the wild to the very spot tapped", () => {
+    const to = { x: -(landHalf(t) + 600), z: 140 };
+    const walk = planWalk(t, NO_SOLIDS, { x: 0, z: 0 }, to);
+    expect(walk.target.x).toBeCloseTo(to.x, 6);
+    expect(walk.target.z).toBeCloseTo(to.z, 6);
   });
 });

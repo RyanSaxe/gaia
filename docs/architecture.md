@@ -42,7 +42,7 @@ never crosses, because the renderer builds it. `EngineMethods` in
 | `@gaia/world` | The question planner, answer rules, context gathering, file and entity vitality, type-space tools, `WorldChange` | schema |
 | `@gaia/realize` | Blueprint to parts, world and region looks at an hour, the light between a day's keys, the sky and air references, presets, channel math, detail by distance | schema, primitives |
 | `@gaia/render` | Three.js materials, light and shadow, and instanced copies of a component, culled by cell and thinned by distance | schema, realize, three |
-| `@gaia/terrain` | Relief composition, the baked heightfield, water, the wild land past the rim, walking, wading and swimming, the solids that stop a walk and the way around them, sight lines, where plants, the understory and landmarks stand, the routes of trails, and where a point is (its area and the file underfoot, `placeAt`) | schema, primitives, realize |
+| `@gaia/terrain` | Relief composition, the baked heightfield, water, the endless wild land past the rim and the ground's height anywhere, walking, wading and swimming, the solids that stop a walk and the way around them, sight lines, where plants, the understory and landmarks stand, the routes of trails, and where a point is (its area and the file underfoot, `placeAt`) | schema, primitives, realize |
 | `@gaia/app` | Electron main, preload, world service, and the renderer (the lab) | Every package |
 
 ESLint enforces these boundaries and the purity rules; `eslint.config.js`

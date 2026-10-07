@@ -2,13 +2,16 @@
 // The shaders weigh regions by the baked cover shares (`Terrain.coverRegions`
 // and `coverShares`: each lattice sample's largest few), interpolated between
 // samples as the lattice is, so the cover drifts across the same wide band
-// where the land changes, in the same patches the bake measured.
+// where the land changes, in the same patches the bake measured. The last two
+// slots hold the wild's own two covers, which grow past the land.
 
 import * as THREE from "three";
 import type { GroundSpec } from "@gaia/schema";
 import { COVER_TAPS, type Terrain, type WorldSpec, landRadius } from "@gaia/terrain";
 
 export const MAX_REGIONS = 32;
+/** The slots of the wild's two covers, after every region's. */
+const WILD_SLOTS = [MAX_REGIONS - 2, MAX_REGIONS - 1] as const;
 
 /** Four bytes per lattice sample, read whole: the shader interpolates between samples itself. */
 function tapMap(): THREE.DataTexture {
@@ -57,26 +60,34 @@ export function createRegionCovers() {
     uniforms.uCoverMap.value.set(origin, spacing, n);
     uniforms.uCoverReach.value = landRadius(t) - 1;
   };
+  const setSlot = (i: number, c: GroundSpec): void => {
+    uniforms.uCoverForm.value[i]?.set(c.lean, c.round, c.bend);
+    uniforms.uCoverLow.value[i]?.set(...c.low);
+    uniforms.uCoverHigh.value[i]?.set(...c.high);
+    uniforms.uCoverTip.value[i]?.set(...c.tip);
+    uniforms.uCoverSoil.value[i]?.set(...c.soil);
+    uniforms.uCoverShape.value[i]?.set(c.height, c.width, c.density, c.clump);
+    uniforms.uCoverFlowers.value[i] = c.flowers;
+    uniforms.uFlowerA.value[i]?.set(...(c.flowerColors[0] ?? c.tip));
+    uniforms.uFlowerB.value[i]?.set(...(c.flowerColors[1] ?? c.tip));
+    uniforms.uFlowerC.value[i]?.set(...(c.flowerColors[2] ?? c.tip));
+  };
   return {
     uniforms,
     update(spec: WorldSpec, covers: readonly GroundSpec[], terrain: Terrain): void {
       weigh(terrain);
-      if (spec.regions.length > MAX_REGIONS) throw new Error(`The terrain lab draws at most ${MAX_REGIONS} regions; this world has ${spec.regions.length}.`);
+      if (spec.regions.length > WILD_SLOTS[0]) throw new Error(`The terrain lab draws at most ${WILD_SLOTS[0]} regions; this world has ${spec.regions.length}.`);
       uniforms.uRegionCount.value = spec.regions.length;
       spec.regions.forEach((r, i) => {
         const c = covers[i];
         if (c === undefined) throw new Error(`Region ${r.id} has no ground cover.`);
-        uniforms.uCoverForm.value[i]?.set(c.lean, c.round, c.bend);
-        uniforms.uCoverLow.value[i]?.set(...c.low);
-        uniforms.uCoverHigh.value[i]?.set(...c.high);
-        uniforms.uCoverTip.value[i]?.set(...c.tip);
-        uniforms.uCoverSoil.value[i]?.set(...c.soil);
-        uniforms.uCoverShape.value[i]?.set(c.height, c.width, c.density, c.clump);
-        uniforms.uCoverFlowers.value[i] = c.flowers;
-        uniforms.uFlowerA.value[i]?.set(...(c.flowerColors[0] ?? c.tip));
-        uniforms.uFlowerB.value[i]?.set(...(c.flowerColors[1] ?? c.tip));
-        uniforms.uFlowerC.value[i]?.set(...(c.flowerColors[2] ?? c.tip));
+        setSlot(i, c);
       });
+    },
+    /** The wild's two covers: what grows past the land, mingled in patches. */
+    wild(covers: readonly [GroundSpec, GroundSpec]): void {
+      setSlot(WILD_SLOTS[0], covers[0]);
+      setSlot(WILD_SLOTS[1], covers[1]);
     },
   };
 }
@@ -166,6 +177,16 @@ int coverPick(vec2 xz, float r) {
   }
   return region[0];
 }
+
+// The wild's two covers, after every region's.
+#define WILD_A ${WILD_SLOTS[0]}
+#define WILD_B ${WILD_SLOTS[1]}
+GroundCover coverOf(int i) { return GroundCover(uCoverLow[i], uCoverHigh[i], uCoverTip[i], uCoverSoil[i], uCoverShape[i].w); }
+GroundCover mixCover(GroundCover a, GroundCover b, float t) {
+  return GroundCover(mix(a.low, b.low, t), mix(a.high, b.high, t), mix(a.tip, b.tip, t), mix(a.soil, b.soil, t), mix(a.clump, b.clump, t));
+}
+// The wild's cover at a point, from its patch: 0 is the first cover, 1 the second.
+GroundCover wildCover(float share) { return mixCover(coverOf(WILD_A), coverOf(WILD_B), share); }
 
 // The selected region's share of the cover, for a soft glow that fades at its organic edge.
 float coverShare(vec2 xz, int region) {

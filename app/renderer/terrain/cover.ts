@@ -1,10 +1,11 @@
 // What covers the ground: wind-swayed grass that travels with the viewer and
-// stands on the baked lattice, grown from each region's ground cover. It
-// reads the same ground texture the mesh was built from.
+// stands on the baked lattice, grown from each region's ground cover, and
+// past the land on the wild land, grown from the wild's own covers. It reads
+// the same ground texture the mesh was built from.
 
 import * as THREE from "three";
 import { CLEARINGS_GLSL, type Clearing, LIGHT_GLSL, type SceneLight, createClearings, hexToVec3 } from "@gaia/render";
-import { GROUND_SAMPLE_GLSL, type GroundTexture } from "./ground.ts";
+import { GROUND_SAMPLE_GLSL, type GroundTexture, WILD_GLSL } from "./ground.ts";
 import { REGIONS_GLSL, type RegionCovers, TUFT_GLSL } from "./regions.ts";
 import { CLEARING_GLSL, type Clearings } from "./clearings.ts";
 import { trailWear } from "./trails.ts";
@@ -14,8 +15,8 @@ ${CLEARINGS_GLSL}
 uniform float uTime;
 uniform float uWind;
 uniform vec3 uCenter;
-uniform float uLand;
 ${GROUND_SAMPLE_GLSL}
+${WILD_GLSL}
 uniform float uTrailWear;
 ${REGIONS_GLSL}
 ${TUFT_GLSL}
@@ -68,36 +69,47 @@ void main() {
   // travels with them while every blade keeps a fixed spot on the ground.
   float reach = aThin.y;
   vec2 xz = uCenter.xz + mod(aBlade.xy * reach * 2.0 - uCenter.xz + reach, reach * 2.0) - reach;
-  vec4 g4 = groundSample4(xz);
+  // Past the land the blade stands on the wild land: no water, no trails. The
+  // wild land is gentle and each sample of it costs noise, so its slope is
+  // read forward, from two samples rather than four.
+  bool wild = inWild(xz);
+  vec4 g4 = wild ? vec4(wildHeight(xz), -1000.0, 1000.0, 1000.0) : groundSample4(xz);
   vec3 g = g4.xyz;
   float e = 0.6;
-  float sx = groundAt(xz + vec2(e, 0.0)).x - groundAt(xz - vec2(e, 0.0)).x;
-  float sz = groundAt(xz + vec2(0.0, e)).x - groundAt(xz - vec2(0.0, e)).x;
+  float sx = wild ? (wildHeight(xz + vec2(e, 0.0)) - g.x) * 2.0 : groundAt(xz + vec2(e, 0.0)).x - groundAt(xz - vec2(e, 0.0)).x;
+  float sz = wild ? (wildHeight(xz + vec2(0.0, e)) - g.x) * 2.0 : groundAt(xz + vec2(0.0, e)).x - groundAt(xz - vec2(0.0, e)).x;
   float grade = length(vec2(sx, sz)) / (2.0 * e);
   vGroundNormal = normalize(vec3(-sx / (2.0 * e), 1.0, -sz / (2.0 * e)));
 
   // A blade never grows or shrinks with distance, slope or shore. Each one has
   // its own thresholds and is there whole or not at all: the field thins out
-  // from 55% of its reach over ground painted the same, toward the hand-over
-  // to the wild land, on steep risers, and over the sand toward the water.
+  // from 55% of its reach over ground painted the same, on steep risers, and
+  // over the sand toward the water.
   float r2 = fract(aSeed.x * 7.13 + aSeed.z * 3.71);
   float r3 = fract(aSeed.y * 5.31 + aThin.x * 9.17);
   float near = step(length(xz - uCenter.xz), reach * mix(0.55, 1.0, aThin.x));
-  float inland = step(length(xz), uLand - 2.0 - 26.0 * aThin.x);
   float banks = step(mix(1.3, 3.0, r2), g.z);
   float steep = step(r3, 1.0 - smoothstep(0.35, 0.7, grade) * 0.8);
 
-  // The blade grows one region's cover: its height, width, density, clumping, form and flowers.
+  // The blade grows one region's cover: its height, width, density, clumping,
+  // form and flowers. Past the land, blades drift into the wild's own two
+  // covers, each blade at its own seeded share, so the covers mingle; where
+  // the wild has only begun, its blades stand lower, so tall grass rises
+  // out of the land's cover as a verge rather than in lone spikes.
   int k = coverPick(xz, aSeed.w);
+  float wildness = wildShare(xz);
+  bool wildBlade = fract(aSeed.w * 7.31 + aThin.x * 3.17) < wildness;
+  if (wildBlade) k = fract(aSeed.w * 5.77 + aSeed.y * 2.3) < wildPatch(xz) ? WILD_B : WILD_A;
   vec4 shape = uCoverShape[k];
   vec3 form = uCoverForm[k];
   float tuft = tuftMask(xz);
   float tufted = step(fract(aBlade.w * 13.7 + aSeed.w * 5.3) * 0.999, mix(1.0, tuft, shape.w));
-  float keep = step(aSeed.z, shape.z) * near * inland * banks * steep * tufted;
+  float keep = step(aSeed.z, shape.z) * near * banks * steep * tufted;
   float flowers = uCoverFlowers[k];
   float flower = step(aSeed.y, flowers);
   // Tufts dome: their middles stand a little taller than their edges.
   float h = aBlade.w * shape.x * keep * mix(1.0, 0.72 + 0.28 * tuft, shape.w) * (1.0 + flower * 0.25) * clearing(xz);
+  if (wildBlade) h *= mix(0.35, 1.0, smoothstep(0.0, 0.9, wildness));
   // Nothing grows under a stone or a bush.
   h *= step(clearingAt(xz), 0.5);
   // A trail parts the grass: each blade stands only past its own seeded edge,
@@ -222,7 +234,7 @@ const TIERS = [
  * grows where and in what form. Blades keep their full height at every
  * distance: the far ones thin out whole, each at its own seeded distance.
  */
-export function createGrass(light: SceneLight, ground: GroundTexture, covers: RegionCovers, land: number, under: Clearings, count = 150000, radius = 60): Grass {
+export function createGrass(light: SceneLight, ground: GroundTexture, covers: RegionCovers, under: Clearings, count = 150000, radius = 60): Grass {
   // One blade, one unit wide and tall: five rows and a soft tip. The vertex
   // shader gives it its cover's outline, lean and arc.
   const rows = [0, 0.26, 0.5, 0.71, 0.87];
@@ -283,7 +295,6 @@ export function createGrass(light: SceneLight, ground: GroundTexture, covers: Re
       ...covers.uniforms,
       uCenter: center,
       uTrailWear: trailWear,
-      uLand: { value: land },
       ...under.uniforms,
       uDry: { value: hexToVec3(0xc4b47e) },
     },
