@@ -1,6 +1,8 @@
 // Walking at eye height, one pure step at a time. A person wades through
 // shallow water more slowly and never walks into water deep enough to reach
-// their eyes: a step that would end there slides along the edge instead.
+// their eyes: a step that would end there slides along the edge instead. A
+// walk to a tapped point goes straight there and ends on arrival, or at the
+// edge of deep water in the way.
 
 import { heightAt } from "./lattice.ts";
 import { DRY, type Terrain } from "./world.ts";
@@ -95,4 +97,46 @@ export function walkStep(t: Terrain, from: Walker, intent: Intent, dt: number): 
   // Right at the edge the slide also leans a little away from the deep water,
   // so the curve of the edge cannot pin the walker in place.
   return tryStep(tx, tz) ?? tryStep(tx - nx * 0.4, tz - nz * 0.4) ?? from;
+}
+
+export const WALK_TO = {
+  /** Walking pace, meters per second. */
+  pace: 4.2,
+  /** While more than `jogFrom` meters remain the walker jogs at this multiple of the pace, easing back to a walk by `walkWithin`. */
+  jog: 1.8,
+  jogFrom: 25,
+  walkWithin: 15,
+  /** A target this close is where the walker stands: the walk ends there, or never starts. */
+  reach: 1.5,
+  /** A step that gets closer by less than this share of its length ends the walk: deep water or the world's edge turned it too far aside. */
+  stall: 0.5,
+} as const;
+
+/** One step of a walk to a target, and whether the walk goes on. */
+export interface Approach {
+  readonly walker: Walker;
+  /** `arrived` within `WALK_TO.reach` of the target; `stalled` where deep water or the world's edge stops the walker short of it. */
+  readonly state: "walking" | "arrived" | "stalled";
+}
+
+/**
+ * One step of walking straight toward a point on the ground, through
+ * `walkStep`, so wading and deep water work as they do for any walk. A glancing
+ * brush with deep water slides past it; water across the way stops the walk at
+ * its edge rather than pushing against it forever.
+ */
+export function walkToward(t: Terrain, from: Walker, target: Walker, dt: number): Approach {
+  const ex = target.x - from.x;
+  const ez = target.z - from.z;
+  const remaining = Math.hypot(ex, ez);
+  if (remaining <= WALK_TO.reach) return { walker: from, state: "arrived" };
+  const speed = WALK_TO.pace * (1 + (WALK_TO.jog - 1) * smoothstep(WALK_TO.walkWithin, WALK_TO.jogFrom, remaining));
+  const full = speed * wadeSpeed(waterDepthAt(t, from.x, from.z)) * dt;
+  if (full <= 0) return { walker: from, state: "walking" };
+  // A step longer than the way left lands on the target rather than past it.
+  const share = Math.min(1, remaining / full);
+  const next = walkStep(t, from, { dx: (ex / remaining) * share, dz: (ez / remaining) * share, speed }, dt);
+  const left = Math.hypot(target.x - next.x, target.z - next.z);
+  if (remaining - left < WALK_TO.stall * full * share) return { walker: from, state: "stalled" };
+  return { walker: next, state: left <= WALK_TO.reach ? "arrived" : "walking" };
 }
