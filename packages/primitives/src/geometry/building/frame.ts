@@ -248,5 +248,5 @@ export function ruinAt(r: Ruin, p: Vec3): number {
 export function wallRot(plan: BuildingPlan, m: Mass, r: Ruin, p: Vec3): number {
   const up = clamp((p[1] - plan.floor) / Math.max(0.5, wallTop(plan, m) + m.rise * 0.6 - plan.floor), 0, 1);
   const z = ruinAt(r, p);
-  return clamp(0.16 + 0.3 * up + z * (0.55 + 0.4 * up), 0, 1);
+  return clamp(0.16 + 0.38 * up + z * (0.55 + 0.4 * up), 0, 1);
 }

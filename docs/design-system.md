@@ -225,7 +225,7 @@ roofs exactly. A hipped range hips only the ends no other mass joins, so a
 long range reads as one stepped roof. Windows fall where walls show, in
 every storey, clear of the door, the chimney's gable and each other; a big
 building keeps those that look toward the walk, at most fourteen. Its walls
-keep within 10,500 triangles and its roofs share 4,600 across their slopes:
+keep within 9,800 triangles and its roofs share 4,300 across their slopes:
 fine work (studs, plaster cells, plinth stones, ivy, tile courses) coarsens on
 a big building and again until it fits, so a building of many masses keeps
 its budget by construction.

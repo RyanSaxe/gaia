@@ -61,7 +61,7 @@ function overgrowth(plan: BuildingPlan, ruin: Ruin, r: Rand, stones: PartBuilder
 // ---------- timber frame ----------
 
 /** Triangles a building's walls keep within, however many masses and storeys it has. */
-const WALL_TRIANGLES = 10_500;
+const WALL_TRIANGLES = 9_800;
 
 /**
  * Builds a building's walls at its coarseness, and again coarser while they
@@ -310,7 +310,8 @@ function fieldstone(p: Resolved<typeof fieldstoneParams>, ctx: BuildContext, pla
           const ground = clamp(cy / 1.8, 0, 1);
           // Stones fall from the top of the walls, and from the weak corner most.
           const fallen = wallRot(plan, m, ruin, c);
-          const missing = r.next() < 0.05 + 0.9 * Math.max(0, fallen - 0.35);
+          // A tall house's upper courses fall too, so a ruin is broken down from above as well as at its weak corner.
+          const missing = r.next() < 0.05 + 0.95 * Math.max(0, fallen - 0.3);
           pillow(stones, c, w.u, w.n, len * 0.94, h * 0.9, 0.05 + 0.05 * r.next(), 0.4 + 0.25 * r.next(), {
             loss: missing ? lossThreshold(r.next(), 0.22 + 0.3 * fallen, 0.05) : 0,
             droop: 0,

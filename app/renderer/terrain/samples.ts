@@ -1,8 +1,8 @@
 // Sample code for the terrain lab, standing in for what the engine will
-// report: three of Gaia's own entities, which become its buildings, and
-// files for its trees. Their vitality comes from the same formulas the world
-// service will run, so what a building or tree looks like and what its card
-// says always agree.
+// report: six of Gaia's own entities, which become its buildings, more for
+// its landmarks, and files for its trees. Their vitality comes from the same
+// formulas the world service will run, so what a building or tree looks like
+// and what its card says always agree.
 
 import type { EntityFacts, FileFacts } from "@gaia/schema";
 import { type VitalityReport, entityVitalityOf, vitalityOf } from "@gaia/world";
@@ -104,6 +104,61 @@ export const SAMPLE_ENTITIES: readonly SampleEntity[] = [
       diagnostics: { errors: 4, warnings: 9, lint: 21 },
       debtMarkers: 11,
       unusedExports: 0.3,
+    }),
+  },
+  {
+    building: "Merchant's hall",
+    facts: entity({
+      path: "app/world-service",
+      name: "world-service",
+      form: "service",
+      entry: "app/world-service/index.ts",
+      doc: "The world service: kinds, primitives, the question planner, answer rules, vitality and the world document.",
+      files: 9,
+      lines: 2600,
+      exports: 46,
+      dependsOn: ["packages/schema", "packages/world", "packages/kinds", "packages/primitives"],
+      dependents: ["app"],
+      tests: { files: 3, failing: 0, covered: 0.7 },
+      diagnostics: { errors: 0, warnings: 1, lint: 3 },
+      debtMarkers: 2,
+    }),
+  },
+  {
+    building: "Gathered farmstead",
+    facts: entity({
+      path: "app/renderer/terrain",
+      name: "terrain lab",
+      form: "module",
+      entry: "app/renderer/terrain/lab.ts",
+      doc: "The terrain lab: a whole world baked on workers, walked at eye height.",
+      files: 17,
+      lines: 4600,
+      exports: 18,
+      dependsOn: ["packages/terrain", "packages/render", "packages/realize"],
+      tests: { files: 1, failing: 0, covered: 0.3 },
+      diagnostics: { errors: 0, warnings: 3, lint: 8 },
+      debtMarkers: 5,
+      unusedExports: 0.15,
+    }),
+  },
+  {
+    building: "Stone croft",
+    facts: entity({
+      path: "app/main",
+      name: "main",
+      form: "module",
+      entry: "app/main/index.ts",
+      doc: "Electron's main process: the window and the app's lifecycle, the engine and the world service.",
+      files: 4,
+      lines: 420,
+      exports: 6,
+      dependsOn: ["packages/schema"],
+      dependents: ["app"],
+      tests: { files: 1, failing: 1, covered: 0.25 },
+      diagnostics: { errors: 1, warnings: 4, lint: 6 },
+      debtMarkers: 6,
+      unusedExports: 0.4,
     }),
   },
 ];

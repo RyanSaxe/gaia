@@ -557,7 +557,7 @@ function cone(roof: PartBuilder, wood: PartBuilder, plan: BuildingPlan, m: Mass,
 
 /** Every mass's roof in one covering, the rafters under each slope, and the main body's chimney and smoke. */
 /** Triangles all of a building's slopes share, by each mass's length, so a building of many masses keeps its budget. */
-const ROOF_TRIANGLES = 4600;
+const ROOF_TRIANGLES = 4300;
 
 function roofs(plan: BuildingPlan, r: Rand, slab: (roof: PartBuilder, f: RoofFrame, ruin: Ruin, seed: number, r: Rand, budget: number) => { reach: number; a0: number; a1: number }, coneStyle: { thick: number; overhang: number; course: number }, wanted: "gable" | "ridge" | "none"): Built {
   const seed = Math.floor(r.next() * 1e6);
