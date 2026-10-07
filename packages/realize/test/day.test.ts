@@ -7,7 +7,7 @@ import { WORLD_PRESETS, lightAt, realizeSky } from "@gaia/realize";
 type Erased = (p: unknown) => DaySpec;
 const build = daylight.build as unknown as Erased;
 
-/** Every daylight@2 blueprint, with each scale at both ends of its level. */
+/** Every daylight@1 blueprint, with each scale at both ends of its level. */
 const days: DaySpec[] = (() => {
   const f = daylight.params;
   const choices = (c: ChoiceField): string[] => Object.keys(c.options);
@@ -77,7 +77,7 @@ describe("lightAt", () => {
   });
 });
 
-describe("daylight@2 nights", () => {
+describe("daylight@1 nights", () => {
   it("lights the land with the sun by day and the moon by night", () => {
     for (const day of days) {
       const noon = lightAt(day, 12.5);

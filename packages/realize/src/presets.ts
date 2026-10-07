@@ -80,7 +80,7 @@ const worldOf = (
   wind: string,
 ): Omit<WorldPreset, "name"> => ({
   world: identify("world", {
-    light: { use: "daylight@2", params: light },
+    light: { use: "daylight@1", params: light },
     sky: { use: "sky@1", params: sky },
     season: { use: "season@1", params: season },
     wind: { use: "wind@1", params: { strength: wind } },

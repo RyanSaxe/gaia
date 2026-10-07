@@ -68,7 +68,7 @@ const toward = (elevationDeg: number, azimuthDeg: number): Vec3 => {
 };
 
 export const daylight = primitive({
-  id: "daylight@2",
+  id: "daylight@1",
   role: "Light",
   doc: "A whole day and night: the sun's path, the warmth of its light, how the light is painted, the moon and the stars. The hour follows the person's own clock.",
   params: {

@@ -91,7 +91,7 @@ removed.
 
 A world's hour follows the person's own clock. Jev chooses how each world's
 light looks (the sun's path, its warmth, the brush, the moon and the stars)
-but never the hour. `daylight@2` lights eight keys: dawn 6:00, morning 8:30,
+but never the hour. `daylight@1` lights eight keys: dawn 6:00, morning 8:30,
 midday 12:30, afternoon 15:30, golden hour 18:00, dusk 19:30, moonlit 22:00
 and deep night 2:00. Between keys, colors mix in OKLab and the sun and moon
 turn at a constant rate; a body below the horizon lends no direct light.
