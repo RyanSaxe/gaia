@@ -46,6 +46,7 @@ import {
   insideFootprint,
   levelPad,
   outlineShape,
+  piecesShapes,
   planWalk,
   type Terrain,
   type Walk,
@@ -451,7 +452,15 @@ export function createTerrainLab(root: HTMLElement): Lab {
       if (share === undefined || foot === undefined || p.y + foot.top * p.scale - heightAt(terrain.lattice, p.x, p.z) < STEP_OVER) return [];
       return [outlineShape(p.x, p.z, p.yaw, p.scale, foot.outline, share)];
     });
-    solids = solidsOf([...trunks, ...components, wallsShape(cottagePlan, site)]);
+    // A landmark stops a walker at each of its solid pieces: a tower's blocks, each standing stone, a great trunk.
+    const standing = ways.sites.flatMap((s) => {
+      const view = landmarkViews[s.landmark];
+      const lm = landmarks[s.landmark];
+      if (view === undefined || lm === undefined) return [];
+      const p = view.object.position;
+      return piecesShapes(lm.built.parts, { x: p.x, y: p.y, z: p.z, yaw: view.object.rotation.y });
+    });
+    solids = solidsOf([...trunks, ...components, ...standing, wallsShape(cottagePlan, site)]);
     warm();
   }
   let solids: Solids = NO_SOLIDS;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { Library } from "@gaia/schema";
-import { BIOME_PRIMITIVES, RELIEF_PRIMITIVES } from "@gaia/primitives";
+import { Library, rand } from "@gaia/schema";
+import { BIOME_PRIMITIVES, RELIEF_PRIMITIVES, standingStones } from "@gaia/primitives";
 import {
   BODY_RADIUS,
   EYE_HEIGHT,
@@ -15,6 +15,7 @@ import {
   clearanceAt,
   heightAt,
   outlineShape,
+  piecesShapes,
   planWalk,
   sampleWorld,
   solidsOf,
@@ -214,6 +215,32 @@ describe("solids", () => {
     expect(walk.state).toBe("arrived");
     expect(Math.hypot(walk.at.x - goal.x, walk.at.z - goal.z)).toBeGreaterThan(3);
     for (const p of walk.path) expect(clearanceAt(ring, p.x, p.z)).toBeGreaterThanOrEqual(BODY_RADIUS - 1e-6);
+  });
+});
+
+describe("solid pieces of a built thing", () => {
+  const ring = (lintels: boolean, centre: "nothing" | "a tall king stone") =>
+    standingStones.build({ count: 9, height: 5.2, lintels, centre, facets: 0.55 }, { rand: rand(5), facts: {} }, null);
+  const at = { x: dry.x - 12, y: heightAt(t.lattice, dry.x - 12, dry.z - 32), z: dry.z - 32, yaw: 0.4 };
+
+  it("stops a walker at each standing stone, never at a lintel overhead, and leaves a ring's open middle free", () => {
+    const open = piecesShapes(ring(true, "nothing").parts, at);
+    expect(open.length).toBe(piecesShapes(ring(false, "nothing").parts, at).length);
+    expect(open.length).toBeGreaterThanOrEqual(9);
+    const solids = solidsOf(open);
+    expect(clearanceAt(solids, at.x, at.z)).toBeGreaterThan(BODY_RADIUS);
+    // A tap from outside the ring walks between the stones to its middle.
+    let walker: Walker = { x: at.x + 16, z: at.z + 3 };
+    let walk = planWalk(t, solids, walker, { ...walker, x: at.x, z: at.z });
+    let state = "walking";
+    for (let i = 0; i < 1800 && state === "walking"; i++) {
+      const step = walkToward(t, solids, walker, walk, 1 / 60);
+      ({ walker, walk, state } = step);
+      expect(clearanceAt(solids, walker.x, walker.z)).toBeGreaterThanOrEqual(BODY_RADIUS - 1e-6);
+    }
+    expect(state).toBe("arrived");
+    // A king stone at the middle blocks it.
+    expect(clearanceAt(solidsOf(piecesShapes(ring(true, "a tall king stone").parts, at)), at.x, at.z)).toBeLessThan(0);
   });
 });
 

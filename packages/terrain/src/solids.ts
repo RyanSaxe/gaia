@@ -5,7 +5,7 @@
 // it without catching. Built once from placements; every step of a walk asks
 // how far the nearest edge is.
 
-import type { BuildingPlan } from "@gaia/schema";
+import type { BuildingPlan, Part } from "@gaia/schema";
 import { type BuildingSite, siteToWorld } from "./site.ts";
 
 /** One thing in the way, as its outline on the ground in world meters. */
@@ -110,6 +110,37 @@ export function wallsShape(plan: BuildingPlan, site: BuildingSite): SolidShape {
   const w = plan.width / 2;
   const d = plan.depth / 2;
   return { points: [[-w, -d], [w, -d], [w, d], [-w, d]].flatMap(([lx, lz]) => siteToWorld(site, lx as number, lz as number)) };
+}
+
+/** A walker's body, from just above the ground to the top of its head, meters above a thing's base. */
+export const BODY_BAND = { from: 0.1, to: 1.8 } as const;
+
+/**
+ * The solids of a built thing standing at (x, y, z), turned by `yaw` as Three
+ * turns it: each solid piece's outline across a walker's body height. A
+ * piece wholly above or below that band stops nothing, so a walker passes
+ * under a lintel and through a doorway between two stones.
+ */
+export function piecesShapes(parts: readonly Part[], at: { readonly x: number; readonly y: number; readonly z: number; readonly yaw: number }): SolidShape[] {
+  const c = Math.cos(at.yaw);
+  const s = Math.sin(at.yaw);
+  const shapes: SolidShape[] = [];
+  for (const part of parts) {
+    if (part.collision !== "solid") continue;
+    const byPiece = new Map<number, number[]>();
+    for (let v = 0; v * 3 < part.positions.length; v++) {
+      const y = part.positions[v * 3 + 1] as number;
+      if (y < BODY_BAND.from || y > BODY_BAND.to) continue;
+      const lx = part.positions[v * 3] as number;
+      const lz = part.positions[v * 3 + 2] as number;
+      const piece = part.piece[v * 2] as number;
+      let points = byPiece.get(piece);
+      if (points === undefined) byPiece.set(piece, (points = []));
+      points.push(at.x + lx * c + lz * s, at.z - lx * s + lz * c);
+    }
+    for (const points of byPiece.values()) shapes.push({ points });
+  }
+  return shapes;
 }
 
 /** The nearest edge to a point: signed distance (negative inside) and the outward direction there. */
