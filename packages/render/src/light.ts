@@ -277,7 +277,8 @@ vec3 nightLight(vec3 albedo, vec3 n, vec3 worldPosition, float wrap, float shado
 // skyColorAt and aerialAt in @gaia/realize are the CPU references.
 
 // The sky's color along a view direction: the gradient from horizon to
-// zenith, the hour's glow on the sun's side, and the haze around the sun.
+// zenith, the hour's glow on the sun's side, the haze around the sun, and
+// low mist along the horizon.
 // Below the horizon it holds the horizon's color. The dome draws clouds,
 // stars and the moon on top; distant land dissolves into exactly this.
 vec3 skyColor(vec3 dir) {
@@ -292,7 +293,11 @@ vec3 skyColor(vec3 dir) {
   color = mix(color, uSkyGlow, exp(-e * 5.0) * (0.35 + 0.65 * toward * toward) * uSkyGlowAmount * 0.75);
   float sunDot = max(dot(dir, sun), 0.0);
   color = mix(color, uSunColor, pow(sunDot, 10.0) * 0.28 * up);
-  return color + uSunColor * pow(sunDot, 180.0) * 0.18 * up;
+  color += uSunColor * pow(sunDot, 180.0) * 0.18 * up;
+  // Low mist lies along the horizon: the air's own color rises into the
+  // lowest sky and thins upward, veiling even a low sun's haze, so misty
+  // land meets the sky in a soft band.
+  return mix(color, uFogColor, clamp(uMist * ${AIR.mistGain.toFixed(2)}, 0.0, 1.0) * (1.0 - smoothstep(${AIR.mistRise[0].toFixed(2)}, ${AIR.mistRise[1].toFixed(2)}, e)) * ${AIR.mistSky.toFixed(2)});
 }
 
 // Near and middle distance haze toward the local air's tint, lit by the sky

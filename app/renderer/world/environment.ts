@@ -129,7 +129,10 @@ void main() {
   vec3 stars = starLayer(dir, 90.0, uStars * 0.5 + river * 0.3, 0.17);
   stars += starLayer(dir, 170.0, uStars * 0.7 + river * 0.8, 0.16) * 0.6;
   stars += starLayer(dir, 300.0, river * 0.9, 0.2) * 0.35 * (1.0 - lane);
-  color += (stars + vec3(0.45, 0.5, 0.74) * milk * 0.45) * starsOut;
+  // The milky band reaches lower than single stars, so even a low view
+  // looking out across the land sees the river rise from the horizon.
+  float milkOut = smoothstep(0.4, 0.9, uNightness) * smoothstep(0.0, 0.14, e);
+  color += stars * starsOut + vec3(0.45, 0.5, 0.74) * milk * 0.6 * milkOut;
 
   // One parametric cloud layer. Dome clouds use a stereographic projection
   // (stretch draws streaks, cells break the cover into dapples); horizon
@@ -147,8 +150,15 @@ void main() {
   n = mix(n, fbm(p - vec2(6.28318 * 6.0 * uScale, 0.0)), wrapW);
   float cells = noise(p * 5.0 + 3.0);
   n = mix(n, n * (0.35 + 1.25 * smoothstep(0.25, 0.75, cells)), uCells);
-  // Horizon clouds thin with height, so their tops break up into billows.
-  n += uStand * (0.06 - smoothstep(uHigh * 0.3, uHigh, e) * 0.28);
+  // Horizon clouds stand in columns: each bearing has its own height, so
+  // towers rise with clear sky between them and banks run long and low.
+  // Sampled around a circle, so the columns wrap without a seam.
+  vec2 around = vec2(cos(az), sin(az)) * max(1.4, 1.9 * uScale / sqrt(uStretch)) + vec2(wind.x * 0.4, 7.5);
+  float column = noise(around) * 0.7 + noise(around * 2.3 + 4.0) * 0.3;
+  float top = uHigh * smoothstep(uThreshold - 0.32, uThreshold + 0.08, column);
+  float rise = clamp(e / max(top, 1e-3), 0.0, 1.5);
+  // Full at the foot, thinning upward, so the top breaks up into billows.
+  n += uStand * (0.36 - rise * 0.5);
   // Dome clouds thin out toward the horizon instead of stopping at a line:
   // fewer and smaller there, and fading over a wide band of sky.
   n -= (1.0 - smoothstep(0.0, 0.22, e)) * 0.08 * (1.0 - uStand);
@@ -164,7 +174,7 @@ void main() {
   // Clouds standing on the horizon are lit from above: bright billowed tops,
   // and only their lowest edge cools into shade.
   // Against a glowing low-sun horizon they turn to soft violet silhouettes.
-  shade = mix(shade, (0.6 + 0.4 * lit) * (0.82 + 0.18 * smoothstep(0.0, uHigh * 0.3, e)) * (1.0 - uSkyGlowAmount * 0.5), uStand);
+  shade = mix(shade, (0.6 + 0.4 * lit) * (0.8 + 0.22 * smoothstep(0.0, 0.7, rise)) * (1.0 - uSkyGlowAmount * 0.5), uStand);
   vec3 cloud = mix(uCloudShade, uCloudLit, clamp(shade, 0.0, 1.0));
   // Distant clouds take on the air between, like distant land.
   cloud = mix(cloud, base, (1.0 - smoothstep(0.0, 0.3, e)) * 0.45);

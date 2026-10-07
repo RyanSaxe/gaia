@@ -105,7 +105,9 @@ Near and middle distance take the local air's tint, lit by the sky behind
 it; farther, only the sky's own color remains, and land fully dissolves
 between 900 m and 1.4 km. Rays that skim the land pass through the most air,
 so far ground just below the horizon thickens into the sky over a band, not
-at a line. Dome
+at a line. Low mist
+rises from the land into the lowest sky and thins upward, veiling even a low
+sun's haze, so misty ground meets a dawn sky in a soft band. Dome
 clouds thin out toward the horizon rather than stopping, and clouds standing
 on the horizon rise out of its haze. `skyColorAt` and `aerialAt` in
 `@gaia/realize` are the CPU references the tests check.
@@ -126,6 +128,9 @@ paths.
 ## Clouds
 
 Fair-weather puffs, towering cumulus, cirrus streaks and low drifting banks.
+Clouds on the horizon stand in columns: each bearing has its own height, so
+towering cumulus rise from the haze in separate billowing towers with clear
+sky between them, and banks run long, low and flat.
 Cirrus suits only some worlds, and Jev chooses where; it is thin and high,
 fine streaks nine times longer than wide, faint, and kept to the upper sky. Mackerel dapples were
 removed.
@@ -145,7 +150,8 @@ grass and water agree:
 - **Moonlight is a floor.** Night ambient and shadow colors are cool blue,
   never black, and hues fade halfway toward a cool grey under the moon, so
   the land reads as blue shapes while warm palettes stay warm. The moon is a dim soft-cel key, and it casts
-  the shadows once the sun has set.
+  the shadows once the sun has set. Its shadows rise from nothing as the sun
+  sinks past the point where its light ends, so the switch never shows.
 - **The lantern.** The person carries a candle-orange lantern at hand height,
   a little ahead and to the right. Its pool is about 12 m across and fades
   smoothly to nothing, with no edge; colors come back inside it. It lights
@@ -155,7 +161,8 @@ grass and water agree:
 - **The night sky** deepens to blue, keeping a trace of the world's own sky
   color. The chosen moon, the chosen stars, and clouds silvered by the moon.
   A river of stars is a band: a milky glow with a brighter core, split by a
-  dark lane of dust.
+  dark lane of dust. Its glow reaches lower than single stars, so a view
+  across the land sees it rise from the horizon.
 - **The world's own glow** (the vitality `glow` channel, fireflies, living
   water) reads by contrast in the dark, a little stronger than by day and
   still below what draws the eye on its own. Wildflowers fade into their
