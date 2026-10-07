@@ -27,6 +27,13 @@ export interface Capsule {
   readonly radius: number;
 }
 
+/** A circle of ground, such as the lot a building or a landmark is laid out on. */
+export interface Circle {
+  readonly x: number;
+  readonly z: number;
+  readonly radius: number;
+}
+
 /** Meters over which a pad blends back into the land. */
 export const PAD_BLEND = 7;
 
@@ -82,8 +89,22 @@ function yardSamples(plan: BuildingPlan, site: BuildingSite, step: number, grow 
  * site keeps `apart` meters from every site already `taken`, and its yard
  * covers `beside` too.
  */
-export function findSite(t: Terrain, plan: BuildingPlan, taken: readonly BuildingSite[] = [], apart = 30, beside: Extent | null = null): BuildingSite {
+export function findSite(t: Terrain, plan: BuildingPlan, taken: readonly BuildingSite[] = [], apart = 30, beside: Extent | null = null, within: Circle | null = null): BuildingSite {
   const half = t.spec.size / 2 - 34;
+  if (within !== null) {
+    // A lot laid out for it: the gentlest dry spot whose middle lies on the lot, its door facing the lot's middle or the water.
+    const spots: { x: number; z: number; yaw: number }[] = [];
+    for (let r = 0; r <= within.radius; r += 2) {
+      const count = r === 0 ? 1 : Math.ceil((Math.PI * 2 * r) / 3);
+      for (let k = 0; k < count; k++) {
+        const a = (k / count) * Math.PI * 2;
+        const x = within.x + Math.cos(a) * r;
+        const z = within.z + Math.sin(a) * r;
+        for (const yaw of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) spots.push({ x, z, yaw: yaw + Math.atan2(-within.x, -within.z) });
+      }
+    }
+    return gentlest(t, plan, spots, taken, Math.min(apart, 12), beside, half) ?? { x: within.x, z: within.z, yaw: Math.atan2(-within.x, -within.z), level: heightAt(t.lattice, within.x, within.z) };
+  }
   const candidates: { x: number; z: number; yaw: number }[] = [];
   for (const stream of t.streams) {
     const st = stream.stations;

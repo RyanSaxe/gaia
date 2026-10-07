@@ -1,81 +1,58 @@
-// Where a person is: the area (a directory) whose land they stand in, and the
-// file whose patch of ground is underfoot, if any. Past the codebase's land
-// lies the wild, which stands for nothing. Everything that tells a person
-// where they are (arrival titles, the field map, signposts and the compass)
-// reads only `placeAt`, so a world built from real code facts swaps in its
-// own areas and patches behind the same interface.
+// Where a person is: the area (a directory) whose ground a point is, and the
+// file whose patch is underfoot, if any. Past the codebase's land lies the
+// wild, which stands for no directory. Everything that tells a person where
+// they are (arrival titles, the field map, signposts, the compass) reads only
+// `placeAt`.
+//
+// A world lays its areas out one of two ways. A world laid out from code
+// gives each directory a circle nested in its parent's, and the deepest
+// circle holding a point is its directory; land no circle holds is the
+// repository's own common ground. A world laid out as regions (the lab's
+// sample world) names each area's land as a terrain region, and a point is
+// the area whose region's warped cell holds it, as its landform is.
 
-import { type Terrain, type WorldSpec, regionWeights } from "./world.ts";
+import type { CellPlace, PatchPlace, WorldPlaces } from "@gaia/schema";
+import { type WorldSpec, cellAt } from "./world.ts";
 
-/** A directory, as the area of land that stands for it. */
-export interface PlaceArea {
-  /** The directory's project-relative path: its identity. "" is the repository's root. */
-  readonly path: string;
-  /** The directory's own name, the last part of its path. */
-  readonly name: string;
-  /** How many directories deep it is: 1 for a top-level directory; -1 for the wild. */
-  readonly depth: number;
-}
+export type { AreaPlace, CellPlace, PatchPlace, WorldPlaces } from "@gaia/schema";
 
-/** A file, as the patch of ground that stands for it. */
-export interface PlaceFile {
-  readonly path: string;
-  readonly name: string;
-  readonly vitality: number;
-}
-
-/** Where a point is: its area, and the file whose patch it is on, if any. */
+/** Where a point is: the directory whose ground it is, and the file whose patch it is on, if any. */
 export interface Place {
-  readonly area: PlaceArea;
-  readonly file: PlaceFile | null;
+  readonly area: { readonly path: string; readonly name: string; readonly depth: number };
+  readonly file: { readonly path: string; readonly name: string; readonly vitality: number } | null;
 }
+
+/** A directory, as the area of land that stands for it: `depth` is 0 for the repository's root and -1 for the wild. */
+export type PlaceArea = Place["area"];
 
 /** The wild land past the codebase's: an area that stands for no directory. */
 export const WILD_AREA: PlaceArea = { path: "", name: "The wilds", depth: -1 };
 
-/** The area that stands for a directory path. */
-export function areaOfPath(path: string): PlaceArea {
-  const parts = path.split("/").filter(Boolean);
-  return { path: parts.join("/"), name: parts[parts.length - 1] ?? "", depth: parts.length };
-}
-
-/** A file's patch of ground: a disc around where it stands. In the sample world, the ground around the tree that stands for it. */
-export interface FilePatch {
-  readonly x: number;
-  readonly z: number;
-  /** How far the patch reaches from (x, z), meters. */
-  readonly reach: number;
-  readonly file: PlaceFile;
-}
-
-/** What `placeAt` reads: a world's regions, the areas they stand for, and its files' patches. */
-export interface WorldPlaces {
-  /** The world's regions: a point's area is the region whose warped cell holds it, as its landform does. */
-  readonly spec: WorldSpec;
-  /** Each region's area, in the order of `spec.regions`. */
-  readonly areas: readonly PlaceArea[];
-  readonly patches: readonly FilePatch[];
-  /** Patches by bucket, so a lookup reads only the few near a point. */
-  readonly buckets: ReadonlyMap<number, readonly number[]>;
-  /** Room for the regions' weights at a point. */
-  readonly weights: Float64Array;
+/** Whether (x, z) lies past the codebase's land: its rounded square, where the rim crests. */
+function pastTheLand(size: number, x: number, z: number): boolean {
+  return Math.abs(x) ** 4 + Math.abs(z) ** 4 > (size / 2) ** 4;
 }
 
 /** Side of a patch bucket, meters. */
 const BUCKET = 8;
 const bucketKey = (bx: number, bz: number): number => (bx + 32768) * 65536 + (bz + 32768);
 
-/**
- * A baked world's places: each region is the area of the directory it stands
- * for, and `patches` are its files. An area's border runs where its region's
- * landform gives way to the next, not through the islands where ground
- * covers drift into each other.
- */
-export function worldPlaces(t: Terrain, patches: readonly FilePatch[]): WorldPlaces {
+type Area = WorldPlaces["areas"][number];
+/** What a lookup reads quickly: patches by bucket, areas by path, the root, and the circles deepest first. */
+interface Index {
+  readonly buckets: ReadonlyMap<number, readonly number[]>;
+  readonly byPath: ReadonlyMap<string, Area>;
+  readonly root: Area | undefined;
+  readonly circles: readonly Area[];
+}
+const indexes = new WeakMap<WorldPlaces, Index>();
+function indexOf(world: WorldPlaces): Index {
+  let index = indexes.get(world);
+  if (index !== undefined) return index;
   const buckets = new Map<number, number[]>();
-  patches.forEach((p, i) => {
-    for (let bx = Math.floor((p.x - p.reach) / BUCKET); bx <= Math.floor((p.x + p.reach) / BUCKET); bx++) {
-      for (let bz = Math.floor((p.z - p.reach) / BUCKET); bz <= Math.floor((p.z + p.reach) / BUCKET); bz++) {
+  world.patches.forEach((p, i) => {
+    for (let bx = Math.floor((p.x - p.radius) / BUCKET); bx <= Math.floor((p.x + p.radius) / BUCKET); bx++) {
+      for (let bz = Math.floor((p.z - p.radius) / BUCKET); bz <= Math.floor((p.z + p.radius) / BUCKET); bz++) {
         const key = bucketKey(bx, bz);
         const list = buckets.get(key);
         if (list === undefined) buckets.set(key, [i]);
@@ -83,34 +60,58 @@ export function worldPlaces(t: Terrain, patches: readonly FilePatch[]): WorldPla
       }
     }
   });
-  return { spec: t.spec, areas: t.spec.regions.map((r) => areaOfPath(r.id)), patches, buckets, weights: new Float64Array(t.spec.regions.length) };
+  index = {
+    buckets,
+    byPath: new Map(world.areas.map((a) => [a.path, a])),
+    root: world.areas.find((a) => a.parent === null),
+    // Deepest first, so the first circle holding a point is its directory.
+    circles: world.areas.filter((a) => a.radius > 0).sort((a, b) => b.depth - a.depth),
+  };
+  indexes.set(world, index);
+  return index;
+}
+
+/** The area and the file patch under (x, z). */
+export function placeAt(world: WorldPlaces, x: number, z: number): Place {
+  if (pastTheLand(world.size, x, z)) return { area: WILD_AREA, file: null };
+  const index = indexOf(world);
+  let area = index.circles.find((a) => Math.hypot(x - a.x, z - a.z) <= a.radius);
+  if (area === undefined && world.cells !== undefined && world.cells.length > 0) {
+    area = index.byPath.get((world.cells[cellAt(world.cells, x, z)] as CellPlace).area);
+  }
+  area ??= index.root;
+  let file: Place["file"] = null;
+  let nearest = Infinity;
+  for (const i of index.buckets.get(bucketKey(Math.floor(x / BUCKET), Math.floor(z / BUCKET))) ?? []) {
+    const p = world.patches[i] as PatchPlace;
+    // The patch whose middle is nearest for its size: a small patch inside a large one's edge still shows.
+    const d = Math.hypot(x - p.x, z - p.z) / p.radius;
+    if (d <= 1 && d < nearest) {
+      nearest = d;
+      file = { path: p.path, name: p.name, vitality: p.vitality };
+    }
+  }
+  return { area: area === undefined ? { path: "", name: world.name, depth: 0 } : { path: area.path, name: area.name, depth: area.depth }, file };
+}
+
+/** A directory's path, its own name, how deep it is and its parent's path. */
+function pathParts(path: string): { path: string; name: string; depth: number; parent: string | null } {
+  const parts = path.split("/").filter(Boolean);
+  return { path: parts.join("/"), name: parts[parts.length - 1] ?? "", depth: parts.length, parent: parts.length === 0 ? null : parts.slice(0, -1).join("/") };
 }
 
 /**
- * Whether (x, z) lies past the codebase's land: its rounded square, where the
- * rim crests. The ground itself hands over to the wild land further out, at
- * the lattice's edge (`inWilds`); between the two lies the rim's outer slope.
+ * The places of a world laid out as regions: each region the area of the
+ * directory it stands for (its id), and each file's patch a disc of ground in
+ * the area that holds its middle.
  */
-function pastTheLand(size: number, x: number, z: number): boolean {
-  return Math.abs(x) ** 4 + Math.abs(z) ** 4 > (size / 2) ** 4;
-}
-
-/** Where (x, z) is: the area whose land it is, and the nearest file whose patch reaches it. */
-export function placeAt(w: WorldPlaces, x: number, z: number): Place {
-  if (pastTheLand(w.spec.size, x, z)) return { area: WILD_AREA, file: null };
-  regionWeights(w.spec, x, z, w.weights);
-  let region = 0;
-  for (let i = 1; i < w.weights.length; i++) if ((w.weights[i] as number) > (w.weights[region] as number)) region = i;
-  const area = w.areas[region] ?? WILD_AREA;
-  let file: PlaceFile | null = null;
-  let best = Infinity;
-  for (const i of w.buckets.get(bucketKey(Math.floor(x / BUCKET), Math.floor(z / BUCKET))) ?? []) {
-    const p = w.patches[i] as FilePatch;
-    const d = Math.hypot(x - p.x, z - p.z);
-    if (d <= p.reach && d < best) {
-      best = d;
-      file = p.file;
-    }
-  }
-  return { area, file };
+export function regionPlaces(spec: WorldSpec, name: string, files: readonly Omit<PatchPlace, "area">[]): WorldPlaces {
+  const cells: CellPlace[] = spec.regions.map((r) => ({ area: pathParts(r.id).path, x: r.x, z: r.z, ...(r.reach === undefined ? {} : { reach: r.reach }) }));
+  return {
+    name,
+    size: spec.size,
+    areas: spec.regions.map((r) => ({ ...pathParts(r.id), x: r.x, z: r.z, radius: 0 })),
+    patches: files.map((f) => ({ ...f, area: (cells[cellAt(cells, f.x, f.z)] as CellPlace).area })),
+    cells,
+  };
 }

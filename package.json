@@ -17,7 +17,9 @@
     "test": "vitest run",
     "check": "tsc --noEmit -p . && eslint . && vitest run",
     "prepare": "git config core.hooksPath .githooks",
-    "engine": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo build -p gaia-engine"
+    "engine": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo build -p gaia-engine",
+    "snapshot": "tsx tools/snapshot.ts",
+    "print-world-requests": "tsx tools/print-world-requests.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

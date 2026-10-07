@@ -38,7 +38,6 @@ import {
   SMALL_WORLD,
   type Trail,
   type Capsule,
-  type FilePatch,
   type Place,
   type WorldPlaces,
   NO_SOLIDS,
@@ -48,19 +47,20 @@ import {
   clearanceAt,
   outlineShape,
   piecesShapes,
+  placeAt,
   planWalk,
   type Terrain,
   type Walk,
   type WorldSpec,
   groundHeightAt,
   heightAt,
-  placeAt,
-  worldPlaces,
+  regionPlaces,
   latticeOf,
   randomWorld,
   sampleWorld,
   sightlines,
   siteToWorld,
+  trailVitalityAt,
   solidsOf,
   stanceAt,
   TERRAIN,
@@ -83,9 +83,10 @@ import { createWater } from "./water.ts";
 import { createWildGrowth } from "./wilds.ts";
 import { createUnderstory } from "./understory.ts";
 import { createClearings } from "./clearings.ts";
-import { type Ways, createWays, trailWear } from "./trails.ts";
+import { type Ways, createWays, setTrailEnds, setTrailPlaces } from "./trails.ts";
 import { createCard } from "./card.ts";
-import { type Represented, SAMPLE_FILES, representFile } from "./samples.ts";
+import { LANDMARK_ENTITIES, type Represented, SAMPLE_ENTITIES, SAMPLE_FILES, representEntity, representFile } from "./samples.ts";
+import { type CodeLab, codeWorld } from "./code-world.ts";
 import { createSettlement } from "./settlement.ts";
 import { createSigns } from "./signs.ts";
 import { createBaker } from "./baker.ts";
@@ -100,6 +101,7 @@ const TEMPLATE = /* html */ `
       <button data-ref="mode-walk" class="seg on" type="button">Walk</button>
       <button data-ref="mode-overview" class="seg" type="button">Overview</button>
     </div>
+    <button data-ref="codebase" title="Gaia's own world, from the engine's facts about this repository">This codebase</button>
     <button data-ref="random" class="primary" title="Draw every region's landform, fields and cover uniformly, then fit the budget">Random terrain</button>
   </div>
   <div class="bar bottom">
@@ -183,6 +185,8 @@ interface Tree {
   readonly yaw: number;
   /** The file it stands for. */
   readonly represented: Represented;
+  /** In the codebase's world, the file patch it grows on. */
+  readonly patch?: number;
 }
 
 /** The world as it stands after a bake: what a map draws and what markers stand beside. */
@@ -210,6 +214,8 @@ export interface WorldHandle {
   person(): { readonly x: number; readonly z: number; readonly yaw: number; readonly walking: boolean };
   /** Where a point is: its area and the file underfoot. */
   placeAt(x: number, z: number): Place;
+  /** Every area and file patch of the world standing now. */
+  places(): WorldPlaces;
   /** The world as it stands now. */
   stood(): StoodWorld;
   /** Calls `listener` after every bake the lab takes on. */
@@ -226,8 +232,16 @@ export interface TerrainLab extends Lab {
   readonly world: WorldHandle;
 }
 
-/** The full world, or the small one with `?world=small` in the page's address, to compare the two. */
-const SCALE = new URLSearchParams(location.search).get("world") === "small" ? SMALL_WORLD : FULL_WORLD;
+/** A thing's name as it stands in the world, such as "An archive tower". */
+const withArticle = (name: string): string => `${/^[aeiou]/i.test(name) ? "An" : "A"} ${name.toLowerCase()}`;
+
+/** The name the sample world goes by where a repository's name would be. */
+const SAMPLE_NAME = "the sample world";
+
+/** Which world the lab opens on: Gaia's own, unless the page's address asks for the sample world (`?world=sample`, or `?world=small` for its 320 m version). */
+const ASKED_WORLD = new URLSearchParams(location.search).get("world");
+/** The sample world's size: the full world, or the small one, to compare the two. */
+const SCALE = ASKED_WORLD === "small" ? SMALL_WORLD : FULL_WORLD;
 /** The air's density walking, and over the overview, which thins with the world's size so the whole of it stays legible. */
 const FOG = { walk: 0.0042, overview: 0.0008 * Math.min(1, 320 / SCALE.size) };
 /** Seeded builds per flora preset, and the trees the lab plants unless a hook asks otherwise: as dense as the small world's 22 over 320 m. */
@@ -271,7 +285,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   // What another layer stands beside the trails, and where a person is.
   /** What stops a walker without the furnishing. */
   let bodies: SolidShape[] = [];
-  let places: WorldPlaces = worldPlaces(terrain, []);
+  let places: WorldPlaces = regionPlaces(world, SAMPLE_NAME, []);
   let furnisher: ((stood: StoodWorld) => Furnishing) | null = null;
   let furnished: Furnishing = UNFURNISHED;
   let furnishSolid = true;
@@ -290,6 +304,8 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     let base = 1;
     for (const part of built.parts) {
       for (let k = 0; k < part.positions.length; k += 3) {
+        // Only what stands counts: fallen stone that grows in at its foot is walked over.
+        if ((part.channels.grow?.[k / 3] ?? 0) > 0) continue;
         if ((part.positions[k + 1] as number) < 1) base = Math.max(base, Math.hypot(part.positions[k] as number, part.positions[k + 2] as number));
       }
     }
@@ -311,8 +327,41 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   const light = createSceneLight();
   light.uFogDensity.value = FOG.walk;
   // A building for each sample entity, near the stream, each on a pad leveled into the bake.
-  const settlement = createSettlement(light);
+  let settlement = createSettlement(light);
+  /** Gaia's own world when "This codebase" is shown: what every area, patch, building, landmark and trail stands for. */
+  let code: CodeLab | null = null;
+  /** The world whose light, sky and air the lab shows: the codebase's own once it is shown. */
+  let skyWorld = SKY_WORLD;
   let ways: Settled = { sites: [], trails: [] };
+  // Every entity's vitality by its name, live: buildings and landmarks stand
+  // for entities, and each trail's wear follows the two it joins.
+  let landmarkEntities: Represented[] = [];
+  const entityVitality = new Map<string, number>();
+  /** The entity each trail end stands for, by the place id the trail names: a building's name or lot, or a standing landmark's place. */
+  const entityOfPlace = new Map<string, string>();
+  /** Learns the entities of the world now shown: the codebase's own, or the samples. */
+  function knowEntities(): void {
+    landmarkEntities = (code?.landmarks.map((l) => l.facts) ?? LANDMARK_ENTITIES).map(representEntity);
+    entityVitality.clear();
+    entityOfPlace.clear();
+    for (const r of [...settlement.buildings.map((b) => b.represented), ...landmarkEntities]) entityVitality.set(r.name, r.report.vitality);
+    settlement.buildings.forEach((b, i) => {
+      entityOfPlace.set(b.represented.name, b.represented.name);
+      const lot = code?.stand.lots[i];
+      if (lot !== undefined) entityOfPlace.set(lot.id, b.represented.name);
+    });
+  }
+  knowEntities();
+  /**
+   * The entity standing landmark `i` stands for: in the codebase's world the
+   * one its place names; in the sample world the samples, repeated when a
+   * world has more landmarks than entities.
+   */
+  const landmarkEntity = (i: number): Represented => {
+    const id = ways.sites[i]?.id;
+    return (code !== null ? landmarkEntities.find((e) => e.id === id) : undefined) ?? (landmarkEntities[i % landmarkEntities.length] as Represented);
+  };
+  const vitalityOfPlace = (place: string): number => entityVitality.get(entityOfPlace.get(place) ?? "") ?? 1;
   const worldLib = new Library(WORLD_PRIMITIVES);
   const lantern = createLantern(light);
 
@@ -363,9 +412,31 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       view.object.rotation.y = Math.atan2((fx ?? 0) - s.site.x, (fz ?? 0) - s.site.z);
       return view;
     });
-    trailWear.value = ways.trails.length === 0 ? 0 : ways.trails.reduce((n, t) => n + t.style.wear, 0) / ways.trails.length;
+    ways.sites.forEach((s, i) => entityOfPlace.set(s.id, landmarkEntity(i).name));
     built?.dispose();
     built = createWays(scene, light, landmarkLib, terrain, ways.trails);
+    showVitality();
+  }
+
+  /** Shows every entity's vitality now on its landmark, on its trails' wear and on what is built along them. Nothing rebuilds. */
+  function showVitality(): void {
+    landmarkViews.forEach((view, i) => view.setVitality(entityVitality.get(landmarkEntity(i).name) ?? 1));
+    setTrailEnds(ways.trails, vitalityOfPlace);
+    built?.setVitality((i, along) => {
+      const t = ways.trails[i];
+      return t === undefined ? 1 : trailVitalityAt(vitalityOfPlace(t.from), vitalityOfPlace(t.to), along);
+    });
+  }
+
+  /** Sets one entity's vitality, by its name, wherever it shows: its building and sign, its landmark, and every trail it joins. */
+  function setEntityVitality(name: string, v: number): void {
+    entityVitality.set(name, v);
+    settlement.buildings.forEach((b, i) => {
+      if (b.represented.name !== name) return;
+      b.view.setVitality(v);
+      signs.setVitality(i, v);
+    });
+    showVitality();
   }
   placeWays();
   for (const v of settlement.views()) scene.add(v.object);
@@ -386,8 +457,8 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   let hour = Number.NaN;
   function applyHour(h: number): void {
     hour = h;
-    if (SKY_WORLD === undefined) return;
-    const look = realizeSky({ blueprint: SKY_WORLD.world, kind: worldKind }, worldLib, seedOf("terrain-lab/sky"), h);
+    if (skyWorld === undefined) return;
+    const look = realizeSky({ blueprint: skyWorld.world, kind: worldKind }, worldLib, seedOf("terrain-lab/sky"), h);
     applyLight(light, look.light);
     sky.apply({ light: look.light, sky: { ...look.sky, mid: mixLab(look.sky.zenith, look.sky.horizon, 0.5) }, fog: { color: look.sky.horizon, density: FOG[mode], mist: 0 } });
   }
@@ -457,11 +528,17 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     trailStyles: [trailStyles[0], trailStyles[1], trailStyles[2]] as [RouteSpec, RouteSpec, RouteSpec],
     trees: { count: treeCount, seed: 9, presets: FLORA_PRESETS.length, builds: TREE_BUILDS, bases: variants.map((v) => v.base) },
     understory: understory.plan(next, understoryDensity),
+    ...(code === null ? {} : { code: code.stand }),
   });
   /** Stands the bake's trees and understory, placed on the bake thread, and what stops a walker. */
   function plant(stood: Stand): void {
     // Trees keep off the trails, the buildings and the landmarks; the bake thread kept them off.
-    trees = stood.trees.map((t) => ({ ...t, represented: representFile(SAMPLE_FILES[t.index % SAMPLE_FILES.length] as (typeof SAMPLE_FILES)[number]) }));
+    // In the codebase's world each tree grows on its file's patch and takes that file's vitality.
+    const fileOf = (t: (typeof stood.trees)[number]) => {
+      const patch = t.patch === undefined ? undefined : code?.world.patches[t.patch];
+      return (patch === undefined ? undefined : code?.files.get(patch.path)) ?? (SAMPLE_FILES[t.index % SAMPLE_FILES.length] as (typeof SAMPLE_FILES)[number]);
+    };
+    trees = stood.trees.map((t) => ({ ...t, represented: representFile(fileOf(t)) }));
     // Each build keeps its instances from bake to bake and only moves its copies.
     treeViews = variants.flatMap((v, k) => {
       const spots = trees.filter((t) => t.variant === k).map((t) => ({ x: t.x, y: t.y, z: t.z, yaw: t.yaw, scale: t.scale, vitality: t.represented.report.vitality }));
@@ -501,18 +578,27 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     const buildings = settlement.buildings.flatMap((b): SolidShape[] => {
       const e = b.beside;
       const beside = e === null ? [] : [{ points: [[e.x0, e.z0], [e.x1, e.z0], [e.x1, e.z1], [e.x0, e.z1]].flatMap(([lx, lz]) => siteToWorld(b.site, lx as number, lz as number)) }];
-      return [wallsShape(b.plan, b.site), ...beside];
+      return [...wallsShape(b.plan, b.site), ...beside];
     });
     bodies = [...trunks, ...components, ...standing, ...buildings];
     solids = solidsOf(furnishSolid ? [...bodies, ...furnished.solids] : bodies);
     // Each tree's file is the ground around it, out to most of its crown.
-    const patches: FilePatch[] = trees.map((t) => ({
-      x: t.x,
-      z: t.z,
-      reach: Math.max(4, Math.min(7, (variants[t.variant] as TreeVariant).radius * t.scale * 0.8)),
-      file: { path: t.represented.id, name: t.represented.name, vitality: t.represented.report.vitality },
-    }));
-    places = worldPlaces(terrain, patches);
+    // In the codebase's world every file has its own patch; in the sample world a file's patch is the ground around its tree, out to most of its crown.
+    places =
+      code !== null
+        ? code.world
+        : regionPlaces(
+            terrain.spec,
+            SAMPLE_NAME,
+            trees.map((t) => ({
+              path: t.represented.id,
+              name: t.represented.name,
+              x: t.x,
+              z: t.z,
+              radius: Math.max(4, Math.min(7, (variants[t.variant] as TreeVariant).radius * t.scale * 0.8)),
+              vitality: t.represented.report.vitality,
+            })),
+          );
     warm();
     placeSigns();
   }
@@ -521,15 +607,42 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   // ---------- signs, and walking up to see what a thing is ----------
 
   let subjects: Subject[] = [];
-  /** A building's signboard at the end of its walk, and a plaque at the foot of each tree facing the middle of the world. */
+  /** The subject each sign names, by the sign's instance. */
+  let signSubjects: Subject[] = [];
+  /**
+   * A building's signboard at the end of its walk, a landmark's at its foot,
+   * and a plaque at the foot of a tree facing the middle of the world: every
+   * tree in the sample world, and in the codebase's world the first tree on
+   * each file's patch, which names the file.
+   */
   function placeSigns(): void {
     const buildingSubjects: Subject[] = settlement.buildings.map((b) => ({
       represented: b.represented,
-      standsAs: `A ${b.kindName.toLowerCase()}`,
+      standsAs: withArticle(b.kindName),
       x: b.site.x,
       z: b.site.z,
       stand: () => settlement.standOf(b),
     }));
+    // A landmark stands for an entity in the codebase's world: walk up to its foot to read it.
+    const landmarkSubjects: Subject[] = code === null
+      ? []
+      : ways.sites.flatMap((s, i) => {
+          const facts = code?.landmarks[i]?.facts;
+          const lm = landmarks[s.landmark];
+          if (facts === undefined || lm === undefined) return [];
+          const { x, z } = s.site;
+          return [{
+            represented: representEntity(facts),
+            standsAs: withArticle(lm.name),
+            x,
+            z,
+            stand: (fx: number, fz: number) => {
+              const d = Math.hypot(fx - x, fz - z) || 1;
+              const off = lm.base + 7;
+              return { x: x + ((fx - x) / d) * off, z: z + ((fz - z) / d) * off };
+            },
+          }];
+        });
     const treeSubjects: Subject[] = trees.map((tree) => {
       const { x, z } = tree;
       const crown = (variants[tree.variant] as TreeVariant).radius * tree.scale;
@@ -546,13 +659,31 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
         },
       };
     });
-    subjects = [...buildingSubjects, ...treeSubjects];
+    subjects = [...buildingSubjects, ...landmarkSubjects, ...treeSubjects];
+    const named = new Set<number>();
+    const plaqued = trees.flatMap((tree, i) => {
+      if (tree.patch !== undefined) {
+        if (named.has(tree.patch)) return [];
+        named.add(tree.patch);
+      }
+      return [{ tree, subject: treeSubjects[i] as Subject }];
+    });
+    signSubjects = [...buildingSubjects, ...landmarkSubjects, ...plaqued.map((p) => p.subject)];
     signs.set([
       ...settlement.buildings.map((b) => {
         const at = settlement.signOf(b);
         return { ...at, y: heightAt(terrain.lattice, at.x, at.z), scale: 1, name: b.represented.name, note: b.represented.what, vitality: b.represented.report.vitality };
       }),
-      ...trees.map((tree) => {
+      ...landmarkSubjects.map((l, i) => {
+        const view = landmarkViews[i];
+        const yaw = view?.object.rotation.y ?? 0;
+        const lm = landmarks[ways.sites[i]?.landmark ?? 0];
+        const r = (lm?.base ?? 2) + 3;
+        const x = l.x + Math.sin(yaw) * r + Math.cos(yaw) * 1.6;
+        const z = l.z + Math.cos(yaw) * r - Math.sin(yaw) * 1.6;
+        return { x, y: heightAt(terrain.lattice, x, z), z, yaw, scale: 1, name: l.represented.name, note: l.represented.what, vitality: l.represented.report.vitality };
+      }),
+      ...plaqued.map(({ tree }) => {
         const { x, z } = tree;
         const base = (variants[tree.variant] as TreeVariant).base * tree.scale;
         const d = Math.hypot(x, z) || 1;
@@ -744,11 +875,15 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     const land = groundHit(ray);
     const tree = treeHit(ray);
     const building = raycaster.intersectObjects(settlement.views().map((v) => v.object), true)[0];
+    const rise = code === null ? undefined : raycaster.intersectObjects(landmarkViews.map((v) => v.object), true)[0];
+    const riseAt = rise === undefined ? undefined : landmarkViews.findIndex((v) => v.object.getObjectById(rise.object.id) !== undefined);
+    const riseSite = riseAt === undefined ? undefined : ways.sites[riseAt]?.site;
     const sign = raycaster.intersectObject(signs.mesh)[0];
     const hits = [
       ...(tree === null ? [] : [{ distance: tree.distance, subject: subjects.find((s) => s.x === tree.tree.x && s.z === tree.tree.z) }]),
       ...(building === undefined ? [] : [{ distance: building.distance, subject: subjects.find((s) => settlement.buildings.some((b) => b.view.object.getObjectById(building.object.id) !== undefined && s.x === b.site.x && s.z === b.site.z)) }]),
-      ...(sign === undefined ? [] : [{ distance: sign.distance, subject: subjects[sign.instanceId ?? -1] }]),
+      ...(sign === undefined ? [] : [{ distance: sign.distance, subject: signSubjects[sign.instanceId ?? -1] }]),
+      ...(rise === undefined || riseSite === undefined ? [] : [{ distance: rise.distance, subject: subjects.find((s) => s.x === riseSite.x && s.z === riseSite.z) }]),
     ].sort((a, b) => a.distance - b.distance);
     const nearest = hits[0];
     if (nearest !== undefined && nearest.subject !== undefined && (land === null || nearest.distance < land.distance + 0.5)) {
@@ -872,11 +1007,15 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     world = next;
     terrain = baked;
     // Areas first, so whatever stands beside the trails knows where it is; files join when the trees stand.
-    places = worldPlaces(terrain, []);
+    places = code !== null ? code.world : regionPlaces(terrain.spec, SAMPLE_NAME, []);
+    clearings.fit(terrain);
     settlement.seat(stood.sites);
     ways = { sites: stood.landmarks, trails: stood.trails };
+    setTrailPlaces(stood.trailPlaces, baked.lattice.n);
     placeWays();
     furnished = furnisher?.(stoodWorld()) ?? UNFURNISHED;
+    // In the codebase's world a landmark stands for an entity and takes its vitality.
+    landmarkViews.forEach((v, i) => v.setVitality(code === null ? 1 : (code.world.things.filter((t) => t.as === "landmark")[i]?.vitality ?? 1)));
     placeBuildings();
     updateCovers();
     groundTex.update(terrain, stood.ground);
@@ -949,8 +1088,12 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       `${mode === "walk" ? "From here" : `From the middle of ${world.regions[selected]?.id ?? ""}`}, at eye height: ` +
       `farthest visible ground <b>${fmt(s.max, 0)} m</b>, median over bearings <b>${fmt(s.median, 0)} m</b>`;
     const here = regionAt(walker.x, walker.z);
-    const wild = placeAt(places, walker.x, walker.z).area.depth < 0;
-    $("here").textContent = mode !== "walk" ? "" : wild ? "The wilds" : `${world.regions[here]?.id ?? ""} · ${landformName(here)} · ${coverName(here)}`;
+    const place = placeAt(places, walker.x, walker.z);
+    if (mode !== "walk") $("here").textContent = "";
+    else if (place.area.depth < 0) $("here").textContent = place.area.name;
+    // In the codebase's world: the directory whose ground this is, and the file underfoot.
+    else if (code !== null) $("here").textContent = `${place.area.path === "" ? code.world.name : place.area.path} · ${place.file === null ? "common ground" : place.file.name}`;
+    else $("here").textContent = `${world.regions[here]?.id ?? ""} · ${landformName(here)} · ${coverName(here)}`;
   }
 
   function refreshPanel(): void {
@@ -1086,14 +1229,37 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     passes.view = { calls: renderer.info.render.calls, triangles: renderer.info.render.triangles };
   }
 
+  /**
+   * Shows Gaia's own world, judged and laid out from the engine's snapshot
+   * of this repository, or goes back to the sample world. The buildings are
+   * the codebase's entities, so the settlement is rebuilt; the rest follows
+   * the bake.
+   */
+  async function showCodebase(on: boolean): Promise<void> {
+    code = on ? await codeWorld() : null;
+    for (const v of settlement.views()) scene.remove(v.object);
+    settlement = createSettlement(light, code?.buildings ?? SAMPLE_ENTITIES);
+    for (const v of settlement.views()) scene.add(v.object);
+    knowEntities();
+    skyWorld = code?.sky ?? SKY_WORLD;
+    hour = Number.NaN;
+    const next = code?.spec ?? sampleWorld(SCALE);
+    orbit.maxDistance = Math.max(700, next.size * 1.1);
+    selected = 0;
+    $("codebase").textContent = on ? "Sample world" : "This codebase";
+    ($("random") as HTMLButtonElement).disabled = on;
+    if (await rebake(next)) valleyView();
+  }
+
   setMode("walk");
   refreshStats();
   refreshPanel();
   // The first world bakes behind a quiet veil, which lifts once it stands.
-  const ready = rebake(world).then(() => {
-    valleyView();
+  const startWithCode = ASKED_WORLD !== "sample" && ASKED_WORLD !== "small";
+  const ready = (startWithCode ? showCodebase(true) : rebake(world).then(() => valleyView())).then(() => {
     $("veil").classList.add("lifted");
   });
+  $("codebase").addEventListener("click", () => void showCodebase(code === null));
 
   // ---------- shots: each relief primitive under every region, from above ----------
 
@@ -1117,6 +1283,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     camera,
     person: () => ({ x: walker.x, z: walker.z, yaw: walker.yaw, walking: goal !== null || [...keys].some((k) => k !== "ShiftLeft" && k !== "ShiftRight") }),
     placeAt: (x, z) => placeAt(places, x, z),
+    places: () => places,
     stood: stoodWorld,
     onStood: (listener) => stoodListeners.push(listener),
     furnish: (f) => {
@@ -1166,12 +1333,41 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       /** Each standing landmark: its name, site, height and triangles. */
       landmarks: () =>
         ways.sites.map((s, i) => ({ name: landmarks[s.landmark]?.name, ...s.site, height: landmarkViews[i]?.height, triangles: landmarkViews[i]?.triangles })),
-      /** Sets every landmark's vitality, 0 to 1. */
-      landmarkVitality: (v: number) => landmarkViews.forEach((view) => view.setVitality(v)),
+      /** Sets every landmark's entity's vitality, 0 to 1, and with it the trails they join. */
+      landmarkVitality: (v: number) => {
+        landmarkEntities.forEach((e) => setEntityVitality(e.name, v));
+        for (const view of landmarkPool.values()) view.setVitality(v);
+      },
+      /** Every entity, what stands for it, and its vitality now. */
+      entities: () => [
+        ...settlement.buildings.map((b) => ({ name: b.represented.name, standsAs: b.kindName, vitality: entityVitality.get(b.represented.name) })),
+        ...ways.sites.map((s, i) => ({ name: landmarkEntity(i).name, standsAs: landmarks[s.landmark]?.name, place: s.id, x: s.site.x, z: s.site.z, vitality: entityVitality.get(landmarkEntity(i).name) })),
+      ],
+      /** Sets one entity's vitality by its name: its building or landmark, and the wear of every trail it joins, live. */
+      entityVitality: (name: string, v: number) => setEntityVitality(name, v),
+      /** Stands landmark preset `i` on landmark site `at` in place of what stands there, so every form can be seen; returns where. */
+      showLandmark: (i: number, at = 0) => {
+        const s = ways.sites[at];
+        const lm = landmarks[i];
+        if (s === undefined || lm === undefined) return null;
+        for (const [key, v] of landmarkPool) if (key.startsWith("show#") || v === landmarkViews[at]) v.object.visible = false;
+        let view = landmarkPool.get(`show#${i}`);
+        if (view === undefined) {
+          view = createPlant({ ...lm.built, parts: mergeParts(lm.built.parts) }, light);
+          landmarkPool.set(`show#${i}`, view);
+          scene.add(view.object);
+        }
+        view.object.visible = true;
+        view.object.position.set(s.site.x, s.site.y - 0.05, s.site.z);
+        view.object.rotation.y = 0;
+        return { name: lm.name, x: s.site.x, y: s.site.y, z: s.site.z, base: lm.base, height: view.height, triangles: view.triangles };
+      },
       /** Each trail: its ends, length, crossings and a point every 10 m. */
       trails: () =>
         ways.trails.map((t) => ({
           id: t.id,
+          from: { place: t.from, entity: entityOfPlace.get(t.from), vitality: vitalityOfPlace(t.from) },
+          to: { place: t.to, entity: entityOfPlace.get(t.to), vitality: vitalityOfPlace(t.to) },
           length: t.length,
           width: t.style.width,
           crossings: t.crossings.map((c) => ({ x: Math.round(c.x), z: Math.round(c.z), span: +c.span.toFixed(1) })),
@@ -1182,8 +1378,8 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
         settlement.buildings.map((b) => ({ name: b.represented.name, building: b.kindName, ...b.site, width: b.plan.width, depth: b.plan.depth, triangles: b.view.triangles, vitality: b.view.vitality, sign: settlement.signOf(b), stand: settlement.standOf(b) })),
       /** Sets building `i`'s vitality, and its sign's. */
       vitality: (i: number, v: number) => {
-        settlement.buildings[i]?.view.setVitality(v);
-        signs.setVitality(i, v);
+        const b = settlement.buildings[i];
+        if (b !== undefined) setEntityVitality(b.represented.name, v);
       },
       /** Walks up to subject `i` (buildings first, then trees) and shows its card on arrival. */
       inspect: (i: number) => {
@@ -1301,6 +1497,24 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
         drawnTriangles: instanced().reduce((n, v) => n + v.drawn().triangles, 0),
       }),
       selected: () => selected,
+      /** Shows Gaia's own world (true) or the sample world (false). */
+      codebase: (on: boolean) => showCodebase(on),
+      /** Where the walker is, or (x, z): the area and file patch underfoot, in either world. */
+      place: (x?: number, z?: number) => placeAt(places, x ?? walker.x, z ?? walker.z),
+      /** The codebase's world: its size, areas, patches, buildings, landmarks and trails. */
+      code: () =>
+        code === null
+          ? null
+          : {
+              name: code.world.name,
+              size: code.world.size,
+              sky: code.sky?.name,
+              regions: code.world.regions.map((r) => ({ area: r.area, land: r.land, x: Math.round(r.x), z: Math.round(r.z) })),
+              areas: code.world.areas.map((a) => ({ path: a.path, x: Math.round(a.x), z: Math.round(a.z), radius: Math.round(a.radius), depth: a.depth })),
+              patches: code.world.patches.length,
+              things: code.world.things.map((t) => ({ path: t.path, name: t.name, as: t.as, look: t.look, x: Math.round(t.x), z: Math.round(t.z), vitality: +t.vitality.toFixed(2) })),
+              trails: code.world.trails.map((t) => `${t.from}->${t.to}`),
+            },
       lantern: () => ({ position: light.uLanternPosition.value.toArray(), intensity: light.uLanternIntensity.value, nightness: light.uNightness.value }),
       camera: () => ({ position: camera.position.toArray(), target: orbit.target.toArray() }),
     },

@@ -20,7 +20,7 @@ import { LIGHT_GLSL, type SceneLight, hexToVec3 } from "@gaia/render";
 import { SHORE_CAP, TRAILS, type Terrain, WILDS, type WildsRing, landHalf, wildBase, wildsRing } from "@gaia/terrain";
 import { SWARD_GLSL } from "../world/environment.ts";
 import { REGIONS_GLSL, type RegionCovers, TUFT_GLSL } from "./regions.ts";
-import { TRAIL_GLSL, trailWear } from "./trails.ts";
+import { TRAIL_GLSL, trailUniforms } from "./trails.ts";
 
 /** Height, water level, distance to the water and to the nearest trail's edge per lattice sample, for shaders that sample the ground. */
 export interface GroundTexture {
@@ -41,7 +41,7 @@ export interface GroundTexture {
 }
 
 export function createGroundTexture(t: Terrain): GroundTexture {
-  const { n } = t.lattice;
+  let { n } = t.lattice;
   let data: Float32Array = new Float32Array(n * n * 4);
   const texture = new THREE.DataTexture(data, n, n, THREE.RGBAFormat, THREE.FloatType);
   texture.minFilter = THREE.NearestFilter;
@@ -55,6 +55,15 @@ export function createGroundTexture(t: Terrain): GroundTexture {
     uWildBase: { value: 0 },
   };
   const update = (next: Terrain, packed?: Float32Array): void => {
+    // A world of another size: a texture of its size.
+    if (next.lattice.n !== n || next.lattice.origin !== uniforms.uGroundOrigin.value) {
+      n = next.lattice.n;
+      data = new Float32Array(n * n * 4).fill(TRAILS.reach);
+      texture.dispose();
+      texture.image = { data, width: n, height: n };
+      uniforms.uGroundN.value = n;
+      uniforms.uGroundOrigin.value = next.lattice.origin;
+    }
     uniforms.uLand.value = landHalf(next);
     uniforms.uWildBase.value = wildBase(next);
     if (packed !== undefined && packed.length === n * n * 4) {
@@ -361,14 +370,16 @@ void main() {
 #else
   float edge = vTrail;
 #endif
-  if (edge < 2.0 && uTrailWear > 0.0) {
+  // Each trail's wear follows the vitality of the two entities it joins.
+  float wear = edge < 2.0 ? trailWearAt(vWorld.xz) : 0.0;
+  if (wear > 0.0) {
     float ragged = (fine - 0.5) * 0.8 + (noise(vWorld.xz * 2.3) - 0.5) * 0.45;
-    float tread = (1.0 - smoothstep(-0.4, 0.35, edge + ragged * (0.6 + 0.5 * (1.0 - uTrailWear)))) * uTrailWear;
+    float tread = (1.0 - smoothstep(-0.4, 0.35, edge + ragged * (0.6 + 0.5 * (1.0 - wear)))) * wear;
     vec3 earth = mix(uTrailEarth, cover.soil, 0.22) * (0.88 + 0.22 * fine);
     earth *= 1.0 - 0.12 * (1.0 - smoothstep(-0.9, -0.25, edge));
     earth = mix(earth, earth * 1.22 + 0.03, step(0.8, noise(vWorld.xz * 7.0)) * 0.6);
     albedo = mix(albedo, earth, tread);
-    float margin = (1.0 - smoothstep(0.0, 1.6, edge + ragged)) * (1.0 - tread) * 0.4 * uTrailWear;
+    float margin = (1.0 - smoothstep(0.0, 1.6, edge + ragged)) * (1.0 - tread) * 0.4 * wear;
     albedo = mix(albedo, mix(albedo, uDry, 0.55), margin);
   }
   albedo = mix(albedo, uBed, smoothstep(0.1, 0.5, vWater));
@@ -474,7 +485,7 @@ export function createGround(t: Terrain, light: SceneLight, covers: RegionCovers
     ...light,
     ...covers.uniforms,
     ...tex.uniforms,
-    uTrailWear: trailWear,
+    ...trailUniforms,
     uTrailEarth: { value: hexToVec3(0x9c8462) },
     uDry: { value: hexToVec3(0xbba878) },
     uBare: { value: hexToVec3(0x9a7d58) },
@@ -494,16 +505,25 @@ export function createGround(t: Terrain, light: SceneLight, covers: RegionCovers
   // The overview's coarse grid reads the trails from the texture at full resolution.
   const coarseMaterial = new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: FRAG, uniforms: coarseUniforms, defines: { TRAIL_TEXTURE: "" } });
   // The whole lattice: the same grid, one level, centered on the world.
-  const coarseQuads = 2 * Math.ceil(((t.lattice.n - 1) * t.lattice.spacing) / (2 * RINGS.coarse * t.lattice.spacing));
-  const into = { pos: [] as number[], index: [] as number[] };
-  grid(coarseQuads, 0, () => true, into);
-  const coarse = meshOf(into.pos, into.index, coarseMaterial);
+  const coarseOf = (l: Terrain["lattice"]): THREE.Mesh => {
+    const quads = 2 * Math.ceil(((l.n - 1) * l.spacing) / (2 * RINGS.coarse * l.spacing));
+    const into = { pos: [] as number[], index: [] as number[] };
+    grid(quads, 0, () => true, into);
+    return meshOf(into.pos, into.index, coarseMaterial);
+  };
+  const coarse = coarseOf(t.lattice);
+  let coarseN = t.lattice.n;
   const wilds = new THREE.Mesh(
     wildsGeometry(t),
     new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: FRAG, uniforms, defines: { WILDS: "" } }),
   );
   wilds.frustumCulled = false;
   const update = (next: Terrain, made?: WildsRing): void => {
+    if (next.lattice.n !== coarseN) {
+      coarseN = next.lattice.n;
+      coarse.geometry.dispose();
+      coarse.geometry = coarseOf(next.lattice).geometry;
+    }
     wilds.geometry.dispose();
     wilds.geometry = wildsGeometry(next, made);
     uniforms.uHeightRange.value.set(next.report.min, next.report.max);

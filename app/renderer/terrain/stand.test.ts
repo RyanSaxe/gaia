@@ -4,7 +4,7 @@ import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, RELIEF_PRIMITIVES, ROUTE_PRIMITIVES
 import { link, structure } from "@gaia/kinds";
 import { STRUCTURE_PRESETS, TRAIL_PRESETS, buildSlots, realize } from "@gaia/realize";
 import { bakeTerrain, heightAt, sampleWorld, siteToWorld } from "@gaia/terrain";
-import { type StandRequest, standWorld } from "./stand.ts";
+import { type StandCode, type StandRequest, standWorld } from "./stand.ts";
 
 const lib = new Library([...RELIEF_PRIMITIVES, ...BIOME_PRIMITIVES]);
 const buildingLib = new Library([...STRUCTURE_PRIMITIVES, ...FLORA_PRIMITIVES]);
@@ -34,6 +34,7 @@ describe("standing a world's things on a bake", () => {
     const a = standWorld(here, request);
     const b = standWorld(there, request);
     expect(bytes(a.ground).equals(bytes(b.ground))).toBe(true);
+    expect(bytes(a.trailPlaces).equals(bytes(b.trailPlaces))).toBe(true);
     expect(bytes(here.lattice.heights).equals(bytes(there.lattice.heights))).toBe(true);
     expect(b.sites).toEqual(a.sites);
     expect(b.trails).toEqual(a.trails);
@@ -54,5 +55,36 @@ describe("standing a world's things on a bake", () => {
     for (const t of a.trees) {
       for (const site of a.sites) expect(Math.hypot(t.x - site.x, t.z - site.z)).toBeGreaterThan(4);
     }
+  });
+
+  it("stands a world laid out from code: each building and landmark on its lot, each tree on its file's patch, trails between lots", () => {
+    const t = bakeTerrain(sampleWorld(), lib);
+    const code: StandCode = {
+      lots: [{ id: "packages/a", x: -40, z: 30, radius: 9 }, { id: "packages/b", x: 50, z: -20, radius: 9 }],
+      landmarks: [{ landmark: 0, lot: { id: "packages/c", x: 10, z: 70, radius: 7 } }],
+      patches: [
+        { x: -60, z: -50, radius: 12, trees: 4, preset: 0 },
+        { x: 20, z: -70, radius: 8, trees: 2, preset: 1 },
+        { x: 0, z: 0, radius: 10, trees: 0, preset: -1 },
+      ],
+      trails: [{ from: "packages/a", to: "packages/b", want: 0.9, style: 0 }, { from: "packages/a", to: "packages/c", want: 0.8, style: 1 }],
+    };
+    const stood = standWorld(t, { ...request, code });
+    stood.sites.forEach((site, i) => {
+      const lot = code.lots[i]!;
+      expect(Math.hypot(site.x - lot.x, site.z - lot.z)).toBeLessThanOrEqual(lot.radius + 1e-6);
+    });
+    const [lm] = stood.landmarks;
+    expect(lm?.landmark).toBe(0);
+    expect(Math.hypot(lm!.site.x - 10, lm!.site.z - 70)).toBeLessThanOrEqual(7 + 1e-6);
+    expect(stood.trees.length).toBeGreaterThan(0);
+    for (const tree of stood.trees) {
+      const patch = code.patches[tree.patch!]!;
+      expect(Math.hypot(tree.x - patch.x, tree.z - patch.z)).toBeLessThanOrEqual(patch.radius);
+      expect(Math.floor(tree.variant / request.trees.builds)).toBe(patch.preset);
+    }
+    expect(stood.trees.some((tree) => tree.patch === 2)).toBe(false);
+    expect(stood.trails.length).toBeGreaterThan(0);
+    for (const tr of stood.trails) expect(["packages/a->packages/b", "packages/a->packages/c"]).toContain(tr.id);
   });
 });

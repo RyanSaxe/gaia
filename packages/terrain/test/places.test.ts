@@ -1,41 +1,49 @@
 import { describe, expect, it } from "vitest";
 import { Library } from "@gaia/schema";
 import { BIOME_PRIMITIVES, RELIEF_PRIMITIVES } from "@gaia/primitives";
-import { type FilePatch, WILD_AREA, bakeTerrain, placeAt, sampleWorld, worldPlaces } from "@gaia/terrain";
+import { WILD_AREA, type WorldPlaces, bakeTerrain, placeAt, regionPlaces, sampleWorld } from "@gaia/terrain";
 
-const lib = new Library([...RELIEF_PRIMITIVES, ...BIOME_PRIMITIVES]);
-const world = sampleWorld();
-const t = bakeTerrain(world, lib);
-const file = (path: string) => ({ path, name: path.split("/").pop() ?? path, vitality: 0.8 });
+const file = (path: string, x: number, z: number, radius: number, vitality = 0.8) => ({ path, name: path.split("/").pop() ?? path, x, z, radius, vitality });
 
-describe("placeAt", () => {
-  it("names the directory whose land a point is on, and the wild past the land's edge", () => {
-    const places = worldPlaces(t, []);
-    for (const r of world.regions) {
-      const here = placeAt(places, r.x, r.z).area;
-      expect(here.path).toBe(r.id);
-      expect(here.name).toBe(r.id.split("/").pop());
-      expect(here.depth).toBe(r.id.split("/").length);
-    }
-    const half = world.size / 2;
-    for (const [x, z] of [[half + 5, 0], [0, -half - 5], [half * 0.9, half * 0.9], [5000, -3000]] as const) {
-      expect(placeAt(places, x, z)).toEqual({ area: WILD_AREA, file: null });
-    }
+describe("where a person is", () => {
+  it("names the deepest area and the patch under a point in a world laid out from code, the common ground between, and the wild past the land", () => {
+    const world: WorldPlaces = {
+      name: "demo",
+      size: 260,
+      areas: [
+        { path: "", name: "demo", depth: 0, parent: null, x: 0, z: 0, radius: 100 },
+        { path: "src", name: "src", depth: 1, parent: "", x: 30, z: 0, radius: 40 },
+        { path: "src/ui", name: "ui", depth: 2, parent: "src", x: 45, z: 0, radius: 15 },
+      ],
+      patches: [
+        { ...file("src/ui/menu.ts", 50, 0, 5, 0.4), area: "src/ui" },
+        { ...file("src/main.ts", 10, 0, 6, 1), area: "src" },
+      ],
+    };
+    expect(placeAt(world, 51, 1)).toEqual({ area: { path: "src/ui", name: "ui", depth: 2 }, file: { path: "src/ui/menu.ts", name: "menu.ts", vitality: 0.4 } });
+    expect(placeAt(world, 12, 0).file?.path).toBe("src/main.ts");
+    expect(placeAt(world, 40, 0)).toEqual({ area: { path: "src/ui", name: "ui", depth: 2 }, file: null });
+    expect(placeAt(world, 0, 30)).toEqual({ area: { path: "", name: "demo", depth: 0 }, file: null });
+    // Land no circle holds is the repository's own; past the land's rounded square is the wild.
+    expect(placeAt(world, 0, 120).area).toEqual({ path: "", name: "demo", depth: 0 });
+    for (const [x, z] of [[140, 0], [0, -140], [120, 120], [900, 0]] as const) expect(placeAt(world, x, z)).toEqual({ area: WILD_AREA, file: null });
   });
 
-  it("finds the nearest file whose patch reaches a point, and none off every patch", () => {
-    const [a, b] = world.regions;
-    const patches: FilePatch[] = [
-      { x: a!.x, z: a!.z, reach: 4, file: file("src/core/a.ts") },
-      { x: a!.x + 6, z: a!.z, reach: 4, file: file("src/core/b.ts") },
-      { x: b!.x, z: b!.z, reach: 3, file: file("src/ui/c.ts") },
-    ];
-    const places = worldPlaces(t, patches);
-    expect(placeAt(places, a!.x + 1, a!.z).file?.path).toBe("src/core/a.ts");
-    // Where two patches overlap, the nearer one is underfoot.
-    expect(placeAt(places, a!.x + 3.5, a!.z).file?.path).toBe("src/core/b.ts");
-    expect(placeAt(places, b!.x, b!.z + 2.9).file?.path).toBe("src/ui/c.ts");
-    expect(placeAt(places, b!.x, b!.z + 3.1).file).toBeNull();
-    expect(placeAt(places, a!.x, a!.z + 20).file).toBeNull();
+  it("names the region whose land a point is on in a world laid out as regions, and the nearest file whose patch reaches it", () => {
+    const spec = sampleWorld();
+    const t = bakeTerrain(spec, new Library([...RELIEF_PRIMITIVES, ...BIOME_PRIMITIVES]));
+    const [a, b] = spec.regions;
+    const world = regionPlaces(t.spec, "sample", [file("src/core/a.ts", a!.x, a!.z, 4), file("src/core/b.ts", a!.x + 6, a!.z, 4), file("src/ui/c.ts", b!.x, b!.z, 3)]);
+    for (const r of spec.regions) {
+      const here = placeAt(world, r.x, r.z).area;
+      expect(here).toEqual({ path: r.id, name: r.id.split("/").pop(), depth: r.id.split("/").length });
+    }
+    expect(world.patches.map((p) => p.area)).toEqual([a!.id, a!.id, b!.id]);
+    expect(placeAt(world, a!.x + 1, a!.z).file?.path).toBe("src/core/a.ts");
+    // Where two patches overlap, the one whose middle is nearer for its size is underfoot.
+    expect(placeAt(world, a!.x + 3.5, a!.z).file?.path).toBe("src/core/b.ts");
+    expect(placeAt(world, b!.x, b!.z + 2.9).file?.path).toBe("src/ui/c.ts");
+    expect(placeAt(world, b!.x, b!.z + 3.1).file).toBeNull();
+    expect(placeAt(world, spec.size / 2 + 5, 0)).toEqual({ area: WILD_AREA, file: null });
   });
 });

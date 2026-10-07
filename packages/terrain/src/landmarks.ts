@@ -6,6 +6,7 @@
 
 import { heightAt, slopeAt, worldOf } from "./lattice.ts";
 import type { Occupied } from "./scatter.ts";
+import type { Circle } from "./site.ts";
 import { isWet } from "./plants.ts";
 import type { Terrain } from "./world.ts";
 
@@ -37,17 +38,20 @@ export const LANDMARK_SITE = {
  * footprint `radius`, keeping clear of `avoid`; null when the region has
  * no room.
  */
-export function findLandmarkSite(t: Terrain, region: number, radius: number, avoid: readonly Occupied[]): LandmarkSite | null {
+export function findLandmarkSite(t: Terrain, region: number, radius: number, avoid: readonly Occupied[], within: Circle | null = null): LandmarkSite | null {
   const l = t.lattice;
   const half = t.spec.size / 2 - LANDMARK_SITE.margin - radius;
-  const heart = t.spec.regions[region];
+  const heart = within ?? t.spec.regions[region];
   if (heart === undefined) return null;
   let best: { x: number; z: number; score: number } | null = null;
-  for (let z = -half; z <= half; z += LANDMARK_SITE.step) {
-    for (let x = -half; x <= half; x += LANDMARK_SITE.step) {
+  const step = within === null ? LANDMARK_SITE.step : 2;
+  const [x0, x1, z0, z1] = within === null ? [-half, half, -half, half] : [Math.max(-half, within.x - within.radius), Math.min(half, within.x + within.radius), Math.max(-half, within.z - within.radius), Math.min(half, within.z + within.radius)];
+  for (let z = z0; z <= z1; z += step) {
+    for (let x = x0; x <= x1; x += step) {
       const ix = Math.round((x - l.origin) / l.spacing);
       const iz = Math.round((z - l.origin) / l.spacing);
-      if (t.region[iz * l.n + ix] !== region) continue;
+      // A landmark laid out on a lot stands on it, whichever region's land that is.
+      if (within !== null ? Math.hypot(x - within.x, z - within.z) > within.radius : t.region[iz * l.n + ix] !== region) continue;
       if (avoid.some((o) => Math.hypot(o.x - x, o.z - z) < o.radius + radius)) continue;
       let steep = slopeAt(l, x, z);
       for (let k = 0; k < 8 && steep <= LANDMARK_SITE.maxSlope; k++) {
@@ -66,7 +70,7 @@ export function findLandmarkSite(t: Terrain, region: number, radius: number, avo
       if (best === null || score > best.score) best = { x, z, score };
     }
   }
-  if (best === null) return null;
+  if (best === null) return within === null ? null : { x: within.x, z: within.z, y: levelDisc(t, within.x, within.z, radius), region };
   return { x: best.x, z: best.z, y: levelDisc(t, best.x, best.z, radius), region };
 }
 

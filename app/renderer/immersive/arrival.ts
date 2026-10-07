@@ -91,7 +91,8 @@ export function createArrival(root: HTMLElement): Arrival {
           underKey = nextKey;
           underFile.textContent = place.file?.name ?? "";
           underFile.hidden = place.file === null;
-          underArea.textContent = place.area.depth < 0 ? place.area.name : place.area.path.split("/").join(" / ");
+          // The wild and the repository's own ground go by their names; a directory by its path.
+          underArea.textContent = place.area.depth <= 0 ? place.area.name : place.area.path.split("/").join(" / ");
         }
       }
       under.classList.toggle("on", pausing);

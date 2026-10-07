@@ -15,6 +15,9 @@ import {
   sampleWorld,
   slopeAt,
   trailField,
+  trailPlaces,
+  trailWearAt,
+  unpackPlace,
   waterDepthAt,
 } from "@gaia/terrain";
 
@@ -80,6 +83,53 @@ describe("trails", () => {
         }
       }
     }
+  });
+
+  it("knows, on every sample of a tread, which trail it is and how far along from its first end to its second", () => {
+    const { t, trails } = planned[0] as (typeof planned)[number];
+    const places = trailPlaces(t, trails);
+    expect(Array.from(trailPlaces(t, trails))).toEqual(Array.from(places));
+    const field = trailField(t, trails);
+    const l = t.lattice;
+    const sample = (x: number, z: number): number => Math.round((z - l.origin) / l.spacing) * l.n + Math.round((x - l.origin) / l.spacing);
+    for (const [index, trail] of trails.entries()) {
+      const [a, b] = trail.id.split("-").map(Number) as [number, number];
+      expect([trail.from, trail.to]).toEqual([t.spec.regions[a]?.id, t.spec.regions[b]?.id]);
+      const p = trail.points;
+      const count = p.length / 2;
+      // Along its own center line, away from where other trails join, it reads itself, rising from 0 to 1.
+      let last = -1;
+      for (let k = 0; k < count; k += 3) {
+        const i = sample(p[k * 2] as number, p[k * 2 + 1] as number);
+        if ((field[i] as number) >= 0) continue;
+        const mine = [unpackPlace(places[i * 2] as number), unpackPlace(places[i * 2 + 1] as number)].find((q) => q?.trail === index);
+        if (mine === undefined) continue;
+        expect(Math.abs((mine as { along: number }).along - k / (count - 1))).toBeLessThan(0.05);
+        expect((mine as { along: number }).along).toBeGreaterThanOrEqual(last - 0.02);
+        last = (mine as { along: number }).along;
+      }
+      expect(last).toBeGreaterThan(0.8);
+    }
+    // Far from every trail, no sample names one.
+    for (let i = 0; i < field.length; i += 97) if ((field[i] as number) >= TRAILS.reach) expect(places[i * 2]).toBe(-1);
+  });
+
+  it("wears a trail by the vitality of the entities it joins: bare between thriving ones, grown over toward a failing one", () => {
+    const wear = 0.8;
+    expect(trailWearAt(wear, 1, 1, 0.5)).toBeCloseTo(wear, 5);
+    // Each end holds its own entity's vitality, and the wear runs smoothly between them.
+    expect(trailWearAt(wear, 1, 0.05, 0)).toBeCloseTo(wear, 5);
+    expect(trailWearAt(wear, 1, 0.05, 1)).toBeLessThan(wear * 0.25);
+    let before = Infinity;
+    for (let a = 0; a <= 1; a += 0.05) {
+      const w = trailWearAt(wear, 1, 0.05, a);
+      expect(w).toBeLessThanOrEqual(before + 1e-9);
+      expect(before === Infinity || before - w < 0.16).toBe(true);
+      before = w;
+    }
+    // A failing pair leaves a faint trace, never nothing, so the route still reads.
+    expect(trailWearAt(wear, 0, 0, 0.5)).toBeGreaterThan(0);
+    expect(trailWearAt(wear, 0.5, 0.5, 0.5)).toBeGreaterThan(trailWearAt(wear, 0.1, 0.1, 0.5));
   });
 
   it("levels the ground only near a trail, and never by more than its limit", () => {

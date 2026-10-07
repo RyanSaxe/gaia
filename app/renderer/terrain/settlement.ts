@@ -71,8 +71,9 @@ function extentOf(feature: Built | undefined): Extent | null {
   return Number.isFinite(box.x0) ? box : null;
 }
 
-export function createSettlement(light: SceneLight): Settlement {
-  const buildings: Building[] = SAMPLE_ENTITIES.map((entity) => {
+/** A building for each entity, each the building Jev chose for it: the sample entities unless a world names its own. */
+export function createSettlement(light: SceneLight, entities: readonly SampleEntity[] = SAMPLE_ENTITIES): Settlement {
+  const buildings: Building[] = entities.map((entity) => {
     const preset = STRUCTURE_PRESETS.find((p) => p.name === entity.building);
     if (preset === undefined) throw new Error(`There is no building called ${entity.building}.`);
     const facts = Object.fromEntries(Object.entries(structure.facts).map(([k, bind]) => [k, bind(entity.facts)]));

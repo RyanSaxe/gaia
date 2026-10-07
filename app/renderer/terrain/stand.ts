@@ -6,10 +6,12 @@
 // ground is packed. No Three.js and no DOM: the bake worker runs it, and the
 // same terrain and request give the same stand on any thread.
 
-import type { BuildingPlan, RouteSpec } from "@gaia/schema";
+import { type BuildingPlan, type RouteSpec, rand } from "@gaia/schema";
 import {
   type BuildingSite,
   type Capsule,
+  type Circle,
+  PLANT_SLOPE,
   type Extent,
   type LandmarkSite,
   type Occupied,
@@ -24,14 +26,17 @@ import {
   findLandmarkSite,
   findSite,
   groundedBase,
+  isWet,
   levelPad,
   levelTrails,
   planTrails,
   scatterComponents,
   scatterPlants,
   siteToWorld,
+  slopeAt,
   trailDiscs,
   trailField,
+  trailPlaces,
   wildsRing,
 } from "@gaia/terrain";
 
@@ -48,6 +53,33 @@ export interface StandLandmark {
   readonly base: number;
 }
 
+/** A building's or landmark's lot from a world's layout: the ground kept for it, named by its entity's path. */
+export interface StandLot extends Circle {
+  readonly id: string;
+}
+
+/** One file's patch: where it lies, and how many trees of which flora preset grow on it (preset -1: none). */
+export interface StandPatch extends Circle {
+  readonly trees: number;
+  readonly preset: number;
+}
+
+/**
+ * A world laid out from code (`layoutWorld` in @gaia/world): each building
+ * and landmark on its entity's lot, the trees on their files' patches, and
+ * the trails Jev wants between entities. Without it, the sample world's
+ * rules place everything.
+ */
+export interface StandCode {
+  /** Each building's lot, in the order of `buildings`. */
+  readonly lots: readonly StandLot[];
+  /** Each landmark standing for an entity: which of `landmarks`, on which lot. */
+  readonly landmarks: readonly { readonly landmark: number; readonly lot: StandLot }[];
+  readonly patches: readonly StandPatch[];
+  /** Trails between lots by id; `style` indexes `trailStyles`. */
+  readonly trails: readonly { readonly from: string; readonly to: string; readonly want: number; readonly style: number }[];
+}
+
 export interface StandRequest {
   readonly buildings: readonly StandBuilding[];
   /** The landmarks a world may stand; a world with more rises than kinds repeats them. */
@@ -57,6 +89,7 @@ export interface StandRequest {
   /** How many trees, the scatter's seed, and each build's trunk radius by build: tree i copies a build chosen from i. */
   readonly trees: { readonly count: number; readonly seed: number; readonly presets: number; readonly builds: number; readonly bases: readonly number[] };
   readonly understory: { readonly rules: readonly ScatterRule[]; readonly seed: number };
+  readonly code?: StandCode;
 }
 
 /** Where one tree stands and which build it copies; `index` is its place in the scatter, which names the file it stands for. */
@@ -68,11 +101,14 @@ export interface StandTree {
   readonly variant: number;
   readonly scale: number;
   readonly yaw: number;
+  /** In a world laid out from code, the patch (and so the file) it grows on. */
+  readonly patch?: number;
 }
 
-/** A landmark standing on its site; `landmark` indexes the request's landmarks. */
+/** A landmark standing on its site; `landmark` indexes the request's landmarks, and `id` is the place its trails name. */
 export interface StandingLandmark {
   readonly landmark: number;
+  readonly id: string;
   readonly site: LandmarkSite;
 }
 
@@ -86,6 +122,8 @@ export interface Stand {
   readonly wilds: WildsRing;
   /** Height, water level, distance to the water and to a trail's edge per lattice sample: the ground texture's data. */
   readonly ground: Float32Array;
+  /** Which trails each lattice sample lies on and how far along them (`trailPlaces`), two per sample. */
+  readonly trailPlaces: Float32Array;
 }
 
 /** The middle of a building's door along its front wall, in its own frame. */
@@ -174,10 +212,10 @@ function settleWays(t: Terrain, req: StandRequest, sites: readonly BuildingSite[
     const lm = req.landmarks[k] as StandLandmark;
     const site = findLandmarkSite(t, pick, lm.base + 1.5, avoid);
     if (site === null) continue;
-    placed.push({ landmark: k, site });
+    placed.push({ landmark: k, id: `${lm.name} ${placed.length + 1}`, site });
     avoid.push({ x: site.x, z: site.z, radius: spacing });
   }
-  const places: TrailEnd[] = [...homes.map(door), ...placed.map((s, i) => ({ id: `${req.landmarks[s.landmark]?.name ?? ""} ${i + 1}`, x: s.site.x, z: s.site.z }))];
+  const places: TrailEnd[] = [...homes.map(door), ...placed.map((s) => ({ id: s.id, x: s.site.x, z: s.site.z }))];
   const foot = (p: TrailEnd, toward: TrailEnd, i: number): TrailEnd => {
     if (i < homes.length) return p;
     const lm = req.landmarks[placed[i - homes.length]?.landmark ?? 0];
@@ -211,26 +249,109 @@ function settleWays(t: Terrain, req: StandRequest, sites: readonly BuildingSite[
   return { landmarks: placed, trails };
 }
 
+/**
+ * A world laid out from code: each building on its lot, each landmark on
+ * its lot, and the trails Jev wants between them, leveled into the ground.
+ */
+function settleCode(t: Terrain, req: StandRequest, code: StandCode, sites: readonly BuildingSite[]): { landmarks: StandingLandmark[]; trails: Trail[] } {
+  const homes = req.buildings.map((b, i) => ({ ...b, site: sites[i] as BuildingSite, id: code.lots[i]?.id ?? b.name }));
+  const avoid: Occupied[] = homes.map((b) => ({ x: b.site.x, z: b.site.z, radius: Math.hypot(b.plan.width, b.plan.depth) / 2 + 2 }));
+  const landmarks: StandingLandmark[] = [];
+  const ids: string[] = [];
+  for (const { landmark, lot } of code.landmarks) {
+    const lm = req.landmarks[landmark];
+    if (lm === undefined) continue;
+    const site = findLandmarkSite(t, 0, lm.base + 1.5, avoid, lot);
+    if (site === null) continue;
+    landmarks.push({ landmark, id: lot.id, site });
+    ids.push(lot.id);
+    avoid.push({ x: site.x, z: site.z, radius: lm.base + 2 });
+  }
+  // A trail ends at a building's door, or at a landmark's foot facing the other end.
+  const end = (id: string, toward: { x: number; z: number } | null): TrailEnd | null => {
+    const home = homes.find((b) => b.id === id);
+    if (home !== undefined) return { id, ...standOf(home.plan, home.site) };
+    const k = ids.indexOf(id);
+    const s = landmarks[k];
+    if (s === undefined) return null;
+    if (toward === null) return { id, x: s.site.x, z: s.site.z };
+    const d = Math.hypot(toward.x - s.site.x, toward.z - s.site.z) || 1;
+    const r = (req.landmarks[s.landmark]?.base ?? 2) + 1.8;
+    return { id, x: s.site.x + ((toward.x - s.site.x) / d) * r, z: s.site.z + ((toward.z - s.site.z) / d) * r };
+  };
+  const requests: TrailRequest[] = code.trails.flatMap((w) => {
+    const a = end(w.from, null);
+    const b = end(w.to, null);
+    if (a === null || b === null) return [];
+    const from = end(w.from, b) as TrailEnd;
+    const to = end(w.to, a) as TrailEnd;
+    return [{ id: `${w.from}->${w.to}`, from, to, style: req.trailStyles[w.style] ?? req.trailStyles[0], want: w.want }];
+  });
+  const keepOut: Occupied[] = [
+    ...homes.map((b) => ({ x: b.site.x, z: b.site.z, radius: Math.hypot(b.plan.width, b.plan.depth) / 2 + 0.6 })),
+    ...landmarks.map((s) => ({ x: s.site.x, z: s.site.z, radius: (req.landmarks[s.landmark]?.base ?? 2) + 0.8 })),
+  ];
+  const trails = planTrails(t, requests, 41, keepOut);
+  levelTrails(t, trails);
+  return { landmarks, trails };
+}
+
+/** Meters between trees on one patch. */
+const PATCH_GAP = 6.5;
+
+/** The trees on each file's patch: dry, gentle ground inside it, clear of what stands and of each other. */
+function plantPatches(t: Terrain, req: StandRequest, code: StandCode, blocked: (x: number, z: number) => boolean): StandTree[] {
+  const { seed, builds, bases } = req.trees;
+  const half = t.spec.size / 2 - 24;
+  const trees: StandTree[] = [];
+  code.patches.forEach((p, j) => {
+    if (p.preset < 0 || p.trees <= 0) return;
+    const r = rand(seed * 7919 + j);
+    let grown = 0;
+    for (let attempt = 0; attempt < p.trees * 40 && grown < p.trees; attempt++) {
+      // The first tree tries the patch's middle; the rest spread over its ground.
+      const a = r.next() * Math.PI * 2;
+      const d = attempt === 0 ? 0 : Math.sqrt(r.next()) * p.radius * 0.9;
+      const x = p.x + Math.cos(a) * d;
+      const z = p.z + Math.sin(a) * d;
+      if (Math.abs(x) > half || Math.abs(z) > half || slopeAt(t.lattice, x, z) > PLANT_SLOPE || isWet(t, x, z) || blocked(x, z)) continue;
+      if (trees.some((o) => Math.hypot(o.x - x, o.z - z) < PATCH_GAP)) continue;
+      const index = trees.length;
+      const variant = p.preset * builds + Math.floor(r.next() * builds);
+      const scale = 0.85 + r.next() * 0.45;
+      const base = (bases[variant] ?? 0.5) * scale;
+      trees.push({ index, x, y: groundedBase(t.lattice, x, z, base), z, variant, scale, yaw: r.next() * Math.PI * 2, patch: j });
+      grown++;
+    }
+  });
+  return trees;
+}
+
 /** Stands everything on a finished bake, leveling the lattice under the buildings and the trails first. */
 export function standWorld(t: Terrain, req: StandRequest): Stand {
+  const code = req.code;
   const sites: BuildingSite[] = [];
-  for (const b of req.buildings) {
-    const site = findSite(t, b.plan, sites, 30, b.beside);
+  req.buildings.forEach((b, i) => {
+    const site = findSite(t, b.plan, sites, 30, b.beside, code?.lots[i] ?? null);
     levelPad(t, b.plan, site, b.beside);
     sites.push(site);
-  }
-  const { landmarks, trails } = settleWays(t, req, sites);
+  });
+  const { landmarks, trails } = code === undefined ? settleWays(t, req, sites) : settleCode(t, req, code, sites);
 
   // Trees keep off the trails, out of the buildings and out from under a landmark.
   const clear: Occupied[] = [...trailDiscs(trails, 1.6), ...landmarks.map((s) => ({ x: s.site.x, z: s.site.z, radius: treeClearance(req.landmarks[s.landmark] as StandLandmark) }))];
+  const blocked = (x: number, z: number): boolean => req.buildings.some((b, k) => blockedBy(b, sites[k] as BuildingSite, x, z, 6)) || clear.some((o) => Math.hypot(o.x - x, o.z - z) < o.radius);
   const { count, seed, presets, builds, bases } = req.trees;
-  const trees = scatterPlants(t, count, seed).flatMap((s, i): StandTree[] => {
-    if (req.buildings.some((b, k) => blockedBy(b, sites[k] as BuildingSite, s.x, s.z, 6)) || clear.some((o) => Math.hypot(o.x - s.x, o.z - s.z) < o.radius)) return [];
-    const variant = (i % presets) * builds + (Math.floor(i / presets) % builds);
-    const scale = 0.85 + ((i * 37) % 10) / 22;
-    const base = (bases[variant] ?? 0.5) * scale;
-    return [{ index: i, x: s.x, y: groundedBase(t.lattice, s.x, s.z, base), z: s.z, variant, scale, yaw: i * 1.7 }];
-  });
+  const trees =
+    code !== undefined
+      ? plantPatches(t, req, code, blocked)
+      : scatterPlants(t, count, seed).flatMap((s, i): StandTree[] => {
+          if (blocked(s.x, s.z)) return [];
+          const variant = (i % presets) * builds + (Math.floor(i / presets) % builds);
+          const scale = 0.85 + ((i * 37) % 10) / 22;
+          const base = (bases[variant] ?? 0.5) * scale;
+          return [{ index: i, x: s.x, y: groundedBase(t.lattice, s.x, s.z, base), z: s.z, variant, scale, yaw: i * 1.7 }];
+        });
 
   // Nothing of the understory stands in a building, on its walk, on a trail or under a landmark.
   const homes = req.buildings.flatMap((b, k) =>
@@ -256,5 +377,5 @@ export function standWorld(t: Terrain, req: StandRequest): Stand {
     ground[i * 4 + 2] = t.shore[i] as number;
     ground[i * 4 + 3] = field[i] as number;
   }
-  return { sites, landmarks, trails, trees, placements, wilds: wildsRing(t), ground };
+  return { sites, landmarks, trails, trees, placements, wilds: wildsRing(t), ground, trailPlaces: trailPlaces(t, trails) };
 }

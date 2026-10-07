@@ -10,7 +10,7 @@
 // never holds up a frame. Opening, panning and zooming redraw only the view of
 // the paper and the marks and names over it, which stay one size at any zoom.
 
-import { type Place, type PlaceArea, heightAt, waterDepthAt } from "@gaia/terrain";
+import { type Place, type PlaceArea, type WorldPlaces, heightAt, waterDepthAt } from "@gaia/terrain";
 import type { StoodWorld } from "../terrain/lab.ts";
 
 export interface FieldMap {
@@ -30,6 +30,8 @@ export interface FieldMap {
 export interface MapSource {
   stood(): StoodWorld;
   placeAt(x: number, z: number): Place;
+  /** Every area and file patch, for drawing each file's ground. */
+  places(): WorldPlaces;
 }
 
 /** Paper size in pixels, and how far past the land the map shows of the wild, meters. */
@@ -48,6 +50,8 @@ const SPARE_MS = 2;
 const SERIF = `"Iowan Old Style", Georgia, "Times New Roman", serif`;
 const INK = "#4a3c2c";
 const PAPER_TONE = "#efe4c8";
+/** The wash of land no directory but the repository's root holds. */
+const COMMON_GROUND = "#cfd3a4";
 /** Watercolor hues for top-level directories, soft enough to read names over. */
 const WASHES = ["#9fbf83", "#dcb56f", "#d09684", "#8eb0c9", "#b39fcb", "#86b8a1", "#d79e68", "#a9bd93", "#cdb48a", "#9cadd6"];
 
@@ -103,7 +107,7 @@ interface Paper {
 }
 
 /** Paints the land onto paper, yielding between steps so a driver can spread the work over idle time. */
-function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place): Generator<void, Paper> {
+function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place, places: WorldPlaces): Generator<void, Paper> {
   const t = stood.terrain;
   const size = t.spec.size;
   const reach = size / 2 + MARGIN;
@@ -159,8 +163,10 @@ function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place
   // Washes: each top-level directory a hue, its subdirectories a little lighter or darker.
   const tops = [...new Set(areas.map((a) => a.path.split("/")[0] ?? ""))].sort();
   const washOf = areas.map((a) => {
+    // The repository's own common ground is a pale meadow, so its directories' washes stand out on it.
+    if (a.depth === 0) return mixRgb(COMMON_GROUND, "#fbf5e6", 0.15);
     const base = WASHES[tops.indexOf(a.path.split("/")[0] ?? "") % WASHES.length] as string;
-    const tone = (hash(a.path.length * 13.1, a.path.charCodeAt(a.path.length - 1)) - 0.5) * 0.56;
+    const tone = (hash(a.path.length * 13.1, a.path.charCodeAt(a.path.length - 1) || 0) - 0.5) * 0.56;
     return tone > 0 ? mixRgb(base, "#fbf5e6", tone) : mixRgb(base, "#5b5040", -tone * 0.5);
   });
   const small = document.createElement("canvas");
@@ -216,6 +222,19 @@ function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place
   ctx.drawImage(hill, 0, 0, PAPER, PAPER);
   ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = "source-over";
+  yield;
+
+  // Each file's patch: a faint wash in its health's color inside a fine ring, so the ground of every file shows.
+  ctx.lineWidth = 1.6;
+  for (const p of places.patches) {
+    const r = p.radius * scale;
+    ctx.beginPath();
+    ctx.arc(px(p.x), px(p.z), r, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(${mixRgb("#a8956a", "#6f9450", Math.max(0, Math.min(1, p.vitality))).join(",")},0.2)`;
+    ctx.fill();
+    ctx.strokeStyle = "rgba(74,60,44,0.28)";
+    ctx.stroke();
+  }
   yield;
 
   // Water: washed blue and inked at its edge; streams too narrow for the samples follow their stations.
@@ -406,6 +425,7 @@ export function createFieldMap(root: HTMLElement, source: MapSource): FieldMap {
   const ctx = canvas.getContext("2d") as CanvasRenderingContext2D;
   const hereFile = sheet.querySelector(".here-file") as HTMLElement;
   const hereArea = sheet.querySelector(".here-area") as HTMLElement;
+  const title = sheet.querySelector(".field-map-title span") as HTMLElement;
 
   let paper: Paper | null = null;
   /** Whether the world changed since the paper was painted. */
@@ -439,7 +459,7 @@ export function createFieldMap(root: HTMLElement, source: MapSource): FieldMap {
     stale = false;
     stopPainting?.();
     paper = null;
-    painting = paintPaper(source.stood(), source.placeAt);
+    painting = paintPaper(source.stood(), source.placeAt, source.places());
     timing.paintMs = 0;
     timing.longestStepMs = 0;
     // At least one step in each idle slot, and more while the slot has time to spare.
@@ -488,6 +508,7 @@ export function createFieldMap(root: HTMLElement, source: MapSource): FieldMap {
       return;
     }
     const stood = source.stood();
+    title.textContent = `Field map · ${source.places().name}`;
     const sx = (x: number): number => (x - view.x) * view.zoom + w / 2;
     const sy = (z: number): number => (z - view.z) * view.zoom + h / 2;
     const visible = (x: number, y: number, pad: number): boolean => x > -pad && x < w + pad && y > -pad && y < h + pad;
@@ -614,7 +635,8 @@ export function createFieldMap(root: HTMLElement, source: MapSource): FieldMap {
     ctx.textBaseline = "middle";
     const nameSize = w < 520 ? 15 : 17;
     for (const l of [...paper.areaLabels].sort((a, b) => b.cells - a.cells)) {
-      if (!visible(sx(l.x), sy(l.z), 0)) continue;
+      // The repository's root is the whole sheet: the title names it.
+      if (l.area.depth === 0 || !visible(sx(l.x), sy(l.z), 0)) continue;
       const parent = l.area.path.split("/").slice(0, -1).join(" / ").toUpperCase();
       ctx.font = `italic 600 ${nameSize}px ${SERIF}`;
       const nameW = ctx.measureText(l.area.name).width;
@@ -844,7 +866,7 @@ export function createFieldMap(root: HTMLElement, source: MapSource): FieldMap {
         lastPlace = key;
         hereFile.textContent = place.file?.name ?? "";
         hereFile.hidden = place.file === null;
-        hereArea.textContent = place.area.depth < 0 ? place.area.name : place.area.path.split("/").join(" / ");
+        hereArea.textContent = place.area.depth < 0 ? place.area.name : place.area.depth === 0 ? source.places().name : place.area.path.split("/").join(" / ");
       }
       // Walking with the map open moves the arrow a fraction of a pixel a frame: a few redraws a second keep up.
       if (isOpen && moved && performance.now() - lastDraw > FOLLOW_MS) draw();

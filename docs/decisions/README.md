@@ -25,3 +25,6 @@ One file per decision the reviewer settled in the pair sessions that designed Ga
 - [Solid things stop you; water never does](21-solid-things-and-swimming.md)
 - [Buildings stand for entities, and fall to ruin](22-structures-stand-for-entities.md)
 - [Walk up to a thing to see what it stands for](23-walk-up-and-see.md)
+- [A world from real code](24-a-world-from-code.md)
+- [Entities throughout, each with its own vitality](25-entities-throughout.md)
+- [Buildings and landmarks are as flexible as trees](26-structures-as-flexible-as-trees.md)

@@ -22,15 +22,35 @@ the document that did not change renders exactly as it did before.
 | Main | TypeScript (Electron) | The window and the app's lifecycle. It starts the engine and the world service and restarts the engine if it exits. |
 | Engine | Rust (`gaia-engine`) | Files, parsing, git, test reports, the code model, the app-data store and the Jev client with the key from the macOS Keychain. |
 | World service | TypeScript (Electron utility process) | Kinds and primitives, the question planner, answer rules, vitality and the world document. |
-| Renderer | TypeScript | The UI, the Three.js scene, the realizer and the clock. In slice 1 the renderer is the lab. The lab opens into the world, full screen at eye height (`app/renderer/immersive/`), with its debugging views (Components, Terrain and Skies) behind tabs; the immersive world is the terrain lab's world without its chrome, plus one way of telling a person where they are, read through `placeAt`. The terrain lab bakes its world on worker threads (`app/renderer/terrain/bake-worker.ts`): a few workers compose bands of lattice rows with `composeRows`, and one finishes the bake with `finishTerrain` and stands the world's things on it with `standWorld` (`app/renderer/terrain/stand.ts`): each building's site and pad, the landmarks' sites, the trails leveled into the ground, the trees and the understory, and the ground texture's data, so drawing never waits on a bake. Components are still realized on the main thread; the realizer is pure and worker-safe, so it can move into workers too. |
+| Renderer | TypeScript | The UI, the Three.js scene, the realizer and the clock. In slice 1 the renderer is the lab. The lab opens into the world, full screen at eye height (`app/renderer/immersive/`), with its debugging views (Components, Terrain and Skies) behind tabs; the immersive world is the terrain lab's world without its chrome, plus one way of telling a person where they are, read through `placeAt`. The terrain lab bakes its world on worker threads (`app/renderer/terrain/bake-worker.ts`): a few workers compose bands of lattice rows with `composeRows`, and one finishes the bake with `finishTerrain` and stands the world's things on it with `standWorld` (`app/renderer/terrain/stand.ts`): each building's site and pad, the landmarks' sites, the trails leveled into the ground and which trail each ground sample lies on, the trees and the understory, and the ground texture's data, so drawing never waits on a bake. Components are still realized on the main thread; the realizer is pure and worker-safe, so it can move into workers too. |
 
 The world service talks to the engine in newline-delimited JSON-RPC 2.0 over
 the engine's stdin and stdout, relayed by the main process. Only small data
 crosses: code facts, Jev requests and answers, and store records. Geometry
 never crosses, because the renderer builds it. `EngineMethods` in
 `packages/schema/src/engine.ts` is the TypeScript side of the protocol, and
-`engine/src/rpc.rs` the Rust side. In slice 1 the engine answers only
-`engine.ping`.
+`engine/src/rpc.rs` the Rust side. The engine answers `engine.ping`,
+`project.open`, and Jev's `jev.estimate`, `jev.ask` and `jev.batch`.
+
+`project.open` walks a directory, respecting `.gitignore`, and reports each
+file's facts, the entities, and the repository (`CodeModel`). Each file is
+read by a careful line-based pass for TypeScript, JavaScript and Rust
+(`engine/src/source.rs`), with a small lexer that keeps strings and comments
+apart from code: its language and kind (source, test, config, data, docs,
+script), lines, leading comment, exported symbols with their doc comments,
+imports, a rough complexity and its TODO markers. Imports resolve relative
+paths, workspace packages by name through their `exports`, and Rust `mod`
+declarations. A test covers every file it reaches through imports; a crate's
+integration tests reach its entry, and a Rust file with a `#[cfg(test)]`
+module covers itself. Entities come from `package.json` and `Cargo.toml`, from
+directories whose index file is no package's entry (modules), and from
+directories with a `main` or `server` file (apps and services). An entity
+depends on another through its manifest or when one of its files imports one
+of the other's. History comes from one `git log`. Nothing runs the compiler,
+the linter or the tests yet, so diagnostics and failing tests read 0, and
+nothing watches the project for `facts.changed`. On Gaia's own repository
+(about 220 files, 33,000 lines) `project.open` takes about 70 ms in a release
+build.
 
 ## Packages
 
@@ -39,7 +59,7 @@ never crosses, because the renderer builds it. `EngineMethods` in
 | `@gaia/schema` | The type builder, ports and vitality channels, primitive and kind contracts, code facts, the world document, Jev's wire format, the engine protocol, content identity | Nothing |
 | `@gaia/primitives` | Primitive declarations and geometry, palettes, the manifest `PRIMITIVES` | schema |
 | `@gaia/kinds` | The flora, structure, rock, wildflowers, landmark, link, biome and world kinds | schema |
-| `@gaia/world` | The question planner, answer rules, context gathering, file and entity vitality, type-space tools, `WorldChange` | schema |
+| `@gaia/world` | The question planner, answer rules, context gathering, file and entity vitality, type-space tools, `WorldChange`, and the world laid out from code: the requests Jev answers about it, the stand-in judge and the layout | schema |
 | `@gaia/realize` | Blueprint to parts, world and region looks at an hour, the light between a day's keys, the sky and air references, presets, channel math, detail by distance | schema, primitives |
 | `@gaia/render` | Three.js materials, light and shadow, and instanced copies of a component, culled by cell and thinned by distance | schema, realize, three |
 | `@gaia/terrain` | Relief composition, the baked heightfield, water, the endless wild land past the rim and the ground's height anywhere, walking, wading and swimming, the solids that stop a walk and the way around them, sight lines, where plants, the understory and landmarks stand, the routes of trails, and where a point is (its area and the file underfoot, `placeAt`) | schema, primitives, realize |
@@ -53,13 +73,18 @@ gives the reason next to each rule.
 A **primitive** is a pure procedural function with typed parameters and a
 role, such as `branching@1` (Skeleton) or `leaf-clumps@1` (Foliage). It is code,
 versioned in its ID. A **kind** declares slots by role and the subject it
-stands for: a file (`flora`, `rock`, `wildflowers`, `landmark`), an entity
-(`structure`), a region (`biome`), a dependency between two files (`link`) or
-the repository (`world`). A `link`'s blueprint fills only a trail's look; the
+stands for: a file (`flora`, `rock`, `wildflowers`), an entity
+(`structure`, `landmark`), a region (`biome`), a dependency between two
+entities (`link`) or the repository (`world`). A `link`'s blueprint fills only a trail's look; the
 terrain finds its route. A `structure`'s footprint lays out one
-`BuildingPlan` (walls, roofline, floor and where every door and window goes);
-its body, roof, openings, ornaments and optional feature (a `waterwheel@1`, a
-`tower@1`) each build on that plan, so they agree by construction.
+`BuildingPlan`: the masses the building is joined from (each a block or a
+round turret with its own storeys and roof form: gable, hip, half-hip,
+lean-to or cone), its floor, and where every door and window goes. Its body,
+roof, openings, ornaments and optional feature (a `waterwheel@1`, a
+`tower@1`) each build on that plan, so walls rise to the roofline over them
+and everything agrees by construction. The geometry lives in
+`packages/primitives/src/geometry/building/`, one file per part: layout,
+frame (reading the plan), walls, roofs, openings, garden, ruin and features.
 
 An **entity** is a named unit of the code with a boundary, a public surface,
 things that depend on it and a health of its own: a package or crate (found
@@ -69,10 +94,15 @@ or a module (a directory whose index file gives it a public surface).
 report for each: its root path (its identity), name, form, manifest, entry,
 doc, size, exports, the entities it depends on and that depend on it, and
 its files' tests, diagnostics and git activity summed. Entities nest; each
-file belongs to its innermost one. Buildings stand for entities and plants
-for files. Jev decides which entities become buildings and which building
-suits each; the kind binds only numbers from the facts (size from lines,
-storeys from exports, a feature's reach from dependents).
+file belongs to its innermost one. Buildings and landmarks stand for
+entities, plants for files, and trails for dependencies between entities.
+Jev decides which entities become buildings, which become landmarks and
+which form suits each, with no rule fixing how many of either; the kinds
+bind only numbers from the facts (a building's size from lines, storeys from
+exports and a feature's reach from dependents; a landmark's scale from its
+dependents; a trail's traffic from how many of one entity's files import the
+other). `DependencyFacts` carries both entities' facts, so a trail can follow
+the vitality of each.
 A **blueprint** fills a kind: a primitive for each slot and a stored value for
 each parameter. An **instance** places a blueprint for one path. Jev
 generates blueprints and instances; people and agents write primitives and
@@ -82,6 +112,53 @@ Every parameter is a closed set: a choice, a scale of described levels, a
 flag or a set. A blueprint stores the words Jev chose. A primitive's `build`
 receives numbers, which the seed picks between neighboring levels, so
 instances of one blueprint vary and each is identical on every run.
+
+## A world from code
+
+`@gaia/world` turns a code model (`CodeModel`, what `project.open` returns)
+into a world document (`CodeWorld`, in `packages/world/src/code-world.ts`).
+The repository is the world. Each directory is an area, a circle of ground
+nested inside its parent's. Each file is a patch inside its directory's area,
+its size set by its lines (2.5 m² a line, capped at 1,200 lines). Each entity
+stands on a lot in its root directory's area, as a building or a landmark.
+A dependency between two entities that Jev would walk becomes a trail
+request. `layoutWorld` packs a directory's lot first, then its files, then
+its subdirectories' areas around them, and fits each in its smallest circle,
+so the world's side grows with the code (Gaia's own is 1.3 km). A directory
+whose own lines, with those of subdirectories that have no land of their
+own, reach 3% of the code gets its own land: a terrain region centered on
+its files, reaching as far as their ground (`RegionSpec.reach`, which weighs
+the borders between regions). Smaller directories are areas on their
+parent's land.
+
+Jev judges every look: the repository's art direction, each region's land,
+what grows on each file's patch, whether each entity is a building or a
+landmark and which, and which dependencies become trails and how they look.
+`planWorldRequests` builds one request per thing, from facts and doc
+comments only, with options shuffled by the thing's path. `judgeWorld` asks
+them through any `JevClient`, eight at a time. Until the reviewer approves
+live calls, `standInJev` answers: a deterministic stand-in that scores each
+option by the fact tags its look suits, with a tie-break seeded by the
+question. `engineJev` in the world service is the live client; swapping it in
+is one line in `app/renderer/terrain/code-world.ts`.
+
+`placeAt(world, x, z)` in `@gaia/terrain` says where a person is: the
+deepest area whose circle holds the point and the file patch underfoot, if
+any (`WorldPlaces`, in `@gaia/schema`). Land that no circle holds is the
+repository's own common ground, and past the land's rounded square
+(`WorldPlaces.size`) is the wild, which stands for no directory. A world laid
+out as regions instead of circles, as the lab's sample world is, names each
+area's land in `WorldPlaces.cells`, and a point is the area whose region's
+warped cell holds it (`cellAt`, the cell its landform weighs most in);
+`regionPlaces` builds such a world's places.
+
+The lab opens on Gaia's own world, from
+`app/renderer/terrain/fixtures/gaia.json`, a snapshot `pnpm snapshot` writes
+through the engine's `project.open`; `?world=sample` (or `?world=small`) and
+the Terrain view's "Sample world" button show the sample world instead. `standWorld` takes the
+layout (`StandRequest.code`): each building and landmark on its lot, trees of
+the chosen species on each file's patch with that file's vitality, and the
+trails between lots. The ground textures take a world of any size.
 
 ## Jev
 
@@ -99,6 +176,17 @@ answers can vary between identical calls. Gaia therefore:
 - stores every accepted answer, keyed by the question, the pinned model and
   the coarse facts it reads, and asks again only when those facts change;
 - keeps a stored answer unless a fresh one wins by a margin (`reconcile`).
+
+The engine is Jev's only client (`engine/src/jev.rs`). It posts each request
+to OpenRouter's Decisions API with curl, the key read from the macOS Keychain
+(service `gaia-openrouter`) and handed to curl on stdin, never on a command
+line or over the protocol. `jev.batch` sends many requests eight at a time;
+`jev.ask` sends one. Both refuse unless the engine runs with `GAIA_JEV=live`.
+`jev.estimate` returns what a batch would send and cost without reading the
+key or touching the network: tokens are estimated at 1.8 bytes each, from
+OpenRouter's published example, and priced at Jev 1.13's $0.042 per million
+input tokens (output is free). `pnpm print-world-requests` prints every
+request judging Gaia's own world would make, with that estimate.
 
 ## Vitality
 

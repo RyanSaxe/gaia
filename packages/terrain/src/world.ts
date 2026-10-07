@@ -22,6 +22,12 @@ export interface RegionSpec {
   readonly z: number;
   /** The region's ground level, meters, from the world layout. */
   readonly base: number;
+  /**
+   * How far the region's own ground reaches from its middle, meters: a
+   * larger region claims more land before its neighbor's begins. Absent, 0,
+   * which divides the land evenly between neighboring middles.
+   */
+  readonly reach?: number;
   /** A blueprint of the `biome` kind. Terrain reads its relief slot. */
   readonly biome: Blueprint;
 }
@@ -111,20 +117,39 @@ const smooth = (t: number): number => {
 const WARP_SEEDS = [5101, 5203] as const;
 const DRIFT_SEED = 6007;
 
+/** A point moved by the domain warp that makes region borders curve and wander. */
+function warped(x: number, z: number): [number, number] {
+  const u = x / TERRAIN.warpWavelength;
+  const v = z / TERRAIN.warpWavelength;
+  return [x + TERRAIN.warp * fbm(WARP_SEEDS[0], u, v, 2, 0.4), z + TERRAIN.warp * fbm(WARP_SEEDS[1], u, v, 2, 0.4)];
+}
+
+/** Which region's warped cell holds (x, z): the one whose landform weighs most there, as `regionWeights` finds it. */
+export function cellAt(sites: readonly { readonly x: number; readonly z: number; readonly reach?: number }[], x: number, z: number): number {
+  const [wx, wz] = warped(x, z);
+  let best = 0;
+  let nearest = Infinity;
+  sites.forEach((r, i) => {
+    const d = Math.hypot(wx - r.x, wz - r.z) - (r.reach ?? 0);
+    if (d < nearest) {
+      nearest = d;
+      best = i;
+    }
+  });
+  return best;
+}
+
 /**
  * Each region's blend weight at a point: 1 for the nearest, falling smoothly to
  * 0 across the blend band. Distances are measured from a domain-warped point,
  * so the cells' borders curve and wander. Heights blend by these weights.
  */
 export function regionWeights(spec: WorldSpec, x: number, z: number, out: Float64Array): void {
-  const u = x / TERRAIN.warpWavelength;
-  const v = z / TERRAIN.warpWavelength;
-  const wx = x + TERRAIN.warp * fbm(WARP_SEEDS[0], u, v, 2, 0.4);
-  const wz = z + TERRAIN.warp * fbm(WARP_SEEDS[1], u, v, 2, 0.4);
+  const [wx, wz] = warped(x, z);
   let nearest = Infinity;
   for (let i = 0; i < spec.regions.length; i++) {
     const r = spec.regions[i] as RegionSpec;
-    const d = Math.hypot(wx - r.x, wz - r.z);
+    const d = Math.hypot(wx - r.x, wz - r.z) - (r.reach ?? 0);
     out[i] = d;
     if (d < nearest) nearest = d;
   }

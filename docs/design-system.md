@@ -79,9 +79,9 @@ instance within it:
 | Shrub | up to 2 m |
 | Small tree | 3 to 6 m |
 | Tall tree | 8 to 16 m |
-| House | 5 to 9 m |
+| Building | 5 to 9 m a storey or two; up to 14 m with three storeys or a turret |
 | Tower | 8 to 19 m, taller with more depending on it |
-| Landmark | 12 to 30 m; a ring of standing stones 3 to 8 m, 10 to 20 m across |
+| Landmark | 12 to 30 m; great stones 3 to 8 m, set out 10 to 25 m across |
 
 ## Terrain
 
@@ -217,7 +217,35 @@ on the horizon rise out of its haze. `skyColorAt` and `aerialAt` in
 
 ## Buildings
 
-A building stands for an entity. A building stands on a pad leveled into
+A building stands for an entity. Buildings are as flexible as trees: a few
+strong axes of `cottage-plan@1` change the whole form, and walls, roofs and
+openings compose on whatever it lays out, so one set of primitives makes a
+hamlet of very different buildings.
+
+| Axis | Choices |
+| --- | --- |
+| Massing | a single block; an L (a wing juts out at one end, its gable looking outward); a T (a gabled wing from the middle); a long range (blocks in line, each narrower); a cluster (wings and outbuildings joined all round) |
+| Main body | long, snug or gable-fronted; tiny to roomy |
+| Storeys | one to three, and whether joined parts keep one eave line or step down a storey each |
+| Roof form | gabled, hipped or half-hipped over the body and its wings; a lean-to's one slope; a turret's cone |
+| Attachments | a gabled porch over the door, a lean-to shed, a round turret a storey taller |
+| Character | how steep the roofs, how high the plinth, how many windows, how settled and crooked |
+
+Each volume is a mass: walls standing on a rectangle (or a turret's
+octagon) under a roof of its own. Joined masses overlap where they meet, so
+a wall inside another mass is never built and a wing's roof runs into the
+main roof in a valley. Every wall rises to the roofline over it, so gables,
+hipped ends, a half-hip's cut-back gable and a lean-to's slope meet their
+roofs exactly. A hipped range hips only the ends no other mass joins, so a
+long range reads as one stepped roof. Windows fall where walls show, in
+every storey, clear of the door, the chimney's gable and each other; a big
+building keeps those that look toward the walk, at most fourteen. Its walls
+keep within 9,800 triangles and its roofs share 4,300 across their slopes:
+fine work (studs, plaster cells, plinth stones, ivy, tile courses) coarsens on
+a big building and again until it fits, so a building of many masses keeps
+its budget by construction.
+
+A building stands on a pad leveled into
 the baked ground under it and its yard, blending back into the land over
 7 m, and its foundation reaches 1.4 m below, so it never floats and never
 shows a gap. Grass is cleared under the house and along the walk to its
@@ -241,6 +269,11 @@ at the front corner away from the door, where a person walking up sees it:
 | 0.5 | Tired: plaster falls in patches, the first holes in the roof's eaves, ivy at the corners, the door ajar, a shutter hanging, long grass |
 | 0.2 | Failing: the roof rotted through over bare rafters, walls holed and timbers fallen at the weak corner, rubble below, windows broken or boarded, the chimney toppling, the flower boxes down |
 | 0.05 | A ruin: most of the covering gone, the chimney lying across the ridge, ivy to the eaves, rank grass and rubble all round, a tower's top and lantern fallen |
+
+Ruin follows each form: every mass's walls and roof rot by the same weak
+corner, a lean-to's whole slope caves in about its high edge, a turret's
+cone rots through and its finial leans and falls, and a fallen timber is
+one storey's post, so a tall house collapses floor by floor.
 
 Every one of these is a vitality channel on the pieces the primitives
 already build, so nothing is rebuilt and nothing pops. Ivy and the moss on
@@ -284,13 +317,16 @@ and slow, soft motion. After dark the paper (the map, the slip, a card) is
 read by the lantern, a little warmer and dimmer. While a card is read, the
 words over the land step back.
 
-Where a person is comes from one function, `placeAt` in `@gaia/terrain`:
-the area (a directory) whose land they stand on, and the file whose patch
-of ground is underfoot, if any. An area's border runs where its region's
-landform gives way to the next, so the islands where ground covers drift
-across a border never flicker a name. Past the codebase's land is the
-wild, which names nothing. In the sample world a file's patch is the ground
-around the tree that stands for it, out to most of its crown.
+The immersive world opens on Gaia's own world. Where a person is comes from
+one function, `placeAt` in `@gaia/terrain`: the area (a directory) whose land
+they stand on, and the file whose patch of ground is underfoot, if any. In a
+world laid out from code each directory's area is a circle nested in its
+parent's, the deepest one holding the point names it, and land no circle
+holds is the repository's own common ground. In the sample world an area's
+border runs where its region's landform gives way to the next, so the
+islands where ground covers drift across a border never flicker a name, and
+a file's patch is the ground around the tree that stands for it. Past the
+codebase's land is the wild, which names nothing.
 
 There are three ways, for the reviewer to choose between:
 
@@ -301,8 +337,11 @@ There are three ways, for the reviewer to choose between:
   not announced again. Standing still brings up a quieter line near the
   ground: the file underfoot and the area's path.
 - **The field map.** A map button in the lower corner (or M) unfolds a
-  hand-drawn map on warm paper: each area a watercolor wash, every area
-  under one top-level directory sharing a hue, inside a thin ink border;
+  hand-drawn map on warm paper, titled with the repository's name: each
+  area a watercolor wash, every area under one top-level directory sharing
+  a hue, on the pale meadow of the repository's own common ground, inside a
+  thin ink border; each file's patch a faint ring washed in its health's
+  color;
   hills shaded from the northwest, water washed blue and inked at its edge,
   trails dotted, trees as small dabs browning with their files' vitality,
   buildings and landmarks as drawn marks, wild brush past the land's edge,
@@ -318,7 +357,7 @@ There are three ways, for the reviewer to choose between:
   the tread a boundary stone is carved with both names, the one to the left
   above a cut line and the one to the right below it. An arm's paint fades,
   its wood greys and it droops on its nail with the vitality of the area it
-  names (the mean of its files'); the stone's moss recedes and the stone
+  names (the mean of its files', its subdirectories' included); the stone's moss recedes and the stone
   bleaches with both areas'. Posts and stones stop a walker, and no grass
   grows through a stone. A compass strip at the top names the area ahead:
   the first one along the way the person faces that is not the one they
@@ -326,7 +365,7 @@ There are three ways, for the reviewer to choose between:
 
 ## Trails
 
-A trail is a `link`: a dependency between two files that Jev judges a
+A trail is a `link`: a dependency between two entities that Jev judges a
 person would walk between. Jev fills only the trail's look, through
 `trail@1`'s closed fields: its width (a narrow footpath to a broad cart
 track), how worn its tread is, whether stones line its edges, how freely
@@ -350,28 +389,69 @@ ragged, and a faint trail keeps more blades on it. Trees keep 1.6 m off a
 tread and the understory half a meter. A footbridge's deck and stepping
 stones are walkable. Planks go missing and rails sag as vitality falls.
 
+A trail's wear follows the vitality of the two entities it joins, live.
+Near each end it takes that end's entity's vitality, and it blends between
+the two across the middle. Between thriving entities the tread is worn to
+bare earth, as far as its blueprint's wear says; toward a failing entity
+the grass grows back across it, its ragged edge closes and its earth fades
+into the cover, until a faint trace and its edging stones are all that mark
+the way. Where trails meet or share a tread, the more worn one shows, so
+no seam appears. A trail's footbridges, stepping stones and edging stones
+take its vitality where they stand. `trailWearAt` in `@gaia/terrain` is the
+CPU reference: the bake records which trail each ground sample lies on and
+how far along it (`trailPlaces`), and the ground and grass shaders read each
+trail's ends' vitality from a small texture, so a change in vitality never
+rebakes anything.
+
 ## Landmarks
 
 A landmark is a great thing a person steers by: a lookout tower, a ring of
-standing stones, or a great old tree. It stands for the one file a region
-is organized around, and Jev chooses the form. `findLandmarkSite` puts it
+standing stones, or a great old tree. It stands for an entity, as a
+building does: Jev decides which entities become landmarks (prominent ones
+much of the code leans on suit them) and which become buildings, and
+chooses the form. No rule fixes how many; its vitality is its entity's own. `findLandmarkSite` puts it
 on the most prominent gentle, dry ground of its region, a knoll or a rise
 near the region's heart, and levels its footprint into the land. Each
 reads as a silhouette through the haze from 300 m and more, and declines
 by breaking, not by fading:
 
 - A tower's blocks fall from the top down, each at its own seeded
-  threshold, so a failing tower is a jagged stump. Its roof goes first and
-  its lit windows go out one by one; an open lantern room glows at night
-  like a beacon.
-- A ring of standing stones loses its lintels first; then stones lean and
-  break off at a seeded height.
+  threshold, so a failing tower is a jagged stump with fallen stone heaped
+  at its foot. Its roof and galleries go first, never outlasting the wall
+  that carries them, and its lit windows go out one by one; an open
+  lantern room glows at night like a beacon.
+- Great stones lose their lintels and a dolmen its capstone first. A stone
+  never bends: it leans whole about its toe, falls flat into the grass, or
+  snaps, its top lying broken at its foot. A cairn's top stones tumble
+  first.
 - A great tree drops its leaves, sags and greys to a bare snag.
 
-A world stands a few landmarks, more for more regions (about 1.4 times the
-square root of the region count: seven in a full world of 22 regions), on
-regions spread far apart; when a world wants more than there are forms,
-forms repeat. Buildings' floors and walks and landmarks' feet clear the
+Each landmark primitive has a few strong axes that change the whole form,
+as a tree's skeleton does, so the same three primitives make very
+different landmarks:
+
+- A tower's plan is round, square or eight-sided; it rises straight,
+  tapering, or in stages that set back above a string course; a walkway
+  on stepped corbels may ring its top or every stage; and it is crowned
+  by a cone (a four- or eight-sided spire on a square or eight-sided
+  tower), battlements, a lantern room, or a top already broken long ago.
+- Great stones stand in a ring, an avenue of two facing rows rising toward
+  its head, a dolmen of uprights under one capstone in a kerb of low
+  stones, a field of cairns, or a loose group of lone menhirs, some
+  already leaning.
+- A great tree is a spreading oak, a tall elm, a great willow, an umbrella
+  pine or a dark yew, and young, old or ancient: an ancient tree squats
+  lower and broader on a buttressed trunk, some great limbs broken to
+  stubs and its highest limbs bare above the crown.
+
+What falls (rubble at a tower's foot, a snapped top, a fallen lintel)
+grows in at its foot only once it has fallen, and never stops a walk.
+
+Until worlds come from real code, the terrain lab stands a few landmarks,
+more for more regions (about 1.4 times the square root of the region count:
+seven in a full world of 22 regions), each for one of its sample entities,
+on regions spread far apart; when it wants more than there are forms, forms
+repeat. Buildings' floors and walks and landmarks' feet clear the
 grass through the same mask as the understory, so a world may hold any
 number of them.
 

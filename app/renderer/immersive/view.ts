@@ -55,23 +55,31 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
 
   const arrival = createArrival(layer);
   const compass = createCompass(layer);
-  const map = createFieldMap(layer, { stood: world.stood, placeAt: world.placeAt });
+  const map = createFieldMap(layer, { stood: world.stood, placeAt: world.placeAt, places: world.places });
   const markers = createMarkers(world.light);
   world.scene.add(markers.group);
   world.camera.layers.enable(MARKER_LAYER);
 
   // Markers stand beside the trails on every bake, before the grass and the walk read the ground.
   world.furnish((stood) => markers.place(stood, (x, z): PlaceArea => world.placeAt(x, z).area));
+  /** Whether a world stands yet: until the first bake lands, nothing names a place. */
+  let standing = false;
   world.onStood(() => {
+    standing = true;
+    // A new world announces where the person stands afresh.
+    arrival.show(active && way === "titles");
     map.invalidate();
-    // Each area's vitality: the mean of its files'.
+    // A directory's vitality: the mean of its files', its subdirectories' included.
     const sums = new Map<string, { v: number; n: number }>();
-    for (const t of world.stood().trees) {
-      const path = world.placeAt(t.x, t.z).area.path;
-      const s = sums.get(path) ?? { v: 0, n: 0 };
-      s.v += t.vitality;
-      s.n += 1;
-      sums.set(path, s);
+    for (const p of world.places().patches) {
+      const parts = p.area.split("/").filter(Boolean);
+      for (let k = 0; k <= parts.length; k++) {
+        const path = parts.slice(0, k).join("/");
+        const s = sums.get(path) ?? { v: 0, n: 0 };
+        s.v += p.vitality;
+        s.n += 1;
+        sums.set(path, s);
+      }
     }
     markers.vitality((path) => {
       const s = sums.get(path);
@@ -154,7 +162,7 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
       apply();
     },
     frame(dt) {
-      if (!active) return;
+      if (!active || !standing) return;
       const p = world.person();
       const moved = Math.hypot(p.x - last.x, p.z - last.z) > 0.02;
       still = moved || p.walking ? 0 : still + dt;
