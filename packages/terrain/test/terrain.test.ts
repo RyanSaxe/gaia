@@ -5,7 +5,9 @@ import { biome, flora, structure } from "@gaia/kinds";
 import { validate } from "@gaia/world";
 import { FLORA_PRESETS, STRUCTURE_PRESETS, realize } from "@gaia/realize";
 import {
+  COVER_TAPS,
   FLOW,
+  FULL_WORLD,
   RELIEF_BUDGET,
   type SolvedStream,
   SHORE_CAP,
@@ -16,10 +18,13 @@ import {
   WILDS,
   type Terrain,
   bakeTerrain,
+  composeRows,
   composer,
   flowAt,
   coverWeights,
   findSite,
+  finishTerrain,
+  latticeOf,
   levelPad,
   siteToWorld,
   groundedBase,
@@ -209,18 +214,23 @@ describe("terrain", () => {
         }
         if (switches > 1) islands++;
       }
-      // The bake keeps each sample's cover weights, summing to 1, and names the dominant one.
+      // The bake keeps each sample's largest cover shares, largest first and
+      // summing to 255, matching the blend, and names the dominant one.
       const { n } = t.lattice;
-      const count = w.regions.length;
       for (let k = 0; k < n * n; k += 997) {
+        const x = t.lattice.origin + (k % n) * t.lattice.spacing;
+        const z = t.lattice.origin + Math.floor(k / n) * t.lattice.spacing;
+        coverWeights(w, x, z, weights);
         let total = 0;
-        let best = 0;
-        for (let i = 0; i < count; i++) {
-          total += t.cover[k * count + i]!;
-          if (t.cover[k * count + i]! > t.cover[k * count + best]!) best = i;
+        for (let tap = 0; tap < COVER_TAPS; tap++) {
+          const share = t.coverShares[k * COVER_TAPS + tap]!;
+          total += share;
+          if (tap > 0) expect(share).toBeLessThanOrEqual(t.coverShares[k * COVER_TAPS + tap - 1]!);
+          if (share > 0) expect(Math.abs(share / 255 - weights[t.coverRegions[k * COVER_TAPS + tap]!]!)).toBeLessThan(0.03);
         }
-        expect(total).toBeCloseTo(1, 5);
-        expect(t.region[k]).toBe(best);
+        expect(total).toBe(255);
+        expect(t.region[k]).toBe(t.coverRegions[k * COVER_TAPS]);
+        expect(weights[t.region[k]!]).toBe(Math.max(...weights));
       }
     }
     expect(islands).toBeGreaterThan(3);
@@ -339,6 +349,32 @@ describe("terrain", () => {
     medians.sort((a, b) => a - b);
     expect(medians[Math.floor(medians.length / 2)]).toBeLessThan(200);
   });
+});
+
+describe("full worlds", () => {
+  it("bakes in bands, on any number of threads, byte-identically to one piece", () => {
+    const w = sampleWorld();
+    const landforms = landformsOf(w, lib);
+    const { n } = latticeOf(w);
+    const cuts = [0, 97, 98, 250, n];
+    const parts = cuts.slice(1).map((z1, i) => composeRows(w, landforms, cuts[i]!, z1));
+    const banded = finishTerrain(w, landforms, parts.reverse());
+    const whole = bakeTerrain(w, lib);
+    for (const key of ["waterLevel", "shore", "region", "coverRegions", "coverShares"] as const) expect(bytes(banded[key]).equals(bytes(whole[key])), key).toBe(true);
+    expect(bytes(banded.lattice.heights).equals(bytes(whole.lattice.heights))).toBe(true);
+    expect(banded.streams).toEqual(whole.streams);
+  });
+
+  it("keeps a full world of a score of regions inside the relief budget, with several streams and ponds", () => {
+    for (const w of [sampleWorld(FULL_WORLD), randomWorld(lib, 7, FULL_WORLD)]) {
+      expect(w.size).toBe(FULL_WORLD.size);
+      expect(w.regions.length).toBeGreaterThanOrEqual(FULL_WORLD.regions[0]);
+      expect(w.regions.length).toBeLessThanOrEqual(FULL_WORLD.regions[1]);
+      const t = bakeTerrain(w, lib);
+      expect(withinBudget(t.report)).toBe(true);
+      expect(t.streams.length + t.ponds.length).toBeGreaterThanOrEqual(3);
+    }
+  }, 60_000);
 });
 
 describe("wild land past the rim", () => {

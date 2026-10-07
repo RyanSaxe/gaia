@@ -1,11 +1,20 @@
-// The baked lattice as Three.js: one ground mesh (and an exact-subset coarse
-// mesh for the overview), the wild land past the rim, a float texture of the
-// same samples for the grass and water shaders, and the painterly ground
+// The baked lattice as Three.js: the ground around the person as nested
+// rings that follow them, a coarse whole-world mesh for the overview and the
+// water's mirror, the wild land past the rim, a float texture of the lattice
+// for every shader that stands on the ground, and the painterly ground
 // material, colored by each region's ground cover.
+//
+// The rings never change shape on the CPU: each is a fixed grid, and its
+// vertex shader reads heights from the lattice texture. Every ring's vertices
+// are lattice samples, each coarser ring's a strict subset of the finer one's.
+// Toward its outer edge a ring morphs, by the person's distance, into exactly
+// the next ring's surface (the lattice's own triangle split makes the fine
+// triangles lie on the coarse ones), so where rings meet there is no seam,
+// and as the person walks and the rings follow, no vertex ever jumps.
 
 import * as THREE from "three";
 import { LIGHT_GLSL, type SceneLight, hexToVec3 } from "@gaia/render";
-import { DRY, SHORE_CAP, type Terrain, landRadius, wildsRing } from "@gaia/terrain";
+import { SHORE_CAP, type Terrain, type WildsRing, landRadius, wildsRing } from "@gaia/terrain";
 import { SWARD_GLSL } from "../world/environment.ts";
 import { REGIONS_GLSL, type RegionCovers, TUFT_GLSL } from "./regions.ts";
 
@@ -18,12 +27,13 @@ export interface GroundTexture {
     readonly uGroundOrigin: { value: number };
     readonly uGroundSpacing: { value: number };
   };
-  update(t: Terrain): void;
+  /** Takes on a new bake; `packed` is the texture's data when a bake thread packed it already. */
+  update(t: Terrain, packed?: Float32Array): void;
 }
 
 export function createGroundTexture(t: Terrain): GroundTexture {
   const { n } = t.lattice;
-  const data = new Float32Array(n * n * 4);
+  let data: Float32Array = new Float32Array(n * n * 4);
   const texture = new THREE.DataTexture(data, n, n, THREE.RGBAFormat, THREE.FloatType);
   texture.minFilter = THREE.NearestFilter;
   texture.magFilter = THREE.NearestFilter;
@@ -33,11 +43,20 @@ export function createGroundTexture(t: Terrain): GroundTexture {
     uGroundOrigin: { value: t.lattice.origin },
     uGroundSpacing: { value: t.lattice.spacing },
   };
-  const update = (next: Terrain): void => {
-    for (let i = 0; i < n * n; i++) {
-      data[i * 4] = next.lattice.heights[i] as number;
-      data[i * 4 + 1] = next.waterLevel[i] as number;
-      data[i * 4 + 2] = next.shore[i] as number;
+  const update = (next: Terrain, packed?: Float32Array): void => {
+    if (packed !== undefined && packed.length === n * n * 4) {
+      data = packed;
+      texture.image = { data, width: n, height: n };
+      texture.needsUpdate = true;
+      return;
+    }
+    const heights = next.lattice.heights;
+    const water = next.waterLevel;
+    const shore = next.shore;
+    for (let i = 0, j = 0; i < n * n; i++, j += 4) {
+      data[j] = heights[i] as number;
+      data[j + 1] = water[i] as number;
+      data[j + 2] = shore[i] as number;
     }
     texture.needsUpdate = true;
   };
@@ -66,13 +85,26 @@ vec3 groundSample(vec2 xz) {
 vec2 groundAt(vec2 xz) { return groundSample(xz).xy; }
 `;
 
+/** The rings around the person: how many, and how many quads on a side each. */
+export const RINGS = {
+  levels: 5,
+  /** Quads per side of every ring; ring k's quads are 2^k lattice spacings wide, so it reaches 2^k * 128 m each way. */
+  quads: 256,
+  /** Quad size of the whole-world mesh the overview and the water's mirror draw, in lattice spacings. */
+  coarse: 4,
+} as const;
+
+/** The rings' center moves in steps of the coarsest ring's quad, so every ring's grid stays on its own lattice samples. */
+const SNAP = 2 ** (RINGS.levels - 1);
+
 const VERT = /* glsl */ `
-attribute float aWater;
-attribute float aShore;
 varying vec3 vWorld;
 varying vec3 vNormal;
 varying float vWater;
 varying float vShore;
+#ifdef WILDS
+attribute float aWater;
+attribute float aShore;
 void main() {
   vec4 world = modelMatrix * vec4(position, 1.0);
   vWorld = world.xyz;
@@ -81,6 +113,73 @@ void main() {
   vShore = aShore;
   gl_Position = projectionMatrix * viewMatrix * world;
 }
+#else
+// position: a vertex's column and row on its ring's grid, and the ring.
+uniform sampler2D uGround;
+uniform float uGroundN;
+uniform float uGroundOrigin;
+uniform float uGroundSpacing;
+uniform vec2 uCenter;
+uniform vec2 uViewer;
+uniform float uBase;
+uniform float uMorph;
+uniform float uQuads;
+uniform float uLevels;
+uniform float uSnap;
+
+// Height, water level and distance to water at a lattice sample.
+vec3 latticeAt(vec2 xz) {
+  vec2 g = clamp(floor((xz - uGroundOrigin) / uGroundSpacing + 0.5), vec2(0.0), vec2(uGroundN - 1.0));
+  return texelFetch(uGround, ivec2(g), 0).rgb;
+}
+
+struct GroundVertex { float y; float water; float shore; vec3 normal; };
+
+// A vertex on a grid of quads s meters wide: its height, water depth, shore
+// distance, and the normal from its grid neighbors.
+GroundVertex vertexAt(vec2 q, float s) {
+  vec3 c = latticeAt(q);
+  float gx = (latticeAt(q + vec2(s, 0.0)).x - latticeAt(q - vec2(s, 0.0)).x) / (2.0 * s);
+  float gz = (latticeAt(q + vec2(0.0, s)).x - latticeAt(q - vec2(0.0, s)).x) / (2.0 * s);
+  return GroundVertex(c.x, c.y > -500.0 ? c.y - c.x : -5.0, c.z, normalize(vec3(-gx, 1.0, -gz)));
+}
+
+void main() {
+  float s = uBase * exp2(position.y);
+  vec2 p = uCenter + position.xz * s;
+  GroundVertex v = vertexAt(p, s);
+  float y = v.y;
+  float water = v.water;
+  float shore = v.shore;
+  vec3 n = v.normal;
+  if (uMorph > 0.5 && position.y < uLevels - 1.5) {
+    // Fully the next ring's surface wherever the next ring could take over
+    // once the rings move, and not at all where the inner ring could.
+    float reach = uQuads * 0.5 * s;
+    float d = max(abs(p.x - uViewer.x), abs(p.y - uViewer.y));
+    float start = position.y < 0.5 ? reach * 0.5 : reach * 0.5 + uSnap * 0.5;
+    float a = smoothstep(start, reach - uSnap * 0.5, d);
+    if (a > 0.0) {
+      // The next ring's surface here: its vertex, or the middle of its edge or
+      // of its cell's diagonal, which runs as the lattice splits its cells.
+      vec2 odd = mod(position.xz, 2.0);
+      vec2 e = odd.x > 0.5 && odd.y > 0.5 ? vec2(s, -s) : odd.x > 0.5 ? vec2(s, 0.0) : odd.y > 0.5 ? vec2(0.0, s) : vec2(0.0);
+      GroundVertex c0 = vertexAt(p + e, 2.0 * s);
+      GroundVertex c1 = vertexAt(p - e, 2.0 * s);
+      y = mix(y, 0.5 * (c0.y + c1.y), a);
+      water = mix(water, 0.5 * (c0.water + c1.water), a);
+      shore = mix(shore, 0.5 * (c0.shore + c1.shore), a);
+      n = mix(n, 0.5 * (c0.normal + c1.normal), a);
+    }
+  }
+  vec4 world = vec4(p.x, y, p.y, 1.0);
+  vWorld = world.xyz;
+  vNormal = n;
+  vWater = water;
+  vShore = shore;
+  gl_Position = projectionMatrix * viewMatrix * world;
+}
+#endif
 `;
 
 const FRAG = /* glsl */ `
@@ -170,78 +269,62 @@ void main() {
 `;
 
 export interface GroundMesh {
+  /** The ground around the person, as nested rings that follow them. */
   readonly fine: THREE.Mesh;
+  /** The whole lattice, coarsely, for the overview and the water's mirror. */
   readonly coarse: THREE.Mesh;
   /** Wild land past the rim, out to where distance dissolves it into the sky. */
   readonly wilds: THREE.Mesh;
   readonly material: THREE.ShaderMaterial;
-  update(t: Terrain): void;
+  /** Takes on a new bake; `wilds` is its wild ring when a bake thread made it already. */
+  update(t: Terrain, wilds?: WildsRing): void;
   select(region: number, outline: boolean): void;
+  /** Centers the rings on the person; call every frame they walk. */
+  follow(x: number, z: number): void;
 }
 
-function geometryFor(t: Terrain, stride: number): THREE.BufferGeometry {
-  const { n } = t.lattice;
-  const m = Math.floor((n - 1) / stride) + 1;
-  const g = new THREE.BufferGeometry();
-  g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(m * m * 3), 3));
-  g.setAttribute("normal", new THREE.BufferAttribute(new Float32Array(m * m * 3), 3));
-  g.setAttribute("aWater", new THREE.BufferAttribute(new Float32Array(m * m), 1));
-  g.setAttribute("aShore", new THREE.BufferAttribute(new Float32Array(m * m), 1));
-  const index = new Uint32Array((m - 1) * (m - 1) * 6);
-  let k = 0;
-  for (let j = 0; j < m - 1; j++) {
-    for (let i = 0; i < m - 1; i++) {
-      const a = j * m + i;
+/** A grid of quads, `quads` on a side around its center, as columns and rows; `keep` says which quads to draw. */
+function grid(quads: number, level: number, keep: (i: number, j: number) => boolean, into: { pos: number[]; index: number[] }): void {
+  const first = into.pos.length / 3;
+  const side = quads + 1;
+  const h = quads / 2;
+  for (let j = 0; j <= quads; j++) for (let i = 0; i <= quads; i++) into.pos.push(i - h, level, j - h);
+  for (let j = 0; j < quads; j++) {
+    for (let i = 0; i < quads; i++) {
+      if (!keep(i - h, j - h)) continue;
+      const a = first + j * side + i;
       const b = a + 1;
-      const c = a + m;
+      const c = a + side;
       const d = c + 1;
       // Split along b-c, as the lattice's heightAt interpolates.
-      index.set([a, c, b, b, c, d], k);
-      k += 6;
+      into.index.push(a, c, b, b, c, d);
     }
   }
-  g.setIndex(new THREE.BufferAttribute(index, 1));
-  g.userData.stride = stride;
-  return g;
 }
 
-function fill(g: THREE.BufferGeometry, t: Terrain): void {
-  const { n, heights, origin, spacing } = t.lattice;
-  const stride = g.userData.stride as number;
-  const m = Math.floor((n - 1) / stride) + 1;
-  const pos = g.getAttribute("position").array as Float32Array;
-  const nor = g.getAttribute("normal").array as Float32Array;
-  const water = g.getAttribute("aWater").array as Float32Array;
-  const shore = g.getAttribute("aShore").array as Float32Array;
-  const h = (ix: number, iz: number): number =>
-    heights[Math.min(n - 1, Math.max(0, iz)) * n + Math.min(n - 1, Math.max(0, ix))] as number;
-  for (let j = 0; j < m; j++) {
-    for (let i = 0; i < m; i++) {
-      const ix = i * stride;
-      const iz = j * stride;
-      const v = j * m + i;
-      const y = h(ix, iz);
-      pos[v * 3] = origin + ix * spacing;
-      pos[v * 3 + 1] = y;
-      pos[v * 3 + 2] = origin + iz * spacing;
-      const gx = (h(ix + stride, iz) - h(ix - stride, iz)) / (2 * stride * spacing);
-      const gz = (h(ix, iz + stride) - h(ix, iz - stride)) / (2 * stride * spacing);
-      const len = Math.hypot(gx, 1, gz);
-      nor[v * 3] = -gx / len;
-      nor[v * 3 + 1] = 1 / len;
-      nor[v * 3 + 2] = -gz / len;
-      const level = t.waterLevel[iz * n + ix] as number;
-      water[v] = level > DRY / 2 ? level - y : -5;
-      shore[v] = t.shore[iz * n + ix] as number;
-    }
+function meshOf(pos: number[], index: number[], material: THREE.ShaderMaterial): THREE.Mesh {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  g.setIndex(index);
+  const mesh = new THREE.Mesh(g, material);
+  // The vertex shader places every vertex; the grid's own positions mean nothing to culling.
+  mesh.frustumCulled = false;
+  return mesh;
+}
+
+/** The rings: ring 0 whole, each ring after it with a hole where the ring inside it lies. */
+function ringsMesh(material: THREE.ShaderMaterial): THREE.Mesh {
+  const into = { pos: [] as number[], index: [] as number[] };
+  const q = RINGS.quads;
+  for (let level = 0; level < RINGS.levels; level++) {
+    grid(q, level, (i, j) => level === 0 || !(i >= -q / 4 && i < q / 4 && j >= -q / 4 && j < q / 4), into);
   }
-  for (const name of ["position", "normal", "aWater", "aShore"]) g.getAttribute(name).needsUpdate = true;
-  g.computeBoundingSphere();
+  return meshOf(into.pos, into.index, material);
 }
 
 /** The wild ring as geometry the ground material can draw: no water anywhere near. */
-function wildsGeometry(t: Terrain): THREE.BufferGeometry {
-  const ring = wildsRing(t);
+function wildsGeometry(t: Terrain, made?: WildsRing): THREE.BufferGeometry {
+  const ring = made ?? wildsRing(t);
   const count = ring.positions.length / 3;
   const g = new THREE.BufferGeometry();
   g.setAttribute("position", new THREE.BufferAttribute(ring.positions, 3));
@@ -252,10 +335,11 @@ function wildsGeometry(t: Terrain): THREE.BufferGeometry {
   return g;
 }
 
-export function createGround(t: Terrain, light: SceneLight, covers: RegionCovers): GroundMesh {
+export function createGround(t: Terrain, light: SceneLight, covers: RegionCovers, lattice: GroundTexture): GroundMesh {
   const uniforms = {
     ...light,
     ...covers.uniforms,
+    ...lattice.uniforms,
     uDry: { value: hexToVec3(0xbba878) },
     uBare: { value: hexToVec3(0x9a7d58) },
     uSand: { value: hexToVec3(0xcdbb8a) },
@@ -264,24 +348,33 @@ export function createGround(t: Terrain, light: SceneLight, covers: RegionCovers
     uOutline: { value: 0 },
     uLand: { value: landRadius(t) },
     uHeightRange: { value: new THREE.Vector2(t.report.min, t.report.max) },
+    uQuads: { value: RINGS.quads },
+    uLevels: { value: RINGS.levels },
+    uSnap: { value: SNAP * t.lattice.spacing },
   };
-  const material = new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: FRAG, uniforms });
-  const fine = new THREE.Mesh(geometryFor(t, 1), material);
-  const coarse = new THREE.Mesh(geometryFor(t, 4), material);
+  const ringUniforms = { ...uniforms, uCenter: { value: new THREE.Vector2() }, uViewer: { value: new THREE.Vector2() }, uBase: { value: t.lattice.spacing }, uMorph: { value: 1 } };
+  const coarseUniforms = { ...uniforms, uCenter: { value: new THREE.Vector2() }, uViewer: { value: new THREE.Vector2() }, uBase: { value: t.lattice.spacing * RINGS.coarse }, uMorph: { value: 0 } };
+  const material = new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: FRAG, uniforms: ringUniforms });
+  const fine = ringsMesh(material);
+  const coarseMaterial = new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: FRAG, uniforms: coarseUniforms });
+  // The whole lattice: the same grid, one level, centered on the world.
+  const coarseQuads = 2 * Math.ceil(((t.lattice.n - 1) * t.lattice.spacing) / (2 * RINGS.coarse * t.lattice.spacing));
+  const into = { pos: [] as number[], index: [] as number[] };
+  grid(coarseQuads, 0, () => true, into);
+  const coarse = meshOf(into.pos, into.index, coarseMaterial);
   const wilds = new THREE.Mesh(
     wildsGeometry(t),
     new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: FRAG, uniforms, defines: { WILDS: "" } }),
   );
   wilds.frustumCulled = false;
-  const update = (next: Terrain): void => {
-    fill(fine.geometry, next);
-    fill(coarse.geometry, next);
+  const update = (next: Terrain, made?: WildsRing): void => {
     wilds.geometry.dispose();
-    wilds.geometry = wildsGeometry(next);
+    wilds.geometry = wildsGeometry(next, made);
     uniforms.uHeightRange.value.set(next.report.min, next.report.max);
     uniforms.uLand.value = landRadius(next);
   };
   update(t);
+  const snap = SNAP * t.lattice.spacing;
   return {
     fine,
     coarse,
@@ -291,6 +384,10 @@ export function createGround(t: Terrain, light: SceneLight, covers: RegionCovers
     select(region, outline) {
       uniforms.uSelected.value = region;
       uniforms.uOutline.value = outline ? 1 : 0;
+    },
+    follow(x, z) {
+      ringUniforms.uViewer.value.set(x, z);
+      ringUniforms.uCenter.value.set(Math.round(x / snap) * snap, Math.round(z / snap) * snap);
     },
   };
 }

@@ -5,21 +5,39 @@
 
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import type { BuildOptions, BuildResult } from "esbuild";
+import { type BuildOptions, type BuildResult, type Plugin, build } from "esbuild";
 
 const root = resolve(import.meta.dirname, "..");
 const renderer = resolve(root, "app/renderer");
 
+const SCRIPT = { bundle: true, format: "iife", minify: true, write: false, target: "es2022", tsconfig: resolve(root, "tsconfig.json"), legalComments: "none" } as const;
+
+/**
+ * `import X from "./file.ts?worker"`, as Vite reads it for the app: the file
+ * bundled on its own and run as a worker. The one-file lab carries the
+ * worker's script inline and starts it from a blob URL.
+ */
+const inlineWorkers: Plugin = {
+  name: "inline-workers",
+  setup(b) {
+    b.onResolve({ filter: /\?worker$/ }, (args) => ({ path: resolve(args.resolveDir, args.path.replace(/\?worker$/, "")), namespace: "inline-worker" }));
+    b.onLoad({ filter: /.*/, namespace: "inline-worker" }, async (args) => {
+      const result = await build({ ...SCRIPT, entryPoints: [args.path], metafile: true });
+      const code = result.outputFiles[0]?.text ?? "";
+      return {
+        loader: "js",
+        contents: `const url = URL.createObjectURL(new Blob([${JSON.stringify(code)}], { type: "text/javascript" }));\nexport default class { constructor() { return new Worker(url); } }`,
+        watchFiles: Object.keys(result.metafile.inputs).map((f) => resolve(process.cwd(), f)),
+      };
+    });
+  },
+};
+
 export const LAB_BUILD = {
+  ...SCRIPT,
   entryPoints: [resolve(renderer, "main.ts")],
-  bundle: true,
-  format: "iife",
-  minify: true,
-  write: false,
   outdir: "lab",
-  target: "es2022",
-  tsconfig: resolve(root, "tsconfig.json"),
-  legalComments: "none",
+  plugins: [inlineWorkers],
 } as const satisfies BuildOptions;
 
 export interface LabBundle {

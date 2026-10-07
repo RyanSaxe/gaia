@@ -1,5 +1,6 @@
-// The terrain lab: a small world of regions, each a biome with a landform and
-// a ground cover Jev could choose, baked into one heightfield. Walk it at eye
+// The terrain lab: a full world of regions, each a biome with a landform and
+// a ground cover Jev could choose, baked into one heightfield on worker
+// threads, so the page never stops drawing while a world bakes. Walk it at eye
 // height, tapping or clicking the ground to walk there, or look at the whole of
 // it from above; edit any region's biome and watch the budget and the ground change.
 
@@ -9,25 +10,26 @@ import { type BuildingPlan, type GroundSpec, Library, type SeasonSpec, blueprint
 import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, NO_SHIFT, RELIEF_PRIMITIVES, ROCK_PRIMITIVES, STRUCTURE_PRIMITIVES, WILDFLOWER_PRIMITIVES, WORLD_PRIMITIVES, hex, mixLab } from "@gaia/primitives";
 import { biome, flora, structure, world as worldKind } from "@gaia/kinds";
 import { defaultParams, validate } from "@gaia/world";
-import { FLORA_PRESETS, STRUCTURE_PRESETS, WORLD_PRESETS, mergeParts, realize, realizeRegion, realizeSky } from "@gaia/realize";
-import { type PlantView, applyLight, createLantern, createPlant, createRenderer, createSceneLight, createSunShadow } from "@gaia/render";
+import { FLORA_PRESETS, type Realized, STRUCTURE_PRESETS, WORLD_PRESETS, mergeParts, realize, realizeRegion, realizeSky } from "@gaia/realize";
+import { type PlantInstances, applyLight, createLantern, createPlant, createPlantInstances, createRenderer, createSceneLight, createSunShadow } from "@gaia/render";
 import {
   type BuildingSite,
+  COVER_TAPS,
+  DRY,
   EYE_HEIGHT,
+  FULL_WORLD,
+  SHORE_CAP,
+  SMALL_WORLD,
   RELIEF_BUDGET,
   clearingsOf,
-  findSite,
   insideFootprint,
-  levelPad,
   type Terrain,
   type WorldSpec,
-  bakeTerrain,
-  groundedBase,
   heightAt,
   landRadius,
+  latticeOf,
   randomWorld,
   sampleWorld,
-  scatterPlants,
   sightlines,
   WALK_TO,
   walkStep,
@@ -45,10 +47,13 @@ import { createRegionCovers } from "./regions.ts";
 import { createWater } from "./water.ts";
 import { createUnderstory } from "./understory.ts";
 import { createClearings } from "./clearings.ts";
+import { createBaker } from "./baker.ts";
+import type { Stand, Tree } from "./bake-worker.ts";
 
 const TEMPLATE = /* html */ `
 <main class="stage">
-  <canvas class="view" aria-label="A small world of gentle landforms. Click or tap the ground to walk there and drag to look, or switch to the overview."></canvas>
+  <canvas class="view" aria-label="A world of gentle landforms. Click or tap the ground to walk there and drag to look, or switch to the overview."></canvas>
+  <div class="veil" data-ref="veil" role="status"><span>Baking the world…</span></div>
   <div class="bar top">
     <div class="segmented modes" role="group" aria-label="View">
       <button data-ref="mode-walk" class="seg on" type="button">Walk</button>
@@ -95,10 +100,39 @@ const MOVE = new Set(["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "A
 /** How far a tap's ray looks for the ground, meters. */
 const REACH = 900;
 
-interface Planted {
-  readonly view: PlantView;
+/** The full world, or the small one with `?world=small` in the page's address, to compare the two. */
+const SCALE = new URLSearchParams(location.search).get("world") === "small" ? SMALL_WORLD : FULL_WORLD;
+/** Trees in the world: as dense as the small world's 22 over 320 m. Tune here; each stands as a copy of one of TREE_KINDS realized trees. */
+const TREES = Math.round(22 * (SCALE.size / 320) ** 2);
+const TREE_KINDS = 22;
+
+interface TreeKind {
+  readonly plant: Realized;
   /** Radius of the trunk's bottom ring, for grounding. */
   readonly base: number;
+  readonly height: number;
+}
+
+/** Level, dry ground the size of a world's lattice: what the lab holds, behind its veil, until the first bake arrives. */
+function levelGround(spec: WorldSpec): Terrain {
+  const lattice = latticeOf(spec);
+  const count = lattice.n * lattice.n;
+  const shares = new Uint8Array(count * COVER_TAPS);
+  for (let i = 0; i < count; i++) shares[i * COVER_TAPS] = 255;
+  return {
+    spec,
+    lattice,
+    waterLevel: new Float32Array(count).fill(DRY),
+    shore: new Float32Array(count).fill(SHORE_CAP),
+    region: new Uint8Array(count),
+    coverRegions: new Uint8Array(count * COVER_TAPS),
+    coverShares: shares,
+    streams: [],
+    ponds: [],
+    fit: 1,
+    report: { min: 0, max: 0, range: 0, maxSlope: 0, walkShare: 1, maxStep: 0 },
+    landforms: [],
+  };
 }
 
 export function createTerrainLab(root: HTMLElement): Lab {
@@ -109,10 +143,10 @@ export function createTerrainLab(root: HTMLElement): Lab {
   const floraLib = new Library(FLORA_PRIMITIVES);
   let active = false;
 
-  let world: WorldSpec = sampleWorld();
-  const firstBake = performance.now();
-  let terrain: Terrain = bakeTerrain(world, lib);
-  let bakeMs = performance.now() - firstBake;
+  const baker = createBaker();
+  let world: WorldSpec = sampleWorld(SCALE);
+  let terrain: Terrain = levelGround(world);
+  let bakeMs = 0;
 
   // One cottage stands near the stream, on a pad leveled into the bake.
   const cottagePreset = STRUCTURE_PRESETS[0];
@@ -122,12 +156,7 @@ export function createTerrainLab(root: HTMLElement): Lab {
     facts: { size: 1, floors: 1 },
   });
   const cottagePlan = cottageBuilt.slots.get("footprint")?.output as BuildingPlan;
-  const settle = (t: Terrain): BuildingSite => {
-    const s = findSite(t, cottagePlan);
-    levelPad(t, cottagePlan, s);
-    return s;
-  };
-  let site = settle(terrain);
+  let site: BuildingSite = { x: 0, z: 0, yaw: 0, level: 0 };
 
   const canvas = root.querySelector("canvas") as HTMLCanvasElement;
   const stage = root.querySelector(".stage") as HTMLElement;
@@ -152,7 +181,7 @@ export function createTerrainLab(root: HTMLElement): Lab {
   const scene = new THREE.Scene();
   const sky = createSky(light);
   const groundTex = createGroundTexture(terrain);
-  const ground = createGround(terrain, light, covers);
+  const ground = createGround(terrain, light, covers, groundTex);
   const clearings = createClearings(terrain);
   const grass = createGrass(light, groundTex, covers, landRadius(terrain), clearings);
   const water = createWater(terrain, light, groundTex);
@@ -180,7 +209,7 @@ export function createTerrainLab(root: HTMLElement): Lab {
 
   // ---------- plants ----------
 
-  const planted: Planted[] = Array.from({ length: 22 }, (_, i) => {
+  const kinds: TreeKind[] = Array.from({ length: TREE_KINDS }, (_, i) => {
     const preset = FLORA_PRESETS[i % FLORA_PRESETS.length] as (typeof FLORA_PRESETS)[number];
     const plant = realize(preset.blueprint, flora, floraLib, {
       seed: seedOf(`terrain-lab/plant-${i}`),
@@ -188,35 +217,36 @@ export function createTerrainLab(root: HTMLElement): Lab {
     });
     const bark = plant.parts.find((p) => p.swatch === "bark");
     let base = 0.5;
+    let height = 1;
     if (bark !== undefined) {
       for (let k = 0; k < 11; k++) base = Math.max(base, Math.hypot(bark.positions[k * 3] ?? 0, bark.positions[k * 3 + 2] ?? 0));
     }
-    const view = createPlant(plant, light);
-    view.object.rotation.y = i * 1.7;
-    scene.add(view.object);
-    return { view, base };
+    for (const part of plant.parts) for (let k = 1; k < part.positions.length; k += 3) height = Math.max(height, part.positions[k] as number);
+    return { plant, base, height };
   });
+  /** Each kind's copies, placed again with every bake. */
+  let trees: readonly Tree[] = [];
+  let groves: PlantInstances[] = [];
 
   // Rocks, bushes and wildflowers, scattered around the trees.
   const understory = createUnderstory(scene, light, new Library([...FLORA_PRIMITIVES, ...ROCK_PRIMITIVES, ...WILDFLOWER_PRIMITIVES]), clearings);
 
-  function plant(): void {
-    const spots = scatterPlants(terrain, planted.length, 9);
-    planted.forEach((p, i) => {
-      const s = spots[i];
-      p.view.object.visible = s !== undefined && !insideFootprint(cottagePlan, site, s.x, s.z, 6);
-      if (s === undefined) return;
-      p.view.object.position.set(s.x, groundedBase(terrain.lattice, s.x, s.z, p.base), s.z);
+  /** Stands the bake's trees and understory: placed on the bake thread, drawn here. */
+  function plant(stood: Stand): void {
+    trees = stood.trees;
+    for (const g of groves) {
+      scene.remove(g.object);
+      g.dispose();
+    }
+    groves = kinds.flatMap((k, i) => {
+      const spots = trees.flatMap((t, n) => (t.kind === i ? [{ x: t.x, y: t.y, z: t.z, yaw: n * 1.7, scale: 1 }] : []));
+      if (spots.length === 0) return [];
+      const grove = createPlantInstances(k.plant, light, spots);
+      scene.add(grove.object);
+      return [grove];
     });
-    const trees = planted.flatMap((p) => (p.view.object.visible ? [{ x: p.view.object.position.x, z: p.view.object.position.z, radius: 1.6 }] : []));
-    // Nothing of the understory stands in the cottage or on its walk: discs a meter apart along each cleared capsule.
-    const cottageGround = clearingsOf(cottagePlan, site).flatMap((c) => {
-      const steps = Math.max(1, Math.ceil(Math.hypot(c.bx - c.ax, c.bz - c.az)));
-      return Array.from({ length: steps + 1 }, (_, k) => ({ x: c.ax + ((c.bx - c.ax) * k) / steps, z: c.az + ((c.bz - c.az) * k) / steps, radius: c.radius + 0.5 }));
-    });
-    understory.place(terrain, world, [...trees, ...cottageGround]);
+    understory.place(terrain, world, stood.occupied, stood.placements);
   }
-  plant();
 
   // ---------- camera, walking and the overview ----------
 
@@ -225,7 +255,7 @@ export function createTerrainLab(root: HTMLElement): Lab {
   orbit.enableDamping = true;
   orbit.maxPolarAngle = Math.PI * 0.42;
   orbit.minDistance = 60;
-  orbit.maxDistance = 700;
+  orbit.maxDistance = Math.max(700, SCALE.size * 1.1);
   orbit.enabled = false;
 
   type Mode = "walk" | "overview";
@@ -287,7 +317,20 @@ export function createTerrainLab(root: HTMLElement): Lab {
     const above = (s: number): boolean => o.y + d.y * s > heightAt(l, o.x + d.x * s, o.z + d.z * s);
     const edge = l.origin + (l.n - 1) * l.spacing;
     const step = l.spacing * 0.5;
-    for (let s = step; s < REACH; s += step) {
+    // Start where the ray enters the lattice's square, so a view from above or beyond it still finds the ground.
+    let enter = 0;
+    let leave = Infinity;
+    for (const [p, v] of [[o.x, d.x], [o.z, d.z]] as const) {
+      if (Math.abs(v) < 1e-9) {
+        if (p < l.origin || p > edge) return null;
+        continue;
+      }
+      const a = (l.origin - p) / v;
+      const b = (edge - p) / v;
+      enter = Math.max(enter, Math.min(a, b));
+      leave = Math.min(leave, Math.max(a, b));
+    }
+    for (let s = Math.max(step, enter + step); s < Math.min(leave, enter + REACH); s += step) {
       const x = o.x + d.x * s;
       const z = o.z + d.z * s;
       if (x < l.origin || x > edge || z < l.origin || z > edge) break;
@@ -320,16 +363,14 @@ export function createTerrainLab(root: HTMLElement): Lab {
   onTap(canvas, (e) => {
     const ray = aim(e);
     if (mode === "overview") {
-      const hit = raycaster.intersectObject(ground.coarse)[0];
-      if (hit !== undefined) select(regionAt(hit.point.x, hit.point.z));
+      const hit = groundHit(ray);
+      if (hit !== null) select(regionAt(hit.x, hit.z));
       return;
     }
     const land = groundHit(ray);
-    const plants = planted.map((p) => p.view.object).filter((o) => o.visible);
-    const tree = raycaster.intersectObjects(plants, true)[0];
+    const tree = raycaster.intersectObjects(groves.map((g) => g.object), true)[0];
     if (tree !== undefined && (land === null || tree.distance < land.distance)) {
-      const root = plants.find((o) => o.getObjectById(tree.object.id) !== undefined);
-      if (root !== undefined) select(regionAt(root.position.x, root.position.z));
+      select(regionAt(tree.point.x, tree.point.z));
       return;
     }
     if (land !== null) setGoal(land.x, land.z);
@@ -443,21 +484,40 @@ export function createTerrainLab(root: HTMLElement): Lab {
   let selected = 0;
   const fmt = (v: number, d = 1): string => v.toFixed(d);
 
-  function rebake(): void {
-    const t0 = performance.now();
-    terrain = bakeTerrain(world, lib);
-    site = settle(terrain);
-    bakeMs = performance.now() - t0;
+  /** Takes on a freshly baked world: everything that stands on the land follows it. */
+  function adopt(next: WorldSpec, baked: Terrain, stood: Stand): void {
+    world = next;
+    terrain = baked;
+    site = stood.site;
     placeCottage();
     updateCovers();
-    groundTex.update(terrain);
-    ground.update(terrain);
+    groundTex.update(terrain, stood.ground);
+    ground.update(terrain, stood.wilds);
     water.update(terrain);
-    plant();
+    plant(stood);
     endWalk();
     walker.moved = true;
     refreshStats();
     refreshPanel();
+  }
+
+  // Bakes run on the workers while the old world stays on screen; the newest
+  // one asked for is the one the lab takes on.
+  let asked = 0;
+  async function rebake(next: WorldSpec): Promise<boolean> {
+    const mine = ++asked;
+    const t0 = performance.now();
+    $("random").textContent = "Baking…";
+    const baked = await baker.bake(next, {
+      plan: cottagePlan,
+      trees: { count: TREES, seed: 9, trunks: kinds.map((k) => k.base) },
+      understory: understory.plan(next),
+    });
+    if (mine !== asked) return false;
+    bakeMs = performance.now() - t0;
+    adopt(next, baked.terrain, baked.stand);
+    $("random").textContent = "Random terrain";
+    return true;
   }
 
   const landformName = (i: number): string => world.regions[i]?.biome.slots.relief?.use.replace(/@\d+$/, "") ?? "";
@@ -527,11 +587,12 @@ export function createTerrainLab(root: HTMLElement): Lab {
           return;
         }
         const reshaped = JSON.stringify(next.slots.relief) !== JSON.stringify(region.biome.slots.relief);
-        world = { ...world, regions: world.regions.map((r, i) => (i === selected ? { ...r, biome: next } : r)) };
+        const edited = { ...world, regions: world.regions.map((r, i) => (i === selected ? { ...r, biome: next } : r)) };
         // Only a new landform needs a new bake; a new cover only recolors.
         if (reshaped) {
-          rebake();
+          void rebake(edited);
         } else {
+          world = edited;
           updateCovers();
           refreshPanel();
           walker.moved = true;
@@ -541,20 +602,21 @@ export function createTerrainLab(root: HTMLElement): Lab {
   }
 
   let draws = 0;
-  function randomize(seed?: number): void {
+  async function randomize(seed?: number): Promise<void> {
     draws += 1;
-    world = randomWorld(lib, seed ?? Math.floor(Math.random() * 2 ** 31));
+    const draw = draws;
+    if (!(await rebake(randomWorld(lib, seed ?? Math.floor(Math.random() * 2 ** 31), SCALE)))) return;
     selected = 0;
-    rebake();
     ground.select(selected, mode === "overview");
+    refreshPanel();
     if (mode === "walk") {
       const r = world.regions[0];
       if (r !== undefined) walkTo(r.x, r.z, Math.atan2(r.x, r.z));
     }
-    $("draw").textContent = `Draw ${draws}: ${world.regions.length} regions, fit ${fmt(terrain.fit * 100, 0)}%`;
+    $("draw").textContent = `Draw ${draw}: ${world.regions.length} regions, fit ${fmt(terrain.fit * 100, 0)}%`;
   }
 
-  $("random").addEventListener("click", () => randomize());
+  $("random").addEventListener("click", () => void randomize());
   $("mode-walk").addEventListener("click", () => {
     if (mode !== "walk") {
       const r = world.regions[selected];
@@ -582,7 +644,6 @@ export function createTerrainLab(root: HTMLElement): Lab {
 
   let frozen: number | null = null;
   const shadowCenter = new THREE.Vector3();
-  const views = [...planted.map((p) => p.view), cottage];
   const lanternEye = new THREE.Vector3();
   // The water mirrors the sky, the coarse ground, trees and the cottage, and
   // never grass or the understory: its reflection is soft, so fine detail
@@ -595,6 +656,7 @@ export function createTerrainLab(root: HTMLElement): Lab {
     light.uTime.value = frozen ?? light.uTime.value + dt;
     if (mode === "walk") {
       updateWalk(dt);
+      ground.follow(walker.x, walker.z);
       lantern.follow(camera.position, forward, walker.eye - EYE_HEIGHT, walked, dt);
       grass.follow(camera.position);
       water.wade(walker.x, walker.z, walker.yaw, walked, dt);
@@ -609,7 +671,7 @@ export function createTerrainLab(root: HTMLElement): Lab {
     }
     marker.frame(dt, camera.position, light.uNightness.value);
     refreshSight(now);
-    shadow.render(renderer, scene, [...views, ...understory.casters()], [sky.mesh, ground.wilds, ground.fine, ground.coarse, grass.mesh, water.group, marker.mesh, ...understory.quiet()]);
+    shadow.render(renderer, scene, [...groves, cottage, ...understory.casters()], [sky.mesh, ground.wilds, ground.fine, ground.coarse, grass.mesh, water.group, marker.mesh, ...understory.quiet()]);
     frameCalls = renderer.info.render.calls;
     frameCalls += water.mirror(renderer, scene, camera, [...mirrorHide, ...understory.quiet(), ...understory.casters().map((c) => c.object)], mirrorShow, dt);
     renderer.render(scene, camera);
@@ -617,21 +679,24 @@ export function createTerrainLab(root: HTMLElement): Lab {
   }
 
   setMode("walk");
-  valleyView();
   refreshStats();
   refreshPanel();
+  // The first world bakes behind a quiet veil, which lifts once it stands.
+  const ready = rebake(world).then(() => {
+    valleyView();
+    $("veil").classList.add("lifted");
+  });
 
   // ---------- shots: each relief primitive under every region, from above ----------
 
-  function showcase(reliefId: string): void {
+  async function showcase(reliefId: string): Promise<void> {
     const p = lib.get(reliefId);
-    const sample = sampleWorld();
-    world = {
+    const sample = sampleWorld(SCALE);
+    await rebake({
       ...sample,
       regions: sample.regions.map((r) => ({ ...r, biome: blueprintOf(biome.id, { ...r.biome.slots, relief: { use: p.id, params: defaultParams(p) } }) })),
-    };
+    });
     selected = 0;
-    rebake();
     walker.x = 0;
     walker.z = 0;
     setMode("overview");
@@ -640,6 +705,15 @@ export function createTerrainLab(root: HTMLElement): Lab {
 
   return {
     renderer,
+    ready,
+    report: () => ({
+      mode,
+      walking: goal !== null || [...keys].some((k) => k !== "ShiftLeft" && k !== "ShiftRight"),
+      worldSize: world.size,
+      regions: world.regions.length,
+      trees: trees.length,
+      bakeMs: Math.round(bakeMs),
+    }),
     setActive(on) {
       active = on;
       orbit.enabled = on && mode === "overview";
@@ -678,6 +752,14 @@ export function createTerrainLab(root: HTMLElement): Lab {
       understory: () => understory.stats(),
       placements: () => understory.placements(),
       showUnderstory: (on: boolean) => understory.show(on),
+      /** Shows or hides the grass, for comparing frame costs and looking at the bare ground. */
+      showGrass: (on: boolean) => {
+        grass.mesh.visible = on;
+      },
+      /** Shows or hides every tree, for comparing frame costs. */
+      showTrees: (on: boolean) => {
+        for (const g of groves) g.object.visible = on;
+      },
       /** Draw calls in one whole frame: the shadow pass and the view together. */
       calls: () => {
         renderer.info.autoReset = false;
@@ -719,7 +801,7 @@ export function createTerrainLab(root: HTMLElement): Lab {
         return { x: rect.left + ((p.x + 1) / 2) * rect.width, y: rect.top + ((1 - p.y) / 2) * rect.height };
       },
       ponds: () => terrain.ponds.map((p) => ({ x: p.x, z: p.z, reach: p.reach })),
-      plants: () => planted.filter((p) => p.view.object.visible).map((p) => ({ x: p.view.object.position.x, z: p.view.object.position.z, height: p.view.height, region: regionAt(p.view.object.position.x, p.view.object.position.z) })),
+      plants: () => trees.map((t) => ({ x: t.x, z: t.z, height: (kinds[t.kind] as TreeKind).height, region: regionAt(t.x, t.z) })),
       selected: () => selected,
       lantern: () => ({ position: light.uLanternPosition.value.toArray(), intensity: light.uLanternIntensity.value, nightness: light.uNightness.value }),
       camera: () => ({ position: camera.position.toArray(), target: orbit.target.toArray() }),

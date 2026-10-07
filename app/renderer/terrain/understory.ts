@@ -93,8 +93,14 @@ function footprintOf(plant: Realized): number {
 }
 
 export interface Understory {
-  /** Scatters everything again over freshly baked land, keeping clear of the trees. */
-  place(terrain: Terrain, world: WorldSpec, trees: readonly Occupied[]): void;
+  /** The rules and seed `place` scatters with, as plain data, so a bake thread can scatter ahead of time. */
+  plan(world: WorldSpec): { rules: ScatterRule[]; seed: number };
+  /**
+   * Scatters everything again over freshly baked land, keeping clear of the
+   * trees; or, given `placed` (what `plan`'s rules and seed gave on this land
+   * elsewhere), stands those.
+   */
+  place(terrain: Terrain, world: WorldSpec, trees: readonly Occupied[], placed?: readonly Placement[]): void;
   /** Instances that cast into the sun's shadow map. */
   readonly casters: () => readonly PlantInstances[];
   /** Objects the shadow pass hides: drifts of flowers are too fine to cast. */
@@ -111,19 +117,27 @@ export function createUnderstory(scene: THREE.Scene, light: SceneLight, lib: Lib
     return { group: g, plants, radii: plants.map(footprintOf), outlines: plants.map((p) => outlineOf(p).map((r) => r * g.clears)) };
   });
   let views: { group: Group; view: PlantInstances }[] = [];
-  let placed: Placement[] = [];
+  let placed: readonly Placement[] = [];
+  const plan = (world: WorldSpec): { rules: ScatterRule[]; seed: number } => ({
+    rules: built.map(({ group, radii }) => ({
+      ...group.rule,
+      id: group.id,
+      variants: radii.map((radius, i) => ({ radius, weight: group.weights[i] ?? 1 })),
+      regions: world.regions.map((r) => group.landforms[r.biome.slots.relief?.use ?? ""] ?? 1),
+    })),
+    seed: seedOf("terrain-lab/understory"),
+  });
 
   return {
-    place(terrain, world, trees) {
+    plan,
+    place(terrain, world, trees, given) {
       for (const v of views) v.view.dispose();
       views = [];
-      const rules: ScatterRule[] = built.map(({ group, radii }) => ({
-        ...group.rule,
-        id: group.id,
-        variants: radii.map((radius, i) => ({ radius, weight: group.weights[i] ?? 1 })),
-        regions: world.regions.map((r) => group.landforms[r.biome.slots.relief?.use ?? ""] ?? 1),
-      }));
-      placed = scatterComponents(terrain, rules, seedOf("terrain-lab/understory"), trees);
+      if (given !== undefined) placed = given;
+      else {
+        const { rules, seed } = plan(world);
+        placed = scatterComponents(terrain, rules, seed, trees);
+      }
       clearings.update(
         placed.flatMap((p) => {
           const b = built.find((x) => x.group.id === p.rule);

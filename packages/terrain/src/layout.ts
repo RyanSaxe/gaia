@@ -29,13 +29,14 @@ export function layoutSites(seed: number, count: number, size: number): Site[] {
     }
     pts.push(best);
   }
-  // Lloyd relaxation on a coarse grid evens out region sizes.
+  // Lloyd relaxation on a coarse grid, forty cells across, evens out region sizes.
+  const cell = size / 40;
   for (let pass = 0; pass < 4; pass++) {
     const sx = new Float64Array(count);
     const sz = new Float64Array(count);
     const n = new Float64Array(count);
-    for (let gz = -half; gz <= half; gz += 8) {
-      for (let gx = -half; gx <= half; gx += 8) {
+    for (let gz = -half; gz <= half; gz += cell) {
+      for (let gx = -half; gx <= half; gx += cell) {
         let k = 0;
         let d = Infinity;
         pts.forEach(([px, pz], i) => {

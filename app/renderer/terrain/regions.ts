@@ -1,18 +1,20 @@
 // Each region's ground cover, as uniforms the ground and grass shaders share.
-// The shaders weigh regions by the baked cover weights (`Terrain.cover`),
-// packed four regions to a texture, so the cover drifts across the same wide
-// band where the land changes, in the same patches the bake measured.
+// The shaders weigh regions by the baked cover shares (`Terrain.coverRegions`
+// and `coverShares`: each lattice sample's largest few), interpolated between
+// samples as the lattice is, so the cover drifts across the same wide band
+// where the land changes, in the same patches the bake measured.
 
 import * as THREE from "three";
 import type { GroundSpec } from "@gaia/schema";
-import { type Terrain, type WorldSpec, landRadius } from "@gaia/terrain";
+import { COVER_TAPS, type Terrain, type WorldSpec, landRadius } from "@gaia/terrain";
 
-export const MAX_REGIONS = 8;
+export const MAX_REGIONS = 32;
 
-function weightMap(): THREE.DataTexture {
+/** Four bytes per lattice sample, read whole: the shader interpolates between samples itself. */
+function tapMap(): THREE.DataTexture {
   const t = new THREE.DataTexture(new Uint8Array(4), 1, 1, THREE.RGBAFormat, THREE.UnsignedByteType);
-  t.minFilter = THREE.LinearFilter;
-  t.magFilter = THREE.LinearFilter;
+  t.minFilter = THREE.NearestFilter;
+  t.magFilter = THREE.NearestFilter;
   return t;
 }
 
@@ -21,9 +23,9 @@ const vectors = <T>(make: () => T): { value: T[] } => ({ value: Array.from({ len
 export function createRegionCovers() {
   const uniforms = {
     uRegionCount: { value: 0 },
-    /** Regions 0 to 3 and 4 to 7: each one's cover weight per lattice sample. */
-    uCoverMapA: { value: weightMap() },
-    uCoverMapB: { value: weightMap() },
+    /** Per lattice sample: the regions with the largest shares of the cover, and their shares. */
+    uCoverRegions: { value: tapMap() },
+    uCoverShares: { value: tapMap() },
     /** The lattice's origin, spacing and samples per side. */
     uCoverMap: { value: new THREE.Vector3() },
     /** Past this radius (the wild land) covers continue outward from the land's edge. */
@@ -42,24 +44,16 @@ export function createRegionCovers() {
     uFlowerC: vectors(() => new THREE.Vector3()),
   };
   let weighed: Terrain | null = null;
-  /** Packs the bake's cover weights into the two textures, once per bake. */
+  /** Hands the bake's cover shares to the two textures as they are, once per bake. */
   const weigh = (t: Terrain): void => {
     if (t === weighed) return;
     weighed = t;
     const { n, origin, spacing } = t.lattice;
-    const count = t.spec.regions.length;
-    const maps = [uniforms.uCoverMapA.value, uniforms.uCoverMapB.value];
-    maps.forEach((map, m) => {
-      const data = new Uint8Array(n * n * 4);
-      for (let i = 0; i < n * n; i++) {
-        for (let c = 0; c < 4; c++) {
-          const r = m * 4 + c;
-          data[i * 4 + c] = r < count ? Math.round((t.cover[i * count + r] as number) * 255) : 0;
-        }
-      }
+    if (COVER_TAPS !== 4) throw new Error("The cover textures hold four regions per lattice sample.");
+    for (const [map, data] of [[uniforms.uCoverRegions.value, t.coverRegions], [uniforms.uCoverShares.value, t.coverShares]] as const) {
       map.image = { data, width: n, height: n };
       map.needsUpdate = true;
-    });
+    }
     uniforms.uCoverMap.value.set(origin, spacing, n);
     uniforms.uCoverReach.value = landRadius(t) - 1;
   };
@@ -92,8 +86,8 @@ export type RegionCovers = ReturnType<typeof createRegionCovers>;
 export const REGIONS_GLSL = /* glsl */ `
 #define MAX_REGIONS ${MAX_REGIONS}
 uniform int uRegionCount;
-uniform sampler2D uCoverMapA;
-uniform sampler2D uCoverMapB;
+uniform sampler2D uCoverRegions;
+uniform sampler2D uCoverShares;
 uniform vec3 uCoverMap;
 uniform float uCoverReach;
 uniform vec3 uCoverForm[MAX_REGIONS];
@@ -107,64 +101,83 @@ uniform vec3 uFlowerA[MAX_REGIONS];
 uniform vec3 uFlowerB[MAX_REGIONS];
 uniform vec3 uFlowerC[MAX_REGIONS];
 
-// coverWeights from @gaia/terrain, as baked per lattice sample: each region's
-// share of the cover, drifting in patches across the wide blend band. Past
-// the lattice, the land's edge carries on outward.
-void coverWeights(vec2 xz, out float w[MAX_REGIONS]) {
+// The bake's cover around a point: the four nearest lattice samples' regions
+// and shares, each share already weighed by how near its sample is, exactly
+// as the lattice interpolates. Past the lattice, the land's edge carries on
+// outward.
+struct CoverTaps { ivec4 region[4]; vec4 share[4]; };
+CoverTaps coverTaps(vec2 xz) {
   float r = length(xz);
   vec2 p = r > uCoverReach ? xz * (uCoverReach / r) : xz;
-  vec2 uv = ((p - uCoverMap.x) / uCoverMap.y + 0.5) / uCoverMap.z;
-  vec4 a = texture2D(uCoverMapA, uv);
-  vec4 b = texture2D(uCoverMapB, uv);
-  w[0] = a.r; w[1] = a.g; w[2] = a.b; w[3] = a.a;
-  w[4] = b.r; w[5] = b.g; w[6] = b.b; w[7] = b.a;
+  vec2 g = clamp((p - uCoverMap.x) / uCoverMap.y, vec2(0.0), vec2(uCoverMap.z - 1.001));
+  ivec2 i = ivec2(floor(g));
+  vec2 f = g - vec2(i);
+  CoverTaps c;
+  c.region[0] = ivec4(texelFetch(uCoverRegions, i, 0) * 255.0 + 0.5);
+  c.region[1] = ivec4(texelFetch(uCoverRegions, i + ivec2(1, 0), 0) * 255.0 + 0.5);
+  c.region[2] = ivec4(texelFetch(uCoverRegions, i + ivec2(0, 1), 0) * 255.0 + 0.5);
+  c.region[3] = ivec4(texelFetch(uCoverRegions, i + ivec2(1, 1), 0) * 255.0 + 0.5);
+  c.share[0] = texelFetch(uCoverShares, i, 0) * ((1.0 - f.x) * (1.0 - f.y));
+  c.share[1] = texelFetch(uCoverShares, i + ivec2(1, 0), 0) * (f.x * (1.0 - f.y));
+  c.share[2] = texelFetch(uCoverShares, i + ivec2(0, 1), 0) * ((1.0 - f.x) * f.y);
+  c.share[3] = texelFetch(uCoverShares, i + ivec2(1, 1), 0) * (f.x * f.y);
+  return c;
 }
 
 struct GroundCover { vec3 low; vec3 high; vec3 tip; vec3 soil; float clump; };
 
 // The ground's colors: every region's cover, weighted.
 GroundCover groundCoverAt(vec2 xz) {
-  float w[MAX_REGIONS];
-  coverWeights(xz, w);
+  CoverTaps t = coverTaps(xz);
   GroundCover c = GroundCover(vec3(0.0), vec3(0.0), vec3(0.0), vec3(0.0), 0.0);
   float total = 0.0;
-  for (int i = 0; i < MAX_REGIONS; i++) {
-    c.low += w[i] * uCoverLow[i];
-    c.high += w[i] * uCoverHigh[i];
-    c.tip += w[i] * uCoverTip[i];
-    c.soil += w[i] * uCoverSoil[i];
-    c.clump += w[i] * uCoverShape[i].w;
-    total += w[i];
+  for (int k = 0; k < 4; k++) {
+    for (int j = 0; j < 4; j++) {
+      float w = t.share[k][j];
+      if (w <= 0.0) continue;
+      int i = t.region[k][j];
+      c.low += w * uCoverLow[i];
+      c.high += w * uCoverHigh[i];
+      c.tip += w * uCoverTip[i];
+      c.soil += w * uCoverSoil[i];
+      c.clump += w * uCoverShape[i].w;
+      total += w;
+    }
   }
-  float k = 1.0 / max(total, 1e-4);
-  return GroundCover(c.low * k, c.high * k, c.tip * k, c.soil * k, c.clump * k);
+  float inv = 1.0 / max(total, 1e-4);
+  return GroundCover(c.low * inv, c.high * inv, c.tip * inv, c.soil * inv, c.clump * inv);
 }
 
 // Each blade grows one region's cover, drawn by weight with its own random
-// number, so where covers drift into each other their blades mingle.
+// number, so where covers drift into each other their blades mingle. Blades
+// are scattered points, so the nearest lattice sample's shares serve; the
+// ground's color interpolates between samples instead.
 int coverPick(vec2 xz, float r) {
-  float w[MAX_REGIONS];
-  coverWeights(xz, w);
-  float total = 0.0;
-  for (int i = 0; i < MAX_REGIONS; i++) total += w[i];
+  float d = length(xz);
+  vec2 p = d > uCoverReach ? xz * (uCoverReach / d) : xz;
+  ivec2 i = ivec2(clamp(floor((p - uCoverMap.x) / uCoverMap.y + 0.5), vec2(0.0), vec2(uCoverMap.z - 1.0)));
+  ivec4 region = ivec4(texelFetch(uCoverRegions, i, 0) * 255.0 + 0.5);
+  vec4 share = texelFetch(uCoverShares, i, 0);
+  float total = dot(share, vec4(1.0));
   float acc = 0.0;
-  int pick = 0;
-  for (int i = 0; i < MAX_REGIONS; i++) {
-    acc += w[i];
-    if (w[i] > 0.0 && r * total <= acc) { pick = i; break; }
+  for (int j = 0; j < 4; j++) {
+    acc += share[j];
+    if (share[j] > 0.0 && r * total <= acc) return region[j];
   }
-  return pick;
+  return region[0];
 }
 
 // The selected region's share of the cover, for a soft glow that fades at its organic edge.
 float coverShare(vec2 xz, int region) {
-  float w[MAX_REGIONS];
-  coverWeights(xz, w);
+  CoverTaps t = coverTaps(xz);
   float total = 0.0;
   float mine = 0.0;
-  for (int i = 0; i < MAX_REGIONS; i++) {
-    total += w[i];
-    if (i == region) mine = w[i];
+  for (int k = 0; k < 4; k++) {
+    for (int j = 0; j < 4; j++) {
+      float w = t.share[k][j];
+      total += w;
+      if (t.region[k][j] == region) mine += w;
+    }
   }
   return mine / max(total, 1e-4);
 }

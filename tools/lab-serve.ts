@@ -33,6 +33,7 @@ const ctx = await context({
   ...LAB_BUILD,
   logLevel: "warning",
   plugins: [
+    ...LAB_BUILD.plugins,
     {
       name: "lab-serve",
       setup(build) {

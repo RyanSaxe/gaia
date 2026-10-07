@@ -73,6 +73,45 @@ export interface Placement {
 /** Placements stay this far inside the walkable square's edge, meters. */
 const EDGE_MARGIN = 26;
 
+/** Cells of the grid that finds what already stands near a new placement, meters. */
+const CELL = 8;
+
+/**
+ * What stands where, bucketed into square cells so a new placement checks
+ * only its neighbors. It answers exactly as a check against every footprint
+ * would: a cell's neighbors reach as far as the widest footprint can.
+ */
+function standing(first: readonly Occupied[]) {
+  const cells = new Map<number, Occupied[]>();
+  let widest = 0;
+  const key = (cx: number, cz: number): number => (cx + 32768) * 65536 + (cz + 32768);
+  const add = (o: Occupied): void => {
+    const k = key(Math.floor(o.x / CELL), Math.floor(o.z / CELL));
+    const list = cells.get(k);
+    if (list === undefined) cells.set(k, [o]);
+    else list.push(o);
+    widest = Math.max(widest, o.radius);
+  };
+  for (const o of first) add(o);
+  return {
+    add,
+    /** True when a footprint of `radius` at (x, z) comes closer than 85% of the two radii to anything standing. */
+    crowds(x: number, z: number, radius: number): boolean {
+      const reach = Math.ceil(((widest + radius) * 0.85) / CELL);
+      const cx = Math.floor(x / CELL);
+      const cz = Math.floor(z / CELL);
+      for (let dz = -reach; dz <= reach; dz++) {
+        for (let dx = -reach; dx <= reach; dx++) {
+          const list = cells.get(key(cx + dx, cz + dz));
+          if (list === undefined) continue;
+          for (const o of list) if (Math.hypot(o.x - x, o.z - z) < (o.radius + radius) * 0.85) return true;
+        }
+      }
+      return false;
+    },
+  };
+}
+
 function regionAt(t: Terrain, x: number, z: number): number {
   const l = t.lattice;
   const ix = Math.max(0, Math.min(l.n - 1, Math.round((x - l.origin) / l.spacing)));
@@ -126,7 +165,7 @@ export function scatterComponents(t: Terrain, rules: readonly ScatterRule[], see
   const l = t.lattice;
   const half = t.spec.size / 2 - EDGE_MARGIN;
   const areas = regionAreas(t);
-  const taken: Occupied[] = [...occupied];
+  const taken = standing(occupied);
   const out: Placement[] = [];
   const root = rand(seed);
   for (const rule of rules) {
@@ -156,7 +195,7 @@ export function scatterComponents(t: Terrain, rules: readonly ScatterRule[], see
           const yaw = g.next() * Math.PI * 2;
           const radius = (rule.variants[variant] as ScatterVariant).radius * scale;
           if (Math.abs(x) > half - radius || Math.abs(z) > half - radius) continue;
-          if (taken.some((o) => Math.hypot(o.x - x, o.z - z) < (o.radius + radius) * 0.85)) continue;
+          if (taken.crowds(x, z, radius)) continue;
           if (steepest(l, x, z, radius) > rule.maxSlope) continue;
           if (isWet(t, x, z, rule.waterClearance + radius)) continue;
           m++;
@@ -171,7 +210,7 @@ export function scatterComponents(t: Terrain, rules: readonly ScatterRule[], see
           }
           const placed: Placement = { rule: rule.id, variant, x, y, z, yaw, scale, radius, slope, region: regionAt(t, x, z) };
           mine.push(placed);
-          taken.push({ x, z, radius });
+          taken.add({ x, z, radius });
         }
       }
     });

@@ -70,10 +70,12 @@ export interface Terrain {
   /** Index of the region whose cover dominates each lattice sample. */
   readonly region: Uint8Array;
   /**
-   * Each region's share of the ground cover per lattice sample: `regions.length`
-   * values per sample, summing to 1. Covers blend by these weights.
+   * The ground cover per lattice sample, as the regions with the largest
+   * shares: COVER_TAPS region indices per sample, largest share first, and
+   * their shares in 255ths, summing to 255. Covers blend by these shares.
    */
-  readonly cover: Float32Array;
+  readonly coverRegions: Uint8Array;
+  readonly coverShares: Uint8Array;
   readonly streams: readonly SolvedStream[];
   readonly ponds: readonly SolvedPond[];
   /** The vertical scale applied to fit the budget; 1 means the landforms fit as chosen. */
@@ -190,32 +192,99 @@ export function composer(spec: WorldSpec, landforms: readonly Landform[]): (x: n
   };
 }
 
-/** Bakes the world's one height truth. */
-export function bakeTerrain(spec: WorldSpec, lib: Library): Terrain {
-  const landforms = landformsOf(spec, lib);
-  const lattice = createLattice(spec.size + TERRAIN.skirt * 2, TERRAIN.spacing);
+/** How many regions' shares of the cover each lattice sample keeps: more than ever meet at one point. */
+export const COVER_TAPS = 4;
+
+/** The composed ground of some lattice rows, before fitting and water. */
+export interface ComposedRows {
+  /** The first row and one past the last. */
+  readonly z0: number;
+  readonly z1: number;
+  /** Per sample of these rows: the blended height with the rim, and the cover. */
+  readonly raw: Float32Array;
+  readonly region: Uint8Array;
+  readonly coverRegions: Uint8Array;
+  readonly coverShares: Uint8Array;
+}
+
+/** The baked lattice's shape for a world: samples every TERRAIN.spacing meters over the walkable square and its skirt. */
+export const latticeOf = (spec: WorldSpec): Lattice => createLattice(spec.size + TERRAIN.skirt * 2, TERRAIN.spacing);
+
+/**
+ * Composes lattice rows [z0, z1): each sample's blended height and its cover.
+ * Rows are independent, so a bake may compose them in parts, on several
+ * threads, and get the same bytes as composing them at once.
+ */
+export function composeRows(spec: WorldSpec, landforms: readonly Landform[], z0: number, z1: number): ComposedRows {
+  const lattice = latticeOf(spec);
   const { n } = lattice;
   const count = spec.regions.length;
-  const raw = new Float32Array(n * n);
-  const region = new Uint8Array(n * n);
-  const cover = new Float32Array(n * n * count);
+  if (count > 255) throw new Error(`A world holds at most 255 regions; this one has ${count}.`);
+  const rows = z1 - z0;
+  const raw = new Float32Array(rows * n);
+  const region = new Uint8Array(rows * n);
+  const coverRegions = new Uint8Array(rows * n * COVER_TAPS);
+  const coverShares = new Uint8Array(rows * n * COVER_TAPS);
   const weights = new Float64Array(count);
-  for (let iz = 0; iz < n; iz++) {
+  const top = new Int32Array(COVER_TAPS);
+  for (let iz = z0; iz < z1; iz++) {
     const z = worldOf(lattice, iz);
     for (let ix = 0; ix < n; ix++) {
       const x = worldOf(lattice, ix);
-      const k = iz * n + ix;
+      const k = (iz - z0) * n + ix;
       regionWeights(spec, x, z, weights);
       raw[k] = blended(spec, landforms, weights, x, z) + rimAt(spec.size, x, z);
       coverFromBlend(spec, x, z, weights);
-      let best = 0;
+      // The largest shares, largest first; ties keep the lower index.
+      top.fill(-1);
       for (let i = 0; i < count; i++) {
-        cover[k * count + i] = weights[i] as number;
-        if ((weights[i] as number) > (weights[best] as number)) best = i;
+        const w = weights[i] as number;
+        if (w <= 0) continue;
+        for (let t = 0; t < COVER_TAPS; t++) {
+          const at = top[t] as number;
+          if (at < 0 || w > (weights[at] as number)) {
+            top.copyWithin(t + 1, t, COVER_TAPS - 1);
+            top[t] = i;
+            break;
+          }
+        }
       }
-      region[k] = best;
+      let kept = 0;
+      for (let t = 0; t < COVER_TAPS; t++) if ((top[t] as number) >= 0) kept += weights[top[t] as number] as number;
+      let given = 0;
+      for (let t = 0; t < COVER_TAPS; t++) {
+        const i = top[t] as number;
+        const share = i < 0 ? 0 : Math.round(((weights[i] as number) / kept) * 255);
+        coverRegions[k * COVER_TAPS + t] = Math.max(0, i);
+        coverShares[k * COVER_TAPS + t] = share;
+        given += share;
+      }
+      // Rounding leftovers go to the largest share, so every sample's shares sum to 255.
+      coverShares[k * COVER_TAPS] = (coverShares[k * COVER_TAPS] as number) + 255 - given;
+      region[k] = Math.max(0, top[0] as number);
     }
   }
+  return { z0, z1, raw, region, coverRegions, coverShares };
+}
+
+/** Fits composed rows (covering every lattice row, in order) into the budget, then solves and cuts the water. */
+export function finishTerrain(spec: WorldSpec, landforms: readonly Landform[], parts: readonly ComposedRows[]): Terrain {
+  const lattice = latticeOf(spec);
+  const { n } = lattice;
+  const raw = new Float32Array(n * n);
+  const region = new Uint8Array(n * n);
+  const coverRegions = new Uint8Array(n * n * COVER_TAPS);
+  const coverShares = new Uint8Array(n * n * COVER_TAPS);
+  let filled = 0;
+  for (const p of [...parts].sort((a, b) => a.z0 - b.z0)) {
+    if (p.z0 !== filled) throw new Error(`Composed rows ${p.z0} to ${p.z1} leave a gap or overlap at row ${filled}.`);
+    raw.set(p.raw, p.z0 * n);
+    region.set(p.region, p.z0 * n);
+    coverRegions.set(p.coverRegions, p.z0 * n * COVER_TAPS);
+    coverShares.set(p.coverShares, p.z0 * n * COVER_TAPS);
+    filled = p.z1;
+  }
+  if (filled !== n) throw new Error(`Composed rows end at ${filled} of ${n}.`);
 
   // Fit: scale the relief about its mean until the walkable square fits the
   // budget. Range, slopes and steps all shrink with the scale.
@@ -270,13 +339,20 @@ export function bakeTerrain(spec: WorldSpec, lib: Library): Terrain {
     waterLevel,
     shore: shoreField(final, heights, waterLevel),
     region,
-    cover,
+    coverRegions,
+    coverShares,
     streams,
     ponds,
     fit,
     report: measureRelief(final, heights, inside),
     landforms,
   };
+}
+
+/** Bakes the world's one height truth. */
+export function bakeTerrain(spec: WorldSpec, lib: Library): Terrain {
+  const landforms = landformsOf(spec, lib);
+  return finishTerrain(spec, landforms, [composeRows(spec, landforms, 0, latticeOf(spec).n)]);
 }
 
 /**

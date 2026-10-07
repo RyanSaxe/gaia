@@ -73,7 +73,8 @@ instance within it:
 
 No mountains. Landforms (rolling hills, valley, terraces, basin, dunes,
 meadow) are relief primitives in each region's biome, blended into one baked
-heightfield that every consumer samples.
+heightfield that every consumer samples. A full world is 1.2 km across with
+18 to 22 regions; the tests also bake small worlds, 320 m with 3 to 5.
 
 A region never shows its shape. Region cells are domain-warped, so their
 borders curve and wander, and neighboring landforms ease into each other
@@ -82,7 +83,16 @@ seeded patches about 30 m across, so one cover drifts into the next in
 islands rather than along a gradient. The overview marks the selected region
 with a faint glow that follows its cover and fades at its edge; walking shows
 nothing. `regionWeights` and `coverWeights` in `@gaia/terrain` are the
-references, and the bake keeps each sample's cover weights for the shaders.
+references, and the bake keeps each sample's four largest cover shares for
+the shaders, which interpolate them between samples as the lattice does.
+
+The ground near the person is drawn as five nested rings that follow them,
+from 1 m quads out to 16 m quads, each reaching twice as far as the one
+inside it. Every ring's vertices are lattice samples, a coarser ring's a
+subset of the finer one's, and toward its outer edge each ring morphs, by
+distance, into exactly the next ring's surface, so rings meet without a
+seam and the ground never changes shape perceptibly as the person walks.
+Grass only grows on the finest ring, where the ground is the lattice itself.
 
 The bake enforces a relief budget:
 
