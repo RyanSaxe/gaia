@@ -151,6 +151,22 @@ export function mergeParts(parts: readonly Part[]): Part[] {
       shade: join((p) => p.shade),
       tint: join((p) => p.tint),
       cutout: join((p) => p.cutout),
+      // Each joined part's pieces are numbered on from the last one's.
+      piece: (() => {
+        const out = join((p) => p.piece);
+        let at = 0;
+        let offset = 0;
+        for (const p of list) {
+          let top = -1;
+          for (let i = 0; i < p.piece.length; i += 2) {
+            out[at + i] = (p.piece[i] as number) + offset;
+            top = Math.max(top, p.piece[i] as number);
+          }
+          at += p.piece.length;
+          offset += top + 1;
+        }
+        return out;
+      })(),
       channels: {
         loss: join((p) => p.channels.loss),
         droop: join((p) => p.channels.droop),

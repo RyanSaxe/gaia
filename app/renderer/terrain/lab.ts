@@ -9,8 +9,20 @@ import { type BuildingPlan, type GroundSpec, Library, type RouteSpec, type Seaso
 import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, LANDMARK_PRIMITIVES, NO_SHIFT, ROUTE_PRIMITIVES, RELIEF_PRIMITIVES, ROCK_PRIMITIVES, STRUCTURE_PRIMITIVES, WILDFLOWER_PRIMITIVES, WORLD_PRIMITIVES, hex, mixLab } from "@gaia/primitives";
 import { biome, flora, landmark, link, structure, world as worldKind } from "@gaia/kinds";
 import { defaultParams, validate } from "@gaia/world";
-import { FLORA_PRESETS, LANDMARK_PRESETS, STRUCTURE_PRESETS, TRAIL_PRESETS, WORLD_PRESETS, buildSlots, mergeParts, realize, realizeRegion, realizeSky } from "@gaia/realize";
-import { LANTERN, type PlantView, applyLight, createLantern, createPlant, createRenderer, createSceneLight, createSunShadow } from "@gaia/render";
+import { FLORA_PRESETS, LANDMARK_PRESETS, type Realized, STRUCTURE_PRESETS, TRAIL_PRESETS, WORLD_PRESETS, buildSlots, mergeParts, realize, realizeRegion, realizeSky } from "@gaia/realize";
+import {
+  LANTERN,
+  type DetailMode,
+  type PlantInstances,
+  type PlantView,
+  applyLight,
+  createLantern,
+  createPlant,
+  createPlantInstances,
+  createRenderer,
+  createSceneLight,
+  createSunShadow,
+} from "@gaia/render";
 import {
   type BuildingSite,
   EYE_HEIGHT,
@@ -125,13 +137,29 @@ const BOB = { height: 0.03, period: 2.8 };
 /** While swimming, the lantern is held at least this far above the water, meters. */
 const LANTERN_ABOVE_WATER = 0.15;
 
-interface Planted {
-  readonly view: PlantView;
+/** One seeded build of a flora preset: every tree is a copy of one. */
+interface TreeVariant {
+  readonly plant: Realized;
   /** Radius of the trunk's bottom ring, for grounding. */
   readonly base: number;
   /** The trunk's own radius at its base: what stops a walker. */
   readonly trunk: number;
+  readonly height: number;
 }
+
+/** Where one tree stands, and which build it copies. */
+interface Tree {
+  readonly x: number;
+  readonly y: number;
+  readonly z: number;
+  readonly variant: number;
+  readonly scale: number;
+  readonly yaw: number;
+}
+
+/** Seeded builds per flora preset, and the trees the lab plants unless a hook asks for more. */
+const TREE_BUILDS = 3;
+const TREES = 22;
 
 export function createTerrainLab(root: HTMLElement): Lab {
   root.innerHTML = TEMPLATE;
@@ -338,49 +366,85 @@ export function createTerrainLab(root: HTMLElement): Lab {
 
   // ---------- plants ----------
 
-  const planted: Planted[] = Array.from({ length: 22 }, (_, i) => {
-    const preset = FLORA_PRESETS[i % FLORA_PRESETS.length] as (typeof FLORA_PRESETS)[number];
-    const plant = realize(preset.blueprint, flora, floraLib, {
-      seed: seedOf(`terrain-lab/plant-${i}`),
-      facts: { scale: 0.85 + ((i * 37) % 10) / 22, age: 120 },
-    });
-    const bark = plant.parts.find((p) => p.swatch === "bark");
-    let trunk = 0;
-    if (bark !== undefined) {
-      for (let k = 0; k < 11; k++) trunk = Math.max(trunk, Math.hypot(bark.positions[k * 3] ?? 0, bark.positions[k * 3 + 2] ?? 0));
-    }
-    const view = createPlant(plant, light);
-    view.object.rotation.y = i * 1.7;
-    scene.add(view.object);
-    return { view, base: Math.max(0.5, trunk), trunk };
-  });
+  // Trees are copies of a few seeded builds of each preset, drawn as
+  // instances: hundreds of trees cost a few draw calls per build.
+  const variants: TreeVariant[] = FLORA_PRESETS.flatMap((preset, p) =>
+    Array.from({ length: TREE_BUILDS }, (_, k) => {
+      const plant = realize(preset.blueprint, flora, floraLib, { seed: seedOf(`terrain-lab/tree-${p}-${k}`), facts: { scale: 1, age: 120 } });
+      const bark = plant.parts.find((part) => part.swatch === "bark");
+      let trunk = 0;
+      if (bark !== undefined) {
+        for (let i = 0; i < 11; i++) trunk = Math.max(trunk, Math.hypot(bark.positions[i * 3] ?? 0, bark.positions[i * 3 + 2] ?? 0));
+      }
+      const base = Math.max(0.5, trunk);
+      let height = 1;
+      for (const part of plant.parts) for (let i = 1; i < part.positions.length; i += 3) height = Math.max(height, part.positions[i] as number);
+      return { plant, base, trunk, height };
+    }),
+  );
+  let treeCount = TREES;
+  let trees: Tree[] = [];
+  let treeViews: PlantInstances[] = [];
 
   // Rocks, bushes and wildflowers, scattered around the trees.
   const understory = createUnderstory(scene, light, new Library([...FLORA_PRIMITIVES, ...ROCK_PRIMITIVES, ...WILDFLOWER_PRIMITIVES]), clearings);
 
+  // Before every pass (the sun's shadow, the water's mirror and the view),
+  // each instanced blueprint packs only the cells that pass's camera sees.
+  const instanced = (): PlantInstances[] => [...treeViews, ...understory.all()];
+  let warming = false;
+  scene.onBeforeRender = (_renderer, _scene, passCamera) => {
+    if (!warming) for (const v of instanced()) v.cull(passCamera);
+  };
+  // Uploads every tree's and the understory's geometry, at every level, in
+  // one render while the planting already holds the frame, so no level's
+  // first appearance ever costs a frame.
+  const warmTarget = new THREE.WebGLRenderTarget(1, 1);
+  const warmCamera = new THREE.PerspectiveCamera();
+  function warm(): void {
+    warming = true;
+    for (const v of instanced()) v.warm();
+    renderer.setRenderTarget(warmTarget);
+    renderer.render(scene, warmCamera);
+    renderer.setRenderTarget(null);
+    warming = false;
+  }
+
+  let understoryDensity = 1;
   function plant(): void {
-    const spots = scatterPlants(terrain, planted.length, 9);
     // Trees keep off the trails and out from under a landmark.
     const clear: Occupied[] = [
       ...trailDiscs(ways.trails, 1.6),
       ...ways.sites.map((s) => ({ x: s.site.x, z: s.site.z, radius: (landmarks[s.landmark]?.base ?? 2) + (landmarks[s.landmark]?.name.startsWith("Great") ? 12 : 5) })),
     ];
-    planted.forEach((p, i) => {
-      const s = spots[i];
-      p.view.object.visible = s !== undefined && !insideFootprint(cottagePlan, site, s.x, s.z, 6) && !clear.some((o) => Math.hypot(o.x - s.x, o.z - s.z) < o.radius);
-      if (s === undefined) return;
-      p.view.object.position.set(s.x, groundedBase(terrain.lattice, s.x, s.z, p.base), s.z);
+    trees = scatterPlants(terrain, treeCount, 9).flatMap((s, i) => {
+      if (insideFootprint(cottagePlan, site, s.x, s.z, 6) || clear.some((o) => Math.hypot(o.x - s.x, o.z - s.z) < o.radius)) return [];
+      const variant = (i % FLORA_PRESETS.length) * TREE_BUILDS + (Math.floor(i / FLORA_PRESETS.length) % TREE_BUILDS);
+      const scale = 0.85 + ((i * 37) % 10) / 22;
+      const base = (variants[variant] as TreeVariant).base * scale;
+      return [{ x: s.x, y: groundedBase(terrain.lattice, s.x, s.z, base), z: s.z, variant, scale, yaw: i * 1.7 }];
     });
-    const trees = planted.flatMap((p) => (p.view.object.visible ? [{ x: p.view.object.position.x, z: p.view.object.position.z, radius: 1.6 }] : []));
+    for (const v of treeViews) v.dispose();
+    treeViews = variants.flatMap((v, k) => {
+      const spots = trees.filter((t) => t.variant === k).map((t) => ({ x: t.x, y: t.y, z: t.z, yaw: t.yaw, scale: t.scale }));
+      if (spots.length === 0) return [];
+      const view = createPlantInstances(v.plant, light, spots);
+      scene.add(view.object);
+      return [view];
+    });
+    const occupied = trees.map((t) => ({ x: t.x, z: t.z, radius: 1.6 }));
     // Nothing of the understory stands in the cottage or on its walk: discs a meter apart along each cleared capsule.
     const cottageGround = clearingsOf(cottagePlan, site).flatMap((c) => {
       const steps = Math.max(1, Math.ceil(Math.hypot(c.bx - c.ax, c.bz - c.az)));
       return Array.from({ length: steps + 1 }, (_, k) => ({ x: c.ax + ((c.bx - c.ax) * k) / steps, z: c.az + ((c.bz - c.az) * k) / steps, radius: c.radius + 0.5 }));
     });
     const ways_ = [...trailDiscs(ways.trails, 0.5), ...ways.sites.map((s) => ({ x: s.site.x, z: s.site.z, radius: (landmarks[s.landmark]?.base ?? 2) + 1 }))];
-    understory.place(terrain, world, [...trees, ...cottageGround, ...ways_]);
+    understory.place(terrain, world, [...occupied, ...cottageGround, ...ways_], understoryDensity);
     // What stops a walker: each trunk at its base, the rocks and bushes by their outlines at the ground, and the cottage's walls.
-    const trunks: SolidShape[] = planted.flatMap((p) => (p.view.object.visible && p.trunk > 0 ? [{ x: p.view.object.position.x, z: p.view.object.position.z, radius: p.trunk }] : []));
+    const trunks: SolidShape[] = trees.flatMap((t) => {
+      const trunk = (variants[t.variant] as TreeVariant).trunk * t.scale;
+      return trunk > 0 ? [{ x: t.x, z: t.z, radius: trunk }] : [];
+    });
     const components = understory.placements().flatMap((p): SolidShape[] => {
       const share = STOPS[p.rule];
       const foot = understory.footprint(p.rule, p.variant);
@@ -388,9 +452,49 @@ export function createTerrainLab(root: HTMLElement): Lab {
       return [outlineShape(p.x, p.z, p.yaw, p.scale, foot.outline, share)];
     });
     solids = solidsOf([...trunks, ...components, wallsShape(cottagePlan, site)]);
+    warm();
   }
   let solids: Solids = NO_SOLIDS;
   plant();
+
+  /** The nearest tree a ray passes through, by each tree's trunk and crown as an upright cylinder. */
+  function treeHit(ray: THREE.Ray): { tree: Tree; distance: number } | null {
+    const { origin: o, direction: d } = ray;
+    const flat = d.x * d.x + d.z * d.z;
+    let best: { tree: Tree; distance: number } | null = null;
+    for (const t of trees) {
+      const v = variants[t.variant] as TreeVariant;
+      const s = flat < 1e-9 ? 0 : ((t.x - o.x) * d.x + (t.z - o.z) * d.z) / flat;
+      if (s <= 0) continue;
+      const y = o.y + d.y * s;
+      if (Math.hypot(o.x + d.x * s - t.x, o.z + d.z * s - t.z) > 1.2 * t.scale || y < t.y || y > t.y + v.height * t.scale) continue;
+      if (best === null || s < best.distance) best = { tree: t, distance: s };
+    }
+    return best;
+  }
+
+  /**
+   * The nearest rock or bush a ray passes through, by its outline's reach and
+   * its top as an upright cylinder. Instances can't be raycast: their
+   * matrices also carry vitality, hue and seed.
+   */
+  function thingHit(ray: THREE.Ray): { x: number; z: number; distance: number } | null {
+    const { origin: o, direction: d } = ray;
+    const flat = d.x * d.x + d.z * d.z;
+    let best: { x: number; z: number; distance: number } | null = null;
+    for (const p of understory.placements()) {
+      const foot = STOPS[p.rule] === undefined ? undefined : understory.footprint(p.rule, p.variant);
+      if (foot === undefined) continue;
+      const s = flat < 1e-9 ? 0 : ((p.x - o.x) * d.x + (p.z - o.z) * d.z) / flat;
+      if (s <= 0) continue;
+      const x = o.x + d.x * s;
+      const z = o.z + d.z * s;
+      const y = o.y + d.y * s;
+      if (Math.hypot(x - p.x, z - p.z) > Math.max(...foot.outline) * p.scale || y > p.y + foot.top * p.scale) continue;
+      if (best === null || s < best.distance) best = { x, z, distance: s };
+    }
+    return best;
+  }
 
   // ---------- camera, walking and the overview ----------
 
@@ -499,16 +603,14 @@ export function createTerrainLab(root: HTMLElement): Lab {
       return;
     }
     const land = groundHit(ray);
-    const plants = planted.map((p) => p.view.object).filter((o) => o.visible);
-    const tree = raycaster.intersectObjects(plants, true)[0];
-    if (tree !== undefined && (land === null || tree.distance < land.distance)) {
-      const root = plants.find((o) => o.getObjectById(tree.object.id) !== undefined);
-      if (root !== undefined) select(regionAt(root.position.x, root.position.z));
+    const tree = treeHit(ray);
+    if (tree !== null && (land === null || tree.distance < land.distance)) {
+      select(regionAt(tree.tree.x, tree.tree.z));
       return;
     }
-    // A tap on a rock or a bush walks up to the face that was tapped, not to the ground hidden behind it.
-    const thing = raycaster.intersectObjects(understory.casters().map((c) => c.object), true)[0];
-    if (thing !== undefined && (land === null || thing.distance < land.distance)) setGoal(thing.point.x, thing.point.z);
+    // A tap on a rock or a bush walks up to it, not to the ground hidden behind it.
+    const thing = thingHit(ray);
+    if (thing !== null && (land === null || thing.distance < land.distance)) setGoal(thing.x, thing.z);
     else if (land !== null) setGoal(land.x, land.z);
   });
 
@@ -757,7 +859,7 @@ export function createTerrainLab(root: HTMLElement): Lab {
 
   let frozen: number | null = null;
   const shadowCenter = new THREE.Vector3();
-  const views = (): PlantView[] => [...planted.map((p) => p.view), cottage, ...landmarkViews, ...(built?.views ?? [])];
+  const views = (): PlantView[] => [...treeViews, cottage, ...landmarkViews, ...(built?.views ?? [])];
   const lanternEye = new THREE.Vector3();
   // The water mirrors the sky, the coarse ground, trees and the cottage, and
   // never grass or the understory: its reflection is soft, so fine detail
@@ -765,6 +867,8 @@ export function createTerrainLab(root: HTMLElement): Lab {
   const mirrorHide = [grass.mesh, ground.fine];
   const mirrorShow = [ground.coarse];
   let frameCalls = 0;
+  /** Each pass's draw calls and triangles in the last frame. */
+  const passes = { shadow: { calls: 0, triangles: 0 }, mirror: { calls: 0, triangles: 0 }, view: { calls: 0, triangles: 0 } };
   function frame(dt: number, now: number, at: number): void {
     if (at !== hour) applyHour(at);
     light.uTime.value = frozen ?? light.uTime.value + dt;
@@ -784,11 +888,17 @@ export function createTerrainLab(root: HTMLElement): Lab {
     }
     marker.frame(dt, camera.position, light.uNightness.value);
     refreshSight(now);
+    // Every pass thins distant detail from where the person's eyes are.
+    light.uEye.value.copy(camera.position);
     shadow.render(renderer, scene, [...views(), ...understory.casters()], [sky.mesh, ground.wilds, ground.fine, ground.coarse, grass.mesh, water.group, marker.mesh, ...understory.quiet()]);
     frameCalls = renderer.info.render.calls;
-    frameCalls += water.mirror(renderer, scene, camera, [...mirrorHide, ...understory.quiet(), ...understory.casters().map((c) => c.object)], mirrorShow, dt);
+    passes.shadow = { calls: renderer.info.render.calls, triangles: renderer.info.render.triangles };
+    const mirrorCalls = water.mirror(renderer, scene, camera, [...mirrorHide, ...understory.quiet(), ...understory.casters().map((c) => c.object)], mirrorShow, dt);
+    frameCalls += mirrorCalls;
+    passes.mirror = { calls: mirrorCalls, triangles: mirrorCalls > 0 ? renderer.info.render.triangles : 0 };
     renderer.render(scene, camera);
     frameCalls += renderer.info.render.calls;
+    passes.view = { calls: renderer.info.render.calls, triangles: renderer.info.render.triangles };
   }
 
   setMode("walk");
@@ -863,6 +973,8 @@ export function createTerrainLab(root: HTMLElement): Lab {
       info: () => renderer.info.render,
       /** Draw calls in the whole last frame (shadow, mirror and view), and the water's mirror. */
       water: () => ({ ...water.stats(), frameCalls }),
+      /** Draw calls and triangles of each pass in the last frame: the sun's shadow, the water's mirror and the view. */
+      passes: () => structuredClone(passes),
       waterVitality: (v: number) => water.vitality(v),
       understory: () => understory.stats(),
       placements: () => understory.placements(),
@@ -914,7 +1026,26 @@ export function createTerrainLab(root: HTMLElement): Lab {
         return { x: rect.left + ((p.x + 1) / 2) * rect.width, y: rect.top + ((1 - p.y) / 2) * rect.height };
       },
       ponds: () => terrain.ponds.map((p) => ({ x: p.x, z: p.z, reach: p.reach })),
-      plants: () => planted.filter((p) => p.view.object.visible).map((p) => ({ x: p.view.object.position.x, z: p.view.object.position.z, height: p.view.height, region: regionAt(p.view.object.position.x, p.view.object.position.z) })),
+      plants: () => trees.map((t) => ({ x: t.x, z: t.z, height: (variants[t.variant] as TreeVariant).height * t.scale, region: regionAt(t.x, t.z) })),
+      /** Replants `trees` trees and the understory at `density` times its usual count, for measuring at scale. */
+      forest: (count: number, density = 1) => {
+        treeCount = count;
+        understoryDensity = density;
+        plant();
+        return { trees: trees.length, understory: understory.stats().placed };
+      },
+      /** Forces every instanced blueprint's detail ("full" or "far"), or lets distance choose ("auto"). */
+      detail: (mode: DetailMode) => {
+        for (const v of instanced()) v.detail = mode;
+      },
+      /** Trees, builds, each blueprint's levels, and the copies and triangles the last pass drew. */
+      scale: () => ({
+        trees: trees.length,
+        builds: variants.length,
+        levels: instanced().map((v) => v.levels),
+        drawn: instanced().reduce((n, v) => n + v.drawn().copies, 0),
+        drawnTriangles: instanced().reduce((n, v) => n + v.drawn().triangles, 0),
+      }),
       selected: () => selected,
       lantern: () => ({ position: light.uLanternPosition.value.toArray(), intensity: light.uLanternIntensity.value, nightness: light.uNightness.value }),
       camera: () => ({ position: camera.position.toArray(), target: orbit.target.toArray() }),
