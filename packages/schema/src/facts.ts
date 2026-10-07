@@ -112,16 +112,18 @@ export interface RegionFacts {
   readonly extent: number;
 }
 
-/** Facts about one dependency, an import from one file to another, which the link kind reads. */
-export interface LinkFacts {
-  /** The importing file's project-relative path. */
-  readonly from: string;
-  /** The imported file's project-relative path. */
-  readonly to: string;
-  /** How many of the importing file's symbols use the imported file. */
-  readonly uses: number;
-  /** Whether the two files are in different regions. */
-  readonly crossesRegions: boolean;
+/**
+ * Facts about one dependency between two entities, which the link kind
+ * reads: the entity that imports and the entity it leans on, each with its
+ * own facts, so a trail between them can follow both.
+ */
+export interface DependencyFacts {
+  /** The entity that depends on the other. */
+  readonly from: EntityFacts;
+  /** The entity it depends on. */
+  readonly to: EntityFacts;
+  /** How many of `from`'s files import from `to`. */
+  readonly importers: number;
 }
 
 /** Facts about the whole repository, which the world kind reads. */

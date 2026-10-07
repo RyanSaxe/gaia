@@ -374,6 +374,8 @@ export interface RouteSpec {
 /** A door or window in a building's wall. */
 export interface Opening {
   readonly kind: "door" | "window";
+  /** The mass whose wall it is in, as an index into the plan's masses. */
+  readonly mass: number;
   /** Bottom center of the opening, on the wall's outer face. */
   readonly position: Vec3;
   /** Unit outward normal of the wall it is in; always level. */
@@ -383,24 +385,56 @@ export interface Opening {
 }
 
 /**
+ * The form of one mass's roof: two slopes meeting at a ridge over gable
+ * walls; four slopes with no gables; gables whose tops are hipped back; one
+ * slope against a taller wall; or a cone over a round turret.
+ */
+export type RoofForm = "gable" | "hip" | "half-hip" | "lean-to" | "cone";
+
+/**
+ * One volume of a building: walls standing on a rectangle (or on a round
+ * turret's octagon) under a roof of its own. A building is one mass or
+ * several joined ones that overlap where they meet, so a wall inside another
+ * mass never shows and walls and roofs agree by construction.
+ */
+export interface Mass {
+  /** Center of its footprint in the building's frame. */
+  readonly x: number;
+  readonly z: number;
+  /** Outer wall lengths along x and z; a round mass is `width` across. */
+  readonly width: number;
+  readonly depth: number;
+  readonly round: boolean;
+  /** Floor to the top of its walls, where its eaves sit. */
+  readonly wallHeight: number;
+  /** How many storeys its walls hold, for windows and floor beams. */
+  readonly storeys: number;
+  /** The roof's height above the top of its walls. */
+  readonly rise: number;
+  /** The axis its ridge runs along; a lean-to's high side runs along it. */
+  readonly ridge: "x" | "z";
+  readonly roof: RoofForm;
+  /** The side across its span a lean-to's slope falls toward. */
+  readonly fall: 1 | -1;
+  /** Whether each end of its ridge (toward -, toward +) stands free; a hipped roof hips only free ends, so a range of joined masses reads as one roof. */
+  readonly ends: readonly [boolean, boolean];
+}
+
+/**
  * A building's plan, which its walls, roof, openings and dressing all build
  * against, so they agree by construction. Local meters: the origin is the
- * center of the footprint at ground level, and the door faces +z.
+ * center of the whole footprint at ground level, and the door faces +z.
  */
 export interface BuildingPlan {
-  /** Outer wall lengths along x and z. */
+  /** The whole footprint's extent along x and z, centered on the origin. */
   readonly width: number;
   readonly depth: number;
   /** Floor level above the ground: the plinth that shows. */
   readonly floor: number;
   /** How far the foundation reaches below ground level, so uneven ground never shows a gap. */
   readonly footing: number;
-  /** Floor to the top of the walls, where the eaves sit. */
-  readonly wallHeight: number;
-  /** The ridge's height above the top of the walls. */
-  readonly rise: number;
-  /** The axis the ridge runs along. */
-  readonly ridge: "x" | "z";
+  /** The building's volumes; the first is its main body, whose front wall holds the door. */
+  readonly masses: readonly Mass[];
   /** How settled and crooked the whole building is, 0 (square) to 1 (storybook), so every part leans alike. */
   readonly settle: number;
   readonly openings: readonly Opening[];

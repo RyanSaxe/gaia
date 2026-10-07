@@ -105,11 +105,25 @@ export function outlineShape(x: number, z: number, yaw: number, scale: number, o
   return points.length > 0 ? { points } : { x, z, radius: 0.05 };
 }
 
-/** A building's walls: its footprint's rectangle on its site. */
-export function wallsShape(plan: BuildingPlan, site: BuildingSite): SolidShape {
-  const w = plan.width / 2;
-  const d = plan.depth / 2;
-  return { points: [[-w, -d], [w, -d], [w, d], [-w, d]].flatMap(([lx, lz]) => siteToWorld(site, lx as number, lz as number)) };
+/** A building's walls: each of its masses' footprints on its site. */
+export function wallsShape(plan: BuildingPlan, site: BuildingSite): SolidShape[] {
+  // One shape per mass, so the walk passes through the open corner of an L
+  // or between a cluster's volumes; a round mass is its octagon.
+  return plan.masses.map((m) => {
+    const corners: [number, number][] = m.round
+      ? Array.from({ length: 8 }, (_, k) => {
+          const a = ((k + 0.5) / 8) * Math.PI * 2;
+          const r = m.width / 2 / Math.cos(Math.PI / 8);
+          return [m.x + Math.cos(a) * r, m.z + Math.sin(a) * r];
+        })
+      : [
+          [m.x - m.width / 2, m.z - m.depth / 2],
+          [m.x + m.width / 2, m.z - m.depth / 2],
+          [m.x + m.width / 2, m.z + m.depth / 2],
+          [m.x - m.width / 2, m.z + m.depth / 2],
+        ];
+    return { points: corners.flatMap(([lx, lz]) => siteToWorld(site, lx, lz)) };
+  });
 }
 
 /** A walker's body, from just above the ground to the top of its head, meters above a thing's base. */
@@ -119,7 +133,8 @@ export const BODY_BAND = { from: 0.1, to: 1.8 } as const;
  * The solids of a built thing standing at (x, y, z), turned by `yaw` as Three
  * turns it: each solid piece's outline across a walker's body height. A
  * piece wholly above or below that band stops nothing, so a walker passes
- * under a lintel and through a doorway between two stones.
+ * under a lintel and through a doorway between two stones. Nor does a piece
+ * that only grows in as the thing declines, such as fallen stone.
  */
 export function piecesShapes(parts: readonly Part[], at: { readonly x: number; readonly y: number; readonly z: number; readonly yaw: number }): SolidShape[] {
   const c = Math.cos(at.yaw);
@@ -130,7 +145,7 @@ export function piecesShapes(parts: readonly Part[], at: { readonly x: number; r
     const byPiece = new Map<number, number[]>();
     for (let v = 0; v * 3 < part.positions.length; v++) {
       const y = part.positions[v * 3 + 1] as number;
-      if (y < BODY_BAND.from || y > BODY_BAND.to) continue;
+      if (y < BODY_BAND.from || y > BODY_BAND.to || (part.channels.grow?.[v] ?? 0) > 0) continue;
       const lx = part.positions[v * 3] as number;
       const lz = part.positions[v * 3 + 2] as number;
       const piece = part.piece[v * 2] as number;

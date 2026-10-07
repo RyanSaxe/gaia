@@ -36,6 +36,7 @@ import {
   slopeAt,
   trailDiscs,
   trailField,
+  trailPlaces,
   wildsRing,
 } from "@gaia/terrain";
 
@@ -104,9 +105,10 @@ export interface StandTree {
   readonly patch?: number;
 }
 
-/** A landmark standing on its site; `landmark` indexes the request's landmarks. */
+/** A landmark standing on its site; `landmark` indexes the request's landmarks, and `id` is the place its trails name. */
 export interface StandingLandmark {
   readonly landmark: number;
+  readonly id: string;
   readonly site: LandmarkSite;
 }
 
@@ -120,6 +122,8 @@ export interface Stand {
   readonly wilds: WildsRing;
   /** Height, water level, distance to the water and to a trail's edge per lattice sample: the ground texture's data. */
   readonly ground: Float32Array;
+  /** Which trails each lattice sample lies on and how far along them (`trailPlaces`), two per sample. */
+  readonly trailPlaces: Float32Array;
 }
 
 /** The middle of a building's door along its front wall, in its own frame. */
@@ -208,10 +212,10 @@ function settleWays(t: Terrain, req: StandRequest, sites: readonly BuildingSite[
     const lm = req.landmarks[k] as StandLandmark;
     const site = findLandmarkSite(t, pick, lm.base + 1.5, avoid);
     if (site === null) continue;
-    placed.push({ landmark: k, site });
+    placed.push({ landmark: k, id: `${lm.name} ${placed.length + 1}`, site });
     avoid.push({ x: site.x, z: site.z, radius: spacing });
   }
-  const places: TrailEnd[] = [...homes.map(door), ...placed.map((s, i) => ({ id: `${req.landmarks[s.landmark]?.name ?? ""} ${i + 1}`, x: s.site.x, z: s.site.z }))];
+  const places: TrailEnd[] = [...homes.map(door), ...placed.map((s) => ({ id: s.id, x: s.site.x, z: s.site.z }))];
   const foot = (p: TrailEnd, toward: TrailEnd, i: number): TrailEnd => {
     if (i < homes.length) return p;
     const lm = req.landmarks[placed[i - homes.length]?.landmark ?? 0];
@@ -259,7 +263,7 @@ function settleCode(t: Terrain, req: StandRequest, code: StandCode, sites: reado
     if (lm === undefined) continue;
     const site = findLandmarkSite(t, 0, lm.base + 1.5, avoid, lot);
     if (site === null) continue;
-    landmarks.push({ landmark, site });
+    landmarks.push({ landmark, id: lot.id, site });
     ids.push(lot.id);
     avoid.push({ x: site.x, z: site.z, radius: lm.base + 2 });
   }
@@ -373,5 +377,5 @@ export function standWorld(t: Terrain, req: StandRequest): Stand {
     ground[i * 4 + 2] = t.shore[i] as number;
     ground[i * 4 + 3] = field[i] as number;
   }
-  return { sites, landmarks, trails, trees, placements, wilds: wildsRing(t), ground };
+  return { sites, landmarks, trails, trees, placements, wilds: wildsRing(t), ground, trailPlaces: trailPlaces(t, trails) };
 }

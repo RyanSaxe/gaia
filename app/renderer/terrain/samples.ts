@@ -1,8 +1,8 @@
 // Sample code for the terrain lab, standing in for what the engine will
-// report: three of Gaia's own entities, which become its buildings, and
-// files for its trees. Their vitality comes from the same formulas the world
-// service will run, so what a building or tree looks like and what its card
-// says always agree.
+// report: six of Gaia's own entities, which become its buildings, more for
+// its landmarks, and files for its trees. Their vitality comes from the same
+// formulas the world service will run, so what a building or tree looks like
+// and what its card says always agree.
 
 import type { EntityFacts, FileFacts } from "@gaia/schema";
 import { type VitalityReport, entityVitalityOf, vitalityOf } from "@gaia/world";
@@ -106,6 +106,161 @@ export const SAMPLE_ENTITIES: readonly SampleEntity[] = [
       unusedExports: 0.3,
     }),
   },
+  {
+    building: "Merchant's hall",
+    facts: entity({
+      path: "app/world-service",
+      name: "world-service",
+      form: "service",
+      entry: "app/world-service/index.ts",
+      doc: "The world service: kinds, primitives, the question planner, answer rules, vitality and the world document.",
+      files: 9,
+      lines: 2600,
+      exports: 46,
+      dependsOn: ["packages/schema", "packages/world", "packages/kinds", "packages/primitives"],
+      dependents: ["app"],
+      tests: { files: 3, failing: 0, covered: 0.7 },
+      diagnostics: { errors: 0, warnings: 1, lint: 3 },
+      debtMarkers: 2,
+    }),
+  },
+  {
+    building: "Gathered farmstead",
+    facts: entity({
+      path: "app/renderer/terrain",
+      name: "terrain lab",
+      form: "module",
+      entry: "app/renderer/terrain/lab.ts",
+      doc: "The terrain lab: a whole world baked on workers, walked at eye height.",
+      files: 17,
+      lines: 4600,
+      exports: 18,
+      dependsOn: ["packages/terrain", "packages/render", "packages/realize"],
+      tests: { files: 1, failing: 0, covered: 0.3 },
+      diagnostics: { errors: 0, warnings: 3, lint: 8 },
+      debtMarkers: 5,
+      unusedExports: 0.15,
+    }),
+  },
+  {
+    building: "Stone croft",
+    facts: entity({
+      path: "app/main",
+      name: "main",
+      form: "module",
+      entry: "app/main/index.ts",
+      doc: "Electron's main process: the window and the app's lifecycle, the engine and the world service.",
+      files: 4,
+      lines: 420,
+      exports: 6,
+      dependsOn: ["packages/schema"],
+      dependents: ["app"],
+      tests: { files: 1, failing: 1, covered: 0.25 },
+      diagnostics: { errors: 1, warnings: 4, lint: 6 },
+      debtMarkers: 6,
+      unusedExports: 0.4,
+    }),
+  },
+];
+
+/**
+ * The entities the lab's landmarks stand for, in the order landmarks stand
+ * (a world with more landmarks than these repeats them): more of Gaia's own
+ * packages, from thriving to failing, so the trails between them and the
+ * buildings show each entity's health.
+ */
+export const LANDMARK_ENTITIES: readonly EntityFacts[] = [
+  entity({
+    path: "packages/terrain",
+    name: "@gaia/terrain",
+    form: "package",
+    doc: "Relief, the baked heightfield, water, walking and swimming, and where everything stands.",
+    files: 17,
+    lines: 4200,
+    exports: 70,
+    dependsOn: ["packages/schema", "packages/primitives", "packages/realize"],
+    dependents: ["app"],
+    tests: { files: 4, failing: 0, covered: 0.95 },
+  }),
+  entity({
+    path: "app",
+    name: "@gaia/app",
+    form: "app",
+    doc: "Electron main, the world service and the renderer: the lab.",
+    files: 40,
+    lines: 9800,
+    exports: 6,
+    dependsOn: ["packages/schema", "packages/world", "packages/realize", "packages/render", "packages/terrain", "engine"],
+    tests: { files: 4, failing: 3, covered: 0.25 },
+    diagnostics: { errors: 3, warnings: 14, lint: 30 },
+    debtMarkers: 16,
+    unusedExports: 0.2,
+  }),
+  entity({
+    path: "packages/primitives",
+    name: "@gaia/primitives",
+    form: "package",
+    doc: "Primitive declarations and geometry, palettes and the manifest.",
+    files: 28,
+    lines: 7600,
+    exports: 90,
+    dependsOn: ["packages/schema"],
+    dependents: ["packages/realize", "packages/terrain", "app"],
+    tests: { files: 1, failing: 0, covered: 0.9 },
+  }),
+  entity({
+    path: "packages/render",
+    name: "@gaia/render",
+    form: "package",
+    doc: "Three.js materials, light and shadow, and instanced copies of a component.",
+    files: 7,
+    lines: 1900,
+    exports: 24,
+    dependsOn: ["packages/schema", "packages/realize"],
+    dependents: ["app"],
+    tests: { files: 5, failing: 1, covered: 0.6 },
+    diagnostics: { errors: 0, warnings: 3, lint: 6 },
+    debtMarkers: 3,
+  }),
+  entity({
+    path: "packages/world",
+    name: "@gaia/world",
+    form: "package",
+    doc: "The question planner, answer rules, context gathering, vitality and the world document.",
+    files: 9,
+    lines: 980,
+    exports: 31,
+    dependsOn: ["packages/schema"],
+    dependents: ["app", "packages/realize"],
+    tests: { files: 4, failing: 0, covered: 0.9 },
+    diagnostics: { errors: 0, warnings: 0, lint: 2 },
+    debtMarkers: 1,
+  }),
+  entity({
+    path: "tools",
+    name: "tools",
+    form: "module",
+    doc: "The lab's build, phone serving and telemetry scripts.",
+    files: 6,
+    lines: 700,
+    exports: 4,
+    tests: { files: 2, failing: 2, covered: 0.2 },
+    diagnostics: { errors: 1, warnings: 6, lint: 8 },
+    debtMarkers: 6,
+    unusedExports: 0.5,
+  }),
+  entity({
+    path: "packages/kinds",
+    name: "@gaia/kinds",
+    form: "package",
+    doc: "The flora, structure, rock, wildflowers, landmark, link, biome and world kinds.",
+    files: 9,
+    lines: 260,
+    exports: 8,
+    dependsOn: ["packages/schema"],
+    dependents: ["app", "packages/world"],
+    tests: { files: 1, failing: 0, covered: 0.6 },
+  }),
 ];
 
 const file = (path: string, lines: number, doc: string, health: Partial<FileFacts> = {}): FileFacts => ({

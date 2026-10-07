@@ -4,11 +4,11 @@
 // crumbles from the top down. Each builds against the house's plan, on the
 // side the chimney leaves free, so the two never meet.
 
-import type { BuildContext, BuildingPlan, Built, Opening, Resolved, Vec3 } from "@gaia/schema";
-import type { towerParams, waterwheelParams } from "../structure.ts";
-import { type Channels, PartBuilder, type V3, add, addScaled, clamp, fbm3, lossThreshold, normalize } from "./kit.ts";
-import { UP, beam, box, log, quad, tri } from "./blocks.ts";
-import { chimneyEnd, on, ruinAt, ruinOf, still, wallRot, wallsOf } from "./plan.ts";
+import type { BuildContext, BuildingPlan, Built, Mass, Opening, Resolved, Vec3 } from "@gaia/schema";
+import type { towerParams, waterwheelParams } from "../../structure.ts";
+import { type Channels, PartBuilder, type V3, add, addScaled, clamp, fbm3, lossThreshold, normalize } from "../kit.ts";
+import { UP, beam, box, log, quad, tri } from "../blocks.ts";
+import { chimneyEnd, on, ruinAt, ruinOf, still, wallRot, wallTop, wallsOf } from "./frame.ts";
 import { ivy, rubble, wallSheet } from "./ruin.ts";
 
 /** Builds into another builder, every vertex and pivot moved by `off`: a feature's own frame placed beside the house. */
@@ -27,7 +27,7 @@ class Moved extends PartBuilder {
 }
 
 /** The side wall (+1 or -1 along x) a feature takes: away from a gable chimney. */
-const featureSide = (plan: BuildingPlan): 1 | -1 => (plan.ridge === "x" ? (chimneyEnd(plan) === 1 ? -1 : 1) : 1);
+const featureSide = (plan: BuildingPlan): 1 | -1 => (plan.masses[0]?.ridge === "x" ? (chimneyEnd(plan) === 1 ? -1 : 1) : 1);
 
 // ---------- waterwheel ----------
 
@@ -40,7 +40,7 @@ export function buildWaterwheel(p: Resolved<typeof waterwheelParams>, ctx: Build
   const W = 0.62 + 0.12 * R;
   const sink = 0.42;
   const cx = side * (plan.width / 2 + 0.38 + W / 2);
-  const cz = plan.ridge === "x" ? -0.15 : -plan.depth * 0.12;
+  const cz = plan.masses[0]?.ridge === "x" ? -0.15 : -plan.depth * 0.12;
   const cy = R - sink;
   const center: V3 = [cx, cy, cz];
   const rate = p.drive === "overshot" ? 0.11 : -0.09;
@@ -167,7 +167,7 @@ export function buildTower(p: Resolved<typeof towerParams>, ctx: BuildContext, p
   const r = ctx.rand.fork("tower");
   const side = featureSide(plan);
   const T = clamp(Math.min(plan.width, plan.depth) * 0.62, 3, 3.8);
-  const houseTop = plan.floor + plan.wallHeight + plan.rise;
+  const houseTop = Math.max(...plan.masses.map((m) => wallTop(plan, m) + m.rise));
   const H = clamp(houseTop + p.height + 2.5 * (ctx.facts.reach ?? 0.5), 8, 19);
   // At the back corner on the free side, joined to the house a little, clear of its windows.
   const off: V3 = [side * (plan.width / 2 + T / 2 - 0.35), 0, -plan.depth / 2 - T / 2 + 1.05];
@@ -179,13 +179,14 @@ export function buildTower(p: Resolved<typeof towerParams>, ctx: BuildContext, p
   const moss = new Moved("moss", "none", off);
   const storey = 2.7;
   const windows: Opening[] = [];
-  const tower0: BuildingPlan = { width: T, depth: T, floor: plan.floor, footing: 1.4, wallHeight: H - plan.floor, rise: 0, ridge: "x", settle: plan.settle, openings: [] };
+  const body: Mass = { x: 0, z: 0, width: T, depth: T, round: false, wallHeight: H - plan.floor, storeys: 1, rise: 0, ridge: "x", roof: "hip", fall: 1, ends: [true, true] };
+  const tower0: BuildingPlan = { width: T, depth: T, floor: plan.floor, footing: 1.4, masses: [body], settle: plan.settle, openings: [] };
   const faces = wallsOf(tower0);
   for (let y = plan.floor + 1.0; y + 1.3 < H - 0.5; y += storey) {
     for (const w of faces) {
       // Windows look away from the house, and every way once above its roof.
       const outward = w.n[0] * side > 0.5 || w.n[2] < -0.5 || y > houseTop - 0.5;
-      if (outward) windows.push({ kind: "window", position: on(w, w.length / 2, y), normal: w.n, width: 0.52, height: 1.15 });
+      if (outward) windows.push({ kind: "window", mass: 0, position: on(w, w.length / 2, y), normal: w.n, width: 0.52, height: 1.15 });
     }
   }
   const tower: BuildingPlan = { ...tower0, openings: windows };
@@ -198,7 +199,7 @@ export function buildTower(p: Resolved<typeof towerParams>, ctx: BuildContext, p
     wallSheet(render, tower, w, -tower.footing, 0.01, 0.7, (q) => {
       const n = fbm3(q[0] * 1.4, q[1] * 1.4, q[2] * 1.4, seed, 2);
       const up = clamp(q[1] / H, 0, 1);
-      return { shade: 0.56 + 0.1 * n, c: still(pivot, 0.55 + 0.2 * up, { rot: clamp(wallRot(tower, ruin, q) * 0.7 + 0.35 * up * up, 0, 1), tint: 0.02 * n }) };
+      return { shade: 0.56 + 0.1 * n, c: still(pivot, 0.55 + 0.2 * up, { rot: clamp(wallRot(tower, body, ruin, q) * 0.7 + 0.35 * up * up, 0, 1), tint: 0.02 * n }) };
     });
   }
   // Quoins up every corner, and a string course at every storey; the top courses fall first.

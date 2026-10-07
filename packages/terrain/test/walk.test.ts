@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { Library, rand } from "@gaia/schema";
-import { BIOME_PRIMITIVES, RELIEF_PRIMITIVES, standingStones } from "@gaia/primitives";
+import { type BuildingPlan, Library, rand } from "@gaia/schema";
+import { BIOME_PRIMITIVES, PRIMITIVES, RELIEF_PRIMITIVES, standingStones } from "@gaia/primitives";
+import { structure } from "@gaia/kinds";
+import { STRUCTURE_PRESETS, buildSlots } from "@gaia/realize";
 import {
   BODY_RADIUS,
   EYE_HEIGHT,
@@ -20,6 +22,8 @@ import {
   sampleWorld,
   solidsOf,
   stanceAt,
+  siteToWorld,
+  wallsShape,
   wadeSpeed,
   walkStep,
   walkToward,
@@ -220,7 +224,7 @@ describe("solids", () => {
 
 describe("solid pieces of a built thing", () => {
   const ring = (lintels: boolean, centre: "nothing" | "a tall king stone") =>
-    standingStones.build({ count: 9, height: 5.2, lintels, centre, facets: 0.55 }, { rand: rand(5), facts: {} }, null);
+    standingStones.build({ arrangement: "ring", count: 9, height: 5.2, lintels, centre, facets: 0.55 }, { rand: rand(5), facts: {} }, null);
   const at = { x: dry.x - 12, y: heightAt(t.lattice, dry.x - 12, dry.z - 32), z: dry.z - 32, yaw: 0.4 };
 
   it("stops a walker at each standing stone, never at a lintel overhead, and leaves a ring's open middle free", () => {
@@ -241,6 +245,30 @@ describe("solid pieces of a built thing", () => {
     expect(state).toBe("arrived");
     // A king stone at the middle blocks it.
     expect(clearanceAt(solidsOf(piecesShapes(ring(true, "a tall king stone").parts, at)), at.x, at.z)).toBeLessThan(0);
+  });
+});
+
+describe("a building's walls", () => {
+  it("lets a walker into the open corner of an L-shaped building, and never through a wall", () => {
+    const preset = STRUCTURE_PRESETS.find((p) => p.blueprint.slots.footprint?.params?.massing === "an L");
+    expect(preset).toBeDefined();
+    const plan = buildSlots(preset!.blueprint, structure, new Library(PRIMITIVES), { seed: 1, facts: { size: 1, floors: 1, reach: 0 } }).get("footprint")?.output as BuildingPlan;
+    const site = { x: dry.x - 40, z: dry.z, yaw: 0.3, level: 0 };
+    const solids = solidsOf(wallsShape(plan, site));
+    // Every mass is solid at its middle.
+    for (const m of plan.masses) {
+      const [x, z] = siteToWorld(site, m.x, m.z);
+      expect(clearanceAt(solids, x, z)).toBeLessThan(0);
+    }
+    // Some corner of the whole footprint lies outside every mass: the L's open corner, where a body fits.
+    const inset = BODY_RADIUS + 0.3;
+    const corners = [-1, 1].flatMap((sx) => [-1, 1].map((sz) => [sx * (plan.width / 2 - inset), sz * (plan.depth / 2 - inset)] as const));
+    const open = corners.filter(([lx, lz]) => plan.masses.every((m) => Math.abs(lx - m.x) > m.width / 2 || Math.abs(lz - m.z) > m.depth / 2));
+    expect(open.length).toBeGreaterThan(0);
+    for (const [lx, lz] of open) {
+      const [x, z] = siteToWorld(site, lx, lz);
+      expect(clearanceAt(solids, x, z)).toBeGreaterThan(BODY_RADIUS);
+    }
   });
 });
 

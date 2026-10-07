@@ -17,7 +17,7 @@ import { LIGHT_GLSL, type SceneLight, hexToVec3 } from "@gaia/render";
 import { SHORE_CAP, TRAILS, type Terrain, type WildsRing, landRadius, wildsRing } from "@gaia/terrain";
 import { SWARD_GLSL } from "../world/environment.ts";
 import { REGIONS_GLSL, type RegionCovers, TUFT_GLSL } from "./regions.ts";
-import { TRAIL_GLSL, trailWear } from "./trails.ts";
+import { TRAIL_GLSL, trailUniforms } from "./trails.ts";
 
 /** Height, water level, distance to the water and to the nearest trail's edge per lattice sample, for shaders that sample the ground. */
 export interface GroundTexture {
@@ -275,14 +275,16 @@ void main() {
 #else
   float edge = vTrail;
 #endif
-  if (edge < 2.0 && uTrailWear > 0.0) {
+  // Each trail's wear follows the vitality of the two entities it joins.
+  float wear = edge < 2.0 ? trailWearAt(vWorld.xz) : 0.0;
+  if (wear > 0.0) {
     float ragged = (fine - 0.5) * 0.8 + (noise(vWorld.xz * 2.3) - 0.5) * 0.45;
-    float tread = (1.0 - smoothstep(-0.4, 0.35, edge + ragged * (0.6 + 0.5 * (1.0 - uTrailWear)))) * uTrailWear;
+    float tread = (1.0 - smoothstep(-0.4, 0.35, edge + ragged * (0.6 + 0.5 * (1.0 - wear)))) * wear;
     vec3 earth = mix(uTrailEarth, cover.soil, 0.22) * (0.88 + 0.22 * fine);
     earth *= 1.0 - 0.12 * (1.0 - smoothstep(-0.9, -0.25, edge));
     earth = mix(earth, earth * 1.22 + 0.03, step(0.8, noise(vWorld.xz * 7.0)) * 0.6);
     albedo = mix(albedo, earth, tread);
-    float margin = (1.0 - smoothstep(0.0, 1.6, edge + ragged)) * (1.0 - tread) * 0.4 * uTrailWear;
+    float margin = (1.0 - smoothstep(0.0, 1.6, edge + ragged)) * (1.0 - tread) * 0.4 * wear;
     albedo = mix(albedo, mix(albedo, uDry, 0.55), margin);
   }
   albedo = mix(albedo, uBed, smoothstep(0.1, 0.5, vWater));
@@ -388,7 +390,7 @@ export function createGround(t: Terrain, light: SceneLight, covers: RegionCovers
     ...light,
     ...covers.uniforms,
     ...tex.uniforms,
-    uTrailWear: trailWear,
+    ...trailUniforms,
     uTrailEarth: { value: hexToVec3(0x9c8462) },
     uDry: { value: hexToVec3(0xbba878) },
     uBare: { value: hexToVec3(0x9a7d58) },

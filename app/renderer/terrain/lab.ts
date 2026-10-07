@@ -55,6 +55,7 @@ import {
   sampleWorld,
   sightlines,
   siteToWorld,
+  trailVitalityAt,
   solidsOf,
   stanceAt,
   WALK_TO,
@@ -74,9 +75,9 @@ import { createRegionCovers } from "./regions.ts";
 import { createWater } from "./water.ts";
 import { createUnderstory } from "./understory.ts";
 import { createClearings } from "./clearings.ts";
-import { type Ways, createWays, trailWear } from "./trails.ts";
+import { type Ways, createWays, setTrailEnds, setTrailPlaces } from "./trails.ts";
 import { createCard } from "./card.ts";
-import { type Represented, SAMPLE_ENTITIES, SAMPLE_FILES, representEntity, representFile } from "./samples.ts";
+import { LANDMARK_ENTITIES, type Represented, SAMPLE_ENTITIES, SAMPLE_FILES, representEntity, representFile } from "./samples.ts";
 import { type CodeLab, codeWorld } from "./code-world.ts";
 import { createSettlement } from "./settlement.ts";
 import { createSigns } from "./signs.ts";
@@ -239,6 +240,8 @@ export function createTerrainLab(root: HTMLElement): Lab {
     let base = 1;
     for (const part of built.parts) {
       for (let k = 0; k < part.positions.length; k += 3) {
+        // Only what stands counts: fallen stone that grows in at its foot is walked over.
+        if ((part.channels.grow?.[k / 3] ?? 0) > 0) continue;
         if ((part.positions[k + 1] as number) < 1) base = Math.max(base, Math.hypot(part.positions[k] as number, part.positions[k + 2] as number));
       }
     }
@@ -266,6 +269,35 @@ export function createTerrainLab(root: HTMLElement): Lab {
   /** The world whose light, sky and air the lab shows: the codebase's own once it is shown. */
   let skyWorld = SKY_WORLD;
   let ways: Settled = { sites: [], trails: [] };
+  // Every entity's vitality by its name, live: buildings and landmarks stand
+  // for entities, and each trail's wear follows the two it joins.
+  let landmarkEntities: Represented[] = [];
+  const entityVitality = new Map<string, number>();
+  /** The entity each trail end stands for, by the place id the trail names: a building's name or lot, or a standing landmark's place. */
+  const entityOfPlace = new Map<string, string>();
+  /** Learns the entities of the world now shown: the codebase's own, or the samples. */
+  function knowEntities(): void {
+    landmarkEntities = (code?.landmarks.map((l) => l.facts) ?? LANDMARK_ENTITIES).map(representEntity);
+    entityVitality.clear();
+    entityOfPlace.clear();
+    for (const r of [...settlement.buildings.map((b) => b.represented), ...landmarkEntities]) entityVitality.set(r.name, r.report.vitality);
+    settlement.buildings.forEach((b, i) => {
+      entityOfPlace.set(b.represented.name, b.represented.name);
+      const lot = code?.stand.lots[i];
+      if (lot !== undefined) entityOfPlace.set(lot.id, b.represented.name);
+    });
+  }
+  knowEntities();
+  /**
+   * The entity standing landmark `i` stands for: in the codebase's world the
+   * one its place names; in the sample world the samples, repeated when a
+   * world has more landmarks than entities.
+   */
+  const landmarkEntity = (i: number): Represented => {
+    const id = ways.sites[i]?.id;
+    return (code !== null ? landmarkEntities.find((e) => e.id === id) : undefined) ?? (landmarkEntities[i % landmarkEntities.length] as Represented);
+  };
+  const vitalityOfPlace = (place: string): number => entityVitality.get(entityOfPlace.get(place) ?? "") ?? 1;
   const worldLib = new Library(WORLD_PRIMITIVES);
   const lantern = createLantern(light);
 
@@ -316,9 +348,31 @@ export function createTerrainLab(root: HTMLElement): Lab {
       view.object.rotation.y = Math.atan2((fx ?? 0) - s.site.x, (fz ?? 0) - s.site.z);
       return view;
     });
-    trailWear.value = ways.trails.length === 0 ? 0 : ways.trails.reduce((n, t) => n + t.style.wear, 0) / ways.trails.length;
+    ways.sites.forEach((s, i) => entityOfPlace.set(s.id, landmarkEntity(i).name));
     built?.dispose();
     built = createWays(scene, light, landmarkLib, terrain, ways.trails);
+    showVitality();
+  }
+
+  /** Shows every entity's vitality now on its landmark, on its trails' wear and on what is built along them. Nothing rebuilds. */
+  function showVitality(): void {
+    landmarkViews.forEach((view, i) => view.setVitality(entityVitality.get(landmarkEntity(i).name) ?? 1));
+    setTrailEnds(ways.trails, vitalityOfPlace);
+    built?.setVitality((i, along) => {
+      const t = ways.trails[i];
+      return t === undefined ? 1 : trailVitalityAt(vitalityOfPlace(t.from), vitalityOfPlace(t.to), along);
+    });
+  }
+
+  /** Sets one entity's vitality, by its name, wherever it shows: its building and sign, its landmark, and every trail it joins. */
+  function setEntityVitality(name: string, v: number): void {
+    entityVitality.set(name, v);
+    settlement.buildings.forEach((b, i) => {
+      if (b.represented.name !== name) return;
+      b.view.setVitality(v);
+      signs.setVitality(i, v);
+    });
+    showVitality();
   }
   placeWays();
   for (const v of settlement.views()) scene.add(v.object);
@@ -458,7 +512,7 @@ export function createTerrainLab(root: HTMLElement): Lab {
     const buildings = settlement.buildings.flatMap((b): SolidShape[] => {
       const e = b.beside;
       const beside = e === null ? [] : [{ points: [[e.x0, e.z0], [e.x1, e.z0], [e.x1, e.z1], [e.x0, e.z1]].flatMap(([lx, lz]) => siteToWorld(b.site, lx as number, lz as number)) }];
-      return [wallsShape(b.plan, b.site), ...beside];
+      return [...wallsShape(b.plan, b.site), ...beside];
     });
     solids = solidsOf([...trunks, ...components, ...standing, ...buildings]);
     warm();
@@ -886,6 +940,7 @@ export function createTerrainLab(root: HTMLElement): Lab {
     (grass.mesh.material as THREE.ShaderMaterial).uniforms.uLand!.value = landRadius(terrain);
     settlement.seat(stood.sites);
     ways = { sites: stood.landmarks, trails: stood.trails };
+    setTrailPlaces(stood.trailPlaces, baked.lattice.n);
     placeWays();
     // In the codebase's world a landmark stands for an entity and takes its vitality.
     landmarkViews.forEach((v, i) => v.setVitality(code === null ? 1 : (code.world.things.filter((t) => t.as === "landmark")[i]?.vitality ?? 1)));
@@ -1101,6 +1156,7 @@ export function createTerrainLab(root: HTMLElement): Lab {
     for (const v of settlement.views()) scene.remove(v.object);
     settlement = createSettlement(light, code?.buildings ?? SAMPLE_ENTITIES);
     for (const v of settlement.views()) scene.add(v.object);
+    knowEntities();
     skyWorld = code?.sky ?? SKY_WORLD;
     hour = Number.NaN;
     const next = code?.spec ?? sampleWorld(SCALE);
@@ -1168,12 +1224,41 @@ export function createTerrainLab(root: HTMLElement): Lab {
       /** Each standing landmark: its name, site, height and triangles. */
       landmarks: () =>
         ways.sites.map((s, i) => ({ name: landmarks[s.landmark]?.name, ...s.site, height: landmarkViews[i]?.height, triangles: landmarkViews[i]?.triangles })),
-      /** Sets every landmark's vitality, 0 to 1. */
-      landmarkVitality: (v: number) => landmarkViews.forEach((view) => view.setVitality(v)),
+      /** Sets every landmark's entity's vitality, 0 to 1, and with it the trails they join. */
+      landmarkVitality: (v: number) => {
+        landmarkEntities.forEach((e) => setEntityVitality(e.name, v));
+        for (const view of landmarkPool.values()) view.setVitality(v);
+      },
+      /** Every entity, what stands for it, and its vitality now. */
+      entities: () => [
+        ...settlement.buildings.map((b) => ({ name: b.represented.name, standsAs: b.kindName, vitality: entityVitality.get(b.represented.name) })),
+        ...ways.sites.map((s, i) => ({ name: landmarkEntity(i).name, standsAs: landmarks[s.landmark]?.name, place: s.id, x: s.site.x, z: s.site.z, vitality: entityVitality.get(landmarkEntity(i).name) })),
+      ],
+      /** Sets one entity's vitality by its name: its building or landmark, and the wear of every trail it joins, live. */
+      entityVitality: (name: string, v: number) => setEntityVitality(name, v),
+      /** Stands landmark preset `i` on landmark site `at` in place of what stands there, so every form can be seen; returns where. */
+      showLandmark: (i: number, at = 0) => {
+        const s = ways.sites[at];
+        const lm = landmarks[i];
+        if (s === undefined || lm === undefined) return null;
+        for (const [key, v] of landmarkPool) if (key.startsWith("show#") || v === landmarkViews[at]) v.object.visible = false;
+        let view = landmarkPool.get(`show#${i}`);
+        if (view === undefined) {
+          view = createPlant({ ...lm.built, parts: mergeParts(lm.built.parts) }, light);
+          landmarkPool.set(`show#${i}`, view);
+          scene.add(view.object);
+        }
+        view.object.visible = true;
+        view.object.position.set(s.site.x, s.site.y - 0.05, s.site.z);
+        view.object.rotation.y = 0;
+        return { name: lm.name, x: s.site.x, y: s.site.y, z: s.site.z, base: lm.base, height: view.height, triangles: view.triangles };
+      },
       /** Each trail: its ends, length, crossings and a point every 10 m. */
       trails: () =>
         ways.trails.map((t) => ({
           id: t.id,
+          from: { place: t.from, entity: entityOfPlace.get(t.from), vitality: vitalityOfPlace(t.from) },
+          to: { place: t.to, entity: entityOfPlace.get(t.to), vitality: vitalityOfPlace(t.to) },
           length: t.length,
           width: t.style.width,
           crossings: t.crossings.map((c) => ({ x: Math.round(c.x), z: Math.round(c.z), span: +c.span.toFixed(1) })),
@@ -1184,8 +1269,8 @@ export function createTerrainLab(root: HTMLElement): Lab {
         settlement.buildings.map((b) => ({ name: b.represented.name, building: b.kindName, ...b.site, width: b.plan.width, depth: b.plan.depth, triangles: b.view.triangles, vitality: b.view.vitality, sign: settlement.signOf(b), stand: settlement.standOf(b) })),
       /** Sets building `i`'s vitality, and its sign's. */
       vitality: (i: number, v: number) => {
-        settlement.buildings[i]?.view.setVitality(v);
-        signs.setVitality(i, v);
+        const b = settlement.buildings[i];
+        if (b !== undefined) setEntityVitality(b.represented.name, v);
       },
       /** Walks up to subject `i` (buildings first, then trees) and shows its card on arrival. */
       inspect: (i: number) => {

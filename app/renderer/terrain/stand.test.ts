@@ -34,6 +34,7 @@ describe("standing a world's things on a bake", () => {
     const a = standWorld(here, request);
     const b = standWorld(there, request);
     expect(bytes(a.ground).equals(bytes(b.ground))).toBe(true);
+    expect(bytes(a.trailPlaces).equals(bytes(b.trailPlaces))).toBe(true);
     expect(bytes(here.lattice.heights).equals(bytes(there.lattice.heights))).toBe(true);
     expect(b.sites).toEqual(a.sites);
     expect(b.trails).toEqual(a.trails);
