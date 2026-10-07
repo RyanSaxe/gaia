@@ -584,7 +584,9 @@ export function createTerrainLab(root: HTMLElement): Lab {
   const shadowCenter = new THREE.Vector3();
   const views = [...planted.map((p) => p.view), cottage];
   const lanternEye = new THREE.Vector3();
-  // The water mirrors the coarse ground and no grass: its reflection is soft, so detail there is wasted.
+  // The water mirrors the sky, the coarse ground, trees and the cottage, and
+  // never grass or the understory: its reflection is soft, so fine detail
+  // there is wasted, and the understory keeps back from the water anyway.
   const mirrorHide = [grass.mesh, ground.fine];
   const mirrorShow = [ground.coarse];
   let frameCalls = 0;
@@ -609,7 +611,7 @@ export function createTerrainLab(root: HTMLElement): Lab {
     refreshSight(now);
     shadow.render(renderer, scene, [...views, ...understory.casters()], [sky.mesh, ground.wilds, ground.fine, ground.coarse, grass.mesh, water.group, marker.mesh, ...understory.quiet()]);
     frameCalls = renderer.info.render.calls;
-    frameCalls += water.mirror(renderer, scene, camera, mirrorHide, mirrorShow, dt);
+    frameCalls += water.mirror(renderer, scene, camera, [...mirrorHide, ...understory.quiet(), ...understory.casters().map((c) => c.object)], mirrorShow, dt);
     renderer.render(scene, camera);
     frameCalls += renderer.info.render.calls;
   }

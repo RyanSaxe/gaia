@@ -322,6 +322,11 @@ export function createPlant(plant: Realized, light: SceneLight): PlantView {
   for (const g of geometries) if (g.boundingBox !== null) box.union(g.boundingBox);
   const height = Math.max(1, box.max.y);
   const radius = Math.max(Math.abs(box.min.x), box.max.x, Math.abs(box.min.z), box.max.z, 1);
+  // Wind and decline move vertices a little past the built mesh. A padded
+  // sphere lets every pass cull the plant without ever clipping a swaying tip.
+  const bounds = box.getBoundingSphere(new THREE.Sphere());
+  bounds.radius += 2 + 0.15 * height;
+  for (const g of geometries) g.boundingSphere = bounds.clone();
 
   const shared = {
     uVitality: { value: 1 },
@@ -370,7 +375,6 @@ export function createPlant(plant: Realized, light: SceneLight): PlantView {
       side: THREE.DoubleSide,
     });
     const mesh = new THREE.Mesh(geometries[i], color);
-    mesh.frustumCulled = false;
     mesh.userData.part = part.swatch;
     object.add(mesh);
     materials.push(color, depth);
