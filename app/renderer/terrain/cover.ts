@@ -6,6 +6,7 @@ import * as THREE from "three";
 import { CLEARINGS_GLSL, type Clearing, LIGHT_GLSL, type SceneLight, createClearings, hexToVec3 } from "@gaia/render";
 import { GROUND_SAMPLE_GLSL, type GroundTexture } from "./ground.ts";
 import { REGIONS_GLSL, type RegionCovers, TUFT_GLSL } from "./regions.ts";
+import { CLEARING_GLSL, type Clearings } from "./clearings.ts";
 
 const GRASS_VERT = /* glsl */ `
 ${CLEARINGS_GLSL}
@@ -16,6 +17,7 @@ uniform float uLand;
 ${GROUND_SAMPLE_GLSL}
 ${REGIONS_GLSL}
 ${TUFT_GLSL}
+${CLEARING_GLSL}
 attribute vec4 aBlade; // x, z as a share of the blade's patch, rotation, height
 attribute vec4 aSeed; // tint, flower, keep, cover pick
 attribute vec2 aThin; // how far out the blade still grows, as a share of the thinning band; its reach
@@ -93,6 +95,8 @@ void main() {
   float flower = step(aSeed.y, flowers);
   // Tufts dome: their middles stand a little taller than their edges.
   float h = aBlade.w * shape.x * keep * mix(1.0, 0.72 + 0.28 * tuft, shape.w) * (1.0 + flower * 0.25) * clearing(xz);
+  // Nothing grows under a stone or a bush.
+  h *= step(clearingAt(xz), 0.5);
 
   float side = position.x;
   // A flower's rows crowd toward its top, so its head is a small round dab on a long stem.
@@ -208,7 +212,7 @@ const TIERS = [
  * grows where and in what form. Blades keep their full height at every
  * distance: the far ones thin out whole, each at its own seeded distance.
  */
-export function createGrass(light: SceneLight, ground: GroundTexture, covers: RegionCovers, land: number, count = 150000, radius = 60): Grass {
+export function createGrass(light: SceneLight, ground: GroundTexture, covers: RegionCovers, land: number, under: Clearings, count = 150000, radius = 60): Grass {
   // One blade, one unit wide and tall: five rows and a soft tip. The vertex
   // shader gives it its cover's outline, lean and arc.
   const rows = [0, 0.26, 0.5, 0.71, 0.87];
@@ -269,6 +273,7 @@ export function createGrass(light: SceneLight, ground: GroundTexture, covers: Re
       ...covers.uniforms,
       uCenter: center,
       uLand: { value: land },
+      ...under.uniforms,
       uDry: { value: hexToVec3(0xc4b47e) },
     },
     side: THREE.DoubleSide,

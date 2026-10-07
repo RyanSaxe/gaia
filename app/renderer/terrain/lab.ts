@@ -6,7 +6,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { type BuildingPlan, type GroundSpec, Library, type SeasonSpec, blueprintOf, seedOf } from "@gaia/schema";
-import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, NO_SHIFT, RELIEF_PRIMITIVES, STRUCTURE_PRIMITIVES, WORLD_PRIMITIVES, hex, mixLab } from "@gaia/primitives";
+import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, NO_SHIFT, RELIEF_PRIMITIVES, ROCK_PRIMITIVES, STRUCTURE_PRIMITIVES, WILDFLOWER_PRIMITIVES, WORLD_PRIMITIVES, hex, mixLab } from "@gaia/primitives";
 import { biome, flora, structure, world as worldKind } from "@gaia/kinds";
 import { defaultParams, validate } from "@gaia/world";
 import { FLORA_PRESETS, STRUCTURE_PRESETS, WORLD_PRESETS, mergeParts, realize, realizeRegion, realizeSky } from "@gaia/realize";
@@ -43,6 +43,8 @@ import { createGround, createGroundTexture } from "./ground.ts";
 import { createWalkMarker } from "./marker.ts";
 import { createRegionCovers } from "./regions.ts";
 import { createWater } from "./water.ts";
+import { createUnderstory } from "./understory.ts";
+import { createClearings } from "./clearings.ts";
 
 const TEMPLATE = /* html */ `
 <main class="stage">
@@ -151,7 +153,8 @@ export function createTerrainLab(root: HTMLElement): Lab {
   const sky = createSky(light);
   const groundTex = createGroundTexture(terrain);
   const ground = createGround(terrain, light, covers);
-  const grass = createGrass(light, groundTex, covers, landRadius(terrain));
+  const clearings = createClearings(terrain);
+  const grass = createGrass(light, groundTex, covers, landRadius(terrain), clearings);
   const water = createWater(terrain, light, groundTex);
   const marker = createWalkMarker();
   scene.add(sky.mesh, ground.wilds, ground.fine, ground.coarse, grass.mesh, water.group, marker.mesh);
@@ -194,6 +197,9 @@ export function createTerrainLab(root: HTMLElement): Lab {
     return { view, base };
   });
 
+  // Rocks, bushes and wildflowers, scattered around the trees.
+  const understory = createUnderstory(scene, light, new Library([...FLORA_PRIMITIVES, ...ROCK_PRIMITIVES, ...WILDFLOWER_PRIMITIVES]), clearings);
+
   function plant(): void {
     const spots = scatterPlants(terrain, planted.length, 9);
     planted.forEach((p, i) => {
@@ -202,6 +208,13 @@ export function createTerrainLab(root: HTMLElement): Lab {
       if (s === undefined) return;
       p.view.object.position.set(s.x, groundedBase(terrain.lattice, s.x, s.z, p.base), s.z);
     });
+    const trees = planted.flatMap((p) => (p.view.object.visible ? [{ x: p.view.object.position.x, z: p.view.object.position.z, radius: 1.6 }] : []));
+    // Nothing of the understory stands in the cottage or on its walk: discs a meter apart along each cleared capsule.
+    const cottageGround = clearingsOf(cottagePlan, site).flatMap((c) => {
+      const steps = Math.max(1, Math.ceil(Math.hypot(c.bx - c.ax, c.bz - c.az)));
+      return Array.from({ length: steps + 1 }, (_, k) => ({ x: c.ax + ((c.bx - c.ax) * k) / steps, z: c.az + ((c.bz - c.az) * k) / steps, radius: c.radius + 0.5 }));
+    });
+    understory.place(terrain, world, [...trees, ...cottageGround]);
   }
   plant();
 
@@ -594,7 +607,7 @@ export function createTerrainLab(root: HTMLElement): Lab {
     }
     marker.frame(dt, camera.position, light.uNightness.value);
     refreshSight(now);
-    shadow.render(renderer, scene, views, [sky.mesh, ground.wilds, ground.fine, ground.coarse, grass.mesh, water.group, marker.mesh]);
+    shadow.render(renderer, scene, [...views, ...understory.casters()], [sky.mesh, ground.wilds, ground.fine, ground.coarse, grass.mesh, water.group, marker.mesh, ...understory.quiet()]);
     frameCalls = renderer.info.render.calls;
     frameCalls += water.mirror(renderer, scene, camera, mirrorHide, mirrorShow, dt);
     renderer.render(scene, camera);
@@ -660,6 +673,28 @@ export function createTerrainLab(root: HTMLElement): Lab {
       /** Draw calls in the whole last frame (shadow, mirror and view), and the water's mirror. */
       water: () => ({ ...water.stats(), frameCalls }),
       waterVitality: (v: number) => water.vitality(v),
+      understory: () => understory.stats(),
+      placements: () => understory.placements(),
+      showUnderstory: (on: boolean) => understory.show(on),
+      /** Draw calls in one whole frame: the shadow pass and the view together. */
+      calls: () => {
+        renderer.info.autoReset = false;
+        renderer.info.reset();
+        frame(0, performance.now(), hour);
+        const calls = renderer.info.render.calls;
+        renderer.info.autoReset = true;
+        return calls;
+      },
+      /** Draws `count` frames back to back and waits for the GPU: milliseconds per frame, shadows included. */
+      bench: (count: number) => {
+        const gl = renderer.getContext();
+        const pixel = new Uint8Array(4);
+        gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
+        const t0 = performance.now();
+        for (let k = 0; k < count; k++) frame(1 / 60, t0, hour);
+        gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
+        return (performance.now() - t0) / count;
+      },
       /** Walks straight ahead for `seconds` at walking pace, as if W were held, and reports where the walk ended. */
       stride: (seconds: number) => {
         for (let k = 0; k < Math.round(seconds * 60); k++) {

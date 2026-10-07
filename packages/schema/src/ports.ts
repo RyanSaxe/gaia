@@ -21,6 +21,8 @@ export interface VitalityChannels {
   readonly glow: Float32Array;
   /** The point each vertex collapses toward and sags around, xyz per vertex. */
   readonly pivot: Float32Array;
+  /** How far the vertex folds toward its pivot at night, 0 to 1. Flowers close; most pieces never do. */
+  readonly close: Float32Array;
 }
 
 export interface Part {
@@ -297,6 +299,12 @@ export interface Roles {
   Roof: { input: BuildingPlan; output: Built };
   Openings: { input: BuildingPlan; output: Built };
   Dressing: { input: BuildingPlan; output: Built };
+  /** A rock's body: a boulder, a stone, a cluster or an outcrop. */
+  Rock: { input: null; output: Built };
+  /** What grows over another piece's upward faces, such as moss on stone. */
+  Overgrowth: { input: Built; output: Built };
+  /** A drift of small plants at ground level, such as wildflowers. */
+  Drift: { input: null; output: Built };
 }
 
 /** A door or window in a building's wall. */

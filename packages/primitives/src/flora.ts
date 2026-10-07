@@ -4,6 +4,7 @@
 import { primitive, t } from "@gaia/schema";
 import { buildBark, buildBlossoms, buildLeafClumps, buildLeafStrands, buildNeedles } from "./geometry/foliage.ts";
 import { growBranching, growSpire } from "./geometry/skeleton.ts";
+import { buildLeafMound, growThicket } from "./geometry/shrub.ts";
 import { PALETTE_FAMILIES, paletteOf } from "./palettes.ts";
 
 export const branchingParams = {
@@ -173,4 +174,39 @@ export const palette = primitive({
   build: (p) => paletteOf(p.family, p.contrast),
 });
 
-export const FLORA_PRIMITIVES = [branching, spire, bark, leafClumps, leafStrands, needles, blossoms, sway, palette];
+export const thicketParams = {
+  habit: t.choice("The shrub's overall form", {
+    mound: "A rounded mound, a little wider than tall",
+    spreading: "Low and wide, spilling outward",
+    vase: "Upright stems flaring out like a vase",
+  }),
+  stems: t.scale("How many stems rise from the root", { "a few stems": 3, "several stems": 5, "a dense tangle": 8 }),
+  stature: t.scale("How tall the shrub stands", { "knee-high": 0.6, "waist-high": 1.1, "head-high": 1.8 }),
+};
+
+export const thicket = primitive({
+  id: "thicket@1",
+  role: "Skeleton",
+  doc: "A shrub's frame: many stems from one root crown, spreading into a low dome.",
+  params: thicketParams,
+  build: (p, ctx) => growThicket(p, ctx),
+});
+
+export const leafMoundParams = {
+  leaves: t.choice("What the shrub's leaves are like", {
+    rounded: "Soft, rounded clumps of small leaves",
+    glossy: "Dense glossy clumps, like box or holly",
+    feathery: "Loose, feathery sprays",
+  }),
+  fullness: t.scale("How much of the frame the leaves hide", { airy: 0.45, full: 0.75, "dense and clipped": 1 }),
+};
+
+export const leafMound = primitive({
+  id: "leaf-mound@1",
+  role: "Foliage",
+  doc: "Leaf clumps that hug a shrub's frame down to the ground, so it reads as one soft mound.",
+  params: leafMoundParams,
+  build: (p, ctx, skeleton) => buildLeafMound(p, ctx, skeleton),
+});
+
+export const FLORA_PRIMITIVES = [branching, spire, bark, leafClumps, leafStrands, needles, blossoms, sway, palette, thicket, leafMound];

@@ -34,6 +34,9 @@ const ROLE_IO: Readonly<Record<Role, { input: string | null; output: string }>> 
   Roof: { input: "BuildingPlan", output: "Built" },
   Openings: { input: "BuildingPlan", output: "Built" },
   Dressing: { input: "BuildingPlan", output: "Built" },
+  Rock: { input: null, output: "Built" },
+  Overgrowth: { input: "Built", output: "Built" },
+  Drift: { input: null, output: "Built" },
 };
 
 /** Anchors come from a Skeleton's tips or a Built's anchors. */

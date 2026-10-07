@@ -27,11 +27,13 @@ Color works at three levels:
    each other across region edges (see Terrain).
 3. **Each component** has one palette family. Components never blend.
 
-There are eight palette families in `packages/primitives/src/palettes.ts`
+There are nine palette families in `packages/primitives/src/palettes.ts`
 (spring-meadow, deep-forest, teal-gold, autumn-ember, cherry-blossom,
-silver-birch, desert-sage, lantern-dusk). Each gives bark, leaf and bloom
-swatches, and a building's wall, timber, roof, masonry, trim, window-glass
-and smoke swatches, so a family's cottages belong with its plants. Every family declines toward the same dry grey-brown, so failing
+silver-birch, desert-sage, lantern-dusk, bluebell-wood). Each gives bark, leaf
+and bloom swatches; for the ground, a stone, the moss that grows on it, and a
+wildflower's stem and eye; and a building's wall, timber, roof, masonry, trim,
+window-glass and smoke swatches, so a family's cottages belong with its
+plants. Every family declines toward the same dry grey-brown, so failing
 code reads the same everywhere. A season shifts only healthy colors, keeps
 each family's identity, and pushes each shifted color a fixed distance away
 from its decline color. The `tint` channel varies hue within one swatch across
@@ -59,6 +61,8 @@ instance within it:
 
 | Kind | Height |
 | --- | --- |
+| Wildflowers | 0.3 to 1 m, heads just above the grass |
+| Rock | 0.5 to 2.2 m; a ledge runs up to 11 m |
 | Shrub | up to 2 m |
 | Small tree | 3 to 6 m |
 | Tall tree | 8 to 16 m |
@@ -177,6 +181,24 @@ Jev decides which dependencies become routes; when it wants more than the
 budget allows, the most probable win. The world must never be dominated by
 paths.
 
+## Understory
+
+Rocks lie in groups, bushes in thickets, and wildflowers in drifts of one
+species. `scatterComponents` in `@gaia/terrain` places them: a seeded number
+of groups per hectare of each region, weighted by its landform (rocks crowd
+terraces and basins, flowers favor open meadow), with no two footprints
+overlapping, nothing on ground steeper than its rule allows, and nothing
+within a meter or two of water. A solid thing sits below the lowest ground
+under its footprint, so on a slope its uphill side is buried and its
+downhill side still touches the soil; a drift lies on the ground's plane, so
+its stems stay upright. Rocks are half sunk by construction. Moss caps their
+upward faces and recedes, edges first, drying to lichen grey as vitality
+falls; the stone bleaches, and a boulder's two halves slump apart along a
+fissure, so it cracks. No blade of grass grows under a stone or through a bush's heart: a
+mask of each one's outline at the ground clears it, so grass grows up
+against a rock and never pierces it. Each blueprint draws as one instanced
+mesh per part, and drifts cast no shadow.
+
 ## Clouds
 
 Fair-weather puffs, towering cumulus, cirrus streaks and low drifting banks.
@@ -222,4 +244,4 @@ grass and water agree:
 - **The world's own glow** (the vitality `glow` channel, fireflies, living
   water) reads by contrast in the dark, a little stronger than by day and
   still below what draws the eye on its own. Wildflowers fade into their
-  blades at night.
+  blades at night, and drifts fold their open faces shut.

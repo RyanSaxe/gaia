@@ -6,10 +6,10 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { type AnyKind, type Blueprint, Library, blueprintOf, seedOf } from "@gaia/schema";
-import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, RELIEF_PRIMITIVES, STRUCTURE_PRIMITIVES, WORLD_PRIMITIVES } from "@gaia/primitives";
-import { biome, flora, structure, world as worldKind } from "@gaia/kinds";
+import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, RELIEF_PRIMITIVES, ROCK_PRIMITIVES, STRUCTURE_PRIMITIVES, WILDFLOWER_PRIMITIVES, WORLD_PRIMITIVES } from "@gaia/primitives";
+import { biome, flora, rock, structure, wildflowers, world as worldKind } from "@gaia/kinds";
 import { blueprintCount, randomSlots, validate } from "@gaia/world";
-import { FLORA_PRESETS, STRUCTURE_PRESETS, WORLD_PRESETS, mergeParts, realize, realizeWorld } from "@gaia/realize";
+import { FLORA_PRESETS, FLOWER_PRESETS, type Preset, ROCK_PRESETS, SHRUB_PRESETS, STRUCTURE_PRESETS, WORLD_PRESETS, mergeParts, realize, realizeWorld } from "@gaia/realize";
 import { type PlantView, applyLight, createPlant, createRenderer, createSceneLight, createSunShadow } from "@gaia/render";
 import { renderInspector } from "../inspector.ts";
 import { type Lab, type Shot, onTap, refs, slug } from "../lab.ts";
@@ -55,6 +55,23 @@ const SPOTS: readonly [number, number][] = [
   [3.2, -1.2],
   [9.8, 1.6],
 ];
+/** The meadow row's understory, in front of the trees: rocks, bushes and drifts of wildflowers. */
+const UNDERSTORY: readonly { preset: Preset | undefined; kind: AnyKind; at: [number, number] }[] = [
+  { preset: ROCK_PRESETS[0], kind: rock, at: [-6.6, 6.2] },
+  { preset: SHRUB_PRESETS[1], kind: flora, at: [-1.4, 7.4] },
+  { preset: FLOWER_PRESETS[0], kind: wildflowers, at: [2.4, 9.6] },
+  { preset: ROCK_PRESETS[3], kind: rock, at: [6.6, 6.4] },
+  { preset: SHRUB_PRESETS[2], kind: flora, at: [12.6, 5.6] },
+  { preset: FLOWER_PRESETS[3], kind: wildflowers, at: [-11.6, 6.8] },
+  { preset: FLOWER_PRESETS[2], kind: wildflowers, at: [-4.2, 10.8] },
+  { preset: FLOWER_PRESETS[1], kind: wildflowers, at: [8.8, 10.4] },
+  { preset: ROCK_PRESETS[2], kind: rock, at: [-8.4, 13.2] },
+  { preset: ROCK_PRESETS[4], kind: rock, at: [14.5, 11.5] },
+];
+const ROW = [
+  ...FLORA_PRESETS.map((preset, i) => ({ preset, kind: flora as AnyKind, at: SPOTS[i] ?? [0, 0] })),
+  ...UNDERSTORY.flatMap((u) => (u.preset === undefined ? [] : [{ preset: u.preset, kind: u.kind, at: u.at }])),
+];
 const OVERVIEW = { position: new THREE.Vector3(5.5, 6.8, 50), target: new THREE.Vector3(1.6, 4, 0) };
 const MEADOW = WORLD_PRESETS[0];
 const MEADOW_SEED = seedOf("lab/world");
@@ -79,7 +96,7 @@ export function createFloraLab(root: HTMLElement): Lab {
   root.innerHTML = TEMPLATE;
   const $ = refs(root);
   const sheet = createSheet($("panel"));
-  const lib = new Library([...FLORA_PRIMITIVES, ...STRUCTURE_PRIMITIVES]);
+  const lib = new Library([...FLORA_PRIMITIVES, ...ROCK_PRIMITIVES, ...WILDFLOWER_PRIMITIVES, ...STRUCTURE_PRIMITIVES]);
   const space = blueprintCount(flora, lib);
   let active = false;
 
@@ -128,14 +145,14 @@ export function createFloraLab(root: HTMLElement): Lab {
 
   const firstCottage = STRUCTURE_PRESETS[0];
   if (firstCottage === undefined) throw new Error("There are no cottages.");
-  const entries: Entry[] = FLORA_PRESETS.map((preset, i) => ({
+  const entries: Entry[] = ROW.map(({ preset, kind, at }, i) => ({
     name: preset.name,
     blueprint: preset.blueprint,
-    kind: flora as AnyKind,
+    kind,
     facts: FACTS,
     yaw: null as number | null,
     seed: seedOf(`lab/plant-${i}`),
-    position: new THREE.Vector3(SPOTS[i]?.[0] ?? 0, 0, SPOTS[i]?.[1] ?? 0),
+    position: new THREE.Vector3(at[0], 0, at[1]),
     view: null,
     target: 1,
     shown: 1,
@@ -192,7 +209,10 @@ export function createFloraLab(root: HTMLElement): Lab {
     if (view === null) return null;
     const target = entry.position.clone().add(new THREE.Vector3(0, view.height * 0.45, 0));
     const distance = Math.max(view.height, view.radius * 2) * 1.55 + 4;
-    return [target, target.clone().addScaledVector(away, distance).add(new THREE.Vector3(0, view.height * 0.25, 0))];
+    // Small things are framed from a person's eye height, never from inside the grass.
+    const camera = target.clone().addScaledVector(away, distance).add(new THREE.Vector3(0, view.height * 0.25, 0));
+    camera.y = Math.max(camera.y, 1.7);
+    return [target, camera];
   }
 
   function focus(entry: Entry): void {
@@ -371,7 +391,7 @@ export function createFloraLab(root: HTMLElement): Lab {
     const wanted = STRUCTURE_PRESETS.findIndex((p) => Object.values(p.blueprint.slots).some((s) => s.use === primitiveId));
     if (cottage !== undefined && STRUCTURE_PRESETS[Math.max(0, wanted)]?.blueprint.id !== cottage.blueprint.id) nextCottage(Math.max(0, wanted));
     entries.forEach((e, i) => {
-      const preset = e.kind === flora ? FLORA_PRESETS[i] : undefined;
+      const preset = e.kind === structure ? undefined : ROW[i]?.preset;
       if (preset !== undefined && e.blueprint.id !== preset.blueprint.id) {
         e.blueprint = preset.blueprint;
         e.name = preset.name;
@@ -404,7 +424,11 @@ export function createFloraLab(root: HTMLElement): Lab {
       if (active) frame(dt, h);
     },
     shots: (): Shot[] =>
-      [...FLORA_PRIMITIVES, ...STRUCTURE_PRIMITIVES].flatMap((p) =>
+      // Every primitive some plant in the row or the cottage uses, at three vitalities.
+      [
+        ...[...FLORA_PRIMITIVES, ...ROCK_PRIMITIVES, ...WILDFLOWER_PRIMITIVES].filter((p) => ROW.some((r) => Object.values(r.preset.blueprint.slots).some((s) => s.use === p.id))),
+        ...STRUCTURE_PRIMITIVES,
+      ].flatMap((p) =>
         [1, 0.5, 0.1].map((v) => ({ name: `flora-${slug(p.id)}-vitality-${v.toFixed(1)}`, stage: () => showcase(p.id, v) })),
       ),
     hook: {

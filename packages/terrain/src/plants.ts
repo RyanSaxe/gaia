@@ -1,6 +1,7 @@
-// Where plants may stand and how they meet the ground. A trunk's base sits at
-// the lowest ground under its footprint, so on a slope the downhill side
-// touches the soil and the uphill side is buried, never floating.
+// Where plants may stand and how they meet the ground. A trunk's base, a
+// rock or a bush sits at the lowest ground under its footprint, so on a slope
+// the downhill side touches the soil and the uphill side is buried, never
+// floating; a drift of flowers lies on the ground's plane instead.
 
 import { rand } from "@gaia/schema";
 import { type Lattice, heightAt, slopeAt } from "./lattice.ts";
@@ -19,15 +20,59 @@ export const PLANT_SINK = 0.12;
 
 /** The height a plant's origin takes at (x, z), for a trunk base of `radius` meters. */
 export function groundedBase(l: Lattice, x: number, z: number, radius: number): number {
-  let low = heightAt(l, x, z);
-  for (let ring = 0.5; ring <= 1; ring += 0.5) {
-    for (let k = 0; k < 12; k++) {
-      const a = (k / 12) * Math.PI * 2;
-      low = Math.min(low, heightAt(l, x + Math.cos(a) * radius * ring, z + Math.sin(a) * radius * ring));
+  return lowestUnder(l, x, z, radius) - PLANT_SINK;
+}
+
+/** Points on the footprint: its center and three rings. */
+function footprint(x: number, z: number, radius: number): [number, number][] {
+  const out: [number, number][] = [[x, z]];
+  for (const ring of [0.35, 0.7, 1]) {
+    for (let k = 0; k < 16; k++) {
+      const a = (k / 16) * Math.PI * 2 + ring;
+      out.push([x + Math.cos(a) * radius * ring, z + Math.sin(a) * radius * ring]);
     }
   }
-  return low - PLANT_SINK;
+  return out;
 }
+
+/** The lowest ground under a footprint. */
+export function lowestUnder(l: Lattice, x: number, z: number, radius: number): number {
+  let low = Infinity;
+  for (const [px, pz] of footprint(x, z, radius)) low = Math.min(low, heightAt(l, px, pz));
+  return low;
+}
+
+/**
+ * The ground's plane under a footprint, fitted by least squares and then
+ * lowered until it lies at or under the ground at every footprint point.
+ */
+export function groundPlane(l: Lattice, x: number, z: number, radius: number): { y: number; slope: [number, number] } {
+  const pts = footprint(x, z, radius);
+  let sxx = 0, szz = 0, sxz = 0, sxh = 0, szh = 0, sh = 0;
+  const hs = pts.map(([px, pz]) => heightAt(l, px, pz));
+  pts.forEach(([px, pz], i) => {
+    const dx = px - x;
+    const dz = pz - z;
+    const h = hs[i] as number;
+    sxx += dx * dx;
+    szz += dz * dz;
+    sxz += dx * dz;
+    sxh += dx * h;
+    szh += dz * h;
+    sh += h;
+  });
+  const det = sxx * szz - sxz * sxz;
+  const gx = det > 1e-9 ? (sxh * szz - szh * sxz) / det : 0;
+  const gz = det > 1e-9 ? (szh * sxx - sxh * sxz) / det : 0;
+  let y = sh / pts.length;
+  let over = 0;
+  pts.forEach(([px, pz], i) => {
+    over = Math.max(over, y + gx * (px - x) + gz * (pz - z) - (hs[i] as number));
+  });
+  y -= over;
+  return { y, slope: [gx, gz] };
+}
+
 
 export function isWet(t: Terrain, x: number, z: number, clearance = WATER_CLEARANCE): boolean {
   for (let k = 0; k < 9; k++) {

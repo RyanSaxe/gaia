@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Library, kind, slot } from "@gaia/schema";
-import { FLORA_PRIMITIVES } from "@gaia/primitives";
+import { FLORA_PRIMITIVES, PALETTE_FAMILIES } from "@gaia/primitives";
 import { flora } from "@gaia/kinds";
 import { assemble, planDetails, planStructure, readStructure, validate } from "@gaia/world";
 import { SCANNER, fakeJev } from "./fixtures.ts";
@@ -98,6 +98,6 @@ describe("narrowing a choice to a region's native families", () => {
       return Object.keys((q as { criteria: object }).criteria).sort();
     };
     expect(family(["deep-forest", "silver-birch"])).toEqual(["deep-forest", "silver-birch"]);
-    expect(family([]).length).toBe(8);
+    expect(family([]).length).toBe(Object.keys(PALETTE_FAMILIES).length);
   });
 });

@@ -157,6 +157,7 @@ export function mergeParts(parts: readonly Part[]): Part[] {
         wither: join((p) => p.channels.wither),
         glow: join((p) => p.channels.glow),
         pivot: join((p) => p.channels.pivot),
+        close: join((p) => p.channels.close),
       },
     };
   });

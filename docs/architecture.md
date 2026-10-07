@@ -38,11 +38,11 @@ never crosses, because the renderer builds it. `EngineMethods` in
 | --- | --- | --- |
 | `@gaia/schema` | The type builder, ports and vitality channels, primitive and kind contracts, code facts, the world document, Jev's wire format, the engine protocol, content identity | Nothing |
 | `@gaia/primitives` | Primitive declarations and geometry, palettes, the manifest `PRIMITIVES` | schema |
-| `@gaia/kinds` | The flora, structure, biome and world kinds | schema |
+| `@gaia/kinds` | The flora, structure, rock, wildflowers, biome and world kinds | schema |
 | `@gaia/world` | The question planner, answer rules, context gathering, vitality, type-space tools, `WorldChange` | schema |
 | `@gaia/realize` | Blueprint to parts, world and region looks at an hour, the light between a day's keys, the sky and air references, presets, channel math | schema, primitives |
-| `@gaia/render` | Three.js materials, light and shadow | schema, realize, three |
-| `@gaia/terrain` | Relief composition, the baked heightfield, water, the wild land past the rim, walking and wading, sight lines | schema, primitives, realize |
+| `@gaia/render` | Three.js materials, light and shadow, and instanced copies of a component | schema, realize, three |
+| `@gaia/terrain` | Relief composition, the baked heightfield, water, the wild land past the rim, walking and wading, sight lines, where plants and the understory stand | schema, primitives, realize |
 | `@gaia/app` | Electron main, preload, world service, and the renderer (the lab) | Every package |
 
 ESLint enforces these boundaries and the purity rules; `eslint.config.js`
@@ -53,11 +53,11 @@ gives the reason next to each rule.
 A **primitive** is a pure procedural function with typed parameters and a
 role, such as `branching@1` (Skeleton) or `leaf-clumps@1` (Foliage). It is code,
 versioned in its ID. A **kind** declares slots by role and the subject it
-stands for: a file (`flora`, `structure`), a region (`biome`) or the
-repository (`world`). A `structure`'s footprint lays out one `BuildingPlan`
-(walls, roofline, floor and where every door and window goes); its body,
-roof, openings and ornaments each build on that plan, so they agree by
-construction.
+stands for: a file (`flora`, `structure`, `rock`, `wildflowers`), a region
+(`biome`) or the repository (`world`). A `structure`'s footprint lays out one
+`BuildingPlan` (walls, roofline, floor and where every door and window goes);
+its body, roof, openings and ornaments each build on that plan, so they agree
+by construction.
 A **blueprint** fills a kind: a primitive for each slot and a stored value for
 each parameter. An **instance** places a blueprint for one path. Jev
 generates blueprints and instances; people and agents write primitives and
@@ -94,9 +94,12 @@ commits, is a separate channel that never lowers vitality.
 
 Every primitive writes five per-vertex vitality channels: `loss` (the vitality
 below which a piece collapses to its pivot), `droop`, `wither`, `glow` and
-`pivot`, plus a `tint` hue offset and a `cutout` that places a vertex on a
-leaf card. The plant shader combines them with each instance's live
-vitality, so a change in vitality never rebuilds geometry.
+`pivot`, plus a `tint` hue offset, a `cutout` that places a vertex on a
+leaf card, and `close`, how far a piece folds toward its pivot at night (a
+flower's petals). The plant shader combines them with each instance's live
+vitality, so a change in vitality never rebuilds geometry. A component placed
+many times, such as a rock or a drift of flowers, draws as one instanced mesh
+per part, with each copy's vitality read per instance.
 `applyVitality` in `packages/realize/src/channels.ts` is the CPU reference the
 tests run against.
 

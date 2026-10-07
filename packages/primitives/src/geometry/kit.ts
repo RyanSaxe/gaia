@@ -54,6 +54,8 @@ export interface Channels {
   readonly pivot: Vec3;
   /** Hue offset in turns, -0.1 to 0.1. Zero when absent. */
   readonly tint?: number;
+  /** How far the piece folds toward its pivot at night, 0 to 1. Zero when absent. */
+  readonly close?: number;
 }
 
 const SOLID: Vec3 = [0, 0, 0];
@@ -70,6 +72,7 @@ export class PartBuilder {
   readonly #wither: number[] = [];
   readonly #glow: number[] = [];
   readonly #pivot: number[] = [];
+  readonly #close: number[] = [];
   readonly #idx: number[] = [];
 
   constructor(
@@ -97,6 +100,7 @@ export class PartBuilder {
     this.#wither.push(clamp(c.wither, 0, 1));
     this.#glow.push(clamp(c.glow, 0, 1));
     this.#pivot.push(c.pivot[0], c.pivot[1], c.pivot[2]);
+    this.#close.push(clamp(c.close ?? 0, 0, 1));
     return this.#shade.length - 1;
   }
 
@@ -119,6 +123,7 @@ export class PartBuilder {
         wither: new Float32Array(this.#wither),
         glow: new Float32Array(this.#glow),
         pivot: new Float32Array(this.#pivot),
+        close: new Float32Array(this.#close),
       },
       collision: this.collision,
     };
