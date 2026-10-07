@@ -732,7 +732,8 @@ export function createFieldMap(root: HTMLElement, source: MapSource): FieldMap {
     ctx.font = `italic 11px ${SERIF}`;
     ctx.textAlign = "left";
     ctx.fillStyle = INK;
-    ctx.fillText(`${meters} m`, 26 + bar, h - 24);
+    // The scale's words sit over its bar, clear of the place cartouche on a narrow sheet.
+    ctx.fillText(`${meters} m`, 20, h - 34);
     timing.drawMs = performance.now() - t0;
   }
 
