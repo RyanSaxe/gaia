@@ -303,9 +303,9 @@ export function buildOutcrop(p: Resolved<typeof outcropParams>, ctx: BuildContex
 // ---------- moss ----------
 
 const GROWTH = {
-  velvet: { thick: 0.025, lumps: 0.2, shade: 0.55 },
-  cushions: { thick: 0.06, lumps: 1, shade: 0.5 },
-  lichen: { thick: 0.012, lumps: 0.1, shade: 0.62 },
+  velvet: { thick: 0.025, lumps: 0.2, shade: 0.36 },
+  cushions: { thick: 0.06, lumps: 1, shade: 0.32 },
+  lichen: { thick: 0.012, lumps: 0.1, shade: 0.5 },
 } as const;
 
 /**
@@ -320,7 +320,7 @@ export function buildMoss(p: Resolved<typeof mossParams>, ctx: BuildContext, bas
   const seed = Math.floor(r.next() * 1e6);
   const g = GROWTH[p.growth];
   const stones: Part[] = base.parts.filter((part) => part.swatch === "stone");
-  const threshold = 1.15 - p.cover * 1.1;
+  const threshold = 1.2 - p.cover * 1.15;
   for (const part of stones) {
     const pos = part.positions;
     const nrm = part.normals;
@@ -335,7 +335,7 @@ export function buildMoss(p: Resolved<typeof mossParams>, ctx: BuildContext, bas
       const up = nrm[i * 3 + 1] as number;
       const patch = fbm3(x * 1.8, y * 1.8, z * 1.8, seed, 3);
       const high = clamp(y / Math.max(0.1, top), 0, 1);
-      const want = up * 0.9 + 0.7 * patch + 0.35 * high - 0.3;
+      const want = up * 0.6 + 0.9 * patch + 0.25 * high - 0.3;
       mask[i] = clamp((want - threshold + 0.15) / 0.3, 0, 1) * (y > 0.02 ? 1 : 0);
     }
     const idx = part.indices;

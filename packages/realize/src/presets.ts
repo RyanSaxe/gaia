@@ -192,8 +192,8 @@ export const SHRUB_PRESETS: readonly Preset[] = [
     blueprint: shrub({ habit: "mound", stems: "several stems", stature: "waist-high" }, { leaves: "rounded", fullness: "full" }, "bluebell-wood", { form: "berries", count: "a scattered few" }),
   },
   {
-    name: "Azalea",
-    blueprint: shrub({ habit: "spreading", stems: "a dense tangle", stature: "knee-high" }, { leaves: "rounded", fullness: "dense and clipped" }, "cherry-blossom", { form: "petals", count: "plenty" }),
+    name: "Rhododendron",
+    blueprint: shrub({ habit: "spreading", stems: "a dense tangle", stature: "waist-high" }, { leaves: "glossy", fullness: "full" }, "bluebell-wood", { form: "petals", count: "plenty" }),
   },
   { name: "Feather shrub", blueprint: shrub({ habit: "vase", stems: "several stems", stature: "head-high" }, { leaves: "feathery", fullness: "full" }, "silver-birch") },
 ];

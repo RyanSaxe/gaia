@@ -64,7 +64,7 @@ const LEAVES = {
 } as const;
 
 /** A bush is placed by the hundred, so its mound stays small: the frame's tips first, then fill. */
-const MOUND_TRIANGLE_BUDGET = 7_000;
+const MOUND_TRIANGLE_BUDGET = 8_500;
 
 /** Clumps at every tip and along the stems, shaded as one rounded volume that sits on the ground. */
 export function buildLeafMound(p: Resolved<typeof leafMoundParams>, ctx: BuildContext, skel: Skeleton): Built {
@@ -109,10 +109,31 @@ export function buildLeafMound(p: Resolved<typeof leafMoundParams>, ctx: BuildCo
     at[1] = Math.max(at[1], rad * 0.5);
     clumps.push({ at, pivot: limb.end, radius: rad });
   }
+  const core = icosphere(3);
+  const budget = MOUND_TRIANGLE_BUDGET - core.triangles.length;
   const perClump = look.count * 320;
   // Feathery sprays are three small blobs each, so they drop to the coarser sphere first.
-  const subdiv = look.count > 1 && clumps.length * perClump > MOUND_TRIANGLE_BUDGET ? 1 : 2;
-  clumps.length = Math.min(clumps.length, Math.floor(MOUND_TRIANGLE_BUDGET / (look.count * (subdiv === 2 ? 320 : 80))));
+  const subdiv = look.count > 1 && clumps.length * perClump > budget ? 1 : 2;
+  clumps.length = Math.min(clumps.length, Math.floor(budget / (look.count * (subdiv === 2 ? 320 : 80))));
+
+  // A leafy core fills the mound so the frame never shows through; the clumps break its outline.
+  const coreSeed = Math.floor(r.fork("core").next() * 1e6);
+  const coreFirst = out.vertexCount;
+  const coreRadius: V3 = [reach * 0.8, top * 0.48, reach * 0.8];
+  for (const n of core.points) {
+    const lump = 1 + 0.2 * fbm3(n[0] * 2.2, n[1] * 2.2, n[2] * 2.2, coreSeed, 3);
+    const down = n[1] < 0 ? Math.min(coreRadius[1], center[1] - 0.02) : coreRadius[1];
+    const q: V3 = [center[0] + n[0] * coreRadius[0] * lump, Math.max(0.02, center[1] + n[1] * down * lump), center[2] + n[2] * coreRadius[2] * lump];
+    out.vertex(q, n, 0.22 + 0.3 * (n[1] * 0.5 + 0.5) + look.shade, {
+      loss: clamp(0.2 + 0.05 * fbm3(n[0] * 3, n[1] * 3, n[2] * 3, coreSeed + 1, 2), 0.05, 0.3),
+      droop: 0.25,
+      wither: 0.85,
+      glow: 0,
+      pivot: [0, 0.05, 0],
+      tint: 0.02 * fbm3(n[0] * 1.3, n[1] * 1.3, n[2] * 1.3, coreSeed + 2, 2),
+    });
+  }
+  for (const [a, b, c] of core.triangles) out.triangle(coreFirst + a, coreFirst + b, coreFirst + c);
 
   const anchors: Anchor[] = [];
   const sphere = icosphere(subdiv);

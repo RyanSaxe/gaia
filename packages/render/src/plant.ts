@@ -184,7 +184,7 @@ export function geometryOf(part: Part): THREE.BufferGeometry {
 }
 
 /** Bark and stone are solid; leaves, moss and blooms are thin and scatter light. */
-export const FOLIAGE: Readonly<Record<string, number>> = { bark: 0, leaf: 1, bloom: 0.6, stone: 0, moss: 0.5, stem: 0.8, eye: 0.6 };
+export const FOLIAGE: Readonly<Record<string, number>> = { bark: 0, leaf: 1, bloom: 0.6, stone: 0, moss: 0.3, stem: 0.8, eye: 0.6 };
 
 export function createPlant(plant: Realized, light: SceneLight): PlantView {
   const object = new THREE.Group();

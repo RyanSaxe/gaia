@@ -570,6 +570,18 @@ export function createTerrainLab(root: HTMLElement): Lab {
       },
       info: () => renderer.info.render,
       understory: () => understory.stats(),
+      placements: () => understory.placements(),
+      showUnderstory: (on: boolean) => understory.show(on),
+      /** Draws `count` frames back to back and waits for the GPU: milliseconds per frame, shadows included. */
+      bench: (count: number) => {
+        const gl = renderer.getContext();
+        const pixel = new Uint8Array(4);
+        gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
+        const t0 = performance.now();
+        for (let k = 0; k < count; k++) frame(1 / 60, t0, hour);
+        gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
+        return (performance.now() - t0) / count;
+      },
       /** Walks straight ahead for `seconds` at walking pace, as if W were held, and reports where the walk ended. */
       stride: (seconds: number) => {
         for (let k = 0; k < Math.round(seconds * 60); k++) {

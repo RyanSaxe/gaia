@@ -73,6 +73,8 @@ export interface Understory {
   /** Objects the shadow pass hides: drifts of flowers are too fine to cast. */
   readonly quiet: () => readonly THREE.Object3D[];
   readonly placements: () => readonly Placement[];
+  /** Shows or hides everything, for comparing frame costs. */
+  show(on: boolean): void;
   readonly stats: () => { placed: Record<string, number>; triangles: number; meshes: number };
 }
 
@@ -110,6 +112,9 @@ export function createUnderstory(scene: THREE.Scene, light: SceneLight, lib: Lib
     casters: () => views.filter((v) => v.group.casts).map((v) => v.view),
     quiet: () => views.filter((v) => !v.group.casts).map((v) => v.view.object),
     placements: () => placed,
+    show(on) {
+      for (const v of views) v.view.object.visible = on;
+    },
     stats: () => ({
       placed: Object.fromEntries(GROUPS.map((g) => [g.id, placed.filter((p) => p.rule === g.id).length])),
       triangles: views.reduce((n, v) => n + v.view.triangles, 0),

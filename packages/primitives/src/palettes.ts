@@ -38,12 +38,12 @@ const HEALTHY: Record<PaletteFamily, { bark: number; leaf: number; bloom: number
  * the moss that grows on them, and the stems and eyes of its wildflowers.
  */
 const UNDERSTORY: Record<PaletteFamily, { stone: number; moss: number; stem: number; eye: number }> = {
-  "spring-meadow": { stone: 0xa39b8a, moss: 0x7fae46, stem: 0x6f9a3c, eye: 0xf0c43c },
+  "spring-meadow": { stone: 0xa39b8a, moss: 0x5f8a3e, stem: 0x6f9a3c, eye: 0xf0c43c },
   "deep-forest": { stone: 0x7c807a, moss: 0x427c3c, stem: 0x3f6e38, eye: 0x8a5a2a },
   "teal-gold": { stone: 0x98948a, moss: 0x5c9a6a, stem: 0x4f8a6c, eye: 0xe0902e },
   "autumn-ember": { stone: 0x988a7a, moss: 0x8c9a40, stem: 0x6a7e3a, eye: 0x3a2a20 },
   "cherry-blossom": { stone: 0xa59c9c, moss: 0x8fb27a, stem: 0x6f9a5a, eye: 0xf2d27a },
-  "silver-birch": { stone: 0xb0aea5, moss: 0x9cc44a, stem: 0x7fa83e, eye: 0xe8c04a },
+  "silver-birch": { stone: 0xb0aea5, moss: 0x7a9e48, stem: 0x7fa83e, eye: 0xe8c04a },
   "desert-sage": { stone: 0xbe9f76, moss: 0x9aa77c, stem: 0x8a9a6a, eye: 0xa0662e },
   "lantern-dusk": { stone: 0x6c6878, moss: 0x3f7f6c, stem: 0x356a5e, eye: 0xffd27a },
   "bluebell-wood": { stone: 0x8e9096, moss: 0x5e9a52, stem: 0x4f8a48, eye: 0xf4e7b0 },

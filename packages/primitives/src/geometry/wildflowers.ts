@@ -21,8 +21,8 @@ interface Flower {
 }
 
 /** Flowers per square meter at the heart of a drift of density 1. */
-const PER_SQUARE_METER = 16;
-const MAX_FLOWERS = 220;
+const PER_SQUARE_METER = 24;
+const MAX_FLOWERS = 300;
 
 /** Night closing per species: open faces fold tight, bells and spikes barely change. */
 const CLOSE: Record<Species, number> = { daisies: 1, cups: 0.9, bells: 0.3, spikes: 0.25 };
@@ -158,7 +158,7 @@ function emitDisc(out: PartBuilder, center: V3, facing: V3, radius: number, rise
 function emitDaisy(petals: PartBuilder, eyes: PartBuilder, f: Flower, look: HeadLook): void {
   const facing = facingOf(f, 1.1);
   const [u, v] = basis(facing);
-  const radius = (0.06 + 0.05 * f.height) * f.r.range(0.85, 1.15);
+  const radius = (0.075 + 0.06 * f.height) * f.r.range(0.85, 1.15);
   const count = 11 + Math.floor(f.r.next() * 4);
   const spin = f.r.next() * Math.PI * 2;
   const ch = { ...look, pivot: f.top };
@@ -187,7 +187,7 @@ function emitDaisy(petals: PartBuilder, eyes: PartBuilder, f: Flower, look: Head
 function emitCup(petals: PartBuilder, eyes: PartBuilder, f: Flower, look: HeadLook): void {
   const facing = facingOf(f, 0.5);
   const [u, v] = basis(facing);
-  const radius = (0.05 + 0.04 * f.height) * f.r.range(0.85, 1.15);
+  const radius = (0.065 + 0.05 * f.height) * f.r.range(0.85, 1.15);
   const count = 5;
   const spin = f.r.next() * Math.PI * 2;
   const ch = { ...look, pivot: f.top };
@@ -209,11 +209,14 @@ function emitCup(petals: PartBuilder, eyes: PartBuilder, f: Flower, look: HeadLo
   emitDisc(eyes, addScaled(f.top, facing, radius * 0.08), facing, radius * 0.22, radius * 0.12, look, 0.35);
 }
 
+/** A bell's sides: five reads as round at a flower's size. */
+const SIDES = 5;
+
 /** An arching stem hung with nodding bells on one side, like a bluebell. */
 function emitBells(petals: PartBuilder, f: Flower, look: HeadLook): void {
   const count = 3 + Math.floor(f.r.next() * 3);
   const away = normalize([f.lean[0] + 1e-3, 0, f.lean[2]]);
-  const size = (0.022 + 0.014 * f.height) * f.r.range(0.85, 1.15);
+  const size = (0.034 + 0.022 * f.height) * f.r.range(0.85, 1.15);
   for (let k = 0; k < count; k++) {
     const t = k / count;
     const hang = addScaled(addScaled(f.top, away, size * (0.6 + 2.2 * t)), [0, 1, 0], -f.height * 0.22 * t - size * 0.8);
@@ -224,20 +227,20 @@ function emitBells(petals: PartBuilder, f: Flower, look: HeadLook): void {
     const rings: number[] = [];
     for (const [along, rad, flare] of [[0.25, 0.6, 0], [1, 1, 0], [1.25, 1.35, 0.4]] as const) {
       rings.push(petals.vertexCount);
-      for (let j = 0; j < 6; j++) {
-        const a = (j / 6) * Math.PI * 2;
+      for (let j = 0; j < SIDES; j++) {
+        const a = (j / SIDES) * Math.PI * 2;
         const dir = add(scale(u, Math.cos(a)), scale(v, Math.sin(a)));
         const n = normalize(addScaled(dir, axis, -0.2 - flare));
         petals.vertex(addScaled(addScaled(hang, axis, size * along), dir, size * rad * 0.55), n, 0.65 + 0.25 * along * 0.6, ch);
       }
     }
-    for (let j = 0; j < 6; j++) petals.triangle(top, (rings[0] as number) + ((j + 1) % 6), (rings[0] as number) + j);
+    for (let j = 0; j < SIDES; j++) petals.triangle(top, (rings[0] as number) + ((j + 1) % SIDES), (rings[0] as number) + j);
     for (let ring = 0; ring < 2; ring++) {
-      for (let j = 0; j < 6; j++) {
+      for (let j = 0; j < SIDES; j++) {
         const a = (rings[ring] as number) + j;
-        const b = (rings[ring] as number) + ((j + 1) % 6);
-        petals.triangle(a, b, a + 6);
-        petals.triangle(b, b + 6, a + 6);
+        const b = (rings[ring] as number) + ((j + 1) % SIDES);
+        petals.triangle(a, b, a + SIDES);
+        petals.triangle(b, b + SIDES, a + SIDES);
       }
     }
   }
@@ -247,7 +250,7 @@ function emitBells(petals: PartBuilder, f: Flower, look: HeadLook): void {
 function emitSpike(petals: PartBuilder, f: Flower, look: HeadLook): void {
   const count = 9 + Math.floor(f.r.next() * 6);
   const span = f.height * 0.38;
-  const size = (0.016 + 0.012 * f.height) * f.r.range(0.85, 1.15);
+  const size = (0.022 + 0.016 * f.height) * f.r.range(0.85, 1.15);
   const spin = f.r.next() * Math.PI * 2;
   for (let k = 0; k < count; k++) {
     const t = k / (count - 1);
