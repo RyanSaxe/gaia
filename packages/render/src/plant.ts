@@ -4,7 +4,7 @@
 
 import * as THREE from "three";
 import { CUT, type Part, type Swatch } from "@gaia/schema";
-import { CHANNEL_MATH, DETAIL, type Realized, pieceFrames } from "@gaia/realize";
+import { CHANNEL_MATH, DETAIL, type Realized, pieceFrames, spinAt } from "@gaia/realize";
 import { LIGHT_GLSL, type SceneLight } from "./light.ts";
 import { createSmokeMaterial } from "./smoke.ts";
 
@@ -36,6 +36,45 @@ uniform float uHeight;
 uniform float uFlutter;
 uniform float uWind;
 
+#ifdef RUIN
+// A building's pieces also fall, grow and turn. These attributes exist only
+// on parts that use them, so instanced plants never spend slots on them.
+attribute vec4 aFall;
+attribute float aGrow;
+attribute float aRot;
+attribute vec3 aSpin;
+uniform float uTurn;
+
+mat3 turnAbout(vec3 k, float a) {
+  float c = cos(a);
+  float s = sin(a);
+  vec3 t = (1.0 - c) * k;
+  return mat3(
+    t.x * k.x + c, t.x * k.y + s * k.z, t.x * k.z - s * k.y,
+    t.y * k.x - s * k.z, t.y * k.y + c, t.y * k.z + s * k.x,
+    t.z * k.x + s * k.y, t.z * k.y - s * k.x, t.z * k.z + c);
+}
+
+// A spinning piece turns about its pivot by the plant's accumulated turn;
+// a falling piece then tips about the same pivot as vitality drops.
+mat3 pieceTurn() {
+  mat3 m = mat3(1.0);
+  float rate = length(aSpin);
+  if (rate > 0.0) m = turnAbout(aSpin / rate, uTurn * rate * 6.28318530718);
+  float most = length(aFall.xyz);
+  if (aFall.w > 0.0 && most > 0.0) {
+    float fallen = 1.0 - smoothstep(aFall.w - ${f(CHANNEL_MATH.fallBand)}, aFall.w, uVitality);
+    m = turnAbout(aFall.xyz / most, most * fallen) * m;
+  }
+  return m;
+}
+vec3 turnedNormal(vec3 n) { return pieceTurn() * n; }
+// How far this surface has rotted through, for the fragment shader's holes.
+float rotNow() { return aRot * ${f(CHANNEL_MATH.rotMost)} * clamp(1.0 - uVitality / ${f(CHANNEL_MATH.rotStart)}, 0.0, 1.0); }
+#else
+vec3 turnedNormal(vec3 n) { return n; }
+#endif
+
 // Loss collapses a piece to its pivot over a short band; droop bends the
 // offset from the pivot toward the ground, keeping its length. At night a
 // piece that closes (a flower's petals) folds part way toward its pivot.
@@ -49,7 +88,12 @@ vec3 applyChannels(vec3 p) {
     off = normalize(bent) * d;
   }
   float keep = aLoss > 0.0 ? smoothstep(aLoss, aLoss + ${f(CHANNEL_MATH.lossBand)}, uVitality) : 1.0;
+#ifdef RUIN
+  keep *= aGrow > 0.0 ? 1.0 - smoothstep(aGrow, aGrow + ${f(CHANNEL_MATH.lossBand)}, uVitality) : 1.0;
+  return aPivot + pieceTurn() * (off * keep);
+#else
   return aPivot + off * keep;
+#endif
 }
 
 // Copies of one component vary their shape a little, seeded by where each
@@ -117,7 +161,36 @@ vec3 cardCut() {
 }
 `;
 
+// Rot: a surface rots through into ragged holes as vitality falls. The
+// holes follow a noise fixed to the piece's own rest position, so they
+// never crawl, and both faces of a roof open at the same spots.
+const ROT_GLSL = /* glsl */ `
+#ifdef RUIN
+varying float vRot;
+varying vec3 vRest;
+float rotHash(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
+float rotValue(vec3 p) {
+  vec3 i = floor(p);
+  vec3 f = fract(p);
+  vec3 u = f * f * (3.0 - 2.0 * f);
+  return mix(
+    mix(mix(rotHash(i), rotHash(i + vec3(1, 0, 0)), u.x), mix(rotHash(i + vec3(0, 1, 0)), rotHash(i + vec3(1, 1, 0)), u.x), u.y),
+    mix(mix(rotHash(i + vec3(0, 0, 1)), rotHash(i + vec3(1, 0, 1)), u.x), mix(rotHash(i + vec3(0, 1, 1)), rotHash(i + vec3(1, 1, 1)), u.x), u.y),
+    u.z);
+}
+// Distance above the hole's edge: negative inside a hole.
+float rotEdge() {
+  if (vRot <= 0.0) return 1.0;
+  float n = rotValue(vRest * 1.1) * 0.65 + rotValue(vRest * 3.3 + 7.0) * 0.35;
+  return n - vRot;
+}
+#else
+float rotEdge() { return 1.0; }
+#endif
+`;
+
 const LEAF_MASK_GLSL = /* glsl */ `
+${ROT_GLSL}
 varying vec3 vCut;
 float leafHash(float x) { return fract(sin(x * 91.3458) * 47453.5453); }
 
@@ -280,6 +353,10 @@ export const PLANT_VERT = /* glsl */ `
 uniform float uTime;
 ${CHANNELS_GLSL}
 ${CUTOUT_GLSL}
+#ifdef RUIN
+varying float vRot;
+varying vec3 vRest;
+#endif
 varying vec3 vNormal;
 varying vec3 vWorld;
 varying float vShade;
@@ -297,7 +374,11 @@ void main() {
   vec3 p = applyWind(applyVariety(applyChannels(aPiece.xyz + (position - aPiece.xyz) * k), root), root);
   vec4 world = modelMatrix * vec4(p, 1.0);
   vWorld = world.xyz;
-  vNormal = normalize(mat3(modelMatrix) * normal);
+  vNormal = normalize(mat3(modelMatrix) * turnedNormal(normal));
+#ifdef RUIN
+  vRot = rotNow();
+  vRest = position;
+#endif
   vShade = aShade;
   vTint = aTint;
   vCut = cardCut();
@@ -340,7 +421,10 @@ void main() {
     cover *= smoothstep(0.06, 0.28, abs(dot(face, normalize(cameraPosition - vWorld))));
   }
   if (cover < 0.02) discard;
-  float bright = mix(${f(CHANNEL_MATH.shadeLow)}, ${f(CHANNEL_MATH.shadeHigh)}, vShade) * cut.y;
+  // A rotted hole is cut cleanly; its rim darkens like a broken, weathered edge.
+  float edge = rotEdge();
+  if (edge < 0.0) discard;
+  float bright = mix(${f(CHANNEL_MATH.shadeLow)}, ${f(CHANNEL_MATH.shadeHigh)}, vShade) * cut.y * mix(0.45, 1.0, smoothstep(0.0, 0.09, edge));
   vec3 albedo = mix(hueRotate(uHealthy, vTint), uDecline, vWither) * bright;
   vec3 n = normalize(vNormal);
   if (uFoliage < 0.5 && !gl_FrontFacing) n = -n;
@@ -377,8 +461,16 @@ export const DEPTH_VERT = /* glsl */ `
 uniform float uTime;
 ${CHANNELS_GLSL}
 ${CUTOUT_GLSL}
+#ifdef RUIN
+varying float vRot;
+varying vec3 vRest;
+#endif
 void main() {
   vCut = cardCut();
+#ifdef RUIN
+  vRot = rotNow();
+  vRest = position;
+#endif
   float k = pieceScale(modelMatrix);
   if (k < 0.0) {
     gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
@@ -396,7 +488,7 @@ precision highp float;
 #define SHADOW_PASS
 ${LEAF_MASK_GLSL}
 void main() {
-  if (leafCut().x < 0.5) discard;
+  if (leafCut().x < 0.5 || rotEdge() < 0.0) discard;
   gl_FragColor = vec4(1.0);
 }
 `;
@@ -429,6 +521,11 @@ function four(a: Float32Array, b: Float32Array, c: Float32Array, d: Float32Array
   }
   return new THREE.BufferAttribute(out, 4);
 }
+/** A part whose pieces fall, grow, rot or spin, which its material compiles in. */
+const hasRuin = (part: Part): boolean => {
+  const c = part.channels;
+  return c.fall !== undefined || c.grow !== undefined || c.rot !== undefined || c.spin !== undefined;
+};
 
 export function geometryOf(part: Part): THREE.BufferGeometry {
   const g = new THREE.BufferGeometry();
@@ -449,6 +546,14 @@ export function geometryOf(part: Part): THREE.BufferGeometry {
   g.setAttribute("aLook", four(part.shade, part.tint, ch.loss, ch.droop));
   g.setAttribute("aLife", four(ch.wither, ch.glow, ch.close, leave));
   g.setAttribute("aPiece", four(center(0), center(1), center(2), start));
+  if (hasRuin(part)) {
+    const n = part.shade.length;
+    const c = part.channels;
+    g.setAttribute("aFall", new THREE.BufferAttribute(c.fall ?? new Float32Array(n * 4), 4));
+    g.setAttribute("aGrow", new THREE.BufferAttribute(c.grow ?? new Float32Array(n), 1));
+    g.setAttribute("aRot", new THREE.BufferAttribute(c.rot ?? new Float32Array(n), 1));
+    g.setAttribute("aSpin", new THREE.BufferAttribute(c.spin ?? new Float32Array(n * 3), 3));
+  }
   g.setIndex(new THREE.BufferAttribute(part.indices, 1));
   g.computeBoundingSphere();
   g.computeBoundingBox();
@@ -486,6 +591,16 @@ export function createPlant(plant: Realized, light: SceneLight): PlantView {
     uSway: { value: plant.motion.sway },
     uFrequency: { value: plant.motion.frequency },
     uHeight: { value: height },
+    uTurn: { value: 0 },
+  };
+  // Spinning pieces turn by an accumulated phase, so their speed can follow
+  // vitality without the turn ever jumping when vitality changes.
+  let turnedAt = light.uTime.value;
+  const advanceTurn = (): void => {
+    const now = light.uTime.value;
+    if (now === turnedAt) return;
+    shared.uTurn.value += Math.max(0, now - turnedAt) * spinAt(shared.uVitality.value);
+    turnedAt = now;
   };
   const materials: THREE.ShaderMaterial[] = [];
   const meshes: { mesh: THREE.Mesh; color: THREE.ShaderMaterial; depth: THREE.ShaderMaterial }[] = [];
@@ -505,7 +620,9 @@ export function createPlant(plant: Realized, light: SceneLight): PlantView {
     }
     const foliage = FOLIAGE[part.swatch] ?? 0.5;
     const perPart = { uFlutter: { value: foliage === 0 ? 0 : 1 } };
+    const defines = hasRuin(part) ? { RUIN: "" } : {};
     const color = new THREE.ShaderMaterial({
+      defines,
       vertexShader: PLANT_VERT,
       fragmentShader: PLANT_FRAG,
       uniforms: {
@@ -522,6 +639,7 @@ export function createPlant(plant: Realized, light: SceneLight): PlantView {
       alphaToCoverage: part.cutout.some((c) => c !== 0),
     });
     const depth = new THREE.ShaderMaterial({
+      defines,
       vertexShader: DEPTH_VERT,
       fragmentShader: DEPTH_FRAG,
       uniforms: { uTime: light.uTime, uWind: light.uWind, uNightness: light.uNightness, uEye: light.uEye, ...shared, ...perPart },
@@ -529,6 +647,7 @@ export function createPlant(plant: Realized, light: SceneLight): PlantView {
     });
     const mesh = new THREE.Mesh(geometries[i], color);
     mesh.userData.part = part.swatch;
+    if (part.channels.spin !== undefined) mesh.onBeforeRender = advanceTurn;
     object.add(mesh);
     materials.push(color, depth);
     meshes.push({ mesh, color, depth });

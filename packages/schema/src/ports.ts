@@ -23,6 +23,26 @@ export interface VitalityChannels {
   readonly pivot: Float32Array;
   /** How far the vertex folds toward its pivot at night, 0 to 1. Flowers close; most pieces never do. */
   readonly close: Float32Array;
+  /**
+   * How a piece falls as vitality drops, four per vertex: the axis it turns
+   * about its pivot, scaled by the most it turns in radians, then the
+   * vitality below which it starts to turn. A door swings ajar, a chimney
+   * topples, a post leans. Absent means nothing falls.
+   */
+  readonly fall?: Float32Array;
+  /**
+   * The vitality below which a piece grows out of its pivot: ivy, weeds,
+   * rubble and boards over windows. 0 means it never grows. Absent means none.
+   */
+  readonly grow?: Float32Array;
+  /** How far a surface rots through into ragged holes as vitality drops, 0 to 1. Absent means none. */
+  readonly rot?: Float32Array;
+  /**
+   * How a piece turns about its pivot while it is alive, three per vertex:
+   * the axis scaled by turns per second. It slows as vitality falls and
+   * stops near the bottom, like a mill wheel. Absent means nothing turns.
+   */
+  readonly spin?: Float32Array;
 }
 
 export interface Part {
@@ -320,6 +340,8 @@ export interface Roles {
   Roof: { input: BuildingPlan; output: Built };
   Openings: { input: BuildingPlan; output: Built };
   Dressing: { input: BuildingPlan; output: Built };
+  /** What sets a building apart and says what it does: a turning waterwheel, a tower. */
+  Feature: { input: BuildingPlan; output: Built };
   /** A rock's body: a boulder, a stone, a cluster or an outcrop. */
   Rock: { input: null; output: Built };
   /** What grows over another piece's upward faces, such as moss on stone. */

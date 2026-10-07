@@ -80,6 +80,7 @@ instance within it:
 | Small tree | 3 to 6 m |
 | Tall tree | 8 to 16 m |
 | House | 5 to 9 m |
+| Tower | 8 to 19 m, taller with more depending on it |
 | Landmark | 12 to 30 m; a ring of standing stones 3 to 8 m, 10 to 20 m across |
 
 ## Terrain
@@ -191,12 +192,57 @@ on the horizon rise out of its haze. `skyColorAt` and `aerialAt` in
 
 ## Buildings
 
-A building stands on a pad leveled into the baked ground under it and its
-yard, blending back into the land over 7 m, and its foundation reaches
-1.4 m below, so it never floats and never shows a gap. Grass is cleared
-under the house and along the walk to its door, and its walls stop the
-walk. A cottage stays under 25,000 triangles and draws one mesh per
-swatch, about ten calls.
+A building stands for an entity. A building stands on a pad leveled into
+the baked ground under it and its yard, blending back into the land over
+7 m, and its foundation reaches 1.4 m below, so it never floats and never
+shows a gap. Grass is cleared under the house and along the walk to its
+door, and its walls stop the walk. A building stays under 32,000 triangles
+and draws one mesh per swatch, at most eleven calls.
+
+A feature sets a building apart and says what its entity does, on the side
+the chimney leaves free. A mill's waterwheel turns in a stone-lined pit, fed
+by a flume on trestles or pushed round by the race, about once every nine
+seconds; it slows as vitality falls and stands still below 0.1. An
+archive's tower rises from the back corner, rendered between stone quoins,
+taller the more of the code depends on it, its narrow windows lamplit at
+night under a steep cap or an open lantern room whose lamp burns after dusk.
+
+A failing building falls to ruin, and reads from 40 m. It gives way first
+at the front corner away from the door, where a person walking up sees it:
+
+| Vitality | What shows |
+| --- | --- |
+| 1 | Whole and lived in: lit windows, smoke, flowers |
+| 0.5 | Tired: plaster falls in patches, the first holes in the roof's eaves, ivy at the corners, the door ajar, a shutter hanging, long grass |
+| 0.2 | Failing: the roof rotted through over bare rafters, walls holed and timbers fallen at the weak corner, rubble below, windows broken or boarded, the chimney toppling, the flower boxes down |
+| 0.05 | A ruin: most of the covering gone, the chimney lying across the ridge, ivy to the eaves, rank grass and rubble all round, a tower's top and lantern fallen |
+
+Every one of these is a vitality channel on the pieces the primitives
+already build, so nothing is rebuilt and nothing pops. Ivy and the moss on
+a ruin keep the family's moss green: nature takes a ruin back, rather than
+everything turning grey.
+
+## Signs and cards
+
+Everything that stands for code says so in the world. A building has a
+wooden signboard on a post at the end of its walk, facing anyone coming up
+it, with its entity's name and what it is painted on; a tree has a small
+plaque on a stake at its foot with its file's name. Signs are always there:
+a name becomes readable as a person comes near, as a real sign's does, and
+the lantern lights it at night. Nothing fades in or appears. A sign follows
+the vitality of what it names: its paint fades and flakes, its wood greys
+and it leans on its post. All signs draw as one instanced mesh.
+
+Tapping a building, a tree or a sign walks the person up to it (to the end
+of a building's walk, or just outside a tree's crown on their side), and
+when they arrive a card opens: in the panel on a wide screen, in the sheet
+on a phone. A thing already close is shown at once. A new tap or a key
+cancels the walk and the card stays shut. The view never turns on its
+own. The card reads like a page from a field guide: what kind of thing it
+is, its name, what it does, where it lives in the code, its size, what it
+leans on and what leans on it, what it stands as in the world, and its
+vitality in words (thriving, healthy, tired, failing, in ruins) with the
+signals behind it, each with its reading.
 
 ## Trails
 

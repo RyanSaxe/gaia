@@ -1,4 +1,4 @@
-import type { FileFacts, LinkFacts, RegionFacts, RepositoryFacts } from "./facts.ts";
+import type { EntityFacts, FileFacts, LinkFacts, RegionFacts, RepositoryFacts } from "./facts.ts";
 import type { Role } from "./ports.ts";
 
 export interface Slot<R extends Role = Role> {
@@ -34,6 +34,7 @@ const ROLE_IO: Readonly<Record<Role, { input: string | null; output: string }>> 
   Roof: { input: "BuildingPlan", output: "Built" },
   Openings: { input: "BuildingPlan", output: "Built" },
   Dressing: { input: "BuildingPlan", output: "Built" },
+  Feature: { input: "BuildingPlan", output: "Built" },
   Rock: { input: null, output: "Built" },
   Overgrowth: { input: "Built", output: "Built" },
   Drift: { input: null, output: "Built" },
@@ -46,11 +47,16 @@ function feeds(output: string, input: string): boolean {
   return output === input || (input === "Anchors" && (output === "Built" || output === "Skeleton"));
 }
 
-/** What a kind stands for: one file, one directory's region, one dependency between files, or the whole repository. */
-export type Subject = "file" | "region" | "link" | "repository";
+/**
+ * What a kind stands for: one file, one entity (a package, crate, service or
+ * module), one directory's region, one dependency (a link), or the whole
+ * repository.
+ */
+export type Subject = "file" | "entity" | "region" | "link" | "repository";
 
 export interface SubjectFacts {
   file: FileFacts;
+  entity: EntityFacts;
   region: RegionFacts;
   link: LinkFacts;
   repository: RepositoryFacts;
@@ -74,7 +80,7 @@ export interface Kind<S extends Subject = Subject> {
 }
 
 /** Any kind, for code that reads slots and stages but never binds facts. */
-export type AnyKind = Kind<"file"> | Kind<"region"> | Kind<"link"> | Kind<"repository">;
+export type AnyKind = Kind<"file"> | Kind<"entity"> | Kind<"region"> | Kind<"link"> | Kind<"repository">;
 
 /** The slot groups Jev answers in order: the kind's stages, or every slot at once. */
 export function stagesOf(k: AnyKind): readonly (readonly string[])[] {

@@ -218,3 +218,37 @@ details.json pre { font: 11px/1.45 ui-monospace, "SF Mono", Menlo, monospace; ba
   .switch-track::after { width: 26px; height: 26px; }
   .switch input:checked + .switch-track::after { transform: translateX(20px); }
 }
+
+/* ---------- the card: what a thing in the world stands for ---------- */
+/* A page from a field guide: warm paper, a serif name, calm color. */
+.card {
+  --paper: #f7f1e3; --paper-ink: #3a3226; --paper-muted: #7a6f5c; --paper-line: #e4d9c2;
+  --life: #6f9a4a; --dry: #a89a7c;
+  background: var(--paper); color: var(--paper-ink); padding: 14px 16px 16px; border-bottom: 1px solid var(--paper-line);
+  overflow-y: auto; min-height: 0; flex: 1;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .card { --paper: #26231d; --paper-ink: #ece4d2; --paper-muted: #a99d86; --paper-line: #3b362c; --life: #9cc27a; --dry: #8a7f68; }
+}
+:root[data-theme="dark"] .card { --paper: #26231d; --paper-ink: #ece4d2; --paper-muted: #a99d86; --paper-line: #3b362c; --life: #9cc27a; --dry: #8a7f68; }
+.card-head { display: grid; grid-template-columns: 1fr auto; align-items: start; column-gap: 8px; }
+.card-what { grid-column: 1; font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--paper-muted); }
+.card-name { grid-column: 1; margin: 2px 0 0; font: italic 600 22px/1.2 Georgia, "Iowan Old Style", "Times New Roman", serif; overflow-wrap: anywhere; }
+.card-close { grid-column: 2; grid-row: 1 / span 2; background: transparent; border: 0; color: var(--paper-muted); font-size: 20px; line-height: 1; padding: 2px 6px; }
+.card-doc { margin: 8px 0 10px; font: 14px/1.45 Georgia, "Iowan Old Style", "Times New Roman", serif; }
+.card-facts { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; margin: 0 0 12px; font-size: 12px; }
+.card-facts dt { color: var(--paper-muted); }
+.card-facts dd { margin: 0; overflow-wrap: anywhere; }
+.card-facts code { font: 11.5px ui-monospace, "SF Mono", Menlo, monospace; }
+.card-health { display: grid; grid-template-columns: auto auto 1fr; align-items: center; gap: 8px; padding-top: 10px; border-top: 1px solid var(--paper-line); }
+.card-health b { font: italic 600 15px Georgia, "Times New Roman", serif; }
+.card-score { color: var(--paper-muted); font-variant-numeric: tabular-nums; font-size: 12px; }
+.card-meter { height: 6px; border-radius: 3px; background: var(--paper-line); overflow: hidden; }
+.card-meter span { display: block; height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--dry), var(--life)); }
+.card-signals { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
+.card-signals li { display: grid; grid-template-columns: auto 1fr; gap: 0 10px; font-size: 12px; }
+.card-signal { font-weight: 600; }
+.card-reading { color: var(--paper-muted); text-align: right; }
+.card-cost { grid-column: 1 / -1; height: 2px; margin-top: 3px; background: var(--dry); border-radius: 1px; }
+.card-well { color: var(--paper-muted); font-style: italic; }
+.panel.showing-card > header, .panel.showing-card > .scroll { display: none; }

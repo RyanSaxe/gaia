@@ -2,14 +2,14 @@
 // JSON-RPC over the engine's stdin and stdout. The Rust side derives the same
 // shapes from its structs. The OpenRouter key never crosses this boundary.
 
-import type { FileFacts } from "./facts.ts";
+import type { EntityFacts, FileFacts } from "./facts.ts";
 import type { JevRequest, JevResponse } from "./jev.ts";
 
 export interface EngineMethods {
   /** Answers with the engine's version; the app's first sign the engine is alive. */
   "engine.ping": { params: Record<string, never>; result: { version: string } };
-  /** Scans the project, starts watching it, and returns every file's facts. */
-  "project.open": { params: { root: string }; result: { projectId: string; files: FileFacts[] } };
+  /** Scans the project, starts watching it, and returns every file's facts and every entity it found. */
+  "project.open": { params: { root: string }; result: { projectId: string; files: FileFacts[]; entities: EntityFacts[] } };
   /** Sends one request to Jev with the key from the macOS Keychain. */
   "jev.ask": { params: { request: JevRequest }; result: JevResponse };
   /** Reads one record from the project's app-data store. */
@@ -22,7 +22,7 @@ export type StoreTable = "answers" | "blueprints" | "document" | "placements";
 
 /** Pushed by the engine without a request. */
 export type EngineEvent =
-  | { event: "facts.changed"; changed: FileFacts[]; removed: string[] }
+  | { event: "facts.changed"; changed: FileFacts[]; removed: string[]; entities: EntityFacts[]; entitiesRemoved: string[] }
   | { event: "tests.reported"; failing: string[]; at: string }
   | { event: "engine.error"; message: string };
 
