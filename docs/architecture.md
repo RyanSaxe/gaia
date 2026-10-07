@@ -57,9 +57,14 @@ stands for: a file (`flora`, `rock`, `wildflowers`, `landmark`), an entity
 (`structure`), a region (`biome`), a dependency between two files (`link`) or
 the repository (`world`). A `link`'s blueprint fills only a trail's look; the
 terrain finds its route. A `structure`'s footprint lays out one
-`BuildingPlan` (walls, roofline, floor and where every door and window goes);
-its body, roof, openings, ornaments and optional feature (a `waterwheel@1`, a
-`tower@1`) each build on that plan, so they agree by construction.
+`BuildingPlan`: the masses the building is joined from (each a block or a
+round turret with its own storeys and roof form: gable, hip, half-hip,
+lean-to or cone), its floor, and where every door and window goes. Its body,
+roof, openings, ornaments and optional feature (a `waterwheel@1`, a
+`tower@1`) each build on that plan, so walls rise to the roofline over them
+and everything agrees by construction. The geometry lives in
+`packages/primitives/src/geometry/building/`, one file per part: layout,
+frame (reading the plan), walls, roofs, openings, garden, ruin and features.
 
 An **entity** is a named unit of the code with a boundary, a public surface,
 things that depend on it and a health of its own: a package or crate (found

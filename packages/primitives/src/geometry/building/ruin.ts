@@ -4,8 +4,11 @@
 // a failing one is overgrown, with no geometry rebuilt.
 
 import { type BuildingPlan, CUT, type Rand, type Vec3 } from "@gaia/schema";
-import { type Channels, type PartBuilder, type V3, addScaled, clamp, cross, icosphere, normalize, rotate } from "./kit.ts";
-import { type Ruin, type Wall, clearings, on, ruinAt, topAt, wallsOf } from "./plan.ts";
+import { type Channels, type PartBuilder, type V3, addScaled, clamp, cross, icosphere, normalize, rotate } from "../kit.ts";
+import { type Ruin, type Wall, clearings, hidden, insideMass, massOf, on, peakOf, ruinAt, shownWalls, topAt, wallTop } from "./frame.ts";
+
+/** True when a point on the ground lies inside one of the building's masses. */
+const indoors = (plan: BuildingPlan, x: number, z: number): boolean => plan.masses.some((m) => insideMass(plan, m, [x, 0.1, z], -0.05));
 
 /** Sorted breaks every `cell` meters from `a` to `b`, with `extra` breaks added where they fall inside. */
 function breaks(a: number, b: number, cell: number, extra: readonly number[]): number[] {
@@ -22,11 +25,11 @@ function breaks(a: number, b: number, cell: number, extra: readonly number[]): n
  * an open door or a broken pane shows the dark inside.
  */
 export function wallSheet(b: PartBuilder, plan: BuildingPlan, w: Wall, y0: number, d: number, cell: number, at: (p: V3) => { c: Channels; shade: number }): void {
-  const top = topAt(plan, w, 0);
+  const top = wallTop(plan, massOf(plan, w));
   const holes = clearings(plan, w, 0).filter((h) => h.y1 <= top + 1e-3);
   const cols = breaks(0, w.length, cell, holes.flatMap((h) => [h.s0, h.s1]));
   const body = breaks(y0, top, cell, holes.flatMap((h) => [h.y0, h.y1]));
-  const peak = topAt(plan, w, w.length / 2);
+  const peak = peakOf(plan, w).y;
   const gableRows = peak - top > 0.05 ? Math.max(1, Math.round((peak - top) / cell)) : 0;
   const rows = body.length + gableRows;
   const yAt = (s: number, j: number): number => (j < body.length ? (body[j] as number) : top + ((topAt(plan, w, s) - top) * (j - body.length + 1)) / gableRows);
@@ -71,19 +74,19 @@ function card(b: PartBuilder, c: Vec3, n: Vec3, up: Vec3, size: number, twist: n
  * the collapse. The lowest leaves come first as vitality falls, and the
  * strands reach higher as it keeps falling, up over the eaves.
  */
-export function ivy(b: PartBuilder, plan: BuildingPlan, ruin: Ruin, r: Rand): void {
-  for (const w of wallsOf(plan)) {
+export function ivy(b: PartBuilder, plan: BuildingPlan, ruin: Ruin, r: Rand, coarse = 1): void {
+  for (const w of shownWalls(plan)) {
     const holes = clearings(plan, w, 0.05).filter((h) => h.y0 < plan.floor + 0.5);
     const starts = [0.25 + 0.4 * r.next(), w.length - 0.25 - 0.4 * r.next()];
     const mid = w.length * (0.3 + 0.4 * r.next());
     if (ruinAt(ruin, on(w, mid, 0)) > 0.2 || w.length > 6) starts.push(mid);
-    for (const s0 of starts) {
+    for (const s0 of starts.filter((s) => !hidden(plan, w, s, 0.4))) {
       const zone = Math.max(ruinAt(ruin, on(w, s0, 0)), 0.15);
       const reach = Math.min(8, topAt(plan, w, s0) * (0.65 + 0.5 * zone) + 0.3);
       let s = s0;
-      for (let y = 0.15; y < reach; y += 0.22) {
+      for (let y = 0.15; y < reach; y += 0.22 * coarse) {
         s = clamp(s + (r.next() - 0.5) * 0.35, 0.1, w.length - 0.1);
-        if (holes.some((h) => s > h.s0 && s < h.s1 && y < h.y1)) continue;
+        if (holes.some((h) => s > h.s0 && s < h.s1 && y < h.y1) || hidden(plan, w, s, y)) continue;
         for (let k = 0; k < 2; k++) {
           const ss = clamp(s + (r.next() - 0.5) * 0.5, 0.05, w.length - 0.05);
           const c = on(w, ss, y + (r.next() - 0.5) * 0.15, 0.06 + 0.05 * r.next());
@@ -138,11 +141,13 @@ export function weeds(b: PartBuilder, spots: readonly { x: number; z: number; gr
 export function weedSpots(plan: BuildingPlan, ruin: Ruin, r: Rand, count: number): { x: number; z: number; grow: number; size: number }[] {
   const out: { x: number; z: number; grow: number; size: number }[] = [];
   const door = plan.openings.find((o) => o.kind === "door");
+  const walls = shownWalls(plan);
   for (let i = 0; i < count; i++) {
-    const w = wallsOf(plan)[Math.floor(r.next() * 4)] as Wall;
+    const w = walls[Math.floor(r.next() * walls.length)] as Wall;
     const s = r.next() * w.length;
     const out0 = 0.15 + Math.pow(r.next(), 2) * 2.4;
     const p = on(w, s, 0, out0);
+    if (indoors(plan, p[0], p[2])) continue;
     // Keep the doorway and its walk passable a little longer.
     const onWalk = door !== undefined && Math.abs(p[0] - door.position[0]) < 0.6 && p[2] > plan.depth / 2;
     const z = ruinAt(ruin, p);
@@ -177,6 +182,7 @@ export function lump(b: PartBuilder, c: Vec3, radii: Vec3, yaw: number, shade: n
  * corner first.
  */
 export function rubble(b: PartBuilder, plan: BuildingPlan, ruin: Ruin, r: Rand, size: number, count: number): void {
+  const walls = shownWalls(plan);
   for (let i = 0; i < count; i++) {
     // Most rubble lies near the weak corner, inside and out; the rest along the walls.
     const near = i < count * 0.7;
@@ -188,7 +194,7 @@ export function rubble(b: PartBuilder, plan: BuildingPlan, ruin: Ruin, r: Rand, 
       x = ruin.x + Math.cos(a) * d;
       z = ruin.z + Math.sin(a) * d;
     } else {
-      const w = wallsOf(plan)[Math.floor(r.next() * 4)] as Wall;
+      const w = walls[Math.floor(r.next() * walls.length)] as Wall;
       const p = on(w, r.next() * w.length, 0, 0.2 + r.next() * 0.9);
       x = p[0];
       z = p[2];

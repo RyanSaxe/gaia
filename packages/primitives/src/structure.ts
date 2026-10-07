@@ -1,24 +1,51 @@
 // Structure primitives: a building's plan, walls, roof, openings, dressing
 // and feature. Every part builds against the one plan the footprint lays
 // out, so walls, roof, windows, flower boxes and a mill's wheel agree by
-// construction. Geometry lives in ./geometry/building.ts and
-// ./geometry/features.ts.
+// construction. Geometry lives in ./geometry/building/, one file per part:
+// layout (massing, door and windows), walls, roofs, openings, garden, ruin
+// and features.
 
 import { primitive, t } from "@gaia/schema";
-import { buildCasements, buildFieldstone, buildGarden, buildThatch, buildTiles, buildTimberFrame, layOutCottage } from "./geometry/building.ts";
-import { buildTower, buildWaterwheel } from "./geometry/features.ts";
+import { buildTower, buildWaterwheel } from "./geometry/building/features.ts";
+import { buildGarden } from "./geometry/building/garden.ts";
+import { layOutCottage } from "./geometry/building/layout.ts";
+import { buildCasements } from "./geometry/building/openings.ts";
+import { buildThatch, buildTiles } from "./geometry/building/roofs.ts";
+import { buildFieldstone, buildTimberFrame } from "./geometry/building/walls.ts";
 
 export const cottagePlanParams = {
-  shape: t.choice("The cottage's shape on the ground", {
-    long: "A low house longer than it is deep, its door in the long side under the eaves",
-    snug: "A small, nearly square house, compact and cosy",
-    "gable-fronted": "A narrow house that faces you with its pointed gable, the door beneath the peak",
+  massing: t.choice("How the building's volumes are put together", {
+    "a single block": "One simple block under one roof",
+    "an L": "A main range with a wing jutting out at one end, its gable looking outward, the door in the corner between them",
+    "a T": "A main range with a gabled wing jutting from its middle",
+    "a long range": "A long run of joined blocks in a line, each a little narrower than the last, like a farmhouse with its byre and barn",
+    "a cluster": "A main house with wings and outbuildings joined on all round, gathered over the years",
   }),
-  size: t.scale("How big the cottage is", { tiny: 0.85, modest: 1, roomy: 1.15 }),
-  roofline: t.scale("How steep the roof is", {
+  shape: t.choice("The main body's shape on the ground", {
+    long: "A low range longer than it is deep, its door in the long side under the eaves",
+    snug: "A small, nearly square body, compact and cosy",
+    "gable-fronted": "A narrow body that faces you with its pointed gable, the door beneath the peak",
+  }),
+  size: t.scale("How big the main body is", { tiny: 0.85, modest: 1, roomy: 1.15 }),
+  storeys: t.scale("How many storeys the main body rises", { "one storey": 1, "two storeys": 2, "three storeys": 3 }),
+  heights: t.choice("How the joined parts' heights relate", {
+    level: "Every part keeps the main body's storeys, under one eave line",
+    stepped: "Each joined part stands a storey lower than the part it joins, so the roofs step down",
+  }),
+  roof: t.choice("The form of the roofs over the main body and its wings", {
+    gabled: "Two slopes meeting at a ridge, with pointed gable walls at the ends",
+    hipped: "Slopes on every side, so there are no gables and the roof sits low and calm",
+    "half-hipped": "Gables whose tops are cut back into a small hip, like an old farmhouse",
+  }),
+  roofline: t.scale("How steep the roofs are", {
     "low and spreading": 33,
     steep: 45,
     "tall and steep": 54,
+  }),
+  attachments: t.set("What is built onto it", {
+    porch: "A small gabled porch sheltering the door",
+    "lean-to": "A low lean-to shed against a back or end wall, under one slope",
+    turret: "A round turret at a corner, a storey taller, under a pointed cone",
   }),
   windows: t.scale("How many windows it has", { "a few": 1, several: 2, many: 3 }),
   base: t.scale("How high the floor sits on its stone base", {
@@ -36,7 +63,7 @@ export const cottagePlanParams = {
 export const cottagePlan = primitive({
   id: "cottage-plan@1",
   role: "Footprint",
-  doc: "A cottage's plan on the ground: its shape, size, roofline, storeys, and where the door and windows go.",
+  doc: "A building's plan: the volumes it is put together from (a single block, an L, a T, a long range or a cluster, with a porch, a lean-to or a turret), their storeys and roof forms, and where the door and windows go.",
   params: cottagePlanParams,
   build: (p, ctx) => layOutCottage(p, ctx),
 });

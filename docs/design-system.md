@@ -79,7 +79,7 @@ instance within it:
 | Shrub | up to 2 m |
 | Small tree | 3 to 6 m |
 | Tall tree | 8 to 16 m |
-| House | 5 to 9 m |
+| Building | 5 to 9 m a storey or two; up to 14 m with three storeys or a turret |
 | Tower | 8 to 19 m, taller with more depending on it |
 | Landmark | 12 to 30 m; a ring of standing stones 3 to 8 m, 10 to 20 m across |
 
@@ -202,7 +202,35 @@ on the horizon rise out of its haze. `skyColorAt` and `aerialAt` in
 
 ## Buildings
 
-A building stands for an entity. A building stands on a pad leveled into
+A building stands for an entity. Buildings are as flexible as trees: a few
+strong axes of `cottage-plan@1` change the whole form, and walls, roofs and
+openings compose on whatever it lays out, so one set of primitives makes a
+hamlet of very different buildings.
+
+| Axis | Choices |
+| --- | --- |
+| Massing | a single block; an L (a wing juts out at one end, its gable looking outward); a T (a gabled wing from the middle); a long range (blocks in line, each narrower); a cluster (wings and outbuildings joined all round) |
+| Main body | long, snug or gable-fronted; tiny to roomy |
+| Storeys | one to three, and whether joined parts keep one eave line or step down a storey each |
+| Roof form | gabled, hipped or half-hipped over the body and its wings; a lean-to's one slope; a turret's cone |
+| Attachments | a gabled porch over the door, a lean-to shed, a round turret a storey taller |
+| Character | how steep the roofs, how high the plinth, how many windows, how settled and crooked |
+
+Each volume is a mass: walls standing on a rectangle (or a turret's
+octagon) under a roof of its own. Joined masses overlap where they meet, so
+a wall inside another mass is never built and a wing's roof runs into the
+main roof in a valley. Every wall rises to the roofline over it, so gables,
+hipped ends, a half-hip's cut-back gable and a lean-to's slope meet their
+roofs exactly. A hipped range hips only the ends no other mass joins, so a
+long range reads as one stepped roof. Windows fall where walls show, in
+every storey, clear of the door, the chimney's gable and each other; a big
+building keeps those that look toward the walk, at most fourteen. Its walls
+keep within 10,500 triangles and its roofs share 4,600 across their slopes:
+fine work (studs, plaster cells, plinth stones, ivy, tile courses) coarsens on
+a big building and again until it fits, so a building of many masses keeps
+its budget by construction.
+
+A building stands on a pad leveled into
 the baked ground under it and its yard, blending back into the land over
 7 m, and its foundation reaches 1.4 m below, so it never floats and never
 shows a gap. Grass is cleared under the house and along the walk to its
@@ -226,6 +254,11 @@ at the front corner away from the door, where a person walking up sees it:
 | 0.5 | Tired: plaster falls in patches, the first holes in the roof's eaves, ivy at the corners, the door ajar, a shutter hanging, long grass |
 | 0.2 | Failing: the roof rotted through over bare rafters, walls holed and timbers fallen at the weak corner, rubble below, windows broken or boarded, the chimney toppling, the flower boxes down |
 | 0.05 | A ruin: most of the covering gone, the chimney lying across the ridge, ivy to the eaves, rank grass and rubble all round, a tower's top and lantern fallen |
+
+Ruin follows each form: every mass's walls and roof rot by the same weak
+corner, a lean-to's whole slope caves in about its high edge, a turret's
+cone rots through and its finial leans and falls, and a fallen timber is
+one storey's post, so a tall house collapses floor by floor.
 
 Every one of these is a vitality channel on the pieces the primitives
 already build, so nothing is rebuilt and nothing pops. Ivy and the moss on
