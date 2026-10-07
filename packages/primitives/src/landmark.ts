@@ -75,7 +75,7 @@ export const greatTreeParams = {
     "a spreading oak": "Broad and low, its great limbs reaching far out",
     "a tall elm": "Tall, with rising limbs and a high domed crown",
     "a great willow": "A huge weeping crown of hanging strands",
-    "an umbrella pine": "A tall trunk holding up one broad, flat-topped umbrella of foliage plates, like a stone pine",
+    "an umbrella pine": "A tall bare trunk holding up one broad, flat-topped umbrella of a crown, like a stone pine",
     "a dark yew": "A low, dense dome of small dark leaves, spreading wider than it is tall",
   }),
   size: t.scale("How great it is", { great: 2.2, vast: 2.7, "ancient and immense": 3.2 }),

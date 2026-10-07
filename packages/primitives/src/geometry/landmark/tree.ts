@@ -17,7 +17,7 @@ const FORMS = {
   "a spreading oak": { frame: { habit: "spreading", density: 5, spread: 44, stature: 0.95 }, crown: "clumps", leaf: "lobed", shape: "round", bole: 1 },
   "a tall elm": { frame: { habit: "upright", density: 5, spread: 34, stature: 1.25 }, crown: "clumps", leaf: "oval", shape: "round", bole: 1 },
   "a great willow": { frame: { habit: "weeping", density: 4, spread: 46, stature: 0.95 }, crown: "strands", leaf: "pointed", shape: "round", bole: 1 },
-  "an umbrella pine": { frame: { habit: "spreading", density: 4, spread: 62, stature: 0.8 }, crown: "clumps", leaf: "pointed", shape: "plates", bole: 2 },
+  "an umbrella pine": { frame: { habit: "spreading", density: 4, spread: 50, stature: 0.72 }, crown: "clumps", leaf: "pointed", shape: "round", bole: 2.2 },
   "a dark yew": { frame: { habit: "spreading", density: 5, spread: 52, stature: 0.72 }, crown: "clumps", leaf: "oval", shape: "round", bole: 1 },
 } as const;
 
@@ -33,7 +33,12 @@ function aged(skel: Skeleton, age: number, bole: number, broken: (i: number) => 
   const fork = trunk.reduce((m, l) => Math.max(m, l.end[1]), 0);
   // The fork drops and the trunk thickens with age; the crown above moves with the fork.
   const stretch = bole * (1 - 0.38 * age);
-  const lower = (q: readonly [number, number, number]): V3 => [q[0], q[1] <= fork ? q[1] * stretch : q[1] + fork * (stretch - 1), q[2]];
+  // The trunk stretches; the crown moves with the fork, whole, except that a
+  // crown lowered with age never sinks a drooping limb below where it hung.
+  const lower = (q: readonly [number, number, number], trunk = false): V3 => {
+    const moved = trunk || (stretch < 1 && q[1] <= fork) ? q[1] * stretch : q[1] + fork * (stretch - 1);
+    return [q[0], moved, q[2]];
+  };
   const girth = (l: Limb): number => (l.depth === 0 ? 0.85 + 0.75 * age : l.depth === 1 ? 0.9 + 0.4 * age : 1);
   // Great limbs broken off: the first segment stays as a blunt stub and everything it carried is gone.
   const stubs = new Set<number>();
@@ -48,8 +53,8 @@ function aged(skel: Skeleton, age: number, bole: number, broken: (i: number) => 
   skel.limbs.forEach((l, i) => {
     if (removed(i)) return;
     kept.set(i, limbs.length);
-    const start = lower(l.start);
-    let end = lower(l.end);
+    const start = lower(l.start, l.depth === 0);
+    let end = lower(l.end, l.depth === 0);
     let endRadius = l.endRadius * girth(l);
     if (stubs.has(i)) {
       end = [start[0] + (end[0] - start[0]) * 0.5, start[1] + (end[1] - start[1]) * 0.5, start[2] + (end[2] - start[2]) * 0.5];

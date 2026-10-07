@@ -349,7 +349,8 @@ export function buildLookoutTower(p: TowerParams, ctx: BuildContext): Built {
     const d = wallAt(0) * (sides === 0 ? 1 : 1.1) + 0.3 + Math.pow(r.next(), 1.6) * Math.max(2.5, height * 0.2);
     const s = (0.22 + 0.3 * r.next()) * p.masonry;
     const at: V3 = [Math.cos(a) * d, 0, Math.sin(a) * d];
-    const grow = broken && i % 3 === 0 ? 0 : clamp(0.08 + 0.5 * r.next(), 0.06, 0.55);
+    // A ruin's oldest rubble fell before any decline, so it lies there even at full health.
+    const grow = broken && i % 3 === 0 ? 1 : clamp(0.08 + 0.5 * r.next(), 0.06, 0.55);
     lump(stone, [at[0], s * 0.1, at[2]], [s, s * 0.6, s * 0.8], r.next() * Math.PI, 0.42 + 0.15 * r.next(), still(at, 0.6, { grow, tint: (r.next() - 0.5) * 0.04 }), r);
   }
 

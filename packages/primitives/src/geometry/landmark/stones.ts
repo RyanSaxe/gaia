@@ -286,9 +286,9 @@ export function buildStandingStones(p: StonesParams, ctx: BuildContext): Built {
     legs.forEach(([fx, fz, yaw], k) => {
       const sr = r.fork(`leg${k}`);
       const s = stoneAt(sr, fx * capL, fz * capW, yaw, legSize);
-      // The back uprights give way outward, and the capstone slides off after them.
-      const back = fz < 0;
-      stones.push({ ...s, height: legH * sr.range(0.96, 1.04), toward: back ? -Math.PI / 2 + sr.range(-0.3, 0.3) : s.toward, decline: back ? { kind: "tilt", most: sr.range(0.9, 1.25), from: sr.range(0.3, 0.38) } : { kind: "tilt", most: sr.range(0.08, 0.2), from: sr.range(0.36, 0.5) } });
+      // The uprights on one side give way outward, and the capstone tips off after them.
+      const gives = fx >= 0;
+      stones.push({ ...s, height: legH * sr.range(0.96, 1.04), toward: gives ? sr.range(-0.3, 0.3) : s.toward, decline: gives ? { kind: "tilt", most: sr.range(0.9, 1.25), from: sr.range(0.3, 0.38) } : { kind: "tilt", most: sr.range(0.08, 0.2), from: sr.range(0.36, 0.5) } });
     });
     emitCapstone(out, stones.slice(firstLeg), capL, capW, h * 0.2, p.facets, r.fork("capstone"));
     const kerb = Math.round(count * 1.5);
@@ -358,9 +358,9 @@ export function buildStandingStones(p: StonesParams, ctx: BuildContext): Built {
 }
 
 /**
- * A dolmen's capstone across the tops of its uprights. As the back uprights
- * give way outward it tips about the front ones' tops until its back edge
- * rests on the ground.
+ * A dolmen's capstone across the tops of its uprights. As the uprights on
+ * one side give way outward, it tips about the other side's tops until its
+ * edge rests on the ground.
  */
 function emitCapstone(b: PartBuilder, legs: readonly Stone[], length: number, width: number, thick: number, facets: number, r: Rand): void {
   const top = Math.min(...legs.map((l) => l.height)) * 0.98;
@@ -374,16 +374,17 @@ function emitCapstone(b: PartBuilder, legs: readonly Stone[], length: number, wi
     return [x * c + z * s, top + y - thick * 0.15, -x * s + z * c];
   });
   const normals = smoothNormals(points, shape.triangles);
-  const front = Math.max(...legs.filter((l) => l.z > 0).map((l) => l.z - l.depth * 0.3), 0);
-  const hinge: V3 = [0, top, front];
-  const reach = front + width * 0.5;
-  const tip = Math.asin(clamp(top / Math.max(reach, top + 0.01), 0, 0.98));
-  const from = Math.max(...legs.filter((l) => l.decline.kind === "tilt" && l.z < 0).map((l) => (l.decline.kind === "tilt" ? l.decline.from : 0)), 0.3) + 0.02;
+  const standing = legs.filter((l) => l.x < 0);
+  const hingeX = Math.max(...standing.map((l) => l.x + l.depth * 0.5), -length * 0.25);
+  const hinge: V3 = [hingeX, top, 0];
+  const reach = length * 0.5 - hingeX;
+  const tip = Math.asin(clamp(top / reach, 0, 0.95));
+  const from = Math.max(...legs.filter((l) => l.x >= 0).map((l) => (l.decline.kind === "tilt" ? l.decline.from : 0)), 0.3) + 0.02;
   const first = b.vertexCount;
   points.forEach((p, i) => {
     const n = normals[i] as V3;
     const mottle = fbm3(p[0] * 1.1, p[1] * 1.1, p[2] * 1.1, shape.seed + 3, 3);
-    const ch: Channels = { loss: 0, droop: 0, wither: clamp(0.6 + 0.3 * mottle, 0.2, 0.95), glow: 0, pivot: hinge, tint: 0.025 * mottle, fall: [-tip, 0, 0, from] };
+    const ch: Channels = { loss: 0, droop: 0, wither: clamp(0.6 + 0.3 * mottle, 0.2, 0.95), glow: 0, pivot: hinge, tint: 0.025 * mottle, fall: [0, 0, -tip, from] };
     b.vertex(p, n, 0.5 + 0.14 * mottle + 0.1 * n[1], ch);
   });
   for (const [i, j, k] of shape.triangles) b.triangle(first + i, first + j, first + k);
