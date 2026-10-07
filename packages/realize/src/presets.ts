@@ -394,43 +394,109 @@ export const FLOWER_PRESETS: readonly Preset[] = [
   { name: "Pink asters", blueprint: flowersOf("daisies@1", { spread: "a patch", density: "a thick carpet", height: "knee-high" }, "cherry-blossom") },
 ];
 
-/** Hand-filled landmarks: one of each primitive, as Jev might answer for a region's central file. */
+/** Hand-filled landmarks: very different great things from three primitives, as Jev might answer for the entities a world is organized around. */
 export const LANDMARK_PRESETS: readonly Preset[] = [
   {
     name: "Lantern tower",
     blueprint: identify("landmark", {
-      form: { use: "lookout-tower@1", params: { height: "a lookout tower", shape: "round", crown: "an open lantern room", masonry: "dressed blocks" } },
+      form: { use: "lookout-tower@1", params: { height: "a lookout tower", plan: "round", profile: "tapering", galleries: "a gallery at the top", crown: "an open lantern room", masonry: "dressed blocks" } },
       palette: { use: "palette@1", params: { family: "spring-meadow", contrast: "balanced" } },
     }),
   },
   {
     name: "Stone ring",
     blueprint: identify("landmark", {
-      form: { use: "standing-stones@1", params: { count: "a ring", height: "towering", lintels: true, centre: "a tall king stone", facets: "softly faceted" } },
+      form: { use: "standing-stones@1", params: { arrangement: "ring", count: "a good many", height: "towering", lintels: true, centre: "a tall king stone", facets: "softly faceted" } },
       palette: { use: "palette@1", params: { family: "silver-birch", contrast: "balanced" } },
     }),
   },
   {
     name: "Great oak",
     blueprint: identify("landmark", {
-      form: { use: "great-tree@1", params: { form: "a spreading oak", size: "vast", fullness: "dense and lush", bark: "deeply furrowed" } },
+      form: { use: "great-tree@1", params: { form: "a spreading oak", size: "vast", age: "ancient, storm-broken and stag-headed", fullness: "dense and lush", bark: "deeply furrowed" } },
       motion: { use: "sway@1", params: { stiffness: "stiff", rhythm: "slow" } },
       palette: { use: "palette@1", params: { family: "deep-forest", contrast: "balanced" } },
     }),
   },
   {
-    name: "Battlemented keep",
+    name: "Broken watchtower",
     blueprint: identify("landmark", {
-      form: { use: "lookout-tower@1", params: { height: "a tall tower", shape: "square", crown: "battlements", masonry: "great rough blocks" } },
+      form: { use: "lookout-tower@1", params: { height: "a tall tower", plan: "round", profile: "straight", galleries: "none", crown: "a broken top", masonry: "great rough blocks" } },
+      palette: { use: "palette@1", params: { family: "bluebell-wood", contrast: "balanced" } },
+    }),
+  },
+  {
+    name: "Dolmen",
+    blueprint: identify("landmark", {
+      form: { use: "standing-stones@1", params: { arrangement: "dolmen", count: "a good many", height: "towering", lintels: false, centre: "nothing", facets: "worn smooth" } },
+      palette: { use: "palette@1", params: { family: "deep-forest", contrast: "balanced" } },
+    }),
+  },
+  {
+    name: "Great pine",
+    blueprint: identify("landmark", {
+      form: { use: "great-tree@1", params: { form: "an umbrella pine", size: "vast", age: "old and broad", fullness: "full", bark: "deeply furrowed" } },
+      motion: { use: "sway@1", params: { stiffness: "stiff", rhythm: "slow" } },
+      palette: { use: "palette@1", params: { family: "deep-forest", contrast: "balanced" } },
+    }),
+  },
+  {
+    name: "Stepped spire",
+    blueprint: identify("landmark", {
+      form: { use: "lookout-tower@1", params: { height: "a soaring tower", plan: "octagonal", profile: "stepped", galleries: "a gallery at every stage", crown: "a conical roof", masonry: "small, even blocks" } },
+      palette: { use: "palette@1", params: { family: "teal-gold", contrast: "balanced" } },
+    }),
+  },
+  {
+    name: "Stone avenue",
+    blueprint: identify("landmark", {
+      form: { use: "standing-stones@1", params: { arrangement: "avenue", count: "a great many", height: "twice a person's height", lintels: true, centre: "a tall king stone", facets: "sharply faceted" } },
       palette: { use: "palette@1", params: { family: "desert-sage", contrast: "balanced" } },
     }),
   },
   {
     name: "Great willow",
     blueprint: identify("landmark", {
-      form: { use: "great-tree@1", params: { form: "a great willow", size: "great", fullness: "full", bark: "gnarled and burred" } },
+      form: { use: "great-tree@1", params: { form: "a great willow", size: "great", age: "old and broad", fullness: "full", bark: "gnarled and burred" } },
       motion: { use: "sway@1", params: { stiffness: "gently swaying", rhythm: "slow" } },
       palette: { use: "palette@1", params: { family: "lantern-dusk", contrast: "balanced" } },
+    }),
+  },
+  {
+    name: "Battlemented keep",
+    blueprint: identify("landmark", {
+      form: { use: "lookout-tower@1", params: { height: "a tall tower", plan: "square", profile: "straight", galleries: "a gallery at the top", crown: "battlements", masonry: "great rough blocks" } },
+      palette: { use: "palette@1", params: { family: "desert-sage", contrast: "balanced" } },
+    }),
+  },
+  {
+    name: "Cairn field",
+    blueprint: identify("landmark", {
+      form: { use: "standing-stones@1", params: { arrangement: "cairn field", count: "a great many", height: "towering", lintels: false, centre: "nothing", facets: "softly faceted" } },
+      palette: { use: "palette@1", params: { family: "autumn-ember", contrast: "balanced" } },
+    }),
+  },
+  {
+    name: "Great yew",
+    blueprint: identify("landmark", {
+      form: { use: "great-tree@1", params: { form: "a dark yew", size: "great", age: "ancient, storm-broken and stag-headed", fullness: "dense and lush", bark: "gnarled and burred" } },
+      motion: { use: "sway@1", params: { stiffness: "stiff", rhythm: "slow" } },
+      palette: { use: "palette@1", params: { family: "deep-forest", contrast: "balanced" } },
+    }),
+  },
+  {
+    name: "Leaning menhirs",
+    blueprint: identify("landmark", {
+      form: { use: "standing-stones@1", params: { arrangement: "leaning menhirs", count: "a good many", height: "towering", lintels: false, centre: "an altar stone", facets: "sharply faceted" } },
+      palette: { use: "palette@1", params: { family: "silver-birch", contrast: "balanced" } },
+    }),
+  },
+  {
+    name: "Great elm",
+    blueprint: identify("landmark", {
+      form: { use: "great-tree@1", params: { form: "a tall elm", size: "vast", age: "a young giant, still reaching", fullness: "full", bark: "deeply furrowed" } },
+      motion: { use: "sway@1", params: { stiffness: "stiff", rhythm: "slow" } },
+      palette: { use: "palette@1", params: { family: "autumn-ember", contrast: "balanced" } },
     }),
   },
 ];

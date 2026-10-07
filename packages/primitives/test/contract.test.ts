@@ -19,9 +19,14 @@ const TRIANGLE_BUDGET = 40_000;
 type Stored = Record<string, string | boolean | string[]>;
 type Erased = (params: unknown, ctx: { rand: ReturnType<typeof rand>; facts: Record<string, number> }, input: unknown) => unknown;
 
-/** The lowest, middle and highest level of every scale, with every choice option cycled through. */
+/**
+ * The lowest, middle and highest level of every scale, with every choice
+ * option cycled through: a primitive with a choice of more than three
+ * options gets one more sample for each, so every option is built.
+ */
 function samples(p: AnyPrimitive): Stored[] {
-  return [0, 0.5, 1].map((at, i) => {
+  const options = Math.max(3, ...(Object.values(p.params) as Field[]).map((f) => (f.type === "choice" ? Object.keys(f.options).length : 0)));
+  return Array.from({ length: options }, (_, i) => [0, 0.5, 1][i % 3] as number).map((at, i) => {
     const out: Stored = {};
     for (const [name, f] of Object.entries(p.params) as [string, Field][]) {
       if (f.type === "scale") out[name] = f.levels[Math.round(at * (f.levels.length - 1))]?.words ?? "";

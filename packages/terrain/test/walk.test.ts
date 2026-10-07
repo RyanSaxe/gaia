@@ -220,7 +220,7 @@ describe("solids", () => {
 
 describe("solid pieces of a built thing", () => {
   const ring = (lintels: boolean, centre: "nothing" | "a tall king stone") =>
-    standingStones.build({ count: 9, height: 5.2, lintels, centre, facets: 0.55 }, { rand: rand(5), facts: {} }, null);
+    standingStones.build({ arrangement: "ring", count: 9, height: 5.2, lintels, centre, facets: 0.55 }, { rand: rand(5), facts: {} }, null);
   const at = { x: dry.x - 12, y: heightAt(t.lattice, dry.x - 12, dry.z - 32), z: dry.z - 32, yaw: 0.4 };
 
   it("stops a walker at each standing stone, never at a lintel overhead, and leaves a ring's open middle free", () => {

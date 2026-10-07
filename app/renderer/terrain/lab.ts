@@ -232,6 +232,8 @@ export function createTerrainLab(root: HTMLElement): Lab {
     let base = 1;
     for (const part of built.parts) {
       for (let k = 0; k < part.positions.length; k += 3) {
+        // Only what stands counts: fallen stone that grows in at its foot is walked over.
+        if ((part.channels.grow?.[k / 3] ?? 0) > 0) continue;
         if ((part.positions[k + 1] as number) < 1) base = Math.max(base, Math.hypot(part.positions[k] as number, part.positions[k + 2] as number));
       }
     }
@@ -1103,7 +1105,10 @@ export function createTerrainLab(root: HTMLElement): Lab {
       landmarks: () =>
         ways.sites.map((s, i) => ({ name: landmarks[s.landmark]?.name, ...s.site, height: landmarkViews[i]?.height, triangles: landmarkViews[i]?.triangles })),
       /** Sets every landmark's entity's vitality, 0 to 1, and with it the trails they join. */
-      landmarkVitality: (v: number) => landmarkEntities.forEach((e) => setEntityVitality(e.name, v)),
+      landmarkVitality: (v: number) => {
+        landmarkEntities.forEach((e) => setEntityVitality(e.name, v));
+        for (const view of landmarkPool.values()) view.setVitality(v);
+      },
       /** Every entity, what stands for it, and its vitality now. */
       entities: () => [
         ...settlement.buildings.map((b) => ({ name: b.represented.name, standsAs: b.kindName, vitality: entityVitality.get(b.represented.name) })),
@@ -1111,6 +1116,23 @@ export function createTerrainLab(root: HTMLElement): Lab {
       ],
       /** Sets one entity's vitality by its name: its building or landmark, and the wear of every trail it joins, live. */
       entityVitality: (name: string, v: number) => setEntityVitality(name, v),
+      /** Stands landmark preset `i` on landmark site `at` in place of what stands there, so every form can be seen; returns where. */
+      showLandmark: (i: number, at = 0) => {
+        const s = ways.sites[at];
+        const lm = landmarks[i];
+        if (s === undefined || lm === undefined) return null;
+        for (const [key, v] of landmarkPool) if (key.startsWith("show#") || v === landmarkViews[at]) v.object.visible = false;
+        let view = landmarkPool.get(`show#${i}`);
+        if (view === undefined) {
+          view = createPlant({ ...lm.built, parts: mergeParts(lm.built.parts) }, light);
+          landmarkPool.set(`show#${i}`, view);
+          scene.add(view.object);
+        }
+        view.object.visible = true;
+        view.object.position.set(s.site.x, s.site.y - 0.05, s.site.z);
+        view.object.rotation.y = 0;
+        return { name: lm.name, x: s.site.x, y: s.site.y, z: s.site.z, base: lm.base, height: view.height, triangles: view.triangles };
+      },
       /** Each trail: its ends, length, crossings and a point every 10 m. */
       trails: () =>
         ways.trails.map((t) => ({

@@ -119,7 +119,8 @@ export const BODY_BAND = { from: 0.1, to: 1.8 } as const;
  * The solids of a built thing standing at (x, y, z), turned by `yaw` as Three
  * turns it: each solid piece's outline across a walker's body height. A
  * piece wholly above or below that band stops nothing, so a walker passes
- * under a lintel and through a doorway between two stones.
+ * under a lintel and through a doorway between two stones. Nor does a piece
+ * that only grows in as the thing declines, such as fallen stone.
  */
 export function piecesShapes(parts: readonly Part[], at: { readonly x: number; readonly y: number; readonly z: number; readonly yaw: number }): SolidShape[] {
   const c = Math.cos(at.yaw);
@@ -130,7 +131,7 @@ export function piecesShapes(parts: readonly Part[], at: { readonly x: number; r
     const byPiece = new Map<number, number[]>();
     for (let v = 0; v * 3 < part.positions.length; v++) {
       const y = part.positions[v * 3 + 1] as number;
-      if (y < BODY_BAND.from || y > BODY_BAND.to) continue;
+      if (y < BODY_BAND.from || y > BODY_BAND.to || (part.channels.grow?.[v] ?? 0) > 0) continue;
       const lx = part.positions[v * 3] as number;
       const lz = part.positions[v * 3 + 2] as number;
       const piece = part.piece[v * 2] as number;

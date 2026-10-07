@@ -81,7 +81,7 @@ instance within it:
 | Tall tree | 8 to 16 m |
 | Building | 5 to 9 m a storey or two; up to 14 m with three storeys or a turret |
 | Tower | 8 to 19 m, taller with more depending on it |
-| Landmark | 12 to 30 m; a ring of standing stones 3 to 8 m, 10 to 20 m across |
+| Landmark | 12 to 30 m; great stones 3 to 8 m, set out 10 to 25 m across |
 
 ## Terrain
 
@@ -340,12 +340,36 @@ reads as a silhouette through the haze from 300 m and more, and declines
 by breaking, not by fading:
 
 - A tower's blocks fall from the top down, each at its own seeded
-  threshold, so a failing tower is a jagged stump. Its roof goes first and
-  its lit windows go out one by one; an open lantern room glows at night
-  like a beacon.
-- A ring of standing stones loses its lintels first; then stones lean and
-  break off at a seeded height.
+  threshold, so a failing tower is a jagged stump with fallen stone heaped
+  at its foot. Its roof and galleries go first, never outlasting the wall
+  that carries them, and its lit windows go out one by one; an open
+  lantern room glows at night like a beacon.
+- Great stones lose their lintels and a dolmen its capstone first. A stone
+  never bends: it leans whole about its toe, falls flat into the grass, or
+  snaps, its top lying broken at its foot. A cairn's top stones tumble
+  first.
 - A great tree drops its leaves, sags and greys to a bare snag.
+
+Each landmark primitive has a few strong axes that change the whole form,
+as a tree's skeleton does, so the same three primitives make very
+different landmarks:
+
+- A tower's plan is round, square or eight-sided; it rises straight,
+  tapering, or in stages that set back above a string course; a walkway
+  on stepped corbels may ring its top or every stage; and it is crowned
+  by a cone (a four- or eight-sided spire on a square or eight-sided
+  tower), battlements, a lantern room, or a top already broken long ago.
+- Great stones stand in a ring, an avenue of two facing rows rising toward
+  its head, a dolmen of uprights under one capstone in a kerb of low
+  stones, a field of cairns, or a loose group of lone menhirs, some
+  already leaning.
+- A great tree is a spreading oak, a tall elm, a great willow, an umbrella
+  pine or a dark yew, and young, old or ancient: an ancient tree squats
+  lower and broader on a buttressed trunk, some great limbs broken to
+  stubs and its highest limbs bare above the crown.
+
+What falls (rubble at a tower's foot, a snapped top, a fallen lintel)
+grows in at its foot only once it has fallen, and never stops a walk.
 
 Until worlds come from real code, the terrain lab stands a few landmarks,
 more for more regions (about 1.4 times the square root of the region count:
