@@ -39,6 +39,8 @@ const MARGIN = 70;
 const AREA_CELL = 5;
 const HILL_CELL = 5;
 const WATER_CELL = 2.5;
+/** While the map is open and the person walks, it redraws at most this often, ms. */
+const FOLLOW_MS = 150;
 /** Where an area's name may step to, in pixels, when its own spot is taken. */
 const NUDGES: readonly (readonly [number, number])[] = [[0, 0], [0, 26], [0, -26], [34, 10], [-34, 10], [0, 48], [0, -48]];
 /** The paper is painted in steps of a millisecond or two, as many as fit in the page's idle time with this much to spare, ms. */
@@ -470,8 +472,10 @@ export function createFieldMap(root: HTMLElement, source: MapSource): FieldMap {
     view.z = Math.max(-hz, Math.min(hz, view.z));
   }
 
+  let lastDraw = 0;
   function draw(): void {
     const t0 = performance.now();
+    lastDraw = t0;
     const { w, h, dpr } = size();
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.fillStyle = PAPER_TONE;
@@ -842,7 +846,8 @@ export function createFieldMap(root: HTMLElement, source: MapSource): FieldMap {
         hereFile.hidden = place.file === null;
         hereArea.textContent = place.area.depth < 0 ? place.area.name : place.area.path.split("/").join(" / ");
       }
-      if (isOpen && moved) draw();
+      // Walking with the map open moves the arrow a fraction of a pixel a frame: a few redraws a second keep up.
+      if (isOpen && moved && performance.now() - lastDraw > FOLLOW_MS) draw();
     },
     show(on) {
       shown = on;
