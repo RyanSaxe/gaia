@@ -574,6 +574,15 @@ export function createTerrainLab(root: HTMLElement): Lab {
       understory: () => understory.stats(),
       placements: () => understory.placements(),
       showUnderstory: (on: boolean) => understory.show(on),
+      /** Draw calls in one whole frame: the shadow pass and the view together. */
+      calls: () => {
+        renderer.info.autoReset = false;
+        renderer.info.reset();
+        frame(0, performance.now(), hour);
+        const calls = renderer.info.render.calls;
+        renderer.info.autoReset = true;
+        return calls;
+      },
       /** Draws `count` frames back to back and waits for the GPU: milliseconds per frame, shadows included. */
       bench: (count: number) => {
         const gl = renderer.getContext();
