@@ -1,0 +1,104 @@
+// One great old tree: the flora frames and crowns grown at a landmark's
+// scale, then aged. An ancient tree is lower and broader on a massive,
+// buttressed trunk, some of its great limbs are broken off to stubs, and
+// its highest limbs stand bare above the crown. In decline its leaves thin
+// and drop, its boughs sag and its bark greys to a bare snag.
+
+import type { Anchor, BuildContext, Built, Limb, Resolved, Skeleton } from "@gaia/schema";
+import type { greatTreeParams } from "../../landmark.ts";
+import { type V3, clamp } from "../kit.ts";
+import { growBranching } from "../skeleton.ts";
+import { buildBark, buildLeafClumps, buildLeafStrands } from "../foliage.ts";
+
+type TreeParams = Resolved<typeof greatTreeParams>;
+
+/** How each form grows: its frame, and the crown on it. */
+const FORMS = {
+  "a spreading oak": { frame: { habit: "spreading", density: 5, spread: 44, stature: 0.95 }, crown: "clumps", leaf: "lobed", shape: "round", bole: 1 },
+  "a tall elm": { frame: { habit: "upright", density: 5, spread: 34, stature: 1.25 }, crown: "clumps", leaf: "oval", shape: "round", bole: 1 },
+  "a great willow": { frame: { habit: "weeping", density: 4, spread: 46, stature: 0.95 }, crown: "strands", leaf: "pointed", shape: "round", bole: 1 },
+  "an umbrella pine": { frame: { habit: "spreading", density: 4, spread: 62, stature: 0.8 }, crown: "clumps", leaf: "pointed", shape: "plates", bole: 2 },
+  "a dark yew": { frame: { habit: "spreading", density: 5, spread: 52, stature: 0.72 }, crown: "clumps", leaf: "oval", shape: "round", bole: 1 },
+} as const;
+
+/**
+ * Ages a frame: `age` 0 is a young giant, slim and reaching; 1 is ancient,
+ * squat on a massive trunk that forks low, with buttress roots, great limbs
+ * broken to stubs and its highest limbs bare. `bole` stretches the bare
+ * trunk below the crown. Returns the aged frame and the tips that still
+ * carry leaves.
+ */
+function aged(skel: Skeleton, age: number, bole: number, broken: (i: number) => boolean): Skeleton {
+  const trunk = skel.limbs.filter((l) => l.depth === 0);
+  const fork = trunk.reduce((m, l) => Math.max(m, l.end[1]), 0);
+  // The fork drops and the trunk thickens with age; the crown above moves with the fork.
+  const stretch = bole * (1 - 0.38 * age);
+  const lower = (q: readonly [number, number, number]): V3 => [q[0], q[1] <= fork ? q[1] * stretch : q[1] + fork * (stretch - 1), q[2]];
+  const girth = (l: Limb): number => (l.depth === 0 ? 0.85 + 0.75 * age : l.depth === 1 ? 0.9 + 0.4 * age : 1);
+  // Great limbs broken off: the first segment stays as a blunt stub and everything it carried is gone.
+  const stubs = new Set<number>();
+  const gone = new Set<number>();
+  skel.limbs.forEach((l, i) => {
+    if (gone.has(l.parent) || stubs.has(l.parent)) gone.add(i);
+    else if (l.depth === 1 && skel.limbs[l.parent]?.depth === 0 && broken(i)) stubs.add(i);
+  });
+  const removed = (i: number): boolean => gone.has(i);
+  const kept = new Map<number, number>();
+  const limbs: Limb[] = [];
+  skel.limbs.forEach((l, i) => {
+    if (removed(i)) return;
+    kept.set(i, limbs.length);
+    const start = lower(l.start);
+    let end = lower(l.end);
+    let endRadius = l.endRadius * girth(l);
+    if (stubs.has(i)) {
+      end = [start[0] + (end[0] - start[0]) * 0.5, start[1] + (end[1] - start[1]) * 0.5, start[2] + (end[2] - start[2]) * 0.5];
+      endRadius = l.startRadius * girth(l) * 0.75;
+    }
+    limbs.push({ start, end, startRadius: l.startRadius * girth(l), endRadius, depth: l.depth, parent: l.parent < 0 ? -1 : (kept.get(l.parent) ?? -1) });
+  });
+  // Buttress roots spread into the ground around an old trunk.
+  const base = limbs[0];
+  if (base !== undefined && age > 0.3) {
+    const roots = 4 + Math.round(age * 3);
+    for (let k = 0; k < roots; k++) {
+      const a = (k / roots) * Math.PI * 2 + 0.4 * Math.sin(k * 2.3);
+      const reach = base.startRadius * (1.5 + 0.9 * age) * (0.8 + 0.3 * Math.cos(k * 1.7));
+      limbs.push({ start: [0, base.startRadius * 1.3, 0], end: [Math.cos(a) * reach, -0.4, Math.sin(a) * reach], startRadius: base.startRadius * 0.55, endRadius: base.startRadius * 0.28, depth: 1, parent: 0 });
+    }
+  }
+  // Tips on what remains carry leaves, but an ancient crown's highest limbs stand bare.
+  const ends = new Map<string, number>();
+  skel.limbs.forEach((l, i) => ends.set(l.end.join(","), i));
+  const top = skel.tips.reduce((m, t) => Math.max(m, t.position[1]), 0);
+  const bare = age > 0.6 ? top - (top - fork) * 0.14 * (age - 0.6) * 2.5 : Infinity;
+  const tips: Anchor[] = skel.tips.flatMap((t) => {
+    const i = ends.get(t.position.join(","));
+    if (i !== undefined && (removed(i) || stubs.has(i))) return [];
+    if (t.position[1] > bare) return [];
+    return [{ ...t, position: lower(t.position) }];
+  });
+  return { limbs, tips };
+}
+
+/**
+ * One great old tree, four or five times a person's reach across, of the
+ * chosen form and age. It declines as a flora tree does, to a bare grey snag.
+ */
+export function buildGreatTree(p: TreeParams, ctx: BuildContext): Built {
+  const form = FORMS[p.form];
+  // A young giant stands a little taller; an ancient one spreads lower and wider.
+  const scale = p.size * (ctx.facts.scale ?? 1) * (1.06 - 0.12 * p.age);
+  const inner: BuildContext = { rand: ctx.rand.fork("great-tree"), facts: { ...ctx.facts, scale } };
+    const grown = growBranching({ ...form.frame, spread: form.frame.spread * (1 + 0.18 * p.age), stature: form.frame.stature * (1.08 - 0.2 * p.age) }, inner);
+  const breaks = inner.rand.fork("broken");
+  const odds = clamp((p.age - 0.3) * 0.75, 0, 0.5);
+  const skeleton = aged(grown, p.age, form.bole, () => breaks.next() < odds);
+  const bark = buildBark({ roughness: clamp(p.bark + 0.25 * p.age, 0, 1) }, { ...inner, rand: inner.rand.fork("bark") }, skeleton);
+  const fullness = p.fullness * (1 - 0.18 * p.age);
+  const crown =
+    form.crown === "strands"
+      ? buildLeafStrands({ length: 2.2, fullness }, { ...inner, rand: inner.rand.fork("crown") }, skeleton)
+      : buildLeafClumps({ shape: form.shape, leaf: form.leaf, size: 1, fullness }, { ...inner, rand: inner.rand.fork("crown") }, skeleton);
+  return { parts: [...bark.parts, ...crown.parts], anchors: crown.anchors };
+}

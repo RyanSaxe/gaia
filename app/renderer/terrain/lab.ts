@@ -230,6 +230,8 @@ export function createTerrainLab(root: HTMLElement): Lab {
     // The footprint at the ground: how far the landmark reaches within a meter of it.
     let base = 1;
     for (const part of built.parts) {
+      // Only what stands counts: fallen stone that grows in at its foot is walked over.
+      if (part.collision !== "solid") continue;
       for (let k = 0; k < part.positions.length; k += 3) {
         if ((part.positions[k + 1] as number) < 1) base = Math.max(base, Math.hypot(part.positions[k] as number, part.positions[k + 2] as number));
       }
@@ -1070,7 +1072,24 @@ export function createTerrainLab(root: HTMLElement): Lab {
       landmarks: () =>
         ways.sites.map((s, i) => ({ name: landmarks[s.landmark]?.name, ...s.site, height: landmarkViews[i]?.height, triangles: landmarkViews[i]?.triangles })),
       /** Sets every landmark's vitality, 0 to 1. */
-      landmarkVitality: (v: number) => landmarkViews.forEach((view) => view.setVitality(v)),
+      landmarkVitality: (v: number) => [...landmarkViews, ...landmarkPool.values()].forEach((view) => view.setVitality(v)),
+      /** Stands landmark preset `i` on landmark site `at` in place of what stands there, so every form can be seen; returns where. */
+      showLandmark: (i: number, at = 0) => {
+        const s = ways.sites[at];
+        const lm = landmarks[i];
+        if (s === undefined || lm === undefined) return null;
+        for (const [key, v] of landmarkPool) if (key.startsWith("show#") || v === landmarkViews[at]) v.object.visible = false;
+        let view = landmarkPool.get(`show#${i}`);
+        if (view === undefined) {
+          view = createPlant({ ...lm.built, parts: mergeParts(lm.built.parts) }, light);
+          landmarkPool.set(`show#${i}`, view);
+          scene.add(view.object);
+        }
+        view.object.visible = true;
+        view.object.position.set(s.site.x, s.site.y - 0.05, s.site.z);
+        view.object.rotation.y = 0;
+        return { name: lm.name, x: s.site.x, y: s.site.y, z: s.site.z, base: lm.base, height: view.height, triangles: view.triangles };
+      },
       /** Each trail: its ends, length, crossings and a point every 10 m. */
       trails: () =>
         ways.trails.map((t) => ({
