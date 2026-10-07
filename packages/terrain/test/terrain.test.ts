@@ -245,18 +245,20 @@ describe("terrain", () => {
 
   it("never leaves a crack in the baked lattice: neighbors differ by less than the steepest slope allows", () => {
     const limit = Math.tan((RELIEF_BUDGET.maxSlope * Math.PI) / 180) * 1.5;
-    for (const t of baked.slice(0, 4)) {
+    for (const [i, t] of baked.slice(0, 4).entries()) {
       const { n, heights, spacing, origin } = t.lattice;
       const half = t.spec.size / 2;
+      let steepest = { step: 0, x: 0, z: 0 };
       for (let iz = 0; iz < n - 1; iz++) {
         if (Math.abs(origin + iz * spacing) > half) continue;
         for (let ix = 0; ix < n - 1; ix++) {
           if (Math.abs(origin + ix * spacing) > half) continue;
           const h0 = heights[iz * n + ix]!;
-          expect(Math.abs(heights[iz * n + ix + 1]! - h0)).toBeLessThan(limit * spacing);
-          expect(Math.abs(heights[(iz + 1) * n + ix]! - h0)).toBeLessThan(limit * spacing);
+          const step = Math.max(Math.abs(heights[iz * n + ix + 1]! - h0), Math.abs(heights[(iz + 1) * n + ix]! - h0));
+          if (step > steepest.step) steepest = { step, x: origin + ix * spacing, z: origin + iz * spacing };
         }
       }
+      expect(steepest.step, `world ${i} at (${steepest.x}, ${steepest.z})`).toBeLessThan(limit * spacing);
     }
   });
 
