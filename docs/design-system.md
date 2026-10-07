@@ -27,10 +27,11 @@ Color works at three levels:
    region edges.
 3. **Each component** has one palette family. Components never blend.
 
-There are eight palette families in `packages/primitives/src/palettes.ts`
+There are nine palette families in `packages/primitives/src/palettes.ts`
 (spring-meadow, deep-forest, teal-gold, autumn-ember, cherry-blossom,
-silver-birch, desert-sage, lantern-dusk). Each gives bark, leaf and bloom
-swatches. Every family declines toward the same dry grey-brown, so failing
+silver-birch, desert-sage, lantern-dusk, bluebell-wood). Each gives bark, leaf
+and bloom swatches, and for the ground a stone, the moss that grows on it,
+and a wildflower's stem and eye. Every family declines toward the same dry grey-brown, so failing
 code reads the same everywhere. A season shifts only healthy colors, keeps
 each family's identity, and pushes each shifted color a fixed distance away
 from its decline color. The `tint` channel varies hue within one swatch across
@@ -44,6 +45,8 @@ instance within it:
 
 | Kind | Height |
 | --- | --- |
+| Wildflowers | 0.3 to 1 m, heads just above the grass |
+| Rock | 0.5 to 2.2 m; a ledge runs up to 11 m |
 | Shrub | up to 2 m |
 | Small tree | 3 to 6 m |
 | Tall tree | 8 to 16 m |
@@ -109,6 +112,7 @@ Jev decides which dependencies become routes; when it wants more than the
 budget allows, the most probable win. The world must never be dominated by
 paths.
 
+
 ## Clouds
 
 Fair-weather puffs, towering cumulus, cirrus streaks and low drifting banks.
@@ -145,4 +149,4 @@ grass and water agree:
 - **The world's own glow** (the vitality `glow` channel, fireflies, living
   water) reads by contrast in the dark, a little stronger than by day and
   still below what draws the eye on its own. Wildflowers fade into their
-  blades at night.
+  blades at night, and drifts fold their open faces shut.

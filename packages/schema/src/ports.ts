@@ -21,6 +21,8 @@ export interface VitalityChannels {
   readonly glow: Float32Array;
   /** The point each vertex collapses toward and sags around, xyz per vertex. */
   readonly pivot: Float32Array;
+  /** How far the vertex folds toward its pivot at night, 0 to 1. Flowers close; most pieces never do. */
+  readonly close: Float32Array;
 }
 
 export interface Part {
@@ -265,6 +267,12 @@ export interface Roles {
   Accents: { input: null; output: AccentSpec };
   Wind: { input: null; output: WindSpec };
   Natives: { input: null; output: NativeFamilies };
+  /** A rock's body: a boulder, a stone, a cluster or an outcrop. */
+  Rock: { input: null; output: Built };
+  /** What grows over another piece's upward faces, such as moss on stone. */
+  Overgrowth: { input: Built; output: Built };
+  /** A drift of small plants at ground level, such as wildflowers. */
+  Drift: { input: null; output: Built };
 }
 
 /** The palette families native to a region. Empty means every family. */

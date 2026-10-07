@@ -17,7 +17,9 @@ attribute float aDroop;
 attribute float aWither;
 attribute float aGlow;
 attribute vec3 aPivot;
+attribute float aClose;
 uniform float uVitality;
+uniform float uNightness;
 uniform float uSway;
 uniform float uFrequency;
 uniform float uHeight;
@@ -25,9 +27,10 @@ uniform float uFlutter;
 uniform float uWind;
 
 // Loss collapses a piece to its pivot over a short band; droop bends the
-// offset from the pivot toward the ground, keeping its length.
+// offset from the pivot toward the ground, keeping its length. At night a
+// piece that closes (a flower's petals) folds part way toward its pivot.
 vec3 applyChannels(vec3 p) {
-  vec3 off = p - aPivot;
+  vec3 off = (p - aPivot) * (1.0 - aClose * uNightness * 0.7);
   float s = aDroop * (1.0 - uVitality);
   float d = length(off);
   if (s > 0.0 && d > 1e-5) {
@@ -55,7 +58,7 @@ vec3 applyWind(vec3 p, vec3 root) {
 }
 `;
 
-const PLANT_VERT = /* glsl */ `
+export const PLANT_VERT = /* glsl */ `
 uniform float uTime;
 ${CHANNELS_GLSL}
 varying vec3 vNormal;
@@ -78,7 +81,7 @@ void main() {
 }
 `;
 
-const PLANT_FRAG = /* glsl */ `
+export const PLANT_FRAG = /* glsl */ `
 precision highp float;
 ${LIGHT_GLSL}
 // Same YIQ rotation as hueRotate in @gaia/realize.
@@ -130,7 +133,7 @@ void main() {
 }
 `;
 
-const DEPTH_VERT = /* glsl */ `
+export const DEPTH_VERT = /* glsl */ `
 uniform float uTime;
 ${CHANNELS_GLSL}
 void main() {
@@ -140,7 +143,7 @@ void main() {
 }
 `;
 
-const DEPTH_FRAG = /* glsl */ `
+export const DEPTH_FRAG = /* glsl */ `
 precision highp float;
 void main() { gl_FragColor = vec4(1.0); }
 `;
@@ -162,7 +165,7 @@ export interface PlantView {
 
 const vec3Of = (c: readonly number[]): THREE.Vector3 => new THREE.Vector3(c[0] ?? 0, c[1] ?? 0, c[2] ?? 0);
 
-function geometryOf(part: Part): THREE.BufferGeometry {
+export function geometryOf(part: Part): THREE.BufferGeometry {
   const g = new THREE.BufferGeometry();
   g.setAttribute("position", new THREE.BufferAttribute(part.positions, 3));
   g.setAttribute("normal", new THREE.BufferAttribute(part.normals, 3));
@@ -173,14 +176,15 @@ function geometryOf(part: Part): THREE.BufferGeometry {
   g.setAttribute("aWither", new THREE.BufferAttribute(part.channels.wither, 1));
   g.setAttribute("aGlow", new THREE.BufferAttribute(part.channels.glow, 1));
   g.setAttribute("aPivot", new THREE.BufferAttribute(part.channels.pivot, 3));
+  g.setAttribute("aClose", new THREE.BufferAttribute(part.channels.close, 1));
   g.setIndex(new THREE.BufferAttribute(part.indices, 1));
   g.computeBoundingSphere();
   g.computeBoundingBox();
   return g;
 }
 
-/** Bark is solid; leaves and blooms are thin and scatter light. */
-const FOLIAGE: Readonly<Record<string, number>> = { bark: 0, leaf: 1, bloom: 0.6 };
+/** Bark and stone are solid; leaves, moss and blooms are thin and scatter light. */
+export const FOLIAGE: Readonly<Record<string, number>> = { bark: 0, leaf: 1, bloom: 0.6, stone: 0, moss: 0.5, stem: 0.8, eye: 0.6 };
 
 export function createPlant(plant: Realized, light: SceneLight): PlantView {
   const object = new THREE.Group();
@@ -201,7 +205,7 @@ export function createPlant(plant: Realized, light: SceneLight): PlantView {
   plant.parts.forEach((part, i) => {
     const swatch: Swatch = plant.palette.swatches[part.swatch] ?? { healthy: [1, 0, 1], decline: [1, 0, 1] };
     const foliage = FOLIAGE[part.swatch] ?? 0.5;
-    const perPart = { uFlutter: { value: part.swatch === "bark" ? 0 : 1 } };
+    const perPart = { uFlutter: { value: foliage === 0 ? 0 : 1 } };
     const color = new THREE.ShaderMaterial({
       vertexShader: PLANT_VERT,
       fragmentShader: PLANT_FRAG,
@@ -213,12 +217,12 @@ export function createPlant(plant: Realized, light: SceneLight): PlantView {
         uDecline: { value: vec3Of(swatch.decline) },
         uFoliage: { value: foliage },
       },
-      side: part.swatch === "bark" ? THREE.FrontSide : THREE.DoubleSide,
+      side: foliage === 0 ? THREE.FrontSide : THREE.DoubleSide,
     });
     const depth = new THREE.ShaderMaterial({
       vertexShader: DEPTH_VERT,
       fragmentShader: DEPTH_FRAG,
-      uniforms: { uTime: light.uTime, uWind: light.uWind, ...shared, ...perPart },
+      uniforms: { uTime: light.uTime, uWind: light.uWind, uNightness: light.uNightness, ...shared, ...perPart },
       side: THREE.DoubleSide,
     });
     const mesh = new THREE.Mesh(geometries[i], color);

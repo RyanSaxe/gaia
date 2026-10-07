@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { type AnyPrimitive, type Built, type Part, Library, type Skeleton, rand, seedOf } from "@gaia/schema";
-import { FLORA_PRIMITIVES } from "@gaia/primitives";
-import { flora } from "@gaia/kinds";
+import { FLORA_PRIMITIVES, PRIMITIVES } from "@gaia/primitives";
+import { flora, rock, wildflowers } from "@gaia/kinds";
 import { validate } from "@gaia/world";
-import { FLORA_PRESETS, applyVitality, realize, resolveParams, triangleCount } from "@gaia/realize";
+import { FLORA_PRESETS, FLOWER_PRESETS, ROCK_PRESETS, SHRUB_PRESETS, applyVitality, realize, resolveParams, triangleCount } from "@gaia/realize";
 
 const lib = new Library(FLORA_PRIMITIVES);
 const facts = { scale: 1, age: 120 };
@@ -143,4 +143,33 @@ describe("presets", () => {
       expect(validate(blueprint, flora, lib)).toEqual([]);
     });
   }
+});
+
+describe("understory presets", () => {
+  const all = new Library(PRIMITIVES);
+  const groups = [
+    { presets: SHRUB_PRESETS, kind: flora, budget: 12_000 },
+    { presets: ROCK_PRESETS, kind: rock, budget: 12_000 },
+    { presets: FLOWER_PRESETS, kind: wildflowers, budget: 12_000 },
+  ];
+  for (const { presets, kind, budget } of groups) {
+    for (const { name, blueprint } of presets) {
+      it(`${name} is a valid ${kind.id} blueprint, light enough to place by the hundred`, () => {
+        expect(validate(blueprint, kind, all)).toEqual([]);
+        const parts = realize(blueprint, kind, all, { seed: 11, facts: { scale: 1.3, age: 0 } }).parts;
+        expect(parts.length).toBeGreaterThan(0);
+        expect(triangleCount(parts)).toBeLessThan(budget);
+      });
+    }
+  }
+
+  it("keeps a bush on the ground: its lowest leaves reach the soil", () => {
+    for (const { blueprint } of SHRUB_PRESETS) {
+      const leaf = realize(blueprint, flora, all, { seed: 3, facts: { scale: 1, age: 0 } }).parts.find((p) => p.swatch === "leaf")!;
+      let low = Infinity;
+      for (let i = 1; i < leaf.positions.length; i += 3) low = Math.min(low, leaf.positions[i]!);
+      expect(low).toBeLessThan(0.1);
+      expect(low).toBeGreaterThanOrEqual(0);
+    }
+  });
 });

@@ -5,11 +5,11 @@
 
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { type Blueprint, Library, blueprintOf, seedOf } from "@gaia/schema";
-import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, RELIEF_PRIMITIVES, WORLD_PRIMITIVES } from "@gaia/primitives";
-import { biome, flora, world as worldKind } from "@gaia/kinds";
+import { type AnyKind, type Blueprint, Library, blueprintOf, seedOf } from "@gaia/schema";
+import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, RELIEF_PRIMITIVES, ROCK_PRIMITIVES, WILDFLOWER_PRIMITIVES, WORLD_PRIMITIVES } from "@gaia/primitives";
+import { biome, flora, rock, wildflowers, world as worldKind } from "@gaia/kinds";
 import { blueprintCount, randomSlots, validate } from "@gaia/world";
-import { FLORA_PRESETS, WORLD_PRESETS, realize, realizeWorld } from "@gaia/realize";
+import { FLORA_PRESETS, FLOWER_PRESETS, type Preset, ROCK_PRESETS, SHRUB_PRESETS, WORLD_PRESETS, realize, realizeWorld } from "@gaia/realize";
 import { type PlantView, applyLight, createPlant, createSceneLight, createSunShadow } from "@gaia/render";
 import { renderInspector } from "../inspector.ts";
 import { type Lab, type Shot, onTap, refs, slug } from "../lab.ts";
@@ -51,6 +51,21 @@ const SPOTS: readonly [number, number][] = [
   [3.2, -1.2],
   [9.8, 1.6],
 ];
+/** The meadow row's understory, in front of the trees: rocks, bushes and drifts of wildflowers. */
+const UNDERSTORY: readonly { preset: Preset | undefined; kind: AnyKind; at: [number, number] }[] = [
+  { preset: ROCK_PRESETS[0], kind: rock, at: [-6.6, 6.2] },
+  { preset: SHRUB_PRESETS[1], kind: flora, at: [-1.4, 7.4] },
+  { preset: FLOWER_PRESETS[0], kind: wildflowers, at: [2.4, 9.6] },
+  { preset: ROCK_PRESETS[3], kind: rock, at: [6.6, 6.4] },
+  { preset: SHRUB_PRESETS[2], kind: flora, at: [12.6, 5.6] },
+  { preset: FLOWER_PRESETS[3], kind: wildflowers, at: [-11.6, 6.8] },
+  { preset: FLOWER_PRESETS[2], kind: wildflowers, at: [-4.2, 10.8] },
+  { preset: FLOWER_PRESETS[1], kind: wildflowers, at: [8.8, 10.4] },
+];
+const ROW = [
+  ...FLORA_PRESETS.map((preset, i) => ({ preset, kind: flora as AnyKind, at: SPOTS[i] ?? [0, 0] })),
+  ...UNDERSTORY.flatMap((u) => (u.preset === undefined ? [] : [{ preset: u.preset, kind: u.kind, at: u.at }])),
+];
 const OVERVIEW = { position: new THREE.Vector3(5.5, 6.8, 50), target: new THREE.Vector3(1.6, 4, 0) };
 const MEADOW = WORLD_PRESETS[0];
 const MEADOW_SEED = seedOf("lab/world");
@@ -58,6 +73,7 @@ const MEADOW_SEED = seedOf("lab/world");
 interface Entry {
   name: string;
   blueprint: Blueprint;
+  readonly kind: AnyKind;
   readonly seed: number;
   readonly position: THREE.Vector3;
   view: PlantView | null;
@@ -71,7 +87,7 @@ export function createFloraLab(root: HTMLElement): Lab {
   root.innerHTML = TEMPLATE;
   const $ = refs(root);
   const sheet = createSheet($("panel"));
-  const lib = new Library(FLORA_PRIMITIVES);
+  const lib = new Library([...FLORA_PRIMITIVES, ...ROCK_PRIMITIVES, ...WILDFLOWER_PRIMITIVES]);
   const space = blueprintCount(flora, lib);
   let active = false;
 
@@ -118,11 +134,12 @@ export function createFloraLab(root: HTMLElement): Lab {
   controls.minDistance = 5;
   controls.maxDistance = 90;
 
-  const entries: Entry[] = FLORA_PRESETS.map((preset, i) => ({
+  const entries: Entry[] = ROW.map(({ preset, kind, at }, i) => ({
     name: preset.name,
     blueprint: preset.blueprint,
+    kind,
     seed: seedOf(`lab/plant-${i}`),
-    position: new THREE.Vector3(SPOTS[i]?.[0] ?? 0, 0, SPOTS[i]?.[1] ?? 0),
+    position: new THREE.Vector3(at[0], 0, at[1]),
     view: null,
     target: 1,
     shown: 1,
@@ -131,7 +148,7 @@ export function createFloraLab(root: HTMLElement): Lab {
 
   function build(entry: Entry): void {
     const t0 = performance.now();
-    const plant = realize(entry.blueprint, flora, lib, { seed: entry.seed, facts: FACTS });
+    const plant = realize(entry.blueprint, entry.kind, lib, { seed: entry.seed, facts: FACTS });
     const view = createPlant(plant, light);
     view.object.position.copy(entry.position);
     view.object.rotation.y = (entry.seed % 628) / 100;
@@ -163,7 +180,10 @@ export function createFloraLab(root: HTMLElement): Lab {
     if (view === null) return null;
     const target = entry.position.clone().add(new THREE.Vector3(0, view.height * 0.45, 0));
     const distance = Math.max(view.height, view.radius * 2) * 1.55 + 4;
-    return [target, target.clone().addScaledVector(away, distance).add(new THREE.Vector3(0, view.height * 0.25, 0))];
+    // Small things are framed from a person's eye height, never from inside the grass.
+    const camera = target.clone().addScaledVector(away, distance).add(new THREE.Vector3(0, view.height * 0.25, 0));
+    camera.y = Math.max(camera.y, 1.7);
+    return [target, camera];
   }
 
   function focus(entry: Entry): void {
@@ -220,17 +240,17 @@ export function createFloraLab(root: HTMLElement): Lab {
     $("bp-id").textContent = entry.blueprint.id;
     vitalityInput.value = String(entry.target);
     vitalityOut.textContent = fmt(entry.target);
-    const problems = validate(entry.blueprint, flora, lib);
+    const problems = validate(entry.blueprint, entry.kind, lib);
     $("problems").textContent = problems.length === 0 ? "" : problems.join(" ");
     $("stats").textContent = `${(entry.view?.triangles ?? 0).toLocaleString()} triangles · built in ${entry.ms.toFixed(0)} ms`;
     $("json").textContent = JSON.stringify(entry.blueprint, null, 2);
     renderInspector(slotsRoot, {
-      kind: flora,
+      kind: entry.kind,
       lib,
       blueprint: entry.blueprint,
       onChange: (slots) => {
-        const next = blueprintOf(flora.id, slots);
-        const issues = validate(next, flora, lib);
+        const next = blueprintOf(entry.kind.id, slots);
+        const issues = validate(next, entry.kind, lib);
         if (issues.length > 0) {
           $("problems").textContent = issues.join(" ");
           return;
@@ -263,12 +283,12 @@ export function createFloraLab(root: HTMLElement): Lab {
   function randomize(): Blueprint | null {
     const entry = selected ?? entries[0];
     if (entry === undefined) return null;
-    const bp = blueprintOf(flora.id, randomSlots(flora, lib, Math.random));
-    const problems = validate(bp, flora, lib);
+    const bp = blueprintOf(entry.kind.id, randomSlots(entry.kind, lib, Math.random));
+    const problems = validate(bp, entry.kind, lib);
     draws += 1;
     $("space").textContent =
       problems.length === 0
-        ? `Draw ${draws}: valid, one of ${space.toLocaleString()} flora blueprints.`
+        ? `Draw ${draws}: valid, one of ${blueprintCount(entry.kind, lib).toLocaleString()} ${entry.kind.id} blueprints.`
         : `Draw ${draws} failed validation: ${problems.join(" ")}`;
     if (problems.length > 0) return null;
     entry.blueprint = bp;
@@ -328,7 +348,7 @@ export function createFloraLab(root: HTMLElement): Lab {
 
   function showcase(primitiveId: string, vitality: number): void {
     entries.forEach((e, i) => {
-      const preset = FLORA_PRESETS[i];
+      const preset = ROW[i]?.preset;
       if (preset !== undefined && e.blueprint.id !== preset.blueprint.id) {
         e.blueprint = preset.blueprint;
         e.name = preset.name;
@@ -360,7 +380,7 @@ export function createFloraLab(root: HTMLElement): Lab {
       if (active) frame(dt, h);
     },
     shots: (): Shot[] =>
-      FLORA_PRIMITIVES.flatMap((p) =>
+      [...FLORA_PRIMITIVES, ...ROCK_PRIMITIVES, ...WILDFLOWER_PRIMITIVES].flatMap((p) =>
         [1, 0.5, 0.1].map((v) => ({ name: `flora-${slug(p.id)}-vitality-${v.toFixed(1)}`, stage: () => showcase(p.id, v) })),
       ),
     hook: {

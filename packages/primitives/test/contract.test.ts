@@ -9,7 +9,9 @@ import { applyVitality, resolveParams } from "@gaia/realize";
 
 const lib = new Library(PRIMITIVES);
 const facts = { scale: 1, age: 120 };
-const GEOMETRY_ROLES = new Set(["Surface", "Foliage", "Ornament"]);
+const GEOMETRY_ROLES = new Set(["Surface", "Foliage", "Ornament", "Rock", "Overgrowth", "Drift"]);
+/** Roles that build from nothing. */
+const SOURCE_ROLES = new Set(["Skeleton", "Motion", "Palette", "Rock", "Drift"]);
 const TRIANGLE_BUDGET = 40_000;
 
 type Stored = Record<string, string | boolean | string[]>;
@@ -38,7 +40,10 @@ function build(p: AnyPrimitive, stored: Stored, input: unknown, seed: number): u
 
 const skeletons: Skeleton[] = lib.forRole("Skeleton").flatMap((p) => samples(p).map((s) => build(p, s, null, 11) as Skeleton));
 const anchors = skeletons.flatMap((s) => s.tips).slice(0, 64);
-const inputFor = (p: AnyPrimitive): unknown[] => (p.role === "Ornament" ? [anchors] : p.role === "Skeleton" || p.role === "Motion" || p.role === "Palette" ? [null] : skeletons);
+/** What overgrowth grows on: every rock body at its lowest, middle and highest levels. */
+const rocks: Built[] = lib.forRole("Rock").flatMap((p) => samples(p).map((s) => build(p, s, null, 13) as Built));
+const inputFor = (p: AnyPrimitive): unknown[] =>
+  p.role === "Ornament" ? [anchors] : p.role === "Overgrowth" ? rocks : SOURCE_ROLES.has(p.role) ? [null] : skeletons;
 
 const allFinite = (a: Float32Array): boolean => a.every(Number.isFinite);
 const inUnit = (a: Float32Array): boolean => a.every((x) => x >= 0 && x <= 1);
@@ -76,7 +81,8 @@ describe.each(PRIMITIVES.map((p) => [p.id, p] as const))("%s", (_id, p) => {
         for (const part of (build(p, s, input, 5) as Built).parts as Part[]) {
           expect(allFinite(part.positions) && allFinite(part.normals) && allFinite(part.channels.pivot)).toBe(true);
           const c = part.channels;
-          expect([c.loss, c.droop, c.wither, c.glow, part.shade].every(inUnit)).toBe(true);
+          expect([c.loss, c.droop, c.wither, c.glow, c.close, part.shade].every(inUnit)).toBe(true);
+          expect(c.close.length).toBe(part.shade.length);
           expect(part.tint.every((x) => x >= -0.1 && x <= 0.1)).toBe(true);
           expect(part.indices.length / 3).toBeLessThanOrEqual(TRIANGLE_BUDGET);
         }

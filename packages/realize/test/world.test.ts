@@ -134,8 +134,8 @@ describe("season and decline", () => {
         }
       }
     }
-    // 6 seasons x 3 strengths x 2 ends x 8 families x 3 contrasts x 2 ends x 3 swatches.
-    expect(checked).toBe(5184);
+    // 6 seasons x 3 strengths x 2 ends x 9 families x 3 contrasts x 2 ends x 7 swatches.
+    expect(checked).toBe(13608);
   });
 
   it("never touches decline: every world declines toward the same colors", () => {

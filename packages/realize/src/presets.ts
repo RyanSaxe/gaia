@@ -168,3 +168,82 @@ export const WORLD_PRESETS: readonly WorldPreset[] = [
     ),
   },
 ];
+
+const shrub = (
+  form: Record<string, string>,
+  crown: Record<string, string>,
+  family: string,
+  bloom: Record<string, string> | null = null,
+): Blueprint =>
+  identify("flora", {
+    form: { use: "thicket@1", params: form },
+    bark: { use: "bark@1", params: { roughness: "smooth" } },
+    crown: { use: "leaf-mound@1", params: crown },
+    ...(bloom === null ? {} : { bloom: { use: "blossoms@1", params: bloom } }),
+    motion: { use: "sway@1", params: { stiffness: "stiff", rhythm: "gentle" } },
+    palette: { use: "palette@1", params: { family, contrast: "balanced" } },
+  });
+
+/** Bushes are flora too: a thicket frame under a mound of leaves. */
+export const SHRUB_PRESETS: readonly Preset[] = [
+  { name: "Box mound", blueprint: shrub({ habit: "mound", stems: "several stems", stature: "waist-high" }, { leaves: "glossy", fullness: "dense and clipped" }, "deep-forest") },
+  {
+    name: "Blueberry",
+    blueprint: shrub({ habit: "mound", stems: "several stems", stature: "waist-high" }, { leaves: "rounded", fullness: "full" }, "bluebell-wood", { form: "berries", count: "a scattered few" }),
+  },
+  {
+    name: "Azalea",
+    blueprint: shrub({ habit: "spreading", stems: "a dense tangle", stature: "knee-high" }, { leaves: "rounded", fullness: "dense and clipped" }, "cherry-blossom", { form: "petals", count: "plenty" }),
+  },
+  { name: "Feather shrub", blueprint: shrub({ habit: "vase", stems: "several stems", stature: "head-high" }, { leaves: "feathery", fullness: "full" }, "silver-birch") },
+];
+
+const rockOf = (use: string, params: Record<string, string>, moss: Record<string, string> | null, family: string): Blueprint =>
+  identify("rock", {
+    form: { use: use as `${string}@${number}`, params },
+    ...(moss === null ? {} : { moss: { use: "moss@1", params: moss } }),
+    palette: { use: "palette@1", params: { family, contrast: "balanced" } },
+  });
+
+export const ROCK_PRESETS: readonly Preset[] = [
+  {
+    name: "Mossy boulder",
+    blueprint: rockOf("boulder@1", { size: "waist-high", shape: "round", facets: "softly faceted" }, { cover: "a cap on top", growth: "velvet" }, "spring-meadow"),
+  },
+  {
+    name: "Standing stone",
+    blueprint: rockOf("boulder@1", { size: "taller than a person", shape: "egg", facets: "sharply faceted" }, { cover: "a few patches", growth: "lichen" }, "deep-forest"),
+  },
+  {
+    name: "Bench stone",
+    blueprint: rockOf("flat-stone@1", { size: "a bench", top: "level", facets: "softly faceted" }, { cover: "a few patches", growth: "cushions" }, "spring-meadow"),
+  },
+  {
+    name: "Stone family",
+    blueprint: rockOf("stone-cluster@1", { count: "several", size: "waist-high", facets: "softly faceted" }, { cover: "a cap on top", growth: "velvet" }, "teal-gold"),
+  },
+  {
+    name: "Shale ledge",
+    blueprint: rockOf("outcrop@1", { length: "long", height: "knee-high", layering: "layered" }, { cover: "thickly overgrown", growth: "cushions" }, "deep-forest"),
+  },
+  {
+    name: "Sandstone",
+    blueprint: rockOf("boulder@1", { size: "shoulder-high", shape: "wide", facets: "sharply faceted" }, { cover: "a few patches", growth: "lichen" }, "desert-sage"),
+  },
+];
+
+const flowersOf = (use: string, params: Record<string, string>, family: string): Blueprint =>
+  identify("wildflowers", {
+    drift: { use: use as `${string}@${number}`, params },
+    motion: { use: "sway@1", params: { stiffness: "supple", rhythm: "gentle" } },
+    palette: { use: "palette@1", params: { family, contrast: "balanced" } },
+  });
+
+export const FLOWER_PRESETS: readonly Preset[] = [
+  { name: "Daisies", blueprint: flowersOf("daisies@1", { spread: "a wide drift", density: "a good showing", height: "knee-high" }, "spring-meadow") },
+  { name: "Poppies", blueprint: flowersOf("cups@1", { spread: "a patch", density: "a good showing", height: "knee-high" }, "autumn-ember") },
+  { name: "Bluebells", blueprint: flowersOf("bells@1", { spread: "a patch", density: "a thick carpet", height: "knee-high" }, "bluebell-wood") },
+  { name: "Lupines", blueprint: flowersOf("spikes@1", { spread: "a patch", density: "a good showing", height: "tall" }, "bluebell-wood") },
+  { name: "Marigolds", blueprint: flowersOf("cups@1", { spread: "a wide drift", density: "a thick carpet", height: "low among the grass" }, "teal-gold") },
+  { name: "Pink asters", blueprint: flowersOf("daisies@1", { spread: "a patch", density: "a thick carpet", height: "knee-high" }, "cherry-blossom") },
+];

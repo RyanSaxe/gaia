@@ -99,7 +99,7 @@ export function realize(bp: Blueprint, k: AnyKind, lib: Library, opts: RealizeOp
   for (const { role, output } of buildSlots(bp, k, lib, opts).values()) {
     if (role === "Motion") motion = output as MotionSpec;
     else if (role === "Palette") palette = output as Palette;
-    else if (role === "Surface" || role === "Foliage" || role === "Ornament") parts.push(...(output as Built).parts);
+    else if (isBuilt(output)) parts.push(...output.parts);
   }
   if (palette === undefined) throw new Error(`Blueprint ${bp.id} has no Palette slot to color it.`);
   return { parts, motion: motion ?? STILL, palette };

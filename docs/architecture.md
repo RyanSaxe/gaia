@@ -38,7 +38,7 @@ never crosses, because the renderer builds it. `EngineMethods` in
 | --- | --- | --- |
 | `@gaia/schema` | The type builder, ports and vitality channels, primitive and kind contracts, code facts, the world document, Jev's wire format, the engine protocol, content identity | Nothing |
 | `@gaia/primitives` | Primitive declarations and geometry, palettes, the manifest `PRIMITIVES` | schema |
-| `@gaia/kinds` | The flora, biome and world kinds | schema |
+| `@gaia/kinds` | The flora, rock, wildflowers, biome and world kinds | schema |
 | `@gaia/world` | The question planner, answer rules, context gathering, vitality, type-space tools, `WorldChange` | schema |
 | `@gaia/realize` | Blueprint to parts, world and region looks at an hour, the light between a day's keys, the sky and air references, presets, channel math | schema, primitives |
 | `@gaia/render` | Three.js materials, light and shadow | schema, realize, three |
@@ -53,7 +53,8 @@ gives the reason next to each rule.
 A **primitive** is a pure procedural function with typed parameters and a
 role, such as `branching@1` (Skeleton) or `leaf-clumps@1` (Foliage). It is code,
 versioned in its ID. A **kind** declares slots by role and the subject it
-stands for: a file (`flora`), a region (`biome`) or the repository (`world`).
+stands for: a file (`flora`, `rock`, `wildflowers`), a region (`biome`) or the
+repository (`world`).
 A **blueprint** fills a kind: a primitive for each slot and a stored value for
 each parameter. An **instance** places a blueprint for one path. Jev
 generates blueprints and instances; people and agents write primitives and
@@ -90,8 +91,10 @@ commits, is a separate channel that never lowers vitality.
 
 Every primitive writes five per-vertex vitality channels: `loss` (the vitality
 below which a piece collapses to its pivot), `droop`, `wither`, `glow` and
-`pivot`, plus a `tint` hue offset. The plant shader combines them with each
-instance's live vitality, so a change in vitality never rebuilds geometry.
+`pivot`, plus a `tint` hue offset and `close`, how far a piece folds toward
+its pivot at night (a flower's petals). The plant shader combines them with
+each instance's live vitality, so a change in vitality never rebuilds
+geometry.
 `applyVitality` in `packages/realize/src/channels.ts` is the CPU reference the
 tests run against.
 
