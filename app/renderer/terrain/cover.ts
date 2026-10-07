@@ -8,6 +8,7 @@ import { LIGHT_GLSL, type SceneLight, hexToVec3 } from "@gaia/render";
 import { type Terrain, surfaceHalfWidth } from "@gaia/terrain";
 import { GROUND_SAMPLE_GLSL, type GroundTexture } from "./ground.ts";
 import { REGIONS_GLSL, type RegionCovers, TUFT_GLSL } from "./regions.ts";
+import { CLEARING_GLSL, type Clearings } from "./clearings.ts";
 
 const GRASS_VERT = /* glsl */ `
 uniform float uTime;
@@ -17,6 +18,7 @@ uniform float uLand;
 ${GROUND_SAMPLE_GLSL}
 ${REGIONS_GLSL}
 ${TUFT_GLSL}
+${CLEARING_GLSL}
 attribute vec4 aBlade; // x, z as a share of the blade's patch, rotation, height
 attribute vec4 aSeed; // tint, flower, keep, cover pick
 attribute vec2 aThin; // how far out the blade still grows, as a share of the thinning band; its reach
@@ -58,6 +60,8 @@ void main() {
   float flowers = uCoverFlowers[k];
   float flower = step(aSeed.y, flowers);
   float h = aBlade.w * shape.x * dry * keep * clump * (1.0 - smoothstep(0.35, 0.65, grade) * 0.7) * (1.0 + flower * 0.25);
+  // Nothing grows under a stone.
+  h *= step(clearingAt(xz), 0.5);
   float t = position.y;
   float c = cos(aBlade.z);
   float s = sin(aBlade.z);
@@ -123,7 +127,7 @@ export interface Grass {
  * grows where. Blades keep their full height at every distance: the far ones
  * thin out whole, each at its own seeded distance.
  */
-export function createGrass(light: SceneLight, ground: GroundTexture, covers: RegionCovers, land: number, count = 150000, radius = 60): Grass {
+export function createGrass(light: SceneLight, ground: GroundTexture, covers: RegionCovers, land: number, clearings: Clearings, count = 150000, radius = 60): Grass {
   // A third of the blades reach only 26 m, so the grass is densest close by.
   const close = Math.round(count * 0.3);
   // One tapered blade, one unit wide: the cover sets its width.
@@ -167,6 +171,7 @@ export function createGrass(light: SceneLight, ground: GroundTexture, covers: Re
       ...covers.uniforms,
       uCenter: center,
       uLand: { value: land },
+      ...clearings.uniforms,
       uDry: { value: hexToVec3(0xc4b47e) },
     },
     side: THREE.DoubleSide,

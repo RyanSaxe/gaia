@@ -35,6 +35,7 @@ import { createGrass, createWater } from "./cover.ts";
 import { createGround, createGroundTexture } from "./ground.ts";
 import { createRegionCovers } from "./regions.ts";
 import { createUnderstory } from "./understory.ts";
+import { createClearings } from "./clearings.ts";
 
 const TEMPLATE = /* html */ `
 <main class="stage">
@@ -124,7 +125,8 @@ export function createTerrainLab(root: HTMLElement): Lab {
   const sky = createSky(light);
   const groundTex = createGroundTexture(terrain);
   const ground = createGround(terrain, light, covers);
-  const grass = createGrass(light, groundTex, covers, landRadius(terrain));
+  const clearings = createClearings(terrain);
+  const grass = createGrass(light, groundTex, covers, landRadius(terrain), clearings);
   const water = createWater(terrain, light, groundTex);
   scene.add(sky.mesh, ground.wilds, ground.fine, ground.coarse, grass.mesh, water.group);
 
@@ -160,7 +162,7 @@ export function createTerrainLab(root: HTMLElement): Lab {
   });
 
   // Rocks, bushes and wildflowers, scattered around the trees.
-  const understory = createUnderstory(scene, light, new Library([...FLORA_PRIMITIVES, ...ROCK_PRIMITIVES, ...WILDFLOWER_PRIMITIVES]));
+  const understory = createUnderstory(scene, light, new Library([...FLORA_PRIMITIVES, ...ROCK_PRIMITIVES, ...WILDFLOWER_PRIMITIVES]), clearings);
 
   function plant(): void {
     const spots = scatterPlants(terrain, planted.length, 9);

@@ -124,8 +124,10 @@ under its footprint, so on a slope its uphill side is buried and its
 downhill side still touches the soil; a drift lies on the ground's plane, so
 its stems stay upright. Rocks are half sunk by construction. Moss caps their
 upward faces and recedes, edges first, drying to lichen grey as vitality
-falls. Each blueprint draws as one instanced mesh per part, and drifts cast
-no shadow.
+falls. No blade of grass grows under a stone or through a bush's heart: a
+mask of each one's outline at the ground clears it, so grass grows up
+against a rock and never pierces it. Each blueprint draws as one instanced
+mesh per part, and drifts cast no shadow.
 
 ## Clouds
 

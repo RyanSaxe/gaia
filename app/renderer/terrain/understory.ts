@@ -9,6 +9,7 @@ import { flora, rock, wildflowers } from "@gaia/kinds";
 import { FLOWER_PRESETS, type Preset, ROCK_PRESETS, type Realized, SHRUB_PRESETS, realize } from "@gaia/realize";
 import { type PlantInstances, type SceneLight, createPlantInstances } from "@gaia/render";
 import { type Occupied, type Placement, type ScatterRule, type Terrain, type WorldSpec, scatterComponents } from "@gaia/terrain";
+import type { Clearings } from "./clearings.ts";
 
 interface Group {
   readonly id: string;
@@ -17,6 +18,8 @@ interface Group {
   readonly weights: readonly number[];
   /** Whether the group's instances draw into the sun's shadow map. */
   readonly casts: boolean;
+  /** How much of its outline at the ground is kept clear of grass, 0 for none. */
+  readonly clears: number;
   readonly rule: Omit<ScatterRule, "id" | "variants" | "regions">;
   /** Density per landform: rocks crowd terraces and basins, flowers favor open meadow. */
   readonly landforms: Readonly<Record<string, number>>;
@@ -29,6 +32,7 @@ const GROUPS: readonly Group[] = [
     presets: ROCK_PRESETS,
     weights: [3, 0.5, 1, 2, 1, 0.7],
     casts: true,
+    clears: 0.92,
     rule: { groups: 3.5, members: [1, 4], spread: 6, mix: "member", scale: [0.7, 1.25], maxSlope: 22, waterClearance: 1.5, ground: "lowest", sink: 0.05 },
     landforms: { "terraces@1": 1.8, "basin@1": 1.4, "valley@1": 1, "rolling-hills@1": 1, "meadow@1": 0.6, "dunes@1": 0.3 },
   },
@@ -38,6 +42,7 @@ const GROUPS: readonly Group[] = [
     presets: SHRUB_PRESETS,
     weights: [1, 1, 0.7, 0.6],
     casts: true,
+    clears: 0.55,
     rule: { groups: 5, members: [1, 5], spread: 5, mix: "member", scale: [0.75, 1.2], maxSlope: 24, waterClearance: 2, ground: "lowest", sink: 0.06 },
     landforms: { "valley@1": 1.3, "rolling-hills@1": 1.2, "basin@1": 1, "terraces@1": 0.8, "meadow@1": 0.7, "dunes@1": 0.4 },
   },
@@ -47,10 +52,32 @@ const GROUPS: readonly Group[] = [
     presets: FLOWER_PRESETS,
     weights: [1.2, 1, 0.8, 0.8, 0.8, 0.7],
     casts: false,
+    clears: 0,
     rule: { groups: 6.5, members: [2, 5], spread: 7, mix: "group", scale: [0.8, 1.15], maxSlope: 20, waterClearance: 1, ground: "plane", sink: 0.02 },
     landforms: { "meadow@1": 1.6, "rolling-hills@1": 1.3, "valley@1": 1.1, "basin@1": 0.8, "terraces@1": 0.7, "dunes@1": 0.3 },
   },
 ];
+
+/** A component's reach where it meets the ground, in 48 directions around its origin. */
+function outlineOf(plant: Realized): Float32Array {
+  const out = new Float32Array(48);
+  for (const part of plant.parts) {
+    const p = part.positions;
+    for (let i = 0; i < p.length; i += 3) {
+      const y = p[i + 1] as number;
+      if (y < -0.02 || y > 0.25) continue;
+      const x = p[i] as number;
+      const z = p[i + 2] as number;
+      const k = Math.floor(((((Math.atan2(z, x) / (Math.PI * 2)) % 1) + 1) % 1) * 48) % 48;
+      out[k] = Math.max(out[k] as number, Math.hypot(x, z));
+    }
+  }
+  // Fill directions no vertex fell in from their neighbors.
+  for (let pass = 0; pass < 2; pass++) {
+    for (let k = 0; k < 48; k++) if (out[k] === 0) out[k] = Math.max(out[(k + 47) % 48] as number, out[(k + 1) % 48] as number);
+  }
+  return out;
+}
 
 /** The ground a realized component covers: its widest reach near the ground. */
 function footprintOf(plant: Realized): number {
@@ -78,10 +105,10 @@ export interface Understory {
   readonly stats: () => { placed: Record<string, number>; triangles: number; meshes: number };
 }
 
-export function createUnderstory(scene: THREE.Scene, light: SceneLight, lib: Library): Understory {
+export function createUnderstory(scene: THREE.Scene, light: SceneLight, lib: Library, clearings: Clearings): Understory {
   const built = GROUPS.map((g) => {
     const plants = g.presets.map((p, i) => realize(p.blueprint, g.kind, lib, { seed: seedOf(`terrain-lab/${g.id}/${i}`), facts: { scale: 1, age: 120 } }));
-    return { group: g, plants, radii: plants.map(footprintOf) };
+    return { group: g, plants, radii: plants.map(footprintOf), outlines: plants.map((p) => outlineOf(p).map((r) => r * g.clears)) };
   });
   let views: { group: Group; view: PlantInstances }[] = [];
   let placed: Placement[] = [];
@@ -97,6 +124,13 @@ export function createUnderstory(scene: THREE.Scene, light: SceneLight, lib: Lib
         regions: world.regions.map((r) => group.landforms[r.biome.slots.relief?.use ?? ""] ?? 1),
       }));
       placed = scatterComponents(terrain, rules, seedOf("terrain-lab/understory"), trees);
+      clearings.update(
+        placed.flatMap((p) => {
+          const b = built.find((x) => x.group.id === p.rule);
+          const outline = b?.outlines[p.variant];
+          return b === undefined || outline === undefined || b.group.clears === 0 ? [] : [{ x: p.x, z: p.z, yaw: p.yaw, scale: p.scale, outline }];
+        }),
+      );
       for (const { group, plants } of built) {
         plants.forEach((plant, variant) => {
           const spots = placed
