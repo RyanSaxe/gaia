@@ -38,7 +38,7 @@ never crosses, because the renderer builds it. `EngineMethods` in
 | --- | --- | --- |
 | `@gaia/schema` | The type builder, ports and vitality channels, primitive and kind contracts, code facts, the world document, Jev's wire format, the engine protocol, content identity | Nothing |
 | `@gaia/primitives` | Primitive declarations and geometry, palettes, the manifest `PRIMITIVES` | schema |
-| `@gaia/kinds` | The flora, biome and world kinds | schema |
+| `@gaia/kinds` | The flora, structure, biome and world kinds | schema |
 | `@gaia/world` | The question planner, answer rules, context gathering, vitality, type-space tools, `WorldChange` | schema |
 | `@gaia/realize` | Blueprint to parts, world and region looks at an hour, the light between a day's keys, the sky and air references, presets, channel math | schema, primitives |
 | `@gaia/render` | Three.js materials, light and shadow | schema, realize, three |
@@ -53,7 +53,11 @@ gives the reason next to each rule.
 A **primitive** is a pure procedural function with typed parameters and a
 role, such as `branching@1` (Skeleton) or `leaf-clumps@1` (Foliage). It is code,
 versioned in its ID. A **kind** declares slots by role and the subject it
-stands for: a file (`flora`), a region (`biome`) or the repository (`world`).
+stands for: a file (`flora`, `structure`), a region (`biome`) or the
+repository (`world`). A `structure`'s footprint lays out one `BuildingPlan`
+(walls, roofline, floor and where every door and window goes); its body,
+roof, openings and ornaments each build on that plan, so they agree by
+construction.
 A **blueprint** fills a kind: a primitive for each slot and a stored value for
 each parameter. An **instance** places a blueprint for one path. Jev
 generates blueprints and instances; people and agents write primitives and

@@ -30,7 +30,8 @@ Color works at three levels:
 There are eight palette families in `packages/primitives/src/palettes.ts`
 (spring-meadow, deep-forest, teal-gold, autumn-ember, cherry-blossom,
 silver-birch, desert-sage, lantern-dusk). Each gives bark, leaf and bloom
-swatches. Every family declines toward the same dry grey-brown, so failing
+swatches, and a building's wall, timber, roof, masonry, trim, window-glass
+and smoke swatches, so a family's cottages belong with its plants. Every family declines toward the same dry grey-brown, so failing
 code reads the same everywhere. A season shifts only healthy colors, keeps
 each family's identity, and pushes each shifted color a fixed distance away
 from its decline color. The `tint` channel varies hue within one swatch across
@@ -96,6 +97,15 @@ clouds thin out toward the horizon rather than stopping, and clouds standing
 on the horizon rise out of its haze. `skyColorAt` and `aerialAt` in
 `@gaia/realize` are the CPU references the tests check.
 
+## Buildings
+
+A building stands on a pad leveled into the baked ground under it and its
+yard, blending back into the land over 7 m, and its foundation reaches
+1.4 m below, so it never floats and never shows a gap. Grass is cleared
+under the house and along the walk to its door, and its walls stop the
+walk. A cottage stays under 25,000 triangles and draws one mesh per
+swatch, about ten calls.
+
 ## Composition budgets
 
 | Budget | Starting value |
@@ -142,6 +152,10 @@ grass and water agree:
   color. The chosen moon, the chosen stars, and clouds silvered by the moon.
   A river of stars is a band: a milky glow with a brighter core, split by a
   dark lane of dust.
+- **Lamplit windows.** Window glass is a dark pane holding a little sky by
+  day; from dusk the lamp inside lights it in the glass swatch's warm
+  color. As vitality falls the lamps go out one window at a time, and the
+  chimney's smoke thins and stops.
 - **The world's own glow** (the vitality `glow` channel, fireflies, living
   water) reads by contrast in the dark, a little stronger than by day and
   still below what draws the eye on its own. Wildflowers fade into their
