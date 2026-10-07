@@ -530,6 +530,7 @@ export function createTerrainLab(root: HTMLElement): Lab {
   }
 
   return {
+    renderer,
     setActive(on) {
       active = on;
       orbit.enabled = on && mode === "overview";

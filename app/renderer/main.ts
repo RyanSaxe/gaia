@@ -7,6 +7,7 @@ import { createClock } from "./clock.ts";
 import { watchEngine } from "./engine-status.ts";
 import { createFloraLab } from "./flora/lab.ts";
 import type { Lab } from "./lab.ts";
+import { createStats } from "./stats.ts";
 import { createTerrainLab } from "./terrain/lab.ts";
 import { createWorldLab } from "./world/lab.ts";
 
@@ -68,11 +69,20 @@ const clockRoot = document.getElementById("clock");
 if (clockRoot === null) throw new Error("Missing the time control's container.");
 const clock = createClock(clockRoot);
 
+const statsToggle = document.getElementById("stats-toggle");
+const statsReadout = document.getElementById("stats");
+if (!(statsToggle instanceof HTMLButtonElement) || statsReadout === null) throw new Error("Missing the dev readout's elements.");
+const stats = createStats(statsToggle, statsReadout);
+
 let last = performance.now();
 function loop(now: number): void {
-  const dt = Math.min(0.05, (now - last) / 1000);
+  const elapsed = (now - last) / 1000;
+  const dt = Math.min(0.05, elapsed);
   last = now;
-  labOf(current).frame(dt, now, clock.hour());
+  const lab = labOf(current);
+  stats.begin(lab.renderer);
+  lab.frame(dt, now, clock.hour());
+  stats.end(lab.renderer, elapsed);
   requestAnimationFrame(loop);
 }
 
@@ -108,6 +118,8 @@ window.__lab = {
     await frames(3);
   },
   status: () => statusLine?.textContent ?? "",
+  /** The dev readout's latest frame time and draw calls, or null while it is off. */
+  stats: () => stats.read(),
   frames,
   shots: () => allShots().map((s) => s.shot.name),
   stage: async (name: string) => {

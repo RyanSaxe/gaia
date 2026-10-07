@@ -69,6 +69,11 @@ body { font: 12.5px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; overfl
 #status[data-state="starting"] .dot, #status[data-state="restarting"] .dot { background: var(--warn); animation: pulse 0.9s ease-in-out infinite alternate; }
 #status[data-state="standalone"] .dot { background: var(--muted); }
 @keyframes pulse { from { opacity: 0.35; } to { opacity: 1; } }
+/* The dev readout: off by default, a quiet button at the status bar's end. */
+#stats { margin-left: auto; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#status .stats-toggle { margin-left: auto; padding: 0 7px; font-size: 10.5px; line-height: 16px; background: transparent; color: var(--muted); border: 1px solid var(--line); border-radius: 5px; }
+#stats:not([hidden]) + .stats-toggle { margin-left: 0; }
+#status .stats-toggle.on { color: var(--accent); border-color: var(--accent); }
 
 /* ---------- a lab: the stage and its panel ---------- */
 .stage { position: relative; min-width: 0; overflow: hidden; }

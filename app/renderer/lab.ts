@@ -1,6 +1,8 @@
 // What the shell knows about a lab: it draws only while its tab is open,
 // names the views `pnpm shots` saves, and offers a hook for scripted checks.
 
+import type { WebGLRenderer } from "three";
+
 export interface Shot {
   readonly name: string;
   /** Sets the view up at once: no camera flights, no easing. */
@@ -14,6 +16,8 @@ export interface Lab {
   frame(dt: number, now: number, hour: number): void;
   readonly shots: () => readonly Shot[];
   readonly hook: Readonly<Record<string, unknown>>;
+  /** The lab's renderer, so the shell's dev readout can count its draw calls. */
+  readonly renderer?: WebGLRenderer;
 }
 
 /** Finds the element marked `data-ref="name"` inside a lab. */
