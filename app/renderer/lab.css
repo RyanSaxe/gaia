@@ -331,6 +331,8 @@ details.json pre { font: 11px/1.45 ui-monospace, "SF Mono", Menlo, monospace; ba
 .map-button.on { opacity: 1; pointer-events: auto !important; }
 .wayfinding:has(.field-map.open) .menu-button, .wayfinding:has(.field-map.open) .map-button { opacity: 0; pointer-events: none !important; }
 .lab-terrain.immersive:has(.panel.showing-card) .way-button { opacity: 0; pointer-events: none !important; }
+/* While a card is read, the words over the land step back. */
+.lab-terrain.immersive:has(.panel.showing-card) :is(.arrival, .underfoot) { visibility: hidden; }
 
 /* The slip: choosing the way, and the way back to the lab. */
 .way-slip {
@@ -383,6 +385,8 @@ details.json pre { font: 11px/1.45 ui-monospace, "SF Mono", Menlo, monospace; ba
   opacity: 0; transform: translate(-50%, -50%) scale(0.985); transition: opacity 0.26s ease, transform 0.26s ease;
 }
 .field-map.open { opacity: 1; transform: translate(-50%, -50%); pointer-events: auto; }
+/* At night the sheet is read by the lantern's warm light. */
+.field-map, .way-slip, .lab-terrain.immersive .panel.showing-card { filter: sepia(calc(var(--night, 0) * 0.3)) brightness(calc(1 - var(--night, 0) * 0.16)); }
 .field-map-view { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
 .field-map-view:active { cursor: grabbing; }
 .field-map-title { position: absolute; left: 22px; top: 20px; color: var(--ink); font-size: 11px; font-weight: 600; letter-spacing: 0.32em; text-transform: uppercase; pointer-events: none; }

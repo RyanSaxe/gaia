@@ -41,8 +41,8 @@ const HILL_CELL = 5;
 const WATER_CELL = 2.5;
 /** Where an area's name may step to, in pixels, when its own spot is taken. */
 const NUDGES: readonly (readonly [number, number])[] = [[0, 0], [0, 26], [0, -26], [34, 10], [-34, 10], [0, 48], [0, -48]];
-/** The paper is painted in steps of about this many milliseconds. */
-const SLICE_MS = 5;
+/** The paper is painted in steps of a millisecond or two, as many as fit in the page's idle time with this much to spare, ms. */
+const SPARE_MS = 2;
 const SERIF = `"Iowan Old Style", Georgia, "Times New Roman", serif`;
 const INK = "#4a3c2c";
 const PAPER_TONE = "#efe4c8";
@@ -151,7 +151,7 @@ function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place
       s.j0 = Math.min(s.j0, j);
       s.j1 = Math.max(s.j1, j);
     }
-    if (j % 24 === 23) yield;
+    if (j % 8 === 7) yield;
   }
 
   // Washes: each top-level directory a hue, its subdirectories a little lighter or darker.
@@ -206,7 +206,7 @@ function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place
       img.data[o + 2] = Math.round(v * 0.9);
       img.data[o + 3] = 255;
     }
-    if (j % 40 === 39) yield;
+    if (j % 14 === 13) yield;
   }
   hctx.putImageData(img, 0, 0);
   ctx.globalCompositeOperation = "multiply";
@@ -222,7 +222,7 @@ function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place
   const wet = new Uint8Array(wn * wn);
   for (let j = 0; j < wn; j++) {
     for (let i = 0; i < wn; i++) wet[j * wn + i] = waterDepthAt(t, w0 + (i + 0.5) * WATER_CELL, w0 + (j + 0.5) * WATER_CELL) > 0.04 ? 1 : 0;
-    if (j % 60 === 59) yield;
+    if (j % 20 === 19) yield;
   }
   ctx.lineCap = ctx.lineJoin = "round";
   for (const stream of t.streams) {
@@ -250,15 +250,18 @@ function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place
   wctx.putImageData(wimg, 0, 0);
   ctx.drawImage(water, px(w0), px(w0), wn * WATER_CELL * scale, wn * WATER_CELL * scale);
   yield;
-  ctx.beginPath();
   const wpx = (g: number): number => px(w0 + (g + 0.5) * WATER_CELL);
-  contour(0, wn - 1, 0, wn - 1, (i, j) => wet[j * wn + i] === 1, (x0, y0, x1, y1) => {
-    ctx.moveTo(wpx(x0), wpx(y0));
-    ctx.lineTo(wpx(x1), wpx(y1));
-  });
   ctx.strokeStyle = "rgba(60,88,98,0.8)";
   ctx.lineWidth = 2.6;
-  ctx.stroke();
+  for (let j0 = 0; j0 < wn - 1; j0 += 60) {
+    ctx.beginPath();
+    contour(0, wn - 1, j0, Math.min(wn - 1, j0 + 60), (i, j) => wet[j * wn + i] === 1, (x0, y0, x1, y1) => {
+      ctx.moveTo(wpx(x0), wpx(y0));
+      ctx.lineTo(wpx(x1), wpx(y1));
+    });
+    ctx.stroke();
+    yield;
+  }
   // A few ripple strokes inside each pond.
   ctx.strokeStyle = "rgba(255,255,255,0.55)";
   ctx.lineWidth = 2;
@@ -289,7 +292,7 @@ function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place
     ctx.globalAlpha = 0.62;
     ctx.stroke();
     ctx.globalAlpha = 1;
-    if (a % 4 === 3) yield;
+    yield;
   }
   yield;
 
@@ -359,15 +362,15 @@ function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place
 const MAP_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 6.2 9 4l6 2.2 5.5-2.2v13.8L15 20l-6-2.2-5.5 2.2Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M9 4v13.8M15 6.2V20" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>`;
 const HERE_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="6.5" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="12" cy="12" r="1.8" fill="currentColor"/><path d="M12 2.5v3.2M12 18.3v3.2M2.5 12h3.2M18.3 12h3.2" stroke="currentColor" stroke-width="1.4"/></svg>`;
 
-/** Runs `step` in slices of idle time until it returns true. */
-function whenIdle(step: () => boolean): () => void {
+/** Runs `step` in the page's idle time, passing the milliseconds left there, until it returns true. */
+function whenIdle(step: (budget: number) => boolean): () => void {
   let handle = 0;
   let stopped = false;
   const hasIdle = typeof window.requestIdleCallback === "function";
-  const idle = (cb: () => void): number => (hasIdle ? window.requestIdleCallback(cb, { timeout: 400 }) : window.setTimeout(cb, 16));
-  const run = (): void => {
+  const idle = (cb: (deadline?: IdleDeadline) => void): number => (hasIdle ? window.requestIdleCallback(cb, { timeout: 1000 }) : window.setTimeout(cb, 16));
+  const run = (deadline?: IdleDeadline): void => {
     if (stopped) return;
-    if (!step()) handle = idle(run);
+    if (!step(deadline?.timeRemaining() ?? 4)) handle = idle(run);
   };
   handle = idle(run);
   return () => {
@@ -437,10 +440,11 @@ export function createFieldMap(root: HTMLElement, source: MapSource): FieldMap {
     painting = paintPaper(source.stood(), source.placeAt);
     timing.paintMs = 0;
     timing.longestStepMs = 0;
-    // A few steps in each idle slot, stopping before the slot runs long.
-    stopPainting = whenIdle(() => {
+    // At least one step in each idle slot, and more while the slot has time to spare.
+    stopPainting = whenIdle((budget) => {
       const t0 = performance.now();
-      while (performance.now() - t0 < SLICE_MS) if (paintStep()) return true;
+      do if (paintStep()) return true;
+      while (performance.now() - t0 < budget - SPARE_MS);
       return false;
     });
   }

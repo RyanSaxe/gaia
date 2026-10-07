@@ -265,7 +265,9 @@ chooses that way and leads back to the debugging views (Components, Terrain
 and Skies). The hour follows the person's clock (`?hour=22` pins it).
 Everything a person reads here looks like the world's own things: warm
 paper, brown ink, a serif with italic names and small capitals for paths,
-and slow, soft motion.
+and slow, soft motion. After dark the paper (the map, the slip, a card) is
+read by the lantern, a little warmer and dimmer. While a card is read, the
+words over the land step back.
 
 Where a person is comes from one function, `placeAt` in `@gaia/terrain`:
 the area (a directory) whose land they stand on, and the file whose patch
@@ -292,8 +294,9 @@ There are three ways, for the reviewer to choose between:
   and a vermilion arrow for "you are here". Names stay one size at any zoom
   and the larger area's name wins where two would collide. It pans and
   zooms by drag, pinch or scroll; a phone opens it close around the person,
-  a wide screen shows it whole. Its paper is painted a few milliseconds at a
-  time while the page is idle after a bake, so it never holds up a frame.
+  a wide screen shows it whole. Its paper is painted in steps of a
+  millisecond or two in the page's idle time after a bake, so it never
+  holds up a frame.
 - **Markers in the world.** Where a trail crosses from one area into the
   next, a fingerpost stands beside it with an arm pointing each way along
   the trail, each painted with the name of the area that way, and across

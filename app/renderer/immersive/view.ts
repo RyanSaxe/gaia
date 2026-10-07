@@ -145,6 +145,7 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
 
   let still = 0;
   let last = { x: Number.NaN, z: Number.NaN };
+  let night = -1;
   return {
     setActive(on) {
       active = on;
@@ -159,6 +160,12 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
       still = moved || p.walking ? 0 : still + dt;
       last = { x: p.x, z: p.z };
       const place = world.placeAt(p.x, p.z);
+      // After dark, paper is read by the lantern: lab.css warms and dims it by this.
+      const n = Math.round(world.light.uNightness.value * 20) / 20;
+      if (n !== night) {
+        night = n;
+        container.style.setProperty("--night", String(n));
+      }
       if (way === "titles") arrival.frame(place, still, dt);
       else if (way === "markers") compass.frame(p.x, p.z, p.yaw, world.placeAt);
       else map.frame(p.x, p.z, p.yaw, place);
