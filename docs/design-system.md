@@ -69,6 +69,13 @@ on to 1.5 km, continuing the rim's height and settling into a gentle roll of
 at most 6 m, colored by the nearest region's cover. It is never walkable. A
 person can wade but never goes under water.
 
+Grass keeps its full height at every distance, so it never grows out of the
+ground. Each blade has a seeded threshold and disappears whole once the
+viewer is farther than that, thinning from 55% of its reach of 60 m; a third
+of the blades reach only 26 m, so grass is densest close by. The ground
+beneath is painted in the cover's own colors with short brushed strokes, so
+where blades thin out the ground still reads as the same cover.
+
 ## Sky and distance
 
 The world should seem infinite, so the horizon never shows a line. One sky
@@ -130,5 +137,4 @@ grass and water agree:
 
 Not built yet:
 
-- **Grass that never grows out of the ground** at the edge of its radius.
 - **Wading** that stops before the person's eyes go under water.

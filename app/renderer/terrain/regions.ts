@@ -80,23 +80,24 @@ void regionWeights(vec2 xz, out float w[MAX_REGIONS]) {
   }
 }
 
-struct GroundCover { vec3 low; vec3 high; vec3 soil; float clump; };
+struct GroundCover { vec3 low; vec3 high; vec3 tip; vec3 soil; float clump; };
 
 // The ground's colors: every region's cover, weighted.
 GroundCover groundCoverAt(vec2 xz) {
   float w[MAX_REGIONS];
   regionWeights(xz, w);
-  GroundCover c = GroundCover(vec3(0.0), vec3(0.0), vec3(0.0), 0.0);
+  GroundCover c = GroundCover(vec3(0.0), vec3(0.0), vec3(0.0), vec3(0.0), 0.0);
   float total = 0.0;
   for (int i = 0; i < MAX_REGIONS; i++) {
     c.low += w[i] * uCoverLow[i];
     c.high += w[i] * uCoverHigh[i];
+    c.tip += w[i] * uCoverTip[i];
     c.soil += w[i] * uCoverSoil[i];
     c.clump += w[i] * uCoverShape[i].w;
     total += w[i];
   }
   float k = 1.0 / max(total, 1e-4);
-  return GroundCover(c.low * k, c.high * k, c.soil * k, c.clump * k);
+  return GroundCover(c.low * k, c.high * k, c.tip * k, c.soil * k, c.clump * k);
 }
 
 // Each blade grows one region's cover, drawn by weight with its own random

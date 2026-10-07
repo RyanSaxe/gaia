@@ -30,6 +30,22 @@ float tuftMask(vec2 xz) {
 }
 `;
 
+/**
+ * The ground under grass, painted in the cover's own colors with short
+ * brushed strokes, so where far blades thin out the ground still reads as the
+ * same cover. `lift` moves the paint from the low color toward the high one.
+ * Uses the includer's \`noise(vec2)\`.
+ */
+export const SWARD_GLSL = /* glsl */ `
+vec3 sward(vec2 xz, vec3 low, vec3 high, vec3 tip, float lift) {
+  vec2 q = mat2(0.8, 0.6, -0.6, 0.8) * xz;
+  float stroke = noise(vec2(q.x * 1.6, q.y * 7.0)) * 0.6 + noise(vec2(q.x * 3.7, q.y * 15.0) + 3.7) * 0.4;
+  vec3 c = mix(low, high, clamp(0.45 + lift + (stroke - 0.5) * 0.5, 0.0, 1.0));
+  c = mix(c, tip, smoothstep(0.55, 0.85, stroke) * 0.25);
+  return c * (0.88 + 0.1 * stroke);
+}
+`;
+
 // ---------- sky ----------
 
 const SKY_VERT = /* glsl */ `
@@ -264,9 +280,11 @@ precision highp float;
 ${LIGHT_GLSL}
 ${NOISE_GLSL}
 ${GROUND_LIGHT_GLSL}
+${SWARD_GLSL}
 uniform vec3 uSoil;
 uniform vec3 uLow;
 uniform vec3 uHigh;
+uniform vec3 uTip;
 uniform vec3 uDry;
 uniform float uClump;
 uniform float uVitality;
@@ -275,7 +293,7 @@ varying vec3 vWorld;
 void main() {
   float broad = fbm(vWorld.xz * 0.05);
   float fine = fbm(vWorld.xz * 0.6);
-  vec3 grass = mix(uLow, uHigh, smoothstep(0.3, 0.72, broad * 0.75 + fine * 0.25)) * 0.9;
+  vec3 grass = sward(vWorld.xz, uLow, uHigh, uTip, (broad - 0.5) * 0.6);
   vec3 albedo = mix(uSoil, grass, mix(1.0, tuftMask(vWorld.xz) * 0.75, uClump));
   albedo = mix(albedo, uSoil, smoothstep(0.66, 0.82, fbm(vWorld.xz * 0.09 + 40.0)) * 0.3);
   albedo = mix(albedo, uDry, (1.0 - uVitality) * 0.55);
@@ -305,6 +323,7 @@ export function createGround(light: SceneLight, shared: GroundUniforms): Ground 
     uSoil: { value: new THREE.Vector3() },
     uLow: { value: new THREE.Vector3() },
     uHigh: { value: new THREE.Vector3() },
+    uTip: { value: new THREE.Vector3() },
     uDry: { value: new THREE.Vector3() },
     uClump: { value: 0 },
   };
@@ -327,6 +346,7 @@ export function createGround(light: SceneLight, shared: GroundUniforms): Ground 
       u.uSoil.value.copy(v3(g.soil));
       u.uLow.value.copy(v3(g.low));
       u.uHigh.value.copy(v3(g.high));
+      u.uTip.value.copy(v3(g.tip));
       u.uDry.value.copy(v3(look.groundDecline));
       u.uClump.value = g.clump;
     },
@@ -345,7 +365,7 @@ uniform float uClump;
 uniform float uFlowers;
 uniform float uVitality;
 attribute vec4 aBlade; // x, z, rotation, height
-attribute vec2 aTint; // tint, flower pick
+attribute vec3 aTint; // tint, flower pick, how far out the blade still grows
 varying vec3 vWorld;
 varying float vT;
 varying float vTint;
@@ -356,14 +376,17 @@ float windAt(vec2 p, float t) {
 }
 void main() {
   float t = position.y;
-  float fade = smoothstep(uRadius, uRadius * 0.6, length(aBlade.xy));
+  // Blades keep their full height everywhere: toward the rim of the field
+  // each one disappears whole past its own seeded radius, over ground
+  // painted in the same colors.
+  float keep = step(length(aBlade.xy), uRadius * mix(0.55, 1.0, aTint.z));
   float clump = mix(1.0, tuftMask(aBlade.xy), uClump);
   float flower = step(aTint.y, uFlowers) * smoothstep(0.35, 0.7, uVitality);
-  float h = aBlade.w * uHeight * fade * clump * (0.62 + 0.38 * uVitality) * (1.0 + flower * 0.25);
+  float h = aBlade.w * uHeight * keep * clump * (0.62 + 0.38 * uVitality) * (1.0 + flower * 0.25);
   float c = cos(aBlade.z);
   float s = sin(aBlade.z);
   // A flower blade opens a small diamond head around its upper vertices.
-  float wide = uWidth * (1.0 + flower * 3.2 * step(0.7, t) * step(t, 0.9));
+  float wide = uWidth * keep * (1.0 + flower * 3.2 * step(0.7, t) * step(t, 0.9));
   vec3 local = vec3(position.x * wide * c, t * h, position.x * wide * s);
   float w = windAt(aBlade.xy, uTime * 0.95) + 0.3 * sin(uTime * 3.7 + aBlade.x * 0.7 + aBlade.y * 1.3);
   float bend = uWind * t * t * max(h, 0.15);
@@ -416,10 +439,10 @@ export interface GroundCover {
   apply(look: WorldLook): void;
 }
 
-const MAX_BLADES = 110000;
+const MAX_BLADES = 180000;
 
-/** A field of wind-swayed blades, thinning softly at its rim; a few carry flowers. */
-export function createGroundCover(light: SceneLight, shared: GroundUniforms, radius = 48): GroundCover {
+/** A field of wind-swayed blades that thins out whole toward its rim; a few carry flowers. */
+export function createGroundCover(light: SceneLight, shared: GroundUniforms, radius = 60): GroundCover {
   const blade = new THREE.BufferGeometry();
   blade.setAttribute(
     "position",
@@ -430,7 +453,7 @@ export function createGroundCover(light: SceneLight, shared: GroundUniforms, rad
   geometry.index = blade.index;
   geometry.setAttribute("position", blade.getAttribute("position"));
   const data = new Float32Array(MAX_BLADES * 4);
-  const tint = new Float32Array(MAX_BLADES * 2);
+  const tint = new Float32Array(MAX_BLADES * 3);
   let seed = 1234567;
   const next = (): number => {
     seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
@@ -443,11 +466,12 @@ export function createGroundCover(light: SceneLight, shared: GroundUniforms, rad
     data[i * 4 + 1] = Math.sin(a) * r;
     data[i * 4 + 2] = next() * Math.PI;
     data[i * 4 + 3] = 0.55 + next() * 0.75;
-    tint[i * 2] = next();
-    tint[i * 2 + 1] = next();
+    tint[i * 3] = next();
+    tint[i * 3 + 1] = next();
+    tint[i * 3 + 2] = next();
   }
   geometry.setAttribute("aBlade", new THREE.InstancedBufferAttribute(data, 4));
-  geometry.setAttribute("aTint", new THREE.InstancedBufferAttribute(tint, 2));
+  geometry.setAttribute("aTint", new THREE.InstancedBufferAttribute(tint, 3));
   geometry.instanceCount = MAX_BLADES;
   const u = {
     uRadius: { value: radius },

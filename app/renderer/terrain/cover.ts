@@ -12,15 +12,14 @@ import { REGIONS_GLSL, type RegionCovers, TUFT_GLSL } from "./regions.ts";
 const GRASS_VERT = /* glsl */ `
 uniform float uTime;
 uniform float uWind;
-uniform float uRadius;
-uniform float uPatch;
 uniform vec3 uCenter;
 uniform float uLand;
 ${GROUND_SAMPLE_GLSL}
 ${REGIONS_GLSL}
 ${TUFT_GLSL}
-attribute vec4 aBlade; // x, z within the patch, rotation, height
+attribute vec4 aBlade; // x, z as a share of the blade's patch, rotation, height
 attribute vec4 aSeed; // tint, flower, keep, cover pick
+attribute vec2 aThin; // how far out the blade still grows, as a share of the thinning band; its reach
 varying vec3 vWorld;
 varying float vT;
 varying float vTint;
@@ -33,32 +32,38 @@ float windAt(vec2 p, float t) {
   return sin(t * 1.35 + p.x * 0.21 + p.y * 0.17) + 0.35 * sin(t * 2.9 + p.y * 0.43);
 }
 void main() {
-  // Each blade wraps to stay within half a patch of the viewer, so the field
+  // Each blade wraps to stay within its reach of the viewer, so the field
   // travels with them while every blade keeps a fixed spot on the ground.
-  vec2 xz = uCenter.xz + mod(aBlade.xy - uCenter.xz + uPatch * 0.5, uPatch) - uPatch * 0.5;
+  // Some blades reach only half as far, so the grass is densest close by.
+  float reach = aThin.y;
+  vec2 xz = uCenter.xz + mod(aBlade.xy * reach * 2.0 - uCenter.xz + reach, reach * 2.0) - reach;
   vec2 g = groundAt(xz);
   float e = 0.6;
   float sx = groundAt(xz + vec2(e, 0.0)).x - groundAt(xz - vec2(e, 0.0)).x;
   float sz = groundAt(xz + vec2(0.0, e)).x - groundAt(xz - vec2(0.0, e)).x;
   float grade = length(vec2(sx, sz)) / (2.0 * e);
   float dry = 1.0 - smoothstep(-0.35, -0.05, g.y - g.x);
-  float fade = smoothstep(uRadius, uRadius * 0.55, length(xz - uCenter.xz));
+  // A blade never grows or shrinks with distance. Each one has its own
+  // threshold and disappears whole once the viewer is farther than that, so
+  // the field thins out from 55% of its reach over ground painted the same.
+  // It thins the same way toward the hand-over to the wild land.
+  float near = step(length(xz - uCenter.xz), reach * mix(0.55, 1.0, aThin.x));
+  float inland = step(length(xz), uLand - 2.0 - 26.0 * aThin.x);
 
   // The blade grows one region's cover: its height, width, density, clumping and flowers.
   int k = coverPick(xz, aSeed.w);
   vec4 shape = uCoverShape[k];
-  // Past the hand-over circle the wild land has no grass.
-  float keep = step(aSeed.z, shape.z) * step(length(xz), uLand - 1.0);
+  float keep = step(aSeed.z, shape.z) * near * inland;
   float clump = mix(1.0, tuftMask(xz), shape.w);
   float flowers = uCoverFlowers[k];
   float flower = step(aSeed.y, flowers);
-  float h = aBlade.w * shape.x * fade * dry * keep * clump * (1.0 - smoothstep(0.35, 0.65, grade) * 0.7) * (1.0 + flower * 0.25);
+  float h = aBlade.w * shape.x * dry * keep * clump * (1.0 - smoothstep(0.35, 0.65, grade) * 0.7) * (1.0 + flower * 0.25);
   float t = position.y;
   float c = cos(aBlade.z);
   float s = sin(aBlade.z);
   // A flower blade opens a small head just below its tip. Seen at eye
   // height, a head any larger reads as confetti.
-  float wide = shape.y * (1.0 + flower * 1.6 * step(0.7, t) * step(t, 0.9));
+  float wide = shape.y * keep * (1.0 + flower * 1.6 * step(0.7, t) * step(t, 0.9));
   vec3 local = vec3(position.x * wide * c, t * h, position.x * wide * s);
   float w = windAt(xz, uTime * 0.95) + 0.3 * sin(uTime * 3.7 + xz.x * 0.7 + xz.y * 1.3);
   local.x += w * 0.09 * uWind * t * t * h;
@@ -112,8 +117,14 @@ export interface Grass {
   follow(center: THREE.Vector3): void;
 }
 
-/** Wind-swayed blades around the viewer; each region's cover decides what grows where. */
-export function createGrass(light: SceneLight, ground: GroundTexture, covers: RegionCovers, land: number, count = 110000, radius = 42): Grass {
+/**
+ * Wind-swayed blades around the viewer; each region's cover decides what
+ * grows where. Blades keep their full height at every distance: the far ones
+ * thin out whole, each at its own seeded distance.
+ */
+export function createGrass(light: SceneLight, ground: GroundTexture, covers: RegionCovers, land: number, count = 150000, radius = 60): Grass {
+  // A third of the blades reach only 26 m, so the grass is densest close by.
+  const close = Math.round(count * 0.3);
   // One tapered blade, one unit wide: the cover sets its width.
   const blade = new THREE.BufferGeometry();
   blade.setAttribute(
@@ -124,23 +135,26 @@ export function createGrass(light: SceneLight, ground: GroundTexture, covers: Re
   const geometry = new THREE.InstancedBufferGeometry();
   geometry.index = blade.index;
   geometry.setAttribute("position", blade.getAttribute("position"));
-  const patch = radius * 2;
   const data = new Float32Array(count * 4);
   const seeds = new Float32Array(count * 4);
+  const thin = new Float32Array(count * 2);
   let seed = 1234567;
   const next = (): number => {
     seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
     return seed / 4294967296;
   };
   for (let i = 0; i < count; i++) {
-    data[i * 4] = next() * patch;
-    data[i * 4 + 1] = next() * patch;
+    data[i * 4] = next();
+    data[i * 4 + 1] = next();
     data[i * 4 + 2] = next() * Math.PI;
     data[i * 4 + 3] = 0.55 + next() * 0.75;
     for (let k = 0; k < 4; k++) seeds[i * 4 + k] = next();
+    thin[i * 2] = next();
+    thin[i * 2 + 1] = i < close ? 26 : radius;
   }
   geometry.setAttribute("aBlade", new THREE.InstancedBufferAttribute(data, 4));
   geometry.setAttribute("aSeed", new THREE.InstancedBufferAttribute(seeds, 4));
+  geometry.setAttribute("aThin", new THREE.InstancedBufferAttribute(thin, 2));
   geometry.instanceCount = count;
   const center = { value: new THREE.Vector3() };
   const material = new THREE.ShaderMaterial({
@@ -150,8 +164,6 @@ export function createGrass(light: SceneLight, ground: GroundTexture, covers: Re
       ...light,
       ...ground.uniforms,
       ...covers.uniforms,
-      uRadius: { value: radius },
-      uPatch: { value: patch },
       uCenter: center,
       uLand: { value: land },
       uDry: { value: hexToVec3(0xc4b47e) },

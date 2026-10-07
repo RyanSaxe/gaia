@@ -6,6 +6,7 @@
 import * as THREE from "three";
 import { LIGHT_GLSL, type SceneLight, hexToVec3 } from "@gaia/render";
 import { DRY, type Terrain, landRadius, wildsRing } from "@gaia/terrain";
+import { SWARD_GLSL } from "../world/environment.ts";
 import { REGIONS_GLSL, type RegionCovers, TUFT_GLSL } from "./regions.ts";
 
 /** Height and water level per lattice sample, for shaders that sample the ground. */
@@ -109,6 +110,7 @@ float fbm(vec2 p) {
   for (int i = 0; i < 4; i++) { v += a * noise(p); p = p * 2.03 + 17.0; a *= 0.5; }
   return v;
 }
+${SWARD_GLSL}
 void main() {
 #ifndef WILDS
   // Past the hand-over circle the wild land takes over.
@@ -121,7 +123,7 @@ void main() {
   // lush and deep; high ground is lighter and drier.
   GroundCover cover = groundCoverAt(vWorld.xz);
   float rel = clamp((vWorld.y - uHeightRange.x) / max(1.0, uHeightRange.y - uHeightRange.x), 0.0, 1.0);
-  vec3 albedo = mix(cover.low, cover.high, smoothstep(0.25, 0.75, broad * 0.6 + fine * 0.2 + rel * 0.45));
+  vec3 albedo = sward(vWorld.xz, cover.low, cover.high, cover.tip, (broad - 0.5) * 0.5 + (rel - 0.4) * 0.45);
   // A clumped cover leaves its own soil showing between the tufts.
   albedo = mix(cover.soil, albedo, mix(1.0, tuftMask(vWorld.xz) * 0.75, cover.clump));
   albedo = mix(albedo, uDry, smoothstep(0.6, 0.82, fbm(vWorld.xz * 0.08 + 40.0) + rel * 0.18) * 0.38);
