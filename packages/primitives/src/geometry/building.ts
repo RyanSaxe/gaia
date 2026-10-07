@@ -320,7 +320,9 @@ export function buildFieldstone(p: Resolved<typeof fieldstoneParams>, ctx: Build
   const boards = new PartBuilder("timber", "solid");
   core(mortar, plan, -0.005, -plan.footing);
   const top = wallTop(plan);
-  const size = p.stones;
+  // Stones grow on a big house, so the walls stay within about 450 stones.
+  const area = 2 * (plan.width + plan.depth) * (top + 0.12) + (plan.ridge === "x" ? plan.depth : plan.width) * plan.rise;
+  const size = Math.max(p.stones, Math.sqrt(area / (0.84 * 450)));
   for (const w of wallsOf(plan)) {
     const holes = clearings(plan, w, 0.06);
     const gableTop = (s: number): number => (w.gable && p.gables === "stone" ? topAt(plan, w, s) : top);
@@ -708,7 +710,9 @@ export function buildTiles(p: Resolved<typeof tilesParams>, ctx: BuildContext, p
   const a0 = -f.halfLength - overGable;
   const a1 = f.halfLength + overGable;
   const tileW = p.covering === "pantiles" ? 0.3 : p.covering === "slates" ? 0.36 : 0.22;
-  const segments = Math.max(12, Math.round((a1 - a0) / (p.covering === "pantiles" ? tileW / 4 : tileW)));
+  // Pantiles need a few segments per tile for their roll; the roof stays under about 9,000 triangles.
+  const wanted = Math.round((a1 - a0) / (p.covering === "pantiles" ? tileW / 4 : tileW));
+  const segments = Math.max(12, Math.min(wanted, Math.floor(9000 / (2 * profile.length))));
   extrudeRoof(
     roof,
     f,

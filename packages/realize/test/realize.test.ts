@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { type AnyPrimitive, type Built, type Part, Library, type Skeleton, rand, seedOf } from "@gaia/schema";
+import { type AnyPrimitive, type Built, type Part, Library, type Skeleton, blueprintOf, rand, seedOf } from "@gaia/schema";
 import { FLORA_PRIMITIVES, STRUCTURE_PRIMITIVES } from "@gaia/primitives";
 import { flora, structure } from "@gaia/kinds";
-import { validate } from "@gaia/world";
+import { randomSlots, validate } from "@gaia/world";
 import { FLORA_PRESETS, STRUCTURE_PRESETS, applyVitality, mergeParts, realize, resolveParams, triangleCount } from "@gaia/realize";
 
 const lib = new Library(FLORA_PRIMITIVES);
@@ -161,6 +161,16 @@ describe("structures", () => {
       expect(triangleCount(mergeParts(built.parts))).toBe(triangleCount(built.parts));
     });
   }
+
+  it("keeps any cottage in the type space within 25k triangles and 11 draw calls, at its largest", () => {
+    const r = rand(99);
+    for (let i = 0; i < 80; i++) {
+      const bp = blueprintOf(structure.id, randomSlots(structure, structureLib, () => r.next()));
+      const built = realize(bp, structure, structureLib, { seed: i, facts });
+      expect(triangleCount(built.parts), JSON.stringify(bp.slots)).toBeLessThan(25_000);
+      expect(mergeParts(built.parts).length).toBeLessThanOrEqual(11);
+    }
+  });
 
   it("builds every part of a cottage on the footprint's one plan", () => {
     const built = realize((STRUCTURE_PRESETS[0] as (typeof STRUCTURE_PRESETS)[number]).blueprint, structure, structureLib, { seed: 4, facts });
