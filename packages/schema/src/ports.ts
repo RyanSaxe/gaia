@@ -292,6 +292,46 @@ export interface Roles {
   Accents: { input: null; output: AccentSpec };
   Wind: { input: null; output: WindSpec };
   Natives: { input: null; output: NativeFamilies };
+  Footprint: { input: null; output: BuildingPlan };
+  Walls: { input: BuildingPlan; output: Built };
+  Roof: { input: BuildingPlan; output: Built };
+  Openings: { input: BuildingPlan; output: Built };
+  Dressing: { input: BuildingPlan; output: Built };
+}
+
+/** A door or window in a building's wall. */
+export interface Opening {
+  readonly kind: "door" | "window";
+  /** Bottom center of the opening, on the wall's outer face. */
+  readonly position: Vec3;
+  /** Unit outward normal of the wall it is in; always level. */
+  readonly normal: Vec3;
+  readonly width: number;
+  readonly height: number;
+}
+
+/**
+ * A building's plan, which its walls, roof, openings and dressing all build
+ * against, so they agree by construction. Local meters: the origin is the
+ * center of the footprint at ground level, and the door faces +z.
+ */
+export interface BuildingPlan {
+  /** Outer wall lengths along x and z. */
+  readonly width: number;
+  readonly depth: number;
+  /** Floor level above the ground: the plinth that shows. */
+  readonly floor: number;
+  /** How far the foundation reaches below ground level, so uneven ground never shows a gap. */
+  readonly footing: number;
+  /** Floor to the top of the walls, where the eaves sit. */
+  readonly wallHeight: number;
+  /** The ridge's height above the top of the walls. */
+  readonly rise: number;
+  /** The axis the ridge runs along. */
+  readonly ridge: "x" | "z";
+  /** How settled and crooked the whole building is, 0 (square) to 1 (storybook), so every part leans alike. */
+  readonly settle: number;
+  readonly openings: readonly Opening[];
 }
 
 /** The palette families native to a region. Empty means every family. */

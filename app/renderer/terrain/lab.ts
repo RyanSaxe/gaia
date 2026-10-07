@@ -5,15 +5,20 @@
 
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { type GroundSpec, Library, type SeasonSpec, blueprintOf, seedOf } from "@gaia/schema";
-import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, NO_SHIFT, RELIEF_PRIMITIVES, WORLD_PRIMITIVES, hex, mixLab } from "@gaia/primitives";
-import { biome, flora, world as worldKind } from "@gaia/kinds";
+import { type BuildingPlan, type GroundSpec, Library, type SeasonSpec, blueprintOf, seedOf } from "@gaia/schema";
+import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, NO_SHIFT, RELIEF_PRIMITIVES, STRUCTURE_PRIMITIVES, WORLD_PRIMITIVES, hex, mixLab } from "@gaia/primitives";
+import { biome, flora, structure, world as worldKind } from "@gaia/kinds";
 import { defaultParams, validate } from "@gaia/world";
-import { FLORA_PRESETS, WORLD_PRESETS, realize, realizeRegion, realizeSky } from "@gaia/realize";
+import { FLORA_PRESETS, STRUCTURE_PRESETS, WORLD_PRESETS, mergeParts, realize, realizeRegion, realizeSky } from "@gaia/realize";
 import { type PlantView, applyLight, createLantern, createPlant, createRenderer, createSceneLight, createSunShadow } from "@gaia/render";
 import {
+  type BuildingSite,
   EYE_HEIGHT,
   RELIEF_BUDGET,
+  clearingsOf,
+  findSite,
+  insideFootprint,
+  levelPad,
   type Terrain,
   type WorldSpec,
   bakeTerrain,
@@ -107,6 +112,21 @@ export function createTerrainLab(root: HTMLElement): Lab {
   let terrain: Terrain = bakeTerrain(world, lib);
   let bakeMs = performance.now() - firstBake;
 
+  // One cottage stands near the stream, on a pad leveled into the bake.
+  const cottagePreset = STRUCTURE_PRESETS[0];
+  if (cottagePreset === undefined) throw new Error("There are no cottages.");
+  const cottageBuilt = realize(cottagePreset.blueprint, structure, new Library([...STRUCTURE_PRIMITIVES, ...FLORA_PRIMITIVES]), {
+    seed: seedOf("terrain-lab/cottage"),
+    facts: { size: 1, floors: 1 },
+  });
+  const cottagePlan = cottageBuilt.slots.get("footprint")?.output as BuildingPlan;
+  const settle = (t: Terrain): BuildingSite => {
+    const s = findSite(t, cottagePlan);
+    levelPad(t, cottagePlan, s);
+    return s;
+  };
+  let site = settle(terrain);
+
   const canvas = root.querySelector("canvas") as HTMLCanvasElement;
   const stage = root.querySelector(".stage") as HTMLElement;
   const renderer = createRenderer(canvas);
@@ -135,6 +155,14 @@ export function createTerrainLab(root: HTMLElement): Lab {
   const water = createWater(terrain, light, groundTex);
   const marker = createWalkMarker();
   scene.add(sky.mesh, ground.wilds, ground.fine, ground.coarse, grass.mesh, water.group, marker.mesh);
+  const cottage = createPlant({ ...cottageBuilt, parts: mergeParts(cottageBuilt.parts) }, light);
+  scene.add(cottage.object);
+  function placeCottage(): void {
+    cottage.object.position.set(site.x, site.level, site.z);
+    cottage.object.rotation.y = site.yaw;
+    grass.clear(clearingsOf(cottagePlan, site));
+  }
+  placeCottage();
 
   /** The hour's light, sky and air, from the sky world's day. */
   let hour = Number.NaN;
@@ -170,7 +198,7 @@ export function createTerrainLab(root: HTMLElement): Lab {
     const spots = scatterPlants(terrain, planted.length, 9);
     planted.forEach((p, i) => {
       const s = spots[i];
-      p.view.object.visible = s !== undefined;
+      p.view.object.visible = s !== undefined && !insideFootprint(cottagePlan, site, s.x, s.z, 6);
       if (s === undefined) return;
       p.view.object.position.set(s.x, groundedBase(terrain.lattice, s.x, s.z, p.base), s.z);
     });
@@ -362,19 +390,32 @@ export function createTerrainLab(root: HTMLElement): Lab {
     if (keys.has("ArrowRight")) walker.yaw -= 1.8 * dt;
     const sy = Math.sin(walker.yaw);
     const cy = Math.cos(walker.yaw);
+    // The cottage's walls stop the walk; it slides along them.
+    const wall = (x: number, z: number): boolean => insideFootprint(cottagePlan, site, x, z, 0.45);
+    /** Steps to (x, z), sliding along a wall in the way; returns how far the walker moved. */
+    const stepTo = (x: number, z: number): number => {
+      const x0 = walker.x;
+      const z0 = walker.z;
+      if (!wall(x, z)) {
+        walker.x = x;
+        walker.z = z;
+      } else if (!wall(x, walker.z)) walker.x = x;
+      else if (!wall(walker.x, z)) walker.z = z;
+      return Math.hypot(walker.x - x0, walker.z - z0);
+    };
     if (f !== 0 || s !== 0) {
       // Wading slows the walk, and deep water turns it aside along the edge.
       const next = walkStep(terrain, walker, { dx: -sy * f + cy * s, dz: -cy * f - sy * s, speed }, dt);
-      walker.x = next.x;
-      walker.z = next.z;
+      stepTo(next.x, next.z);
       walker.moved = true;
     } else if (goal !== null) {
       // The view stays where the person looks; only the feet head for the goal.
       const step = walkToward(terrain, walker, goal, dt);
-      walker.x = step.walker.x;
-      walker.z = step.walker.z;
+      const wanted = Math.hypot(step.walker.x - walker.x, step.walker.z - walker.z);
+      // A wall that leaves only a crawl along it ends the walk, as deep water does.
+      const blocked = stepTo(step.walker.x, step.walker.z) < wanted * 0.25;
       walker.moved = true;
-      if (step.state !== "walking") endWalk();
+      if (step.state !== "walking" || blocked) endWalk();
     }
     const target = heightAt(terrain.lattice, walker.x, walker.z) + EYE_HEIGHT;
     walker.eye += (target - walker.eye) * (1 - Math.exp(-dt * 12));
@@ -392,7 +433,9 @@ export function createTerrainLab(root: HTMLElement): Lab {
   function rebake(): void {
     const t0 = performance.now();
     terrain = bakeTerrain(world, lib);
+    site = settle(terrain);
     bakeMs = performance.now() - t0;
+    placeCottage();
     updateCovers();
     groundTex.update(terrain);
     ground.update(terrain);
@@ -526,7 +569,7 @@ export function createTerrainLab(root: HTMLElement): Lab {
 
   let frozen: number | null = null;
   const shadowCenter = new THREE.Vector3();
-  const views = planted.map((p) => p.view);
+  const views = [...planted.map((p) => p.view), cottage];
   const lanternEye = new THREE.Vector3();
   // The water mirrors the coarse ground and no grass: its reflection is soft, so detail there is wasted.
   const mirrorHide = [grass.mesh, ground.fine];
@@ -593,6 +636,7 @@ export function createTerrainLab(root: HTMLElement): Lab {
     },
     shots: (): Shot[] => RELIEF_PRIMITIVES.map((p) => ({ name: `terrain-${slug(p.id)}`, stage: () => showcase(p.id) })),
     hook: {
+      cottage: () => ({ ...site, triangles: cottage.triangles, width: cottagePlan.width, depth: cottagePlan.depth }),
       walk: (x: number, z: number, yawDeg: number, pitchDeg = -3) => walkTo(x, z, (yawDeg * Math.PI) / 180, (pitchDeg * Math.PI) / 180),
       valley: () => valleyView(),
       walker: () => ({ x: walker.x, z: walker.z, yawDeg: (walker.yaw * 180) / Math.PI, pitchDeg: (walker.pitch * 180) / Math.PI, eye: walker.eye }),

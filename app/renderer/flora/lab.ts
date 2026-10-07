@@ -5,11 +5,11 @@
 
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { type Blueprint, Library, blueprintOf, seedOf } from "@gaia/schema";
-import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, RELIEF_PRIMITIVES, WORLD_PRIMITIVES } from "@gaia/primitives";
-import { biome, flora, world as worldKind } from "@gaia/kinds";
+import { type AnyKind, type Blueprint, Library, blueprintOf, seedOf } from "@gaia/schema";
+import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, RELIEF_PRIMITIVES, STRUCTURE_PRIMITIVES, WORLD_PRIMITIVES } from "@gaia/primitives";
+import { biome, flora, structure, world as worldKind } from "@gaia/kinds";
 import { blueprintCount, randomSlots, validate } from "@gaia/world";
-import { FLORA_PRESETS, WORLD_PRESETS, realize, realizeWorld } from "@gaia/realize";
+import { FLORA_PRESETS, STRUCTURE_PRESETS, WORLD_PRESETS, mergeParts, realize, realizeWorld } from "@gaia/realize";
 import { type PlantView, applyLight, createPlant, createRenderer, createSceneLight, createSunShadow } from "@gaia/render";
 import { renderInspector } from "../inspector.ts";
 import { type Lab, type Shot, onTap, refs, slug } from "../lab.ts";
@@ -26,6 +26,7 @@ const TEMPLATE = /* html */ `
   <div class="bar bottom">
     <label class="chip range grow"><span>All plants</span><input data-ref="all" type="range" min="0" max="1" step="0.01" value="1"><output data-ref="all-out">1.00</output></label>
     <button data-ref="overview">Show all</button>
+    <button data-ref="cottage" title="Show the next hand-filled cottage">Next cottage</button>
     <div class="chip space" data-ref="space"></div>
   </div>
 </main>
@@ -45,6 +46,9 @@ const TEMPLATE = /* html */ `
 `;
 
 const FACTS = { scale: 1, age: 120 };
+const COTTAGE_FACTS = { size: 1, floors: 1 };
+/** The cottage stands behind the plants, its door toward the overview. */
+const COTTAGE_SPOT = { x: 17, z: -9, yaw: -0.42 };
 const SPOTS: readonly [number, number][] = [
   [-9.6, -1.5],
   [-3.2, 2.2],
@@ -58,6 +62,10 @@ const MEADOW_SEED = seedOf("lab/world");
 interface Entry {
   name: string;
   blueprint: Blueprint;
+  readonly kind: AnyKind;
+  readonly facts: Readonly<Record<string, number>>;
+  /** A fixed facing, or null for a seeded one. */
+  readonly yaw: number | null;
   readonly seed: number;
   readonly position: THREE.Vector3;
   view: PlantView | null;
@@ -71,7 +79,7 @@ export function createFloraLab(root: HTMLElement): Lab {
   root.innerHTML = TEMPLATE;
   const $ = refs(root);
   const sheet = createSheet($("panel"));
-  const lib = new Library(FLORA_PRIMITIVES);
+  const lib = new Library([...FLORA_PRIMITIVES, ...STRUCTURE_PRIMITIVES]);
   const space = blueprintCount(flora, lib);
   let active = false;
 
@@ -89,7 +97,7 @@ export function createFloraLab(root: HTMLElement): Lab {
   const grass = createGroundCover(light, groundShared);
   scene.add(sky.mesh, ground.mesh, grass.mesh);
   const shadow = createSunShadow(light, 2048);
-  shadow.frame(new THREE.Vector3(0, 0, 0), 20);
+  shadow.frame(new THREE.Vector3(4, 0, -3), 27);
 
   // The meadow's light, sky and air follow the shell's hour. No lantern is
   // carried here: plants are judged under the moon alone.
@@ -118,9 +126,14 @@ export function createFloraLab(root: HTMLElement): Lab {
   controls.minDistance = 5;
   controls.maxDistance = 90;
 
+  const firstCottage = STRUCTURE_PRESETS[0];
+  if (firstCottage === undefined) throw new Error("There are no cottages.");
   const entries: Entry[] = FLORA_PRESETS.map((preset, i) => ({
     name: preset.name,
     blueprint: preset.blueprint,
+    kind: flora as AnyKind,
+    facts: FACTS,
+    yaw: null as number | null,
     seed: seedOf(`lab/plant-${i}`),
     position: new THREE.Vector3(SPOTS[i]?.[0] ?? 0, 0, SPOTS[i]?.[1] ?? 0),
     view: null,
@@ -128,13 +141,29 @@ export function createFloraLab(root: HTMLElement): Lab {
     shown: 1,
     ms: 0,
   }));
+  entries.push({
+    name: firstCottage.name,
+    blueprint: firstCottage.blueprint,
+    kind: structure,
+    facts: COTTAGE_FACTS,
+    yaw: COTTAGE_SPOT.yaw,
+    seed: seedOf("lab/cottage"),
+    position: new THREE.Vector3(COTTAGE_SPOT.x, 0, COTTAGE_SPOT.z),
+    view: null,
+    target: 1,
+    shown: 1,
+    ms: 0,
+  });
+  let cottagePreset = 0;
 
   function build(entry: Entry): void {
     const t0 = performance.now();
-    const plant = realize(entry.blueprint, flora, lib, { seed: entry.seed, facts: FACTS });
+    const built = realize(entry.blueprint, entry.kind, lib, { seed: entry.seed, facts: entry.facts });
+    // A building's many pieces draw as one mesh per swatch.
+    const plant = entry.kind === structure ? { ...built, parts: mergeParts(built.parts) } : built;
     const view = createPlant(plant, light);
     view.object.position.copy(entry.position);
-    view.object.rotation.y = (entry.seed % 628) / 100;
+    view.object.rotation.y = entry.yaw ?? (entry.seed % 628) / 100;
     view.object.userData.entry = entry;
     view.setVitality(entry.shown);
     entry.view?.dispose();
@@ -220,17 +249,17 @@ export function createFloraLab(root: HTMLElement): Lab {
     $("bp-id").textContent = entry.blueprint.id;
     vitalityInput.value = String(entry.target);
     vitalityOut.textContent = fmt(entry.target);
-    const problems = validate(entry.blueprint, flora, lib);
+    const problems = validate(entry.blueprint, entry.kind, lib);
     $("problems").textContent = problems.length === 0 ? "" : problems.join(" ");
     $("stats").textContent = `${(entry.view?.triangles ?? 0).toLocaleString()} triangles · built in ${entry.ms.toFixed(0)} ms`;
     $("json").textContent = JSON.stringify(entry.blueprint, null, 2);
     renderInspector(slotsRoot, {
-      kind: flora,
+      kind: entry.kind,
       lib,
       blueprint: entry.blueprint,
       onChange: (slots) => {
-        const next = blueprintOf(flora.id, slots);
-        const issues = validate(next, flora, lib);
+        const next = blueprintOf(entry.kind.id, slots);
+        const issues = validate(next, entry.kind, lib);
         if (issues.length > 0) {
           $("problems").textContent = issues.join(" ");
           return;
@@ -263,12 +292,12 @@ export function createFloraLab(root: HTMLElement): Lab {
   function randomize(): Blueprint | null {
     const entry = selected ?? entries[0];
     if (entry === undefined) return null;
-    const bp = blueprintOf(flora.id, randomSlots(flora, lib, Math.random));
-    const problems = validate(bp, flora, lib);
+    const bp = blueprintOf(entry.kind.id, randomSlots(entry.kind, lib, Math.random));
+    const problems = validate(bp, entry.kind, lib);
     draws += 1;
     $("space").textContent =
       problems.length === 0
-        ? `Draw ${draws}: valid, one of ${space.toLocaleString()} flora blueprints.`
+        ? `Draw ${draws}: valid, one of ${blueprintCount(entry.kind, lib).toLocaleString()} ${entry.kind.id} blueprints.`
         : `Draw ${draws} failed validation: ${problems.join(" ")}`;
     if (problems.length > 0) return null;
     entry.blueprint = bp;
@@ -284,6 +313,17 @@ export function createFloraLab(root: HTMLElement): Lab {
   }
 
   $("random").addEventListener("click", () => randomize());
+  function nextCottage(index?: number): void {
+    const entry = entries.find((e) => e.kind === structure);
+    cottagePreset = index ?? (cottagePreset + 1) % STRUCTURE_PRESETS.length;
+    const preset = STRUCTURE_PRESETS[cottagePreset];
+    if (entry === undefined || preset === undefined) return;
+    entry.blueprint = preset.blueprint;
+    entry.name = preset.name;
+    build(entry);
+    select(entry, selected !== entry);
+  }
+  $("cottage").addEventListener("click", () => nextCottage());
   $("overview").addEventListener("click", overview);
   $("space").textContent = `${space.toLocaleString()} flora blueprints in this type space.`;
 
@@ -327,8 +367,11 @@ export function createFloraLab(root: HTMLElement): Lab {
   // ---------- shots: each primitive in a tree that uses it, at three vitalities ----------
 
   function showcase(primitiveId: string, vitality: number): void {
+    const cottage = entries.find((e) => e.kind === structure);
+    const wanted = STRUCTURE_PRESETS.findIndex((p) => Object.values(p.blueprint.slots).some((s) => s.use === primitiveId));
+    if (cottage !== undefined && STRUCTURE_PRESETS[Math.max(0, wanted)]?.blueprint.id !== cottage.blueprint.id) nextCottage(Math.max(0, wanted));
     entries.forEach((e, i) => {
-      const preset = FLORA_PRESETS[i];
+      const preset = e.kind === flora ? FLORA_PRESETS[i] : undefined;
       if (preset !== undefined && e.blueprint.id !== preset.blueprint.id) {
         e.blueprint = preset.blueprint;
         e.name = preset.name;
@@ -361,7 +404,7 @@ export function createFloraLab(root: HTMLElement): Lab {
       if (active) frame(dt, h);
     },
     shots: (): Shot[] =>
-      FLORA_PRIMITIVES.flatMap((p) =>
+      [...FLORA_PRIMITIVES, ...STRUCTURE_PRIMITIVES].flatMap((p) =>
         [1, 0.5, 0.1].map((v) => ({ name: `flora-${slug(p.id)}-vitality-${v.toFixed(1)}`, stage: () => showcase(p.id, v) })),
       ),
     hook: {
@@ -372,6 +415,7 @@ export function createFloraLab(root: HTMLElement): Lab {
         for (const e of entries) e.shown = v;
       },
       random: () => randomize(),
+      cottage: (i?: number) => nextCottage(i),
       showcase,
       freeze: (t: number | null) => (frozen = t),
       hour: () => hour,

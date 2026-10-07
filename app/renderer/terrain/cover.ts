@@ -3,11 +3,12 @@
 // reads the same ground texture the mesh was built from.
 
 import * as THREE from "three";
-import { LIGHT_GLSL, type SceneLight, hexToVec3 } from "@gaia/render";
+import { CLEARINGS_GLSL, type Clearing, LIGHT_GLSL, type SceneLight, createClearings, hexToVec3 } from "@gaia/render";
 import { GROUND_SAMPLE_GLSL, type GroundTexture } from "./ground.ts";
 import { REGIONS_GLSL, type RegionCovers, TUFT_GLSL } from "./regions.ts";
 
 const GRASS_VERT = /* glsl */ `
+${CLEARINGS_GLSL}
 uniform float uTime;
 uniform float uWind;
 uniform vec3 uCenter;
@@ -91,7 +92,7 @@ void main() {
   float flowers = uCoverFlowers[k];
   float flower = step(aSeed.y, flowers);
   // Tufts dome: their middles stand a little taller than their edges.
-  float h = aBlade.w * shape.x * keep * mix(1.0, 0.72 + 0.28 * tuft, shape.w) * (1.0 + flower * 0.25);
+  float h = aBlade.w * shape.x * keep * mix(1.0, 0.72 + 0.28 * tuft, shape.w) * (1.0 + flower * 0.25) * clearing(xz);
 
   float side = position.x;
   // A flower's rows crowd toward its top, so its head is a small round dab on a long stem.
@@ -189,6 +190,8 @@ void main() {
 export interface Grass {
   readonly mesh: THREE.Mesh;
   follow(center: THREE.Vector3): void;
+  /** Where no grass grows, such as under a house and along its walk. */
+  clear(list: readonly Clearing[]): void;
 }
 
 /**
@@ -255,11 +258,13 @@ export function createGrass(light: SceneLight, ground: GroundTexture, covers: Re
   geometry.setAttribute("aThin", new THREE.InstancedBufferAttribute(thin, 2));
   geometry.instanceCount = count;
   const center = { value: new THREE.Vector3() };
+  const clearings = createClearings();
   const material = new THREE.ShaderMaterial({
     vertexShader: GRASS_VERT,
     fragmentShader: GRASS_FRAG,
     uniforms: {
       ...light,
+      ...clearings.uniforms,
       ...ground.uniforms,
       ...covers.uniforms,
       uCenter: center,
@@ -270,5 +275,5 @@ export function createGrass(light: SceneLight, ground: GroundTexture, covers: Re
   });
   const mesh = new THREE.Mesh(geometry, material);
   mesh.frustumCulled = false;
-  return { mesh, follow: (c) => center.value.copy(c) };
+  return { mesh, follow: (c) => center.value.copy(c), clear: (list) => clearings.set(list) };
 }

@@ -2,14 +2,16 @@
 // covered as soon as it is listed in PRIMITIVES; nobody writes these tests per primitive.
 
 import { describe, expect, it } from "vitest";
-import { type AnyPrimitive, type Built, CUT, type Field, Library, type Part, type Skeleton, rand } from "@gaia/schema";
+import { type AnyPrimitive, type Built, type BuildingPlan, CUT, type Field, Library, type Part, type Skeleton, rand } from "@gaia/schema";
 import * as primitivesModule from "@gaia/primitives";
 import { PRIMITIVES } from "@gaia/primitives";
 import { applyVitality, resolveParams } from "@gaia/realize";
 
 const lib = new Library(PRIMITIVES);
 const facts = { scale: 1, age: 120 };
-const GEOMETRY_ROLES = new Set(["Surface", "Foliage", "Ornament"]);
+const GEOMETRY_ROLES = new Set(["Surface", "Foliage", "Ornament", "Walls", "Roof", "Openings", "Dressing"]);
+/** Roles that build against a building's plan. */
+const PLAN_ROLES = new Set(["Walls", "Roof", "Openings", "Dressing"]);
 const TRIANGLE_BUDGET = 40_000;
 
 type Stored = Record<string, string | boolean | string[]>;
@@ -38,7 +40,12 @@ function build(p: AnyPrimitive, stored: Stored, input: unknown, seed: number): u
 
 const skeletons: Skeleton[] = lib.forRole("Skeleton").flatMap((p) => samples(p).map((s) => build(p, s, null, 11) as Skeleton));
 const anchors = skeletons.flatMap((s) => s.tips).slice(0, 64);
-const inputFor = (p: AnyPrimitive): unknown[] => (p.role === "Ornament" ? [anchors] : p.role === "Skeleton" || p.role === "Motion" || p.role === "Palette" ? [null] : skeletons);
+const plans: BuildingPlan[] = lib.forRole("Footprint").flatMap((p) => samples(p).map((s) => build(p, s, null, 13) as BuildingPlan));
+const inputFor = (p: AnyPrimitive): unknown[] =>
+  p.role === "Ornament" ? [anchors]
+  : PLAN_ROLES.has(p.role) ? plans
+  : p.role === "Skeleton" || p.role === "Motion" || p.role === "Palette" || p.role === "Footprint" ? [null]
+  : skeletons;
 
 const allFinite = (a: Float32Array): boolean => a.every(Number.isFinite);
 const inUnit = (a: Float32Array): boolean => a.every((x) => x >= 0 && x <= 1);

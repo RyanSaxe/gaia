@@ -5,7 +5,7 @@
 import * as THREE from "three";
 import type { Rgb } from "@gaia/schema";
 import { AIR, type WorldLook } from "@gaia/realize";
-import { LIGHT_GLSL, type SceneLight, applySky } from "@gaia/render";
+import { CLEARINGS_GLSL, type Clearing, LIGHT_GLSL, type SceneLight, applySky, createClearings } from "@gaia/render";
 
 const v3 = (c: Rgb): THREE.Vector3 => new THREE.Vector3(c[0], c[1], c[2]);
 
@@ -389,6 +389,7 @@ export function createGround(light: SceneLight, shared: GroundUniforms): Ground 
 // ---------- ground cover ----------
 
 const GRASS_VERT = /* glsl */ `
+${CLEARINGS_GLSL}
 uniform float uTime;
 uniform float uWind;
 uniform float uRadius;
@@ -415,7 +416,7 @@ void main() {
   float keep = step(length(aBlade.xy), uRadius * mix(0.55, 1.0, aTint.z));
   float clump = mix(1.0, tuftMask(aBlade.xy), uClump);
   float flower = step(aTint.y, uFlowers) * smoothstep(0.35, 0.7, uVitality);
-  float h = aBlade.w * uHeight * keep * clump * (0.62 + 0.38 * uVitality) * (1.0 + flower * 0.25);
+  float h = aBlade.w * uHeight * keep * clump * (0.62 + 0.38 * uVitality) * (1.0 + flower * 0.25) * clearing(aBlade.xy);
   float c = cos(aBlade.z);
   float s = sin(aBlade.z);
   // A flower blade opens a small diamond head around its upper vertices.
@@ -471,6 +472,8 @@ void main() {
 export interface GroundCover {
   readonly mesh: THREE.Mesh;
   apply(look: WorldLook): void;
+  /** Where no grass grows, such as under a house and along its walk. */
+  clear(list: readonly Clearing[]): void;
 }
 
 const MAX_BLADES = 180000;
@@ -521,16 +524,18 @@ export function createGroundCover(light: SceneLight, shared: GroundUniforms, rad
     uFlower1: { value: new THREE.Vector3() },
     uFlower2: { value: new THREE.Vector3() },
   };
+  const clearings = createClearings();
   const material = new THREE.ShaderMaterial({
     vertexShader: GRASS_VERT,
     fragmentShader: GRASS_FRAG,
-    uniforms: { ...light, ...u, uVitality: shared.uVitality },
+    uniforms: { ...light, ...u, ...clearings.uniforms, uVitality: shared.uVitality },
     side: THREE.DoubleSide,
   });
   const mesh = new THREE.Mesh(geometry, material);
   mesh.frustumCulled = false;
   return {
     mesh,
+    clear: (list) => clearings.set(list),
     apply(look) {
       const g = look.ground;
       geometry.instanceCount = Math.round(MAX_BLADES * g.density);

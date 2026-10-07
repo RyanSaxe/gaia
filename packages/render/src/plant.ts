@@ -6,6 +6,7 @@ import * as THREE from "three";
 import type { Part, Swatch } from "@gaia/schema";
 import { CHANNEL_MATH, type Realized } from "@gaia/realize";
 import { LIGHT_GLSL, type SceneLight } from "./light.ts";
+import { createSmokeMaterial } from "./smoke.ts";
 
 const f = (x: number): string => x.toFixed(4);
 
@@ -193,6 +194,7 @@ vec3 hueRotate(vec3 c, float turns) {
 uniform vec3 uHealthy;
 uniform vec3 uDecline;
 uniform float uFoliage;
+uniform float uLamp;
 varying vec3 vNormal;
 varying vec3 vWorld;
 varying float vShade;
@@ -212,6 +214,10 @@ void main() {
   vec3 albedo = mix(hueRotate(uHealthy, vTint), uDecline, vWither) * bright;
   vec3 n = normalize(vNormal);
   if (uFoliage < 0.5 && !gl_FrontFacing) n = -n;
+  // Window glass is a dark pane holding a little sky by day; from dusk the
+  // lamp inside lights it, and its healthy color is the lamplight.
+  float evening = smoothstep(0.08, 0.55, uNightness) * uLamp;
+  if (uLamp > 0.5) albedo = mix(uDecline * 0.75 + skyColor(reflect(-normalize(cameraPosition - vWorld), n)) * 0.2, uDecline * 0.45, evening);
   // Foliage gets wrapped diffuse: leaves scatter light, so canopies never
   // fall into hard dark sides.
   float nDotL = dot(n, uSunDirection);
@@ -232,7 +238,7 @@ void main() {
   color += nightLight(albedo, n, vWorld, uFoliage * 0.85, mix(1.0, shadow, uMoonShadow));
   // The world's own glow shows by contrast: a touch stronger in the dark,
   // and it carries through the night air a little farther than lit color.
-  vec3 glow = uHealthy * vGlow * (1.0 + uNightness * 0.6);
+  vec3 glow = uHealthy * vGlow * (1.0 + uNightness * 0.6) * mix(1.0, evening * 1.5, uLamp);
   gl_FragColor = vec4(aerial(shoulder(color), vWorld) + glow * (1.0 - uNightness * 0.35), cover);
 }
 `;
@@ -296,7 +302,9 @@ function geometryOf(part: Part): THREE.BufferGeometry {
 }
 
 /** Bark is solid; leaves and blooms are thin and scatter light. */
-const FOLIAGE: Readonly<Record<string, number>> = { bark: 0, leaf: 1, bloom: 0.6 };
+const FOLIAGE: Readonly<Record<string, number>> = { bark: 0, leaf: 1, bloom: 0.6, wall: 0, timber: 0, roof: 0.12, masonry: 0, trim: 0, glass: 0 };
+/** Swatches lit from inside at night, like window glass. */
+const LAMP = new Set(["glass"]);
 
 export function createPlant(plant: Realized, light: SceneLight): PlantView {
   const object = new THREE.Group();
@@ -314,8 +322,20 @@ export function createPlant(plant: Realized, light: SceneLight): PlantView {
   };
   const materials: THREE.ShaderMaterial[] = [];
   const meshes: { mesh: THREE.Mesh; color: THREE.ShaderMaterial; depth: THREE.ShaderMaterial }[] = [];
+  const veils: THREE.Mesh[] = [];
   plant.parts.forEach((part, i) => {
     const swatch: Swatch = plant.palette.swatches[part.swatch] ?? { healthy: [1, 0, 1], decline: [1, 0, 1] };
+    if (part.swatch === "smoke") {
+      // Smoke drifts in its own soft material and casts no shadow.
+      const material = createSmokeMaterial(light, shared, vec3Of(swatch.healthy));
+      const mesh = new THREE.Mesh(geometries[i], material);
+      mesh.frustumCulled = false;
+      mesh.renderOrder = 1;
+      object.add(mesh);
+      materials.push(material);
+      veils.push(mesh);
+      return;
+    }
     const foliage = FOLIAGE[part.swatch] ?? 0.5;
     const perPart = { uFlutter: { value: part.swatch === "bark" ? 0 : 1 } };
     const color = new THREE.ShaderMaterial({
@@ -328,6 +348,7 @@ export function createPlant(plant: Realized, light: SceneLight): PlantView {
         uHealthy: { value: vec3Of(swatch.healthy) },
         uDecline: { value: vec3Of(swatch.decline) },
         uFoliage: { value: foliage },
+        uLamp: { value: LAMP.has(part.swatch) ? 1 : 0 },
       },
       side: part.swatch === "bark" ? THREE.FrontSide : THREE.DoubleSide,
       // Leaf edges resolve through the multisampled canvas, not a hard alpha test.
@@ -360,6 +381,7 @@ export function createPlant(plant: Realized, light: SceneLight): PlantView {
     },
     useDepth(on) {
       for (const m of meshes) m.mesh.material = on ? m.depth : m.color;
+      for (const v of veils) v.visible = !on;
     },
     dispose() {
       for (const g of geometries) g.dispose();
