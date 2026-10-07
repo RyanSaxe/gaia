@@ -25,5 +25,26 @@ export function refs(root: ParentNode): <T extends HTMLElement = HTMLElement>(na
   };
 }
 
+/**
+ * Calls `tap` when a press lifts within 5 px of where it went down. A press
+ * that shared the canvas with another finger is part of a pinch, never a tap.
+ */
+export function onTap(target: HTMLElement, tap: (e: PointerEvent) => void): void {
+  const down = new Map<number, { x: number; y: number }>();
+  let pinched = false;
+  target.addEventListener("pointerdown", (e) => {
+    down.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (down.size > 1) pinched = true;
+  });
+  const lift = (e: PointerEvent, counts: boolean): void => {
+    const start = down.get(e.pointerId);
+    down.delete(e.pointerId);
+    if (counts && !pinched && start !== undefined && Math.hypot(e.clientX - start.x, e.clientY - start.y) <= 5) tap(e);
+    if (down.size === 0) pinched = false;
+  };
+  target.addEventListener("pointerup", (e) => lift(e, true));
+  target.addEventListener("pointercancel", (e) => lift(e, false));
+}
+
 /** A small file name for a shot: lowercase words joined by dashes. */
 export const slug = (s: string): string => s.toLowerCase().replace(/@\d+$/, "").replace(/[^a-z0-9.]+/g, "-").replace(/^-|-$/g, "");

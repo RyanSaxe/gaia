@@ -10,6 +10,7 @@
     "dev": "pnpm engine && pnpm --filter @gaia/app dev",
     "shots": "pnpm engine && pnpm --filter @gaia/app shots",
     "lab:html": "tsx tools/lab-html.ts",
+    "lab:serve": "tsx tools/lab-serve.ts",
     "print-request": "tsx tools/print-request.ts",
     "typecheck": "tsc --noEmit -p .",
     "lint": "eslint .",

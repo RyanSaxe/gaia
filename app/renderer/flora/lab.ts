@@ -12,7 +12,8 @@ import { blueprintCount, randomSlots, validate } from "@gaia/world";
 import { FLORA_PRESETS, WORLD_PRESETS, realize, realizeWorld } from "@gaia/realize";
 import { type PlantView, applyLight, createPlant, createSceneLight, createSunShadow } from "@gaia/render";
 import { renderInspector } from "../inspector.ts";
-import { type Lab, type Shot, refs, slug } from "../lab.ts";
+import { type Lab, type Shot, onTap, refs, slug } from "../lab.ts";
+import { createSheet } from "../sheet.ts";
 import { createGround, createGroundCover, createSky } from "../world/environment.ts";
 
 const TEMPLATE = /* html */ `
@@ -69,6 +70,7 @@ interface Entry {
 export function createFloraLab(root: HTMLElement): Lab {
   root.innerHTML = TEMPLATE;
   const $ = refs(root);
+  const sheet = createSheet($("panel"));
   const lib = new Library(FLORA_PRIMITIVES);
   const space = blueprintCount(flora, lib);
   let active = false;
@@ -181,10 +183,7 @@ export function createFloraLab(root: HTMLElement): Lab {
   }
 
   const raycaster = new THREE.Raycaster();
-  const down = new THREE.Vector2();
-  canvas.addEventListener("pointerdown", (e) => down.set(e.clientX, e.clientY));
-  canvas.addEventListener("pointerup", (e) => {
-    if (Math.hypot(e.clientX - down.x, e.clientY - down.y) > 5) return;
+  onTap(canvas, (e) => {
     const rect = canvas.getBoundingClientRect();
     raycaster.setFromCamera(
       new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1),
@@ -207,6 +206,7 @@ export function createFloraLab(root: HTMLElement): Lab {
 
   function refreshPanel(): void {
     $("panel").classList.toggle("empty", selected === null);
+    sheet.name(selected?.name ?? "No plant selected");
     if (selected === null) {
       $("name").textContent = "No plant selected";
       $("bp-id").textContent = "Click a plant in the meadow.";

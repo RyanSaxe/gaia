@@ -20,3 +20,4 @@ One file per decision the reviewer settled in the pair sessions that designed Ga
 - [Jev through OpenRouter](16-jev-access.md)
 - [Make it concrete, then plan, then build in slices](17-process.md)
 - [Edit primitives in place until release](18-edit-primitives-in-place.md)
+- [The lab on your phone](19-lab-on-your-phone.md)
