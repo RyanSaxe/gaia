@@ -53,9 +53,9 @@ gives the reason next to each rule.
 A **primitive** is a pure procedural function with typed parameters and a
 role, such as `branching@1` (Skeleton) or `leaf-clumps@1` (Foliage). It is code,
 versioned in its ID. A **kind** declares slots by role and the subject it
-stands for: a file (`flora`, `rock`, `wildflowers`, `landmark`), an entity
-(`structure`), a region (`biome`), a dependency between two files (`link`) or
-the repository (`world`). A `link`'s blueprint fills only a trail's look; the
+stands for: a file (`flora`, `rock`, `wildflowers`), an entity
+(`structure`, `landmark`), a region (`biome`), a dependency between two
+entities (`link`) or the repository (`world`). A `link`'s blueprint fills only a trail's look; the
 terrain finds its route. A `structure`'s footprint lays out one
 `BuildingPlan` (walls, roofline, floor and where every door and window goes);
 its body, roof, openings, ornaments and optional feature (a `waterwheel@1`, a
@@ -69,10 +69,15 @@ or a module (a directory whose index file gives it a public surface).
 report for each: its root path (its identity), name, form, manifest, entry,
 doc, size, exports, the entities it depends on and that depend on it, and
 its files' tests, diagnostics and git activity summed. Entities nest; each
-file belongs to its innermost one. Buildings stand for entities and plants
-for files. Jev decides which entities become buildings and which building
-suits each; the kind binds only numbers from the facts (size from lines,
-storeys from exports, a feature's reach from dependents).
+file belongs to its innermost one. Buildings and landmarks stand for
+entities, plants for files, and trails for dependencies between entities.
+Jev decides which entities become buildings, which become landmarks and
+which form suits each, with no rule fixing how many of either; the kinds
+bind only numbers from the facts (a building's size from lines, storeys from
+exports and a feature's reach from dependents; a landmark's scale from its
+dependents; a trail's traffic from how many of one entity's files import the
+other). `DependencyFacts` carries both entities' facts, so a trail can follow
+the vitality of each.
 A **blueprint** fills a kind: a primitive for each slot and a stored value for
 each parameter. An **instance** places a blueprint for one path. Jev
 generates blueprints and instances; people and agents write primitives and

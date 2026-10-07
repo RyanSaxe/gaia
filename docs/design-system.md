@@ -256,7 +256,7 @@ signals behind it, each with its reading.
 
 ## Trails
 
-A trail is a `link`: a dependency between two files that Jev judges a
+A trail is a `link`: a dependency between two entities that Jev judges a
 person would walk between. Jev fills only the trail's look, through
 `trail@1`'s closed fields: its width (a narrow footpath to a broad cart
 track), how worn its tread is, whether stones line its edges, how freely
@@ -283,8 +283,10 @@ stones are walkable. Planks go missing and rails sag as vitality falls.
 ## Landmarks
 
 A landmark is a great thing a person steers by: a lookout tower, a ring of
-standing stones, or a great old tree. It stands for the one file a region
-is organized around, and Jev chooses the form. `findLandmarkSite` puts it
+standing stones, or a great old tree. It stands for an entity, as a
+building does: Jev decides which entities become landmarks (prominent ones
+much of the code leans on suit them) and which become buildings, and
+chooses the form. No rule fixes how many; its vitality is its entity's own. `findLandmarkSite` puts it
 on the most prominent gentle, dry ground of its region, a knoll or a rise
 near the region's heart, and levels its footprint into the land. Each
 reads as a silhouette through the haze from 300 m and more, and declines
@@ -298,10 +300,11 @@ by breaking, not by fading:
   break off at a seeded height.
 - A great tree drops its leaves, sags and greys to a bare snag.
 
-A world stands a few landmarks, more for more regions (about 1.4 times the
-square root of the region count: seven in a full world of 22 regions), on
-regions spread far apart; when a world wants more than there are forms,
-forms repeat. Buildings' floors and walks and landmarks' feet clear the
+Until worlds come from real code, the terrain lab stands a few landmarks,
+more for more regions (about 1.4 times the square root of the region count:
+seven in a full world of 22 regions), each for one of its sample entities,
+on regions spread far apart; when it wants more than there are forms, forms
+repeat. Buildings' floors and walks and landmarks' feet clear the
 grass through the same mask as the understory, so a world may hold any
 number of them.
 
