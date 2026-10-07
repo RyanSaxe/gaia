@@ -7,8 +7,8 @@
     "node": ">=26"
   },
   "scripts": {
-    "dev": "pnpm --filter @gaia/app dev",
-    "shots": "pnpm --filter @gaia/app shots",
+    "dev": "pnpm engine && pnpm --filter @gaia/app dev",
+    "shots": "pnpm engine && pnpm --filter @gaia/app shots",
     "lab:html": "tsx tools/lab-html.ts",
     "print-request": "tsx tools/print-request.ts",
     "typecheck": "tsc --noEmit -p .",
@@ -16,7 +16,7 @@
     "test": "vitest run",
     "check": "tsc --noEmit -p . && eslint . && vitest run",
     "prepare": "git config core.hooksPath .githooks",
-    "engine": "cargo build -p gaia-engine"
+    "engine": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo build -p gaia-engine"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

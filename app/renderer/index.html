@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' ws:">
+<title>Gaia lab</title>
+</head>
+<body>
+<div id="shell">
+  <header id="tabs">
+    <div class="brand">Gaia<span>lab</span></div>
+    <div class="segmented" role="tablist" aria-label="Lab">
+      <button class="seg" type="button" role="tab" data-tab="flora">Flora</button>
+      <button class="seg" type="button" role="tab" data-tab="terrain">Terrain</button>
+      <button class="seg" type="button" role="tab" data-tab="world">World</button>
+    </div>
+  </header>
+  <div id="labs">
+    <div class="lab lab-flora" data-lab="flora" role="tabpanel" hidden></div>
+    <div class="lab lab-terrain" data-lab="terrain" role="tabpanel" hidden></div>
+    <div class="lab lab-world" data-lab="world" role="tabpanel" hidden></div>
+  </div>
+  <footer id="status" role="status" aria-live="polite"><span class="dot"></span><span id="status-text"></span></footer>
+</div>
+<script type="module" src="./main.ts"></script>
+</body>
+</html>
