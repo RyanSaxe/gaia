@@ -13,6 +13,8 @@ const here = import.meta.dirname;
 const shots = process.argv.includes("--shots");
 
 app.setName("Gaia");
+// Shots look the same whatever the system theme is.
+if (shots) nativeTheme.themeSource = "light";
 
 void app.whenReady().then(() => {
   const repoRoot = resolve(app.getAppPath(), "..");
