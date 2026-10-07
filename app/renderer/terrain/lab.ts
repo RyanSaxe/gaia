@@ -500,6 +500,7 @@ export function createTerrainLab(root: HTMLElement): Lab {
         return { max: s.max, median: s.median };
       },
       info: () => renderer.info.render,
+      lantern: () => ({ position: light.uLanternPosition.value.toArray(), intensity: light.uLanternIntensity.value, nightness: light.uNightness.value }),
     },
   };
 }

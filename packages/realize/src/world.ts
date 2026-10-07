@@ -140,7 +140,8 @@ export function realizeWorld(world: Filled, region: Filled, lib: Library, seed: 
   // The air sits in front of the sunset; at night its color fades into the dark.
   const tint = mixLab(local.air.tint, sky.sky.horizon, sky.light.nightness * 0.75);
   const horizon = mixLab(sky.sky.horizon, tint, local.air.tintAmount * 0.5);
-  const fog = mixLab(horizon, tint, local.air.tintAmount * 0.5);
+  // Night air is only moonlit: distance dims the land a little rather than washing it pale.
+  const fog = mixLab(mixLab(horizon, tint, local.air.tintAmount * 0.5), sky.sky.zenith, sky.light.nightness * 0.3);
   return {
     light: sky.light,
     sky: { ...sky.sky, horizon, mid: mixLab(sky.sky.zenith, horizon, 0.5) },

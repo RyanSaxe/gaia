@@ -112,11 +112,11 @@ void main() {
   // river of stars crosses the sky as a soft band, denser and faintly milky.
   float starsOut = smoothstep(0.4, 0.9, uNightness) * smoothstep(0.02, 0.3, e);
   vec3 bandNormal = normalize(vec3(1.0, 0.62, 0.12));
-  float river = exp(-pow(dot(dir, bandNormal) / 0.17, 2.0)) * uStarRiver;
+  float river = exp(-pow(dot(dir, bandNormal) / 0.2, 2.0)) * uStarRiver;
   float milk = river * (0.45 + 0.55 * fbm(vec2(dot(dir, vec3(0.7, 0.1, -0.7)), dir.y) * 9.0));
   vec3 stars = starLayer(dir, 90.0, uStars * 0.5 + river * 0.3, 0.17);
   stars += starLayer(dir, 170.0, uStars * 0.7 + river * 0.8, 0.16) * 0.6;
-  color += (stars + vec3(0.42, 0.48, 0.7) * milk * 0.13) * starsOut;
+  color += (stars + vec3(0.42, 0.48, 0.7) * milk * 0.2) * starsOut;
 
   // One parametric cloud layer. Dome clouds use a stereographic projection
   // (stretch draws streaks, cells break the cover into dapples); horizon
