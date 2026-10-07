@@ -1,11 +1,11 @@
 // The baked lattice as Three.js: one ground mesh (and an exact-subset coarse
-// mesh for the overview), a float texture of the same samples for the grass
-// and water shaders, and the painterly ground material, colored by each
-// region's ground cover.
+// mesh for the overview), the wild land past the rim, a float texture of the
+// same samples for the grass and water shaders, and the painterly ground
+// material, colored by each region's ground cover.
 
 import * as THREE from "three";
 import { LIGHT_GLSL, type SceneLight, hexToVec3 } from "@gaia/render";
-import { DRY, TERRAIN, type Terrain } from "@gaia/terrain";
+import { DRY, type Terrain, landRadius, wildsRing } from "@gaia/terrain";
 import { REGIONS_GLSL, type RegionCovers, TUFT_GLSL } from "./regions.ts";
 
 /** Height and water level per lattice sample, for shaders that sample the ground. */
@@ -62,24 +62,6 @@ vec2 groundAt(vec2 xz) {
 }
 `;
 
-/** The sea of mist the world floats in: past the rim, land dissolves into it. */
-export const MIST_GLSL = /* glsl */ `
-float mistHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-float mistNoise(vec2 p) {
-  vec2 i = floor(p);
-  vec2 f = fract(p);
-  vec2 u = f * f * (3.0 - 2.0 * f);
-  return mix(mix(mistHash(i), mistHash(i + vec2(1.0, 0.0)), u.x), mix(mistHash(i + vec2(0.0, 1.0)), mistHash(i + vec2(1.0, 1.0)), u.x), u.y);
-}
-vec3 mistAt(vec2 xz, float t) {
-  vec2 p = xz * 0.012 + vec2(t * 0.004, t * 0.002);
-  float m = mistNoise(p) * 0.6 + mistNoise(p * 2.3 + 5.0) * 0.3 + mistNoise(p * 5.1 + 9.0) * 0.1;
-  // By night the mist is lit only by the moon: a shade above the dark air, never white.
-  vec3 pale = mix(vec3(0.97, 0.97, 0.95), uFogColor * 1.08 + uMoonColor * uMoonIntensity * 0.06, uNightness);
-  return mix(uFogColor, pale, 0.35 + 0.3 * smoothstep(0.35, 0.75, m));
-}
-`;
-
 const VERT = /* glsl */ `
 attribute float aWater;
 attribute float aRegion;
@@ -100,7 +82,6 @@ void main() {
 const FRAG = /* glsl */ `
 precision highp float;
 ${LIGHT_GLSL}
-${MIST_GLSL}
 ${REGIONS_GLSL}
 ${TUFT_GLSL}
 uniform vec3 uDry;
@@ -109,8 +90,7 @@ uniform vec3 uSand;
 uniform vec3 uBed;
 uniform float uSelected;
 uniform float uOutline;
-uniform float uHalf;
-uniform float uSkirt;
+uniform float uLand;
 uniform vec2 uHeightRange;
 varying vec3 vWorld;
 varying vec3 vNormal;
@@ -130,6 +110,10 @@ float fbm(vec2 p) {
   return v;
 }
 void main() {
+#ifndef WILDS
+  // Past the hand-over circle the wild land takes over.
+  if (length(vWorld.xz) > uLand) discard;
+#endif
   vec3 n = normalize(vNormal);
   float broad = fbm(vWorld.xz * 0.045);
   float fine = fbm(vWorld.xz * 0.6);
@@ -166,23 +150,22 @@ void main() {
   vec3 color = mix(shadowed, lit, clamp(light + 0.3, 0.0, 1.0));
   color += nightLight(albedo, n, vWorld, 0.3, mix(1.0, shadow, uMoonShadow));
 
+#ifndef WILDS
   // The selected region glows faintly; region edges draw as soft lines in the overview.
   float selected = 1.0 - step(0.5, abs(vRegion - uSelected));
   color = mix(color, color * vec3(1.1, 1.08, 0.92) + vec3(0.03, 0.03, 0.0), selected * 0.7 * uOutline);
   float edge = clamp(fwidth(vRegion) * 2.0, 0.0, 1.0);
   color = mix(color, color * 1.25 + vec3(0.04), edge * 0.35 * uOutline);
-
-  color = aerial(shoulder(color), vWorld);
-  // Past the world's rim the land dissolves into the haze.
-  float e = pow(pow(abs(vWorld.x), 4.0) + pow(abs(vWorld.z), 4.0), 0.25);
-  float beyond = smoothstep(uHalf + 12.0, uHalf + uSkirt - 20.0, e + (mistNoise(vWorld.xz * 0.05) - 0.5) * 16.0);
-  gl_FragColor = vec4(mix(color, aerial(mistAt(vWorld.xz, uTime), vWorld), beyond), 1.0);
+#endif
+  gl_FragColor = vec4(aerial(shoulder(color), vWorld), 1.0);
 }
 `;
 
 export interface GroundMesh {
   readonly fine: THREE.Mesh;
   readonly coarse: THREE.Mesh;
+  /** Wild land past the rim, out to where distance dissolves it into the sky. */
+  readonly wilds: THREE.Mesh;
   readonly material: THREE.ShaderMaterial;
   update(t: Terrain): void;
   select(region: number, outline: boolean): void;
@@ -248,85 +231,58 @@ function fill(g: THREE.BufferGeometry, t: Terrain): void {
   g.computeBoundingSphere();
 }
 
+/** The wild ring as geometry the ground material can draw: no water, no region of its own. */
+function wildsGeometry(t: Terrain): THREE.BufferGeometry {
+  const ring = wildsRing(t);
+  const count = ring.positions.length / 3;
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.BufferAttribute(ring.positions, 3));
+  g.setAttribute("aWater", new THREE.BufferAttribute(new Float32Array(count).fill(-5), 1));
+  g.setAttribute("aRegion", new THREE.BufferAttribute(new Float32Array(count).fill(-1), 1));
+  g.setIndex(new THREE.BufferAttribute(ring.indices, 1));
+  g.computeVertexNormals();
+  return g;
+}
+
 export function createGround(t: Terrain, light: SceneLight, covers: RegionCovers): GroundMesh {
-  const material = new THREE.ShaderMaterial({
-    vertexShader: VERT,
-    fragmentShader: FRAG,
-    uniforms: {
-      ...light,
-      ...covers.uniforms,
-      uDry: { value: hexToVec3(0xbba878) },
-      uBare: { value: hexToVec3(0x9a7d58) },
-      uSand: { value: hexToVec3(0xcdbb8a) },
-      uBed: { value: hexToVec3(0x6d7a58) },
-      uSelected: { value: -1 },
-      uOutline: { value: 0 },
-      uHalf: { value: t.spec.size / 2 },
-      uSkirt: { value: TERRAIN.skirt },
-      uHeightRange: { value: new THREE.Vector2(t.report.min, t.report.max) },
-    },
-  });
+  const uniforms = {
+    ...light,
+    ...covers.uniforms,
+    uDry: { value: hexToVec3(0xbba878) },
+    uBare: { value: hexToVec3(0x9a7d58) },
+    uSand: { value: hexToVec3(0xcdbb8a) },
+    uBed: { value: hexToVec3(0x6d7a58) },
+    uSelected: { value: -1 },
+    uOutline: { value: 0 },
+    uLand: { value: landRadius(t) },
+    uHeightRange: { value: new THREE.Vector2(t.report.min, t.report.max) },
+  };
+  const material = new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: FRAG, uniforms });
   const fine = new THREE.Mesh(geometryFor(t, 1), material);
   const coarse = new THREE.Mesh(geometryFor(t, 4), material);
+  const wilds = new THREE.Mesh(
+    wildsGeometry(t),
+    new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: FRAG, uniforms, defines: { WILDS: "" } }),
+  );
+  wilds.frustumCulled = false;
   const update = (next: Terrain): void => {
     fill(fine.geometry, next);
     fill(coarse.geometry, next);
-    (material.uniforms.uHeightRange as { value: THREE.Vector2 }).value.set(next.report.min, next.report.max);
+    wilds.geometry.dispose();
+    wilds.geometry = wildsGeometry(next);
+    uniforms.uHeightRange.value.set(next.report.min, next.report.max);
+    uniforms.uLand.value = landRadius(next);
   };
   update(t);
   return {
     fine,
     coarse,
+    wilds,
     material,
     update,
     select(region, outline) {
-      (material.uniforms.uSelected as { value: number }).value = region;
-      (material.uniforms.uOutline as { value: number }).value = outline ? 1 : 0;
+      uniforms.uSelected.value = region;
+      uniforms.uOutline.value = outline ? 1 : 0;
     },
   };
-}
-
-const MIST_VERT = /* glsl */ `
-varying vec3 vWorld;
-void main() {
-  vec4 world = modelMatrix * vec4(position, 1.0);
-  vWorld = world.xyz;
-  gl_Position = projectionMatrix * viewMatrix * world;
-}
-`;
-
-const MIST_FRAG = /* glsl */ `
-precision highp float;
-${LIGHT_GLSL}
-${MIST_GLSL}
-varying vec3 vWorld;
-void main() {
-  gl_FragColor = vec4(aerial(mistAt(vWorld.xz, uTime), vWorld), 1.0);
-}
-`;
-
-/** A wide ring of mist at the skirt's outer height, so the world never shows an edge. */
-export function createMist(t: Terrain, light: SceneLight): { mesh: THREE.Mesh; update(t: Terrain): void } {
-  const half = t.spec.size / 2;
-  // The rim is a rounded square; this inner radius keeps the whole ring past it, even on the diagonals.
-  const geometry = new THREE.RingGeometry((half + 20) * Math.SQRT2 ** 0.5, 4000, 128, 1);
-  geometry.rotateX(-Math.PI / 2);
-  const mesh = new THREE.Mesh(geometry, new THREE.ShaderMaterial({ vertexShader: MIST_VERT, fragmentShader: MIST_FRAG, uniforms: { ...light } }));
-  mesh.frustumCulled = false;
-  const update = (next: Terrain): void => {
-    // Just under the lowest ground past the rim, so it never shows through the skirt.
-    const { n, heights, origin, spacing } = next.lattice;
-    const beyond = next.spec.size / 2 + 12;
-    let low = Infinity;
-    for (let iz = 0; iz < n; iz++) {
-      for (let ix = 0; ix < n; ix++) {
-        const x = origin + ix * spacing;
-        const z = origin + iz * spacing;
-        if (Math.pow(x ** 4 + z ** 4, 0.25) > beyond) low = Math.min(low, heights[iz * n + ix] as number);
-      }
-    }
-    mesh.position.y = low - 0.4;
-  };
-  update(t);
-  return { mesh, update };
 }

@@ -4,8 +4,8 @@
 
 import * as THREE from "three";
 import type { Rgb } from "@gaia/schema";
-import type { WorldLook } from "@gaia/realize";
-import { LIGHT_GLSL, type SceneLight } from "@gaia/render";
+import { AIR, type WorldLook } from "@gaia/realize";
+import { LIGHT_GLSL, type SceneLight, applySky } from "@gaia/render";
 
 const v3 = (c: Rgb): THREE.Vector3 => new THREE.Vector3(c[0], c[1], c[2]);
 
@@ -44,15 +44,8 @@ void main() {
 
 const SKY_FRAG = /* glsl */ `
 precision highp float;
+${LIGHT_GLSL}
 varying vec3 vDirection;
-uniform vec3 uZenith;
-uniform vec3 uMid;
-uniform vec3 uHorizon;
-uniform vec3 uFog;
-uniform vec3 uGlow;
-uniform float uGlowAmount;
-uniform vec3 uSunDirection;
-uniform vec3 uSunColor;
 uniform vec3 uCloudLit;
 uniform vec3 uCloudShade;
 uniform float uScale;
@@ -65,12 +58,7 @@ uniform float uOpacity;
 uniform float uBillow;
 uniform float uCells;
 uniform float uStand;
-uniform float uTime;
 uniform float uWind;
-uniform float uSunIntensity;
-uniform vec3 uMoonDirection;
-uniform vec3 uMoonColor;
-uniform float uNightness;
 uniform vec3 uMoonDisc;
 uniform float uMoonSize;
 uniform float uMoonPhase;
@@ -94,19 +82,15 @@ void main() {
   vec3 dir = normalize(vDirection);
   float y = dir.y;
   float e = max(y, 0.0);
-  vec3 color = mix(uHorizon, uMid, smoothstep(0.0, 0.32, e));
-  color = mix(color, uZenith, smoothstep(0.28, 0.9, e));
+  // The same sky every distant surface dissolves into.
+  vec3 base = skyColor(dir);
+  vec3 color = base;
 
   vec3 sun = normalize(uSunDirection);
   float sunDot = max(dot(dir, sun), 0.0);
   // The sun's own light in the sky goes out once it is below the horizon.
-  float sunUp = smoothstep(-0.08, 0.02, sun.y);
-  vec2 flatDir = normalize(dir.xz + vec2(1e-4));
+  float sunHigh = smoothstep(-0.08, 0.02, sun.y);
   vec2 flatSun = normalize(sun.xz + vec2(1e-4));
-  float toward = dot(flatDir, flatSun) * 0.5 + 0.5;
-  // The hour's glow gathers along the horizon on the sun's side.
-  color = mix(color, uGlow, exp(-e * 5.0) * (0.35 + 0.65 * toward * toward) * uGlowAmount * 0.75);
-  color = mix(color, uSunColor, pow(sunDot, 10.0) * 0.28 * sunUp);
 
   // Stars come out as the night deepens and thin toward the hazy horizon. A
   // river of stars crosses the sky as a soft band, denser and faintly milky.
@@ -136,9 +120,13 @@ void main() {
   n = mix(n, n * (0.35 + 1.25 * smoothstep(0.25, 0.75, cells)), uCells);
   // Horizon clouds thin with height, so their tops break up into billows.
   n += uStand * (0.06 - smoothstep(uHigh * 0.3, uHigh, e) * 0.28);
+  // Dome clouds thin out toward the horizon instead of stopping at a line:
+  // fewer and smaller there, and fading over a wide band of sky.
+  n -= (1.0 - smoothstep(0.0, 0.3, e)) * 0.09 * (1.0 - uStand);
   float d = smoothstep(uThreshold, uThreshold + uSoftness, n);
-  float band = mix(smoothstep(uLow - 0.005, uLow + 0.06, y) * (1.0 - smoothstep(uHigh - 0.12, uHigh + 0.04, y)), 1.0 - smoothstep(uHigh * 0.8, uHigh * 1.25, e), uStand);
-  d *= band * smoothstep(0.0, 0.02, y);
+  float band = mix(smoothstep(uLow, uLow + 0.2, e) * (1.0 - smoothstep(uHigh - 0.12, uHigh + 0.04, y)), 1.0 - smoothstep(uHigh * 0.8, uHigh * 1.25, e), uStand);
+  // Clouds standing on the horizon rise out of its haze.
+  d *= band * smoothstep(0.0, mix(0.02, 0.06, uStand), y);
   vec2 sunStep = mix(vec2(flatSun.x / uStretch, flatSun.y), vec2(0.0, 0.5), uStand) * 0.22;
   float n2 = fbm(p + sunStep);
   float lit = clamp(0.62 + (n - n2) * 3.2, 0.0, 1.0);
@@ -147,20 +135,21 @@ void main() {
   // Clouds standing on the horizon are lit from above: bright billowed tops,
   // and only their lowest edge cools into shade.
   // Against a glowing low-sun horizon they turn to soft violet silhouettes.
-  shade = mix(shade, (0.6 + 0.4 * lit) * (0.82 + 0.18 * smoothstep(0.0, uHigh * 0.3, e)) * (1.0 - uGlowAmount * 0.5), uStand);
+  shade = mix(shade, (0.6 + 0.4 * lit) * (0.82 + 0.18 * smoothstep(0.0, uHigh * 0.3, e)) * (1.0 - uSkyGlowAmount * 0.5), uStand);
   vec3 cloud = mix(uCloudShade, uCloudLit, clamp(shade, 0.0, 1.0));
+  // Distant clouds take on the air between, like distant land.
+  cloud = mix(cloud, base, (1.0 - smoothstep(0.0, 0.3, e)) * 0.45);
   // Thin cloud edges near the sun light up; at night, near the moon.
   vec3 moon = normalize(uMoonDirection);
   float moonDot = max(dot(dir, moon), 0.0);
   float moonUp = smoothstep(0.15, 0.6, uNightness) * smoothstep(-0.03, 0.03, moon.y);
-  cloud += uSunColor * pow(sunDot, 5.0) * (1.0 - d) * 0.22 * sunUp;
+  cloud += uSunColor * pow(sunDot, 5.0) * (1.0 - d) * 0.22 * sunHigh;
   cloud += uMoonColor * pow(moonDot, 24.0) * (1.0 - d * 0.5) * 0.35 * moonUp;
   color = mix(color, cloud, d * uOpacity);
 
   // The sun itself: a soft disc with a narrow halo.
   float disc = smoothstep(0.99935, 0.99965, sunDot);
-  color = mix(color, mix(uSunColor, vec3(1.0), 0.6), disc * (1.0 - d * uOpacity * 0.85) * sunUp);
-  color += uSunColor * pow(sunDot, 180.0) * 0.18 * sunUp;
+  color = mix(color, mix(uSunColor, vec3(1.0), 0.6), disc * (1.0 - d * uOpacity * 0.85) * sunHigh);
 
   // The moon: a soft disc with faint maria, a crescent's dark part a shade
   // above the sky, and a wide pale halo.
@@ -178,27 +167,18 @@ void main() {
   color = mix(color, mix(face3, color * 1.15 + uMoonDisc * 0.04, dark), moonDisc * moonUp * clear);
   float halo = exp(-max(r - 1.0, 0.0) * 0.45) * (1.0 - moonDisc) * 0.16 + exp(-r * 0.06) * 0.05;
   color += uMoonColor * halo * moonUp * mix(0.35, 1.0, uMoonPhase) * clear;
-
-  // The horizon melts into the air the ground's distance dissolves into.
-  color = mix(color, uFog, exp(-e * 30.0) * 0.6);
-  color = mix(color, uFog, smoothstep(0.0, -0.06, y));
   gl_FragColor = vec4(color, 1.0);
 }
 `;
 
 export interface Sky {
   readonly mesh: THREE.Mesh;
+  /** The hour's sky, clouds, moon and stars, and the air every distance dissolves into. */
   apply(look: Pick<WorldLook, "light" | "sky" | "fog">): void;
 }
 
 export function createSky(light: SceneLight): Sky {
   const u = {
-    uZenith: { value: new THREE.Vector3() },
-    uMid: { value: new THREE.Vector3() },
-    uHorizon: { value: new THREE.Vector3() },
-    uFog: { value: new THREE.Vector3() },
-    uGlow: { value: new THREE.Vector3() },
-    uGlowAmount: { value: 0 },
     uCloudLit: { value: new THREE.Vector3() },
     uCloudShade: { value: new THREE.Vector3() },
     uScale: { value: 3 },
@@ -220,17 +200,7 @@ export function createSky(light: SceneLight): Sky {
   const material = new THREE.ShaderMaterial({
     vertexShader: SKY_VERT,
     fragmentShader: SKY_FRAG,
-    uniforms: {
-      ...u,
-      uSunDirection: light.uSunDirection,
-      uSunColor: light.uSunColor,
-      uSunIntensity: light.uSunIntensity,
-      uMoonDirection: light.uMoonDirection,
-      uMoonColor: light.uMoonColor,
-      uNightness: light.uNightness,
-      uTime: light.uTime,
-      uWind: light.uWind,
-    },
+    uniforms: { ...light, ...u },
     side: THREE.BackSide,
     depthWrite: false,
   });
@@ -240,14 +210,9 @@ export function createSky(light: SceneLight): Sky {
   return {
     mesh,
     apply(look) {
+      applySky(light, look);
       const s = look.sky;
       const c = s.clouds;
-      u.uZenith.value.copy(v3(s.zenith));
-      u.uMid.value.copy(v3(s.mid));
-      u.uHorizon.value.copy(v3(s.horizon));
-      u.uFog.value.copy(v3(look.fog.color));
-      u.uGlow.value.copy(v3(look.light.horizonGlow));
-      u.uGlowAmount.value = look.light.glow;
       u.uCloudLit.value.copy(v3(s.cloudLit));
       u.uCloudShade.value.copy(v3(s.cloudShade));
       u.uScale.value = c.scale;
@@ -319,9 +284,7 @@ void main() {
   float d = length(vWorld.xz - uSelect.xy);
   float ring = smoothstep(uSelect.z * 1.04, uSelect.z, d) * smoothstep(uSelect.z * 0.9, uSelect.z, d);
   color = mix(color, vec3(1.0, 0.98, 0.9), ring * 0.4 * uSelect.w);
-  color = aerial(shoulder(color), vWorld);
-  float far = smoothstep(60.0, 190.0, length(vWorld.xz - cameraPosition.xz));
-  gl_FragColor = vec4(mix(color, uFogColor, far), 1.0);
+  gl_FragColor = vec4(aerial(shoulder(color), vWorld), 1.0);
 }
 `;
 
@@ -350,7 +313,8 @@ export function createGround(light: SceneLight, shared: GroundUniforms): Ground 
     fragmentShader: GROUND_FRAG,
     uniforms: { ...light, ...u, uVitality: shared.uVitality, uSelect: select },
   });
-  const geometry = new THREE.CircleGeometry(420, 96);
+  // Out past the distance where land dissolves into the sky, so no edge can show.
+  const geometry = new THREE.CircleGeometry(AIR.dissolveEnd + 150, 96);
   geometry.rotateX(-Math.PI / 2);
   const mesh = new THREE.Mesh(geometry, material);
   return {

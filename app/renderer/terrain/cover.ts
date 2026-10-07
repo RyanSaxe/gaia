@@ -15,6 +15,7 @@ uniform float uWind;
 uniform float uRadius;
 uniform float uPatch;
 uniform vec3 uCenter;
+uniform float uLand;
 ${GROUND_SAMPLE_GLSL}
 ${REGIONS_GLSL}
 ${TUFT_GLSL}
@@ -46,7 +47,8 @@ void main() {
   // The blade grows one region's cover: its height, width, density, clumping and flowers.
   int k = coverPick(xz, aSeed.w);
   vec4 shape = uCoverShape[k];
-  float keep = step(aSeed.z, shape.z);
+  // Past the hand-over circle the wild land has no grass.
+  float keep = step(aSeed.z, shape.z) * step(length(xz), uLand - 1.0);
   float clump = mix(1.0, tuftMask(xz), shape.w);
   float flowers = uCoverFlowers[k];
   float flower = step(aSeed.y, flowers);
@@ -111,7 +113,7 @@ export interface Grass {
 }
 
 /** Wind-swayed blades around the viewer; each region's cover decides what grows where. */
-export function createGrass(light: SceneLight, ground: GroundTexture, covers: RegionCovers, count = 110000, radius = 42): Grass {
+export function createGrass(light: SceneLight, ground: GroundTexture, covers: RegionCovers, land: number, count = 110000, radius = 42): Grass {
   // One tapered blade, one unit wide: the cover sets its width.
   const blade = new THREE.BufferGeometry();
   blade.setAttribute(
@@ -151,6 +153,7 @@ export function createGrass(light: SceneLight, ground: GroundTexture, covers: Re
       uRadius: { value: radius },
       uPatch: { value: patch },
       uCenter: center,
+      uLand: { value: land },
       uDry: { value: hexToVec3(0xc4b47e) },
     },
     side: THREE.DoubleSide,

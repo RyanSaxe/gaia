@@ -101,16 +101,13 @@ export function createFloraLab(root: HTMLElement): Lab {
     const look = meadowAt(h);
     applyLight(light, look.light);
     light.uLanternIntensity.value = 0;
-    light.uFogColor.value.set(...look.fog.color);
-    light.uFogDensity.value = look.fog.density;
-    light.uMist.value = look.fog.mist;
     sky.apply(look);
   }
   const firstLook = meadowAt(12.5);
   ground.apply(firstLook);
   grass.apply(firstLook);
 
-  const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 600);
+  const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 2000);
   camera.position.copy(OVERVIEW.position);
   const controls = new OrbitControls(camera, canvas);
   controls.target.copy(OVERVIEW.target);

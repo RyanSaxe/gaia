@@ -101,7 +101,7 @@ export function createWorldLab(root: HTMLElement): Lab {
   const shadow = createSunShadow(light, 2048);
   const lantern = createLantern(light);
 
-  const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 900);
+  const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 2000);
   camera.position.copy(OVERVIEW.position);
   const controls = new OrbitControls(camera, canvas);
   controls.target.copy(OVERVIEW.target);
@@ -128,9 +128,6 @@ export function createWorldLab(root: HTMLElement): Lab {
     look = next;
     const l = next.light;
     applyLight(light, l);
-    light.uFogColor.value.set(...next.fog.color);
-    light.uFogDensity.value = next.fog.density;
-    light.uMist.value = next.fog.mist;
     daylight = Math.min(1, Math.max(0, (l.sunDirection[1] - 0.1) / 0.55)) * Math.min(1, l.sunIntensity);
     shadow.frame(new THREE.Vector3(0, 0, 0), 20);
     sky.apply(next);

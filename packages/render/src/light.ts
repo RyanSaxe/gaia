@@ -3,6 +3,7 @@
 
 import * as THREE from "three";
 import type { LightSpec } from "@gaia/schema";
+import { AIR, type AirInput } from "@gaia/realize";
 
 export interface SceneLight {
   readonly uSunDirection: { value: THREE.Vector3 };
@@ -34,6 +35,12 @@ export interface SceneLight {
   readonly uLanternIntensity: { value: number };
   /** How strongly the shadow map darkens moonlight: 0 while the map follows the sun. */
   readonly uMoonShadow: { value: number };
+  /** The sky's gradient and the hour's horizon glow, read by `skyColor()` in the dome and in `aerial()`. */
+  readonly uSkyZenith: { value: THREE.Vector3 };
+  readonly uSkyMid: { value: THREE.Vector3 };
+  readonly uSkyHorizon: { value: THREE.Vector3 };
+  readonly uSkyGlow: { value: THREE.Vector3 };
+  readonly uSkyGlowAmount: { value: number };
 }
 
 /** The lantern's warm pool: about 12 m across, fading smoothly to nothing by `LANTERN.reach`. */
@@ -76,6 +83,21 @@ export function applyLight(light: SceneLight, l: LightSpec): void {
   light.uMoonIntensity.value = l.moonIntensity;
   light.uNightness.value = l.nightness;
   light.uLanternIntensity.value = LANTERN.intensity * smooth(LANTERN.fadeIn[0], LANTERN.fadeIn[1], l.nightness);
+}
+
+/**
+ * Writes the hour's sky and the local air into the shared uniforms, so the
+ * dome and every distant surface take their color from the same sky.
+ */
+export function applySky(light: SceneLight, look: AirInput): void {
+  light.uSkyZenith.value.set(...look.sky.zenith);
+  light.uSkyMid.value.set(...look.sky.mid);
+  light.uSkyHorizon.value.set(...look.sky.horizon);
+  light.uSkyGlow.value.set(...look.light.horizonGlow);
+  light.uSkyGlowAmount.value = look.light.glow;
+  light.uFogColor.value.set(...look.fog.color);
+  light.uFogDensity.value = look.fog.density;
+  light.uMist.value = look.fog.mist;
 }
 
 export interface Lantern {
@@ -135,8 +157,15 @@ export function createSceneLight(): SceneLight {
     uLanternColor: { value: hexToVec3(LANTERN.color) },
     uLanternIntensity: { value: 0 },
     uMoonShadow: { value: 0 },
+    uSkyZenith: { value: hexToVec3(0x6aa5e3) },
+    uSkyMid: { value: hexToVec3(0x9cc6ea) },
+    uSkyHorizon: { value: hexToVec3(0xcfe6f2) },
+    uSkyGlow: { value: hexToVec3(0xffffff) },
+    uSkyGlowAmount: { value: 0 },
   };
 }
+
+const f1 = (x: number): string => x.toFixed(1);
 
 export const LIGHT_GLSL = /* glsl */ `
 uniform vec3 uSunDirection;
@@ -162,6 +191,11 @@ uniform vec3 uLanternPosition;
 uniform vec3 uLanternColor;
 uniform float uLanternIntensity;
 uniform float uMoonShadow;
+uniform vec3 uSkyZenith;
+uniform vec3 uSkyMid;
+uniform vec3 uSkyHorizon;
+uniform vec3 uSkyGlow;
+uniform float uSkyGlowAmount;
 
 float softCel(float x) {
   float scaled = clamp(x, 0.0, 1.0) * uCelBands;
@@ -237,15 +271,42 @@ vec3 nightLight(vec3 albedo, vec3 n, vec3 worldPosition, float wrap, float shado
   return moonLight(albedo, n, wrap, shadow) + lanternLight(albedo, n, worldPosition, wrap);
 }
 
+// ---------- sky and distance ----------
+// skyColorAt and aerialAt in @gaia/realize are the CPU references.
+
+// The sky's color along a view direction: the gradient from horizon to
+// zenith, the hour's glow on the sun's side, and the haze around the sun.
+// Below the horizon it holds the horizon's color. The dome draws clouds,
+// stars and the moon on top; distant land dissolves into exactly this.
+vec3 skyColor(vec3 dir) {
+  float e = max(dir.y, 0.0);
+  vec3 color = mix(uSkyHorizon, uSkyMid, smoothstep(0.0, 0.32, e));
+  color = mix(color, uSkyZenith, smoothstep(0.28, 0.9, e));
+  vec3 sun = normalize(uSunDirection);
+  float up = smoothstep(-0.08, 0.02, sun.y);
+  vec2 flatDir = normalize(dir.xz + vec2(1e-4));
+  vec2 flatSun = normalize(sun.xz + vec2(1e-4));
+  float toward = dot(flatDir, flatSun) * 0.5 + 0.5;
+  color = mix(color, uSkyGlow, exp(-e * 5.0) * (0.35 + 0.65 * toward * toward) * uSkyGlowAmount * 0.75);
+  float sunDot = max(dot(dir, sun), 0.0);
+  color = mix(color, uSunColor, pow(sunDot, 10.0) * 0.28 * up);
+  return color + uSunColor * pow(sunDot, 180.0) * 0.18 * up;
+}
+
+// Near and middle distance haze toward the local air's tint; farther, toward
+// the sky behind along the same ray; by ${AIR.dissolveEnd} m only the sky remains.
 vec3 aerial(vec3 color, vec3 worldPosition) {
-  float dist = length(worldPosition - cameraPosition);
-  float lift = 1.0 - exp(-dist * uFogDensity);
+  vec3 ray = worldPosition - cameraPosition;
+  float dist = length(ray);
+  vec3 sky = skyColor(ray / max(dist, 1e-4));
+  vec3 air = mix(sky, uFogColor, 1.0 - smoothstep(${f1(AIR.tintFade[0])}, ${f1(AIR.tintFade[1])}, dist));
+  float haze = (1.0 - exp(-dist * uFogDensity)) * (0.65 + 0.35 * smoothstep(150.0, ${f1(AIR.hazeFull)}, dist));
   // Mist lies low: thickest at the ground, gone a few units up, and only with distance.
   float mist = uMist * exp(-max(worldPosition.y, 0.0) * 0.45) * (1.0 - exp(-dist * 0.035));
-  color = mix(color, uFogColor, clamp(lift * 0.65 + mist * 0.7, 0.0, 1.0));
+  color = mix(color, air, clamp(haze + mist * 0.7, 0.0, 1.0));
+  color = mix(color, sky, smoothstep(${f1(AIR.dissolveStart)}, ${f1(AIR.dissolveEnd)}, dist));
   // The air right around the lantern holds a faint warm glow, so the person
   // feels it in hand even when it hangs below the view.
-  vec3 ray = worldPosition - cameraPosition;
   float t = clamp(dot(uLanternPosition - cameraPosition, ray) / max(dot(ray, ray), 1e-4), 0.0, 1.0);
   float near = length(cameraPosition + ray * t - uLanternPosition);
   return color + uLanternColor * uLanternIntensity * exp(-near * near * 2.5) * 0.035;

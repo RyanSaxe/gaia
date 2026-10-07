@@ -19,6 +19,7 @@ import {
   bakeTerrain,
   groundedBase,
   heightAt,
+  landRadius,
   randomWorld,
   sampleWorld,
   scatterPlants,
@@ -28,7 +29,7 @@ import { createSky } from "../world/environment.ts";
 import { renderInspector } from "../inspector.ts";
 import { type Lab, type Shot, refs, slug } from "../lab.ts";
 import { createGrass, createWater } from "./cover.ts";
-import { createGround, createGroundTexture, createMist } from "./ground.ts";
+import { createGround, createGroundTexture } from "./ground.ts";
 import { createRegionCovers } from "./regions.ts";
 
 const TEMPLATE = /* html */ `
@@ -112,10 +113,9 @@ export function createTerrainLab(root: HTMLElement): Lab {
   const sky = createSky(light);
   const groundTex = createGroundTexture(terrain);
   const ground = createGround(terrain, light, covers);
-  const grass = createGrass(light, groundTex, covers);
+  const grass = createGrass(light, groundTex, covers, landRadius(terrain));
   const water = createWater(terrain, light, groundTex);
-  const mist = createMist(terrain, light);
-  scene.add(sky.mesh, mist.mesh, ground.fine, ground.coarse, grass.mesh, water.group);
+  scene.add(sky.mesh, ground.wilds, ground.fine, ground.coarse, grass.mesh, water.group);
 
   /** The hour's light, sky, air and water reflection, from the sky world's day. */
   let hour = Number.NaN;
@@ -124,8 +124,7 @@ export function createTerrainLab(root: HTMLElement): Lab {
     if (SKY_WORLD === undefined) return;
     const look = realizeSky({ blueprint: SKY_WORLD.world, kind: worldKind }, worldLib, seedOf("terrain-lab/sky"), h);
     applyLight(light, look.light);
-    light.uFogColor.value.set(...look.sky.horizon);
-    sky.apply({ light: look.light, sky: { ...look.sky, mid: mixLab(look.sky.zenith, look.sky.horizon, 0.5) }, fog: { color: look.sky.horizon, density: 0, mist: 0 } });
+    sky.apply({ light: look.light, sky: { ...look.sky, mid: mixLab(look.sky.zenith, look.sky.horizon, 0.5) }, fog: { color: look.sky.horizon, density: FOG[mode], mist: 0 } });
     water.reflect(mixLab(look.sky.horizon, look.sky.zenith, 0.3));
   }
   const shadow = createSunShadow(light, 2048);
@@ -300,7 +299,6 @@ export function createTerrainLab(root: HTMLElement): Lab {
     groundTex.update(terrain);
     ground.update(terrain);
     water.update(terrain);
-    mist.update(terrain);
     plant();
     walker.moved = true;
     refreshStats();
@@ -442,7 +440,7 @@ export function createTerrainLab(root: HTMLElement): Lab {
       shadow.frame(shadowCenter.set(0, 0, 0), world.size * 0.62);
     }
     refreshSight(now);
-    shadow.render(renderer, scene, views, [sky.mesh, mist.mesh, ground.fine, ground.coarse, grass.mesh, water.group]);
+    shadow.render(renderer, scene, views, [sky.mesh, ground.wilds, ground.fine, ground.coarse, grass.mesh, water.group]);
     renderer.render(scene, camera);
   }
 

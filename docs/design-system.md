@@ -64,9 +64,22 @@ heightfield that every consumer samples. The bake enforces a relief budget:
 | Tallest steep climb | 3 m |
 
 Water is solved from the ground and cut into it, so it never floats. The
-world's edge is a gentle rim, and the world should seem infinite: distant
-land should dim into the sky's own color. A person can wade but never goes
-under water.
+world's edge is a gentle rim. Past it, one ring of low-detail wild land runs
+on to 1.5 km, continuing the rim's height and settling into a gentle roll of
+at most 6 m, colored by the nearest region's cover. It is never walkable. A
+person can wade but never goes under water.
+
+## Sky and distance
+
+The world should seem infinite, so the horizon never shows a line. One sky
+function, `skyColor(dir)` in the shared light chunk, colors both the dome and
+the air: the dome draws it and adds clouds, the sun, the moon and stars on
+top, and `aerial()` hazes every surface toward it along the same view ray.
+Near and middle distance take the local air's tint; farther, only the sky's
+own color remains, and land fully dissolves between 900 m and 1.4 km. Dome
+clouds thin out toward the horizon rather than stopping, and clouds standing
+on the horizon rise out of its haze. `skyColorAt` and `aerialAt` in
+`@gaia/realize` are the CPU references the tests check.
 
 ## Composition budgets
 
@@ -117,7 +130,5 @@ grass and water agree:
 
 Not built yet:
 
-- **A horizon that seems infinite.** Fog colored by the sky along each view
-  ray, and wild land continuing past the rim at low detail.
 - **Grass that never grows out of the ground** at the edge of its radius.
 - **Wading** that stops before the person's eyes go under water.

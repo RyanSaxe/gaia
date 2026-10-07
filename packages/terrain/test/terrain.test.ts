@@ -7,17 +7,20 @@ import { FLORA_PRESETS, realize } from "@gaia/realize";
 import {
   RELIEF_BUDGET,
   type Station,
+  WILDS,
   type Terrain,
   bakeTerrain,
   composer,
   groundedBase,
   heightAt,
+  landRadius,
   landformsOf,
   randomWorld,
   sampleWorld,
   scatterPlants,
   sightlines,
   surfaceHalfWidth,
+  wildsRing,
   withinBudget,
 } from "@gaia/terrain";
 
@@ -186,5 +189,30 @@ describe("terrain", () => {
     }
     medians.sort((a, b) => a - b);
     expect(medians[Math.floor(medians.length / 2)]).toBeLessThan(200);
+  });
+});
+
+describe("wild land past the rim", () => {
+  it("meets the baked ground at the hand-over circle and rolls at most 6 m once settled", () => {
+    const { rings, segments, settle, variation } = WILDS;
+    for (const t of baked) {
+      const { positions } = wildsRing(t);
+      expect(positions.length).toBe(rings * segments * 3);
+      const r0 = landRadius(t);
+      for (let s = 0; s < segments; s++) {
+        const v = (segments + s) * 3;
+        const [x, y, z] = [positions[v]!, positions[v + 1]!, positions[v + 2]!];
+        expect(Math.hypot(x, z)).toBeCloseTo(r0, 2);
+        expect(y).toBeCloseTo(heightAt(t.lattice, x, z), 3);
+      }
+      let low = Infinity;
+      let high = -Infinity;
+      for (let v = 0; v < positions.length; v += 3) {
+        if (Math.hypot(positions[v]!, positions[v + 2]!) < r0 + settle) continue;
+        low = Math.min(low, positions[v + 1]!);
+        high = Math.max(high, positions[v + 1]!);
+      }
+      expect(high - low).toBeLessThanOrEqual(variation + 1e-4);
+    }
   });
 });
