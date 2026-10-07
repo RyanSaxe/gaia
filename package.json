@@ -20,6 +20,10 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@gaia/kinds": "workspace:*",
+    "@gaia/primitives": "workspace:*",
+    "@gaia/schema": "workspace:*",
+    "@gaia/world": "workspace:*",
     "@types/node": "^26.6.4",
     "esbuild": "^0.28.2",
     "eslint": "^10.12.0",
