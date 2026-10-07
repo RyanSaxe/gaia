@@ -459,6 +459,7 @@ export function createTerrainLab(root: HTMLElement): Lab {
     hook: {
       walk: (x: number, z: number, yawDeg: number, pitchDeg = -3) => walkTo(x, z, (yawDeg * Math.PI) / 180, (pitchDeg * Math.PI) / 180),
       valley: () => valleyView(),
+      walker: () => ({ x: walker.x, z: walker.z, yawDeg: (walker.yaw * 180) / Math.PI, pitchDeg: (walker.pitch * 180) / Math.PI, eye: walker.eye }),
       overview: (pos?: [number, number, number]) => {
         setMode("overview");
         if (pos !== undefined) camera.position.set(...pos);
