@@ -293,7 +293,7 @@ function settleCode(t: Terrain, req: StandRequest, code: StandCode, sites: reado
 }
 
 /** Meters between trees on one patch. */
-const PATCH_GAP = 4.5;
+const PATCH_GAP = 6.5;
 
 /** The trees on each file's patch: dry, gentle ground inside it, clear of what stands and of each other. */
 function plantPatches(t: Terrain, req: StandRequest, code: StandCode, blocked: (x: number, z: number) => boolean): StandTree[] {

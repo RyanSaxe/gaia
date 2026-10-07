@@ -34,7 +34,7 @@ export interface CodeLab {
 }
 
 /** Trees on a file's patch: more for a longer file. */
-export const treesFor = (lines: number): number => Math.min(10, Math.max(1, Math.round(Math.sqrt(lines) / 3)));
+export const treesFor = (lines: number): number => Math.min(6, Math.max(1, Math.round(Math.sqrt(lines) / 5)));
 
 /** Gaia's own world: judged, laid out and ready to bake. */
 export async function codeWorld(model: CodeModel = snapshot as unknown as CodeModel): Promise<CodeLab> {
