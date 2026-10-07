@@ -293,14 +293,15 @@ void main() {
   // deeper, the water's own color fills in. Decline clouds the water.
   float cosR = sqrt(1.0 - (1.0 - cosV * cosV) / 1.78);
   float path = depth / max(cosR, 0.25);
-  float through = exp(-path * mix(2.8, 0.85, uVitality));
+  // At night little light comes back up from the bed, so the water reads deep and glassy.
+  float through = exp(-path * mix(2.8, 0.85, uVitality)) * mix(1.0, 0.5, uNightness);
   vec3 tint = mix(uClear, uDeep, smoothstep(0.15, 1.5, depth));
   tint = mix(uMurk, tint, smoothstep(0.15, 0.85, uVitality));
   float sunLit = max(uSunDirection.y, 0.0) * sunUp();
   vec3 inLight = uSunColor * uSunIntensity * (0.2 + 0.5 * sunLit) * sunUp() + uAmbientColor * uAmbientIntensity * 0.9;
   vec3 body = nightTone(tint) * inLight * 0.8 + moonLight(tint, vec3(0.0, 1.0, 0.0), 0.6, 1.0) * 0.7;
   // The lantern's warmth reaches into the water near it.
-  body += lanternLight(tint + 0.15, n, vWorld, 0.7) * 0.55;
+  body += lanternLight(tint + 0.15, n, vWorld, 0.7) * 0.3;
   // Ripples tilted toward the sun read lighter, tilted away darker: painted light that flows.
   body *= 1.0 + clamp(-dot(slope, uSunDirection.xz) * 2.0, -0.1, 0.1) * sunUp();
   vec3 under = body * (1.0 - through);
@@ -318,7 +319,7 @@ void main() {
   float streak = (1.0 - smoothstep(0.0, 0.03, abs(s.streak - 0.5))) * s.dash * near * smoothstep(3.0, 9.0, dist);
   color += (mirror * 0.35 + inLight * 0.12) * streak * 0.18;
   // Crests of the rings catch the light.
-  color += (inLight * 0.35 + mirror * 0.25 + uLanternColor * uLanternIntensity * lanternReach(vWorld) * 0.4) * min(crest, 1.0) * 0.26;
+  color += (inLight * 0.35 + mirror * 0.25 + uLanternColor * uLanternIntensity * lanternReach(vWorld) * 0.2) * min(crest, 1.0) * 0.26;
 
   // Sun glints sparkle on the fine ripples; the moon lays a path of them;
   // the lantern scatters warm ones close by.
