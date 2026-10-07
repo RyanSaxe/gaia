@@ -33,16 +33,21 @@ float tuftMask(vec2 xz) {
 /**
  * The ground under grass, painted in the cover's own colors with short
  * brushed strokes, so where far blades thin out the ground still reads as the
- * same cover. `lift` moves the paint from the low color toward the high one.
- * Uses the includer's \`noise(vec2)\`.
+ * same cover. Close by, looking down, the paint is the shaded base of the
+ * sward between the blades; farther, where only blade tops show, it takes
+ * their colors. `lift` moves the paint from the low color toward the high one.
+ * Uses the includer's \`noise(vec2)\` and \`cameraPosition\`.
  */
 export const SWARD_GLSL = /* glsl */ `
-vec3 sward(vec2 xz, vec3 low, vec3 high, vec3 tip, float lift) {
-  vec2 q = mat2(0.8, 0.6, -0.6, 0.8) * xz;
+vec3 sward(vec3 world, vec3 low, vec3 high, vec3 tip, float lift) {
+  vec2 q = mat2(0.8, 0.6, -0.6, 0.8) * world.xz;
   float stroke = noise(vec2(q.x * 1.6, q.y * 7.0)) * 0.6 + noise(vec2(q.x * 3.7, q.y * 15.0) + 3.7) * 0.4;
-  vec3 c = mix(low, high, clamp(0.45 + lift + (stroke - 0.5) * 0.5, 0.0, 1.0));
-  c = mix(c, tip, smoothstep(0.55, 0.85, stroke) * 0.25);
-  return c * (0.88 + 0.1 * stroke);
+  // Only close by, looking down into the sward, does its shaded base show.
+  vec3 view = world - cameraPosition;
+  float under = (1.0 - smoothstep(0.86, 0.975, 1.0 - abs(normalize(view).y))) * (1.0 - smoothstep(12.0, 40.0, length(view)));
+  vec3 base = mix(low, high, clamp(0.25 + lift + (stroke - 0.5) * 0.5, 0.0, 1.0)) * 0.84;
+  vec3 tops = mix(mix(low, high, clamp(0.55 + lift + (stroke - 0.5) * 0.5, 0.0, 1.0)), tip, smoothstep(0.55, 0.85, stroke) * 0.25);
+  return mix(tops * (0.9 + 0.1 * stroke), base, under);
 }
 `;
 
@@ -146,9 +151,9 @@ void main() {
   n += uStand * (0.06 - smoothstep(uHigh * 0.3, uHigh, e) * 0.28);
   // Dome clouds thin out toward the horizon instead of stopping at a line:
   // fewer and smaller there, and fading over a wide band of sky.
-  n -= (1.0 - smoothstep(0.0, 0.3, e)) * 0.09 * (1.0 - uStand);
+  n -= (1.0 - smoothstep(0.0, 0.22, e)) * 0.08 * (1.0 - uStand);
   float d = smoothstep(uThreshold, uThreshold + uSoftness, n);
-  float band = mix(smoothstep(uLow, uLow + 0.2, e) * (1.0 - smoothstep(uHigh - 0.12, uHigh + 0.04, y)), 1.0 - smoothstep(uHigh * 0.8, uHigh * 1.25, e), uStand);
+  float band = mix(smoothstep(uLow, uLow + 0.14, e) * (1.0 - smoothstep(uHigh - 0.12, uHigh + 0.04, y)), 1.0 - smoothstep(uHigh * 0.8, uHigh * 1.25, e), uStand);
   // Clouds standing on the horizon rise out of its haze.
   d *= band * smoothstep(0.0, mix(0.02, 0.06, uStand), y);
   vec2 sunStep = mix(vec2(flatSun.x / uStretch, flatSun.y), vec2(0.0, 0.5), uStand) * 0.22;
@@ -301,7 +306,7 @@ varying vec3 vWorld;
 void main() {
   float broad = fbm(vWorld.xz * 0.05);
   float fine = fbm(vWorld.xz * 0.6);
-  vec3 grass = sward(vWorld.xz, uLow, uHigh, uTip, (broad - 0.5) * 0.6);
+  vec3 grass = sward(vWorld, uLow, uHigh, uTip, (broad - 0.5) * 0.6);
   vec3 albedo = mix(uSoil, grass, mix(1.0, tuftMask(vWorld.xz) * 0.75, uClump));
   albedo = mix(albedo, uSoil, smoothstep(0.66, 0.82, fbm(vWorld.xz * 0.09 + 40.0)) * 0.3);
   albedo = mix(albedo, uDry, (1.0 - uVitality) * 0.55);

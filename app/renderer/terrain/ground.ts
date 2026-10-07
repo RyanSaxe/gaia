@@ -123,10 +123,10 @@ void main() {
   // lush and deep; high ground is lighter and drier.
   GroundCover cover = groundCoverAt(vWorld.xz);
   float rel = clamp((vWorld.y - uHeightRange.x) / max(1.0, uHeightRange.y - uHeightRange.x), 0.0, 1.0);
-  vec3 albedo = sward(vWorld.xz, cover.low, cover.high, cover.tip, (broad - 0.5) * 0.5 + (rel - 0.4) * 0.45);
+  vec3 albedo = sward(vWorld, cover.low, cover.high, cover.tip, (broad - 0.5) * 0.5 + (rel - 0.4) * 0.45);
   // A clumped cover leaves its own soil showing between the tufts.
   albedo = mix(cover.soil, albedo, mix(1.0, tuftMask(vWorld.xz) * 0.75, cover.clump));
-  albedo = mix(albedo, uDry, smoothstep(0.6, 0.82, fbm(vWorld.xz * 0.08 + 40.0) + rel * 0.18) * 0.38);
+  albedo = mix(albedo, uDry, smoothstep(0.6, 0.82, fbm(vWorld.xz * 0.08 + 40.0) + rel * 0.18) * 0.28);
   // Bare earth shows on steep risers and banks.
   float steep = 1.0 - n.y;
   albedo = mix(albedo, uBare, smoothstep(0.075, 0.17, steep + (fine - 0.5) * 0.05) * 0.8);
@@ -155,7 +155,8 @@ void main() {
 #ifndef WILDS
   // The selected region glows faintly; region edges draw as soft lines in the overview.
   float selected = 1.0 - step(0.5, abs(vRegion - uSelected));
-  color = mix(color, color * vec3(1.1, 1.08, 0.92) + vec3(0.03, 0.03, 0.0), selected * 0.7 * uOutline);
+  // At night the glow stays faint, so the selection never reads as a lit field.
+  color = mix(color, color * vec3(1.1, 1.08, 0.92) + vec3(0.03, 0.03, 0.0), selected * 0.7 * uOutline * (1.0 - uNightness * 0.6));
   float edge = clamp(fwidth(vRegion) * 2.0, 0.0, 1.0);
   color = mix(color, color * 1.25 + vec3(0.04), edge * 0.35 * uOutline);
 #endif
