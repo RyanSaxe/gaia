@@ -63,9 +63,9 @@ export const LANDS: Readonly<Record<string, { readonly look: Look; readonly biom
 /** What grows on a file's patch: a tree species, or open ground that its directory's cover fills. */
 export const VIBES: Readonly<Record<string, Look>> = {
   "Lantern willow": look("Weeping willows that hang lanterns of light: a file much of the code leans on.", "hub", "large", "render", "light", "water"),
-  Fir: look("Dark, steady firs: a sturdy file that tests or guards others.", "test", "rust", "engine", "medium"),
-  Cherry: look("Cherry trees in blossom: a small, lively file of the interface.", "small", "renderer", "lab", "app", "typescript"),
-  "Autumn maple": look("Broad maples turning gold: a substantial file of logic.", "source", "medium", "large", "typescript"),
+  Fir: look("Dark, steady firs: a sturdy file that tests or guards others.", "test", "rust", "engine"),
+  Cherry: look("Cherry trees in blossom: a small, lively file of the interface.", "renderer", "lab", "app", "typescript"),
+  "Autumn maple": look("Broad maples turning gold: a substantial file of logic.", "source", "large", "typescript"),
   "Open meadow": look("No trees: open ground in the area's own cover, for a file that describes or configures rather than acts.", "docs", "config", "data", "script", "markdown", "json", "yaml", "toml"),
 };
 

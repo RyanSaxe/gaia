@@ -180,6 +180,9 @@ interface Tree {
   readonly patch?: number;
 }
 
+/** A thing's name as it stands in the world, such as "An archive tower". */
+const withArticle = (name: string): string => `${/^[aeiou]/i.test(name) ? "An" : "A"} ${name.toLowerCase()}`;
+
 /** The full world, or the small one with `?world=small` in the page's address, to compare the two. */
 const SCALE = new URLSearchParams(location.search).get("world") === "small" ? SMALL_WORLD : FULL_WORLD;
 /** The air's density walking, and over the overview, which thins with the world's size so the whole of it stays legible. */
@@ -477,7 +480,7 @@ export function createTerrainLab(root: HTMLElement): Lab {
   function placeSigns(): void {
     const buildingSubjects: Subject[] = settlement.buildings.map((b) => ({
       represented: b.represented,
-      standsAs: `A ${b.kindName.toLowerCase()}`,
+      standsAs: withArticle(b.kindName),
       x: b.site.x,
       z: b.site.z,
       stand: () => settlement.standOf(b),
@@ -492,7 +495,7 @@ export function createTerrainLab(root: HTMLElement): Lab {
           const { x, z } = s.site;
           return [{
             represented: representEntity(facts),
-            standsAs: `A ${lm.name.toLowerCase()}`,
+            standsAs: withArticle(lm.name),
             x,
             z,
             stand: (fx: number, fz: number) => {

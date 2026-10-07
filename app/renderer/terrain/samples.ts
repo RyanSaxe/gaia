@@ -158,8 +158,8 @@ export const SAMPLE_FILES: readonly FileFacts[] = [
 const FORMS: Readonly<Record<EntityFacts["form"], string>> = { package: "Package", crate: "Rust crate", service: "Service", app: "App", module: "Module" };
 const LANGUAGES: Readonly<Record<string, string>> = { typescript: "TypeScript", rust: "Rust" };
 const count = (n: number, one: string): string => `${n.toLocaleString()} ${n === 1 ? one : `${one}s`}`;
-/** The last part of a path, which names an entity among its neighbors. */
-export const shortName = (path: string): string => path.split("/").filter(Boolean).pop() ?? path;
+/** The last part of a path, which names an entity among its neighbors; the root's entity is the repository's own. */
+export const shortName = (path: string): string => path.split("/").filter(Boolean).pop() ?? "the repository";
 
 export function representEntity(e: EntityFacts): Represented {
   return {
