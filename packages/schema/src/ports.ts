@@ -31,6 +31,8 @@ export interface Part {
   readonly indices: Uint32Array;
   /** Per-vertex brightness variation, 0 to 1. */
   readonly shade: Float32Array;
+  /** Per-vertex hue offset in turns, -0.1 to 0.1, so one swatch varies across a canopy. */
+  readonly tint: Float32Array;
   readonly channels: VitalityChannels;
   readonly collision: "solid" | "walkable" | "none";
 }

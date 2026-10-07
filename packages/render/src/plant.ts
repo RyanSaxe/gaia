@@ -11,6 +11,7 @@ const f = (x: number): string => x.toFixed(4);
 
 const CHANNELS_GLSL = /* glsl */ `
 attribute float aShade;
+attribute float aTint;
 attribute float aLoss;
 attribute float aDroop;
 attribute float aWither;
@@ -60,6 +61,7 @@ ${CHANNELS_GLSL}
 varying vec3 vNormal;
 varying vec3 vWorld;
 varying float vShade;
+varying float vTint;
 varying float vWither;
 varying float vGlow;
 void main() {
@@ -69,6 +71,7 @@ void main() {
   vWorld = world.xyz;
   vNormal = normalize(mat3(modelMatrix) * normal);
   vShade = aShade;
+  vTint = aTint;
   vWither = aWither * (1.0 - uVitality);
   vGlow = aGlow * uVitality * ${f(CHANNEL_MATH.glowStrength)} * (0.85 + 0.15 * sin(uTime * 1.3 + aPivot.x * 3.0 + aPivot.z * 2.0));
   gl_Position = projectionMatrix * viewMatrix * world;
@@ -78,17 +81,28 @@ void main() {
 const PLANT_FRAG = /* glsl */ `
 precision highp float;
 ${LIGHT_GLSL}
+// Same YIQ rotation as hueRotate in @gaia/realize.
+vec3 hueRotate(vec3 c, float turns) {
+  float y = dot(c, vec3(0.299, 0.587, 0.114));
+  float i = dot(c, vec3(0.596, -0.274, -0.322));
+  float q = dot(c, vec3(0.211, -0.523, 0.312));
+  float a = turns * 6.28318530718;
+  float i2 = i * cos(a) - q * sin(a);
+  float q2 = i * sin(a) + q * cos(a);
+  return clamp(vec3(y + 0.956 * i2 + 0.621 * q2, y - 0.272 * i2 - 0.647 * q2, y - 1.106 * i2 + 1.703 * q2), 0.0, 1.0);
+}
 uniform vec3 uHealthy;
 uniform vec3 uDecline;
 uniform float uFoliage;
 varying vec3 vNormal;
 varying vec3 vWorld;
 varying float vShade;
+varying float vTint;
 varying float vWither;
 varying float vGlow;
 void main() {
   float bright = mix(${f(CHANNEL_MATH.shadeLow)}, ${f(CHANNEL_MATH.shadeHigh)}, vShade);
-  vec3 albedo = mix(uHealthy, uDecline, vWither) * bright;
+  vec3 albedo = mix(hueRotate(uHealthy, vTint), uDecline, vWither) * bright;
   vec3 n = normalize(vNormal);
   if (uFoliage < 0.5 && !gl_FrontFacing) n = -n;
   // Foliage gets wrapped diffuse: leaves scatter light, so canopies never
@@ -146,6 +160,7 @@ function geometryOf(part: Part): THREE.BufferGeometry {
   g.setAttribute("position", new THREE.BufferAttribute(part.positions, 3));
   g.setAttribute("normal", new THREE.BufferAttribute(part.normals, 3));
   g.setAttribute("aShade", new THREE.BufferAttribute(part.shade, 1));
+  g.setAttribute("aTint", new THREE.BufferAttribute(part.tint, 1));
   g.setAttribute("aLoss", new THREE.BufferAttribute(part.channels.loss, 1));
   g.setAttribute("aDroop", new THREE.BufferAttribute(part.channels.droop, 1));
   g.setAttribute("aWither", new THREE.BufferAttribute(part.channels.wither, 1));

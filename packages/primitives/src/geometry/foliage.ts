@@ -299,13 +299,15 @@ function emitBlob(
     const place = crownPlace(crown, q);
     const normal = blendNormal(n, place.out, 0.6);
     const rim = clamp((place.depth - 0.35) / 0.75, 0, 1);
-    const shade = 0.3 + 0.45 * rim + 0.14 * n[1] + look.tint + 0.08 * (lump - 1) / lumpiness;
+    // Each clump varies a little in brightness and a little in hue, as v1's canopies did.
+    const shade = 0.3 + 0.45 * rim + 0.14 * n[1] + 0.5 * look.tint + 0.08 * (lump - 1) / lumpiness;
     out.vertex(q, normal, shade, {
       loss: Math.max(0.01, look.loss + 0.07 * fbm3(n[0] * 3 + 5, n[1] * 3, n[2] * 3, seed + 7, 2)),
       droop: look.droop,
       wither: look.wither,
       glow: 0,
       pivot: look.pivot,
+      tint: look.tint * 0.4,
     });
   }
   for (const [a, b, c] of sphere.triangles) out.triangle(first + a, first + b, first + c);
@@ -359,6 +361,8 @@ export function buildLeafStrands(p: Resolved<typeof leafStrandsParams>, ctx: Bui
         pivot: h.at,
       });
     }
+    // A forked stream, so the strand's hue never shifts the draws that shape it.
+    const strandTint = sr.fork("tint").range(-0.08, 0.08) * 0.4;
     const count = Math.max(3, Math.round(fall / step));
     for (let k = 0; k < count; k++) {
       const t = (k + sr.range(0.2, 0.8)) / count;
@@ -384,6 +388,7 @@ export function buildLeafStrands(p: Resolved<typeof leafStrandsParams>, ctx: Bui
         wither: clamp(wither + 0.15 * t, 0, 1),
         glow: 0,
         pivot: h.at,
+        tint: strandTint,
       };
       const a = out.vertex(baseP, normal, shade * 0.9, ch);
       const b = out.vertex(left, normal, shade, ch);
@@ -505,13 +510,14 @@ function emitSpray(
     const q = add(at, add(scale(side, n[2] * w), scale(up, (n[1] * 0.42 + fringe - 0.12) * w)));
     const place = crownPlace(crown, q);
     const normal = blendNormal([side[0] * n[2] + up[0] * n[1], side[1] * n[2] + up[1] * n[1], side[2] * n[2] + up[2] * n[1]], place.out, 0.5);
-    const shade = 0.28 + 0.42 * clamp(place.depth - 0.25, 0, 1) + 0.2 * Math.max(0, n[1]) + tint + 0.12 * (p.fullness < 0.9 ? 1 : 0.5) * heightFrac;
+    const shade = 0.28 + 0.42 * clamp(place.depth - 0.25, 0, 1) + 0.2 * Math.max(0, n[1]) + 0.5 * tint + 0.12 * (p.fullness < 0.9 ? 1 : 0.5) * heightFrac;
     out.vertex(q, normal, shade, {
       loss: Math.max(0.01, loss + 0.08 * t),
       droop: 0.35,
       wither,
       glow: 0,
       pivot: at,
+      tint: tint * 0.4,
     });
   }
   for (const [a, b, c] of sphere.triangles) out.triangle(first + a, first + b, first + c);

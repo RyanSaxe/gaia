@@ -52,6 +52,8 @@ export interface Channels {
   readonly wither: number;
   readonly glow: number;
   readonly pivot: Vec3;
+  /** Hue offset in turns, -0.1 to 0.1. Zero when absent. */
+  readonly tint?: number;
 }
 
 /** Accumulates vertices with every channel, then freezes into a Part. */
@@ -59,6 +61,7 @@ export class PartBuilder {
   readonly #pos: number[] = [];
   readonly #nrm: number[] = [];
   readonly #shade: number[] = [];
+  readonly #tint: number[] = [];
   readonly #loss: number[] = [];
   readonly #droop: number[] = [];
   readonly #wither: number[] = [];
@@ -83,6 +86,7 @@ export class PartBuilder {
     this.#pos.push(p[0], p[1], p[2]);
     this.#nrm.push(n[0], n[1], n[2]);
     this.#shade.push(clamp(shade, 0, 1));
+    this.#tint.push(clamp(c.tint ?? 0, -0.1, 0.1));
     this.#loss.push(clamp(c.loss, 0, 1));
     this.#droop.push(clamp(c.droop, 0, 1));
     this.#wither.push(clamp(c.wither, 0, 1));
@@ -102,6 +106,7 @@ export class PartBuilder {
       normals: new Float32Array(this.#nrm),
       indices: new Uint32Array(this.#idx),
       shade: new Float32Array(this.#shade),
+      tint: new Float32Array(this.#tint),
       channels: {
         loss: new Float32Array(this.#loss),
         droop: new Float32Array(this.#droop),

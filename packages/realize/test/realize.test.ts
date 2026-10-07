@@ -36,6 +36,14 @@ function build(p: AnyPrimitive, stored: Record<string, string | boolean | string
 const skeletons = lib.forRole("Skeleton").map((p) => ({ id: p.id, skel: build(p, middleParams(p), null) as Skeleton }));
 
 describe("realize", () => {
+  it("varies hue across a canopy through the tint channel", () => {
+    for (const { blueprint } of FLORA_PRESETS) {
+      const leaves = realize(blueprint, flora, lib, { seed: seedOf("src/app.ts"), facts }).parts.filter((p) => p.swatch === "leaf");
+      const tints = new Set(leaves.flatMap((p) => Array.from(p.tint).map((t) => t.toFixed(3))));
+      expect(tints.size).toBeGreaterThan(3);
+    }
+  });
+
   it("gives byte-identical buffers for the same blueprint and seed", () => {
     for (const { blueprint } of FLORA_PRESETS) {
       const a = realize(blueprint, flora, lib, { seed: seedOf("src/app.ts"), facts });

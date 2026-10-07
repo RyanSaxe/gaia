@@ -77,6 +77,7 @@ describe.each(PRIMITIVES.map((p) => [p.id, p] as const))("%s", (_id, p) => {
           expect(allFinite(part.positions) && allFinite(part.normals) && allFinite(part.channels.pivot)).toBe(true);
           const c = part.channels;
           expect([c.loss, c.droop, c.wither, c.glow, part.shade].every(inUnit)).toBe(true);
+          expect(part.tint.every((x) => x >= -0.1 && x <= 0.1)).toBe(true);
           expect(part.indices.length / 3).toBeLessThanOrEqual(TRIANGLE_BUDGET);
         }
       }
