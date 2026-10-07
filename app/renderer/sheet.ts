@@ -5,6 +5,8 @@
 export interface Sheet {
   /** Names the selected item on the handle. */
   name(text: string): void;
+  /** Opens or closes the sheet, as a tap on its handle would; on a wide screen the panel is always open. */
+  open(on: boolean): void;
 }
 
 /** How far a pull must travel before the sheet settles at its other end. */
@@ -67,5 +69,6 @@ export function createSheet(panel: HTMLElement): Sheet {
     name: (text) => {
       label.textContent = text;
     },
+    open: setOpen,
   };
 }

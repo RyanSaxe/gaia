@@ -4,3 +4,5 @@ export * from "./world.ts";
 export * from "./structure.ts";
 export * from "./rock.ts";
 export * from "./wildflowers.ts";
+export * from "./link.ts";
+export * from "./landmark.ts";

@@ -5,15 +5,15 @@ import { describe, expect, it } from "vitest";
 import { type AnyPrimitive, type Built, type BuildingPlan, CUT, type Field, Library, type Part, type Skeleton, rand } from "@gaia/schema";
 import * as primitivesModule from "@gaia/primitives";
 import { PRIMITIVES } from "@gaia/primitives";
-import { applyVitality, resolveParams } from "@gaia/realize";
+import { applyVitality, detailAt, resolveParams } from "@gaia/realize";
 
 const lib = new Library(PRIMITIVES);
 const facts = { scale: 1, age: 120 };
-const GEOMETRY_ROLES = new Set(["Surface", "Foliage", "Ornament", "Walls", "Roof", "Openings", "Dressing", "Rock", "Overgrowth", "Drift"]);
+const GEOMETRY_ROLES = new Set(["Surface", "Foliage", "Ornament", "Walls", "Roof", "Openings", "Dressing", "Feature", "Rock", "Overgrowth", "Drift", "Landmark"]);
 /** Roles that build against a building's plan. */
-const PLAN_ROLES = new Set(["Walls", "Roof", "Openings", "Dressing"]);
+const PLAN_ROLES = new Set(["Walls", "Roof", "Openings", "Dressing", "Feature"]);
 /** Roles that build from nothing. */
-const SOURCE_ROLES = new Set(["Skeleton", "Motion", "Palette", "Footprint", "Rock", "Drift"]);
+const SOURCE_ROLES = new Set(["Skeleton", "Motion", "Palette", "Footprint", "Rock", "Drift", "Route", "Landmark"]);
 const TRIANGLE_BUDGET = 40_000;
 
 type Stored = Record<string, string | boolean | string[]>;
@@ -95,9 +95,68 @@ describe.each(PRIMITIVES.map((p) => [p.id, p] as const))("%s", (_id, p) => {
           const c = part.channels;
           expect([c.loss, c.droop, c.wither, c.glow, c.close, part.shade].every(inUnit)).toBe(true);
           expect(c.close.length).toBe(part.shade.length);
+          // Optional channels, when present, cover every vertex and stay in range.
+          expect([c.grow, c.rot].every((a) => a === undefined || (a.length === part.shade.length && inUnit(a)))).toBe(true);
+          expect(c.fall === undefined || (c.fall.length === part.shade.length * 4 && allFinite(c.fall) && c.fall.every((x, i) => i % 4 !== 3 || (x >= 0 && x <= 1)))).toBe(true);
+          expect(c.spin === undefined || (c.spin.length === part.shade.length * 3 && allFinite(c.spin))).toBe(true);
           expect(part.tint.every((x) => x >= -0.1 && x <= 0.1)).toBe(true);
           expect(cutsKnown(part)).toBe(true);
           expect(part.indices.length / 3).toBeLessThanOrEqual(TRIANGLE_BUDGET);
+        }
+      }
+    }
+  });
+
+  it("builds whole pieces, and far detail leaves out whole pieces and keeps the rest bit-identical", () => {
+    for (const s of samples(p)) {
+      for (const input of inputFor(p).slice(0, 2)) {
+        for (const part of (build(p, s, input, 5) as Built).parts as Part[]) {
+          const n = part.shade.length;
+          const id = (v: number): number => part.piece[v * 2] as number;
+          expect(part.piece.length).toBe(n * 2);
+          // A triangle never spans two pieces, and pieces are numbered in order of their first vertex.
+          for (let t = 0; t < part.indices.length; t += 3) {
+            const a = id(part.indices[t] as number);
+            expect(id(part.indices[t + 1] as number) === a && id(part.indices[t + 2] as number) === a).toBe(true);
+          }
+          let top = -1;
+          for (let v = 0; v < n; v++) {
+            expect(id(v) <= top + 1).toBe(true);
+            top = Math.max(top, id(v));
+          }
+          let before = new Set<number>(Array.from({ length: top + 1 }, (_, k) => k));
+          for (const distance of [20, 50, 120, 300, 800]) {
+            const far = detailAt(part, distance);
+            const kept = new Set<number>();
+            for (let v = 0; v < far.shade.length; v++) kept.add(far.piece[v * 2] as number);
+            // Each step out leaves out more whole pieces and brings none back.
+            expect([...kept].every((k) => before.has(k))).toBe(true);
+            before = kept;
+            const from: number[] = [];
+            for (let v = 0; v < n; v++) if (kept.has(id(v))) from.push(v);
+            expect(far.shade.length).toBe(from.length);
+            const same = (full: Float32Array, reduced: Float32Array, width: number): boolean =>
+              from.every((v, k) => {
+                for (let c = 0; c < width; c++) if (!Object.is(reduced[k * width + c], full[v * width + c])) return false;
+                return true;
+              });
+            const c = part.channels;
+            const fc = far.channels;
+            expect(
+              same(part.positions, far.positions, 3) && same(part.normals, far.normals, 3) && same(part.shade, far.shade, 1) &&
+                same(part.tint, far.tint, 1) && same(part.cutout, far.cutout, 3) && same(part.piece, far.piece, 2) &&
+                same(c.loss, fc.loss, 1) && same(c.droop, fc.droop, 1) && same(c.wither, fc.wither, 1) &&
+                same(c.glow, fc.glow, 1) && same(c.pivot, fc.pivot, 3) && same(c.close, fc.close, 1),
+            ).toBe(true);
+            // The kept triangles are the full build's, in its order.
+            const at = new Map(from.map((v, k) => [v, k]));
+            const triangles: number[] = [];
+            for (let t = 0; t < part.indices.length; t++) {
+              const k = at.get(part.indices[t] as number);
+              if (k !== undefined) triangles.push(k);
+            }
+            expect(Array.from(far.indices)).toEqual(triangles);
+          }
         }
       }
     }

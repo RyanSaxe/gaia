@@ -4,7 +4,8 @@
 // landforms never holds the rest back.
 
 import { type ComposedRows, type Terrain, type WorldSpec, latticeOf } from "@gaia/terrain";
-import type { BakeJob, BakeReply, Stand, StandRequest } from "./bake-worker.ts";
+import type { BakeJob, BakeReply } from "./bake-worker.ts";
+import type { Stand, StandRequest } from "./stand.ts";
 import BakeWorker from "./bake-worker.ts?worker";
 
 export interface Baker {

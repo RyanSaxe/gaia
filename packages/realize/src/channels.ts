@@ -13,6 +13,18 @@ export const CHANNEL_MATH = {
   /** Brightness at shade 0 and shade 1. */
   shadeLow: 0.62,
   shadeHigh: 1.1,
+  /** Vitality span over which a piece turns from upright to fully fallen, once below its `fall` threshold. */
+  fallBand: 0.14,
+  /**
+   * Rot opens holes below `rotStart`, deepening steadily to `rotMost` at
+   * vitality 0. A fragment is a hole where the surface's rot noise (about
+   * 0.1 to 0.9) falls below its rot times that depth.
+   */
+  rotStart: 0.85,
+  rotMost: 0.8,
+  /** A spinning piece stops below `spinStop` and turns at full speed above `spinFull`. */
+  spinStop: 0.1,
+  spinFull: 0.6,
 } as const;
 
 export interface VitalityView {
@@ -48,7 +60,27 @@ export function hueRotate(rgb: readonly [number, number, number], turns: number)
   return [c(y + 0.956 * i2 + 0.621 * q2), c(y - 0.272 * i2 - 0.647 * q2), c(y - 1.106 * i2 + 1.703 * q2)];
 }
 
-/** CPU reference of the plant shader's channel math. */
+/** Turns `v` about the unit `axis` by `angle` radians (Rodrigues), as the shader does. */
+function turn(v: readonly [number, number, number], axis: readonly [number, number, number], angle: number): [number, number, number] {
+  const c = Math.cos(angle);
+  const s = Math.sin(angle);
+  const [x, y, z] = v;
+  const [ux, uy, uz] = axis;
+  const d = (ux * x + uy * y + uz * z) * (1 - c);
+  return [x * c + (uy * z - uz * y) * s + ux * d, y * c + (uz * x - ux * z) * s + uy * d, z * c + (ux * y - uy * x) * s + uz * d];
+}
+
+/** How deep rot has reached at vitality `v`: a surface with rot `r` is a hole wherever its noise is below `r * rotAt(v)`. */
+export const rotAt = (v: number): number => CHANNEL_MATH.rotMost * Math.min(1, Math.max(0, 1 - v / CHANNEL_MATH.rotStart));
+
+/** How fast a spinning piece turns at vitality `v`, as a share of its full speed. */
+export const spinAt = (v: number): number => smoothstep(CHANNEL_MATH.spinStop, CHANNEL_MATH.spinFull, v);
+
+/**
+ * CPU reference of the plant shader's channel math. Rot holes are cut per
+ * fragment, so only `rotAt` says how much shows; spinning pieces stand at
+ * their first turn.
+ */
 export function applyVitality(part: Part, vitality: number, swatch: Swatch = REFERENCE_SWATCH): VitalityView {
   const v = Math.min(1, Math.max(0, vitality));
   const { loss, droop, wither, glow, pivot } = part.channels;
@@ -74,10 +106,25 @@ export function applyVitality(part: Part, vitality: number, swatch: Swatch = REF
       oz = (oz / bl) * d;
     }
     const threshold = loss[i] ?? 0;
-    const keep = threshold > 0 ? smoothstep(threshold, threshold + m.lossBand, v) : 1;
-    positions[i * 3] = px + ox * keep;
-    positions[i * 3 + 1] = py + oy * keep;
-    positions[i * 3 + 2] = pz + oz * keep;
+    const grows = part.channels.grow?.[i] ?? 0;
+    const keep = (threshold > 0 ? smoothstep(threshold, threshold + m.lossBand, v) : 1) * (grows > 0 ? 1 - smoothstep(grows, grows + m.lossBand, v) : 1);
+    ox *= keep;
+    oy *= keep;
+    oz *= keep;
+    // A spinning piece stands at its first turn here; the shader adds the turning.
+    const fall = part.channels.fall;
+    const from = fall?.[i * 4 + 3] ?? 0;
+    if (fall !== undefined && from > 0) {
+      const ax = fall[i * 4] ?? 0;
+      const ay = fall[i * 4 + 1] ?? 0;
+      const az = fall[i * 4 + 2] ?? 0;
+      const most = Math.hypot(ax, ay, az);
+      const angle = most * (1 - smoothstep(from - m.fallBand, from, v));
+      if (most > 1e-6 && angle !== 0) [ox, oy, oz] = turn([ox, oy, oz], [ax / most, ay / most, az / most], angle);
+    }
+    positions[i * 3] = px + ox;
+    positions[i * 3 + 1] = py + oy;
+    positions[i * 3 + 2] = pz + oz;
 
     const w = (wither[i] ?? 0) * (1 - v);
     const bright = m.shadeLow + (m.shadeHigh - m.shadeLow) * (part.shade[i] ?? 0.5);

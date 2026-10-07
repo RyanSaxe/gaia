@@ -23,6 +23,26 @@ export interface VitalityChannels {
   readonly pivot: Float32Array;
   /** How far the vertex folds toward its pivot at night, 0 to 1. Flowers close; most pieces never do. */
   readonly close: Float32Array;
+  /**
+   * How a piece falls as vitality drops, four per vertex: the axis it turns
+   * about its pivot, scaled by the most it turns in radians, then the
+   * vitality below which it starts to turn. A door swings ajar, a chimney
+   * topples, a post leans. Absent means nothing falls.
+   */
+  readonly fall?: Float32Array;
+  /**
+   * The vitality below which a piece grows out of its pivot: ivy, weeds,
+   * rubble and boards over windows. 0 means it never grows. Absent means none.
+   */
+  readonly grow?: Float32Array;
+  /** How far a surface rots through into ragged holes as vitality drops, 0 to 1. Absent means none. */
+  readonly rot?: Float32Array;
+  /**
+   * How a piece turns about its pivot while it is alive, three per vertex:
+   * the axis scaled by turns per second. It slows as vitality falls and
+   * stops near the bottom, like a mill wheel. Absent means nothing turns.
+   */
+  readonly spin?: Float32Array;
 }
 
 export interface Part {
@@ -41,6 +61,14 @@ export interface Part {
    * card to that leafy shape; a solid surface is all zeros.
    */
   readonly cutout: Float32Array;
+  /**
+   * The whole piece each vertex belongs to, two per vertex: the piece's number
+   * in the part (0, 1, 2, ... in build order) and its size in meters, the side
+   * of a square with half the piece's surface area. A piece is a connected run
+   * of triangles, such as one leaf card, one limb or one petal; renderers thin
+   * distant detail by leaving out whole pieces, smallest first.
+   */
+  readonly piece: Float32Array;
   readonly channels: VitalityChannels;
   readonly collision: "solid" | "walkable" | "none";
 }
@@ -58,6 +86,19 @@ export const CUT = {
   strand: 2,
   /** A needle spray with a jagged fringe; along runs from 0 at the base to 1 at the tip. */
   needles: 3,
+  /** Rounded oval leaves, like a cherry's or a blueberry's, around the card's middle; along runs -1 to 1. */
+  oval: 4,
+  /** Palmate leaves with pointed lobes, like a maple's; along runs -1 to 1. */
+  lobed: 5,
+  /**
+   * A patch laid on a surface, like moss on stone. Across is how deep in the
+   * patch the vertex sits (0 at its edge, 1 at its heart) and along jitters
+   * that edge; the patch recedes from its edge as vitality falls. It is never
+   * a card: it does not fade when seen edge-on.
+   */
+  patch: 6,
+  /** A five-petaled flower, its heart at the card's middle; along runs -1 to 1. */
+  blossom: 7,
 } as const;
 
 export interface Anchor {
@@ -299,12 +340,35 @@ export interface Roles {
   Roof: { input: BuildingPlan; output: Built };
   Openings: { input: BuildingPlan; output: Built };
   Dressing: { input: BuildingPlan; output: Built };
+  /** What sets a building apart and says what it does: a turning waterwheel, a tower. */
+  Feature: { input: BuildingPlan; output: Built };
   /** A rock's body: a boulder, a stone, a cluster or an outcrop. */
   Rock: { input: null; output: Built };
   /** What grows over another piece's upward faces, such as moss on stone. */
   Overgrowth: { input: Built; output: Built };
   /** A drift of small plants at ground level, such as wildflowers. */
   Drift: { input: null; output: Built };
+  /** How a trail between two places looks and runs. The terrain routes it; geometry follows the route. */
+  Route: { input: null; output: RouteSpec };
+  /** A great thing a person can steer by from far away, such as a tower or a ring of standing stones. */
+  Landmark: { input: null; output: Built };
+}
+
+/**
+ * A trail's look, in numbers the terrain and the ground shader read. The
+ * route itself is never chosen: the terrain finds it over the ground.
+ */
+export interface RouteSpec {
+  /** Width of the worn tread, meters. */
+  readonly width: number;
+  /** How bare the tread is worn, 0 (grassed over) to 1 (bare earth). */
+  readonly wear: number;
+  /** What lines the tread's edges. */
+  readonly edging: "none" | "stones";
+  /** How freely the trail wanders off the easiest line, 0 to 1. */
+  readonly winding: number;
+  /** How the trail crosses a stream. */
+  readonly crossing: "stepping-stones" | "footbridge";
 }
 
 /** A door or window in a building's wall. */

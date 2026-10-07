@@ -56,9 +56,66 @@ export interface Channels {
   readonly tint?: number;
   /** How far the piece folds toward its pivot at night, 0 to 1. Zero when absent. */
   readonly close?: number;
+  /** How the piece falls about its pivot as vitality drops: axis times radians, then the vitality it starts at. */
+  readonly fall?: readonly [number, number, number, number];
+  /** The vitality below which the piece grows out of its pivot. Zero when absent. */
+  readonly grow?: number;
+  /** How far the surface rots through into holes as vitality drops, 0 to 1. Zero when absent. */
+  readonly rot?: number;
+  /** How the piece turns about its pivot while alive: axis times turns per second. */
+  readonly spin?: Vec3;
 }
 
 const SOLID: Vec3 = [0, 0, 0];
+const NO_FALL = [0, 0, 0, 0] as const;
+
+/**
+ * Every vertex's piece (the connected run of triangles it is in, numbered by
+ * first vertex) and that piece's size, the side of a square with half its
+ * surface area. A vertex no triangle uses is a piece of its own, of size 0.
+ */
+function piecesOf(pos: readonly number[], idx: readonly number[]): Float32Array {
+  const n = pos.length / 3;
+  const parent = new Int32Array(n);
+  for (let i = 0; i < n; i++) parent[i] = i;
+  const root = (a: number): number => {
+    let r = a;
+    while (parent[r] !== r) r = parent[r] as number;
+    while (parent[a] !== r) {
+      const next = parent[a] as number;
+      parent[a] = r;
+      a = next;
+    }
+    return r;
+  };
+  for (let t = 0; t < idx.length; t += 3) {
+    const a = root(idx[t] as number);
+    const b = root(idx[t + 1] as number);
+    const c = root(idx[t + 2] as number);
+    const low = Math.min(a, b, c);
+    parent[a] = low;
+    parent[b] = low;
+    parent[c] = low;
+  }
+  const area = new Float64Array(n);
+  const at = (v: number): V3 => [pos[v * 3] as number, pos[v * 3 + 1] as number, pos[v * 3 + 2] as number];
+  for (let t = 0; t < idx.length; t += 3) {
+    const a = idx[t] as number;
+    const corner = at(a);
+    const r = root(a);
+    area[r] = (area[r] as number) + length(cross(sub(at(idx[t + 1] as number), corner), sub(at(idx[t + 2] as number), corner))) / 2;
+  }
+  const number = new Int32Array(n).fill(-1);
+  let pieces = 0;
+  const out = new Float32Array(n * 2);
+  for (let i = 0; i < n; i++) {
+    const r = root(i);
+    if (number[r] === -1) number[r] = pieces++;
+    out[i * 2] = number[r] as number;
+    out[i * 2 + 1] = Math.sqrt((area[r] as number) / 2);
+  }
+  return out;
+}
 
 /** Accumulates vertices with every channel, then freezes into a Part. */
 export class PartBuilder {
@@ -73,6 +130,12 @@ export class PartBuilder {
   readonly #glow: number[] = [];
   readonly #pivot: number[] = [];
   readonly #close: number[] = [];
+  readonly #fall: number[] = [];
+  readonly #grow: number[] = [];
+  readonly #rot: number[] = [];
+  readonly #spin: number[] = [];
+  /** Which optional channels some vertex wrote, so a part without them carries none. */
+  readonly #uses = { fall: false, grow: false, rot: false, spin: false };
   readonly #idx: number[] = [];
 
   constructor(
@@ -101,6 +164,16 @@ export class PartBuilder {
     this.#glow.push(clamp(c.glow, 0, 1));
     this.#pivot.push(c.pivot[0], c.pivot[1], c.pivot[2]);
     this.#close.push(clamp(c.close ?? 0, 0, 1));
+    const fall = c.fall ?? NO_FALL;
+    this.#fall.push(fall[0], fall[1], fall[2], clamp(fall[3], 0, 1));
+    this.#grow.push(clamp(c.grow ?? 0, 0, 1));
+    this.#rot.push(clamp(c.rot ?? 0, 0, 1));
+    const spin = c.spin ?? SOLID;
+    this.#spin.push(spin[0], spin[1], spin[2]);
+    if (c.fall !== undefined && fall[3] > 0) this.#uses.fall = true;
+    if ((c.grow ?? 0) > 0) this.#uses.grow = true;
+    if ((c.rot ?? 0) > 0) this.#uses.rot = true;
+    if (c.spin !== undefined) this.#uses.spin = true;
     return this.#shade.length - 1;
   }
 
@@ -117,6 +190,7 @@ export class PartBuilder {
       shade: new Float32Array(this.#shade),
       tint: new Float32Array(this.#tint),
       cutout: new Float32Array(this.#cut),
+      piece: piecesOf(this.#pos, this.#idx),
       channels: {
         loss: new Float32Array(this.#loss),
         droop: new Float32Array(this.#droop),
@@ -124,9 +198,40 @@ export class PartBuilder {
         glow: new Float32Array(this.#glow),
         pivot: new Float32Array(this.#pivot),
         close: new Float32Array(this.#close),
+        ...(this.#uses.fall ? { fall: new Float32Array(this.#fall) } : {}),
+        ...(this.#uses.grow ? { grow: new Float32Array(this.#grow) } : {}),
+        ...(this.#uses.rot ? { rot: new Float32Array(this.#rot) } : {}),
+        ...(this.#uses.spin ? { spin: new Float32Array(this.#spin) } : {}),
       },
       collision: this.collision,
     };
+  }
+}
+
+/** A leaf card's cut, with the card's own seed (0 to 1) in its fraction. */
+export const cutOf = (form: number, seed: number): number => form + 0.999 * clamp(seed, 0, 1);
+
+/** One vertex of a leaf card: where it is, its place on the card, its normal and shade. */
+export interface CardPoint {
+  readonly p: V3;
+  readonly across: number;
+  readonly along: number;
+  readonly n: V3;
+  readonly shade: number;
+}
+
+/** A leaf card as a grid of rows (along the card) of points (across it). */
+export function emitCard(out: PartBuilder, rows: readonly (readonly CardPoint[])[], cut: number, ch: Channels): void {
+  const first = out.vertexCount;
+  const cols = rows[0]?.length ?? 0;
+  for (const row of rows) for (const v of row) out.vertex(v.p, v.n, v.shade, ch, [v.across, v.along, cut]);
+  for (let i = 0; i + 1 < rows.length; i++) {
+    for (let j = 0; j + 1 < cols; j++) {
+      const a = first + i * cols + j;
+      const b = a + cols;
+      out.triangle(a, b, a + 1);
+      out.triangle(a + 1, b, b + 1);
+    }
   }
 }
 

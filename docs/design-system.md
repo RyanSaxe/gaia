@@ -41,17 +41,30 @@ a canopy; it never touches decline.
 
 ## Leaves
 
-Canopies are painted masses from afar and leaves up close. Each clump of
-leaves is a soft core under a shell of leaf cards; willow strands are crossed
-ribbons of small hanging leaves; fir sprays are layered tents of needles with
-jagged, combed fringes. A primitive only places cards and names their cut
-(`CUT` in `@gaia/schema`: cluster, strand or needles); the plant shader cuts
-each card to its leaves, with no textures. Every card shades with the crown's
+Canopies are painted masses from afar and leaves up close. Leaf cards build
+each clump themselves: an outer shell gives it a leafy outline and an inner,
+darker layer gives it depth, over a small dark core that reads only as
+shadow in the gaps. Each family has its own leaf: a canopy's leaves are
+pointed, oval (cherry) or lobed (maple), chosen as a parameter of
+`leaf-clumps@1`. Willow strands are crossed ribbons of small hanging lance
+leaves. A fir spray is a frond: a ridge of needles along the limb and
+branchlets to either side that reach toward the tip and droop, so a fir reads
+as layered, feathery needles rather than flat plates. A primitive only places
+cards and names their cut (`CUT` in `@gaia/schema`: cluster, oval, lobed,
+strand, needles, blossom or patch); the plant shader cuts each card to its
+leaves, with no textures. Every card shades with the crown's
 blended normal, so the canopy lights as one volume. As a card shrinks on
 screen its leaves merge into its plain outline, so distant canopies never
 sparkle, and a card seen edge-on fades out. Cards drop and wither one by one
 as vitality falls, so a failing canopy thins before it goes bare. Cards cast
 their scalloped outlines as shadows, so sun falls through between them.
+
+Bushes are leafy mounds built the same way: layered leaf cards over clumps
+at every stem tip, down to the soil, over a dark core that hides the frame.
+They shade as one volume, bright on top and at the rim, dark underneath and
+inside, so they sit in the turf. Their blossoms are small cupped five-petaled
+flowers in loose trusses, and berries are small. As vitality falls the cards
+drop one by one and brown, the core goes, and bare twigs show.
 
 ## Scale
 
@@ -67,7 +80,8 @@ instance within it:
 | Small tree | 3 to 6 m |
 | Tall tree | 8 to 16 m |
 | House | 5 to 9 m |
-| Landmark | 12 to 30 m |
+| Tower | 8 to 19 m, taller with more depending on it |
+| Landmark | 12 to 30 m; a ring of standing stones 3 to 8 m, 10 to 20 m across |
 
 ## Terrain
 
@@ -108,20 +122,37 @@ world's edge is a gentle rim. Past it, one ring of low-detail wild land runs
 on to 1.5 km, continuing the rim's height and settling into a gentle roll of
 at most 6 m, colored by the nearest region's cover. It is never walkable.
 
-A person can wade but never goes under water. Walking slows as the water
-deepens, to 40% of its pace at 1.1 m, and a step that would end where the
-water is 1.2 m deep slides along the edge instead; eyes stay 1.6 m above the
-ground. `walkStep` and `waterDepthAt` in `@gaia/terrain` are pure, so tests
+Water never stops a person, and they never go under. Walking slows as the
+water deepens, to 40% of its pace at 1.1 m; deeper, the feet leave the
+bottom by 1.5 m and the person swims at 30% of the pace. Eyes stay 1.6 m
+above the ground until the water nears them, then ease down as the bottom
+falls away until they float 0.3 m above the surface, and rise again the same
+way climbing out: the eye height is a smooth function of depth, so it never
+jumps. A swimmer bobs gently, 3 cm every 2.8 s, and the wading rings go on.
+At night a swimmer holds the lantern just above the water.
+
+Solid things stop a person: tree trunks at the bark of their base, rocks and
+bushes by their outlines at the ground (all of a rock; the heart of a bush,
+so the walk brushes its outer leaves), and a house's walls. A stone lower
+than half a meter is stepped over, and drifts of flowers are walked through.
+Each solid is the convex hull of its outline, so a step that would end in one
+slides along its edge without catching: pushing straight at a trunk stops,
+pushing at an angle slides around it. The body keeps 0.4 m from every edge.
+`walkStep`, `stanceAt` and `solidsOf` in `@gaia/terrain` are pure, so tests
 check every step.
 
 A person walks by tapping or clicking the ground, the same with a mouse, a
-trackpad or a thumb, and drags to look. The walk goes straight to the spot at
-4.2 m/s, jogs at 1.8 times that while more than 25 m remain, easing back to a
-walk by 15 m, and ends within 1.5 m of the spot, so a tap that close to where
-the person stands stops them. A glancing brush with deep water slides past
-it; deep water across the way ends the walk at its edge. The view never turns
-on its own. A faint ring marks the spot and fades when the walk ends.
-`walkToward` in `@gaia/terrain` takes each step.
+trackpad or a thumb, and drags to look. The walk plans its way around
+whatever stands between (straight when nothing does), follows it at 4.2 m/s,
+jogs at 1.8 times that while more than 25 m remain, easing back to a walk by
+15 m, and ends within 1.5 m of the spot, so a tap that close to where the
+person stands stops them. It heads for a point 1.2 m ahead along its way, so
+it rounds each corner in a curve. A tap across a pond swims all the way
+across. A tap on a rock or a bush walks up to the face that was tapped; when
+solids ring the spot, the walk ends at the nearest place it can reach. The
+view never turns on its own. A faint ring marks where the walk will end and
+fades when it does. `planWalk` and `walkToward` in `@gaia/terrain` plan and
+take each step.
 
 Streams run downstream along the flow solved from their bed (`streamFlow`
 and `flowAt` in `@gaia/terrain`), faster where the channel narrows or the
@@ -171,12 +202,130 @@ on the horizon rise out of its haze. `skyColorAt` and `aerialAt` in
 
 ## Buildings
 
-A building stands on a pad leveled into the baked ground under it and its
-yard, blending back into the land over 7 m, and its foundation reaches
-1.4 m below, so it never floats and never shows a gap. Grass is cleared
-under the house and along the walk to its door, and its walls stop the
-walk. A cottage stays under 25,000 triangles and draws one mesh per
-swatch, about ten calls.
+A building stands for an entity. A building stands on a pad leveled into
+the baked ground under it and its yard, blending back into the land over
+7 m, and its foundation reaches 1.4 m below, so it never floats and never
+shows a gap. Grass is cleared under the house and along the walk to its
+door, and its walls stop the walk. A building stays under 32,000 triangles
+and draws one mesh per swatch, at most eleven calls.
+
+A feature sets a building apart and says what its entity does, on the side
+the chimney leaves free. A mill's waterwheel turns in a stone-lined pit, fed
+by a flume on trestles or pushed round by the race, about once every nine
+seconds; it slows as vitality falls and stands still below 0.1. An
+archive's tower rises from the back corner, rendered between stone quoins,
+taller the more of the code depends on it, its narrow windows lamplit at
+night under a steep cap or an open lantern room whose lamp burns after dusk.
+
+A failing building falls to ruin, and reads from 40 m. It gives way first
+at the front corner away from the door, where a person walking up sees it:
+
+| Vitality | What shows |
+| --- | --- |
+| 1 | Whole and lived in: lit windows, smoke, flowers |
+| 0.5 | Tired: plaster falls in patches, the first holes in the roof's eaves, ivy at the corners, the door ajar, a shutter hanging, long grass |
+| 0.2 | Failing: the roof rotted through over bare rafters, walls holed and timbers fallen at the weak corner, rubble below, windows broken or boarded, the chimney toppling, the flower boxes down |
+| 0.05 | A ruin: most of the covering gone, the chimney lying across the ridge, ivy to the eaves, rank grass and rubble all round, a tower's top and lantern fallen |
+
+Every one of these is a vitality channel on the pieces the primitives
+already build, so nothing is rebuilt and nothing pops. Ivy and the moss on
+a ruin keep the family's moss green: nature takes a ruin back, rather than
+everything turning grey.
+
+## Signs and cards
+
+Everything that stands for code says so in the world. A building has a
+wooden signboard on a post at the end of its walk, facing anyone coming up
+it, with its entity's name and what it is painted on; a tree has a small
+plaque on a stake at its foot with its file's name. Signs are always there:
+a name becomes readable as a person comes near, as a real sign's does, and
+the lantern lights it at night. Nothing fades in or appears. A sign follows
+the vitality of what it names: its paint fades and flakes, its wood greys
+and it leans on its post. All signs draw as one instanced mesh.
+
+Tapping a building, a tree or a sign walks the person up to it (to the end
+of a building's walk, or just outside a tree's crown on their side), and
+when they arrive a card opens: in the panel on a wide screen, in the sheet
+on a phone. A thing already close is shown at once. A new tap or a key
+cancels the walk and the card stays shut. The view never turns on its
+own. The card reads like a page from a field guide: what kind of thing it
+is, its name, what it does, where it lives in the code, its size, what it
+leans on and what leans on it, what it stands as in the world, and its
+vitality in words (thriving, healthy, tired, failing, in ruins) with the
+signals behind it, each with its reading.
+
+## Trails
+
+A trail is a `link`: a dependency between two files that Jev judges a
+person would walk between. Jev fills only the trail's look, through
+`trail@1`'s closed fields: its width (a narrow footpath to a broad cart
+track), how worn its tread is, whether stones line its edges, how freely
+it wanders, and whether it crosses a stream on stepping stones or a small
+footbridge. Jev never draws the route. `planTrails` in `@gaia/terrain`
+finds it over the baked ground: the cheapest way at a gentle grade, around
+steep ground, ponds and deep water, across a stream where it is narrow, and
+wandering off the easiest line by a seeded field as far as the winding
+allows. A later trail prefers ground an earlier one wore, so trails meet
+at junctions instead of running side by side. The same terrain, requests
+and seed always give the same trails.
+
+The ground under a tread eases toward the tread's own grade, averaged over
+14 m, and blends back into the land over 2.6 m, as a cottage's pad does; a
+trail on a hillside benches gently into it, and no sample moves more than
+55 cm. Water and its banks are never touched. The tread is worn earth from
+the cover's own soil, darker down the trodden middle, with a ragged edge;
+just outside it the grass is dulled and trampled shorter. Blades part along
+the tread: each stands only past its own seeded edge, so the border is
+ragged, and a faint trail keeps more blades on it. Trees keep 1.6 m off a
+tread and the understory half a meter. A footbridge's deck and stepping
+stones are walkable. Planks go missing and rails sag as vitality falls.
+
+## Landmarks
+
+A landmark is a great thing a person steers by: a lookout tower, a ring of
+standing stones, or a great old tree. It stands for the one file a region
+is organized around, and Jev chooses the form. `findLandmarkSite` puts it
+on the most prominent gentle, dry ground of its region, a knoll or a rise
+near the region's heart, and levels its footprint into the land. Each
+reads as a silhouette through the haze from 300 m and more, and declines
+by breaking, not by fading:
+
+- A tower's blocks fall from the top down, each at its own seeded
+  threshold, so a failing tower is a jagged stump. Its roof goes first and
+  its lit windows go out one by one; an open lantern room glows at night
+  like a beacon.
+- A ring of standing stones loses its lintels first; then stones lean and
+  break off at a seeded height.
+- A great tree drops its leaves, sags and greys to a bare snag.
+
+A world stands a few landmarks, more for more regions (about 1.4 times the
+square root of the region count: seven in a full world of 22 regions), on
+regions spread far apart; when a world wants more than there are forms,
+forms repeat. Buildings' floors and walks and landmarks' feet clear the
+grass through the same mask as the understory, so a world may hold any
+number of them.
+
+## Detail at a distance
+
+A person sees everything around them, near things in full and far things
+thinned, and nothing ever appears, vanishes or changes shape as they move.
+Every piece of a component (a leaf card, a limb, a petal) leaves whole at
+its own seeded distance from the eye, smaller pieces first: a piece starts to
+thin 720 times its size away, where it covers about a pixel, shrinks to its
+center over the last 15% before it leaves, and draws nothing past that. Of
+the pieces of one size, the share still there at a distance d past their
+start is (start / d)², and each has grown by d / start, so together they
+cover what the full detail would: a drift of daisies keeps its white far off
+while its petals thin. A drift's petals start to thin about 14 m off; a
+tree's finest twigs and blossoms between 30 and 120 m, and most of its leaf
+cards near 300 m. A copy switches to a coarser level only where every piece that
+level leaves out has already left, so the switch changes no pixel. Shadows
+and the mirror show the same pieces as the view, measured from the same eye.
+
+A pass draws only the cells its camera sees. The sun's shadow map covers a
+box around the person, so only casters inside that box draw into it: its cost
+stays bounded however large the world grows, and nothing outside it could
+cast into it.
 
 ## Composition budgets
 
@@ -188,8 +337,10 @@ swatch, about ten calls.
 | Tree spacing | at least one crown width between trunks |
 
 Jev decides which dependencies become routes; when it wants more than the
-budget allows, the most probable win. The world must never be dominated by
-paths.
+budget allows, the most probable win. `planTrails` routes trails most wanted
+first and keeps each only while every region it crosses stays within both
+route budgets, so the world is never dominated by paths. Landmarks stand
+about a quarter of the world's width apart.
 
 ## Understory
 
@@ -204,10 +355,17 @@ downhill side still touches the soil; a drift lies on the ground's plane, so
 its stems stay upright. Rocks are half sunk by construction. Moss caps their
 upward faces and recedes, edges first, drying to lichen grey as vitality
 falls; the stone bleaches, and a boulder's two halves slump apart along a
-fissure, so it cracks. No blade of grass grows under a stone or through a bush's heart: a
+fissure, so it cracks. Moss ends along a soft, winding edge that follows its
+own depth across the stone, never the stone's facets, and that edge creeps
+back toward each patch's heart as vitality falls. No blade of grass grows under a stone or through a bush's heart: a
 mask of each one's outline at the ground clears it, so grass grows up
 against a rock and never pierces it. Each blueprint draws as one instanced
-mesh per part, and drifts cast no shadow.
+mesh per part and level of detail, and drifts cast no shadow. Neighbors never look stamped: each
+rock blueprint is built from two seeds and each bush from three (a variant
+is one more instanced mesh per part), and every copy also varies its own
+shape in the shader, seeded by where it stands: a little taller or squatter,
+a lean, and a bulge to one side that grows from nothing at the ground, so the
+cleared footprint still fits.
 
 ## Clouds
 
@@ -238,8 +396,10 @@ grass and water agree:
   sinks past the point where its light ends, so the switch never shows.
 - **The lantern.** The person carries a candle-orange lantern at hand height,
   a little ahead and to the right. Its pool is about 12 m across and fades
-  smoothly to nothing, with no edge; colors come back inside it. It lights
-  surfaces only, never the air. It fades in through dusk, sways a few
+  smoothly to nothing, with no edge; colors come back inside it. On pale,
+  muted surfaces such as stone it reads as warm amber rather than full
+  orange, which over the moon's blue floor would look salmon, and its
+  brightest light rolls off. It lights surfaces only, never the air. It fades in through dusk, sways a few
   centimeters with each stride and settles when the person stops. The Flora
   tab carries none, so plants are judged under the moon alone.
 - **The night sky** deepens to blue, keeping a trace of the world's own sky

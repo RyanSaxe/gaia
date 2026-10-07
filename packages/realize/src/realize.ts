@@ -142,6 +142,9 @@ export function mergeParts(parts: readonly Part[]): Part[] {
       base += p.shade.length;
     }
     const first = list[0] as Part;
+    /** An optional channel joins only if some part has it; parts without it read zeros. */
+    const optional = (name: "fall" | "grow" | "rot" | "spin", size: number): Partial<Part["channels"]> =>
+      list.some((p) => p.channels[name] !== undefined) ? { [name]: join((p) => p.channels[name] ?? new Float32Array(p.shade.length * size)) } : {};
     return {
       swatch: first.swatch,
       collision: first.collision,
@@ -151,6 +154,22 @@ export function mergeParts(parts: readonly Part[]): Part[] {
       shade: join((p) => p.shade),
       tint: join((p) => p.tint),
       cutout: join((p) => p.cutout),
+      // Each joined part's pieces are numbered on from the last one's.
+      piece: (() => {
+        const out = join((p) => p.piece);
+        let at = 0;
+        let offset = 0;
+        for (const p of list) {
+          let top = -1;
+          for (let i = 0; i < p.piece.length; i += 2) {
+            out[at + i] = (p.piece[i] as number) + offset;
+            top = Math.max(top, p.piece[i] as number);
+          }
+          at += p.piece.length;
+          offset += top + 1;
+        }
+        return out;
+      })(),
       channels: {
         loss: join((p) => p.channels.loss),
         droop: join((p) => p.channels.droop),
@@ -158,6 +177,10 @@ export function mergeParts(parts: readonly Part[]): Part[] {
         glow: join((p) => p.channels.glow),
         pivot: join((p) => p.channels.pivot),
         close: join((p) => p.channels.close),
+        ...optional("fall", 4),
+        ...optional("grow", 1),
+        ...optional("rot", 1),
+        ...optional("spin", 3),
       },
     };
   });

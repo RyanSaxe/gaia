@@ -58,7 +58,7 @@ const DECLINE = { bark: 0x6f6a64, leaf: 0x9a8a5c, bloom: 0x8c7a66, stone: 0xbcb5
  * chimney smoke. Each family's buildings belong with its plants.
  */
 const BUILDING: Record<PaletteFamily, { wall: number; timber: number; roof: number; masonry: number; trim: number; glass: number }> = {
-  "spring-meadow": { wall: 0xf1e4c8, timber: 0x6b4f3a, roof: 0xa88a58, masonry: 0xa89d8a, trim: 0x7fa36a, glass: 0xffbf66 },
+  "spring-meadow": { wall: 0xf1e4c8, timber: 0x6b4f3a, roof: 0x8f7f62, masonry: 0xa89d8a, trim: 0x7fa36a, glass: 0xffbf66 },
   "deep-forest": { wall: 0xd9c9a8, timber: 0x3f2e22, roof: 0x8a7a4c, masonry: 0x878274, trim: 0x46704f, glass: 0xffb85c },
   "teal-gold": { wall: 0xf2ede2, timber: 0x5b4a3a, roof: 0x4f8a86, masonry: 0xb0a48f, trim: 0xd9a443, glass: 0xffc46a },
   "autumn-ember": { wall: 0xe9c690, timber: 0x4a3426, roof: 0xa65a42, masonry: 0x9c8f80, trim: 0x9e3d2c, glass: 0xffb055 },

@@ -30,9 +30,19 @@ export interface Capsule {
 /** Meters over which a pad blends back into the land. */
 export const PAD_BLEND = 7;
 
-/** The yard in the building's own frame: the house, a margin around it, and the walk out front. */
-function yardOf(plan: BuildingPlan): { x0: number; x1: number; z0: number; z1: number } {
-  return { x0: -plan.width / 2 - 1.2, x1: plan.width / 2 + 1.2, z0: -plan.depth / 2 - 1.2, z1: plan.depth / 2 + 5.8 };
+/** A rectangle in the building's own frame, such as the reach of a mill wheel or a tower beside the house. */
+export interface Extent {
+  readonly x0: number;
+  readonly x1: number;
+  readonly z0: number;
+  readonly z1: number;
+}
+
+/** The yard in the building's own frame: the house, a margin around it, the walk out front, and anything beside it. */
+function yardOf(plan: BuildingPlan, beside: Extent | null = null): Extent {
+  const yard = { x0: -plan.width / 2 - 1.2, x1: plan.width / 2 + 1.2, z0: -plan.depth / 2 - 1.2, z1: plan.depth / 2 + 5.8 };
+  if (beside === null) return yard;
+  return { x0: Math.min(yard.x0, beside.x0 - 1), x1: Math.max(yard.x1, beside.x1 + 1), z0: Math.min(yard.z0, beside.z0 - 1), z1: Math.max(yard.z1, beside.z1 + 1) };
 }
 
 /** A point in the building's frame, in the world, as Three's rotation about y places it. */
@@ -57,8 +67,8 @@ export function insideFootprint(plan: BuildingPlan, site: BuildingSite, x: numbe
 }
 
 /** The yard's samples, every `step` meters, in the world. */
-function yardSamples(plan: BuildingPlan, site: BuildingSite, step: number, grow = 0): [number, number][] {
-  const y = yardOf(plan);
+function yardSamples(plan: BuildingPlan, site: BuildingSite, step: number, grow = 0, beside: Extent | null = null): [number, number][] {
+  const y = yardOf(plan, beside);
   const out: [number, number][] = [];
   for (let lz = y.z0 - grow; lz <= y.z1 + grow + 1e-6; lz += step) {
     for (let lx = y.x0 - grow; lx <= y.x1 + grow + 1e-6; lx += step) out.push(siteToWorld(site, lx, lz));
@@ -68,9 +78,11 @@ function yardSamples(plan: BuildingPlan, site: BuildingSite, step: number, grow 
 
 /**
  * The gentlest dry spot near the middle reach of a stream, its door facing
- * the water; without streams, the gentlest dry spot inside the world.
+ * the water; without streams, the gentlest dry spot inside the world. A
+ * site keeps `apart` meters from every site already `taken`, and its yard
+ * covers `beside` too.
  */
-export function findSite(t: Terrain, plan: BuildingPlan): BuildingSite {
+export function findSite(t: Terrain, plan: BuildingPlan, taken: readonly BuildingSite[] = [], apart = 30, beside: Extent | null = null): BuildingSite {
   const half = t.spec.size / 2 - 34;
   const candidates: { x: number; z: number; yaw: number }[] = [];
   for (const stream of t.streams) {
@@ -93,16 +105,21 @@ export function findSite(t: Terrain, plan: BuildingPlan): BuildingSite {
       }
     }
   }
-  if (candidates.length === 0) {
-    for (let z = -half; z <= half; z += 12) for (let x = -half; x <= half; x += 12) candidates.push({ x, z, yaw: Math.atan2(-x, -z) });
-  }
+  const everywhere: { x: number; z: number; yaw: number }[] = [];
+  for (let z = -half; z <= half; z += 12) for (let x = -half; x <= half; x += 12) everywhere.push({ x, z, yaw: Math.atan2(-x, -z) });
+  // Beside the water first; anywhere in the world when the banks are full.
+  return gentlest(t, plan, candidates, taken, apart, beside, half) ?? gentlest(t, plan, everywhere, taken, apart, beside, half) ?? { x: 0, z: 0, yaw: 0, level: heightAt(t.lattice, 0, 0) };
+}
+
+function gentlest(t: Terrain, plan: BuildingPlan, candidates: readonly { x: number; z: number; yaw: number }[], taken: readonly BuildingSite[], apart: number, beside: Extent | null, half: number): BuildingSite | null {
   let best: BuildingSite | null = null;
   let bestScore = Infinity;
   for (const c of candidates) {
     if (Math.abs(c.x) > half || Math.abs(c.z) > half) continue;
+    if (taken.some((o) => Math.hypot(o.x - c.x, o.z - c.z) < apart)) continue;
     const site: BuildingSite = { ...c, level: 0 };
-    const pts = yardSamples(plan, site, 1.5);
-    if (yardSamples(plan, site, 2, 2.5).some(([x, z]) => heightAt(t.lattice, x, z, t.waterLevel) > DRY / 2)) continue;
+    const pts = yardSamples(plan, site, 1.5, 0, beside);
+    if (yardSamples(plan, site, 2, 2.5, beside).some(([x, z]) => heightAt(t.lattice, x, z, t.waterLevel) > DRY / 2)) continue;
     let lo = Infinity;
     let hi = -Infinity;
     let sum = 0;
@@ -117,13 +134,13 @@ export function findSite(t: Terrain, plan: BuildingPlan): BuildingSite {
       best = { ...c, level: sum / pts.length };
     }
   }
-  return best ?? { x: 0, z: 0, yaw: 0, level: heightAt(t.lattice, 0, 0) };
+  return best;
 }
 
 /** Levels the lattice under the yard to the site's level, blending back to the land over PAD_BLEND meters. */
-export function levelPad(t: Terrain, plan: BuildingPlan, site: BuildingSite): void {
+export function levelPad(t: Terrain, plan: BuildingPlan, site: BuildingSite, beside: Extent | null = null): void {
   const l = t.lattice;
-  const y = yardOf(plan);
+  const y = yardOf(plan, beside);
   const cx = (y.x0 + y.x1) / 2;
   const cz = (y.z0 + y.z1) / 2;
   const hx = (y.x1 - y.x0) / 2;

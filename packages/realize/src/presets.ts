@@ -41,7 +41,7 @@ export const FLORA_PRESETS: readonly Preset[] = [
         params: { habit: "spreading", density: "moderate branching", spread: "wide", stature: "squat and broad" },
       },
       bark: { use: "bark@1", params: { roughness: "smooth" } },
-      crown: { use: "leaf-clumps@1", params: { shape: "round", size: "medium", fullness: "full" } },
+      crown: { use: "leaf-clumps@1", params: { shape: "round", leaf: "oval", size: "medium", fullness: "full" } },
       bloom: { use: "blossoms@1", params: { form: "petals", count: "covered in them" } },
       motion: { use: "sway@1", params: { stiffness: "gently swaying", rhythm: "gentle" } },
       palette: { use: "palette@1", params: { family: "cherry-blossom", contrast: "balanced" } },
@@ -55,14 +55,14 @@ export const FLORA_PRESETS: readonly Preset[] = [
         params: { habit: "upright", density: "dense, fine twigwork", spread: "open", stature: "balanced" },
       },
       bark: { use: "bark@1", params: { roughness: "lightly textured" } },
-      crown: { use: "leaf-clumps@1", params: { shape: "round", size: "large", fullness: "dense and lush" } },
+      crown: { use: "leaf-clumps@1", params: { shape: "round", leaf: "lobed", size: "large", fullness: "dense and lush" } },
       motion: { use: "sway@1", params: { stiffness: "gently swaying", rhythm: "gentle" } },
       palette: { use: "palette@1", params: { family: "autumn-ember", contrast: "balanced" } },
     }),
   },
 ];
 
-/** Hand-filled structure blueprints: cottages Jev might choose for central files. */
+/** Hand-filled structure blueprints: buildings Jev might choose for entities, from cottages to a mill and an archive tower. */
 export const STRUCTURE_PRESETS: readonly Preset[] = [
   {
     name: "Thatched cottage",
@@ -104,6 +104,36 @@ export const STRUCTURE_PRESETS: readonly Preset[] = [
       openings: { use: "casements@1", params: { panes: "four panes", shutters: true, door: "arched" } },
       ornaments: { use: "cottage-garden@1", params: { extras: ["flower boxes", "fence", "lantern"], walk: "stepping stones" } },
       palette: { use: "palette@1", params: { family: "autumn-ember", contrast: "balanced" } },
+    }),
+  },
+  {
+    name: "Watermill",
+    blueprint: identify("structure", {
+      footprint: {
+        use: "cottage-plan@1",
+        params: { shape: "long", size: "roomy", roofline: "steep", windows: "several", base: "on a stone plinth", character: "gently settled" },
+      },
+      body: { use: "fieldstone@1", params: { stones: "mixed sizes", gables: "boards" } },
+      roof: { use: "tiles@1", params: { covering: "shingles", overhang: "sheltering", chimney: "gable" } },
+      feature: { use: "waterwheel@1", params: { wheel: "a great wheel", drive: "overshot" } },
+      openings: { use: "casements@1", params: { panes: "six panes", shutters: true, door: "plank" } },
+      ornaments: { use: "cottage-garden@1", params: { extras: ["lantern", "woodpile"], walk: "flagstones" } },
+      palette: { use: "palette@1", params: { family: "teal-gold", contrast: "balanced" } },
+    }),
+  },
+  {
+    name: "Archive tower",
+    blueprint: identify("structure", {
+      footprint: {
+        use: "cottage-plan@1",
+        params: { shape: "snug", size: "modest", roofline: "tall and steep", windows: "several", base: "raised up steps", character: "gently settled" },
+      },
+      body: { use: "timber-frame@1", params: { framing: "close studding", plaster: "hand-laid" } },
+      roof: { use: "tiles@1", params: { covering: "slates", overhang: "sheltering", chimney: "gable" } },
+      feature: { use: "tower@1", params: { height: "tall", cap: "lantern" } },
+      openings: { use: "casements@1", params: { panes: "six panes", shutters: false, door: "arched" } },
+      ornaments: { use: "cottage-garden@1", params: { extras: ["flower boxes", "lantern"], walk: "flagstones" } },
+      palette: { use: "palette@1", params: { family: "bluebell-wood", contrast: "balanced" } },
     }),
   },
 ];
@@ -292,4 +322,67 @@ export const FLOWER_PRESETS: readonly Preset[] = [
   { name: "Lupines", blueprint: flowersOf("spikes@1", { spread: "a patch", density: "a good showing", height: "tall" }, "bluebell-wood") },
   { name: "Marigolds", blueprint: flowersOf("cups@1", { spread: "a wide drift", density: "a thick carpet", height: "low among the grass" }, "teal-gold") },
   { name: "Pink asters", blueprint: flowersOf("daisies@1", { spread: "a patch", density: "a thick carpet", height: "knee-high" }, "cherry-blossom") },
+];
+
+/** Hand-filled landmarks: one of each primitive, as Jev might answer for a region's central file. */
+export const LANDMARK_PRESETS: readonly Preset[] = [
+  {
+    name: "Lantern tower",
+    blueprint: identify("landmark", {
+      form: { use: "lookout-tower@1", params: { height: "a lookout tower", shape: "round", crown: "an open lantern room", masonry: "dressed blocks" } },
+      palette: { use: "palette@1", params: { family: "spring-meadow", contrast: "balanced" } },
+    }),
+  },
+  {
+    name: "Stone ring",
+    blueprint: identify("landmark", {
+      form: { use: "standing-stones@1", params: { count: "a ring", height: "towering", lintels: true, centre: "a tall king stone", facets: "softly faceted" } },
+      palette: { use: "palette@1", params: { family: "silver-birch", contrast: "balanced" } },
+    }),
+  },
+  {
+    name: "Great oak",
+    blueprint: identify("landmark", {
+      form: { use: "great-tree@1", params: { form: "a spreading oak", size: "vast", fullness: "dense and lush", bark: "deeply furrowed" } },
+      motion: { use: "sway@1", params: { stiffness: "stiff", rhythm: "slow" } },
+      palette: { use: "palette@1", params: { family: "deep-forest", contrast: "balanced" } },
+    }),
+  },
+  {
+    name: "Battlemented keep",
+    blueprint: identify("landmark", {
+      form: { use: "lookout-tower@1", params: { height: "a tall tower", shape: "square", crown: "battlements", masonry: "great rough blocks" } },
+      palette: { use: "palette@1", params: { family: "desert-sage", contrast: "balanced" } },
+    }),
+  },
+  {
+    name: "Great willow",
+    blueprint: identify("landmark", {
+      form: { use: "great-tree@1", params: { form: "a great willow", size: "great", fullness: "full", bark: "gnarled and burred" } },
+      motion: { use: "sway@1", params: { stiffness: "gently swaying", rhythm: "slow" } },
+      palette: { use: "palette@1", params: { family: "lantern-dusk", contrast: "balanced" } },
+    }),
+  },
+];
+
+/** Hand-filled trail looks. */
+export const TRAIL_PRESETS: readonly Preset[] = [
+  {
+    name: "Worn footpath",
+    blueprint: identify("link", {
+      route: { use: "trail@1", params: { width: "a path two could walk", wear: "well trodden", edging: "none", winding: "gently curving", crossing: "footbridge" } },
+    }),
+  },
+  {
+    name: "Stone-edged path",
+    blueprint: identify("link", {
+      route: { use: "trail@1", params: { width: "a path two could walk", wear: "bare, beaten earth", edging: "stones", winding: "gently curving", crossing: "stepping stones" } },
+    }),
+  },
+  {
+    name: "Faint wandering track",
+    blueprint: identify("link", {
+      route: { use: "trail@1", params: { width: "a narrow footpath", wear: "faint, half grassed over", edging: "none", winding: "meandering", crossing: "stepping stones" } },
+    }),
+  },
 ];

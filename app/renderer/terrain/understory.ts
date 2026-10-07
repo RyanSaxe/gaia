@@ -1,7 +1,8 @@
 // The terrain lab's understory: rocks in groups, bushes in thickets and
 // drifts of wildflowers, scattered by @gaia/terrain and drawn as one
-// InstancedMesh per part of each blueprint, so a hundred bushes cost a
-// handful of draw calls. Placement reruns whenever the land is rebaked.
+// InstancedMesh per part and level of detail of each blueprint, so a hundred
+// bushes cost a handful of draw calls, and each pass draws only the cells it
+// can see. Placement reruns whenever the land is rebaked.
 
 import * as THREE from "three";
 import { type AnyKind, type Library, seedOf } from "@gaia/schema";
@@ -25,12 +26,21 @@ interface Group {
   readonly landforms: Readonly<Record<string, number>>;
 }
 
+/**
+ * Each preset built from `n` seeds, so neighbors of one blueprint differ in
+ * shape and not only in turn, size and hue. A variant is one more build and
+ * one more instanced mesh per part; the shader varies each copy a little more.
+ */
+const seeded = (presets: readonly Preset[], weights: readonly number[], n: number): { presets: readonly Preset[]; weights: readonly number[] } => ({
+  presets: Array.from({ length: n }, () => presets).flat(),
+  weights: Array.from({ length: n }, () => weights.map((w) => w / n)).flat(),
+});
+
 const GROUPS: readonly Group[] = [
   {
     id: "rocks",
     kind: rock,
-    presets: ROCK_PRESETS,
-    weights: [3, 0.5, 1, 2, 1, 0.7],
+    ...seeded(ROCK_PRESETS, [3, 0.5, 1, 2, 1, 0.7], 2),
     casts: true,
     clears: 0.92,
     rule: { groups: 3.5, members: [1, 4], spread: 6, mix: "member", scale: [0.7, 1.25], maxSlope: 22, waterClearance: 1.5, ground: "lowest", sink: 0.05 },
@@ -39,8 +49,7 @@ const GROUPS: readonly Group[] = [
   {
     id: "shrubs",
     kind: flora,
-    presets: SHRUB_PRESETS,
-    weights: [1, 1, 0.7, 0.6],
+    ...seeded(SHRUB_PRESETS, [1, 1, 0.7, 0.6], 3),
     casts: true,
     clears: 0.55,
     rule: { groups: 5, members: [1, 5], spread: 5, mix: "member", scale: [0.75, 1.2], maxSlope: 24, waterClearance: 2, ground: "lowest", sink: 0.06 },
@@ -49,8 +58,7 @@ const GROUPS: readonly Group[] = [
   {
     id: "flowers",
     kind: wildflowers,
-    presets: FLOWER_PRESETS,
-    weights: [1.2, 1, 0.8, 0.8, 0.8, 0.7],
+    ...seeded(FLOWER_PRESETS, [1.2, 1, 0.8, 0.8, 0.8, 0.7], 1),
     casts: false,
     clears: 0,
     rule: { groups: 6.5, members: [2, 5], spread: 7, mix: "group", scale: [0.8, 1.15], maxSlope: 20, waterClearance: 1, ground: "plane", sink: 0.02 },
@@ -93,34 +101,42 @@ function footprintOf(plant: Realized): number {
 }
 
 export interface Understory {
-  /** The rules and seed `place` scatters with, as plain data, so a bake thread can scatter ahead of time. */
-  plan(world: WorldSpec): { rules: ScatterRule[]; seed: number };
+  /** The rules and seed `place` scatters with, as plain data, so a bake thread can scatter ahead of time; `density` multiplies every group's count. */
+  plan(world: WorldSpec, density?: number): { rules: ScatterRule[]; seed: number };
   /**
    * Scatters everything again over freshly baked land, keeping clear of the
-   * trees; or, given `placed` (what `plan`'s rules and seed gave on this land
-   * elsewhere), stands those.
+   * trees, at `density` times every group's count; or, given `placed` (what
+   * `plan`'s rules and seed gave on this land elsewhere), stands those.
    */
-  place(terrain: Terrain, world: WorldSpec, trees: readonly Occupied[], placed?: readonly Placement[]): void;
+  place(terrain: Terrain, world: WorldSpec, trees: readonly Occupied[], density?: number, placed?: readonly Placement[]): void;
   /** Instances that cast into the sun's shadow map. */
   readonly casters: () => readonly PlantInstances[];
   /** Objects the shadow pass hides: drifts of flowers are too fine to cast. */
   readonly quiet: () => readonly THREE.Object3D[];
+  /** Every instanced blueprint, for culling each pass and forcing detail. */
+  readonly all: () => readonly PlantInstances[];
   readonly placements: () => readonly Placement[];
+  /** A placed component's reach at the ground in 48 directions and its top above its origin, at scale 1, by the rule and variant its placement names. */
+  readonly footprint: (rule: string, variant: number) => { readonly outline: Float32Array; readonly top: number } | undefined;
   /** Shows or hides everything, for comparing frame costs. */
   show(on: boolean): void;
-  readonly stats: () => { placed: Record<string, number>; triangles: number; meshes: number };
+  /** What was placed, its triangles at full detail, its meshes, and the triangles the last pass drew. */
+  readonly stats: () => { placed: Record<string, number>; triangles: number; meshes: number; drawn: number };
 }
 
 export function createUnderstory(scene: THREE.Scene, light: SceneLight, lib: Library, clearings: Clearings): Understory {
   const built = GROUPS.map((g) => {
     const plants = g.presets.map((p, i) => realize(p.blueprint, g.kind, lib, { seed: seedOf(`terrain-lab/${g.id}/${i}`), facts: { scale: 1, age: 120 } }));
-    return { group: g, plants, radii: plants.map(footprintOf), outlines: plants.map((p) => outlineOf(p).map((r) => r * g.clears)) };
+    const reach = plants.map(outlineOf);
+    const tops = plants.map((p) => p.parts.reduce((top, part) => part.positions.reduce((t, v, i) => (i % 3 === 1 ? Math.max(t, v) : t), top), 0));
+    return { group: g, plants, radii: plants.map(footprintOf), reach, tops, outlines: reach.map((o) => o.map((r) => r * g.clears)) };
   });
   let views: { group: Group; view: PlantInstances }[] = [];
   let placed: readonly Placement[] = [];
-  const plan = (world: WorldSpec): { rules: ScatterRule[]; seed: number } => ({
+  const plan = (world: WorldSpec, density = 1): { rules: ScatterRule[]; seed: number } => ({
     rules: built.map(({ group, radii }) => ({
       ...group.rule,
+      groups: group.rule.groups * density,
       id: group.id,
       variants: radii.map((radius, i) => ({ radius, weight: group.weights[i] ?? 1 })),
       regions: world.regions.map((r) => group.landforms[r.biome.slots.relief?.use ?? ""] ?? 1),
@@ -130,12 +146,12 @@ export function createUnderstory(scene: THREE.Scene, light: SceneLight, lib: Lib
 
   return {
     plan,
-    place(terrain, world, trees, given) {
+    place(terrain, world, trees, density = 1, given) {
       for (const v of views) v.view.dispose();
       views = [];
       if (given !== undefined) placed = given;
       else {
-        const { rules, seed } = plan(world);
+        const { rules, seed } = plan(world, density);
         placed = scatterComponents(terrain, rules, seed, trees);
       }
       clearings.update(
@@ -159,7 +175,13 @@ export function createUnderstory(scene: THREE.Scene, light: SceneLight, lib: Lib
     },
     casters: () => views.filter((v) => v.group.casts).map((v) => v.view),
     quiet: () => views.filter((v) => !v.group.casts).map((v) => v.view.object),
+    all: () => views.map((v) => v.view),
     placements: () => placed,
+    footprint: (rule, variant) => {
+      const b = built.find((x) => x.group.id === rule);
+      const outline = b?.reach[variant];
+      return b === undefined || outline === undefined ? undefined : { outline, top: b.tops[variant] ?? 0 };
+    },
     show(on) {
       for (const v of views) v.view.object.visible = on;
     },
@@ -167,6 +189,7 @@ export function createUnderstory(scene: THREE.Scene, light: SceneLight, lib: Lib
       placed: Object.fromEntries(GROUPS.map((g) => [g.id, placed.filter((p) => p.rule === g.id).length])),
       triangles: views.reduce((n, v) => n + v.view.triangles, 0),
       meshes: views.reduce((n, v) => n + v.view.object.children.length, 0),
+      drawn: views.reduce((n, v) => n + v.view.drawn().triangles, 0),
     }),
   };
 }

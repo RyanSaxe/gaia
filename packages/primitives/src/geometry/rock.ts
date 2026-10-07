@@ -2,9 +2,9 @@
 // faceted painterly stone, half sunk into the ground. Moss grows over their
 // upward faces and recedes, drying to lichen grey, as vitality falls.
 
-import type { Anchor, BuildContext, Built, Part, Rand, Resolved } from "@gaia/schema";
+import { type Anchor, type BuildContext, type Built, CUT, type Part, type Rand, type Resolved } from "@gaia/schema";
 import type { boulderParams, flatStoneParams, mossParams, outcropParams, stoneClusterParams } from "../rock.ts";
-import { PartBuilder, type V3, clamp, cross, fbm3, icosphere, normalize, sub } from "./kit.ts";
+import { PartBuilder, type V3, clamp, cross, cutOf, fbm3, icosphere, normalize, sub } from "./kit.ts";
 
 /** One stone's body in the rock's local frame. */
 interface Stone {
@@ -348,14 +348,18 @@ const GROWTH = {
 
 /**
  * Moss on every upward face of the stone below it: a skin lifted a few
- * centimeters off the surface where noise and the face's tilt agree. Each
- * small piece shrinks to its own center as vitality falls, the ragged edges
- * of a patch first and its heart last, and what remains dries to lichen grey.
+ * centimeters off the surface where noise and the face's tilt agree. The skin
+ * is a patch (`CUT.patch`): each vertex carries how deep in the patch it
+ * sits, and the shader ends the moss along a soft, winding contour of that
+ * depth, never along the stone's triangles. The skin thins to nothing at that
+ * edge, so it meets the stone flush. As vitality falls the edge creeps back
+ * toward each patch's heart and what remains dries to lichen grey.
  */
 export function buildMoss(p: Resolved<typeof mossParams>, ctx: BuildContext, base: Built): Built {
   const out = new PartBuilder("moss");
   const r = ctx.rand.fork("moss");
   const seed = Math.floor(r.next() * 1e6);
+  const cut = cutOf(CUT.patch, r.next());
   const g = GROWTH[p.growth];
   const stones: Part[] = base.parts.filter((part) => part.swatch === "stone");
   const threshold = 1.2 - p.cover * 1.15;
@@ -377,42 +381,51 @@ export function buildMoss(p: Resolved<typeof mossParams>, ctx: BuildContext, bas
       mask[i] = clamp((want - threshold + 0.15) / 0.3, 0, 1) * (y > 0.02 ? 1 : 0);
     }
     const idx = part.indices;
-    for (let t = 0; t < idx.length; t += 3) {
-      const a = idx[t] as number;
-      const b = idx[t + 1] as number;
-      const c = idx[t + 2] as number;
-      const m = ((mask[a] as number) + (mask[b] as number) + (mask[c] as number)) / 3;
-      if (m < 0.34 || Math.min(mask[a] as number, mask[b] as number, mask[c] as number) <= 0) continue;
-      const corners = [a, b, c].map((i) => [pos[i * 3] as number, pos[i * 3 + 1] as number, pos[i * 3 + 2] as number] as V3);
-      const ca = corners[0] as V3;
-      const cb = corners[1] as V3;
-      const cc = corners[2] as V3;
-      const center: V3 = [(ca[0] + cb[0] + cc[0]) / 3, (ca[1] + cb[1] + cc[1]) / 3, (ca[2] + cb[2] + cc[2]) / 3];
-      const heart = clamp((m - 0.34) / 0.5, 0, 1);
-      const jitter = fbm3(center[0] * 4.1, center[1] * 4.1, center[2] * 4.1, seed + 11, 1);
-      const loss = clamp(0.62 - 0.52 * heart + 0.08 * jitter, 0.04, 0.7);
-      const tint = clamp(0.05 * fbm3(center[0] * 0.7, center[1] * 0.7, center[2] * 0.7, seed + 13, 2), -0.06, 0.06);
-      // On a stone that slumps in decline, moss rides along with it; elsewhere it shrinks to its own center.
-      const sag = part.channels.droop[a] as number;
-      const pivot: V3 = sag > 0 ? [part.channels.pivot[a * 3] as number, part.channels.pivot[a * 3 + 1] as number, part.channels.pivot[a * 3 + 2] as number] : center;
-      [a, b, c].forEach((i, k) => {
-        const q = corners[k] as V3;
-        const n: V3 = [nrm[i * 3] as number, nrm[i * 3 + 1] as number, nrm[i * 3 + 2] as number];
-        const lump = 1 + g.lumps * fbm3(q[0] * 7, q[1] * 7, q[2] * 7, seed + 17, 2);
-        const lift = g.thick * (0.35 + 0.65 * (mask[i] as number)) * Math.max(0.3, lump);
-        const at: V3 = [q[0] + n[0] * lift, q[1] + n[1] * lift, q[2] + n[2] * lift];
-        out.vertex(at, n, g.shade + 0.18 * (mask[i] as number) + 0.12 * (lump - 1) + 0.08 * n[1], {
-          loss,
+    // The same vertex of the stone is the same vertex of the skin, so the skin stays smooth.
+    const skin = new Map<number, number>();
+    const skinVertex = (i: number): number => {
+      const hit = skin.get(i);
+      if (hit !== undefined) return hit;
+      const q: V3 = [pos[i * 3] as number, pos[i * 3 + 1] as number, pos[i * 3 + 2] as number];
+      const n: V3 = [nrm[i * 3] as number, nrm[i * 3 + 1] as number, nrm[i * 3 + 2] as number];
+      const m = mask[i] as number;
+      const lump = 1 + g.lumps * fbm3(q[0] * 7, q[1] * 7, q[2] * 7, seed + 17, 2);
+      const lift = 0.004 + g.thick * smoothstep(0.15, 0.75, m) * Math.max(0.3, lump);
+      const at: V3 = [q[0] + n[0] * lift, q[1] + n[1] * lift, q[2] + n[2] * lift];
+      const jitter = clamp(0.5 + 0.9 * fbm3(q[0] * 6.3, q[1] * 6.3, q[2] * 6.3, seed + 23, 2), 0, 1);
+      // On a stone that slumps in decline, moss rides along with it.
+      const sag = part.channels.droop[i] as number;
+      const pivot: V3 = [part.channels.pivot[i * 3] as number, part.channels.pivot[i * 3 + 1] as number, part.channels.pivot[i * 3 + 2] as number];
+      const v = out.vertex(
+        at,
+        n,
+        g.shade + 0.18 * m + 0.12 * (lump - 1) + 0.08 * n[1],
+        {
+          loss: 0,
           droop: sag,
           wither: 0.85,
           glow: 0,
           pivot,
-          tint,
-        });
-      });
-      const first = out.vertexCount - 3;
-      out.triangle(first, first + 1, first + 2);
+          tint: clamp(0.05 * fbm3(q[0] * 0.7, q[1] * 0.7, q[2] * 0.7, seed + 13, 2), -0.06, 0.06),
+        },
+        [m, jitter, cut],
+      );
+      skin.set(i, v);
+      return v;
+    };
+    for (let t = 0; t < idx.length; t += 3) {
+      const a = idx[t] as number;
+      const b = idx[t + 1] as number;
+      const c = idx[t + 2] as number;
+      // Only faces the patch's edge can reach: the shader cuts the rest of them away.
+      if (Math.max(mask[a] as number, mask[b] as number, mask[c] as number) < 0.12) continue;
+      out.triangle(skinVertex(a), skinVertex(b), skinVertex(c));
     }
   }
   return { parts: [out.part()], anchors: base.anchors };
 }
+
+const smoothstep = (lo: number, hi: number, x: number): number => {
+  const t = clamp((x - lo) / (hi - lo), 0, 1);
+  return t * t * (3 - 2 * t);
+};
