@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { EntityFacts } from "@gaia/schema";
-import { structure } from "@gaia/kinds";
+import { landmark, link, structure } from "@gaia/kinds";
 import { entityVitalityOf } from "@gaia/world";
 
 /** A package as the engine would describe it: the world package of this repository. */
@@ -42,5 +42,16 @@ describe("entities", () => {
     expect(large.floors).toBeGreaterThan(small.floors as number);
     expect(large.reach).toBe(1);
     expect(small.reach).toBeLessThan(0.5);
+  });
+
+  it("stands landmarks and trails for entities: a landmark rises with what depends on it, a trail joins two", () => {
+    expect([landmark.subject, link.subject]).toEqual(["entity", "link"]);
+    const lone = landmark.facts.scale?.(WORLD) as number;
+    const leaned = landmark.facts.scale?.({ ...WORLD, dependents: Array.from({ length: 12 }, (_, i) => `p${i}`) }) as number;
+    expect(leaned).toBeGreaterThan(lone);
+    const busy = link.facts.traffic?.({ from: WORLD, to: { ...WORLD, path: "packages/schema" }, importers: 9 }) as number;
+    const quiet = link.facts.traffic?.({ from: WORLD, to: { ...WORLD, path: "packages/schema" }, importers: 1 }) as number;
+    expect(busy).toBeGreaterThan(quiet);
+    expect(busy).toBeLessThanOrEqual(1);
   });
 });

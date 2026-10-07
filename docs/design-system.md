@@ -289,7 +289,7 @@ signals behind it, each with its reading.
 
 ## Trails
 
-A trail is a `link`: a dependency between two files that Jev judges a
+A trail is a `link`: a dependency between two entities that Jev judges a
 person would walk between. Jev fills only the trail's look, through
 `trail@1`'s closed fields: its width (a narrow footpath to a broad cart
 track), how worn its tread is, whether stones line its edges, how freely
@@ -313,11 +313,27 @@ ragged, and a faint trail keeps more blades on it. Trees keep 1.6 m off a
 tread and the understory half a meter. A footbridge's deck and stepping
 stones are walkable. Planks go missing and rails sag as vitality falls.
 
+A trail's wear follows the vitality of the two entities it joins, live.
+Near each end it takes that end's entity's vitality, and it blends between
+the two across the middle. Between thriving entities the tread is worn to
+bare earth, as far as its blueprint's wear says; toward a failing entity
+the grass grows back across it, its ragged edge closes and its earth fades
+into the cover, until a faint trace and its edging stones are all that mark
+the way. Where trails meet or share a tread, the more worn one shows, so
+no seam appears. A trail's footbridges, stepping stones and edging stones
+take its vitality where they stand. `trailWearAt` in `@gaia/terrain` is the
+CPU reference: the bake records which trail each ground sample lies on and
+how far along it (`trailPlaces`), and the ground and grass shaders read each
+trail's ends' vitality from a small texture, so a change in vitality never
+rebakes anything.
+
 ## Landmarks
 
 A landmark is a great thing a person steers by: a lookout tower, a ring of
-standing stones, or a great old tree. It stands for the one file a region
-is organized around, and Jev chooses the form. `findLandmarkSite` puts it
+standing stones, or a great old tree. It stands for an entity, as a
+building does: Jev decides which entities become landmarks (prominent ones
+much of the code leans on suit them) and which become buildings, and
+chooses the form. No rule fixes how many; its vitality is its entity's own. `findLandmarkSite` puts it
 on the most prominent gentle, dry ground of its region, a knoll or a rise
 near the region's heart, and levels its footprint into the land. Each
 reads as a silhouette through the haze from 300 m and more, and declines
@@ -331,10 +347,11 @@ by breaking, not by fading:
   break off at a seeded height.
 - A great tree drops its leaves, sags and greys to a bare snag.
 
-A world stands a few landmarks, more for more regions (about 1.4 times the
-square root of the region count: seven in a full world of 22 regions), on
-regions spread far apart; when a world wants more than there are forms,
-forms repeat. Buildings' floors and walks and landmarks' feet clear the
+Until worlds come from real code, the terrain lab stands a few landmarks,
+more for more regions (about 1.4 times the square root of the region count:
+seven in a full world of 22 regions), each for one of its sample entities,
+on regions spread far apart; when it wants more than there are forms, forms
+repeat. Buildings' floors and walks and landmarks' feet clear the
 grass through the same mask as the understory, so a world may hold any
 number of them.
 

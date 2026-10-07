@@ -22,7 +22,7 @@ the document that did not change renders exactly as it did before.
 | Main | TypeScript (Electron) | The window and the app's lifecycle. It starts the engine and the world service and restarts the engine if it exits. |
 | Engine | Rust (`gaia-engine`) | Files, parsing, git, test reports, the code model, the app-data store and the Jev client with the key from the macOS Keychain. |
 | World service | TypeScript (Electron utility process) | Kinds and primitives, the question planner, answer rules, vitality and the world document. |
-| Renderer | TypeScript | The UI, the Three.js scene, the realizer and the clock. In slice 1 the renderer is the lab. The terrain lab bakes its world on worker threads (`app/renderer/terrain/bake-worker.ts`): a few workers compose bands of lattice rows with `composeRows`, and one finishes the bake with `finishTerrain` and stands the world's things on it with `standWorld` (`app/renderer/terrain/stand.ts`): each building's site and pad, the landmarks' sites, the trails leveled into the ground, the trees and the understory, and the ground texture's data, so drawing never waits on a bake. Components are still realized on the main thread; the realizer is pure and worker-safe, so it can move into workers too. |
+| Renderer | TypeScript | The UI, the Three.js scene, the realizer and the clock. In slice 1 the renderer is the lab. The terrain lab bakes its world on worker threads (`app/renderer/terrain/bake-worker.ts`): a few workers compose bands of lattice rows with `composeRows`, and one finishes the bake with `finishTerrain` and stands the world's things on it with `standWorld` (`app/renderer/terrain/stand.ts`): each building's site and pad, the landmarks' sites, the trails leveled into the ground and which trail each ground sample lies on, the trees and the understory, and the ground texture's data, so drawing never waits on a bake. Components are still realized on the main thread; the realizer is pure and worker-safe, so it can move into workers too. |
 
 The world service talks to the engine in newline-delimited JSON-RPC 2.0 over
 the engine's stdin and stdout, relayed by the main process. Only small data
@@ -53,9 +53,9 @@ gives the reason next to each rule.
 A **primitive** is a pure procedural function with typed parameters and a
 role, such as `branching@1` (Skeleton) or `leaf-clumps@1` (Foliage). It is code,
 versioned in its ID. A **kind** declares slots by role and the subject it
-stands for: a file (`flora`, `rock`, `wildflowers`, `landmark`), an entity
-(`structure`), a region (`biome`), a dependency between two files (`link`) or
-the repository (`world`). A `link`'s blueprint fills only a trail's look; the
+stands for: a file (`flora`, `rock`, `wildflowers`), an entity
+(`structure`, `landmark`), a region (`biome`), a dependency between two
+entities (`link`) or the repository (`world`). A `link`'s blueprint fills only a trail's look; the
 terrain finds its route. A `structure`'s footprint lays out one
 `BuildingPlan`: the masses the building is joined from (each a block or a
 round turret with its own storeys and roof form: gable, hip, half-hip,
@@ -74,10 +74,15 @@ or a module (a directory whose index file gives it a public surface).
 report for each: its root path (its identity), name, form, manifest, entry,
 doc, size, exports, the entities it depends on and that depend on it, and
 its files' tests, diagnostics and git activity summed. Entities nest; each
-file belongs to its innermost one. Buildings stand for entities and plants
-for files. Jev decides which entities become buildings and which building
-suits each; the kind binds only numbers from the facts (size from lines,
-storeys from exports, a feature's reach from dependents).
+file belongs to its innermost one. Buildings and landmarks stand for
+entities, plants for files, and trails for dependencies between entities.
+Jev decides which entities become buildings, which become landmarks and
+which form suits each, with no rule fixing how many of either; the kinds
+bind only numbers from the facts (a building's size from lines, storeys from
+exports and a feature's reach from dependents; a landmark's scale from its
+dependents; a trail's traffic from how many of one entity's files import the
+other). `DependencyFacts` carries both entities' facts, so a trail can follow
+the vitality of each.
 A **blueprint** fills a kind: a primitive for each slot and a stored value for
 each parameter. An **instance** places a blueprint for one path. Jev
 generates blueprints and instances; people and agents write primitives and

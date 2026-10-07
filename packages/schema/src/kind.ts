@@ -1,4 +1,4 @@
-import type { EntityFacts, FileFacts, LinkFacts, RegionFacts, RepositoryFacts } from "./facts.ts";
+import type { DependencyFacts, EntityFacts, FileFacts, RegionFacts, RepositoryFacts } from "./facts.ts";
 import type { Role } from "./ports.ts";
 
 export interface Slot<R extends Role = Role> {
@@ -49,8 +49,8 @@ function feeds(output: string, input: string): boolean {
 
 /**
  * What a kind stands for: one file, one entity (a package, crate, service or
- * module), one directory's region, one dependency (a link), or the whole
- * repository.
+ * module), one directory's region, one dependency between two entities (a
+ * link), or the whole repository.
  */
 export type Subject = "file" | "entity" | "region" | "link" | "repository";
 
@@ -58,7 +58,7 @@ export interface SubjectFacts {
   file: FileFacts;
   entity: EntityFacts;
   region: RegionFacts;
-  link: LinkFacts;
+  link: DependencyFacts;
   repository: RepositoryFacts;
 }
 

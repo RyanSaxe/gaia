@@ -3,7 +3,8 @@ import { kind, slot } from "@gaia/schema";
 /**
  * A building that stands for one entity: a package, crate, service, app or
  * module with a name, a boundary and things that depend on it. Jev decides
- * which entities become buildings and which building suits each one. The
+ * which entities become buildings (and which landmarks) and which building
+ * suits each one. The
  * footprint lays out the plan; the body, roof, feature, openings and
  * ornaments all build on that one plan, so they agree by construction. The
  * body, roof and feature are settled first, so the openings and ornaments
@@ -14,7 +15,7 @@ export const structure = kind({
   subject: "entity",
   doc: "A lived-in building that stands for one entity of the code: a package, crate, service, app or module.",
   represents:
-    "Entities the rest of the code leans on: packages and crates others import, services and apps that run, and modules with a public surface. A building's feature says what the entity does: a mill for one that turns input into output, a tower for one that keeps records or watches over others.",
+    "Entities the rest of the code leans on: packages and crates others import, services and apps that run, and modules with a public surface. Jev chooses whether an entity stands as a building or a landmark: a lived-in, workaday one suits a building. Its massing, storeys and roofs say how big and how gathered it is, and its feature says what it does: a mill for one that turns input into output, a tower for one that keeps records or watches over others.",
   slots: {
     footprint: slot("Footprint"),
     body: slot("Walls", { on: "footprint" }),
