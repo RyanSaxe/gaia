@@ -87,8 +87,11 @@ The world should seem infinite, so the horizon never shows a line. One sky
 function, `skyColor(dir)` in the shared light chunk, colors both the dome and
 the air: the dome draws it and adds clouds, the sun, the moon and stars on
 top, and `aerial()` hazes every surface toward it along the same view ray.
-Near and middle distance take the local air's tint; farther, only the sky's
-own color remains, and land fully dissolves between 900 m and 1.4 km. Dome
+Near and middle distance take the local air's tint, lit by the sky behind
+it; farther, only the sky's own color remains, and land fully dissolves
+between 900 m and 1.4 km. Rays that skim the land pass through the most air,
+so far ground just below the horizon thickens into the sky over a band, not
+at a line. Dome
 clouds thin out toward the horizon rather than stopping, and clouds standing
 on the horizon rise out of its haze. `skyColorAt` and `aerialAt` in
 `@gaia/realize` are the CPU references the tests check.

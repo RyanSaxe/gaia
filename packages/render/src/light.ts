@@ -295,14 +295,19 @@ vec3 skyColor(vec3 dir) {
   return color + uSunColor * pow(sunDot, 180.0) * 0.18 * up;
 }
 
-// Near and middle distance haze toward the local air's tint; farther, toward
+// Near and middle distance haze toward the local air's tint, lit by the sky
+// behind it; farther, toward
 // the sky behind along the same ray; by ${AIR.dissolveEnd} m only the sky remains.
 vec3 aerial(vec3 color, vec3 worldPosition) {
   vec3 ray = worldPosition - cameraPosition;
   float dist = length(ray);
   vec3 sky = skyColor(ray / max(dist, 1e-4));
-  vec3 air = mix(sky, uFogColor, 1.0 - smoothstep(${f1(AIR.tintFade[0])}, ${f1(AIR.tintFade[1])}, dist));
+  // Rays that skim the land pass through the most air: far ground just below
+  // the horizon thickens toward the sky over a band, not at a line.
+  float skim = exp(-abs(ray.y) / max(dist, 1e-4) * ${f1(AIR.skim)}) * smoothstep(${f1(AIR.skimFrom[0])}, ${f1(AIR.skimFrom[1])}, dist);
+  vec3 air = mix(sky, uFogColor, ${AIR.tint.toFixed(2)} * (1.0 - smoothstep(${f1(AIR.tintFade[0])}, ${f1(AIR.tintFade[1])}, dist)) * (1.0 - skim));
   float haze = (1.0 - exp(-dist * uFogDensity)) * (0.65 + 0.35 * smoothstep(150.0, ${f1(AIR.hazeFull)}, dist));
+  haze += (1.0 - haze) * skim;
   // Mist lies low: thickest at the ground, gone a few units up, and only with distance.
   float mist = uMist * exp(-max(worldPosition.y, 0.0) * 0.45) * (1.0 - exp(-dist * 0.035));
   color = mix(color, air, clamp(haze + mist * 0.7, 0.0, 1.0));

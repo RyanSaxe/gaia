@@ -9,6 +9,11 @@ import type { LightSpec, Rgb, Vec3 } from "@gaia/schema";
 export const AIR = {
   /** Past this, the haze reaches its full strength. */
   hazeFull: 900,
+  /** Rays that skim the land thicken toward the sky: how fast that falls off with the ray's slope, and over which distances it comes in. */
+  skim: 20,
+  skimFrom: [80, 420],
+  /** How much of the local air's own tint the near haze takes; the rest is the sky behind it. */
+  tint: 0.6,
   /** The local air's tint gives way to the sky's own color between these distances. */
   tintFade: [300, 900],
   dissolveStart: 900,
@@ -73,8 +78,10 @@ export function aerialAt(look: AirInput, color: Rgb, eye: Vec3, point: Vec3): Rg
   const dist = Math.hypot(...ray);
   const k = 1 / Math.max(dist, 1e-4);
   const sky = skyColorAt(look, [ray[0] * k, ray[1] * k, ray[2] * k]);
-  const air = mix(sky, look.fog.color, 1 - smoothstep(AIR.tintFade[0], AIR.tintFade[1], dist));
-  const haze = (1 - Math.exp(-dist * look.fog.density)) * (0.65 + 0.35 * smoothstep(150, AIR.hazeFull, dist));
+  const skim = Math.exp((-Math.abs(ray[1]) / Math.max(dist, 1e-4)) * AIR.skim) * smoothstep(AIR.skimFrom[0], AIR.skimFrom[1], dist);
+  const air = mix(sky, look.fog.color, AIR.tint * (1 - smoothstep(AIR.tintFade[0], AIR.tintFade[1], dist)) * (1 - skim));
+  let haze = (1 - Math.exp(-dist * look.fog.density)) * (0.65 + 0.35 * smoothstep(150, AIR.hazeFull, dist));
+  haze += (1 - haze) * skim;
   const mist = look.fog.mist * Math.exp(-Math.max(point[1], 0) * 0.45) * (1 - Math.exp(-dist * 0.035));
   const hazed = mix(color, air, clamp01(haze + mist * 0.7));
   return mix(hazed, sky, smoothstep(AIR.dissolveStart, AIR.dissolveEnd, dist));
