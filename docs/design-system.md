@@ -74,6 +74,15 @@ water is 1.2 m deep slides along the edge instead; eyes stay 1.6 m above the
 ground. `walkStep` and `waterDepthAt` in `@gaia/terrain` are pure, so tests
 check every step.
 
+A person walks by tapping or clicking the ground, the same with a mouse, a
+trackpad or a thumb, and drags to look. The walk goes straight to the spot at
+4.2 m/s, jogs at 1.8 times that while more than 25 m remain, easing back to a
+walk by 15 m, and ends within 1.5 m of the spot, so a tap that close to where
+the person stands stops them. A glancing brush with deep water slides past
+it; deep water across the way ends the walk at its edge. The view never turns
+on its own. A faint ring marks the spot and fades when the walk ends.
+`walkToward` in `@gaia/terrain` takes each step.
+
 Grass keeps its full height at every distance, so it never grows out of the
 ground. Each blade has a seeded threshold and disappears whole once the
 viewer is farther than that, thinning from 55% of its reach of 60 m; a third

@@ -134,6 +134,12 @@ details.json pre { font: 11px/1.45 ui-monospace, "SF Mono", Menlo, monospace; ba
 .modes { background: var(--chip); backdrop-filter: blur(6px); border: 1px solid var(--line); border-radius: 8px; padding: 3px; flex-wrap: nowrap; }
 .modes .seg { padding: 4px 10px; }
 .lab-terrain .bar.bottom { flex-direction: column; align-items: stretch; gap: 6px; }
+.bar-row { display: flex; gap: 6px; align-items: stretch; pointer-events: none; }
+.bar-row > * { pointer-events: auto; }
+.bar-row .hintline { flex: 1; min-width: 0; }
+/* The walk stats fold into this toggle; open, it wears the accent's outline. */
+.stats-toggle { flex: none; font-size: 11px; font-weight: 600; color: var(--muted); padding: 4px 10px; }
+.stats-toggle[aria-expanded="true"] { color: var(--ink); border-color: var(--accent); }
 .stats { font-size: 11px; line-height: 1.5; color: var(--muted); }
 .stats b { color: var(--ink); font-weight: 650; font-variant-numeric: tabular-nums; }
 .budget { display: flex; flex-wrap: wrap; gap: 2px 12px; }
@@ -158,15 +164,6 @@ details.json pre { font: 11px/1.45 ui-monospace, "SF Mono", Menlo, monospace; ba
 }
 :root.touch .touch-only { display: revert; }
 :root.touch .mouse-only { display: none; }
-.pad { position: absolute; left: 16px; bottom: 16px; width: 132px; height: 132px; border-radius: 50%; background: var(--chip); backdrop-filter: blur(6px); border: 1px solid var(--line); touch-action: none; user-select: none; -webkit-user-select: none; }
-.pad::before { content: ""; position: absolute; inset: 10%; border-radius: 50%; border: 1px dashed var(--line); pointer-events: none; }
-.pad-knob { position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; margin: -26px 0 0 -26px; border-radius: 50%; background: var(--panel); border: 1px solid var(--line); box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18); pointer-events: none; }
-.pad.run .pad-knob { background: var(--accent); border-color: var(--accent); }
-/* On a wide touch screen the terrain stats sit beside the pad, not under it. */
-@media (pointer: coarse) {
-  :where(.stage:has(> .pad:not([hidden]))) > .bar.bottom { left: 164px; }
-}
-:where(:root.touch .stage:has(> .pad:not([hidden]))) > .bar.bottom { left: 164px; }
 
 /* ---------- the panel's sheet handle, shown only on a narrow screen ---------- */
 .sheet-handle { display: none; }
@@ -215,7 +212,4 @@ details.json pre { font: 11px/1.45 ui-monospace, "SF Mono", Menlo, monospace; ba
   .switch-track { inset: 7px 0; border-radius: 15px; }
   .switch-track::after { width: 26px; height: 26px; }
   .switch input:checked + .switch-track::after { transform: translateX(20px); }
-
-  /* The terrain stats move to the top, leaving the bottom left to the walk pad. */
-  .lab-terrain .bar.bottom { top: 64px; bottom: auto; left: 10px; }
 }

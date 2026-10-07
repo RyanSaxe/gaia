@@ -3,7 +3,8 @@
 `pnpm lab:serve` serves the lab, without the engine, on this Mac's Tailscale
 address only (port 5180), so the reviewer can use it from a phone. The lab has
 touch controls (a walk pad, one-finger look, pinch and drag) and, below 700 px
-wide, an inspector that pulls up from the bottom.
+wide, an inspector that pulls up from the bottom. Round 8 replaced the walk pad
+with [tapping the ground to walk](20-click-to-walk.md).
 
 ## Why
 

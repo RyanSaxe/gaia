@@ -1,7 +1,7 @@
 // The terrain lab: a small world of regions, each a biome with a landform and
 // a ground cover Jev could choose, baked into one heightfield. Walk it at eye
-// height or look at the whole of it from above; edit any region's biome and
-// watch the budget and the ground change.
+// height, tapping or clicking the ground to walk there, or look at the whole of
+// it from above; edit any region's biome and watch the budget and the ground change.
 
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
@@ -24,20 +24,23 @@ import {
   sampleWorld,
   scatterPlants,
   sightlines,
+  WALK_TO,
   walkStep,
+  walkToward,
   waterDepthAt,
 } from "@gaia/terrain";
 import { createSky } from "../world/environment.ts";
 import { renderInspector } from "../inspector.ts";
-import { type Lab, type Shot, onTap, refs, slug } from "../lab.ts";
+import { type Lab, type Shot, onTap, refs, slug, tapSlop } from "../lab.ts";
 import { createSheet } from "../sheet.ts";
 import { createGrass, createWater } from "./cover.ts";
 import { createGround, createGroundTexture } from "./ground.ts";
+import { createWalkMarker } from "./marker.ts";
 import { createRegionCovers } from "./regions.ts";
 
 const TEMPLATE = /* html */ `
 <main class="stage">
-  <canvas class="view" aria-label="A small world of gentle landforms. Walk with WASD or the arrow keys and drag to look, or switch to the overview."></canvas>
+  <canvas class="view" aria-label="A small world of gentle landforms. Click or tap the ground to walk there and drag to look, or switch to the overview."></canvas>
   <div class="bar top">
     <div class="segmented modes" role="group" aria-label="View">
       <button data-ref="mode-walk" class="seg on" type="button">Walk</button>
@@ -46,13 +49,15 @@ const TEMPLATE = /* html */ `
     <button data-ref="random" class="primary" title="Draw every region's landform, fields and cover uniformly, then fit the budget">Random terrain</button>
   </div>
   <div class="bar bottom">
-    <div class="chip stats">
+    <div class="chip stats" id="terrain-stats" data-ref="stats" hidden>
       <div class="budget" data-ref="budget"></div>
       <div class="sight" data-ref="sight"></div>
     </div>
-    <div class="chip hintline"><span class="here" data-ref="here"></span><span data-ref="hint"></span></div>
+    <div class="bar-row">
+      <div class="chip hintline"><span class="here" data-ref="here"></span><span data-ref="hint"></span></div>
+      <button data-ref="stats-toggle" class="chip stats-toggle" type="button" aria-expanded="false" aria-controls="terrain-stats">Stats</button>
+    </div>
   </div>
-  <div class="pad touch-only" data-ref="pad" aria-hidden="true"><div class="pad-knob" data-ref="pad-knob"></div></div>
 </main>
 <aside class="panel" data-ref="panel">
   <header>
@@ -75,10 +80,12 @@ const SKY_WORLD = WORLD_PRESETS[0];
 const FOG = { walk: 0.0042, overview: 0.0008 };
 /** Each mode's hint, for a mouse and keyboard and for touch. */
 const HINTS = {
-  walk: ["WASD or arrows to walk, Shift to run, drag to look", "Drag to look, use the pad to walk, push it to the rim to run"],
+  walk: ["Click the ground to walk there, drag to look; WASD and Shift work too", "Tap the ground to walk there, drag to look"],
   overview: ["Drag to orbit, scroll to zoom, click a region", "Drag to orbit, pinch to zoom, tap a region"],
 };
 const MOVE = new Set(["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "ShiftLeft", "ShiftRight"]);
+/** How far a tap's ray looks for the ground, meters. */
+const REACH = 900;
 
 interface Planted {
   readonly view: PlantView;
@@ -125,7 +132,8 @@ export function createTerrainLab(root: HTMLElement): Lab {
   const ground = createGround(terrain, light, covers);
   const grass = createGrass(light, groundTex, covers, landRadius(terrain));
   const water = createWater(terrain, light, groundTex);
-  scene.add(sky.mesh, ground.wilds, ground.fine, ground.coarse, grass.mesh, water.group);
+  const marker = createWalkMarker();
+  scene.add(sky.mesh, ground.wilds, ground.fine, ground.coarse, grass.mesh, water.group, marker.mesh);
 
   /** The hour's light, sky, air and water reflection, from the sky world's day. */
   let hour = Number.NaN;
@@ -182,28 +190,37 @@ export function createTerrainLab(root: HTMLElement): Lab {
   type Mode = "walk" | "overview";
   let mode: Mode = "walk";
   const walker = { x: 0, z: 0, yaw: 0, pitch: -0.05, eye: 0, moved: true };
+  /** Where a tap or click is walking the walker, if anywhere. */
+  let goal: { x: number; z: number } | null = null;
   const keys = new Set<string>();
   window.addEventListener("keydown", (e) => {
     if (!active || e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) return;
     if (MOVE.has(e.code)) {
       keys.add(e.code);
       e.preventDefault();
+      // The keys take over from a tap's walk; Shift alone moves nothing, so it leaves the walk be.
+      if (e.code !== "ShiftLeft" && e.code !== "ShiftRight") endWalk();
     }
   });
   window.addEventListener("keyup", (e) => keys.delete(e.code));
   window.addEventListener("blur", () => keys.clear());
 
-  // One pointer looks: a second finger on the canvas never jerks the view.
-  const drag = { id: -1, x: 0, y: 0 };
+  // One pointer looks: a second finger on the canvas never jerks the view. The
+  // view holds still until the press strays past a tap's slop, so a tap never
+  // nudges it and a drag never walks.
+  const drag = { id: -1, x: 0, y: 0, looking: false };
   canvas.addEventListener("pointerdown", (e) => {
     if (mode !== "walk" || drag.id !== -1) return;
     drag.id = e.pointerId;
     drag.x = e.clientX;
     drag.y = e.clientY;
+    drag.looking = false;
     canvas.setPointerCapture(e.pointerId);
   });
   canvas.addEventListener("pointermove", (e) => {
     if (e.pointerId !== drag.id || mode !== "walk") return;
+    if (!drag.looking && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) <= tapSlop(e)) return;
+    drag.looking = true;
     walker.yaw -= (e.clientX - drag.x) * 0.0045;
     walker.pitch = Math.max(-1.1, Math.min(1.1, walker.pitch - (e.clientY - drag.y) * 0.0045));
     drag.x = e.clientX;
@@ -214,56 +231,68 @@ export function createTerrainLab(root: HTMLElement): Lab {
       if (e.pointerId === drag.id) drag.id = -1;
     });
   }
-  onTap(canvas, (e) => {
-    if (mode !== "overview") return;
-    const rect = canvas.getBoundingClientRect();
-    const ray = new THREE.Raycaster();
-    ray.setFromCamera(new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1), camera);
-    const hit = ray.intersectObject(ground.coarse)[0];
-    if (hit !== undefined) select(regionAt(hit.point.x, hit.point.z));
-  });
 
-  // The touch pad walks toward the thumb, and past 80% of its radius it runs.
-  const padEl = $("pad");
-  const knob = $("pad-knob");
-  const pad = { id: -1, forward: 0, side: 0, run: false };
-  function padMove(e: PointerEvent): void {
-    const rect = padEl.getBoundingClientRect();
-    const radius = rect.width / 2;
-    const dx = e.clientX - (rect.left + radius);
-    const dy = e.clientY - (rect.top + radius);
-    const length = Math.hypot(dx, dy);
-    const reach = length / radius;
-    const k = reach > 1 ? 1 / reach : 1;
-    knob.style.transform = `translate(${dx * k}px, ${dy * k}px)`;
-    const moving = reach > 0.15;
-    pad.forward = moving ? -dy / length : 0;
-    pad.side = moving ? dx / length : 0;
-    pad.run = reach > 0.8;
-    padEl.classList.toggle("run", pad.run);
+  const raycaster = new THREE.Raycaster();
+  function aim(e: PointerEvent): THREE.Ray {
+    const rect = canvas.getBoundingClientRect();
+    raycaster.setFromCamera(new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1), camera);
+    return raycaster.ray;
   }
-  function padRelease(): void {
-    pad.id = -1;
-    pad.forward = 0;
-    pad.side = 0;
-    pad.run = false;
-    knob.style.transform = "";
-    padEl.classList.remove("run");
+
+  /** Where a ray first meets the walkable ground, marched over the heightfield the mesh draws; past the rim, the wild land. */
+  function groundHit(ray: THREE.Ray): { x: number; z: number; distance: number } | null {
+    const l = terrain.lattice;
+    const { origin: o, direction: d } = ray;
+    const above = (s: number): boolean => o.y + d.y * s > heightAt(l, o.x + d.x * s, o.z + d.z * s);
+    const edge = l.origin + (l.n - 1) * l.spacing;
+    const step = l.spacing * 0.5;
+    for (let s = step; s < REACH; s += step) {
+      const x = o.x + d.x * s;
+      const z = o.z + d.z * s;
+      if (x < l.origin || x > edge || z < l.origin || z > edge) break;
+      if (above(s)) continue;
+      let lo = s - step;
+      let hi = s;
+      for (let k = 0; k < 12; k++) {
+        const mid = (lo + hi) / 2;
+        if (above(mid)) lo = mid;
+        else hi = mid;
+      }
+      return { x: o.x + d.x * hi, z: o.z + d.z * hi, distance: hi };
+    }
+    const wild = raycaster.intersectObject(ground.wilds)[0];
+    return wild === undefined ? null : { x: wild.point.x, z: wild.point.z, distance: wild.distance };
   }
-  padEl.addEventListener("pointerdown", (e) => {
-    if (pad.id !== -1) return;
-    pad.id = e.pointerId;
-    padEl.setPointerCapture(e.pointerId);
-    padMove(e);
+
+  function setGoal(x: number, z: number): void {
+    goal = { x, z };
+    marker.place(terrain, x, z);
+  }
+  function endWalk(): void {
+    if (goal === null) return;
+    goal = null;
+    marker.fade();
+  }
+
+  // In the overview a tap picks a region. Walking, a tap on a tree picks the
+  // region it grows in, and a tap on the ground walks there.
+  onTap(canvas, (e) => {
+    const ray = aim(e);
+    if (mode === "overview") {
+      const hit = raycaster.intersectObject(ground.coarse)[0];
+      if (hit !== undefined) select(regionAt(hit.point.x, hit.point.z));
+      return;
+    }
+    const land = groundHit(ray);
+    const plants = planted.map((p) => p.view.object).filter((o) => o.visible);
+    const tree = raycaster.intersectObjects(plants, true)[0];
+    if (tree !== undefined && (land === null || tree.distance < land.distance)) {
+      const root = plants.find((o) => o.getObjectById(tree.object.id) !== undefined);
+      if (root !== undefined) select(regionAt(root.position.x, root.position.z));
+      return;
+    }
+    if (land !== null) setGoal(land.x, land.z);
   });
-  padEl.addEventListener("pointermove", (e) => {
-    if (e.pointerId === pad.id) padMove(e);
-  });
-  for (const type of ["pointerup", "pointercancel"] as const) {
-    padEl.addEventListener(type, (e) => {
-      if (e.pointerId === pad.id) padRelease();
-    });
-  }
 
   function regionAt(x: number, z: number): number {
     const l = terrain.lattice;
@@ -284,8 +313,7 @@ export function createTerrainLab(root: HTMLElement): Lab {
     $("mode-overview").classList.toggle("on", next === "overview");
     const [mouseHint, touchHint] = HINTS[next];
     $("hint").innerHTML = `<span class="mouse-only">${mouseHint}</span><span class="touch-only">${touchHint}</span>`;
-    padEl.hidden = next !== "walk";
-    padRelease();
+    endWalk();
     if (next === "overview") {
       camera.position.set(walker.x * 0.3 + 40, 300, walker.z * 0.3 + 330);
       orbit.target.set(0, 0, 0);
@@ -293,7 +321,9 @@ export function createTerrainLab(root: HTMLElement): Lab {
     walker.moved = true;
   }
 
+  /** Puts the walker at a point at once, looking along `yaw`. */
   function walkTo(x: number, z: number, yaw: number, pitch = -0.05): void {
+    endWalk();
     walker.x = x;
     walker.z = z;
     walker.yaw = yaw;
@@ -321,10 +351,9 @@ export function createTerrainLab(root: HTMLElement): Lab {
   function updateWalk(dt: number): void {
     const fromX = walker.x;
     const fromZ = walker.z;
-    const run = keys.has("ShiftLeft") || keys.has("ShiftRight") || pad.run ? 2.4 : 1;
-    const speed = 4.2 * run;
-    let f = pad.forward;
-    let s = pad.side;
+    const speed = WALK_TO.pace * (keys.has("ShiftLeft") || keys.has("ShiftRight") ? 2.4 : 1);
+    let f = 0;
+    let s = 0;
     if (keys.has("KeyW") || keys.has("ArrowUp")) f += 1;
     if (keys.has("KeyS") || keys.has("ArrowDown")) f -= 1;
     if (keys.has("KeyD")) s += 1;
@@ -339,6 +368,13 @@ export function createTerrainLab(root: HTMLElement): Lab {
       walker.x = next.x;
       walker.z = next.z;
       walker.moved = true;
+    } else if (goal !== null) {
+      // The view stays where the person looks; only the feet head for the goal.
+      const step = walkToward(terrain, walker, goal, dt);
+      walker.x = step.walker.x;
+      walker.z = step.walker.z;
+      walker.moved = true;
+      if (step.state !== "walking") endWalk();
     }
     const target = heightAt(terrain.lattice, walker.x, walker.z) + EYE_HEIGHT;
     walker.eye += (target - walker.eye) * (1 - Math.exp(-dt * 12));
@@ -362,6 +398,7 @@ export function createTerrainLab(root: HTMLElement): Lab {
     ground.update(terrain);
     water.update(terrain);
     plant();
+    endWalk();
     walker.moved = true;
     refreshStats();
     refreshPanel();
@@ -469,6 +506,11 @@ export function createTerrainLab(root: HTMLElement): Lab {
     }
   });
   $("mode-overview").addEventListener("click", () => setMode("overview"));
+  $("stats-toggle").addEventListener("click", () => {
+    const open = $("stats").hidden;
+    $("stats").hidden = !open;
+    $("stats-toggle").setAttribute("aria-expanded", String(open));
+  });
 
   // ---------- frame ----------
 
@@ -502,8 +544,9 @@ export function createTerrainLab(root: HTMLElement): Lab {
       lantern.follow(lanternEye, forward, walker.eye - EYE_HEIGHT, 0, dt);
       shadow.frame(shadowCenter.set(0, 0, 0), world.size * 0.62);
     }
+    marker.frame(dt, camera.position, light.uNightness.value);
     refreshSight(now);
-    shadow.render(renderer, scene, views, [sky.mesh, ground.wilds, ground.fine, ground.coarse, grass.mesh, water.group]);
+    shadow.render(renderer, scene, views, [sky.mesh, ground.wilds, ground.fine, ground.coarse, grass.mesh, water.group, marker.mesh]);
     renderer.render(scene, camera);
   }
 
@@ -533,10 +576,7 @@ export function createTerrainLab(root: HTMLElement): Lab {
     setActive(on) {
       active = on;
       orbit.enabled = on && mode === "overview";
-      if (!on) {
-        keys.clear();
-        padRelease();
-      }
+      if (!on) keys.clear();
       if (on) resize();
     },
     frame: (dt, now, h) => {
@@ -567,7 +607,7 @@ export function createTerrainLab(root: HTMLElement): Lab {
       /** Walks straight ahead for `seconds` at walking pace, as if W were held, and reports where the walk ended. */
       stride: (seconds: number) => {
         for (let k = 0; k < Math.round(seconds * 60); k++) {
-          const next = walkStep(terrain, walker, { dx: -Math.sin(walker.yaw), dz: -Math.cos(walker.yaw), speed: 4.2 }, 1 / 60);
+          const next = walkStep(terrain, walker, { dx: -Math.sin(walker.yaw), dz: -Math.cos(walker.yaw), speed: WALK_TO.pace }, 1 / 60);
           walker.x = next.x;
           walker.z = next.z;
         }
@@ -576,7 +616,18 @@ export function createTerrainLab(root: HTMLElement): Lab {
         return { x: walker.x, z: walker.z, depth: waterDepthAt(terrain, walker.x, walker.z) };
       },
       depth: () => waterDepthAt(terrain, walker.x, walker.z),
+      /** Where a tap's walk is headed, or null, and how opaque its ring is now. */
+      goal: () => ({ goal: goal === null ? null : { ...goal }, ring: marker.opacity() }),
+      /** Where the ground at (x, z) shows on screen, in CSS pixels from the page's top left; null when it is behind the view. */
+      onScreen: (x: number, z: number) => {
+        const p = new THREE.Vector3(x, heightAt(terrain.lattice, x, z), z).project(camera);
+        if (p.z > 1) return null;
+        const rect = canvas.getBoundingClientRect();
+        return { x: rect.left + ((p.x + 1) / 2) * rect.width, y: rect.top + ((1 - p.y) / 2) * rect.height };
+      },
       ponds: () => terrain.ponds.map((p) => ({ x: p.x, z: p.z, reach: p.reach })),
+      plants: () => planted.filter((p) => p.view.object.visible).map((p) => ({ x: p.view.object.position.x, z: p.view.object.position.z, height: p.view.height, region: regionAt(p.view.object.position.x, p.view.object.position.z) })),
+      selected: () => selected,
       lantern: () => ({ position: light.uLanternPosition.value.toArray(), intensity: light.uLanternIntensity.value, nightness: light.uNightness.value }),
       camera: () => ({ position: camera.position.toArray(), target: orbit.target.toArray() }),
     },
