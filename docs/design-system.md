@@ -83,6 +83,18 @@ it; deep water across the way ends the walk at its edge. The view never turns
 on its own. A faint ring marks the spot and fades when the walk ends.
 `walkToward` in `@gaia/terrain` takes each step.
 
+Streams run downstream along the flow solved from their bed (`streamFlow`
+and `flowAt` in `@gaia/terrain`), faster where the channel narrows or the
+waterline falls. Ponds lie still, and now and then a ring spreads across one.
+Looking down, water is clear: the bed shows where it is shallow, and the
+water's own teal deepens with depth. At a grazing angle it mirrors the sky,
+the banks and the trees, softened and broken by the ripples. A soft line of
+foam marks the shore. Rings spread from the person's legs while they wade,
+and the water settles when they stop. At night the moon lays a sparkling
+path, the lantern a warm glint close by, and living water carries faint
+drifting specks of light. Low vitality clouds the water and dulls its
+sparkle.
+
 Grass keeps its full height at every distance, so it never grows out of the
 ground. Each blade has a seeded threshold and disappears whole once the
 viewer is farther than that, thinning from 55% of its reach of 60 m; a third
