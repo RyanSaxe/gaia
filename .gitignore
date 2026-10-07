@@ -1,0 +1,7 @@
+node_modules/
+out/
+dist/
+shots/
+engine/target/
+*.local
+.DS_Store
