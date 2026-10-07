@@ -86,14 +86,18 @@ export function worldPlaces(t: Terrain, patches: readonly FilePatch[]): WorldPla
   return { spec: t.spec, areas: t.spec.regions.map((r) => areaOfPath(r.id)), patches, buckets, weights: new Float64Array(t.spec.regions.length) };
 }
 
-/** Whether (x, z) lies past the land's rounded square, in the wild. */
-export function inWild(size: number, x: number, z: number): boolean {
+/**
+ * Whether (x, z) lies past the codebase's land: its rounded square, where the
+ * rim crests. The ground itself hands over to the wild land further out, at
+ * the lattice's edge (`inWilds`); between the two lies the rim's outer slope.
+ */
+function pastTheLand(size: number, x: number, z: number): boolean {
   return Math.abs(x) ** 4 + Math.abs(z) ** 4 > (size / 2) ** 4;
 }
 
 /** Where (x, z) is: the area whose land it is, and the nearest file whose patch reaches it. */
 export function placeAt(w: WorldPlaces, x: number, z: number): Place {
-  if (inWild(w.spec.size, x, z)) return { area: WILD_AREA, file: null };
+  if (pastTheLand(w.spec.size, x, z)) return { area: WILD_AREA, file: null };
   regionWeights(w.spec, x, z, w.weights);
   let region = 0;
   for (let i = 1; i < w.weights.length; i++) if ((w.weights[i] as number) > (w.weights[region] as number)) region = i;
