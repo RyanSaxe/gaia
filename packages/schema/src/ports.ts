@@ -41,6 +41,14 @@ export interface Part {
    * card to that leafy shape; a solid surface is all zeros.
    */
   readonly cutout: Float32Array;
+  /**
+   * The whole piece each vertex belongs to, two per vertex: the piece's number
+   * in the part (0, 1, 2, ... in build order) and its size in meters, the side
+   * of a square with half the piece's surface area. A piece is a connected run
+   * of triangles, such as one leaf card, one limb or one petal; renderers thin
+   * distant detail by leaving out whole pieces, smallest first.
+   */
+  readonly piece: Float32Array;
   readonly channels: VitalityChannels;
   readonly collision: "solid" | "walkable" | "none";
 }

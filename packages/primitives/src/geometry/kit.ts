@@ -60,6 +60,54 @@ export interface Channels {
 
 const SOLID: Vec3 = [0, 0, 0];
 
+/**
+ * Every vertex's piece (the connected run of triangles it is in, numbered by
+ * first vertex) and that piece's size, the side of a square with half its
+ * surface area. A vertex no triangle uses is a piece of its own, of size 0.
+ */
+function piecesOf(pos: readonly number[], idx: readonly number[]): Float32Array {
+  const n = pos.length / 3;
+  const parent = new Int32Array(n);
+  for (let i = 0; i < n; i++) parent[i] = i;
+  const root = (a: number): number => {
+    let r = a;
+    while (parent[r] !== r) r = parent[r] as number;
+    while (parent[a] !== r) {
+      const next = parent[a] as number;
+      parent[a] = r;
+      a = next;
+    }
+    return r;
+  };
+  for (let t = 0; t < idx.length; t += 3) {
+    const a = root(idx[t] as number);
+    const b = root(idx[t + 1] as number);
+    const c = root(idx[t + 2] as number);
+    const low = Math.min(a, b, c);
+    parent[a] = low;
+    parent[b] = low;
+    parent[c] = low;
+  }
+  const area = new Float64Array(n);
+  const at = (v: number): V3 => [pos[v * 3] as number, pos[v * 3 + 1] as number, pos[v * 3 + 2] as number];
+  for (let t = 0; t < idx.length; t += 3) {
+    const a = idx[t] as number;
+    const corner = at(a);
+    const r = root(a);
+    area[r] = (area[r] as number) + length(cross(sub(at(idx[t + 1] as number), corner), sub(at(idx[t + 2] as number), corner))) / 2;
+  }
+  const number = new Int32Array(n).fill(-1);
+  let pieces = 0;
+  const out = new Float32Array(n * 2);
+  for (let i = 0; i < n; i++) {
+    const r = root(i);
+    if (number[r] === -1) number[r] = pieces++;
+    out[i * 2] = number[r] as number;
+    out[i * 2 + 1] = Math.sqrt((area[r] as number) / 2);
+  }
+  return out;
+}
+
 /** Accumulates vertices with every channel, then freezes into a Part. */
 export class PartBuilder {
   readonly #pos: number[] = [];
@@ -117,6 +165,7 @@ export class PartBuilder {
       shade: new Float32Array(this.#shade),
       tint: new Float32Array(this.#tint),
       cutout: new Float32Array(this.#cut),
+      piece: piecesOf(this.#pos, this.#idx),
       channels: {
         loss: new Float32Array(this.#loss),
         droop: new Float32Array(this.#droop),

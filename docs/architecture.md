@@ -40,7 +40,7 @@ never crosses, because the renderer builds it. `EngineMethods` in
 | `@gaia/primitives` | Primitive declarations and geometry, palettes, the manifest `PRIMITIVES` | schema |
 | `@gaia/kinds` | The flora, structure, rock, wildflowers, biome and world kinds | schema |
 | `@gaia/world` | The question planner, answer rules, context gathering, vitality, type-space tools, `WorldChange` | schema |
-| `@gaia/realize` | Blueprint to parts, world and region looks at an hour, the light between a day's keys, the sky and air references, presets, channel math | schema, primitives |
+| `@gaia/realize` | Blueprint to parts, world and region looks at an hour, the light between a day's keys, the sky and air references, presets, channel math, detail by distance | schema, primitives |
 | `@gaia/render` | Three.js materials, light and shadow, and instanced copies of a component | schema, realize, three |
 | `@gaia/terrain` | Relief composition, the baked heightfield, water, the wild land past the rim, walking and wading, sight lines, where plants and the understory stand | schema, primitives, realize |
 | `@gaia/app` | Electron main, preload, world service, and the renderer (the lab) | Every package |
@@ -102,6 +102,17 @@ many times, such as a rock or a drift of flowers, draws as one instanced mesh
 per part, with each copy's vitality read per instance.
 `applyVitality` in `packages/realize/src/channels.ts` is the CPU reference the
 tests run against.
+
+## Detail
+
+Every part also carries `piece`: the connected run of triangles each vertex
+belongs to (one leaf card, one limb, one petal) and that piece's size.
+`PartBuilder` writes it, so every primitive has it without work of its own.
+Distance thins detail by whole pieces: `pieceReach` and `detailAt` in
+`packages/realize/src/detail.ts` are the rule and the CPU reference. A
+coarser level of detail is the full build with the pieces that have left by
+its distance taken out, every kept vertex bit-identical, so detail is computed
+from one build and never shifts a primitive's random streams.
 
 ## Time
 
