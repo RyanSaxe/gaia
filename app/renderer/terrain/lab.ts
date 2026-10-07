@@ -24,6 +24,8 @@ import {
   sampleWorld,
   scatterPlants,
   sightlines,
+  walkStep,
+  waterDepthAt,
 } from "@gaia/terrain";
 import { createSky } from "../world/environment.ts";
 import { renderInspector } from "../inspector.ts";
@@ -261,7 +263,7 @@ export function createTerrainLab(root: HTMLElement): Lab {
     const fromX = walker.x;
     const fromZ = walker.z;
     const run = keys.has("ShiftLeft") || keys.has("ShiftRight") ? 2.4 : 1;
-    const speed = 4.2 * run * dt;
+    const speed = 4.2 * run;
     let f = 0;
     let s = 0;
     if (keys.has("KeyW") || keys.has("ArrowUp")) f += 1;
@@ -273,9 +275,10 @@ export function createTerrainLab(root: HTMLElement): Lab {
     const sy = Math.sin(walker.yaw);
     const cy = Math.cos(walker.yaw);
     if (f !== 0 || s !== 0) {
-      const half = world.size / 2 - 6;
-      walker.x = Math.max(-half, Math.min(half, walker.x + (-sy * f + cy * s) * speed));
-      walker.z = Math.max(-half, Math.min(half, walker.z + (-cy * f - sy * s) * speed));
+      // Wading slows the walk, and deep water turns it aside along the edge.
+      const next = walkStep(terrain, walker, { dx: -sy * f + cy * s, dz: -cy * f - sy * s, speed }, dt);
+      walker.x = next.x;
+      walker.z = next.z;
       walker.moved = true;
     }
     const target = heightAt(terrain.lattice, walker.x, walker.z) + EYE_HEIGHT;
@@ -498,6 +501,19 @@ export function createTerrainLab(root: HTMLElement): Lab {
         return { max: s.max, median: s.median };
       },
       info: () => renderer.info.render,
+      /** Walks straight ahead for `seconds` at walking pace, as if W were held, and reports where the walk ended. */
+      stride: (seconds: number) => {
+        for (let k = 0; k < Math.round(seconds * 60); k++) {
+          const next = walkStep(terrain, walker, { dx: -Math.sin(walker.yaw), dz: -Math.cos(walker.yaw), speed: 4.2 }, 1 / 60);
+          walker.x = next.x;
+          walker.z = next.z;
+        }
+        walker.eye = heightAt(terrain.lattice, walker.x, walker.z) + EYE_HEIGHT;
+        walker.moved = true;
+        return { x: walker.x, z: walker.z, depth: waterDepthAt(terrain, walker.x, walker.z) };
+      },
+      depth: () => waterDepthAt(terrain, walker.x, walker.z),
+      ponds: () => terrain.ponds.map((p) => ({ x: p.x, z: p.z, reach: p.reach })),
       lantern: () => ({ position: light.uLanternPosition.value.toArray(), intensity: light.uLanternIntensity.value, nightness: light.uNightness.value }),
     },
   };

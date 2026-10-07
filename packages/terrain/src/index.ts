@@ -7,3 +7,4 @@ export * from "./sight.ts";
 export * from "./plants.ts";
 export * from "./sample.ts";
 export * from "./wilds.ts";
+export * from "./walk.ts";

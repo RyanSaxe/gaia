@@ -7,6 +7,7 @@ import { FLORA_PRESETS, realize } from "@gaia/realize";
 import {
   RELIEF_BUDGET,
   type Station,
+  WADE,
   WILDS,
   type Terrain,
   bakeTerrain,
@@ -19,7 +20,11 @@ import {
   sampleWorld,
   scatterPlants,
   sightlines,
+  EYE_HEIGHT,
   surfaceHalfWidth,
+  wadeSpeed,
+  walkStep,
+  waterDepthAt,
   wildsRing,
   withinBudget,
 } from "@gaia/terrain";
@@ -215,4 +220,73 @@ describe("wild land past the rim", () => {
       expect(high - low).toBeLessThanOrEqual(variation + 1e-4);
     }
   });
+});
+
+describe("wading", () => {
+  const t = baked[0]!;
+  const pond = t.ponds[0]!;
+  const dt = 1 / 60;
+  const walkFrom = (x: number, z: number, dx: number, dz: number, steps: number, speed = 4.2) => {
+    const path = [{ x, z }];
+    for (let i = 0; i < steps; i++) path.push(walkStep(t, path[path.length - 1]!, { dx, dz, speed }, dt));
+    return path;
+  };
+
+  it("measures water depth as the surface above the ground, and none on dry land", () => {
+    expect(waterDepthAt(t, pond.x, pond.z)).toBeGreaterThan(WADE.deepest);
+    expect(waterDepthAt(t, pond.x + pond.reach * 2.5, pond.z)).toBe(0);
+    for (let k = 0; k < 400; k++) {
+      const x = ((k * 37) % 300) - 150;
+      const z = ((k * 91) % 300) - 150;
+      expect(waterDepthAt(t, x, z)).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  it("never ends a step in water 1.2 m deep or more, so eyes stay above the surface", () => {
+    expect(WADE.deepest).toBeLessThan(EYE_HEIGHT);
+    for (let a = 0; a < 16; a++) {
+      const ang = (a / 16) * Math.PI * 2;
+      const start = { x: pond.x + Math.cos(ang) * pond.reach * 1.6, z: pond.z + Math.sin(ang) * pond.reach * 1.6 };
+      for (const p of walkFrom(start.x, start.z, -Math.cos(ang), -Math.sin(ang), 900)) {
+        expect(waterDepthAt(t, p.x, p.z)).toBeLessThan(WADE.deepest);
+      }
+    }
+  });
+
+  it("slows as the water deepens", () => {
+    expect(wadeSpeed(0)).toBe(1);
+    expect(wadeSpeed(1.1)).toBeCloseTo(0.4, 6);
+    const dry = walkStep(t, { x: pond.x + pond.reach * 2, z: pond.z }, { dx: 0, dz: 1, speed: 4 }, 0.1);
+    const dryStep = Math.hypot(dry.x - pond.x - pond.reach * 2, dry.z - pond.z);
+    // A point in shallow water at the pond's edge.
+    let wet = { x: pond.x, z: pond.z };
+    for (let r = pond.reach; r > 0; r -= 0.25) {
+      const d = waterDepthAt(t, pond.x + r, pond.z);
+      if (d > 0.5 && d < 1) {
+        wet = { x: pond.x + r, z: pond.z };
+        break;
+      }
+    }
+    const depth = waterDepthAt(t, wet.x, wet.z);
+    expect(depth).toBeGreaterThan(0.5);
+    const moved = walkStep(t, wet, { dx: 0, dz: 1, speed: 4 }, 0.1);
+    const wetStep = Math.hypot(moved.x - wet.x, moved.z - wet.z);
+    expect(wetStep).toBeLessThan(dryStep * 0.85);
+    expect(wetStep).toBeCloseTo(dryStep * wadeSpeed(depth), 6);
+  });
+
+  it("slides along the deep water's edge instead of stopping dead", () => {
+    // Walk straight across the pond's near side: the deep middle turns the
+    // walker aside, and they slide around it and come out past the pond.
+    // The farthest line from the middle that still crosses deep water.
+    const crosses = (z: number): boolean =>
+      Array.from({ length: 200 }, (_, k) => pond.x + (k / 100 - 1) * pond.reach).some((x) => waterDepthAt(t, x, z) >= WADE.deepest + 0.05);
+    let z = pond.z;
+    while (crosses(z - 0.5)) z -= 0.5;
+    const path = walkFrom(pond.x - pond.reach * 1.5, z, 1, 0, 3600);
+    expect(path.some((p) => Math.abs(p.z - z) > 0.2)).toBe(true);
+    expect(path[path.length - 1]!.x).toBeGreaterThan(pond.x + pond.reach * 0.5);
+    for (const p of path) expect(waterDepthAt(t, p.x, p.z)).toBeLessThan(WADE.deepest);
+  });
+
 });

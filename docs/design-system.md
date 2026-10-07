@@ -66,8 +66,13 @@ heightfield that every consumer samples. The bake enforces a relief budget:
 Water is solved from the ground and cut into it, so it never floats. The
 world's edge is a gentle rim. Past it, one ring of low-detail wild land runs
 on to 1.5 km, continuing the rim's height and settling into a gentle roll of
-at most 6 m, colored by the nearest region's cover. It is never walkable. A
-person can wade but never goes under water.
+at most 6 m, colored by the nearest region's cover. It is never walkable.
+
+A person can wade but never goes under water. Walking slows as the water
+deepens, to 40% of its pace at 1.1 m, and a step that would end where the
+water is 1.2 m deep slides along the edge instead; eyes stay 1.6 m above the
+ground. `walkStep` and `waterDepthAt` in `@gaia/terrain` are pure, so tests
+check every step.
 
 Grass keeps its full height at every distance, so it never grows out of the
 ground. Each blade has a seeded threshold and disappears whole once the
@@ -132,9 +137,3 @@ grass and water agree:
 - **The world's own glow** (the vitality `glow` channel, fireflies, living
   water) reads by contrast in the dark, a little stronger than by day and
   still below what draws the eye on its own.
-
-## Planned for slice 2
-
-Not built yet:
-
-- **Wading** that stops before the person's eyes go under water.
