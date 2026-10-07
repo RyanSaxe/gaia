@@ -5,13 +5,16 @@ import { biome, flora } from "@gaia/kinds";
 import { validate } from "@gaia/world";
 import { FLORA_PRESETS, realize } from "@gaia/realize";
 import {
+  FLOW,
   RELIEF_BUDGET,
+  type SolvedStream,
   type Station,
   WADE,
   WILDS,
   type Terrain,
   bakeTerrain,
   composer,
+  flowAt,
   groundedBase,
   heightAt,
   landRadius,
@@ -20,6 +23,7 @@ import {
   sampleWorld,
   scatterPlants,
   sightlines,
+  streamFlow,
   EYE_HEIGHT,
   surfaceHalfWidth,
   wadeSpeed,
@@ -289,4 +293,56 @@ describe("wading", () => {
     for (const p of path) expect(waterDepthAt(t, p.x, p.z)).toBeLessThan(WADE.deepest);
   });
 
+});
+
+describe("flow", () => {
+  it("runs every solved stream downstream, toward its lower end", () => {
+    let stations = 0;
+    for (const t of baked) {
+      for (const s of t.streams) {
+        const flow = streamFlow(s);
+        const st = s.stations;
+        for (let i = 0; i + 1 < st.length; i++) {
+          const a = st[i] as Station;
+          const b = st[i + 1] as Station;
+          const vx = flow[i * 2] as number;
+          const vz = flow[i * 2 + 1] as number;
+          const speed = Math.hypot(vx, vz);
+          expect(speed).toBeGreaterThanOrEqual(FLOW.slowest - 1e-6);
+          expect(speed).toBeLessThanOrEqual(FLOW.fastest + 1e-6);
+          // The next station is downstream: the waterline never rises toward it, and the flow heads its way.
+          expect(b.level).toBeLessThanOrEqual(a.level);
+          expect(vx * (b.x - a.x) + vz * (b.z - a.z)).toBeGreaterThan(0);
+          stations++;
+        }
+      }
+    }
+    expect(stations).toBeGreaterThan(200);
+  });
+
+  it("runs faster where the channel narrows", () => {
+    // A level, straight stream that pinches to half its width in the middle.
+    const stations = Array.from({ length: 41 }, (_, i) => {
+      const halfWidth = i >= 15 && i <= 25 ? 1.5 : 3;
+      return { x: i * 2, z: 0, level: 0, halfWidth, depth: halfWidth * 0.35 };
+    });
+    const flow = streamFlow({ stations } satisfies SolvedStream);
+    const speed = (i: number): number => Math.hypot(flow[i * 2] as number, flow[i * 2 + 1] as number);
+    expect(speed(20)).toBeGreaterThan(speed(5) * 1.5);
+    expect(flow[10]).toBeGreaterThan(0);
+  });
+
+  it("is still in ponds and on dry land, and matches the stream along its course", () => {
+    const t = baked[0]!;
+    const pond = t.ponds[0]!;
+    expect(flowAt(t, pond.x, pond.z)).toEqual({ x: 0, z: 0 });
+    expect(flowAt(t, pond.x + pond.reach * 2.5, pond.z)).toEqual({ x: 0, z: 0 });
+    const s = t.streams[0]!;
+    const flow = streamFlow(s);
+    const i = Math.floor(s.stations.length / 2);
+    const at = s.stations[i]!;
+    const v = flowAt(t, at.x, at.z);
+    expect(v.x).toBeCloseTo(flow[i * 2] as number, 3);
+    expect(v.z).toBeCloseTo(flow[i * 2 + 1] as number, 3);
+  });
 });

@@ -31,9 +31,10 @@ import { createSky } from "../world/environment.ts";
 import { renderInspector } from "../inspector.ts";
 import { type Lab, type Shot, onTap, refs, slug } from "../lab.ts";
 import { createSheet } from "../sheet.ts";
-import { createGrass, createWater } from "./cover.ts";
+import { createGrass } from "./cover.ts";
 import { createGround, createGroundTexture } from "./ground.ts";
 import { createRegionCovers } from "./regions.ts";
+import { createWater } from "./water.ts";
 
 const TEMPLATE = /* html */ `
 <main class="stage">
@@ -127,7 +128,7 @@ export function createTerrainLab(root: HTMLElement): Lab {
   const water = createWater(terrain, light, groundTex);
   scene.add(sky.mesh, ground.wilds, ground.fine, ground.coarse, grass.mesh, water.group);
 
-  /** The hour's light, sky, air and water reflection, from the sky world's day. */
+  /** The hour's light, sky and air, from the sky world's day. */
   let hour = Number.NaN;
   function applyHour(h: number): void {
     hour = h;
@@ -135,7 +136,6 @@ export function createTerrainLab(root: HTMLElement): Lab {
     const look = realizeSky({ blueprint: SKY_WORLD.world, kind: worldKind }, worldLib, seedOf("terrain-lab/sky"), h);
     applyLight(light, look.light);
     sky.apply({ light: look.light, sky: { ...look.sky, mid: mixLab(look.sky.zenith, look.sky.horizon, 0.5) }, fog: { color: look.sky.horizon, density: FOG[mode], mist: 0 } });
-    water.reflect(mixLab(look.sky.horizon, look.sky.zenith, 0.3));
   }
   const shadow = createSunShadow(light, 2048);
 
@@ -486,6 +486,10 @@ export function createTerrainLab(root: HTMLElement): Lab {
   const shadowCenter = new THREE.Vector3();
   const views = planted.map((p) => p.view);
   const lanternEye = new THREE.Vector3();
+  // The water mirrors the coarse ground and no grass: its reflection is soft, so detail there is wasted.
+  const mirrorHide = [grass.mesh, ground.fine];
+  const mirrorShow = [ground.coarse];
+  let frameCalls = 0;
   function frame(dt: number, now: number, at: number): void {
     if (at !== hour) applyHour(at);
     light.uTime.value = frozen ?? light.uTime.value + dt;
@@ -493,6 +497,7 @@ export function createTerrainLab(root: HTMLElement): Lab {
       updateWalk(dt);
       lantern.follow(camera.position, forward, walker.eye - EYE_HEIGHT, walked, dt);
       grass.follow(camera.position);
+      water.wade(walker.x, walker.z, walker.yaw, walked, dt);
       shadowCenter.set(walker.x - Math.sin(walker.yaw) * 18, walker.eye, walker.z - Math.cos(walker.yaw) * 18);
       shadow.frame(shadowCenter, 40);
     } else {
@@ -504,7 +509,10 @@ export function createTerrainLab(root: HTMLElement): Lab {
     }
     refreshSight(now);
     shadow.render(renderer, scene, views, [sky.mesh, ground.wilds, ground.fine, ground.coarse, grass.mesh, water.group]);
+    frameCalls = renderer.info.render.calls;
+    frameCalls += water.mirror(renderer, scene, camera, mirrorHide, mirrorShow, dt);
     renderer.render(scene, camera);
+    frameCalls += renderer.info.render.calls;
   }
 
   setMode("walk");
@@ -564,6 +572,9 @@ export function createTerrainLab(root: HTMLElement): Lab {
         return { max: s.max, median: s.median };
       },
       info: () => renderer.info.render,
+      /** Draw calls in the whole last frame (shadow, mirror and view), and the water's mirror. */
+      water: () => ({ ...water.stats(), frameCalls }),
+      waterVitality: (v: number) => water.vitality(v),
       /** Walks straight ahead for `seconds` at walking pace, as if W were held, and reports where the walk ended. */
       stride: (seconds: number) => {
         for (let k = 0; k < Math.round(seconds * 60); k++) {

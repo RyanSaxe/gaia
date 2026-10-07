@@ -1,11 +1,9 @@
 // What covers the ground: wind-swayed grass that travels with the viewer and
-// stands on the baked lattice, grown from each region's ground cover, and
-// water surfaces that sit at their solved levels. Both read the same ground
-// texture the mesh was built from.
+// stands on the baked lattice, grown from each region's ground cover. It
+// reads the same ground texture the mesh was built from.
 
 import * as THREE from "three";
 import { LIGHT_GLSL, type SceneLight, hexToVec3 } from "@gaia/render";
-import { type Terrain, surfaceHalfWidth } from "@gaia/terrain";
 import { GROUND_SAMPLE_GLSL, type GroundTexture } from "./ground.ts";
 import { REGIONS_GLSL, type RegionCovers, TUFT_GLSL } from "./regions.ts";
 
@@ -174,126 +172,4 @@ export function createGrass(light: SceneLight, ground: GroundTexture, covers: Re
   const mesh = new THREE.Mesh(geometry, material);
   mesh.frustumCulled = false;
   return { mesh, follow: (c) => center.value.copy(c) };
-}
-
-const WATER_VERT = /* glsl */ `
-varying vec3 vWorld;
-void main() {
-  vec4 world = modelMatrix * vec4(position, 1.0);
-  vWorld = world.xyz;
-  gl_Position = projectionMatrix * viewMatrix * world;
-}
-`;
-
-const WATER_FRAG = /* glsl */ `
-precision highp float;
-${LIGHT_GLSL}
-${GROUND_SAMPLE_GLSL}
-uniform vec3 uShallow;
-uniform vec3 uDeep;
-uniform vec3 uSky;
-varying vec3 vWorld;
-float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-float noise(vec2 p) {
-  vec2 i = floor(p);
-  vec2 f = fract(p);
-  vec2 u = f * f * (3.0 - 2.0 * f);
-  return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);
-}
-void main() {
-  float depth = vWorld.y - groundAt(vWorld.xz).x;
-  if (depth <= 0.0) discard;
-  vec2 p = vWorld.xz * 0.9;
-  float t = uTime * 0.6;
-  float ripple = noise(p + vec2(t, t * 0.7)) + noise(p * 1.9 - vec2(t * 0.8, -t)) * 0.5;
-  vec3 n = normalize(vec3((ripple - 0.75) * 0.12, 1.0, (noise(p * 1.3 + 9.0 + t) - 0.5) * 0.12));
-  vec3 toEye = normalize(cameraPosition - vWorld);
-  float fresnel = pow(1.0 - max(dot(n, toEye), 0.0), 3.0);
-  vec3 body = mix(uShallow, uDeep, smoothstep(0.05, 0.9, depth));
-  vec3 color = nightTone(body) * (uSunColor * uSunIntensity * 0.55 * max(uSunDirection.y, 0.0) + uAmbientColor * uAmbientIntensity * 0.9);
-  color = mix(color, uSky, fresnel * 0.55);
-  float glint = pow(max(dot(reflect(-uSunDirection, n), toEye), 0.0), 120.0);
-  color += uSunColor * glint * 0.35 * min(uSunIntensity, 1.0);
-  // At night the moon lays a soft path across the water, the lantern warms
-  // what is near, and living water glows faintly where its ripples gather.
-  float moonGlint = pow(max(dot(reflect(-uMoonDirection, n), toEye), 0.0), 40.0);
-  color += uMoonColor * moonGlint * uMoonIntensity * 1.4;
-  color += lanternLight(body, n, vWorld, 0.5) * 0.8;
-  float bloom = smoothstep(0.78, 0.98, noise(p * 2.3 + vec2(t * 0.35, -t * 0.2))) * (0.6 + 0.4 * sin(uTime * 0.9 + p.x * 1.7));
-  color += vec3(0.32, 0.78, 0.72) * bloom * smoothstep(0.08, 0.4, depth) * uNightness * 0.16;
-  // A thin, soft line of foam where the water meets the shore.
-  float foam = (1.0 - smoothstep(0.0, 0.07, depth)) * (0.6 + 0.4 * noise(p * 3.0 + t));
-  color = mix(color, vec3(0.93, 0.95, 0.92), foam * 0.45);
-  float alpha = mix(0.55, 0.92, smoothstep(0.0, 0.6, depth));
-  gl_FragColor = vec4(aerial(shoulder(color), vWorld), alpha);
-}
-`;
-
-export interface Water {
-  readonly group: THREE.Group;
-  update(t: Terrain): void;
-  /** The sky color the water reflects at grazing angles. */
-  reflect(sky: readonly [number, number, number]): void;
-}
-
-function ribbon(t: Terrain): THREE.BufferGeometry[] {
-  return t.streams.map((stream) => {
-    const st = stream.stations;
-    const pos: number[] = [];
-    const idx: number[] = [];
-    st.forEach((s, i) => {
-      const a = st[Math.max(0, i - 1)] ?? s;
-      const b = st[Math.min(st.length - 1, i + 1)] ?? s;
-      const len = Math.hypot(b.x - a.x, b.z - a.z) || 1;
-      const nx = -(b.z - a.z) / len;
-      const nz = (b.x - a.x) / len;
-      const w = surfaceHalfWidth(s);
-      pos.push(s.x - nx * w, s.level, s.z - nz * w, s.x + nx * w, s.level, s.z + nz * w);
-      if (i > 0) {
-        const k = (i - 1) * 2;
-        idx.push(k, k + 2, k + 1, k + 1, k + 2, k + 3);
-      }
-    });
-    const g = new THREE.BufferGeometry();
-    g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
-    g.setIndex(idx);
-    return g;
-  });
-}
-
-function disc(x: number, z: number, radius: number, level: number): THREE.BufferGeometry {
-  const g = new THREE.CircleGeometry(radius, 72);
-  g.rotateX(-Math.PI / 2);
-  g.translate(x, level, z);
-  return g;
-}
-
-export function createWater(t: Terrain, light: SceneLight, ground: GroundTexture): Water {
-  const material = new THREE.ShaderMaterial({
-    vertexShader: WATER_VERT,
-    fragmentShader: WATER_FRAG,
-    uniforms: {
-      ...light,
-      ...ground.uniforms,
-      uShallow: { value: hexToVec3(0x8fcfc0) },
-      uDeep: { value: hexToVec3(0x2e6f93) },
-      uSky: { value: hexToVec3(0xb9d8f0) },
-    },
-    transparent: true,
-    depthWrite: false,
-    side: THREE.DoubleSide,
-  });
-  const group = new THREE.Group();
-  const update = (next: Terrain): void => {
-    for (const child of [...group.children]) {
-      (child as THREE.Mesh).geometry.dispose();
-      group.remove(child);
-    }
-    for (const g of ribbon(next)) group.add(new THREE.Mesh(g, material));
-    for (const p of next.ponds) group.add(new THREE.Mesh(disc(p.x, p.z, p.reach, p.level), material));
-    for (const m of group.children) m.renderOrder = 2;
-  };
-  update(t);
-  const sky = material.uniforms.uSky as { value: THREE.Vector3 };
-  return { group, update, reflect: (c) => sky.value.set(c[0], c[1], c[2]) };
 }
