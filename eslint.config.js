@@ -84,7 +84,7 @@ export default tseslint.config(
   // Tests: few and strong. They check behavior through public entry points,
   // so changing an internal never breaks a test that should not care.
   {
-    files: ["packages/*/test/**", "app/**/*.test.ts"],
+    files: ["packages/*/test/**", "app/**/*.test.ts", "tools/**/*.test.ts"],
     rules: {
       "no-restricted-imports": [
         "error",
