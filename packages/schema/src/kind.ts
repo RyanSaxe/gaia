@@ -1,4 +1,4 @@
-import type { FileFacts, RegionFacts, RepositoryFacts } from "./facts.ts";
+import type { FileFacts, LinkFacts, RegionFacts, RepositoryFacts } from "./facts.ts";
 import type { Role } from "./ports.ts";
 
 export interface Slot<R extends Role = Role> {
@@ -37,6 +37,8 @@ const ROLE_IO: Readonly<Record<Role, { input: string | null; output: string }>> 
   Rock: { input: null, output: "Built" },
   Overgrowth: { input: "Built", output: "Built" },
   Drift: { input: null, output: "Built" },
+  Route: { input: null, output: "RouteSpec" },
+  Landmark: { input: null, output: "Built" },
 };
 
 /** Anchors come from a Skeleton's tips or a Built's anchors. */
@@ -44,12 +46,13 @@ function feeds(output: string, input: string): boolean {
   return output === input || (input === "Anchors" && (output === "Built" || output === "Skeleton"));
 }
 
-/** What a kind stands for: one file, one directory's region, or the whole repository. */
-export type Subject = "file" | "region" | "repository";
+/** What a kind stands for: one file, one directory's region, one dependency between files, or the whole repository. */
+export type Subject = "file" | "region" | "link" | "repository";
 
 export interface SubjectFacts {
   file: FileFacts;
   region: RegionFacts;
+  link: LinkFacts;
   repository: RepositoryFacts;
 }
 
@@ -71,7 +74,7 @@ export interface Kind<S extends Subject = Subject> {
 }
 
 /** Any kind, for code that reads slots and stages but never binds facts. */
-export type AnyKind = Kind<"file"> | Kind<"region"> | Kind<"repository">;
+export type AnyKind = Kind<"file"> | Kind<"region"> | Kind<"link"> | Kind<"repository">;
 
 /** The slot groups Jev answers in order: the kind's stages, or every slot at once. */
 export function stagesOf(k: AnyKind): readonly (readonly string[])[] {

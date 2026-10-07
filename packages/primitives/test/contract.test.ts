@@ -9,11 +9,11 @@ import { applyVitality, resolveParams } from "@gaia/realize";
 
 const lib = new Library(PRIMITIVES);
 const facts = { scale: 1, age: 120 };
-const GEOMETRY_ROLES = new Set(["Surface", "Foliage", "Ornament", "Walls", "Roof", "Openings", "Dressing", "Rock", "Overgrowth", "Drift"]);
+const GEOMETRY_ROLES = new Set(["Surface", "Foliage", "Ornament", "Walls", "Roof", "Openings", "Dressing", "Rock", "Overgrowth", "Drift", "Landmark"]);
 /** Roles that build against a building's plan. */
 const PLAN_ROLES = new Set(["Walls", "Roof", "Openings", "Dressing"]);
 /** Roles that build from nothing. */
-const SOURCE_ROLES = new Set(["Skeleton", "Motion", "Palette", "Footprint", "Rock", "Drift"]);
+const SOURCE_ROLES = new Set(["Skeleton", "Motion", "Palette", "Footprint", "Rock", "Drift", "Route", "Landmark"]);
 const TRIANGLE_BUDGET = 40_000;
 
 type Stored = Record<string, string | boolean | string[]>;

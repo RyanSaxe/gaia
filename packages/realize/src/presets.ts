@@ -293,3 +293,66 @@ export const FLOWER_PRESETS: readonly Preset[] = [
   { name: "Marigolds", blueprint: flowersOf("cups@1", { spread: "a wide drift", density: "a thick carpet", height: "low among the grass" }, "teal-gold") },
   { name: "Pink asters", blueprint: flowersOf("daisies@1", { spread: "a patch", density: "a thick carpet", height: "knee-high" }, "cherry-blossom") },
 ];
+
+/** Hand-filled landmarks: one of each primitive, as Jev might answer for a region's central file. */
+export const LANDMARK_PRESETS: readonly Preset[] = [
+  {
+    name: "Lantern tower",
+    blueprint: identify("landmark", {
+      form: { use: "lookout-tower@1", params: { height: "a lookout tower", shape: "round", crown: "an open lantern room", masonry: "dressed blocks" } },
+      palette: { use: "palette@1", params: { family: "spring-meadow", contrast: "balanced" } },
+    }),
+  },
+  {
+    name: "Stone ring",
+    blueprint: identify("landmark", {
+      form: { use: "standing-stones@1", params: { count: "a ring", height: "towering", lintels: true, centre: "a tall king stone", facets: "softly faceted" } },
+      palette: { use: "palette@1", params: { family: "silver-birch", contrast: "balanced" } },
+    }),
+  },
+  {
+    name: "Great oak",
+    blueprint: identify("landmark", {
+      form: { use: "great-tree@1", params: { form: "a spreading oak", size: "vast", fullness: "dense and lush", bark: "deeply furrowed" } },
+      motion: { use: "sway@1", params: { stiffness: "stiff", rhythm: "slow" } },
+      palette: { use: "palette@1", params: { family: "deep-forest", contrast: "balanced" } },
+    }),
+  },
+  {
+    name: "Battlemented keep",
+    blueprint: identify("landmark", {
+      form: { use: "lookout-tower@1", params: { height: "a tall tower", shape: "square", crown: "battlements", masonry: "great rough blocks" } },
+      palette: { use: "palette@1", params: { family: "desert-sage", contrast: "balanced" } },
+    }),
+  },
+  {
+    name: "Great willow",
+    blueprint: identify("landmark", {
+      form: { use: "great-tree@1", params: { form: "a great willow", size: "great", fullness: "full", bark: "gnarled and burred" } },
+      motion: { use: "sway@1", params: { stiffness: "gently swaying", rhythm: "slow" } },
+      palette: { use: "palette@1", params: { family: "lantern-dusk", contrast: "balanced" } },
+    }),
+  },
+];
+
+/** Hand-filled trail looks. */
+export const TRAIL_PRESETS: readonly Preset[] = [
+  {
+    name: "Worn footpath",
+    blueprint: identify("link", {
+      route: { use: "trail@1", params: { width: "a path two could walk", wear: "well trodden", edging: "none", winding: "gently curving", crossing: "footbridge" } },
+    }),
+  },
+  {
+    name: "Stone-edged path",
+    blueprint: identify("link", {
+      route: { use: "trail@1", params: { width: "a path two could walk", wear: "bare, beaten earth", edging: "stones", winding: "gently curving", crossing: "stepping stones" } },
+    }),
+  },
+  {
+    name: "Faint wandering track",
+    blueprint: identify("link", {
+      route: { use: "trail@1", params: { width: "a narrow footpath", wear: "faint, half grassed over", edging: "none", winding: "meandering", crossing: "stepping stones" } },
+    }),
+  },
+];

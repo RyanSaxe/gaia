@@ -305,6 +305,27 @@ export interface Roles {
   Overgrowth: { input: Built; output: Built };
   /** A drift of small plants at ground level, such as wildflowers. */
   Drift: { input: null; output: Built };
+  /** How a trail between two places looks and runs. The terrain routes it; geometry follows the route. */
+  Route: { input: null; output: RouteSpec };
+  /** A great thing a person can steer by from far away, such as a tower or a ring of standing stones. */
+  Landmark: { input: null; output: Built };
+}
+
+/**
+ * A trail's look, in numbers the terrain and the ground shader read. The
+ * route itself is never chosen: the terrain finds it over the ground.
+ */
+export interface RouteSpec {
+  /** Width of the worn tread, meters. */
+  readonly width: number;
+  /** How bare the tread is worn, 0 (grassed over) to 1 (bare earth). */
+  readonly wear: number;
+  /** What lines the tread's edges. */
+  readonly edging: "none" | "stones";
+  /** How freely the trail wanders off the easiest line, 0 to 1. */
+  readonly winding: number;
+  /** How the trail crosses a stream. */
+  readonly crossing: "stepping-stones" | "footbridge";
 }
 
 /** A door or window in a building's wall. */

@@ -38,11 +38,11 @@ never crosses, because the renderer builds it. `EngineMethods` in
 | --- | --- | --- |
 | `@gaia/schema` | The type builder, ports and vitality channels, primitive and kind contracts, code facts, the world document, Jev's wire format, the engine protocol, content identity | Nothing |
 | `@gaia/primitives` | Primitive declarations and geometry, palettes, the manifest `PRIMITIVES` | schema |
-| `@gaia/kinds` | The flora, structure, rock, wildflowers, biome and world kinds | schema |
+| `@gaia/kinds` | The flora, structure, rock, wildflowers, landmark, link, biome and world kinds | schema |
 | `@gaia/world` | The question planner, answer rules, context gathering, vitality, type-space tools, `WorldChange` | schema |
 | `@gaia/realize` | Blueprint to parts, world and region looks at an hour, the light between a day's keys, the sky and air references, presets, channel math | schema, primitives |
 | `@gaia/render` | Three.js materials, light and shadow, and instanced copies of a component | schema, realize, three |
-| `@gaia/terrain` | Relief composition, the baked heightfield, water, the wild land past the rim, walking and wading, sight lines, where plants and the understory stand | schema, primitives, realize |
+| `@gaia/terrain` | Relief composition, the baked heightfield, water, the wild land past the rim, walking and wading, sight lines, where plants, the understory and landmarks stand, and the routes of trails | schema, primitives, realize |
 | `@gaia/app` | Electron main, preload, world service, and the renderer (the lab) | Every package |
 
 ESLint enforces these boundaries and the purity rules; `eslint.config.js`
@@ -53,8 +53,10 @@ gives the reason next to each rule.
 A **primitive** is a pure procedural function with typed parameters and a
 role, such as `branching@1` (Skeleton) or `leaf-clumps@1` (Foliage). It is code,
 versioned in its ID. A **kind** declares slots by role and the subject it
-stands for: a file (`flora`, `structure`, `rock`, `wildflowers`), a region
-(`biome`) or the repository (`world`). A `structure`'s footprint lays out one
+stands for: a file (`flora`, `structure`, `rock`, `wildflowers`,
+`landmark`), a region (`biome`), a dependency between two files (`link`) or
+the repository (`world`). A `link`'s blueprint fills only a trail's look;
+the terrain finds its route. A `structure`'s footprint lays out one
 `BuildingPlan` (walls, roofline, floor and where every door and window goes);
 its body, roof, openings and ornaments each build on that plan, so they agree
 by construction.
