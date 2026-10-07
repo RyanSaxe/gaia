@@ -38,7 +38,7 @@ const HEALTHY: Record<PaletteFamily, { bark: number; leaf: number; bloom: number
  * the moss that grows on them, and the stems and eyes of its wildflowers.
  */
 const UNDERSTORY: Record<PaletteFamily, { stone: number; moss: number; stem: number; eye: number }> = {
-  "spring-meadow": { stone: 0xa39b8a, moss: 0x5f8a3e, stem: 0x6f9a3c, eye: 0xf0c43c },
+  "spring-meadow": { stone: 0x9b988c, moss: 0x5f8a3e, stem: 0x6f9a3c, eye: 0xf0c43c },
   "deep-forest": { stone: 0x7c807a, moss: 0x427c3c, stem: 0x3f6e38, eye: 0x8a5a2a },
   "teal-gold": { stone: 0x98948a, moss: 0x5c9a6a, stem: 0x4f8a6c, eye: 0xe0902e },
   "autumn-ember": { stone: 0x988a7a, moss: 0x8c9a40, stem: 0x6a7e3a, eye: 0x3a2a20 },

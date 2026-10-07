@@ -61,6 +61,8 @@ const UNDERSTORY: readonly { preset: Preset | undefined; kind: AnyKind; at: [num
   { preset: FLOWER_PRESETS[3], kind: wildflowers, at: [-11.6, 6.8] },
   { preset: FLOWER_PRESETS[2], kind: wildflowers, at: [-4.2, 10.8] },
   { preset: FLOWER_PRESETS[1], kind: wildflowers, at: [8.8, 10.4] },
+  { preset: ROCK_PRESETS[2], kind: rock, at: [-8.4, 13.2] },
+  { preset: ROCK_PRESETS[4], kind: rock, at: [3.6, 15.2] },
 ];
 const ROW = [
   ...FLORA_PRESETS.map((preset, i) => ({ preset, kind: flora as AnyKind, at: SPOTS[i] ?? [0, 0] })),
@@ -380,7 +382,8 @@ export function createFloraLab(root: HTMLElement): Lab {
       if (active) frame(dt, h);
     },
     shots: (): Shot[] =>
-      [...FLORA_PRIMITIVES, ...ROCK_PRIMITIVES, ...WILDFLOWER_PRIMITIVES].flatMap((p) =>
+      // Every primitive some plant in the row uses, at three vitalities.
+      [...FLORA_PRIMITIVES, ...ROCK_PRIMITIVES, ...WILDFLOWER_PRIMITIVES].filter((p) => ROW.some((r) => Object.values(r.preset.blueprint.slots).some((s) => s.use === p.id))).flatMap((p) =>
         [1, 0.5, 0.1].map((v) => ({ name: `flora-${slug(p.id)}-vitality-${v.toFixed(1)}`, stage: () => showcase(p.id, v) })),
       ),
     hook: {

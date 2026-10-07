@@ -29,7 +29,7 @@ const GROUPS: readonly Group[] = [
     presets: ROCK_PRESETS,
     weights: [3, 0.5, 1, 2, 1, 0.7],
     casts: true,
-    rule: { groups: 3, members: [1, 4], spread: 6, mix: "member", scale: [0.7, 1.25], maxSlope: 22, waterClearance: 1.5, ground: "lowest", sink: 0.05 },
+    rule: { groups: 3.5, members: [1, 4], spread: 6, mix: "member", scale: [0.7, 1.25], maxSlope: 22, waterClearance: 1.5, ground: "lowest", sink: 0.05 },
     landforms: { "terraces@1": 1.8, "basin@1": 1.4, "valley@1": 1, "rolling-hills@1": 1, "meadow@1": 0.6, "dunes@1": 0.3 },
   },
   {
@@ -38,7 +38,7 @@ const GROUPS: readonly Group[] = [
     presets: SHRUB_PRESETS,
     weights: [1, 1, 0.7, 0.6],
     casts: true,
-    rule: { groups: 4, members: [1, 5], spread: 5, mix: "member", scale: [0.75, 1.2], maxSlope: 24, waterClearance: 2, ground: "lowest", sink: 0.06 },
+    rule: { groups: 5, members: [1, 5], spread: 5, mix: "member", scale: [0.75, 1.2], maxSlope: 24, waterClearance: 2, ground: "lowest", sink: 0.06 },
     landforms: { "valley@1": 1.3, "rolling-hills@1": 1.2, "basin@1": 1, "terraces@1": 0.8, "meadow@1": 0.7, "dunes@1": 0.4 },
   },
   {
@@ -47,7 +47,7 @@ const GROUPS: readonly Group[] = [
     presets: FLOWER_PRESETS,
     weights: [1.2, 1, 0.8, 0.8, 0.8, 0.7],
     casts: false,
-    rule: { groups: 5, members: [2, 5], spread: 7, mix: "group", scale: [0.8, 1.15], maxSlope: 20, waterClearance: 1, ground: "plane", sink: 0.02 },
+    rule: { groups: 6.5, members: [2, 5], spread: 7, mix: "group", scale: [0.8, 1.15], maxSlope: 20, waterClearance: 1, ground: "plane", sink: 0.02 },
     landforms: { "meadow@1": 1.6, "rolling-hills@1": 1.3, "valley@1": 1.1, "basin@1": 0.8, "terraces@1": 0.7, "dunes@1": 0.3 },
   },
 ];

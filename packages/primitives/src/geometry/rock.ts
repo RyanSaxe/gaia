@@ -35,13 +35,13 @@ function emitStone(out: PartBuilder, s: Stone, r: Rand, anchors: Anchor[], subdi
   const sphere = icosphere(subdiv);
   const seed = Math.floor(r.next() * 1e6);
   const planeCount = Math.round(6 + s.facets * 10);
-  const planes: { n: V3; d: number }[] = [];
+  const planes: { n: V3; d: number; hue: number }[] = [];
   for (let k = 0; k < planeCount; k++) {
     // Cuts favor the sides and shoulders; the buried base needs none.
     const a = r.next() * Math.PI * 2;
     const y = r.range(-0.25, 0.85);
     const h = Math.sqrt(1 - y * y);
-    planes.push({ n: [Math.cos(a) * h, y, Math.sin(a) * h], d: r.range(0.66, 0.86) });
+    planes.push({ n: [Math.cos(a) * h, y, Math.sin(a) * h], d: r.range(0.66, 0.86), hue: r.range(-0.035, 0.035) });
   }
   const cut = 0.35 + 0.65 * s.facets;
   const tiltAxis = r.next() * Math.PI * 2;
@@ -58,14 +58,25 @@ function emitStone(out: PartBuilder, s: Stone, r: Rand, anchors: Anchor[], subdi
   const floor = -s.size[1] * HIDDEN_DEPTH;
   const tint = r.range(-0.03, 0.03);
 
-  const positions: V3[] = sphere.points.map((n) => {
+  // How deeply cut planes shaved each vertex, and the hue of the plane that shaved it most:
+  // fresh fractures read lighter than weathered rounds, and each face takes its own tone.
+  const fracture = new Float32Array(sphere.points.length);
+  const faceHue = new Float32Array(sphere.points.length);
+  const positions: V3[] = sphere.points.map((n, vi) => {
     let q: V3 = [n[0], n[1], n[2]];
     const lump = 1 + 0.16 * fbm3(n[0] * 1.3 + seed * 0.001, n[1] * 1.3, n[2] * 1.3, seed, 3) + 0.05 * fbm3(n[0] * 3.7, n[1] * 3.7, n[2] * 3.7, seed + 5, 2);
     q = [q[0] * lump, q[1] * lump, q[2] * lump];
+    let deepest = 0;
     for (const p of planes) {
       const over = q[0] * p.n[0] + q[1] * p.n[1] + q[2] * p.n[2] - p.d;
-      if (over > 0) q = [q[0] - p.n[0] * over * cut, q[1] - p.n[1] * over * cut, q[2] - p.n[2] * over * cut];
+      if (over <= 0) continue;
+      q = [q[0] - p.n[0] * over * cut, q[1] - p.n[1] * over * cut, q[2] - p.n[2] * over * cut];
+      if (over > deepest) {
+        deepest = over;
+        faceHue[vi] = p.hue;
+      }
     }
+    fracture[vi] = clamp(deepest / 0.08, 0, 1) * cut;
     if (s.top > 0) {
       const over = q[0] * topNormal[0] + q[1] * topNormal[1] + q[2] * topNormal[2] - s.top;
       if (over > 0) q = [q[0] - topNormal[0] * over, q[1] - topNormal[1] * over, q[2] - topNormal[2] * over];
@@ -98,14 +109,17 @@ function emitStone(out: PartBuilder, s: Stone, r: Rand, anchors: Anchor[], subdi
     const mottle = fbm3(p[0] * 1.6, p[1] * 1.6, p[2] * 1.6, seed + 3, 3);
     // Lighter toward the top, a soft darker band where the stone meets the ground.
     const ground = clamp(above / 0.22, 0, 1);
-    const shade = 0.5 + 0.2 * mottle + 0.16 * clamp(above, 0, 1) - 0.2 * (1 - ground * ground) + 0.06 * n[1];
+    // Rain streaks run down the sides: noise stretched tall.
+    const streak = fbm3(p[0] * 4.5, p[1] * 0.6, p[2] * 4.5, seed + 6, 2);
+    const shade =
+      0.46 + 0.16 * mottle + 0.12 * (fracture[i] as number) + 0.08 * streak + 0.16 * clamp(above, 0, 1) - 0.2 * (1 - ground * ground) + 0.06 * n[1];
     out.vertex(p, n, shade, {
       loss: 0,
       droop: 0,
       wither: clamp(0.5 + 0.35 * fbm3(p[0] * 2.3, p[1] * 2.3, p[2] * 2.3, seed + 4, 2), 0.2, 0.9),
       glow: 0,
       pivot: s.base,
-      tint: tint + 0.02 * mottle,
+      tint: tint + 0.02 * mottle + (faceHue[i] as number) * (fracture[i] as number),
     });
     if (n[1] > 0.75 && above > 0.55 && i % 7 === 0) anchors.push({ position: p, normal: n, size: clamp(height, 0, 1) });
   });
