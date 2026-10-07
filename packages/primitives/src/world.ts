@@ -143,10 +143,10 @@ type CloudShape = Omit<CloudSpec, "threshold">;
 
 const CLOUD_FORMS = {
   "fair-weather puffs": { scale: 3.0, stretch: 1.2, softness: 0.08, low: 0.03, high: 0.95, opacity: 0.95, billow: 0.65, cells: 0, horizon: 0 },
-  "towering cumulus": { scale: 1.0, stretch: 1, softness: 0.06, low: 0.0, high: 0.45, opacity: 1, billow: 0.9, cells: 0, horizon: 1 },
+  "towering cumulus": { scale: 1.0, stretch: 1, softness: 0.06, low: 0.0, high: 0.55, opacity: 1, billow: 0.9, cells: 0, horizon: 1 },
   // Thin and high: fine streaks nine times longer than wide, faint, kept to the upper sky.
   "cirrus streaks": { scale: 3.4, stretch: 9, softness: 0.14, low: 0.22, high: 1.05, opacity: 0.38, billow: 0.15, cells: 0, horizon: 0 },
-  "low drifting banks": { scale: 0.9, stretch: 3.5, softness: 0.1, low: 0.0, high: 0.26, opacity: 0.88, billow: 0.45, cells: 0, horizon: 1 },
+  "low drifting banks": { scale: 0.9, stretch: 3.5, softness: 0.1, low: 0.0, high: 0.32, opacity: 0.88, billow: 0.45, cells: 0, horizon: 1 },
 } as const satisfies Record<string, CloudShape>;
 
 export const sky = primitive({

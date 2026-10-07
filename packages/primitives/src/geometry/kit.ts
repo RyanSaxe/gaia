@@ -56,12 +56,15 @@ export interface Channels {
   readonly tint?: number;
 }
 
+const SOLID: Vec3 = [0, 0, 0];
+
 /** Accumulates vertices with every channel, then freezes into a Part. */
 export class PartBuilder {
   readonly #pos: number[] = [];
   readonly #nrm: number[] = [];
   readonly #shade: number[] = [];
   readonly #tint: number[] = [];
+  readonly #cut: number[] = [];
   readonly #loss: number[] = [];
   readonly #droop: number[] = [];
   readonly #wither: number[] = [];
@@ -82,8 +85,10 @@ export class PartBuilder {
     return this.#idx.length / 3;
   }
 
-  vertex(p: Vec3, n: Vec3, shade: number, c: Channels): number {
+  /** Adds a vertex; `cut` places it on a leaf card (see `CUT`), and solid surfaces omit it. */
+  vertex(p: Vec3, n: Vec3, shade: number, c: Channels, cut: Vec3 = SOLID): number {
     this.#pos.push(p[0], p[1], p[2]);
+    this.#cut.push(cut[0], cut[1], cut[2]);
     this.#nrm.push(n[0], n[1], n[2]);
     this.#shade.push(clamp(shade, 0, 1));
     this.#tint.push(clamp(c.tint ?? 0, -0.1, 0.1));
@@ -107,6 +112,7 @@ export class PartBuilder {
       indices: new Uint32Array(this.#idx),
       shade: new Float32Array(this.#shade),
       tint: new Float32Array(this.#tint),
+      cutout: new Float32Array(this.#cut),
       channels: {
         loss: new Float32Array(this.#loss),
         droop: new Float32Array(this.#droop),

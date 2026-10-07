@@ -10,7 +10,7 @@ import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, RELIEF_PRIMITIVES, WORLD_PRIMITIVES
 import { biome, flora, world as worldKind } from "@gaia/kinds";
 import { blueprintCount, randomSlots, validate } from "@gaia/world";
 import { FLORA_PRESETS, WORLD_PRESETS, realize, realizeWorld } from "@gaia/realize";
-import { type PlantView, applyLight, createPlant, createSceneLight, createSunShadow } from "@gaia/render";
+import { type PlantView, applyLight, createPlant, createRenderer, createSceneLight, createSunShadow } from "@gaia/render";
 import { renderInspector } from "../inspector.ts";
 import { type Lab, type Shot, onTap, refs, slug } from "../lab.ts";
 import { createSheet } from "../sheet.ts";
@@ -77,7 +77,7 @@ export function createFloraLab(root: HTMLElement): Lab {
 
   const canvas = root.querySelector("canvas") as HTMLCanvasElement;
   const stage = root.querySelector(".stage") as HTMLElement;
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  const renderer = createRenderer(canvas);
   renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 

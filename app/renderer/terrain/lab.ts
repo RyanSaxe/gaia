@@ -10,7 +10,7 @@ import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, NO_SHIFT, RELIEF_PRIMITIVES, WORLD_
 import { biome, flora, world as worldKind } from "@gaia/kinds";
 import { defaultParams, validate } from "@gaia/world";
 import { FLORA_PRESETS, WORLD_PRESETS, realize, realizeRegion, realizeSky } from "@gaia/realize";
-import { type PlantView, applyLight, createLantern, createPlant, createSceneLight, createSunShadow } from "@gaia/render";
+import { type PlantView, applyLight, createLantern, createPlant, createRenderer, createSceneLight, createSunShadow } from "@gaia/render";
 import {
   EYE_HEIGHT,
   RELIEF_BUDGET,
@@ -109,7 +109,7 @@ export function createTerrainLab(root: HTMLElement): Lab {
 
   const canvas = root.querySelector("canvas") as HTMLCanvasElement;
   const stage = root.querySelector(".stage") as HTMLElement;
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  const renderer = createRenderer(canvas);
   renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 

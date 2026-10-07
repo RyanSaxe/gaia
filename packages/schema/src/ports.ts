@@ -33,9 +33,30 @@ export interface Part {
   readonly shade: Float32Array;
   /** Per-vertex hue offset in turns, -0.1 to 0.1, so one swatch varies across a canopy. */
   readonly tint: Float32Array;
+  /**
+   * Where each vertex sits on a leaf card, three per vertex: across the card
+   * (-1 to 1), along it, and the card's cut from `CUT`. The renderer cuts each
+   * card to that leafy shape; a solid surface is all zeros.
+   */
+  readonly cutout: Float32Array;
   readonly channels: VitalityChannels;
   readonly collision: "solid" | "walkable" | "none";
 }
+
+/**
+ * The shapes a leaf card can be cut to. A cut's fraction carries the card's
+ * own seed, so no two cards show the same leaves.
+ */
+export const CUT = {
+  /** A solid surface: nothing is cut. */
+  solid: 0,
+  /** A cluster of broad leaves around the card's middle; along runs -1 to 1. */
+  cluster: 1,
+  /** Small lance leaves hanging from a stem down the middle; along counts leaves. */
+  strand: 2,
+  /** A needle spray with a jagged fringe; along runs from 0 at the base to 1 at the tip. */
+  needles: 3,
+} as const;
 
 export interface Anchor {
   readonly position: Vec3;

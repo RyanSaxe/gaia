@@ -13,6 +13,13 @@ export interface SunShadow {
   dispose(): void;
 }
 
+/** How far below the horizon (as a direction's height) the sun lends no light; `lightAt` in @gaia/realize ends it there. */
+const SUN_GONE = 0.04;
+const smooth01 = (x: number): number => {
+  const t = Math.min(1, Math.max(0, x));
+  return t * t * (3 - 2 * t);
+};
+
 export function createSunShadow(light: SceneLight, size = 2048): SunShadow {
   const target = new THREE.WebGLRenderTarget(size, size, {
     depthTexture: new THREE.DepthTexture(size, size),
@@ -25,11 +32,14 @@ export function createSunShadow(light: SceneLight, size = 2048): SunShadow {
   let extent = 20;
 
   const update = (): void => {
-    // Once the sun is down the map follows the moon, and moon shadows fade in with the night.
+    // Once the sun is down the map follows the moon, and moon shadows fade in
+    // with the night. They rise from nothing as the sun sinks past the point
+    // where its light ends, so the map's change of caster never shows.
     const fromMoon = light.uSunIntensity.value <= 0.001;
     const sun = fromMoon ? light.uMoonDirection.value : light.uSunDirection.value;
-    const n = Math.min(1, Math.max(0, (light.uNightness.value - 0.45) / 0.35));
-    light.uMoonShadow.value = fromMoon ? n * n * (3 - 2 * n) : 0;
+    const night = smooth01((light.uNightness.value - 0.45) / 0.35);
+    const sunk = smooth01((-light.uSunDirection.value.y - SUN_GONE) / 0.12);
+    light.uMoonShadow.value = fromMoon ? night * sunk : 0;
     camera.position.copy(center).addScaledVector(sun, 60);
     camera.up.set(0, 1, 0);
     camera.lookAt(center);

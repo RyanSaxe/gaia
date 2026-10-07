@@ -18,6 +18,10 @@ export const AIR = {
   tintFade: [300, 900],
   dissolveStart: 900,
   dissolveEnd: 1400,
+  /** Low mist holds the horizon's color to the first height and thins out by the second (heights of a direction); the horizon takes the air's color by mist times `mistGain`, at most `mistSky`. */
+  mistRise: [0.01, 0.14],
+  mistGain: 2.2,
+  mistSky: 0.75,
 } as const;
 
 /** What the sky function reads: the hour's light and the sky's three gradient colors. */
@@ -44,12 +48,12 @@ const normalize2 = (x: number, y: number): [number, number] => {
 
 /**
  * The sky's color looking along `dir` (a unit vector): the gradient from
- * horizon to zenith, the hour's glow on the sun's side, and the haze around
- * the sun. Below the horizon it holds the horizon's color, so nothing seen
+ * horizon to zenith, the hour's glow on the sun's side, the haze around the
+ * sun, and the local air's low mist along the horizon when `look` carries it. Below the horizon it holds the horizon's color, so nothing seen
  * there can meet the sky at a line. Clouds, stars and the moon are drawn on
  * top by the dome only.
  */
-export function skyColorAt(look: SkyInput, dir: Vec3): Rgb {
+export function skyColorAt(look: SkyInput & { readonly fog?: AirInput["fog"] }, dir: Vec3): Rgb {
   const { light, sky } = look;
   const e = Math.max(dir[1], 0);
   let color = mix(sky.horizon, sky.mid, smoothstep(0, 0.32, e));
@@ -64,7 +68,9 @@ export function skyColorAt(look: SkyInput, dir: Vec3): Rgb {
   const sunDot = Math.max(dir[0] * sun[0] + dir[1] * sun[1] + dir[2] * sun[2], 0);
   color = mix(color, light.sunColor, Math.pow(sunDot, 10) * 0.28 * sunUp);
   const halo = Math.pow(sunDot, 180) * 0.18 * sunUp;
-  return [color[0] + light.sunColor[0] * halo, color[1] + light.sunColor[1] * halo, color[2] + light.sunColor[2] * halo];
+  color = [color[0] + light.sunColor[0] * halo, color[1] + light.sunColor[1] * halo, color[2] + light.sunColor[2] * halo];
+  if (look.fog === undefined) return color;
+  return mix(color, look.fog.color, clamp01(look.fog.mist * AIR.mistGain) * (1 - smoothstep(AIR.mistRise[0], AIR.mistRise[1], e)) * AIR.mistSky);
 }
 
 /**
