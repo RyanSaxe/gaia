@@ -45,9 +45,10 @@ export interface SceneLight {
 
 /** The lantern's warm pool: about 12 m across, fading smoothly to nothing by `LANTERN.reach`. */
 export const LANTERN = {
-  color: 0xff9448,
+  /** Candle orange: little green, so on green grass the pool reads warm, not yellow-olive. */
+  color: 0xff6a2a,
   /** Strength at full night. */
-  intensity: 1.8,
+  intensity: 2.4,
   /** Distance in meters where its light reaches zero. */
   reach: 7.5,
   /** Carried at hand height (eye height less this), a little ahead and to the right, in meters. */
@@ -232,10 +233,11 @@ vec3 shoulder(vec3 c) {
 // soft-cel key and the lantern's warm pool. \`wrap\` softens the terminator:
 // 0 for solid surfaces, up to 1 for leaves and blades that scatter light.
 
-// The eye loses color at night: hues fade toward a cool grey under the moon.
+// The eye loses color at night: hues fade halfway toward a cool grey under
+// the moon, so warm palettes stay warm instead of going muddy.
 vec3 nightTone(vec3 albedo) {
   float luma = dot(albedo, vec3(0.299, 0.587, 0.114));
-  return mix(albedo, vec3(luma) * vec3(0.92, 0.98, 1.08), uNightness * 0.7);
+  return mix(albedo, vec3(luma) * vec3(0.92, 0.98, 1.08), uNightness * 0.5);
 }
 
 // How much the sun's own terms count: 1 by day, 0 once it has set, so the
@@ -304,11 +306,6 @@ vec3 aerial(vec3 color, vec3 worldPosition) {
   // Mist lies low: thickest at the ground, gone a few units up, and only with distance.
   float mist = uMist * exp(-max(worldPosition.y, 0.0) * 0.45) * (1.0 - exp(-dist * 0.035));
   color = mix(color, air, clamp(haze + mist * 0.7, 0.0, 1.0));
-  color = mix(color, sky, smoothstep(${f1(AIR.dissolveStart)}, ${f1(AIR.dissolveEnd)}, dist));
-  // The air right around the lantern holds a faint warm glow, so the person
-  // feels it in hand even when it hangs below the view.
-  float t = clamp(dot(uLanternPosition - cameraPosition, ray) / max(dot(ray, ray), 1e-4), 0.0, 1.0);
-  float near = length(cameraPosition + ray * t - uLanternPosition);
-  return color + uLanternColor * uLanternIntensity * exp(-near * near * 2.5) * 0.035;
+  return mix(color, sky, smoothstep(${f1(AIR.dissolveStart)}, ${f1(AIR.dissolveEnd)}, dist));
 }
 `;

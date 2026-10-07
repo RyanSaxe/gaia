@@ -99,7 +99,8 @@ void main() {
   albedo = mix(albedo, vTip, smoothstep(0.55, 1.0, vT) * 0.75);
   albedo = mix(albedo, uDry, step(0.93, vTint) * 0.45);
   albedo *= 0.82 + 0.25 * vT;
-  if (vFlower > 0.5 && vT > 0.8) albedo = vBloom * (0.9 + 0.1 * vT);
+  // Flowers fade into their blades at night, so the dark meadow never reads as confetti.
+  if (vFlower > 0.5 && vT > 0.8) albedo = mix(vBloom * (0.9 + 0.1 * vT), albedo, uNightness * 0.75);
   float shadow = mix(0.45, 1.0, sunShadow(vWorld, 0.0015));
   float light = softCel(max(uSunDirection.y, 0.0) * shadow) * sunUp();
   vec3 toned = nightTone(albedo);

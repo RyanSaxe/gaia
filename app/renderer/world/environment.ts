@@ -112,11 +112,19 @@ void main() {
   // river of stars crosses the sky as a soft band, denser and faintly milky.
   float starsOut = smoothstep(0.4, 0.9, uNightness) * smoothstep(0.02, 0.3, e);
   vec3 bandNormal = normalize(vec3(1.0, 0.62, 0.12));
-  float river = exp(-pow(dot(dir, bandNormal) / 0.2, 2.0)) * uStarRiver;
-  float milk = river * (0.45 + 0.55 * fbm(vec2(dot(dir, vec3(0.7, 0.1, -0.7)), dir.y) * 9.0));
+  float across = dot(dir, bandNormal);
+  float along = dot(dir, normalize(vec3(-0.12, 0.0, 1.0)));
+  // The band: a soft milky glow with a brighter core, clumped along its
+  // length, split by a dark lane of dust, and crowded with faint stars.
+  float river = exp(-pow(across / 0.24, 2.0)) * uStarRiver;
+  float core = exp(-pow(across / 0.09, 2.0)) * uStarRiver;
+  float clumps = 0.35 + 0.65 * fbm(vec2(along * 6.0, across * 14.0) + 2.0);
+  float lane = smoothstep(0.5, 0.7, fbm(vec2(along * 4.0 + 7.0, across * 22.0))) * smoothstep(0.08, 0.0, abs(across - 0.02));
+  float milk = (river * 0.55 + core * 0.7) * clumps * (1.0 - lane * 0.7);
   vec3 stars = starLayer(dir, 90.0, uStars * 0.5 + river * 0.3, 0.17);
   stars += starLayer(dir, 170.0, uStars * 0.7 + river * 0.8, 0.16) * 0.6;
-  color += (stars + vec3(0.42, 0.48, 0.7) * milk * 0.2) * starsOut;
+  stars += starLayer(dir, 300.0, river * 0.9, 0.2) * 0.35 * (1.0 - lane);
+  color += (stars + vec3(0.45, 0.5, 0.74) * milk * 0.45) * starsOut;
 
   // One parametric cloud layer. Dome clouds use a stereographic projection
   // (stretch draws streaks, cells break the cover into dapples); horizon
@@ -423,8 +431,9 @@ void main() {
   albedo = mix(albedo, uTip, smoothstep(0.55, 1.0, vT) * 0.75);
   albedo = mix(albedo, uDry, max(step(0.94, vTint) * 0.4, (1.0 - uVitality) * 0.7));
   albedo *= 0.82 + 0.25 * vT;
+  // Flowers fade into their blades at night, so the dark meadow never reads as confetti.
   if (vFlower > 0.0 && vT > 0.55) {
-    albedo = vFlower < 0.4 ? uFlower0 : vFlower < 0.75 ? uFlower1 : uFlower2;
+    albedo = mix(vFlower < 0.4 ? uFlower0 : vFlower < 0.75 ? uFlower1 : uFlower2, albedo, uNightness * 0.75);
   }
   vec3 color = groundLit(albedo, vWorld);
   // Looking toward a low sun, blade tips glow with the light shining through them.

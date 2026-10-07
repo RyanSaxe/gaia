@@ -125,15 +125,20 @@ Night follows four rules, all in the shared light chunk so plants, ground,
 grass and water agree:
 
 - **Moonlight is a floor.** Night ambient and shadow colors are cool blue,
-  never black, and hues fade toward a cool grey under the moon, so the land
-  always reads as blue shapes. The moon is a dim soft-cel key, and it casts
+  never black, and hues fade halfway toward a cool grey under the moon, so
+  the land reads as blue shapes while warm palettes stay warm. The moon is a dim soft-cel key, and it casts
   the shadows once the sun has set.
-- **The lantern.** The person carries a warm lantern at hand height, a little
-  ahead and to the right. Its pool is about 12 m across and fades smoothly to
-  nothing, with no edge; colors come back inside it. It fades in through dusk,
-  sways a few centimeters with each stride and settles when the person stops.
+- **The lantern.** The person carries a candle-orange lantern at hand height,
+  a little ahead and to the right. Its pool is about 12 m across and fades
+  smoothly to nothing, with no edge; colors come back inside it. It lights
+  surfaces only, never the air. It fades in through dusk, sways a few
+  centimeters with each stride and settles when the person stops. The Flora
+  tab carries none, so plants are judged under the moon alone.
 - **The night sky** deepens to blue, keeping a trace of the world's own sky
   color. The chosen moon, the chosen stars, and clouds silvered by the moon.
+  A river of stars is a band: a milky glow with a brighter core, split by a
+  dark lane of dust.
 - **The world's own glow** (the vitality `glow` channel, fireflies, living
   water) reads by contrast in the dark, a little stronger than by day and
-  still below what draws the eye on its own.
+  still below what draws the eye on its own. Wildflowers fade into their
+  blades at night.
