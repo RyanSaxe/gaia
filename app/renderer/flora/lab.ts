@@ -1,17 +1,19 @@
-// The flora lab: four preset plants in a sunlit meadow, an inspector
-// generated from the declarations, and live vitality.
+// The flora lab: four preset plants in a meadow, an inspector generated
+// from the declarations, and live vitality. The meadow is the first named
+// world's, at the shell's hour, so plants can be judged by day and by night.
+// Plants here keep their own palettes: no season turns them.
 
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { type Blueprint, Library, blueprintOf, seedOf } from "@gaia/schema";
-import { FLORA_PRIMITIVES } from "@gaia/primitives";
-import { flora } from "@gaia/kinds";
+import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, RELIEF_PRIMITIVES, WORLD_PRIMITIVES } from "@gaia/primitives";
+import { biome, flora, world as worldKind } from "@gaia/kinds";
 import { blueprintCount, randomSlots, validate } from "@gaia/world";
-import { FLORA_PRESETS, realize } from "@gaia/realize";
-import { type PlantView, createPlant, createSceneLight, createSunShadow } from "@gaia/render";
+import { FLORA_PRESETS, WORLD_PRESETS, realize, realizeWorld } from "@gaia/realize";
+import { type PlantView, applyLight, createPlant, createSceneLight, createSunShadow } from "@gaia/render";
 import { renderInspector } from "../inspector.ts";
 import { type Lab, type Shot, refs, slug } from "../lab.ts";
-import { createGrass, createGround, createSky } from "./environment.ts";
+import { createGround, createGroundCover, createSky } from "../world/environment.ts";
 
 const TEMPLATE = /* html */ `
 <main class="stage">
@@ -49,6 +51,8 @@ const SPOTS: readonly [number, number][] = [
   [9.8, 1.6],
 ];
 const OVERVIEW = { position: new THREE.Vector3(5.5, 6.8, 50), target: new THREE.Vector3(1.6, 4, 0) };
+const MEADOW = WORLD_PRESETS[0];
+const MEADOW_SEED = seedOf("lab/world");
 
 interface Entry {
   name: string;
@@ -76,13 +80,35 @@ export function createFloraLab(root: HTMLElement): Lab {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
   const light = createSceneLight();
+  const groundShared = { uVitality: { value: 1 } };
   const scene = new THREE.Scene();
   const sky = createSky(light);
-  const ground = createGround(light);
-  const grass = createGrass(light);
-  scene.add(sky, ground.mesh, grass);
+  const ground = createGround(light, groundShared);
+  const grass = createGroundCover(light, groundShared);
+  scene.add(sky.mesh, ground.mesh, grass.mesh);
   const shadow = createSunShadow(light, 2048);
   shadow.frame(new THREE.Vector3(0, 0, 0), 20);
+
+  // The meadow's light, sky and air follow the shell's hour. No lantern is
+  // carried here: plants are judged under the moon alone.
+  if (MEADOW === undefined) throw new Error("There are no named worlds.");
+  const worldLib = new Library([...WORLD_PRIMITIVES, ...BIOME_PRIMITIVES, ...RELIEF_PRIMITIVES]);
+  const meadowAt = (h: number) =>
+    realizeWorld({ blueprint: MEADOW.world, kind: worldKind }, { blueprint: MEADOW.biome, kind: biome }, worldLib, MEADOW_SEED, h);
+  let hour = Number.NaN;
+  function applyHour(h: number): void {
+    hour = h;
+    const look = meadowAt(h);
+    applyLight(light, look.light);
+    light.uLanternIntensity.value = 0;
+    light.uFogColor.value.set(...look.fog.color);
+    light.uFogDensity.value = look.fog.density;
+    light.uMist.value = look.fog.mist;
+    sky.apply(look);
+  }
+  const firstLook = meadowAt(12.5);
+  ground.apply(firstLook);
+  grass.apply(firstLook);
 
   const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 600);
   camera.position.copy(OVERVIEW.position);
@@ -277,13 +303,17 @@ export function createFloraLab(root: HTMLElement): Lab {
   new ResizeObserver(resize).observe(stage);
 
   let frozen: number | null = null;
-  function frame(dt: number): void {
+  function frame(dt: number, at: number): void {
+    if (at !== hour) applyHour(at);
     light.uTime.value = frozen ?? light.uTime.value + dt;
+    let sum = 0;
     for (const e of entries) {
       e.shown += (e.target - e.shown) * (1 - Math.exp(-dt * 5));
       if (Math.abs(e.target - e.shown) < 0.001) e.shown = e.target;
       e.view?.setVitality(e.shown);
+      sum += e.shown;
     }
+    groundShared.uVitality.value = sum / Math.max(1, entries.length);
     if (fly.t < 1) {
       fly.t = Math.min(1, fly.t + dt / 0.8);
       const k = fly.t * fly.t * (3 - 2 * fly.t);
@@ -292,7 +322,7 @@ export function createFloraLab(root: HTMLElement): Lab {
     }
     controls.update();
     const views = entries.flatMap((e) => (e.view === null ? [] : [e.view]));
-    shadow.render(renderer, scene, views, [sky, ground.mesh, grass]);
+    shadow.render(renderer, scene, views, [sky.mesh, ground.mesh, grass.mesh]);
     renderer.render(scene, camera);
   }
   select(entries[0] ?? null, false);
@@ -329,8 +359,8 @@ export function createFloraLab(root: HTMLElement): Lab {
       controls.enabled = on;
       if (on) resize();
     },
-    frame: (dt) => {
-      if (active) frame(dt);
+    frame: (dt, _now, h) => {
+      if (active) frame(dt, h);
     },
     shots: (): Shot[] =>
       FLORA_PRIMITIVES.flatMap((p) =>
@@ -346,6 +376,7 @@ export function createFloraLab(root: HTMLElement): Lab {
       random: () => randomize(),
       showcase,
       freeze: (t: number | null) => (frozen = t),
+      hour: () => hour,
       view: (pos: [number, number, number], target: [number, number, number]) => {
         camera.position.set(...pos);
         controls.target.set(...target);
