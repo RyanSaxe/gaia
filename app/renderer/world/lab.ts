@@ -384,7 +384,9 @@ export function createWorldLab(root: HTMLElement): Lab {
   refreshWorldPanel();
   select(null, false);
 
-  function view(pos: readonly [number, number, number], target: readonly [number, number, number]): void {
+  /** Places the camera; `skyward` lets a scripted check look up from below the target, at the sky. */
+  function view(pos: readonly [number, number, number], target: readonly [number, number, number], skyward = false): void {
+    controls.maxPolarAngle = Math.PI * (skyward ? 0.9 : 0.49);
     camera.position.set(...pos);
     controls.target.set(...target);
     fly.t = 1;

@@ -109,7 +109,8 @@ paths.
 ## Clouds
 
 Fair-weather puffs, towering cumulus, cirrus streaks and low drifting banks.
-Cirrus suits only some worlds, and Jev chooses where. Mackerel dapples were
+Cirrus suits only some worlds, and Jev chooses where; it is thin and high,
+fine streaks nine times longer than wide, faint, and kept to the upper sky. Mackerel dapples were
 removed.
 
 ## Day and night
