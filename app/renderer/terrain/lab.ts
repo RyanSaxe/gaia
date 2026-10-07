@@ -26,7 +26,7 @@ import {
 } from "@gaia/terrain";
 import { createSky } from "../flora/environment.ts";
 import { renderInspector } from "../inspector.ts";
-import { type Lab, type Shot, refs, slug } from "../lab.ts";
+import { type Lab, type Shot, onTap, refs, slug } from "../lab.ts";
 import { createGrass, createWater } from "./cover.ts";
 import { createGround, createGroundTexture, createMist } from "./ground.ts";
 import { createRegionCovers } from "./regions.ts";
@@ -48,6 +48,7 @@ const TEMPLATE = /* html */ `
     </div>
     <div class="chip hintline"><span class="here" data-ref="here"></span><span data-ref="hint"></span></div>
   </div>
+  <div class="pad touch-only" data-ref="pad" aria-hidden="true"><div class="pad-knob" data-ref="pad-knob"></div></div>
 </main>
 <aside class="panel">
   <header>
@@ -67,6 +68,11 @@ const TEMPLATE = /* html */ `
 /** The terrain lab has no world, so its covers wear no season. */
 const NO_SEASON: SeasonSpec = { swatches: {}, ground: NO_SHIFT, frost: 0, fall: hex(0xd9a04a) };
 const FOG = { walk: 0.0042, overview: 0.0008 };
+/** Each mode's hint, for a mouse and keyboard and for touch. */
+const HINTS = {
+  walk: ["WASD or arrows to walk, Shift to run, drag to look", "Drag to look, use the pad to walk, push it to the rim to run"],
+  overview: ["Drag to orbit, scroll to zoom, click a region", "Drag to orbit, pinch to zoom, tap a region"],
+};
 const MOVE = new Set(["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "ShiftLeft", "ShiftRight"]);
 
 interface Planted {
@@ -171,29 +177,77 @@ export function createTerrainLab(root: HTMLElement): Lab {
   window.addEventListener("keyup", (e) => keys.delete(e.code));
   window.addEventListener("blur", () => keys.clear());
 
-  const drag = { on: false, x: 0, y: 0, startX: 0, startY: 0 };
+  // One pointer looks: a second finger on the canvas never jerks the view.
+  const drag = { id: -1, x: 0, y: 0 };
   canvas.addEventListener("pointerdown", (e) => {
-    drag.on = true;
-    drag.x = drag.startX = e.clientX;
-    drag.y = drag.startY = e.clientY;
-    if (mode === "walk") canvas.setPointerCapture(e.pointerId);
+    if (mode !== "walk" || drag.id !== -1) return;
+    drag.id = e.pointerId;
+    drag.x = e.clientX;
+    drag.y = e.clientY;
+    canvas.setPointerCapture(e.pointerId);
   });
   canvas.addEventListener("pointermove", (e) => {
-    if (!drag.on || mode !== "walk") return;
+    if (e.pointerId !== drag.id || mode !== "walk") return;
     walker.yaw -= (e.clientX - drag.x) * 0.0045;
     walker.pitch = Math.max(-1.1, Math.min(1.1, walker.pitch - (e.clientY - drag.y) * 0.0045));
     drag.x = e.clientX;
     drag.y = e.clientY;
   });
-  canvas.addEventListener("pointerup", (e) => {
-    drag.on = false;
-    if (mode !== "overview" || Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY) > 5) return;
+  for (const type of ["pointerup", "pointercancel"] as const) {
+    canvas.addEventListener(type, (e) => {
+      if (e.pointerId === drag.id) drag.id = -1;
+    });
+  }
+  onTap(canvas, (e) => {
+    if (mode !== "overview") return;
     const rect = canvas.getBoundingClientRect();
     const ray = new THREE.Raycaster();
     ray.setFromCamera(new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1), camera);
     const hit = ray.intersectObject(ground.coarse)[0];
     if (hit !== undefined) select(regionAt(hit.point.x, hit.point.z));
   });
+
+  // The touch pad walks toward the thumb, and past 80% of its radius it runs.
+  const padEl = $("pad");
+  const knob = $("pad-knob");
+  const pad = { id: -1, forward: 0, side: 0, run: false };
+  function padMove(e: PointerEvent): void {
+    const rect = padEl.getBoundingClientRect();
+    const radius = rect.width / 2;
+    const dx = e.clientX - (rect.left + radius);
+    const dy = e.clientY - (rect.top + radius);
+    const length = Math.hypot(dx, dy);
+    const reach = length / radius;
+    const k = reach > 1 ? 1 / reach : 1;
+    knob.style.transform = `translate(${dx * k}px, ${dy * k}px)`;
+    const moving = reach > 0.15;
+    pad.forward = moving ? -dy / length : 0;
+    pad.side = moving ? dx / length : 0;
+    pad.run = reach > 0.8;
+    padEl.classList.toggle("run", pad.run);
+  }
+  function padRelease(): void {
+    pad.id = -1;
+    pad.forward = 0;
+    pad.side = 0;
+    pad.run = false;
+    knob.style.transform = "";
+    padEl.classList.remove("run");
+  }
+  padEl.addEventListener("pointerdown", (e) => {
+    if (pad.id !== -1) return;
+    pad.id = e.pointerId;
+    padEl.setPointerCapture(e.pointerId);
+    padMove(e);
+  });
+  padEl.addEventListener("pointermove", (e) => {
+    if (e.pointerId === pad.id) padMove(e);
+  });
+  for (const type of ["pointerup", "pointercancel"] as const) {
+    padEl.addEventListener(type, (e) => {
+      if (e.pointerId === pad.id) padRelease();
+    });
+  }
 
   function regionAt(x: number, z: number): number {
     const l = terrain.lattice;
@@ -212,7 +266,10 @@ export function createTerrainLab(root: HTMLElement): Lab {
     ground.select(selected, next === "overview");
     $("mode-walk").classList.toggle("on", next === "walk");
     $("mode-overview").classList.toggle("on", next === "overview");
-    $("hint").textContent = next === "walk" ? "WASD or arrows to walk, Shift to run, drag to look" : "Drag to orbit, scroll to zoom, click a region";
+    const [mouseHint, touchHint] = HINTS[next];
+    $("hint").innerHTML = `<span class="mouse-only">${mouseHint}</span><span class="touch-only">${touchHint}</span>`;
+    padEl.hidden = next !== "walk";
+    padRelease();
     if (next === "overview") {
       camera.position.set(walker.x * 0.3 + 40, 300, walker.z * 0.3 + 330);
       orbit.target.set(0, 0, 0);
@@ -245,10 +302,10 @@ export function createTerrainLab(root: HTMLElement): Lab {
 
   const forward = new THREE.Vector3();
   function updateWalk(dt: number): void {
-    const run = keys.has("ShiftLeft") || keys.has("ShiftRight") ? 2.4 : 1;
+    const run = keys.has("ShiftLeft") || keys.has("ShiftRight") || pad.run ? 2.4 : 1;
     const speed = 4.2 * run * dt;
-    let f = 0;
-    let s = 0;
+    let f = pad.forward;
+    let s = pad.side;
     if (keys.has("KeyW") || keys.has("ArrowUp")) f += 1;
     if (keys.has("KeyS") || keys.has("ArrowDown")) f -= 1;
     if (keys.has("KeyD")) s += 1;
@@ -449,7 +506,10 @@ export function createTerrainLab(root: HTMLElement): Lab {
     setActive(on) {
       active = on;
       orbit.enabled = on && mode === "overview";
-      if (!on) keys.clear();
+      if (!on) {
+        keys.clear();
+        padRelease();
+      }
       if (on) resize();
     },
     frame: (dt, now) => {
@@ -477,6 +537,7 @@ export function createTerrainLab(root: HTMLElement): Lab {
         return { max: s.max, median: s.median };
       },
       info: () => renderer.info.render,
+      camera: () => ({ position: camera.position.toArray(), target: orbit.target.toArray() }),
     },
   };
 }
