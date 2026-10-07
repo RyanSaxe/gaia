@@ -13,7 +13,8 @@ import { blueprintCount, randomSlots, validate } from "@gaia/world";
 import { FLORA_PRESETS, WORLD_PRESETS, type WorldLook, realize, realizeWorld } from "@gaia/realize";
 import { type PlantView, createPlant, createSceneLight, createSunShadow } from "@gaia/render";
 import { renderInspector } from "../inspector.ts";
-import { type Lab, type Shot, refs, slug } from "../lab.ts";
+import { type Lab, type Shot, onTap, refs, slug } from "../lab.ts";
+import { createSheet } from "../sheet.ts";
 import { createDrift, createGround, createGroundCover, createSky } from "./environment.ts";
 
 const TEMPLATE = /* html */ `
@@ -28,7 +29,7 @@ const TEMPLATE = /* html */ `
     <button data-ref="overview">Show all</button>
   </div>
 </main>
-<aside class="panel">
+<aside class="panel" data-ref="panel">
   <header>
     <select class="preset" data-ref="preset" aria-label="World"></select>
     <div class="bp-id" data-ref="bp-id"></div>
@@ -77,6 +78,7 @@ interface Entry {
 export function createWorldLab(root: HTMLElement): Lab {
   root.innerHTML = TEMPLATE;
   const $ = refs(root);
+  const sheet = createSheet($("panel"));
   const floraLib = new Library(FLORA_PRIMITIVES);
   // Realizing a biome builds its relief too, though the trees stand on flat ground.
   const lib = new Library([...WORLD_PRIMITIVES, ...BIOME_PRIMITIVES, ...RELIEF_PRIMITIVES]);
@@ -199,8 +201,12 @@ export function createWorldLab(root: HTMLElement): Lab {
   const allOut = $<HTMLOutputElement>("all-out");
   const fmt = (v: number): string => v.toFixed(2);
 
+  /** The handle names the world, and the selected tree when there is one. */
+  const nameSheet = (): void => sheet.name(selected === null ? current.name : `${current.name} · ${selected.name}`);
+
   function select(entry: Entry | null, frame = true): void {
     selected = entry;
+    nameSheet();
     plantRow.classList.toggle("empty", entry === null);
     if (entry !== null && entry.view !== null) {
       ground.select(entry.position.x, entry.position.z, entry.view.radius * 0.95 + 0.6, true);
@@ -217,10 +223,7 @@ export function createWorldLab(root: HTMLElement): Lab {
   }
 
   const raycaster = new THREE.Raycaster();
-  const down = new THREE.Vector2();
-  canvas.addEventListener("pointerdown", (e) => down.set(e.clientX, e.clientY));
-  canvas.addEventListener("pointerup", (e) => {
-    if (Math.hypot(e.clientX - down.x, e.clientY - down.y) > 5) return;
+  onTap(canvas, (e) => {
     const rect = canvas.getBoundingClientRect();
     raycaster.setFromCamera(
       new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1),
@@ -279,6 +282,7 @@ export function createWorldLab(root: HTMLElement): Lab {
   }
 
   function refreshWorldPanel(): void {
+    nameSheet();
     refreshPresetSelect();
     $("bp-id").textContent = current.world.id;
     $("json").textContent = JSON.stringify(current.world, null, 2);

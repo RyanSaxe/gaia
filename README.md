@@ -52,7 +52,13 @@ pnpm check       # type checker, lint rules and tests
 cargo test       # the engine's tests
 pnpm shots       # screenshots of every primitive and world for review
 pnpm lab:html    # the lab as one offline HTML file
+pnpm lab:serve   # the lab on this Mac's Tailscale address, for a phone
 ```
+
+`pnpm lab:serve` listens on port 5180 of the Tailscale address and nowhere
+else, so localhost and the LAN cannot reach it. It rebuilds the page whenever
+the renderer changes, and a reload shows the change. It exits when Tailscale
+is not running.
 
 ## Contributing
 

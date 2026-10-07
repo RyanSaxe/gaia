@@ -51,6 +51,11 @@ for (const button of document.querySelectorAll<HTMLElement>("[data-tab]")) {
   if (tab in LABS) button.addEventListener("click", () => open(tab));
 }
 
+// The first touch shows the touch controls, even where the primary pointer is a mouse.
+window.addEventListener("pointerdown", (e) => {
+  if (e.pointerType === "touch") document.documentElement.classList.add("touch");
+});
+
 const statusBar = document.getElementById("status");
 const statusLine = document.getElementById("status-text");
 watchEngine((text, state) => {
