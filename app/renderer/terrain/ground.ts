@@ -1,8 +1,11 @@
 // The baked lattice as Three.js: the ground around the person as nested
 // rings that follow them, a coarse whole-world mesh for the overview and the
-// water's mirror, the wild land past the rim, a float texture of the lattice
-// for every shader that stands on the ground, and the painterly ground
-// material, colored by each region's ground cover.
+// water's mirror, a coarse ring of the wild land past the rim for views from
+// above, a float texture of the lattice for every shader that stands on the
+// ground, and the painterly ground material, colored by each region's ground
+// cover. Past the land the rings draw the wild land themselves, from the
+// same function the walk stands on (`wildHeightAt` and its twin here,
+// `WILD_GLSL`), so wherever the person goes the ground goes on.
 //
 // The rings never change shape on the CPU: each is a fixed grid, and its
 // vertex shader reads heights from the lattice texture. Every ring's vertices
@@ -14,7 +17,7 @@
 
 import * as THREE from "three";
 import { LIGHT_GLSL, type SceneLight, hexToVec3 } from "@gaia/render";
-import { SHORE_CAP, TRAILS, type Terrain, type WildsRing, landRadius, wildsRing } from "@gaia/terrain";
+import { SHORE_CAP, TRAILS, type Terrain, WILDS, type WildsRing, landHalf, wildBase, wildsRing } from "@gaia/terrain";
 import { SWARD_GLSL } from "../world/environment.ts";
 import { REGIONS_GLSL, type RegionCovers, TUFT_GLSL } from "./regions.ts";
 import { TRAIL_GLSL, trailWear } from "./trails.ts";
@@ -27,6 +30,9 @@ export interface GroundTexture {
     readonly uGroundN: { value: number };
     readonly uGroundOrigin: { value: number };
     readonly uGroundSpacing: { value: number };
+    /** The half side of the land's square, where it hands over to the wild land, and the wild roll's middle. */
+    readonly uLand: { value: number };
+    readonly uWildBase: { value: number };
   };
   /** Takes on a new bake; `packed` is the texture's data, trails included, when a bake thread packed it already. */
   update(t: Terrain, packed?: Float32Array): void;
@@ -45,8 +51,12 @@ export function createGroundTexture(t: Terrain): GroundTexture {
     uGroundN: { value: n },
     uGroundOrigin: { value: t.lattice.origin },
     uGroundSpacing: { value: t.lattice.spacing },
+    uLand: { value: landHalf(t) },
+    uWildBase: { value: 0 },
   };
   const update = (next: Terrain, packed?: Float32Array): void => {
+    uniforms.uLand.value = landHalf(next);
+    uniforms.uWildBase.value = wildBase(next);
     if (packed !== undefined && packed.length === n * n * 4) {
       data = packed;
       texture.image = { data, width: n, height: n };
@@ -94,6 +104,76 @@ vec3 groundSample(vec2 xz) { return groundSample4(xz).xyz; }
 vec2 groundAt(vec2 xz) { return groundSample(xz).xy; }
 `;
 
+/**
+ * The wild land past the hand-over circle, the twin of `wildHeightAt` and
+ * `wildNoise` in @gaia/terrain: the same integer hash, so the drawn ground
+ * and the ground the walk stands on agree. Needs GROUND_SAMPLE_GLSL first.
+ */
+export const WILD_GLSL = /* glsl */ `
+uniform float uLand;
+uniform float uWildBase;
+float wildHash(ivec2 i, int octave) {
+  uint h = (uint(i.x) * 0x27d4eb2du) ^ (uint(i.y) * 0x165667b1u) ^ (uint(octave + 1) * 0x5bd1e995u);
+  h = (h ^ (h >> 15u)) * 0x2c1b3c6du;
+  h = (h ^ (h >> 12u)) * 0x297a2d39u;
+  h ^= h >> 15u;
+  return float(h) / 4294967296.0;
+}
+float wildNoise(vec2 p) {
+  float sum = 0.0;
+  float amp = 1.0;
+  float norm = 0.0;
+  float wave = ${WILDS.wavelength.toFixed(1)};
+  for (int o = 0; o < ${WILDS.octaves}; o++) {
+    vec2 g = p / wave;
+    vec2 i = floor(g);
+    vec2 f = g - i;
+    vec2 u = f * f * (3.0 - 2.0 * f);
+    ivec2 c = ivec2(i);
+    float a = wildHash(c, o);
+    float b = wildHash(c + ivec2(1, 0), o);
+    float e = wildHash(c + ivec2(0, 1), o);
+    float d = wildHash(c + ivec2(1, 1), o);
+    sum += amp * (a + (b - a) * u.x + (e - a + (a - b - e + d) * u.x) * u.y - 0.5) * 2.0;
+    norm += amp;
+    amp *= 0.5;
+    wave *= 0.5;
+  }
+  return sum / norm;
+}
+// Whether a point lies past the land's square, and how far: negative inside it.
+bool inWild(vec2 xz) { return max(abs(xz.x), abs(xz.y)) > uLand; }
+float wildPast(vec2 xz) {
+  vec2 q = abs(xz) - uLand;
+  return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0);
+}
+float wildHeight(vec2 xz) {
+  vec2 e = clamp(xz, -uLand, uLand);
+  float edge = groundSample(e).x;
+  float past = length(xz - e);
+  float w = clamp((past - ${WILDS.hillsIn[0].toFixed(1)}) / ${(WILDS.hillsIn[1] - WILDS.hillsIn[0]).toFixed(1)}, 0.0, 1.0);
+  // The hills' noise only where they have begun to swell.
+  float hill = w > 0.0 ? clamp(wildNoise(xz * ${WILDS.hillScale.toFixed(3)} + vec2(5000.0, -3000.0)) * 1.6, -1.0, 1.0) : 0.0;
+  float roll = uWildBase + clamp(wildNoise(xz) * 1.6, -1.0, 1.0) * ${(WILDS.variation / 2).toFixed(2)} + w * w * (3.0 - 2.0 * w) * hill * ${(WILDS.hills / 2).toFixed(2)};
+  float s = clamp(past / ${WILDS.settle.toFixed(1)}, 0.0, 1.0);
+  return edge + (roll - edge) * s * s * (3.0 - 2.0 * s);
+}
+// The ground's height anywhere, as the walk stands on it.
+float groundHeight(vec2 xz) { return inWild(xz) ? wildHeight(xz) : groundSample(xz).x; }
+// How much of the wild's own cover grows at a point: none on the land, all of
+// it some way out, drifting in from the land's covers in islands.
+float wildShare(vec2 xz) {
+  float past = wildPast(xz);
+  if (past < -40.0) return 0.0;
+  return smoothstep(0.0, 1.0, (past - 20.0 + wildNoise(xz * 8.0 + 311.0) * 55.0) / 22.0);
+}
+// Where the wild runs to scrub, 0 to 1, in patches a few hundred meters across;
+// the wild's thickets gather there too (wildSpots reads the same field).
+float wildScrub(vec2 xz) { return smoothstep(-0.1, 0.5, wildNoise(xz * 0.6 + 1000.0)); }
+// Which of the wild's two covers grows at a point, 0 to 1, in broad swathes a hundred meters and more across.
+float wildPatch(vec2 xz) { return smoothstep(-0.3, 0.3, wildNoise(xz * 1.5 + 97.0)); }
+`;
+
 /** The rings around the person: how many, and how many quads on a side each. */
 export const RINGS = {
   levels: 5,
@@ -127,10 +207,8 @@ void main() {
 }
 #else
 // position: a vertex's column and row on its ring's grid, and the ring.
-uniform sampler2D uGround;
-uniform float uGroundN;
-uniform float uGroundOrigin;
-uniform float uGroundSpacing;
+${GROUND_SAMPLE_GLSL}
+${WILD_GLSL}
 uniform vec2 uCenter;
 uniform vec2 uViewer;
 uniform float uBase;
@@ -147,13 +225,19 @@ vec4 latticeAt(vec2 xz) {
 
 struct GroundVertex { float y; float water; float shore; float trail; vec3 normal; };
 
+// A lattice sample's height on the land, the wild land's past it.
+float heightOf(vec2 q) { return inWild(q) ? wildHeight(q) : latticeAt(q).x; }
+
 // A vertex on a grid of quads s meters wide: its height, water depth, shore
-// and trail distances, and the normal from its grid neighbors.
+// and trail distances, and the normal from its grid neighbors. The wild land
+// has no water and no trails.
 GroundVertex vertexAt(vec2 q, float s) {
+  float gx = (heightOf(q + vec2(s, 0.0)) - heightOf(q - vec2(s, 0.0))) / (2.0 * s);
+  float gz = (heightOf(q + vec2(0.0, s)) - heightOf(q - vec2(0.0, s))) / (2.0 * s);
+  vec3 n = normalize(vec3(-gx, 1.0, -gz));
+  if (inWild(q)) return GroundVertex(wildHeight(q), -5.0, ${SHORE_CAP.toFixed(1)}, ${TRAILS.reach.toFixed(1)}, n);
   vec4 c = latticeAt(q);
-  float gx = (latticeAt(q + vec2(s, 0.0)).x - latticeAt(q - vec2(s, 0.0)).x) / (2.0 * s);
-  float gz = (latticeAt(q + vec2(0.0, s)).x - latticeAt(q - vec2(0.0, s)).x) / (2.0 * s);
-  return GroundVertex(c.x, c.y > -500.0 ? c.y - c.x : -5.0, c.z, c.w, normalize(vec3(-gx, 1.0, -gz)));
+  return GroundVertex(c.x, c.y > -500.0 ? c.y - c.x : -5.0, c.z, c.w, n);
 }
 
 void main() {
@@ -203,6 +287,7 @@ ${LIGHT_GLSL}
 ${REGIONS_GLSL}
 ${TUFT_GLSL}
 ${GROUND_SAMPLE_GLSL}
+${WILD_GLSL}
 ${TRAIL_GLSL}
 uniform vec3 uTrailEarth;
 varying float vTrail;
@@ -212,7 +297,6 @@ uniform vec3 uSand;
 uniform vec3 uBed;
 uniform float uSelected;
 uniform float uOutline;
-uniform float uLand;
 uniform vec2 uHeightRange;
 varying vec3 vWorld;
 varying vec3 vNormal;
@@ -233,9 +317,9 @@ float fbm(vec2 p) {
 }
 ${SWARD_GLSL}
 void main() {
-#ifndef WILDS
-  // Past the hand-over circle the wild land takes over.
-  if (length(vWorld.xz) > uLand) discard;
+#ifdef WILDS
+  // Over the land's square the whole-world mesh draws the ground.
+  if (!inWild(vWorld.xz)) discard;
 #endif
   vec3 n = normalize(vNormal);
   float broad = fbm(vWorld.xz * 0.045);
@@ -243,6 +327,9 @@ void main() {
   // The regions' covers, blended where their heights blend. Low ground is
   // lush and deep; high ground is lighter and drier.
   GroundCover cover = groundCoverAt(vWorld.xz);
+  // Past the land the wild's own covers drift in, in islands, and take over.
+  float wild = wildShare(vWorld.xz);
+  if (wild > 0.0) cover = mixCover(cover, wildCover(wildPatch(vWorld.xz)), wild);
   float rel = clamp((vWorld.y - uHeightRange.x) / max(1.0, uHeightRange.y - uHeightRange.x), 0.0, 1.0);
   vec3 albedo = sward(vWorld, cover.low, cover.high, cover.tip, (broad - 0.5) * 0.5 + (rel - 0.4) * 0.45);
   // A clumped cover leaves its own soil showing between the tufts.
@@ -253,6 +340,14 @@ void main() {
   albedo = mix(albedo, uBare, smoothstep(0.075, 0.17, steep + (fine - 0.5) * 0.05) * 0.8);
   // Hollows hold a deeper green; the broad patches carry more contrast.
   albedo *= 0.94 + 0.12 * smoothstep(0.2, 0.8, broad);
+  // In the wild, low brush darkens the ground in dabs several meters across,
+  // crowding together where the wild runs to scrub, so it reads as brush from afar.
+  if (wild > 0.0) {
+    float scrub = wildScrub(vWorld.xz);
+    float brush = smoothstep(0.62, 0.74, fbm(vWorld.xz * 0.13 + 53.0) + wildNoise(vWorld.xz * 2.2 + 41.0) * 0.12 + scrub * 0.16);
+    albedo = mix(albedo, cover.low * vec3(0.52, 0.6, 0.42), brush * wild * 0.85);
+    albedo *= 1.0 - 0.08 * scrub * wild;
+  }
   // Sand banks a meter or two wide, darker and wet at the waterline, with a
   // ragged edge where the grass (which reads the same distance) thins out.
   float sand = 1.0 - smoothstep(1.2, 2.6, vShore + (fine - 0.5) * 1.2);
@@ -311,7 +406,7 @@ export interface GroundMesh {
   readonly fine: THREE.Mesh;
   /** The whole lattice, coarsely, for the overview and the water's mirror. */
   readonly coarse: THREE.Mesh;
-  /** Wild land past the rim, out to where distance dissolves it into the sky. */
+  /** A coarse ring of the wild land past the rim, for views from above; walking, the rings draw the wild land. */
   readonly wilds: THREE.Mesh;
   readonly material: THREE.ShaderMaterial;
   /** Takes on a new bake; `wilds` is its wild ring when a bake thread made it already. */
@@ -387,7 +482,6 @@ export function createGround(t: Terrain, light: SceneLight, covers: RegionCovers
     uBed: { value: hexToVec3(0x6d7a58) },
     uSelected: { value: -1 },
     uOutline: { value: 0 },
-    uLand: { value: landRadius(t) },
     uHeightRange: { value: new THREE.Vector2(t.report.min, t.report.max) },
     uQuads: { value: RINGS.quads },
     uLevels: { value: RINGS.levels },
@@ -413,7 +507,6 @@ export function createGround(t: Terrain, light: SceneLight, covers: RegionCovers
     wilds.geometry.dispose();
     wilds.geometry = wildsGeometry(next, made);
     uniforms.uHeightRange.value.set(next.report.min, next.report.max);
-    uniforms.uLand.value = landRadius(next);
   };
   update(t);
   const snap = SNAP * t.lattice.spacing;

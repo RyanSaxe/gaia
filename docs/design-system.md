@@ -118,9 +118,24 @@ The bake enforces a relief budget:
 | Tallest steep climb | 3 m |
 
 Water is solved from the ground and cut into it, so it never floats. The
-world's edge is a gentle rim. Past it, one ring of low-detail wild land runs
-on to 1.5 km, continuing the rim's height and settling into a gentle roll of
-at most 6 m, colored by the nearest region's cover. It is never walkable.
+world's edge is a gentle rim.
+
+Past the baked land the wild land goes on forever and stands for nothing.
+From the rim's crest it settles over 160 m to the level of the land inside
+the rim, into a gentle roll of at most 6 m, which swells between 200 m and a
+kilometer out into soft hills of at most 18 m from trough to crest. A person
+can walk or tap their way off the land in any direction and keep going, with
+no wall anywhere. The rings around the person draw the wild land from the
+same function the walk stands on (`groundHeightAt` in `@gaia/terrain`, whose
+integer-hash noise has a GLSL twin), so it follows them; a coarse ring of it
+surrounds the world for the overview and the water's mirror. The wild grows
+its own two covers, tall unkempt green grass and tall dry golden grass,
+which drift in from the land's covers in islands past the rim and mingle
+blade by blade in broad swathes. Low brush darkens the ground in dabs that
+crowd together where the wild runs to scrub, and wild bushes stand in
+seeded thickets there, always healthy. Only the thickets within 1.64 km of
+an anchor that jumps to the person every 200 m stand, so every bush that
+comes or goes is past where land has fully dissolved into the sky.
 
 Water never stops a person, and they never go under. Walking slows as the
 water deepens, to 40% of its pace at 1.1 m; deeper, the feet leave the

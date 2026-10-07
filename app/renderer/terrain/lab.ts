@@ -47,8 +47,8 @@ import {
   type Terrain,
   type Walk,
   type WorldSpec,
+  groundHeightAt,
   heightAt,
-  landRadius,
   latticeOf,
   randomWorld,
   sampleWorld,
@@ -56,7 +56,9 @@ import {
   siteToWorld,
   solidsOf,
   stanceAt,
+  TERRAIN,
   WALK_TO,
+  WILDS,
   walkStep,
   walkToward,
   wallsShape,
@@ -71,6 +73,7 @@ import { createGround, createGroundTexture } from "./ground.ts";
 import { createWalkMarker } from "./marker.ts";
 import { createRegionCovers } from "./regions.ts";
 import { createWater } from "./water.ts";
+import { createWildGrowth } from "./wilds.ts";
 import { createUnderstory } from "./understory.ts";
 import { createClearings } from "./clearings.ts";
 import { type Ways, createWays, trailWear } from "./trails.ts";
@@ -271,7 +274,7 @@ export function createTerrainLab(root: HTMLElement): Lab {
   const groundTex = createGroundTexture(terrain);
   const ground = createGround(terrain, light, covers, groundTex);
   const clearings = createClearings(terrain);
-  const grass = createGrass(light, groundTex, covers, landRadius(terrain), clearings);
+  const grass = createGrass(light, groundTex, covers, clearings);
   const water = createWater(terrain, light, groundTex);
   const marker = createWalkMarker();
   scene.add(sky.mesh, ground.wilds, ground.fine, ground.coarse, grass.mesh, water.group, marker.mesh);
@@ -369,7 +372,9 @@ export function createTerrainLab(root: HTMLElement): Lab {
 
   // Before every pass (the sun's shadow, the water's mirror and the view),
   // each instanced blueprint packs only the cells that pass's camera sees.
-  const instanced = (): PlantInstances[] => [...treeViews, ...understory.all()];
+  // Past the land: the wild's covers and its scattered bushes, which stand for nothing.
+  const wildGrowth = createWildGrowth(scene, light, covers, lib, floraLib);
+  const instanced = (): PlantInstances[] => [...treeViews, ...understory.all(), ...wildGrowth.all()];
   let warming = false;
   scene.onBeforeRender = (_renderer, _scene, passCamera) => {
     if (!warming) for (const v of instanced()) v.cull(passCamera);
@@ -620,30 +625,15 @@ export function createTerrainLab(root: HTMLElement): Lab {
     return raycaster.ray;
   }
 
-  /** Where a ray first meets the walkable ground, marched over the heightfield the mesh draws; past the rim, the wild land. */
+  /** Where a ray first meets the ground, marched over the height the walk stands on: the lattice on the land, the wild land past it. */
   function groundHit(ray: THREE.Ray): { x: number; z: number; distance: number } | null {
-    const l = terrain.lattice;
     const { origin: o, direction: d } = ray;
-    const above = (s: number): boolean => o.y + d.y * s > heightAt(l, o.x + d.x * s, o.z + d.z * s);
-    const edge = l.origin + (l.n - 1) * l.spacing;
-    const step = l.spacing * 0.5;
-    // Start where the ray enters the lattice's square, so a view from above or beyond it still finds the ground.
-    let enter = 0;
-    let leave = Infinity;
-    for (const [p, v] of [[o.x, d.x], [o.z, d.z]] as const) {
-      if (Math.abs(v) < 1e-9) {
-        if (p < l.origin || p > edge) return null;
-        continue;
-      }
-      const a = (l.origin - p) / v;
-      const b = (edge - p) / v;
-      enter = Math.max(enter, Math.min(a, b));
-      leave = Math.min(leave, Math.max(a, b));
-    }
-    for (let s = Math.max(step, enter + step); s < Math.min(leave, enter + REACH); s += step) {
-      const x = o.x + d.x * s;
-      const z = o.z + d.z * s;
-      if (x < l.origin || x > edge || z < l.origin || z > edge) break;
+    const above = (s: number): boolean => o.y + d.y * s > groundHeightAt(terrain, o.x + d.x * s, o.z + d.z * s);
+    const step = terrain.lattice.spacing * 0.5;
+    // Skip the air above the highest ground, so a view from above finds the ground as quickly as one at eye height.
+    const top = terrain.report.max + TERRAIN.rim + WILDS.variation + 2;
+    const enter = d.y < 0 && o.y > top ? (o.y - top) / -d.y : 0;
+    for (let s = enter + step; s < enter + REACH; s += step) {
       if (above(s)) continue;
       let lo = s - step;
       let hi = s;
@@ -654,8 +644,7 @@ export function createTerrainLab(root: HTMLElement): Lab {
       }
       return { x: o.x + d.x * hi, z: o.z + d.z * hi, distance: hi };
     }
-    const wild = raycaster.intersectObject(ground.wilds)[0];
-    return wild === undefined ? null : { x: wild.point.x, z: wild.point.z, distance: wild.distance };
+    return null;
   }
 
   function setGoal(x: number, z: number): void {
@@ -720,6 +709,8 @@ export function createTerrainLab(root: HTMLElement): Lab {
     light.uFogDensity.value = FOG[next];
     ground.fine.visible = next === "walk";
     ground.coarse.visible = next === "overview";
+    ground.wilds.visible = next === "overview";
+    wildGrowth.show(next === "walk");
     grass.mesh.visible = next === "walk";
     ground.select(selected, next === "overview");
     $("mode-walk").classList.toggle("on", next === "walk");
@@ -823,6 +814,7 @@ export function createTerrainLab(root: HTMLElement): Lab {
     groundTex.update(terrain, stood.ground);
     ground.update(terrain, stood.wilds);
     water.update(terrain);
+    wildGrowth.update(terrain);
     plant(stood);
     endWalk();
     walker.moved = true;
@@ -976,7 +968,7 @@ export function createTerrainLab(root: HTMLElement): Lab {
   // never grass or the understory: its reflection is soft, so fine detail
   // there is wasted, and the understory keeps back from the water anyway.
   const mirrorHide = [grass.mesh, ground.fine, signs.mesh];
-  const mirrorShow = [ground.coarse];
+  const mirrorShow = [ground.coarse, ground.wilds];
   let frameCalls = 0;
   /** Each pass's draw calls and triangles in the last frame. */
   const passes = { shadow: { calls: 0, triangles: 0 }, mirror: { calls: 0, triangles: 0 }, view: { calls: 0, triangles: 0 } };
@@ -986,6 +978,7 @@ export function createTerrainLab(root: HTMLElement): Lab {
     if (mode === "walk") {
       updateWalk(dt);
       ground.follow(walker.x, walker.z);
+      wildGrowth.follow(walker.x, walker.z);
       lantern.follow(camera.position, forward, lanternGround, walked, dt);
       grass.follow(camera.position);
       water.wade(walker.x, walker.z, walker.yaw, walked, dt);
@@ -1002,10 +995,10 @@ export function createTerrainLab(root: HTMLElement): Lab {
     refreshSight(now);
     // Every pass thins distant detail from where the person's eyes are.
     light.uEye.value.copy(camera.position);
-    shadow.render(renderer, scene, [...views(), ...understory.casters()], [sky.mesh, ground.wilds, ground.fine, ground.coarse, grass.mesh, water.group, marker.mesh, signs.mesh, ...understory.quiet()]);
+    shadow.render(renderer, scene, [...views(), ...understory.casters(), ...wildGrowth.all()], [sky.mesh, ground.wilds, ground.fine, ground.coarse, grass.mesh, water.group, marker.mesh, signs.mesh, ...understory.quiet()]);
     frameCalls = renderer.info.render.calls;
     passes.shadow = { calls: renderer.info.render.calls, triangles: renderer.info.render.triangles };
-    const mirrorCalls = water.mirror(renderer, scene, camera, [...mirrorHide, ...understory.quiet(), ...understory.casters().map((c) => c.object)], mirrorShow, dt);
+    const mirrorCalls = water.mirror(renderer, scene, camera, [...mirrorHide, ...understory.quiet(), ...understory.casters().map((c) => c.object), ...wildGrowth.all().map((c) => c.object)], mirrorShow, dt);
     frameCalls += mirrorCalls;
     passes.mirror = { calls: mirrorCalls, triangles: mirrorCalls > 0 ? renderer.info.render.triangles : 0 };
     renderer.render(scene, camera);
@@ -1122,6 +1115,10 @@ export function createTerrainLab(root: HTMLElement): Lab {
       passes: () => structuredClone(passes),
       waterVitality: (v: number) => water.vitality(v),
       understory: () => understory.stats(),
+      /** Shows or hides the wild bushes, for comparing frame costs. */
+      showWilds: (on: boolean) => wildGrowth.show(on),
+      /** The wild bushes: copies standing and drawn in the last pass, per blueprint, and each blueprint's triangles. */
+      wilds: () => wildGrowth.all().map((v) => ({ standing: v.count, perCopy: v.triangles / Math.max(1, v.count), levels: v.levels, ...v.drawn() })),
       placements: () => understory.placements(),
       showUnderstory: (on: boolean) => understory.show(on),
       /** Shows or hides the grass, for comparing frame costs and looking at the bare ground. */
@@ -1173,7 +1170,7 @@ export function createTerrainLab(root: HTMLElement): Lab {
       stance: () => stanceAt(terrain, walker.x, walker.z),
       /** Where the ground at (x, z) shows on screen, in CSS pixels from the page's top left; null when it is behind the view. */
       onScreen: (x: number, z: number) => {
-        const p = new THREE.Vector3(x, heightAt(terrain.lattice, x, z), z).project(camera);
+        const p = new THREE.Vector3(x, groundHeightAt(terrain, x, z), z).project(camera);
         if (p.z > 1) return null;
         const rect = canvas.getBoundingClientRect();
         return { x: rect.left + ((p.x + 1) / 2) * rect.width, y: rect.top + ((1 - p.y) / 2) * rect.height };

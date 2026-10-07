@@ -2,11 +2,13 @@
 // and turn the step aside along their edge; water never does. A person wades
 // more slowly as the water deepens and swims where it is deep, eyes a little
 // above the surface. A walk to a tapped point plans its way around whatever
-// stands between, follows that way smoothly, and ends on arrival.
+// stands between, follows that way smoothly, and ends on arrival. Nothing
+// bounds a walk: past the codebase's land the wild land goes on forever.
 
 import { heightAt } from "./lattice.ts";
 import { EYE_HEIGHT } from "./sight.ts";
 import { type Edge, type Solids, nearestEdge } from "./solids.ts";
+import { groundHeightAt, inWilds } from "./wilds.ts";
 import { DRY, type Terrain } from "./world.ts";
 
 export const WADE = {
@@ -14,8 +16,6 @@ export const WADE = {
   slow: 0.6,
   slowFrom: 0.1,
   slowTo: 1.1,
-  /** The walker stays this far inside the walkable square's edge, meters. */
-  margin: 6,
 } as const;
 
 export const SWIM = {
@@ -62,9 +62,9 @@ function depthField(t: Terrain): Float32Array {
   return field;
 }
 
-/** Water depth at a point: the water surface minus the ground, never below 0. */
+/** Water depth at a point: the water surface minus the ground, never below 0, and none in the wild. */
 export function waterDepthAt(t: Terrain, x: number, z: number): number {
-  return Math.max(0, heightAt(t.lattice, x, z, depthField(t)));
+  return inWilds(t, x, z) ? 0 : Math.max(0, heightAt(t.lattice, x, z, depthField(t)));
 }
 
 const smoothstep = (lo: number, hi: number, x: number): number => {
@@ -94,7 +94,7 @@ export function stanceAt(t: Terrain, x: number, z: number): Stance {
   // A smooth maximum of standing and floating, exact outside the ease band.
   const h = Math.max(0, SWIM.ease - Math.abs(wading - SWIM.eye)) / SWIM.ease;
   const above = Math.max(wading, SWIM.eye) + (h * h * SWIM.ease) / 4;
-  return { eye: heightAt(t.lattice, x, z) + depth + above, depth, swim: smoothstep(SWIM.from, SWIM.to, depth) };
+  return { eye: groundHeightAt(t, x, z) + depth + above, depth, swim: smoothstep(SWIM.from, SWIM.to, depth) };
 }
 
 /** Steps longer than this are taken in parts, so nothing thin is ever stepped through, meters. */
@@ -107,22 +107,20 @@ const edge: Edge = { distance: 0, nx: 0, nz: 0 };
  * the edge's normal, which keeps only the part running along it. A part that
  * cannot be freed (a wedge between two solids) is not taken.
  */
-function moveBy(t: Terrain, solids: Solids, from: Walker, mx: number, mz: number): Walker {
-  const half = t.spec.size / 2 - WADE.margin;
-  const clamp = (v: number): number => Math.max(-half, Math.min(half, v));
+function moveBy(solids: Solids, from: Walker, mx: number, mz: number): Walker {
   const parts = Math.max(1, Math.ceil(Math.hypot(mx, mz) / SUBSTEP));
   let x = from.x;
   let z = from.z;
   // A walker set down inside something may always move outward.
   let allowed = Math.max(0, BODY_RADIUS - nearestEdge(solids, x, z, edge).distance) + 1e-6;
   for (let p = 0; p < parts; p++) {
-    let nx = clamp(x + mx / parts);
-    let nz = clamp(z + mz / parts);
+    let nx = x + mx / parts;
+    let nz = z + mz / parts;
     for (let k = 0; k < 4; k++) {
       const into = BODY_RADIUS - nearestEdge(solids, nx, nz, edge).distance;
       if (into <= 1e-7) break;
-      nx = clamp(nx + edge.nx * into);
-      nz = clamp(nz + edge.nz * into);
+      nx += edge.nx * into;
+      nz += edge.nz * into;
     }
     const into = BODY_RADIUS - nearestEdge(solids, nx, nz, edge).distance;
     if (into > allowed) break;
@@ -142,7 +140,7 @@ export function walkStep(t: Terrain, solids: Solids, from: Walker, intent: Inten
   const len = Math.hypot(intent.dx, intent.dz);
   if (len < 1e-9 || dt <= 0 || intent.speed <= 0) return from;
   const step = (intent.speed * wadeSpeed(waterDepthAt(t, from.x, from.z)) * dt) / Math.max(1, len);
-  return moveBy(t, solids, from, intent.dx * step, intent.dz * step);
+  return moveBy(solids, from, intent.dx * step, intent.dz * step);
 }
 
 export const WALK_TO = {
@@ -180,14 +178,12 @@ export interface Approach {
   readonly state: "walking" | "arrived" | "stalled";
 }
 
-/** Whether a body walking straight from a to b stays `room` meters clear of every solid and inside the walkable square. */
-function clearWay(t: Terrain, solids: Solids, ax: number, az: number, bx: number, bz: number, room: number): boolean {
-  const half = t.spec.size / 2 - WADE.margin + 1e-6;
+/** Whether a body walking straight from a to b stays `room` meters clear of every solid. */
+function clearWay(solids: Solids, ax: number, az: number, bx: number, bz: number, room: number): boolean {
   const n = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az) / 0.2));
   for (let i = 0; i <= n; i++) {
     const x = ax + ((bx - ax) * i) / n;
     const z = az + ((bz - az) * i) / n;
-    if (Math.abs(x) > half || Math.abs(z) > half) return false;
     if (nearestEdge(solids, x, z, edge).distance < room) return false;
   }
   return true;
@@ -206,21 +202,20 @@ const PLAN = { cell: 0.5, past: 8, side: 16, expansions: 40_000 } as const;
 export function planWalk(t: Terrain, solids: Solids, at: Walker, to: Walker): Walk {
   // The way keeps its own copy of where it began: the caller's walker moves on.
   const from = { x: at.x, z: at.z };
-  const half = t.spec.size / 2 - WADE.margin;
-  let tx = Math.max(-half, Math.min(half, to.x));
-  let tz = Math.max(-half, Math.min(half, to.z));
+  let tx = to.x;
+  let tz = to.z;
   for (let left = Math.hypot(tx - from.x, tz - from.z); left > 0.1 && nearestEdge(solids, tx, tz, edge).distance < BODY_RADIUS; left -= 0.1) {
     tx += ((from.x - tx) / left) * 0.1;
     tz += ((from.z - tz) / left) * 0.1;
   }
   const target = { x: tx, z: tz };
-  if (clearWay(t, solids, from.x, from.z, tx, tz, BODY_RADIUS)) return { target, way: [from, target], leg: 0 };
-  const way = routeAround(t, solids, from, target);
+  if (clearWay(solids, from.x, from.z, tx, tz, BODY_RADIUS)) return { target, way: [from, target], leg: 0 };
+  const way = routeAround(solids, from, target);
   return { target: way[way.length - 1] as Walker, way, leg: 0 };
 }
 
 /** A* on a grid laid along the walk, where cells nearer a solid than the body and its clearance are closed, pulled taut. */
-function routeAround(t: Terrain, solids: Solids, from: Walker, to: Walker): Walker[] {
+function routeAround(solids: Solids, from: Walker, to: Walker): Walker[] {
   const length = Math.hypot(to.x - from.x, to.z - from.z);
   const ux = (to.x - from.x) / Math.max(1e-9, length);
   const uz = (to.z - from.z) / Math.max(1e-9, length);
@@ -232,7 +227,6 @@ function routeAround(t: Terrain, solids: Solids, from: Walker, to: Walker): Walk
   const count = nu * nv;
   const xAt = (i: number): number => from.x + ux * ((i % nu) - back) * h - uz * (Math.floor(i / nu) - sideCells) * h;
   const zAt = (i: number): number => from.z + uz * ((i % nu) - back) * h + ux * (Math.floor(i / nu) - sideCells) * h;
-  const half = t.spec.size / 2 - WADE.margin;
   const state = new Uint8Array(count); // 0 unknown, 1 open, 2 closed
   const open = (i: number): boolean => {
     if (state[i] === 0) {
@@ -240,7 +234,7 @@ function routeAround(t: Terrain, solids: Solids, from: Walker, to: Walker): Walk
       const z = zAt(i);
       // Right by the start the body alone must fit, so a walker standing close to something can leave.
       const room = Math.hypot(x - from.x, z - from.z) < 1.5 ? BODY_RADIUS : BODY_RADIUS + WALK_TO.clearance;
-      state[i] = Math.abs(x) <= half && Math.abs(z) <= half && nearestEdge(solids, x, z, edge).distance >= room ? 1 : 2;
+      state[i] = nearestEdge(solids, x, z, edge).distance >= room ? 1 : 2;
     }
     return state[i] === 1;
   };
@@ -328,7 +322,7 @@ function routeAround(t: Terrain, solids: Solids, from: Walker, to: Walker): Walk
     while (lo < hi) {
       const mid = (lo + hi + 1) >> 1;
       const q = points[mid] as Walker;
-      if (clearWay(t, solids, p.x, p.z, q.x, q.z, BODY_RADIUS + WALK_TO.clearance / 2)) lo = mid;
+      if (clearWay(solids, p.x, p.z, q.x, q.z, BODY_RADIUS + WALK_TO.clearance / 2)) lo = mid;
       else hi = mid - 1;
     }
     way.push(points[lo] as Walker);
@@ -387,7 +381,7 @@ export function walkToward(t: Terrain, solids: Solids, from: Walker, walk: Walk,
   // A step longer than the way left lands on the target rather than past it.
   const length = Math.min(full, remaining);
   const k = length / Math.max(1e-9, Math.hypot(ax, az));
-  const next = moveBy(t, solids, from, ax * k, az * k);
+  const next = moveBy(solids, from, ax * k, az * k);
   if (Math.hypot(next.x - from.x, next.z - from.z) < WALK_TO.stall * length) return { walker: from, walk: onward, state: "stalled" };
   const left = Math.hypot(walk.target.x - next.x, walk.target.z - next.z);
   return { walker: next, walk: onward, state: left <= WALK_TO.reach ? "arrived" : "walking" };
