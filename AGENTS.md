@@ -14,8 +14,10 @@ looks.
   words. Free text, free numbers and coordinates come from code, never Jev.
 - Primitives write vitality channels and pick a swatch. They never ship GLSL.
 - Kinds name roles, never primitives, so Jev can choose any primitive that fits.
-- Change a primitive's look or parameters by adding a new version
-  (`branching@2`). Stored worlds name the old version until a person migrates.
+- Until Gaia stores worlds for real people, change primitives in place and
+  keep them at `@1`: look and feel will change a lot first. Once worlds are
+  stored, a change to a primitive's look or parameters becomes a new version
+  (`branching@2`), and stored worlds keep the old one until a person migrates.
 - The visual bar is v1's components and Breath of the Wild. Effects stay subtle.
 
 ## Adding a primitive

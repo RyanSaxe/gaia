@@ -19,3 +19,4 @@ One file per decision the reviewer settled in the pair sessions that designed Ga
 - [The world follows the code, and only the code](15-continuity.md)
 - [Jev through OpenRouter](16-jev-access.md)
 - [Make it concrete, then plan, then build in slices](17-process.md)
+- [Edit primitives in place until release](18-edit-primitives-in-place.md)
