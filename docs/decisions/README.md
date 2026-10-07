@@ -23,3 +23,4 @@ One file per decision the reviewer settled in the pair sessions that designed Ga
 - [The lab on your phone](19-lab-on-your-phone.md)
 - [Click or tap to walk](20-click-to-walk.md)
 - [Buildings stand for entities, and fall to ruin](21-structures-stand-for-entities.md)
+- [Walk up to a thing to see what it stands for](22-walk-up-and-see.md)

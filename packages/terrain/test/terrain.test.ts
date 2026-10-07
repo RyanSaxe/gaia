@@ -599,4 +599,29 @@ describe("a cottage on the land", () => {
       for (let lz = -plan.depth / 2; lz <= plan.depth / 2 + 5; lz += 1) expect(waterDepthAt(t, ...siteToWorld(site, lx, lz))).toBe(0);
     }
   });
+
+  it("keeps a village's buildings apart, each with its mill wheel or tower on dry, level ground", () => {
+    const terrain: Terrain = { ...t, lattice: { ...t.lattice, heights: t.lattice.heights.slice() } };
+    const taken: ReturnType<typeof findSite>[] = [];
+    for (const { blueprint } of STRUCTURE_PRESETS) {
+      const built = realize(blueprint, structure, structureLib, { seed: 5, facts: { size: 1, floors: 1 } });
+      const plan = built.slots.get("footprint")?.output as BuildingPlan;
+      const feature = built.slots.get("feature")?.output as { parts: { positions: Float32Array }[] } | undefined;
+      const xs = feature?.parts.flatMap((p) => Array.from(p.positions.filter((_, i) => i % 3 === 0))) ?? [];
+      const zs = feature?.parts.flatMap((p) => Array.from(p.positions.filter((_, i) => i % 3 === 2))) ?? [];
+      const beside = xs.length === 0 ? null : { x0: Math.min(...xs), x1: Math.max(...xs), z0: Math.min(...zs), z1: Math.max(...zs) };
+      const site = findSite(terrain, plan, taken, 30, beside);
+      levelPad(terrain, plan, site, beside);
+      for (const other of taken) expect(Math.hypot(site.x - other.x, site.z - other.z)).toBeGreaterThanOrEqual(30);
+      if (beside !== null) {
+        // The ground under a feature is the building's level ground, and dry.
+        for (const [lx, lz] of [[beside.x0, beside.z0], [beside.x1, beside.z0], [beside.x0, beside.z1], [beside.x1, beside.z1]] as const) {
+          const [x, z] = siteToWorld(site, lx, lz);
+          expect(Math.abs(heightAt(terrain.lattice, x, z) - site.level)).toBeLessThan(0.02);
+          expect(waterDepthAt(terrain, x, z)).toBe(0);
+        }
+      }
+      taken.push(site);
+    }
+  });
 });

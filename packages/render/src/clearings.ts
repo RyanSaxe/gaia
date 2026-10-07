@@ -1,10 +1,10 @@
-// Clearings: up to four capsules on the ground where grass does not grow,
-// such as the floor of a house and the walk to its door. Grass shaders
+// Clearings: up to twelve capsules on the ground where grass does not grow,
+// such as the floors of a few buildings and the walks to their doors. Grass shaders
 // multiply each blade's height by `clearing(xz)`.
 
 import * as THREE from "three";
 
-export const MAX_CLEARINGS = 4;
+export const MAX_CLEARINGS = 12;
 
 /** A capsule from (ax, az) to (bx, bz) with a radius, in world meters. */
 export interface Clearing {

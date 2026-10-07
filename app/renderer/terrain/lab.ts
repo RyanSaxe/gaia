@@ -2,23 +2,20 @@
 // a ground cover Jev could choose, baked into one heightfield. Walk it at eye
 // height, tapping or clicking the ground to walk there, or look at the whole of
 // it from above; edit any region's biome and watch the budget and the ground change.
+// Buildings stand for sample entities and trees for sample files; tapping one
+// walks the person up to it and then opens a card saying what it stands for.
 
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { type BuildingPlan, type GroundSpec, Library, type SeasonSpec, blueprintOf, seedOf } from "@gaia/schema";
-import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, NO_SHIFT, RELIEF_PRIMITIVES, ROCK_PRIMITIVES, STRUCTURE_PRIMITIVES, WILDFLOWER_PRIMITIVES, WORLD_PRIMITIVES, hex, mixLab } from "@gaia/primitives";
-import { biome, flora, structure, world as worldKind } from "@gaia/kinds";
+import { type GroundSpec, Library, type SeasonSpec, blueprintOf, seedOf } from "@gaia/schema";
+import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, NO_SHIFT, RELIEF_PRIMITIVES, ROCK_PRIMITIVES, WILDFLOWER_PRIMITIVES, WORLD_PRIMITIVES, hex, mixLab } from "@gaia/primitives";
+import { biome, flora, world as worldKind } from "@gaia/kinds";
 import { defaultParams, validate } from "@gaia/world";
-import { FLORA_PRESETS, STRUCTURE_PRESETS, WORLD_PRESETS, mergeParts, realize, realizeRegion, realizeSky } from "@gaia/realize";
+import { FLORA_PRESETS, WORLD_PRESETS, realize, realizeRegion, realizeSky } from "@gaia/realize";
 import { type PlantView, applyLight, createLantern, createPlant, createRenderer, createSceneLight, createSunShadow } from "@gaia/render";
 import {
-  type BuildingSite,
   EYE_HEIGHT,
   RELIEF_BUDGET,
-  clearingsOf,
-  findSite,
-  insideFootprint,
-  levelPad,
   type Terrain,
   type WorldSpec,
   bakeTerrain,
@@ -45,6 +42,10 @@ import { createRegionCovers } from "./regions.ts";
 import { createWater } from "./water.ts";
 import { createUnderstory } from "./understory.ts";
 import { createClearings } from "./clearings.ts";
+import { createCard } from "./card.ts";
+import { type Represented, SAMPLE_FILES, representFile } from "./samples.ts";
+import { createSettlement } from "./settlement.ts";
+import { createSigns } from "./signs.ts";
 
 const TEMPLATE = /* html */ `
 <main class="stage">
@@ -68,6 +69,7 @@ const TEMPLATE = /* html */ `
   </div>
 </main>
 <aside class="panel" data-ref="panel">
+  <section data-ref="card" aria-live="polite"></section>
   <header>
     <div class="regions" data-ref="regions"></div>
     <div class="title" data-ref="region-name"></div>
@@ -99,6 +101,19 @@ interface Planted {
   readonly view: PlantView;
   /** Radius of the trunk's bottom ring, for grounding. */
   readonly base: number;
+  /** The file it stands for. */
+  readonly represented: Represented;
+}
+
+/** Something a person can walk up to and ask about: a building or a tree. */
+interface Subject {
+  readonly represented: Represented;
+  /** Its form in the world, such as "a watermill". */
+  readonly standsAs: string;
+  /** Where it stands, and where a person stops to read its sign; a tree's spot depends on where they come from. */
+  readonly x: number;
+  readonly z: number;
+  readonly stand: (fromX: number, fromZ: number) => { x: number; z: number };
 }
 
 export function createTerrainLab(root: HTMLElement): Lab {
@@ -114,21 +129,6 @@ export function createTerrainLab(root: HTMLElement): Lab {
   let terrain: Terrain = bakeTerrain(world, lib);
   let bakeMs = performance.now() - firstBake;
 
-  // One cottage stands near the stream, on a pad leveled into the bake.
-  const cottagePreset = STRUCTURE_PRESETS[0];
-  if (cottagePreset === undefined) throw new Error("There are no cottages.");
-  const cottageBuilt = realize(cottagePreset.blueprint, structure, new Library([...STRUCTURE_PRIMITIVES, ...FLORA_PRIMITIVES]), {
-    seed: seedOf("terrain-lab/cottage"),
-    facts: { size: 1, floors: 1 },
-  });
-  const cottagePlan = cottageBuilt.slots.get("footprint")?.output as BuildingPlan;
-  const settle = (t: Terrain): BuildingSite => {
-    const s = findSite(t, cottagePlan);
-    levelPad(t, cottagePlan, s);
-    return s;
-  };
-  let site = settle(terrain);
-
   const canvas = root.querySelector("canvas") as HTMLCanvasElement;
   const stage = root.querySelector(".stage") as HTMLElement;
   const renderer = createRenderer(canvas);
@@ -137,6 +137,9 @@ export function createTerrainLab(root: HTMLElement): Lab {
 
   const light = createSceneLight();
   light.uFogDensity.value = FOG.walk;
+  // A building for each sample entity, near the stream, each on a pad leveled into the bake.
+  const settlement = createSettlement(light);
+  settlement.settle(terrain);
   const worldLib = new Library(WORLD_PRIMITIVES);
   const lantern = createLantern(light);
 
@@ -158,14 +161,11 @@ export function createTerrainLab(root: HTMLElement): Lab {
   const water = createWater(terrain, light, groundTex);
   const marker = createWalkMarker();
   scene.add(sky.mesh, ground.wilds, ground.fine, ground.coarse, grass.mesh, water.group, marker.mesh);
-  const cottage = createPlant({ ...cottageBuilt, parts: mergeParts(cottageBuilt.parts) }, light);
-  scene.add(cottage.object);
-  function placeCottage(): void {
-    cottage.object.position.set(site.x, site.level, site.z);
-    cottage.object.rotation.y = site.yaw;
-    grass.clear(clearingsOf(cottagePlan, site));
-  }
-  placeCottage();
+  for (const v of settlement.views()) scene.add(v.object);
+  const placeBuildings = (): void => grass.clear(settlement.clearings());
+  placeBuildings();
+  const signs = createSigns(light);
+  scene.add(signs.mesh);
 
   /** The hour's light, sky and air, from the sky world's day. */
   let hour = Number.NaN;
@@ -193,8 +193,10 @@ export function createTerrainLab(root: HTMLElement): Lab {
     }
     const view = createPlant(plant, light);
     view.object.rotation.y = i * 1.7;
+    const represented = representFile(SAMPLE_FILES[i % SAMPLE_FILES.length] as (typeof SAMPLE_FILES)[number]);
+    view.setVitality(represented.report.vitality);
     scene.add(view.object);
-    return { view, base };
+    return { view, base, represented };
   });
 
   // Rocks, bushes and wildflowers, scattered around the trees.
@@ -204,18 +206,90 @@ export function createTerrainLab(root: HTMLElement): Lab {
     const spots = scatterPlants(terrain, planted.length, 9);
     planted.forEach((p, i) => {
       const s = spots[i];
-      p.view.object.visible = s !== undefined && !insideFootprint(cottagePlan, site, s.x, s.z, 6);
+      p.view.object.visible = s !== undefined && !settlement.blocked(s.x, s.z, 6);
       if (s === undefined) return;
       p.view.object.position.set(s.x, groundedBase(terrain.lattice, s.x, s.z, p.base), s.z);
     });
     const trees = planted.flatMap((p) => (p.view.object.visible ? [{ x: p.view.object.position.x, z: p.view.object.position.z, radius: 1.6 }] : []));
-    // Nothing of the understory stands in the cottage or on its walk: discs a meter apart along each cleared capsule.
-    const cottageGround = clearingsOf(cottagePlan, site).flatMap((c) => {
+    // Nothing of the understory stands in a building or on its walk: discs a meter apart along each cleared capsule.
+    const cottageGround = settlement.clearings().flatMap((c) => {
       const steps = Math.max(1, Math.ceil(Math.hypot(c.bx - c.ax, c.bz - c.az)));
       return Array.from({ length: steps + 1 }, (_, k) => ({ x: c.ax + ((c.bx - c.ax) * k) / steps, z: c.az + ((c.bz - c.az) * k) / steps, radius: c.radius + 0.5 }));
     });
     understory.place(terrain, world, [...trees, ...cottageGround]);
+    placeSigns();
   }
+
+  // ---------- signs, and walking up to see what a thing is ----------
+
+  let subjects: Subject[] = [];
+  /** A building's signboard at the end of its walk, and a plaque at the foot of each tree facing the middle of the world. */
+  function placeSigns(): void {
+    const buildingSubjects: Subject[] = settlement.buildings.map((b) => ({
+      represented: b.represented,
+      standsAs: `A ${b.kindName.toLowerCase()}`,
+      x: b.site.x,
+      z: b.site.z,
+      stand: () => settlement.standOf(b),
+    }));
+    const trees = planted.filter((p) => p.view.object.visible);
+    const treeSubjects: Subject[] = trees.map((p) => {
+      const { x, z } = p.view.object.position;
+      return {
+        represented: p.represented,
+        standsAs: "A tree",
+        x,
+        z,
+        // Stop just outside the crown, so the tree and its plaque are in view, not its leaves.
+        stand: (fx: number, fz: number) => {
+          const d = Math.hypot(fx - x, fz - z) || 1;
+          const off = Math.max(3, p.view.radius * 0.9 + 1.4);
+          return { x: x + ((fx - x) / d) * off, z: z + ((fz - z) / d) * off };
+        },
+      };
+    });
+    subjects = [...buildingSubjects, ...treeSubjects];
+    signs.set([
+      ...settlement.buildings.map((b) => {
+        const at = settlement.signOf(b);
+        return { ...at, y: heightAt(terrain.lattice, at.x, at.z), scale: 1, name: b.represented.name, note: b.represented.what, vitality: b.represented.report.vitality };
+      }),
+      ...trees.map((p) => {
+        const { x, z } = p.view.object.position;
+        const d = Math.hypot(x, z) || 1;
+        const px = x - (x / d) * (p.base + 0.75);
+        const pz = z - (z / d) * (p.base + 0.75);
+        return { x: px, y: heightAt(terrain.lattice, px, pz) - 0.05, z: pz, yaw: Math.atan2(-x, -z), scale: 0.42, name: p.represented.name, note: "", vitality: p.represented.report.vitality };
+      }),
+    ]);
+  }
+
+  const card = createCard($("card"), () => hideCard());
+  function showCard(s: Subject): void {
+    card.show(s.represented, s.standsAs);
+    $("panel").classList.add("showing-card");
+    sheet.name(s.represented.name);
+    sheet.open(true);
+  }
+  function hideCard(): void {
+    card.hide();
+    $("panel").classList.remove("showing-card");
+    sheet.name(world.regions[selected]?.id ?? "");
+  }
+  /** The subject a walk is taking the person to, shown when they get there. */
+  let pending: Subject | null = null;
+  /** Walk up to a thing, then show what it stands for; a thing already close is shown at once. */
+  function approach(s: Subject): void {
+    const spot = s.stand(walker.x, walker.z);
+    if (Math.hypot(spot.x - walker.x, spot.z - walker.z) < 2) {
+      endWalk();
+      showCard(s);
+      return;
+    }
+    setGoal(spot.x, spot.z);
+    pending = s;
+  }
+
   plant();
 
   // ---------- camera, walking and the overview ----------
@@ -307,16 +381,25 @@ export function createTerrainLab(root: HTMLElement): Lab {
 
   function setGoal(x: number, z: number): void {
     goal = { x, z };
+    pending = null;
     marker.place(terrain, x, z);
   }
   function endWalk(): void {
+    pending = null;
     if (goal === null) return;
     goal = null;
     marker.fade();
   }
+  /** A walk that ends on its own shows what it was walking to, if the person got near enough to read it. */
+  function finishWalk(): void {
+    const to = pending;
+    endWalk();
+    if (to !== null && Math.hypot(walker.x - to.x, walker.z - to.z) < 14) showCard(to);
+  }
 
-  // In the overview a tap picks a region. Walking, a tap on a tree picks the
-  // region it grows in, and a tap on the ground walks there.
+  // In the overview a tap picks a region. Walking, a tap on a building, a
+  // tree or a sign walks the person up to it and then says what it is, and a
+  // tap on the ground walks there.
   onTap(canvas, (e) => {
     const ray = aim(e);
     if (mode === "overview") {
@@ -325,12 +408,21 @@ export function createTerrainLab(root: HTMLElement): Lab {
       return;
     }
     const land = groundHit(ray);
-    const plants = planted.map((p) => p.view.object).filter((o) => o.visible);
-    const tree = raycaster.intersectObjects(plants, true)[0];
-    if (tree !== undefined && (land === null || tree.distance < land.distance)) {
-      const root = plants.find((o) => o.getObjectById(tree.object.id) !== undefined);
-      if (root !== undefined) select(regionAt(root.position.x, root.position.z));
-      return;
+    const things = [...settlement.views().map((v) => v.object), ...planted.map((p) => p.view.object).filter((o) => o.visible)];
+    const thing = raycaster.intersectObjects(things, true)[0];
+    const sign = raycaster.intersectObject(signs.mesh)[0];
+    const nearest = [thing, sign].filter((h) => h !== undefined).sort((a, b) => a.distance - b.distance)[0];
+    if (nearest !== undefined && (land === null || nearest.distance < land.distance + 0.5)) {
+      let subject: Subject | undefined;
+      if (nearest === sign) subject = subjects[sign.instanceId ?? -1];
+      else {
+        const root = things.find((o) => o.getObjectById(nearest.object.id) !== undefined);
+        subject = root === undefined ? undefined : subjects.find((s) => Math.abs(s.x - root.position.x) < 0.01 && Math.abs(s.z - root.position.z) < 0.01);
+      }
+      if (subject !== undefined) {
+        approach(subject);
+        return;
+      }
     }
     if (land !== null) setGoal(land.x, land.z);
   });
@@ -403,8 +495,8 @@ export function createTerrainLab(root: HTMLElement): Lab {
     if (keys.has("ArrowRight")) walker.yaw -= 1.8 * dt;
     const sy = Math.sin(walker.yaw);
     const cy = Math.cos(walker.yaw);
-    // The cottage's walls stop the walk; it slides along them.
-    const wall = (x: number, z: number): boolean => insideFootprint(cottagePlan, site, x, z, 0.45);
+    // Buildings' walls and features stop the walk; it slides along them.
+    const wall = (x: number, z: number): boolean => settlement.blocked(x, z, 0.45);
     /** Steps to (x, z), sliding along a wall in the way; returns how far the walker moved. */
     const stepTo = (x: number, z: number): number => {
       const x0 = walker.x;
@@ -428,7 +520,7 @@ export function createTerrainLab(root: HTMLElement): Lab {
       // A wall that leaves only a crawl along it ends the walk, as deep water does.
       const blocked = stepTo(step.walker.x, step.walker.z) < wanted * 0.25;
       walker.moved = true;
-      if (step.state !== "walking" || blocked) endWalk();
+      if (step.state !== "walking" || blocked) finishWalk();
     }
     const target = heightAt(terrain.lattice, walker.x, walker.z) + EYE_HEIGHT;
     walker.eye += (target - walker.eye) * (1 - Math.exp(-dt * 12));
@@ -446,9 +538,9 @@ export function createTerrainLab(root: HTMLElement): Lab {
   function rebake(): void {
     const t0 = performance.now();
     terrain = bakeTerrain(world, lib);
-    site = settle(terrain);
+    settlement.settle(terrain);
     bakeMs = performance.now() - t0;
-    placeCottage();
+    placeBuildings();
     updateCovers();
     groundTex.update(terrain);
     ground.update(terrain);
@@ -465,6 +557,7 @@ export function createTerrainLab(root: HTMLElement): Lab {
 
   function select(i: number): void {
     selected = i;
+    hideCard();
     ground.select(i, mode === "overview");
     refreshPanel();
   }
@@ -582,12 +675,12 @@ export function createTerrainLab(root: HTMLElement): Lab {
 
   let frozen: number | null = null;
   const shadowCenter = new THREE.Vector3();
-  const views = [...planted.map((p) => p.view), cottage];
+  const views = [...planted.map((p) => p.view), ...settlement.views()];
   const lanternEye = new THREE.Vector3();
   // The water mirrors the sky, the coarse ground, trees and the cottage, and
   // never grass or the understory: its reflection is soft, so fine detail
   // there is wasted, and the understory keeps back from the water anyway.
-  const mirrorHide = [grass.mesh, ground.fine];
+  const mirrorHide = [grass.mesh, ground.fine, signs.mesh];
   const mirrorShow = [ground.coarse];
   let frameCalls = 0;
   function frame(dt: number, now: number, at: number): void {
@@ -609,7 +702,7 @@ export function createTerrainLab(root: HTMLElement): Lab {
     }
     marker.frame(dt, camera.position, light.uNightness.value);
     refreshSight(now);
-    shadow.render(renderer, scene, [...views, ...understory.casters()], [sky.mesh, ground.wilds, ground.fine, ground.coarse, grass.mesh, water.group, marker.mesh, ...understory.quiet()]);
+    shadow.render(renderer, scene, [...views, ...understory.casters()], [sky.mesh, ground.wilds, ground.fine, ground.coarse, grass.mesh, water.group, marker.mesh, signs.mesh, ...understory.quiet()]);
     frameCalls = renderer.info.render.calls;
     frameCalls += water.mirror(renderer, scene, camera, [...mirrorHide, ...understory.quiet(), ...understory.casters().map((c) => c.object)], mirrorShow, dt);
     renderer.render(scene, camera);
@@ -651,7 +744,26 @@ export function createTerrainLab(root: HTMLElement): Lab {
     },
     shots: (): Shot[] => RELIEF_PRIMITIVES.map((p) => ({ name: `terrain-${slug(p.id)}`, stage: () => showcase(p.id) })),
     hook: {
-      cottage: () => ({ ...site, triangles: cottage.triangles, width: cottagePlan.width, depth: cottagePlan.depth }),
+      cottage: () => {
+        const b = settlement.buildings[0];
+        return b === undefined ? null : { ...b.site, triangles: b.view.triangles, width: b.plan.width, depth: b.plan.depth };
+      },
+      /** Every building: what it stands for, where, and its vitality now. */
+      buildings: () =>
+        settlement.buildings.map((b) => ({ name: b.represented.name, building: b.kindName, ...b.site, width: b.plan.width, depth: b.plan.depth, triangles: b.view.triangles, vitality: b.view.vitality, sign: settlement.signOf(b), stand: settlement.standOf(b) })),
+      /** Sets building `i`'s vitality, and its sign's. */
+      vitality: (i: number, v: number) => {
+        settlement.buildings[i]?.view.setVitality(v);
+        signs.setVitality(i, v);
+      },
+      /** Walks up to subject `i` (buildings first, then trees) and shows its card on arrival. */
+      inspect: (i: number) => {
+        const s = subjects[i];
+        if (s !== undefined) approach(s);
+      },
+      subjects: () => subjects.map((s) => ({ name: s.represented.name, standsAs: s.standsAs, x: s.x, z: s.z, vitality: s.represented.report.vitality })),
+      card: () => (card.shown === null ? null : { name: card.shown.name, what: card.shown.what }),
+      closeCard: () => hideCard(),
       walk: (x: number, z: number, yawDeg: number, pitchDeg = -3) => walkTo(x, z, (yawDeg * Math.PI) / 180, (pitchDeg * Math.PI) / 180),
       valley: () => valleyView(),
       walker: () => ({ x: walker.x, z: walker.z, yawDeg: (walker.yaw * 180) / Math.PI, pitchDeg: (walker.pitch * 180) / Math.PI, eye: walker.eye }),

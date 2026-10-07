@@ -192,6 +192,28 @@ already build, so nothing is rebuilt and nothing pops. Ivy and the moss on
 a ruin keep the family's moss green: nature takes a ruin back, rather than
 everything turning grey.
 
+## Signs and cards
+
+Everything that stands for code says so in the world. A building has a
+wooden signboard on a post at the end of its walk, facing anyone coming up
+it, with its entity's name and what it is painted on; a tree has a small
+plaque on a stake at its foot with its file's name. Signs are always there:
+a name becomes readable as a person comes near, as a real sign's does, and
+the lantern lights it at night. Nothing fades in or appears. A sign follows
+the vitality of what it names: its paint fades and flakes, its wood greys
+and it leans on its post. All signs draw as one instanced mesh.
+
+Tapping a building, a tree or a sign walks the person up to it (to the end
+of a building's walk, or just outside a tree's crown on their side), and
+when they arrive a card opens: in the panel on a wide screen, in the sheet
+on a phone. A thing already close is shown at once. A new tap or a key
+cancels the walk and the card stays shut. The view never turns on its
+own. The card reads like a page from a field guide: what kind of thing it
+is, its name, what it does, where it lives in the code, its size, what it
+leans on and what leans on it, what it stands as in the world, and its
+vitality in words (thriving, healthy, tired, failing, in ruins) with the
+signals behind it, each with its reading.
+
 ## Composition budgets
 
 | Budget | Starting value |
