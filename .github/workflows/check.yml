@@ -1,0 +1,24 @@
+# The same checks as the pre-commit hook, on every push and pull request.
+name: check
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check
+      - run: cargo test
+      - run: cargo clippy --all-targets -- -D warnings

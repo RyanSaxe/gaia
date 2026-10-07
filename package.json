@@ -1,0 +1,35 @@
+{
+  "name": "gaia",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.34.6",
+  "engines": {
+    "node": ">=26"
+  },
+  "scripts": {
+    "dev": "pnpm engine && pnpm --filter @gaia/app dev",
+    "shots": "pnpm engine && pnpm --filter @gaia/app shots",
+    "lab:html": "tsx tools/lab-html.ts",
+    "print-request": "tsx tools/print-request.ts",
+    "typecheck": "tsc --noEmit -p .",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "check": "tsc --noEmit -p . && eslint . && vitest run",
+    "prepare": "git config core.hooksPath .githooks",
+    "engine": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo build -p gaia-engine"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@gaia/kinds": "workspace:*",
+    "@gaia/primitives": "workspace:*",
+    "@gaia/schema": "workspace:*",
+    "@gaia/world": "workspace:*",
+    "@types/node": "^26.6.4",
+    "esbuild": "^0.28.2",
+    "eslint": "^10.12.0",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.71.1",
+    "vitest": "^5.0.3"
+  }
+}
