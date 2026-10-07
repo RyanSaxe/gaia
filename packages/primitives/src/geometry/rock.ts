@@ -26,6 +26,12 @@ interface Stone {
   readonly strata: number;
   /** Share of the body's height that lies below ground. */
   readonly embed: number;
+  /**
+   * Keeps one half of a body split by a vertical plane through its center,
+   * at `angle`, on `side` 1 or -1. Two halves make one stone that, as
+   * vitality falls, slumps apart along the split: a crack opens.
+   */
+  readonly split?: { readonly angle: number; readonly side: number; readonly droop: number };
 }
 
 /** Below this the body is flattened: it is always underground, so it needs no detail. */
@@ -62,6 +68,8 @@ function emitStone(out: PartBuilder, s: Stone, r: Rand, anchors: Anchor[], subdi
   // fresh fractures read lighter than weathered rounds, and each face takes its own tone.
   const fracture = new Float32Array(sphere.points.length);
   const faceHue = new Float32Array(sphere.points.length);
+  const inCrack = new Float32Array(sphere.points.length);
+  const splitN: V3 | null = s.split === undefined ? null : [Math.cos(s.split.angle), 0, Math.sin(s.split.angle)];
   const positions: V3[] = sphere.points.map((n, vi) => {
     let q: V3 = [n[0], n[1], n[2]];
     const lump = 1 + 0.16 * fbm3(n[0] * 1.3 + seed * 0.001, n[1] * 1.3, n[2] * 1.3, seed, 3) + 0.05 * fbm3(n[0] * 3.7, n[1] * 3.7, n[2] * 3.7, seed + 5, 2);
@@ -80,6 +88,13 @@ function emitStone(out: PartBuilder, s: Stone, r: Rand, anchors: Anchor[], subdi
     if (s.top > 0) {
       const over = q[0] * topNormal[0] + q[1] * topNormal[1] + q[2] * topNormal[2] - s.top;
       if (over > 0) q = [q[0] - topNormal[0] * over, q[1] - topNormal[1] * over, q[2] - topNormal[2] * over];
+    }
+    if (splitN !== null && s.split !== undefined) {
+      const along = q[0] * splitN[0] + q[2] * splitN[2];
+      if (along * s.split.side < 0) {
+        q = [q[0] - splitN[0] * along, q[1], q[2] - splitN[2] * along];
+        inCrack[vi] = 1;
+      }
     }
     if (s.strata > 0) {
       // Ledges: each layer's lower edge steps in a little.
@@ -102,6 +117,14 @@ function emitStone(out: PartBuilder, s: Stone, r: Rand, anchors: Anchor[], subdi
 
   const normals = vertexNormals(positions, sphere.triangles);
   const first = out.vertexCount;
+  // A half slumps around a point at the ground inside the other half, so its top leans away from the split.
+  let pivot: V3 = [s.base[0], s.base[1], s.base[2]];
+  if (splitN !== null && s.split !== undefined) {
+    const px = splitN[0] * s.size[0] * 0.5;
+    const pz = splitN[2] * s.size[2] * 0.5;
+    const back = -0.45 * s.split.side;
+    pivot = [s.base[0] + (px * cosY - pz * sinY) * back, s.base[1], s.base[2] + (px * sinY + pz * cosY) * back];
+  }
   const height = Math.max(0.05, s.size[1]);
   positions.forEach((p, i) => {
     const n = normals[i] as V3;
@@ -112,13 +135,14 @@ function emitStone(out: PartBuilder, s: Stone, r: Rand, anchors: Anchor[], subdi
     // Rain streaks run down the sides: noise stretched tall.
     const streak = fbm3(p[0] * 4.5, p[1] * 0.6, p[2] * 4.5, seed + 6, 2);
     const shade =
-      0.46 + 0.16 * mottle + 0.12 * (fracture[i] as number) + 0.08 * streak + 0.16 * clamp(above, 0, 1) - 0.2 * (1 - ground * ground) + 0.06 * n[1];
+      (0.46 + 0.16 * mottle + 0.12 * (fracture[i] as number) + 0.08 * streak + 0.16 * clamp(above, 0, 1) - 0.2 * (1 - ground * ground) + 0.06 * n[1]) *
+      (1 - 0.55 * (inCrack[i] as number));
     out.vertex(p, n, shade, {
       loss: 0,
-      droop: 0,
+      droop: s.split?.droop ?? 0,
       wither: clamp(0.5 + 0.35 * fbm3(p[0] * 2.3, p[1] * 2.3, p[2] * 2.3, seed + 4, 2), 0.2, 0.9),
       glow: 0,
-      pivot: s.base,
+      pivot,
       tint: tint + 0.02 * mottle + (faceHue[i] as number) * (fracture[i] as number),
     });
     if (n[1] > 0.75 && above > 0.55 && i % 7 === 0) anchors.push({ position: p, normal: n, size: clamp(height, 0, 1) });
@@ -155,30 +179,30 @@ const BOULDER_SHAPES = {
   lopsided: { w: 1.4, d: 1.05, lean: 0.3 },
 } as const;
 
+/** How far a split boulder's halves slump apart at vitality 0. */
+const CRACK_DROOP = 0.08;
+
 export function buildBoulder(p: Resolved<typeof boulderParams>, ctx: BuildContext): Built {
   const out = new PartBuilder("stone", "solid");
   const r = ctx.rand.fork("boulder");
   const h = p.size * sizeOf(ctx);
   const shape = BOULDER_SHAPES[p.shape];
   const anchors: Anchor[] = [];
-  emitStone(
-    out,
-    {
-      base: [0, 0, 0],
-      size: [h * shape.w * r.range(0.9, 1.1), h, h * shape.d * r.range(0.9, 1.1)],
-      yaw: r.next() * Math.PI * 2,
-      lean: shape.lean * r.range(0.5, 1),
-      leanDir: r.next() * Math.PI * 2,
-      facets: p.facets,
-      top: 0,
-      topTilt: 0,
-      strata: 0,
-      embed: 0.3,
-    },
-    r.fork("body"),
-    anchors,
-    3,
-  );
+  const stone: Stone = {
+    base: [0, 0, 0],
+    size: [h * shape.w * r.range(0.9, 1.1), h, h * shape.d * r.range(0.9, 1.1)],
+    yaw: r.next() * Math.PI * 2,
+    lean: shape.lean * r.range(0.5, 1),
+    leanDir: r.next() * Math.PI * 2,
+    facets: p.facets,
+    top: 0,
+    topTilt: 0,
+    strata: 0,
+    embed: 0.3,
+  };
+  // One stone in two halves that meet exactly: whole while healthy, cracking open in decline.
+  const angle = r.next() * Math.PI;
+  for (const side of [1, -1]) emitStone(out, { ...stone, split: { angle, side, droop: CRACK_DROOP } }, r.fork("body"), anchors, 3);
   return built(out, anchors);
 }
 
@@ -368,6 +392,9 @@ export function buildMoss(p: Resolved<typeof mossParams>, ctx: BuildContext, bas
       const jitter = fbm3(center[0] * 4.1, center[1] * 4.1, center[2] * 4.1, seed + 11, 1);
       const loss = clamp(0.62 - 0.52 * heart + 0.08 * jitter, 0.04, 0.7);
       const tint = clamp(0.05 * fbm3(center[0] * 0.7, center[1] * 0.7, center[2] * 0.7, seed + 13, 2), -0.06, 0.06);
+      // On a stone that slumps in decline, moss rides along with it; elsewhere it shrinks to its own center.
+      const sag = part.channels.droop[a] as number;
+      const pivot: V3 = sag > 0 ? [part.channels.pivot[a * 3] as number, part.channels.pivot[a * 3 + 1] as number, part.channels.pivot[a * 3 + 2] as number] : center;
       [a, b, c].forEach((i, k) => {
         const q = corners[k] as V3;
         const n: V3 = [nrm[i * 3] as number, nrm[i * 3 + 1] as number, nrm[i * 3 + 2] as number];
@@ -376,10 +403,10 @@ export function buildMoss(p: Resolved<typeof mossParams>, ctx: BuildContext, bas
         const at: V3 = [q[0] + n[0] * lift, q[1] + n[1] * lift, q[2] + n[2] * lift];
         out.vertex(at, n, g.shade + 0.18 * (mask[i] as number) + 0.12 * (lump - 1) + 0.08 * n[1], {
           loss,
-          droop: 0,
+          droop: sag,
           wither: 0.85,
           glow: 0,
-          pivot: center,
+          pivot,
           tint,
         });
       });
