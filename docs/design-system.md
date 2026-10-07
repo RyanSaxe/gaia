@@ -212,10 +212,12 @@ own depth across the stone, never the stone's facets, and that edge creeps
 back toward each patch's heart as vitality falls. No blade of grass grows under a stone or through a bush's heart: a
 mask of each one's outline at the ground clears it, so grass grows up
 against a rock and never pierces it. Each blueprint draws as one instanced
-mesh per part, and drifts cast no shadow. Instanced copies vary their own
-shape in the shader, seeded by where each stands: a little taller or
-squatter, a lean, and a bulge to one side that grows from nothing at the
-ground, so the cleared footprint still fits.
+mesh per part, and drifts cast no shadow. Neighbors never look stamped: each
+rock blueprint is built from two seeds and each bush from three (a variant
+is one more instanced mesh per part), and every copy also varies its own
+shape in the shader, seeded by where it stands: a little taller or squatter,
+a lean, and a bulge to one side that grows from nothing at the ground, so the
+cleared footprint still fits.
 
 ## Clouds
 
