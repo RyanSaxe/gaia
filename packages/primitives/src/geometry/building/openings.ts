@@ -39,14 +39,17 @@ export function buildCasements(p: Resolved<typeof casementsParams>, ctx: BuildCo
       const bar = (): Channels => ({ ...wood(), loss: wr.next() < 0.6 ? lossThreshold(wr.next(), 0.3, 0.05) : 0 });
       for (let i = 1; i <= bars.v; i++) box(frame, at(-hw + (o.width * i) / (bars.v + 1), o.height / 2, 0.06), axes, [0.018, o.height / 2, 0.02], 0.5, bar());
       for (let i = 1; i <= bars.h; i++) box(frame, at(0, (o.height * i) / (bars.h + 1), 0.06), axes, [hw, 0.018, 0.02], 0.5, bar());
-      // Some windows are boarded up as the house is abandoned.
+      // Some windows are boarded up as the house is abandoned: boards nailed
+      // across the frame, each growing out from the side it is nailed to first.
       if (wr.next() < 0.55) {
         const from = 0.24 + 0.14 * wr.next();
         for (let k = 0; k < 3; k++) {
-          const c = at((wr.next() - 0.5) * 0.08, o.height * (0.2 + 0.3 * k) + (wr.next() - 0.5) * 0.06, 0.13);
+          const c = at((wr.next() - 0.5) * 0.04, o.height * (0.2 + 0.3 * k) + (wr.next() - 0.5) * 0.06, 0.124);
           const tilt = (wr.next() - 0.5) * 0.32;
           const along = normalize(addScaled(w.u, UP, Math.tan(tilt)));
-          box(frame, c, [along, normalize(cross(w.n, along)), w.n], [hw + 0.2, 0.065, 0.016], 0.5 + 0.12 * wr.next(), { loss: 0, droop: 0, wither: 0.75, glow: 0, pivot: c, tint: (wr.next() - 0.5) * 0.04, grow: from - 0.04 * k });
+          const half = hw + fw * 0.6;
+          const nailed = addScaled(c, along, (k % 2 === 0 ? -1 : 1) * half * 0.94);
+          box(frame, c, [along, normalize(cross(w.n, along)), w.n], [half, 0.065, 0.016], 0.5 + 0.12 * wr.next(), { loss: 0, droop: 0, wither: 0.75, glow: 0, pivot: nailed, tint: (wr.next() - 0.5) * 0.04, grow: from - 0.04 * k });
         }
       }
       const sillC = at(0, -0.06, 0.1);
@@ -90,7 +93,7 @@ export function buildCasements(p: Resolved<typeof casementsParams>, ctx: BuildCo
       for (let k = 0; k < planks; k++) {
         const x = -hw + (o.width * (k + 0.5)) / planks;
         const ph = arched ? h - hw + Math.sqrt(Math.max(0, hw * hw - x * x)) : h;
-        box(trim, at(x, ph / 2, 0.035), axes, [o.width / planks / 2 - 0.008, ph / 2, 0.03], 0.46 + 0.1 * wr.next(), leaf(0.55, { loss: k === 3 || k === 1 ? lossThreshold(wr.next(), 0.16, 0.04) : 0 }));
+        box(trim, at(x, ph / 2, 0.035), axes, [o.width / planks / 2 - 0.008, ph / 2, 0.03], 0.46 + 0.1 * wr.next(), leaf(0.55));
       }
       for (const ly of [0.28, 0.74]) box(frame, at(0, h * ly, 0.08), axes, [hw - 0.06, 0.06, 0.018], 0.48, leaf(0.5));
       const knob = at(hw * 0.62, h * 0.48, 0.11);

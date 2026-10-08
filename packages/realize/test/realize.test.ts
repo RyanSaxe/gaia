@@ -163,12 +163,14 @@ describe("structures", () => {
 
     it(`${name} falls to ruin as vitality drops, and shows none of it while healthy`, () => {
       const parts = mergeParts(realize(blueprint, structure, structureLib, { seed: 4, facts }).parts);
-      /** How far the pieces carrying a channel stand from where they were built, at most. */
-      const moved = (v: number, has: (p: Part) => Float32Array | undefined): number =>
+      /** How far the falling pieces stand from where they were built, at most. */
+      const moved = (v: number): number =>
         Math.max(
-          ...parts.filter((p) => has(p) !== undefined).map((p) => {
+          ...parts.map((p) => {
+            const fall = p.channels.fall;
+            if (fall === undefined) return 0;
             const at = applyVitality(p, v).positions;
-            return at.reduce((m, x, i) => Math.max(m, Math.abs(x - (p.positions[i] as number))), 0);
+            return at.reduce((m, x, i) => ((fall[Math.floor(i / 3) * 4 + 3] as number) > 0 ? Math.max(m, Math.abs(x - (p.positions[i] as number))) : m), 0);
           }),
         );
       // Overgrowth and rubble are gone into their pivots while healthy, and spread out when failing.
@@ -184,7 +186,7 @@ describe("structures", () => {
       expect(grown(1)).toBe(0);
       expect(grown(0.05)).toBeGreaterThan(0.3);
       // Doors swing, shutters hang and chimneys topple: whole meters, not a tremble.
-      expect(moved(0.05, (p) => p.channels.fall) - moved(1, (p) => p.channels.fall)).toBeGreaterThan(1);
+      expect(moved(0.05) - moved(1)).toBeGreaterThan(1);
       // Walls and roofs rot through: no holes while healthy, deep ones when failing.
       const rotMost = Math.max(...parts.flatMap((p) => (p.channels.rot === undefined ? [] : [Math.max(...p.channels.rot)])));
       expect(rotAt(1)).toBe(0);

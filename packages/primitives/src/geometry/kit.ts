@@ -328,6 +328,13 @@ export function fbm3(x: number, y: number, z: number, seed = 0, octaves = 3): nu
 }
 
 /**
+ * The vitality span over which a piece collapses once below its `loss`, the
+ * realizer's `CHANNEL_MATH.lossBand`: a piece that rests on another must
+ * finish going within it before what holds it starts.
+ */
+export const LOSS_BAND = 0.08;
+
+/**
  * A threshold for `loss` drawn so decline is gradual across many pieces:
  * few pieces go early, most hold on until vitality is low.
  * Fraction lost at vitality v is about 1 - (v / top)^(2/3).
