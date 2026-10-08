@@ -4,7 +4,9 @@
 // low boundary stone faces the tread, carved with the two areas' names, the
 // one to the left above a cut line and the one to the right below it, each
 // pointing its way. They draw as three instanced meshes, their
-// names from two atlases, lit like everything else. An arm's paint fades and
+// names from two atlases, lit like everything else. Every name fits its
+// board (`lettering.ts`): a long one breaks onto two lines and its arm grows
+// longer, and a name on a stone shrinks to its line. An arm's paint fades and
 // its wood greys, and it droops on its nail, with the vitality of the area it
 // names; a stone's moss recedes and the stone bleaches with both areas'.
 
@@ -12,6 +14,7 @@ import * as THREE from "three";
 import { LIGHT_GLSL, type SceneLight } from "@gaia/render";
 import { type PlaceArea, type SolidShape, type Way, heightAt, waterDepthAt } from "@gaia/terrain";
 import type { Furnishing, StoodWorld } from "../terrain/lab.ts";
+import { type Board, letter } from "../terrain/lettering.ts";
 
 /** The layer markers draw on: the view's camera sees it, the sun's shadow pass does not, since their material reads the shadow map. */
 export const MARKER_LAYER = 1;
@@ -260,16 +263,15 @@ void main() {
 
 const SERIF = `Georgia, "Iowan Old Style", "Times New Roman", serif`;
 
-/** Fits `text` into `width` pixels, starting from `size`, and sets the font. */
-function fit(ctx: CanvasRenderingContext2D, text: string, style: string, size: number, width: number): number {
-  let s = size;
-  ctx.font = `${style} ${s}px ${SERIF}`;
-  while (ctx.measureText(text).width > width && s > 18) {
-    s -= 2;
-    ctx.font = `${style} ${s}px ${SERIF}`;
-  }
-  return s;
-}
+/** Measures text in a style on the atlas's canvas. */
+const measureOn = (ctx: CanvasRenderingContext2D, style: string) => (text: string, size: number): number => {
+  ctx.font = `${style} ${size}px ${SERIF}`;
+  return ctx.measureText(text).width;
+};
+/** An arm's name: one line or two, and the arm grows up to a third longer before its letters shrink further. */
+const ARM_BOARD: Board = { width: ARM_SLOT.w - 50, height: ARM_SLOT.h, size: 78, least: 46, twoLines: true, widen: 1.35 };
+/** Each name on a stone keeps to its own line, above or below the cut, and shrinks to fit. */
+const STONE_BOARD: Board = { width: STONE_SLOT.w - 70, height: STONE_SLOT.h * 0.42, size: 74, least: 74, twoLines: false, widen: 1 };
 
 function atlas(cols: number, rows: number, slot: { w: number; h: number }): { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D; texture: THREE.CanvasTexture } {
   const canvas = document.createElement("canvas");
@@ -435,15 +437,19 @@ export function createMarkers(light: SceneLight): Markers {
           const az = f.tz * dir * Math.cos(SPLAY) + nz * Math.sin(SPLAY);
           // Three's Y rotation turns local +x to (cos, -sin).
           q.setFromAxisAngle(up, Math.atan2(-az, ax));
-          m4.compose(new THREE.Vector3(px + ax * POST.half, py + height, pz + az * POST.half), q, one);
           const slot = k * 2 + j;
+          const name = letter(area.name, ARM_BOARD, measureOn(actx, "italic 600"));
+          // A long name's arm grows longer, and its letters are painted narrower by as much, so they keep their shape.
+          m4.compose(new THREE.Vector3(px + ax * POST.half, py + height, pz + az * POST.half), q, new THREE.Vector3(name.widen, 1, 1));
           arms?.setMatrixAt(slot, m4);
           armMark.setXYZ(slot, 1, slot, 0);
           armNames.push(area.path);
           const cx = (slot % ARM_SLOT.cols) * ARM_SLOT.w + ARM_SLOT.w / 2;
           const cy = Math.floor(slot / ARM_SLOT.cols) * ARM_SLOT.h + ARM_SLOT.h / 2 + 3;
-          fit(actx, area.name, "italic 600", 78, ARM_SLOT.w - 50);
-          actx.fillText(area.name, cx, cy);
+          actx.setTransform(1 / name.widen, 0, 0, 1, cx, cy);
+          actx.font = `italic 600 ${name.size}px ${SERIF}`;
+          name.lines.forEach((line, n) => actx.fillText(line, 0, (n - (name.lines.length - 1) / 2) * name.size * 1.02));
+          actx.setTransform(1, 0, 0, 1, 0, 0);
         }
         // The stone faces the tread; seen from the trail, each area's name is on its own side of the cut.
         const fx = nx;
@@ -467,7 +473,7 @@ export function createMarkers(light: SceneLight): Markers {
         const half = STONE_SLOT.w / 2;
         // Capitals, as stone is cut: the area to the left over a cut line, the one to the right beneath it, each pointing its way.
         for (const [text, cy] of [[`‹ ${left.name.toUpperCase()}`, 0.27], [`${right.name.toUpperCase()} ›`, 0.73]] as const) {
-          fit(sctx, text, "600", 74, STONE_SLOT.w - 70);
+          sctx.font = `600 ${letter(text, STONE_BOARD, measureOn(sctx, "600")).size}px ${SERIF}`;
           sctx.fillText(text, ox + half, oy + STONE_SLOT.h * cy);
         }
         sctx.fillRect(ox + half - 120, oy + STONE_SLOT.h * 0.5 - 3, 240, 6);

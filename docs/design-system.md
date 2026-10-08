@@ -298,7 +298,13 @@ wooden signboard on a post at the end of its walk, facing anyone coming up
 it, with its entity's name and what it is painted on; a tree has a small
 plaque on a stake at its foot with its file's name. Signs are always there:
 a name becomes readable as a person comes near, as a real sign's does, and
-the lantern lights it at night. Nothing fades in or appears. A sign follows
+the lantern lights it at night. Nothing fades in or appears. Every name
+fits its board, never cut off: it is set on one line as large as the board
+allows; a name too long for that breaks onto two lines where a person would
+break it (after a slash, a dash, a dot or an underscore, between words, or
+where a camel-cased word turns); then the board widens, up to half again,
+with the cross-arm it hangs from; and only then do the letters shrink
+(`app/renderer/terrain/lettering.ts`). A sign follows
 the vitality of what it names: its paint fades and flakes, its wood greys
 and it leans on its post. All signs draw as one instanced mesh.
 
@@ -448,9 +454,11 @@ The three ways work together:
   its wood greys and it droops on its nail with the vitality of the area it
   names (the mean of its files', its subdirectories' included); the stone's moss recedes and the stone
   bleaches with both areas'. Posts and stones stop a walker, and no grass
-  grows through a stone. A compass strip at the top names the area ahead:
-  the first one along the way the person faces that is not the one they
-  stand in. Markers draw as three instanced meshes and cast no shadow.
+  grows through a stone. Every name fits its arm or its line on the stone,
+  as on the signs (see Signs and cards); a long name's arm grows up to a
+  third longer. A compass strip at the top names the area ahead: the first
+  one along the way the person faces that is not the one they stand in.
+  Markers draw as three instanced meshes and cast no shadow.
 
 ## Gaia's mark
 

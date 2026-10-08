@@ -1,6 +1,8 @@
 // Signs in the world that say what things are: a wooden signboard on a post
 // at the end of each building's walk, and a small plaque on a stake at the
-// foot of each tree, each with its name painted on. They are always there,
+// foot of each tree, each with its name painted on, always fitting its board
+// (`lettering.ts`): a long name breaks onto two lines and its board widens
+// within a limit before the letters shrink. They are always there,
 // so nothing appears as a person walks up; the name simply becomes readable
 // as they come near, the way a real sign does, and the lantern lights it at
 // night. All of them draw as one instanced mesh, their names from one atlas.
@@ -9,6 +11,7 @@
 
 import * as THREE from "three";
 import { LIGHT_GLSL, type SceneLight } from "@gaia/render";
+import { type Board, letter } from "./lettering.ts";
 
 export interface Sign {
   readonly x: number;
@@ -39,6 +42,7 @@ const SLOT = { w: 512, h: 224, cols: 2, rows: 16 };
 const SIGN_VERT = /* glsl */ `
 attribute float aFace;
 attribute vec2 aUv;
+// Vitality, the way it leans, its slot in the atlas, and how much wider its board stands for a long name.
 attribute vec4 aSign;
 varying vec3 vNormal;
 varying vec3 vWorld;
@@ -60,7 +64,10 @@ void main() {
   float lean = (1.0 - life) * (1.0 - life) * 0.32;
   float a = aSign.y;
   mat3 tilt = turnAbout(vec3(cos(a), 0.0, sin(a)), lean);
-  vec3 p = tilt * position;
+  // A long name's board widens, and the cross-arm it hangs from with it; the post keeps its width.
+  vec3 board = position;
+  if (abs(board.x) > ${(BOARD.post * 0.6).toFixed(3)}) board.x *= max(1.0, aSign.w);
+  vec3 p = tilt * board;
   vec4 world = modelMatrix * instanceMatrix * vec4(p, 1.0);
   vWorld = world.xyz;
   vNormal = normalize(mat3(modelMatrix) * mat3(instanceMatrix) * (tilt * normal));
@@ -151,29 +158,46 @@ function signGeometry(): THREE.BufferGeometry {
   return g;
 }
 
-/** Paints each name and note into its slot of the atlas, shrinking a long name to fit. */
-function paintNames(canvas: HTMLCanvasElement, signs: readonly Sign[]): void {
+const SERIF = `Georgia, "Iowan Old Style", "Times New Roman", serif`;
+/** A name's board, in the atlas slot's pixels: one line, or two, and the board widens up to half again before the letters shrink further. */
+const NAME_BOARD: Board = { width: SLOT.w - 56, height: SLOT.h, size: 92, least: 50, twoLines: true, widen: 1.45 };
+/** Under a name, its note takes the bottom of the board. */
+const NOTE = { share: 0.7, at: 0.84, size: 30 };
+
+/** Paints each name and note into its slot of the atlas, fitted to its board (`lettering.ts`); returns how much wider each board stands. */
+function paintNames(canvas: HTMLCanvasElement, signs: readonly Sign[]): number[] {
   const ctx = canvas.getContext("2d");
-  if (ctx === null) return;
+  if (ctx === null) return signs.map(() => 1);
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = "#000";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.fillStyle = "#fff";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  signs.forEach((sign, i) => {
+  const measure = (style: string) => (text: string, size: number): number => {
+    ctx.font = `${style} ${size}px ${SERIF}`;
+    return ctx.measureText(text).width;
+  };
+  return signs.map((sign, i) => {
     const x = (i % SLOT.cols) * SLOT.w + SLOT.w / 2;
     const y = Math.floor(i / SLOT.cols) * SLOT.h;
-    let size = 92;
-    ctx.font = `italic 600 ${size}px Georgia, "Iowan Old Style", "Times New Roman", serif`;
-    while (ctx.measureText(sign.name).width > SLOT.w - 56 && size > 40) {
-      size -= 4;
-      ctx.font = `italic 600 ${size}px Georgia, "Iowan Old Style", "Times New Roman", serif`;
+    const noted = sign.note !== "";
+    const area = noted ? SLOT.h * NOTE.share : SLOT.h;
+    const name = letter(sign.name, { ...NAME_BOARD, height: area }, measure("italic 600"));
+    // A widened board stretches its slot: letters are painted narrower by as much, so they keep their shape.
+    ctx.setTransform(1 / name.widen, 0, 0, 1, x, y);
+    ctx.font = `italic 600 ${name.size}px ${SERIF}`;
+    const middle = noted ? area * 0.56 : area * 0.5;
+    const step = name.size * 1.08;
+    name.lines.forEach((line, k) => ctx.fillText(line, 0, middle + (k - (name.lines.length - 1) / 2) * step));
+    if (noted) {
+      const spaced = sign.note.toUpperCase().split("").join(" ");
+      const note = letter(spaced, { width: NAME_BOARD.width * name.widen, height: SLOT.h * (1 - NOTE.share), size: NOTE.size, least: NOTE.size, twoLines: false, widen: 1 }, measure("600"));
+      ctx.font = `600 ${note.size}px ${SERIF}`;
+      ctx.fillText(spaced, 0, SLOT.h * NOTE.at);
     }
-    ctx.fillText(sign.name, x, y + SLOT.h * (sign.note === "" ? 0.5 : 0.42));
-    if (sign.note !== "") {
-      ctx.font = `600 30px Georgia, "Times New Roman", serif`;
-      ctx.fillText(sign.note.toUpperCase().split("").join(" "), x, y + SLOT.h * 0.8);
-    }
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    return name.widen;
   });
 }
 
@@ -202,14 +226,14 @@ export function createSigns(light: SceneLight, capacity = SLOT.cols * SLOT.rows)
     mesh,
     set(signs) {
       const shown = signs.slice(0, capacity);
-      paintNames(canvas, shown);
+      const widths = paintNames(canvas, shown);
       names.needsUpdate = true;
       shown.forEach((s, i) => {
         q.setFromAxisAngle(up, s.yaw);
         m.compose(new THREE.Vector3(s.x, s.y, s.z), q, new THREE.Vector3(s.scale, s.scale, s.scale));
         mesh.setMatrixAt(i, m);
         // Each sign leans its own way: mostly back or to one side, never into the reader.
-        life.setXYZW(i, s.vitality, ((i * 2.399) % (Math.PI * 2)) * 0.5 + 0.2, i, 0);
+        life.setXYZW(i, s.vitality, ((i * 2.399) % (Math.PI * 2)) * 0.5 + 0.2, i, widths[i] ?? 1);
       });
       mesh.count = shown.length;
       mesh.instanceMatrix.needsUpdate = true;
