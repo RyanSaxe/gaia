@@ -47,13 +47,16 @@ You need Node 26, pnpm 10 and a stable Rust toolchain from rustup.
 
 ```sh
 pnpm install     # also points git at the pre-commit hook
-pnpm dev         # builds the engine and opens the lab
+pnpm dev         # builds the engine and opens the app on this repository's world
 pnpm check       # type checker, lint rules and tests
 cargo test       # the engine's tests
 pnpm shots       # screenshots of every primitive and world for review
 pnpm lab:html    # the lab as one offline HTML file
 pnpm lab:serve   # the lab on this Mac's Tailscale address, for a phone
 ```
+
+To have Jev judge the world with your OpenRouter key, follow
+`docs/connect-jev.md`.
 
 `pnpm lab:serve` listens on port 5180 of the Tailscale address and nowhere
 else, so localhost and the LAN cannot reach it. It rebuilds the page whenever

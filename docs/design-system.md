@@ -300,9 +300,18 @@ at once. A new tap or a key
 cancels the walk and the card stays shut. The view never turns on its
 own. The card reads like a page from a field guide: what kind of thing it
 is, its name, what it does, where it lives in the code, its size, what it
-leans on and what leans on it, what it stands as in the world, and its
-vitality in words (thriving, healthy, tired, failing, in ruins) with the
-signals behind it, each with its reading.
+leans on and what leans on it, what it stands as in the world, who judged
+that (Jev, or the stand-in when Jev did not answer), and its vitality in
+words (thriving, healthy, tired, failing, in ruins) with the signals behind
+it, each with its reading.
+
+While a codebase's world opens, it waits behind the veil, the color of a
+hazy sky, which says in the world's italic what is happening ("Reading
+gaia-v3…", "Asking Jev about 273 places… 96 answered") over a hairline of
+how much is done. Before anything is sent to Jev, the veil asks once per
+project, in a sentence with the run's size and cost, with two quiet
+pill-shaped answers: Ask Jev, or Use the stand-in. The world appears only
+once it is fully judged.
 
 ## Knowing where you are
 

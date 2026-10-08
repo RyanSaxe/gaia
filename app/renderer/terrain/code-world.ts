@@ -1,22 +1,32 @@
-// "This codebase": Gaia's own world, from the engine's snapshot of this
-// repository (`fixtures/gaia.json`, written by `pnpm snapshot` through the
-// engine's `project.open`). Jev's judgments come from the stand-in judge
-// until the reviewer approves live calls; swapping in Jev is the one line
-// marked below. Everything else follows from the code: each directory's area
-// and land, each file's patch and what grows on it, each entity's building or
-// landmark on its lot, and the trails between entities.
+// "This codebase": a codebase's world. Inside the app it comes from the world
+// service, which opens the folder main names (Gaia's own repository unless
+// the person opens another), has Jev or the stand-in judge it, and lays it
+// out; while that happens the veil says how it is going, and asks the person
+// once per project before anything is sent to Jev. A standalone page (the
+// offline HTML, `pnpm lab:serve`) has no engine: it lays out the engine's
+// snapshot of this repository (`fixtures/gaia.json`, written by `pnpm
+// snapshot`), judged by the stand-in. Everything else follows from the code:
+// each directory's area and land, each file's patch and what grows on it,
+// each entity's building or landmark on its lot, and the trails between them.
 
-import { type CodeModel, type EntityFacts, type FileFacts, type JevClient, rand, seedOf } from "@gaia/schema";
+import { type CodeModel, type EntityFacts, type FileFacts, rand, seedOf } from "@gaia/schema";
 import { FLORA_PRESETS, LANDMARK_PRESETS, TRAIL_PRESETS, WORLD_PRESETS } from "@gaia/realize";
 import type { WorldSpec } from "@gaia/terrain";
-import { type CodeWorld, judgeWorld, layoutWorld, standInJev } from "@gaia/world";
+import { type CodeWorld, type Judge, judgeWorld, layoutWorld, standInJev } from "@gaia/world";
+import type { ConsentPlan, Opening, WorldDocument } from "../../world-service/protocol.ts";
+import { type WorldService, worldService } from "../service.ts";
 import snapshot from "./fixtures/gaia.json";
 import { LANDS, LOOKS } from "./looks.ts";
 import type { SampleEntity } from "./samples.ts";
 import type { StandCode, StandLot } from "./stand.ts";
 
-/** Who judges the world. Swap in Jev here once live calls are approved: `engineJev(engine)` from the world service. */
-const JEV: JevClient = standInJev(LOOKS);
+/** The veil a world opens behind: what is happening, and a question for the person. */
+export interface Veil {
+  /** Shows words, and how much of the work is done (0 to 1) when that is known. */
+  say(words: string, done?: number): void;
+  /** Asks a question with two answers; resolves true for `yes`. */
+  ask(question: string, yes: string, no: string): Promise<boolean>;
+}
 
 export interface CodeLab {
   readonly world: CodeWorld;
@@ -31,14 +41,79 @@ export interface CodeLab {
   readonly sky: (typeof WORLD_PRESETS)[number] | undefined;
   /** What the bake thread needs to stand this world's things, given the request's trail styles. */
   readonly stand: StandCode;
+  /** Who judged a thing, by `judgedThing` ("file:src/main.ts", "entity:packages/world"). */
+  readonly judgeOf: (thing: string) => Judge;
+  /** How the judging went, in words. */
+  readonly summary: string;
 }
 
 /** Trees on a file's patch: more for a longer file. */
 export const treesFor = (lines: number): number => Math.min(6, Math.max(1, Math.round(Math.sqrt(lines) / 5)));
 
-/** Gaia's own world: judged, laid out and ready to bake. */
-export async function codeWorld(model: CodeModel = snapshot as unknown as CodeModel): Promise<CodeLab> {
-  const world = layoutWorld(model, await judgeWorld(model, LOOKS, JEV));
+const count = (n: number): string => n.toLocaleString("en-US");
+const dollars = (usd: number): string => `$${usd < 0.01 ? usd.toFixed(3) : usd.toFixed(2)}`;
+
+/** The veil's words for each stage of opening a world. */
+function openingWords(o: Opening): string {
+  if (o.stage === "reading") return `Reading ${o.root.split("/").filter(Boolean).pop() ?? o.root}…`;
+  const tookOver = o.failed > 0 ? ` · ${count(o.failed)} left to the stand-in` : "";
+  return `Asking Jev about ${count(o.total)} ${o.total === 1 ? "place" : "places"}… ${count(o.answered)} answered${tookOver}`;
+}
+
+/** What a live run would send, in a sentence the person can say yes or no to. */
+function consentWords(plan: ConsentPlan): string {
+  const to = plan.endpoint.startsWith("https://openrouter.ai/") ? "OpenRouter" : `the stand-in for OpenRouter at ${new URL(plan.endpoint).host}`;
+  return (
+    `Jev has not yet judged ${count(plan.requests)} ${plan.requests === 1 ? "place" : "places"} in ${plan.name}. ` +
+    `Asking it sends their facts and doc comments, never source, to ${to}: about ${count(plan.estimatedTokens)} tokens, about ${dollars(plan.estimatedUsd)}. ` +
+    "Its answers are kept, so it is asked only once."
+  );
+}
+
+/** The world from the world service: opened, judged and laid out there, with the veil kept up to date. */
+function serviceWorld(service: WorldService, veil: Veil): Promise<WorldDocument> {
+  return new Promise((resolve, reject) => {
+    const off = service.on((m) => {
+      if (m.type === "world.progress") veil.say(openingWords(m.opening), m.opening.stage === "asking" ? m.opening.answered / Math.max(1, m.opening.total) : undefined);
+      else if (m.type === "world.consent") void veil.ask(consentWords(m.plan), "Ask Jev", "Use the stand-in").then((approve) => service.send({ type: "world.consent", approve }));
+      else if (m.type === "world.document") {
+        off();
+        resolve(m.document);
+      } else if (m.type === "world.failed") {
+        off();
+        reject(new Error(m.message));
+      }
+    });
+    service.send({ type: "world.open" });
+  });
+}
+
+/** Gaia's own world from the bundled snapshot, judged by the stand-in: the world of a page with no engine. */
+async function snapshotWorld(why: string): Promise<WorldDocument> {
+  const model = snapshot as unknown as CodeModel;
+  const world = layoutWorld(model, await judgeWorld(model, LOOKS, standInJev(LOOKS)));
+  return { root: model.repository.name, model, world, judges: {}, summary: `Every thing judged by the stand-in (${why})` };
+}
+
+/** A codebase's world: judged, laid out and ready to bake. */
+export async function codeWorld(veil: Veil): Promise<CodeLab> {
+  const service = worldService();
+  let document: WorldDocument;
+  if (service === null) document = await snapshotWorld("no engine on a standalone page");
+  else {
+    try {
+      document = await serviceWorld(service, veil);
+    } catch (error) {
+      console.error(`gaia: showing Gaia's snapshot instead: ${(error as Error).message}`);
+      document = await snapshotWorld(`the world service could not open it: ${(error as Error).message}`);
+    }
+  }
+  veil.say("Baking the world…");
+  return codeLab(document);
+}
+
+/** Everything the terrain lab needs to bake and furnish a world document. */
+function codeLab({ model, world, judges, summary }: WorldDocument): CodeLab {
   const fallback = Object.values(LANDS)[0]?.biome;
   if (fallback === undefined) throw new Error("No lands to choose from.");
   const spec: WorldSpec = {
@@ -73,5 +148,7 @@ export async function codeWorld(model: CodeModel = snapshot as unknown as CodeMo
       }),
       trails: world.trails.map((t) => ({ from: t.from, to: t.to, want: t.want, style: Math.max(0, TRAIL_PRESETS.findIndex((p) => p.name === t.look)) })),
     },
+    judgeOf: (thing) => judges[thing] ?? "stand-in",
+    summary,
   };
 }

@@ -9,6 +9,8 @@ const here = import.meta.dirname;
 export default defineConfig({
   main: {
     build: {
+      // The world service runs the world package itself, so Gaia's own packages are bundled, not required at run time.
+      externalizeDeps: { exclude: ["@gaia/schema", "@gaia/world", "@gaia/kinds", "@gaia/primitives", "@gaia/realize", "@gaia/render", "@gaia/terrain"] },
       rollupOptions: {
         input: {
           index: resolve(here, "main/index.ts"),

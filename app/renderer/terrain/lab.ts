@@ -86,7 +86,8 @@ import { createClearings } from "./clearings.ts";
 import { type Ways, createWays, setTrailEnds, setTrailPlaces } from "./trails.ts";
 import { createCard } from "./card.ts";
 import { LANDMARK_ENTITIES, type Represented, SAMPLE_ENTITIES, SAMPLE_FILES, representEntity, representFile } from "./samples.ts";
-import { type CodeLab, codeWorld } from "./code-world.ts";
+import { type Judge, judgedThing } from "@gaia/world";
+import { type CodeLab, type Veil, codeWorld } from "./code-world.ts";
 import { createSettlement } from "./settlement.ts";
 import { createSigns } from "./signs.ts";
 import { createBaker } from "./baker.ts";
@@ -95,7 +96,7 @@ import type { Stand, StandRequest, StandingLandmark } from "./stand.ts";
 const TEMPLATE = /* html */ `
 <main class="stage">
   <canvas class="view" aria-label="A world of gentle landforms. Click or tap the ground to walk there and drag to look, or switch to the overview."></canvas>
-  <div class="veil" data-ref="veil" role="status"><span>Baking the world…</span></div>
+  <div class="veil" data-ref="veil" role="status"><div class="veil-words"><span data-ref="veil-words">Baking the world…</span><span class="veil-done" data-ref="veil-done" hidden><i></i></span><div class="veil-ask" data-ref="veil-ask" hidden></div></div></div>
   <div class="bar top">
     <div class="segmented modes" role="group" aria-label="View">
       <button data-ref="mode-walk" class="seg on" type="button">Walk</button>
@@ -169,6 +170,8 @@ interface Subject {
   readonly represented: Represented;
   /** Its form in the world, such as "a watermill". */
   readonly standsAs: string;
+  /** In a codebase's world, who judged its look: Jev or the stand-in. */
+  readonly judge?: Judge;
   /** Where it stands, and where a person stops to read its sign; a tree's spot depends on where they come from. */
   readonly x: number;
   readonly z: number;
@@ -616,9 +619,11 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
    * each file's patch, which names the file.
    */
   function placeSigns(): void {
+    const judged = (about: "file" | "entity", target: string): { judge?: Judge } => (code === null ? {} : { judge: code.judgeOf(judgedThing({ about, target })) });
     const buildingSubjects: Subject[] = settlement.buildings.map((b) => ({
       represented: b.represented,
       standsAs: withArticle(b.kindName),
+      ...judged("entity", b.represented.id),
       x: b.site.x,
       z: b.site.z,
       stand: () => settlement.standOf(b),
@@ -634,6 +639,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
           return [{
             represented: representEntity(facts),
             standsAs: withArticle(lm.name),
+            ...judged("entity", facts.path),
             x,
             z,
             stand: (fx: number, fz: number) => {
@@ -649,6 +655,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       return {
         represented: tree.represented,
         standsAs: "A tree",
+        ...judged("file", tree.represented.id),
         x,
         z,
         // Stop just outside the crown, so the tree and its plaque are in view, not its leaves.
@@ -696,7 +703,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
 
   const card = createCard($("card"), () => hideCard());
   function showCard(s: Subject): void {
-    card.show(s.represented, s.standsAs);
+    card.show(s.represented, s.standsAs, s.judge);
     $("panel").classList.add("showing-card");
     sheet.name(s.represented.name);
     sheet.open(true);
@@ -1236,7 +1243,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
    * the bake.
    */
   async function showCodebase(on: boolean): Promise<void> {
-    code = on ? await codeWorld() : null;
+    code = on ? await codeWorld(veil) : null;
     for (const v of settlement.views()) scene.remove(v.object);
     settlement = createSettlement(light, code?.buildings ?? SAMPLE_ENTITIES);
     for (const v of settlement.views()) scene.add(v.object);
@@ -1250,6 +1257,53 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     ($("random") as HTMLButtonElement).disabled = on;
     if (await rebake(next)) valleyView();
   }
+
+  /**
+   * The veil's words while a codebase's world opens, and the one question it
+   * may ask: whether to send the places Jev has not judged to it. A question
+   * raises the veil again if it had lifted, and lowers it once answered.
+   */
+  const veil: Veil = {
+    say(words, done) {
+      $("veil-words").textContent = words;
+      $("veil-done").hidden = done === undefined;
+      if (done !== undefined) ($("veil-done").firstElementChild as HTMLElement).style.width = `${Math.round(done * 100)}%`;
+    },
+    ask(question, yes, no) {
+      const shroud = $("veil");
+      const wasLifted = shroud.classList.contains("lifted");
+      shroud.classList.remove("lifted");
+      const box = $("veil-ask");
+      const words = document.createElement("p");
+      words.textContent = question;
+      const choices = document.createElement("div");
+      choices.className = "veil-choices";
+      const button = (text: string, answer: boolean): HTMLButtonElement => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.textContent = text;
+        b.dataset.answer = String(answer);
+        return b;
+      };
+      const yesButton = button(yes, true);
+      choices.append(yesButton, button(no, false));
+      box.replaceChildren(words, choices);
+      box.hidden = false;
+      $("veil-words").hidden = true;
+      yesButton.focus();
+      return new Promise((resolve) => {
+        choices.addEventListener("click", (e) => {
+          const answer = (e.target as HTMLElement).closest<HTMLButtonElement>("button")?.dataset.answer;
+          if (answer === undefined) return;
+          box.hidden = true;
+          box.replaceChildren();
+          $("veil-words").hidden = false;
+          if (wasLifted) shroud.classList.add("lifted");
+          resolve(answer === "true");
+        });
+      });
+    },
+  };
 
   setMode("walk");
   refreshStats();
@@ -1386,7 +1440,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
         const s = subjects[i];
         if (s !== undefined) approach(s);
       },
-      subjects: () => subjects.map((s) => ({ name: s.represented.name, standsAs: s.standsAs, x: s.x, z: s.z, vitality: s.represented.report.vitality })),
+      subjects: () => subjects.map((s) => ({ name: s.represented.name, standsAs: s.standsAs, judge: s.judge, x: s.x, z: s.z, vitality: s.represented.report.vitality })),
       card: () => (card.shown === null ? null : { name: card.shown.name, what: card.shown.what }),
       closeCard: () => hideCard(),
       walk: (x: number, z: number, yawDeg: number, pitchDeg = -3) => walkTo(x, z, (yawDeg * Math.PI) / 180, (pitchDeg * Math.PI) / 180),
@@ -1507,6 +1561,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
           ? null
           : {
               name: code.world.name,
+              judged: code.summary,
               size: code.world.size,
               sky: code.sky?.name,
               regions: code.world.regions.map((r) => ({ area: r.area, land: r.land, x: Math.round(r.x), z: Math.round(r.z) })),

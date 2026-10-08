@@ -7,8 +7,8 @@
 import type { Represented } from "./samples.ts";
 
 export interface Card {
-  /** Shows a thing; `standsAs` names its form in the world, such as "a watermill". */
-  show(r: Represented, standsAs: string): void;
+  /** Shows a thing; `standsAs` names its form in the world, such as "a watermill", and `judge` who chose it, in a codebase's world. */
+  show(r: Represented, standsAs: string, judge?: "jev" | "stand-in"): void;
   hide(): void;
   /** The thing shown, if any. */
   readonly shown: Represented | null;
@@ -34,7 +34,7 @@ export function createCard(root: HTMLElement, onClose: () => void): Card {
     get shown() {
       return shown;
     },
-    show(r, standsAs) {
+    show(r, standsAs, judge) {
       shown = r;
       const v = r.report.vitality;
       const close = el("button", "card-close", "×");
@@ -54,6 +54,7 @@ export function createCard(root: HTMLElement, onClose: () => void): Card {
       if (r.dependsOn.length > 0) fact("Leans on", r.dependsOn.join(", "));
       if (r.dependents.length > 0) fact("Leaned on by", r.dependents.join(", "));
       fact("Stands as", standsAs);
+      if (judge !== undefined) fact("Judged by", judge === "jev" ? "Jev" : "the stand-in");
       const meter = el("div", "card-meter");
       const fill = el("span");
       fill.style.width = `${Math.round(v * 100)}%`;

@@ -19,9 +19,9 @@ the document that did not change renders exactly as it did before.
 
 | Process | Language | Owns |
 | --- | --- | --- |
-| Main | TypeScript (Electron) | The window and the app's lifecycle. It starts the engine and the world service and restarts the engine if it exits. |
+| Main | TypeScript (Electron) | The window and the app's lifecycle. It starts the engine and the world service, restarts the engine if it exits, and names the folder whose world each page opens: Gaia's own repository, `GAIA_PROJECT`, or one chosen with File > Open Folder. |
 | Engine | Rust (`gaia-engine`) | Files, parsing, git, test reports, the code model, the app-data store and the Jev client with the key from the macOS Keychain. |
-| World service | TypeScript (Electron utility process) | Kinds and primitives, the question planner, answer rules, vitality and the world document. |
+| World service | TypeScript (Electron utility process) | Kinds and primitives, the question planner, answer rules, vitality and the world document. It opens a codebase's world (`openWorld` in `app/world-service/open-world.ts`): the engine's `project.open`, Jev's judgments, kept in the store, and `layoutWorld`, and sends the renderer the result (`WorldDocument`) over its MessagePort. |
 | Renderer | TypeScript | The UI, the Three.js scene, the realizer and the clock. In slice 1 the renderer is the lab. The lab opens into the world, full screen at eye height (`app/renderer/immersive/`), with its debugging views (Components, Terrain and Skies) behind tabs; the immersive world is the terrain lab's world without its chrome, plus one way of telling a person where they are, read through `placeAt`. The terrain lab bakes its world on worker threads (`app/renderer/terrain/bake-worker.ts`): a few workers compose bands of lattice rows with `composeRows`, and one finishes the bake with `finishTerrain` and stands the world's things on it with `standWorld` (`app/renderer/terrain/stand.ts`): each building's site and pad, the landmarks' sites, the trails leveled into the ground and which trail each ground sample lies on, the trees and the understory, and the ground texture's data, so drawing never waits on a bake. Components are still realized on the main thread; the realizer is pure and worker-safe, so it can move into workers too. |
 
 The world service talks to the engine in newline-delimited JSON-RPC 2.0 over
@@ -141,11 +141,22 @@ what grows on each file's patch, whether each entity is a building or a
 landmark and which, and which dependencies become trails and how they look.
 `planWorldRequests` builds one request per thing, from facts and doc
 comments only, with options shuffled by the thing's path. `judgeWorld` asks
-them through any `JevClient`, eight at a time. Until the reviewer approves
-live calls, `standInJev` answers: a deterministic stand-in that scores each
-option by the fact tags its look suits, with a tie-break seeded by the
-question. `engineJev` in the world service is the live client; swapping it in
-is one line in `app/renderer/terrain/code-world.ts`.
+them through any `JevClient`, eight at a time. `keptJev`
+(`packages/world/src/judging.ts`) keeps Jev's answers: each request's key is
+the hash of the whole request (`requestKey`), so a stored answer is used
+without asking and only requests whose facts changed are asked again; an
+answer that does not fit its options, or a request Jev fails, is judged by
+`standInJev`, a deterministic stand-in that scores each option by the fact
+tags its look suits, with a tie-break seeded by the question. The document
+records who judged each thing (`judgedThing`, such as `file:src/main.ts`),
+and a thing's card says so. `engineJev` in the world service is the live
+client. Jev is asked only when the engine has a key and runs with
+`GAIA_JEV=live`, and only after the person has seen the run's size and cost
+(`jev.estimate`) and said yes, once per project (the `settings` table
+remembers the answer). The world stays veiled while Jev answers, with a
+count of answers, because a judgment that changed after the world stood
+would swap trees, buildings and land in view. `docs/connect-jev.md` is the
+reviewer's page for connecting it.
 
 `placeAt(world, x, z)` in `@gaia/terrain` says where a person is: the
 deepest area whose circle holds the point and the file patch underfoot, if
@@ -157,9 +168,12 @@ area's land in `WorldPlaces.cells`, and a point is the area whose region's
 warped cell holds it (`cellAt`, the cell its landform weighs most in);
 `regionPlaces` builds such a world's places.
 
-The lab opens on Gaia's own world, from
-`app/renderer/terrain/fixtures/gaia.json`, a snapshot `pnpm snapshot` writes
-through the engine's `project.open`; `?world=sample` (or `?world=small`) and
+In the app, the lab opens on the world the world service sends. A
+standalone page (`pnpm lab:html`, `pnpm lab:serve`) has no engine and opens
+on Gaia's own world from `app/renderer/terrain/fixtures/gaia.json`, a
+snapshot `pnpm snapshot` writes through the engine's `project.open`, judged
+by the stand-in; so does the app if the world service cannot open its
+folder. `?world=sample` (or `?world=small`) and
 the Terrain view's "Sample world" button show the sample world instead. `standWorld` takes the
 layout (`StandRequest.code`): each building and landmark on its lot, trees of
 the chosen species on each file's patch with that file's vitality, and the
@@ -269,8 +283,9 @@ a `DaySpec`: the light at each key hour, with the world's moon and stars.
   plus an addition. Seeds come from paths.
 - A blueprint's ID is a hash of its contents, so equal answers name the same
   blueprint.
-- Reopening a world loads the stored document and asks Jev only about stale
-  answers.
+- Reopening a world asks Jev only about requests it has not answered: the
+  world is laid out again from the code and the kept answers. The world
+  document itself is not stored yet.
 - The world service will emit a `WorldChange` for every document patch, so
   notes about changes can be added later as one more listener. Nothing emits
   it yet.

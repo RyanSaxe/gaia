@@ -1,10 +1,12 @@
 // The main process: one window on the lab, the engine binary, and the world
 // service. Main relays newline-delimited JSON-RPC between the world service
 // and the engine, restarts the engine when it exits, and hands each loaded
-// page a MessagePort to the world service.
+// page a MessagePort to the world service, with the folder whose world it
+// shows: Gaia's own repository, `GAIA_PROJECT`, or one the person opens with
+// File > Open Folder.
 
-import { join, resolve } from "node:path";
-import { BrowserWindow, MessageChannelMain, type MessagePortMain, app, nativeTheme, utilityProcess } from "electron";
+import { basename, join, resolve } from "node:path";
+import { BrowserWindow, Menu, MessageChannelMain, type MessagePortMain, app, dialog, nativeTheme, utilityProcess } from "electron";
 import type { FromMain, ToMain } from "../world-service/protocol.ts";
 import { superviseEngine } from "./engine.ts";
 import { takeShots } from "./shots.ts";
@@ -18,6 +20,9 @@ if (shots) nativeTheme.themeSource = "light";
 
 void app.whenReady().then(() => {
   const repoRoot = resolve(app.getAppPath(), "..");
+  let root = resolve(process.env.GAIA_PROJECT ?? repoRoot);
+  // The engine keeps each project's store (Jev's answers, the person's consent) with the app's own data.
+  process.env.GAIA_DATA_DIR ??= app.getPath("userData");
   const service = utilityProcess.fork(join(here, "world-service.js"), [], { serviceName: "Gaia world service", stdio: "inherit" });
   const toService = (message: FromMain, ports?: MessagePortMain[]): void => service.postMessage(message, ports);
 
@@ -52,12 +57,32 @@ void app.whenReady().then(() => {
     },
   });
 
-  // Every page load gets a fresh port to the world service.
+  // Every page load gets a fresh port to the world service, and the folder whose world it opens.
   window.webContents.on("did-finish-load", () => {
     const { port1, port2 } = new MessageChannelMain();
-    toService({ type: "renderer.port" }, [port1]);
+    toService({ type: "renderer.port", root }, [port1]);
     window.webContents.postMessage("gaia:world-port", null, [port2]);
+    window.setTitle(`Gaia · ${basename(root)}`);
   });
+  window.on("page-title-updated", (event) => event.preventDefault());
+
+  // File > Open Folder: the page reloads, and its new port opens the chosen folder's world.
+  const openFolder = async (): Promise<void> => {
+    const chosen = await dialog.showOpenDialog(window, { title: "Open a codebase", defaultPath: root, properties: ["openDirectory"] });
+    const folder = chosen.filePaths[0];
+    if (chosen.canceled || folder === undefined) return;
+    root = folder;
+    window.webContents.reload();
+  };
+  Menu.setApplicationMenu(
+    Menu.buildFromTemplate([
+      { role: "appMenu" },
+      { label: "File", submenu: [{ label: "Open Folder…", accelerator: "CmdOrCtrl+O", click: () => void openFolder() }, { type: "separator" }, { role: "close" }] },
+      { role: "editMenu" },
+      { role: "viewMenu" },
+      { role: "windowMenu" },
+    ]),
+  );
 
   const url = process.env.ELECTRON_RENDERER_URL;
   const loaded = url === undefined ? window.loadFile(join(here, "../renderer/index.html")) : window.loadURL(url);
