@@ -43,21 +43,34 @@ a canopy; it never touches decline.
 
 Canopies are painted masses from afar and leaves up close. Leaf cards build
 each clump themselves: an outer shell gives it a leafy outline and an inner,
-darker layer gives it depth, over a small dark core that reads only as
-shadow in the gaps. Each family has its own leaf: a canopy's leaves are
-pointed, oval (cherry) or lobed (maple), chosen as a parameter of
-`leaf-clumps@1`. Willow strands are crossed ribbons of small hanging lance
-leaves. A fir spray is a frond: a ridge of needles along the limb and
-branchlets to either side that reach toward the tip and droop, so a fir reads
-as layered, feathery needles rather than flat plates. A primitive only places
+darker layer gives it depth, over a solid heart that stands in for the
+inner leaves while they merge into a mass. The heart is drawn darker than
+its leaves, as the shade between them, and as a person comes near enough to
+see single leaves it shrinks smoothly to its center, so up close the gaps
+show limbs, deeper leaves and sky, never a ball; its shadow stays. Each
+family has its own leaf: a canopy's leaves are pointed, oval (cherry) or
+lobed (maple), chosen as a parameter of `leaf-clumps@1`. Up close a card is
+a loose clump of small leaves scattered over it, each pointing roughly away
+from the card's middle at its own angle, length and tone, lighter toward
+its tip and darker along its midrib, overlapping in a fixed order: never a
+ring of equal leaves around a heart, which reads as a flower or a sticker,
+and never an outline drawn around the leaves. Willow strands are crossed
+ribbons of small hanging lance leaves; far off a strand swells and narrows
+along its length, as its leaves bunch, so a curtain never reads as ribbons.
+A fir spray is a frond: a ridge of needles along the limb and branchlets to
+either side that reach toward the tip and droop, so a fir reads as layered,
+feathery needles rather than flat plates; close enough to see single
+needles, the comb reaches in nearly to the limb. A primitive only places
 cards and names their cut (`CUT` in `@gaia/schema`: cluster, oval, lobed,
-strand, needles, blossom or patch); the plant shader cuts each card to its
-leaves, with no textures. Every card shades with the crown's
-blended normal, so the canopy lights as one volume. As a card shrinks on
-screen its leaves merge into its plain outline, so distant canopies never
-sparkle, and a card seen edge-on fades out. Cards drop and wither one by one
-as vitality falls, so a failing canopy thins before it goes bare. Cards cast
-their scalloped outlines as shadows, so sun falls through between them.
+strand, needles, blossom, patch or core); the plant shader cuts each card to
+its leaves, with no textures. Every card shades with the crown's blended
+normal, so the canopy lights as one volume. As a card shrinks on screen its
+leaves merge into its plain outline, so distant canopies never sparkle; a
+clump's small leaves merge by the time they are a few pixels across. A card
+turning edge-on thins its leaves from their edges until nothing is left, so
+it never shows as a sliver or a stippled ghost. Cards drop and wither one by
+one as vitality falls, so a failing canopy thins before it goes bare. Cards
+cast their scalloped outlines as shadows, so sun falls through between them.
 
 Bushes are leafy mounds built the same way: layered leaf cards over clumps
 at every stem tip, down to the soil, over a dark core that hides the frame.
