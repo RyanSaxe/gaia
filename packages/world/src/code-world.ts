@@ -208,8 +208,12 @@ export const LAYOUT = {
   lines: [20, 1500],
   /** How much a line weighs by the part its file plays: code most, configuration and data least. */
   kindWeight: { source: 1, test: 0.85, docs: 0.6, script: 0.6, config: 0.4, data: 0.3 },
-  /** Ground kept for an entity's lot at its directory's heart, square meters. */
-  lot: { building: 900, landmark: 700 },
+  /**
+   * Ground kept for an entity's lot at its directory's heart, square meters:
+   * the same for a building or a landmark, so the land's division depends on
+   * the code alone and is known before Jev answers (`landOf`).
+   */
+  lot: 900,
   /** How far a building or landmark may stand from its lot's middle, meters. */
   lotReach: { building: 9, landmark: 7 },
   /** The smallest world, meters across. */
@@ -923,18 +927,46 @@ function chooseTrails(wanted: readonly CodeTrail[], standing: readonly string[],
   return [...spanning, ...rest];
 }
 
+/** Each code model's division of the land, made once: it depends on the code alone. */
+const divided = new WeakMap<CodeModel, { readonly dirs: ReturnType<typeof directoriesOf>; readonly size: number; readonly land: ReturnType<typeof divideLand> }>();
+function divisionOf(model: CodeModel): { readonly dirs: ReturnType<typeof directoriesOf>; readonly size: number; readonly land: ReturnType<typeof divideLand> } {
+  const kept = divided.get(model);
+  if (kept !== undefined) return kept;
+  const dirs = directoriesOf(model, model.repository.name);
+  const lots = new Map(model.entities.map((e) => [e.path, LAYOUT.lot]));
+  const total = model.files.reduce((n, f) => n + groundOfFile(f), 0) + lots.size * LAYOUT.lot;
+  const size = Math.max(LAYOUT.minSize, Math.ceil(Math.sqrt(total / LAND_SHARE) / 10) * 10);
+  const made = { dirs, size, land: divideLand(landTree(dirs, lots), size) };
+  divided.set(model, made);
+  return made;
+}
+
+/** Judgments that decide nothing: what the land is laid out with before Jev answers. */
+const UNJUDGED: Judgments = { world: "", lands: {}, vibes: {}, things: {}, trails: [], forms: {}, waters: {}, characters: {} };
+
+/**
+ * The world's land before anything is judged: every area, file patch and
+ * cell exactly as `layoutWorld` lays them out once Jev has answered, because
+ * the land's division depends on the code alone. Opening a world shows it
+ * while Jev answers.
+ */
+export function landOf(model: CodeModel): WorldPlaces {
+  const w = layoutWorld(model, UNJUDGED);
+  return {
+    name: w.name,
+    size: w.size,
+    areas: w.areas.map(({ path, name, depth, parent, x, z }) => ({ path, name, depth, parent, x, z })),
+    patches: w.patches.map(({ path, name, area, x, z, radius, vitality }) => ({ path, name, area, x, z, radius, vitality })),
+    cells: w.cells,
+  };
+}
+
 /** Lays out the world from the code and Jev's judgments. */
 export function layoutWorld(model: CodeModel, judged: Judgments): CodeWorld {
   const name = model.repository.name;
-  const dirs = directoriesOf(model, name);
+  const { dirs, size, land } = divisionOf(model);
   const entityAt = new Map(model.entities.map((e) => [e.path, e]));
   const files = new Map(model.files.map((f) => [f.path, f]));
-  const asOf = (path: string): "building" | "landmark" => (judged.things[path]?.as === "landmark" ? "landmark" : "building");
-  const lots = new Map(model.entities.map((e) => [e.path, LAYOUT.lot[asOf(e.path)]]));
-  const tree = landTree(dirs, lots);
-  const total = model.files.reduce((n, f) => n + groundOfFile(f), 0) + [...lots.values()].reduce((a, b) => a + b, 0);
-  const size = Math.max(LAYOUT.minSize, Math.ceil(Math.sqrt(total / LAND_SHARE) / 10) * 10);
-  const land = divideLand(tree, size);
 
   const regionsOf = regionPaths(dirs);
   const regionIndex = new Map(regionsOf.map((p, i) => [p, i]));

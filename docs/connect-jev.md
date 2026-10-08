@@ -20,12 +20,25 @@ pnpm install
 GAIA_JEV=live pnpm dev
 ```
 
-The app opens on this repository's world. Before anything is sent, the veil
-says how many places Jev has not judged yet and what asking will cost, then
-offers **Ask Jev** or **Use the stand-in**. It asks once per project and
-remembers your answer. While Jev answers, the veil counts them ("Asking Jev
-about 267 places… 96 answered"). Eight requests go at a time, so a first
-run takes about half a minute to a minute.
+The app opens on this repository's world. Gaia asks Jev with no question
+when judging costs no more than your spend limit: $0.10 a project unless you
+set another (`DEFAULT_SPEND_LIMIT_USD` in `app/world-service/open-world.ts`).
+Only when a project's estimate is over the limit does a small paper slip
+appear at the foot of the waiting screen, with the cost and your limit, and
+two answers: **Go ahead** or **Use the stand-in**. Choosing the stand-in is
+remembered for that project until the limit changes. Eight requests go at a
+time, so a first run takes about half a minute to a minute, while the
+waiting screen paints the world's map: each area's border as soon as the
+code is read, each area's watercolor as Jev's answers about it come in.
+
+The limit is kept with the app's own settings in
+`~/Library/Application Support/Gaia/projects/app/store.json`. To set it,
+write that file while Gaia is closed:
+
+```sh
+mkdir -p ~/Library/Application\ Support/Gaia/projects/app
+echo '{"settings":{"jev-spend-limit":{"usd":0.25}}}' > ~/Library/Application\ Support/Gaia/projects/app/store.json
+```
 
 The world appears once every answer is in, never half-judged: changing a
 judgment after the world stands would swap trees, buildings and land in
@@ -41,8 +54,9 @@ To see another codebase, choose **File > Open Folder…** (⌘O), or start with
 Each place is one request of facts and doc comments. Source code is never
 sent. On 2026-10-07 this repository took 267 requests: about 380,000 input
 tokens, about $0.016 at Jev 1.13's $0.042 per million input tokens (output is
-free). The app shows the exact figure from the engine's `jev.estimate` before
-asking. `pnpm print-world-requests` prints every request without sending it.
+free). The engine's `jev.estimate` gives the exact figure before anything is
+sent, and the app compares it with your limit. `pnpm print-world-requests`
+prints every request without sending it.
 
 ## Comparing what Jev reads
 
@@ -66,7 +80,7 @@ places whose facts changed are asked again, usually a handful of requests.
 
 ## Where answers are kept, and starting over
 
-Each project's answers and your cost answer live in
+Each project's answers, and a stand-in choice made over the limit, live in
 `~/Library/Application Support/Gaia/projects/<project>/store.json`, where
 `<project>` is the first 12 characters of the repository's root commit.
 
@@ -79,8 +93,8 @@ rm -r ~/Library/Application\ Support/Gaia/projects
 security delete-generic-password -s gaia-openrouter -a openrouter
 ```
 
-Forgetting a project also forgets your cost answer, so the next live start
-asks again.
+Forgetting a project also forgets a stand-in choice, so the next live start
+over the limit asks again.
 
 ## When Jev is not asked
 

@@ -93,11 +93,11 @@ import { createWildGrowth } from "./wilds.ts";
 import { createUnderstory } from "./understory.ts";
 import { createClearings } from "./clearings.ts";
 import { type Ways, createWays, setTrailEnds, setTrailPlaces } from "./trails.ts";
-import { LOGO_SVG } from "../brand/logo.ts";
+import { createWait } from "../wait/wait.ts";
 import { createCard } from "./card.ts";
 import { LANDMARK_ENTITIES, type Represented, SAMPLE_ENTITIES, SAMPLE_FILES, representEntity, representFile } from "./samples.ts";
 import { type Judge, judgedThing } from "@gaia/world";
-import { type CodeLab, type Veil, codeWorld, representSymbol } from "./code-world.ts";
+import { type CodeLab, codeWorld, representSymbol } from "./code-world.ts";
 import { createSettlement } from "./settlement.ts";
 import { createSigns } from "./signs.ts";
 import { createBaker } from "./baker.ts";
@@ -106,7 +106,7 @@ import type { Stand, StandRequest, StandingLandmark } from "./stand.ts";
 const TEMPLATE = /* html */ `
 <main class="stage">
   <canvas class="view" aria-label="A world of gentle landforms. Click or tap the ground to walk there and drag to look, or switch to the overview."></canvas>
-  <div class="veil" data-ref="veil"><div class="veil-inner"><div class="veil-mark">${LOGO_SVG}</div><div class="veil-words" role="status" aria-live="polite"><span class="veil-status" data-ref="veil-words">Baking the world…</span><span class="veil-done" data-ref="veil-done" hidden><i></i></span></div><div class="veil-ask" data-ref="veil-ask" hidden></div></div></div>
+  <div class="veil" data-ref="veil" aria-label="The world is being made"></div>
   <div class="bar top">
     <div class="segmented modes" role="group" aria-label="View">
       <button data-ref="mode-walk" class="seg on" type="button">Walk</button>
@@ -247,6 +247,8 @@ export interface WorldHandle {
   stood(): StoodWorld;
   /** Calls `listener` after every bake the lab takes on. */
   onStood(listener: () => void): void;
+  /** Calls `listener` once the wait has given way to the first world standing. */
+  onLifted(listener: () => void): void;
   /** Asked on every bake, after the trails are routed and before anything else stands: what to stand beside them. */
   furnish(furnisher: (stood: StoodWorld) => Furnishing): void;
   /** Whether the furnishing stops a walker, as it should while it shows. */
@@ -301,6 +303,8 @@ const SAMPLE_NAME = "the sample world";
 
 /** Which world the lab opens on: Gaia's own, unless the page's address asks for the sample world (`?world=sample`, or `?world=small` for its 320 m version). */
 const ASKED_WORLD = new URLSearchParams(location.search).get("world");
+/** Frames the first world draws under the wait before it lifts: the first compiles every material. */
+const LIFT_FRAMES = 4;
 /** The sample world's size: the full world, or the small one, to compare the two. */
 const SCALE = ASKED_WORLD === "small" ? SMALL_WORLD : FULL_WORLD;
 /** The air's density walking, and over the overview, which thins with the world's size so the whole of it stays legible. */
@@ -351,6 +355,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   let furnished: Furnishing = UNFURNISHED;
   let furnishSolid = true;
   const stoodListeners: (() => void)[] = [];
+  const liftedListeners: (() => void)[] = [];
 
   // ---------- landmarks and trails ----------
   // A few landmarks stand on the most prominent ground of regions spread
@@ -1503,8 +1508,12 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   let frameCalls = 0;
   /** Each pass's draw calls and triangles in the last frame. */
   const passes = { shadow: { calls: 0, triangles: 0 }, mirror: { calls: 0, triangles: 0 }, view: { calls: 0, triangles: 0 } };
+  let waitNight = -1;
   function frame(dt: number, now: number, at: number): void {
     if (at !== hour) applyHour(at);
+    // The wait follows the hour as the world will.
+    const night = Math.round(light.uNightness.value * 20) / 20;
+    if (night !== waitNight) veil.night((waitNight = night));
     light.uTime.value = frozen ?? light.uTime.value + dt;
     if (mode === "walk") {
       updateWalk(dt);
@@ -1559,60 +1568,19 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     if (await rebake(next)) valleyView();
   }
 
-  /**
-   * The veil's words while a codebase's world opens, and the one question it
-   * may ask: whether to send the places Jev has not judged to it. A question
-   * raises the veil again if it had lifted, and lowers it once answered.
-   */
-  const veil: Veil = {
-    say(words, done) {
-      $("veil-words").textContent = words;
-      $("veil-done").hidden = done === undefined;
-      if (done !== undefined) ($("veil-done").firstElementChild as HTMLElement).style.width = `${Math.round(done * 100)}%`;
-    },
-    ask(question, yes, no) {
-      const shroud = $("veil");
-      const wasLifted = shroud.classList.contains("lifted");
-      shroud.classList.remove("lifted");
-      const box = $("veil-ask");
-      const words = document.createElement("p");
-      words.textContent = question;
-      const choices = document.createElement("div");
-      choices.className = "veil-choices";
-      const button = (text: string, answer: boolean): HTMLButtonElement => {
-        const b = document.createElement("button");
-        b.type = "button";
-        b.textContent = text;
-        b.dataset.answer = String(answer);
-        return b;
-      };
-      const yesButton = button(yes, true);
-      choices.append(yesButton, button(no, false));
-      box.replaceChildren(words, choices);
-      box.hidden = false;
-      $("veil-words").hidden = true;
-      yesButton.focus();
-      return new Promise((resolve) => {
-        choices.addEventListener("click", (e) => {
-          const answer = (e.target as HTMLElement).closest<HTMLButtonElement>("button")?.dataset.answer;
-          if (answer === undefined) return;
-          box.hidden = true;
-          box.replaceChildren();
-          $("veil-words").hidden = false;
-          if (wasLifted) shroud.classList.add("lifted");
-          resolve(answer === "true");
-        });
-      });
-    },
-  };
+  /** The wait the first world opens behind (app/renderer/wait/): it lifts once the world stands and has drawn. */
+  const veil = createWait($("veil"));
 
   setMode("walk");
   refreshStats();
   refreshPanel();
   // The first world bakes behind a quiet veil, which lifts once it stands.
   const startWithCode = ASKED_WORLD !== "sample" && ASKED_WORLD !== "small";
-  const ready = (startWithCode ? showCodebase(true) : rebake(world).then(() => valleyView())).then(() => {
-    $("veil").classList.add("lifted");
+  const ready = (startWithCode ? showCodebase(true) : rebake(world).then(() => valleyView())).then(async () => {
+    // The world's first frames compile its materials; they draw under the paper, so the world shows only once it moves smoothly.
+    for (let k = 0; k < LIFT_FRAMES; k++) await new Promise((r) => requestAnimationFrame(r));
+    await veil.lift();
+    for (const listener of liftedListeners) listener();
   });
   $("codebase").addEventListener("click", () => void showCodebase(code === null));
 
@@ -1699,6 +1667,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     places: () => places,
     stood: stoodWorld,
     onStood: (listener) => stoodListeners.push(listener),
+    onLifted: (listener) => liftedListeners.push(listener),
     furnish: (f) => {
       furnisher = f;
     },

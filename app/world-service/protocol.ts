@@ -3,6 +3,7 @@
 // renderer over its own MessagePort.
 
 import type { CodeModel } from "@gaia/schema";
+import type { Outline } from "@gaia/terrain";
 import type { CodeWorld, Judge } from "@gaia/world";
 
 /** Main process → world service. */
@@ -36,7 +37,7 @@ export interface WorldDocument {
   readonly summary: string;
 }
 
-/** What a live run would send, shown to the person before anything is sent. */
+/** What a live run would send and cost, shown to the person only when it costs more than their spend limit. */
 export interface ConsentPlan {
   /** The repository's name. */
   readonly name: string;
@@ -44,20 +45,31 @@ export interface ConsentPlan {
   readonly requests: number;
   readonly estimatedTokens: number;
   readonly estimatedUsd: number;
+  /** What judging one project may spend without asking, US dollars. */
+  readonly limitUsd: number;
   readonly endpoint: string;
 }
 
 /** How opening a world is going. */
 export type Opening =
   | { readonly stage: "reading"; readonly root: string }
-  /** Asking Jev about the things it has not judged; `answered` counts those settled, `failed` those the stand-in took over. */
-  | { readonly stage: "asking"; readonly name: string; readonly total: number; readonly answered: number; readonly failed: number };
+  /**
+   * The land is divided, before anything is judged: every area's outline,
+   * exactly as the finished world's map draws it (`outlinesOf`), since the
+   * division depends on the code alone. Sent once, before any judging.
+   */
+  | { readonly stage: "land"; readonly name: string; readonly size: number; readonly areas: readonly Outline[] }
+  /**
+   * Asking Jev about the things it has not judged; `answered` counts those settled, `failed` those the stand-in
+   * took over, and `settled` names every area (a directory's path, "" for the root) whose things are all judged.
+   */
+  | { readonly stage: "asking"; readonly name: string; readonly total: number; readonly answered: number; readonly failed: number; readonly settled: readonly string[] };
 
 /** World service → renderer. */
 export type ToRenderer =
   | { readonly type: "engine.status"; readonly status: EngineStatus }
   | { readonly type: "world.progress"; readonly opening: Opening }
-  /** Asks the person, once per project, whether to send `plan` to Jev; the renderer answers with `world.consent`. */
+  /** Asks the person whether to send `plan` to Jev, only when it costs more than their spend limit; the renderer answers with `world.consent`. */
   | { readonly type: "world.consent"; readonly plan: ConsentPlan }
   | { readonly type: "world.document"; readonly document: WorldDocument }
   | { readonly type: "world.failed"; readonly root: string; readonly message: string };

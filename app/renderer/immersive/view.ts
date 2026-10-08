@@ -135,6 +135,11 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
   world.camera.layers.enable(MARKER_LAYER);
   world.furnishingSolid(true);
 
+  // The first place announces itself as the wait gives way to the world, not under it.
+  world.onLifted(() => {
+    arrival.show(false);
+    arrival.show(active);
+  });
   // Markers stand beside the trails on every bake, before the grass and the walk read the ground.
   world.furnish((stood) => markers.place(stood, (x, z): PlaceArea => world.placeAt(x, z).area));
   /** Whether a world stands yet: until the first bake lands, nothing names a place. */

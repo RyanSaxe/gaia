@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { CodeModel, EntityFacts, FileFacts, JevClient, JevQuestion, JevResponse } from "@gaia/schema";
 import { cellUnder, placeAt } from "@gaia/terrain";
-import { type Judge, type Looks, codeGraph, judgeWorld, keptJev, layoutWorld, planWorldRequests, requestKey, standInJev } from "@gaia/world";
+import { type Judge, type Looks, codeGraph, judgeWorld, keptJev, landOf, layoutWorld, planWorldRequests, requestKey, standInJev } from "@gaia/world";
 
 const file = (path: string, lines: number, kind: FileFacts["kind"] = "source"): FileFacts => ({
   path,
@@ -147,6 +147,18 @@ describe("a world laid out from code", () => {
     expect(world.regions.reduce((n, r) => n + r.sites.length, 0)).toBe(world.cells.length);
     const bigger = layoutWorld(model(30), await judgeWorld(model(30), LOOKS, standInJev(LOOKS)));
     expect(bigger.size).toBeGreaterThan(world.size);
+  });
+
+  it("knows the land before anything is judged: however Jev judges, every area, patch and cell is the same", async () => {
+    const judged = await judgeWorld(model(), LOOKS, standInJev(LOOKS));
+    const landmarks = { ...judged, things: Object.fromEntries(Object.keys(judged.things).map((path) => [path, { as: "landmark" as const, look: "" }])) };
+    const land = landOf(model());
+    for (const world of [layoutWorld(model(), judged), layoutWorld(model(), landmarks)]) {
+      expect(world.size).toBe(land.size);
+      expect(world.cells).toEqual(land.cells);
+      expect(world.areas.map(({ path, x, z }) => ({ path, x, z }))).toEqual(land.areas.map(({ path, x, z }) => ({ path, x, z })));
+      expect(world.patches.map(({ path, x, z, radius }) => ({ path, x, z, radius }))).toEqual(land.patches.map(({ path, x, z, radius }) => ({ path, x, z, radius })));
+    }
   });
 
   it("moves little when a little code changes", async () => {
