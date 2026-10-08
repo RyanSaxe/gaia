@@ -275,6 +275,17 @@ corner, a lean-to's whole slope caves in about its high edge, a turret's
 cone rots through and its finial leans and falls, and a fallen timber is
 one storey's post, so a tall house collapses floor by floor.
 
+Ruin obeys gravity. Every piece knows what holds it up and goes no later
+than it: plaster before the timbers framing it, a rail before the pickets
+it is nailed to, a trough before the trestles under it, a quoin before
+the one below. A piece that goes shrinks back onto what holds it (a
+timber onto the post it is pegged to, a pane onto its sill, a board onto
+the frame it is nailed to), so nothing hangs in the air even partway
+through. What falls comes to rest: a toppled post lies with its head on
+the ground, a chimney lies along the ridge, a finial lies down its roof,
+and a flower box pitches off the wall and is gone. Ivy grows only where
+there is wall to hold it, never past its top.
+
 Every one of these is a vitality channel on the pieces the primitives
 already build, so nothing is rebuilt and nothing pops. Ivy and the moss on
 a ruin keep the family's moss green: nature takes a ruin back, rather than
@@ -416,14 +427,20 @@ reads as a silhouette through the haze from 300 m and more, and declines
 by breaking, not by fading:
 
 - A tower's blocks fall from the top down, each at its own seeded
-  threshold, so a failing tower is a jagged stump with fallen stone heaped
-  at its foot. Its roof and galleries go first, never outlasting the wall
-  that carries them, and its lit windows go out one by one; an open
+  threshold but never later than the blocks it rests on, so a failing
+  tower is a jagged stump with fallen stone heaped at its foot and no
+  block ever hangs over a gap. A falling block sinks down into the wall
+  below it as it goes. Its crown goes first, in tiers (the roof and the
+  lantern's glass, then the deck, posts, drum and battlements, then the
+  walkway), each shrinking back onto what it stands on, never outlasting
+  the wall that carries it; its lit windows go out one by one; an open
   lantern room glows at night like a beacon.
 - Great stones lose their lintels and a dolmen its capstone first. A stone
-  never bends: it leans whole about its toe, falls flat into the grass, or
-  snaps, its top lying broken at its foot. A cairn's top stones tumble
-  first.
+  never bends: it leans whole about its toe (the edge of its foot), falls
+  until it lies in the grass, or snaps, its top lying broken at its foot;
+  a dolmen's capstone tips until its far edge rests on the ground. A
+  cairn is courses of stones each bedded on the ones below; its top stones
+  tumble first, sliding down the pile as they go.
 - A great tree drops its leaves, sags and greys to a bare snag.
 
 Each landmark primitive has a few strong axes that change the whole form,
