@@ -1,6 +1,6 @@
 # Decisions
 
-One file per decision the reviewer settled in the pair sessions that designed Gaia v3. Each says what was decided, why, and where.
+One file per decision the reviewer settled in the pair sessions that designed Gaia v3. Each says what was decided, why, and in which round. A later decision can refine an earlier one; `docs/architecture.md` and `docs/design-system.md` describe what the code does now.
 
 - [A new codebase in a new repository](01-rebuild-from-scratch.md)
 - [Electron, four processes, a Rust engine binary](02-platform.md)
@@ -34,3 +34,5 @@ One file per decision the reviewer settled in the pair sessions that designed Ga
 - [Every trail Jev wants is walked, on one network of paths](30-a-network-of-paths.md)
 - [What Jev reads, and how its context grows](31-what-jev-reads.md)
 - [A slip for where you are, a line to ask, a rim to touch](32-a-slip-ask-and-a-rim.md)
+- [Nothing reminds you it is an app](33-nothing-reminds-you-it-is-an-app.md)
+- [This repository becomes Gaia](34-this-repository-becomes-gaia.md)

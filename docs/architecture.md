@@ -151,7 +151,7 @@ and a small change moves it a little. The divisions are measured from points
 moved by the land's warp (`warpPoint`, a broad sway and a fine one), so
 borders curve and wander like fields' and nothing is a circle or a square.
 The land fills the walkable square with no common ground between areas;
-the world's side grows with the code (Gaia's own is 990 m). Last, a few
+the world's side grows with the code (Gaia's own is 1,120 m). Last, a few
 sites drawn from each file's share (`CodeWorld.cells`, one per 16 m or so)
 redraw the whole division as plain nearest-site cells: the rule `siteAt` in
 `@gaia/terrain` reads, so a file's ground is the same for the layout,
@@ -283,9 +283,9 @@ many trees a line of code grows, how close they stand and how large, and
 whether its files' groves gather on the sides of their patches nearest the
 area's heart, so they knit into one wood with open ground at the area's rim,
 or keep to their patches' middles with clearings between
-(`app/renderer/terrain/looks.ts`, `CHARACTERS`); a world grows at most 470
-trees, and where its areas would grow more every grove gives up the same
-share. The understory then grows where it belongs (`scatterComponents`):
+(`app/renderer/terrain/looks.ts`, `CHARACTERS`); a world grows about 470
+trees: where its areas would grow more, every grove gives up the same
+share, though each keeps the one tree that names its file. The understory then grows where it belongs (`scatterComponents`):
 each candidate site on a grid fixed to the world reads its kind of place from
 the trees' crowns, the water and the slope, so a change in one place moves
 nothing elsewhere. The ground textures take a world of any size.

@@ -643,9 +643,8 @@ wanted trail's, as wide as its widest. Where three or more ways meet away
 from a place (14 m or more from one), a small cairn of stacked stones
 stands in the widest gap between them, clear of every tread, no nearer
 than 40 m to another cairn. The same terrain, requests and seed always
-give the same network. In Gaia's own world every one of the 35
-dependencies Jev would walk is walked, on 21 ways and 3.3 km of tread,
-where five separate trails took 2.6 km.
+give the same network. In Gaia's own world every one of the 18
+dependencies Jev would walk is walked, on 15 ways and 3.4 km of tread.
 
 The ground under a tread eases toward the tread's own grade, averaged over
 14 m, and blends back into the land over 2.6 m, as a cottage's pad does; a
@@ -771,7 +770,7 @@ cast into it.
 | Open ground | at least 40% of a region |
 | Landmarks | at most 1 per region |
 | Tree spacing | about half a crown width to a crown between trunks in a grove, set by its area's character, never under 4.5 m; wider toward a grove's margin |
-| Trees | at most 470 in a world, every grove giving up the same share past that |
+| Trees | about 470 in a world: past that every grove gives up the same share, keeping the tree that names its file |
 
 Jev decides which dependencies become trails: every one it would walk. The
 network, not a count of trails, holds the composition: `planTrails` routes
