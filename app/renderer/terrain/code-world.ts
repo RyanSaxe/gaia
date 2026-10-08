@@ -22,7 +22,7 @@ import snapshot from "./fixtures/gaia.json";
 import kept from "./fixtures/gaia-jev.json";
 import { CHARACTERS, type Character, FORMS, LANDS, LOOKS } from "./looks.ts";
 import type { Represented, SampleEntity } from "./samples.ts";
-import { vitalityOf } from "@gaia/world";
+import { type CodePatch, type FileJudged, vitalityOf } from "@gaia/world";
 import type { StandCode, StandLot } from "./stand.ts";
 
 /** The wait a world opens behind: it shows how opening goes, and asks before spending past the limit. */
@@ -75,11 +75,14 @@ export function withWater(biome: Blueprint, water: string): Blueprint {
   return biome;
 }
 
+/** What Jev judged about a patch's file that its vitality reads. */
+export const judgedOf = (patch: CodePatch | undefined): FileJudged => (patch?.needsTests === undefined ? {} : { needsTests: patch.needsTests });
+
 const KIND_NAMES: Readonly<Record<SymbolFact["kind"], string>> = { function: "Function", class: "Class", type: "Type", constant: "Constant", module: "Module" };
 const LANGUAGE_NAMES: Readonly<Record<string, string>> = { typescript: "TypeScript", javascript: "JavaScript", rust: "Rust" };
 
 /** What a card says about a file's finer entity: its name, kind, doc comment, where it is declared and its file's health. */
-export function representSymbol(s: CodeWorld["symbols"][number], file: FileFacts): Represented {
+export function representSymbol(s: CodeWorld["symbols"][number], file: FileFacts, judged: FileJudged = {}): Represented {
   return {
     id: s.id,
     name: s.name,
@@ -89,7 +92,7 @@ export function representSymbol(s: CodeWorld["symbols"][number], file: FileFacts
     size: `${s.lines.toLocaleString()} ${s.lines === 1 ? "line" : "lines"} of ${file.lines.toLocaleString()} in its file`,
     dependsOn: [],
     dependents: [],
-    report: vitalityOf(file),
+    report: vitalityOf(file, [], judged),
   };
 }
 

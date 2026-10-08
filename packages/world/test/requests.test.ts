@@ -34,12 +34,12 @@ const file = (path: string, lines: number, imports: string[] = [], importedBy: s
   imports,
   importedBy,
   doc: `The ${path} file.`,
-  tests: { coveredBy: path.includes(".test.") ? [] : ["pkg/test/a.test.ts"], failing: [] },
+  tests: { coveredBy: path.includes(".test.") ? [] : ["pkg/test/a.test.ts"], own: path.includes(".test.") ? [] : ["pkg/test/a.test.ts"], failing: [] },
   complexity: { functions: 3, longestFunction: 40, maxNesting: 2 },
   diagnostics: { errors: 0, warnings: 0, lint: 0 },
   debtMarkers: 0,
   unused: false,
-  git: { daysSinceFirstCommit: 10, commitsLast14Days: 1 },
+  git: { daysSinceFirstCommit: 10, daysSinceLastCommit: 2, commitsLast14Days: 1, commits: 4, authors: 1 },
 });
 
 function model(): CodeModel {

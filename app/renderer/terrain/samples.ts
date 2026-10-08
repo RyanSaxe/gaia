@@ -5,7 +5,7 @@
 // and what its card says always agree.
 
 import type { EntityFacts, FileFacts } from "@gaia/schema";
-import { type VitalityReport, entityVitalityOf, vitalityOf } from "@gaia/world";
+import { type FileJudged, type VitalityReport, entityVitalityOf, vitalityOf } from "@gaia/world";
 
 /** Something in the world a person can walk up to and ask about. */
 export interface Represented {
@@ -272,17 +272,17 @@ const file = (path: string, lines: number, doc: string, health: Partial<FileFact
   imports: [],
   importedBy: [],
   doc,
-  tests: { coveredBy: ["test"], failing: [] },
+  tests: { coveredBy: ["test"], own: ["test"], failing: [] },
   complexity: { functions: 8, longestFunction: 40, maxNesting: 3 },
   diagnostics: { errors: 0, warnings: 0, lint: 0 },
   debtMarkers: 0,
   unused: false,
-  git: { daysSinceFirstCommit: 30, commitsLast14Days: 2 },
+  git: { daysSinceFirstCommit: 30, daysSinceLastCommit: 2, commitsLast14Days: 2, commits: 5, authors: 1 },
   ...health,
 });
 
-const untested = { tests: { coveredBy: [], failing: [] } };
-const failing = { tests: { coveredBy: ["test"], failing: ["test"] } };
+const untested = { tests: { coveredBy: [], own: [], failing: [] } };
+const failing = { tests: { coveredBy: ["test"], own: ["test"], failing: ["test"] } };
 
 /** One file for each tree in the lab, in the order the trees are planted. */
 export const SAMPLE_FILES: readonly FileFacts[] = [
@@ -330,7 +330,8 @@ export function representEntity(e: EntityFacts): Represented {
   };
 }
 
-export function representFile(f: FileFacts): Represented {
+/** What a card says about a file; `judged` is what Jev judged about it that its vitality reads. */
+export function representFile(f: FileFacts, judged: FileJudged = {}): Represented {
   return {
     id: f.path,
     name: shortName(f.path),
@@ -340,6 +341,6 @@ export function representFile(f: FileFacts): Represented {
     size: count(f.lines, "line"),
     dependsOn: f.imports.map(shortName),
     dependents: f.importedBy.map(shortName),
-    report: vitalityOf(f),
+    report: vitalityOf(f, [], judged),
   };
 }

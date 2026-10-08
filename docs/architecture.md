@@ -47,13 +47,18 @@ top-level functions and classes it keeps to itself, with `exported: false`),
 each with its doc comment, the line it is declared on and how many lines it
 spans, imports, a rough complexity and its TODO markers. Imports resolve relative
 paths, workspace packages by name through their `exports`, and Rust `mod`
-declarations. A test covers every file it reaches through imports; a crate's
+declarations (not `use crate::…`, so a Rust file's own dependencies on its
+siblings are not edges yet). A test covers every file it reaches through
+imports, across packages (`tests.coveredBy`); `tests.own` names those of the
+file's own entity; a crate's
 integration tests reach its entry, and a Rust file with a `#[cfg(test)]`
 module covers itself. Entities come from `package.json` and `Cargo.toml`, from
 directories whose index file is no package's entry (modules), and from
 directories with a `main` or `server` file (apps and services). An entity
 depends on another through its manifest or when one of its files imports one
-of the other's. History comes from one `git log`. Nothing runs the compiler,
+of the other's. History comes from one `git log`: per file, how many days
+since its first and its last commit, its commits in the last 14 days and in
+all, and how many people wrote them. Nothing runs the compiler,
 the linter or the tests yet, so diagnostics and failing tests read 0, and
 nothing watches the project for `facts.changed`. On Gaia's own repository
 (about 220 files, 33,000 lines) `project.open` takes about 70 ms in a release
@@ -287,13 +292,22 @@ becomes the default. A design fixes four things:
 | Design | State | Questions | Character | Escalation |
 | --- | --- | --- | --- | --- |
 | `first` | Summary facts | Round 12's wording | No | No |
-| `revised` (the app's default) | Summary facts, the repository in words | Round 13's wording | No | No |
+| `revised` | Summary facts, the repository in words | Round 13's wording | No | No |
 | `outline` | Each thing's outline | Round 13's | Yes | No |
 | `escalate` | Each thing's outline | Round 13's | Yes | Yes |
 | `shared` | Summary facts, one state per area | Round 13's | No | No |
 | `shared-outline` | Outlines, one state per area | Round 13's | No | No |
+| `judged` (the app's default) | Summary facts in words, areas compared | Round 15's | No | No |
 
-- **State.** Summary facts are counts and a few docs. An outline
+- **State.** Summary facts are counts and a few docs. `judged` sends the
+  same facts with every count and size in words (`fileWords`, `areaWords`,
+  `entityWords`), so a one-line edit asks 0.02 requests again instead of
+  4.7; a file also says what it declares (functions, classes, types and
+  constants, each in words), how far tests reach it (its own entity's tests,
+  only other entities', or none) and how often it changed; an area compares
+  its size and its imports per file with the repository's other areas
+  (`comparedWithOtherAreas`), because Jev answers each area's request alone
+  and cannot see that "much of the code leans on" one area more than another. An outline
   (`packages/world/src/outline.ts`) is the structure a tree-sitter summary
   gives, from the engine's facts only: a file's symbols (kind, name,
   exported or not, size in words, doc comment), the files it imports and
@@ -324,6 +338,11 @@ becomes the default. A design fixes four things:
   ring, the root a great willow). The vibe question says to
   judge a file by its part, size and importers, not its subject: a file
   about grass or light had been read as open meadow or a lantern willow.
+  Round 15's `judged` questions ask each finer entity that may stand on a
+  file's patch on its own (`form#<name>`, the first `LAYOUT.symbolsPerPatch`
+  of `standingSymbols`), instead of one form for every function of a file,
+  and ask every source file whether it holds behavior a test should check
+  (`tests`, a `noul`), which its vitality reads (see Vitality).
 - **Character.** A request carries what was judged above it: an area the
   world's art direction, a file and an entity their land's landform and
   water. `judgeWorld` then asks in three waves (the world, its areas, then
@@ -359,6 +378,17 @@ reading this one change your answer?"); and a `SourceReader` in the engine
 returns only the chosen spans, each capped in lines, for one more request
 that asks the still-unsure questions again.
 
+On 2026-10-08 Jev answered `revised` and `judged` twice and once reordered
+over a fresh snapshot (292 files; $0.12 for 1,932 requests). `judged` cost
+$0.024 a world against $0.016. Per symbol, forms used all ten options
+instead of eight (spread 0.63 to 0.71 of the most possible), with median
+certainty 0.41 to 0.50 and half the noise (10% to 6% of answers changed when
+asked again); vibes kept their spread at median certainty 0.83 to 0.91. With
+areas compared, lands spread 0.65 to 0.77 and water 0.45 to 0.62, but
+character collapsed toward the deep wood (0.53 to 0.39). Jev judged 147 of
+176 source files to need tests, and the 29 that do not are types, kinds,
+styles, markup and barrel files.
+
 `pnpm compare-jev` (`tools/compare-jev-designs.ts`) judges a codebase under
 each design and reports requests, questions, the tokens OpenRouter billed,
 cost and latency; how often each design's judgments differ from the first
@@ -367,16 +397,21 @@ and with every option reordered (its order bias); which readings second
 requests chose; and the requests and tokens a one-line edit asks again. `--judge stand-in` runs in process, `--judge local` runs the real
 engine against the local OpenRouter stand-in, and `--judge jev` asks Jev
 itself, only with `GAIA_JEV=live`, the Keychain's key and `--spend-up-to`
-covering the engine's estimate. On Gaia's own repository the designs plan:
+covering the engine's estimate. On Gaia's own repository (the snapshot of
+292 files) the designs plan:
 
 | Design | Requests | Questions | Tokens (first requests) |
 | --- | --- | --- | --- |
-| `first` | 267 | 584 | 362,103 |
-| `revised` | 267 | 612 | 380,391 |
-| `outline` | 267 | 612 | 427,476 |
-| `escalate` | 267, plus a second for each unsure one | 1,593 | 608,944 |
+| `first` | 322 | 697 | 448,014 |
+| `revised` | 322 | 740 | 505,609 |
+| `outline` | 322 | 740 | 553,477 |
+| `escalate` | 322, plus a second for each unsure one | 1,920 | 772,057 |
+| `shared` | 70 | 740 | 580,994 |
+| `shared-outline` | 72 | 740 | 641,476 |
+| `judged` | 322 | 1,332 | 846,618 |
 
-On 2026-10-08 Jev answered every design twice and once reordered
+On 2026-10-08 Jev answered every design twice and once reordered over the
+earlier snapshot of 235 files
 (`compare-jev --judge jev`, $0.31 for 4,018 requests; the round-13 wording
 of lands, trails and building-or-landmark). Billed tokens run about 78% of
 the estimate.
@@ -395,8 +430,8 @@ asking twice: with options shuffled per thing, Jev shows no lean toward the
 first. Sharing an area's state saves four requests in five and 8% of
 tokens but changes a quarter of the judgments, mostly for the worse: each
 question reads the whole state, so a file's neighbours sway it (substantial
-files of logic turn to open meadow, hubs lose their willows). `revised`
-stays the app's default; sharing pays only for questions about one thing.
+files of logic turn to open meadow, hubs lose their willows). Sharing pays
+only for questions about one thing.
 The engine is Jev's only client (`engine/src/jev.rs`). It posts each request
 to OpenRouter's Decisions API with curl, the key read from the macOS Keychain
 (service `gaia-openrouter`) and handed to curl on stdin, never on a command
@@ -421,7 +456,11 @@ world would make, with that estimate.
 
 Vitality multiplies penalties from named signals, each with a weight:
 failing tests, compiler errors, complexity, untested code, lint warnings,
-unused code, debt markers, and named Jev judgments. An entity's signals read
+unused code, debt markers, and named Jev judgments. A file is untested in
+full when no test reaches it and in half when only other entities' tests do,
+and that penalty is scaled by Jev's probability that the file holds behavior
+a test should check (`FileJudged.needsTests`, asked by the `judged` design),
+so a file of types or styles loses nothing for having no tests of its own. An entity's signals read
 the same facts as shares of the whole (`entityVitalityOf`), so one failing
 test in a large package costs less than half its tests failing. Each term
 carries a reading in words, such as "2 of 4 test files failing", for the

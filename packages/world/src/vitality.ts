@@ -3,16 +3,31 @@
 
 import type { EntityFacts, FileFacts } from "@gaia/schema";
 
+/**
+ * What Jev judged about a file that its vitality reads: the facts say what a
+ * tool can measure, and Jev what a tool cannot, such as whether a file holds
+ * behavior that needs tests of its own.
+ */
+export interface FileJudged {
+  /** Jev's probability that the file holds behavior a test should check. Without it, every file is taken to need tests. */
+  readonly needsTests?: number;
+}
+
 export interface Signal {
   readonly id: string;
   readonly label: string;
   readonly weight: number;
-  readonly penalty: (f: FileFacts) => number;
+  readonly penalty: (f: FileFacts, judged: FileJudged) => number;
   /** The facts behind the penalty in words. */
-  readonly reading: (f: FileFacts) => string;
+  readonly reading: (f: FileFacts, judged: FileJudged) => string;
 }
 
 const clamp01 = (x: number): number => Math.min(1, Math.max(0, x));
+
+/** How far a file is from tested: none of its own entity's tests reach it (1), only other entities' tests reach it (0.5), or its own do (0). */
+const untested = (f: FileFacts): number => (f.tests.own.length > 0 ? 0 : f.tests.coveredBy.length > 0 ? 0.5 : 1);
+const testedWords = (f: FileFacts): string =>
+  f.tests.own.length > 0 ? `${f.tests.own.length} of its own entity's tests reach it` : f.tests.coveredBy.length > 0 ? `only other entities' tests reach it (${f.tests.coveredBy.length})` : "no test reaches it";
 
 export const TOOL_SIGNALS: readonly Signal[] = [
   {
@@ -34,8 +49,8 @@ export const TOOL_SIGNALS: readonly Signal[] = [
     id: "untested",
     label: "Untested code",
     weight: 0.25,
-    penalty: (f) => (f.tests.coveredBy.length === 0 ? 1 : 0),
-    reading: (f) => (f.tests.coveredBy.length === 0 ? "no test reaches it" : `${f.tests.coveredBy.length} tests reach it`),
+    penalty: (f, j) => untested(f) * (j.needsTests ?? 1),
+    reading: (f, j) => `${testedWords(f)}${j.needsTests === undefined ? "" : `; Jev: ${Math.round(j.needsTests * 100)}% that it needs tests of its own`}`,
   },
   { id: "lint", label: "Lint warnings", weight: 0.15, penalty: (f) => clamp01(f.diagnostics.lint / 10), reading: (f) => `${f.diagnostics.lint} warnings` },
   { id: "unused", label: "Unused code", weight: 0.2, penalty: (f) => (f.unused ? 1 : 0), reading: (f) => (f.unused ? "nothing imports it" : "in use") },
@@ -63,9 +78,9 @@ export interface VitalityReport {
   }[];
 }
 
-export function vitalityOf(f: FileFacts, jev: readonly JevSignal[] = []): VitalityReport {
+export function vitalityOf(f: FileFacts, jev: readonly JevSignal[] = [], judged: FileJudged = {}): VitalityReport {
   const terms = [
-    ...TOOL_SIGNALS.map((s) => ({ id: s.id, label: s.label, weight: s.weight, penalty: s.penalty(f), reading: s.reading(f) })),
+    ...TOOL_SIGNALS.map((s) => ({ id: s.id, label: s.label, weight: s.weight, penalty: s.penalty(f, judged), reading: s.reading(f, judged) })),
     ...jev.map((s) => ({ id: s.id, label: s.label, weight: s.weight, penalty: s.penalty })),
   ];
   const vitality = terms.reduce((v, term) => v * (1 - term.weight * term.penalty), 1);

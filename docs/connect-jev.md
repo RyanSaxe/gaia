@@ -52,10 +52,10 @@ To see another codebase, choose **File > Open Folder…** (⌘O), or start with
 ## What it costs
 
 Each place is one request of facts and doc comments. Source code is never
-sent. On 2026-10-08 Jev judged this repository's snapshot in 267 requests:
-316,000 input tokens billed, $0.013 at Jev 1.13's $0.042 per million input
-tokens (output is free), a quarter to half a second per request, none
-failed or answered outside its options. The engine's `jev.estimate` gives the figure before anything is sent, and
+sent. On 2026-10-08 Jev judged this repository's snapshot (292 files) in 322
+requests with the app's `judged` design: 572,000 input tokens billed, $0.024
+at Jev 1.13's $0.042 per million input tokens (output is free), about 0.3
+seconds per request, none failed or answered outside its options. The engine's `jev.estimate` gives the figure before anything is sent, and
 the app compares it with your limit; it runs about a quarter above what
 OpenRouter bills. `pnpm print-world-requests` prints every request without sending it.
 
@@ -66,7 +66,7 @@ instead. After questions or options change, the page judges what the kept
 answers no longer cover with the stand-in until someone runs, with the key:
 
 ```sh
-GAIA_JEV=live pnpm jev-world --judge jev --spend-up-to 0.04
+GAIA_JEV=live pnpm jev-world --judge jev --spend-up-to 0.07
 ```
 
 It asks only what is not kept yet; `--limit 5` sends at most five, and
@@ -76,15 +76,15 @@ It asks only what is not kept yet; `--limit 5` sends at most five, and
 
 `pnpm compare-jev` judges this repository under each way of building Jev's
 requests (`first`, `revised`, `outline`, `escalate`, `shared`,
-`shared-outline`; see "What a request carries" in `docs/architecture.md`)
+`shared-outline`, `judged`; see "What a request carries" in `docs/architecture.md`)
 and reports how often their judgments differ, question by question, against
 Jev's own noise and its lean toward the first option. With your key it asks
 Jev itself, every design twice and once reordered. It refuses to start
-unless you allow twice the estimate, about $0.69; the run on 2026-10-08
-cost $0.31:
+unless you allow twice the estimate, about $1.10 for all seven designs; the
+six-design run on 2026-10-08 cost $0.31:
 
 ```sh
-GAIA_JEV=live pnpm compare-jev --judge jev --spend-up-to 0.70 --out /tmp/jev-designs.json
+GAIA_JEV=live pnpm compare-jev --judge jev --spend-up-to 1.10 --out /tmp/jev-designs.json
 ```
 
 `--designs revised,shared` compares fewer, `--keep-runs yes` writes every

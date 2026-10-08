@@ -14,12 +14,12 @@ export const SCANNER: FileFacts = {
   imports: ["src-tauri/src/lib.rs"],
   importedBy: ["src-tauri/src/commands.rs"],
   doc: "Walks a project with gitignore support and records hashes, line counts and languages.",
-  tests: { coveredBy: [], failing: [] },
+  tests: { coveredBy: [], own: [], failing: [] },
   complexity: { functions: 9, longestFunction: 58, maxNesting: 4 },
   diagnostics: { errors: 0, warnings: 1, lint: 2 },
   debtMarkers: 2,
   unused: false,
-  git: { daysSinceFirstCommit: 171, commitsLast14Days: 0 },
+  git: { daysSinceFirstCommit: 171, daysSinceLastCommit: 2, commitsLast14Days: 0, commits: 3, authors: 1 },
 };
 
 /**

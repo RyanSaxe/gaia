@@ -35,8 +35,10 @@ export interface FileFacts {
   /** The file's leading comment, if any. */
   readonly doc?: string;
   readonly tests: {
-    /** Test files that import this file, directly or through others. */
+    /** Test files that import this file, directly or through others, from anywhere in the project. */
     readonly coveredBy: readonly string[];
+    /** Those of them that belong to the file's own entity: its package's or module's own tests, not tests elsewhere that happen to reach it. */
+    readonly own: readonly string[];
     /** Those of them failing in the project's latest test report. */
     readonly failing: readonly string[];
   };
@@ -50,7 +52,12 @@ export interface FileFacts {
   readonly unused: boolean;
   readonly git: {
     readonly daysSinceFirstCommit: number;
+    /** Days since the last commit that touched it. */
+    readonly daysSinceLastCommit: number;
     readonly commitsLast14Days: number;
+    /** Every commit that touched it, and how many people wrote them. */
+    readonly commits: number;
+    readonly authors: number;
   };
 }
 
@@ -65,10 +72,10 @@ export type EntityForm = "package" | "crate" | "service" | "app" | "module";
  * Facts about one entity: a named unit of the code with a boundary, a public
  * surface, things that depend on it and a health of its own, such as a
  * package, a crate, a service or a module. Structures stand for entities.
- * The engine finds them from manifests (package.json, Cargo.toml,
- * pyproject.toml, go.mod), binary and server entry points, and directories
- * with an index file (index.ts, mod.rs, __init__.py), and sums their files'
- * facts. Entities may nest; each file belongs to its innermost entity.
+ * The engine finds them from manifests (package.json, and Cargo.toml with
+ * a `[package]`), binary and server entry points (main.ts, main.rs, main.py,
+ * server.ts), and directories with an index file (index.ts, mod.rs,
+ * __init__.py), and sums their files' facts. Entities may nest; each file belongs to its innermost entity.
  */
 export interface EntityFacts {
   /** The entity's root directory, project-relative. This is its identity. */

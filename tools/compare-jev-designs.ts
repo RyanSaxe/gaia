@@ -6,7 +6,7 @@
 // judge is `jev`, the engine runs with GAIA_JEV=live, and --spend-up-to
 // covers the engine's own estimate.
 //
-// Usage: pnpm compare-jev [--judge stand-in|local|jev] [--designs first,revised,outline,escalate,shared]
+// Usage: pnpm compare-jev [--judge stand-in|local|jev] [--designs first,revised,outline,escalate,shared,shared-outline,judged]
 //          [--model fixture.json] [--repeat 2] [--spend-up-to 0.20] [--out report.json] [--keep-runs yes] [--ledger spend.jsonl]
 //   stand-in: the deterministic stand-in judge, in process.
 //   local:    the real engine binary, live, against a local stand-in for OpenRouter (proves the path).
@@ -29,7 +29,7 @@ const flag = (name: string, fallback: string): string => {
   return i < 0 ? fallback : (process.argv[i + 1] ?? fallback);
 };
 const judge = flag("judge", "stand-in");
-const designs = flag("designs", "first,revised,outline,escalate,shared,shared-outline").split(",") as DesignName[];
+const designs = flag("designs", "first,revised,outline,escalate,shared,shared-outline,judged").split(",") as DesignName[];
 const repeat = Number(flag("repeat", judge === "stand-in" ? "1" : "2"));
 const model = JSON.parse(readFileSync(resolve(flag("model", resolve(repo, "app/renderer/terrain/fixtures/gaia.json"))), "utf8")) as CodeModel;
 for (const d of designs) if (!(d in DESIGNS)) throw new Error(`Unknown design ${d}; choose from ${Object.keys(DESIGNS).join(", ")}.`);
