@@ -97,7 +97,8 @@ describe.each(PRIMITIVES.map((p) => [p.id, p] as const))("%s", { timeout: 20_000
     for (const s of samples(p)) {
       for (const input of inputFor(p)) {
         for (const part of (build(p, s, input, 5) as Built).parts as Part[]) {
-          expect(allFinite(part.positions) && allFinite(part.normals) && allFinite(part.channels.pivot)).toBe(true);
+          expect(allFinite(part.positions) && allFinite(part.normals) && allFinite(part.channels.pivot) && allFinite(part.channels.bough) && allFinite(part.channels.twig)).toBe(true);
+          expect(part.channels.bough.length === part.shade.length * 3 && part.channels.twig.length === part.shade.length * 3).toBe(true);
           const c = part.channels;
           expect([c.loss, c.droop, c.wither, c.glow, c.close, part.shade].every(inUnit)).toBe(true);
           expect(c.close.length).toBe(part.shade.length);
@@ -152,7 +153,7 @@ describe.each(PRIMITIVES.map((p) => [p.id, p] as const))("%s", { timeout: 20_000
               same(part.positions, far.positions, 3) && same(part.normals, far.normals, 3) && same(part.shade, far.shade, 1) &&
                 same(part.tint, far.tint, 1) && same(part.cutout, far.cutout, 3) && same(part.piece, far.piece, 2) &&
                 same(c.loss, fc.loss, 1) && same(c.droop, fc.droop, 1) && same(c.wither, fc.wither, 1) &&
-                same(c.glow, fc.glow, 1) && same(c.pivot, fc.pivot, 3) && same(c.close, fc.close, 1),
+                same(c.glow, fc.glow, 1) && same(c.pivot, fc.pivot, 3) && same(c.bough, fc.bough, 3) && same(c.twig, fc.twig, 3) && same(c.close, fc.close, 1),
             ).toBe(true);
             // The kept triangles are the full build's, in its order.
             const at = new Map(from.map((v, k) => [v, k]));

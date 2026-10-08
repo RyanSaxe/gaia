@@ -38,7 +38,8 @@ export function buildDrift(species: Species, p: Resolved<typeof driftParams>, ct
     const headLoss = clamp(lossThreshold(f.r.next(), 0.78) + 0.12 * f.edge, 0.02, 0.85);
     const tint = f.r.range(-0.06, 0.06);
     emitStem(stems, f, headLoss, species === "bells");
-    const ch = { loss: headLoss, droop: 0.6, wither: 1, glow: 0, close: CLOSE[species], tint };
+    // The head rides its stem: it sags and sways with it about the stem's foot.
+    const ch = { loss: headLoss, droop: 0.35, wither: 1, glow: 0, close: CLOSE[species], tint, bough: f.base };
     if (species === "daisies") emitDaisy(petals, eyes, f, ch);
     else if (species === "cups") emitCup(petals, eyes, f, ch);
     else if (species === "bells") emitBells(petals, f, ch);
@@ -82,6 +83,7 @@ function layout(p: Resolved<typeof driftParams>, r: Rand, s: number): Flower[] {
 }
 
 interface HeadLook {
+  readonly bough: V3;
   readonly loss: number;
   readonly droop: number;
   readonly wither: number;

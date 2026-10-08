@@ -5,7 +5,7 @@
 import * as THREE from "three";
 import type { Rgb } from "@gaia/schema";
 import { AIR, type WorldLook } from "@gaia/realize";
-import { CLEARINGS_GLSL, type Clearing, LIGHT_GLSL, type SceneLight, applySky, createClearings } from "@gaia/render";
+import { CLEARINGS_GLSL, type Clearing, LIGHT_GLSL, type SceneLight, WIND_GLSL, applySky, createClearings } from "@gaia/render";
 
 const v3 = (c: Rgb): THREE.Vector3 => new THREE.Vector3(c[0], c[1], c[2]);
 
@@ -405,9 +405,7 @@ varying float vT;
 varying float vTint;
 varying float vFlower;
 ${NOISE_GLSL}
-float windAt(vec2 p, float t) {
-  return sin(t * 1.35 + p.x * 0.21 + p.y * 0.17) + 0.35 * sin(t * 2.9 + p.y * 0.43);
-}
+${WIND_GLSL}
 void main() {
   float t = position.y;
   // Blades keep their full height everywhere: toward the rim of the field
@@ -422,10 +420,10 @@ void main() {
   // A flower blade opens a small diamond head around its upper vertices.
   float wide = uWidth * keep * (1.0 + flower * 3.2 * step(0.7, t) * step(t, 0.9));
   vec3 local = vec3(position.x * wide * c, t * h, position.x * wide * s);
-  float w = windAt(aBlade.xy, uTime * 0.95) + 0.3 * sin(uTime * 3.7 + aBlade.x * 0.7 + aBlade.y * 1.3);
+  // The world's one wind: blades bow downwind in each gust and sway a little between.
+  float w = 0.35 + 0.75 * gustAt(aBlade.xy, uTime) + 0.2 * sin(uTime * 1.3 + aBlade.x * 0.21 + aBlade.y * 0.17);
   float bend = uWind * t * t * max(h, 0.15);
-  local.x += w * 0.22 * bend;
-  local.z += w * 0.12 * bend;
+  local.xz += WIND_DIR * w * 0.24 * bend;
   vec3 world = vec3(aBlade.x, 0.0, aBlade.y) + local;
   vWorld = world;
   vT = t;

@@ -5,8 +5,9 @@
 // reference the contract tests hold every structure and landmark to, so no
 // primitive can float a piece at any vitality.
 
-import type { Part } from "@gaia/schema";
+import { type Part, SPRAYS } from "@gaia/schema";
 import { CHANNEL_MATH, applyVitality } from "./channels.ts";
+import type { WindState } from "./wind.ts";
 
 export const SUPPORT = {
   /** A piece whose lowest point is this close to the ground (y = 0) stands on it. */
@@ -45,6 +46,8 @@ const smoothstep = (e0: number, e1: number, x: number): number => {
 function keepOf(part: Part, i: number, v: number): number {
   const loss = part.channels.loss[i] ?? 0;
   const grow = part.channels.grow?.[i] ?? 0;
+  // A spray stays where it is while its leaves drop one by one, the last a little below its loss.
+  if (SPRAYS.has(Math.floor(part.cutout[i * 3 + 2] ?? 0))) return loss > 0 ? smoothstep(loss - CHANNEL_MATH.dropSpread, loss + CHANNEL_MATH.dropSpread + CHANNEL_MATH.lossBand, v) : 1;
   return (loss > 0 ? smoothstep(loss, loss + CHANNEL_MATH.lossBand, v) : 1) * (grow > 0 ? 1 - smoothstep(grow, grow + CHANNEL_MATH.lossBand, v) : 1);
 }
 
@@ -151,8 +154,8 @@ function signature(part: Part, i: number): number {
 
 /** Swatches that are not solid things: smoke rises on its own. */
 const WEIGHTLESS = new Set(["smoke"]);
-/** A crown's leaf cards hang from twigs too fine to model, so only the cards of other swatches (ivy) are held to account. */
-const CROWN = new Set(["leaf", "bloom"]);
+/** Thin swatches flutter in the wind, as the plant shader flutters them. */
+const THIN = new Set(["leaf", "bloom", "moss", "stem", "eye"]);
 const CELL = 0.35;
 /** Long edges are probed every this many meters. */
 const EDGE = 0.3;
@@ -165,13 +168,15 @@ const EDGE = 0.3;
  * or on another piece that is itself supported, where both are at that
  * vitality: across a gap no wider than `SUPPORT.gap` from above, touching
  * within `SUPPORT.glue` from any side, or let into it (a point just behind
- * its nearest face). Leaf cards cling within `SUPPORT.cling`; a crown's cards
- * and smoke are not counted. A piece that has fully fallen over its hinge
+ * its nearest face). Leaf cards cling within `SUPPORT.cling`, or hang from
+ * their stalk: a pivot on the card within `SUPPORT.cling` of what carries
+ * it. Smoke is not counted. With `wind`, every piece stands where that
+ * moment's wind bends it (`swayAt`). A piece that has fully fallen over its hinge
  * must also rest away from it, on the ground or on something standing, and
  * not lie sunk into the ground. With `moving: false`, only pieces wholly
  * standing are counted, as when vitality has settled between thresholds.
  */
-export function unsupportedAt(parts: readonly Part[], v: number, options: { readonly moving?: boolean } = {}): Unsupported[] {
+export function unsupportedAt(parts: readonly Part[], v: number, options: { readonly moving?: boolean; readonly wind?: WindState } = {}): Unsupported[] {
   const moving = options.moving ?? true;
   const offsets: number[] = [];
   let total = 0;
@@ -212,13 +217,18 @@ export function unsupportedAt(parts: readonly Part[], v: number, options: { read
     vertex: number;
     weightless: boolean;
     card: boolean;
-    crown: boolean;
+    /** Where the piece's pivot is now, and how far it lies from the piece as built: a card's stalk is on the card. */
+    stalk: [number, number, number];
+    stalkGap: number;
   }
   const bodies: Body[] = [];
   const index = new Map<number, number>();
   parts.forEach((part, pi) => {
     const base = offsets[pi] as number;
-    const seen = applyVitality(part, v).positions;
+    const wind = options.wind === undefined ? undefined : { state: options.wind, flutter: THIN.has(part.swatch) };
+    const seen = applyVitality(part, v, undefined, wind).positions;
+    // Each piece's pivot as vitality and the wind carry it: where a card's stalk meets what holds it.
+    const stalks = applyVitality({ ...part, positions: part.channels.pivot }, v, undefined, wind).positions;
     for (let i = 0; i < part.shade.length; i++) {
       const g = base + i;
       for (let c = 0; c < 3; c++) {
@@ -230,7 +240,7 @@ export function unsupportedAt(parts: readonly Part[], v: number, options: { read
       if (b === undefined) {
         b = bodies.length;
         index.set(root, b);
-        bodies.push({ keepLo: 1, keepHi: 0, fallen: -1, lo: [Infinity, Infinity, Infinity], hi: [-Infinity, -Infinity, -Infinity], restLow: Infinity, pivot: [part.channels.pivot[i * 3] as number, part.channels.pivot[i * 3 + 1] as number, part.channels.pivot[i * 3 + 2] as number], reach: 0, part: pi, vertex: i, weightless: WEIGHTLESS.has(part.swatch), card: true, crown: CROWN.has(part.swatch) });
+        bodies.push({ keepLo: 1, keepHi: 0, fallen: -1, lo: [Infinity, Infinity, Infinity], hi: [-Infinity, -Infinity, -Infinity], restLow: Infinity, pivot: [part.channels.pivot[i * 3] as number, part.channels.pivot[i * 3 + 1] as number, part.channels.pivot[i * 3 + 2] as number], reach: 0, part: pi, vertex: i, weightless: WEIGHTLESS.has(part.swatch), card: true, stalk: [stalks[i * 3] as number, stalks[i * 3 + 1] as number, stalks[i * 3 + 2] as number], stalkGap: Infinity });
       }
       bodyOf[g] = b;
       const body = bodies[b] as Body;
@@ -240,6 +250,8 @@ export function unsupportedAt(parts: readonly Part[], v: number, options: { read
       body.keepHi = Math.max(body.keepHi, keep);
       body.fallen = Math.max(body.fallen, fallenOf(part, i, v));
       body.restLow = Math.min(body.restLow, rest[g * 3 + 1] as number);
+      const gap = Math.hypot((rest[g * 3] as number) - (part.channels.pivot[i * 3] as number), (rest[g * 3 + 1] as number) - (part.channels.pivot[i * 3 + 1] as number), (rest[g * 3 + 2] as number) - (part.channels.pivot[i * 3 + 2] as number));
+      body.stalkGap = Math.min(body.stalkGap, gap);
       for (let c = 0; c < 3; c++) {
         body.lo[c] = Math.min(body.lo[c] as number, pos[g * 3 + c] as number);
         body.hi[c] = Math.max(body.hi[c] as number, pos[g * 3 + c] as number);
@@ -247,7 +259,22 @@ export function unsupportedAt(parts: readonly Part[], v: number, options: { read
     }
   });
   /** Still showing, whole or partly gone: it must be held up, and holds up what rests on it where it is now. */
-  const shown = (b: Body): boolean => (moving ? b.keepHi > 0.15 : b.keepLo > 0.999) && !b.weightless && !(b.card && b.crown);
+  const near = new Float64Array(3);
+  const shown = (b: Body): boolean => (moving ? b.keepHi > 0.15 : b.keepLo > 0.999) && !b.weightless;
+  // A card's stalk may meet it between its corners: measure from its pivot to its own surface.
+  const restTri = new Float64Array(9);
+  parts.forEach((part, pi) => {
+    const base = offsets[pi] as number;
+    for (let t = 0; t < part.indices.length; t += 3) {
+      const ia = part.indices[t] as number;
+      const body = bodies[bodyOf[base + ia] as number] as Body;
+      if (!body.card || body.stalkGap <= SUPPORT.glue) continue;
+      for (let k = 0; k < 3; k++) for (let c = 0; c < 3; c++) restTri[k * 3 + c] = part.positions[(part.indices[t + k] as number) * 3 + c] as number;
+      const pv = part.channels.pivot;
+      closest(pv[ia * 3] as number, pv[ia * 3 + 1] as number, pv[ia * 3 + 2] as number, restTri, 0, near);
+      body.stalkGap = Math.min(body.stalkGap, Math.hypot((pv[ia * 3] as number) - (near[0] as number), (pv[ia * 3 + 1] as number) - (near[1] as number), (pv[ia * 3 + 2] as number) - (near[2] as number)));
+    }
+  });
   for (let g = 0; g < total; g++) {
     const body = bodies[bodyOf[g] as number] as Body;
     body.reach = Math.max(body.reach, Math.hypot((pos[g * 3] as number) - body.pivot[0], (pos[g * 3 + 1] as number) - body.pivot[1], (pos[g * 3 + 2] as number) - body.pivot[2]));
@@ -325,7 +352,6 @@ export function unsupportedAt(parts: readonly Part[], v: number, options: { read
     if (s === undefined) map.set(a, new Set([b]));
     else s.add(b);
   };
-  const near = new Float64Array(3);
   const onRest = (top: number, under: number, x: number, y: number, z: number): void => {
     link(restsOn, top, under);
     const body = bodies[top] as Body;
@@ -413,10 +439,12 @@ export function unsupportedAt(parts: readonly Part[], v: number, options: { read
     }
   }
 
-  // A leaf card also hangs from its pivot, where its stem meets what it grows on.
+  // A leaf card also hangs from its stalk, where it meets what it grows on:
+  // its pivot, which must lie on the card itself, wherever vitality and the
+  // wind have carried it.
   bodies.forEach((body, b) => {
-    if (!shown(body) || !body.card) return;
-    const [px, py, pz] = body.pivot;
+    if (!shown(body) || !body.card || body.stalkGap > SUPPORT.cling) return;
+    const [px, py, pz] = body.stalk;
     const cx = Math.floor(px / CELL), cy = Math.floor(py / CELL), cz = Math.floor(pz / CELL);
     for (let x = cx - 1; x <= cx + 1; x++)
       for (let y = cy - 1; y <= cy + 1; y++)

@@ -516,9 +516,13 @@ thing, and says nothing of a signal nearly every file shares. Jev's own
 judgment of what to say about a thing plugs in there.
 
 Every primitive writes five per-vertex vitality channels: `loss` (the vitality
-below which a piece collapses to its pivot), `droop`, `wither`, `glow` and
-`pivot`, plus a `tint` hue offset, a `cutout` that places a vertex on a
-leaf card or marks a crown's solid heart (`CUT.core`), and `close`, how far a piece folds toward its pivot at night (a
+below which a piece collapses to its pivot, or a spray's leaves drop in
+place), `droop` (how far its bough sags about the bough's joint), `wither`,
+`glow` and `pivot` (the point the piece hangs from), and what carries the
+vertex: `bough` (the joint where its bough or stem leaves the trunk or the
+ground) and `twig` (where its twig leaves the bough), which wind and droop
+bend it about, plus a `tint` hue offset, a `cutout` that places a vertex on a
+leaf card or marks a fir frond's solid heart (`CUT.core`), and `close`, how far a piece folds toward its pivot at night (a
 flower's petals). Parts may add four optional channels for ruin and motion:
 `fall` (an axis, the most it turns, and the vitality below which a piece tips
 about its pivot: a door swings ajar, a chimney topples), `grow` (the vitality
@@ -533,14 +537,19 @@ many times, such as a tree, a rock or a drift of flowers, draws as one
 instanced mesh per part and level of detail, with each copy's vitality, seed
 and hue read per instance and its shape varied a little by where it stands.
 `applyVitality` in `packages/realize/src/channels.ts` is the CPU reference the
-tests run against. Ruin obeys gravity: `unsupportedAt` in
+tests run against: a piece collapses in the plant's rest shape, the wind
+bends it (`swayAt` in `packages/realize/src/wind.ts`, the twin of
+`WIND_GLSL` in `@gaia/render`), and droop bends its bough last. Ruin obeys gravity: `unsupportedAt` in
 `packages/realize/src/support.ts` applies the channels at a vitality and
 finds every piece (the vertices that move and go together) standing on
 nothing, whole or partway through collapsing, and every toppled piece not
 at rest; a contract test holds every landmark and every building put
 together from the structure primitives to it (buildings for their standing
 pieces), so a primitive orders its thresholds by what rests on what and
-collapses each piece toward what holds it.
+collapses each piece toward what holds it. Plants keep the same rule, in
+still air and in a strong gust: every flora primitive's crown, on frames of
+every kind with bark and blossoms, and every great tree, at vitality 1, 0.5
+and 0.15.
 
 ## Detail
 
@@ -552,10 +561,10 @@ Distance thins detail by whole pieces, from the person's eye in every pass:
 and the CPU reference, and the plant shader applies the same numbers. A
 coarser level of detail is the full build with the pieces that have left by
 its distance taken out, every kept vertex bit-identical, so detail is computed
-from one build and never shifts a primitive's random streams. A crown's
+from one build and never shifts a primitive's random streams. A fir frond's
 heart (`CUT.core`) also leaves near the eye, shrinking to its center by its
 own size (`CORE_NEAR` in `packages/render/src/plant.ts`), in the view only:
-its shadow stays, so the shade under a tree never changes as a person walks.
+its shadow stays, so the shade under a fir never changes as a person walks.
 
 `createPlantInstances` in `@gaia/render` sorts copies into 32 m cells. Before
 each pass (the sun's shadow, the water's mirror, the view) the scene's

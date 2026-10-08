@@ -7,6 +7,7 @@
 import * as THREE from "three";
 import { CHANNEL_MATH } from "@gaia/realize";
 import { LIGHT_GLSL, type SceneLight } from "./light.ts";
+import { WIND_GLSL } from "./wind.ts";
 
 const SMOKE_VERT = /* glsl */ `
 uniform float uTime;
@@ -20,6 +21,7 @@ varying float vAlpha;
 varying vec2 vCorner;
 varying vec3 vWorld;
 varying float vPhase;
+${WIND_GLSL}
 void main() {
   vec3 corner = position - aPivot;
   float size0 = max(length(corner.xy) / 1.41421, 1e-4);
@@ -28,7 +30,9 @@ void main() {
   float keep = aLoss > 0.0 ? smoothstep(aLoss, aLoss + ${CHANNEL_MATH.lossBand.toFixed(4)}, uVitality) : 1.0;
   vec3 base = (modelMatrix * vec4(aPivot, 1.0)).xyz;
   float sway = sin(uTime * 0.7 + aShade * 9.0) * 0.25 * phase;
-  vec3 drift = vec3(0.9 + sway, 0.0, 0.4 - sway) * phase * phase * (1.2 + 1.6 * uWind);
+  // Smoke leans downwind with the world's one wind, farther in a gust.
+  vec2 lean = WIND_DIR * (1.0 + 0.4 * gustAt(base.xz, uTime)) + vec2(-WIND_DIR.y, WIND_DIR.x) * sway;
+  vec3 drift = vec3(lean.x, 0.0, lean.y) * phase * phase * (1.2 + 1.6 * uWind);
   vec3 center = base + vec3(0.0, phase * 5.0, 0.0) + drift;
   float size = size0 * (0.45 + 1.7 * phase);
   vec3 right = vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]);

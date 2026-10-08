@@ -14,9 +14,9 @@
 
 import * as THREE from "three";
 import type { Part, Swatch } from "@gaia/schema";
-import { type Realized, detailAt } from "@gaia/realize";
+import { type Realized, detailAt, mergeParts } from "@gaia/realize";
 import type { SceneLight } from "./light.ts";
-import { DEPTH_FRAG, DEPTH_VERT, FOLIAGE, PLANT_FRAG, PLANT_VERT, type PlantView, geometryOf } from "./plant.ts";
+import { DEPTH_FRAG, DEPTH_VERT, FOLIAGE, PLANT_FRAG, PLANT_VERT, type PlantView, geometryOf, sprayColors } from "./plant.ts";
 
 /** Where one copy stands. */
 export interface InstanceSpot {
@@ -215,6 +215,7 @@ export function createPlantInstances(plant: Realized, light: SceneLight, spots: 
           ...perPart,
           uHealthy: { value: vec3Of(swatch.healthy) },
           uDecline: { value: vec3Of(swatch.decline) },
+          ...sprayColors(plant),
           uFoliage: { value: foliage },
           uLamp: { value: 0 },
         },
@@ -238,7 +239,8 @@ export function createPlantInstances(plant: Realized, light: SceneLight, spots: 
     attribute.setUsage(THREE.DynamicDrawUsage);
     return attribute;
   };
-  const levels: Level[] = levelsOf(plant.parts).map(({ at, parts }) => {
+  // A tree's twigs are bark like its limbs: parts of one swatch draw as one mesh.
+  const levels: Level[] = levelsOf(mergeParts(plant.parts)).map(({ at, parts }) => {
     const attribute = bufferFor(count);
     return {
       at,

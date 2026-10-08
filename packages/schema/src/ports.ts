@@ -13,14 +13,31 @@ export type Rgb = readonly [number, number, number];
 export interface VitalityChannels {
   /** The vitality below which the vertex's piece collapses to its pivot. 0 means never. */
   readonly loss: Float32Array;
-  /** How far the vertex sags toward the ground as vitality falls, 0 to 1. */
+  /** How far the vertex sags toward the ground about its `bough` joint as vitality falls, 0 to 1. */
   readonly droop: Float32Array;
   /** How far the vertex's color moves toward the decline swatch, 0 to 1. */
   readonly wither: Float32Array;
   /** How much the vertex shines when vitality is high, 0 to 1. */
   readonly glow: Float32Array;
-  /** The point each vertex collapses toward and sags around, xyz per vertex. */
+  /**
+   * The point each vertex's piece hangs from, xyz per vertex: where a leaf's
+   * stalk meets its twig, a petal its flower. The piece collapses onto it,
+   * and a leaf flutters about it in the wind.
+   */
   readonly pivot: Float32Array;
+  /**
+   * What carries the vertex, xyz per vertex: the joint where its bough or
+   * stem leaves the trunk or the ground. The whole bough, with everything
+   * it carries, sags about this joint (`droop`) and bends about it in the
+   * wind. Equal to `pivot` for a piece carried by nothing finer.
+   */
+  readonly bough: Float32Array;
+  /**
+   * The joint where the vertex's twig leaves its bough, xyz per vertex: the
+   * twig and its leaves bend about it in the wind, on top of the bough's
+   * bend. Equal to `bough` for a piece with no twig of its own.
+   */
+  readonly twig: Float32Array;
   /** How far the vertex folds toward its pivot at night, 0 to 1. Flowers close; most pieces never do. */
   readonly close: Float32Array;
   /**
@@ -75,20 +92,25 @@ export interface Part {
 
 /**
  * The shapes a leaf card can be cut to. A cut's fraction carries the card's
- * own seed, so no two cards show the same leaves.
+ * own seed, so no two cards show the same leaves. A spray (cluster, oval,
+ * lobed, umbels) is a stalk from the card's base (along -1) to its tip
+ * (along 1) with leaves or flowers on short stalks along it: its base sits
+ * on the twig that carries it, and as vitality falls each leaf drops in
+ * place at its own threshold near the card's `loss`, so a spray never
+ * shrinks or flies toward anything.
  */
 export const CUT = {
   /** A solid surface: nothing is cut. */
   solid: 0,
-  /** Pointed leaves on a twig from the card's base (along -1) toward its tip (along 1). */
+  /** A spray of slender pointed leaves, like a birch's or a willow's. */
   cluster: 1,
   /** Small lance leaves hanging from a stem down the middle; along counts leaves. */
   strand: 2,
   /** A needle spray with a jagged fringe; along runs from 0 at the base to 1 at the tip. */
   needles: 3,
-  /** Small rounded oval leaves, like a cherry's or a blueberry's, on a twig from the card's base (along -1) toward its tip (along 1). */
+  /** A spray of small rounded oval leaves, like a cherry's or a box's. */
   oval: 4,
-  /** Palmate leaves with pointed lobes, like a maple's, in pairs on a twig from the card's base (along -1) toward its tip (along 1). */
+  /** A spray of palmate leaves with pointed lobes, like a maple's. */
   lobed: 5,
   /**
    * A patch laid on a surface, like moss on stone. Across is how deep in the
@@ -97,21 +119,30 @@ export const CUT = {
    * a card: it does not fade when seen edge-on.
    */
   patch: 6,
-  /** A five-petaled flower, its heart at the card's middle; along runs -1 to 1. */
-  blossom: 7,
   /**
-   * The solid heart of a crown or a bush, inside its leaves: drawn dark, as
-   * the shade between leaves, so up close it never reads as a ball. It is
-   * never a card: it does not thin when seen edge-on.
+   * The solid heart of a fir's frond, inside its needles: drawn dark, as
+   * the shade between them. It is never a card: it does not thin when seen
+   * edge-on.
    */
   core: 8,
+  /** A spray in bloom: umbels of five-petaled flowers on fine stalks, with a few small fresh leaves, like a cherry's. */
+  umbels: 9,
 } as const;
+
+/** The cuts that are sprays: their leaves drop in place rather than collapsing onto the pivot. */
+export const SPRAYS: ReadonlySet<number> = new Set([CUT.cluster, CUT.oval, CUT.lobed, CUT.umbels]);
 
 export interface Anchor {
   readonly position: Vec3;
   readonly normal: Vec3;
   /** Relative size of what may attach here, 0 to 1. */
   readonly size: number;
+  /**
+   * What carries the anchor, so what grows on it moves with it: the joints
+   * of its bough and twig (as the `bough` and `twig` channels) and how far
+   * the bough droops there. Absent for an anchor carried by nothing that moves.
+   */
+  readonly carry?: { readonly bough: Vec3; readonly twig: Vec3; readonly droop: number };
 }
 
 export interface Built {

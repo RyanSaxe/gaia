@@ -9,7 +9,7 @@ among the options by their descriptions and never writes a color or a number.
 - **Painterly light.** Soft cel shading in a few bands, shadows tinted and
   never black, and aerial perspective instead of a fog wall.
 - **One material family.** Every component uses the same plant shader, which
-  applies cel light, wind, shadow and the vitality channels. A primitive picks
+  applies cel light, the world's one wind, shadow and the vitality channels. A primitive picks
   a swatch and writes channels, and never ships GLSL. Water and sky keep their
   own shaders.
 - **v1's components and Breath of the Wild are the visual bar.** A new
@@ -41,43 +41,79 @@ a canopy; it never touches decline.
 
 ## Leaves
 
-Canopies are painted masses from afar and leaves up close. Leaf cards build
-each clump themselves: an outer shell gives it a leafy outline and an inner,
-darker layer gives it depth, over a solid heart that stands in for the
-inner leaves while they merge into a mass. The heart is drawn darker than
-its leaves, as the shade between them, and as a person comes near enough to
-see single leaves it shrinks smoothly to its center, so up close the gaps
-show limbs, deeper leaves and sky, never a ball; its shadow stays. Each
-family has its own leaf: a canopy's leaves are pointed, oval (cherry) or
-lobed (maple), chosen as a parameter of `leaf-clumps@1`. Up close a card is
-a loose clump of small leaves scattered over it, each pointing roughly away
-from the card's middle at its own angle, length and tone, lighter toward
-its tip and darker along its midrib, overlapping in a fixed order: never a
-ring of equal leaves around a heart, which reads as a flower or a sticker,
-and never an outline drawn around the leaves. Willow strands are crossed
-ribbons of small hanging lance leaves; far off a strand swells and narrows
-along its length, as its leaves bunch, so a curtain never reads as ribbons.
-A fir spray is a frond: a ridge of needles along the limb and branchlets to
-either side that reach toward the tip and droop, so a fir reads as layered,
-feathery needles rather than flat plates; close enough to see single
-needles, the comb reaches in nearly to the limb. A primitive only places
-cards and names their cut (`CUT` in `@gaia/schema`: cluster, oval, lobed,
-strand, needles, blossom, patch or core); the plant shader cuts each card to
-its leaves, with no textures. Every card shades with the crown's blended
-normal, so the canopy lights as one volume. As a card shrinks on screen its
-leaves merge into its plain outline, so distant canopies never sparkle; a
-clump's small leaves merge by the time they are a few pixels across. A card
-turning edge-on thins its leaves from their edges until nothing is left, so
-it never shows as a sliver or a stippled ghost. Cards drop and wither one by
-one as vitality falls, so a failing canopy thins before it goes bare. Cards
-cast their scalloped outlines as shadows, so sun falls through between them.
+Canopies are painted masses from afar and leaves up close, and every leaf
+is carried by something. A broadleaf's crown is clumps where its mass is,
+one at every limb tip and, for a full crown, more along the inner limbs, so
+from afar it reads as the same rounded mass. Each clump is a fan of thin
+twigs that leave the limb along its last stretch and curve out to the
+clump's surface, with sprays along them: a spray is a stalk with leaves on
+short stalks alternating along it, its base on its twig. No ball sits
+inside a crown, so up close the gaps show twigs, deeper sprays and sky.
+Each family has its own spray (`leaf-clumps@1`'s `leaf`): pointed, oval
+(an apple's), lobed (a maple's), or blossom, umbels of five-petaled flowers
+on fine stalks with a few small leaves in the family's stem green (a
+cherry's). A spray's stalks are the bark's color. A primitive only places
+cards and names their cut (`CUT` in `@gaia/schema`: cluster, oval, lobed
+and umbels are sprays; strand, needles, patch and core); the
+plant shader cuts each card to its leaves, with no textures. Every card
+shades with the crown's blended normal, so the canopy lights as one
+volume, and sprays deep in a clump shade darker. As a spray shrinks on
+screen its leaves merge into a soft scalloped round, so distant canopies
+are painted masses that never sparkle. A card turning edge-on thins its
+leaves from their edges until nothing is left. Cards cast their outlines
+as shadows, so sun falls through between them.
 
-Bushes are leafy mounds built the same way: layered leaf cards over clumps
-at every stem tip, down to the soil, over a dark core that hides the frame.
-They shade as one volume, bright on top and at the rim, dark underneath and
-inside, so they sit in the turf. Their blossoms are small cupped five-petaled
-flowers in loose trusses, and berries are small. As vitality falls the cards
-drop one by one and brown, the core goes, and bare twigs show.
+Willow strands are crossed ribbons of small hanging lance leaves, hung from
+the tips and the undersides of the limbs, each topped by two small sprays;
+far off a strand swells and narrows along its length, as its leaves bunch,
+so a curtain never reads as ribbons. A fir spray is a frond along its
+limb: a ridge of needles along the limb and branchlets to either side that
+reach toward the tip and droop, over a slim dark heart, so a fir reads as
+layered, feathery needles rather than flat plates.
+
+Bushes are built the same way as a crown: twigs from every stem carry
+sprays of leaves out to the mound's surface, down to the soil, and the
+mound shades as one volume, bright on top and at the rim, darker inside,
+where the stems show in its shade. Their blossoms are umbels on stalks
+from the twigs, and berries hang in small clusters on stalks.
+
+### Wind, gravity and vitality
+
+One system moves, holds up and declines everything that grows, so no
+component writes its own (`docs/decisions/33`). A primitive says what
+carries each vertex: the joint where its bough or stem leaves the trunk or
+the ground (the `bough` channel), the joint where its twig leaves the
+bough (`twig`) and the point its piece hangs from (`pivot`).
+
+- **Wind.** One field for the whole world (`gustAt` and `swayAt` in
+  `@gaia/realize`, `WIND_GLSL` in `@gaia/render`): gusts travel downwind as
+  broad, soft bands about 60 m apart at 8.5 m/s, their fronts bowed by a
+  slow meander, so a gust rolls through the grass and on into the trees.
+  A plant bends level by level: the whole plant from its base by height,
+  each bough about its joint, each twig about where it leaves the bough,
+  and each leaf on its stalk, only in a gust. Each level leans downwind
+  with the gust where its joint stands and swings gently about that lean,
+  smaller parts faster, each with its own phase. Every level is a bend
+  that keeps each point's distance from its joint, so a bough curves and
+  never slides, and whatever a joint carries moves with it. Grass,
+  flowers, bushes, trees and smoke read the same gusts. A plant's
+  `sway@1` sets how far it gives and how quickly it swings; calm is the
+  default.
+- **Gravity.** Every leaf, flower and twig is carried by its parent: a
+  spray's base sits on its twig, a twig grows out of its limb, flowers and
+  berries hang on stalks from twigs, a strand hangs from a limb's
+  underside. Limbs and twigs never vanish, so a failing plant stands bare,
+  and a weeping limb levels out above the ground rather than into it.
+- **Vitality.** A spray's leaves brown and drop in place one by one,
+  around the spray's own threshold, eroding from their edges; nothing
+  shrinks toward anything far away. Droop bends a whole bough down about
+  its joint, after the wind, carrying all it bears.
+
+`unsupportedAt` holds plants to the rule ruins keep: the contract test
+builds every crown on frames of every kind with bark and blossoms, and
+every great tree, healthy, tired and failing (1, 0.5, 0.15), in still air
+and in a gusty world's strongest gust, and finds nothing floating, within
+40,000 triangles a plant (50,000 for a great tree).
 
 ## Scale
 
@@ -251,8 +287,9 @@ Each cover sets its blades' form: how far they lean, how round their outline
 is (a pointed blade or a round leaf) and how far they arc over. Lush grass is
 soft arcing blades with blunt tips; heather is splayed sprigs with purple
 tops in bushy tufts; moss and clover are low round leaves. Blades bend as
-arcs that keep their length. The wind rolls across the field in broad, soft
-gusts that bow the blades and show their paler sheen.
+arcs that keep their length. The world's one wind rolls across the field in
+broad, soft gusts that bow the blades and show their paler sheen, and the
+same gusts reach the trees and bushes (see Leaves).
 
 ## Sky and distance
 
@@ -783,7 +820,10 @@ by breaking, not by fading:
   a dolmen's capstone tips until its far edge rests on the ground. A
   cairn is courses of stones each bedded on the ones below; its top stones
   tumble first, sliding down the pile as they go.
-- A great tree drops its leaves, sags and greys to a bare snag.
+- A great tree drops its leaves, sags and greys to a bare snag. Its crown
+  is a flora crown at its scale (rooted clumps, or a willow's strands), so
+  it bends and declines by the same rules, its sprays growing only with
+  the square root of its size.
 
 Each landmark primitive has a few strong axes that change the whole form,
 as a tree's skeleton does, so the same three primitives make very

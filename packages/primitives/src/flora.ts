@@ -93,6 +93,7 @@ export const leafClumpsParams = {
     pointed: "Slender pointed leaves, like a birch's or a beech's",
     oval: "Small rounded ovals, like a cherry's or an apple's",
     lobed: "Broad leaves with pointed lobes, like a maple's or a sycamore's",
+    blossom: "Clusters of five-petaled flowers on fine stalks with a few small leaves among them, like a cherry in full bloom",
   }),
   size: t.scale("Size of each clump", { small: 0.6, medium: 1, large: 1.5, "very large": 2.1 }),
   fullness: t.scale("How much of the frame the leaves hide", {
@@ -105,7 +106,7 @@ export const leafClumpsParams = {
 export const leafClumps = primitive({
   id: "leaf-clumps@1",
   role: "Foliage",
-  doc: "Clumps of leaves at the limb tips.",
+  doc: "Clumps of leaves at the limb tips, each a fan of twigs carrying sprays of leaves.",
   params: leafClumpsParams,
   build: (p, ctx, skeleton) => buildLeafClumps(p, ctx, skeleton),
 });
@@ -209,7 +210,7 @@ export const leafMoundParams = {
 export const leafMound = primitive({
   id: "leaf-mound@1",
   role: "Foliage",
-  doc: "Layered leaves that hug a shrub's frame down to the ground, so it reads as one soft, leafy mound.",
+  doc: "Twigs carrying sprays of leaves that fill a shrub's frame down to the ground, so it reads as one soft, leafy mound.",
   params: leafMoundParams,
   build: (p, ctx, skeleton) => buildLeafMound(p, ctx, skeleton),
 });

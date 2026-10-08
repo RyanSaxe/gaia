@@ -1,11 +1,14 @@
 // The vitality channel math, once. The renderer's shader reads these same
 // constants, and `applyVitality` is the CPU reference tests run against.
 
-import type { Part, Swatch } from "@gaia/schema";
+import { type Part, SPRAYS, type Swatch } from "@gaia/schema";
+import { type WindState, swayAt } from "./wind.ts";
 
 export const CHANNEL_MATH = {
   /** Vitality span over which a piece collapses once it falls below its `loss`. */
   lossBand: 0.08,
+  /** A spray's leaves drop in place at their own thresholds, spread this far either side of its `loss`. */
+  dropSpread: 0.15,
   /** How strongly `droop` bends a vertex's offset from its pivot toward the ground. */
   sag: 1.1,
   /** Emission at full vitality and glow 1, as a fraction of the swatch's healthy color. */
@@ -28,7 +31,7 @@ export const CHANNEL_MATH = {
 } as const;
 
 export interface VitalityView {
-  /** Positions after loss and droop, before wind. */
+  /** Positions after loss, the wind when given, and droop. */
   readonly positions: Float32Array;
   /** Albedo per vertex: the swatch mixed toward decline, times shade. */
   readonly colors: Float32Array;
@@ -76,16 +79,25 @@ export const rotAt = (v: number): number => CHANNEL_MATH.rotMost * Math.min(1, M
 /** How fast a spinning piece turns at vitality `v`, as a share of its full speed. */
 export const spinAt = (v: number): number => smoothstep(CHANNEL_MATH.spinStop, CHANNEL_MATH.spinFull, v);
 
+/** A moment's wind over a copy, and whether the part flutters (thin swatches do). */
+export interface InWind {
+  readonly state: WindState;
+  readonly flutter: boolean;
+}
+
 /**
- * CPU reference of the plant shader's channel math. Rot holes are cut per
+ * CPU reference of the plant shader's channel math. Each piece first
+ * collapses onto its pivot (or falls about it), in the plant's rest shape;
+ * then the wind bends it about its joints (`swayAt`), when given; then droop
+ * bends its whole bough down about the bough's joint. Rot holes are cut per
  * fragment, so only `rotAt` says how much shows; spinning pieces stand at
  * their first turn.
  */
-export function applyVitality(part: Part, vitality: number, swatch: Swatch = REFERENCE_SWATCH): VitalityView {
+export function applyVitality(part: Part, vitality: number, swatch: Swatch = REFERENCE_SWATCH, wind?: InWind): VitalityView {
   const v = Math.min(1, Math.max(0, vitality));
-  const { loss, droop, wither, glow, pivot } = part.channels;
+  const { loss, droop, wither, glow, pivot, bough } = part.channels;
   const count = part.shade.length;
-  const positions = new Float32Array(count * 3);
+  const collapsed = new Float32Array(count * 3);
   const colors = new Float32Array(count * 3);
   const emission = new Float32Array(count * 3);
   const m = CHANNEL_MATH;
@@ -96,16 +108,8 @@ export function applyVitality(part: Part, vitality: number, swatch: Swatch = REF
     let ox = (part.positions[i * 3] ?? 0) - px;
     let oy = (part.positions[i * 3 + 1] ?? 0) - py;
     let oz = (part.positions[i * 3 + 2] ?? 0) - pz;
-    const s = (droop[i] ?? 0) * (1 - v);
-    const d = Math.hypot(ox, oy, oz);
-    if (s > 0 && d > 1e-5) {
-      const by = oy - s * d * m.sag;
-      const bl = Math.hypot(ox, by, oz);
-      ox = (ox / bl) * d;
-      oy = (by / bl) * d;
-      oz = (oz / bl) * d;
-    }
-    const threshold = loss[i] ?? 0;
+    // A spray's leaves drop in place, cut away per fragment; every other piece collapses onto its pivot.
+    const threshold = SPRAYS.has(Math.floor(part.cutout[i * 3 + 2] ?? 0)) ? 0 : (loss[i] ?? 0);
     const grows = part.channels.grow?.[i] ?? 0;
     const keep = (threshold > 0 ? smoothstep(threshold, threshold + m.lossBand, v) : 1) * (grows > 0 ? 1 - smoothstep(grows, grows + m.lossBand, v) : 1);
     ox *= keep;
@@ -122,9 +126,9 @@ export function applyVitality(part: Part, vitality: number, swatch: Swatch = REF
       const angle = most * (1 - smoothstep(from - m.fallBand, from, v));
       if (most > 1e-6 && angle !== 0) [ox, oy, oz] = turn([ox, oy, oz], [ax / most, ay / most, az / most], angle);
     }
-    positions[i * 3] = px + ox;
-    positions[i * 3 + 1] = py + oy;
-    positions[i * 3 + 2] = pz + oz;
+    collapsed[i * 3] = px + ox;
+    collapsed[i * 3 + 1] = py + oy;
+    collapsed[i * 3 + 2] = pz + oz;
 
     const w = (wither[i] ?? 0) * (1 - v);
     const bright = m.shadeLow + (m.shadeHigh - m.shadeLow) * (part.shade[i] ?? 0.5);
@@ -137,6 +141,25 @@ export function applyVitality(part: Part, vitality: number, swatch: Swatch = REF
       colors[i * 3 + c] = (healthy + (decline - healthy) * w) * bright;
       emission[i * 3 + c] = healthy * g;
     }
+  }
+  const positions = wind === undefined ? collapsed : swayAt(part, collapsed, wind.state, wind.flutter);
+  // Droop bends the whole bough down about its joint, keeping each point's distance from it.
+  for (let i = 0; i < count; i++) {
+    const s = (droop[i] ?? 0) * (1 - v);
+    if (s <= 0) continue;
+    const bx = bough[i * 3] ?? 0;
+    const by = bough[i * 3 + 1] ?? 0;
+    const bz = bough[i * 3 + 2] ?? 0;
+    const dx = (positions[i * 3] ?? 0) - bx;
+    const dy = (positions[i * 3 + 1] ?? 0) - by;
+    const dz = (positions[i * 3 + 2] ?? 0) - bz;
+    const d = Math.hypot(dx, dy, dz);
+    if (d <= 1e-5) continue;
+    const ly = dy - s * d * m.sag;
+    const bl = Math.hypot(dx, ly, dz);
+    positions[i * 3] = bx + (dx / bl) * d;
+    positions[i * 3 + 1] = by + (ly / bl) * d;
+    positions[i * 3 + 2] = bz + (dz / bl) * d;
   }
   return { positions, colors, emission };
 }
