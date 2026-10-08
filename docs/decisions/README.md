@@ -31,3 +31,4 @@ One file per decision the reviewer settled in the pair sessions that designed Ga
 - [Code becomes a graph, and the graph becomes land](27-code-graph-world.md)
 - [One way to touch the world](28-one-way-to-touch-the-world.md)
 - [Ruin obeys gravity](29-ruin-obeys-gravity.md)
+- [What Jev reads, and how its context grows](30-what-jev-reads.md)

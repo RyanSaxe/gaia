@@ -175,7 +175,8 @@ own: the option's words are the reason, stored with the choice), what grows
 on each file's patch, what each kind of a file's finer entities stands as,
 whether each entity is a building or a landmark and which, and how much it
 would walk each dependency. `planWorldRequests` builds one request per thing,
-from facts and doc comments only, with options shuffled by the thing's path.
+from facts and doc comments only, with options shuffled by the thing's path,
+in the shape a design chooses ("What a request carries" under Jev).
 `judgeWorld` asks them through any `JevClient`, eight at a time. Of the
 dependencies Jev would walk, the trails a world shows are first those that
 join parts of the code no other chosen trail joins, then the most wanted, up
@@ -223,21 +224,97 @@ finer entity as an understory placement, and the trails between lots. The ground
 
 Jev answers three question types about one JSON state: `choice` (up to 255
 options), `score` (2 to 10 described levels) and `noul` (the probability that
-a statement is true). It cannot return text, free numbers or objects, and its
-answers can vary between identical calls. Gaia therefore:
+a statement is true). It cannot return text, free numbers or objects, its
+answers can vary between identical calls, and it answers every question of a
+request on its own, never seeing the others. Gaia therefore:
 
 - plans a blueprint in two requests, structure and then details, so details
   agree with the structure; kinds with `stages` answer in more;
 - shuffles each choice's options by the target's path, because Jev leans
   toward the first option;
 - grows the context only where Jev is unsure, adding the readings Jev asks for
-  (`gather` in `packages/world/src/context.ts`);
+  (`gather` in `packages/world/src/context.ts`); a question about readings
+  names the decision it would help, since Jev cannot see the other questions;
 - stores every accepted answer, keyed by the hash of the whole request
   (model, facts and questions), and asks again only when the request
   changes;
 - will keep a stored answer unless a fresh one wins by a margin
   (`reconcile`); the world from code does not apply that margin yet, so a
   changed request takes Jev's new answer.
+
+### What a request carries: designs
+
+How the world's requests are built is a `Design` (`DESIGNS` in
+`packages/world/src/code-world.ts`), chosen per call of `planWorldRequests`
+and `judgeWorld`, so designs can be compared on real answers before one
+becomes the default. A design fixes four things:
+
+| Design | State | Questions | Character | Escalation |
+| --- | --- | --- | --- | --- |
+| `first` | Summary facts | Round 12's wording | No | No |
+| `revised` (the app's default) | Summary facts, the repository in words | Round 13's wording | No | No |
+| `outline` | Each thing's outline | Round 13's | Yes | No |
+| `escalate` | Each thing's outline | Round 13's | Yes | Yes |
+
+- **State.** Summary facts are counts and a few docs. An outline
+  (`packages/world/src/outline.ts`) is the structure a tree-sitter summary
+  gives, from the engine's facts only: a file's symbols (kind, name,
+  exported or not, size in words, doc comment), the files it imports and
+  that import it, the tests that cover it and its health; an area's own
+  files and subdirectories; an entity's files, its dependencies (with how
+  many of its files import each) and its dependents. Each fits a token
+  budget (`OUTLINE.tokens`: 1,200 for a file, 2,000 for an area, 1,600 for
+  an entity, 2,400 for a reading), built at the richest level of detail that
+  fits. Sizes are words and line numbers are left out, because a request's
+  key is the hash of what it sends: with summary facts a one-line edit asks
+  about 5.8 requests again (the file, every area holding it, its entity and
+  the world); with outlines, 0.05.
+- **Questions.** Round 13 asks an entity's building-or-landmark on its own
+  and each look apart, because one choice over five buildings and five
+  landmarks split a preference for buildings five ways; tells the land
+  question that water is asked separately; and gives the trail question the
+  fact it names (how many files import the other entity).
+- **Character.** A request carries what was judged above it: an area the
+  world's art direction, a file and an entity their land's landform and
+  water. `judgeWorld` then asks in three waves (the world, its areas, then
+  files and entities). An upstream answer that changes makes every request
+  below it new, so stickiness upstream protects everything downstream.
+- **Escalation.** Each request also asks one `noul` per reading
+  (`more:imports`, `more:importers`, `more:tests`, `more:neighbours`,
+  `more:symbols` for a file; `more:files` and `more:neighbours` for an area;
+  `more:dependencies` and `more:dependents` for an entity), each naming the
+  decision it would help. A request with an answer below the certainty
+  threshold (0.5) is asked again (`planFollowUp`) with the readings Jev
+  chose, or the first one when it chose none, asking only the unsure
+  questions with their options in the same order. Both requests are keyed
+  and kept like any other.
+
+Source is not sent. A file's request in the `escalate` design also asks
+`more:source`, whether reading some of its functions' and classes' code
+would help, and records the answer without reading anything. The
+source-reading step is an interface still to be built, once the reviewer
+approves sending source: Gaia keeps each symbol's span out of the state
+(`spansOf`); a third request asks one `noul` per outlined symbol ("would
+reading this one change your answer?"); and a `SourceReader` in the engine
+returns only the chosen spans, each capped in lines, for one more request
+that asks the still-unsure questions again.
+
+`pnpm compare-jev` (`tools/compare-jev-designs.ts`) judges a codebase under
+each design and reports requests, questions, tokens and cost; how often each
+design's judgments differ from `first`'s, by question; the same for one
+design asked twice (Jev's own noise) and with every option reordered (its
+order bias); which readings second requests chose; and re-asks per one-line
+edit. `--judge stand-in` runs in process, `--judge local` runs the real
+engine against the local OpenRouter stand-in, and `--judge jev` asks Jev
+itself, only with `GAIA_JEV=live`, the Keychain's key and `--spend-up-to`
+covering the engine's estimate. On Gaia's own repository the designs plan:
+
+| Design | Requests | Questions | Tokens (first requests) |
+| --- | --- | --- | --- |
+| `first` | 267 | 584 | 362,103 |
+| `revised` | 267 | 612 | 380,391 |
+| `outline` | 267 | 612 | 427,476 |
+| `escalate` | 267, plus a second for each unsure one | 1,593 | 608,944 |
 
 The engine is Jev's only client (`engine/src/jev.rs`). It posts each request
 to OpenRouter's Decisions API with curl, the key read from the macOS Keychain
@@ -254,8 +331,9 @@ and the Keychain is never read, so the key can only go to OpenRouter.
 `jev.estimate` returns what a batch would send and cost without reading the
 key or touching the network: tokens are estimated at 1.8 bytes each, from
 OpenRouter's published example, and priced at Jev 1.13's $0.042 per million
-input tokens (output is free). `pnpm print-world-requests` prints every
-request judging Gaia's own world would make, with that estimate.
+input tokens (output is free); `tokensOf` in `@gaia/world` counts the same
+way. `pnpm print-world-requests` prints every request judging Gaia's own
+world would make, with that estimate.
 
 ## Vitality
 
