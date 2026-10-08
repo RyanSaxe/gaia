@@ -8,6 +8,10 @@
 // buildings and landmarks are little drawn vignettes, and an inked
 // cartouche carries Gaia's mark. A vermilion arrow says "you are here".
 //
+// Tapping a spot or an area's name on the open map sends the person there:
+// the map marks the spot in vermilion ink and hands it on (`onPick`), and the
+// immersive layer folds the map and dissolves the world in at the new place.
+//
 // The land (washes, hills, water, borders) is painted onto a paper canvas a
 // few milliseconds at a time while the page is idle after each bake, so it
 // never holds up a frame. Opening, panning and zooming redraw only the view of
@@ -15,6 +19,7 @@
 
 import { type Place, type PlaceArea, type WorldPlaces, heightAt, outlinesOf, waterDepthAt } from "@gaia/terrain";
 import { LOGO_ASPECT, logoImage } from "../brand/logo.ts";
+import { onTap } from "../lab.ts";
 import type { StoodWorld } from "../terrain/lab.ts";
 
 export interface FieldMap {
@@ -768,6 +773,9 @@ function drawCartouche(ctx: CanvasRenderingContext2D, logo: HTMLImageElement, { 
 const MAP_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 6.2 9 4l6 2.2 5.5-2.2v13.8L15 20l-6-2.2-5.5 2.2Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M9 4v13.8M15 6.2V20" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>`;
 const HERE_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="6.5" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="12" cy="12" r="1.8" fill="currentColor"/><path d="M12 2.5v3.2M12 18.3v3.2M2.5 12h3.2M18.3 12h3.2" stroke="currentColor" stroke-width="1.4"/></svg>`;
 
+/** How long a tap on the map waits for a second press (a double tap zooms instead), ms. */
+const PICK_WAIT_MS = 240;
+
 /** Runs `step` in the page's idle time, passing the milliseconds left there, until it returns true. */
 function whenIdle(step: (budget: number) => boolean): () => void {
   let handle = 0;
@@ -786,8 +794,18 @@ function whenIdle(step: (budget: number) => boolean): () => void {
   };
 }
 
-/** `onToggle` hears the map unfold and fold, however it was asked to. */
-export function createFieldMap(root: HTMLElement, source: MapSource, onToggle?: (open: boolean) => void): FieldMap {
+/**
+ * `onToggle` hears the map unfold and fold, however it was asked to. `onPick`
+ * hears a tap on the open map: the spot in the world, and the heart of the
+ * area there (where its name is written); it answers whether the person can
+ * go there.
+ */
+export function createFieldMap(
+  root: HTMLElement,
+  source: MapSource,
+  onToggle?: (open: boolean) => void,
+  onPick?: (x: number, z: number, heart: { readonly x: number; readonly z: number } | undefined) => boolean,
+): FieldMap {
   const button = document.createElement("button");
   button.type = "button";
   button.className = "way-button map-button";
@@ -828,6 +846,12 @@ export function createFieldMap(root: HTMLElement, source: MapSource, onToggle?: 
   const view = { x: 0, z: 0, zoom: 1, fit: 1 };
   const person = { x: 0, z: 0, yaw: 0 };
   let labelCount = 0;
+  /** Each area name drawn, its box on the sheet and its area's heart: a tap on a name goes to its heart. */
+  let names: { box: [number, number, number, number]; x: number; z: number }[] = [];
+  /** The spot a tap marked, waiting to be sent, and its timer. */
+  let pick: { x: number; z: number; timer: number } | null = null;
+  /** Whether the press under way is a double tap's second. */
+  let doubled = false;
 
   /** Takes one step of painting; true once the paper is done. */
   function paintStep(): boolean {
@@ -982,6 +1006,7 @@ export function createFieldMap(root: HTMLElement, source: MapSource, onToggle?: 
 
     // Names stay one size at any zoom; where two would collide, the larger area's wins, and a name steps aside from a mark.
     labelCount = 0;
+    names = [];
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     const nameSize = w < 520 ? 15 : 17;
@@ -1007,6 +1032,7 @@ export function createFieldMap(root: HTMLElement, source: MapSource, onToggle?: 
       if (spot === undefined) continue;
       const [x, y] = spot;
       taken.push(boxAt(x, y));
+      names.push({ box: boxAt(x, y), x: l.x, z: l.z });
       labelCount++;
       ctx.strokeStyle = "rgba(239,228,200,0.88)";
       ctx.lineWidth = 4;
@@ -1044,6 +1070,18 @@ export function createFieldMap(root: HTMLElement, source: MapSource, onToggle?: 
 
     drawCartouche(ctx, logo, cartouche);
     placeArrow();
+    // The spot a tap picked: a ring of vermilion ink round a dot.
+    if (pick !== null) {
+      ctx.beginPath();
+      ctx.arc(sx(pick.x), sy(pick.z), 9, 0, Math.PI * 2);
+      ctx.strokeStyle = "#b8452c";
+      ctx.lineWidth = 2.2;
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(sx(pick.x), sy(pick.z), 2.4, 0, Math.PI * 2);
+      ctx.fillStyle = "#b8452c";
+      ctx.fill();
+    }
 
     // A compass rose and a scale, inked in the lower corners: a ring, four long points half-shaded from the
     // light, four short ones between, and north named above.
@@ -1109,9 +1147,16 @@ export function createFieldMap(root: HTMLElement, source: MapSource, onToggle?: 
     clampView();
   }
 
+  function cancelPick(): void {
+    if (pick === null) return;
+    window.clearTimeout(pick.timer);
+    pick = null;
+  }
+
   function setOpen(on: boolean): void {
     if (on === isOpen) return;
     isOpen = on;
+    cancelPick();
     sheet.classList.toggle("open", on);
     button.setAttribute("aria-expanded", String(on));
     onToggle?.(on);
@@ -1143,6 +1188,12 @@ export function createFieldMap(root: HTMLElement, source: MapSource, onToggle?: 
   const pointers = new Map<number, { x: number; y: number }>();
   let pinch = 0;
   canvas.addEventListener("pointerdown", (e) => {
+    // A second press while a tap waits is a double tap, which zooms: neither tap goes anywhere.
+    doubled = pick !== null;
+    if (doubled) {
+      cancelPick();
+      draw();
+    }
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     canvas.setPointerCapture(e.pointerId);
     if (pointers.size === 2) {
@@ -1194,6 +1245,30 @@ export function createFieldMap(root: HTMLElement, source: MapSource, onToggle?: 
     },
     { passive: false },
   );
+  // A tap on an area's name goes to the area's heart; a tap anywhere else, to that spot.
+  onTap(canvas, (e) => {
+    if (paper === null || onPick === undefined || doubled) return;
+    const rect = canvas.getBoundingClientRect();
+    const px = e.clientX - rect.left;
+    const py = e.clientY - rect.top;
+    const name = names.find(({ box: [x0, y0, x1, y1] }) => px >= x0 && px <= x1 && py >= y0 && py <= y1);
+    const x = name?.x ?? view.x + (px - rect.width / 2) / view.zoom;
+    const z = name?.z ?? view.z + (py - rect.height / 2) / view.zoom;
+    const label = paper.areaLabels[paper.areaAt(x, z)];
+    const heart = label === undefined ? undefined : { x: label.x, z: label.z };
+    cancelPick();
+    pick = {
+      x,
+      z,
+      timer: window.setTimeout(() => {
+        if (pick === null) return;
+        const sent = onPick(pick.x, pick.z, heart);
+        if (!sent) pick = null;
+        draw();
+      }, PICK_WAIT_MS),
+    };
+    draw();
+  });
   canvas.addEventListener("dblclick", (e) => {
     zoomAbout(1.8, e.clientX, e.clientY);
     draw();
