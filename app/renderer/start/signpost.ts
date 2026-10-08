@@ -87,7 +87,7 @@ function grass(seed: string, count: number, from = 0, to = 1): string {
 
 const baseName = (path: string): string => path.split("/").filter(Boolean).pop() ?? path;
 const nameOf = (r: StartOffer["recent"][number]): string => (r.github !== undefined ? (r.github.split("/")[1] ?? r.name) : r.name);
-const whereOf = (r: StartOffer["recent"][number]): string => (r.github !== undefined ? `GitHub · ${r.github.split("/")[0] ?? ""}` : (r.root.includes("/") ? baseName(r.root.slice(0, r.root.lastIndexOf("/"))) : ""));
+const whereOf = (r: StartOffer["recent"][number]): string => (r.github !== undefined ? (r.github.split("/")[0] ?? "") : (r.root.includes("/") ? baseName(r.root.slice(0, r.root.lastIndexOf("/"))) : ""));
 
 export function createSignpost(veil: HTMLElement): StartPage {
   const root = document.createElement("div");
@@ -159,10 +159,10 @@ export function createSignpost(veil: HTMLElement): StartPage {
         });
         return b;
       });
-      folder.classList.toggle("arm-east", named.length % 2 === 0);
-      folder.classList.toggle("arm-west", named.length % 2 === 1);
+      folder.classList.add("arm-west");
       folder.style.setProperty("--tilt", "1.6deg");
-      blank.classList.add(named.length % 2 === 0 ? "arm-west" : "arm-east");
+      // The blank arm points out over the land, where the path goes.
+      blank.classList.add("arm-east");
       blank.style.setProperty("--tilt", "-1.2deg");
       arms.replaceChildren(...named, folder, blank);
       blank.classList.remove("reading");

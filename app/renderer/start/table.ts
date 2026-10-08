@@ -12,7 +12,7 @@ import { REFUSALS, type StartPage, askFolder, placeOf } from "./choice.ts";
 const baseName = (path: string): string => path.split("/").filter(Boolean).pop() ?? path;
 
 /** Where a world lies, in small capitals under its name: who keeps it on GitHub, or the folder it sits in. */
-const whereOf = (r: StartOffer["recent"][number]): string => (r.github !== undefined ? `on GitHub · ${r.github.split("/")[0] ?? ""}` : (r.root.includes("/") ? baseName(r.root.slice(0, r.root.lastIndexOf("/"))) : ""));
+const whereOf = (r: StartOffer["recent"][number]): string => (r.github !== undefined ? (r.github.split("/")[0] ?? "") : (r.root.includes("/") ? baseName(r.root.slice(0, r.root.lastIndexOf("/"))) : ""));
 const nameOf = (r: StartOffer["recent"][number]): string => (r.github !== undefined ? (r.github.split("/")[1] ?? r.name) : r.name);
 
 export function createTable(veil: HTMLElement): StartPage {
