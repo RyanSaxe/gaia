@@ -336,7 +336,13 @@ wooden signboard on a post at the end of its walk, facing anyone coming up
 it, with its entity's name and what it is painted on; a tree has a small
 plaque on a stake at its foot with its file's name. Signs are always there:
 a name becomes readable as a person comes near, as a real sign's does, and
-the lantern lights it at night. Nothing fades in or appears. A sign follows
+the lantern lights it at night. Nothing fades in or appears. Every name
+fits its board, never cut off: it is set on one line as large as the board
+allows; a name too long for that breaks onto two lines where a person would
+break it (after a slash, a dash, a dot or an underscore, between words, or
+where a camel-cased word turns); then the board widens, up to half again,
+with the cross-arm it hangs from; and only then do the letters shrink
+(`app/renderer/terrain/lettering.ts`). A sign follows
 the vitality of what it names: its paint fades and flakes, its wood greys
 and it leans on its post. All signs draw as one instanced mesh.
 
@@ -438,8 +444,7 @@ The three ways work together:
   heavy enough to hold their shape, each with a tight dark rim and a wider
   soft one, over a soft wash of cool shade that breathes behind them like a
   cloud's shadow on the sky, with no box and no edge: they read over bright
-  cloud, golden hour and night alike. While a title rises, the compass's
-  name ahead steps back, so one name speaks at a time.
+  cloud, golden hour and night alike.
 - **The field map.** The map button among the corner controls (or M)
   unfolds a hand-drawn map on warm paper: it opens out from its folds,
   tilting up flat as it comes, and its folds stay faintly creased. The
@@ -486,9 +491,44 @@ The three ways work together:
   its wood greys and it droops on its nail with the vitality of the area it
   names (the mean of its files', its subdirectories' included); the stone's moss recedes and the stone
   bleaches with both areas'. Posts and stones stop a walker, and no grass
-  grows through a stone. A compass strip at the top names the area ahead:
-  the first one along the way the person faces that is not the one they
-  stand in. Markers draw as three instanced meshes and cast no shadow.
+  grows through a stone. Every name fits its arm or its line on the stone,
+  as on the signs (see Signs and cards); a long name's arm grows up to a
+  third longer. There is no compass on the screen: the field map keeps its
+  painted compass rose. Markers draw as three instanced meshes and cast no
+  shadow.
+
+### Round 14's sandbox
+
+The reviewer asked for options before any of these change, shown at the same
+spots. The slip lists them under "Round 14 options", with the one showing
+inked, and the page's address and `__lab.immersive.styles(way, card, heed)`
+choose them too; without any of these the world shows today's.
+
+- **Where you are** (`?way=`): `titles`, today's arrival titles and line
+  underfoot; `land`, no words on the screen, so the signs, fingerposts,
+  boundary stones and the field map say where a person is; `slip`, the
+  area's name written on a slip of warm paper low at the left that fades in
+  on arrival and away, the file underfoot on the same slip when the person
+  pauses.
+- **What a thing tells you** (`?card=`, `app/renderer/immersive/journal.ts`):
+  `page`, today's card; `journal`, a page of the traveller's journal low at
+  the left, written in a hand under an ink sketch of the thing washed in its
+  health's color (a failing tree's crown thins and browns, a failing house's
+  roof sags and ivy climbs it), with its name, what it is ("A watermill for
+  a TypeScript package"), the first sentence of its doc comment and how it
+  fares with the reason ("It looks tired: no test reaches it"); where it
+  lives, its size, what it leans on and who judged it open only from "more";
+  `ask`, one line on a slip of paper at the lower edge (its name and how it
+  fares in a word), which opens the journal page when tapped; `sign`, no
+  paper: the view turns to the thing and its own sign.
+- **Touchable** (`?heed=rim`): a thing under a resting mouse pointer (a
+  tree, a building, a landmark, a function's stone or bush) catches a soft
+  rim of light along its edges, the sun's by day and the lantern's after
+  dark, fading in and out over a third of a second, and the pointer becomes
+  a hand. The pointer is read once it rests and five times a second while it
+  does, with each thing as an upright cylinder of its reach, so it costs no
+  triangle tests. `uHeed` in the scene's light carries the thing's middle,
+  reach and strength to the plant shader's `heedRim`.
 
 ## Gaia's mark
 
