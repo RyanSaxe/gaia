@@ -7,7 +7,7 @@
 // not answer is judged by the stand-in, and the document says which.
 
 import type { EngineClient, JevResponse } from "@gaia/schema";
-import { type Judge, judgeWorld, judgedThing, keptJev, layoutWorld, planWorldRequests, requestKey, standInJev } from "@gaia/world";
+import { type Judge, judgeWorld, judgedThing, keptJev, layoutWorld, planWorldRequests, requestKey, standInJev, thingsOf } from "@gaia/world";
 import { LOOKS } from "../renderer/terrain/looks.ts";
 import { engineJev } from "./jev.ts";
 import type { ConsentPlan, Opening, WorldDocument } from "./protocol.ts";
@@ -91,18 +91,20 @@ export async function openWorld({ engine, root, consent, progress }: OpenWorldOp
   await new Promise((resolve) => setTimeout(resolve, 0));
   await Promise.all(writes);
 
-  const byJev = planned.filter((_, i) => judges.get(keys[i] as string) === "jev").length;
+  const byThing = Object.fromEntries(planned.flatMap((p, i) => thingsOf(p).map((t) => [judgedThing(t), judges.get(keys[i] as string) ?? "stand-in"] as const)));
+  const things = Object.keys(byThing).length;
+  const byJev = Object.values(byThing).filter((j) => j === "jev").length;
   const parts =
     byJev === 0
-      ? [`${plural(planned.length, "thing")} judged by the stand-in`]
-      : [`${plural(byJev, "thing")} judged by Jev`, ...(byJev < planned.length ? [`${plural(planned.length - byJev, "thing")} by the stand-in`] : [])];
+      ? [`${plural(things, "thing")} judged by the stand-in`]
+      : [`${plural(byJev, "thing")} judged by Jev`, ...(byJev < things ? [`${plural(things - byJev, "thing")} by the stand-in`] : [])];
   if (failures.length > 0) parts.push(`${plural(failures.length, "request")} failed (${failures[0]})`);
   else if (why !== "") parts.push(why);
   return {
     root,
     model,
     world: layoutWorld(model, judgments),
-    judges: Object.fromEntries(planned.map((p, i) => [judgedThing(p), judges.get(keys[i] as string) ?? "stand-in"])),
+    judges: byThing,
     summary: parts.join("; "),
   };
 }

@@ -39,24 +39,44 @@ To see another codebase, choose **File > Open Folder…** (⌘O), or start with
 ## What it costs
 
 Each place is one request of facts and doc comments. Source code is never
-sent. On 2026-10-07 this repository took 267 requests: about 380,000 input
-tokens, about $0.016 at Jev 1.13's $0.042 per million input tokens (output is
-free). The app shows the exact figure from the engine's `jev.estimate` before
-asking. `pnpm print-world-requests` prints every request without sending it.
+sent. On 2026-10-08 Jev judged this repository's snapshot in 267 requests:
+316,000 input tokens billed, $0.013 at Jev 1.13's $0.042 per million input
+tokens (output is free), a quarter to half a second per request, none
+failed or answered outside its options. The engine's `jev.estimate`, which
+the app shows before asking, runs about a quarter above what OpenRouter
+bills. `pnpm print-world-requests` prints every request without sending it.
+
+The lab's standalone page shows that world: `pnpm jev-world` judged the
+snapshot and kept the answers in `app/renderer/terrain/fixtures/gaia-jev.json`.
+Add `?judge=stand-in` to the page's address to see the stand-in's world
+instead. After questions or options change, the page judges what the kept
+answers no longer cover with the stand-in until someone runs, with the key:
+
+```sh
+GAIA_JEV=live pnpm jev-world --judge jev --spend-up-to 0.04
+```
+
+It asks only what is not kept yet; `--limit 5` sends at most five, and
+`--judge local` proves the path against the local stand-in.
 
 ## Comparing what Jev reads
 
 `pnpm compare-jev` judges this repository under each way of building Jev's
-requests (`first`, `revised`, `outline`, `escalate`; see "What a request
-carries" in `docs/architecture.md`) and reports how often their judgments
-differ, question by question, against Jev's own noise and its lean toward
-the first option. With your key it asks Jev itself, all four designs twice
-and once reordered, for about $0.45 at most, and refuses to start unless you
-allow that:
+requests (`first`, `revised`, `outline`, `escalate`, `shared`,
+`shared-outline`; see "What a request carries" in `docs/architecture.md`)
+and reports how often their judgments differ, question by question, against
+Jev's own noise and its lean toward the first option. With your key it asks
+Jev itself, every design twice and once reordered. It refuses to start
+unless you allow twice the estimate, about $0.69; the run on 2026-10-08
+cost $0.31:
 
 ```sh
-GAIA_JEV=live pnpm compare-jev --judge jev --spend-up-to 0.50 --out /tmp/jev-designs.json
+GAIA_JEV=live pnpm compare-jev --judge jev --spend-up-to 0.70 --out /tmp/jev-designs.json
 ```
+
+`--designs revised,shared` compares fewer, `--keep-runs yes` writes every
+answer into the report, and `--ledger spend.jsonl` appends what each run
+cost.
 
 `--judge local` runs the same flow through the engine against the local
 stand-in, and `--judge stand-in` in process; neither reaches OpenRouter.

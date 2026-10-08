@@ -17,6 +17,9 @@ export const requestKey = (request: JevRequest): string => contentHash(request);
 /** The thing a planned request is about, such as "file:src/main.ts" or "entity:packages/world". */
 export const judgedThing = (r: Pick<WorldRequest, "about" | "target">): string => `${r.about}:${r.target}`;
 
+/** Every thing a planned request judges: itself, or each thing a shared request carries. */
+export const thingsOf = (r: WorldRequest): readonly Pick<WorldRequest, "about" | "target">[] => r.carries ?? [r];
+
 export interface Keeping {
   /** Jev's earlier answers, by request key. */
   readonly stored: ReadonlyMap<string, JevResponse>;

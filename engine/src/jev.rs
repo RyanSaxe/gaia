@@ -191,6 +191,7 @@ fn send(url: &str, key: &str, request: &Value) -> Result<Value, String> {
         "answers": body["answers"],
         "model": body["model"],
         "costUsd": body["usage"]["cost"].as_f64().unwrap_or(0.0),
+        "inputTokens": body["usage"]["input_tokens"].as_u64().unwrap_or(0),
         "ms": started.elapsed().as_millis() as u64,
     }))
 }

@@ -5,17 +5,20 @@
 // once per project before anything is sent to Jev. A standalone page (the
 // offline HTML, `pnpm lab:serve`) has no engine: it lays out the engine's
 // snapshot of this repository (`fixtures/gaia.json`, written by `pnpm
-// snapshot`), judged by the stand-in. Everything else follows from the code:
+// snapshot`), judged by Jev's answers kept for it (`fixtures/gaia-jev.json`,
+// written by `pnpm jev-world`), or by the stand-in with `?judge=stand-in` and
+// wherever no kept answer fits. Everything else follows from the code:
 // each directory's area and land, each file's patch and what grows on it,
 // each entity's building or landmark on its lot, and the trails between them.
 
-import { type Blueprint, type CodeModel, type EntityFacts, type FileFacts, type SymbolFact, rand, seedOf } from "@gaia/schema";
+import { type Blueprint, type CodeModel, type EntityFacts, type FileFacts, type JevResponse, type SymbolFact, rand, seedOf } from "@gaia/schema";
 import { FLORA_PRESETS, LANDMARK_PRESETS, TRAIL_PRESETS, WORLD_PRESETS } from "@gaia/realize";
 import { type WorldSpec, outlinesOf } from "@gaia/terrain";
-import { type CodeWorld, type Judge, judgeWorld, layoutWorld, standInJev } from "@gaia/world";
+import { type CodeWorld, type Judge, judgeWorld, judgedThing, keptJev, layoutWorld, planWorldRequests, requestKey, standInJev, thingsOf } from "@gaia/world";
 import type { ConsentPlan, Opening, WorldDocument } from "../../world-service/protocol.ts";
 import { type WorldService, worldService } from "../service.ts";
 import snapshot from "./fixtures/gaia.json";
+import kept from "./fixtures/gaia-jev.json";
 import { CHARACTERS, type Character, FORMS, LANDS, LOOKS } from "./looks.ts";
 import type { Represented, SampleEntity } from "./samples.ts";
 import { vitalityOf } from "@gaia/world";
@@ -137,11 +140,25 @@ function serviceWorld(service: WorldService, veil: Veil): Promise<WorldDocument>
   });
 }
 
-/** Gaia's own world from the bundled snapshot, judged by the stand-in: the world of a page with no engine. */
+/** Who judges a page with no engine: Jev's kept answers, unless the page asks for the stand-in (`?judge=stand-in`). */
+const SNAPSHOT_JUDGE = typeof location === "undefined" || new URLSearchParams(location.search).get("judge") !== "stand-in" ? "jev" : "stand-in";
+
+/**
+ * Gaia's own world from the bundled snapshot: the world of a page with no
+ * engine. Jev's answers kept for the snapshot judge it, as the app's store
+ * would; the stand-in judges whatever they do not answer, such as a request
+ * whose questions or options changed since Jev was asked.
+ */
 async function snapshotWorld(why: string): Promise<WorldDocument> {
   const model = snapshot as unknown as CodeModel;
-  const world = layoutWorld(model, await judgeWorld(model, LOOKS, standInJev(LOOKS)));
-  return { root: model.repository.name, model, world, judges: {}, summary: `Every thing judged by the stand-in (${why})` };
+  const stored = new Map(SNAPSHOT_JUDGE === "jev" ? Object.entries((kept as { answers: Record<string, JevResponse> }).answers) : []);
+  const byKey = new Map<string, Judge>();
+  const jev = keptJev(null, standInJev(LOOKS), { stored, keep: () => undefined, settled: (key, judge) => byKey.set(key, judge) });
+  const world = layoutWorld(model, await judgeWorld(model, LOOKS, jev));
+  const judges = Object.fromEntries(planWorldRequests(model, LOOKS).flatMap((p) => thingsOf(p).map((t) => [judgedThing(t), byKey.get(requestKey(p.request)) ?? "stand-in"] as const)));
+  const byJev = Object.values(judges).filter((j) => j === "jev").length;
+  const summary = byJev === 0 ? `Every thing judged by the stand-in (${why})` : `${byJev} of ${Object.keys(judges).length} things judged by Jev, from answers kept for this snapshot (${why})`;
+  return { root: model.repository.name, model, world, judges, summary };
 }
 
 /** A codebase's world: judged, laid out and ready to bake. */

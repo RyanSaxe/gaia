@@ -217,7 +217,10 @@ In the app, the lab opens on the world the world service sends. A
 standalone page (`pnpm lab:html`, `pnpm lab:serve`) has no engine and opens
 on Gaia's own world from `app/renderer/terrain/fixtures/gaia.json`, a
 snapshot `pnpm snapshot` writes through the engine's `project.open`, judged
-by the stand-in; so does the app if the world service cannot open its
+by Jev's answers kept for that snapshot in `fixtures/gaia-jev.json` (written
+by `pnpm jev-world`, keyed by request hash like the app's store), with the
+stand-in judging any request they no longer answer; `?judge=stand-in` shows
+the stand-in's world. So does the app if the world service cannot open its
 folder. `?world=sample` (or `?world=small`) and
 the Terrain view's "Sample world" button show the sample world instead. `standWorld` takes the
 layout (`StandRequest.code`): each building and landmark on its lot, each
@@ -274,6 +277,8 @@ becomes the default. A design fixes four things:
 | `revised` (the app's default) | Summary facts, the repository in words | Round 13's wording | No | No |
 | `outline` | Each thing's outline | Round 13's | Yes | No |
 | `escalate` | Each thing's outline | Round 13's | Yes | Yes |
+| `shared` | Summary facts, one state per area | Round 13's | No | No |
+| `shared-outline` | Outlines, one state per area | Round 13's | No | No |
 
 - **State.** Summary facts are counts and a few docs. An outline
   (`packages/world/src/outline.ts`) is the structure a tree-sitter summary
@@ -292,12 +297,35 @@ becomes the default. A design fixes four things:
   and each look apart, because one choice over five buildings and five
   landmarks split a preference for buildings five ways; tells the land
   question that water is asked separately; and gives the trail question the
-  fact it names (how many files import the other entity).
+  fact it names (how many files import the other entity). Round 14 read
+  Jev's real answers and gave every option a reason in code, because Jev
+  falls back on the option that fits everything when the others describe
+  only scenery: each land names the code it suits (twelve of seventeen
+  areas had been the home lawn; now six lands, the root alone on the lawn),
+  each trail look how many files import the other entity (37 of 39 had been
+  worn footpaths), and building-or-landmark how many entities depend on it
+  (`dependedOnBy` in words; twelve of fourteen had been buildings, now the
+  five entities most depended on and the root are landmarks), and each
+  building and landmark the kind of entity it suits (half the buildings had
+  been watermills; now the engine is a stone croft, the schema a stone
+  ring, the root a great willow). The vibe question says to
+  judge a file by its part, size and importers, not its subject: a file
+  about grass or light had been read as open meadow or a lantern willow.
 - **Character.** A request carries what was judged above it: an area the
   world's art direction, a file and an entity their land's landform and
   water. `judgeWorld` then asks in three waves (the world, its areas, then
   files and entities). An upstream answer that changes makes every request
   below it new, so stickiness upstream protects everything downstream.
+- **Sharing.** A design with `share: "area"` asks one request per area
+  instead of one per file: the area's request carries every question about
+  the files on its land, each renamed `vibe@<path>` and told which file of
+  the state's `files` it is about, over one state holding the area's facts
+  and each file's (`SHARE.tokens`, 12,000, splits a large area into
+  several). `WorldRequest.carries` names the things a shared request judges,
+  `unshare` hands each its own answers, and `thingsOf` lists them for the
+  store's who-judged-what. Jev answers each question of a request on its
+  own: asked alone, with 13 others or in reverse order, a question's
+  probabilities moved no more than asking it twice (0.07 at most).
 - **Escalation.** Each request also asks one `noul` per reading
   (`more:imports`, `more:importers`, `more:tests`, `more:neighbours`,
   `more:symbols` for a file; `more:files` and `more:neighbours` for an area;
@@ -319,11 +347,11 @@ returns only the chosen spans, each capped in lines, for one more request
 that asks the still-unsure questions again.
 
 `pnpm compare-jev` (`tools/compare-jev-designs.ts`) judges a codebase under
-each design and reports requests, questions, tokens and cost; how often each
-design's judgments differ from `first`'s, by question; the same for one
-design asked twice (Jev's own noise) and with every option reordered (its
-order bias); which readings second requests chose; and re-asks per one-line
-edit. `--judge stand-in` runs in process, `--judge local` runs the real
+each design and reports requests, questions, the tokens OpenRouter billed,
+cost and latency; how often each design's judgments differ from the first
+design's, by question; the same for one design asked twice (Jev's own noise)
+and with every option reordered (its order bias); which readings second
+requests chose; and the requests and tokens a one-line edit asks again. `--judge stand-in` runs in process, `--judge local` runs the real
 engine against the local OpenRouter stand-in, and `--judge jev` asks Jev
 itself, only with `GAIA_JEV=live`, the Keychain's key and `--spend-up-to`
 covering the engine's estimate. On Gaia's own repository the designs plan:
@@ -335,12 +363,34 @@ covering the engine's estimate. On Gaia's own repository the designs plan:
 | `outline` | 267 | 612 | 427,476 |
 | `escalate` | 267, plus a second for each unsure one | 1,593 | 608,944 |
 
+On 2026-10-08 Jev answered every design twice and once reordered
+(`compare-jev --judge jev`, $0.31 for 4,018 requests; the round-13 wording
+of lands, trails and building-or-landmark). Billed tokens run about 78% of
+the estimate.
+
+| Design | Requests sent | Billed tokens | Cost | Median ms | Judgments that differ from `revised` | Asked twice | A one-line edit asks again |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `first` | 267 | 290,947 | $0.012 | 269 | 26% | 4.5% | 5.8 requests, 8,865 tokens |
+| `revised` | 267 | 302,770 | $0.013 | 245 | the baseline | 5.8% | 4.8 requests, 10,492 tokens |
+| `outline` | 267 | 366,863 | $0.015 | 470 | 28% | 4.7% | 0.05 requests, 121 tokens |
+| `escalate` | 415 | 899,217 | $0.038 | 286 | 28% (14% from `outline`) | 6.5% | 0.05 requests, 138 tokens |
+| `shared` | 59 | 277,844 | $0.012 | 379 | 23% | 5.0% | 11.2 requests, 106,721 tokens |
+| `shared-outline` | 63 | 335,020 | $0.014 | 335 | 32% | 4.5% | 0.08 requests, 573 tokens |
+
+Reordering every option moved 2 to 6% of file judgments, no more than
+asking twice: with options shuffled per thing, Jev shows no lean toward the
+first. Sharing an area's state saves four requests in five and 8% of
+tokens but changes a quarter of the judgments, mostly for the worse: each
+question reads the whole state, so a file's neighbours sway it (substantial
+files of logic turn to open meadow, hubs lose their willows). `revised`
+stays the app's default; sharing pays only for questions about one thing.
 The engine is Jev's only client (`engine/src/jev.rs`). It posts each request
 to OpenRouter's Decisions API with curl, the key read from the macOS Keychain
 (service `gaia-openrouter`) and handed to curl on stdin, never on a command
 line or over the protocol. `jev.batch` sends many requests eight at a time
 and answers each with Jev's response or the reason that request failed;
-`jev.ask` sends one. Both refuse unless the engine runs with `GAIA_JEV=live`. curl retries a timeout, 429 or
+`jev.ask` sends one; each response carries the cost and input tokens
+OpenRouter billed (`costUsd`, `inputTokens`) and its time. Both refuse unless the engine runs with `GAIA_JEV=live`. curl retries a timeout, 429 or
 5xx twice and gives up on a request after 90 seconds. `jev.status` says
 whether the Keychain holds the key, asking only whether the item exists, and
 whether the engine is live. Tests point the engine at a local stand-in for

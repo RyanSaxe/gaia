@@ -19,43 +19,43 @@ const land = (use: string, params: FilledSlot["params"], cover: string): Bluepri
 /** Each land's blueprint and the words Jev reads about it. */
 export const LANDS: Readonly<Record<string, { readonly look: Look; readonly biome: Blueprint }>> = {
   "Brook valley": {
-    look: look("A winding valley with a brook running through lush grass: busy ground where things flow.", "terrain", "water", "flow", "world"),
+    look: look("A winding valley through lush grass: busy core logic, where work passes from file to file along the directory's own imports.", "terrain", "water", "flow", "world"),
     biome: land("valley@1", { depth: "moderate", width: "open", run: "north-south", fall: "gentle", meander: "winding", stream: "brook" }, "lush grass"),
   },
   "Clover hills": {
-    look: look("Rolling hills in clover, round and moderately spaced.", "primitives", "geometry"),
+    look: look("Rolling hills in clover, round and moderately spaced: a family of many small, similar pieces made alike, such as shapes or parts.", "primitives", "geometry"),
     biome: land("rolling-hills@1", { height: "rolling", breadth: "moderately spaced", roughness: "softly uneven", grain: "round" }, "clover meadow"),
   },
   "Silver terraces": {
-    look: look("A terraced hillside of silver grass, each step level and ordered.", "test", "realize", "kinds"),
+    look: look("A terraced hillside of silver grass, each step level and ordered: code that checks other code, or runs in ordered stages, such as tests or a pipeline.", "test", "realize", "kinds"),
     biome: land("terraces@1", { form: "terraced hill", rise: "waist-high", climb: "a hillside", facing: "south", edge: "soft and grassy" }, "silver grass"),
   },
   "Mossy basin": {
-    look: look("A deep mossy bowl around a still pond.", "rust", "engine", "schema"),
+    look: look("A deep mossy bowl: settled code at the bottom of things that much of the rest rests on, such as shared types, a schema or an engine.", "rust", "engine", "schema"),
     biome: land("basin@1", { depth: "a bowl", size: "medium", rim: "a soft rim", pond: true }, "moss"),
   },
   "Heather moor": {
-    look: look("An open moor of heather, softly undulating: quiet ground for reading.", "docs", "markdown", "decisions"),
+    look: look("An open moor of heather, softly undulating: quiet ground of writing, read more than run, such as documentation and decisions.", "docs", "markdown", "decisions"),
     biome: land("meadow@1", { undulation: "softly undulating", tilt: "slightly tilted", facing: "east" }, "heather"),
   },
   "Meandering vale": {
-    look: look("A broad, shallow vale with a trickle meandering through clover.", "render", "renderer", "app"),
+    look: look("A broad, shallow vale meandering through clover: the part a person sees and touches, an interface that wanders between many concerns.", "render", "renderer", "app"),
     biome: land("valley@1", { depth: "shallow", width: "broad", run: "east-west", fall: "nearly level", meander: "strongly meandering", stream: "trickle" }, "clover meadow"),
   },
   "Golden dunes": {
-    look: look("Low golden dunes of steppe grass, rippled by the west wind.", "config", "data", "json", "tools"),
+    look: look("Low golden dunes of steppe grass, rippled by the west wind: configuration, data and tooling that shift around the code rather than run in it.", "config", "data", "json", "tools"),
     biome: land("dunes@1", { height: "low dunes", spacing: "even", wind: "from the west", wander: "wavering" }, "golden steppe"),
   },
   "Pond meadow": {
-    look: look("A wide shallow dip holding a pond, melting into lush grass.", "service", "main", "flora"),
+    look: look("A wide shallow dip melting into lush grass: a service or entry point where requests from elsewhere gather and are handed on.", "service", "main", "flora"),
     biome: land("basin@1", { depth: "a shallow dip", size: "wide", rim: "melting into the land", pond: true }, "lush grass"),
   },
   "Broad downs": {
-    look: look("Broad, sweeping downs of silver grass, smooth and open.", "packages"),
+    look: look("Broad, sweeping downs of silver grass, smooth and open: a wide container whose own subdirectories hold the code, with little of its own.", "packages"),
     biome: land("rolling-hills@1", { height: "gentle", breadth: "broad and sweeping", roughness: "smooth", grain: "diagonal" }, "silver grass"),
   },
   "Home lawn": {
-    look: look("A lawn-flat meadow, level and open: the ground everything else starts from.", "script", "root", "repository"),
+    look: look("A lawn-flat meadow, level and open: the repository's own root, its top-level files and the ground every other area starts from.", "script", "root", "repository"),
     biome: land("meadow@1", { undulation: "flat as a lawn", tilt: "slightly tilted", facing: "south" }, "lush grass"),
   },
 };
@@ -73,25 +73,25 @@ export const VIBES: Readonly<Record<string, Look>> = {
 export const TREE_VIBES: readonly string[] = ["Lantern willow", "Fir", "Cherry", "Autumn maple"];
 
 export const BUILDINGS: Readonly<Record<string, Look>> = {
-  "Thatched cottage": look("a thatched cottage, small and homely", "module", "small", "leaf"),
-  "Stone croft": look("a low stone croft, sturdy and plain", "crate", "rust", "medium", "engine"),
-  "Storybook house": look("a crooked storybook house with a tall chimney", "app", "service", "renderer", "main", "preload"),
-  Watermill: look("a watermill whose wheel turns while the code is healthy: one that turns input into output", "realize", "render", "world"),
-  "Archive tower": look("a house with an archive tower that rises with what depends on it: one that keeps records", "surface", "kinds"),
+  "Thatched cottage": look("a thatched cottage, small and homely: a small entity of a few files doing one modest job", "module", "small", "leaf"),
+  "Stone croft": look("a low stone croft, sturdy and plain: native code close to the machine, compiled on its own, such as an engine", "crate", "rust", "medium", "engine"),
+  "Storybook house": look("a crooked storybook house with a tall chimney: an application or a process a person starts, with a window or a service of its own", "app", "service", "renderer", "main", "preload"),
+  Watermill: look("a watermill whose wheel turns while the code is healthy: a pipeline that turns one kind of data into another, such as rendering", "realize", "render", "world"),
+  "Archive tower": look("a house with an archive tower that rises with what depends on it: one that keeps records, definitions or types that others read", "surface", "kinds"),
 };
 
 export const LANDMARKS: Readonly<Record<string, Look>> = {
-  "Lantern tower": look("a round lookout tower crowned with a lantern room", "terrain", "renderer", "light"),
-  "Stone ring": look("a ring of towering standing stones around a king stone", "hub", "schema"),
-  "Great oak": look("a vast spreading oak", "hub", "primitives"),
-  "Battlemented keep": look("a tall square keep with battlements", "crate", "rust", "engine"),
-  "Great willow": look("a great willow, gnarled and slow", "root", "repository"),
+  "Lantern tower": look("a round lookout tower crowned with a lantern room: an entity that watches over or lights the rest, seen from everywhere", "terrain", "renderer", "light"),
+  "Stone ring": look("a ring of towering standing stones around a king stone: the shared definitions every other entity agrees on, such as a schema", "hub", "schema"),
+  "Great oak": look("a vast spreading oak: a large library whose many branches the others build from", "hub", "primitives"),
+  "Battlemented keep": look("a tall square keep with battlements: a guarded core that the rest runs on", "crate", "rust", "engine"),
+  "Great willow": look("a great willow, gnarled and slow: the repository's own root, holding everything", "root", "repository"),
 };
 
 export const TRAILS: Readonly<Record<string, Look>> = {
-  "Worn footpath": look("A well-trodden footpath two could walk, gently curving, with footbridges.", "hub", "package", "busy"),
-  "Stone-edged path": look("A beaten-earth path edged with stones, with stepping stones over water.", "crate", "surface", "app"),
-  "Faint wandering track": look("A faint, half grassed-over track that meanders.", "leaf", "module", "small"),
+  "Worn footpath": look("A well-trodden footpath two could walk, gently curving, with footbridges: most or many of its files import the other.", "hub", "package", "busy"),
+  "Stone-edged path": look("A beaten-earth path edged with stones, with stepping stones over water: some of its files import the other, a deliberate way kept in order.", "crate", "surface", "app"),
+  "Faint wandering track": look("A faint, half grassed-over track that meanders: only one or a few of its files import the other.", "leaf", "module", "small"),
 };
 
 export const WORLDS: Readonly<Record<string, Look>> = {

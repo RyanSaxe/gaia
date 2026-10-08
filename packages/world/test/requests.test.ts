@@ -134,6 +134,24 @@ describe("what Jev reads about a thing", () => {
     }
   });
 
+  it("shares one state per area: every file's questions ride in its area's request, each naming its file, and judge the world as asking each alone does", async () => {
+    const own = planWorldRequests(model(), LOOKS, { design: "revised" });
+    const shared = planWorldRequests(model(), LOOKS, { design: "shared" });
+    expect(shared.length).toBeLessThan(own.length);
+    expect(shared.some((p) => p.about === "file")).toBe(false);
+    const asked = (ps: typeof own) => ps.reduce((n, p) => n + Object.keys(p.request.questions).length, 0);
+    expect(asked(shared)).toBe(asked(own));
+    for (const p of shared.filter((x) => x.carries !== undefined)) {
+      const files = (p.request.state as { files: Record<string, unknown> }).files;
+      for (const t of p.carries!.filter((c) => c.about === "file")) {
+        expect(files[t.target]).toBeDefined();
+        for (const sent of Object.keys(t.questions)) expect(p.request.questions[sent]!.instructions).toContain(`files["${t.target}"]`);
+      }
+    }
+    // The stand-in answers each question from its own file's facts, as Jev answers each question on its own.
+    expect(await judgeWorld(model(), LOOKS, standInJev(LOOKS), { design: "shared" })).toEqual(await judgeWorld(model(), LOOKS, standInJev(LOOKS), { design: "revised" }));
+  });
+
   it("asks a file again after a one-line edit only when its words change, where summary facts ask again every time", () => {
     const edited = model();
     const files = edited.files.map((f) => (f.path === "pkg/src/a.ts" ? { ...f, lines: f.lines + 1, symbols: f.symbols.map((s) => ({ ...s, line: (s.line ?? 1) + 1 })) } : f));

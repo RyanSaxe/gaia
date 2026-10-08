@@ -21,7 +21,8 @@
     "snapshot": "tsx tools/snapshot.ts",
     "print-world-requests": "tsx tools/print-world-requests.ts",
     "openrouter-stand-in": "tsx tools/openrouter-stand-in.ts",
-    "compare-jev": "tsx tools/compare-jev-designs.ts"
+    "compare-jev": "tsx tools/compare-jev-designs.ts",
+    "jev-world": "tsx tools/jev-world.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

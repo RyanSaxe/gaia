@@ -37,7 +37,7 @@ import type { LandSite } from "@gaia/terrain";
 import { symbolsOf } from "./graph.ts";
 import { LAND_SHARE, type LandNode, divideLand } from "./land.ts";
 import { certainty } from "./context.ts";
-import { type OutlineReading, areaOutline, areaReadings, entityOutline, entityReadings, fileOutline, fileReadings, howMany, importersOf } from "./outline.ts";
+import { type OutlineReading, areaOutline, areaReadings, entityOutline, entityReadings, fileOutline, fileReadings, howMany, importersOf, tokensOf } from "./outline.ts";
 import { MODEL } from "./planner.ts";
 import { entityVitalityOf, vitalityOf } from "./vitality.ts";
 
@@ -79,6 +79,20 @@ export interface WorldRequest {
   readonly readings?: Readonly<Record<string, OutlineReading>>;
   /** What the request decides, in words: each question about readings names it, because Jev answers every question on its own. */
   readonly decides?: string;
+  /**
+   * For a design that shares state: the things this one request judges, each
+   * with its questions as sent (`vibe@src/a.ts`) and as planned (`vibe`).
+   * Absent when the request judges only its own `about` and `target`.
+   */
+  readonly carries?: readonly CarriedThing[];
+}
+
+/** One thing a shared request judges, and which of its questions are that thing's. */
+export interface CarriedThing {
+  readonly about: "area" | "file";
+  readonly target: string;
+  /** Sent question id → the id the thing's own request would have asked. */
+  readonly questions: Readonly<Record<string, string>>;
 }
 
 /** Everything Jev decided about a world. */
@@ -345,6 +359,13 @@ export interface Design {
   readonly character: boolean;
   /** Whether each request also asks which readings would help, and a request Jev was unsure about is asked again with the readings it chose. */
   readonly escalate: boolean;
+  /**
+   * `area`: one request per area carries its own questions and every
+   * question about the files on its land, over one state holding the area's
+   * facts and each file's (`SHARE`). Jev answers each question on its own
+   * over the shared state, so a file's questions name the file they are about.
+   */
+  readonly share?: "area";
 }
 
 export const DESIGNS = {
@@ -356,6 +377,10 @@ export const DESIGNS = {
   outline: { state: "outline", questions: "revised", character: true, escalate: false },
   /** The outline, and a second request with the readings Jev chose wherever it was unsure. */
   escalate: { state: "outline", questions: "revised", character: true, escalate: true },
+  /** `revised`'s facts and questions, one request per area carrying its files' questions over one shared state. */
+  shared: { state: "facts", questions: "revised", character: false, escalate: false, share: "area" },
+  /** The same, over outlines: the area's outline and each of its files', sizes in words, so a small edit asks again rarely. */
+  "shared-outline": { state: "outline", questions: "revised", character: false, escalate: false, share: "area" },
 } as const satisfies Readonly<Record<string, Design>>;
 
 export type DesignName = keyof typeof DESIGNS;
@@ -519,7 +544,7 @@ export function planWorldRequests(model: CodeModel, looks: Looks, options: PlanO
             },
           };
     const vibe = revised
-      ? choice("This file becomes a patch of ground in its directory's area, and what grows there shows what the file is and does. Which suits this file?", docs(looks.vibe), "vibe", f.path, salt)
+      ? choice("This file becomes a patch of ground in its directory's area, and what grows there shows what the file is and does. Which suits this file? Judge by the part it plays, its size and how much code imports it, not by what its words are about: a file about light or grass is judged like any other.", docs(looks.vibe), "vibe", f.path, salt)
       : choice("This file becomes a patch of ground in its directory's area. What grows on it?", docs(looks.vibe), "vibe", f.path, salt);
     const kindsStanding = Object.keys(forms).map((id) => `${KIND_WORDS[id.slice("form:".length) as SymbolFact["kind"]]}s`);
     ask("file", f.path, state, { vibe, ...forms }, { readings: fileReadings(model, f), decides: `what grows on this file's patch${kindsStanding.length === 0 ? "" : ` and what its ${kindsStanding.join(" and ")} stand as`}` });
@@ -533,10 +558,10 @@ export function planWorldRequests(model: CodeModel, looks: Looks, options: PlanO
     const questions: Record<string, JevQuestion> = revised
       ? {
           stands: choice(
-            "This entity stands in the world as one thing. Should it be a building or a landmark?",
+            "This entity stands in the world as one thing. Should it be a building or a landmark? `dependedOnBy` says how many of the other entities depend on it.",
             {
-              building: "A building a person can walk up to and look around: something people work inside.",
-              landmark: "A landmark seen and steered by from far away: something the rest of the world orients around.",
+              building: "A building a person can walk up to and look around: an entity that does its own work, which none or only a few of the others depend on.",
+              landmark: "A landmark seen and steered by from far away: an entity several or many of the others depend on, which the rest of the world orients around.",
             },
             "stands",
             e.path,
@@ -564,7 +589,13 @@ export function planWorldRequests(model: CodeModel, looks: Looks, options: PlanO
           : `${e.name} depends on ${other.name}. Would a person walk a worn trail between the two, because ${e.name} leans on it heavily?`,
         criteria: { true: "A trail joins them.", false: "No trail joins them." },
       };
-      questions[`trail-look:${dep}`] = choice(`How does the trail from ${e.name} to ${other.name} look?`, docs(looks.trail), `trail-look:${dep}`, e.path, salt);
+      questions[`trail-look:${dep}`] = choice(
+        revised ? `How does the trail from ${e.name} to ${other.name} look? \`dependsOn\` says how many of ${e.name}'s files import ${other.name}.` : `How does the trail from ${e.name} to ${other.name} look?`,
+        docs(looks.trail),
+        `trail-look:${dep}`,
+        e.path,
+        salt,
+      );
     }
     const state =
       design.state === "outline"
@@ -585,11 +616,72 @@ export function planWorldRequests(model: CodeModel, looks: Looks, options: PlanO
                 return [revised ? { name: o.name, importers: `${howMany(importersOf(model, e, o))} of its files`, dependents: o.dependents.length } : { name: o.name, dependents: o.dependents.length }];
               }),
               dependents: e.dependents.map((p) => entities.get(p)?.name ?? p),
+              ...(revised ? { dependedOnBy: howMany(e.dependents.length) } : {}),
             },
           };
     ask("entity", e.path, state, questions, { readings: entityReadings(model, e), decides: "whether this entity stands as a building or a landmark, which one, and which of its dependencies a trail follows" });
   }
-  return requests;
+  return design.share === "area" ? shareByArea(requests, (path) => regionFor(regions, parentOf(path))) : requests;
+}
+
+/** How a shared request is built: the most tokens one may take, and how a question names its file. */
+export const SHARE = {
+  /** Jev's window is 32,000 tokens of state and questions; an area with more files is asked in several requests, each with the area's facts. */
+  tokens: 12000,
+  /** Joins a planned question's id and the file it is about: `vibe@src/a.ts`. */
+  separator: "@",
+} as const;
+
+/**
+ * One request per area instead of one per file: the area's request carries
+ * every question about the files on its land, over a state holding the
+ * area's facts and each file's (`files`, keyed by path). Each file's
+ * questions name the file, because Jev reads every question alone. An area
+ * whose files outgrow `SHARE.tokens` is asked in several requests.
+ */
+function shareByArea(requests: readonly WorldRequest[], regionOf: (path: string) => string): WorldRequest[] {
+  const files = new Map<string, WorldRequest[]>();
+  for (const r of requests) if (r.about === "file") files.set(regionOf(r.target), [...(files.get(regionOf(r.target)) ?? []), r]);
+  const out: WorldRequest[] = [];
+  for (const r of requests) {
+    if (r.about === "file") continue;
+    if (r.about !== "area") {
+      out.push(r);
+      continue;
+    }
+    const base = r.request.state as Record<string, unknown>;
+    let state: Record<string, unknown> = { ...base, files: {} };
+    let questions: Record<string, JevQuestion> = { ...r.request.questions };
+    let carries: CarriedThing[] = [{ about: "area", target: r.target, questions: Object.fromEntries(Object.keys(r.request.questions).map((id) => [id, id])) }];
+    const flush = (): void => {
+      out.push({ about: "area", target: r.target, request: { model: r.request.model, state, questions }, carries });
+      state = { ...base, files: {} };
+      questions = {};
+      carries = [];
+    };
+    for (const f of files.get(r.target) ?? []) {
+      const own = (f.request.state as { file: unknown }).file;
+      const asked = Object.fromEntries(
+        Object.entries(f.request.questions).map(([id, q]) => [`${id}${SHARE.separator}${f.target}`, { ...q, instructions: `About the file \`files["${f.target}"]\` in the state, not the others: ${q.instructions}` }]),
+      );
+      const grown = { model: r.request.model, state: { ...state, files: { ...(state.files as object), [f.target]: own } }, questions: { ...questions, ...asked } };
+      if (carries.length > 0 && Object.keys(state.files as object).length > 0 && tokensOf(grown) > SHARE.tokens) flush();
+      state = { ...state, files: { ...(state.files as object), [f.target]: own } };
+      questions = { ...questions, ...asked };
+      carries.push({ about: "file", target: f.target, questions: Object.fromEntries(Object.keys(f.request.questions).map((id) => [`${id}${SHARE.separator}${f.target}`, id])) });
+    }
+    if (carries.length > 0) flush();
+  }
+  return out;
+}
+
+/** What each thing a request judges was asked and answered, as if each had been asked on its own. */
+export function unshare(p: WorldRequest, answers: Readonly<Record<string, JevAnswer>>): { p: WorldRequest; a: Readonly<Record<string, JevAnswer>> }[] {
+  if (p.carries === undefined) return [{ p, a: answers }];
+  return p.carries.map((t) => ({
+    p: { about: t.about, target: t.target, request: { model: p.request.model, state: p.request.state, questions: Object.fromEntries(Object.entries(t.questions).map(([sent, id]) => [id, p.request.questions[sent] as JevQuestion])) } },
+    a: Object.fromEntries(Object.entries(t.questions).flatMap(([sent, id]) => (answers[sent] === undefined ? [] : [[id, answers[sent] as JevAnswer]]))),
+  }));
 }
 
 /**
@@ -632,7 +724,7 @@ export async function judgeWorld(model: CodeModel, looks: Looks, jev: JevClient,
     const readings = Object.keys(p.readings ?? {});
     const unsure = Object.keys(p.request.questions).filter((id) => !id.startsWith(MORE) && first[id] !== undefined && certainty(first[id] as JevAnswer) < threshold);
     if (!design.escalate || readings.length === 0 || unsure.length === 0) {
-      trace?.({ about: p.about, target: p.target, first: { request: p.request, answers: first } });
+      for (const t of unshare(p, first)) trace?.({ about: t.p.about, target: t.p.target, first: { request: t.p.request, answers: t.a } });
       return first;
     }
     // Jev picks what to read; when it asks for nothing, the first reading in order.
@@ -664,7 +756,7 @@ export async function judgeWorld(model: CodeModel, looks: Looks, jev: JevClient,
   const answered: { p: WorldRequest; a: Readonly<Record<string, JevAnswer>> }[] = [];
   const run = async (planned: WorldRequest[]): Promise<void> => {
     const answers = await askAll(planned);
-    planned.forEach((p, i) => answered.push({ p, a: answers[i] ?? {} }));
+    planned.forEach((p, i) => answered.push(...unshare(p, answers[i] ?? {})));
   };
   if (!design.character) await run(plan({}));
   else {
@@ -790,9 +882,28 @@ export function standInJev(looks: Looks): JevClient {
   for (const [prefix, set] of [["", looks.world], ["", looks.land], ["", looks.vibe], ["", looks.trail], ["", looks.form], ["", looks.water], ["", looks.character], ["building:", looks.building], ["landmark:", looks.landmark]] as const) {
     for (const [key, look] of Object.entries(set)) suits.set(`${prefix}${key}`, [...(suits.get(`${prefix}${key}`) ?? []), ...look.suits]);
   }
-  return {
+  const judge: JevClient = {
     async ask(request: JevRequest) {
       const state = (request.state ?? {}) as Record<string, unknown>;
+      // A shared request: each file's questions are judged from that file's facts alone.
+      const files = state.files as Record<string, unknown> | undefined;
+      if (files !== undefined) {
+        const answers: Record<string, JevAnswer> = {};
+        const own: Record<string, JevQuestion> = {};
+        const byFile = new Map<string, Record<string, JevQuestion>>();
+        for (const [id, q] of Object.entries(request.questions)) {
+          const at = id.indexOf(SHARE.separator);
+          if (at < 0) own[id] = q;
+          else byFile.set(id.slice(at + 1), { ...(byFile.get(id.slice(at + 1)) ?? {}), [id.slice(0, at)]: q });
+        }
+        const { files: _, ...rest } = state;
+        if (Object.keys(own).length > 0) Object.assign(answers, (await judge.ask({ model: request.model, state: rest, questions: own })).answers);
+        for (const [path, questions] of byFile) {
+          const a = (await judge.ask({ model: request.model, state: { file: files[path] }, questions })).answers;
+          for (const [id, answer] of Object.entries(a)) answers[`${id}${SHARE.separator}${path}`] = answer;
+        }
+        return { answers, model: "gaia/stand-in", costUsd: 0, ms: 0 };
+      }
       const tags = new Set(tagsOf(state));
       const about = (state.file ?? state.entity ?? state.directory ?? {}) as { path?: string };
       const target = about.path ?? "";
@@ -828,6 +939,7 @@ export function standInJev(looks: Looks): JevClient {
       return { answers, model: "gaia/stand-in", costUsd: 0, ms: 0 };
     },
   };
+  return judge;
 }
 
 // ---------- laying the world out ----------
