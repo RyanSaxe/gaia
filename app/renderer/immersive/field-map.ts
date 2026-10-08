@@ -1,10 +1,10 @@
 // The field map: a hand-drawn map of the world on a torn sheet of handmade
-// paper, unfolded from a small map button, painted in one of the directions
-// in `map-styles.ts`. The land runs to the sheet's edges and the wild fills
+// paper, unfolded from a small map button, painted as `map-styles.ts`
+// says. The land runs to the sheet's edges and the wild fills
 // its corners. Each area (a directory) and each file's patch is drawn from
-// the outline the layout traces (`outlinesOf`): an area is a watercolor wash,
-// its hue shared by every area under the same top-level directory, its
-// pigment pooling toward its rim and bleeding into its neighbors; a patch is
+// the outline the layout traces (`outlinesOf`): an area is a watercolor wash
+// in the color of the land Jev judged for it (`groundWash`), its pigment
+// pooling toward its rim and bleeding into its neighbors; a patch is
 // a faint wash in its health's color. Hills are shaded, water is washed,
 // trails are dotted, trees brown with their files' vitality, buildings and
 // landmarks are little drawn vignettes, and names are lettered on the land
@@ -22,7 +22,7 @@
 import { type Place, type PlaceArea, type WorldPlaces, heightAt, outlinesOf, waterDepthAt } from "@gaia/terrain";
 import { onTap } from "../lab.ts";
 import type { StoodWorld } from "../terrain/lab.ts";
-import { DECKLE_MASK, type MapStyle, type MapStyleName, MAP_STYLES, TRAVELLER_SVG, askedMapStyle } from "./map-styles.ts";
+import { DECKLE_MASK, MAP_STYLE, type MapStyle, TRAVELLER_SVG, groundWash } from "./map-styles.ts";
 
 export interface FieldMap {
   /** The world changed: the paper is painted again while the page is idle. */
@@ -34,12 +34,9 @@ export interface FieldMap {
   frame(x: number, z: number, yaw: number, place: Place): void;
   /** Whether the immersive world shows: the map's button shows with it. */
   show(on: boolean): void;
-  /** Paints the map in another direction (`map-styles.ts`). */
-  restyle(name: MapStyleName): void;
-  /** What the map shows, for scripted checks: its direction, whether its paper is painted, zoom in pixels per meter, the paper's painting time and its longest step, and names drawn. */
+  /** What the map shows, for scripted checks: whether its paper is painted, zoom in pixels per meter, the paper's painting time and its longest step, and names drawn. */
   state(): {
     readonly open: boolean;
-    readonly style: MapStyleName;
     readonly ready: boolean;
     readonly zoom: number;
     readonly paintMs: number;
@@ -58,7 +55,7 @@ export interface MapSource {
 
 /** Paper size in pixels, and how far past the land's widest reach the sheet runs, meters: the land meets its edges. */
 const PAPER = 2048;
-const MARGIN = 4;
+export const MARGIN = 4;
 /** Sample spacing of the areas, the hills and the water, meters. */
 const AREA_CELL = 5;
 const HILL_CELL = 5;
@@ -218,21 +215,9 @@ function axisOf(s: { readonly x: number; readonly z: number; readonly xx: number
   return { angle: Math.max(-0.42, Math.min(0.42, angle)) * elongated, length: Math.sqrt(long) * 3.4 };
 }
 
-/** A closed blob of `count` points round (x, y), its radius varying by up to `wobble`. */
-function blob(g: CanvasRenderingContext2D, x: number, y: number, r: number, wobble: number, seed: number, count = 14): void {
-  g.beginPath();
-  for (let k = 0; k <= count; k++) {
-    const a = (k / count) * Math.PI * 2;
-    const rr = r * (1 - wobble / 2 + wobble * hash(k % count, seed));
-    if (k === 0) g.moveTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
-    else g.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
-  }
-  g.closePath();
-}
-
 /**
  * Each wet cell's distance from the nearest dry one, in cells: how deep into
- * a pond a point lies, for shading deep water and engraving water lines.
+ * a pond a point lies, for shading deep water.
  */
 function wetDistance(wet: Uint8Array, n: number): Float32Array {
   const d = new Float32Array(n * n);
@@ -289,7 +274,94 @@ export function washArea(g: CanvasRenderingContext2D, path: Path2D, rgb: readonl
   g.restore();
 }
 
-/** Paints the land onto paper in a direction's manner, yielding between steps so a driver can spread the work over idle time. */
+/**
+ * The map's paper over `w` by `h` pixels: a ground mottled as handmade
+ * paper is, with fibres and a faint grain. At the map's paper size it is the map's own paper; the wait
+ * paints the same paper at the size of its sheet.
+ */
+export function paintPaperGround(ctx: CanvasRenderingContext2D, style: MapStyle, w: number, h: number): void {
+  const k = w / PAPER;
+  const many = (w * h) / PAPER ** 2;
+  ctx.fillStyle = style.paper;
+  ctx.fillRect(0, 0, w, h);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  for (const [cells, strength] of [[14, 0.09], [56, 0.05]] as const) {
+    ctx.globalAlpha = strength;
+    ctx.drawImage(noiseCanvas(cells, cells * 7.3, style.mottle), 0, 0, w, h);
+  }
+  ctx.globalAlpha = 1;
+  ctx.lineCap = "round";
+  for (const [tone, count, seed] of [["rgba(118,92,56,0.075)", 1800, 11], ["rgba(255,251,238,0.16)", 1100, 23]] as const) {
+    ctx.strokeStyle = tone;
+    ctx.lineWidth = Math.max(0.7, 1.3 * k);
+    ctx.beginPath();
+    for (let n = 0; n < count * many; n++) {
+      const x = hash(n, seed) * w;
+      const y = hash(seed, n) * h;
+      const a = hash(n + seed, 3) * Math.PI * 2;
+      const len = (6 + hash(n, seed + 1) * 16) * k;
+      const bend = (hash(n, seed + 2) - 0.5) * 8 * k;
+      ctx.moveTo(x, y);
+      ctx.quadraticCurveTo(x + Math.cos(a) * len * 0.5 - Math.sin(a) * bend, y + Math.sin(a) * len * 0.5 + Math.cos(a) * bend, x + Math.cos(a) * len, y + Math.sin(a) * len);
+    }
+    ctx.stroke();
+  }
+  for (const [tone, from] of [["rgba(120,96,60,0.06)", 0], ["rgba(255,250,235,0.1)", 1]] as const) {
+    ctx.fillStyle = tone;
+    ctx.beginPath();
+    for (let n = from; n < 6000 * many; n += 2) ctx.rect(hash(n, 1) * w, hash(n, 2) * h, (1 + hash(n, 4) * 3) * k, (1 + hash(n, 5) * 3) * k);
+    ctx.fill();
+  }
+}
+
+/** Where the paint gives way to bare paper at the sheet's edge: rows `j0` to `j1` of a mask `cells` on a side, in its alpha. */
+export function paintFade(img: ImageData, style: MapStyle, j0: number, j1: number): void {
+  const cells = img.width;
+  for (let j = j0; j < j1; j++) for (let i = 0; i < cells; i++) img.data[(j * cells + i) * 4 + 3] = Math.round(255 * paintAt(style, (i + 0.5) / cells, (j + 0.5) / cells));
+}
+
+/** A wood's trees past the land's edge, on a sheet `reach` meters from its middle to its edge at `scale` pixels per meter: thinning into clearings and gone where the paint gives way. */
+export function woodsOf(style: MapStyle, half: number, reach: number, scale: number): { x: number; y: number; r: number; tone: number }[] {
+  const px = (v: number): number => (v + reach) * scale;
+  const wild = (x: number, z: number, past = 0): boolean => Math.abs(x) ** 4 + Math.abs(z) ** 4 > (half + past) ** 4;
+  const woodStep = style.woodSize * 2.1;
+  const woods: { x: number; y: number; r: number; tone: number }[] = [];
+  for (let z = -reach; z < reach; z += woodStep) {
+    for (let x = -reach; x < reach; x += woodStep) {
+      const jx = x + (hash(x, z) - 0.5) * woodStep;
+      const jz = z + (hash(z, x) - 0.5) * woodStep;
+      if (!wild(jx, jz, 3)) continue;
+      const u = (jx + reach) / (reach * 2);
+      const v = (jz + reach) / (reach * 2);
+      if (valueNoise(u * 14, v * 14, 5) < 0.32 || hash(jx * 1.3, jz) > paintAt(style, u, v)) continue;
+      woods.push({ x: px(jx), y: px(jz), r: (style.woodSize + hash(jx, jz * 1.7) * style.woodSize * 0.6) * scale, tone: hash(jz, jx * 2.3) });
+    }
+  }
+  return woods.sort((a, b) => a.y - b.y);
+}
+
+/** Draws a wood's trees: round crowns over soft shadows, lit on their northwest shoulders. */
+export function drawWoods(ctx: CanvasRenderingContext2D, woods: readonly { x: number; y: number; r: number; tone: number }[]): void {
+  ctx.fillStyle = "rgba(30,46,40,0.24)";
+  for (const w of woods) {
+    ctx.beginPath();
+    ctx.ellipse(w.x + w.r * 0.45, w.y + w.r * 0.55, w.r * 1.05, w.r * 0.8, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  for (const w of woods) {
+    ctx.beginPath();
+    ctx.arc(w.x, w.y, w.r, 0, Math.PI * 2);
+    ctx.fillStyle = mixHex("#4f7f45", "#7aa95a", w.tone);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(w.x - w.r * 0.32, w.y - w.r * 0.34, w.r * 0.5, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(214,232,150,0.4)";
+    ctx.fill();
+  }
+}
+
+/** Paints the land onto paper, yielding between steps so a driver can spread the work over idle time. */
 function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place, places: WorldPlaces, style: MapStyle): Generator<void, Paper> {
   const t = stood.terrain;
   const size = t.spec.size;
@@ -301,58 +373,8 @@ function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place
   canvas.width = canvas.height = PAPER;
   const ctx = canvas.getContext("2d") as CanvasRenderingContext2D;
   const px = (v: number): number => (v + reach) * scale;
-  const wild = (x: number, z: number, past = 0): boolean => Math.abs(x) ** 4 + Math.abs(z) ** 4 > (half + past) ** 4;
 
-  // Paper: a ground mottled as handmade paper is, with fibres and a faint grain; old paper is foxed and darker at its edges.
-  ctx.fillStyle = style.paper;
-  ctx.fillRect(0, 0, PAPER, PAPER);
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = "high";
-  for (const [cells, strength] of [[14, 0.09], [56, 0.05]] as const) {
-    ctx.globalAlpha = strength;
-    ctx.drawImage(noiseCanvas(cells, cells * 7.3, style.mottle), 0, 0, PAPER, PAPER);
-  }
-  ctx.globalAlpha = 1;
-  ctx.lineCap = "round";
-  for (const [tone, count, seed] of [["rgba(118,92,56,0.075)", 1800, 11], ["rgba(255,251,238,0.16)", 1100, 23]] as const) {
-    ctx.strokeStyle = tone;
-    ctx.lineWidth = 1.3;
-    ctx.beginPath();
-    for (let k = 0; k < count; k++) {
-      const x = hash(k, seed) * PAPER;
-      const y = hash(seed, k) * PAPER;
-      const a = hash(k + seed, 3) * Math.PI * 2;
-      const len = 6 + hash(k, seed + 1) * 16;
-      const bend = (hash(k, seed + 2) - 0.5) * 8;
-      ctx.moveTo(x, y);
-      ctx.quadraticCurveTo(x + Math.cos(a) * len * 0.5 - Math.sin(a) * bend, y + Math.sin(a) * len * 0.5 + Math.cos(a) * bend, x + Math.cos(a) * len, y + Math.sin(a) * len);
-    }
-    ctx.stroke();
-  }
-  for (const [tone, from] of [["rgba(120,96,60,0.06)", 0], ["rgba(255,250,235,0.1)", 1]] as const) {
-    ctx.fillStyle = tone;
-    ctx.beginPath();
-    for (let k = from; k < 6000; k += 2) ctx.rect(hash(k, 1) * PAPER, hash(k, 2) * PAPER, 1 + hash(k, 4) * 3, 1 + hash(k, 5) * 3);
-    ctx.fill();
-  }
-  if (style.aged) {
-    for (let k = 0; k < 70; k++) {
-      const x = hash(k, 41) * PAPER;
-      const y = hash(41, k) * PAPER;
-      const r = 6 + hash(k, 42) ** 3 * 60;
-      const spot = ctx.createRadialGradient(x, y, 0, x, y, r);
-      spot.addColorStop(0, "rgba(150,98,44,0.12)");
-      spot.addColorStop(0.7, "rgba(150,98,44,0.05)");
-      spot.addColorStop(1, "rgba(150,98,44,0)");
-      ctx.fillStyle = spot;
-      ctx.fillRect(x - r, y - r, r * 2, r * 2);
-    }
-    const burn = ctx.createRadialGradient(PAPER / 2, PAPER / 2, PAPER * 0.36, PAPER / 2, PAPER / 2, PAPER * 0.74);
-    burn.addColorStop(0, "rgba(120,80,30,0)");
-    burn.addColorStop(1, "rgba(120,80,30,0.3)");
-    ctx.fillStyle = burn;
-    ctx.fillRect(0, 0, PAPER, PAPER);
-  }
+  paintPaperGround(ctx, style, PAPER, PAPER);
   yield;
 
   // Areas: one sample per cell.
@@ -428,13 +450,13 @@ function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place
   fade.width = fade.height = FADE_CELLS;
   const fctx = fade.getContext("2d") as CanvasRenderingContext2D;
   const fimg = fctx.createImageData(FADE_CELLS, FADE_CELLS);
-  for (let j = 0; j < FADE_CELLS; j++) {
-    for (let i = 0; i < FADE_CELLS; i++) fimg.data[(j * FADE_CELLS + i) * 4 + 3] = Math.round(255 * paintAt(style, (i + 0.5) / FADE_CELLS, (j + 0.5) / FADE_CELLS));
-    if (j % 96 === 95) yield;
+  for (let j = 0; j < FADE_CELLS; j += 96) {
+    paintFade(fimg, style, j, Math.min(FADE_CELLS, j + 96));
+    yield;
   }
   fctx.putImageData(fimg, 0, 0);
 
-  // Washes: each top-level directory a hue, its subdirectories a little lighter or darker, painted from the
+  // Washes: each area in the color of its land's ground, a little lighter or darker by its path, painted from the
   // outlines the layout traces (`outlinesOf`), shallowest first so each nested area washes over its parent's,
   // over the wild's own wash.
   const traced = outlinesOf(places);
@@ -442,13 +464,10 @@ function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place
   // The outlines follow the lattice they were traced on in steps of a few meters; a pen draws easier lines.
   const outlines = { areas: traced.areas.map((o) => ({ ...o, rings: o.rings.map(easeRing) })) };
   yield;
-  const tops = [...new Set(outlines.areas.filter((o) => o.depth > 0).map((o) => o.path.split("/")[0] ?? ""))].sort();
-  const washOf = (path: string, depth: number): [number, number, number] => {
-    // The repository's own ground is a pale meadow, so its directories' washes stand out on it.
-    if (depth === 0) return mixRgb(style.common, "#fbf5e6", 0.15);
-    const base = style.washes[tops.indexOf(path.split("/")[0] ?? "") % style.washes.length] as string;
-    const tone = (hash(path.length * 13.1, path.charCodeAt(path.length - 1) || 0) - 0.5) * style.toneStep;
-    return tone > 0 ? mixRgb(base, "#fbf5e6", tone) : mixRgb(base, "#5b5040", -tone * 0.5);
+  // An area whose ground is unknown stays bare paper.
+  const washOf = (path: string): readonly [number, number, number] => {
+    const ground = stood.grounds.get(path);
+    return ground === undefined ? mixRgb(style.paper, style.paper, 0) : groundWash(style, ground, path);
   };
   // Each ring is drawn as a curve through the middles of its edges, bending at its corners, so the
   // traced lattice's steps read as a pen's easy line; a border's pen also wobbles a little.
@@ -487,23 +506,8 @@ function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place
   for (const [k, o] of byDepth.entries()) {
     const path = trace(o.rings);
     paths.set(o.path, path);
-    washArea(g, path, washOf(o.path, o.depth), style.pool);
+    washArea(g, path, washOf(o.path), style.pool);
     if (k % 6 === 5) yield;
-  }
-  // Blooms: where a wash dried unevenly the pigment lifts in a pale patch with a dark, frilled rim.
-  for (let k = 0; k < style.blooms; k++) {
-    const x = (0.08 + hash(k, 61) * 0.84) * PAPER;
-    const y = (0.08 + hash(61, k) * 0.84) * PAPER;
-    const r = 26 + hash(k, 62) * 70;
-    blob(g, x, y, r, 0.45, k * 3.7, 18);
-    g.globalCompositeOperation = "destination-out";
-    g.fillStyle = "rgba(0,0,0,0.2)";
-    g.fill();
-    g.globalCompositeOperation = "source-atop";
-    g.lineWidth = 3;
-    g.strokeStyle = "rgba(70,52,30,0.13)";
-    g.stroke();
-    g.globalCompositeOperation = "source-over";
   }
   // Brushwork: the wash laid in broad, overlapping strokes, each a little warmer or cooler, lighter or darker.
   g.globalCompositeOperation = "source-atop";
@@ -589,48 +593,13 @@ function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place
   ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = "source-over";
   yield;
-  if (style.hills === "hachure") {
-    // Hachures: short strokes down the fall line, closer and darker where the ground is steep and away from the light.
-    const step = 3.4;
-    const hm = Math.ceil((reach * 2) / step);
-    const buckets: Path2D[] = [new Path2D(), new Path2D(), new Path2D()];
-    for (let j = 0; j < hm; j++) {
-      for (let i = 0; i < hm; i++) {
-        const x = -reach + (i + 0.5 + (hash(i, j) - 0.5) * 0.7) * step;
-        const z = -reach + (j + 0.5 + (hash(j, i) - 0.5) * 0.7) * step;
-        const gx = (heightAt(t.lattice, x + 2, z) - heightAt(t.lattice, x - 2, z)) / 4;
-        const gz = (heightAt(t.lattice, x, z + 2) - heightAt(t.lattice, x, z - 2)) / 4;
-        const slope = Math.hypot(gx, gz);
-        if (slope < 0.1 || hash(i * 3.1, j * 1.7) > slope * 5) continue;
-        if (paintAt(style, (x + reach) / (reach * 2), (z + reach) / (reach * 2)) < 0.5) continue;
-        const len = Math.min(2.8, 0.9 + slope * 7);
-        const ux = (gx / slope) * len;
-        const uz = (gz / slope) * len;
-        const dark = Math.max(0, -(gx + gz) / slope);
-        const bucket = buckets[Math.min(2, Math.floor(slope * 6 + dark * 1.2))] as Path2D;
-        bucket.moveTo(px(x - ux), px(z - uz));
-        bucket.lineTo(px(x + ux), px(z + uz));
-      }
-      if (j % 24 === 23) yield;
-    }
-    ctx.lineCap = "round";
-    ctx.lineWidth = 1.5;
-    for (const [k, bucket] of buckets.entries()) {
-      ctx.strokeStyle = `rgba(59,44,28,${0.22 + k * 0.14})`;
-      ctx.stroke(bucket);
-    }
-    yield;
-  }
 
-  // Each file's patch: its own traced shape, faintly washed in its health's color, inside a fine line in some directions.
+  // Each file's patch: its own traced shape, faintly washed in its health's color.
   const health = new Map(places.patches.map((p) => [p.path, p.vitality]));
-  ctx.lineWidth = 1.4;
-  ctx.strokeStyle = `rgba(74,60,44,${style.patchLine})`;
   for (const [k, o] of traced.patches.entries()) {
     const path = trace(o.rings.map(easeRing));
     ctx.fillStyle = `rgba(${mixRgb("#a8956a", "#6f9450", Math.max(0, Math.min(1, health.get(o.path) ?? 1))).join(",")},${style.patchFill})`;
     ctx.fill(path, "evenodd");
-    if (style.patchLine > 0) ctx.stroke(path);
     if (k % 60 === 59) yield;
   }
   yield;
@@ -645,28 +614,17 @@ function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place
   }
   const depth = wetDistance(wet, wn);
   yield;
-  const shallowRgb = style.water === "deep" ? [150, 203, 204] : style.water === "engraved" ? [178, 199, 190] : [138, 184, 202];
-  const deepRgb = style.water === "deep" ? [58, 122, 152] : style.water === "engraved" ? [150, 178, 176] : [104, 152, 184];
+  // Deep water is darker toward its middle.
+  const shallowRgb = [150, 203, 204];
+  const deepRgb = [58, 122, 152];
   ctx.lineCap = ctx.lineJoin = "round";
   for (const stream of t.streams) {
     const width = 2 * Math.max(...stream.stations.map((s) => s.halfWidth)) * scale;
     const line = new Path2D();
     stream.stations.forEach((s, k) => (k === 0 ? line.moveTo(px(s.x), px(s.z)) : line.lineTo(px(s.x), px(s.z))));
-    if (style.water === "engraved") {
-      ctx.strokeStyle = "rgba(59,44,28,0.8)";
-      ctx.lineWidth = Math.max(6, width + 4);
-      ctx.stroke(line);
-    } else if (style.water === "wash") {
-      ctx.filter = "blur(2px)";
-      ctx.strokeStyle = "rgba(92,136,170,0.45)";
-      ctx.lineWidth = Math.max(7, width + 5);
-      ctx.stroke(line);
-      ctx.filter = "none";
-    } else {
-      ctx.strokeStyle = "rgba(40,84,104,0.55)";
-      ctx.lineWidth = Math.max(6.5, width + 3.5);
-      ctx.stroke(line);
-    }
+    ctx.strokeStyle = "rgba(40,84,104,0.55)";
+    ctx.lineWidth = Math.max(6.5, width + 3.5);
+    ctx.stroke(line);
     ctx.strokeStyle = `rgb(${shallowRgb.join(",")})`;
     ctx.lineWidth = Math.max(3.5, width);
     ctx.stroke(line);
@@ -684,14 +642,6 @@ function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place
   wctx.putImageData(wimg, 0, 0);
   const wx0 = px(w0);
   const wspan = wn * WATER_CELL * scale;
-  if (style.water === "wash") {
-    // A wash of blue, bleeding a little past its edge.
-    ctx.filter = "blur(5px)";
-    ctx.globalAlpha = 0.55;
-    ctx.drawImage(water, wx0, wx0, wspan, wspan);
-    ctx.filter = "none";
-    ctx.globalAlpha = 0.6;
-  }
   ctx.drawImage(water, wx0, wx0, wspan, wspan);
   ctx.globalAlpha = 1;
   yield;
@@ -706,36 +656,16 @@ function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place
   };
   const coast = shore(0);
   yield;
-  if (style.water === "engraved") {
-    // The coast inked, and water lines engraved inside it, each a little farther out and fainter.
-    ctx.strokeStyle = "rgba(59,44,28,0.85)";
-    ctx.lineWidth = 2.6;
-    ctx.stroke(coast);
-    for (const [level, alpha] of [[1.3, 0.42], [2.5, 0.3], [4, 0.2]] as const) {
-      ctx.strokeStyle = `rgba(59,44,28,${alpha})`;
-      ctx.lineWidth = 1.2;
-      ctx.stroke(shore(level));
-      yield;
-    }
-  } else if (style.water === "wash") {
-    // Pigment pools darker where the wash dried at its edge.
-    ctx.filter = "blur(1.5px)";
-    ctx.strokeStyle = "rgba(64,104,140,0.4)";
-    ctx.lineWidth = 3.2;
-    ctx.stroke(coast);
-    ctx.filter = "none";
-  } else {
-    // Deep water: a shadow under its bank, and the light catching its rim.
-    ctx.strokeStyle = "rgba(30,64,84,0.35)";
-    ctx.lineWidth = 6;
-    ctx.save();
-    ctx.translate(2, 2.5);
-    ctx.stroke(coast);
-    ctx.restore();
-    ctx.strokeStyle = "rgba(250,244,222,0.5)";
-    ctx.lineWidth = 1.8;
-    ctx.stroke(coast);
-  }
+  // Deep water: a shadow under its bank, and the light catching its rim.
+  ctx.strokeStyle = "rgba(30,64,84,0.35)";
+  ctx.lineWidth = 6;
+  ctx.save();
+  ctx.translate(2, 2.5);
+  ctx.stroke(coast);
+  ctx.restore();
+  ctx.strokeStyle = "rgba(250,244,222,0.5)";
+  ctx.lineWidth = 1.8;
+  ctx.stroke(coast);
   // A few ripple strokes inside each pond.
   ctx.strokeStyle = "rgba(255,255,255,0.55)";
   ctx.lineWidth = 2;
@@ -748,7 +678,7 @@ function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place
   }
   yield;
 
-  // Area borders: in pencil, in ink, or as a soft painted hedgerow; each is drawn from both sides, so a light hand keeps the two one line.
+  // Area borders: soft painted hedgerows; each is drawn from both sides, so a light hand keeps the two one line.
   // They stop short of the land's edge, where the land gives way to the wild by its colors alone.
   ctx.save();
   const inside = new Path2D();
@@ -764,91 +694,24 @@ function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place
   ctx.lineJoin = "round";
   for (const [k, o] of outlines.areas.entries()) {
     if (o.depth === 0) continue;
-    if (style.border === "pencil") {
-      ctx.strokeStyle = "rgba(72,66,60,0.32)";
-      ctx.lineWidth = 1.5;
-      ctx.stroke(trace(o.rings, 2.6, 1));
-      ctx.stroke(trace(o.rings, 3.2, 7));
-    } else if (style.border === "ink") {
-      ctx.strokeStyle = "rgba(59,44,28,0.62)";
-      ctx.lineWidth = o.depth === 1 ? 3 : 1.6;
-      ctx.stroke(trace(o.rings, 2.2, 1));
-    } else {
-      const path = trace(o.rings, 1.6, 1);
-      ctx.filter = "blur(1.5px)";
-      ctx.strokeStyle = "rgba(52,80,40,0.26)";
-      ctx.lineWidth = o.depth === 1 ? 7 : 5;
-      ctx.stroke(path);
-      ctx.filter = "none";
-      ctx.strokeStyle = "rgba(46,70,36,0.3)";
-      ctx.lineWidth = 1.6;
-      ctx.stroke(path);
-    }
+    const path = trace(o.rings, 1.6, 1);
+    ctx.filter = "blur(1.5px)";
+    ctx.strokeStyle = "rgba(52,80,40,0.26)";
+    ctx.lineWidth = o.depth === 1 ? 7 : 5;
+    ctx.stroke(path);
+    ctx.filter = "none";
+    ctx.strokeStyle = "rgba(46,70,36,0.3)";
+    ctx.lineWidth = 1.6;
+    ctx.stroke(path);
     if (k % 8 === 7) yield;
   }
   ctx.restore();
   yield;
 
-  // The wild past the land: a wood drawn the direction's way, thinning into clearings and gone where the paint gives way.
-  const woodStep = style.woodSize * 2.1;
-  const woods: { x: number; y: number; r: number; tone: number }[] = [];
-  for (let z = -reach; z < reach; z += woodStep) {
-    for (let x = -reach; x < reach; x += woodStep) {
-      const jx = x + (hash(x, z) - 0.5) * woodStep;
-      const jz = z + (hash(z, x) - 0.5) * woodStep;
-      if (!wild(jx, jz, 3)) continue;
-      const u = (jx + reach) / (reach * 2);
-      const v = (jz + reach) / (reach * 2);
-      if (valueNoise(u * 14, v * 14, 5) < 0.32 || hash(jx * 1.3, jz) > paintAt(style, u, v)) continue;
-      woods.push({ x: px(jx), y: px(jz), r: (style.woodSize + hash(jx, jz * 1.7) * style.woodSize * 0.6) * scale, tone: hash(jz, jx * 2.3) });
-    }
-  }
-  woods.sort((a, b) => a.y - b.y);
+  // The wild past the land: a wood thinning into clearings and gone where the paint gives way.
+  const woods = woodsOf(style, half, reach, scale);
   yield;
-  if (style.trees === "crown") {
-    ctx.fillStyle = "rgba(30,46,40,0.24)";
-    for (const w of woods) {
-      ctx.beginPath();
-      ctx.ellipse(w.x + w.r * 0.45, w.y + w.r * 0.55, w.r * 1.05, w.r * 0.8, 0, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    for (const w of woods) {
-      ctx.beginPath();
-      ctx.arc(w.x, w.y, w.r, 0, Math.PI * 2);
-      ctx.fillStyle = mixHex("#4f7f45", "#7aa95a", w.tone);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(w.x - w.r * 0.32, w.y - w.r * 0.34, w.r * 0.5, 0, Math.PI * 2);
-      ctx.fillStyle = "rgba(214,232,150,0.4)";
-      ctx.fill();
-    }
-    yield;
-  } else if (style.trees === "dab") {
-    for (const w of woods) {
-      blob(ctx, w.x, w.y, w.r * 1.1, 0.35, w.tone * 31);
-      ctx.fillStyle = `rgba(${mixRgb("#6f9a5a", "#a7bd78", w.tone).join(",")},0.42)`;
-      ctx.fill();
-    }
-  } else {
-    ctx.lineWidth = 1.3;
-    ctx.strokeStyle = "rgba(59,44,28,0.62)";
-    for (const w of woods) {
-      ctx.beginPath();
-      ctx.moveTo(w.x, w.y + w.r * 0.6);
-      ctx.lineTo(w.x, w.y + w.r * 1.5);
-      ctx.moveTo(w.x + w.r, w.y);
-      ctx.arc(w.x, w.y, w.r, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(${mixRgb("#8a9a5c", "#a9ab6c", w.tone).join(",")},0.55)`;
-      ctx.fill();
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(w.x + w.r * 0.25, w.y - w.r * 0.5);
-      ctx.lineTo(w.x + w.r * 0.25, w.y + w.r * 0.5);
-      ctx.moveTo(w.x + w.r * 0.6, w.y - w.r * 0.3);
-      ctx.lineTo(w.x + w.r * 0.6, w.y + w.r * 0.4);
-      ctx.stroke();
-    }
-  }
+  drawWoods(ctx, woods);
   yield;
 
   // The map's title, lettered in the wild at the sheet's top left: "a field map of" and the repository's name.
@@ -1097,53 +960,22 @@ function whenIdle(step: (budget: number) => boolean): () => void {
   };
 }
 
-/** A tree on the land, drawn the direction's way: browning with its file's vitality. */
-function drawTree(ctx: CanvasRenderingContext2D, style: MapStyle, x: number, y: number, r: number, vitality: number, seed: number): void {
+/** A tree on the land: a round crown browning with its file's vitality. */
+function drawTree(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, vitality: number): void {
   const v = Math.max(0, Math.min(1, vitality));
-  if (style.trees === "crown") {
-    // A round crown with a soft shadow to the southeast and the sun on its northwest shoulder.
-    ctx.beginPath();
-    ctx.ellipse(x + r * 0.5, y + r * 0.6, r * 1.05, r * 0.78, 0, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(34,44,48,0.22)";
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI * 2);
-    ctx.fillStyle = mixHex("#ad9a6c", "#5f9447", v);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(x - r * 0.3, y - r * 0.32, r * 0.52, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(226,240,170,0.45)";
-    ctx.fill();
-  } else if (style.trees === "dab") {
-    // A loose dab of watercolor, darker where its pigment pooled.
-    blob(ctx, x, y, r * 1.15, 0.4, seed);
-    ctx.fillStyle = `rgba(${mixRgb("#b5a47c", "#6f9a50", v).join(",")},0.62)`;
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(x + r * 0.35, y + r * 0.3, r * 0.55, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(60,80,40,0.16)";
-    ctx.fill();
-  } else {
-    // A small inked tree: a crown on a trunk, hatched on its shaded side.
-    ctx.strokeStyle = "rgba(59,44,28,0.8)";
-    ctx.lineWidth = 0.8;
-    ctx.beginPath();
-    ctx.moveTo(x, y + r * 0.5);
-    ctx.lineTo(x, y + r * 1.7);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI * 2);
-    ctx.fillStyle = mixHex("#bba878", "#8ea062", v);
-    ctx.fill();
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(x + r * 0.3, y - r * 0.55);
-    ctx.lineTo(x + r * 0.3, y + r * 0.55);
-    ctx.moveTo(x + r * 0.65, y - r * 0.3);
-    ctx.lineTo(x + r * 0.65, y + r * 0.35);
-    ctx.lineWidth = 0.6;
-    ctx.stroke();
-  }
+  // A round crown with a soft shadow to the southeast and the sun on its northwest shoulder.
+  ctx.beginPath();
+  ctx.ellipse(x + r * 0.5, y + r * 0.6, r * 1.05, r * 0.78, 0, 0, Math.PI * 2);
+  ctx.fillStyle = "rgba(34,44,48,0.22)";
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fillStyle = mixHex("#ad9a6c", "#5f9447", v);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(x - r * 0.3, y - r * 0.32, r * 0.52, 0, Math.PI * 2);
+  ctx.fillStyle = "rgba(226,240,170,0.45)";
+  ctx.fill();
 }
 
 /**
@@ -1180,7 +1012,7 @@ export function createFieldMap(
   const hereFile = sheet.querySelector(".here-file") as HTMLElement;
   const steps = sheet.querySelector(".traveller-steps") as SVGGElement;
 
-  let style = askedMapStyle();
+  const style = MAP_STYLE;
   let paper: Paper | null = null;
   /** Whether the world changed since the paper was painted. */
   let stale = true;
@@ -1315,13 +1147,13 @@ export function createFieldMap(
     }
     ctx.setLineDash([]);
 
-    // Trees: drawn the direction's way, browning with their files' vitality.
+    // Trees: round crowns browning with their files' vitality.
     for (const tree of stood.trees) {
       const x = sx(tree.x);
       const y = sy(tree.z);
       if (!visible(x, y, 8)) continue;
       const seed = hash(tree.x, tree.z);
-      drawTree(ctx, style, x, y, Math.max((1.9 + seed * 0.8) * grow, (2 + seed * 1.2) * view.zoom), tree.vitality, seed * 97);
+      drawTree(ctx, x, y, Math.max((1.9 + seed * 0.8) * grow, (2 + seed * 1.2) * view.zoom), tree.vitality);
     }
 
     // Names keep off the drawn marks and each other, and off the scale and the compass rose in the lower corners.
@@ -1382,15 +1214,11 @@ export function createFieldMap(
     for (const l of [...paper.areaLabels].sort((a, b) => b.cells - a.cells)) {
       // The repository's root is the whole sheet: the title names it.
       if (l.area.depth === 0 || !visible(sx(l.x), sy(l.z), 0)) continue;
-      const capitals = style.capitals && l.area.depth === 1;
       const parent = l.area.path.split("/").slice(0, -1).join(" / ").toUpperCase();
-      const label = capitals ? l.area.name.toUpperCase() : l.area.name;
-      const nameFont = capitals ? `600 ${nameSize - 1}px ${SERIF}` : `italic 600 ${nameSize}px ${SERIF}`;
-      const nameSpacing = capitals ? nameSize * 0.32 : 0;
+      const label = l.area.name;
+      const nameFont = `italic 600 ${nameSize}px ${SERIF}`;
       ctx.font = nameFont;
-      ctx.letterSpacing = `${nameSpacing}px`;
       const nameW = ctx.measureText(label).width;
-      ctx.letterSpacing = "0px";
       ctx.font = `600 9px ${SERIF}`;
       const parentW = parent === "" ? 0 : ctx.measureText(parent).width + parent.length * 1.8;
       const halfW = Math.max(nameW, parentW) / 2 + 4;
@@ -1428,10 +1256,8 @@ export function createFieldMap(
           ctx.letterSpacing = "0px";
         }
         ctx.font = nameFont;
-        ctx.letterSpacing = `${nameSpacing}px`;
         ctx.fillStyle = style.ink;
-        ctx.fillText(label, nameSpacing / 2, 2);
-        ctx.letterSpacing = "0px";
+        ctx.fillText(label, 0, 2);
       }
       ctx.restore();
     }
@@ -1700,16 +1526,8 @@ export function createFieldMap(
       button.classList.toggle("on", on);
       if (!on) setOpen(false);
     },
-    restyle(name) {
-      if (name === style.name) return;
-      style = MAP_STYLES[name];
-      if (shown) startPainting();
-      else stale = true;
-      if (isOpen) draw();
-    },
     state: () => ({
       open: isOpen,
-      style: style.name,
       ready: paper !== null,
       zoom: view.zoom,
       paintMs: Math.round(timing.paintMs),
