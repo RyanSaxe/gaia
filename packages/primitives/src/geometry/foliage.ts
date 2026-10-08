@@ -230,7 +230,7 @@ const SPRAY_CUTS = {
   pointed: { cut: CUT.cluster, card: 1 },
   oval: { cut: CUT.oval, card: 0.95 },
   lobed: { cut: CUT.lobed, card: 1.12 },
-  blossom: { cut: CUT.umbels, card: 1 },
+  blossom: { cut: CUT.umbels, card: 1.12 },
 } as const;
 
 /**
@@ -281,7 +281,7 @@ export function buildLeafClumps(p: Resolved<typeof leafClumpsParams>, ctx: Build
 
   const spray = SPRAY_CUTS[p.leaf];
   // Leaves keep near their own size on a great tree: its sprays grow only with the root of its scale.
-  const look: ClumpLook = { twigs: 15, sprays: 6, half: 0.25 * spray.card * (s <= 1 ? s : Math.sqrt(s)), cut: spray.cut, shape: p.shape, ground: 0 };
+  const look: ClumpLook = { twigs: 15, sprays: 8, half: 0.25 * spray.card * (s <= 1 ? s : Math.sqrt(s)), cut: spray.cut, shape: p.shape, ground: 0 };
   // A dense frame's crown thins its twigs, then drops interior fill clumps (added last), to stay in budget.
   let density = 1;
   const triangles = (): number => clumps.reduce((n, c) => n + twigsOf(look, c.radius, density) * TRIANGLES_PER_TWIG, 0);
@@ -305,7 +305,7 @@ export interface ClumpLook {
 }
 
 /** Each twig is a three-sided tube in two segments and a fork in one, with its sprays: 12 + 6 + 2 per spray. */
-const TRIANGLES_PER_TWIG = 18 + 2 * 9;
+const TRIANGLES_PER_TWIG = 18 + 2 * 12;
 const twigsOf = (look: ClumpLook, radius: number, density: number): number => Math.max(4, Math.round(look.twigs * radius * radius * density));
 
 /**
@@ -332,12 +332,20 @@ export function emitClump(leaf: PartBuilder, bark: PartBuilder, anchors: Anchor[
     const d = normalize([Math.cos(phi) * ring, y, Math.sin(phi) * ring]);
     const goal = shellPoint(clump.center, clump.radius * tr.range(0.62, 0.86), look.shape, d, seed).q;
     goal[1] = Math.max(goal[1], look.ground + look.half);
-    // Twigs leave the limb all along its last stretch, at a shallow angle, and curve out to their goal.
-    const root = lerp(limb.start, limb.end, nearEnd ? tr.range(0.45, 1) : tr.range(0.3, 0.9));
+    // Each twig leaves the limb near the point of it closest to the twig's
+    // goal, so a clump that hugs its limb grows short twigs all along it
+    // rather than long spokes from one point. It leaves at its own angle and
+    // curves out to its goal, rising a little or arching over.
+    const ab = sub(limb.end, limb.start);
+    const nearest = dot(sub(goal, limb.start), ab) / Math.max(dot(ab, ab), 1e-9);
+    const root = lerp(limb.start, limb.end, clamp(Math.min(nearest, 1) - tr.range(0, 0.3), nearEnd ? 0.4 : 0.2, 1));
     const span = length(sub(goal, root));
     if (span < 0.05) continue;
     const dir = normalize(sub(goal, root));
-    const ctrl = add(addScaled(root, normalize(add(limbDir, scale(dir, 0.8))), span * 0.45), [0, (0.05 - 0.1 * tr.next()) * span, 0]);
+    const [wu, wv] = basis(dir);
+    const swing = tr.next() * Math.PI * 2;
+    const lean = add(scale(limbDir, tr.range(0.2, 0.7)), add(dir, scale(add(scale(wu, Math.cos(swing)), scale(wv, Math.sin(swing))), tr.range(0.2, 0.55))));
+    const ctrl = add(addScaled(root, normalize(lean), span * tr.range(0.35, 0.55)), [0, tr.range(-0.08, 0.1) * span, 0]);
     const bez = (t: number): V3 => add(add(scale(root, (1 - t) * (1 - t)), scale(ctrl, 2 * t * (1 - t))), scale(goal, t * t));
     const carry = (q: Vec3): { bough: Vec3; droop: number } => boughs.at(clump.limb, q);
     const twigCh = (q: Vec3): Channels => {
@@ -345,6 +353,8 @@ export function emitClump(leaf: PartBuilder, bark: PartBuilder, anchors: Anchor[
       return { loss: 0, droop: b.droop, wither: 0.5, glow: 0, pivot: root, bough: b.bough, twig: root };
     };
     const line: V3[] = [0, 0.5, 1].map(bez);
+    // A short twig carries fewer sprays, so the flowers keep their spacing.
+    const along = clamp(span / (look.half * 5), 0.45, 1);
     emitTwig(bark, line, r0 * tr.range(0.5, 0.8), r0 * 0.25, twigCh);
     const sprays = (on: readonly V3[], count: number, from: number): void => {
       for (let j = 0; j < count; j++) {
@@ -375,7 +385,7 @@ export function emitClump(leaf: PartBuilder, bark: PartBuilder, anchors: Anchor[
         emitSpray(leaf, crown, at0, sdir, faceUp, look.half * tr.range(0.85, 1.15), look.cut, tr, ch, -0.16 * (1 - depth));
       }
     };
-    sprays(line, look.sprays, 0.22);
+    sprays(line, Math.max(2, Math.round(look.sprays * along)), 0.12);
     // A fork: a shorter side twig from partway along, with sprays of its own.
     const t = tr.range(0.4, 0.75);
     const from = bez(t);
@@ -384,7 +394,7 @@ export function emitClump(leaf: PartBuilder, bark: PartBuilder, anchors: Anchor[
     fgoal[1] = Math.max(fgoal[1], look.ground + look.half);
     const fork: V3[] = [from, fgoal];
     emitTwig(bark, fork, r0 * 0.35, r0 * 0.18, twigCh);
-    sprays(fork, Math.max(2, Math.round(look.sprays * 0.5)), 0.3);
+    sprays(fork, Math.max(2, Math.round(look.sprays * 0.5 * along)), 0.2);
     // Flowers and berries hang from the twig just short of its end.
     const at = pointOnPolyline(line, 0.82).at;
     const b = carry(at);
