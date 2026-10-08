@@ -354,6 +354,7 @@ details.json pre { font: 11px/1.45 ui-monospace, "SF Mono", Menlo, monospace; ba
 .wayfinding:has(.field-map.open) .menu-button, .wayfinding:has(.field-map.open) .map-button { opacity: 0; pointer-events: none !important; }
 /* While a card is read, the words over the land step back. */
 .lab-terrain.immersive:has(.panel.showing-card) :is(.arrival, .underfoot, .compass-ahead) { visibility: hidden; }
+.wayfinding:has(.field-map.open) :is(.arrival, .underfoot, .compass-ahead) { visibility: hidden; }
 
 /* While paper opened from the corner is read, the world waits under a faint wash; a tap there folds the paper. */
 .reading { position: absolute; inset: 0; background: rgba(40, 30, 16, 0); transition: background 0.3s ease; }
@@ -407,21 +408,30 @@ details.json pre { font: 11px/1.45 ui-monospace, "SF Mono", Menlo, monospace; ba
 .compass-ahead-parent:empty { display: none; }
 .compass-ahead-name { font-size: 17px; font-style: italic; font-weight: 600; }
 
-/* The field map: a sheet of paper unfolded over the world. */
+/* The field map: a sheet of paper unfolded over the world. It opens out from its folds, tilting up flat as it
+   comes, and folds away quicker than it opened. */
 .field-map {
   position: absolute; left: 50%; top: 50%; width: min(94vw, 90vh, 980px); height: min(90vh, 94vw, 980px);
   background: #efe4c8; border-radius: 4px; overflow: hidden; pointer-events: none;
   box-shadow: 0 22px 60px rgba(25, 18, 8, 0.42), inset 0 0 44px rgba(120, 90, 50, 0.22);
-  opacity: 0; transform: translate(-50%, -50%) scale(0.985); transition: opacity 0.26s ease, transform 0.26s ease;
+  opacity: 0; transform: translate(-50%, -50%) perspective(1600px) rotateX(10deg) scale(0.95, 0.82); transform-origin: 50% 45%;
+  transition: opacity 0.2s ease, transform 0.24s ease-in;
 }
-.field-map.open { opacity: 1; transform: translate(-50%, -50%); pointer-events: auto; }
+.field-map.open { opacity: 1; transform: translate(-50%, -50%); pointer-events: auto; transition: opacity 0.3s ease, transform 0.6s cubic-bezier(0.2, 0.75, 0.25, 1); }
+/* The sheet's folds stay faintly creased, and after dark the lantern's pool lights it from low on the right while its edges fall into blue. */
+.field-map::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none; mix-blend-mode: multiply;
+  background:
+    radial-gradient(ellipse 85% 75% at 64% 80%, rgba(255, 222, 170, calc(var(--night, 0) * 0.42)), rgba(255, 236, 205, 0) 45%, rgba(48, 46, 80, calc(var(--night, 0) * 0.66)) 100%),
+    linear-gradient(90deg, transparent calc(50% - 1px), rgba(110, 84, 50, 0.13) 50%, transparent calc(50% + 1.5px)),
+    linear-gradient(0deg, transparent calc(50% - 1px), rgba(110, 84, 50, 0.11) 50%, transparent calc(50% + 1.5px)),
+    linear-gradient(90deg, rgba(110, 84, 50, 0.05), transparent 12%, transparent 46%, rgba(110, 84, 50, 0.05) 50%, transparent 54%, transparent 88%, rgba(110, 84, 50, 0.05));
+}
 /* At night the sheet is read by the lantern's warm light. */
 .field-map, .way-slip, .lab-terrain.immersive .panel.showing-card { filter: sepia(calc(var(--night, 0) * 0.3)) brightness(calc(1 - var(--night, 0) * 0.16)); }
 .field-map-view { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
 .field-map-view:active { cursor: grabbing; }
 .field-map-here-arrow { position: absolute; left: -14px; top: -14px; width: 28px; height: 28px; pointer-events: none; will-change: transform; }
-.field-map-title { position: absolute; left: 22px; top: 20px; color: var(--ink); font-size: 11px; font-weight: 600; letter-spacing: 0.32em; text-transform: uppercase; pointer-events: none; }
-.field-map-title span { border-bottom: 1px solid rgba(74, 60, 44, 0.45); padding-bottom: 3px; }
 .field-map-here {
   position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); display: grid; justify-items: center; gap: 2px; max-width: calc(100% - 150px);
   padding: 6px 16px 7px; background: rgba(246, 238, 219, 0.92); border: 1px solid rgba(74, 60, 44, 0.35); border-radius: 3px; color: var(--ink); pointer-events: none;
@@ -442,7 +452,7 @@ details.json pre { font: 11px/1.45 ui-monospace, "SF Mono", Menlo, monospace; ba
   .arrival-name { font-size: 38px; }
   .arrival-rule { width: 170px; }
   .underfoot { bottom: 12%; }
-  .field-map { left: 8px; top: 8px; width: calc(100% - 16px); height: calc(100% - 16px); transform: scale(0.985); }
+  .field-map { left: 8px; top: 8px; width: calc(100% - 16px); height: calc(100% - 16px); transform: perspective(1600px) rotateX(8deg) scale(0.95, 0.85); }
   .field-map.open { transform: none; }
   .field-map-here { max-width: calc(100% - 110px); bottom: 14px; }
   .map-tool { min-height: 0; width: 44px; height: 44px; }

@@ -369,21 +369,31 @@ The three ways work together:
   cloud's shadow on the sky, with no box and no edge: they read over bright
   cloud, golden hour and night alike. While a title rises, the compass's
   name ahead steps back, so one name speaks at a time.
-- **The field map.** The map button among the corner controls (or M) unfolds a
-  hand-drawn map on warm paper, titled with the repository's name: each
-  area a watercolor wash, every area under one top-level directory sharing
-  a hue, on the pale meadow of the repository's own common ground, inside a
-  thin ink border; each file's patch a faint ring washed in its health's
-  color;
-  hills shaded from the northwest, water washed blue and inked at its edge,
-  trails dotted, trees as small dabs browning with their files' vitality,
-  buildings and landmarks as drawn marks, wild brush past the land's edge,
-  and a vermilion arrow for "you are here". Names stay one size at any zoom
-  and the larger area's name wins where two would collide. It pans and
-  zooms by drag, pinch or scroll; a phone opens it close around the person,
-  a wide screen shows it whole. Its paper is painted in steps of a
-  millisecond or two in the page's idle time after a bake, so it never
-  holds up a frame.
+- **The field map.** The map button among the corner controls (or M)
+  unfolds a hand-drawn map on warm paper: it opens out from its folds,
+  tilting up flat as it comes, and its folds stay faintly creased. The
+  paper is mottled as handmade paper is, with fibres and a fine grain. Each
+  area is a watercolor wash, every area under one top-level directory
+  sharing a hue, its pigment pooling darker toward its rim and granulating
+  into the paper's tooth, on the pale meadow of the repository's own common
+  ground, inside a thin ink border. Each file's patch is a faint ring washed
+  in its health's color; hills are shaded from the northwest, water washed
+  blue and inked at its edge, trails dotted, trees small dabs browning with
+  their files' vitality, wild brush past the land's edge, and a vermilion
+  arrow says "you are here". Buildings and landmarks are little drawn
+  vignettes: a cottage's walls washed pale under a roof of thatch, slate or
+  tile with a chimney's curl of smoke, a mill with its wheel, a tower under
+  a pointed roof, a great oak's crown, a willow's falling fronds, a ring of
+  standing stones. An inked cartouche at the top left carries Gaia's mark
+  over "a field map of" and the repository's name, and a compass rose and a
+  scale sit in the lower corners. After dark the sheet is read by the
+  lantern: a warm pool low on the right, its edges falling into blue. Areas
+  are drawn from whatever `placeAt` answers, never from a fixed shape. Names
+  stay one size at any zoom and the larger area's name wins where two would
+  collide. It pans and zooms by drag, pinch or scroll; a phone opens it
+  close around the person, a wide screen shows it whole. Its paper is
+  painted in steps of a millisecond or two in the page's idle time after a
+  bake, so it never holds up a frame.
 - **Markers in the world.** Where a trail crosses from one area into the
   next, a fingerpost stands beside it with an arm pointing each way along
   the trail, each painted with the name of the area that way, and across
