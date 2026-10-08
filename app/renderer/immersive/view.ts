@@ -65,6 +65,8 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
   let standing = false;
   world.onStood(() => {
     standing = true;
+    // The ways of knowing where you are come in as the veil lifts: nothing names a place before the world stands.
+    layer.classList.add("standing");
     // A new world announces where the person stands afresh.
     arrival.show(active);
     map.invalidate();

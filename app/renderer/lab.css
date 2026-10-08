@@ -281,6 +281,10 @@ details.json pre { font: 11px/1.45 ui-monospace, "SF Mono", Menlo, monospace; ba
   box-shadow: 0 18px 44px rgba(30, 22, 10, 0.3); animation: page-in 0.45s ease-out both;
 }
 .lab-terrain.immersive .panel .sheet-handle { display: none; }
+/* Over the world the card is written in the same serif as the map and the slip, so every page reads as one book. */
+.lab-terrain.immersive .card { font-family: "Iowan Old Style", Georgia, "Times New Roman", serif; }
+.lab-terrain.immersive .card-facts { font-size: 13px; }
+.lab-terrain.immersive .card-what { font-weight: 600; letter-spacing: 0.16em; }
 @keyframes page-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 /* Walking away, the page fades as it came; the terrain lab removes it when the fade ends. */
 .lab-terrain.immersive .panel.showing-card.card-leaving { animation: page-out 0.32s ease-in both; pointer-events: none; }
@@ -295,6 +299,10 @@ details.json pre { font: 11px/1.45 ui-monospace, "SF Mono", Menlo, monospace; ba
   font-family: "Iowan Old Style", Georgia, "Times New Roman", serif;
 }
 .wayfinding button { pointer-events: auto; font-family: inherit; }
+/* Until the first world stands, the veil speaks alone; then the layer comes in as the veil lifts. */
+.wayfinding { opacity: 0; transition: opacity 0.9s ease 0.2s; }
+.wayfinding.standing { opacity: 1; }
+.wayfinding:not(.standing) button { pointer-events: none !important; }
 
 /* Arrival: the area's name rises over the land, under a fine rule, and fades. Cream letters read over any sky
    because a soft wash of shade breathes behind them, like ink bleeding into damp paper: no box, no edge. */

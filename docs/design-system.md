@@ -341,9 +341,12 @@ finger) and the way back to the debugging views (Components, Terrain and
 Skies). The hour follows the person's clock (`?hour=22` pins it).
 Everything a person reads here looks like the world's own things: warm
 paper, brown ink, a serif with italic names and small capitals for paths,
-and slow, soft motion. After dark the paper (the map, the slip, a card) is
-read by the lantern, a little warmer and dimmer. While a card is read, the
-words over the land step back.
+and slow, soft motion; a card over the world is set in the same serif.
+After dark the paper (the map, the slip, a card) is read by the lantern, a
+little warmer and dimmer. While a card is read or the map is open, the
+words over the land step back. Until the first world stands, the veil and
+Gaia's mark speak alone; the ways of knowing where you are and the corner
+controls come in as the veil lifts.
 
 The immersive world opens on Gaia's own world. Where a person is comes from
 one function, `placeAt` in `@gaia/terrain`: the area (a directory) whose land
