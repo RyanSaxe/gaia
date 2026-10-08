@@ -52,6 +52,10 @@ export interface Channels {
   readonly wither: number;
   readonly glow: number;
   readonly pivot: Vec3;
+  /** The joint where the piece's bough or stem leaves the trunk or the ground: it sags (`droop`) and bends in the wind about it. `pivot` when absent. */
+  readonly bough?: Vec3;
+  /** The joint where the piece's twig leaves its bough: it bends about it in the wind, on top of the bough. `bough` when absent. */
+  readonly twig?: Vec3;
   /** Hue offset in turns, -0.1 to 0.1. Zero when absent. */
   readonly tint?: number;
   /** How far the piece folds toward its pivot at night, 0 to 1. Zero when absent. */
@@ -129,6 +133,8 @@ export class PartBuilder {
   readonly #wither: number[] = [];
   readonly #glow: number[] = [];
   readonly #pivot: number[] = [];
+  readonly #bough: number[] = [];
+  readonly #twig: number[] = [];
   readonly #close: number[] = [];
   readonly #fall: number[] = [];
   readonly #grow: number[] = [];
@@ -163,6 +169,10 @@ export class PartBuilder {
     this.#wither.push(clamp(c.wither, 0, 1));
     this.#glow.push(clamp(c.glow, 0, 1));
     this.#pivot.push(c.pivot[0], c.pivot[1], c.pivot[2]);
+    const bough = c.bough ?? c.pivot;
+    const twig = c.twig ?? bough;
+    this.#bough.push(bough[0], bough[1], bough[2]);
+    this.#twig.push(twig[0], twig[1], twig[2]);
     this.#close.push(clamp(c.close ?? 0, 0, 1));
     const fall = c.fall ?? NO_FALL;
     this.#fall.push(fall[0], fall[1], fall[2], clamp(fall[3], 0, 1));
@@ -197,6 +207,8 @@ export class PartBuilder {
         wither: new Float32Array(this.#wither),
         glow: new Float32Array(this.#glow),
         pivot: new Float32Array(this.#pivot),
+        bough: new Float32Array(this.#bough),
+        twig: new Float32Array(this.#twig),
         close: new Float32Array(this.#close),
         ...(this.#uses.fall ? { fall: new Float32Array(this.#fall) } : {}),
         ...(this.#uses.grow ? { grow: new Float32Array(this.#grow) } : {}),

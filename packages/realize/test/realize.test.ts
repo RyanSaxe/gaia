@@ -66,7 +66,7 @@ describe("realize", () => {
   });
 
   it("feeds the bloom slot from the crown, and skips it when the crown is absent", () => {
-    const bp = (FLORA_PRESETS[2] as (typeof FLORA_PRESETS)[number]).blueprint;
+    const bp = (FLORA_PRESETS[0] as (typeof FLORA_PRESETS)[number]).blueprint;
     const full = realize(bp, flora, lib, { seed: 3, facts });
     expect(full.parts.map((p) => p.swatch)).toEqual(["bark", "leaf", "bloom"]);
     const { crown: _crown, ...rest } = bp.slots;
@@ -267,12 +267,13 @@ describe("understory presets", () => {
   it("thins a declining bush to bare twigs: most leaves fall by vitality 0.1, few by 0.6, and the stems stay", () => {
     for (const { name, blueprint } of SHRUB_PRESETS) {
       const parts = realize(blueprint, flora, all, { seed: 3, facts: { scale: 1, age: 0 } }).parts;
+      // A spray's leaves drop in place around its loss; anything else collapses onto its pivot.
       const fallen = (part: Part, v: number): number => {
         const pos = applyVitality(part, v).positions;
         let gone = 0;
         for (let i = 0; i < pos.length; i += 3) {
           const d = Math.hypot(pos[i]! - part.channels.pivot[i]!, pos[i + 1]! - part.channels.pivot[i + 1]!, pos[i + 2]! - part.channels.pivot[i + 2]!);
-          if (d < 1e-5) gone++;
+          if (d < 1e-5 || part.channels.loss[i / 3]! > v) gone++;
         }
         return gone / (pos.length / 3);
       };

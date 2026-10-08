@@ -144,8 +144,10 @@ export function growBranching(p: Resolved<typeof branchingParams>, ctx: BuildCon
   const grownWidth = Math.max(0.01, (maxX - minX + maxZ - minZ) / 2);
   const fx = Math.min(1.6, Math.max(0.6, width / grownWidth));
   const fy = height / Math.max(0.01, top);
+  // Limbs that arch down level out softly above the ground, never into it.
+  const above = (y: number): number => (y >= 0.6 ? y : 0.6 - 0.35 * (1 - Math.exp((y - 0.6) / 0.35)));
   const fit = (q: V3, trunk: boolean): V3 =>
-    trunk ? [q[0], q[1] * fy, q[2]] : [fork[0] + (q[0] - fork[0]) * fx, q[1] * fy, fork[2] + (q[2] - fork[2]) * fx];
+    trunk ? [q[0], q[1] * fy, q[2]] : [fork[0] + (q[0] - fork[0]) * fx, above(q[1] * fy), fork[2] + (q[2] - fork[2]) * fx];
 
   // Pipe model: a branch's radius follows how many tips it carries.
   const totalTips = Math.max(1, chainTips[0] ?? 1);

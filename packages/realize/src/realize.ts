@@ -176,6 +176,8 @@ export function mergeParts(parts: readonly Part[]): Part[] {
         wither: join((p) => p.channels.wither),
         glow: join((p) => p.channels.glow),
         pivot: join((p) => p.channels.pivot),
+        bough: join((p) => p.channels.bough),
+        twig: join((p) => p.channels.twig),
         close: join((p) => p.channels.close),
         ...optional("fall", 4),
         ...optional("grow", 1),

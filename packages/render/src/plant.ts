@@ -3,14 +3,15 @@
 // never rebuilds geometry.
 
 import * as THREE from "three";
-import { CUT, type Part, type Swatch } from "@gaia/schema";
+import { CUT, type Part, SPRAYS, type Swatch } from "@gaia/schema";
 import { CHANNEL_MATH, DETAIL, type Realized, pieceFrames, spinAt } from "@gaia/realize";
 import { LIGHT_GLSL, type SceneLight } from "./light.ts";
+import { WIND_GLSL } from "./wind.ts";
 import { createSmokeMaterial } from "./smoke.ts";
 
 const f = (x: number): string => x.toFixed(4);
 
-/** Where a crown's heart is gone and where it is whole, in multiples of its own size from the eye. */
+/** Where a fir frond's heart is gone and where it is whole, in multiples of its own size from the eye. */
 const CORE_NEAR = { gone: 3, whole: 8 } as const;
 
 // The scalar channels ride four to an attribute (see \`geometryOf\`), so an
@@ -19,7 +20,10 @@ const CHANNELS_GLSL = /* glsl */ `
 attribute vec4 aLook;
 attribute vec4 aLife;
 attribute vec3 aPivot;
+attribute vec3 aBough;
+attribute vec3 aTwig;
 attribute vec4 aPiece;
+attribute vec3 aCutout;
 #define aShade aLook.x
 #define aTint aLook.y
 #define aLoss aLook.z
@@ -78,25 +82,36 @@ float rotNow() { return aRot * ${f(CHANNEL_MATH.rotMost)} * clamp(1.0 - uVitalit
 vec3 turnedNormal(vec3 n) { return n; }
 #endif
 
-// Loss collapses a piece to its pivot over a short band; droop bends the
-// offset from the pivot toward the ground, keeping its length. At night a
-// piece that closes (a flower's petals) folds part way toward its pivot.
+// A spray's leaves drop in place, cut away per fragment (see sprayCut), so
+// only other pieces collapse.
+bool onSpray() {
+  float form = floor(aCutout.z);
+  return ${[...SPRAYS].map((c) => `abs(form - ${c.toFixed(1)}) < 0.5`).join(" || ")};
+}
+
+// Loss collapses a piece onto its pivot over a short band, and at night a
+// piece that closes (a flower's petals) folds part way toward it, in the
+// plant's rest shape.
 vec3 applyChannels(vec3 p) {
   vec3 off = (p - aPivot) * (1.0 - aClose * uNightness * 0.7);
-  float s = aDroop * (1.0 - uVitality);
-  float d = length(off);
-  if (s > 0.0 && d > 1e-5) {
-    vec3 bent = off;
-    bent.y -= s * d * ${f(CHANNEL_MATH.sag)};
-    off = normalize(bent) * d;
-  }
-  float keep = aLoss > 0.0 ? smoothstep(aLoss, aLoss + ${f(CHANNEL_MATH.lossBand)}, uVitality) : 1.0;
+  float keep = aLoss > 0.0 && !onSpray() ? smoothstep(aLoss, aLoss + ${f(CHANNEL_MATH.lossBand)}, uVitality) : 1.0;
 #ifdef RUIN
   keep *= aGrow > 0.0 ? 1.0 - smoothstep(aGrow, aGrow + ${f(CHANNEL_MATH.lossBand)}, uVitality) : 1.0;
   return aPivot + pieceTurn() * (off * keep);
 #else
   return aPivot + off * keep;
 #endif
+}
+
+// Droop, last of all: the whole bough bends down about its joint, keeping
+// each point's distance from it, so whatever the bough carries sags with it.
+vec3 applyDroop(vec3 p, vec3 bough) {
+  vec3 o = p - bough;
+  float s = aDroop * (1.0 - uVitality);
+  float d = length(o);
+  if (s <= 0.0 || d <= 1e-5) return p;
+  o.y -= s * d * ${f(CHANNEL_MATH.sag)};
+  return bough + normalize(o) * d;
 }
 
 // Copies of one component vary their shape a little, seeded by where each
@@ -131,19 +146,39 @@ float pieceScale(mat4 model) {
   return grow * (1.0 - smoothstep(aLeave * ${f(1 - DETAIL.band)}, aLeave, d));
 }
 
-// The one wind field (v2's windAt), with the plant's response on top.
-float windAt(vec2 p, float t) {
-  return sin(t * 1.35 + p.x * 0.21 + p.y * 0.17) + 0.35 * sin(t * 2.9 + p.y * 0.43);
+${WIND_GLSL}
+// A level's push in the copy's own frame, so a turned copy bends downwind.
+vec3 pushOf(vec3 level, float give, float gust, float phase, vec2 along) {
+  return pushAlong(windPush(level, give, uFrequency, gust, uTime, phase), along);
 }
 
-vec3 applyWind(vec3 p, vec3 root) {
-  float t = uTime * (0.35 + uFrequency);
-  float h = clamp(p.y / uHeight, 0.0, 1.4);
-  float w = windAt(root.xz + p.xz * 0.08, t);
-  vec3 lean = vec3(w, 0.0, w * 0.55) * uSway * uWind * 0.22 * h * h;
-  float reach = min(length(p - aPivot), 2.5);
-  float flutter = sin(t * 3.1 + dot(aPivot, vec3(1.7, 2.3, 1.3)) + uSeed * 6.2832) * uFlutter * uSway * uWind * 0.05 * reach;
-  return p + lean + vec3(flutter, 0.0, flutter * 0.6);
+// The plant in the wind, level by level (WIND and swayAt in @gaia/realize):
+// a leaf flutters on its stalk in a gust, its twig bends about where it
+// leaves the bough, the bough about where it leaves the trunk, and the
+// whole plant from its base. Each level bends whatever it carries, so
+// nothing parts from what holds it. Joints take the copy's own shape.
+vec3 applyWind(vec3 p, mat4 model, vec3 root) {
+  float give = uWind * uSway;
+  if (give <= 0.0) return p;
+  vec3 wd = transpose(mat3(model)) * vec3(WIND_DIR.x, 0.0, WIND_DIR.y);
+  vec2 along = normalize(wd.xz + vec2(1e-6, 0.0));
+  if (uFlutter > 0.0) {
+    vec3 j = applyVariety(aPivot, root);
+    float g = gustAt((model * vec4(j, 1.0)).xz, uTime);
+    float amp = give * WIND_LEAF.y * g * g * sin(uTime * (0.5 + uFrequency) * WIND_LEAF.z + jointPhase(aPivot, uSeed));
+    p = windBend(p, j, normal * amp, WIND_SMALL.y);
+  }
+  if (distance(aTwig, aBough) > 1e-4) {
+    vec3 j = applyVariety(aTwig, root);
+    float g = gustAt((model * vec4(j, 1.0)).xz, uTime);
+    p = windBend(p, j, pushOf(WIND_TWIG, give, g, jointPhase(aTwig, uSeed), along), WIND_SMALL.x);
+  }
+  if (length(aBough) > 1e-4) {
+    vec3 j = applyVariety(aBough, root);
+    float g = gustAt((model * vec4(j, 1.0)).xz, uTime);
+    p = windBend(p, j, pushOf(WIND_BOUGH, give, g, jointPhase(aBough, uSeed), along), clamp(WIND_REACH.x * uHeight, WIND_REACH.y, WIND_REACH.z));
+  }
+  return bendUp(p, pushOf(WIND_TRUNK, give, gustAt(root.xz, uTime), uSeed * 6.28318530718, along), uHeight);
 }
 `;
 
@@ -153,8 +188,8 @@ vec3 applyWind(vec3 p, vec3 root) {
 // the card's plain outline, so distant canopies stay soft painted masses
 // instead of sparkling. CUT in @gaia/schema names the cuts.
 const CUTOUT_GLSL = /* glsl */ `
-attribute vec3 aCutout;
 varying vec3 vCut;
+varying vec2 vLife;
 // A patch (moss) recedes from its edge as vitality falls: its depth shrinks
 // before the fragment cuts it, so the edge creeps back smoothly.
 vec3 cardCut() {
@@ -162,9 +197,9 @@ vec3 cardCut() {
   if (abs(floor(c.z) - ${CUT.patch.toFixed(1)}) < 0.5) c.x -= 0.5 * (1.0 - uVitality);
   return c;
 }
-// A crown's heart stands in for its inner leaves only while they merge into
-// a mass: as the eye comes near enough to see single leaves, it shrinks
-// smoothly to its center, so up close the gaps show limbs, deeper leaves and
+// A frond's heart stands in for its inner needles only while they merge into
+// a mass: as the eye comes near enough to see single needles, it shrinks
+// smoothly to its center, so up close the gaps show limbs, deeper needles and
 // sky, never a ball. It measures from the eye by its own size, gone within
 // ${CORE_NEAR.gone} sizes and whole past ${CORE_NEAR.whole}. Its shadow stays: it stands for the
 // crown's dense shade wherever the person walks.
@@ -204,52 +239,6 @@ float rotEdge() { return 1.0; }
 #endif
 `;
 
-/**
- * A clump cut for one leaf shape (described in LEAF_MASK_GLSL). Each shape
- * gets its own loop: one loop holding all three shapes costs about a quarter
- * more GPU time in a grove.
- */
-function clumpGlsl(name: string, len: number, wide: number, leaf: string, midrib: boolean): string {
-  return /* glsl */ `
-vec2 ${name}(vec2 p, float seed, float far, float px, float outline) {
-  if (far > 0.999) return vec2(outline, 1.0);
-  float cell = 0.4;
-  float len = ${f(len)};
-  float wide = ${f(wide)};
-  vec2 c0 = floor(p / cell);
-  // A leaf rooted farther than 1.2 lengths plus 0.06 away cannot reach this
-  // fragment and is skipped; the floor lies below what it would give there,
-  // so skipping changes nothing.
-  float d = -0.06;
-  float tone = 1.0;
-  for (int j = -1; j <= 1; j++) {
-    for (int i = -1; i <= 1; i++) {
-      vec2 c = c0 + vec2(float(i), float(j));
-      vec2 h = cellHash(c + seed * vec2(37.1, 91.7));
-      vec2 base = (c + 0.2 + 0.6 * h) * cell;
-      float rb = length(base);
-      vec2 r = p - base;
-      // Only leaves rooted inside the outline grow, so the clump keeps its shape.
-      if (rb > 0.72 || dot(r, r) > (len * 1.2 + 0.06) * (len * 1.2 + 0.06)) continue;
-      vec2 g = cellHash(c + seed * vec2(53.3, 17.9) + 11.0);
-      float l = len * (0.8 + 0.4 * g.x);
-      // Each leaf points roughly away from the card's middle, turned up to about 55 degrees.
-      vec2 away = rb > 1e-3 ? base / rb : vec2(0.0, 1.0);
-      vec2 turn = normalize(vec2(1.0, (h.y - 0.5) * 2.2 + (h.x - 0.5) * 0.6));
-      vec2 dir = vec2(away.x * turn.x - away.y * turn.y, away.x * turn.y + away.y * turn.x);
-      r += dir * 0.06;
-      vec2 q = vec2(dot(r, dir), dot(r, vec2(-dir.y, dir.x)));
-      float di = ${leaf};
-      float ti = (0.8 + 0.26 * g.y) * (0.9 + 0.14 * clamp(q.x / l, 0.0, 1.0));
-${midrib ? "      ti *= mix(0.88, 1.0, smoothstep(0.0, 0.01 + px, abs(q.y)));\n" : ""}      tone = mix(tone, ti, clamp(di / px + 0.5, 0.0, 1.0));
-      d = max(d, di);
-    }
-  }
-  return vec2(mix(d, outline, far), mix(tone, 1.0, far));
-}
-`;
-}
-
 const LEAF_MASK_GLSL = /* glsl */ `
 ${ROT_GLSL}
 varying vec3 vCut;
@@ -287,33 +276,121 @@ float lobedShape(vec2 q, float size) {
   return max(reach - length(c), stalk);
 }
 
-// A loose clump of small leaves, the way a spray looks from outside: leaves
-// scattered over the card, one to each cell of a jittered 5-by-5 grid inside
-// the card's outline, each pointing roughly away from the card's middle at
-// its own angle, length and tone. Never a ring of equal leaves around a
-// heart, so up close a card never reads as a flower. Each leaf is lighter
-// toward its tip and darker along its midrib, and leaves overlap in one
-// fixed order, so they read apart without outlines. Far away the leaves
-// merge into the card's scalloped outline. Each returns the signed distance
-// and the tone; each leaf shape has its own copy (clumpGlsl), which keeps the
-// shader small enough to stay as cheap as the cuts it replaced.
-${clumpGlsl("pointedClump", 0.48, 0.14, "leafShape(q, l, wide * (0.85 + 0.3 * h.y))", true)}
-${clumpGlsl("ovalClump", 0.4, 0.16, "ovalShape(q, l, wide * (0.85 + 0.3 * h.y))", true)}
-${clumpGlsl("lobedClump", 0.44, 0.16, "lobedShape(q, l)", false)}
+// A leaf drops in place as vitality falls past its own threshold, spread
+// about the card's loss: it erodes from its edge, so nothing flies anywhere.
+varying vec2 vLife;
+float dropAt(float h) {
+  if (vLife.x <= 0.0) return 0.0;
+  float th = clamp(vLife.x + (h - 0.5) * ${f(2 * CHANNEL_MATH.dropSpread)}, 0.01, 0.95);
+  return 1.0 - smoothstep(th, th + ${f(CHANNEL_MATH.lossBand)}, vLife.y);
+}
+// Where a spray shows its stalk (bark) and its few fresh leaves (stem green).
+float gBark = 0.0;
+float gGreen = 0.0;
+
+// A five-petaled flower of radius R at the origin, each petal with a small notch.
+float flowerShape(vec2 q, float R, float turn) {
+  float r = length(q);
+  float lobe = cos((atan(q.y, q.x) + turn) * 2.5);
+  float petal = 0.5 + 0.5 * pow(abs(lobe), 0.55);
+  float notch = 0.16 * pow(abs(lobe), 60.0);
+  return (R * (petal - notch) - r) * 0.7;
+}
+
+// A spray: a stalk from the card's base (along -1) curving toward its tip,
+// with leaves on short stalks alternating along it (kind 0 oval, 1 lobed,
+// 3 pointed), or umbels of three or four flowers on fine stalks with a
+// small fresh leaf at every third node (kind 2). Returns (distance, tone).
+vec2 sprayCut(vec2 p, float seed, float px, int kind) {
+  float bend = (fract(seed * 7.13) - 0.5) * 0.5;
+  float y = p.y;
+  float sx = bend * (y + 1.0) * (y + 1.0) * 0.22;
+  float sw = mix(0.026, 0.01, clamp((y + 1.0) * 0.5, 0.0, 1.0));
+  float d = min(sw - abs(p.x - sx), min(y + 1.02, 0.78 - y) * 0.5);
+  float tone = 0.9;
+  float bark = 1.0;
+  float green = 0.0;
+  int n = kind == 2 ? 6 : 5;
+  for (int k = 0; k < 6; k++) {
+    if (k >= n) break;
+    float t = (float(k) + 0.6) / float(n);
+    float ny = -0.8 + 1.55 * t;
+    vec2 node = vec2(bend * (ny + 1.0) * (ny + 1.0) * 0.22, ny);
+    vec2 r = p - node;
+    if (dot(r, r) > 0.42) continue;
+    float side = mod(float(k) + floor(seed * 2.0), 2.0) < 1.0 ? 1.0 : -1.0;
+    vec2 h = cellHash(vec2(float(k), seed * 113.0));
+    float a = mix(0.55 + 0.45 * h.x, 0.1, k == n - 1 ? 1.0 : 0.0);
+    vec2 dir = normalize(vec2(side * sin(a), cos(a)));
+    if (kind == 2) {
+      vec2 c = node + dir * (0.13 + 0.05 * h.y);
+      // An umbel reaches about a third of the card from its middle: skip it from farther.
+      if (dot(p - c, p - c) < 0.12) {
+        for (int m = 0; m < 4; m++) {
+          vec2 g = cellHash(vec2(float(m) + 7.0, seed * 59.0 + float(k) * 3.1));
+          if (m == 3 && g.x < 0.5) break;
+          float ang = float(m) * 2.1 + g.y * 1.2 + seed * 6.2832;
+          vec2 fc = c + vec2(cos(ang), sin(ang)) * (0.07 + 0.03 * g.x);
+          vec2 seg = fc - node;
+          float u = clamp(dot(r, seg) / dot(seg, seg), 0.0, 1.0);
+          float ped = 0.012 - length(r - seg * u);
+          if (ped > d) { d = ped; tone = 0.8; bark = 0.6; green = 0.0; }
+          float R = 0.105 * (0.85 + 0.3 * g.y);
+          float di = flowerShape(p - fc, R, g.x * 6.2832) - dropAt(fract(h.x * 3.7 + g.x)) * 0.12;
+          float cov = clamp(di / px + 0.5, 0.0, 1.0);
+          tone = mix(tone, (0.92 + 0.1 * g.y) * mix(0.9, 1.05, smoothstep(0.1, 0.8, length(p - fc) / R)), cov);
+          bark = mix(bark, 0.0, cov);
+          green = mix(green, 0.0, cov);
+          d = max(d, di);
+        }
+      }
+      if (mod(float(k), 3.0) < 0.5) {
+        vec2 ld = normalize(vec2(-dir.x, dir.y * 0.6 + 0.2));
+        vec2 q = r - ld * 0.03;
+        q = vec2(dot(q, ld), dot(q, vec2(-ld.y, ld.x)));
+        float di = ovalShape(q, 0.24, 0.07) - dropAt(h.y) * 0.12;
+        float cov = clamp(di / px + 0.5, 0.0, 1.0);
+        tone = mix(tone, 0.8 + 0.2 * clamp(q.x / 0.24, 0.0, 1.0), cov);
+        bark = mix(bark, 0.0, cov);
+        green = mix(green, 1.0, cov);
+        d = max(d, di);
+      }
+    } else {
+      float len = (kind == 1 ? 0.5 : kind == 3 ? 0.52 : 0.46) * (1.0 - 0.25 * t) * (0.85 + 0.3 * h.y);
+      vec2 q = r - dir * 0.05;
+      q = vec2(dot(q, dir), dot(q, vec2(-dir.y, dir.x)));
+      float pet = min(0.012 - abs(q.y), min(q.x + 0.05, 0.06 - q.x));
+      if (pet > d) { d = pet; tone = 0.8; bark = 0.7; }
+      vec2 lq = q - vec2(0.04, 0.0);
+      float di = (kind == 1 ? lobedShape(lq, len) : kind == 3 ? leafShape(lq, len, len * 0.24) : ovalShape(lq, len, len * 0.42)) - dropAt(h.x) * 0.4 * len;
+      float ti = (0.82 + 0.2 * h.x) * (0.88 + 0.18 * clamp(lq.x / len, 0.0, 1.0));
+      ti *= mix(0.88, 1.0, smoothstep(0.0, 0.01 + px, abs(lq.y)));
+      float cov = clamp(di / px + 0.5, 0.0, 1.0);
+      tone = mix(tone, ti, cov);
+      bark = mix(bark, 0.0, cov);
+      d = max(d, di);
+    }
+  }
+  gBark = bark * step(0.0, d);
+  gGreen = green;
+  return vec2(d, tone);
+}
+
+// A spray up close, merging far away into a soft scalloped round whose edge
+// erodes as its leaves drop, so a far canopy is a painted mass that thins.
+vec2 sprayLeaves(vec2 p, float seed, float px, float merged, int kind) {
+  vec2 c = merged > 0.999 ? vec2(0.0, 1.0) : sprayCut(p, seed, px, kind);
+  vec2 o = p - vec2(0.0, 0.05);
+  float outline = 0.8 + 0.07 * cos((atan(o.y, o.x) + seed * 6.2832) * 9.0) - length(o * vec2(1.0, 0.92));
+  float bare = vLife.x > 0.0 ? 1.0 - smoothstep(vLife.x, vLife.x + 0.2, vLife.y) : 0.0;
+  gBark *= 1.0 - merged;
+  gGreen *= 1.0 - merged;
+  return vec2(mix(c.x, outline - 1.2 * bare, merged), mix(c.y, 1.0, merged));
+}
 // Moss on stone: the patch ends where its depth, jittered per vertex, falls
 // below a fifth, so the edge follows a soft winding contour.
 float patchCut(vec2 p) {
   return (p.x + 0.24 * (p.y - 0.5) - 0.2) * 0.25;
-}
-
-// A five-petaled flower: rounded petals around its heart, a plain round far away.
-float blossomCut(vec2 p, float seed, float far) {
-  float r = length(p);
-  float outline = 0.86 - r;
-  if (far > 0.999) return outline;
-  float th = atan(p.y, p.x) + seed * 6.2832;
-  float petal = pow(abs(cos(th * 2.5)), 0.7);
-  return mix((0.5 + 0.46 * petal - r) * 0.6, outline, far);
 }
 
 // Small lance leaves hanging from a stem, alternating sides.
@@ -358,18 +435,18 @@ float needleCut(vec2 p, float seed, float far, float px) {
   return mix(d, plain, far);
 }
 
-// The tone of a crown's heart: it reads only as the shade between leaves.
+// The tone of a frond's heart: it reads only as the shade between needles.
 const float CORE_TONE = 0.75;
 
 // The card's leaves at this fragment: x is coverage, y a tone that sets
-// leaves apart up close. Solid surfaces are (1, 1); a crown's heart is solid
+// leaves apart up close. Solid surfaces are (1, 1); a frond's heart is solid
 // and dark. \`thin\` (0 to 1) is how nearly edge-on the card is seen: its
 // leaves narrow toward nothing, so a card turning away never shows as a
 // sliver or a stippled ghost.
 vec2 leafCut(float thin) {
   float form = floor(vCut.z + 0.5 / 1024.0);
   if (form < 0.5) return vec2(1.0);
-  if (form > ${(CUT.core - 0.5).toFixed(1)}) return vec2(1.0, CORE_TONE);
+  if (abs(form - ${CUT.core.toFixed(1)}) < 0.5) return vec2(1.0, CORE_TONE);
   float seed = fract(vCut.z);
   vec2 p = vCut.xy;
   // A pixel's footprint on the card, by its area, so a card seen at a slant
@@ -383,19 +460,17 @@ vec2 leafCut(float thin) {
 #else
   float far = smoothstep(0.05, 0.16, px);
 #endif
-  float th = atan(p.y, p.x) + seed * 6.2832;
-  float r = length(p);
-  // A clump's small leaves merge sooner than a card's coarser cuts: once they
+  // A spray's small leaves merge sooner than a card's coarser cuts: once they
   // are a few pixels across they read only as the outline's texture.
   float merged = max(far, smoothstep(0.04, 0.11, px));
-  vec2 c = form < 1.5 ? pointedClump(p, seed, merged, px, 0.78 + 0.08 * cos(th * 7.0) - r)
+  vec2 c = form < 1.5 ? sprayLeaves(p, seed, px, merged, 3)
     : form < 2.5 ? vec2(strandCut(p, seed, far), 1.0)
     : form < 3.5 ? vec2(needleCut(p, seed, far, px), 1.0)
-    : form < 4.5 ? ovalClump(p, seed, merged, px, 0.8 + 0.07 * cos(th * 9.0) - r)
-    : form < 5.5 ? lobedClump(p, seed, merged, px, 0.76 + 0.1 * cos(th * 5.0) - r)
+    : form < 4.5 ? sprayLeaves(p, seed, px, merged, 0)
+    : form < 5.5 ? sprayLeaves(p, seed, px, merged, 1)
     : form < 6.5 ? vec2(patchCut(p), 1.0)
-    : vec2(blossomCut(p, seed, far), 1.0);
-  if (form > 1.5 && form < 3.5 || form > 5.5) c.y = mix(0.86 + 0.14 * smoothstep(0.0, 0.07, c.x), 1.0, far);
+    : sprayLeaves(p, seed, px, merged, 2);
+  if (form > 1.5 && form < 3.5 || abs(form - ${CUT.patch.toFixed(1)}) < 0.5) c.y = mix(0.86 + 0.14 * smoothstep(0.0, 0.07, c.x), 1.0, far);
   if (form > 2.5 && form < 3.5) c.y *= 0.9 + 0.1 * smoothstep(0.15, 0.45, abs(fract(p.y * 15.0 - abs(p.x) * 1.3 + seed * 5.0) - 0.5));
   // Edge-on, every leaf erodes from its edge; at fully edge-on nothing is left.
   float d = c.x * (1.0 - thin) - thin * 0.05;
@@ -426,7 +501,7 @@ void main() {
   }
   k *= coreKeep(modelMatrix);
   vec3 root = (modelMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
-  vec3 p = applyWind(applyVariety(applyChannels(aPiece.xyz + (position - aPiece.xyz) * k), root), root);
+  vec3 p = applyDroop(applyWind(applyVariety(applyChannels(aPiece.xyz + (position - aPiece.xyz) * k), root), modelMatrix, root), applyVariety(aBough, root));
   vec4 world = modelMatrix * vec4(p, 1.0);
   vWorld = world.xyz;
   vNormal = normalize(mat3(modelMatrix) * turnedNormal(normal));
@@ -437,6 +512,7 @@ void main() {
   vShade = aShade;
   vTint = aTint;
   vCut = cardCut();
+  vLife = vec2(aLoss, uVitality);
   vWither = aWither * (1.0 - uVitality);
   vGlow = aGlow * uVitality * ${f(CHANNEL_MATH.glowStrength)} * (0.85 + 0.15 * sin(uTime * 1.3 + aPivot.x * 3.0 + aPivot.z * 2.0));
   gl_Position = projectionMatrix * viewMatrix * world;
@@ -459,6 +535,8 @@ vec3 hueRotate(vec3 c, float turns) {
 }
 uniform vec3 uHealthy;
 uniform vec3 uDecline;
+uniform vec3 uBark;
+uniform vec3 uStem;
 uniform float uFoliage;
 uniform float uLamp;
 varying vec3 vNormal;
@@ -471,7 +549,7 @@ void main() {
   // A card seen edge-on would show as a sliver: its leaves thin as it turns away.
   float thin = 0.0;
   float form = floor(vCut.z);
-  if (form > 0.5 && abs(form - ${CUT.patch.toFixed(1)}) > 0.5 && form < ${(CUT.core - 0.5).toFixed(1)}) {
+  if (form > 0.5 && abs(form - ${CUT.patch.toFixed(1)}) > 0.5 && abs(form - ${CUT.core.toFixed(1)}) > 0.5) {
     vec3 face = normalize(cross(dFdx(vWorld), dFdy(vWorld)));
     thin = 1.0 - smoothstep(0.06, 0.45, abs(dot(face, normalize(cameraPosition - vWorld))));
   }
@@ -483,6 +561,9 @@ void main() {
   if (edge < 0.0) discard;
   float bright = mix(${f(CHANNEL_MATH.shadeLow)}, ${f(CHANNEL_MATH.shadeHigh)}, vShade) * cut.y * mix(0.45, 1.0, smoothstep(0.0, 0.09, edge));
   vec3 albedo = mix(hueRotate(uHealthy, vTint), uDecline, vWither) * bright;
+  // A spray's stalks are bark; a blossom spray's few fresh leaves are the family's stem green.
+  albedo = mix(albedo, mix(uStem, uDecline, vWither) * bright, gGreen);
+  albedo = mix(albedo, uBark * 0.55, gBark);
   vec3 n = normalize(vNormal);
   if (uFoliage < 0.5 && !gl_FrontFacing) n = -n;
   // Window glass is a dark pane holding a little sky by day; from dusk the
@@ -525,6 +606,7 @@ varying vec3 vRest;
 #endif
 void main() {
   vCut = cardCut();
+  vLife = vec2(aLoss, uVitality);
 #ifdef RUIN
   vRot = rotNow();
   vRest = position;
@@ -535,7 +617,7 @@ void main() {
     return;
   }
   vec3 root = (modelMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
-  vec3 p = applyWind(applyVariety(applyChannels(aPiece.xyz + (position - aPiece.xyz) * k), root), root);
+  vec3 p = applyDroop(applyWind(applyVariety(applyChannels(aPiece.xyz + (position - aPiece.xyz) * k), root), modelMatrix, root), applyVariety(aBough, root));
   gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4(p, 1.0);
 }
 `;
@@ -601,6 +683,8 @@ export function geometryOf(part: Part): THREE.BufferGeometry {
   g.setAttribute("normal", new THREE.BufferAttribute(part.normals, 3));
   g.setAttribute("aCutout", new THREE.BufferAttribute(part.cutout, 3));
   g.setAttribute("aPivot", new THREE.BufferAttribute(ch.pivot, 3));
+  g.setAttribute("aBough", new THREE.BufferAttribute(ch.bough, 3));
+  g.setAttribute("aTwig", new THREE.BufferAttribute(ch.twig, 3));
   g.setAttribute("aLook", four(part.shade, part.tint, ch.loss, ch.droop));
   g.setAttribute("aLife", four(ch.wither, ch.glow, ch.close, leave));
   g.setAttribute("aPiece", four(center(0), center(1), center(2), start));
@@ -623,6 +707,11 @@ export const FOLIAGE: Readonly<Record<string, number>> = {
   bark: 0, leaf: 1, bloom: 0.6, stone: 0, moss: 0.3, stem: 0.8, eye: 0.6,
   wall: 0, timber: 0, roof: 0.12, masonry: 0, trim: 0, glass: 0,
 };
+/** The colors a spray borrows: its stalks the bark's, a blossom spray's few fresh leaves the family's stem green. */
+export const sprayColors = (plant: Realized): { uBark: { value: THREE.Vector3 }; uStem: { value: THREE.Vector3 } } => ({
+  uBark: { value: vec3Of(plant.palette.swatches.bark?.healthy ?? [0.4, 0.33, 0.3]) },
+  uStem: { value: vec3Of(plant.palette.swatches.stem?.healthy ?? plant.palette.swatches.leaf?.healthy ?? [0.4, 0.6, 0.3]) },
+});
 /** Swatches lit from inside at night, like window glass. */
 const LAMP = new Set(["glass"]);
 /** Closed shapes, drawn front-faced; a building's boards and panes show from both sides. */
@@ -689,6 +778,7 @@ export function createPlant(plant: Realized, light: SceneLight): PlantView {
         ...perPart,
         uHealthy: { value: vec3Of(swatch.healthy) },
         uDecline: { value: vec3Of(swatch.decline) },
+        ...sprayColors(plant),
         uFoliage: { value: foliage },
         uLamp: { value: LAMP.has(part.swatch) ? 1 : 0 },
       },

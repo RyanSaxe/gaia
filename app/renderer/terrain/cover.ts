@@ -4,7 +4,7 @@
 // the same ground texture the mesh was built from.
 
 import * as THREE from "three";
-import { CLEARINGS_GLSL, type Clearing, LIGHT_GLSL, type SceneLight, createClearings, hexToVec3 } from "@gaia/render";
+import { CLEARINGS_GLSL, type Clearing, LIGHT_GLSL, type SceneLight, WIND_GLSL, createClearings, hexToVec3 } from "@gaia/render";
 import { GROUND_SAMPLE_GLSL, type GroundTexture, WILD_GLSL } from "./ground.ts";
 import { REGIONS_GLSL, type RegionCovers, TUFT_GLSL } from "./regions.ts";
 import { CLEARING_GLSL, type Clearings } from "./clearings.ts";
@@ -36,14 +36,10 @@ varying vec3 vHigh;
 varying vec3 vTip;
 varying vec3 vBloom;
 
-// The wind blows from one side of the world. Gusts travel downwind as broad,
-// soft bands, so waves roll across the field; a slower sway and a little
-// flutter ride on top.
-const vec2 WIND_DIR = vec2(0.94, 0.34);
-float gustAt(vec2 p, float t) {
-  float along = dot(p, WIND_DIR) * 0.1 - t * 0.85 + tuftNoise(p * 0.025) * 3.0;
-  return smoothstep(0.35, 1.0, 0.5 + 0.5 * sin(along));
-}
+// The world's one wind (WIND_GLSL): gusts travel downwind as broad, soft
+// bands, so waves roll across the field and on into the trees; a slower
+// sway and a little flutter ride on top.
+${WIND_GLSL}
 
 // A blade's spine: it leans along its facing, arcs over toward the tip and
 // bends with the wind, integrated in four steps so its length never changes.

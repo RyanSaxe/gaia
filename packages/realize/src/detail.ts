@@ -135,6 +135,8 @@ export function detailAt(part: Part, distance: number): Part {
       wither: pick(c.wither, 1),
       glow: pick(c.glow, 1),
       pivot: pick(c.pivot, 3),
+      bough: pick(c.bough, 3),
+      twig: pick(c.twig, 3),
       close: pick(c.close, 1),
     },
   };

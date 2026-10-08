@@ -34,3 +34,4 @@ One file per decision the reviewer settled in the pair sessions that designed Ga
 - [Every trail Jev wants is walked, on one network of paths](30-a-network-of-paths.md)
 - [What Jev reads, and how its context grows](31-what-jev-reads.md)
 - [A slip for where you are, a line to ask, a rim to touch](32-a-slip-ask-and-a-rim.md)
+- [One system for wind, gravity and vitality](33-one-system-for-wind-gravity-and-vitality.md)
