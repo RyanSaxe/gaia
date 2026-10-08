@@ -355,7 +355,7 @@ finger and keys all follow the same three rules.
 - **Paper you open holds the world still.** While the map or the slip is
   open, the world waits under a faint wash. A tap there folds the paper and
   moves no one, a drag there does nothing, and Esc folds it. The keys still
-  walk, and the map's arrow follows. A card is different: it opens on its
+  walk, and the map's traveller follows. A card is different: it opens on its
   own when the person arrives, so it never holds the world; a tap elsewhere
   walks there and leaving closes the card.
 
@@ -403,33 +403,62 @@ The three ways work together:
   cloud, golden hour and night alike. While a title rises, the compass's
   name ahead steps back, so one name speaks at a time.
 - **The field map.** The map button among the corner controls (or M)
-  unfolds a hand-drawn map on warm paper: it opens out from its folds,
-  tilting up flat as it comes, and its folds stay faintly creased. The
-  paper is mottled as handmade paper is, with fibres and a fine grain. Each
-  area is a watercolor wash, every area under one top-level directory
-  sharing a hue, its pigment pooling darker toward its rim and granulating
-  into the paper's tooth, on the pale meadow of the repository's own common
-  ground, inside a thin ink border. Each file's patch is its own shape,
-  faintly inked and washed in its health's color; hills are shaded from the northwest, water washed
-  blue and inked at its edge, trails dotted, trees small dabs browning with
-  their files' vitality, wild brush past the land's edge, and a vermilion
-  arrow says "you are here". Buildings and landmarks are little drawn
+  unfolds a hand-drawn map: it opens out from its folds, tilting up flat as
+  it comes, and its folds stay faintly creased. The sheet is handmade paper
+  with a torn, deckled edge and its top right corner turned down; a tap on
+  the corner folds it. The land runs to the sheet's edges: the sheet ends a
+  few meters past the land's widest reach, and the wild fills its corners
+  as a painted wood that thins into clearings, so no frame of empty paper
+  rings the land and no ink line marks where the land ends. Each area is a
+  watercolor wash, every area under one top-level directory sharing a hue,
+  its pigment pooling darker toward its rim and granulating into the
+  paper's tooth, laid over a softened copy of itself so neighbors bleed into
+  each other wet in wet, and broken by broad brush strokes a little warmer,
+  cooler, lighter or darker. Each file's patch is faintly washed in its
+  health's color; hills are shaded away from the light in the northwest;
+  water is washed blue; trails are dotted; trees on the land brown with
+  their files' vitality. Buildings and landmarks are little drawn
   vignettes: a cottage's walls washed pale under a roof of thatch, slate or
   tile with a chimney's curl of smoke, a mill with its wheel, a tower under
   a pointed roof, a great oak's crown, a willow's falling fronds, a ring of
-  standing stones. An inked cartouche at the top left carries Gaia's mark
-  over "a field map of" and the repository's name, and a compass rose and a
-  scale sit in the lower corners. After dark the sheet is read by the
-  lantern: a warm pool low on the right, its edges falling into blue. Areas
-  and patches are drawn from the outlines `outlinesOf` traces, never from a
-  fixed shape, and the repository's own ground is a pale meadow. Names
-  stay one size at any zoom and the larger area's name wins where two would
-  collide. It pans and zooms by drag, pinch or scroll; a phone opens it
-  close around the person, a wide screen shows it whole. Its paper is
-  painted in steps of a millisecond or two in the page's idle time after a
-  bake, so it never holds up a frame.
+  standing stones. Nothing on the sheet sits in a box. Names are lettered
+  in ink on the land itself, slanting along the way each area runs, with
+  the paper softening their edges; each top-level directory's name is
+  lettered large and faint in spaced capitals across its whole region and
+  fades as the map comes close. The title, "a field map of" and the
+  repository's name, is lettered on the paper's top left corner. Where the
+  person stands, a small traveller in a vermilion cloak and a straw hat
+  stands on the map on their own soft shadow, their last few footprints
+  behind them along the way they look, the file underfoot lettered beside
+  them; after dark their lantern glows. A compass rose and a scale are
+  inked in the lower corners, and a tap on the rose finds the traveller.
+  After dark the sheet is read by the lantern: a warm pool low on the
+  right, its edges falling into blue. Areas and patches are drawn from the
+  outlines `outlinesOf` traces, never from a fixed shape, and the
+  repository's own ground is a pale meadow. Names stay one size at any
+  zoom and the larger area's name wins where two would collide. It pans
+  and zooms by drag, pinch or scroll; a phone opens it close around the
+  person, a wide screen shows it whole. Its paper is painted in steps of a
+  few milliseconds in the page's idle time after a bake, so it never holds
+  up a frame; `washArea` lays one area's wash, so the land can be painted
+  in area by area.
+  The map is painted in one of three directions (`map-styles.ts`;
+  `CHOSEN_MAP` picks the one shown and `?map=` asks for another):
+  - **painted** (shown): a painted bird's-eye of the valley, as in a
+    Ghibli film: gouache-rich washes, hills shaded violet and lit warm,
+    soft painted hedgerows between areas, trees as round crowns with soft
+    shadows, deep water darker toward its middle and lit at its rim.
+  - **sketchbook**: a traveller's watercolor sketchbook page: loose,
+    transparent washes, blooms where the pigment dried unevenly, pencil
+    borders, trees as loose dabs, and paint giving way raggedly to white
+    paper just short of the torn edge.
+  - **explorer**: an old explorer's chart on foxed parchment darkened
+    toward its edges: thin hand-tinted washes, hills drawn as ink
+    hachures down the fall line, ponds inked at the coast with engraved
+    water lines inside, ink borders, top-level areas in spaced capitals,
+    and the wild drawn as a forest of little inked trees.
   A tap on the open map, on a spot or on an area's name, sends the person
-  there. The spot is marked in vermilion ink; the map folds away as the view
+  there. The spot is marked with a cross in vermilion ink; the map folds away as the view
   clouds over in the map's own creased paper, the person is placed under it
   while the ground and grass follow, and the world dissolves back in at the
   new place, slower than it clouded, with no name spoken until it does. A
@@ -480,8 +509,7 @@ app shows:
   after v1's.
 
 The mark opens the world on the veil while it bakes, over a soft wash of
-light with the veil's words and question under it, heads the slip, and
-signs the field map's cartouche. Every file is plain paths, with no
+light with the veil's words and question under it, and heads the slip. Every file is plain paths, with no
 filters, gradients or IDs, so it inlines any number of times. The SVG files
 are the source; nothing redraws the mark in code.
 
