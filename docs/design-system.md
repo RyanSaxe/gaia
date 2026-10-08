@@ -51,7 +51,8 @@ short stalks alternating along it, its base on its twig. No ball sits
 inside a crown, so up close the gaps show twigs, deeper sprays and sky.
 Each family has its own spray (`leaf-clumps@1`'s `leaf`): pointed, oval
 (an apple's), lobed (a maple's), or blossom, umbels of five-petaled flowers
-on fine stalks with a few small leaves in the family's stem green (a
+on fine stalks, their petals the family's pale bloom deepening to its leaf
+color at the heart, with a few small leaves in the family's stem green (a
 cherry's). A spray's stalks are the bark's color. A primitive only places
 cards and names their cut (`CUT` in `@gaia/schema`: cluster, oval, lobed
 and umbels are sprays; strand, needles, patch and core); the

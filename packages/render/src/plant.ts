@@ -284,9 +284,11 @@ float dropAt(float h) {
   float th = clamp(vLife.x + (h - 0.5) * ${f(2 * CHANNEL_MATH.dropSpread)}, 0.01, 0.95);
   return 1.0 - smoothstep(th, th + ${f(CHANNEL_MATH.lossBand)}, vLife.y);
 }
-// Where a spray shows its stalk (bark) and its few fresh leaves (stem green).
+// Where a spray shows its stalk (bark), its few fresh leaves (stem green)
+// and its flowers' pale petals (the family's bloom).
 float gBark = 0.0;
 float gGreen = 0.0;
+float gBloom = 0.0;
 
 // A five-petaled flower of radius R at the origin, each petal with a small notch.
 float flowerShape(vec2 q, float R, float turn) {
@@ -299,8 +301,8 @@ float flowerShape(vec2 q, float R, float turn) {
 
 // A spray: a stalk from the card's base (along -1) curving toward its tip,
 // with leaves on short stalks alternating along it (kind 0 oval, 1 lobed,
-// 3 pointed), or umbels of three or four flowers on fine stalks with a
-// small fresh leaf at every third node (kind 2). Returns (distance, tone).
+// 3 pointed), or umbels of four flowers on fine stalks with a small fresh
+// leaf at every third node (kind 2). Returns (distance, tone).
 vec2 sprayCut(vec2 p, float seed, float px, int kind) {
   float bend = (fract(seed * 7.13) - 0.5) * 0.5;
   float y = p.y;
@@ -310,6 +312,7 @@ vec2 sprayCut(vec2 p, float seed, float px, int kind) {
   float tone = 0.9;
   float bark = 1.0;
   float green = 0.0;
+  float bloom = 0.0;
   int n = kind == 2 ? 6 : 5;
   for (int k = 0; k < 6; k++) {
     if (k >= n) break;
@@ -323,24 +326,26 @@ vec2 sprayCut(vec2 p, float seed, float px, int kind) {
     float a = mix(0.55 + 0.45 * h.x, 0.1, k == n - 1 ? 1.0 : 0.0);
     vec2 dir = normalize(vec2(side * sin(a), cos(a)));
     if (kind == 2) {
-      vec2 c = node + dir * (0.13 + 0.05 * h.y);
+      vec2 c = node + dir * (0.17 + 0.07 * h.y);
       // An umbel reaches about a third of the card from its middle: skip it from farther.
       if (dot(p - c, p - c) < 0.12) {
         for (int m = 0; m < 4; m++) {
           vec2 g = cellHash(vec2(float(m) + 7.0, seed * 59.0 + float(k) * 3.1));
-          if (m == 3 && g.x < 0.5) break;
           float ang = float(m) * 2.1 + g.y * 1.2 + seed * 6.2832;
           vec2 fc = c + vec2(cos(ang), sin(ang)) * (0.07 + 0.03 * g.x);
           vec2 seg = fc - node;
           float u = clamp(dot(r, seg) / dot(seg, seg), 0.0, 1.0);
           float ped = 0.012 - length(r - seg * u);
-          if (ped > d) { d = ped; tone = 0.8; bark = 0.6; green = 0.0; }
-          float R = 0.105 * (0.85 + 0.3 * g.y);
+          if (ped > d) { d = ped; tone = 0.8; bark = 0.6; green = 0.0; bloom = 0.0; }
+          float R = 0.122 * (0.85 + 0.3 * g.y);
           float di = flowerShape(p - fc, R, g.x * 6.2832) - dropAt(fract(h.x * 3.7 + g.x)) * 0.12;
           float cov = clamp(di / px + 0.5, 0.0, 1.0);
-          tone = mix(tone, (0.92 + 0.1 * g.y) * mix(0.9, 1.05, smoothstep(0.1, 0.8, length(p - fc) / R)), cov);
+          float rim = smoothstep(0.12, 0.62, length(p - fc) / R);
+          tone = mix(tone, (0.94 + 0.08 * g.y) * mix(0.92, 1.04, rim), cov);
           bark = mix(bark, 0.0, cov);
           green = mix(green, 0.0, cov);
+          // The petals are the family's pale bloom, deepening to its leaf color at the heart.
+          bloom = mix(bloom, rim * 0.7, cov);
           d = max(d, di);
         }
       }
@@ -353,6 +358,7 @@ vec2 sprayCut(vec2 p, float seed, float px, int kind) {
         tone = mix(tone, 0.8 + 0.2 * clamp(q.x / 0.24, 0.0, 1.0), cov);
         bark = mix(bark, 0.0, cov);
         green = mix(green, 1.0, cov);
+        bloom = mix(bloom, 0.0, cov);
         d = max(d, di);
       }
     } else {
@@ -373,6 +379,7 @@ vec2 sprayCut(vec2 p, float seed, float px, int kind) {
   }
   gBark = bark * step(0.0, d);
   gGreen = green;
+  gBloom = bloom;
   return vec2(d, tone);
 }
 
@@ -385,6 +392,7 @@ vec2 sprayLeaves(vec2 p, float seed, float px, float merged, int kind) {
   float bare = vLife.x > 0.0 ? 1.0 - smoothstep(vLife.x, vLife.x + 0.2, vLife.y) : 0.0;
   gBark *= 1.0 - merged;
   gGreen *= 1.0 - merged;
+  gBloom *= 1.0 - merged;
   return vec2(mix(c.x, outline - 1.2 * bare, merged), mix(c.y, 1.0, merged));
 }
 // Moss on stone: the patch ends where its depth, jittered per vertex, falls
@@ -537,6 +545,7 @@ uniform vec3 uHealthy;
 uniform vec3 uDecline;
 uniform vec3 uBark;
 uniform vec3 uStem;
+uniform vec3 uBloomColor;
 uniform float uFoliage;
 uniform float uLamp;
 varying vec3 vNormal;
@@ -563,6 +572,7 @@ void main() {
   vec3 albedo = mix(hueRotate(uHealthy, vTint), uDecline, vWither) * bright;
   // A spray's stalks are bark; a blossom spray's few fresh leaves are the family's stem green.
   albedo = mix(albedo, mix(uStem, uDecline, vWither) * bright, gGreen);
+  albedo = mix(albedo, mix(uBloomColor, uDecline, vWither) * bright * mix(1.0, cut.y, 0.5), gBloom);
   albedo = mix(albedo, uBark * 0.55, gBark);
   vec3 n = normalize(vNormal);
   if (uFoliage < 0.5 && !gl_FrontFacing) n = -n;
@@ -706,10 +716,11 @@ export const FOLIAGE: Readonly<Record<string, number>> = {
   bark: 0, leaf: 1, bloom: 0.6, stone: 0, moss: 0.3, stem: 0.8, eye: 0.6,
   wall: 0, timber: 0, roof: 0.12, masonry: 0, trim: 0, glass: 0,
 };
-/** The colors a spray borrows: its stalks the bark's, a blossom spray's few fresh leaves the family's stem green. */
-export const sprayColors = (plant: Realized): { uBark: { value: THREE.Vector3 }; uStem: { value: THREE.Vector3 } } => ({
+/** The colors a spray borrows: its stalks the bark's, a blossom spray's petals the family's bloom and its few fresh leaves the stem green. */
+export const sprayColors = (plant: Realized): { uBark: { value: THREE.Vector3 }; uStem: { value: THREE.Vector3 }; uBloomColor: { value: THREE.Vector3 } } => ({
   uBark: { value: vec3Of(plant.palette.swatches.bark?.healthy ?? [0.4, 0.33, 0.3]) },
   uStem: { value: vec3Of(plant.palette.swatches.stem?.healthy ?? plant.palette.swatches.leaf?.healthy ?? [0.4, 0.6, 0.3]) },
+  uBloomColor: { value: vec3Of(plant.palette.swatches.bloom?.healthy ?? plant.palette.swatches.leaf?.healthy ?? [1, 0.9, 0.92]) },
 });
 /** Swatches lit from inside at night, like window glass. */
 const LAMP = new Set(["glass"]);
