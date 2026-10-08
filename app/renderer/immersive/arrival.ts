@@ -1,25 +1,25 @@
-// Arrival titles: crossing into a directory's area, its name rises softly
-// over the land and fades, as a region's name does in Breath of the Wild.
-// Pausing brings up a quieter line near the ground: the file underfoot, if
-// any, over the area's path. Walking on lets it go.
+// The slip: crossing into a directory's area, its name is written on a slip
+// of warm paper low at the left, which fades in and away. Pausing writes the
+// file underfoot, if any, over the area's path on the same slip. Walking on
+// lets it go. No words hang over the land.
 
 import type { Place } from "@gaia/terrain";
 
 export interface Arrival {
   /** Follows the person: where they stand, and how long they have stood still, in seconds. */
   frame(place: Place, still: number, dt: number): void;
-  /** Whether titles are the chosen way of finding one's way. */
+  /** Whether the slip may show; either way the area the person stands in is announced afresh. */
   show(on: boolean): void;
-  /** The title showing now and the line underfoot, for scripted checks. */
-  state(): { readonly title: string | null; readonly underfoot: string | null };
+  /** The area's name on the slip now and the line underfoot, for scripted checks. */
+  state(): { readonly area: string | null; readonly underfoot: string | null };
 }
 
-/** How long a person must stay in a new area before its name rises, seconds: a border walked along never flickers. */
+/** How long a person must stay in a new area before its name is written, seconds: a border walked along never flickers. */
 const SETTLE = 1.2;
 /** An area left and re-entered within this long, seconds, is not announced again. */
 const RECENT = 25;
-/** How long a title shows, seconds, matching its animation in lab.css. */
-const TITLE_LIFE = 7;
+/** How long an area's name shows, seconds, matching its animation in lab.css. */
+const NAME_LIFE = 7;
 /** Standing still this long, seconds, brings up the line underfoot. */
 const PAUSE = 1.1;
 
@@ -38,7 +38,6 @@ export function createArrival(root: HTMLElement): Arrival {
   title.setAttribute("aria-live", "polite");
   const parent = el("arrival-parent", title);
   const name = el("arrival-name", title);
-  el("arrival-rule", title);
   const under = el("underfoot", root);
   const underFile = el("underfoot-file", under);
   const underArea = el("underfoot-area", under);
@@ -55,7 +54,7 @@ export function createArrival(root: HTMLElement): Arrival {
   function announce(place: Place): void {
     parent.textContent = parentOf(place.area.path);
     name.textContent = place.area.name;
-    // Restart the rise: drop the class, let the browser see it gone, add it back.
+    // Restart the fade in: drop the class, let the browser see it gone, add it back.
     title.classList.remove("rise");
     void title.offsetWidth;
     title.classList.add("rise");
@@ -66,7 +65,7 @@ export function createArrival(root: HTMLElement): Arrival {
     frame(place, still, dt) {
       clock += dt;
       age += dt;
-      if (age > TITLE_LIFE && title.classList.contains("rise")) title.classList.remove("rise");
+      if (age > NAME_LIFE && title.classList.contains("rise")) title.classList.remove("rise");
       const key = `${place.area.depth}:${place.area.path}`;
       if (key === announced) {
         candidate = null;
@@ -103,14 +102,14 @@ export function createArrival(root: HTMLElement): Arrival {
         title.classList.remove("rise");
         under.classList.remove("on");
       }
-      // Arriving into the titles announces where the person stands.
+      // Showing the slip again announces where the person stands.
       announced = null;
       candidate = null;
       held = 0;
       seen.clear();
     },
     state: () => ({
-      title: title.classList.contains("rise") ? name.textContent : null,
+      area: title.classList.contains("rise") ? name.textContent : null,
       underfoot: under.classList.contains("on") ? `${underFile.hidden ? "" : `${underFile.textContent} · `}${underArea.textContent}` : null,
     }),
   };

@@ -1,27 +1,18 @@
-// What a thing tells a person who walks up to it, in round 14's sandbox of
-// options (`?card=`). Each speaks in the world's voice: what the thing is and
-// how it fares, with the details only on asking.
-//
-// - "journal": a page of the traveller's journal, low at the left, written
-//   in a hand, with an ink sketch of the thing washed in its health's color:
-//   a failing tree's crown thins and browns, a failing house loses its roof.
-// - "ask": a small slip of paper at the lower edge with the thing's name
-//   and one word for how it fares; a tap on it opens the journal page.
-// - "sign": no paper at all: the view turns to the thing and its own sign.
-// - "page": today's field-guide card, for comparison (the terrain lab's).
+// What a thing tells a person who walks up to it, in the world's voice: one
+// line on a slip of paper at the lower edge, the thing's name and one word for
+// how it fares. A tap on the line opens a page of the traveller's journal, low
+// at the left, written in a hand, with an ink sketch of the thing washed in its
+// health's color (a failing tree's crown thins and browns, a failing house
+// loses its roof), what it is, and how it fares; the details only on asking.
 
 import type { CardThing } from "../terrain/lab.ts";
 import { standing } from "../terrain/card.ts";
 
-export type CardStyle = "page" | "journal" | "ask" | "sign";
-export const CARD_STYLES: readonly CardStyle[] = ["page", "journal", "ask", "sign"];
-
 export interface Journal {
-  /** Shows what the person walked up to, or lets it go (null). */
+  /** Shows the line for what the person walked up to, or lets it go (null). */
   show(thing: CardThing | null): void;
-  style(next: CardStyle): void;
-  /** What shows now, for scripted checks. */
-  state(): { readonly style: CardStyle; readonly shown: string | null; readonly open: boolean };
+  /** What shows now, for scripted checks: the thing's name, and whether its page is open. */
+  state(): { readonly shown: string | null; readonly open: boolean };
 }
 
 /** A small hash of a name, for a sketch's own wobble. */
@@ -187,7 +178,6 @@ export function createJournal(root: HTMLElement): Journal {
   const tab = el("button", "journal-tab");
   tab.type = "button";
   root.append(page, tab);
-  let current: CardStyle = "page";
   let shown: CardThing | null = null;
   let open = false;
 
@@ -225,8 +215,8 @@ export function createJournal(root: HTMLElement): Journal {
 
   function apply(): void {
     const has = shown !== null;
-    page.classList.toggle("on", has && (current === "journal" || (current === "ask" && open)));
-    tab.classList.toggle("on", has && current === "ask" && !open);
+    page.classList.toggle("on", has && open);
+    tab.classList.toggle("on", has && !open);
   }
   tab.addEventListener("click", () => {
     open = true;
@@ -240,11 +230,6 @@ export function createJournal(root: HTMLElement): Journal {
       if (thing !== null) fill(thing);
       apply();
     },
-    style(next) {
-      current = next;
-      open = false;
-      apply();
-    },
-    state: () => ({ style: current, shown: shown?.represented.name ?? null, open: page.classList.contains("on") }),
+    state: () => ({ shown: shown?.represented.name ?? null, open: page.classList.contains("on") }),
   };
 }

@@ -167,8 +167,6 @@ const FACE = { base: 0.7, perHalfTurn: 0.7 };
 const LOW_THING = 2.5;
 /** Walking this far from where a card opened closes it, meters. */
 const LEAVE_CARD = 4;
-/** How long a card over the world takes to fade away, ms, matching lab.css. */
-const CARD_FADE_MS = 320;
 /** Furnishings (fingerposts, boundary stones) a tap can reach stand about this tall, meters. */
 const FURNISHING_TOP = 2.4;
 
@@ -267,8 +265,6 @@ export interface WorldHandle {
   place(at: Landing): void;
   /** Calls `listener` with what a person has walked up to when its card opens, and with null when it closes. */
   onCard(listener: (thing: CardThing | null) => void): void;
-  /** Whether a thing under a resting mouse pointer catches a rim of light (round 14's sandbox). */
-  heeding(on: boolean): void;
 }
 
 /** What a person walked up to: what it stands for, its form in the world (such as "A watermill") and who judged it. */
@@ -802,12 +798,9 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   const card = createCard($("card"), () => hideCard());
   /** Where the person stood when the card opened: walking this far from it closes the card, meters. */
   let cardAt: { x: number; z: number } | null = null;
-  let leaving = 0;
   const cardListeners: ((thing: CardThing | null) => void)[] = [];
   function showCard(s: Subject): void {
     for (const l of cardListeners) l({ represented: s.represented, standsAs: s.standsAs, ...(s.judge === undefined ? {} : { judge: s.judge }) });
-    window.clearTimeout(leaving);
-    $("panel").classList.remove("card-leaving");
     card.show(s.represented, s.standsAs, s.judge);
     $("panel").classList.add("showing-card");
     sheet.name(s.represented.name);
@@ -817,19 +810,9 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   function hideCard(): void {
     if (card.shown !== null) for (const l of cardListeners) l(null);
     cardAt = null;
-    const done = (): void => {
-      card.hide();
-      $("panel").classList.remove("showing-card", "card-leaving");
-      sheet.name(world.regions[selected]?.id ?? "");
-    };
-    // Over the world, the page fades away as it came (lab.css); in the panel it simply goes.
-    if (!root.classList.contains("immersive") || !$("panel").classList.contains("showing-card")) {
-      done();
-      return;
-    }
-    $("panel").classList.add("card-leaving");
-    window.clearTimeout(leaving);
-    leaving = window.setTimeout(done, CARD_FADE_MS);
+    card.hide();
+    $("panel").classList.remove("showing-card");
+    sheet.name(world.regions[selected]?.id ?? "");
   }
   /** The subject a walk is taking the person to, shown when they get there. */
   let pending: Subject | null = null;
@@ -844,7 +827,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     setGoal(spot.x, spot.z);
     pending = s;
   }
-  /** Arriving at a thing: its card opens and the view turns gently to frame it beside the card. */
+  /** Arriving at a thing: its card opens and the view turns gently to frame it. */
   function arrive(s: Subject): void {
     showCard(s);
     face(s);
@@ -852,33 +835,17 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
 
   /** A gentle turn of the view, eased from where it looked to where it should; any drag or key takes the view back. */
   let turn: { yaw0: number; pitch0: number; dyaw: number; dpitch: number; t: number; duration: number } | null = null;
-  /**
-   * Where on screen the card leaves the world in view, in normalized device
-   * coordinates: the middle of the strip beside it on a wide screen, or above
-   * it on a phone. In the Terrain view the card sits in its own panel.
-   */
-  function freeMiddle(): { x: number; y: number } {
-    if (!root.classList.contains("immersive")) return { x: 0, y: 0 };
-    const view = canvas.getBoundingClientRect();
-    const page = $("panel").getBoundingClientRect();
-    if (page.width === 0 || view.width === 0) return { x: 0, y: 0 };
-    if (page.left > view.left + view.width * 0.5) return { x: (page.left - view.left) / view.width - 1, y: 0 };
-    if (page.top > view.top + view.height * 0.25) return { x: 0, y: 1 - (page.top - view.top) / view.height };
-    return { x: 0, y: 0 };
-  }
   function face(s: Subject): void {
     const dx = s.x - walker.x;
     const dz = s.z - walker.z;
     const far = Math.hypot(dx, dz);
     if (far < 0.5) return;
-    const free = freeMiddle();
-    const tanV = Math.tan((camera.fov * Math.PI) / 360);
     // A tall thing is framed a little below its middle, so its foot and its sign show; a low one, a
     // function's stone or bush at the person's feet, by its own middle, looking down at it.
     const rise = s.height < LOW_THING ? s.height * 0.5 : Math.max(1.2, Math.min(4, s.height * 0.4));
     const aim = heightAt(terrain.lattice, s.x, s.z) + rise;
-    const yaw = Math.atan2(-dx, -dz) + Math.atan(free.x * tanV * camera.aspect);
-    const pitch = Math.max(-0.65, Math.min(0.35, Math.atan2(aim - walker.eye, far) - Math.atan(free.y * tanV)));
+    const yaw = Math.atan2(-dx, -dz);
+    const pitch = Math.max(-0.65, Math.min(0.35, Math.atan2(aim - walker.eye, far)));
     // The short way round.
     const dyaw = ((((yaw - walker.yaw) % TAU) + TAU * 1.5) % TAU) - TAU / 2;
     const dpitch = pitch - walker.pitch;
@@ -1036,9 +1003,9 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
 
   // ---------- heeding: what a resting mouse pointer finds catches a rim of light ----------
 
-  /** Whether the rim shows (round 14's sandbox, `?heed=rim`), how long the pointer rests before it looks, how often it looks again while the view moves, and how long the rim takes to come and go, seconds. */
+  /** How long the pointer rests before it looks, how often it looks again while the view moves, and how long the rim takes to come and go, seconds. */
   const HEED = { rest: 0.12, again: 0.2, fade: 0.35 };
-  const heed = { on: new URLSearchParams(location.search).get("heed") === "rim", x: 0, y: 0, over: false, still: 0, since: Infinity, wanted: null as Subject | null, shown: null as Subject | null, strength: 0 };
+  const heed = { x: 0, y: 0, over: false, still: 0, since: Infinity, wanted: null as Subject | null, shown: null as Subject | null, strength: 0 };
   canvas.addEventListener("pointermove", (e) => {
     if (e.pointerType !== "mouse") return;
     heed.x = e.clientX;
@@ -1073,7 +1040,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     return best !== null && (land === null || best.distance < land.distance + 0.5) ? best.subject : null;
   }
   function heedFrame(dt: number): void {
-    if (!heed.on || mode !== "walk") return;
+    if (mode !== "walk") return;
     if (heed.over && drag.id === -1) {
       heed.still += dt;
       heed.since += dt;
@@ -1684,16 +1651,6 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     landing: (x, z, heart) => landingNear(x, z, heart),
     place: (at) => walkTo(at.x, at.z, at.yaw),
     onCard: (listener) => cardListeners.push(listener),
-    heeding: (on) => {
-      heed.on = on;
-      heed.wanted = null;
-      if (!on) {
-        heed.shown = null;
-        heed.strength = 0;
-        light.uHeed.value.w = 0;
-        canvas.style.cursor = "";
-      }
-    },
   };
 
   return {
