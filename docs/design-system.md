@@ -643,7 +643,8 @@ The three ways work together:
   person, a wide screen shows it whole. Close in, past 2.4 times the whole
   sheet's zoom, the map shows its next level down: each file's patch in
   fine dotted ink with its name lettered small on it, and the contours and
-  borders inked crisp over their painted bleed. A tap on an area's name from
+  borders inked crisp where their painted lines (laid on their own sheet
+  over the paint) give way. A tap on an area's name from
   afar glides the map round to frame that area at that level; there, a tap
   on a file's name or a spot sends the person to it. Its paper is painted in steps of a
   few milliseconds in the page's idle time after a bake, so it never holds

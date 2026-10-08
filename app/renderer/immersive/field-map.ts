@@ -213,6 +213,8 @@ interface AreaLabel {
 
 export interface Paper {
   readonly canvas: HTMLCanvasElement;
+  /** The map's linework, its contours and its areas' hedgerows, on their own sheet laid over the paper in ink. */
+  readonly lines: HTMLCanvasElement;
   readonly reach: number;
   readonly style: MapStyle;
   /** Where to write each area's name: its heart, how much land it holds, and the way it runs. */
@@ -679,31 +681,34 @@ function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place
   ctx.globalCompositeOperation = "source-over";
   yield;
 
+  // The map's linework (its contours and its hedgerows) lies on its own sheet over the paper, laid on in ink as the
+  // map is drawn, and gives way to the same lines inked crisp as the map comes close.
+  const lines = document.createElement("canvas");
+  lines.width = lines.height = PAPER;
+  const line = lines.getContext("2d") as CanvasRenderingContext2D;
   // Contours: sepia lines from the real heights, every few, heavier; the paint gives way at the sheet's edge, and so do they.
   const c = style.contour;
   let lo = Infinity;
   let hi = -Infinity;
   for (const v of heights) [lo, hi] = [Math.min(lo, v), Math.max(hi, v)];
   const hpx = (gr: number): number => px(-reach + (gr + 0.5) * HILL_CELL);
-  ctx.save();
-  ctx.lineCap = ctx.lineJoin = "round";
-  ctx.strokeStyle = c.ink;
-  ctx.globalCompositeOperation = "multiply";
+  line.lineCap = line.lineJoin = "round";
+  line.strokeStyle = c.ink;
   for (let step = Math.ceil(lo / c.interval); step * c.interval <= hi; step++) {
     const index = step % c.index === 0;
-    const line = new Path2D();
+    const contour = new Path2D();
     isoline(heights, hn, step * c.interval, (x0, y0, x1, y1) => {
       const fadeHere = paintAt(style, (x0 + 0.5) / hn, (y0 + 0.5) / hn);
       if (fadeHere < 0.5) return;
-      line.moveTo(hpx(x0), hpx(y0));
-      line.lineTo(hpx(x1), hpx(y1));
+      contour.moveTo(hpx(x0), hpx(y0));
+      contour.lineTo(hpx(x1), hpx(y1));
     });
-    ctx.globalAlpha = index ? c.indexAlpha : c.alpha;
-    ctx.lineWidth = index ? c.indexWidth : c.width;
-    ctx.stroke(line);
+    line.globalAlpha = index ? c.indexAlpha : c.alpha;
+    line.lineWidth = index ? c.indexWidth : c.width;
+    line.stroke(contour);
     yield;
   }
-  ctx.restore();
+  line.globalAlpha = 1;
   yield;
 
   // Each file's patch: its own traced shape, faintly washed in its health's color.
@@ -795,8 +800,9 @@ function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place
   yield;
 
   // Area borders: soft painted hedgerows; each is drawn from both sides, so a light hand keeps the two one line.
-  // They stop short of the land's edge, where the land gives way to the wild by its colors alone.
-  ctx.save();
+  // They stop short of the land's edge, where the land gives way to the wild by its colors alone. They lie on
+  // the linework's sheet.
+  line.save();
   const inside = new Path2D();
   for (let k = 0; k <= 180; k++) {
     const a = (k / 180) * Math.PI * 2;
@@ -806,22 +812,22 @@ function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place
     if (k === 0) inside.moveTo(px(c * r), px(s * r));
     else inside.lineTo(px(c * r), px(s * r));
   }
-  ctx.clip(inside);
-  ctx.lineJoin = "round";
+  line.clip(inside);
+  line.lineJoin = "round";
   for (const [k, o] of outlines.areas.entries()) {
     if (o.depth === 0) continue;
     const path = trace(o.rings, 1.6, 1);
-    ctx.filter = "blur(1.5px)";
-    ctx.strokeStyle = "rgba(52,80,40,0.26)";
-    ctx.lineWidth = o.depth === 1 ? 7 : 5;
-    ctx.stroke(path);
-    ctx.filter = "none";
-    ctx.strokeStyle = "rgba(46,70,36,0.3)";
-    ctx.lineWidth = 1.6;
-    ctx.stroke(path);
+    line.filter = "blur(1.5px)";
+    line.strokeStyle = "rgba(52,80,40,0.26)";
+    line.lineWidth = o.depth === 1 ? 7 : 5;
+    line.stroke(path);
+    line.filter = "none";
+    line.strokeStyle = "rgba(46,70,36,0.3)";
+    line.lineWidth = 1.6;
+    line.stroke(path);
     if (k % 8 === 7) yield;
   }
-  ctx.restore();
+  line.restore();
   yield;
 
   // The wild past the land: a wood thinning into clearings and gone where the paint gives way.
@@ -889,7 +895,7 @@ function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place
     .map(([top, r]) => ({ name: top.toUpperCase(), x: r.x / r.cells, z: r.z / r.cells, ...axisOf(r) }));
   const relief = { heights, n: hn, cell: HILL_CELL, origin: -reach + HILL_CELL / 2, lo, hi };
   const borders = outlines.areas.filter((o) => o.depth > 0).map((o) => ({ path: meterPath(o.rings), depth: o.depth }));
-  return { canvas, reach, style, areaLabels, regionLabels, areaAt, vitality, patches, relief, borders };
+  return { canvas, lines, reach, style, areaLabels, regionLabels, areaAt, vitality, patches, relief, borders };
 }
 
 /** A traced outline as a path in meters, to stroke at any zoom. */
@@ -1183,17 +1189,26 @@ export interface LandView {
  * The land as the sheet shows it in a view `w` by `h` pixels: the painted
  * paper, the dotted ways, every tree as a round crown browning with its
  * file's vitality, and buildings and landmarks as little vignettes worn by
- * theirs. `grow` sizes the marks, which never shrink below legible. Both the
+ * theirs. `grow` sizes the marks, which never shrink below legible, and
+ * `lines` is how strongly the painted linework (contours and hedgerows) shows. Both the
  * field map and the minimap draw the land this way. Returns the boxes the
  * vignettes take, which names keep off.
  */
-export function drawLand(ctx: CanvasRenderingContext2D, w: number, h: number, paper: Paper, stood: StoodWorld, view: LandView, grow: number): [number, number, number, number][] {
+export function drawLand(ctx: CanvasRenderingContext2D, w: number, h: number, paper: Paper, stood: StoodWorld, view: LandView, grow: number, lines = 1): [number, number, number, number][] {
   const sx = (x: number): number => (x - view.x) * view.zoom + w / 2;
   const sy = (z: number): number => (z - view.z) * view.zoom + h / 2;
   const visible = (x: number, y: number, pad: number): boolean => x > -pad && x < w + pad && y > -pad && y < h + pad;
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
-  ctx.drawImage(paper.canvas, sx(-paper.reach), sy(-paper.reach), paper.reach * 2 * view.zoom, paper.reach * 2 * view.zoom);
+  const side = paper.reach * 2 * view.zoom;
+  ctx.drawImage(paper.canvas, sx(-paper.reach), sy(-paper.reach), side, side);
+  if (lines > 0.01) {
+    ctx.globalAlpha = lines;
+    ctx.globalCompositeOperation = "multiply";
+    ctx.drawImage(paper.lines, sx(-paper.reach), sy(-paper.reach), side, side);
+    ctx.globalCompositeOperation = "source-over";
+    ctx.globalAlpha = 1;
+  }
 
   // Trails: dotted, the way a footpath is drawn.
   ctx.lineCap = "round";
@@ -1440,7 +1455,7 @@ export function createFieldMap(
     const close = Math.max(0, Math.min(1, (near - CLOSE) / 0.8));
     const wx = (x: number): number => view.x + (x - w / 2) / view.zoom;
     const wz = (y: number): number => view.z + (y - h / 2) / view.zoom;
-    const marks = drawLand(ctx, w, h, paper, stood, view, grow);
+    const marks = drawLand(ctx, w, h, paper, stood, view, grow, 1 - close * 0.85);
     if (close > 0) {
       ctx.save();
       ctx.setTransform(dpr * view.zoom, 0, 0, dpr * view.zoom, dpr * (w / 2 - view.x * view.zoom), dpr * (h / 2 - view.z * view.zoom));

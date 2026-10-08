@@ -346,7 +346,7 @@ details.json pre { font: 11px/1.45 ui-monospace, "SF Mono", Menlo, monospace; ba
 /* A thing's sketch page: the scrap grows into a page of the traveller's sketchbook, the land it stands on faint
    under the drawing; the pen draws the sketch as the page grows. */
 .minimap.page { --w: min(316px, calc(100vw - 36px)); height: min(var(--page-h, 400px), calc(100% - 100px)); cursor: default; }
-.minimap.page .minimap-sheet { opacity: 0.2; }
+.minimap.page .minimap-sheet { opacity: 0.2; width: 100%; height: 236px; }
 .minimap.page .minimap-band, .minimap.page .minimap-mark { opacity: 0; }
 .minimap.page .minimap-here { display: none; }
 .sketch-page {
