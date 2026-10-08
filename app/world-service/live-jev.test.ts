@@ -10,8 +10,9 @@ import { join, resolve } from "node:path";
 import { createInterface } from "node:readline";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { type StandIn, startOpenRouterStandIn } from "../../tools/openrouter-stand-in.ts";
+import { outlinesOf } from "@gaia/terrain";
 import { createEngineClient } from "./engine-client.ts";
-import { openWorld } from "./open-world.ts";
+import { openWorld, setSpendLimit } from "./open-world.ts";
 import type { ConsentPlan, Opening } from "./protocol.ts";
 
 const REPO = resolve(import.meta.dirname, "../..");
@@ -84,11 +85,23 @@ describe("judging a codebase with Jev", () => {
     const root = codebase("tiny");
     const data = join(scratch, "data-live");
 
-    const first = await open(root, data, true);
-    // The person is asked once, shown exactly what will go out.
-    expect(first.asked).toHaveLength(1);
-    expect(first.asked[0]).toMatchObject({ name: "tiny", requests: first.sent.length, endpoint: standIn.endpoint });
-    expect(first.asked[0]?.estimatedTokens).toBeGreaterThan(0);
+    const first = await open(root, data, false);
+    // Judging costs less than the default limit, so Gaia asks Jev with no question at all.
+    expect(first.asked).toHaveLength(0);
+    expect(first.sent.length).toBeGreaterThan(0);
+    // The land's outlines come before any judging, exactly as the finished world's map draws them.
+    const land = first.shown.findIndex((o) => o.stage === "land");
+    expect(land).toBeGreaterThan(first.shown.findIndex((o) => o.stage === "reading"));
+    expect(land).toBeLessThan(first.shown.findIndex((o) => o.stage === "asking"));
+    expect(first.shown[land]).toEqual({ stage: "land", name: "tiny", size: first.document.world.size, areas: outlinesOf(first.document.world).areas });
+    // Each area is named once everything on its land is judged, and stays named; by the end, every area.
+    let named = new Set<string>();
+    for (const o of first.shown) {
+      if (o.stage !== "asking") continue;
+      expect([...named].every((a) => o.settled.includes(a))).toBe(true);
+      named = new Set(o.settled);
+    }
+    expect([...named].sort()).toEqual(first.document.world.areas.map((a) => a.path).sort());
     // Every request went out once, with the placeholder key and nothing but the model, facts and questions.
     for (const { authorization, body } of first.sent) {
       expect(authorization).toBe("Bearer local-stand-in");
@@ -118,16 +131,27 @@ describe("judging a codebase with Jev", () => {
     expect(third.about).not.toContain("file:package.json");
   }, 60_000);
 
-  it("sends nothing when the person keeps the stand-in, and remembers that for the project", async () => {
+  it("asks before spending past the limit, sends nothing when the person keeps the stand-in, and remembers that until the limit changes", async () => {
     const root = codebase("declined");
     const data = join(scratch, "data-declined");
+    await setSpendLimit(engineAt(data), 0);
     const first = await open(root, data, false);
+    // Past the limit the person is asked once, shown exactly what would go out and what they allow.
     expect(first.asked).toHaveLength(1);
+    expect(first.asked[0]).toMatchObject({ name: "declined", limitUsd: 0, endpoint: standIn.endpoint });
+    expect(first.asked[0]?.estimatedUsd).toBeGreaterThan(0);
+    expect(first.asked[0]?.estimatedTokens).toBeGreaterThan(0);
     expect(first.sent).toHaveLength(0);
     expect(new Set(Object.values(first.document.judges))).toEqual(new Set(["stand-in"]));
     expect(first.document.summary).toContain("you chose the stand-in");
+    // The choice holds for the project while the limit stands.
     const second = await open(root, data, true);
     expect(second.asked).toHaveLength(0);
     expect(second.sent).toHaveLength(0);
+    // A new limit, still under the cost, asks again; going ahead sends every request.
+    await setSpendLimit(engineAt(data), 1e-9);
+    const third = await open(root, data, true);
+    expect(third.asked).toHaveLength(1);
+    expect(third.sent).toHaveLength(third.asked[0]?.requests ?? -1);
   }, 60_000);
 });

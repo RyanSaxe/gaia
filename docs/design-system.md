@@ -323,15 +323,36 @@ that (Jev, or the stand-in when Jev did not answer), and its vitality in
 words (thriving, healthy, tired, failing, in ruins) with the signals behind
 it, each with its reading.
 
-While a codebase's world opens, it waits behind the veil, the color of a
-hazy sky, with Gaia's mark breathing at its middle (see Gaia's mark). Under
-the mark one line says in the world's italic what is happening ("Reading
-gaia-v3…", "Asking Jev about 273 places… 96 answered") over a hairline of
-how much is done. Before anything is sent to Jev, the veil asks once per
-project: the question, with the run's size and cost, is written on a small
-page of warm paper under the mark, with two answers: Ask Jev, in moss
-green, and Use the stand-in, in ink. The world appears only once it is
-fully judged.
+While a codebase's world opens, the wait covers the screen
+(`app/renderer/wait/`). It shows no words, counts or percentages and never
+names Jev or OpenRouter: the progress a person sees is the world coming to
+be. Two directions are built, chosen by `CHOSEN_WAIT` in `wait.ts` or
+`?wait=map|mark`:
+
+- **The map paints itself** (the default). The screen is the field map's
+  paper, creased where it folds. While the code is read, light drifts over
+  the empty sheet: leaves' light by day, the lantern's pool breathing at
+  night. As soon as the land is divided, a pen draws the land's rounded edge
+  and then every area's border, from the middle outward, and the wild's
+  brush comes in past the edge. Each area washes in with its watercolor as
+  its judgments settle, coming in wet, a little darker, and spreading from
+  its heart; while the world bakes the washes dry lighter. Then the map
+  folds away as the field map does and the paper dissolves into the world,
+  as a jump on the map does, and the place's title rises. The sheet has no
+  frame, title or names. After dark it is read by the lantern, warm at its
+  middle and falling into blue at its edges.
+- **The mark gathers.** Gaia's mark on the sky the world will stand under,
+  darkening with the hour, and fireflies drifting in from the edges to
+  gather into the glow over the i as the world is read, judged and baked;
+  the glow grows with how much is done. Then the sky lifts.
+
+Everything in the wait that moves is an opacity or transform animation, or
+a pen line's dash, so it keeps moving while the page stands the world, and
+the world shows only after its first frames have drawn under the wait. When
+judging would cost more than the person's spend limit, a small slip of warm
+paper at the foot of the wait says what it costs against the limit, with two
+answers: Go ahead, in moss green, and Use the stand-in, in ink. The world
+appears only once it is fully judged.
 
 ## One way to touch the world
 
@@ -372,9 +393,9 @@ paper, brown ink, a serif with italic names and small capitals for paths,
 and slow, soft motion; a card over the world is set in the same serif.
 After dark the paper (the map, the slip, a card) is read by the lantern, a
 little warmer and dimmer. While a card is read or the map is open, the
-words over the land step back. Until the first world stands, the veil and
-Gaia's mark speak alone; the ways of knowing where you are and the corner
-controls come in as the veil lifts.
+words over the land step back. Until the first world stands, the wait is
+alone on the screen; the ways of knowing where you are and the corner
+controls come in as the wait lifts.
 
 The immersive world opens on Gaia's own world. Where a person is comes from
 one function, `placeAt` in `@gaia/terrain`: the area (a directory) whose land
@@ -479,9 +500,8 @@ app shows:
 - **sprout**: round 12's moss-green word with a two-leaf sprout from the i,
   after v1's.
 
-The mark opens the world on the veil while it bakes, over a soft wash of
-light with the veil's words and question under it, heads the slip, and
-signs the field map's cartouche. Every file is plain paths, with no
+The mark gathers the fireflies in the wait's `mark` direction, heads the
+slip, and signs the field map's cartouche. Every file is plain paths, with no
 filters, gradients or IDs, so it inlines any number of times. The SVG files
 are the source; nothing redraws the mark in code.
 

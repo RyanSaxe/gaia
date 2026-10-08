@@ -21,7 +21,7 @@ if (shots) nativeTheme.themeSource = "light";
 void app.whenReady().then(() => {
   const repoRoot = resolve(app.getAppPath(), "..");
   let root = resolve(process.env.GAIA_PROJECT ?? repoRoot);
-  // The engine keeps each project's store (Jev's answers, the person's consent) with the app's own data.
+  // The engine keeps each project's store (Jev's answers, a stand-in choice) and the app's own settings (the spend limit) with the app's own data.
   process.env.GAIA_DATA_DIR ??= app.getPath("userData");
   const service = utilityProcess.fork(join(here, "world-service.js"), [], { serviceName: "Gaia world service", stdio: "inherit" });
   const toService = (message: FromMain, ports?: MessagePortMain[]): void => service.postMessage(message, ports);

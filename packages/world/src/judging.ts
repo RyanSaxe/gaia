@@ -17,6 +17,10 @@ export const requestKey = (request: JevRequest): string => contentHash(request);
 /** The thing a planned request is about, such as "file:src/main.ts" or "entity:packages/world". */
 export const judgedThing = (r: Pick<WorldRequest, "about" | "target">): string => `${r.about}:${r.target}`;
 
+/** The area (a directory's path, "" for the repository's root) whose land a planned request's thing stands on: a file's directory, an area or entity itself, the root for the world. */
+export const areaOfRequest = (r: Pick<WorldRequest, "about" | "target">): string =>
+  r.about === "file" ? (r.target.includes("/") ? r.target.slice(0, r.target.lastIndexOf("/")) : "") : r.about === "world" ? "" : r.target;
+
 export interface Keeping {
   /** Jev's earlier answers, by request key. */
   readonly stored: ReadonlyMap<string, JevResponse>;

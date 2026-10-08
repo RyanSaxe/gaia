@@ -196,12 +196,25 @@ tags its look suits, with a tie-break seeded by the question. The document
 records who judged each thing (`judgedThing`, such as `file:src/main.ts`),
 and a thing's card says so. `engineJev` in the world service is the live
 client. Jev is asked only when the engine has a key and runs with
-`GAIA_JEV=live`, and only after the person has seen the run's size and cost
-(`jev.estimate`) and said yes, once per project (the `settings` table
-remembers the answer). The world stays veiled while Jev answers, with a
-count of answers, because a judgment that changed after the world stood
-would swap trees, buildings and land in view. `docs/connect-jev.md` is the
-reviewer's page for connecting it.
+`GAIA_JEV=live`. A run whose cost (`jev.estimate`) is within the person's
+spend limit goes ahead with no question; the limit is one number for every
+project, kept in the app's own settings (the store's `app` project,
+`settings` table, `jev-spend-limit`), and `DEFAULT_SPEND_LIMIT_USD` in
+`app/world-service/open-world.ts` ($0.10) holds until the person sets one
+(`setSpendLimit`; no screen sets it yet). A run that costs more asks first, with
+the cost and the limit (`world.consent`); choosing the stand-in is
+remembered in the project's `settings` table until the limit changes. The
+world stays under the wait while Jev answers, because a judgment that
+changed after the world stood would swap trees, buildings and land in view.
+The land's division depends on the code alone (an entity's lot is the same
+ground, 900 m², whether a building or a landmark stands on it), so
+`landOf(model)` in `@gaia/world` gives every area, patch and cell before
+anything is judged, equal to the finished layout's. `openWorld` sends the
+renderer the areas' outlines (`world.progress` stage `land`) before it asks
+Jev, then names the areas whose judgments have all settled with every
+answer (stage `asking`, `settled`: an area settles once every request about
+its files, its entity and itself has), and the wait paints the map from
+them. `docs/connect-jev.md` is the reviewer's page for connecting it.
 
 `placeAt(world, x, z)` in `@gaia/terrain` says where a person is: the cell
 whose site is nearest the warped point names the area and the file underfoot

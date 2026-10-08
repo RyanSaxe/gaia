@@ -1,8 +1,9 @@
 // "This codebase": a codebase's world. Inside the app it comes from the world
 // service, which opens the folder main names (Gaia's own repository unless
 // the person opens another), has Jev or the stand-in judge it, and lays it
-// out; while that happens the veil says how it is going, and asks the person
-// once per project before anything is sent to Jev. A standalone page (the
+// out; while that happens the wait paints the land as it is judged
+// (app/renderer/wait/), and asks the person only before spending past their
+// limit. A standalone page (the
 // offline HTML, `pnpm lab:serve`) has no engine: it lays out the engine's
 // snapshot of this repository (`fixtures/gaia.json`, written by `pnpm
 // snapshot`), judged by the stand-in. Everything else follows from the code:
@@ -21,12 +22,14 @@ import type { Represented, SampleEntity } from "./samples.ts";
 import { vitalityOf } from "@gaia/world";
 import type { StandCode, StandLot } from "./stand.ts";
 
-/** The veil a world opens behind: what is happening, and a question for the person. */
+/** The wait a world opens behind: it shows how opening goes, and asks before spending past the limit. */
 export interface Veil {
-  /** Shows words, and how much of the work is done (0 to 1) when that is known. */
-  say(words: string, done?: number): void;
-  /** Asks a question with two answers; resolves true for `yes`. */
-  ask(question: string, yes: string, no: string): Promise<boolean>;
+  /** How opening the world is going: the land's outlines, then the areas judged so far. */
+  opening(o: Opening): void;
+  /** Everything is judged and laid out: the world bakes now. */
+  baking(): void;
+  /** Asks whether to send `plan` to Jev; resolves true to go ahead. */
+  ask(plan: ConsentPlan): Promise<boolean>;
 }
 
 export interface CodeLab {
@@ -99,32 +102,12 @@ export const treesFor = (lines: number, character: Character): number => Math.mi
 /** The most trees a world grows: where its areas would grow more, every grove gives up the same share. */
 const TREE_BUDGET = 470;
 
-const count = (n: number): string => n.toLocaleString("en-US");
-const dollars = (usd: number): string => `$${usd < 0.01 ? usd.toFixed(3) : usd.toFixed(2)}`;
-
-/** The veil's words for each stage of opening a world. */
-function openingWords(o: Opening): string {
-  if (o.stage === "reading") return `Reading ${o.root.split("/").filter(Boolean).pop() ?? o.root}…`;
-  const tookOver = o.failed > 0 ? ` · ${count(o.failed)} left to the stand-in` : "";
-  return `Asking Jev about ${count(o.total)} ${o.total === 1 ? "place" : "places"}… ${count(o.answered)} answered${tookOver}`;
-}
-
-/** What a live run would send, in a sentence the person can say yes or no to. */
-function consentWords(plan: ConsentPlan): string {
-  const to = plan.endpoint.startsWith("https://openrouter.ai/") ? "OpenRouter" : `the stand-in for OpenRouter at ${new URL(plan.endpoint).host}`;
-  return (
-    `Jev has not yet judged ${count(plan.requests)} ${plan.requests === 1 ? "place" : "places"} in ${plan.name}. ` +
-    `Asking it sends their facts and doc comments, never source, to ${to}: about ${count(plan.estimatedTokens)} tokens, about ${dollars(plan.estimatedUsd)}. ` +
-    "Its answers are kept, so it is asked only once."
-  );
-}
-
-/** The world from the world service: opened, judged and laid out there, with the veil kept up to date. */
+/** The world from the world service: opened, judged and laid out there, with the wait kept up to date. */
 function serviceWorld(service: WorldService, veil: Veil): Promise<WorldDocument> {
   return new Promise((resolve, reject) => {
     const off = service.on((m) => {
-      if (m.type === "world.progress") veil.say(openingWords(m.opening), m.opening.stage === "asking" ? m.opening.answered / Math.max(1, m.opening.total) : undefined);
-      else if (m.type === "world.consent") void veil.ask(consentWords(m.plan), "Ask Jev", "Use the stand-in").then((approve) => service.send({ type: "world.consent", approve }));
+      if (m.type === "world.progress") veil.opening(m.opening);
+      else if (m.type === "world.consent") void veil.ask(m.plan).then((approve) => service.send({ type: "world.consent", approve }));
       else if (m.type === "world.document") {
         off();
         resolve(m.document);
@@ -148,18 +131,23 @@ async function snapshotWorld(why: string): Promise<WorldDocument> {
 export async function codeWorld(veil: Veil): Promise<CodeLab> {
   const service = worldService();
   let document: WorldDocument;
+  let landed = false;
+  const watched: Veil = { ...veil, opening: (o) => ((landed ||= o.stage === "land"), veil.opening(o)) };
   if (service === null) document = await snapshotWorld("no engine on a standalone page");
   else {
     try {
-      document = await serviceWorld(service, veil);
+      document = await serviceWorld(service, watched);
     } catch (error) {
       console.error(`gaia: showing Gaia's snapshot instead: ${(error as Error).message}`);
       document = await snapshotWorld(`the world service could not open it: ${(error as Error).message}`);
+      landed = false;
     }
   }
   // Traced once now, while the world loads, so the field map never traces them mid-walk.
-  outlinesOf(document.world);
-  veil.say("Baking the world…");
+  const outlines = outlinesOf(document.world);
+  // A world laid out here, with no world service, shows its land only now.
+  if (!landed) veil.opening({ stage: "land", name: document.world.name, size: document.world.size, areas: outlines.areas });
+  veil.baking();
   return codeLab(document);
 }
 
