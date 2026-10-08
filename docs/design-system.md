@@ -373,18 +373,10 @@ thing. A low thing, such as a function's stone or bush, is framed by its
 own middle, looking down at it at the person's feet. A thing already close
 counts as arrived. A new tap or a key cancels the walk and nothing opens.
 
-In the immersive world, arriving shows one line on a slip of paper at the
-lower edge: the thing's name and one word for how it fares ("signal ·
-healthy"). A person who only wants to look reads almost nothing. A tap on
-the line opens a page of the traveller's journal low at the left
-(`app/renderer/immersive/journal.ts`), written in a hand: an ink sketch of
-the thing washed in its health's color (a failing tree's crown thins and
-browns, a failing house's roof sags and ivy climbs it), its name, what it
-is ("A watermill for a TypeScript package"), the first sentence of its doc
-comment, and how it fares with the reason ("It looks tired: no test reaches
-it"). Where it lives, its size, what it leans on and who judged it open
-only from "more". The line and the page belong to their thing: walking more
-than 4 m from where they opened lets them go, and so does Esc.
+In the immersive world, walking up to a thing, the minimap rings it, and
+on arrival the minimap grows into the thing's sketch page (see The field
+sheet). The page belongs to its thing: walking more than 4 m from where it
+opened lets it go, and so does Esc.
 
 In the Terrain view the thing's card opens in the panel or the sheet
 instead, and reads like a page from a field guide: what kind of thing it
@@ -397,20 +389,29 @@ it, each with its reading. Walking away, its × and Esc close it.
 While a codebase's world opens, the wait covers the screen
 (`app/renderer/wait/`). It shows no words, counts or percentages and never
 names Jev or OpenRouter: the progress a person sees is the world coming to
-be: the map paints itself. The field map's own sheet lies on its creased
+be: the map paints itself, on the field sheet (see The field sheet). The field map's own sheet lies on its creased
 paper: the same size, paper, torn edge, turned-down corner and shadow.
 While the code is read, light drifts over the empty sheet: leaves' light
 by day, the lantern's pool breathing at night. As soon as the land is
 divided, a pen draws the land's rounded edge and then every area's border,
 from the middle outward, in the green of the map's hedgerows, and the wild's
-wood is brushed in past the edge as the map paints it. Each area washes in
-as its judgments settle, in the color of the land Jev judged for it, as
-the map washes it: coming in wet, a little darker, and spreading from its
-heart; while the world bakes the washes dry lighter. An area whose land is
-not judged yet stays bare paper inside its border. Then the map folds away
-as the field map does and the paper dissolves into the world, as a jump on
-the map does, and the place's name is written on the slip. The sheet has no title, names
-or marks. After dark it is read by the lantern, warm at its middle and
+wood is brushed in past the edge as the map paints it. While Jev is asked, a round
+watercolor brush is held over the sheet with its shadow: it goes to an
+area with a question out, touches down, its shadow meeting its tip,
+leaves a damp dab that dries, hovers and moves on, brisk while answers
+flow and about half as quick in a lull, never still and never saying how
+much is left; the areas with a question out take a pass of clear water
+first, the paper darkening a touch under a slow sheen, so even a long lull
+shows the map being drawn. By day the brush's shadow falls from the
+window, at night from the lantern (`brush.ts`). Each area washes in as its
+judgments settle, in the color of the land Jev judged for it, as the map
+washes it: coming in wet, a little darker, and spreading from its heart;
+while the world bakes the washes dry lighter and into their land's health,
+as the map's wilt (tired land toward straw, thriving land a touch richer).
+An area whose land is not judged yet stays bare paper inside its border.
+Then the map folds away as the field map does and the paper dissolves into
+the world, as a jump on the map does, and the place's name is written on
+the minimap. The sheet has no title, names or marks. After dark it is read by the lantern, warm at its middle and
 falling into blue at its edges.
 
 Everything in the wait that moves is an opacity or transform animation, or
@@ -463,50 +464,100 @@ finger and keys all follow the same three rules.
 - **The world moves you.** A tap or click on the world always means "go
   there". On the land, the person walks to the spot (a tap where they stand
   stops them). On a thing (a building, a tree, a landmark or its sign) they
-  walk up to it, the view turns to frame it, and a line says what it is. A
+  walk up to it, the view turns to frame it, and its sketch page opens. A
   tap on a rock, a bush, a fingerpost or a boundary stone walks up to it, never to
   the ground hidden behind it. A drag looks around and never walks. W A S D
   or the arrows walk and Shift hurries. A drag or a key takes the view back
   from a turn at once. Touching the world never does anything but move you.
-- **Everything else is paper from the corner.** The corner controls, at the
-  top right (stacked on a phone), are the only things on the screen that are
-  not the world: the map button (or M) unfolds the field map, and the rose
-  opens the slip. They stay while a thing's line or page shows. A tap on the
-  open map is the one way to travel far at once: it is a paper action, so it
-  belongs to the map, never to the world.
+- **Everything else is paper.** The minimap at the lower left and the rose
+  at the top right are the only things on the screen that are not the world:
+  a tap on the minimap (or M) unfolds the field map out of it, and the rose
+  opens the slip. A tap on the open map is the one way to travel far at
+  once: it is a paper action, so it belongs to the map, never to the world.
 - **Paper you open holds the world still.** While the map or the slip is
   open, the world waits under a faint wash. A tap there folds the paper and
   moves no one, a drag there does nothing, and Esc folds it. The keys still
-  walk, and the map's traveller follows. A thing's line and page are
-  different: the line shows on its own when the person arrives, so neither
-  holds the world; a tap elsewhere walks there and leaving lets them go.
+  walk, and the map's traveller follows. A thing's sketch page is
+  different: it opens on its own when the person arrives, so it does not
+  hold the world; a tap elsewhere walks there and leaving lets it go.
 
-What can be touched shows it. A thing under a resting mouse pointer (a
-tree, a building, a landmark, a function's stone or bush) catches a soft
-rim of light along its edges, the sun's by day and the lantern's after
-dark, fading in and out over a third of a second, and the pointer becomes a
-hand. There are no circles and no labels. The pointer is read once it rests
-and five times a second while it does, with each thing as an upright
-cylinder of its reach, so it costs no triangle tests. `uHeed` in the
-scene's light carries the thing's middle, reach and strength to the plant
-shader's `heedRim`. A phone, with no resting pointer, gets no rim.
+Nothing in the world lights up, rings or changes under a pointer: a thing
+looks the same whether or not a person could walk up to it, and the pointer
+stays the hand that drags the view. Selecting is shown on paper instead: a
+tap on a thing walks the person up to it, the minimap rings it in
+vermilion pencil as they go, with its name beside the ring in the
+traveller's hand, and on arrival the view turns to frame it and the
+minimap grows into its sketch page. So it is plain what was chosen, and
+the world never shows a game's cursor.
+
+## The field sheet
+
+The field map, the minimap, a thing's sketch page and the wait are one
+sheet of the traveller's paper, so what tells a person where they are and
+what a thing is belongs to the world rather than sitting on it. One
+material language holds them (`map-styles.ts` is its data):
+
+| Material | What it is | Where it shows |
+| --- | --- | --- |
+| Paper | Handmade cream paper, mottled and fibred, with a torn deckled edge; after dark read by the lantern, warm at its middle and falling into blue | The map's sheet, the minimap's scrap, the sketch page, the wait's sheet |
+| Paint | Watercolor washes in each area's land color (its ground cover's, softened), pooling at their rims and bleeding wet in wet; hills shaded violet and lit warm | The map, the minimap, the wait; faintly under a sketch |
+| Contours | Fine sepia lines from the real heights, every 1.2 m and every fifth heavier: the map is a painted topographic map, so a person can read a rise before walking it | The map and the minimap; inked crisp close in |
+| Ink | One brown-black ink for names, borders, vignettes and sketches; names in an italic serif with their parent directories in spaced capitals, edged with a little paper, never boxed | Every name on every sheet |
+| Hand | The traveller's own notes, in a hand: what a thing's sketch shows is wrong, and the name of the thing walked up to | The sketch page and the minimap's ring |
+| Vermilion | The traveller's own marks: their cloak, a spot picked on the map, the pencil ring round a thing walked up to | The map and the minimap |
+
+Health shows the same way on every sheet. An area's wash wilts with its
+own ground's vitality (`groundVitality` in `@gaia/world`): thriving land a
+touch richer and deeper, tired land dried toward straw with the paper
+showing through in dry-brush streaks, failing land toward the pale of grass
+gone to seed. One scale of words names it, `LAND_HEALTH`: in full leaf, in
+good heart, going over, gone to seed (and laid waste), on the same
+thresholds as a thing's (thriving, healthy, tired, failing, in ruins). The
+map's legend paints the four bands in dabs of the same wash and names the
+largest areas going over; its title says how the whole land fares. Trees
+brown, roofs dry and rot, a tower's top falls and a ring's stones lie down
+on the map as they do in the world. The wait's washes dry into the same
+wilt once the world is judged.
+
+The sheets nest by scale, each growing out of the last so nothing jumps:
+the minimap is the land around the person; a tap unfolds it into the
+field map, which draws back from the minimap's close view to the whole
+land; close in, the map shows the next level down, each file's patch and
+name; a thing walked up to grows the minimap into its sketch page, the land
+it stands on faint under the drawing.
+
+**What a thing says: the sketch is the news.** The sketch page
+(`sketch.ts`) is an ink drawing of the thing washed in its health (a
+failing tree's crown thins and browns, a failing house's roof rots through
+and ivy climbs it; the pen draws it as the page grows), with at most two
+notes in the hand, each with a pencil leader to the part of the drawing it
+names: "one bough grown 361 lines long, knotted 4 deep", "no test reaches
+it, though it wants one". A note says only what is specific and true of
+this thing: a signal nearly every file shares (no test of its own, a
+warning or two) is news only when it is the thing's real trouble, so a
+thing with nothing particular wrong says nothing but its name and how it
+fares. Under the drawing: where it lives in spaced capitals, its name
+lettered as the map letters names, how it fares in a word, the first
+sentence of its doc comment, and the details (where it lives, its size,
+what it leans on, what leans on it, what it stands as, who judged it)
+behind "more". What the notes say comes from one function, `describe`, so
+Jev's own judgment of what to say plugs in there.
 
 ## Knowing where you are
 
 The lab opens into the world, full screen, at eye height. Nothing sits on
 it but the world, the three ways of knowing where you are, all at once, and
-the corner controls: no panels, no readouts. The rose opens a slip with
+the rose in the corner: no panels, no readouts. The rose opens a slip with
 Gaia's mark, the world's name, how to wander (for a mouse and keys, or for a
 finger) and the way back to the debugging views (Components, Terrain and
 Skies). The hour follows the person's clock (`?hour=22` pins it).
 Everything a person reads here looks like the world's own things: warm
 paper, brown ink, a serif with italic names and small capitals for paths,
-and slow, soft motion; a thing's journal page is written in a hand. After
-dark the paper (the map, the slips, a thing's line and page) is read by the
-lantern, a little warmer and dimmer. While a thing's line or page shows, or
-the map is open, the slip naming the area steps back. Until the first world
-stands, the wait is alone on the screen; the ways of knowing where you are and the corner
-controls come in as the wait lifts.
+and slow, soft motion; the traveller's own notes, on the minimap and a thing's sketch page, are written in a hand. After
+dark the paper (the map, the minimap, the slip, a thing's sketch page) is
+read by the lantern, a little warmer and dimmer. Until the first world
+stands, the wait is alone on the screen; the ways of knowing where you are
+and the rose come in as the wait lifts.
 
 The immersive world opens on Gaia's own world. Where a person is comes from
 one function, `placeAt` in `@gaia/terrain`: the area (a directory) whose land
@@ -523,19 +574,25 @@ codebase's land is the wild, which names nothing.
 
 The three ways work together:
 
-- **A slip of paper.** Entering an area, after a moment there, its name is
-  written on a small slip of warm paper at the lower left, in italic ink
-  with its parent directories in small capitals above it. The slip fades
-  in, holds, and fades away after seven seconds. An area left and
-  re-entered within half a minute is not announced again. Standing still
-  writes the file underfoot and the area's path on the same slip, once the
-  area's name has come and gone, so the two never cross. It is the
-  map's paper and ink, so it reads as the traveller's own note rather than
-  a sign hung in the sky, and it names the area off the trails too. No
-  words hang over the land (`app/renderer/immersive/arrival.ts`).
-- **The field map.** The map button among the corner controls (or M)
-  unfolds a hand-drawn map: it opens out from its folds, tilting up flat as
-  it comes, and its folds stay faintly creased. The sheet is handmade paper
+- **The minimap.** A torn scrap of the field map lies at the lower left
+  (`app/renderer/immersive/minimap.ts`): the land around the person, about
+  170 m across, as the map paints it, north up, with the traveller at its
+  middle, their footprints turning with the way they look. It is the local
+  land, not the whole: the paint runs to its torn edges and gives way to
+  bare paper at its foot, where the area's name is lettered as the map
+  letters names, its parent directories in spaced capitals above it. After
+  a moment in a new area, the old name fades as the new one is written, so
+  crossing a border reads on the scrap as a border crossed and a name
+  changed; standing still writes the file underfoot beneath it. A tap on it
+  (or M) unfolds the field map out of it. It costs nothing a frame: its
+  canvas holds a window of the land half again wider than the scrap, drawn
+  from the field map's painted paper, and slides under the scrap by a
+  transform; it is drawn again only as the person nears the window's edge
+  or the paper is painted afresh.
+- **The field map.** A tap on the minimap (or M) unfolds the field map out
+  of it: the sheet grows from the scrap to its place while its land draws
+  back from the scrap's close view to the whole, by transforms alone, and
+  folds back into the scrap the same way. Its folds stay faintly creased. The sheet is handmade paper
   with a torn, deckled edge and its top right corner turned down; a tap on
   the corner folds it. The land runs to the sheet's edges: the sheet ends a
   few meters past the land's widest reach, and the wild fills its corners
@@ -549,19 +606,30 @@ The three ways work together:
   granulates into the
   paper's tooth, laid over a softened copy of itself so neighbors bleed into
   each other wet in wet, and broken by broad brush strokes a little warmer,
-  cooler, lighter or darker. Each file's patch is faintly washed in its
-  health's color; hills are shaded away from the light in the northwest;
-  water is washed blue; trails are dotted; trees on the land brown with
-  their files' vitality. Buildings and landmarks are little drawn
+  cooler, lighter or darker. Each area's wash wilts with its own ground's health (see The field
+  sheet), and each file's patch is faintly washed in its health's color;
+  hills are shaded away from the light in the northwest, and fine sepia
+  contour lines run over the paint from the real heights, every 1.2 m and
+  every fifth heavier; water is washed blue; trails are dotted; trees on
+  the land brown with their files' vitality. Buildings and landmarks are little drawn
   vignettes: a cottage's walls washed pale under a roof of thatch, slate or
   tile with a chimney's curl of smoke, a mill with its wheel, a tower under
   a pointed roof, a great oak's crown, a willow's falling fronds, a ring of
-  standing stones. Nothing on the sheet sits in a box. Names are lettered
+  standing stones; each wears its entity's health, a roof drying and
+  rotting through over bare rafters and its smoke stopping, a tower's top
+  fallen, a ring's stones lying in the grass. Nothing on the sheet sits in a
+  box: names are lettered in ink with a narrow edge of paper around their
+  letters, and the paint thins under the title and the legend as it does
+  where a map is lettered. Names are lettered
   in ink on the land itself, slanting along the way each area runs, with
   the paper softening their edges; each top-level directory's name is
   lettered large and faint in spaced capitals across its whole region and
   fades as the map comes close. The title, "a field map of" and the
-  repository's name, is lettered on the paper's top left corner. Where the
+  repository's name, is lettered on the paper's top left corner, with how
+  the whole land fares beneath it ("the land in good heart"). The legend,
+  low at the left in the map's hand, shows the land's health in four dabs of
+  its wash (in full leaf, in good heart, going over, gone to seed) and
+  names the largest areas in each tired band. Where the
   person stands, a small traveller in a vermilion cloak and a straw hat
   stands on the map on their own soft shadow, their last few footprints
   behind them along the way they look, the file underfoot lettered beside
@@ -572,20 +640,26 @@ The three ways work together:
   outlines `outlinesOf` traces, never from a fixed shape. Names stay one size at any
   zoom and the larger area's name wins where two would collide. It pans
   and zooms by drag, pinch or scroll; a phone opens it close around the
-  person, a wide screen shows it whole. Its paper is painted in steps of a
+  person, a wide screen shows it whole. Close in, past 2.4 times the whole
+  sheet's zoom, the map shows its next level down: each file's patch in
+  fine dotted ink with its name lettered small on it, and the contours and
+  borders inked crisp where their painted lines (laid on their own sheet
+  over the paint) give way. A tap on an area's name from
+  afar glides the map round to frame that area at that level; there, a tap
+  on a file's name or a spot sends the person to it. Its paper is painted in steps of a
   few milliseconds in the page's idle time after a bake, so it never holds
   up a frame; `washArea` lays one area's wash, so the land can be painted
   in area by area.
-  The map is a painted bird's-eye of the valley, as in a Ghibli film
-  (`map-styles.ts`): gouache-rich washes, hills shaded violet and lit
-  warm, soft painted hedgerows between areas, trees as round crowns with
-  soft shadows, deep water darker toward its middle and lit at its rim.
-  A tap on the open map, on a spot or on an area's name, sends the person
+  The map is a painted topographic map (`map-styles.ts`): gouache-rich
+  washes, hills shaded violet and lit warm under fine sepia contours, soft
+  painted hedgerows between areas, trees as round crowns with soft shadows,
+  deep water darker toward its middle and lit at its rim.
+  A tap on the open map, on a spot or (close in) on a name, sends the person
   there. The spot is marked with a cross in vermilion ink; the map folds away as the view
   clouds over in the map's own creased paper, the person is placed under it
   while the ground and grass follow, and the world dissolves back in at the
-  new place, slower than it clouded, with no name spoken until it does. A
-  name sends the person to its area's heart. They land at eye height on the
+  new place, slower than it clouded, with no name spoken until it does. An
+  area's name sends the person to its heart, a file's to its patch's. They land at eye height on the
   nearest dry ground (wading water only if nothing dry is near) clear of
   everything solid, in the area tapped, and in the wild only if the tap was
   there: on or beside a building, where its sign is read, looking at it; on a
@@ -598,7 +672,7 @@ The three ways work together:
   the tread a boundary stone is carved with both names, the one to the left
   above a cut line and the one to the right below it. An arm's paint fades,
   its wood greys and it droops on its nail with the vitality of the area it
-  names (the mean of its files', its subdirectories' included); the stone's moss recedes and the stone
+  names (its files', its subdirectories' included, pooled by size: `areaVitality`); the stone's moss recedes and the stone
   bleaches with both areas'. Posts and stones stop a walker, and no grass
   grows through a stone. Every name fits its arm or its line on the stone,
   as on the signs (see Signs and cards); a long name's arm grows up to a

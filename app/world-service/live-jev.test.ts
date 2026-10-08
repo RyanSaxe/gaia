@@ -118,7 +118,9 @@ describe("judging a codebase with Jev", () => {
     expect(Object.entries(first.document.judges).filter(([, j]) => j === "stand-in").map(([t]) => t)).toEqual(["file:README.md"]);
     expect(first.document.summary).toContain("1 request failed");
     const asking = first.shown.filter((o) => o.stage === "asking");
-    expect(asking.at(-1)).toMatchObject({ total: first.sent.length, answered: first.sent.length, failed: 1 });
+    expect(asking.at(-1)).toMatchObject({ total: first.sent.length, answered: first.sent.length, failed: 1, asking: [] });
+    // While a question is out, its area is named as being worked on, for the wait to show.
+    expect(asking.some((o) => o.asking.length > 0)).toBe(true);
 
     // Reopening on a new engine asks nothing it has answered, and never asks the person again.
     const second = await open(root, data, true);

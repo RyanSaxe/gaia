@@ -1,11 +1,15 @@
-// The field map's look: a painted bird's-eye of the valley, as in a Ghibli
-// film: gouache-rich washes, hills shaded in violet and lit warm, soft
-// painted hedgerows between areas, trees as round crowns with soft shadows,
-// and deep water lit at its rim. It is plain data that `field-map.ts` paints
-// from, and the wait paints its sheet from the same data (`wait/ink.ts`).
+// The field sheet's look, one for the field map, the minimap, a thing's
+// sketch page and the wait (docs/design-system.md, "The field sheet"): a
+// painted topographic map. Gouache-rich washes in the color of each area's
+// land, wilting with its health; hills shaded in violet and lit warm, with
+// fine sepia contour lines from the real heights over them; soft painted
+// hedgerows between areas, trees as round crowns with soft shadows, and deep
+// water lit at its rim. It is plain data that `field-map.ts` paints from, and
+// the wait paints its sheet from the same data (`wait/ink.ts`).
 //
 // An area's wash is the color of the land Jev judged for it, from the
-// palette the ground shader paints that land's cover with (`groundWash`).
+// palette the ground shader paints that land's cover with, dried or
+// deepened by its vitality (`groundWash`).
 
 import { type GroundSpec, rand, seedOf } from "@gaia/schema";
 
@@ -49,6 +53,16 @@ export interface MapStyle {
   readonly trail: string;
   /** How strongly each top-level directory's name is lettered across its whole region. */
   readonly regionAlpha: number;
+  /**
+   * Contour lines from the real heights, in sepia ink over the paint: one every `interval` meters and every
+   * `index`th one heavier, their widths in paper pixels and opacities.
+   */
+  readonly contour: { readonly interval: number; readonly index: number; readonly ink: string; readonly width: number; readonly alpha: number; readonly indexWidth: number; readonly indexAlpha: number };
+  /**
+   * How a wash answers its area's health: thriving land a touch richer and deeper; tired land dried toward straw,
+   * failing land toward the pale of grass gone to seed, with the paper showing through in dry-brush streaks.
+   */
+  readonly wilt: { readonly straw: readonly [number, number, number]; readonly seed: readonly [number, number, number]; readonly rich: number; readonly streaks: number };
 }
 
 export const MAP_STYLE: MapStyle = {
@@ -76,7 +90,29 @@ export const MAP_STYLE: MapStyle = {
   patchFill: 0.16,
   trail: "rgba(122,80,42,0.92)",
   regionAlpha: 0.2,
+  contour: { interval: 1.2, index: 5, ink: "#5a4128", width: 1.8, alpha: 0.3, indexWidth: 3, indexAlpha: 0.46 },
+  wilt: { straw: [205, 176, 102], seed: [226, 208, 164], rich: 0.3, streaks: 46 },
 };
+
+/** How dry an area's land is, 0 thriving to 1 failing: nothing above 0.82, wholly dry at 0.3. */
+export const dryness = (vitality: number): number => {
+  const t = Math.max(0, Math.min(1, (0.82 - vitality) / 0.52));
+  return t * t * (3 - 2 * t);
+};
+
+/**
+ * One scale of health for the land in words, the map's legend and the
+ * minimap's: the same thresholds as a thing's (`standing` in
+ * `terrain/card.ts`).
+ */
+export const LAND_HEALTH: readonly { readonly from: number; readonly words: string }[] = [
+  { from: 0.85, words: "in full leaf" },
+  { from: 0.65, words: "in good heart" },
+  { from: 0.4, words: "going over" },
+  { from: 0.15, words: "gone to seed" },
+  { from: -1, words: "laid waste" },
+];
+export const landHealth = (vitality: number): string => LAND_HEALTH.find((h) => vitality >= h.from)?.words ?? "laid waste";
 
 const channels = (h: string): [number, number, number] => {
   const v = parseInt(h.slice(1), 16);
@@ -100,13 +136,27 @@ export function groundTone(g: GroundSpec): [number, number, number] {
 }
 
 /**
+ * A wash as its land's health leaves it: thriving land a touch richer and
+ * deeper, tired land dried toward straw and failing land toward the pale of
+ * grass gone to seed.
+ */
+export function wilted(style: MapStyle, rgb: readonly [number, number, number], vitality: number): [number, number, number] {
+  const grey = rgb[0] * 0.3 + rgb[1] * 0.59 + rgb[2] * 0.11;
+  const rich = Math.max(0, Math.min(1, (vitality - 0.82) / 0.12)) * style.wilt.rich;
+  const deep = rgb.map((c) => Math.max(0, Math.min(255, (grey + (c - grey) * (1 + rich)) * (1 - rich * 0.25)))) as [number, number, number];
+  const dry = dryness(vitality);
+  const straw = mix3(deep, style.wilt.straw, Math.min(1, dry * 0.85));
+  return mix3(straw, style.wilt.seed, Math.max(0, dry - 0.6) * 1.4).map(Math.round) as [number, number, number];
+}
+
+/**
  * An area's wash, red, green and blue from 0 to 255: the color its ground is
  * painted with, softened into watercolor (its chroma
- * scaled about its lightness, then lifted toward the paper), and a little
+ * scaled about its lightness, then lifted toward the paper), a little
  * lighter or darker, warmer or cooler by its path, so neighbors on one land
- * keep apart.
+ * keep apart, and wilted by its vitality (`wilted`).
  */
-export function groundWash(style: MapStyle, ground: GroundSpec, path: string): [number, number, number] {
+export function groundWash(style: MapStyle, ground: GroundSpec, path: string, vitality = 1): [number, number, number] {
   const tone = groundTone(ground);
   const grey = tone[0] * 0.3 + tone[1] * 0.59 + tone[2] * 0.11;
   const paint = mix3(tone.map((c) => Math.max(0, Math.min(255, grey + (c - grey) * style.landChroma))), channels(style.paper), style.landLift);
@@ -114,7 +164,7 @@ export function groundWash(style: MapStyle, ground: GroundSpec, path: string): [
   const light = r.range(-1, 1) * style.toneStep;
   const warmth = r.range(-1, 1) * style.toneStep * 0.38;
   const lit = light > 0 ? mix3(paint, LIGHTER, light * 0.5) : mix3(paint, DARKER, -light * 0.3);
-  return (warmth > 0 ? mix3(lit, WARMER, warmth) : mix3(lit, COOLER, -warmth)).map(Math.round) as [number, number, number];
+  return wilted(style, warmth > 0 ? mix3(lit, WARMER, warmth) : mix3(lit, COOLER, -warmth), vitality);
 }
 
 const hash = (x: number, z: number): number => {

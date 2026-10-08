@@ -12,9 +12,13 @@
 // less its subdirectories'), painted in idle moments once its land is judged
 // and shown by a CSS opacity transition, and each border is an SVG path
 // drawn by a CSS transition of its dash: nothing here redraws per frame, so
-// a busy page thread never stalls it.
+// a busy page thread never stalls it. While Jev is asked, a brush works
+// over the areas with a question out (`brush.ts`), so the sheet shows it is
+// still being drawn through every lull.
 
 import type { Outline } from "@gaia/terrain";
+import { dryness } from "../immersive/map-styles.ts";
+import { type WaitBrush, createWaitBrush } from "./brush.ts";
 import { WAIT_INK } from "./ink.ts";
 import type { WaitView } from "./wait.ts";
 
@@ -37,6 +41,8 @@ interface Area {
   readonly path: string;
   readonly depth: number;
   readonly rings: readonly (readonly number[])[];
+  /** Its own ground, its subdirectories' cut out, as an SVG path in meters. */
+  ground: string;
   /** Its middle, for the order washes come in when they settle together. */
   readonly x: number;
   readonly z: number;
@@ -110,6 +116,10 @@ export function createMapWait(veil: HTMLElement): WaitView {
   let pump = 0;
   let painting = 0;
   let resolveShown: (() => void) | null = null;
+  let painter: WaitBrush | null = null;
+  /** Each area's own ground's vitality, once the world bakes: its wash dries into it. */
+  let dryInto: Readonly<Record<string, number>> = {};
+  let nightness = 0;
   const allShown = new Promise<void>((r) => (resolveShown = r));
 
   /** Paints one area's wash onto its own canvas, over its own ground only, in the color of its land. */
@@ -194,6 +204,16 @@ export function createMapWait(veil: HTMLElement): WaitView {
     g.globalCompositeOperation = "source-over";
     washes.append(canvas);
     a.canvas = canvas;
+    wilt(a);
+  }
+
+  /** Once the world bakes, a wash dries into its ground's health: tired land toward straw, thriving land a touch richer, as the map washes it. */
+  function wilt(a: Area): void {
+    const v = dryInto[a.path];
+    if (a.canvas === null || a.canvas === undefined || v === undefined) return;
+    const dry = dryness(v);
+    const rich = Math.max(0, Math.min(1, (v - 0.82) / 0.12));
+    a.canvas.style.setProperty("--wilt", `saturate(${(1 + rich * 0.25 - dry * 0.5).toFixed(2)}) sepia(${(dry * 0.6).toFixed(2)}) brightness(${(1 + dry * 0.08).toFixed(2)})`);
   }
 
   /** Paints the settled areas' washes a few at a time while the page is idle. */
@@ -298,8 +318,11 @@ export function createMapWait(veil: HTMLElement): WaitView {
         // Top-level borders a little heavier than those within them.
         pen(path, hand.line, hand.width * (o.depth === 1 ? 1.25 : 0.9), delay, PACE.penMs);
       }
-      return { path: o.path, depth: o.depth, rings, x, z, inkedAt, land: null, canvas: undefined, shown: false };
+      return { path: o.path, depth: o.depth, rings, ground: "", x, z, inkedAt, land: null, canvas: undefined, shown: false };
     });
+    for (const a of areas) a.ground = pathOf([...a.rings, ...areas.filter((c) => c.depth === a.depth + 1 && parentOf(c.path) === a.path).flatMap((c) => c.rings)], 0);
+    painter = createWaitBrush(veil.querySelector(".wait-body") as HTMLElement, areas, reach, sideOf);
+    painter.night(nightness);
     // The wild past the land's edge, as the map paints it, brushed in after the edge.
     idle(() => {
       brush.width = brush.height = Math.round(sideOf() * dpr);
@@ -315,10 +338,16 @@ export function createMapWait(veil: HTMLElement): WaitView {
   return {
     opening(o) {
       if (o.stage === "land") land(o.name, o.size, o.areas);
-      else if (o.stage === "asking") settle(o.settled);
+      else if (o.stage === "asking") {
+        settle(o.settled);
+        painter?.asking(o.asking, o.answered);
+      }
     },
-    baking(lands) {
+    baking(lands, health = {}) {
       everything = true;
+      dryInto = health;
+      for (const a of areas) wilt(a);
+      painter?.baking();
       // Whatever has not settled settles now: from the middle outward, as the pen went.
       settle(lands);
       // An area with no judged land stays bare paper.
@@ -332,7 +361,9 @@ export function createMapWait(veil: HTMLElement): WaitView {
       schedulePump();
     },
     night(n) {
+      nightness = n;
       veil.style.setProperty("--night", n.toFixed(2));
+      painter?.night(n);
     },
     async lift() {
       if (areas.length > 0) await allShown;

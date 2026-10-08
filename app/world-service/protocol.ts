@@ -95,9 +95,10 @@ export type Opening =
    * Asking Jev about the things it has not judged; `answered` counts those settled, `failed` those the stand-in
    * took over, and `settled` names every area (a directory's path, "" for the root) whose things and land are all
    * judged, with the land judged for its own ground: a land's name in `looks.ts`, its region's for an area without
-   * land of its own, as `areaLands` reads it from the finished world.
+   * land of its own, as `areaLands` reads it from the finished world. `asking` names the areas with a question
+   * to Jev in flight now, which the wait shows being worked on.
    */
-  | { readonly stage: "asking"; readonly name: string; readonly total: number; readonly answered: number; readonly failed: number; readonly settled: Readonly<Record<string, string>> };
+  | { readonly stage: "asking"; readonly name: string; readonly total: number; readonly answered: number; readonly failed: number; readonly settled: Readonly<Record<string, string>>; readonly asking: readonly string[] };
 
 /** World service → renderer. */
 export type ToRenderer =

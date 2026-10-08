@@ -22,7 +22,7 @@ the document that did not change renders exactly as it did before.
 | Main | TypeScript (Electron) | The window and the app's lifecycle. It starts the engine and the world service, restarts the engine if it exits, and names the folder whose world each page opens: `GAIA_PROJECT`, one chosen with File > Open Folder, or none, and then the page offers the start (File > Choose a World returns to it). |
 | Engine | Rust (`gaia-engine`) | Files, parsing, git, test reports, the code model, the app-data store and the Jev client with the key from the macOS Keychain. |
 | World service | TypeScript (Electron utility process) | Kinds and primitives, the question planner, answer rules, vitality and the world document. It opens a codebase's world (`openWorld` in `app/world-service/open-world.ts`): the engine's `project.open`, Jev's judgments, kept in the store, and `layoutWorld`, and sends the renderer the result (`WorldDocument`) over its MessagePort. |
-| Renderer | TypeScript | The UI, the Three.js scene, the realizer and the clock. In slice 1 the renderer is the lab. The lab opens into the world, full screen at eye height (`app/renderer/immersive/`), with its debugging views (Components, Terrain and Skies) behind tabs; the immersive world is the terrain lab's world without its chrome, plus three ways of telling a person where they are (the area's name on a slip of paper, a field map and markers in the world), read through `placeAt`; touching the world only moves the person, and everything else opens from the corner controls (`docs/design-system.md`); a tap on the open field map sends the person to that place, landing where `WorldHandle.landing` says, under a fold of paper that hides the move. The terrain lab bakes its world on worker threads (`app/renderer/terrain/bake-worker.ts`): a few workers compose bands of lattice rows with `composeRows`, and one finishes the bake with `finishTerrain` and stands the world's things on it with `standWorld` (`app/renderer/terrain/stand.ts`): each building's site and pad, the landmarks' sites, the network of trails leveled into the ground and which way of it each ground sample lies on, the trees and the understory, and the ground texture's data, so drawing never waits on a bake. Components are still realized on the main thread; the realizer is pure and worker-safe, so it can move into workers too. |
+| Renderer | TypeScript | The UI, the Three.js scene, the realizer and the clock. In slice 1 the renderer is the lab. The lab opens into the world, full screen at eye height (`app/renderer/immersive/`), with its debugging views (Components, Terrain and Skies) behind tabs; the immersive world is the terrain lab's world without its chrome, plus three ways of telling a person where they are (a minimap of the land around them with the area's name, the field map that unfolds out of it, and markers in the world), read through `placeAt` and drawn on one field sheet (`docs/design-system.md`, "The field sheet"); touching the world only moves the person, and a thing walked up to grows the minimap into its sketch page; a tap on the open field map sends the person to that place, landing where `WorldHandle.landing` says, under a fold of paper that hides the move. The terrain lab bakes its world on worker threads (`app/renderer/terrain/bake-worker.ts`): a few workers compose bands of lattice rows with `composeRows`, and one finishes the bake with `finishTerrain` and stands the world's things on it with `standWorld` (`app/renderer/terrain/stand.ts`): each building's site and pad, the landmarks' sites, the network of trails leveled into the ground and which way of it each ground sample lies on, the trees and the understory, and the ground texture's data, so drawing never waits on a bake. Components are still realized on the main thread; the realizer is pure and worker-safe, so it can move into workers too. |
 
 The world service talks to the engine in newline-delimited JSON-RPC 2.0 over
 the engine's stdin and stdout, relayed by the main process. Only small data
@@ -222,9 +222,12 @@ answer, each with the land judged for its ground (stage `asking`,
 `settled`, area path to land name: an area settles once every request
 about its files, its entity and itself has, and the one that judges its
 land, its own or its region's), and the wait washes each area in its
-land's color as it settles. Once the world is laid out, the wait gets
-every area's land (`areaLands` in `@gaia/world`, equal to the last
-`settled`), which is all a world judged without asking Jev ever sends it.
+land's color as it settles. The same stage names the areas with a
+question to Jev in flight (`asking`), where the wait's brush works. Once
+the world is laid out, the wait gets every area's land (`areaLands` in
+`@gaia/world`, equal to the last `settled`), which is all a world judged
+without asking Jev ever sends it, and each area's own ground's vitality
+(`groundVitality`), which its wash dries into.
 `docs/connect-jev.md` is the reviewer's page for connecting it.
 
 `placeAt(world, x, z)` in `@gaia/terrain` says where a person is: the cell
@@ -496,6 +499,21 @@ test in a large package costs less than half its tests failing. Each term
 carries a reading in words, such as "2 of 4 test files failing", for the
 card that tells a person what a thing is. Activity, from recent commits, is
 a separate channel that never lowers vitality.
+
+A directory's vitality pools its files' (`areaVitality` in `@gaia/world`):
+every file under it, its subdirectories' included, weighted by its size,
+so the whole reads as the share of it that thrives; the field map, the
+minimap and the markers weigh each file by the ground its patch holds,
+which the layout gives in proportion to its code. An area's own ground
+is washed with the files directly in it (`groundVitality`), or with
+everything under it where it holds none of its own; `""` is the whole
+world's.
+
+What a thing's sketch page says comes from one function (`describe` in
+`app/renderer/immersive/sketch.ts`): by default `symptomsOf`, which turns
+the vitality's signals into a few words about what is specific to this
+thing, and says nothing of a signal nearly every file shares. Jev's own
+judgment of what to say about a thing plugs in there.
 
 Every primitive writes five per-vertex vitality channels: `loss` (the vitality
 below which a piece collapses to its pivot), `droop`, `wither`, `glow` and

@@ -31,3 +31,7 @@ were deleted rather than kept behind switches.
 Pair session `gaia-v3` (`f8d282bc-7712-4894-9255-dcf4699f92cb`), round 14
 (the wayfinding page). The look of the slip and the line is being designed
 further on a scratch board in round 15.
+
+## Superseded
+
+Round 16 replaced the slip, the line and the rim with one field sheet: see [35](35-one-field-sheet.md).
