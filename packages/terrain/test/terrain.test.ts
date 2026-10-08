@@ -46,6 +46,7 @@ import {
 const lib = new Library([...RELIEF_PRIMITIVES, ...BIOME_PRIMITIVES]);
 const bytes = (a: ArrayBufferView): Buffer => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
 const draws = Array.from({ length: 16 }, (_, i) => randomWorld(lib, 7000 + i));
+/** Baked once and only read: the sample world, then sixteen random draws. */
 const baked: Terrain[] = [sampleWorld(), ...draws].map((w) => bakeTerrain(w, lib));
 
 describe("landforms", () => {
@@ -76,9 +77,10 @@ describe("landforms", () => {
   });
 });
 
-describe("terrain", () => {
+// Some tests here bake a world or read every baked sample: up to a second alone, several when other work shares the machine.
+describe("terrain", { timeout: 20_000 }, () => {
   it("bakes byte-identical ground and water for the same world", () => {
-    const a = bakeTerrain(sampleWorld(), lib);
+    const a = baked[0] as Terrain;
     const b = bakeTerrain(sampleWorld(), lib);
     expect(bytes(a.lattice.heights).equals(bytes(b.lattice.heights))).toBe(true);
     expect(bytes(a.waterLevel).equals(bytes(b.waterLevel))).toBe(true);
@@ -355,11 +357,12 @@ describe("full worlds", () => {
     const cuts = [0, 97, 98, 250, n];
     const parts = cuts.slice(1).map((z1, i) => composeRows(w, landforms, cuts[i]!, z1));
     const banded = finishTerrain(w, landforms, parts.reverse());
-    const whole = bakeTerrain(w, lib);
+    const whole = baked[0] as Terrain;
     for (const key of ["waterLevel", "shore", "region", "coverRegions", "coverShares"] as const) expect(bytes(banded[key]).equals(bytes(whole[key])), key).toBe(true);
     expect(bytes(banded.lattice.heights).equals(bytes(whole.lattice.heights))).toBe(true);
     expect(banded.streams).toEqual(whole.streams);
-  });
+    // Composes and finishes a world in bands: about half a second alone, several when other work shares the machine.
+  }, 20_000);
 
   it("keeps a full world of a score of regions inside the relief budget, with several streams and ponds", () => {
     for (const w of [sampleWorld(FULL_WORLD), randomWorld(lib, 7, FULL_WORLD)]) {

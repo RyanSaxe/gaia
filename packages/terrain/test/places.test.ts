@@ -1,7 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Library } from "@gaia/schema";
-import { BIOME_PRIMITIVES, RELIEF_PRIMITIVES } from "@gaia/primitives";
-import { WILD_AREA, type WorldPlaces, bakeTerrain, outlinesOf, placeAt, regionPlaces, sampleWorld, warpPoint } from "@gaia/terrain";
+import { WILD_AREA, type WorldPlaces, outlinesOf, placeAt, regionPlaces, sampleWorld, warpPoint } from "@gaia/terrain";
 
 const file = (path: string, x: number, z: number, radius: number, vitality = 0.8) => ({ path, name: path.split("/").pop() ?? path, x, z, radius, vitality });
 
@@ -50,10 +48,10 @@ describe("where a person is", () => {
   });
 
   it("names the region whose land a point is on in a world laid out as regions, and the nearest file whose patch reaches it", () => {
+    // Places read the world's regions alone, so the ground need not be baked.
     const spec = sampleWorld();
-    const t = bakeTerrain(spec, new Library([...RELIEF_PRIMITIVES, ...BIOME_PRIMITIVES]));
     const [a, b] = spec.regions;
-    const world = regionPlaces(t.spec, "sample", [file("src/core/a.ts", a!.x, a!.z, 4), file("src/core/b.ts", a!.x + 6, a!.z, 4), file("src/ui/c.ts", b!.x, b!.z, 3)]);
+    const world = regionPlaces(spec, "sample", [file("src/core/a.ts", a!.x, a!.z, 4), file("src/core/b.ts", a!.x + 6, a!.z, 4), file("src/ui/c.ts", b!.x, b!.z, 3)]);
     for (const r of spec.regions) {
       const here = placeAt(world, r.x, r.z).area;
       expect(here).toEqual({ path: r.id, name: r.id.split("/").pop(), depth: r.id.split("/").length });

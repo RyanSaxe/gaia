@@ -23,11 +23,8 @@ const days: DaySpec[] = (() => {
 
 /** Every number in a light, in a fixed order. */
 const numbers = (l: LightSpec): number[] => Object.values(l).flatMap((v) => (typeof v === "number" ? [v] : [...(v as readonly number[])]));
-const largestChange = (a: LightSpec, b: LightSpec): number => {
-  const x = numbers(a);
-  const y = numbers(b);
-  return Math.max(...x.map((v, i) => Math.abs(v - (y[i] ?? Number.NaN))));
-};
+const largestDifference = (x: readonly number[], y: readonly number[]): number => Math.max(...x.map((v, i) => Math.abs(v - (y[i] ?? Number.NaN))));
+const largestChange = (a: LightSpec, b: LightSpec): number => largestDifference(numbers(a), numbers(b));
 const luminance = (c: Rgb): number => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
 const EVERY_15_MINUTES = Array.from({ length: 96 }, (_, i) => i / 4);
 
@@ -52,10 +49,16 @@ describe("lightAt", () => {
   it("never jumps from one minute to the next", () => {
     for (const day of days.filter((_, i) => i % 7 === 0)) {
       let worst = 0;
-      for (let m = 0; m < 24 * 60; m++) worst = Math.max(worst, largestChange(lightAt(day, m / 60), lightAt(day, (m + 1) / 60)));
+      let before = numbers(lightAt(day, 0));
+      for (let m = 1; m <= 24 * 60; m++) {
+        const now = numbers(lightAt(day, m / 60));
+        worst = Math.max(worst, largestDifference(before, now));
+        before = now;
+      }
       expect(worst).toBeLessThan(0.05);
     }
-  });
+    // Reads the light 200,000 times: half a second alone, several when other work shares the machine.
+  }, 20_000);
 
   it("repeats every 24 hours", () => {
     for (const day of days.filter((_, i) => i % 5 === 0)) {
@@ -111,7 +114,8 @@ describe("daylight@1 nights", () => {
         if (l.nightness > 0.8) expect(l.ambientColor[2]).toBeGreaterThan(l.ambientColor[0]);
       }
     }
-  });
+    // Reads the light 93,000 times: half a second alone, several when other work shares the machine.
+  }, 20_000);
 
   it("deepens every preset's sky to a blue night that is never black", () => {
     const lib = new Library(WORLD_PRIMITIVES);

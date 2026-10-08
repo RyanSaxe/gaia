@@ -25,12 +25,15 @@ const request: StandRequest = {
   },
 };
 const bytes = (a: ArrayBufferView): Buffer => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
+/** The sample world, baked once; standing levels a bake's ground, so each test stands its own copy. */
+const baked = bakeTerrain(sampleWorld(), lib);
+const pristine = structuredClone(baked);
 
 describe("standing a world's things on a bake", () => {
   it("stands the same things whether the bake crossed to another thread or not, leveling the pads first", () => {
-    const here = bakeTerrain(sampleWorld(), lib);
+    const here = baked;
     // A worker's bake arrives as a structured clone.
-    const there = structuredClone(here);
+    const there = structuredClone(pristine);
     const a = standWorld(here, request);
     const b = standWorld(there, request);
     expect(bytes(a.ground).equals(bytes(b.ground))).toBe(true);
@@ -58,7 +61,7 @@ describe("standing a world's things on a bake", () => {
   });
 
   it("stands a world laid out from code: each building and landmark on its lot, each tree on its file's patch, trails between lots", () => {
-    const t = bakeTerrain(sampleWorld(), lib);
+    const t = pristine;
     const code: StandCode = {
       lots: [{ id: "packages/a", x: -40, z: 30, radius: 9 }, { id: "packages/b", x: 50, z: -20, radius: 9 }],
       landmarks: [{ landmark: 0, lot: { id: "packages/c", x: 10, z: 70, radius: 7 } }],

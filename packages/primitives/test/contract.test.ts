@@ -75,7 +75,8 @@ describe("manifest", () => {
   });
 });
 
-describe.each(PRIMITIVES.map((p) => [p.id, p] as const))("%s", (_id, p) => {
+// Each test builds every sample of a primitive: up to a second alone, several when other work shares the machine.
+describe.each(PRIMITIVES.map((p) => [p.id, p] as const))("%s", { timeout: 20_000 }, (_id, p) => {
   it("declares a versioned ID, a doc and an instruction for every field", () => {
     expect(p.id).toMatch(/^[a-z][a-z0-9-]*@\d+$/);
     expect(p.doc.trim().length).toBeGreaterThan(10);

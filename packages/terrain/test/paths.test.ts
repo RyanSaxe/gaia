@@ -28,7 +28,8 @@ import {
 
 const lib = new Library([...RELIEF_PRIMITIVES, ...BIOME_PRIMITIVES]);
 const STYLE: RouteSpec = { width: 1.4, wear: 0.7, edging: "none", winding: 0.45, crossing: "footbridge" };
-const bake = (): Terrain[] => [sampleWorld(), randomWorld(lib, 7003), randomWorld(lib, 7011)].map((w) => bakeTerrain(w, lib));
+/** Baked once for every test here: the sample world first, then two random ones. Tests only read them. */
+const baked: readonly Terrain[] = [sampleWorld(), randomWorld(lib, 7003), randomWorld(lib, 7011)].map((w) => bakeTerrain(w, lib));
 
 /** Every pair of region hearts, all wanted: far more trails than any budget allows. */
 function everyPair(t: Terrain): TrailRequest[] {
@@ -40,13 +41,14 @@ function everyPair(t: Terrain): TrailRequest[] {
   return out;
 }
 
-describe("trails", () => {
-  // Planned once: these worlds are only read.
-  const planned = bake().map((t) => ({ t, network: planTrails(t, everyPair(t), 41) }));
+// Some tests here bake a world or plan a network: up to a second alone, several when other work shares the machine.
+describe("trails", { timeout: 20_000 }, () => {
+  // Planned once: these networks are only read.
+  const planned = baked.map((t) => ({ t, network: planTrails(t, everyPair(t), 41) }));
 
   it("routes the same network for the same terrain, requests and seed", () => {
-    const [a, b] = [bakeTerrain(sampleWorld(), lib), bakeTerrain(sampleWorld(), lib)] as [Terrain, Terrain];
-    const na = planTrails(a, everyPair(a), 41);
+    const { network: na } = planned[0] as (typeof planned)[number];
+    const b = bakeTerrain(sampleWorld(), lib);
     const nb = planTrails(b, everyPair(b), 41);
     expect(na.trails).toEqual(nb.trails);
     expect(na.ways.map((w) => Array.from(w.points))).toEqual(nb.ways.map((w) => Array.from(w.points)));
@@ -210,8 +212,9 @@ describe("trails", () => {
   });
 
   it("levels the ground only near a way, and never by more than its limit", () => {
-    const t = bakeTerrain(sampleWorld(), lib);
-    const network = planTrails(t, everyPair(t), 41);
+    const { t: read, network } = planned[0] as (typeof planned)[number];
+    // Leveling changes the ground, so it works on a copy.
+    const t = structuredClone(read);
     const before = t.lattice.heights.slice();
     const field = trailField(t, network.ways);
     levelTrails(t, network.ways);
@@ -230,7 +233,7 @@ describe("trails", () => {
 
 describe("landmark sites", () => {
   it("stand on gentle, dry ground inside their own region, clear of what they avoid", () => {
-    for (const t of bake()) {
+    for (const t of baked) {
       const avoid = [{ x: 0, z: 0, radius: 40 }];
       t.spec.regions.forEach((_, r) => {
         const site = findLandmarkSite(t, r, 4, avoid);
