@@ -349,7 +349,9 @@ finger and keys all follow the same three rules.
 - **Everything else is paper from the corner.** The corner controls, at the
   top right (stacked on a phone), are the only things on the screen that are
   not the world: the map button (or M) unfolds the field map, and the rose
-  opens the slip. They stay while a card is read.
+  opens the slip. They stay while a card is read. A tap on the open map is
+  the one way to travel far at once: it is a paper action, so it belongs to
+  the map, never to the world.
 - **Paper you open holds the world still.** While the map or the slip is
   open, the world waits under a faint wash. A tap there folds the paper and
   moves no one, a drag there does nothing, and Esc folds it. The keys still
@@ -426,6 +428,18 @@ The three ways work together:
   close around the person, a wide screen shows it whole. Its paper is
   painted in steps of a millisecond or two in the page's idle time after a
   bake, so it never holds up a frame.
+  A tap on the open map, on a spot or on an area's name, sends the person
+  there. The spot is marked in vermilion ink; the map folds away as the view
+  clouds over in the map's own creased paper, the person is placed under it
+  while the ground and grass follow, and the world dissolves back in at the
+  new place, slower than it clouded, with no name spoken until it does. A
+  name sends the person to its area's heart. They land at eye height on the
+  nearest dry ground (wading water only if nothing dry is near) clear of
+  everything solid, in the area tapped, and in the wild only if the tap was
+  there: on or beside a building, where its sign is read, looking at it; on a
+  trail, looking along it toward the area's building or heart; elsewhere,
+  looking toward the building or the heart. A double tap zooms and sends no
+  one. `WorldHandle.landing` is the rule.
 - **Markers in the world.** Where a trail crosses from one area into the
   next, a fingerpost stands beside it with an arm pointing each way along
   the trail, each painted with the name of the area that way, and across

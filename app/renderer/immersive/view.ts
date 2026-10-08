@@ -28,6 +28,9 @@ export interface Immersive {
   readonly hook: Readonly<Record<string, unknown>>;
 }
 
+/** A jump's timing, matching lab.css: the paper clouds over and holds a moment, frames for the ground and grass to follow under it, and the world dissolving in, ms. */
+const JUMP = { coverMs: 480, settleFrames: 4, revealMs: 1100 };
+
 const ROSE = `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M12 4.5 13.6 12 12 19.5 10.4 12Z" fill="currentColor" opacity=".85"/><path d="M4.5 12 12 10.6 19.5 12 12 13.4Z" fill="none" stroke="currentColor" stroke-width="1"/></svg>`;
 
 /** How to wander, as the slip says it: a mouse and keys, or a finger. */
@@ -38,6 +41,7 @@ const WANDER = /* html */ `
     <dt>Drag</dt><dd>look around</dd>
     <dt class="mouse-only">W A S D</dt><dd class="mouse-only">walk, Shift to hurry</dd>
     <dt class="mouse-only">M</dt><dd class="mouse-only">the map; Esc folds it</dd>
+    <dt><span class="mouse-only">Click</span><span class="touch-only">Tap</span> the map</dt><dd>go to that place</dd>
   </dl>`;
 
 export function createImmersive(container: HTMLElement, world: WorldHandle, lab: LabViews): Immersive {
@@ -51,9 +55,42 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
   const reading = document.createElement("div");
   reading.className = "reading";
   layer.append(reading);
-  const map = createFieldMap(layer, { stood: world.stood, placeAt: world.placeAt, places: world.places }, (open) => {
-    if (open) setSlip(false);
-  });
+  // A jump from the map: the map folds as the view clouds over in the paper's own color, the person is
+  // placed under it, and once the ground and grass have followed them the world dissolves in at the new place.
+  const cover = document.createElement("div");
+  cover.className = "jump-cover";
+  layer.append(cover);
+  let jumping = false;
+  function jump(x: number, z: number, heart?: { readonly x: number; readonly z: number }): boolean {
+    if (jumping) return false;
+    const at = world.landing(x, z, heart);
+    if (at === null) return false;
+    jumping = true;
+    map.open(false);
+    cover.classList.add("on");
+    window.setTimeout(() => {
+      world.place(at);
+      let frames = 0;
+      const settle = (): void => {
+        if (++frames < JUMP.settleFrames) {
+          requestAnimationFrame(settle);
+          return;
+        }
+        cover.classList.remove("on");
+        window.setTimeout(() => (jumping = false), JUMP.revealMs);
+      };
+      requestAnimationFrame(settle);
+    }, JUMP.coverMs);
+    return true;
+  }
+  const map = createFieldMap(
+    layer,
+    { stood: world.stood, placeAt: world.placeAt, places: world.places },
+    (open) => {
+      if (open) setSlip(false);
+    },
+    jump,
+  );
   const markers = createMarkers(world.light);
   world.scene.add(markers.group);
   world.camera.layers.enable(MARKER_LAYER);
@@ -176,6 +213,10 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
     hook: {
       /** Unfolds or folds the field map. */
       map: (on: boolean) => map.open(on),
+      /** Sends the person to (x, z) as a tap on the map would; false if nowhere near is fit. */
+      jump: (x: number, z: number) => jump(x, z),
+      /** Whether a jump is under way. */
+      jumping: () => jumping,
       /** Opens or closes the slip in the corner. */
       slip: (on: boolean) => setSlip(on),
       /** Where the person is, and what each way of knowing it shows now. */

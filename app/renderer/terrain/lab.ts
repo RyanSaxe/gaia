@@ -243,7 +243,30 @@ export interface WorldHandle {
   furnishingSolid(on: boolean): void;
   /** Shows only the world: no panel, no bars, walking only. */
   immersive(on: boolean): void;
+  /**
+   * Where a person sent from the map to (x, z) lands, or null if nowhere near
+   * is fit: on or beside a building, where its sign is read, looking at it;
+   * elsewhere the nearest dry ground clear of every solid, in the same area
+   * (in the wild only if (x, z) is), facing along a trail close by, else
+   * toward the area's building or landmark, else toward `heart`.
+   */
+  landing(x: number, z: number, heart?: { readonly x: number; readonly z: number }): Landing | null;
+  /** Puts the person at a landing at once: only under cover of a transition, so nothing is seen to jump. */
+  place(at: Landing): void;
 }
+
+/** Where a person lands and which way they look (radians, 0 looking toward -z). */
+export interface Landing {
+  readonly x: number;
+  readonly z: number;
+  readonly yaw: number;
+}
+
+/** Where a landing may be: water no deeper than this (dry first, then wading), this far from any solid, and how far it looks from the spot asked for, meters. */
+const LAND = { dry: 0.02, wade: 0.45, clear: 1.1, reach: 40, ring: 1.5 };
+/** A landing faces along a trail this close, else the area's building or landmark this close, meters. */
+const FACE_TRAIL = 14;
+const FACE_THING = 160;
 
 export interface TerrainLab extends Lab {
   readonly world: WorldHandle;
@@ -1499,6 +1522,64 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     frozen = 8;
   }
 
+  /** The landing nearest (x, z): see `WorldHandle.landing`. */
+  function landingNear(x: number, z: number, heart?: { readonly x: number; readonly z: number }): Landing | null {
+    // A spot on or beside a building lands where a person stops to read its sign, looking at it.
+    const house = settlement.buildings.find((b) => Math.hypot(b.site.x - x, b.site.z - z) < Math.max(b.plan.width, b.plan.depth) * 0.5 + 4);
+    if (house !== undefined) {
+      const at = settlement.standOf(house);
+      if (waterDepthAt(terrain, at.x, at.z) <= LAND.wade && clearanceAt(solids, at.x, at.z) >= LAND.clear * 0.5) return { x: at.x, z: at.z, yaw: Math.atan2(-(house.site.x - at.x), -(house.site.z - at.z)) };
+    }
+    const asked = placeAt(places, x, z).area;
+    const fits = (px: number, pz: number, depth: number): boolean => {
+      if (waterDepthAt(terrain, px, pz) > depth || clearanceAt(solids, px, pz) < LAND.clear) return false;
+      const area = placeAt(places, px, pz).area;
+      return asked.depth < 0 ? area.depth < 0 : area.path === asked.path && area.depth === asked.depth;
+    };
+    let spot: { x: number; z: number } | null = null;
+    for (const depth of [LAND.dry, LAND.wade]) {
+      for (let r = 0; r <= LAND.reach && spot === null; r += LAND.ring) {
+        const count = Math.max(1, Math.round((Math.PI * 2 * r) / LAND.ring));
+        for (let k = 0; k < count; k++) {
+          const a = (k / count) * Math.PI * 2;
+          const px = x + Math.cos(a) * r;
+          const pz = z + Math.sin(a) * r;
+          if (fits(px, pz, depth)) {
+            spot = { x: px, z: pz };
+            break;
+          }
+        }
+      }
+      if (spot !== null) break;
+    }
+    if (spot === null) return null;
+    const { x: lx, z: lz } = spot;
+    const toward = (tx: number, tz: number): number => Math.atan2(-(tx - lx), -(tz - lz));
+    // What the person faces: the area's building or landmark if it stands near, the area's heart otherwise.
+    const area = placeAt(places, lx, lz).area;
+    const stood = stoodWorld();
+    const thing = [...stood.buildings, ...stood.landmarks]
+      .filter((t) => area.depth >= 0 && placeAt(places, t.x, t.z).area.path === area.path)
+      .map((t) => ({ t, d: Math.hypot(t.x - lx, t.z - lz) }))
+      .filter(({ d }) => d > 6 && d < FACE_THING)
+      .sort((a, b) => a.d - b.d)[0]?.t;
+    const aim = thing ?? (heart !== undefined && Math.hypot(heart.x - lx, heart.z - lz) > 8 ? heart : null);
+    // On a trail, look along it, the way that heads more toward what the person would face.
+    let best: { d: number; tx: number; tz: number } | null = null;
+    for (const trail of ways.trails) {
+      const p = trail.points;
+      for (let k = 0; k + 3 < p.length; k += 2) {
+        const d = Math.hypot((p[k] as number) - lx, (p[k + 1] as number) - lz);
+        if (d < FACE_TRAIL && (best === null || d < best.d)) best = { d, tx: (p[k + 2] as number) - (p[k] as number), tz: (p[k + 3] as number) - (p[k + 1] as number) };
+      }
+    }
+    if (best !== null && Math.hypot(best.tx, best.tz) > 1e-6) {
+      const sign = aim === null || best.tx * (aim.x - lx) + best.tz * (aim.z - lz) >= 0 ? 1 : -1;
+      return { x: lx, z: lz, yaw: Math.atan2(-best.tx * sign, -best.tz * sign) };
+    }
+    return { x: lx, z: lz, yaw: aim === null ? walker.yaw : toward(aim.x, aim.z) };
+  }
+
   const handle: WorldHandle = {
     scene,
     light,
@@ -1521,6 +1602,8 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       if (on && mode !== "walk") setMode("walk");
       resize();
     },
+    landing: (x, z, heart) => landingNear(x, z, heart),
+    place: (at) => walkTo(at.x, at.z, at.yaw),
   };
 
   return {
