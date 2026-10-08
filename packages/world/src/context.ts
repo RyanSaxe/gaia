@@ -18,6 +18,12 @@ export interface ContextSource {
   readonly facts: Readonly<Record<string, unknown>>;
   /** Readings in escalation order: Gaia adds the first unread one when Jev asks for none. */
   readonly readings: Readonly<Record<string, Reading>>;
+  /**
+   * What the questions decide, in words, such as "what grows on this file's
+   * patch". Jev answers each question on its own, never seeing the others, so
+   * a question about readings must name the decision it would help.
+   */
+  readonly decides?: string;
 }
 
 /** Confidence for choices and scores; distance from an even split for a noul, which has none. */
@@ -60,7 +66,10 @@ export async function gather(
       for (const id of unread) {
         asked[`${READ_PREFIX}${id}`] = {
           type: "noul",
-          instructions: `Would this help you answer the other questions? ${source.readings[id]?.describe ?? id}`,
+          instructions:
+            source.decides === undefined
+              ? `Would this help you answer the other questions? ${source.readings[id]?.describe ?? id}`
+              : `Gaia is deciding ${source.decides}. Would also reading ${source.readings[id]?.describe ?? id} make that decision clearer?`,
           criteria: { true: "It would help.", false: "It would not help." },
         };
       }

@@ -32,3 +32,4 @@ One file per decision the reviewer settled in the pair sessions that designed Ga
 - [One way to touch the world](28-one-way-to-touch-the-world.md)
 - [Ruin obeys gravity](29-ruin-obeys-gravity.md)
 - [Every trail Jev wants is walked, on one network of paths](30-a-network-of-paths.md)
+- [What Jev reads, and how its context grows](31-what-jev-reads.md)

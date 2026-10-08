@@ -24,7 +24,7 @@ The app opens on this repository's world. Before anything is sent, the veil
 says how many places Jev has not judged yet and what asking will cost, then
 offers **Ask Jev** or **Use the stand-in**. It asks once per project and
 remembers your answer. While Jev answers, the veil counts them ("Asking Jev
-about 273 places… 96 answered"). Eight requests go at a time, so a first
+about 267 places… 96 answered"). Eight requests go at a time, so a first
 run takes about half a minute to a minute.
 
 The world appears once every answer is in, never half-judged: changing a
@@ -39,10 +39,27 @@ To see another codebase, choose **File > Open Folder…** (⌘O), or start with
 ## What it costs
 
 Each place is one request of facts and doc comments. Source code is never
-sent. On 2026-10-07 this repository took 273 requests: about 193,000 input
-tokens, about $0.008 at Jev 1.13's $0.042 per million input tokens (output is
+sent. On 2026-10-07 this repository took 267 requests: about 380,000 input
+tokens, about $0.016 at Jev 1.13's $0.042 per million input tokens (output is
 free). The app shows the exact figure from the engine's `jev.estimate` before
 asking. `pnpm print-world-requests` prints every request without sending it.
+
+## Comparing what Jev reads
+
+`pnpm compare-jev` judges this repository under each way of building Jev's
+requests (`first`, `revised`, `outline`, `escalate`; see "What a request
+carries" in `docs/architecture.md`) and reports how often their judgments
+differ, question by question, against Jev's own noise and its lean toward
+the first option. With your key it asks Jev itself, all four designs twice
+and once reordered, for about $0.45 at most, and refuses to start unless you
+allow that:
+
+```sh
+GAIA_JEV=live pnpm compare-jev --judge jev --spend-up-to 0.50 --out /tmp/jev-designs.json
+```
+
+`--judge local` runs the same flow through the engine against the local
+stand-in, and `--judge stand-in` in process; neither reaches OpenRouter.
 
 Answers are kept, so reopening sends nothing. When code changes, only the
 places whose facts changed are asked again, usually a handful of requests.
