@@ -295,10 +295,8 @@ export function createMapWait(veil: HTMLElement): WaitView {
       if (o.depth > 0) {
         const path = pathOf(rings, 0);
         const delay = PACE.edgeMs * 0.5 + k * step;
-        // Top-level borders a little heavier than those within them; a hedgerow's leaves under its line.
-        const weight = o.depth === 1 ? 1.25 : 0.9;
-        pen(path, hand.under, hand.underWidth * weight, delay, PACE.penMs);
-        pen(path, hand.line, hand.width * weight, delay, PACE.penMs);
+        // Top-level borders a little heavier than those within them.
+        pen(path, hand.line, hand.width * (o.depth === 1 ? 1.25 : 0.9), delay, PACE.penMs);
       }
       return { path: o.path, depth: o.depth, rings, x, z, inkedAt, land: null, canvas: undefined, shown: false };
     });

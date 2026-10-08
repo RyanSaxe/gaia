@@ -36,8 +36,11 @@ export interface WaitInk {
   readonly strokes: number;
   /** Eases a traced ring's lattice steps into a pen's line: x, z pairs. */
   ease(ring: readonly number[]): number[];
-  /** The borders' hand, a hedgerow: its line and the soft band of leaves under it, with their widths in CSS pixels. */
-  readonly border: { readonly line: string; readonly width: number; readonly under: string; readonly underWidth: number };
+  /**
+   * The borders' hand: the hedgerow's line, its width in CSS pixels. One line, without the map's soft band of
+   * leaves under it: a second, wider stroke for every border doubles what the moving pen repaints each frame.
+   */
+  readonly border: { readonly line: string; readonly width: number };
   /** Pigment settling into the paper's tooth: a canvas of soft specks to draw large over a wash. */
   grain(cells: number, seed: number): HTMLCanvasElement;
 }
@@ -150,6 +153,6 @@ export const WAIT_INK: WaitInk = {
     }
     return Array.from(pts);
   },
-  border: { line: "rgba(46,70,36,0.36)", width: 0.85, under: "rgba(52,80,40,0.13)", underWidth: 2.8 },
+  border: { line: "rgba(46,70,36,0.42)", width: 1 },
   grain: (cells, seed) => noise(cells, seed, [60, 46, 26]),
 };

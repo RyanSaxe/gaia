@@ -393,7 +393,7 @@ paper: the same size, paper, torn edge, turned-down corner and shadow.
 While the code is read, light drifts over the empty sheet: leaves' light
 by day, the lantern's pool breathing at night. As soon as the land is
 divided, a pen draws the land's rounded edge and then every area's border,
-from the middle outward, as the map's soft hedgerow lines, and the wild's
+from the middle outward, in the green of the map's hedgerows, and the wild's
 wood is brushed in past the edge as the map paints it. Each area washes in
 as its judgments settle, in the color of the land Jev judged for it, as
 the map washes it: coming in wet, a little darker, and spreading from its
