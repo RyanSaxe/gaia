@@ -7,7 +7,7 @@
 
 import type { BuildContext, BuildingPlan, Built, Rand, Resolved } from "@gaia/schema";
 import type { fieldstoneParams, timberFrameParams } from "../../structure.ts";
-import { type Channels, PartBuilder, type V3, addScaled, clamp, fbm3, lossThreshold, normalize } from "../kit.ts";
+import { type Channels, LOSS_BAND, PartBuilder, type V3, addScaled, clamp, fbm3, lossThreshold, normalize } from "../kit.ts";
 import { UP, beam, box, pillow } from "../blocks.ts";
 import { type Ruin, type Wall, clearings, coarseness, massOf, on, peakOf, ruinAt, ruinOf, shownWalls, still, topAt, wallRot, wallTop, wobble } from "./frame.ts";
 import { ivy, rubble, wallSheet, weedSpots, weeds } from "./ruin.ts";
@@ -133,14 +133,22 @@ function timberFrame(p: Resolved<typeof timberFrameParams>, ctx: BuildContext, p
     // In the collapse, timbers go: lost below a threshold that rises toward the weak corner.
     const gone = (s: number, y = top): number => (zoneAt(s, y) > 0.3 ? lossThreshold(r.next(), 0.14 + 0.3 * zoneAt(s, y), 0.05) : 0);
     const ch = (s: number, sag = 0, y = top): Channels => still(pivotOf(s), 0.5, { droop: sag * Math.sin((Math.PI * clamp(s / w.length, 0, 1))), tint: (r.next() - 0.5) * 0.03, loss: gone(s, y) });
+    // Every timber, with where it runs and the vitality below which it falls
+    // or goes, so the plaster it frames goes first.
+    const members: { s0: number; s1: number; y0: number; y1: number; gives: number }[] = [];
+    const member = (c: Channels, s0: number, s1: number, y0: number, y1: number): Channels => {
+      members.push({ s0: Math.min(s0, s1), s1: Math.max(s0, s1), y0: Math.min(y0, y1), y1: Math.max(y0, y1), gives: Math.max(c.loss, c.fall?.[3] ?? 0) });
+      // A timber that goes shrinks back onto the post or sill it is pegged to at its first end.
+      return c.loss > 0 ? { ...c, pivot: lean(s0, Math.min(y0, y1)) } : c;
+    };
 
     // Sill and wall plate run the whole length; the plate sags a little as the house declines.
-    beam(timber, lean(-0.05, sill), lean(w.length + 0.05, sill), beamW, 0.09, w.n, 0.42, ch(w.length / 2));
+    beam(timber, lean(-0.05, sill), lean(w.length + 0.05, sill), beamW, 0.09, w.n, 0.42, member(ch(w.length / 2), 0, w.length, sill, sill));
     const plates = clamp(Math.round(w.length / (1.4 * coarse)), 1, 6);
     for (let k = 0; k < plates; k++) {
       const s0 = (w.length * k) / plates;
       const s1 = (w.length * (k + 1)) / plates;
-      beam(timber, lean(s0 - (k === 0 ? 0.05 : 0), plate), lean(s1 + (k === plates - 1 ? 0.05 : 0), plate), beamW, 0.1, w.n, 0.46, ch((s0 + s1) / 2, 0.05));
+      beam(timber, lean(s0 - (k === 0 ? 0.05 : 0), plate), lean(s1 + (k === plates - 1 ? 0.05 : 0), plate), beamW, 0.1, w.n, 0.46, member(ch((s0 + s1) / 2, 0.05), s0, s1, plate, plate));
     }
     // Posts, broken where an opening passes.
     for (const s of filled) {
@@ -160,12 +168,15 @@ function timberFrame(p: Resolved<typeof timberFrameParams>, ctx: BuildContext, p
         if (b2 - a <= 0.12) continue;
         const zone = zoneAt(s);
         if (a === sill && zone > 0.3) {
-          // A post in the collapse topples outward off its sill and comes to rest on the ground.
+          // A post in the collapse topples outward off its sill and comes to
+          // rest with its head on the ground: it turns past level by as much
+          // as the sill stands above the ground.
           const base = lean(s, a);
-          const tip = 1.62 + 0.18 * r.next();
+          const length = b2 - a;
+          const tip = Math.PI / 2 + Math.asin(clamp((base[1] - 0.04) / length, 0, 0.9));
           const c: Channels = { loss: 0, droop: 0, wither: 0.6, glow: 0, pivot: base, tint: (r.next() - 0.5) * 0.03, fall: [w.u[0] * tip, w.u[1] * tip, w.u[2] * tip, clamp(0.16 + 0.3 * zone * r.next(), 0.12, 0.42)] };
-          beam(timber, base, lean(s, b2), beamW * 0.9, 0.09, w.n, 0.44 + 0.08 * r.next(), c);
-        } else beam(timber, lean(s, a), lean(s, b2), beamW * 0.9, 0.09, w.n, 0.44 + 0.08 * r.next(), ch(s, 0, (a + b2) / 2));
+          beam(timber, base, lean(s, b2), beamW * 0.9, 0.09, w.n, 0.44 + 0.08 * r.next(), member(c, s, s, a, b2));
+        } else beam(timber, lean(s, a), lean(s, b2), beamW * 0.9, 0.09, w.n, 0.44 + 0.08 * r.next(), member(ch(s, 0, (a + b2) / 2), s, s, a, b2));
       }
     }
     // Floor beams at every storey; rails at window-sill height between posts, and braces in the end bays.
@@ -173,7 +184,7 @@ function timberFrame(p: Resolved<typeof timberFrameParams>, ctx: BuildContext, p
     for (const y of floors) {
       for (let i = 0; i + 1 < all.length; i++) {
         const mid = ((all[i] as number) + (all[i + 1] as number)) / 2;
-        if (!blocked(mid, y - 0.08, y + 0.08)) beam(timber, lean(all[i] as number, y), lean(all[i + 1] as number, y), beamW, 0.1, w.n, 0.44, ch(mid, 0, y));
+        if (!blocked(mid, y - 0.08, y + 0.08)) beam(timber, lean(all[i] as number, y), lean(all[i + 1] as number, y), beamW, 0.1, w.n, 0.44, member(ch(mid, 0, y), all[i] as number, all[i + 1] as number, y, y));
       }
     }
     if (p.framing !== "close studding") {
@@ -183,10 +194,10 @@ function timberFrame(p: Resolved<typeof timberFrameParams>, ctx: BuildContext, p
           const a = all[i] as number;
           const b2 = all[i + 1] as number;
           const mid = (a + b2) / 2;
-          if (!blocked(mid, rail - 0.08, rail + 0.08)) beam(timber, lean(a, rail), lean(b2, rail), beamW * 0.8, 0.08, w.n, 0.42, ch(mid, 0, rail));
+          if (!blocked(mid, rail - 0.08, rail + 0.08)) beam(timber, lean(a, rail), lean(b2, rail), beamW * 0.8, 0.08, w.n, 0.42, member(ch(mid, 0, rail), a, b2, rail, rail));
           if (p.framing === "crossed braces" && (i === 0 || i === all.length - 2) && !blocked(mid, rail, head)) {
             const [s0, s1] = i === 0 ? [a, b2] : [b2, a];
-            beam(timber, lean(s0, head - 0.05), lean(s1, rail + 0.05), beamW * 0.75, 0.08, w.n, 0.4, ch(mid, 0, (rail + head) / 2));
+            beam(timber, lean(s0, head - 0.05), lean(s1, rail + 0.05), beamW * 0.75, 0.08, w.n, 0.4, member(ch(mid, 0, (rail + head) / 2), a, b2, rail, head));
           }
         }
       }
@@ -199,8 +210,8 @@ function timberFrame(p: Resolved<typeof timberFrameParams>, ctx: BuildContext, p
       let s1 = peak.s;
       while (s0 > 0.1 && topAt(plan, w, s0 - 0.05) > collar + 0.12) s0 -= 0.05;
       while (s1 < w.length - 0.1 && topAt(plan, w, s1 + 0.05) > collar + 0.12) s1 += 0.05;
-      beam(timber, lean(peak.s, top), lean(peak.s, peak.y - 0.12), beamW, 0.09, w.n, 0.44, ch(peak.s, 0, peak.y));
-      if (s1 - s0 > 0.4) beam(timber, lean(s0, collar), lean(s1, collar), beamW * 0.9, 0.09, w.n, 0.42, ch(peak.s, 0, collar));
+      beam(timber, lean(peak.s, top), lean(peak.s, peak.y - 0.12), beamW, 0.09, w.n, 0.44, member(ch(peak.s, 0, peak.y), peak.s, peak.s, top, peak.y));
+      if (s1 - s0 > 0.4) beam(timber, lean(s0, collar), lean(s1, collar), beamW * 0.9, 0.09, w.n, 0.42, member(ch(peak.s, 0, collar), s0, s1, collar, collar));
     }
 
     // Plaster panels between the timbers. Some are loose, and fall away as the house declines.
@@ -216,7 +227,10 @@ function timberFrame(p: Resolved<typeof timberFrameParams>, ctx: BuildContext, p
         for (const h of holes.filter((h) => s0 < h.s1 - 0.02 && s1 > h.s0 + 0.02)) {
           spans = spans.flatMap(([a, b2]): [number, number][] => (h.y1 <= a || h.y0 >= b2 ? [[a, b2]] : ([[a, h.y0], [h.y1, b2]] as [number, number][]).filter(([x, y]) => y - x > 0.06)));
         }
-        for (const [a, b2] of spans) panel(plaster, plan, ruin, w, s0, s1, a, b2, p.plaster, r, seed);
+        for (const [a, b2] of spans) {
+          const framing = Math.max(0, ...members.filter((m) => m.s1 > s0 - 0.12 && m.s0 < s1 + 0.12 && m.y1 > a - 0.12 && m.y0 < b2 + 0.12).map((m) => m.gives));
+          panel(plaster, plan, ruin, w, s0, s1, a, b2, p.plaster, r, seed, framing);
+        }
       }
     }
     if (rise > 0.05) {
@@ -231,19 +245,24 @@ function timberFrame(p: Resolved<typeof timberFrameParams>, ctx: BuildContext, p
   return { parts: [masonry.part(), plaster.part(), timber.part(), moss.part(), weed.part()], anchors: [] };
 }
 
-/** One plaster panel: a slightly bulging 3x3 sheet, its shade hand-laid. */
-function panel(b: PartBuilder, plan: BuildingPlan, ruin: Ruin, w: Wall, s0: number, s1: number, y0: number, y1: number, rough: number, r: Rand, seed: number): void {
+/**
+ * One plaster panel: a slightly bulging 3x3 sheet, its shade hand-laid. It
+ * goes no later than any timber framing it (`framing`, the highest
+ * threshold among them), and slumps down onto the timber under it as it goes.
+ */
+function panel(b: PartBuilder, plan: BuildingPlan, ruin: Ruin, w: Wall, s0: number, s1: number, y0: number, y1: number, rough: number, r: Rand, seed: number, framing: number): void {
   const center = on(w, (s0 + s1) / 2, (y0 + y1) / 2, 0.01);
   // Panels near the weak corner are loose more often, and go earlier.
   const zone = ruinAt(ruin, center);
   const loose = r.next() < 0.4 + 0.5 * zone;
   const u = r.next();
+  const own = loose ? lossThreshold(u, 0.42 + 0.12 * zone, 0.06) : 0;
   const c: Channels = {
-    loss: loose ? lossThreshold(u, 0.42 + 0.12 * zone, 0.06) : 0,
+    loss: framing > 0 ? Math.max(own, framing + LOSS_BAND + 0.01) : own,
     droop: 0,
     wither: 0.45 + 0.35 * r.next(),
     glow: 0,
-    pivot: center,
+    pivot: on(w, (s0 + s1) / 2, y0, 0.01),
     tint: (r.next() - 0.5) * 0.02,
   };
   const base = 0.6 + 0.08 * (r.next() - 0.5);

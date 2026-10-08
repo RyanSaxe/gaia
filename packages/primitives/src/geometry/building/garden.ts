@@ -5,7 +5,7 @@
 
 import type { BuildContext, BuildingPlan, Built, Vec3, Resolved } from "@gaia/schema";
 import type { cottageGardenParams } from "../../structure.ts";
-import { type Channels, PartBuilder, type V3, addScaled, icosphere, lossThreshold, normalize, sub } from "../kit.ts";
+import { type Channels, LOSS_BAND, PartBuilder, type V3, addScaled, icosphere, lossThreshold, normalize, sub } from "../kit.ts";
 import { UP, beam, box, flatStone, log } from "../blocks.ts";
 import { type Wall, clearings, hidden, on, placeOf, sameWall, shownWalls, still } from "./frame.ts";
 
@@ -56,24 +56,30 @@ export function buildGarden(p: Resolved<typeof cottageGardenParams>, ctx: BuildC
       const { wall: w, s } = placeOf(plan, o);
       const y = o.position[1] - 0.12;
       const hw = o.width / 2 + 0.06;
-      const boxC = on(w, s, y - 0.1, 0.24);
-      // As the house fails, a box tips forward off its brackets, its dead plants with it.
-      const pivot = on(w, s, y - 0.2, 0.13);
+      // The box hangs on the wall under the sill. As the house fails its
+      // plants die back into it, then it pitches forward about its bottom
+      // edge on the wall and is gone before it would hang there, so it is
+      // never left in the air.
+      const boxC = on(w, s, y - 0.1, 0.13);
+      const pivot = on(w, s, y - 0.2, -0.04);
       const tip = 0.85 + 0.3 * r.next();
-      const fall = [w.u[0] * tip, w.u[1] * tip, w.u[2] * tip, 0.26 + 0.1 * r.next()] as const;
-      box(paint, boxC, [w.u, UP, w.n], [hw, 0.1, 0.11], 0.5, still(pivot, 0.5, { fall }));
+      const from = 0.26 + 0.1 * r.next();
+      const fall = [w.u[0] * tip, w.u[1] * tip, w.u[2] * tip, from] as const;
+      box(paint, boxC, [w.u, UP, w.n], [hw, 0.1, 0.11], 0.5, still(pivot, 0.5, { fall, loss: from - 0.14 + 0.03 }));
+      const soil = on(w, s, y - 0.12, 0.13);
+      const dies = (u: number, top: number): number => Math.max(lossThreshold(u, top, 0.04), fall[3] + 0.01);
       for (let i = 0; i < 6; i++) {
         const x = -hw + 0.1 + ((2 * hw - 0.2) * i) / 5;
-        const c = on(w, s + x, y + 0.03 + 0.03 * r.next(), 0.24 + (r.next() - 0.5) * 0.08);
-        sphere(leaf, c, [0.12, 0.09, 0.1], 0.45 + 0.15 * r.next(), { loss: lossThreshold(r.next(), 0.3, 0.04), droop: 0.5, wither: 0.85, glow: 0, pivot, tint: (r.next() - 0.5) * 0.04, fall });
+        const c = on(w, s + x, y + 0.03 + 0.03 * r.next(), 0.13 + (r.next() - 0.5) * 0.08);
+        sphere(leaf, c, [0.12, 0.09, 0.1], 0.45 + 0.15 * r.next(), { loss: dies(r.next(), 0.42), droop: 0.5, wither: 0.85, glow: 0, pivot: soil, tint: (r.next() - 0.5) * 0.04 });
       }
       for (let i = 0; i < 3; i++) {
-        const c = on(w, s - hw + 0.15 + (2 * hw - 0.3) * r.next(), y - 0.12, 0.36);
-        sphere(leaf, c, [0.07, 0.14, 0.05], 0.4, { loss: lossThreshold(r.next(), 0.35, 0.04), droop: 0.6, wither: 0.85, glow: 0, pivot, tint: 0, fall });
+        const c = on(w, s - hw + 0.15 + (2 * hw - 0.3) * r.next(), y - 0.12, 0.25);
+        sphere(leaf, c, [0.07, 0.14, 0.05], 0.4, { loss: dies(r.next(), 0.45), droop: 0.6, wither: 0.85, glow: 0, pivot: soil, tint: 0 });
       }
       for (let i = 0; i < 9; i++) {
-        const c = on(w, s - hw + 0.08 + (2 * hw - 0.16) * r.next(), y + 0.09 + 0.05 * r.next(), 0.2 + 0.12 * r.next());
-        sphere(bloom, c, [0.055, 0.045, 0.055], 0.62, { loss: lossThreshold(r.next(), 0.72, 0.25), droop: 0.3, wither: 0.9, glow: 0, pivot, tint: (r.next() - 0.5) * 0.12, fall });
+        const c = on(w, s - hw + 0.08 + (2 * hw - 0.16) * r.next(), y + 0.09 + 0.05 * r.next(), 0.09 + 0.12 * r.next());
+        sphere(bloom, c, [0.055, 0.045, 0.055], 0.62, { loss: Math.max(lossThreshold(r.next(), 0.72, 0.25), fall[3] + 0.01), droop: 0.3, wither: 0.9, glow: 0, pivot: soil, tint: (r.next() - 0.5) * 0.12 });
       }
     }
   }
@@ -89,12 +95,13 @@ export function buildGarden(p: Resolved<typeof cottageGardenParams>, ctx: BuildC
     // The bracket works loose from the wall and the lantern hangs askew.
     const mount = on(w, ls, ly + 0.25, 0);
     const sag = 0.55;
-    const hang = { fall: [w.u[0] * sag, w.u[1] * sag, w.u[2] * sag, 0.36] as const };
+    // It hangs askew, then is gone with the wall it is fixed to.
+    const hang = { fall: [w.u[0] * sag, w.u[1] * sag, w.u[2] * sag, 0.36] as const, loss: 0.24 };
     beam(wood, mount, on(w, ls, ly + 0.25, 0.42), 0.05, 0.05, w.u, 0.35, still(mount, 0.5, hang));
     const c = on(w, ls, ly, 0.4);
     box(wood, addScaled(c, UP, 0.16), [w.u, UP, w.n], [0.11, 0.025, 0.11], 0.35, still(mount, 0.5, hang));
     box(wood, addScaled(c, UP, -0.15), [w.u, UP, w.n], [0.09, 0.02, 0.09], 0.35, still(mount, 0.5, hang));
-    box(lamp, c, [w.u, UP, w.n], [0.075, 0.13, 0.075], 0.8, { loss: lossThreshold(r.next(), 0.42, 0.25), droop: 0, wither: 0.4, glow: 1, pivot: mount, ...hang });
+    box(lamp, c, [w.u, UP, w.n], [0.075, 0.13, 0.075], 0.8, { droop: 0, wither: 0.4, glow: 1, pivot: mount, ...hang, loss: Math.max(0.37, lossThreshold(r.next(), 0.5, 0.37)) });
   }
 
   // Split logs stacked against the longest bare stretch of a side wall, end grain out.
@@ -120,16 +127,23 @@ export function buildGarden(p: Resolved<typeof cottageGardenParams>, ctx: BuildC
       const s0 = best.s0 + (best.s1 - best.s0 - len) / 2;
       const rad = 0.085;
       const rows = 5;
+      // The top of the pile goes first: a log never outlasts the row under
+      // it, and sinks down into the pile as it goes.
+      let under = 0;
       for (let row = 0; row < rows; row++) {
         const n = Math.floor((len - row * rad) / (rad * 2.05));
+        let most = under;
         for (let i = 0; i < n; i++) {
           const s = s0 + rad + row * rad + i * rad * 2.05;
           const yy = rad * 0.8 + row * rad * 1.75;
           const from = on(w, s, yy, 0.12);
           const to = on(w, s, yy, 0.62 + 0.05 * r.next());
           const pivot = on(w, s, 0, 0.35);
-          log(wood, from, to, rad * (0.9 + 0.2 * r.next()), 0.45 + 0.12 * r.next(), { loss: row >= 2 ? lossThreshold(r.next(), 0.35, 0.05) : 0, droop: 0, wither: 0.5, glow: 0, pivot, tint: (r.next() - 0.5) * 0.03 });
+          const loss = row >= 2 ? Math.max(lossThreshold(r.next(), 0.35, 0.05), under) : 0;
+          most = Math.max(most, loss);
+          log(wood, from, to, rad * (0.9 + 0.2 * r.next()), 0.45 + 0.12 * r.next(), { loss, droop: 0, wither: 0.5, glow: 0, pivot, tint: (r.next() - 0.5) * 0.03 });
         }
+        under = most;
       }
     }
   }
@@ -150,6 +164,8 @@ export function buildGarden(p: Resolved<typeof cottageGardenParams>, ctx: BuildC
       const u = normalize(sub(b2, a));
       const n: V3 = [u[2], 0, -u[0]];
       const count = Math.floor(len / 0.2);
+      /** Each picket along the run: how far along, and the vitality it starts to lean or go at. */
+      const pickets: { t: number; gives: number }[] = [];
       for (let i = 0; i <= count; i++) {
         const q = addScaled(a, u, (len * i) / count);
         if (Math.abs(q[2] - front) < 0.01 && Math.abs(q[0] - gateX) < 0.62) continue;
@@ -167,20 +183,28 @@ export function buildGarden(p: Resolved<typeof cottageGardenParams>, ctx: BuildC
           fall: [u[0] * leanBy, 0, u[2] * leanBy, 0.3 + 0.32 * r.next()],
         };
         box(fence, [q[0], (h - 0.25) / 2, q[2]], [u, UP, n], [0.035, (h + 0.25) / 2, 0.014], 0.55 + 0.08 * r.next(), ch);
+        pickets.push({ t: (len * i) / count, gives: Math.max(ch.fall?.[3] ?? 0, ch.loss > 0 ? ch.loss + LOSS_BAND : 0) });
       }
+      // A rail goes before any picket it is nailed to leans or goes, shrinking back onto the first.
+      const rail = (t0: number, t1: number, ry: number): Channels => {
+        const first = pickets.find((pk) => pk.t >= t0 - 0.11) ?? { t: t0, gives: 0 };
+        return { loss: Math.max(...pickets.map((pk) => pk.gives)) + 0.01, droop: 0, wither: 0.6, glow: 0, pivot: addScaled([a[0], ry, a[2]], u, first.t), tint: 0 };
+      };
       for (const ry of [0.22, 0.58]) {
         const segs = Math.max(1, Math.round(len / 2));
         for (let k = 0; k < segs; k++) {
           const p0 = addScaled(a, u, (len * k) / segs);
           const p1 = addScaled(a, u, (len * (k + 1)) / segs);
           const mid = addScaled(p0, sub(p1, p0), 0.5);
+          const tOf = (x: number, z: number): number => (x - a[0]) * u[0] + (z - a[2]) * u[2];
           if (Math.abs(mid[2] - front) < 0.01 && Math.abs(mid[0] - gateX) < 0.62 + len / segs / 2) {
             for (const [x0, x1] of [[p0[0], gateX - 0.62], [gateX + 0.62, p1[0]]] as const) {
-              if (Math.abs(x1 - x0) > 0.1) beam(fence, [Math.min(x0, x1), ry, front - 0.03], [Math.max(x0, x1), ry, front - 0.03], 0.07, 0.025, n, 0.5, still([gateX, 0, front], 0.6, { droop: 0.05 }));
+              const [t0, t1] = [tOf(x0, front), tOf(x1, front)].sort((m, k) => m - k) as [number, number];
+              if (Math.abs(x1 - x0) > 0.1) beam(fence, [Math.min(x0, x1), ry, front - 0.03], [Math.max(x0, x1), ry, front - 0.03], 0.07, 0.025, n, 0.5, rail(t0, t1, ry));
             }
             continue;
           }
-          beam(fence, addScaled([p0[0], ry, p0[2]], n, -0.03), addScaled([p1[0], ry, p1[2]], n, -0.03), 0.07, 0.025, n, 0.5, still(p0, 0.6, { droop: 0.05 }));
+          beam(fence, addScaled([p0[0], ry, p0[2]], n, -0.03), addScaled([p1[0], ry, p1[2]], n, -0.03), 0.07, 0.025, n, 0.5, rail((len * k) / segs, (len * (k + 1)) / segs, ry));
         }
       }
     }

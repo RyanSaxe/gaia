@@ -286,7 +286,14 @@ many times, such as a tree, a rock or a drift of flowers, draws as one
 instanced mesh per part and level of detail, with each copy's vitality, seed
 and hue read per instance and its shape varied a little by where it stands.
 `applyVitality` in `packages/realize/src/channels.ts` is the CPU reference the
-tests run against.
+tests run against. Ruin obeys gravity: `unsupportedAt` in
+`packages/realize/src/support.ts` applies the channels at a vitality and
+finds every piece (the vertices that move and go together) standing on
+nothing, whole or partway through collapsing, and every toppled piece not
+at rest; a contract test holds every landmark and every building put
+together from the structure primitives to it (buildings for their standing
+pieces), so a primitive orders its thresholds by what rests on what and
+collapses each piece toward what holds it.
 
 ## Detail
 

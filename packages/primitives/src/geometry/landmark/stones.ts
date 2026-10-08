@@ -13,8 +13,11 @@ type StonesParams = Resolved<typeof standingStonesParams>;
 
 /** How a stone gives way as vitality falls. */
 type Decline =
-  /** It turns about its toe by `most` radians once vitality drops below `from`: a lean, or a fall flat into the grass. */
-  | { readonly kind: "tilt"; readonly most: number; readonly from: number }
+  /**
+   * It turns about its toe by `most` radians once vitality drops below
+   * `from`: a lean; or, with `flat`, as far as it takes to lie in the grass.
+   */
+  | { readonly kind: "tilt"; readonly most: number; readonly from: number; readonly flat?: boolean }
   /** Above `at` (a share of its height) it snaps below `loss`, and the top lies broken at its foot. */
   | { readonly kind: "snap"; readonly at: number; readonly loss: number }
   | { readonly kind: "firm" };
@@ -33,17 +36,40 @@ interface Stone {
   readonly decline: Decline;
 }
 
-/** The ground point a stone tips over: the edge of its foot on the side it leans toward. */
-function toeOf(s: Stone): V3 {
+/**
+ * The ground point a stone tips over: the edge of its foot on the side it
+ * leans toward, the farthest of its points near the ground in that
+ * direction, so it turns about where it really meets the ground.
+ */
+function toeOf(s: Stone, local: readonly V3[]): V3 {
   const dir: V3 = [Math.cos(s.toward), 0, Math.sin(s.toward)];
-  const ux: V3 = [Math.cos(s.yaw), 0, -Math.sin(s.yaw)];
-  const uz: V3 = [Math.sin(s.yaw), 0, Math.cos(s.yaw)];
-  const reach = 0.42 * (Math.abs(dir[0] * ux[0] + dir[2] * ux[2]) * s.width + Math.abs(dir[0] * uz[0] + dir[2] * uz[2]) * s.depth);
-  return [s.x + dir[0] * reach, 0, s.z + dir[2] * reach];
+  const c = Math.cos(s.yaw);
+  const sn = Math.sin(s.yaw);
+  let reach = 0;
+  for (const q of local) if (q[1] > -0.1 && q[1] < 0.25) reach = Math.max(reach, (q[0] * c + q[2] * sn) * dir[0] + (-q[0] * sn + q[2] * c) * dir[2]);
+  return [s.x + dir[0] * reach * 0.98, 0, s.z + dir[2] * reach * 0.98];
 }
 
 /** The axis a stone turns about to tip toward its lean: the top moves along `toward`. */
 const tipAxis = (s: Stone): V3 => normalize(cross([0, 1, 0], [Math.cos(s.toward), 0, Math.sin(s.toward)]));
+
+/**
+ * How far `points` must turn about `axis` through `hinge` until the lowest
+ * of them comes down to `ground`: where a falling stone comes to rest.
+ */
+function restAngle(points: readonly V3[], hinge: V3, axis: V3, ground: number): number {
+  const lowest = (angle: number): number =>
+    Math.min(...points.map((p) => hinge[1] + rotate([p[0] - hinge[0], p[1] - hinge[1], p[2] - hinge[2]], axis, angle)[1]));
+  let lo = 0;
+  let hi = Math.PI * 0.75;
+  if (lowest(hi) > ground) return hi;
+  for (let k = 0; k < 30; k++) {
+    const mid = (lo + hi) / 2;
+    if (lowest(mid) > ground) lo = mid;
+    else hi = mid;
+  }
+  return hi;
+}
 
 /**
  * The lumpy slab a stone is cut from, in its own frame: centered on the
@@ -77,10 +103,9 @@ function slabShape(s: { width: number; depth: number; height: number }, facets: 
 }
 
 /** Turns a point of a stone's own frame into the arrangement's: yaw, then its standing lean about the toe. */
-function placer(s: Stone): { at: (q: V3) => V3; dir: (n: V3) => V3 } {
+function placer(s: Stone, toe: V3): { at: (q: V3) => V3; dir: (n: V3) => V3 } {
   const c = Math.cos(s.yaw);
   const sn = Math.sin(s.yaw);
-  const toe = toeOf(s);
   const axis = tipAxis(s);
   const turn = (q: V3): V3 => [q[0] * c + q[2] * sn, q[1], -q[0] * sn + q[2] * c];
   return {
@@ -107,13 +132,15 @@ function shadeOf(p: V3, height: number, n: V3, seed: number): { shade: number; m
  */
 function emitStone(b: PartBuilder, s: Stone, facets: number, r: Rand, subdiv: number): void {
   const shape = slabShape(s, facets, 0.55, r, subdiv);
-  const place = placer(s);
+  const toe = toeOf(s, shape.points);
+  const place = placer(s, toe);
   const points = shape.points.map(place.at);
   const normals = smoothNormals(points, shape.triangles);
-  const toe = toeOf(s);
   const d = s.decline;
   const tilt = d.kind === "tilt" ? tipAxis(s) : null;
-  const fall = tilt !== null && d.kind === "tilt" ? ([tilt[0] * d.most, tilt[1] * d.most, tilt[2] * d.most, d.from] as const) : undefined;
+  // A stone that falls flat turns until its upper part lies on the ground, bedded a little in the grass.
+  const most = d.kind === "tilt" && d.flat === true && tilt !== null ? restAngle(points.filter((p) => p[1] > s.height * 0.3), toe, tilt, -0.05) : d.kind === "tilt" ? d.most : 0;
+  const fall = tilt !== null && d.kind === "tilt" ? ([tilt[0] * most, tilt[1] * most, tilt[2] * most, d.from] as const) : undefined;
   const breakY = d.kind === "snap" ? d.at * s.height : Infinity;
   const breakPivot = place.at([0, breakY === Infinity ? 0 : breakY, 0]);
   const tint = r.range(-0.03, 0.03);
@@ -180,7 +207,9 @@ function emitLintel(b: PartBuilder, a: Stone, c: Stone, thick: number, depth: nu
   const yaw = Math.atan2(c.z - a.z, c.x - a.x);
   const cy = Math.cos(yaw);
   const sy = Math.sin(yaw);
-  const loss = r.range(0.6, 0.7);
+  // It goes before either stone under it starts to give way.
+  const gives = (st: Stone): number => (st.decline.kind === "tilt" ? st.decline.from : st.decline.kind === "snap" ? st.decline.loss : 0);
+  const loss = Math.max(r.range(0.6, 0.7), gives(a) + 0.02, gives(c) + 0.02);
   const points: V3[] = sphere.points.map((n) => {
     const bump = 1 + 0.1 * fbm3(n[0] * 1.5, n[1] * 1.5, n[2] * 1.5, seed, 2);
     const flat = (v: number): number => Math.sign(v) * Math.pow(Math.abs(v), 0.55 - 0.25 * facets);
@@ -209,7 +238,7 @@ function declineOf(sr: Rand, lean: number): Decline {
   const kind = sr.next();
   if (kind < 0.42) return { kind: "tilt", most: sr.range(0.18, 0.42), from: sr.range(0.38, 0.58) };
   if (kind < 0.75) return { kind: "snap", at: sr.range(0.3, 0.55), loss: sr.range(0.3, 0.55) };
-  return { kind: "tilt", most: Math.PI / 2 - 0.1 - lean, from: sr.range(0.16, 0.34) };
+  return { kind: "tilt", most: Math.PI / 2 - lean, from: sr.range(0.16, 0.34), flat: true };
 }
 
 /** A stone of the arrangement, its size jittered from the arrangement's own. */
@@ -377,8 +406,8 @@ function emitCapstone(b: PartBuilder, legs: readonly Stone[], length: number, wi
   const standing = legs.filter((l) => l.x < 0);
   const hingeX = Math.max(...standing.map((l) => l.x + l.depth * 0.5), -length * 0.25);
   const hinge: V3 = [hingeX, top, 0];
-  const reach = length * 0.5 - hingeX;
-  const tip = Math.asin(clamp(top / reach, 0, 0.95));
+  // It tips about the standing side until its far edge lies on the ground.
+  const tip = restAngle(points, hinge, [0, 0, -1], -0.05);
   const from = Math.max(...legs.filter((l) => l.x >= 0).map((l) => (l.decline.kind === "tilt" ? l.decline.from : 0)), 0.3) + 0.02;
   const first = b.vertexCount;
   points.forEach((p, i) => {
@@ -391,29 +420,49 @@ function emitCapstone(b: PartBuilder, legs: readonly Stone[], length: number, wi
 }
 
 /**
- * A cairn: small stones piled in a rounded cone, `tall` meters high. Its top
- * stones tumble first as vitality falls, coming to rest around its foot.
+ * A cairn: small stones piled in a rounded cone, about `tall` meters high,
+ * each course bedded on the stones below it. Its top stones tumble first as
+ * vitality falls, coming to rest around its foot: a stone never outlasts
+ * the stones it rests on, so none is ever left above a gap.
  */
 function emitCairn(b: PartBuilder, x: number, z: number, tall: number, facets: number, r: Rand): void {
   const base = tall * 0.55;
   const stone = clamp(tall * 0.13, 0.2, 0.45);
-  const rows = Math.max(3, Math.round(tall / (stone * 1.3)));
+  // Bedded courses rise about 0.62 of a stone each.
+  const rows = Math.max(3, Math.round(tall / (stone * 0.62)));
+  /** Where the pile's slope meets the ground, from its heart. */
+  const slope = base + stone * 0.3;
+  /** The stones of the course below: where each stands, how wide, its top and its threshold. */
+  let below: { x: number; z: number; s: number; top: number; loss: number }[] = [];
   for (let row = 0; row < rows; row++) {
     const t = row / rows;
-    const y = t * tall;
     const rad = base * Math.pow(1 - t, 0.8) + stone * 0.3;
     const n = Math.max(1, Math.round((Math.PI * 2 * rad) / (stone * 1.7)));
     const turn = r.next() * Math.PI * 2;
+    const course: typeof below = [];
     for (let k = 0; k < n; k++) {
       const a = turn + (k / n) * Math.PI * 2 + r.range(-0.15, 0.15);
       const s = stone * r.range(0.75, 1.2);
-      const at: V3 = [x + Math.cos(a) * rad, y + s * 0.4, z + Math.sin(a) * rad];
-      const loss = row < 2 ? 0 : lossThreshold(t * r.range(0.7, 1), 0.62, 0.05);
-      lump(b, at, [s, s * (0.78 - 0.12 * facets), s * 0.85], a, 0.5 + 0.2 * r.next() + 0.08 * t, { loss: clamp(loss, 0, 0.7), droop: 0, wither: 0.4 + 0.4 * r.next(), glow: 0, pivot: [x, y, z], tint: (r.next() - 0.5) * 0.05 }, r);
+      const sx = x + Math.cos(a) * rad;
+      const sz = z + Math.sin(a) * rad;
+      const ry = s * (0.78 - 0.12 * facets);
+      // It beds on the stones under it, sunk a little into the course below,
+      // and as it goes it slides down the pile's slope into them.
+      const under = below.filter((o) => Math.hypot(o.x - sx, o.z - sz) < (o.s + s) * 0.95);
+      if (row > 0 && under.length === 0) continue;
+      const foot = row === 0 ? 0 : Math.min(...under.map((o) => o.top)) - ry * 0.35;
+      const own = row < 2 ? 0 : lossThreshold(t * r.range(0.7, 1), 0.62, 0.05);
+      const loss = row < 2 ? 0 : clamp(Math.max(own, ...under.map((o) => o.loss)), 0, 0.7);
+      // A flat-bottomed lump: its bottom sits 0.4 of its height below its center.
+      const at: V3 = [sx, foot + ry * 0.4 * 0.8, sz];
+      lump(b, at, [s, ry, s * 0.85], a, 0.5 + 0.2 * r.next() + 0.08 * t, { loss, droop: 0, wither: 0.4 + 0.4 * r.next(), glow: 0, pivot: [x + Math.cos(a) * slope, 0, z + Math.sin(a) * slope], tint: (r.next() - 0.5) * 0.05 }, r);
+      course.push({ x: sx, z: sz, s, top: at[1] + ry * 0.8, loss });
     }
+    if (course.length === 0) break;
+    below = course;
   }
   // What tumbled lies around the foot.
-  for (let k = 0; k < Math.round(rows * 1.6); k++) {
+  for (let k = 0; k < Math.round(tall / (stone * 0.8)); k++) {
     const a = r.next() * Math.PI * 2;
     const d = base + stone + r.next() * tall * 0.5;
     const s = stone * r.range(0.7, 1.1);

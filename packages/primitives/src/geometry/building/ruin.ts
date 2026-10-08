@@ -86,10 +86,11 @@ export function ivy(b: PartBuilder, plan: BuildingPlan, ruin: Ruin, r: Rand, coa
       let s = s0;
       for (let y = 0.15; y < reach; y += 0.22 * coarse) {
         s = clamp(s + (r.next() - 0.5) * 0.35, 0.1, w.length - 0.1);
-        if (holes.some((h) => s > h.s0 && s < h.s1 && y < h.y1) || hidden(plan, w, s, y)) continue;
+        // Ivy clings to the wall: never past its top, where there is nothing to hold.
+        if (holes.some((h) => s > h.s0 && s < h.s1 && y < h.y1) || hidden(plan, w, s, y) || y > topAt(plan, w, s) - 0.3) continue;
         for (let k = 0; k < 2; k++) {
           const ss = clamp(s + (r.next() - 0.5) * 0.5, 0.05, w.length - 0.05);
-          const c = on(w, ss, y + (r.next() - 0.5) * 0.15, 0.06 + 0.05 * r.next());
+          const c = on(w, ss, Math.min(y + (r.next() - 0.5) * 0.15, topAt(plan, w, ss) - 0.3), 0.06 + 0.05 * r.next());
           const height = y / reach;
           const ch: Channels = {
             loss: 0,
