@@ -1,7 +1,6 @@
 // The immersive world: the terrain lab's world, full screen, with nothing on
 // it but the world itself and three quiet ways of knowing where you are, all
-// at once: arrival titles, the field map, and markers in the world with a
-// compass. Touching the world only ever moves you (docs/design-system.md,
+// at once: arrival titles, the field map, and markers in the world. Touching the world only ever moves you (docs/design-system.md,
 // "One way to touch the world"); everything else is paper opened from the
 // corner: the map, and a slip with Gaia's mark, how to wander, and the way
 // back to the lab's debugging views. Walking, tapping a thing to walk up and
@@ -12,7 +11,6 @@ import { LOGO_SVG } from "../brand/logo.ts";
 import { onTap } from "../lab.ts";
 import type { WorldHandle } from "../terrain/lab.ts";
 import { createArrival } from "./arrival.ts";
-import { createCompass } from "./compass.ts";
 import { createFieldMap } from "./field-map.ts";
 import { MARKER_LAYER, createMarkers } from "./markers.ts";
 
@@ -50,7 +48,6 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
   container.append(layer);
 
   const arrival = createArrival(layer);
-  const compass = createCompass(layer);
   // While paper opened from the corner is read, the world waits under a faint wash: a tap there folds the paper and moves no one.
   const reading = document.createElement("div");
   reading.className = "reading";
@@ -183,7 +180,6 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
   function apply(): void {
     arrival.show(active);
     map.show(active);
-    compass.show(active);
   }
 
   let still = 0;
@@ -210,7 +206,6 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
         container.style.setProperty("--night", String(n));
       }
       arrival.frame(place, still, dt);
-      compass.frame(p.x, p.z, p.yaw, world.placeAt);
       map.frame(p.x, p.z, p.yaw, place);
     },
     hook: {
@@ -225,7 +220,7 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
       /** Where the person is, and what each way of knowing it shows now. */
       state: () => {
         const p = world.person();
-        return { place: world.placeAt(p.x, p.z), titles: arrival.state(), compass: compass.state(), map: map.state(), markers: markers.crossings().length };
+        return { place: world.placeAt(p.x, p.z), titles: arrival.state(), map: map.state(), markers: markers.crossings().length };
       },
       crossings: () => markers.crossings(),
     },

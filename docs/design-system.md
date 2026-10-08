@@ -406,8 +406,7 @@ The three ways work together:
   heavy enough to hold their shape, each with a tight dark rim and a wider
   soft one, over a soft wash of cool shade that breathes behind them like a
   cloud's shadow on the sky, with no box and no edge: they read over bright
-  cloud, golden hour and night alike. While a title rises, the compass's
-  name ahead steps back, so one name speaks at a time.
+  cloud, golden hour and night alike.
 - **The field map.** The map button among the corner controls (or M)
   unfolds a hand-drawn map on warm paper: it opens out from its folds,
   tilting up flat as it comes, and its folds stay faintly creased. The
@@ -456,9 +455,9 @@ The three ways work together:
   bleaches with both areas'. Posts and stones stop a walker, and no grass
   grows through a stone. Every name fits its arm or its line on the stone,
   as on the signs (see Signs and cards); a long name's arm grows up to a
-  third longer. A compass strip at the top names the area ahead: the first
-  one along the way the person faces that is not the one they stand in.
-  Markers draw as three instanced meshes and cast no shadow.
+  third longer. There is no compass on the screen: the field map keeps its
+  painted compass rose. Markers draw as three instanced meshes and cast no
+  shadow.
 
 ## Gaia's mark
 
