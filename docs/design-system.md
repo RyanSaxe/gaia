@@ -440,15 +440,36 @@ The three ways work together:
 
 ## Gaia's mark
 
-Gaia introduces itself with its own mark (`app/renderer/brand/`): a
-hand-drawn lowercase "gaia" in moss green with an uneven ink outline, a
-lighter wash up and to the left of each stroke so it reads round, a soft
-shadow on the paper, and a two-leaf sprout growing from the i in place of
-its dot, after v1's. The sprout alone, on a round of paper, is the page's
-icon. The mark opens the world on the veil while it bakes, over a soft
-wash of light with the veil's words and question under it, heads the slip,
-and signs the field map's cartouche. The SVG files are the
-source; nothing redraws the mark in code.
+Gaia introduces itself with its own mark (`app/renderer/brand/`), a
+lowercase "gaia" and a mark alone on a round for the page's icon. Several
+directions stand side by side, each a folder holding `logo.svg` and
+`mark.svg`, and `CHOSEN` in `app/renderer/brand/logo.ts` picks the one the
+app shows:
+
+- **firefly** (shown): "g" and the last "a" in moss green, the land; "ai" in
+  the lantern's amber, the light Jev brings to it; the i's dot a firefly
+  with its glow and a short flight of sparks. The icon is the firefly over a
+  hill at dusk.
+- **watercolor**: painted with a round brush in moss watercolor, the field
+  map's own medium, with pooled edges, dry-brush bristles where each stroke
+  lifts and granulation; the sprout drawn in brown ink. The icon is the
+  sprout inside an ensō.
+- **seasons**: alive at the "g", with a leafy tendril, and drier letter by
+  letter to a last "a" that is grey, cracked and taken back by ivy. Each
+  letter mixes its colors by its own vitality; `seasons/live.svg` shows one
+  vitality for the whole word, read from `--gaia-v` on any parent, so it can
+  show a world's health without being redrawn. The icon is a leaf, alive on
+  one side of its midrib and dry on the other.
+- **grove**: a cartographer's ink line, and from the i a tree whose limbs
+  end in round leaves with dotted cross-links between them.
+- **sprout**: round 12's moss-green word with a two-leaf sprout from the i,
+  after v1's.
+
+The mark opens the world on the veil while it bakes, over a soft wash of
+light with the veil's words and question under it, heads the slip, and
+signs the field map's cartouche. Every file is plain paths, with no
+filters, gradients or IDs, so it inlines any number of times. The SVG files
+are the source; nothing redraws the mark in code.
 
 ## Trails
 
