@@ -28,6 +28,8 @@ import {
 } from "./kit.ts";
 
 const UP: V3 = [0, 1, 0];
+/** A crown's heart: solid, drawn as the shade between its leaves. */
+const CORE: V3 = [0, 0, CUT.core];
 
 /** The foliage volume's center and half-extents, from the frame's tips. */
 interface Crown {
@@ -341,7 +343,7 @@ function emitBlob(
       glow: 0,
       pivot: look.pivot,
       tint: look.tint * 0.4,
-    });
+    }, CORE);
   }
   for (const [a, b, c] of sphere.triangles) out.triangle(first + a, first + b, first + c);
 }
@@ -621,7 +623,7 @@ function emitSpray(
       glow: 0,
       pivot: at,
       tint: tint * 0.4,
-    });
+    }, CORE);
   }
   for (const [a, b, c] of sphere.triangles) out.triangle(first + a, first + b, first + c);
 

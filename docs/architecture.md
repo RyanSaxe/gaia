@@ -368,7 +368,7 @@ a separate channel that never lowers vitality.
 Every primitive writes five per-vertex vitality channels: `loss` (the vitality
 below which a piece collapses to its pivot), `droop`, `wither`, `glow` and
 `pivot`, plus a `tint` hue offset, a `cutout` that places a vertex on a
-leaf card, and `close`, how far a piece folds toward its pivot at night (a
+leaf card or marks a crown's solid heart (`CUT.core`), and `close`, how far a piece folds toward its pivot at night (a
 flower's petals). Parts may add four optional channels for ruin and motion:
 `fall` (an axis, the most it turns, and the vitality below which a piece tips
 about its pivot: a door swings ajar, a chimney topples), `grow` (the vitality
@@ -402,7 +402,10 @@ Distance thins detail by whole pieces, from the person's eye in every pass:
 and the CPU reference, and the plant shader applies the same numbers. A
 coarser level of detail is the full build with the pieces that have left by
 its distance taken out, every kept vertex bit-identical, so detail is computed
-from one build and never shifts a primitive's random streams.
+from one build and never shifts a primitive's random streams. A crown's
+heart (`CUT.core`) also leaves near the eye, shrinking to its center by its
+own size (`CORE_NEAR` in `packages/render/src/plant.ts`), in the view only:
+its shadow stays, so the shade under a tree never changes as a person walks.
 
 `createPlantInstances` in `@gaia/render` sorts copies into 32 m cells. Before
 each pass (the sun's shadow, the water's mirror, the view) the scene's

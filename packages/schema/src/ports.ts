@@ -80,15 +80,15 @@ export interface Part {
 export const CUT = {
   /** A solid surface: nothing is cut. */
   solid: 0,
-  /** A cluster of broad leaves around the card's middle; along runs -1 to 1. */
+  /** Pointed leaves on a twig from the card's base (along -1) toward its tip (along 1). */
   cluster: 1,
   /** Small lance leaves hanging from a stem down the middle; along counts leaves. */
   strand: 2,
   /** A needle spray with a jagged fringe; along runs from 0 at the base to 1 at the tip. */
   needles: 3,
-  /** Rounded oval leaves, like a cherry's or a blueberry's, around the card's middle; along runs -1 to 1. */
+  /** Small rounded oval leaves, like a cherry's or a blueberry's, on a twig from the card's base (along -1) toward its tip (along 1). */
   oval: 4,
-  /** Palmate leaves with pointed lobes, like a maple's; along runs -1 to 1. */
+  /** Palmate leaves with pointed lobes, like a maple's, in pairs on a twig from the card's base (along -1) toward its tip (along 1). */
   lobed: 5,
   /**
    * A patch laid on a surface, like moss on stone. Across is how deep in the
@@ -99,6 +99,12 @@ export const CUT = {
   patch: 6,
   /** A five-petaled flower, its heart at the card's middle; along runs -1 to 1. */
   blossom: 7,
+  /**
+   * The solid heart of a crown or a bush, inside its leaves: drawn dark, as
+   * the shade between leaves, so up close it never reads as a ball. It is
+   * never a card: it does not thin when seen edge-on.
+   */
+  core: 8,
 } as const;
 
 export interface Anchor {

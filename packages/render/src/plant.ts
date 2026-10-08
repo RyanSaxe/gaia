@@ -10,6 +10,9 @@ import { createSmokeMaterial } from "./smoke.ts";
 
 const f = (x: number): string => x.toFixed(4);
 
+/** Where a crown's heart is gone and where it is whole, in multiples of its own size from the eye. */
+const CORE_NEAR = { gone: 3, whole: 8 } as const;
+
 // The scalar channels ride four to an attribute (see \`geometryOf\`), so an
 // instanced plant stays well inside WebGL's 16 attribute slots.
 const CHANNELS_GLSL = /* glsl */ `
@@ -159,6 +162,18 @@ vec3 cardCut() {
   if (abs(floor(c.z) - ${CUT.patch.toFixed(1)}) < 0.5) c.x -= 0.5 * (1.0 - uVitality);
   return c;
 }
+// A crown's heart stands in for its inner leaves only while they merge into
+// a mass: as the eye comes near enough to see single leaves, it shrinks
+// smoothly to its center, so up close the gaps show limbs, deeper leaves and
+// sky, never a ball. It measures from the eye by its own size, gone within
+// ${CORE_NEAR.gone} sizes and whole past ${CORE_NEAR.whole}. Its shadow stays: it stands for the
+// crown's dense shade wherever the person walks.
+float coreKeep(mat4 model) {
+  if (abs(floor(aCutout.z) - ${CUT.core.toFixed(1)}) > 0.5) return 1.0;
+  float size = aPiece.w / ${f(DETAIL.reach)};
+  float d = distance((model * vec4(aPiece.xyz, 1.0)).xyz, uEye);
+  return smoothstep(size * ${f(CORE_NEAR.gone)}, size * ${f(CORE_NEAR.whole)}, d);
+}
 `;
 
 // Rot: a surface rots through into ragged holes as vitality falls. The
@@ -189,33 +204,68 @@ float rotEdge() { return 1.0; }
 #endif
 `;
 
+/**
+ * A clump cut for one leaf shape (described in LEAF_MASK_GLSL). Each shape
+ * gets its own loop: one loop holding all three shapes costs about a quarter
+ * more GPU time in a grove.
+ */
+function clumpGlsl(name: string, len: number, wide: number, leaf: string, midrib: boolean): string {
+  return /* glsl */ `
+vec2 ${name}(vec2 p, float seed, float far, float px, float outline) {
+  if (far > 0.999) return vec2(outline, 1.0);
+  float cell = 0.4;
+  float len = ${f(len)};
+  float wide = ${f(wide)};
+  vec2 c0 = floor(p / cell);
+  // A leaf rooted farther than 1.2 lengths plus 0.06 away cannot reach this
+  // fragment and is skipped; the floor lies below what it would give there,
+  // so skipping changes nothing.
+  float d = -0.06;
+  float tone = 1.0;
+  for (int j = -1; j <= 1; j++) {
+    for (int i = -1; i <= 1; i++) {
+      vec2 c = c0 + vec2(float(i), float(j));
+      vec2 h = cellHash(c + seed * vec2(37.1, 91.7));
+      vec2 base = (c + 0.2 + 0.6 * h) * cell;
+      float rb = length(base);
+      vec2 r = p - base;
+      // Only leaves rooted inside the outline grow, so the clump keeps its shape.
+      if (rb > 0.72 || dot(r, r) > (len * 1.2 + 0.06) * (len * 1.2 + 0.06)) continue;
+      vec2 g = cellHash(c + seed * vec2(53.3, 17.9) + 11.0);
+      float l = len * (0.8 + 0.4 * g.x);
+      // Each leaf points roughly away from the card's middle, turned up to about 55 degrees.
+      vec2 away = rb > 1e-3 ? base / rb : vec2(0.0, 1.0);
+      vec2 turn = normalize(vec2(1.0, (h.y - 0.5) * 2.2 + (h.x - 0.5) * 0.6));
+      vec2 dir = vec2(away.x * turn.x - away.y * turn.y, away.x * turn.y + away.y * turn.x);
+      r += dir * 0.06;
+      vec2 q = vec2(dot(r, dir), dot(r, vec2(-dir.y, dir.x)));
+      float di = ${leaf};
+      float ti = (0.8 + 0.26 * g.y) * (0.9 + 0.14 * clamp(q.x / l, 0.0, 1.0));
+${midrib ? "      ti *= mix(0.88, 1.0, smoothstep(0.0, 0.01 + px, abs(q.y)));\n" : ""}      tone = mix(tone, ti, clamp(di / px + 0.5, 0.0, 1.0));
+      d = max(d, di);
+    }
+  }
+  return vec2(mix(d, outline, far), mix(tone, 1.0, far));
+}
+`;
+}
+
 const LEAF_MASK_GLSL = /* glsl */ `
 ${ROT_GLSL}
 varying vec3 vCut;
 float leafHash(float x) { return fract(sin(x * 91.3458) * 47453.5453); }
+// Two values in [0, 1) for a grid cell, from arithmetic alone (no sine).
+vec2 cellHash(vec2 c) {
+  vec3 q = fract(vec3(c.xyx) * vec3(0.1031, 0.103, 0.0973));
+  q += dot(q, q.yzx + 33.33);
+  return fract((q.xx + q.yz) * q.zy);
+}
 
 // A pointed leaf from the origin along +x, \`len\` long and \`wide\` at its widest.
 float leafShape(vec2 q, float len, float wide) {
   float t = clamp(q.x / len, 0.0, 1.0);
   float profile = wide * pow(sin(3.14159 * pow(t, 0.8)), 0.7);
   return min(profile - abs(q.y), min(q.x, len - q.x) * 0.6);
-}
-
-// Broad leaves fanned around the card's middle.
-float clusterCut(vec2 p, float seed, float far) {
-  // Far away, the cluster is a soft scalloped round.
-  float outline = 0.78 + 0.08 * cos(atan(p.y, p.x) * 7.0 + seed * 6.2832) - length(p);
-  if (far > 0.999) return outline;
-  float d = 0.16 - length(p);
-  for (int k = 0; k < 7; k++) {
-    float fk = float(k);
-    float a = seed * 6.2832 + fk * 0.8976 + (leafHash(seed * 13.1 + fk) - 0.5) * 0.6;
-    vec2 dir = vec2(cos(a), sin(a));
-    vec2 q = vec2(dot(p, dir), dot(p, vec2(-dir.y, dir.x)));
-    float len = 0.68 + 0.3 * leafHash(seed * 7.3 + fk * 3.1);
-    d = max(d, leafShape(q, len, 0.2 + 0.06 * leafHash(seed * 3.7 + fk)));
-  }
-  return mix(d, outline, far);
 }
 
 // A rounded oval leaf from the origin along +x.
@@ -225,50 +275,31 @@ float ovalShape(vec2 q, float len, float wide) {
   return min(profile - abs(q.y), min(q.x, len - q.x) * 0.7);
 }
 
-// Small oval leaves on short stalks, each starting a little off the card's
-// middle, so a cluster reads as leaves on twigs rather than a rosette.
-float ovalCut(vec2 p, float seed, float far) {
-  float outline = 0.8 + 0.07 * cos(atan(p.y, p.x) * 9.0 + seed * 6.2832) - length(p);
-  if (far > 0.999) return outline;
-  float d = 0.1 - length(p);
-  for (int k = 0; k < 8; k++) {
-    float fk = float(k);
-    float a = seed * 6.2832 + fk * 0.785 + (leafHash(seed * 11.3 + fk) - 0.5) * 0.5;
-    vec2 dir = vec2(cos(a), sin(a));
-    vec2 side = vec2(-dir.y, dir.x);
-    vec2 r = p - dir * (0.06 + 0.12 * leafHash(seed * 5.1 + fk * 2.3)) - side * (leafHash(seed * 2.9 + fk) - 0.5) * 0.2;
-    vec2 q = vec2(dot(r, dir), dot(r, side));
-    d = max(d, ovalShape(q, 0.48 + 0.24 * leafHash(seed * 7.7 + fk * 3.3), 0.19 + 0.05 * leafHash(seed * 4.1 + fk)));
-  }
-  return mix(d, outline, far);
-}
-
 // A palmate leaf facing +x from its stalk: five pointed lobes, the side ones
-// shorter, with deep sinuses between them.
+// shorter, with deep sinuses between them, on a short stalk.
 float lobedShape(vec2 q, float size) {
   vec2 c = q - vec2(size * 0.4, 0.0);
   float th = atan(c.y, c.x);
   float lobes = pow(0.5 + 0.5 * cos(th * 8.4), 2.2);
   float reach = size * (0.3 + 0.34 * lobes * (1.0 - 0.45 * smoothstep(0.5, 1.6, abs(th))));
   reach = mix(reach, size * 0.24, smoothstep(1.75, 2.5, abs(th)));
-  return reach - length(c);
+  float stalk = min(0.02 - abs(q.y), min(q.x, size * 0.3 - q.x));
+  return max(reach - length(c), stalk);
 }
 
-// A few maple-like leaves splayed from the card's middle.
-float lobedCut(vec2 p, float seed, float far) {
-  float outline = 0.76 + 0.1 * cos(atan(p.y, p.x) * 5.0 + seed * 6.2832) - length(p);
-  if (far > 0.999) return outline;
-  float d = 0.08 - length(p);
-  for (int k = 0; k < 4; k++) {
-    float fk = float(k);
-    float a = seed * 6.2832 + fk * 1.5708 + (leafHash(seed * 9.7 + fk) - 0.5) * 0.9;
-    vec2 dir = vec2(cos(a), sin(a));
-    vec2 q = vec2(dot(p, dir), dot(p, vec2(-dir.y, dir.x)));
-    d = max(d, lobedShape(q, 0.6 + 0.22 * leafHash(seed * 3.3 + fk * 1.7)));
-  }
-  return mix(d, outline, far);
-}
-
+// A loose clump of small leaves, the way a spray looks from outside: leaves
+// scattered over the card, one to each cell of a jittered 5-by-5 grid inside
+// the card's outline, each pointing roughly away from the card's middle at
+// its own angle, length and tone. Never a ring of equal leaves around a
+// heart, so up close a card never reads as a flower. Each leaf is lighter
+// toward its tip and darker along its midrib, and leaves overlap in one
+// fixed order, so they read apart without outlines. Far away the leaves
+// merge into the card's scalloped outline. Each returns the signed distance
+// and the tone; each leaf shape has its own copy (clumpGlsl), which keeps the
+// shader small enough to stay as cheap as the cuts it replaced.
+${clumpGlsl("pointedClump", 0.48, 0.14, "leafShape(q, l, wide * (0.85 + 0.3 * h.y))", true)}
+${clumpGlsl("ovalClump", 0.4, 0.16, "ovalShape(q, l, wide * (0.85 + 0.3 * h.y))", true)}
+${clumpGlsl("lobedClump", 0.44, 0.16, "lobedShape(q, l)", false)}
 // Moss on stone: the patch ends where its depth, jittered per vertex, falls
 // below a fifth, so the edge follows a soft winding contour.
 float patchCut(vec2 p) {
@@ -287,7 +318,10 @@ float blossomCut(vec2 p, float seed, float far) {
 
 // Small lance leaves hanging from a stem, alternating sides.
 float strandCut(vec2 p, float seed, float far) {
-  if (far > 0.999) return 0.55 - abs(p.x);
+  // Far away a strand swells and narrows along its length, as its leaves
+  // bunch, so a curtain reads as hanging leaves rather than ribbons.
+  float plain = 0.55 + 0.1 * sin(p.y * 1.9 + seed * 6.2832) - abs(p.x);
+  if (far > 0.999) return plain;
   float d = 0.05 - abs(p.x);
   float cell = 0.42;
   float i0 = floor(p.y / cell);
@@ -300,12 +334,13 @@ float strandCut(vec2 p, float seed, float far) {
     q = vec2(dot(q, dir), dot(q, vec2(-dir.y, dir.x)));
     d = max(d, leafShape(q, 0.95 + 0.2 * h, 0.2));
   }
-  return mix(d, 0.55 - abs(p.x), far);
+  return mix(d, plain, far);
 }
 
 // A needle spray: solid along the limb, combed into needles toward a jagged
-// fringe, tapering to the tip.
-float needleCut(vec2 p, float seed, float far) {
+// fringe, tapering to the tip. Close enough to see single needles, the comb
+// reaches in nearly to the limb, so a spray is feathery, never a plate.
+float needleCut(vec2 p, float seed, float far, float px) {
   float v = clamp(p.y, 0.0, 1.0);
   float edge = (1.0 - pow(v, 2.2)) * (0.8 + 0.2 * smoothstep(0.0, 0.25, v)) + 0.06;
   float u = abs(p.x) / edge;
@@ -317,35 +352,54 @@ float needleCut(vec2 p, float seed, float far) {
   float reach = 0.88 + 0.12 * leafHash(floor(row) + seed * 31.0);
   float needle = (0.3 - abs(comb - 0.5)) * 0.35;
   float body = (reach - u) * edge;
-  float d = u < 0.62 ? body : min(body, needle);
+  float solid = mix(0.22, 0.62, smoothstep(0.03, 0.08, px));
+  float d = min(body, max(needle, (solid - u) * edge));
   d = min(d, min(p.y + 0.02, 1.02 - p.y));
   return mix(d, plain, far);
 }
 
-// The card's leaves at this fragment: x is coverage, y a brightness that
-// darkens each leaf's rim a little, so overlapping leaves read apart up close.
-// Solid surfaces are (1, 1).
-vec2 leafCut() {
+// The tone of a crown's heart: it reads only as the shade between leaves.
+const float CORE_TONE = 0.75;
+
+// The card's leaves at this fragment: x is coverage, y a tone that sets
+// leaves apart up close. Solid surfaces are (1, 1); a crown's heart is solid
+// and dark. \`thin\` (0 to 1) is how nearly edge-on the card is seen: its
+// leaves narrow toward nothing, so a card turning away never shows as a
+// sliver or a stippled ghost.
+vec2 leafCut(float thin) {
   float form = floor(vCut.z + 0.5 / 1024.0);
   if (form < 0.5) return vec2(1.0);
+  if (form > ${(CUT.core - 0.5).toFixed(1)}) return vec2(1.0, CORE_TONE);
   float seed = fract(vCut.z);
   vec2 p = vCut.xy;
+  // A pixel's footprint on the card, by its area, so a card seen at a slant
+  // keeps its leaves as long as one seen face on of the same size.
+  vec2 dx = dFdx(p);
+  vec2 dy = dFdy(p);
+  float px = max(sqrt(abs(dx.x * dy.y - dx.y * dy.x) * 2.0), 1e-4);
 #ifdef SHADOW_PASS
   // Shadows are too soft to show single leaves: cards cast their outline.
   float far = 1.0;
 #else
-  float far = smoothstep(0.05, 0.16, length(fwidth(p)));
+  float far = smoothstep(0.05, 0.16, px);
 #endif
-  float d = form < 1.5 ? clusterCut(p, seed, far)
-    : form < 2.5 ? strandCut(p, seed, far)
-    : form < 3.5 ? needleCut(p, seed, far)
-    : form < 4.5 ? ovalCut(p, seed, far)
-    : form < 5.5 ? lobedCut(p, seed, far)
-    : form < 6.5 ? patchCut(p)
-    : blossomCut(p, seed, far);
-  float rim = 0.86 + 0.14 * smoothstep(0.0, 0.07, d);
-  if (form > 2.5 && form < 3.5) rim *= 0.9 + 0.1 * smoothstep(0.15, 0.45, abs(fract(p.y * 15.0 - abs(p.x) * 1.3 + seed * 5.0) - 0.5));
-  return vec2(clamp(d / max(fwidth(d), 1e-4) + 0.5, 0.0, 1.0), mix(rim, 1.0, far));
+  float th = atan(p.y, p.x) + seed * 6.2832;
+  float r = length(p);
+  // A clump's small leaves merge sooner than a card's coarser cuts: once they
+  // are a few pixels across they read only as the outline's texture.
+  float merged = max(far, smoothstep(0.04, 0.11, px));
+  vec2 c = form < 1.5 ? pointedClump(p, seed, merged, px, 0.78 + 0.08 * cos(th * 7.0) - r)
+    : form < 2.5 ? vec2(strandCut(p, seed, far), 1.0)
+    : form < 3.5 ? vec2(needleCut(p, seed, far, px), 1.0)
+    : form < 4.5 ? ovalClump(p, seed, merged, px, 0.8 + 0.07 * cos(th * 9.0) - r)
+    : form < 5.5 ? lobedClump(p, seed, merged, px, 0.76 + 0.1 * cos(th * 5.0) - r)
+    : form < 6.5 ? vec2(patchCut(p), 1.0)
+    : vec2(blossomCut(p, seed, far), 1.0);
+  if (form > 1.5 && form < 3.5 || form > 5.5) c.y = mix(0.86 + 0.14 * smoothstep(0.0, 0.07, c.x), 1.0, far);
+  if (form > 2.5 && form < 3.5) c.y *= 0.9 + 0.1 * smoothstep(0.15, 0.45, abs(fract(p.y * 15.0 - abs(p.x) * 1.3 + seed * 5.0) - 0.5));
+  // Edge-on, every leaf erodes from its edge; at fully edge-on nothing is left.
+  float d = c.x * (1.0 - thin) - thin * 0.05;
+  return vec2(clamp(d / max(fwidth(d), 1e-4) + 0.5, 0.0, 1.0), c.y);
 }
 `;
 
@@ -370,6 +424,7 @@ void main() {
     gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
     return;
   }
+  k *= coreKeep(modelMatrix);
   vec3 root = (modelMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
   vec3 p = applyWind(applyVariety(applyChannels(aPiece.xyz + (position - aPiece.xyz) * k), root), root);
   vec4 world = modelMatrix * vec4(p, 1.0);
@@ -413,13 +468,15 @@ varying float vTint;
 varying float vWither;
 varying float vGlow;
 void main() {
-  vec2 cut = leafCut();
-  float cover = cut.x;
-  // A card seen edge-on would show as a sliver: it fades out as it turns away.
-  if (vCut.z > 0.5 && abs(floor(vCut.z) - ${CUT.patch.toFixed(1)}) > 0.5) {
+  // A card seen edge-on would show as a sliver: its leaves thin as it turns away.
+  float thin = 0.0;
+  float form = floor(vCut.z);
+  if (form > 0.5 && abs(form - ${CUT.patch.toFixed(1)}) > 0.5 && form < ${(CUT.core - 0.5).toFixed(1)}) {
     vec3 face = normalize(cross(dFdx(vWorld), dFdy(vWorld)));
-    cover *= smoothstep(0.06, 0.28, abs(dot(face, normalize(cameraPosition - vWorld))));
+    thin = 1.0 - smoothstep(0.06, 0.45, abs(dot(face, normalize(cameraPosition - vWorld))));
   }
+  vec2 cut = leafCut(thin);
+  float cover = cut.x;
   if (cover < 0.02) discard;
   // A rotted hole is cut cleanly; its rim darkens like a broken, weathered edge.
   float edge = rotEdge();
@@ -488,7 +545,7 @@ precision highp float;
 #define SHADOW_PASS
 ${LEAF_MASK_GLSL}
 void main() {
-  if (leafCut().x < 0.5 || rotEdge() < 0.0) discard;
+  if (leafCut(0.0).x < 0.5 || rotEdge() < 0.0) discard;
   gl_FragColor = vec4(1.0);
 }
 `;
