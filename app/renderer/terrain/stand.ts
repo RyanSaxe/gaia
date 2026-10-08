@@ -22,10 +22,12 @@ import {
   type TrailEnd,
   type TrailRequest,
   type WildsRing,
+  type LandSite,
   clearingsOf,
   findLandmarkSite,
   findSite,
   groundedBase,
+  heightAt,
   isWet,
   levelPad,
   levelTrails,
@@ -33,6 +35,7 @@ import {
   scatterComponents,
   scatterPlants,
   siteToWorld,
+  siteAt,
   slopeAt,
   trailDiscs,
   trailField,
@@ -58,10 +61,24 @@ export interface StandLot extends Circle {
   readonly id: string;
 }
 
-/** One file's patch: where it lies, and how many trees of which flora preset grow on it (preset -1: none). */
+/** One file's patch: its heart and how far its ground reaches, and how many trees of which flora preset grow on it (preset -1: none). */
 export interface StandPatch extends Circle {
   readonly trees: number;
   readonly preset: number;
+}
+
+/** A file's finer entity standing on its patch, as one of the understory's blueprints. */
+export interface StandSymbol {
+  readonly x: number;
+  readonly z: number;
+  /** The understory rule and variant it stands as. */
+  readonly rule: string;
+  readonly variant: number;
+  /** Its footprint's radius at scale 1, meters, and its scale. */
+  readonly radius: number;
+  readonly scale: number;
+  /** Its file's vitality. */
+  readonly vitality: number;
 }
 
 /**
@@ -76,7 +93,10 @@ export interface StandCode {
   /** Each landmark standing for an entity: which of `landmarks`, on which lot. */
   readonly landmarks: readonly { readonly landmark: number; readonly lot: StandLot }[];
   readonly patches: readonly StandPatch[];
-  /** Trails between lots by id; `style` indexes `trailStyles`. */
+  /** The land's cells, each part of one patch (its index) or of a lot (-1): a tree grows only on its own patch's cells. */
+  readonly cells: readonly (LandSite & { readonly patch: number })[];
+  readonly symbols: readonly StandSymbol[];
+  /** Trails between lots by id; `style` indexes `trailStyles`; the most wanted route first. */
   readonly trails: readonly { readonly from: string; readonly to: string; readonly want: number; readonly style: number }[];
 }
 
@@ -119,6 +139,8 @@ export interface Stand {
   readonly trails: readonly Trail[];
   readonly trees: readonly StandTree[];
   readonly placements: readonly Placement[];
+  /** In a world laid out from code, each symbol's placement in `placements`, or -1 where nothing could stand. */
+  readonly symbols: readonly number[];
   readonly wilds: WildsRing;
   /** Height, water level, distance to the water and to a trail's edge per lattice sample: the ground texture's data. */
   readonly ground: Float32Array;
@@ -304,6 +326,7 @@ function plantPatches(t: Terrain, req: StandRequest, code: StandCode, blocked: (
   const { seed, builds, bases } = req.trees;
   const half = t.spec.size / 2 - 24;
   const trees: StandTree[] = [];
+  const onPatch = (j: number, x: number, z: number): boolean => code.cells.length === 0 || code.cells[siteAt(code.cells, x, z)]?.patch === j;
   code.patches.forEach((p, j) => {
     if (p.preset < 0 || p.trees <= 0) return;
     const r = rand(seed * 7919 + j);
@@ -311,10 +334,11 @@ function plantPatches(t: Terrain, req: StandRequest, code: StandCode, blocked: (
     for (let attempt = 0; attempt < p.trees * 40 && grown < p.trees; attempt++) {
       // The first tree tries the patch's middle; the rest spread over its ground.
       const a = r.next() * Math.PI * 2;
-      const d = attempt === 0 ? 0 : Math.sqrt(r.next()) * p.radius * 0.9;
+      // A patch drawn by cells reaches past its average radius in places; a disc does not.
+      const d = attempt === 0 ? 0 : Math.sqrt(r.next()) * p.radius * (code.cells.length === 0 ? 0.9 : 1.3);
       const x = p.x + Math.cos(a) * d;
       const z = p.z + Math.sin(a) * d;
-      if (Math.abs(x) > half || Math.abs(z) > half || slopeAt(t.lattice, x, z) > PLANT_SLOPE || isWet(t, x, z) || blocked(x, z)) continue;
+      if (Math.abs(x) > half || Math.abs(z) > half || !onPatch(j, x, z) || slopeAt(t.lattice, x, z) > PLANT_SLOPE || isWet(t, x, z) || blocked(x, z)) continue;
       if (trees.some((o) => Math.hypot(o.x - x, o.z - z) < PATCH_GAP)) continue;
       const index = trees.length;
       const variant = p.preset * builds + Math.floor(r.next() * builds);
@@ -366,7 +390,25 @@ export function standWorld(t: Terrain, req: StandRequest): Stand {
     ...trailDiscs(trails, 0.5),
     ...landmarks.map((s) => ({ x: s.site.x, z: s.site.z, radius: (req.landmarks[s.landmark]?.base ?? 2) + 1 })),
   ];
-  const placements = scatterComponents(t, req.understory.rules, req.understory.seed, occupied);
+  // A file's finer entities stand where the layout put them, kept off water, steep ground and whatever else stands.
+  const standing: Placement[] = [];
+  const symbols = (code?.symbols ?? []).map((sym, i): number => {
+    const reach = sym.radius * sym.scale;
+    const clash = (x: number, z: number): boolean => isWet(t, x, z) || slopeAt(t.lattice, x, z) > 24 || blocked(x, z) || occupied.some((o) => Math.hypot(o.x - x, o.z - z) < o.radius + reach);
+    let at: [number, number] | null = clash(sym.x, sym.z) ? null : [sym.x, sym.z];
+    for (let k = 1; at === null && k <= 8; k++) {
+      const a = k * 2.4;
+      const x = sym.x + Math.cos(a) * k * 0.6;
+      const z = sym.z + Math.sin(a) * k * 0.6;
+      if (!clash(x, z)) at = [x, z];
+    }
+    if (at === null) return -1;
+    const [x, z] = at;
+    occupied.push({ x, z, radius: reach + 0.4 });
+    standing.push({ rule: sym.rule, variant: sym.variant, x, y: heightAt(t.lattice, x, z) - 0.05, z, yaw: ((i * 2.399) % (Math.PI * 2)), scale: sym.scale, radius: reach, slope: [0, 0], region: t.region[Math.round((z - t.lattice.origin) / t.lattice.spacing) * t.lattice.n + Math.round((x - t.lattice.origin) / t.lattice.spacing)] ?? 0, vitality: sym.vitality });
+    return standing.length - 1;
+  });
+  const placements = [...standing, ...scatterComponents(t, req.understory.rules, req.understory.seed, occupied)];
 
   const n = t.lattice.n * t.lattice.n;
   const field = trailField(t, trails);
@@ -377,5 +419,5 @@ export function standWorld(t: Terrain, req: StandRequest): Stand {
     ground[i * 4 + 2] = t.shore[i] as number;
     ground[i * 4 + 3] = field[i] as number;
   }
-  return { sites, landmarks, trails, trees, placements, wilds: wildsRing(t), ground, trailPlaces: trailPlaces(t, trails) };
+  return { sites, landmarks, trails, trees, placements, symbols, wilds: wildsRing(t), ground, trailPlaces: trailPlaces(t, trails) };
 }

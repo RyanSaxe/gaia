@@ -37,8 +37,10 @@ file's facts, the entities, and the repository (`CodeModel`). Each file is
 read by a careful line-based pass for TypeScript, JavaScript and Rust
 (`engine/src/source.rs`), with a small lexer that keeps strings and comments
 apart from code: its language and kind (source, test, config, data, docs,
-script), lines, leading comment, exported symbols with their doc comments,
-imports, a rough complexity and its TODO markers. Imports resolve relative
+script), lines, leading comment, symbols (every exported one, and the
+top-level functions and classes it keeps to itself, with `exported: false`),
+each with its doc comment, the line it is declared on and how many lines it
+spans, imports, a rough complexity and its TODO markers. Imports resolve relative
 paths, workspace packages by name through their `exports`, and Rust `mod`
 declarations. A test covers every file it reaches through imports; a crate's
 integration tests reach its entry, and a Rust file with a `#[cfg(test)]`
@@ -59,10 +61,10 @@ build.
 | `@gaia/schema` | The type builder, ports and vitality channels, primitive and kind contracts, code facts, the world document, Jev's wire format, the engine protocol, content identity | Nothing |
 | `@gaia/primitives` | Primitive declarations and geometry, palettes, the manifest `PRIMITIVES` | schema |
 | `@gaia/kinds` | The flora, structure, rock, wildflowers, landmark, link, biome and world kinds | schema |
-| `@gaia/world` | The question planner, answer rules, context gathering, file and entity vitality, type-space tools, `WorldChange`, and the world laid out from code: the requests Jev answers about it, the stand-in judge and the layout | schema |
+| `@gaia/world` | The question planner, answer rules, context gathering, file and entity vitality, type-space tools, `WorldChange`, and the world laid out from code: the code graph, the requests Jev answers about it, the stand-in judge, the division of the land and the layout | schema, terrain (the land's division rule) |
 | `@gaia/realize` | Blueprint to parts, world and region looks at an hour, the light between a day's keys, the sky and air references, presets, channel math, detail by distance | schema, primitives |
 | `@gaia/render` | Three.js materials, light and shadow, and instanced copies of a component, culled by cell and thinned by distance | schema, realize, three |
-| `@gaia/terrain` | Relief composition, the baked heightfield, water, the endless wild land past the rim and the ground's height anywhere, walking, wading and swimming, the solids that stop a walk and the way around them, sight lines, where plants, the understory and landmarks stand, the routes of trails, and where a point is (its area and the file underfoot, `placeAt`) | schema, primitives, realize |
+| `@gaia/terrain` | Relief composition, the baked heightfield, water, the endless wild land past the rim and the ground's height anywhere, walking, wading and swimming, the solids that stop a walk and the way around them, sight lines, where plants, the understory and landmarks stand, the routes of trails, how land divides into cells (`siteAt`), and where a point is (its area and the file underfoot, `placeAt`, and every area's and patch's outline, `outlinesOf`) | schema, primitives, realize |
 | `@gaia/app` | Electron main, preload, world service, and the renderer (the lab) | Every package |
 
 ESLint enforces these boundaries and the purity rules; `eslint.config.js`
@@ -116,49 +118,88 @@ instances of one blueprint vary and each is identical on every run.
 ## A world from code
 
 `@gaia/world` turns a code model (`CodeModel`, what `project.open` returns)
-into a world document (`CodeWorld`, in `packages/world/src/code-world.ts`).
-The repository is the world. Each directory is an area, a circle of ground
-nested inside its parent's. Each file is a patch inside its directory's area,
-its size set by its lines (2.5 m² a line, capped at 1,200 lines). Each entity
-stands on a lot in its root directory's area, as a building or a landmark.
-A dependency between two entities that Jev would walk becomes a trail
-request. `layoutWorld` packs a directory's lot first, then its files, then
-its subdirectories' areas around them, and fits each in its smallest circle,
-so the world's side grows with the code (Gaia's own is 1.3 km). A directory
-whose own lines, with those of subdirectories that have no land of their
-own, reach 3% of the code gets its own land: a terrain region centered on
-its files, reaching as far as their ground (`RegionSpec.reach`, which weighs
-the borders between regions). Smaller directories are areas on their
-parent's land.
+into a world document (`CodeWorld`, in `packages/world/src/code-world.ts`) in
+three steps: code to graph, graph to land, and Jev's meaning on top.
 
-Jev judges every look: the repository's art direction, each region's land,
-what grows on each file's patch, whether each entity is a building or a
-landmark and which, and which dependencies become trails and how they look.
-`planWorldRequests` builds one request per thing, from facts and doc
-comments only, with options shuffled by the thing's path. `judgeWorld` asks
-them through any `JevClient`, eight at a time. Until the reviewer approves
+**The graph.** `codeGraph` builds one graph from the facts: directories
+contain directories and files, files contain their finer entities
+(functions, classes, types and constants, each with its size and doc
+comment), and entities are rooted at directories. Edges say what contains
+what, which file imports which, and which entity depends on which, weighed by
+how many of its files import the other.
+
+**The land.** `layoutWorld` lays the graph out as land with `divideLand`
+(`packages/world/src/land.ts`). Each directory's land is divided among its own
+ground (its files and its entity's lot, kept together at its heart) and its
+subdirectories, each in proportion to its code (26 m² a line, weighed by the
+part the file plays: code most, configuration and data least); then each of
+those is divided the same way, down to the files. Every division is a
+relaxed, weighted nearest-site division of a raster of the land, starting
+from spots seeded by each child's path, so the same code gives the same land
+and a small change moves it a little. The divisions are measured from points
+moved by the land's warp (`warpPoint`, a broad sway and a fine one), so
+borders curve and wander like fields' and nothing is a circle or a square.
+The land fills the walkable square with no common ground between areas;
+the world's side grows with the code (Gaia's own is 990 m). Last, a few
+sites drawn from each file's share (`CodeWorld.cells`, one per 16 m or so)
+redraw the whole division as plain nearest-site cells: the rule `siteAt` in
+`@gaia/terrain` reads, so a file's ground is the same for the layout,
+`placeAt`, the map and the terrain. A file's patch is its cells; an entity's
+lot is a cell of its directory's own ground, and its building or landmark
+stands there.
+
+A directory whose ground, with that of subdirectories that have no land of
+their own, reaches 3% of the code gets its own land: a terrain region whose
+cells are its files' (`RegionSpec.sites`). The terrain blends landforms and
+covers by distance to those cells, so a region's cover changes exactly where
+its areas end. Smaller directories are areas on their parent's land.
+
+On each file's patch stand its finer entities, largest first, as many as its
+ground allows (one per 240 m², at most six, and 420 in the world), spread
+apart and clear of its first tree. Each stands as one of the understory's
+own blueprints, drawn instanced with the rest of the understory at no extra
+draw calls, with its file's vitality, and a person can walk up to it to
+read its card: its kind, doc comment, where it is declared and its size.
+
+**The meaning.** The engine gives structure and sizes; Jev gives meaning.
+Jev judges every choice a reasonable person could make differently: the
+repository's art direction, each region's land, whether that land holds
+water and why (a brook where the code flows along chains of its own imports,
+a still pond where much of the code leans on it, none where it stands on its
+own: the option's words are the reason, stored with the choice), what grows
+on each file's patch, what each kind of a file's finer entities stands as,
+whether each entity is a building or a landmark and which, and how much it
+would walk each dependency. `planWorldRequests` builds one request per thing,
+from facts and doc comments only, with options shuffled by the thing's path.
+`judgeWorld` asks them through any `JevClient`, eight at a time. Of the
+dependencies Jev would walk, the trails a world shows are first those that
+join parts of the code no other chosen trail joins, then the most wanted, up
+to 1.4 per standing entity; the joining ones route first. The repository's
+own ground takes its place among the other areas rather than at the middle,
+so trails between areas do not all cross it. Until the reviewer approves
 live calls, `standInJev` answers: a deterministic stand-in that scores each
 option by the fact tags its look suits, with a tie-break seeded by the
-question. `engineJev` in the world service is the live client; swapping it in
-is one line in `app/renderer/terrain/code-world.ts`.
+question. `engineJev` in the world service is the live client; swapping it
+in is one line in `app/renderer/terrain/code-world.ts`.
 
-`placeAt(world, x, z)` in `@gaia/terrain` says where a person is: the
-deepest area whose circle holds the point and the file patch underfoot, if
-any (`WorldPlaces`, in `@gaia/schema`). Land that no circle holds is the
-repository's own common ground, and past the land's rounded square
-(`WorldPlaces.size`) is the wild, which stands for no directory. A world laid
-out as regions instead of circles, as the lab's sample world is, names each
-area's land in `WorldPlaces.cells`, and a point is the area whose region's
-warped cell holds it (`cellAt`, the cell its landform weighs most in);
-`regionPlaces` builds such a world's places.
+`placeAt(world, x, z)` in `@gaia/terrain` says where a person is: the cell
+whose site is nearest the warped point names the area and the file underfoot
+(`WorldPlaces`, in `@gaia/schema`); a lot's cell names its area and no file.
+Past the land's rounded square (`WorldPlaces.size`) is the wild, which stands
+for no directory. A world laid out as regions, as the lab's sample world is,
+gives each region one cell and its files' patches are discs; `regionPlaces`
+builds such a world's places. `outlinesOf(world)` traces every area's and
+patch's outline from `placeAt`, once per world, for anything that draws them
+(the field map draws each patch's own shape).
 
 The lab opens on Gaia's own world, from
 `app/renderer/terrain/fixtures/gaia.json`, a snapshot `pnpm snapshot` writes
 through the engine's `project.open`; `?world=sample` (or `?world=small`) and
-the Terrain view's "Sample world" button show the sample world instead. `standWorld` takes the
-layout (`StandRequest.code`): each building and landmark on its lot, trees of
-the chosen species on each file's patch with that file's vitality, and the
-trails between lots. The ground textures take a world of any size.
+the Terrain view's "Sample world" button show the sample world instead.
+`standWorld` takes the layout (`StandRequest.code`): each building and
+landmark on its lot, trees of the chosen species on each file's own cells
+with that file's vitality, each finer entity as an understory placement, and
+the trails between lots. The ground textures take a world of any size.
 
 ## Jev
 

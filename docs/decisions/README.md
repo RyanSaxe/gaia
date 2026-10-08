@@ -28,3 +28,4 @@ One file per decision the reviewer settled in the pair sessions that designed Ga
 - [A world from real code](24-a-world-from-code.md)
 - [Entities throughout, each with its own vitality](25-entities-throughout.md)
 - [Buildings and landmarks are as flexible as trees](26-structures-as-flexible-as-trees.md)
+- [Code becomes a graph, and the graph becomes land](27-code-graph-world.md)

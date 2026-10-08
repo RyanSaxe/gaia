@@ -10,7 +10,7 @@
 // never holds up a frame. Opening, panning and zooming redraw only the view of
 // the paper and the marks and names over it, which stay one size at any zoom.
 
-import { type Place, type PlaceArea, type WorldPlaces, heightAt, waterDepthAt } from "@gaia/terrain";
+import { type Place, type PlaceArea, type WorldPlaces, heightAt, outlinesOf, waterDepthAt } from "@gaia/terrain";
 import type { StoodWorld } from "../terrain/lab.ts";
 
 export interface FieldMap {
@@ -224,10 +224,17 @@ function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place
 
   // Each file's patch: a faint wash in its health's color inside a fine ring, so the ground of every file shows.
   ctx.lineWidth = 1.6;
+  // A world laid out from code draws each patch's own cell; a world whose patches are discs draws the discs.
+  const shapes = places.cells.some((c) => c.file !== undefined) ? new Map(outlinesOf(places).patches.map((o) => [o.path, o.rings])) : null;
   for (const p of places.patches) {
-    const r = p.radius * scale;
     ctx.beginPath();
-    ctx.arc(px(p.x), px(p.z), r, 0, Math.PI * 2);
+    const rings = shapes?.get(p.path);
+    if (rings !== undefined) {
+      for (const ring of rings) {
+        for (let k = 0; k < ring.length; k += 2) (k === 0 ? ctx.moveTo : ctx.lineTo).call(ctx, px(ring[k] as number), px(ring[k + 1] as number));
+        ctx.closePath();
+      }
+    } else ctx.arc(px(p.x), px(p.z), p.radius * scale, 0, Math.PI * 2);
     ctx.fillStyle = `rgba(${mixRgb("#a8956a", "#6f9450", Math.max(0, Math.min(1, p.vitality))).join(",")},0.2)`;
     ctx.fill();
     ctx.strokeStyle = "rgba(74,60,44,0.28)";

@@ -320,9 +320,11 @@ words over the land step back.
 The immersive world opens on Gaia's own world. Where a person is comes from
 one function, `placeAt` in `@gaia/terrain`: the area (a directory) whose land
 they stand on, and the file whose patch of ground is underfoot, if any. In a
-world laid out from code each directory's area is a circle nested in its
-parent's, the deepest one holding the point names it, and land no circle
-holds is the repository's own common ground. In the sample world an area's
+world laid out from code the land is all patches: each file's ground is a
+few organic cells, its directory's area is its files' and subdirectories'
+ground together, and an entity's lot is its area's own ground. Areas nest
+and fill the land, and their borders wander like fields' and are where the
+regions' covers change. In the sample world an area's
 border runs where its region's landform gives way to the next, so the
 islands where ground covers drift across a border never flicker a name, and
 a file's patch is the ground around the tree that stands for it. Past the
@@ -339,9 +341,9 @@ There are three ways, for the reviewer to choose between:
 - **The field map.** A map button in the lower corner (or M) unfolds a
   hand-drawn map on warm paper, titled with the repository's name: each
   area a watercolor wash, every area under one top-level directory sharing
-  a hue, on the pale meadow of the repository's own common ground, inside a
-  thin ink border; each file's patch a faint ring washed in its health's
-  color;
+  a hue, the repository's own ground a pale meadow, inside a thin ink
+  border; each file's patch its own shape (`outlinesOf`), faintly inked and
+  washed in its health's color;
   hills shaded from the northwest, water washed blue and inked at its edge,
   trails dotted, trees as small dabs browning with their files' vitality,
   buildings and landmarks as drawn marks, wild brush past the land's edge,

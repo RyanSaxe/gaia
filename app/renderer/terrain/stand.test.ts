@@ -67,6 +67,8 @@ describe("standing a world's things on a bake", () => {
         { x: 20, z: -70, radius: 8, trees: 2, preset: 1 },
         { x: 0, z: 0, radius: 10, trees: 0, preset: -1 },
       ],
+      cells: [],
+      symbols: [{ x: -55, z: -40, rule: "rocks", variant: 0, radius: 0.8, scale: 1, vitality: 0.3 }],
       trails: [{ from: "packages/a", to: "packages/b", want: 0.9, style: 0 }, { from: "packages/a", to: "packages/c", want: 0.8, style: 1 }],
     };
     const stood = standWorld(t, { ...request, code });
@@ -84,6 +86,10 @@ describe("standing a world's things on a bake", () => {
       expect(Math.floor(tree.variant / request.trees.builds)).toBe(patch.preset);
     }
     expect(stood.trees.some((tree) => tree.patch === 2)).toBe(false);
+    // A file's function stands near where the layout put it, as the blueprint it was given, with its file's vitality.
+    const sym = stood.placements[stood.symbols[0]!]!;
+    expect(sym).toMatchObject({ rule: "rocks", variant: 0, vitality: 0.3 });
+    expect(Math.hypot(sym.x + 55, sym.z + 40)).toBeLessThan(5);
     expect(stood.trails.length).toBeGreaterThan(0);
     for (const tr of stood.trails) expect(["packages/a->packages/b", "packages/a->packages/c"]).toContain(tr.id);
   });

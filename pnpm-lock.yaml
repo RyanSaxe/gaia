@@ -159,6 +159,9 @@ importers:
       '@gaia/schema':
         specifier: workspace:*
         version: link:../schema
+      '@gaia/terrain':
+        specifier: workspace:*
+        version: link:../terrain
     devDependencies:
       '@gaia/kinds':
         specifier: workspace:*
