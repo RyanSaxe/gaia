@@ -267,29 +267,14 @@ details.json pre { font: 11px/1.45 ui-monospace, "SF Mono", Menlo, monospace; ba
 /* While the veil is down (the first bake, or a question asked later), nothing of the world's paper sits over it. */
 .lab-terrain:has(.veil:not(.lifted)) .wayfinding { opacity: 0; }
 .lab-terrain:has(.veil:not(.lifted)) .wayfinding button { pointer-events: none !important; }
-/* A thing's card is a page of the field guide, laid over the world only while it is read. */
+/* The debugging views' panel, a thing's field-guide card among it, never shows over the world. */
 .lab-terrain.immersive .panel { display: none; }
-.lab-terrain.immersive .panel.showing-card {
-  display: flex; position: absolute; z-index: 4; left: auto; top: calc(max(14px, env(safe-area-inset-top)) + 58px); right: 16px; bottom: auto; height: auto;
-  width: min(360px, calc(100% - 32px)); max-height: calc(100% - 90px);
-  border: 0; border-radius: 10px; overflow: hidden; transform: none; transition: none;
-  box-shadow: 0 18px 44px rgba(30, 22, 10, 0.3); animation: page-in 0.45s ease-out both;
-}
-.lab-terrain.immersive .panel .sheet-handle { display: none; }
-/* Over the world the card is written in the same serif as the map and the slip, so every page reads as one book. */
-.lab-terrain.immersive .card { font-family: "Iowan Old Style", Georgia, "Times New Roman", serif; }
-.lab-terrain.immersive .card-facts { font-size: 13px; }
-.lab-terrain.immersive .card-what { font-weight: 600; letter-spacing: 0.16em; }
+/* Paper coming and going: the wait's slip (wait/wait.css) uses these. */
 @keyframes page-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-/* Walking away, the page fades as it came; the terrain lab removes it when the fade ends. */
-.lab-terrain.immersive .panel.showing-card.card-leaving { animation: page-out 0.32s ease-in both; pointer-events: none; }
 @keyframes page-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(6px); } }
 
 .wayfinding {
   --ink: #4a3c2c; --ink-soft: #7a6f5c; --paper: #f7f1e3; --paper-line: #e4d9c2; --vermilion: #b8452c;
-  --title: #fdf8ea; --title-shade: rgba(36, 28, 16, 0.55);
-  /* A tight dark rim keeps every letter's edge, and a wider soft one lifts the word off bright cloud. */
-  --title-halo: 0 0 1px rgba(30, 22, 10, 0.7), 0 1px 2px rgba(30, 22, 10, 0.55), 0 0 10px rgba(30, 22, 10, 0.4), 0 0 26px rgba(30, 22, 10, 0.28);
   position: absolute; inset: 0; z-index: 3; pointer-events: none;
   font-family: "Iowan Old Style", Georgia, "Times New Roman", serif;
 }
@@ -299,47 +284,32 @@ details.json pre { font: 11px/1.45 ui-monospace, "SF Mono", Menlo, monospace; ba
 .wayfinding.standing { opacity: 1; }
 .wayfinding:not(.standing) button { pointer-events: none !important; }
 
-/* Arrival: the area's name rises over the land, under a fine rule, and fades. Cream letters read over any sky
-   because a soft wash of shade breathes behind them, like ink bleeding into damp paper: no box, no edge. */
-.arrival {
-  position: absolute; left: 16px; right: 16px; top: 15%; display: grid; justify-items: center; gap: 6px;
-  color: var(--title); text-shadow: var(--title-halo); opacity: 0;
+/* Where you are: an area's name is written on a slip of paper low at the left, fading in on arrival and away;
+   pausing, the file underfoot is written on the same slip. No words hang over the land. */
+.arrival, .underfoot {
+  position: absolute; left: max(18px, env(safe-area-inset-left)); bottom: max(18px, env(safe-area-inset-bottom));
+  display: grid; justify-items: start; gap: 1px; max-width: min(420px, calc(100% - 36px)); padding: 8px 18px 10px 15px;
+  color: var(--ink); rotate: -0.6deg; border-radius: 2px;
+  background: radial-gradient(130% 160% at 25% 15%, #faf4e4, #efe4c9); border: 1px solid rgba(110, 84, 50, 0.16);
+  box-shadow: 0 6px 18px rgba(30, 22, 10, 0.2);
+  filter: sepia(calc(var(--night, 0) * 0.3)) brightness(calc(1 - var(--night, 0) * 0.3));
+  opacity: 0;
 }
-.arrival::before, .underfoot::before {
-  content: ""; position: absolute; z-index: -1; left: 50%; top: 50%; pointer-events: none;
-  /* A cool slate, like a cloud's shadow on the sky: over blue it reads as shade, never as dirt. */
-  background: radial-gradient(closest-side, rgba(24, 30, 44, 0.26), rgba(24, 30, 44, 0.15) 46%, rgba(24, 30, 44, 0.05) 74%, transparent);
-}
-.arrival::before { width: min(760px, 108%); height: 230%; transform: translate(-50%, -50%); }
 .arrival.rise { animation: arrive 7s ease-out both; }
-.arrival-parent { font-size: 12px; font-weight: 700; letter-spacing: 0.34em; padding-left: 0.34em; text-transform: uppercase; }
+.arrival-parent, .underfoot-area { font-size: 9.5px; font-weight: 600; letter-spacing: 0.24em; text-transform: uppercase; color: var(--ink-soft); text-align: left; }
 .arrival-parent:empty { display: none; }
-.arrival-name { font-size: 52px; font-style: italic; font-weight: 600; line-height: 1.05; letter-spacing: 0.012em; text-align: center; overflow-wrap: anywhere; }
-.arrival-rule {
-  position: relative; width: 220px; height: 9px; transform: scaleX(0);
-  background: linear-gradient(90deg, transparent, rgba(251, 246, 232, 0.92) 28%, rgba(251, 246, 232, 0.92) 72%, transparent) center / 100% 1.5px no-repeat;
-  filter: drop-shadow(0 0 2px rgba(30, 22, 10, 0.6));
-}
-.arrival-rule::after { content: ""; position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; background: rgba(251, 246, 232, 0.98); transform: rotate(45deg); }
-.arrival.rise .arrival-rule { animation: rule 7s ease-out both; }
+.arrival-name { font-size: 25px; font-style: italic; font-weight: 600; line-height: 1.05; letter-spacing: 0.012em; text-align: left; overflow-wrap: anywhere; }
 @keyframes arrive {
   0% { opacity: 0; transform: translateY(10px); }
   17% { opacity: 1; transform: none; }
   70% { opacity: 1; transform: none; }
   100% { opacity: 0; transform: translateY(-4px); }
 }
-@keyframes rule { 0%, 6% { transform: scaleX(0); } 32%, 100% { transform: scaleX(1); } }
-
-/* Pausing: the file underfoot, quietly, near the ground, over the same soft wash. */
-.underfoot {
-  position: absolute; left: 50%; bottom: 9%; display: grid; justify-items: center; gap: 5px; max-width: calc(100% - 32px);
-  color: var(--title); text-shadow: var(--title-halo);
-  opacity: 0; transform: translate(-50%, 6px); transition: opacity 0.7s ease, transform 0.7s ease;
-}
-.underfoot::before { width: calc(100% + 140px); height: 200%; transform: translate(-50%, -50%); }
-.underfoot.on { opacity: 1; transform: translate(-50%, 0); transition-duration: 1.1s; }
-.underfoot-file { font-size: 23px; font-style: italic; font-weight: 600; overflow-wrap: anywhere; text-align: center; }
-.underfoot-area { font-size: 11.5px; font-weight: 700; letter-spacing: 0.28em; padding-left: 0.28em; text-transform: uppercase; text-align: center; }
+.underfoot { transform: translateY(6px); transition: opacity 0.7s ease, transform 0.7s ease; }
+.underfoot.on { opacity: 1; transform: none; transition-duration: 1.1s; }
+.underfoot-file { font-size: 19px; font-style: italic; font-weight: 600; overflow-wrap: anywhere; text-align: left; }
+/* While the area's name shows, the line underfoot waits. */
+.wayfinding:has(.arrival.rise) .underfoot { opacity: 0; }
 
 /* The quiet buttons: small rounds of paper at the corners. */
 .way-button {
@@ -355,8 +325,8 @@ details.json pre { font: 11px/1.45 ui-monospace, "SF Mono", Menlo, monospace; ba
 .map-button { top: max(14px, env(safe-area-inset-top)); right: 66px; opacity: 0; pointer-events: none !important; }
 .map-button.on { opacity: 1; pointer-events: auto !important; }
 .wayfinding:has(.field-map.open) .menu-button, .wayfinding:has(.field-map.open) .map-button { opacity: 0; pointer-events: none !important; }
-/* While a card is read, the words over the land step back. */
-.lab-terrain.immersive:has(.panel.showing-card) :is(.arrival, .underfoot) { visibility: hidden; }
+/* While a thing's line or page shows, the slip steps back: they share the lower left. */
+.wayfinding:has(.journal.on, .journal-tab.on) :is(.arrival, .underfoot) { visibility: hidden; }
 .wayfinding:has(.field-map.open) :is(.arrival, .underfoot) { visibility: hidden; }
 
 /* While paper opened from the corner is read, the world waits under a faint wash; a tap there folds the paper. */
@@ -395,11 +365,6 @@ details.json pre { font: 11px/1.45 ui-monospace, "SF Mono", Menlo, monospace; ba
 .slip-wander dt { font-style: italic; font-weight: 600; color: var(--ink); white-space: nowrap; }
 .slip-wander dd { margin: 0; color: var(--ink-soft); }
 .slip-views { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 4px; }
-/* Round 14's sandbox: the options side by side, the one showing inked. */
-.slip-sandbox { display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; align-items: center; margin: 0 6px 12px; font-size: 12px; color: var(--ink-soft); }
-.slip-sandbox > div { display: flex; flex-wrap: wrap; gap: 4px; }
-.slip-sandbox .slip-view { padding: 3px 9px; font-size: 12px; }
-.slip-sandbox .slip-view.on { background: var(--ink); color: var(--paper); border-color: var(--ink); }
 .slip-view { background: transparent; color: #3a3226; border: 1px solid var(--paper-line); border-radius: 999px; padding: 5px 12px; font-size: 13px; }
 @media (hover: hover) { .slip-view:hover { border-color: rgba(74, 60, 44, 0.3); } }
 
@@ -429,7 +394,7 @@ details.json pre { font: 11px/1.45 ui-monospace, "SF Mono", Menlo, monospace; ba
     linear-gradient(90deg, rgba(110, 84, 50, 0.05), transparent 12%, transparent 46%, rgba(110, 84, 50, 0.05) 50%, transparent 54%, transparent 88%, rgba(110, 84, 50, 0.05));
 }
 /* At night the sheet is read by the lantern's warm light. */
-.way-slip, .lab-terrain.immersive .panel.showing-card { filter: sepia(calc(var(--night, 0) * 0.3)) brightness(calc(1 - var(--night, 0) * 0.16)); }
+.way-slip { filter: sepia(calc(var(--night, 0) * 0.3)) brightness(calc(1 - var(--night, 0) * 0.16)); }
 .field-map { filter: drop-shadow(0 16px 26px rgba(25, 18, 8, 0.38)) sepia(calc(var(--night, 0) * 0.3)) brightness(calc(1 - var(--night, 0) * 0.16)); }
 .field-map-view { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
 .field-map-view:active { cursor: grabbing; }
@@ -450,29 +415,9 @@ details.json pre { font: 11px/1.45 ui-monospace, "SF Mono", Menlo, monospace; ba
 }
 @media (hover: hover) { .map-fold:hover { background: linear-gradient(225deg, transparent 50%, #cfbd92 50%, #e4d6b4 78%, #dccba2); } }
 
-/* ---------- round 14's sandbox: other ways of knowing where you are, and of what a thing tells you ---------- */
-/* ?way=slip: an area's name is written on a slip of paper low at the left, fading in on arrival and away;
-   pausing, the file underfoot is written on the same slip. No words hang over the land. */
-.wayfinding[data-way="slip"] :is(.arrival, .underfoot) {
-  left: max(18px, env(safe-area-inset-left)); right: auto; top: auto; bottom: max(18px, env(safe-area-inset-bottom));
-  justify-items: start; gap: 1px; max-width: min(420px, calc(100% - 36px)); padding: 8px 18px 10px 15px;
-  color: var(--ink); text-shadow: none; rotate: -0.6deg; border-radius: 2px;
-  background: radial-gradient(130% 160% at 25% 15%, #faf4e4, #efe4c9); border: 1px solid rgba(110, 84, 50, 0.16);
-  box-shadow: 0 6px 18px rgba(30, 22, 10, 0.2);
-  filter: sepia(calc(var(--night, 0) * 0.3)) brightness(calc(1 - var(--night, 0) * 0.3));
-}
-.wayfinding[data-way="slip"] :is(.arrival, .underfoot)::before { display: none; }
-.wayfinding[data-way="slip"] .arrival-name { font-size: 25px; text-align: left; }
-.wayfinding[data-way="slip"] :is(.arrival-parent, .underfoot-area) { font-size: 9.5px; font-weight: 600; letter-spacing: 0.24em; padding-left: 0; color: var(--ink-soft); text-align: left; }
-.wayfinding[data-way="slip"] .arrival-rule { display: none; }
-.wayfinding[data-way="slip"] .underfoot { transform: translateY(6px); }
-.wayfinding[data-way="slip"] .underfoot.on { transform: none; }
-.wayfinding[data-way="slip"] .underfoot-file { font-size: 19px; text-align: left; }
-.wayfinding[data-way="slip"]:has(.arrival.rise) .underfoot { opacity: 0; }
-
-/* ?card=journal and ?card=ask: what a thing is and how it fares, on a page of the traveller's journal low at the
-   left, written in a hand under an ink sketch of the thing washed in its health's color; details only on asking. */
-.lab-terrain.immersive[data-card]:not([data-card="page"]) .panel.showing-card { display: none; }
+/* What a thing tells: one line on a slip at the lower edge, its name and how it fares in a word; a tap opens a page
+   of the traveller's journal low at the left, written in a hand under an ink sketch of the thing washed in its
+   health's color; details only on asking. */
 .journal, .journal-tab {
   position: absolute; left: max(18px, env(safe-area-inset-left)); bottom: max(18px, env(safe-area-inset-bottom));
   color: #3f3324; border-radius: 3px; border: 1px solid rgba(110, 84, 50, 0.16);
@@ -506,17 +451,11 @@ details.json pre { font: 11px/1.45 ui-monospace, "SF Mono", Menlo, monospace; ba
 .journal-tab span { color: var(--ink-soft); font-style: italic; }
 
 @media (max-width: 699px) {
-  .lab-terrain.immersive .panel.showing-card { left: 10px; right: 10px; top: auto; bottom: max(10px, env(safe-area-inset-bottom)); width: auto; max-height: 64%; }
-  .arrival { top: 13%; }
-  .arrival-name { font-size: 38px; }
-  .arrival-rule { width: 170px; }
-  .underfoot { bottom: 12%; }
   .field-map { left: 8px; top: 8px; width: calc(100% - 16px); height: calc(100% - 16px); transform: perspective(1600px) rotateX(8deg) scale(0.95, 0.85); }
   .field-map.open { transform: none; }
   .field-map { --fold: 44px; }
   .way-button, .slip-view { min-height: 44px; }
   /* On a phone the corner controls stack. */
   .map-button { top: calc(max(14px, env(safe-area-inset-top)) + 52px); right: 14px; }
-  .underfoot-area { font-size: 10.5px; letter-spacing: 0.2em; padding-left: 0.2em; }
   .journal { left: 10px; right: 10px; width: auto; bottom: max(10px, env(safe-area-inset-bottom)); max-height: 60%; }
 }

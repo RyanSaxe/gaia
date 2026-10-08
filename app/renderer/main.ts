@@ -181,6 +181,6 @@ window.__lab = {
     await frames(6);
   },
   ...Object.fromEntries(TABS.map((tab) => [tab, new Proxy({}, { get: (_, key: string) => labOf(tab).hook[key] })])),
-  /** The immersive world's hooks: its way of finding one's way, the map, and what each shows. */
+  /** The immersive world's hooks: the map, a jump, the slip in the corner, and what each way of knowing where you are shows. */
   immersive: new Proxy({}, { get: (_, key: string) => (labOf("terrain"), immersive?.hook[key]) }),
 };

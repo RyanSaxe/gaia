@@ -1,7 +1,7 @@
 // Where a person is: the area (a directory) whose ground a point is, and the
 // file whose patch is underfoot, if any. Past the codebase's land lies the
 // wild, which stands for no directory. Everything that tells a person where
-// they are (arrival titles or a slip, the field map, signposts) reads only
+// they are (the slip, the field map, signposts) reads only
 // `placeAt`, and anything that draws the areas reads `outlinesOf`.
 //
 // The land is divided into cells by one rule (`siteAt`): the terrain's

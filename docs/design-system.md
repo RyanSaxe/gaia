@@ -369,21 +369,30 @@ function or class stands as walks the person up to it (to the end of a
 building's walk, just outside a tree's crown, or a couple of steps from a
 function's stone on their side), and
 when they arrive the view turns gently, in about a second, to frame the
-thing beside its card, and the card opens: in the immersive world, a page
-laid over the world (at the top right under the corner controls on a wide
-screen, the thing framed in the strip beside it; along the bottom on a
-phone, the thing framed above it); in the Terrain view, in the panel or the
-sheet. A low thing, such as a function's stone or bush, is framed by its
+thing. A low thing, such as a function's stone or bush, is framed by its
 own middle, looking down at it at the person's feet. A thing already close
-counts as arrived. A new tap or a key cancels
-the walk and the card stays shut. The card belongs to its thing: walking
-more than 4 m from where it opened closes it, fading as it came, and so do
-its × and Esc. The card reads like a page from a field guide: what kind of thing it
+counts as arrived. A new tap or a key cancels the walk and nothing opens.
+
+In the immersive world, arriving shows one line on a slip of paper at the
+lower edge: the thing's name and one word for how it fares ("signal ·
+healthy"). A person who only wants to look reads almost nothing. A tap on
+the line opens a page of the traveller's journal low at the left
+(`app/renderer/immersive/journal.ts`), written in a hand: an ink sketch of
+the thing washed in its health's color (a failing tree's crown thins and
+browns, a failing house's roof sags and ivy climbs it), its name, what it
+is ("A watermill for a TypeScript package"), the first sentence of its doc
+comment, and how it fares with the reason ("It looks tired: no test reaches
+it"). Where it lives, its size, what it leans on and who judged it open
+only from "more". The line and the page belong to their thing: walking more
+than 4 m from where they opened lets them go, and so does Esc.
+
+In the Terrain view the thing's card opens in the panel or the sheet
+instead, and reads like a page from a field guide: what kind of thing it
 is, its name, what it does, where it lives in the code, its size, what it
 leans on and what leans on it, what it stands as in the world, who judged
 that (Jev, or the stand-in when Jev did not answer), and its vitality in
 words (thriving, healthy, tired, failing, in ruins) with the signals behind
-it, each with its reading.
+it, each with its reading. Walking away, its × and Esc close it.
 
 While a codebase's world opens, the wait covers the screen
 (`app/renderer/wait/`). It shows no words, counts or percentages and never
@@ -400,8 +409,8 @@ be. Two directions are built, chosen by `CHOSEN_WAIT` in `wait.ts` or
   its judgments settle, coming in wet, a little darker, and spreading from
   its heart; while the world bakes the washes dry lighter. Then the map
   folds away as the field map does and the paper dissolves into the world,
-  as a jump on the map does, and the place's title rises. The sheet has no
-  frame, title or names. After dark it is read by the lantern, warm at its
+  as a jump on the map does, and the place's name is written on the slip.
+  The sheet has no frame, title or names. After dark it is read by the lantern, warm at its
   middle and falling into blue at its edges.
 - **The mark gathers.** Gaia's mark on the sky the world will stand under,
   darkening with the hour, and fireflies drifting in from the edges to
@@ -456,23 +465,33 @@ finger and keys all follow the same three rules.
 - **The world moves you.** A tap or click on the world always means "go
   there". On the land, the person walks to the spot (a tap where they stand
   stops them). On a thing (a building, a tree, a landmark or its sign) they
-  walk up to it, the view turns to frame it, and its card opens. A tap on a
-  rock, a bush, a fingerpost or a boundary stone walks up to it, never to
+  walk up to it, the view turns to frame it, and a line says what it is. A
+  tap on a rock, a bush, a fingerpost or a boundary stone walks up to it, never to
   the ground hidden behind it. A drag looks around and never walks. W A S D
   or the arrows walk and Shift hurries. A drag or a key takes the view back
   from a turn at once. Touching the world never does anything but move you.
 - **Everything else is paper from the corner.** The corner controls, at the
   top right (stacked on a phone), are the only things on the screen that are
   not the world: the map button (or M) unfolds the field map, and the rose
-  opens the slip. They stay while a card is read. A tap on the open map is
-  the one way to travel far at once: it is a paper action, so it belongs to
-  the map, never to the world.
+  opens the slip. They stay while a thing's line or page shows. A tap on the
+  open map is the one way to travel far at once: it is a paper action, so it
+  belongs to the map, never to the world.
 - **Paper you open holds the world still.** While the map or the slip is
   open, the world waits under a faint wash. A tap there folds the paper and
   moves no one, a drag there does nothing, and Esc folds it. The keys still
-  walk, and the map's traveller follows. A card is different: it opens on its
-  own when the person arrives, so it never holds the world; a tap elsewhere
-  walks there and leaving closes the card.
+  walk, and the map's traveller follows. A thing's line and page are
+  different: the line shows on its own when the person arrives, so neither
+  holds the world; a tap elsewhere walks there and leaving lets them go.
+
+What can be touched shows it. A thing under a resting mouse pointer (a
+tree, a building, a landmark, a function's stone or bush) catches a soft
+rim of light along its edges, the sun's by day and the lantern's after
+dark, fading in and out over a third of a second, and the pointer becomes a
+hand. There are no circles and no labels. The pointer is read once it rests
+and five times a second while it does, with each thing as an upright
+cylinder of its reach, so it costs no triangle tests. `uHeed` in the
+scene's light carries the thing's middle, reach and strength to the plant
+shader's `heedRim`. A phone, with no resting pointer, gets no rim.
 
 ## Knowing where you are
 
@@ -484,11 +503,11 @@ finger) and the way back to the debugging views (Components, Terrain and
 Skies). The hour follows the person's clock (`?hour=22` pins it).
 Everything a person reads here looks like the world's own things: warm
 paper, brown ink, a serif with italic names and small capitals for paths,
-and slow, soft motion; a card over the world is set in the same serif.
-After dark the paper (the map, the slip, a card) is read by the lantern, a
-little warmer and dimmer. While a card is read or the map is open, the
-words over the land step back. Until the first world stands, the wait is
-alone on the screen; the ways of knowing where you are and the corner
+and slow, soft motion; a thing's journal page is written in a hand. After
+dark the paper (the map, the slips, a thing's line and page) is read by the
+lantern, a little warmer and dimmer. While a thing's line or page shows, or
+the map is open, the slip naming the area steps back. Until the first world
+stands, the wait is alone on the screen; the ways of knowing where you are and the corner
 controls come in as the wait lifts.
 
 The immersive world opens on Gaia's own world. Where a person is comes from
@@ -506,16 +525,16 @@ codebase's land is the wild, which names nothing.
 
 The three ways work together:
 
-- **Arrival titles.** Entering an area, after a moment there, its name
-  rises softly over the land under a fine rule, with its parent directories
-  in small capitals above it, holds, and fades, as a region's name does in
-  Breath of the Wild. An area left and re-entered within half a minute is
-  not announced again. Standing still brings up a quieter line near the
-  ground: the file underfoot and the area's path. Both are cream letters,
-  heavy enough to hold their shape, each with a tight dark rim and a wider
-  soft one, over a soft wash of cool shade that breathes behind them like a
-  cloud's shadow on the sky, with no box and no edge: they read over bright
-  cloud, golden hour and night alike.
+- **A slip of paper.** Entering an area, after a moment there, its name is
+  written on a small slip of warm paper at the lower left, in italic ink
+  with its parent directories in small capitals above it. The slip fades
+  in, holds, and fades away after seven seconds. An area left and
+  re-entered within half a minute is not announced again. Standing still
+  writes the file underfoot and the area's path on the same slip, once the
+  area's name has come and gone, so the two never cross. It is the
+  map's paper and ink, so it reads as the traveller's own note rather than
+  a sign hung in the sky, and it names the area off the trails too. No
+  words hang over the land (`app/renderer/immersive/arrival.ts`).
 - **The field map.** The map button among the corner controls (or M)
   unfolds a hand-drawn map: it opens out from its folds, tilting up flat as
   it comes, and its folds stay faintly creased. The sheet is handmade paper
@@ -596,39 +615,6 @@ The three ways work together:
   third longer. There is no compass on the screen: the field map keeps its
   painted compass rose. Markers draw as three instanced meshes and cast no
   shadow.
-
-### Round 14's sandbox
-
-The reviewer asked for options before any of these change, shown at the same
-spots. The slip lists them under "Round 14 options", with the one showing
-inked, and the page's address and `__lab.immersive.styles(way, card, heed)`
-choose them too; without any of these the world shows today's.
-
-- **Where you are** (`?way=`): `titles`, today's arrival titles and line
-  underfoot; `land`, no words on the screen, so the signs, fingerposts,
-  boundary stones and the field map say where a person is; `slip`, the
-  area's name written on a slip of warm paper low at the left that fades in
-  on arrival and away, the file underfoot on the same slip when the person
-  pauses.
-- **What a thing tells you** (`?card=`, `app/renderer/immersive/journal.ts`):
-  `page`, today's card; `journal`, a page of the traveller's journal low at
-  the left, written in a hand under an ink sketch of the thing washed in its
-  health's color (a failing tree's crown thins and browns, a failing house's
-  roof sags and ivy climbs it), with its name, what it is ("A watermill for
-  a TypeScript package"), the first sentence of its doc comment and how it
-  fares with the reason ("It looks tired: no test reaches it"); where it
-  lives, its size, what it leans on and who judged it open only from "more";
-  `ask`, one line on a slip of paper at the lower edge (its name and how it
-  fares in a word), which opens the journal page when tapped; `sign`, no
-  paper: the view turns to the thing and its own sign.
-- **Touchable** (`?heed=rim`): a thing under a resting mouse pointer (a
-  tree, a building, a landmark, a function's stone or bush) catches a soft
-  rim of light along its edges, the sun's by day and the lantern's after
-  dark, fading in and out over a third of a second, and the pointer becomes
-  a hand. The pointer is read once it rests and five times a second while it
-  does, with each thing as an upright cylinder of its reach, so it costs no
-  triangle tests. `uHeed` in the scene's light carries the thing's middle,
-  reach and strength to the plant shader's `heedRim`.
 
 ## Gaia's mark
 
