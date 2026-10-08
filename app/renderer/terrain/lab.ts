@@ -192,6 +192,8 @@ interface Subject {
   readonly stand: (fromX: number, fromZ: number) => { x: number; z: number };
   /** How tall it stands, meters: arriving, the view turns to frame it. */
   readonly height: number;
+  /** How far it reaches from its middle, meters: what a pointer finds and what catches the rim of light. */
+  readonly reach: number;
 }
 
 /** Where one tree stands, and which build it copies. */
@@ -256,6 +258,17 @@ export interface WorldHandle {
   landing(x: number, z: number, heart?: { readonly x: number; readonly z: number }): Landing | null;
   /** Puts the person at a landing at once: only under cover of a transition, so nothing is seen to jump. */
   place(at: Landing): void;
+  /** Calls `listener` with what a person has walked up to when its card opens, and with null when it closes. */
+  onCard(listener: (thing: CardThing | null) => void): void;
+  /** Whether a thing under a resting mouse pointer catches a rim of light (round 14's sandbox). */
+  heeding(on: boolean): void;
+}
+
+/** What a person walked up to: what it stands for, its form in the world (such as "A watermill") and who judged it. */
+export interface CardThing {
+  readonly represented: Represented;
+  readonly standsAs: string;
+  readonly judge?: Judge;
 }
 
 /** Where a person lands and which way they look (radians, 0 looking toward -z). */
@@ -670,6 +683,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       z: b.site.z,
       stand: () => settlement.standOf(b),
       height: b.view.height,
+      reach: Math.hypot(b.plan.width, b.plan.depth) / 2,
     }));
     // A landmark stands for an entity in the codebase's world: walk up to its foot to read it.
     const landmarkSubjects: Subject[] = code === null
@@ -686,6 +700,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
             x,
             z,
             height: landmarkViews[i]?.height ?? 6,
+            reach: lm.base + 1,
             stand: (fx: number, fz: number) => {
               const d = Math.hypot(fx - x, fz - z) || 1;
               const off = lm.base + 7;
@@ -703,6 +718,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
         x,
         z,
         height: (variants[tree.variant] as TreeVariant).height * tree.scale,
+        reach: crown,
         // Stop just outside the crown, so the tree and its plaque are in view, not its leaves.
         stand: (fx: number, fz: number) => {
           const d = Math.hypot(fx - x, fz - z) || 1;
@@ -729,6 +745,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
             x,
             z,
             height: (understory.footprint(p.rule, p.variant)?.top ?? 0.8) * p.scale,
+            reach: p.radius + 0.3,
             stand: (fx: number, fz: number) => {
               const d = Math.hypot(fx - x, fz - z) || 1;
               const off = p.radius + 2.2;
@@ -777,7 +794,9 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   /** Where the person stood when the card opened: walking this far from it closes the card, meters. */
   let cardAt: { x: number; z: number } | null = null;
   let leaving = 0;
+  const cardListeners: ((thing: CardThing | null) => void)[] = [];
   function showCard(s: Subject): void {
+    for (const l of cardListeners) l({ represented: s.represented, standsAs: s.standsAs, ...(s.judge === undefined ? {} : { judge: s.judge }) });
     window.clearTimeout(leaving);
     $("panel").classList.remove("card-leaving");
     card.show(s.represented, s.standsAs, s.judge);
@@ -787,6 +806,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     cardAt = { x: walker.x, z: walker.z };
   }
   function hideCard(): void {
+    if (card.shown !== null) for (const l of cardListeners) l(null);
     cardAt = null;
     const done = (): void => {
       card.hide();
@@ -1003,6 +1023,67 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     const rect = canvas.getBoundingClientRect();
     raycaster.setFromCamera(new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1), camera);
     return raycaster.ray;
+  }
+
+  // ---------- heeding: what a resting mouse pointer finds catches a rim of light ----------
+
+  /** Whether the rim shows (round 14's sandbox, `?heed=rim`), how long the pointer rests before it looks, how often it looks again while the view moves, and how long the rim takes to come and go, seconds. */
+  const HEED = { rest: 0.12, again: 0.2, fade: 0.35 };
+  const heed = { on: new URLSearchParams(location.search).get("heed") === "rim", x: 0, y: 0, over: false, still: 0, since: Infinity, wanted: null as Subject | null, shown: null as Subject | null, strength: 0 };
+  canvas.addEventListener("pointermove", (e) => {
+    if (e.pointerType !== "mouse") return;
+    heed.x = e.clientX;
+    heed.y = e.clientY;
+    heed.over = true;
+    heed.still = 0;
+    heed.since = Infinity;
+  });
+  canvas.addEventListener("pointerleave", () => {
+    heed.over = false;
+    heed.wanted = null;
+  });
+  /**
+   * The thing a ray finds first, if nothing nearer hides it: every tree, building,
+   * landmark and function's stone or bush as an upright cylinder of its reach and
+   * height, so a look costs no triangle tests.
+   */
+  function subjectUnder(ray: THREE.Ray): Subject | null {
+    const { origin: o, direction: d } = ray;
+    const flat = d.x * d.x + d.z * d.z;
+    if (flat < 1e-9) return null;
+    const land = groundHit(ray);
+    let best: { subject: Subject; distance: number } | null = null;
+    for (const subject of subjects) {
+      const s = ((subject.x - o.x) * d.x + (subject.z - o.z) * d.z) / flat;
+      if (s <= 0 || (best !== null && s > best.distance)) continue;
+      const foot = heightAt(terrain.lattice, subject.x, subject.z);
+      const y = o.y + d.y * s;
+      if (Math.hypot(o.x + d.x * s - subject.x, o.z + d.z * s - subject.z) > Math.max(0.6, subject.reach) || y < foot - 0.3 || y > foot + Math.max(0.6, subject.height)) continue;
+      best = { subject, distance: s };
+    }
+    return best !== null && (land === null || best.distance < land.distance + 0.5) ? best.subject : null;
+  }
+  function heedFrame(dt: number): void {
+    if (!heed.on || mode !== "walk") return;
+    if (heed.over && drag.id === -1) {
+      heed.still += dt;
+      heed.since += dt;
+      // Look once the pointer rests, and again now and then, as the person walks or turns under it.
+      if (heed.still >= HEED.rest && heed.since >= HEED.again) {
+        heed.since = 0;
+        const rect = canvas.getBoundingClientRect();
+        raycaster.setFromCamera(new THREE.Vector2(((heed.x - rect.left) / rect.width) * 2 - 1, -((heed.y - rect.top) / rect.height) * 2 + 1), camera);
+        heed.wanted = subjectUnder(raycaster.ray);
+        canvas.style.cursor = heed.wanted === null ? "" : "pointer";
+      }
+    } else canvas.style.cursor = "";
+    // A rim moving to another thing first fades from the one it lit.
+    const target = heed.wanted !== null && heed.wanted === heed.shown ? 1 : 0;
+    heed.strength = Math.max(0, Math.min(1, heed.strength + (target > heed.strength ? dt : -dt) / HEED.fade));
+    if (heed.strength === 0) heed.shown = heed.wanted;
+    const lit = heed.shown;
+    if (lit !== null) light.uHeed.value.set(lit.x, lit.z, lit.reach, heed.strength * heed.strength * (3 - 2 * heed.strength));
+    else light.uHeed.value.w = 0;
   }
 
   /** Where a ray first meets the ground, marched over the height the walk stands on: the lattice on the land, the wild land past it. */
@@ -1413,6 +1494,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       shadow.frame(shadowCenter.set(0, 0, 0), world.size * 0.62);
     }
     marker.frame(dt, camera.position, light.uNightness.value);
+    heedFrame(dt);
     refreshSight(now);
     // Every pass thins distant detail from where the person's eyes are.
     light.uEye.value.copy(camera.position);
@@ -1604,6 +1686,17 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     },
     landing: (x, z, heart) => landingNear(x, z, heart),
     place: (at) => walkTo(at.x, at.z, at.yaw),
+    onCard: (listener) => cardListeners.push(listener),
+    heeding: (on) => {
+      heed.on = on;
+      heed.wanted = null;
+      if (!on) {
+        heed.shown = null;
+        heed.strength = 0;
+        light.uHeed.value.w = 0;
+        canvas.style.cursor = "";
+      }
+    },
   };
 
   return {

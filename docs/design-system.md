@@ -459,6 +459,39 @@ The three ways work together:
   painted compass rose. Markers draw as three instanced meshes and cast no
   shadow.
 
+### Round 14's sandbox
+
+The reviewer asked for options before any of these change, shown at the same
+spots. The slip lists them under "Round 14 options", with the one showing
+inked, and the page's address and `__lab.immersive.styles(way, card, heed)`
+choose them too; without any of these the world shows today's.
+
+- **Where you are** (`?way=`): `titles`, today's arrival titles and line
+  underfoot; `land`, no words on the screen, so the signs, fingerposts,
+  boundary stones and the field map say where a person is; `slip`, the
+  area's name written on a slip of warm paper low at the left that fades in
+  on arrival and away, the file underfoot on the same slip when the person
+  pauses.
+- **What a thing tells you** (`?card=`, `app/renderer/immersive/journal.ts`):
+  `page`, today's card; `journal`, a page of the traveller's journal low at
+  the left, written in a hand under an ink sketch of the thing washed in its
+  health's color (a failing tree's crown thins and browns, a failing house's
+  roof sags and ivy climbs it), with its name, what it is ("A watermill for
+  a TypeScript package"), the first sentence of its doc comment and how it
+  fares with the reason ("It looks tired: no test reaches it"); where it
+  lives, its size, what it leans on and who judged it open only from "more";
+  `ask`, one line on a slip of paper at the lower edge (its name and how it
+  fares in a word), which opens the journal page when tapped; `sign`, no
+  paper: the view turns to the thing and its own sign.
+- **Touchable** (`?heed=rim`): a thing under a resting mouse pointer (a
+  tree, a building, a landmark, a function's stone or bush) catches a soft
+  rim of light along its edges, the sun's by day and the lantern's after
+  dark, fading in and out over a third of a second, and the pointer becomes
+  a hand. The pointer is read once it rests and five times a second while it
+  does, with each thing as an upright cylinder of its reach, so it costs no
+  triangle tests. `uHeed` in the scene's light carries the thing's middle,
+  reach and strength to the plant shader's `heedRim`.
+
 ## Gaia's mark
 
 Gaia introduces itself with its own mark (`app/renderer/brand/`), a
