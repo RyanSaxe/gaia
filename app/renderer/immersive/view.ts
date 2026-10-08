@@ -20,7 +20,6 @@ import type { WorldHandle } from "../terrain/lab.ts";
 import { createArrival } from "./arrival.ts";
 import { createFieldMap } from "./field-map.ts";
 import { CARD_STYLES, type CardStyle, createJournal } from "./journal.ts";
-import type { MapStyleName } from "./map-styles.ts";
 import { MARKER_LAYER, createMarkers } from "./markers.ts";
 
 /** The lab's debugging views, which the slip leads back to. */
@@ -269,8 +268,6 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
     hook: {
       /** Unfolds or folds the field map. */
       map: (on: boolean) => map.open(on),
-      /** Paints the field map in another direction: "painted", "sketchbook" or "explorer". */
-      mapStyle: (name: MapStyleName) => map.restyle(name),
       /** Sends the person to (x, z) as a tap on the map would; false if nowhere near is fit. */
       jump: (x: number, z: number) => jump(x, z),
       /** Whether a jump is under way. */

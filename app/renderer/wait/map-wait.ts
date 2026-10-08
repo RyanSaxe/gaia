@@ -1,5 +1,5 @@
-// The map paints itself: the wait is the field map's sheet, in the direction
-// the map shows (`ink.ts`), lying on its creased paper. While the code is
+// The map paints itself: the wait is the field map's sheet (`ink.ts`), lying
+// on its creased paper. While the code is
 // read, light moves over the empty sheet (leaf-light by day, the lantern's
 // pool at night). As soon as the land is divided, a pen draws the land's edge
 // and then each area's border, and the wild's wood is brushed in past the
@@ -297,7 +297,7 @@ export function createMapWait(veil: HTMLElement): WaitView {
         const delay = PACE.edgeMs * 0.5 + k * step;
         // Top-level borders a little heavier than those within them; a hedgerow's leaves under its line.
         const weight = o.depth === 1 ? 1.25 : 0.9;
-        if (hand.under !== null) pen(path, hand.under, hand.underWidth * weight, delay, PACE.penMs);
+        pen(path, hand.under, hand.underWidth * weight, delay, PACE.penMs);
         pen(path, hand.line, hand.width * weight, delay, PACE.penMs);
       }
       return { path: o.path, depth: o.depth, rings, x, z, inkedAt, land: null, canvas: undefined, shown: false };

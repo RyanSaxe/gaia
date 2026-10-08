@@ -1,13 +1,10 @@
 // The wait while a world is read, judged and baked: the first thing anyone
 // sees whenever a project opens. It shows no words, counts or percentages;
-// the progress a person sees is the world itself coming to be. Two
-// directions, chosen by `CHOSEN_WAIT` or `?wait=map|mark`:
-// - `map`: the field map paints itself. Paper, then each area's border drawn
-//   with a pen as soon as the land is divided, each area washed in as its
-//   judgments settle, the washes drying while the world bakes, and the
-//   paper folding away into the world.
-// - `mark`: Gaia's mark on the sky, and fireflies drifting in to gather
-//   into its glow as the world is read, judged and baked.
+// the progress a person sees is the world itself coming to be: the field
+// map paints itself (`map-wait.ts`). Paper, then each area's border drawn
+// with a pen as soon as the land is divided, each area washed in its land's
+// color as its judgments settle, the washes drying while the world bakes,
+// and the paper folding away into the world.
 // Everything that moves is a CSS transition or animation of opacity or
 // transform, so it keeps moving on the compositor while the page's thread
 // is busy standing the world, and the wait never competes with the bake.
@@ -17,7 +14,6 @@
 
 import type { ConsentPlan, Opening } from "../../world-service/protocol.ts";
 import { createMapWait } from "./map-wait.ts";
-import { createMarkWait } from "./mark-wait.ts";
 import "./wait.css";
 
 /** A wait that shows how opening a world is going. */
@@ -37,21 +33,12 @@ export interface Wait extends WaitView {
   ask(plan: ConsentPlan): Promise<boolean>;
 }
 
-export type WaitStyle = "map" | "mark";
-/** The direction the app shows unless the page asks for another with `?wait=`. */
-const CHOSEN_WAIT: WaitStyle = "map";
-
-export function waitStyle(): WaitStyle {
-  const asked = new URLSearchParams(location.search).get("wait");
-  return asked === "map" || asked === "mark" ? asked : CHOSEN_WAIT;
-}
-
 const dollars = (usd: number): string => `$${usd < 0.01 ? usd.toFixed(3) : usd.toFixed(2)}`;
 
 /** The wait in `veil`, a layer over the stage that lifts once the world stands. */
-export function createWait(veil: HTMLElement, style: WaitStyle = waitStyle()): Wait {
-  veil.dataset.wait = style;
-  const view = style === "map" ? createMapWait(veil) : createMarkWait(veil);
+export function createWait(veil: HTMLElement): Wait {
+  veil.dataset.wait = "";
+  const view = createMapWait(veil);
   return {
     ...view,
     ask(plan) {

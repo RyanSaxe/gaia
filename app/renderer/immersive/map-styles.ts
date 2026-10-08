@@ -1,36 +1,18 @@
-// The field map's directions: how its paper, washes, hills, water, borders,
-// the wild past the land and its lettering are painted. Each direction is
-// plain data that `field-map.ts` paints from; `CHOSEN_MAP` picks the one the
-// app shows, and `?map=` picks another for a look at it.
+// The field map's look: a painted bird's-eye of the valley, as in a Ghibli
+// film: gouache-rich washes, hills shaded in violet and lit warm, soft
+// painted hedgerows between areas, trees as round crowns with soft shadows,
+// and deep water lit at its rim. It is plain data that `field-map.ts` paints
+// from, and the wait paints its sheet from the same data (`wait/ink.ts`).
 //
-// - `painted`: a painted bird's-eye of the valley, as in a Ghibli film:
-//   gouache-rich washes, hills shaded in violet and lit warm, hedgerows of
-//   painted dots between areas, trees as round crowns with soft shadows, and
-//   deep water lit at its rim.
-// - `sketchbook`: a traveller's watercolor sketchbook page: loose,
-//   transparent washes bleeding into each other wet-in-wet, blooms where the
-//   pigment dried unevenly, pencil borders, and paint fading raggedly into
-//   white paper short of the sheet's edge.
-// - `explorer`: an old explorer's chart on aged parchment: thin hand-tinted
-//   washes, hills drawn as ink hachures, the coast of each pond engraved with
-//   water lines, ink borders with a band of color inside each region, and the
-//   wild drawn as a forest of little inked trees.
-//
-// In every direction an area's wash is the color of the land Jev judged for
-// it, from the palette the ground shader paints that land's cover with
-// (`groundWash`); the wait paints the same washes on the same paper.
+// An area's wash is the color of the land Jev judged for it, from the
+// palette the ground shader paints that land's cover with (`groundWash`).
 
 import { type GroundSpec, rand, seedOf } from "@gaia/schema";
 
-export type MapStyleName = "painted" | "sketchbook" | "explorer";
-
 export interface MapStyle {
-  readonly name: MapStyleName;
   /** The paper's tone, and the pigment its mottling is in. */
   readonly paper: string;
   readonly mottle: readonly [number, number, number];
-  /** Whether the paper is old: foxed, and darkened toward its edges. */
-  readonly aged: boolean;
   /** The wild past the land. */
   readonly wild: string;
   /** How an area's ground color becomes its wash: its chroma scaled, then lifted this far toward the paper. */
@@ -46,15 +28,11 @@ export interface MapStyle {
   readonly bleedPx: number;
   /** Pigment pooling at each wash's rim: stroke widths in paper pixels and opacities, kept inside the outline. */
   readonly pool: readonly (readonly [number, number])[];
-  /** Blooms where the pigment dried unevenly: how many. */
-  readonly blooms: number;
   /** Broad brush strokes laid over the washes, each a little warmer, cooler, lighter or darker: how many. */
   readonly strokes: number;
   /** Where the paint gives way to bare paper, as a fraction of the sheet from its edge: fully gone at the first, full at the second; and how ragged that edge is. */
   readonly fade: readonly [number, number];
   readonly ragged: number;
-  /** How hills are drawn. */
-  readonly hills: "shade" | "hachure" | "lit";
   /** Shadow and light tints for the hills, and their strengths. */
   readonly shadow: string;
   readonly shadowAlpha: number;
@@ -63,141 +41,42 @@ export interface MapStyle {
   readonly reliefBlur: number;
   readonly light: string;
   readonly lightAlpha: number;
-  /** How the borders between areas are drawn. */
-  readonly border: "pencil" | "ink" | "hedge";
-  /** How water is drawn. */
-  readonly water: "wash" | "engraved" | "deep";
-  /** How trees are drawn, on the land and in the wild. */
-  readonly trees: "dab" | "symbol" | "crown";
   /** A wild tree's crown, meters. */
   readonly woodSize: number;
-  /** A patch's faint health wash and the line round it. */
+  /** A patch's faint health wash. */
   readonly patchFill: number;
-  readonly patchLine: number;
   /** The dotted ways' ink. */
   readonly trail: string;
-  /** Top-level areas lettered in spaced capitals. */
-  readonly capitals: boolean;
   /** How strongly each top-level directory's name is lettered across its whole region. */
   readonly regionAlpha: number;
 }
 
-export const MAP_STYLES: Readonly<Record<MapStyleName, MapStyle>> = {
-  painted: {
-    name: "painted",
-    paper: "#efe5cb",
-    mottle: [96, 72, 40],
-    aged: false,
-    wild: "#5f8a4c",
-    landChroma: 1.3,
-    landLift: 0.1,
-    toneStep: 0.42,
-    ink: "#3a2f22",
-    washAlpha: 0.84,
-    bleed: 0.5,
-    bleedPx: 7,
-    pool: [[22, 0.05], [10, 0.07], [4, 0.09]],
-    blooms: 0,
-    strokes: 2600,
-    fade: [0.002, 0.012],
-    ragged: 0.006,
-    hills: "lit",
-    shadow: "#6e6aa0",
-    shadowAlpha: 0.62,
-    relief: 4.5,
-    reliefBlur: 7,
-    light: "#fff0c4",
-    lightAlpha: 0.42,
-    border: "hedge",
-    water: "deep",
-    trees: "crown",
-    woodSize: 3.4,
-    patchFill: 0.16,
-    patchLine: 0,
-    trail: "rgba(122,80,42,0.92)",
-    capitals: false,
-    regionAlpha: 0.2,
-  },
-  sketchbook: {
-    name: "sketchbook",
-    paper: "#f6f1e4",
-    mottle: [110, 96, 70],
-    aged: false,
-    wild: "#a9bf8a",
-    landChroma: 1.15,
-    landLift: 0.22,
-    toneStep: 0.5,
-    ink: "#4f4234",
-    washAlpha: 0.5,
-    bleed: 0.42,
-    bleedPx: 12,
-    pool: [[16, 0.05], [7, 0.08], [2.5, 0.12]],
-    blooms: 30,
-    strokes: 1200,
-    fade: [0.004, 0.032],
-    ragged: 0.02,
-    hills: "shade",
-    shadow: "#7d86a8",
-    shadowAlpha: 0.55,
-    relief: 5,
-    reliefBlur: 6,
-    light: "#ffffff",
-    lightAlpha: 0,
-    border: "pencil",
-    water: "wash",
-    trees: "dab",
-    woodSize: 3,
-    patchFill: 0.12,
-    patchLine: 0.1,
-    trail: "rgba(112,72,38,0.85)",
-    capitals: false,
-    regionAlpha: 0.16,
-  },
-  explorer: {
-    name: "explorer",
-    paper: "#e8d6a8",
-    mottle: [120, 82, 36],
-    aged: true,
-    wild: "#b9b27e",
-    landChroma: 0.85,
-    landLift: 0.18,
-    toneStep: 0.4,
-    ink: "#3b2c1c",
-    washAlpha: 0.42,
-    bleed: 0.12,
-    bleedPx: 5,
-    pool: [[30, 0.07], [16, 0.09], [7, 0.12], [2.5, 0.14]],
-    blooms: 0,
-    strokes: 0,
-    fade: [0.004, 0.022],
-    ragged: 0.01,
-    hills: "hachure",
-    shadow: "#6b5a44",
-    shadowAlpha: 0.32,
-    relief: 4,
-    reliefBlur: 3,
-    light: "#ffffff",
-    lightAlpha: 0,
-    border: "ink",
-    water: "engraved",
-    trees: "symbol",
-    woodSize: 2.4,
-    patchFill: 0.1,
-    patchLine: 0.16,
-    trail: "rgba(96,58,30,0.9)",
-    capitals: true,
-    regionAlpha: 0.26,
-  },
+export const MAP_STYLE: MapStyle = {
+  paper: "#efe5cb",
+  mottle: [96, 72, 40],
+  wild: "#5f8a4c",
+  landChroma: 1.3,
+  landLift: 0.1,
+  toneStep: 0.42,
+  ink: "#3a2f22",
+  washAlpha: 0.84,
+  bleed: 0.5,
+  bleedPx: 7,
+  pool: [[22, 0.05], [10, 0.07], [4, 0.09]],
+  strokes: 2600,
+  fade: [0.002, 0.012],
+  ragged: 0.006,
+  shadow: "#6e6aa0",
+  shadowAlpha: 0.62,
+  relief: 4.5,
+  reliefBlur: 7,
+  light: "#fff0c4",
+  lightAlpha: 0.42,
+  woodSize: 3.4,
+  patchFill: 0.16,
+  trail: "rgba(122,80,42,0.92)",
+  regionAlpha: 0.2,
 };
-
-/** The direction the app shows. */
-export const CHOSEN_MAP: MapStyleName = "painted";
-
-/** The direction `?map=` asks for, or the chosen one. */
-export function askedMapStyle(): MapStyle {
-  const asked = new URLSearchParams(location.search).get("map");
-  return MAP_STYLES[(asked !== null && asked in MAP_STYLES ? asked : CHOSEN_MAP) as MapStyleName];
-}
 
 const channels = (h: string): [number, number, number] => {
   const v = parseInt(h.slice(1), 16);
@@ -222,7 +101,7 @@ export function groundTone(g: GroundSpec): [number, number, number] {
 
 /**
  * An area's wash, red, green and blue from 0 to 255: the color its ground is
- * painted with, softened into watercolor the direction's way (its chroma
+ * painted with, softened into watercolor (its chroma
  * scaled about its lightness, then lifted toward the paper), and a little
  * lighter or darker, warmer or cooler by its path, so neighbors on one land
  * keep apart.

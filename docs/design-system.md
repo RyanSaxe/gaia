@@ -388,30 +388,21 @@ it, each with its reading.
 While a codebase's world opens, the wait covers the screen
 (`app/renderer/wait/`). It shows no words, counts or percentages and never
 names Jev or OpenRouter: the progress a person sees is the world coming to
-be. Two directions are built, chosen by `CHOSEN_WAIT` in `wait.ts` or
-`?wait=map|mark`:
-
-- **The map paints itself** (the default). The field map's own sheet, in
-  the direction the map shows (`CHOSEN_MAP`), lies on its creased paper:
-  the same size, paper, torn edge, turned-down corner and shadow. While the
-  code is read, light drifts over the empty sheet: leaves' light by day,
-  the lantern's pool breathing at night. As soon as the land is divided, a
-  pen draws the land's rounded edge and then every area's border, from the
-  middle outward, in the map's hand (a hedgerow's soft line on the painted
-  map), and the wild's wood is brushed in past the edge as the map paints
-  it. Each area washes in as its judgments settle, in the color of the land
-  Jev judged for it, as the map washes it: coming in wet, a little darker,
-  and spreading from its heart; while the world bakes the washes dry
-  lighter. An area whose land is not judged yet stays bare paper inside its
-  border. Then the map folds away as the field map does and the paper
-  dissolves into the world, as a jump on the map does, and the place's
-  title rises. The sheet has no title, names or marks. After dark it is
-  read by the lantern, warm at its middle and falling into blue at its
-  edges.
-- **The mark gathers.** Gaia's mark on the sky the world will stand under,
-  darkening with the hour, and fireflies drifting in from the edges to
-  gather into the glow over the i as the world is read, judged and baked;
-  the glow grows with how much is done. Then the sky lifts.
+be: the map paints itself. The field map's own sheet lies on its creased
+paper: the same size, paper, torn edge, turned-down corner and shadow.
+While the code is read, light drifts over the empty sheet: leaves' light
+by day, the lantern's pool breathing at night. As soon as the land is
+divided, a pen draws the land's rounded edge and then every area's border,
+from the middle outward, as the map's soft hedgerow lines, and the wild's
+wood is brushed in past the edge as the map paints it. Each area washes in
+as its judgments settle, in the color of the land Jev judged for it, as
+the map washes it: coming in wet, a little darker, and spreading from its
+heart; while the world bakes the washes dry lighter. An area whose land is
+not judged yet stays bare paper inside its border. Then the map folds away
+as the field map does and the paper dissolves into the world, as a jump on
+the map does, and the place's title rises. The sheet has no title, names
+or marks. After dark it is read by the lantern, warm at its middle and
+falling into blue at its edges.
 
 Everything in the wait that moves is an opacity or transform animation, or
 a pen line's dash, so it keeps moving while the page stands the world, and
@@ -534,21 +525,10 @@ The three ways work together:
   few milliseconds in the page's idle time after a bake, so it never holds
   up a frame; `washArea` lays one area's wash, so the land can be painted
   in area by area.
-  The map is painted in one of three directions (`map-styles.ts`;
-  `CHOSEN_MAP` picks the one shown and `?map=` asks for another):
-  - **painted** (shown): a painted bird's-eye of the valley, as in a
-    Ghibli film: gouache-rich washes, hills shaded violet and lit warm,
-    soft painted hedgerows between areas, trees as round crowns with soft
-    shadows, deep water darker toward its middle and lit at its rim.
-  - **sketchbook**: a traveller's watercolor sketchbook page: loose,
-    transparent washes, blooms where the pigment dried unevenly, pencil
-    borders, trees as loose dabs, and paint giving way raggedly to white
-    paper just short of the torn edge.
-  - **explorer**: an old explorer's chart on foxed parchment darkened
-    toward its edges: thin hand-tinted washes, hills drawn as ink
-    hachures down the fall line, ponds inked at the coast with engraved
-    water lines inside, ink borders, top-level areas in spaced capitals,
-    and the wild drawn as a forest of little inked trees.
+  The map is a painted bird's-eye of the valley, as in a Ghibli film
+  (`map-styles.ts`): gouache-rich washes, hills shaded violet and lit
+  warm, soft painted hedgerows between areas, trees as round crowns with
+  soft shadows, deep water darker toward its middle and lit at its rim.
   A tap on the open map, on a spot or on an area's name, sends the person
   there. The spot is marked with a cross in vermilion ink; the map folds away as the view
   clouds over in the map's own creased paper, the person is placed under it
@@ -667,8 +647,7 @@ Round 13's directions remain for comparison:
 - **sprout**: round 12's moss-green word with a two-leaf sprout from the i,
   after v1's.
 
-The mark gathers the fireflies in the wait's `mark` direction and heads the
-slip. Every file is plain paths, with no
+The mark heads the slip. Every file is plain paths, with no
 filters, gradients or IDs, so it inlines any number of times and stays
 sharp at 16 px. Nothing redraws the mark in code.
 

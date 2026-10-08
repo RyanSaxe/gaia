@@ -1,5 +1,5 @@
-// The field map's sheet, as the wait paints it: the direction the map shows
-// (`CHOSEN_MAP`), so the waiting sheet and the field map are one sheet. Its
+// The field map's sheet, as the wait paints it, so the waiting sheet and the
+// field map are one sheet. Its
 // paper, torn edge and the wild's wood past the land are the map's own
 // (`paintPaperGround`, `DECKLE_MASK`, `woodsOf`); each area's wash is the
 // color of the land Jev judged for it (`groundWash`), from the palette the
@@ -11,7 +11,7 @@ import { BIOME_PRIMITIVES } from "@gaia/primitives";
 import { biome } from "@gaia/kinds";
 import { buildSlots } from "@gaia/realize";
 import { MARGIN, drawWoods, paintFade, paintPaperGround, woodsOf } from "../immersive/field-map.ts";
-import { CHOSEN_MAP, DECKLE_MASK, MAP_STYLES, type MapStyle, groundWash } from "../immersive/map-styles.ts";
+import { DECKLE_MASK, MAP_STYLE, type MapStyle, groundWash } from "../immersive/map-styles.ts";
 import { LANDS } from "../terrain/looks.ts";
 
 /** What the wait paints with. */
@@ -36,8 +36,8 @@ export interface WaitInk {
   readonly strokes: number;
   /** Eases a traced ring's lattice steps into a pen's line: x, z pairs. */
   ease(ring: readonly number[]): number[];
-  /** The borders' hand: the line and, for a hedgerow, the soft band of leaves under it, with their widths in CSS pixels. */
-  readonly border: { readonly line: string; readonly width: number; readonly under: string | null; readonly underWidth: number };
+  /** The borders' hand, a hedgerow: its line and the soft band of leaves under it, with their widths in CSS pixels. */
+  readonly border: { readonly line: string; readonly width: number; readonly under: string; readonly underWidth: number };
   /** Pigment settling into the paper's tooth: a canvas of soft specks to draw large over a wash. */
   grain(cells: number, seed: number): HTMLCanvasElement;
 }
@@ -60,7 +60,7 @@ const EASE = { reach: 5, passes: 2 };
 /** The fade at the sheet's edge, cells on a side: coarser than the map's, as the wait's sheet is smaller. */
 const FADE_CELLS = 192;
 
-const STYLE = MAP_STYLES[CHOSEN_MAP];
+const STYLE = MAP_STYLE;
 
 /** Each land's ground cover, built once from its blueprint, as the terrain builds a region's. */
 const library = new Library([...BIOME_PRIMITIVES]);
@@ -75,12 +75,6 @@ function groundOfLand(land: string): GroundSpec | null {
   }
   return ground;
 }
-
-const BORDERS: Readonly<Record<MapStyle["border"], WaitInk["border"]>> = {
-  hedge: { line: "rgba(46,70,36,0.36)", width: 0.85, under: "rgba(52,80,40,0.13)", underWidth: 2.8 },
-  pencil: { line: "rgba(72,66,60,0.42)", width: 0.9, under: null, underWidth: 0 },
-  ink: { line: "rgba(59,44,28,0.66)", width: 1.1, under: null, underWidth: 0 },
-};
 
 export const WAIT_INK: WaitInk = {
   style: STYLE,
@@ -124,7 +118,7 @@ export const WAIT_INK: WaitInk = {
     g.globalAlpha = STYLE.washAlpha;
     g.drawImage(wash, 0, 0);
     g.globalAlpha = 1;
-    drawWoods(g, STYLE, woodsOf(STYLE, half, reach, scale));
+    drawWoods(g, woodsOf(STYLE, half, reach, scale));
   },
   wash(path, land) {
     const ground = groundOfLand(land);
@@ -156,6 +150,6 @@ export const WAIT_INK: WaitInk = {
     }
     return Array.from(pts);
   },
-  border: BORDERS[STYLE.border],
+  border: { line: "rgba(46,70,36,0.36)", width: 0.85, under: "rgba(52,80,40,0.13)", underWidth: 2.8 },
   grain: (cells, seed) => noise(cells, seed, [60, 46, 26]),
 };
