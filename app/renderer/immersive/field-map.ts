@@ -64,9 +64,17 @@ export interface MapSource {
   places(): WorldPlaces;
 }
 
-/** Paper size in pixels, and how far past the land's widest reach the sheet runs, meters: the land meets its edges. */
+/**
+ * Paper size in pixels, and how far past the land's square the sheet runs, meters: none, so the painted country
+ * runs square to every edge of the sheet, and the land's rounded rim is never drawn.
+ */
 const PAPER = 2048;
-export const MARGIN = 4;
+export const MARGIN = 0;
+/**
+ * Near its rounded rim the land rises to a crest. On the sheet its relief eases, over the last `inner` meters, to
+ * the height `held` meters in, so neither the hill shade nor the contours draw a ring where the land ends.
+ */
+const RIM = { inner: 110, held: 60 };
 /** Sample spacing of the areas, the hills and the water, meters. */
 const AREA_CELL = 5;
 const HILL_CELL = 5;
@@ -378,22 +386,27 @@ export function paintPaperGround(ctx: CanvasRenderingContext2D, style: MapStyle,
 }
 
 /** Where the paint gives way to bare paper at the sheet's edge: rows `j0` to `j1` of a mask `cells` on a side, in its alpha. */
-export function paintFade(img: ImageData, style: MapStyle, j0: number, j1: number): void {
+function paintFade(img: ImageData, style: MapStyle, j0: number, j1: number): void {
   const cells = img.width;
   for (let j = j0; j < j1; j++) for (let i = 0; i < cells; i++) img.data[(j * cells + i) * 4 + 3] = Math.round(255 * paintAt(style, (i + 0.5) / cells, (j + 0.5) / cells));
 }
 
-/** A wood's trees past the land's edge, on a sheet `reach` meters from its middle to its edge at `scale` pixels per meter: thinning into clearings and gone where the paint gives way. */
-export function woodsOf(style: MapStyle, half: number, reach: number, scale: number): { x: number; y: number; r: number; tone: number }[] {
+/**
+ * A ragged fringe of wood along the sheet's square edges, on a sheet `reach` meters from its middle to its edge
+ * at `scale` pixels per meter: thickest at the edge, thinning into clearings inward and gone where the paint
+ * gives way. It follows the paper's edge, never the land's rounded rim.
+ */
+export function woodsOf(style: MapStyle, reach: number, scale: number): { x: number; y: number; r: number; tone: number }[] {
   const px = (v: number): number => (v + reach) * scale;
-  const wild = (x: number, z: number, past = 0): boolean => Math.abs(x) ** 4 + Math.abs(z) ** 4 > (half + past) ** 4;
+  const BAND = 30;
+  const wild = (x: number, z: number): boolean => reach - Math.max(Math.abs(x), Math.abs(z)) < BAND * (0.25 + 0.75 * valueNoise((x + reach) / 60, (z + reach) / 60, 17));
   const woodStep = style.woodSize * 2.1;
   const woods: { x: number; y: number; r: number; tone: number }[] = [];
   for (let z = -reach; z < reach; z += woodStep) {
     for (let x = -reach; x < reach; x += woodStep) {
       const jx = x + (hash(x, z) - 0.5) * woodStep;
       const jz = z + (hash(z, x) - 0.5) * woodStep;
-      if (!wild(jx, jz, 3)) continue;
+      if (!wild(jx, jz)) continue;
       const u = (jx + reach) / (reach * 2);
       const v = (jz + reach) / (reach * 2);
       if (valueNoise(u * 14, v * 14, 5) < 0.32 || hash(jx * 1.3, jz) > paintAt(style, u, v)) continue;
@@ -568,11 +581,39 @@ function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place
   wash.width = wash.height = PAPER;
   const g = wash.getContext("2d") as CanvasRenderingContext2D;
   g.lineJoin = "round";
-  g.fillStyle = style.wild;
-  g.fillRect(0, 0, PAPER, PAPER);
+  // Under the washes, every cell of the sheet in its nearest area's wash, laid soft: past the land's rounded rim
+  // the painted country goes on to the paper's edge in the colors of the land beside it.
+  const nearest = Int16Array.from(at);
+  const queue: number[] = [];
+  for (let c = 0; c < n * n; c++) if (nearest[c] !== -1) queue.push(c);
+  for (let q = 0; q < queue.length; q++) {
+    const c = queue[q] as number;
+    const i = c % n;
+    for (const d of [i > 0 ? c - 1 : -1, i < n - 1 ? c + 1 : -1, c - n, c + n]) {
+      if (d < 0 || d >= n * n || nearest[d] !== -1) continue;
+      nearest[d] = nearest[c] as number;
+      queue.push(d);
+    }
+  }
+  yield;
+  const under = document.createElement("canvas");
+  under.width = under.height = n;
+  const uctx = under.getContext("2d") as CanvasRenderingContext2D;
+  const uimg = uctx.createImageData(n, n);
+  const tones = areas.map((a) => washOf(a.path));
+  for (let c = 0; c < n * n; c++) uimg.data.set([...(tones[nearest[c] as number] ?? mixRgb(style.wild, style.wild, 0)), 255], c * 4);
+  uctx.putImageData(uimg, 0, 0);
+  g.imageSmoothingEnabled = true;
+  g.imageSmoothingQuality = "high";
+  g.drawImage(under, 0, 0, n * AREA_CELL * scale, n * AREA_CELL * scale);
+  yield;
   const byDepth = [...outlines.areas].sort((a, b) => a.depth - b.depth);
   const ground = (path: string): boolean => stood.grounds.has(path);
   const paths = new Map<string, Path2D>();
+  // The washes stop a little inside the land's rim, so no wash pools along it: the soft country under them goes on
+  // across the rim to the paper's edge.
+  g.save();
+  g.clip(rimPath(half - 8, px));
   for (const [k, o] of byDepth.entries()) {
     const path = trace(o.rings);
     paths.set(o.path, path);
@@ -588,6 +629,7 @@ function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place
     if (k % 6 === 5) yield;
   }
   // Brushwork: the wash laid in broad, overlapping strokes, each a little warmer or cooler, lighter or darker.
+  g.restore();
   g.globalCompositeOperation = "source-atop";
   g.lineCap = "round";
   for (let k = 0; k < style.strokes; k++) {
@@ -631,6 +673,17 @@ function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place
   // Hills: shade away from the light in the northwest, and (when lit) a warm light on the slopes facing it.
   const hn = Math.ceil((reach * 2) / HILL_CELL);
   const e = HILL_CELL * 1.5;
+  /** The ground's height as the sheet paints it: eased at the rim to the height a little way in (`RIM`). */
+  const reliefAt = (x: number, z: number): number => {
+    const r = Math.pow(Math.abs(x) ** 4 + Math.abs(z) ** 4, 0.25);
+    const toRim = half - r;
+    const h = heightAt(t.lattice, x, z);
+    if (toRim >= RIM.inner) return h;
+    const pull = Math.min(1, (half - RIM.held) / Math.max(r, 1e-6));
+    const held = heightAt(t.lattice, x * pull, z * pull);
+    const k = Math.max(0, Math.min(1, (toRim - RIM.held) / (RIM.inner - RIM.held)));
+    return held + (h - held) * k * k * (3 - 2 * k);
+  };
   const slopes = new Float32Array(hn * hn * 2);
   const heights = new Float32Array(hn * hn);
   const shadeImg = new ImageData(hn, hn);
@@ -641,10 +694,10 @@ function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place
     for (let i = 0; i < hn; i++) {
       const x = -reach + (i + 0.5) * HILL_CELL;
       const z = -reach + (j + 0.5) * HILL_CELL;
-      const gx = (heightAt(t.lattice, x + e, z) - heightAt(t.lattice, x - e, z)) / (2 * e);
-      const gz = (heightAt(t.lattice, x, z + e) - heightAt(t.lattice, x, z - e)) / (2 * e);
+      const gx = (reliefAt(x + e, z) - reliefAt(x - e, z)) / (2 * e);
+      const gz = (reliefAt(x, z + e) - reliefAt(x, z - e)) / (2 * e);
       const k = j * hn + i;
-      heights[k] = heightAt(t.lattice, x, z);
+      heights[k] = reliefAt(x, z);
       slopes[k * 2] = gx;
       slopes[k * 2 + 1] = gz;
       const lit = (gx + gz) * style.relief;
@@ -803,16 +856,7 @@ function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place
   // They stop short of the land's edge, where the land gives way to the wild by its colors alone. They lie on
   // the linework's sheet.
   line.save();
-  const inside = new Path2D();
-  for (let k = 0; k <= 180; k++) {
-    const a = (k / 180) * Math.PI * 2;
-    const c = Math.cos(a);
-    const s = Math.sin(a);
-    const r = (half - 3) / Math.pow(Math.abs(c) ** 4 + Math.abs(s) ** 4, 0.25);
-    if (k === 0) inside.moveTo(px(c * r), px(s * r));
-    else inside.lineTo(px(c * r), px(s * r));
-  }
-  line.clip(inside);
+  line.clip(rimPath(half - 3, px));
   line.lineJoin = "round";
   for (const [k, o] of outlines.areas.entries()) {
     if (o.depth === 0) continue;
@@ -830,8 +874,8 @@ function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place
   line.restore();
   yield;
 
-  // The wild past the land: a wood thinning into clearings and gone where the paint gives way.
-  const woods = woodsOf(style, half, reach, scale);
+  // A ragged fringe of wood along the paper's edges, thinning into clearings and gone where the paint gives way.
+  const woods = woodsOf(style, reach, scale);
   yield;
   drawWoods(ctx, woods);
   yield;
@@ -896,6 +940,21 @@ function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place
   const relief = { heights, n: hn, cell: HILL_CELL, origin: -reach + HILL_CELL / 2, lo, hi };
   const borders = outlines.areas.filter((o) => o.depth > 0).map((o) => ({ path: meterPath(o.rings), depth: o.depth }));
   return { canvas, lines, reach, style, areaLabels, regionLabels, areaAt, vitality, patches, relief, borders };
+}
+
+/** The land's rounded square `r` meters from its middle, through `px` (meters to the sheet's pixels): what keeps a pen inside the land. */
+export function rimPath(r: number, px: (v: number) => number = (v) => v): Path2D {
+  const p = new Path2D();
+  for (let k = 0; k <= 180; k++) {
+    const a = (k / 180) * Math.PI * 2;
+    const c = Math.cos(a);
+    const s = Math.sin(a);
+    const d = r / Math.pow(Math.abs(c) ** 4 + Math.abs(s) ** 4, 0.25);
+    if (k === 0) p.moveTo(px(c * d), px(s * d));
+    else p.lineTo(px(c * d), px(s * d));
+  }
+  p.closePath();
+  return p;
 }
 
 /** A traced outline as a path in meters, to stroke at any zoom. */

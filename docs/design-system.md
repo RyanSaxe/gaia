@@ -393,9 +393,11 @@ be: the map paints itself, on the field sheet (see The field sheet). The field m
 paper: the same size, paper, torn edge, turned-down corner and shadow.
 While the code is read, light drifts over the empty sheet: leaves' light
 by day, the lantern's pool breathing at night. As soon as the land is
-divided, a pen draws the land's rounded edge and then every area's border,
-from the middle outward, in the green of the map's hedgerows, and the wild's
-wood is brushed in past the edge as the map paints it. While Jev is asked, a round
+divided, a pen draws every area's border, from the middle outward, in the
+green of the map's hedgerows, and never the land's rounded rim; a fringe of
+wood is brushed in along the sheet's edges as the map paints it. Each
+area's wash runs on past the rim to the paper's edge wherever it is the
+nearest area, so the land fills the sheet square, as on the map. While Jev is asked, a round
 watercolor brush is held over the sheet with its shadow: it goes to an
 area with a question out, touches down, its shadow meeting its tip,
 leaves a damp dab that dries, hovers and moves on, brisk while answers
@@ -594,10 +596,15 @@ The three ways work together:
   back from the scrap's close view to the whole, by transforms alone, and
   folds back into the scrap the same way. Its folds stay faintly creased. The sheet is handmade paper
   with a torn, deckled edge and its top right corner turned down; a tap on
-  the corner folds it. The land runs to the sheet's edges: the sheet ends a
-  few meters past the land's widest reach, and the wild fills its corners
-  as a painted wood that thins into clearings, so no frame of empty paper
-  rings the land and no ink line marks where the land ends. Each area is a
+  the corner folds it. The land runs square to every edge of the sheet: the sheet
+  ends at the land's square, with no margin, and past the land's rounded
+  rim each part of the sheet takes the wash of the area nearest it, so
+  painted country goes on into the corners. Nothing marks the rim: no pen
+  inks it, the washes stop pooling a little inside it, and the relief eases
+  over its last 110 m to the height 60 m in, so neither the hill shade nor
+  the contours draw the rim's crest as a ring. A ragged fringe of wood runs
+  along the paper's edges, thickest at the edge and thinning into
+  clearings, and the minimap shows the same sheet near the land's edge. Each area is a
   watercolor wash in the color of the land Jev judged for it: its ground
   cover's color as the ground shader paints it from above, softened into
   paint (`groundWash` in `map-styles.ts`), a little lighter or darker,
