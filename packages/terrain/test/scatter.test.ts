@@ -3,7 +3,7 @@ import { Library, seedOf } from "@gaia/schema";
 import { BIOME_PRIMITIVES, PRIMITIVES, RELIEF_PRIMITIVES } from "@gaia/primitives";
 import { rock } from "@gaia/kinds";
 import { ROCK_PRESETS, realize } from "@gaia/realize";
-import { type Placement, type ScatterRule, type Terrain, bakeTerrain, heightAt, randomWorld, sampleWorld, scatterComponents, slopeAt, waterDepthAt } from "@gaia/terrain";
+import { type Placement, type ScatterRule, type Terrain, bakeTerrain, growGrove, heightAt, randomWorld, sampleWorld, scatterComponents, slopeAt, waterDepthAt } from "@gaia/terrain";
 
 const lib = new Library([...RELIEF_PRIMITIVES, ...BIOME_PRIMITIVES]);
 const worlds: Terrain[] = [sampleWorld(), randomWorld(lib, 7003), randomWorld(lib, 7011)].map((w) => bakeTerrain(w, lib));
@@ -126,5 +126,39 @@ describe("scatterComponents", () => {
         expect(p.y + vy * s, "the rock's ground line is under the turf").toBeLessThanOrEqual(heightAt(t.lattice, x, z) + 0.06);
       }
     });
+  });
+
+  it("grows each thing where it belongs: woodland plants under a grove's canopy, meadow flowers in the open, and a change in one place moves nothing far from it", () => {
+    const t = worlds[0]!;
+    const grove = growGrove({ x: -40, z: 40, count: 40, spacing: 6, reach: 70, seed: 3 }, () => true).map(([x, z]) => ({ x, z, radius: 6.5 }));
+    const rules: ScatterRule[] = [
+      { ...RULES[1]!, id: "woodland", groups: 65, places: { under: 1, edge: 0, open: 0, dry: 0, wet: 0 } },
+      { ...RULES[1]!, id: "meadow", groups: 8, places: { under: 0, edge: 0, open: 1, dry: 0, wet: 0 } },
+    ];
+    const placed = scatterComponents(t, rules, 5, [], { canopy: grove });
+    const crowns = (p: Placement): number => grove.filter((c) => Math.hypot(c.x - p.x, c.z - p.z) < c.radius + p.radius * 2).length;
+    const woodland = placed.filter((p) => p.rule === "woodland");
+    expect(woodland.length).toBeGreaterThan(3);
+    for (const p of woodland) expect(crowns(p), "a woodland plant stands under the grove").toBeGreaterThan(0);
+    const meadow = placed.filter((p) => p.rule === "meadow");
+    expect(meadow.length).toBeGreaterThan(30);
+    expect(meadow.filter((p) => Math.hypot(p.x + 40, p.z - 40) < 25)).toHaveLength(0);
+    // A tree planted far away changes nothing here.
+    const moved = scatterComponents(t, rules, 5, [], { canopy: [...grove, { x: 120, z: -120, radius: 5 }] });
+    const near = (list: readonly Placement[]) => list.filter((p) => Math.hypot(p.x - 120, p.z + 120) > 40);
+    expect(near(moved)).toEqual(near(placed));
+  });
+
+  it("grows a grove close at its heart, thinning toward its margin, on ground it fits", () => {
+    const fits = (x: number): boolean => x < 30;
+    const trees = growGrove({ x: 0, z: 0, count: 30, spacing: 6, reach: 80, seed: 11 }, fits);
+    expect(trees).toHaveLength(30);
+    expect(trees[0]).toEqual([0, 0]);
+    for (const [x] of trees) expect(x).toBeLessThan(30);
+    const gap = ([x, z]: [number, number]): number => Math.min(...trees.filter((o) => o[0] !== x || o[1] !== z).map((o) => Math.hypot(o[0] - x, o[1] - z)));
+    for (const tr of trees) expect(gap(tr)).toBeGreaterThanOrEqual(6 - 1e-9);
+    const byReach = [...trees].sort((a, b) => Math.hypot(...a) - Math.hypot(...b));
+    const mean = (list: [number, number][]): number => list.reduce((n, tr) => n + gap(tr), 0) / list.length;
+    expect(mean(byReach.slice(0, 10)), "the heart stands closer than the margin").toBeLessThan(mean(byReach.slice(-8)));
   });
 });

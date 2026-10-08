@@ -635,7 +635,8 @@ cast into it.
 | Paths | the network's treads cover at most 5% of any region's ground and 2% of the land |
 | Open ground | at least 40% of a region |
 | Landmarks | at most 1 per region |
-| Tree spacing | at least one crown width between trunks |
+| Tree spacing | about half a crown width to a crown between trunks in a grove, set by its area's character, never under 4.5 m; wider toward a grove's margin |
+| Trees | at most 470 in a world, every grove giving up the same share past that |
 
 Jev decides which dependencies become trails: every one it would walk. The
 network, not a count of trails, holds the composition: `planTrails` routes
@@ -645,14 +646,46 @@ its own, so the world is never dominated by paths. A trail it cannot keep
 is listed with the reason (`TrailNetwork.dropped`). Landmarks stand
 about a quarter of the world's width apart.
 
+## Groves and open ground
+
+Land reads as groves, woods and copses with meadows and clearings between,
+never as an orchard. Each file's trees stand as one grove on its own patch:
+close-set at its heart, where crowns touch, thinning into scattered trees at
+its margin, inside an outline of a few seeded lobes, so no two groves share a
+shape and none is a circle. A longer file grows more trees, set a little
+closer; a file that describes or configures grows none, so its patch is a
+clearing. Each of a file's functions and classes stands in a small glade of
+its own among its trees. Each area's character, which Jev chooses with its
+reason, decides how its groves lie:
+
+| Character | Its land |
+| --- | --- |
+| Deep wood | Its files' groves gather on the sides of their patches nearest the area's heart and knit into one wood, with meadow at its rim |
+| Groves and clearings | Each grove keeps to its patch's middle, with clearings between |
+| Old meadow | Open meadow where a file's one or two old trees, a third larger, stand alone among flowers |
+| Rocky heath | Few, smaller trees; stones and low scrub over dry open ground |
+| Wet hollow | Groves knit as in a wood, more loosely; reeds and marsh flowers over damp open ground |
+
+In the sample world, which has no code behind it, groves gather by landform:
+valleys and hills hold the most and the largest, a meadow a few lone trees.
+
 ## Understory
 
-Rocks lie in groups, bushes in thickets, and wildflowers in drifts of one
-species. `scatterComponents` in `@gaia/terrain` places them: a seeded number
-of groups per hectare of each region, weighted by its landform (rocks crowd
-terraces and basins, flowers favor open meadow), with no two footprints
+The understory grows where it belongs. Rocks lie in groups, bushes in
+thickets, and wildflowers in drifts of one species, and each grows in its own
+kind of place: shrubs and bluebells under a grove's canopy, shrubs at a
+wood's edge and a lone tree's foot, daisies, poppies, lupines and asters in
+open meadow and clearings, marsh marigolds and tall feathery shrubs by water,
+stones where the ground is dry or steep (and on terraces, dunes and a heath's
+open ground). Open meadow holds only flowers and the odd stone; wild brush
+grows only past the land. `scatterComponents` in `@gaia/terrain` places them:
+candidate group sites lie on a jittered grid fixed to the world, each site
+reads its place from the trees' crowns, the water and the slope, and each
+rule groups there by its density for that place, its region's landform and,
+in a world from code, its area's character, with no two footprints
 overlapping, nothing on ground steeper than its rule allows, and nothing
-within a meter or two of water. A solid thing sits below the lowest ground
+within a meter or two of water. Nothing crowds a file's finer entities: the
+understory keeps two meters clear of each. A solid thing sits below the lowest ground
 under its footprint, so on a slope its uphill side is buried and its
 downhill side still touches the soil; a drift lies on the ground's plane, so
 its stems stay upright. Rocks are half sunk by construction. Moss caps their

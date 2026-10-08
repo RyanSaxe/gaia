@@ -18,7 +18,7 @@ const request: StandRequest = {
   })),
   landmarks: [{ name: "Lantern tower", base: 3 }, { name: "Great oak", base: 2 }],
   trailStyles: [styles[0]!, styles[1]!, styles[2]!],
-  trees: { count: 30, seed: 9, presets: 2, builds: 2, bases: [0.5, 0.6, 0.7, 0.8] },
+  trees: { count: 30, seed: 9, presets: 2, builds: 2, bases: [0.5, 0.6, 0.7, 0.8], crowns: [3, 3, 4, 4] },
   understory: {
     rules: [{ id: "rocks", variants: [{ radius: 0.8, weight: 1 }], groups: 4, members: [1, 3], spread: 5, mix: "member", scale: [0.8, 1.2], maxSlope: 22, waterClearance: 1.5, ground: "lowest", sink: 0.05 }],
     seed: 5,
@@ -63,12 +63,13 @@ describe("standing a world's things on a bake", () => {
       lots: [{ id: "packages/a", x: -40, z: 30, radius: 9 }, { id: "packages/b", x: 50, z: -20, radius: 9 }],
       landmarks: [{ landmark: 0, lot: { id: "packages/c", x: 10, z: 70, radius: 7 } }],
       patches: [
-        { x: -60, z: -50, radius: 12, trees: 4, preset: 0 },
-        { x: 20, z: -70, radius: 8, trees: 2, preset: 1 },
-        { x: 0, z: 0, radius: 10, trees: 0, preset: -1 },
+        { x: -60, z: -50, radius: 12, trees: 4, preset: 0, heart: { x: -60, z: -50 }, closeness: 0.7, reach: 12, stature: 1, seed: 1 },
+        { x: 20, z: -70, radius: 8, trees: 2, preset: 1, heart: { x: 20, z: -70 }, closeness: 0.7, reach: 8, stature: 1, seed: 2 },
+        { x: 0, z: 0, radius: 10, trees: 0, preset: -1, heart: { x: 0, z: 0 }, closeness: 0.7, reach: 10, stature: 1, seed: 3 },
       ],
       cells: [],
       symbols: [{ x: -55, z: -40, rule: "rocks", variant: 0, radius: 0.8, scale: 1, vitality: 0.3 }],
+      regions: [],
       trails: [{ from: "packages/a", to: "packages/b", want: 0.9, style: 0 }, { from: "packages/a", to: "packages/c", want: 0.8, style: 1 }],
     };
     const stood = standWorld(t, { ...request, code });

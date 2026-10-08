@@ -129,6 +129,70 @@ export const WATERS: Readonly<Record<string, Look>> = {
   "A still pond": look("A still pond gathers: much of the code leans on this area, and what it holds settles here.", "crossroads", "schema", "data"),
 };
 
+/**
+ * How an area's trees and open ground lie, and what that means on the
+ * ground: how many trees each line of a file grows (`perLine`), how close
+ * they stand in crown widths (`closeness`), whether its files' groves gather
+ * toward the area's heart and knit into one wood (`knit`) or keep to their
+ * own patches' middles with clearings between, how large its trees grow
+ * (`stature`), how much of each understory rule it holds, and what its open
+ * ground reads as to the understory (dry heath or damp hollow).
+ */
+export interface Character {
+  readonly look: Look;
+  readonly perLine: number;
+  readonly closeness: number;
+  readonly knit: boolean;
+  readonly stature: number;
+  readonly understory: Readonly<Record<string, number>>;
+  readonly open?: "dry" | "wet";
+}
+
+export const CHARACTERS: Readonly<Record<string, Character>> = {
+  "Deep wood": {
+    look: look("A deep wood: its files' groves run together under one canopy around the area's heart, with meadow at its rim: a large body of code dense with its own logic.", "large", "flow", "geometry", "building", "landmark", "engine", "rust"),
+    perLine: 0.04,
+    closeness: 0.56,
+    knit: true,
+    stature: 1.05,
+    understory: { rocks: 0.7, shrubs: 1.3, flowers: 0.8 },
+  },
+  "Groves and clearings": {
+    look: look("Groves standing apart, each file's on its own ground, with open clearings between: code whose files each keep to themselves.", "medium", "renderer", "render", "immersive", "app", "terrain"),
+    perLine: 0.024,
+    closeness: 0.56,
+    knit: false,
+    stature: 1,
+    understory: { rocks: 1, shrubs: 1, flowers: 1 },
+  },
+  "Old meadow": {
+    look: look("An open meadow where a few old trees stand alone, flowers in the grass: code that describes or configures, or is small and settled.", "docs", "config", "small", "still", "root", "repository", "data", "markdown"),
+    perLine: 0.006,
+    closeness: 2.5,
+    knit: false,
+    stature: 1.3,
+    understory: { rocks: 0.6, shrubs: 0.5, flowers: 1.7 },
+  },
+  "Rocky heath": {
+    look: look("A dry, rocky heath of stones, low scrub and a few wind-bent trees: hard-working code that checks or runs other code, spare and plain.", "test", "script", "tools", "realize", "dry"),
+    perLine: 0.012,
+    closeness: 0.9,
+    knit: false,
+    stature: 0.85,
+    understory: { rocks: 2.6, shrubs: 1.4, flowers: 0.6 },
+    open: "dry",
+  },
+  "Wet hollow": {
+    look: look("A wet hollow of reeds and marsh flowers on soft ground, trees leaning in: ground much of the code leans on, where what it holds settles.", "crossroads", "schema", "world", "service"),
+    perLine: 0.016,
+    closeness: 0.55,
+    knit: true,
+    stature: 1,
+    understory: { rocks: 0.6, shrubs: 1.3, flowers: 1.5 },
+    open: "wet",
+  },
+};
+
 export const LOOKS: Looks = {
   world: WORLDS,
   land: Object.fromEntries(Object.entries(LANDS).map(([k, l]) => [k, l.look])),
@@ -138,4 +202,5 @@ export const LOOKS: Looks = {
   trail: TRAILS,
   form: Object.fromEntries(Object.entries(FORMS).map(([k, f]) => [k, f.look])),
   water: WATERS,
+  character: Object.fromEntries(Object.entries(CHARACTERS).map(([k, c]) => [k, c.look])),
 };

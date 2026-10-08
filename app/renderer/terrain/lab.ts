@@ -566,7 +566,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     buildings: settlement.requests(),
     landmarks: landmarks.map((lm) => ({ name: lm.name, base: lm.base })),
     trailStyles: [trailStyles[0], trailStyles[1], trailStyles[2]] as [RouteSpec, RouteSpec, RouteSpec],
-    trees: { count: treeCount, seed: 9, presets: FLORA_PRESETS.length, builds: TREE_BUILDS, bases: variants.map((v) => v.base) },
+    trees: { count: treeCount, seed: 9, presets: FLORA_PRESETS.length, builds: TREE_BUILDS, bases: variants.map((v) => v.base), crowns: variants.map((v) => v.radius) },
     understory: understory.plan(next, understoryDensity),
     ...(code === null ? {} : { code: code.stand }),
   });
@@ -1716,9 +1716,11 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       walk: (x: number, z: number, yawDeg: number, pitchDeg = -3) => walkTo(x, z, (yawDeg * Math.PI) / 180, (pitchDeg * Math.PI) / 180),
       valley: () => valleyView(),
       walker: () => ({ x: walker.x, z: walker.z, yawDeg: (walker.yaw * 180) / Math.PI, pitchDeg: (walker.pitch * 180) / Math.PI, eye: walker.eye }),
-      overview: (pos?: [number, number, number]) => {
+      /** The overview, from `pos` if given, looking at `target` (the world's middle unless given). */
+      overview: (pos?: [number, number, number], target?: [number, number, number]) => {
         setMode("overview");
         if (pos !== undefined) camera.position.set(...pos);
+        if (target !== undefined) orbit.target.set(...target);
       },
       select: (i: number) => select(i),
       random: (seed?: number) => randomize(seed),
