@@ -21,6 +21,9 @@ export const judgedThing = (r: Pick<WorldRequest, "about" | "target">): string =
 export const areaOfRequest = (r: Pick<WorldRequest, "about" | "target">): string =>
   r.about === "file" ? (r.target.includes("/") ? r.target.slice(0, r.target.lastIndexOf("/")) : "") : r.about === "world" ? "" : r.target;
 
+/** Every thing a planned request judges: itself, or each thing a shared request carries. */
+export const thingsOf = (r: WorldRequest): readonly Pick<WorldRequest, "about" | "target">[] => r.carries ?? [r];
+
 export interface Keeping {
   /** Jev's earlier answers, by request key. */
   readonly stored: ReadonlyMap<string, JevResponse>;

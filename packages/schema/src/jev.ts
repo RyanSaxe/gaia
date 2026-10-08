@@ -36,6 +36,8 @@ export interface JevResponse {
   /** The exact build that answered, such as "typesafe/jev-1.13-20260917". */
   readonly model: string;
   readonly costUsd: number;
+  /** Input tokens OpenRouter billed (`usage.input_tokens`); absent from answers kept before it was recorded. */
+  readonly inputTokens?: number;
   readonly ms: number;
 }
 

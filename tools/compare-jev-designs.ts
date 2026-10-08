@@ -6,14 +6,14 @@
 // judge is `jev`, the engine runs with GAIA_JEV=live, and --spend-up-to
 // covers the engine's own estimate.
 //
-// Usage: pnpm compare-jev [--judge stand-in|local|jev] [--designs first,revised,outline,escalate]
-//          [--model fixture.json] [--repeat 2] [--spend-up-to 0.20] [--out report.json]
+// Usage: pnpm compare-jev [--judge stand-in|local|jev] [--designs first,revised,outline,escalate,shared]
+//          [--model fixture.json] [--repeat 2] [--spend-up-to 0.20] [--out report.json] [--keep-runs yes] [--ledger spend.jsonl]
 //   stand-in: the deterministic stand-in judge, in process.
 //   local:    the real engine binary, live, against a local stand-in for OpenRouter (proves the path).
 //   jev:      the real engine binary and the Keychain's key: real answers, real cost.
 
 import { type ChildProcess, execFileSync, spawn } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createInterface } from "node:readline";
 import type { CodeModel, EngineClient, JevAnswer, JevClient, JevEstimate } from "@gaia/schema";
@@ -29,7 +29,7 @@ const flag = (name: string, fallback: string): string => {
   return i < 0 ? fallback : (process.argv[i + 1] ?? fallback);
 };
 const judge = flag("judge", "stand-in");
-const designs = flag("designs", "first,revised,outline,escalate").split(",") as DesignName[];
+const designs = flag("designs", "first,revised,outline,escalate,shared,shared-outline").split(",") as DesignName[];
 const repeat = Number(flag("repeat", judge === "stand-in" ? "1" : "2"));
 const model = JSON.parse(readFileSync(resolve(flag("model", resolve(repo, "app/renderer/terrain/fixtures/gaia.json"))), "utf8")) as CodeModel;
 for (const d of designs) if (!(d in DESIGNS)) throw new Error(`Unknown design ${d}; choose from ${Object.keys(DESIGNS).join(", ")}.`);
@@ -43,7 +43,10 @@ const valueOf = (a: JevAnswer | undefined): string => (a === undefined ? "" : a.
 interface Run {
   readonly design: DesignName;
   readonly label: string;
+  /** Each thing's exchange; a shared request's things each get their own. */
   readonly exchanges: Exchange[];
+  /** What was actually sent: requests, the tokens OpenRouter billed (estimated for the stand-in), cost and each request's time. */
+  readonly sent: { requests: number; tokens: number; ms: number[] };
   readonly costUsd: number;
 }
 
@@ -128,15 +131,19 @@ try {
       if (reordered && judge === "stand-in") continue;
       const exchanges: Exchange[] = [];
       let costUsd = 0;
+      const sent = { requests: 0, tokens: 0, ms: [] as number[] };
       const counted: JevClient = {
         async ask(request) {
           const r = await jev.ask(request);
           costUsd += r.costUsd;
+          sent.requests++;
+          sent.tokens += r.inputTokens ?? tokensOf(request);
+          sent.ms.push(r.ms);
           return r;
         },
       };
       await judgeWorld(model, LOOKS, counted, { design, trace: (e) => exchanges.push(e), ...(reordered ? { shuffle: "reordered" } : {}) });
-      runs.push({ design, label: reordered ? `${design} reordered` : `${design} #${i + 1}`, exchanges, costUsd });
+      runs.push({ design, label: reordered ? `${design} reordered` : `${design} #${i + 1}`, exchanges, sent, costUsd });
     }
   }
 } finally {
@@ -146,11 +153,12 @@ try {
 
 // ---------- what a one-line edit asks again ----------
 
-/** Requests whose key changes when one file grows by a line at its top, averaged over every source file. */
-function reasksPerEdit(design: DesignName): number {
+/** Requests whose key changes when one file grows by a line at its top, and their tokens, averaged over every source file. */
+function reasksPerEdit(design: DesignName): { requests: number; tokens: number } {
   const before = new Set(planWorldRequests(model, LOOKS, { design }).map((p) => requestKey(p.request)));
   const sources = model.files.filter((f) => (f.kind ?? "source") === "source");
   let changed = 0;
+  let tokens = 0;
   for (const f of sources) {
     const owner = model.entities.filter((e) => e.path === "" || f.path.startsWith(`${e.path}/`)).sort((a, b) => b.path.length - a.path.length)[0];
     const edited: CodeModel = {
@@ -159,9 +167,11 @@ function reasksPerEdit(design: DesignName): number {
       files: model.files.map((x) => (x === f ? { ...x, lines: x.lines + 1, symbols: x.symbols.map((s) => ({ ...s, ...(s.line === undefined ? {} : { line: s.line + 1 }) })) } : x)),
       entities: model.entities.map((e) => (e === owner ? { ...e, lines: e.lines + 1 } : e)),
     };
-    changed += planWorldRequests(edited, LOOKS, { design }).filter((p) => !before.has(requestKey(p.request))).length;
+    const again = planWorldRequests(edited, LOOKS, { design }).filter((p) => !before.has(requestKey(p.request)));
+    changed += again.length;
+    tokens += again.reduce((n, p) => n + tokensOf(p.request), 0);
   }
-  return changed / Math.max(1, sources.length);
+  return { requests: changed / Math.max(1, sources.length), tokens: tokens / Math.max(1, sources.length) };
 }
 
 // ---------- the report ----------
@@ -172,7 +182,7 @@ const report = designs.map((design) => {
   const run = mine[0] as Run;
   const planned = planWorldRequests(model, LOOKS, { design });
   const seconds = run.exchanges.filter((e) => e.second !== undefined);
-  const sent = [...run.exchanges.map((e) => e.first.request), ...seconds.map((e) => e.second!.request)];
+  const ms = [...run.sent.ms].sort((a, b) => a - b);
   const wishes = run.exchanges.filter((e) => e.first.answers[SOURCE_WISH]?.type === "noul" && (e.first.answers[SOURCE_WISH] as { noul: number }).noul > 0.5).length;
   const read: Record<string, number> = {};
   for (const e of seconds) for (const id of e.second!.read) read[id] = (read[id] ?? 0) + 1;
@@ -180,7 +190,7 @@ const report = designs.map((design) => {
   return {
     design,
     planned: { requests: planned.length, questions: planned.reduce((n, p) => n + Object.keys(p.request.questions).length, 0), tokens: planned.reduce((n, p) => n + tokensOf(p.request), 0), largestRequestTokens: Math.max(...planned.map((p) => tokensOf(p.request))) },
-    sent: { requests: sent.length, secondRequests: seconds.length, tokens: sent.reduce((n, r) => n + tokensOf(r), 0), costUsd: run.costUsd },
+    sent: { requests: run.sent.requests, secondRequests: seconds.length, tokens: run.sent.tokens, costUsd: run.costUsd, msP50: ms[Math.floor(ms.length / 2)] ?? 0, msP90: ms[Math.floor(ms.length * 0.9)] ?? 0 },
     readings: read,
     wouldReadSource: wishes,
     meanChoiceConfidence: certainties.reduce((a, b) => a + b, 0) / Math.max(1, certainties.length),
@@ -195,8 +205,8 @@ const lines: string[] = [`Judge: ${judge}. ${model.repository.name}: ${model.fil
 for (const r of report) {
   lines.push(
     `\n${r.design}: ${r.planned.requests} requests planned, ${r.planned.questions} questions, about ${r.planned.tokens.toLocaleString("en-US")} tokens (largest ${r.planned.largestRequestTokens.toLocaleString("en-US")})`,
-    `  sent ${r.sent.requests} requests (${r.sent.secondRequests} second), about ${r.sent.tokens.toLocaleString("en-US")} tokens, $${r.sent.costUsd.toFixed(4)} reported; mean choice confidence ${r.meanChoiceConfidence.toFixed(2)}`,
-    `  a one-line edit asks ${r.reasksPerEdit.toFixed(2)} requests again${Object.keys(r.readings).length === 0 ? "" : `; second requests read ${Object.entries(r.readings).map(([k, n]) => `${k} ${n}`).join(", ")}; ${r.wouldReadSource} files would read source`}`,
+    `  sent ${r.sent.requests} requests (${r.sent.secondRequests} second), ${r.sent.tokens.toLocaleString("en-US")} tokens, $${r.sent.costUsd.toFixed(4)} reported, ${r.sent.msP50} ms median (p90 ${r.sent.msP90}); mean choice confidence ${r.meanChoiceConfidence.toFixed(2)}`,
+    `  a one-line edit asks ${r.reasksPerEdit.requests.toFixed(2)} requests again (about ${Math.round(r.reasksPerEdit.tokens).toLocaleString("en-US")} tokens)${Object.keys(r.readings).length === 0 ? "" : `; second requests read ${Object.entries(r.readings).map(([k, n]) => `${k} ${n}`).join(", ")}; ${r.wouldReadSource} files would read source`}`,
   );
   const show = (name: string, d: Record<string, { compared: number; differ: number }> | undefined): void => {
     if (d !== undefined) lines.push(`  ${name}: ${Object.entries(d).map(([f, x]) => `${f} ${pct(x.differ, x.compared)} of ${x.compared}`).join(", ")}`);
@@ -207,4 +217,9 @@ for (const r of report) {
 }
 console.log(lines.join("\n"));
 const out = flag("out", "");
-if (out !== "") writeFileSync(out, `${JSON.stringify({ judge, report }, null, 2)}\n`);
+if (out !== "") writeFileSync(out, `${JSON.stringify({ judge, report, runs: flag("keep-runs", "") === "" ? undefined : runs.map((r) => ({ label: r.label, exchanges: r.exchanges })) }, null, 2)}\n`);
+const ledger = flag("ledger", "");
+if (ledger !== "") {
+  const spent = runs.reduce((n, r) => n + r.costUsd, 0);
+  appendFileSync(ledger, `${JSON.stringify({ time: new Date().toISOString(), what: `compare-jev ${designs.join(",")} x${repeat}+reordered (${judge})`, requests: runs.reduce((n, r) => n + r.sent.requests, 0), inputTokens: runs.reduce((n, r) => n + r.sent.tokens, 0), reportedUsd: +spent.toFixed(6) })}\n`);
+}
