@@ -5,7 +5,10 @@ import { structure } from "@gaia/kinds";
 import { STRUCTURE_PRESETS, buildSlots } from "@gaia/realize";
 import {
   BODY_RADIUS,
+  type Deck,
   EYE_HEIGHT,
+  GAIT,
+  type Stride,
   NO_SOLIDS,
   SWIM,
   type SolidShape,
@@ -17,6 +20,8 @@ import {
   groundHeightAt,
   landHalf,
   clearanceAt,
+  footingAt,
+  gradePace,
   heightAt,
   outlineShape,
   piecesShapes,
@@ -24,6 +29,8 @@ import {
   sampleWorld,
   solidsOf,
   stanceAt,
+  standAt,
+  stride,
   siteToWorld,
   wallsShape,
   wadeSpeed,
@@ -328,5 +335,91 @@ describe("walking off the land", () => {
     const walk = planWalk(t, NO_SOLIDS, { x: 0, z: 0 }, to);
     expect(walk.target.x).toBeCloseTo(to.x, 6);
     expect(walk.target.z).toBeCloseTo(to.z, 6);
+  });
+});
+
+describe("a walker's stride", () => {
+  /** Walks `seconds` from `from` toward (dx, dz) at `speed`, then stands for `rest` seconds: each frame's body, and the eyes' height with the stride. */
+  const walkThen = (decks: readonly Deck[], from: Walker, dx: number, dz: number, seconds: number, rest: number, speed = WALK_TO.pace) => {
+    let body = standAt(t, decks, from.x, from.z);
+    const frames: { body: Stride; camera: number; moving: boolean }[] = [];
+    for (let i = 0; i < Math.round((seconds + rest) * 60); i++) {
+      const moving = i < seconds * 60;
+      body = stride(t, NO_SOLIDS, decks, body, moving ? { dx, dz, speed } : { dx: 0, dz: 0, speed: 0 }, dt);
+      frames.push({ body, camera: body.eye + body.lift, moving });
+    }
+    return frames;
+  };
+  const speedOf = (b: Stride): number => Math.hypot(b.vx, b.vz);
+
+  it("eases into a gentle low-frequency stride that rides the ground without jitter, and comes to rest when stopped", () => {
+    const frames = walkThen([], dry, -1, 0, 6, 3);
+    // No instant velocity: the body gathers speed over its first steps and sheds it over its last, as a person does
+    // (an instant start or stop at walking pace would be 250 m/s² in one frame).
+    expect(speedOf(frames[5]!.body)).toBeLessThan(WALK_TO.pace * 0.15);
+    for (let i = 1; i < frames.length; i++) expect(Math.abs(speedOf(frames[i]!.body) - speedOf(frames[i - 1]!.body)) / dt).toBeLessThan(12);
+    const striding = frames.slice(120, 360);
+    // The stride rises and falls within its comfort bound (a little more where a gentle descent quickens it), and only lifts and sways: no roll, no pitch.
+    const lifts = striding.map((f) => f.body.lift);
+    expect(Math.max(...lifts) - Math.min(...lifts)).toBeGreaterThan(GAIT.lift.walk);
+    for (const l of lifts) expect(Math.abs(l)).toBeLessThanOrEqual(GAIT.lift.walk * 1.05);
+    // The eyes ride 1.6 m over the ground they cross, never lagging or floating by more than a few centimeters.
+    for (const f of striding) expect(Math.abs(f.body.eye - footingAt(t, [], f.body.x, f.body.z).eye)).toBeLessThan(0.08);
+    // No high-frequency jitter: almost all of the eyes' vertical acceleration is the stride's own cadence, below 4 Hz.
+    // The eyes' vertical acceleration, through a Hann window so the stride's own cadence does not leak into high frequencies.
+    const acc = striding.slice(1, -1).map((f, i, all) => ((striding[i + 2]!.camera - 2 * f.camera + striding[i]!.camera) / (dt * dt)) * (0.5 - 0.5 * Math.cos((2 * Math.PI * i) / (all.length - 1))));
+    let total = 0;
+    let high = 0;
+    for (let k = 1; k <= acc.length / 2; k++) {
+      let re = 0;
+      let im = 0;
+      acc.forEach((a, n) => {
+        re += a * Math.cos((2 * Math.PI * k * n) / acc.length);
+        im -= a * Math.sin((2 * Math.PI * k * n) / acc.length);
+      });
+      total += re * re + im * im;
+      if (k / (acc.length * dt) > 4) high += re * re + im * im;
+    }
+    expect(high / total).toBeLessThan(0.02);
+    // Stopped, the body settles within about a step and then holds perfectly still.
+    const settled = frames.slice(Math.round(7.5 * 60));
+    for (const f of settled) {
+      expect(speedOf(f.body)).toBeLessThan(0.01);
+      expect(Math.abs(f.body.lift)).toBe(0);
+      expect(Math.abs(f.camera - settled[0]!.camera)).toBeLessThan(1e-3);
+    }
+  });
+
+  it("slows climbing, quickens a little on a gentle descent, and stands on a footbridge's deck above the water", () => {
+    expect(gradePace(0)).toBe(1);
+    expect(gradePace(0.12)).toBeLessThan(0.85);
+    expect(gradePace(-GAIT.peak)).toBeGreaterThan(1);
+    for (let s = -0.6; s < 0.6; s += 0.01) expect(gradePace(s)).toBeLessThanOrEqual(GAIT.ceiling);
+    for (let s = -GAIT.peak; s < 0.6; s += 0.01) expect(gradePace(s + 0.01)).toBeLessThanOrEqual(gradePace(s));
+    // On real ground: the steepest dry 20 m line near the pond is walked up more slowly than down.
+    let line = { from: dry, dx: 1, dz: 0, rise: 0 };
+    for (let a = 0; a < 32; a++) {
+      const dx = Math.cos((a / 32) * Math.PI * 2);
+      const dz = Math.sin((a / 32) * Math.PI * 2);
+      for (let r = 0; r < 60; r += 6) {
+        const from = { x: dry.x - 20 + dx * r, z: dry.z + dz * r };
+        const rise = groundHeightAt(t, from.x + dx * 20, from.z + dz * 20) - groundHeightAt(t, from.x, from.z);
+        const wet = [0, 5, 10, 15, 20].some((k) => waterDepthAt(t, from.x + dx * k, from.z + dz * k) > 0);
+        if (!wet && rise > line.rise && rise < 4) line = { from, dx, dz, rise };
+      }
+    }
+    expect(line.rise).toBeGreaterThan(1);
+    const steady = (frames: readonly { body: Stride }[]): number => frames.slice(90, 180).reduce((sum, f) => sum + speedOf(f.body), 0) / 90;
+    const up = steady(walkThen([], line.from, line.dx, line.dz, 3, 0));
+    const top = { x: line.from.x + line.dx * 20, z: line.from.z + line.dz * 20 };
+    const down = steady(walkThen([], top, -line.dx, -line.dz, 3, 0));
+    expect(up).toBeLessThan(WALK_TO.pace * 0.95);
+    expect(up).toBeLessThan(down);
+    // A deck across the pond, 0.3 m over the water: walked across, the eyes stay 1.6 m above its planks, dry, and never sink toward the water.
+    const water = heightAt(t.lattice, pond.x, pond.z) + waterDepthAt(t, pond.x, pond.z);
+    const deck: Deck = { x: pond.x, z: pond.z, cos: 1, sin: 0, half: pond.reach * 1.5, halfWidth: 0.8, base: water, topAt: () => 0.3 };
+    expect(footingAt(t, [deck], pond.x, pond.z)).toMatchObject({ deck: true, depth: 0, eye: water + 0.3 + EYE_HEIGHT });
+    const crossing = walkThen([deck], { x: pond.x - pond.reach, z: pond.z }, 1, 0, 4, 1);
+    for (const f of crossing.slice(60)) expect(f.body.eye).toBeGreaterThan(water + 0.3 + EYE_HEIGHT - 0.05);
   });
 });

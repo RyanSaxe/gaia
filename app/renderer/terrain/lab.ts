@@ -31,8 +31,12 @@ import {
 } from "@gaia/render";
 import {
   COVER_TAPS,
+  type Deck,
   DRY,
   EYE_HEIGHT,
+  GAIT,
+  type Intent,
+  type Stride,
   FULL_WORLD,
   SHORE_CAP,
   SMALL_WORLD,
@@ -47,6 +51,8 @@ import {
   type SolidShape,
   type Solids,
   clearanceAt,
+  decksOf,
+  footingAt,
   outlineShape,
   piecesShapes,
   placeAt,
@@ -65,12 +71,14 @@ import {
   wayWear,
   solidsOf,
   stanceAt,
+  standAt,
+  stride,
   TERRAIN,
   WALK_TO,
   WILDS,
   walkStep,
-  walkToward,
   wallsShape,
+  wayAhead,
   waterDepthAt,
 } from "@gaia/terrain";
 import { createSky } from "../world/environment.ts";
@@ -79,7 +87,6 @@ import { type Lab, type Shot, onTap, refs, slug, tapSlop } from "../lab.ts";
 import { createSheet } from "../sheet.ts";
 import { createGrass } from "./cover.ts";
 import { createGround, createGroundTexture } from "./ground.ts";
-import { createWalkMarker } from "./marker.ts";
 import { createRegionCovers } from "./regions.ts";
 import { createWater } from "./water.ts";
 import { createWildGrowth } from "./wilds.ts";
@@ -151,8 +158,6 @@ const REACH = 900;
 const STOPS: Readonly<Record<string, number>> = { rocks: 1, shrubs: 0.7 };
 /** A stone whose top stands lower than this above the ground is stepped over, not walked around, meters. */
 const STEP_OVER = 0.5;
-/** A swimmer's gentle bob: meters up and down, and seconds per bob. */
-const BOB = { height: 0.03, period: 2.8 };
 /** While swimming, the lantern is held at least this far above the water, meters. */
 const LANTERN_ABOVE_WATER = 0.15;
 const TAU = Math.PI * 2;
@@ -424,8 +429,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   const clearings = createClearings(terrain);
   const grass = createGrass(light, groundTex, covers, clearings);
   const water = createWater(terrain, light, groundTex);
-  const marker = createWalkMarker();
-  scene.add(sky.mesh, ground.wilds, ground.fine, ground.coarse, grass.mesh, water.group, marker.mesh);
+  scene.add(sky.mesh, ground.wilds, ground.fine, ground.coarse, grass.mesh, water.group);
   /** Each standing landmark's view, in the order of `ways.sites`; a kind may stand more than once. */
   let landmarkViews: PlantView[] = [];
   /** Every landmark view made so far, by its kind and which of that kind it is, reused from bake to bake. */
@@ -1030,13 +1034,10 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   function setGoal(x: number, z: number): void {
     goal = planWalk(terrain, solids, walker, { x, z });
     pending = null;
-    marker.place(terrain, goal.target.x, goal.target.z);
   }
   function endWalk(): void {
     pending = null;
-    if (goal === null) return;
     goal = null;
-    marker.fade();
   }
   /** A walk that ends on its own shows what it was walking to, if the person got near enough to read it. */
   function finishWalk(): void {
@@ -1121,7 +1122,9 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     walker.z = z;
     walker.yaw = yaw;
     walker.pitch = pitch;
-    walker.eye = stanceAt(terrain, x, z).eye;
+    body = standAt(terrain, decks, x, z);
+    walker.eye = body.eye;
+    yawRate = 0;
     walker.moved = true;
     if (mode !== "walk") setMode("walk");
   }
@@ -1141,38 +1144,59 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
 
   const forward = new THREE.Vector3();
   let walked = 0;
-  let bob = 0;
+  /** The footbridges' decks, which a walk stands on above the water. */
+  let decks: readonly Deck[] = [];
+  /** The person's body: its velocity, its stride and its eyes' ride over the ground, eased frame by frame. */
+  let body: Stride | null = null;
+  /** How fast the arrow keys are turning the view, radians a second. */
+  let yawRate = 0;
+  const STAND: Intent = { dx: 0, dz: 0, speed: 0 };
   /** Where the lantern's hand height is measured from: the ground, or while swimming, low enough that the lantern stays above the water. */
   let lanternGround = 0;
-  function updateWalk(dt: number): void {
-    const fromX = walker.x;
-    const fromZ = walker.z;
-    const speed = WALK_TO.pace * (keys.has("ShiftLeft") || keys.has("ShiftRight") ? 2.4 : 1);
+  /** What the person asks of their body this frame: the keys first, then a tap's walk, moved on along its way, braking to arrive and ended there. */
+  function intent(at: Stride): Intent {
     let f = 0;
     let s = 0;
     if (keys.has("KeyW") || keys.has("ArrowUp")) f += 1;
     if (keys.has("KeyS") || keys.has("ArrowDown")) f -= 1;
     if (keys.has("KeyD")) s += 1;
     if (keys.has("KeyA")) s -= 1;
-    if (keys.has("ArrowLeft")) walker.yaw += 1.8 * dt;
-    if (keys.has("ArrowRight")) walker.yaw -= 1.8 * dt;
-    const sy = Math.sin(walker.yaw);
-    const cy = Math.cos(walker.yaw);
     if (f !== 0 || s !== 0) {
-      // Water slows the walk and solids turn it aside along their edges.
-      const next = walkStep(terrain, solids, walker, { dx: -sy * f + cy * s, dz: -cy * f - sy * s, speed }, dt);
-      walker.x = next.x;
-      walker.z = next.z;
-      walker.moved = true;
-    } else if (goal !== null) {
-      // The view stays where the person looks; only the feet follow the way.
-      const step = walkToward(terrain, solids, walker, goal, dt);
-      walker.x = step.walker.x;
-      walker.z = step.walker.z;
-      goal = step.walk;
-      walker.moved = true;
-      if (step.state !== "walking") finishWalk();
+      const sy = Math.sin(walker.yaw);
+      const cy = Math.cos(walker.yaw);
+      return { dx: -sy * f + cy * s, dz: -cy * f - sy * s, speed: WALK_TO.pace * (keys.has("ShiftLeft") || keys.has("ShiftRight") ? GAIT.hurry : 1) };
     }
+    if (goal === null) return STAND;
+    // The view stays where the person looks; only the feet follow the way.
+    const heading = wayAhead(goal, at);
+    goal = heading.walk;
+    if (heading.remaining <= WALK_TO.reach) {
+      finishWalk();
+      return STAND;
+    }
+    const dx = heading.aim.x - at.x;
+    const dz = heading.aim.z - at.z;
+    const length = Math.max(1e-9, Math.hypot(dx, dz));
+    const braking = Math.sqrt(2 * GAIT.arrive * Math.max(0, heading.remaining - WALK_TO.reach * 0.6));
+    return { dx: dx / length, dz: dz / length, speed: Math.min(heading.pace, braking) };
+  }
+  function updateWalk(dt: number): void {
+    const fromX = walker.x;
+    const fromZ = walker.z;
+    // A hook may have moved the walker: the body stands where the walker is.
+    if (body === null || body.x !== walker.x || body.z !== walker.z) body = { ...(body ?? standAt(terrain, decks, walker.x, walker.z)), x: walker.x, z: walker.z };
+    // The arrow keys turn the view, easing into a turn and out of it.
+    const turning = (keys.has("ArrowLeft") ? 1 : 0) - (keys.has("ArrowRight") ? 1 : 0);
+    yawRate += (turning * GAIT.turn - yawRate) * (1 - Math.exp((-dt * 3) / GAIT.turnEase));
+    if (Math.abs(yawRate) < 1e-4 && turning === 0) yawRate = 0;
+    walker.yaw += yawRate * dt;
+    // Water and the grade slow the body, solids turn it aside, and it eases into and out of its stride.
+    const asked = intent(body);
+    body = stride(terrain, solids, decks, body, asked, dt);
+    if (goal !== null && body.blocked) finishWalk();
+    walker.x = body.x;
+    walker.z = body.z;
+    if (walker.x !== fromX || walker.z !== fromZ) walker.moved = true;
     if (turn !== null) {
       turn.t = Math.min(1, turn.t + dt / turn.duration);
       const e = turn.t * turn.t * (3 - 2 * turn.t);
@@ -1182,14 +1206,17 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     }
     // A card belongs to the thing it was opened at: walking away closes it.
     if (cardAt !== null && Math.hypot(walker.x - cardAt.x, walker.z - cardAt.z) > LEAVE_CARD) hideCard();
-    // Eyes ride 1.6 m above the ground, easing down to float just above deep water, with a gentle bob there.
-    const stance = stanceAt(terrain, walker.x, walker.z);
-    bob = (bob + dt / BOB.period) % 1;
-    const target = stance.eye + Math.sin(bob * Math.PI * 2) * BOB.height * stance.swim;
-    walker.eye += (target - walker.eye) * (1 - Math.exp(-dt * 12));
-    const surface = heightAt(terrain.lattice, walker.x, walker.z) + stance.depth;
-    lanternGround = stance.depth > 0 ? Math.max(walker.eye - EYE_HEIGHT, surface + LANTERN_ABOVE_WATER - (EYE_HEIGHT - LANTERN.drop)) : walker.eye - EYE_HEIGHT;
-    camera.position.set(walker.x, walker.eye, walker.z);
+    // Eyes ride 1.6 m above the ground or a bridge's deck, easing down to float just above deep water.
+    walker.eye = body.eye;
+    const footing = footingAt(terrain, decks, walker.x, walker.z);
+    const surface = footing.ground + footing.depth;
+    lanternGround = footing.depth > 0 ? Math.max(walker.eye - EYE_HEIGHT, surface + LANTERN_ABOVE_WATER - (EYE_HEIGHT - LANTERN.drop)) : walker.eye - EYE_HEIGHT;
+    // The stride lifts the eyes and sways them across the way the body moves, never rolling or pitching the view.
+    const speed = Math.hypot(body.vx, body.vz);
+    const across = speed > 1e-3 ? body.sway / speed : 0;
+    camera.position.set(walker.x - body.vz * across, walker.eye + body.lift, walker.z + body.vx * across);
+    const sy = Math.sin(walker.yaw);
+    const cy = Math.cos(walker.yaw);
     forward.set(-sy * Math.cos(walker.pitch), Math.sin(walker.pitch), -cy * Math.cos(walker.pitch));
     camera.lookAt(camera.position.clone().add(forward));
     walked = Math.hypot(walker.x - fromX, walker.z - fromZ);
@@ -1209,6 +1236,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     clearings.fit(terrain);
     settlement.seat(stood.sites);
     ways = { sites: stood.landmarks, network: stood.network };
+    decks = decksOf(stood.network.ways);
     setTrailPlaces(stood.trailPlaces, baked.lattice.n);
     placeWays();
     furnished = furnisher?.(stoodWorld()) ?? UNFURNISHED;
@@ -1412,11 +1440,10 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       lantern.follow(lanternEye, forward, lanternGround, 0, dt);
       shadow.frame(shadowCenter.set(0, 0, 0), world.size * 0.62);
     }
-    marker.frame(dt, camera.position, light.uNightness.value);
     refreshSight(now);
     // Every pass thins distant detail from where the person's eyes are.
     light.uEye.value.copy(camera.position);
-    shadow.render(renderer, scene, [...views(), ...understory.casters(), ...wildGrowth.all()], [sky.mesh, ground.wilds, ground.fine, ground.coarse, grass.mesh, water.group, marker.mesh, signs.mesh, ...understory.quiet()]);
+    shadow.render(renderer, scene, [...views(), ...understory.casters(), ...wildGrowth.all()], [sky.mesh, ground.wilds, ground.fine, ground.coarse, grass.mesh, water.group, signs.mesh, ...understory.quiet()]);
     frameCalls = renderer.info.render.calls;
     passes.shadow = { calls: renderer.info.render.calls, triangles: renderer.info.render.triangles };
     const mirrorCalls = water.mirror(renderer, scene, camera, [...mirrorHide, ...understory.quiet(), ...understory.casters().map((c) => c.object), ...wildGrowth.all().map((c) => c.object)], mirrorShow, dt);
@@ -1781,13 +1808,45 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
           walker.x = next.x;
           walker.z = next.z;
         }
-        walker.eye = stanceAt(terrain, walker.x, walker.z).eye;
+        body = standAt(terrain, decks, walker.x, walker.z);
+        walker.eye = body.eye;
         walker.moved = true;
         return { x: walker.x, z: walker.z, depth: waterDepthAt(terrain, walker.x, walker.z) };
       },
       depth: () => waterDepthAt(terrain, walker.x, walker.z),
-      /** Where a tap's walk is headed, or null, the corners of its way, and how opaque its ring is now. */
-      goal: () => ({ goal: goal === null ? null : { ...goal.target }, way: goal?.way.map((p) => [p.x, p.z]) ?? null, ring: marker.opacity() }),
+      /** The body now: its speed, its eyes' ride and what the stride adds, and the footing under it. */
+      gait: () => (body === null ? null : { speed: Math.hypot(body.vx, body.vz), eye: body.eye, lift: body.lift, sway: body.sway, steps: body.steps, camera: camera.position.y, footing: footingAt(terrain, decks, walker.x, walker.z) }),
+      /** Every footbridge deck a walk stands on: its middle, the way it runs along, its span and its top at the middle. */
+      decks: () => decks.map((d) => ({ x: d.x, z: d.z, along: [d.cos, -d.sin], span: d.half * 2, width: d.halfWidth * 2, top: d.base + d.topAt(0) })),
+      /** The ground (bridges left out), how a person stood there before decks, and the footing now, at each (x, z). */
+      profile: (points: readonly (readonly [number, number])[]) =>
+        points.map(([x, z]) => {
+          const s = stanceAt(terrain, x, z);
+          const f = footingAt(terrain, decks, x, z);
+          return { ground: groundHeightAt(terrain, x, z), eye: s.eye, depth: s.depth, swim: s.swim, footing: f.ground, deck: f.deck };
+        }),
+      /**
+       * Walks the lab's own walk for `seconds` at 60 frames a second without
+       * drawing, holding `keys` (codes) for `hold` seconds or walking a tap to
+       * `to`, and records each frame: [t, x, z, speed, camera y, eye ride, footing, depth, on a deck].
+       */
+      trace: (seconds: number, drive: { keys?: readonly string[]; hold?: number; to?: readonly [number, number] }) => {
+        keys.clear();
+        if (drive.to !== undefined) setGoal(drive.to[0], drive.to[1]);
+        for (const k of drive.keys ?? []) keys.add(k);
+        const rows: number[][] = [];
+        for (let i = 0; i < Math.round(seconds * 60); i++) {
+          if (drive.hold !== undefined && i === Math.round(drive.hold * 60)) keys.clear();
+          updateWalk(1 / 60);
+          const f = footingAt(terrain, decks, walker.x, walker.z);
+          const b = body as Stride;
+          rows.push([i / 60, walker.x, walker.z, Math.hypot(b.vx, b.vz), camera.position.y, walker.eye, f.ground, f.depth, f.deck ? 1 : 0]);
+        }
+        keys.clear();
+        return rows;
+      },
+      /** Where a tap's walk is headed, or null, and the corners of its way. */
+      goal: () => ({ goal: goal === null ? null : { ...goal.target }, way: goal?.way.map((p) => [p.x, p.z]) ?? null }),
       /** How far (x, z) is from the nearest solid's edge, at most 2 m; negative inside one. */
       clearance: (x: number, z: number) => clearanceAt(solids, x, z),
       /** The trunks, rocks and bushes and walls that stop a walker. */

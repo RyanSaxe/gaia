@@ -8,6 +8,7 @@ export * from "./plants.ts";
 export * from "./sample.ts";
 export * from "./wilds.ts";
 export * from "./walk.ts";
+export * from "./gait.ts";
 export * from "./flow.ts";
 export * from "./site.ts";
 export * from "./scatter.ts";

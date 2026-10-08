@@ -11,4 +11,4 @@ export * from "./rock.ts";
 export * from "./wildflowers.ts";
 export * from "./route.ts";
 export * from "./landmark.ts";
-export { buildCairn, buildEdgingStones, buildFootbridge, buildSteppingStones } from "./geometry/crossing.ts";
+export { type FootbridgeDeck, buildCairn, buildEdgingStones, buildFootbridge, buildSteppingStones, footbridgeDeck } from "./geometry/crossing.ts";

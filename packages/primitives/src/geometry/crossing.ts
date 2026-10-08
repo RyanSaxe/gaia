@@ -12,6 +12,22 @@ import { UP, beam, box, log, quad, tri } from "./blocks.ts";
 
 const nonEmpty = (parts: Part[]): Part[] => parts.filter((p) => p.indices.length > 0);
 
+/** Half a plank's thickness, meters: the deck's top stands this far above the planks' middles. */
+const PLANK_HALF = 0.035;
+
+/** Where a footbridge's deck is: its half width, and its top at `u` meters along the span from the middle, above the bank it rests on. */
+export interface FootbridgeDeck {
+  readonly halfWidth: number;
+  topAt(u: number): number;
+}
+
+/** The deck of a footbridge `span` long and `width` wide, arching a little: its planks are laid on it, and a walk stands on it. */
+export function footbridgeDeck(span: number, width: number): FootbridgeDeck {
+  const arch = 0.2 + span * 0.035;
+  const lift = 0.12;
+  return { halfWidth: Math.max(1.3, width) / 2, topAt: (u) => lift + arch * (1 - Math.pow((2 * u) / span, 2)) + PLANK_HALF };
+}
+
 /**
  * A plank footbridge along local +x, `span` long from bank to bank and
  * `width` wide, its deck arching a little. The deck is walkable. The origin
@@ -22,10 +38,10 @@ export function buildFootbridge(span: number, width: number, seed: number): Buil
   const deck = new PartBuilder("timber", "walkable");
   const frame = new PartBuilder("timber", "solid");
   const stone = new PartBuilder("stone", "solid");
-  const w = Math.max(1.3, width);
-  const arch = 0.2 + span * 0.035;
+  const top = footbridgeDeck(span, width);
+  const w = top.halfWidth * 2;
   const lift = 0.12;
-  const yAt = (x: number): number => lift + arch * (1 - Math.pow((2 * x) / span, 2));
+  const yAt = (x: number): number => top.topAt(x) - PLANK_HALF;
   const still = (pivot: Vec3, wither: number, extra: Partial<Channels> = {}): Channels => ({ loss: 0, droop: 0, wither, glow: 0, pivot, ...extra });
 
   // Planks across the span; a few go missing as vitality falls.
@@ -35,12 +51,12 @@ export function buildFootbridge(span: number, width: number, seed: number): Buil
     const x = -span / 2 + (k + 0.5) * (span / count);
     const pr = r.fork(`plank${k}`);
     const y = yAt(x);
-    const slope = (-8 * arch * x) / (span * span);
+    const slope = (top.topAt(x + 0.01) - top.topAt(x - 0.01)) / 0.02;
     const along = normalize([1, slope, 0]);
     const up = normalize([-slope, 1, 0]);
     const missing = pr.next() < 0.3;
     const pivot: V3 = [x, y - 0.6, 0];
-    box(deck, [x, y, (pr.next() - 0.5) * 0.04], [along, up, [0, 0, 1]], [span / count / 2 - 0.012, 0.035, w / 2 + (pr.next() - 0.5) * 0.06], 0.44 + 0.12 * pr.next(), {
+    box(deck, [x, y, (pr.next() - 0.5) * 0.04], [along, up, [0, 0, 1]], [span / count / 2 - 0.012, PLANK_HALF, w / 2 + (pr.next() - 0.5) * 0.06], 0.44 + 0.12 * pr.next(), {
       loss: missing ? lossThreshold(pr.next(), 0.42, 0.06) : 0,
       droop: 0,
       wither: 0.7 + 0.25 * pr.next(),

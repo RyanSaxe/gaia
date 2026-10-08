@@ -107,7 +107,7 @@ const edge: Edge = { distance: 0, nx: 0, nz: 0 };
  * the edge's normal, which keeps only the part running along it. A part that
  * cannot be freed (a wedge between two solids) is not taken.
  */
-function moveBy(solids: Solids, from: Walker, mx: number, mz: number): Walker {
+export function moveBy(solids: Solids, from: Walker, mx: number, mz: number): Walker {
   const parts = Math.max(1, Math.ceil(Math.hypot(mx, mz) / SUBSTEP));
   let x = from.x;
   let z = from.z;
@@ -362,6 +362,22 @@ function pursue(walk: Walk, x: number, z: number, ahead: number): { leg: number;
   return { leg, x: walk.target.x, z: walk.target.z };
 }
 
+/** Where a walk heads from a point: the walk with its leg moved on, the point to make for, the pace to make for it at, and how far the target is, meters. */
+export interface Heading {
+  readonly walk: Walk;
+  readonly aim: Walker;
+  readonly pace: number;
+  readonly remaining: number;
+}
+
+/** The point a little ahead along the way to make for, so corners round in curves, at walking pace, or jogging while the target is far. */
+export function wayAhead(walk: Walk, from: Walker): Heading {
+  const remaining = Math.hypot(walk.target.x - from.x, walk.target.z - from.z);
+  const pace = WALK_TO.pace * (1 + (WALK_TO.jog - 1) * smoothstep(WALK_TO.walkWithin, WALK_TO.jogFrom, remaining));
+  const aim = pursue(walk, from.x, from.z, WALK_TO.lookAhead);
+  return { walk: aim.leg === walk.leg ? walk : { ...walk, leg: aim.leg }, aim: { x: aim.x, z: aim.z }, pace, remaining };
+}
+
 /**
  * One step of a walk along its planned way, through the same movement as a
  * held key, so wading, swimming and solids work as they do for any walk. The
@@ -371,13 +387,12 @@ function pursue(walk: Walk, x: number, z: number, ahead: number): { leg: number;
 export function walkToward(t: Terrain, solids: Solids, from: Walker, walk: Walk, dt: number): Approach {
   const remaining = Math.hypot(walk.target.x - from.x, walk.target.z - from.z);
   if (remaining <= WALK_TO.reach) return { walker: from, walk, state: "arrived" };
-  const speed = WALK_TO.pace * (1 + (WALK_TO.jog - 1) * smoothstep(WALK_TO.walkWithin, WALK_TO.jogFrom, remaining));
-  const full = speed * wadeSpeed(waterDepthAt(t, from.x, from.z)) * dt;
+  const heading = wayAhead(walk, from);
+  const full = heading.pace * wadeSpeed(waterDepthAt(t, from.x, from.z)) * dt;
   if (full <= 0) return { walker: from, walk, state: "walking" };
-  const aim = pursue(walk, from.x, from.z, WALK_TO.lookAhead);
-  const onward = aim.leg === walk.leg ? walk : { ...walk, leg: aim.leg };
-  const ax = aim.x - from.x;
-  const az = aim.z - from.z;
+  const onward = heading.walk;
+  const ax = heading.aim.x - from.x;
+  const az = heading.aim.z - from.z;
   // A step longer than the way left lands on the target rather than past it.
   const length = Math.min(full, remaining);
   const k = length / Math.max(1e-9, Math.hypot(ax, az));

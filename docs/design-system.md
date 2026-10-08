@@ -160,14 +160,52 @@ A person walks by tapping or clicking the ground, the same with a mouse, a
 trackpad or a thumb, and drags to look. The walk plans its way around
 whatever stands between (straight when nothing does), follows it at 4.2 m/s,
 jogs at 1.8 times that while more than 25 m remain, easing back to a walk by
-15 m, and ends within 1.5 m of the spot, so a tap that close to where the
-person stands stops them. It heads for a point 1.2 m ahead along its way, so
-it rounds each corner in a curve. A tap across a pond swims all the way
-across. A tap on a rock or a bush walks up to the face that was tapped; when
-solids ring the spot, the walk ends at the nearest place it can reach. The
-view never turns on its own. A faint ring marks where the walk will end and
-fades when it does. `planWalk` and `walkToward` in `@gaia/terrain` plan and
-take each step.
+15 m, slows as if braking to arrive, and ends within 1.5 m of the spot, so a
+tap that close to where the person stands stops them. It heads for a point
+1.2 m ahead along its way, so it rounds each corner in a curve. A tap across
+a pond swims all the way across. A tap on a rock or a bush walks up to the
+face that was tapped; when solids ring the spot, the walk ends at the
+nearest place it can reach. The view never turns on its own. Nothing marks
+where a walk will end: touching the world just walks. `planWalk` and
+`wayAhead` in `@gaia/terrain` plan the way and say where to head next.
+
+A person walks like a person, not a sliding camera (`stride` in
+`@gaia/terrain`, every parameter in its `GAIT` table). The body eases into a
+stride over about a second, two steps, and settles over about 0.7 s when it
+stops, so velocity never jumps; the arrow keys ease into and out of a turn.
+The grade along the way sets the pace by Tobler's hiking function made
+gentler: a 12% climb walks at about 79% of the pace, a descent of up to 16%
+is a little quicker (at most 10%), and a steep descent is careful; no grade
+slows a person below 35%. The eyes ride 1.6 m over the mean footing within
+half a meter, which smooths away the lattice's facets, on a critically
+damped spring read ahead of the body by the spring's own lag, so on a slope
+they keep their height within 3 cm and never overshoot or float. A
+footbridge's deck is ground to walk on: stepping up onto it lifts the eyes
+as a step, and the person crosses dry above the water. Each step lifts the
+eyes about a centimeter (1.1 cm at a walk, 1.8 cm running with Shift, half
+the rise and fall) at 1.9 steps a second (2.6 running, a longer stride),
+lowest as a foot falls; they sway 6 mm from side to side once every two
+steps. The stride only translates the eyes: it never rolls or pitches the
+view, so distant land holds still. It fades in and out with speed, wading
+softens it by up to 65%, and a swimmer bobs gently instead. `GAIT.on`
+switches the stride off and keeps the rest.
+
+These numbers follow the research on walking and comfort. A walking head
+rises and falls once each step at about 2 Hz and sways once each stride at
+about 1 Hz (Hirasaki et al. 1999, "Effects of walking velocity on vertical
+head and body movements during locomotion", Exp Brain Res 127); camera
+oscillations of that kind make desktop walking feel like walking (Lécuyer
+et al. 2006, IEEE VR; Terziman et al. 2013, IEEE TVCG 19(4), which also
+slows the walk on slopes). Motion sickness peaks for vertical motion between
+0.1 and 0.5 Hz (ISO 2631-1) and for visual motion at 0.2 to 0.4 Hz (Diels
+and Howarth 2013, Human Factors 55(3)), so the stride stays above that band
+at 1.4 to 2.6 Hz, its sway at about 1 Hz, and the eyes' motion carries
+nothing above 4 Hz. The rise is kept well under a real head's few centimeters, since a
+screen cannot steady the gaze as the eyes' reflexes do, and the switch
+follows the Game Accessibility Guidelines and Xbox Accessibility Guideline
+117. Tobler's function is from Tobler 1993; a person reaches a steady pace in
+two or three steps (Najafi et al. 2010, Gait & Posture 32(1)) and can stop
+in one.
 
 Streams run downstream along the flow solved from their bed (`streamFlow`
 and `flowAt` in `@gaia/terrain`), faster where the channel narrows or the
