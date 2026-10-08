@@ -1,9 +1,13 @@
-// Trails between a world's places. A trail's look is a `RouteSpec` Jev
-// fills; its route is never chosen, it is found over the baked ground: the
-// cheapest way at a gentle grade, around steep ground and deep water, across
-// a stream where it is narrow, wandering as freely as the spec's winding
-// says. The composition budget then keeps the most wanted trails that fit,
-// so trails never dominate a region. Everything here is pure and seeded.
+// Trails between a world's places, walked over one network of paths. A
+// trail's look is a `RouteSpec` Jev fills; its route is never chosen, it is
+// found over the baked ground: the cheapest way at a gentle grade, around
+// steep ground and deep water, across a stream where it is narrow, wandering
+// as freely as the spec's winding says. Each trail prefers the ways earlier
+// ones made and never runs beside one, so trails share trunk paths that
+// branch to each place at junctions. The network is cut into ways, stretches
+// of tread between two junctions or places, each knowing every trail that
+// walks it. Composition is held by the network's ground, which shared ways do
+// not add to. Everything here is pure and seeded.
 
 import type { RouteSpec } from "@gaia/schema";
 import { fbm } from "@gaia/primitives";
@@ -22,14 +26,17 @@ export const TRAILS = {
   wade: 14,
   /** Water deeper than this is never crossed, meters. */
   deep: 0.7,
-  /** Ground already worn by a trail costs this share, so trails join instead of running side by side. */
-  join: 0.55,
+  /** Walking a way the network already has costs this share, so trails share ways: a trail takes the network unless that is over twice as far. */
+  join: 0.45,
+  /** Ground this many routing cells from a way, but off it, costs `beside` times as much, so no trail runs beside another. */
+  besideCells: 2,
+  beside: 2.5,
   /** Wavelength of the wandering that `winding` scales, meters. */
   wander: 46,
-  /** The composition budget. */
-  routesPerRegion: 3,
-  /** Share of a region's ground trails may cover. */
+  /** Share of a region's ground the network's treads may cover. */
   share: 0.05,
+  /** Share of the whole land they may cover. */
+  landShare: 0.02,
   /** How far the ground eases back to the land beyond a trail's edge, meters. */
   blend: 2.6,
   /** Half the length of ground the tread's grade is averaged over, meters. */
@@ -38,8 +45,14 @@ export const TRAILS = {
   maxCut: 0.55,
   /** The trail field's reach past an edge, meters; farther reads as this. */
   reach: 6,
-  /** A second trail counts at a sample when its edge is within this many meters of the nearest one's, so where trails meet the more worn one shows. */
+  /** A second way counts at a sample when its edge is within this many meters of the nearest one's, so where ways meet the more worn one shows. */
   meet: 1.2,
+  /** A junction's cairn keeps this far clear of every tread, at least this far from a place, and this far from another cairn, meters. */
+  cairnClear: 0.9,
+  cairnFromPlace: 14,
+  cairnApart: 40,
+  /** Points a way's wear is known at, evenly along it, for the shaders to blend between. */
+  stations: 4,
 } as const;
 
 /** One end of a trail: a place, such as a cottage's door or a landmark's foot. */
@@ -59,11 +72,11 @@ export interface TrailRequest {
   readonly want: number;
 }
 
-/** Where a trail crosses a stream: the span from bank to bank, along the trail. */
+/** Where a way crosses a stream: the span from bank to bank, along the way. */
 export interface Crossing {
   readonly x: number;
   readonly z: number;
-  /** Rotation about y that turns local +x along the trail, as Three's rotation does. */
+  /** Rotation about y that turns local +x along the way, as Three's rotation does. */
   readonly yaw: number;
   /** Bank to bank, meters. */
   readonly span: number;
@@ -73,19 +86,74 @@ export interface Crossing {
   readonly bank: number;
 }
 
-export interface Trail {
+/** A trail walking a way: which trail, and how far along it (0 at its first end, 1 at its second) the way's first and last points lie. */
+export interface WayCarry {
+  readonly trail: number;
+  readonly from: number;
+  readonly to: number;
+}
+
+/** A stretch of tread between two junctions or places, walked by one trail or many. */
+export interface Way {
   readonly id: string;
-  /** The ids of the places it joins: the first end, where `points` start, and the second. */
+  /** The places or junctions at its first and last points. */
   readonly from: string;
   readonly to: string;
+  /**
+   * Its look: its most wanted trail's, as wide as its widest trail, with a
+   * footbridge where it carries much traffic, is wide, or a trail on it asks
+   * for one, and stepping stones otherwise.
+   */
   readonly style: RouteSpec;
-  /** The tread's center line, x and z pairs about a meter apart, from the first end to the second. */
+  /** The tread's center line, x and z pairs about a meter apart. */
   readonly points: Float32Array;
   readonly length: number;
   readonly crossings: readonly Crossing[];
-  /** Every region the trail passes through. */
+  /** Every region it passes through. */
   readonly regions: readonly number[];
+  /** Every trail walking it, most wanted first. */
+  readonly carries: readonly WayCarry[];
 }
+
+/** One dependency walked over the network: its two places, its look, and the ways it walks in order. */
+export interface Trail {
+  readonly id: string;
+  /** The ids of the places it joins: its first end and its second. */
+  readonly from: string;
+  readonly to: string;
+  readonly style: RouteSpec;
+  readonly want: number;
+  /** The ways it walks from its first end to its second, each `reversed` when walked from its last point to its first. */
+  readonly ways: readonly { readonly way: number; readonly reversed: boolean }[];
+  /** Meters walked. */
+  readonly length: number;
+}
+
+/** Where three or more ways meet away from a place. */
+export interface Junction {
+  readonly id: string;
+  readonly x: number;
+  readonly z: number;
+  /** The ways meeting here. */
+  readonly ways: readonly number[];
+  /** A small cairn in the widest gap between its ways, or null where none suits: near a place, near another cairn, or with no dry, clear ground. */
+  readonly cairn: { readonly x: number; readonly z: number; readonly y: number } | null;
+}
+
+/** A trail the network could not take, and why. */
+export interface DroppedTrail {
+  readonly id: string;
+  readonly reason: string;
+}
+
+export interface TrailNetwork {
+  readonly ways: readonly Way[];
+  readonly trails: readonly Trail[];
+  readonly junctions: readonly Junction[];
+  readonly dropped: readonly DroppedTrail[];
+}
+
+export const NO_TRAILS: TrailNetwork = { ways: [], trails: [], junctions: [], dropped: [] };
 
 // ---------- routing ----------
 
@@ -136,6 +204,20 @@ class Heap {
   }
 }
 
+const NEIGHBORS: readonly [number, number][] = [
+  [1, 0], [-1, 0], [0, 1], [0, -1],
+  [1, 1], [1, -1], [-1, 1], [-1, -1],
+  [2, 1], [1, 2], [-1, 2], [-2, 1], [-2, -1], [-1, -2], [1, -2], [2, -1],
+];
+/** Each neighbor's opposite. */
+const OPPOSITE = NEIGHBORS.map(([di, dj]) => NEIGHBORS.findIndex(([a, b]) => a === -di && b === -dj));
+/** The neighbor index of a step, by (di + 2) * 5 + (dj + 2). */
+const STEP = (() => {
+  const out = new Int8Array(25).fill(-1);
+  NEIGHBORS.forEach(([di, dj], d) => (out[(di + 2) * 5 + dj + 2] = d));
+  return out;
+})();
+
 interface Grid {
   readonly n: number;
   readonly origin: number;
@@ -143,10 +225,18 @@ interface Grid {
   readonly slope: Float32Array;
   readonly depth: Float32Array;
   readonly wander: Float32Array;
-  readonly worn: Uint8Array;
+  readonly blocked: Uint8Array;
+  /** The network so far: a bit per neighbor for each step a trail takes from a cell. */
+  readonly edges: Uint16Array;
+  /** Routing cells from the nearest way, 0 on one, up to `TRAILS.besideCells + 1` for far. */
+  readonly near: Uint8Array;
+  // Scratch for each search.
+  readonly cost: Float64Array;
+  readonly came: Int32Array;
+  readonly done: Uint8Array;
 }
 
-function gridOf(t: Terrain, seed: number): Grid {
+function gridOf(t: Terrain, seed: number, avoid: readonly Occupied[]): Grid {
   const half = t.spec.size / 2 - TRAILS.margin;
   const n = Math.floor((half * 2) / TRAILS.cell) + 1;
   const origin = -half;
@@ -167,25 +257,6 @@ function gridOf(t: Terrain, seed: number): Grid {
       wander[k] = 0.5 + 0.5 * fbm(seed, x / TRAILS.wander, z / TRAILS.wander, 2, 0.5);
     }
   }
-  return { n, origin, height, slope, depth, wander, worn: new Uint8Array(n * n) };
-}
-
-const NEIGHBORS: readonly [number, number][] = [
-  [1, 0], [-1, 0], [0, 1], [0, -1],
-  [1, 1], [1, -1], [-1, 1], [-1, -1],
-  [2, 1], [1, 2], [-1, 2], [-2, 1], [-2, -1], [-1, -2], [1, -2], [2, -1],
-];
-
-/** The cheapest chain of cells between two points, or null when none exists. */
-function search(g: Grid, from: TrailEnd, to: TrailEnd, winding: number, avoid: readonly Occupied[]): [number, number][] | null {
-  const { n, origin } = g;
-  const cellOf = (x: number, z: number): number => {
-    const i = Math.max(0, Math.min(n - 1, Math.round((x - origin) / TRAILS.cell)));
-    const j = Math.max(0, Math.min(n - 1, Math.round((z - origin) / TRAILS.cell)));
-    return j * n + i;
-  };
-  const start = cellOf(from.x, from.z);
-  const goal = cellOf(to.x, to.z);
   const blocked = new Uint8Array(n * n);
   for (const o of avoid) {
     const reach = Math.ceil(o.radius / TRAILS.cell) + 1;
@@ -198,14 +269,28 @@ function search(g: Grid, from: TrailEnd, to: TrailEnd, winding: number, avoid: r
       }
     }
   }
-  blocked[start] = 0;
-  blocked[goal] = 0;
-  const cost = new Float64Array(n * n).fill(Infinity);
-  const came = new Int32Array(n * n).fill(-1);
-  const done = new Uint8Array(n * n);
+  const near = new Uint8Array(n * n).fill(TRAILS.besideCells + 1);
+  return { n, origin, height, slope, depth, wander, blocked, edges: new Uint16Array(n * n), near, cost: new Float64Array(n * n), came: new Int32Array(n * n), done: new Uint8Array(n * n) };
+}
+
+const cellOf = (g: Grid, x: number, z: number): number => {
+  const i = Math.max(0, Math.min(g.n - 1, Math.round((x - g.origin) / TRAILS.cell)));
+  const j = Math.max(0, Math.min(g.n - 1, Math.round((z - g.origin) / TRAILS.cell)));
+  return j * g.n + i;
+};
+const cellX = (g: Grid, k: number): number => g.origin + (k % g.n) * TRAILS.cell;
+const cellZ = (g: Grid, k: number): number => g.origin + Math.floor(k / g.n) * TRAILS.cell;
+
+/** The cheapest chain of cells between two cells, or null when none exists. Steps along the network's ways cost `TRAILS.join`; ground beside a way costs more. */
+function search(g: Grid, start: number, goal: number, winding: number): number[] | null {
+  const { n, cost, came, done } = g;
+  cost.fill(Infinity);
+  came.fill(-1);
+  done.fill(0);
   const gi = goal % n;
   const gj = Math.floor(goal / n);
-  const guess = (k: number): number => Math.hypot((k % n) - gi, Math.floor(k / n) - gj) * TRAILS.cell * 0.9;
+  // Below the cheapest step per meter, so the search still finds a long way round along the network.
+  const guess = (k: number): number => Math.hypot((k % n) - gi, Math.floor(k / n) - gj) * TRAILS.cell * TRAILS.join * 0.95;
   const heap = new Heap();
   cost[start] = 0;
   heap.push(start, guess(start));
@@ -216,12 +301,14 @@ function search(g: Grid, from: TrailEnd, to: TrailEnd, winding: number, avoid: r
     if (k === goal) break;
     const i = k % n;
     const j = Math.floor(k / n);
-    for (const [di, dj] of NEIGHBORS) {
+    const ways = g.edges[k] as number;
+    for (let d = 0; d < NEIGHBORS.length; d++) {
+      const [di, dj] = NEIGHBORS[d] as [number, number];
       const ni = i + di;
       const nj = j + dj;
       if (ni < 0 || nj < 0 || ni >= n || nj >= n) continue;
       const m = nj * n + ni;
-      if (done[m] === 1 || blocked[m] === 1) continue;
+      if (done[m] === 1 || (g.blocked[m] === 1 && m !== goal)) continue;
       const deep = g.depth[m] as number;
       if (deep > TRAILS.deep) continue;
       const run = Math.hypot(di, dj) * TRAILS.cell;
@@ -230,8 +317,12 @@ function search(g: Grid, from: TrailEnd, to: TrailEnd, winding: number, avoid: r
       const steep = Math.max(0, grade - TRAILS.maxGrade * 0.35) / TRAILS.maxGrade;
       const side = (g.slope[m] as number) / 16;
       let step = run * (1 + 4 * steep * steep + side * side * 0.8 + winding * 1.4 * (g.wander[m] as number));
-      if (deep > 0) step += TRAILS.wade * run / TRAILS.cell;
-      if (g.worn[m] === 1) step *= TRAILS.join;
+      if (deep > 0) step += (TRAILS.wade * run) / TRAILS.cell;
+      if ((ways & (1 << d)) !== 0) step *= TRAILS.join;
+      else {
+        const near = g.near[m] as number;
+        if (near > 0 && near <= TRAILS.besideCells && m !== goal) step *= TRAILS.beside;
+      }
       const next = (cost[k] as number) + step;
       if (next < (cost[m] as number)) {
         cost[m] = next;
@@ -240,16 +331,44 @@ function search(g: Grid, from: TrailEnd, to: TrailEnd, winding: number, avoid: r
       }
     }
   }
-  if (came[goal] === -1 && goal !== start) return null;
-  const cells: [number, number][] = [];
+  if (came[goal] === -1) return null;
+  const cells: number[] = [];
   for (let k = goal; k !== -1; k = came[k] as number) {
-    cells.push([origin + (k % n) * TRAILS.cell, origin + Math.floor(k / n) * TRAILS.cell]);
+    cells.push(k);
     if (k === start) break;
   }
-  cells.reverse();
-  cells[0] = [from.x, from.z];
-  cells[cells.length - 1] = [to.x, to.z];
-  return cells;
+  return cells.reverse();
+}
+
+/** The neighbor index of the step from cell `a` to cell `b`. */
+const stepOf = (g: Grid, a: number, b: number): number => STEP[((b % g.n) - (a % g.n) + 2) * 5 + (Math.floor(b / g.n) - Math.floor(a / g.n)) + 2] as number;
+/** One key per undirected step: its lower cell and the direction from it. */
+const edgeKey = (g: Grid, a: number, b: number): number => (a < b ? a * 16 + stepOf(g, a, b) : b * 16 + stepOf(g, b, a));
+
+/** Adds a trail's cells to the network: its steps, and how near every cell around lies to a way. */
+function wear(g: Grid, cells: readonly number[]): void {
+  const { n } = g;
+  for (let s = 0; s + 1 < cells.length; s++) {
+    const a = cells[s] as number;
+    const b = cells[s + 1] as number;
+    const d = stepOf(g, a, b);
+    g.edges[a] = (g.edges[a] as number) | (1 << d);
+    g.edges[b] = (g.edges[b] as number) | (1 << (OPPOSITE[d] as number));
+  }
+  const r = TRAILS.besideCells;
+  for (const k of cells) {
+    const i = k % n;
+    const j = Math.floor(k / n);
+    for (let dj = -r; dj <= r; dj++) {
+      for (let di = -r; di <= r; di++) {
+        const ni = i + di;
+        const nj = j + dj;
+        if (ni < 0 || nj < 0 || ni >= n || nj >= n) continue;
+        const m = nj * n + ni;
+        g.near[m] = Math.min(g.near[m] as number, Math.max(Math.abs(di), Math.abs(dj)));
+      }
+    }
+  }
 }
 
 /** Chaikin corner cutting, then resampling every `spacing` meters: a trail curves instead of turning on a grid. */
@@ -339,52 +458,258 @@ function regionAreas(t: Terrain): number[] {
   return areas;
 }
 
-/**
- * Routes the trails Jev wants, most wanted first, and keeps each only while
- * every region it crosses stays within the composition budget: at most
- * `TRAILS.routesPerRegion` trails, covering at most `TRAILS.share` of its
- * ground. Later trails prefer ground earlier ones wore, so they join.
- * `avoid` keeps trails out of footprints such as a house's walls.
- */
-export function planTrails(t: Terrain, requests: readonly TrailRequest[], seed: number, avoid: readonly Occupied[] = []): Trail[] {
-  const g = gridOf(t, seed);
-  const areas = regionAreas(t);
-  const routes = areas.map(() => 0);
-  const covered = areas.map(() => 0);
-  const out: Trail[] = [];
-  const order = [...requests].sort((a, b) => b.want - a.want || a.id.localeCompare(b.id));
-  for (const req of order) {
-    const cells = search(g, req.from, req.to, req.style.winding, avoid);
-    if (cells === null || cells.length < 2) continue;
-    const points = smoothLine(cells, 1);
-    const count = points.length / 2;
-    const perRegion = new Map<number, number>();
-    for (let k = 0; k < count; k++) {
-      const r = regionIndex(t, points[k * 2] as number, points[k * 2 + 1] as number);
-      perRegion.set(r, (perRegion.get(r) ?? 0) + req.style.width);
-    }
-    const fits = [...perRegion].every(([r, area]) => (routes[r] ?? 0) + 1 <= TRAILS.routesPerRegion && ((covered[r] ?? 0) + area) / Math.max(1, areas[r] ?? 0) <= TRAILS.share);
-    if (!fits) continue;
-    for (const [r, area] of perRegion) {
-      routes[r] = (routes[r] ?? 0) + 1;
-      covered[r] = (covered[r] ?? 0) + area;
-    }
-    for (const [x, z] of cells) {
-      const i = Math.round((x - g.origin) / TRAILS.cell);
-      const j = Math.round((z - g.origin) / TRAILS.cell);
-      if (i >= 0 && j >= 0 && i < g.n && j < g.n) g.worn[j * g.n + i] = 1;
-    }
-    out.push({ id: req.id, from: req.from.id, to: req.to.id, style: req.style, points, length: count - 1, crossings: crossingsOf(t, points), regions: [...perRegion.keys()].sort((a, b) => a - b) });
-  }
-  return out;
+const percent = (share: number): string => `${Math.round(share * 1000) / 10}%`;
+
+/** Each way's look from the trails walking it: the most wanted one's, as wide as the widest, bridged by width and traffic. */
+function wayStyle(carried: readonly TrailRequest[]): RouteSpec {
+  const lead = carried[0] as TrailRequest;
+  const width = Math.max(...carried.map((r) => r.style.width));
+  const wear = Math.max(...carried.map((r) => r.style.wear));
+  const bridged = carried.length >= 3 || width >= 1.8 || carried.some((r) => r.style.crossing === "footbridge");
+  return { ...lead.style, width, wear, crossing: bridged ? "footbridge" : "stepping-stones" };
 }
 
-// ---------- the ground under a trail ----------
+/** Where a junction's cairn stands: in the widest gap between the ways leaving it, clear of every tread, on dry ground. */
+function cairnOf(t: Terrain, x: number, z: number, leaving: readonly { readonly dx: number; readonly dz: number; readonly half: number }[], ways: readonly Way[]): { x: number; z: number; y: number } | null {
+  const angles = leaving.map((l) => Math.atan2(l.dz, l.dx)).sort((a, b) => a - b);
+  let gap = -1;
+  let mid = 0;
+  angles.forEach((a, i) => {
+    const next = i + 1 < angles.length ? (angles[i + 1] as number) : (angles[0] as number) + Math.PI * 2;
+    if (next - a > gap) {
+      gap = next - a;
+      mid = a + (next - a) / 2;
+    }
+  });
+  const half = Math.max(...leaving.map((l) => l.half));
+  const clear = half + TRAILS.cairnClear;
+  const r = Math.max(clear + 0.6, clear / Math.sin(Math.min(gap / 2, Math.PI / 2)));
+  if (r > 6) return null;
+  const cx = x + Math.cos(mid) * r;
+  const cz = z + Math.sin(mid) * r;
+  if (heightAt(t.lattice, cx, cz, t.waterLevel) > DRY / 2 || heightAt(t.lattice, cx, cz, t.shore) < 2) return null;
+  for (const w of ways) {
+    const p = w.points;
+    for (let k = 0; k < p.length; k += 2) if (Math.hypot((p[k] as number) - cx, (p[k + 1] as number) - cz) < w.style.width / 2 + TRAILS.cairnClear) return null;
+  }
+  return { x: cx, z: cz, y: heightAt(t.lattice, cx, cz) };
+}
 
-/** Visits every lattice sample within `reach` of each segment, with its distance and the nearest point's index along the trail. */
-function nearSegments(t: Terrain, trail: Trail, reach: number, visit: (index: number, distance: number, along: number) => void): void {
+/**
+ * Routes the trails Jev wants, most wanted first, as one network of paths.
+ * Each trail takes the ways earlier ones made wherever that is not much
+ * farther, and never runs beside one, so trails share trunk paths and
+ * branch at junctions. A trail is kept while the ground it adds to the
+ * network (shared ways add none) keeps every region it crosses within
+ * `TRAILS.share` of its ground and the whole land within `TRAILS.landShare`;
+ * one that would not, or that no gentle, dry way joins, is listed in
+ * `dropped` with the reason. Ends sharing an id share the first one's spot.
+ * `avoid` keeps trails out of footprints such as a house's walls.
+ */
+export function planTrails(t: Terrain, requests: readonly TrailRequest[], seed: number, avoid: readonly Occupied[] = []): TrailNetwork {
+  const g = gridOf(t, seed, avoid);
+  const areas = regionAreas(t);
+  const land = areas.reduce((a, b) => a + b, 0);
+  const covered = areas.map(() => 0);
+  let total = 0;
+  /** The width of the tread on each step of the network, by `edgeKey`. */
+  const widths = new Map<number, number>();
+  const spots = new Map<string, TrailEnd>();
+  const dropped: DroppedTrail[] = [];
+  const routed: { req: TrailRequest; cells: number[]; from: TrailEnd; to: TrailEnd }[] = [];
+  const order = [...requests].sort((a, b) => b.want - a.want || a.id.localeCompare(b.id));
+  for (const req of order) {
+    const from = spots.get(req.from.id) ?? req.from;
+    const to = spots.get(req.to.id) ?? req.to;
+    const start = cellOf(g, from.x, from.z);
+    const goal = cellOf(g, to.x, to.z);
+    if (start === goal) {
+      dropped.push({ id: req.id, reason: "its two places stand on one spot" });
+      continue;
+    }
+    const cells = search(g, start, goal, req.style.winding);
+    if (cells === null) {
+      dropped.push({ id: req.id, reason: "no gentle, dry way joins its places" });
+      continue;
+    }
+    // The ground this trail adds: new steps, and steps it widens.
+    const adds = new Map<number, number>();
+    let added = 0;
+    for (let s = 0; s + 1 < cells.length; s++) {
+      const a = cells[s] as number;
+      const b = cells[s + 1] as number;
+      const grow = Math.max(0, req.style.width - (widths.get(edgeKey(g, a, b)) ?? 0)) * Math.hypot(cellX(g, b) - cellX(g, a), cellZ(g, b) - cellZ(g, a));
+      if (grow <= 0) continue;
+      const r = regionIndex(t, (cellX(g, a) + cellX(g, b)) / 2, (cellZ(g, a) + cellZ(g, b)) / 2);
+      adds.set(r, (adds.get(r) ?? 0) + grow);
+      added += grow;
+    }
+    const over = [...adds].find(([r, a]) => ((covered[r] ?? 0) + a) / Math.max(1, areas[r] ?? 0) > TRAILS.share);
+    if (over !== undefined) {
+      dropped.push({ id: req.id, reason: `its new ground would take the paths in ${t.spec.regions[over[0]]?.id ?? `region ${over[0]}`} past ${percent(TRAILS.share)} of its ground` });
+      continue;
+    }
+    if ((total + added) / Math.max(1, land) > TRAILS.landShare) {
+      dropped.push({ id: req.id, reason: `its new ground would take the paths past ${percent(TRAILS.landShare)} of the land` });
+      continue;
+    }
+    for (const [r, a] of adds) covered[r] = (covered[r] ?? 0) + a;
+    total += added;
+    for (let s = 0; s + 1 < cells.length; s++) {
+      const key = edgeKey(g, cells[s] as number, cells[s + 1] as number);
+      widths.set(key, Math.max(widths.get(key) ?? 0, req.style.width));
+    }
+    wear(g, cells);
+    if (!spots.has(req.from.id)) spots.set(req.from.id, from);
+    if (!spots.has(req.to.id)) spots.set(req.to.id, to);
+    routed.push({ req, cells, from, to });
+  }
+  return networkOf(t, g, routed, dropped);
+}
+
+/** Cuts the routed trails' cells into ways between places and junctions, and tells each way which trails walk it. */
+function networkOf(t: Terrain, g: Grid, routed: readonly { req: TrailRequest; cells: number[]; from: TrailEnd; to: TrailEnd }[], dropped: DroppedTrail[]): TrailNetwork {
+  const ends = new Map<number, TrailEnd>();
+  for (const r of routed) {
+    ends.set(r.cells[0] as number, r.from);
+    ends.set(r.cells[r.cells.length - 1] as number, r.to);
+  }
+  const degree = (k: number): number => {
+    let v = g.edges[k] as number;
+    let c = 0;
+    for (; v !== 0; v &= v - 1) c++;
+    return c;
+  };
+  const isNode = (k: number): boolean => ends.has(k) || degree(k) !== 2;
+  const nodeId = (k: number): string => ends.get(k)?.id ?? `junction@${cellX(g, k)},${cellZ(g, k)}`;
+  // Each step's way and where along it the step starts.
+  const onWay = new Map<number, { way: number; at: number }>();
+  const chains: number[][] = [];
+  const trace = (k: number, d: number): void => {
+    const chain = [k];
+    let cur = k;
+    let dir = d;
+    for (;;) {
+      const [di, dj] = NEIGHBORS[dir] as [number, number];
+      const next = cur + dj * g.n + di;
+      onWay.set(edgeKey(g, cur, next), { way: chains.length, at: chain.length - 1 });
+      chain.push(next);
+      if (isNode(next)) break;
+      const back = OPPOSITE[dir] as number;
+      let out = -1;
+      for (let e = 0; e < NEIGHBORS.length; e++) if (e !== back && ((g.edges[next] as number) & (1 << e)) !== 0) out = e;
+      cur = next;
+      dir = out;
+    }
+    chains.push(chain);
+  };
+  for (const r of routed) {
+    for (const k of r.cells) {
+      if (!isNode(k)) continue;
+      for (let d = 0; d < NEIGHBORS.length; d++) {
+        if (((g.edges[k] as number) & (1 << d)) === 0) continue;
+        const [di, dj] = NEIGHBORS[d] as [number, number];
+        if (!onWay.has(edgeKey(g, k, k + dj * g.n + di))) trace(k, d);
+      }
+    }
+  }
+  // Each trail's ways in order.
+  const walks = routed.map((r) => {
+    const out: { way: number; reversed: boolean }[] = [];
+    for (let s = 0; s + 1 < r.cells.length; s++) {
+      const a = r.cells[s] as number;
+      const on = onWay.get(edgeKey(g, a, r.cells[s + 1] as number)) as { way: number; at: number };
+      const last = out[out.length - 1];
+      if (last?.way === on.way) continue;
+      out.push({ way: on.way, reversed: chains[on.way]?.[on.at] !== a });
+    }
+    return out;
+  });
+  const carriedBy = chains.map(() => [] as number[]);
+  walks.forEach((w, i) => w.forEach((s) => carriedBy[s.way]?.push(i)));
+  const lines = chains.map((chain) =>
+    smoothLine(
+      chain.map((k): [number, number] => {
+        const end = ends.get(k);
+        return end !== undefined ? [end.x, end.z] : [cellX(g, k), cellZ(g, k)];
+      }),
+      1,
+    ),
+  );
+  const lengths = lines.map((p) => p.length / 2 - 1);
+  const trails: Trail[] = routed.map((r, i) => ({
+    id: r.req.id,
+    from: r.req.from.id,
+    to: r.req.to.id,
+    style: r.req.style,
+    want: r.req.want,
+    ways: walks[i] as { way: number; reversed: boolean }[],
+    length: (walks[i] ?? []).reduce((n, s) => n + (lengths[s.way] ?? 0), 0),
+  }));
+  // How far along each trail each of its ways lies.
+  const spans = new Map<string, WayCarry>();
+  trails.forEach((tr, i) => {
+    let walked = 0;
+    for (const s of tr.ways) {
+      const len = lengths[s.way] ?? 0;
+      const a = walked / Math.max(1e-6, tr.length);
+      const b = (walked + len) / Math.max(1e-6, tr.length);
+      spans.set(`${s.way}/${i}`, { trail: i, from: s.reversed ? b : a, to: s.reversed ? a : b });
+      walked += len;
+    }
+  });
+  const ways: Way[] = chains.map((chain, w) => {
+    const carried = (carriedBy[w] ?? []).slice().sort((a, b) => (trails[b]?.want ?? 0) - (trails[a]?.want ?? 0) || a - b);
+    const points = lines[w] as Float32Array;
+    const regions = new Set<number>();
+    for (let k = 0; k < points.length; k += 2) regions.add(regionIndex(t, points[k] as number, points[k + 1] as number));
+    return {
+      id: `way:${nodeId(chain[0] as number)}~${nodeId(chain[chain.length - 1] as number)}`,
+      from: nodeId(chain[0] as number),
+      to: nodeId(chain[chain.length - 1] as number),
+      style: wayStyle(carried.map((i) => routed[i]?.req as TrailRequest)),
+      points,
+      length: lengths[w] as number,
+      crossings: crossingsOf(t, points),
+      regions: [...regions].sort((a, b) => a - b),
+      carries: carried.map((i) => spans.get(`${w}/${i}`) as WayCarry),
+    };
+  });
+  // Junctions: where three or more ways meet away from a place; the busiest first take a cairn.
+  const places = [...ends.values()];
+  const meeting = new Map<string, number[]>();
+  ways.forEach((w, i) => {
+    for (const id of [w.from, w.to]) if (id.startsWith("junction@")) meeting.set(id, [...(meeting.get(id) ?? []), i]);
+  });
+  const traffic = (ids: readonly number[]): number => new Set(ids.flatMap((i) => ways[i]?.carries.map((c) => c.trail) ?? [])).size;
+  const found = [...meeting].filter(([, ids]) => new Set(ids).size >= 3).sort((a, b) => traffic(b[1]) - traffic(a[1]) || a[0].localeCompare(b[0]));
+  const cairns: { x: number; z: number }[] = [];
+  const junctions: Junction[] = found.map(([id, ids]) => {
+    const w0 = ways[ids[0] as number] as Way;
+    const x = w0.from === id ? (w0.points[0] as number) : (w0.points[w0.points.length - 2] as number);
+    const z = w0.from === id ? (w0.points[1] as number) : (w0.points[w0.points.length - 1] as number);
+    const leaving = ids.flatMap((i) => {
+      const w = ways[i] as Way;
+      const p = w.points;
+      const count = p.length / 2;
+      const ks = [...(w.from === id ? [Math.min(count - 1, 5)] : []), ...(w.to === id ? [Math.max(0, count - 6)] : [])];
+      return ks.map((k) => ({ dx: (p[k * 2] as number) - x, dz: (p[k * 2 + 1] as number) - z, half: w.style.width / 2 }));
+    });
+    const nearPlace = places.some((p) => Math.hypot(p.x - x, p.z - z) < TRAILS.cairnFromPlace);
+    const nearCairn = cairns.some((c) => Math.hypot(c.x - x, c.z - z) < TRAILS.cairnApart);
+    const cairn = nearPlace || nearCairn ? null : cairnOf(t, x, z, leaving, ways);
+    if (cairn !== null) cairns.push(cairn);
+    return { id, x, z, ways: [...new Set(ids)], cairn };
+  });
+  return { ways, trails, junctions, dropped };
+}
+
+// ---------- the ground under the ways ----------
+
+/** Visits every lattice sample within `reach` of each segment, with its distance and the nearest point's index along the way. */
+function nearSegments(t: Terrain, way: Way, reach: number, visit: (index: number, distance: number, along: number) => void): void {
   const l = t.lattice;
-  const pts = trail.points;
+  const pts = way.points;
   const count = pts.length / 2;
   for (let k = 0; k + 1 < count; k++) {
     const ax = pts[k * 2] as number;
@@ -411,15 +736,15 @@ function nearSegments(t: Terrain, trail: Trail, reach: number, visit: (index: nu
 }
 
 /**
- * Eases the baked ground under each trail toward the tread's own smoothed
+ * Eases the baked ground under each way toward the tread's own smoothed
  * grade, blending back to the land over `TRAILS.blend` meters, as a cottage's
  * pad does. A trail on a hillside benches gently into it; bumps along the
  * tread soften. Water and the banks next to it are never touched, and no
  * sample moves more than `TRAILS.maxCut`.
  */
-export function levelTrails(t: Terrain, trails: readonly Trail[]): void {
+export function levelTrails(t: Terrain, ways: readonly Way[]): void {
   const l = t.lattice;
-  for (const trail of trails) {
+  for (const trail of ways) {
     const pts = trail.points;
     const count = pts.length / 2;
     const ground = new Float32Array(count);
@@ -459,14 +784,14 @@ export function levelTrails(t: Terrain, trails: readonly Trail[]): void {
 }
 
 /**
- * Signed distance from each lattice sample to the nearest trail's edge,
+ * Signed distance from each lattice sample to the nearest way's edge,
  * meters: negative on the tread, capped at `TRAILS.reach`. The ground paints
  * worn earth from it and the grass parts along it; water reads as far.
  */
-export function trailField(t: Terrain, trails: readonly Trail[]): Float32Array {
+export function trailField(t: Terrain, ways: readonly Way[]): Float32Array {
   const l = t.lattice;
   const field = new Float32Array(l.n * l.n).fill(TRAILS.reach);
-  for (const trail of trails) {
+  for (const trail of ways) {
     const half = trail.style.width / 2;
     nearSegments(t, trail, half + TRAILS.reach, (index, d) => {
       if ((t.waterLevel[index] as number) > DRY / 2) return;
@@ -477,26 +802,26 @@ export function trailField(t: Terrain, trails: readonly Trail[]): Float32Array {
   return field;
 }
 
-/** A trail's place packed in one number: its index, plus how far along it (0 to 1) in the fraction. */
+/** A way's place packed in one number: its index, plus how far along it (0 to 1) in the fraction. */
 const packPlace = (index: number, along: number): number => index + 0.999 * Math.max(0, Math.min(1, along));
 
-/** Unpacks `trailPlaces`' numbers: the trail's index and how far along it, from its first end (0) to its second (1); null for none. */
-export function unpackPlace(packed: number): { trail: number; along: number } | null {
+/** Unpacks `trailPlaces`' numbers: the way's index and how far along it, from its first point (0) to its last (1); null for none. */
+export function unpackPlace(packed: number): { way: number; along: number } | null {
   if (packed < 0) return null;
-  const trail = Math.floor(packed);
-  return { trail, along: (packed - trail) / 0.999 };
+  const way = Math.floor(packed);
+  return { way, along: (packed - way) / 0.999 };
 }
 
 /**
- * Which trails each lattice sample lies on, two numbers per sample: the
- * nearest trail within `TRAILS.reach` of its edge and, where another trail's
- * edge is within `TRAILS.meet` meters of that one's (where trails meet or
- * share a tread), that one too; -1 for none. Each packs the trail's index in
- * `trails` and how far along it the sample lies, 0 at its first end and 1 at
- * its second (see `unpackPlace`), so a shader can read the vitality of the
- * two entities a trail joins live and blend it along the trail.
+ * Which ways each lattice sample lies on, two numbers per sample: the
+ * nearest way within `TRAILS.reach` of its edge and, where another way's
+ * edge is within `TRAILS.meet` meters of that one's (where ways meet at a
+ * junction), that one too; -1 for none. Each packs the way's index in
+ * `ways` and how far along it the sample lies, 0 at its first point and 1
+ * at its last (see `unpackPlace`), so a shader can read the way's wear, which
+ * follows the vitality of every trail walking it, live (`wayWear`).
  */
-export function trailPlaces(t: Terrain, trails: readonly Trail[]): Float32Array {
+export function trailPlaces(t: Terrain, ways: readonly Way[]): Float32Array {
   const l = t.lattice;
   const n = l.n * l.n;
   const d1 = new Float32Array(n).fill(Infinity);
@@ -505,7 +830,7 @@ export function trailPlaces(t: Terrain, trails: readonly Trail[]): Float32Array 
   const p2 = new Float32Array(n).fill(-1);
   const mine = new Float32Array(n).fill(Infinity);
   const along = new Float32Array(n);
-  trails.forEach((trail, index) => {
+  ways.forEach((trail, index) => {
     const half = trail.style.width / 2;
     const last = Math.max(1, trail.points.length / 2 - 1);
     const touched: number[] = [];
@@ -563,17 +888,68 @@ export const trailVitalityAt = (fromVitality: number, toVitality: number, along:
 export const trailWearAt = (wear: number, fromVitality: number, toVitality: number, along: number): number =>
   wear * (0.2 + 0.8 * smooth(0.05, 0.75, trailVitalityAt(fromVitality, toVitality, along)));
 
-/** Discs along each trail's tread, so trees and the understory keep off it. */
-export function trailDiscs(trails: readonly Trail[], margin: number): Occupied[] {
-  const out: Occupied[] = [];
-  for (const trail of trails) {
-    const pts = trail.points;
-    for (let k = 0; k < pts.length / 2; k += 2) out.push({ x: pts[k * 2] as number, z: pts[k * 2 + 1] as number, radius: trail.style.width / 2 + margin });
+/**
+ * How worn a way is at each of its `TRAILS.stations`, evenly from its first
+ * point to its last. Every trail walking it wears it (`trailWearAt`, from the
+ * vitality of the two entities that trail joins), and their wear adds up as
+ * chances do: a way bare to `a` by one trail and to `b` by another is bare to
+ * 1 - (1 - a)(1 - b). So a shared way is never less worn than its most worn
+ * trail, a trunk stays trodden while any trail on it thrives, and it grows
+ * over only when every trail on it fails. The shaders blend between the
+ * stations (`wayWearAt`); call it again whenever an entity's vitality changes.
+ */
+export function wayWear(network: TrailNetwork, way: number, vitalityOf: (place: string) => number): number[] {
+  const w = network.ways[way];
+  return Array.from({ length: TRAILS.stations }, (_, s) => {
+    const a = s / (TRAILS.stations - 1);
+    let bare = 1;
+    for (const c of w?.carries ?? []) {
+      const tr = network.trails[c.trail];
+      if (tr === undefined) continue;
+      bare *= 1 - trailWearAt(tr.style.wear, vitalityOf(tr.from), vitalityOf(tr.to), c.from + (c.to - c.from) * a);
+    }
+    return 1 - bare;
+  });
+}
+
+/** A way's wear `along` it (0 to 1), blended between its stations as the shaders do. */
+export function wayWearAt(stations: readonly number[], along: number): number {
+  const f = Math.max(0, Math.min(1, along)) * (stations.length - 1);
+  const k = Math.min(stations.length - 2, Math.floor(f));
+  return (stations[k] as number) + ((stations[k + 1] as number) - (stations[k] as number)) * (f - k);
+}
+
+/**
+ * The vitality a way shows at a point `along` it, for what is built on it (a
+ * footbridge, edging stones): its liveliest trail's there, since a way is
+ * kept in repair by whoever still walks it.
+ */
+export function wayVitalityAt(network: TrailNetwork, way: number, along: number, vitalityOf: (place: string) => number): number {
+  let best = 0;
+  for (const c of network.ways[way]?.carries ?? []) {
+    const tr = network.trails[c.trail];
+    if (tr !== undefined) best = Math.max(best, trailVitalityAt(vitalityOf(tr.from), vitalityOf(tr.to), c.from + (c.to - c.from) * along));
   }
+  return best;
+}
+
+/** A junction's vitality, for its cairn: the liveliest of its ways' where they meet. */
+export function junctionVitality(network: TrailNetwork, junction: Junction, vitalityOf: (place: string) => number): number {
+  return Math.max(0, ...junction.ways.map((i) => wayVitalityAt(network, i, network.ways[i]?.from === junction.id ? 0 : 1, vitalityOf)));
+}
+
+/** Discs along each way's tread and around each junction's cairn, so trees and the understory keep off them. */
+export function trailDiscs(network: TrailNetwork, margin: number): Occupied[] {
+  const out: Occupied[] = [];
+  for (const way of network.ways) {
+    const pts = way.points;
+    for (let k = 0; k < pts.length / 2; k += 2) out.push({ x: pts[k * 2] as number, z: pts[k * 2 + 1] as number, radius: way.style.width / 2 + margin });
+  }
+  for (const j of network.junctions) if (j.cairn !== null) out.push({ x: j.cairn.x, z: j.cairn.z, radius: 0.6 + margin });
   return out;
 }
 
-/** Small stones set along both edges of a trail's tread, grounded; none in or beside water. */
+/** Small stones set along both edges of a way's tread, grounded; none in or beside water. */
 export interface EdgeStone {
   readonly x: number;
   readonly y: number;
@@ -582,7 +958,7 @@ export interface EdgeStone {
   readonly size: number;
 }
 
-export function edgeStones(t: Terrain, trail: Trail, seed: number): EdgeStone[] {
+export function edgeStones(t: Terrain, trail: Way, seed: number): EdgeStone[] {
   if (trail.style.edging !== "stones") return [];
   const pts = trail.points;
   const count = pts.length / 2;

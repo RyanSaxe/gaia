@@ -36,7 +36,9 @@ import {
   FULL_WORLD,
   SHORE_CAP,
   SMALL_WORLD,
-  type Trail,
+  type TrailNetwork,
+  type Way,
+  NO_TRAILS,
   type Capsule,
   type Place,
   type WorldPlaces,
@@ -60,7 +62,7 @@ import {
   sampleWorld,
   sightlines,
   siteToWorld,
-  trailVitalityAt,
+  wayWear,
   solidsOf,
   stanceAt,
   TERRAIN,
@@ -209,7 +211,8 @@ interface Tree {
 /** The world as it stands after a bake: what a map draws and what markers stand beside. */
 export interface StoodWorld {
   readonly terrain: Terrain;
-  readonly trails: readonly Trail[];
+  /** The paths' ways of tread. */
+  readonly ways: readonly Way[];
   readonly buildings: readonly { readonly x: number; readonly z: number; readonly name: string; readonly kind: string }[];
   readonly landmarks: readonly { readonly x: number; readonly z: number; readonly name: string }[];
   readonly trees: readonly { readonly x: number; readonly z: number; readonly vitality: number }[];
@@ -329,10 +332,10 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     return { name: preset.name, built, base: Math.min(base, 10) };
   });
   const trailStyles = TRAIL_PRESETS.map((p) => buildSlots(p.blueprint, link, routeLib, { seed: 1, facts: {} }).get("route")?.output as RouteSpec);
-  /** The landmarks standing and the trails between every place, from the last bake. */
+  /** The landmarks standing and the network of paths between every place, from the last bake. */
   interface Settled {
     readonly sites: readonly StandingLandmark[];
-    readonly trails: readonly Trail[];
+    readonly network: TrailNetwork;
   }
 
   const canvas = root.querySelector("canvas") as HTMLCanvasElement;
@@ -349,7 +352,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   let code: CodeLab | null = null;
   /** The world whose light, sky and air the lab shows: the codebase's own once it is shown. */
   let skyWorld = SKY_WORLD;
-  let ways: Settled = { sites: [], trails: [] };
+  let ways: Settled = { sites: [], network: NO_TRAILS };
   // Every entity's vitality by its name, live: buildings and landmarks stand
   // for entities, and each trail's wear follows the two it joins.
   let landmarkEntities: Represented[] = [];
@@ -423,7 +426,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       view.object.visible = true;
       view.object.position.set(s.site.x, s.site.y - 0.05, s.site.z);
       // The door faces where its first trail arrives, or the first building.
-      const near = ways.trails.flatMap((t) => [[t.points[0], t.points[1]], [t.points[t.points.length - 2], t.points[t.points.length - 1]]]).find(([x, z]) => Math.hypot((x ?? 0) - s.site.x, (z ?? 0) - s.site.z) < 14);
+      const near = ways.network.ways.flatMap((t) => [[t.points[0], t.points[1]], [t.points[t.points.length - 2], t.points[t.points.length - 1]]]).find(([x, z]) => Math.hypot((x ?? 0) - s.site.x, (z ?? 0) - s.site.z) < 14);
       const home = settlement.buildings[0]?.site;
       const [fx, fz] = near ?? [home?.x ?? 0, home?.z ?? 0];
       view.object.rotation.y = Math.atan2((fx ?? 0) - s.site.x, (fz ?? 0) - s.site.z);
@@ -431,18 +434,15 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     });
     ways.sites.forEach((s, i) => entityOfPlace.set(s.id, landmarkEntity(i).name));
     built?.dispose();
-    built = createWays(scene, light, landmarkLib, terrain, ways.trails);
+    built = createWays(scene, light, landmarkLib, terrain, ways.network);
     showVitality();
   }
 
   /** Shows every entity's vitality now on its landmark, on its trails' wear and on what is built along them. Nothing rebuilds. */
   function showVitality(): void {
     landmarkViews.forEach((view, i) => view.setVitality(entityVitality.get(landmarkEntity(i).name) ?? 1));
-    setTrailEnds(ways.trails, vitalityOfPlace);
-    built?.setVitality((i, along) => {
-      const t = ways.trails[i];
-      return t === undefined ? 1 : trailVitalityAt(vitalityOfPlace(t.from), vitalityOfPlace(t.to), along);
-    });
+    setTrailEnds(ways.network, vitalityOfPlace);
+    built?.setVitality(vitalityOfPlace);
   }
 
   /** Sets one entity's vitality, by its name, wherever it shows: its building and sign, its landmark, and every trail it joins. */
@@ -1185,7 +1185,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     places = code !== null ? code.world : regionPlaces(terrain.spec, SAMPLE_NAME, []);
     clearings.fit(terrain);
     settlement.seat(stood.sites);
-    ways = { sites: stood.landmarks, trails: stood.trails };
+    ways = { sites: stood.landmarks, network: stood.network };
     setTrailPlaces(stood.trailPlaces, baked.lattice.n);
     placeWays();
     furnished = furnisher?.(stoodWorld()) ?? UNFURNISHED;
@@ -1208,7 +1208,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   function stoodWorld(): StoodWorld {
     return {
       terrain,
-      trails: ways.trails,
+      ways: ways.network.ways,
       buildings: settlement.buildings.map((b) => ({ x: b.site.x, z: b.site.z, name: b.represented.name, kind: b.kindName })),
       landmarks: ways.sites.map((s) => ({ x: s.site.x, z: s.site.z, name: landmarks[s.landmark]?.name ?? "" })),
       trees: trees.map((t) => ({ x: t.x, z: t.z, vitality: t.represented.report.vitality })),
@@ -1534,7 +1534,8 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       regions: world.regions.length,
       trees: trees.length,
       landmarks: ways.sites.length,
-      trails: ways.trails.length,
+      trails: ways.network.trails.length,
+      ways: ways.network.ways.length,
       bakeMs: Math.round(bakeMs),
     }),
     setActive(on) {
@@ -1584,17 +1585,33 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
         view.object.rotation.y = 0;
         return { name: lm.name, x: s.site.x, y: s.site.y, z: s.site.z, base: lm.base, height: view.height, triangles: view.triangles };
       },
-      /** Each trail: its ends, length, crossings and a point every 10 m. */
+      /** Each trail (a dependency): its ends, length and the ways it walks. */
       trails: () =>
-        ways.trails.map((t) => ({
+        ways.network.trails.map((t) => ({
           id: t.id,
           from: { place: t.from, entity: entityOfPlace.get(t.from), vitality: vitalityOfPlace(t.from) },
           to: { place: t.to, entity: entityOfPlace.get(t.to), vitality: vitalityOfPlace(t.to) },
-          length: t.length,
-          width: t.style.width,
-          crossings: t.crossings.map((c) => ({ x: Math.round(c.x), z: Math.round(c.z), span: +c.span.toFixed(1) })),
-          points: Array.from({ length: Math.ceil(t.points.length / 20) }, (_, k) => [Math.round(t.points[k * 20] ?? 0), Math.round(t.points[k * 20 + 1] ?? 0)]),
+          length: Math.round(t.length),
+          ways: t.ways.map((w) => w.way),
         })),
+      /** Each way of tread: its ends, length, width, crossings, the trails walking it, its wear now and a point every 10 m. */
+      ways: () =>
+        ways.network.ways.map((w, i) => ({
+          id: w.id,
+          from: w.from,
+          to: w.to,
+          length: Math.round(w.length),
+          width: +w.style.width.toFixed(2),
+          crossing: w.style.crossing,
+          crossings: w.crossings.map((c) => ({ x: Math.round(c.x), z: Math.round(c.z), span: +c.span.toFixed(1), yaw: +c.yaw.toFixed(2) })),
+          carries: w.carries.map((c) => ways.network.trails[c.trail]?.id),
+          wear: wayWear(ways.network, i, vitalityOfPlace).map((v) => +v.toFixed(2)),
+          points: Array.from({ length: Math.ceil(w.points.length / 20) }, (_, k) => [Math.round(w.points[k * 20] ?? 0), Math.round(w.points[k * 20 + 1] ?? 0)]),
+        })),
+      /** Where ways meet away from a place, and each cairn. */
+      junctions: () => ways.network.junctions.map((j) => ({ id: j.id, x: Math.round(j.x), z: Math.round(j.z), ways: j.ways.length, cairn: j.cairn })),
+      /** Trails the network could not take, and why. */
+      dropped: () => ways.network.dropped,
       /** Every building: what it stands for, where, and its vitality now. */
       buildings: () =>
         settlement.buildings.map((b) => ({ name: b.represented.name, building: b.kindName, ...b.site, width: b.plan.width, depth: b.plan.depth, triangles: b.view.triangles, vitality: b.view.vitality, sign: settlement.signOf(b), stand: settlement.standOf(b) })),

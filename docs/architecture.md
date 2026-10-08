@@ -22,7 +22,7 @@ the document that did not change renders exactly as it did before.
 | Main | TypeScript (Electron) | The window and the app's lifecycle. It starts the engine and the world service, restarts the engine if it exits, and names the folder whose world each page opens: Gaia's own repository, `GAIA_PROJECT`, or one chosen with File > Open Folder. |
 | Engine | Rust (`gaia-engine`) | Files, parsing, git, test reports, the code model, the app-data store and the Jev client with the key from the macOS Keychain. |
 | World service | TypeScript (Electron utility process) | Kinds and primitives, the question planner, answer rules, vitality and the world document. It opens a codebase's world (`openWorld` in `app/world-service/open-world.ts`): the engine's `project.open`, Jev's judgments, kept in the store, and `layoutWorld`, and sends the renderer the result (`WorldDocument`) over its MessagePort. |
-| Renderer | TypeScript | The UI, the Three.js scene, the realizer and the clock. In slice 1 the renderer is the lab. The lab opens into the world, full screen at eye height (`app/renderer/immersive/`), with its debugging views (Components, Terrain and Skies) behind tabs; the immersive world is the terrain lab's world without its chrome, plus three ways of telling a person where they are (arrival titles, a field map and markers in the world), read through `placeAt`; touching the world only moves the person, and everything else opens from the corner controls (`docs/design-system.md`). The terrain lab bakes its world on worker threads (`app/renderer/terrain/bake-worker.ts`): a few workers compose bands of lattice rows with `composeRows`, and one finishes the bake with `finishTerrain` and stands the world's things on it with `standWorld` (`app/renderer/terrain/stand.ts`): each building's site and pad, the landmarks' sites, the trails leveled into the ground and which trail each ground sample lies on, the trees and the understory, and the ground texture's data, so drawing never waits on a bake. Components are still realized on the main thread; the realizer is pure and worker-safe, so it can move into workers too. |
+| Renderer | TypeScript | The UI, the Three.js scene, the realizer and the clock. In slice 1 the renderer is the lab. The lab opens into the world, full screen at eye height (`app/renderer/immersive/`), with its debugging views (Components, Terrain and Skies) behind tabs; the immersive world is the terrain lab's world without its chrome, plus three ways of telling a person where they are (arrival titles, a field map and markers in the world), read through `placeAt`; touching the world only moves the person, and everything else opens from the corner controls (`docs/design-system.md`). The terrain lab bakes its world on worker threads (`app/renderer/terrain/bake-worker.ts`): a few workers compose bands of lattice rows with `composeRows`, and one finishes the bake with `finishTerrain` and stands the world's things on it with `standWorld` (`app/renderer/terrain/stand.ts`): each building's site and pad, the landmarks' sites, the network of trails leveled into the ground and which way of it each ground sample lies on, the trees and the understory, and the ground texture's data, so drawing never waits on a bake. Components are still realized on the main thread; the realizer is pure and worker-safe, so it can move into workers too. |
 
 The world service talks to the engine in newline-delimited JSON-RPC 2.0 over
 the engine's stdin and stdout, relayed by the main process. Only small data
@@ -176,10 +176,11 @@ on each file's patch, what each kind of a file's finer entities stands as,
 whether each entity is a building or a landmark and which, and how much it
 would walk each dependency. `planWorldRequests` builds one request per thing,
 from facts and doc comments only, with options shuffled by the thing's path.
-`judgeWorld` asks them through any `JevClient`, eight at a time. Of the
-dependencies Jev would walk, the trails a world shows are first those that
-join parts of the code no other chosen trail joins, then the most wanted, up
-to 1.4 per standing entity; the joining ones route first. The repository's
+`judgeWorld` asks them through any `JevClient`, eight at a time. A world
+shows every dependency Jev would walk as a trail: first those that join
+parts of the code no other chosen trail joins, then the most wanted; the
+joining ones route first, and the terrain walks them all over one network
+of shared paths (`planTrails`), which holds the composition by its ground. The repository's
 own ground takes its place among the other areas rather than at the middle,
 so trails between areas do not all cross it. `keptJev`
 (`packages/world/src/judging.ts`) keeps Jev's answers: each request's key is
@@ -217,7 +218,9 @@ folder. `?world=sample` (or `?world=small`) and
 the Terrain view's "Sample world" button show the sample world instead. `standWorld` takes the
 layout (`StandRequest.code`): each building and landmark on its lot, trees of
 the chosen species on each file's own cells with that file's vitality, each
-finer entity as an understory placement, and the trails between lots. The ground textures take a world of any size.
+finer entity as an understory placement, and the trails between lots,
+walked over one network of ways (`Stand.network`: its ways of tread, the
+trails walking them, its junctions and any trail dropped, with why). The ground textures take a world of any size.
 
 ## Jev
 

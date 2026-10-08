@@ -212,8 +212,6 @@ export const LAYOUT = {
   /** Meters between things standing on a patch, and kept clear around its first tree. */
   symbolGap: 4.5,
   treeClear: 5,
-  /** The most trails a world shows: this many per standing entity. */
-  trailsPerEntity: 1.4,
 } as const;
 
 // ---------- the tree of directories ----------
@@ -650,10 +648,12 @@ function standSymbols(f: FileFacts, heart: { x: number; z: number }, inner: read
 }
 
 /**
- * The trails a world shows: of the dependencies Jev would walk (more than
- * even odds), first those that join groups of entities not yet joined, most
- * wanted and heaviest first, so every connected part of the code is walkable;
- * then the most wanted of the rest, up to the composition budget.
+ * The trails a world shows: every dependency Jev would walk (more than even
+ * odds), first those that join groups of entities not yet joined, most
+ * wanted and heaviest first, so every connected part of the code is walkable
+ * and they route first; then the rest, most wanted first. The terrain walks
+ * them all over one network of shared paths, which holds the composition by
+ * its ground (`planTrails` in @gaia/terrain), so none is dropped here.
  */
 function chooseTrails(wanted: readonly CodeTrail[], standing: readonly string[], weights: ReadonlyMap<string, number>): CodeTrail[] {
   const known = new Set(standing);
@@ -669,7 +669,6 @@ function chooseTrails(wanted: readonly CodeTrail[], standing: readonly string[],
     group.set(p, r);
     return r;
   };
-  const budget = Math.round(standing.length * LAYOUT.trailsPerEntity);
   const spanning: CodeTrail[] = [];
   const rest: CodeTrail[] = [];
   for (const t of order) {
@@ -680,7 +679,7 @@ function chooseTrails(wanted: readonly CodeTrail[], standing: readonly string[],
       spanning.push({ ...t, spans: true });
     } else rest.push({ ...t, spans: false });
   }
-  return [...spanning, ...rest].slice(0, Math.max(spanning.length, budget));
+  return [...spanning, ...rest];
 }
 
 /** Lays out the world from the code and Jev's judgments. */

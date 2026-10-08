@@ -1,6 +1,6 @@
 // What a trail is built from where the ground alone will not do: a small
-// footbridge or a line of stepping stones across a stream, and stones set
-// along a tread's edges. Spans and positions come from the terrain, so these
+// footbridge or a line of stepping stones across a stream, stones set along
+// a tread's edges, and a little cairn where ways meet. Spans and positions come from the terrain, so these
 // are pure builders a trail's route calls, not primitives Jev picks.
 // Each writes vitality channels: planks go missing and rails sag in decline,
 // and stone weathers grey.
@@ -141,6 +141,39 @@ export function buildEdgingStones(stones: readonly { x: number; y: number; z: nu
       pivot: [s.x, s.y, s.z],
       tint: (sr.next() - 0.5) * 0.05,
     });
+  }
+  return { parts: [out.part()], anchors: [] };
+}
+
+/**
+ * A little waymarker cairn where ways meet: a few flat stones, each bedded on
+ * the one below and smaller than it, about knee high, its foot sunk in the
+ * ground at y = 0. Nothing in it falls; its stone weathers grey in decline.
+ */
+export function buildCairn(seed: number): Built {
+  const r = rand(seed);
+  const out = new PartBuilder("stone", "none");
+  const count = 4 + Math.floor(r.next() * 2);
+  let y = 0.02;
+  let radius = 0.34 + r.next() * 0.06;
+  let x = 0;
+  let z = 0;
+  for (let k = 0; k < count; k++) {
+    const sr = r.fork(`stone${k}`);
+    const tall = radius * (0.42 + sr.next() * 0.18);
+    // Each stone rests on the one below: its foot a little inside that one's top.
+    column(out, x, z, radius, y + tall, k === 0 ? -0.18 : y - tall * 0.25, 0.46 + 0.16 * sr.next(), sr.next() * Math.PI, 0.75 + 0.25 * sr.next(), {
+      loss: 0,
+      droop: 0,
+      wither: 0.5 + 0.35 * sr.next(),
+      glow: 0,
+      pivot: [x, y, z],
+      tint: (sr.next() - 0.5) * 0.05,
+    });
+    y += tall + radius * 0.06;
+    radius *= 0.72 + sr.next() * 0.08;
+    x += (sr.next() - 0.5) * radius * 0.25;
+    z += (sr.next() - 0.5) * radius * 0.25;
   }
   return { parts: [out.part()], anchors: [] };
 }

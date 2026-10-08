@@ -10,7 +10,7 @@
 
 import * as THREE from "three";
 import { LIGHT_GLSL, type SceneLight } from "@gaia/render";
-import { type PlaceArea, type SolidShape, type Trail, heightAt, waterDepthAt } from "@gaia/terrain";
+import { type PlaceArea, type SolidShape, type Way, heightAt, waterDepthAt } from "@gaia/terrain";
 import type { Furnishing, StoodWorld } from "../terrain/lab.ts";
 
 /** The layer markers draw on: the view's camera sees it, the sun's shadow pass does not, since their material reads the shadow map. */
@@ -287,7 +287,7 @@ function atlas(cols: number, rows: number, slot: { w: number; h: number }): { ca
 }
 
 /** Where a trail runs from one area into the next, once each border's wobble is set aside. */
-function crossingsOf(trail: Trail, areaAt: (x: number, z: number) => PlaceArea): { i: number; from: PlaceArea; to: PlaceArea }[] {
+function crossingsOf(trail: Way, areaAt: (x: number, z: number) => PlaceArea): { i: number; from: PlaceArea; to: PlaceArea }[] {
   const p = trail.points;
   const count = p.length / 2;
   const runs: { area: PlaceArea; start: number; end: number }[] = [];
@@ -355,7 +355,7 @@ export function createMarkers(light: SceneLight): Markers {
       clear();
       const t = stood.terrain;
       const found: { x: number; z: number; tx: number; tz: number; off: number; from: PlaceArea; to: PlaceArea }[] = [];
-      for (const trail of stood.trails) {
+      for (const trail of stood.ways) {
         const p = trail.points;
         const count = p.length / 2;
         for (const c of crossingsOf(trail, areaAt)) {
