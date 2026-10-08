@@ -70,6 +70,9 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
     cover.classList.add("on");
     window.setTimeout(() => {
       world.place(at);
+      // The old place's title goes with it; the new place announces itself as the world dissolves in.
+      arrival.show(false);
+      arrival.show(active);
       let frames = 0;
       const settle = (): void => {
         if (++frames < JUMP.settleFrames) {
