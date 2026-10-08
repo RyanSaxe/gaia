@@ -1,6 +1,6 @@
 # Gaia
 
-![A late afternoon in Gaia's own world, at eye height: a timber-framed house among cherry trees and firs, an autumn maple, daisies in the grass, and a slip of paper at the lower left naming the file underfoot.](docs/images/world.jpg)
+![A late afternoon in Gaia's own world, at eye height: a timber-framed house among cherry trees in blossom and firs, an autumn maple, daisies in the grass, and at the lower left the minimap, a torn scrap of the field map naming the area underfoot.](docs/images/world.jpg)
 
 Gaia turns a codebase into a world you walk through at eye height:
 directories become land, files grow groves, packages stand as cottages,
