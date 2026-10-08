@@ -1,10 +1,11 @@
 // The map paints itself: the wait is the field map's sheet (`ink.ts`), lying
 // on its creased paper. While the code is
 // read, light moves over the empty sheet (leaf-light by day, the lantern's
-// pool at night). As soon as the land is divided, a pen draws the land's edge
-// and then each area's border, and the wild's wood is brushed in past the
-// edge; each area washes in with the color of the land Jev judged for it as
-// its judgments settle; while the world bakes, the washes dry; then the map
+// pool at night). As soon as the land is divided, a pen draws each area's
+// border and a fringe of wood is brushed in along the sheet's edges; each
+// area washes in with the color of the land Jev judged for it as its
+// judgments settle, on to the paper's edge where it is the nearest area, so
+// the land runs square to the sheet's edges as the map's does; while the world bakes, the washes dry; then the map
 // folds away and the paper dissolves into the world, as a jump on the map
 // does.
 //
@@ -17,6 +18,7 @@
 // still being drawn through every lull.
 
 import type { Outline } from "@gaia/terrain";
+import { rimPath } from "../immersive/field-map.ts";
 import { dryness } from "../immersive/map-styles.ts";
 import { type WaitBrush, createWaitBrush } from "./brush.ts";
 import { WAIT_INK } from "./ink.ts";
@@ -122,7 +124,69 @@ export function createMapWait(veil: HTMLElement): WaitView {
   let nightness = 0;
   const allShown = new Promise<void>((r) => (resolveShown = r));
 
-  /** Paints one area's wash onto its own canvas, over its own ground only, in the color of its land. */
+  /** Side of the raster that finds which area's wash runs on past the land's rim to each part of the sheet's corners. */
+  const RIM_GRID = 192;
+  let beyond: Map<string, { path: Path2D; box: [number, number, number, number] }> | null = null;
+  let half = 0;
+  /**
+   * Past the land's rounded rim, each cell of the sheet takes the wash of the area nearest it, as the map paints
+   * it: the cells each area's wash runs on to, in meters, found once on a small raster of the areas' own ground.
+   */
+  function beyondRim(): Map<string, { path: Path2D; box: [number, number, number, number] }> {
+    if (beyond !== null) return beyond;
+    const n = RIM_GRID;
+    const cell = (reach * 2) / n;
+    const c = document.createElement("canvas");
+    c.width = c.height = n;
+    const g = c.getContext("2d", { willReadFrequently: true }) as CanvasRenderingContext2D;
+    g.setTransform(n / (reach * 2), 0, 0, n / (reach * 2), n / 2, n / 2);
+    areas.forEach((a, k) => {
+      g.fillStyle = `rgb(${(k + 1) & 255},${((k + 1) >> 8) & 255},0)`;
+      g.fill(new Path2D(a.ground), "evenodd");
+    });
+    const px = g.getImageData(0, 0, n, n).data;
+    const owner = new Int32Array(n * n).fill(-1);
+    const queue: number[] = [];
+    const outside = (i: number, j: number): boolean => {
+      const x = -reach + (i + 0.5) * cell;
+      const z = -reach + (j + 0.5) * cell;
+      return Math.abs(x) ** 4 + Math.abs(z) ** 4 > (half - cell) ** 4;
+    };
+    for (let k = 0; k < n * n; k++) {
+      const id = (px[k * 4] as number) + ((px[k * 4 + 1] as number) << 8) - 1;
+      // A cell straddling two areas' edges reads as a blend of their colors: only a clean one is an area's.
+      if (id >= 0 && id < areas.length && px[k * 4 + 3] === 255 && px[k * 4 + 2] === 0) {
+        owner[k] = id;
+        queue.push(k);
+      }
+    }
+    for (let q = 0; q < queue.length; q++) {
+      const k = queue[q] as number;
+      const i = k % n;
+      for (const d of [i > 0 ? k - 1 : -1, i < n - 1 ? k + 1 : -1, k - n, k + n]) {
+        if (d < 0 || d >= n * n || owner[d] !== -1) continue;
+        owner[d] = owner[k] as number;
+        queue.push(d);
+      }
+    }
+    beyond = new Map();
+    for (let j = 0; j < n; j++) {
+      for (let i = 0; i < n; i++) {
+        const k = j * n + i;
+        const a = areas[owner[k] as number];
+        if (a === undefined || !outside(i, j)) continue;
+        const x = -reach + i * cell;
+        const z = -reach + j * cell;
+        const b = beyond.get(a.path) ?? { path: new Path2D(), box: [Infinity, Infinity, -Infinity, -Infinity] as [number, number, number, number] };
+        b.path.rect(x, z, cell, cell);
+        b.box = [Math.min(b.box[0], x), Math.min(b.box[1], z), Math.max(b.box[2], x + cell), Math.max(b.box[3], z + cell)];
+        beyond.set(a.path, b);
+      }
+    }
+    return beyond;
+  }
+
+  /** Paints one area's wash onto its own canvas, over its own ground and on past the rim where it is nearest, in the color of its land. */
   function paintWash(a: Area): void {
     const rgb = a.land === null ? null : WAIT_INK.wash(a.path, a.land);
     if (rgb === null) {
@@ -145,6 +209,8 @@ export function createMapWait(veil: HTMLElement): WaitView {
         z1 = Math.max(z1, ring[k + 1] as number);
       }
     }
+    const past = beyondRim().get(a.path);
+    if (past !== undefined) [x0, z0, x1, z1] = [Math.min(x0, past.box[0]), Math.min(z0, past.box[1]), Math.max(x1, past.box[2]), Math.max(z1, past.box[3])];
     if (!Number.isFinite(x0)) {
       a.canvas = null;
       return;
@@ -163,9 +229,16 @@ export function createMapWait(veil: HTMLElement): WaitView {
     const path = new Path2D(pathOf([...a.rings, ...holes.flatMap((h) => h.rings)], 0));
     g.fillStyle = `rgb(${rgb.join(",")})`;
     g.fill(path, "evenodd");
-    // Pigment pools at the rim as it dries: soft strokes of a deeper tone, kept inside its ground.
+    if (past !== undefined) {
+      // On past the rim, laid soft so the raster's cells read as a wash, not as steps.
+      g.filter = `blur(${(1.2 * dpr).toFixed(1)}px)`;
+      g.fill(past.path);
+      g.filter = "none";
+    }
+    // Pigment pools at the rim as it dries: soft strokes of a deeper tone, kept inside its ground and off the land's rim.
     g.save();
     g.clip(path, "evenodd");
+    g.clip(rimPath(half - 8));
     const rim = rgb.map((c) => Math.round(c * 0.6)).join(",");
     const scale = (side * dpr) / 2048 / px;
     for (const [width, alpha] of WAIT_INK.pool) {
@@ -286,6 +359,16 @@ export function createMapWait(veil: HTMLElement): WaitView {
     const bordered = order.filter((e) => e.o.depth > 0);
     const step = Math.min(90, PACE.penSpreadMs / Math.max(1, bordered.length));
     ink.setAttribute("viewBox", `${-reach} ${-reach} ${reach * 2} ${reach * 2}`);
+    // The pen keeps inside the land, as the map's hedgerows do, so where an area meets the rim nothing is inked.
+    const r = size / 2 - 3;
+    let rim = "";
+    for (let k = 0; k <= 180; k++) {
+      const a = (k / 180) * Math.PI * 2;
+      const d = r / Math.pow(Math.abs(Math.cos(a)) ** 4 + Math.abs(Math.sin(a)) ** 4, 0.25);
+      rim += `${k === 0 ? "M" : "L"}${(Math.cos(a) * d).toFixed(1)} ${(Math.sin(a) * d).toFixed(1)}`;
+    }
+    ink.innerHTML = `<defs><clipPath id="wait-land"><path d="${rim}Z"/></clipPath></defs><g clip-path="url(#wait-land)"></g>`;
+    const inked = ink.lastElementChild as SVGGElement;
     // Meters per CSS pixel on this sheet, for the pen's widths.
     const perPixel = (reach * 2) / sideOf();
     const hand = WAIT_INK.border;
@@ -297,18 +380,10 @@ export function createMapWait(veil: HTMLElement): WaitView {
       line.setAttribute("stroke-width", (width * perPixel).toFixed(2));
       line.style.transitionDuration = `${durationMs}ms`;
       line.style.transitionDelay = `${Math.round(delayMs)}ms`;
-      ink.append(line);
+      inked.append(line);
     };
-    // The land's rounded edge first, which the wild's wash then meets.
-    let d = "";
-    for (let k = 0; k <= 240; k++) {
-      const a = (k / 240) * Math.PI * 2;
-      const c = Math.cos(a);
-      const s = Math.sin(a);
-      const r = size / 2 / Math.pow(Math.abs(c) ** 4 + Math.abs(s) ** 4, 0.25);
-      d += `${k === 0 ? "M" : "L"}${(c * r).toFixed(1)} ${(s * r).toFixed(1)}`;
-    }
-    pen(`${d}Z`, hand.line, hand.width * 1.15, 0, PACE.edgeMs);
+    // The land's rounded rim is never inked: the painted country runs on past it to the paper's edge.
+    half = size / 2;
     areas = order.map(({ o, rings, x, z }) => {
       const k = bordered.findIndex((e) => e.o === o);
       const inkedAt = o.depth === 0 ? PACE.edgeMs * 0.8 : PACE.edgeMs * 0.5 + k * step + PACE.penMs * 0.75;
@@ -323,10 +398,10 @@ export function createMapWait(veil: HTMLElement): WaitView {
     for (const a of areas) a.ground = pathOf([...a.rings, ...areas.filter((c) => c.depth === a.depth + 1 && parentOf(c.path) === a.path).flatMap((c) => c.rings)], 0);
     painter = createWaitBrush(veil.querySelector(".wait-body") as HTMLElement, areas, reach, sideOf);
     painter.night(nightness);
-    // The wild past the land's edge, as the map paints it, brushed in after the edge.
+    // The fringe of wood along the sheet's edges, as the map paints it, brushed in after the borders.
     idle(() => {
       brush.width = brush.height = Math.round(sideOf() * dpr);
-      WAIT_INK.wild(brush.getContext("2d") as CanvasRenderingContext2D, size, reach);
+      WAIT_INK.woods(brush.getContext("2d") as CanvasRenderingContext2D, reach);
     });
     // A frame later, so the pen strokes start from nothing.
     requestAnimationFrame(() => requestAnimationFrame(() => sheet.classList.add("inked")));

@@ -1,7 +1,7 @@
 // The field map's sheet, as the wait paints it, so the waiting sheet and the
-// field map are one sheet. Its
-// paper, torn edge and the wild's wood past the land are the map's own
-// (`paintPaperGround`, `DECKLE_MASK`, `woodsOf`); each area's wash is the
+// field map are one sheet. Its paper, torn edge and the fringe of wood along
+// its edges are the map's own (`paintPaperGround`, `DECKLE_MASK`,
+// `woodsOf`); each area's wash is the
 // color of the land Jev judged for it (`groundWash`), from the palette the
 // ground shader paints that land's cover with; its borders are drawn in the
 // map's hand. The wait has no names, title or marks.
@@ -10,7 +10,7 @@ import { type GroundSpec, Library } from "@gaia/schema";
 import { BIOME_PRIMITIVES } from "@gaia/primitives";
 import { biome } from "@gaia/kinds";
 import { buildSlots } from "@gaia/realize";
-import { MARGIN, drawWoods, paintFade, paintPaperGround, woodsOf } from "../immersive/field-map.ts";
+import { MARGIN, drawWoods, paintPaperGround, woodsOf } from "../immersive/field-map.ts";
 import { DECKLE_MASK, MAP_STYLE, type MapStyle, groundWash } from "../immersive/map-styles.ts";
 import { LANDS } from "../terrain/looks.ts";
 
@@ -19,12 +19,12 @@ export interface WaitInk {
   readonly style: MapStyle;
   /** The sheet's torn edge, as a CSS mask image. */
   readonly deckle: string;
-  /** How far past the land's widest reach the sheet runs, meters: as far as the field map's. */
+  /** How far past the land's square the sheet runs, meters: as far as the field map's, none. */
   readonly margin: number;
   /** The sheet's paper over `w` by `h` pixels. */
   paper(g: CanvasRenderingContext2D, w: number, h: number): void;
-  /** The wild past the land of `size` meters, on a square canvas `reach` meters from its middle to its edge: its wash and its wood. */
-  wild(g: CanvasRenderingContext2D, size: number, reach: number): void;
+  /** The fringe of wood along the sheet's edges, on a square canvas `reach` meters from its middle to its edge, as the map paints it. */
+  woods(g: CanvasRenderingContext2D, reach: number): void;
   /** An area's wash, red, green and blue, in the color of the land judged for it; null for a land the wait does not know. */
   wash(path: string, land: string): readonly [number, number, number] | null;
   /** Pigment pooling at a wash's rim, as it dries: stroke widths in pixels at the map's full size, and opacities. */
@@ -60,8 +60,6 @@ function noise(cells: number, seed: number, rgb: readonly [number, number, numbe
 }
 
 const EASE = { reach: 5, passes: 2 };
-/** The fade at the sheet's edge, cells on a side: coarser than the map's, as the wait's sheet is smaller. */
-const FADE_CELLS = 192;
 
 const STYLE = MAP_STYLE;
 
@@ -84,44 +82,8 @@ export const WAIT_INK: WaitInk = {
   deckle: DECKLE_MASK,
   margin: MARGIN,
   paper: (g, w, h) => paintPaperGround(g, STYLE, w, h),
-  wild(g, size, reach) {
-    const w = g.canvas.width;
-    const scale = w / (reach * 2);
-    const half = size / 2;
-    // Its wash: everywhere past the land's edge, giving way raggedly to bare paper at the sheet's edge, as the map's.
-    const wash = document.createElement("canvas");
-    wash.width = wash.height = w;
-    const c = wash.getContext("2d") as CanvasRenderingContext2D;
-    c.fillStyle = STYLE.wild;
-    c.fillRect(0, 0, w, w);
-    c.globalCompositeOperation = "destination-out";
-    c.beginPath();
-    for (let k = 0; k <= 240; k++) {
-      const a = (k / 240) * Math.PI * 2;
-      const cos = Math.cos(a);
-      const sin = Math.sin(a);
-      const r = half / Math.pow(Math.abs(cos) ** 4 + Math.abs(sin) ** 4, 0.25);
-      c.lineTo((cos * r + reach) * scale, (sin * r + reach) * scale);
-    }
-    c.fill();
-    const fade = document.createElement("canvas");
-    fade.width = fade.height = FADE_CELLS;
-    const f = fade.getContext("2d") as CanvasRenderingContext2D;
-    const img = f.createImageData(FADE_CELLS, FADE_CELLS);
-    paintFade(img, STYLE, 0, FADE_CELLS);
-    f.putImageData(img, 0, 0);
-    c.globalCompositeOperation = "destination-in";
-    c.imageSmoothingEnabled = true;
-    c.drawImage(fade, 0, 0, w, w);
-    // Laid as the map lays its washes: a softened copy under it, so it bleeds into the land's.
-    g.filter = `blur(${Math.max(1, (STYLE.bleedPx * w) / 2048).toFixed(1)}px)`;
-    g.globalAlpha = STYLE.bleed;
-    g.drawImage(wash, 0, 0);
-    g.filter = "none";
-    g.globalAlpha = STYLE.washAlpha;
-    g.drawImage(wash, 0, 0);
-    g.globalAlpha = 1;
-    drawWoods(g, woodsOf(STYLE, half, reach, scale));
+  woods(g, reach) {
+    drawWoods(g, woodsOf(STYLE, reach, g.canvas.width / (reach * 2)));
   },
   wash(path, land) {
     const ground = groundOfLand(land);
