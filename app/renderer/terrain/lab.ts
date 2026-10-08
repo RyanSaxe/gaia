@@ -1169,7 +1169,11 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       return;
     }
     const yaw = Math.atan2(-(b.x - a.x), -(b.z - a.z));
-    walkTo(a.x + Math.cos(yaw) * 5, a.z - Math.sin(yaw) * 5, yaw, -0.06);
+    // On the nearest dry ground clear of anything solid: a wide stream would otherwise stand the person in it.
+    const x = a.x + Math.cos(yaw) * 5;
+    const z = a.z - Math.sin(yaw) * 5;
+    const bank = landingNear(x, z);
+    walkTo(bank?.x ?? x, bank?.z ?? z, yaw, -0.06);
   }
 
   const forward = new THREE.Vector3();
