@@ -12,7 +12,8 @@ a desktop or the sheet on a phone. The card says what the thing is, its
 name, what it does, where it lives in the code, what it leans on and what
 leans on it, and its vitality with the signals behind it. A thing already
 close is shown at once; a new tap or a key cancels the walk and no card
-opens. The view never turns on its own.
+opens. The view never turns on its own (round 12 changed this: see
+[27](27-one-way-to-touch-the-world.md)).
 
 ## Why
 

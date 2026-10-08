@@ -293,24 +293,52 @@ and it leans on its post. All signs draw as one instanced mesh.
 
 Tapping a building, a tree or a sign walks the person up to it (to the end
 of a building's walk, or just outside a tree's crown on their side), and
-when they arrive a card opens: in the immersive world, a page laid over the
-world (at the top right on a wide screen, along the bottom on a phone); in
-the Terrain view, in the panel or the sheet. A thing already close is shown
-at once. A new tap or a key
-cancels the walk and the card stays shut. The view never turns on its
-own. The card reads like a page from a field guide: what kind of thing it
+when they arrive the view turns gently, in about a second, to frame the
+thing beside its card, and the card opens: in the immersive world, a page
+laid over the world (at the top right under the corner controls on a wide
+screen, the thing framed in the strip beside it; along the bottom on a
+phone, the thing framed above it); in the Terrain view, in the panel or the
+sheet. A thing already close counts as arrived. A new tap or a key cancels
+the walk and the card stays shut. The card belongs to its thing: walking
+more than 4 m from where it opened closes it, fading as it came, and so do
+its × and Esc. The card reads like a page from a field guide: what kind of thing it
 is, its name, what it does, where it lives in the code, its size, what it
 leans on and what leans on it, what it stands as in the world, and its
 vitality in words (thriving, healthy, tired, failing, in ruins) with the
 signals behind it, each with its reading.
 
+## One way to touch the world
+
+A person never has to think about what a touch will do. Mouse, trackpad,
+finger and keys all follow the same three rules.
+
+- **The world moves you.** A tap or click on the world always means "go
+  there". On the land, the person walks to the spot (a tap where they stand
+  stops them). On a thing (a building, a tree, a landmark or its sign) they
+  walk up to it, the view turns to frame it, and its card opens. A tap on a
+  rock, a bush, a fingerpost or a boundary stone walks up to it, never to
+  the ground hidden behind it. A drag looks around and never walks. W A S D
+  or the arrows walk and Shift hurries. A drag or a key takes the view back
+  from a turn at once. Touching the world never does anything but move you.
+- **Everything else is paper from the corner.** The corner controls, at the
+  top right (stacked on a phone), are the only things on the screen that are
+  not the world: the map button (or M) unfolds the field map, and the rose
+  opens the slip. They stay while a card is read.
+- **Paper you open holds the world still.** While the map or the slip is
+  open, the world waits under a faint wash. A tap there folds the paper and
+  moves no one, a drag there does nothing, and Esc folds it. The keys still
+  walk, and the map's arrow follows. A card is different: it opens on its
+  own when the person arrives, so it never holds the world; a tap elsewhere
+  walks there and leaving closes the card.
+
 ## Knowing where you are
 
 The lab opens into the world, full screen, at eye height. Nothing sits on
-it but the world and one quiet way of knowing where you are: no panels, no
-readouts. A small round of paper in the top corner opens a slip that
-chooses that way and leads back to the debugging views (Components, Terrain
-and Skies). The hour follows the person's clock (`?hour=22` pins it).
+it but the world, the three ways of knowing where you are, all at once, and
+the corner controls: no panels, no readouts. The rose opens a slip with
+Gaia's mark, the world's name, how to wander (for a mouse and keys, or for a
+finger) and the way back to the debugging views (Components, Terrain and
+Skies). The hour follows the person's clock (`?hour=22` pins it).
 Everything a person reads here looks like the world's own things: warm
 paper, brown ink, a serif with italic names and small capitals for paths,
 and slow, soft motion. After dark the paper (the map, the slip, a card) is
@@ -328,15 +356,20 @@ islands where ground covers drift across a border never flicker a name, and
 a file's patch is the ground around the tree that stands for it. Past the
 codebase's land is the wild, which names nothing.
 
-There are three ways, for the reviewer to choose between:
+The three ways work together:
 
 - **Arrival titles.** Entering an area, after a moment there, its name
   rises softly over the land under a fine rule, with its parent directories
   in small capitals above it, holds, and fades, as a region's name does in
   Breath of the Wild. An area left and re-entered within half a minute is
   not announced again. Standing still brings up a quieter line near the
-  ground: the file underfoot and the area's path.
-- **The field map.** A map button in the lower corner (or M) unfolds a
+  ground: the file underfoot and the area's path. Both are cream letters,
+  heavy enough to hold their shape, each with a tight dark rim and a wider
+  soft one, over a soft wash of cool shade that breathes behind them like a
+  cloud's shadow on the sky, with no box and no edge: they read over bright
+  cloud, golden hour and night alike. While a title rises, the compass's
+  name ahead steps back, so one name speaks at a time.
+- **The field map.** The map button among the corner controls (or M) unfolds a
   hand-drawn map on warm paper, titled with the repository's name: each
   area a watercolor wash, every area under one top-level directory sharing
   a hue, on the pale meadow of the repository's own common ground, inside a
@@ -362,6 +395,18 @@ There are three ways, for the reviewer to choose between:
   grows through a stone. A compass strip at the top names the area ahead:
   the first one along the way the person faces that is not the one they
   stand in. Markers draw as three instanced meshes and cast no shadow.
+
+## Gaia's mark
+
+Gaia introduces itself with its own mark (`app/renderer/brand/`): a
+hand-drawn lowercase "gaia" in moss green with an uneven ink outline, a
+lighter wash up and to the left of each stroke so it reads round, a soft
+shadow on the paper, and a two-leaf sprout growing from the i in place of
+its dot, after v1's. The sprout alone, on a round of paper, is the page's
+icon. The mark opens the world on the veil while it bakes, over a soft
+wash of light with one status line under it (`data-ref="veil-status"`),
+heads the slip, and signs the field map's cartouche. The SVG files are the
+source; nothing redraws the mark in code.
 
 ## Trails
 

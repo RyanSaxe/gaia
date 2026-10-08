@@ -84,6 +84,7 @@ import { createWildGrowth } from "./wilds.ts";
 import { createUnderstory } from "./understory.ts";
 import { createClearings } from "./clearings.ts";
 import { type Ways, createWays, setTrailEnds, setTrailPlaces } from "./trails.ts";
+import { LOGO_SVG } from "../brand/logo.ts";
 import { createCard } from "./card.ts";
 import { LANDMARK_ENTITIES, type Represented, SAMPLE_ENTITIES, SAMPLE_FILES, representEntity, representFile } from "./samples.ts";
 import { type CodeLab, codeWorld } from "./code-world.ts";
@@ -95,7 +96,7 @@ import type { Stand, StandRequest, StandingLandmark } from "./stand.ts";
 const TEMPLATE = /* html */ `
 <main class="stage">
   <canvas class="view" aria-label="A world of gentle landforms. Click or tap the ground to walk there and drag to look, or switch to the overview."></canvas>
-  <div class="veil" data-ref="veil" role="status"><span>Baking the world…</span></div>
+  <div class="veil" data-ref="veil"><div class="veil-inner"><div class="veil-mark">${LOGO_SVG}</div><span class="veil-status" data-ref="veil-status" role="status" aria-live="polite">Baking the world…</span></div></div>
   <div class="bar top">
     <div class="segmented modes" role="group" aria-label="View">
       <button data-ref="mode-walk" class="seg on" type="button">Walk</button>
@@ -151,6 +152,15 @@ const STEP_OVER = 0.5;
 const BOB = { height: 0.03, period: 2.8 };
 /** While swimming, the lantern is held at least this far above the water, meters. */
 const LANTERN_ABOVE_WATER = 0.15;
+const TAU = Math.PI * 2;
+/** Arriving at a thing, the view turns to it over this long, seconds: a base, and more for each half turn. */
+const FACE = { base: 0.7, perHalfTurn: 0.7 };
+/** Walking this far from where a card opened closes it, meters. */
+const LEAVE_CARD = 4;
+/** How long a card over the world takes to fade away, ms, matching lab.css. */
+const CARD_FADE_MS = 320;
+/** Furnishings (fingerposts, boundary stones) a tap can reach stand about this tall, meters. */
+const FURNISHING_TOP = 2.4;
 
 /** One seeded build of a flora preset: every tree is a copy of one. */
 interface TreeVariant {
@@ -173,6 +183,8 @@ interface Subject {
   readonly x: number;
   readonly z: number;
   readonly stand: (fromX: number, fromZ: number) => { x: number; z: number };
+  /** How tall it stands, meters: arriving, the view turns to frame it. */
+  readonly height: number;
 }
 
 /** Where one tree stands, and which build it copies. */
@@ -622,6 +634,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       x: b.site.x,
       z: b.site.z,
       stand: () => settlement.standOf(b),
+      height: b.view.height,
     }));
     // A landmark stands for an entity in the codebase's world: walk up to its foot to read it.
     const landmarkSubjects: Subject[] = code === null
@@ -636,6 +649,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
             standsAs: withArticle(lm.name),
             x,
             z,
+            height: landmarkViews[i]?.height ?? 6,
             stand: (fx: number, fz: number) => {
               const d = Math.hypot(fx - x, fz - z) || 1;
               const off = lm.base + 7;
@@ -651,6 +665,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
         standsAs: "A tree",
         x,
         z,
+        height: (variants[tree.variant] as TreeVariant).height * tree.scale,
         // Stop just outside the crown, so the tree and its plaque are in view, not its leaves.
         stand: (fx: number, fz: number) => {
           const d = Math.hypot(fx - x, fz - z) || 1;
@@ -695,29 +710,85 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   }
 
   const card = createCard($("card"), () => hideCard());
+  /** Where the person stood when the card opened: walking this far from it closes the card, meters. */
+  let cardAt: { x: number; z: number } | null = null;
+  let leaving = 0;
   function showCard(s: Subject): void {
+    window.clearTimeout(leaving);
+    $("panel").classList.remove("card-leaving");
     card.show(s.represented, s.standsAs);
     $("panel").classList.add("showing-card");
     sheet.name(s.represented.name);
     sheet.open(true);
+    cardAt = { x: walker.x, z: walker.z };
   }
   function hideCard(): void {
-    card.hide();
-    $("panel").classList.remove("showing-card");
-    sheet.name(world.regions[selected]?.id ?? "");
+    cardAt = null;
+    const done = (): void => {
+      card.hide();
+      $("panel").classList.remove("showing-card", "card-leaving");
+      sheet.name(world.regions[selected]?.id ?? "");
+    };
+    // Over the world, the page fades away as it came (lab.css); in the panel it simply goes.
+    if (!root.classList.contains("immersive") || !$("panel").classList.contains("showing-card")) {
+      done();
+      return;
+    }
+    $("panel").classList.add("card-leaving");
+    window.clearTimeout(leaving);
+    leaving = window.setTimeout(done, CARD_FADE_MS);
   }
   /** The subject a walk is taking the person to, shown when they get there. */
   let pending: Subject | null = null;
-  /** Walk up to a thing, then show what it stands for; a thing already close is shown at once. */
+  /** Walk up to a thing, then show what it stands for; at a thing already close, the person has arrived. */
   function approach(s: Subject): void {
     const spot = s.stand(walker.x, walker.z);
     if (Math.hypot(spot.x - walker.x, spot.z - walker.z) < 2) {
       endWalk();
-      showCard(s);
+      arrive(s);
       return;
     }
     setGoal(spot.x, spot.z);
     pending = s;
+  }
+  /** Arriving at a thing: its card opens and the view turns gently to frame it beside the card. */
+  function arrive(s: Subject): void {
+    showCard(s);
+    face(s);
+  }
+
+  /** A gentle turn of the view, eased from where it looked to where it should; any drag or key takes the view back. */
+  let turn: { yaw0: number; pitch0: number; dyaw: number; dpitch: number; t: number; duration: number } | null = null;
+  /**
+   * Where on screen the card leaves the world in view, in normalized device
+   * coordinates: the middle of the strip beside it on a wide screen, or above
+   * it on a phone. In the Terrain view the card sits in its own panel.
+   */
+  function freeMiddle(): { x: number; y: number } {
+    if (!root.classList.contains("immersive")) return { x: 0, y: 0 };
+    const view = canvas.getBoundingClientRect();
+    const page = $("panel").getBoundingClientRect();
+    if (page.width === 0 || view.width === 0) return { x: 0, y: 0 };
+    if (page.left > view.left + view.width * 0.5) return { x: (page.left - view.left) / view.width - 1, y: 0 };
+    if (page.top > view.top + view.height * 0.25) return { x: 0, y: 1 - (page.top - view.top) / view.height };
+    return { x: 0, y: 0 };
+  }
+  function face(s: Subject): void {
+    const dx = s.x - walker.x;
+    const dz = s.z - walker.z;
+    const far = Math.hypot(dx, dz);
+    if (far < 0.5) return;
+    const free = freeMiddle();
+    const tanV = Math.tan((camera.fov * Math.PI) / 360);
+    // Look a little below the thing's middle, so its foot and its sign are in frame.
+    const aim = heightAt(terrain.lattice, s.x, s.z) + Math.max(1.2, Math.min(4, s.height * 0.4));
+    const yaw = Math.atan2(-dx, -dz) + Math.atan(free.x * tanV * camera.aspect);
+    const pitch = Math.max(-0.45, Math.min(0.35, Math.atan2(aim - walker.eye, far) - Math.atan(free.y * tanV)));
+    // The short way round.
+    const dyaw = ((((yaw - walker.yaw) % TAU) + TAU * 1.5) % TAU) - TAU / 2;
+    const dpitch = pitch - walker.pitch;
+    if (Math.abs(dyaw) < 0.02 && Math.abs(dpitch) < 0.02) return;
+    turn = { yaw0: walker.yaw, pitch0: walker.pitch, dyaw, dpitch, t: 0, duration: FACE.base + (Math.abs(dyaw) / Math.PI) * FACE.perHalfTurn };
   }
 
   /** The nearest tree a ray passes through, by each tree's trunk and crown as an upright cylinder. */
@@ -759,6 +830,46 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     return best;
   }
 
+  /**
+   * The nearest furnishing a ray passes through, each solid as an upright
+   * cylinder round its middle: where a walk toward it stops, just short of it
+   * on the person's side.
+   */
+  function furnishingHit(ray: THREE.Ray): { x: number; z: number; distance: number } | null {
+    const { origin: o, direction: d } = ray;
+    const flat = d.x * d.x + d.z * d.z;
+    if (flat < 1e-9) return null;
+    let best: { x: number; z: number; distance: number } | null = null;
+    for (const shape of furnished.solids) {
+      let cx: number;
+      let cz: number;
+      let r: number;
+      if ("points" in shape) {
+        const n = shape.points.length / 2;
+        cx = 0;
+        cz = 0;
+        for (let k = 0; k < n; k++) {
+          cx += (shape.points[k * 2] as number) / n;
+          cz += (shape.points[k * 2 + 1] as number) / n;
+        }
+        r = 0;
+        for (let k = 0; k < n; k++) r = Math.max(r, Math.hypot((shape.points[k * 2] as number) - cx, (shape.points[k * 2 + 1] as number) - cz));
+      } else {
+        cx = shape.x;
+        cz = shape.z;
+        r = shape.radius;
+      }
+      const s = ((cx - o.x) * d.x + (cz - o.z) * d.z) / flat;
+      if (s <= 0 || (best !== null && s > best.distance)) continue;
+      const y = o.y + d.y * s;
+      const ground = heightAt(terrain.lattice, cx, cz);
+      if (Math.hypot(o.x + d.x * s - cx, o.z + d.z * s - cz) > r + 0.25 || y < ground - 0.2 || y > ground + FURNISHING_TOP) continue;
+      const back = Math.hypot(o.x - cx, o.z - cz) || 1;
+      best = { x: cx + ((o.x - cx) / back) * (r + 1.1), z: cz + ((o.z - cz) / back) * (r + 1.1), distance: s };
+    }
+    return best;
+  }
+
   // ---------- camera, walking and the overview ----------
 
   const camera = new THREE.PerspectiveCamera(58, 1, 0.2, 4500);
@@ -780,9 +891,12 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     if (MOVE.has(e.code)) {
       keys.add(e.code);
       e.preventDefault();
-      // The keys take over from a tap's walk; Shift alone moves nothing, so it leaves the walk be.
-      if (e.code !== "ShiftLeft" && e.code !== "ShiftRight") endWalk();
-    }
+      // The keys take over from a tap's walk and a turn; Shift alone moves nothing, so it leaves them be.
+      if (e.code !== "ShiftLeft" && e.code !== "ShiftRight") {
+        endWalk();
+        turn = null;
+      }
+    } else if (e.code === "Escape" && card.shown !== null) hideCard();
   });
   window.addEventListener("keyup", (e) => keys.delete(e.code));
   window.addEventListener("blur", () => keys.clear());
@@ -803,6 +917,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     if (e.pointerId !== drag.id || mode !== "walk") return;
     if (!drag.looking && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) <= tapSlop(e)) return;
     drag.looking = true;
+    turn = null;
     walker.yaw -= (e.clientX - drag.x) * 0.0045;
     walker.pitch = Math.max(-1.1, Math.min(1.1, walker.pitch - (e.clientY - drag.y) * 0.0045));
     drag.x = e.clientX;
@@ -858,7 +973,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   function finishWalk(): void {
     const to = pending;
     endWalk();
-    if (to !== null && Math.hypot(walker.x - to.x, walker.z - to.z) < 14) showCard(to);
+    if (to !== null && Math.hypot(walker.x - to.x, walker.z - to.z) < 14) arrive(to);
   }
 
   // In the overview a tap picks a region. Walking, a tap on a building, a
@@ -866,6 +981,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   // tap on the ground walks there.
   onTap(canvas, (e) => {
     const ray = aim(e);
+    turn = null;
     if (mode === "overview") {
       // The coarse mesh is placed by its shader, so the pick marches the heightfield instead.
       const hit = groundHit(ray);
@@ -890,9 +1006,9 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       approach(nearest.subject);
       return;
     }
-    // A tap on a rock or a bush walks up to it, not to the ground hidden behind it.
-    const thing = thingHit(ray);
-    if (thing !== null && (land === null || thing.distance < land.distance)) setGoal(thing.x, thing.z);
+    // A tap on a rock, a bush, a fingerpost or a boundary stone walks up to it, not to the ground hidden behind it.
+    const thing = [thingHit(ray), furnishingHit(ray)].filter((t) => t !== null).sort((a, b) => a.distance - b.distance)[0];
+    if (thing !== undefined && (land === null || thing.distance < land.distance)) setGoal(thing.x, thing.z);
     else if (land !== null) setGoal(land.x, land.z);
   });
 
@@ -928,6 +1044,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   /** Puts the walker at a point at once, looking along `yaw`. */
   function walkTo(x: number, z: number, yaw: number, pitch = -0.05): void {
     endWalk();
+    turn = null;
     walker.x = x;
     walker.z = z;
     walker.yaw = yaw;
@@ -984,6 +1101,15 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       walker.moved = true;
       if (step.state !== "walking") finishWalk();
     }
+    if (turn !== null) {
+      turn.t = Math.min(1, turn.t + dt / turn.duration);
+      const e = turn.t * turn.t * (3 - 2 * turn.t);
+      walker.yaw = turn.yaw0 + turn.dyaw * e;
+      walker.pitch = turn.pitch0 + turn.dpitch * e;
+      if (turn.t >= 1) turn = null;
+    }
+    // A card belongs to the thing it was opened at: walking away closes it.
+    if (cardAt !== null && Math.hypot(walker.x - cardAt.x, walker.z - cardAt.z) > LEAVE_CARD) hideCard();
     // Eyes ride 1.6 m above the ground, easing down to float just above deep water, with a gentle bob there.
     const stance = stanceAt(terrain, walker.x, walker.z);
     bob = (bob + dt / BOB.period) % 1;
@@ -1388,6 +1514,8 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       },
       subjects: () => subjects.map((s) => ({ name: s.represented.name, standsAs: s.standsAs, x: s.x, z: s.z, vitality: s.represented.report.vitality })),
       card: () => (card.shown === null ? null : { name: card.shown.name, what: card.shown.what }),
+      /** Whether the view is turning on its own to frame a thing the person arrived at. */
+      turning: () => turn !== null,
       closeCard: () => hideCard(),
       walk: (x: number, z: number, yawDeg: number, pitchDeg = -3) => walkTo(x, z, (yawDeg * Math.PI) / 180, (pitchDeg * Math.PI) / 180),
       valley: () => valleyView(),

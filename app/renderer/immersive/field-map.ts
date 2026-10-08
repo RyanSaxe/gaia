@@ -21,7 +21,7 @@ export interface FieldMap {
   readonly isOpen: boolean;
   /** Follows the person; redraws only while the map is open. */
   frame(x: number, z: number, yaw: number, place: Place): void;
-  /** Whether the map is the chosen way of finding one's way: shows its button. */
+  /** Whether the immersive world shows: the map's button shows with it. */
   show(on: boolean): void;
   /** What the map shows, for scripted checks: zoom in pixels per meter, the paper's painting time and its longest step, and names drawn. */
   state(): { readonly open: boolean; readonly zoom: number; readonly paintMs: number; readonly longestStepMs: number; readonly drawMs: number; readonly labels: number };
@@ -399,7 +399,8 @@ function whenIdle(step: (budget: number) => boolean): () => void {
   };
 }
 
-export function createFieldMap(root: HTMLElement, source: MapSource): FieldMap {
+/** `onToggle` hears the map unfold and fold, however it was asked to. */
+export function createFieldMap(root: HTMLElement, source: MapSource, onToggle?: (open: boolean) => void): FieldMap {
   const button = document.createElement("button");
   button.type = "button";
   button.className = "way-button map-button";
@@ -753,6 +754,7 @@ export function createFieldMap(root: HTMLElement, source: MapSource): FieldMap {
     isOpen = on;
     sheet.classList.toggle("open", on);
     button.setAttribute("aria-expanded", String(on));
+    onToggle?.(on);
     if (on) {
       fitView();
       draw();

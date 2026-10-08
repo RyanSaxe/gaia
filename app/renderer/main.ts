@@ -10,6 +10,7 @@ import { createClock } from "./clock.ts";
 import { watchEngine } from "./engine-status.ts";
 import { createFloraLab } from "./flora/lab.ts";
 import type { Lab } from "./lab.ts";
+import { setFavicon } from "./brand/logo.ts";
 import { createStats } from "./stats.ts";
 import { startTelemetry } from "./telemetry.ts";
 import { type TerrainLab, createTerrainLab } from "./terrain/lab.ts";
@@ -17,6 +18,7 @@ import { type Immersive, createImmersive } from "./immersive/view.ts";
 import { createWorldLab } from "./world/lab.ts";
 
 THREE.ColorManagement.enabled = false;
+setFavicon();
 
 const LABS = {
   flora: createFloraLab,

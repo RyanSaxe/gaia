@@ -33,11 +33,20 @@ const inlineWorkers: Plugin = {
   },
 };
 
+/** `import text from "./file.svg?raw"`, as Vite reads it for the app: the file's text as a string. */
+const rawText: Plugin = {
+  name: "raw-text",
+  setup(b) {
+    b.onResolve({ filter: /\?raw$/ }, (args) => ({ path: resolve(args.resolveDir, args.path.replace(/\?raw$/, "")), namespace: "raw-text" }));
+    b.onLoad({ filter: /.*/, namespace: "raw-text" }, (args) => ({ loader: "text", contents: readFileSync(args.path, "utf8"), watchFiles: [args.path] }));
+  },
+};
+
 export const LAB_BUILD = {
   ...SCRIPT,
   entryPoints: [resolve(renderer, "main.ts")],
   outdir: "lab",
-  plugins: [inlineWorkers],
+  plugins: [inlineWorkers, rawText],
 } as const satisfies BuildOptions;
 
 export interface LabBundle {
