@@ -20,8 +20,11 @@ import "./wait.css";
 export interface WaitView {
   /** How opening the world is going: the land's outlines and the areas judged so far. */
   opening(o: Opening): void;
-  /** Everything is judged and laid out, and `lands` names the land judged for each area's ground: the world bakes now. */
-  baking(lands: Readonly<Record<string, string>>): void;
+  /**
+   * Everything is judged and laid out, and `lands` names the land judged for each area's ground: the world bakes
+   * now, and each wash dries into its own ground's health (`health`, its vitality), as the field map washes it.
+   */
+  baking(lands: Readonly<Record<string, string>>, health?: Readonly<Record<string, number>>): void;
   /** How dark it is, 0 by day to 1 at night: the wait follows the clock. */
   night(n: number): void;
   /** The world stands and has drawn: the wait gives way to it, and resolves once the world shows. */

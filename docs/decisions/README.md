@@ -33,4 +33,5 @@ One file per decision the reviewer settled in the pair sessions that designed Ga
 - [Ruin obeys gravity](29-ruin-obeys-gravity.md)
 - [Every trail Jev wants is walked, on one network of paths](30-a-network-of-paths.md)
 - [What Jev reads, and how its context grows](31-what-jev-reads.md)
-- [A slip for where you are, a line to ask, a rim to touch](32-a-slip-ask-and-a-rim.md)
+- [A slip for where you are, a line to ask, a rim to touch](32-a-slip-ask-and-a-rim.md) (superseded by 33)
+- [One field sheet: the map, the minimap and what a thing says](33-one-field-sheet.md)

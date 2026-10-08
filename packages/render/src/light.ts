@@ -43,12 +43,6 @@ export interface SceneLight {
   readonly uSkyGlowAmount: { value: number };
   /** Where the person's eyes are. Every pass thins distant detail from here, so shadows and the mirror agree with the view. */
   readonly uEye: { value: THREE.Vector3 };
-  /**
-   * The thing a person points at, which catches a soft rim of light: its
-   * middle on the ground (x, z), its reach (z) and how strongly it shows (w,
-   * 0 for nothing).
-   */
-  readonly uHeed: { value: THREE.Vector4 };
 }
 
 /** The lantern's warm pool: about 12 m across, fading smoothly to nothing by `LANTERN.reach`. */
@@ -172,7 +166,6 @@ export function createSceneLight(): SceneLight {
     uSkyGlow: { value: hexToVec3(0xffffff) },
     uSkyGlowAmount: { value: 0 },
     uEye: { value: new THREE.Vector3() },
-    uHeed: { value: new THREE.Vector4(0, 0, 0, 0) },
   };
 }
 
@@ -289,18 +282,6 @@ vec3 lanternLight(vec3 albedo, vec3 n, vec3 worldPosition, float wrap) {
 
 vec3 nightLight(vec3 albedo, vec3 n, vec3 worldPosition, float wrap, float shadow) {
   return moonLight(albedo, n, wrap, shadow) + lanternLight(albedo, n, worldPosition, wrap);
-}
-
-uniform vec4 uHeed;
-// The thing a person points at catches a soft rim of light along its edges,
-// by day the sun's and after dark the lantern's: everything within uHeed.z
-// of its middle, fading over its last half meter, at strength uHeed.w.
-vec3 heedRim(vec3 albedo, vec3 n, vec3 worldPosition) {
-  if (uHeed.w <= 0.0) return vec3(0.0);
-  float inside = smoothstep(uHeed.z + 0.5, uHeed.z * 0.85, length(worldPosition.xz - uHeed.xy));
-  float rim = pow(1.0 - clamp(dot(n, normalize(cameraPosition - worldPosition)), 0.0, 1.0), 2.0);
-  vec3 warm = mix(uSunColor, uLanternColor, uNightness);
-  return (albedo * 0.4 + warm * 0.14) * (0.08 + rim) * inside * uHeed.w * 0.5;
 }
 
 // ---------- sky and distance ----------

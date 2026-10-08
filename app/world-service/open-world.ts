@@ -140,7 +140,10 @@ export async function openWorld({ engine, root, consent, progress }: OpenWorldOp
     }
     return out;
   };
-  const asking = (): void => progress({ stage: "asking", name, total: missing.length, answered, failed: failures.length, settled: settledAreas() });
+  /** Questions in flight, by the area they are about. */
+  const inFlight = new Map<string, number>();
+  const asking = (): void =>
+    progress({ stage: "asking", name, total: missing.length, answered, failed: failures.length, settled: settledAreas(), asking: [...inFlight].filter(([, n]) => n > 0).map(([area]) => area) });
   if (ask) asking();
   const kept = keptJev(ask ? engineJev(engine) : null, standInJev(LOOKS), {
     stored,
@@ -154,9 +157,17 @@ export async function openWorld({ engine, root, consent, progress }: OpenWorldOp
   const counted = new Set<string>();
   const jev: JevClient = {
     async ask(request) {
-      const response = await kept.ask(request);
       const key = requestKey(request);
       const p = plannedOf.get(key);
+      // A question going out to Jev (not one kept from before) marks its area as being worked on until it returns.
+      const out = ask && p !== undefined && !stored.has(key) ? areaOfRequest(p) : null;
+      if (out !== null) {
+        inFlight.set(out, (inFlight.get(out) ?? 0) + 1);
+        asking();
+      }
+      const response = await kept.ask(request).finally(() => {
+        if (out !== null) inFlight.set(out, (inFlight.get(out) ?? 1) - 1);
+      });
       if (p !== undefined && !counted.has(key)) {
         counted.add(key);
         const area = areaOfRequest(p);

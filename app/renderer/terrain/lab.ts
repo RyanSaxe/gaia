@@ -97,7 +97,7 @@ import { createWait } from "../wait/wait.ts";
 import { withStart } from "../start/start.ts";
 import { createCard } from "./card.ts";
 import { LANDMARK_ENTITIES, type Represented, SAMPLE_ENTITIES, SAMPLE_FILES, representEntity, representFile } from "./samples.ts";
-import { type Judge, judgedThing } from "@gaia/world";
+import { type Judge, entityVitalityOf, judgedThing } from "@gaia/world";
 import { type CodeLab, codeWorld, judgedOf, representSymbol } from "./code-world.ts";
 import { createSettlement } from "./settlement.ts";
 import { createSigns } from "./signs.ts";
@@ -219,8 +219,8 @@ export interface StoodWorld {
   readonly terrain: Terrain;
   /** The paths' ways of tread. */
   readonly ways: readonly Way[];
-  readonly buildings: readonly { readonly x: number; readonly z: number; readonly name: string; readonly kind: string }[];
-  readonly landmarks: readonly { readonly x: number; readonly z: number; readonly name: string }[];
+  readonly buildings: readonly { readonly x: number; readonly z: number; readonly name: string; readonly kind: string; readonly vitality: number }[];
+  readonly landmarks: readonly { readonly x: number; readonly z: number; readonly name: string; readonly vitality: number }[];
   readonly trees: readonly { readonly x: number; readonly z: number; readonly vitality: number }[];
   /** Each area's ground cover, by its path: the one the ground shader paints its own ground with. */
   readonly grounds: ReadonlyMap<string, GroundSpec>;
@@ -268,6 +268,20 @@ export interface WorldHandle {
   place(at: Landing): void;
   /** Calls `listener` with what a person has walked up to when its card opens, and with null when it closes. */
   onCard(listener: (thing: CardThing | null) => void): void;
+  /**
+   * Calls `listener` with the thing a person is walking up to, or has walked
+   * up to while its card shows, from the tap that sends them; null once they
+   * turn to something else or its card closes.
+   */
+  onHeading(listener: (thing: Heading | null) => void): void;
+}
+
+/** A thing a person is walking up to: where it stands, how far it reaches and its name. */
+export interface Heading {
+  readonly x: number;
+  readonly z: number;
+  readonly reach: number;
+  readonly name: string;
 }
 
 /** What a person walked up to: what it stands for, its form in the world (such as "A watermill") and who judged it. */
@@ -816,8 +830,17 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     sheet.open(true);
     cardAt = { x: walker.x, z: walker.z };
   }
+  /** The thing the person is walking up to, or whose card shows. */
+  let heading: Subject | null = null;
+  const headingListeners: ((thing: Heading | null) => void)[] = [];
+  function headFor(s: Subject | null): void {
+    if (s === heading) return;
+    heading = s;
+    for (const l of headingListeners) l(s === null ? null : { x: s.x, z: s.z, reach: s.reach, name: s.represented.name });
+  }
   function hideCard(): void {
     if (card.shown !== null) for (const l of cardListeners) l(null);
+    headFor(null);
     cardAt = null;
     card.hide();
     $("panel").classList.remove("showing-card");
@@ -835,9 +858,11 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     }
     setGoal(spot.x, spot.z);
     pending = s;
+    headFor(s);
   }
   /** Arriving at a thing: its card opens and the view turns gently to frame it. */
   function arrive(s: Subject): void {
+    headFor(s);
     showCard(s);
     face(s);
   }
@@ -1010,67 +1035,6 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     return raycaster.ray;
   }
 
-  // ---------- heeding: what a resting mouse pointer finds catches a rim of light ----------
-
-  /** How long the pointer rests before it looks, how often it looks again while the view moves, and how long the rim takes to come and go, seconds. */
-  const HEED = { rest: 0.12, again: 0.2, fade: 0.35 };
-  const heed = { x: 0, y: 0, over: false, still: 0, since: Infinity, wanted: null as Subject | null, shown: null as Subject | null, strength: 0 };
-  canvas.addEventListener("pointermove", (e) => {
-    if (e.pointerType !== "mouse") return;
-    heed.x = e.clientX;
-    heed.y = e.clientY;
-    heed.over = true;
-    heed.still = 0;
-    heed.since = Infinity;
-  });
-  canvas.addEventListener("pointerleave", () => {
-    heed.over = false;
-    heed.wanted = null;
-  });
-  /**
-   * The thing a ray finds first, if nothing nearer hides it: every tree, building,
-   * landmark and function's stone or bush as an upright cylinder of its reach and
-   * height, so a look costs no triangle tests.
-   */
-  function subjectUnder(ray: THREE.Ray): Subject | null {
-    const { origin: o, direction: d } = ray;
-    const flat = d.x * d.x + d.z * d.z;
-    if (flat < 1e-9) return null;
-    const land = groundHit(ray);
-    let best: { subject: Subject; distance: number } | null = null;
-    for (const subject of subjects) {
-      const s = ((subject.x - o.x) * d.x + (subject.z - o.z) * d.z) / flat;
-      if (s <= 0 || (best !== null && s > best.distance)) continue;
-      const foot = heightAt(terrain.lattice, subject.x, subject.z);
-      const y = o.y + d.y * s;
-      if (Math.hypot(o.x + d.x * s - subject.x, o.z + d.z * s - subject.z) > Math.max(0.6, subject.reach) || y < foot - 0.3 || y > foot + Math.max(0.6, subject.height)) continue;
-      best = { subject, distance: s };
-    }
-    return best !== null && (land === null || best.distance < land.distance + 0.5) ? best.subject : null;
-  }
-  function heedFrame(dt: number): void {
-    if (mode !== "walk") return;
-    if (heed.over && drag.id === -1) {
-      heed.still += dt;
-      heed.since += dt;
-      // Look once the pointer rests, and again now and then, as the person walks or turns under it.
-      if (heed.still >= HEED.rest && heed.since >= HEED.again) {
-        heed.since = 0;
-        const rect = canvas.getBoundingClientRect();
-        raycaster.setFromCamera(new THREE.Vector2(((heed.x - rect.left) / rect.width) * 2 - 1, -((heed.y - rect.top) / rect.height) * 2 + 1), camera);
-        heed.wanted = subjectUnder(raycaster.ray);
-        canvas.style.cursor = heed.wanted === null ? "" : "pointer";
-      }
-    } else canvas.style.cursor = "";
-    // A rim moving to another thing first fades from the one it lit.
-    const target = heed.wanted !== null && heed.wanted === heed.shown ? 1 : 0;
-    heed.strength = Math.max(0, Math.min(1, heed.strength + (target > heed.strength ? dt : -dt) / HEED.fade));
-    if (heed.strength === 0) heed.shown = heed.wanted;
-    const lit = heed.shown;
-    if (lit !== null) light.uHeed.value.set(lit.x, lit.z, lit.reach, heed.strength * heed.strength * (3 - 2 * heed.strength));
-    else light.uHeed.value.w = 0;
-  }
-
   /** Where a ray first meets the ground, marched over the height the walk stands on: the lattice on the land, the wild land past it. */
   function groundHit(ray: THREE.Ray): { x: number; z: number; distance: number } | null {
     const { origin: o, direction: d } = ray;
@@ -1096,16 +1060,20 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   function setGoal(x: number, z: number): void {
     goal = planWalk(terrain, solids, walker, { x, z });
     pending = null;
+    if (card.shown === null) headFor(null);
   }
   function endWalk(): void {
+    if (pending !== null && card.shown === null) headFor(null);
     pending = null;
     goal = null;
   }
   /** A walk that ends on its own shows what it was walking to, if the person got near enough to read it. */
   function finishWalk(): void {
     const to = pending;
-    endWalk();
+    pending = null;
+    goal = null;
     if (to !== null && Math.hypot(walker.x - to.x, walker.z - to.z) < 14) arrive(to);
+    else if (card.shown === null) headFor(null);
   }
 
   // In the overview a tap picks a region. Walking, a tap on a building, a
@@ -1322,8 +1290,11 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     return {
       terrain,
       ways: ways.network.ways,
-      buildings: settlement.buildings.map((b) => ({ x: b.site.x, z: b.site.z, name: b.represented.name, kind: b.kindName })),
-      landmarks: ways.sites.map((s) => ({ x: s.site.x, z: s.site.z, name: landmarks[s.landmark]?.name ?? "" })),
+      buildings: settlement.buildings.map((b) => ({ x: b.site.x, z: b.site.z, name: b.represented.name, kind: b.kindName, vitality: b.represented.report.vitality })),
+      landmarks: ways.sites.map((s, i) => {
+        const facts = code?.landmarks[i]?.facts;
+        return { x: s.site.x, z: s.site.z, name: landmarks[s.landmark]?.name ?? "", vitality: facts === undefined ? 1 : entityVitalityOf(facts).vitality };
+      }),
       trees: trees.map((t) => ({ x: t.x, z: t.z, vitality: t.represented.report.vitality })),
       // A codebase's area shows its region's ground; each of the sample world's regions is one area.
       grounds: new Map(places.areas.flatMap((a, i) => {
@@ -1512,7 +1483,6 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       lantern.follow(lanternEye, forward, lanternGround, 0, dt);
       shadow.frame(shadowCenter.set(0, 0, 0), world.size * 0.62);
     }
-    heedFrame(dt);
     refreshSight(now);
     // Every pass thins distant detail from where the person's eyes are.
     light.uEye.value.copy(camera.position);
@@ -1665,6 +1635,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     landing: (x, z, heart) => landingNear(x, z, heart),
     place: (at) => walkTo(at.x, at.z, at.yaw),
     onCard: (listener) => cardListeners.push(listener),
+    onHeading: (listener) => headingListeners.push(listener),
   };
 
   return {

@@ -1,23 +1,25 @@
 // The immersive world: the terrain lab's world, full screen, with nothing on
 // it but the world itself and three quiet ways of knowing where you are, all
-// at once: the area's name on a slip of paper low at the left (`arrival.ts`),
-// the field map, and markers in the world. Touching the world only ever moves
-// you (docs/design-system.md, "One way to touch the world"); a thing walked up
-// to says its name in one line, which opens its journal page on asking
-// (`journal.ts`). Everything else is paper opened from the corner: the map,
-// and a slip with Gaia's mark, how to wander, and the way back to the lab's
-// debugging views. Walking, tapping a thing to walk up to it, the rim of
-// light on what the pointer rests on, the lantern and the hour all come from
-// the terrain lab.
+// at once, drawn on one field sheet (docs/design-system.md, "The field
+// sheet"): the minimap, a torn scrap of the field map low at the left with
+// the area's name on it (`minimap.ts`), the field map that unfolds out of it,
+// and markers in the world. Touching the world only ever moves you
+// (docs/design-system.md, "One way to touch the world"); walking up to a
+// thing, the scrap rings it and then grows into its sketch page
+// (`sketch.ts`). The one other paper is the slip in the corner, with Gaia's
+// mark, how to wander, and the way back to the lab's debugging views.
+// Walking, tapping a thing to walk up to it, the lantern and the hour all
+// come from the terrain lab.
 
 import type { PlaceArea } from "@gaia/terrain";
+import { areaVitality } from "@gaia/world";
 import { LOGO_SVG } from "../brand/logo.ts";
 import { onTap } from "../lab.ts";
 import type { WorldHandle } from "../terrain/lab.ts";
-import { createArrival } from "./arrival.ts";
 import { createFieldMap } from "./field-map.ts";
-import { createJournal } from "./journal.ts";
 import { MARKER_LAYER, createMarkers } from "./markers.ts";
+import { createMinimap } from "./minimap.ts";
+import { createSketchPage } from "./sketch.ts";
 
 /** The lab's debugging views, which the slip leads back to. */
 export interface LabViews {
@@ -40,10 +42,10 @@ const ROSE = `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12
 const WANDER = /* html */ `
   <dl class="slip-wander">
     <dt><span class="mouse-only">Click</span><span class="touch-only">Tap</span> the land</dt><dd>go there</dd>
-    <dt><span class="mouse-only">Click</span><span class="touch-only">Tap</span> a thing</dt><dd>walk up and learn its name</dd>
+    <dt><span class="mouse-only">Click</span><span class="touch-only">Tap</span> a thing</dt><dd>walk up and see its sketch</dd>
     <dt>Drag</dt><dd>look around</dd>
     <dt class="mouse-only">W A S D</dt><dd class="mouse-only">walk, Shift to hurry</dd>
-    <dt class="mouse-only">M</dt><dd class="mouse-only">the map; Esc folds it</dd>
+    <dt><span class="mouse-only">Click</span><span class="touch-only">Tap</span> the scrap</dt><dd>unfold the map<span class="mouse-only"> (M); Esc folds it</span></dd>
     <dt><span class="mouse-only">Click</span><span class="touch-only">Tap</span> the map</dt><dd>go to that place</dd>
   </dl>`;
 
@@ -52,9 +54,6 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
   layer.className = "wayfinding";
   container.append(layer);
 
-  const arrival = createArrival(layer);
-  const journal = createJournal(layer);
-  world.onCard((thing) => journal.show(thing));
   // While paper opened from the corner is read, the world waits under a faint wash: a tap there folds the paper and moves no one.
   const reading = document.createElement("div");
   reading.className = "reading";
@@ -74,9 +73,8 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
     cover.classList.add("on");
     window.setTimeout(() => {
       world.place(at);
-      // The old place's slip goes with it; the new place announces itself as the world dissolves in.
-      arrival.show(false);
-      arrival.show(active);
+      // The new place writes its name as the world dissolves in.
+      minimap.show(active);
       let frames = 0;
       const settle = (): void => {
         if (++frames < JUMP.settleFrames) {
@@ -98,16 +96,17 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
     },
     jump,
   );
+  const minimap = createMinimap(layer, map, world.stood);
+  const sketch = createSketchPage(minimap.element);
+  world.onCard((thing) => sketch.show(thing));
+  world.onHeading((thing) => minimap.heading(thing));
   const markers = createMarkers(world.light);
   world.scene.add(markers.group);
   world.camera.layers.enable(MARKER_LAYER);
   world.furnishingSolid(true);
 
-  // The first place announces itself as the wait gives way to the world, not under it.
-  world.onLifted(() => {
-    arrival.show(false);
-    arrival.show(active);
-  });
+  // The first place writes its name as the wait gives way to the world, not under it.
+  world.onLifted(() => minimap.show(active));
   // Markers stand beside the trails on every bake, before the grass and the walk read the ground.
   world.furnish((stood) => markers.place(stood, (x, z): PlaceArea => world.placeAt(x, z).area));
   /** Whether a world stands yet: until the first bake lands, nothing names a place. */
@@ -116,26 +115,13 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
     standing = true;
     // The ways of knowing where you are come in as the veil lifts: nothing names a place before the world stands.
     layer.classList.add("standing");
-    // A new world announces where the person stands afresh.
-    arrival.show(active);
+    // A new world writes where the person stands afresh.
+    minimap.show(active);
     map.invalidate();
     worldName.textContent = world.places().name;
-    // A directory's vitality: the mean of its files', its subdirectories' included.
-    const sums = new Map<string, { v: number; n: number }>();
-    for (const p of world.places().patches) {
-      const parts = p.area.split("/").filter(Boolean);
-      for (let k = 0; k <= parts.length; k++) {
-        const path = parts.slice(0, k).join("/");
-        const s = sums.get(path) ?? { v: 0, n: 0 };
-        s.v += p.vitality;
-        s.n += 1;
-        sums.set(path, s);
-      }
-    }
-    markers.vitality((path) => {
-      const s = sums.get(path);
-      return s === undefined ? 1 : s.v / s.n;
-    });
+    // A directory's vitality: its files', its subdirectories' included, pooled by the ground each holds, as the map washes it.
+    const vitality = areaVitality(world.places().patches.map((p) => ({ area: p.area, vitality: p.vitality, size: p.radius * p.radius })));
+    markers.vitality((path) => vitality.get(path) ?? 1);
   });
 
   // ---------- the slip: Gaia's mark, how to wander, and the way back to the lab ----------
@@ -190,8 +176,8 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
 
   let active = false;
   function apply(): void {
-    arrival.show(active);
     map.show(active);
+    minimap.show(active);
   }
 
   apply();
@@ -218,7 +204,7 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
         night = n;
         container.style.setProperty("--night", String(n));
       }
-      arrival.frame(place, still, dt);
+      minimap.frame(p.x, p.z, p.yaw, place, still, dt);
       map.frame(p.x, p.z, p.yaw, place);
     },
     hook: {
@@ -230,10 +216,10 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
       jumping: () => jumping,
       /** Opens or closes the slip in the corner. */
       slip: (on: boolean) => setSlip(on),
-      /** Where the person is, what each way of knowing it shows now, and the line or page of a thing walked up to. */
+      /** Where the person is, what each way of knowing it shows now, and the sketch page of a thing walked up to. */
       state: () => {
         const p = world.person();
-        return { place: world.placeAt(p.x, p.z), arrival: arrival.state(), map: map.state(), markers: markers.crossings().length, journal: journal.state() };
+        return { place: world.placeAt(p.x, p.z), minimap: minimap.state(), map: map.state(), markers: markers.crossings().length, sketch: sketch.state() };
       },
       crossings: () => markers.crossings(),
     },

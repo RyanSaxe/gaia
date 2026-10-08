@@ -507,7 +507,6 @@ void main() {
   float moonBack = pow(clamp(dot(-toEye, uMoonDirection), 0.0, 1.0), 3.0) * uFoliage * 0.5 * uMoonIntensity;
   color += nightTone(albedo) * uMoonColor * moonBack;
   color += nightLight(albedo, n, vWorld, uFoliage * 0.85, mix(1.0, shadow, uMoonShadow));
-  color += heedRim(albedo, n, vWorld);
   // The world's own glow shows by contrast: a touch stronger in the dark,
   // and it carries through the night air a little farther than lit color.
   vec3 glow = uHealthy * vGlow * (1.0 + uNightness * 0.6) * mix(1.0, evening * 1.5, uLamp);
