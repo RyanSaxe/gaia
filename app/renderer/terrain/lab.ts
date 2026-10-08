@@ -1705,11 +1705,6 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
         landmarkEntities.forEach((e) => setEntityVitality(e.name, v));
         for (const view of landmarkPool.values()) view.setVitality(v);
       },
-      /** Every entity, what stands for it, and its vitality now. */
-      entities: () => [
-        ...settlement.buildings.map((b) => ({ name: b.represented.name, standsAs: b.kindName, vitality: entityVitality.get(b.represented.name) })),
-        ...ways.sites.map((s, i) => ({ name: landmarkEntity(i).name, standsAs: landmarks[s.landmark]?.name, place: s.id, x: s.site.x, z: s.site.z, vitality: entityVitality.get(landmarkEntity(i).name) })),
-      ],
       /** Sets one entity's vitality by its name: its building or landmark, and the wear of every trail it joins, live. */
       entityVitality: (name: string, v: number) => setEntityVitality(name, v),
       /** Stands landmark preset `i` on landmark site `at` in place of what stands there, so every form can be seen; returns where. */
@@ -1752,10 +1747,6 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
           wear: wayWear(ways.network, i, vitalityOfPlace).map((v) => +v.toFixed(2)),
           points: Array.from({ length: Math.ceil(w.points.length / 20) }, (_, k) => [Math.round(w.points[k * 20] ?? 0), Math.round(w.points[k * 20 + 1] ?? 0)]),
         })),
-      /** Where ways meet away from a place, and each cairn. */
-      junctions: () => ways.network.junctions.map((j) => ({ id: j.id, x: Math.round(j.x), z: Math.round(j.z), ways: j.ways.length, cairn: j.cairn })),
-      /** Trails the network could not take, and why. */
-      dropped: () => ways.network.dropped,
       /** Every building: what it stands for, where, and its vitality now. */
       buildings: () =>
         settlement.buildings.map((b) => ({ name: b.represented.name, building: b.kindName, ...b.site, width: b.plan.width, depth: b.plan.depth, triangles: b.view.triangles, vitality: b.view.vitality, sign: settlement.signOf(b), stand: settlement.standOf(b) })),
@@ -1791,10 +1782,6 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
         world.regions.map((r, i) => ({ i, id: r.id, x: Math.round(r.x), z: Math.round(r.z), landform: landformName(i), cover: coverName(i) })),
       streams: () => terrain.streams.map((s) => s.stations.filter((_, k) => k % 10 === 0).map((p) => [Math.round(p.x), Math.round(p.z), +p.level.toFixed(2)])),
       report: () => ({ ...terrain.report, fit: terrain.fit, bakeMs: Math.round(bakeMs) }),
-      sight: (x: number, z: number) => {
-        const s = sightlines(terrain.lattice, x, z);
-        return { max: s.max, median: s.median };
-      },
       info: () => renderer.info.render,
       /** Draw calls in the whole last frame (shadow, mirror and view), and the water's mirror. */
       water: () => ({ ...water.stats(), frameCalls }),
@@ -1945,7 +1932,6 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
               things: code.world.things.map((t) => ({ path: t.path, name: t.name, as: t.as, look: t.look, x: Math.round(t.x), z: Math.round(t.z), vitality: +t.vitality.toFixed(2) })),
               trails: code.world.trails.map((t) => `${t.from}->${t.to}`),
             },
-      lantern: () => ({ position: light.uLanternPosition.value.toArray(), intensity: light.uLanternIntensity.value, nightness: light.uNightness.value }),
       camera: () => ({ position: camera.position.toArray(), target: orbit.target.toArray() }),
     },
   };

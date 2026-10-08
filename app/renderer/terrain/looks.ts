@@ -69,9 +69,6 @@ export const VIBES: Readonly<Record<string, Look>> = {
   "Open meadow": look("No trees: open ground in the area's own cover, for a file that describes or configures rather than acts.", "docs", "config", "data", "script", "markdown", "json", "yaml", "toml"),
 };
 
-/** The vibe keys that grow trees, by flora preset name. */
-export const TREE_VIBES: readonly string[] = ["Lantern willow", "Fir", "Cherry", "Autumn maple"];
-
 export const BUILDINGS: Readonly<Record<string, Look>> = {
   "Thatched cottage": look("a thatched cottage, small and homely: a small entity of a few files doing one modest job", "module", "small", "leaf"),
   "Stone croft": look("a low stone croft, sturdy and plain: native code close to the machine, compiled on its own, such as an engine", "crate", "rust", "medium", "engine"),

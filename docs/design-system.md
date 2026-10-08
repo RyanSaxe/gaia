@@ -608,66 +608,17 @@ The three ways work together:
 
 ## Gaia's mark
 
-Gaia introduces itself with its own mark (`app/renderer/brand/`), a
-lowercase "gaia" and a mark alone for the page's icon. Several directions
-stand side by side, each a folder holding `logo.svg` and `mark.svg`, and
-`CHOSEN` in `app/renderer/brand/logo.ts` picks the one the app shows.
-
-Round 14's five directions share three rules. The i's dot is a leaf. The
-"ai" is more alive than the outer "g" and "a": fresh and green, while the
-outer letters are weathered, cracked like v1's mark. Each folder's
-`live.svg` draws the same layers from `--gaia-v` (0 to 1) on any parent:
-the ai takes the vitality as given and the outer letters take 0.4 of it, so
-at 1 it matches `logo.svg`, and as vitality falls the ai weathers too and
-the leaf browns and droops. The letters are outlines from open-licence
-typefaces, and the generator that draws them lives outside the repository;
-the SVG files are the source.
-
-- **signpost** (shown): letters cut from wood like the fingerpost arms, in a
-  calligraphic serif (Alegreya Black). The ai is freshly painted moss green
-  over the grain; on the outer letters the paint has flaked away in pieces,
-  each lifting at its own vitality, and the wood has greyed and split, the
-  way an arm weathers with its area. The dot is a leaf on a twig. The icon
-  is an end-grain round with the leaf.
-- **storybook**: a soft storybook serif (Fraunces, soft and wonky) in flat
-  cel colour with an ink line; the ai spring green with a sheen, the outer
-  letters dried to olive and cracked, a chip knocked off an edge. The icon
-  is the leaf on a cream round.
-- **brushwork**: a calm brush hand (Merienda) in clean watercolour, a wash
-  with a pooled edge on its shaded side; the ai wet green, the outer letters
-  faded, dry-brushed and crazed. The icon is a brush leaf in a green ring.
-- **fieldguide**: the area titles' italic serif (Crimson Pro Black Italic)
-  in ink over a loose wash; the ai in green ink putting out two sprigs, the
-  outer letters faded to sepia over an autumn wash, worn through in fine
-  cracks. The icon is an inked leaf.
-- **boulder**: round letters (Fredoka Bold) cut low-poly and lit in flat cel
-  facets like the world's boulders; the ai capped in moss that recedes as
-  vitality falls, the outer letters bare, bleached and cracked. The icon is a
-  mossy boulder with the leaf on its crown.
-
-Round 13's directions remain for comparison:
-
-- **firefly**: "g" and the last "a" in moss green, the land; "ai" in the
-  lantern's amber, the light Jev brings to it; the i's dot a firefly with
-  its glow and a short flight of sparks. The icon is the firefly over a
-  hill at dusk.
-- **watercolor**: painted with a round brush in moss watercolor, the field
-  map's own medium, with pooled edges, dry-brush bristles where each stroke
-  lifts and granulation; the sprout drawn in brown ink. The icon is the
-  sprout inside an ensō.
-- **seasons**: alive at the "g", with a leafy tendril, and drier letter by
-  letter to a last "a" that is grey, cracked and taken back by ivy. Each
-  letter mixes its colors by its own vitality; `seasons/live.svg` shows one
-  vitality for the whole word, read from `--gaia-v` on any parent. The icon
-  is a leaf, alive on one side of its midrib and dry on the other.
-- **grove**: a cartographer's ink line, and from the i a tree whose limbs
-  end in round leaves with dotted cross-links between them.
-- **sprout**: round 12's moss-green word with a two-leaf sprout from the i,
-  after v1's.
-
-The mark heads the slip. Every file is plain paths, with no
-filters, gradients or IDs, so it inlines any number of times and stays
-sharp at 16 px. Nothing redraws the mark in code.
+Gaia introduces itself with its own mark (`app/renderer/brand/`): a
+lowercase "gaia" (`logo.svg`) and a mark alone for the page's icon
+(`mark.svg`). The letters are cut from wood like the fingerpost arms, in a
+calligraphic serif (Alegreya Black). The "ai" is freshly painted moss green
+over the grain; on the outer "g" and "a" the paint has flaked away and the
+wood has greyed and split, the way an arm weathers with its area. The i's
+dot is a leaf on a twig, and the icon is an end-grain round with the leaf.
+The letters are outlines from an open-licence typeface; the SVG files are
+the source, and nothing redraws the mark in code. Every file is plain
+paths, with no filters, gradients or IDs, so it inlines any number of times
+and stays sharp at 16 px. The mark heads the slip and the start.
 
 ## Trails
 
