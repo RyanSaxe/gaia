@@ -6,3 +6,4 @@ export * from "./space.ts";
 export type * from "./changes.ts";
 export * from "./code-world.ts";
 export * from "./judging.ts";
+export * from "./graph.ts";

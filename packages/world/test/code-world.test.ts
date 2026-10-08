@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { CodeModel, EntityFacts, FileFacts, JevClient, JevQuestion, JevResponse } from "@gaia/schema";
-import { type Judge, type Looks, judgeWorld, keptJev, layoutWorld, planWorldRequests, requestKey, standInJev } from "@gaia/world";
+import { cellUnder, placeAt } from "@gaia/terrain";
+import { type Judge, type Looks, codeGraph, judgeWorld, keptJev, layoutWorld, planWorldRequests, requestKey, standInJev } from "@gaia/world";
 
 const file = (path: string, lines: number, kind: FileFacts["kind"] = "source"): FileFacts => ({
   path,
@@ -8,7 +9,10 @@ const file = (path: string, lines: number, kind: FileFacts["kind"] = "source"): 
   kind,
   contentHash: "",
   lines,
-  symbols: [{ name: "x", kind: "function", exported: true, doc: "Does x." }],
+  symbols: [
+    { name: "x", kind: "function", exported: true, doc: "Does x.", line: 3, lines: Math.max(1, Math.round(lines / 3)) },
+    { name: "helper", kind: "function", exported: false, line: 40, lines: Math.max(1, Math.round(lines / 4)) },
+  ],
   imports: [],
   importedBy: [],
   doc: `The ${path} file.`,
@@ -68,6 +72,8 @@ const LOOKS: Looks = {
   building: set("Cottage", "Mill"),
   landmark: set("Tower", "Oak"),
   trail: set("Path", "Track"),
+  form: set("Stone", "Bush"),
+  water: set("Dry", "Brook"),
 };
 
 describe("a world laid out from code", () => {
@@ -92,23 +98,79 @@ describe("a world laid out from code", () => {
     expect(b).toEqual(a);
   });
 
-  it("puts each file's patch in its directory's area, nests areas, stands each entity in its own area, and grows with the code", async () => {
+  it("builds one graph of the code: directories hold files, files hold their functions, entities depend on entities", () => {
+    const g = codeGraph(model());
+    const node = (id: string) => g.nodes.find((n) => n.id === id);
+    expect(node("file:packages/core/src/math.ts")?.parent).toBe("dir:packages/core/src");
+    expect(node("symbol:packages/core/src/math.ts#helper")).toMatchObject({ kind: "symbol", parent: "file:packages/core/src/math.ts", lines: 75, symbol: { exported: false } });
+    expect(node("dir:packages/core")?.lines).toBe(15 + 10 + 300 + 420 + 90);
+    expect(g.edges).toContainEqual({ from: "entity:packages/app", to: "entity:packages/core", kind: "depends", weight: 1 });
+    expect(g.edges).toContainEqual({ from: "dir:packages/app/src", to: "dir:packages/app/src/ui", kind: "contains", weight: 1 });
+  });
+
+  it("divides the land among directories and files by their code, with no gaps, nested as the tree nests, and what placeAt reads agrees", async () => {
     const world = layoutWorld(model(), await judgeWorld(model(), LOOKS, standInJev(LOOKS)));
-    const area = (path: string) => world.areas.find((a) => a.path === path)!;
-    const inside = (p: { x: number; z: number; radius: number }, a: { x: number; z: number; radius: number }) => Math.hypot(p.x - a.x, p.z - a.z) + p.radius <= a.radius + 1e-6;
-    for (const p of world.patches) expect(inside(p, area(p.area))).toBe(true);
-    for (const a of world.areas) if (a.parent !== null) expect(inside(a, area(a.parent))).toBe(true);
-    for (const [i, p] of world.patches.entries()) {
-      for (const q of world.patches.slice(i + 1)) expect(Math.hypot(p.x - q.x, p.z - q.z)).toBeGreaterThanOrEqual(p.radius + q.radius);
+    // Every point of the land is one file's patch or one entity's lot, in its directory's area.
+    const half = world.size / 2;
+    const counts = new Map<string, number>();
+    for (let x = -half + 2; x < half; x += 4) {
+      for (let z = -half + 2; z < half; z += 4) {
+        const here = placeAt(world, x, z);
+        if (here.area.depth < 0) continue;
+        const cell = world.cells[cellUnder(world, x, z)]!;
+        expect(here.area.path).toBe(cell.area);
+        expect(here.file?.path ?? null).toBe(cell.file ?? null);
+        if (here.file !== null) expect(here.file.path.startsWith(here.area.path)).toBe(true);
+        counts.set(here.file?.path ?? `lot:${here.area.path}`, (counts.get(here.file?.path ?? `lot:${here.area.path}`) ?? 0) + 16);
+      }
     }
+    // Each patch holds ground in proportion to its code: the two longest files hold the most, within a fair margin of their share.
+    for (const p of world.patches) {
+      expect(counts.get(p.path) ?? 0).toBeGreaterThan(0);
+      expect(Math.abs((counts.get(p.path) ?? 0) - p.ground)).toBeLessThan(Math.max(80, p.ground * 0.25));
+    }
+    const ground = (path: string) => world.patches.find((p) => p.path === path)!.ground;
+    expect(ground("packages/core/src/shapes.ts")).toBeGreaterThan(ground("packages/core/src/math.ts"));
+    expect(ground("packages/core/src/math.ts")).toBeGreaterThan(ground("packages/core/src/index.ts") * 4);
+    // Areas nest: a directory's ground is its own and its subdirectories'.
+    const area = (path: string) => world.areas.find((a) => a.path === path)!;
+    expect(area("packages/app/src").ground).toBeGreaterThan(area("packages/app/src/ui").ground);
+    expect(Math.abs(area("packages/app").ground - area("packages/app/src").ground - (counts.get("lot:packages/app") ?? 0) - (counts.get("packages/app/package.json") ?? 0))).toBeLessThan(200);
+    // Each entity stands in its own area; each standing symbol on its own file's patch.
     expect(world.things.map((t) => t.path).sort()).toEqual(["", "packages/app", "packages/core"]);
-    for (const t of world.things) expect(inside({ x: t.x, z: t.z, radius: t.lot }, area(t.area))).toBe(true);
-    // A larger patch for a longer file.
-    const patch = (path: string) => world.patches.find((p) => p.path === path)!;
-    expect(patch("packages/core/src/shapes.ts").radius).toBeGreaterThan(patch("packages/core/src/index.ts").radius);
+    for (const t of world.things) expect(placeAt(world, t.x, t.z).area.path).toBe(t.path);
+    expect(world.symbols.length).toBeGreaterThan(0);
+    for (const s of world.symbols) expect(placeAt(world, s.x, s.z).file?.path).toBe(s.file);
+    // Each region's land is its cells, so its cover changes exactly where its areas end.
+    for (const r of world.regions) expect(r.sites.length).toBeGreaterThan(0);
+    expect(world.regions.reduce((n, r) => n + r.sites.length, 0)).toBe(world.cells.length);
     const bigger = layoutWorld(model(30), await judgeWorld(model(30), LOOKS, standInJev(LOOKS)));
     expect(bigger.size).toBeGreaterThan(world.size);
+  });
 
+  it("moves little when a little code changes", async () => {
+    const before = layoutWorld(model(), await judgeWorld(model(), LOOKS, standInJev(LOOKS)));
+    const grown = model();
+    const changed: CodeModel = { ...grown, files: grown.files.map((f) => (f.path === "packages/app/src/ui/menu.ts" ? { ...f, lines: f.lines + 12 } : f)) };
+    const after = layoutWorld(changed, await judgeWorld(changed, LOOKS, standInJev(LOOKS)));
+    const moved = before.patches.map((p) => {
+      const q = after.patches.find((o) => o.path === p.path)!;
+      return Math.hypot(p.x - q.x, p.z - q.z);
+    });
+    // Most patches stay within a few meters; none jumps across the world.
+    moved.sort((a, b) => a - b);
+    expect(moved[Math.floor(moved.length / 2)]!).toBeLessThan(6);
+    expect(moved[moved.length - 1]!).toBeLessThan(before.size / 3);
+  });
+
+  it("lets Jev choose each symbol's form and each area's water, and chooses trails that join every connected part first", async () => {
+    const judged = await judgeWorld(model(), LOOKS, standInJev(LOOKS));
+    expect(Object.keys(judged.forms)).toContain("packages/core/src/math.ts");
+    expect(["Stone", "Bush"]).toContain(judged.forms["packages/core/src/math.ts"]!.function);
+    for (const w of Object.values(judged.waters)) expect(["Dry", "Brook"]).toContain(w);
+    const world = layoutWorld(model(), { ...judged, trails: [{ from: "packages/app", to: "packages/core", want: 0.9, look: "Path" }, { from: "", to: "packages/core", want: 0.6, look: "Track" }, { from: "", to: "packages/app", want: 0.3, look: "Path" }] });
+    expect(world.trails.map((t) => `${t.from}->${t.to}`)).toEqual(["packages/app->packages/core", "->packages/core"]);
+    expect(world.trails.every((t) => t.spans)).toBe(true);
   });
 
   it("keeps Jev's answers: a stored one is used without asking, and one outside the options is left to the stand-in", async () => {

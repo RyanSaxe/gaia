@@ -1,11 +1,16 @@
-// The world a codebase becomes. The repository is the world; each directory
-// is an area, nested inside its parent's; each file is a patch of ground in
-// its directory's area, sized by its lines; each entity is a building or a
-// landmark standing in its root directory's area; and a dependency between
-// two entities may become a trail. Jev judges what each thing looks like:
-// `planWorldRequests` asks it, one request per thing, from facts and doc
-// comments only. `layoutWorld` then places everything by rule, so the same
-// code and the same answers always give the same world.
+// The world a codebase becomes. The engine's facts become one code graph
+// (`codeGraph`): directories holding directories and files, files holding
+// their functions, classes and exported symbols, entities rooted at
+// directories, and the imports and dependencies between them. `layoutWorld`
+// lays that graph out as land: each directory a region of ground built of its
+// own files and its subdirectories, sized by their code, with organic borders
+// (`divideLand`); each file a patch of that ground; each entity standing on a
+// lot at its directory's heart; a file's finer entities standing on its patch;
+// and the dependencies Jev would walk as trails. The engine gives structure
+// and sizes. Jev gives meaning: every look, what each kind of symbol stands
+// as, whether an area holds water and why, and which dependencies become
+// trails, asked by `planWorldRequests` from facts and doc comments only. The
+// same code and the same answers always give the same world.
 //
 // Until the reviewer approves live calls, `standInJev` answers those same
 // requests: a deterministic stand-in that matches each option's `suits`
@@ -14,6 +19,7 @@
 
 import {
   type AreaPlace,
+  type CellPlace,
   type CodeModel,
   type EntityFacts,
   type FileFacts,
@@ -22,10 +28,14 @@ import {
   type JevQuestion,
   type JevRequest,
   type PatchPlace,
+  type SymbolFact,
   type WorldPlaces,
   rand,
   seedOf,
 } from "@gaia/schema";
+import type { LandSite } from "@gaia/terrain";
+import { symbolsOf } from "./graph.ts";
+import { LAND_SHARE, type LandNode, divideLand } from "./land.ts";
 import { MODEL } from "./planner.ts";
 import { entityVitalityOf, vitalityOf } from "./vitality.ts";
 
@@ -49,6 +59,10 @@ export interface Looks {
   readonly landmark: LookSet;
   /** How a trail between two entities looks. */
   readonly trail: LookSet;
+  /** What a file's finer entity (a function, a class, a type, a constant) stands as on its patch. */
+  readonly form: LookSet;
+  /** Whether an area's land holds water, and why: each option's words are the reason recorded with the choice. */
+  readonly water: LookSet;
 }
 
 /** One Jev request about one thing. */
@@ -70,11 +84,17 @@ export interface Judgments {
   readonly things: Readonly<Record<string, { readonly as: "building" | "landmark"; readonly look: string }>>;
   /** Dependencies Jev would walk, with how much it wants each and its look. */
   readonly trails: readonly CodeTrail[];
+  /** File → symbol kind → form key: what each kind of the file's finer entities stands as. */
+  readonly forms: Readonly<Record<string, Readonly<Record<string, string>>>>;
+  /** Directory → water key, for the directories that are regions. */
+  readonly waters: Readonly<Record<string, string>>;
 }
 
 export interface CodeArea extends AreaPlace {
   /** The terrain region whose land this area's own ground shows. */
   readonly region: number;
+  /** Square meters of land it holds, its subdirectories' included. */
+  readonly ground: number;
 }
 
 export interface CodePatch extends PatchPlace {
@@ -82,6 +102,10 @@ export interface CodePatch extends PatchPlace {
   readonly kind: string;
   /** What grows on it: a vibe key. */
   readonly vibe: string;
+  /** Square meters of ground its cell holds. */
+  readonly ground: number;
+  /** Its first cell in `cells`; its ground is every cell naming it. */
+  readonly cell: number;
 }
 
 /** An entity standing in the world: a building or a landmark on its lot. */
@@ -94,10 +118,30 @@ export interface CodeThing {
   readonly look: string;
   /** The directory it stands in: its root. */
   readonly area: string;
-  /** Its lot: ground kept for it in its area. */
+  /** Its lot: the middle of the ground kept for it at its directory's heart, and how far a building may stand from it. */
   readonly x: number;
   readonly z: number;
   readonly lot: number;
+  readonly vitality: number;
+}
+
+/** A file's finer entity standing on its patch: a function, a class, a type or a constant. */
+export interface CodeSymbol {
+  /** `<file>#<name>`, its identity. */
+  readonly id: string;
+  readonly file: string;
+  readonly name: string;
+  readonly kind: SymbolFact["kind"];
+  readonly exported: boolean;
+  /** Where it is declared and how many lines it spans. */
+  readonly line: number;
+  readonly lines: number;
+  readonly doc?: string;
+  /** What it stands as: a form key Jev chose for its kind in its file. */
+  readonly form: string;
+  readonly x: number;
+  readonly z: number;
+  /** Its file's vitality. */
   readonly vitality: number;
 }
 
@@ -107,19 +151,28 @@ export interface CodeTrail {
   /** Jev's probability that a person would walk between them, 0 to 1. */
   readonly want: number;
   readonly look: string;
+  /** How many of `from`'s files import from `to`. */
+  readonly weight?: number;
+  /** Whether it joins two groups of entities no other chosen trail joins yet: these route first. */
+  readonly spans?: boolean;
 }
 
 /** A terrain region: a directory whose land has its own landform and cover. */
 export interface CodeRegion {
   readonly area: string;
+  /** The middle of its land. */
   readonly x: number;
   readonly z: number;
-  /** How far its land reaches before a neighbor's begins, meters. */
+  /** How far its land reaches from its middle on average, meters. */
   readonly reach: number;
   readonly land: string;
+  /** Whether its land holds water: a water key, whose words say why. */
+  readonly water: string;
+  /** The cells its land is made of: the sites of its files' patches and its lots (`RegionSpec.sites`). */
+  readonly sites: readonly LandSite[];
 }
 
-/** A world document laid out from code: every area, patch, thing and trail, and the terrain's regions. */
+/** A world document laid out from code: every area, patch, thing, symbol and trail, the land's cells, and the terrain's regions. */
 export interface CodeWorld extends WorldPlaces {
   readonly projectId: string;
   /** Side of the walkable square, meters: it grows with the codebase. */
@@ -128,31 +181,39 @@ export interface CodeWorld extends WorldPlaces {
   readonly world: string;
   readonly areas: readonly CodeArea[];
   readonly patches: readonly CodePatch[];
+  /** Every cell of the land, each part of one file's patch or one entity's lot, naming its area and its file (null for a lot). */
+  readonly cells: readonly CellPlace[];
   readonly things: readonly CodeThing[];
+  readonly symbols: readonly CodeSymbol[];
   readonly trails: readonly CodeTrail[];
   readonly regions: readonly CodeRegion[];
 }
 
 export const LAYOUT = {
-  /** Square meters of ground per line of a file. */
-  m2PerLine: 2.5,
+  /** Square meters of ground per line of code. */
+  m2PerLine: 26,
   /** A file's lines count between these for its patch's size. */
-  lines: [12, 1200],
-  /** Meters between neighboring patches. */
-  patchGap: 1.5,
-  /** Meters between neighboring subdirectory areas. */
-  areaGap: 6,
-  /** Common ground around a directory's contents, meters. */
-  border: 5,
-  /** The ground kept for a building or a landmark, meters across its middle. */
-  lot: { building: 15, landmark: 12 },
-  /** From the land's edge to the walkable square's edge, meters: room for the rim. */
-  rim: 70,
+  lines: [20, 1500],
+  /** How much a line weighs by the part its file plays: code most, configuration and data least. */
+  kindWeight: { source: 1, test: 0.85, docs: 0.6, script: 0.6, config: 0.4, data: 0.3 },
+  /** Ground kept for an entity's lot at its directory's heart, square meters. */
+  lot: { building: 900, landmark: 700 },
+  /** How far a building or landmark may stand from its lot's middle, meters. */
+  lotReach: { building: 9, landmark: 7 },
   /** The smallest world, meters across. */
   minSize: 320,
-  /** A directory has its own land when it holds this share of the code's lines, not counting its own lands. */
+  /** A directory has its own land when it holds this share of the code's ground, not counting its own lands. */
   regionShare: 0.03,
   maxRegions: 24,
+  /** Square meters of a patch for each finer entity standing on it, the most on one patch, and in the world. */
+  symbolGround: 240,
+  symbolsPerPatch: 6,
+  symbols: 420,
+  /** Meters between things standing on a patch, and kept clear around its first tree. */
+  symbolGap: 4.5,
+  treeClear: 5,
+  /** The most trails a world shows: this many per standing entity. */
+  trailsPerEntity: 1.4,
 } as const;
 
 // ---------- the tree of directories ----------
@@ -168,7 +229,7 @@ interface Dir {
 
 const parentOf = (path: string): string => (path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "");
 const baseName = (path: string): string => path.split("/").pop() ?? path;
-const weightOf = (f: FileFacts): number => Math.min(LAYOUT.lines[1], Math.max(LAYOUT.lines[0], f.lines));
+const weightOf = (f: FileFacts): number => Math.min(LAYOUT.lines[1], Math.max(LAYOUT.lines[0], f.lines)) * LAYOUT.kindWeight[f.kind ?? "source"];
 const byPath = <T extends { readonly path: string }>(a: T, b: T): number => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
 
 function directoriesOf(model: CodeModel, name: string): Map<string, Dir> {
@@ -248,6 +309,20 @@ function languagesOf(files: readonly FileFacts[]): string[] {
   return [...lines].filter(([l]) => SOURCE.has(l)).sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1)).map(([l]) => l);
 }
 
+const KIND_WORDS: Readonly<Record<SymbolFact["kind"], string>> = { function: "function", class: "class", type: "type", constant: "constant", module: "module" };
+
+/**
+ * A file's finer entities that may stand on its patch: its functions and
+ * classes, and the exported types and constants a doc comment describes, the
+ * largest first. The layout stands as many as the patch's ground allows.
+ */
+export function standingSymbols(f: FileFacts): SymbolFact[] {
+  if ((f.kind ?? "source") !== "source" && f.kind !== "test") return [];
+  return symbolsOf(f)
+    .filter((s) => s.kind === "function" || s.kind === "class" || (s.exported && s.doc !== undefined && (s.kind === "type" || s.kind === "constant")))
+    .sort((a, b) => (b.lines ?? 1) * (b.exported ? 1.5 : 1) - (a.lines ?? 1) * (a.exported ? 1.5 : 1) || (a.name < b.name ? -1 : 1));
+}
+
 /** The request Jev gets about each thing. State carries facts and doc comments only, never source. */
 export function planWorldRequests(model: CodeModel, looks: Looks): WorldRequest[] {
   const dirs = directoriesOf(model, model.repository.name);
@@ -274,6 +349,10 @@ export function planWorldRequests(model: CodeModel, looks: Looks): WorldRequest[
     const kinds: Record<string, number> = {};
     for (const f of all) kinds[f.kind ?? "source"] = (kinds[f.kind ?? "source"] ?? 0) + 1;
     const largest = [...d.files].sort((a, b) => b.lines - a.lines || byPath(a, b)).slice(0, 12);
+    const inside = new Set(all.map((f) => f.path));
+    const within = all.reduce((n, f) => n + f.imports.filter((i) => inside.has(i)).length, 0);
+    const reaching = all.reduce((n, f) => n + f.imports.filter((i) => !inside.has(i)).length, 0);
+    const reached = all.reduce((n, f) => n + f.importedBy.filter((i) => !inside.has(i)).length, 0);
     ask(
       "area",
       path,
@@ -285,13 +364,22 @@ export function planWorldRequests(model: CodeModel, looks: Looks): WorldRequest[
           languages: languagesOf(all),
           kinds,
           subdirectories: d.children.map(baseName),
+          imports: { withinItself: within, toOtherDirectories: reaching, fromOtherDirectories: reached },
           contents: largest.map((f) => ({ name: baseName(f.path), ...(f.doc === undefined ? {} : { doc: trim(f.doc, 160) }) })),
         },
       },
-      { land: choice("This directory becomes an area of the world. Which land suits it: its landform and ground cover?", docs(looks.land), "land", path) },
+      {
+        land: choice("This directory becomes an area of the world. Which land suits it: its landform and ground cover?", docs(looks.land), "land", path),
+        water: choice("Does this area's land hold water? Choose the option whose reason fits this directory best.", docs(looks.water), "water", path),
+      },
     );
   }
   for (const f of [...model.files].sort(byPath)) {
+    const standing = standingSymbols(f);
+    const forms: Record<string, JevQuestion> = {};
+    for (const kind of [...new Set(standing.map((s) => s.kind))].sort()) {
+      forms[`form:${kind}`] = choice(`Each ${KIND_WORDS[kind]} in this file stands on its patch as something a person can walk up to. What does each stand as?`, docs(looks.form), `form:${kind}`, f.path);
+    }
     ask(
       "file",
       f.path,
@@ -305,9 +393,10 @@ export function planWorldRequests(model: CodeModel, looks: Looks): WorldRequest[
           exports: f.symbols.filter((s) => s.exported).slice(0, 8).map((s) => (s.doc === undefined ? s.name : `${s.name}: ${trim(s.doc, 100)}`)),
           importedBy: f.importedBy.length,
           coveredByTests: f.tests.coveredBy.length,
+          ...(standing.length === 0 ? {} : { standing: standing.slice(0, 8).map((s) => ({ name: s.name, kind: s.kind, lines: s.lines ?? 1, exported: s.exported, ...(s.doc === undefined ? {} : { doc: trim(s.doc, 100) }) })) }),
         },
       },
-      { vibe: choice("This file becomes a patch of ground in its directory's area. What grows on it?", docs(looks.vibe), "vibe", f.path) },
+      { vibe: choice("This file becomes a patch of ground in its directory's area. What grows on it?", docs(looks.vibe), "vibe", f.path), ...forms },
     );
   }
   const entities = new Map(model.entities.map((e) => [e.path, e]));
@@ -381,12 +470,20 @@ export async function judgeWorld(model: CodeModel, looks: Looks, jev: JevClient,
   const vibes: Record<string, string> = {};
   const things: Record<string, { as: "building" | "landmark"; look: string }> = {};
   const trails: CodeTrail[] = [];
+  const forms: Record<string, Record<string, string>> = {};
+  const waters: Record<string, string> = {};
   planned.forEach((p, i) => {
     const a = answers[i] ?? {};
     if (p.about === "world") world = pickOf(a.world) ?? world;
-    else if (p.about === "area") lands[p.target] = pickOf(a.land) ?? first(looks.land);
-    else if (p.about === "file") vibes[p.target] = pickOf(a.vibe) ?? first(looks.vibe);
-    else {
+    else if (p.about === "area") {
+      lands[p.target] = pickOf(a.land) ?? first(looks.land);
+      waters[p.target] = pickOf(a.water) ?? first(looks.water);
+    } else if (p.about === "file") {
+      vibes[p.target] = pickOf(a.vibe) ?? first(looks.vibe);
+      const mine: Record<string, string> = {};
+      for (const id of Object.keys(p.request.questions)) if (id.startsWith("form:")) mine[id.slice("form:".length)] = pickOf(a[id]) ?? first(looks.form);
+      if (Object.keys(mine).length > 0) forms[p.target] = mine;
+    } else {
       const [as, look] = (pickOf(a.stands) ?? `building:${first(looks.building)}`).split(/:(.*)/s) as [string, string];
       things[p.target] = { as: as === "landmark" ? "landmark" : "building", look };
       for (const [id, answer] of Object.entries(a)) {
@@ -396,7 +493,7 @@ export async function judgeWorld(model: CodeModel, looks: Looks, jev: JevClient,
       }
     }
   });
-  return { world, lands, vibes, things, trails };
+  return { world, lands, vibes, things, trails, forms, waters };
 }
 
 // ---------- the stand-in judge ----------
@@ -415,7 +512,11 @@ function tagsOf(state: Record<string, unknown>): string[] {
   const dir = state.directory as Facts | undefined;
   if (dir !== undefined) {
     const kinds = Object.entries(dir.kinds ?? {}).sort((a, b) => b[1] - a[1]);
-    return [kinds[0]?.[0] ?? "source", ...(dir.languages ?? []).slice(0, 1), sizeTag(dir.lines as number, 600, 4000), ...words(String(dir.path))];
+    const imports = (dir.imports ?? {}) as { withinItself?: number; toOtherDirectories?: number; fromOtherDirectories?: number };
+    const files = Math.max(1, dir.files as number);
+    // How the directory's code moves: along chains of its own imports, out to others, or barely at all.
+    const flow = (imports.withinItself ?? 0) >= files * 2 ? ["flow"] : (imports.fromOtherDirectories ?? 0) >= files * 2 ? ["crossroads"] : (imports.withinItself ?? 0) + (imports.toOtherDirectories ?? 0) < files * 0.3 ? ["still"] : ["dry"];
+    return [kinds[0]?.[0] ?? "source", ...(dir.languages ?? []).slice(0, 1), sizeTag(dir.lines as number, 600, 4000), ...flow, ...words(String(dir.path))];
   }
   const file = state.file as Facts | undefined;
   if (file !== undefined) {
@@ -454,7 +555,7 @@ function tagsOf(state: Record<string, unknown>): string[] {
  */
 export function standInJev(looks: Looks): JevClient {
   const suits = new Map<string, readonly string[]>();
-  for (const [prefix, set] of [["", looks.world], ["", looks.land], ["", looks.vibe], ["", looks.trail], ["building:", looks.building], ["landmark:", looks.landmark]] as const) {
+  for (const [prefix, set] of [["", looks.world], ["", looks.land], ["", looks.vibe], ["", looks.trail], ["", looks.form], ["", looks.water], ["building:", looks.building], ["landmark:", looks.landmark]] as const) {
     for (const [key, look] of Object.entries(set)) suits.set(`${prefix}${key}`, [...(suits.get(`${prefix}${key}`) ?? []), ...look.suits]);
   }
   return {
@@ -467,9 +568,11 @@ export function standInJev(looks: Looks): JevClient {
       for (const [id, q] of Object.entries(request.questions)) {
         if (q.type === "choice") {
           const r = rand(seedOf(`${target}:${id}`));
+          // A form question is about one kind of symbol: the kind is a fact it suits.
+          const own = id.startsWith("form:") ? new Set([...tags, id.slice("form:".length)]) : tags;
           const scores = Object.keys(q.criteria)
             .sort()
-            .map((key) => [key, (suits.get(key) ?? []).filter((s) => tags.has(s)).length + r.next() * 0.6] as const);
+            .map((key) => [key, (suits.get(key) ?? []).filter((s) => own.has(s)).length + r.next() * 0.6] as const);
           const total = scores.reduce((n, [, s]) => n + Math.exp(2 * s), 0);
           const probabilities = Object.fromEntries(scores.map(([k, s]) => [k, Math.exp(2 * s) / total]));
           const [best] = [...scores].sort((a, b) => b[1] - a[1])[0] ?? [""];
@@ -490,129 +593,109 @@ export function standInJev(looks: Looks): JevClient {
 
 // ---------- laying the world out ----------
 
-interface Disc {
-  r: number;
-  x: number;
-  z: number;
+/** A file's ground, square meters: its lines, weighed by the part it plays. */
+const groundOfFile = (f: FileFacts): number => weightOf(f) * LAYOUT.m2PerLine;
+
+/**
+ * The tree whose land `divideLand` divides: each directory's own ground (its
+ * files and its entity's lot, the lot at its heart) and its subdirectories.
+ * A directory's own ground starts at its heart, except the repository's,
+ * which takes its place among the rest so trails between areas never all
+ * cross it.
+ */
+function landTree(dirs: Map<string, Dir>, lots: ReadonlyMap<string, number>): LandNode {
+  const node = (path: string): LandNode => {
+    const d = dirs.get(path) as Dir;
+    const own: LandNode[] = [];
+    const lot = lots.get(path);
+    if (lot !== undefined) own.push({ id: `lot:${path}`, ground: lot, children: [], heart: true });
+    for (const f of d.files) own.push({ id: `file:${f.path}`, ground: groundOfFile(f), children: [] });
+    const subs = d.children.map(node);
+    if (subs.length === 0) return { id: `dir:${path}`, ground: 0, children: own };
+    const children = own.length === 0 ? subs : [{ id: `own:${path}`, ground: 0, children: own, heart: path !== "" }, ...subs];
+    return { id: `dir:${path}`, ground: 0, children };
+  };
+  return node("");
 }
 
 /**
- * Packs discs around the origin in order: each takes the nearest free spot
- * on rings growing outward, keeping `gap` from the others; the first sits
- * at the origin. Each ring's angles start at a rotation seeded by `seed`.
+ * Where a patch's finer entities stand: spread over its ground, each the
+ * farthest it can get from its first tree and the others, at least
+ * `LAYOUT.symbolGap` apart; as many as its ground allows, largest first.
  */
-function pack(discs: readonly Disc[], gap: number, seed: string): void {
-  const placed: Disc[] = [];
-  const r0 = rand(seedOf(seed));
-  for (const d of discs) {
-    if (placed.length === 0) {
-      d.x = 0;
-      d.z = 0;
-      placed.push(d);
-      continue;
-    }
-    const step = Math.max(0.75, d.r * 0.25);
-    const turn = r0.next() * Math.PI * 2;
-    // The placed discs' middle, weighted by area: free spots nearest it keep the cluster round.
-    const mass = placed.reduce((n, p) => n + p.r * p.r, 0);
-    const mx = placed.reduce((n, p) => n + p.x * p.r * p.r, 0) / mass;
-    const mz = placed.reduce((n, p) => n + p.z * p.r * p.r, 0) / mass;
-    let best: [number, number] | null = null;
-    for (let rho = step; best === null; rho += step) {
-      const count = Math.max(12, Math.ceil((Math.PI * 2 * rho) / step));
-      let near = Infinity;
-      for (let k = 0; k < count; k++) {
-        const a = turn + (k * Math.PI * 2) / count;
-        const x = Math.cos(a) * rho;
-        const z = Math.sin(a) * rho;
-        const dm = Math.hypot(x - mx, z - mz);
-        if (dm < near && placed.every((p) => Math.hypot(p.x - x, p.z - z) >= p.r + d.r + gap)) {
-          near = dm;
-          best = [x, z];
-        }
+function standSymbols(f: FileFacts, heart: { x: number; z: number }, inner: readonly (readonly [number, number])[], ground: number, room: number): { symbol: SymbolFact; x: number; z: number }[] {
+  const want = Math.min(LAYOUT.symbolsPerPatch, Math.floor(ground / LAYOUT.symbolGround), room);
+  const candidates = standingSymbols(f).slice(0, Math.max(0, want));
+  // Each placed thing keeps others this far off: the first tree its crown, a symbol the gap.
+  const placed: { x: number; z: number; keep: number }[] = [{ ...heart, keep: LAYOUT.treeClear }];
+  const out: { symbol: SymbolFact; x: number; z: number }[] = [];
+  for (const symbol of candidates) {
+    const r = rand(seedOf(`${f.path}#${symbol.name}`));
+    let best: readonly [number, number] | null = null;
+    let score = -Infinity;
+    for (const p of inner) {
+      const room = Math.min(...placed.map((q) => Math.hypot(p[0] - q.x, p[1] - q.z) - q.keep));
+      if (room < 0) continue;
+      const s = Math.min(room, 9) + r.next() * 1.5;
+      if (s > score) {
+        score = s;
+        best = p;
       }
     }
-    [d.x, d.z] = best;
-    placed.push(d);
+    if (best === null) continue;
+    placed.push({ x: best[0], z: best[1], keep: LAYOUT.symbolGap });
+    out.push({ symbol, x: best[0], z: best[1] });
   }
+  return out;
 }
 
-/** The middle of a near-smallest circle enclosing every disc (Bădoiu and Clarkson's iteration). */
-function enclosing(discs: readonly Disc[]): [number, number] {
-  if (discs.length === 0) return [0, 0];
-  let cx = discs.reduce((n, d) => n + d.x, 0) / discs.length;
-  let cz = discs.reduce((n, d) => n + d.z, 0) / discs.length;
-  for (let k = 1; k <= 200; k++) {
-    let far = discs[0] as Disc;
-    let reach = -1;
-    for (const d of discs) {
-      const r = Math.hypot(d.x - cx, d.z - cz) + d.r;
-      if (r > reach) [far, reach] = [d, r];
-    }
-    const dist = Math.hypot(far.x - cx, far.z - cz) || 1;
-    const px = far.x + ((far.x - cx) / dist) * far.r;
-    const pz = far.z + ((far.z - cz) / dist) * far.r;
-    cx += (px - cx) / (k + 1);
-    cz += (pz - cz) / (k + 1);
+/**
+ * The trails a world shows: of the dependencies Jev would walk (more than
+ * even odds), first those that join groups of entities not yet joined, most
+ * wanted and heaviest first, so every connected part of the code is walkable;
+ * then the most wanted of the rest, up to the composition budget.
+ */
+function chooseTrails(wanted: readonly CodeTrail[], standing: readonly string[], weights: ReadonlyMap<string, number>): CodeTrail[] {
+  const known = new Set(standing);
+  const order = wanted
+    .filter((t) => t.want > 0.5 && known.has(t.from) && known.has(t.to) && t.from !== t.to)
+    .map((t) => ({ ...t, weight: weights.get(`${t.from}\n${t.to}`) ?? 1 }))
+    .sort((a, b) => b.want - a.want || b.weight - a.weight || (a.from + a.to < b.from + b.to ? -1 : 1));
+  const group = new Map(standing.map((p) => [p, p]));
+  const root = (p: string): string => {
+    const g = group.get(p) as string;
+    if (g === p) return p;
+    const r = root(g);
+    group.set(p, r);
+    return r;
+  };
+  const budget = Math.round(standing.length * LAYOUT.trailsPerEntity);
+  const spanning: CodeTrail[] = [];
+  const rest: CodeTrail[] = [];
+  for (const t of order) {
+    const a = root(t.from);
+    const b = root(t.to);
+    if (a !== b) {
+      group.set(a, b);
+      spanning.push({ ...t, spans: true });
+    } else rest.push({ ...t, spans: false });
   }
-  return [cx, cz];
+  return [...spanning, ...rest].slice(0, Math.max(spanning.length, budget));
 }
-
-/** A directory's contents laid out around its own origin. */
-interface Block {
-  readonly radius: number;
-  /** Positions relative to the block's origin. */
-  readonly lot: Disc | null;
-  readonly patches: ReadonlyMap<string, Disc>;
-  readonly children: ReadonlyMap<string, Disc>;
-}
-
-const patchRadius = (f: FileFacts): number => Math.sqrt((weightOf(f) * LAYOUT.m2PerLine) / Math.PI);
 
 /** Lays out the world from the code and Jev's judgments. */
 export function layoutWorld(model: CodeModel, judged: Judgments): CodeWorld {
   const name = model.repository.name;
   const dirs = directoriesOf(model, name);
   const entityAt = new Map(model.entities.map((e) => [e.path, e]));
-  const blocks = new Map<string, Block>();
+  const files = new Map(model.files.map((f) => [f.path, f]));
+  const asOf = (path: string): "building" | "landmark" => (judged.things[path]?.as === "landmark" ? "landmark" : "building");
+  const lots = new Map(model.entities.map((e) => [e.path, LAYOUT.lot[asOf(e.path)]]));
+  const tree = landTree(dirs, lots);
+  const total = model.files.reduce((n, f) => n + groundOfFile(f), 0) + [...lots.values()].reduce((a, b) => a + b, 0);
+  const size = Math.max(LAYOUT.minSize, Math.ceil(Math.sqrt(total / LAND_SHARE) / 10) * 10);
+  const land = divideLand(tree, size);
 
-  // Bottom up: a directory's lot first, then its own files, then its subdirectories' areas.
-  const build = (path: string): Block => {
-    const d = dirs.get(path) as Dir;
-    for (const c of d.children) build(c);
-    const thing = judged.things[path];
-    const lot: Disc | null = entityAt.has(path) ? { r: thing?.as === "landmark" ? LAYOUT.lot.landmark : LAYOUT.lot.building, x: 0, z: 0 } : null;
-    const files = [...d.files].sort((a, b) => b.lines - a.lines || byPath(a, b));
-    const patches = new Map(files.map((f) => [f.path, { r: patchRadius(f), x: 0, z: 0 }]));
-    const kids = [...d.children].sort((a, b) => (blocks.get(b)?.radius ?? 0) - (blocks.get(a)?.radius ?? 0) || (a < b ? -1 : 1));
-    const children = new Map(kids.map((c) => [c, { r: (blocks.get(c) as Block).radius, x: 0, z: 0 }]));
-    const discs = [...(lot === null ? [] : [lot]), ...patches.values()];
-    pack(discs, LAYOUT.patchGap, `${path}/own`);
-    // Subdirectories ring the directory's own ground.
-    const all = [...discs, ...children.values()];
-    if (discs.length > 0) {
-      const own = discs.reduce((m, p) => Math.max(m, Math.hypot(p.x, p.z) + p.r), 0);
-      pack([{ r: own, x: 0, z: 0 }, ...children.values()], LAYOUT.areaGap, `${path}/areas`);
-    } else {
-      pack([...children.values()], LAYOUT.areaGap, `${path}/areas`);
-    }
-    // The block's origin moves to the middle of its smallest enclosing circle, so areas stay tight at every depth.
-    const [cx, cz] = enclosing(all);
-    for (const p of all) {
-      p.x -= cx;
-      p.z -= cz;
-    }
-    const radius = all.reduce((m, p) => Math.max(m, Math.hypot(p.x, p.z) + p.r), 0) + LAYOUT.border;
-    const block: Block = { radius, lot, patches, children };
-    blocks.set(path, block);
-    return block;
-  };
-  const root = build("");
-
-  // Top down: every block's origin in the world.
-  const areas: CodeArea[] = [];
-  const patches: CodePatch[] = [];
-  const things: CodeThing[] = [];
   const regionsOf = regionPaths(dirs);
   const regionIndex = new Map(regionsOf.map((p, i) => [p, i]));
   const regionOfDir = (path: string): number => {
@@ -622,38 +705,102 @@ export function layoutWorld(model: CodeModel, judged: Judgments): CodeWorld {
     }
     return 0;
   };
-  const files = new Map(model.files.map((f) => [f.path, f]));
-  const place = (path: string, ox: number, oz: number): void => {
-    const d = dirs.get(path) as Dir;
-    const b = blocks.get(path) as Block;
-    areas.push({ path, name: d.name, depth: d.depth, parent: d.parent, x: ox, z: oz, radius: b.radius, region: regionOfDir(path) });
-    if (b.lot !== null) {
+
+  const cells: CellPlace[] = [];
+  const patches: CodePatch[] = [];
+  const things: CodeThing[] = [];
+  const symbols: CodeSymbol[] = [];
+  /** Per directory: ground held and the ground-weighted sum of its leaves' hearts. */
+  const held = new Map<string, { ground: number; x: number; z: number; hearts: { x: number; z: number }[] }>();
+  const regionSites: LandSite[][] = regionsOf.map(() => []);
+  const regionMass = regionsOf.map(() => ({ ground: 0, x: 0, z: 0 }));
+  for (const leaf of land.leaves) {
+    const [kind, path] = leaf.id.split(/:(.*)/s) as [string, string];
+    const area = kind === "lot" ? path : parentOf(path);
+    const cell = cells.length;
+    for (const site of leaf.sites) cells.push({ area, file: kind === "file" ? path : null, x: site.x, z: site.z });
+    const ri = regionOfDir(area);
+    (regionSites[ri] as LandSite[]).push(...leaf.sites);
+    const m = regionMass[ri] as { ground: number; x: number; z: number };
+    m.ground += leaf.ground;
+    m.x += leaf.x * leaf.ground;
+    m.z += leaf.z * leaf.ground;
+    for (let p: string | null = area; p !== null; p = p === "" ? null : parentOf(p)) {
+      const h = held.get(p) ?? { ground: 0, x: 0, z: 0, hearts: [] };
+      h.ground += leaf.ground;
+      h.x += leaf.x * leaf.ground;
+      h.z += leaf.z * leaf.ground;
+      h.hearts.push({ x: leaf.x, z: leaf.z });
+      held.set(p, h);
+    }
+    if (kind === "lot") {
       const e = entityAt.get(path) as EntityFacts;
       const t = judged.things[path] ?? { as: "building", look: "" };
-      things.push({ path, name: e.name, as: t.as, look: t.look, area: path, x: ox + b.lot.x, z: oz + b.lot.z, lot: b.lot.r, vitality: entityVitalityOf(e).vitality });
+      things.push({ path, name: e.name, as: t.as, look: t.look, area: path, x: leaf.x, z: leaf.z, lot: LAYOUT.lotReach[t.as], vitality: entityVitalityOf(e).vitality });
+      continue;
     }
-    for (const [p, disc] of b.patches) {
-      const f = files.get(p) as FileFacts;
-      patches.push({ path: p, name: baseName(p), area: path, x: ox + disc.x, z: oz + disc.z, radius: disc.r, vitality: vitalityOf(f).vitality, lines: f.lines, kind: f.kind ?? "source", vibe: judged.vibes[p] ?? "" });
+    const f = files.get(path) as FileFacts;
+    const vitality = vitalityOf(f).vitality;
+    patches.push({ path, name: baseName(path), area, x: leaf.x, z: leaf.z, radius: Math.sqrt(leaf.ground / Math.PI), vitality, lines: f.lines, kind: f.kind ?? "source", vibe: judged.vibes[path] ?? "", ground: leaf.ground, cell });
+    for (const s of standSymbols(f, leaf, leaf.inner, leaf.ground, LAYOUT.symbols - symbols.length)) {
+      symbols.push({
+        id: `${path}#${s.symbol.name}`,
+        file: path,
+        name: s.symbol.name,
+        kind: s.symbol.kind,
+        exported: s.symbol.exported,
+        line: s.symbol.line ?? 0,
+        lines: s.symbol.lines ?? 1,
+        ...(s.symbol.doc === undefined ? {} : { doc: s.symbol.doc }),
+        form: judged.forms[path]?.[s.symbol.kind] ?? "",
+        x: s.x,
+        z: s.z,
+        vitality,
+      });
     }
-    for (const [c, disc] of b.children) place(c, ox + disc.x, oz + disc.z);
-  };
-  place("", 0, 0);
+  }
 
-  // Each region's land centers on its own files (and lot), reaching as far as their ground.
+  // Each area's heart: the middle of its ground, moved onto the nearest of its own leaves' hearts.
+  const areas: CodeArea[] = [...dirs.values()]
+    .filter((d) => held.has(d.path))
+    .sort(byPath)
+    .map((d) => {
+      const h = held.get(d.path) as { ground: number; x: number; z: number; hearts: { x: number; z: number }[] };
+      const mx = h.x / h.ground;
+      const mz = h.z / h.ground;
+      const heart = h.hearts.reduce((b, p) => (Math.hypot(p.x - mx, p.z - mz) < Math.hypot(b.x - mx, b.z - mz) ? p : b), h.hearts[0] as { x: number; z: number });
+      return { path: d.path, name: d.name, depth: d.depth, parent: d.parent, x: heart.x, z: heart.z, region: regionOfDir(d.path), ground: h.ground };
+    });
+
   const regions: CodeRegion[] = regionsOf.map((path, i) => {
-    const mine = patches.filter((p) => areas.find((a) => a.path === p.area)?.region === i);
-    const lots = things.filter((t) => areas.find((a) => a.path === t.area)?.region === i).map((t) => ({ x: t.x, z: t.z, radius: t.lot }));
-    const discs = [...mine, ...lots];
-    const weight = discs.reduce((n, p) => n + p.radius * p.radius, 0);
-    const area = areas.find((a) => a.path === path) as CodeArea;
-    const x = weight > 0 ? discs.reduce((n, p) => n + p.x * p.radius * p.radius, 0) / weight : area.x;
-    const z = weight > 0 ? discs.reduce((n, p) => n + p.z * p.radius * p.radius, 0) / weight : area.z;
-    return { area: path, x, z, reach: 0.6 * Math.sqrt(weight), land: judged.lands[path] ?? "" };
+    const m = regionMass[i] as { ground: number; x: number; z: number };
+    return {
+      area: path,
+      x: m.ground > 0 ? m.x / m.ground : 0,
+      z: m.ground > 0 ? m.z / m.ground : 0,
+      reach: Math.sqrt(m.ground / Math.PI),
+      land: judged.lands[path] ?? "",
+      water: judged.waters[path] ?? "",
+      sites: regionSites[i] as LandSite[],
+    };
   });
 
-  const size = Math.max(LAYOUT.minSize, Math.ceil((2 * (root.radius + LAYOUT.rim)) / 10) * 10);
-  const known = new Set(things.map((t) => t.path));
+  // A dependency weighs as many of one entity's files as import from the other.
+  const roots = model.entities.map((e) => e.path);
+  const owner = (p: string): string | undefined => roots.filter((r) => r === "" || p === r || p.startsWith(`${r}/`)).sort((a, b) => b.length - a.length)[0];
+  const weights = new Map<string, number>();
+  const counted = new Set<string>();
+  for (const f of model.files) {
+    const from = owner(f.path);
+    if (from === undefined) continue;
+    for (const to of f.imports) {
+      const o = owner(to);
+      const key = `${from}\n${o}`;
+      if (o === undefined || o === from || counted.has(`${key}\n${f.path}`)) continue;
+      counted.add(`${key}\n${f.path}`);
+      weights.set(key, (weights.get(key) ?? 0) + 1);
+    }
+  }
   return {
     name,
     projectId: model.projectId,
@@ -661,8 +808,10 @@ export function layoutWorld(model: CodeModel, judged: Judgments): CodeWorld {
     world: judged.world,
     areas,
     patches,
+    cells,
     things,
-    trails: judged.trails.filter((t) => t.want > 0.5 && known.has(t.from) && known.has(t.to)),
+    symbols,
+    trails: chooseTrails(judged.trails, things.map((t) => t.path), weights),
     regions,
   };
 }

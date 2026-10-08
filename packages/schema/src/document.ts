@@ -63,7 +63,7 @@ export interface WorldDocument {
   readonly placements: Readonly<Record<Path, Placement>>;
 }
 
-/** A directory's land: the circle of ground it holds, its own and its subdirectories'. */
+/** A directory's land: the ground it holds, its own and its subdirectories'. */
 export interface AreaPlace {
   /** The directory's project-relative path; "" is the repository's root. */
   readonly path: string;
@@ -71,12 +71,17 @@ export interface AreaPlace {
   /** 0 for the root, 1 for its subdirectories, and so on. */
   readonly depth: number;
   readonly parent: Path | null;
+  /** Its heart: a point on its own ground near the middle of its land. */
   readonly x: number;
   readonly z: number;
-  readonly radius: number;
 }
 
-/** A file's patch of ground inside its directory's area. */
+/**
+ * A file's patch of ground inside its directory's area. In a world laid out
+ * from code its ground is its cell (`CellPlace.file`), and `x`, `z` and
+ * `radius` are its heart and how far its ground reaches on average; in a
+ * world laid out as regions it is the disc they describe.
+ */
 export interface PatchPlace {
   readonly path: string;
   readonly name: string;
@@ -90,25 +95,33 @@ export interface PatchPlace {
 }
 
 /**
- * An area whose land is a region of the terrain rather than a circle: a
- * point is its area's when this region's warped cell holds it, as its
- * landform does.
+ * One cell of the land. A point is the cell's when the cell's site is the
+ * nearest to the point, measured from the point moved by the land's warp and
+ * less each site's reach (`siteAt` in @gaia/terrain), so cells are organic
+ * and fill the land. In a world laid out from code every cell is one file's
+ * patch or one entity's lot; in a world laid out as regions each region is
+ * one cell.
  */
 export interface CellPlace {
   /** The area's path. */
   readonly area: Path;
+  /**
+   * The file whose patch this cell is; null for ground that is its area's
+   * own and no file's (an entity's lot). Absent, the cell says nothing of
+   * files, and patches are the discs `PatchPlace` describes.
+   */
+  readonly file?: Path | null;
   readonly x: number;
   readonly z: number;
-  /** How far the region's own ground reaches before a neighbor's begins, meters. */
+  /** How far the cell's own ground reaches before a neighbor's begins, meters. */
   readonly reach?: number;
 }
 
 /**
  * Where every directory's area and every file's patch lies in a world, so
  * anything can ask what stands under a point (`placeAt` in @gaia/terrain).
- * Areas nest: a subdirectory's circle lies inside its parent's. A world laid
- * out as regions instead (the lab's sample world) gives its areas no circle
- * and names their land in `cells`.
+ * The land is divided into cells; an area's land is every cell of its own
+ * and of its subdirectories, so areas nest and fill the land.
  */
 export interface WorldPlaces {
   /** The repository's name, which names the world. */
@@ -117,6 +130,5 @@ export interface WorldPlaces {
   readonly size: number;
   readonly areas: readonly AreaPlace[];
   readonly patches: readonly PatchPlace[];
-  /** Areas whose land is a terrain region's cell, for a world laid out as regions. */
-  readonly cells?: readonly CellPlace[];
+  readonly cells: readonly CellPlace[];
 }

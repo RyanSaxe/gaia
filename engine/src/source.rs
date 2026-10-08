@@ -1,6 +1,8 @@
 //! Reads one file's own facts from its text: its language and kind, lines,
-//! leading comment, exported symbols with their doc comments, the modules it
-//! imports, rough complexity and debt markers. A careful line-based first
+//! leading comment, symbols (every exported one, and the functions and
+//! classes declared at its top level) with their doc comments, where each
+//! begins and how many lines it spans, the modules it imports, rough
+//! complexity and debt markers. A careful line-based first
 //! pass for TypeScript, JavaScript and Rust, not a parser: a small lexer
 //! keeps comments and strings apart from code, so braces in a GLSL template
 //! or a URL in a string never count. Other languages get lines and kind.
@@ -14,6 +16,10 @@ pub struct Symbol {
     pub exported: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub doc: Option<String>,
+    /// The 1-based line its declaration begins on.
+    pub line: u32,
+    /// How many lines its declaration and body span, at least 1.
+    pub lines: u32,
 }
 
 #[derive(Serialize, Clone, Copy, Debug, Default, PartialEq)]
@@ -40,6 +46,13 @@ pub struct Source {
     pub debt_markers: u32,
     /// Rust: a `#[cfg(test)]` module, so the file tests itself.
     pub inline_tests: bool,
+}
+
+impl Source {
+    /// How many symbols the file exports itself, not counting what it passes on.
+    pub fn exported(&self) -> usize {
+        self.symbols.iter().filter(|s| s.exported).count()
+    }
 }
 
 /// The language a path is written in, by its extension or name.
@@ -337,6 +350,105 @@ fn rust_pub(code: &str) -> Option<(String, &'static str)> {
     None
 }
 
+/// A TypeScript or JavaScript function or class declared without `export`.
+fn ts_local(code: &str) -> Option<(String, &'static str)> {
+    let mut rest = code.trim_start();
+    for word in ["declare ", "async ", "abstract "] {
+        rest = rest.strip_prefix(word).unwrap_or(rest).trim_start();
+    }
+    if let Some(after) = rest
+        .strip_prefix("function* ")
+        .or_else(|| rest.strip_prefix("function "))
+    {
+        return ident(after).map(|n| (n, "function"));
+    }
+    if let Some(after) = rest.strip_prefix("class ") {
+        return ident(after).map(|n| (n, "class"));
+    }
+    for word in ["const ", "let ", "var "] {
+        if let Some(after) = rest.strip_prefix(word) {
+            let name = ident(after)?;
+            let value = after.split_once('=').map(|(_, v)| v.trim_start())?;
+            let callable = value.starts_with('(')
+                || value.starts_with("async")
+                || value.starts_with("function");
+            return callable.then_some((name, "function"));
+        }
+    }
+    None
+}
+
+/// A Rust function, struct, enum or trait declared without `pub`.
+fn rust_local(code: &str) -> Option<(String, &'static str)> {
+    let mut rest = code.trim_start();
+    if rest.starts_with("pub ") {
+        return None;
+    }
+    if let Some(after) = rest.strip_prefix("pub(") {
+        rest = after.split_once(") ")?.1;
+    }
+    for word in ["const ", "async ", "unsafe ", "extern \"C\" "] {
+        rest = rest.strip_prefix(word).unwrap_or(rest);
+    }
+    [
+        ("fn ", "function"),
+        ("struct ", "class"),
+        ("enum ", "type"),
+        ("trait ", "type"),
+    ]
+    .into_iter()
+    .find_map(|(word, kind)| rest.strip_prefix(word).and_then(ident).map(|n| (n, kind)))
+}
+
+/// How far a line of code opens brackets of every kind, net, skipping what its strings hold.
+fn nesting(code: &str, rust: bool) -> i64 {
+    let mut net = 0;
+    let mut quote: Option<char> = None;
+    for c in code.chars() {
+        match quote {
+            Some(q) => {
+                if c == q {
+                    quote = None;
+                }
+            }
+            None => match c {
+                '"' => quote = Some('"'),
+                '\'' if !rust => quote = Some('\''),
+                '{' | '[' | '(' => net += 1,
+                '}' | ']' | ')' => net -= 1,
+                _ => {}
+            },
+        }
+    }
+    net
+}
+
+/// Whether a statement carries on past a line of code that ends this way.
+fn ends_open(code: &str) -> bool {
+    [
+        "=", "|", "&", ",", "(", "?", ":", "+", "-", "=>", "->", "where",
+    ]
+    .iter()
+    .any(|end| code.ends_with(end))
+}
+
+/// Whether a line of code that begins this way carries on the statement before it.
+fn carries_on(code: &str) -> bool {
+    ["|", ".", "?", ":", "{", "=", "+", "&&", "->", "where"]
+        .iter()
+        .any(|start| code.starts_with(start))
+}
+
+/// A symbol whose declaration has not ended yet.
+struct Span {
+    symbol: usize,
+    /// The bracket nesting and brace depth before its first line.
+    nest: i64,
+    depth: i64,
+    /// The line it ends on, unless the next line of code carries the statement on.
+    end: Option<usize>,
+}
+
 /// Reads one file's facts from its path and text.
 pub fn read(path: &str, text: &str) -> Source {
     let language = language_of(path);
@@ -368,6 +480,14 @@ pub fn read(path: &str, text: &str) -> Source {
     // Each open function: the depth it opened at and its first line.
     let mut open: Vec<(i64, usize)> = Vec::new();
     let mut fn_waiting: Option<usize> = None;
+    // Every kind of bracket, for where each symbol's declaration ends.
+    let mut nest: i64 = 0;
+    let mut spans: Vec<Span> = Vec::new();
+    let mut last_code = 0;
+    let close = |symbols: &mut Vec<Symbol>, s: &Span, end: usize| {
+        let sym = &mut symbols[s.symbol];
+        sym.lines = (end as u32 + 2).saturating_sub(sym.line).max(1);
+    };
 
     for (n, raw) in text.lines().enumerate() {
         let trimmed = raw.trim_start();
@@ -425,16 +545,69 @@ pub fn read(path: &str, text: &str) -> Source {
             continue;
         }
 
-        // Symbols and imports.
-        if rust {
-            if let Some((name, kind)) = rust_pub(&code) {
-                out.symbols.push(Symbol {
-                    name,
-                    kind,
-                    exported: true,
-                    doc: paragraph(&pending),
-                });
+        // A symbol that seemed to end on an earlier line ends there, unless this line carries it on.
+        let carried = carries_on(stripped);
+        spans.retain_mut(|s| match s.end {
+            Some(end) if !carried => {
+                close(&mut out.symbols, s, end);
+                false
             }
+            Some(_) => {
+                s.end = None;
+                true
+            }
+            None => true,
+        });
+
+        // Symbols and imports: every exported symbol, and functions and classes declared at the top level.
+        let mut found: Vec<(String, &'static str, bool)> = Vec::new();
+        if rust {
+            found.extend(rust_pub(&code).map(|(n, k)| (n, k, true)));
+            if depth == 0 {
+                found.extend(rust_local(&code).map(|(n, k)| (n, k, false)));
+            }
+        } else {
+            found.extend(ts_export(&code).into_iter().map(|(n, k)| (n, k, true)));
+            if depth == 0 {
+                found.extend(ts_local(&code).map(|(n, k)| (n, k, false)));
+            }
+        }
+        if !found.is_empty() {
+            // A declaration still open at this depth was never closed (an unbalanced line): it ends before this one.
+            spans.retain(|s| {
+                let stale = s.depth == depth;
+                if stale {
+                    close(&mut out.symbols, s, last_code);
+                }
+                !stale
+            });
+        }
+        for (name, kind, exported) in found {
+            spans.push(Span {
+                symbol: out.symbols.len(),
+                nest,
+                depth,
+                end: None,
+            });
+            out.symbols.push(Symbol {
+                name,
+                kind,
+                exported,
+                doc: paragraph(&pending),
+                line: n as u32 + 1,
+                lines: 1,
+            });
+        }
+        nest += nesting(&code, rust);
+        let open_end = ends_open(stripped);
+        for s in spans.iter_mut().filter(|s| s.end.is_none()) {
+            if nest <= s.nest && !open_end {
+                s.end = Some(n);
+            }
+        }
+        last_code = n;
+
+        if rust {
             if stripped.starts_with("#[cfg(test)]") {
                 out.inline_tests = true;
             }
@@ -443,14 +616,6 @@ pub fn read(path: &str, text: &str) -> Source {
                 out.specifiers.push(m.trim().to_string());
             }
         } else {
-            for (name, kind) in ts_export(&code) {
-                out.symbols.push(Symbol {
-                    name,
-                    kind,
-                    exported: true,
-                    doc: paragraph(&pending),
-                });
-            }
             let mut found = quoted_after(&code, " from ");
             found.extend(quoted_after(&code, "}from "));
             found.extend(quoted_after(&code, "import("));
@@ -513,6 +678,9 @@ pub fn read(path: &str, text: &str) -> Source {
             fn_waiting = None;
         }
     }
+    for s in &spans {
+        close(&mut out.symbols, s, s.end.unwrap_or(last_code));
+    }
     out.doc = paragraph(&leading);
     out.specifiers.sort();
     out.specifiers.dedup();
@@ -565,6 +733,19 @@ export function step(t: number): number {
   return "{".length;
 }
 export { step as walkStep, PACE as pace };
+
+/** Which way the ground runs. */
+export type Run =
+  | "north-south"
+  | "east-west";
+
+/** Finds the ground underfoot. */
+function ground(
+  x: number,
+): number {
+  return [x].length;
+}
+const half = (x: number) => x / 2;
 "#;
         let s = read("packages/terrain/src/walk.ts", text);
         assert_eq!(s.language, "typescript");
@@ -578,18 +759,22 @@ export { step as walkStep, PACE as pace };
             vec!["./lattice.ts", "./more.ts", "./multi.ts", "@gaia/schema"]
         );
         assert_eq!(s.reexports, vec!["./more.ts"]);
-        let names: Vec<_> = s
+        // Each symbol: its name, kind, whether it is exported, its first line and how many lines it spans.
+        let found: Vec<_> = s
             .symbols
             .iter()
-            .map(|s| (s.name.as_str(), s.kind))
+            .map(|s| (s.name.as_str(), s.kind, s.exported, s.line, s.lines))
             .collect();
         assert_eq!(
-            names,
+            found,
             vec![
-                ("PACE", "constant"),
-                ("step", "function"),
-                ("walkStep", "constant"),
-                ("pace", "constant")
+                ("PACE", "constant", true, 16, 1),
+                ("step", "function", true, 22, 7),
+                ("walkStep", "constant", true, 29, 1),
+                ("pace", "constant", true, 29, 1),
+                ("Run", "type", true, 32, 3),
+                ("ground", "function", false, 37, 5),
+                ("half", "function", false, 42, 1)
             ]
         );
         assert_eq!(
@@ -597,6 +782,11 @@ export { step as walkStep, PACE as pace };
             Some("How fast a person walks, meters per second.")
         );
         assert_eq!(s.symbols[1].doc.as_deref(), Some("Takes one step."));
+        assert_eq!(
+            s.symbols[5].doc.as_deref(),
+            Some("Finds the ground underfoot.")
+        );
+        assert_eq!(s.exported(), 5);
         assert_eq!(s.debt_markers, 1);
         // The braces in the GLSL template and the string never count.
         assert_eq!(s.complexity.longest_function, 7);
@@ -619,8 +809,18 @@ pub fn handle<'a>(line: &'a str) -> char {
     '}'
 }
 
+/// Reads one request.
+fn request<T>(line: &str) -> Option<T>
+where
+    T: Default,
+{
+    None
+}
+
 #[cfg(test)]
-mod tests {}
+mod tests {
+    fn helper() {}
+}
 "#;
         let s = read("engine/src/main.rs", text);
         assert_eq!(
@@ -638,9 +838,15 @@ mod tests {}
             vec![
                 ("source", "module"),
                 ("VERSION", "constant"),
-                ("handle", "function")
+                ("handle", "function"),
+                ("request", "function")
             ]
         );
+        let request = &s.symbols[3];
+        assert!(!request.exported);
+        assert_eq!(request.doc.as_deref(), Some("Reads one request."));
+        assert_eq!((request.line, request.lines), (16, 6));
+        assert_eq!((s.symbols[2].line, s.symbols[2].lines), (10, 4));
         assert_eq!(s.symbols[1].doc.as_deref(), Some("The engine's version."));
         assert!(s.inline_tests);
         assert_eq!(s.complexity.longest_function, 4);

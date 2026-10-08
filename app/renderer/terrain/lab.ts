@@ -87,7 +87,7 @@ import { type Ways, createWays, setTrailEnds, setTrailPlaces } from "./trails.ts
 import { createCard } from "./card.ts";
 import { LANDMARK_ENTITIES, type Represented, SAMPLE_ENTITIES, SAMPLE_FILES, representEntity, representFile } from "./samples.ts";
 import { type Judge, judgedThing } from "@gaia/world";
-import { type CodeLab, type Veil, codeWorld } from "./code-world.ts";
+import { type CodeLab, type Veil, codeWorld, representSymbol } from "./code-world.ts";
 import { createSettlement } from "./settlement.ts";
 import { createSigns } from "./signs.ts";
 import { createBaker } from "./baker.ts";
@@ -542,6 +542,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       return (patch === undefined ? undefined : code?.files.get(patch.path)) ?? (SAMPLE_FILES[t.index % SAMPLE_FILES.length] as (typeof SAMPLE_FILES)[number]);
     };
     trees = stood.trees.map((t) => ({ ...t, represented: representFile(fileOf(t)) }));
+    symbolPlacements = stood.symbols;
     // Each build keeps its instances from bake to bake and only moves its copies.
     treeViews = variants.flatMap((v, k) => {
       const spots = trees.filter((t) => t.variant === k).map((t) => ({ x: t.x, y: t.y, z: t.z, yaw: t.yaw, scale: t.scale, vitality: t.represented.report.vitality }));
@@ -606,6 +607,8 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     placeSigns();
   }
   let solids: Solids = NO_SOLIDS;
+  /** In the codebase's world, each symbol's placement among the understory's, or -1. */
+  let symbolPlacements: readonly number[] = [];
 
   // ---------- signs, and walking up to see what a thing is ----------
 
@@ -666,7 +669,28 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
         },
       };
     });
-    subjects = [...buildingSubjects, ...landmarkSubjects, ...treeSubjects];
+    // A file's functions and classes stand on its patch: walk up to one to read what it is.
+    const placed = understory.placements();
+    const symbolSubjects: Subject[] = code === null
+      ? []
+      : code.world.symbols.flatMap((sym, i) => {
+          const p = placed[symbolPlacements[i] ?? -1];
+          const file = code?.files.get(sym.file);
+          if (p === undefined || file === undefined) return [];
+          const { x, z } = p;
+          return [{
+            represented: representSymbol(sym, file),
+            standsAs: withArticle(sym.form),
+            x,
+            z,
+            stand: (fx: number, fz: number) => {
+              const d = Math.hypot(fx - x, fz - z) || 1;
+              const off = p.radius + 2.2;
+              return { x: x + ((fx - x) / d) * off, z: z + ((fz - z) / d) * off };
+            },
+          }];
+        });
+    subjects = [...buildingSubjects, ...landmarkSubjects, ...treeSubjects, ...symbolSubjects];
     const named = new Set<number>();
     const plaqued = trees.flatMap((tree, i) => {
       if (tree.patch !== undefined) {
@@ -1565,7 +1589,9 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
               size: code.world.size,
               sky: code.sky?.name,
               regions: code.world.regions.map((r) => ({ area: r.area, land: r.land, x: Math.round(r.x), z: Math.round(r.z) })),
-              areas: code.world.areas.map((a) => ({ path: a.path, x: Math.round(a.x), z: Math.round(a.z), radius: Math.round(a.radius), depth: a.depth })),
+              areas: code.world.areas.map((a) => ({ path: a.path, x: Math.round(a.x), z: Math.round(a.z), ground: Math.round(a.ground), depth: a.depth })),
+              symbols: code.world.symbols.length,
+              standingSymbols: symbolPlacements.filter((k) => k >= 0).length,
               patches: code.world.patches.length,
               things: code.world.things.map((t) => ({ path: t.path, name: t.name, as: t.as, look: t.look, x: Math.round(t.x), z: Math.round(t.z), vitality: +t.vitality.toFixed(2) })),
               trails: code.world.trails.map((t) => `${t.from}->${t.to}`),
