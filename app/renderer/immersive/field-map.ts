@@ -1,7 +1,9 @@
 // The field map: a hand-drawn map of the world on mottled paper, unfolded
-// from a small map button. Each area (a directory) is a watercolor wash, its
-// hue shared by every area under the same top-level directory, its pigment
-// pooling toward its rim, inside a thin ink border; hills are shaded, water
+// from a small map button. Each area (a directory) and each file's patch is
+// drawn from the outline the layout traces (`outlinesOf`): an area is a
+// watercolor wash, its hue shared by every area under the same top-level
+// directory, its pigment pooling toward its rim, inside a thin ink border;
+// a patch is a faint wash in its health's color. Hills are shaded, water
 // is washed blue and inked at its edge, trails are dotted, trees are dabs,
 // buildings and landmarks are little drawn vignettes, and an inked
 // cartouche carries Gaia's mark. A vermilion arrow says "you are here".
