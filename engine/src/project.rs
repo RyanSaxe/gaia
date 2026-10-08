@@ -623,7 +623,7 @@ pub fn open(root: &Path) -> Result<Opened, String> {
         .enumerate()
         .map(|(i, f)| {
             is_source(f)
-                && !f.source.symbols.is_empty()
+                && f.source.exported() > 0
                 && imported_by[i].is_empty()
                 && !entries.contains(f.path.as_str())
         })
@@ -721,11 +721,11 @@ pub fn open(root: &Path) -> Result<Opened, String> {
                 .iter()
                 .filter(|&&i| !covered_by[i].is_empty())
                 .count();
-            let symbols: usize = sources.iter().map(|&i| read[i].source.symbols.len()).sum();
+            let symbols: usize = sources.iter().map(|&i| read[i].source.exported()).sum();
             let orphaned: usize = sources
                 .iter()
                 .filter(|&&i| unused[i])
-                .map(|&i| read[i].source.symbols.len())
+                .map(|&i| read[i].source.exported())
                 .sum();
             let touching: Vec<&git::Commit> = commits
                 .iter()
@@ -840,7 +840,7 @@ fn surface(i: usize, read: &[Read], reexports: &[Vec<usize>], seen: &mut BTreeSe
     if !seen.insert(i) {
         return 0;
     }
-    read[i].source.symbols.len() as u32
+    read[i].source.exported() as u32
         + reexports[i]
             .iter()
             .map(|&j| surface(j, read, reexports, seen))
@@ -876,7 +876,7 @@ mod tests {
         );
         write(
             "packages/core/src/math.ts",
-            "/** Adds. */\nexport function add(a: number, b: number) {\n  return a + b;\n}\nexport const ZERO = 0;\n",
+            "/** Adds. */\nexport function add(a: number, b: number) {\n  return a + b;\n}\nexport const ZERO = 0;\nfunction twice(a: number) {\n  return add(a, a);\n}\n",
         );
         write(
             "packages/core/test/math.test.ts",
@@ -954,7 +954,10 @@ mod tests {
         assert_eq!(core.name, "@demo/core");
         assert_eq!(core.doc.as_deref(), Some("The core."));
         assert_eq!(core.entry.as_deref(), Some("packages/core/src/index.ts"));
-        assert_eq!(core.exports, 2, "index.ts passes on math.ts's two exports");
+        assert_eq!(
+            core.exports, 2,
+            "index.ts passes on math.ts's two exports, not its own helper"
+        );
         assert_eq!(core.dependents, vec!["packages/app"]);
         assert_eq!(core.tests.files, 1);
         assert_eq!(core.tests.covered, 1.0);

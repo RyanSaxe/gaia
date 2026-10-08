@@ -103,6 +103,32 @@ export const WORLDS: Readonly<Record<string, Look>> = {
   "Heather moor": look("Grey-violet light over heather moors and wind.", "small", "quiet"),
 };
 
+/**
+ * What a file's finer entity stands as on its patch: a stone, a cairn, a bush
+ * or a drift of flowers, each one of the understory's own blueprints (`rule`
+ * and which of its presets), so standing hundreds costs no draw calls.
+ */
+export const FORMS: Readonly<Record<string, { readonly look: Look; readonly rule: string; readonly preset: number }>> = {
+  "Standing stone": { look: look("A single upright stone: one thing done plainly, that others steer by.", "function", "exported", "hub", "medium"), rule: "rocks", preset: 1 },
+  "Mossy boulder": { look: look("A broad boulder gone green with moss: a heavy, settled piece of work.", "large", "class", "rust", "engine"), rule: "rocks", preset: 0 },
+  "Stone family": { look: look("A family of stones, a big one and its small ones: something built of parts.", "class", "geometry", "primitives"), rule: "rocks", preset: 3 },
+  "Bench stone": { look: look("A low flat stone to sit on: a quiet helper.", "small", "test", "constant"), rule: "rocks", preset: 2 },
+  "Box mound": { look: look("A clipped box bush: a small, tidy, well-kept routine.", "small", "function", "typescript", "renderer"), rule: "shrubs", preset: 0 },
+  Blueberry: { look: look("A blueberry bush: a helper that bears fruit for its file.", "function", "test", "world"), rule: "shrubs", preset: 1 },
+  Rhododendron: { look: look("A rhododendron in flower: a showy piece of the interface.", "renderer", "lab", "app", "immersive"), rule: "shrubs", preset: 2 },
+  "Feather shrub": { look: look("A tall, feathery shrub: a light, airy piece that sways with what it reads.", "type", "schema", "terrain"), rule: "shrubs", preset: 3 },
+  Bluebells: { look: look("A carpet of bluebells: a type, a shape the code agrees on, more felt than seen.", "type", "schema", "kinds"), rule: "flowers", preset: 2 },
+  Daisies: { look: look("A drift of daisies: a small constant or value scattered through the code.", "constant", "config", "small"), rule: "flowers", preset: 0 },
+};
+
+/** Whether an area's land holds water, and the reason each choice gives. */
+export const WATERS: Readonly<Record<string, Look>> = {
+  "No water": look("No water: the area's code stands on its own, reading little from its neighbors and passing little on.", "dry", "still", "docs", "config", "test"),
+  "A brook": look("A brook runs through: the area's code flows, one file feeding the next along chains of its own imports.", "flow", "large"),
+  "A trickle": look("A thin trickle: a little flows through, files passing a few things along to each other.", "flow", "small"),
+  "A still pond": look("A still pond gathers: much of the code leans on this area, and what it holds settles here.", "crossroads", "schema", "data"),
+};
+
 export const LOOKS: Looks = {
   world: WORLDS,
   land: Object.fromEntries(Object.entries(LANDS).map(([k, l]) => [k, l.look])),
@@ -110,4 +136,6 @@ export const LOOKS: Looks = {
   building: BUILDINGS,
   landmark: LANDMARKS,
   trail: TRAILS,
+  form: Object.fromEntries(Object.entries(FORMS).map(([k, f]) => [k, f.look])),
+  water: WATERS,
 };

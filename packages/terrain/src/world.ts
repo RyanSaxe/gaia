@@ -12,6 +12,7 @@ import { type AnyPrimitive, type BuildContext, type Blueprint, type Landform, ty
 import { fbm, fieldAt } from "@gaia/primitives";
 import { resolveParams } from "@gaia/realize";
 import { RELIEF_BUDGET, type ReliefReport, measureRelief, withinBudget } from "./budget.ts";
+import { type LandSite, LAND_WARP, siteAt, warpPoint } from "./land.ts";
 import { type Lattice, createLattice, worldOf } from "./lattice.ts";
 import { type SolvedPond, type SolvedStream, carvePond, carveStream, shoreField, solvePond, solveStream } from "./water.ts";
 
@@ -28,6 +29,14 @@ export interface RegionSpec {
    * which divides the land evenly between neighboring middles.
    */
   readonly reach?: number;
+  /**
+   * The cells the region's land is made of, when it is more than one: its
+   * ground is every point whose nearest site (`siteAt`) is one of these, so
+   * its border follows theirs. Absent, the region is one cell, at its middle
+   * with its reach. A world laid out from code gives each region the sites
+   * of its files' patches.
+   */
+  readonly sites?: readonly LandSite[];
   /** A blueprint of the `biome` kind. Terrain reads its relief slot. */
   readonly biome: Blueprint;
 }
@@ -45,9 +54,9 @@ export const TERRAIN = {
   skirt: 80,
   /** Width of the band over which neighboring regions' landforms and covers blend, meters. */
   blend: 130,
-  /** How far region borders wander from straight lines, meters, and over what wavelength. */
-  warp: 34,
-  warpWavelength: 150,
+  /** How far region borders wander from straight lines, meters, and over what wavelength (`LAND_WARP`). */
+  warp: LAND_WARP.amount,
+  warpWavelength: LAND_WARP.wavelength,
   /** How strongly covers break into patches across a blend; 0 is a plain gradient. */
   drift: 1.2,
   /** How abruptly one cover's patch gives way to the next's. */
@@ -114,29 +123,82 @@ const smooth = (t: number): number => {
   return c * c * (3 - 2 * c);
 };
 
-const WARP_SEEDS = [5101, 5203] as const;
 const DRIFT_SEED = 6007;
 
-/** A point moved by the domain warp that makes region borders curve and wander. */
-function warped(x: number, z: number): [number, number] {
-  const u = x / TERRAIN.warpWavelength;
-  const v = z / TERRAIN.warpWavelength;
-  return [x + TERRAIN.warp * fbm(WARP_SEEDS[0], u, v, 2, 0.4), z + TERRAIN.warp * fbm(WARP_SEEDS[1], u, v, 2, 0.4)];
-}
+/** Which one-cell region's warped cell holds (x, z): the one whose landform weighs most there, as `regionWeights` finds it. */
+export const cellAt = (sites: readonly LandSite[], x: number, z: number): number => siteAt(sites, x, z);
 
-/** Which region's warped cell holds (x, z): the one whose landform weighs most there, as `regionWeights` finds it. */
-export function cellAt(sites: readonly { readonly x: number; readonly z: number; readonly reach?: number }[], x: number, z: number): number {
-  const [wx, wz] = warped(x, z);
-  let best = 0;
-  let nearest = Infinity;
-  sites.forEach((r, i) => {
-    const d = Math.hypot(wx - r.x, wz - r.z) - (r.reach ?? 0);
-    if (d < nearest) {
-      nearest = d;
-      best = i;
+/** Side of a region field's lookup cell, meters. */
+const FIELD_CELL = 24;
+
+/**
+ * What `regionWeights` reads quickly: per lookup cell (over warped points),
+ * the regions that can weigh anything in it and, for each, the sites that
+ * can be its nearest there, as (region, from, to) triples over `order`.
+ */
+interface RegionField {
+  readonly x0: number;
+  readonly n: number;
+  readonly sites: readonly (readonly LandSite[])[];
+  readonly starts: Int32Array;
+  readonly runs: Int32Array;
+  /** Site indices grouped per run: a run of region r lists indices into `sites[r]`. */
+  readonly order: Int32Array;
+}
+const fields = new WeakMap<WorldSpec, RegionField>();
+
+function regionField(spec: WorldSpec): RegionField {
+  const had = fields.get(spec);
+  if (had !== undefined) return had;
+  const sites = spec.regions.map((r) => r.sites ?? [{ x: r.x, z: r.z, reach: r.reach ?? 0 }]);
+  const half = spec.size / 2 + TERRAIN.skirt + TERRAIN.warp * 2;
+  const x0 = -half;
+  const n = Math.max(1, Math.ceil((half * 2) / FIELD_CELL));
+  const starts = new Int32Array(n * n + 1);
+  const runs: number[] = [];
+  const order: number[] = [];
+  const lo = sites.map((s) => new Float64Array(s.length));
+  const regionLo = new Float64Array(sites.length);
+  const regionHi = new Float64Array(sites.length);
+  for (let j = 0; j < n; j++) {
+    for (let i = 0; i < n; i++) {
+      const ax = x0 + i * FIELD_CELL;
+      const az = x0 + j * FIELD_CELL;
+      let bestHi = Infinity;
+      sites.forEach((list, r) => {
+        let rLo = Infinity;
+        let rHi = Infinity;
+        const los = lo[r] as Float64Array;
+        list.forEach((s, k) => {
+          const dx = Math.max(ax - s.x, 0, s.x - ax - FIELD_CELL);
+          const dz = Math.max(az - s.z, 0, s.z - az - FIELD_CELL);
+          const fx = Math.max(Math.abs(s.x - ax), Math.abs(s.x - ax - FIELD_CELL));
+          const fz = Math.max(Math.abs(s.z - az), Math.abs(s.z - az - FIELD_CELL));
+          const reach = s.reach ?? 0;
+          const l = Math.hypot(dx, dz) - reach;
+          los[k] = l;
+          rLo = Math.min(rLo, l);
+          rHi = Math.min(rHi, Math.hypot(fx, fz) - reach);
+        });
+        regionLo[r] = rLo;
+        regionHi[r] = rHi;
+        bestHi = Math.min(bestHi, rHi);
+      });
+      starts[j * n + i] = runs.length;
+      sites.forEach((list, r) => {
+        // A region farther than the blend band beyond the nearest weighs nothing anywhere in this cell.
+        if ((regionLo[r] as number) > bestHi + TERRAIN.blend) return;
+        const los = lo[r] as Float64Array;
+        const from = order.length;
+        for (let k = 0; k < list.length; k++) if ((los[k] as number) <= (regionHi[r] as number)) order.push(k);
+        runs.push(r, from, order.length);
+      });
     }
-  });
-  return best;
+  }
+  starts[n * n] = runs.length;
+  const field = { x0, n, sites, starts, runs: Int32Array.from(runs), order: Int32Array.from(order) };
+  fields.set(spec, field);
+  return field;
 }
 
 /**
@@ -145,15 +207,36 @@ export function cellAt(sites: readonly { readonly x: number; readonly z: number;
  * so the cells' borders curve and wander. Heights blend by these weights.
  */
 export function regionWeights(spec: WorldSpec, x: number, z: number, out: Float64Array): void {
-  const [wx, wz] = warped(x, z);
+  const [wx, wz] = warpPoint(x, z);
+  const f = regionField(spec);
+  const i = Math.floor((wx - f.x0) / FIELD_CELL);
+  const j = Math.floor((wz - f.x0) / FIELD_CELL);
+  const count = spec.regions.length;
+  out.fill(Infinity, 0, count);
   let nearest = Infinity;
-  for (let i = 0; i < spec.regions.length; i++) {
-    const r = spec.regions[i] as RegionSpec;
-    const d = Math.hypot(wx - r.x, wz - r.z) - (r.reach ?? 0);
-    out[i] = d;
-    if (d < nearest) nearest = d;
+  const within = i >= 0 && j >= 0 && i < f.n && j < f.n;
+  if (within) {
+    const c = j * f.n + i;
+    for (let q = f.starts[c] as number; q < (f.starts[c + 1] as number); q += 3) {
+      const r = f.runs[q] as number;
+      const list = f.sites[r] as readonly LandSite[];
+      let d = Infinity;
+      for (let o = f.runs[q + 1] as number; o < (f.runs[q + 2] as number); o++) {
+        const s = list[f.order[o] as number] as LandSite;
+        d = Math.min(d, Math.hypot(wx - s.x, wz - s.z) - (s.reach ?? 0));
+      }
+      out[r] = d;
+      if (d < nearest) nearest = d;
+    }
+  } else {
+    f.sites.forEach((list, r) => {
+      let d = Infinity;
+      for (const s of list) d = Math.min(d, Math.hypot(wx - s.x, wz - s.z) - (s.reach ?? 0));
+      out[r] = d;
+      if (d < nearest) nearest = d;
+    });
   }
-  for (let i = 0; i < spec.regions.length; i++) out[i] = 1 - smooth(((out[i] as number) - nearest) / TERRAIN.blend);
+  for (let r = 0; r < count; r++) out[r] = 1 - smooth(((out[r] as number) - nearest) / TERRAIN.blend);
 }
 
 /**

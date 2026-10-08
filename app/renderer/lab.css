@@ -80,6 +80,22 @@ body { font: 12.5px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; overfl
 /* While a world first bakes, a quiet veil the color of a hazy sky; it lifts once the world stands. */
 .veil { position: absolute; inset: 0; z-index: 2; display: grid; place-items: center; background: linear-gradient(#b9cfe0, #dfe6df 62%, #c9d3b8); color: #46524a; font-size: 13px; letter-spacing: 0.02em; transition: opacity 0.9s ease, visibility 0s linear 0.9s; }
 .veil.lifted { opacity: 0; visibility: hidden; pointer-events: none; }
+/* While a codebase's world opens: what is happening, a hairline of how much is done, and the one question asked
+   before Jev is, written on a small page of warm paper under Gaia's mark. */
+.veil-words { display: grid; justify-items: center; gap: 10px; max-width: min(460px, calc(100vw - 32px)); text-align: center; }
+.veil-done { display: block; width: 180px; height: 1px; background: rgba(70, 82, 74, 0.18); }
+.veil-done i { display: block; height: 100%; width: 0; background: rgba(70, 82, 74, 0.62); transition: width 0.6s ease; }
+.veil-ask {
+  max-width: min(400px, calc(100vw - 32px)); padding: 16px 20px 18px; border-radius: 10px; text-align: center;
+  background: #f7f1e3; color: #3a3226; box-shadow: 0 14px 36px rgba(30, 22, 10, 0.2), 0 0 0 1px rgba(74, 60, 44, 0.08);
+  font: 15px/1.5 "Iowan Old Style", Georgia, "Times New Roman", serif; animation: page-in 0.45s ease-out both;
+}
+.veil-ask p { margin: 0 0 14px; }
+.veil-choices { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.veil-choices button { font: italic 600 14.5px "Iowan Old Style", Georgia, "Times New Roman", serif; color: #3a3226; background: transparent; border: 1px solid rgba(74, 60, 44, 0.32); border-radius: 999px; padding: 7px 18px; min-height: 40px; cursor: pointer; }
+.veil-choices button[data-answer="true"] { background: #6f9a45; border-color: #56803a; color: #fbf6e8; }
+.veil-choices button:hover, .veil-choices button:focus-visible { outline: none; border-color: rgba(74, 60, 44, 0.6); box-shadow: 0 0 0 3px rgba(111, 154, 69, 0.2); }
+.veil-choices button[data-answer="true"]:hover, .veil-choices button[data-answer="true"]:focus-visible { background: #648d3d; }
 .view { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
 .view:active { cursor: grabbing; }
 .bar { position: absolute; left: 10px; right: 10px; display: flex; gap: 8px; align-items: center; pointer-events: none; }
@@ -272,6 +288,10 @@ details.json pre { font: 11px/1.45 ui-monospace, "SF Mono", Menlo, monospace; ba
 .veil-mark svg .gaia-logo-leaf { transform-box: fill-box; transform-origin: 50% 100%; }
 @keyframes veil-breathe { from { transform: translateY(0); } to { transform: translateY(-3px); } }
 .veil-status { font: italic 15px/1.4 "Iowan Old Style", Georgia, "Times New Roman", serif; color: #55604f; letter-spacing: 0.02em; min-height: 1.4em; }
+.veil-status[hidden] + .veil-done { display: none; }
+/* While the veil is down (the first bake, or a question asked later), nothing of the world's paper sits over it. */
+.lab-terrain:has(.veil:not(.lifted)) .wayfinding { opacity: 0; }
+.lab-terrain:has(.veil:not(.lifted)) .wayfinding button { pointer-events: none !important; }
 /* A thing's card is a page of the field guide, laid over the world only while it is read. */
 .lab-terrain.immersive .panel { display: none; }
 .lab-terrain.immersive .panel.showing-card {

@@ -167,7 +167,7 @@ export function createUnderstory(scene: THREE.Scene, light: SceneLight, lib: Lib
         plants.forEach((plant, variant) => {
           const spots = placed
             .filter((p) => p.rule === group.id && p.variant === variant)
-            .map((p) => ({ x: p.x, y: p.y, z: p.z, yaw: p.yaw, scale: p.scale, slope: p.slope, hue: ((((p.x * 12.9898 + p.z * 78.233) % 1) + 1) % 1) * 0.04 - 0.02 }));
+            .map((p) => ({ x: p.x, y: p.y, z: p.z, yaw: p.yaw, scale: p.scale, slope: p.slope, hue: ((((p.x * 12.9898 + p.z * 78.233) % 1) + 1) % 1) * 0.04 - 0.02, ...(p.vitality === undefined ? {} : { vitality: p.vitality }) }));
           const key = `${group.id}/${variant}`;
           const had = kept.get(key);
           if (had !== undefined) {

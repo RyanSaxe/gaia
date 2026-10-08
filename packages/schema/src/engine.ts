@@ -17,17 +17,35 @@ export interface EngineMethods {
   "project.open": { params: { root: string }; result: CodeModel };
   /** Sends one request to Jev with the key from the macOS Keychain. Fails unless the engine runs with GAIA_JEV=live. */
   "jev.ask": { params: { request: JevRequest }; result: JevResponse };
-  /** Sends many requests, eight at a time, answering in the order asked. Fails unless the engine runs with GAIA_JEV=live. */
-  "jev.batch": { params: { requests: JevRequest[] }; result: { responses: JevResponse[] } };
+  /**
+   * Sends many requests, eight at a time, answering in the order asked: each
+   * a response, or the reason that one request failed. Fails as a whole only
+   * when nothing can be sent, such as when the engine runs without GAIA_JEV=live.
+   */
+  "jev.batch": { params: { requests: JevRequest[] }; result: { responses: (JevResponse | JevFailure)[] } };
   /** What a batch would send and cost, without sending it or reading the key. */
   "jev.estimate": { params: { requests: JevRequest[] }; result: JevEstimate };
-  /** Reads one record from the project's app-data store. */
-  "store.get": { params: { table: StoreTable; key: string }; result: { value: unknown } | null };
+  /**
+   * Whether an OpenRouter key is in the Keychain (asked without reading it)
+   * and whether this engine runs with GAIA_JEV=live. Only these two flags
+   * cross; the key never does.
+   */
+  "jev.status": { params: Record<string, never>; result: { key: boolean; live: boolean } };
+  /** Reads one record from a project's app-data store; null when it was never written. */
+  "store.get": { params: { project: string; table: StoreTable; key: string }; result: { value: unknown } | null };
+  /** Reads every record of one table of a project's store, by key. */
+  "store.read": { params: { project: string; table: StoreTable }; result: { records: Record<string, unknown> } };
   /** Writes records atomically, so a world update is never half-saved. */
-  "store.put": { params: { writes: { table: StoreTable; key: string; value: unknown }[] }; result: { ok: true } };
+  "store.put": { params: { project: string; writes: { table: StoreTable; key: string; value: unknown }[] }; result: { ok: true } };
 }
 
-export type StoreTable = "answers" | "blueprints" | "document" | "placements";
+/** The tables of a project's app-data store (`engine/src/store.rs`). */
+export type StoreTable = "answers" | "blueprints" | "document" | "placements" | "settings";
+
+/** One request of a batch that failed on its own, and why. */
+export interface JevFailure {
+  readonly error: string;
+}
 
 /** The code model of one project, as `project.open` reports it. */
 export interface CodeModel {

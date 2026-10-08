@@ -291,21 +291,36 @@ the lantern lights it at night. Nothing fades in or appears. A sign follows
 the vitality of what it names: its paint fades and flakes, its wood greys
 and it leans on its post. All signs draw as one instanced mesh.
 
-Tapping a building, a tree or a sign walks the person up to it (to the end
-of a building's walk, or just outside a tree's crown on their side), and
+Tapping a building, a tree, a sign, or the stone, bush or flowers a
+function or class stands as walks the person up to it (to the end of a
+building's walk, just outside a tree's crown, or a couple of steps from a
+function's stone on their side), and
 when they arrive the view turns gently, in about a second, to frame the
 thing beside its card, and the card opens: in the immersive world, a page
 laid over the world (at the top right under the corner controls on a wide
 screen, the thing framed in the strip beside it; along the bottom on a
 phone, the thing framed above it); in the Terrain view, in the panel or the
-sheet. A thing already close counts as arrived. A new tap or a key cancels
+sheet. A low thing, such as a function's stone or bush, is framed by its
+own middle, looking down at it at the person's feet. A thing already close
+counts as arrived. A new tap or a key cancels
 the walk and the card stays shut. The card belongs to its thing: walking
 more than 4 m from where it opened closes it, fading as it came, and so do
 its × and Esc. The card reads like a page from a field guide: what kind of thing it
 is, its name, what it does, where it lives in the code, its size, what it
-leans on and what leans on it, what it stands as in the world, and its
-vitality in words (thriving, healthy, tired, failing, in ruins) with the
-signals behind it, each with its reading.
+leans on and what leans on it, what it stands as in the world, who judged
+that (Jev, or the stand-in when Jev did not answer), and its vitality in
+words (thriving, healthy, tired, failing, in ruins) with the signals behind
+it, each with its reading.
+
+While a codebase's world opens, it waits behind the veil, the color of a
+hazy sky, with Gaia's mark breathing at its middle (see Gaia's mark). Under
+the mark one line says in the world's italic what is happening ("Reading
+gaia-v3…", "Asking Jev about 273 places… 96 answered") over a hairline of
+how much is done. Before anything is sent to Jev, the veil asks once per
+project: the question, with the run's size and cost, is written on a small
+page of warm paper under the mark, with two answers: Ask Jev, in moss
+green, and Use the stand-in, in ink. The world appears only once it is
+fully judged.
 
 ## One way to touch the world
 
@@ -351,9 +366,11 @@ controls come in as the veil lifts.
 The immersive world opens on Gaia's own world. Where a person is comes from
 one function, `placeAt` in `@gaia/terrain`: the area (a directory) whose land
 they stand on, and the file whose patch of ground is underfoot, if any. In a
-world laid out from code each directory's area is a circle nested in its
-parent's, the deepest one holding the point names it, and land no circle
-holds is the repository's own common ground. In the sample world an area's
+world laid out from code the land is all patches: each file's ground is a
+few organic cells, its directory's area is its files' and subdirectories'
+ground together, and an entity's lot is its area's own ground. Areas nest
+and fill the land, and their borders wander like fields' and are where the
+regions' covers change. In the sample world an area's
 border runs where its region's landform gives way to the next, so the
 islands where ground covers drift across a border never flicker a name, and
 a file's patch is the ground around the tree that stands for it. Past the
@@ -379,8 +396,8 @@ The three ways work together:
   area is a watercolor wash, every area under one top-level directory
   sharing a hue, its pigment pooling darker toward its rim and granulating
   into the paper's tooth, on the pale meadow of the repository's own common
-  ground, inside a thin ink border. Each file's patch is a faint ring washed
-  in its health's color; hills are shaded from the northwest, water washed
+  ground, inside a thin ink border. Each file's patch is its own shape,
+  faintly inked and washed in its health's color; hills are shaded from the northwest, water washed
   blue and inked at its edge, trails dotted, trees small dabs browning with
   their files' vitality, wild brush past the land's edge, and a vermilion
   arrow says "you are here". Buildings and landmarks are little drawn
@@ -391,7 +408,8 @@ The three ways work together:
   over "a field map of" and the repository's name, and a compass rose and a
   scale sit in the lower corners. After dark the sheet is read by the
   lantern: a warm pool low on the right, its edges falling into blue. Areas
-  are drawn from whatever `placeAt` answers, never from a fixed shape. Names
+  and patches are drawn from the outlines `outlinesOf` traces, never from a
+  fixed shape, and the repository's own ground is a pale meadow. Names
   stay one size at any zoom and the larger area's name wins where two would
   collide. It pans and zooms by drag, pinch or scroll; a phone opens it
   close around the person, a wide screen shows it whole. Its paper is
@@ -417,8 +435,8 @@ lighter wash up and to the left of each stroke so it reads round, a soft
 shadow on the paper, and a two-leaf sprout growing from the i in place of
 its dot, after v1's. The sprout alone, on a round of paper, is the page's
 icon. The mark opens the world on the veil while it bakes, over a soft
-wash of light with one status line under it (`data-ref="veil-status"`),
-heads the slip, and signs the field map's cartouche. The SVG files are the
+wash of light with the veil's words and question under it, heads the slip,
+and signs the field map's cartouche. The SVG files are the
 source; nothing redraws the mark in code.
 
 ## Trails

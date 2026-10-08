@@ -192,6 +192,7 @@ describe("structures", () => {
     });
   }
 
+  // Builds 80 whole buildings at their largest: about 3 s alone, longer when the suite runs in parallel.
   it("keeps any building in the type space within 32k triangles and 11 draw calls, at its largest", () => {
     const r = rand(99);
     for (let i = 0; i < 80; i++) {
@@ -200,7 +201,7 @@ describe("structures", () => {
       expect(triangleCount(built.parts), JSON.stringify(bp.slots)).toBeLessThan(32_000);
       expect(mergeParts(built.parts).length).toBeLessThanOrEqual(11);
     }
-  });
+  }, 30_000);
 
   it("builds every part of a cottage on the footprint's one plan", () => {
     const built = realize((STRUCTURE_PRESETS[0] as (typeof STRUCTURE_PRESETS)[number]).blueprint, structure, structureLib, { seed: 4, facts });

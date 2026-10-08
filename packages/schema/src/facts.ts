@@ -1,11 +1,20 @@
 // The code model for one file. The Rust engine produces it; in the real
 // repository this file is generated from the Rust structs, never hand-edited.
 
+/**
+ * One of a file's finer entities: every symbol it exports, and the functions
+ * and classes declared at its top level without exporting them
+ * (`exported: false`), each with its doc comment and the lines it spans.
+ */
 export interface SymbolFact {
   readonly name: string;
   readonly kind: "function" | "class" | "type" | "constant" | "module";
   readonly exported: boolean;
   readonly doc?: string;
+  /** 1-based line of its declaration. */
+  readonly line?: number;
+  /** How many lines it spans, at least 1. */
+  readonly lines?: number;
 }
 
 /** The part a file plays, which says what kind of ground its patch is. */

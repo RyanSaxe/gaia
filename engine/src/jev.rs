@@ -5,6 +5,11 @@
 //! sent (never the key) and what it would cost, and touches neither the
 //! network nor the Keychain. The key never leaves this process: it goes to
 //! curl on stdin, never on a command line and never back over the protocol.
+//!
+//! Tests point the connector at a local stand-in for OpenRouter with
+//! `GAIA_JEV_ENDPOINT`, which accepts only a loopback address. A local
+//! endpoint is sent a placeholder key and the Keychain is never read, so the
+//! person's key can only ever go to OpenRouter.
 
 use serde_json::{Value, json};
 use std::io::Write;
@@ -26,9 +31,65 @@ pub const BYTES_PER_TOKEN: f64 = 1.8;
 pub const KEYCHAIN_SERVICE: &str = "gaia-openrouter";
 pub const KEYCHAIN_ACCOUNT: &str = "openrouter";
 
+/// The key a local stand-in for OpenRouter receives in place of the person's.
+pub const LOCAL_KEY: &str = "local-stand-in";
+
 /// True when the person turned live Jev calls on for this engine.
 pub fn live() -> bool {
     std::env::var("GAIA_JEV").is_ok_and(|v| v == "live")
+}
+
+/// Where requests go: OpenRouter, or a local stand-in for it (tests only).
+enum Endpoint {
+    OpenRouter,
+    Local(String),
+}
+
+impl Endpoint {
+    fn url(&self) -> &str {
+        match self {
+            Endpoint::OpenRouter => ENDPOINT,
+            Endpoint::Local(url) => url,
+        }
+    }
+}
+
+/// OpenRouter, unless `GAIA_JEV_ENDPOINT` names a loopback address.
+fn endpoint() -> Result<Endpoint, String> {
+    match std::env::var("GAIA_JEV_ENDPOINT") {
+        Err(_) => Ok(Endpoint::OpenRouter),
+        Ok(url) if is_loopback(&url) => Ok(Endpoint::Local(url)),
+        Ok(url) => Err(format!(
+            "GAIA_JEV_ENDPOINT is only for a local stand-in of OpenRouter, at http://127.0.0.1:<port>/…; {url} is not one."
+        )),
+    }
+}
+
+fn is_loopback(url: &str) -> bool {
+    ["http://127.0.0.1:", "http://localhost:", "http://[::1]:"]
+        .iter()
+        .any(|prefix| url.starts_with(prefix))
+}
+
+/// Whether a key is configured, without reading it: the Keychain is asked
+/// only whether the item exists. A local stand-in needs no key.
+pub fn has_key() -> bool {
+    match endpoint() {
+        Ok(Endpoint::Local(_)) => true,
+        Ok(Endpoint::OpenRouter) => Command::new("security")
+            .args([
+                "find-generic-password",
+                "-s",
+                KEYCHAIN_SERVICE,
+                "-a",
+                KEYCHAIN_ACCOUNT,
+            ])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .is_ok_and(|s| s.success()),
+        Err(_) => false,
+    }
 }
 
 /// One request's body exactly as it would be posted, and its estimated cost.
@@ -42,7 +103,7 @@ pub fn price(request: &Value) -> (String, u64, f64) {
 pub fn dry_run(requests: &[Value]) -> Value {
     let priced: Vec<(String, u64, f64)> = requests.iter().map(price).collect();
     json!({
-        "endpoint": ENDPOINT,
+        "endpoint": endpoint().map_or(ENDPOINT.to_string(), |e| e.url().to_string()),
         "requests": requests.len(),
         "questions": requests.iter().map(|r| r["questions"].as_object().map_or(0, |q| q.len())).sum::<usize>(),
         "bytes": priced.iter().map(|p| p.0.len()).sum::<usize>(),
@@ -54,7 +115,10 @@ pub fn dry_run(requests: &[Value]) -> Value {
     })
 }
 
-fn key() -> Result<String, String> {
+fn key(endpoint: &Endpoint) -> Result<String, String> {
+    if let Endpoint::Local(_) = endpoint {
+        return Ok(LOCAL_KEY.to_string());
+    }
     let out = Command::new("security")
         .args([
             "find-generic-password",
@@ -74,16 +138,24 @@ fn key() -> Result<String, String> {
     Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
 }
 
-/// Posts one request with curl, the key passed on stdin as a header.
-fn send(key: &str, request: &Value) -> Result<Value, String> {
+/// Posts one request with curl, the key passed on stdin as a header. curl
+/// retries a transient failure (a timeout, 429 or 5xx) twice, and gives up on
+/// one request after 90 seconds.
+fn send(url: &str, key: &str, request: &Value) -> Result<Value, String> {
     let started = Instant::now();
     let mut child = Command::new("curl")
         .args([
             "-sS",
             "--fail-with-body",
+            "--connect-timeout",
+            "10",
+            "--max-time",
+            "90",
+            "--retry",
+            "2",
             "-X",
             "POST",
-            ENDPOINT,
+            url,
             "-H",
             "Content-Type: application/json",
             "-H",
@@ -124,23 +196,33 @@ fn send(key: &str, request: &Value) -> Result<Value, String> {
 }
 
 /// Sends every request, CONCURRENCY at a time, answering in the order asked.
+/// Each answer is a `JevResponse`, or `{ "error": … }` for a request that
+/// failed on its own; the whole batch fails only when nothing can be sent.
 pub fn batch(requests: Vec<Value>) -> Result<Vec<Value>, String> {
     if !live() {
         return Err(
             "Jev is off: the engine sends nothing until it runs with GAIA_JEV=live.".into(),
         );
     }
-    let key = Arc::new(key()?);
+    let endpoint = endpoint()?;
+    let key = Arc::new(key(&endpoint)?);
+    let url = Arc::new(endpoint.url().to_string());
     let jobs = Arc::new(Mutex::new(
         requests.into_iter().enumerate().collect::<Vec<_>>(),
     ));
     let results = Arc::new(Mutex::new(Vec::new()));
     let workers: Vec<_> = (0..CONCURRENCY)
         .map(|_| {
-            let (key, jobs, results) = (Arc::clone(&key), Arc::clone(&jobs), Arc::clone(&results));
+            let (url, key, jobs, results) = (
+                Arc::clone(&url),
+                Arc::clone(&key),
+                Arc::clone(&jobs),
+                Arc::clone(&results),
+            );
             std::thread::spawn(move || {
                 while let Some((i, request)) = jobs.lock().map(|mut j| j.pop()).ok().flatten() {
-                    let answer = send(&key, &request);
+                    let answer =
+                        send(&url, &key, &request).unwrap_or_else(|e| json!({ "error": e }));
                     if let Ok(mut r) = results.lock() {
                         r.push((i, answer));
                     }
@@ -156,7 +238,7 @@ pub fn batch(requests: Vec<Value>) -> Result<Vec<Value>, String> {
         .into_inner()
         .map_err(|e| e.to_string())?;
     results.sort_by_key(|(i, _)| *i);
-    results.into_iter().map(|(_, r)| r).collect()
+    Ok(results.into_iter().map(|(_, r)| r).collect())
 }
 
 #[cfg(test)]

@@ -15,3 +15,4 @@ export * from "./paths.ts";
 export * from "./landmarks.ts";
 export * from "./solids.ts";
 export * from "./places.ts";
+export * from "./land.ts";

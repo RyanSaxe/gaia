@@ -6,6 +6,7 @@ mod jev;
 mod project;
 mod rpc;
 mod source;
+mod store;
 
 use std::io::{self, BufRead, Write};
 use std::process::ExitCode;
