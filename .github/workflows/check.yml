@@ -1,15 +1,27 @@
-# The same checks as the pre-commit hook, on every push and pull request.
+# The same checks as the pre-commit hook (.githooks/pre-commit), on every push
+# and pull request: the type checker, the lint rules and the tests, then the
+# engine's tests and clippy. macOS, because Gaia is a Mac app and its engine
+# keeps the Jev key in the Keychain.
 name: check
 
 on:
   push:
   pull_request:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check:
     runs-on: macos-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+      # pnpm's version comes from package.json's packageManager.
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
@@ -18,7 +30,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
+      # Keeps cargo's registry and target/ between runs, so the engine builds incrementally.
+      - uses: Swatinem/rust-cache@v2
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
-      - run: cargo test
-      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test --quiet
+      - run: cargo clippy --all-targets --quiet -- -D warnings
