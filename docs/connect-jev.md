@@ -20,7 +20,7 @@ pnpm install
 GAIA_JEV=live pnpm dev
 ```
 
-The app opens on this repository's world. Gaia asks Jev with no question
+The app opens on the start; choose a world there. Gaia asks Jev with no question
 when judging costs no more than your spend limit: $0.10 a project unless you
 set another (`DEFAULT_SPEND_LIMIT_USD` in `app/world-service/open-world.ts`).
 Only when a project's estimate is over the limit does a small paper slip
@@ -46,8 +46,13 @@ front of you. Walk up to anything and its card says **Judged by Jev**, or
 **Judged by the stand-in** if Jev refused or failed that request (a failed
 request is asked again on the next live start).
 
-To see another codebase, choose **File > Open Folder…** (⌘O), or start with
-`GAIA_PROJECT=/path/to/repo GAIA_JEV=live pnpm dev`.
+With no project named, Gaia opens on the start: the worlds you opened
+before, a folder on this computer, or the address of a public repository on
+GitHub (`github.com/owner/name`), which Gaia clones into
+`~/Library/Application Support/Gaia/clones/` and judges like any other
+codebase, within the same spend limit. **File > Choose a World…** (⇧⌘O)
+returns to it, **File > Open Folder…** (⌘O) opens a folder directly, and
+`GAIA_PROJECT=/path/to/repo GAIA_JEV=live pnpm dev` skips the start.
 
 ## What it costs
 

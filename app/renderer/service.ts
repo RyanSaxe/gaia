@@ -7,7 +7,7 @@ import type { FromRenderer, ToRenderer } from "../world-service/protocol.ts";
 declare global {
   interface Window {
     /** Set by the preload script when the page runs inside the app. */
-    gaiaShell?: { readonly app: "electron" };
+    gaiaShell?: { readonly app: "electron"; readonly chooseFolder: () => Promise<string | null> };
   }
 }
 

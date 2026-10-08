@@ -19,7 +19,7 @@ pub const TABLES: &[&str] = &[
     "settings",
 ];
 
-fn data_dir() -> Result<PathBuf, String> {
+pub(crate) fn data_dir() -> Result<PathBuf, String> {
     if let Ok(dir) = std::env::var("GAIA_DATA_DIR") {
         return Ok(PathBuf::from(dir));
     }

@@ -1,5 +1,8 @@
 //! The engine protocol: newline-delimited JSON-RPC 2.0. The TypeScript side of
 //! the same contract is `EngineMethods` in `packages/schema/src/engine.ts`.
+//! `project.locate` and `project.clone` answer a GitHub address that leads
+//! nowhere (not an address, no public repository there, GitHub unreachable,
+//! past a cap) with an ordinary result naming why, not an error.
 
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -43,6 +46,14 @@ pub fn handle(line: &str) -> Value {
                     serde_json::to_value(opened).map_err(|e| (FAILED, e.to_string()))
                 }),
             None => Err((INVALID_PARAMS, "project.open needs a root.".into())),
+        },
+        "project.locate" => match p["address"].as_str() {
+            Some(address) => crate::clone::locate(address).map_err(|e| (FAILED, e)),
+            None => Err((INVALID_PARAMS, "project.locate needs an address.".into())),
+        },
+        "project.clone" => match p["address"].as_str() {
+            Some(address) => crate::clone::clone(address).map_err(|e| (FAILED, e)),
+            None => Err((INVALID_PARAMS, "project.clone needs an address.".into())),
         },
         "jev.ask" => match p.get("request") {
             Some(r) => crate::jev::batch(vec![r.clone()])
@@ -145,6 +156,28 @@ mod tests {
                 r#"{"jsonrpc":"2.0","id":4,"method":"project.open","params":{"root":"/no/such/dir"}}"#
             )["error"]["code"],
             FAILED
+        );
+    }
+
+    #[test]
+    fn an_address_that_is_not_a_github_repository_goes_nowhere() {
+        let locate = handle(
+            r#"{"jsonrpc":"2.0","id":5,"method":"project.locate","params":{"address":"https://gitlab.com/a/b"}}"#,
+        );
+        assert_eq!(
+            locate["result"],
+            json!({ "found": false, "why": "address" })
+        );
+        let clone = handle(
+            r#"{"jsonrpc":"2.0","id":6,"method":"project.clone","params":{"address":"git@github.com:a/b.git"}}"#,
+        );
+        assert_eq!(
+            clone["result"],
+            json!({ "cloned": false, "why": "address" })
+        );
+        assert_eq!(
+            handle(r#"{"jsonrpc":"2.0","id":7,"method":"project.clone","params":{}}"#)["error"]["code"],
+            INVALID_PARAMS
         );
     }
 }

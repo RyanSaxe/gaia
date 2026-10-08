@@ -16,7 +16,8 @@ import { type Blueprint, type CodeModel, type EntityFacts, type FileFacts, type 
 import { FLORA_PRESETS, LANDMARK_PRESETS, TRAIL_PRESETS, WORLD_PRESETS } from "@gaia/realize";
 import { type WorldSpec, outlinesOf } from "@gaia/terrain";
 import { type CodeWorld, type Judge, judgeWorld, judgedThing, keptJev, layoutWorld, planWorldRequests, requestKey, standInJev, thingsOf } from "@gaia/world";
-import type { ConsentPlan, Opening, WorldDocument } from "../../world-service/protocol.ts";
+import type { ConsentPlan, Opening, StartChoice, StartOffer, WorldDocument } from "../../world-service/protocol.ts";
+import { postcardOf } from "../../world-service/postcard.ts";
 import { type WorldService, worldService } from "../service.ts";
 import snapshot from "./fixtures/gaia.json";
 import kept from "./fixtures/gaia-jev.json";
@@ -33,6 +34,8 @@ export interface Veil {
   baking(): void;
   /** Asks whether to send `plan` to Jev; resolves true to go ahead. */
   ask(plan: ConsentPlan): Promise<boolean>;
+  /** Offers the start when no folder is named (app/renderer/start/); resolves with the place chosen. The next `opening` takes it away. */
+  choose(offer: StartOffer): Promise<StartChoice>;
 }
 
 export interface CodeLab {
@@ -110,6 +113,7 @@ function serviceWorld(service: WorldService, veil: Veil): Promise<WorldDocument>
   return new Promise((resolve, reject) => {
     const off = service.on((m) => {
       if (m.type === "world.progress") veil.opening(m.opening);
+      else if (m.type === "world.start") void veil.choose(m.offer).then((place) => service.send({ type: "world.choose", place }));
       else if (m.type === "world.consent") void veil.ask(m.plan).then((approve) => service.send({ type: "world.consent", approve }));
       else if (m.type === "world.document") {
         off();
@@ -144,14 +148,30 @@ async function snapshotWorld(why: string): Promise<WorldDocument> {
   return { root: model.repository.name, model, world, judges, summary };
 }
 
+/**
+ * The start on a page with no engine, to see it (`?start=table|signpost`):
+ * Gaia's own world is the one world walked before, and any choice opens it,
+ * except an address, which a page with no engine cannot follow.
+ */
+async function previewStart(veil: Veil): Promise<void> {
+  const model = snapshot as unknown as CodeModel;
+  const world = layoutWorld(model, await judgeWorld(model, LOOKS, standInJev(LOOKS)));
+  const recent = [{ root: model.repository.name, name: model.repository.name, at: Date.now(), postcard: postcardOf(world) }];
+  let place = await veil.choose({ recent });
+  while ("address" in place) place = await veil.choose({ recent, refused: { address: place.address, why: "offline" } });
+  veil.opening({ stage: "reading", root: model.repository.name });
+}
+
 /** A codebase's world: judged, laid out and ready to bake. */
 export async function codeWorld(veil: Veil): Promise<CodeLab> {
   const service = worldService();
   let document: WorldDocument;
   let landed = false;
   const watched: Veil = { ...veil, opening: (o) => ((landed ||= o.stage === "land"), veil.opening(o)) };
-  if (service === null) document = await snapshotWorld("no engine on a standalone page");
-  else {
+  if (service === null) {
+    if (typeof location !== "undefined" && new URLSearchParams(location.search).has("start")) await previewStart(veil);
+    document = await snapshotWorld("no engine on a standalone page");
+  } else {
     try {
       document = await serviceWorld(service, watched);
     } catch (error) {

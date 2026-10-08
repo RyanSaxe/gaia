@@ -2,11 +2,12 @@
 // service. Main relays newline-delimited JSON-RPC between the world service
 // and the engine, restarts the engine when it exits, and hands each loaded
 // page a MessagePort to the world service, with the folder whose world it
-// shows: Gaia's own repository, `GAIA_PROJECT`, or one the person opens with
-// File > Open Folder.
+// shows: `GAIA_PROJECT`, one the person opens with File > Open Folder, or none,
+// and then the page offers the start, where a person picks a world they
+// opened before, a folder, or an address on GitHub.
 
 import { basename, join, resolve } from "node:path";
-import { BrowserWindow, Menu, MessageChannelMain, type MessagePortMain, app, dialog, nativeTheme, utilityProcess } from "electron";
+import { BrowserWindow, Menu, MessageChannelMain, type MessagePortMain, app, dialog, ipcMain, nativeTheme, utilityProcess } from "electron";
 import type { FromMain, ToMain } from "../world-service/protocol.ts";
 import { superviseEngine } from "./engine.ts";
 import { takeShots } from "./shots.ts";
@@ -20,7 +21,9 @@ if (shots) nativeTheme.themeSource = "light";
 
 void app.whenReady().then(() => {
   const repoRoot = resolve(app.getAppPath(), "..");
-  let root = resolve(process.env.GAIA_PROJECT ?? repoRoot);
+  // With no project named the page offers the start; shots always show Gaia's own world.
+  const named = process.env.GAIA_PROJECT ?? (shots ? repoRoot : undefined);
+  let root: string | null = named === undefined ? null : resolve(named);
   // The engine keeps each project's store (Jev's answers, a stand-in choice) and the app's own settings (the spend limit) with the app's own data.
   process.env.GAIA_DATA_DIR ??= app.getPath("userData");
   const service = utilityProcess.fork(join(here, "world-service.js"), [], { serviceName: "Gaia world service", stdio: "inherit" });
@@ -32,8 +35,12 @@ void app.whenReady().then(() => {
     line: (line) => toService({ type: "engine.line", line }),
   });
   service.on("message", (message: ToMain) => {
-    if (message.type === "engine.send" && !engine.send(message.line)) {
-      console.error("gaia: no engine is running to take the request");
+    if (message.type === "engine.send") {
+      if (!engine.send(message.line)) console.error("gaia: no engine is running to take the request");
+    } else if (message.type === "world.opened") {
+      // A world chosen on the start page: the window takes its name, and a reload reopens it.
+      root = message.root;
+      window.setTitle(`Gaia · ${message.name}`);
     }
   });
   app.on("before-quit", () => {
@@ -62,22 +69,32 @@ void app.whenReady().then(() => {
     const { port1, port2 } = new MessageChannelMain();
     toService({ type: "renderer.port", root }, [port1]);
     window.webContents.postMessage("gaia:world-port", null, [port2]);
-    window.setTitle(`Gaia · ${basename(root)}`);
+    window.setTitle(root === null ? "Gaia" : `Gaia · ${basename(root)}`);
   });
   window.on("page-title-updated", (event) => event.preventDefault());
 
+  const chooseFolder = async (): Promise<string | null> => {
+    const chosen = await dialog.showOpenDialog(window, { title: "Open a codebase", ...(root === null ? {} : { defaultPath: root }), properties: ["openDirectory"] });
+    return chosen.canceled ? null : (chosen.filePaths[0] ?? null);
+  };
+  // The start page's "a folder on this computer": the page sends the folder to the world service itself.
+  ipcMain.handle("gaia:choose-folder", () => chooseFolder());
   // File > Open Folder: the page reloads, and its new port opens the chosen folder's world.
   const openFolder = async (): Promise<void> => {
-    const chosen = await dialog.showOpenDialog(window, { title: "Open a codebase", defaultPath: root, properties: ["openDirectory"] });
-    const folder = chosen.filePaths[0];
-    if (chosen.canceled || folder === undefined) return;
+    const folder = await chooseFolder();
+    if (folder === null) return;
     root = folder;
+    window.webContents.reload();
+  };
+  // File > Choose a World: back to the start page.
+  const offerStart = (): void => {
+    root = null;
     window.webContents.reload();
   };
   Menu.setApplicationMenu(
     Menu.buildFromTemplate([
       { role: "appMenu" },
-      { label: "File", submenu: [{ label: "Open Folder…", accelerator: "CmdOrCtrl+O", click: () => void openFolder() }, { type: "separator" }, { role: "close" }] },
+      { label: "File", submenu: [{ label: "Open Folder…", accelerator: "CmdOrCtrl+O", click: () => void openFolder() }, { label: "Choose a World…", accelerator: "CmdOrCtrl+Shift+O", click: offerStart }, { type: "separator" }, { role: "close" }] },
       { role: "editMenu" },
       { role: "viewMenu" },
       { role: "windowMenu" },

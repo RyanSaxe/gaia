@@ -416,6 +416,38 @@ paper at the foot of the wait says what it costs against the limit, with two
 answers: Go ahead, in moss green, and Use the stand-in, in ink. The world
 appears only once it is fully judged.
 
+## The start
+
+When Gaia opens with no world named, the start lies over the wait
+(`app/renderer/start/`), in its veil, so it follows the same hour and, once
+a place is chosen, dissolves into the wait's paper. It offers the worlds a
+person walked before, a folder on this computer, and a line to write the
+address of a place on GitHub. Nothing on it is a box or a word of jargon:
+no "repository", "clone" or "Jev". An address that leads nowhere is
+answered beneath it in a sentence in the world's voice ("Nothing open lies
+at that address. It may be private, or spelled a little differently."), the
+written address fading a little while the line or arm settles. While an
+address is asked after, ink runs along its line, or its arm creaks. Two
+directions are built, chosen by `CHOSEN_START` in `start.ts` or
+`?start=table|signpost` (a standalone page shows it only when asked, with
+Gaia's own world as the one walked before):
+
+- **The traveller's map table** (shown): the field map's paper on a dark
+  wooden table, with Gaia's mark lettered at its corner. Each world walked
+  before is a small map sheet laid on the paper a little askew, its areas
+  washed in their lands' colors with water, cottages and landmarks inked
+  small, its name lettered beneath in italic and where it lies in small
+  capitals. At the paper's foot an ink line waits for an address, with "or
+  open a folder on this computer" beneath it. Choosing lifts a sheet; then
+  the table falls away and the paper fills the view as the wait's. After
+  dark the lantern lights the table.
+- **The world's edge**: standing where the land begins, at the hour it is,
+  by a wooden signpost like the fingerposts in the world. Its arms are
+  painted with the worlds walked before; one points "somewhere on this
+  computer"; one is bare wood to write an address on. Hills fall away into
+  haze behind it and a path sets out; after dark the stars are out, the
+  post's lantern is lit and a few fireflies drift.
+
 ## One way to touch the world
 
 A person never has to think about what a touch will do. Mouse, trackpad,

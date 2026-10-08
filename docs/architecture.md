@@ -19,7 +19,7 @@ the document that did not change renders exactly as it did before.
 
 | Process | Language | Owns |
 | --- | --- | --- |
-| Main | TypeScript (Electron) | The window and the app's lifecycle. It starts the engine and the world service, restarts the engine if it exits, and names the folder whose world each page opens: Gaia's own repository, `GAIA_PROJECT`, or one chosen with File > Open Folder. |
+| Main | TypeScript (Electron) | The window and the app's lifecycle. It starts the engine and the world service, restarts the engine if it exits, and names the folder whose world each page opens: `GAIA_PROJECT`, one chosen with File > Open Folder, or none, and then the page offers the start (File > Choose a World returns to it). |
 | Engine | Rust (`gaia-engine`) | Files, parsing, git, test reports, the code model, the app-data store and the Jev client with the key from the macOS Keychain. |
 | World service | TypeScript (Electron utility process) | Kinds and primitives, the question planner, answer rules, vitality and the world document. It opens a codebase's world (`openWorld` in `app/world-service/open-world.ts`): the engine's `project.open`, Jev's judgments, kept in the store, and `layoutWorld`, and sends the renderer the result (`WorldDocument`) over its MessagePort. |
 | Renderer | TypeScript | The UI, the Three.js scene, the realizer and the clock. In slice 1 the renderer is the lab. The lab opens into the world, full screen at eye height (`app/renderer/immersive/`), with its debugging views (Components, Terrain and Skies) behind tabs; the immersive world is the terrain lab's world without its chrome, plus three ways of telling a person where they are (arrival titles, a field map and markers in the world), read through `placeAt`; touching the world only moves the person, and everything else opens from the corner controls (`docs/design-system.md`); a tap on the open field map sends the person to that place, landing where `WorldHandle.landing` says, under a fold of paper that hides the move. The terrain lab bakes its world on worker threads (`app/renderer/terrain/bake-worker.ts`): a few workers compose bands of lattice rows with `composeRows`, and one finishes the bake with `finishTerrain` and stands the world's things on it with `standWorld` (`app/renderer/terrain/stand.ts`): each building's site and pad, the landmarks' sites, the network of trails leveled into the ground and which way of it each ground sample lies on, the trees and the understory, and the ground texture's data, so drawing never waits on a bake. Components are still realized on the main thread; the realizer is pure and worker-safe, so it can move into workers too. |
@@ -30,15 +30,16 @@ crosses: code facts, Jev requests and answers, and store records. Geometry
 never crosses, because the renderer builds it. `EngineMethods` in
 `packages/schema/src/engine.ts` is the TypeScript side of the protocol, and
 `engine/src/rpc.rs` the Rust side. The engine answers `engine.ping`,
-`project.open`, Jev's `jev.estimate`, `jev.status`, `jev.ask` and
-`jev.batch`, and the app-data store's `store.get`, `store.read` and
-`store.put`. The store (`engine/src/store.rs`) keeps one JSON file of tables
+`project.open`, `project.locate` and `project.clone`, Jev's
+`jev.estimate`, `jev.status`, `jev.ask` and `jev.batch`, and the app-data
+store's `store.get`, `store.read` and `store.put`. The store (`engine/src/store.rs`) keeps one JSON file of tables
 per project, `<data>/projects/<project id>/store.json`, replaced through a
 rename so it is never half-written; `<data>` is the app's user-data folder,
 which main passes as `GAIA_DATA_DIR`.
 
-`project.open` walks a directory, respecting `.gitignore`, and reports each
-file's facts, the entities, and the repository (`CodeModel`). Each file is
+`project.open` walks a directory, respecting `.gitignore`, never following a
+symbolic link and leaving out any file over 2 MiB, and reports each file's
+facts, the entities, and the repository (`CodeModel`). Each file is
 read by a careful line-based pass for TypeScript, JavaScript and Rust
 (`engine/src/source.rs`), with a small lexer that keeps strings and comments
 apart from code: its language and kind (source, test, config, data, docs,
@@ -226,7 +227,31 @@ builds such a world's places. `outlinesOf(world)` traces every area's and
 patch's outline from `placeAt`, once per world, for anything that draws them
 (the field map draws each patch's own shape).
 
-In the app, the lab opens on the world the world service sends. A
+In the app, the lab opens on the world the world service sends. With no
+folder named, the world service answers the page's `world.open` with
+`world.start`: the worlds opened before (`RecentWorld`, kept newest first in
+the app's `settings` table under `recent-worlds`, each with a `Postcard` of
+its land's areas, land, water, buildings and landmarks), and the page shows
+the start (`app/renderer/start/`, see `docs/design-system.md`) over the wait
+until the person chooses a world they walked before, a folder (main's
+dialog, through the preload's `gaiaShell.chooseFolder`) or an address on
+GitHub (`world.choose`). An address goes to the engine's `project.locate`
+first, which accepts only `https://github.com/OWNER/REPO` or
+`github.com/OWNER/REPO` (an optional `.git`) and asks GitHub with one
+`git ls-remote` whether a public repository is there, so one that leads
+nowhere is answered on the start page itself (`world.start` again, with
+`refused`: `address`, `missing`, `offline`, `large` or `slow`). Then
+`project.clone` clones it into `<data>/clones/<owner>/<repo>` (lowercased),
+or fetches into the copy already there, while the wait shows the code being
+read: every commit and tree but only the checked-out files' contents
+(`--filter=blob:none`), since the project's ID is its root commit and its
+activity reads the whole history; no tags, no submodules, no LFS content, no
+hooks or templates, symbolic links checked out as plain files, https only,
+no credentials or prompts, and the user's and system's git settings
+ignored; past 500 MB or 240 seconds it gives up. A clone runs on the
+engine's one request loop, so other requests wait behind it. The copy then
+opens like any folder, and main names the window after the world
+(`world.opened`) so a reload reopens it. A
 standalone page (`pnpm lab:html`, `pnpm lab:serve`) has no engine and opens
 on Gaia's own world from `app/renderer/terrain/fixtures/gaia.json`, a
 snapshot `pnpm snapshot` writes through the engine's `project.open`, judged

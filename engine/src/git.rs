@@ -1,6 +1,9 @@
 //! A project's history from `git log`: when each file was first committed,
 //! which commits touched it and who wrote them. One `git log` call reads the
-//! whole history; a directory outside git has none.
+//! whole history; a directory outside git has none. Neither call ever reaches
+//! the network: in a copy cloned without file contents (`clone.rs`), commits
+//! and trees are all there, and `GIT_NO_LAZY_FETCH` makes git fail rather
+//! than fetch anything missing.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
@@ -16,6 +19,7 @@ pub struct Commit {
 /// The history of the files under `root`, newest commit first, paths relative to `root`.
 pub fn history(root: &Path) -> Vec<Commit> {
     let out = Command::new("git")
+        .env("GIT_NO_LAZY_FETCH", "1")
         .arg("-C")
         .arg(root)
         .args([
@@ -55,6 +59,7 @@ pub fn parse(log: &str) -> Vec<Commit> {
 /// The commit that roots the history, which names the project wherever it is cloned.
 pub fn root_commit(root: &Path) -> Option<String> {
     let out = Command::new("git")
+        .env("GIT_NO_LAZY_FETCH", "1")
         .arg("-C")
         .arg(root)
         .args(["rev-list", "--max-parents=0", "HEAD"])

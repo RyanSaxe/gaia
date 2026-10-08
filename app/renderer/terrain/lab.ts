@@ -94,6 +94,7 @@ import { createUnderstory } from "./understory.ts";
 import { createClearings } from "./clearings.ts";
 import { type Ways, createWays, setTrailEnds, setTrailPlaces } from "./trails.ts";
 import { createWait } from "../wait/wait.ts";
+import { withStart } from "../start/start.ts";
 import { createCard } from "./card.ts";
 import { LANDMARK_ENTITIES, type Represented, SAMPLE_ENTITIES, SAMPLE_FILES, representEntity, representFile } from "./samples.ts";
 import { type Judge, judgedThing } from "@gaia/world";
@@ -1569,7 +1570,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   }
 
   /** The wait the first world opens behind (app/renderer/wait/): it lifts once the world stands and has drawn. */
-  const veil = createWait($("veil"));
+  const veil = withStart(createWait($("veil")), $("veil"));
 
   setMode("walk");
   refreshStats();

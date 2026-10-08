@@ -15,6 +15,22 @@ export interface EngineMethods {
    * the project for `facts.changed` is not built yet.
    */
   "project.open": { params: { root: string }; result: CodeModel };
+  /**
+   * Where a GitHub address leads, before anything is cloned: whether it names
+   * a public repository GitHub will hand over (one `git ls-remote`), and the
+   * folder Gaia keeps its copy in. Only `https://github.com/OWNER/REPO` or
+   * `github.com/OWNER/REPO`, with an optional `.git`, is an address.
+   */
+  "project.locate": { params: { address: string }; result: Located };
+  /**
+   * Clones a public GitHub repository into Gaia's app-data folder
+   * (`<data>/clones/<owner>/<repo>`), or fetches into the copy already there;
+   * the copy then opens with `project.open` like any folder. The clone runs no
+   * hooks, skips submodules and LFS content, speaks only https, keeps every
+   * commit but fetches file contents only for the files checked out, and
+   * gives up past a size or time cap.
+   */
+  "project.clone": { params: { address: string }; result: Cloned };
   /** Sends one request to Jev with the key from the macOS Keychain. Fails unless the engine runs with GAIA_JEV=live. */
   "jev.ask": { params: { request: JevRequest }; result: JevResponse };
   /**
@@ -38,6 +54,19 @@ export interface EngineMethods {
   /** Writes records atomically, so a world update is never half-saved. */
   "store.put": { params: { project: string; writes: { table: StoreTable; key: string; value: unknown }[] }; result: { ok: true } };
 }
+
+/**
+ * Why a GitHub address leads nowhere Gaia can go: it is not a repository's
+ * address; no public repository is there (missing, or private); GitHub could
+ * not be reached; or the repository is past the size or the time cap.
+ */
+export type Unreachable = "address" | "missing" | "offline" | "large" | "slow";
+
+/** Where a GitHub address leads (`project.locate`). `kept` is true when Gaia already holds a copy. */
+export type Located = { readonly found: true; readonly owner: string; readonly repo: string; readonly root: string; readonly kept: boolean } | { readonly found: false; readonly why: Unreachable };
+
+/** A clone or an update (`project.clone`). `fetched` is true when a copy already there was updated rather than cloned anew. */
+export type Cloned = { readonly cloned: true; readonly owner: string; readonly repo: string; readonly root: string; readonly fetched: boolean } | { readonly cloned: false; readonly why: Unreachable };
 
 /** The tables of a project's app-data store (`engine/src/store.rs`). */
 export type StoreTable = "answers" | "blueprints" | "document" | "placements" | "settings";

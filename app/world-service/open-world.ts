@@ -81,6 +81,7 @@ export async function openWorld({ engine, root, consent, progress }: OpenWorldOp
     else {
       const estimate = await engine.call("jev.estimate", { requests: missing.map((p) => p.request) });
       const limitUsd = await spendLimit(engine);
+      console.log(`gaia: ${name}: ${estimate.requests} requests to judge, about ${estimate.estimatedTokens} tokens, $${estimate.estimatedUsd.toFixed(4)} (limit $${limitUsd})`);
       if (estimate.estimatedUsd <= limitUsd) ask = true;
       else {
         // Past the limit the person decides; choosing the stand-in is remembered for the project until the limit changes.
@@ -98,7 +99,10 @@ export async function openWorld({ engine, root, consent, progress }: OpenWorldOp
   // Answers Jev gives arrive a batch at a time; each batch is stored in one write.
   let pending: { table: "answers"; key: string; value: unknown }[] = [];
   const writes: Promise<unknown>[] = [];
+  /** What OpenRouter billed for this opening's answers. */
+  let billed = 0;
   const keep = (key: string, response: JevResponse): void => {
+    billed += Number.isFinite(response.costUsd) ? response.costUsd : 0;
     if (pending.length === 0) {
       setTimeout(() => {
         writes.push(engine.call("store.put", { project, writes: pending }));
@@ -149,6 +153,7 @@ export async function openWorld({ engine, root, consent, progress }: OpenWorldOp
     byJev === 0
       ? [`${plural(things, "thing")} judged by the stand-in`]
       : [`${plural(byJev, "thing")} judged by Jev`, ...(byJev < things ? [`${plural(things - byJev, "thing")} by the stand-in`] : [])];
+  if (billed > 0) parts.push(`$${billed.toFixed(4)} billed`);
   if (failures.length > 0) parts.push(`${plural(failures.length, "request")} failed (${failures[0]})`);
   else if (why !== "") parts.push(why);
   return {

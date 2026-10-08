@@ -2,7 +2,7 @@
 // engine lines go to the world service, and the world service talks to the
 // renderer over its own MessagePort.
 
-import type { CodeModel } from "@gaia/schema";
+import type { CodeModel, Unreachable } from "@gaia/schema";
 import type { Outline } from "@gaia/terrain";
 import type { CodeWorld, Judge } from "@gaia/world";
 
@@ -14,11 +14,43 @@ export type FromMain =
   | { readonly type: "engine.up" }
   /** The engine process exited; main restarts it after a short backoff. */
   | { readonly type: "engine.down"; readonly reason: string }
-  /** A new renderer page loaded; the message carries its MessagePort, and the folder its world is of. */
-  | { readonly type: "renderer.port"; readonly root: string };
+  /** A new renderer page loaded; the message carries its MessagePort, and the folder its world is of, or null when none is named yet and the page offers the start. */
+  | { readonly type: "renderer.port"; readonly root: string | null };
 
 /** World service → main process. */
-export type ToMain = { readonly type: "engine.send"; readonly line: string };
+export type ToMain =
+  | { readonly type: "engine.send"; readonly line: string }
+  /** A world chosen on the start page opened: main names the window after it and reopens it when the page reloads. */
+  | { readonly type: "world.opened"; readonly root: string; readonly name: string };
+
+/** A small picture of a world's land, kept with each recent world for the start page to paint. */
+export interface Postcard {
+  /** Its areas down to the second level, deepest last, in the land's frame scaled to -1..1, each with its land's and water's keys. */
+  readonly areas: readonly { readonly depth: number; readonly land: string; readonly water: string; readonly rings: readonly (readonly number[])[] }[];
+  /** Where its buildings and landmarks stand, -1..1. */
+  readonly things: readonly { readonly x: number; readonly z: number; readonly as: "building" | "landmark" }[];
+}
+
+/** A world opened before, newest first on the start page. */
+export interface RecentWorld {
+  /** The folder it is the world of; for a place on GitHub, Gaia's own copy. */
+  readonly root: string;
+  readonly name: string;
+  /** "owner/repo" for a place on GitHub, reopened through its address so it is brought up to date. */
+  readonly github?: string;
+  /** When it was last opened, ms since the epoch. */
+  readonly at: number;
+  readonly postcard?: Postcard;
+}
+
+/** What the start page offers: the worlds opened before, and why the last address written led nowhere, if it did. */
+export interface StartOffer {
+  readonly recent: readonly RecentWorld[];
+  readonly refused?: { readonly address: string; readonly why: Unreachable };
+}
+
+/** A place chosen on the start page: a folder on this computer, or an address on GitHub. */
+export type StartChoice = { readonly folder: string } | { readonly address: string };
 
 export type EngineStatus =
   | { readonly state: "starting" }
@@ -71,6 +103,8 @@ export type ToRenderer =
   | { readonly type: "world.progress"; readonly opening: Opening }
   /** Asks the person whether to send `plan` to Jev, only when it costs more than their spend limit; the renderer answers with `world.consent`. */
   | { readonly type: "world.consent"; readonly plan: ConsentPlan }
+  /** No folder is named: the page offers the start, and answers with `world.choose`. Sent again, with `refused`, when a written address leads nowhere. */
+  | { readonly type: "world.start"; readonly offer: StartOffer }
   | { readonly type: "world.document"; readonly document: WorldDocument }
   | { readonly type: "world.failed"; readonly root: string; readonly message: string };
 
@@ -79,7 +113,9 @@ export type FromRenderer =
   /** Opens the world of the folder main named for this page. */
   | { readonly type: "world.open" }
   /** The person's answer to `world.consent`. */
-  | { readonly type: "world.consent"; readonly approve: boolean };
+  | { readonly type: "world.consent"; readonly approve: boolean }
+  /** The place chosen on the start page. */
+  | { readonly type: "world.choose"; readonly place: StartChoice };
 
 /** The status bar's words for each state. */
 export function statusText(status: EngineStatus | "standalone"): string {

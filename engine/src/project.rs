@@ -189,16 +189,28 @@ fn within(path: &str, root: &str) -> bool {
     root.is_empty() || path == root || path.starts_with(&format!("{root}/"))
 }
 
+/// Files larger than this are left out of the world unread: bundles, data
+/// dumps and vendored blobs, never code a person keeps by hand.
+const MAX_FILE_BYTES: u64 = 2 * 1024 * 1024;
+
+/// Every regular file under `root` that .gitignore keeps, read. Nothing
+/// outside the root is ever read: symlinks, to files or directories, are
+/// skipped, never followed.
 fn walk(root: &Path) -> Vec<Read> {
     let mut out = Vec::new();
     let walker = ignore::WalkBuilder::new(root)
         .hidden(false)
         .git_global(false)
         .require_git(false)
+        // A link could lead anywhere on the disk, and a cloned repository chooses its own.
+        .follow_links(false)
         .filter_entry(|e| e.file_name() != ".git")
         .build();
     for entry in walker.flatten() {
         if !entry.file_type().is_some_and(|t| t.is_file()) {
+            continue;
+        }
+        if entry.metadata().map_or(true, |m| m.len() > MAX_FILE_BYTES) {
             continue;
         }
         let Ok(rel) = entry.path().strip_prefix(root) else {
@@ -1012,5 +1024,30 @@ mod tests {
         );
         assert_eq!(file("docs/guide.md").kind, "docs");
         let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn the_walk_never_leaves_the_root() {
+        use std::os::unix::fs::symlink;
+        let base =
+            std::env::temp_dir().join(format!("gaia-engine-test-{}-links", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+        let (root, outside) = (base.join("root"), base.join("outside"));
+        fs::create_dir_all(root.join("src")).unwrap();
+        fs::create_dir_all(outside.join("dir")).unwrap();
+        fs::write(outside.join("secret.ts"), "export const secret = 1;\n").unwrap();
+        fs::write(outside.join("dir/leak.ts"), "export const leak = 2;\n").unwrap();
+        fs::write(root.join("src/main.ts"), "export const main = 0;\n").unwrap();
+        // A file past the size cap stays out, unread.
+        fs::write(root.join("dump.json"), vec![b'1'; 3 * 1024 * 1024]).unwrap();
+        // Links to a file and to directories outside, absolute and relative.
+        symlink(outside.join("secret.ts"), root.join("src/secret.ts")).unwrap();
+        symlink(outside.join("dir"), root.join("linked")).unwrap();
+        symlink("../outside", root.join("up")).unwrap();
+
+        let opened = open(&root).unwrap();
+        let paths: Vec<&str> = opened.files.iter().map(|f| f.path.as_str()).collect();
+        assert_eq!(paths, vec!["src/main.ts"]);
+        let _ = fs::remove_dir_all(&base);
     }
 }

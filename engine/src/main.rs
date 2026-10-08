@@ -1,6 +1,7 @@
 //! The gaia-engine binary. `--version` prints its version; `rpc` serves the
 //! engine protocol over stdin and stdout until stdin closes.
 
+mod clone;
 mod git;
 mod jev;
 mod project;
