@@ -22,6 +22,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 #[serde(rename_all = "camelCase")]
 pub struct FileTests {
     pub covered_by: Vec<String>,
+    /// The tests among `covered_by` that belong to the file's own entity.
+    pub own: Vec<String>,
     pub failing: Vec<String>,
 }
 
@@ -36,7 +38,11 @@ pub struct Diagnostics {
 #[serde(rename_all = "camelCase")]
 pub struct FileGit {
     pub days_since_first_commit: u32,
+    pub days_since_last_commit: u32,
     pub commits_last14_days: u32,
+    /// Every commit that touched it, and how many people wrote them.
+    pub commits: u32,
+    pub authors: u32,
 }
 
 #[derive(Serialize, Debug)]
@@ -658,6 +664,11 @@ pub fn open(root: &Path) -> Result<Opened, String> {
                 doc: f.source.doc.clone(),
                 tests: FileTests {
                     covered_by: covered_by[i].iter().map(|&j| name_of(j)).collect(),
+                    own: covered_by[i]
+                        .iter()
+                        .filter(|&&t| owner[t] == owner[i])
+                        .map(|&j| name_of(j))
+                        .collect(),
                     failing: Vec::new(),
                 },
                 complexity: f.source.complexity,
@@ -666,9 +677,12 @@ pub fn open(root: &Path) -> Result<Opened, String> {
                 unused: unused[i],
                 git: FileGit {
                     days_since_first_commit: days(h.and_then(|h| h.first)),
+                    days_since_last_commit: days(h.and_then(|h| h.commits.iter().max().copied())),
                     commits_last14_days: h.map_or(0, |h| {
                         h.commits.iter().filter(|t| now - **t <= 14 * DAY).count() as u32
                     }),
+                    commits: h.map_or(0, |h| h.commits.len() as u32),
+                    authors: h.map_or(0, |h| h.authors.len() as u32),
                 },
             }
         })
@@ -903,6 +917,10 @@ mod tests {
             "import { add } from \"@demo/core\";\nimport { greet } from \"./greet/index.ts\";\nadd(1, greet());\n",
         );
         write(
+            "packages/app/test/main.test.ts",
+            "import \"../src/main.ts\";\n",
+        );
+        write(
             "packages/app/src/greet/index.ts",
             "// Says hello.\nexport function greet() { return 1; }\n",
         );
@@ -998,8 +1016,16 @@ mod tests {
         assert_eq!(math.imported_by, vec!["packages/core/src/index.ts"]);
         assert_eq!(
             math.tests.covered_by,
+            vec![
+                "packages/app/test/main.test.ts",
+                "packages/core/test/math.test.ts"
+            ],
+            "core's test reaches math.ts through the package's entry, and app's test through app"
+        );
+        assert_eq!(
+            math.tests.own,
             vec!["packages/core/test/math.test.ts"],
-            "the test reaches math.ts through the package's entry"
+            "only core's own test is math.ts's own"
         );
         assert_eq!(math.symbols[0].doc.as_deref(), Some("Adds."));
         assert_eq!(

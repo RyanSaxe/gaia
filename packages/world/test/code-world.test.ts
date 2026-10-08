@@ -16,12 +16,12 @@ const file = (path: string, lines: number, kind: FileFacts["kind"] = "source"): 
   imports: [],
   importedBy: [],
   doc: `The ${path} file.`,
-  tests: { coveredBy: [], failing: [] },
+  tests: { coveredBy: [], own: [], failing: [] },
   complexity: { functions: 1, longestFunction: 10, maxNesting: 1 },
   diagnostics: { errors: 0, warnings: 0, lint: 0 },
   debtMarkers: 0,
   unused: false,
-  git: { daysSinceFirstCommit: 10, commitsLast14Days: 1 },
+  git: { daysSinceFirstCommit: 10, daysSinceLastCommit: 2, commitsLast14Days: 1, commits: 4, authors: 1 },
 });
 
 const entity = (path: string, name: string, dependsOn: string[], dependents: string[]): EntityFacts => ({
@@ -179,7 +179,8 @@ describe("a world laid out from code", () => {
   it("lets Jev choose each symbol's form and each area's water and character, and chooses trails that join every connected part first", async () => {
     const judged = await judgeWorld(model(), LOOKS, standInJev(LOOKS));
     expect(Object.keys(judged.forms)).toContain("packages/core/src/math.ts");
-    expect(["Stone", "Bush"]).toContain(judged.forms["packages/core/src/math.ts"]!.function);
+    // The default design asks each symbol that may stand on its own: `#x` is math.ts's function x.
+    expect(["Stone", "Bush"]).toContain(judged.forms["packages/core/src/math.ts"]!["#x"]);
     for (const w of Object.values(judged.waters)) expect(["Dry", "Brook"]).toContain(w);
     // Every area with land of its own is judged for how its trees and open ground lie, and its region carries the choice.
     expect(Object.keys(judged.characters).sort()).toEqual(Object.keys(judged.waters).sort());
@@ -187,6 +188,36 @@ describe("a world laid out from code", () => {
     const world = layoutWorld(model(), { ...judged, trails: [{ from: "packages/app", to: "packages/core", want: 0.9, look: "Path" }, { from: "", to: "packages/core", want: 0.6, look: "Track" }, { from: "", to: "packages/app", want: 0.3, look: "Path" }] });
     expect(world.trails.map((t) => `${t.from}->${t.to}`)).toEqual(["packages/app->packages/core", "->packages/core"]);
     expect(world.trails.every((t) => t.spans)).toBe(true);
+  });
+
+  it("under the judged design, asks each standing symbol's form on its own and whether a source file needs tests, which its vitality reads", async () => {
+    const planned = planWorldRequests(model(), LOOKS, { design: "judged" });
+    const math = planned.find((p) => p.target === "packages/core/src/math.ts")!;
+    expect(Object.keys(math.request.questions).sort()).toEqual(["form#helper", "form#x", "tests", "vibe"]);
+    // Only source files are asked whether they need tests.
+    expect(Object.keys(planned.find((p) => p.target === "README.md")!.request.questions)).toEqual(["vibe"]);
+    // A Jev that says no file needs tests and gives each symbol its own form.
+    const standIn = standInJev(LOOKS);
+    const jev: JevClient = {
+      async ask(request) {
+        const r = await standIn.ask(request);
+        const answers = { ...r.answers };
+        for (const id of Object.keys(request.questions)) {
+          if (id === "tests") answers[id] = { type: "noul", noul: 0.05 };
+          if (id.startsWith("form#")) answers[id] = { type: "choice", choice: id === "form#x" ? "Stone" : "Bush", probabilities: {}, confidence: 1 };
+        }
+        return { ...r, answers };
+      },
+    };
+    const judged = await judgeWorld(model(), LOOKS, jev, { design: "judged" });
+    const world = layoutWorld(model(), judged);
+    const forms = Object.fromEntries(world.symbols.filter((s) => s.file === "packages/core/src/math.ts").map((s) => [s.name, s.form]));
+    expect(forms).toEqual({ x: "Stone", helper: "Bush" });
+    // No test reaches main.ts: it loses vitality for that only as far as Jev judges it needs tests.
+    const unjudged = layoutWorld(model(), { ...judged, needsTests: {} });
+    const vitality = (w: typeof world) => w.patches.find((p) => p.path === "packages/app/src/main.ts")!.vitality;
+    expect(vitality(world)).toBeGreaterThan(vitality(unjudged));
+    expect(1 - vitality(world)).toBeCloseTo((1 - vitality(unjudged)) * 0.05, 5);
   });
 
   it("keeps Jev's answers: a stored one is used without asking, and one outside the options is left to the stand-in", async () => {

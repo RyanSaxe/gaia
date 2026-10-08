@@ -98,7 +98,7 @@ import { withStart } from "../start/start.ts";
 import { createCard } from "./card.ts";
 import { LANDMARK_ENTITIES, type Represented, SAMPLE_ENTITIES, SAMPLE_FILES, representEntity, representFile } from "./samples.ts";
 import { type Judge, judgedThing } from "@gaia/world";
-import { type CodeLab, codeWorld, representSymbol } from "./code-world.ts";
+import { type CodeLab, codeWorld, judgedOf, representSymbol } from "./code-world.ts";
 import { createSettlement } from "./settlement.ts";
 import { createSigns } from "./signs.ts";
 import { createBaker } from "./baker.ts";
@@ -601,7 +601,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       const patch = t.patch === undefined ? undefined : code?.world.patches[t.patch];
       return (patch === undefined ? undefined : code?.files.get(patch.path)) ?? (SAMPLE_FILES[t.index % SAMPLE_FILES.length] as (typeof SAMPLE_FILES)[number]);
     };
-    trees = stood.trees.map((t) => ({ ...t, represented: representFile(fileOf(t)) }));
+    trees = stood.trees.map((t) => ({ ...t, represented: representFile(fileOf(t), judgedOf(t.patch === undefined ? undefined : code?.world.patches[t.patch])) }));
     symbolPlacements = stood.symbols;
     // Each build keeps its instances from bake to bake and only moves its copies.
     treeViews = variants.flatMap((v, k) => {
@@ -739,6 +739,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     });
     // A file's functions and classes stand on its patch: walk up to one to read what it is.
     const placed = understory.placements();
+    const patchByPath = new Map(code?.world.patches.map((p) => [p.path, p]) ?? []);
     const symbolEntries: (readonly [number, Subject])[] = code === null
       ? []
       : code.world.symbols.flatMap((sym, i) => {
@@ -748,7 +749,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
           if (p === undefined || file === undefined) return [];
           const { x, z } = p;
           return [[at, {
-            represented: representSymbol(sym, file),
+            represented: representSymbol(sym, file, judgedOf(patchByPath.get(sym.file))),
             standsAs: withArticle(sym.form),
             // A symbol's form is judged with its file.
             ...judged("file", sym.file),

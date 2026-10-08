@@ -11,7 +11,7 @@
 // it runs, a request that would take the reported cost past --spend-up-to is
 // not sent: the stand-in judges it and it is not kept.
 //
-// Usage: pnpm jev-world [--judge jev|local] [--design revised] [--limit 5]
+// Usage: pnpm jev-world [--judge jev|local] [--design judged] [--limit 5]
 //          [--spend-up-to 0.05] [--out fixtures/gaia-jev.json] [--ledger ledger.jsonl]
 
 import { type ChildProcess, execFileSync, spawn } from "node:child_process";
@@ -19,7 +19,7 @@ import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs
 import { resolve } from "node:path";
 import { createInterface } from "node:readline";
 import type { CodeModel, EngineClient, JevClient, JevResponse } from "@gaia/schema";
-import { DESIGNS, type DesignName, judgeWorld, keptJev, planWorldRequests, requestKey, standInJev } from "@gaia/world";
+import { DEFAULT_DESIGN, DESIGNS, type DesignName, judgeWorld, keptJev, planWorldRequests, requestKey, standInJev } from "@gaia/world";
 import { createEngineClient } from "../app/world-service/engine-client.ts";
 import { engineJev } from "../app/world-service/jev.ts";
 import { LOOKS } from "../app/renderer/terrain/looks.ts";
@@ -31,7 +31,7 @@ const flag = (name: string, fallback: string): string => {
   return i < 0 ? fallback : (process.argv[i + 1] ?? fallback);
 };
 const judge = flag("judge", "local");
-const design = flag("design", "revised") as DesignName;
+const design = flag("design", DEFAULT_DESIGN) as DesignName;
 if (!(design in DESIGNS)) throw new Error(`Unknown design ${design}; choose from ${Object.keys(DESIGNS).join(", ")}.`);
 const limit = Number(flag("limit", "Infinity"));
 const allowed = Number(flag("spend-up-to", "0"));

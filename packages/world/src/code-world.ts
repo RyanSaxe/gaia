@@ -37,7 +37,7 @@ import type { LandSite } from "@gaia/terrain";
 import { symbolsOf } from "./graph.ts";
 import { LAND_SHARE, type LandNode, divideLand } from "./land.ts";
 import { certainty } from "./context.ts";
-import { type OutlineReading, areaOutline, areaReadings, entityOutline, entityReadings, fileOutline, fileReadings, howMany, importersOf, tokensOf } from "./outline.ts";
+import { type OutlineReading, areaOutline, areaReadings, bodySize, entityOutline, entityReadings, fileOutline, fileReadings, fileSize, howMany, importersOf, outlineOrder, symbolSize, tokensOf } from "./outline.ts";
 import { MODEL } from "./planner.ts";
 import { entityVitalityOf, vitalityOf } from "./vitality.ts";
 
@@ -106,8 +106,14 @@ export interface Judgments {
   readonly things: Readonly<Record<string, { readonly as: "building" | "landmark"; readonly look: string }>>;
   /** Dependencies Jev would walk, with how much it wants each and its look. */
   readonly trails: readonly CodeTrail[];
-  /** File → symbol kind → form key: what each kind of the file's finer entities stands as. */
+  /**
+   * File → form key, by symbol kind (`function`) when a design asks about each
+   * kind of a file's finer entities, or by `#name` (`#growGrove`) when it asks
+   * about each one: what the file's finer entities stand as.
+   */
   readonly forms: Readonly<Record<string, Readonly<Record<string, string>>>>;
+  /** File → Jev's probability that it holds behavior a test should check, for a design that asks (`judged`). Vitality reads it. */
+  readonly needsTests?: Readonly<Record<string, number>>;
   /** Directory → water key, for the directories that are regions. */
   readonly waters: Readonly<Record<string, string>>;
   /** Directory → character key, for the directories that are regions: how its trees and open ground lie. */
@@ -130,6 +136,8 @@ export interface CodePatch extends PatchPlace {
   readonly ground: number;
   /** Its first cell in `cells`; its ground is every cell naming it. */
   readonly cell: number;
+  /** Jev's probability that the file needs tests of its own, when Jev was asked: its vitality reads it. */
+  readonly needsTests?: number;
 }
 
 /** An entity standing in the world: a building or a landmark on its lot. */
@@ -338,6 +346,7 @@ function languagesOf(files: readonly FileFacts[]): string[] {
 }
 
 const KIND_WORDS: Readonly<Record<SymbolFact["kind"], string>> = { function: "function", class: "class", type: "type", constant: "constant", module: "module" };
+const KIND_PLURALS: Readonly<Record<SymbolFact["kind"], string>> = { function: "functions", class: "classes", type: "types", constant: "constants", module: "modules" };
 
 /**
  * A file's finer entities that may stand on its patch: its functions and
@@ -355,10 +364,22 @@ export function standingSymbols(f: FileFacts): SymbolFact[] {
 
 /** How Gaia builds Jev's requests: what each state is made of, how the questions are worded, and whether context grows. */
 export interface Design {
-  /** `facts`: each thing's summary facts. `outline`: its outline (`fileOutline`, `areaOutline`, `entityOutline`), sizes in words. */
-  readonly state: "facts" | "outline";
-  /** `first`: the questions as round 12 asked them. `revised`: round 13's wording, with an entity's building-or-landmark asked on its own. */
-  readonly questions: "first" | "revised";
+  /**
+   * `facts`: each thing's summary facts. `outline`: its outline
+   * (`fileOutline`, `areaOutline`, `entityOutline`), sizes in words. `words`:
+   * the summary facts with every count and size in words, and what a file
+   * declares, how far tests reach it and how often it changed
+   * (`fileWords`, `areaWords`, `entityWords`).
+   */
+  readonly state: "facts" | "outline" | "words";
+  /**
+   * `first`: the questions as round 12 asked them. `revised`: round 13's
+   * wording, with an entity's building-or-landmark asked on its own.
+   * `judged`: `revised`'s, with each finer entity that may stand on a file's
+   * patch asked about on its own (`form#<name>`), and whether a source file
+   * holds behavior a test should check (`tests`), which vitality reads.
+   */
+  readonly questions: "first" | "revised" | "judged";
   /** Whether a request carries what was judged above it: the world's light for an area, its land's landform and water for a file or entity. Asked top-down, in three waves. */
   readonly character: boolean;
   /** Whether each request also asks which readings would help, and a request Jev was unsure about is asked again with the readings it chose. */
@@ -375,7 +396,7 @@ export interface Design {
 export const DESIGNS = {
   /** Round 12's requests, exactly. */
   first: { state: "facts", questions: "first", character: false, escalate: false },
-  /** The same facts, round 13's questions and stable words for the repository: what the app asks. */
+  /** The same facts, round 13's questions and stable words for the repository: what the app asked until round 15. */
   revised: { state: "facts", questions: "revised", character: false, escalate: false },
   /** Each thing's outline, with what was judged above it. */
   outline: { state: "outline", questions: "revised", character: true, escalate: false },
@@ -385,10 +406,12 @@ export const DESIGNS = {
   shared: { state: "facts", questions: "revised", character: false, escalate: false, share: "area" },
   /** The same, over outlines: the area's outline and each of its files', sizes in words, so a small edit asks again rarely. */
   "shared-outline": { state: "outline", questions: "revised", character: false, escalate: false, share: "area" },
+  /** Round 15's, what the app asks: summary facts in words with areas compared, each standing symbol judged on its own, and Jev judging whether a file needs tests. */
+  judged: { state: "words", questions: "judged", character: false, escalate: false },
 } as const satisfies Readonly<Record<string, Design>>;
 
 export type DesignName = keyof typeof DESIGNS;
-export const DEFAULT_DESIGN: DesignName = "revised";
+export const DEFAULT_DESIGN: DesignName = "judged";
 
 /** Look keys judged so far, top-down, for a design that carries character. */
 export interface Character {
@@ -420,6 +443,135 @@ const activityWords = (commits: number): string => (commits === 0 ? "dormant" : 
 const about = (n: number): string => (n < 100 ? `${n}` : `about ${Number(n.toPrecision(2)).toLocaleString("en-US")}`);
 const lookWords = (set: LookSet, key: string | undefined): string | undefined => (key === undefined || set[key] === undefined ? undefined : `${key}: ${set[key].doc}`);
 
+/** A count per file in words: how much of something each of a directory's files does on average. */
+const perFile = (n: number, files: number): string => {
+  const r = n / Math.max(1, files);
+  return r === 0 ? "none" : r < 0.5 ? "a little" : r < 1.5 ? "some" : "a lot";
+};
+/** How often a file changed, and by how many people, in words that move only when its history does. */
+const historyWords = (g: FileFacts["git"]): string =>
+  `${g.commits <= 1 ? "committed once" : g.commits < 5 ? "changed a few times" : g.commits < 15 ? "changed several times" : "changed many times"}, by ${g.authors <= 1 ? "one person" : g.authors < 5 ? "a few people" : "many people"}`;
+/** How far a file's tests reach it, in words. */
+const testsWords = (f: FileFacts): string =>
+  f.tests.own.length > 0 ? `${howMany(f.tests.own.length)} of its own entity's tests reach it` : f.tests.coveredBy.length > 0 ? "only tests of other entities reach it" : "no test reaches it";
+
+/** A file as `judged` sends it: what it declares, its size and links in words, how far tests reach it, how often it changed and the finer entities that may stand on its patch. */
+export function fileWords(f: FileFacts): Record<string, unknown> {
+  const declares: Record<string, string> = {};
+  for (const kind of ["function", "class", "type", "constant", "module"] as const) {
+    const n = f.symbols.filter((s) => s.kind === kind).length;
+    if (n > 0) declares[KIND_PLURALS[kind]] = howMany(n);
+  }
+  const standing = standingSymbols(f).slice(0, LAYOUT.symbolsPerPatch);
+  const kind = f.kind ?? "source";
+  return {
+    path: f.path,
+    language: f.language,
+    kind,
+    size: fileSize(f.lines),
+    ...(f.doc === undefined ? {} : { doc: trim(f.doc, 300) }),
+    declares: Object.keys(declares).length === 0 ? "nothing of its own" : declares,
+    exports: outlineOrder(f).filter((s) => s.exported).slice(0, 8).map((s) => (s.doc === undefined ? s.name : `${s.name}: ${trim(s.doc, 100)}`)),
+    imports: `${howMany(f.imports.length)} project files`,
+    importedBy: `${howMany(f.importedBy.length)} project files`,
+    ...(kind === "test" ? {} : { tests: testsWords(f) }),
+    history: historyWords(f.git),
+    ...(standing.length === 0 ? {} : { standing: standing.map((s) => ({ name: s.name, kind: s.kind, size: symbolSize(s.lines ?? 1), exported: s.exported, ...(s.doc === undefined ? {} : { doc: trim(s.doc, 120) }) })) }),
+  };
+}
+
+/** A directory's lines and how its files import, per file: what `judged` compares across the repository's areas. */
+interface AreaMeasure {
+  readonly lines: number;
+  readonly within: number;
+  readonly out: number;
+  readonly in: number;
+}
+
+function measureArea(all: readonly FileFacts[]): AreaMeasure {
+  const inside = new Set(all.map((f) => f.path));
+  const n = Math.max(1, all.length);
+  return {
+    lines: all.reduce((x, f) => x + f.lines, 0),
+    within: all.reduce((x, f) => x + f.imports.filter((i) => inside.has(i)).length, 0) / n,
+    out: all.reduce((x, f) => x + f.imports.filter((i) => !inside.has(i)).length, 0) / n,
+    in: all.reduce((x, f) => x + f.importedBy.filter((i) => !inside.has(i)).length, 0) / n,
+  };
+}
+
+/**
+ * Where a value stands among the repository's areas, in words. Jev answers
+ * each area's request alone and never sees the others, so a judgment such as
+ * "much of the code leans on this area" needs the comparison made for it.
+ */
+function standing(value: number, all: readonly number[]): string {
+  if (all.length < 3) return "about the middle of this repository's areas";
+  const below = all.filter((v) => v < value).length;
+  const equal = all.filter((v) => v === value).length;
+  const p = (below + (equal - 1) / 2) / (all.length - 1);
+  return p >= 0.8 ? "among the most of this repository's areas" : p >= 0.6 ? "more than most of this repository's areas" : p > 0.4 ? "about the middle of this repository's areas" : p > 0.2 ? "less than most of this repository's areas" : "among the least of this repository's areas";
+}
+
+/** A directory as `judged` sends it: its size, parts and imports in words, per file where a count would grow with the directory, and each compared with the repository's other areas (`others`). */
+export function areaWords(model: CodeModel, path: string, own: readonly FileFacts[], all: readonly FileFacts[], subdirectories: readonly string[], others: readonly AreaMeasure[] = []): Record<string, unknown> {
+  const kinds: Record<string, string> = {};
+  for (const f of all) kinds[f.kind ?? "source"] = "";
+  for (const k of Object.keys(kinds)) kinds[k] = howMany(all.filter((f) => (f.kind ?? "source") === k).length);
+  const inside = new Set(all.map((f) => f.path));
+  const entity = model.entities.find((e) => e.path === path);
+  const me = measureArea(all);
+  return {
+    path: path === "" ? "(the repository's root)" : path,
+    size: bodySize(all.reduce((n, f) => n + f.lines, 0)),
+    files: howMany(all.length),
+    languages: languagesOf(all),
+    kinds,
+    ...(entity === undefined ? {} : { entity: `${entity.name} (${entity.form})` }),
+    subdirectories: subdirectories.map(baseName),
+    importsPerFile: {
+      amongItsOwnFiles: perFile(all.reduce((n, f) => n + f.imports.filter((i) => inside.has(i)).length, 0), all.length),
+      toOtherDirectories: perFile(all.reduce((n, f) => n + f.imports.filter((i) => !inside.has(i)).length, 0), all.length),
+      fromOtherDirectories: perFile(all.reduce((n, f) => n + f.importedBy.filter((i) => !inside.has(i)).length, 0), all.length),
+    },
+    ...(others.length === 0
+      ? {}
+      : {
+          comparedWithOtherAreas: {
+            size: standing(me.lines, others.map((o) => o.lines)),
+            importsAmongItsOwnFiles: standing(me.within, others.map((o) => o.within)),
+            importsToOtherDirectories: standing(me.out, others.map((o) => o.out)),
+            importedFromOtherDirectories: standing(me.in, others.map((o) => o.in)),
+          },
+        }),
+    contents: [...own].sort((a, b) => b.lines - a.lines || byPath(a, b)).slice(0, 12).map((f) => ({ name: baseName(f.path), size: fileSize(f.lines), ...(f.doc === undefined ? {} : { doc: trim(f.doc, 160) }) })),
+  };
+}
+
+/** An entity as `judged` sends it: `revised`'s facts with every count and size in words. */
+export function entityWords(model: CodeModel, e: EntityFacts): Record<string, unknown> {
+  const entities = new Map(model.entities.map((x) => [x.path, x]));
+  return {
+    name: e.name,
+    path: e.path === "" ? "(the repository's root)" : e.path,
+    form: e.form,
+    ...(e.doc === undefined ? {} : { doc: trim(e.doc, 300) }),
+    size: bodySize(e.lines),
+    files: howMany(e.files),
+    languages: e.languages,
+    surface: `${howMany(e.exports)} exported symbols`,
+    dependsOn: e.dependsOn.flatMap((p) => {
+      const o = entities.get(p);
+      return o === undefined ? [] : [{ name: o.name, importers: `${howMany(importersOf(model, e, o))} of its files`, dependedOnBy: `${howMany(o.dependents.length)} entities` }];
+    }),
+    dependents: e.dependents.map((p) => entities.get(p)?.name ?? p),
+    dependedOnBy: howMany(e.dependents.length),
+    tests: { ownTestFiles: howMany(e.tests.files), sourceFilesSomeTestReaches: e.tests.covered >= 0.9 ? "nearly all" : e.tests.covered >= 0.6 ? "most" : e.tests.covered >= 0.3 ? "some" : e.tests.covered > 0 ? "few" : "none" },
+  };
+}
+
+/** The question `judged` asks of every source file, whose answer vitality reads. */
+export const NEEDS_TESTS = "tests";
+
 /** The nearest directory with land of its own that holds a path's directory. */
 function regionFor(regions: ReadonlySet<string>, dir: string): string {
   for (let p: string | null = dir; p !== null; p = p === "" ? null : parentOf(p)) if (regions.has(p)) return p;
@@ -429,7 +581,8 @@ function regionFor(regions: ReadonlySet<string>, dir: string): string {
 /** The request Jev gets about each thing. State carries facts and doc comments only, never source. */
 export function planWorldRequests(model: CodeModel, looks: Looks, options: PlanOptions = {}): WorldRequest[] {
   const design = designOf(options.design);
-  const revised = design.questions === "revised";
+  const revised = design.questions !== "first";
+  const judged = design.questions === "judged";
   const salt = options.shuffle ?? "";
   const character = design.character ? (options.character ?? {}) : {};
   const dirs = directoriesOf(model, model.repository.name);
@@ -466,6 +619,11 @@ export function planWorldRequests(model: CodeModel, looks: Looks, options: PlanO
   );
   const regionList = regionPaths(dirs);
   const regions = new Set(regionList);
+  const underDir = (p: string): FileFacts[] => {
+    const x = dirs.get(p) as Dir;
+    return [...x.files, ...x.children.flatMap(underDir)];
+  };
+  const measures = design.state === "words" ? regionList.map((p) => measureArea(underDir(p))) : [];
   const worldWords = lookWords(looks.world, character.world);
   for (const path of regionList) {
     const d = dirs.get(path) as Dir;
@@ -486,7 +644,9 @@ export function planWorldRequests(model: CodeModel, looks: Looks, options: PlanO
     const state =
       design.state === "outline"
         ? { directory: areaOutline(model, path), ...(worldWords === undefined ? {} : { world: worldWords }) }
-        : {
+        : design.state === "words"
+          ? { directory: areaWords(model, path, d.files, all, d.children, measures) }
+          : {
             directory: {
               path: path === "" ? "(the repository's root)" : path,
               files: all.length,
@@ -526,7 +686,20 @@ export function planWorldRequests(model: CodeModel, looks: Looks, options: PlanO
   for (const f of [...model.files].sort(byPath)) {
     const standing = standingSymbols(f);
     const forms: Record<string, JevQuestion> = {};
-    for (const kind of [...new Set(standing.map((s) => s.kind))].sort()) {
+    if (judged) {
+      // Each finer entity that may stand on the patch, on its own: the layout stands at most `symbolsPerPatch`, the first of `standingSymbols`.
+      for (const s of standing.slice(0, LAYOUT.symbolsPerPatch)) {
+        if (forms[`form#${s.name}`] !== undefined) continue;
+        forms[`form#${s.name}`] = choice(
+          `The ${KIND_WORDS[s.kind]} \`${s.name}\`, listed in \`standing\`, stands on this file's patch as one small thing a person can walk up to and read about. Which suits it best? Judge by what its name and doc comment say it does, its size and whether other files can use it.`,
+          docs(looks.form),
+          `form#${s.name}`,
+          f.path,
+          salt,
+        );
+      }
+    }
+    for (const kind of judged ? [] : [...new Set(standing.map((s) => s.kind))].sort()) {
       forms[`form:${kind}`] = revised
         ? choice(`Each ${KIND_WORDS[kind]} declared in this file stands on the file's patch as one small thing a person can walk up to and read about. Which suits this file's ${KIND_WORDS[kind]}s best?`, docs(looks.form), `form:${kind}`, f.path, salt)
         : choice(`Each ${KIND_WORDS[kind]} in this file stands on its patch as something a person can walk up to. What does each stand as?`, docs(looks.form), `form:${kind}`, f.path, salt);
@@ -534,7 +707,9 @@ export function planWorldRequests(model: CodeModel, looks: Looks, options: PlanO
     const state =
       design.state === "outline"
         ? { file: fileOutline(f), ...landOf(parentOf(f.path)) }
-        : {
+        : design.state === "words"
+          ? { file: fileWords(f) }
+          : {
             file: {
               path: f.path,
               language: f.language,
@@ -550,8 +725,18 @@ export function planWorldRequests(model: CodeModel, looks: Looks, options: PlanO
     const vibe = revised
       ? choice("This file becomes a patch of ground in its directory's area, and what grows there shows what the file is and does. Which suits this file? Judge by the part it plays, its size and how much code imports it, not by what its words are about: a file about light or grass is judged like any other.", docs(looks.vibe), "vibe", f.path, salt)
       : choice("This file becomes a patch of ground in its directory's area. What grows on it?", docs(looks.vibe), "vibe", f.path, salt);
-    const kindsStanding = Object.keys(forms).map((id) => `${KIND_WORDS[id.slice("form:".length) as SymbolFact["kind"]]}s`);
-    ask("file", f.path, state, { vibe, ...forms }, { readings: fileReadings(model, f), decides: `what grows on this file's patch${kindsStanding.length === 0 ? "" : ` and what its ${kindsStanding.join(" and ")} stand as`}` });
+    const kindsStanding = judged ? (Object.keys(forms).length === 0 ? [] : ["functions, classes, types and constants"]) : Object.keys(forms).map((id) => `${KIND_WORDS[id.slice("form:".length) as SymbolFact["kind"]]}s`);
+    const tests: Record<string, JevQuestion> =
+      judged && (f.kind ?? "source") === "source"
+        ? {
+            [NEEDS_TESTS]: {
+              type: "noul",
+              instructions: "Does this file hold behavior a test should check: logic that could break when someone changes it? Files of only types, constants, presets, markup or styles, and files that only pass on what they import, hold none.",
+              criteria: { true: "It holds behavior a test should check.", false: "It holds nothing a test needs to check." },
+            },
+          }
+        : {};
+    ask("file", f.path, state, { vibe, ...forms, ...tests }, { readings: fileReadings(model, f), decides: `what grows on this file's patch${kindsStanding.length === 0 ? "" : ` and what its ${kindsStanding.join(" and ")} stand as`}` });
   }
   const entities = new Map(model.entities.map((e) => [e.path, e]));
   const things = {
@@ -604,7 +789,9 @@ export function planWorldRequests(model: CodeModel, looks: Looks, options: PlanO
     const state =
       design.state === "outline"
         ? { entity: entityOutline(model, e), ...landOf(e.path) }
-        : {
+        : design.state === "words"
+          ? { entity: entityWords(model, e) }
+          : {
             entity: {
               name: e.name,
               path: e.path === "" ? "(the repository's root)" : e.path,
@@ -784,6 +971,7 @@ export async function judgeWorld(model: CodeModel, looks: Looks, jev: JevClient,
   const forms: Record<string, Record<string, string>> = {};
   const waters: Record<string, string> = {};
   const characters: Record<string, string> = {};
+  const needsTests: Record<string, number> = {};
   for (const { p, a } of answered) {
     if (p.about === "world") world = pickOf(a.world) ?? world;
     else if (p.about === "area") {
@@ -793,8 +981,13 @@ export async function judgeWorld(model: CodeModel, looks: Looks, jev: JevClient,
     } else if (p.about === "file") {
       vibes[p.target] = pickOf(a.vibe) ?? first(looks.vibe);
       const mine: Record<string, string> = {};
-      for (const id of Object.keys(p.request.questions)) if (id.startsWith("form:")) mine[id.slice("form:".length)] = pickOf(a[id]) ?? first(looks.form);
+      for (const id of Object.keys(p.request.questions)) {
+        if (id.startsWith("form:")) mine[id.slice("form:".length)] = pickOf(a[id]) ?? first(looks.form);
+        else if (id.startsWith("form#")) mine[id.slice("form".length)] = pickOf(a[id]) ?? first(looks.form);
+      }
       if (Object.keys(mine).length > 0) forms[p.target] = mine;
+      const tests = a[NEEDS_TESTS];
+      if (tests?.type === "noul") needsTests[p.target] = tests.noul;
     } else {
       // Revised questions ask building-or-landmark on its own, then each look; the first asked one choice over both.
       const stands = pickOf(a.stands);
@@ -810,7 +1003,7 @@ export async function judgeWorld(model: CodeModel, looks: Looks, jev: JevClient,
       }
     }
   }
-  return { world, lands, vibes, things, trails, forms, waters, characters };
+  return { world, lands, vibes, things, trails, forms, waters, characters, ...(Object.keys(needsTests).length === 0 ? {} : { needsTests }) };
 }
 
 // ---------- the stand-in judge ----------
@@ -847,7 +1040,7 @@ function tagsOf(state: Record<string, unknown>): string[] {
   const file = state.file as Facts | undefined;
   if (file !== undefined) {
     const path = String(file.path);
-    const hub = typeof file.importedBy === "number" ? file.importedBy >= 4 : ["several", "many"].includes(String(file.importedByCount));
+    const hub = typeof file.importedBy === "number" ? file.importedBy >= 4 : /^(several|many)/.test(String(file.importedByCount ?? file.importedBy));
     return [
       String(file.kind),
       String(file.language),
@@ -917,8 +1110,9 @@ export function standInJev(looks: Looks): JevClient {
           // Building-or-landmark and each look, asked apart, are judged as the one choice over both: the same thing stands either way.
           const split = request.questions.building !== undefined && (id === "stands" || id === "building" || id === "landmark");
           const r = rand(seedOf(`${target}:${split ? "stands" : id}`));
-          // A form question is about one kind of symbol: the kind is a fact it suits.
-          const own = id.startsWith("form:") ? new Set([...tags, id.slice("form:".length)]) : tags;
+          // A form question is about one kind of symbol, or one symbol: its kind is a fact it suits.
+          const named = id.startsWith("form#") ? ((state.file as { standing?: { name: string; kind: string }[] } | undefined)?.standing ?? []).find((s) => `form#${s.name}` === id)?.kind : undefined;
+          const own = id.startsWith("form:") ? new Set([...tags, id.slice("form:".length)]) : named !== undefined ? new Set([...tags, named]) : tags;
           const keys = split ? [...Object.keys(looks.building).map((k) => `building:${k}`), ...Object.keys(looks.landmark).map((k) => `landmark:${k}`)] : Object.keys(q.criteria);
           const all = keys
             .sort()
@@ -928,6 +1122,11 @@ export function standInJev(looks: Looks): JevClient {
           const probabilities = Object.fromEntries(scores.map(([k, s]) => [k, Math.exp(2 * s) / total]));
           const [best] = [...scores].sort((a, b) => b[1] - a[1])[0] ?? [""];
           answers[id] = { type: "choice", choice: best, probabilities, confidence: probabilities[best] ?? 0 };
+        } else if (q.type === "noul" && id === NEEDS_TESTS) {
+          // Whether a file needs tests: one that declares functions or classes does.
+          const declares = (state.file as { declares?: unknown } | undefined)?.declares;
+          const acts = typeof declares === "object" && declares !== null && ("functions" in declares || "classes" in declares);
+          answers[id] = { type: "noul", noul: acts ? 0.8 : 0.15 };
         } else if (q.type === "noul" && id.startsWith(MORE)) {
           // Whether a reading would help: seeded, so some requests grow their context and the path is exercised.
           answers[id] = { type: "noul", noul: 0.2 + 0.6 * rand(seedOf(`${target}:${id}`)).next() };
@@ -1124,8 +1323,9 @@ export function layoutWorld(model: CodeModel, judged: Judgments): CodeWorld {
       continue;
     }
     const f = files.get(path) as FileFacts;
-    const vitality = vitalityOf(f).vitality;
-    patches.push({ path, name: baseName(path), area, x: leaf.x, z: leaf.z, radius: Math.sqrt(leaf.ground / Math.PI), vitality, lines: f.lines, kind: f.kind ?? "source", vibe: judged.vibes[path] ?? "", ground: leaf.ground, cell });
+    const needsTests = judged.needsTests?.[path];
+    const vitality = vitalityOf(f, [], needsTests === undefined ? {} : { needsTests }).vitality;
+    patches.push({ path, name: baseName(path), area, x: leaf.x, z: leaf.z, radius: Math.sqrt(leaf.ground / Math.PI), vitality, lines: f.lines, kind: f.kind ?? "source", vibe: judged.vibes[path] ?? "", ground: leaf.ground, cell, ...(needsTests === undefined ? {} : { needsTests }) });
     for (const s of standSymbols(f, leaf, leaf.inner, leaf.ground, LAYOUT.symbols - symbols.length)) {
       symbols.push({
         id: `${path}#${s.symbol.name}`,
@@ -1136,7 +1336,7 @@ export function layoutWorld(model: CodeModel, judged: Judgments): CodeWorld {
         line: s.symbol.line ?? 0,
         lines: s.symbol.lines ?? 1,
         ...(s.symbol.doc === undefined ? {} : { doc: s.symbol.doc }),
-        form: judged.forms[path]?.[s.symbol.kind] ?? "",
+        form: judged.forms[path]?.[`#${s.symbol.name}`] ?? judged.forms[path]?.[s.symbol.kind] ?? "",
         x: s.x,
         z: s.z,
         vitality,
