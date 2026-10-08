@@ -220,14 +220,19 @@ drifting specks of light. Low vitality clouds the water and dulls its
 sparkle.
 
 Grass keeps its full height at every distance, so it never grows out of the
-ground. Each blade has a seeded threshold and disappears whole once the
-viewer is farther than that, thinning from 55% of its reach of 60 m; a
-quarter of the blades reach only 14 m and a third only 30 m, so grass is
-densest close by. Blades thin the same way, whole, on steep risers and over
-the sand banks within one to three meters of water, which the ground paints
-from the same shore distance. The ground beneath is painted in the cover's
-own colors with short dabs in three directions, so where blades thin out the
-ground still reads as the same cover and no stroke runs on into a streak.
+ground, and no blade appears or vanishes as the person walks. Each blade
+stands at a fixed spot on the ground and narrows smoothly to nothing across
+its own seeded band of distance: the band starts between 50% and 80% of the
+blade's reach and runs a fifth of the reach, so a half-meter step changes a
+blade's width by at most 27%, and a frame of walking by at most 4%. Of the
+blades, a quarter reach only 14 m and a third only 30 m, the rest 60 m, so
+grass is densest close by. On steep risers and over the sand banks within
+one to three meters of water blades thin whole, chosen by their spot on the
+ground rather than by distance, so walking never changes which of them
+stand; the ground paints the banks from the same shore distance. The ground
+beneath is painted in the cover's own colors with short dabs in three
+directions, so where blades thin out the ground still reads as the same
+cover and no stroke runs on into a streak.
 
 Each cover sets its blades' form: how far they lean, how round their outline
 is (a pointed blade or a round leaf) and how far they arc over. Lush grass is
