@@ -83,7 +83,8 @@ export function createArrival(root: HTMLElement): Arrival {
         candidate = key;
         held = 0;
       }
-      const pausing = on && still >= PAUSE;
+      // The line underfoot waits until its area's name has been written: both share the one slip, so they never cross.
+      const pausing = on && still >= PAUSE && key === announced;
       if (pausing) {
         const nextKey = `${place.file?.path ?? ""}|${key}`;
         if (nextKey !== underKey || !under.classList.contains("on")) {

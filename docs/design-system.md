@@ -498,7 +498,8 @@ The three ways work together:
   with its parent directories in small capitals above it. The slip fades
   in, holds, and fades away after seven seconds. An area left and
   re-entered within half a minute is not announced again. Standing still
-  writes the file underfoot and the area's path on the same slip. It is the
+  writes the file underfoot and the area's path on the same slip, once the
+  area's name has come and gone, so the two never cross. It is the
   map's paper and ink, so it reads as the traveller's own note rather than
   a sign hung in the sky, and it names the area off the trails too. No
   words hang over the land (`app/renderer/immersive/arrival.ts`).
