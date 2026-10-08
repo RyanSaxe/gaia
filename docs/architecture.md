@@ -30,7 +30,12 @@ crosses: code facts, Jev requests and answers, and store records. Geometry
 never crosses, because the renderer builds it. `EngineMethods` in
 `packages/schema/src/engine.ts` is the TypeScript side of the protocol, and
 `engine/src/rpc.rs` the Rust side. The engine answers `engine.ping`,
-`project.open`, and Jev's `jev.estimate`, `jev.ask` and `jev.batch`.
+`project.open`, Jev's `jev.estimate`, `jev.status`, `jev.ask` and
+`jev.batch`, and the app-data store's `store.get`, `store.read` and
+`store.put`. The store (`engine/src/store.rs`) keeps one JSON file of tables
+per project, `<data>/projects/<project id>/store.json`, replaced through a
+rename so it is never half-written; `<data>` is the app's user-data folder,
+which main passes as `GAIA_DATA_DIR`.
 
 `project.open` walks a directory, respecting `.gitignore`, and reports each
 file's facts, the entities, and the repository (`CodeModel`). Each file is
@@ -173,15 +178,25 @@ answers can vary between identical calls. Gaia therefore:
   toward the first option;
 - grows the context only where Jev is unsure, adding the readings Jev asks for
   (`gather` in `packages/world/src/context.ts`);
-- stores every accepted answer, keyed by the question, the pinned model and
-  the coarse facts it reads, and asks again only when those facts change;
-- keeps a stored answer unless a fresh one wins by a margin (`reconcile`).
+- stores every accepted answer, keyed by the hash of the whole request
+  (model, facts and questions), and asks again only when the request
+  changes;
+- will keep a stored answer unless a fresh one wins by a margin
+  (`reconcile`); the world from code does not apply that margin yet, so a
+  changed request takes Jev's new answer.
 
 The engine is Jev's only client (`engine/src/jev.rs`). It posts each request
 to OpenRouter's Decisions API with curl, the key read from the macOS Keychain
 (service `gaia-openrouter`) and handed to curl on stdin, never on a command
-line or over the protocol. `jev.batch` sends many requests eight at a time;
-`jev.ask` sends one. Both refuse unless the engine runs with `GAIA_JEV=live`.
+line or over the protocol. `jev.batch` sends many requests eight at a time
+and answers each with Jev's response or the reason that request failed;
+`jev.ask` sends one. Both refuse unless the engine runs with `GAIA_JEV=live`. curl retries a timeout, 429 or
+5xx twice and gives up on a request after 90 seconds. `jev.status` says
+whether the Keychain holds the key, asking only whether the item exists, and
+whether the engine is live. Tests point the engine at a local stand-in for
+OpenRouter (`tools/openrouter-stand-in.ts`) with `GAIA_JEV_ENDPOINT`, which
+accepts only a loopback address; a local endpoint is sent a placeholder key
+and the Keychain is never read, so the key can only go to OpenRouter.
 `jev.estimate` returns what a batch would send and cost without reading the
 key or touching the network: tokens are estimated at 1.8 bytes each, from
 OpenRouter's published example, and priced at Jev 1.13's $0.042 per million

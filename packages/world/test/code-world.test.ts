@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { CodeModel, EntityFacts, FileFacts, JevQuestion } from "@gaia/schema";
-import { type Looks, judgeWorld, layoutWorld, planWorldRequests, standInJev } from "@gaia/world";
+import type { CodeModel, EntityFacts, FileFacts, JevClient, JevQuestion, JevResponse } from "@gaia/schema";
+import { type Judge, type Looks, judgeWorld, keptJev, layoutWorld, planWorldRequests, requestKey, standInJev } from "@gaia/world";
 
 const file = (path: string, lines: number, kind: FileFacts["kind"] = "source"): FileFacts => ({
   path,
@@ -109,5 +109,31 @@ describe("a world laid out from code", () => {
     const bigger = layoutWorld(model(30), await judgeWorld(model(30), LOOKS, standInJev(LOOKS)));
     expect(bigger.size).toBeGreaterThan(world.size);
 
+  });
+
+  it("keeps Jev's answers: a stored one is used without asking, and one outside the options is left to the stand-in", async () => {
+    const planned = planWorldRequests(model(), LOOKS);
+    const world = planned.find((p) => p.about === "world");
+    const file = planned.find((p) => p.about === "file");
+    const standIn = standInJev(LOOKS);
+    const stored = await standIn.ask(world!.request);
+    const asked: string[] = [];
+    // A Jev that answers every choice with an option it was never offered.
+    const wayward: JevClient = {
+      async ask(request) {
+        asked.push(requestKey(request));
+        return { answers: { vibe: { type: "choice", choice: "Bamboo", probabilities: {}, confidence: 1 } }, model: "jev", costUsd: 0, ms: 1 };
+      },
+    };
+    const kept: JevResponse[] = [];
+    const judges = new Map<string, Judge>();
+    const jev = keptJev(wayward, standIn, { stored: new Map([[requestKey(world!.request), stored]]), keep: (_, r) => kept.push(r), settled: (k, j) => judges.set(k, j) });
+    expect(await jev.ask(world!.request)).toEqual(stored);
+    const vibe = (await jev.ask(file!.request)).answers.vibe;
+    expect(vibe?.type === "choice" && Object.keys(LOOKS.vibe)).toContain(vibe?.type === "choice" ? vibe.choice : "");
+    expect(vibe).toEqual((await standIn.ask(file!.request)).answers.vibe);
+    expect(asked).toEqual([requestKey(file!.request)]);
+    expect(kept).toEqual([]);
+    expect([...judges.values()]).toEqual(["jev", "stand-in"]);
   });
 });

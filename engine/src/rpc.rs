@@ -46,10 +46,21 @@ pub fn handle(line: &str) -> Value {
         },
         "jev.ask" => match p.get("request") {
             Some(r) => crate::jev::batch(vec![r.clone()])
-                .map(|mut answers| answers.pop().unwrap_or(Value::Null))
-                .map_err(|e| (FAILED, e)),
+                .map_err(|e| (FAILED, e))
+                .and_then(|mut answers| match answers.pop() {
+                    Some(answer) if answer.get("error").is_none() => Ok(answer),
+                    Some(answer) => Err((
+                        FAILED,
+                        answer["error"]
+                            .as_str()
+                            .unwrap_or("Jev failed.")
+                            .to_string(),
+                    )),
+                    None => Err((FAILED, "Jev answered nothing.".into())),
+                }),
             None => Err((INVALID_PARAMS, "jev.ask needs a request.".into())),
         },
+        "jev.status" => Ok(json!({ "key": crate::jev::has_key(), "live": crate::jev::live() })),
         "jev.estimate" => match p["requests"].as_array() {
             Some(requests) => Ok(crate::jev::dry_run(requests)),
             None => Err((INVALID_PARAMS, "jev.estimate needs requests.".into())),
@@ -59,6 +70,37 @@ pub fn handle(line: &str) -> Value {
                 .map(|responses| json!({ "responses": responses }))
                 .map_err(|e| (FAILED, e)),
             None => Err((INVALID_PARAMS, "jev.batch needs requests.".into())),
+        },
+        "store.get" => match (
+            p["project"].as_str(),
+            p["table"].as_str(),
+            p["key"].as_str(),
+        ) {
+            (Some(project), Some(table), Some(key)) => crate::store::get(project, table, key)
+                .map(|v| v.map_or(Value::Null, |value| json!({ "value": value })))
+                .map_err(|e| (FAILED, e)),
+            _ => Err((
+                INVALID_PARAMS,
+                "store.get needs a project, a table and a key.".into(),
+            )),
+        },
+        "store.read" => match (p["project"].as_str(), p["table"].as_str()) {
+            (Some(project), Some(table)) => crate::store::read(project, table)
+                .map(|records| json!({ "records": records }))
+                .map_err(|e| (FAILED, e)),
+            _ => Err((
+                INVALID_PARAMS,
+                "store.read needs a project and a table.".into(),
+            )),
+        },
+        "store.put" => match (p["project"].as_str(), p["writes"].as_array()) {
+            (Some(project), Some(writes)) => crate::store::put(project, writes)
+                .map(|()| json!({ "ok": true }))
+                .map_err(|e| (FAILED, e)),
+            _ => Err((
+                INVALID_PARAMS,
+                "store.put needs a project and writes.".into(),
+            )),
         },
         other => Err((METHOD_NOT_FOUND, format!("Unknown method {other}"))),
     };
