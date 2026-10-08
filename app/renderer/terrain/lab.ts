@@ -1382,6 +1382,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   new ResizeObserver(resize).observe(stage);
 
   let frozen: number | null = null;
+  let grassPin: THREE.Vector3 | null = null;
   const shadowCenter = new THREE.Vector3();
   const views = (): PlantView[] => [...treeViews, ...settlement.views(), ...landmarkViews, ...(built?.views ?? [])];
   const lanternEye = new THREE.Vector3();
@@ -1401,7 +1402,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       ground.follow(walker.x, walker.z);
       wildGrowth.follow(walker.x, walker.z);
       lantern.follow(camera.position, forward, lanternGround, walked, dt);
-      grass.follow(camera.position);
+      grass.follow(grassPin ?? camera.position);
       water.wade(walker.x, walker.z, walker.yaw, walked, dt);
       shadowCenter.set(walker.x - Math.sin(walker.yaw) * 18, walker.eye, walker.z - Math.cos(walker.yaw) * 18);
       shadow.frame(shadowCenter, 40);
@@ -1750,6 +1751,14 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       /** Shows or hides the grass, for comparing frame costs and looking at the bare ground. */
       showGrass: (on: boolean) => {
         grass.mesh.visible = on;
+      },
+      /**
+       * Holds the grass's center at (x, z) at eye height while the view stays
+       * put, or lets it follow the eye again (null): moving only the center
+       * shows exactly what a step changes in the grass.
+       */
+      grassCenter: (at: [number, number] | null) => {
+        grassPin = at === null ? null : new THREE.Vector3(at[0], walker.eye, at[1]);
       },
       /** Shows or hides every tree, for comparing frame costs. */
       showTrees: (on: boolean) => {

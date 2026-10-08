@@ -23,7 +23,7 @@ ${TUFT_GLSL}
 ${CLEARING_GLSL}
 attribute vec4 aBlade; // x, z as a share of the blade's patch, rotation, height
 attribute vec4 aSeed; // tint, flower, keep, cover pick
-attribute vec2 aThin; // how far out the blade still grows, as a share of the thinning band; its reach
+attribute vec2 aThin; // where in the thinning band the blade narrows away, 0 to 1; its reach
 varying vec3 vWorld;
 varying vec3 vNormal;
 varying vec3 vGroundNormal;
@@ -81,13 +81,17 @@ void main() {
   float grade = length(vec2(sx, sz)) / (2.0 * e);
   vGroundNormal = normalize(vec3(-sx / (2.0 * e), 1.0, -sz / (2.0 * e)));
 
-  // A blade never grows or shrinks with distance, slope or shore. Each one has
-  // its own thresholds and is there whole or not at all: the field thins out
-  // from 55% of its reach over ground painted the same, on steep risers, and
-  // over the sand toward the water.
+  // A blade's height never changes with distance, so it never grows out of
+  // the ground. Toward its reach the field thins continuously: each blade
+  // narrows to nothing across its own seeded band, which starts between 50%
+  // and 80% of its reach and runs a fifth of the reach, so no blade ever
+  // appears or vanishes between one step and the next. On steep risers and
+  // over the sand toward the water blades thin whole, by their fixed spot on
+  // the ground, so walking never changes which of them stand.
   float r2 = fract(aSeed.x * 7.13 + aSeed.z * 3.71);
   float r3 = fract(aSeed.y * 5.31 + aThin.x * 9.17);
-  float near = step(length(xz - uCenter.xz), reach * mix(0.55, 1.0, aThin.x));
+  float from = reach * mix(0.5, 0.8, aThin.x);
+  float near = 1.0 - smoothstep(from, from + reach * 0.2, length(xz - uCenter.xz));
   float banks = step(mix(1.3, 3.0, r2), g.z);
   float steep = step(r3, 1.0 - smoothstep(0.35, 0.7, grade) * 0.8);
 
@@ -104,7 +108,7 @@ void main() {
   vec3 form = uCoverForm[k];
   float tuft = tuftMask(xz);
   float tufted = step(fract(aBlade.w * 13.7 + aSeed.w * 5.3) * 0.999, mix(1.0, tuft, shape.w));
-  float keep = step(aSeed.z, shape.z) * near * banks * steep * tufted;
+  float keep = step(aSeed.z, shape.z) * banks * steep * tufted;
   float flowers = uCoverFlowers[k];
   float flower = step(aSeed.y, flowers);
   // Tufts dome: their middles stand a little taller than their edges.
@@ -133,7 +137,7 @@ void main() {
   // A flower is a slim stem that opens a small round head at its top. Seen
   // at eye height, a head any larger reads as confetti.
   float head = smoothstep(0.9, 0.94, t);
-  float wide = shape.y * keep * mix(outline, mix(0.18, 0.95, head), flower);
+  float wide = shape.y * keep * near * mix(outline, mix(0.18, 0.95, head), flower);
 
   vec2 facing = vec2(-sin(aBlade.z), cos(aBlade.z));
   vec3 across = vec3(cos(aBlade.z), 0.0, sin(aBlade.z));
@@ -235,7 +239,8 @@ const TIERS = [
 /**
  * Wind-swayed blades around the viewer; each region's cover decides what
  * grows where and in what form. Blades keep their full height at every
- * distance: the far ones thin out whole, each at its own seeded distance.
+ * distance: toward their reach each one narrows smoothly to nothing over its
+ * own seeded band, so none appears or vanishes as the viewer moves.
  */
 export function createGrass(light: SceneLight, ground: GroundTexture, covers: RegionCovers, under: Clearings, count = 150000, radius = 60): Grass {
   // One blade, one unit wide and tall: five rows and a soft tip. The vertex
