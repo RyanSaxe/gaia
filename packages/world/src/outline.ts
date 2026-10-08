@@ -119,6 +119,18 @@ export function outlineOrder(f: FileFacts): SymbolFact[] {
   return [...f.symbols].sort((a, b) => Number(b.exported) - Number(a.exported) || (b.lines ?? 1) - (a.lines ?? 1) || (a.name < b.name ? -1 : 1));
 }
 
+/** Paths nearest a file first (the longest shared directory), then by name: its own tests before tests that reach it from afar. */
+function nearestFirst(path: string, paths: readonly string[]): string[] {
+  const shared = (p: string): number => {
+    const a = path.split("/");
+    const b = p.split("/");
+    let n = 0;
+    while (n < a.length - 1 && n < b.length - 1 && a[n] === b[n]) n++;
+    return n;
+  };
+  return [...paths].sort((x, y) => shared(y) - shared(x) || (x < y ? -1 : 1));
+}
+
 /** Where each outlined symbol is in its file, for the source-reading step. Never sent as state. */
 export function spansOf(f: FileFacts): Readonly<Record<string, { readonly line: number; readonly lines: number }>> {
   return Object.fromEntries(f.symbols.filter((s) => s.line !== undefined).map((s) => [s.name, { line: s.line as number, lines: s.lines ?? 1 }]));
@@ -144,7 +156,7 @@ function fileAt(f: FileFacts, level: Level): FileOutline {
     importedBy: [...f.importedBy].sort().slice(0, level.paths),
     importsCount: howMany(f.imports.length),
     importedByCount: howMany(f.importedBy.length),
-    tests: { coveredBy: [...f.tests.coveredBy].sort().slice(0, Math.min(4, level.paths)), failing: f.tests.failing.length },
+    tests: { coveredBy: nearestFirst(f.path, f.tests.coveredBy).slice(0, Math.min(4, level.paths)), failing: f.tests.failing.length },
     health: { errors: f.diagnostics.errors, warnings: f.diagnostics.warnings, lint: f.diagnostics.lint, debtMarkers: f.debtMarkers, unused: f.unused, nesting },
   };
 }
