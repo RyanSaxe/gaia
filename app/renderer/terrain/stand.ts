@@ -23,6 +23,9 @@ import {
   type TrailRequest,
   type WildsRing,
   type LandSite,
+  type Habitat,
+  growGrove,
+  trunkIndex,
   clearingsOf,
   findLandmarkSite,
   findSite,
@@ -61,10 +64,20 @@ export interface StandLot extends Circle {
   readonly id: string;
 }
 
-/** One file's patch: its heart and how far its ground reaches, and how many trees of which flora preset grow on it (preset -1: none). */
+/** One file's patch: its heart and how far its ground reaches, and how many trees of which flora preset grow on it (preset -1: none), as one grove. */
 export interface StandPatch extends Circle {
   readonly trees: number;
   readonly preset: number;
+  /** Where its grove gathers: the patch's middle, or, where an area's groves knit into one wood, its side nearest the area's heart. */
+  readonly heart: { readonly x: number; readonly z: number };
+  /** Trunks this many crown widths apart at the grove's heart; they thin toward its margin. */
+  readonly closeness: number;
+  /** How far from its heart the grove may reach, meters. */
+  readonly reach: number;
+  /** How large its trees grow, a multiplier: a meadow's lone old trees stand larger. */
+  readonly stature: number;
+  /** Seeds its trees, from its file's path, so a change elsewhere never moves them. */
+  readonly seed: number;
 }
 
 /** A file's finer entity standing on its patch, as one of the understory's blueprints. */
@@ -96,6 +109,8 @@ export interface StandCode {
   /** The land's cells, each part of one patch (its index) or of a lot (-1): a tree grows only on its own patch's cells. */
   readonly cells: readonly (LandSite & { readonly patch: number })[];
   readonly symbols: readonly StandSymbol[];
+  /** Per terrain region: how much of each understory rule it holds (by rule id; absent counts 1), and what its open ground reads as. */
+  readonly regions: readonly { readonly understory: Readonly<Record<string, number>>; readonly open?: Habitat }[];
   /** Trails between lots by id; `style` indexes `trailStyles`; the most wanted route first. */
   readonly trails: readonly { readonly from: string; readonly to: string; readonly want: number; readonly style: number }[];
 }
@@ -106,9 +121,10 @@ export interface StandRequest {
   readonly landmarks: readonly StandLandmark[];
   /** Trail looks: between landmarks, from a building's door, and for a loop. */
   readonly trailStyles: readonly [RouteSpec, RouteSpec, RouteSpec];
-  /** How many trees, the scatter's seed, and each build's trunk radius by build: tree i copies a build chosen from i. */
-  readonly trees: { readonly count: number; readonly seed: number; readonly presets: number; readonly builds: number; readonly bases: readonly number[] };
-  readonly understory: { readonly rules: readonly ScatterRule[]; readonly seed: number };
+  /** How many trees, the scatter's seed, and each build's trunk and crown radius by build: tree i copies a build chosen from i. */
+  readonly trees: { readonly count: number; readonly seed: number; readonly presets: number; readonly builds: number; readonly bases: readonly number[]; readonly crowns: readonly number[] };
+  /** The understory's rules and seed, and what each region's open ground reads as. */
+  readonly understory: { readonly rules: readonly ScatterRule[]; readonly seed: number; readonly open?: readonly (Habitat | undefined)[] };
   readonly code?: StandCode;
 }
 
@@ -318,34 +334,37 @@ function settleCode(t: Terrain, req: StandRequest, code: StandCode, sites: reado
   return { landmarks, trails };
 }
 
-/** Meters between trees on one patch. */
-const PATCH_GAP = 6.5;
+/** Fewest meters between trunks, whatever the crowns. */
+const TRUNK_GAP = 4.5;
 
-/** The trees on each file's patch: dry, gentle ground inside it, clear of what stands and of each other. */
-function plantPatches(t: Terrain, req: StandRequest, code: StandCode, blocked: (x: number, z: number) => boolean): StandTree[] {
-  const { seed, builds, bases } = req.trees;
+/**
+ * The trees on each file's patch, as one grove: close-set at its heart and
+ * thinning toward its margin, on its own cells' dry, gentle ground, clear of
+ * what stands, of every other grove's trees and of the file's own finer
+ * entities, which each keep a small glade.
+ */
+function plantPatches(t: Terrain, req: StandRequest, code: StandCode, blocked: (x: number, z: number) => boolean, glades: readonly Occupied[]): StandTree[] {
+  const { builds, bases, crowns } = req.trees;
   const half = t.spec.size / 2 - 24;
   const trees: StandTree[] = [];
+  const index = trunkIndex();
   const onPatch = (j: number, x: number, z: number): boolean => code.cells.length === 0 || code.cells[siteAt(code.cells, x, z)]?.patch === j;
+  const inGlade = (x: number, z: number): boolean => glades.some((g) => Math.hypot(g.x - x, g.z - z) < g.radius);
   code.patches.forEach((p, j) => {
     if (p.preset < 0 || p.trees <= 0) return;
-    const r = rand(seed * 7919 + j);
-    let grown = 0;
-    for (let attempt = 0; attempt < p.trees * 40 && grown < p.trees; attempt++) {
-      // The first tree tries the patch's middle; the rest spread over its ground.
-      const a = r.next() * Math.PI * 2;
-      // A patch drawn by cells reaches past its average radius in places; a disc does not.
-      const d = attempt === 0 ? 0 : Math.sqrt(r.next()) * p.radius * (code.cells.length === 0 ? 0.9 : 1.3);
-      const x = p.x + Math.cos(a) * d;
-      const z = p.z + Math.sin(a) * d;
-      if (Math.abs(x) > half || Math.abs(z) > half || !onPatch(j, x, z) || slopeAt(t.lattice, x, z) > PLANT_SLOPE || isWet(t, x, z) || blocked(x, z)) continue;
-      if (trees.some((o) => Math.hypot(o.x - x, o.z - z) < PATCH_GAP)) continue;
-      const index = trees.length;
+    let crown = 0;
+    for (let k = 0; k < builds; k++) crown += (crowns[p.preset * builds + k] ?? 4) / builds;
+    const spacing = Math.max(TRUNK_GAP, crown * 2 * p.stature * p.closeness);
+    const fits = (x: number, z: number): boolean =>
+      Math.abs(x) <= half && Math.abs(z) <= half && onPatch(j, x, z) && slopeAt(t.lattice, x, z) <= PLANT_SLOPE && !isWet(t, x, z) && !blocked(x, z) && !inGlade(x, z);
+    const grown = growGrove({ x: p.heart.x, z: p.heart.z, count: p.trees, spacing, reach: p.reach, seed: p.seed }, fits, (x, z, gap) => index.crowded(x, z, Math.min(gap, spacing)));
+    const r = rand(p.seed ^ 0x5bd1e995);
+    for (const [x, z] of grown) {
+      index.add(x, z);
       const variant = p.preset * builds + Math.floor(r.next() * builds);
-      const scale = 0.85 + r.next() * 0.45;
+      const scale = p.stature * (0.85 + r.next() * 0.45);
       const base = (bases[variant] ?? 0.5) * scale;
-      trees.push({ index, x, y: groundedBase(t.lattice, x, z, base), z, variant, scale, yaw: r.next() * Math.PI * 2, patch: j });
-      grown++;
+      trees.push({ index: trees.length, x, y: groundedBase(t.lattice, x, z, base), z, variant, scale, yaw: r.next() * Math.PI * 2, patch: j });
     }
   });
   return trees;
@@ -366,9 +385,11 @@ export function standWorld(t: Terrain, req: StandRequest): Stand {
   const clear: Occupied[] = [...trailDiscs(trails, 1.6), ...landmarks.map((s) => ({ x: s.site.x, z: s.site.z, radius: treeClearance(req.landmarks[s.landmark] as StandLandmark) }))];
   const blocked = (x: number, z: number): boolean => req.buildings.some((b, k) => blockedBy(b, sites[k] as BuildingSite, x, z, 6)) || clear.some((o) => Math.hypot(o.x - x, o.z - z) < o.radius);
   const { count, seed, presets, builds, bases } = req.trees;
+  // A file's finer entities each keep a small glade among its trees.
+  const glades: Occupied[] = (code?.symbols ?? []).map((sym) => ({ x: sym.x, z: sym.z, radius: sym.radius * sym.scale + 2.6 }));
   const trees =
     code !== undefined
-      ? plantPatches(t, req, code, blocked)
+      ? plantPatches(t, req, code, blocked, glades)
       : scatterPlants(t, count, seed).flatMap((s, i): StandTree[] => {
           if (blocked(s.x, s.z)) return [];
           const variant = (i % presets) * builds + (Math.floor(i / presets) % builds);
@@ -392,6 +413,8 @@ export function standWorld(t: Terrain, req: StandRequest): Stand {
   ];
   // A file's finer entities stand where the layout put them, kept off water, steep ground and whatever else stands.
   const standing: Placement[] = [];
+  /** Each standing entity with the room decoration leaves it, so nothing crowds it. */
+  const roomy: Occupied[] = [];
   const symbols = (code?.symbols ?? []).map((sym, i): number => {
     const reach = sym.radius * sym.scale;
     const clash = (x: number, z: number): boolean => isWet(t, x, z) || slopeAt(t.lattice, x, z) > 24 || blocked(x, z) || occupied.some((o) => Math.hypot(o.x - x, o.z - z) < o.radius + reach);
@@ -405,10 +428,15 @@ export function standWorld(t: Terrain, req: StandRequest): Stand {
     if (at === null) return -1;
     const [x, z] = at;
     occupied.push({ x, z, radius: reach + 0.4 });
+    roomy.push({ x, z, radius: reach + 2.2 });
     standing.push({ rule: sym.rule, variant: sym.variant, x, y: heightAt(t.lattice, x, z) - 0.05, z, yaw: ((i * 2.399) % (Math.PI * 2)), scale: sym.scale, radius: reach, slope: [0, 0], region: t.region[Math.round((z - t.lattice.origin) / t.lattice.spacing) * t.lattice.n + Math.round((x - t.lattice.origin) / t.lattice.spacing)] ?? 0, vitality: sym.vitality });
     return standing.length - 1;
   });
-  const placements = [...standing, ...scatterComponents(t, req.understory.rules, req.understory.seed, occupied)];
+  // The understory grows where it belongs: it reads the groves' crowns, and in a world from code each region's character.
+  const rules = code === undefined ? req.understory.rules : req.understory.rules.map((rule) => ({ ...rule, regions: t.spec.regions.map((_, i) => (rule.regions?.[i] ?? 1) * (code.regions[i]?.understory[rule.id] ?? 1)) }));
+  const open = code === undefined ? req.understory.open : t.spec.regions.map((_, i) => code.regions[i]?.open ?? req.understory.open?.[i]);
+  const canopy = trees.map((tr) => ({ x: tr.x, z: tr.z, radius: (req.trees.crowns[tr.variant] ?? 4) * tr.scale }));
+  const placements = [...standing, ...scatterComponents(t, rules, req.understory.seed, [...occupied, ...roomy], { canopy, ...(open === undefined ? {} : { open }) })];
 
   const n = t.lattice.n * t.lattice.n;
   const field = trailField(t, trails);

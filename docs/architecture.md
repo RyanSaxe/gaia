@@ -171,7 +171,10 @@ Jev judges every choice a reasonable person could make differently: the
 repository's art direction, each region's land, whether that land holds
 water and why (a brook where the code flows along chains of its own imports,
 a still pond where much of the code leans on it, none where it stands on its
-own: the option's words are the reason, stored with the choice), what grows
+own: the option's words are the reason, stored with the choice), how that
+land's trees and open ground lie (its character: a deep wood, groves and
+clearings, a meadow with a few old trees, a rocky heath or a wet hollow,
+again with its reason), what grows
 on each file's patch, what each kind of a file's finer entities stands as,
 whether each entity is a building or a landmark and which, and how much it
 would walk each dependency. `planWorldRequests` builds one request per thing,
@@ -215,9 +218,22 @@ snapshot `pnpm snapshot` writes through the engine's `project.open`, judged
 by the stand-in; so does the app if the world service cannot open its
 folder. `?world=sample` (or `?world=small`) and
 the Terrain view's "Sample world" button show the sample world instead. `standWorld` takes the
-layout (`StandRequest.code`): each building and landmark on its lot, trees of
-the chosen species on each file's own cells with that file's vitality, each
-finer entity as an understory placement, and the trails between lots. The ground textures take a world of any size.
+layout (`StandRequest.code`): each building and landmark on its lot, each
+file's trees of the chosen species as one grove on its own cells with that
+file's vitality (`growGrove` in `@gaia/terrain`: close-set at its heart,
+thinning into scattered trees at its margin, inside a lobed outline seeded by
+the file's path), each finer entity as an understory placement in a small
+glade of its own, and the trails between lots. The area's character sets how
+many trees a line of code grows, how close they stand and how large, and
+whether its files' groves gather on the sides of their patches nearest the
+area's heart, so they knit into one wood with open ground at the area's rim,
+or keep to their patches' middles with clearings between
+(`app/renderer/terrain/looks.ts`, `CHARACTERS`); a world grows at most 470
+trees, and where its areas would grow more every grove gives up the same
+share. The understory then grows where it belongs (`scatterComponents`):
+each candidate site on a grid fixed to the world reads its kind of place from
+the trees' crowns, the water and the slope, so a change in one place moves
+nothing elsewhere. The ground textures take a world of any size.
 
 ## Jev
 

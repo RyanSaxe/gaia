@@ -16,7 +16,7 @@ import { type CodeWorld, type Judge, judgeWorld, layoutWorld, standInJev } from 
 import type { ConsentPlan, Opening, WorldDocument } from "../../world-service/protocol.ts";
 import { type WorldService, worldService } from "../service.ts";
 import snapshot from "./fixtures/gaia.json";
-import { FORMS, LANDS, LOOKS } from "./looks.ts";
+import { CHARACTERS, type Character, FORMS, LANDS, LOOKS } from "./looks.ts";
 import type { Represented, SampleEntity } from "./samples.ts";
 import { vitalityOf } from "@gaia/world";
 import type { StandCode, StandLot } from "./stand.ts";
@@ -93,8 +93,11 @@ export const symbolScale = (lines: SymbolFact["lines"], rule: string): number =>
   return rule === "rocks" ? 0.45 + 0.75 * t : rule === "shrubs" ? 0.6 + 0.6 * t : 0.8 + 0.4 * t;
 };
 
-/** Trees on a file's patch: more for a longer file. */
-export const treesFor = (lines: number): number => Math.min(6, Math.max(1, Math.round(Math.sqrt(lines) / 5)));
+/** Trees on a file's patch, as its area's character grows them: more for a longer file, at least the one that names it. */
+export const treesFor = (lines: number, character: Character): number => Math.min(48, Math.max(1, Math.round(lines * character.perLine)));
+
+/** The most trees a world grows: where its areas would grow more, every grove gives up the same share. */
+const TREE_BUDGET = 470;
 
 const count = (n: number): string => n.toLocaleString("en-US");
 const dollars = (usd: number): string => `$${usd < 0.01 ? usd.toFixed(3) : usd.toFixed(2)}`;
@@ -160,6 +163,45 @@ export async function codeWorld(veil: Veil): Promise<CodeLab> {
   return codeLab(document);
 }
 
+/**
+ * Each file's patch as one grove, as its area's character grows it: in a
+ * deep wood or a wet hollow every file's grove gathers on the side of its
+ * patch nearest its area's heart, so an area's groves knit into one wood with
+ * open ground at its rim; elsewhere each grove keeps to its patch's middle,
+ * with clearings between. A longer file grows more trees, set a little
+ * closer; a file that describes or configures grows none.
+ */
+function patchesOf(world: CodeWorld): StandCode["patches"] {
+  const fallback = CHARACTERS["Groves and clearings"] as Character;
+  const areas = new Map(world.areas.map((a) => [a.path, a]));
+  const cellsOf = new Map<string, { x: number; z: number }[]>();
+  for (const c of world.cells) if (c.file !== null && c.file !== undefined) cellsOf.set(c.file, [...(cellsOf.get(c.file) ?? []), c]);
+  const planned = world.patches.map((p) => {
+    const area = areas.get(p.area);
+    const character = CHARACTERS[world.regions[area?.region ?? 0]?.character ?? ""] ?? fallback;
+    const preset = FLORA_PRESETS.findIndex((f) => f.name === p.vibe);
+    // The patch's cell nearest its area's heart, where a wood gathers.
+    const toward = area === undefined ? p : (cellsOf.get(p.path) ?? [p]).reduce((b, c) => (Math.hypot(c.x - area.x, c.z - area.z) < Math.hypot(b.x - area.x, b.z - area.z) ? c : b), p as { x: number; z: number });
+    const heart = character.knit ? { x: toward.x, z: toward.z } : { x: p.x, z: p.z };
+    const big = Math.min(1, Math.max(0, Math.log2(p.lines / 50) / 5));
+    return {
+      x: p.x,
+      z: p.z,
+      radius: p.radius,
+      preset,
+      trees: preset < 0 ? 0 : treesFor(p.lines, character),
+      heart,
+      closeness: character.closeness * (1.1 - 0.25 * big),
+      reach: p.radius * (character.knit ? 1.7 : 0.75),
+      stature: character.stature,
+      seed: seedOf(`grove:${p.path}`),
+    };
+  });
+  const wanted = planned.reduce((n, p) => n + p.trees, 0);
+  const share = Math.min(1, TREE_BUDGET / Math.max(1, wanted));
+  return planned.map((p) => (p.trees === 0 ? p : { ...p, trees: Math.max(1, Math.round(p.trees * share)) }));
+}
+
 /** Everything the terrain lab needs to bake and furnish a world document. */
 function codeLab({ model, world, judges, summary }: WorldDocument): CodeLab {
   const fallback = Object.values(LANDS)[0]?.biome;
@@ -191,9 +233,10 @@ function codeLab({ model, world, judges, summary }: WorldDocument): CodeLab {
     stand: {
       lots: houses.map(lot),
       landmarks: rises.map((t) => ({ landmark: landmarkIndex(t.look), lot: lot(t) })),
-      patches: world.patches.map((p) => {
-        const preset = FLORA_PRESETS.findIndex((f) => f.name === p.vibe);
-        return { x: p.x, z: p.z, radius: p.radius, preset, trees: preset < 0 ? 0 : treesFor(p.lines) };
+      patches: patchesOf(world),
+      regions: world.regions.map((r) => {
+        const c = CHARACTERS[r.character];
+        return { understory: c?.understory ?? {}, ...(c?.open === undefined ? {} : { open: c.open }) };
       }),
       cells: (() => {
         const patchOf = new Map(world.patches.map((p, i) => [p.path, i]));

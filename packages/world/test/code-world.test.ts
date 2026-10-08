@@ -74,6 +74,7 @@ const LOOKS: Looks = {
   trail: set("Path", "Track"),
   form: set("Stone", "Bush"),
   water: set("Dry", "Brook"),
+  character: set("Meadow land", "Wood"),
 };
 
 describe("a world laid out from code", () => {
@@ -163,11 +164,14 @@ describe("a world laid out from code", () => {
     expect(moved[moved.length - 1]!).toBeLessThan(before.size / 3);
   });
 
-  it("lets Jev choose each symbol's form and each area's water, and chooses trails that join every connected part first", async () => {
+  it("lets Jev choose each symbol's form and each area's water and character, and chooses trails that join every connected part first", async () => {
     const judged = await judgeWorld(model(), LOOKS, standInJev(LOOKS));
     expect(Object.keys(judged.forms)).toContain("packages/core/src/math.ts");
     expect(["Stone", "Bush"]).toContain(judged.forms["packages/core/src/math.ts"]!.function);
     for (const w of Object.values(judged.waters)) expect(["Dry", "Brook"]).toContain(w);
+    // Every area with land of its own is judged for how its trees and open ground lie, and its region carries the choice.
+    expect(Object.keys(judged.characters).sort()).toEqual(Object.keys(judged.waters).sort());
+    for (const r of layoutWorld(model(), judged).regions) expect(Object.keys(LOOKS.character)).toContain(r.character);
     const world = layoutWorld(model(), { ...judged, trails: [{ from: "packages/app", to: "packages/core", want: 0.9, look: "Path" }, { from: "", to: "packages/core", want: 0.6, look: "Track" }, { from: "", to: "packages/app", want: 0.3, look: "Path" }] });
     expect(world.trails.map((t) => `${t.from}->${t.to}`)).toEqual(["packages/app->packages/core", "->packages/core"]);
     expect(world.trails.every((t) => t.spans)).toBe(true);

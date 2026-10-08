@@ -63,6 +63,8 @@ export interface Looks {
   readonly form: LookSet;
   /** Whether an area's land holds water, and why: each option's words are the reason recorded with the choice. */
   readonly water: LookSet;
+  /** How an area's trees and open ground lie: a deep wood, groves and clearings, a meadow with a few old trees, a heath, a wet hollow. */
+  readonly character: LookSet;
 }
 
 /** One Jev request about one thing. */
@@ -88,6 +90,8 @@ export interface Judgments {
   readonly forms: Readonly<Record<string, Readonly<Record<string, string>>>>;
   /** Directory → water key, for the directories that are regions. */
   readonly waters: Readonly<Record<string, string>>;
+  /** Directory → character key, for the directories that are regions: how its trees and open ground lie. */
+  readonly characters: Readonly<Record<string, string>>;
 }
 
 export interface CodeArea extends AreaPlace {
@@ -168,6 +172,8 @@ export interface CodeRegion {
   readonly land: string;
   /** Whether its land holds water: a water key, whose words say why. */
   readonly water: string;
+  /** How its trees and open ground lie: a character key, whose words say why. */
+  readonly character: string;
   /** The cells its land is made of: the sites of its files' patches and its lots (`RegionSpec.sites`). */
   readonly sites: readonly LandSite[];
 }
@@ -371,6 +377,7 @@ export function planWorldRequests(model: CodeModel, looks: Looks): WorldRequest[
       {
         land: choice("This directory becomes an area of the world. Which land suits it: its landform and ground cover?", docs(looks.land), "land", path),
         water: choice("Does this area's land hold water? Choose the option whose reason fits this directory best.", docs(looks.water), "water", path),
+        character: choice("How do this area's trees and open ground lie? Choose the option whose reason fits this directory best.", docs(looks.character), "character", path),
       },
     );
   }
@@ -472,12 +479,14 @@ export async function judgeWorld(model: CodeModel, looks: Looks, jev: JevClient,
   const trails: CodeTrail[] = [];
   const forms: Record<string, Record<string, string>> = {};
   const waters: Record<string, string> = {};
+  const characters: Record<string, string> = {};
   planned.forEach((p, i) => {
     const a = answers[i] ?? {};
     if (p.about === "world") world = pickOf(a.world) ?? world;
     else if (p.about === "area") {
       lands[p.target] = pickOf(a.land) ?? first(looks.land);
       waters[p.target] = pickOf(a.water) ?? first(looks.water);
+      characters[p.target] = pickOf(a.character) ?? first(looks.character);
     } else if (p.about === "file") {
       vibes[p.target] = pickOf(a.vibe) ?? first(looks.vibe);
       const mine: Record<string, string> = {};
@@ -493,7 +502,7 @@ export async function judgeWorld(model: CodeModel, looks: Looks, jev: JevClient,
       }
     }
   });
-  return { world, lands, vibes, things, trails, forms, waters };
+  return { world, lands, vibes, things, trails, forms, waters, characters };
 }
 
 // ---------- the stand-in judge ----------
@@ -555,7 +564,7 @@ function tagsOf(state: Record<string, unknown>): string[] {
  */
 export function standInJev(looks: Looks): JevClient {
   const suits = new Map<string, readonly string[]>();
-  for (const [prefix, set] of [["", looks.world], ["", looks.land], ["", looks.vibe], ["", looks.trail], ["", looks.form], ["", looks.water], ["building:", looks.building], ["landmark:", looks.landmark]] as const) {
+  for (const [prefix, set] of [["", looks.world], ["", looks.land], ["", looks.vibe], ["", looks.trail], ["", looks.form], ["", looks.water], ["", looks.character], ["building:", looks.building], ["landmark:", looks.landmark]] as const) {
     for (const [key, look] of Object.entries(set)) suits.set(`${prefix}${key}`, [...(suits.get(`${prefix}${key}`) ?? []), ...look.suits]);
   }
   return {
@@ -781,6 +790,7 @@ export function layoutWorld(model: CodeModel, judged: Judgments): CodeWorld {
       reach: Math.sqrt(m.ground / Math.PI),
       land: judged.lands[path] ?? "",
       water: judged.waters[path] ?? "",
+      character: judged.characters[path] ?? "",
       sites: regionSites[i] as LandSite[],
     };
   });
