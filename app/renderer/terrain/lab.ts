@@ -223,6 +223,8 @@ export interface StoodWorld {
   readonly buildings: readonly { readonly x: number; readonly z: number; readonly name: string; readonly kind: string }[];
   readonly landmarks: readonly { readonly x: number; readonly z: number; readonly name: string }[];
   readonly trees: readonly { readonly x: number; readonly z: number; readonly vitality: number }[];
+  /** Each area's ground cover, by its path: the one the ground shader paints its own ground with. */
+  readonly grounds: ReadonlyMap<string, GroundSpec>;
 }
 
 /** Things another layer stands in the world on each bake: the ground they keep bare and what stops a walker. */
@@ -437,7 +439,12 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     if (r === undefined) throw new Error(`No region ${i}.`);
     return realizeRegion({ blueprint: r.biome, kind: biome }, lib, seedOf(r.id), NO_SEASON).ground;
   };
-  const updateCovers = (): void => covers.update(world, world.regions.map((_, i) => coverOf(i)), terrain);
+  /** Each region's ground cover, as the shaders paint it. */
+  let regionGrounds: readonly GroundSpec[] = [];
+  const updateCovers = (): void => {
+    regionGrounds = world.regions.map((_, i) => coverOf(i));
+    covers.update(world, regionGrounds, terrain);
+  };
   updateCovers();
 
   const scene = new THREE.Scene();
@@ -1349,6 +1356,11 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       buildings: settlement.buildings.map((b) => ({ x: b.site.x, z: b.site.z, name: b.represented.name, kind: b.kindName })),
       landmarks: ways.sites.map((s) => ({ x: s.site.x, z: s.site.z, name: landmarks[s.landmark]?.name ?? "" })),
       trees: trees.map((t) => ({ x: t.x, z: t.z, vitality: t.represented.report.vitality })),
+      // A codebase's area shows its region's ground; each of the sample world's regions is one area.
+      grounds: new Map(places.areas.flatMap((a, i) => {
+        const ground = regionGrounds[code !== null ? (code.world.areas[i]?.region ?? 0) : i];
+        return ground === undefined ? [] : [[a.path, ground] as const];
+      })),
     };
   }
 

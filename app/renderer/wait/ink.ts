@@ -1,26 +1,43 @@
-// The field map's paper and washes, as the wait paints them. This is the one
-// place the wait reads the map's look: a handmade sheet, mottled and
-// fibred, and each area's watercolor hue (every area under one top-level
-// directory shares it, a little lighter or darker), pooling at its rim. It
-// matches `app/renderer/immersive/field-map.ts`; when the map's look
-// changes, change `WAIT_INK` with it so the wait and the map stay one paper.
+// The field map's sheet, as the wait paints it: the direction the map shows
+// (`CHOSEN_MAP`), so the waiting sheet and the field map are one sheet. Its
+// paper, torn edge and the wild's wood past the land are the map's own
+// (`paintPaperGround`, `DECKLE_MASK`, `woodsOf`); each area's wash is the
+// color of the land Jev judged for it (`groundWash`), from the palette the
+// ground shader paints that land's cover with; its borders are drawn in the
+// map's hand. The wait has no names, title or marks.
+
+import { type GroundSpec, Library } from "@gaia/schema";
+import { BIOME_PRIMITIVES } from "@gaia/primitives";
+import { biome } from "@gaia/kinds";
+import { buildSlots } from "@gaia/realize";
+import { MARGIN, drawWoods, paintFade, paintPaperGround, woodsOf } from "../immersive/field-map.ts";
+import { CHOSEN_MAP, DECKLE_MASK, MAP_STYLES, type MapStyle, groundWash } from "../immersive/map-styles.ts";
+import { LANDS } from "../terrain/looks.ts";
 
 /** What the wait paints with. */
 export interface WaitInk {
-  /** The paper's ground tone. */
-  readonly paperTone: string;
-  /** Mottling and fibres over `w` by `h` pixels of paper, as handmade paper has. */
+  readonly style: MapStyle;
+  /** The sheet's torn edge, as a CSS mask image. */
+  readonly deckle: string;
+  /** How far past the land's widest reach the sheet runs, meters: as far as the field map's. */
+  readonly margin: number;
+  /** The sheet's paper over `w` by `h` pixels. */
   paper(g: CanvasRenderingContext2D, w: number, h: number): void;
-  /** An area's wash, red, green and blue: `tops` are the top-level directories in order. */
-  wash(path: string, depth: number, tops: readonly string[]): readonly [number, number, number];
+  /** The wild past the land of `size` meters, on a square canvas `reach` meters from its middle to its edge: its wash and its wood. */
+  wild(g: CanvasRenderingContext2D, size: number, reach: number): void;
+  /** An area's wash, red, green and blue, in the color of the land judged for it; null for a land the wait does not know. */
+  wash(path: string, land: string): readonly [number, number, number] | null;
   /** Pigment pooling at a wash's rim, as it dries: stroke widths in pixels at the map's full size, and opacities. */
   readonly pool: readonly (readonly [number, number])[];
-  /** The opacity a dry wash floats at over the paper. */
+  /** The opacity a wash comes in at, wet, and dries to, as the map floats its washes. */
+  readonly wet: number;
   readonly dry: number;
+  /** Broad brush strokes over the washes, a little warmer, cooler, lighter or darker: how many over the whole sheet. */
+  readonly strokes: number;
   /** Eases a traced ring's lattice steps into a pen's line: x, z pairs. */
   ease(ring: readonly number[]): number[];
-  /** The ink of borders and the land's edge. */
-  readonly ink: string;
+  /** The borders' hand: the line and, for a hedgerow, the soft band of leaves under it, with their widths in CSS pixels. */
+  readonly border: { readonly line: string; readonly width: number; readonly under: string | null; readonly underWidth: number };
   /** Pigment settling into the paper's tooth: a canvas of soft specks to draw large over a wash. */
   grain(cells: number, seed: number): HTMLCanvasElement;
 }
@@ -28,12 +45,6 @@ export interface WaitInk {
 const hash = (x: number, z: number): number => {
   const s = Math.sin(x * 127.1 + z * 311.7) * 43758.5453;
   return s - Math.floor(s);
-};
-const mixRgb = (a: string, b: string, t: number): [number, number, number] => {
-  const pa = parseInt(a.slice(1), 16);
-  const pb = parseInt(b.slice(1), 16);
-  const ch = (shift: number): number => Math.round(((pa >> shift) & 255) * (1 - t) + ((pb >> shift) & 255) * t);
-  return [ch(16), ch(8), ch(0)];
 };
 function noise(cells: number, seed: number, rgb: readonly [number, number, number]): HTMLCanvasElement {
   const c = document.createElement("canvas");
@@ -45,46 +56,85 @@ function noise(cells: number, seed: number, rgb: readonly [number, number, numbe
   return c;
 }
 
-const COMMON_GROUND = "#cfd3a4";
-const WASHES = ["#9fbf83", "#dcb56f", "#d09684", "#8eb0c9", "#b39fcb", "#86b8a1", "#d79e68", "#a9bd93", "#cdb48a", "#9cadd6"];
 const EASE = { reach: 5, passes: 2 };
+/** The fade at the sheet's edge, cells on a side: coarser than the map's, as the wait's sheet is smaller. */
+const FADE_CELLS = 192;
+
+const STYLE = MAP_STYLES[CHOSEN_MAP];
+
+/** Each land's ground cover, built once from its blueprint, as the terrain builds a region's. */
+const library = new Library([...BIOME_PRIMITIVES]);
+const grounds = new Map<string, GroundSpec | null>();
+function groundOfLand(land: string): GroundSpec | null {
+  let ground = grounds.get(land);
+  if (ground === undefined) {
+    const blueprint = LANDS[land]?.biome;
+    const cover = blueprint?.slots.cover;
+    ground = blueprint === undefined || cover === undefined ? null : ((buildSlots({ ...blueprint, slots: { cover } }, biome, library, { seed: 0, facts: {} }).get("cover")?.output as GroundSpec | undefined) ?? null);
+    grounds.set(land, ground);
+  }
+  return ground;
+}
+
+const BORDERS: Readonly<Record<MapStyle["border"], WaitInk["border"]>> = {
+  hedge: { line: "rgba(46,70,36,0.36)", width: 0.85, under: "rgba(52,80,40,0.13)", underWidth: 2.8 },
+  pencil: { line: "rgba(72,66,60,0.42)", width: 0.9, under: null, underWidth: 0 },
+  ink: { line: "rgba(59,44,28,0.66)", width: 1.1, under: null, underWidth: 0 },
+};
 
 export const WAIT_INK: WaitInk = {
-  paperTone: "#efe4c8",
-  paper(g, w, h) {
-    g.imageSmoothingEnabled = true;
-    g.imageSmoothingQuality = "high";
-    for (const [cells, strength] of [[14, 0.09], [56, 0.05]] as const) {
-      g.globalAlpha = strength;
-      g.drawImage(noise(cells, cells * 7.3, [96, 72, 40]), 0, 0, w, h);
+  style: STYLE,
+  deckle: DECKLE_MASK,
+  margin: MARGIN,
+  paper: (g, w, h) => paintPaperGround(g, STYLE, w, h),
+  wild(g, size, reach) {
+    const w = g.canvas.width;
+    const scale = w / (reach * 2);
+    const half = size / 2;
+    // Its wash: everywhere past the land's edge, giving way raggedly to bare paper at the sheet's edge, as the map's.
+    const wash = document.createElement("canvas");
+    wash.width = wash.height = w;
+    const c = wash.getContext("2d") as CanvasRenderingContext2D;
+    c.fillStyle = STYLE.wild;
+    c.fillRect(0, 0, w, w);
+    c.globalCompositeOperation = "destination-out";
+    c.beginPath();
+    for (let k = 0; k <= 240; k++) {
+      const a = (k / 240) * Math.PI * 2;
+      const cos = Math.cos(a);
+      const sin = Math.sin(a);
+      const r = half / Math.pow(Math.abs(cos) ** 4 + Math.abs(sin) ** 4, 0.25);
+      c.lineTo((cos * r + reach) * scale, (sin * r + reach) * scale);
     }
+    c.fill();
+    const fade = document.createElement("canvas");
+    fade.width = fade.height = FADE_CELLS;
+    const f = fade.getContext("2d") as CanvasRenderingContext2D;
+    const img = f.createImageData(FADE_CELLS, FADE_CELLS);
+    paintFade(img, STYLE, 0, FADE_CELLS);
+    f.putImageData(img, 0, 0);
+    c.globalCompositeOperation = "destination-in";
+    c.imageSmoothingEnabled = true;
+    c.drawImage(fade, 0, 0, w, w);
+    // Laid as the map lays its washes: a softened copy under it, so it bleeds into the land's.
+    g.filter = `blur(${Math.max(1, (STYLE.bleedPx * w) / 2048).toFixed(1)}px)`;
+    g.globalAlpha = STYLE.bleed;
+    g.drawImage(wash, 0, 0);
+    g.filter = "none";
+    g.globalAlpha = STYLE.washAlpha;
+    g.drawImage(wash, 0, 0);
     g.globalAlpha = 1;
-    g.lineCap = "round";
-    const fibres = (w * h) / 2048 ** 2;
-    for (const [tone, count, seed] of [["rgba(118,92,56,0.075)", 1800, 11], ["rgba(255,251,238,0.16)", 1100, 23]] as const) {
-      g.strokeStyle = tone;
-      g.lineWidth = 1;
-      g.beginPath();
-      for (let k = 0; k < count * fibres; k++) {
-        const x = hash(k, seed) * w;
-        const y = hash(seed, k) * h;
-        const a = hash(k + seed, 3) * Math.PI * 2;
-        const len = 4 + hash(k, seed + 1) * 10;
-        const bend = (hash(k, seed + 2) - 0.5) * 6;
-        g.moveTo(x, y);
-        g.quadraticCurveTo(x + Math.cos(a) * len * 0.5 - Math.sin(a) * bend, y + Math.sin(a) * len * 0.5 + Math.cos(a) * bend, x + Math.cos(a) * len, y + Math.sin(a) * len);
-      }
-      g.stroke();
-    }
+    drawWoods(g, STYLE, woodsOf(STYLE, half, reach, scale));
   },
-  wash(path, depth, tops) {
-    if (depth === 0) return mixRgb(COMMON_GROUND, "#fbf5e6", 0.15);
-    const base = WASHES[tops.indexOf(path.split("/")[0] ?? "") % WASHES.length] as string;
-    const tone = (hash(path.length * 13.1, path.charCodeAt(path.length - 1) || 0) - 0.5) * 0.56;
-    return tone > 0 ? mixRgb(base, "#fbf5e6", tone) : mixRgb(base, "#5b5040", -tone * 0.5);
+  wash(path, land) {
+    const ground = groundOfLand(land);
+    return ground === null ? null : groundWash(STYLE, ground, path);
   },
-  pool: [[26, 0.05], [15, 0.06], [8, 0.08], [3.5, 0.1]],
-  dry: 0.62,
+  pool: STYLE.pool,
+  wet: Math.min(1, STYLE.washAlpha + 0.12),
+  dry: STYLE.washAlpha,
+  // Half the map's: with no hills shaded over them, the wait's washes show their brushwork more.
+  strokes: STYLE.strokes * 0.5,
   ease(ring) {
     const count = ring.length / 2;
     if (count < EASE.reach * 2 + 3) return [...ring];
@@ -106,6 +156,6 @@ export const WAIT_INK: WaitInk = {
     }
     return Array.from(pts);
   },
-  ink: "rgba(74,60,44,0.62)",
+  border: BORDERS[STYLE.border],
   grain: (cells, seed) => noise(cells, seed, [60, 46, 26]),
 };

@@ -15,7 +15,7 @@
 import { type Blueprint, type CodeModel, type EntityFacts, type FileFacts, type JevResponse, type SymbolFact, rand, seedOf } from "@gaia/schema";
 import { FLORA_PRESETS, LANDMARK_PRESETS, TRAIL_PRESETS, WORLD_PRESETS } from "@gaia/realize";
 import { type WorldSpec, outlinesOf } from "@gaia/terrain";
-import { type CodeWorld, type Judge, judgeWorld, judgedThing, keptJev, layoutWorld, planWorldRequests, requestKey, standInJev, thingsOf } from "@gaia/world";
+import { type CodeWorld, type Judge, areaLands, judgeWorld, judgedThing, keptJev, layoutWorld, planWorldRequests, requestKey, standInJev, thingsOf } from "@gaia/world";
 import type { ConsentPlan, Opening, WorldDocument } from "../../world-service/protocol.ts";
 import { type WorldService, worldService } from "../service.ts";
 import snapshot from "./fixtures/gaia.json";
@@ -29,8 +29,8 @@ import type { StandCode, StandLot } from "./stand.ts";
 export interface Veil {
   /** How opening the world is going: the land's outlines, then the areas judged so far. */
   opening(o: Opening): void;
-  /** Everything is judged and laid out: the world bakes now. */
-  baking(): void;
+  /** Everything is judged and laid out, and `lands` names the land judged for each area's ground: the world bakes now. */
+  baking(lands: Readonly<Record<string, string>>): void;
   /** Asks whether to send `plan` to Jev; resolves true to go ahead. */
   ask(plan: ConsentPlan): Promise<boolean>;
 }
@@ -164,7 +164,7 @@ export async function codeWorld(veil: Veil): Promise<CodeLab> {
   const outlines = outlinesOf(document.world);
   // A world laid out here, with no world service, shows its land only now.
   if (!landed) veil.opening({ stage: "land", name: document.world.name, size: document.world.size, areas: outlines.areas });
-  veil.baking();
+  veil.baking(areaLands(document.world));
   return codeLab(document);
 }
 

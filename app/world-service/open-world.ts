@@ -10,7 +10,7 @@
 // first. Everything Jev does not answer is judged by the stand-in, and the
 // document says which.
 
-import type { EngineClient, JevResponse } from "@gaia/schema";
+import type { EngineClient, JevClient, JevResponse } from "@gaia/schema";
 import { outlinesOf } from "@gaia/terrain";
 import { type Judge, areaOfRequest, judgeWorld, judgedThing, keptJev, landOf, layoutWorld, planWorldRequests, requestKey, standInJev, thingsOf } from "@gaia/world";
 import { LOOKS } from "../renderer/terrain/looks.ts";
@@ -111,33 +111,62 @@ export async function openWorld({ engine, root, consent, progress }: OpenWorldOp
   const judges = new Map<string, Judge>();
   const failures: string[] = [];
   let answered = 0;
-  // Each area is settled once every request about a thing on its land is: its files, its entity and itself.
+  // Each area is settled once every request about a thing on its land is (its files, its entity and itself) and
+  // its land is judged: its own, or its region's when it has no land of its own.
   const unsettled = new Map<string, number>(land.areas.map((a) => [a.path, 0]));
-  const areaOf = new Map<string, string>();
+  const plannedOf = new Map<string, (typeof planned)[number]>();
   for (const [i, p] of planned.entries()) {
     const key = keys[i] as string;
-    if (areaOf.has(key)) continue;
+    if (plannedOf.has(key)) continue;
+    plannedOf.set(key, p);
     const area = areaOfRequest(p);
-    areaOf.set(key, area);
     unsettled.set(area, (unsettled.get(area) ?? 0) + 1);
   }
-  const settledAreas = (): string[] => [...unsettled].filter(([, n]) => n === 0).map(([a]) => a);
+  const regions = new Set(planned.filter((p) => p.about === "area").map((p) => p.target));
+  const regionOf = (area: string): string => {
+    for (let p = area; p !== ""; p = p.includes("/") ? p.slice(0, p.lastIndexOf("/")) : "") if (regions.has(p)) return p;
+    return "";
+  };
+  const lands = new Map<string, string>();
+  const settledAreas = (): Record<string, string> => {
+    const out: Record<string, string> = {};
+    for (const [area, n] of unsettled) {
+      const judged = lands.get(regionOf(area));
+      if (n === 0 && judged !== undefined) out[area] = judged;
+    }
+    return out;
+  };
   const asking = (): void => progress({ stage: "asking", name, total: missing.length, answered, failed: failures.length, settled: settledAreas() });
   if (ask) asking();
-  const jev = keptJev(ask ? engineJev(engine) : null, standInJev(LOOKS), {
+  const kept = keptJev(ask ? engineJev(engine) : null, standInJev(LOOKS), {
     stored,
     keep,
     settled: (key, judge, failure) => {
-      const area = areaOf.get(key);
-      if (area !== undefined && !judges.has(key)) unsettled.set(area, (unsettled.get(area) ?? 1) - 1);
       judges.set(key, judge);
       if (failure !== undefined) failures.push(failure);
-      if (ask && !stored.has(key)) {
-        answered++;
-        asking();
-      }
     },
   });
+  // A request counts as settled once its answer, whoever gave it, is in hand: an area's answer names its land.
+  const counted = new Set<string>();
+  const jev: JevClient = {
+    async ask(request) {
+      const response = await kept.ask(request);
+      const key = requestKey(request);
+      const p = plannedOf.get(key);
+      if (p !== undefined && !counted.has(key)) {
+        counted.add(key);
+        const area = areaOfRequest(p);
+        unsettled.set(area, (unsettled.get(area) ?? 1) - 1);
+        const judged = response.answers.land;
+        if (p.about === "area" && judged?.type === "choice") lands.set(p.target, judged.choice);
+        if (ask && !stored.has(key)) {
+          answered++;
+          asking();
+        }
+      }
+      return response;
+    },
+  };
   const judgments = await judgeWorld(model, LOOKS, jev);
   await new Promise((resolve) => setTimeout(resolve, 0));
   await Promise.all(writes);

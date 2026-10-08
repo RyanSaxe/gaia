@@ -15,6 +15,12 @@
 //   washes, hills drawn as ink hachures, the coast of each pond engraved with
 //   water lines, ink borders with a band of color inside each region, and the
 //   wild drawn as a forest of little inked trees.
+//
+// In every direction an area's wash is the color of the land Jev judged for
+// it, from the palette the ground shader paints that land's cover with
+// (`groundWash`); the wait paints the same washes on the same paper.
+
+import { type GroundSpec, rand, seedOf } from "@gaia/schema";
 
 export type MapStyleName = "painted" | "sketchbook" | "explorer";
 
@@ -25,11 +31,12 @@ export interface MapStyle {
   readonly mottle: readonly [number, number, number];
   /** Whether the paper is old: foxed, and darkened toward its edges. */
   readonly aged: boolean;
-  /** One hue per top-level directory, the repository's own ground, and the wild past the land. */
-  readonly washes: readonly string[];
-  readonly common: string;
+  /** The wild past the land. */
   readonly wild: string;
-  /** How far a subdirectory's wash steps lighter or darker than its top-level hue. */
+  /** How an area's ground color becomes its wash: its chroma scaled, then lifted this far toward the paper. */
+  readonly landChroma: number;
+  readonly landLift: number;
+  /** How far each area's wash steps lighter or darker, warmer or cooler, by its path, so neighbors on one land keep apart. */
   readonly toneStep: number;
   /** Ink for lettering and drawn marks. */
   readonly ink: string;
@@ -75,17 +82,15 @@ export interface MapStyle {
   readonly regionAlpha: number;
 }
 
-const SHARED = ["#9fbf83", "#dcb56f", "#d09684", "#8eb0c9", "#b39fcb", "#86b8a1", "#d79e68", "#a9bd93", "#cdb48a", "#9cadd6"];
-
 export const MAP_STYLES: Readonly<Record<MapStyleName, MapStyle>> = {
   painted: {
     name: "painted",
     paper: "#efe5cb",
     mottle: [96, 72, 40],
     aged: false,
-    washes: ["#8fbb68", "#e2bb5c", "#dc9670", "#7fb3d0", "#ad97d2", "#6fb893", "#e09c56", "#a0c47a", "#d6b26a", "#8aa8de"],
-    common: "#b7cf8c",
     wild: "#5f8a4c",
+    landChroma: 1.3,
+    landLift: 0.1,
     toneStep: 0.42,
     ink: "#3a2f22",
     washAlpha: 0.84,
@@ -118,9 +123,9 @@ export const MAP_STYLES: Readonly<Record<MapStyleName, MapStyle>> = {
     paper: "#f6f1e4",
     mottle: [110, 96, 70],
     aged: false,
-    washes: SHARED,
-    common: "#cad6a2",
     wild: "#a9bf8a",
+    landChroma: 1.15,
+    landLift: 0.22,
     toneStep: 0.5,
     ink: "#4f4234",
     washAlpha: 0.5,
@@ -153,9 +158,9 @@ export const MAP_STYLES: Readonly<Record<MapStyleName, MapStyle>> = {
     paper: "#e8d6a8",
     mottle: [120, 82, 36],
     aged: true,
-    washes: ["#a8b97d", "#d6ae68", "#c98f72", "#93abb3", "#a99bb8", "#8fae8f", "#cf9a62", "#b0b884", "#c7ab7c", "#9aa8c4"],
-    common: "#cbc792",
     wild: "#b9b27e",
+    landChroma: 0.85,
+    landLift: 0.18,
     toneStep: 0.4,
     ink: "#3b2c1c",
     washAlpha: 0.42,
@@ -192,6 +197,45 @@ export const CHOSEN_MAP: MapStyleName = "painted";
 export function askedMapStyle(): MapStyle {
   const asked = new URLSearchParams(location.search).get("map");
   return MAP_STYLES[(asked !== null && asked in MAP_STYLES ? asked : CHOSEN_MAP) as MapStyleName];
+}
+
+const channels = (h: string): [number, number, number] => {
+  const v = parseInt(h.slice(1), 16);
+  return [(v >> 16) & 255, (v >> 8) & 255, v & 255];
+};
+const mix3 = (a: readonly number[], b: readonly number[], t: number): [number, number, number] => [0, 1, 2].map((i) => (a[i] as number) * (1 - t) + (b[i] as number) * t) as [number, number, number];
+const LIGHTER = channels("#fbf5e6");
+const DARKER = channels("#5b5040");
+const WARMER = channels("#e2bd62");
+const COOLER = channels("#5f9aa6");
+
+/**
+ * The color an area's ground reads as from above, red, green and blue from 0
+ * to 255: its cover's sward as the ground shader mixes it (`ground.ts`), its
+ * low and high blades with a touch of their tips, over its soil where the
+ * cover grows in clumps.
+ */
+export function groundTone(g: GroundSpec): [number, number, number] {
+  const sward = mix3(mix3(g.low, g.high, 0.55), g.tip, 0.1);
+  return mix3(sward, g.soil, g.clump * 0.6).map((c) => c * 255) as [number, number, number];
+}
+
+/**
+ * An area's wash, red, green and blue from 0 to 255: the color its ground is
+ * painted with, softened into watercolor the direction's way (its chroma
+ * scaled about its lightness, then lifted toward the paper), and a little
+ * lighter or darker, warmer or cooler by its path, so neighbors on one land
+ * keep apart.
+ */
+export function groundWash(style: MapStyle, ground: GroundSpec, path: string): [number, number, number] {
+  const tone = groundTone(ground);
+  const grey = tone[0] * 0.3 + tone[1] * 0.59 + tone[2] * 0.11;
+  const paint = mix3(tone.map((c) => Math.max(0, Math.min(255, grey + (c - grey) * style.landChroma))), channels(style.paper), style.landLift);
+  const r = rand(seedOf(`wash:${path}`));
+  const light = r.range(-1, 1) * style.toneStep;
+  const warmth = r.range(-1, 1) * style.toneStep * 0.38;
+  const lit = light > 0 ? mix3(paint, LIGHTER, light * 0.5) : mix3(paint, DARKER, -light * 0.3);
+  return (warmth > 0 ? mix3(lit, WARMER, warmth) : mix3(lit, COOLER, -warmth)).map(Math.round) as [number, number, number];
 }
 
 const hash = (x: number, z: number): number => {

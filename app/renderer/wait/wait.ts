@@ -12,7 +12,8 @@
 // transform, so it keeps moving on the compositor while the page's thread
 // is busy standing the world, and the wait never competes with the bake.
 // The one question the wait may ask, when judging would cost more than the
-// person's limit, is a small paper slip.
+// person's limit, is a small paper slip: go ahead, or draw this world from
+// the code alone, which the project remembers until the limit changes.
 
 import type { ConsentPlan, Opening } from "../../world-service/protocol.ts";
 import { createMapWait } from "./map-wait.ts";
@@ -23,8 +24,8 @@ import "./wait.css";
 export interface WaitView {
   /** How opening the world is going: the land's outlines and the areas judged so far. */
   opening(o: Opening): void;
-  /** Everything is judged and laid out: the world bakes now. */
-  baking(): void;
+  /** Everything is judged and laid out, and `lands` names the land judged for each area's ground: the world bakes now. */
+  baking(lands: Readonly<Record<string, string>>): void;
   /** How dark it is, 0 by day to 1 at night: the wait follows the clock. */
   night(n: number): void;
   /** The world stands and has drawn: the wait gives way to it, and resolves once the world shows. */
@@ -61,7 +62,7 @@ export function createWait(veil: HTMLElement, style: WaitStyle = waitStyle()): W
       words.append("Judging ");
       const name = document.createElement("i");
       name.textContent = plan.name;
-      words.append(name, ` costs about ${dollars(plan.estimatedUsd)}, over your ${dollars(plan.limitUsd)} limit.`);
+      words.append(name, ` costs about ${dollars(plan.estimatedUsd)}, over your ${dollars(plan.limitUsd)} limit. Without it, the world is drawn from the code alone.`);
       const choices = document.createElement("div");
       choices.className = "wait-choices";
       const button = (text: string, answer: boolean): HTMLButtonElement => {
@@ -72,7 +73,8 @@ export function createWait(veil: HTMLElement, style: WaitStyle = waitStyle()): W
         return b;
       };
       const yes = button("Go ahead", true);
-      choices.append(yes, button("Use the stand-in", false));
+      // Declining is remembered for this project until the limit changes.
+      choices.append(yes, button("Not for this world", false));
       slip.append(words, choices);
       (veil.parentElement ?? veil).append(slip);
       yes.focus({ preventScroll: true });

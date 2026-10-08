@@ -391,18 +391,23 @@ names Jev or OpenRouter: the progress a person sees is the world coming to
 be. Two directions are built, chosen by `CHOSEN_WAIT` in `wait.ts` or
 `?wait=map|mark`:
 
-- **The map paints itself** (the default). The screen is the field map's
-  paper, creased where it folds. While the code is read, light drifts over
-  the empty sheet: leaves' light by day, the lantern's pool breathing at
-  night. As soon as the land is divided, a pen draws the land's rounded edge
-  and then every area's border, from the middle outward, and the wild's
-  brush comes in past the edge. Each area washes in with its watercolor as
-  its judgments settle, coming in wet, a little darker, and spreading from
-  its heart; while the world bakes the washes dry lighter. Then the map
-  folds away as the field map does and the paper dissolves into the world,
-  as a jump on the map does, and the place's title rises. The sheet has no
-  frame, title or names. After dark it is read by the lantern, warm at its
-  middle and falling into blue at its edges.
+- **The map paints itself** (the default). The field map's own sheet, in
+  the direction the map shows (`CHOSEN_MAP`), lies on its creased paper:
+  the same size, paper, torn edge, turned-down corner and shadow. While the
+  code is read, light drifts over the empty sheet: leaves' light by day,
+  the lantern's pool breathing at night. As soon as the land is divided, a
+  pen draws the land's rounded edge and then every area's border, from the
+  middle outward, in the map's hand (a hedgerow's soft line on the painted
+  map), and the wild's wood is brushed in past the edge as the map paints
+  it. Each area washes in as its judgments settle, in the color of the land
+  Jev judged for it, as the map washes it: coming in wet, a little darker,
+  and spreading from its heart; while the world bakes the washes dry
+  lighter. An area whose land is not judged yet stays bare paper inside its
+  border. Then the map folds away as the field map does and the paper
+  dissolves into the world, as a jump on the map does, and the place's
+  title rises. The sheet has no title, names or marks. After dark it is
+  read by the lantern, warm at its middle and falling into blue at its
+  edges.
 - **The mark gathers.** Gaia's mark on the sky the world will stand under,
   darkening with the hour, and fireflies drifting in from the edges to
   gather into the glow over the i as the world is read, judged and baked;
@@ -412,9 +417,11 @@ Everything in the wait that moves is an opacity or transform animation, or
 a pen line's dash, so it keeps moving while the page stands the world, and
 the world shows only after its first frames have drawn under the wait. When
 judging would cost more than the person's spend limit, a small slip of warm
-paper at the foot of the wait says what it costs against the limit, with two
-answers: Go ahead, in moss green, and Use the stand-in, in ink. The world
-appears only once it is fully judged.
+paper at the foot of the wait says what it costs against the limit and
+that without it the world is drawn from the code alone, with two answers:
+Go ahead, in moss green, and Not for this world, in ink, which the project
+remembers until the limit changes. The world appears only once it is fully
+judged.
 
 ## One way to touch the world
 
@@ -492,8 +499,12 @@ The three ways work together:
   few meters past the land's widest reach, and the wild fills its corners
   as a painted wood that thins into clearings, so no frame of empty paper
   rings the land and no ink line marks where the land ends. Each area is a
-  watercolor wash, every area under one top-level directory sharing a hue,
-  its pigment pooling darker toward its rim and granulating into the
+  watercolor wash in the color of the land Jev judged for it: its ground
+  cover's color as the ground shader paints it from above, softened into
+  paint (`groundWash` in `map-styles.ts`), a little lighter or darker,
+  warmer or cooler by its path, so neighbors on one land keep apart by
+  their borders and their tone. Its pigment pools darker toward its rim and
+  granulates into the
   paper's tooth, laid over a softened copy of itself so neighbors bleed into
   each other wet in wet, and broken by broad brush strokes a little warmer,
   cooler, lighter or darker. Each file's patch is faintly washed in its
@@ -516,8 +527,7 @@ The three ways work together:
   inked in the lower corners, and a tap on the rose finds the traveller.
   After dark the sheet is read by the lantern: a warm pool low on the
   right, its edges falling into blue. Areas and patches are drawn from the
-  outlines `outlinesOf` traces, never from a fixed shape, and the
-  repository's own ground is a pale meadow. Names stay one size at any
+  outlines `outlinesOf` traces, never from a fixed shape. Names stay one size at any
   zoom and the larger area's name wins where two would collide. It pans
   and zooms by drag, pinch or scroll; a phone opens it close around the
   person, a wide screen shows it whole. Its paper is painted in steps of a

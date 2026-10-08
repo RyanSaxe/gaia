@@ -11,6 +11,7 @@ import { createInterface } from "node:readline";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { type StandIn, startOpenRouterStandIn } from "../../tools/openrouter-stand-in.ts";
 import { outlinesOf } from "@gaia/terrain";
+import { areaLands } from "@gaia/world";
 import { createEngineClient } from "./engine-client.ts";
 import { openWorld, setSpendLimit } from "./open-world.ts";
 import type { ConsentPlan, Opening } from "./protocol.ts";
@@ -94,14 +95,16 @@ describe("judging a codebase with Jev", () => {
     expect(land).toBeGreaterThan(first.shown.findIndex((o) => o.stage === "reading"));
     expect(land).toBeLessThan(first.shown.findIndex((o) => o.stage === "asking"));
     expect(first.shown[land]).toEqual({ stage: "land", name: "tiny", size: first.document.world.size, areas: outlinesOf(first.document.world).areas });
-    // Each area is named once everything on its land is judged, and stays named; by the end, every area.
-    let named = new Set<string>();
+    // Each area is named once everything on its land is judged, with the land judged for its ground, and stays named
+    // with that land; by the end, every area, each with the finished world's land.
+    let named: Readonly<Record<string, string>> = {};
     for (const o of first.shown) {
       if (o.stage !== "asking") continue;
-      expect([...named].every((a) => o.settled.includes(a))).toBe(true);
-      named = new Set(o.settled);
+      expect(o.settled).toMatchObject(named);
+      named = o.settled;
     }
-    expect([...named].sort()).toEqual(first.document.world.areas.map((a) => a.path).sort());
+    expect(Object.keys(named).sort()).toEqual(first.document.world.areas.map((a) => a.path).sort());
+    expect(named).toEqual(areaLands(first.document.world));
     // Every request went out once, with the placeholder key and nothing but the model, facts and questions.
     for (const { authorization, body } of first.sent) {
       expect(authorization).toBe("Bearer local-stand-in");

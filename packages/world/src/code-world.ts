@@ -1073,6 +1073,14 @@ export function landOf(model: CodeModel): WorldPlaces {
   };
 }
 
+/** The land judged for each area's own ground, by the area's path: its region's land key. */
+export function areaLands(world: Pick<CodeWorld, "areas" | "regions">): Record<string, string> {
+  return Object.fromEntries(world.areas.flatMap((a) => {
+    const region = world.regions[a.region];
+    return region === undefined ? [] : [[a.path, region.land] as const];
+  }));
+}
+
 /** Lays out the world from the code and Jev's judgments. */
 export function layoutWorld(model: CodeModel, judged: Judgments): CodeWorld {
   const name = model.repository.name;

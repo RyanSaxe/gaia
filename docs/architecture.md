@@ -212,9 +212,14 @@ ground, 900 m², whether a building or a landmark stands on it), so
 anything is judged, equal to the finished layout's. `openWorld` sends the
 renderer the areas' outlines (`world.progress` stage `land`) before it asks
 Jev, then names the areas whose judgments have all settled with every
-answer (stage `asking`, `settled`: an area settles once every request about
-its files, its entity and itself has), and the wait paints the map from
-them. `docs/connect-jev.md` is the reviewer's page for connecting it.
+answer, each with the land judged for its ground (stage `asking`,
+`settled`, area path to land name: an area settles once every request
+about its files, its entity and itself has, and the one that judges its
+land, its own or its region's), and the wait washes each area in its
+land's color as it settles. Once the world is laid out, the wait gets
+every area's land (`areaLands` in `@gaia/world`, equal to the last
+`settled`), which is all a world judged without asking Jev ever sends it.
+`docs/connect-jev.md` is the reviewer's page for connecting it.
 
 `placeAt(world, x, z)` in `@gaia/terrain` says where a person is: the cell
 whose site is nearest the warped point names the area and the file underfoot
