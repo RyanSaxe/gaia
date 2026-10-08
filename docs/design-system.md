@@ -458,12 +458,24 @@ person would walk between. Jev fills only the trail's look, through
 track), how worn its tread is, whether stones line its edges, how freely
 it wanders, and whether it crosses a stream on stepping stones or a small
 footbridge. Jev never draws the route. `planTrails` in `@gaia/terrain`
-finds it over the baked ground: the cheapest way at a gentle grade, around
-steep ground, ponds and deep water, across a stream where it is narrow, and
-wandering off the easiest line by a seeded field as far as the winding
-allows. A later trail prefers ground an earlier one wore, so trails meet
-at junctions instead of running side by side. The same terrain, requests
-and seed always give the same trails.
+walks every trail over one network of paths, found over the baked ground:
+the cheapest way at a gentle grade, around steep ground, ponds and deep
+water, across a stream where it is narrow, and wandering off the easiest
+line by a seeded field as far as the winding allows. Trails route most
+wanted first, and each takes the ways earlier ones made wherever that is
+less than about twice as far (walking a way costs 0.45 of fresh ground),
+while ground within 4 m of a way, but off it, costs two and a half times
+as much, so no trail runs beside another. Trails share trunk paths that
+branch to each place at junctions. The network is cut into ways, stretches
+of tread between two junctions or places, and each way knows every trail
+that walks it and how far along each it lies. A way looks like its most
+wanted trail's, as wide as its widest. Where three or more ways meet away
+from a place (14 m or more from one), a small cairn of stacked stones
+stands in the widest gap between them, clear of every tread, no nearer
+than 40 m to another cairn. The same terrain, requests and seed always
+give the same network. In Gaia's own world every one of the 35
+dependencies Jev would walk is walked, on 21 ways and 3.3 km of tread,
+where five separate trails took 2.6 km.
 
 The ground under a tread eases toward the tread's own grade, averaged over
 14 m, and blends back into the land over 2.6 m, as a cottage's pad does; a
@@ -473,8 +485,11 @@ the cover's own soil, darker down the trodden middle, with a ragged edge;
 just outside it the grass is dulled and trampled shorter. Blades part along
 the tread: each stands only past its own seeded edge, so the border is
 ragged, and a faint trail keeps more blades on it. Trees keep 1.6 m off a
-tread and the understory half a meter. A footbridge's deck and stepping
-stones are walkable. Planks go missing and rails sag as vitality falls.
+tread and the understory half a meter, and both keep off a cairn. A way
+crosses a stream on a footbridge where it carries three trails or more, is
+1.8 m wide or more, or a trail on it asks for one, and on stepping stones
+otherwise. A footbridge's deck and stepping stones are walkable. Planks go
+missing and rails sag as vitality falls.
 
 A trail's wear follows the vitality of the two entities it joins, live.
 Near each end it takes that end's entity's vitality, and it blends between
@@ -482,13 +497,21 @@ the two across the middle. Between thriving entities the tread is worn to
 bare earth, as far as its blueprint's wear says; toward a failing entity
 the grass grows back across it, its ragged edge closes and its earth fades
 into the cover, until a faint trace and its edging stones are all that mark
-the way. Where trails meet or share a tread, the more worn one shows, so
-no seam appears. A trail's footbridges, stepping stones and edging stones
-take its vitality where they stand. `trailWearAt` in `@gaia/terrain` is the
-CPU reference: the bake records which trail each ground sample lies on and
-how far along it (`trailPlaces`), and the ground and grass shaders read each
-trail's ends' vitality from a small texture, so a change in vitality never
-rebakes anything.
+the way (`trailWearAt`). A shared way is worn by every trail walking it,
+and their wear adds up as chances do: a way worn to `a` by one trail and to
+`b` by another is worn to 1 - (1 - a)(1 - b) (`wayWear`). So a trunk is
+never less worn than its most worn trail, stays trodden while any trail on
+it thrives, and grows over only when every trail on it fails; the branch
+to a failing entity grows over alone. What is built on a way (footbridges,
+stepping stones, edging stones) takes its liveliest trail's vitality where
+it stands, since a way is kept in repair by whoever still walks it
+(`wayVitalityAt`), and a cairn its liveliest way's (`junctionVitality`).
+Where ways meet, the more worn one shows, so no seam appears. The bake
+records which way each ground sample lies on and how far along it
+(`trailPlaces`); the ground and grass shaders read each way's wear at four
+stations along it from a small texture, rewritten from the entities'
+vitality whenever it changes (`wayWearAt` is the CPU reference), so a
+change in vitality never rebakes anything.
 
 ## Landmarks
 
@@ -574,15 +597,17 @@ cast into it.
 
 | Budget | Starting value |
 | --- | --- |
-| Routes per region | at most 3, covering at most 5% of its ground |
+| Paths | the network's treads cover at most 5% of any region's ground and 2% of the land |
 | Open ground | at least 40% of a region |
 | Landmarks | at most 1 per region |
 | Tree spacing | at least one crown width between trunks |
 
-Jev decides which dependencies become routes; when it wants more than the
-budget allows, the most probable win. `planTrails` routes trails most wanted
-first and keeps each only while every region it crosses stays within both
-route budgets, so the world is never dominated by paths. Landmarks stand
+Jev decides which dependencies become trails: every one it would walk. The
+network, not a count of trails, holds the composition: `planTrails` routes
+trails most wanted first and keeps each while the ground it adds (a shared
+way adds none) keeps every region within its share and the land within
+its own, so the world is never dominated by paths. A trail it cannot keep
+is listed with the reason (`TrailNetwork.dropped`). Landmarks stand
 about a quarter of the world's width apart.
 
 ## Understory

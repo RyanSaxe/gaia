@@ -37,10 +37,10 @@ describe("standing a world's things on a bake", () => {
     expect(bytes(a.trailPlaces).equals(bytes(b.trailPlaces))).toBe(true);
     expect(bytes(here.lattice.heights).equals(bytes(there.lattice.heights))).toBe(true);
     expect(b.sites).toEqual(a.sites);
-    expect(b.trails).toEqual(a.trails);
+    expect(b.network).toEqual(a.network);
     expect(b.trees).toEqual(a.trees);
     expect(b.placements).toEqual(a.placements);
-    expect(a.trails.length).toBeGreaterThan(0);
+    expect(a.network.ways.length).toBeGreaterThan(0);
     // The ground texture's data is the leveled lattice: each house stands on its own flat pad.
     a.sites.forEach((site, i) => {
       const plan = request.buildings[i]!.plan;
@@ -90,7 +90,7 @@ describe("standing a world's things on a bake", () => {
     const sym = stood.placements[stood.symbols[0]!]!;
     expect(sym).toMatchObject({ rule: "rocks", variant: 0, vitality: 0.3 });
     expect(Math.hypot(sym.x + 55, sym.z + 40)).toBeLessThan(5);
-    expect(stood.trails.length).toBeGreaterThan(0);
-    for (const tr of stood.trails) expect(["packages/a->packages/b", "packages/a->packages/c"]).toContain(tr.id);
+    expect(stood.network.trails.length).toBeGreaterThan(0);
+    for (const tr of stood.network.trails) expect(["packages/a->packages/b", "packages/a->packages/c"]).toContain(tr.id);
   });
 });

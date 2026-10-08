@@ -1,28 +1,30 @@
-// Trails as the ground and the grass read them, and the things built along
-// them. The trail field rides in the ground texture's fourth channel, so the
-// ground paints worn earth and the grass parts from the same samples. A
-// trail stands for a dependency between two entities, and its wear follows
-// their vitality: a second texture says which trails each sample lies on and
-// how far along them, and a tiny one holds each trail's ends' vitality, which
-// changes live, so a trail between thriving entities is worn bare and one to
-// a failing entity grows over, with nothing rebaked. The footbridges,
-// stepping stones and edging stones are ordinary components in the plant
-// material, so they wither with the trail's vitality like everything else.
+// The paths as the ground and the grass read them, and the things built
+// along them. The trail field rides in the ground texture's fourth channel,
+// so the ground paints worn earth and the grass parts from the same samples.
+// A trail stands for a dependency between two entities and walks the ways of
+// one network; each way's wear follows the vitality of every trail walking
+// it (`wayWear` in @gaia/terrain): a second texture says which ways each
+// sample lies on and how far along them, and a tiny one holds each way's
+// wear at a few stations along it, rewritten live, so a way between thriving
+// entities is worn bare and one only failing entities walk grows over, with
+// nothing rebaked. The footbridges, stepping stones, edging stones and the
+// junctions' cairns are ordinary components in the plant material, so they
+// wither with their way's vitality like everything else.
 
 import * as THREE from "three";
 import { type Built, type Library, seedOf } from "@gaia/schema";
-import { buildEdgingStones, buildFootbridge, buildSteppingStones } from "@gaia/primitives";
+import { buildCairn, buildEdgingStones, buildFootbridge, buildSteppingStones } from "@gaia/primitives";
 import { type Realized, mergeParts } from "@gaia/realize";
 import { type PlantView, type SceneLight, createPlant } from "@gaia/render";
-import { type Terrain, type Trail, edgeStones } from "@gaia/terrain";
+import { type Terrain, type TrailNetwork, type Way, edgeStones, junctionVitality, wayVitalityAt, wayWear } from "@gaia/terrain";
 
 /**
- * GLSL: the signed distance to the nearest trail's edge, meters, negative on
+ * GLSL: the signed distance to the nearest way's edge, meters, negative on
  * the tread, read with the mesh's own triangle interpolation; and how worn
- * the trails are at a point, from the vitality of the entities each joins,
- * blended along it as `trailWearAt` in @gaia/terrain does. Where trails meet,
- * the more worn one shows. Needs the ground texture's uniforms
- * (GROUND_SAMPLE_GLSL) declared first.
+ * the ways are at a point, blended between each way's stations as
+ * `wayWearAt` in @gaia/terrain does. Where ways meet, the more worn one
+ * shows. Needs the ground texture's uniforms (GROUND_SAMPLE_GLSL) declared
+ * first.
  */
 export const TRAIL_GLSL = /* glsl */ `
 uniform sampler2D uTrailPlace;
@@ -38,13 +40,13 @@ float trailAt(vec2 xz) {
   if (f.x + f.y <= 1.0) return h00 + f.x * (h10 - h00) + f.y * (h01 - h00);
   return h11 + (1.0 - f.x) * (h01 - h11) + (1.0 - f.y) * (h10 - h11);
 }
-// One trail's wear at a packed place (its index, plus how far along it in the fraction).
+// One way's wear at a packed place (its index, plus how far along it in the fraction), between its four stations.
 float trailWearOf(float packed) {
   if (packed < 0.0) return 0.0;
   float k = floor(packed);
-  vec4 ends = texelFetch(uTrailEnds, ivec2(int(k), 0), 0);
-  float v = mix(ends.x, ends.y, smoothstep(0.15, 0.85, (packed - k) / 0.999));
-  return ends.z * (0.2 + 0.8 * smoothstep(0.05, 0.75, v));
+  vec4 s = texelFetch(uTrailEnds, ivec2(int(k), 0), 0);
+  float f = clamp((packed - k) / 0.999, 0.0, 1.0) * 3.0;
+  return f < 1.0 ? mix(s.x, s.y, f) : f < 2.0 ? mix(s.y, s.z, f - 1.0) : mix(s.z, s.w, f - 2.0);
 }
 float trailWearSample(ivec2 i) {
   vec2 p = texelFetch(uTrailPlace, i, 0).xy;
@@ -71,7 +73,7 @@ const texture = (data: Float32Array, width: number, height: number, format: THRE
   return t;
 };
 
-/** The trails' textures, shared by the ground and the grass: which trails each sample lies on, and each trail's ends' vitality and wear. */
+/** The paths' textures, shared by the ground and the grass: which ways each sample lies on, and each way's wear at its stations. */
 export const trailUniforms = {
   uTrailPlace: { value: texture(new Float32Array([-1, -1]), 1, 1, THREE.RGFormat) },
   uTrailEnds: { value: texture(new Float32Array(4), 1, 1, THREE.RGBAFormat) },
@@ -85,12 +87,12 @@ export function setTrailPlaces(places: Float32Array, n: number): void {
 }
 
 /**
- * Each trail's ends: the vitality of the entity at its first end and at its
- * second, and its blueprint's wear. Call it again whenever an entity's
- * vitality changes; it only rewrites a texel per trail.
+ * Each way's wear at its stations, from the vitality of the entities every
+ * trail walking it joins (`wayWear`). Call it again whenever an entity's
+ * vitality changes; it only rewrites a texel per way.
  */
-export function setTrailEnds(trails: readonly Trail[], vitalityOf: (place: string) => number): void {
-  const n = Math.max(1, trails.length);
+export function setTrailEnds(network: TrailNetwork, vitalityOf: (place: string) => number): void {
+  const n = Math.max(1, network.ways.length);
   let ends = trailUniforms.uTrailEnds.value;
   if (ends.image.width !== n) {
     ends.dispose();
@@ -98,19 +100,15 @@ export function setTrailEnds(trails: readonly Trail[], vitalityOf: (place: strin
     trailUniforms.uTrailEnds.value = ends;
   }
   const data = ends.image.data as Float32Array;
-  trails.forEach((t, i) => {
-    data[i * 4] = vitalityOf(t.from);
-    data[i * 4 + 1] = vitalityOf(t.to);
-    data[i * 4 + 2] = t.style.wear;
-  });
+  network.ways.forEach((_, i) => data.set(wayWear(network, i, vitalityOf), i * 4));
   ends.needsUpdate = true;
 }
 
 export interface Ways {
   /** Every component built along the trails, for shadows and the mirror. */
   readonly views: readonly PlantView[];
-  /** Sets each crossing's and each trail's edging's vitality from the vitality at its place along its trail. */
-  setVitality(at: (trail: number, along: number) => number): void;
+  /** Sets each crossing's, edging's and cairn's vitality from the trails walking its way (`wayVitalityAt`, `junctionVitality`). */
+  setVitality(vitalityOf: (place: string) => number): void;
   dispose(): void;
 }
 
@@ -119,8 +117,8 @@ const STONE_PALETTE = (lib: Library): Realized["palette"] => {
   return (palette.build as (p: unknown) => Realized["palette"])({ family: "spring-meadow", contrast: 1 });
 };
 
-/** How far along a trail (0 to 1) its center line passes nearest a point. */
-function alongOf(trail: Trail, x: number, z: number): number {
+/** How far along a way (0 to 1) its center line passes nearest a point. */
+function alongOf(trail: Way, x: number, z: number): number {
   const pts = trail.points;
   const count = pts.length / 2;
   let best = 0;
@@ -135,33 +133,39 @@ function alongOf(trail: Trail, x: number, z: number): number {
   return best / Math.max(1, count - 1);
 }
 
-/** Builds each trail's crossings and edging stones and adds them to the scene. */
-export function createWays(scene: THREE.Scene, light: SceneLight, lib: Library, t: Terrain, trails: readonly Trail[]): Ways {
+/** Builds each way's crossings and edging stones, and each junction's cairn, and adds them to the scene. */
+export function createWays(scene: THREE.Scene, light: SceneLight, lib: Library, t: Terrain, network: TrailNetwork): Ways {
   const palette = STONE_PALETTE(lib);
-  const placed: { view: PlantView; trail: number; along: number }[] = [];
-  const add = (built: Built, x: number, y: number, z: number, yaw: number, trail: number, along: number): void => {
+  const placed: { view: PlantView; vitality: (of: (place: string) => number) => number }[] = [];
+  const show = (built: Built, x: number, y: number, z: number, yaw: number, vitality: (of: (place: string) => number) => number): void => {
     if (built.parts.length === 0) return;
     const view = createPlant({ parts: mergeParts(built.parts), motion: { sway: 0, frequency: 0 }, palette, slots: new Map() }, light);
     view.object.position.set(x, y, z);
     view.object.rotation.y = yaw;
     scene.add(view.object);
-    placed.push({ view, trail, along });
+    placed.push({ view, vitality });
   };
-  trails.forEach((trail, i) => {
+  const add = (built: Built, x: number, y: number, z: number, yaw: number, way: number, along: number): void => show(built, x, y, z, yaw, (of) => wayVitalityAt(network, way, along, of));
+  network.ways.forEach((trail, i) => {
     trail.crossings.forEach((c, k) => {
       const seed = seedOf(`${trail.id}/crossing${k}`);
       const along = alongOf(trail, c.x, c.z);
       if (trail.style.crossing === "footbridge") add(buildFootbridge(c.span, trail.style.width, seed), c.x, c.bank, c.z, c.yaw, i, along);
       else add(buildSteppingStones(c.span, seed), c.x, c.level, c.z, c.yaw, i, along);
     });
-    // One mesh of edging stones per trail, so each follows its own trail's vitality.
+    // One mesh of edging stones per way, so each follows its own way's vitality.
     const stones = edgeStones(t, trail, seedOf(`${trail.id}/edging`));
     if (stones.length > 0) add(buildEdgingStones(stones, seedOf(`${trail.id}/edging-stones`)), 0, 0, 0, 0, i, 0.5);
   });
+  // A small cairn beside a junction, where it suits.
+  for (const j of network.junctions) {
+    if (j.cairn === null) continue;
+    show(buildCairn(seedOf(`${j.id}/cairn`)), j.cairn.x, j.cairn.y, j.cairn.z, seedOf(`${j.id}/turn`) % 628 / 100, (of) => junctionVitality(network, j, of));
+  }
   return {
     views: placed.map((p) => p.view),
-    setVitality(at) {
-      for (const p of placed) p.view.setVitality(at(p.trail, p.along));
+    setVitality(vitalityOf) {
+      for (const p of placed) p.view.setVitality(p.vitality(vitalityOf));
     },
     dispose() {
       for (const p of placed) p.view.dispose();

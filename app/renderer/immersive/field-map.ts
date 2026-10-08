@@ -924,7 +924,7 @@ export function createFieldMap(root: HTMLElement, source: MapSource, onToggle?: 
     ctx.lineJoin = "round";
     ctx.setLineDash([0.1, 5.5 * grow]);
     ctx.strokeStyle = "rgba(112,72,38,0.9)";
-    for (const trail of stood.trails) {
+    for (const trail of stood.ways) {
       const p = trail.points;
       ctx.beginPath();
       const stride = Math.max(2, Math.round(3 / view.zoom)) * 2;
