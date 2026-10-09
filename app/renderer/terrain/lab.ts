@@ -412,22 +412,23 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   /** The world whose light, sky and air the lab shows: the codebase's own once it is shown. */
   let skyWorld = SKY_WORLD;
   let ways: Settled = { sites: [], network: NO_TRAILS };
-  // Every entity's vitality by its name, live: buildings and landmarks stand
-  // for entities, and each trail's wear follows the two it joins.
+  // Every entity's vitality by its path, live: buildings and landmarks stand
+  // for entities, and each trail's wear follows the two it joins. Names repeat
+  // (two packages may both be called "utils"), so nothing is keyed by name.
   let landmarkEntities: Represented[] = [];
   const entityVitality = new Map<string, number>();
-  /** The entity each trail end stands for, by the place id the trail names: a building's name or lot, or a standing landmark's place. */
+  /** The entity (its path) each trail end stands for, by the place id the trail names: a building's name or lot, or a standing landmark's place. */
   const entityOfPlace = new Map<string, string>();
   /** Learns the entities of the world now shown: the codebase's own, or the samples. */
   function knowEntities(): void {
     landmarkEntities = (code?.landmarks.map((l) => l.facts) ?? LANDMARK_ENTITIES).map(representEntity);
     entityVitality.clear();
     entityOfPlace.clear();
-    for (const r of [...settlement.buildings.map((b) => b.represented), ...landmarkEntities]) entityVitality.set(r.name, r.report.vitality);
+    for (const r of [...settlement.buildings.map((b) => b.represented), ...landmarkEntities]) entityVitality.set(r.id, r.report.vitality);
     settlement.buildings.forEach((b, i) => {
-      entityOfPlace.set(b.represented.name, b.represented.name);
+      entityOfPlace.set(b.represented.name, b.represented.id);
       const lot = code?.stand.lots[i];
-      if (lot !== undefined) entityOfPlace.set(lot.id, b.represented.name);
+      if (lot !== undefined) entityOfPlace.set(lot.id, b.represented.id);
     });
   }
   knowEntities();
@@ -440,7 +441,10 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     const id = ways.sites[i]?.id;
     return (code !== null ? landmarkEntities.find((e) => e.id === id) : undefined) ?? (landmarkEntities[i % landmarkEntities.length] as Represented);
   };
-  const vitalityOfPlace = (place: string): number => entityVitality.get(entityOfPlace.get(place) ?? "") ?? 1;
+  const vitalityOfPlace = (place: string): number => {
+    const id = entityOfPlace.get(place);
+    return id === undefined ? 1 : (entityVitality.get(id) ?? 1);
+  };
   const worldLib = new Library(WORLD_PRIMITIVES);
   const lantern = createLantern(light);
 
@@ -495,7 +499,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       view.object.rotation.y = Math.atan2((fx ?? 0) - s.site.x, (fz ?? 0) - s.site.z);
       return view;
     });
-    ways.sites.forEach((s, i) => entityOfPlace.set(s.id, landmarkEntity(i).name));
+    ways.sites.forEach((s, i) => entityOfPlace.set(s.id, landmarkEntity(i).id));
     built?.dispose();
     built = createWays(scene, light, landmarkLib, terrain, ways.network);
     showVitality();
@@ -503,16 +507,16 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
 
   /** Shows every entity's vitality now on its landmark, on its trails' wear and on what is built along them. Nothing rebuilds. */
   function showVitality(): void {
-    landmarkViews.forEach((view, i) => view.setVitality(entityVitality.get(landmarkEntity(i).name) ?? 1));
+    landmarkViews.forEach((view, i) => view.setVitality(entityVitality.get(landmarkEntity(i).id) ?? 1));
     setTrailEnds(ways.network, vitalityOfPlace);
     built?.setVitality(vitalityOfPlace);
   }
 
-  /** Sets one entity's vitality, by its name, wherever it shows: its building and sign, its landmark, and every trail it joins. */
-  function setEntityVitality(name: string, v: number): void {
-    entityVitality.set(name, v);
+  /** Sets one entity's vitality, by its path, wherever it shows: its building and sign, its landmark, and every trail it joins. */
+  function setEntityVitality(id: string, v: number): void {
+    entityVitality.set(id, v);
     settlement.buildings.forEach((b, i) => {
-      if (b.represented.name !== name) return;
+      if (b.represented.id !== id) return;
       b.view.setVitality(v);
       signs.setVitality(i, v);
     });
@@ -1677,11 +1681,14 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
         ways.sites.map((s, i) => ({ name: landmarks[s.landmark]?.name, ...s.site, height: landmarkViews[i]?.height, triangles: landmarkViews[i]?.triangles })),
       /** Sets every landmark's entity's vitality, 0 to 1, and with it the trails they join. */
       landmarkVitality: (v: number) => {
-        landmarkEntities.forEach((e) => setEntityVitality(e.name, v));
+        landmarkEntities.forEach((e) => setEntityVitality(e.id, v));
         for (const view of landmarkPool.values()) view.setVitality(v);
       },
-      /** Sets one entity's vitality by its name: its building or landmark, and the wear of every trail it joins, live. */
-      entityVitality: (name: string, v: number) => setEntityVitality(name, v),
+      /** Sets an entity's vitality by its path, or every entity's with that name: its building or landmark, and the wear of every trail it joins, live. */
+      entityVitality: (key: string, v: number) => {
+        const named = [...settlement.buildings.map((b) => b.represented), ...landmarkEntities].filter((r) => r.name === key).map((r) => r.id);
+        for (const id of entityVitality.has(key) ? [key] : named) setEntityVitality(id, v);
+      },
       /** Stands landmark preset `i` on landmark site `at` in place of what stands there, so every form can be seen; returns where. */
       showLandmark: (i: number, at = 0) => {
         const s = ways.sites[at];
@@ -1728,7 +1735,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       /** Sets building `i`'s vitality, and its sign's. */
       vitality: (i: number, v: number) => {
         const b = settlement.buildings[i];
-        if (b !== undefined) setEntityVitality(b.represented.name, v);
+        if (b !== undefined) setEntityVitality(b.represented.id, v);
       },
       /** Walks up to subject `i` (buildings first, then trees) and shows its card on arrival. */
       inspect: (i: number) => {
