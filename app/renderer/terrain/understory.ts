@@ -141,6 +141,8 @@ export interface Understory {
   show(on: boolean): void;
   /** What was placed, its triangles at full detail, its meshes, and the triangles the last pass drew. */
   readonly stats: () => { placed: Record<string, number>; triangles: number; meshes: number; drawn: number };
+  /** Copies and triangles each kind of the understory drew in the last pass. */
+  readonly drawnByKind: () => Record<string, { copies: number; triangles: number }>;
 }
 
 export function createUnderstory(scene: THREE.Scene, light: SceneLight, lib: Library, clearings: Clearings): Understory {
@@ -227,6 +229,16 @@ export function createUnderstory(scene: THREE.Scene, light: SceneLight, lib: Lib
     },
     show(on) {
       for (const v of views) v.view.object.visible = on;
+    },
+    drawnByKind: () => {
+      const by: Record<string, { copies: number; triangles: number }> = {};
+      for (const { group, view } of views) {
+        const d = view.drawn();
+        const sum = (by[group.id] ??= { copies: 0, triangles: 0 });
+        sum.copies += d.copies;
+        sum.triangles += d.triangles;
+      }
+      return by;
     },
     stats: () => ({
       placed: Object.fromEntries(GROUPS.map((g) => [g.id, placed.filter((p) => p.rule === g.id).length])),
