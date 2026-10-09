@@ -46,7 +46,7 @@ and leaves the change to that session.
   - Smoothness, the proving ground, CI, `AGENTS.md`, the README and merging to `main`.
 
 **Wind is split by what it is.**
-- The field is World's: where and when it blows, its direction, gust bands and overall strength (`wind-field.ts` in `packages/realize` and `packages/render`: `WIND_FIELD`, `gustAt` and `WIND_FIELD_GLSL`).
+- The field is World's: where and when it blows, its direction, breeze, gusts and overall strength (`wind-field.ts` in `packages/realize` and `packages/render`: `WIND_FIELD`, `gustAt`, `windDirAt` and `WIND_FIELD_GLSL`).
 - How each plant answers it is Components': its stiffness, its levels and their lean, swing and flutter, per kind of plant (`sway.ts` in `packages/realize` and `packages/render`: `WIND`'s levels, `swayAt`, `jointPhase`, `WindState` and `SWAY_GLSL`, and the plant shader's `applyWind`).
 - So round 16's overreacting flowers and willows are a Components fix. A world that is too windy everywhere would be a World fix.
 - `WIND` (the field's numbers with the levels) and `WIND_GLSL` (both chunks) put the two together for the plant shader, so each session edits only its own file.

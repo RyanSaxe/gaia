@@ -348,7 +348,7 @@ export interface AccentSpec {
 export interface WindSpec {
   /** Multiplies every sway in the world. 1 is a light breeze. */
   readonly strength: number;
-  /** How much the strength surges in slow gusts, 0 to 1. */
+  /** How gusty the world is, 0 to 1. Nothing reads it yet: the gusts come from the one wind field (`gustAt`), the same in every world. */
   readonly gust: number;
 }
 

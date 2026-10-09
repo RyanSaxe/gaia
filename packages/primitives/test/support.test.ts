@@ -87,8 +87,8 @@ describe("buildings", () => {
 
 /**
  * A gusty world's strongest gust over a supple plant: the most any plant
- * bends. The gustiest world (strength 1.55, gust 0.855) peaks at
- * 1.55 x (1 + 0.855 x 0.7), about 2.5, as the lab drives it.
+ * bends. The gustiest world blows at strength 1.55; 2.5, what the world
+ * lab's old surges reached, leaves room to spare.
  */
 const GUST: WindState = (() => {
   let time = 0;
