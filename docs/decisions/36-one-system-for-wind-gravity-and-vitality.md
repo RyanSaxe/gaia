@@ -7,8 +7,9 @@ its twig leaves the bough (`twig`) and the point its piece hangs from
 (`pivot`). The system does the rest, the same way for every plant:
 
 - **Wind** is one field, `gustAt` and `swayAt` in `@gaia/realize` with
-  their GLSL twin `WIND_GLSL` in `@gaia/render`. Gusts travel downwind
-  across the land as soft bands, so a gust that bows the grass reaches the
+  their GLSL twin `WIND_GLSL` in `@gaia/render`. Over a light breeze,
+  gusts come irregularly, most of them mild, and travel downwind across
+  the land as soft fronts, so a gust that bows the grass reaches the
   trees standing in it. A plant bends level by level: the whole plant from
   its base, each bough about its joint, each twig about where it leaves
   the bough, each leaf on its stalk, and only in a gust. Every level is a
