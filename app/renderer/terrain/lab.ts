@@ -697,9 +697,18 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
           ? { smaller: 1, focal: height / (passCamera.top - passCamera.bottom), ortho: true }
           : { smaller: 1, focal: 0, ortho: false };
     farBatch.count = 0;
-    for (const v of instanced()) v.cull(passCamera, size);
+    for (const v of swapping === null ? instanced() : [swapping]) v.cull(passCamera, size);
     farCards?.draw(farBatch.copies, farBatch.count);
   };
+  /** One step of the swap test: how much it changes the tree's part of the screen, the wind's change there, and how far away the tree stands. */
+  interface SwapStep {
+    readonly change: Change;
+    readonly wind: Change;
+    readonly distance: number;
+  }
+  /** The copy the swap test stands alone while it runs (`swapTest`), when it does. */
+  let swapping: Copies | null = null;
+  const swapCopies = new Map<number, Copies>();
   // Uploads every tree's and the understory's geometry, at every level, in
   // one render while the planting already holds the frame, so no level's
   // first appearance ever costs a frame.
@@ -1675,7 +1684,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     refreshSight(now);
     // Every pass thins distant detail from where the person's eyes are.
     light.uEye.value.copy(mode === "walk" ? detailEye : camera.position);
-    shadow.render(renderer, scene, [...views(), ...understory.casters(), ...wildGrowth.all(), ...(farCards === null ? [] : [farCards])], [sky.mesh, ground.wilds, ground.fine, ground.coarse, grass.mesh, water.group, signs.mesh, ...understory.quiet()]);
+    shadow.render(renderer, scene, [...views(), ...understory.casters(), ...wildGrowth.all(), ...(farCards === null ? [] : [farCards]), ...(swapping === null ? [] : [swapping])], [sky.mesh, ground.wilds, ground.fine, ground.coarse, grass.mesh, water.group, signs.mesh, ...understory.quiet()]);
     frameCalls = renderer.info.render.calls;
     passes.shadow = { calls: renderer.info.render.calls, triangles: renderer.info.render.triangles };
     const mirrorCalls = water.mirror(renderer, scene, camera, [...mirrorHide, ...understory.quiet(), ...understory.casters().map((c) => c.object), ...wildGrowth.all().map((c) => c.object)], mirrorShow, dt);
@@ -1894,6 +1903,80 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       walkTo(start.x, start.z, start.yaw, start.pitch);
     }
     return { steps, wind };
+  }
+
+  /**
+   * The swap test: whether a tree's change of form ever shows. One copy of
+   * preset `name`'s first build, at `vitality`, stands alone straight ahead
+   * of the eye. With the wind's clock frozen, only the point detail is
+   * chosen from moves back, so the crown's span on screen shrinks:
+   * - `end`: from just inside the band's far end to just past it, the frame
+   *   where the full form leaves and the far form stands alone;
+   * - `middle`: from halfway into the band to 5% farther, the far form
+   *   coming in over the full one.
+   * Each is held to the wind's half-second change at the same spot, all
+   * measured over the tree's own part of the screen. The world's other trees
+   * and the grass hide while it runs. Null when there is no such preset.
+   */
+  function swapTest(name: string, vitality: number): { end: SwapStep; middle: SwapStep } | null {
+    const p = FLORA_PRESETS.findIndex((preset) => preset.name === name);
+    const v = variants[p * TREE_BUILDS];
+    if (p < 0 || v === undefined) return null;
+    const k = p * TREE_BUILDS;
+    const gl = renderer.getContext();
+    const focal = gl.drawingBufferHeight / 2 / Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2);
+    let copy = swapCopies.get(k);
+    if (copy === undefined) {
+      copy = createCopies(v.plant, light, [], { form: k, batch: farBatch });
+      scene.add(copy.object);
+      swapCopies.set(k, copy);
+    }
+    const crown = copy.crown;
+    const dx = -Math.sin(walker.yaw);
+    const dz = -Math.cos(walker.yaw);
+    const eye = camera.position.clone();
+    const span = (f: number): number => FAR.swapPx * FAR.band - f * FAR.swapPx * (FAR.band - 1);
+    const hidden = treeViews.map((t) => t.object.visible);
+    const grassShown = grass.mesh.visible;
+    for (const t of treeViews) t.object.visible = false;
+    grass.mesh.visible = false;
+    swapping = copy;
+    const was = frozen;
+    const t = light.uTime.value;
+    /** Stands the tree where its crown spans `from` pixels, and measures moving the detail back until it spans `to`. */
+    const step = (stood: Copies, from: number, to: number): SwapStep => {
+      const distance = (2 * crown.radius * focal) / from;
+      const back = (2 * crown.radius * focal) / to - distance;
+      // The crown's middle at the eye's height, straight ahead.
+      stood.respot([{ x: eye.x + dx * distance - crown.center.x, y: eye.y - crown.center.y, z: eye.z + dz * distance - crown.center.z, yaw: 0, scale: 1, vitality }]);
+      stood.setVitality(vitality);
+      const corners = [-1, 1].flatMap((sx) => [-1, 1].flatMap((sy) => [-1, 1].map((sz) => new THREE.Vector3(eye.x + dx * distance + sx * crown.radius, eye.y + sy * crown.radius, eye.z + dz * distance + sz * crown.radius).project(camera))));
+      const px = corners.map((c) => ((c.x + 1) / 2) * gl.drawingBufferWidth);
+      const py = corners.map((c) => ((c.y + 1) / 2) * gl.drawingBufferHeight);
+      const rect = [Math.floor(Math.min(...px)), Math.floor(Math.min(...py)), Math.ceil(Math.max(...px)), Math.ceil(Math.max(...py))] as const;
+      const changeIn = (a: Uint8Array, b: Uint8Array): Change => pictureChange(a, b, gl.drawingBufferWidth, gl.drawingBufferHeight, 64, rect);
+      frozen = t;
+      detailPin = { x: eye.x, z: eye.z };
+      const before = grabFrame(3);
+      detailPin = { x: eye.x - dx * back, z: eye.z - dz * back };
+      const change = changeIn(before, grabFrame(3));
+      detailPin = { x: eye.x, z: eye.z };
+      frozen = t + 0.5;
+      const wind = changeIn(before, grabFrame(3));
+      frozen = t;
+      return { change, wind, distance };
+    };
+    try {
+      copy.object.visible = true;
+      return { end: step(copy, span(0.995), FAR.swapPx - 0.1), middle: step(copy, span(0.5), span(0.55)) };
+    } finally {
+      swapping = null;
+      copy.object.visible = false;
+      treeViews.forEach((tv, i) => (tv.object.visible = hidden[i] ?? true));
+      grass.mesh.visible = grassShown;
+      detailPin = null;
+      frozen = was;
+    }
   }
 
   /**
@@ -2162,6 +2245,8 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       change: frameChange,
       /** The walk test (`walkSteps`): each step's change to the detail drawn, and the wind's along the same walk. */
       steps: (meters: number, step = 0.7, at?: number) => walkSteps(meters, step, at),
+      /** The swap test (`swapTest`) for preset `name` at `vitality`, and every flora preset's name with none. */
+      swap: (name?: string, vitality = 1) => (name === undefined ? FLORA_PRESETS.map((p) => p.name) : swapTest(name, vitality)),
       /** Walks as a person would for `seconds` of real time (`wander`). */
       wander,
       /** Shows or hides the far trees' cards alone, for seeing what they draw. */

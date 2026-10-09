@@ -75,6 +75,8 @@ export interface Copies extends PlantView {
   readonly count: number;
   /** The distance from which each level may draw, starting with 0 for the full detail. */
   readonly levels: readonly number[];
+  /** The crown each copy's size on screen is measured by: the plant's built bounds at scale 1 where it stands. */
+  readonly crown: THREE.Sphere;
   /** Sets one copy's vitality; the shader reads it per instance. */
   setVitalityAt(index: number, v: number): void;
   /**
@@ -202,6 +204,7 @@ export function createCopies(plant: Realized, light: SceneLight, spots: readonly
     height: view.height,
     radius: view.radius,
     levels,
+    crown: view.built.clone(),
     get count() {
       return view.count;
     },
