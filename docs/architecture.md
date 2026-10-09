@@ -22,7 +22,7 @@ the document that did not change renders exactly as it did before.
 | Main | TypeScript (Electron) | The window and the app's lifecycle. It starts the engine and the world service, restarts the engine if it exits, and names the folder whose world each page opens: `GAIA_PROJECT`, one chosen with File > Open Folder, or none, and then the page offers the start (File > Choose a World returns to it). |
 | Engine | Rust (`gaia-engine`) | Files, parsing, git, test reports, the code model, the app-data store and the Jev client with the key from the macOS Keychain. |
 | World service | TypeScript (Electron utility process) | Kinds and primitives, the question planner, answer rules, vitality and the world document. It opens a codebase's world (`openWorld` in `app/world-service/open-world.ts`): the engine's `project.open`, Jev's judgments, kept in the store, and `layoutWorld`, and sends the renderer the result (`WorldDocument`) over its MessagePort. |
-| Renderer | TypeScript | The UI, the Three.js scene, the realizer and the clock. In slice 1 the renderer is the lab. The lab opens into the world, full screen at eye height (`app/renderer/immersive/`), with its debugging views (Components, Terrain and Skies) behind tabs; the immersive world is the terrain lab's world without its chrome, plus three ways of telling a person where they are (a minimap of the land around them with the area's name, the field map that unfolds out of it, and markers in the world), read through `placeAt` and drawn on one field sheet (`docs/design-system.md`, "The field sheet"); touching the world only moves the person, and a thing walked up to grows the minimap into its sketch page; a tap on the open field map sends the person to that place, landing where `WorldHandle.landing` says, under a fold of paper that hides the move. The terrain lab bakes its world on worker threads (`app/renderer/terrain/bake-worker.ts`): a few workers compose bands of lattice rows with `composeRows`, and one finishes the bake with `finishTerrain` and stands the world's things on it with `standWorld` (`app/renderer/terrain/stand.ts`): each building's site and pad, the landmarks' sites, the network of trails leveled into the ground and which way of it each ground sample lies on, the trees and the understory, and the ground texture's data, so drawing never waits on a bake. Components are still realized on the main thread; the realizer is pure and worker-safe, so it can move into workers too. |
+| Renderer | TypeScript | The UI, the Three.js scene, the realizer and the clock. In slice 1 the renderer is the lab. The lab opens into the world, full screen at eye height (`app/renderer/immersive/`), with its debugging views (Components, Terrain and Skies) behind tabs; the immersive world is the terrain lab's world without its chrome, plus three ways of telling a person where they are (a minimap of the land around them with the area's name, the field map that unfolds out of it, and markers in the world), read through `placeAt` and drawn on one field sheet (`docs/design-system.md`, "The field sheet"); touching the world only moves the person, and a thing walked up to grows the minimap into its sketch page; a tap on the open field map sends the person to that place, landing where `WorldHandle.landing` says, under a fold of paper that hides the move. The terrain lab bakes its world on worker threads (`app/renderer/terrain/bake-worker.ts`): a few workers compose bands of lattice rows with `composeRows`, and one finishes the bake with `finishTerrain` and stands the world's things on it with `standWorld` (`app/renderer/terrain/stand.ts`): each building's site and pad, the landmarks' sites, the network of trails leveled into the ground and which way of it each ground sample lies on, the trees and the understory, and the ground texture's data, while the others work out whose ground each part of the land is (`ownershipRows`, see Vitality), so drawing never waits on a bake. Components are still realized on the main thread; the realizer is pure and worker-safe, so it can move into workers too. |
 
 The world service talks to the engine in newline-delimited JSON-RPC 2.0 over
 the engine's stdin and stdout, relayed by the main process. Only small data
@@ -301,9 +301,11 @@ trees: where its areas would grow more, every grove gives up the same
 share, though each keeps the one tree that names its file. The understory then grows where it belongs (`scatterComponents`):
 each candidate site on a grid fixed to the world reads its kind of place from
 the trees' crowns, the water and the slope, so a change in one place moves
-nothing elsewhere, and each placement takes the vitality of the cell it
-stands on (`StandCode.cells`: a patch's file's, a lot's area's), or full
-health past the land. The ground textures take a world of any size.
+nothing elsewhere. Each scattered placement shows the vitality of the
+ground it grows on, read on the page from the ground's vitality field the
+grass beneath it reads (`understoryVitality` in `stand.ts`; see Vitality),
+and each file's finer entity its file's. The ground textures take a world of
+any size.
 
 ## Jev
 
@@ -520,6 +522,31 @@ which the layout gives in proportion to its code. An area's own ground
 is washed with the files directly in it (`groundVitality`), or with
 everything under it where it holds none of its own; `""` is the whole
 world's.
+
+The land shows vitality as the trees do (`docs/design-system.md`, "Vitality
+on the land"). Every point of a world from code is someone's ground: a
+file's patch, an area's own ground (an entity's lot), or past the land the
+wild's, which always thrives. While the bake finishes, the other bake
+threads work out, for each sample of a 4 m grid over the land, the few
+owners whose ground it is and their shares in 255ths (`ownershipRows` and
+`groundOwners` in `@gaia/terrain`; `groundSites` in
+`app/renderer/terrain/stand.ts` numbers the owners): the owner of the cell
+holding the sample and, near a border, its neighbors', each share falling
+off by e for every 3 m its nearest site lies farther from the warped point,
+so health eases across borders. The page weighs each owner's vitality by its
+share (`vitalityOver`, with `ownerVitality` in `stand.ts`) into a small
+texture whose red channel is the ground's own vitality (its file's, or on a
+lot its area's pooled `areaVitality`) and whose green is that of the area
+the ground lies in; the grass and the ground read the red and the water the
+green, and `groundLook` is the rule they follow. The scattered understory
+reads the red on the page's thread, through `vitalityAt`, the CPU twin of
+the texture's filtering. A change in vitality
+rewrites the texture's bytes (about 3 to 9 ms on the page's thread for
+Gaia's world) and never rebakes: the lab's
+`__lab.terrain.fileVitality(path, v)` sets a file's vitality, or every
+file's under a directory, on its trees, its finer entities, its ground and
+what grows there, and its area's lots and water, and `__lab.terrain.groundVitality(x, z)` reads the texture as the
+shaders do.
 
 What a thing's sketch page says comes from one function (`describe` in
 `app/renderer/immersive/sketch.ts`): by default `symptomsOf`, which turns

@@ -103,8 +103,9 @@ import { type Judge, entityVitalityOf, groundVitality, judgedThing } from "@gaia
 import { type CodeLab, codeWorld, judgedOf, representSymbol } from "./code-world.ts";
 import { createSettlement } from "./settlement.ts";
 import { createSigns } from "./signs.ts";
-import { createBaker } from "./baker.ts";
-import { type Stand, type StandRequest, type StandingLandmark, landmarkBase } from "./stand.ts";
+import { type Baked, createBaker } from "./baker.ts";
+import { type Stand, type StandRequest, type StandingLandmark, landmarkBase, ownerVitality, understoryVitality } from "./stand.ts";
+import { groundVitalityAt, setGroundOwnership, showGroundVitality } from "./vitality.ts";
 import { type TourStop, tourStops } from "./tour.ts";
 
 const TEMPLATE = /* html */ `
@@ -518,6 +519,25 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     });
     showVitality();
   }
+
+  // Every file's vitality by its path, live, where a hook has changed it from
+  // the world's: each file's trees and its patch of ground show it, and each
+  // area's lots and water show its files' pooled.
+  const liveFileVitality = new Map<string, number>();
+  /** Shows each file's vitality now on its ground and the understory growing there, and each area's on its lots and its water. Nothing rebakes. */
+  function showLandVitality(): void {
+    if (code === null) return;
+    const live = new Map(code.world.patches.map((p) => [p.path, liveFileVitality.get(p.path) ?? p.vitality]));
+    const { ground, area } = ownerVitality(code.world, (path) => live.get(path) ?? 1);
+    showGroundVitality(ground, area);
+    showUnderstoryVitality();
+  }
+  /** Each finer entity shows its file's vitality, and every scattered rock, bush and flower its ground's, read from the field the grass reads. */
+  function showUnderstoryVitality(): void {
+    const symbols = code?.world.symbols ?? [];
+    const own = (k: number): number => liveFileVitality.get(symbols[k]?.file ?? "") ?? code?.stand.symbols[k]?.vitality ?? 1;
+    understory.setVitality(understoryVitality({ placements: understory.placements(), symbols: symbolPlacements }, own, (x, z) => groundVitalityAt(x, z).ground));
+  }
   placeWays();
   for (const v of settlement.views()) scene.add(v.object);
   function placeBuildings(): void {
@@ -573,6 +593,11 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   );
   let treeCount = TREES;
   let trees: readonly Tree[] = [];
+  /** Each tree's copy among its build's instances. */
+  let treeCopies: readonly number[] = [];
+  /** The file a tree grows for, in the codebase's world. */
+  const treeFile = (t: { readonly patch?: number }): string | undefined => (t.patch === undefined ? undefined : code?.world.patches[t.patch]?.path);
+  const treeVitality = (t: Tree): number => liveFileVitality.get(treeFile(t) ?? "") ?? t.represented.report.vitality;
   let treeViews: PlantInstances[] = [];
   /** Each build's instances by variant, kept for the life of the lab. */
   const groves = new Map<number, PlantInstances>();
@@ -625,7 +650,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     symbolPlacements = stood.symbols;
     // Each build keeps its instances from bake to bake and only moves its copies.
     treeViews = variants.flatMap((v, k) => {
-      const spots = trees.filter((t) => t.variant === k).map((t) => ({ x: t.x, y: t.y, z: t.z, yaw: t.yaw, scale: t.scale, vitality: t.represented.report.vitality }));
+      const spots = trees.filter((t) => t.variant === k).map((t) => ({ x: t.x, y: t.y, z: t.z, yaw: t.yaw, scale: t.scale, vitality: treeVitality(t) }));
       const had = groves.get(k);
       if (had !== undefined) {
         had.respot(spots);
@@ -637,8 +662,16 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       groves.set(k, view);
       return [view];
     });
+    // Each tree's copy among its build's, so a file's trees take a new vitality live.
+    const copies = new Map<number, number>();
+    treeCopies = trees.map((t) => {
+      const i = copies.get(t.variant) ?? 0;
+      copies.set(t.variant, i + 1);
+      return i;
+    });
     // Nothing of the understory stands in a building, on its walk, on a trail or under a landmark: the bake thread kept it clear.
     understory.place(terrain, world, [], understoryDensity, stood.placements);
+    showUnderstoryVitality();
     // What stops a walker: each trunk at its base, the rocks and bushes by their outlines at the ground, and the cottage's walls.
     const trunks: SolidShape[] = trees.flatMap((t) => {
       const trunk = (variants[t.variant] as TreeVariant).trunk * t.scale;
@@ -1265,7 +1298,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   const fmt = (v: number, d = 1): string => v.toFixed(d);
 
   /** Takes on a freshly baked world and what stands on it: everything on the land follows. */
-  function adopt(next: WorldSpec, baked: Terrain, stood: Stand): void {
+  function adopt(next: WorldSpec, baked: Terrain, stood: Stand, ownership: Baked["ownership"]): void {
     world = next;
     terrain = baked;
     // Areas first, so whatever stands beside the trails knows where it is; files join when the trees stand.
@@ -1282,6 +1315,8 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     placeBuildings();
     updateCovers();
     groundTex.update(terrain, stood.ground);
+    setGroundOwnership(ownership);
+    showLandVitality();
     ground.update(terrain, stood.wilds);
     water.update(terrain);
     wildGrowth.update(terrain);
@@ -1321,7 +1356,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     const baked = await baker.bake(next, standRequest(next));
     if (mine !== asked) return false;
     bakeMs = performance.now() - t0;
-    adopt(next, baked.terrain, baked.stand);
+    adopt(next, baked.terrain, baked.stand, baked.ownership);
     $("random").textContent = "Random terrain";
     return true;
   }
@@ -1512,6 +1547,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
    */
   async function showCodebase(on: boolean): Promise<void> {
     code = on ? await codeWorld(veil) : null;
+    liveFileVitality.clear();
     for (const v of settlement.views()) scene.remove(v.object);
     settlement = createSettlement(light, code?.buildings ?? SAMPLE_ENTITIES);
     for (const v of settlement.views()) scene.add(v.object);
@@ -1815,7 +1851,25 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       water: () => ({ ...water.stats(), frameCalls }),
       /** Draw calls and triangles of each pass in the last frame: the sun's shadow, the water's mirror and the view. */
       passes: () => structuredClone(passes),
-      waterVitality: (v: number) => water.vitality(v),
+      /**
+       * Sets the vitality of a file, or of every file under a directory, by
+       * its path ("" for every file), live: its trees, its finer entities, its
+       * patch of ground and what grows there, and the lots and water of the
+       * areas pooling it. Nothing rebakes. Returns how many files it set.
+       */
+      fileVitality: (path: string, v: number) => {
+        const under = (p: string): boolean => path === "" || p === path || p.startsWith(`${path}/`);
+        const files = (code?.world.patches ?? []).filter((p) => under(p.path));
+        for (const p of files) liveFileVitality.set(p.path, v);
+        trees.forEach((t, i) => {
+          const file = treeFile(t);
+          if (file !== undefined && under(file)) groves.get(t.variant)?.setVitalityAt(treeCopies[i] ?? 0, v);
+        });
+        showLandVitality();
+        return files.length;
+      },
+      /** The ground's own vitality and its area's at (x, z), or underfoot, as the grass, the ground and the water read them. */
+      groundVitality: (x?: number, z?: number) => groundVitalityAt(x ?? walker.x, z ?? walker.z),
       understory: () => understory.stats(),
       /** Shows or hides the wild bushes, for comparing frame costs. */
       showWilds: (on: boolean) => wildGrowth.show(on),

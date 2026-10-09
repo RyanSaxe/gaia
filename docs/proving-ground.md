@@ -72,10 +72,11 @@ stone croft, stone ring, storybook house, thatched cottage and watermill.
 ## What it shows and what it does not yet
 
 Decline shows on trees, buildings, landmarks, footbridges, stepping stones,
-cairns, trail wear, the understory's forms, and the paper of the minimap and
-the field map. Grass, the bare ground and water look the same in `ruins` as
-in `crossings`: the grass and ground shaders do not read vitality, and the
-water's vitality is one value for the whole world.
+cairns, trail wear, the understory's forms, the grass, the ground and the
+water, and the paper of the minimap and the field map. In `ruins` the grass
+has thinned to straw over dry ground with bare earth between, and the brook
+runs brown and still; under `mixed/failing-grove.ts` one patch has dried
+while its neighbors stay green.
 
 It is also harder to draw than Gaia's own world: 479 trees grow on 950 m
 against Gaia's 489 on 1,120 m, three of its lands are deep woods, and most of

@@ -2,11 +2,13 @@
 // building's site and leveled pad, the landmarks' sites, the trails between
 // them leveled into the ground, the trees and the understory kept off all of
 // these, the wild land's ring, and the ground texture's data with the trail
-// field in its fourth channel. It levels the lattice, so it runs before the
+// field in its fourth channel; and who owns each cell's ground, whose
+// vitality the ground shows. It levels the lattice, so it runs before the
 // ground is packed. No Three.js and no DOM: the bake worker runs it, and the
 // same terrain and request give the same stand on any thread.
 
 import { type BuildingPlan, type Built, type RouteSpec, rand } from "@gaia/schema";
+import { areaVitality } from "@gaia/world";
 import {
   type BuildingSite,
   type Capsule,
@@ -24,13 +26,13 @@ import {
   type WildsRing,
   type LandSite,
   type Habitat,
+  type OwnedSite,
   growGrove,
   trunkIndex,
   clearingsOf,
   findLandmarkSite,
   findSite,
   groundedBase,
-  pastTheLand,
   heightAt,
   isWet,
   levelPad,
@@ -109,9 +111,9 @@ export interface StandCode {
   readonly patches: readonly StandPatch[];
   /**
    * The land's cells, each part of one patch (its index) or of a lot (-1): a tree grows only on its own patch's cells.
-   * Each holds its ground's vitality, which the understory growing on it shows: its file's, or on a lot its area's.
+   * `area` indexes the world's areas: the directory whose ground the cell is.
    */
-  readonly cells: readonly (LandSite & { readonly patch: number; readonly vitality: number })[];
+  readonly cells: readonly (LandSite & { readonly patch: number; readonly area: number })[];
   readonly symbols: readonly StandSymbol[];
   /** Per terrain region: how much of each understory rule it holds (by rule id; absent counts 1), and what its open ground reads as. */
   readonly regions: readonly { readonly understory: Readonly<Record<string, number>>; readonly open?: Habitat }[];
@@ -197,6 +199,57 @@ export function landmarkBase(built: Pick<Built, "parts">): number {
     }
   }
   return Math.min(base, 10);
+}
+
+/**
+ * Who owns each cell's ground (`groundOwners` in @gaia/terrain): a file's
+ * patch by its index, or an area's own ground (a lot) as the number of
+ * patches plus its area's index, so the ground takes its file's vitality or,
+ * on a lot, its area's.
+ */
+export function groundSites(code: Pick<StandCode, "cells" | "patches">): OwnedSite[] {
+  return code.cells.map((c) => ({ x: c.x, z: c.z, ...(c.reach === undefined ? {} : { reach: c.reach }), owner: c.patch >= 0 ? c.patch : code.patches.length + c.area }));
+}
+
+/**
+ * Each owner's vitality, numbered as `groundSites` numbers them: on its
+ * ground (a file's own, or on a lot its area's, every file under the area
+ * pooled by size: `areaVitality` in @gaia/world), and on the water of the
+ * area its ground lies in, which follows that area's pooled vitality.
+ */
+export function ownerVitality(
+  world: { readonly patches: readonly { readonly path: string; readonly area: string; readonly radius: number }[]; readonly areas: readonly { readonly path: string }[] },
+  vitalityOf: (file: string) => number,
+): { ground: Float32Array; area: Float32Array } {
+  const pooled = areaVitality(world.patches.map((p) => ({ area: p.area, vitality: vitalityOf(p.path), size: p.radius * p.radius })));
+  const count = world.patches.length;
+  const ground = new Float32Array(count + world.areas.length);
+  const area = new Float32Array(count + world.areas.length);
+  world.patches.forEach((p, j) => {
+    ground[j] = vitalityOf(p.path);
+    area[j] = pooled.get(p.area) ?? 1;
+  });
+  world.areas.forEach((a, k) => {
+    ground[count + k] = pooled.get(a.path) ?? 1;
+    area[count + k] = pooled.get(a.path) ?? 1;
+  });
+  return { ground, area };
+}
+
+/**
+ * The vitality each placement shows, in the order of `Stand.placements`: a
+ * file's finer entity its file's (`symbolVitality`, by its index in
+ * `StandCode.symbols`), and every scattered rock, bush and flower that of the
+ * ground it grows on (`groundAt`, the ground's vitality field the grass
+ * beneath it reads), so the understory eases across borders with the grass
+ * and follows a live change in vitality.
+ */
+export function understoryVitality(stand: Pick<Stand, "placements" | "symbols">, symbolVitality: (symbol: number) => number, groundAt: (x: number, z: number) => number): Float32Array {
+  const symbolAt = new Map(stand.symbols.flatMap((i, k) => (i >= 0 ? [[i, k] as const] : [])));
+  return Float32Array.from(stand.placements, (p, i) => {
+    const k = symbolAt.get(i);
+    return k === undefined ? groundAt(p.x, p.z) : symbolVitality(k);
+  });
 }
 
 /** The middle of a building's door along its front wall, in its own frame. */
@@ -485,11 +538,8 @@ export function standWorld(t: Terrain, req: StandRequest): Stand {
   const rules = code === undefined ? req.understory.rules : req.understory.rules.map((rule) => ({ ...rule, regions: t.spec.regions.map((_, i) => (rule.regions?.[i] ?? 1) * (code.regions[i]?.understory[rule.id] ?? 1)) }));
   const open = code === undefined ? req.understory.open : t.spec.regions.map((_, i) => code.regions[i]?.open ?? req.understory.open?.[i]);
   const canopy = trees.map((tr) => ({ x: tr.x, z: tr.z, radius: (req.trees.crowns[tr.variant] ?? 4) * tr.scale }));
-  const scattered = scatterComponents(t, rules, req.understory.seed, [...occupied, ...roomy], { canopy, ...(open === undefined ? {} : { open }) });
-  // In a world from code the understory shows the vitality of the ground it grows on: its cell's, or full health in the wild past the land.
-  const cells = code?.cells ?? [];
-  const vitalityUnder = (x: number, z: number): number => (pastTheLand(t.spec.size, x, z) ? 1 : (cells[siteAt(cells, x, z)]?.vitality ?? 1));
-  const placements = [...standing, ...(cells.length === 0 ? scattered : scattered.map((p) => ({ ...p, vitality: vitalityUnder(p.x, p.z) })))];
+  // What is scattered takes the vitality of the ground it grows on once the page knows it (`understoryVitality`).
+  const placements = [...standing, ...scatterComponents(t, rules, req.understory.seed, [...occupied, ...roomy], { canopy, ...(open === undefined ? {} : { open }) })];
 
   const n = t.lattice.n * t.lattice.n;
   const field = trailField(t, network.ways);
