@@ -8,7 +8,7 @@ import type { PlantView } from "./plant.ts";
 
 export interface SunShadow {
   /** Renders the plants' depth from the sun, covering a square of `extent` around `center`. */
-  render(renderer: THREE.WebGLRenderer, scene: THREE.Scene, plants: readonly PlantView[], hide: readonly THREE.Object3D[]): void;
+  render(renderer: THREE.WebGLRenderer, scene: THREE.Scene, plants: readonly Pick<PlantView, "useDepth">[], hide: readonly THREE.Object3D[]): void;
   frame(center: THREE.Vector3, extent: number): void;
   dispose(): void;
 }

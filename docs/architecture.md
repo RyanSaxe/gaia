@@ -624,6 +624,17 @@ level only when its nearest point is past that level's distance, where every
 piece the level leaves out has already left on screen, so the two draw the
 same pixels.
 
+The woods also measure every tree's crown in each pass's own device pixels.
+A crown under `FAR.swapPx` (128) draws as its far form, one card baked from
+its build (`packages/render/src/far.ts`). Between 128 and 160 pixels, the band
+(`farness` in `woods.ts`), the card draws over the full tree as far into its
+form as the crown is into the band, so a tree never changes form in one
+frame. Each pass gathers its far copies into one batch, and the far cards
+draw it in one call per form. Nothing past `AIR.dissolveEnd`, where the air
+has dissolved everything into the sky, draws at all. Every tree build bakes
+into its far form a few views a frame under the wait (`startFarBake`), and
+the wait lifts only once all of them are ready.
+
 ## Time
 
 A world's hour is the person's local time. Only the renderer reads the clock

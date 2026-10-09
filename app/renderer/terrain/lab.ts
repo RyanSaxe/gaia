@@ -16,9 +16,14 @@ import { biome, flora, landmark, link, world as worldKind } from "@gaia/kinds";
 import { defaultParams, validate } from "@gaia/world";
 import { FLORA_PRESETS, LANDMARK_PRESETS, type Realized, TRAIL_PRESETS, WORLD_PRESETS, buildSlots, mergeParts, realize, realizeRegion, realizeSky } from "@gaia/realize";
 import {
+  FAR_COPY,
+  type FarCards,
   LANTERN,
   type PlantView,
   applyLight,
+  createFarCards,
+  type FarForm,
+  startFarBake,
   createLantern,
   createPlant,
   createRenderer,
@@ -105,7 +110,7 @@ import { type Stand, type StandRequest, type StandingLandmark, landmarkBase, own
 import { groundVitalityAt, setGroundOwnership, showGroundVitality } from "./vitality.ts";
 import { type TourStop, tourStops } from "./tour.ts";
 import { type Change, pictureChange, tallyFrame } from "./measure.ts";
-import { type Copies, type DetailMode, createCopies } from "./woods.ts";
+import { type Copies, type DetailMode, FAR, type PassSize, createCopies, createFarBatch } from "./woods.ts";
 
 const TEMPLATE = /* html */ `
 <main class="stage">
@@ -337,6 +342,12 @@ const SAMPLE_NAME = "the sample world";
 const ASKED_WORLD = new URLSearchParams(location.search).get("world");
 /** Frames the first world draws under the wait before it lifts: the first compiles every material. */
 const LIFT_FRAMES = 4;
+/**
+ * Baking far forms under the wait: at most this many views of a form a frame
+ * (960 make a form), within this many milliseconds, so the wait keeps
+ * painting while every tree build bakes.
+ */
+const FAR_BAKE = { views: 24, ms: 6 } as const;
 /** The sample world's size: the full world, or the small one, to compare the two. */
 const SCALE = ASKED_WORLD === "small" ? SMALL_WORLD : FULL_WORLD;
 /** The air's density walking, and over the overview, which thins with the world's size so the whole of it stays legible. */
@@ -625,17 +636,53 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   // Past the land: the wild's covers and its scattered bushes, which stand for nothing.
   const wildGrowth = createWildGrowth(scene, light, covers, lib, floraLib);
   const instanced = (): Copies[] => [...treeViews, ...understory.all(), ...wildGrowth.all()];
+  // Far trees: each build baked once into its far form, drawn as cards where a
+  // tree is small on a pass's screen (woods.ts). The builds bake a few views a
+  // frame from the moment the lab opens, and the wait lifts only once they
+  // are done, so no frame ever shows a far tree before its card exists.
+  let farCards: FarCards | null = null;
+  let farBakeMs = 0;
+  const farBatch = createFarBatch();
+  const farBaked = (async (): Promise<void> => {
+    const t0 = performance.now();
+    const forms: FarForm[] = [];
+    for (const v of variants) {
+      const bake = startFarBake(renderer, v.plant, FAR.swapPx);
+      await bake.ready;
+      for (;;) {
+        const form = bake.step(FAR_BAKE.ms, FAR_BAKE.views);
+        if (form !== null) {
+          forms.push(form);
+          break;
+        }
+        await new Promise((r) => requestAnimationFrame(r));
+      }
+    }
+    const cards = createFarCards(forms, light);
+    scene.add(cards.object);
+    farCards = cards;
+    farBakeMs = performance.now() - t0;
+    warm();
+  })();
   let warming = false;
   const viewSize = new THREE.Vector2();
+  const bufferSize = new THREE.Vector2();
   scene.onBeforeRender = (_renderer, _scene, passCamera) => {
     if (warming) return;
     const target = renderer.getRenderTarget();
     // The water's mirror, drawn smaller than the view, chooses detail by its
     // own size; the sun's shadow keeps the view's, so shade never changes as
-    // a person walks.
-    const perspective = (passCamera as THREE.PerspectiveCamera).isPerspectiveCamera === true;
-    const smaller = target !== null && perspective ? renderer.getSize(viewSize).y / target.height : 1;
-    for (const v of instanced()) v.cull(passCamera, smaller);
+    // a person walks. Crowns are measured in each pass's own device pixels.
+    const height = target === null ? renderer.getDrawingBufferSize(bufferSize).y : target.height;
+    const size: PassSize =
+      passCamera instanceof THREE.PerspectiveCamera
+        ? { smaller: target === null ? 1 : renderer.getSize(viewSize).y / target.height, focal: height / 2 / Math.tan(THREE.MathUtils.degToRad(passCamera.fov) / 2), ortho: false }
+        : passCamera instanceof THREE.OrthographicCamera
+          ? { smaller: 1, focal: height / (passCamera.top - passCamera.bottom), ortho: true }
+          : { smaller: 1, focal: 0, ortho: false };
+    farBatch.count = 0;
+    for (const v of instanced()) v.cull(passCamera, size);
+    farCards?.draw(farBatch.copies, farBatch.count);
   };
   // Uploads every tree's and the understory's geometry, at every level, in
   // one render while the planting already holds the frame, so no level's
@@ -645,6 +692,13 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   function warm(): void {
     warming = true;
     for (const v of instanced()) v.warm();
+    // Every far form, solid and fading, so neither card's first appearance compiles a material.
+    if (farCards !== null) {
+      variants.forEach((_, k) => {
+        for (const fade of [1, 0.5]) farBatch.copies.set([k, 0, 0, 0, 0, 1, 1, 0, fade], (k * 2 + (fade < 1 ? 1 : 0)) * FAR_COPY);
+      });
+      farCards.draw(farBatch.copies, variants.length * 2);
+    }
     renderer.setRenderTarget(warmTarget);
     renderer.render(scene, warmCamera);
     renderer.setRenderTarget(null);
@@ -680,7 +734,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
         return [had];
       }
       if (spots.length === 0) return [];
-      const view = createCopies(v.plant, light, spots);
+      const view = createCopies(v.plant, light, spots, { form: k, batch: farBatch });
       scene.add(view.object);
       groves.set(k, view);
       return [view];
@@ -1605,7 +1659,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     refreshSight(now);
     // Every pass thins distant detail from where the person's eyes are.
     light.uEye.value.copy(mode === "walk" ? detailEye : camera.position);
-    shadow.render(renderer, scene, [...views(), ...understory.casters(), ...wildGrowth.all()], [sky.mesh, ground.wilds, ground.fine, ground.coarse, grass.mesh, water.group, signs.mesh, ...understory.quiet()]);
+    shadow.render(renderer, scene, [...views(), ...understory.casters(), ...wildGrowth.all(), ...(farCards === null ? [] : [farCards])], [sky.mesh, ground.wilds, ground.fine, ground.coarse, grass.mesh, water.group, signs.mesh, ...understory.quiet()]);
     frameCalls = renderer.info.render.calls;
     passes.shadow = { calls: renderer.info.render.calls, triangles: renderer.info.render.triangles };
     const mirrorCalls = water.mirror(renderer, scene, camera, [...mirrorHide, ...understory.quiet(), ...understory.casters().map((c) => c.object), ...wildGrowth.all().map((c) => c.object)], mirrorShow, dt);
@@ -1647,7 +1701,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   refreshPanel();
   // The first world bakes behind a quiet veil, which lifts once it stands.
   const startWithCode = ASKED_WORLD !== "sample" && ASKED_WORLD !== "small";
-  const ready = (startWithCode ? showCodebase(true) : rebake(world).then(() => valleyView())).then(async () => {
+  const ready = Promise.all([startWithCode ? showCodebase(true) : rebake(world).then(() => valleyView()), farBaked]).then(async () => {
     // The world's first frames compile its materials; they draw under the paper, so the world shows only once it moves smoothly.
     for (let k = 0; k < LIFT_FRAMES; k++) await new Promise((r) => requestAnimationFrame(r));
     await veil.lift();
@@ -1894,6 +1948,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       trails: ways.network.trails.length,
       ways: ways.network.ways.length,
       bakeMs: Math.round(bakeMs),
+      farBakeMs: Math.round(farBakeMs),
     }),
     setActive(on) {
       active = on;
@@ -2067,6 +2122,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
           for (const o of objects) if (o !== undefined) kinds.set(o, kind);
         };
         name("trees", treeViews.map((v) => v.object));
+        name("far trees", [farCards?.object]);
         name("understory", [...understory.all().map((v) => v.object), ...understory.quiet()]);
         name("wild bushes", wildGrowth.all().map((v) => v.object));
         name("grass", [grass.mesh]);
@@ -2092,9 +2148,14 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       steps: (meters: number, step = 0.7, at?: number) => walkSteps(meters, step, at),
       /** Walks as a person would for `seconds` of real time (`wander`). */
       wander,
+      /** Shows or hides the far trees' cards alone, for seeing what they draw. */
+      showFarTrees: (on: boolean) => {
+        if (farCards !== null) farCards.object.visible = on;
+      },
       /** Shows or hides every tree, for comparing frame costs. */
       showTrees: (on: boolean) => {
         for (const v of treeViews) v.object.visible = on;
+        if (farCards !== null) farCards.object.visible = on;
       },
       /** Draw calls in one whole frame: the shadow pass and the view together. */
       calls: () => {
@@ -2194,6 +2255,13 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
         levels: instanced().map((v) => v.levels),
         drawn: instanced().reduce((n, v) => n + v.drawn().copies, 0),
         drawnTriangles: instanced().reduce((n, v) => n + v.drawn().triangles, 0),
+        /** Milliseconds every tree build took to bake into its far form. */
+        farBakeMs: Math.round(farBakeMs),
+        /** Trees in the last pass in the band, or small enough on screen to draw as far forms. */
+        treesInBand: treeViews.reduce((n, v) => n + v.drawn().band, 0),
+        treesFar: treeViews.reduce((n, v) => n + v.drawn().far, 0),
+        treesDrawn: treeViews.reduce((n, v) => n + v.drawn().copies, 0),
+        treeTriangles: treeViews.reduce((n, v) => n + v.drawn().triangles, 0),
       }),
       selected: () => selected,
       /**

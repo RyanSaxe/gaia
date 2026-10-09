@@ -32,6 +32,11 @@ export interface InstanceSpot {
   readonly seed?: number;
 }
 
+/** A copy's own seed, 0 to 1, drawn from where it stands when its spot gives none: neighbors never flutter in step. */
+export function copySeed(spot: InstanceSpot): number {
+  return spot.seed ?? (((Math.sin(spot.x * 12.9898 + spot.z * 78.233) * 43758.5453) % 1) + 1) % 1;
+}
+
 /** Distances from which a coarser level may draw. */
 const LEVEL_AT = [48, 96, 192, 384, 768] as const;
 const MAX_LEVELS = 3;
@@ -159,7 +164,7 @@ export function createPlantInstances(plant: Realized, light: SceneLight, spots: 
       matrix.makeTranslation(s.x, s.y, s.z).multiply(shear).multiply(turn);
       matrix.elements[3] = s.vitality ?? 1;
       matrix.elements[7] = s.hue ?? 0;
-      matrix.elements[11] = s.seed ?? (((Math.sin(s.x * 12.9898 + s.z * 78.233) * 43758.5453) % 1) + 1) % 1;
+      matrix.elements[11] = copySeed(s);
       source.set(matrix.elements, k * 16);
     });
   };
