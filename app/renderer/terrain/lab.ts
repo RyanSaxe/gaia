@@ -610,8 +610,16 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   const wildGrowth = createWildGrowth(scene, light, covers, lib, floraLib);
   const instanced = (): Copies[] => [...treeViews, ...understory.all(), ...wildGrowth.all()];
   let warming = false;
+  const viewSize = new THREE.Vector2();
   scene.onBeforeRender = (_renderer, _scene, passCamera) => {
-    if (!warming) for (const v of instanced()) v.cull(passCamera);
+    if (warming) return;
+    const target = renderer.getRenderTarget();
+    // The water's mirror, drawn smaller than the view, chooses detail by its
+    // own size; the sun's shadow keeps the view's, so shade never changes as
+    // a person walks.
+    const perspective = (passCamera as THREE.PerspectiveCamera).isPerspectiveCamera === true;
+    const smaller = target !== null && perspective ? renderer.getSize(viewSize).y / target.height : 1;
+    for (const v of instanced()) v.cull(passCamera, smaller);
   };
   // Uploads every tree's and the understory's geometry, at every level, in
   // one render while the planting already holds the frame, so no level's

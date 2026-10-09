@@ -4,9 +4,10 @@
 // can see, each cell at the detail its distance from the eye allows. A
 // coarser level leaves out whole pieces, and a cell draws it only once every
 // piece it leaves out has already left on screen at the cell's nearest
-// point, so the switch changes no pixel. How a plant looks at each level is
-// the plant's own (`createPlantInstances` in @gaia/render); this decides
-// only which copies draw it.
+// point, so the switch changes no pixel. A pass drawn smaller than the view
+// (the water's mirror) chooses by its own size: its pieces leave sooner. How
+// a plant looks at each level is the plant's own (`createPlantInstances` in
+// @gaia/render); this decides only which copies draw it.
 
 import * as THREE from "three";
 import type { Realized } from "@gaia/realize";
@@ -27,8 +28,13 @@ export interface Copies extends PlantView {
   readonly levels: readonly number[];
   /** Sets one copy's vitality; the shader reads it per instance. */
   setVitalityAt(index: number, v: number): void;
-  /** Draws, in the pass about to render through `camera`, only the cells it can see, each at the detail its distance from the eye allows. */
-  cull(camera: THREE.Camera): void;
+  /**
+   * Draws, in the pass about to render through `camera`, only the cells it
+   * can see, each at the detail its distance from the eye allows. A pass
+   * drawn `smaller` times smaller than the view gives each cell the detail it
+   * would have that many times farther away.
+   */
+  cull(camera: THREE.Camera, smaller?: number): void;
   /** Readies every level to draw, so its geometry uploads while a loading screen holds the frame; the next `cull` undoes it. */
   warm(): void;
   /** Moves the copies to new spots: a world's new bake stands the same blueprints elsewhere. */
@@ -87,10 +93,10 @@ export function createCopies(plant: Realized, light: SceneLight, spots: readonly
   /** Each level's copies as last packed, kept while the same cells draw it. */
   let packed: LevelCopies[] = levels.map(() => ({ copies: [], key: "" }));
 
-  const levelFor = (cell: Cell): number => {
+  const levelFor = (cell: Cell, smaller: number): number => {
     if (detail === "full") return 0;
     if (detail === "far") return levels.length - 1;
-    const near = cell.built.center.distanceTo(light.uEye.value) - cell.built.radius;
+    const near = (cell.built.center.distanceTo(light.uEye.value) - cell.built.radius) * smaller;
     let pick = 0;
     for (let k = 1; k < levels.length; k++) if ((levels[k] as number) <= near - LEVEL_MARGIN) pick = k;
     return pick;
@@ -118,11 +124,11 @@ export function createCopies(plant: Realized, light: SceneLight, spots: readonly
     },
     setVitality: (v) => view.setVitality(v),
     setVitalityAt: (index, v) => view.setVitalityAt(index, v),
-    cull(camera) {
+    cull(camera, smaller = 1) {
       frustum.setFromProjectionMatrix(viewProjection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
       for (const list of chosen) list.length = 0;
       cells.forEach((cell, i) => {
-        if (frustum.intersectsSphere(cell.bounds)) (chosen[levelFor(cell)] as number[]).push(i);
+        if (frustum.intersectsSphere(cell.bounds)) (chosen[levelFor(cell, smaller)] as number[]).push(i);
       });
       packed = chosen.map((picked, k) => {
         const key = picked.join(",");
