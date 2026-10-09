@@ -530,15 +530,19 @@ export function createFarCards(forms: readonly FarForm[], light: SceneLight): Fa
   const card = new THREE.PlaneGeometry(2, 2, 1, 5);
   const sets = forms.map((form) => {
     const sides = [false, true].map((fading) => {
-      const geometry = new THREE.InstancedBufferGeometry();
-      geometry.index = card.index;
-      geometry.setAttribute("position", card.getAttribute("position"));
+      // A geometry holds room for so many copies; three fixes how many an
+      // instanced geometry may draw when it is first bound, so outgrowing it
+      // takes a new geometry, never new attributes on the old one.
+      const geometryFor = (room: number): THREE.InstancedBufferGeometry => {
+        const g = new THREE.InstancedBufferGeometry();
+        g.index = card.index;
+        g.setAttribute("position", card.getAttribute("position"));
+        g.setAttribute("aSpot", new THREE.InstancedBufferAttribute(new Float32Array(room * 4), 4));
+        g.setAttribute("aMore", new THREE.InstancedBufferAttribute(new Float32Array(room * 4), 4));
+        g.instanceCount = 0;
+        return g;
+      };
       let capacity = 16;
-      const spot = new THREE.InstancedBufferAttribute(new Float32Array(capacity * 4), 4);
-      const more = new THREE.InstancedBufferAttribute(new Float32Array(capacity * 4), 4);
-      geometry.setAttribute("aSpot", spot);
-      geometry.setAttribute("aMore", more);
-      geometry.instanceCount = 0;
       const [l0, l1, l2, l3] = form.atlas.layers;
       const uniforms = {
         ...light,
@@ -563,7 +567,7 @@ export function createFarCards(forms: readonly FarForm[], light: SceneLight): Fa
         ...(fading ? { transparent: true, depthWrite: false } : { alphaToCoverage: true }),
       });
       const depth = new THREE.ShaderMaterial({ vertexShader: CARD_VERT, fragmentShader: CARD_DEPTH_FRAG, uniforms, side: THREE.DoubleSide });
-      const mesh = new THREE.Mesh(geometry, color);
+      const mesh = new THREE.Mesh(geometryFor(capacity), color);
       mesh.frustumCulled = false;
       if (fading) mesh.renderOrder = 2;
       object.add(mesh);
@@ -575,9 +579,10 @@ export function createFarCards(forms: readonly FarForm[], light: SceneLight): Fa
         fill(list: readonly number[], copies: Float32Array): void {
           if (list.length > capacity) {
             capacity = Math.ceil(list.length * 1.25);
-            geometry.setAttribute("aSpot", new THREE.InstancedBufferAttribute(new Float32Array(capacity * 4), 4));
-            geometry.setAttribute("aMore", new THREE.InstancedBufferAttribute(new Float32Array(capacity * 4), 4));
+            mesh.geometry.dispose();
+            mesh.geometry = geometryFor(capacity);
           }
+          const geometry = mesh.geometry as THREE.InstancedBufferGeometry;
           const a = geometry.getAttribute("aSpot") as THREE.InstancedBufferAttribute;
           const b = geometry.getAttribute("aMore") as THREE.InstancedBufferAttribute;
           list.forEach((c, k) => {
