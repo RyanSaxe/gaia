@@ -169,11 +169,40 @@ interface Flare {
 /** The ring heights a flare needs, in trunk radii: close at the ground, where it curves most. */
 const FLARE_RINGS = [0.05, 0.12, 0.22, 0.36, 0.55, 0.85, 1.3, 2, 3, 4.2];
 
-function flareOf(trunkRadius: number): Flare {
+/** Where the trunk's root lobes stand around it, and how strong each is. */
+interface Lobe {
+  readonly angle: number;
+  readonly strength: number;
+}
+
+/** Three to five lobes spaced around the trunk, each turned and sized a little differently. */
+function lobesOf(r: Rand): Lobe[] {
+  const count = 3 + Math.floor(r.next() * 3);
+  const phase = r.next() * Math.PI * 2;
+  return Array.from({ length: count }, (_, k) => ({ angle: phase + ((k + r.range(-0.22, 0.22)) / count) * Math.PI * 2, strength: r.range(0.7, 1.15) }));
+}
+
+/** How much of a lobe stands at `theta`: 1 on its ridge, falling to 0 between lobes. */
+function lobeAt(lobes: readonly Lobe[], theta: number, width: number): number {
+  let most = 0;
+  for (const l of lobes) {
+    const d = Math.atan2(Math.sin(theta - l.angle), Math.cos(theta - l.angle)) / width;
+    most = Math.max(most, l.strength * Math.exp(-d * d));
+  }
+  return most;
+}
+
+function flareOf(trunkRadius: number, lobes: readonly Lobe[], lift: number): Flare {
   const reach = trunkRadius * 1.2;
   const fillet = trunkRadius * 0.16;
-  const at = (y: number): number => 1 + 0.55 * Math.exp(-Math.max(0, y) / reach) + 0.3 * Math.exp(-Math.max(0, y) / fillet);
-  return { at, rings: FLARE_RINGS.map((k) => k * trunkRadius) };
+  // Broad lobes: each spans about a third of the gap to its neighbors on either side.
+  const width = (Math.PI * 2) / lobes.length / 3;
+  const at = (y: number, theta: number): number => {
+    const l = lobeAt(lobes, theta, width);
+    const h = Math.max(0, y);
+    return 1 + 0.35 * Math.exp(-h / reach) + 0.25 * Math.exp(-h / fillet) + lift * l * Math.exp(-h / (reach * 1.6));
+  };
+  return { at, rings: [...FLARE_RINGS, 5.5].map((k) => k * trunkRadius) };
 }
 
 export function buildBark(p: Resolved<typeof barkParams>, ctx: BuildContext, skel: Skeleton): Built {
@@ -182,7 +211,7 @@ export function buildBark(p: Resolved<typeof barkParams>, ctx: BuildContext, ske
   const seed = Math.floor(r.next() * 1e6);
   const trunkRadius = skel.limbs[0]?.startRadius ?? 0.2;
   const boughs = new Boughs(skel);
-  const flare = flareOf(trunkRadius);
+  const flare = flareOf(trunkRadius, lobesOf(r.fork("lobes")), 1.1);
 
   // Each chain of segments is one tube, so its bark runs unbroken past the joins.
   for (const whole of chainsOf(skel)) {
@@ -192,7 +221,7 @@ export function buildBark(p: Resolved<typeof barkParams>, ctx: BuildContext, ske
     const first = skel.limbs[head] as Limb;
     const lr = r.fork(`limb${head}`);
     const flared = first.depth === 0 && first.parent === -1;
-    const radial = first.depth === 0 ? 10 : first.startRadius > trunkRadius * 0.3 ? 7 : 5;
+    const radial = flared ? 24 : first.depth === 0 ? 10 : first.startRadius > trunkRadius * 0.3 ? 7 : 5;
     // Limbs never go: twigs and leaves always have a limb under them, and a failing tree stands bare.
     const wither = 0.45 + 0.25 * lr.next();
     const furrows = first.depth === 0 ? 7 : 4;
