@@ -109,5 +109,5 @@ read as none.
   contracts between its parts.
 
 `pnpm check` runs the type checker, the lint rules and the tests, and
-`cargo test` and `cargo clippy` cover the engine. The pre-commit hook and CI
-run all of them. `pnpm readme-shots` retakes the screenshots above.
+`cargo test` and `cargo clippy` cover the engine. CI runs all of them on every
+push and pull request; the pre-commit hook checks types and lint. `pnpm readme-shots` retakes the screenshots above.

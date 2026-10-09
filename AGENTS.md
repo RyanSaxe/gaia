@@ -142,11 +142,17 @@ doc in the same commit, and say so in the commit message.
 
 ## Checks and commits
 
-`pnpm check` runs the type checker, the lint rules and the tests.
+`pnpm check` runs the type checker, the lint rules and every test.
 `cargo test` and `cargo clippy --all-targets -- -D warnings` cover the
-engine. The pre-commit hook runs all of them, and so does CI
-(`.github/workflows/check.yml`). Commit through the hook, with rustup's
-toolchain first: `PATH="$HOME/.cargo/bin:$PATH" git commit`. Fix a failing
+engine. CI (`.github/workflows/check.yml`) runs all of them on every push and
+pull request, and a pull request merges only once CI passes. The pre-commit
+hook stays quick, because several worktrees share one machine: it checks the
+whole project's types incrementally and lints the changed files, and lints
+the engine when the engine changed. It runs no tests. While you work, run the
+tests your change touches (`pnpm vitest run packages/terrain`, say, or
+`cargo test`), and run `pnpm check` before opening a pull request when the
+change is broad. Commit through the
+hook, with rustup's toolchain first: `PATH="$HOME/.cargo/bin:$PATH" git commit`. Fix a failing
 check; never silence it or skip the hook. Make each commit one coherent step,
 and keep scratch scripts, logs and screenshots out of the repository.
 
