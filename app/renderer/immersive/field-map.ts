@@ -1257,6 +1257,8 @@ export function createFieldMap(
   let isOpen = false;
   let shown = false;
   const view = { x: 0, z: 0, zoom: 1, fit: 1 };
+  /** The land's reach the view was last fit to, or null when it was fit before the paper was painted. */
+  let fittedTo: number | null = null;
   const person = { x: 0, z: 0, yaw: 0 };
   let labelCount = 0;
   /** Each name drawn, its box on the sheet and where it leads: an area's heart, or a file's; and the area's box, to bring the map round to it. */
@@ -1279,6 +1281,8 @@ export function createFieldMap(
     if (next.done === true) {
       paper = next.value;
       painting = null;
+      // A map opened before its paper was painted was fit to a guess at the land's size: fit it to the land.
+      if (isOpen && fittedTo !== paper.reach) fitView();
       if (isOpen) draw();
       for (const l of painted) l();
       return true;
@@ -1528,6 +1532,7 @@ export function createFieldMap(
 
   function fitView(): void {
     const { w, h } = size();
+    fittedTo = paper?.reach ?? null;
     view.fit = Math.min(w, h) / ((paper?.reach ?? 604) * 2);
     // A phone opens close enough to read the names around the person; a wide screen shows it all.
     const close = Math.min(w, h) < 560;
