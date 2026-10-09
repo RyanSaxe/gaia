@@ -64,13 +64,15 @@ GAIA_JEV=live GAIA_JEV_ENDPOINT=http://127.0.0.1:8787/api/alpha/decisions GAIA_D
 ## Working in parallel worktrees
 
 Several agents often work at once, each in its own git worktree on its own
-branch.
+branch. Four sessions own the parts of Gaia; `docs/sessions.md` says who owns
+what, how work merges into `main`, and how each worktree keeps the current
+world. Read it before you change anything outside your session's area.
 
 - Create the worktree from the branch you were given, then run
   `pnpm install` inside it. Each worktree has its own `node_modules` and its
   own `target/`, so the first engine build in it takes a minute or two.
-- Port 5180 (`pnpm lab:serve`) serves one worktree at a time, usually the
-  reviewer's phone; leave it alone. See your work with `pnpm lab:html` and
+- Port 5180 (`pnpm lab:serve`) serves `main` to the reviewer's phone; leave it
+  alone. Each session has its own port in `docs/sessions.md`. See your work with `pnpm lab:html` and
   open the file instead.
 - Stop only the processes you started, by their PIDs.
 - The machine is shared, so timings are noisy: say so when you report frame
