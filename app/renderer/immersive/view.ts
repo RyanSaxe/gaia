@@ -1,12 +1,12 @@
 // The immersive world: the terrain lab's world, full screen, with nothing on
 // it but the world itself and three quiet ways of knowing where you are, all
 // at once, drawn on one field sheet (docs/design-system.md, "The field
-// sheet"): the minimap, a torn scrap of the field map low at the left with
-// the area's name on it (`minimap.ts`), the field map that unfolds out of it,
-// and markers in the world. Touching the world only ever moves you
-// (docs/design-system.md, "One way to touch the world"); walking up to a
-// thing, the scrap rings it, and stopping at a thing raises its page at the
-// lower left (`sketch.ts`). The compass in the top right corner points north
+// sheet"): the minimap, a torn scrap of the field map low at the right that
+// turns with the person and letters the area's name (`minimap.ts`), the field
+// map that unfolds out of it, and markers in the world. Touching the world
+// only ever moves you (docs/design-system.md, "One way to touch the world");
+// walking up to a thing, the scrap rings it, and stopping at a thing raises
+// its page at the lower left (`sketch.ts`). The compass in the top right corner points north
 // (`compass.ts`) and opens the one other paper, the slip, with Gaia's mark,
 // how to wander, and the way back to the lab's debugging views.
 // Walking, tapping a thing to walk up to it, the lantern and the hour all
@@ -45,7 +45,8 @@ const WANDER = /* html */ `
     <dt><span class="mouse-only">Click</span><span class="touch-only">Tap</span> a thing</dt><dd>walk up and see its page</dd>
     <dt>Drag</dt><dd>look around</dd>
     <dt class="mouse-only">W A S D</dt><dd class="mouse-only">walk, Shift to hurry</dd>
-    <dt><span class="mouse-only">Click</span><span class="touch-only">Tap</span> the scrap</dt><dd>unfold the map<span class="mouse-only"> (M); Esc folds it</span></dd>
+    <dt><span class="mouse-only">Click</span><span class="touch-only">Tap</span> the minimap</dt><dd>unfold the map<span class="mouse-only"> (M); Esc folds it</span></dd>
+    <dt><span class="mouse-only">Click</span><span class="touch-only">Tap</span> its edge</dt><dd>tuck it away, and again to bring it back</dd>
     <dt><span class="mouse-only">Click</span><span class="touch-only">Tap</span> the map</dt><dd>go to that place</dd>
   </dl>`;
 
@@ -96,7 +97,7 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
     },
     jump,
   );
-  const minimap = createMinimap(layer, map, world.stood);
+  const minimap = createMinimap(layer, map, world.stood, world.places);
   const sketch = createSketchPage(layer);
   world.onCard((thing) => sketch.show(active ? thing : null));
   world.onHeading((thing) => minimap.heading(thing));
@@ -181,8 +182,6 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
   }
 
   apply();
-  let still = 0;
-  let last = { x: Number.NaN, z: Number.NaN };
   let night = -1;
   return {
     setActive(on) {
@@ -197,9 +196,6 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
     frame(dt) {
       if (!active || !standing) return;
       const p = world.person();
-      const moved = Math.hypot(p.x - last.x, p.z - last.z) > 0.02;
-      still = moved || p.walking ? 0 : still + dt;
-      last = { x: p.x, z: p.z };
       const place = world.placeAt(p.x, p.z);
       // After dark, paper is read by the lantern: lab.css warms and dims it by this.
       const n = Math.round(world.light.uNightness.value * 20) / 20;
@@ -207,7 +203,7 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
         night = n;
         container.style.setProperty("--night", String(n));
       }
-      minimap.frame(p.x, p.z, p.yaw, place, still, dt);
+      minimap.frame(p.x, p.z, p.yaw, place, dt);
       compass.turn(p.yaw, dt);
       map.frame(p.x, p.z, p.yaw, place);
     },
@@ -222,6 +218,8 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
       slip: (on: boolean) => setSlip(on),
       /** Unfolds or folds the rest of the thing's page that shows. */
       unfold: (on: boolean) => sketch.unfold(on),
+      /** Tucks the minimap below the screen's foot, or brings it back, as a tap on its edge does. */
+      tuck: (on: boolean) => minimap.tuck(on),
       /** Where the person is, what each way of knowing it shows now, and the page of the thing they stopped at. */
       state: () => {
         const p = world.person();

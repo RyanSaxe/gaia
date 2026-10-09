@@ -33,10 +33,10 @@ export interface FieldMap {
   /** Unfolds or folds the map. */
   open(on: boolean): void;
   /**
-   * Where the minimap lies (in the layer's pixels) and its scale (pixels a meter), asked each time the map
-   * unfolds: the sheet unfolds out of it and folds back into it.
+   * Where the minimap lies (in the layer's pixels), asked each time the map unfolds: the sheet unfolds out of it
+   * and folds back into it.
    */
-  unfoldsFrom(minimap: () => { readonly rect: DOMRect; readonly scale: number } | null): void;
+  unfoldsFrom(minimap: () => MinimapAt | null): void;
   readonly isOpen: boolean;
   /** The painted paper, once it is painted: the minimap shows the same sheet. */
   paper(): Paper | null;
@@ -57,6 +57,18 @@ export interface FieldMap {
     readonly drawMs: number;
     readonly labels: number;
   };
+}
+
+/**
+ * The minimap as the field map unfolds out of it: where it lies, its scale (pixels a meter), how far it turns the
+ * land (radians clockwise, so the way the person faces is up) and where the person stands on it (fractions of its
+ * width and height).
+ */
+export interface MinimapAt {
+  readonly rect: DOMRect;
+  readonly scale: number;
+  readonly turn: number;
+  readonly at: readonly [number, number];
 }
 
 export interface MapSource {
@@ -1549,10 +1561,11 @@ export function createFieldMap(
   }
 
   /**
-   * The transforms that lay the sheet over `from` (the minimap, in the layer's pixels) with its land at the
-   * minimap's scale, `scale` pixels a meter, around the person: what the sheet unfolds from and folds back into.
+   * The transforms that lay the sheet over the minimap with its land as the minimap shows it: at its scale, turned
+   * as it turns, around the person where they stand on it. The sheet unfolds from there and folds back into it.
    */
-  function overMinimap(from: DOMRect, scale: number): { sheet: string; land: string; origin: string } {
+  function overMinimap(minimap: MinimapAt): { sheet: string; land: string; origin: string } {
+    const from = minimap.rect;
     const left = sheet.offsetLeft;
     const top = sheet.offsetTop;
     const k = from.width / Math.max(1, sheet.offsetWidth);
@@ -1562,16 +1575,19 @@ export function createFieldMap(
     const h = canvas.clientHeight;
     const px = (person.x - view.x) * view.zoom + w / 2;
     const py = (person.z - view.z) * view.zoom + h / 2;
-    const zoom = scale / Math.max(1e-6, k * view.zoom);
+    const zoom = minimap.scale / Math.max(1e-6, k * view.zoom);
+    // Turned the short way round, so the land swings to north up through less than half a turn.
+    const turn = ((((minimap.turn * 180) / Math.PI) % 360) + 540) % 360 - 180;
+    const [ax, ay] = minimap.at;
     return {
       sheet: `translate(${tx.toFixed(1)}px, ${ty.toFixed(1)}px) scale(${k.toFixed(4)})`,
-      land: `translate(${(w / 2 - px).toFixed(1)}px, ${(h / 2 - py).toFixed(1)}px) scale(${zoom.toFixed(3)})`,
+      land: `translate(${(w * ax - px).toFixed(1)}px, ${(h * ay - py).toFixed(1)}px) scale(${zoom.toFixed(3)}) rotate(${turn.toFixed(2)}deg)`,
       origin: `${px.toFixed(1)}px ${py.toFixed(1)}px`,
     };
   }
-  /** Where the minimap lies and its scale, asked as the map unfolds; the layer's own pixels. */
-  let minimapAt: () => { readonly rect: DOMRect; readonly scale: number } | null = () => null;
-  let minimap: { readonly rect: DOMRect; readonly scale: number } | null = null;
+  /** Where the minimap lies, asked as the map unfolds; the layer's own pixels. */
+  let minimapAt: () => MinimapAt | null = () => null;
+  let minimap: MinimapAt | null = null;
   let folding = 0;
 
   function setOpen(on: boolean): void {
@@ -1590,7 +1606,7 @@ export function createFieldMap(
       const from = minimap;
       for (const e of animated) e.style.transition = "none";
       if (from !== null) {
-        const t = overMinimap(from.rect, from.scale);
+        const t = overMinimap(from);
         sheet.style.transform = t.sheet;
         canvas.style.transformOrigin = t.origin;
         canvas.style.transform = t.land;
@@ -1605,7 +1621,7 @@ export function createFieldMap(
       // It folds back into the minimap as it came, if it came from there.
       sheet.style.setProperty("--unfold", `${FOLD_MS}ms`);
       if (minimap !== null) {
-        const t = overMinimap(minimap.rect, minimap.scale);
+        const t = overMinimap(minimap);
         canvas.style.transformOrigin = t.origin;
         sheet.style.transform = t.sheet;
         canvas.style.transform = t.land;
