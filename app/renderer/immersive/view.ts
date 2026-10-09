@@ -6,9 +6,9 @@
 // and markers in the world. Touching the world only ever moves you
 // (docs/design-system.md, "One way to touch the world"); walking up to a
 // thing, the scrap rings it, and stopping at a thing raises its page at the
-// lower left (`sketch.ts`). The one other paper is the slip in the corner,
-// with Gaia's mark, how to wander, and the way back to the lab's debugging
-// views.
+// lower left (`sketch.ts`). The compass in the top right corner points north
+// (`compass.ts`) and opens the one other paper, the slip, with Gaia's mark,
+// how to wander, and the way back to the lab's debugging views.
 // Walking, tapping a thing to walk up to it, the lantern and the hour all
 // come from the terrain lab.
 
@@ -17,6 +17,7 @@ import { areaVitality } from "@gaia/world";
 import { LOGO_SVG } from "../brand/logo.ts";
 import { onTap } from "../lab.ts";
 import type { WorldHandle } from "../terrain/lab.ts";
+import { createCompass } from "./compass.ts";
 import { createFieldMap } from "./field-map.ts";
 import { MARKER_LAYER, createMarkers } from "./markers.ts";
 import { createMinimap } from "./minimap.ts";
@@ -36,8 +37,6 @@ export interface Immersive {
 
 /** A jump's timing, matching lab.css: the paper clouds over and holds a moment, frames for the ground and grass to follow under it, and the world dissolving in, ms. */
 const JUMP = { coverMs: 480, settleFrames: 4, revealMs: 1100 };
-
-const ROSE = `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M12 4.5 13.6 12 12 19.5 10.4 12Z" fill="currentColor" opacity=".85"/><path d="M4.5 12 12 10.6 19.5 12 12 13.4Z" fill="none" stroke="currentColor" stroke-width="1"/></svg>`;
 
 /** How to wander, as the slip says it: a mouse and keys, or a finger. */
 const WANDER = /* html */ `
@@ -125,14 +124,14 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
     markers.vitality((path) => vitality.get(path) ?? 1);
   });
 
-  // ---------- the slip: Gaia's mark, how to wander, and the way back to the lab ----------
+  // ---------- the compass, and the slip it opens: Gaia's mark, how to wander, and the way back to the lab ----------
 
   const menuButton = document.createElement("button");
   menuButton.type = "button";
   menuButton.className = "way-button menu-button";
   menuButton.setAttribute("aria-label", "About this world, and the lab");
   menuButton.setAttribute("aria-expanded", "false");
-  menuButton.innerHTML = ROSE;
+  const compass = createCompass(menuButton);
   const slip = document.createElement("div");
   slip.className = "way-slip";
   slip.setAttribute("role", "dialog");
@@ -209,6 +208,7 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
         container.style.setProperty("--night", String(n));
       }
       minimap.frame(p.x, p.z, p.yaw, place, still, dt);
+      compass.turn(p.yaw, dt);
       map.frame(p.x, p.z, p.yaw, place);
     },
     hook: {
@@ -225,7 +225,7 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
       /** Where the person is, what each way of knowing it shows now, and the page of the thing they stopped at. */
       state: () => {
         const p = world.person();
-        return { place: world.placeAt(p.x, p.z), minimap: minimap.state(), map: map.state(), markers: markers.crossings().length, sketch: sketch.state() };
+        return { place: world.placeAt(p.x, p.z), minimap: minimap.state(), compass: compass.state(), map: map.state(), markers: markers.crossings().length, sketch: sketch.state() };
       },
       crossings: () => markers.crossings(),
     },
