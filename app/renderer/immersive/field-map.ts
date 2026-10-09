@@ -1058,23 +1058,21 @@ export function drawLand(ctx: CanvasRenderingContext2D, w: number, h: number, pa
   ctx.fillStyle = "rgba(226,240,170,0.45)";
   ctx.fill(lights);
 
-  // Buildings and landmarks: each kind's own mark, worn as its entity is. A mark keeps a legible size on the whole
-  // sheet and grows with the land as the map comes close, as the trees do.
+  // Buildings and landmarks: each drawn from its own blueprint and worn as its entity is. A mark keeps a legible size
+  // on the whole sheet and grows with the land as the map comes close, as the trees do; names keep off the box it takes.
   const s = Math.max(1.1 * grow, MARK_METERS * view.zoom);
   const taken: [number, number, number, number][] = [];
   for (const l of stood.landmarks) {
     const x = sx(l.x);
     const y = sy(l.z);
     if (!visible(x, y, 30 * s)) continue;
-    drawLandmark(ctx, x, y, s, l.name, l.vitality);
-    taken.push([x - 10 * s, y - 18 * s, x + 10 * s, y + 4 * s]);
+    taken.push(drawLandmark(ctx, x, y, s, l, l.vitality, l.name));
   }
   for (const b of stood.buildings) {
     const x = sx(b.x);
     const y = sy(b.z);
     if (!visible(x, y, 30 * s)) continue;
-    drawBuilding(ctx, x, y, s, b.kind, b.vitality);
-    taken.push([x - 10 * s, y - 18 * s, x + 10 * s, y + 4 * s]);
+    taken.push(drawBuilding(ctx, x, y, s, b, b.vitality, b.name));
   }
   return taken;
 }
