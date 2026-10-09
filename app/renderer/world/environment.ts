@@ -5,7 +5,7 @@
 import * as THREE from "three";
 import type { Rgb } from "@gaia/schema";
 import { AIR, type WorldLook } from "@gaia/realize";
-import { CLEARINGS_GLSL, type Clearing, LIGHT_GLSL, type SceneLight, WIND_GLSL, applySky, createClearings } from "@gaia/render";
+import { CLEARINGS_GLSL, type Clearing, LIGHT_GLSL, type SceneLight, WIND_FIELD_GLSL, applySky, createClearings } from "@gaia/render";
 
 const v3 = (c: Rgb): THREE.Vector3 => new THREE.Vector3(c[0], c[1], c[2]);
 
@@ -405,7 +405,7 @@ varying float vT;
 varying float vTint;
 varying float vFlower;
 ${NOISE_GLSL}
-${WIND_GLSL}
+${WIND_FIELD_GLSL}
 void main() {
   float t = position.y;
   // Blades keep their full height everywhere: toward the rim of the field
