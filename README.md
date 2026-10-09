@@ -40,9 +40,9 @@ security add-generic-password -s gaia-openrouter -a openrouter -w
 GAIA_JEV=live pnpm dev
 ```
 
-Only the engine reads the key. Gaia spends up to $0.10 a project without
-asking and asks before spending more; judging this repository costs about
-two cents. Jev's answers are kept, so reopening a world asks again only about
+Only the engine reads the key. While Gaia is being built it asks Jev
+without a spend limit and prints each run's estimate; judging this
+repository costs about two cents. Jev's answers are kept, so reopening a world asks again only about
 what changed. [Connecting Jev](docs/connect-jev.md) has the details.
 
 ### The lab on a phone or in one file
