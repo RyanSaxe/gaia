@@ -110,8 +110,13 @@ export const symbolScale = (lines: SymbolFact["lines"], rule: string): number =>
 /** Trees on a file's patch, as its area's character grows them: more for a longer file, at least the one that names it. */
 export const treesFor = (lines: number, character: Character): number => Math.min(48, Math.max(1, Math.round(lines * character.perLine)));
 
-/** The most trees a world grows: where its areas would grow more, every grove gives up the same share. */
-const TREE_BUDGET = 470;
+/**
+ * A world grows every tree its areas call for: far trees cost a card, so
+ * woods may be as large as their land. Each file's grove stops at 48
+ * (`treesFor`), so no one file can run away with a patch; this bound only
+ * catches a world gone wrong, where every grove gives up the same share.
+ */
+const TREE_BOUND = 200_000;
 
 /** The world from the world service: opened, judged and laid out there, with the wait kept up to date. */
 function serviceWorld(service: WorldService, veil: Veil): Promise<WorldDocument> {
@@ -244,7 +249,7 @@ function patchesOf(world: CodeWorld): StandCode["patches"] {
     };
   });
   const wanted = planned.reduce((n, p) => n + p.trees, 0);
-  const share = Math.min(1, TREE_BUDGET / Math.max(1, wanted));
+  const share = Math.min(1, TREE_BOUND / Math.max(1, wanted));
   return planned.map((p) => (p.trees === 0 ? p : { ...p, trees: Math.max(1, Math.round(p.trees * share)) }));
 }
 

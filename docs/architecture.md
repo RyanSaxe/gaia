@@ -306,9 +306,10 @@ many trees a line of code grows, how close they stand and how large, and
 whether its files' groves gather on the sides of their patches nearest the
 area's heart, so they knit into one wood with open ground at the area's rim,
 or keep to their patches' middles with clearings between
-(`app/renderer/terrain/looks.ts`, `CHARACTERS`); a world grows about 470
-trees: where its areas would grow more, every grove gives up the same
-share, though each keeps the one tree that names its file. The understory then grows where it belongs (`scatterComponents`):
+(`app/renderer/terrain/looks.ts`, `CHARACTERS`); a world grows every tree
+its areas call for, at most 48 to a file's grove, since far trees cost a
+card each. Only past 200,000, a world gone wrong, does every grove give up
+the same share, though each keeps the one tree that names its file. The understory then grows where it belongs (`scatterComponents`):
 each candidate site on a grid fixed to the world reads its kind of place from
 the trees' crowns, the water and the slope, so a change in one place moves
 nothing elsewhere. Each scattered placement shows the vitality of the
