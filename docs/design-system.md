@@ -695,7 +695,9 @@ plan, profile, galleries and crown; the stones' arrangement, count, height,
 lintels and centre; a great tree's form, size, age and fullness, its crown
 in the form's own green. A contract test fails when a structure or landmark
 primitive has no entry in `INKS`, so a new primitive is never drawn as
-something else.
+something else. Each mark is drawn once into a bitmap at its size and
+health and stamped from then on, because the map redraws on every frame of
+a glide.
 
 The sheets nest by scale, each growing out of the last so nothing jumps:
 the minimap is the land around the person; a tap unfolds it into the

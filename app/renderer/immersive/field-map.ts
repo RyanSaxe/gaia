@@ -29,7 +29,7 @@ import type { StoodWorld } from "../terrain/lab.ts";
 import { DECKLE_MASK, MAP_STYLE, type MapStyle, TRAVELLER_SVG, dryness, healthColor, healthField, landWash } from "./map-styles.ts";
 import { chained, contour, isoline, simplified } from "./isolines.ts";
 import { nameTails } from "./map-names.ts";
-import { drawBuilding, drawLandmark } from "./marks.ts";
+import { stampBuilding, stampLandmark } from "./marks.ts";
 import { INK, type LandView, RIM, type WildInk, createWildInk, layGround, reliefAt } from "./wild-ink.ts";
 
 export interface FieldMap {
@@ -1066,13 +1066,13 @@ export function drawLand(ctx: CanvasRenderingContext2D, w: number, h: number, pa
     const x = sx(l.x);
     const y = sy(l.z);
     if (!visible(x, y, 30 * s)) continue;
-    taken.push(drawLandmark(ctx, x, y, s, l, l.vitality, l.name));
+    taken.push(stampLandmark(ctx, x, y, s, l, l.vitality, l.name));
   }
   for (const b of stood.buildings) {
     const x = sx(b.x);
     const y = sy(b.z);
     if (!visible(x, y, 30 * s)) continue;
-    taken.push(drawBuilding(ctx, x, y, s, b, b.vitality, b.name));
+    taken.push(stampBuilding(ctx, x, y, s, b, b.vitality, b.name));
   }
   return taken;
 }
