@@ -298,10 +298,11 @@ uniform float uHeight;
 uniform float uSway;
 uniform float uFrequency;
 uniform float uElev[${FAR_VIEWS.elevations.length}];
-varying vec2 vUv0;
-varying vec2 vUv1;
-varying vec2 vUv2;
-varying vec2 vUv3;
+const vec2 GRID = vec2(${FAR_VIEWS.azimuths}.0, ${FAR_VIEWS.elevations.length}.0);
+varying vec3 vQ;
+varying vec3 vVl;
+varying vec4 vCells0;
+varying vec4 vCells1;
 varying vec4 vW;
 varying vec3 vWorld;
 varying vec3 vToEye;
@@ -310,20 +311,6 @@ varying float vVitality;
 varying float vFade;
 varying float vScale;
 ${WIND_GLSL}
-const vec2 GRID = vec2(${FAR_VIEWS.azimuths}.0, ${FAR_VIEWS.elevations.length}.0);
-vec3 viewDir(vec2 cell) {
-  float az = 6.28318530718 * cell.x / GRID.x;
-  float el = radians(uElev[int(cell.y)]);
-  return vec3(cos(el) * cos(az), sin(el), cos(el) * sin(az));
-}
-// Where a point on the card, q from the plant's center, falls in view cell's frame of the atlas.
-vec2 frameUv(vec2 cell, vec3 q) {
-  vec3 dir = viewDir(cell);
-  vec3 right = normalize(cross(vec3(0.0, 1.0, 0.0), dir));
-  vec3 up = cross(dir, right);
-  vec2 f = vec2(dot(q, right), dot(q, up)) / uRadius * 0.5 + 0.5;
-  return (cell + clamp(f, 0.0, 1.0)) / GRID;
-}
 // The plant shader's per-copy shape variety (applyVariety), at full variety.
 vec3 variety(vec3 p, vec3 root) {
   vec3 h = fract(sin(vec3(dot(root.xz, vec2(12.9898, 78.233)), dot(root.xz, vec2(39.346, 11.135)), dot(root.xz, vec2(73.156, 52.235)))) * 43758.5453);
@@ -358,10 +345,10 @@ void main() {
   }
   float j1 = min(j0 + 1.0, GRID.y - 1.0);
   vW = vec4((1.0 - fi) * (1.0 - fj), fi * (1.0 - fj), (1.0 - fi) * fj, fi * fj);
-  vUv0 = frameUv(vec2(i0, j0), q);
-  vUv1 = frameUv(vec2(i1, j0), q);
-  vUv2 = frameUv(vec2(i0, j1), q);
-  vUv3 = frameUv(vec2(i1, j1), q);
+  vCells0 = vec4(i0, j0, i1, j0);
+  vCells1 = vec4(i0, j1, i1, j1);
+  vQ = q;
+  vVl = Vl;
   // Placed as the near form is: its variety, then the whole plant's bend in the wind.
   vec3 p = variety(uCenter + q, root);
   vec3 wd = transpose(R) * vec3(WIND_DIR.x, 0.0, WIND_DIR.y);
@@ -385,17 +372,54 @@ uniform sampler2D uLayer0;
 uniform sampler2D uLayer1;
 uniform sampler2D uLayer2;
 uniform sampler2D uLayer3;
-varying vec2 vUv0;
-varying vec2 vUv1;
-varying vec2 vUv2;
-varying vec2 vUv3;
+uniform float uRadius;
+uniform vec2 uCoverEdge;
+uniform float uElev[${FAR_VIEWS.elevations.length}];
+const vec2 GRID = vec2(${FAR_VIEWS.azimuths}.0, ${FAR_VIEWS.elevations.length}.0);
+varying vec3 vQ;
+varying vec3 vVl;
+varying vec4 vCells0;
+varying vec4 vCells1;
 varying vec4 vW;
 varying float vVitality;
+vec3 viewDir(vec2 cell) {
+  float az = 6.28318530718 * cell.x / GRID.x;
+  float el = radians(uElev[int(cell.y)]);
+  return vec3(cos(el) * cos(az), sin(el), cos(el) * sin(az));
+}
+// Where a point p, from the plant's center, falls in a view's frame of the atlas.
+vec2 frameUv(vec2 cell, vec3 dir, vec3 p) {
+  vec3 right = normalize(cross(vec3(0.0, 1.0, 0.0), dir));
+  vec3 up = cross(dir, right);
+  vec2 f = vec2(dot(p, right), dot(p, up)) / uRadius * 0.5 + 0.5;
+  return (cell + clamp(f, 0.0, 1.0)) / GRID;
+}
+// Where the eye's ray through this point of the card meets the plant, as one
+// view saw it: the view's depth there moves the point along the ray, so the
+// four views line up on the same surface instead of ghosting thin strands.
+vec2 seen(vec2 cell) {
+  vec3 dir = viewDir(cell);
+  vec2 uv = frameUv(cell, dir, vQ);
+  vec4 l0 = texture2D(uLayer0, uv, -0.5);
+  if (l0.a < 0.05) return uv;
+  float d = (texture2D(uLayer2, uv, -0.5).a / l0.a - 0.5) * 2.0 * uRadius;
+  float t = (dot(vQ, dir) - d) / max(dot(vVl, dir), 0.3);
+  return frameUv(cell, dir, vQ - vVl * t);
+}
+vec2 gUv0;
+vec2 gUv1;
+vec2 gUv2;
+vec2 gUv3;
+void views() {
+  gUv0 = seen(vCells0.xy);
+  gUv1 = seen(vCells0.zw);
+  gUv2 = seen(vCells1.xy);
+  gUv3 = seen(vCells1.zw);
+}
 // Half a level finer than the mipmaps pick: blending four views already softens the card.
 vec4 tap(sampler2D t) {
-  return texture2D(t, vUv0, -0.5) * vW.x + texture2D(t, vUv1, -0.5) * vW.y + texture2D(t, vUv2, -0.5) * vW.z + texture2D(t, vUv3, -0.5) * vW.w;
+  return texture2D(t, gUv0, -0.5) * vW.x + texture2D(t, gUv1, -0.5) * vW.y + texture2D(t, gUv2, -0.5) * vW.z + texture2D(t, gUv3, -0.5) * vW.w;
 }
-uniform vec2 uCoverEdge;
 // The share of the texel covered at vitality v, between the baked slices at
 // 1, 0.6, 0.3 and 0.1, its edge sharpened: blending four views and their
 // mipmaps softens it, and a soft edge would dither into a halo.
@@ -413,7 +437,6 @@ precision highp float;
 uniform mat4 projectionMatrix;
 ${LIGHT_GLSL}
 ${CARD_TAP_GLSL}
-uniform float uRadius;
 uniform float uShadowLift;
 varying vec3 vWorld;
 varying vec3 vToEye;
@@ -421,6 +444,7 @@ varying float vYaw;
 varying float vFade;
 varying float vScale;
 void main() {
+  views();
   vec4 l0 = tap(uLayer0);
   vec4 l3 = tap(uLayer3);
   float healthy = max(l0.a, 1e-4);
@@ -465,11 +489,11 @@ const CARD_DEPTH_FRAG = /* glsl */ `
 precision highp float;
 uniform mat4 projectionMatrix;
 ${CARD_TAP_GLSL}
-uniform float uRadius;
 varying vec3 vWorld;
 varying vec3 vToEye;
 varying float vScale;
 void main() {
+  views();
   vec4 l0 = tap(uLayer0);
   if (coverAt(l0, tap(uLayer3), vVitality) < 0.5) discard;
   vec4 l2 = tap(uLayer2);
