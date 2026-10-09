@@ -433,17 +433,16 @@ details.json pre { font: 11px/1.45 ui-monospace, "SF Mono", Menlo, monospace; ba
 .field-map {
   --side: min(94vw, 90vh, 980px);
   position: absolute; left: calc(50% - var(--side) / 2); top: calc(50% - var(--side) / 2); width: var(--side); height: var(--side);
-  overflow: hidden; pointer-events: none; --fold: 34px; transform-origin: 50% 50%;
+  overflow: hidden; pointer-events: none; transform-origin: 50% 50%;
   opacity: 0; transition: opacity calc(var(--unfold, 360ms) * 0.8) ease-in calc(var(--unfold, 360ms) * 0.2), transform var(--unfold, 360ms) cubic-bezier(0.5, 0, 0.75, 0.4);
 }
 .field-map.open { opacity: 1; pointer-events: auto; transition: opacity calc(var(--unfold, 640ms) * 0.3) ease-out, transform var(--unfold, 640ms) cubic-bezier(0.2, 0.7, 0.2, 1); }
 /* The land on the sheet draws back from the minimap's close view to the whole as the sheet unfolds. */
 .field-map-view { transition: transform var(--unfold, 640ms) cubic-bezier(0.25, 0.7, 0.2, 1); }
-/* The sheet's edge is torn, deckled as handmade paper is, with its top right corner turned down; the canvas and its
-   creases share the one torn shape, and its shadow falls from that shape. */
+/* The sheet's edge is torn, deckled as handmade paper is; the canvas and its creases share the one torn shape, and
+   its shadow falls from that shape. A tap off the sheet, Esc or M folds it. */
 .field-map-view, .field-map::after {
-  -webkit-mask-image: var(--deckle), linear-gradient(225deg, transparent calc(var(--fold) * 0.7071), #000 calc(var(--fold) * 0.7071 + 0.5px)); mask-image: var(--deckle), linear-gradient(225deg, transparent calc(var(--fold) * 0.7071), #000 calc(var(--fold) * 0.7071 + 0.5px));
-  -webkit-mask-size: 100% 100%; mask-size: 100% 100%; -webkit-mask-composite: source-in; mask-composite: intersect;
+  -webkit-mask-image: var(--deckle); mask-image: var(--deckle); -webkit-mask-size: 100% 100%; mask-size: 100% 100%;
 }
 /* The sheet's folds stay faintly creased, and after dark the lantern's pool lights it from low on the right while its edges fall into blue. */
 .field-map::after {
@@ -469,13 +468,6 @@ details.json pre { font: 11px/1.45 ui-monospace, "SF Mono", Menlo, monospace; ba
   position: absolute; left: 11px; top: -19px; font-size: 13px; font-style: italic; font-weight: 600; white-space: nowrap; color: #3b2c1c;
   text-shadow: 0 0 3px rgba(246, 238, 219, 0.95), 0 0 7px rgba(246, 238, 219, 0.8);
 }
-/* The turned-down corner: the paper's back lying over the sheet, a tap folds the map. */
-.map-fold {
-  position: absolute; top: 0; right: 0; width: var(--fold); height: var(--fold); padding: 0; border: 0; cursor: pointer;
-  background: linear-gradient(225deg, transparent 50%, #d9c9a2 50%, #eadfc2 78%, #e2d3ae);
-  filter: drop-shadow(-2px 3px 3px rgba(60, 44, 20, 0.3));
-}
-@media (hover: hover) { .map-fold:hover { background: linear-gradient(225deg, transparent 50%, #cfbd92 50%, #e4d6b4 78%, #dccba2); } }
 
 @media (max-width: 699px) {
   .field-map { left: 8px; top: 8px; width: calc(100% - 16px); height: calc(100% - 16px); }

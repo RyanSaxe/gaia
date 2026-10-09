@@ -41,3 +41,5 @@ Pair session `gaia-v3` (`f8d282bc-7712-4894-9255-dcf4699f92cb`), round 16
 (the wayfinding page), building on round 15's map, paper, vitality and
 drawing boards. It supersedes the slip, the line and the rim of
 [decision 32](32-a-slip-ask-and-a-rim.md).
+
+Refined by [42](42-the-field-map-shows-health.md): color on the field map is health alone, with no legend, title, region names, fringe or turned-down corner.

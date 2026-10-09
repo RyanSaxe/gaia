@@ -23,7 +23,9 @@ import { type Place, type PlaceArea, type WorldPlaces, heightAt, outlinesOf, wat
 import { areaVitality, groundVitality } from "@gaia/world";
 import { onTap } from "../lab.ts";
 import type { StoodWorld } from "../terrain/lab.ts";
-import { DECKLE_MASK, LAND_HEALTH, MAP_STYLE, type MapStyle, TRAVELLER_SVG, dryness, groundWash, landHealth, wilted } from "./map-styles.ts";
+import { DECKLE_MASK, MAP_STYLE, type MapStyle, TRAVELLER_SVG, dryness, healthColor, healthField, landWash } from "./map-styles.ts";
+import { nameTails } from "./map-names.ts";
+import { drawBuilding, drawLandmark } from "./marks.ts";
 
 export interface FieldMap {
   /** The world changed: the paper is painted again while the page is idle. */
@@ -84,7 +86,8 @@ const NUDGES: readonly (readonly [number, number])[] = [[0, 0], [0, 26], [0, -26
 /** The paper is painted in steps of a millisecond or two, as many as fit in the page's idle time with this much to spare, ms. */
 const SPARE_MS = 2;
 const SERIF = `"Iowan Old Style", Georgia, "Times New Roman", serif`;
-const INK = "#4a3c2c";
+/** The folders lettered above a name that repeats. */
+const PARENT_FONT = `italic 600 10px ${SERIF}`;
 
 const hash = (x: number, z: number): number => {
   const s = Math.sin(x * 127.1 + z * 311.7) * 43758.5453;
@@ -206,6 +209,83 @@ function isoline(h: Float32Array, n: number, level: number, emit: (x0: number, y
   }
 }
 
+/** Joins line segments (x0, y0, x1, y1 each) that share ends into polylines, x and y pairs. */
+function chained(segments: readonly number[]): number[][] {
+  // Ends meet exactly where two segments share a cell's edge; a millimeter's grid makes them one key.
+  const key = (x: number, y: number): number => (Math.round(x * 1000) + 2 ** 24) * 2 ** 26 + (Math.round(y * 1000) + 2 ** 24);
+  const at = new Map<number, number[]>();
+  const count = segments.length / 4;
+  for (let k = 0; k < count; k++) {
+    for (const end of [0, 2]) {
+      const id = key(segments[k * 4 + end] as number, segments[k * 4 + end + 1] as number);
+      const list = at.get(id);
+      if (list === undefined) at.set(id, [k]);
+      else list.push(k);
+    }
+  }
+  const used = new Uint8Array(count);
+  const lines: number[][] = [];
+  // From a segment, walks on through the segment sharing its far end until none is left.
+  const walk = (k: number, fromEnd: number, line: number[]): void => {
+    let seg = k;
+    let end = fromEnd;
+    for (;;) {
+      const x = segments[seg * 4 + end] as number;
+      const y = segments[seg * 4 + end + 1] as number;
+      const next = (at.get(key(x, y)) ?? []).find((o) => used[o] === 0);
+      if (next === undefined) return;
+      used[next] = 1;
+      const near = key(segments[next * 4] as number, segments[next * 4 + 1] as number) === key(x, y) ? 0 : 2;
+      const far = 2 - near;
+      line.push(segments[next * 4 + far] as number, segments[next * 4 + far + 1] as number);
+      seg = next;
+      end = far;
+    }
+  };
+  for (let k = 0; k < count; k++) {
+    if (used[k] === 1) continue;
+    used[k] = 1;
+    const forward = [segments[k * 4] as number, segments[k * 4 + 1] as number, segments[k * 4 + 2] as number, segments[k * 4 + 3] as number];
+    walk(k, 2, forward);
+    const back: number[] = [];
+    walk(k, 0, back);
+    const head: number[] = [];
+    for (let i = back.length - 2; i >= 0; i -= 2) head.push(back[i] as number, back[i + 1] as number);
+    lines.push([...head, ...forward]);
+  }
+  return lines;
+}
+
+/** A polyline (x and y pairs) with the points that stray less than `tolerance` from the line through their neighbors dropped. */
+function simplified(line: readonly number[], tolerance: number): number[] {
+  const n = line.length / 2;
+  if (n < 3) return [...line];
+  const keep = new Uint8Array(n);
+  keep[0] = keep[n - 1] = 1;
+  const stack: [number, number][] = [[0, n - 1]];
+  while (stack.length > 0) {
+    const [a, b] = stack.pop() as [number, number];
+    const ax = line[a * 2] as number;
+    const ay = line[a * 2 + 1] as number;
+    const dx = (line[b * 2] as number) - ax;
+    const dy = (line[b * 2 + 1] as number) - ay;
+    const length = Math.hypot(dx, dy) || 1;
+    let worst = -1;
+    let at = -1;
+    for (let i = a + 1; i < b; i++) {
+      const d = Math.abs(((line[i * 2] as number) - ax) * dy - ((line[i * 2 + 1] as number) - ay) * dx) / length;
+      if (d > worst) [worst, at] = [d, i];
+    }
+    if (worst > tolerance) {
+      keep[at] = 1;
+      stack.push([a, at], [at, b]);
+    }
+  }
+  const out: number[] = [];
+  for (let i = 0; i < n; i++) if (keep[i] === 1) out.push(line[i * 2] as number, line[i * 2 + 1] as number);
+  return out;
+}
+
 interface AreaLabel {
   readonly area: PlaceArea;
   readonly index: number;
@@ -217,25 +297,25 @@ interface AreaLabel {
   readonly cells: number;
   /** The way the area runs, radians from east toward south: its name is lettered along it. */
   readonly angle: number;
+  /** The folders lettered above its name, when another area shares the name (`nameTails`); otherwise empty. */
+  readonly above: string;
 }
 
 export interface Paper {
   readonly canvas: HTMLCanvasElement;
-  /** The map's linework, its contours and its areas' hedgerows, on their own sheet laid over the paper in ink. */
-  readonly lines: HTMLCanvasElement;
   readonly reach: number;
   readonly style: MapStyle;
   /** Where to write each area's name: its heart, how much land it holds, and the way it runs. */
   readonly areaLabels: readonly AreaLabel[];
-  /** Each top-level directory's whole region: its name, its middle, the way it runs and how far, meters. */
-  readonly regionLabels: readonly { readonly name: string; readonly x: number; readonly z: number; readonly angle: number; readonly length: number }[];
   /** Which area's own ground holds a point, by its index in `areaLabels`, or -1: where a nudged name may go. */
   readonly areaAt: (x: number, z: number) => number;
   /** Every directory's vitality, its subdirectories' included, by its path; "" is the whole world's. */
   readonly vitality: ReadonlyMap<string, number>;
-  /** The heights the contours were drawn from: `n` samples a side, `cell` meters apart, from `origin` meters; the map redraws them in ink close in. */
-  readonly relief: { readonly heights: Float32Array; readonly n: number; readonly cell: number; readonly origin: number; readonly lo: number; readonly hi: number };
-  /** Every area's outline in meters, by depth, for borders inked crisp close in. */
+  /**
+   * The map's linework in meters, drawn at the view's size at every zoom so it never changes its drawing as the
+   * map comes close: the contours from the real heights (every fifth heavier) and every area's border by depth.
+   */
+  readonly contours: readonly { readonly path: Path2D; readonly index: boolean }[];
   readonly borders: readonly { readonly path: Path2D; readonly depth: number }[];
   /** Each file's patch: its outline in meters, its heart, how far it reaches and its name, drawn once the map comes close. */
   readonly patches: readonly { readonly path: Path2D; readonly x: number; readonly z: number; readonly radius: number; readonly name: string; readonly area: string }[];
@@ -325,14 +405,8 @@ function wetDistance(wet: Uint8Array, n: number): Float32Array {
   return d;
 }
 
-/**
- * Washes one area onto a sheet: its outline filled in its hue, with pigment
- * pooling darker toward its rim. Callable area by area, so the land can be
- * painted in as it is shown.
- */
-export function washArea(g: CanvasRenderingContext2D, path: Path2D, rgb: readonly [number, number, number], pool: MapStyle["pool"]): void {
-  g.fillStyle = `rgb(${rgb.join(",")})`;
-  g.fill(path, "evenodd");
+/** Pigment pooling darker toward an area's rim, inside its outline, as a wash dries. */
+function poolRim(g: CanvasRenderingContext2D, path: Path2D, rgb: readonly [number, number, number], pool: MapStyle["pool"]): void {
   g.save();
   g.clip(path, "evenodd");
   const rim = rgb.map((c) => Math.round(c * 0.6)).join(",");
@@ -458,8 +532,6 @@ function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place
   const areas: PlaceArea[] = [];
   const index = new Map<string, number>();
   const sums: { x: number; z: number; xx: number; zz: number; xz: number; cells: number; i0: number; i1: number; j0: number; j1: number }[] = [];
-  /** Each top-level directory's whole region, its subdirectories' ground included: where its name is lettered large. */
-  const regions = new Map<string, { x: number; z: number; xx: number; zz: number; xz: number; cells: number }>();
   for (let j = 0; j < n; j++) {
     for (let i = 0; i < n; i++) {
       const x = -reach + (i + 0.5) * AREA_CELL;
@@ -485,17 +557,6 @@ function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place
       s.i1 = Math.max(s.i1, i);
       s.j0 = Math.min(s.j0, j);
       s.j1 = Math.max(s.j1, j);
-      if (area.depth > 0) {
-        const top = area.path.split("/")[0] ?? "";
-        const r = regions.get(top) ?? { x: 0, z: 0, xx: 0, zz: 0, xz: 0, cells: 0 };
-        r.x += x;
-        r.z += z;
-        r.xx += x * x;
-        r.zz += z * z;
-        r.xz += x * z;
-        r.cells += 1;
-        regions.set(top, r);
-      }
     }
     if (j % 8 === 7) yield;
   }
@@ -531,9 +592,10 @@ function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place
   }
   fctx.putImageData(fimg, 0, 0);
 
-  // Washes: each area in the color of its land's ground, a little lighter or darker by its path, painted from the
-  // outlines the layout traces (`outlinesOf`), shallowest first so each nested area washes over its parent's,
-  // over the wild's own wash.
+  // Washes: color on the map is health. Every area starts from the same healthy land, a little lighter or darker by
+  // its path, and each file's health spreads over the ground around it (`healthField`), across area borders too, so
+  // the land is one gradient from green through gold and russet to ash. Areas are drawn from the outlines the layout
+  // traces (`outlinesOf`); their pigment pools at their rims.
   const traced = outlinesOf(places);
   yield;
   // The outlines follow the lattice they were traced on in steps of a few meters; a pen draws easier lines.
@@ -546,11 +608,11 @@ function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place
   const vitality = areaVitality(parts);
   const grounds = groundVitality(parts);
   const ownVitality = (path: string): number => grounds.get(path) ?? 1;
-  // An area whose ground is unknown stays bare paper.
-  const washOf = (path: string): readonly [number, number, number] => {
-    const ground = stood.grounds.get(path);
-    return ground === undefined ? mixRgb(style.paper, style.paper, 0) : groundWash(style, ground, path, ownVitality(path));
-  };
+  const washOf = (path: string): readonly [number, number, number] => healthColor(style, landWash(style, path), ownVitality(path));
+  const healthAt = healthField(
+    places.patches.map((q) => ({ x: q.x, z: q.z, reach: q.radius, size: q.radius * q.radius, vitality: q.vitality })),
+    style.spread,
+  );
   // Each ring is drawn as a curve through the middles of its edges, bending at its corners, so the
   // traced lattice's steps read as a pen's easy line; a border's pen also wobbles a little.
   const trace = (rings: readonly (readonly number[])[], wobble = 0, seed = 0): Path2D => {
@@ -581,8 +643,8 @@ function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place
   wash.width = wash.height = PAPER;
   const g = wash.getContext("2d") as CanvasRenderingContext2D;
   g.lineJoin = "round";
-  // Under the washes, every cell of the sheet in its nearest area's wash, laid soft: past the land's rounded rim
-  // the painted country goes on to the paper's edge in the colors of the land beside it.
+  // Every cell of the sheet in its health over its nearest area's land, laid soft: past the land's rounded rim the
+  // painted country goes on to the paper's edge as the land beside it.
   const nearest = Int16Array.from(at);
   const queue: number[] = [];
   for (let c = 0; c < n * n; c++) if (nearest[c] !== -1) queue.push(c);
@@ -600,8 +662,16 @@ function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place
   under.width = under.height = n;
   const uctx = under.getContext("2d") as CanvasRenderingContext2D;
   const uimg = uctx.createImageData(n, n);
-  const tones = areas.map((a) => washOf(a.path));
-  for (let c = 0; c < n * n; c++) uimg.data.set([...(tones[nearest[c] as number] ?? mixRgb(style.wild, style.wild, 0)), 255], c * 4);
+  const lands = areas.map((a) => landWash(style, a.path));
+  for (let j = 0; j < n; j++) {
+    for (let i = 0; i < n; i++) {
+      const c = j * n + i;
+      const area = areas[nearest[c] as number];
+      const v = healthAt(-reach + (i + 0.5) * AREA_CELL, -reach + (j + 0.5) * AREA_CELL, ownVitality(area?.path ?? ""));
+      uimg.data.set([...healthColor(style, lands[nearest[c] as number] ?? mixRgb(style.wild, style.wild, 0), v), 255], c * 4);
+    }
+    if (j % 8 === 7) yield;
+  }
   uctx.putImageData(uimg, 0, 0);
   g.imageSmoothingEnabled = true;
   g.imageSmoothingQuality = "high";
@@ -610,14 +680,13 @@ function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place
   const byDepth = [...outlines.areas].sort((a, b) => a.depth - b.depth);
   const ground = (path: string): boolean => stood.grounds.has(path);
   const paths = new Map<string, Path2D>();
-  // The washes stop a little inside the land's rim, so no wash pools along it: the soft country under them goes on
-  // across the rim to the paper's edge.
+  // The pooling stops a little inside the land's rim, so no rim is drawn along it.
   g.save();
   g.clip(rimPath(half - 8, px));
   for (const [k, o] of byDepth.entries()) {
     const path = trace(o.rings);
     paths.set(o.path, path);
-    washArea(g, path, washOf(o.path), style.pool);
+    poolRim(g, path, washOf(o.path), style.pool);
     // Dry land lets the paper through in dry-brush streaks; an area washed over its parent's covers them there.
     const dry = ground(o.path) ? dryness(ownVitality(o.path)) : 0;
     const own = index.get(o.path) ?? -1;
@@ -734,56 +803,57 @@ function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place
   ctx.globalCompositeOperation = "source-over";
   yield;
 
-  // The map's linework (its contours and its hedgerows) lies on its own sheet over the paper, laid on in ink as the
-  // map is drawn, and gives way to the same lines inked crisp as the map comes close.
-  const lines = document.createElement("canvas");
-  lines.width = lines.height = PAPER;
-  const line = lines.getContext("2d") as CanvasRenderingContext2D;
-  // Contours: sepia lines from the real heights, every few, heavier; the paint gives way at the sheet's edge, and so do they.
+  // Contours: lines from the real heights in meters, every few heavier, drawn at the view's size. They stop at the
+  // land's rim: past it the ground is eased toward the rim's height, and its lines would only ring the land.
   const c = style.contour;
   let lo = Infinity;
   let hi = -Infinity;
   for (const v of heights) [lo, hi] = [Math.min(lo, v), Math.max(hi, v)];
-  const hpx = (gr: number): number => px(-reach + (gr + 0.5) * HILL_CELL);
-  line.lineCap = line.lineJoin = "round";
-  line.strokeStyle = c.ink;
+  const hm = (gr: number): number => -reach + (gr + 0.5) * HILL_CELL;
+  const contours: Paper["contours"][number][] = [];
   for (let step = Math.ceil(lo / c.interval); step * c.interval <= hi; step++) {
-    const index = step % c.index === 0;
-    const contour = new Path2D();
+    const segments: number[] = [];
     isoline(heights, hn, step * c.interval, (x0, y0, x1, y1) => {
-      const fadeHere = paintAt(style, (x0 + 0.5) / hn, (y0 + 0.5) / hn);
-      if (fadeHere < 0.5) return;
-      contour.moveTo(hpx(x0), hpx(y0));
-      contour.lineTo(hpx(x1), hpx(y1));
+      const mx = hm((x0 + x1) / 2);
+      const mz = hm((y0 + y1) / 2);
+      if (mx ** 4 + mz ** 4 > (half - RIM.held) ** 4) return;
+      segments.push(hm(x0), hm(y0), hm(x1), hm(y1));
     });
-    line.globalAlpha = index ? c.indexAlpha : c.alpha;
-    line.lineWidth = index ? c.indexWidth : c.width;
-    line.stroke(contour);
+    // Joined into lines and eased of points that add nothing, so a view strokes a few long lines, not thousands of
+    // cell-sized pieces.
+    const contour = new Path2D();
+    for (const line of chained(segments)) {
+      const pts = simplified(line, 0.6);
+      contour.moveTo(pts[0] as number, pts[1] as number);
+      for (let k = 2; k < pts.length; k += 2) contour.lineTo(pts[k] as number, pts[k + 1] as number);
+    }
+    contours.push({ path: contour, index: step % c.index === 0 });
     yield;
   }
-  line.globalAlpha = 1;
   yield;
 
-  // Each file's patch: its own traced shape, faintly washed in its health's color.
-  const health = new Map(places.patches.map((p) => [p.path, p.vitality]));
+  // Each file's patch: its own traced shape, drawn in fine dotted ink once the map comes close.
   const patchOf = new Map(places.patches.map((p) => [p.path, p]));
   const patches: Paper["patches"][number][] = [];
   for (const [k, o] of traced.patches.entries()) {
-    const path = trace(o.rings.map(easeRing));
     const p = patchOf.get(o.path);
     if (p !== undefined) patches.push({ path: meterPath(o.rings.map(easeRing)), x: p.x, z: p.z, radius: p.radius, name: p.name, area: p.area });
-    ctx.fillStyle = `rgba(${mixRgb("#a8956a", "#6f9450", Math.max(0, Math.min(1, health.get(o.path) ?? 1))).join(",")},${style.patchFill})`;
-    ctx.fill(path, "evenodd");
     if (k % 60 === 59) yield;
   }
   yield;
 
-  // Water: the ponds sampled on a fine grid; streams too narrow for the samples follow their stations.
+  // Water: the ponds sampled on a fine grid. Streams are drawn as lines at the view's size (`drawLand`), so a river
+  // looks the same on the whole sheet and close in; only the ponds lie on the paper.
   const wn = Math.ceil((size + 40) / WATER_CELL);
   const w0 = -(size + 40) / 2;
   const wet = new Uint8Array(wn * wn);
   for (let j = 0; j < wn; j++) {
-    for (let i = 0; i < wn; i++) wet[j * wn + i] = waterDepthAt(t, w0 + (i + 0.5) * WATER_CELL, w0 + (j + 0.5) * WATER_CELL) > 0.04 ? 1 : 0;
+    for (let i = 0; i < wn; i++) {
+      const x = w0 + (i + 0.5) * WATER_CELL;
+      const z = w0 + (j + 0.5) * WATER_CELL;
+      const pond = t.ponds.some((q) => Math.hypot(q.x - x, q.z - z) < q.reach * 1.35);
+      wet[j * wn + i] = pond && waterDepthAt(t, x, z) > 0.04 ? 1 : 0;
+    }
     if (j % 20 === 19) yield;
   }
   const depth = wetDistance(wet, wn);
@@ -791,18 +861,6 @@ function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place
   // Deep water is darker toward its middle.
   const shallowRgb = [150, 203, 204];
   const deepRgb = [58, 122, 152];
-  ctx.lineCap = ctx.lineJoin = "round";
-  for (const stream of t.streams) {
-    const width = 2 * Math.max(...stream.stations.map((s) => s.halfWidth)) * scale;
-    const line = new Path2D();
-    stream.stations.forEach((s, k) => (k === 0 ? line.moveTo(px(s.x), px(s.z)) : line.lineTo(px(s.x), px(s.z))));
-    ctx.strokeStyle = "rgba(40,84,104,0.55)";
-    ctx.lineWidth = Math.max(6.5, width + 3.5);
-    ctx.stroke(line);
-    ctx.strokeStyle = `rgb(${shallowRgb.join(",")})`;
-    ctx.lineWidth = Math.max(3.5, width);
-    ctx.stroke(line);
-  }
   const water = document.createElement("canvas");
   water.width = water.height = wn;
   const wctx = water.getContext("2d") as CanvasRenderingContext2D;
@@ -852,58 +910,8 @@ function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place
   }
   yield;
 
-  // Area borders: soft painted hedgerows; each is drawn from both sides, so a light hand keeps the two one line.
-  // They stop short of the land's edge, where the land gives way to the wild by its colors alone. They lie on
-  // the linework's sheet.
-  line.save();
-  line.clip(rimPath(half - 3, px));
-  line.lineJoin = "round";
-  for (const [k, o] of outlines.areas.entries()) {
-    if (o.depth === 0) continue;
-    const path = trace(o.rings, 1.6, 1);
-    line.filter = "blur(1.5px)";
-    line.strokeStyle = "rgba(52,80,40,0.26)";
-    line.lineWidth = o.depth === 1 ? 7 : 5;
-    line.stroke(path);
-    line.filter = "none";
-    line.strokeStyle = "rgba(46,70,36,0.3)";
-    line.lineWidth = 1.6;
-    line.stroke(path);
-    if (k % 8 === 7) yield;
-  }
-  line.restore();
-  yield;
 
-  // A ragged fringe of wood along the paper's edges, thinning into clearings and gone where the paint gives way.
-  const woods = woodsOf(style, reach, scale);
-  yield;
-  drawWoods(ctx, woods);
-  yield;
-
-  // The map's title, lettered in the wild at the sheet's top left: "a field map of" and the repository's name.
-  const name = places.name.trim().toLowerCase() === "gaia" ? "its own code" : places.name;
-  const title = Math.round(PAPER / 36);
-  ctx.textAlign = "left";
-  ctx.textBaseline = "alphabetic";
-  ctx.shadowColor = style.paper;
-  ctx.shadowBlur = 14;
-  ctx.fillStyle = style.ink;
-  ctx.globalAlpha = 0.8;
-  ctx.font = `600 ${Math.round(title * 0.42)}px ${SERIF}`;
-  ctx.letterSpacing = `${(title * 0.15).toFixed(1)}px`;
-  for (let pass = 0; pass < 2; pass++) ctx.fillText("A FIELD MAP OF", PAPER * 0.032, PAPER * 0.045);
-  ctx.letterSpacing = "0px";
-  ctx.globalAlpha = 0.95;
-  ctx.font = `italic 600 ${title}px ${SERIF}`;
-  for (let pass = 0; pass < 2; pass++) ctx.fillText(name, PAPER * 0.032, PAPER * 0.045 + title * 1.05);
-  // How the whole land fares, in the legend's words, under its name.
-  ctx.globalAlpha = 0.85;
-  ctx.font = `italic ${Math.round(title * 0.62)}px ${SERIF}`;
-  for (let pass = 0; pass < 2; pass++) ctx.fillText(`the land ${landHealth(vitality.get("") ?? 1)}`, PAPER * 0.034, PAPER * 0.045 + title * 1.85);
-  ctx.shadowBlur = 0;
-  ctx.globalAlpha = 1;
-  yield;
-
+  const tails = nameTails(areas.filter((a) => a.depth > 0).map((a) => a.path));
   const areaLabels = areas.map((area, k): AreaLabel => {
     const s = sums[k] as (typeof sums)[number];
     const mx = s.x / s.cells;
@@ -927,19 +935,15 @@ function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place
       }
     }
     const cell = (i: number): number => -reach + i * AREA_CELL;
-    return { area, index: k, bounds: [cell(s.i0), cell(s.j0), cell(s.i1 + 1), cell(s.j1 + 1)], x, z, cells: s.cells, angle: axisOf(s).angle };
+    return { area, index: k, bounds: [cell(s.i0), cell(s.j0), cell(s.i1 + 1), cell(s.j1 + 1)], x, z, cells: s.cells, angle: axisOf(s).angle, above: tails.get(area.path) ?? "" };
   });
   const areaAt = (x: number, z: number): number => {
     const i = Math.floor((x + reach) / AREA_CELL);
     const j = Math.floor((z + reach) / AREA_CELL);
     return i < 0 || j < 0 || i >= n || j >= n ? -1 : (at[j * n + i] as number);
   };
-  const regionLabels = [...regions]
-    .filter(([, r]) => r.cells >= 40)
-    .map(([top, r]) => ({ name: top.toUpperCase(), x: r.x / r.cells, z: r.z / r.cells, ...axisOf(r) }));
-  const relief = { heights, n: hn, cell: HILL_CELL, origin: -reach + HILL_CELL / 2, lo, hi };
   const borders = outlines.areas.filter((o) => o.depth > 0).map((o) => ({ path: meterPath(o.rings), depth: o.depth }));
-  return { canvas, lines, reach, style, areaLabels, regionLabels, areaAt, vitality, patches, relief, borders };
+  return { canvas, reach, style, areaLabels, areaAt, vitality, patches, contours, borders };
 }
 
 /** The land's rounded square `r` meters from its middle, through `px` (meters to the sheet's pixels): what keeps a pen inside the land. */
@@ -1002,209 +1006,6 @@ function dryBrush(g: CanvasRenderingContext2D, box: readonly [number, number, nu
   g.restore();
 }
 
-/** A soft shadow on the paper under a drawn thing, a little to the southeast. */
-function groundShadow(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number): void {
-  ctx.beginPath();
-  ctx.ellipse(x + w * 0.18, y, w, h, 0, 0, Math.PI * 2);
-  ctx.fillStyle = "rgba(74,60,44,0.16)";
-  ctx.fill();
-}
-
-/** Washes a closed path in a color and inks its edge. */
-function washAndInk(ctx: CanvasRenderingContext2D, fill: string, width = 1.1): void {
-  ctx.fillStyle = fill;
-  ctx.fill();
-  ctx.lineWidth = width;
-  ctx.strokeStyle = INK;
-  ctx.stroke();
-}
-
-/**
- * A building drawn as a little vignette, the way a hand-drawn map shows a
- * village: walls washed pale, a roof in the building's own material, a door
- * and a window, and a chimney's curl of smoke. A mill has its wheel, a
- * tower stands tall under a pointed roof.
- */
-function drawBuilding(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, kind: string, vitality = 1): void {
-  const k = kind.toLowerCase();
-  // A failing building's roof dries and holes, and its chimney stops smoking, as the building itself does.
-  const dry = dryness(vitality);
-  if (k.includes("tower")) {
-    groundShadow(ctx, x, y + 5 * s, 6.5 * s, 2.2 * s);
-    ctx.beginPath();
-    ctx.rect(x - 3.6 * s, y - 10 * s, 7.2 * s, 15 * s);
-    washAndInk(ctx, "#ece2cb");
-    ctx.beginPath();
-    if (vitality < 0.35) {
-      // Its top has fallen: a jagged stump of wall.
-      ctx.moveTo(x - 3.6 * s, y - 10 * s);
-      ctx.lineTo(x - 1.6 * s, y - 12.5 * s);
-      ctx.lineTo(x + 0.4 * s, y - 10.8 * s);
-      ctx.lineTo(x + 2 * s, y - 12 * s);
-      ctx.lineTo(x + 3.6 * s, y - 10 * s);
-      ctx.closePath();
-      washAndInk(ctx, "#ddd3bc");
-    } else {
-      ctx.moveTo(x - 5 * s, y - 10 * s);
-      ctx.lineTo(x, y - 17.5 * s);
-      ctx.lineTo(x + 5 * s, y - 10 * s);
-      ctx.closePath();
-      washAndInk(ctx, mixHex("#6f7f8e", "#a49a86", dry));
-    }
-    ctx.fillStyle = INK;
-    ctx.fillRect(x - 0.8 * s, y - 7.5 * s, 1.6 * s, 2.4 * s);
-    ctx.fillRect(x - 0.8 * s, y - 3 * s, 1.6 * s, 2.4 * s);
-    ctx.fillStyle = "#9a5a3c";
-    ctx.fillRect(x - 1.4 * s, y + 1.2 * s, 2.8 * s, 3.8 * s);
-    return;
-  }
-  const roof = mixHex(k.includes("thatch") ? "#c9a25a" : k.includes("croft") ? "#7d8790" : k.includes("storybook") ? "#b55d3f" : "#a96a45", "#b3a486", dry * 0.8);
-  const wall = k.includes("croft") ? "#d9d2c2" : "#f1e6cc";
-  const steep = k.includes("storybook") ? 1.35 : k.includes("croft") ? 0.75 : 1;
-  groundShadow(ctx, x, y + 5 * s, 8 * s, 2.4 * s);
-  if (k.includes("mill")) {
-    // The wheel stands at the gable end, half in its race.
-    ctx.beginPath();
-    ctx.arc(x + 7.2 * s, y + 1.4 * s, 4 * s, 0, Math.PI * 2);
-    washAndInk(ctx, "#b48a5a", 1);
-    ctx.beginPath();
-    for (let a = 0; a < 6; a++) {
-      const t = (a / 6) * Math.PI;
-      ctx.moveTo(x + 7.2 * s + Math.cos(t) * 4 * s, y + 1.4 * s + Math.sin(t) * 4 * s);
-      ctx.lineTo(x + 7.2 * s - Math.cos(t) * 4 * s, y + 1.4 * s - Math.sin(t) * 4 * s);
-    }
-    ctx.lineWidth = 0.7;
-    ctx.stroke();
-  }
-  // Walls.
-  ctx.beginPath();
-  ctx.rect(x - 5.6 * s, y - 1.5 * s, 11.2 * s, 6.5 * s);
-  washAndInk(ctx, wall);
-  // A chimney, then the roof over it, then its smoke.
-  ctx.beginPath();
-  ctx.rect(x + 2 * s, y - 8.5 * s, 2 * s, 4 * s);
-  washAndInk(ctx, "#a98a6a", 0.9);
-  ctx.beginPath();
-  ctx.moveTo(x - 7 * s, y - 1 * s);
-  ctx.lineTo(x - 3 * s, y - 1.5 * s - 5.5 * s * steep);
-  ctx.lineTo(x + 3 * s, y - 1.5 * s - 5.5 * s * steep);
-  ctx.lineTo(x + 7 * s, y - 1 * s);
-  ctx.closePath();
-  washAndInk(ctx, roof);
-  // Thatch and slate show their courses as fine strokes.
-  ctx.beginPath();
-  for (let r = 1; r <= 2; r++) {
-    const yy = y - 1.2 * s - r * 1.8 * s * steep;
-    const inset = (r * 1.8 * steep * 4) / (5.5 * steep);
-    ctx.moveTo(x - 7 * s + inset * s, yy);
-    ctx.lineTo(x + 7 * s - inset * s, yy);
-  }
-  ctx.lineWidth = 0.6;
-  ctx.strokeStyle = "rgba(74,60,44,0.55)";
-  ctx.stroke();
-  ctx.fillStyle = "#8c4f34";
-  ctx.fillRect(x - 1.3 * s, y + 1 * s, 2.6 * s, 4 * s);
-  ctx.fillStyle = "rgba(74,60,44,0.8)";
-  ctx.fillRect(x - 4.3 * s, y + 0.6 * s, 1.8 * s, 1.8 * s);
-  ctx.fillRect(x + 2.6 * s, y + 0.6 * s, 1.8 * s, 1.8 * s);
-  if (vitality < 0.4) {
-    // The roof rotted through at its weak corner: bare rafters over the dark inside.
-    ctx.beginPath();
-    ctx.moveTo(x - 6 * s, y - 1.4 * s);
-    ctx.lineTo(x - 3.4 * s, y - 4.6 * s * steep);
-    ctx.lineTo(x - 1.2 * s, y - 2.6 * s * steep);
-    ctx.lineTo(x - 2.2 * s, y - 1.3 * s);
-    ctx.closePath();
-    ctx.fillStyle = "rgba(58,44,30,0.75)";
-    ctx.fill();
-    ctx.beginPath();
-    for (const r of [-5, -3.6, -2.2]) {
-      ctx.moveTo(x + r * s, y - 1.3 * s);
-      ctx.lineTo(x + (r + 1.6) * s, y - 4.6 * s * steep);
-    }
-    ctx.lineWidth = 0.7;
-    ctx.strokeStyle = INK;
-    ctx.stroke();
-    return;
-  }
-  if (vitality < 0.5) return;
-  ctx.beginPath();
-  ctx.moveTo(x + 3 * s, y - 9 * s);
-  ctx.bezierCurveTo(x + 1.5 * s, y - 11 * s, x + 5 * s, y - 12 * s, x + 3.6 * s, y - 14 * s);
-  ctx.lineWidth = 0.8;
-  ctx.strokeStyle = "rgba(74,60,44,0.45)";
-  ctx.stroke();
-}
-
-/** A landmark as a vignette: a great tree's crown, a ring of standing stones, or a tower. */
-function drawLandmark(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, name: string, vitality = 1): void {
-  const k = name.toLowerCase();
-  const dry = dryness(vitality);
-  if (k.includes("ring")) {
-    groundShadow(ctx, x, y + 1 * s, 10 * s, 5 * s);
-    for (let i = 0; i < 9; i++) {
-      const a = (i / 9) * Math.PI * 2 + 0.3;
-      const sx = x + Math.cos(a) * 7.5 * s;
-      const sy = y + Math.sin(a) * 4.2 * s;
-      ctx.beginPath();
-      // A failing ring's stones lie fallen in the grass, one by one.
-      if (hash(i, 9.1) < dry * 0.8) ctx.roundRect(sx - 2.4 * s, sy - 1.4 * s, 4.8 * s, 2.2 * s, 1 * s);
-      else ctx.roundRect(sx - 1.3 * s, sy - 4.4 * s, 2.6 * s, 4.8 * s, [1.2 * s, 1.2 * s, 0.3 * s, 0.3 * s]);
-      washAndInk(ctx, i % 3 === 0 ? "#c9c3b2" : "#d8d2c1", 0.9);
-    }
-    return;
-  }
-  if (k.includes("willow")) {
-    groundShadow(ctx, x, y + 9 * s, 9 * s, 3 * s);
-    ctx.beginPath();
-    ctx.moveTo(x, y + 9 * s);
-    ctx.lineTo(x, y - 2 * s);
-    ctx.lineWidth = 2 * s;
-    ctx.strokeStyle = "#6e5236";
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.ellipse(x, y - 4 * s, 9 * s, 6.5 * s, 0, Math.PI, 0);
-    for (let i = 0; i <= 8; i++) {
-      const fx = x + 9 * s - (i / 8) * 18 * s;
-      ctx.lineTo(fx + (i % 2) * 0.8 * s, y + 4 * s + (i % 2 === 0 ? 1.5 : 0) * s);
-    }
-    ctx.closePath();
-    washAndInk(ctx, mixHex("#93ad6b", "#bcae84", dry));
-    ctx.beginPath();
-    for (let i = 1; i < 8; i++) {
-      const fx = x - 8 * s + i * 2.2 * s;
-      ctx.moveTo(fx, y - 5 * s + Math.abs(i - 4) * 0.8 * s);
-      ctx.quadraticCurveTo(fx + 0.6 * s, y, fx, y + 3.6 * s);
-    }
-    ctx.lineWidth = 0.6;
-    ctx.strokeStyle = "rgba(60,74,40,0.6)";
-    ctx.stroke();
-    return;
-  }
-  if (k.includes("oak") || k.includes("tree")) {
-    groundShadow(ctx, x, y + 9 * s, 9 * s, 3 * s);
-    ctx.beginPath();
-    ctx.moveTo(x - 1.2 * s, y + 9 * s);
-    ctx.lineTo(x - 0.8 * s, y + 1 * s);
-    ctx.lineTo(x + 0.8 * s, y + 1 * s);
-    ctx.lineTo(x + 1.2 * s, y + 9 * s);
-    ctx.closePath();
-    washAndInk(ctx, "#7a5a3c", 0.9);
-    ctx.beginPath();
-    for (const [dx, dy, r] of [[-5, -2, 4.6], [5, -2, 4.6], [0, -6, 5.4], [-2.6, 1.4, 4], [3, 1.6, 4]] as const) {
-      ctx.moveTo(x + (dx + r) * s, y + dy * s);
-      ctx.arc(x + dx * s, y + dy * s, r * s, 0, Math.PI * 2);
-    }
-    washAndInk(ctx, mixHex("#7fa159", "#b9a878", dry));
-    ctx.beginPath();
-    ctx.arc(x - 1.6 * s, y - 6.4 * s, 2.4 * s, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(214,232,160,0.55)";
-    ctx.fill();
-    return;
-  }
-  drawBuilding(ctx, x, y, s, "tower", vitality);
-}
-
 /** How long a tap on the map waits for a second press (a double tap zooms instead), ms. */
 const PICK_WAIT_MS = 240;
 /** The compass rose's middle, from the sheet's lower right corner, and how far round it a tap finds you, pixels. */
@@ -1234,8 +1035,13 @@ function whenIdle(step: (budget: number) => boolean): () => void {
   };
 }
 
-/** Trees' crowns are laid in this many tones, from dry to green, so all of a tone fills at once. */
+/** Trees' crowns are laid in this many tones of health, so all of a tone fills at once; a healthy crown's green. */
 const TREE_TONES = 8;
+const TREE_GREEN: readonly [number, number, number] = [95, 148, 71];
+/** The linework's widths in pixels at every zoom: a contour, an index contour, an area's border and its hedgerow. */
+const LINE = { contour: 0.85, index: 1.4, border: 1, hedge: 3.2 };
+/** How a mark grows with the land close in: its scale per pixel a meter, about a building's width over its drawing's. */
+const MARK_METERS = 0.67;
 
 /** A view of the land: its middle in meters, and pixels per meter. */
 export interface LandView {
@@ -1246,34 +1052,84 @@ export interface LandView {
 
 /**
  * The land as the sheet shows it in a view `w` by `h` pixels: the painted
- * paper, the dotted ways, every tree as a round crown browning with its
- * file's vitality, and buildings and landmarks as little vignettes worn by
- * theirs. `grow` sizes the marks, which never shrink below legible, and
- * `lines` is how strongly the painted linework (contours and hedgerows) shows. Both the
- * field map and the minimap draw the land this way. Returns the boxes the
- * vignettes take, which names keep off.
+ * paper; the contours, area borders and rivers, drawn at the view's size so
+ * they look the same at every zoom; the dotted ways; every tree as a round
+ * crown in its file's health; and buildings and landmarks as marks worn by
+ * theirs. `grow` sizes the trees and ways, which never shrink below legible;
+ * the marks grow with the land as the map comes close. Both the field map and
+ * the minimap draw the land this way. Returns the boxes the marks take, which
+ * names keep off.
  */
-export function drawLand(ctx: CanvasRenderingContext2D, w: number, h: number, paper: Paper, stood: StoodWorld, view: LandView, grow: number, lines = 1): [number, number, number, number][] {
+export function drawLand(ctx: CanvasRenderingContext2D, w: number, h: number, paper: Paper, stood: StoodWorld, view: LandView, grow: number): [number, number, number, number][] {
   const sx = (x: number): number => (x - view.x) * view.zoom + w / 2;
   const sy = (z: number): number => (z - view.z) * view.zoom + h / 2;
   const visible = (x: number, y: number, pad: number): boolean => x > -pad && x < w + pad && y > -pad && y < h + pad;
+  const style = paper.style;
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
   const side = paper.reach * 2 * view.zoom;
   ctx.drawImage(paper.canvas, sx(-paper.reach), sy(-paper.reach), side, side);
-  if (lines > 0.01) {
-    ctx.globalAlpha = lines;
-    ctx.globalCompositeOperation = "multiply";
-    ctx.drawImage(paper.lines, sx(-paper.reach), sy(-paper.reach), side, side);
-    ctx.globalCompositeOperation = "source-over";
-    ctx.globalAlpha = 1;
+
+  // The linework, in meters under the view's transform, its widths in pixels: contours in sepia, every fifth
+  // heavier, and each area's border as a soft hedgerow under a fine line, stopping short of the land's rim.
+  ctx.save();
+  ctx.translate(w / 2 - view.x * view.zoom, h / 2 - view.z * view.zoom);
+  ctx.scale(view.zoom, view.zoom);
+  ctx.lineCap = ctx.lineJoin = "round";
+  ctx.globalCompositeOperation = "multiply";
+  const c = style.contour;
+  ctx.strokeStyle = c.ink;
+  for (const contour of paper.contours) {
+    ctx.globalAlpha = contour.index ? c.indexAlpha : c.alpha;
+    ctx.lineWidth = (contour.index ? LINE.index : LINE.contour) / view.zoom;
+    ctx.stroke(contour.path);
+  }
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = "source-over";
+  ctx.save();
+  ctx.clip(rimPath(paper.reach - MARGIN - 3));
+  for (const b of paper.borders) {
+    ctx.strokeStyle = "rgba(52,80,40,0.16)";
+    ctx.lineWidth = (b.depth === 1 ? LINE.hedge * 1.35 : LINE.hedge) / view.zoom;
+    ctx.stroke(b.path);
+    ctx.strokeStyle = "rgba(46,66,34,0.44)";
+    ctx.lineWidth = (b.depth === 1 ? LINE.border * 1.3 : LINE.border) / view.zoom;
+    ctx.stroke(b.path);
+  }
+  ctx.restore();
+  ctx.restore();
+
+  // Rivers: a bank, the water and a glint, along each stream's stations, its width the stream's own once the map is
+  // close enough and never thinner than a line.
+  ctx.lineCap = ctx.lineJoin = "round";
+  for (const stream of stood.terrain.streams) {
+    const st = stream.stations;
+    const first = st[0];
+    const last = st[st.length - 1];
+    if (first === undefined || last === undefined) continue;
+    const line = new Path2D();
+    line.moveTo(sx(first.x), sy(first.z));
+    for (let k = 1; k < st.length - 1; k++) {
+      const a = st[k] as (typeof st)[number];
+      const b = st[k + 1] as (typeof st)[number];
+      line.quadraticCurveTo(sx(a.x), sy(a.z), sx((a.x + b.x) / 2), sy((a.z + b.z) / 2));
+    }
+    line.lineTo(sx(last.x), sy(last.z));
+    const width = 2 * Math.max(...st.map((q) => q.halfWidth)) * view.zoom;
+    ctx.strokeStyle = "rgba(40,84,104,0.5)";
+    ctx.lineWidth = Math.max(3.4, width + 2.6);
+    ctx.stroke(line);
+    ctx.strokeStyle = "rgb(150,203,204)";
+    ctx.lineWidth = Math.max(1.9, width);
+    ctx.stroke(line);
+    ctx.strokeStyle = "rgba(250,244,222,0.45)";
+    ctx.lineWidth = Math.max(0.5, width * 0.16);
+    ctx.stroke(line);
   }
 
   // Trails: dotted, the way a footpath is drawn.
-  ctx.lineCap = "round";
-  ctx.lineJoin = "round";
   ctx.setLineDash([0.1, 5.5 * grow]);
-  ctx.strokeStyle = paper.style.trail;
+  ctx.strokeStyle = style.trail;
   const stride = Math.max(2, Math.round(3 / view.zoom)) * 2;
   for (const trail of stood.ways) {
     const p = trail.points;
@@ -1289,8 +1145,8 @@ export function drawLand(ctx: CanvasRenderingContext2D, w: number, h: number, pa
   }
   ctx.setLineDash([]);
 
-  // Trees: round crowns with a soft shadow to the southeast and the sun on their northwest shoulders, browning
-  // with their files' vitality; each layer is one path, so a thousand trees cost a few fills.
+  // Trees: round crowns with a soft shadow to the southeast and the sun on their northwest shoulders, colored by
+  // their files' health as the land is; each layer is one path, so a thousand trees cost a few fills.
   const shadows = new Path2D();
   const lights = new Path2D();
   const crowns = Array.from({ length: TREE_TONES }, () => new Path2D());
@@ -1312,28 +1168,29 @@ export function drawLand(ctx: CanvasRenderingContext2D, w: number, h: number, pa
   ctx.fillStyle = "rgba(34,44,48,0.22)";
   ctx.fill(shadows);
   crowns.forEach((path, k) => {
-    ctx.fillStyle = mixHex("#ad9a6c", "#5f9447", k / (TREE_TONES - 1));
+    ctx.fillStyle = `rgb(${healthColor(style, TREE_GREEN, k / (TREE_TONES - 1)).join(",")})`;
     ctx.fill(path);
   });
   ctx.fillStyle = "rgba(226,240,170,0.45)";
   ctx.fill(lights);
 
-  // Buildings and landmarks: little drawn vignettes, as on a hand-drawn map, worn as their entities are.
+  // Buildings and landmarks: each kind's own mark, worn as its entity is. A mark keeps a legible size on the whole
+  // sheet and grows with the land as the map comes close, as the trees do.
+  const s = Math.max(1.1 * grow, MARK_METERS * view.zoom);
   const taken: [number, number, number, number][] = [];
-  ctx.lineJoin = "round";
   for (const l of stood.landmarks) {
     const x = sx(l.x);
     const y = sy(l.z);
-    if (!visible(x, y, 30 * grow)) continue;
-    drawLandmark(ctx, x, y, 1.05 * grow, l.name, l.vitality);
-    taken.push([x - 9 * grow, y - 16 * grow, x + 9 * grow, y + 10 * grow]);
+    if (!visible(x, y, 30 * s)) continue;
+    drawLandmark(ctx, x, y, s, l.name, l.vitality);
+    taken.push([x - 10 * s, y - 18 * s, x + 10 * s, y + 4 * s]);
   }
   for (const b of stood.buildings) {
     const x = sx(b.x);
     const y = sy(b.z);
-    if (!visible(x, y, 30 * grow)) continue;
-    drawBuilding(ctx, x, y, 1.1 * grow, b.kind, b.vitality);
-    taken.push([x - 9 * grow, y - 16 * grow, x + 9 * grow, y + 10 * grow]);
+    if (!visible(x, y, 30 * s)) continue;
+    drawBuilding(ctx, x, y, s, b.kind, b.vitality);
+    taken.push([x - 10 * s, y - 18 * s, x + 10 * s, y + 4 * s]);
   }
   return taken;
 }
@@ -1346,26 +1203,6 @@ export function letter(ctx: CanvasRenderingContext2D, text: string, x: number, y
   ctx.strokeText(text, x, y);
   ctx.fillStyle = ink;
   ctx.fillText(text, x, y);
-}
-
-/** A small dab of wash for the legend, in the land's health. */
-function dab(ctx: CanvasRenderingContext2D, style: MapStyle, x: number, y: number, vitality: number, seed: number): void {
-  const rgb = wilted(style, [138, 172, 92], vitality);
-  ctx.beginPath();
-  for (let k = 0; k <= 14; k++) {
-    const a = (k / 14) * Math.PI * 2;
-    const r = 6.4 + (hash(k % 14, seed) - 0.5) * 2.6;
-    const px = x + Math.cos(a) * r * 1.35;
-    const py = y + Math.sin(a) * r * 0.82;
-    if (k === 0) ctx.moveTo(px, py);
-    else ctx.lineTo(px, py);
-  }
-  ctx.closePath();
-  ctx.fillStyle = `rgba(${rgb.join(",")},0.92)`;
-  ctx.fill();
-  ctx.lineWidth = 1.6;
-  ctx.strokeStyle = `rgba(${rgb.map((c) => Math.round(c * 0.62)).join(",")},0.35)`;
-  ctx.stroke();
 }
 
 /**
@@ -1387,8 +1224,7 @@ export function createFieldMap(
   sheet.style.setProperty("--deckle", DECKLE_MASK);
   sheet.innerHTML = /* html */ `
     <canvas class="field-map-view"></canvas>
-    <div class="field-map-here">${TRAVELLER_SVG}<span class="here-file"></span></div>
-    <button type="button" class="map-fold" aria-label="Fold the map" title="Fold (Esc)"></button>`;
+    <div class="field-map-here">${TRAVELLER_SVG}<span class="here-file"></span></div>`;
   root.append(sheet);
   const canvas = sheet.querySelector("canvas") as HTMLCanvasElement;
   const ctx = canvas.getContext("2d") as CanvasRenderingContext2D;
@@ -1500,7 +1336,6 @@ export function createFieldMap(
     ctx.fillRect(0, 0, w, h);
     // Until its paper is painted the sheet lies bare; it is never long, as the paper paints after every bake.
     if (paper === null) return;
-    const sheetPaper = paper;
     const stood = source.stood();
     const sx = (x: number): number => (x - view.x) * view.zoom + w / 2;
     const sy = (z: number): number => (z - view.z) * view.zoom + h / 2;
@@ -1510,39 +1345,14 @@ export function createFieldMap(
     const grow = Math.min(1.6, Math.max(1, Math.sqrt(near) * 0.85));
     const halo = `rgba(${mixRgb(style.paper, style.paper, 0).join(",")},0.82)`;
 
-    // Close in, the map's next level down: each file's patch in fine dotted ink, the contours and borders inked crisp.
+    // Close in, the map's next level down: each file's patch in fine dotted ink.
     const close = Math.max(0, Math.min(1, (near - CLOSE) / 0.8));
     const wx = (x: number): number => view.x + (x - w / 2) / view.zoom;
     const wz = (y: number): number => view.z + (y - h / 2) / view.zoom;
-    const marks = drawLand(ctx, w, h, paper, stood, view, grow, 1 - close * 0.85);
+    const marks = drawLand(ctx, w, h, paper, stood, view, grow);
     if (close > 0) {
       ctx.save();
       ctx.setTransform(dpr * view.zoom, 0, 0, dpr * view.zoom, dpr * (w / 2 - view.x * view.zoom), dpr * (h / 2 - view.z * view.zoom));
-      ctx.lineCap = ctx.lineJoin = "round";
-      // The contours of the ground in view, inked fine over their own painted bleed.
-      const r = paper.relief;
-      const c = style.contour;
-      const i0 = Math.max(0, Math.floor((wx(0) - r.origin) / r.cell) - 1);
-      const i1 = Math.min(r.n - 1, Math.ceil((wx(w) - r.origin) / r.cell) + 1);
-      const j0 = Math.max(0, Math.floor((wz(0) - r.origin) / r.cell) - 1);
-      const j1 = Math.min(r.n - 1, Math.ceil((wz(h) - r.origin) / r.cell) + 1);
-      for (let step = Math.ceil(r.lo / c.interval); step * c.interval <= r.hi; step++) {
-        const line = new Path2D();
-        isoline(r.heights, r.n, step * c.interval, (x0, y0, x1, y1) => {
-          line.moveTo(r.origin + x0 * r.cell, r.origin + y0 * r.cell);
-          line.lineTo(r.origin + x1 * r.cell, r.origin + y1 * r.cell);
-        }, i0, i1, j0, j1);
-        const index = step % c.index === 0;
-        ctx.strokeStyle = `rgba(90,65,40,${((index ? 0.5 : 0.3) * close).toFixed(3)})`;
-        ctx.lineWidth = (index ? 1.1 : 0.7) / view.zoom;
-        ctx.stroke(line);
-      }
-      // Borders inked crisp over their painted hedgerows.
-      for (const b of paper.borders) {
-        ctx.strokeStyle = `rgba(46,62,34,${(0.55 * close).toFixed(3)})`;
-        ctx.lineWidth = (b.depth === 1 ? 1.6 : 1.1) / view.zoom;
-        ctx.stroke(b.path);
-      }
       // Each file's patch shows its bounds in fine dotted ink: the map's next level down.
       ctx.lineWidth = 1 / view.zoom;
       ctx.setLineDash([2.2 / view.zoom, 3.2 / view.zoom]);
@@ -1551,63 +1361,39 @@ export function createFieldMap(
       ctx.restore();
     }
 
-    // Names keep off the drawn marks and each other, and off the scale, the legend and the compass rose in the lower corners.
-    const legend = { x: 22, y: h - 54, w: 214, h: 96 };
-    const taken: [number, number, number, number][] = [[w - 48, 0, w, 48], [legend.x - 6, legend.y - legend.h, legend.x + legend.w, h], [w - ROSE.right - 34, h - ROSE.bottom - 46, w, h], ...marks];
-    // The title is lettered on the paper's top left corner.
-    const titleX = sx(-paper.reach) + paper.reach * 2 * view.zoom * 0.03;
-    const titleY = sy(-paper.reach) + paper.reach * 2 * view.zoom * 0.02;
-    taken.push([titleX - 6, titleY - 6, titleX + paper.reach * 2 * view.zoom * 0.24, titleY + paper.reach * 2 * view.zoom * 0.07]);
+    // Names keep off the drawn marks and each other, and off the compass rose in the lower right corner.
+    const taken: [number, number, number, number][] = [[w - ROSE.right - 34, h - ROSE.bottom - 46, w, h], ...marks];
     // The traveller and the file lettered beside them.
     const hx = sx(person.x);
     const hy = sy(person.z);
     taken.push([hx - 12, hy - 30, hx + 18 + hereFile.offsetWidth, hy + 8]);
     const free = (x0: number, y0: number, x1: number, y1: number): boolean => taken.every(([a, b, c, d]) => x1 < a || x0 > c || y1 < b || y0 > d);
 
-    // Each top-level directory's name lettered large and faint across its whole region in spaced capitals, as a
-    // map names a province under its towns; it fades as the map comes close, where the region fills the view.
-    const faint = style.regionAlpha * Math.max(0, Math.min(1, (2.6 - near) / 1.2));
-    if (faint > 0.01) {
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillStyle = style.ink;
-      ctx.globalAlpha = faint;
-      for (const r of paper.regionLabels) {
-        const fontPx = Math.min(64, (r.length * view.zoom * 0.62) / (r.name.length * 1.25));
-        if (fontPx < 16) continue;
-        ctx.save();
-        ctx.translate(sx(r.x), sy(r.z));
-        ctx.rotate(r.angle);
-        ctx.font = `600 ${fontPx.toFixed(0)}px ${SERIF}`;
-        ctx.letterSpacing = `${(fontPx * 0.55).toFixed(0)}px`;
-        ctx.fillText(r.name, fontPx * 0.27, 0);
-        ctx.restore();
-      }
-      ctx.letterSpacing = "0px";
-      ctx.globalAlpha = 1;
-    }
-
-    // Names are lettered on the land itself in ink, along the way each area runs, the paper just around the
-    // letters keeping them clear of the paint; they stay one size at any zoom, and where two would collide the
-    // larger area's wins.
+    // Names are lettered on the land itself in ink, in upright, widely spaced capitals as a survey map letters its
+    // regions, along the way each area runs, the paper just around the letters keeping them clear of the paint. A
+    // name that repeats carries just enough of its path above it, in italic, to tell it apart (`nameTails`). Names
+    // stay one size at any zoom, and where two would collide the larger area's wins.
     labelCount = 0;
     names = [];
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    const nameSize = w < 520 ? 15 : 17;
+    const nameSize = w < 520 ? 12.5 : 13.5;
+    const spacing = `${(nameSize * 0.17).toFixed(1)}px`;
     const { areaAt } = paper;
     const half = paper.reach - MARGIN;
     const edge = half ** 4;
     for (const l of [...paper.areaLabels].sort((a, b) => b.cells - a.cells)) {
-      // The repository's root is the whole sheet: the title names it.
+      // The repository's root is the whole sheet, and it is not lettered.
       if (l.area.depth === 0 || !visible(sx(l.x), sy(l.z), 0)) continue;
-      const parent = l.area.path.split("/").slice(0, -1).join(" / ").toUpperCase();
-      const label = l.area.name;
-      const nameFont = `italic 600 ${nameSize}px ${SERIF}`;
+      const parent = l.above;
+      const label = l.area.name.toUpperCase();
+      const nameFont = `600 ${nameSize}px ${SERIF}`;
       ctx.font = nameFont;
+      ctx.letterSpacing = spacing;
       const nameW = ctx.measureText(label).width;
-      ctx.font = `600 9px ${SERIF}`;
-      const parentW = parent === "" ? 0 : ctx.measureText(parent).width + parent.length * 1.8;
+      ctx.letterSpacing = "0px";
+      ctx.font = PARENT_FONT;
+      const parentW = parent === "" ? 0 : ctx.measureText(parent).width;
       const halfW = Math.max(nameW, parentW) / 2 + 4;
       const top = parent === "" ? 11 : 21;
       // The box the slanted lettering takes on the sheet.
@@ -1630,19 +1416,19 @@ export function createFieldMap(
       ctx.translate(x, y);
       ctx.rotate(l.angle);
       if (parent !== "") {
-        ctx.font = `600 9px ${SERIF}`;
-        ctx.letterSpacing = "1.8px";
-        letter(ctx, parent, 0, -12, `rgba(${mixRgb(style.ink, style.ink, 0).join(",")},0.78)`, halo, 2.5);
-        ctx.letterSpacing = "0px";
+        ctx.font = PARENT_FONT;
+        letter(ctx, parent, 0, -12, `rgba(${mixRgb(style.ink, style.ink, 0).join(",")},0.8)`, halo, 2.5);
       }
       ctx.font = nameFont;
-      letter(ctx, label, 0, 2, style.ink, halo, 3.5);
+      ctx.letterSpacing = spacing;
+      letter(ctx, label, 0, 2, style.ink, halo, 4.5);
+      ctx.letterSpacing = "0px";
       ctx.restore();
     }
 
     // Close in, each file's name is lettered small on its patch, and a tap on it goes there.
     if (close > 0) {
-      ctx.font = `italic 11.5px ${SERIF}`;
+      ctx.font = `italic 12px ${SERIF}`;
       ctx.globalAlpha = close;
       for (const p of [...paper.patches].sort((a, b) => b.radius - a.radius)) {
         if (p.radius * view.zoom < 15) continue;
@@ -1659,7 +1445,7 @@ export function createFieldMap(
     }
     // Buildings and landmarks name themselves once the map is close enough to read them.
     if (near > 1.6) {
-      ctx.font = `italic 12px ${SERIF}`;
+      ctx.font = `italic 12.5px ${SERIF}`;
       const named = [...stood.landmarks.map((l) => ({ ...l, below: 15 })), ...stood.buildings.map((b) => ({ ...b, below: 13 }))];
       for (const m of named) {
         const x = sx(m.x);
@@ -1688,47 +1474,8 @@ export function createFieldMap(
       ctx.stroke();
     }
 
-    // The legend, in the map's hand at the lower left: the land's health in four dabs of its wash, and the
-    // largest areas each tired band holds, by name. The paint thins under it as it does where a map is lettered.
-    const thin = ctx.createRadialGradient(legend.x + legend.w * 0.42, legend.y - legend.h * 0.45, 4, legend.x + legend.w * 0.42, legend.y - legend.h * 0.45, legend.w * 0.68);
-    thin.addColorStop(0, `rgba(${mixRgb(style.paper, style.paper, 0).join(",")},0.62)`);
-    thin.addColorStop(0.62, `rgba(${mixRgb(style.paper, style.paper, 0).join(",")},0.4)`);
-    thin.addColorStop(1, `rgba(${mixRgb(style.paper, style.paper, 0).join(",")},0)`);
-    ctx.save();
-    ctx.translate(0, legend.y - legend.h * 0.45);
-    ctx.scale(1, 0.62);
-    ctx.translate(0, -(legend.y - legend.h * 0.45));
-    ctx.fillStyle = thin;
-    ctx.fillRect(legend.x - 60, legend.y - legend.h * 2, legend.w + 120, legend.h * 3);
-    ctx.restore();
-    ctx.textAlign = "left";
-    ctx.textBaseline = "middle";
-    ctx.font = `600 9px ${SERIF}`;
-    ctx.letterSpacing = "2px";
-    letter(ctx, "THE LAND'S HEALTH", legend.x, legend.y - legend.h + 12, `rgba(${mixRgb(style.ink, style.ink, 0).join(",")},0.8)`, halo, 3);
-    ctx.letterSpacing = "0px";
-    const bands = LAND_HEALTH.slice(0, 4);
-    bands.forEach((band, k) => {
-      const y = legend.y - legend.h + 30 + k * 17;
-      const upper = k === 0 ? 2 : (bands[k - 1] as (typeof bands)[number]).from;
-      dab(ctx, style, legend.x + 9, y, (band.from + Math.min(1, upper)) / 2, k + 3);
-      ctx.font = `italic 12.5px ${SERIF}`;
-      letter(ctx, band.words, legend.x + 24, y, style.ink, halo, 3);
-      const width = ctx.measureText(band.words).width;
-      // The largest areas in a tired band are named beside it: where the land is going over, by name.
-      if (k >= 2) {
-        const held = sheetPaper.areaLabels
-          .filter((l) => l.area.depth > 0 && (sheetPaper.vitality.get(l.area.path) ?? 1) >= band.from && (sheetPaper.vitality.get(l.area.path) ?? 1) < upper)
-          .sort((a, b) => b.cells - a.cells)
-          .slice(0, 2)
-          .map((l) => l.area.name);
-        ctx.font = `11.5px ${SERIF}`;
-        letter(ctx, held.length === 0 ? "· none" : `· ${held.join(", ")}`, legend.x + 30 + width, y + 0.5, `rgba(${mixRgb(style.ink, style.ink, 0).join(",")},0.72)`, halo, 3);
-      }
-    });
-
-    // A compass rose and a scale, inked in the lower corners: a ring, four long points half-shaded from the
-    // light, four short ones between, and north named above. A tap on the rose finds you on the map.
+    // A compass rose, inked in the lower right corner: a ring, four long points half-shaded from the light, four
+    // short ones between, and north named above. A tap on the rose finds you on the map.
     ctx.save();
     ctx.translate(w - ROSE.right, h - ROSE.bottom);
     ctx.strokeStyle = style.ink;
@@ -1762,19 +1509,6 @@ export function createFieldMap(
     ctx.textAlign = "center";
     ctx.fillStyle = style.ink;
     ctx.fillText("N", w - ROSE.right, h - ROSE.bottom - 27);
-    const meters = [20, 50, 100, 200, 500].find((m) => m * view.zoom > 60) ?? 500;
-    const bar = meters * view.zoom;
-    ctx.strokeStyle = style.ink;
-    ctx.lineWidth = 1.2;
-    ctx.beginPath();
-    ctx.moveTo(22, h - 26);
-    ctx.lineTo(22, h - 22);
-    ctx.lineTo(22 + bar, h - 22);
-    ctx.lineTo(22 + bar, h - 26);
-    ctx.stroke();
-    ctx.font = `italic 11px ${SERIF}`;
-    ctx.textAlign = "left";
-    letter(ctx, `${meters} m`, 22, h - 32, style.ink, halo, 3);
     timing.drawMs = performance.now() - t0;
   }
 
@@ -1868,7 +1602,6 @@ export function createFieldMap(
     }
   }
   // The sheet's turned-down corner folds it.
-  (sheet.querySelector(".map-fold") as HTMLElement).addEventListener("click", () => setOpen(false));
   /** Brings the map round to where the person stands, close enough to read. */
   function findHere(): void {
     view.x = person.x;

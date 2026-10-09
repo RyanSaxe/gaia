@@ -518,10 +518,12 @@ A directory's vitality pools its files' (`areaVitality` in `@gaia/world`):
 every file under it, its subdirectories' included, weighted by its size,
 so the whole reads as the share of it that thrives; the field map, the
 minimap and the markers weigh each file by the ground its patch holds,
-which the layout gives in proportion to its code. An area's own ground
-is washed with the files directly in it (`groundVitality`), or with
-everything under it where it holds none of its own; `""` is the whole
-world's.
+which the layout gives in proportion to its code. The field map spreads
+each file's own vitality over the ground around it (`healthField`), so its
+colors run in one gradient across areas; an area's own ground, the files
+directly in it or everything under it where it holds none of its own
+(`groundVitality`), sets the health it settles on far from any file and
+its dry-brush streaks; `""` is the whole world's.
 
 The land shows vitality as the trees do (`docs/design-system.md`, "Vitality
 on the land"). Every point of a world from code is someone's ground: a
