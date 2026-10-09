@@ -665,6 +665,45 @@ squares nearest its own scale, crossfading between two as the map zooms, so
 nothing is drawn afresh as the person walks and no mark appears or changes
 as they go.
 
+Each building's and landmark's mark is drawn from its own blueprint, never
+chosen by name (`marks.ts`). A building's mark is the plan its footprint
+realized, seen from the south-southwest and lit from the northwest: every
+mass (the body, a wing, a porch, a lean-to, a turret) is drawn back to front
+at the plan's own size, a unit to 0.67 m of land, with its door toward the
+viewer and its roofs drawn 1.25 times as tall as they stand, so the
+covering carries the mark. A table keyed by primitive id (`INKS`) says how
+each slot's primitive is inked, and the palette gives every wash:
+
+| Primitive | How the map inks it |
+| --- | --- |
+| `cottage-plan@1` | Every mass it lays out, joined masses trimmed where they meet |
+| `timber-frame@1` | Posts, a rail at every floor, and braces or close studs as its framing says, on plaster |
+| `fieldstone@1` | Coursed rounded stones as big as its stones, with boards or stone in its gables |
+| `thatch@1` | Rounded edges as plump as the thatch, a thick eave and a capped ridge, the roof's color warmed toward straw |
+| `tiles@1` | Fine courses of slates, rippled courses of pantiles or staggered shingles |
+| `casements@1` | Dark panes at each window the plan places, glazing bars, shutters, and a plank, arched or hooded door |
+| `cottage-garden@1` | The walk, a picket fence, flowers under the windows, a lantern by the door, a woodpile |
+| `waterwheel@1` | The wheel at the free end, turned 35 degrees toward the viewer so it reads as a wheel, its flume or race |
+| `tower@1` | A square tower at the back corner, quoined, under a pyramid cap or an open lantern |
+
+One wear rule runs on every mass, as the building's ruin does: the roof
+rots through from the weak corner (the front corner away from the door),
+the wall breaches there, ivy climbs the corners nearest it, a lean-to caves
+in, a turret's cone rots from its tip, and the chimney topples as its smoke
+thins and stops. A landmark's mark follows its primitive's words: a tower's
+plan, profile, galleries and crown; the stones' arrangement, count, height,
+lintels and centre; a great tree's form, size, age and fullness, its crown
+in the form's own green. A contract test fails when a structure or landmark
+primitive has no entry in `INKS`, so a new primitive is never drawn as
+something else.
+
+The sheets nest by scale, each growing out of the last so nothing jumps:
+the minimap is the land around the person; a tap unfolds it into the
+field map, which draws back from the minimap's close view to the whole
+land; close in, the map shows the next level down, each file's patch and
+name; a thing walked up to grows the minimap into its sketch page, the land
+it stands on faint under the drawing.
+
 The sheets nest by scale, each growing out of the last so nothing jumps:
 the minimap is the land around the person, turned to the way they face; a
 tap unfolds it into the field map, which draws back from the minimap's
