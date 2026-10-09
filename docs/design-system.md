@@ -87,12 +87,18 @@ the ground (the `bough` channel), the joint where its twig leaves the
 bough (`twig`) and the point its piece hangs from (`pivot`).
 
 - **Wind.** One field for the whole world, and each plant's answer to it.
-  The field is `gustAt` and `WIND_FIELD` (`wind-field.ts` in
-  `@gaia/realize`, `WIND_FIELD_GLSL` in `@gaia/render`); the answer is
-  `swayAt` and the levels of `WIND` (`sway.ts` in each, `SWAY_GLSL` in
-  `@gaia/render`). Gusts travel downwind as
-  broad, soft bands about 60 m apart at 8.5 m/s, their fronts bowed by a
-  slow meander, so a gust rolls through the grass and on into the trees.
+  The field is `gustAt`, `windDirAt` and `WIND_FIELD` (`wind-field.ts`
+  in `@gaia/realize`, `WIND_FIELD_GLSL` in `@gaia/render`, which a test
+  runs against them); the answer is `swayAt` and the levels of `WIND`
+  (`sway.ts` in each, `SWAY_GLSL` in `@gaia/render`). The air is mostly a
+  light breeze that swells and eases over tens of seconds, its direction
+  wandering a few degrees. Gusts come irregularly: at any spot one passes
+  every 8 to 40 seconds, most often about ten, most of them mild, and a
+  strong one every minute or two. Each is a soft front that rises in about
+  two seconds and eases over four, travelling downwind at 6 m/s, bowed by
+  a slow meander and stronger in some places along it than others, so a
+  gust rolls through the grass and on into the trees while the land
+  beside it stays calm.
   A plant bends level by level: the whole plant from its base by height,
   each bough about its joint, each twig about where it leaves the bough,
   and each leaf or flower on its stalk, only in a gust. Each level leans

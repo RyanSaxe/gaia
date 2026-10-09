@@ -36,9 +36,9 @@ varying vec3 vHigh;
 varying vec3 vTip;
 varying vec3 vBloom;
 
-// The world's one wind field (WIND_FIELD_GLSL): gusts travel downwind as
-// broad, soft bands, so waves roll across the field and on into the trees; a
-// slower sway and a little flutter ride on top.
+// The world's one wind field (WIND_FIELD_GLSL): over a light breeze,
+// irregular gusts travel downwind as soft fronts, so waves roll across the
+// field and on into the trees; a slower sway and a little flutter ride on top.
 ${WIND_FIELD_GLSL}
 
 // A blade's spine: it leans along its facing, arcs over toward the tip and

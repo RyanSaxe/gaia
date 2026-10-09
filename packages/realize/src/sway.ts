@@ -11,7 +11,7 @@
 // the CPU reference the tests run against.
 
 import { CUT, type Part } from "@gaia/schema";
-import { WIND_FIELD, gustAt } from "./wind-field.ts";
+import { WIND_FIELD, gustAt, windDirAt } from "./wind-field.ts";
 
 /** One level of a plant's bend: how far it leans downwind and swings about that lean, as an angle. */
 export interface WindLevel {
@@ -96,7 +96,7 @@ function leanOf(level: WindLevel, s: WindState, give: number, gust: number, phas
   const swing = level.lean * level.swing * (0.35 + 0.65 * gust) * fade;
   const along = give * (lean + swing * Math.sin(t));
   const across = give * swing * 0.4 * Math.sin(t * 1.31 + phase * 1.7);
-  const [dx, dz] = WIND_FIELD.dir;
+  const [dx, dz] = windDirAt(s.time);
   const x = along * dx - across * dz;
   const z = along * dz + across * dx;
   const l = Math.hypot(x, z);
@@ -153,7 +153,7 @@ export function swayAt(part: Part, positions: Float32Array, s: WindState, flutte
   const give = s.strength * s.sway;
   const trunk = trunkGive(s.height);
   const boughReach = Math.min(WIND.bough.longest, Math.max(WIND.bough.least, WIND.bough.reach * s.height));
-  const [wx, wz] = WIND_FIELD.dir;
+  const [wx, wz] = windDirAt(s.time);
   const p = [0, 0, 0];
   const [tx, tz] = leanOf(WIND.trunk, s, give * trunk, gustAt(s.at[0], s.at[2], s.time), s.seed * 6.283185307179586, 1, 0);
   for (let i = 0; i < part.shade.length; i++) {

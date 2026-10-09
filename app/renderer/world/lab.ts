@@ -353,9 +353,8 @@ export function createWorldLab(root: HTMLElement): Lab {
     if (at !== hour) applyHour(lookOf(current, (hour = at)));
     const time = frozen ?? light.uTime.value + dt;
     light.uTime.value = time;
-    // Gusts: slow surges on top of the world's steady wind.
-    const surge = 0.5 + 0.5 * Math.sin(time * 0.37) * Math.sin(time * 0.23 + 1.3);
-    light.uWind.value = look.wind.strength * (1 + look.wind.gust * (surge - 0.3));
+    // The world's wind blows steadily; its gusts come from the wind field, where they travel across the land.
+    light.uWind.value = look.wind.strength;
     let sum = 0;
     for (const e of entries) {
       e.shown += (e.target - e.shown) * (1 - Math.exp(-dt * 5));
