@@ -347,7 +347,7 @@ const SAMPLE_NAME = "the sample world";
 
 /** Which world the lab opens on: Gaia's own, unless the page's address asks for the sample world (`?world=sample`, or `?world=small` for its 320 m version). */
 const ASKED_WORLD = new URLSearchParams(location.search).get("world");
-/** Frames the first world draws under the wait before it lifts: the first compiles every material. */
+/** Frames the first world draws under the wait before it lifts, its shaders already compiled (`warmSoon`), so it moves smoothly from the first. */
 const LIFT_FRAMES = 4;
 /**
  * Baking far forms under the wait: at most this many views of a form a frame
@@ -680,7 +680,19 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     scene.add(cards.object);
     farCards = cards;
     farBakeMs = performance.now() - t0;
-    warm();
+    warmSoon();
+  })();
+  // Each tree build's instances are made a build a frame while the wait holds,
+  // so a world's planting only moves copies.
+  void (async (): Promise<void> => {
+    for (const [k, v] of variants.entries()) {
+      if (!groves.has(k)) {
+        const view = createCopies(v.plant, light, [], { form: k, batch: farBatch });
+        scene.add(view.object);
+        groves.set(k, view);
+      }
+      await new Promise((r) => requestAnimationFrame(r));
+    }
   })();
   let warming = false;
   const viewSize = new THREE.Vector2();
@@ -716,16 +728,51 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   // first appearance ever costs a frame.
   const warmTarget = new THREE.WebGLRenderTarget(1, 1);
   const warmCamera = new THREE.PerspectiveCamera();
-  function warm(): void {
-    warming = true;
+  /** While above 0, the world is changing (shaders compiling, a new world settling in) and draws no frames: the wait, or the world as it stood, holds. */
+  let holding = 0;
+  let warmed: Promise<void> = Promise.resolve();
+  /**
+   * Readies everything to draw without holding the page: every shader the
+   * world uses compiles off the page's thread where the browser can, for the
+   * view, for the mirror's and the shadow's targets, and as the shadow's
+   * depth, while the world draws no frames. Then `warm` uploads every level's
+   * geometry in one render, which no longer waits on a compile.
+   */
+  function warmSoon(): void {
+    warmed = warmed.then(async () => {
+      holding++;
+      try {
+        readyToWarm();
+        await renderer.compileAsync(scene, warmCamera);
+        renderer.setRenderTarget(warmTarget);
+        await renderer.compileAsync(scene, warmCamera);
+        const depth = [...views(), ...understory.casters(), ...wildGrowth.all(), ...(farCards === null ? [] : [farCards])];
+        for (const v of depth) v.useDepth(true);
+        try {
+          await renderer.compileAsync(scene, warmCamera);
+        } finally {
+          for (const v of depth) v.useDepth(false);
+          renderer.setRenderTarget(null);
+        }
+        warm();
+      } finally {
+        holding--;
+      }
+    });
+  }
+  /** Every level of every instanced plant, and every far card solid and fading, readied to draw one copy. */
+  function readyToWarm(): void {
     for (const v of instanced()) v.warm();
-    // Every far form, solid and fading, so neither card's first appearance compiles a material.
     if (farCards !== null) {
       variants.forEach((_, k) => {
         for (const fade of [1, 0.5]) farBatch.copies.set([k, 0, 0, 0, 0, 1, 1, 0, fade], (k * 2 + (fade < 1 ? 1 : 0)) * FAR_COPY);
       });
       farCards.draw(farBatch.copies, variants.length * 2);
     }
+  }
+  function warm(): void {
+    warming = true;
+    readyToWarm();
     renderer.setRenderTarget(warmTarget);
     renderer.render(scene, warmCamera);
     renderer.setRenderTarget(null);
@@ -820,7 +867,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
               vitality: t.represented.report.vitality,
             })),
           );
-    warm();
+    warmSoon();
     placeSigns();
   }
   let solids: Solids = NO_SOLIDS;
@@ -1453,34 +1500,48 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   const fmt = (v: number, d = 1): string => v.toFixed(d);
 
   /** Takes on a freshly baked world and what stands on it: everything on the land follows. */
-  function adopt(next: WorldSpec, baked: Terrain, stood: Stand, ownership: Baked["ownership"]): void {
-    world = next;
-    terrain = baked;
-    // Areas first, so whatever stands beside the trails knows where it is; files join when the trees stand.
-    places = code !== null ? code.world : regionPlaces(terrain.spec, SAMPLE_NAME, []);
-    clearings.fit(terrain);
-    settlement.seat(stood.sites);
-    ways = { sites: stood.landmarks, network: stood.network };
-    decks = decksOf(stood.network.ways);
-    setTrailPlaces(stood.trailPlaces, baked.lattice.n);
-    placeWays();
-    furnished = furnisher?.(stoodWorld()) ?? UNFURNISHED;
-    // In the codebase's world a landmark stands for an entity and takes its vitality.
-    landmarkViews.forEach((v, i) => v.setVitality(code === null ? 1 : (code.world.things.filter((t) => t.as === "landmark")[i]?.vitality ?? 1)));
-    placeBuildings();
-    updateCovers();
-    groundTex.update(terrain, stood.ground);
-    setGroundOwnership(ownership);
-    showLandVitality();
-    ground.update(terrain, stood.wilds);
-    water.update(terrain);
-    wildGrowth.update(terrain);
-    plant(stood);
-    endWalk();
-    walker.moved = true;
-    refreshStats();
-    refreshPanel();
-    for (const listener of stoodListeners) listener();
+  /**
+   * Takes on a baked world over a few frames, so no single frame holds the
+   * page long enough for the wait to stutter. The world draws no frames
+   * until it has all settled in.
+   */
+  async function adopt(next: WorldSpec, baked: Terrain, stood: Stand, ownership: Baked["ownership"]): Promise<void> {
+    const nextFrame = (): Promise<void> => new Promise((r) => requestAnimationFrame(() => r()));
+    holding++;
+    try {
+      world = next;
+      terrain = baked;
+      // Areas first, so whatever stands beside the trails knows where it is; files join when the trees stand.
+      places = code !== null ? code.world : regionPlaces(terrain.spec, SAMPLE_NAME, []);
+      clearings.fit(terrain);
+      settlement.seat(stood.sites);
+      ways = { sites: stood.landmarks, network: stood.network };
+      decks = decksOf(stood.network.ways);
+      setTrailPlaces(stood.trailPlaces, baked.lattice.n);
+      placeWays();
+      furnished = furnisher?.(stoodWorld()) ?? UNFURNISHED;
+      // In the codebase's world a landmark stands for an entity and takes its vitality.
+      landmarkViews.forEach((v, i) => v.setVitality(code === null ? 1 : (code.world.things.filter((t) => t.as === "landmark")[i]?.vitality ?? 1)));
+      placeBuildings();
+      await nextFrame();
+      updateCovers();
+      groundTex.update(terrain, stood.ground);
+      setGroundOwnership(ownership);
+      showLandVitality();
+      await nextFrame();
+      ground.update(terrain, stood.wilds);
+      water.update(terrain);
+      wildGrowth.update(terrain);
+      await nextFrame();
+      plant(stood);
+      endWalk();
+      walker.moved = true;
+      refreshStats();
+      refreshPanel();
+      for (const listener of stoodListeners) listener();
+    } finally {
+      holding--;
+    }
   }
 
   function stoodWorld(): StoodWorld {
@@ -1512,7 +1573,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     const baked = await baker.bake(next, standRequest(next));
     if (mine !== asked) return false;
     bakeMs = performance.now() - t0;
-    adopt(next, baked.terrain, baked.stand, baked.ownership);
+    await adopt(next, baked.terrain, baked.stand, baked.ownership);
     $("random").textContent = "Random terrain";
     return true;
   }
@@ -1662,6 +1723,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   const passes = { shadow: { calls: 0, triangles: 0 }, mirror: { calls: 0, triangles: 0 }, view: { calls: 0, triangles: 0 } };
   let waitNight = -1;
   function frame(dt: number, now: number, at: number): void {
+    if (holding > 0) return;
     if (at !== hour) applyHour(at);
     // The wait follows the hour as the world will.
     const night = Math.round(light.uNightness.value * 20) / 20;
@@ -1730,7 +1792,8 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   // The first world bakes behind a quiet veil, which lifts once it stands.
   const startWithCode = ASKED_WORLD !== "sample" && ASKED_WORLD !== "small";
   const ready = Promise.all([startWithCode ? showCodebase(true) : rebake(world).then(() => valleyView()), farBaked]).then(async () => {
-    // The world's first frames compile its materials; they draw under the paper, so the world shows only once it moves smoothly.
+    await warmed;
+    // The world's first frames draw under the paper, so the world shows only once it moves smoothly.
     for (let k = 0; k < LIFT_FRAMES; k++) await new Promise((r) => requestAnimationFrame(r));
     await veil.lift();
     for (const listener of liftedListeners) listener();
