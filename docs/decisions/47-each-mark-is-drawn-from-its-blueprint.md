@@ -14,7 +14,9 @@ structure or landmark primitive has no entry in the table.
 
 The stood world hands the map each building's realized plan, blueprint and
 palette, and each landmark's blueprint and palette, so buildings Jev
-composes later draw the same way.
+composes later draw the same way. Each mark is drawn once into a bitmap at
+its size and health and stamped from then on, because the map redraws on
+every frame of a glide.
 
 ## Why
 

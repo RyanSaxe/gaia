@@ -2419,3 +2419,89 @@ export function drawLandmark(ctx: CanvasRenderingContext2D, x: number, y: number
   return [...pen.box];
 }
 
+// ---------------------------------------------------------------------------------------------------------------
+// Stamps. The map redraws on every frame of a glide or a zoom, and a composed mark is many strokes, so each mark is
+// drawn once into a bitmap at the size it shows and stamped from then on. A stamp is kept at sizes a quarter of a
+// doubling apart and drawn shrunk to the size asked for, never grown, so it stays as crisp as the ink.
+
+/** Sizes are kept in steps of 2^(1/4): a glide draws a mark anew about every fifth of the way to twice its size. */
+const STAMP_STEPS = 4;
+/** How many stamps are kept, the least recently stamped going first. */
+const STAMPS_KEPT = 160;
+/** The bitmap a stamp is first drawn into, in units round the mark's foot: room for the widest range and the tallest tower. */
+const SCRATCH = { width: 180, height: 170, footX: 90, footY: 125 } as const;
+
+interface Stamp {
+  readonly canvas: HTMLCanvasElement;
+  /** Where its top left lies from the mark's foot, and its size, in pixels at its own scale. */
+  readonly left: number;
+  readonly top: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+const stamps = new Map<string, Stamp>();
+let scratch: CanvasRenderingContext2D | null = null;
+
+function stampOf(s: number, device: number, draw: (c: CanvasRenderingContext2D, x: number, y: number, s: number) => MarkBox): Stamp {
+  const w = Math.ceil(SCRATCH.width * s * device);
+  const h = Math.ceil(SCRATCH.height * s * device);
+  if (scratch === null || scratch.canvas.width < w || scratch.canvas.height < h) {
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(w, scratch?.canvas.width ?? 0);
+    canvas.height = Math.max(h, scratch?.canvas.height ?? 0);
+    scratch = canvas.getContext("2d", { willReadFrequently: false }) as CanvasRenderingContext2D;
+  }
+  const c = scratch;
+  c.setTransform(1, 0, 0, 1, 0, 0);
+  c.clearRect(0, 0, w, h);
+  c.setTransform(device, 0, 0, device, 0, 0);
+  const fx = SCRATCH.footX * s;
+  const fy = SCRATCH.footY * s;
+  const box = draw(c, fx, fy, s);
+  // A little room for the ink's width and the brush's offset past the points the mark placed.
+  const pad = 1 + s;
+  const x0 = Math.max(0, Math.floor((box[0] - pad) * device));
+  const y0 = Math.max(0, Math.floor((box[1] - pad) * device));
+  const x1 = Math.min(w, Math.ceil((box[2] + pad) * device));
+  const y1 = Math.min(h, Math.ceil((box[3] + pad) * device));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, x1 - x0);
+  canvas.height = Math.max(1, y1 - y0);
+  (canvas.getContext("2d") as CanvasRenderingContext2D).drawImage(c.canvas, x0, y0, canvas.width, canvas.height, 0, 0, canvas.width, canvas.height);
+  return { canvas, left: x0 / device - fx, top: y0 / device - fy, width: canvas.width / device, height: canvas.height / device };
+}
+
+/** Stamps the mark `key` names at (x, y), `s` pixels a unit, drawing it with `draw` only when no stamp of it is kept at this size and on this screen. */
+function stamp(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, key: string, draw: (c: CanvasRenderingContext2D, x: number, y: number, s: number) => MarkBox): MarkBox {
+  const m = ctx.getTransform();
+  const device = Math.hypot(m.a, m.b);
+  const kept = 2 ** (Math.ceil(Math.log2(s) * STAMP_STEPS - 1e-6) / STAMP_STEPS);
+  const id = `${key}|${kept.toFixed(4)}|${device.toFixed(2)}`;
+  let st = stamps.get(id);
+  if (st === undefined) {
+    st = stampOf(kept, device, draw);
+    if (stamps.size >= STAMPS_KEPT) stamps.delete(stamps.keys().next().value as string);
+  } else {
+    stamps.delete(id);
+  }
+  stamps.set(id, st);
+  const k = s / kept;
+  // On whole device pixels, so a stamp shown at its own size is copied rather than resampled.
+  const left = Math.round((x + st.left * k) * device) / device;
+  const top = Math.round((y + st.top * k) * device) / device;
+  ctx.drawImage(st.canvas, left, top, st.width * k, st.height * k);
+  return [left, top, left + st.width * k, top + st.height * k];
+}
+
+/** Stamps a building's mark, as `drawBuilding` draws it. */
+export function stampBuilding(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, b: BuildingComposition, vitality = 1, name = ""): MarkBox {
+  const key = `b|${b.blueprint.id}|${name}|${vitality.toFixed(3)}|${b.plan.masses.length}|${b.plan.width.toFixed(3)}|${b.plan.depth.toFixed(3)}`;
+  return stamp(ctx, x, y, s, key, (c, fx, fy, ks) => drawBuilding(c, fx, fy, ks, b, vitality, name));
+}
+
+/** Stamps a landmark's mark, as `drawLandmark` draws it. */
+export function stampLandmark(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, l: Composition, vitality = 1, name = ""): MarkBox {
+  const key = `l|${l.blueprint.id}|${name}|${vitality.toFixed(3)}`;
+  return stamp(ctx, x, y, s, key, (c, fx, fy, ks) => drawLandmark(c, fx, fy, ks, l, vitality, name));
+}
