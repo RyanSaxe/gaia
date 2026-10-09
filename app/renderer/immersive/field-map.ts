@@ -687,18 +687,29 @@ function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place
     const path = trace(o.rings);
     paths.set(o.path, path);
     poolRim(g, path, washOf(o.path), style.pool);
-    // Dry land lets the paper through in dry-brush streaks; an area washed over its parent's covers them there.
-    const dry = ground(o.path) ? dryness(ownVitality(o.path)) : 0;
-    const own = index.get(o.path) ?? -1;
-    const span = sums[own];
-    if (dry > 0.05 && span !== undefined) {
-      const box = [span.i0, span.j0, span.i1 + 1, span.j1 + 1].map((c) => c * AREA_CELL * scale) as [number, number, number, number];
-      dryBrush(g, box, dry, style, k, (x, y) => at[Math.floor(y / scale / AREA_CELL) * n + Math.floor(x / scale / AREA_CELL)] === own);
-    }
     if (k % 6 === 5) yield;
   }
-  // Brushwork: the wash laid in broad, overlapping strokes, each a little warmer or cooler, lighter or darker.
   g.restore();
+  // Dry land lets the paper through in dry-brush streaks, each cell by the area nearest it, so the corners past the
+  // land's rim take their neighbor's streaks and nothing marks the rim.
+  const spans = new Map<number, [number, number, number, number]>();
+  for (let c = 0; c < n * n; c++) {
+    const k = nearest[c] as number;
+    const i = c % n;
+    const j = Math.floor(c / n);
+    const b = spans.get(k);
+    spans.set(k, b === undefined ? [i, j, i, j] : [Math.min(b[0], i), Math.min(b[1], j), Math.max(b[2], i), Math.max(b[3], j)]);
+  }
+  const cellAt = (x: number, y: number): number => Math.floor(y / scale / AREA_CELL) * n + Math.floor(x / scale / AREA_CELL);
+  for (const [k, b] of spans) {
+    const area = areas[k];
+    const dry = area !== undefined && ground(area.path) ? dryness(ownVitality(area.path)) : 0;
+    if (dry <= 0.05) continue;
+    const box = [b[0], b[1], b[2] + 1, b[3] + 1].map((c) => c * AREA_CELL * scale) as [number, number, number, number];
+    dryBrush(g, box, dry, style, k, (x, y) => nearest[cellAt(x, y)] === k);
+  }
+  yield;
+  // Brushwork: the wash laid in broad, overlapping strokes, each a little warmer or cooler, lighter or darker.
   g.globalCompositeOperation = "source-atop";
   g.lineCap = "round";
   for (let k = 0; k < style.strokes; k++) {
@@ -770,7 +781,10 @@ function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place
       slopes[k * 2] = gx;
       slopes[k * 2 + 1] = gz;
       const lit = (gx + gz) * style.relief;
-      const fadeHere = paintAt(style, (i + 0.5) / hn, (j + 0.5) / hn);
+      // Over the band where the ground is eased toward the rim, and past it, the eased heights would shade in stripes
+      // along their rays, so the shading fades out across the band and is gone at the rim.
+      const inside = Math.max(0, Math.min(1, (half - Math.pow(x ** 4 + z ** 4, 0.25)) / RIM.inner));
+      const fadeHere = paintAt(style, (i + 0.5) / hn, (j + 0.5) / hn) * inside * inside * (3 - 2 * inside);
       shadeImg.data.set([sr, sg, sb, Math.round(255 * Math.max(0, Math.min(1, -lit)) * fadeHere)], k * 4);
       lightImg.data.set([lr, lg, lb, Math.round(255 * Math.max(0, Math.min(1, lit)) * fadeHere)], k * 4);
     }
