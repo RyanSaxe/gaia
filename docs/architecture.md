@@ -538,8 +538,9 @@ instanced mesh per part and level of detail, with each copy's vitality, seed
 and hue read per instance and its shape varied a little by where it stands.
 `applyVitality` in `packages/realize/src/channels.ts` is the CPU reference the
 tests run against: a piece collapses in the plant's rest shape, the wind
-bends it (`swayAt` in `packages/realize/src/wind.ts`, the twin of
-`WIND_GLSL` in `@gaia/render`), and droop bends its bough last. Ruin obeys gravity: `unsupportedAt` in
+bends it (`swayAt` in `packages/realize/src/sway.ts`, the twin of
+`SWAY_GLSL` in `@gaia/render`, on the gusts of `gustAt` in
+`packages/realize/src/wind-field.ts`), and droop bends its bough last. Ruin obeys gravity: `unsupportedAt` in
 `packages/realize/src/support.ts` applies the channels at a vitality and
 finds every piece (the vertices that move and go together) standing on
 nothing, whole or partway through collapsing, and every toppled piece not

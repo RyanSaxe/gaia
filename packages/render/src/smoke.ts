@@ -7,7 +7,7 @@
 import * as THREE from "three";
 import { CHANNEL_MATH } from "@gaia/realize";
 import { LIGHT_GLSL, type SceneLight } from "./light.ts";
-import { WIND_GLSL } from "./wind.ts";
+import { WIND_FIELD_GLSL } from "./wind-field.ts";
 
 const SMOKE_VERT = /* glsl */ `
 uniform float uTime;
@@ -21,7 +21,7 @@ varying float vAlpha;
 varying vec2 vCorner;
 varying vec3 vWorld;
 varying float vPhase;
-${WIND_GLSL}
+${WIND_FIELD_GLSL}
 void main() {
   vec3 corner = position - aPivot;
   float size0 = max(length(corner.xy) / 1.41421, 1e-4);

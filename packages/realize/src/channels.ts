@@ -2,7 +2,7 @@
 // constants, and `applyVitality` is the CPU reference tests run against.
 
 import { type Part, SPRAYS, type Swatch } from "@gaia/schema";
-import { type WindState, swayAt } from "./wind.ts";
+import { type WindState, swayAt } from "./sway.ts";
 
 export const CHANNEL_MATH = {
   /** Vitality span over which a piece collapses once it falls below its `loss`. */

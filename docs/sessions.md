@@ -26,7 +26,7 @@ and leaves the change to that session.
 - **Components:** what stands in the world and how it looks and behaves.
   - Flora, bushes, flowers, rocks, buildings, landmarks and their vitality.
   - `packages/primitives`, `packages/kinds` and `packages/realize`, except the wind field (below).
-  - The plant, bark and building shaders in `packages/render` (`plant.ts`, `instances.ts`, `smoke.ts`).
+  - The plant, bark and building shaders in `packages/render` (`plant.ts`, `instances.ts`, `smoke.ts`, `sway.ts`).
   - The Components tab (`app/renderer/flora`, `app/renderer/world`).
 - **Paper and wayfinding:** everything the person reads.
   - The field map, the minimap, selection and the sketch page.
@@ -41,15 +41,15 @@ and leaves the change to that session.
   - Layout (`land.ts`, `layoutWorld`, `landOf`, `graph.ts`) and vitality's pooling in `packages/world`.
   - `packages/terrain`, water, trails and walking.
   - The terrain lab and stand (`app/renderer/terrain`, except `looks.ts`'s wording).
-  - Light, sky and the wind field (`light.ts`, `shadow.ts`, `clearings.ts`, `wind.ts` in `packages/render`; `day.ts`, `sky.ts`, `world.ts`).
+  - Light, sky and the wind field (`light.ts`, `shadow.ts`, `clearings.ts`, `wind-field.ts` in `packages/render`; `day.ts`, `sky.ts`, `world.ts`, `wind-field.ts` in `packages/realize`).
   - The app shell (`app/main`, `app/preload`, `app/world-service/index.ts`).
   - Smoothness, the proving ground, CI, `AGENTS.md`, the README and merging to `main`.
 
 **Wind is split by what it is.**
-- The field is World's: where and when it blows, its direction, gust bands and overall strength (`WIND.dir`, `WIND.gust`, `gustAt`, and `WIND_GLSL`'s field).
-- How each plant answers it is Components': its stiffness, its levels and their lean, swing and flutter, per kind of plant (the rest of `packages/realize/src/wind.ts` and the plant shader's response).
+- The field is World's: where and when it blows, its direction, gust bands and overall strength (`wind-field.ts` in `packages/realize` and `packages/render`: `WIND_FIELD`, `gustAt` and `WIND_FIELD_GLSL`).
+- How each plant answers it is Components': its stiffness, its levels and their lean, swing and flutter, per kind of plant (`sway.ts` in `packages/realize` and `packages/render`: `WIND`'s levels, `swayAt`, `jointPhase`, `WindState` and `SWAY_GLSL`, and the plant shader's `applyWind`).
 - So round 16's overreacting flowers and willows are a Components fix. A world that is too windy everywhere would be a World fix.
-- `wind.ts` holds both today; the World session will split it into the field and the response.
+- `WIND` (the field's numbers with the levels) and `WIND_GLSL` (both chunks) put the two together for the plant shader, so each session edits only its own file.
 
 **Where a trunk meets the ground** is Components' (the tree's root flare). Seating a tree on a slope is World's (the stand).
 

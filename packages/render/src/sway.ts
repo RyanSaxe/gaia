@@ -1,23 +1,15 @@
-// The one wind field in GLSL: every swaying shader (plants, grass, smoke)
-// reads its gusts from here, so a gust that bows the grass reaches the trees
-// standing in it at the same moment. The numbers are WIND in @gaia/realize,
-// whose `gustAt` and `swayAt` are the CPU references.
+// How a plant answers the wind field, in GLSL: each level's push, the bend
+// about a joint and the whole plant's bend from its base. The numbers are
+// WIND in @gaia/realize, whose `swayAt` is the CPU reference; the gusts it
+// answers are `WIND_FIELD_GLSL`.
 
 import { WIND } from "@gaia/realize";
+import { WIND_FIELD_GLSL } from "./wind-field.ts";
 
 const f = (x: number): string => x.toFixed(5);
 
-/** `WIND_DIR`, `gustAt(p, t)` and the plant's bend: `windBend` and `bendUp`. */
-export const WIND_GLSL = /* glsl */ `
-const vec2 WIND_DIR = vec2(${f(WIND.dir[0])}, ${f(WIND.dir[1])});
-// Gusts travel downwind as broad soft bands, their fronts bowed by a slow
-// meander across the wind, so a gust reaches each thing in turn.
-float gustAt(vec2 p, float t) {
-  float along = dot(p, WIND_DIR);
-  float across = dot(p, vec2(-WIND_DIR.y, WIND_DIR.x));
-  float phase = along * ${f(WIND.gust.wave)} - t * ${f(WIND.gust.wave * WIND.gust.speed)} + 1.6 * sin(across * 0.023 + 0.7 * sin(along * 0.011 + t * 0.05));
-  return smoothstep(0.35, 1.0, 0.5 + 0.5 * sin(phase));
-}
+/** The plant's bend, on `WIND_FIELD_GLSL`'s gusts: `jointPhase`, `windPush`, `windBend`, `bendUp` and each level's numbers. */
+export const SWAY_GLSL = /* glsl */ `
 // A seeded phase from a joint's place, so neighboring boughs never swing in step.
 float jointPhase(vec3 j, float seed) {
   return (fract(sin(j.x * 12.9898 + j.y * 78.233 + j.z * 37.719) * 43758.5453) + seed) * 6.28318530718;
@@ -56,3 +48,6 @@ const vec3 WIND_LEAF = vec3(${f(WIND.leaf.lean)}, ${f(WIND.leaf.swing)}, ${f(WIN
 const vec3 WIND_REACH = vec3(${f(WIND.bough.reach)}, ${f(WIND.bough.least)}, ${f(WIND.bough.most)});
 const vec2 WIND_SMALL = vec2(${f(WIND.twig.reach)}, ${f(WIND.leaf.reach)});
 `;
+
+/** The field and the plant's bend together: `WIND_FIELD_GLSL` then `SWAY_GLSL`. */
+export const WIND_GLSL = WIND_FIELD_GLSL + SWAY_GLSL;
