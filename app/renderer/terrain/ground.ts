@@ -1,6 +1,7 @@
 // The baked lattice as Three.js: the ground around the person as nested
-// rings that follow them, a coarse whole-world mesh for the overview and the
-// water's mirror, a coarse ring of the wild land past the rim for views from
+// rings that follow them, the same rings at a quarter of their detail for the
+// water's mirror, a coarse whole-world mesh for the overview, a coarse ring
+// of the wild land past the rim for views from
 // above, a float texture of the lattice for every shader that stands on the
 // ground, and the painterly ground material, colored by each region's ground
 // cover and dried by the ground's vitality. Past the land the rings draw the
@@ -193,8 +194,10 @@ export const RINGS = {
   levels: 5,
   /** Quads per side of every ring; ring k's quads are 2^k lattice spacings wide, so it reaches 2^k * 128 m each way. */
   quads: 256,
-  /** Quad size of the whole-world mesh the overview and the water's mirror draw, in lattice spacings. */
+  /** Quad size of the whole-world mesh the overview draws, and of the mirror's innermost ring, in lattice spacings. */
   coarse: 4,
+  /** Quads per side of each of the mirror's rings: with quads `coarse` times as large, about six of the mirror's pixels each at any distance. */
+  mirrorQuads: 128,
 } as const;
 
 /** The rings' center moves in steps of the coarsest ring's quad, so every ring's grid stays on its own lattice samples. */
@@ -438,8 +441,14 @@ void main() {
 export interface GroundMesh {
   /** The ground around the person, as nested rings that follow them. */
   readonly fine: THREE.Mesh;
-  /** The whole lattice, coarsely, for the overview and the water's mirror. */
+  /** The whole lattice, coarsely, for the overview and its water's mirror. */
   readonly coarse: THREE.Mesh;
+  /**
+   * The rings at `RINGS.coarse` times their quad size, around the person,
+   * for the water's mirror while they walk: as fine as the whole-world mesh
+   * near them, and as cheap however large the world grows.
+   */
+  readonly mirror: THREE.Mesh;
   /** A coarse ring of the wild land past the rim, for views from above; walking, the rings draw the wild land. */
   readonly wilds: THREE.Mesh;
   readonly material: THREE.ShaderMaterial;
@@ -480,9 +489,8 @@ function meshOf(pos: number[], index: number[], material: THREE.ShaderMaterial):
 }
 
 /** The rings: ring 0 whole, each ring after it with a hole where the ring inside it lies. */
-function ringsMesh(material: THREE.ShaderMaterial): THREE.Mesh {
+function ringsMesh(material: THREE.ShaderMaterial, q: number = RINGS.quads): THREE.Mesh {
   const into = { pos: [] as number[], index: [] as number[] };
-  const q = RINGS.quads;
   for (let level = 0; level < RINGS.levels; level++) {
     grid(q, level, (i, j) => level === 0 || !(i >= -q / 4 && i < q / 4 && j >= -q / 4 && j < q / 4), into);
   }
@@ -537,6 +545,9 @@ export function createGround(t: Terrain, light: SceneLight, covers: RegionCovers
   };
   const coarse = coarseOf(t.lattice);
   let coarseN = t.lattice.n;
+  const mirrorUniforms = { ...uniforms, uCenter: { value: new THREE.Vector2() }, uViewer: { value: new THREE.Vector2() }, uBase: { value: t.lattice.spacing * RINGS.coarse }, uMorph: { value: 1 }, uQuads: { value: RINGS.mirrorQuads }, uSnap: { value: SNAP * t.lattice.spacing * RINGS.coarse } };
+  const mirror = ringsMesh(new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: FRAG, uniforms: mirrorUniforms, defines: { TRAIL_TEXTURE: "" } }), RINGS.mirrorQuads);
+  mirror.visible = false;
   const wilds = new THREE.Mesh(
     wildsGeometry(t),
     new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: FRAG, uniforms, defines: { WILDS: "" } }),
@@ -557,6 +568,7 @@ export function createGround(t: Terrain, light: SceneLight, covers: RegionCovers
   return {
     fine,
     coarse,
+    mirror,
     wilds,
     material,
     update,
@@ -567,6 +579,9 @@ export function createGround(t: Terrain, light: SceneLight, covers: RegionCovers
     follow(x, z) {
       ringUniforms.uViewer.value.set(x, z);
       ringUniforms.uCenter.value.set(Math.round(x / snap) * snap, Math.round(z / snap) * snap);
+      const mirrorSnap = snap * RINGS.coarse;
+      mirrorUniforms.uViewer.value.set(x, z);
+      mirrorUniforms.uCenter.value.set(Math.round(x / mirrorSnap) * mirrorSnap, Math.round(z / mirrorSnap) * mirrorSnap);
     },
   };
 }
