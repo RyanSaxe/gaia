@@ -212,6 +212,8 @@ export function buildBark(p: Resolved<typeof barkParams>, ctx: BuildContext, ske
   const trunkRadius = skel.limbs[0]?.startRadius ?? 0.2;
   const boughs = new Boughs(skel);
   const flare = flareOf(trunkRadius, lobesOf(r.fork("lobes")), 1.1);
+  // A tree stands on one trunk, which flares into root lobes; a shrub's many stems rise straight from the soil.
+  const oneTrunk = skel.limbs.filter((l) => l.parent === -1).length === 1;
 
   // Each chain of segments is one tube, so its bark runs unbroken past the joins.
   for (const whole of chainsOf(skel)) {
@@ -220,7 +222,7 @@ export function buildBark(p: Resolved<typeof barkParams>, ctx: BuildContext, ske
     const head = chain[0] as number;
     const first = skel.limbs[head] as Limb;
     const lr = r.fork(`limb${head}`);
-    const flared = first.depth === 0 && first.parent === -1;
+    const flared = oneTrunk && head === 0;
     const radial = flared ? 24 : first.depth === 0 ? 10 : first.startRadius > trunkRadius * 0.3 ? 7 : 5;
     // Limbs never go: twigs and leaves always have a limb under them, and a failing tree stands bare.
     const wither = 0.45 + 0.25 * lr.next();
