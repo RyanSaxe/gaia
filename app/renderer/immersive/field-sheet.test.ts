@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
+import { Library } from "@gaia/schema";
+import { BIOME_PRIMITIVES, RELIEF_PRIMITIVES } from "@gaia/primitives";
+import { WILDS, bakeTerrain, groundHeightAt, heightAt, landHalf, sampleWorld } from "@gaia/terrain";
 import { nameTails } from "./map-names.ts";
 import { MAP_STYLE, healthColor, healthField, landWash } from "./map-styles.ts";
+import { INK, RIM, levelsFor, reliefAt } from "./wild-ink.ts";
 
 describe("names that repeat", () => {
   it("letters a name alone when no other area shares it, and just enough of the path above it when one does", () => {
@@ -59,6 +63,38 @@ describe("health's colors", () => {
       const a = at(v);
       const b = at(v + 0.01);
       expect(Math.max(...a.map((c, i) => Math.abs(c - (b[i] as number))))).toBeLessThanOrEqual(6);
+    }
+  });
+});
+
+describe("the wild past the land", () => {
+  // Baked once and only read.
+  const t = bakeTerrain(sampleWorld(), new Library([...RELIEF_PRIMITIVES, ...BIOME_PRIMITIVES]));
+
+  it("draws the land's own heights, eased at its rim into the wild's, without a step, and the wild's own ground once settled", () => {
+    expect(reliefAt(t, 30, -40)).toBe(heightAt(t.lattice, 30, -40));
+    const out = landHalf(t) + WILDS.settle + 20;
+    for (let k = 0; k < 16; k++) {
+      const a = (k / 16) * Math.PI * 2;
+      const [cx, cz] = [Math.cos(a), Math.sin(a)];
+      expect(reliefAt(t, cx * out * 1.5, cz * out * 1.5)).toBeCloseTo(groundHeightAt(t, cx * out * 1.5, cz * out * 1.5), 6);
+      // From where the rim's easing begins, across the rim and far out into the wild, the ground never steps, so no
+      // contours crowd into a ring where the land ends.
+      for (let r = t.spec.size / 2 - RIM.inner - 20; r < out * 1.5; r += 0.5) {
+        expect(Math.abs(reliefAt(t, cx * (r + 0.5), cz * (r + 0.5)) - reliefAt(t, cx * r, cz * r))).toBeLessThan(0.25);
+      }
+    }
+  });
+
+  it("lays the scale nearest a view's zoom, and crossfades between two scales as it zooms, never jumping", () => {
+    expect(levelsFor(INK.scale)).toEqual([{ k: 0, weight: 1 }]);
+    let last = levelsFor(8);
+    for (let zoom = 8; zoom > 0.01; zoom *= 0.995) {
+      const levels = levelsFor(zoom);
+      expect(levels.reduce((sum, l) => sum + l.weight, 0)).toBeCloseTo(1, 9);
+      const weightOf = (ls: typeof levels, k: number): number => ls.find((l) => l.k === k)?.weight ?? 0;
+      for (const k of new Set([...levels, ...last].map((l) => l.k))) expect(Math.abs(weightOf(levels, k) - weightOf(last, k))).toBeLessThan(0.05);
+      last = levels;
     }
   });
 });

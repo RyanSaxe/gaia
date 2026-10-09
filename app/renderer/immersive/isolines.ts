@@ -37,7 +37,8 @@ export function contour(i0: number, i1: number, j0: number, j1: number, inside: 
  * Marching squares over a grid of heights `n` on a side, between columns i0..i1
  * and rows j0..j1: line segments, in grid coordinates, where the ground crosses
  * `level`, each end placed along its cell edge where the height passes the
- * level, so a contour runs smooth.
+ * level, so a contour runs smooth. Cells with a height not known (NaN) are
+ * skipped.
  */
 export function isoline(h: Float32Array, n: number, level: number, emit: (x0: number, y0: number, x1: number, y1: number) => void, i0 = 0, i1 = n - 1, j0 = 0, j1 = n - 1): void {
   const at = (i: number, j: number): number => h[j * n + i] as number;
@@ -48,6 +49,8 @@ export function isoline(h: Float32Array, n: number, level: number, emit: (x0: nu
       const b = at(i + 1, j);
       const c = at(i + 1, j + 1);
       const d = at(i, j + 1);
+      // A cell with a corner the grid does not know draws nothing.
+      if (Number.isNaN(a + b + c + d)) continue;
       const k = (a > level ? 1 : 0) | (b > level ? 2 : 0) | (c > level ? 4 : 0) | (d > level ? 8 : 0);
       if (k === 0 || k === 15) continue;
       const top = (): [number, number] => [i + cross(a, b), j];
