@@ -194,19 +194,20 @@ export function buildBark(p: Resolved<typeof barkParams>, ctx: BuildContext, ske
         out.vertex(q, ring, shade, channels(q));
       }
     }
+    // Wound counter-clockwise seen from outside, so the bark's outer face is its front face.
     for (let k = 0; k < rings; k++) {
       for (let j = 0; j < radial; j++) {
         const a = ringStart + k * (radial + 1) + j;
         const b = a + radial + 1;
-        out.triangle(a, b, a + 1);
-        out.triangle(a + 1, b, b + 1);
+        out.triangle(a, a + 1, b);
+        out.triangle(a + 1, b + 1, b);
       }
     }
     // Close the end with a short rounded tip.
     const last = ringStart + rings * (radial + 1);
     const tip = addScaled(limb.end, dir, limb.endRadius * 0.8);
     const tipIndex = out.vertex(tip, dir, 0.7, channels(tip));
-    for (let j = 0; j < radial; j++) out.triangle(last + j, tipIndex, last + j + 1);
+    for (let j = 0; j < radial; j++) out.triangle(last + j, last + j + 1, tipIndex);
   });
 
   return { parts: [out.part()], anchors: skel.tips };
@@ -422,8 +423,8 @@ function emitTwig(bark: PartBuilder, pts: readonly V3[], r0: number, r1: number,
     for (let j = 0; j < radial; j++) {
       const a = first + k * (radial + 1) + j;
       const b = a + radial + 1;
-      bark.triangle(a, b, a + 1);
-      bark.triangle(a + 1, b, b + 1);
+      bark.triangle(a, a + 1, b);
+      bark.triangle(a + 1, b + 1, b);
     }
   }
 }
