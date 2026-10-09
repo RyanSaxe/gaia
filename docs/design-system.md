@@ -69,8 +69,11 @@ the tips and the undersides of the limbs, each topped by two small sprays;
 far off a strand swells and narrows along its length, as its leaves bunch,
 so a curtain never reads as ribbons. A fir spray is a frond along its
 limb: a ridge of needles along the limb and branchlets to either side that
-reach toward the tip and droop, so a fir reads as layered, feathery
-needles rather than flat plates. No crown, bush or frond has a dark body
+reach toward the tip and droop, most of them doubled by a second card
+hung lower beneath, so a fir reads as layered, feathery needles rather
+than flat plates. A spire grows 1.4 whorls for each ring its look asks
+for, and a frond's outer branchlets reach farther and hang over the whorl
+below, so needles fill the sky between its levels. No crown, bush or frond has a dark body
 inside it to read as dense: its fullness comes from its leaves.
 
 A bush is seen close, where a spray's five small leaves cover too little
@@ -152,7 +155,9 @@ and in a gusty world's strongest gust, and finds nothing floating, within
 twigs evenly to stay within its share, 24,000 triangles for a tree, placed
 by the hundred, and twice that for a great tree, whose crown fills the
 screen up close, where every layer of leaf cards costs its whole area to
-draw. No crown ever drops a clump to fit. In that gust every
+draw. No crown ever drops a clump to fit. A fir's needles thin every
+frond's branchlets evenly to stay within 26,000, since its many whorls
+make its bark heavy. In that gust every
 plant, great tree and drift of wildflowers also keeps its shape: no
 triangle's edge stretches or shrinks by more than a quarter, and none
 turns over.
