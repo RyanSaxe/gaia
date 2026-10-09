@@ -38,7 +38,12 @@ import {
   streamFlow,
   surfaceHalfWidth,
   waterDepthAt,
+  WILD_THICKETS,
   wildPast,
+  wildRollAt,
+  wildScrub,
+  wildShare,
+  wildThicket,
   wildsRing,
   withinBudget,
 } from "@gaia/terrain";
@@ -418,6 +423,33 @@ describe("wild land past the rim", () => {
       for (let v = 0; v < positions.length; v += 3 * 37) {
         expect(positions[v + 1]!).toBeCloseTo(groundHeightAt(t, positions[v]!, positions[v + 2]!), 5);
       }
+    }
+  });
+
+  it("grows its own covers and thickets only out past the land, each cell's thicket always the same and gathering where it runs to scrub", () => {
+    const { cell, thinIn } = WILD_THICKETS;
+    for (const t of baked.slice(0, 4)) {
+      const h = landHalf(t);
+      // Settled, the ground is the wild's own roll, which the field map draws.
+      expect(groundHeightAt(t, h + WILDS.settle + 40, 17)).toBeCloseTo(wildRollAt(t, h + WILDS.settle + 40, 17), 9);
+      expect(wildShare(t, 0, 0)).toBe(0);
+      expect(wildShare(t, h + 200, -h - 200)).toBe(1);
+      const held = { scrub: [0, 0], open: [0, 0] };
+      for (let cj = -60; cj < 60; cj++) {
+        for (let ci = -60; ci < 60; ci++) {
+          const thicket = wildThicket(t, ci, cj);
+          if ((ci * 7 + cj) % 23 === 0) expect(wildThicket(t, ci, cj)).toEqual(thicket);
+          for (const b of thicket?.bushes ?? []) expect(wildPast(t, b.x, b.z)).toBeGreaterThanOrEqual(thinIn[0]);
+          const [cx, cz] = [(ci + 0.5) * cell, (cj + 0.5) * cell];
+          if (wildPast(t, cx, cz) < thinIn[1]) continue;
+          const scrub = wildScrub(cx, cz);
+          const tally = scrub > 0.6 ? held.scrub : scrub < 0.1 ? held.open : null;
+          if (tally === null) continue;
+          tally[0]! += 1;
+          tally[1]! += thicket === null ? 0 : 1;
+        }
+      }
+      expect(held.scrub[1]! / held.scrub[0]!).toBeGreaterThan((2 * held.open[1]!) / held.open[0]!);
     }
   });
 });

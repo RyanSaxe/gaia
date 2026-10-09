@@ -172,15 +172,17 @@ float wildHeight(vec2 xz) {
 }
 // The ground's height anywhere, as the walk stands on it.
 float groundHeight(vec2 xz) { return inWild(xz) ? wildHeight(xz) : groundSample(xz).x; }
-// How much of the wild's own cover grows at a point: none on the land, all of
-// it some way out, drifting in from the land's covers in islands.
+// The wild's covers, twins of wildShare, wildScrub and wildPatch in
+// @gaia/terrain, which the thickets and the field map read: how much of the
+// wild's own cover grows at a point, none on the land and all of it some way
+// out, drifting in from the land's covers in islands.
 float wildShare(vec2 xz) {
   float past = wildPast(xz);
   if (past < -40.0) return 0.0;
   return smoothstep(0.0, 1.0, (past - 20.0 + wildNoise(xz * 8.0 + 311.0) * 55.0) / 22.0);
 }
 // Where the wild runs to scrub, 0 to 1, in patches a few hundred meters across;
-// the wild's thickets gather there too (wildSpots reads the same field).
+// the wild's thickets gather there too.
 float wildScrub(vec2 xz) { return smoothstep(-0.1, 0.5, wildNoise(xz * 0.6 + 1000.0)); }
 // Which of the wild's two covers grows at a point, 0 to 1, in broad swathes a hundred meters and more across.
 float wildPatch(vec2 xz) { return smoothstep(-0.3, 0.3, wildNoise(xz * 1.5 + 97.0)); }
