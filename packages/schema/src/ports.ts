@@ -127,10 +127,12 @@ export const CUT = {
   core: 8,
   /** A spray in bloom: umbels of five-petaled flowers on fine stalks, with a few small fresh leaves, like a cherry's. */
   umbels: 9,
+  /** A crowded cluster of overlapping rounded leaves around a short stalk, its rim leafy, like the leaves of a bush seen close. */
+  crowded: 10,
 } as const;
 
 /** The cuts that are sprays: their leaves drop in place rather than collapsing onto the pivot. */
-export const SPRAYS: ReadonlySet<number> = new Set([CUT.cluster, CUT.oval, CUT.lobed, CUT.umbels]);
+export const SPRAYS: ReadonlySet<number> = new Set([CUT.cluster, CUT.oval, CUT.lobed, CUT.umbels, CUT.crowded]);
 
 export interface Anchor {
   readonly position: Vec3;
