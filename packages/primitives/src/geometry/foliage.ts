@@ -142,60 +142,123 @@ export class Boughs {
 
 // ---------- bark ----------
 
+/** One ring of a tube: its center, its frame and its radius before the flare. */
+interface Ring {
+  readonly center: V3;
+  readonly dir: V3;
+  readonly u: V3;
+  readonly v: V3;
+  readonly radius: number;
+  readonly limb: number;
+}
+
+/**
+ * Where a trunk meets the ground it flares, widest at the ground and
+ * curving in to the trunk within a few of its widths. A narrow fillet at
+ * the very bottom turns the flare out nearly flat, so its outline meets the
+ * ground in a curve instead of a point. `at` is the multiplier on the
+ * trunk's radius at height `y` and angle `theta`; `rings` are the heights
+ * that need a ring so the flare curves. The trunk's first ring is its base
+ * at the ground, the ring the terrain sinks a tree by on a slope.
+ */
+interface Flare {
+  readonly at: (y: number, theta: number) => number;
+  readonly rings: readonly number[];
+}
+
+/** The ring heights a flare needs, in trunk radii: close at the ground, where it curves most. */
+const FLARE_RINGS = [0.05, 0.12, 0.22, 0.36, 0.55, 0.85, 1.3, 2, 3, 4.2];
+
+function flareOf(trunkRadius: number): Flare {
+  const reach = trunkRadius * 1.2;
+  const fillet = trunkRadius * 0.16;
+  const at = (y: number): number => 1 + 0.55 * Math.exp(-Math.max(0, y) / reach) + 0.3 * Math.exp(-Math.max(0, y) / fillet);
+  return { at, rings: FLARE_RINGS.map((k) => k * trunkRadius) };
+}
+
 export function buildBark(p: Resolved<typeof barkParams>, ctx: BuildContext, skel: Skeleton): Built {
   const out = new PartBuilder("bark", "solid");
   const r = ctx.rand.fork("bark");
   const seed = Math.floor(r.next() * 1e6);
   const trunkRadius = skel.limbs[0]?.startRadius ?? 0.2;
   const boughs = new Boughs(skel);
+  const flare = flareOf(trunkRadius);
 
-  skel.limbs.forEach((limb, i) => {
-    const lr = r.fork(`limb${i}`);
-    const axis = sub(limb.end, limb.start);
-    const len = length(axis);
-    if (len < 1e-4) return;
-    const dir = normalize(axis);
-    // Sink each limb into its parent so joints never show a gap.
-    const sink = limb.depth === 0 ? 0 : Math.min(limb.startRadius * 1.2, len * 0.3);
-    const start = addScaled(limb.start, dir, -sink);
-    const span = len + sink;
-    const radial = limb.depth === 0 ? 10 : limb.startRadius > trunkRadius * 0.3 ? 7 : 5;
-    const rings = clamp(Math.ceil(span / ((limb.startRadius + limb.endRadius) * 2.2)), 1, limb.depth === 0 ? 6 : 3);
-    const [u, v] = basis(dir);
+  // Each chain of segments is one tube, so its bark runs unbroken past the joins.
+  for (const whole of chainsOf(skel)) {
+    const chain = whole.filter((i) => length(sub((skel.limbs[i] as Limb).end, (skel.limbs[i] as Limb).start)) >= 1e-4);
+    if (chain.length === 0) continue;
+    const head = chain[0] as number;
+    const first = skel.limbs[head] as Limb;
+    const lr = r.fork(`limb${head}`);
+    const flared = first.depth === 0 && first.parent === -1;
+    const radial = first.depth === 0 ? 10 : first.startRadius > trunkRadius * 0.3 ? 7 : 5;
     // Limbs never go: twigs and leaves always have a limb under them, and a failing tree stands bare.
     const wither = 0.45 + 0.25 * lr.next();
-    const furrows = limb.depth === 0 ? 7 : 4;
+    const furrows = first.depth === 0 ? 7 : 4;
 
-    const channels = (q: Vec3): Channels => {
-      const b = boughs.at(i, q);
-      return { loss: 0, droop: b.droop, wither, glow: 0, pivot: b.bough, bough: b.bough };
+    // The rings along the chain, in one frame carried from ring to ring, so
+    // the bark's ridges never jump where one segment meets the next.
+    const rings: Ring[] = [];
+    let u: V3 = basis(normalize(sub(first.end, first.start)))[0];
+    const push = (center: V3, dir: V3, radius: number, limb: number): void => {
+      u = normalize(addScaled(u, dir, -dot(u, dir)));
+      rings.push({ center, dir, u, v: cross(dir, u), radius, limb });
     };
+    chain.forEach((i, k) => {
+      const limb = skel.limbs[i] as Limb;
+      const len = length(sub(limb.end, limb.start));
+      const dir = normalize(sub(limb.end, limb.start));
+      const after = chain[k + 1];
+      const nextDir = after === undefined ? dir : normalize(sub((skel.limbs[after] as Limb).end, (skel.limbs[after] as Limb).start));
+      // A bough sinks into its parent so its joint never shows a gap.
+      const sink = k > 0 || limb.depth === 0 ? 0 : Math.min(limb.startRadius * 1.2, len * 0.3);
+      const span = len + sink;
+      const start = addScaled(limb.start, dir, -sink);
+      const radiusAt = (along: number): number => limb.startRadius + (limb.endRadius - limb.startRadius) * clamp((along - sink) / len, 0, 1);
+      const count = clamp(Math.ceil(span / ((limb.startRadius + limb.endRadius) * 2.2)), 1, limb.depth === 0 ? 6 : 3);
+      let alongs = Array.from({ length: count + 1 }, (_, n) => (n / count) * span);
+      if (k === 0 && flared) {
+        // Rings close together near the ground, so the flare curves.
+        const extra = flare.rings.map((y) => y / Math.max(dir[1], 0.5)).filter((a) => a < span * 0.8);
+        alongs = [...alongs, ...extra].sort((a, b) => a - b).filter((a, n, all) => n === 0 || a - (all[n - 1] as number) > trunkRadius * 0.03);
+      }
+      alongs.forEach((along, n) => {
+        if (k > 0 && n === 0) return;
+        const end = n === alongs.length - 1;
+        push(addScaled(start, dir, along), end ? normalize(add(dir, nextDir)) : dir, radiusAt(along), i);
+      });
+    });
 
+    // The surface without its bark's ridges gives the normals, so the flare
+    // shades as one smooth form; the ridges go on top.
+    const smooth = (ring: Ring, theta: number): V3 => {
+      const m = flared ? flare.at(ring.center[1], theta) : 1;
+      return addScaled(ring.center, add(scale(ring.u, Math.cos(theta)), scale(ring.v, Math.sin(theta))), ring.radius * m);
+    };
+    const step = (Math.PI * 2) / radial;
     const ringStart = out.vertexCount;
-    for (let k = 0; k <= rings; k++) {
-      const t = k / rings;
-      const along = t * span;
-      const center = addScaled(start, dir, along);
-      let radius = limb.startRadius + (limb.endRadius - limb.startRadius) * clamp((along - sink) / len, 0, 1);
-      if (limb.depth === 0 && limb.parent === -1) {
-        // Root flare where the trunk meets the ground.
-        const f = Math.max(0, 1 - center[1] / (trunkRadius * 5));
-        radius *= 1 + 0.55 * f * f;
-      }
+    rings.forEach((ring, k) => {
+      const lo = rings[Math.max(0, k - 1)] as Ring;
+      const hi = rings[Math.min(rings.length - 1, k + 1)] as Ring;
       for (let j = 0; j <= radial; j++) {
-        const theta = (j / radial) * Math.PI * 2;
-        const ring = add(scale(u, Math.cos(theta)), scale(v, Math.sin(theta)));
-        const wobble = fbm3(center[0] * 1.7 + Math.cos(theta), center[1] * 0.8, center[2] * 1.7 + Math.sin(theta), seed, 2);
-        const furrow = 0.5 + 0.5 * Math.sin(theta * furrows + wobble * 3 + center[1] * 0.6);
-        const bump = 1 + p.roughness * (0.14 * (furrow - 0.5) + 0.05 * wobble);
-        const q = addScaled(center, ring, radius * bump);
-        const ground = clamp(center[1] / 1.2, 0, 1);
+        const theta = j * step;
+        const outward = add(scale(ring.u, Math.cos(theta)), scale(ring.v, Math.sin(theta)));
+        let n = normalize(cross(sub(smooth(ring, theta + step * 0.5), smooth(ring, theta - step * 0.5)), sub(smooth(hi, theta), smooth(lo, theta))));
+        if (dot(n, outward) < 0) n = scale(n, -1);
+        const c = ring.center;
+        const wobble = fbm3(c[0] * 1.7 + Math.cos(theta), c[1] * 0.8, c[2] * 1.7 + Math.sin(theta), seed, 2);
+        const furrow = 0.5 + 0.5 * Math.sin(theta * furrows + wobble * 3 + c[1] * 0.6);
+        const bump = p.roughness * (0.14 * (furrow - 0.5) + 0.05 * wobble);
+        const q = addScaled(smooth(ring, theta), outward, ring.radius * bump);
+        const ground = clamp(c[1] / 1.2, 0, 1);
         const shade = (0.5 + 0.28 * (1 - p.roughness * 0.6) + 0.22 * furrow * (0.3 + p.roughness)) * (0.82 + 0.18 * ground) + 0.06 * wobble;
-        out.vertex(q, ring, shade, channels(q));
+        const b = boughs.at(ring.limb, q);
+        out.vertex(q, n, clamp(shade, 0, 1), { loss: 0, droop: b.droop, wither, glow: 0, pivot: b.bough, bough: b.bough });
       }
-    }
+    });
     // Wound counter-clockwise seen from outside, so the bark's outer face is its front face.
-    for (let k = 0; k < rings; k++) {
+    for (let k = 0; k < rings.length - 1; k++) {
       for (let j = 0; j < radial; j++) {
         const a = ringStart + k * (radial + 1) + j;
         const b = a + radial + 1;
@@ -204,11 +267,15 @@ export function buildBark(p: Resolved<typeof barkParams>, ctx: BuildContext, ske
       }
     }
     // Close the end with a short rounded tip.
-    const last = ringStart + rings * (radial + 1);
-    const tip = addScaled(limb.end, dir, limb.endRadius * 0.8);
-    const tipIndex = out.vertex(tip, dir, 0.7, channels(tip));
+    const end = chain[chain.length - 1] as number;
+    const lastLimb = skel.limbs[end] as Limb;
+    const lastDir = normalize(sub(lastLimb.end, lastLimb.start));
+    const last = ringStart + (rings.length - 1) * (radial + 1);
+    const tip = addScaled(lastLimb.end, lastDir, lastLimb.endRadius * 0.8);
+    const b = boughs.at(end, tip);
+    const tipIndex = out.vertex(tip, lastDir, 0.7, { loss: 0, droop: b.droop, wither, glow: 0, pivot: b.bough, bough: b.bough });
     for (let j = 0; j < radial; j++) out.triangle(last + j, last + j + 1, tipIndex);
-  });
+  }
 
   return { parts: [out.part()], anchors: skel.tips };
 }
@@ -567,9 +634,9 @@ export function buildLeafStrands(p: Resolved<typeof leafStrandsParams>, ctx: Bui
 
 // ---------- needles ----------
 
-/** Chains of limb segments that continue one another at the same depth. */
-function chainsOf(skel: Skeleton): Limb[][] {
-  const chains: Limb[][] = [];
+/** Chains of limb segments that continue one another at the same depth, as limb indices from the base: a trunk's segments, or one bough's. */
+function chainsOf(skel: Skeleton): number[][] {
+  const chains: number[][] = [];
   const next = new Map<number, number>();
   skel.limbs.forEach((l, i) => {
     const parent = skel.limbs[l.parent];
@@ -578,8 +645,8 @@ function chainsOf(skel: Skeleton): Limb[][] {
   skel.limbs.forEach((l, i) => {
     const parent = skel.limbs[l.parent];
     if (parent !== undefined && parent.depth === l.depth && next.get(l.parent) === i) return;
-    const chain: Limb[] = [l];
-    for (let at = next.get(i); at !== undefined; at = next.get(at)) chain.push(skel.limbs[at] as Limb);
+    const chain = [i];
+    for (let at = next.get(i); at !== undefined; at = next.get(at)) chain.push(at);
     chains.push(chain);
   });
   return chains;
@@ -590,7 +657,7 @@ export function buildNeedles(p: Resolved<typeof needlesParams>, ctx: BuildContex
   const r = ctx.rand.fork("needles");
   const s = ctx.facts.scale ?? 1;
   const crown = crownOf(skel.limbs.filter((l) => l.depth >= 1).map((l) => l.end));
-  const chains = chainsOf(skel);
+  const chains = chainsOf(skel).map((c) => c.map((i) => skel.limbs[i] as Limb));
   const boughs = new Boughs(skel);
   const top = skel.limbs.reduce((m, l) => Math.max(m, l.end[1]), 0.01);
   const anchors: Anchor[] = [];
