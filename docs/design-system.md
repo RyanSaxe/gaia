@@ -54,8 +54,8 @@ Each family has its own spray (`leaf-clumps@1`'s `leaf`): pointed, oval
 on fine stalks, their petals the family's pale bloom deepening to its leaf
 color at the heart, with a few small leaves in the family's stem green (a
 cherry's). A spray's stalks are the bark's color. A primitive only places
-cards and names their cut (`CUT` in `@gaia/schema`: cluster, oval, lobed
-and umbels are sprays; strand, needles, patch and core); the
+cards and names their cut (`CUT` in `@gaia/schema`: cluster, oval, lobed,
+umbels and crowded are sprays; strand, needles, patch and core); the
 plant shader cuts each card to its leaves, with no textures. Every card
 shades with the crown's blended normal, so the canopy lights as one
 volume, and sprays deep in a clump shade darker. As a spray shrinks on

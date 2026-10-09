@@ -378,6 +378,47 @@ vec2 sprayLeaves(vec2 p, float seed, float px, float merged, int kind) {
   gBloom *= 1.0 - merged;
   return vec2(mix(c.x, outline - 1.2 * bare, merged), mix(c.y, 1.0, merged));
 }
+// A crowded cluster: a short stalk from the card's base into its middle and
+// fourteen rounded leaves around it, overlapping like a bush's leaves seen
+// close: a centre leaf, five about it and eight in a ring, each pointing out
+// from the middle so the rim is all leaf tips. Each leaf has its own tone, a
+// darker edge where it lies over the next, and its own moment to drop as
+// vitality falls, so a failing cluster thins leaf by leaf from anywhere.
+// Far away its leaves merge into the same scalloped round as a spray's.
+vec2 crowdedCut(vec2 p, float seed, float px, float merged) {
+  vec2 o = p - vec2(0.0, 0.05);
+  float stalk = min(0.024 - abs(p.x), min(p.y + 1.02, 0.1 - p.y) * 0.5);
+  float d = stalk;
+  float tone = 0.8;
+  float bark = 1.0;
+  float best = -1.0;
+  for (int k = 0; k < 14; k++) {
+    float fk = float(k);
+    vec2 h = cellHash(vec2(fk, seed * 97.0));
+    float ring = k == 0 ? 0.0 : k < 6 ? 0.3 : 0.58;
+    float slot = k < 6 ? (fk - 1.0) / 5.0 : (fk - 6.0) / 8.0;
+    float ang = slot * 6.2832 + seed * 6.2832 + (h.x - 0.5) * 0.7 + (k < 6 ? 0.5 : 0.0);
+    vec2 c = vec2(cos(ang), sin(ang) * 0.92) * ring * (0.9 + 0.2 * h.y);
+    vec2 dir = k == 0 ? normalize(vec2(h.x - 0.5, 1.0)) : normalize(c + vec2(h.y - 0.5, h.x - 0.5) * 0.4);
+    float len = (k < 6 ? 0.46 : 0.5) * (0.88 + 0.24 * h.y);
+    vec2 q = o - c + dir * len * 0.35;
+    q = vec2(dot(q, dir), dot(q, vec2(-dir.y, dir.x)));
+    float di = ovalShape(q, len, len * 0.42) - dropAt(fract(h.x * 5.3 + h.y)) * 0.6 * len;
+    // Outer leaves lie over inner ones: the later leaf wins where both cover.
+    float shown = di + fk * 0.002;
+    if (di > 0.0 && shown > best) {
+      best = shown;
+      float rim = smoothstep(0.0, 0.012 + px, di);
+      tone = (0.78 + 0.22 * h.x) * mix(0.72, 1.0, rim) * (0.9 + 0.12 * clamp(q.x / len, 0.0, 1.0));
+      bark = 0.0;
+    }
+    d = max(d, di);
+  }
+  gBark = bark * step(0.0, d) * (1.0 - merged);
+  float outline = 0.8 + 0.07 * cos((atan(o.y, o.x) + seed * 6.2832) * 9.0) - length(o * vec2(1.0, 0.92));
+  float bare = vLife.x > 0.0 ? 1.0 - smoothstep(vLife.x, vLife.x + 0.2, vLife.y) : 0.0;
+  return vec2(mix(d, outline - 1.2 * bare, merged), mix(tone, 1.0, merged));
+}
 // Moss on stone: the patch ends where its depth, jittered per vertex, falls
 // below a fifth, so the edge follows a soft winding contour.
 float patchCut(vec2 p) {
@@ -455,6 +496,7 @@ vec2 leafCut(float thin) {
     : form < 4.5 ? sprayLeaves(p, seed, px, merged, 0)
     : form < 5.5 ? sprayLeaves(p, seed, px, merged, 1)
     : form < 6.5 ? vec2(patchCut(p), 1.0)
+    : abs(form - ${CUT.crowded.toFixed(1)}) < 0.5 ? crowdedCut(p, seed, px, max(far, smoothstep(0.06, 0.16, px)))
     : sprayLeaves(p, seed, px, merged, 2);
   if (form > 1.5 && form < 3.5 || abs(form - ${CUT.patch.toFixed(1)}) < 0.5) c.y = mix(0.86 + 0.14 * smoothstep(0.0, 0.07, c.x), 1.0, far);
   if (form > 2.5 && form < 3.5) c.y *= 0.9 + 0.1 * smoothstep(0.15, 0.45, abs(fract(p.y * 15.0 - abs(p.x) * 1.3 + seed * 5.0) - 0.5));
