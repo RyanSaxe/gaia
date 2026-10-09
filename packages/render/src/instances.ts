@@ -52,7 +52,7 @@ export interface PlantInstances extends PlantView {
    * at that distance.
    */
   readonly levels: readonly number[];
-  /** Encloses the plant as built, at scale 1 where it stands, so no piece's center lies outside it. */
+  /** Encloses the plant as built, at scale 1 where it stands, so no piece's center lies outside it. A copy: changing it changes nothing. */
   readonly built: THREE.Sphere;
   /** How much farther than `built` the plant reaches as drawn: wind, decline and far pieces growing toward a pixel's size. */
   readonly reach: number;
@@ -245,6 +245,7 @@ export function createPlantInstances(plant: Realized, light: SceneLight, spots: 
     levels.forEach((level, k) => {
       const picked = chosen[k];
       const n = picked?.copies.length ?? 0;
+      if (n > count) throw new Error(`draw was given ${n} copies at level ${k} of a plant with ${count}.`);
       if (picked !== undefined && (level.key !== picked.key || level.generation !== generation)) {
         picked.copies.forEach((c, i) => level.attribute.array.set(source.subarray(c * 16, c * 16 + 16), i * 16));
         level.attribute.needsUpdate = true;
@@ -275,7 +276,7 @@ export function createPlantInstances(plant: Realized, light: SceneLight, spots: 
       return count;
     },
     levels: levels.map((l) => l.at),
-    built: sphere,
+    built: sphere.clone(),
     reach,
     get triangles() {
       return perCopy * count;
