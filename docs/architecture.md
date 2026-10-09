@@ -637,6 +637,11 @@ into its far form a few views a frame under the wait (`startFarBake`), and
 the wait lifts only once all of them are ready. A baked form is kept in the
 browser's IndexedDB (`app/renderer/terrain/far-store.ts`), keyed by a hash of
 the build, the bake's version and the swap size, so each build bakes once.
+A new world settles in over a few frames (`adopt`), and every shader it
+needs compiles off the page's thread (`warmSoon`, three's `compileAsync`)
+for the view, the mirror's and the shadow's targets and the shadow's depth,
+while the world draws no frames, so the wait never stutters as a world
+opens.
 
 ## Time
 
