@@ -1124,7 +1124,7 @@ cast into it.
 | Open ground | at least 40% of a region |
 | Landmarks | at most 1 per region |
 | Tree spacing | about half a crown width to a crown between trunks in a grove, set by its area's character, never under 4.5 m; wider toward a grove's margin |
-| Trees | about 470 in a world: past that every grove gives up the same share, keeping the tree that names its file |
+| Trees | every tree a world's areas call for, at most 48 to a file's grove; only past 200,000 does every grove give up the same share, keeping the tree that names its file |
 
 Jev decides which dependencies become trails: every one it would walk. The
 network, not a count of trails, holds the composition: `planTrails` routes
