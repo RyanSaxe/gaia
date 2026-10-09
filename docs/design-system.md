@@ -582,12 +582,13 @@ finger and keys all follow the same three rules.
   the ground hidden behind it. A drag looks around and never walks. W A S D
   or the arrows walk and Shift hurries. A drag or a key takes the view back
   from a turn at once. Touching the world never does anything but move you.
-- **Everything else is paper.** The minimap at the lower left and the
+- **Everything else is paper.** The minimap at the lower right and the
   compass at the top right, and a thing's page while the person stops at
   it, are the only things on the screen that are not the world: a tap on
-  the minimap (or M) unfolds the field map out of it, and the compass opens
-  the slip. A tap on the open map is the one way to travel far at
-  once: it is a paper action, so it belongs to the map, never to the world.
+  the minimap's land (or M) unfolds the field map out of it, a tap on its
+  edge tucks it away, and the compass opens the slip. A tap on the open map
+  is the one way to travel far at once: it is a paper action, so it belongs
+  to the map, never to the world.
 - **Paper you open holds the world still.** While the map or the slip is
   open, the world waits under a faint wash. A tap there folds the paper and
   moves no one, a drag there does nothing, and Esc folds it. The keys still
@@ -639,11 +640,12 @@ The wait still washes each area in its land's color until it is rebuilt
 to paint health as the map does.
 
 The sheets nest by scale, each growing out of the last so nothing jumps:
-the minimap is the land around the person; a tap unfolds it into the
-field map, which draws back from the minimap's close view to the whole
-land; close in, the map shows the next level down, each file's patch and
-name. A thing's page is a sheet of its own, risen from the bottom edge at
-the lower left while the person stops at the thing.
+the minimap is the land around the person, turned to the way they face; a
+tap unfolds it into the field map, which draws back from the minimap's
+close view to the whole land and turns to north up as it comes; close in,
+the map shows the next level down, each file's patch and name. A thing's
+page is a sheet of its own, risen from the bottom edge at the lower left
+while the person stops at the thing.
 
 **What a thing says: the sketch is the news.** A thing's page
 (`app/renderer/immersive/sketch.ts`) is a sheet of the traveller's
@@ -739,25 +741,37 @@ codebase's land is the wild, which names nothing.
 
 The three ways work together:
 
-- **The minimap.** A torn scrap of the field map lies at the lower left
-  (`app/renderer/immersive/minimap.ts`): the land around the person, about
-  170 m across, as the map paints it, north up, with the traveller at its
-  middle, their footprints turning with the way they look. It is the local
-  land, not the whole: the paint runs to its torn edges and gives way to
-  bare paper at its foot, where the area's name is lettered as the map
-  letters names, its parent directories in spaced capitals above it. After
-  a moment in a new area, the old name fades as the new one is written, so
-  crossing a border reads on the scrap as a border crossed and a name
-  changed; standing still writes the file underfoot beneath it. A tap on it
-  (or M) unfolds the field map out of it. It costs nothing a frame: its
-  canvas holds a window of the land half again wider than the scrap, drawn
-  from the field map's painted paper, and slides under the scrap by a
-  transform; it is drawn again only as the person nears the window's edge
-  or the paper is painted afresh.
+- **The minimap.** A torn scrap of the field map, about 156 px square,
+  lies at the lower right (`app/renderer/immersive/minimap.ts`): the land
+  around the person, about 130 m across, as the map paints it, turned with
+  them so the way they face is always up. The traveller stands a little
+  below its middle, so more of the way ahead shows, their footprints behind
+  them. It is the local land, not the whole, and it carries no north: the
+  compass points north. Its paint thins out unevenly over 6 px into 4 px of
+  bare paper at its torn edge, so it parts from green grass without a drawn
+  frame, and it lies close on the view under a light shadow. After 2.5 s in
+  a new area the old name fades and the new one is lettered across the land
+  near its top, as the field map letters areas: upright, widely spaced
+  capitals with a narrow edge of paper round the letters, smaller for a
+  long name, and a name that repeats carries just enough of its path above
+  it in italic. A border walked along never changes the name. In the wild
+  the old name fades after the same pause and nothing is written, since
+  the wild stands for no directory. A tap on its land (or M) unfolds the
+  field map out of it. A tap on its outer 16 px, or up to 6 px past its torn
+  edge, tucks it: it slides slowly down past the screen's foot and leaves
+  its top 50 px, the name and a band of turning land, showing; a tap on
+  what shows brings it back. It costs almost nothing a frame: its canvas
+  holds a window of the land wide enough to cover the scrap at any heading
+  with 75 m to walk, drawn from the field map's painted paper in a few
+  milliseconds, and one transform turns it about the traveller and
+  slides it under the scrap; it is drawn again only as the person nears the
+  window's edge or the paper is painted afresh. After dark the lantern
+  reads its paper and land alike, as it reads the map.
 - **The field map.** A tap on the minimap (or M) unfolds the field map out
   of it: the sheet grows from the scrap to its place while its land draws
-  back from the scrap's close view to the whole, by transforms alone, and
-  folds back into the scrap the same way. Its folds stay faintly creased. The sheet is handmade paper
+  back from the scrap's close view to the whole and turns from the way the
+  person faces to north up, by transforms alone, and folds back into the
+  scrap the same way. Its folds stay faintly creased. The sheet is handmade paper
   with a torn, deckled edge; a tap off the sheet, Esc or M folds it. The land runs square to every edge of the sheet: the sheet
   ends at the land's square, with no margin, and past the land's rounded
   rim each part of the sheet takes the health of the land nearest it, so

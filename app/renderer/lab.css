@@ -284,40 +284,43 @@ details.json pre { font: 11px/1.45 ui-monospace, "SF Mono", Menlo, monospace; ba
 .wayfinding.standing { opacity: 1; }
 .wayfinding:not(.standing) button { pointer-events: none !important; }
 
-/* Where you are: the minimap, a torn scrap of the field map at the lower left, its land painted to its torn
-   edges and fading into bare paper at its foot, where the area's name is written. The old name fades as the new
-   one is written; standing still writes the file underfoot beneath it. A tap unfolds the map out of it. */
+/* Where you are: the minimap, a torn scrap of the field map at the lower right, its land turned so the way the
+   person faces is always up. The paint thins out into bare paper at its torn edge, and it lies close on the view
+   under a light shadow. The area's name is lettered across its land as the map letters areas; the old name fades as
+   the new one is written. A tap on its land unfolds the map out of it; a tap on its edge tucks it below the screen's
+   foot, leaving its top 50 px, and a tap there brings it back, slowly. */
 .minimap {
-  --w: 216px; --land: 216px;
-  position: absolute; left: max(18px, env(safe-area-inset-left)); bottom: max(18px, env(safe-area-inset-bottom));
-  width: var(--w); height: calc(var(--land) + 52px); rotate: -0.7deg; cursor: pointer; pointer-events: auto;
-  opacity: 0; transition: opacity 0.6s ease, width 0.55s cubic-bezier(0.2, 0.75, 0.25, 1), height 0.55s cubic-bezier(0.2, 0.75, 0.25, 1);
+  --side: 156px; --foot: max(18px, env(safe-area-inset-bottom));
+  position: absolute; right: max(18px, env(safe-area-inset-right)); bottom: var(--foot); width: var(--side); height: var(--side);
+  opacity: 0; transition: opacity 0.6s ease, translate 1s cubic-bezier(0.45, 0, 0.25, 1), width 0.55s cubic-bezier(0.2, 0.75, 0.25, 1), height 0.55s cubic-bezier(0.2, 0.75, 0.25, 1);
 }
 .minimap.on { opacity: 1; }
-/* The scrap's paper and its shadow are still, so they are drawn once: no filter lies over the land that slides
-   under it, which would be drawn again every frame. After dark a still veil reads it by the lantern. */
-.minimap::before, .minimap::after {
+.minimap.tucked { translate: 0 calc(var(--side) + var(--foot) - 50px); }
+/* The paper and its shadow are still, so they are drawn once: only the land turns, and no blur lies over it, which
+   would be drawn again every frame it turns. After dark the lantern reads the paper and the land alike, and a still
+   veil warms its middle and lets its edges fall into blue. */
+.minimap-paper {
+  position: absolute; inset: 0; pointer-events: none;
+  filter: drop-shadow(0 0.5px 0.8px rgba(30, 22, 10, 0.24)) drop-shadow(0 3px 6px rgba(30, 22, 10, 0.15)) sepia(calc(var(--night, 0) * 0.3)) brightness(calc(1 - var(--night, 0) * 0.22));
+}
+.minimap-paper::before, .minimap::after {
   content: ""; position: absolute; inset: 0; pointer-events: none;
   -webkit-mask-image: var(--deckle); mask-image: var(--deckle); -webkit-mask-size: 100% 100%; mask-size: 100% 100%;
 }
-.minimap::before {
-  background: radial-gradient(130% 120% at 30% 20%, #f8f1df, #eee2c4);
-  filter: drop-shadow(0 8px 14px rgba(30, 22, 10, 0.24)) sepia(calc(var(--night, 0) * 0.3)) brightness(calc(1 - var(--night, 0) * 0.22));
-}
+.minimap-paper::before { background: radial-gradient(130% 120% at 30% 20%, #f8f1df, #eee2c4); }
 .minimap::after {
   z-index: 1;
-  background: radial-gradient(ellipse 90% 80% at 62% 70%, rgba(255, 214, 160, calc(var(--night, 0) * 0.1)), rgba(36, 34, 70, calc(var(--night, 0) * 0.3)));
+  background: radial-gradient(ellipse 90% 80% at 50% 60%, rgba(255, 214, 160, calc(var(--night, 0) * 0.1)), rgba(36, 34, 70, calc(var(--night, 0) * 0.3)));
 }
+.minimap-face { position: absolute; inset: 0; pointer-events: none; filter: sepia(calc(var(--night, 0) * 0.3)) brightness(calc(1 - var(--night, 0) * 0.22)); }
+/* The paint thins out over 6 px into 4 px of bare paper at the torn edge (minimap.ts draws the mask once). */
 .minimap-sheet {
-  position: absolute; left: 0; top: 0; width: var(--land); height: var(--land); overflow: hidden;
-  /* The paint runs to the torn edge on three sides and gives way to bare paper toward the name. */
-  -webkit-mask-image: var(--deckle), linear-gradient(#000 74%, transparent 100%); mask-image: var(--deckle), linear-gradient(#000 74%, transparent 100%);
-  -webkit-mask-size: 100% 100%; mask-size: 100% 100%; -webkit-mask-composite: source-in; mask-composite: intersect;
-  transition: opacity 0.5s ease;
+  position: absolute; inset: 0; overflow: hidden;
+  -webkit-mask-image: var(--paint); mask-image: var(--paint); -webkit-mask-size: 100% 100%; mask-size: 100% 100%;
 }
-.minimap-land { position: absolute; left: 0; top: 0; will-change: transform; }
-.minimap-here { position: absolute; left: 50%; top: 50%; width: 0; height: 0; }
-.minimap-here .field-map-traveller { position: absolute; left: -26px; top: -26px; width: 52px; height: 52px; overflow: visible; }
+.minimap-land { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
+.minimap-here { position: absolute; left: 50%; top: 60%; width: 0; height: 0; }
+.minimap-here .field-map-traveller { position: absolute; left: -22px; top: -22px; width: 44px; height: 44px; overflow: visible; }
 /* Walking up to a thing: a vermilion pencil ring drawn round it, its name beside it in the traveller's hand. */
 .minimap-mark { position: absolute; left: 0; top: 0; width: 0; height: 0; opacity: 0; transition: opacity 0.4s ease; }
 .minimap-mark.on { opacity: 1; }
@@ -330,17 +333,25 @@ details.json pre { font: 11px/1.45 ui-monospace, "SF Mono", Menlo, monospace; ba
   text-shadow: 0 0 3px rgba(246, 238, 219, 0.95), 0 0 6px rgba(246, 238, 219, 0.8);
 }
 .minimap-mark.left span { left: auto; right: 16px; }
-/* The area's name, lettered as the map letters names: its parents in spaced capitals over it in italic. */
-.minimap-band { position: absolute; left: 14px; right: 12px; top: calc(var(--land) - 14px); height: 62px; transition: opacity 0.4s ease; }
-.minimap-name { position: absolute; left: 0; right: 0; top: 0; display: grid; justify-items: start; color: var(--ink); opacity: 0; transform: translateY(5px); transition: opacity 0.9s ease, transform 0.9s ease; }
-.minimap-name.on { opacity: 1; transform: none; transition-delay: 0.35s; }
-.minimap-parent { font-size: 8.5px; font-weight: 600; letter-spacing: 0.22em; text-transform: uppercase; color: var(--ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
-.minimap-area { font-size: 19px; font-style: italic; font-weight: 600; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
-.minimap-underfoot { position: absolute; right: 2px; bottom: 6px; max-width: 60%; font: italic 12px "Iowan Old Style", Georgia, serif; color: var(--ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: 0; transition: opacity 0.8s ease; }
-.minimap-underfoot.on { opacity: 1; }
-.minimap-underfoot::before { content: "on "; }
+/* The area's name, lettered across the land as the field map letters areas: upright, widely spaced capitals with a
+   narrow edge of paper round the letters, and a name that repeats carries just enough of its path above it. */
+.minimap-names { position: absolute; left: 14px; right: 14px; top: 11px; transition: opacity 0.4s ease; }
+.minimap-name {
+  position: absolute; left: 0; right: 0; top: 0; display: grid; justify-items: center; color: #3a2f22; opacity: 0;
+  paint-order: stroke fill; -webkit-text-stroke-color: rgba(239, 229, 203, 0.82); transition: opacity 0.9s ease;
+}
+.minimap-name.on { opacity: 1; transition-delay: 0.35s; }
+.minimap-above { font: italic 600 10px/1.25 "Iowan Old Style", Georgia, serif; color: rgba(58, 47, 34, 0.8); -webkit-text-stroke-width: 2.5px; white-space: nowrap; }
+.minimap-area {
+  font-weight: 600; line-height: 1.3; text-transform: uppercase; letter-spacing: 0.17em; margin-right: -0.17em; -webkit-text-stroke-width: 4.5px;
+  max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* Taps land a little past the torn edge too: the outer 16 px and the 6 px beyond tuck the minimap away. */
+.minimap-touch { position: absolute; inset: -6px; z-index: 2; pointer-events: auto; cursor: pointer; }
+.minimap:not(.on) .minimap-touch { pointer-events: none; }
 .wayfinding:has(.field-map.open) .minimap { opacity: 0; transition-duration: 0.25s; }
-.wayfinding:has(.jump-cover.on) .minimap-band { opacity: 0; }
+.wayfinding:has(.field-map.open) .minimap-touch { pointer-events: none; }
+.wayfinding:has(.jump-cover.on) .minimap-names { opacity: 0; }
 
 /* A thing's page: a page of the traveller's sketchbook at the lower left, risen from the bottom edge while the
    person stops at a thing and sunk below it when they walk away. The pen draws the sketch as it rises, and the
@@ -516,6 +527,6 @@ details.json pre { font: 11px/1.45 ui-monospace, "SF Mono", Menlo, monospace; ba
   .field-map { left: 8px; top: 8px; width: calc(100% - 16px); height: calc(100% - 16px); }
   .field-map { --fold: 44px; }
   .way-button, .slip-view { min-height: 44px; }
-  .minimap { --w: 168px; --land: 168px; left: 10px; bottom: max(10px, env(safe-area-inset-bottom)); }
+  .minimap { right: 10px; --foot: max(10px, env(safe-area-inset-bottom)); }
   .thing-page { left: 10px; width: min(300px, calc(100vw - 20px)); }
 }
