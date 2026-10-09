@@ -148,7 +148,11 @@ bough (`twig`) and the point its piece hangs from (`pivot`).
 builds every crown on frames of every kind with bark and blossoms, and
 every great tree, healthy, tired and failing (1, 0.5, 0.15), in still air
 and in a gusty world's strongest gust, and finds nothing floating, within
-40,000 triangles a plant (50,000 for a great tree). In that gust every
+40,000 triangles a plant (80,000 for a great tree). A crown thins its
+twigs evenly to stay within its share, 24,000 triangles for a tree, placed
+by the hundred, and twice that for a great tree, whose crown fills the
+screen up close, where every layer of leaf cards costs its whole area to
+draw. No crown ever drops a clump to fit. In that gust every
 plant, great tree and drift of wildflowers also keeps its shape: no
 triangle's edge stretches or shrinks by more than a quarter, and none
 turns over.

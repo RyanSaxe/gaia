@@ -319,8 +319,12 @@ export interface Clump {
   readonly r: Rand;
 }
 
-/** Leaves the rest of the 40,000-triangle plant budget for bark and blossoms. */
-const CLUMP_TRIANGLE_BUDGET = 24_000;
+/**
+ * A crown's twigs and leaves, at most: the rest of the 40,000-triangle plant
+ * budget is for bark and blossoms. A tree is placed by the hundred, so its
+ * crown thins evenly to this. A great tree stands alone and passes its own.
+ */
+export const CLUMP_TRIANGLE_BUDGET = 24_000;
 
 /** Each leaf's spray cut, and its sprays' size: a few broad maple leaves fill a larger spray than many small ovals. */
 const SPRAY_CUTS = {
@@ -339,7 +343,7 @@ const SPRAY_CUTS = {
  * sits inside to show. Twigs and sprays take their bough's joint and droop,
  * and each twig bends about where it leaves the limb.
  */
-export function buildLeafClumps(p: Resolved<typeof leafClumpsParams>, ctx: BuildContext, skel: Skeleton): Built {
+export function buildLeafClumps(p: Resolved<typeof leafClumpsParams>, ctx: BuildContext, skel: Skeleton, budget = CLUMP_TRIANGLE_BUDGET): Built {
   const r = ctx.rand.fork("clumps");
   const s = ctx.facts.scale ?? 1;
   const crown = crownOf(skel.tips.map((t) => t.position));
@@ -387,7 +391,7 @@ export function buildLeafClumps(p: Resolved<typeof leafClumpsParams>, ctx: Build
   // Every clump stays, so the crown keeps its shape; a crown over budget thins all its twigs evenly.
   let density = 1;
   const triangles = (): number => clumps.reduce((n, c) => n + twigsOf(look, c.radius, density) * TRIANGLES_PER_TWIG, 0);
-  while (triangles() > CLUMP_TRIANGLE_BUDGET && density > 0.05) density -= 0.01;
+  while (triangles() > budget && density > 0.05) density -= 0.01;
   const leaf = new PartBuilder("leaf");
   const twigs = new PartBuilder("bark");
   const anchors: Anchor[] = [];
