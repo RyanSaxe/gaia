@@ -7,7 +7,7 @@
 
 import { type Part, SPRAYS } from "@gaia/schema";
 import { CHANNEL_MATH, applyVitality } from "./channels.ts";
-import type { WindState } from "./sway.ts";
+import { FLUTTERS, type WindState } from "./sway.ts";
 
 export const SUPPORT = {
   /** A piece whose lowest point is this close to the ground (y = 0) stands on it. */
@@ -154,8 +154,6 @@ function signature(part: Part, i: number): number {
 
 /** Swatches that are not solid things: smoke rises on its own. */
 const WEIGHTLESS = new Set(["smoke"]);
-/** Thin swatches flutter in the wind, as the plant shader flutters them. */
-const THIN = new Set(["leaf", "bloom", "moss", "stem", "eye"]);
 const CELL = 0.35;
 /** Long edges are probed every this many meters. */
 const EDGE = 0.3;
@@ -225,7 +223,7 @@ export function unsupportedAt(parts: readonly Part[], v: number, options: { read
   const index = new Map<number, number>();
   parts.forEach((part, pi) => {
     const base = offsets[pi] as number;
-    const wind = options.wind === undefined ? undefined : { state: options.wind, flutter: THIN.has(part.swatch) };
+    const wind = options.wind === undefined ? undefined : { state: options.wind, flutter: FLUTTERS.has(part.swatch) };
     const seen = applyVitality(part, v, undefined, wind).positions;
     // Each piece's pivot as vitality and the wind carry it: where a card's stalk meets what holds it.
     const stalks = applyVitality({ ...part, positions: part.channels.pivot }, v, undefined, wind).positions;

@@ -4,12 +4,15 @@
 // that falls must come to rest. Every plant put together from the flora
 // primitives is checked healthy, tired and failing, in still air and in a
 // strong gust: every leaf, flower and twig is carried by what it grows on.
-// A new primitive in these roles is covered as soon as it is in PRIMITIVES.
+// Every plant and drift of wildflowers also keeps its shape in that gust: the
+// wind turns pieces about their joints, so no triangle stretches, splits or
+// folds. A new primitive in these roles is covered as soon as it is in
+// PRIMITIVES.
 
 import { describe, expect, it } from "vitest";
 import { type AnyPrimitive, type Built, type BuildingPlan, type Field, Library, type Part, rand } from "@gaia/schema";
 import { PRIMITIVES } from "@gaia/primitives";
-import { type WindState, gustAt, resolveParams, unsupportedAt } from "@gaia/realize";
+import { FLUTTERS, type WindState, applyVitality, gustAt, resolveParams, unsupportedAt } from "@gaia/realize";
 
 const lib = new Library(PRIMITIVES);
 const facts = { scale: 1, age: 120 };
@@ -82,12 +85,54 @@ describe("buildings", () => {
   }, 20_000);
 });
 
-/** A gusty world's strongest gust over a supple plant: the most any plant bends. */
+/**
+ * A gusty world's strongest gust over a supple plant: the most any plant
+ * bends. The gustiest world (strength 1.55, gust 0.855) peaks at
+ * 1.55 x (1 + 0.855 x 0.7), about 2.5, as the lab drives it.
+ */
 const GUST: WindState = (() => {
   let time = 0;
   for (let t = 0; t < 30; t += 0.05) if (gustAt(0, 0, t) > gustAt(0, 0, time)) time = t;
-  return { time: time + 0.4, strength: 1.55, sway: 0.9, frequency: 1.1, height: 6, at: [0, 0, 0], seed: 0.3 };
+  return { time: time + 0.4, strength: 2.5, sway: 0.9, frequency: 1.1, height: 6, at: [0, 0, 0], seed: 0.3 };
 })();
+/** Moments through that gust, so each level is caught near the top of its swing. */
+const GUST_MOMENTS = [0, 0.35, 0.7, 1.05, 1.4].map((dt) => ({ ...GUST, time: GUST.time + dt }));
+
+/** How far a triangle's edge may stretch or shrink in the wind, as a ratio: a smooth bend changes it a little. */
+const STRETCH = 1.25;
+
+/** Each triangle of `parts`, healthy, whose edge stretches or shrinks past `STRETCH` or which turns over, in each of `moments`. */
+function misshapen(parts: readonly Part[], moments: readonly WindState[]): string[] {
+  const out: string[] = [];
+  const at = (a: Float32Array, i: number): [number, number, number] => [a[i * 3] as number, a[i * 3 + 1] as number, a[i * 3 + 2] as number];
+  const sub = (a: number[], b: number[]): number[] => [(a[0] as number) - (b[0] as number), (a[1] as number) - (b[1] as number), (a[2] as number) - (b[2] as number)];
+  const cross = (a: number[], b: number[]): number[] => [(a[1] as number) * (b[2] as number) - (a[2] as number) * (b[1] as number), (a[2] as number) * (b[0] as number) - (a[0] as number) * (b[2] as number), (a[0] as number) * (b[1] as number) - (a[1] as number) * (b[0] as number)];
+  const dot = (a: number[], b: number[]): number => (a[0] as number) * (b[0] as number) + (a[1] as number) * (b[1] as number) + (a[2] as number) * (b[2] as number);
+  for (const part of parts) {
+    const rest = applyVitality(part, 1).positions;
+    for (const wind of moments) {
+      const moved = applyVitality(part, 1, undefined, { state: wind, flutter: FLUTTERS.has(part.swatch) }).positions;
+      for (let t = 0; t < part.indices.length && out.length < 5; t += 3) {
+        const ids = [part.indices[t], part.indices[t + 1], part.indices[t + 2]] as number[];
+        const r = ids.map((i) => at(rest, i));
+        const m = ids.map((i) => at(moved, i));
+        const where = `${part.swatch} triangle at (${(r[0] as number[]).map((c) => c.toFixed(2)).join(", ")}), ${wind.time.toFixed(2)} s`;
+        for (let e = 0; e < 3; e++) {
+          const lr = Math.hypot(...sub(r[e] as number[], r[(e + 1) % 3] as number[]));
+          const lm = Math.hypot(...sub(m[e] as number[], m[(e + 1) % 3] as number[]));
+          if (lr > 0.002 && (lm > lr * STRETCH || lm < lr / STRETCH)) {
+            out.push(`${where}: an edge goes from ${lr.toFixed(3)} m to ${lm.toFixed(3)} m`);
+            break;
+          }
+        }
+        const nr = cross(sub(r[1] as number[], r[0] as number[]), sub(r[2] as number[], r[0] as number[]));
+        const nm = cross(sub(m[1] as number[], m[0] as number[]), sub(m[2] as number[], m[0] as number[]));
+        if (Math.hypot(...nr) > 1e-5 && dot(nr, nm) < 0) out.push(`${where}: it turns over`);
+      }
+    }
+  }
+  return out;
+}
 
 describe("plants", () => {
   const skeletons = lib.forRole("Skeleton").flatMap((p) => samples(p).map((s, i) => build(p, s, null, 21 + i)));
@@ -114,4 +159,19 @@ describe("plants", () => {
     expect(floaters).toEqual([]);
     expect(parts.reduce((n, p) => n + p.indices.length / 3, 0)).toBeLessThanOrEqual(GREAT_TREE_BUDGET);
   }, 120_000);
+  it.each(cases)("%s keeps its shape in the gust: no triangle stretches, splits or folds (sample %i)", (_id, i, crown, s) => {
+    const parts = plantOf(crown, s, i);
+    const height = Math.max(...parts.map((p) => p.positions.reduce((m, y, k) => (k % 3 === 1 ? Math.max(m, y) : m), 0.3)));
+    expect(misshapen(parts, GUST_MOMENTS.map((g) => ({ ...g, height })))).toEqual([]);
+  }, 60_000);
+  it.each(samples(lib.get("great-tree@1")).map((s, i) => [i, s] as const))("a great tree keeps its shape in the gust (sample %i)", (i, s) => {
+    const parts = (build(lib.get("great-tree@1"), s, null, 5 + i) as Built).parts as Part[];
+    expect(misshapen(parts, GUST_MOMENTS.map((g) => ({ ...g, height: 20 })))).toEqual([]);
+  }, 120_000);
+  const drifts = lib.forRole("Drift").flatMap((p) => samples(p).map((s, i) => [p.id, i, p, s] as const));
+  it.each(drifts)("%s keeps every stem, leaf and flower whole in the gust (sample %i)", (_id, i, p, s) => {
+    const parts = (build(p, s, null, 11 + i) as Built).parts as Part[];
+    const height = Math.max(...parts.map((q) => q.positions.reduce((m, y, k) => (k % 3 === 1 ? Math.max(m, y) : m), 0.3)));
+    expect(misshapen(parts, GUST_MOMENTS.map((g) => ({ ...g, height })))).toEqual([]);
+  }, 60_000);
 });

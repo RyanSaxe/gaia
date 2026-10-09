@@ -4,7 +4,7 @@
 
 import * as THREE from "three";
 import { CUT, type Part, SPRAYS, type Swatch } from "@gaia/schema";
-import { CHANNEL_MATH, DETAIL, type Realized, pieceFrames, spinAt } from "@gaia/realize";
+import { CHANNEL_MATH, DETAIL, FLUTTERS, type Realized, pieceFrames, spinAt } from "@gaia/realize";
 import { LIGHT_GLSL, type SceneLight } from "./light.ts";
 import { WIND_GLSL } from "./sway.ts";
 import { createSmokeMaterial } from "./smoke.ts";
@@ -147,38 +147,32 @@ float pieceScale(mat4 model) {
 }
 
 ${WIND_GLSL}
-// A level's push in the copy's own frame, so a turned copy bends downwind.
-vec3 pushOf(vec3 level, float give, float gust, float phase, vec2 along) {
-  return pushAlong(windPush(level, give, uFrequency, gust, uTime, phase), along);
-}
 
 // The plant in the wind, level by level (WIND and swayAt in @gaia/realize):
-// a leaf flutters on its stalk in a gust, its twig bends about where it
-// leaves the bough, the bough about where it leaves the trunk, and the
-// whole plant from its base. Each level bends whatever it carries, so
-// nothing parts from what holds it. Joints take the copy's own shape.
+// a leaf or flower turns as one on its stalk in a gust (never a stiff
+// needle), its twig turns about where it leaves the bough, the bough about
+// where it leaves the trunk, and the whole plant bends from its base. Each level turns whatever it
+// carries, so nothing parts from what holds it. Joints take the copy's own
+// shape, and the wind its own frame, so a turned copy bends downwind.
 vec3 applyWind(vec3 p, mat4 model, vec3 root) {
   float give = uWind * uSway;
   if (give <= 0.0) return p;
   vec3 wd = transpose(mat3(model)) * vec3(WIND_DIR.x, 0.0, WIND_DIR.y);
   vec2 along = normalize(wd.xz + vec2(1e-6, 0.0));
-  if (uFlutter > 0.0) {
+  float trunk = trunkGive(uHeight);
+  if (uFlutter > 0.0 && !windStiff(aCutout.z)) {
     vec3 j = applyVariety(aPivot, root);
-    float g = gustAt((model * vec4(j, 1.0)).xz, uTime);
-    float amp = give * WIND_LEAF.y * g * g * sin(uTime * (0.5 + uFrequency) * WIND_LEAF.z + jointPhase(aPivot, uSeed));
-    p = windBend(p, j, normal * amp, WIND_SMALL.y);
+    p = windFlutter(p, j, applyVariety(aTwig, root), give, uFrequency, gustAt((model * vec4(j, 1.0)).xz, uTime), uTime, jointPhase(aPivot, uSeed), along);
   }
   if (distance(aTwig, aBough) > 1e-4) {
     vec3 j = applyVariety(aTwig, root);
-    float g = gustAt((model * vec4(j, 1.0)).xz, uTime);
-    p = windBend(p, j, pushOf(WIND_TWIG, give, g, jointPhase(aTwig, uSeed), along), WIND_SMALL.x);
+    p = windBendAt(p, j, WIND_TWIG, give, uFrequency, gustAt((model * vec4(j, 1.0)).xz, uTime), uTime, jointPhase(aTwig, uSeed), WIND_SMALL.x, along);
   }
   if (length(aBough) > 1e-4) {
     vec3 j = applyVariety(aBough, root);
-    float g = gustAt((model * vec4(j, 1.0)).xz, uTime);
-    p = windBend(p, j, pushOf(WIND_BOUGH, give, g, jointPhase(aBough, uSeed), along), clamp(WIND_REACH.x * uHeight, WIND_REACH.y, WIND_REACH.z));
+    p = windBendAt(p, j, WIND_BOUGH, give * sqrt(trunk), uFrequency, gustAt((model * vec4(j, 1.0)).xz, uTime), uTime, jointPhase(aBough, uSeed), clamp(WIND_REACH.x * uHeight, WIND_REACH.y, WIND_REACH.z), along);
   }
-  return bendUp(p, pushOf(WIND_TRUNK, give, gustAt(root.xz, uTime), uSeed * 6.28318530718, along), uHeight);
+  return bendUp(p, windLean(WIND_TRUNK, give * trunk, uFrequency, gustAt(root.xz, uTime), uTime, uSeed * 6.28318530718, 1.0, 0.0, along), uHeight);
 }
 `;
 
@@ -732,7 +726,7 @@ export function createPlant(plant: Realized, light: SceneLight): PlantView {
   const box = new THREE.Box3();
   const geometries = plant.parts.map(geometryOf);
   for (const g of geometries) if (g.boundingBox !== null) box.union(g.boundingBox);
-  const height = Math.max(1, box.max.y);
+  const height = Math.max(0.3, box.max.y);
   const radius = Math.max(Math.abs(box.min.x), box.max.x, Math.abs(box.min.z), box.max.z, 1);
   // Wind and decline move vertices a little past the built mesh. A padded
   // sphere lets every pass cull the plant without ever clipping a swaying tip.
@@ -776,7 +770,7 @@ export function createPlant(plant: Realized, light: SceneLight): PlantView {
       return;
     }
     const foliage = FOLIAGE[part.swatch] ?? 0.5;
-    const perPart = { uFlutter: { value: foliage === 0 ? 0 : 1 } };
+    const perPart = { uFlutter: { value: FLUTTERS.has(part.swatch) ? 1 : 0 } };
     const defines = hasRuin(part) ? { RUIN: "" } : {};
     const color = new THREE.ShaderMaterial({
       defines,
