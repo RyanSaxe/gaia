@@ -1,30 +1,25 @@
 // The one wind field in GLSL: every shader that moves in the wind (plants,
 // grass, smoke) reads its breeze and gusts from here, so a gust that bows
-// the grass reaches the trees standing in it at the same moment. It is a
-// line-for-line transcription of `gustAt` and `windDirAt` in @gaia/realize,
-// with WIND_FIELD's numbers; a test runs this text against them. How a plant
-// answers the field is `SWAY_GLSL`.
+// the grass reaches the trees standing in it at the same moment. `gustAt` is
+// a line-for-line transcription of `gustAt` in @gaia/realize, with
+// WIND_FIELD's numbers; a test runs this text against it. The wind's
+// direction is one value a frame, so the scene light computes it with
+// `windDirAt` (`uWindDir`) rather than every vertex turning it again. How a
+// plant answers the field is `SWAY_GLSL`.
 
 import { WIND_FIELD } from "@gaia/realize";
 
 const f = (x: number): string => x.toFixed(8);
-const { wander, breeze, gust } = WIND_FIELD;
+const { breeze, gust } = WIND_FIELD;
 
 /**
- * `WIND_DIR`, the wind's direction now (a macro on `uTime`, which every
- * shader that reads it declares), `windDir(t)` and `gustAt(p, t)`.
+ * `WIND_DIR`, where the wind blows toward now (the scene light's `uWindDir`,
+ * which every material using this chunk takes), and `gustAt(p, t)`.
  */
 export const WIND_FIELD_GLSL = /* glsl */ `
 const vec2 WIND_MEAN = vec2(${f(WIND_FIELD.dir[0])}, ${f(WIND_FIELD.dir[1])});
-// Where the wind blows toward at time t: its mean direction, turned a few
-// degrees by a slow wander.
-vec2 windDir(float t) {
-  float a = ${f(wander.swing[0])} * sin(t * ${f(wander.rate[0])} + 0.6) + ${f(wander.swing[1])} * sin(t * ${f(wander.rate[1])} + 2.1);
-  float c = cos(a);
-  float s = sin(a);
-  return vec2(WIND_MEAN.x * c - WIND_MEAN.y * s, WIND_MEAN.x * s + WIND_MEAN.y * c);
-}
-#define WIND_DIR windDir(uTime)
+uniform vec2 uWindDir;
+#define WIND_DIR uWindDir
 // How hard the air blows at p and time t, 0 to 1: a breeze that swells and
 // eases, and irregular gusts, most of them mild, that travel downwind as
 // soft fronts bowed by a slow meander.

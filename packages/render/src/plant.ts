@@ -794,7 +794,7 @@ export function createPlant(plant: Realized, light: SceneLight): PlantView {
       defines,
       vertexShader: DEPTH_VERT,
       fragmentShader: DEPTH_FRAG,
-      uniforms: { uTime: light.uTime, uWind: light.uWind, uNightness: light.uNightness, uEye: light.uEye, ...shared, ...perPart },
+      uniforms: { uTime: light.uTime, uWind: light.uWind, uWindDir: light.uWindDir, uNightness: light.uNightness, uEye: light.uEye, ...shared, ...perPart },
       side: THREE.DoubleSide,
     });
     const mesh = new THREE.Mesh(geometries[i], color);

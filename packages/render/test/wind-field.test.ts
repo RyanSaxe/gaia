@@ -1,12 +1,13 @@
-// The shaders' wind field is a transcription of the CPU's (`gustAt` and
-// `windDirAt` in @gaia/realize), so the gust that bends a plant in a test is
-// the gust that bends it on screen. Tests cannot run a GPU, so this runs the
-// GLSL text itself as JavaScript: its functions use only float arithmetic
-// and built-ins that have a Math twin.
+// The shaders' wind field is the CPU's (`gustAt` and `windDirAt` in
+// @gaia/realize), so the gust that bends a plant in a test is the gust that
+// bends it on screen. Tests cannot run a GPU, so this runs the GLSL text
+// itself as JavaScript: its functions use only float arithmetic and built-ins
+// that have a Math twin. The direction is computed on the CPU for every
+// shader, from the scene light's clock.
 
 import { describe, expect, it } from "vitest";
 import { gustAt, windDirAt } from "@gaia/realize";
-import { WIND_FIELD_GLSL } from "@gaia/render";
+import { WIND_FIELD_GLSL, createSceneLight } from "@gaia/render";
 
 type Vec2 = { x: number; y: number };
 const BUILT_INS = {
@@ -32,7 +33,6 @@ function glslFunction(name: string): (...args: unknown[]) => unknown {
 
 describe("WIND_FIELD_GLSL", () => {
   const gust = glslFunction("gustAt");
-  const dir = glslFunction("windDir");
   const moments = Array.from({ length: 400 }, (_, i) => i * 7.31);
   const spots = [[0, 0], [37, -12], [-260, 410], [512, 180], [-90, -333]] as const;
 
@@ -40,12 +40,13 @@ describe("WIND_FIELD_GLSL", () => {
     for (const [x, z] of spots) for (const t of moments) expect(gust({ x, y: z }, t)).toBeCloseTo(gustAt(x, z, t), 3);
   });
 
-  it("turns with windDirAt", () => {
+  it("turns with windDirAt, by the scene light's clock", () => {
+    const light = createSceneLight();
     for (const t of moments) {
-      const d = dir(t) as Vec2;
+      light.uTime.value = t;
       const [x, z] = windDirAt(t);
-      expect(d.x).toBeCloseTo(x, 5);
-      expect(d.y).toBeCloseTo(z, 5);
+      expect(light.uWindDir.value.x).toBeCloseTo(x, 12);
+      expect(light.uWindDir.value.y).toBeCloseTo(z, 12);
     }
   });
 });

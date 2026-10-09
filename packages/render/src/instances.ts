@@ -199,7 +199,7 @@ export function createPlantInstances(plant: Realized, light: SceneLight, spots: 
       depth: new THREE.ShaderMaterial({
         vertexShader: INSTANCED_DEPTH,
         fragmentShader: DEPTH_FRAG,
-        uniforms: { uTime: light.uTime, uWind: light.uWind, uNightness: light.uNightness, uEye: light.uEye, ...shared, ...perPart },
+        uniforms: { uTime: light.uTime, uWind: light.uWind, uWindDir: light.uWindDir, uNightness: light.uNightness, uEye: light.uEye, ...shared, ...perPart },
         side: THREE.DoubleSide,
       }),
     };

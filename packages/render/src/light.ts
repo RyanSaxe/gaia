@@ -3,7 +3,7 @@
 
 import * as THREE from "three";
 import type { LightSpec } from "@gaia/schema";
-import { AIR, type AirInput } from "@gaia/realize";
+import { AIR, type AirInput, windDirAt } from "@gaia/realize";
 
 export interface SceneLight {
   readonly uSunDirection: { value: THREE.Vector3 };
@@ -21,6 +21,8 @@ export interface SceneLight {
   readonly uMist: { value: number };
   /** Multiplies every sway; the world's wind, 1 by default. */
   readonly uWind: { value: number };
+  /** Where the wind blows toward now, over the ground (x, z): `windDirAt` at `uTime`, read whenever a material draws. */
+  readonly uWindDir: { readonly value: THREE.Vector2 };
   readonly uShadowMatrix: { value: THREE.Matrix4 };
   readonly uShadowMap: { value: THREE.Texture | null };
   readonly uShadowTexel: { value: number };
@@ -135,6 +137,8 @@ export const hexToVec3 = (hex: number): THREE.Vector3 =>
   new THREE.Vector3(((hex >> 16) & 255) / 255, ((hex >> 8) & 255) / 255, (hex & 255) / 255);
 
 export function createSceneLight(): SceneLight {
+  const uTime = { value: 0 };
+  const windDir = new THREE.Vector2();
   return {
     uSunDirection: { value: new THREE.Vector3(0.45, 0.62, 0.3).normalize() },
     uSunColor: { value: hexToVec3(0xffe08c) },
@@ -146,9 +150,16 @@ export function createSceneLight(): SceneLight {
     uCelSoftness: { value: 0.2 },
     uFogColor: { value: hexToVec3(0xa9cde8) },
     uFogDensity: { value: 0.006 },
-    uTime: { value: 0 },
+    uTime,
     uMist: { value: 0 },
     uWind: { value: 1 },
+    uWindDir: {
+      // Follows the clock by itself, so no lab or world has to set it.
+      get value() {
+        const [x, z] = windDirAt(uTime.value);
+        return windDir.set(x, z);
+      },
+    },
     uShadowMatrix: { value: new THREE.Matrix4() },
     uShadowMap: { value: null },
     uShadowTexel: { value: 1 / 2048 },
