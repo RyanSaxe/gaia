@@ -302,6 +302,8 @@ export interface Landing {
 }
 
 /** Where a landing may be: water no deeper than this (dry first, then wading), this far from any solid, and how far it looks from the spot asked for, meters. */
+/** A bark vertex lower than this, meters, belongs to the trunk's base where it meets the ground. */
+const TRUNK_BASE = 0.05;
 const LAND = { dry: 0.02, wade: 0.45, clear: 1.1, reach: 40, ring: 1.5 };
 /** A landing faces along a trail this close, else the area's building or landmark this close, meters. */
 const FACE_TRAIL = 14;
@@ -550,9 +552,12 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     Array.from({ length: TREE_BUILDS }, (_, k) => {
       const plant = realize(preset.blueprint, flora, floraLib, { seed: seedOf(`terrain-lab/tree-${p}-${k}`), facts: { scale: 1, age: 120 } });
       const bark = plant.parts.find((part) => part.swatch === "bark");
+      // The trunk's base is every bark vertex at the ground, however many sides or lobes the trunk has.
       let trunk = 0;
       if (bark !== undefined) {
-        for (let i = 0; i < 11; i++) trunk = Math.max(trunk, Math.hypot(bark.positions[i * 3] ?? 0, bark.positions[i * 3 + 2] ?? 0));
+        for (let i = 0; i < bark.positions.length; i += 3) {
+          if ((bark.positions[i + 1] as number) < TRUNK_BASE) trunk = Math.max(trunk, Math.hypot(bark.positions[i] as number, bark.positions[i + 2] as number));
+        }
       }
       const base = Math.max(0.5, trunk);
       let height = 1;
