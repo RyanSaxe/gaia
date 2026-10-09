@@ -8,9 +8,10 @@ import * as THREE from "three";
 import { type AnyKind, type Library, seedOf } from "@gaia/schema";
 import { flora, rock, wildflowers } from "@gaia/kinds";
 import { FLOWER_PRESETS, type Preset, ROCK_PRESETS, type Realized, SHRUB_PRESETS, realize } from "@gaia/realize";
-import { type PlantInstances, type SceneLight, createPlantInstances } from "@gaia/render";
+import type { SceneLight } from "@gaia/render";
 import { type Habitat, type Occupied, type Placement, type ScatterRule, type Terrain, type WorldSpec, scatterComponents } from "@gaia/terrain";
 import type { Clearings } from "./clearings.ts";
+import { type Copies, createCopies } from "./woods.ts";
 
 interface Group {
   readonly id: string;
@@ -126,11 +127,11 @@ export interface Understory {
    */
   place(terrain: Terrain, world: WorldSpec, trees: readonly Occupied[], density?: number, placed?: readonly Placement[]): void;
   /** Instances that cast into the sun's shadow map. */
-  readonly casters: () => readonly PlantInstances[];
+  readonly casters: () => readonly Copies[];
   /** Objects the shadow pass hides: drifts of flowers are too fine to cast. */
   readonly quiet: () => readonly THREE.Object3D[];
   /** Every instanced blueprint, for culling each pass and forcing detail. */
-  readonly all: () => readonly PlantInstances[];
+  readonly all: () => readonly Copies[];
   readonly placements: () => readonly Placement[];
   /** Sets each placement's vitality, by its index in `placements()`, on its copy; nothing moves or rebuilds. */
   setVitality(vitality: ArrayLike<number>): void;
@@ -149,9 +150,9 @@ export function createUnderstory(scene: THREE.Scene, light: SceneLight, lib: Lib
     const tops = plants.map((p) => p.parts.reduce((top, part) => part.positions.reduce((t, v, i) => (i % 3 === 1 ? Math.max(t, v) : t), top), 0));
     return { group: g, plants, radii: plants.map(footprintOf), reach, tops, outlines: reach.map((o) => o.map((r) => r * g.clears)) };
   });
-  const views: { group: Group; view: PlantInstances }[] = [];
+  const views: { group: Group; view: Copies }[] = [];
   /** Each blueprint's instances by rule and variant, kept for the life of the lab. */
-  const kept = new Map<string, { group: Group; view: PlantInstances }>();
+  const kept = new Map<string, { group: Group; view: Copies }>();
   let placed: readonly Placement[] = [];
   /** Each placement's blueprint and its copy among that blueprint's instances. */
   let copies: readonly { readonly key: string; readonly copy: number }[] = [];
@@ -197,7 +198,7 @@ export function createUnderstory(scene: THREE.Scene, light: SceneLight, lib: Lib
             return;
           }
           if (spots.length === 0) return;
-          const view = createPlantInstances(plant, light, spots);
+          const view = createCopies(plant, light, spots);
           scene.add(view.object);
           const entry = { group, view };
           kept.set(key, entry);

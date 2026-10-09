@@ -17,13 +17,10 @@ import { defaultParams, validate } from "@gaia/world";
 import { FLORA_PRESETS, LANDMARK_PRESETS, type Realized, TRAIL_PRESETS, WORLD_PRESETS, buildSlots, mergeParts, realize, realizeRegion, realizeSky } from "@gaia/realize";
 import {
   LANTERN,
-  type DetailMode,
-  type PlantInstances,
   type PlantView,
   applyLight,
   createLantern,
   createPlant,
-  createPlantInstances,
   createRenderer,
   createSceneLight,
   createSunShadow,
@@ -108,6 +105,7 @@ import { type Stand, type StandRequest, type StandingLandmark, landmarkBase, own
 import { groundVitalityAt, setGroundOwnership, showGroundVitality } from "./vitality.ts";
 import { type TourStop, tourStops } from "./tour.ts";
 import { type Change, pictureChange, tallyFrame } from "./measure.ts";
+import { type Copies, type DetailMode, createCopies } from "./woods.ts";
 
 const TEMPLATE = /* html */ `
 <main class="stage">
@@ -599,9 +597,9 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   /** The file a tree grows for, in the codebase's world. */
   const treeFile = (t: { readonly patch?: number }): string | undefined => (t.patch === undefined ? undefined : code?.world.patches[t.patch]?.path);
   const treeVitality = (t: Tree): number => liveFileVitality.get(treeFile(t) ?? "") ?? t.represented.report.vitality;
-  let treeViews: PlantInstances[] = [];
+  let treeViews: Copies[] = [];
   /** Each build's instances by variant, kept for the life of the lab. */
-  const groves = new Map<number, PlantInstances>();
+  const groves = new Map<number, Copies>();
 
   // Rocks, bushes and wildflowers, scattered around the trees.
   const understory = createUnderstory(scene, light, new Library([...FLORA_PRIMITIVES, ...ROCK_PRIMITIVES, ...WILDFLOWER_PRIMITIVES]), clearings);
@@ -610,7 +608,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   // each instanced blueprint packs only the cells that pass's camera sees.
   // Past the land: the wild's covers and its scattered bushes, which stand for nothing.
   const wildGrowth = createWildGrowth(scene, light, covers, lib, floraLib);
-  const instanced = (): PlantInstances[] => [...treeViews, ...understory.all(), ...wildGrowth.all()];
+  const instanced = (): Copies[] => [...treeViews, ...understory.all(), ...wildGrowth.all()];
   let warming = false;
   scene.onBeforeRender = (_renderer, _scene, passCamera) => {
     if (!warming) for (const v of instanced()) v.cull(passCamera);
@@ -658,7 +656,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
         return [had];
       }
       if (spots.length === 0) return [];
-      const view = createPlantInstances(v.plant, light, spots);
+      const view = createCopies(v.plant, light, spots);
       scene.add(view.object);
       groves.set(k, view);
       return [view];
@@ -1716,13 +1714,13 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
    * to the wind's own change over half a second, a change people already see
    * all the time, measured along the same walk every `windEvery` steps, each
    * time 1.7 s further on, so the samples span the breeze's lulls and gusts.
-   * Returns each step's [meters walked, mean, worst block] and the wind's
-   * worst blocks.
+   * The wind's clock stands at `at` seconds, or where it is now. Returns each
+   * step's [meters walked, mean, worst block] and the wind's worst blocks.
    */
-  function walkSteps(meters: number, step: number, windEvery = 10): { steps: [number, number, number][]; wind: number[] } {
+  function walkSteps(meters: number, step: number, at = light.uTime.value, windEvery = 10): { steps: [number, number, number][]; wind: number[] } {
     const start = { x: walker.x, z: walker.z, yaw: walker.yaw, pitch: walker.pitch };
     const was = frozen;
-    const t = light.uTime.value;
+    const t = at;
     const dx = -Math.sin(start.yaw);
     const dz = -Math.cos(start.yaw);
     const steps: [number, number, number][] = [];
@@ -1734,10 +1732,10 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
         detailPin = { x: walker.x, z: walker.z };
         const here = grabFrame();
         if (k % windEvery === 0) {
-          const at = t + (k / windEvery) * 1.7;
-          frozen = at;
+          const moment = t + (k / windEvery) * 1.7;
+          frozen = moment;
           const before = grabFrame();
-          frozen = at + 0.5;
+          frozen = moment + 0.5;
           wind.push(frameChange(before, grabFrame()).worst);
           frozen = t;
         }
@@ -2016,7 +2014,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       /** How much the picture changed between two grabbed frames (`pictureChange`). */
       change: frameChange,
       /** The walk test (`walkSteps`): each step's change to the detail drawn, and the wind's along the same walk. */
-      steps: (meters: number, step = 0.7) => walkSteps(meters, step),
+      steps: (meters: number, step = 0.7, at?: number) => walkSteps(meters, step, at),
       /** Walks as a person would for `seconds` of real time (`wander`). */
       wander,
       /** Shows or hides every tree, for comparing frame costs. */
