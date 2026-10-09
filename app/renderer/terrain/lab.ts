@@ -10,7 +10,7 @@
 
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { type GroundSpec, Library, type RouteSpec, type SeasonSpec, blueprintOf, seedOf } from "@gaia/schema";
+import { type Blueprint, type BuildingPlan, type GroundSpec, Library, type Palette, type RouteSpec, type SeasonSpec, blueprintOf, seedOf } from "@gaia/schema";
 import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, LANDMARK_PRIMITIVES, NO_SHIFT, ROUTE_PRIMITIVES, RELIEF_PRIMITIVES, ROCK_PRIMITIVES, WILDFLOWER_PRIMITIVES, WORLD_PRIMITIVES, hex, mixLab } from "@gaia/primitives";
 import { biome, flora, landmark, link, world as worldKind } from "@gaia/kinds";
 import { defaultParams, validate } from "@gaia/world";
@@ -246,8 +246,10 @@ export interface StoodWorld {
   readonly terrain: Terrain;
   /** The paths' ways of tread. */
   readonly ways: readonly Way[];
-  readonly buildings: readonly { readonly x: number; readonly z: number; readonly name: string; readonly kind: string; readonly vitality: number }[];
-  readonly landmarks: readonly { readonly x: number; readonly z: number; readonly name: string; readonly vitality: number }[];
+  /** Each building, with the plan, blueprint and colors its map mark is drawn from. */
+  readonly buildings: readonly { readonly x: number; readonly z: number; readonly name: string; readonly kind: string; readonly vitality: number; readonly plan: BuildingPlan; readonly blueprint: Blueprint; readonly palette: Palette }[];
+  /** Each landmark, with the blueprint and colors its map mark is drawn from. */
+  readonly landmarks: readonly { readonly x: number; readonly z: number; readonly name: string; readonly vitality: number; readonly blueprint: Blueprint; readonly palette: Palette }[];
   readonly trees: readonly { readonly x: number; readonly z: number; readonly vitality: number }[];
   /** Each area's ground cover, by its path: the one the ground shader paints its own ground with. */
   readonly grounds: ReadonlyMap<string, GroundSpec>;
@@ -414,7 +416,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   const routeLib = new Library(ROUTE_PRIMITIVES);
   const landmarks = LANDMARK_PRESETS.map((preset, i) => {
     const built = realize(preset.blueprint, landmark, landmarkLib, { seed: seedOf(`terrain-lab/landmark-${i}`), facts: { scale: 1 } });
-    return { name: preset.name, built, base: landmarkBase(built) };
+    return { name: preset.name, blueprint: preset.blueprint, built, base: landmarkBase(built) };
   });
   const trailStyles = TRAIL_PRESETS.map((p) => buildSlots(p.blueprint, link, routeLib, { seed: 1, facts: {} }).get("route")?.output as RouteSpec);
   /** The landmarks standing and the network of paths between every place, from the last bake. */
@@ -1485,10 +1487,11 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     return {
       terrain,
       ways: ways.network.ways,
-      buildings: settlement.buildings.map((b) => ({ x: b.site.x, z: b.site.z, name: b.represented.name, kind: b.kindName, vitality: b.represented.report.vitality })),
+      buildings: settlement.buildings.map((b) => ({ x: b.site.x, z: b.site.z, name: b.represented.name, kind: b.kindName, vitality: b.represented.report.vitality, plan: b.plan, blueprint: b.blueprint, palette: b.palette })),
       landmarks: ways.sites.map((s, i) => {
         const facts = code?.landmarks[i]?.facts;
-        return { x: s.site.x, z: s.site.z, name: landmarks[s.landmark]?.name ?? "", vitality: facts === undefined ? 1 : entityVitalityOf(facts).vitality };
+        const lm = landmarks[s.landmark] as (typeof landmarks)[number];
+        return { x: s.site.x, z: s.site.z, name: lm.name, vitality: facts === undefined ? 1 : entityVitalityOf(facts).vitality, blueprint: lm.blueprint, palette: lm.built.palette };
       }),
       trees: trees.map((t) => ({ x: t.x, z: t.z, vitality: t.represented.report.vitality })),
       // A codebase's area shows its region's ground; each of the sample world's regions is one area.

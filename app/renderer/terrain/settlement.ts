@@ -6,7 +6,7 @@
 // grass, and each has a signboard at the end of its walk naming what it
 // stands for.
 
-import { type BuildingPlan, type Built, Library, seedOf } from "@gaia/schema";
+import { type Blueprint, type BuildingPlan, type Built, Library, type Palette, seedOf } from "@gaia/schema";
 import { FLORA_PRIMITIVES, STRUCTURE_PRIMITIVES } from "@gaia/primitives";
 import { structure } from "@gaia/kinds";
 import { STRUCTURE_PRESETS, mergeParts, realize } from "@gaia/realize";
@@ -21,6 +21,9 @@ export interface Building {
   /** The building's own name, such as "Watermill". */
   readonly kindName: string;
   readonly view: PlantView;
+  /** The blueprint it was built from and the colors it was given, which its mark on the map is drawn from. */
+  readonly blueprint: Blueprint;
+  readonly palette: Palette;
   readonly plan: BuildingPlan;
   /** What stands beside the house, such as a mill wheel, in the house's frame. */
   readonly beside: Extent | null;
@@ -68,6 +71,8 @@ export function createSettlement(light: SceneLight, entities: readonly SampleEnt
       represented,
       kindName: preset.name,
       view,
+      blueprint: preset.blueprint,
+      palette: built.palette,
       plan: built.slots.get("footprint")?.output as BuildingPlan,
       beside: extentOf(built.slots.get("feature")?.output as Built | undefined),
       site: { x: 0, z: 0, yaw: 0, level: 0 },
