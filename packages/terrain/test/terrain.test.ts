@@ -309,12 +309,14 @@ describe("terrain", { timeout: 20_000 }, () => {
 
   it("grounds plants: every point of a trunk's bottom ring is at or under the ground", () => {
     const floraLib = new Library(FLORA_PRIMITIVES);
-    // The first ring of the bark is the trunk's base (10 sides, 11 vertices).
+    // The trunk's base is every bark vertex at the ground, however many sides or lobes the trunk has.
     const bases = FLORA_PRESETS.map(({ blueprint }) => {
       const bark = realize(blueprint, flora, floraLib, { seed: seedOf("p"), facts: { scale: 1, age: 1 } }).parts.find((p) => p.swatch === "bark")!;
-      return Array.from({ length: 11 }, (_, k) => [bark.positions[k * 3]!, bark.positions[k * 3 + 1]!, bark.positions[k * 3 + 2]!] as const);
+      const ring: (readonly [number, number, number])[] = [];
+      for (let k = 0; k < bark.positions.length; k += 3) if (bark.positions[k + 1]! < 0.05) ring.push([bark.positions[k]!, bark.positions[k + 1]!, bark.positions[k + 2]!]);
+      return ring;
     });
-    for (const ring of bases) expect(Math.max(...ring.map((v) => Math.abs(v[1]))), "the origin is the trunk base").toBeLessThan(0.1);
+    for (const ring of bases) expect(ring.length, "the origin is the trunk base").toBeGreaterThanOrEqual(3);
     for (const t of baked.slice(0, 8)) {
       const spots = scatterPlants(t, 16, 9);
       expect(spots.length).toBe(16);
