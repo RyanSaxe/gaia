@@ -1,7 +1,8 @@
 // What covers the ground: wind-swayed grass that travels with the viewer and
 // stands on the baked lattice, grown from each region's ground cover, and
 // past the land on the wild land, grown from the wild's own covers. It reads
-// the same ground texture the mesh was built from.
+// the same ground texture the mesh was built from, and the ground's vitality:
+// where the ground declines, the grass thins, shortens and turns to straw.
 
 import * as THREE from "three";
 import { CLEARINGS_GLSL, type Clearing, LIGHT_GLSL, type SceneLight, WIND_FIELD_GLSL, createClearings, hexToVec3 } from "@gaia/render";
@@ -9,6 +10,8 @@ import { GROUND_SAMPLE_GLSL, type GroundTexture, WILD_GLSL } from "./ground.ts";
 import { REGIONS_GLSL, type RegionCovers, TUFT_GLSL } from "./regions.ts";
 import { CLEARING_GLSL, type Clearings } from "./clearings.ts";
 import { TRAIL_GLSL, trailUniforms } from "./trails.ts";
+import { VITALITY_GLSL, vitalityUniforms } from "./vitality.ts";
+import { GROUND_DECLINE } from "@gaia/terrain";
 
 const GRASS_VERT = /* glsl */ `
 ${CLEARINGS_GLSL}
@@ -21,6 +24,7 @@ ${TRAIL_GLSL}
 ${REGIONS_GLSL}
 ${TUFT_GLSL}
 ${CLEARING_GLSL}
+${VITALITY_GLSL}
 attribute vec4 aBlade; // x, z as a share of the blade's patch, rotation, height
 attribute vec4 aSeed; // tint, flower, keep, cover pick
 attribute vec2 aThin; // where in the thinning band the blade narrows away, 0 to 1; its reach
@@ -122,6 +126,24 @@ void main() {
   float r4 = fract(aSeed.z * 11.3 + aBlade.x * 7.1 + aBlade.y * 3.7);
   h *= step(mix(-0.45, 0.55, r4) - (1.0 - wear) * 1.3, edge);
   h *= mix(0.55, 1.0, smoothstep(-0.3, 1.3, edge + (1.0 - wear)));
+  // Declined ground (VITALITY_GLSL): blades thin one by one, each at its own
+  // seeded share, narrowing to nothing by the same continuous rule as
+  // distance, and none stands on bare earth; those left stand shorter and
+  // turn to straw, each at its own seeded point, so a failing field is a
+  // mottle of straw and the last of the green.
+  float decline = wild ? 0.0 : declineOf(landVitality(xz).x);
+  float standing = 1.0;
+  float straw = 0.0;
+  if (decline > 0.0) {
+    float r5 = fract(aSeed.w * 3.91 + aBlade.y * 5.13 + aThin.x * 2.71);
+    float r6 = fract(aSeed.x * 9.73 + aBlade.x * 3.31 + aSeed.z * 1.7);
+    float left = 1.0 - ${(1 - GROUND_DECLINE.blades).toFixed(3)} * decline;
+    // Toward bare earth blades give out one by one across a wide edge, so a patch opens in the grass rather than behind a wall of it.
+    float r7 = fract(aSeed.z * 5.37 + aBlade.y * 2.11);
+    standing = (1.0 - smoothstep(left, left + 0.1, r5)) * (1.0 - smoothstep(r7 - 0.1, r7 + 0.1, bareEarth(xz, decline, 0.24) * 1.2));
+    h *= 1.0 - ${(1 - GROUND_DECLINE.height).toFixed(3)} * decline;
+    straw = max(smoothstep(r6 - 0.1, r6 + 0.1, decline), decline * 0.35);
+  }
 
   float side = position.x;
   // A flower's rows crowd toward its top, so its head is a small round dab on a long stem.
@@ -133,7 +155,7 @@ void main() {
   // A flower is a slim stem that opens a small round head at its top. Seen
   // at eye height, a head any larger reads as confetti.
   float head = smoothstep(0.9, 0.94, t);
-  float wide = shape.y * keep * near * mix(outline, mix(0.18, 0.95, head), flower);
+  float wide = shape.y * keep * near * standing * mix(outline, mix(0.18, 0.95, head), flower);
 
   vec2 facing = vec2(-sin(aBlade.z), cos(aBlade.z));
   vec3 across = vec3(cos(aBlade.z), 0.0, sin(aBlade.z));
@@ -160,9 +182,12 @@ void main() {
   vBloom = pick < 0.4 ? uFlowerA[k] : pick < 0.75 ? uFlowerB[k] : uFlowerC[k];
   // Broad patches shift a cover between its low and high colors, so a field never reads as one flat green.
   float patchy = tuftNoise(xz * 0.07 + 3.0) - 0.5;
-  vLow = uCoverLow[k] * (1.0 + patchy * 0.16);
-  vHigh = mix(uCoverHigh[k], uCoverLow[k], max(-patchy, 0.0) * 0.35);
-  vTip = uCoverTip[k];
+  // Straw goes gold, or for some blades a withered grey-brown.
+  float withered = straw > 0.0 ? smoothstep(0.55, 0.95, fract(aSeed.y * 13.7 + aBlade.x * 2.9)) * 0.8 : 0.0;
+  vLow = mix(uCoverLow[k] * (1.0 + patchy * 0.16), mix(uStrawLow, uStrawDead * 0.85, withered), straw);
+  vHigh = mix(mix(uCoverHigh[k], uCoverLow[k], max(-patchy, 0.0) * 0.35), mix(uStrawHigh, uStrawDead, withered), straw);
+  vTip = mix(uCoverTip[k], mix(uStrawTip, uStrawDead * 1.1, withered), straw);
+  vBloom = mix(vBloom, uStrawTip, straw);
   gl_Position = projectionMatrix * viewMatrix * vec4(world, 1.0);
 }
 `;
@@ -300,6 +325,7 @@ export function createGrass(light: SceneLight, ground: GroundTexture, covers: Re
       uCenter: center,
       ...trailUniforms,
       ...under.uniforms,
+      ...vitalityUniforms,
       uDry: { value: hexToVec3(0xc4b47e) },
     },
     side: THREE.DoubleSide,

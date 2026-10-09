@@ -132,6 +132,8 @@ export interface Understory {
   /** Every instanced blueprint, for culling each pass and forcing detail. */
   readonly all: () => readonly PlantInstances[];
   readonly placements: () => readonly Placement[];
+  /** Sets each placement's vitality, by its index in `placements()`, on its copy; nothing moves or rebuilds. */
+  setVitality(vitality: ArrayLike<number>): void;
   /** A placed component's reach at the ground in 48 directions and its top above its origin, at scale 1, by the rule and variant its placement names. */
   readonly footprint: (rule: string, variant: number) => { readonly outline: Float32Array; readonly top: number } | undefined;
   /** Shows or hides everything, for comparing frame costs. */
@@ -151,6 +153,8 @@ export function createUnderstory(scene: THREE.Scene, light: SceneLight, lib: Lib
   /** Each blueprint's instances by rule and variant, kept for the life of the lab. */
   const kept = new Map<string, { group: Group; view: PlantInstances }>();
   let placed: readonly Placement[] = [];
+  /** Each placement's blueprint and its copy among that blueprint's instances. */
+  let copies: readonly { readonly key: string; readonly copy: number }[] = [];
   const plan = (world: WorldSpec, density = 1): { rules: ScatterRule[]; seed: number; open: (Habitat | undefined)[] } => ({
     rules: built.map(({ group, radii }) => ({
       ...group.rule,
@@ -200,6 +204,16 @@ export function createUnderstory(scene: THREE.Scene, light: SceneLight, lib: Lib
           views.push(entry);
         });
       }
+      const counts = new Map<string, number>();
+      copies = placed.map((p) => {
+        const key = `${p.rule}/${p.variant}`;
+        const copy = counts.get(key) ?? 0;
+        counts.set(key, copy + 1);
+        return { key, copy };
+      });
+    },
+    setVitality(vitality) {
+      copies.forEach((c, i) => kept.get(c.key)?.view.setVitalityAt(c.copy, vitality[i] ?? 1));
     },
     casters: () => views.filter((v) => v.group.casts).map((v) => v.view),
     quiet: () => views.filter((v) => !v.group.casts).map((v) => v.view.object),

@@ -290,8 +290,8 @@ the banks and the trees, softened and broken by the ripples. A soft line of
 foam marks the shore. Rings spread from the person's legs while they wade,
 and the water settles when they stop. At night the moon lays a sparkling
 path, the lantern a warm glint close by, and living water carries faint
-drifting specks of light. Low vitality clouds the water and dulls its
-sparkle.
+drifting specks of light. Water is as alive as the area it flows through
+(see Vitality on the land).
 
 Grass keeps its full height at every distance, so it never grows out of the
 ground, and no blade appears or vanishes as the person walks. Each blade
@@ -306,7 +306,8 @@ ground rather than by distance, so walking never changes which of them
 stand; the ground paints the banks from the same shore distance. The ground
 beneath is painted in the cover's own colors with short dabs in three
 directions, so where blades thin out the ground still reads as the same
-cover and no stroke runs on into a streak.
+cover and no stroke runs on into a streak. Where the ground declines, blades
+thin, shorten and turn to straw (see Vitality on the land).
 
 Each cover sets its blades' form: how far they lean, how round their outline
 is (a pointed blade or a round leaf) and how far they arc over. Lush grass is
@@ -315,6 +316,41 @@ tops in bushy tufts; moss and clover are low round leaves. Blades bend as
 arcs that keep their length. The world's one wind rolls across the field in
 broad, soft gusts that bow the blades and show their paler sheen, and the
 same gusts reach the trees and bushes (see Leaves).
+
+### Vitality on the land
+
+The ground takes the vitality of whatever it belongs to, as the trees do: a
+file's patch its file's, an area's own ground (its lots) its area's, every
+file under the area pooled by size (`areaVitality`), and the wild past the
+land always thrives. A failing grove in a healthy area is one sick patch in a
+living place, and a ruined area is ruin all through. One patch's health eases
+into its neighbor's over about 7 m, wider where the land's warp gathers the
+ground and narrower where it spreads it, and the land hands its ground to the
+wild over 8 m at its rim, so no border shows as a line.
+
+Ground of vitality 0.85 or more looks as it always did; below that it
+declines, all it will by about 0.02:
+
+| Vitality | Grass | Ground | Water |
+| --- | --- | --- | --- |
+| 0.85 and up | As it always was | Its cover's own colors | Clear and lively |
+| 0.5, tired | 83% of blades stand, a tenth shorter, and a third have turned to straw | A third of the way to straw | Clouding |
+| 0.1 and below, failing to ruin | 56% stand, three quarters as tall, nearly all straw | Dried to straw, with bare earth open over two fifths of it | A still brown murk that hides its bed |
+
+Blades thin one by one, each at its own seeded point, narrowing to nothing by
+the same rule as distance, so no blade pops as vitality changes. None stands
+on bare earth, and blades give out across a wider edge than the earth's, so
+a bare patch opens in the grass rather than behind a wall of it. Each blade
+turns to straw at its own point, gold or for some a withered grey-brown, so
+a failing field is a mottle of straw and the last green, and a flower fades
+with its blade. The ground's cover dries toward straw dab by dab, and bare
+earth opens in patches a few meters across, painted in the same short dabs in
+the earth's own warm tone. Water reads its area over about 15 m, so a stream
+clouds and clears gradually as it passes from one area into the next;
+failing water hides its bed in a brown murk, its ripples and streaks still,
+and its sparkle, foam and night specks dim. `groundDecline` and `groundLook`
+in `@gaia/terrain` are the rule, and the grass, ground and water shaders
+follow it (`VITALITY_GLSL` in `app/renderer/terrain/vitality.ts`).
 
 ## Sky and distance
 
@@ -966,9 +1002,11 @@ in a world from code, its area's character, with no two footprints
 overlapping, nothing on ground steeper than its rule allows, and nothing
 within a meter or two of water. Nothing crowds a file's finer entities: the
 understory keeps two meters clear of each. In a world from code each rock,
-bush and flower shows the vitality of the ground it grows on: its file's on a
-file's patch, its whole area's on a lot (`areaVitality`), and full health in
-the wild past the land, so a failing area's understory fails with its trees.
+bush and flower shows the vitality of the ground it grows on, as the grass
+beneath it does (see Vitality on the land): its file's on a file's patch,
+its whole area's on a lot (`areaVitality`), full health in the wild past the
+land, and between patches the same soft blend, so a failing area's
+understory fails with its trees and a live change in vitality reaches it.
 A solid thing sits below the lowest ground
 under its footprint, so on a slope its uphill side is buried and its
 downhill side still touches the soil; a drift lies on the ground's plane, so

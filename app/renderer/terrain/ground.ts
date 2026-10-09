@@ -3,9 +3,10 @@
 // water's mirror, a coarse ring of the wild land past the rim for views from
 // above, a float texture of the lattice for every shader that stands on the
 // ground, and the painterly ground material, colored by each region's ground
-// cover. Past the land the rings draw the wild land themselves, from the
-// same function the walk stands on (`wildHeightAt` and its twin here,
-// `WILD_GLSL`), so wherever the person goes the ground goes on.
+// cover and dried by the ground's vitality. Past the land the rings draw the
+// wild land themselves, from the same function the walk stands on
+// (`wildHeightAt` and its twin here, `WILD_GLSL`), so wherever the person
+// goes the ground goes on.
 //
 // The rings never change shape on the CPU: each is a fixed grid, and its
 // vertex shader reads heights from the lattice texture. Every ring's vertices
@@ -21,6 +22,8 @@ import { SHORE_CAP, TRAILS, type Terrain, WILDS, type WildsRing, landHalf, wildB
 import { SWARD_GLSL } from "../world/environment.ts";
 import { REGIONS_GLSL, type RegionCovers, TUFT_GLSL } from "./regions.ts";
 import { TRAIL_GLSL, trailUniforms } from "./trails.ts";
+import { VITALITY_GLSL, vitalityUniforms } from "./vitality.ts";
+import { GROUND_DECLINE } from "@gaia/terrain";
 
 /** Height, water level, distance to the water and to the nearest trail's edge per lattice sample, for shaders that sample the ground. */
 export interface GroundTexture {
@@ -298,6 +301,7 @@ ${TUFT_GLSL}
 ${GROUND_SAMPLE_GLSL}
 ${WILD_GLSL}
 ${TRAIL_GLSL}
+${VITALITY_GLSL}
 uniform vec3 uTrailEarth;
 varying float vTrail;
 uniform vec3 uDry;
@@ -339,6 +343,14 @@ void main() {
   // Past the land the wild's own covers drift in, in islands, and take over.
   float wild = wildShare(vWorld.xz);
   if (wild > 0.0) cover = mixCover(cover, wildCover(wildPatch(vWorld.xz)), wild);
+  // Declined ground (VITALITY_GLSL) dries toward straw, its dabs and all.
+  float decline = declineOf(landVitality(vWorld.xz).x);
+  if (decline > 0.0) {
+    float dry = ${GROUND_DECLINE.dry.toFixed(3)} * decline;
+    cover.low = mix(cover.low, uStrawLow, dry);
+    cover.high = mix(cover.high, uStrawHigh, dry);
+    cover.tip = mix(cover.tip, uStrawTip, dry);
+  }
   float rel = clamp((vWorld.y - uHeightRange.x) / max(1.0, uHeightRange.y - uHeightRange.x), 0.0, 1.0);
   vec3 albedo = sward(vWorld, cover.low, cover.high, cover.tip, (broad - 0.5) * 0.5 + (rel - 0.4) * 0.45);
   // A clumped cover leaves its own soil showing between the tufts.
@@ -347,6 +359,15 @@ void main() {
   // Bare earth shows on steep risers and banks.
   float steep = 1.0 - n.y;
   albedo = mix(albedo, uBare, smoothstep(0.075, 0.17, steep + (fine - 0.5) * 0.05) * 0.8);
+  // And in patches where the ground has declined, where the grass leaves it bare.
+  if (decline > 0.0) {
+    float bare = bareEarth(vWorld.xz, decline, 0.1);
+    if (bare > 0.0) {
+      // Painted in the same short dabs as the sward, in the earth's own tones.
+      vec3 earth = mix(cover.soil, uBareEarth, 0.88);
+      albedo = mix(albedo, sward(vWorld, earth * 0.9, earth * 1.04, earth * 1.12, (broad - 0.5) * 0.4) * (0.96 + 0.1 * fine), bare);
+    }
+  }
   // Hollows hold a deeper green; the broad patches carry more contrast.
   albedo *= 0.94 + 0.12 * smoothstep(0.2, 0.8, broad);
   // In the wild, low brush darkens the ground in dabs several meters across,
@@ -486,6 +507,7 @@ export function createGround(t: Terrain, light: SceneLight, covers: RegionCovers
     ...covers.uniforms,
     ...tex.uniforms,
     ...trailUniforms,
+    ...vitalityUniforms,
     uTrailEarth: { value: hexToVec3(0x9c8462) },
     uDry: { value: hexToVec3(0xbba878) },
     uBare: { value: hexToVec3(0x9a7d58) },

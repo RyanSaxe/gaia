@@ -4,12 +4,15 @@
 // grazing angle, show their bed where they are shallow and deepen in color
 // where they are deep. Rings spread from the person's legs as they wade.
 // At night the moon lays a sparkling path, the lantern a warm one, and
-// living water glows faintly with its vitality.
+// living water glows faintly. Water is as alive as the area it flows
+// through (the ground's vitality field): clear and lively in a thriving
+// area, clouded, brown and still in a failing one.
 
 import * as THREE from "three";
 import { LIGHT_GLSL, type SceneLight, hexToVec3 } from "@gaia/render";
 import { FLOW, type Terrain, flowAt, streamFlow, surfaceHalfWidth, waterDepthAt } from "@gaia/terrain";
 import { GROUND_SAMPLE_GLSL, type GroundTexture } from "./ground.ts";
+import { VITALITY_GLSL, vitalityUniforms } from "./vitality.ts";
 
 /** Wading rings alive at once. */
 const RINGS = 8;
@@ -58,6 +61,7 @@ const WATER_FRAG = /* glsl */ `
 precision highp float;
 ${LIGHT_GLSL}
 ${GROUND_SAMPLE_GLSL}
+${VITALITY_GLSL}
 #define RINGS ${RINGS}
 uniform sampler2D uMirror;
 uniform vec2 uMirrorTexel;
@@ -67,7 +71,6 @@ uniform vec3 uClear;
 uniform vec3 uDeep;
 uniform vec3 uMurk;
 uniform vec3 uFoam;
-uniform float uVitality;
 uniform vec4 uRings[RINGS];
 uniform vec2 uRingDrift[RINGS];
 uniform vec4 uWader; // where the person stands (x, z), which way they move (x, z) times how hard they push the water
@@ -263,6 +266,11 @@ void main() {
   vec3 V = toEye / dist;
   // Fine ripples fade with distance, so far water never shimmers.
   float near = 1.0 - smoothstep(18.0, 110.0, dist);
+  // As alive as the area it flows through, read over about 15 m so a stream
+  // clouds and clears gradually as it passes from one area into the next.
+  vec2 p = vWorld.xz;
+  float area = landVitality(p).y * 0.4 + (landVitality(p + vec2(7.0, 0.0)).y + landVitality(p - vec2(7.0, 0.0)).y + landVitality(p + vec2(0.0, 7.0)).y + landVitality(p - vec2(0.0, 7.0)).y) * 0.15;
+  float alive = 1.0 - declineOf(area);
 
   float crest = 0.0;
   Surface s = surface(near);
@@ -271,8 +279,8 @@ void main() {
   slope += pondRings(vWorld.xz, crest) * near;
 #endif
   slope += wadeRings(vWorld.xz, crest) + bow(vWorld.xz, crest);
-  // The thinnest water at the shore barely moves.
-  slope *= mix(0.35, 1.0, smoothstep(0.0, 0.3, depth));
+  // The thinnest water at the shore barely moves, and failing water stills.
+  slope *= mix(0.35, 1.0, smoothstep(0.0, 0.3, depth)) * mix(0.4, 1.0, alive);
   vec3 n = normalize(vec3(-slope.x, 1.0, -slope.y));
   vec3 nf = normalize(vec3(-(slope.x + s.fine.x * near), 1.0, -(slope.y + s.fine.y * near)));
   float cosV = clamp(dot(n, V), 0.0, 1.0);
@@ -294,9 +302,9 @@ void main() {
   float cosR = sqrt(1.0 - (1.0 - cosV * cosV) / 1.78);
   float path = depth / max(cosR, 0.25);
   // At night little light comes back up from the bed, so the water reads deep and glassy.
-  float through = exp(-path * mix(2.8, 0.85, uVitality)) * mix(1.0, 0.5, uNightness);
+  float through = exp(-path * mix(2.8, 0.85, alive)) * mix(1.0, 0.5, uNightness);
   vec3 tint = mix(uClear, uDeep, smoothstep(0.15, 1.5, depth));
-  tint = mix(uMurk, tint, smoothstep(0.15, 0.85, uVitality));
+  tint = mix(uMurk, tint, smoothstep(0.15, 0.85, alive));
   float sunLit = max(uSunDirection.y, 0.0) * sunUp();
   vec3 inLight = uSunColor * uSunIntensity * (0.2 + 0.5 * sunLit) * sunUp() + uAmbientColor * uAmbientIntensity * 0.9;
   vec3 body = nightTone(tint) * inLight * 0.8 + moonLight(tint, vec3(0.0, 1.0, 0.0), 0.6, 1.0) * 0.7;
@@ -308,7 +316,7 @@ void main() {
   // Sunlight dances on a clear, shallow bed.
   vec3 refr = refract(-V, n, 0.75);
   vec2 bed = vWorld.xz + refr.xz / max(-refr.y, 0.3) * depth;
-  under += uSunColor * vec3(1.0, 0.96, 0.82) * caustic(bed) * through * sunLit * uSunIntensity * 0.3 * uVitality * smoothstep(0.02, 0.15, depth);
+  under += uSunColor * vec3(1.0, 0.96, 0.82) * caustic(bed) * through * sunLit * uSunIntensity * 0.3 * alive * smoothstep(0.02, 0.15, depth);
 
   // Premultiplied: the mirror covers fresnel of the view; what remains looks
   // into the water, which lets its bed through.
@@ -316,7 +324,7 @@ void main() {
   float alpha = 1.0 - (1.0 - fresnel) * through;
 
   // Painterly streaks of light run along the current.
-  float streak = (1.0 - smoothstep(0.0, 0.03, abs(s.streak - 0.5))) * s.dash * near * smoothstep(3.0, 9.0, dist);
+  float streak = (1.0 - smoothstep(0.0, 0.03, abs(s.streak - 0.5))) * s.dash * near * smoothstep(3.0, 9.0, dist) * alive;
   color += (mirror * 0.35 + inLight * 0.12) * streak * 0.18;
   // Crests of the rings catch the light.
   color += (inLight * 0.35 + mirror * 0.25 + uLanternColor * uLanternIntensity * lanternReach(vWorld) * 0.2) * min(crest, 1.0) * 0.26;
@@ -325,7 +333,7 @@ void main() {
   // the lantern scatters warm ones close by.
   vec3 Rf = reflect(-V, nf);
   float sunGlint = pow(max(dot(Rf, uSunDirection), 0.0), 900.0) * 2.4 + pow(max(dot(R, uSunDirection), 0.0), 140.0) * 0.2;
-  color += uSunColor * sunGlint * min(uSunIntensity, 1.2) * sunUp() * mix(0.3, 1.0, uVitality);
+  color += uSunColor * sunGlint * min(uSunIntensity, 1.2) * sunUp() * mix(0.3, 1.0, alive);
   float moonUp = smoothstep(-0.02, 0.1, uMoonDirection.y);
   float moonGlint = pow(max(dot(Rf, uMoonDirection), 0.0), 380.0) * 2.2 + pow(max(dot(R, uMoonDirection), 0.0), 36.0) * 0.22;
   color += uMoonColor * moonGlint * uMoonIntensity * moonUp;
@@ -336,7 +344,7 @@ void main() {
   color += uLanternColor * uLanternIntensity * lanternGlint / (1.0 + lanternDist * lanternDist * 0.05);
 
   // Living water: faint motes drift with it and glow in the dark, as alive as its vitality.
-  color += vec3(0.3, 0.8, 0.72) * motes(s.motes) * near * uNightness * uVitality * 0.5 * smoothstep(0.1, 0.5, depth) * (1.0 - fresnel);
+  color += vec3(0.3, 0.8, 0.72) * motes(s.motes) * near * uNightness * alive * 0.5 * smoothstep(0.1, 0.5, depth) * (1.0 - fresnel);
 
   // Foam laps at the shore: a soft broken line, flowing with a stream and
   // breathing in and out on a pond.
@@ -345,7 +353,7 @@ void main() {
 #else
   float lap = 0.025 * sin(uTime * 0.8 + dot(vWorld.xz, vec2(0.21, 0.13))) + (wnoise(vWorld.xz * 1.5).x - 0.5) * 0.06;
 #endif
-  float foam = (1.0 - smoothstep(0.0, 0.085, depth + lap)) * 0.34 * mix(0.55, 1.0, uVitality) * smoothstep(0.0, 0.015, depth);
+  float foam = (1.0 - smoothstep(0.0, 0.085, depth + lap)) * 0.34 * mix(0.55, 1.0, alive) * smoothstep(0.0, 0.015, depth);
   vec3 foamLit = nightTone(uFoam) * inLight + moonLight(uFoam, vec3(0.0, 1.0, 0.0), 0.5, 1.0) + lanternLight(uFoam, vec3(0.0, 1.0, 0.0), vWorld, 0.5);
   color = color * (1.0 - foam) + foamLit * foam;
   alpha = alpha * (1.0 - foam) + foam;
@@ -375,8 +383,6 @@ export interface Water {
   mirror(renderer: THREE.WebGLRenderer, scene: THREE.Scene, view: THREE.PerspectiveCamera, hide: readonly THREE.Object3D[], show: readonly THREE.Object3D[], dt: number): number;
   /** Rings spread from the person's legs when they move through water: where they stand, which way they face, how far they moved. */
   wade(x: number, z: number, yaw: number, walked: number, dt: number): void;
-  /** How alive the water is, 0 to 1: clear and glowing, or clouded and dull. */
-  vitality(v: number): void;
   stats(): { mirrorCalls: number; mirrorLevel: number; mirrored: boolean; moon: number[] };
 }
 
@@ -557,9 +563,9 @@ export function createWater(t: Terrain, light: SceneLight, ground: GroundTexture
     uMirrorOn: { value: 0 },
     uClear: { value: hexToVec3(0x4fa89a) },
     uDeep: { value: hexToVec3(0x1f5e7e) },
-    uMurk: { value: hexToVec3(0x7c7a52) },
+    uMurk: { value: hexToVec3(0x7a6842) },
     uFoam: { value: hexToVec3(0xf2f4ee) },
-    uVitality: { value: 1 },
+    ...vitalityUniforms,
     uRings: { value: rings },
     uRingDrift: { value: drift },
     uWader: { value: new THREE.Vector4() },
@@ -671,9 +677,6 @@ export function createWater(t: Terrain, light: SceneLight, ground: GroundTexture
       const speed = walked / dt;
       rings.set([cx, cz, light.uTime.value, Math.min(1, depth / 0.25) * Math.min(1, 0.4 + speed / 4)], slot * 4);
       drift.set([v.x, v.z], slot * 2);
-    },
-    vitality(v) {
-      uniforms.uVitality.value = Math.max(0, Math.min(1, v));
     },
     stats: () => ({ mirrorCalls, mirrorLevel: level, mirrored, moon: light.uMoonDirection.value.toArray() }),
   };
