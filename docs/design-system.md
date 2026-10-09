@@ -582,11 +582,11 @@ finger and keys all follow the same three rules.
   the ground hidden behind it. A drag looks around and never walks. W A S D
   or the arrows walk and Shift hurries. A drag or a key takes the view back
   from a turn at once. Touching the world never does anything but move you.
-- **Everything else is paper.** The minimap at the lower left and the rose
-  at the top right, and a thing's page while the person stops at it, are
-  the only things on the screen that are not the world:
-  a tap on the minimap (or M) unfolds the field map out of it, and the rose
-  opens the slip. A tap on the open map is the one way to travel far at
+- **Everything else is paper.** The minimap at the lower left and the
+  compass at the top right, and a thing's page while the person stops at
+  it, are the only things on the screen that are not the world: a tap on
+  the minimap (or M) unfolds the field map out of it, and the compass opens
+  the slip. A tap on the open map is the one way to travel far at
   once: it is a paper action, so it belongs to the map, never to the world.
 - **Paper you open holds the world still.** While the map or the slip is
   open, the world waits under a faint wash. A tap there folds the paper and
@@ -705,17 +705,24 @@ first, and who judged it.
 
 The lab opens into the world, full screen, at eye height. Nothing sits on
 it but the world, the three ways of knowing where you are, all at once, and
-the rose in the corner: no panels, no readouts. The rose opens a slip with
-Gaia's mark, the world's name, how to wander (for a mouse and keys, or for a
-finger) and the way back to the debugging views (Components, Terrain and
-Skies). The hour follows the person's clock (`?hour=22` pins it).
+the compass in the corner: no panels, no readouts. The compass
+(`app/renderer/immersive/compass.ts`) is a round of the map's paper, 44 px
+across, with an inked ring of ticks that stays put, its top tick marking
+the way the person faces, and a needle whose north half is in the
+traveller's vermilion. Only the needle turns, to point north, on a damped
+spring: after a sudden turn it swings about a tenth past and settles within
+about a second. It is the one north on the screen besides the field map's
+painted rose. A tap on it opens a slip with Gaia's mark, the world's name,
+how to wander (for a mouse and keys, or for a finger) and the way back to
+the debugging views (Components, Terrain and Skies). The hour follows the
+person's clock (`?hour=22` pins it).
 Everything a person reads here looks like the world's own things: warm
 paper, brown ink, a serif with italic names and small capitals for paths,
 and slow, soft motion; the traveller's own notes, on the minimap and a thing's page, are written in a hand. After
 dark the paper (the map, the minimap, the slip, a thing's page) is
 read by the lantern, a little warmer and dimmer. Until the first world
 stands, the wait is alone on the screen; the ways of knowing where you are
-and the rose come in as the wait lifts.
+and the compass come in as the wait lifts.
 
 The immersive world opens on Gaia's own world. Where a person is comes from
 one function, `placeAt` in `@gaia/terrain`: the area (a directory) whose land
@@ -824,8 +831,7 @@ The three ways work together:
   bleaches with both areas'. Posts and stones stop a walker, and no grass
   grows through a stone. Every name fits its arm or its line on the stone,
   as on the signs (see Signs and cards); a long name's arm grows up to a
-  third longer. There is no compass on the screen: the field map keeps its
-  painted compass rose. Markers draw as three instanced meshes and cast no
+  third longer. Markers draw as three instanced meshes and cast no
   shadow.
 
 ## Gaia's mark
