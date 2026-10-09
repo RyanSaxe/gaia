@@ -29,9 +29,11 @@ export type DetailMode = "auto" | "full" | "far";
  * A crown spanning fewer device pixels than `swapPx` draws as its plant's
  * far form, where one texel of the baked views covers one pixel. Up to `band`
  * times that, the far form draws over the full one, so a tree never changes
- * form in a single frame.
+ * form in a single frame. A touch-first screen (a phone) bakes and turns far
+ * at half the size: a quarter of the memory and the bake, and still one
+ * texel to a pixel.
  */
-export const FAR = { swapPx: 128, band: 1.25 } as const;
+export const FAR = { swapPx: typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches ? 64 : 128, band: 1.25 } as const;
 
 /**
  * How far toward its far form a crown spanning `px` device pixels is: 0 draws

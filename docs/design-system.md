@@ -1081,8 +1081,9 @@ half the view's size, so it chooses its level of detail as if each copy
 stood twice as far: a level it draws leaves out only pieces under a pixel of
 the mirror.
 
-A tree whose crown spans fewer than 128 device pixels on a pass's screen
-draws as a card baked from the tree itself, by its own shaders, and lit
+A tree whose crown spans fewer than 128 device pixels on a pass's screen (64
+on a phone, which bakes its cards at that size) draws as a card baked from
+the tree itself, by its own shaders, and lit
 live, so far trees look like the near ones at every hour and every health.
 Across a band from 128 to 160 pixels the card draws over the full tree, never
 fading in on its own, so nothing appears or fades as a person walks. The
