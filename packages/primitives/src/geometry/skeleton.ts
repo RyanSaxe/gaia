@@ -185,6 +185,13 @@ export function growBranching(p: Resolved<typeof branchingParams>, ctx: BuildCon
   return { limbs, tips };
 }
 
+/**
+ * A spire grows this many whorls for each ring Jev asks for, so its levels
+ * stand close enough that needles fill the sky between them, while a sparse
+ * spire stays sparser than a dense one.
+ */
+const WHORLS_PER_RING = 1.4;
+
 /** A straight leader with whorls of limbs, shaped as a cone of the declared proportions. */
 export function growSpire(p: Resolved<typeof spireParams>, ctx: BuildContext): Skeleton {
   const s = ctx.facts.scale ?? 1;
@@ -218,7 +225,7 @@ export function growSpire(p: Resolved<typeof spireParams>, ctx: BuildContext): S
   }
   tips.push({ position: at, normal: [0, 1, 0], size: 0.6 });
 
-  const whorls = Math.max(2, Math.round(p.whorls));
+  const whorls = Math.max(2, Math.round(p.whorls * WHORLS_PER_RING));
   const low = height * 0.16;
   const high = height * 0.9;
   for (let w = 0; w < whorls; w++) {

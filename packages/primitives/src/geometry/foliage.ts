@@ -710,7 +710,34 @@ function chainsOf(skel: Skeleton): number[][] {
   return chains;
 }
 
+/**
+ * How a fir's fronds fill its frame: a quarter more branchlets than a
+ * frond's span alone would space, seven in ten of them doubled by a second
+ * card hung lower and steeper beneath, and outer branchlets that reach
+ * farther and hang lower (in radians), so they drape over the whorl below.
+ */
+const FROND = { branchlets: 1.25, lowerTier: 0.7, drape: { reach: 0.6, drop: 0.95 } } as const;
+
+/**
+ * A fir's needles, at most: the rest of a plant's 40,000 triangles is for its
+ * bark, which a fir's many whorls make heavy (up to about 12,000). A fir over
+ * this thins every frond's branchlets evenly; no frond is dropped.
+ */
+const NEEDLE_TRIANGLE_BUDGET = 26_000;
+
 export function buildNeedles(p: Resolved<typeof needlesParams>, ctx: BuildContext, skel: Skeleton): Built {
+  let density = 1;
+  let built = growNeedles(p, ctx, skel, density);
+  for (let pass = 0; pass < 4; pass++) {
+    const triangles = built.out.triangleCount;
+    if (triangles <= NEEDLE_TRIANGLE_BUDGET) break;
+    density *= (0.98 * NEEDLE_TRIANGLE_BUDGET) / triangles;
+    built = growNeedles(p, ctx, skel, density);
+  }
+  return { parts: [built.out.part()], anchors: built.anchors };
+}
+
+function growNeedles(p: Resolved<typeof needlesParams>, ctx: BuildContext, skel: Skeleton, density: number): { out: PartBuilder; anchors: Anchor[] } {
   const out = new PartBuilder("leaf");
   const r = ctx.rand.fork("needles");
   const s = ctx.facts.scale ?? 1;
@@ -728,7 +755,7 @@ export function buildNeedles(p: Resolved<typeof needlesParams>, ctx: BuildContex
     if (depth === 0) {
       // A tuft along the top of the leader.
       const tipY = last.end[1];
-      emitFrond(out, crown, [lerp(last.start, last.end, 0.1), lerp(last.start, last.end, 0.55), last.end], p.length * 0.32 * s, cr, p, tipY / top, (q) => boughs.at(skel.limbs.indexOf(last), q));
+      emitFrond(out, crown, [lerp(last.start, last.end, 0.1), lerp(last.start, last.end, 0.55), last.end], p.length * 0.32 * s, cr, p, tipY / top, (q) => boughs.at(skel.limbs.indexOf(last), q), density);
       return;
     }
     if (depth >= 2 && p.fullness < 0.7) return;
@@ -736,11 +763,11 @@ export function buildNeedles(p: Resolved<typeof needlesParams>, ctx: BuildContex
     const tip = points[points.length - 1] as Vec3;
     const width = p.length * (depth === 1 ? 0.5 : 0.36) * s * (0.85 + 0.25 * p.fullness);
     const carry = (q: Vec3): { bough: Vec3; droop: number } => boughs.at(skel.limbs.indexOf(first), q);
-    emitFrond(out, crown, points, width, cr, p, tip[1] / top, carry);
+    emitFrond(out, crown, points, width, cr, p, tip[1] / top, carry, density);
     const at = carry(tip);
     anchors.push({ position: tip, normal: normalize(sub(tip, points[points.length - 2] as Vec3)), size: depth === 1 ? 1 : 0.5, carry: { bough: at.bough, twig: at.bough, droop: at.droop } });
   });
-  return { parts: [out.part()], anchors };
+  return { out, anchors };
 }
 
 function pointOnPolyline(points: readonly Vec3[], t: number): { at: V3; dir: V3 } {
@@ -774,6 +801,7 @@ function emitFrond(
   p: Resolved<typeof needlesParams>,
   heightFrac: number,
   carry: (q: Vec3) => { bough: Vec3; droop: number },
+  density: number,
 ): void {
   // Lower sprays shed first, as an ailing conifer browns from the bottom up.
   const loss = clamp(lossThreshold(r.next(), 0.5) + 0.12 * (1 - heightFrac), 0.02, 0.7);
@@ -827,41 +855,48 @@ function emitFrond(
 
   // Branchlets, alternating sides, shorter and more drooping toward the tip.
   const span = points.slice(1).reduce((n, q, i) => n + length(sub(q, points[i] as Vec3)), 0);
-  const count = Math.round(clamp(span / (width * 0.3), 5, 11));
+  const count = Math.max(3, Math.round(clamp(span / (width * 0.3), 5, 11) * FROND.branchlets * density));
+  const branchlet = (t: number, sideSign: number, reach: number, drop: number, forward: number): void => {
+    const { at, dir } = pointOnPolyline(points, t);
+    const side = acrossOf(dir);
+    const up = normalize(cross(side, dir));
+    const flat = normalize(add(scale(side, sideSign * Math.cos(forward)), scale(dir, Math.sin(forward))));
+    const along = normalize(add(scale(flat, Math.cos(drop)), scale(up, -Math.sin(drop))));
+    // The card's width lies nearly level, rolled a little, creased along its middle.
+    const roll = r.range(-0.35, 0.35);
+    const wide = normalize(rotate(normalize(cross(up, along)), along, roll));
+    const crest = normalize(cross(along, wide));
+    const halfWide = reach * r.range(0.36, 0.44);
+    const cut = cutOf(CUT.needles, r.next());
+    const cardTint = clamp(tint * 0.4 + r.range(-0.03, 0.03), -0.1, 0.1);
+    const firstCard = out.vertexCount;
+    for (const v of [0, 1]) {
+      const base = addScaled(at, along, v * reach);
+      for (const a of [-1, 0, 1]) {
+        const q = add(base, add(scale(wide, a * halfWide * (1 - 0.35 * v)), scale(crest, (0.18 - 0.3 * Math.abs(a)) * halfWide)));
+        const place = crownPlace(crown, q);
+        const normal = blendNormal(normalize(add(crest, scale(wide, a * 0.5))), place.out, 0.5);
+        const shade = 0.28 + 0.42 * clamp(place.depth - 0.25, 0, 1) + 0.12 * Math.max(0, crest[1]) + 0.08 * v + 0.5 * tint + lift;
+        out.vertex(q, normal, shade, channelsAt(Math.min(1, t + 0.1 * v), Math.abs(a) * 0.5 + v * 0.5, cardTint, t, true), [a, v, cut]);
+      }
+    }
+    for (let j = 0; j < 2; j++) {
+      const a = firstCard + j;
+      out.triangle(a, a + 3, a + 1);
+      out.triangle(a + 1, a + 3, a + 4);
+    }
+  };
   for (let k = 0; k < count; k++) {
     for (const sideSign of [-1, 1]) {
       const t = 0.1 + 0.84 * ((k + (sideSign > 0 ? 0.25 : 0.75)) / count) + r.range(-0.03, 0.03);
-      const { at, dir } = pointOnPolyline(points, t);
-      const side = acrossOf(dir);
-      const up = normalize(cross(side, dir));
-      const reach = width * (0.8 - 0.4 * t) * r.range(0.8, 1.15);
+      // The outer branchlets drape: they reach farther and hang lower, over the whorl below.
+      const outer = clamp((t - 0.3) / 0.5, 0, 1);
+      const reach = width * (0.8 - 0.4 * t) * r.range(0.8, 1.15) * (1 + FROND.drape.reach * outer);
       const forward = r.range(0.6, 0.95);
-      const drop = r.range(0.1, 0.3) + 0.25 * t + 0.2 * (1 - heightFrac);
-      const flat = normalize(add(scale(side, sideSign * Math.cos(forward)), scale(dir, Math.sin(forward))));
-      const along = normalize(add(scale(flat, Math.cos(drop)), scale(up, -Math.sin(drop))));
-      // The card's width lies nearly level, rolled a little, creased along its middle.
-      const roll = r.range(-0.35, 0.35);
-      const wide = normalize(rotate(normalize(cross(up, along)), along, roll));
-      const crest = normalize(cross(along, wide));
-      const halfWide = reach * r.range(0.36, 0.44);
-      const cut = cutOf(CUT.needles, r.next());
-      const cardTint = clamp(tint * 0.4 + r.range(-0.03, 0.03), -0.1, 0.1);
-      const firstCard = out.vertexCount;
-      for (const v of [0, 1]) {
-        const base = addScaled(at, along, v * reach);
-        for (const a of [-1, 0, 1]) {
-          const q = add(base, add(scale(wide, a * halfWide * (1 - 0.35 * v)), scale(crest, (0.18 - 0.3 * Math.abs(a)) * halfWide)));
-          const place = crownPlace(crown, q);
-          const normal = blendNormal(normalize(add(crest, scale(wide, a * 0.5))), place.out, 0.5);
-          const shade = 0.28 + 0.42 * clamp(place.depth - 0.25, 0, 1) + 0.12 * Math.max(0, crest[1]) + 0.08 * v + 0.5 * tint + lift;
-          out.vertex(q, normal, shade, channelsAt(Math.min(1, t + 0.1 * v), Math.abs(a) * 0.5 + v * 0.5, cardTint, t, true), [a, v, cut]);
-        }
-      }
-      for (let j = 0; j < 2; j++) {
-        const a = firstCard + j;
-        out.triangle(a, a + 3, a + 1);
-        out.triangle(a + 1, a + 3, a + 4);
-      }
+      const drop = r.range(0.1, 0.3) + 0.25 * t + 0.2 * (1 - heightFrac) + FROND.drape.drop * outer;
+      branchlet(t, sideSign, reach, drop, forward);
+      // A second card hung lower and steeper beneath, so the frond is deep rather than one sheet.
+      if (r.next() < FROND.lowerTier) branchlet(clamp(t + 0.04, 0, 1), sideSign, reach * 0.9, drop + 0.8, forward * 0.8);
     }
   }
 }
