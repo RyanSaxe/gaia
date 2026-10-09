@@ -928,7 +928,11 @@ while its petals thin. A drift's petals start to thin about 14 m off; a
 tree's finest twigs and blossoms between 30 and 120 m, and most of its leaf
 cards near 300 m. A copy switches to a coarser level only where every piece that
 level leaves out has already left, so the switch changes no pixel. Shadows
-and the mirror show the same pieces as the view, measured from the same eye.
+show the same pieces as the view, measured from the same eye, so the shade
+under a tree never changes as a person walks. The water's mirror is drawn at
+half the view's size, so it chooses its level of detail as if each copy
+stood twice as far: a level it draws leaves out only pieces under a pixel of
+the mirror.
 
 A pass draws only the cells its camera sees. The sun's shadow map covers a
 box around the person, so only casters inside that box draw into it: its cost
