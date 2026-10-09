@@ -205,9 +205,10 @@ client. Jev is asked only when the engine has a key and runs with
 `GAIA_JEV=live`. A run whose cost (`jev.estimate`) is within the person's
 spend limit goes ahead with no question; the limit is one number for every
 project, kept in the app's own settings (the store's `app` project,
-`settings` table, `jev-spend-limit`), and `DEFAULT_SPEND_LIMIT_USD` in
-`app/world-service/open-world.ts` ($0.10) holds until the person sets one
-(`setSpendLimit`; no screen sets it yet). A run that costs more asks first, with
+`settings` table, `jev-spend-limit`). Until the person sets one
+(`setSpendLimit`; no screen sets it yet), `DEFAULT_SPEND_LIMIT_USD` in
+`app/world-service/open-world.ts` is no limit at all, while Gaia is being
+built, so every run goes ahead and only prints its estimate. A run that costs more asks first, with
 the cost and the limit (`world.consent`); choosing the stand-in is
 remembered in the project's `settings` table until the limit changes. The
 world stays under the wait while Jev answers, because a judgment that

@@ -5,8 +5,8 @@
 // the map as the world is judged. Jev's answers are kept in the project's
 // app-data store, keyed by each request's hash, so reopening asks again only
 // about things whose facts changed. Jev is asked only when the engine has a
-// key and runs with GAIA_JEV=live. A run that costs no more than the
-// person's spend limit goes ahead with no question; one that costs more asks
+// key and runs with GAIA_JEV=live. Until the person sets a spend limit, every
+// run goes ahead with no question; with one set, a run that costs more asks
 // first. Everything Jev does not answer is judged by the stand-in, and the
 // document says which.
 
@@ -19,10 +19,11 @@ import type { ConsentPlan, Opening, WorldDocument } from "./protocol.ts";
 
 /**
  * What judging one project may spend without asking, US dollars, until the
- * person sets their own: about six times what judging Gaia's own repository
- * (267 requests, about $0.016) costs.
+ * person sets their own: no limit while Gaia is being built, so a test run
+ * never stops on the waiting screen (decision 39). Each run still prints its
+ * estimate.
  */
-export const DEFAULT_SPEND_LIMIT_USD = 0.1;
+export const DEFAULT_SPEND_LIMIT_USD = Number.POSITIVE_INFINITY;
 
 /** The store's "project" that keeps the app's own settings, apart from every project's (project IDs are hex hashes). */
 export const APP_STORE = "app";
@@ -81,7 +82,7 @@ export async function openWorld({ engine, root, consent, progress }: OpenWorldOp
     else {
       const estimate = await engine.call("jev.estimate", { requests: missing.map((p) => p.request) });
       const limitUsd = await spendLimit(engine);
-      console.log(`gaia: ${name}: ${estimate.requests} requests to judge, about ${estimate.estimatedTokens} tokens, $${estimate.estimatedUsd.toFixed(4)} (limit $${limitUsd})`);
+      console.log(`gaia: ${name}: ${estimate.requests} requests to judge, about ${estimate.estimatedTokens} tokens, $${estimate.estimatedUsd.toFixed(4)} (${Number.isFinite(limitUsd) ? `limit $${limitUsd}` : "no limit"})`);
       if (estimate.estimatedUsd <= limitUsd) ask = true;
       else {
         // Past the limit the person decides; choosing the stand-in is remembered for the project until the limit changes.

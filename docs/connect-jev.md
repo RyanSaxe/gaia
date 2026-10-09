@@ -20,13 +20,14 @@ pnpm install
 GAIA_JEV=live pnpm dev
 ```
 
-The app opens on the start; choose a world there. Gaia asks Jev with no question
-when judging costs no more than your spend limit: $0.10 a project unless you
-set another (`DEFAULT_SPEND_LIMIT_USD` in `app/world-service/open-world.ts`).
-Only when a project's estimate is over the limit does a small paper slip
-appear at the foot of the waiting screen, with the cost and your limit, and
-two answers: **Go ahead** or **Use the stand-in**. Choosing the stand-in is
-remembered for that project until the limit changes. Eight requests go at a
+The app opens on the start; choose a world there. While Gaia is being built,
+it asks Jev with no spend limit (`DEFAULT_SPEND_LIMIT_USD` in
+`app/world-service/open-world.ts`), so a run never stops to ask; the terminal
+prints each run's requests, tokens and estimated cost. If you set a limit
+(below), a project whose estimate is over it shows a small paper slip at the
+foot of the waiting screen, with the cost and your limit, and two answers:
+**Go ahead** or **Use the stand-in**. Choosing the stand-in is remembered for
+that project until the limit changes. Eight requests go at a
 time, so a first run takes about half a minute to a minute, while the
 waiting screen paints the world's map: each area's border as soon as the
 code is read, each area's watercolor as Jev's answers about it come in.
@@ -50,7 +51,7 @@ With no project named, Gaia opens on the start: the worlds you opened
 before, a folder on this computer, or the address of a public repository on
 GitHub (`github.com/owner/name`), which Gaia clones into
 `~/Library/Application Support/Gaia/clones/` and judges like any other
-codebase, within the same spend limit. **File > Choose a World…** (⇧⌘O)
+codebase the same way. **File > Choose a World…** (⇧⌘O)
 returns to it, **File > Open Folder…** (⌘O) opens a folder directly, and
 `GAIA_PROJECT=/path/to/repo GAIA_JEV=live pnpm dev` skips the start.
 
