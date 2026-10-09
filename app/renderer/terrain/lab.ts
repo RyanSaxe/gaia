@@ -1775,6 +1775,8 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     for (const v of settlement.views()) scene.remove(v.object);
     settlement = createSettlement(light, code?.buildings ?? SAMPLE_ENTITIES);
     for (const v of settlement.views()) scene.add(v.object);
+    // The wait's pen draws each building and landmark at its laid-out place while the world bakes.
+    if (code !== null) veil.marks(laidOut(code));
     knowEntities();
     skyWorld = code?.sky ?? SKY_WORLD;
     hour = Number.NaN;
@@ -1786,8 +1788,27 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     if (await rebake(next)) valleyView();
   }
 
+  /** Each building and landmark of a codebase's world at its laid-out place, with what its mark on the map is drawn from, before a bake stands it. */
+  function laidOut(c: CodeLab): Pick<StoodWorld, "buildings" | "landmarks"> {
+    const houses = c.world.things.filter((t) => t.as === "building");
+    const rises = c.world.things.filter((t) => t.as === "landmark");
+    return {
+      buildings: settlement.buildings.map((b, i) => ({ x: houses[i]?.x ?? 0, z: houses[i]?.z ?? 0, name: b.represented.name, kind: b.kindName, vitality: b.represented.report.vitality, plan: b.plan, blueprint: b.blueprint, palette: b.palette })),
+      landmarks: c.landmarks.map((l, i) => {
+        const lm = landmarks[l.preset] as (typeof landmarks)[number];
+        return { x: rises[i]?.x ?? 0, z: rises[i]?.z ?? 0, name: lm.name, vitality: entityVitalityOf(l.facts).vitality, blueprint: lm.blueprint, palette: lm.built.palette };
+      }),
+    };
+  }
+
   /** The wait the first world opens behind (app/renderer/wait/): it lifts once the world stands and has drawn. */
   const veil = withStart(createWait($("veil")), $("veil"));
+  // The first world's hills, water and trees come in on the wait's sheet as soon as it stands.
+  let stoodOnce = false;
+  stoodListeners.push(() => {
+    if (!stoodOnce) veil.stood(stoodWorld());
+    stoodOnce = true;
+  });
 
   setMode("walk");
   refreshStats();

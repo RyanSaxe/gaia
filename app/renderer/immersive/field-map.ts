@@ -30,7 +30,7 @@ import { DECKLE_MASK, MAP_STYLE, type MapStyle, TRAVELLER_SVG, dryness, healthCo
 import { chained, contour, isoline, simplified } from "./isolines.ts";
 import { nameTails } from "./map-names.ts";
 import { stampBuilding, stampLandmark } from "./marks.ts";
-import { PAPER, type WashArea, type WashSheet, easeRing, fadeMask, floatWash, layWash, noiseCanvas, paintAt, rimPath, ringsPath, valueNoise } from "./wash.ts";
+import { PAPER, type WashArea, type WashSheet, easeRing, fadeMask, floatWash, layWash, paintAt, rimPath, ringsPath } from "./wash.ts";
 import { INK, type LandView, RIM, type WildInk, createWildInk, layGround, reliefAt } from "./wild-ink.ts";
 
 export interface FieldMap {
@@ -98,7 +98,7 @@ const AREA_CELL = 5;
 const HILL_CELL = 5;
 const WATER_CELL = 2.5;
 /** Where an area's name may step to, in pixels, when its own spot is taken. */
-const NUDGES: readonly (readonly [number, number])[] = [[0, 0], [0, 26], [0, -26], [34, 10], [-34, 10], [0, 48], [0, -48], [56, 0], [-56, 0], [40, 36], [-40, 36], [40, -36], [-40, -36]];
+export const NUDGES: readonly (readonly [number, number])[] = [[0, 0], [0, 26], [0, -26], [34, 10], [-34, 10], [0, 48], [0, -48], [56, 0], [-56, 0], [40, 36], [-40, 36], [40, -36], [-40, -36]];
 /** The paper is painted in steps of a millisecond or two, as many as fit in the page's idle time with this much to spare, ms. */
 const SPARE_MS = 2;
 const SERIF = `"Iowan Old Style", Georgia, "Times New Roman", serif`;
@@ -116,7 +116,6 @@ const mixRgb = (a: string, b: string, t: number): [number, number, number] => {
   const ch = (shift: number): number => Math.round(((pa >> shift) & 255) * (1 - t) + ((pb >> shift) & 255) * t);
   return [ch(16), ch(8), ch(0)];
 };
-const mixHex = (a: string, b: string, t: number): string => `rgb(${mixRgb(a, b, t).join(",")})`;
 
 /** Where an area's name is lettered on the sheet. */
 export interface AreaLabel<A = PlaceArea> {
@@ -215,92 +214,6 @@ function wetDistance(wet: Uint8Array, n: number): Float32Array {
     }
   }
   return d;
-}
-
-/**
- * The map's paper over `w` by `h` pixels: a ground mottled as handmade
- * paper is, with fibres and a faint grain. At the map's paper size it is the map's own paper; the wait
- * paints the same paper at the size of its sheet.
- */
-export function paintPaperGround(ctx: CanvasRenderingContext2D, style: MapStyle, w: number, h: number): void {
-  const k = w / PAPER;
-  const many = (w * h) / PAPER ** 2;
-  ctx.fillStyle = style.paper;
-  ctx.fillRect(0, 0, w, h);
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = "high";
-  for (const [cells, strength] of [[14, 0.09], [56, 0.05]] as const) {
-    ctx.globalAlpha = strength;
-    ctx.drawImage(noiseCanvas(cells, cells * 7.3, style.mottle), 0, 0, w, h);
-  }
-  ctx.globalAlpha = 1;
-  ctx.lineCap = "round";
-  for (const [tone, count, seed] of [["rgba(118,92,56,0.075)", 1800, 11], ["rgba(255,251,238,0.16)", 1100, 23]] as const) {
-    ctx.strokeStyle = tone;
-    ctx.lineWidth = Math.max(0.7, 1.3 * k);
-    ctx.beginPath();
-    for (let n = 0; n < count * many; n++) {
-      const x = hash(n, seed) * w;
-      const y = hash(seed, n) * h;
-      const a = hash(n + seed, 3) * Math.PI * 2;
-      const len = (6 + hash(n, seed + 1) * 16) * k;
-      const bend = (hash(n, seed + 2) - 0.5) * 8 * k;
-      ctx.moveTo(x, y);
-      ctx.quadraticCurveTo(x + Math.cos(a) * len * 0.5 - Math.sin(a) * bend, y + Math.sin(a) * len * 0.5 + Math.cos(a) * bend, x + Math.cos(a) * len, y + Math.sin(a) * len);
-    }
-    ctx.stroke();
-  }
-  for (const [tone, from] of [["rgba(120,96,60,0.06)", 0], ["rgba(255,250,235,0.1)", 1]] as const) {
-    ctx.fillStyle = tone;
-    ctx.beginPath();
-    for (let n = from; n < 6000 * many; n += 2) ctx.rect(hash(n, 1) * w, hash(n, 2) * h, (1 + hash(n, 4) * 3) * k, (1 + hash(n, 5) * 3) * k);
-    ctx.fill();
-  }
-}
-
-/**
- * A ragged fringe of wood along the sheet's square edges, on a sheet `reach` meters from its middle to its edge
- * at `scale` pixels per meter: thickest at the edge, thinning into clearings inward and gone where the paint
- * gives way. It follows the paper's edge, never the land's rounded rim.
- */
-export function woodsOf(style: MapStyle, reach: number, scale: number): { x: number; y: number; r: number; tone: number }[] {
-  const px = (v: number): number => (v + reach) * scale;
-  const BAND = 30;
-  const wild = (x: number, z: number): boolean => reach - Math.max(Math.abs(x), Math.abs(z)) < BAND * (0.25 + 0.75 * valueNoise((x + reach) / 60, (z + reach) / 60, 17));
-  const woodStep = style.woodSize * 2.1;
-  const woods: { x: number; y: number; r: number; tone: number }[] = [];
-  for (let z = -reach; z < reach; z += woodStep) {
-    for (let x = -reach; x < reach; x += woodStep) {
-      const jx = x + (hash(x, z) - 0.5) * woodStep;
-      const jz = z + (hash(z, x) - 0.5) * woodStep;
-      if (!wild(jx, jz)) continue;
-      const u = (jx + reach) / (reach * 2);
-      const v = (jz + reach) / (reach * 2);
-      if (valueNoise(u * 14, v * 14, 5) < 0.32 || hash(jx * 1.3, jz) > paintAt(style, u, v)) continue;
-      woods.push({ x: px(jx), y: px(jz), r: (style.woodSize + hash(jx, jz * 1.7) * style.woodSize * 0.6) * scale, tone: hash(jz, jx * 2.3) });
-    }
-  }
-  return woods.sort((a, b) => a.y - b.y);
-}
-
-/** Draws a wood's trees: round crowns over soft shadows, lit on their northwest shoulders. */
-export function drawWoods(ctx: CanvasRenderingContext2D, woods: readonly { x: number; y: number; r: number; tone: number }[]): void {
-  ctx.fillStyle = "rgba(30,46,40,0.24)";
-  for (const w of woods) {
-    ctx.beginPath();
-    ctx.ellipse(w.x + w.r * 0.45, w.y + w.r * 0.55, w.r * 1.05, w.r * 0.8, 0, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  for (const w of woods) {
-    ctx.beginPath();
-    ctx.arc(w.x, w.y, w.r, 0, Math.PI * 2);
-    ctx.fillStyle = mixHex("#4f7f45", "#7aa95a", w.tone);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(w.x - w.r * 0.32, w.y - w.r * 0.34, w.r * 0.5, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(214,232,150,0.4)";
-    ctx.fill();
-  }
 }
 
 /** Paints the land onto paper, yielding between steps so a driver can spread the work over idle time. */
@@ -925,8 +838,11 @@ export const markScale = (zoom: number, grow: number): number => Math.max(1.1 * 
 /** The size areas' names are lettered at on a sheet `w` pixels wide. */
 export const nameSizeFor = (w: number): number => (w < 520 ? 12.5 : 13.5);
 
-/** The box an area's name takes on the sheet when lettered at (x, y) at `nameSize`: its slanted lettering and the folders above it. */
-export function nameBox(ctx: CanvasRenderingContext2D, l: AreaLabel<{ readonly name: string }>, nameSize: number): (x: number, y: number) => [number, number, number, number] {
+/**
+ * The box an area's name takes on the sheet when lettered at (x, y) at `nameSize`, its slanted lettering and the
+ * folders above it; and, along the way it runs, how far its lettering reaches either side of (x, y) and above it.
+ */
+export function nameBox(ctx: CanvasRenderingContext2D, l: AreaLabel<{ readonly name: string }>, nameSize: number): ((x: number, y: number) => [number, number, number, number]) & { readonly halfW: number; readonly top: number } {
   ctx.font = `600 ${nameSize}px ${SERIF}`;
   ctx.letterSpacing = `${(nameSize * 0.17).toFixed(1)}px`;
   const nameW = ctx.measureText(l.area.name.toUpperCase()).width;
@@ -939,7 +855,8 @@ export function nameBox(ctx: CanvasRenderingContext2D, l: AreaLabel<{ readonly n
   const sin = Math.abs(Math.sin(l.angle));
   const hw = halfW * cos + ((top + 12) / 2) * sin;
   const hh = halfW * sin + ((top + 12) / 2) * cos;
-  return (x, y) => [x - hw, y - hh - (top - 12) / 2, x + hw, y + hh - (top - 12) / 2];
+  const at = (x: number, y: number): [number, number, number, number] => [x - hw, y - hh - (top - 12) / 2, x + hw, y + hh - (top - 12) / 2];
+  return Object.assign(at, { halfW, top });
 }
 
 /**
