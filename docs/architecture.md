@@ -581,7 +581,7 @@ them in. The plant shader combines them with each instance's live
 vitality, so a change in vitality never rebuilds geometry. A component placed
 many times, such as a tree, a rock or a drift of flowers, draws as one
 instanced mesh per part and level of detail, with each copy's vitality, seed
-and hue read per instance and its shape varied a little by where it stands.
+and hue read per instance and its shape varied a little by where it stands. Far enough away that its crown spans few pixels, a tree draws as one card baked from its own build by its own shaders (`bakeFarForm` and `createFarCards` in `packages/render/src/far.ts`): healthy and withered color, normal, depth, glow, foliage and coverage at four vitalities per texel, from 96 directions, lit live with the scene's light; the woods choose which copies draw far.
 `applyVitality` in `packages/realize/src/channels.ts` is the CPU reference the
 tests run against: a piece collapses in the plant's rest shape, the wind
 bends it (`swayAt` in `packages/realize/src/sway.ts`, the twin of
