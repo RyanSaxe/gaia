@@ -15,12 +15,14 @@
 import { type Blueprint, type CodeModel, type EntityFacts, type FileFacts, type JevResponse, type SymbolFact, rand, seedOf } from "@gaia/schema";
 import { FLORA_PRESETS, LANDMARK_PRESETS, TRAIL_PRESETS, WORLD_PRESETS } from "@gaia/realize";
 import { type WorldSpec, outlinesOf } from "@gaia/terrain";
-import { type CodeWorld, type Judge, areaLands, groundVitality, judgeWorld, judgedThing, keptJev, layoutWorld, planWorldRequests, requestKey, standInJev, thingsOf } from "@gaia/world";
+import { type CodeWorld, type Judge, type Judgments, areaLands, groundVitality, judgeWorld, judgedThing, keptJev, layoutWorld, planWorldRequests, requestKey, standInJev, thingsOf } from "@gaia/world";
 import type { ConsentPlan, Opening, StartChoice, StartOffer, WorldDocument } from "../../world-service/protocol.ts";
 import { postcardOf } from "../../world-service/postcard.ts";
 import { type WorldService, worldService } from "../service.ts";
 import snapshot from "./fixtures/gaia.json";
 import kept from "./fixtures/gaia-jev.json";
+import proving from "./fixtures/proving.json";
+import provingJudged from "./fixtures/proving-judged.json";
 import { CHARACTERS, type Character, FORMS, LANDS, LOOKS } from "./looks.ts";
 import type { Represented, SampleEntity } from "./samples.ts";
 import { type CodePatch, type FileJudged, vitalityOf } from "@gaia/world";
@@ -155,6 +157,21 @@ async function snapshotWorld(why: string): Promise<WorldDocument> {
 }
 
 /**
+ * The proving ground (`?world=proving`): a made-up codebase with every
+ * feature a world can show, from thriving to ruin, laid out from the choices
+ * fixed for it (`fixtures/proving.json` and `proving-judged.json`, written by
+ * `pnpm proving`). It is laid out, stood and baked like any codebase's world.
+ */
+export function provingWorld(): WorldDocument {
+  const model = proving as unknown as CodeModel;
+  const world = layoutWorld(model, provingJudged as unknown as Judgments);
+  return { root: model.repository.name, model, world, judges: {}, summary: "The proving ground: every choice fixed so each feature shows" };
+}
+
+/** Whether the page asks for the proving ground (`?world=proving`), which opens with or without an engine. */
+const ASKS_PROVING = typeof location !== "undefined" && new URLSearchParams(location.search).get("world") === "proving";
+
+/**
  * The start on a page with no engine, to see it (`?start=table|signpost`):
  * Gaia's own world is the one world walked before, and any choice opens it,
  * except an address, which a page with no engine cannot follow.
@@ -174,7 +191,8 @@ export async function codeWorld(veil: Veil): Promise<CodeLab> {
   let document: WorldDocument;
   let landed = false;
   const watched: Veil = { ...veil, opening: (o) => ((landed ||= o.stage === "land"), veil.opening(o)) };
-  if (service === null) {
+  if (ASKS_PROVING) document = provingWorld();
+  else if (service === null) {
     if (typeof location !== "undefined" && new URLSearchParams(location.search).has("start")) await previewStart(veil);
     document = await snapshotWorld("no engine on a standalone page");
   } else {
@@ -234,7 +252,7 @@ function patchesOf(world: CodeWorld): StandCode["patches"] {
 }
 
 /** Everything the terrain lab needs to bake and furnish a world document. */
-function codeLab({ model, world, judges, summary }: WorldDocument): CodeLab {
+export function codeLab({ model, world, judges, summary }: WorldDocument): CodeLab {
   const fallback = Object.values(LANDS)[0]?.biome;
   if (fallback === undefined) throw new Error("No lands to choose from.");
   const spec: WorldSpec = {

@@ -4,7 +4,8 @@
 // page a MessagePort to the world service, with the folder whose world it
 // shows: `GAIA_PROJECT`, one the person opens with File > Open Folder, or none,
 // and then the page offers the start, where a person picks a world they
-// opened before, a folder, or an address on GitHub.
+// opened before, a folder, or an address on GitHub. `GAIA_PROJECT=proving`
+// opens the proving ground instead, which needs no folder (`?world=proving`).
 
 import { basename, join, resolve } from "node:path";
 import { BrowserWindow, Menu, MessageChannelMain, type MessagePortMain, app, dialog, ipcMain, nativeTheme, utilityProcess } from "electron";
@@ -23,7 +24,9 @@ void app.whenReady().then(() => {
   const repoRoot = resolve(app.getAppPath(), "..");
   // With no project named the page offers the start; shots always show Gaia's own world.
   const named = process.env.GAIA_PROJECT ?? (shots ? repoRoot : undefined);
-  let root: string | null = named === undefined ? null : resolve(named);
+  // The proving ground is laid out on the page from its own fixture, so no folder is opened for it.
+  let proving = named === "proving";
+  let root: string | null = named === undefined || proving ? null : resolve(named);
   // The engine keeps each project's store (Jev's answers, a stand-in choice) and the app's own settings (the spend limit) with the app's own data.
   process.env.GAIA_DATA_DIR ??= app.getPath("userData");
   const service = utilityProcess.fork(join(here, "world-service.js"), [], { serviceName: "Gaia world service", stdio: "inherit" });
@@ -69,7 +72,8 @@ void app.whenReady().then(() => {
     const { port1, port2 } = new MessageChannelMain();
     toService({ type: "renderer.port", root }, [port1]);
     window.webContents.postMessage("gaia:world-port", null, [port2]);
-    window.setTitle(root === null ? "Gaia" : `Gaia · ${basename(root)}`);
+    const onProving = new URL(window.webContents.getURL()).searchParams.get("world") === "proving";
+    window.setTitle(onProving ? "Gaia · proving ground" : root === null ? "Gaia" : `Gaia · ${basename(root)}`);
   });
   window.on("page-title-updated", (event) => event.preventDefault());
 
@@ -84,12 +88,12 @@ void app.whenReady().then(() => {
     const folder = await chooseFolder();
     if (folder === null) return;
     root = folder;
-    window.webContents.reload();
+    void load();
   };
   // File > Choose a World: back to the start page.
   const offerStart = (): void => {
     root = null;
-    window.webContents.reload();
+    void load();
   };
   Menu.setApplicationMenu(
     Menu.buildFromTemplate([
@@ -102,7 +106,14 @@ void app.whenReady().then(() => {
   );
 
   const url = process.env.ELECTRON_RENDERER_URL;
-  const loaded = url === undefined ? window.loadFile(join(here, "../renderer/index.html")) : window.loadURL(url);
+  /** Loads the page: on the proving ground the first time if `GAIA_PROJECT` named it, and on the folder `root` names from then on. */
+  function load(): Promise<void> {
+    const world = proving ? "proving" : undefined;
+    proving = false;
+    if (url === undefined) return window.loadFile(join(here, "../renderer/index.html"), world === undefined ? {} : { query: { world } });
+    return window.loadURL(world === undefined ? url : `${url}?world=${world}`);
+  }
+  const loaded = load();
 
   if (shots) {
     loaded

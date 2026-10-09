@@ -273,7 +273,16 @@ by `pnpm jev-world`, keyed by request hash like the app's store), with the
 stand-in judging any request they no longer answer; `?judge=stand-in` shows
 the stand-in's world. So does the app if the world service cannot open its
 folder. `?world=sample` (or `?world=small`) and
-the Terrain view's "Sample world" button show the sample world instead. `standWorld` takes the
+the Terrain view's "Sample world" button show the sample world instead.
+`?world=proving` (and `GAIA_PROJECT=proving` in the app) shows the proving
+ground: a made-up codebase (`fixtures/proving.json`) laid out with
+`layoutWorld` from choices fixed to cover every option
+(`fixtures/proving-judged.json`), both written by `pnpm proving`
+(`tools/proving.ts`), so it holds every building and landmark thriving, tired
+and in ruin, a whole area in ruin, streams crossed on footbridges and
+stepping stones, cairns, ponds, a tiny area and deep nesting
+(`docs/proving-ground.md`). `tourStops` (`app/renderer/terrain/tour.ts`)
+finds in any world where to stand to see each such feature. `standWorld` takes the
 layout (`StandRequest.code`): each building and landmark on its lot, each
 file's trees of the chosen species as one grove on its own cells with that
 file's vitality (`growGrove` in `@gaia/terrain`: close-set at its heart,

@@ -13,7 +13,7 @@ import { STRUCTURE_PRESETS, mergeParts, realize } from "@gaia/realize";
 import { type PlantView, type SceneLight, createPlant } from "@gaia/render";
 import type { BuildingSite, Capsule, Extent } from "@gaia/terrain";
 import { type Represented, SAMPLE_ENTITIES, type SampleEntity, representEntity } from "./samples.ts";
-import { type StandBuilding, blockedBy, buildingClearings, signOf, standOf } from "./stand.ts";
+import { type StandBuilding, blockedBy, buildingClearings, extentOf, signOf, standOf } from "./stand.ts";
 
 export interface Building {
   readonly entity: SampleEntity;
@@ -52,24 +52,6 @@ export interface Settlement {
 }
 
 const lib = new Library([...STRUCTURE_PRIMITIVES, ...FLORA_PRIMITIVES]);
-
-/** The reach of a feature's solid parts in the house's frame, or null when it has none. */
-function extentOf(feature: Built | undefined): Extent | null {
-  if (feature === undefined) return null;
-  const box = { x0: Infinity, x1: -Infinity, z0: Infinity, z1: -Infinity };
-  for (const part of feature.parts) {
-    if (part.collision !== "solid") continue;
-    for (let i = 0; i < part.positions.length; i += 3) {
-      const x = part.positions[i] as number;
-      const z = part.positions[i + 2] as number;
-      box.x0 = Math.min(box.x0, x);
-      box.x1 = Math.max(box.x1, x);
-      box.z0 = Math.min(box.z0, z);
-      box.z1 = Math.max(box.z1, z);
-    }
-  }
-  return Number.isFinite(box.x0) ? box : null;
-}
 
 /** A building for each entity, each the building Jev chose for it: the sample entities unless a world names its own. */
 export function createSettlement(light: SceneLight, entities: readonly SampleEntity[] = SAMPLE_ENTITIES): Settlement {

@@ -1,0 +1,1176 @@
+{
+ "world": "Meadow morning",
+ "lands": {
+  "": "Home lawn",
+  "crossings": "Brook valley",
+  "fords": "Meandering vale",
+  "hollow": "Mossy basin",
+  "pondside": "Pond meadow",
+  "hills": "Clover hills",
+  "terraces": "Silver terraces",
+  "moor": "Heather moor",
+  "dunes": "Golden dunes",
+  "downs": "Broad downs",
+  "mixed": "Clover hills",
+  "ruins": "Brook valley"
+ },
+ "waters": {
+  "": "No water",
+  "crossings": "A brook",
+  "fords": "A trickle",
+  "hollow": "A still pond",
+  "pondside": "A still pond",
+  "hills": "No water",
+  "terraces": "No water",
+  "moor": "No water",
+  "dunes": "No water",
+  "downs": "No water",
+  "mixed": "No water",
+  "ruins": "A brook"
+ },
+ "characters": {
+  "": "Old meadow",
+  "crossings": "Deep wood",
+  "fords": "Groves and clearings",
+  "hollow": "Wet hollow",
+  "pondside": "Old meadow",
+  "hills": "Groves and clearings",
+  "terraces": "Rocky heath",
+  "moor": "Old meadow",
+  "dunes": "Rocky heath",
+  "downs": "Groves and clearings",
+  "mixed": "Deep wood",
+  "ruins": "Deep wood"
+ },
+ "vibes": {
+  "CHANGELOG.md": "Open meadow",
+  "README.md": "Open meadow",
+  "build.sh": "Lantern willow",
+  "crossings/NOTES.md": "Open meadow",
+  "crossings/banks.ts": "Fir",
+  "crossings/channel.ts": "Cherry",
+  "crossings/crossings.test.ts": "Open meadow",
+  "crossings/east-bank/gate.ts": "Autumn maple",
+  "crossings/east-bank/index.ts": "Lantern willow",
+  "crossings/flow.ts": "Fir",
+  "crossings/mill/index.ts": "Cherry",
+  "crossings/mill/package.json": "Open meadow",
+  "crossings/mill/wheel.ts": "Autumn maple",
+  "crossings/weir.ts": "Lantern willow",
+  "crossings/west-bank/index.ts": "Fir",
+  "crossings/west-bank/path.ts": "Cherry",
+  "downs/atlas.ts": "Autumn maple",
+  "downs/deep/deeper/deeper-still/deepest/bottom/five.ts": "Lantern willow",
+  "downs/deep/deeper/deeper-still/deepest/four.ts": "Fir",
+  "downs/deep/deeper/deeper-still/three.ts": "Cherry",
+  "downs/deep/deeper/two.ts": "Autumn maple",
+  "downs/deep/index.ts": "Lantern willow",
+  "downs/deep/one.ts": "Fir",
+  "downs/fields/barley.ts": "Cherry",
+  "downs/fields/rye.ts": "Autumn maple",
+  "downs/hedges.ts": "Lantern willow",
+  "downs/index.ts": "Fir",
+  "downs/lanes.ts": "Cherry",
+  "downs/oak/index.ts": "Autumn maple",
+  "downs/oak/roots.ts": "Lantern willow",
+  "downs/orchard/apples.ts": "Fir",
+  "downs/orchard/orchard.test.ts": "Open meadow",
+  "downs/orchard/pears.ts": "Cherry",
+  "downs/survey.ts": "Autumn maple",
+  "downs/tiny/seed.ts": "Lantern willow",
+  "dunes/data.csv": "Open meadow",
+  "dunes/deploy.sh": "Fir",
+  "dunes/keep/Cargo.toml": "Open meadow",
+  "dunes/keep/guard.rs": "Cherry",
+  "dunes/keep/lib.rs": "Autumn maple",
+  "dunes/ledger/entries.ts": "Lantern willow",
+  "dunes/ledger/index.ts": "Fir",
+  "dunes/lint.toml": "Open meadow",
+  "dunes/settings.json": "Open meadow",
+  "fords/fords.test.ts": "Open meadow",
+  "fords/gravel/index.ts": "Cherry",
+  "fords/gravel/ring.ts": "Autumn maple",
+  "fords/jetty/index.ts": "Lantern willow",
+  "fords/jetty/landing.ts": "Fir",
+  "fords/reeds.ts": "Cherry",
+  "fords/shallows.ts": "Autumn maple",
+  "fords/stones.ts": "Lantern willow",
+  "hills/crests.ts": "Fir",
+  "hills/hills.test.ts": "Open meadow",
+  "hills/kiln/fire.ts": "Cherry",
+  "hills/kiln/index.ts": "Autumn maple",
+  "hills/oak/branches.ts": "Lantern willow",
+  "hills/oak/index.ts": "Fir",
+  "hills/oak/package.json": "Open meadow",
+  "hills/slopes.ts": "Cherry",
+  "hollow/depth.ts": "Autumn maple",
+  "hollow/hollow.test.ts": "Open meadow",
+  "hollow/index.ts": "Lantern willow",
+  "hollow/package.json": "Open meadow",
+  "hollow/pool.ts": "Fir",
+  "hollow/willow/fronds.ts": "Cherry",
+  "hollow/willow/index.ts": "Autumn maple",
+  "index.ts": "Lantern willow",
+  "mixed/beacon/index.ts": "Fir",
+  "mixed/beacon/lamp.ts": "Cherry",
+  "mixed/failing-grove.ts": "Autumn maple",
+  "mixed/main.ts": "Lantern willow",
+  "mixed/mixed.test.ts": "Open meadow",
+  "mixed/patched.ts": "Fir",
+  "mixed/sound.ts": "Cherry",
+  "mixed/steady.ts": "Autumn maple",
+  "mixed/workshop/gears.ts": "Lantern willow",
+  "mixed/workshop/index.ts": "Fir",
+  "mixed/workshop/package.json": "Open meadow",
+  "moor/archive/catalog.ts": "Cherry",
+  "moor/archive/index.ts": "Autumn maple",
+  "moor/decisions.md": "Open meadow",
+  "moor/glossary.md": "Open meadow",
+  "moor/guide.md": "Open meadow",
+  "moor/henge/index.ts": "Lantern willow",
+  "moor/henge/stones.ts": "Fir",
+  "package.json": "Open meadow",
+  "pondside/handoff.ts": "Cherry",
+  "pondside/pondside.test.ts": "Open meadow",
+  "pondside/queue.ts": "Autumn maple",
+  "pondside/records/index.ts": "Lantern willow",
+  "pondside/records/ledger.ts": "Fir",
+  "pondside/server.ts": "Cherry",
+  "ruins/README.md": "Open meadow",
+  "ruins/collapse.ts": "Autumn maple",
+  "ruins/cottage/hearth.ts": "Lantern willow",
+  "ruins/cottage/index.ts": "Fir",
+  "ruins/croft/Cargo.toml": "Open meadow",
+  "ruins/croft/forge.rs": "Cherry",
+  "ruins/croft/lib.rs": "Autumn maple",
+  "ruins/house/main.ts": "Lantern willow",
+  "ruins/house/stair.ts": "Fir",
+  "ruins/index.ts": "Cherry",
+  "ruins/keep/Cargo.toml": "Open meadow",
+  "ruins/keep/lib.rs": "Autumn maple",
+  "ruins/keep/walls.rs": "Lantern willow",
+  "ruins/lighthouse/index.ts": "Fir",
+  "ruins/lighthouse/lens.ts": "Cherry",
+  "ruins/mill/index.ts": "Autumn maple",
+  "ruins/mill/package.json": "Open meadow",
+  "ruins/mill/race.ts": "Lantern willow",
+  "ruins/oak/hollow.ts": "Fir",
+  "ruins/oak/index.ts": "Cherry",
+  "ruins/rubble.ts": "Autumn maple",
+  "ruins/ruins.test.ts": "Open meadow",
+  "terraces/croft/Cargo.toml": "Open meadow",
+  "terraces/croft/lib.rs": "Lantern willow",
+  "terraces/croft/press.rs": "Fir",
+  "terraces/order.test.ts": "Open meadow",
+  "terraces/pipeline.ts": "Cherry",
+  "terraces/ring/index.ts": "Autumn maple",
+  "terraces/ring/package.json": "Open meadow",
+  "terraces/ring/schema.ts": "Lantern willow",
+  "terraces/stages.test.ts": "Open meadow",
+  "terraces/steps.ts": "Fir",
+  "tsconfig.json": "Open meadow"
+ },
+ "things": {
+  "": {
+   "as": "landmark",
+   "look": "Great willow"
+  },
+  "crossings/west-bank": {
+   "as": "building",
+   "look": "Thatched cottage"
+  },
+  "crossings/east-bank": {
+   "as": "building",
+   "look": "Storybook house"
+  },
+  "crossings/mill": {
+   "as": "building",
+   "look": "Watermill"
+  },
+  "fords/jetty": {
+   "as": "building",
+   "look": "Stone croft"
+  },
+  "fords/gravel": {
+   "as": "landmark",
+   "look": "Stone ring"
+  },
+  "hollow": {
+   "as": "landmark",
+   "look": "Lantern tower"
+  },
+  "pondside": {
+   "as": "building",
+   "look": "Archive tower"
+  },
+  "pondside/records": {
+   "as": "building",
+   "look": "Archive tower"
+  },
+  "hills/kiln": {
+   "as": "building",
+   "look": "Thatched cottage"
+  },
+  "hills/oak": {
+   "as": "landmark",
+   "look": "Great oak"
+  },
+  "terraces/croft": {
+   "as": "building",
+   "look": "Stone croft"
+  },
+  "terraces/ring": {
+   "as": "landmark",
+   "look": "Stone ring"
+  },
+  "moor/archive": {
+   "as": "building",
+   "look": "Archive tower"
+  },
+  "moor/henge": {
+   "as": "landmark",
+   "look": "Stone ring"
+  },
+  "dunes/keep": {
+   "as": "landmark",
+   "look": "Battlemented keep"
+  },
+  "dunes/ledger": {
+   "as": "building",
+   "look": "Archive tower"
+  },
+  "downs": {
+   "as": "landmark",
+   "look": "Battlemented keep"
+  },
+  "downs/oak": {
+   "as": "landmark",
+   "look": "Great oak"
+  },
+  "downs/deep": {
+   "as": "building",
+   "look": "Thatched cottage"
+  },
+  "mixed": {
+   "as": "building",
+   "look": "Watermill"
+  },
+  "mixed/workshop": {
+   "as": "building",
+   "look": "Storybook house"
+  },
+  "mixed/beacon": {
+   "as": "landmark",
+   "look": "Lantern tower"
+  },
+  "ruins": {
+   "as": "landmark",
+   "look": "Great willow"
+  },
+  "ruins/cottage": {
+   "as": "building",
+   "look": "Thatched cottage"
+  },
+  "ruins/croft": {
+   "as": "building",
+   "look": "Stone croft"
+  },
+  "ruins/house": {
+   "as": "building",
+   "look": "Storybook house"
+  },
+  "ruins/mill": {
+   "as": "building",
+   "look": "Watermill"
+  },
+  "ruins/keep": {
+   "as": "landmark",
+   "look": "Battlemented keep"
+  },
+  "ruins/lighthouse": {
+   "as": "landmark",
+   "look": "Lantern tower"
+  },
+  "ruins/oak": {
+   "as": "landmark",
+   "look": "Great oak"
+  },
+  "hollow/willow": {
+   "as": "landmark",
+   "look": "Great willow"
+  }
+ },
+ "trails": [
+  {
+   "from": "crossings/west-bank",
+   "to": "crossings/east-bank",
+   "want": 0.92,
+   "look": "Worn footpath"
+  },
+  {
+   "from": "crossings/mill",
+   "to": "crossings/east-bank",
+   "want": 0.8,
+   "look": "Stone-edged path"
+  },
+  {
+   "from": "crossings/west-bank",
+   "to": "crossings/mill",
+   "want": 0.7,
+   "look": "Faint wandering track"
+  },
+  {
+   "from": "fords/jetty",
+   "to": "fords/gravel",
+   "want": 0.9,
+   "look": "Faint wandering track"
+  },
+  {
+   "from": "ruins/cottage",
+   "to": "ruins/mill",
+   "want": 0.9,
+   "look": "Worn footpath"
+  },
+  {
+   "from": "ruins/croft",
+   "to": "ruins/keep",
+   "want": 0.85,
+   "look": "Faint wandering track"
+  },
+  {
+   "from": "ruins/house",
+   "to": "ruins/lighthouse",
+   "want": 0.8,
+   "look": "Stone-edged path"
+  },
+  {
+   "from": "ruins/oak",
+   "to": "ruins",
+   "want": 0.75,
+   "look": "Faint wandering track"
+  },
+  {
+   "from": "ruins/keep",
+   "to": "ruins/house",
+   "want": 0.7,
+   "look": "Faint wandering track"
+  },
+  {
+   "from": "",
+   "to": "hollow",
+   "want": 0.95,
+   "look": "Worn footpath"
+  },
+  {
+   "from": "crossings/mill",
+   "to": "hollow",
+   "want": 0.9,
+   "look": "Worn footpath"
+  },
+  {
+   "from": "downs",
+   "to": "hollow",
+   "want": 0.88,
+   "look": "Worn footpath"
+  },
+  {
+   "from": "hills/oak",
+   "to": "hollow",
+   "want": 0.86,
+   "look": "Stone-edged path"
+  },
+  {
+   "from": "mixed",
+   "to": "hollow",
+   "want": 0.84,
+   "look": "Stone-edged path"
+  },
+  {
+   "from": "pondside",
+   "to": "hollow",
+   "want": 0.83,
+   "look": "Worn footpath"
+  },
+  {
+   "from": "terraces/croft",
+   "to": "hollow",
+   "want": 0.8,
+   "look": "Faint wandering track"
+  },
+  {
+   "from": "fords/gravel",
+   "to": "hollow",
+   "want": 0.78,
+   "look": "Stone-edged path"
+  },
+  {
+   "from": "ruins/mill",
+   "to": "hollow",
+   "want": 0.76,
+   "look": "Faint wandering track"
+  },
+  {
+   "from": "pondside/records",
+   "to": "pondside",
+   "want": 0.7,
+   "look": "Faint wandering track"
+  },
+  {
+   "from": "hills/kiln",
+   "to": "hills/oak",
+   "want": 0.7,
+   "look": "Faint wandering track"
+  },
+  {
+   "from": "terraces/ring",
+   "to": "terraces/croft",
+   "want": 0.72,
+   "look": "Stone-edged path"
+  },
+  {
+   "from": "moor/archive",
+   "to": "",
+   "want": 0.75,
+   "look": "Stone-edged path"
+  },
+  {
+   "from": "moor/henge",
+   "to": "moor/archive",
+   "want": 0.7,
+   "look": "Faint wandering track"
+  },
+  {
+   "from": "dunes/keep",
+   "to": "downs",
+   "want": 0.74,
+   "look": "Stone-edged path"
+  },
+  {
+   "from": "dunes/ledger",
+   "to": "dunes/keep",
+   "want": 0.7,
+   "look": "Faint wandering track"
+  },
+  {
+   "from": "downs/oak",
+   "to": "downs",
+   "want": 0.7,
+   "look": "Faint wandering track"
+  },
+  {
+   "from": "mixed/workshop",
+   "to": "mixed",
+   "want": 0.72,
+   "look": "Stone-edged path"
+  },
+  {
+   "from": "mixed/beacon",
+   "to": "mixed",
+   "want": 0.7,
+   "look": "Faint wandering track"
+  },
+  {
+   "from": "downs/deep",
+   "to": "downs",
+   "want": 0.7,
+   "look": "Faint wandering track"
+  },
+  {
+   "from": "hollow/willow",
+   "to": "hollow",
+   "want": 0.7,
+   "look": "Faint wandering track"
+  },
+  {
+   "from": "",
+   "to": "crossings/mill",
+   "want": 0.7,
+   "look": "Stone-edged path"
+  }
+ ],
+ "forms": {
+  "crossings/banks.ts": {
+   "#carryBanks": "Standing stone",
+   "#BanksSettleer": "Mossy boulder",
+   "#BanksMend": "Stone family",
+   "#BANKS_TURN": "Bench stone",
+   "#keepBanks": "Box mound",
+   "#sortBanks": "Blueberry"
+  },
+  "crossings/channel.ts": {
+   "#mendChannel": "Rhododendron",
+   "#ChannelTurner": "Feather shrub",
+   "#ChannelKeep": "Bluebells",
+   "#CHANNEL_SORT": "Daisies",
+   "#traceChannel": "Standing stone",
+   "#foldChannel": "Mossy boulder",
+   "#measureChannel": "Stone family"
+  },
+  "crossings/east-bank/gate.ts": {
+   "#traceGate": "Bench stone",
+   "#GateFolder": "Box mound",
+   "#GateMeasure": "Blueberry",
+   "#GATE_JOIN": "Rhododendron"
+  },
+  "crossings/east-bank/index.ts": {
+   "#measureEastBank": "Feather shrub",
+   "#EastBankJoiner": "Bluebells"
+  },
+  "crossings/flow.ts": {
+   "#keepFlow": "Daisies",
+   "#FlowSorter": "Standing stone",
+   "#FlowTrace": "Mossy boulder",
+   "#FLOW_FOLD": "Stone family",
+   "#measureFlow": "Bench stone",
+   "#joinFlow": "Box mound",
+   "#gatherFlow": "Blueberry"
+  },
+  "crossings/mill/index.ts": {
+   "#keepMill": "Rhododendron",
+   "#MillSorter": "Feather shrub"
+  },
+  "crossings/mill/wheel.ts": {
+   "#mendWheel": "Bluebells",
+   "#WheelTurner": "Daisies",
+   "#WheelKeep": "Standing stone",
+   "#WHEEL_SORT": "Mossy boulder",
+   "#traceWheel": "Stone family"
+  },
+  "crossings/weir.ts": {
+   "#gatherWeir": "Bench stone",
+   "#WeirWeigher": "Box mound",
+   "#WeirCarry": "Blueberry",
+   "#WEIR_SETTLE": "Rhododendron",
+   "#mendWeir": "Feather shrub"
+  },
+  "crossings/west-bank/index.ts": {
+   "#gatherWestBank": "Bluebells",
+   "#WestBankWeigher": "Daisies"
+  },
+  "crossings/west-bank/path.ts": {
+   "#measurePath": "Standing stone",
+   "#PathJoiner": "Mossy boulder",
+   "#PathGather": "Stone family",
+   "#PATH_WEIGH": "Bench stone"
+  },
+  "downs/atlas.ts": {
+   "#measureAtlas": "Box mound",
+   "#AtlasJoiner": "Blueberry",
+   "#AtlasGather": "Rhododendron",
+   "#ATLAS_WEIGH": "Feather shrub",
+   "#carryAtlas": "Bluebells",
+   "#settleAtlas": "Daisies",
+   "#mendAtlas": "Standing stone"
+  },
+  "downs/deep/deeper/deeper-still/deepest/bottom/five.ts": {
+   "#weighFive": "Mossy boulder"
+  },
+  "downs/deep/deeper/deeper-still/deepest/four.ts": {
+   "#traceFour": "Stone family",
+   "#FourFolder": "Bench stone"
+  },
+  "downs/deep/deeper/deeper-still/three.ts": {
+   "#settleThree": "Box mound",
+   "#ThreeMender": "Blueberry"
+  },
+  "downs/deep/deeper/two.ts": {
+   "#measureTwo": "Rhododendron",
+   "#TwoJoiner": "Feather shrub"
+  },
+  "downs/deep/index.ts": {
+   "#gatherDeep": "Bluebells",
+   "#DeepWeigher": "Daisies"
+  },
+  "downs/deep/one.ts": {
+   "#measureOne": "Standing stone",
+   "#OneJoiner": "Mossy boulder"
+  },
+  "downs/fields/barley.ts": {
+   "#weighBarley": "Stone family",
+   "#BarleyCarryer": "Bench stone",
+   "#BarleySettle": "Box mound",
+   "#BARLEY_MEND": "Blueberry",
+   "#turnBarley": "Rhododendron"
+  },
+  "downs/fields/rye.ts": {
+   "#joinRye": "Feather shrub",
+   "#RyeGatherer": "Bluebells",
+   "#RyeWeigh": "Daisies",
+   "#RYE_CARRY": "Standing stone"
+  },
+  "downs/hedges.ts": {
+   "#keepHedges": "Mossy boulder",
+   "#HedgesSorter": "Stone family",
+   "#HedgesTrace": "Bench stone",
+   "#HEDGES_FOLD": "Box mound",
+   "#measureHedges": "Blueberry",
+   "#joinHedges": "Rhododendron",
+   "#gatherHedges": "Feather shrub"
+  },
+  "downs/index.ts": {
+   "#gatherDowns": "Bluebells",
+   "#DownsWeigher": "Daisies"
+  },
+  "downs/lanes.ts": {
+   "#mendLanes": "Standing stone",
+   "#LanesTurner": "Mossy boulder",
+   "#LanesKeep": "Stone family",
+   "#LANES_SORT": "Bench stone",
+   "#traceLanes": "Box mound",
+   "#foldLanes": "Blueberry",
+   "#measureLanes": "Rhododendron"
+  },
+  "downs/oak/index.ts": {
+   "#carryOak": "Feather shrub",
+   "#OakSettleer": "Bluebells"
+  },
+  "downs/oak/roots.ts": {
+   "#gatherRoots": "Daisies",
+   "#RootsWeigher": "Standing stone",
+   "#RootsCarry": "Mossy boulder",
+   "#ROOTS_SETTLE": "Stone family",
+   "#mendRoots": "Bench stone"
+  },
+  "downs/orchard/apples.ts": {
+   "#joinApples": "Box mound",
+   "#ApplesGatherer": "Blueberry",
+   "#ApplesWeigh": "Rhododendron",
+   "#APPLES_CARRY": "Feather shrub"
+  },
+  "downs/orchard/pears.ts": {
+   "#foldPears": "Bluebells",
+   "#PearsMeasureer": "Daisies",
+   "#PearsJoin": "Standing stone"
+  },
+  "downs/survey.ts": {
+   "#traceSurvey": "Mossy boulder",
+   "#SurveyFolder": "Stone family",
+   "#SurveyMeasure": "Bench stone",
+   "#SURVEY_JOIN": "Box mound",
+   "#gatherSurvey": "Blueberry",
+   "#weighSurvey": "Rhododendron",
+   "#carrySurvey": "Feather shrub"
+  },
+  "downs/tiny/seed.ts": {
+   "#keepSeed": "Bluebells"
+  },
+  "dunes/keep/guard.rs": {
+   "#sortGuard": "Daisies",
+   "#GuardTraceer": "Standing stone",
+   "#GuardFold": "Mossy boulder",
+   "#GUARD_MEASURE": "Stone family",
+   "#joinGuard": "Bench stone"
+  },
+  "dunes/keep/lib.rs": {
+   "#foldKeep": "Box mound",
+   "#KeepMeasureer": "Blueberry",
+   "#KeepJoin": "Rhododendron"
+  },
+  "dunes/ledger/entries.ts": {
+   "#gatherEntries": "Feather shrub",
+   "#EntriesWeigher": "Bluebells",
+   "#EntriesCarry": "Daisies",
+   "#ENTRIES_SETTLE": "Standing stone"
+  },
+  "dunes/ledger/index.ts": {
+   "#carryLedger": "Mossy boulder",
+   "#LedgerSettleer": "Stone family"
+  },
+  "fords/gravel/index.ts": {
+   "#turnGravel": "Bench stone",
+   "#GravelKeeper": "Box mound"
+  },
+  "fords/gravel/ring.ts": {
+   "#settleRing": "Blueberry",
+   "#RingMender": "Rhododendron",
+   "#RingTurn": "Feather shrub",
+   "#RING_KEEP": "Bluebells",
+   "#sortRing": "Daisies"
+  },
+  "fords/jetty/index.ts": {
+   "#sortJetty": "Standing stone",
+   "#JettyTraceer": "Mossy boulder"
+  },
+  "fords/jetty/landing.ts": {
+   "#turnLanding": "Stone family",
+   "#LandingKeeper": "Bench stone",
+   "#LandingSort": "Box mound",
+   "#LANDING_TRACE": "Blueberry",
+   "#foldLanding": "Rhododendron"
+  },
+  "fords/reeds.ts": {
+   "#foldReeds": "Feather shrub",
+   "#ReedsMeasureer": "Bluebells",
+   "#ReedsJoin": "Daisies",
+   "#REEDS_GATHER": "Standing stone",
+   "#weighReeds": "Mossy boulder"
+  },
+  "fords/shallows.ts": {
+   "#joinShallows": "Stone family",
+   "#ShallowsGatherer": "Bench stone",
+   "#ShallowsWeigh": "Box mound",
+   "#SHALLOWS_CARRY": "Blueberry",
+   "#settleShallows": "Rhododendron",
+   "#mendShallows": "Feather shrub",
+   "#turnShallows": "Bluebells"
+  },
+  "fords/stones.ts": {
+   "#sortStones": "Daisies",
+   "#StonesTraceer": "Standing stone",
+   "#StonesFold": "Mossy boulder",
+   "#STONES_MEASURE": "Stone family"
+  },
+  "hills/crests.ts": {
+   "#traceCrests": "Bench stone",
+   "#CrestsFolder": "Box mound",
+   "#CrestsMeasure": "Blueberry",
+   "#CRESTS_JOIN": "Rhododendron",
+   "#gatherCrests": "Feather shrub",
+   "#weighCrests": "Bluebells"
+  },
+  "hills/kiln/fire.ts": {
+   "#joinFire": "Daisies",
+   "#FireGatherer": "Standing stone",
+   "#FireWeigh": "Mossy boulder",
+   "#FIRE_CARRY": "Stone family"
+  },
+  "hills/kiln/index.ts": {
+   "#weighKiln": "Bench stone",
+   "#KilnCarryer": "Box mound"
+  },
+  "hills/oak/branches.ts": {
+   "#sortBranches": "Blueberry",
+   "#BranchesTraceer": "Rhododendron",
+   "#BranchesFold": "Feather shrub",
+   "#BRANCHES_MEASURE": "Bluebells",
+   "#joinBranches": "Daisies",
+   "#gatherBranches": "Standing stone"
+  },
+  "hills/oak/index.ts": {
+   "#foldOak": "Mossy boulder",
+   "#OakMeasureer": "Stone family",
+   "#OakJoin": "Bench stone"
+  },
+  "hills/slopes.ts": {
+   "#measureSlopes": "Box mound",
+   "#SlopesJoiner": "Blueberry",
+   "#SlopesGather": "Rhododendron",
+   "#SLOPES_WEIGH": "Feather shrub",
+   "#carrySlopes": "Bluebells",
+   "#settleSlopes": "Daisies",
+   "#mendSlopes": "Standing stone"
+  },
+  "hollow/depth.ts": {
+   "#foldDepth": "Mossy boulder",
+   "#DepthMeasureer": "Stone family",
+   "#DepthJoin": "Bench stone",
+   "#DEPTH_GATHER": "Box mound",
+   "#weighDepth": "Blueberry",
+   "#carryDepth": "Rhododendron"
+  },
+  "hollow/index.ts": {
+   "#weighHollow": "Feather shrub",
+   "#HollowCarryer": "Bluebells",
+   "#HollowSettle": "Daisies"
+  },
+  "hollow/pool.ts": {
+   "#joinPool": "Standing stone",
+   "#PoolGatherer": "Mossy boulder",
+   "#PoolWeigh": "Stone family",
+   "#POOL_CARRY": "Bench stone",
+   "#settlePool": "Box mound",
+   "#mendPool": "Blueberry",
+   "#turnPool": "Rhododendron"
+  },
+  "hollow/willow/fronds.ts": {
+   "#keepFronds": "Feather shrub",
+   "#FrondsSorter": "Bluebells",
+   "#FrondsTrace": "Daisies",
+   "#FRONDS_FOLD": "Standing stone"
+  },
+  "hollow/willow/index.ts": {
+   "#traceWillow": "Mossy boulder",
+   "#WillowFolder": "Stone family"
+  },
+  "index.ts": {
+   "#carryProving": "Bench stone",
+   "#ProvingSettleer": "Box mound"
+  },
+  "mixed/beacon/index.ts": {
+   "#traceBeacon": "Blueberry",
+   "#BeaconFolder": "Rhododendron"
+  },
+  "mixed/beacon/lamp.ts": {
+   "#keepLamp": "Feather shrub",
+   "#LampSorter": "Bluebells",
+   "#LampTrace": "Daisies",
+   "#LAMP_FOLD": "Standing stone",
+   "#measureLamp": "Mossy boulder"
+  },
+  "mixed/failing-grove.ts": {
+   "#turnFailingGrove": "Stone family",
+   "#FailingGroveKeeper": "Bench stone",
+   "#FailingGroveSort": "Box mound",
+   "#FAILINGGROVE_TRACE": "Blueberry",
+   "#foldFailingGrove": "Rhododendron",
+   "#measureFailingGrove": "Feather shrub",
+   "#joinFailingGrove": "Bluebells"
+  },
+  "mixed/main.ts": {
+   "#joinMixed": "Daisies",
+   "#MixedGatherer": "Standing stone"
+  },
+  "mixed/patched.ts": {
+   "#settlePatched": "Mossy boulder",
+   "#PatchedMender": "Stone family",
+   "#PatchedTurn": "Bench stone",
+   "#PATCHED_KEEP": "Box mound",
+   "#sortPatched": "Blueberry",
+   "#tracePatched": "Rhododendron"
+  },
+  "mixed/sound.ts": {
+   "#foldSound": "Feather shrub",
+   "#SoundMeasureer": "Bluebells",
+   "#SoundJoin": "Daisies",
+   "#SOUND_GATHER": "Standing stone",
+   "#weighSound": "Mossy boulder",
+   "#carrySound": "Stone family",
+   "#settleSound": "Bench stone"
+  },
+  "mixed/steady.ts": {
+   "#sortSteady": "Box mound",
+   "#SteadyTraceer": "Blueberry",
+   "#SteadyFold": "Rhododendron",
+   "#STEADY_MEASURE": "Feather shrub",
+   "#joinSteady": "Bluebells",
+   "#gatherSteady": "Daisies",
+   "#weighSteady": "Standing stone"
+  },
+  "mixed/workshop/gears.ts": {
+   "#weighGears": "Mossy boulder",
+   "#GearsCarryer": "Stone family",
+   "#GearsSettle": "Bench stone",
+   "#GEARS_MEND": "Box mound",
+   "#turnGears": "Blueberry",
+   "#keepGears": "Rhododendron"
+  },
+  "mixed/workshop/index.ts": {
+   "#settleWorkshop": "Feather shrub",
+   "#WorkshopMender": "Bluebells"
+  },
+  "moor/archive/catalog.ts": {
+   "#turnCatalog": "Daisies",
+   "#CatalogKeeper": "Standing stone",
+   "#CatalogSort": "Mossy boulder",
+   "#CATALOG_TRACE": "Stone family",
+   "#foldCatalog": "Bench stone"
+  },
+  "moor/archive/index.ts": {
+   "#sortArchive": "Box mound",
+   "#ArchiveTraceer": "Blueberry"
+  },
+  "moor/henge/index.ts": {
+   "#turnHenge": "Rhododendron",
+   "#HengeKeeper": "Feather shrub"
+  },
+  "moor/henge/stones.ts": {
+   "#settleStones": "Bluebells",
+   "#StonesMender": "Daisies",
+   "#StonesTurn": "Standing stone",
+   "#STONES_KEEP": "Mossy boulder"
+  },
+  "pondside/handoff.ts": {
+   "#gatherHandoff": "Stone family",
+   "#HandoffWeigher": "Bench stone",
+   "#HandoffCarry": "Box mound",
+   "#HANDOFF_SETTLE": "Blueberry",
+   "#mendHandoff": "Rhododendron"
+  },
+  "pondside/queue.ts": {
+   "#carryQueue": "Feather shrub",
+   "#QueueSettleer": "Bluebells",
+   "#QueueMend": "Daisies",
+   "#QUEUE_TURN": "Standing stone",
+   "#keepQueue": "Mossy boulder",
+   "#sortQueue": "Stone family"
+  },
+  "pondside/records/index.ts": {
+   "#gatherRecords": "Bench stone"
+  },
+  "pondside/records/ledger.ts": {
+   "#measureLedger": "Box mound",
+   "#LedgerJoiner": "Blueberry",
+   "#LedgerGather": "Rhododendron",
+   "#LEDGER_WEIGH": "Feather shrub"
+  },
+  "pondside/server.ts": {
+   "#mendPondside": "Bluebells",
+   "#PondsideTurner": "Daisies",
+   "#PondsideKeep": "Standing stone"
+  },
+  "ruins/collapse.ts": {
+   "#mendCollapse": "Mossy boulder",
+   "#CollapseTurner": "Stone family",
+   "#CollapseKeep": "Bench stone",
+   "#COLLAPSE_SORT": "Box mound",
+   "#traceCollapse": "Blueberry",
+   "#foldCollapse": "Rhododendron",
+   "#measureCollapse": "Feather shrub"
+  },
+  "ruins/cottage/hearth.ts": {
+   "#turnHearth": "Bluebells",
+   "#HearthKeeper": "Daisies",
+   "#HearthSort": "Standing stone",
+   "#HEARTH_TRACE": "Mossy boulder"
+  },
+  "ruins/cottage/index.ts": {
+   "#sortCottage": "Stone family",
+   "#CottageTraceer": "Bench stone"
+  },
+  "ruins/croft/forge.rs": {
+   "#weighForge": "Box mound",
+   "#ForgeCarryer": "Blueberry",
+   "#ForgeSettle": "Rhododendron",
+   "#FORGE_MEND": "Feather shrub",
+   "#turnForge": "Bluebells"
+  },
+  "ruins/croft/lib.rs": {
+   "#settleCroft": "Daisies",
+   "#CroftMender": "Standing stone",
+   "#CroftTurn": "Mossy boulder"
+  },
+  "ruins/house/main.ts": {
+   "#traceHouse": "Stone family",
+   "#HouseFolder": "Bench stone"
+  },
+  "ruins/house/stair.ts": {
+   "#keepStair": "Box mound",
+   "#StairSorter": "Blueberry",
+   "#StairTrace": "Rhododendron",
+   "#STAIR_FOLD": "Feather shrub",
+   "#measureStair": "Bluebells"
+  },
+  "ruins/index.ts": {
+   "#keepRuins": "Daisies",
+   "#RuinsSorter": "Standing stone"
+  },
+  "ruins/keep/lib.rs": {
+   "#sortKeep": "Mossy boulder",
+   "#KeepTraceer": "Stone family",
+   "#KeepFold": "Bench stone"
+  },
+  "ruins/keep/walls.rs": {
+   "#turnWalls": "Box mound",
+   "#WallsKeeper": "Blueberry",
+   "#WallsSort": "Rhododendron",
+   "#WALLS_TRACE": "Feather shrub",
+   "#foldWalls": "Bluebells"
+  },
+  "ruins/lighthouse/index.ts": {
+   "#gatherLighthouse": "Daisies",
+   "#LighthouseWeigher": "Standing stone"
+  },
+  "ruins/lighthouse/lens.ts": {
+   "#measureLens": "Mossy boulder",
+   "#LensJoiner": "Stone family",
+   "#LensGather": "Bench stone",
+   "#LENS_WEIGH": "Box mound"
+  },
+  "ruins/mill/index.ts": {
+   "#mendMill": "Blueberry",
+   "#MillTurner": "Rhododendron"
+  },
+  "ruins/mill/race.ts": {
+   "#carryRace": "Feather shrub",
+   "#RaceSettleer": "Bluebells",
+   "#RaceMend": "Daisies",
+   "#RACE_TURN": "Standing stone",
+   "#keepRace": "Mossy boulder"
+  },
+  "ruins/oak/hollow.ts": {
+   "#traceHollow": "Stone family",
+   "#HollowFolder": "Bench stone",
+   "#HollowMeasure": "Box mound",
+   "#HOLLOW_JOIN": "Blueberry"
+  },
+  "ruins/oak/index.ts": {
+   "#measureOak": "Rhododendron",
+   "#OakJoiner": "Feather shrub"
+  },
+  "ruins/rubble.ts": {
+   "#carryRubble": "Bluebells",
+   "#RubbleSettleer": "Daisies",
+   "#RubbleMend": "Standing stone",
+   "#RUBBLE_TURN": "Mossy boulder",
+   "#keepRubble": "Stone family",
+   "#sortRubble": "Bench stone",
+   "#traceRubble": "Box mound"
+  },
+  "terraces/croft/lib.rs": {
+   "#traceCroft": "Blueberry",
+   "#CroftFolder": "Rhododendron",
+   "#CroftMeasure": "Feather shrub"
+  },
+  "terraces/croft/press.rs": {
+   "#keepPress": "Bluebells",
+   "#PressSorter": "Daisies",
+   "#PressTrace": "Standing stone",
+   "#PRESS_FOLD": "Mossy boulder",
+   "#measurePress": "Stone family"
+  },
+  "terraces/pipeline.ts": {
+   "#tracePipeline": "Bench stone",
+   "#PipelineFolder": "Box mound",
+   "#PipelineMeasure": "Blueberry",
+   "#PIPELINE_JOIN": "Rhododendron",
+   "#gatherPipeline": "Feather shrub"
+  },
+  "terraces/ring/index.ts": {
+   "#joinRing": "Bluebells",
+   "#RingGatherer": "Daisies"
+  },
+  "terraces/ring/schema.ts": {
+   "#foldSchema": "Standing stone",
+   "#SchemaMeasureer": "Mossy boulder",
+   "#SchemaJoin": "Stone family",
+   "#SCHEMA_GATHER": "Bench stone",
+   "#weighSchema": "Box mound"
+  },
+  "terraces/steps.ts": {
+   "#carrySteps": "Blueberry",
+   "#StepsSettleer": "Rhododendron",
+   "#StepsMend": "Feather shrub",
+   "#STEPS_TURN": "Bluebells",
+   "#keepSteps": "Daisies",
+   "#sortSteps": "Standing stone"
+  }
+ },
+ "needsTests": {
+  "CHANGELOG.md": 0.1,
+  "README.md": 0.1,
+  "build.sh": 0.1,
+  "crossings/NOTES.md": 0.1,
+  "crossings/banks.ts": 0.85,
+  "crossings/channel.ts": 0.85,
+  "crossings/crossings.test.ts": 0.1,
+  "crossings/east-bank/gate.ts": 0.85,
+  "crossings/east-bank/index.ts": 0.85,
+  "crossings/flow.ts": 0.85,
+  "crossings/mill/index.ts": 0.85,
+  "crossings/mill/package.json": 0.1,
+  "crossings/mill/wheel.ts": 0.85,
+  "crossings/weir.ts": 0.85,
+  "crossings/west-bank/index.ts": 0.85,
+  "crossings/west-bank/path.ts": 0.85,
+  "downs/atlas.ts": 0.85,
+  "downs/deep/deeper/deeper-still/deepest/bottom/five.ts": 0.85,
+  "downs/deep/deeper/deeper-still/deepest/four.ts": 0.85,
+  "downs/deep/deeper/deeper-still/three.ts": 0.85,
+  "downs/deep/deeper/two.ts": 0.85,
+  "downs/deep/index.ts": 0.85,
+  "downs/deep/one.ts": 0.85,
+  "downs/fields/barley.ts": 0.85,
+  "downs/fields/rye.ts": 0.85,
+  "downs/hedges.ts": 0.85,
+  "downs/index.ts": 0.85,
+  "downs/lanes.ts": 0.85,
+  "downs/oak/index.ts": 0.85,
+  "downs/oak/roots.ts": 0.85,
+  "downs/orchard/apples.ts": 0.85,
+  "downs/orchard/orchard.test.ts": 0.1,
+  "downs/orchard/pears.ts": 0.85,
+  "downs/survey.ts": 0.85,
+  "downs/tiny/seed.ts": 0.85,
+  "dunes/data.csv": 0.1,
+  "dunes/deploy.sh": 0.1,
+  "dunes/keep/Cargo.toml": 0.1,
+  "dunes/keep/guard.rs": 0.85,
+  "dunes/keep/lib.rs": 0.85,
+  "dunes/ledger/entries.ts": 0.85,
+  "dunes/ledger/index.ts": 0.85,
+  "dunes/lint.toml": 0.1,
+  "dunes/settings.json": 0.1,
+  "fords/fords.test.ts": 0.1,
+  "fords/gravel/index.ts": 0.85,
+  "fords/gravel/ring.ts": 0.85,
+  "fords/jetty/index.ts": 0.85,
+  "fords/jetty/landing.ts": 0.85,
+  "fords/reeds.ts": 0.85,
+  "fords/shallows.ts": 0.85,
+  "fords/stones.ts": 0.85,
+  "hills/crests.ts": 0.85,
+  "hills/hills.test.ts": 0.1,
+  "hills/kiln/fire.ts": 0.85,
+  "hills/kiln/index.ts": 0.85,
+  "hills/oak/branches.ts": 0.85,
+  "hills/oak/index.ts": 0.85,
+  "hills/oak/package.json": 0.1,
+  "hills/slopes.ts": 0.85,
+  "hollow/depth.ts": 0.85,
+  "hollow/hollow.test.ts": 0.1,
+  "hollow/index.ts": 0.85,
+  "hollow/package.json": 0.1,
+  "hollow/pool.ts": 0.85,
+  "hollow/willow/fronds.ts": 0.85,
+  "hollow/willow/index.ts": 0.85,
+  "index.ts": 0.85,
+  "mixed/beacon/index.ts": 0.85,
+  "mixed/beacon/lamp.ts": 0.85,
+  "mixed/failing-grove.ts": 0.85,
+  "mixed/main.ts": 0.85,
+  "mixed/mixed.test.ts": 0.1,
+  "mixed/patched.ts": 0.85,
+  "mixed/sound.ts": 0.85,
+  "mixed/steady.ts": 0.85,
+  "mixed/workshop/gears.ts": 0.85,
+  "mixed/workshop/index.ts": 0.85,
+  "mixed/workshop/package.json": 0.1,
+  "moor/archive/catalog.ts": 0.85,
+  "moor/archive/index.ts": 0.85,
+  "moor/decisions.md": 0.1,
+  "moor/glossary.md": 0.1,
+  "moor/guide.md": 0.1,
+  "moor/henge/index.ts": 0.85,
+  "moor/henge/stones.ts": 0.85,
+  "package.json": 0.1,
+  "pondside/handoff.ts": 0.85,
+  "pondside/pondside.test.ts": 0.1,
+  "pondside/queue.ts": 0.85,
+  "pondside/records/index.ts": 0.85,
+  "pondside/records/ledger.ts": 0.85,
+  "pondside/server.ts": 0.85,
+  "ruins/README.md": 0.1,
+  "ruins/collapse.ts": 0.85,
+  "ruins/cottage/hearth.ts": 0.85,
+  "ruins/cottage/index.ts": 0.85,
+  "ruins/croft/Cargo.toml": 0.1,
+  "ruins/croft/forge.rs": 0.85,
+  "ruins/croft/lib.rs": 0.85,
+  "ruins/house/main.ts": 0.85,
+  "ruins/house/stair.ts": 0.85,
+  "ruins/index.ts": 0.85,
+  "ruins/keep/Cargo.toml": 0.1,
+  "ruins/keep/lib.rs": 0.85,
+  "ruins/keep/walls.rs": 0.85,
+  "ruins/lighthouse/index.ts": 0.85,
+  "ruins/lighthouse/lens.ts": 0.85,
+  "ruins/mill/index.ts": 0.85,
+  "ruins/mill/package.json": 0.1,
+  "ruins/mill/race.ts": 0.85,
+  "ruins/oak/hollow.ts": 0.85,
+  "ruins/oak/index.ts": 0.85,
+  "ruins/rubble.ts": 0.85,
+  "ruins/ruins.test.ts": 0.1,
+  "terraces/croft/Cargo.toml": 0.1,
+  "terraces/croft/lib.rs": 0.85,
+  "terraces/croft/press.rs": 0.85,
+  "terraces/order.test.ts": 0.1,
+  "terraces/pipeline.ts": 0.85,
+  "terraces/ring/index.ts": 0.85,
+  "terraces/ring/package.json": 0.1,
+  "terraces/ring/schema.ts": 0.85,
+  "terraces/stages.test.ts": 0.1,
+  "terraces/steps.ts": 0.85,
+  "tsconfig.json": 0.1
+ }
+}

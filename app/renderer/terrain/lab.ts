@@ -69,6 +69,8 @@ import {
   sightlines,
   siteToWorld,
   wayWear,
+  wayVitalityAt,
+  junctionVitality,
   solidsOf,
   stanceAt,
   standAt,
@@ -97,12 +99,13 @@ import { createWait } from "../wait/wait.ts";
 import { withStart } from "../start/start.ts";
 import { createCard } from "./card.ts";
 import { LANDMARK_ENTITIES, type Represented, SAMPLE_ENTITIES, SAMPLE_FILES, representEntity, representFile } from "./samples.ts";
-import { type Judge, entityVitalityOf, judgedThing } from "@gaia/world";
+import { type Judge, entityVitalityOf, groundVitality, judgedThing } from "@gaia/world";
 import { type CodeLab, codeWorld, judgedOf, representSymbol } from "./code-world.ts";
 import { createSettlement } from "./settlement.ts";
 import { createSigns } from "./signs.ts";
 import { createBaker } from "./baker.ts";
-import type { Stand, StandRequest, StandingLandmark } from "./stand.ts";
+import { type Stand, type StandRequest, type StandingLandmark, landmarkBase } from "./stand.ts";
+import { type TourStop, tourStops } from "./tour.ts";
 
 const TEMPLATE = /* html */ `
 <main class="stage">
@@ -379,16 +382,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   const routeLib = new Library(ROUTE_PRIMITIVES);
   const landmarks = LANDMARK_PRESETS.map((preset, i) => {
     const built = realize(preset.blueprint, landmark, landmarkLib, { seed: seedOf(`terrain-lab/landmark-${i}`), facts: { scale: 1 } });
-    // The footprint at the ground: how far the landmark reaches within a meter of it.
-    let base = 1;
-    for (const part of built.parts) {
-      for (let k = 0; k < part.positions.length; k += 3) {
-        // Only what stands counts: fallen stone that grows in at its foot is walked over.
-        if ((part.channels.grow?.[k / 3] ?? 0) > 0) continue;
-        if ((part.positions[k + 1] as number) < 1) base = Math.max(base, Math.hypot(part.positions[k] as number, part.positions[k + 2] as number));
-      }
-    }
-    return { name: preset.name, built, base: Math.min(base, 10) };
+    return { name: preset.name, built, base: landmarkBase(built) };
   });
   const trailStyles = TRAIL_PRESETS.map((p) => buildSlots(p.blueprint, link, routeLib, { seed: 1, facts: {} }).get("route")?.output as RouteSpec);
   /** The landmarks standing and the network of paths between every place, from the last bake. */
@@ -1559,6 +1553,40 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     frozen = 8;
   }
 
+  /** The places worth seeing in the world now shown, each with where to stand and which way to look (`tourStops`). */
+  function tour(): TourStop[] {
+    const groves = new Map<number, { x: number; z: number; trees: number }>();
+    for (const t of trees) {
+      if (t.patch === undefined) continue;
+      const g = groves.get(t.patch) ?? { x: 0, z: 0, trees: 0 };
+      groves.set(t.patch, { x: g.x + t.x, z: g.z + t.z, trees: g.trees + 1 });
+    }
+    const patches = code?.world.patches ?? [];
+    const own = groundVitality(patches.map((p) => ({ area: p.area, vitality: p.vitality, size: p.radius * p.radius })));
+    const half = world.size / 2 - 4;
+    return tourStops({
+      things: [
+        ...settlement.buildings.map((b) => {
+          const front = settlement.standOf(b);
+          const d = Math.hypot(front.x - b.site.x, front.z - b.site.z) || 1;
+          return { as: "building" as const, kind: b.kindName, name: b.represented.id || b.represented.name, x: b.site.x, z: b.site.z, vitality: entityVitality.get(b.represented.id) ?? 1, reach: Math.hypot(b.plan.width, b.plan.depth) / 2, front: { x: (front.x - b.site.x) / d, z: (front.z - b.site.z) / d } };
+        }),
+        ...ways.sites.map((s, i) => {
+          const turn = landmarkViews[i]?.object.rotation.y ?? 0;
+          const entity = landmarkEntity(i);
+          return { as: "landmark" as const, kind: landmarks[s.landmark]?.name ?? "Landmark", name: entity.id || entity.name, x: s.site.x, z: s.site.z, vitality: entityVitality.get(entity.id) ?? 1, reach: landmarks[s.landmark]?.base ?? 4, front: { x: Math.sin(turn), z: Math.cos(turn) } };
+        }),
+      ],
+      network: ways.network,
+      wayVitality: (way, along) => wayVitalityAt(ways.network, way, along, vitalityOfPlace),
+      junctionVitality: (j) => junctionVitality(ways.network, j, vitalityOfPlace),
+      areas: (code?.world.areas ?? []).map((a) => ({ path: a.path, x: a.x, z: a.z, ground: a.ground, depth: a.depth, vitality: own.get(a.path) ?? 1 })),
+      groves: [...groves].map(([i, g]) => ({ path: patches[i]?.path ?? `patch ${i}`, x: g.x / g.trees, z: g.z / g.trees, trees: g.trees, vitality: patches[i]?.vitality ?? 1 })),
+      ponds: terrain.ponds.map((p) => ({ x: p.x, z: p.z, reach: p.reach })),
+      standable: (x, z) => Math.abs(x) < half && Math.abs(z) < half && waterDepthAt(terrain, x, z) <= LAND.dry && clearanceAt(solids, x, z) >= LAND.clear,
+    });
+  }
+
   /** The landing nearest (x, z): see `WorldHandle.landing`. */
   function landingNear(x: number, z: number, heart?: { readonly x: number; readonly z: number }): Landing | null {
     // A spot on or beside a building lands where a person stops to read its sign, looking at it.
@@ -1748,6 +1776,19 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       turning: () => turn !== null,
       closeCard: () => hideCard(),
       walk: (x: number, z: number, yawDeg: number, pitchDeg = -3) => walkTo(x, z, (yawDeg * Math.PI) / 180, (pitchDeg * Math.PI) / 180),
+      /**
+       * The tour (`tourStops`): with no name, every stop's name, what is there
+       * and where; with a name, such as "ruined building", "bridge",
+       * "stepping stones", "cairn" or "watermill (ruin)", walks there, looking
+       * at it, and returns the stop, or null when this world has none.
+       */
+      tour: (name?: string) => {
+        const stops = tour();
+        if (name === undefined) return stops.map((s) => ({ name: s.name, what: s.what, x: Math.round(s.x), z: Math.round(s.z) }));
+        const s = stops.find((t) => t.name === name.toLowerCase());
+        if (s !== undefined) walkTo(s.x, s.z, s.yaw, s.pitch);
+        return s ?? null;
+      },
       valley: () => valleyView(),
       walker: () => ({ x: walker.x, z: walker.z, yawDeg: (walker.yaw * 180) / Math.PI, pitchDeg: (walker.pitch * 180) / Math.PI, eye: walker.eye }),
       /** The overview, from `pos` if given, looking at `target` (the world's middle unless given). */
