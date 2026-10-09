@@ -110,7 +110,9 @@ bough (`twig`) and the point its piece hangs from (`pivot`).
   each bough about its joint, each twig about where it leaves the bough,
   and each leaf or flower on its stalk, only in a gust. Each level leans
   downwind with the gust where its joint stands and swings gently about
-  that lean, smaller parts faster, each with its own phase. Every level
+  that lean, smaller parts faster, each with its own phase; both grow with
+  the square of the gust (`WIND.answer`), so the steady breeze only stirs
+  a plant and a strong gust bows it. Every level
   turns about one axis per joint, so whatever a joint carries turns as
   one: a broad leaf, a round stem and a bell keep their shape, and a bough
   curves and never slides. A turn grows smoothly from its joint and eases
