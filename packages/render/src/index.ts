@@ -5,3 +5,4 @@ export * from "./clearings.ts";
 export * from "./instances.ts";
 export * from "./wind-field.ts";
 export * from "./sway.ts";
+export * from "./far.ts";
