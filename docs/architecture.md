@@ -625,7 +625,8 @@ piece the level leaves out has already left on screen, so the two draw the
 same pixels.
 
 The woods also measure every tree's crown in each pass's own device pixels.
-A crown under `FAR.swapPx` (128) draws as its far form, one card baked from
+A crown under `FAR.swapPx` (128, or 64 on a touch-first screen, whose
+far forms bake at that size) draws as its far form, one card baked from
 its build (`packages/render/src/far.ts`). Between 128 and 160 pixels, the band
 (`farness` in `woods.ts`), the card draws over the full tree as far into its
 form as the crown is into the band, so a tree never changes form in one
