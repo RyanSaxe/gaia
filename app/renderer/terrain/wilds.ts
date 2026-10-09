@@ -45,12 +45,12 @@ const WILD_COVERS = [
   { cover: "golden steppe", length: "tall and unkempt", wildflowers: "none" },
 ] as const;
 
-/** Wild bushes in the flora kind's words: a tangle of grey-green scrub and a rounded bush. */
+/** Wild bushes in the flora kind's words: grey-green scrub in tufts and a rounded bush. */
 const WILD_BUSHES = [
   blueprintOf("flora", {
-    form: { use: "thicket@1", params: { habit: "spreading", stems: "a few stems", stature: "waist-high" } },
+    form: { use: "thicket@1", params: { habit: "scrub", stems: "a few stems", stature: "waist-high" } },
     bark: { use: "bark@1", params: { roughness: "smooth" } },
-    crown: { use: "leaf-mound@1", params: { leaves: "rounded", fullness: "full" } },
+    crown: { use: "leaf-mound@1", params: { leaves: "rounded", fullness: "in tufts at its tips" } },
     motion: { use: "sway@1", params: { stiffness: "stiff", rhythm: "gentle" } },
     palette: { use: "palette@1", params: { family: "desert-sage", contrast: "balanced" } },
   }),
