@@ -31,8 +31,6 @@ import {
 } from "./kit.ts";
 
 const UP: V3 = [0, 1, 0];
-/** A crown's heart: solid, drawn as the shade between its leaves. */
-const CORE: V3 = [0, 0, CUT.core];
 
 /** The foliage volume's center and half-extents, from the frame's tips. */
 export interface Crown {
@@ -733,9 +731,8 @@ function acrossOf(dir: Vec3): V3 {
 
 /**
  * A spray of needles along a limb's polyline, built like a fir's frond: a
- * slim dark core for its mass, a narrow ridge of needles along its top, and
- * branchlets to either side that reach toward the tip and droop, each a
- * small creased needle card. The branchlets alternate and vary, so a spray
+ * narrow ridge of needles along its top, and branchlets to either side that
+ * reach toward the tip and droop, each a small creased needle card. The branchlets alternate and vary, so a spray
  * reads as layered, feathery needles from the side and from below rather
  * than as one flat plate.
  */
@@ -749,38 +746,11 @@ function emitFrond(
   heightFrac: number,
   carry: (q: Vec3) => { bough: Vec3; droop: number },
 ): void {
-  const sphere = icosphere(1);
-  const first = out.vertexCount;
-  const seed = Math.floor(r.next() * 1e6);
   // Lower sprays shed first, as an ailing conifer browns from the bottom up.
   const loss = clamp(lossThreshold(r.next(), 0.5) + 0.12 * (1 - heightFrac), 0.02, 0.7);
   const wither = 0.7 + 0.3 * r.next();
   const tint = r.range(-0.06, 0.06);
   const lift = 0.12 * (p.fullness < 0.9 ? 1 : 0.5) * heightFrac;
-  const core = width * 0.36;
-  for (const n of sphere.points) {
-    // x runs along the limb from just past its base to its tip.
-    const t = 0.08 + (n[0] * 0.5 + 0.5) * 0.85;
-    const { at, dir } = pointOnPolyline(points, t);
-    const side = acrossOf(dir);
-    const up = normalize(cross(side, dir));
-    const profile = Math.sin(Math.PI * clamp(t * 0.92 + 0.04, 0, 1)) * 0.75 + 0.25;
-    const w = core * profile * (1 + 0.18 * fbm3(n[0] * 2.5 + seed * 0.01, n[1] * 2.5, n[2] * 2.5, seed, 2));
-    const q = add(at, add(scale(side, n[2] * w), scale(up, (n[1] * 0.45 - 0.3) * w)));
-    const place = crownPlace(crown, q);
-    const normal = blendNormal([side[0] * n[2] + up[0] * n[1], side[1] * n[2] + up[1] * n[1], side[2] * n[2] + up[2] * n[1]], place.out, 0.5);
-    const shade = 0.14 + 0.36 * clamp(place.depth - 0.25, 0, 1) + 0.16 * Math.max(0, n[1]) + 0.5 * tint + lift;
-    out.vertex(q, normal, shade, {
-      loss: Math.max(0.01, loss + 0.08 * t),
-      droop: carry(at).droop,
-      wither,
-      glow: 0,
-      pivot: at,
-      bough: carry(at).bough,
-      tint: tint * 0.4,
-    }, CORE);
-  }
-  for (const [a, b, c] of sphere.triangles) out.triangle(first + a, first + b, first + c);
 
   // Each card sags with its bough by the bark's rule where it leaves the limb; a branchlet also bends about that point.
   const channelsAt = (t: number, edge: number, cardTint: number, from = t, twig = false): Channels => {

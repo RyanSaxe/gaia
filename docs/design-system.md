@@ -69,8 +69,9 @@ the tips and the undersides of the limbs, each topped by two small sprays;
 far off a strand swells and narrows along its length, as its leaves bunch,
 so a curtain never reads as ribbons. A fir spray is a frond along its
 limb: a ridge of needles along the limb and branchlets to either side that
-reach toward the tip and droop, over a slim dark heart, so a fir reads as
-layered, feathery needles rather than flat plates.
+reach toward the tip and droop, so a fir reads as layered, feathery
+needles rather than flat plates. No crown, bush or frond has a dark body
+inside it to read as dense: its fullness comes from its leaves.
 
 Bushes are built the same way as a crown: twigs from every stem carry
 sprays of leaves out to the mound's surface, down to the soil, and the

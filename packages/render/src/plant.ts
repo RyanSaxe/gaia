@@ -12,7 +12,6 @@ import { createSmokeMaterial } from "./smoke.ts";
 const f = (x: number): string => x.toFixed(4);
 
 /** Where a fir frond's heart is gone and where it is whole, in multiples of its own size from the eye. */
-const CORE_NEAR = { gone: 3, whole: 8 } as const;
 
 // The scalar channels ride four to an attribute (see \`geometryOf\`), so an
 // instanced plant stays well inside WebGL's 16 attribute slots.
@@ -192,18 +191,6 @@ vec3 cardCut() {
   vec3 c = aCutout;
   if (abs(floor(c.z) - ${CUT.patch.toFixed(1)}) < 0.5) c.x -= 0.5 * (1.0 - uVitality);
   return c;
-}
-// A frond's heart stands in for its inner needles only while they merge into
-// a mass: as the eye comes near enough to see single needles, it shrinks
-// smoothly to its center, so up close the gaps show limbs, deeper needles and
-// sky, never a ball. It measures from the eye by its own size, gone within
-// ${CORE_NEAR.gone} sizes and whole past ${CORE_NEAR.whole}. Its shadow stays: it stands for the
-// crown's dense shade wherever the person walks.
-float coreKeep(mat4 model) {
-  if (abs(floor(aCutout.z) - ${CUT.core.toFixed(1)}) > 0.5) return 1.0;
-  float size = aPiece.w / ${f(DETAIL.reach)};
-  float d = distance((model * vec4(aPiece.xyz, 1.0)).xyz, uEye);
-  return smoothstep(size * ${f(CORE_NEAR.gone)}, size * ${f(CORE_NEAR.whole)}, d);
 }
 `;
 
@@ -439,18 +426,13 @@ float needleCut(vec2 p, float seed, float far, float px) {
   return mix(d, plain, far);
 }
 
-// The tone of a frond's heart: it reads only as the shade between needles.
-const float CORE_TONE = 0.75;
-
 // The card's leaves at this fragment: x is coverage, y a tone that sets
-// leaves apart up close. Solid surfaces are (1, 1); a frond's heart is solid
-// and dark. \`thin\` (0 to 1) is how nearly edge-on the card is seen: its
+// leaves apart up close. Solid surfaces are (1, 1). \`thin\` (0 to 1) is how nearly edge-on the card is seen: its
 // leaves narrow toward nothing, so a card turning away never shows as a
 // sliver or a stippled ghost.
 vec2 leafCut(float thin) {
   float form = floor(vCut.z + 0.5 / 1024.0);
   if (form < 0.5) return vec2(1.0);
-  if (abs(form - ${CUT.core.toFixed(1)}) < 0.5) return vec2(1.0, CORE_TONE);
   float seed = fract(vCut.z);
   vec2 p = vCut.xy;
   // A pixel's footprint on the card, by its area, so a card seen at a slant
@@ -503,7 +485,6 @@ void main() {
     gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
     return;
   }
-  k *= coreKeep(modelMatrix);
   vec3 root = (modelMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
   vec3 p = applyDroop(applyWind(applyVariety(applyChannels(aPiece.xyz + (position - aPiece.xyz) * k), root), modelMatrix, root), applyVariety(aBough, root));
   vec4 world = modelMatrix * vec4(p, 1.0);
@@ -554,7 +535,7 @@ void main() {
   // A card seen edge-on would show as a sliver: its leaves thin as it turns away.
   float thin = 0.0;
   float form = floor(vCut.z);
-  if (form > 0.5 && abs(form - ${CUT.patch.toFixed(1)}) > 0.5 && abs(form - ${CUT.core.toFixed(1)}) > 0.5) {
+  if (form > 0.5 && abs(form - ${CUT.patch.toFixed(1)}) > 0.5) {
     vec3 face = normalize(cross(dFdx(vWorld), dFdy(vWorld)));
     thin = 1.0 - smoothstep(0.06, 0.45, abs(dot(face, normalize(cameraPosition - vWorld))));
   }
