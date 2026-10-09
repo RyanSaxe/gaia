@@ -16,20 +16,11 @@ import { biome, flora } from "@gaia/kinds";
 import { type Realized, realize, realizeRegion } from "@gaia/realize";
 import type { InstanceSpot, SceneLight } from "@gaia/render";
 import { NO_SHIFT, hex } from "@gaia/primitives";
-import { type Terrain, wildHash, wildHeightAt, wildNoise, wildPast } from "@gaia/terrain";
+import { type Terrain, WILD_THICKETS, wildHeightAt, wildThicket } from "@gaia/terrain";
 import type { RegionCovers } from "./regions.ts";
 import { type Copies, createCopies } from "./woods.ts";
 
 export const WILD_GROWTH = {
-  /** The world grid thickets stand on, meters, and the chance a cell holds one. */
-  cell: 48,
-  chance: 0.42,
-  /** Bushes per thicket, fewest and most, and how far they spread from its middle, meters. */
-  members: [1, 5],
-  spread: 5,
-  scale: [0.85, 1.45],
-  /** Thickets thin in over this band past the land's edge, meters, as the wild's covers take over. */
-  thinIn: [20, 140],
   /**
    * Bushes stand within `reach` of the anchor, which jumps to the person once
    * they are `recenter` from it, meters: `reach - recenter` stays past the
@@ -83,46 +74,25 @@ export interface WildGrowth {
   show(on: boolean): void;
 }
 
-const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
-const smooth = (a: number, b: number, x: number): number => {
-  const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
-  return t * t * (3 - 2 * t);
-};
-
-/** One world cell's thicket, if it holds one: which blueprint, and its bushes. Seeded by the cell, so a cell always holds the same bushes. */
+/** One world cell's thicket (`wildThicket`), if it holds one: which blueprint, and its bushes standing on the ground. */
 function thicketIn(t: Terrain, ci: number, cj: number, variants: number): { variant: number; spots: InstanceSpot[] } | null {
-  const g = WILD_GROWTH;
-  const cx = (ci + 0.5) * g.cell;
-  const cz = (cj + 0.5) * g.cell;
-  const past = wildPast(t, cx, cz);
-  if (past < 0) return null;
-  // Thickets gather where the wild runs to scrub (the ground's wildScrub) and thin out over open grass.
-  const scrub = 0.15 + 1.7 * smooth(-0.1, 0.5, wildNoise(cx * 0.6 + 1000, cz * 0.6 + 1000));
-  if (wildHash(ci, cj, 101) >= g.chance * scrub * smooth(g.thinIn[0], g.thinIn[1], past)) return null;
-  const tx = (ci + wildHash(ci, cj, 102)) * g.cell;
-  const tz = (cj + wildHash(ci, cj, 103)) * g.cell;
-  const members = g.members[0] + Math.floor(wildHash(ci, cj, 104) * (g.members[1] - g.members[0] + 1));
-  const spots: InstanceSpot[] = [];
-  for (let m = 0; m < members; m++) {
-    const a = wildHash(ci, cj, 110 + m) * Math.PI * 2;
-    const d = m === 0 ? 0 : g.spread * (0.4 + 0.6 * wildHash(ci, cj, 120 + m));
-    const x = tx + Math.cos(a) * d;
-    const z = tz + Math.sin(a) * d;
-    if (wildPast(t, x, z) < g.thinIn[0]) continue;
-    const y = wildHeightAt(t, x, z);
-    spots.push({
-      x,
-      y: y - g.sink,
-      z,
-      yaw: wildHash(ci, cj, 130 + m) * Math.PI * 2,
-      scale: lerp(g.scale[0], g.scale[1], wildHash(ci, cj, 140 + m)) * (m === 0 ? 1 : 0.85),
-      slope: [(wildHeightAt(t, x + 0.5, z) - y) * 2, (wildHeightAt(t, x, z + 0.5) - y) * 2],
-      vitality: g.vitality,
-      hue: (wildHash(ci, cj, 150 + m) - 0.5) * 0.04,
-      seed: wildHash(ci, cj, 160 + m),
-    });
-  }
-  return { variant: Math.floor(wildHash(ci, cj, 105) * variants), spots };
+  const thicket = wildThicket(t, ci, cj);
+  if (thicket === null) return null;
+  const spots = thicket.bushes.map((b): InstanceSpot => {
+    const y = wildHeightAt(t, b.x, b.z);
+    return {
+      x: b.x,
+      y: y - WILD_GROWTH.sink,
+      z: b.z,
+      yaw: b.yaw,
+      scale: b.scale,
+      slope: [(wildHeightAt(t, b.x + 0.5, b.z) - y) * 2, (wildHeightAt(t, b.x, b.z + 0.5) - y) * 2],
+      vitality: WILD_GROWTH.vitality,
+      hue: b.hue,
+      seed: b.seed,
+    };
+  });
+  return { variant: Math.floor(thicket.pick * variants), spots };
 }
 
 /**
@@ -131,13 +101,14 @@ function thicketIn(t: Terrain, ci: number, cj: number, variants: number): { vari
  * the anchor seeds only the cells it newly reaches.
  */
 function wildSpots(t: Terrain, ax: number, az: number, variants: number, cache: Map<string, ReturnType<typeof thicketIn>>): InstanceSpot[][] {
-  const g = WILD_GROWTH;
+  const { reach } = WILD_GROWTH;
+  const { cell } = WILD_THICKETS;
   const out: InstanceSpot[][] = Array.from({ length: variants }, () => []);
-  const lo = (v: number): number => Math.floor((v - g.reach) / g.cell);
-  const hi = (v: number): number => Math.ceil((v + g.reach) / g.cell);
+  const lo = (v: number): number => Math.floor((v - reach) / cell);
+  const hi = (v: number): number => Math.ceil((v + reach) / cell);
   for (let cj = lo(az); cj <= hi(az); cj++) {
     for (let ci = lo(ax); ci <= hi(ax); ci++) {
-      if (Math.hypot((ci + 0.5) * g.cell - ax, (cj + 0.5) * g.cell - az) > g.reach) continue;
+      if (Math.hypot((ci + 0.5) * cell - ax, (cj + 0.5) * cell - az) > reach) continue;
       const key = `${ci},${cj}`;
       let thicket = cache.get(key);
       if (thicket === undefined) {
@@ -207,8 +178,8 @@ export function createWildGrowth(scene: THREE.Scene, light: SceneLight, covers: 
       const next = queue.shift();
       if (next !== undefined) next.view.respot(next.spots);
       if (terrain === null || Math.hypot(x - anchor.x, z - anchor.z) <= WILD_GROWTH.recenter) return;
-      anchor.x = Math.round(x / WILD_GROWTH.cell) * WILD_GROWTH.cell;
-      anchor.z = Math.round(z / WILD_GROWTH.cell) * WILD_GROWTH.cell;
+      anchor.x = Math.round(x / WILD_THICKETS.cell) * WILD_THICKETS.cell;
+      anchor.z = Math.round(z / WILD_THICKETS.cell) * WILD_THICKETS.cell;
       stand(terrain, false);
     },
   };
