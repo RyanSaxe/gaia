@@ -125,18 +125,18 @@ function turnAbout(p: number[], j0: number, j1: number, j2: number, k0: number, 
 }
 
 /**
- * Bends `p` about a joint by `level`: one axis for the whole joint, square
- * to where it leans, and an angle that grows smoothly from the joint over
+ * Bends `p` about a joint by `level`, in the gust where its bough stands:
+ * one axis for the whole joint, square to where it leans, and an angle that grows smoothly from the joint over
  * `WIND.grow` reaches. Past that, the swing fades and trails with distance,
  * so a long hanging piece sways rather than whips. Writes into `p`.
  */
-function bendAt(p: number[], j0: number, j1: number, j2: number, level: WindLevel, s: WindState, give: number, reach: number, phase: number): void {
+function bendAt(p: number[], j0: number, j1: number, j2: number, level: WindLevel, s: WindState, give: number, gust: number, reach: number, phase: number): void {
   const d = Math.hypot((p[0] as number) - j0, (p[1] as number) - j1, (p[2] as number) - j2);
   if (d < 1e-4) return;
   const full = reach * WIND.grow;
   const x = 1 - Math.min(d / full, 1);
   const grow = 1 - x * x;
-  const [lx, lz] = leanOf(level, s, give, gustAt(s.at[0] + j0, s.at[2] + j2, s.time), phase, full / Math.max(d, full), Math.max(0, d - full) * WIND.trail);
+  const [lx, lz] = leanOf(level, s, give, gust, phase, full / Math.max(d, full), Math.max(0, d - full) * WIND.trail);
   const angle = Math.hypot(lx, lz);
   if (angle < 1e-7) return;
   // up x lean: a positive turn about it carries what stands above the joint toward the lean.
@@ -168,6 +168,8 @@ export function swayAt(part: Part, positions: Float32Array, s: WindState, flutte
     p[1] = positions[i * 3 + 1] as number;
     p[2] = positions[i * 3 + 2] as number;
     const j = (a: Float32Array, c: number): number => a[i * 3 + c] as number;
+    // One gust for everything a bough carries, where its joint stands: the gust varies over tens of meters.
+    const gust = gustAt(s.at[0] + j(bough, 0), s.at[2] + j(bough, 2), s.time);
     if (flutter && !STIFF.has(Math.floor(part.cutout[i * 3 + 2] as number))) {
       // The piece turns as one about its foot (its pivot): it nods across its stalk and the wind, and twists about the stalk, by a mix its own.
       const [p0, p1, p2] = [j(pivot, 0), j(pivot, 1), j(pivot, 2)];
@@ -189,13 +191,12 @@ export function swayAt(part: Part, positions: Float32Array, s: WindState, flutte
       const ay = (ny / nl) * nod + sy * twist;
       const az = (nz / nl) * nod + sz * twist;
       const al = Math.hypot(ax, ay, az) || 1;
-      const g = gustAt(s.at[0] + p0, s.at[2] + p2, s.time);
-      const amp = ease(give * WIND.leaf.swing * WIND.answer.full * g * g * Math.sin(s.time * (0.5 + s.frequency) * WIND.leaf.rate + phase), WIND.leaf.most);
+      const amp = ease(give * WIND.leaf.swing * WIND.answer.full * gust * gust * Math.sin(s.time * (0.5 + s.frequency) * WIND.leaf.rate + phase), WIND.leaf.most);
       const d = Math.hypot((p[0] as number) - p0, (p[1] as number) - p1, (p[2] as number) - p2);
       turnAbout(p, p0, p1, p2, ax / al, ay / al, az / al, amp * Math.min(1, WIND.leaf.reach / Math.max(d, 1e-4)));
     }
-    if (!same(twig, i, bough, i)) bendAt(p, j(twig, 0), j(twig, 1), j(twig, 2), WIND.twig, s, give, WIND.twig.reach, jointPhase(j(twig, 0), j(twig, 1), j(twig, 2), s.seed));
-    if (Math.hypot(j(bough, 0), j(bough, 1), j(bough, 2)) > 1e-4) bendAt(p, j(bough, 0), j(bough, 1), j(bough, 2), WIND.bough, s, give * Math.sqrt(trunk), boughReach, jointPhase(j(bough, 0), j(bough, 1), j(bough, 2), s.seed));
+    if (!same(twig, i, bough, i)) bendAt(p, j(twig, 0), j(twig, 1), j(twig, 2), WIND.twig, s, give, gust, WIND.twig.reach, jointPhase(j(twig, 0), j(twig, 1), j(twig, 2), s.seed));
+    if (Math.hypot(j(bough, 0), j(bough, 1), j(bough, 2)) > 1e-4) bendAt(p, j(bough, 0), j(bough, 1), j(bough, 2), WIND.bough, s, give * Math.sqrt(trunk), gust, boughReach, jointPhase(j(bough, 0), j(bough, 1), j(bough, 2), s.seed));
     // The whole plant bends from its base: each point leans by its height, and drops to keep its length.
     const y = Math.max(0, p[1] as number);
     const k = (y * y) / Math.max(s.height, 0.3);

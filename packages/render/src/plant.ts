@@ -157,20 +157,22 @@ ${WIND_GLSL}
 vec3 applyWind(vec3 p, mat4 model, vec3 root) {
   float give = uWind * uSway;
   if (give <= 0.0) return p;
-  vec3 wd = transpose(mat3(model)) * vec3(WIND_DIR.x, 0.0, WIND_DIR.y);
+  vec2 dir = WIND_DIR;
+  vec3 wd = transpose(mat3(model)) * vec3(dir.x, 0.0, dir.y);
   vec2 along = normalize(wd.xz + vec2(1e-6, 0.0));
   float trunk = trunkGive(uHeight);
+  // One gust for everything a bough carries, where its joint stands: the
+  // gust varies over tens of meters, so its twigs and leaves share it.
+  vec3 jb = applyVariety(aBough, root);
+  float gust = gustAt((model * vec4(jb, 1.0)).xz, uTime);
   if (uFlutter > 0.0 && !windStiff(aCutout.z)) {
-    vec3 j = applyVariety(aPivot, root);
-    p = windFlutter(p, j, applyVariety(aTwig, root), give, uFrequency, gustAt((model * vec4(j, 1.0)).xz, uTime), uTime, jointPhase(aPivot, uSeed), along);
+    p = windFlutter(p, applyVariety(aPivot, root), applyVariety(aTwig, root), give, uFrequency, gust, uTime, jointPhase(aPivot, uSeed), along);
   }
   if (distance(aTwig, aBough) > 1e-4) {
-    vec3 j = applyVariety(aTwig, root);
-    p = windBendAt(p, j, WIND_TWIG, give, uFrequency, gustAt((model * vec4(j, 1.0)).xz, uTime), uTime, jointPhase(aTwig, uSeed), WIND_SMALL.x, along);
+    p = windBendAt(p, applyVariety(aTwig, root), WIND_TWIG, give, uFrequency, gust, uTime, jointPhase(aTwig, uSeed), WIND_SMALL.x, along);
   }
   if (length(aBough) > 1e-4) {
-    vec3 j = applyVariety(aBough, root);
-    p = windBendAt(p, j, WIND_BOUGH, give * sqrt(trunk), uFrequency, gustAt((model * vec4(j, 1.0)).xz, uTime), uTime, jointPhase(aBough, uSeed), clamp(WIND_REACH.x * uHeight, WIND_REACH.y, WIND_REACH.z), along);
+    p = windBendAt(p, jb, WIND_BOUGH, give * sqrt(trunk), uFrequency, gust, uTime, jointPhase(aBough, uSeed), clamp(WIND_REACH.x * uHeight, WIND_REACH.y, WIND_REACH.z), along);
   }
   return bendUp(p, windLean(WIND_TRUNK, give * trunk, uFrequency, gustAt(root.xz, uTime), uTime, uSeed * 6.28318530718, 1.0, 0.0, along), uHeight);
 }
