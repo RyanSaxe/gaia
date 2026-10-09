@@ -36,6 +36,12 @@ export const WIND = {
   twig: { lean: 0.1, swing: 0.8, rate: 2.7, most: 0.28, reach: 0.6 },
   /** Leaves and flowers turn on their stalks, only in a gust; past its reach in meters a piece turns less, so a long strand only rustles. */
   leaf: { lean: 0, swing: 0.16, rate: 6.5, most: 0.3, reach: 1 },
+  /**
+   * How a plant answers the gust where it stands, 0 to 1: its lean and swing
+   * scale by calm + (full - calm) x gust², so the steady breeze only stirs it
+   * and a strong gust bows it; a leaf's flutter scales by full x gust².
+   */
+  answer: { calm: 0.2, full: 1.8 },
   /** A level's turn grows along the piece over this many reaches, steepest at the joint, then holds. */
   grow: 1.5,
   /** Past where its turn holds, a hanging piece swings less with distance, and its lower end trails its top by this many radians a meter. */
@@ -92,8 +98,9 @@ const ease = (angle: number, most: number): number => most * Math.tanh(angle / m
  */
 function leanOf(level: WindLevel, s: WindState, give: number, gust: number, phase: number, fade: number, lag: number): [number, number] {
   const t = s.time * (0.5 + s.frequency) * level.rate + phase - lag;
-  const lean = level.lean * (0.25 + 0.75 * gust);
-  const swing = level.lean * level.swing * (0.35 + 0.65 * gust) * fade;
+  const answer = WIND.answer.calm + (WIND.answer.full - WIND.answer.calm) * gust * gust;
+  const lean = level.lean * answer;
+  const swing = level.lean * level.swing * answer * fade;
   const along = give * (lean + swing * Math.sin(t));
   const across = give * swing * 0.4 * Math.sin(t * 1.31 + phase * 1.7);
   const [dx, dz] = windDirAt(s.time);
@@ -183,7 +190,7 @@ export function swayAt(part: Part, positions: Float32Array, s: WindState, flutte
       const az = (nz / nl) * nod + sz * twist;
       const al = Math.hypot(ax, ay, az) || 1;
       const g = gustAt(s.at[0] + p0, s.at[2] + p2, s.time);
-      const amp = ease(give * WIND.leaf.swing * g * g * Math.sin(s.time * (0.5 + s.frequency) * WIND.leaf.rate + phase), WIND.leaf.most);
+      const amp = ease(give * WIND.leaf.swing * WIND.answer.full * g * g * Math.sin(s.time * (0.5 + s.frequency) * WIND.leaf.rate + phase), WIND.leaf.most);
       const d = Math.hypot((p[0] as number) - p0, (p[1] as number) - p1, (p[2] as number) - p2);
       turnAbout(p, p0, p1, p2, ax / al, ay / al, az / al, amp * Math.min(1, WIND.leaf.reach / Math.max(d, 1e-4)));
     }

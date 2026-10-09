@@ -29,12 +29,13 @@ float trunkGive(float height) {
 // Eases an angle toward most, never past it.
 float windEase(float a, float most) { return most * tanh(a / most); }
 // One level's turn at a joint, over the ground along dir: its length is the
-// angle, downwind by its lean and swinging about it; fade scales the swing
-// and lag delays it.
+// angle, downwind by its lean and swinging about it, both growing with the
+// square of the gust; fade scales the swing and lag delays it.
 vec2 windLean(vec4 level, float give, float rhythm, float gust, float t, float phase, float fade, float lag, vec2 dir) {
   float a = t * (0.5 + rhythm) * level.z + phase - lag;
-  float lean = level.x * (0.25 + 0.75 * gust);
-  float swing = level.x * level.y * (0.35 + 0.65 * gust) * fade;
+  float answer = ${f(WIND.answer.calm)} + ${f(WIND.answer.full - WIND.answer.calm)} * gust * gust;
+  float lean = level.x * answer;
+  float swing = level.x * level.y * answer * fade;
   float along = give * (lean + swing * sin(a));
   float across = give * swing * 0.4 * sin(a * 1.31 + phase * 1.7);
   vec2 w = vec2(along * dir.x - across * dir.y, along * dir.y + across * dir.x);
@@ -72,7 +73,7 @@ vec3 windFlutter(vec3 p, vec3 pivot, vec3 twig, float give, float rhythm, float 
   float nl = length(n);
   n = nl < 1e-3 ? vec3(w.z, 0.0, -w.x) : n / nl;
   vec3 axis = normalize(n * cos(phase * 1.7) + s * sin(phase * 1.7));
-  float amp = windEase(give * WIND_LEAF.y * gust * gust * sin(t * (0.5 + rhythm) * WIND_LEAF.z + phase), WIND_LEAF.w);
+  float amp = windEase(give * WIND_LEAF.y * ${f(WIND.answer.full)} * gust * gust * sin(t * (0.5 + rhythm) * WIND_LEAF.z + phase), WIND_LEAF.w);
   return turnAbout(p, pivot, axis, amp * min(1.0, WIND_SMALL.y / max(distance(p, pivot), 1e-4)));
 }
 // Cuts too stiff to flutter (STIFF in @gaia/realize).

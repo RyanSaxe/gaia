@@ -86,14 +86,14 @@ describe("buildings", () => {
 });
 
 /**
- * A gusty world's strongest gust over a supple plant: the most any plant
- * bends. The gustiest world blows at strength 1.55; 2.5, what the world
- * lab's old surges reached, leaves room to spare.
+ * The gustiest world's strongest gust in ten minutes over a supple plant: the
+ * most any plant bends. That world blows at strength 1.55, and its gusts come
+ * from the wind field; 2 leaves room to spare.
  */
 const GUST: WindState = (() => {
   let time = 0;
-  for (let t = 0; t < 30; t += 0.05) if (gustAt(0, 0, t) > gustAt(0, 0, time)) time = t;
-  return { time: time + 0.4, strength: 2.5, sway: 0.9, frequency: 1.1, height: 6, at: [0, 0, 0], seed: 0.3 };
+  for (let t = 0; t < 600; t += 0.05) if (gustAt(0, 0, t) > gustAt(0, 0, time)) time = t;
+  return { time, strength: 2, sway: 0.9, frequency: 1.1, height: 6, at: [0, 0, 0], seed: 0.3 };
 })();
 /** Moments through that gust, so each level is caught near the top of its swing. */
 const GUST_MOMENTS = [0, 0.35, 0.7, 1.05, 1.4].map((dt) => ({ ...GUST, time: GUST.time + dt }));
