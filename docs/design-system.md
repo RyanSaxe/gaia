@@ -475,9 +475,19 @@ own middle, looking down at it at the person's feet. A thing already close
 counts as arrived. A new tap or a key cancels the walk and nothing opens.
 
 In the immersive world, walking up to a thing, the minimap rings it, and
-on arrival its page rises at the lower left (see The field sheet). The page
-belongs to its thing: walking more than 4 m from where it opened lets it
-go, and so does Esc.
+on arrival its page rises at the lower left (see The field sheet).
+Stopping at a thing without tapping it raises its page too: every thing
+that stands for code has one, a building, a landmark, a file's tree, and
+the stone, bush or flowers a function, class, constant or type stands as.
+The person has stopped at a thing when they stand still no farther from
+it than walking up would bring them, and 2 m more, with it near the
+middle of their view; of several, the one nearest the middle. A building's
+or landmark's page rises after 0.6 s of standing, anything smaller's after
+1.5 s, so walking through a grove or past a drift of flowers raises none,
+and a pause shorter than that raises nothing (`STOP_AT` in the terrain
+lab). A file's trees all raise the file's one page. The page belongs to its
+thing: walking more than 4 m from where it opened lets it go, and so does
+Esc, after which standing there raises nothing until the person moves on.
 
 In the Terrain view the thing's card opens in the panel or the sheet
 instead, and reads like a page from a field guide: what kind of thing it

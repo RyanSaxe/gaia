@@ -171,6 +171,18 @@ const FACE = { base: 0.7, perHalfTurn: 0.7 };
 const LOW_THING = 2.5;
 /** Walking this far from where a card opened closes it, meters. */
 const LEAVE_CARD = 4;
+/**
+ * Standing still at a thing opens its card as walking up to it does: at a
+ * building or landmark after `great` seconds, at anything smaller after
+ * `small`, so walking through a grove or a drift of flowers opens none. A
+ * thing is at hand while the person stands no farther from it than walking up
+ * would bring them and `slack` meters more, and its middle lies within `view`
+ * radians of the middle of their view beyond its own breadth there; of those,
+ * the one nearest the middle is the one they stopped at.
+ */
+const STOP_AT = { great: 0.6, small: 1.5, slack: 2, view: 0.45 };
+/** Moving slower than this counts as standing still, meters a second. */
+const STILL = 0.25;
 /** Furnishings (fingerposts, boundary stones) a tap can reach stand about this tall, meters. */
 const FURNISHING_TOP = 2.4;
 
@@ -201,6 +213,8 @@ interface Subject {
   readonly height: number;
   /** How far it reaches from its middle, meters: what a pointer finds and what catches the rim of light. */
   readonly reach: number;
+  /** How long a person stands still at it before its card opens, seconds (`STOP_AT`). */
+  readonly stop: number;
 }
 
 /** Where one tree stands, and which build it copies. */
@@ -756,6 +770,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       stand: () => settlement.standOf(b),
       height: b.view.height,
       reach: Math.hypot(b.plan.width, b.plan.depth) / 2,
+      stop: STOP_AT.great,
     }));
     // A landmark stands for an entity in the codebase's world: walk up to its foot to read it.
     const landmarkSubjects: Subject[] = code === null
@@ -773,6 +788,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
             z,
             height: landmarkViews[i]?.height ?? 6,
             reach: lm.base + 1,
+            stop: STOP_AT.great,
             stand: (fx: number, fz: number) => {
               const d = Math.hypot(fx - x, fz - z) || 1;
               const off = lm.base + 7;
@@ -791,6 +807,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
         z,
         height: (variants[tree.variant] as TreeVariant).height * tree.scale,
         reach: crown,
+        stop: STOP_AT.small,
         // Stop just outside the crown, so the tree and its plaque are in view, not its leaves.
         stand: (fx: number, fz: number) => {
           const d = Math.hypot(fx - x, fz - z) || 1;
@@ -819,6 +836,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
             z,
             height: (understory.footprint(p.rule, p.variant)?.top ?? 0.8) * p.scale,
             reach: p.radius + 0.3,
+            stop: STOP_AT.small,
             stand: (fx: number, fz: number) => {
               const d = Math.hypot(fx - x, fz - z) || 1;
               const off = p.radius + 2.2;
@@ -905,11 +923,51 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     pending = s;
     headFor(s);
   }
+  /** How long the person has stood still, seconds; and whether they walked up to the thing they stand at, which keeps its card until they move on. */
+  let stood = 0;
+  let arrived = false;
   /** Arriving at a thing: its card opens and the view turns gently to frame it. */
   function arrive(s: Subject): void {
     headFor(s);
     showCard(s);
     face(s);
+    arrived = true;
+  }
+
+  /**
+   * The thing a person standing still is at (`STOP_AT`): of those they stand
+   * as near as walking up would bring them, the one nearest the middle of
+   * their view.
+   */
+  function thingAt(): Subject | null {
+    const cp = Math.cos(walker.pitch);
+    const fx = -Math.sin(walker.yaw) * cp;
+    const fy = Math.sin(walker.pitch);
+    const fz = -Math.cos(walker.yaw) * cp;
+    let best: Subject | null = null;
+    let nearest = STOP_AT.view;
+    for (const s of subjects) {
+      const dx = s.x - walker.x;
+      const dz = s.z - walker.z;
+      const far = Math.hypot(dx, dz);
+      const spot = s.stand(walker.x, walker.z);
+      if (far > Math.hypot(spot.x - s.x, spot.z - s.z) + STOP_AT.slack) continue;
+      const dy = heightAt(terrain.lattice, s.x, s.z) + s.height * 0.4 - walker.eye;
+      const cos = (dx * fx + dy * fy + dz * fz) / (Math.hypot(dx, dy, dz) || 1);
+      const off = Math.acos(Math.max(-1, Math.min(1, cos))) - Math.atan2(s.reach, far);
+      if (off < nearest) {
+        nearest = off;
+        best = s;
+      }
+    }
+    return best;
+  }
+  /** Standing still long enough at a thing opens its card, unless it is the one already open. */
+  function stopAt(): void {
+    const s = thingAt();
+    if (s === null || stood < s.stop || card.shown?.id === s.represented.id) return;
+    headFor(s);
+    showCard(s);
   }
 
   /** A gentle turn of the view, eased from where it looked to where it should; any drag or key takes the view back. */
@@ -1193,6 +1251,8 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   function walkTo(x: number, z: number, yaw: number, pitch = -0.05): void {
     endWalk();
     turn = null;
+    stood = 0;
+    arrived = false;
     walker.x = x;
     walker.z = z;
     walker.yaw = yaw;
@@ -1276,6 +1336,11 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     walker.x = body.x;
     walker.z = body.z;
     if (walker.x !== fromX || walker.z !== fromZ) walker.moved = true;
+    // Stopping at a thing opens its card, looked for only as the stop reaches each wait.
+    if (goal !== null || keys.size > 0) arrived = false;
+    const before = stood;
+    stood = !arrived && goal === null && keys.size === 0 && Math.hypot(walker.x - fromX, walker.z - fromZ) < STILL * dt ? stood + dt : 0;
+    if ((before < STOP_AT.great && stood >= STOP_AT.great) || (before < STOP_AT.small && stood >= STOP_AT.small)) stopAt();
     if (turn !== null) {
       turn.t = Math.min(1, turn.t + dt / turn.duration);
       const e = turn.t * turn.t * (3 - 2 * turn.t);
