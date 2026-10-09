@@ -21,8 +21,12 @@ import {
   LANTERN,
   type PlantView,
   applyLight,
+  FAR_BAKE_VERSION,
   createFarCards,
   type FarForm,
+  type FarFormData,
+  farFormData,
+  farFormFrom,
   startFarBake,
   createLantern,
   createPlant,
@@ -111,6 +115,7 @@ import { groundVitalityAt, setGroundOwnership, showGroundVitality } from "./vita
 import { type TourStop, tourStops } from "./tour.ts";
 import { type Change, pictureChange, tallyFrame } from "./measure.ts";
 import { type Copies, type DetailMode, FAR, type PassSize, createCopies, createFarBatch } from "./woods.ts";
+import { contentHash, openFarStore } from "./far-store.ts";
 
 const TEMPLATE = /* html */ `
 <main class="stage">
@@ -637,22 +642,33 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   const wildGrowth = createWildGrowth(scene, light, covers, lib, floraLib);
   const instanced = (): Copies[] => [...treeViews, ...understory.all(), ...wildGrowth.all()];
   // Far trees: each build baked once into its far form, drawn as cards where a
-  // tree is small on a pass's screen (woods.ts). The builds bake a few views a
-  // frame from the moment the lab opens, and the wait lifts only once they
-  // are done, so no frame ever shows a far tree before its card exists.
+  // tree is small on a pass's screen (woods.ts). A build's form is read from
+  // the store when it was baked before; otherwise it bakes a few views a frame
+  // from the moment the lab opens, and is stored for next time. The wait lifts
+  // only once every form is ready, so no frame shows a far tree before its card.
   let farCards: FarCards | null = null;
   let farBakeMs = 0;
   const farBatch = createFarBatch();
   const farBaked = (async (): Promise<void> => {
     const t0 = performance.now();
+    const store = await openFarStore();
     const forms: FarForm[] = [];
     for (const v of variants) {
+      const key = contentHash(v.plant.parts, v.plant.motion, v.plant.palette, FAR_BAKE_VERSION, FAR.swapPx);
+      const kept = (await store?.get(key).catch(() => undefined)) as FarFormData | undefined;
+      const stored = kept === undefined ? null : farFormFrom(kept);
+      if (stored !== null) {
+        forms.push(stored);
+        continue;
+      }
       const bake = startFarBake(renderer, v.plant, FAR.swapPx);
       await bake.ready;
       for (;;) {
         const form = bake.step(FAR_BAKE.ms, FAR_BAKE.views);
         if (form !== null) {
           forms.push(form);
+          // A failed write only means the build bakes again next time.
+          if (store !== null) void farFormData(renderer, form).then((data) => store.put(key, data)).catch(() => undefined);
           break;
         }
         await new Promise((r) => requestAnimationFrame(r));
