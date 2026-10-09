@@ -600,24 +600,28 @@ material language holds them (`map-styles.ts` is its data):
 | Material | What it is | Where it shows |
 | --- | --- | --- |
 | Paper | Handmade cream paper, mottled and fibred, with a torn deckled edge; after dark read by the lantern, warm at its middle and falling into blue | The map's sheet, the minimap's scrap, the sketch page, the wait's sheet |
-| Paint | Watercolor washes in each area's land color (its ground cover's, softened), pooling at their rims and bleeding wet in wet; hills shaded violet and lit warm | The map, the minimap, the wait; faintly under a sketch |
-| Contours | Fine sepia lines from the real heights, every 1.2 m and every fifth heavier: the map is a painted topographic map, so a person can read a rise before walking it | The map and the minimap; inked crisp close in |
-| Ink | One brown-black ink for names, borders, vignettes and sketches; names in an italic serif with their parent directories in spaced capitals, edged with a little paper, never boxed | Every name on every sheet |
+| Paint | Watercolor washes in health's colors, pooling at their rims and bleeding wet in wet; hills shaded violet and lit warm | The map, the minimap, the wait; faintly under a sketch |
+| Contours | Fine sepia lines from the real heights, every 1.2 m and every fifth heavier, drawn at the view's size so they look the same at every zoom: the map is a painted topographic map, so a person can read a rise before walking it | The map and the minimap |
+| Ink | One brown-black ink for names, borders, marks and sketches; areas' names in upright, widely spaced capitals as a survey map letters its regions, small names in italic, edged with a little paper, never boxed | Every name on every sheet |
 | Hand | The traveller's own notes, in a hand: what a thing's sketch shows is wrong, and the name of the thing walked up to | The sketch page and the minimap's ring |
 | Vermilion | The traveller's own marks: their cloak, a spot picked on the map, the pencil ring round a thing walked up to | The map and the minimap |
 
-Health shows the same way on every sheet. An area's wash wilts with its
-own ground's vitality (`groundVitality` in `@gaia/world`): thriving land a
-touch richer and deeper, tired land dried toward straw with the paper
-showing through in dry-brush streaks, failing land toward the pale of grass
-gone to seed. One scale of words names it, `LAND_HEALTH`: in full leaf, in
-good heart, going over, gone to seed (and laid waste), on the same
-thresholds as a thing's (thriving, healthy, tired, failing, in ruins). The
-map's legend paints the four bands in dabs of the same wash and names the
-largest areas going over; its title says how the whole land fares. Trees
-brown, roofs dry and rot, a tower's top falls and a ring's stones lie down
-on the map as they do in the world. The wait's washes dry into the same
-wilt once the world is judged.
+On the map, color means health and nothing else, so the map is a window
+into vitality. Every area starts from one healthy green (`landWash`), a
+little lighter or darker, warmer or cooler by its path so neighbors keep
+apart, and each file's own vitality spreads over the ground around it,
+weighed by its size and falling off over 24 m, across area borders too
+(`healthField`), into one gradient over the land. The colors follow each
+file's own number, so a color means the same health in every world:
+thriving land a touch richer and deeper, then gold, russet and ash as
+health falls (`healthColor`, `MAP_STYLE.health`), with the paper showing
+through in dry-brush streaks where an area's own ground is tired. Trees
+take the same colors by their files' vitality, and buildings and
+landmarks wear their health in their marks: roofs dry and rot, smoke stops,
+a tower's top falls and a ring's stones lie down, as they do in the world.
+The colors read as the world's own seasons, so the map carries no legend.
+The wait still washes each area in its land's color until it is rebuilt
+to paint health as the map does.
 
 The sheets nest by scale, each growing out of the last so nothing jumps:
 the minimap is the land around the person; a tap unfolds it into the
@@ -693,53 +697,45 @@ The three ways work together:
   of it: the sheet grows from the scrap to its place while its land draws
   back from the scrap's close view to the whole, by transforms alone, and
   folds back into the scrap the same way. Its folds stay faintly creased. The sheet is handmade paper
-  with a torn, deckled edge and its top right corner turned down; a tap on
-  the corner folds it. The land runs square to every edge of the sheet: the sheet
+  with a torn, deckled edge; a tap off the sheet, Esc or M folds it. The land runs square to every edge of the sheet: the sheet
   ends at the land's square, with no margin, and past the land's rounded
-  rim each part of the sheet takes the wash of the area nearest it, so
+  rim each part of the sheet takes the health of the land nearest it, so
   painted country goes on into the corners. Nothing marks the rim: no pen
-  inks it, the washes stop pooling a little inside it, and the relief eases
-  over its last 110 m to the height 60 m in, so neither the hill shade nor
-  the contours draw the rim's crest as a ring. A ragged fringe of wood runs
-  along the paper's edges, thickest at the edge and thinning into
-  clearings, and the minimap shows the same sheet near the land's edge. Each area is a
-  watercolor wash in the color of the land Jev judged for it: its ground
-  cover's color as the ground shader paints it from above, softened into
-  paint (`groundWash` in `map-styles.ts`), a little lighter or darker,
-  warmer or cooler by its path, so neighbors on one land keep apart by
-  their borders and their tone. Its pigment pools darker toward its rim and
-  granulates into the
-  paper's tooth, laid over a softened copy of itself so neighbors bleed into
-  each other wet in wet, and broken by broad brush strokes a little warmer,
-  cooler, lighter or darker. Each area's wash wilts with its own ground's health (see The field
-  sheet), and each file's patch is faintly washed in its health's color;
-  hills are shaded away from the light in the northwest, and fine sepia
-  contour lines run over the paint from the real heights, every 1.2 m and
-  every fifth heavier; water is washed blue; trails are dotted; trees on
-  the land brown with their files' vitality. Buildings and landmarks are little drawn
-  vignettes: a cottage's walls washed pale under a roof of thatch, slate or
-  tile with a chimney's curl of smoke, a mill with its wheel, a tower under
-  a pointed roof, a great oak's crown, a willow's falling fronds, a ring of
-  standing stones; each wears its entity's health, a roof drying and
-  rotting through over bare rafters and its smoke stopping, a tower's top
-  fallen, a ring's stones lying in the grass. Nothing on the sheet sits in a
-  box: names are lettered in ink with a narrow edge of paper around their
-  letters, and the paint thins under the title and the legend as it does
-  where a map is lettered. Names are lettered
-  in ink on the land itself, slanting along the way each area runs, with
-  the paper softening their edges; each top-level directory's name is
-  lettered large and faint in spaced capitals across its whole region and
-  fades as the map comes close. The title, "a field map of" and the
-  repository's name, is lettered on the paper's top left corner, with how
-  the whole land fares beneath it ("the land in good heart"). The legend,
-  low at the left in the map's hand, shows the land's health in four dabs of
-  its wash (in full leaf, in good heart, going over, gone to seed) and
-  names the largest areas in each tired band. Where the
+  inks it, the washes stop pooling a little inside it, the relief eases
+  over its last 110 m to the height 60 m in so the hill shade draws no
+  crest there, and the contours stop at it. The paint bleeds to the
+  sheet's torn edge on every side, with nothing along it. The land is
+  painted in health's colors (see The field sheet). Each area's pigment
+  pools darker toward its rim and granulates into the paper's tooth, laid
+  over a softened copy of itself so neighbors bleed into each other wet in
+  wet, and broken by broad brush strokes a little warmer, cooler, lighter
+  or darker; hills are shaded away from the light in the northwest. The
+  linework is drawn at the view's size from the land's own shapes, so it
+  looks the same on the whole sheet and close in: fine sepia contours from
+  the real heights, every 1.2 m and every fifth heavier; each area's border
+  as a soft hedgerow under a fine line; and each river as a line with a
+  bank and a glint, as wide as the stream once the map comes close and
+  never thinner than a line. Ponds are washed blue, darker toward their
+  middle; trails are dotted; trees are round crowns in their files'
+  health. Each kind of building and landmark has its own mark (`marks.ts`):
+  an ink drawing over watercolor washes in its real colors, true to its
+  shape in the world, seen from the south-southwest and lit from the
+  northwest, worn by its entity's health (smoke thinning and stopping, a
+  roof rotting to bare rafters, a keep losing its battlements, a ring's
+  lintels and then its stones falling, a tree thinning to a snag). The marks
+  keep a legible size on the whole sheet and grow with the land close in.
+  Nothing on the sheet sits in a box, and it carries no title, legend or
+  scale. Areas' names are lettered in ink on the land itself in upright,
+  widely spaced capitals, slanting along the way each area runs, with a
+  narrow edge of paper softening their letters. A name another area shares
+  carries just enough of its path above it, in small italic, to tell it
+  apart ("world" above SRC where another SRC sits elsewhere; `nameTails`),
+  worked out from the folder names alone. Where the
   person stands, a small traveller in a vermilion cloak and a straw hat
   stands on the map on their own soft shadow, their last few footprints
   behind them along the way they look, the file underfoot lettered beside
-  them; after dark their lantern glows. A compass rose and a scale are
-  inked in the lower corners, and a tap on the rose finds the traveller.
+  them; after dark their lantern glows. A compass rose is inked in the
+  lower right corner, and a tap on the rose finds the traveller.
   After dark the sheet is read by the lantern: a warm pool low on the
   right, its edges falling into blue. Areas and patches are drawn from the
   outlines `outlinesOf` traces, never from a fixed shape. Names stay one size at any
@@ -747,18 +743,11 @@ The three ways work together:
   and zooms by drag, pinch or scroll; a phone opens it close around the
   person, a wide screen shows it whole. Close in, past 2.4 times the whole
   sheet's zoom, the map shows its next level down: each file's patch in
-  fine dotted ink with its name lettered small on it, and the contours and
-  borders inked crisp where their painted lines (laid on their own sheet
-  over the paint) give way. A tap on an area's name from
+  fine dotted ink with its name lettered small on it, in italic. A tap on an area's name from
   afar glides the map round to frame that area at that level; there, a tap
   on a file's name or a spot sends the person to it. Its paper is painted in steps of a
   few milliseconds in the page's idle time after a bake, so it never holds
-  up a frame; `washArea` lays one area's wash, so the land can be painted
-  in area by area.
-  The map is a painted topographic map (`map-styles.ts`): gouache-rich
-  washes, hills shaded violet and lit warm under fine sepia contours, soft
-  painted hedgerows between areas, trees as round crowns with soft shadows,
-  deep water darker toward its middle and lit at its rim.
+  up a frame.
   A tap on the open map, on a spot or (close in) on a name, sends the person
   there. The spot is marked with a cross in vermilion ink; the map folds away as the view
   clouds over in the map's own creased paper, the person is placed under it

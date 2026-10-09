@@ -43,3 +43,4 @@ One file per decision the reviewer settled in the pair sessions that designed Ga
 - [No spend limit while Gaia is being built](39-no-spend-limit-while-building.md)
 - [A trunk meets the ground in root lobes](40-a-trunk-meets-the-ground-in-root-lobes.md)
 - [Grass, ground and water answer vitality](41-grass-ground-and-water-answer-vitality.md)
+- [The field map shows health, letters like a survey and draws each kind](42-the-field-map-shows-health.md)

@@ -58,11 +58,12 @@ rebuilds the page whenever the renderer changes.
 
 ## The field map
 
-![The field map unfolded over the world: a hand-painted map of Gaia's own code, each directory a watercolor area lettered with its path, with streams, dotted trails, small drawn cottages and towers, and a traveller in a red cloak where the person stands.](docs/images/field-map.jpg)
+![The field map unfolded over the world: a hand-painted topographic map of Gaia's own code, each directory an area lettered in spaced capitals, painted green where its code is healthy and gold where it tires, with streams, dotted trails, small drawn houses and towers, and a traveller in a red cloak where the person stands.](docs/images/field-map.jpg)
 
-Each area of the map is a directory, washed in the color of the land Jev
-judged for it. Its patches are files, its little drawings are the packages'
-buildings and landmarks, and its dotted lines are the trails between them.
+Each area of the map is a directory, and its colors are its code's health:
+green where it thrives, turning gold, russet and ash as it fails. Its
+patches are files, its little drawings are the packages' buildings and
+landmarks, and its dotted lines are the trails between them.
 
 ## How it works
 

@@ -96,7 +96,7 @@ export function createMinimap(root: HTMLElement, map: FieldMap, stood: () => Sto
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.fillStyle = paper.style.paper;
     ctx.fillRect(0, 0, span, span);
-    drawLand(ctx, span, span, paper, stood(), { x: anchor.x, z: anchor.z, zoom: SCALE }, 0.85, 0.6);
+    drawLand(ctx, span, span, paper, stood(), { x: anchor.x, z: anchor.z, zoom: SCALE }, 0.85);
     redraws++;
     slide();
   }

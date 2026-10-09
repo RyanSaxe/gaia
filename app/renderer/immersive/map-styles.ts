@@ -1,15 +1,13 @@
 // The field sheet's look, one for the field map, the minimap, a thing's
 // sketch page and the wait (docs/design-system.md, "The field sheet"): a
-// painted topographic map. Gouache-rich washes in the color of each area's
-// land, wilting with its health; hills shaded in violet and lit warm, with
-// fine sepia contour lines from the real heights over them; soft painted
-// hedgerows between areas, trees as round crowns with soft shadows, and deep
-// water lit at its rim. It is plain data that `field-map.ts` paints from, and
-// the wait paints its sheet from the same data (`wait/ink.ts`).
-//
-// An area's wash is the color of the land Jev judged for it, from the
-// palette the ground shader paints that land's cover with, dried or
-// deepened by its vitality (`groundWash`).
+// painted topographic map. On the map, color is health and nothing else:
+// every area starts from one healthy green (`landWash`), and each file's
+// vitality spreads over the ground around it (`healthField`) in health's
+// colors (`healthColor`), from green through gold and russet to ash. Hills
+// are shaded in violet and lit warm under fine sepia contours. It is plain
+// data that `field-map.ts` paints from, and the wait paints its sheet from
+// the same data (`wait/ink.ts`), each area still in its land's color
+// (`groundWash`) until the wait is rebuilt to paint health.
 
 import { type GroundSpec, rand, seedOf } from "@gaia/schema";
 
@@ -47,12 +45,8 @@ export interface MapStyle {
   readonly lightAlpha: number;
   /** A wild tree's crown, meters. */
   readonly woodSize: number;
-  /** A patch's faint health wash. */
-  readonly patchFill: number;
   /** The dotted ways' ink. */
   readonly trail: string;
-  /** How strongly each top-level directory's name is lettered across its whole region. */
-  readonly regionAlpha: number;
   /**
    * Contour lines from the real heights, in sepia ink over the paint: one every `interval` meters and every
    * `index`th one heavier, their widths in paper pixels and opacities.
@@ -63,6 +57,15 @@ export interface MapStyle {
    * failing land toward the pale of grass gone to seed, with the paper showing through in dry-brush streaks.
    */
   readonly wilt: { readonly straw: readonly [number, number, number]; readonly seed: readonly [number, number, number]; readonly rich: number; readonly streaks: number };
+  /** The healthy land every area's wash starts from: on the map, color means health and nothing else. */
+  readonly land: readonly [number, number, number];
+  /**
+   * How health colors the land as it falls, from healthy down to ruin: at each vitality, the color the land turns
+   * toward and how far. Healthy land is green, tired land turns gold, then russet, and ruined land ash brown.
+   */
+  readonly health: readonly (readonly [number, readonly [number, number, number], number])[];
+  /** How far a file's health spreads over the ground around it, meters, across area borders too. */
+  readonly spread: number;
 }
 
 export const MAP_STYLE: MapStyle = {
@@ -87,11 +90,20 @@ export const MAP_STYLE: MapStyle = {
   light: "#fff0c4",
   lightAlpha: 0.42,
   woodSize: 3.4,
-  patchFill: 0.16,
   trail: "rgba(122,80,42,0.92)",
-  regionAlpha: 0.2,
   contour: { interval: 1.2, index: 5, ink: "#5a4128", width: 1.8, alpha: 0.3, indexWidth: 3, indexAlpha: 0.46 },
   wilt: { straw: [205, 176, 102], seed: [226, 208, 164], rich: 0.3, streaks: 46 },
+  land: [104, 160, 66],
+  health: [
+    [0.85, [214, 178, 72], 0],
+    [0.7, [214, 178, 72], 0.25],
+    [0.55, [214, 178, 72], 0.55],
+    [0.4, [206, 138, 56], 0.72],
+    [0.25, [168, 92, 50], 0.82],
+    [0.1, [126, 104, 84], 0.86],
+    [0, [140, 128, 112], 0.9],
+  ],
+  spread: 24,
 };
 
 /** How dry an area's land is, 0 thriving to 1 failing: nothing above 0.82, wholly dry at 0.3. */
@@ -150,6 +162,94 @@ export function wilted(style: MapStyle, rgb: readonly [number, number, number], 
 }
 
 /**
+ * A color as health leaves it, on `style.health`'s ramp: thriving land a touch richer and deeper, then gold,
+ * russet and ash as vitality falls. Continuous in vitality, so a field of health has no steps.
+ */
+export function healthColor(style: MapStyle, rgb: readonly [number, number, number], vitality: number): [number, number, number] {
+  const v = Math.max(0, Math.min(1, vitality));
+  const stops = style.health;
+  const top = stops[0] as (typeof stops)[number];
+  if (v >= top[0]) {
+    // Thriving land is a touch richer and deeper than healthy land.
+    const grey = rgb[0] * 0.3 + rgb[1] * 0.59 + rgb[2] * 0.11;
+    const rich = Math.min(1, (v - top[0]) / (1 - top[0])) * style.wilt.rich;
+    return rgb.map((c) => Math.round(Math.max(0, Math.min(255, (grey + (c - grey) * (1 + rich)) * (1 - rich * 0.25))))) as [number, number, number];
+  }
+  let k = 1;
+  while (k < stops.length - 1 && v < (stops[k] as (typeof stops)[number])[0]) k++;
+  const [v0, c0, m0] = stops[k - 1] as (typeof stops)[number];
+  const [v1, c1, m1] = stops[k] as (typeof stops)[number];
+  const u = Math.max(0, Math.min(1, (v0 - v) / (v0 - v1)));
+  const m = m0 + (m1 - m0) * u;
+  return [0, 1, 2].map((i) => Math.round((rgb[i] as number) * (1 - m) + ((c0[i] as number) + ((c1[i] as number) - (c0[i] as number)) * u) * m)) as [number, number, number];
+}
+
+/** A color a little lighter or darker, warmer or cooler by `path`, so neighboring areas keep apart by their tone. */
+function toned(style: MapStyle, rgb: readonly [number, number, number], path: string): [number, number, number] {
+  const r = rand(seedOf(`wash:${path}`));
+  const light = r.range(-1, 1) * style.toneStep;
+  const warmth = r.range(-1, 1) * style.toneStep * 0.38;
+  const lit = light > 0 ? mix3(rgb, LIGHTER, light * 0.5) : mix3(rgb, DARKER, -light * 0.3);
+  return warmth > 0 ? mix3(lit, WARMER, warmth) : mix3(lit, COOLER, -warmth);
+}
+
+/** An area's healthy wash on the map: `style.land`, a little lighter or darker by its path. */
+export const landWash = (style: MapStyle, path: string): [number, number, number] =>
+  toned(style, mix3(style.land, channels(style.paper), style.landLift), path).map(Math.round) as [number, number, number];
+
+/** A file's health at its place on the land: where it stands, how far its ground reaches, how much code it holds, and its vitality. */
+export interface FileHealth {
+  readonly x: number;
+  readonly z: number;
+  readonly reach: number;
+  readonly size: number;
+  readonly vitality: number;
+}
+
+/**
+ * Health over the land, from each file's own vitality: at a point, the files around it weighed by their size and
+ * how near their ground is, falling off over `spread` meters, across area borders too. Far from every file it
+ * settles on `fallback`, the health of the area the point lies in, without a step.
+ */
+export function healthField(files: readonly FileHealth[], spread: number): (x: number, z: number, fallback: number) => number {
+  const s2 = 2 * spread * spread;
+  const far = spread * 4;
+  const prior = (files.reduce((a, f) => a + f.size, 0) / Math.max(1, files.length)) * 0.01;
+  // Files bucketed by where they stand on a grid of cells wide enough that every file a point can feel lies in the
+  // point's cell or the eight around it, so a point asks only the files near it.
+  const size = far + files.reduce((m, f) => Math.max(m, f.reach), 0);
+  const cell = (v: number): number => Math.floor(v / size);
+  const buckets = new Map<number, FileHealth[]>();
+  const keyOf = (i: number, j: number): number => (i + 4096) * 8192 + (j + 4096);
+  for (const f of files) {
+    const key = keyOf(cell(f.x), cell(f.z));
+    const bucket = buckets.get(key);
+    if (bucket === undefined) buckets.set(key, [f]);
+    else bucket.push(f);
+  }
+  return (x, z, fallback) => {
+    let weight = prior;
+    let sum = prior * fallback;
+    const ci = cell(x);
+    const cj = cell(z);
+    for (let i = ci - 1; i <= ci + 1; i++) {
+      for (let j = cj - 1; j <= cj + 1; j++) {
+        const bucket = buckets.get(keyOf(i, j));
+        if (bucket === undefined) continue;
+        for (const f of bucket) {
+          const d = Math.max(0, Math.hypot(f.x - x, f.z - z) - f.reach);
+          if (d > far) continue;
+          const w = f.size * Math.exp((-d * d) / s2);
+          weight += w;
+          sum += w * f.vitality;
+        }
+      }
+    }
+    return sum / weight;
+  };
+}
+
+/**
  * An area's wash, red, green and blue from 0 to 255: the color its ground is
  * painted with, softened into watercolor (its chroma
  * scaled about its lightness, then lifted toward the paper), a little
@@ -160,11 +260,7 @@ export function groundWash(style: MapStyle, ground: GroundSpec, path: string, vi
   const tone = groundTone(ground);
   const grey = tone[0] * 0.3 + tone[1] * 0.59 + tone[2] * 0.11;
   const paint = mix3(tone.map((c) => Math.max(0, Math.min(255, grey + (c - grey) * style.landChroma))), channels(style.paper), style.landLift);
-  const r = rand(seedOf(`wash:${path}`));
-  const light = r.range(-1, 1) * style.toneStep;
-  const warmth = r.range(-1, 1) * style.toneStep * 0.38;
-  const lit = light > 0 ? mix3(paint, LIGHTER, light * 0.5) : mix3(paint, DARKER, -light * 0.3);
-  return wilted(style, warmth > 0 ? mix3(lit, WARMER, warmth) : mix3(lit, COOLER, -warmth), vitality);
+  return wilted(style, toned(style, paint, path), vitality);
 }
 
 const hash = (x: number, z: number): number => {
