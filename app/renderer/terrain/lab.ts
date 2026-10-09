@@ -107,6 +107,7 @@ import { type Baked, createBaker } from "./baker.ts";
 import { type Stand, type StandRequest, type StandingLandmark, landmarkBase, ownerVitality, understoryVitality } from "./stand.ts";
 import { groundVitalityAt, setGroundOwnership, showGroundVitality } from "./vitality.ts";
 import { type TourStop, tourStops } from "./tour.ts";
+import { type Change, pictureChange, tallyFrame } from "./measure.ts";
 
 const TEMPLATE = /* html */ `
 <main class="stage">
@@ -1490,7 +1491,9 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   new ResizeObserver(resize).observe(stage);
 
   let frozen: number | null = null;
-  let grassPin: THREE.Vector3 | null = null;
+  /** Where every detail is chosen from, when pinned apart from the eye: see the `detailCenter` hook. */
+  let detailPin: { readonly x: number; readonly z: number } | null = null;
+  const detailEye = new THREE.Vector3();
   const shadowCenter = new THREE.Vector3();
   const views = (): PlantView[] => [...treeViews, ...settlement.views(), ...landmarkViews, ...(built?.views ?? [])];
   const lanternEye = new THREE.Vector3();
@@ -1511,10 +1514,11 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     light.uTime.value = frozen ?? light.uTime.value + dt;
     if (mode === "walk") {
       updateWalk(dt);
-      ground.follow(walker.x, walker.z);
-      wildGrowth.follow(walker.x, walker.z);
+      detailEye.set(detailPin?.x ?? camera.position.x, camera.position.y, detailPin?.z ?? camera.position.z);
+      ground.follow(detailPin?.x ?? walker.x, detailPin?.z ?? walker.z);
+      wildGrowth.follow(detailPin?.x ?? walker.x, detailPin?.z ?? walker.z);
       lantern.follow(camera.position, forward, lanternGround, walked, dt);
-      grass.follow(grassPin ?? camera.position);
+      grass.follow(detailEye);
       water.wade(walker.x, walker.z, walker.yaw, walked, dt);
       shadowCenter.set(walker.x - Math.sin(walker.yaw) * 18, walker.eye, walker.z - Math.cos(walker.yaw) * 18);
       shadow.frame(shadowCenter, 40);
@@ -1527,7 +1531,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     }
     refreshSight(now);
     // Every pass thins distant detail from where the person's eyes are.
-    light.uEye.value.copy(camera.position);
+    light.uEye.value.copy(mode === "walk" ? detailEye : camera.position);
     shadow.render(renderer, scene, [...views(), ...understory.casters(), ...wildGrowth.all()], [sky.mesh, ground.wilds, ground.fine, ground.coarse, grass.mesh, water.group, signs.mesh, ...understory.quiet()]);
     frameCalls = renderer.info.render.calls;
     passes.shadow = { calls: renderer.info.render.calls, triangles: renderer.info.render.triangles };
@@ -1684,6 +1688,94 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       return { x: lx, z: lz, yaw: Math.atan2(-best.tx * sign, -best.tz * sign) };
     }
     return { x: lx, z: lz, yaw: aim === null ? walker.yaw : toward(aim.x, aim.z) };
+  }
+
+  // ---------- measuring: what a step of walking changes, and walking as a person would ----------
+
+  /** Draws `settle` frames at this instant, without time passing, and returns the last one's pixels. */
+  function grabFrame(settle = 2): Uint8Array {
+    const now = performance.now();
+    for (let k = 0; k < settle; k++) frame(0, now, hour);
+    const gl = renderer.getContext();
+    const pixels = new Uint8Array(gl.drawingBufferWidth * gl.drawingBufferHeight * 4);
+    gl.readPixels(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+    return pixels;
+  }
+
+  function frameChange(a: Uint8Array, b: Uint8Array): Change {
+    const gl = renderer.getContext();
+    return pictureChange(a, b, gl.drawingBufferWidth, gl.drawingBufferHeight);
+  }
+
+  /**
+   * The walk test. From where the person stands, walks `meters` along the
+   * view in steps of `step` meters with the wind's clock frozen. At each step
+   * the view holds while only the point detail is chosen from moves one step
+   * on, so the change measured is exactly what the step does to the detail
+   * drawn: levels, thinning, the grass, the ground's rings. A step is held
+   * to the wind's own change over half a second, a change people already see
+   * all the time, measured along the same walk every `windEvery` steps, each
+   * time 1.7 s further on, so the samples span the breeze's lulls and gusts.
+   * Returns each step's [meters walked, mean, worst block] and the wind's
+   * worst blocks.
+   */
+  function walkSteps(meters: number, step: number, windEvery = 10): { steps: [number, number, number][]; wind: number[] } {
+    const start = { x: walker.x, z: walker.z, yaw: walker.yaw, pitch: walker.pitch };
+    const was = frozen;
+    const t = light.uTime.value;
+    const dx = -Math.sin(start.yaw);
+    const dz = -Math.cos(start.yaw);
+    const steps: [number, number, number][] = [];
+    const wind: number[] = [];
+    try {
+      for (let k = 0; (k + 1) * step <= meters; k++) {
+        walkTo(start.x + dx * k * step, start.z + dz * k * step, start.yaw, start.pitch);
+        frozen = t;
+        detailPin = { x: walker.x, z: walker.z };
+        const here = grabFrame();
+        if (k % windEvery === 0) {
+          const at = t + (k / windEvery) * 1.7;
+          frozen = at;
+          const before = grabFrame();
+          frozen = at + 0.5;
+          wind.push(frameChange(before, grabFrame()).worst);
+          frozen = t;
+        }
+        detailPin = { x: walker.x + dx * step, z: walker.z + dz * step };
+        const on = frameChange(here, grabFrame());
+        steps.push([k * step, on.mean, on.worst]);
+      }
+    } finally {
+      detailPin = null;
+      frozen = was;
+      walkTo(start.x, start.z, start.yaw, start.pitch);
+    }
+    return { steps, wind };
+  }
+
+  /**
+   * Walks for `seconds` of real time as a person would: forward all along,
+   * turning left or right for 0.7 s every 2.5 s, and running a third of the
+   * time. The app's smoothness probe (`__lab.smoothness()`) reads the frames.
+   */
+  function wander(seconds: number): Promise<{ x: number; z: number }> {
+    return new Promise((done) => {
+      const t0 = performance.now();
+      const tick = (now: number): void => {
+        const t = (now - t0) / 1000;
+        const beat = Math.floor(t / 2.5);
+        keys.clear();
+        if (t >= seconds) {
+          done({ x: walker.x, z: walker.z });
+          return;
+        }
+        keys.add("KeyW");
+        if (t - beat * 2.5 < 0.7) keys.add(beat % 2 === 1 ? "ArrowLeft" : "ArrowRight");
+        if (beat % 3 === 0) keys.add("ShiftLeft");
+        requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    });
   }
 
   const handle: WorldHandle = {
@@ -1882,13 +1974,51 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
         grass.mesh.visible = on;
       },
       /**
-       * Holds the grass's center at (x, z) at eye height while the view stays
-       * put, or lets it follow the eye again (null): moving only the center
-       * shows exactly what a step changes in the grass.
+       * Holds the point every detail is chosen from (the trees' and bushes'
+       * levels and thinning, the grass, the ground's rings and the wild
+       * bushes) at (x, z), at the eye's height, while the view stays put; or
+       * lets it follow the eye again (null). Moving only this point shows
+       * exactly what a step of walking changes in the detail drawn.
        */
-      grassCenter: (at: [number, number] | null) => {
-        grassPin = at === null ? null : new THREE.Vector3(at[0], walker.eye, at[1]);
+      detailCenter: (at: [number, number] | null) => {
+        detailPin = at === null ? null : { x: at[0], z: at[1] };
       },
+      /**
+       * Draws one frame and counts each kind's draw calls and triangles in
+       * each pass (the sun's shadow, the water's mirror and the view), from
+       * what the renderer actually drew.
+       */
+      drawn: () => {
+        const kinds = new Map<THREE.Object3D, string>();
+        const name = (kind: string, objects: readonly (THREE.Object3D | undefined)[]): void => {
+          for (const o of objects) if (o !== undefined) kinds.set(o, kind);
+        };
+        name("trees", treeViews.map((v) => v.object));
+        name("understory", [...understory.all().map((v) => v.object), ...understory.quiet()]);
+        name("wild bushes", wildGrowth.all().map((v) => v.object));
+        name("grass", [grass.mesh]);
+        name("ground", [ground.fine, ground.coarse, ground.wilds]);
+        name("water", [water.group]);
+        name("sky", [sky.mesh]);
+        name("signs", [signs.mesh]);
+        name("buildings", settlement.views().map((v) => v.object));
+        name("landmarks", [...landmarkViews, ...landmarkPool.values()].map((v) => v.object));
+        name("trails", (built?.views ?? []).map((v) => v.object));
+        const now = performance.now();
+        return tallyFrame(renderer, scene, camera, kinds, () => frame(0, now, hour));
+      },
+      /**
+       * Draws `settle` frames at this instant, without time passing, and
+       * returns the last one's pixels, to compare with `change`. Freeze the
+       * wind's clock first (`freeze`), so only what the probe changes moves.
+       */
+      grab: grabFrame,
+      /** How much the picture changed between two grabbed frames (`pictureChange`). */
+      change: frameChange,
+      /** The walk test (`walkSteps`): each step's change to the detail drawn, and the wind's along the same walk. */
+      steps: (meters: number, step = 0.7) => walkSteps(meters, step),
+      /** Walks as a person would for `seconds` of real time (`wander`). */
+      wander,
       /** Shows or hides every tree, for comparing frame costs. */
       showTrees: (on: boolean) => {
         for (const v of treeViews) v.object.visible = on;
