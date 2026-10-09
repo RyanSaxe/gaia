@@ -475,9 +475,9 @@ own middle, looking down at it at the person's feet. A thing already close
 counts as arrived. A new tap or a key cancels the walk and nothing opens.
 
 In the immersive world, walking up to a thing, the minimap rings it, and
-on arrival the minimap grows into the thing's sketch page (see The field
-sheet). The page belongs to its thing: walking more than 4 m from where it
-opened lets it go, and so does Esc.
+on arrival its page rises at the lower left (see The field sheet). The page
+belongs to its thing: walking more than 4 m from where it opened lets it
+go, and so does Esc.
 
 In the Terrain view the thing's card opens in the panel or the sheet
 instead, and reads like a page from a field guide: what kind of thing it
@@ -567,46 +567,48 @@ finger and keys all follow the same three rules.
 - **The world moves you.** A tap or click on the world always means "go
   there". On the land, the person walks to the spot (a tap where they stand
   stops them). On a thing (a building, a tree, a landmark or its sign) they
-  walk up to it, the view turns to frame it, and its sketch page opens. A
+  walk up to it, the view turns to frame it, and its page rises. A
   tap on a rock, a bush, a fingerpost or a boundary stone walks up to it, never to
   the ground hidden behind it. A drag looks around and never walks. W A S D
   or the arrows walk and Shift hurries. A drag or a key takes the view back
   from a turn at once. Touching the world never does anything but move you.
 - **Everything else is paper.** The minimap at the lower left and the rose
-  at the top right are the only things on the screen that are not the world:
+  at the top right, and a thing's page while the person stops at it, are
+  the only things on the screen that are not the world:
   a tap on the minimap (or M) unfolds the field map out of it, and the rose
   opens the slip. A tap on the open map is the one way to travel far at
   once: it is a paper action, so it belongs to the map, never to the world.
 - **Paper you open holds the world still.** While the map or the slip is
   open, the world waits under a faint wash. A tap there folds the paper and
   moves no one, a drag there does nothing, and Esc folds it. The keys still
-  walk, and the map's traveller follows. A thing's sketch page is
-  different: it opens on its own when the person arrives, so it does not
-  hold the world; a tap elsewhere walks there and leaving lets it go.
+  walk, and the map's traveller follows. A thing's page is
+  different: it rises on its own when the person stops at a thing, so it
+  does not hold the world; a tap on it unfolds the rest of it, a tap
+  elsewhere walks there and leaving lets it go.
 
 Nothing in the world lights up, rings or changes under a pointer: a thing
 looks the same whether or not a person could walk up to it, and the pointer
 stays the hand that drags the view. Selecting is shown on paper instead: a
 tap on a thing walks the person up to it, the minimap rings it in
 vermilion pencil as they go, with its name beside the ring in the
-traveller's hand, and on arrival the view turns to frame it and the
-minimap grows into its sketch page. So it is plain what was chosen, and
+traveller's hand, and on arrival the view turns to frame it and its
+page rises at the lower left. So it is plain what was chosen, and
 the world never shows a game's cursor.
 
 ## The field sheet
 
-The field map, the minimap, a thing's sketch page and the wait are one
+The field map, the minimap, a thing's page and the wait are one
 sheet of the traveller's paper, so what tells a person where they are and
 what a thing is belongs to the world rather than sitting on it. One
 material language holds them (`map-styles.ts` is its data):
 
 | Material | What it is | Where it shows |
 | --- | --- | --- |
-| Paper | Handmade cream paper, mottled and fibred, with a torn deckled edge; after dark read by the lantern, warm at its middle and falling into blue | The map's sheet, the minimap's scrap, the sketch page, the wait's sheet |
-| Paint | Watercolor washes in health's colors, pooling at their rims and bleeding wet in wet; hills shaded violet and lit warm | The map, the minimap, the wait; faintly under a sketch |
+| Paper | Handmade cream paper, mottled and fibred, with a torn deckled edge; after dark read by the lantern, warm at its middle and falling into blue | The map's sheet, the minimap's scrap, a thing's page, the wait's sheet |
+| Paint | Watercolor washes in health's colors, pooling at their rims and bleeding wet in wet; hills shaded violet and lit warm | The map, the minimap, the wait; a sketch's wash |
 | Contours | Fine sepia lines from the real heights, every 1.2 m and every fifth heavier, drawn at the view's size so they look the same at every zoom: the map is a painted topographic map, so a person can read a rise before walking it | The map and the minimap |
 | Ink | One brown-black ink for names, borders, marks and sketches; areas' names in upright, widely spaced capitals as a survey map letters its regions, small names in italic, edged with a little paper, never boxed | Every name on every sheet |
-| Hand | The traveller's own notes, in a hand: what a thing's sketch shows is wrong, and the name of the thing walked up to | The sketch page and the minimap's ring |
+| Hand | The traveller's own notes, in a hand: what a thing's sketch shows is wrong, its vitality, and the name of the thing walked up to | A thing's page and the minimap's ring |
 | Vermilion | The traveller's own marks: their cloak, a spot picked on the map, the pencil ring round a thing walked up to | The map and the minimap |
 
 On the map, color means health and nothing else, so the map is a window
@@ -630,25 +632,64 @@ The sheets nest by scale, each growing out of the last so nothing jumps:
 the minimap is the land around the person; a tap unfolds it into the
 field map, which draws back from the minimap's close view to the whole
 land; close in, the map shows the next level down, each file's patch and
-name; a thing walked up to grows the minimap into its sketch page, the land
-it stands on faint under the drawing.
+name. A thing's page is a sheet of its own, risen from the bottom edge at
+the lower left while the person stops at the thing.
 
-**What a thing says: the sketch is the news.** The sketch page
-(`sketch.ts`) is an ink drawing of the thing washed in its health (a
-failing tree's crown thins and browns, a failing house's roof rots through
-and ivy climbs it; the pen draws it as the page grows), with at most two
-notes in the hand, each with a pencil leader to the part of the drawing it
-names: "one bough grown 361 lines long, knotted 4 deep", "no test reaches
-it, though it wants one". A note says only what is specific and true of
-this thing: a signal nearly every file shares (no test of its own, a
-warning or two) is news only when it is the thing's real trouble, so a
-thing with nothing particular wrong says nothing but its name and how it
-fares. Under the drawing: where it lives in spaced capitals, its name
-lettered as the map letters names, how it fares in a word, the first
-sentence of its doc comment, and the details (where it lives, its size,
-what it leans on, what leans on it, what it stands as, who judged it)
-behind "more". What the notes say comes from one function, `describe`, so
-Jev's own judgment of what to say plugs in there.
+**What a thing says: the sketch is the news.** A thing's page
+(`app/renderer/immersive/sketch.ts`) is a sheet of the traveller's
+sketchbook, about 300 px wide, torn along its top and sides. It rises from
+the bottom edge at the lower left over about a second when the person stops
+at a thing, and sinks in less when they walk away; a new thing's page rises
+once the last has sunk. Its face is the sketch: an ink drawing of the
+thing, washed in its health, that the pen draws as the page rises. Every
+kind of thing has its own drawing (`sketchKindOf`, by the words of what it
+stands as): a house, a watermill, an archive tower, a keep, a lantern
+tower, a ring of standing stones, a tree, a willow, a standing stone, a
+boulder or slab, a family of stones, a bush, a feathery shrub and a drift of
+flowers, and the drawing shows the health: a failing tree's crown thins and
+browns, a roof sags, holes and ivy climbs the walls, a keep loses its
+battlements, a lantern goes dark and then its top falls, a ring's lintels
+and then its stones fall, moss leaves a stone and blooms fall from their
+stems. A test fails when a building, landmark, shrub, stone or flower
+Gaia can stand for code gets no drawing of its own kind. Up to two notes in
+the traveller's hand sit on the sketch, the first over it and the second
+under it, each on one line and tied by a dotted pencil leader to the part
+it explains; they come in after the pen. Under the sketch: where it lives
+in spaced capitals (its folders, and for a function or class its file
+too), its name lettered as the map letters names, and beside the name its
+vitality as a reading in the hand, such as 0.47, with no label, percent
+sign or bar. A thing with nothing to note shows only these.
+
+The rest is folded up behind the face, and a crease along the face's foot
+shows it is there. A tap on the page swings the rest down below the face
+as the page lifts to show it, and another tap folds it up; a rest too long
+for the screen scrolls within the page. The page moves by transforms alone
+and draws its shadow with its still paper, so a page that has risen costs
+nothing a frame. A tap on the field map only ever sends the person to the
+place; the page rises when they arrive and stop there.
+
+What the page says is one typed value, `PageContent` in `sketch.ts`, made
+by one function, `describe`. It is the Engine and Jev session's to change
+as Gaia learns what is worth saying; this design only sets how the page
+shows it:
+
+- `notes`: each a few words and the part of the sketch they explain
+  (`crown`, `trunk`, `roof`, `walls` or `ground`; every drawing has all
+  five, a crown and a roof both its top, a trunk and walls its body). The
+  face shows the first two, each on one line: a note too long for its line
+  is set smaller, down to 11 px, and cut short past that.
+- `rest`: any number of entries, in order. An entry with a label is a fact
+  set beside its label, a line break in it starting a new line; one
+  without is a line of prose in the hand.
+
+Code draws the rest of the face: the sketch, where it lives, its name and
+its vitality. Today `describe` fills the notes from the thing's vitality
+signals (`symptomsOf`): only what is specific and true of this thing, so a
+signal nearly every file shares (no test of its own, a warning or two) is
+news only when it is the thing's real trouble. The rest holds the first
+sentence of its doc comment, then where it lives, its size, what it leans
+on, what leans on it, each reading that lowers its health, the strongest
+first, and who judged it.
 
 ## Knowing where you are
 
@@ -660,8 +701,8 @@ finger) and the way back to the debugging views (Components, Terrain and
 Skies). The hour follows the person's clock (`?hour=22` pins it).
 Everything a person reads here looks like the world's own things: warm
 paper, brown ink, a serif with italic names and small capitals for paths,
-and slow, soft motion; the traveller's own notes, on the minimap and a thing's sketch page, are written in a hand. After
-dark the paper (the map, the minimap, the slip, a thing's sketch page) is
+and slow, soft motion; the traveller's own notes, on the minimap and a thing's page, are written in a hand. After
+dark the paper (the map, the minimap, the slip, a thing's page) is
 read by the lantern, a little warmer and dimmer. Until the first world
 stands, the wait is alone on the screen; the ways of knowing where you are
 and the rose come in as the wait lifts.

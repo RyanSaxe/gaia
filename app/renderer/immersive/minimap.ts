@@ -5,8 +5,7 @@
 // another area, the old name fades as the new one is written; standing still
 // writes the file underfoot beneath it. A tap on it unfolds the field map out
 // of it. Walking up to a thing, a vermilion pencil ring is drawn round it on
-// the scrap with its name in the traveller's hand, and on arrival the scrap
-// grows into the thing's sketch page (`sketch.ts`).
+// the scrap with its name in the traveller's hand.
 //
 // Cheap by construction: its canvas holds a window of the land half again
 // wider than the scrap, drawn from the field map's painted paper, and slides
@@ -26,8 +25,6 @@ export interface Minimap {
   show(on: boolean): void;
   /** The thing the person is walking up to, ringed on the scrap, or null. */
   heading(thing: Heading | null): void;
-  /** The scrap itself: a thing's sketch page grows out of it. */
-  readonly element: HTMLElement;
   /** What the scrap shows, for scripted checks. */
   state(): { readonly area: string | null; readonly underfoot: string | null; readonly marked: string | null; readonly redraws: number };
 }
@@ -133,10 +130,8 @@ export function createMinimap(root: HTMLElement, map: FieldMap, stood: () => Sto
     const r = sheet.getBoundingClientRect();
     return { rect: new DOMRect(r.left - layer.left, r.top - layer.top, r.width, r.height), scale: SCALE };
   });
-  // A tap on the scrap unfolds the map; on a thing's page, it does nothing (the page's own "more" is there).
-  const unfold = (): void => {
-    if (!scrap.classList.contains("page")) map.open(true);
-  };
+  // A tap on the scrap unfolds the map.
+  const unfold = (): void => map.open(true);
   onTap(scrap, unfold);
   scrap.addEventListener("keydown", (e) => {
     if (e.code === "Enter" || e.code === "Space") unfold();
@@ -160,7 +155,6 @@ export function createMinimap(root: HTMLElement, map: FieldMap, stood: () => Sto
   }
 
   return {
-    element: scrap,
     frame(x, z, yaw, place, still, dt) {
       person.x = x;
       person.z = z;

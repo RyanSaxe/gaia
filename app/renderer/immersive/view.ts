@@ -5,9 +5,10 @@
 // the area's name on it (`minimap.ts`), the field map that unfolds out of it,
 // and markers in the world. Touching the world only ever moves you
 // (docs/design-system.md, "One way to touch the world"); walking up to a
-// thing, the scrap rings it and then grows into its sketch page
-// (`sketch.ts`). The one other paper is the slip in the corner, with Gaia's
-// mark, how to wander, and the way back to the lab's debugging views.
+// thing, the scrap rings it, and stopping at a thing raises its page at the
+// lower left (`sketch.ts`). The one other paper is the slip in the corner,
+// with Gaia's mark, how to wander, and the way back to the lab's debugging
+// views.
 // Walking, tapping a thing to walk up to it, the lantern and the hour all
 // come from the terrain lab.
 
@@ -42,7 +43,7 @@ const ROSE = `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12
 const WANDER = /* html */ `
   <dl class="slip-wander">
     <dt><span class="mouse-only">Click</span><span class="touch-only">Tap</span> the land</dt><dd>go there</dd>
-    <dt><span class="mouse-only">Click</span><span class="touch-only">Tap</span> a thing</dt><dd>walk up and see its sketch</dd>
+    <dt><span class="mouse-only">Click</span><span class="touch-only">Tap</span> a thing</dt><dd>walk up and see its page</dd>
     <dt>Drag</dt><dd>look around</dd>
     <dt class="mouse-only">W A S D</dt><dd class="mouse-only">walk, Shift to hurry</dd>
     <dt><span class="mouse-only">Click</span><span class="touch-only">Tap</span> the scrap</dt><dd>unfold the map<span class="mouse-only"> (M); Esc folds it</span></dd>
@@ -97,8 +98,8 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
     jump,
   );
   const minimap = createMinimap(layer, map, world.stood);
-  const sketch = createSketchPage(minimap.element);
-  world.onCard((thing) => sketch.show(thing));
+  const sketch = createSketchPage(layer);
+  world.onCard((thing) => sketch.show(active ? thing : null));
   world.onHeading((thing) => minimap.heading(thing));
   const markers = createMarkers(world.light);
   world.scene.add(markers.group);
@@ -188,7 +189,10 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
     setActive(on) {
       active = on;
       layer.hidden = !on;
-      if (!on) setSlip(false);
+      if (!on) {
+        setSlip(false);
+        sketch.show(null);
+      }
       apply();
     },
     frame(dt) {
@@ -216,7 +220,9 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
       jumping: () => jumping,
       /** Opens or closes the slip in the corner. */
       slip: (on: boolean) => setSlip(on),
-      /** Where the person is, what each way of knowing it shows now, and the sketch page of a thing walked up to. */
+      /** Unfolds or folds the rest of the thing's page that shows. */
+      unfold: (on: boolean) => sketch.unfold(on),
+      /** Where the person is, what each way of knowing it shows now, and the page of the thing they stopped at. */
       state: () => {
         const p = world.person();
         return { place: world.placeAt(p.x, p.z), minimap: minimap.state(), map: map.state(), markers: markers.crossings().length, sketch: sketch.state() };
