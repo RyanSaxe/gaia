@@ -20,8 +20,8 @@ import { WIND_GLSL } from "./sway.ts";
 export const FAR_VIEWS = { azimuths: 16, elevations: [-8, 0, 8, 18, 34, 60] } as const;
 /** The vitalities whose coverage is baked: color comes from 1 and 0, and coverage between them is interpolated. */
 const SLICES = [1, 0.6, 0.3, 0.1] as const;
-/** Samples per texel along each side while baking, on top of 4x multisampling. */
-const SUPERSAMPLE = 2;
+/** Samples per texel along each side while baking, on top of 4x multisampling: one keeps the bake's GPU work small. */
+const SUPERSAMPLE = 1;
 /** The world's field of view, degrees: where a tree turns far depends on how many pixels a radian covers. */
 const FOV = 58;
 
@@ -130,15 +130,30 @@ const mapOf = (to: Pass["to"]): THREE.Matrix4 => {
   return m;
 };
 
+/** A far form being baked a little at a time, so a loading screen keeps painting. */
+export interface FarBake {
+  /** Resolves once every shader the bake uses has compiled, in parallel where the browser can. */
+  readonly ready: Promise<void>;
+  /**
+   * Bakes up to `views` views (of 960: 96 directions in ten passes), fewer
+   * if `budgetMs` passes first; the form when the last is done, else null.
+   * The GPU work a view queues is not counted in the budget, so `views`
+   * bounds what a frame takes on the GPU.
+   */
+  step(budgetMs: number, views?: number): FarForm | null;
+  /** Stops and frees everything, if it has not finished. */
+  cancel(): void;
+}
+
 /**
- * Bakes `plant` into its far form, each view `framePx` texels across: the
- * crown span on screen, in device pixels, at which the woods turn it far,
- * so one texel covers about one pixel there. The views see the plant as the
- * near form looks from that distance: still air, full detail thinned as
- * the eye would thin it, leaves merged to that pixel size.
+ * Starts baking `plant` into its far form, each view `framePx` texels
+ * across: the crown span on screen, in device pixels, at which the woods
+ * turn it far, so one texel covers about one pixel there. The views see the
+ * plant as the near form looks from that distance: still air, full detail
+ * thinned as the eye would thin it, leaves merged to that pixel size.
  */
-export function bakeFarForm(renderer: THREE.WebGLRenderer, plant: Realized, framePx = 128): FarForm {
-  const t0 = performance.now();
+export function startFarBake(renderer: THREE.WebGLRenderer, plant: Realized, framePx = 128): FarBake {
+  let spent = 0;
   const parts = mergeParts(plant.parts).filter((p: Part) => p.indices.length > 0);
   const box = new THREE.Box3();
   const point = new THREE.Vector3();
@@ -203,7 +218,8 @@ export function bakeFarForm(renderer: THREE.WebGLRenderer, plant: Realized, fram
   const row = new THREE.WebGLRenderTarget(cols * px, px, { depthBuffer: true, type: THREE.UnsignedByteType, samples: 4 });
   row.texture.minFilter = THREE.NearestFilter;
   row.texture.magFilter = THREE.NearestFilter;
-  const layers = [0, 1, 2, 3].map(() => new THREE.WebGLRenderTarget(cols * framePx, rows * framePx, { depthBuffer: false, generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter }));
+  // Mipmaps are made once, when the last chunk is in.
+  const layers = [0, 1, 2, 3].map(() => new THREE.WebGLRenderTarget(cols * framePx, rows * framePx, { depthBuffer: false, generateMipmaps: false, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter }));
   const downUniforms = { uSrc: { value: row.texture }, uOrigin: { value: new THREE.Vector2() }, uMap: { value: new THREE.Matrix4() } };
   const down = new THREE.ShaderMaterial({
     vertexShader: QUAD_VERT,
@@ -223,68 +239,147 @@ export function bakeFarForm(renderer: THREE.WebGLRenderer, plant: Realized, fram
   const quadScene = new THREE.Scene().add(quad);
   const quadCamera = new THREE.Camera();
   const camera = new THREE.OrthographicCamera(-radius, radius, radius, -radius, 1000, 1000 + 4 * radius + 2);
+  camera.position.set(sphere.center.x, sphere.center.y, sphere.center.z + 2 * radius + 1000);
+  camera.lookAt(sphere.center);
 
-  const was = { target: renderer.getRenderTarget(), auto: renderer.autoClear, color: renderer.getClearColor(new THREE.Color()), alpha: renderer.getClearAlpha() };
-  renderer.autoClear = false;
-  renderer.setClearColor(0x000000, 0);
-  for (const layer of layers) {
-    renderer.setRenderTarget(layer);
-    renderer.clear(true, false, false);
-  }
-  for (let j = 0; j < rows; j++) {
-    for (const pass of PASSES) {
-      shared.uVitality.value = pass.vitality;
-      shared.uColorVitality.value = pass.colorVitality;
-      for (const m of meshes) m.mesh.material = m.materials.get(pass.output) as THREE.ShaderMaterial;
+  const nextFrame = (): Promise<void> => new Promise((resolve) => (typeof requestAnimationFrame === "function" ? requestAnimationFrame(() => resolve()) : setTimeout(resolve, 0)));
+  // Compiling ahead is not enough: each output's first draw into the
+  // multisampled target sets up state the GPU builds then, so each is drawn
+  // once, one pixel across, a frame apart, before the bake steps.
+  const ready = (async (): Promise<void> => {
+    for (const output of Object.keys(OUTPUT) as Output[]) {
+      for (const m of meshes) m.mesh.material = m.materials.get(output) as THREE.ShaderMaterial;
+      await renderer.compileAsync(scene, camera);
+    }
+    await renderer.compileAsync(quadScene, quadCamera);
+    for (const output of Object.keys(OUTPUT) as Output[]) {
+      for (const m of meshes) m.mesh.material = m.materials.get(output) as THREE.ShaderMaterial;
+      const was = renderer.getRenderTarget();
+      row.viewport.set(0, 0, 1, 1);
+      row.scissor.set(0, 0, 1, 1);
+      row.scissorTest = true;
+      renderer.setRenderTarget(row);
+      renderer.render(scene, camera);
+      row.scissorTest = false;
+      renderer.setRenderTarget(was);
+      await nextFrame();
+    }
+  })();
+
+  const free = (): void => {
+    row.dispose();
+    down.dispose();
+    unlit.dispose();
+    quad.geometry.dispose();
+    for (const m of meshes) {
+      m.mesh.geometry.dispose();
+      for (const mat of m.materials.values()) mat.dispose();
+    }
+  };
+  let next = -1;
+  let done: FarForm | null = null;
+  const steps = rows * PASSES.length * cols;
+  /** Renders view k (row, pass and azimuth, in that order of nesting), resolving the row into its atlas after its last view; or clears the atlases when k is -1. */
+  const view = (k: number): void => {
+    if (k < 0) {
+      for (const layer of layers) {
+        renderer.setRenderTarget(layer);
+        renderer.clear(true, false, false);
+      }
+      return;
+    }
+    const i = k % cols;
+    const pk = Math.floor(k / cols);
+    const j = Math.floor(pk / PASSES.length);
+    const pass = PASSES[pk % PASSES.length] as Pass;
+    shared.uVitality.value = pass.vitality;
+    shared.uColorVitality.value = pass.colorVitality;
+    for (const m of meshes) m.mesh.material = m.materials.get(pass.output) as THREE.ShaderMaterial;
+    if (i === 0) {
       row.scissorTest = false;
       renderer.setRenderTarget(row);
       renderer.clear(true, true, true);
-      for (let i = 0; i < cols; i++) {
-        const dir = farViewDir(i, j);
-        camera.position.copy(sphere.center).addScaledVector(dir, 2 * radius + 1000);
-        camera.up.set(0, 1, 0);
-        camera.lookAt(sphere.center);
-        camera.updateMatrixWorld();
-        bake.uBakeDir.value.copy(dir);
-        light.uEye.value.copy(sphere.center).addScaledVector(dir, eyeAt);
-        row.viewport.set(i * px, 0, px, px);
-        row.scissor.set(i * px, 0, px, px);
-        row.scissorTest = true;
-        renderer.setRenderTarget(row);
-        renderer.render(scene, camera);
-      }
-      row.scissorTest = false;
-      const target = layers[pass.layer] as THREE.WebGLRenderTarget;
-      target.viewport.set(0, j * framePx, cols * framePx, framePx);
-      downUniforms.uOrigin.value.set(0, j * framePx);
-      downUniforms.uMap.value.copy(mapOf(pass.to));
-      renderer.setRenderTarget(target);
-      renderer.render(quadScene, quadCamera);
-      target.viewport.set(0, 0, cols * framePx, rows * framePx);
     }
-  }
-  renderer.setRenderTarget(was.target);
-  renderer.autoClear = was.auto;
-  renderer.setClearColor(was.color, was.alpha);
-  row.dispose();
-  down.dispose();
-  unlit.dispose();
-  quad.geometry.dispose();
-  for (const m of meshes) {
-    m.mesh.geometry.dispose();
-    for (const mat of m.materials.values()) mat.dispose();
-  }
-  renderer.getContext().finish();
-  const bytes = Math.round(cols * framePx * rows * framePx * 4 * layers.length * (4 / 3));
+    const dir = farViewDir(i, j);
+    camera.position.copy(sphere.center).addScaledVector(dir, 2 * radius + 1000);
+    camera.up.set(0, 1, 0);
+    camera.lookAt(sphere.center);
+    camera.updateMatrixWorld();
+    bake.uBakeDir.value.copy(dir);
+    light.uEye.value.copy(sphere.center).addScaledVector(dir, eyeAt);
+    row.viewport.set(i * px, 0, px, px);
+    row.scissor.set(i * px, 0, px, px);
+    row.scissorTest = true;
+    renderer.setRenderTarget(row);
+    renderer.render(scene, camera);
+    row.scissorTest = false;
+    if (i < cols - 1) return;
+    const target = layers[pass.layer] as THREE.WebGLRenderTarget;
+    target.viewport.set(0, j * framePx, cols * framePx, framePx);
+    downUniforms.uOrigin.value.set(0, j * framePx);
+    downUniforms.uMap.value.copy(mapOf(pass.to));
+    renderer.setRenderTarget(target);
+    renderer.render(quadScene, quadCamera);
+    target.viewport.set(0, 0, cols * framePx, rows * framePx);
+  };
+  const finish = (): FarForm => {
+    // Every chunk is in: make each atlas's mipmaps once.
+    const empty = new THREE.Scene();
+    for (const layer of layers) {
+      layer.texture.generateMipmaps = true;
+      renderer.setRenderTarget(layer);
+      renderer.render(empty, quadCamera);
+    }
+    free();
+    const bytes = Math.round(cols * framePx * rows * framePx * 4 * layers.length * (4 / 3));
+    return {
+      bounds: { center: sphere.center.clone(), radius, height },
+      bytes,
+      ms: spent,
+      atlas: { layers: layers.map((l) => l.texture), frame: framePx, sway: plant.motion.sway, frequency: plant.motion.frequency },
+      dispose: () => {
+        for (const l of layers) l.dispose();
+      },
+    };
+  };
+  let cancelled = false;
   return {
-    bounds: { center: sphere.center.clone(), radius, height },
-    bytes,
-    ms: performance.now() - t0,
-    atlas: { layers: layers.map((l) => l.texture), frame: framePx, sway: plant.motion.sway, frequency: plant.motion.frequency },
-    dispose: () => {
+    ready,
+    step(budgetMs, views = Number.POSITIVE_INFINITY) {
+      if (done !== null || cancelled) return done;
+      const t0 = performance.now();
+      const was = { target: renderer.getRenderTarget(), auto: renderer.autoClear, color: renderer.getClearColor(new THREE.Color()), alpha: renderer.getClearAlpha() };
+      renderer.autoClear = false;
+      renderer.setClearColor(0x000000, 0);
+      let n = 0;
+      do {
+        view(next);
+        next++;
+        n++;
+      } while (next < steps && n < views && performance.now() - t0 < budgetMs);
+      if (next >= steps) done = finish();
+      renderer.setRenderTarget(was.target);
+      renderer.autoClear = was.auto;
+      renderer.setClearColor(was.color, was.alpha);
+      spent += performance.now() - t0;
+      if (done !== null) (done as { ms: number }).ms = spent;
+      return done;
+    },
+    cancel() {
+      if (done !== null || cancelled) return;
+      cancelled = true;
+      free();
       for (const l of layers) l.dispose();
     },
   };
+}
+
+/** Bakes `plant` into its far form at once (`startFarBake`, stepped to the end). */
+export function bakeFarForm(renderer: THREE.WebGLRenderer, plant: Realized, framePx = 128): FarForm {
+  const bake = startFarBake(renderer, plant, framePx);
+  let form: FarForm | null = null;
+  while (form === null) form = bake.step(Number.POSITIVE_INFINITY);
+  return form;
 }
 
 const CARD_VERT = /* glsl */ `
