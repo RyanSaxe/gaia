@@ -57,8 +57,13 @@ export const WIND = {
 /** Swatches whose pieces turn on their stalks in a gust: leaves and flowers, never the stems and moss that carry or cling. */
 export const FLUTTERS: ReadonlySet<string> = new Set(["leaf", "bloom", "eye"]);
 
-/** Cuts too stiff to flutter: a fir's needles and the heart of its frond bend with their twig and bough but never turn on their own. */
-export const STIFF: ReadonlySet<number> = new Set([CUT.needles, CUT.core]);
+/**
+ * Cuts that never turn on their own, only with their twig and bough: a fir's
+ * needles and the heart of its frond, too stiff to flutter, and a willow's
+ * strand, too long to turn as one leaf: its rows would turn by different
+ * angles and pull apart.
+ */
+export const STIFF: ReadonlySet<number> = new Set([CUT.needles, CUT.core, CUT.strand]);
 
 /** A seeded phase in radians from a joint's place, so neighboring boughs never swing in step. */
 export function jointPhase(x: number, y: number, z: number, seed: number): number {
