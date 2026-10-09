@@ -28,8 +28,8 @@ export type PlaceArea = Place["area"];
 /** The wild land past the codebase's: an area that stands for no directory. */
 export const WILD_AREA: PlaceArea = { path: "", name: "The wilds", depth: -1 };
 
-/** Whether (x, z) lies past the codebase's land: its rounded square, where the rim crests. */
-function pastTheLand(size: number, x: number, z: number): boolean {
+/** Whether (x, z) lies past the codebase's land, a square `size` meters across with rounded corners, where the rim crests: the wild. */
+export function pastTheLand(size: number, x: number, z: number): boolean {
   return Math.abs(x) ** 4 + Math.abs(z) ** 4 > (size / 2) ** 4;
 }
 

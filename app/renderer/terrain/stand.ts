@@ -30,6 +30,7 @@ import {
   findLandmarkSite,
   findSite,
   groundedBase,
+  pastTheLand,
   heightAt,
   isWet,
   levelPad,
@@ -106,8 +107,11 @@ export interface StandCode {
   /** Each landmark standing for an entity: which of `landmarks`, on which lot. */
   readonly landmarks: readonly { readonly landmark: number; readonly lot: StandLot }[];
   readonly patches: readonly StandPatch[];
-  /** The land's cells, each part of one patch (its index) or of a lot (-1): a tree grows only on its own patch's cells. */
-  readonly cells: readonly (LandSite & { readonly patch: number })[];
+  /**
+   * The land's cells, each part of one patch (its index) or of a lot (-1): a tree grows only on its own patch's cells.
+   * Each holds its ground's vitality, which the understory growing on it shows: its file's, or on a lot its area's.
+   */
+  readonly cells: readonly (LandSite & { readonly patch: number; readonly vitality: number })[];
   readonly symbols: readonly StandSymbol[];
   /** Per terrain region: how much of each understory rule it holds (by rule id; absent counts 1), and what its open ground reads as. */
   readonly regions: readonly { readonly understory: Readonly<Record<string, number>>; readonly open?: Habitat }[];
@@ -481,7 +485,11 @@ export function standWorld(t: Terrain, req: StandRequest): Stand {
   const rules = code === undefined ? req.understory.rules : req.understory.rules.map((rule) => ({ ...rule, regions: t.spec.regions.map((_, i) => (rule.regions?.[i] ?? 1) * (code.regions[i]?.understory[rule.id] ?? 1)) }));
   const open = code === undefined ? req.understory.open : t.spec.regions.map((_, i) => code.regions[i]?.open ?? req.understory.open?.[i]);
   const canopy = trees.map((tr) => ({ x: tr.x, z: tr.z, radius: (req.trees.crowns[tr.variant] ?? 4) * tr.scale }));
-  const placements = [...standing, ...scatterComponents(t, rules, req.understory.seed, [...occupied, ...roomy], { canopy, ...(open === undefined ? {} : { open }) })];
+  const scattered = scatterComponents(t, rules, req.understory.seed, [...occupied, ...roomy], { canopy, ...(open === undefined ? {} : { open }) });
+  // In a world from code the understory shows the vitality of the ground it grows on: its cell's, or full health in the wild past the land.
+  const cells = code?.cells ?? [];
+  const vitalityUnder = (x: number, z: number): number => (pastTheLand(t.spec.size, x, z) ? 1 : (cells[siteAt(cells, x, z)]?.vitality ?? 1));
+  const placements = [...standing, ...(cells.length === 0 ? scattered : scattered.map((p) => ({ ...p, vitality: vitalityUnder(p.x, p.z) })))];
 
   const n = t.lattice.n * t.lattice.n;
   const field = trailField(t, network.ways);

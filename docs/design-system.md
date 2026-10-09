@@ -952,7 +952,11 @@ rule groups there by its density for that place, its region's landform and,
 in a world from code, its area's character, with no two footprints
 overlapping, nothing on ground steeper than its rule allows, and nothing
 within a meter or two of water. Nothing crowds a file's finer entities: the
-understory keeps two meters clear of each. A solid thing sits below the lowest ground
+understory keeps two meters clear of each. In a world from code each rock,
+bush and flower shows the vitality of the ground it grows on: its file's on a
+file's patch, its whole area's on a lot (`areaVitality`), and full health in
+the wild past the land, so a failing area's understory fails with its trees.
+A solid thing sits below the lowest ground
 under its footprint, so on a slope its uphill side is buried and its
 downhill side still touches the soil; a drift lies on the ground's plane, so
 its stems stay upright. Rocks are half sunk by construction. Moss caps their

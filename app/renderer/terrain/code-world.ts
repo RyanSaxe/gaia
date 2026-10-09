@@ -15,7 +15,7 @@
 import { type Blueprint, type CodeModel, type EntityFacts, type FileFacts, type JevResponse, type SymbolFact, rand, seedOf } from "@gaia/schema";
 import { FLORA_PRESETS, LANDMARK_PRESETS, TRAIL_PRESETS, WORLD_PRESETS } from "@gaia/realize";
 import { type WorldSpec, outlinesOf } from "@gaia/terrain";
-import { type CodeWorld, type Judge, type Judgments, areaLands, groundVitality, judgeWorld, judgedThing, keptJev, layoutWorld, planWorldRequests, requestKey, standInJev, thingsOf } from "@gaia/world";
+import { type CodeWorld, type Judge, type Judgments, areaLands, areaVitality, groundVitality, judgeWorld, judgedThing, keptJev, layoutWorld, planWorldRequests, requestKey, standInJev, thingsOf } from "@gaia/world";
 import type { ConsentPlan, Opening, StartChoice, StartOffer, WorldDocument } from "../../world-service/protocol.ts";
 import { postcardOf } from "../../world-service/postcard.ts";
 import { type WorldService, worldService } from "../service.ts";
@@ -289,7 +289,12 @@ export function codeLab({ model, world, judges, summary }: WorldDocument): CodeL
       }),
       cells: (() => {
         const patchOf = new Map(world.patches.map((p, i) => [p.path, i]));
-        return world.cells.map((c) => ({ x: c.x, z: c.z, patch: c.file === null || c.file === undefined ? -1 : (patchOf.get(c.file) ?? -1) }));
+        // A patch's ground is as healthy as its file; a lot is its area's own ground, as healthy as the whole area.
+        const areas = areaVitality(world.patches.map((p) => ({ area: p.area, vitality: p.vitality, size: p.radius * p.radius })));
+        return world.cells.map((c) => {
+          const patch = c.file === null || c.file === undefined ? -1 : (patchOf.get(c.file) ?? -1);
+          return { x: c.x, z: c.z, patch, vitality: world.patches[patch]?.vitality ?? areas.get(c.area) ?? 1 };
+        });
       })(),
       symbols: world.symbols.map((s) => {
         const form = FORMS[s.form] ?? (Object.values(FORMS)[0] as (typeof FORMS)[string]);

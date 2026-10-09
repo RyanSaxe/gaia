@@ -300,7 +300,9 @@ trees: where its areas would grow more, every grove gives up the same
 share, though each keeps the one tree that names its file. The understory then grows where it belongs (`scatterComponents`):
 each candidate site on a grid fixed to the world reads its kind of place from
 the trees' crowns, the water and the slope, so a change in one place moves
-nothing elsewhere. The ground textures take a world of any size.
+nothing elsewhere, and each placement takes the vitality of the cell it
+stands on (`StandCode.cells`: a patch's file's, a lot's area's), or full
+health past the land. The ground textures take a world of any size.
 
 ## Jev
 
