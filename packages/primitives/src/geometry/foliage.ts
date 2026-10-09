@@ -379,13 +379,13 @@ export function buildLeafClumps(p: Resolved<typeof leafClumpsParams>, ctx: Build
   }
 
   const spray = SPRAY_CUTS[p.leaf];
-  // Leaves keep near their own size on a great tree: its sprays grow only with the root of its scale.
-  const look: ClumpLook = { twigs: 15, sprays: 8, half: 0.25 * spray.card * (s <= 1 ? s : Math.sqrt(s)), cut: spray.cut, shape: p.shape, ground: 0 };
-  // A dense frame's crown thins its twigs, then drops interior fill clumps (added last), to stay in budget.
+  // Leaves keep near their own size on a great tree: its sprays grow only with the root of its scale,
+  // so each covers s times the area and its clumps need 1/s as many twigs per square meter.
+  const look: ClumpLook = { twigs: 15 / Math.max(1, s), sprays: 8, half: 0.25 * spray.card * (s <= 1 ? s : Math.sqrt(s)), cut: spray.cut, shape: p.shape, ground: 0 };
+  // Every clump stays, so the crown keeps its shape; a crown over budget thins all its twigs evenly.
   let density = 1;
   const triangles = (): number => clumps.reduce((n, c) => n + twigsOf(look, c.radius, density) * TRIANGLES_PER_TWIG, 0);
-  while (triangles() > CLUMP_TRIANGLE_BUDGET && density > 0.55) density -= 0.05;
-  while (triangles() > CLUMP_TRIANGLE_BUDGET) clumps.pop();
+  while (triangles() > CLUMP_TRIANGLE_BUDGET && density > 0.05) density -= 0.01;
   const leaf = new PartBuilder("leaf");
   const twigs = new PartBuilder("bark");
   const anchors: Anchor[] = [];

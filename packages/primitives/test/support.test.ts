@@ -164,6 +164,15 @@ describe("plants", () => {
     const height = Math.max(...parts.map((p) => p.positions.reduce((m, y, k) => (k % 3 === 1 ? Math.max(m, y) : m), 0.3)));
     expect(misshapen(parts, GUST_MOMENTS.map((g) => ({ ...g, height })))).toEqual([]);
   }, 60_000);
+  it.each(samples(lib.get("great-tree@1")).map((s, i) => [i, s] as const))("a great tree's leaves reach across its whole crown (sample %i)", (i, s) => {
+    const parts = (build(lib.get("great-tree@1"), s, null, 5 + i) as Built).parts as Part[];
+    const spanOf = (swatch: string, axis: number): number => {
+      const values = parts.filter((p) => p.swatch === swatch).flatMap((p) => Array.from(p.positions).filter((_, k) => k % 3 === axis));
+      return values.length === 0 ? 0 : Math.max(...values) - Math.min(...values);
+    };
+    // Leaves on every limb tip span at least most of what the limbs and roots span.
+    for (const axis of [0, 2]) if (spanOf("leaf", axis) > 0) expect(spanOf("leaf", axis)).toBeGreaterThan(0.85 * spanOf("bark", axis));
+  }, 30_000);
   it.each(samples(lib.get("great-tree@1")).map((s, i) => [i, s] as const))("a great tree keeps its shape in the gust (sample %i)", (i, s) => {
     const parts = (build(lib.get("great-tree@1"), s, null, 5 + i) as Built).parts as Part[];
     expect(misshapen(parts, GUST_MOMENTS.map((g) => ({ ...g, height: 20 })))).toEqual([]);
