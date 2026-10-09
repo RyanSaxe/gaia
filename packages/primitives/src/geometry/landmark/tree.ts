@@ -90,6 +90,16 @@ function aged(skel: Skeleton, age: number, bole: number, broken: (i: number) => 
  * One great old tree, four or five times a person's reach across, of the
  * chosen form and age. It declines as a flora tree does, to a bare grey snag.
  */
+/**
+ * A great tree's crown, at most: twice a tree's, so its crown fills out
+ * across every limb. A great tree stands alone and a person walks up to it,
+ * but its crown fills much of the screen, so each layer of leaf cards costs
+ * its whole area to draw: at the density its size would call for (about
+ * 160,000 triangles for an oak) it drew 2.5 times as many card layers as a
+ * tree's ceiling allows, and the frame paid for it.
+ */
+const CROWN_GUARD = 48_000;
+
 export function buildGreatTree(p: TreeParams, ctx: BuildContext): Built {
   const form = FORMS[p.form];
   // A young giant stands a little taller; an ancient one spreads lower and wider.
@@ -104,6 +114,6 @@ export function buildGreatTree(p: TreeParams, ctx: BuildContext): Built {
   const crown =
     form.crown === "strands"
       ? buildLeafStrands({ length: 2.2, fullness }, { ...inner, rand: inner.rand.fork("crown") }, skeleton)
-      : buildLeafClumps({ shape: form.shape, leaf: form.leaf, size: 1, fullness }, { ...inner, rand: inner.rand.fork("crown") }, skeleton);
+      : buildLeafClumps({ shape: form.shape, leaf: form.leaf, size: 1, fullness }, { ...inner, rand: inner.rand.fork("crown") }, skeleton, CROWN_GUARD);
   return { parts: [...bark.parts, ...crown.parts], anchors: crown.anchors };
 }

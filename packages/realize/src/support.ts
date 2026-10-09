@@ -316,9 +316,14 @@ export function unsupportedAt(parts: readonly Part[], v: number, options: { read
       triBox[t * 6 + 3 + c] = Math.max(a, b, d) + SUPPORT.within;
     }
   }
+  // Only solid triangles are hashed: a card never rests on a card, and a
+  // card's own probes and stalk find what it clings to, so every probe looks
+  // only at solid triangles. Fewer contacts can only report more floaters,
+  // never hide one.
   const cells = new Map<number, number[]>();
   const cellKey = (x: number, y: number, z: number): number => ((x * 73856093) ^ (y * 19349663) ^ (z * 83492791)) | 0;
   for (let t = 0; t < triBody.length; t++) {
+    if ((bodies[triBody[t] as number] as Body).card) continue;
     const o = t * 9;
     let lx = Infinity, ly = Infinity, lz = Infinity, hx = -Infinity, hy = -Infinity, hz = -Infinity;
     for (let k = 0; k < 3; k++) {
@@ -449,7 +454,7 @@ export function unsupportedAt(parts: readonly Part[], v: number, options: { read
         for (let z = cz - 1; z <= cz + 1; z++)
           for (const t of cells.get(cellKey(x, y, z)) ?? []) {
             const other = triBody[t] as number;
-            if (other === b || (bodies[other] as Body).card) continue;
+            if (other === b) continue;
             closest(px, py, pz, triPos, t * 9, near);
             if (Math.hypot(px - (near[0] as number), py - (near[1] as number), pz - (near[2] as number)) <= SUPPORT.cling) onRest(b, other, px, py, pz);
           }
