@@ -24,6 +24,9 @@ looks; `docs/decisions/` says why each was decided.
   stored, a change to a primitive's look or parameters becomes a new version
   (`branching@2`), and stored worlds keep the old one until a person migrates.
 - The visual bar is v1's components and Breath of the Wild.
+- Never fill foliage (a crown, a bush, a fir frond) with a dark inner body, a
+  heart, core or ball, to make it read as dense: fullness comes from the
+  leaves themselves, overlapping and layered.
 - Never send anything to OpenRouter without the reviewer's approval. Prove a
   live path against the local stand-in (below).
 
