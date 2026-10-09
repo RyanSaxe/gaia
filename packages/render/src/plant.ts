@@ -6,7 +6,7 @@ import * as THREE from "three";
 import { CUT, type Part, SPRAYS, type Swatch } from "@gaia/schema";
 import { CHANNEL_MATH, DETAIL, type Realized, pieceFrames, spinAt } from "@gaia/realize";
 import { LIGHT_GLSL, type SceneLight } from "./light.ts";
-import { WIND_GLSL } from "./wind.ts";
+import { WIND_GLSL } from "./sway.ts";
 import { createSmokeMaterial } from "./smoke.ts";
 
 const f = (x: number): string => x.toFixed(4);

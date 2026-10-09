@@ -7,7 +7,7 @@
 
 import { type Part, SPRAYS } from "@gaia/schema";
 import { CHANNEL_MATH, applyVitality } from "./channels.ts";
-import type { WindState } from "./wind.ts";
+import type { WindState } from "./sway.ts";
 
 export const SUPPORT = {
   /** A piece whose lowest point is this close to the ground (y = 0) stands on it. */

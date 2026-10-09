@@ -1,20 +1,15 @@
-// The one wind field, and how everything that grows moves in it. Gusts
-// travel downwind across the land as broad soft bands; a plant bends where
-// it stands, level by level: the whole plant from its base, each bough about
-// the joint where it leaves the trunk, each twig about where it leaves its
-// bough, and each leaf flutters on its stalk. Every level is a bend about a
-// joint that keeps each point's distance from it, and a piece carried by a
-// joint moves with everything else that joint carries, so nothing ever
-// parts from what holds it. The shaders read these numbers (`WIND_GLSL` in
-// @gaia/render), and `swayAt` is the CPU reference the tests run against.
+// How everything that grows answers the wind field (`wind-field.ts`). A
+// plant bends where it stands, level by level: the whole plant from its
+// base, each bough about the joint where it leaves the trunk, each twig about
+// where it leaves its bough, and each leaf flutters on its stalk. Every level
+// is a bend about a joint that keeps each point's distance from it, and a
+// piece carried by a joint moves with everything else that joint carries, so
+// nothing ever parts from what holds it. The shaders read these numbers
+// (`SWAY_GLSL` in @gaia/render), and `swayAt` is the CPU reference the tests
+// run against.
 
 import type { Part } from "@gaia/schema";
-
-/** A unit direction over the ground (x, z): where the wind blows toward. */
-const DIR: readonly [number, number] = (() => {
-  const l = Math.hypot(0.94, 0.34);
-  return [0.94 / l, 0.34 / l];
-})();
+import { WIND_FIELD, gustAt } from "./wind-field.ts";
 
 /** One level of a plant's bend: how far it leans downwind and swings about that lean, as an angle at its reach. */
 export interface WindLevel {
@@ -26,10 +21,9 @@ export interface WindLevel {
   readonly rate: number;
 }
 
+/** The wind field (`WIND_FIELD`) and how every plant answers it, level by level. */
 export const WIND = {
-  dir: DIR,
-  /** Gust bands: radians of phase per meter downwind, and how fast they travel, meters per second. */
-  gust: { wave: 0.1, speed: 8.5 },
+  ...WIND_FIELD,
   /** The whole plant bends from its base, by height. */
   trunk: { lean: 0.05, swing: 0.45, rate: 0.75 },
   /** A bough bends about its joint; its reach is a share of the plant's height, within bounds in meters. */
@@ -41,24 +35,6 @@ export const WIND = {
   /** A level's bend grows with distance from its joint up to this many reaches, then holds its angle. */
   most: 1.5,
 } as const;
-
-const smoothstep = (e0: number, e1: number, x: number): number => {
-  const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0)));
-  return t * t * (3 - 2 * t);
-};
-
-/**
- * How strongly a gust blows at (x, z) and time t, 0 to 1: soft bands that
- * travel downwind, their fronts bowed by a slow meander across the wind, so
- * a gust reaches each tree in turn rather than all at once.
- */
-export function gustAt(x: number, z: number, t: number): number {
-  const along = x * DIR[0] + z * DIR[1];
-  const across = -x * DIR[1] + z * DIR[0];
-  const g = WIND.gust;
-  const phase = along * g.wave - t * g.wave * g.speed + 1.6 * Math.sin(across * 0.023 + 0.7 * Math.sin(along * 0.011 + t * 0.05));
-  return smoothstep(0.35, 1, 0.5 + 0.5 * Math.sin(phase));
-}
 
 /** A seeded phase in radians from a joint's place, so neighboring boughs never swing in step. */
 export function jointPhase(x: number, y: number, z: number, seed: number): number {
@@ -94,7 +70,8 @@ function pushOf(level: WindLevel, s: WindState, gust: number, phase: number): [n
   const along = w * (lean + swing * Math.sin(t));
   const across = w * swing * 0.4 * Math.sin(t * 1.31 + phase * 1.7);
   const bob = w * swing * 0.5 * Math.sin(t * 1.13 + phase);
-  return [along * DIR[0] - across * DIR[1], bob, along * DIR[1] + across * DIR[0]];
+  const [dx, dz] = WIND_FIELD.dir;
+  return [along * dx - across * dz, bob, along * dz + across * dx];
 }
 
 /** Bends `p` about `joint` by `push` (an angle at `reach`), keeping its distance from the joint. Writes into `p`. */

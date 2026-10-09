@@ -3,4 +3,5 @@ export * from "./plant.ts";
 export * from "./shadow.ts";
 export * from "./clearings.ts";
 export * from "./instances.ts";
-export * from "./wind.ts";
+export * from "./wind-field.ts";
+export * from "./sway.ts";

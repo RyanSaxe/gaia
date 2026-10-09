@@ -86,8 +86,11 @@ carries each vertex: the joint where its bough or stem leaves the trunk or
 the ground (the `bough` channel), the joint where its twig leaves the
 bough (`twig`) and the point its piece hangs from (`pivot`).
 
-- **Wind.** One field for the whole world (`gustAt` and `swayAt` in
-  `@gaia/realize`, `WIND_GLSL` in `@gaia/render`): gusts travel downwind as
+- **Wind.** One field for the whole world, and each plant's answer to it.
+  The field is `gustAt` and `WIND_FIELD` (`wind-field.ts` in
+  `@gaia/realize`, `WIND_FIELD_GLSL` in `@gaia/render`); the answer is
+  `swayAt` and the levels of `WIND` (`sway.ts` in each, `SWAY_GLSL` in
+  `@gaia/render`). Gusts travel downwind as
   broad, soft bands about 60 m apart at 8.5 m/s, their fronts bowed by a
   slow meander, so a gust rolls through the grass and on into the trees.
   A plant bends level by level: the whole plant from its base by height,

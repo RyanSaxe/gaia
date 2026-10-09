@@ -6,4 +6,5 @@ export * from "./day.ts";
 export * from "./sky.ts";
 export * from "./detail.ts";
 export * from "./support.ts";
-export * from "./wind.ts";
+export * from "./wind-field.ts";
+export * from "./sway.ts";
