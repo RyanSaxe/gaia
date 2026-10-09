@@ -559,6 +559,8 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     if (skyWorld === undefined) return;
     const look = realizeSky({ blueprint: skyWorld.world, kind: worldKind }, worldLib, seedOf("terrain-lab/sky"), h);
     applyLight(light, look.light);
+    // How windy the world is: every sway answers the one wind field this many times as hard.
+    light.uWind.value = look.wind.strength;
     sky.apply({ light: look.light, sky: { ...look.sky, mid: mixLab(look.sky.zenith, look.sky.horizon, 0.5) }, fog: { color: look.sky.horizon, density: FOG[mode], mist: 0 } });
   }
   const shadow = createSunShadow(light, 2048);
@@ -2121,6 +2123,18 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
         drawnTriangles: instanced().reduce((n, v) => n + v.drawn().triangles, 0),
       }),
       selected: () => selected,
+      /**
+       * Shows world preset `name`'s light, sky, season and wind over the world
+       * shown, such as "Heather moor", or the world's own again (no name).
+       * Returns the preset's name, or null when there is none by that name.
+       */
+      skyWorld: (name?: string) => {
+        const chosen = name === undefined ? (code?.sky ?? SKY_WORLD) : WORLD_PRESETS.find((p) => p.name === name);
+        if (chosen === undefined) return null;
+        skyWorld = chosen;
+        hour = Number.NaN;
+        return chosen.name;
+      },
       /** Shows Gaia's own world (true) or the sample world (false). */
       codebase: (on: boolean) => showCodebase(on),
       /** Where the walker is, or (x, z): the area and file patch underfoot, in either world. */
