@@ -706,7 +706,22 @@ function chainsOf(skel: Skeleton): number[][] {
   return chains;
 }
 
-export function buildNeedles(p: Resolved<typeof needlesParams>, ctx: BuildContext, skel: Skeleton): Built {
+/**
+ * How a fir's fronds fill its frame, beyond what Jev picks: how many
+ * branchlets a frond carries (a multiple of a frond's own count), the share
+ * of them doubled by a second card hung lower and steeper beneath, and how
+ * much farther and lower the outer branchlets reach, so they drape over the
+ * whorl below.
+ */
+export interface FirLook {
+  readonly branchlets: number;
+  readonly lowerTier: number;
+  readonly drape: { readonly reach: number; readonly drop: number };
+}
+
+export const FIR_LOOK: FirLook = { branchlets: 1, lowerTier: 0, drape: { reach: 0, drop: 0 } };
+
+export function buildNeedles(p: Resolved<typeof needlesParams>, ctx: BuildContext, skel: Skeleton, look: FirLook = FIR_LOOK): Built {
   const out = new PartBuilder("leaf");
   const r = ctx.rand.fork("needles");
   const s = ctx.facts.scale ?? 1;
@@ -724,7 +739,7 @@ export function buildNeedles(p: Resolved<typeof needlesParams>, ctx: BuildContex
     if (depth === 0) {
       // A tuft along the top of the leader.
       const tipY = last.end[1];
-      emitFrond(out, crown, [lerp(last.start, last.end, 0.1), lerp(last.start, last.end, 0.55), last.end], p.length * 0.32 * s, cr, p, tipY / top, (q) => boughs.at(skel.limbs.indexOf(last), q));
+      emitFrond(out, crown, [lerp(last.start, last.end, 0.1), lerp(last.start, last.end, 0.55), last.end], p.length * 0.32 * s, cr, p, tipY / top, (q) => boughs.at(skel.limbs.indexOf(last), q), FIR_LOOK);
       return;
     }
     if (depth >= 2 && p.fullness < 0.7) return;
@@ -732,7 +747,7 @@ export function buildNeedles(p: Resolved<typeof needlesParams>, ctx: BuildContex
     const tip = points[points.length - 1] as Vec3;
     const width = p.length * (depth === 1 ? 0.5 : 0.36) * s * (0.85 + 0.25 * p.fullness);
     const carry = (q: Vec3): { bough: Vec3; droop: number } => boughs.at(skel.limbs.indexOf(first), q);
-    emitFrond(out, crown, points, width, cr, p, tip[1] / top, carry);
+    emitFrond(out, crown, points, width, cr, p, tip[1] / top, carry, look);
     const at = carry(tip);
     anchors.push({ position: tip, normal: normalize(sub(tip, points[points.length - 2] as Vec3)), size: depth === 1 ? 1 : 0.5, carry: { bough: at.bough, twig: at.bough, droop: at.droop } });
   });
@@ -770,6 +785,7 @@ function emitFrond(
   p: Resolved<typeof needlesParams>,
   heightFrac: number,
   carry: (q: Vec3) => { bough: Vec3; droop: number },
+  look: FirLook,
 ): void {
   // Lower sprays shed first, as an ailing conifer browns from the bottom up.
   const loss = clamp(lossThreshold(r.next(), 0.5) + 0.12 * (1 - heightFrac), 0.02, 0.7);
@@ -823,41 +839,48 @@ function emitFrond(
 
   // Branchlets, alternating sides, shorter and more drooping toward the tip.
   const span = points.slice(1).reduce((n, q, i) => n + length(sub(q, points[i] as Vec3)), 0);
-  const count = Math.round(clamp(span / (width * 0.3), 5, 11));
+  const count = Math.round(clamp(span / (width * 0.3), 5, 11) * look.branchlets);
+  const branchlet = (t: number, sideSign: number, reach: number, drop: number, forward: number): void => {
+    const { at, dir } = pointOnPolyline(points, t);
+    const side = acrossOf(dir);
+    const up = normalize(cross(side, dir));
+    const flat = normalize(add(scale(side, sideSign * Math.cos(forward)), scale(dir, Math.sin(forward))));
+    const along = normalize(add(scale(flat, Math.cos(drop)), scale(up, -Math.sin(drop))));
+    // The card's width lies nearly level, rolled a little, creased along its middle.
+    const roll = r.range(-0.35, 0.35);
+    const wide = normalize(rotate(normalize(cross(up, along)), along, roll));
+    const crest = normalize(cross(along, wide));
+    const halfWide = reach * r.range(0.36, 0.44);
+    const cut = cutOf(CUT.needles, r.next());
+    const cardTint = clamp(tint * 0.4 + r.range(-0.03, 0.03), -0.1, 0.1);
+    const firstCard = out.vertexCount;
+    for (const v of [0, 1]) {
+      const base = addScaled(at, along, v * reach);
+      for (const a of [-1, 0, 1]) {
+        const q = add(base, add(scale(wide, a * halfWide * (1 - 0.35 * v)), scale(crest, (0.18 - 0.3 * Math.abs(a)) * halfWide)));
+        const place = crownPlace(crown, q);
+        const normal = blendNormal(normalize(add(crest, scale(wide, a * 0.5))), place.out, 0.5);
+        const shade = 0.28 + 0.42 * clamp(place.depth - 0.25, 0, 1) + 0.12 * Math.max(0, crest[1]) + 0.08 * v + 0.5 * tint + lift;
+        out.vertex(q, normal, shade, channelsAt(Math.min(1, t + 0.1 * v), Math.abs(a) * 0.5 + v * 0.5, cardTint, t, true), [a, v, cut]);
+      }
+    }
+    for (let j = 0; j < 2; j++) {
+      const a = firstCard + j;
+      out.triangle(a, a + 3, a + 1);
+      out.triangle(a + 1, a + 3, a + 4);
+    }
+  };
   for (let k = 0; k < count; k++) {
     for (const sideSign of [-1, 1]) {
       const t = 0.1 + 0.84 * ((k + (sideSign > 0 ? 0.25 : 0.75)) / count) + r.range(-0.03, 0.03);
-      const { at, dir } = pointOnPolyline(points, t);
-      const side = acrossOf(dir);
-      const up = normalize(cross(side, dir));
-      const reach = width * (0.8 - 0.4 * t) * r.range(0.8, 1.15);
+      // The outer branchlets drape: they reach farther and hang lower, over the whorl below.
+      const outer = clamp((t - 0.3) / 0.5, 0, 1);
+      const reach = width * (0.8 - 0.4 * t) * r.range(0.8, 1.15) * (1 + look.drape.reach * outer);
       const forward = r.range(0.6, 0.95);
-      const drop = r.range(0.1, 0.3) + 0.25 * t + 0.2 * (1 - heightFrac);
-      const flat = normalize(add(scale(side, sideSign * Math.cos(forward)), scale(dir, Math.sin(forward))));
-      const along = normalize(add(scale(flat, Math.cos(drop)), scale(up, -Math.sin(drop))));
-      // The card's width lies nearly level, rolled a little, creased along its middle.
-      const roll = r.range(-0.35, 0.35);
-      const wide = normalize(rotate(normalize(cross(up, along)), along, roll));
-      const crest = normalize(cross(along, wide));
-      const halfWide = reach * r.range(0.36, 0.44);
-      const cut = cutOf(CUT.needles, r.next());
-      const cardTint = clamp(tint * 0.4 + r.range(-0.03, 0.03), -0.1, 0.1);
-      const firstCard = out.vertexCount;
-      for (const v of [0, 1]) {
-        const base = addScaled(at, along, v * reach);
-        for (const a of [-1, 0, 1]) {
-          const q = add(base, add(scale(wide, a * halfWide * (1 - 0.35 * v)), scale(crest, (0.18 - 0.3 * Math.abs(a)) * halfWide)));
-          const place = crownPlace(crown, q);
-          const normal = blendNormal(normalize(add(crest, scale(wide, a * 0.5))), place.out, 0.5);
-          const shade = 0.28 + 0.42 * clamp(place.depth - 0.25, 0, 1) + 0.12 * Math.max(0, crest[1]) + 0.08 * v + 0.5 * tint + lift;
-          out.vertex(q, normal, shade, channelsAt(Math.min(1, t + 0.1 * v), Math.abs(a) * 0.5 + v * 0.5, cardTint, t, true), [a, v, cut]);
-        }
-      }
-      for (let j = 0; j < 2; j++) {
-        const a = firstCard + j;
-        out.triangle(a, a + 3, a + 1);
-        out.triangle(a + 1, a + 3, a + 4);
-      }
+      const drop = r.range(0.1, 0.3) + 0.25 * t + 0.2 * (1 - heightFrac) + look.drape.drop * outer;
+      branchlet(t, sideSign, reach, drop, forward);
+      // A second card hung lower and steeper beneath, so the frond is deep rather than one sheet.
+      if (look.lowerTier > 0 && r.next() < look.lowerTier) branchlet(clamp(t + 0.04, 0, 1), sideSign, reach * 0.9, drop + 0.8, forward * 0.8);
     }
   }
 }

@@ -186,7 +186,19 @@ export function growBranching(p: Resolved<typeof branchingParams>, ctx: BuildCon
 }
 
 /** A straight leader with whorls of limbs, shaped as a cone of the declared proportions. */
-export function growSpire(p: Resolved<typeof spireParams>, ctx: BuildContext): Skeleton {
+/**
+ * How a spire's whorls fill its height, beyond what Jev picks: its rings as
+ * a multiple of the ones asked for, and how many short branches stand
+ * between each whorl and the next, as a fir's do.
+ */
+export interface SpireLook {
+  readonly whorls: number;
+  readonly between: number;
+}
+
+export const SPIRE_LOOK: SpireLook = { whorls: 1, between: 0 };
+
+export function growSpire(p: Resolved<typeof spireParams>, ctx: BuildContext, look: SpireLook = SPIRE_LOOK): Skeleton {
   const s = ctx.facts.scale ?? 1;
   const height = 9 * s * Math.pow(p.stature / 2.2, 0.35);
   const width = height / p.stature;
@@ -218,14 +230,18 @@ export function growSpire(p: Resolved<typeof spireParams>, ctx: BuildContext): S
   }
   tips.push({ position: at, normal: [0, 1, 0], size: 0.6 });
 
-  const whorls = Math.max(2, Math.round(p.whorls));
+  const whorls = Math.max(2, Math.round(p.whorls * look.whorls));
   const low = height * 0.16;
   const high = height * 0.9;
+  const coneAt = (y: number): number => (width / 2) * Math.pow(Math.max(0.05, 1 - (y - low * 0.5) / (height - low * 0.5)), 0.95);
+  const trunkAt = (y: number): number => trunkIndex[Math.min(trunkSegs - 1, Math.floor((y / trunkTop) * trunkSegs))] ?? 0;
+  const heights: number[] = [];
   for (let w = 0; w < whorls; w++) {
     const wr = frame.fork(`whorl${w}`);
     const t = w / (whorls - 1);
     const y = low + (high - low) * t + wr.range(-0.15, 0.15) * ((high - low) / whorls);
-    const cone = (width / 2) * Math.pow(Math.max(0.05, 1 - (y - low * 0.5) / (height - low * 0.5)), 0.95);
+    heights.push(y);
+    const cone = coneAt(y);
     const count = t > 0.8 ? 4 : 5 + (wr.next() < 0.5 ? 1 : 0);
     const phase = w * 2.4 + wr.next();
     const onTrunk = trunkIndex[Math.min(trunkSegs - 1, Math.floor((y / trunkTop) * trunkSegs))] ?? 0;
@@ -259,6 +275,22 @@ export function growSpire(p: Resolved<typeof spireParams>, ctx: BuildContext): S
         });
         tips.push({ position: twigEnd, normal: twigDir, size: 0.35 });
       }
+    }
+  }
+  // Short branches between each whorl and the next, set between its limbs, each a short reach of its own.
+  for (let w = 0; w + 1 < heights.length && look.between > 0; w++) {
+    const br = frame.fork(`between${w}`);
+    const y = ((heights[w] as number) + (heights[w + 1] as number)) / 2 + br.range(-0.1, 0.1) * ((high - low) / whorls);
+    const len = Math.max(0.2 * s, coneAt(y) * br.range(0.45, 0.65));
+    const phase = br.next() * Math.PI * 2;
+    for (let j = 0; j < look.between; j++) {
+      const az = phase + (j / look.between) * Math.PI * 2 + br.range(-0.3, 0.3);
+      const dir = normalize([Math.cos(az), 0.05 - p.droop * 0.9, Math.sin(az)]);
+      const start: V3 = [0, y, 0];
+      const end = addScaled(start, dir, len);
+      const r0 = Math.max(0.018 * s, baseRadius * 0.22 * Math.pow(len / (width / 2), 0.6));
+      limbs.push({ start, end, startRadius: r0, endRadius: r0 * 0.3, depth: 1, parent: trunkAt(y) });
+      tips.push({ position: end, normal: dir, size: 0.4 });
     }
   }
   return { limbs, tips };
