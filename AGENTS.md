@@ -35,22 +35,28 @@ You need Node 26, pnpm 10 and a stable Rust toolchain from rustup (put
 | Command | What it does |
 | --- | --- |
 | `pnpm install` | Installs dependencies and points git at `.githooks/` |
-| `pnpm dev` | Builds the engine and opens the app on the start page; `GAIA_PROJECT=/path` opens that folder's world |
+| `pnpm dev` | Builds the engine and opens the app on the start page; `GAIA_PROJECT=/path` opens that folder's world, and `GAIA_PROJECT=proving` the proving ground |
 | `GAIA_JEV=live pnpm dev` | The same, with Jev judging through the Keychain's key (`docs/connect-jev.md`) |
 | `pnpm lab:html out.html` | The lab as one offline page, on Gaia's own world with Jev's kept answers |
 | `pnpm lab:serve` | That page on this Mac's Tailscale address, port 5180, rebuilt on every change |
 | `pnpm shots` | Screenshots of every primitive and world look, from Electron |
 | `pnpm readme-shots` | The README's two screenshots, into `docs/images/` |
 | `pnpm snapshot` | Rewrites `app/renderer/terrain/fixtures/gaia.json`, the code model the standalone lab shows |
+| `pnpm proving` | Rewrites the proving ground's fixtures (`docs/proving-ground.md`) |
 | `pnpm jev-world`, `pnpm compare-jev`, `pnpm print-world-requests` | Jev's kept answers for the snapshot, request designs compared, and every request printed |
 
 The lab page takes `?view=terrain|flora|world` (a debugging view instead of
-the world), `?hour=22`, `?world=sample`, `?judge=stand-in` and
-`?start=table|signpost`. Scripts drive it through `window.__lab`:
+the world), `?hour=22`, `?world=sample`, `?world=proving`, `?judge=stand-in`
+and `?start=table|signpost`. Scripts drive it through `window.__lab`:
 `open(view)`, `hour(h)`, `frames(n)`, `stats()`, and each view's hooks, such
 as `__lab.terrain.walk(x, z, yawDeg, pitchDeg)`, `__lab.terrain.calls()` and
 `__lab.immersive.map(true)`, listed where each lab returns them.
 `tools/readme-shots.ts` is a short example.
+
+Test a change in the proving ground (`?world=proving`) as well as in Gaia's
+own world. It is a made-up codebase whose world holds every feature, from
+thriving to ruin: `__lab.terrain.tour()` lists its stops and
+`__lab.terrain.tour("ruined bridge")` walks to one (`docs/proving-ground.md`).
 
 To prove a live Jev path without spending anything, run the local stand-in
 and point the engine at it. The engine accepts only a loopback endpoint and
@@ -103,7 +109,10 @@ doc in the same commit, and say so in the commit message.
   `app/renderer/terrain/stand.ts`.
 - **Fixtures**: the standalone lab shows `fixtures/gaia.json` (a snapshot of
   this repository) judged by `fixtures/gaia-jev.json`. Regenerate them
-  together, since Jev's kept answers are keyed by each request's hash.
+  together, since Jev's kept answers are keyed by each request's hash. The
+  proving ground's `fixtures/proving.json` and `proving-judged.json` come
+  from `pnpm proving`; its test fails when a new option in `looks.ts` is
+  missing from them, or when its world loses a feature.
 
 ## Adding a primitive
 

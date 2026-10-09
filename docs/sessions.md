@@ -83,10 +83,10 @@ Decision records are numbered when they reach `main`: give a new record the next
 
 ## The proving ground
 
-The World session is building a proving ground: a world built from a synthetic codebase, opened with `?world=proving` in the lab. It contains what Gaia's own world doesn't:
+The proving ground is a world built from a made-up codebase, opened with `?world=proving` in the lab and `GAIA_PROJECT=proving` in the app (`docs/proving-ground.md`). It contains what Gaia's own world doesn't:
 - areas and entities at every vitality, down to ruin
-- bridges and stepping stones over streams
-- every building and landmark kind
-- large and tiny areas
+- footbridges and stepping stones over streams, thriving and in ruin
+- every building and landmark kind, each thriving, tired and in ruin
+- large and tiny areas, and nesting six deep
 
-Every session tests its work there as well as in Gaia's own world.
+Every session tests its work there as well as in Gaia's own world. `__lab.terrain.tour("ruined bridge")` walks to a feature for a screenshot; `__lab.terrain.tour()` lists them.

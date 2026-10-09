@@ -6,7 +6,7 @@
 // ground is packed. No Three.js and no DOM: the bake worker runs it, and the
 // same terrain and request give the same stand on any thread.
 
-import { type BuildingPlan, type RouteSpec, rand } from "@gaia/schema";
+import { type BuildingPlan, type Built, type RouteSpec, rand } from "@gaia/schema";
 import {
   type BuildingSite,
   type Capsule,
@@ -163,6 +163,36 @@ export interface Stand {
   readonly ground: Float32Array;
   /** Which ways each lattice sample lies on and how far along them (`trailPlaces`), two per sample. */
   readonly trailPlaces: Float32Array;
+}
+
+/** The reach of a feature's solid parts in the house's frame, or null when it has none. */
+export function extentOf(feature: Built | undefined): Extent | null {
+  if (feature === undefined) return null;
+  const box = { x0: Infinity, x1: -Infinity, z0: Infinity, z1: -Infinity };
+  for (const part of feature.parts) {
+    if (part.collision !== "solid") continue;
+    for (let i = 0; i < part.positions.length; i += 3) {
+      const x = part.positions[i] as number;
+      const z = part.positions[i + 2] as number;
+      box.x0 = Math.min(box.x0, x);
+      box.x1 = Math.max(box.x1, x);
+      box.z0 = Math.min(box.z0, z);
+      box.z1 = Math.max(box.z1, z);
+    }
+  }
+  return Number.isFinite(box.x0) ? box : null;
+}
+
+/** How far a landmark reaches at the ground: its standing pieces within a meter of it, at most 10 m. Fallen stone that grows in at its foot is walked over, so it does not count. */
+export function landmarkBase(built: Pick<Built, "parts">): number {
+  let base = 1;
+  for (const part of built.parts) {
+    for (let k = 0; k < part.positions.length; k += 3) {
+      if ((part.channels.grow?.[k / 3] ?? 0) > 0) continue;
+      if ((part.positions[k + 1] as number) < 1) base = Math.max(base, Math.hypot(part.positions[k] as number, part.positions[k + 2] as number));
+    }
+  }
+  return Math.min(base, 10);
 }
 
 /** The middle of a building's door along its front wall, in its own frame. */

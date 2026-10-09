@@ -38,3 +38,4 @@ One file per decision the reviewer settled in the pair sessions that designed Ga
 - [This repository becomes Gaia](34-this-repository-becomes-gaia.md)
 - [One field sheet: the map, the minimap and what a thing says](35-one-field-sheet.md)
 - [One system for wind, gravity and vitality](36-one-system-for-wind-gravity-and-vitality.md)
+- [A proving ground with everything in it](37-a-proving-ground.md)
