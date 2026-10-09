@@ -90,9 +90,10 @@ interface Nearest {
   depth: number;
 }
 
-function nearest(stations: readonly Station[], x: number, z: number): Nearest {
+/** The nearest point to (x, z) on the segments from station `i` to `i + 1`, for each `i` of `segments` (ascending), with the stream there. */
+function nearest(stations: readonly Station[], segments: readonly number[], x: number, z: number): Nearest {
   let best: Nearest = { distance: Infinity, level: 0, halfWidth: 0, depth: 0 };
-  for (let i = 0; i + 1 < stations.length; i++) {
+  for (const i of segments) {
     const a = stations[i] as Station;
     const b = stations[i + 1] as Station;
     const abx = b.x - a.x;
@@ -112,20 +113,58 @@ function nearest(stations: readonly Station[], x: number, z: number): Nearest {
   return best;
 }
 
+/**
+ * The stream's segments by square cells `reach` wide: each cell lists, in
+ * order, every segment within `reach` of any point in it. Only a point that
+ * near a segment is carved, and its nearest segment is then always among
+ * its cell's, so searching those alone finds the very segment a search of
+ * every segment would.
+ */
+function segmentCells(stations: readonly Station[], reach: number): { readonly at: (x: number, z: number) => readonly number[] | undefined } {
+  const cells = new Map<number, number[]>();
+  const key = (cx: number, cz: number): number => (cz + 0x8000) * 0x10000 + (cx + 0x8000);
+  for (let i = 0; i + 1 < stations.length; i++) {
+    const a = stations[i] as Station;
+    const b = stations[i + 1] as Station;
+    for (let cz = Math.floor((Math.min(a.z, b.z) - reach) / reach); cz <= Math.floor((Math.max(a.z, b.z) + reach) / reach); cz++) {
+      for (let cx = Math.floor((Math.min(a.x, b.x) - reach) / reach); cx <= Math.floor((Math.max(a.x, b.x) + reach) / reach); cx++) {
+        const k = key(cx, cz);
+        const list = cells.get(k);
+        if (list === undefined) cells.set(k, [i]);
+        else list.push(i);
+      }
+    }
+  }
+  return { at: (x, z) => cells.get(key(Math.floor(x / reach), Math.floor(z / reach))) };
+}
+
 /** Cuts the channel and its banks into `heights`, and records the water level where the banks contain it. */
 export function carveStream(l: Lattice, heights: Float32Array, level: Float32Array, stream: SolvedStream): void {
-  const reach = Math.max(...stream.stations.map((s) => s.halfWidth)) + BANK_REACH;
-  const xs = stream.stations.map((s) => s.x);
-  const zs = stream.stations.map((s) => s.z);
+  let widest = 0;
+  for (const s of stream.stations) widest = Math.max(widest, s.halfWidth);
+  const reach = widest + BANK_REACH;
+  const cells = segmentCells(stream.stations, reach);
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minZ = Infinity;
+  let maxZ = -Infinity;
+  for (const s of stream.stations) {
+    minX = Math.min(minX, s.x);
+    maxX = Math.max(maxX, s.x);
+    minZ = Math.min(minZ, s.z);
+    maxZ = Math.max(maxZ, s.z);
+  }
   const toIndex = (w: number): number => (w - l.origin) / l.spacing;
-  const x0 = Math.max(0, Math.floor(toIndex(Math.min(...xs) - reach)));
-  const x1 = Math.min(l.n - 1, Math.ceil(toIndex(Math.max(...xs) + reach)));
-  const z0 = Math.max(0, Math.floor(toIndex(Math.min(...zs) - reach)));
-  const z1 = Math.min(l.n - 1, Math.ceil(toIndex(Math.max(...zs) + reach)));
+  const x0 = Math.max(0, Math.floor(toIndex(minX - reach)));
+  const x1 = Math.min(l.n - 1, Math.ceil(toIndex(maxX + reach)));
+  const z0 = Math.max(0, Math.floor(toIndex(minZ - reach)));
+  const z1 = Math.min(l.n - 1, Math.ceil(toIndex(maxZ + reach)));
   for (let iz = z0; iz <= z1; iz++) {
     for (let ix = x0; ix <= x1; ix++) {
       const i = iz * l.n + ix;
-      const s = nearest(stream.stations, worldOf(l, ix), worldOf(l, iz));
+      const segments = cells.at(worldOf(l, ix), worldOf(l, iz));
+      if (segments === undefined) continue;
+      const s = nearest(stream.stations, segments, worldOf(l, ix), worldOf(l, iz));
       const h = heights[i] as number;
       if (s.distance < s.halfWidth) {
         const profile = 1 - (s.distance / s.halfWidth) ** 2;
