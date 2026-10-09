@@ -45,3 +45,4 @@ One file per decision the reviewer settled in the pair sessions that designed Ga
 - [Grass, ground and water answer vitality](41-grass-ground-and-water-answer-vitality.md)
 - [The field map shows health, letters like a survey and draws each kind](42-the-field-map-shows-health.md)
 - [A page for every thing, said in a schema Jev can change](43-a-page-for-every-thing.md)
+- [A minimap that turns with you, and a compass that points north](44-a-minimap-that-turns-and-a-compass.md)
