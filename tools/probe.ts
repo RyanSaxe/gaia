@@ -8,6 +8,9 @@
 //   frozen, what each step changes in the detail drawn, against the wind's
 //   own change over half a second. A step above the wind is a pop.
 // - hitch: the app's smoothness probe over a real walk.
+// - swap: the swap test. For every flora preset at vitality 1, 0.5 and 0.15,
+//   by day and at 22:00, the frame where its full form leaves the band and
+//   its far form stands alone, against the wind's half-second change.
 // - stress: a world with five times the trees.
 //
 // The window stays hidden, at exactly the size asked for, except for the walk
@@ -15,7 +18,7 @@
 // pace, so it shows then, without taking focus; leave it uncovered. Timings
 // are only worth comparing from a quiet machine: other work on the GPU or CPU
 // makes them noisy, so the probe prints the load average it ran at.
-// Usage: pnpm probe [drawn] [steps] [hitch] [stress] [--world gaia|proving]
+// Usage: pnpm probe [drawn] [steps] [hitch] [stress] [swap] [--world gaia|proving]
 //          [--spot NAME] [--dpr 1|2] [--json FILE]
 // A spot is "valley", "turned" or a tour stop (`__lab.terrain.tour()` lists
 // them, such as "ruined bridge"); --world and --spot may repeat.
@@ -29,7 +32,7 @@ import { parseArgs } from "node:util";
 import { build } from "esbuild";
 import { LAB_BUILD, labBundle, labPage } from "./lab-page.ts";
 
-const MEASURES = ["drawn", "steps", "hitch", "stress"] as const;
+const MEASURES = ["drawn", "steps", "hitch", "stress", "swap"] as const;
 type Measure = (typeof MEASURES)[number];
 
 /** Where each world is measured: by the stream at the valley, turned 120° from it, and the proving ground's woods. */
@@ -95,7 +98,14 @@ for (const [world, preset] of Object.entries(SPOTS)) {
   if (measures.has("hitch")) {
     for (let w = 0; w < HITCH_WINDOWS; w++) calls.push({ key: `hitch ${w}`, shown: true, js: `(${w === 0 ? `${go("valley")}, await __lab.frames(60), ` : ""}await T.wander(10), __lab.smoothness())` });
   }
-  jobs.push({ world, calls });
+  if (calls.length > 1) jobs.push({ world, calls });
+}
+if (measures.has("swap")) {
+  const calls: Call[] = [{ key: "open", js: OPEN }];
+  for (const hour of [15.5, 22]) {
+    calls.push({ key: `swap ${hour}`, js: `(await __lab.hour(${hour}), ${go("valley")}, ${settle}, T.swap().flatMap((name) => [1, 0.5, 0.15].map((vitality) => ({ name, vitality, ...T.swap(name, vitality) }))))` });
+  }
+  jobs.push({ world: "gaia", calls });
 }
 if (measures.has("stress") && (values.world === undefined || values.world.includes("sample"))) {
   // The sample world, replanted with its usual trees and then five times as many.
@@ -205,6 +215,15 @@ for (const [world, calls] of Object.entries(results)) {
       const worst = steps.reduce((a, b) => (b[2] > a[2] ? b : a));
       const pops = steps.filter((s) => s[2] > bar);
       line(`  ${key}: ${steps.length} steps; worst block ${f(worst[2])} at ${f(worst[0], 0)} m; the wind's ${f(typical)} (its median along the walk); ${pops.length} pops${pops.length > 0 ? ` (at ${pops.map((s) => f(s[0], 0)).join(", ")} m)` : ""}`);
+    } else if (key.startsWith("swap ")) {
+      // A step passes when it changes the tree's part of the screen no more than the wind does there in half a second.
+      type Step = { change: { mean: number; worst: number }; wind: { mean: number; worst: number }; distance: number };
+      const rows = value as { name: string; vitality: number; end: Step; middle: Step }[];
+      const over = (s: Step): boolean => s.change.worst > s.wind.worst || s.change.mean > s.wind.mean;
+      const failed = rows.filter((r) => over(r.end) || over(r.middle));
+      line(`  ${key}: ${rows.length - failed.length} of ${rows.length} presets and healths under the wind (mean / worst block over the tree, the step against the wind)`);
+      const say = (s: Step): string => `${f(s.change.mean, 2)} / ${f(s.change.worst)} against ${f(s.wind.mean, 2)} / ${f(s.wind.worst)}`;
+      for (const r of rows) line(`    ${over(r.end) || over(r.middle) ? "over " : "     "} ${r.name.padEnd(16)} ${f(r.vitality, 2)}  middle of the band ${say(r.middle)} at ${f(r.middle.distance, 0)} m; its end ${say(r.end)}`);
     } else if (key.startsWith("hitch ")) {
       const s = value as { medianMs: number; p99Ms: number; maxMs: number; stutters: number };
       line(`  ${key}: median ${f(s.medianMs, 2)} ms, p99 ${f(s.p99Ms, 1)}, max ${f(s.maxMs, 1)}, ${s.stutters} stutters`);

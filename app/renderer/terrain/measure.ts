@@ -74,20 +74,25 @@ export interface Change {
   readonly worst: number;
 }
 
+/** A part of a frame, in pixels: [x0, y0, x1, y1), rows counted as the frame stores them. */
+export type PixelRect = readonly [number, number, number, number];
+
 /**
  * How much the picture changed between two frames of `width` by `height`
- * RGBA pixels. A pop changes one place a lot, so the frame's most-changed
- * block of `block` pixels square tells it apart from change spread thin.
+ * RGBA pixels, over the whole frame or only within `rect`. A pop changes one
+ * place a lot, so the most-changed block of `block` pixels square tells it
+ * apart from change spread thin.
  */
-export function pictureChange(a: Uint8Array, b: Uint8Array, width: number, height: number, block = 64): Change {
+export function pictureChange(a: Uint8Array, b: Uint8Array, width: number, height: number, block = 64, rect?: PixelRect): Change {
   if (a.length !== width * height * 4 || b.length !== a.length) throw new Error(`Frames must both hold ${width}x${height} RGBA pixels.`);
+  const [x0, y0, x1, y1] = rect ?? [0, 0, width, height];
   const cols = Math.ceil(width / block);
   const sums = new Float64Array(cols * Math.ceil(height / block));
   const counts = new Uint32Array(sums.length);
   let total = 0;
-  for (let y = 0; y < height; y++) {
+  for (let y = Math.max(0, y0); y < Math.min(height, y1); y++) {
     const row = Math.floor(y / block) * cols;
-    for (let x = 0; x < width; x++) {
+    for (let x = Math.max(0, x0); x < Math.min(width, x1); x++) {
       const i = (y * width + x) * 4;
       const d = (Math.abs((a[i] as number) - (b[i] as number)) + Math.abs((a[i + 1] as number) - (b[i + 1] as number)) + Math.abs((a[i + 2] as number) - (b[i + 2] as number))) / 3;
       const k = row + Math.floor(x / block);
@@ -97,6 +102,11 @@ export function pictureChange(a: Uint8Array, b: Uint8Array, width: number, heigh
     }
   }
   let worst = 0;
-  sums.forEach((s, k) => (worst = Math.max(worst, s / (counts[k] as number))));
-  return { mean: total / (width * height), worst };
+  let area = 0;
+  sums.forEach((s, k) => {
+    const n = counts[k] as number;
+    area += n;
+    if (n > 0) worst = Math.max(worst, s / n);
+  });
+  return { mean: area > 0 ? total / area : 0, worst };
 }
