@@ -351,8 +351,12 @@ export function buildLeafClumps(p: Resolved<typeof leafClumpsParams>, ctx: Build
   const base = Math.min(0.3 * s + 0.6 * spacing, 0.24 * crown.radius[0]) * p.size * shapeScale * (0.72 + 0.38 * p.fullness);
 
   const clumps: Clump[] = [];
-  // Keep foliage off the ground and clear of the lower trunk, as v1 did.
-  const fork = skel.limbs.reduce((m, l) => (l.depth === 0 ? Math.max(m, l.end[1]) : m), 0);
+  // Keep foliage off the ground and clear of the lower trunk, as v1 did. The
+  // trunk forks where its first bough leaves it: a spire's trunk runs to its
+  // top, but its lowest whorl leaves far below. Roots leaving at the ground
+  // (a great tree's buttresses) are not boughs.
+  const trunkTop = skel.limbs.reduce((m, l) => (l.depth === 0 ? Math.max(m, l.end[1]) : m), 0);
+  const fork = skel.limbs.reduce((m, l) => (l.depth >= 1 && l.start[1] > trunkTop * 0.1 ? Math.min(m, l.start[1]) : m), trunkTop);
   const floor = Math.max(fork * 0.85, 1.2 * s);
   skel.tips.forEach((tip, i) => {
     const cr = r.fork(`tip${i}`);
@@ -360,7 +364,7 @@ export function buildLeafClumps(p: Resolved<typeof leafClumpsParams>, ctx: Build
     const lift = p.shape === "plates" ? 0.25 : 0.15;
     const center = add(addScaled(tip.position, tip.normal, radius * 0.35), [0, radius * lift, 0]);
     center[1] = Math.max(center[1], floor + radius * 0.5);
-    clumps.push({ center, radius, limb: boughs.limbNear(tip.position), r: cr });
+    clumps.push({ center, radius, limb: liftedFrom(boughs, center, tip.position, radius, boughs.limbNear(tip.position)), r: cr });
   });
   // Fill the crown's interior so a full canopy reads as one mass.
   const fill = Math.round(tipCount * Math.max(0, p.fullness - 0.35) * 0.9);
@@ -373,7 +377,7 @@ export function buildLeafClumps(p: Resolved<typeof leafClumpsParams>, ctx: Build
     const radius = base * fr.range(0.8, 1.1);
     const center = addScaled(at, away, radius * 0.25);
     center[1] = Math.max(center[1], floor + radius * 0.5);
-    clumps.push({ center, radius, limb: pick.i, r: fr });
+    clumps.push({ center, radius, limb: liftedFrom(boughs, center, at, radius, pick.i), r: fr });
   }
 
   const spray = SPRAY_CUTS[p.leaf];
@@ -389,6 +393,16 @@ export function buildLeafClumps(p: Resolved<typeof leafClumpsParams>, ctx: Build
   const anchors: Anchor[] = [];
   for (const clump of clumps) emitClump(leaf, twigs, anchors, crown, boughs, clump, look, density);
   return { parts: [twigs.part(), leaf.part()], anchors };
+}
+
+/**
+ * The limb a clump grows from: the one it was placed on, unless the floor
+ * lifted it more than its own radius clear of that point (a weeping tip near
+ * the ground, a low whorl on a spire), when it grows from the limb nearest
+ * it instead, so no twig climbs a metre or more from far below to reach it.
+ */
+function liftedFrom(boughs: Boughs, center: V3, placed: Vec3, radius: number, limb: number): number {
+  return center[1] - placed[1] > radius ? boughs.limbNear(center) : limb;
 }
 
 /** How a crown's or a mound's clumps are built: twigs per square meter of clump, sprays per twig, a spray's half width, its cut, the clump's shape, and the lowest a spray may reach. */
@@ -492,8 +506,10 @@ export function emitClump(leaf: PartBuilder, bark: PartBuilder, anchors: Anchor[
     const fork: V3[] = [from, fgoal];
     emitTwig(bark, fork, r0 * 0.35, r0 * 0.18, twigCh);
     sprays(fork, Math.max(2, Math.round(look.sprays * 0.5 * along)), 0.2);
-    // Flowers and berries hang from the twig just short of its end.
-    const at = pointOnPolyline(line, 0.82).at;
+    // Flowers and berries hang from the twig's tip: a point of the twig itself,
+    // so a bending twig carries them exactly, where a point between its
+    // points would part from it.
+    const at = line[line.length - 1] as V3;
     const b = carry(at);
     anchors.push({ position: at, normal: normalize(lerp(d, crownPlace(crown, at).out, 0.5)), size: clamp(clump.radius / Math.max(look.half * 3, 1e-3), 0, 1), carry: { bough: b.bough, twig: root, droop: b.droop } });
   }
@@ -569,6 +585,9 @@ const canopyShade = (crown: Crown, q: Vec3, ny: number, tint: number): number =>
 
 // ---------- leaf strands ----------
 
+/** Leaves the rest of the 40,000-triangle plant budget for bark and blossoms; every strand also gives blossoms an anchor, so this is less than a crown's clumps take. */
+const STRAND_TRIANGLE_BUDGET = 21_000;
+
 export function buildLeafStrands(p: Resolved<typeof leafStrandsParams>, ctx: BuildContext, skel: Skeleton): Built {
   const out = new PartBuilder("leaf");
   const r = ctx.rand.fork("strands");
@@ -594,9 +613,15 @@ export function buildLeafStrands(p: Resolved<typeof leafStrandsParams>, ctx: Bui
   const leafLen = 0.3 * s;
   const leafWide = 0.085 * s;
   const anchors: Anchor[] = [];
+  // A dense frame thins every strand's chance evenly to stay in budget: each
+  // strand is two ribbons of rows 0.3 m apart, and two sprays at its top.
+  const kept = 0.45 + 0.55 * p.fullness;
+  const perStrand = (h: { at: V3 }): number => 4 * Math.max(3, Math.ceil(Math.min(p.length * 2.2 * s, Math.max(0.3, h.at[1] - 0.2 * s)) / (0.3 * s))) + 4;
+  const wanted = hangs.reduce((n, h) => n + perStrand(h), 0) * kept;
+  const thin = Math.min(1, STRAND_TRIANGLE_BUDGET / Math.max(1, wanted));
   hangs.forEach((h, i) => {
     const sr = r.fork(`strand${i}`);
-    if (sr.next() > 0.45 + 0.55 * p.fullness) return;
+    if (sr.next() > kept * thin) return;
     const fall = Math.min(p.length * 2.2 * s * sr.range(0.7, 1.15), Math.max(0.3, h.at[1] - 0.2 * s));
     const outward = normalize([h.out[0] + sr.range(-0.3, 0.3), 0, h.out[2] + sr.range(-0.3, 0.3)]);
     const drift = fall * 0.12 * sr.range(0.5, 1);
