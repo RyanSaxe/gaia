@@ -356,7 +356,9 @@ const LIFT_FRAMES = 4;
  */
 const FAR_BAKE = { views: 24, ms: 6 } as const;
 /** The sample world's size: the full world, or the small one, to compare the two. */
-const SCALE = ASKED_WORLD === "small" ? SMALL_WORLD : FULL_WORLD;
+/** `?world=sample&size=5000` asks for a sample world of that many meters across, with as many regions as the full one. */
+const ASKED_SIZE = Number(new URLSearchParams(location.search).get("size"));
+const SCALE = ASKED_WORLD === "small" ? SMALL_WORLD : ASKED_SIZE > 0 ? { ...FULL_WORLD, size: ASKED_SIZE } : FULL_WORLD;
 /** The air's density walking, and over the overview, which thins with the world's size so the whole of it stays legible. */
 const FOG = { walk: 0.0042, overview: 0.0008 * Math.min(1, 320 / SCALE.size) };
 /** Seeded builds per flora preset, and the trees the lab plants unless a hook asks otherwise: as dense as the small world's 22 over 320 m. */

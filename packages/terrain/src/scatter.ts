@@ -275,7 +275,8 @@ export function scatterComponents(t: Terrain, rules: readonly ScatterRule[], see
           taken.add({ x, z, radius });
         }
     }
-    out.push(...mine);
+    // One by one: a large world places more of a rule than a call takes arguments.
+    for (const p of mine) out.push(p);
   }
   return out;
 }
