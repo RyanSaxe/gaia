@@ -65,6 +65,24 @@ const cutsKnown = (part: Part): boolean =>
   part.cutout.length === part.shade.length * 3 &&
   part.cutout.every((x, i) => Number.isFinite(x) && (i % 3 !== 0 || Math.abs(x) <= 1) && (i % 3 !== 2 || CUTS.has(Math.floor(x))));
 
+/** Swatches the renderer draws front faces only (CLOSED in @gaia/render), so a triangle wound inward shows the far wall's inside. */
+const CLOSED = new Set(["bark", "stone"]);
+/** How many of a part's triangles are wound counter-clockwise seen from the side its vertex normals point to. */
+function outwardTriangles(part: Part): number {
+  const p = part.positions;
+  const n = part.normals;
+  let out = 0;
+  for (let t = 0; t < part.indices.length; t += 3) {
+    const [a, b, c] = [part.indices[t] as number, part.indices[t + 1] as number, part.indices[t + 2] as number];
+    const e = [0, 1, 2].map((k) => (p[b * 3 + k] as number) - (p[a * 3 + k] as number));
+    const f = [0, 1, 2].map((k) => (p[c * 3 + k] as number) - (p[a * 3 + k] as number));
+    const face = [(e[1] as number) * (f[2] as number) - (e[2] as number) * (f[1] as number), (e[2] as number) * (f[0] as number) - (e[0] as number) * (f[2] as number), (e[0] as number) * (f[1] as number) - (e[1] as number) * (f[0] as number)];
+    const facing = [0, 1, 2].reduce((sum, k) => sum + (face[k] as number) * ((n[a * 3 + k] as number) + (n[b * 3 + k] as number) + (n[c * 3 + k] as number)), 0);
+    if (facing > 0) out++;
+  }
+  return out;
+}
+
 describe("manifest", () => {
   it("lists every exported primitive", () => {
     const exported = (Object.values(primitivesModule) as unknown[]).filter(
@@ -109,6 +127,18 @@ describe.each(PRIMITIVES.map((p) => [p.id, p] as const))("%s", { timeout: 20_000
           expect(part.tint.every((x) => x >= -0.1 && x <= 0.1)).toBe(true);
           expect(cutsKnown(part)).toBe(true);
           expect(part.indices.length / 3).toBeLessThanOrEqual(TRIANGLE_BUDGET);
+        }
+      }
+    }
+  });
+
+  it("winds bark and stone with their front faces outward", () => {
+    for (const s of samples(p)) {
+      for (const input of inputFor(p).slice(0, 2)) {
+        for (const part of (build(p, s, input, 5) as Built).parts as Part[]) {
+          if (!CLOSED.has(part.swatch)) continue;
+          const tris = part.indices.length / 3;
+          expect(outwardTriangles(part) / Math.max(1, tris)).toBeGreaterThan(0.9);
         }
       }
     }
