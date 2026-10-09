@@ -14,7 +14,7 @@
 
 import * as THREE from "three";
 import type { Part, Swatch } from "@gaia/schema";
-import { type Realized, detailAt, mergeParts } from "@gaia/realize";
+import { FLUTTERS, type Realized, detailAt, mergeParts } from "@gaia/realize";
 import type { SceneLight } from "./light.ts";
 import { DEPTH_FRAG, DEPTH_VERT, FOLIAGE, PLANT_FRAG, PLANT_VERT, type PlantView, geometryOf, sprayColors } from "./plant.ts";
 
@@ -204,7 +204,7 @@ export function createPlantInstances(plant: Realized, light: SceneLight, spots: 
     if (hit !== undefined) return hit;
     const swatch: Swatch = plant.palette.swatches[part.swatch] ?? { healthy: [1, 0, 1], decline: [1, 0, 1] };
     const foliage = FOLIAGE[part.swatch] ?? 0.5;
-    const perPart = { uFlutter: { value: foliage === 0 ? 0 : 1 } };
+    const perPart = { uFlutter: { value: FLUTTERS.has(part.swatch) ? 1 : 0 } };
     const made = {
       color: new THREE.ShaderMaterial({
         vertexShader: INSTANCED_VERT,

@@ -95,14 +95,19 @@ bough (`twig`) and the point its piece hangs from (`pivot`).
   slow meander, so a gust rolls through the grass and on into the trees.
   A plant bends level by level: the whole plant from its base by height,
   each bough about its joint, each twig about where it leaves the bough,
-  and each leaf on its stalk, only in a gust. Each level leans downwind
-  with the gust where its joint stands and swings gently about that lean,
-  smaller parts faster, each with its own phase. Every level is a bend
-  that keeps each point's distance from its joint, so a bough curves and
-  never slides, and whatever a joint carries moves with it. Grass,
-  flowers, bushes, trees and smoke read the same gusts. A plant's
-  `sway@1` sets how far it gives and how quickly it swings; calm is the
-  default.
+  and each leaf or flower on its stalk, only in a gust. Each level leans
+  downwind with the gust where its joint stands and swings gently about
+  that lean, smaller parts faster, each with its own phase. Every level
+  turns about one axis per joint, so whatever a joint carries turns as
+  one: a broad leaf, a round stem and a bell keep their shape, and a bough
+  curves and never slides. A turn grows smoothly from its joint and eases
+  toward a most it never passes, so the gustiest world folds nothing into
+  a crease. Past where its turn holds, a long hanging piece swings less
+  and trails, so a willow's strands sway rather than whip. A taller plant
+  is thicker, so its trunk and boughs lean less (`WIND.build`), and a
+  fir's needles are too stiff to flutter (`STIFF`). Grass, flowers,
+  bushes, trees and smoke read the same gusts. A plant's `sway@1` sets how
+  far it gives and how quickly it swings; calm is the default.
 - **Gravity.** Every leaf, flower and twig is carried by its parent: a
   spray's base sits on its twig, a twig grows out of its limb, flowers and
   berries hang on stalks from twigs, a strand hangs from a limb's
@@ -117,7 +122,10 @@ bough (`twig`) and the point its piece hangs from (`pivot`).
 builds every crown on frames of every kind with bark and blossoms, and
 every great tree, healthy, tired and failing (1, 0.5, 0.15), in still air
 and in a gusty world's strongest gust, and finds nothing floating, within
-40,000 triangles a plant (50,000 for a great tree).
+40,000 triangles a plant (50,000 for a great tree). In that gust every
+plant, great tree and drift of wildflowers also keeps its shape: no
+triangle's edge stretches or shrinks by more than a quarter, and none
+turns over.
 
 ## Scale
 
