@@ -277,14 +277,22 @@ export const season = primitive({
 
 // ---------- wind ----------
 
+const WIND_LEVELS = { "still air": 0.25, "light airs": 0.6, breezy: 1, gusty: 1.55 } as const;
+
 export const wind = primitive({
   id: "wind@1",
   role: "Wind",
   doc: "The wind that moves everything in the world.",
   params: {
-    strength: t.scale("How hard the wind blows", { "still air": 0.25, "light airs": 0.6, breezy: 1, gusty: 1.55 }),
+    strength: t.scale("How hard the wind blows", WIND_LEVELS),
   },
-  build: (p) => ({ strength: p.strength, gust: Math.max(0, (p.strength - 0.6) * 0.9) }),
+  build: (p) => {
+    // A world blows exactly its level: every plant is tuned at breezy, and one
+    // seed realizes every world's sky, so a seeded spread would only shift
+    // every world's breeze alike.
+    const strength = Object.values(WIND_LEVELS).reduce((a, b) => (Math.abs(b - p.strength) < Math.abs(a - p.strength) ? b : a));
+    return { strength, gust: Math.max(0, (strength - 0.6) * 0.9) };
+  },
 });
 
 export const WORLD_PRIMITIVES = [daylight, sky, season, wind];
