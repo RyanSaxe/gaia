@@ -37,8 +37,8 @@ const SPOTS = {
   gaia: ["valley", "turned"],
   proving: ["valley", "thriving grove", "large area"],
 } as const;
-/** How far the walk test walks from each spot, and its step: half a second at walking pace. */
-const WALK = { meters: 150, step: 0.7 };
+/** How far the walk test walks from each spot, its step (half a second at walking pace), and the wind's moment, so every run sees the same wind. */
+const WALK = { meters: 150, step: 0.7, at: 100 };
 /**
  * The least change a step's worst block must make to count as a pop, in
  * 8-bit levels: below it, as in a view of open water and short grass where
@@ -90,7 +90,7 @@ for (const [world, preset] of Object.entries(SPOTS)) {
   const calls: Call[] = [{ key: "open", js: OPEN }];
   for (const spot of spots) {
     if (measures.has("drawn")) calls.push({ key: `drawn ${spot}`, js: `(${go(spot)}, ${settle}, { ms: ${bench}, drawn: T.drawn() })` });
-    if (measures.has("steps")) calls.push({ key: `steps ${spot}`, js: `(${go(spot)}, ${settle}, T.steps(${WALK.meters}, ${WALK.step}))` });
+    if (measures.has("steps")) calls.push({ key: `steps ${spot}`, js: `(${go(spot)}, ${settle}, T.steps(${WALK.meters}, ${WALK.step}, ${WALK.at}))` });
   }
   if (measures.has("hitch")) {
     for (let w = 0; w < HITCH_WINDOWS; w++) calls.push({ key: `hitch ${w}`, shown: true, js: `(${w === 0 ? `${go("valley")}, await __lab.frames(60), ` : ""}await T.wander(10), __lab.smoothness())` });

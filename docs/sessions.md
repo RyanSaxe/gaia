@@ -53,6 +53,8 @@ and leaves the change to that session.
 
 **Where a trunk meets the ground** is Components' (the tree's root flare). Seating a tree on a slope is World's (the stand).
 
+**Copies of a plant are split the same way.** How a plant looks at every level of detail, and later its far form, is Components' (`instances.ts`). Which copies draw, in which form and at which level, in each pass, is World's (`app/renderer/terrain/woods.ts`).
+
 ## Shared contracts
 
 These belong to no single session:

@@ -74,7 +74,7 @@ build.
 | `@gaia/kinds` | The flora, structure, rock, wildflowers, landmark, link, biome and world kinds | schema |
 | `@gaia/world` | The question planner, answer rules, context gathering, file and entity vitality, type-space tools, `WorldChange`, and the world laid out from code: the code graph, the requests Jev answers about it, the stand-in judge, the division of the land and the layout | schema, terrain (the land's division rule) |
 | `@gaia/realize` | Blueprint to parts, world and region looks at an hour, the light between a day's keys, the sky and air references, presets, channel math, detail by distance | schema, primitives |
-| `@gaia/render` | Three.js materials, light and shadow, and instanced copies of a component, culled by cell and thinned by distance | schema, realize, three |
+| `@gaia/render` | Three.js materials, light and shadow, and instanced copies of a component at each level of detail | schema, realize, three |
 | `@gaia/terrain` | Relief composition, the baked heightfield, water, the endless wild land past the rim and the ground's height anywhere, walking, wading and swimming, a walker's gait (easing, grade, the eyes' ride over the ground and footbridge decks), the solids that stop a walk and the way around them, sight lines, where plants, the understory and landmarks stand, the routes of trails, how land divides into cells (`siteAt`), where a point is (its area and the file underfoot, `placeAt`, and every area's and patch's outline, `outlinesOf`), and whose ground it is and how alive (`groundOwners`, `ownershipOf`, `groundLook`) | schema, primitives, realize |
 | `@gaia/app` | Electron main, preload, world service, and the renderer (the lab) | Every package |
 
@@ -608,13 +608,16 @@ heart (`CUT.core`) also leaves near the eye, shrinking to its center by its
 own size (`CORE_NEAR` in `packages/render/src/plant.ts`), in the view only:
 its shadow stays, so the shade under a fir never changes as a person walks.
 
-`createPlantInstances` in `@gaia/render` sorts copies into 32 m cells. Before
-each pass (the sun's shadow, the water's mirror, the view) the scene's
-`onBeforeRender` calls `cull` with that pass's camera, which packs only the
-cells the camera sees into each level's instance buffer. A cell draws a
-coarser level only when its nearest point is past that level's distance, where
-every piece the level leaves out has already left on screen, so the two draw
-the same pixels.
+`createPlantInstances` in `@gaia/render` draws many copies of one plant, one
+instanced mesh per part and level, and `draw` packs the copies it is given
+into each level's instance buffer. Which copies draw, and at which level, is
+the terrain lab's (`createCopies` in `app/renderer/terrain/woods.ts`): it sorts
+copies into 32 m cells, and before each pass (the sun's shadow, the water's
+mirror, the view) the scene's `onBeforeRender` calls `cull` with that pass's
+camera, which draws only the cells the camera sees. A cell draws a coarser
+level only when its nearest point is past that level's distance, where every
+piece the level leaves out has already left on screen, so the two draw the
+same pixels.
 
 ## Time
 

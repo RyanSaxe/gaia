@@ -14,10 +14,11 @@ import type * as THREE from "three";
 import { type GroundSpec, type Library, blueprintOf, seedOf } from "@gaia/schema";
 import { biome, flora } from "@gaia/kinds";
 import { type Realized, realize, realizeRegion } from "@gaia/realize";
-import { type InstanceSpot, type PlantInstances, type SceneLight, createPlantInstances } from "@gaia/render";
+import type { InstanceSpot, SceneLight } from "@gaia/render";
 import { NO_SHIFT, hex } from "@gaia/primitives";
 import { type Terrain, wildHash, wildHeightAt, wildNoise, wildPast } from "@gaia/terrain";
 import type { RegionCovers } from "./regions.ts";
+import { type Copies, createCopies } from "./woods.ts";
 
 export const WILD_GROWTH = {
   /** The world grid thickets stand on, meters, and the chance a cell holds one. */
@@ -73,7 +74,7 @@ const WILD_BUSHES = [
 
 export interface WildGrowth {
   /** Every instanced blueprint, for culling each pass, warming and the sun's shadow. */
-  readonly all: () => readonly PlantInstances[];
+  readonly all: () => readonly Copies[];
   /** Takes on a new bake: stands the bushes again around the anchor. */
   update(t: Terrain): void;
   /** Called every frame the person walks: the anchor jumps to them once they are far from it. */
@@ -175,7 +176,7 @@ export function createWildGrowth(scene: THREE.Scene, light: SceneLight, covers: 
   covers.wild(wildGround(biomeLib));
   const plants: Realized[] = WILD_BUSHES.map((bp, i) => realize(bp, flora, floraLib, { seed: seedOf(`wilds/bush-${i}`), facts: { scale: 1, age: 120 } }));
   const views = plants.map((p) => {
-    const view = createPlantInstances(p, light, []);
+    const view = createCopies(p, light, []);
     scene.add(view.object);
     return view;
   });
@@ -183,7 +184,7 @@ export function createWildGrowth(scene: THREE.Scene, light: SceneLight, covers: 
   const cache = new Map<string, ReturnType<typeof thicketIn>>();
   const anchor = { x: 0, z: 0 };
   /** Respots still to make, one blueprint a frame, so a jump never costs one frame much. */
-  let queue: { view: PlantInstances; spots: InstanceSpot[] }[] = [];
+  let queue: { view: Copies; spots: InstanceSpot[] }[] = [];
   const stand = (t: Terrain, now: boolean): void => {
     const spots = wildSpots(t, anchor.x, anchor.z, views.length, cache);
     queue = views.map((view, i) => ({ view, spots: spots[i] ?? [] }));

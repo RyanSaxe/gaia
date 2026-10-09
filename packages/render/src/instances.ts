@@ -5,12 +5,10 @@
 // plant shader uses most of WebGL's 16 attribute slots, so vitality, hue and
 // seed ride in the instance matrix's unused bottom row.
 //
-// Copies are sorted into square cells. Before every pass (the view, the sun's
-// shadow and the water's mirror) `cull` packs the cells that pass's camera
-// can see into each level's instance buffer, so no pass draws what it cannot
-// see. A coarser level leaves out whole pieces (`detailAt` in @gaia/realize),
-// and a cell draws it only once every piece it leaves out has already left
-// on screen at the cell's nearest point, so the switch changes no pixel.
+// Each level of detail leaves out whole pieces (`detailAt` in @gaia/realize).
+// Which copies draw, and at which level, is chosen before every pass by the
+// one who stands the copies (the terrain lab's woods): `draw` packs the
+// copies it is given into each level's instance buffer.
 
 import * as THREE from "three";
 import type { Part, Swatch } from "@gaia/schema";
@@ -34,42 +32,47 @@ export interface InstanceSpot {
   readonly seed?: number;
 }
 
-/** How copies choose their detail: by distance from the eye, or forced, to prove that the switch never shows. */
-export type DetailMode = "auto" | "full" | "far";
-
-/** The side of a cell, in meters. */
-export const INSTANCE_CELL = 32;
 /** Distances from which a coarser level may draw. */
 const LEVEL_AT = [48, 96, 192, 384, 768] as const;
 const MAX_LEVELS = 3;
 /** A level must leave out at least half the triangles of the level before it to earn its draw calls. */
 const LEVEL_GAIN = 0.5;
-/** Meters a cell's nearest point must lie past a level's distance before it draws that level. */
-const LEVEL_MARGIN = 0.5;
+
+/** The copies one level draws in a pass, and a name for that choice: the same name again draws without repacking. */
+export interface LevelCopies {
+  readonly copies: readonly number[];
+  readonly key: string;
+}
 
 export interface PlantInstances extends PlantView {
   readonly count: number;
-  /** The distance from which each level draws, starting with 0 for the full detail. */
+  /**
+   * The distance from which each level may draw, starting with 0 for the
+   * full detail: every piece a level leaves out has already left on screen
+   * at that distance.
+   */
   readonly levels: readonly number[];
+  /** Encloses the plant as built, at scale 1 where it stands, so no piece's center lies outside it. */
+  readonly built: THREE.Sphere;
+  /** How much farther than `built` the plant reaches as drawn: wind, decline and far pieces growing toward a pixel's size. */
+  readonly reach: number;
   /** Sets one copy's vitality; the shader reads it per instance. */
   setVitalityAt(index: number, v: number): void;
-  /** Draws, in the pass about to render through `camera`, only the cells it can see, each at the detail its distance from the eye allows. */
-  cull(camera: THREE.Camera): void;
+  /** Draws, in the pass about to render, the copies given for each level, packed into its instance buffer; levels not given draw nothing. */
+  draw(levels: readonly LevelCopies[]): void;
   /**
    * Readies every level to draw one copy, so the next render uploads every
    * geometry at once, while a loading screen or a rebake already holds the
-   * frame, never later as a level first comes into view. The next `cull` undoes it.
+   * frame, never later as a level first comes into view. The next `draw` undoes it.
    */
   warm(): void;
   /**
    * Moves the copies to new spots, as many as there are: a world's new bake
    * stands the same blueprints elsewhere. The geometry, its levels and the
-   * materials stay, so this costs only the copies' matrices and cells.
+   * materials stay, so this costs only the copies' matrices.
    */
   respot(spots: readonly InstanceSpot[]): void;
-  /** How copies choose their detail; "auto" outside of tests. */
-  detail: DetailMode;
-  /** Copies and triangles the last culled pass drew. */
+  /** Copies and triangles the last pass drew. */
   drawn(): { copies: number; triangles: number };
 }
 
@@ -113,21 +116,14 @@ function levelsOf(parts: readonly Part[]): { at: number; parts: readonly Part[] 
   return levels;
 }
 
-interface Cell {
-  /** Indices of the copies standing in the cell. */
-  readonly copies: readonly number[];
-  /** Encloses every copy as drawn, wind and growth included: for culling. */
-  readonly bounds: THREE.Sphere;
-  /** Encloses every copy as built, so no piece's center lies outside it: for choosing detail. */
-  readonly built: THREE.Sphere;
-}
-
 interface Level {
   readonly at: number;
   readonly meshes: { mesh: THREE.InstancedMesh; color: THREE.ShaderMaterial; depth: THREE.ShaderMaterial; triangles: number }[];
-  /** One instance buffer every part of the level shares, and which cells it holds now. */
+  /** One instance buffer every part of the level shares, and the name of the choice of copies it holds now. */
   attribute: THREE.InstancedBufferAttribute;
   key: string;
+  /** The copies' data as packed: a copy's change since repacks the level. */
+  generation: number;
 }
 
 export function createPlantInstances(plant: Realized, light: SceneLight, spots: readonly InstanceSpot[]): PlantInstances {
@@ -147,10 +143,9 @@ export function createPlantInstances(plant: Realized, light: SceneLight, spots: 
   // and far pieces grow toward a pixel's size: the drawn bounds allow for all.
   const reach = 3 + 0.15 * height;
 
-  // Every copy's matrix, with vitality, hue and seed in its bottom row, and the cells they stand in.
+  // Every copy's matrix, with vitality, hue and seed in its bottom row.
   let count = 0;
   let source = new Float32Array(16);
-  let cells: Cell[] = [];
   const matrix = new THREE.Matrix4();
   const shear = new THREE.Matrix4();
   const turn = new THREE.Matrix4();
@@ -167,27 +162,6 @@ export function createPlantInstances(plant: Realized, light: SceneLight, spots: 
       matrix.elements[11] = s.seed ?? (((Math.sin(s.x * 12.9898 + s.z * 78.233) * 43758.5453) % 1) + 1) % 1;
       source.set(matrix.elements, k * 16);
     });
-    const byCell = new Map<string, number[]>();
-    next.forEach((s, k) => {
-      const key = `${Math.floor(s.x / INSTANCE_CELL)},${Math.floor(s.z / INSTANCE_CELL)}`;
-      const list = byCell.get(key);
-      if (list === undefined) byCell.set(key, [k]);
-      else list.push(k);
-    });
-    const center = new THREE.Vector3();
-    const size = new THREE.Vector3();
-    cells = [];
-    for (const copies of byCell.values()) {
-      const built = new THREE.Box3();
-      for (const k of copies) {
-        const s = next[k] as InstanceSpot;
-        const tilt = 1 + Math.hypot(...(s.slope ?? [0, 0]));
-        center.copy(sphere.center).multiplyScalar(s.scale).add(point.set(s.x, s.y, s.z));
-        built.union(new THREE.Box3().setFromCenterAndSize(center, size.setScalar(sphere.radius * 2 * s.scale * tilt)));
-      }
-      const b = built.getBoundingSphere(new THREE.Sphere());
-      cells.push({ copies, built: b, bounds: new THREE.Sphere(b.center.clone(), b.radius + reach) });
-    }
   };
   place(spots);
 
@@ -246,6 +220,7 @@ export function createPlantInstances(plant: Realized, light: SceneLight, spots: 
       at,
       attribute,
       key: "",
+      generation: -1,
       meshes: parts.flatMap((part) => {
         if (part.indices.length === 0) return [];
         const { color, depth } = materialFor(part);
@@ -260,46 +235,21 @@ export function createPlantInstances(plant: Realized, light: SceneLight, spots: 
     };
   });
 
-  let detail: DetailMode = "auto";
   let lastDrawn = { copies: 0, triangles: 0 };
   /** Bumped whenever a copy's data changes, so the next pass repacks. */
   let generation = 0;
-  const frustum = new THREE.Frustum();
-  const viewProjection = new THREE.Matrix4();
-  const chosen: number[][] = levels.map(() => []);
 
-  const levelFor = (cell: Cell): number => {
-    if (detail === "full") return 0;
-    if (detail === "far") return levels.length - 1;
-    const near = cell.built.center.distanceTo(light.uEye.value) - cell.built.radius;
-    let pick = 0;
-    for (let k = 1; k < levels.length; k++) if ((levels[k] as Level).at <= near - LEVEL_MARGIN) pick = k;
-    return pick;
-  };
-
-  const cull = (camera: THREE.Camera): void => {
-    frustum.setFromProjectionMatrix(viewProjection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
-    for (const list of chosen) list.length = 0;
-    cells.forEach((cell, i) => {
-      if (frustum.intersectsSphere(cell.bounds)) (chosen[levelFor(cell)] as number[]).push(i);
-    });
+  const draw = (chosen: readonly LevelCopies[]): void => {
     let copies = 0;
     let triangles = 0;
     levels.forEach((level, k) => {
-      const picked = chosen[k] as number[];
-      const key = `${generation}:${picked.join(",")}`;
-      let n = 0;
-      if (level.key !== key) {
-        for (const i of picked) {
-          for (const c of (cells[i] as Cell).copies) {
-            level.attribute.array.set(source.subarray(c * 16, c * 16 + 16), n * 16);
-            n++;
-          }
-        }
+      const picked = chosen[k];
+      const n = picked?.copies.length ?? 0;
+      if (picked !== undefined && (level.key !== picked.key || level.generation !== generation)) {
+        picked.copies.forEach((c, i) => level.attribute.array.set(source.subarray(c * 16, c * 16 + 16), i * 16));
         level.attribute.needsUpdate = true;
-        level.key = key;
-      } else {
-        for (const i of picked) n += (cells[i] as Cell).copies.length;
+        level.key = picked.key;
+        level.generation = generation;
       }
       for (const m of level.meshes) {
         m.mesh.count = n;
@@ -325,17 +275,13 @@ export function createPlantInstances(plant: Realized, light: SceneLight, spots: 
       return count;
     },
     levels: levels.map((l) => l.at),
+    built: sphere,
+    reach,
     get triangles() {
       return perCopy * count;
     },
     get vitality() {
       return all;
-    },
-    get detail() {
-      return detail;
-    },
-    set detail(mode: DetailMode) {
-      detail = mode;
     },
     setVitality(v) {
       all = Math.min(1, Math.max(0, v));
@@ -346,7 +292,7 @@ export function createPlantInstances(plant: Realized, light: SceneLight, spots: 
       write(index, Math.min(1, Math.max(0, v)));
       generation++;
     },
-    cull,
+    draw,
     respot(next) {
       place(next);
       for (const level of levels) {
