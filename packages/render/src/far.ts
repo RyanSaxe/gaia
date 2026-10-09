@@ -33,8 +33,8 @@ export interface FarForm {
   readonly bytes: number;
   /** How long the bake took, milliseconds. */
   readonly ms: number;
-  /** @internal The card's textures and motion. */
-  readonly atlas: { readonly layers: readonly THREE.Texture[]; readonly frame: number; readonly sway: number; readonly frequency: number };
+  /** @internal The card's textures and motion, and the targets the bake drew them into (none for a form read from storage). */
+  readonly atlas: { readonly layers: readonly THREE.Texture[]; readonly frame: number; readonly sway: number; readonly frequency: number; readonly targets?: readonly THREE.WebGLRenderTarget[] };
   dispose(): void;
 }
 
@@ -336,7 +336,7 @@ export function startFarBake(renderer: THREE.WebGLRenderer, plant: Realized, fra
       bounds: { center: sphere.center.clone(), radius, height },
       bytes,
       ms: spent,
-      atlas: { layers: layers.map((l) => l.texture), frame: framePx, sway: plant.motion.sway, frequency: plant.motion.frequency },
+      atlas: { layers: layers.map((l) => l.texture), frame: framePx, sway: plant.motion.sway, frequency: plant.motion.frequency, targets: layers },
       dispose: () => {
         for (const l of layers) l.dispose();
       },
@@ -380,6 +380,70 @@ export function bakeFarForm(renderer: THREE.WebGLRenderer, plant: Realized, fram
   let form: FarForm | null = null;
   while (form === null) form = bake.step(Number.POSITIVE_INFINITY);
   return form;
+}
+
+/**
+ * The bake's version: a far form stored by an earlier version must be baked
+ * again. Bump it whenever what a bake writes, or how a card reads it, changes.
+ */
+export const FAR_BAKE_VERSION = 1;
+
+/** A far form as plain data, to store: its bounds and motion, and each atlas's full-size level, row by row from the bottom. */
+export interface FarFormData {
+  readonly version: number;
+  readonly bounds: { readonly center: readonly [number, number, number]; readonly radius: number; readonly height: number };
+  readonly frame: number;
+  readonly sway: number;
+  readonly frequency: number;
+  /** Each atlas's width and height in texels. */
+  readonly width: number;
+  readonly height: number;
+  readonly layers: readonly Uint8Array[];
+}
+
+/**
+ * Reads a baked form back to store it, once, without stalling: each atlas's
+ * full-size level only, since its mipmaps are made again on load.
+ */
+export async function farFormData(renderer: THREE.WebGLRenderer, form: FarForm): Promise<FarFormData> {
+  const targets = form.atlas.targets;
+  if (targets === undefined) throw new Error("farFormData reads a form just baked; this one was read from storage.");
+  const first = targets[0] as THREE.WebGLRenderTarget;
+  const width = first.width;
+  const height = first.height;
+  const layers = await Promise.all(
+    targets.map(async (target) => {
+      const out = new Uint8Array(width * height * 4);
+      await renderer.readRenderTargetPixelsAsync(target, 0, 0, width, height, out);
+      return out;
+    }),
+  );
+  const c = form.bounds.center;
+  return { version: FAR_BAKE_VERSION, bounds: { center: [c.x, c.y, c.z], radius: form.bounds.radius, height: form.bounds.height }, frame: form.atlas.frame, sway: form.atlas.sway, frequency: form.atlas.frequency, width, height, layers };
+}
+
+/** A far form rebuilt from stored data, its atlases filtered and mipmapped as a bake's are; null when the data is from another version of the bake. */
+export function farFormFrom(data: FarFormData): FarForm | null {
+  if (data.version !== FAR_BAKE_VERSION) return null;
+  const layers = data.layers.map((pixels) => {
+    const t = new THREE.DataTexture(pixels, data.width, data.height, THREE.RGBAFormat, THREE.UnsignedByteType);
+    t.minFilter = THREE.LinearMipmapLinearFilter;
+    t.magFilter = THREE.LinearFilter;
+    t.generateMipmaps = true;
+    t.flipY = false;
+    t.needsUpdate = true;
+    return t;
+  });
+  const [x, y, z] = data.bounds.center;
+  return {
+    bounds: { center: new THREE.Vector3(x, y, z), radius: data.bounds.radius, height: data.bounds.height },
+    bytes: Math.round(data.width * data.height * 4 * layers.length * (4 / 3)),
+    ms: 0,
+    atlas: { layers, frame: data.frame, sway: data.sway, frequency: data.frequency },
+    dispose: () => {
+      for (const t of layers) t.dispose();
+    },
+  };
 }
 
 const CARD_VERT = /* glsl */ `
