@@ -39,3 +39,4 @@ One file per decision the reviewer settled in the pair sessions that designed Ga
 - [One field sheet: the map, the minimap and what a thing says](35-one-field-sheet.md)
 - [One system for wind, gravity and vitality](36-one-system-for-wind-gravity-and-vitality.md)
 - [A proving ground with everything in it](37-a-proving-ground.md)
+- [Each plant answers the wind by its build](38-each-plant-answers-the-wind-by-its-build.md)
