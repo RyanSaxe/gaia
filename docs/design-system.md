@@ -73,11 +73,20 @@ reach toward the tip and droop, so a fir reads as layered, feathery
 needles rather than flat plates. No crown, bush or frond has a dark body
 inside it to read as dense: its fullness comes from its leaves.
 
-Bushes are built the same way as a crown: twigs from every stem carry
-sprays of leaves out to the mound's surface, down to the soil, and the
-mound shades as one volume, bright on top and at the rim, darker inside,
-where the stems show in its shade. Their blossoms are umbels on stalks
-from the twigs, and berries hang in small clusters on stalks.
+A bush is seen close, where a spray's five small leaves cover too little
+of their card to fill it, so a bush's leaves grow in crowded clusters
+(`CUT.crowded`): fourteen rounded leaves overlapping around a short stalk,
+their tips making the rim, each with its own shade, edge and moment to
+drop. Short twigs from the stems carry the clusters over clumps at every
+stem tip and along the stems, at three depths, smaller at the rim and
+larger inside, faced out and up so few are seen edge-on. Uneven clumps,
+notches in the rim and a few stray twigs give it a ragged outline, never a
+dome. Leaves alone fill it: nothing dark stands inside a bush. From 2 m a
+rounded bush fills 80% to 90% of its outline, at 4,900 to 6,300
+triangles before its flowers or berries. Scrub grows low, wiry, arching stems with tufts of clusters at
+most of its tips. A feathery shrub keeps its needle sprays. Blossoms are
+umbels on stalks from the twigs, and berries hang in small clusters on
+stalks.
 
 Bark faces outward and draws front faces only. A trunk is one tube from the
 ground to its fork, and each bough one tube from its joint to its tip, so
