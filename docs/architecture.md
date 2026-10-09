@@ -633,7 +633,9 @@ frame. Each pass gathers its far copies into one batch, and the far cards
 draw it in one call per form. Nothing past `AIR.dissolveEnd`, where the air
 has dissolved everything into the sky, draws at all. Every tree build bakes
 into its far form a few views a frame under the wait (`startFarBake`), and
-the wait lifts only once all of them are ready.
+the wait lifts only once all of them are ready. A baked form is kept in the
+browser's IndexedDB (`app/renderer/terrain/far-store.ts`), keyed by a hash of
+the build, the bake's version and the swap size, so each build bakes once.
 
 ## Time
 

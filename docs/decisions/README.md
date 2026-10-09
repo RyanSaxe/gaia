@@ -47,3 +47,4 @@ One file per decision the reviewer settled in the pair sessions that designed Ga
 - [A page for every thing, said in a schema Jev can change](43-a-page-for-every-thing.md)
 - [A minimap that turns with you, and a compass that points north](44-a-minimap-that-turns-and-a-compass.md)
 - [The wild is inked as an old survey, and the map grows to take you in](45-the-wild-is-inked-as-a-survey.md)
+- [Far trees are cards baked from the tree itself](46-far-trees-are-cards-baked-from-the-tree.md)
