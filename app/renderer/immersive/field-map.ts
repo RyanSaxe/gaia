@@ -2,10 +2,10 @@
 // paper, unfolded from a small map button, painted as `map-styles.ts`
 // says. The land runs to the sheet's edges and the wild fills
 // its corners. Each area (a directory) and each file's patch is drawn from
-// the outline the layout traces (`outlinesOf`): an area is a watercolor wash
-// in the color of the land Jev judged for it (`groundWash`), its pigment
-// pooling toward its rim and bleeding into its neighbors; a patch is
-// a faint wash in its health's color. Hills are shaded, water is washed,
+// the outline the layout traces (`outlinesOf`): the land is one watercolor
+// wash in health's colors, spread from each file's own vitality, its pigment
+// pooling toward each area's rim and bleeding into its neighbors (`wash.ts`,
+// which the wait paints with too). Hills are shaded, water is washed,
 // trails are dotted, trees brown with their files' vitality, buildings and
 // landmarks are little drawn vignettes, and names are lettered on the land
 // itself, never in a box. A small traveller stands where the person is.
@@ -22,7 +22,7 @@
 // inked ahead of the person in the same idle time. Opened from the wild, the
 // sheet grows to take the traveller in.
 
-import { type Place, type PlaceArea, type WorldPlaces, outlinesOf, waterDepthAt } from "@gaia/terrain";
+import { type Place, type PlaceArea, type Terrain, type WorldPlaces, outlinesOf, waterDepthAt } from "@gaia/terrain";
 import { areaVitality, groundVitality } from "@gaia/world";
 import { onTap } from "../lab.ts";
 import type { StoodWorld } from "../terrain/lab.ts";
@@ -30,6 +30,7 @@ import { DECKLE_MASK, MAP_STYLE, type MapStyle, TRAVELLER_SVG, dryness, healthCo
 import { chained, contour, isoline, simplified } from "./isolines.ts";
 import { nameTails } from "./map-names.ts";
 import { stampBuilding, stampLandmark } from "./marks.ts";
+import { PAPER, type WashArea, type WashSheet, easeRing, fadeMask, floatWash, layWash, noiseCanvas, paintAt, rimPath, ringsPath, valueNoise } from "./wash.ts";
 import { INK, type LandView, RIM, type WildInk, createWildInk, layGround, reliefAt } from "./wild-ink.ts";
 
 export interface FieldMap {
@@ -88,10 +89,9 @@ export interface MapSource {
 }
 
 /**
- * Paper size in pixels, and how far past the land's square the sheet runs, meters: none, so the painted country
- * runs square to every edge of the sheet, and the land's rounded rim is never drawn.
+ * How far past the land's square the sheet runs, meters: none, so the painted country runs square to every edge of
+ * the sheet (`PAPER` pixels a side), and the land's rounded rim is never drawn.
  */
-const PAPER = 2048;
 export const MARGIN = 0;
 /** Sample spacing of the areas, the hills and the water, meters. */
 const AREA_CELL = 5;
@@ -118,45 +118,9 @@ const mixRgb = (a: string, b: string, t: number): [number, number, number] => {
 };
 const mixHex = (a: string, b: string, t: number): string => `rgb(${mixRgb(a, b, t).join(",")})`;
 
-/** How many points either side a traced outline's point is averaged with, and how many times, to ease its lattice steps into a line. */
-const EASE = { reach: 5, passes: 2 };
-
-/** A closed ring of x, z pairs with each point averaged with its neighbors along the ring. */
-function easeRing(ring: readonly number[]): number[] {
-  const count = ring.length / 2;
-  if (count < EASE.reach * 2 + 3) return [...ring];
-  let pts = Float64Array.from(ring);
-  for (let pass = 0; pass < EASE.passes; pass++) {
-    const out = new Float64Array(pts.length);
-    for (let k = 0; k < count; k++) {
-      let x = 0;
-      let z = 0;
-      for (let d = -EASE.reach; d <= EASE.reach; d++) {
-        const i = (k + d + count) % count;
-        x += pts[i * 2] as number;
-        z += pts[i * 2 + 1] as number;
-      }
-      out[k * 2] = x / (EASE.reach * 2 + 1);
-      out[k * 2 + 1] = z / (EASE.reach * 2 + 1);
-    }
-    pts = out;
-  }
-  return Array.from(pts);
-}
-
-/** A small canvas of soft blotches in one color, to be drawn large: smoothing turns its pixels into gentle mottling. */
-function noiseCanvas(cells: number, seed: number, rgb: readonly [number, number, number]): HTMLCanvasElement {
-  const c = document.createElement("canvas");
-  c.width = c.height = cells;
-  const g = c.getContext("2d") as CanvasRenderingContext2D;
-  const img = g.createImageData(cells, cells);
-  for (let k = 0; k < cells * cells; k++) img.data.set([rgb[0], rgb[1], rgb[2], Math.round(255 * hash(k + seed, seed))], k * 4);
-  g.putImageData(img, 0, 0);
-  return c;
-}
-
-interface AreaLabel {
-  readonly area: PlaceArea;
+/** Where an area's name is lettered on the sheet. */
+export interface AreaLabel<A = PlaceArea> {
+  readonly area: A;
   readonly index: number;
   /** The box its ground spans, meters: a tap on its name brings the map round to it. */
   readonly bounds: readonly [number, number, number, number];
@@ -190,29 +154,6 @@ export interface Paper {
   readonly patches: readonly { readonly path: Path2D; readonly x: number; readonly z: number; readonly radius: number; readonly name: string; readonly area: string }[];
   /** The wild past the land, in ink, drawn wherever the paint is not. */
   readonly wild: WildInk;
-}
-
-/** Smooth noise between 0 and 1, varying over about one unit. */
-function valueNoise(x: number, y: number, seed: number): number {
-  const xi = Math.floor(x);
-  const yi = Math.floor(y);
-  const fx = x - xi;
-  const fy = y - yi;
-  const sx = fx * fx * (3 - 2 * fx);
-  const sy = fy * fy * (3 - 2 * fy);
-  const a = hash(xi + seed, yi);
-  const b = hash(xi + 1 + seed, yi);
-  const c = hash(xi + seed, yi + 1);
-  const d = hash(xi + 1 + seed, yi + 1);
-  return a + (b - a) * sx + (c - a) * sy + (a - b - c + d) * sx * sy;
-}
-
-/** How much paint the sheet holds at (u, v), its corners 0 and 1: full inside, giving way raggedly to bare paper at the edge. */
-function paintAt(style: MapStyle, u: number, v: number): number {
-  const edge = Math.min(u, 1 - u, v, 1 - v);
-  const rag = (valueNoise(u * 22, v * 22, 3) - 0.5) * 2 * style.ragged + (valueNoise(u * 96, v * 96, 11) - 0.5) * style.ragged * 0.7;
-  const t = Math.max(0, Math.min(1, (edge + rag - style.fade[0]) / (style.fade[1] - style.fade[0])));
-  return t * t * (3 - 2 * t);
 }
 
 /**
@@ -276,19 +217,6 @@ function wetDistance(wet: Uint8Array, n: number): Float32Array {
   return d;
 }
 
-/** Pigment pooling darker toward an area's rim, inside its outline, as a wash dries. */
-function poolRim(g: CanvasRenderingContext2D, path: Path2D, rgb: readonly [number, number, number], pool: MapStyle["pool"]): void {
-  g.save();
-  g.clip(path, "evenodd");
-  const rim = rgb.map((c) => Math.round(c * 0.6)).join(",");
-  for (const [width, alpha] of pool) {
-    g.lineWidth = width;
-    g.strokeStyle = `rgba(${rim},${alpha})`;
-    g.stroke(path);
-  }
-  g.restore();
-}
-
 /**
  * The map's paper over `w` by `h` pixels: a ground mottled as handmade
  * paper is, with fibres and a faint grain. At the map's paper size it is the map's own paper; the wait
@@ -328,12 +256,6 @@ export function paintPaperGround(ctx: CanvasRenderingContext2D, style: MapStyle,
     for (let n = from; n < 6000 * many; n += 2) ctx.rect(hash(n, 1) * w, hash(n, 2) * h, (1 + hash(n, 4) * 3) * k, (1 + hash(n, 5) * 3) * k);
     ctx.fill();
   }
-}
-
-/** Where the paint gives way to bare paper at the sheet's edge: rows `j0` to `j1` of a mask `cells` on a side, in its alpha. */
-function paintFade(img: ImageData, style: MapStyle, j0: number, j1: number): void {
-  const cells = img.width;
-  for (let j = j0; j < j1; j++) for (let i = 0; i < cells; i++) img.data[(j * cells + i) * 4 + 3] = Math.round(255 * paintAt(style, (i + 0.5) / cells, (j + 0.5) / cells));
 }
 
 /**
@@ -403,66 +325,23 @@ function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place
   const at = new Int16Array(n * n).fill(-1);
   const areas: PlaceArea[] = [];
   const index = new Map<string, number>();
-  const sums: { x: number; z: number; xx: number; zz: number; xz: number; cells: number; i0: number; i1: number; j0: number; j1: number }[] = [];
   for (let j = 0; j < n; j++) {
     for (let i = 0; i < n; i++) {
-      const x = -reach + (i + 0.5) * AREA_CELL;
-      const z = -reach + (j + 0.5) * AREA_CELL;
-      const area = placeAt(x, z).area;
+      const area = placeAt(-reach + (i + 0.5) * AREA_CELL, -reach + (j + 0.5) * AREA_CELL).area;
       if (area.depth < 0) continue;
       let k = index.get(area.path);
       if (k === undefined) {
         k = areas.length;
         index.set(area.path, k);
         areas.push(area);
-        sums.push({ x: 0, z: 0, xx: 0, zz: 0, xz: 0, cells: 0, i0: i, i1: i, j0: j, j1: j });
       }
       at[j * n + i] = k;
-      const s = sums[k] as (typeof sums)[number];
-      s.x += x;
-      s.z += z;
-      s.xx += x * x;
-      s.zz += z * z;
-      s.xz += x * z;
-      s.cells += 1;
-      s.i0 = Math.min(s.i0, i);
-      s.i1 = Math.max(s.i1, i);
-      s.j0 = Math.min(s.j0, j);
-      s.j1 = Math.max(s.j1, j);
     }
     if (j % 8 === 7) yield;
   }
 
-  // How far each cell lies from its area's edge, in cells, uncapped: a name goes where its area is widest.
-  const deep = new Float32Array(n * n).fill(n);
-  for (let j = 0; j < n; j++) {
-    for (let i = 0; i < n; i++) {
-      const c = j * n + i;
-      const k = at[c];
-      if (i === 0 || j === 0 || i === n - 1 || j === n - 1 || at[c - 1] !== k || at[c + 1] !== k || at[c - n] !== k || at[c + n] !== k) deep[c] = 0;
-    }
-  }
-  for (let c = 0; c < n * n; c++) {
-    if (c % n > 0) deep[c] = Math.min(deep[c] as number, (deep[c - 1] as number) + 1);
-    if (c >= n) deep[c] = Math.min(deep[c] as number, (deep[c - n] as number) + 1);
-  }
-  for (let c = n * n - 1; c >= 0; c--) {
-    if (c % n < n - 1) deep[c] = Math.min(deep[c] as number, (deep[c + 1] as number) + 1);
-    if (c < n * n - n) deep[c] = Math.min(deep[c] as number, (deep[c + n] as number) + 1);
-  }
-  yield;
-
   // Where the paint gives way to bare paper at the sheet's edge, as a small mask drawn large.
-  const FADE_CELLS = 384;
-  const fade = document.createElement("canvas");
-  fade.width = fade.height = FADE_CELLS;
-  const fctx = fade.getContext("2d") as CanvasRenderingContext2D;
-  const fimg = fctx.createImageData(FADE_CELLS, FADE_CELLS);
-  for (let j = 0; j < FADE_CELLS; j += 96) {
-    paintFade(fimg, style, j, Math.min(FADE_CELLS, j + 96));
-    yield;
-  }
-  fctx.putImageData(fimg, 0, 0);
+  const fade = yield* fadeMask(style);
 
   // Washes: color on the map is health. Every area starts from the same healthy land, a little lighter or darker by
   // its path, and each file's health spreads over the ground around it (`healthField`), across area borders too, so
@@ -480,55 +359,13 @@ function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place
   const vitality = areaVitality(parts);
   const grounds = groundVitality(parts);
   const ownVitality = (path: string): number => grounds.get(path) ?? 1;
-  const washOf = (path: string): readonly [number, number, number] => healthColor(style, landWash(style, path), ownVitality(path));
   const healthAt = healthField(
     places.patches.map((q) => ({ x: q.x, z: q.z, reach: q.radius, size: q.radius * q.radius, vitality: q.vitality })),
     style.spread,
   );
-  // Each ring is drawn as a curve through the middles of its edges, bending at its corners, so the
-  // traced lattice's steps read as a pen's easy line; a border's pen also wobbles a little.
-  const trace = (rings: readonly (readonly number[])[], wobble = 0, seed = 0): Path2D => {
-    const p = new Path2D();
-    for (const ring of rings) {
-      const count = ring.length / 2;
-      if (count < 3) continue;
-      const point = (k: number): [number, number] => {
-        const i = ((k % count) + count) % count;
-        const jitter = wobble === 0 ? 0 : wobble * (hash(i + seed, count) - 0.5);
-        return [px(ring[i * 2] as number) + jitter, px(ring[i * 2 + 1] as number) - jitter];
-      };
-      const [ax, ay] = point(0);
-      let [bx, by] = point(1);
-      p.moveTo((ax + bx) / 2, (ay + by) / 2);
-      for (let k = 1; k <= count; k++) {
-        const [cx, cy] = point(k + 1);
-        p.quadraticCurveTo(bx, by, (bx + cx) / 2, (by + cy) / 2);
-        [bx, by] = [cx, cy];
-      }
-      p.closePath();
-    }
-    return p;
-  };
-  // The washes are laid on their own sheet, each wash opaque over the one it nests in, and the sheet is
-  // floated onto the paper at once, so nested washes never muddy each other.
-  const wash = document.createElement("canvas");
-  wash.width = wash.height = PAPER;
-  const g = wash.getContext("2d") as CanvasRenderingContext2D;
-  g.lineJoin = "round";
   // Every cell of the sheet in its health over its nearest area's land, laid soft: past the land's rounded rim the
   // painted country goes on to the paper's edge as the land beside it.
-  const nearest = Int16Array.from(at);
-  const queue: number[] = [];
-  for (let c = 0; c < n * n; c++) if (nearest[c] !== -1) queue.push(c);
-  for (let q = 0; q < queue.length; q++) {
-    const c = queue[q] as number;
-    const i = c % n;
-    for (const d of [i > 0 ? c - 1 : -1, i < n - 1 ? c + 1 : -1, c - n, c + n]) {
-      if (d < 0 || d >= n * n || nearest[d] !== -1) continue;
-      nearest[d] = nearest[c] as number;
-      queue.push(d);
-    }
-  }
+  const nearest = nearestAreas(at, n);
   yield;
   const under = document.createElement("canvas");
   under.width = under.height = n;
@@ -545,87 +382,166 @@ function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place
     if (j % 8 === 7) yield;
   }
   uctx.putImageData(uimg, 0, 0);
-  g.imageSmoothingEnabled = true;
-  g.imageSmoothingQuality = "high";
-  g.drawImage(under, 0, 0, n * AREA_CELL * scale, n * AREA_CELL * scale);
-  yield;
-  const byDepth = [...outlines.areas].sort((a, b) => a.depth - b.depth);
+  // Each area's rim pools in its own ground's health; dry ground lets the paper through. An area too small for any
+  // sample still pools.
+  const outlineOf = new Map(outlines.areas.map((o) => [o.path, o]));
   const ground = (path: string): boolean => stood.grounds.has(path);
-  const paths = new Map<string, Path2D>();
-  // The pooling stops a little inside the land's rim, so no rim is drawn along it.
-  g.save();
-  g.clip(rimPath(half - 8, px));
-  for (const [k, o] of byDepth.entries()) {
-    const path = trace(o.rings);
-    paths.set(o.path, path);
-    poolRim(g, path, washOf(o.path), style.pool);
-    if (k % 6 === 5) yield;
+  const washAreaOf = (path: string, depth: number, rings: readonly (readonly number[])[]): WashArea => ({
+    path: ringsPath(rings, px),
+    depth,
+    pool: healthColor(style, landWash(style, path), ownVitality(path)),
+    dry: ground(path) ? dryness(ownVitality(path)) : 0,
+  });
+  const sheet: WashSheet = {
+    reach,
+    half,
+    n,
+    cell: AREA_CELL,
+    nearest,
+    fade,
+    areas: [
+      ...areas.map((a) => washAreaOf(a.path, a.depth, outlineOf.get(a.path)?.rings ?? [])),
+      ...outlines.areas.filter((o) => !index.has(o.path)).map((o) => washAreaOf(o.path, o.depth, o.rings)),
+    ],
+  };
+  yield;
+  // The washes are laid on their own sheet, each wash opaque over the one it nests in, and the sheet is
+  // floated onto the paper at once, so nested washes never muddy each other.
+  const wash = document.createElement("canvas");
+  wash.width = wash.height = PAPER;
+  yield* layWash(wash.getContext("2d") as CanvasRenderingContext2D, under, sheet, style);
+  yield;
+  yield* floatWash(ctx, wash, 0, 0, style);
+  yield;
+
+  // The hills, contours and ponds.
+  const contours = yield* paintRelief(ctx, t, style, reach, PAPER);
+
+  // Each file's patch: its own traced shape, drawn in fine dotted ink once the map comes close.
+  const patchOf = new Map(places.patches.map((p) => [p.path, p]));
+  const patches: Paper["patches"][number][] = [];
+  for (const [k, o] of traced.patches.entries()) {
+    const p = patchOf.get(o.path);
+    if (p !== undefined) patches.push({ path: meterPath(o.rings.map(easeRing)), x: p.x, z: p.z, radius: p.radius, name: p.name, area: p.area });
+    if (k % 60 === 59) yield;
   }
-  g.restore();
-  // Dry land lets the paper through in dry-brush streaks, each cell by the area nearest it, so the corners past the
-  // land's rim take their neighbor's streaks and nothing marks the rim.
-  const spans = new Map<number, [number, number, number, number]>();
-  for (let c = 0; c < n * n; c++) {
-    const k = nearest[c] as number;
+  yield;
+
+  const areaLabels = labelsOf(at, n, AREA_CELL, reach, areas);
+  const areaAt = (x: number, z: number): number => {
+    const i = Math.floor((x + reach) / AREA_CELL);
+    const j = Math.floor((z + reach) / AREA_CELL);
+    return i < 0 || j < 0 || i >= n || j >= n ? -1 : (at[j * n + i] as number);
+  };
+  const borders = outlines.areas.filter((o) => o.depth > 0).map((o) => ({ path: meterPath(o.rings), depth: o.depth }));
+  // Past the paint, the wild is inked as views need it, where the paint gives way to bare paper.
+  const wild = createWildInk(t, style, reach, fade);
+  return { canvas, reach, style, areaLabels, areaAt, vitality, patches, contours, borders, wild };
+}
+
+/** For each cell, the area nearest it: its own (`at`, -1 where none), or past them the nearest cell's area. */
+export function nearestAreas(at: Int16Array, n: number): Int16Array {
+  const nearest = Int16Array.from(at);
+  const queue: number[] = [];
+  for (let c = 0; c < n * n; c++) if (nearest[c] !== -1) queue.push(c);
+  for (let q = 0; q < queue.length; q++) {
+    const c = queue[q] as number;
     const i = c % n;
-    const j = Math.floor(c / n);
-    const b = spans.get(k);
-    spans.set(k, b === undefined ? [i, j, i, j] : [Math.min(b[0], i), Math.min(b[1], j), Math.max(b[2], i), Math.max(b[3], j)]);
+    for (const d of [i > 0 ? c - 1 : -1, i < n - 1 ? c + 1 : -1, c - n, c + n]) {
+      if (d < 0 || d >= n * n || nearest[d] !== -1) continue;
+      nearest[d] = nearest[c] as number;
+      queue.push(d);
+    }
   }
-  const cellAt = (x: number, y: number): number => Math.floor(y / scale / AREA_CELL) * n + Math.floor(x / scale / AREA_CELL);
-  for (const [k, b] of spans) {
-    const area = areas[k];
-    const dry = area !== undefined && ground(area.path) ? dryness(ownVitality(area.path)) : 0;
-    if (dry <= 0.05) continue;
-    const box = [b[0], b[1], b[2] + 1, b[3] + 1].map((c) => c * AREA_CELL * scale) as [number, number, number, number];
-    dryBrush(g, box, dry, style, k, (x, y) => nearest[cellAt(x, y)] === k);
+  return nearest;
+}
+
+/**
+ * Where each area's name is lettered, from a raster of the land: `at` names the area whose own ground holds each of
+ * its cells (`n` a side, `cell` meters, from the sheet's corner `reach` meters out) by its index in `areas`, or -1.
+ * A name sits on the cell of its area's own ground farthest from its edges, nearest its middle among equals, so it
+ * never sits on its rim or past the land's edge, and runs the way its area runs.
+ */
+export function labelsOf<A extends { readonly path: string; readonly depth: number }>(at: Int16Array, n: number, cell: number, reach: number, areas: readonly A[]): AreaLabel<A>[] {
+  const sums = areas.map(() => ({ x: 0, z: 0, xx: 0, zz: 0, xz: 0, cells: 0, i0: n, i1: -1, j0: n, j1: -1 }));
+  for (let j = 0; j < n; j++) {
+    for (let i = 0; i < n; i++) {
+      const s = sums[at[j * n + i] as number];
+      if (s === undefined) continue;
+      const x = -reach + (i + 0.5) * cell;
+      const z = -reach + (j + 0.5) * cell;
+      s.x += x;
+      s.z += z;
+      s.xx += x * x;
+      s.zz += z * z;
+      s.xz += x * z;
+      s.cells += 1;
+      s.i0 = Math.min(s.i0, i);
+      s.i1 = Math.max(s.i1, i);
+      s.j0 = Math.min(s.j0, j);
+      s.j1 = Math.max(s.j1, j);
+    }
   }
-  yield;
-  // Brushwork: the wash laid in broad, overlapping strokes, each a little warmer or cooler, lighter or darker.
-  g.globalCompositeOperation = "source-atop";
-  g.lineCap = "round";
-  for (let k = 0; k < style.strokes; k++) {
-    const x = hash(k, 71) * PAPER;
-    const y = hash(71, k) * PAPER;
-    const a = -0.5 + (hash(k, 72) - 0.5) * 0.9;
-    const len = 50 + hash(k, 73) * 120;
-    const tone = hash(k, 74);
-    g.strokeStyle = tone < 0.3 ? "rgba(255,236,170,0.09)" : tone < 0.55 ? "rgba(70,110,120,0.07)" : tone < 0.8 ? "rgba(255,255,240,0.08)" : "rgba(70,56,30,0.07)";
-    g.lineWidth = 12 + hash(k, 75) * 22;
-    g.beginPath();
-    g.moveTo(x, y);
-    g.quadraticCurveTo(x + Math.cos(a) * len * 0.5 + (hash(k, 76) - 0.5) * 30, y + Math.sin(a) * len * 0.5 + (hash(k, 77) - 0.5) * 30, x + Math.cos(a) * len, y + Math.sin(a) * len);
-    g.stroke();
-    if (k % 900 === 899) yield;
+  // How far each cell lies from its area's edge, in cells, uncapped: a name goes where its area is widest.
+  const deep = new Float32Array(n * n).fill(n);
+  for (let j = 0; j < n; j++) {
+    for (let i = 0; i < n; i++) {
+      const c = j * n + i;
+      const k = at[c];
+      if (i === 0 || j === 0 || i === n - 1 || j === n - 1 || at[c - 1] !== k || at[c + 1] !== k || at[c - n] !== k || at[c + n] !== k) deep[c] = 0;
+    }
   }
-  // Granulation: pigment settles unevenly into the paper's tooth, in fine specks and broad blooms.
-  g.imageSmoothingEnabled = true;
-  for (const [cells, strength, seed] of [[420, 0.16, 3.1], [36, 0.12, 9.7]] as const) {
-    g.globalAlpha = strength;
-    g.drawImage(noiseCanvas(cells, seed, [60, 46, 26]), 0, 0, PAPER, PAPER);
+  for (let c = 0; c < n * n; c++) {
+    if (c % n > 0) deep[c] = Math.min(deep[c] as number, (deep[c - 1] as number) + 1);
+    if (c >= n) deep[c] = Math.min(deep[c] as number, (deep[c - n] as number) + 1);
   }
-  g.globalAlpha = 1;
-  yield;
-  // The paint gives way to paper at the sheet's edge.
-  g.globalCompositeOperation = "destination-in";
-  g.drawImage(fade, 0, 0, PAPER, PAPER);
-  g.globalCompositeOperation = "source-over";
-  yield;
-  // Wet in wet: a softened copy of the washes laid first lets each one bleed into its neighbors.
-  ctx.filter = `blur(${style.bleedPx}px)`;
-  ctx.globalAlpha = style.bleed;
-  ctx.drawImage(wash, 0, 0);
-  ctx.filter = "none";
-  yield;
-  ctx.globalAlpha = style.washAlpha;
-  ctx.drawImage(wash, 0, 0);
-  ctx.globalAlpha = 1;
-  yield;
+  for (let c = n * n - 1; c >= 0; c--) {
+    if (c % n < n - 1) deep[c] = Math.min(deep[c] as number, (deep[c + 1] as number) + 1);
+    if (c < n * n - n) deep[c] = Math.min(deep[c] as number, (deep[c + n] as number) + 1);
+  }
+  const tails = nameTails(areas.filter((a) => a.depth > 0).map((a) => a.path));
+  return areas.flatMap((area, k): AreaLabel<A>[] => {
+    const s = sums[k] as (typeof sums)[number];
+    if (s.cells === 0) return [];
+    const mx = s.x / s.cells;
+    const mz = s.z / s.cells;
+    let x = mx;
+    let z = mz;
+    let best = -Infinity;
+    for (let j = s.j0; j <= s.j1; j++) {
+      for (let i = s.i0; i <= s.i1; i++) {
+        if (at[j * n + i] !== k) continue;
+        const cx = -reach + (i + 0.5) * cell;
+        const cz = -reach + (j + 0.5) * cell;
+        const score = (deep[j * n + i] as number) - Math.hypot(cx - mx, cz - mz) / (cell * 40);
+        if (score > best) {
+          best = score;
+          x = cx;
+          z = cz;
+        }
+      }
+    }
+    const edge = (i: number): number => -reach + i * cell;
+    return [{ area, index: k, bounds: [edge(s.i0), edge(s.j0), edge(s.i1 + 1), edge(s.j1 + 1)], x, z, cells: s.cells, angle: axisOf(s).angle, above: tails.get(area.path) ?? "" }];
+  });
+}
+
+/**
+ * The land's relief on `ctx`, a sheet `side` pixels a side reaching `reach` meters from the land's middle: the hills
+ * shaded violet away from the light in the northwest and lit warm on the slopes facing it, and the ponds, darker
+ * toward their middles, with their banks and a few ripples. Returns the contours from the real heights, in meters,
+ * for a view to stroke at its own size.
+ */
+export function* paintRelief(ctx: CanvasRenderingContext2D, t: Terrain, style: MapStyle, reach: number, side: number): Generator<void, Paper["contours"]> {
+  const half = t.spec.size / 2;
+  const size = t.spec.size;
+  const scale = side / (reach * 2);
+  const k = side / PAPER;
+  const px = (v: number): number => (v + reach) * scale;
 
   // Hills: shade away from the light in the northwest, and (when lit) a warm light on the slopes facing it.
   const hn = Math.ceil((reach * 2) / HILL_CELL);
   const e = HILL_CELL * 1.5;
-  const slopes = new Float32Array(hn * hn * 2);
   const heights = new Float32Array(hn * hn);
   const shadeImg = new ImageData(hn, hn);
   const lightImg = new ImageData(hn, hn);
@@ -638,17 +554,15 @@ function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place
       // The ground's height as the sheet paints it: eased at the rim to the height a little way in (`RIM`).
       const gx = (reliefAt(t, x + e, z) - reliefAt(t, x - e, z)) / (2 * e);
       const gz = (reliefAt(t, x, z + e) - reliefAt(t, x, z - e)) / (2 * e);
-      const k = j * hn + i;
-      heights[k] = reliefAt(t, x, z);
-      slopes[k * 2] = gx;
-      slopes[k * 2 + 1] = gz;
+      const c = j * hn + i;
+      heights[c] = reliefAt(t, x, z);
       const lit = (gx + gz) * style.relief;
       // Over the band where the ground is eased toward the rim, and past it, the eased heights would shade in stripes
       // along their rays, so the shading fades out across the band and is gone at the rim.
       const inside = Math.max(0, Math.min(1, (half - Math.pow(x ** 4 + z ** 4, 0.25)) / RIM.inner));
       const fadeHere = paintAt(style, (i + 0.5) / hn, (j + 0.5) / hn) * inside * inside * (3 - 2 * inside);
-      shadeImg.data.set([sr, sg, sb, Math.round(255 * Math.max(0, Math.min(1, -lit)) * fadeHere)], k * 4);
-      lightImg.data.set([lr, lg, lb, Math.round(255 * Math.max(0, Math.min(1, lit)) * fadeHere)], k * 4);
+      shadeImg.data.set([sr, sg, sb, Math.round(255 * Math.max(0, Math.min(1, -lit)) * fadeHere)], c * 4);
+      lightImg.data.set([lr, lg, lb, Math.round(255 * Math.max(0, Math.min(1, lit)) * fadeHere)], c * 4);
     }
     if (j % 14 === 13) yield;
   }
@@ -657,7 +571,7 @@ function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place
   const hctx = hill.getContext("2d") as CanvasRenderingContext2D;
   // The shading is softened on a sheet a quarter of the paper's size, and laid on the paper from there: a blur
   // over the whole paper would hold up a frame.
-  const SOFT = PAPER / 4;
+  const SOFT = Math.round(side / 4);
   const soft = document.createElement("canvas");
   soft.width = soft.height = SOFT;
   const sctx = soft.getContext("2d") as CanvasRenderingContext2D;
@@ -665,12 +579,12 @@ function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place
     hctx.clearRect(0, 0, hn, hn);
     hctx.putImageData(img, 0, 0);
     sctx.clearRect(0, 0, SOFT, SOFT);
-    sctx.filter = `blur(${(style.reliefBlur / 4).toFixed(2)}px)`;
+    sctx.filter = `blur(${((style.reliefBlur * k) / 4).toFixed(2)}px)`;
     sctx.drawImage(hill, 0, 0, SOFT, SOFT);
     sctx.filter = "none";
     ctx.globalCompositeOperation = mode;
     ctx.globalAlpha = alpha;
-    ctx.drawImage(soft, 0, 0, PAPER, PAPER);
+    ctx.drawImage(soft, 0, 0, side, side);
   };
   lay(shadeImg, "multiply", style.shadowAlpha);
   yield;
@@ -701,20 +615,10 @@ function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place
     for (const line of chained(segments)) {
       const pts = simplified(line, 0.6);
       contour.moveTo(pts[0] as number, pts[1] as number);
-      for (let k = 2; k < pts.length; k += 2) contour.lineTo(pts[k] as number, pts[k + 1] as number);
+      for (let q = 2; q < pts.length; q += 2) contour.lineTo(pts[q] as number, pts[q + 1] as number);
     }
     contours.push({ path: contour, index: step % c.index === 0 });
     yield;
-  }
-  yield;
-
-  // Each file's patch: its own traced shape, drawn in fine dotted ink once the map comes close.
-  const patchOf = new Map(places.patches.map((p) => [p.path, p]));
-  const patches: Paper["patches"][number][] = [];
-  for (const [k, o] of traced.patches.entries()) {
-    const p = patchOf.get(o.path);
-    if (p !== undefined) patches.push({ path: meterPath(o.rings.map(easeRing)), x: p.x, z: p.z, radius: p.radius, name: p.name, area: p.area });
-    if (k % 60 === 59) yield;
   }
   yield;
 
@@ -741,11 +645,11 @@ function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place
   water.width = water.height = wn;
   const wctx = water.getContext("2d") as CanvasRenderingContext2D;
   const wimg = wctx.createImageData(wn, wn);
-  for (let k = 0; k < wn * wn; k++) {
-    if (wet[k] === 0) continue;
-    const s = Math.min(1, ((depth[k] as number) - 1) / 6);
-    wimg.data.set([0, 1, 2].map((c) => Math.round((shallowRgb[c] as number) * (1 - s) + (deepRgb[c] as number) * s)), k * 4);
-    wimg.data[k * 4 + 3] = 255;
+  for (let q = 0; q < wn * wn; q++) {
+    if (wet[q] === 0) continue;
+    const s = Math.min(1, ((depth[q] as number) - 1) / 6);
+    wimg.data.set([0, 1, 2].map((ch) => Math.round((shallowRgb[ch] as number) * (1 - s) + (deepRgb[ch] as number) * s)), q * 4);
+    wimg.data[q * 4 + 3] = 255;
   }
   wctx.putImageData(wimg, 0, 0);
   const wx0 = px(w0);
@@ -766,77 +670,26 @@ function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place
   yield;
   // Deep water: a shadow under its bank, and the light catching its rim.
   ctx.strokeStyle = "rgba(30,64,84,0.35)";
-  ctx.lineWidth = 6;
+  ctx.lineWidth = 6 * k;
   ctx.save();
-  ctx.translate(2, 2.5);
+  ctx.translate(2 * k, 2.5 * k);
   ctx.stroke(coast);
   ctx.restore();
   ctx.strokeStyle = "rgba(250,244,222,0.5)";
-  ctx.lineWidth = 1.8;
+  ctx.lineWidth = 1.8 * k;
   ctx.stroke(coast);
   // A few ripple strokes inside each pond.
   ctx.strokeStyle = "rgba(255,255,255,0.55)";
-  ctx.lineWidth = 2;
+  ctx.lineWidth = 2 * k;
   for (const pond of t.ponds) {
-    for (let k = 0; k < 3; k++) {
+    for (let r = 0; r < 3; r++) {
       ctx.beginPath();
-      ctx.arc(px(pond.x), px(pond.z), pond.reach * (0.3 + k * 0.18) * scale, Math.PI * (1.15 + k * 0.1), Math.PI * (1.45 + k * 0.1));
+      ctx.arc(px(pond.x), px(pond.z), pond.reach * (0.3 + r * 0.18) * scale, Math.PI * (1.15 + r * 0.1), Math.PI * (1.45 + r * 0.1));
       ctx.stroke();
     }
   }
   yield;
-
-
-  const tails = nameTails(areas.filter((a) => a.depth > 0).map((a) => a.path));
-  const areaLabels = areas.map((area, k): AreaLabel => {
-    const s = sums[k] as (typeof sums)[number];
-    const mx = s.x / s.cells;
-    const mz = s.z / s.cells;
-    // The cell of the area's own ground farthest from its edges, nearest its middle among equals: the name sits
-    // where the area is widest, never on its rim or past the land's edge.
-    let x = mx;
-    let z = mz;
-    let best = -Infinity;
-    for (let j = s.j0; j <= s.j1; j++) {
-      for (let i = s.i0; i <= s.i1; i++) {
-        if (at[j * n + i] !== k) continue;
-        const cx = -reach + (i + 0.5) * AREA_CELL;
-        const cz = -reach + (j + 0.5) * AREA_CELL;
-        const score = (deep[j * n + i] as number) - Math.hypot(cx - mx, cz - mz) / (AREA_CELL * 40);
-        if (score > best) {
-          best = score;
-          x = cx;
-          z = cz;
-        }
-      }
-    }
-    const cell = (i: number): number => -reach + i * AREA_CELL;
-    return { area, index: k, bounds: [cell(s.i0), cell(s.j0), cell(s.i1 + 1), cell(s.j1 + 1)], x, z, cells: s.cells, angle: axisOf(s).angle, above: tails.get(area.path) ?? "" };
-  });
-  const areaAt = (x: number, z: number): number => {
-    const i = Math.floor((x + reach) / AREA_CELL);
-    const j = Math.floor((z + reach) / AREA_CELL);
-    return i < 0 || j < 0 || i >= n || j >= n ? -1 : (at[j * n + i] as number);
-  };
-  const borders = outlines.areas.filter((o) => o.depth > 0).map((o) => ({ path: meterPath(o.rings), depth: o.depth }));
-  // Past the paint, the wild is inked as views need it, where the paint gives way to bare paper.
-  const wild = createWildInk(t, style, reach, fade);
-  return { canvas, reach, style, areaLabels, areaAt, vitality, patches, contours, borders, wild };
-}
-
-/** The land's rounded square `r` meters from its middle, through `px` (meters to the sheet's pixels): what keeps a pen inside the land. */
-export function rimPath(r: number, px: (v: number) => number = (v) => v): Path2D {
-  const p = new Path2D();
-  for (let k = 0; k <= 180; k++) {
-    const a = (k / 180) * Math.PI * 2;
-    const c = Math.cos(a);
-    const s = Math.sin(a);
-    const d = r / Math.pow(Math.abs(c) ** 4 + Math.abs(s) ** 4, 0.25);
-    if (k === 0) p.moveTo(px(c * d), px(s * d));
-    else p.lineTo(px(c * d), px(s * d));
-  }
-  p.closePath();
-  return p;
+  return contours;
 }
 
 /** A traced outline as a path in meters, to stroke at any zoom. */
@@ -850,38 +703,6 @@ function meterPath(rings: readonly (readonly number[])[]): Path2D {
     p.closePath();
   }
   return p;
-}
-
-/**
- * Dry land's wash, brushed thin: streaks along the brush's way where the
- * paper shows through, more and stronger the drier the land. `box` is the
- * area's extent on the paper and `inside` says whether a point of it is the
- * area's own ground; the streaks go down in two strokes of the brush, so a
- * dry area costs two draws however large it is.
- */
-function dryBrush(g: CanvasRenderingContext2D, box: readonly [number, number, number, number], dry: number, style: MapStyle, seed: number, inside: (x: number, y: number) => boolean): void {
-  const [x0, y0, x1, y1] = box;
-  const count = Math.round(((x1 - x0) * (y1 - y0) * style.wilt.streaks * dry) / 4000);
-  const strokes = [new Path2D(), new Path2D()];
-  for (let k = 0; k < count; k++) {
-    const x = x0 + hash(k + seed * 101, 31) * (x1 - x0);
-    const y = y0 + hash(31, k + seed * 101) * (y1 - y0);
-    if (!inside(x, y)) continue;
-    const a = -0.45 + (hash(k, seed + 33) - 0.5) * 0.4;
-    const len = 18 + hash(k, seed + 34) * 60;
-    const p = strokes[k % 2] as Path2D;
-    p.moveTo(x, y);
-    p.lineTo(x + Math.cos(a) * len, y + Math.sin(a) * len);
-  }
-  g.save();
-  g.globalCompositeOperation = "destination-out";
-  g.lineCap = "round";
-  strokes.forEach((p, k) => {
-    g.strokeStyle = `rgba(0,0,0,${(0.2 + dry * (k === 0 ? 0.25 : 0.45)).toFixed(3)})`;
-    g.lineWidth = k === 0 ? 5.5 : 2.4;
-    g.stroke(p);
-  });
-  g.restore();
 }
 
 /** How long a tap on the map waits for a second press (a double tap zooms instead), ms. */
@@ -960,16 +781,7 @@ export function drawLand(ctx: CanvasRenderingContext2D, w: number, h: number, pa
   ctx.translate(w / 2 - view.x * view.zoom, h / 2 - view.z * view.zoom);
   ctx.scale(view.zoom, view.zoom);
   ctx.lineCap = ctx.lineJoin = "round";
-  ctx.globalCompositeOperation = "multiply";
-  const c = style.contour;
-  ctx.strokeStyle = c.ink;
-  for (const contour of paper.contours) {
-    ctx.globalAlpha = contour.index ? c.indexAlpha : c.alpha;
-    ctx.lineWidth = (contour.index ? LINE.index : LINE.contour) / view.zoom;
-    ctx.stroke(contour.path);
-  }
-  ctx.globalAlpha = 1;
-  ctx.globalCompositeOperation = "source-over";
+  strokeContours(ctx, paper.contours, view.zoom, style);
   ctx.save();
   ctx.clip(rimPath(paper.reach - MARGIN - 3));
   for (const b of paper.borders) {
@@ -983,10 +795,50 @@ export function drawLand(ctx: CanvasRenderingContext2D, w: number, h: number, pa
   ctx.restore();
   ctx.restore();
 
-  // Rivers: a bank, the water and a glint, along each stream's stations, its width the stream's own once the map is
-  // close enough and never thinner than a line.
+  drawRivers(ctx, stood.terrain.streams, sx, sy, view.zoom);
+  drawTrails(ctx, stood.ways, sx, sy, view.zoom, grow, style);
+  drawTrees(ctx, stood.trees, sx, sy, view.zoom, grow, style, visible);
+
+  // Buildings and landmarks: each drawn from its own blueprint and worn as its entity is. Names keep off the box it takes.
+  const s = markScale(view.zoom, grow);
+  const taken: [number, number, number, number][] = [];
+  for (const l of stood.landmarks) {
+    const x = sx(l.x);
+    const y = sy(l.z);
+    if (!visible(x, y, 30 * s)) continue;
+    taken.push(stampLandmark(ctx, x, y, s, l, l.vitality, l.name));
+  }
+  for (const b of stood.buildings) {
+    const x = sx(b.x);
+    const y = sy(b.z);
+    if (!visible(x, y, 30 * s)) continue;
+    taken.push(stampBuilding(ctx, x, y, s, b, b.vitality, b.name));
+  }
+  return taken;
+}
+
+/** The contours from the real heights in sepia ink, every fifth heavier, on `ctx` in meters at `zoom` pixels a meter, so they look the same at every zoom. */
+export function strokeContours(ctx: CanvasRenderingContext2D, contours: Paper["contours"], zoom: number, style: MapStyle): void {
+  const c = style.contour;
+  ctx.save();
   ctx.lineCap = ctx.lineJoin = "round";
-  for (const stream of stood.terrain.streams) {
+  ctx.globalCompositeOperation = "multiply";
+  ctx.strokeStyle = c.ink;
+  for (const contour of contours) {
+    ctx.globalAlpha = contour.index ? c.indexAlpha : c.alpha;
+    ctx.lineWidth = (contour.index ? LINE.index : LINE.contour) / zoom;
+    ctx.stroke(contour.path);
+  }
+  ctx.restore();
+}
+
+/**
+ * Rivers: a bank, the water and a glint, along each stream's stations, its width the stream's own once the map is
+ * close enough and never thinner than a line. `sx` and `sy` take meters to the view's pixels, `zoom` of them a meter.
+ */
+export function drawRivers(ctx: CanvasRenderingContext2D, streams: Terrain["streams"], sx: (x: number) => number, sy: (z: number) => number, zoom: number): void {
+  ctx.lineCap = ctx.lineJoin = "round";
+  for (const stream of streams) {
     const st = stream.stations;
     const first = st[0];
     const last = st[st.length - 1];
@@ -999,7 +851,7 @@ export function drawLand(ctx: CanvasRenderingContext2D, w: number, h: number, pa
       line.quadraticCurveTo(sx(a.x), sy(a.z), sx((a.x + b.x) / 2), sy((a.z + b.z) / 2));
     }
     line.lineTo(sx(last.x), sy(last.z));
-    const width = 2 * Math.max(...st.map((q) => q.halfWidth)) * view.zoom;
+    const width = 2 * Math.max(...st.map((q) => q.halfWidth)) * zoom;
     ctx.strokeStyle = "rgba(40,84,104,0.5)";
     ctx.lineWidth = Math.max(3.4, width + 2.6);
     ctx.stroke(line);
@@ -1010,12 +862,16 @@ export function drawLand(ctx: CanvasRenderingContext2D, w: number, h: number, pa
     ctx.lineWidth = Math.max(0.5, width * 0.16);
     ctx.stroke(line);
   }
+}
 
-  // Trails: dotted, the way a footpath is drawn.
+/** Trails, dotted the way a footpath is drawn, a little larger as `grow` says. */
+export function drawTrails(ctx: CanvasRenderingContext2D, ways: StoodWorld["ways"], sx: (x: number) => number, sy: (z: number) => number, zoom: number, grow: number, style: MapStyle): void {
+  ctx.save();
+  ctx.lineCap = ctx.lineJoin = "round";
   ctx.setLineDash([0.1, 5.5 * grow]);
   ctx.strokeStyle = style.trail;
-  const stride = Math.max(2, Math.round(3 / view.zoom)) * 2;
-  for (const trail of stood.ways) {
+  const stride = Math.max(2, Math.round(3 / zoom)) * 2;
+  for (const trail of ways) {
     const p = trail.points;
     ctx.beginPath();
     for (let k = 0; k < p.length; k += stride) {
@@ -1027,19 +883,23 @@ export function drawLand(ctx: CanvasRenderingContext2D, w: number, h: number, pa
     ctx.lineWidth = (1.9 + trail.style.width * 0.35) * grow;
     ctx.stroke();
   }
-  ctx.setLineDash([]);
+  ctx.restore();
+}
 
-  // Trees: round crowns with a soft shadow to the southeast and the sun on their northwest shoulders, colored by
-  // their files' health as the land is; each layer is one path, so a thousand trees cost a few fills.
+/**
+ * Trees: round crowns with a soft shadow to the southeast and the sun on their northwest shoulders, colored by
+ * their files' health as the land is; each layer is one path, so a thousand trees cost a few fills.
+ */
+export function drawTrees(ctx: CanvasRenderingContext2D, trees: StoodWorld["trees"], sx: (x: number) => number, sy: (z: number) => number, zoom: number, grow: number, style: MapStyle, visible: (x: number, y: number, pad: number) => boolean): void {
   const shadows = new Path2D();
   const lights = new Path2D();
   const crowns = Array.from({ length: TREE_TONES }, () => new Path2D());
-  for (const tree of stood.trees) {
+  for (const tree of trees) {
     const x = sx(tree.x);
     const y = sy(tree.z);
     if (!visible(x, y, 8)) continue;
     const seed = hash(tree.x, tree.z);
-    const r = Math.max((1.9 + seed * 0.8) * grow, (2 + seed * 1.2) * view.zoom);
+    const r = Math.max((1.9 + seed * 0.8) * grow, (2 + seed * 1.2) * zoom);
     // Each mark its own closed shape: without the move, one path would join them all into a web.
     shadows.moveTo(x + r * 1.55, y + r * 0.6);
     shadows.ellipse(x + r * 0.5, y + r * 0.6, r * 1.05, r * 0.78, 0, 0, Math.PI * 2);
@@ -1057,24 +917,51 @@ export function drawLand(ctx: CanvasRenderingContext2D, w: number, h: number, pa
   });
   ctx.fillStyle = "rgba(226,240,170,0.45)";
   ctx.fill(lights);
+}
 
-  // Buildings and landmarks: each drawn from its own blueprint and worn as its entity is. A mark keeps a legible size
-  // on the whole sheet and grows with the land as the map comes close, as the trees do; names keep off the box it takes.
-  const s = Math.max(1.1 * grow, MARK_METERS * view.zoom);
-  const taken: [number, number, number, number][] = [];
-  for (const l of stood.landmarks) {
-    const x = sx(l.x);
-    const y = sy(l.z);
-    if (!visible(x, y, 30 * s)) continue;
-    taken.push(stampLandmark(ctx, x, y, s, l, l.vitality, l.name));
+/** A mark's scale at `zoom` pixels a meter: a legible size on the whole sheet, growing with the land as the map comes close, as the trees do. */
+export const markScale = (zoom: number, grow: number): number => Math.max(1.1 * grow, MARK_METERS * zoom);
+
+/** The size areas' names are lettered at on a sheet `w` pixels wide. */
+export const nameSizeFor = (w: number): number => (w < 520 ? 12.5 : 13.5);
+
+/** The box an area's name takes on the sheet when lettered at (x, y) at `nameSize`: its slanted lettering and the folders above it. */
+export function nameBox(ctx: CanvasRenderingContext2D, l: AreaLabel<{ readonly name: string }>, nameSize: number): (x: number, y: number) => [number, number, number, number] {
+  ctx.font = `600 ${nameSize}px ${SERIF}`;
+  ctx.letterSpacing = `${(nameSize * 0.17).toFixed(1)}px`;
+  const nameW = ctx.measureText(l.area.name.toUpperCase()).width;
+  ctx.letterSpacing = "0px";
+  ctx.font = PARENT_FONT;
+  const parentW = l.above === "" ? 0 : ctx.measureText(l.above).width;
+  const halfW = Math.max(nameW, parentW) / 2 + 4;
+  const top = l.above === "" ? 11 : 21;
+  const cos = Math.abs(Math.cos(l.angle));
+  const sin = Math.abs(Math.sin(l.angle));
+  const hw = halfW * cos + ((top + 12) / 2) * sin;
+  const hh = halfW * sin + ((top + 12) / 2) * cos;
+  return (x, y) => [x - hw, y - hh - (top - 12) / 2, x + hw, y + hh - (top - 12) / 2];
+}
+
+/**
+ * Letters an area's name at (x, y) in ink, in upright, widely spaced capitals as a survey map letters its regions,
+ * along the way the area runs, with the folders that tell a repeated name apart above it in italic.
+ */
+export function letterName(ctx: CanvasRenderingContext2D, l: AreaLabel<{ readonly name: string }>, x: number, y: number, nameSize: number, style: MapStyle): void {
+  const halo = `rgba(${mixRgb(style.paper, style.paper, 0).join(",")},0.82)`;
+  ctx.save();
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.translate(x, y);
+  ctx.rotate(l.angle);
+  if (l.above !== "") {
+    ctx.font = PARENT_FONT;
+    letter(ctx, l.above, 0, -12, `rgba(${mixRgb(style.ink, style.ink, 0).join(",")},0.8)`, halo, 2.5);
   }
-  for (const b of stood.buildings) {
-    const x = sx(b.x);
-    const y = sy(b.z);
-    if (!visible(x, y, 30 * s)) continue;
-    taken.push(stampBuilding(ctx, x, y, s, b, b.vitality, b.name));
-  }
-  return taken;
+  ctx.font = `600 ${nameSize}px ${SERIF}`;
+  ctx.letterSpacing = `${(nameSize * 0.17).toFixed(1)}px`;
+  letter(ctx, l.area.name.toUpperCase(), 0, 2, style.ink, halo, 4.5);
+  ctx.letterSpacing = "0px";
+  ctx.restore();
 }
 
 /** Letters `text` in ink with the paper's tone just around it, so it reads over paint without a box: an outline of paper, then the ink. */
@@ -1358,31 +1245,14 @@ export function createFieldMap(
     names = [];
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    const nameSize = w < 520 ? 12.5 : 13.5;
-    const spacing = `${(nameSize * 0.17).toFixed(1)}px`;
+    const nameSize = nameSizeFor(w);
     const { areaAt } = paper;
     const half = paper.reach - MARGIN;
     const edge = half ** 4;
     for (const l of [...paper.areaLabels].sort((a, b) => b.cells - a.cells)) {
       // The repository's root is the whole sheet, and it is not lettered.
       if (l.area.depth === 0 || !visible(sx(l.x), sy(l.z), 0)) continue;
-      const parent = l.above;
-      const label = l.area.name.toUpperCase();
-      const nameFont = `600 ${nameSize}px ${SERIF}`;
-      ctx.font = nameFont;
-      ctx.letterSpacing = spacing;
-      const nameW = ctx.measureText(label).width;
-      ctx.letterSpacing = "0px";
-      ctx.font = PARENT_FONT;
-      const parentW = parent === "" ? 0 : ctx.measureText(parent).width;
-      const halfW = Math.max(nameW, parentW) / 2 + 4;
-      const top = parent === "" ? 11 : 21;
-      // The box the slanted lettering takes on the sheet.
-      const cos = Math.abs(Math.cos(l.angle));
-      const sin = Math.abs(Math.sin(l.angle));
-      const hw = halfW * cos + ((top + 12) / 2) * sin;
-      const hh = halfW * sin + ((top + 12) / 2) * cos;
-      const boxAt = (x: number, y: number): [number, number, number, number] => [x - hw, y - hh - (top - 12) / 2, x + hw, y + hh - (top - 12) / 2];
+      const boxAt = nameBox(ctx, l, nameSize);
       // A name sits wholly on the sheet and on the land or not at all, its middle on its own area's ground.
       const onLand = ([x0, y0, x1, y1]: [number, number, number, number]): boolean =>
         areaAt(wx((x0 + x1) / 2), wz((y0 + y1) / 2)) === l.index && [x0, x1].every((x) => [y0, y1].every((y) => wx(x) ** 4 + wz(y) ** 4 < edge));
@@ -1393,18 +1263,7 @@ export function createFieldMap(
       taken.push(boxAt(x, y));
       names.push({ box: boxAt(x, y), x: l.x, z: l.z, bounds: l.bounds });
       labelCount++;
-      ctx.save();
-      ctx.translate(x, y);
-      ctx.rotate(l.angle);
-      if (parent !== "") {
-        ctx.font = PARENT_FONT;
-        letter(ctx, parent, 0, -12, `rgba(${mixRgb(style.ink, style.ink, 0).join(",")},0.8)`, halo, 2.5);
-      }
-      ctx.font = nameFont;
-      ctx.letterSpacing = spacing;
-      letter(ctx, label, 0, 2, style.ink, halo, 4.5);
-      ctx.letterSpacing = "0px";
-      ctx.restore();
+      letterName(ctx, l, x, y, nameSize, style);
     }
 
     // Close in, each file's name is lettered small on its patch, and a tap on it goes there.

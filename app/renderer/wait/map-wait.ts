@@ -18,7 +18,7 @@
 // still being drawn through every lull.
 
 import type { Outline } from "@gaia/terrain";
-import { rimPath } from "../immersive/field-map.ts";
+import { rimPath } from "../immersive/wash.ts";
 import { dryness } from "../immersive/map-styles.ts";
 import { type WaitBrush, createWaitBrush } from "./brush.ts";
 import { WAIT_INK } from "./ink.ts";
