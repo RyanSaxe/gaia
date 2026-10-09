@@ -185,6 +185,7 @@ export const thicketParams = {
     mound: "A rounded mound, a little wider than tall",
     spreading: "Low and wide, spilling outward",
     vase: "Upright stems flaring out like a vase",
+    scrub: "Low, wiry stems that fork and arch over, like scrub",
   }),
   stems: t.scale("How many stems rise from the root", { "a few stems": 3, "several stems": 5, "a dense tangle": 8 }),
   stature: t.scale("How tall the shrub stands", { "knee-high": 0.6, "waist-high": 1.1, "head-high": 1.8 }),
@@ -204,13 +205,13 @@ export const leafMoundParams = {
     glossy: "Dense glossy clumps, like box or holly",
     feathery: "Loose, feathery sprays",
   }),
-  fullness: t.scale("How much of the frame the leaves hide", { airy: 0.45, full: 0.75, "dense and clipped": 1 }),
+  fullness: t.scale("How much of the frame the leaves hide", { "in tufts at its tips": 0.05, airy: 0.45, full: 0.75, "dense and clipped": 1 }),
 };
 
 export const leafMound = primitive({
   id: "leaf-mound@1",
   role: "Foliage",
-  doc: "Twigs carrying sprays of leaves that fill a shrub's frame down to the ground, so it reads as one soft, leafy mound.",
+  doc: "Crowded leaf clusters on short twigs that fill a shrub's frame down to the ground, with a ragged outline, so it reads as one leafy mass; or tufts at its tips, for scrub.",
   params: leafMoundParams,
   build: (p, ctx, skeleton) => buildLeafMound(p, ctx, skeleton),
 });

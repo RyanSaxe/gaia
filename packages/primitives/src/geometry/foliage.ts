@@ -516,7 +516,7 @@ export function emitClump(leaf: PartBuilder, bark: PartBuilder, anchors: Anchor[
 }
 
 /** A thin tapered twig: a three-sided tube along `pts`, bark-colored, never lost, so a bare tree keeps its twigs. */
-function emitTwig(bark: PartBuilder, pts: readonly V3[], r0: number, r1: number, ch: (q: Vec3) => Channels): void {
+export function emitTwig(bark: PartBuilder, pts: readonly V3[], r0: number, r1: number, ch: (q: Vec3) => Channels): void {
   const radial = 3;
   const first = bark.vertexCount;
   for (let k = 0; k < pts.length; k++) {
@@ -546,7 +546,7 @@ function emitTwig(bark: PartBuilder, pts: readonly V3[], r0: number, r1: number,
  * about `face`. Its leaves shade with the crown's blended normal, so the
  * canopy lights as one volume; `shadeShift` darkens sprays deep in a clump.
  */
-function emitSpray(leaf: PartBuilder, crown: Crown, base: V3, dir: V3, face: V3, half: number, form: number, r: Rand, ch: Channels, shadeShift: number): void {
+export function emitSpray(leaf: PartBuilder, crown: Crown, base: V3, dir: V3, face: V3, half: number, form: number, r: Rand, ch: Channels, shadeShift: number): void {
   const roll = r.range(-0.5, 0.5);
   const flat = normalize(sub(face, scale(dir, dot(face, dir))));
   const across = normalize(rotate(cross(dir, flat), dir, roll));
