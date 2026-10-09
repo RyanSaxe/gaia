@@ -120,8 +120,9 @@ bough (`twig`) and the point its piece hangs from (`pivot`).
   toward a most it never passes, so the gustiest world folds nothing into
   a crease. Past where its turn holds, a long hanging piece swings less
   and trails, so a willow's strands sway rather than whip. A taller plant
-  is thicker, so its trunk and boughs lean less (`WIND.build`), and a
-  fir's needles are too stiff to flutter (`STIFF`). Grass, flowers,
+  is thicker, so its trunk and boughs lean less (`WIND.build`). A fir's
+  needles are too stiff to flutter, and a willow's strand too long to turn
+  as one leaf, so both move only with their twig (`STIFF`). Grass, flowers,
   bushes, trees and smoke read the same gusts. A plant's `sway@1` sets how
   far it gives and how quickly it swings; calm is the default.
 - **Gravity.** Every leaf, flower and twig is carried by its parent: a

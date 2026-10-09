@@ -152,7 +152,8 @@ describe("plants", () => {
     const floaters = FLORA_VITALITIES.flatMap((v) => [...describeFloaters(parts, v), ...unsupportedAt(parts, v, { wind: { ...GUST, height } }).map((u) => `${parts[u.part]?.swatch} ${u.why} in the gust at (${u.at.map((c) => c.toFixed(1)).join(", ")}), vitality ${v}`)]);
     expect(floaters).toEqual([]);
     expect(parts.reduce((n, p) => n + p.indices.length / 3, 0)).toBeLessThanOrEqual(PLANT_BUDGET);
-  }, 60_000);
+    // A full crown of clumps on a tall spire takes about 35 s alone, and other work shares the machine.
+  }, 120_000);
   it.each(samples(lib.get("great-tree@1")).map((s, i) => [i, s] as const))("a great tree carries every leaf and twig at any vitality, in still air and a gust (sample %i)", (i, s) => {
     const parts = (build(lib.get("great-tree@1"), s, null, 5 + i) as Built).parts as Part[];
     const floaters = FLORA_VITALITIES.flatMap((v) => [...describeFloaters(parts, v), ...unsupportedAt(parts, v, { wind: { ...GUST, height: 20 } }).map((u) => `${parts[u.part]?.swatch} ${u.why} in the gust at (${u.at.map((c) => c.toFixed(1)).join(", ")}), vitality ${v}`)]);
