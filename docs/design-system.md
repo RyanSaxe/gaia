@@ -210,7 +210,9 @@ its own two covers, tall unkempt green grass and tall dry golden grass,
 which drift in from the land's covers in islands past the rim and mingle
 blade by blade in broad swathes. Low brush darkens the ground in dabs that
 crowd together where the wild runs to scrub, and wild bushes stand in
-seeded thickets there, always healthy. Only the thickets within 1.64 km of
+seeded thickets there, always healthy. The covers and the thickets are
+`@gaia/terrain`'s (`wildShare`, `wildPatch`, `wildScrub`, `wildThicket`),
+which the field sheet inks too. Only the thickets within 1.64 km of
 an anchor that jumps to the person every 200 m stand, so every bush that
 comes or goes is past where land has fully dissolved into the sky.
 
@@ -615,10 +617,10 @@ material language holds them (`map-styles.ts` is its data):
 
 | Material | What it is | Where it shows |
 | --- | --- | --- |
-| Paper | Handmade cream paper, mottled and fibred, with a torn deckled edge; after dark read by the lantern, warm at its middle and falling into blue | The map's sheet, the minimap's scrap, a thing's page, the wait's sheet |
+| Paper | Handmade cream paper, mottled and fibred, with a torn deckled edge; on the map one paper anchored to the world, running on unbroken past the land's paint; after dark read by the lantern, warm at its middle and falling into blue | The map's sheet, the minimap's scrap, a thing's page, the wait's sheet |
 | Paint | Watercolor washes in health's colors, pooling at their rims and bleeding wet in wet; hills shaded violet and lit warm | The map, the minimap, the wait; a sketch's wash |
-| Contours | Fine sepia lines from the real heights, every 1.2 m and every fifth heavier, drawn at the view's size so they look the same at every zoom: the map is a painted topographic map, so a person can read a rise before walking it | The map and the minimap |
-| Ink | One brown-black ink for names, borders, marks and sketches; areas' names in upright, widely spaced capitals as a survey map letters its regions, small names in italic, edged with a little paper, never boxed | Every name on every sheet |
+| Contours | Fine sepia lines from the real heights, every 1.2 m and every fifth heavier, drawn at the view's size so they look the same at every zoom: the map is a painted topographic map, so a person can read a rise before walking it; in the wild a little lighter on the bare paper | The map and the minimap, the land and the wild |
+| Ink | One brown-black ink for names, borders, marks and sketches, and for the wild past the land, drawn as an old survey draws country; areas' names in upright, widely spaced capitals as a survey map letters its regions, small names in italic, edged with a little paper, never boxed | Every name on every sheet; the wild |
 | Hand | The traveller's own notes, in a hand: what a thing's sketch shows is wrong, its vitality, and the name of the thing walked up to | A thing's page and the minimap's ring |
 | Vermilion | The traveller's own marks: their cloak, a spot picked on the map, the pencil ring round a thing walked up to | The map and the minimap |
 
@@ -638,6 +640,30 @@ a tower's top falls and a ring's stones lie down, as they do in the world.
 The colors read as the world's own seasons, so the map carries no legend.
 The wait still washes each area in its land's color until it is rebuilt
 to paint health as the map does.
+
+Past the land the paper stays unwashed, because the wild stands for no code
+and color means health, and ink draws the wild as an old survey
+(`wild-ink.ts`): contours from its heights, and hachures down its slopes,
+heavier on the slopes turned from the light; each thicket's bushes where
+the world stands them, little crowns scalloped in ink with their shade side
+and shadow hatched; tufts of grass where its golden steppe runs, a few on
+its green grass, and stipple where it runs to scrub, thinning toward the
+land as the land's own grass runs on past the rim. All of it comes from the
+functions the world grows the wild from (`wildRollAt`, `wildShare`,
+`wildPatch`, `wildScrub` and `wildThicket` in `@gaia/terrain`), so the map
+and the world never disagree. The land's painting ends at its square, its
+paint giving way raggedly to bare paper, and the ink runs up under that
+ragged edge; the corners past the land's rounded rim stay painted like the
+land beside them. Near the land the wild's relief eases from the height the
+land holds a little inside its rim into the wild's own roll over 160 m, as
+the land's relief eases at its rim, so no crest is inked as a ring round
+the land. The wild has no end, so it is not painted onto one sheet: it is
+inked in squares anchored to the world, each at one of a ladder of scales
+twice apart, a few milliseconds at a time in the page's idle time ahead of
+where the person is and where the map would open, and kept. A view lays the
+squares nearest its own scale, crossfading between two as the map zooms, so
+nothing is drawn afresh as the person walks and no mark appears or changes
+as they go.
 
 The sheets nest by scale, each growing out of the last so nothing jumps:
 the minimap is the land around the person, turned to the way they face; a
@@ -765,15 +791,22 @@ The three ways work together:
   with 75 m to walk, drawn from the field map's painted paper in a few
   milliseconds, and one transform turns it about the traveller and
   slides it under the scrap; it is drawn again only as the person nears the
-  window's edge or the paper is painted afresh. After dark the lantern
-  reads its paper and land alike, as it reads the map.
+  window's edge or the paper is painted afresh. It is never bare: however
+  far out in the wild, it shows the wild's ink around the person (see The
+  field sheet), inked ahead of them, so drawing it out there lays only what
+  is inked. After dark the lantern reads its paper and land alike, as it
+  reads the map.
 - **The field map.** A tap on the minimap (or M) unfolds the field map out
   of it: the sheet grows from the scrap to its place while its land draws
   back from the scrap's close view to the whole and turns from the way the
   person faces to north up, by transforms alone, and folds back into the
   scrap the same way. Its folds stay faintly creased. The sheet is handmade paper
-  with a torn, deckled edge; a tap off the sheet, Esc or M folds it. The land runs square to every edge of the sheet: the sheet
-  ends at the land's square, with no margin, and past the land's rounded
+  with a torn, deckled edge; a tap off the sheet, Esc or M folds it. Opened on the land, the land runs square to every edge of the sheet: the sheet
+  ends at the land's square, with no margin. Opened from the wild, the
+  sheet grows to take the traveller in: it frames the land and the
+  traveller together, reaching 60 m past them (and never less than a few
+  pixels, however far out they are), with the wild inked around the land's
+  paint. Past the land's rounded
   rim each part of the sheet takes the health of the land nearest it, so
   painted country goes on into the corners. Nothing marks the rim: no pen
   inks it, the washes stop pooling a little inside it, the relief eases
@@ -822,7 +855,8 @@ The three ways work together:
   afar glides the map round to frame that area at that level; there, a tap
   on a file's name or a spot sends the person to it. Its paper is painted in steps of a
   few milliseconds in the page's idle time after a bake, so it never holds
-  up a frame.
+  up a frame, and so is the wild's ink: the squares around the person first,
+  before the new paper is shown, then those the map would open on.
   A tap on the open map, on a spot or (close in) on a name, sends the person
   there. The spot is marked with a cross in vermilion ink; the map folds away as the view
   clouds over in the map's own creased paper, the person is placed under it

@@ -18,8 +18,11 @@
 // few milliseconds at a time while the page is idle after each bake, so it
 // never holds up a frame. Opening, panning and zooming redraw only the view of
 // the paper and the marks and names over it, which stay one size at any zoom.
+// Past the land's paint the wild is drawn in ink (`wild-ink.ts`) from tiles
+// inked ahead of the person in the same idle time. Opened from the wild, the
+// sheet grows to take the traveller in.
 
-import { type Place, type PlaceArea, type WorldPlaces, heightAt, outlinesOf, waterDepthAt } from "@gaia/terrain";
+import { type Place, type PlaceArea, type WorldPlaces, outlinesOf, waterDepthAt } from "@gaia/terrain";
 import { areaVitality, groundVitality } from "@gaia/world";
 import { onTap } from "../lab.ts";
 import type { StoodWorld } from "../terrain/lab.ts";
@@ -27,6 +30,7 @@ import { DECKLE_MASK, MAP_STYLE, type MapStyle, TRAVELLER_SVG, dryness, healthCo
 import { chained, contour, isoline, simplified } from "./isolines.ts";
 import { nameTails } from "./map-names.ts";
 import { drawBuilding, drawLandmark } from "./marks.ts";
+import { INK, type LandView, RIM, type WildInk, createWildInk, layGround, reliefAt } from "./wild-ink.ts";
 
 export interface FieldMap {
   /** The world changed: the paper is painted again while the page is idle. */
@@ -47,7 +51,7 @@ export interface FieldMap {
   frame(x: number, z: number, yaw: number, place: Place): void;
   /** Whether the immersive world shows: the map paints and opens only while it does. */
   show(on: boolean): void;
-  /** What the map shows, for scripted checks: whether its paper is painted, zoom in pixels per meter and as a multiple of the whole sheet's, the paper's painting time and its longest step, and names drawn. */
+  /** What the map shows, for scripted checks: whether its paper is painted, zoom in pixels per meter and as a multiple of the whole sheet's, the paper's painting time and its longest step, names drawn, the sheet's extent and the wild's ink. */
   state(): {
     readonly open: boolean;
     readonly ready: boolean;
@@ -57,6 +61,10 @@ export interface FieldMap {
     readonly longestStepMs: number;
     readonly drawMs: number;
     readonly labels: number;
+    /** The sheet's extent, meters, as it last unfolded. */
+    readonly box: readonly number[];
+    /** The wild's ink: tiles kept and inked, the longest step, and tiles inked at once because a view could not wait. */
+    readonly ink: ReturnType<WildInk["stats"]> | null;
   };
 }
 
@@ -85,11 +93,6 @@ export interface MapSource {
  */
 const PAPER = 2048;
 export const MARGIN = 0;
-/**
- * Near its rounded rim the land rises to a crest. On the sheet its relief eases, over the last `inner` meters, to
- * the height `held` meters in, so neither the hill shade nor the contours draw a ring where the land ends.
- */
-const RIM = { inner: 110, held: 60 };
 /** Sample spacing of the areas, the hills and the water, meters. */
 const AREA_CELL = 5;
 const HILL_CELL = 5;
@@ -185,6 +188,8 @@ export interface Paper {
   readonly borders: readonly { readonly path: Path2D; readonly depth: number }[];
   /** Each file's patch: its outline in meters, its heart, how far it reaches and its name, drawn once the map comes close. */
   readonly patches: readonly { readonly path: Path2D; readonly x: number; readonly z: number; readonly radius: number; readonly name: string; readonly area: string }[];
+  /** The wild past the land, in ink, drawn wherever the paint is not. */
+  readonly wild: WildInk;
 }
 
 /** Smooth noise between 0 and 1, varying over about one unit. */
@@ -389,7 +394,8 @@ function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place
   const ctx = canvas.getContext("2d") as CanvasRenderingContext2D;
   const px = (v: number): number => (v + reach) * scale;
 
-  paintPaperGround(ctx, style, PAPER, PAPER);
+  // The paper's own ground, anchored to the world: past the land every view lays the same paper, so it runs on.
+  layGround(ctx, style, px(0), px(0), scale, PAPER, PAPER);
   yield;
 
   // Areas: one sample per cell.
@@ -619,17 +625,6 @@ function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place
   // Hills: shade away from the light in the northwest, and (when lit) a warm light on the slopes facing it.
   const hn = Math.ceil((reach * 2) / HILL_CELL);
   const e = HILL_CELL * 1.5;
-  /** The ground's height as the sheet paints it: eased at the rim to the height a little way in (`RIM`). */
-  const reliefAt = (x: number, z: number): number => {
-    const r = Math.pow(Math.abs(x) ** 4 + Math.abs(z) ** 4, 0.25);
-    const toRim = half - r;
-    const h = heightAt(t.lattice, x, z);
-    if (toRim >= RIM.inner) return h;
-    const pull = Math.min(1, (half - RIM.held) / Math.max(r, 1e-6));
-    const held = heightAt(t.lattice, x * pull, z * pull);
-    const k = Math.max(0, Math.min(1, (toRim - RIM.held) / (RIM.inner - RIM.held)));
-    return held + (h - held) * k * k * (3 - 2 * k);
-  };
   const slopes = new Float32Array(hn * hn * 2);
   const heights = new Float32Array(hn * hn);
   const shadeImg = new ImageData(hn, hn);
@@ -640,10 +635,11 @@ function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place
     for (let i = 0; i < hn; i++) {
       const x = -reach + (i + 0.5) * HILL_CELL;
       const z = -reach + (j + 0.5) * HILL_CELL;
-      const gx = (reliefAt(x + e, z) - reliefAt(x - e, z)) / (2 * e);
-      const gz = (reliefAt(x, z + e) - reliefAt(x, z - e)) / (2 * e);
+      // The ground's height as the sheet paints it: eased at the rim to the height a little way in (`RIM`).
+      const gx = (reliefAt(t, x + e, z) - reliefAt(t, x - e, z)) / (2 * e);
+      const gz = (reliefAt(t, x, z + e) - reliefAt(t, x, z - e)) / (2 * e);
       const k = j * hn + i;
-      heights[k] = reliefAt(x, z);
+      heights[k] = reliefAt(t, x, z);
       slopes[k * 2] = gx;
       slopes[k * 2 + 1] = gz;
       const lit = (gx + gz) * style.relief;
@@ -823,7 +819,9 @@ function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place
     return i < 0 || j < 0 || i >= n || j >= n ? -1 : (at[j * n + i] as number);
   };
   const borders = outlines.areas.filter((o) => o.depth > 0).map((o) => ({ path: meterPath(o.rings), depth: o.depth }));
-  return { canvas, reach, style, areaLabels, areaAt, vitality, patches, contours, borders };
+  // Past the paint, the wild is inked as views need it, where the paint gives way to bare paper.
+  const wild = createWildInk(t, style, reach, fade);
+  return { canvas, reach, style, areaLabels, areaAt, vitality, patches, contours, borders, wild };
 }
 
 /** The land's rounded square `r` meters from its middle, through `px` (meters to the sheet's pixels): what keeps a pen inside the land. */
@@ -896,6 +894,13 @@ export const CLOSE = 2.4;
 const UNFOLD_MS = 640;
 const FOLD_MS = 360;
 const GLIDE_MS = 700;
+/**
+ * Opened from the wild, the sheet grows to take the traveller in, this many meters past them, and never less than
+ * this many pixels, so the traveller stands wholly on it however far out they are.
+ */
+const TAKE_IN = { meters: 60, px: 36 };
+/** How far the person walks before the wild's ink ahead of them is asked for again, meters. */
+const WARM_STEP = 20;
 
 /** Runs `step` in the page's idle time, passing the milliseconds left there, until it returns true. */
 function whenIdle(step: (budget: number) => boolean): () => void {
@@ -923,32 +928,31 @@ const LINE = { contour: 0.85, index: 1.4, border: 1, hedge: 3.2 };
 /** How a mark grows with the land close in: its scale per pixel a meter, about a building's width over its drawing's. */
 const MARK_METERS = 0.67;
 
-/** A view of the land: its middle in meters, and pixels per meter. */
-export interface LandView {
-  readonly x: number;
-  readonly z: number;
-  readonly zoom: number;
-}
-
 /**
  * The land as the sheet shows it in a view `w` by `h` pixels: the painted
- * paper; the contours, area borders and rivers, drawn at the view's size so
- * they look the same at every zoom; the dotted ways; every tree as a round
- * crown in its file's health; and buildings and landmarks as marks worn by
- * theirs. `grow` sizes the trees and ways, which never shrink below legible;
- * the marks grow with the land as the map comes close. Both the field map and
- * the minimap draw the land this way. Returns the boxes the marks take, which
- * names keep off.
+ * paper, and past its paint the wild in ink (`wild-ink.ts`); the contours,
+ * area borders and rivers, drawn at the view's size so they look the same at
+ * every zoom; the dotted ways; every tree as a round crown in its file's
+ * health; and buildings and landmarks as marks worn by theirs. `grow` sizes
+ * the trees and ways, which never shrink below legible; the marks grow with
+ * the land as the map comes close. Both the field map and the minimap draw the
+ * land this way, wherever they look, however far out in the wild. A tile of
+ * the wild's ink not yet inked is inked at once when `now`, or else left out
+ * until the page's idle time has inked it. Returns the boxes the marks take,
+ * which names keep off.
  */
-export function drawLand(ctx: CanvasRenderingContext2D, w: number, h: number, paper: Paper, stood: StoodWorld, view: LandView, grow: number): [number, number, number, number][] {
+export function drawLand(ctx: CanvasRenderingContext2D, w: number, h: number, paper: Paper, stood: StoodWorld, view: LandView, grow: number, now = true): [number, number, number, number][] {
   const sx = (x: number): number => (x - view.x) * view.zoom + w / 2;
   const sy = (z: number): number => (z - view.z) * view.zoom + h / 2;
   const visible = (x: number, y: number, pad: number): boolean => x > -pad && x < w + pad && y > -pad && y < h + pad;
   const style = paper.style;
+  // One paper under the whole view, the land's painted square laid on it, and the wild inked where the paint is not.
+  paper.wild.ground(ctx, w, h, view);
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
   const side = paper.reach * 2 * view.zoom;
   ctx.drawImage(paper.canvas, sx(-paper.reach), sy(-paper.reach), side, side);
+  paper.wild.draw(ctx, w, h, view, now);
 
   // The linework, in meters under the view's transform, its widths in pixels: contours in sepia, every fifth
   // heavier, and each area's border as a soft hedgerow under a fine line, stopping short of the land's rim.
@@ -1123,9 +1127,19 @@ export function createFieldMap(
   let isOpen = false;
   let shown = false;
   const view = { x: 0, z: 0, zoom: 1, fit: 1 };
+  /** The sheet's extent, meters: the land's square, or grown from the wild to take the traveller in. */
+  let box: [number, number, number, number] = [-604, -604, 604, 604];
   /** The land's reach the view was last fit to, or null when it was fit before the paper was painted. */
   let fittedTo: number | null = null;
-  const person = { x: 0, z: 0, yaw: 0 };
+  /** Where the person is, and whether out in the wild, which names no area. */
+  const person = { x: 0, z: 0, yaw: 0, wild: false };
+  /** Where the person was when the wild's ink was last asked for, whether out in the wild, and for which paper. */
+  let warmed = { x: Number.NaN, z: Number.NaN, wild: false, paper: null as Paper | null };
+  /** The minimap's scale, pixels a meter, as it last said. */
+  let miniScale: number = INK.scale;
+  let stopInking: (() => void) | null = null;
+  /** A redraw waiting for the next frame, for ink that has come in. */
+  let inkDraw = 0;
   let labelCount = 0;
   /** Each name drawn, its box on the sheet and where it leads: an area's heart, or a file's; and the area's box, to bring the map round to it. */
   let names: { box: [number, number, number, number]; x: number; z: number; bounds?: readonly [number, number, number, number] }[] = [];
@@ -1147,19 +1161,38 @@ export function createFieldMap(
     if (next.done === true) {
       paper = next.value;
       painting = null;
+      // Ink that comes in while the map is open is laid at the next frame, however many tiles land before it.
+      paper.wild.onLanded(() => {
+        if (isOpen && inkDraw === 0) {
+          inkDraw = requestAnimationFrame(() => {
+            inkDraw = 0;
+            if (isOpen) draw();
+          });
+        }
+      });
       // A map opened before its paper was painted was fit to a guess at the land's size: fit it to the land.
       if (isOpen && fittedTo !== paper.reach) fitView();
       if (isOpen) draw();
       for (const l of painted) l();
+      warm();
       return true;
     }
     return false;
   }
+  /** Paints the paper, then inks the wild around the person before it is shown, so the minimap never waits on it. */
+  function* paperAndInk(): Generator<void, Paper> {
+    const fresh = yield* paintPaper(source.stood(), source.placeAt, source.places(), style);
+    fresh.wild.want([minimapView()]);
+    while (fresh.wild.step()) yield;
+    return fresh;
+  }
   function startPainting(): void {
     stale = false;
     stopPainting?.();
+    stopInking?.();
+    stopInking = null;
     paper = null;
-    painting = paintPaper(source.stood(), source.placeAt, source.places(), style);
+    painting = paperAndInk();
     timing.paintMs = 0;
     timing.longestStepMs = 0;
     // At least one step in each idle slot, and more while the slot has time to spare.
@@ -1182,22 +1215,86 @@ export function createFieldMap(
     return { w, h, dpr };
   }
 
-  /** Keeps the zoom in range and the paper over the whole view: a sheet smaller than the view sits in its middle. */
+  /** Keeps the zoom in range and the sheet over the whole view: a sheet smaller than the view sits in its middle. */
   function clampView(): void {
     view.zoom = Math.max(view.fit * 0.9, Math.min(view.fit * 7, view.zoom));
+    const [cx, cz] = [(box[0] + box[2]) / 2, (box[1] + box[3]) / 2];
+    const hx = Math.max(0, (box[2] - box[0]) / 2 - canvas.clientWidth / (2 * view.zoom));
+    const hz = Math.max(0, (box[3] - box[1]) / 2 - canvas.clientHeight / (2 * view.zoom));
+    view.x = Math.max(cx - hx, Math.min(cx + hx, view.x));
+    view.z = Math.max(cz - hz, Math.min(cz + hz, view.z));
+  }
+
+  /**
+   * The sheet's extent for a view `w` by `h` pixels, meters, and the zoom that fits it: the land's square on the
+   * land; from the wild, grown to take the traveller in, `TAKE_IN` past them.
+   */
+  function sheetFor(w: number, h: number): { box: [number, number, number, number]; fit: number } {
     const r = paper?.reach ?? 604;
-    const hx = Math.max(0, r - canvas.clientWidth / (2 * view.zoom));
-    const hz = Math.max(0, r - canvas.clientHeight / (2 * view.zoom));
-    view.x = Math.max(-hx, Math.min(hx, view.x));
-    view.z = Math.max(-hz, Math.min(hz, view.z));
+    const fitOf = (b: readonly number[]): number => Math.min(w / ((b[2] as number) - (b[0] as number)), h / ((b[3] as number) - (b[1] as number)));
+    let grown: [number, number, number, number] = [-r, -r, r, r];
+    if (!person.wild) return { box: grown, fit: fitOf(grown) };
+    // The margin in meters keeps the traveller a few pixels in from the edge however small the land has become.
+    let margin = TAKE_IN.meters;
+    for (let k = 0; k < 3; k++) {
+      grown = [Math.min(-r, person.x - margin), Math.min(-r, person.z - margin), Math.max(r, person.x + margin), Math.max(r, person.z + margin)];
+      margin = Math.max(TAKE_IN.meters, TAKE_IN.px / fitOf(grown));
+    }
+    return { box: grown, fit: fitOf(grown) };
+  }
+
+  /** The land around the person at the minimap's scale, as far as it could show before the wild's ink is asked for again. */
+  function minimapView(): { box: [number, number, number, number]; zoom: number } {
+    miniScale = minimapAt()?.scale ?? miniScale;
+    const a = INK.ahead;
+    return { box: [person.x - a, person.z - a, person.x + a, person.z + a], zoom: miniScale };
+  }
+
+  /**
+   * Asks for the wild's ink ahead of the person, to be inked in the page's idle time: around them at the minimap's
+   * scale first, then the sheet the map would unfold to now. Walking on, it is asked again every few steps, so the
+   * ink is there before either draws it.
+   */
+  function warm(): void {
+    const p = paper;
+    if (p === null) return;
+    warmed = { x: person.x, z: person.z, wild: person.wild, paper: p };
+    const w = canvas.clientWidth;
+    const h = canvas.clientHeight;
+    const views = [minimapView()];
+    if (w > 0 && h > 0) {
+      const sheet = sheetFor(w, h);
+      const close = Math.min(w, h) < 560;
+      const zoom = close ? sheet.fit * 2.2 : sheet.fit;
+      const [cx, cz] = close ? [person.x, person.z] : [(sheet.box[0] + sheet.box[2]) / 2, (sheet.box[1] + sheet.box[3]) / 2];
+      views.push({ box: [cx - w / 2 / zoom, cz - h / 2 / zoom, cx + w / 2 / zoom, cz + h / 2 / zoom], zoom });
+    }
+    p.wild.want(views);
+    inkInIdle();
+  }
+
+  /** Inks the wild's waiting tiles in steps of a few milliseconds in the page's idle time, as the paper is painted. */
+  function inkInIdle(): void {
+    const p = paper;
+    if (p === null || stopInking !== null || !p.wild.waiting) return;
+    stopInking = whenIdle((budget) => {
+      const t0 = performance.now();
+      do {
+        if (!p.wild.step()) {
+          stopInking = null;
+          return true;
+        }
+      } while (performance.now() - t0 < budget - SPARE_MS);
+      return false;
+    });
   }
 
   /**
    * You are here: a small traveller standing on the map, their footprints
    * behind them along the way they look, and the file underfoot lettered
    * beside them. It is its own element, moved by a transform, so walking with
-   * the map open never redraws the sheet. Out in the wilds past the sheet it
-   * waits at the edge nearest them.
+   * the map open never redraws the sheet. Should they walk off the open sheet,
+   * it waits at the edge nearest them.
    */
   function placeHere(): void {
     const w = canvas.clientWidth;
@@ -1233,7 +1330,9 @@ export function createFieldMap(
     const close = Math.max(0, Math.min(1, (near - CLOSE) / 0.8));
     const wx = (x: number): number => view.x + (x - w / 2) / view.zoom;
     const wz = (y: number): number => view.z + (y - h / 2) / view.zoom;
-    const marks = drawLand(ctx, w, h, paper, stood, view, grow);
+    // The wild's ink a view has not had inked yet comes in from the page's idle time, and the sheet is drawn again.
+    const marks = drawLand(ctx, w, h, paper, stood, view, grow, false);
+    inkInIdle();
     if (close > 0) {
       ctx.save();
       ctx.setTransform(dpr * view.zoom, 0, 0, dpr * view.zoom, dpr * (w / 2 - view.x * view.zoom), dpr * (h / 2 - view.z * view.zoom));
@@ -1399,12 +1498,14 @@ export function createFieldMap(
   function fitView(): void {
     const { w, h } = size();
     fittedTo = paper?.reach ?? null;
-    view.fit = Math.min(w, h) / ((paper?.reach ?? 604) * 2);
+    const sheet = sheetFor(w, h);
+    box = sheet.box;
+    view.fit = sheet.fit;
     // A phone opens close enough to read the names around the person; a wide screen shows it all.
     const close = Math.min(w, h) < 560;
     view.zoom = close ? view.fit * 2.2 : view.fit;
-    view.x = close ? person.x : 0;
-    view.z = close ? person.z : 0;
+    view.x = close ? person.x : (box[0] + box[2]) / 2;
+    view.z = close ? person.z : (box[1] + box[3]) / 2;
     clampView();
   }
 
@@ -1654,6 +1755,8 @@ export function createFieldMap(
       person.x = x;
       person.z = z;
       person.yaw = yaw;
+      person.wild = place.area.depth < 0;
+      if (paper !== null && (paper !== warmed.paper || person.wild !== warmed.wild || !(Math.hypot(x - warmed.x, z - warmed.z) < WARM_STEP))) warm();
       const key = `${place.area.depth}|${place.area.path}|${place.file?.path ?? ""}`;
       if (key !== lastPlace) {
         lastPlace = key;
@@ -1676,6 +1779,8 @@ export function createFieldMap(
       longestStepMs: +timing.longestStepMs.toFixed(1),
       drawMs: +timing.drawMs.toFixed(1),
       labels: labelCount,
+      box: [...box],
+      ink: paper?.wild.stats() ?? null,
     }),
   };
 }

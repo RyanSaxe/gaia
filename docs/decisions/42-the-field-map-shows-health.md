@@ -44,3 +44,5 @@ Pair session `paper` (`18bde2d6-ccdd-49fd-a23a-d1663f7c6c3e`), rounds 1 to
 3 (the field map, health and lettering boards). It refines the field map of
 [decision 35](35-one-field-sheet.md); the minimap, a thing's page and the
 wait are still being designed.
+
+Refined by [45](45-the-wild-is-inked-as-a-survey.md): past the land the wild is inked as an old survey, and opened from the wild the sheet grows to take the traveller in.
