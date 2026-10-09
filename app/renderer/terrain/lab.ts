@@ -2259,6 +2259,8 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       /** The ground's own vitality and its area's at (x, z), or underfoot, as the grass, the ground and the water read them. */
       groundVitality: (x?: number, z?: number) => groundVitalityAt(x ?? walker.x, z ?? walker.z),
       understory: () => understory.stats(),
+      /** A hash of the baked land (heights, water levels and shore distances), to prove a change to the bake leaves it byte for byte. */
+      bakeHash: () => contentHash(terrain.lattice.heights, terrain.waterLevel, terrain.shore),
       /** Copies and triangles each kind of the understory drew in the last pass. */
       understoryDrawn: () => understory.drawnByKind(),
       /** Shows or hides the wild bushes, for comparing frame costs. */
