@@ -43,3 +43,5 @@ drawing boards. It supersedes the slip, the line and the rim of
 [decision 32](32-a-slip-ask-and-a-rim.md).
 
 Refined by [42](42-the-field-map-shows-health.md): color on the field map is health alone, with no legend, title, region names, fringe or turned-down corner.
+
+Refined by [43](43-a-page-for-every-thing.md): a thing's page is its own sheet at the lower left, raised by stopping at any thing that stands for code, and what it says is a schema the Engine and Jev session owns.

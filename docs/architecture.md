@@ -22,7 +22,7 @@ the document that did not change renders exactly as it did before.
 | Main | TypeScript (Electron) | The window and the app's lifecycle. It starts the engine and the world service, restarts the engine if it exits, and names the folder whose world each page opens: `GAIA_PROJECT`, one chosen with File > Open Folder, or none, and then the page offers the start (File > Choose a World returns to it). |
 | Engine | Rust (`gaia-engine`) | Files, parsing, git, test reports, the code model, the app-data store and the Jev client with the key from the macOS Keychain. |
 | World service | TypeScript (Electron utility process) | Kinds and primitives, the question planner, answer rules, vitality and the world document. It opens a codebase's world (`openWorld` in `app/world-service/open-world.ts`): the engine's `project.open`, Jev's judgments, kept in the store, and `layoutWorld`, and sends the renderer the result (`WorldDocument`) over its MessagePort. |
-| Renderer | TypeScript | The UI, the Three.js scene, the realizer and the clock. In slice 1 the renderer is the lab. The lab opens into the world, full screen at eye height (`app/renderer/immersive/`), with its debugging views (Components, Terrain and Skies) behind tabs; the immersive world is the terrain lab's world without its chrome, plus three ways of telling a person where they are (a minimap of the land around them with the area's name, the field map that unfolds out of it, and markers in the world), read through `placeAt` and drawn on one field sheet (`docs/design-system.md`, "The field sheet"); touching the world only moves the person, and a thing walked up to grows the minimap into its sketch page; a tap on the open field map sends the person to that place, landing where `WorldHandle.landing` says, under a fold of paper that hides the move. The terrain lab bakes its world on worker threads (`app/renderer/terrain/bake-worker.ts`): a few workers compose bands of lattice rows with `composeRows`, and one finishes the bake with `finishTerrain` and stands the world's things on it with `standWorld` (`app/renderer/terrain/stand.ts`): each building's site and pad, the landmarks' sites, the network of trails leveled into the ground and which way of it each ground sample lies on, the trees and the understory, and the ground texture's data, while the others work out whose ground each part of the land is (`ownershipRows`, see Vitality), so drawing never waits on a bake. Components are still realized on the main thread; the realizer is pure and worker-safe, so it can move into workers too. |
+| Renderer | TypeScript | The UI, the Three.js scene, the realizer and the clock. In slice 1 the renderer is the lab. The lab opens into the world, full screen at eye height (`app/renderer/immersive/`), with its debugging views (Components, Terrain and Skies) behind tabs; the immersive world is the terrain lab's world without its chrome, plus three ways of telling a person where they are (a minimap of the land around them with the area's name, the field map that unfolds out of it, and markers in the world), read through `placeAt` and drawn on one field sheet (`docs/design-system.md`, "The field sheet"); touching the world only moves the person, and stopping at a thing that stands for code raises its page at the lower left; a tap on the open field map sends the person to that place, landing where `WorldHandle.landing` says, under a fold of paper that hides the move. The terrain lab bakes its world on worker threads (`app/renderer/terrain/bake-worker.ts`): a few workers compose bands of lattice rows with `composeRows`, and one finishes the bake with `finishTerrain` and stands the world's things on it with `standWorld` (`app/renderer/terrain/stand.ts`): each building's site and pad, the landmarks' sites, the network of trails leveled into the ground and which way of it each ground sample lies on, the trees and the understory, and the ground texture's data, while the others work out whose ground each part of the land is (`ownershipRows`, see Vitality), so drawing never waits on a bake. Components are still realized on the main thread; the realizer is pure and worker-safe, so it can move into workers too. |
 
 The world service talks to the engine in newline-delimited JSON-RPC 2.0 over
 the engine's stdin and stdout, relayed by the main process. Only small data
@@ -550,11 +550,16 @@ file's under a directory, on its trees, its finer entities, its ground and
 what grows there, and its area's lots and water, and `__lab.terrain.groundVitality(x, z)` reads the texture as the
 shaders do.
 
-What a thing's sketch page says comes from one function (`describe` in
-`app/renderer/immersive/sketch.ts`): by default `symptomsOf`, which turns
-the vitality's signals into a few words about what is specific to this
-thing, and says nothing of a signal nearly every file shares. Jev's own
-judgment of what to say about a thing plugs in there.
+What a thing's page says is one typed value, `PageContent` in
+`app/renderer/immersive/sketch.ts`: up to two notes, each tied to a part of
+the thing's sketch, and the rest, a list of entries each a fact beside its
+label or a line of prose. One function, `describe`, makes it; today it
+fills the notes with `symptomsOf`, which turns the vitality's signals into
+a few words about what is specific to this thing and says nothing of a
+signal nearly every file shares, and the rest with the doc comment's first
+sentence and the facts the code knows. The Engine and Jev session owns
+what goes in it and may change the type; the page shows whatever it holds
+within its limits (`docs/design-system.md`, "What a thing says").
 
 Every primitive writes five per-vertex vitality channels: `loss` (the vitality
 below which a piece collapses to its pivot, or a spray's leaves drop in

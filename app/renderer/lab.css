@@ -286,8 +286,7 @@ details.json pre { font: 11px/1.45 ui-monospace, "SF Mono", Menlo, monospace; ba
 
 /* Where you are: the minimap, a torn scrap of the field map at the lower left, its land painted to its torn
    edges and fading into bare paper at its foot, where the area's name is written. The old name fades as the new
-   one is written; standing still writes the file underfoot beneath it. A tap unfolds the map out of it, and a
-   thing walked up to grows it into the thing's sketch page. */
+   one is written; standing still writes the file underfoot beneath it. A tap unfolds the map out of it. */
 .minimap {
   --w: 216px; --land: 216px;
   position: absolute; left: max(18px, env(safe-area-inset-left)); bottom: max(18px, env(safe-area-inset-bottom));
@@ -343,40 +342,77 @@ details.json pre { font: 11px/1.45 ui-monospace, "SF Mono", Menlo, monospace; ba
 .wayfinding:has(.field-map.open) .minimap { opacity: 0; transition-duration: 0.25s; }
 .wayfinding:has(.jump-cover.on) .minimap-band { opacity: 0; }
 
-/* A thing's sketch page: the scrap grows into a page of the traveller's sketchbook, the land it stands on faint
-   under the drawing; the pen draws the sketch as the page grows. */
-.minimap.page { --w: min(316px, calc(100vw - 36px)); height: min(var(--page-h, 400px), calc(100% - 100px)); cursor: default; }
-.minimap.page .minimap-sheet { opacity: 0.2; width: 100%; height: 236px; }
-.minimap.page .minimap-band, .minimap.page .minimap-mark { opacity: 0; }
-.minimap.page .minimap-here { display: none; }
-.sketch-page {
-  position: absolute; left: 0; top: 0; width: min(316px, calc(100vw - 36px)); max-height: 100%; padding: 12px 18px 14px 20px; overflow-y: auto; color: #3f3324; pointer-events: none;
-  opacity: 0; transition: opacity 0.5s ease 0.15s;
+/* A thing's page: a page of the traveller's sketchbook at the lower left, risen from the bottom edge while the
+   person stops at a thing and sunk below it when they walk away. The pen draws the sketch as it rises, and the
+   notes and their pencil leaders come in after. The rest is folded up behind the face along the crease at its
+   foot: a tap swings it down as the page lifts to show it, and another folds it up. Only transforms, opacity and
+   the pen's dash move it, and no filter lies on anything that moves, so a page at rest costs nothing a frame. */
+.thing-page {
+  position: absolute; left: max(18px, env(safe-area-inset-left)); bottom: 0; width: min(300px, calc(100vw - 36px));
+  pointer-events: none; transition: opacity 0.4s ease;
 }
-.sketch-page.on { opacity: 1; pointer-events: auto; }
-.sketch-drawing { position: relative; height: 150px; }
-.sketch-drawing svg { display: block; width: 200px; height: 150px; margin: 0 auto; overflow: visible; }
-.sketch-drawing .pen { stroke-dasharray: 1 1; stroke-dashoffset: 1; transition: stroke-dashoffset 1.1s cubic-bezier(0.45, 0.05, 0.4, 1) 0.25s; }
-.sketch-page.on .sketch-drawing .pen { stroke-dashoffset: 0; }
-.sketch-drawing .leader { fill: none; stroke: #8a6a4a; stroke-width: 0.7; stroke-dasharray: 0.012 0.02; opacity: 0; transition: opacity 0.8s ease 1.1s; }
-.sketch-page.on .sketch-drawing .leader { opacity: 0.9; }
-.sketch-note {
-  position: absolute; max-width: 92px; font: 13.5px/1.18 "Bradley Hand", "Segoe Print", "Iowan Old Style", Georgia, cursive; color: #5a3e26;
-  opacity: 0; transition: opacity 0.8s ease 1.2s;
+.thing-page-lift {
+  position: relative; perspective: 1300px; will-change: transform;
+  transform: translateY(calc(100% + 40px)); transition: transform 0.8s cubic-bezier(0.55, 0, 0.8, 0.35);
 }
-.sketch-page.on .sketch-note { opacity: 1; }
-.sketch-note.left { left: -4px; top: 2px; }
-.sketch-note.right { right: -6px; top: 74px; text-align: right; }
-.sketch-where { margin-top: 4px; font-size: 8.5px; font-weight: 600; letter-spacing: 0.22em; text-transform: uppercase; color: var(--ink-soft); overflow-wrap: anywhere; }
-.sketch-name { font-size: 24px; font-style: italic; font-weight: 600; line-height: 1.1; overflow-wrap: anywhere; }
-.sketch-fares { font: italic 14px "Iowan Old Style", Georgia, serif; color: var(--ink-soft); margin-top: 1px; }
-.sketch-doc { margin: 7px 0 0; font: 15px/1.28 "Bradley Hand", "Segoe Print", "Iowan Old Style", Georgia, cursive; }
-.sketch-more { background: none; border: 0; padding: 0; margin-top: 7px; color: var(--ink-soft); font: italic 13px "Iowan Old Style", Georgia, serif; text-decoration: underline dotted; text-underline-offset: 3px; cursor: pointer; }
-.sketch-details { display: none; grid-template-columns: auto 1fr; gap: 2px 10px; margin: 6px 0 0; font: 12px/1.35 "Iowan Old Style", Georgia, serif; }
-.sketch-page.unfolded .sketch-details { display: grid; }
-.sketch-page.unfolded .sketch-more { display: none; }
-.sketch-details dt { color: var(--ink-soft); font-style: italic; }
-.sketch-details dd { margin: 0; overflow-wrap: anywhere; }
+.thing-page.on .thing-page-lift { transform: translateY(-18px) rotate(-0.6deg); transition: transform 1.1s cubic-bezier(0.2, 0.75, 0.25, 1); pointer-events: auto; cursor: pointer; }
+.thing-page.on.unfolded .thing-page-lift { transform: translateY(calc(-18px - var(--rest-h, 0px))) rotate(-0.6deg); transition-duration: 1s; }
+/* Each sheet's shadow falls from its torn edge, and after dark it is read by the lantern, warmer and dimmer: the
+   sheet is drawn once with its shadow and carried by the page's transforms. */
+.thing-page-sheet { filter: drop-shadow(0 1px 1.5px rgba(30, 22, 10, 0.18)) drop-shadow(0 9px 15px rgba(30, 22, 10, 0.3)) sepia(calc(var(--night, 0) * 0.3)) brightness(calc(1 - var(--night, 0) * 0.2)); }
+/* The lantern's pool, as on the minimap: warm at the sheet's middle, falling into blue at its edges. */
+.thing-page-face, .thing-page-rest {
+  --lantern: radial-gradient(ellipse 90% 80% at 62% 70%, rgba(255, 214, 160, calc(var(--night, 0) * 0.1)), rgba(36, 34, 70, calc(var(--night, 0) * 0.3)));
+  color: #3f3324; background: var(--lantern), radial-gradient(130% 120% at 30% 20%, #f8f1df, #eee2c4);
+  -webkit-mask-image: var(--deckle); mask-image: var(--deckle); -webkit-mask-size: 100% 100%; mask-size: 100% 100%;
+}
+.thing-page-face { position: relative; padding: 14px 18px 17px; }
+/* The crease along the face's foot, where the rest is folded up behind it. */
+.thing-page-crease {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 12px; pointer-events: none; transition: opacity 0.6s ease;
+  background: linear-gradient(rgba(80, 60, 30, 0), rgba(80, 60, 30, 0.1)); border-bottom: 1px solid rgba(90, 68, 40, 0.28);
+}
+.thing-page.unfolded .thing-page-crease { opacity: 0.5; }
+.thing-page-flap {
+  position: absolute; left: 0; right: 0; top: 100%;
+  transform-origin: 50% 0; transform: rotateX(-180deg); backface-visibility: hidden; -webkit-backface-visibility: hidden;
+  transition: transform 1s cubic-bezier(0.45, 0.05, 0.3, 1);
+}
+.thing-page.unfolded .thing-page-flap { transform: rotateX(0deg); }
+.thing-page-rest {
+  padding: 13px 18px 16px; max-height: calc(100dvh - var(--face-h, 320px) - 56px); overflow-y: auto; overscroll-behavior: contain;
+  background: linear-gradient(rgba(80, 60, 30, 0.13), rgba(80, 60, 30, 0) 10px), var(--lantern), radial-gradient(130% 120% at 30% 20%, #f8f1df, #eee2c4);
+}
+.thing-page-drawing { position: relative; }
+.thing-page-drawing.over { padding-top: 20px; }
+.thing-page-drawing.under { padding-bottom: 22px; }
+.thing-page-sketch { display: block; width: 200px; height: 150px; margin: 0 auto; overflow: visible; }
+.thing-page-sketch .pen { stroke-dasharray: 1 1; stroke-dashoffset: 1; transition: stroke-dashoffset 0.3s ease; }
+.thing-page.on .thing-page-sketch .pen { stroke-dashoffset: 0; transition: stroke-dashoffset 1.3s cubic-bezier(0.45, 0.05, 0.4, 1) 0.8s; }
+.thing-page-leaders { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; opacity: 0; transition: opacity 0.3s ease; }
+.thing-page-leaders path { fill: none; stroke: #7a5f45; stroke-width: 0.9; stroke-linecap: round; stroke-dasharray: 2.2 2.6; }
+.thing-page-leaders circle { fill: #7a5f45; }
+.thing-page.on .thing-page-leaders { opacity: 0.85; transition: opacity 0.9s ease 1.9s; }
+.thing-page-note {
+  position: absolute; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font: 13.5px/1.15 "Bradley Hand", "Segoe Print", "Iowan Old Style", Georgia, cursive; color: #5a3e26;
+  opacity: 0; transition: opacity 0.3s ease;
+}
+.thing-page.on .thing-page-note { opacity: 1; transition: opacity 0.9s ease 2s; }
+.thing-page-note.over { left: 0; top: 0; }
+.thing-page-note.under { right: 0; bottom: 0; text-align: right; }
+.thing-page-where { margin-top: 6px; font-size: 8.5px; font-weight: 600; letter-spacing: 0.22em; text-transform: uppercase; color: var(--ink-soft); overflow-wrap: anywhere; }
+.thing-page-drawing + .thing-page-title { margin-top: 6px; }
+/* Its name lettered as the map letters names, and its vitality beside it as a reading in the traveller's hand. */
+.thing-page-title { display: flex; align-items: baseline; gap: 12px; }
+.thing-page-name { flex: 1; min-width: 0; font-size: 24px; font-style: italic; font-weight: 600; line-height: 1.1; overflow-wrap: anywhere; }
+.thing-page-vitality { font: 18px/1 "Bradley Hand", "Segoe Print", "Iowan Old Style", Georgia, cursive; color: #5a3e26; white-space: nowrap; }
+.thing-page-prose { margin: 0 0 9px; font: 14.5px/1.28 "Bradley Hand", "Segoe Print", "Iowan Old Style", Georgia, cursive; }
+.thing-page-facts { display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; margin: 0 0 9px; font-size: 12.5px; line-height: 1.3; }
+.thing-page-rest > :last-child { margin-bottom: 0; }
+.thing-page-facts dt { color: var(--ink-soft); font-style: italic; white-space: nowrap; }
+.thing-page-facts dd { margin: 0; overflow-wrap: anywhere; white-space: pre-line; }
+.wayfinding:has(.field-map.open) .thing-page { opacity: 0; }
 
 /* The quiet buttons: small rounds of paper at the corners. */
 .way-button {
@@ -474,5 +510,5 @@ details.json pre { font: 11px/1.45 ui-monospace, "SF Mono", Menlo, monospace; ba
   .field-map { --fold: 44px; }
   .way-button, .slip-view { min-height: 44px; }
   .minimap { --w: 168px; --land: 168px; left: 10px; bottom: max(10px, env(safe-area-inset-bottom)); }
-  .minimap.page { --w: calc(100vw - 20px); height: min(400px, 62%); }
+  .thing-page { left: 10px; width: min(300px, calc(100vw - 20px)); }
 }
