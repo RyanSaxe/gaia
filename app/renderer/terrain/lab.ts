@@ -499,7 +499,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   const clearings = createClearings(terrain);
   const grass = createGrass(light, groundTex, covers, clearings);
   const water = createWater(terrain, light, groundTex);
-  scene.add(sky.mesh, ground.wilds, ground.fine, ground.coarse, grass.mesh, water.group);
+  scene.add(sky.mesh, ground.wilds, ground.fine, ground.coarse, ground.mirror, grass.mesh, water.group);
   /** Each standing landmark's view, in the order of `ways.sites`; a kind may stand more than once. */
   let landmarkViews: PlantView[] = [];
   /** Every landmark view made so far, by its kind and which of that kind it is, reused from bake to bake. */
@@ -1719,7 +1719,8 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   // never grass or the understory: its reflection is soft, so fine detail
   // there is wasted, and the understory keeps back from the water anyway.
   const mirrorHide = [grass.mesh, ground.fine, signs.mesh];
-  const mirrorShow = [ground.coarse, ground.wilds];
+  // Walking, it mirrors the ground's rings at a quarter of their detail, which draw the wild land too; from above, the whole-world mesh and the wild ring.
+  const mirrorShow = (): THREE.Object3D[] => (mode === "walk" ? [ground.mirror] : [ground.coarse, ground.wilds]);
   let frameCalls = 0;
   /** Each pass's draw calls and triangles in the last frame. */
   const passes = { shadow: { calls: 0, triangles: 0 }, mirror: { calls: 0, triangles: 0 }, view: { calls: 0, triangles: 0 } };
@@ -1751,10 +1752,10 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     refreshSight(now);
     // Every pass thins distant detail from where the person's eyes are.
     light.uEye.value.copy(mode === "walk" ? detailEye : camera.position);
-    shadow.render(renderer, scene, [...views(), ...understory.casters(), ...wildGrowth.all(), ...(farCards === null ? [] : [farCards]), ...(swapping === null ? [] : [swapping])], [sky.mesh, ground.wilds, ground.fine, ground.coarse, grass.mesh, water.group, signs.mesh, ...understory.quiet()]);
+    shadow.render(renderer, scene, [...views(), ...understory.casters(), ...wildGrowth.all(), ...(farCards === null ? [] : [farCards]), ...(swapping === null ? [] : [swapping])], [sky.mesh, ground.wilds, ground.fine, ground.coarse, ground.mirror, grass.mesh, water.group, signs.mesh, ...understory.quiet()]);
     frameCalls = renderer.info.render.calls;
     passes.shadow = { calls: renderer.info.render.calls, triangles: renderer.info.render.triangles };
-    const mirrorCalls = water.mirror(renderer, scene, camera, [...mirrorHide, ...understory.quiet(), ...understory.casters().map((c) => c.object), ...wildGrowth.all().map((c) => c.object)], mirrorShow, dt);
+    const mirrorCalls = water.mirror(renderer, scene, camera, [...mirrorHide, ...understory.quiet(), ...understory.casters().map((c) => c.object), ...wildGrowth.all().map((c) => c.object)], mirrorShow(), dt);
     frameCalls += mirrorCalls;
     passes.mirror = { calls: mirrorCalls, triangles: mirrorCalls > 0 ? renderer.info.render.triangles : 0 };
     renderer.render(scene, camera);
@@ -2295,7 +2296,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
         name("understory", [...understory.all().map((v) => v.object), ...understory.quiet()]);
         name("wild bushes", wildGrowth.all().map((v) => v.object));
         name("grass", [grass.mesh]);
-        name("ground", [ground.fine, ground.coarse, ground.wilds]);
+        name("ground", [ground.fine, ground.coarse, ground.mirror, ground.wilds]);
         name("water", [water.group]);
         name("sky", [sky.mesh]);
         name("signs", [signs.mesh]);
