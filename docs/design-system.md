@@ -78,6 +78,13 @@ mound shades as one volume, bright on top and at the rim, darker inside,
 where the stems show in its shade. Their blossoms are umbels on stalks
 from the twigs, and berries hang in small clusters on stalks.
 
+Bark faces outward and draws front faces only. A trunk is one tube from the
+ground to its fork, and each bough one tube from its joint to its tip, so
+the bark's ridges run unbroken past the joins. Where a trunk meets the
+ground it flares into three to five broad root lobes that sink into the
+soil, each sized and turned a little differently, curving in to the trunk
+within about two of its widths.
+
 ### Wind, gravity and vitality
 
 One system moves, holds up and declines everything that grows, so no
