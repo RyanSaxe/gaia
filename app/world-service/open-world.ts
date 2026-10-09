@@ -1,8 +1,9 @@
 // Opening a codebase's world: the engine reads the code, the land is divided,
 // Jev judges every look, and the world is laid out. The land's division
-// depends on the code alone, so its outlines go to the renderer before any
-// judging, and each area is named as its judgments settle: the wait paints
-// the map as the world is judged. Jev's answers are kept in the project's
+// depends on the code alone, so its outlines and every file's patch go to the
+// renderer before any judging; each file's health follows as soon as nothing
+// still to be judged can change it, and each area is named as its judgments
+// settle: the wait paints the map as the world is judged. Jev's answers are kept in the project's
 // app-data store, keyed by each request's hash, so reopening asks again only
 // about things whose facts changed. Jev is asked only when the engine has a
 // key and runs with GAIA_JEV=live. Until the person sets a spend limit, every
@@ -10,9 +11,9 @@
 // first. Everything Jev does not answer is judged by the stand-in, and the
 // document says which.
 
-import type { EngineClient, JevClient, JevResponse } from "@gaia/schema";
+import type { EngineClient, FileFacts, JevClient, JevResponse } from "@gaia/schema";
 import { outlinesOf } from "@gaia/terrain";
-import { type Judge, areaOfRequest, judgeWorld, judgedThing, keptJev, landOf, layoutWorld, planWorldRequests, requestKey, standInJev, thingsOf } from "@gaia/world";
+import { type Judge, NEEDS_TESTS, areaOfRequest, judgeWorld, judgedThing, keptJev, landOf, layoutWorld, planWorldRequests, requestKey, standInJev, thingsOf, unshare, vitalityOf } from "@gaia/world";
 import { LOOKS } from "../renderer/terrain/looks.ts";
 import { engineJev } from "./jev.ts";
 import type { ConsentPlan, Opening, WorldDocument } from "./protocol.ts";
@@ -64,9 +65,33 @@ export async function openWorld({ engine, root, consent, progress }: OpenWorldOp
   const planned = planWorldRequests(model, LOOKS);
   const keys = planned.map((p) => requestKey(p.request));
 
-  // The land, outlined as the finished map draws it, before anything is judged.
+  // The land, outlined as the finished map draws it, and every file's patch, before anything is judged.
   const land = landOf(model);
-  progress({ stage: "land", name, size: land.size, areas: outlinesOf(land).areas });
+  progress({ stage: "land", name, size: land.size, areas: outlinesOf(land).areas, patches: land.patches.map(({ path, name, area, x, z, radius }) => ({ path, name, area, x, z, radius })) });
+
+  // Each file's health goes to the renderer once nothing still to be judged can change it. Its vitality reads one
+  // judgment, whether the file holds behavior that needs tests of its own (`NEEDS_TESTS`), and only when its request
+  // asks that and no test of its own reaches it; every other file's health is settled with the land, and the rest
+  // as their answers come in. Health settled together goes in one message.
+  const facts = new Map(model.files.map((f) => [f.path, f]));
+  const asksTests = new Set(planned.flatMap((p) => unshare(p, {}).flatMap(({ p: t }) => (t.about === "file" && t.request.questions[NEEDS_TESTS] !== undefined ? [t.target] : []))));
+  const waitsOnJev = (f: FileFacts): boolean => asksTests.has(f.path) && vitalityOf(f, [], { needsTests: 0 }).vitality !== vitalityOf(f).vitality;
+  const healthUnsent = new Set(land.patches.map((p) => p.path));
+  let healthSettled: Record<string, number> = {};
+  const settleHealth = (path: string, vitality: number): void => {
+    if (!healthUnsent.delete(path)) return;
+    if (Object.keys(healthSettled).length === 0) setTimeout(sendHealth, 0);
+    healthSettled[path] = vitality;
+  };
+  const sendHealth = (): void => {
+    if (Object.keys(healthSettled).length > 0) progress({ stage: "health", vitality: healthSettled });
+    healthSettled = {};
+  };
+  for (const p of land.patches) {
+    const f = facts.get(p.path);
+    if (f !== undefined && !waitsOnJev(f)) settleHealth(p.path, p.vitality);
+  }
+  sendHealth();
 
   const { records } = await engine.call("store.read", { project, table: "answers" });
   const stored = new Map(Object.entries(records as Record<string, JevResponse>));
@@ -183,7 +208,15 @@ export async function openWorld({ engine, root, consent, progress }: OpenWorldOp
       return response;
     },
   };
-  const judgments = await judgeWorld(model, LOOKS, jev);
+  const judgments = await judgeWorld(model, LOOKS, jev, {
+    // A file's answers are in, whoever gave them: its health is settled, read from them as the layout reads them.
+    trace: ({ about, target, first, second }) => {
+      const f = about === "file" ? facts.get(target) : undefined;
+      if (f === undefined) return;
+      const tests = { ...first.answers, ...second?.answers }[NEEDS_TESTS];
+      settleHealth(target, vitalityOf(f, [], tests?.type === "noul" ? { needsTests: tests.noul } : {}).vitality);
+    },
+  });
   await new Promise((resolve) => setTimeout(resolve, 0));
   await Promise.all(writes);
 
@@ -197,11 +230,9 @@ export async function openWorld({ engine, root, consent, progress }: OpenWorldOp
   if (billed > 0) parts.push(`$${billed.toFixed(4)} billed`);
   if (failures.length > 0) parts.push(`${plural(failures.length, "request")} failed (${failures[0]})`);
   else if (why !== "") parts.push(why);
-  return {
-    root,
-    model,
-    world: layoutWorld(model, judgments),
-    judges: byThing,
-    summary: parts.join("; "),
-  };
+  const world = layoutWorld(model, judgments);
+  // Any file no answer was about is settled now, before the document.
+  for (const p of world.patches) settleHealth(p.path, p.vitality);
+  sendHealth();
+  return { root, model, world, judges: byThing, summary: parts.join("; ") };
 }

@@ -217,13 +217,20 @@ The land's division depends on the code alone (an entity's lot is the same
 ground, 900 m², whether a building or a landmark stands on it), so
 `landOf(model)` in `@gaia/world` gives every area, patch and cell before
 anything is judged, equal to the finished layout's. `openWorld` sends the
-renderer the areas' outlines (`world.progress` stage `land`) before it asks
-Jev, then names the areas whose judgments have all settled with every
-answer, each with the land judged for its ground (stage `asking`,
-`settled`, area path to land name: an area settles once every request
-about its files, its entity and itself has, and the one that judges its
-land, its own or its region's), and the wait washes each area in its
-land's color as it settles. The same stage names the areas with a
+renderer the areas' outlines and every file's patch (`world.progress` stage
+`land`) before it asks Jev. It sends each file's health once nothing still
+to be judged can change it (stage `health`, file path to vitality, exactly
+as the finished world has it): a file's vitality reads one judgment,
+whether it holds behavior that needs tests of its own, and only when its
+request asks that and no test of its own reaches it, so every other file's
+health goes out with the land and the rest as their answers come in
+(`judgeWorld`'s `trace`). Every file is named once, before the document,
+whether or not Jev is asked. With every answer it also names the areas
+whose judgments have all settled, each with the land judged for its ground
+(stage `asking`, `settled`, area path to land name: an area settles once
+every request about its files, its entity and itself has, and the one that
+judges its land, its own or its region's), and the wait washes each area in
+its land's color as it settles. The same stage names the areas with a
 question to Jev in flight (`asking`), where the wait's brush works. Once
 the world is laid out, the wait gets every area's land (`areaLands` in
 `@gaia/world`, equal to the last `settled`), which is all a world judged

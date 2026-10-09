@@ -2,7 +2,7 @@
 // engine lines go to the world service, and the world service talks to the
 // renderer over its own MessagePort.
 
-import type { CodeModel, Unreachable } from "@gaia/schema";
+import type { CodeModel, PatchPlace, Unreachable } from "@gaia/schema";
 import type { Outline } from "@gaia/terrain";
 import type { CodeWorld, Judge } from "@gaia/world";
 
@@ -82,23 +82,34 @@ export interface ConsentPlan {
   readonly endpoint: string;
 }
 
+/** A file's patch of ground: where it lies on the land and how far its ground reaches, without its vitality. */
+export type FilePatch = Omit<PatchPlace, "vitality">;
+
 /** How opening a world is going. */
 export type Opening =
   | { readonly stage: "reading"; readonly root: string }
   /**
    * The land is divided, before anything is judged: every area's outline,
-   * exactly as the finished world's map draws it (`outlinesOf`), since the
-   * division depends on the code alone. Sent once, before any judging.
+   * exactly as the finished world's map draws it (`outlinesOf`), and every
+   * file's patch, as the finished world lays it out, since the division
+   * depends on the code alone. Sent once, before any judging.
    */
-  | { readonly stage: "land"; readonly name: string; readonly size: number; readonly areas: readonly Outline[] }
+  | { readonly stage: "land"; readonly name: string; readonly size: number; readonly areas: readonly Outline[]; readonly patches: readonly FilePatch[] }
   /**
    * Asking Jev about the things it has not judged; `answered` counts those settled, `failed` those the stand-in
    * took over, and `settled` names every area (a directory's path, "" for the root) whose things and land are all
    * judged, with the land judged for its own ground: a land's name in `looks.ts`, its region's for an area without
    * land of its own, as `areaLands` reads it from the finished world. `asking` names the areas with a question
-   * to Jev in flight now, which the wait shows being worked on.
+   * to Jev in flight now.
    */
-  | { readonly stage: "asking"; readonly name: string; readonly total: number; readonly answered: number; readonly failed: number; readonly settled: Readonly<Record<string, string>>; readonly asking: readonly string[] };
+  | { readonly stage: "asking"; readonly name: string; readonly total: number; readonly answered: number; readonly failed: number; readonly settled: Readonly<Record<string, string>>; readonly asking: readonly string[] }
+  /**
+   * Files whose health has settled since the last `health`, by path: each one's vitality, exactly as the finished
+   * world has it, so nothing judged later changes it. A file whose vitality reads nothing Jev judges is settled with
+   * the land; any other once the answer it reads is in, whoever gave it. Every file is named once, all of them
+   * before the world's document, whether or not Jev is asked.
+   */
+  | { readonly stage: "health"; readonly vitality: Readonly<Record<string, number>> };
 
 /** World service → renderer. */
 export type ToRenderer =
