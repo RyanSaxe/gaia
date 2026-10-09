@@ -18,8 +18,9 @@
 // pace, so it shows then, without taking focus; leave it uncovered. Timings
 // are only worth comparing from a quiet machine: other work on the GPU or CPU
 // makes them noisy, so the probe prints the load average it ran at.
-// Usage: pnpm probe [drawn] [steps] [hitch] [stress] [swap] [--world gaia|proving]
-//          [--spot NAME] [--dpr 1|2] [--json FILE]
+// Usage: pnpm probe [drawn] [steps] [hitch] [stress] [swap] [--world gaia|proving|sample]
+//          [--size METERS] [--spot NAME] [--dpr 1|2] [--json FILE]
+// The sample world is measured only when asked for, at --size meters across.
 // A spot is "valley", "turned" or a tour stop (`__lab.terrain.tour()` lists
 // them, such as "ruined bridge"); --world and --spot may repeat.
 
@@ -39,6 +40,7 @@ type Measure = (typeof MEASURES)[number];
 const SPOTS = {
   gaia: ["valley", "turned"],
   proving: ["valley", "thriving grove", "large area"],
+  sample: ["valley", "turned"],
 } as const;
 /** How far the walk test walks from each spot, its step (half a second at walking pace), and the wind's moment, so every run sees the same wind. */
 const WALK = { meters: 150, step: 0.7, at: 100 };
@@ -56,7 +58,7 @@ const HEIGHT = 800;
 
 const { values, positionals } = parseArgs({
   allowPositionals: true,
-  options: { dpr: { type: "string", default: "2" }, json: { type: "string" }, world: { type: "string", multiple: true }, spot: { type: "string", multiple: true } },
+  options: { dpr: { type: "string", default: "2" }, json: { type: "string" }, world: { type: "string", multiple: true }, spot: { type: "string", multiple: true }, size: { type: "string" } },
 });
 const asked = positionals.length === 0 ? [...MEASURES] : positionals;
 for (const m of asked) if (!(MEASURES as readonly string[]).includes(m)) throw new Error(`No measure named ${m}; choose from ${MEASURES.join(", ")}.`);
@@ -66,6 +68,8 @@ const dpr = Number(values.dpr);
 /** One page load: the world to open, then each call's JavaScript, run in order with `T` as `__lab.terrain`. */
 interface Job {
   readonly world: string;
+  /** The sample world's size in meters, when asked. */
+  readonly size?: string;
   readonly calls: readonly Call[];
 }
 /** `shown` calls run with the window on screen, where frames keep the display's pace. */
@@ -88,7 +92,7 @@ const bench = "(T.bench(10), +T.bench(40).toFixed(2))";
 
 const jobs: Job[] = [];
 for (const [world, preset] of Object.entries(SPOTS)) {
-  if (values.world !== undefined && !values.world.includes(world)) continue;
+  if (values.world === undefined ? world === "sample" : !values.world.includes(world)) continue;
   const spots = values.spot ?? preset;
   const calls: Call[] = [{ key: "open", js: OPEN }];
   for (const spot of spots) {
@@ -98,7 +102,7 @@ for (const [world, preset] of Object.entries(SPOTS)) {
   if (measures.has("hitch")) {
     for (let w = 0; w < HITCH_WINDOWS; w++) calls.push({ key: `hitch ${w}`, shown: true, js: `(${w === 0 ? `${go("valley")}, await __lab.frames(60), ` : ""}await T.wander(10), __lab.smoothness())` });
   }
-  if (calls.length > 1) jobs.push({ world, calls });
+  if (calls.length > 1) jobs.push({ world, calls, ...(world === "sample" && values.size !== undefined ? { size: values.size } : {}) });
 }
 if (measures.has("swap")) {
   const calls: Call[] = [{ key: "open", js: OPEN }];
@@ -149,7 +153,7 @@ async function probe() {
   const win = new BrowserWindow({ ...fixed, show: false, width, height, useContentSize: true, webPreferences: { backgroundThrottling: false } });
   win.webContents.on("console-message", (e) => { if (e.level === "error") say("page: " + e.message); });
   for (const job of jobs) {
-    await win.loadFile(page, { query: { world: job.world } });
+    await win.loadFile(page, { query: { world: job.world, ...(job.size === undefined ? {} : { size: job.size }) } });
     const run = (js) => win.webContents.executeJavaScript("(async () => { const T = window.__lab.terrain; return " + js + "; })()");
     await win.webContents.executeJavaScript("new Promise((r) => { const t = () => (window.__lab ? r() : setTimeout(t, 50)); t(); })");
     const view = await win.webContents.executeJavaScript("[innerWidth, innerHeight]");
