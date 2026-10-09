@@ -41,3 +41,4 @@ One file per decision the reviewer settled in the pair sessions that designed Ga
 - [A proving ground with everything in it](37-a-proving-ground.md)
 - [Each plant answers the wind by its build](38-each-plant-answers-the-wind-by-its-build.md)
 - [No spend limit while Gaia is being built](39-no-spend-limit-while-building.md)
+- [A trunk meets the ground in root lobes](40-a-trunk-meets-the-ground-in-root-lobes.md)
