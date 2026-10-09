@@ -43,6 +43,7 @@ You need Node 26, pnpm 10 and a stable Rust toolchain from rustup (put
 | `pnpm readme-shots` | The README's two screenshots, into `docs/images/` |
 | `pnpm snapshot` | Rewrites `app/renderer/terrain/fixtures/gaia.json`, the code model the standalone lab shows |
 | `pnpm proving` | Rewrites the proving ground's fixtures (`docs/proving-ground.md`) |
+| `pnpm probe` | Measures both worlds in Electron: frame time, triangles by kind and pass, the walk test and smoothness |
 | `pnpm jev-world`, `pnpm compare-jev`, `pnpm print-world-requests` | Jev's kept answers for the snapshot, request designs compared, and every request printed |
 
 The lab page takes `?view=terrain|flora|world` (a debugging view instead of
@@ -57,6 +58,23 @@ Test a change in the proving ground (`?world=proving`) as well as in Gaia's
 own world. It is a made-up codebase whose world holds every feature, from
 thriving to ruin: `__lab.terrain.tour()` lists its stops and
 `__lab.terrain.tour("ruined bridge")` walks to one (`docs/proving-ground.md`).
+
+Measure a change that could cost frame time, or change what a step of
+walking shows, with `pnpm probe` before and after, on a quiet machine. It
+opens Gaia's own world and the proving ground in the app's own Chromium and
+reports:
+- each spot's frame time, with draw calls and triangles by kind (trees,
+  understory, grass, ground and so on) and by pass (the view, the water's
+  mirror and the sun's shadow);
+- the walk test: walking toward the woods with the wind's clock frozen, what
+  each step changes in the detail drawn, against the wind's own change over
+  half a second. A step that changes more than the wind, and enough to see,
+  is a pop;
+- the app's smoothness probe over a real walk: median, 99th percentile and
+  stutters;
+- a world with five times the trees (`pnpm probe stress`).
+
+Its window opens without taking focus; leave it uncovered while it runs.
 
 To prove a live Jev path without spending anything, run the local stand-in
 and point the engine at it. The engine accepts only a loopback endpoint and
