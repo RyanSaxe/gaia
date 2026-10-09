@@ -12,43 +12,20 @@
     radial-gradient(ellipse 80% 70% at 50% 46%, #f1e7cd, #e4d5b2);
   filter: sepia(calc(var(--night, 0) * 0.3)) brightness(calc(1 - var(--night, 0) * 0.45));
 }
-/* Light over the sheet while the code is read: leaves' light drifting by day, the lantern's pool breathing at night. */
-.wait-dapple, .wait-lantern { position: absolute; inset: 0; pointer-events: none; }
-.wait-dapple { opacity: calc(1 - var(--night, 0)); overflow: hidden; }
-.wait-dapple::before, .wait-dapple::after { content: ""; position: absolute; inset: -12%; will-change: transform; }
-.wait-dapple::before {
-  background:
-    radial-gradient(closest-side, rgba(255, 249, 226, 0.34), rgba(255, 249, 226, 0)) 14% 20% / 30% 26% no-repeat,
-    radial-gradient(closest-side, rgba(255, 249, 226, 0.26), rgba(255, 249, 226, 0)) 72% 26% / 24% 22% no-repeat,
-    radial-gradient(closest-side, rgba(255, 249, 226, 0.3), rgba(255, 249, 226, 0)) 36% 74% / 28% 24% no-repeat,
-    radial-gradient(closest-side, rgba(255, 249, 226, 0.22), rgba(255, 249, 226, 0)) 86% 80% / 20% 20% no-repeat;
-  animation: wait-leaves 17s ease-in-out infinite alternate;
-}
-.wait-dapple::after {
-  background:
-    radial-gradient(closest-side, rgba(82, 88, 46, 0.075), rgba(82, 88, 46, 0)) 58% 46% / 44% 36% no-repeat,
-    radial-gradient(closest-side, rgba(82, 88, 46, 0.06), rgba(82, 88, 46, 0)) 20% 60% / 26% 30% no-repeat,
-    radial-gradient(closest-side, rgba(82, 88, 46, 0.05), rgba(82, 88, 46, 0)) 80% 50% / 22% 30% no-repeat;
-  animation: wait-shade 23s ease-in-out infinite alternate;
-}
-@keyframes wait-leaves { from { transform: translate(-2.5%, -1.2%) rotate(-1.2deg); } to { transform: translate(2.2%, 1.6%) rotate(1deg); } }
-@keyframes wait-shade { from { transform: translate(2%, 1%) scale(1.02); } to { transform: translate(-2%, -1.4%) scale(0.98); } }
-/* After dark the lantern lights the sheet from low on the right, warm, while the paper's edges fall into blue. */
-.wait-lantern { opacity: var(--night, 0); }
-.wait-lantern::after {
-  content: ""; position: absolute; inset: 0;
+/* After dark the lantern lights the paper from low on the right, warm, while its edges fall into blue. It holds
+   still: nothing on the wait moves but what arrives on the sheet. */
+.wait-lantern {
+  position: absolute; inset: 0; pointer-events: none; opacity: var(--night, 0);
   background:
     radial-gradient(ellipse 46% 42% at 58% 60%, rgba(255, 200, 120, 0.2), rgba(255, 214, 160, 0.07) 60%, rgba(255, 214, 160, 0) 100%),
     radial-gradient(ellipse 85% 80% at 54% 54%, rgba(18, 22, 52, 0) 46%, rgba(18, 22, 52, 0.62) 100%);
-  animation: wait-lantern 4.6s ease-in-out infinite alternate;
 }
-@keyframes wait-lantern { from { opacity: 0.82; } to { opacity: 1; } }
 
-/* The sheet: the field map's own (lab.css `.field-map`), the same size, torn edge, turned-down corner, creases and
-   shadow, with no title, names or marks. It folds away as the field map does. Its shadow is a still box under it
-   rather than a drop-shadow filter, which would blur the whole sheet again on every frame its pen moves. */
+/* The sheet: the field map's own (lab.css `.field-map`), the same size, paper, torn edge, creases and lantern's pool,
+   with no fringe, title or turned-down corner. It folds away as the field map does. Its shadow is a still box under
+   it rather than a drop-shadow filter, which would blur the whole sheet again on every frame anything on it moves. */
 .wait-sheet {
-  position: absolute; left: 50%; top: 50%; width: min(94vw, 90vh, 980px); aspect-ratio: 1; --fold: 34px;
+  position: absolute; left: 50%; top: 50%; width: min(94vw, 90vh, 980px); aspect-ratio: 1;
   transform: translate(-50%, -50%); transform-origin: 50% 45%;
   filter: sepia(calc(var(--night, 0) * 0.3)) brightness(calc(1 - var(--night, 0) * 0.16));
   transition: opacity 0.5s ease, transform 0.6s ease-in;
@@ -56,52 +33,42 @@
 .wait-sheet::before { content: ""; position: absolute; inset: 0.6% 0.6% 0.4%; box-shadow: 0 16px 26px rgba(25, 18, 8, 0.36); }
 .wait-sheet.folding { opacity: 0; transform: translate(-50%, -50%) perspective(1600px) rotateX(10deg) scale(0.95, 0.82); }
 .wait-body, .wait-body::after { position: absolute; inset: 0; }
-.wait-body {
-  -webkit-mask-image: var(--deckle), linear-gradient(225deg, transparent calc(var(--fold) * 0.7071), #000 calc(var(--fold) * 0.7071 + 0.5px)); mask-image: var(--deckle), linear-gradient(225deg, transparent calc(var(--fold) * 0.7071), #000 calc(var(--fold) * 0.7071 + 0.5px));
-  -webkit-mask-size: 100% 100%; mask-size: 100% 100%; -webkit-mask-composite: source-in; mask-composite: intersect;
-}
+.wait-body { -webkit-mask-image: var(--deckle); mask-image: var(--deckle); -webkit-mask-size: 100% 100%; mask-size: 100% 100%; }
 .wait-body::after {
   content: ""; pointer-events: none; mix-blend-mode: multiply; box-shadow: inset 0 0 44px rgba(120, 90, 50, 0.2);
   background:
+    radial-gradient(ellipse 85% 75% at 64% 80%, rgba(255, 222, 170, calc(var(--night, 0) * 0.42)), rgba(255, 236, 205, 0) 45%, rgba(48, 46, 80, calc(var(--night, 0) * 0.66)) 100%),
     linear-gradient(90deg, transparent calc(50% - 1px), rgba(110, 84, 50, 0.13) 50%, transparent calc(50% + 1.5px)),
     linear-gradient(0deg, transparent calc(50% - 1px), rgba(110, 84, 50, 0.11) 50%, transparent calc(50% + 1.5px)),
     linear-gradient(90deg, rgba(110, 84, 50, 0.05), transparent 12%, transparent 46%, rgba(110, 84, 50, 0.05) 50%, transparent 54%, transparent 88%, rgba(110, 84, 50, 0.05));
 }
-.wait-fold {
-  position: absolute; top: 0; right: 0; width: var(--fold); height: var(--fold);
-  background: linear-gradient(225deg, transparent 50%, #d9c9a2 50%, #eadfc2 78%, #e2d3ae);
-  filter: drop-shadow(-2px 3px 3px rgba(60, 44, 20, 0.3));
-}
-.wait-sheet-paper { position: absolute; inset: 0; width: 100%; height: 100%; }
-.wait-washes { position: absolute; inset: 0; }
-/* A wash comes in wet, a little darker, spreading from its area's heart; it dries lighter while the world bakes. */
-.wait-washes .wash { position: absolute; opacity: 0; transform: scale(0.97); transition: opacity 1.3s ease-out, transform 1.8s cubic-bezier(0.2, 0.7, 0.3, 1); }
-.wait-washes .wash.shown { opacity: var(--wet, 0.9); transform: none; }
-.wait-sheet.drying .wash.shown { opacity: var(--dry, 0.8); filter: var(--wilt, none); transition: opacity 2.4s ease 0.3s, filter 2.4s ease 0.3s, transform 1.8s cubic-bezier(0.2, 0.7, 0.3, 1); }
-.wait-brush { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; transition: opacity 1.6s ease 0.9s; }
-.wait-sheet.inked .wait-brush { opacity: 1; }
-.wait-ink { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.wait-ground, .wait-hedges, .wait-ink { position: absolute; inset: 0; width: 100%; height: 100%; }
+/* Each change of health comes in over what was there, paper and all; then the hills and water, then the lines. */
+.wait-layers { position: absolute; inset: 0; }
+.wait-layer, .wait-relief { position: absolute; opacity: 0; transition: opacity 1.4s ease-out; }
+.wait-relief { inset: 0; width: 100%; height: 100%; }
+.wait-layer.shown, .wait-relief.shown { opacity: 1; }
+/* The pen draws each border; the hedgerow's soft band under it comes in as the pen goes. */
+.wait-hedges { opacity: 0; transition: opacity 2.4s ease 0.5s; }
+.wait-hedges.shown { opacity: 1; }
+.wait-ink { overflow: visible; }
 .wait-ink path {
-  fill: none; stroke-linejoin: round; stroke-linecap: round;
+  fill: none; stroke: rgba(46, 66, 34, 0.44); stroke-linejoin: round; stroke-linecap: round;
   stroke-dasharray: 1 1; stroke-dashoffset: 1; transition-property: stroke-dashoffset; transition-timing-function: cubic-bezier(0.45, 0.05, 0.4, 1);
 }
-.wait-sheet.inked .wait-ink path { stroke-dashoffset: 0; }
-
-/* While Jev is asked: clear water over the areas with a question out, a soft sheen moving on it, and a brush with
-   its shadow working over them (brush.ts). */
-.wait-water { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
-.wait-water .wet { opacity: 0; }
-.wait-water .wet path:first-child { fill: rgba(92, 80, 58, 0.085); stroke: rgba(96, 80, 54, 0.16); stroke-width: 1.4; }
-.wait-water .wet-sheen { fill: rgba(255, 250, 236, 0.16); animation: wait-sheen 7.5s ease-in-out infinite alternate; }
-@keyframes wait-sheen { from { opacity: 0.1; } to { opacity: 1; } }
-.wait-air { position: absolute; inset: 0; pointer-events: none; }
-.wait-tool { position: absolute; left: 0; top: 0; width: 0; height: 0; opacity: 0; will-change: transform; }
-.wait-tool-in { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
-.wait-tool-in svg { position: absolute; left: -10px; top: -40px; width: 200px; height: 90px; overflow: visible; }
-.wait-tool-shadow { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
-.wait-tool-shadow svg { position: absolute; left: -10px; top: -40px; width: 200px; height: 90px; overflow: visible; fill: rgba(40, 28, 14, 0.24); filter: blur(2.2px); }
-.wait-air.night .wait-tool-shadow svg { fill: rgba(14, 10, 26, 0.26); filter: blur(2.4px); }
-.wait-dab { position: absolute; left: -5px; top: -3px; width: 10px; height: 6px; border-radius: 50%; background: radial-gradient(closest-side, rgba(84, 74, 52, 0.2), rgba(84, 74, 52, 0)); }
+.wait-sheet.shown .wait-ink path { stroke-dashoffset: 0; }
+/* Names and marks: each its own small canvas, written in by a window opening over it, the canvas held still as the
+   window moves: a name along the way it runs, a mark from its foot up. */
+.wait-names, .wait-marks { position: absolute; inset: 0; pointer-events: none; }
+.wait-name, .wait-mark { position: absolute; overflow: hidden; }
+.wait-reveal, .wait-reveal > canvas { display: block; }
+.wait-name .wait-reveal, .wait-name .wait-reveal > canvas { transition: transform 0.9s cubic-bezier(0.45, 0.05, 0.4, 1); }
+.wait-name .wait-reveal { transform: translateX(-100%); }
+.wait-name .wait-reveal > canvas { transform: translateX(100%); }
+.wait-mark .wait-reveal, .wait-mark .wait-reveal > canvas { transition: transform 0.7s cubic-bezier(0.45, 0.05, 0.4, 1); }
+.wait-mark .wait-reveal { transform: translateY(100%); }
+.wait-mark .wait-reveal > canvas { transform: translateY(-100%); }
+.wait-name.shown .wait-reveal, .wait-name.shown .wait-reveal > canvas, .wait-mark.shown .wait-reveal, .wait-mark.shown .wait-reveal > canvas { transform: none; }
 
 /* ---------- the one question: spending past the limit ---------- */
 .wait-slip {

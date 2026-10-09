@@ -512,36 +512,41 @@ it, each with its reading. Walking away, its × and Esc close it.
 While a codebase's world opens, the wait covers the screen
 (`app/renderer/wait/`). It shows no words, counts or percentages and never
 names Jev or OpenRouter: the progress a person sees is the world coming to
-be: the map paints itself, on the field sheet (see The field sheet). The field map's own sheet lies on its creased
-paper: the same size, paper, torn edge, turned-down corner and shadow.
-While the code is read, light drifts over the empty sheet: leaves' light
-by day, the lantern's pool breathing at night. As soon as the land is
-divided, a pen draws every area's border, from the middle outward, in the
-green of the map's hedgerows, and never the land's rounded rim; a fringe of
-wood is brushed in along the sheet's edges as the map paints it. Each
-area's wash runs on past the rim to the paper's edge wherever it is the
-nearest area, so the land fills the sheet square, as on the map. While Jev is asked, a round
-watercolor brush is held over the sheet with its shadow: it goes to an
-area with a question out, touches down, its shadow meeting its tip,
-leaves a damp dab that dries, hovers and moves on, brisk while answers
-flow and about half as quick in a lull, never still and never saying how
-much is left; the areas with a question out take a pass of clear water
-first, the paper darkening a touch under a slow sheen, so even a long lull
-shows the map being drawn. By day the brush's shadow falls from the
-window, at night from the lantern (`brush.ts`). Each area washes in as its
-judgments settle, in the color of the land Jev judged for it, as the map
-washes it: coming in wet, a little darker, and spreading from its heart;
-while the world bakes the washes dry lighter and into their land's health,
-as the map's wilt (tired land toward straw, thriving land a touch richer).
-An area whose land is not judged yet stays bare paper inside its border.
-Then the map folds away as the field map does and the paper dissolves into
-the world, as a jump on the map does, and the place's name is written on
-the minimap. The sheet has no title, names or marks. After dark it is read by the lantern, warm at its middle and
-falling into blue at its edges.
+be, as the field map paints itself (see The field sheet). The field map's
+own sheet lies on its creased paper, the same size, paper and torn edge,
+with no fringe of wood, title or turned-down corner. While the code is read
+the sheet is bare and still. As soon as the land is divided, a pen draws
+every area's border from the middle outward, the map's fine line, with the
+hedgerow's soft band coming in under it, and never the land's rounded rim.
+Color is health, as on the map, and each file's health is washed in once it
+is settled, whenever that is: most files' health follows from their code
+facts and washes in as soon as the land is divided, and a file whose health
+waits on Jev's judgment washes in when that answer comes. Each file's
+health spreads over the ground around it as the map spreads it, and a part
+of the sheet is painted only as nearly all the health there is settled, so
+a color laid is never a color that later changes; until then that part
+stays bare paper (`settling.ts`). Each change is painted by the field map's
+own painter and comes in over a second or so, wet in wet. Each area's name
+is lettered in the map's survey capitals, in the place the map letters it,
+once its last answer is in, names settling together one after another as a
+pen letters them. While the world bakes, the pen draws each building's and
+landmark's mark at its laid-out place, one by one from the middle outward.
+Once the world stands, its hill shade and water come in, then its contours,
+trails and trees, and the sheet is the field map. Then the map folds away
+as the field map does and the paper dissolves into the world, as a jump on
+the map does, and the place's name is written on the minimap. After dark the
+sheet is read by the lantern, warm at its middle and falling into blue at
+its edges.
+
+Nothing in the wait shows that work is pending: no brush, no clear water,
+no drifting light. The only motion is real things arriving on the sheet, so
+a lull in Jev's answers is a still map.
 
 Everything in the wait that moves is an opacity or transform animation, or
 a pen line's dash, so it keeps moving while the page stands the world, and
-the world shows only after its first frames have drawn under the wait. When
+the world shows only after its first frames have drawn under the wait. The
+washes, names and marks are painted a few milliseconds at a time in the
+page's idle time, as the map paints its paper. When
 judging would cost more than the person's spend limit, a small slip of warm
 paper at the foot of the wait says what it costs against the limit and
 that without it the world is drawn from the code alone, with two answers:
@@ -553,7 +558,8 @@ judged.
 
 When Gaia opens with no world named, the start lies over the wait
 (`app/renderer/start/`), in its veil, so it follows the same hour and, once
-a place is chosen, dissolves into the wait's paper. It offers the worlds a
+a place is chosen, dissolves into the wait's paper, where the field map then
+paints itself as the world is opened. It offers the worlds a
 person walked before, a folder on this computer, and a line to write the
 address of a place on GitHub. Nothing on it is a box or a word of jargon:
 no "repository", "clone" or "Jev". An address that leads nowhere is
@@ -648,8 +654,8 @@ take the same colors by their files' vitality, and buildings and
 landmarks wear their health in their marks: roofs dry and rot, smoke stops,
 a tower's top falls and a ring's stones lie down, as they do in the world.
 The colors read as the world's own seasons, so the map carries no legend.
-The wait still washes each area in its land's color until it is rebuilt
-to paint health as the map does.
+The wait paints the same washes (`wash.ts`), each file's health as it
+settles.
 
 Past the land the paper stays unwashed, because the wild stands for no code
 and color means health, and ink draws the wild as an old survey

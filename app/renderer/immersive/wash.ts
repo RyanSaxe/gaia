@@ -132,7 +132,7 @@ export function noiseCanvas(cells: number, seed: number, rgb: readonly [number, 
 }
 
 /** Smooth noise between 0 and 1, varying over about one unit. */
-export function valueNoise(x: number, y: number, seed: number): number {
+function valueNoise(x: number, y: number, seed: number): number {
   const xi = Math.floor(x);
   const yi = Math.floor(y);
   const fx = x - xi;

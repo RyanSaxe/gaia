@@ -229,13 +229,16 @@ whether or not Jev is asked. With every answer it also names the areas
 whose judgments have all settled, each with the land judged for its ground
 (stage `asking`, `settled`, area path to land name: an area settles once
 every request about its files, its entity and itself has, and the one that
-judges its land, its own or its region's), and the wait washes each area in
-its land's color as it settles. The same stage names the areas with a
-question to Jev in flight (`asking`), where the wait's brush works. Once
-the world is laid out, the wait gets every area's land (`areaLands` in
-`@gaia/world`, equal to the last `settled`), which is all a world judged
-without asking Jev ever sends it, and each area's own ground's vitality
-(`groundVitality`), which its wash dries into.
+judges its land, its own or its region's), and the areas with a question to
+Jev in flight (`asking`). The wait (`app/renderer/wait/`) paints the field
+map from these: each file's health as it settles (`settling.ts` works out
+how much of the health at each of the land's cells is settled, and paints a
+cell only once nearly all of it is), and each area's name once it settles.
+Once the world is laid out, the wait gets every file's vitality, all a world
+laid out in the page itself ever sends it; the terrain lab then hands it
+each building's and landmark's mark at its laid-out place
+(`laidOut` in `app/renderer/terrain/lab.ts`), and the stood world when the
+bake returns, for its hills, water and trees.
 `docs/connect-jev.md` is the reviewer's page for connecting it.
 
 `placeAt(world, x, z)` in `@gaia/terrain` says where a person is: the cell

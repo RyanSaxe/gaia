@@ -15,7 +15,7 @@
 import { type Blueprint, type CodeModel, type EntityFacts, type FileFacts, type JevResponse, type SymbolFact, rand, seedOf } from "@gaia/schema";
 import { FLORA_PRESETS, LANDMARK_PRESETS, TRAIL_PRESETS, WORLD_PRESETS } from "@gaia/realize";
 import { type WorldSpec, outlinesOf } from "@gaia/terrain";
-import { type CodeWorld, type Judge, type Judgments, areaLands, groundVitality, judgeWorld, judgedThing, keptJev, layoutWorld, planWorldRequests, requestKey, standInJev, thingsOf } from "@gaia/world";
+import { type CodeWorld, type Judge, type Judgments, judgeWorld, judgedThing, keptJev, layoutWorld, planWorldRequests, requestKey, standInJev, thingsOf } from "@gaia/world";
 import type { ConsentPlan, Opening, StartChoice, StartOffer, WorldDocument } from "../../world-service/protocol.ts";
 import { postcardOf } from "../../world-service/postcard.ts";
 import { type WorldService, worldService } from "../service.ts";
@@ -30,13 +30,10 @@ import type { StandCode, StandLot } from "./stand.ts";
 
 /** The wait a world opens behind: it shows how opening goes, and asks before spending past the limit. */
 export interface Veil {
-  /** How opening the world is going: the land's outlines, then the areas judged so far. */
+  /** How opening the world is going: the land's outlines and patches, then each file's health and the areas judged so far. */
   opening(o: Opening): void;
-  /**
-   * Everything is judged and laid out: `lands` names the land judged for each area's ground and `health` its own
-   * ground's vitality (`groundVitality`), and the world bakes now.
-   */
-  baking(lands: Readonly<Record<string, string>>, health: Readonly<Record<string, number>>): void;
+  /** Everything is judged and laid out: `health` is every file's vitality, by path, and the world bakes now. */
+  baking(health: Readonly<Record<string, number>>): void;
   /** Asks whether to send `plan` to Jev; resolves true to go ahead. */
   ask(plan: ConsentPlan): Promise<boolean>;
   /** Offers the start when no folder is named (app/renderer/start/); resolves with the place chosen. The next `opening` takes it away. */
@@ -208,7 +205,7 @@ export async function codeWorld(veil: Veil): Promise<CodeLab> {
   const outlines = outlinesOf(document.world);
   // A world laid out here, with no world service, shows its land only now.
   if (!landed) veil.opening({ stage: "land", name: document.world.name, size: document.world.size, areas: outlines.areas, patches: document.world.patches });
-  veil.baking(areaLands(document.world), Object.fromEntries(groundVitality(document.world.patches.map((p) => ({ area: p.area, vitality: p.vitality, size: p.radius * p.radius })))));
+  veil.baking(Object.fromEntries(document.world.patches.map((p) => [p.path, p.vitality])));
   return codeLab(document);
 }
 

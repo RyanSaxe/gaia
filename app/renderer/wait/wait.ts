@@ -2,32 +2,36 @@
 // sees whenever a project opens. It shows no words, counts or percentages;
 // the progress a person sees is the world itself coming to be: the field
 // map paints itself (`map-wait.ts`). Paper, then each area's border drawn
-// with a pen as soon as the land is divided, each area washed in its land's
-// color as its judgments settle, the washes drying while the world bakes,
-// and the paper folding away into the world.
-// Everything that moves is a CSS transition or animation of opacity or
-// transform, so it keeps moving on the compositor while the page's thread
-// is busy standing the world, and the wait never competes with the bake.
+// with a pen as soon as the land is divided, each file's health washed in
+// as it settles and each area's name lettered as its last answer comes in,
+// the buildings and landmarks drawn while the world bakes, its hills, water
+// and trees once it stands, and the paper folding away into the world.
+// Nothing shows that work is pending: a lull is a still map.
+// Everything that moves is a CSS transition of opacity or transform, or a
+// pen line's dash, so it keeps moving on the compositor while the page's
+// thread is busy standing the world, and the wait never competes with the bake.
 // The one question the wait may ask, when judging would cost more than the
 // person's limit, is a small paper slip: go ahead, or draw this world from
 // the code alone, which the project remembers until the limit changes.
 
 import type { ConsentPlan, Opening } from "../../world-service/protocol.ts";
+import type { StoodWorld } from "../terrain/lab.ts";
 import { createMapWait } from "./map-wait.ts";
 import "./wait.css";
 
 /** A wait that shows how opening a world is going. */
 export interface WaitView {
-  /** How opening the world is going: the land's outlines and the areas judged so far. */
+  /** How opening the world is going: the land and its patches, each file's health as it settles, and the areas judged so far. */
   opening(o: Opening): void;
-  /**
-   * Everything is judged and laid out, and `lands` names the land judged for each area's ground: the world bakes
-   * now, and each wash dries into its own ground's health (`health`, its vitality), as the field map washes it.
-   */
-  baking(lands: Readonly<Record<string, string>>, health?: Readonly<Record<string, number>>): void;
+  /** Everything is judged and laid out, and `health` is every file's vitality by path: every area is settled, and the world bakes now. */
+  baking(health: Readonly<Record<string, number>>): void;
+  /** The buildings and landmarks at their laid-out places, each with what its mark on the map is drawn from: the pen draws them while the world bakes. */
+  marks(things: Pick<StoodWorld, "buildings" | "landmarks">): void;
+  /** The world stands: its hill shade, contours, water and trees come in on the sheet. */
+  stood(world: StoodWorld): void;
   /** How dark it is, 0 by day to 1 at night: the wait follows the clock. */
   night(n: number): void;
-  /** The world stands and has drawn: the wait gives way to it, and resolves once the world shows. */
+  /** The world stands and has drawn: the wait gives way to it once all that stood is on the sheet, and resolves once the world shows. */
   lift(): Promise<void>;
 }
 
