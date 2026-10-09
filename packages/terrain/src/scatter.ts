@@ -92,7 +92,7 @@ export interface Placement {
   /** The ground's plane under the footprint, dy/dx and dy/dz. Zero for "lowest" grounding. */
   readonly slope: readonly [number, number];
   readonly region: number;
-  /** For a placement that stands for something, such as a function on its file's patch: that thing's vitality, which the copy shows. */
+  /** The vitality the copy shows: what it stands for, such as a function on its file's patch, or the ground it grows on. Absent, full health. */
   readonly vitality?: number;
 }
 

@@ -1,13 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { type BuildingPlan, type Built, Library, type RouteSpec, seedOf } from "@gaia/schema";
 import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, LANDMARK_PRIMITIVES, RELIEF_PRIMITIVES, ROUTE_PRIMITIVES, STRUCTURE_PRIMITIVES } from "@gaia/primitives";
 import { landmark, link, structure } from "@gaia/kinds";
 import { FLORA_PRESETS, LANDMARK_PRESETS, STRUCTURE_PRESETS, TRAIL_PRESETS, buildSlots, realize } from "@gaia/realize";
-import { bakeTerrain, junctionVitality, wayVitalityAt } from "@gaia/terrain";
-import { type Judgments, entityVitalityOf, groundVitality } from "@gaia/world";
+import { type ScatterRule, type Terrain, bakeTerrain, junctionVitality, placeAt, wayVitalityAt } from "@gaia/terrain";
+import { type Judgments, areaVitality, entityVitalityOf, groundVitality } from "@gaia/world";
 import { codeLab, provingWorld } from "./code-world.ts";
 import { BUILDINGS, CHARACTERS, FORMS, LANDMARKS, LANDS, TRAILS, VIBES, WATERS } from "./looks.ts";
-import { extentOf, landmarkBase, standWorld } from "./stand.ts";
+import { type Stand, extentOf, landmarkBase, standWorld } from "./stand.ts";
 import judgedFixture from "./fixtures/proving-judged.json";
 
 const judged = judgedFixture as unknown as Judgments;
@@ -43,39 +43,64 @@ describe("the proving ground", () => {
     expect(Math.max(...doc.world.areas.map((a) => a.depth))).toBeGreaterThanOrEqual(6);
   });
 
-  // Baking the 950 m world takes about 10 s in one Node thread, longer while other work shares the machine.
-  it("crosses its streams on footbridges and stepping stones, and has cairns where ways meet, thriving and in ruin", { timeout: 90_000 }, () => {
-    // Stood as the terrain lab stands it: the same buildings, landmarks and trail looks, seeded alike.
-    const code = codeLab(doc);
-    const terrain = bakeTerrain(code.spec, new Library([...RELIEF_PRIMITIVES, ...BIOME_PRIMITIVES]));
-    const buildingLib = new Library([...STRUCTURE_PRIMITIVES, ...FLORA_PRIMITIVES]);
-    const landmarkLib = new Library([...LANDMARK_PRIMITIVES, ...FLORA_PRIMITIVES]);
-    const routeLib = new Library(ROUTE_PRIMITIVES);
-    const styles = TRAIL_PRESETS.map((p) => buildSlots(p.blueprint, link, routeLib, { seed: 1, facts: {} }).get("route")?.output as RouteSpec);
-    const stood = standWorld(terrain, {
-      buildings: code.buildings.map((b) => {
-        const preset = STRUCTURE_PRESETS.find((p) => p.name === b.building);
-        if (preset === undefined) throw new Error(`No building ${b.building}.`);
-        const facts = Object.fromEntries(Object.entries(structure.facts).map(([k, bind]) => [k, bind(b.facts)]));
-        const built = realize(preset.blueprint, structure, buildingLib, { seed: seedOf(`terrain-lab/${b.facts.path}`), facts });
-        return { name: b.facts.name, plan: built.slots.get("footprint")?.output as BuildingPlan, beside: extentOf(built.slots.get("feature")?.output as Built | undefined) };
-      }),
-      landmarks: LANDMARK_PRESETS.map((p, i) => ({ name: p.name, base: landmarkBase(realize(p.blueprint, landmark, landmarkLib, { seed: seedOf(`terrain-lab/landmark-${i}`), facts: { scale: 1 } })) })),
-      trailStyles: [styles[0] as RouteSpec, styles[1] as RouteSpec, styles[2] as RouteSpec],
-      trees: { count: 0, seed: 9, presets: FLORA_PRESETS.length, builds: 1, bases: FLORA_PRESETS.map(() => 0.5), crowns: FLORA_PRESETS.map(() => 4) },
-      understory: { rules: [], seed: 5 },
-      code: code.stand,
+  describe("stood as the terrain lab stands it", () => {
+    let terrain: Terrain;
+    let stood: Stand;
+    // Baking and standing the 950 m world takes about 10 s in one Node thread, longer while other work shares the machine.
+    beforeAll(() => {
+      // The same buildings, landmarks and trail looks, seeded alike, and an understory of rocks, shrubs and flowers.
+      const code = codeLab(doc);
+      terrain = bakeTerrain(code.spec, new Library([...RELIEF_PRIMITIVES, ...BIOME_PRIMITIVES]));
+      const buildingLib = new Library([...STRUCTURE_PRIMITIVES, ...FLORA_PRIMITIVES]);
+      const landmarkLib = new Library([...LANDMARK_PRIMITIVES, ...FLORA_PRIMITIVES]);
+      const routeLib = new Library(ROUTE_PRIMITIVES);
+      const styles = TRAIL_PRESETS.map((p) => buildSlots(p.blueprint, link, routeLib, { seed: 1, facts: {} }).get("route")?.output as RouteSpec);
+      const understory = (id: string, groups: number): ScatterRule => ({ id, variants: [{ radius: 0.8, weight: 1 }], groups, members: [1, 4], spread: 5, mix: "member", scale: [0.8, 1.2], maxSlope: 22, waterClearance: 1.5, ground: "lowest", sink: 0.05 });
+      stood = standWorld(terrain, {
+        buildings: code.buildings.map((b) => {
+          const preset = STRUCTURE_PRESETS.find((p) => p.name === b.building);
+          if (preset === undefined) throw new Error(`No building ${b.building}.`);
+          const facts = Object.fromEntries(Object.entries(structure.facts).map(([k, bind]) => [k, bind(b.facts)]));
+          const built = realize(preset.blueprint, structure, buildingLib, { seed: seedOf(`terrain-lab/${b.facts.path}`), facts });
+          return { name: b.facts.name, plan: built.slots.get("footprint")?.output as BuildingPlan, beside: extentOf(built.slots.get("feature")?.output as Built | undefined) };
+        }),
+        landmarks: LANDMARK_PRESETS.map((p, i) => ({ name: p.name, base: landmarkBase(realize(p.blueprint, landmark, landmarkLib, { seed: seedOf(`terrain-lab/landmark-${i}`), facts: { scale: 1 } })) })),
+        trailStyles: [styles[0] as RouteSpec, styles[1] as RouteSpec, styles[2] as RouteSpec],
+        trees: { count: 0, seed: 9, presets: FLORA_PRESETS.length, builds: 1, bases: FLORA_PRESETS.map(() => 0.5), crowns: FLORA_PRESETS.map(() => 4) },
+        understory: { rules: [understory("rocks", 3), understory("shrubs", 5), understory("flowers", 6)], seed: 5 },
+        code: code.stand,
+      });
+    }, 120_000);
+
+    it("crosses its streams on footbridges and stepping stones, and has cairns where ways meet, thriving and in ruin", () => {
+      const net = stood.network;
+      const place = (id: string): number => vitalityOf.get(id) ?? 1;
+      const crossings = net.ways.flatMap((w, i) => w.crossings.map(() => ({ kind: w.style.crossing, vitality: wayVitalityAt(net, i, 0.5, place) })));
+      for (const kind of ["footbridge", "stepping-stones"] as const) expect(crossings.some((c) => c.kind === kind), kind).toBe(true);
+      expect(crossings.some((c) => c.vitality > 0.85)).toBe(true);
+      expect(crossings.some((c) => c.vitality < 0.12)).toBe(true);
+      const cairns = net.junctions.filter((j) => j.cairn !== null).map((j) => junctionVitality(net, j, place));
+      expect(cairns.some((v) => v > 0.85)).toBe(true);
+      expect(cairns.some((v) => v < 0.12)).toBe(true);
+      expect(net.dropped).toEqual([]);
+      expect(terrain.ponds.length).toBeGreaterThanOrEqual(2);
     });
-    const net = stood.network;
-    const place = (id: string): number => vitalityOf.get(id) ?? 1;
-    const crossings = net.ways.flatMap((w, i) => w.crossings.map(() => ({ kind: w.style.crossing, vitality: wayVitalityAt(net, i, 0.5, place) })));
-    for (const kind of ["footbridge", "stepping-stones"] as const) expect(crossings.some((c) => c.kind === kind), kind).toBe(true);
-    expect(crossings.some((c) => c.vitality > 0.85)).toBe(true);
-    expect(crossings.some((c) => c.vitality < 0.12)).toBe(true);
-    const cairns = net.junctions.filter((j) => j.cairn !== null).map((j) => junctionVitality(net, j, place));
-    expect(cairns.some((v) => v > 0.85)).toBe(true);
-    expect(cairns.some((v) => v < 0.12)).toBe(true);
-    expect(net.dropped).toEqual([]);
-    expect(terrain.ponds.length).toBeGreaterThanOrEqual(2);
+
+    it("grows the understory with the vitality of the ground it stands on, so the ruins' bushes and flowers fail", () => {
+      // A file's patch is as healthy as its file, a lot as its whole area, and the wild past the land thrives.
+      const areas = areaVitality(doc.world.patches.map((p) => ({ area: p.area, vitality: p.vitality, size: p.radius * p.radius })));
+      const groundAt = (x: number, z: number): number => {
+        const at = placeAt(doc.world, x, z);
+        return at.file?.vitality ?? (at.area.depth < 0 ? 1 : (areas.get(at.area.path) ?? 1));
+      };
+      const symbols = new Set(stood.symbols);
+      const scattered = stood.placements.filter((_, i) => !symbols.has(i));
+      expect(scattered.length).toBeGreaterThan(1000);
+      expect(scattered.map((p) => p.vitality)).toEqual(scattered.map((p) => groundAt(p.x, p.z)));
+      expect(scattered.some((p) => placeAt(doc.world, p.x, p.z).file === null), "understory on a lot").toBe(true);
+      const ruins = scattered.filter((p) => /^ruins(\/|$)/.test(placeAt(doc.world, p.x, p.z).area.path));
+      expect(ruins.length).toBeGreaterThan(20);
+      for (const p of ruins) expect(p.vitality).toBeLessThan(0.25);
+    });
   });
 });
