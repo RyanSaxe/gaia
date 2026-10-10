@@ -12,7 +12,8 @@ const three = { group: ["three", "three/*"], message: "Only @gaia/render and the
 const node = { group: ["node:*", "fs", "path", "os", "child_process"], message: "This code runs in workers and the renderer. Files and processes belong to the Rust engine." };
 
 export default tseslint.config(
-  { ignores: ["**/dist/**", "**/node_modules/**", "**/out/**", "engine/target/**", "tools/**/*.html"] },
+  // engine/tests/fixtures holds a sample in every language the engine parses, written to exercise its queries, not to run.
+  { ignores: ["**/dist/**", "**/node_modules/**", "**/out/**", "engine/target/**", "engine/tests/fixtures/**", "tools/**/*.html"] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {

@@ -10,7 +10,7 @@
 //! server file that is not some package's entry). Entities nest; each file
 //! belongs to its innermost one.
 
-use crate::git;
+use crate::graph::{git, walk::content_hash};
 use crate::source::{self, Complexity, Symbol};
 use serde::Serialize;
 use serde_json::Value;
@@ -153,16 +153,6 @@ struct Found {
 const DAY: i64 = 86_400;
 const SOURCE_LANGUAGES: [&str; 5] = ["typescript", "javascript", "rust", "python", "go"];
 
-/// FNV-1a over the file's bytes: a content identity, not a security hash.
-fn content_hash(bytes: &[u8]) -> String {
-    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
-    for b in bytes {
-        h ^= u64::from(*b);
-        h = h.wrapping_mul(0x0100_0000_01b3);
-    }
-    format!("{h:016x}")
-}
-
 fn dir_of(path: &str) -> &str {
     path.rsplit_once('/').map_or("", |(d, _)| d)
 }
@@ -195,60 +185,27 @@ fn within(path: &str, root: &str) -> bool {
     root.is_empty() || path == root || path.starts_with(&format!("{root}/"))
 }
 
-/// Files larger than this are left out of the world unread: bundles, data
-/// dumps and vendored blobs, never code a person keeps by hand.
-const MAX_FILE_BYTES: u64 = 2 * 1024 * 1024;
-
-/// Every regular file under `root` that .gitignore keeps, read. Nothing
-/// outside the root is ever read: symlinks, to files or directories, are
-/// skipped, never followed.
+/// Every file the walk keeps (`graph::walk`), with its facts read.
 fn walk(root: &Path) -> Vec<Read> {
-    let mut out = Vec::new();
-    let walker = ignore::WalkBuilder::new(root)
-        .hidden(false)
-        .git_global(false)
-        .require_git(false)
-        // A link could lead anywhere on the disk, and a cloned repository chooses its own.
-        .follow_links(false)
-        .filter_entry(|e| e.file_name() != ".git")
-        .build();
-    for entry in walker.flatten() {
-        if !entry.file_type().is_some_and(|t| t.is_file()) {
-            continue;
-        }
-        if entry.metadata().map_or(true, |m| m.len() > MAX_FILE_BYTES) {
-            continue;
-        }
-        let Ok(rel) = entry.path().strip_prefix(root) else {
-            continue;
-        };
-        let path = rel.to_string_lossy().replace('\\', "/");
-        let Ok(bytes) = std::fs::read(entry.path()) else {
-            continue;
-        };
-        let binary = bytes.iter().take(8000).any(|b| *b == 0);
-        let text = if binary {
-            None
-        } else {
-            Some(String::from_utf8_lossy(&bytes).into_owned())
-        };
-        let source = match &text {
-            Some(t) => source::read(&path, t),
-            None => source::Source {
-                language: source::language_of(&path),
-                kind: "data",
-                ..Default::default()
-            },
-        };
-        out.push(Read {
-            path,
-            hash: content_hash(&bytes),
-            source,
-            text,
-        });
-    }
-    out.sort_by(|a, b| a.path.cmp(&b.path));
-    out
+    crate::graph::walk::walk(root)
+        .into_iter()
+        .map(|f| {
+            let source = match &f.text {
+                Some(t) => source::read(&f.path, t),
+                None => source::Source {
+                    language: source::language_of(&f.path),
+                    kind: "data",
+                    ..Default::default()
+                },
+            };
+            Read {
+                path: f.path,
+                hash: f.hash,
+                source,
+                text: f.text,
+            }
+        })
+        .collect()
 }
 
 /// A value from a TOML section, read line by line: enough for a Cargo.toml's name and description.

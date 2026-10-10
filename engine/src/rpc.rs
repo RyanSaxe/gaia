@@ -47,6 +47,12 @@ pub fn handle(line: &str) -> Value {
                 }),
             None => Err((INVALID_PARAMS, "project.open needs a root.".into())),
         },
+        "project.graph" => match p["root"].as_str() {
+            Some(root) => crate::graph::build(Path::new(root))
+                .map_err(|e| (FAILED, e))
+                .and_then(|graph| serde_json::to_value(graph).map_err(|e| (FAILED, e.to_string()))),
+            None => Err((INVALID_PARAMS, "project.graph needs a root.".into())),
+        },
         "project.locate" => match p["address"].as_str() {
             Some(address) => crate::clone::locate(address).map_err(|e| (FAILED, e)),
             None => Err((INVALID_PARAMS, "project.locate needs an address.".into())),
@@ -154,6 +160,20 @@ mod tests {
         assert_eq!(
             handle(
                 r#"{"jsonrpc":"2.0","id":4,"method":"project.open","params":{"root":"/no/such/dir"}}"#
+            )["error"]["code"],
+            FAILED
+        );
+    }
+
+    #[test]
+    fn project_graph_needs_a_real_directory() {
+        assert_eq!(
+            handle(r#"{"jsonrpc":"2.0","id":8,"method":"project.graph","params":{}}"#)["error"]["code"],
+            INVALID_PARAMS
+        );
+        assert_eq!(
+            handle(
+                r#"{"jsonrpc":"2.0","id":9,"method":"project.graph","params":{"root":"/no/such/dir"}}"#
             )["error"]["code"],
             FAILED
         );

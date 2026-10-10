@@ -1,0 +1,8 @@
+{
+  "name": "sample",
+  "main": "sample.js",
+  "scripts": {
+    "walk": "node sample.js"
+  },
+  "files": ["sample.ts", "sample.tsx"]
+}
