@@ -46,9 +46,13 @@ is carried by something. A broadleaf's crown is clumps where its mass is,
 one at every limb tip and, for a full crown, more along the inner limbs, so
 from afar it reads as the same rounded mass. Each clump is a fan of thin
 twigs that leave the limb along its last stretch and curve out to the
-clump's surface, with sprays along them: a spray is a stalk with leaves on
-short stalks alternating along it, its base on its twig. No ball sits
-inside a crown, so up close the gaps show twigs, deeper sprays and sky.
+clump's surface, each with a few sprays along it and one at its tip. A
+crown's spray is full: the family's leaves crowded around a short stalk,
+overlapping, so the card is nearly all leaf and a third as many sprays
+fill a crown. Elsewhere, as atop a willow's strands, a spray is a stalk
+with leaves on short stalks alternating along it, its base on its twig.
+No ball sits inside a crown, so up close the gaps show twigs, deeper
+sprays and sky.
 Each family has its own spray (`leaf-clumps@1`'s `leaf`): pointed, oval
 (an apple's), lobed (a maple's), or blossom, umbels of five-petaled flowers
 on fine stalks, their petals the family's pale bloom deepening to its leaf
