@@ -3,6 +3,7 @@
 // shapes from its structs. The OpenRouter key never crosses this boundary.
 
 import type { EntityFacts, FileFacts, RepositoryFacts } from "./facts.ts";
+import type { CodeGraph } from "./graph.ts";
 import type { JevRequest, JevResponse } from "./jev.ts";
 
 export interface EngineMethods {
@@ -15,6 +16,13 @@ export interface EngineMethods {
    * the project for `facts.changed` is not built yet.
    */
   "project.open": { params: { root: string }; result: CodeModel };
+  /**
+   * Walks, parses and measures the project into its code graph: a node for
+   * every directory, file, definition and block, and every reference the
+   * rules have not resolved as pending. Every language reads the same way,
+   * through its grammar's queries (`docs/architecture.md`, "The code graph").
+   */
+  "project.graph": { params: { root: string }; result: CodeGraph };
   /**
    * Where a GitHub address leads, before anything is cloned: whether it names
    * a public repository GitHub will hand over (one `git ls-remote`), and the
@@ -68,8 +76,13 @@ export type Located = { readonly found: true; readonly owner: string; readonly r
 /** A clone or an update (`project.clone`). `fetched` is true when a copy already there was updated rather than cloned anew. */
 export type Cloned = { readonly cloned: true; readonly owner: string; readonly repo: string; readonly root: string; readonly fetched: boolean } | { readonly cloned: false; readonly why: Unreachable };
 
-/** The tables of a project's app-data store (`engine/src/store.rs`). */
-export type StoreTable = "answers" | "blueprints" | "document" | "placements" | "settings";
+/**
+ * The tables of a project's app-data store (`engine/src/store.rs`). `calls`
+ * keeps Jev's raw responses by request hash, `held` the answer the graph
+ * shows for each question by lineage, and `lineage` the last graph's
+ * lineage map and definition fingerprints.
+ */
+export type StoreTable = "answers" | "blueprints" | "calls" | "document" | "held" | "lineage" | "placements" | "settings";
 
 /** One request of a batch that failed on its own, and why. */
 export interface JevFailure {
