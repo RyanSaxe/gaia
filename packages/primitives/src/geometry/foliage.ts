@@ -621,9 +621,13 @@ export function buildLeafStrands(p: Resolved<typeof leafStrandsParams>, ctx: Bui
   const crown = crownOf(skel.tips.map((t) => t.position));
   const boughs = new Boughs(skel);
 
+  // Leaves keep near their own size on a great tree: its strands grow only
+  // with the root of its scale, so it hangs more of them, each as narrow as a
+  // willow's, rather than a few wide ones that read as slabs from afar.
+  const g = s <= 1 ? s : Math.sqrt(s);
   // Strands hang from the tips and from the undersides of the outer limbs.
   const hangs: { at: V3; out: V3; limb: number }[] = skel.tips.map((t) => ({ at: [...t.position] as V3, out: [...t.normal] as V3, limb: boughs.limbNear(t.position) }));
-  const spacing = (0.3 * s) / (0.5 + p.fullness);
+  const spacing = (0.3 * g) / (0.5 + p.fullness);
   skel.limbs.forEach((limb, i) => {
     if (limb.depth < 1) return;
     const span = length(sub(limb.end, limb.start));
@@ -636,13 +640,13 @@ export function buildLeafStrands(p: Resolved<typeof leafStrandsParams>, ctx: Bui
     }
   });
 
-  const leafLen = 0.3 * s;
-  const leafWide = 0.085 * s;
+  const leafLen = 0.3 * g;
+  const leafWide = 0.085 * g;
   const anchors: Anchor[] = [];
   // A dense frame thins every strand's chance evenly to stay in budget: each
   // strand is two ribbons of rows 0.3 m apart, and two sprays at its top.
   const kept = 0.45 + 0.55 * p.fullness;
-  const perStrand = (h: { at: V3 }): number => 4 * Math.max(3, Math.ceil(Math.min(p.length * 2.2 * s, Math.max(0.3, h.at[1] - 0.2 * s)) / (0.3 * s))) + 4;
+  const perStrand = (h: { at: V3 }): number => 4 * Math.max(3, Math.ceil(Math.min(p.length * 2.2 * s, Math.max(0.3, h.at[1] - 0.2 * s)) / (0.3 * g))) + 4;
   const wanted = hangs.reduce((n, h) => n + perStrand(h), 0) * kept;
   const thin = Math.min(1, STRAND_TRIANGLE_BUDGET / Math.max(1, wanted));
   hangs.forEach((h, i) => {
@@ -671,7 +675,7 @@ export function buildLeafStrands(p: Resolved<typeof leafStrandsParams>, ctx: Bui
     // as a leafy thread. The ribbons narrow toward the bottom, and the lowest
     // leaves fall first as vitality drops, so a failing strand shortens.
     const strandTint = sr.fork("tint").range(-0.08, 0.08) * 0.4;
-    const segments = Math.max(3, Math.ceil(fall / (0.3 * s)));
+    const segments = Math.max(3, Math.ceil(fall / (0.3 * g)));
     const half = leafWide * 1.3;
     const cut = cutOf(CUT.strand, sr.next());
     for (let ribbon = 0; ribbon < 2; ribbon++) {
@@ -701,8 +705,9 @@ export function buildLeafStrands(p: Resolved<typeof leafStrandsParams>, ctx: Bui
         out.triangle(a + 1, a + 2, a + 3);
       }
     }
-    // Pods hang from the limb itself among the strands.
-    if (sr.next() < 0.5) {
+    // Pods hang from the limb itself among the strands, as many on a great
+    // tree's more numerous strands as on its fewer wide ones.
+    if (sr.next() < 0.5 * (g / Math.max(s, 1e-6))) {
       const limb = skel.limbs[h.limb] as Limb;
       const ab = sub(limb.end, limb.start);
       const on = addScaled(limb.start, ab, clamp(dot(sub(h.at, limb.start), ab) / Math.max(dot(ab, ab), 1e-9), 0, 1));

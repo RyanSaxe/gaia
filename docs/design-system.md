@@ -68,7 +68,10 @@ as shadows, so sun falls through between them.
 Willow strands are crossed ribbons of small hanging lance leaves, hung from
 the tips and the undersides of the limbs, each topped by two small sprays;
 far off a strand swells and narrows along its length, as its leaves bunch,
-so a curtain never reads as ribbons. A fir spray is a frond along its
+so a curtain never reads as ribbons. A great willow's leaves keep near
+their own size, so it hangs more, narrower strands than a willow scaled
+up, which would hang a few wide ones that read as slabs from afar. A fir
+spray is a frond along its
 limb: a ridge of needles along the limb and branchlets to either side that
 reach toward the tip and droop, most of them doubled by a second card
 hung lower beneath, so a fir reads as layered, feathery needles rather
