@@ -7,8 +7,8 @@ instructions = "How well do this file's path and name say what it holds?"
 levels = [
   "Misleading or empty: a name such as utils2, misc or new_stuff, or one that says something the file doesn't do.",
   "Vague: the name points roughly the right way but a reader must open the file to know what is in it.",
-  "Clear: the path and name say what the file holds, with a small surprise or two inside.",
-  "Exact: the path and name say precisely what the file holds and nothing else.",
+  "Clear: the path and name say what the file holds to a reader who knows the project, or leave out a thing or two it holds.",
+  "Exact: a reader new to the project could say what the file holds from its path alone, and nothing inside is left out.",
 ]
 
 [file.cohesion]
@@ -16,8 +16,8 @@ instructions = "Does this file hold one concern, or several unrelated ones?"
 levels = [
   "Several unrelated concerns: parts that share nothing but the file, such as parsing, drawing and storage side by side.",
   "A main concern with unrelated extras bolted on: helpers or features that belong elsewhere.",
-  "One concern with a few loosely related pieces.",
-  "One concern: every part serves the same purpose.",
+  "One main concern with loosely related pieces: a helper other files could use, a second feature, or types and constants that could stand in a file of their own.",
+  "Tightly one concern: every part needs the others, and nothing in it would sit better in a file of its own.",
 ]
 
 [def.readability]
