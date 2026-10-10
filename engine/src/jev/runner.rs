@@ -116,13 +116,22 @@ fn billed_per_estimated(project: &str) -> f64 {
         .unwrap_or(START_BILLED_PER_ESTIMATED)
 }
 
-/// The references Jev resolved, from the held answers: target, call and probability by reference key.
+/// The references Jev resolved, from the held answers, by reference key.
+/// An answer from an earlier version of its call no longer holds.
 fn links(held: &Value) -> crate::graph::Links {
+    let current: HashSet<String> = calls::registry()
+        .into_iter()
+        .filter(|c| c.pass() == LINK)
+        .map(|c| format!("{}@{}", c.id(), c.version()))
+        .collect();
     held.as_object()
         .into_iter()
         .flatten()
         .filter_map(|(key, v)| {
             let r = key.strip_prefix(&format!("{LINK}|"))?;
+            if !current.contains(v["call"].as_str()?) {
+                return None;
+            }
             let target = v["answer"]["choice"].as_str()?.to_string();
             let link = crate::graph::Link {
                 p: v["answer"]["p"][&target].as_f64().unwrap_or(0.0),
@@ -944,4 +953,25 @@ fn judge(graph: &mut CodeGraph, held: &Value) {
         *judged = Some(Value::Object(j));
     }
     graph.edges.extend(checks);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_link_answer_holds_only_for_its_call_s_current_version() {
+        let resolve = calls::registry()
+            .into_iter()
+            .find(|c| c.id() == "resolve")
+            .unwrap();
+        let answer = json!({ "choice": "file:x.ts", "p": { "file:x.ts": 0.9 } });
+        let held = json!({
+            "link|now": { "answer": answer, "call": format!("resolve@{}", resolve.version()), "candidates": ["file:x.ts"] },
+            "link|before": { "answer": answer, "call": "resolve@00000000-1", "candidates": ["file:x.ts"] },
+        });
+        let l = links(&held);
+        assert!(l.contains_key("now"));
+        assert!(!l.contains_key("before"));
+    }
 }

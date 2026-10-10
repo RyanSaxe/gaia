@@ -11,6 +11,7 @@ pub mod model;
 mod parse;
 mod reach;
 mod resolve;
+pub(crate) use resolve::{leading_names, mentions};
 pub mod walk;
 
 use model::{
