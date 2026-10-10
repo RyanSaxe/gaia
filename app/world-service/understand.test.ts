@@ -153,6 +153,29 @@ describe("the Jev runner", () => {
     expect(Object.keys((asked[0]?.[1] as { criteria: Record<string, string> }).criteria)).toContain("def:src/three.ts#helper");
   }, 60_000);
 
+  it("holds an answered link again without asking, when its held answer is out of date", async () => {
+    const root = codebase("reheld", { "src/a.ts": fn("a", "return helper(x);"), "src/one.ts": fn("helper", "return x;"), "src/two.ts": fn("helper", "return -x;") });
+    const engine = engineAt(join(scratch, "reheld-data"));
+    await understand(engine, root);
+    const jevCalls = async (): Promise<number> => {
+      const graph: CodeGraph = await engine.call("project.graph", { root, judged: true });
+      return graph.edges.filter((e) => e.kind === "calls" && e.by.by === "jev").length;
+    };
+    expect(await jevCalls()).toBe(1);
+    const { projectId } = await engine.call("project.graph", { root });
+    const { records } = await engine.call("store.read", { project: projectId, table: "held" });
+    const [key, value] = Object.entries(records).find(([k]) => k.startsWith("link|")) as [string, { answer: unknown; call: string; candidates: string[] }];
+    // A held answer from before link answers kept their candidates, and one from an earlier version of its call.
+    for (const stale of [{ answer: value.answer, call: value.call }, { ...value, call: "callee@00000000-1" }]) {
+      await engine.call("store.put", { project: projectId, writes: [{ table: "held", key, value: stale }] });
+      expect(await jevCalls()).toBe(0);
+      const before = standIn.received.length;
+      for (;;) if ((await engine.call("understand.next", { root })).left === 0) break;
+      expect(standIn.received.length).toBe(before);
+      expect(await jevCalls()).toBe(1);
+    }
+  }, 60_000);
+
   it("asks about a directory only once everything under it is answered, the root last", async () => {
     const root = codebase("nested", { "a/b/c/deep.ts": fn("deep", "return x;"), "a/b/mid.ts": fn("mid", "return x;"), "a/top.ts": fn("top", "return x;") });
     const sent = await understand(engineAt(join(scratch, "nested-data")), root);
