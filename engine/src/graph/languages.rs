@@ -1,11 +1,16 @@
 //! The language table (`engine/languages.toml`), and each language's grammar
-//! and queries, loaded once and shared.
+//! and queries, loaded once and shared. A grammar is compiled in, or comes
+//! as WebAssembly from its own release, downloaded once, checked against
+//! the table's hash and kept in the app's data folder.
 
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use serde::Deserialize;
+use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashMap};
+use std::path::PathBuf;
+use std::process::Command;
 use std::sync::{Arc, Mutex, OnceLock};
-use tree_sitter::{Language, Query};
+use tree_sitter::{Language, Query, WasmStore, wasmtime};
 
 const TABLE: &str = include_str!("../../languages.toml");
 
@@ -14,15 +19,32 @@ struct Entry {
     extensions: Vec<String>,
     grammar: Grammar,
     #[serde(default)]
+    tags: Option<Remote>,
+    #[serde(default)]
     inline: Option<InlineEntry>,
     #[serde(default)]
     conventions: Vec<ConventionEntry>,
 }
 
-#[derive(Deserialize)]
-struct Grammar {
-    #[serde(rename = "crate")]
-    krate: String,
+/// Where a language's grammar comes from.
+#[derive(Deserialize, Clone)]
+#[serde(untagged)]
+pub enum Grammar {
+    Compiled {
+        #[serde(rename = "crate")]
+        krate: String,
+    },
+    Wasm {
+        wasm: String,
+        sha256: String,
+    },
+}
+
+/// A file a grammar's release publishes, and the SHA-256 it must have.
+#[derive(Deserialize, Clone)]
+pub struct Remote {
+    pub url: String,
+    pub sha256: String,
 }
 
 #[derive(Deserialize)]
@@ -40,8 +62,9 @@ struct ConventionEntry {
 /// One language as the table describes it.
 pub struct Spec {
     pub name: String,
-    pub grammar_crate: String,
-    extensions: Vec<String>,
+    pub grammar: Grammar,
+    pub tags: Option<Remote>,
+    pub extensions: Vec<String>,
     inline: Option<InlineEntry>,
     convention_tags: Vec<String>,
     conventions: GlobSet,
@@ -62,12 +85,14 @@ impl Spec {
 }
 
 /// A language ready to parse: its grammar, the grammar's own tags query if
-/// it ships one, our query file, and the inline grammar run over some of its
-/// nodes, if any.
+/// it ships one, our query file if we wrote one, and the inline grammar run
+/// over some of its nodes, if any.
 pub struct Loaded {
     pub language: Language,
+    /// True for a WebAssembly grammar, which parses only in a parser given a `WasmStore`.
+    pub wasm: bool,
     pub tags: Option<Query>,
-    pub ours: Query,
+    pub ours: Option<Query>,
     pub inline: Option<Inline>,
 }
 
@@ -93,7 +118,8 @@ pub fn table() -> &'static BTreeMap<String, Spec> {
                 }
                 let spec = Spec {
                     name: name.clone(),
-                    grammar_crate: e.grammar.krate,
+                    grammar: e.grammar,
+                    tags: e.tags,
                     extensions: e.extensions,
                     inline: e.inline,
                     convention_tags: e.conventions.into_iter().map(|c| c.tag).collect(),
@@ -235,21 +261,102 @@ fn query(language: &Language, text: &str, what: &str) -> Result<Query, String> {
     Query::new(language, text).map_err(|e| format!("{what} does not compile: {e}"))
 }
 
-/// The language named in the table, loaded and cached. Fails when the
-/// table names a grammar the engine does not have, or a query does not
-/// compile, which the language contract test catches first.
-pub fn load(name: &str) -> Result<Arc<Loaded>, String> {
-    static LOADED: OnceLock<Mutex<HashMap<String, Arc<Loaded>>>> = OnceLock::new();
-    let cache = LOADED.get_or_init(|| Mutex::new(HashMap::new()));
-    if let Some(l) = cache.lock().map_err(|e| e.to_string())?.get(name) {
-        return Ok(l.clone());
+/// The WebAssembly engine every grammar from a release runs in.
+fn wasm_engine() -> &'static wasmtime::Engine {
+    static ENGINE: OnceLock<wasmtime::Engine> = OnceLock::new();
+    ENGINE.get_or_init(wasmtime::Engine::default)
+}
+
+/// A store for one parser, which a WebAssembly grammar needs to parse.
+pub fn wasm_store() -> Result<WasmStore, String> {
+    WasmStore::new(wasm_engine()).map_err(|e| e.to_string())
+}
+
+/// A WebAssembly grammar from its bytes. `name` is the grammar's own, as its
+/// file exports it (`tree_sitter_<name>`).
+pub fn wasm_language(name: &str, bytes: &[u8]) -> Result<Language, String> {
+    let mut store = wasm_store()?;
+    store
+        .load_language(name, bytes)
+        .map_err(|e| format!("{name}'s WebAssembly grammar does not load: {e}"))
+}
+
+fn sha256_hex(bytes: &[u8]) -> String {
+    Sha256::digest(bytes)
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
+}
+
+/// A release's file, from the data folder or else downloaded, and checked
+/// against its hash either way.
+fn fetch(url: &str, sha256: &str) -> Result<Vec<u8>, String> {
+    let ext = url.rsplit('.').next().unwrap_or("bin");
+    let path: PathBuf = crate::store::data_dir()?
+        .join("grammars")
+        .join(format!("{sha256}.{ext}"));
+    if let Ok(bytes) = std::fs::read(&path)
+        && sha256_hex(&bytes) == sha256
+    {
+        return Ok(bytes);
     }
-    let (language, tags, ours) = compiled(name).ok_or_else(|| {
-        let krate = table()
-            .get(name)
-            .map_or("no crate", |s| s.grammar_crate.as_str());
-        format!("No grammar for {name} ({krate}) is compiled in.")
-    })?;
+    if !url.starts_with("https://") {
+        return Err(format!("A grammar comes only over https: {url}"));
+    }
+    let dir = path.parent().ok_or("The grammars folder has no parent.")?;
+    std::fs::create_dir_all(dir).map_err(|e| format!("Could not make {}: {e}", dir.display()))?;
+    let temp = path.with_extension("part");
+    let out = Command::new("curl")
+        .args([
+            "--fail",
+            "--silent",
+            "--show-error",
+            "--location",
+            "--max-time",
+            "120",
+            "--output",
+        ])
+        .arg(&temp)
+        .arg(url)
+        .output()
+        .map_err(|e| format!("Could not start curl: {e}"))?;
+    if !out.status.success() {
+        return Err(format!(
+            "Could not download {url}: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        ));
+    }
+    let bytes =
+        std::fs::read(&temp).map_err(|e| format!("Could not read {}: {e}", temp.display()))?;
+    if sha256_hex(&bytes) != sha256 {
+        let _ = std::fs::remove_file(&temp);
+        return Err(format!(
+            "{url} does not have the SHA-256 the language table names."
+        ));
+    }
+    std::fs::rename(&temp, &path).map_err(|e| format!("Could not keep {}: {e}", path.display()))?;
+    Ok(bytes)
+}
+
+/// A language from a WebAssembly grammar and its tags query, if it has one.
+pub fn from_wasm(name: &str, grammar: &[u8], tags: Option<&str>) -> Result<Loaded, String> {
+    let language = wasm_language(name, grammar)?;
+    let tags = match tags {
+        Some(t) => Some(query(&language, t, &format!("{name}'s tags query"))?),
+        None => None,
+    };
+    Ok(Loaded {
+        language,
+        wasm: true,
+        tags,
+        ours: None,
+        inline: None,
+    })
+}
+
+fn load_compiled(name: &str) -> Result<Loaded, String> {
+    let (language, tags, ours) =
+        compiled(name).ok_or_else(|| format!("No grammar for {name} is compiled in."))?;
     let tags = match tags {
         Some(t) => Some(query(&language, &t, &format!("{name}'s tags query"))?),
         None => None,
@@ -272,11 +379,38 @@ pub fn load(name: &str) -> Result<Arc<Loaded>, String> {
         }
         None => None,
     };
-    let loaded = Arc::new(Loaded {
+    Ok(Loaded {
         language,
+        wasm: false,
         tags,
-        ours,
+        ours: Some(ours),
         inline,
+    })
+}
+
+/// The language named in the table, loaded and cached. A compiled grammar
+/// fails only when its query does not compile, which the language contract
+/// test catches first. A grammar from a release fails when it cannot be
+/// downloaded, and its files are then read as having no grammar.
+pub fn load(name: &str) -> Result<Arc<Loaded>, String> {
+    static LOADED: OnceLock<Mutex<HashMap<String, Arc<Loaded>>>> = OnceLock::new();
+    let cache = LOADED.get_or_init(|| Mutex::new(HashMap::new()));
+    if let Some(l) = cache.lock().map_err(|e| e.to_string())?.get(name) {
+        return Ok(l.clone());
+    }
+    let spec = table()
+        .get(name)
+        .ok_or_else(|| format!("No language {name} in the table."))?;
+    let loaded = Arc::new(match &spec.grammar {
+        Grammar::Compiled { krate } => load_compiled(name).map_err(|e| format!("{e} ({krate})"))?,
+        Grammar::Wasm { wasm, sha256 } => {
+            let grammar = fetch(wasm, sha256)?;
+            let tags = match &spec.tags {
+                Some(t) => Some(String::from_utf8_lossy(&fetch(&t.url, &t.sha256)?).into_owned()),
+                None => None,
+            };
+            from_wasm(name, &grammar, tags.as_deref())?
+        }
     });
     cache
         .lock()

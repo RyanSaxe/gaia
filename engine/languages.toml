@@ -4,6 +4,13 @@
 # holds our query file for it, run after the grammar's own tags query when
 # it ships one.
 #
+# Any other grammar names the WebAssembly file its own release publishes,
+# with that file's SHA-256, and its tags query from the same release when
+# the grammar has one. The engine downloads each the first time a project
+# needs it, checks the hash and keeps it in the app's data folder. Without
+# our query file, such a language falls back: its tags query finds
+# definitions and calls, and node kinds such as `if_statement` give blocks.
+#
 # A convention is a path pattern a language's community follows. A file
 # whose path matches one is tagged with it, and the tag goes into Jev's
 # state as evidence. It never decides anything on its own.
@@ -154,4 +161,44 @@ conventions = []
 [yaml]
 extensions = ["yml", "yaml"]
 grammar = { crate = "tree-sitter-yaml" }
+conventions = []
+
+[lua]
+extensions = ["lua"]
+grammar = { wasm = "https://github.com/tree-sitter-grammars/tree-sitter-lua/releases/download/v0.4.0/tree-sitter-lua.wasm", sha256 = "46aa46cf86966ba30af11a2674372ec0e51dd355464cad1aa1dca3a981a84a2b" }
+tags = { url = "https://raw.githubusercontent.com/tree-sitter-grammars/tree-sitter-lua/v0.4.0/queries/tags.scm", sha256 = "9499ef7bcd5d7f064153e6acaa4c5b001d04081df17830dc5879009aab63ce0c" }
+conventions = [
+  { tag = "lua:spec", path = "**/*_spec.lua" },
+]
+
+[elixir]
+extensions = ["ex", "exs"]
+grammar = { wasm = "https://github.com/elixir-lang/tree-sitter-elixir/releases/download/v0.3.5/tree-sitter-elixir.wasm", sha256 = "1818ae0d7343f880abb0b7932c9a815f09896ca67b3e126096a2dd7677d1477b" }
+tags = { url = "https://raw.githubusercontent.com/elixir-lang/tree-sitter-elixir/v0.3.5/queries/tags.scm", sha256 = "5456eeebf3bfcd8d13cec8bb7638a258523ba2a0e6b8d799e51d27c11e679b49" }
+conventions = [
+  { tag = "elixir:test-file", path = "**/*_test.exs" },
+]
+
+[scala]
+extensions = ["scala", "sc"]
+grammar = { wasm = "https://github.com/tree-sitter/tree-sitter-scala/releases/download/v0.26.2/tree-sitter-scala.wasm", sha256 = "37d7fe5a91ca98941dc05493b0c05a0df0f36df5035890fa00b02497c68aaac3" }
+tags = { url = "https://raw.githubusercontent.com/tree-sitter/tree-sitter-scala/v0.26.2/queries/tags.scm", sha256 = "f56794ad2bc9ae5c7ffd332a40fa67a3af65880e18ba4124a0053f0bfff54757" }
+conventions = [
+  { tag = "scala:test-source", path = "**/src/test/**" },
+]
+
+[zig]
+extensions = ["zig"]
+grammar = { wasm = "https://github.com/tree-sitter-grammars/tree-sitter-zig/releases/download/v1.1.2/tree-sitter-zig.wasm", sha256 = "54b3b83dd9c62da5815f06132bc3fc914d9dcc780370b32416446a0b7969e8c6" }
+conventions = []
+
+[haskell]
+extensions = ["hs"]
+grammar = { wasm = "https://github.com/tree-sitter/tree-sitter-haskell/releases/download/v0.24.1/tree-sitter-haskell.wasm", sha256 = "ea89cb1199b1ca2102e273b27239e795baff17248128a9bcd3c3825ac17d8cc0" }
+conventions = []
+
+[ocaml]
+extensions = ["ml"]
+grammar = { wasm = "https://github.com/tree-sitter/tree-sitter-ocaml/releases/download/v0.26.0/tree-sitter-ocaml.wasm", sha256 = "bfa3eef92b9d3cc1117aa486d46ecb06c98a3a28c1747660aaa5851df5e4530c" }
+tags = { url = "https://raw.githubusercontent.com/tree-sitter/tree-sitter-ocaml/v0.26.0/queries/tags.scm", sha256 = "bed0a869d8e842e9a5b4e84f0f4940293801b3791c21dcee8b9f73f67776a2d1" }
 conventions = []

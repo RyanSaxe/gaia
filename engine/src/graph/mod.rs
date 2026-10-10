@@ -47,13 +47,36 @@ fn parse_cached(language: &str, hash: &str, text: &str) -> Result<Arc<FileParse>
     Ok(parsed)
 }
 
-/// Parses every file with a grammar, on every core.
+/// Parses every file with a grammar, on every core. A grammar from a
+/// release that cannot be fetched leaves its files without a grammar.
 fn parse_all(files: &[walk::Walked]) -> Result<Vec<Option<Arc<FileParse>>>, String> {
+    let mut available: HashMap<&str, bool> = HashMap::new();
+    for f in files.iter().filter(|f| f.text.is_some()) {
+        let Some(spec) = languages::of_path(&f.path) else {
+            continue;
+        };
+        if available.contains_key(spec.name.as_str()) {
+            continue;
+        }
+        let ok = match languages::load(&spec.name) {
+            Ok(_) => true,
+            Err(e) if matches!(spec.grammar, languages::Grammar::Wasm { .. }) => {
+                eprintln!("gaia-engine: {e}");
+                false
+            }
+            Err(e) => return Err(e),
+        };
+        available.insert(spec.name.as_str(), ok);
+    }
     let jobs: Vec<(usize, &str, &str, &str)> = files
         .iter()
         .enumerate()
         .filter_map(|(i, f)| {
             let language = languages::of_path(&f.path)?;
+            available
+                .get(language.name.as_str())
+                .copied()
+                .filter(|ok| *ok)?;
             Some((
                 i,
                 language.name.as_str(),
@@ -363,7 +386,10 @@ mod tests {
     fn every_language_parses_its_sample_and_fires_every_capture_the_graph_shows() {
         let g = build(&fixtures()).unwrap();
         let defs = defs(&g);
-        for spec in languages::table().values() {
+        let compiled = languages::table()
+            .values()
+            .filter(|s| matches!(s.grammar, languages::Grammar::Compiled { .. }));
+        for spec in compiled {
             let file = g
                 .nodes
                 .iter()
@@ -384,7 +410,7 @@ mod tests {
                 file.path
             );
             let loaded = languages::load(&spec.name).unwrap();
-            let mut captures: Vec<&str> = loaded.ours.capture_names().to_vec();
+            let mut captures: Vec<&str> = loaded.ours.as_ref().unwrap().capture_names().to_vec();
             if let Some(t) = &loaded.tags {
                 captures.extend(t.capture_names());
             }
@@ -409,6 +435,78 @@ mod tests {
                     found,
                     "{}'s @{capture} makes a pending {kind} in {}",
                     spec.name, file.path
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_grammar_from_its_release_reads_lua_with_or_without_its_tags_query() {
+        let wasm = std::fs::read(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/wasm/tree-sitter-lua.wasm"),
+        )
+        .unwrap();
+        let tags = std::fs::read_to_string(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/wasm/lua-tags.scm"),
+        )
+        .unwrap();
+        let src = "local M = {}\n\n-- Walks names.\nfunction M.walk(root, depth)\n  local out = {}\n  for i = 1, depth do\n    if i > 3 and depth > 0 then\n      out[#out + 1] = root\n    elseif i > 5 then\n      print(i)\n    else\n      helper(i)\n    end\n  end\n  return out\nend\n\nfunction M:size()\n  return #self\nend\n\nreturn M\n";
+        // With its tags query, Lua's definitions and calls come from it; without, from node kinds.
+        for (tags, walk_name) in [(Some(tags.as_str()), "walk"), (None, "M.walk")] {
+            let loaded = languages::from_wasm("lua", &wasm, tags).unwrap();
+            let p = parse::parse(&loaded, src).unwrap();
+            assert_eq!(p.unparsed, 0);
+            let walk = p
+                .defs
+                .iter()
+                .find(|d| d.name == walk_name)
+                .unwrap_or_else(|| panic!("{walk_name} is a definition"));
+            assert_eq!(walk.doc.as_deref(), Some("Walks names."));
+            assert_eq!(walk.measures.params, Some(2));
+            // for (1), if nested once (2), `and` (1), elseif (1), else (1).
+            assert_eq!(walk.measures.cognitive, Some(6));
+            assert_eq!(walk.measures.cyclomatic, Some(5));
+            assert_eq!(p.defs.len(), 2, "M.walk and M:size");
+            let shapes: BTreeSet<&str> = p.blocks.iter().map(|b| b.shape.as_str()).collect();
+            assert!(shapes.contains("loop") && shapes.contains("branch"));
+            if tags.is_some() {
+                assert!(
+                    p.refs
+                        .iter()
+                        .any(|r| r.kind == RefKind::Call && r.text == "helper")
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn every_language_from_a_release_names_a_https_file_and_its_hash() {
+        let mut extensions: BTreeSet<&str> = BTreeSet::new();
+        for spec in languages::table().values() {
+            for e in &spec.extensions {
+                assert!(
+                    extensions.insert(e.as_str()),
+                    ".{e} belongs to one language only"
+                );
+            }
+            let remotes: Vec<(&str, &str)> = match &spec.grammar {
+                languages::Grammar::Compiled { .. } => continue,
+                languages::Grammar::Wasm { wasm, sha256 } => {
+                    std::iter::once((wasm.as_str(), sha256.as_str()))
+                        .chain(
+                            spec.tags
+                                .iter()
+                                .map(|t| (t.url.as_str(), t.sha256.as_str())),
+                        )
+                        .collect()
+                }
+            };
+            for (url, sha) in remotes {
+                assert!(url.starts_with("https://"), "{}: {url}", spec.name);
+                assert!(
+                    sha.len() == 64 && sha.chars().all(|c| c.is_ascii_hexdigit()),
+                    "{}: {sha}",
+                    spec.name
                 );
             }
         }
