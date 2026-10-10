@@ -2,9 +2,9 @@
 //! directory and the nodes in it: whether it applies, what it adds to the
 //! state, and its questions, each naming the node it is about and where
 //! its answer goes. A call's words live in its vocabulary file in
-//! `engine/vocab/`, and its version is that file's hash and a number bumped
-//! when its code changes, so a new word asks again only what that call
-//! answered.
+//! `engine/vocab/`, and its version is the hash of those words (of its own
+//! section, where calls share a file) and a number bumped when its code
+//! changes, so a new word asks again only what that call answered.
 //!
 //! The passes say what waits for what: `link` (resolve, callee) goes first;
 //! `understand` (profile, quality, importance, screen, attention) waits for
@@ -1370,9 +1370,10 @@ pub fn registry() -> Vec<&'static dyn Call> {
 mod tests {
     use super::*;
 
-    /// Every call's vocabulary parses, and every choice it asks names only options from it.
+    /// Every call's vocabulary parses, every question has options or levels,
+    /// and every answer goes to a field the graph has.
     #[test]
-    fn every_call_s_words_parse_and_its_values_map_into_zero_to_one() {
+    fn every_call_s_words_parse_and_its_answers_go_to_fields_the_graph_has() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/languages");
         let graph = crate::graph::build(&root).unwrap();
         let deep: BTreeSet<String> = graph
