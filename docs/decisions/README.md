@@ -53,3 +53,4 @@ One file per decision the reviewer settled in the pair sessions that designed Ga
 - [The wait paints today's field map, and shows nothing pending](49-the-wait-paints-todays-map.md)
 - [Every area's name, in the same place](50-every-area-s-name-in-the-same-place.md)
 - [The start is the map table in 3D, each world's card is its saved map, and the reviewer's logo heads it](51-the-start-is-the-map-table-in-3d.md)
+- [Crowns fill with full sprays, and the trees pass](52-crowns-fill-with-full-sprays.md)
