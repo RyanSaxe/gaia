@@ -18,13 +18,21 @@
 // The generator checks the plan covers every option in `looks.ts`, and the
 // lab's test checks the baked world shows each feature.
 //
-// Usage: pnpm proving
+// `--code DIR` writes the proving ground's code instead: real source for
+// every planned file, as poor as its health (tools/proving-code.ts), with
+// `proving-manifest.json` saying how each was written, so the engine's bench
+// can hold Jev's judgments to it. DIR must lie outside Gaia's own repository
+// or under a node_modules folder, which Gaia's own world never reads.
+//
+// Usage: pnpm proving [--code DIR]
 
-import { writeFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { dirname, relative, resolve } from "node:path";
+import { parseArgs } from "node:util";
 import type { CodeModel, EntityFacts, EntityForm, FileFacts, FileKind, SymbolFact } from "@gaia/schema";
 import { type Judgments, entityVitalityOf, layoutWorld } from "@gaia/world";
 import { BUILDINGS, CHARACTERS, FORMS, LANDMARKS, LANDS, TRAILS, VIBES, WATERS } from "../app/renderer/terrain/looks.ts";
+import { provingCode } from "./proving-code.ts";
 
 /** How a file or an entity fares, from every signal clear to every signal failing; `decayed` is ruin with no tests at all, so it drags its entity down less. */
 type Health = "thriving" | "well" | "tired" | "failing" | "ruin" | "decayed";
@@ -165,6 +173,8 @@ const SIGNALS: Readonly<Record<Health, { tested: "own" | "none"; failing: boolea
 };
 
 const VERBS = ["gather", "weigh", "carry", "settle", "mend", "turn", "keep", "sort", "trace", "fold", "measure", "join"];
+/** Who does each verb, where adding "er" misspells it. */
+const AGENT: Readonly<Record<string, string>> = { carry: "carrier", settle: "settler", trace: "tracer", measure: "measurer" };
 const cap = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
 const camel = (s: string): string => s.replace(/[-.](\w)/g, (_, c: string) => c.toUpperCase());
 
@@ -178,7 +188,7 @@ function symbolsFor(base: string, lines: number, index: number): SymbolFact[] {
     const verb = VERBS[(index * 5 + k) % VERBS.length] as string;
     const span = Math.max(4, Math.round((lines * 0.7) / count));
     const kind: SymbolFact["kind"] = k === 1 ? "class" : k === 2 ? "type" : k === 3 ? "constant" : "function";
-    const name = kind === "class" ? `${cap(stem)}${cap(verb)}er` : kind === "type" ? `${cap(stem)}${cap(verb)}` : kind === "constant" ? `${stem.toUpperCase()}_${verb.toUpperCase()}` : `${verb}${cap(stem)}`;
+    const name = kind === "class" ? `${cap(stem)}${cap(AGENT[verb] ?? `${verb}er`)}` : kind === "type" ? `${cap(stem)}${cap(verb)}` : kind === "constant" ? `${stem.toUpperCase()}_${verb.toUpperCase()}` : `${verb}${cap(stem)}`;
     out.push({ name, kind, exported: k % 3 !== 2 || kind === "type", doc: `${cap(verb)}s the ${base.replace(/-/g, " ")}.`, line, lines: kind === "type" || kind === "constant" ? Math.max(1, Math.round(span / 6)) : span });
     line += span + 2;
   }
@@ -408,6 +418,21 @@ const astray = [...planned.filter((p) => !regions.includes(p)).map((p) => `${p |
 if (astray.length > 0) throw new Error(`The proving ground lays out differently from its plan: ${astray.join("; ")}.`);
 
 const repo = resolve(import.meta.dirname, "..");
+const codeDir = parseArgs({ options: { code: { type: "string" } } }).values.code;
+if (codeDir !== undefined) {
+  const dir = resolve(codeDir);
+  const inside = relative(repo, dir);
+  if (!inside.startsWith("..") && !inside.split("/").includes("node_modules")) throw new Error(`Write the proving ground's code outside Gaia's repository or under node_modules, or Gaia's own world reads it: ${dir}.`);
+  const { code, manifest } = provingCode(files.map((facts, i) => ({ facts, health: (drafted[i] as Drafted).health })));
+  for (const [path, text] of code) {
+    mkdirSync(dirname(resolve(dir, path)), { recursive: true });
+    writeFileSync(resolve(dir, path), text);
+  }
+  writeFileSync(resolve(dir, "proving-manifest.json"), `${JSON.stringify(manifest, null, 1)}\n`);
+  const lines = [...code.values()].reduce((n, text) => n + text.split("\n").length - 1, 0);
+  console.log(`proving: wrote ${code.size} files, ${lines.toLocaleString("en-US")} lines, and the manifest of ${manifest.length} source files to ${dir}`);
+  process.exit(0);
+}
 const fixtures = resolve(repo, "app/renderer/terrain/fixtures");
 writeFileSync(resolve(fixtures, "proving.json"), `${JSON.stringify(model)}\n`);
 writeFileSync(resolve(fixtures, "proving-judged.json"), `${JSON.stringify(judged, null, 1)}\n`);

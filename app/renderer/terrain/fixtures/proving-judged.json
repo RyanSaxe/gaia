@@ -491,7 +491,7 @@
  "forms": {
   "crossings/banks.ts": {
    "#carryBanks": "Standing stone",
-   "#BanksSettleer": "Mossy boulder",
+   "#BanksSettler": "Mossy boulder",
    "#BanksMend": "Stone family",
    "#BANKS_TURN": "Bench stone",
    "#keepBanks": "Box mound",
@@ -587,7 +587,7 @@
   },
   "downs/fields/barley.ts": {
    "#weighBarley": "Stone family",
-   "#BarleyCarryer": "Bench stone",
+   "#BarleyCarrier": "Bench stone",
    "#BarleySettle": "Box mound",
    "#BARLEY_MEND": "Blueberry",
    "#turnBarley": "Rhododendron"
@@ -622,7 +622,7 @@
   },
   "downs/oak/index.ts": {
    "#carryOak": "Feather shrub",
-   "#OakSettleer": "Bluebells"
+   "#OakSettler": "Bluebells"
   },
   "downs/oak/roots.ts": {
    "#gatherRoots": "Daisies",
@@ -639,7 +639,7 @@
   },
   "downs/orchard/pears.ts": {
    "#foldPears": "Bluebells",
-   "#PearsMeasureer": "Daisies",
+   "#PearsMeasurer": "Daisies",
    "#PearsJoin": "Standing stone"
   },
   "downs/survey.ts": {
@@ -656,14 +656,14 @@
   },
   "dunes/keep/guard.rs": {
    "#sortGuard": "Daisies",
-   "#GuardTraceer": "Standing stone",
+   "#GuardTracer": "Standing stone",
    "#GuardFold": "Mossy boulder",
    "#GUARD_MEASURE": "Stone family",
    "#joinGuard": "Bench stone"
   },
   "dunes/keep/lib.rs": {
    "#foldKeep": "Box mound",
-   "#KeepMeasureer": "Blueberry",
+   "#KeepMeasurer": "Blueberry",
    "#KeepJoin": "Rhododendron"
   },
   "dunes/ledger/entries.ts": {
@@ -674,7 +674,7 @@
   },
   "dunes/ledger/index.ts": {
    "#carryLedger": "Mossy boulder",
-   "#LedgerSettleer": "Stone family"
+   "#LedgerSettler": "Stone family"
   },
   "fords/gravel/index.ts": {
    "#turnGravel": "Bench stone",
@@ -689,7 +689,7 @@
   },
   "fords/jetty/index.ts": {
    "#sortJetty": "Standing stone",
-   "#JettyTraceer": "Mossy boulder"
+   "#JettyTracer": "Mossy boulder"
   },
   "fords/jetty/landing.ts": {
    "#turnLanding": "Stone family",
@@ -700,7 +700,7 @@
   },
   "fords/reeds.ts": {
    "#foldReeds": "Feather shrub",
-   "#ReedsMeasureer": "Bluebells",
+   "#ReedsMeasurer": "Bluebells",
    "#ReedsJoin": "Daisies",
    "#REEDS_GATHER": "Standing stone",
    "#weighReeds": "Mossy boulder"
@@ -716,7 +716,7 @@
   },
   "fords/stones.ts": {
    "#sortStones": "Daisies",
-   "#StonesTraceer": "Standing stone",
+   "#StonesTracer": "Standing stone",
    "#StonesFold": "Mossy boulder",
    "#STONES_MEASURE": "Stone family"
   },
@@ -736,11 +736,11 @@
   },
   "hills/kiln/index.ts": {
    "#weighKiln": "Bench stone",
-   "#KilnCarryer": "Box mound"
+   "#KilnCarrier": "Box mound"
   },
   "hills/oak/branches.ts": {
    "#sortBranches": "Blueberry",
-   "#BranchesTraceer": "Rhododendron",
+   "#BranchesTracer": "Rhododendron",
    "#BranchesFold": "Feather shrub",
    "#BRANCHES_MEASURE": "Bluebells",
    "#joinBranches": "Daisies",
@@ -748,7 +748,7 @@
   },
   "hills/oak/index.ts": {
    "#foldOak": "Mossy boulder",
-   "#OakMeasureer": "Stone family",
+   "#OakMeasurer": "Stone family",
    "#OakJoin": "Bench stone"
   },
   "hills/slopes.ts": {
@@ -762,7 +762,7 @@
   },
   "hollow/depth.ts": {
    "#foldDepth": "Mossy boulder",
-   "#DepthMeasureer": "Stone family",
+   "#DepthMeasurer": "Stone family",
    "#DepthJoin": "Bench stone",
    "#DEPTH_GATHER": "Box mound",
    "#weighDepth": "Blueberry",
@@ -770,7 +770,7 @@
   },
   "hollow/index.ts": {
    "#weighHollow": "Feather shrub",
-   "#HollowCarryer": "Bluebells",
+   "#HollowCarrier": "Bluebells",
    "#HollowSettle": "Daisies"
   },
   "hollow/pool.ts": {
@@ -794,7 +794,7 @@
   },
   "index.ts": {
    "#carryProving": "Bench stone",
-   "#ProvingSettleer": "Box mound"
+   "#ProvingSettler": "Box mound"
   },
   "mixed/beacon/index.ts": {
    "#traceBeacon": "Blueberry",
@@ -830,7 +830,7 @@
   },
   "mixed/sound.ts": {
    "#foldSound": "Feather shrub",
-   "#SoundMeasureer": "Bluebells",
+   "#SoundMeasurer": "Bluebells",
    "#SoundJoin": "Daisies",
    "#SOUND_GATHER": "Standing stone",
    "#weighSound": "Mossy boulder",
@@ -839,7 +839,7 @@
   },
   "mixed/steady.ts": {
    "#sortSteady": "Box mound",
-   "#SteadyTraceer": "Blueberry",
+   "#SteadyTracer": "Blueberry",
    "#SteadyFold": "Rhododendron",
    "#STEADY_MEASURE": "Feather shrub",
    "#joinSteady": "Bluebells",
@@ -848,7 +848,7 @@
   },
   "mixed/workshop/gears.ts": {
    "#weighGears": "Mossy boulder",
-   "#GearsCarryer": "Stone family",
+   "#GearsCarrier": "Stone family",
    "#GearsSettle": "Bench stone",
    "#GEARS_MEND": "Box mound",
    "#turnGears": "Blueberry",
@@ -867,7 +867,7 @@
   },
   "moor/archive/index.ts": {
    "#sortArchive": "Box mound",
-   "#ArchiveTraceer": "Blueberry"
+   "#ArchiveTracer": "Blueberry"
   },
   "moor/henge/index.ts": {
    "#turnHenge": "Rhododendron",
@@ -888,7 +888,7 @@
   },
   "pondside/queue.ts": {
    "#carryQueue": "Feather shrub",
-   "#QueueSettleer": "Bluebells",
+   "#QueueSettler": "Bluebells",
    "#QueueMend": "Daisies",
    "#QUEUE_TURN": "Standing stone",
    "#keepQueue": "Mossy boulder",
@@ -925,11 +925,11 @@
   },
   "ruins/cottage/index.ts": {
    "#sortCottage": "Stone family",
-   "#CottageTraceer": "Bench stone"
+   "#CottageTracer": "Bench stone"
   },
   "ruins/croft/forge.rs": {
    "#weighForge": "Box mound",
-   "#ForgeCarryer": "Blueberry",
+   "#ForgeCarrier": "Blueberry",
    "#ForgeSettle": "Rhododendron",
    "#FORGE_MEND": "Feather shrub",
    "#turnForge": "Bluebells"
@@ -956,7 +956,7 @@
   },
   "ruins/keep/lib.rs": {
    "#sortKeep": "Mossy boulder",
-   "#KeepTraceer": "Stone family",
+   "#KeepTracer": "Stone family",
    "#KeepFold": "Bench stone"
   },
   "ruins/keep/walls.rs": {
@@ -982,7 +982,7 @@
   },
   "ruins/mill/race.ts": {
    "#carryRace": "Feather shrub",
-   "#RaceSettleer": "Bluebells",
+   "#RaceSettler": "Bluebells",
    "#RaceMend": "Daisies",
    "#RACE_TURN": "Standing stone",
    "#keepRace": "Mossy boulder"
@@ -999,7 +999,7 @@
   },
   "ruins/rubble.ts": {
    "#carryRubble": "Bluebells",
-   "#RubbleSettleer": "Daisies",
+   "#RubbleSettler": "Daisies",
    "#RubbleMend": "Standing stone",
    "#RUBBLE_TURN": "Mossy boulder",
    "#keepRubble": "Stone family",
@@ -1031,14 +1031,14 @@
   },
   "terraces/ring/schema.ts": {
    "#foldSchema": "Standing stone",
-   "#SchemaMeasureer": "Mossy boulder",
+   "#SchemaMeasurer": "Mossy boulder",
    "#SchemaJoin": "Stone family",
    "#SCHEMA_GATHER": "Bench stone",
    "#weighSchema": "Box mound"
   },
   "terraces/steps.ts": {
    "#carrySteps": "Blueberry",
-   "#StepsSettleer": "Rhododendron",
+   "#StepsSettler": "Rhododendron",
    "#StepsMend": "Feather shrub",
    "#STEPS_TURN": "Bluebells",
    "#keepSteps": "Daisies",
