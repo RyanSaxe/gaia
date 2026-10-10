@@ -3,7 +3,7 @@
 // shapes from its structs. The OpenRouter key never crosses this boundary.
 
 import type { EntityFacts, FileFacts, RepositoryFacts } from "./facts.ts";
-import type { CodeGraph } from "./graph.ts";
+import type { CodeGraph, NodeId } from "./graph.ts";
 import type { JevRequest, JevResponse } from "./jev.ts";
 
 export interface EngineMethods {
@@ -22,7 +22,23 @@ export interface EngineMethods {
    * rules have not resolved as pending. Every language reads the same way,
    * through its grammar's queries (`docs/architecture.md`, "The code graph").
    */
-  "project.graph": { params: { root: string }; result: CodeGraph };
+  "project.graph": { params: { root: string; judged?: boolean }; result: CodeGraph };
+  /**
+   * Builds every request Jev's calls would send about the project and looks
+   * each up in the store; sends nothing. A request already answered is
+   * kept, never sent again (`docs/architecture.md`, "The Jev runner").
+   */
+  "understand.plan": { params: { root: string }; result: UnderstandPlan };
+  /**
+   * Sends every request whose waits are met, up to `max` (256 by default),
+   * as many at once as Jev takes, and returns the nodes that settled, so the
+   * waiting screen can paint them. Call it until nothing is left.
+   */
+  "understand.next": { params: { root: string; max?: number }; result: UnderstandProgress };
+  /** Queues the deep questions for the nodes the world chose to stand. */
+  "understand.deepen": { params: { root: string; nodes: readonly NodeId[] }; result: UnderstandPlan };
+  /** Asks one call about one node straight away, for a follow-up a person asks. */
+  "understand.ask": { params: { root: string; node: NodeId; call: string }; result: { answers: Readonly<Record<string, unknown>> } };
   /**
    * Where a GitHub address leads, before anything is cloned: whether it names
    * a public repository GitHub will hand over (one `git ls-remote`), and the
@@ -109,6 +125,24 @@ export interface JevEstimate {
   readonly concurrency: number;
   /** Whether this engine would really send them: it runs with GAIA_JEV=live. */
   readonly live: boolean;
+}
+
+/** The passes of understanding, in the order their waits allow (`docs/architecture.md`, "The Jev runner"). */
+export type Pass = "link" | "understand" | "deep" | "tests" | "dirs";
+
+/** What understanding a project would send, pass by pass, and what it would cost. */
+export interface UnderstandPlan {
+  readonly pending: readonly { readonly pass: Pass; readonly requests: number; readonly kept: number }[];
+  readonly estimate: JevEstimate;
+}
+
+/** One slice of understanding. */
+export interface UnderstandProgress {
+  readonly sent: number;
+  readonly failed: number;
+  readonly left: number;
+  /** Nodes whose requests are all answered. */
+  readonly settled: readonly NodeId[];
 }
 
 /** Pushed by the engine without a request. */
