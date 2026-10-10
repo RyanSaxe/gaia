@@ -631,10 +631,22 @@ pub fn run(units: &[Unit], dirs: &BTreeSet<String>) -> Resolved {
                             owner_of(*kk, *i) == Some(q) || file == q || dir == q
                         })
                         .collect();
-                    if named.is_empty() {
-                        (all.clone(), false)
-                    } else {
-                        (named, true)
+                    match (named.is_empty(), r.path) {
+                        (false, _) => (named, true),
+                        // A path that names none of them, as `Vec::new` names
+                        // no `new` here, leads outside.
+                        (true, true) => (Vec::new(), false),
+                        // A value the rule cannot place reaches a method, or,
+                        // where functions are values, any of them.
+                        (true, false) => (
+                            all.iter()
+                                .copied()
+                                .filter(|(kk, i)| {
+                                    spec.functions_as_values || owner_of(*kk, *i).is_some()
+                                })
+                                .collect(),
+                            false,
+                        ),
                     }
                 }
                 // Java, C#, Kotlin, Swift, C++ and Ruby reach their own class's

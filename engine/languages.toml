@@ -26,9 +26,14 @@
 # unless named. `data = true` marks a format that holds configuration rather
 # than code, which the import rule searches for package names.
 # `implicit_self = true` marks a language whose methods call their own
-# class's methods without naming `self` or `this`.
+# class's methods without naming `self` or `this`. `functions_as_values =
+# true` marks one where a call on a value, such as `store.inc()`, can reach
+# a function that belongs to no class: an object's own functions, or a
+# Kotlin extension. Elsewhere a call on a value the rule cannot place
+# reaches only methods.
 
 [typescript]
+functions_as_values = true
 family = "js"
 relative = [{ prefix = "./", from = "here" }, { prefix = "../", from = "parent" }]
 extensions = ["ts", "mts", "cts"]
@@ -40,6 +45,7 @@ conventions = [
 ]
 
 [tsx]
+functions_as_values = true
 family = "js"
 relative = [{ prefix = "./", from = "here" }, { prefix = "../", from = "parent" }]
 extensions = ["tsx"]
@@ -51,6 +57,7 @@ conventions = [
 ]
 
 [javascript]
+functions_as_values = true
 family = "js"
 relative = [{ prefix = "./", from = "here" }, { prefix = "../", from = "parent" }]
 extensions = ["js", "jsx", "mjs", "cjs"]
@@ -147,6 +154,7 @@ conventions = [
 ]
 
 [kotlin]
+functions_as_values = true
 implicit_self = true
 extensions = ["kt", "kts"]
 grammar = { crate = "tree-sitter-kotlin-ng" }
@@ -196,6 +204,7 @@ grammar = { crate = "tree-sitter-yaml" }
 conventions = []
 
 [lua]
+functions_as_values = true
 extensions = ["lua"]
 grammar = { wasm = "https://github.com/tree-sitter-grammars/tree-sitter-lua/releases/download/v0.4.0/tree-sitter-lua.wasm", sha256 = "46aa46cf86966ba30af11a2674372ec0e51dd355464cad1aa1dca3a981a84a2b" }
 tags = { url = "https://raw.githubusercontent.com/tree-sitter-grammars/tree-sitter-lua/v0.4.0/queries/tags.scm", sha256 = "9499ef7bcd5d7f064153e6acaa4c5b001d04081df17830dc5879009aab63ce0c" }

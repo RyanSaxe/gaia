@@ -76,6 +76,8 @@ pub struct Ref {
     pub from: Option<usize>,
     /// What a call names before its own name: `Batch` in `Batch::new`, `self` in `self.push`.
     pub qualifier: Option<String>,
+    /// The qualifier is a path, as `Batch::` is, rather than a value, as `batch.` is.
+    pub path: bool,
     /// A macro invocation, such as Rust's `format!(…)`, which reaches only a macro.
     pub macro_call: bool,
 }
@@ -883,14 +885,22 @@ pub fn parse(lang: &Loaded, src: &str) -> Result<FileParse, String> {
     for (k, &i) in order.iter().enumerate() {
         let (node, role, name) = &found[i];
         let parent_k = kept_parent(i);
-        let owner = match parent_k {
-            Some(p) if CONTAINERS.contains(&defs[p].role.as_str()) => Some(defs[p].name.clone()),
-            Some(_) => None,
-            None => scopes
+        // The innermost `@owner` scope holding it inside its parent, such as
+        // a Rust impl inside `mod tests`.
+        let scoped = || {
+            scopes
                 .iter()
                 .filter(|(s, _)| contains(*s, *node))
+                .filter(|(s, _)| parent_k.is_none_or(|p| contains(found[order[p]].0, *s)))
                 .map(|(_, o)| o.clone())
-                .next_back(),
+                .next_back()
+        };
+        let owner = match parent_k {
+            Some(p) if CONTAINERS.contains(&defs[p].role.as_str()) => {
+                scoped().or_else(|| Some(defs[p].name.clone()))
+            }
+            Some(_) => None,
+            None => scoped(),
         };
         let doc = docstrings
             .iter()
@@ -976,7 +986,7 @@ pub fn parse(lang: &Loaded, src: &str) -> Result<FileParse, String> {
             // The qualifier is the text before the name in the expression that
             // holds both: the match itself, or, when a tags query captures a
             // call by its arguments, the name's own parent (`ctx.lineTo`).
-            let qualifier = h
+            let before = h
                 .name
                 .and_then(|n| {
                     let holder = if n.start_byte() > h.node.start_byte() && contains(h.node, n) {
@@ -989,7 +999,9 @@ pub fn parse(lang: &Loaded, src: &str) -> Result<FileParse, String> {
                 // Only text that ends in a member or path separator qualifies a
                 // name: `ctx.` and `Batch::` do, `new ` and `impl ` don't.
                 .map(|(p, n)| src[p.start_byte()..n.start_byte()].trim_end())
-                .filter(|q| q.ends_with('.') || q.ends_with("::") || q.ends_with("->"))
+                .filter(|q| q.ends_with('.') || q.ends_with("::") || q.ends_with("->"));
+            let path = before.is_some_and(|q| q.ends_with("::"));
+            let qualifier = before
                 .map(|q| {
                     q.trim_end_matches(|c: char| ".:->?!".contains(c))
                         .trim_end()
@@ -1004,6 +1016,7 @@ pub fn parse(lang: &Loaded, src: &str) -> Result<FileParse, String> {
                 at: span_of(at),
                 from: innermost_def(h.node),
                 qualifier,
+                path,
                 macro_call: h.node.kind().contains("macro"),
             })
         })
