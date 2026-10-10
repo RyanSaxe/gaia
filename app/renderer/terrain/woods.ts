@@ -31,9 +31,12 @@ export type DetailMode = "auto" | "full" | "far";
  * times that, the far form draws over the full one, so a tree never changes
  * form in a single frame. A touch-first screen (a phone) bakes and turns far
  * at half the size: a quarter of the memory and the bake, and still one
- * texel to a pixel.
+ * texel to a pixel. Bushes bake and turn far at `bush` of the trees' size, a
+ * sixteenth of a tree form's memory: a bush turns far some 120 to 230 m
+ * away, and most bushes in view stand farther (in the proving ground's
+ * valley, 36 of 601 stay full).
  */
-export const FAR = { swapPx: typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches ? 64 : 128, band: 1.25 } as const;
+export const FAR = { swapPx: typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches ? 64 : 128, band: 1.25, bush: 0.25 } as const;
 
 /**
  * How far toward its far form a crown spanning `px` device pixels is, where
@@ -80,7 +83,7 @@ export function createFrameBudget(): FrameBudget {
   };
 }
 
-/** What a pass's own size means for detail: how many times smaller than the view it draws, its device pixels per meter one meter away (per meter, for an orthographic pass), and the crown span trees turn far at (`FAR.swapPx` unless the frame budget asks for more). */
+/** What a pass's own size means for detail: how many times smaller than the view it draws, its device pixels per meter one meter away (per meter, for an orthographic pass), and the crown span trees turn far at (`FAR.swapPx` unless the frame budget asks for more; a smaller far form turns far at its share of it). */
 export interface PassSize {
   readonly smaller: number;
   readonly focal: number;
@@ -94,16 +97,51 @@ const VIEW_SIZE: PassSize = { smaller: 1, focal: 0, ortho: false };
 export interface FarBatch {
   copies: Float32Array;
   count: number;
+  /** Whether its forms are baked and their cards draw: until then every copy draws its full form. */
+  baked: boolean;
 }
 
-export function createFarBatch(): FarBatch {
-  return { copies: new Float32Array(FAR_COPY * 256), count: 0 };
+function createFarBatch(): FarBatch {
+  return { copies: new Float32Array(FAR_COPY * 256), count: 0, baked: false };
 }
 
 /** A blueprint's far form: its index among the far cards' forms, and the batch each pass gathers far copies into. */
 export interface FarOf {
   readonly form: number;
   readonly batch: FarBatch;
+  /** The crown span its form baked at, as a share of `FAR.swapPx`, and so of the size every pass turns trees far at; 1 when omitted. */
+  readonly share?: number;
+}
+
+/** Plants that take far forms, in their far cards' form order, and the one batch every pass gathers their far copies into. */
+export interface FarForms {
+  readonly batch: FarBatch;
+  readonly count: number;
+  /** Gives `plant` a far form baked at `share` of `FAR.swapPx`: what its copies take as their `far`. */
+  add(plant: Realized, share?: number): FarOf;
+  /** Every plant added, in form order, and the crown span in device pixels its form bakes at. Nothing may be added after. */
+  close(): readonly { readonly plant: Realized; readonly px: number }[];
+}
+
+export function createFarForms(): FarForms {
+  const batch = createFarBatch();
+  const plants: { plant: Realized; px: number }[] = [];
+  let closed = false;
+  return {
+    batch,
+    get count() {
+      return plants.length;
+    },
+    add(plant, share = 1) {
+      if (closed) throw new Error("The far forms are already baking; add every plant before they bake.");
+      plants.push({ plant, px: FAR.swapPx * share });
+      return { form: plants.length - 1, batch, share };
+    },
+    close() {
+      closed = true;
+      return plants;
+    },
+  };
 }
 
 /** Every copy of one blueprint, and which of them each pass draws. */
@@ -113,6 +151,8 @@ export interface Copies extends PlantView {
   readonly levels: readonly number[];
   /** The crown each copy's size on screen is measured by: the plant's built bounds at scale 1 where it stands. */
   readonly crown: THREE.Sphere;
+  /** Its far form, when a copy small on screen turns far. */
+  readonly far: FarOf | undefined;
   /** Sets one copy's vitality; the shader reads it per instance. */
   setVitalityAt(index: number, v: number): void;
   /**
@@ -241,6 +281,7 @@ export function createCopies(plant: Realized, light: SceneLight, spots: readonly
     radius: view.radius,
     levels,
     crown: view.built.clone(),
+    far,
     get count() {
       return view.count;
     },
@@ -270,8 +311,8 @@ export function createCopies(plant: Realized, light: SceneLight, spots: readonly
       const eye = light.uEye.value;
       // A crown's span on this pass's screen, in device pixels, at distance d.
       const span = (radius: number, d: number): number => (2 * radius * size.focal) / (size.ortho ? 1 : Math.max(d, 1));
-      const swapping = far !== undefined && detail === "auto" && size.focal > 0;
-      const swapPx = size.swapPx ?? FAR.swapPx;
+      const swapping = far !== undefined && far.batch.baked && detail === "auto" && size.focal > 0;
+      const swapPx = (size.swapPx ?? FAR.swapPx) * (far?.share ?? 1);
       inBand = 0;
       farAway = 0;
       cells.forEach((cell, i) => {

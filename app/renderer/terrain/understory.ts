@@ -11,7 +11,7 @@ import { FLOWER_PRESETS, type Preset, ROCK_PRESETS, type Realized, SHRUB_PRESETS
 import type { SceneLight } from "@gaia/render";
 import { type Habitat, type Occupied, type Placement, type ScatterRule, type Terrain, type WorldSpec, scatterComponents } from "@gaia/terrain";
 import type { Clearings } from "./clearings.ts";
-import { type Copies, createCopies } from "./woods.ts";
+import { type Copies, FAR, type FarForms, type FarOf, createCopies } from "./woods.ts";
 
 interface Group {
   readonly id: string;
@@ -22,6 +22,8 @@ interface Group {
   readonly casts: boolean;
   /** How much of its outline at the ground is kept clear of grass, 0 for none. */
   readonly clears: number;
+  /** Whether a copy small on screen draws as its build's far form. Drifts of flowers and rocks wait on far forms of their own. */
+  readonly far: boolean;
   readonly rule: Omit<ScatterRule, "id" | "variants" | "regions">;
   /** Density per landform: rocks crowd terraces and basins, flowers favor open meadow. */
   readonly landforms: Readonly<Record<string, number>>;
@@ -54,6 +56,7 @@ const GROUPS: readonly Group[] = [
     ...seeded(ROCK_PRESETS, [3, 0.5, 1, 2, 1, 0.7], 2),
     casts: true,
     clears: 0.92,
+    far: false,
     rule: { groups: 3.5, members: [1, 4], spread: 6, mix: "member", scale: [0.7, 1.25], maxSlope: 22, waterClearance: 1.5, ground: "lowest", sink: 0.05, places: { dry: 3, wet: 0.7, under: 0.4, edge: 0.5, open: 0.18 } },
     landforms: { "terraces@1": 1.8, "basin@1": 1.4, "valley@1": 1, "rolling-hills@1": 1, "meadow@1": 0.6, "dunes@1": 0.3 },
     // Mossy boulder, standing stone, bench stone, stone family, shale ledge, sandstone.
@@ -65,6 +68,7 @@ const GROUPS: readonly Group[] = [
     ...seeded(SHRUB_PRESETS, [1, 1, 0.7, 0.6], 3),
     casts: true,
     clears: 0.55,
+    far: true,
     rule: { groups: 5, members: [1, 5], spread: 5, mix: "member", scale: [0.75, 1.2], maxSlope: 24, waterClearance: 2, ground: "lowest", sink: 0.06, places: { edge: 1.7, under: 0.5, wet: 1.2, dry: 0.3, open: 0.02 } },
     landforms: { "valley@1": 1.3, "rolling-hills@1": 1.2, "basin@1": 1, "terraces@1": 0.8, "meadow@1": 0.7, "dunes@1": 0.4 },
     // Box mound, blueberry, rhododendron, feather shrub (the reeds' stand-in by water).
@@ -76,6 +80,7 @@ const GROUPS: readonly Group[] = [
     ...seeded(FLOWER_PRESETS, [1.2, 1, 0.8, 0.8, 0.8, 0.7], 1),
     casts: false,
     clears: 0,
+    far: false,
     rule: { groups: 6.5, members: [2, 5], spread: 7, mix: "group", scale: [0.8, 1.15], maxSlope: 20, waterClearance: 1, ground: "plane", sink: 0.02, places: { open: 1.3, edge: 1, under: 0.9, wet: 1.4, dry: 0.5 } },
     landforms: { "meadow@1": 1.6, "rolling-hills@1": 1.3, "valley@1": 1.1, "basin@1": 0.8, "terraces@1": 0.7, "dunes@1": 0.3 },
     // Daisies, poppies, bluebells (the woodland floor), lupines, marigolds (marsh marigolds by water), pink asters.
@@ -143,15 +148,26 @@ export interface Understory {
   readonly stats: () => { placed: Record<string, number>; triangles: number; meshes: number; drawn: number };
   /** Copies and triangles each kind of the understory drew in the last pass. */
   readonly drawnByKind: () => Record<string, { copies: number; triangles: number }>;
+  /** Each preset that turns far, by its first build: what the swap test stands alone. */
+  readonly farPresets: readonly { readonly name: string; readonly plant: Realized; readonly far: FarOf }[];
 }
 
-export function createUnderstory(scene: THREE.Scene, light: SceneLight, lib: Library, clearings: Clearings): Understory {
+/** `farForms` takes the far form of every build whose group turns far; without it, nothing does. */
+export function createUnderstory(scene: THREE.Scene, light: SceneLight, lib: Library, clearings: Clearings, farForms?: FarForms): Understory {
   const built = GROUPS.map((g) => {
     const plants = g.presets.map((p, i) => realize(p.blueprint, g.kind, lib, { seed: seedOf(`terrain-lab/${g.id}/${i}`), facts: { scale: 1, age: 120 } }));
     const reach = plants.map(outlineOf);
     const tops = plants.map((p) => p.parts.reduce((top, part) => part.positions.reduce((t, v, i) => (i % 3 === 1 ? Math.max(t, v) : t), top), 0));
-    return { group: g, plants, radii: plants.map(footprintOf), reach, tops, outlines: reach.map((o) => o.map((r) => r * g.clears)) };
+    const far = plants.map((p) => (g.far ? farForms?.add(p, FAR.bush) : undefined));
+    return { group: g, plants, far, radii: plants.map(footprintOf), reach, tops, outlines: reach.map((o) => o.map((r) => r * g.clears)) };
   });
+  // A seeded group lists its presets once per seed, so a preset's first build comes first.
+  const farPresets = built.flatMap(({ group, plants, far }) =>
+    group.presets.flatMap((preset, i) => {
+      const f = far[i];
+      return f === undefined || group.presets.indexOf(preset) !== i ? [] : [{ name: preset.name, plant: plants[i] as Realized, far: f }];
+    }),
+  );
   const views: { group: Group; view: Copies }[] = [];
   /** Each blueprint's instances by rule and variant, kept for the life of the lab. */
   const kept = new Map<string, { group: Group; view: Copies }>();
@@ -173,6 +189,7 @@ export function createUnderstory(scene: THREE.Scene, light: SceneLight, lib: Lib
 
   return {
     plan,
+    farPresets,
     place(terrain, world, trees, density = 1, given) {
       if (given !== undefined) placed = given;
       else {
@@ -188,7 +205,7 @@ export function createUnderstory(scene: THREE.Scene, light: SceneLight, lib: Lib
       );
       // Each blueprint keeps its instances from bake to bake and only moves its
       // copies, so a new world never rebuilds a blueprint's geometry or levels.
-      for (const { group, plants } of built) {
+      for (const { group, plants, far } of built) {
         plants.forEach((plant, variant) => {
           const spots = placed
             .filter((p) => p.rule === group.id && p.variant === variant)
@@ -200,7 +217,7 @@ export function createUnderstory(scene: THREE.Scene, light: SceneLight, lib: Lib
             return;
           }
           if (spots.length === 0) return;
-          const view = createCopies(plant, light, spots);
+          const view = createCopies(plant, light, spots, far[variant]);
           scene.add(view.object);
           const entry = { group, view };
           kept.set(key, entry);

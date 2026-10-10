@@ -18,7 +18,7 @@ import type { InstanceSpot, SceneLight } from "@gaia/render";
 import { NO_SHIFT, hex } from "@gaia/primitives";
 import { type Terrain, WILD_THICKETS, wildHeightAt, wildThicket } from "@gaia/terrain";
 import type { RegionCovers } from "./regions.ts";
-import { type Copies, createCopies } from "./woods.ts";
+import { type Copies, FAR, type FarForms, type FarOf, createCopies } from "./woods.ts";
 
 export const WILD_GROWTH = {
   /**
@@ -47,25 +47,27 @@ const WILD_COVERS = [
 
 /** Wild bushes in the flora kind's words: grey-green scrub in tufts and a rounded bush. */
 const WILD_BUSHES = [
-  blueprintOf("flora", {
+  ["Wild scrub", blueprintOf("flora", {
     form: { use: "thicket@1", params: { habit: "scrub", stems: "a few stems", stature: "waist-high" } },
     bark: { use: "bark@1", params: { roughness: "smooth" } },
     crown: { use: "leaf-mound@1", params: { leaves: "rounded", fullness: "in tufts at its tips" } },
     motion: { use: "sway@1", params: { stiffness: "stiff", rhythm: "gentle" } },
     palette: { use: "palette@1", params: { family: "desert-sage", contrast: "balanced" } },
-  }),
-  blueprintOf("flora", {
+  })],
+  ["Wild bush", blueprintOf("flora", {
     form: { use: "thicket@1", params: { habit: "mound", stems: "a few stems", stature: "head-high" } },
     bark: { use: "bark@1", params: { roughness: "smooth" } },
     crown: { use: "leaf-mound@1", params: { leaves: "rounded", fullness: "full" } },
     motion: { use: "sway@1", params: { stiffness: "stiff", rhythm: "gentle" } },
     palette: { use: "palette@1", params: { family: "deep-forest", contrast: "balanced" } },
-  }),
-];
+  })],
+] as const;
 
 export interface WildGrowth {
   /** Every instanced blueprint, for culling each pass, warming and the sun's shadow. */
   readonly all: () => readonly Copies[];
+  /** Each bush by name, with its build and far form: what the swap test stands alone. */
+  readonly farPresets: readonly { readonly name: string; readonly plant: Realized; readonly far: FarOf }[];
   /** Takes on a new bake: stands the bushes again around the anchor. */
   update(t: Terrain): void;
   /** Called every frame the person walks: the anchor jumps to them once they are far from it. */
@@ -141,15 +143,21 @@ function wildGround(lib: Library): [GroundSpec, GroundSpec] {
 /**
  * The wild's growth: hands the wild's covers to the ground and the grass,
  * and stands its bushes. `biomeLib` holds the biome primitives, `floraLib`
- * the flora ones.
+ * the flora ones. `farForms` takes each bush's far form; without it, none
+ * turns far.
  */
-export function createWildGrowth(scene: THREE.Scene, light: SceneLight, covers: RegionCovers, biomeLib: Library, floraLib: Library): WildGrowth {
+export function createWildGrowth(scene: THREE.Scene, light: SceneLight, covers: RegionCovers, biomeLib: Library, floraLib: Library, farForms?: FarForms): WildGrowth {
   covers.wild(wildGround(biomeLib));
-  const plants: Realized[] = WILD_BUSHES.map((bp, i) => realize(bp, flora, floraLib, { seed: seedOf(`wilds/bush-${i}`), facts: { scale: 1, age: 120 } }));
-  const views = plants.map((p) => {
-    const view = createCopies(p, light, []);
+  const plants: Realized[] = WILD_BUSHES.map(([, bp], i) => realize(bp, flora, floraLib, { seed: seedOf(`wilds/bush-${i}`), facts: { scale: 1, age: 120 } }));
+  const fars = plants.map((p) => farForms?.add(p, FAR.bush));
+  const views = plants.map((p, i) => {
+    const view = createCopies(p, light, [], fars[i]);
     scene.add(view.object);
     return view;
+  });
+  const farPresets = plants.flatMap((plant, i) => {
+    const far = fars[i];
+    return far === undefined ? [] : [{ name: (WILD_BUSHES[i] as (typeof WILD_BUSHES)[number])[0], plant, far }];
   });
   let terrain: Terrain | null = null;
   const cache = new Map<string, ReturnType<typeof thicketIn>>();
@@ -166,6 +174,7 @@ export function createWildGrowth(scene: THREE.Scene, light: SceneLight, covers: 
   };
   return {
     all: () => views,
+    farPresets,
     show(on) {
       for (const v of views) v.object.visible = on;
     },

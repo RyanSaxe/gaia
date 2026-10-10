@@ -655,9 +655,13 @@ times the size the forms baked at, and eases back once the view is light
 (`createFrameBudget`): each half second a tree in the band moves across it
 no more than the swap test's middle step. Each pass gathers its far copies into one batch, and the far cards
 draw it in one call per form. Nothing past `AIR.dissolveEnd`, where the air
-has dissolved everything into the sky, draws at all. Every tree build bakes
-into its far form a few views a frame under the wait (`startFarBake`), and
-the wait lifts only once all of them are ready. A baked form is kept in the
+has dissolved everything into the sky, draws at all. The understory's shrubs
+and the wild's bushes take far forms too, baked and turned far at a quarter
+of the trees' size (`FAR.bush`); drifts of flowers and rocks draw their own
+levels only. Every plant that turns far is listed once in `createFarForms`,
+in the far cards' form order. Each build bakes into its far form a few views
+a frame under the wait (`startFarBake`), and the wait lifts only once all of
+them are ready. A baked form is kept in the
 browser's IndexedDB (`app/renderer/terrain/far-store.ts`), keyed by a hash of
 the build, the bake's version and the swap size, so each build bakes once.
 A new world settles in over a few frames (`adopt`), and every shader it

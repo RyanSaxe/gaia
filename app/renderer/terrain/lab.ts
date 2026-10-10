@@ -114,7 +114,7 @@ import { type Stand, type StandRequest, type StandingLandmark, landmarkBase, own
 import { groundVitalityAt, setGroundOwnership, showGroundVitality } from "./vitality.ts";
 import { type TourStop, tourStops } from "./tour.ts";
 import { type Change, pictureChange, tallyFrame } from "./measure.ts";
-import { type Copies, type DetailMode, FAR, type PassSize, createCopies, createFarBatch, createFrameBudget } from "./woods.ts";
+import { type Copies, type DetailMode, FAR, type FarOf, type PassSize, createCopies, createFarForms, createFrameBudget } from "./woods.ts";
 import { contentHash, openFarStore } from "./far-store.ts";
 
 const TEMPLATE = /* html */ `
@@ -355,11 +355,12 @@ const ASKED_WORLD = new URLSearchParams(location.search).get("world");
 /** Frames the first world draws under the wait before it lifts, its shaders already compiled (`warmSoon`), so it moves smoothly from the first. */
 const LIFT_FRAMES = 4;
 /**
- * Baking far forms under the wait: at most this many views of a form a frame
- * (960 make a form), within this many milliseconds, so the wait keeps
- * painting while every tree build bakes.
+ * Baking far forms: at most this many views of a form a frame (960 make a
+ * form), within `ms` milliseconds under the wait, so it keeps painting while
+ * every tree build bakes, and within `walkingMs` once the world is open, while
+ * the bushes' forms bake.
  */
-const FAR_BAKE = { views: 24, ms: 6 } as const;
+const FAR_BAKE = { views: 24, ms: 6, walkingMs: 2 } as const;
 /** The sample world's size: the full world, or the small one, to compare the two. */
 /** `?world=sample&size=5000` asks for a sample world of that many meters across, with as many regions as the full one. */
 const ASKED_SIZE = Number(new URLSearchParams(location.search).get("size"));
@@ -642,40 +643,50 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   /** Each build's instances by variant, kept for the life of the lab. */
   const groves = new Map<number, Copies>();
 
+  // Every plant that turns far when small on screen: each tree build, by its
+  // index among the variants, and the understory's and the wild's bushes.
+  const treeForms = createFarForms();
+  const bushForms = createFarForms();
+  const treeFar: readonly FarOf[] = variants.map((v) => treeForms.add(v.plant));
+
   // Rocks, bushes and wildflowers, scattered around the trees.
-  const understory = createUnderstory(scene, light, new Library([...FLORA_PRIMITIVES, ...ROCK_PRIMITIVES, ...WILDFLOWER_PRIMITIVES]), clearings);
+  const understory = createUnderstory(scene, light, new Library([...FLORA_PRIMITIVES, ...ROCK_PRIMITIVES, ...WILDFLOWER_PRIMITIVES]), clearings, bushForms);
 
   // Before every pass (the sun's shadow, the water's mirror and the view),
   // each instanced blueprint packs only the cells that pass's camera sees.
   // Past the land: the wild's covers and its scattered bushes, which stand for nothing.
-  const wildGrowth = createWildGrowth(scene, light, covers, lib, floraLib);
+  const wildGrowth = createWildGrowth(scene, light, covers, lib, floraLib, bushForms);
   const instanced = (): Copies[] => [...treeViews, ...understory.all(), ...wildGrowth.all()];
-  // Far trees: each build baked once into its far form, drawn as cards where a
-  // tree is small on a pass's screen (woods.ts). A build's form is read from
-  // the store when it was baked before; otherwise it bakes a few views a frame
-  // from the moment the lab opens, and is stored for next time. The wait lifts
-  // only once every form is ready, so no frame shows a far tree before its card.
-  let farCards: FarCards | null = null;
-  let farBakeMs = 0;
+  // Far forms: each tree and bush build baked once into its far form, drawn as
+  // cards where a copy is small on a pass's screen (woods.ts). A build's form
+  // is read from the store when it was baked before; otherwise it bakes a few
+  // views a frame, and is stored for next time. The trees' forms bake from the
+  // moment the lab opens, and the wait lifts only once they are ready, so no
+  // frame shows a far tree before its card. The bushes' bake once the world is
+  // open: until then every bush draws its full form, and the far ones then
+  // change by less than a level of 255 as their cards come in.
+  const farSets = [treeForms, bushForms].map((forms) => ({ forms, cards: null as FarCards | null, ms: 0 }));
+  const [treeSet, bushSet] = farSets as [(typeof farSets)[number], (typeof farSets)[number]];
+  const farStore = openFarStore();
   // A heavy view turns trees far a little sooner (woods.ts, `BUDGET`).
   const farBudget = createFrameBudget();
-  const farBatch = createFarBatch();
-  const farBaked = (async (): Promise<void> => {
+  /** Bakes or reads every form of `set`, `ms` milliseconds a frame, and draws its cards from then on. */
+  async function bakeFar(set: (typeof farSets)[number], ms: number): Promise<void> {
     const t0 = performance.now();
-    const store = await openFarStore();
+    const store = await farStore;
     const forms: FarForm[] = [];
-    for (const v of variants) {
-      const key = contentHash(v.plant.parts, v.plant.motion, v.plant.palette, FAR_BAKE_VERSION, FAR.swapPx);
+    for (const { plant, px } of set.forms.close()) {
+      const key = contentHash(plant.parts, plant.motion, plant.palette, FAR_BAKE_VERSION, px);
       const kept = (await store?.get(key).catch(() => undefined)) as FarFormData | undefined;
       const stored = kept === undefined ? null : farFormFrom(kept);
       if (stored !== null) {
         forms.push(stored);
         continue;
       }
-      const bake = startFarBake(renderer, v.plant, FAR.swapPx);
+      const bake = startFarBake(renderer, plant, px);
       await bake.ready;
       for (;;) {
-        const form = bake.step(FAR_BAKE.ms, FAR_BAKE.views);
+        const form = bake.step(ms, FAR_BAKE.views);
         if (form !== null) {
           forms.push(form);
           // A failed write only means the build bakes again next time.
@@ -687,16 +698,18 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     }
     const cards = createFarCards(forms, light);
     scene.add(cards.object);
-    farCards = cards;
-    farBakeMs = performance.now() - t0;
-    warmSoon();
-  })();
+    set.cards = cards;
+    set.forms.batch.baked = true;
+    set.ms = performance.now() - t0;
+  }
+  const farBaked = bakeFar(treeSet, FAR_BAKE.ms).then(warmSoon);
+  const farCardSets = (): FarCards[] => farSets.flatMap((set) => (set.cards === null ? [] : [set.cards]));
   // Each tree build's instances are made a build a frame while the wait holds,
   // so a world's planting only moves copies.
   void (async (): Promise<void> => {
     for (const [k, v] of variants.entries()) {
       if (!groves.has(k)) {
-        const view = createCopies(v.plant, light, [], { form: k, batch: farBatch });
+        const view = createCopies(v.plant, light, [], treeFar[k]);
         scene.add(view.object);
         groves.set(k, view);
       }
@@ -719,9 +732,9 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
         : passCamera instanceof THREE.OrthographicCamera
           ? { smaller: 1, focal: height / (passCamera.top - passCamera.bottom), ortho: true }
           : { smaller: 1, focal: 0, ortho: false };
-    farBatch.count = 0;
+    for (const set of farSets) set.forms.batch.count = 0;
     for (const v of swapping === null ? instanced() : [swapping]) v.cull(passCamera, size);
-    farCards?.draw(farBatch.copies, farBatch.count);
+    for (const set of farSets) set.cards?.draw(set.forms.batch.copies, set.forms.batch.count);
   };
   /** One step of the swap test: how much it changes the tree's part of the screen, the wind's change there, and how far away the tree stands. */
   interface SwapStep {
@@ -755,7 +768,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
         await renderer.compileAsync(scene, warmCamera);
         renderer.setRenderTarget(warmTarget);
         await renderer.compileAsync(scene, warmCamera);
-        const depth = [...views(), ...understory.casters(), ...wildGrowth.all(), ...(farCards === null ? [] : [farCards])];
+        const depth = [...views(), ...understory.casters(), ...wildGrowth.all(), ...farCardSets()];
         for (const v of depth) v.useDepth(true);
         try {
           await renderer.compileAsync(scene, warmCamera);
@@ -772,11 +785,12 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   /** Every level of every instanced plant, and every far card solid and fading, readied to draw one copy. */
   function readyToWarm(): void {
     for (const v of instanced()) v.warm();
-    if (farCards !== null) {
-      variants.forEach((_, k) => {
-        for (const fade of [1, 0.5]) farBatch.copies.set([k, 0, 0, 0, 0, 1, 1, 0, fade], (k * 2 + (fade < 1 ? 1 : 0)) * FAR_COPY);
-      });
-      farCards.draw(farBatch.copies, variants.length * 2);
+    for (const { forms, cards } of farSets) {
+      if (cards === null) continue;
+      for (let k = 0; k < forms.count; k++) {
+        for (const fade of [1, 0.5]) forms.batch.copies.set([k, 0, 0, 0, 0, 1, 1, 0, fade], (k * 2 + (fade < 1 ? 1 : 0)) * FAR_COPY);
+      }
+      cards.draw(forms.batch.copies, forms.count * 2);
     }
   }
   function warm(): void {
@@ -817,7 +831,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
         return [had];
       }
       if (spots.length === 0) return [];
-      const view = createCopies(v.plant, light, spots, { form: k, batch: farBatch });
+      const view = createCopies(v.plant, light, spots, treeFar[k]);
       scene.add(view.object);
       groves.set(k, view);
       return [view];
@@ -1760,7 +1774,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     refreshSight(now);
     // Every pass thins distant detail from where the person's eyes are.
     light.uEye.value.copy(mode === "walk" ? detailEye : camera.position);
-    shadow.render(renderer, scene, [...views(), ...understory.casters(), ...wildGrowth.all(), ...(farCards === null ? [] : [farCards]), ...(swapping === null ? [] : [swapping])], [sky.mesh, ground.wilds, ground.fine, ground.coarse, ground.mirror, grass.mesh, water.group, signs.mesh, ...understory.quiet()]);
+    shadow.render(renderer, scene, [...views(), ...understory.casters(), ...wildGrowth.all(), ...farCardSets(), ...(swapping === null ? [] : [swapping])], [sky.mesh, ground.wilds, ground.fine, ground.coarse, ground.mirror, grass.mesh, water.group, signs.mesh, ...understory.quiet()]);
     frameCalls = renderer.info.render.calls;
     passes.shadow = { calls: renderer.info.render.calls, triangles: renderer.info.render.triangles };
     const mirrorCalls = water.mirror(renderer, scene, camera, [...mirrorHide, ...understory.quiet(), ...understory.casters().map((c) => c.object), ...wildGrowth.all().map((c) => c.object)], mirrorShow(), dt);
@@ -1834,6 +1848,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     await veil.lift();
     for (const listener of liftedListeners) listener();
   });
+  const bushesBaked = ready.then(() => bakeFar(bushSet, FAR_BAKE.walkingMs));
   $("codebase").addEventListener("click", () => void showCodebase(code === null));
 
   // ---------- shots: each relief primitive under every region, from above ----------
@@ -2007,41 +2022,48 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     return { steps, wind };
   }
 
+  /** Every preset that turns far, by name: each tree preset's first build, then the bushes. */
+  const farPresets = (): readonly { readonly name: string; readonly plant: Realized; readonly far: FarOf }[] => [
+    ...FLORA_PRESETS.map((preset, p) => ({ name: preset.name, plant: (variants[p * TREE_BUILDS] as TreeVariant).plant, far: treeFar[p * TREE_BUILDS] as FarOf })),
+    ...understory.farPresets,
+    ...wildGrowth.farPresets,
+  ];
+
   /**
-   * The swap test: whether a tree's change of form ever shows. One copy of
-   * preset `name`'s first build, at `vitality`, stands alone straight ahead
-   * of the eye. With the wind's clock frozen, only the point detail is
+   * The swap test: whether a tree's or a bush's change of form ever shows.
+   * One copy of preset `name`'s first build (`farPresets`), at `vitality`,
+   * stands alone straight ahead of the eye. With the wind's clock frozen, only the point detail is
    * chosen from moves back, so the crown's span on screen shrinks:
    * - `end`: from just inside the band's far end to just past it, the frame
    *   where the full form leaves and the far form stands alone;
    * - `middle`: from halfway into the band to 5% farther, the far form
    *   coming in over the full one.
    * Each is held to the wind's half-second change at the same spot, all
-   * measured over the tree's own part of the screen. The world's other trees
-   * and the grass hide while it runs. Null when there is no such preset.
+   * measured over the plant's own part of the screen. Every other plant that
+   * turns far and the grass hide while it runs; flowers and rocks stay, as
+   * the world around it. Null when there is no such preset.
    */
   function swapTest(name: string, vitality: number): { end: SwapStep; middle: SwapStep } | null {
-    const p = FLORA_PRESETS.findIndex((preset) => preset.name === name);
-    const v = variants[p * TREE_BUILDS];
-    if (p < 0 || v === undefined) return null;
-    const k = p * TREE_BUILDS;
+    const preset = farPresets().find((f) => f.name === name);
+    if (preset === undefined) return null;
     const gl = renderer.getContext();
     const focal = gl.drawingBufferHeight / 2 / Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2);
-    let copy = swapCopies.get(k);
+    let copy = swapCopies.get(preset.far.form);
     if (copy === undefined) {
-      copy = createCopies(v.plant, light, [], { form: k, batch: farBatch });
+      copy = createCopies(preset.plant, light, [], preset.far);
       scene.add(copy.object);
-      swapCopies.set(k, copy);
+      swapCopies.set(preset.far.form, copy);
     }
     const crown = copy.crown;
     const dx = -Math.sin(walker.yaw);
     const dz = -Math.cos(walker.yaw);
     const eye = camera.position.clone();
-    const swapPx = farBudget.swapPx;
+    const swapPx = farBudget.swapPx * (preset.far.share ?? 1);
     const span = (f: number): number => swapPx * FAR.band - f * swapPx * (FAR.band - 1);
-    const hidden = treeViews.map((t) => t.object.visible);
+    const others = instanced().filter((o) => o.far !== undefined);
+    const hidden = others.map((o) => o.object.visible);
     const grassShown = grass.mesh.visible;
-    for (const t of treeViews) t.object.visible = false;
+    for (const o of others) o.object.visible = false;
     grass.mesh.visible = false;
     swapping = copy;
     const was = frozen;
@@ -2075,7 +2097,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     } finally {
       swapping = null;
       copy.object.visible = false;
-      treeViews.forEach((tv, i) => (tv.object.visible = hidden[i] ?? true));
+      others.forEach((o, i) => (o.object.visible = hidden[i] ?? true));
       grass.mesh.visible = grassShown;
       detailPin = null;
       frozen = was;
@@ -2150,7 +2172,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       trails: ways.network.trails.length,
       ways: ways.network.ways.length,
       bakeMs: Math.round(bakeMs),
-      farBakeMs: Math.round(farBakeMs),
+      farBakeMs: Math.round(treeSet.ms),
     }),
     setActive(on) {
       active = on;
@@ -2328,7 +2350,8 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
           for (const o of objects) if (o !== undefined) kinds.set(o, kind);
         };
         name("trees", treeViews.map((v) => v.object));
-        name("far trees", [farCards?.object]);
+        name("far trees", [treeSet.cards?.object]);
+        name("far bushes", [bushSet.cards?.object]);
         name("understory", [...understory.all().map((v) => v.object), ...understory.quiet()]);
         name("wild bushes", wildGrowth.all().map((v) => v.object));
         name("grass", [grass.mesh]);
@@ -2352,18 +2375,20 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       change: frameChange,
       /** The walk test (`walkSteps`): each step's change to the detail drawn, and the wind's along the same walk. */
       steps: (meters: number, step = 0.7, at?: number) => walkSteps(meters, step, at),
-      /** The swap test (`swapTest`) for preset `name` at `vitality`, and every flora preset's name with none. */
-      swap: (name?: string, vitality = 1) => (name === undefined ? FLORA_PRESETS.map((p) => p.name) : swapTest(name, vitality)),
+      /** The swap test (`swapTest`) for preset `name` at `vitality`, and every tree and bush preset's name with none. */
+      swap: (name?: string, vitality = 1) => (name === undefined ? farPresets().map((p) => p.name) : swapTest(name, vitality)),
+      /** Resolves once the bushes' far forms, which bake after the wait lifts, are ready too. */
+      farReady: () => bushesBaked,
       /** Walks as a person would for `seconds` of real time (`wander`). */
       wander,
       /** Shows or hides the far trees' cards alone, for seeing what they draw. */
       showFarTrees: (on: boolean) => {
-        if (farCards !== null) farCards.object.visible = on;
+        if (treeSet.cards !== null) treeSet.cards.object.visible = on;
       },
       /** Shows or hides every tree, for comparing frame costs. */
       showTrees: (on: boolean) => {
         for (const v of treeViews) v.object.visible = on;
-        if (farCards !== null) farCards.object.visible = on;
+        if (treeSet.cards !== null) treeSet.cards.object.visible = on;
       },
       /** Draw calls in one whole frame: the shadow pass and the view together. */
       calls: () => {
@@ -2465,8 +2490,9 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
         drawnTriangles: instanced().reduce((n, v) => n + v.drawn().triangles, 0),
         /** The crown span trees turn far at now, in device pixels: `FAR.swapPx` or more when a view is heavy. */
         swapPx: Math.round(farBudget.swapPx),
-        /** Milliseconds every tree build took to bake into its far form. */
-        farBakeMs: Math.round(farBakeMs),
+        /** Milliseconds every tree build took to bake into its far form, and then every bush build. */
+        farBakeMs: Math.round(treeSet.ms),
+        bushBakeMs: Math.round(bushSet.ms),
         /** Trees in the last pass in the band, or small enough on screen to draw as far forms. */
         treesInBand: treeViews.reduce((n, v) => n + v.drawn().band, 0),
         treesFar: treeViews.reduce((n, v) => n + v.drawn().far, 0),
