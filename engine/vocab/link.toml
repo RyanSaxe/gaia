@@ -1,0 +1,17 @@
+# The link calls: which file an import means, and which definition a call
+# reaches, when the rules found several candidates. "Outside" is always an
+# option, so a library import or a call into the standard library is never
+# forced onto a file in this repository.
+
+[resolve]
+instructions = "Which of these does `{text}`, imported on line {line}, refer to? Read the configuration in the state: a package's manifest names the package its directory holds."
+outside = "Something outside this repository: a library, the standard library or the platform."
+
+[callee]
+instructions = "Which definition does `{text}`, called on line {line}, reach?"
+outside = "Something outside this repository: a library, the standard library or a value passed in."
+
+[checks]
+instructions = "Does this test check code defined in {path}, by calling it or by testing what it does?"
+yes = "Yes: the test exercises code defined in that file."
+no = "No: it only imports it in passing, or not at all."

@@ -1,0 +1,39 @@
+# The roles of definitions and blocks the world chose to stand, asked in
+# their file's deep request.
+
+[def]
+instructions = "What role does `{name}`, on lines {start} to {end}, play?"
+[def.options]
+"constructor" = "Creates and sets up an object or value: a constructor or factory."
+"entry point" = "Starts a program or a major flow."
+"handler" = "Responds to a request, event or callback."
+"command" = "Implements one command-line command."
+"predicate" = "Answers a yes-or-no question about its input."
+"validator" = "Checks input and reports or rejects what is wrong."
+"transformer" = "Turns one shape of data into another."
+"parser" = "Reads text or bytes into structured data."
+"formatter" = "Turns data into text or output for display."
+"UI component" = "Draws part of a user interface."
+"accessor" = "Gets or sets a value, with little logic of its own."
+"orchestrator" = "Calls many other functions in sequence to carry out a task."
+"algorithm" = "Computes something nontrivial: an algorithm or numerical routine."
+"helper" = "A small helper for nearby code."
+"test case" = "A test that checks some behavior."
+"test helper" = "A fixture or helper that tests use."
+"data definition" = "Defines a type, class or record mostly for its data."
+
+[block]
+instructions = "What does the {shape} block on lines {start} to {end}, inside `{holder}`, do?"
+[block.options]
+"guard" = "Guards: returns or stops early when something isn't right."
+"validation" = "Validates input and reports what is wrong."
+"error handling" = "Handles an error: catches, recovers or reports a failure."
+"iteration" = "Goes through items one by one to do something with each."
+"dispatch" = "Picks what to do by a kind, a tag or a case."
+"state update" = "Changes shared or long-lived state."
+"input or output" = "Reads or writes outside the program: files, network, the screen."
+"transformation" = "Turns data from one shape into another."
+"setup or cleanup" = "Sets something up or tears it down."
+"retry or fallback" = "Tries again, or falls back to another way, when something fails."
+"coordination" = "Coordinates concurrent work: tasks, locks, channels."
+"data or markup" = "Holds a table of data or a piece of markup."

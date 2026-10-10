@@ -177,7 +177,7 @@ pub fn changes_with(commits: &[Vec<String>], files: &HashSet<&str>) -> Vec<Edge>
             from: format!("file:{a}"),
             to: format!("file:{b}"),
             kind: "changes-with",
-            by: Filled { by: "git" },
+            by: Filled::by("git"),
             at: None,
         })
         .collect();

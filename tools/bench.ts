@@ -144,12 +144,22 @@ async function understandRepo(r: Repo, planOnly: boolean): Promise<void> {
     let sent = 0;
     let failed = 0;
     const t0 = performance.now();
-    for (;;) {
-      const p = await engine.call<UnderstandProgress>("understand.next", { root });
-      sent += p.sent;
-      failed += p.failed;
-      if (p.left === 0 || p.sent === 0) break;
-    }
+    const drain = async (): Promise<void> => {
+      for (;;) {
+        const p = await engine.call<UnderstandProgress>("understand.next", { root });
+        sent += p.sent;
+        failed += p.failed;
+        if (p.left === 0 || p.sent === 0) break;
+      }
+    };
+    await drain();
+    // Until the world has its rule for what stands, the bench deepens the top fifth of the screened nodes.
+    const screened = (await engine.call<CodeGraph>("project.graph", { root, judged: true })).nodes.flatMap((n) =>
+      (n.kind === "def" || n.kind === "block") && n.judged?.stand !== undefined ? [{ id: n.id, stand: n.judged.stand.score }] : [],
+    );
+    const chosen = screened.sort((a, b) => b.stand - a.stand).slice(0, Math.ceil(screened.length / 5)).map((n) => n.id);
+    await engine.call("understand.deepen", { root, nodes: chosen });
+    await drain();
     const seconds = (performance.now() - t0) / 1000;
     const graph = await engine.call<CodeGraph>("project.graph", { root, judged: true });
     const after = usd((await engine.call<{ records: Record<string, { costUsd?: number }> }>("store.read", { project: graph.projectId, table: "calls" })).records);

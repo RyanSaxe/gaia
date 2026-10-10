@@ -1,0 +1,23 @@
+# The importance call: how much a subtle bug here would break, and how
+# close this is to what the project is for. Reach, which the engine counts,
+# is in the state in words; these two are what only reading can tell.
+
+[breaks]
+instructions = "If {what} had a subtle bug, how much of the project would go wrong?"
+levels = [
+  "Almost nothing: a bug here stays here, in a corner few things touch.",
+  "A little: one feature or a handful of callers would misbehave.",
+  "A fair amount: several features or a whole area would misbehave.",
+  "Much of it: many parts rely on this, and a bug here would spread widely.",
+  "Everything: the project would not work at all.",
+]
+
+[central]
+instructions = "How close is {what} to what this project exists to do?"
+levels = [
+  "Incidental: tooling, glue or scaffolding the project could do without.",
+  "Supporting: helpers or infrastructure the main work leans on.",
+  "Part of the work: it does some of what the project is for.",
+  "Core: it does a large part of what the project is for.",
+  "The heart: the project is, above all, this.",
+]

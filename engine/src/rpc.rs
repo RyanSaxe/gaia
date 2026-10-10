@@ -48,15 +48,13 @@ pub fn handle(line: &str) -> Value {
             None => Err((INVALID_PARAMS, "project.open needs a root.".into())),
         },
         "project.graph" => match p["root"].as_str() {
-            Some(root) => crate::graph::build(Path::new(root))
-                .and_then(|mut graph| {
-                    if p["judged"].as_bool() == Some(true) {
-                        crate::jev::runner::judge(&mut graph)?;
-                    }
-                    Ok(graph)
-                })
-                .map_err(|e| (FAILED, e))
-                .and_then(|graph| serde_json::to_value(graph).map_err(|e| (FAILED, e.to_string()))),
+            Some(root) => if p["judged"].as_bool() == Some(true) {
+                crate::jev::runner::judged_graph(Path::new(root))
+            } else {
+                crate::graph::build(Path::new(root))
+            }
+            .map_err(|e| (FAILED, e))
+            .and_then(|graph| serde_json::to_value(graph).map_err(|e| (FAILED, e.to_string()))),
             None => Err((INVALID_PARAMS, "project.graph needs a root.".into())),
         },
         "understand.plan" => match p["root"].as_str() {

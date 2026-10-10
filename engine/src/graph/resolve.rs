@@ -435,7 +435,7 @@ pub fn run(units: &[Unit], dirs: &BTreeSet<String>) -> Resolved {
                     from,
                     to,
                     kind,
-                    by: Filled { by: "rule" },
+                    by: Filled::by("rule"),
                     at: Some(at),
                 });
             }
