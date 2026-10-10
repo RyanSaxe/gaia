@@ -5,9 +5,16 @@
 // app's data is never touched. Each graph is built by a fresh engine, so the
 // time is a cold start's.
 // Usage: pnpm bench [name …] [--out results.json]
+//        pnpm bench --replay name FROM TO [--monthly]
+//
+// A replay opens the repository at each commit from FROM to TO along its
+// first parents (one a month with --monthly), carrying lineage from one to
+// the next in a store of its own, and reports how many of FROM's
+// definitions keep their identity at TO: by id alone, and by lineage.
 
 import { execFileSync, spawn } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { createInterface } from "node:readline";
 import type { Cloned, CodeGraph } from "@gaia/schema";
@@ -29,8 +36,9 @@ const env = {
 const engine = resolve(repo, "target/release/gaia-engine");
 
 /** One request to a fresh engine, and how long it took to answer. */
-async function call<T>(method: string, params: object): Promise<{ result: T; ms: number }> {
-  const child = spawn(engine, ["rpc"], { env, stdio: ["pipe", "pipe", "inherit"] });
+async function call<T>(method: string, params: object, dataDir?: string): Promise<{ result: T; ms: number }> {
+  const childEnv = dataDir === undefined ? env : { ...env, GAIA_DATA_DIR: dataDir };
+  const child = spawn(engine, ["rpc"], { env: childEnv, stdio: ["pipe", "pipe", "inherit"] });
   const lines = createInterface({ input: child.stdout });
   const t0 = performance.now();
   child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id: 1, method, params })}\n`);
@@ -92,14 +100,68 @@ function measure(graph: CodeGraph, ms: number) {
   };
 }
 
+/** Replays a repository's history and reports what keeps its identity. */
+async function replay(r: Repo, from: string, to: string, monthly: boolean): Promise<void> {
+  const root = await rootOf(r);
+  const git = (...a: string[]): string => execFileSync("git", ["-C", root, ...a], { encoding: "utf8" }).trim();
+  const fromSha = git("rev-parse", from);
+  let commits = [fromSha, ...git("rev-list", "--first-parent", "--reverse", `${fromSha}..${to}`).split("\n").filter(Boolean)];
+  if (monthly) {
+    const picked: string[] = [];
+    let last = -Infinity;
+    for (const c of commits) {
+      const at = Number(git("show", "-s", "--format=%ct", c));
+      if (at - last >= 30 * 86_400 || c === commits.at(-1)) {
+        picked.push(c);
+        last = at;
+      }
+    }
+    commits = picked;
+  }
+  const store = mkdtempSync(resolve(tmpdir(), "gaia-replay-"));
+  const defsAt: { id: string; qualified: string; lineage: string }[][] = [];
+  try {
+    for (const c of commits) {
+      git("-c", "advice.detachedHead=false", "checkout", "--quiet", c);
+      const { result } = await call<CodeGraph>("project.graph", { root }, store);
+      defsAt.push(
+        result.nodes.flatMap((n) => (n.kind === "def" ? [{ id: n.id, qualified: n.id.split("#").slice(1).join("#"), lineage: n.lineage }] : [])),
+      );
+    }
+  } finally {
+    rmSync(store, { recursive: true, force: true });
+    if (r.commit !== undefined) git("-c", "advice.detachedHead=false", "checkout", "--quiet", r.commit);
+  }
+  const first = defsAt[0] ?? [];
+  const last = defsAt.at(-1) ?? [];
+  const ids = new Set(last.map((d) => d.id));
+  const lineages = new Set(last.map((d) => d.lineage));
+  const names = new Set(last.map((d) => d.qualified));
+  // A definition survives when its qualified name still exists somewhere, wherever it moved.
+  const surviving = first.filter((d) => names.has(d.qualified));
+  const pct = (n: number, of: number): string => `${of === 0 ? 0 : Math.round((100 * n) / of)}%`;
+  const byId = first.filter((d) => ids.has(d.id)).length;
+  const byLineage = surviving.filter((d) => lineages.has(d.lineage)).length;
+  console.log(`${r.name}, ${commits.length} commits from ${fromSha.slice(0, 7)} to ${to.slice(0, 7)}:`);
+  console.log(`  ${first.length} definitions at the start; ${surviving.length} still exist by qualified name`);
+  console.log(`  same id: ${byId} (${pct(byId, first.length)}); surviving with their lineage: ${byLineage} of ${surviving.length} (${pct(byLineage, surviving.length)})`);
+}
+
 const args = process.argv.slice(2);
 const outAt = args.indexOf("--out");
 const out = outAt >= 0 ? args[outAt + 1] : undefined;
 const names = args.filter((a, i) => !a.startsWith("--") && (outAt < 0 || i !== outAt + 1));
 const { repos } = JSON.parse(readFileSync(resolve(repo, "tools/bench/repos.json"), "utf8")) as { repos: Repo[] };
-const chosen = names.length > 0 ? repos.filter((r) => names.includes(r.name)) : repos;
+const replayAt = args.indexOf("--replay");
+const chosen = replayAt >= 0 ? [] : names.length > 0 ? repos.filter((r) => names.includes(r.name)) : repos;
 
 execFileSync("cargo", ["build", "-p", "gaia-engine", "--release", "--quiet"], { cwd: repo, env, stdio: "inherit" });
+if (replayAt >= 0) {
+  const [name, from, to] = args.slice(replayAt + 1, replayAt + 4);
+  const r = repos.find((x) => x.name === name);
+  if (r === undefined || from === undefined || to === undefined) throw new Error("Usage: pnpm bench --replay name FROM TO [--monthly]");
+  await replay(r, from, to, args.includes("--monthly"));
+}
 const results: Record<string, ReturnType<typeof measure>> = {};
 for (const r of chosen) {
   const root = await rootOf(r);

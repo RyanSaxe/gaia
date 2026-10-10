@@ -74,6 +74,72 @@ pub fn root_commit(root: &Path) -> Option<String> {
         .map(|l| l.trim().chars().take(12).collect())
 }
 
+/// The commit checked out, if the root is in git.
+pub fn head(root: &Path) -> Option<String> {
+    let out = Command::new("git")
+        .env("GIT_NO_LAZY_FETCH", "1")
+        .arg("-C")
+        .arg(root)
+        .args(["rev-parse", "HEAD"])
+        .output()
+        .ok()?;
+    out.status
+        .success()
+        .then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
+
+/// Where each file that existed at `from` lives at `to`, composing git's
+/// renames commit by commit, at git's own 50% similarity. Files never
+/// renamed are left out. None when `from` is not an ancestor of `to`.
+pub fn renames(root: &Path, from: &str, to: &str) -> Option<BTreeMap<String, String>> {
+    let git = |args: &[&str]| {
+        Command::new("git")
+            .env("GIT_NO_LAZY_FETCH", "1")
+            .arg("-C")
+            .arg(root)
+            .args(args)
+            .output()
+            .ok()
+    };
+    let ancestor = git(&["merge-base", "--is-ancestor", from, to])?;
+    if !ancestor.status.success() {
+        return None;
+    }
+    let range = format!("{from}..{to}");
+    let out = git(&[
+        "log",
+        "--reverse",
+        "--relative",
+        "-M50%",
+        "--name-status",
+        "--format=%x1e",
+        &range,
+    ])?;
+    if !out.status.success() {
+        return None;
+    }
+    // From each path as it was at `from` to where it is now, and back.
+    let mut now: BTreeMap<String, String> = BTreeMap::new();
+    let mut origin: BTreeMap<String, String> = BTreeMap::new();
+    for line in String::from_utf8_lossy(&out.stdout).lines() {
+        let parts: Vec<&str> = line.split('\t').collect();
+        match parts.as_slice() {
+            [status, old, new] if status.starts_with('R') => {
+                let first = origin.remove(*old).unwrap_or_else(|| old.to_string());
+                now.insert(first.clone(), new.to_string());
+                origin.insert(new.to_string(), first);
+            }
+            [status, gone] if status.starts_with('D') => {
+                if let Some(first) = origin.remove(*gone) {
+                    now.remove(&first);
+                }
+            }
+            _ => {}
+        }
+    }
+    Some(now)
+}
+
 /// Per file: the first commit's time, the times of every commit, and its authors.
 #[derive(Default)]
 pub struct FileHistory {

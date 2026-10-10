@@ -6,6 +6,7 @@
 
 pub mod git;
 mod languages;
+mod lineage;
 mod model;
 mod parse;
 mod reach;
@@ -136,8 +137,7 @@ fn ancestors(dir: &str) -> Vec<String> {
     out
 }
 
-/// A lineage for a node seen for the first time. Matching nodes across
-/// opens, so a moved file keeps its lineage, comes with the rules.
+/// A placeholder until lineage matching (`lineage.rs`) gives every node its own.
 fn fresh_lineage(id: &str) -> String {
     walk::content_hash(id.as_bytes())
 }
@@ -179,6 +179,11 @@ fn contains_edge(from: &str, to: &str) -> Edge {
 
 /// Builds the code graph of the project at `root`.
 pub fn build(root: &Path) -> Result<CodeGraph, String> {
+    build_with(root, &lineage::Store)
+}
+
+/// Builds the graph, matching lineage against the record `keeper` holds.
+fn build_with(root: &Path, keeper: &dyn lineage::Keeper) -> Result<CodeGraph, String> {
     if !root.is_dir() {
         return Err(format!("{} is not a directory.", root.display()));
     }
@@ -398,6 +403,71 @@ pub fn build(root: &Path) -> Result<CodeGraph, String> {
     let canonical = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
     let project_id = git::root_commit(root)
         .unwrap_or_else(|| walk::content_hash(canonical.to_string_lossy().as_bytes()));
+
+    // Lineage, matched against the last graph this project kept.
+    let commit = git::head(root);
+    let previous = keeper.load(&project_id);
+    let renames = match (
+        previous.as_ref().and_then(|p| p.commit.as_deref()),
+        commit.as_deref(),
+    ) {
+        (Some(from), Some(to)) if from != to => git::renames(root, from, to),
+        _ => None,
+    };
+    let current = lineage::Current {
+        commit,
+        dirs: dirs.iter().map(String::as_str).collect(),
+        files: files
+            .iter()
+            .enumerate()
+            .map(|(k, f)| lineage::File {
+                path: &f.path,
+                lines: file_lines[k],
+                fingerprint: f
+                    .text
+                    .as_deref()
+                    .map(|t| parse::fingerprint(t).0)
+                    .unwrap_or_default(),
+            })
+            .collect(),
+        defs: files
+            .iter()
+            .zip(&parsed)
+            .zip(&all_def_ids)
+            .flat_map(|((f, p), ids)| {
+                p.iter().flat_map(move |p| {
+                    p.defs.iter().zip(ids).map(move |(d, id)| lineage::Def {
+                        id,
+                        file: &f.path,
+                        name: &d.name,
+                        lines: d.span.end - d.span.start + 1,
+                        fingerprint: &d.fingerprint,
+                    })
+                })
+            })
+            .collect(),
+    };
+    let (lineages, record) = lineage::assign(previous.as_ref(), renames.as_ref(), &current);
+    keeper.save(&project_id, &record);
+    let lineage_of = |id: &str| {
+        lineages
+            .get(id)
+            .cloned()
+            .unwrap_or_else(|| fresh_lineage(id))
+    };
+    for n in &mut nodes {
+        match n {
+            Node::Dir(d) => d.lineage = lineage_of(&d.id),
+            Node::File(f) => f.lineage = lineage_of(&f.id),
+            Node::Def(d) => d.lineage = lineage_of(&d.id),
+            // A block follows its holder: its lineage is its holder's and its place there.
+            Node::Block(b) => {
+                let index = b.id.rsplit('/').next().unwrap_or("0");
+                b.lineage =
+                    walk::content_hash(format!("{}/{index}", lineage_of(&b.def)).as_bytes());
+            }
+        }
+    }
     let name = canonical
         .file_name()
         .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
@@ -414,6 +484,25 @@ pub fn build(root: &Path) -> Result<CodeGraph, String> {
 mod tests {
     use super::*;
     use std::path::PathBuf;
+
+    /// A keeper in memory, so tests never touch the app's store.
+    #[derive(Default)]
+    struct Memory(std::cell::RefCell<HashMap<String, lineage::Record>>);
+
+    impl lineage::Keeper for Memory {
+        fn load(&self, project: &str) -> Option<lineage::Record> {
+            self.0.borrow().get(project).cloned()
+        }
+        fn save(&self, project: &str, record: &lineage::Record) {
+            self.0
+                .borrow_mut()
+                .insert(project.to_string(), record.clone());
+        }
+    }
+
+    fn graph(root: &Path) -> Result<CodeGraph, String> {
+        build_with(root, &Memory::default())
+    }
 
     fn fixtures() -> PathBuf {
         Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/languages")
@@ -443,7 +532,7 @@ mod tests {
 
     #[test]
     fn every_language_parses_its_sample_and_fires_every_capture_the_graph_shows() {
-        let g = build(&fixtures()).unwrap();
+        let g = graph(&fixtures()).unwrap();
         let defs = defs(&g);
         let compiled = languages::table()
             .values()
@@ -616,7 +705,7 @@ mod tests {
                 ("pkg/top.py", "def g():\n    return 2\n"),
             ],
         );
-        let g = build(&dir).unwrap();
+        let g = graph(&dir).unwrap();
         let edge = |from: &str, to: &str, kind: &str| {
             g.edges
                 .iter()
@@ -703,6 +792,117 @@ mod tests {
     }
 
     #[test]
+    fn lineage_survives_a_directory_rename_a_moved_function_and_a_split_file() {
+        let walk = "export function walk(root: string, depth: number): string[] {\n  const out: string[] = [];\n  for (const name of list(root)) {\n    if (name.length > depth) {\n      out.push(name.toUpperCase());\n    }\n  }\n  return out;\n}\n";
+        let helper = "export function helper(text: string): string {\n  const parts = text.split(\"/\").filter((p) => p.length > 0);\n  return parts.map((p) => p.trim().toLowerCase()).join(\"-\");\n}\n";
+        let list = "export function list(root: string): string[] {\n  const seen = new Set<string>();\n  for (const part of root.split(\"/\")) {\n    seen.add(part.trim());\n  }\n  return [...seen].sort();\n}\n";
+        let main = "import { walk } from \"./lib/walk\";\n\nexport function main(): void {\n  console.log(walk(\".\", 1));\n}\n";
+        let dir = project(
+            "lineage",
+            &[
+                ("lib/walk.ts", &format!("{walk}\n{helper}\n{list}")),
+                (
+                    "lib/util.ts",
+                    "export function format(x: number): string {\n  return String(x);\n}\n",
+                ),
+                ("main.ts", main),
+            ],
+        );
+        let git = |args: &[&str]| {
+            let out = std::process::Command::new("git")
+                .arg("-C")
+                .arg(&dir)
+                .args(["-c", "user.name=Gaia", "-c", "user.email=gaia@example.com"])
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(
+                out.status.success(),
+                "git {args:?}: {}",
+                String::from_utf8_lossy(&out.stderr)
+            );
+        };
+        git(&["init", "-q"]);
+        git(&["add", "."]);
+        git(&["commit", "-q", "-m", "one"]);
+        let keeper = Memory::default();
+        let lineage = |g: &CodeGraph| -> HashMap<String, String> {
+            g.nodes
+                .iter()
+                .filter_map(|n| match n {
+                    Node::Dir(d) => Some((d.id.clone(), d.lineage.clone())),
+                    Node::File(f) => Some((f.id.clone(), f.lineage.clone())),
+                    Node::Def(d) => Some((d.id.clone(), d.lineage.clone())),
+                    Node::Block(_) => None,
+                })
+                .collect()
+        };
+        let first = lineage(&build_with(&dir, &keeper).unwrap());
+
+        // A directory renamed, a function moved to another file, another file edited.
+        git(&["mv", "lib", "src"]);
+        std::fs::write(dir.join("src/walk.ts"), format!("{walk}\n{list}")).unwrap();
+        std::fs::write(
+            dir.join("src/util.ts"),
+            format!(
+                "export function format(x: number): string {{\n  return String(x);\n}}\n\n{helper}"
+            ),
+        )
+        .unwrap();
+        std::fs::write(
+            dir.join("main.ts"),
+            main.replace("./lib/walk", "./src/walk")
+                .replace("1));", "2));"),
+        )
+        .unwrap();
+        git(&["add", "-A"]);
+        git(&["commit", "-q", "-m", "two"]);
+        let second = lineage(&build_with(&dir, &keeper).unwrap());
+        for (now, then) in [
+            ("dir:src", "dir:lib"),
+            ("file:src/walk.ts", "file:lib/walk.ts"),
+            ("file:src/util.ts", "file:lib/util.ts"),
+            ("def:src/walk.ts#walk", "def:lib/walk.ts#walk"),
+            ("def:src/util.ts#helper", "def:lib/walk.ts#helper"),
+            ("def:main.ts#main", "def:main.ts#main"),
+        ] {
+            assert_eq!(
+                second.get(now),
+                first.get(then),
+                "{now} keeps {then}'s lineage"
+            );
+        }
+
+        // A file split in two: the larger part keeps the file's lineage.
+        std::fs::remove_file(dir.join("src/walk.ts")).unwrap();
+        std::fs::create_dir_all(dir.join("src/walk")).unwrap();
+        std::fs::write(dir.join("src/walk/core.ts"), walk).unwrap();
+        std::fs::write(dir.join("src/walk/list.ts"), list).unwrap();
+        git(&["add", "-A"]);
+        git(&["commit", "-q", "-m", "three"]);
+        let third = lineage(&build_with(&dir, &keeper).unwrap());
+        assert_eq!(
+            third.get("def:src/walk/core.ts#walk"),
+            first.get("def:lib/walk.ts#walk")
+        );
+        assert_eq!(
+            third.get("def:src/walk/list.ts#list"),
+            first.get("def:lib/walk.ts#list")
+        );
+        let kept = [
+            third.get("file:src/walk/core.ts"),
+            third.get("file:src/walk/list.ts"),
+        ];
+        assert!(
+            kept.contains(&first.get("file:lib/walk.ts")),
+            "one part of the split keeps walk.ts's lineage"
+        );
+        let distinct: HashSet<&String> = third.values().collect();
+        assert_eq!(distinct.len(), third.len(), "no two nodes share a lineage");
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
     fn complexity_follows_mccabe_and_sonarsource() {
         let dir = project(
             "measures",
@@ -725,7 +925,7 @@ mod tests {
                 ),
             ],
         );
-        let g = build(&dir).unwrap();
+        let g = graph(&dir).unwrap();
         let defs = defs(&g);
         // Worked out by hand from each definition's rules.
         for (id, cyclomatic, cognitive) in [
@@ -760,7 +960,7 @@ mod tests {
 
     #[test]
     fn a_definition_records_its_signature_doc_owner_and_parent() {
-        let g = build(&fixtures()).unwrap();
+        let g = graph(&fixtures()).unwrap();
         let defs = defs(&g);
         let push = defs["def:sample.rs#Batch.push"];
         assert_eq!(push.owner.as_deref(), Some("Batch"));
@@ -818,13 +1018,13 @@ mod tests {
                 })
                 .collect()
         };
-        let before = ids(&build(&dir).unwrap());
+        let before = ids(&graph(&dir).unwrap());
         std::fs::write(
             dir.join("src/sample.rs"),
             format!("// A new first line.\n\n{source}"),
         )
         .unwrap();
-        let after = build(&dir).unwrap();
+        let after = graph(&dir).unwrap();
         assert_eq!(before, ids(&after));
         let test_file = after.nodes.iter().find_map(|n| match n {
             Node::File(f) if f.path == "pkg/walk_test.go" => Some(f),
