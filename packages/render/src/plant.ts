@@ -419,6 +419,115 @@ vec2 crowdedCut(vec2 p, float seed, float px, float merged) {
   float bare = vLife.x > 0.0 ? 1.0 - smoothstep(vLife.x, vLife.x + 0.2, vLife.y) : 0.0;
   return vec2(mix(d, outline - 1.2 * bare, merged), mix(tone, 1.0, merged));
 }
+// A full spray's leaves: slender pointed leaves (kind 3) fanned in two rings
+// of six and ten, or broad lobed leaves (kind 1), one in the middle and six
+// about it, each pointing out from the middle so the rim is leaf tips. Each
+// has its own tone, a darker edge where it lies over the next and its own
+// moment to drop. Returns (distance, tone).
+vec2 fullLeaves(vec2 o, float seed, float px, int kind) {
+  float d = -1.0;
+  float tone = 0.8;
+  float best = -1.0;
+  int n = kind == 3 ? 16 : 7;
+  int inner = kind == 3 ? 6 : 1;
+  for (int k = 0; k < 16; k++) {
+    if (k >= n) break;
+    float fk = float(k);
+    vec2 h = cellHash(vec2(fk, seed * 97.0));
+    bool isIn = k < inner;
+    float count = float(isIn ? inner : n - inner);
+    float slot = (isIn ? fk : fk - float(inner)) / count;
+    float ang = (slot + seed + (isIn ? 0.0 : 0.5 / count)) * 6.2832 + (h.x - 0.5) * 0.6;
+    float ring = (isIn ? (kind == 3 ? 0.2 : 0.0) : (kind == 3 ? 0.5 : 0.4)) * (0.9 + 0.2 * h.y);
+    vec2 c = vec2(cos(ang), sin(ang) * 0.92) * ring;
+    vec2 dir = ring < 0.01 ? normalize(vec2(h.x - 0.5, 1.0)) : normalize(c + vec2(h.y - 0.5, h.x - 0.5) * 0.3);
+    float len = (kind == 3 ? 0.56 : 0.6) * (0.88 + 0.24 * h.y);
+    // Each leaf's stalk sits a little back toward the middle.
+    vec2 q = o - c + dir * len * 0.3;
+    q = vec2(dot(q, dir), dot(q, vec2(-dir.y, dir.x)));
+    if (q.x < -0.05 || q.x > len * 1.1 || abs(q.y) > len * 0.7) continue;
+    float di = (kind == 1 ? lobedShape(q, len) : leafShape(q, len, len * 0.3)) - dropAt(fract(h.x * 5.3 + h.y)) * 0.6 * len;
+    // Outer leaves lie over inner ones: the later leaf wins where both cover.
+    float shown = di + fk * 0.002;
+    if (di > 0.0 && shown > best) {
+      best = shown;
+      float rim = smoothstep(0.0, 0.012 + px, di);
+      tone = (0.78 + 0.22 * h.x) * mix(0.72, 1.0, rim) * (0.9 + 0.12 * clamp(q.x / len, 0.0, 1.0));
+    }
+    d = max(d, di);
+  }
+  return vec2(d, tone);
+}
+// A full spray in bloom: seven umbels of five flowers, one in the middle and
+// six about it, with a small fresh leaf between every other outer umbel.
+// The petals are the family's pale bloom, deepening at the heart.
+vec2 fullUmbels(vec2 o, float seed, float px) {
+  float d = -1.0;
+  float tone = 0.9;
+  float best = -1.0;
+  for (int k = 0; k < 7; k++) {
+    float fk = float(k);
+    vec2 h = cellHash(vec2(fk, seed * 97.0));
+    float ang = ((fk - 1.0) / 6.0 + seed) * 6.2832 + (h.x - 0.5) * 0.6;
+    vec2 c = k == 0 ? vec2(0.0, 0.05 * h.y) : vec2(cos(ang), sin(ang) * 0.92) * 0.46 * (0.9 + 0.2 * h.y);
+    vec2 r = o - c;
+    if (dot(r, r) > 0.1) continue;
+    for (int m = 0; m < 5; m++) {
+      vec2 g = cellHash(vec2(float(m) + 7.0, seed * 59.0 + fk * 3.1));
+      float a = float(m) * 1.2566 + g.y * 0.8 + seed * 6.2832;
+      vec2 fc = c + vec2(cos(a), sin(a)) * (0.1 + 0.03 * g.x);
+      float R = 0.13 * (0.85 + 0.3 * g.y);
+      float fi = flowerShape(o - fc, R, g.x * 6.2832) - dropAt(fract(h.x * 3.7 + g.x)) * 0.13;
+      float shown = fi + (fk * 5.0 + float(m)) * 0.001;
+      if (fi > 0.0 && shown > best) {
+        best = shown;
+        float rim = smoothstep(0.12, 0.62, length(o - fc) / R);
+        tone = (0.94 + 0.08 * g.y) * mix(0.92, 1.04, rim);
+        gBloom = rim * 0.7;
+        gGreen = 0.0;
+      }
+      d = max(d, fi);
+    }
+  }
+  for (int k = 0; k < 3; k++) {
+    vec2 h = cellHash(vec2(float(k) + 20.0, seed * 97.0));
+    float ang = ((float(k) * 2.0 + 0.5) / 6.0 + seed) * 6.2832;
+    vec2 dir = vec2(cos(ang), sin(ang));
+    vec2 q = o - dir * 0.36;
+    q = vec2(dot(q, dir), dot(q, vec2(-dir.y, dir.x)));
+    float di = ovalShape(q, 0.34, 0.11) - dropAt(h.x) * 0.15;
+    if (di > 0.0 && best < 0.0) {
+      tone = 0.8 + 0.2 * clamp(q.x / 0.34, 0.0, 1.0);
+      gGreen = 1.0;
+      gBloom = 0.0;
+    }
+    d = max(d, di);
+  }
+  return vec2(d, tone);
+}
+// A full spray up close, its leaves or flowers crowded around a short stalk
+// so the card is nearly all leaf, merging far away into the same scalloped
+// round as a spray's.
+vec2 fullSpray(vec2 p, float seed, float px, float merged, int kind) {
+  vec2 o = p - vec2(0.0, 0.05);
+  vec2 c = vec2(0.0, 1.0);
+  gBark = 0.0;
+  gGreen = 0.0;
+  gBloom = 0.0;
+  if (merged < 0.999) {
+    float stalk = min(0.024 - abs(p.x), min(p.y + 1.02, 0.1 - p.y) * 0.5);
+    c = kind == 2 ? fullUmbels(o, seed, px) : fullLeaves(o, seed, px, kind);
+    gBark = step(0.0, stalk) * (1.0 - step(0.0, c.x));
+    if (c.x <= 0.0 && stalk > c.x) c.y = 0.8;
+    c.x = max(c.x, stalk);
+  }
+  float outline = 0.8 + 0.07 * cos((atan(o.y, o.x) + seed * 6.2832) * 9.0) - length(o * vec2(1.0, 0.92));
+  float bare = vLife.x > 0.0 ? 1.0 - smoothstep(vLife.x, vLife.x + 0.2, vLife.y) : 0.0;
+  gBark *= 1.0 - merged;
+  gGreen *= 1.0 - merged;
+  gBloom *= 1.0 - merged;
+  return vec2(mix(c.x, outline - 1.2 * bare, merged), mix(c.y, 1.0, merged));
+}
 // Moss on stone: the patch ends where its depth, jittered per vertex, falls
 // below a fifth, so the edge follows a soft winding contour.
 float patchCut(vec2 p) {
@@ -497,6 +606,9 @@ vec2 leafCut(float thin) {
     : form < 5.5 ? sprayLeaves(p, seed, px, merged, 1)
     : form < 6.5 ? vec2(patchCut(p), 1.0)
     : abs(form - ${CUT.crowded.toFixed(1)}) < 0.5 ? crowdedCut(p, seed, px, max(far, smoothstep(0.06, 0.16, px)))
+    : abs(form - ${CUT.crowdedPointed.toFixed(1)}) < 0.5 ? fullSpray(p, seed, px, max(far, smoothstep(0.06, 0.16, px)), 3)
+    : abs(form - ${CUT.crowdedLobed.toFixed(1)}) < 0.5 ? fullSpray(p, seed, px, max(far, smoothstep(0.06, 0.16, px)), 1)
+    : abs(form - ${CUT.crowdedUmbels.toFixed(1)}) < 0.5 ? fullSpray(p, seed, px, max(far, smoothstep(0.06, 0.16, px)), 2)
     : sprayLeaves(p, seed, px, merged, 2);
   if (form > 1.5 && form < 3.5 || abs(form - ${CUT.patch.toFixed(1)}) < 0.5) c.y = mix(0.86 + 0.14 * smoothstep(0.0, 0.07, c.x), 1.0, far);
   if (form > 2.5 && form < 3.5) c.y *= 0.9 + 0.1 * smoothstep(0.15, 0.45, abs(fract(p.y * 15.0 - abs(p.x) * 1.3 + seed * 5.0) - 0.5));
