@@ -1256,12 +1256,21 @@ function divisionOf(model: CodeModel): { readonly dirs: ReturnType<typeof direct
 const UNJUDGED: Judgments = { world: "", lands: {}, vibes: {}, things: {}, trails: [], forms: {}, waters: {}, characters: {} };
 
 /**
- * The world's land before anything is judged: every area, file patch and
- * cell exactly as `layoutWorld` lays them out once Jev has answered, because
- * the land's division depends on the code alone. Opening a world shows it
- * while Jev answers.
+ * Where an entity's building or landmark will stand: its lot's middle, meters, a thing's `x` and `z`. Whichever it
+ * turns out to be, it stands within `LAYOUT.lotReach` of it.
  */
-export function landOf(model: CodeModel): WorldPlaces {
+export interface LotPlace {
+  readonly x: number;
+  readonly z: number;
+}
+
+/**
+ * The world's land before anything is judged: every area, file patch, cell
+ * and entity's lot exactly as `layoutWorld` lays them out once Jev has
+ * answered, because the land's division depends on the code alone. Opening a
+ * world shows it while Jev answers.
+ */
+export function landOf(model: CodeModel): WorldPlaces & { readonly lots: readonly LotPlace[] } {
   const w = layoutWorld(model, UNJUDGED);
   return {
     name: w.name,
@@ -1269,6 +1278,7 @@ export function landOf(model: CodeModel): WorldPlaces {
     areas: w.areas.map(({ path, name, depth, parent, x, z }) => ({ path, name, depth, parent, x, z })),
     patches: w.patches.map(({ path, name, area, x, z, radius, vitality }) => ({ path, name, area, x, z, radius, vitality })),
     cells: w.cells,
+    lots: w.things.map(({ x, z }) => ({ x, z })),
   };
 }
 

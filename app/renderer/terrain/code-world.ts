@@ -209,7 +209,7 @@ export async function codeWorld(veil: Veil): Promise<CodeLab> {
   // Traced once now, while the world loads, so the field map never traces them mid-walk.
   const outlines = outlinesOf(document.world);
   // A world laid out here, with no world service, shows its land only now.
-  if (!landed) veil.opening({ stage: "land", name: document.world.name, size: document.world.size, areas: outlines.areas, patches: document.world.patches });
+  if (!landed) veil.opening({ stage: "land", name: document.world.name, size: document.world.size, areas: outlines.areas, patches: document.world.patches, lots: document.world.things.map(({ x, z }) => ({ x, z })) });
   veil.baking(Object.fromEntries(document.world.patches.map((p) => [p.path, p.vitality])));
   return codeLab(document);
 }

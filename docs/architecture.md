@@ -215,10 +215,12 @@ world stays under the wait while Jev answers, because a judgment that
 changed after the world stood would swap trees, buildings and land in view.
 The land's division depends on the code alone (an entity's lot is the same
 ground, 900 m², whether a building or a landmark stands on it), so
-`landOf(model)` in `@gaia/world` gives every area, patch and cell before
-anything is judged, equal to the finished layout's. `openWorld` sends the
-renderer the areas' outlines and every file's patch (`world.progress` stage
-`land`) before it asks Jev. It sends each file's health once nothing still
+`landOf(model)` in `@gaia/world` gives every area, patch, cell and lot before
+anything is judged, equal to the finished layout's: a lot (`LotPlace`) is
+the middle of the ground kept for an entity, which its building or landmark
+stands within `LAYOUT.lotReach` of, whichever Jev makes it. `openWorld`
+sends the renderer the areas' outlines, every file's patch and every lot
+(`world.progress` stage `land`) before it asks Jev. It sends each file's health once nothing still
 to be judged can change it (stage `health`, file path to vitality, exactly
 as the finished world has it): a file's vitality reads one judgment,
 whether it holds behavior that needs tests of its own, and only when its

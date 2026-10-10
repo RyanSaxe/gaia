@@ -4,7 +4,7 @@
 
 import type { CodeModel, PatchPlace, Unreachable } from "@gaia/schema";
 import type { Outline } from "@gaia/terrain";
-import type { CodeWorld, Judge } from "@gaia/world";
+import type { CodeWorld, Judge, LotPlace } from "@gaia/world";
 
 /** Main process → world service. */
 export type FromMain =
@@ -90,11 +90,14 @@ export type Opening =
   | { readonly stage: "reading"; readonly root: string }
   /**
    * The land is divided, before anything is judged: every area's outline,
-   * exactly as the finished world's map draws it (`outlinesOf`), and every
-   * file's patch, as the finished world lays it out, since the division
-   * depends on the code alone. Sent once, before any judging.
+   * exactly as the finished world's map draws it (`outlinesOf`), every
+   * file's patch and every entity's lot, where its building or landmark will
+   * stand, as the finished world lays them out, since the division depends on
+   * the code alone. Every lot is the same ground whatever stands on it, so
+   * its place is all a sheet needs to keep names off the mark to come. Sent
+   * once, before any judging.
    */
-  | { readonly stage: "land"; readonly name: string; readonly size: number; readonly areas: readonly Outline[]; readonly patches: readonly FilePatch[] }
+  | { readonly stage: "land"; readonly name: string; readonly size: number; readonly areas: readonly Outline[]; readonly patches: readonly FilePatch[]; readonly lots: readonly LotPlace[] }
   /**
    * Asking Jev about the things it has not judged; `answered` counts those settled, `failed` those the stand-in
    * took over, and `settled` names every area (a directory's path, "" for the root) whose things and land are all

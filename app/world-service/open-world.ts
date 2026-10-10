@@ -65,9 +65,9 @@ export async function openWorld({ engine, root, consent, progress }: OpenWorldOp
   const planned = planWorldRequests(model, LOOKS);
   const keys = planned.map((p) => requestKey(p.request));
 
-  // The land, outlined as the finished map draws it, and every file's patch, before anything is judged.
+  // The land, outlined as the finished map draws it, every file's patch and every entity's lot, before anything is judged.
   const land = landOf(model);
-  progress({ stage: "land", name, size: land.size, areas: outlinesOf(land).areas, patches: land.patches.map(({ path, name, area, x, z, radius }) => ({ path, name, area, x, z, radius })) });
+  progress({ stage: "land", name, size: land.size, areas: outlinesOf(land).areas, patches: land.patches.map(({ path, name, area, x, z, radius }) => ({ path, name, area, x, z, radius })), lots: land.lots });
 
   // Each file's health goes to the renderer once nothing still to be judged can change it. Its vitality reads one
   // judgment, whether the file holds behavior that needs tests of its own (`NEEDS_TESTS`), and only when its request
