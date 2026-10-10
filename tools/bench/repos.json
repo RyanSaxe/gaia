@@ -1,0 +1,12 @@
+{
+  "repos": [
+    { "name": "gaia", "root": "." },
+    { "name": "click", "address": "https://github.com/pallets/click", "commit": "2247b35ea1c47c727d7a06e51fa280e12a863ff6" },
+    { "name": "cobra", "address": "https://github.com/spf13/cobra", "commit": "adbc8813901bba65827259daa8e22ff94ec1f30e" },
+    { "name": "fd", "address": "https://github.com/sharkdp/fd", "commit": "14dcd92fb76ca0ebc2e82671a275f67c790d25fc" },
+    { "name": "zustand", "address": "https://github.com/pmndrs/zustand", "commit": "d7a5583cffd80af515f7dfb69583c95cbdc9e2ce" },
+    { "name": "git-history", "address": "https://github.com/pomber/git-history", "commit": "a20f6085cf9055b350a4db13cea6e013936da9cd" },
+    { "name": "full-stack-fastapi-template", "address": "https://github.com/fastapi/full-stack-fastapi-template", "commit": "7257e606cb94eada1dca40173e2b7f99dd549bc6" },
+    { "name": "SWE-agent", "address": "https://github.com/SWE-agent/SWE-agent", "commit": "3ea751c087f32b16e039a2233dd6eefecef325d5" }
+  ]
+}
