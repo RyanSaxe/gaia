@@ -10,3 +10,10 @@ declare module "*?raw" {
   const text: string;
   export default text;
 }
+
+// `import url from "./picture.webp"` gives the picture's address: a file Vite serves for the app, and a data URL
+// tools/lab-page.ts inlines for the one-file lab.
+declare module "*.webp" {
+  const url: string;
+  export default url;
+}

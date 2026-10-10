@@ -582,10 +582,10 @@ Gaia's own world as the one walked before):
 
 - **The traveller's map table** (shown): the field map's paper on a dark
   wooden table, with Gaia's mark lettered at its corner. Each world walked
-  before is a small map sheet laid on the paper a little askew, its areas
-  washed in their lands' colors with water, cottages and landmarks inked
-  small, its name lettered beneath in italic and where it lies in small
-  capitals. At the paper's foot an ink line waits for an address, with "or
+  before is a small map sheet laid on the paper a little askew: the picture
+  of its own field map in health's colors that its page painted when it was
+  last opened (plain paper for a world with none yet), its name lettered
+  beneath in italic and where it lies in small capitals. At the paper's foot an ink line waits for an address, with "or
   open a folder on this computer" beneath it. Choosing lifts a sheet; then
   the table falls away and the paper fills the view as the wait's. After
   dark the lantern lights the table.

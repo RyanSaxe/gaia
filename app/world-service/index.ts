@@ -5,14 +5,16 @@
 // laid-out world goes to the renderer over its MessagePort. When main names
 // no folder, the page offers the start (the worlds opened before, a folder,
 // or an address on GitHub) and the service opens whatever is chosen there,
-// cloning a place on GitHub into the app's own data first.
+// cloning a place on GitHub into the app's own data first. Once a world
+// stands, its page sends a picture of its field map, kept with it among the
+// recent worlds for the start.
 
 import type { Unreachable } from "@gaia/schema";
 import type { MessagePortMain } from "electron";
 import { createEngineClient } from "./engine-client.ts";
 import { openWorld } from "./open-world.ts";
 import type { EngineStatus, FromMain, FromRenderer, StartChoice, ToMain, ToRenderer } from "./protocol.ts";
-import { keepRecent, postcardOf, recentWorlds } from "./recent.ts";
+import { keepPicture, keepRecent, recentWorlds } from "./recent.ts";
 
 const parent = process.parentPort;
 const toMain = (message: ToMain): void => parent.postMessage(message);
@@ -33,6 +35,15 @@ function settleable(): { promise: Promise<void>; resolve: () => void; settled: b
     };
   });
   return s;
+}
+
+/** The folder whose world each page opened, so the picture the page paints of it is kept with it. */
+const openedOn = new WeakMap<MessagePortMain, string>();
+/** Writes to the recent worlds, one after another, so a picture never races the visit it belongs to. */
+let keeping: Promise<void> = Promise.resolve();
+function keep(write: () => Promise<void>): Promise<void> {
+  keeping = keeping.then(write).catch((error: unknown) => console.error(`gaia: could not keep the recent worlds: ${(error as Error).message}`));
+  return keeping;
 }
 
 /** The person's answer to the question in flight, if any: dropped when its page goes away. */
@@ -93,7 +104,8 @@ async function open(port: MessagePortMain, folder: string, github?: string): Pro
     send(port, { type: "world.document", document });
     const name = github ?? document.model.repository.name;
     toMain({ type: "world.opened", root: folder, name });
-    await keepRecent(engine, { root: folder, name, ...(github === undefined ? {} : { github }), at: Date.now(), postcard: postcardOf(document.world) });
+    openedOn.set(port, folder);
+    await keep(() => keepRecent(engine, { root: folder, name, ...(github === undefined ? {} : { github }), at: Date.now() }));
   } catch (error) {
     const message = (error as Error).message;
     console.error(`gaia: could not open ${folder}: ${message}`);
@@ -151,6 +163,10 @@ parent.on("message", (event) => {
         const m = e.data as FromRenderer;
         if (m.type === "world.open") void (root === null ? offerStart(port) : open(port, root));
         else if (m.type === "world.choose") void choose(port, m.place);
+        else if (m.type === "world.picture") {
+          const folder = openedOn.get(port);
+          if (folder !== undefined) void keep(() => keepPicture(engine, folder, m.picture));
+        }
         else if (m.type === "world.consent") {
           consenting?.resolve(m.approve);
           consenting = null;

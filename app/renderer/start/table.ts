@@ -1,12 +1,12 @@
 // The traveller's map table: the field map's own paper on a wooden table,
-// with the worlds walked before laid on it as small painted map sheets, and
+// with the worlds walked before laid on it as pictures of their field maps, and
 // a line at the paper's foot to write an address on, lettered like the map.
 // Choosing a place lifts its sheet; then the table falls away and the paper
 // becomes the wait's.
 
 import type { StartChoice, StartOffer } from "../../world-service/protocol.ts";
 import { LOGO_SVG } from "../brand/logo.ts";
-import { FILTERS, deckle, hashOf, paintPostcard } from "./paint.ts";
+import { FILTERS, deckle, hashOf } from "./paint.ts";
 import { REFUSALS, type StartPage, askFolder, placeOf } from "./choice.ts";
 
 const baseName = (path: string): string => path.split("/").filter(Boolean).pop() ?? path;
@@ -85,7 +85,12 @@ export function createTable(veil: HTMLElement): StartPage {
           const paper = document.createElement("span");
           paper.className = "postcard-sheet";
           paper.style.clipPath = deckle(r.root, 9, 2.2);
-          paper.append(paintPostcard(r.postcard, r.root));
+          if (r.picture !== undefined) {
+            const picture = document.createElement("img");
+            picture.src = r.picture;
+            picture.alt = "";
+            paper.append(picture);
+          }
           const name = document.createElement("span");
           name.className = "postcard-name";
           name.textContent = nameOf(r);

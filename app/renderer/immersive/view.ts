@@ -10,17 +10,21 @@
 // (`compass.ts`) and opens the one other paper, the slip, with Gaia's mark,
 // how to wander, and the way back to the lab's debugging views.
 // Walking, tapping a thing to walk up to it, the lantern and the hour all
-// come from the terrain lab.
+// come from the terrain lab. Once the world stands and its map is painted, a
+// picture of the whole map goes to the world service, which keeps it with the
+// world for the start (`picture.ts`).
 
 import type { PlaceArea } from "@gaia/terrain";
 import { areaVitality } from "@gaia/world";
 import { LOGO_SVG } from "../brand/logo.ts";
 import { onTap } from "../lab.ts";
+import { worldService } from "../service.ts";
 import type { WorldHandle } from "../terrain/lab.ts";
 import { createCompass } from "./compass.ts";
 import { createFieldMap } from "./field-map.ts";
 import { MARKER_LAYER, createMarkers } from "./markers.ts";
 import { createMinimap } from "./minimap.ts";
+import { paintPicture } from "./picture.ts";
 import { createSketchPage } from "./sketch.ts";
 
 /** The lab's debugging views, which the slip leads back to. */
@@ -125,6 +129,19 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
     markers.vitality((path) => vitality.get(path) ?? 1);
   });
 
+  // The first map painted after the world stands is pictured for the start; a page with no world service keeps none.
+  const service = worldService();
+  let pictured = false;
+  map.onPainted(() => {
+    const paper = map.paper();
+    if (pictured || !standing || service === null || paper === null) return;
+    pictured = true;
+    paintPicture(paper, world.stood()).then(
+      (picture) => service.send({ type: "world.picture", picture }),
+      (error: unknown) => console.error(`gaia: no picture of this world: ${(error as Error).message}`),
+    );
+  });
+
   // ---------- the compass, and the slip it opens: Gaia's mark, how to wander, and the way back to the lab ----------
 
   const menuButton = document.createElement("button");
@@ -226,6 +243,11 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
         return { place: world.placeAt(p.x, p.z), minimap: minimap.state(), compass: compass.state(), map: map.state(), markers: markers.crossings().length, sketch: sketch.state() };
       },
       crossings: () => markers.crossings(),
+      /** A picture of the whole map as the start lays it on its table: a WebP data URL, or null before the map is painted. */
+      picture: () => {
+        const paper = map.paper();
+        return paper === null ? null : paintPicture(paper, world.stood());
+      },
     },
   };
 }

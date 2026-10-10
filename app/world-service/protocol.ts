@@ -23,14 +23,6 @@ export type ToMain =
   /** A world chosen on the start page opened: main names the window after it and reopens it when the page reloads. */
   | { readonly type: "world.opened"; readonly root: string; readonly name: string };
 
-/** A small picture of a world's land, kept with each recent world for the start page to paint. */
-export interface Postcard {
-  /** Its areas down to the second level, deepest last, in the land's frame scaled to -1..1, each with its land's and water's keys. */
-  readonly areas: readonly { readonly depth: number; readonly land: string; readonly water: string; readonly rings: readonly (readonly number[])[] }[];
-  /** Where its buildings and landmarks stand, -1..1. */
-  readonly things: readonly { readonly x: number; readonly z: number; readonly as: "building" | "landmark" }[];
-}
-
 /** A world opened before, newest first on the start page. */
 export interface RecentWorld {
   /** The folder it is the world of; for a place on GitHub, Gaia's own copy. */
@@ -40,7 +32,12 @@ export interface RecentWorld {
   readonly github?: string;
   /** When it was last opened, ms since the epoch. */
   readonly at: number;
-  readonly postcard?: Postcard;
+  /**
+   * Its whole field map in health's colors, as its page painted it once the world last stood (`world.picture`): a
+   * WebP data URL about 800 pixels a side (`paintPicture` in `app/renderer/immersive/picture.ts`). A world kept
+   * before pictures were, or whose page painted none, has none.
+   */
+  readonly picture?: string;
 }
 
 /** What the start page offers: the worlds opened before, and why the last address written led nowhere, if it did. */
@@ -132,7 +129,9 @@ export type FromRenderer =
   /** The person's answer to `world.consent`. */
   | { readonly type: "world.consent"; readonly approve: boolean }
   /** The place chosen on the start page. */
-  | { readonly type: "world.choose"; readonly place: StartChoice };
+  | { readonly type: "world.choose"; readonly place: StartChoice }
+  /** A picture of the world this page opened (`RecentWorld.picture`), painted once its field map is: kept with it among the recent worlds. */
+  | { readonly type: "world.picture"; readonly picture: string };
 
 /** The status bar's words for each state. */
 export function statusText(status: EngineStatus | "standalone"): string {
