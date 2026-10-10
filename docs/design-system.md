@@ -1137,7 +1137,9 @@ different landmarks:
 - A great tree is a spreading oak, a tall elm, a great willow, an umbrella
   pine or a dark yew, and young, old or ancient: an ancient tree squats
   lower and broader on a buttressed trunk, some great limbs broken to
-  stubs and its highest limbs bare above the crown.
+  stubs and its highest limbs bare above the crown. An old tree's
+  buttresses are thin blades of bark that stand tall at the trunk and
+  sweep down to the ground, curving a little as they run out.
 
 What falls (rubble at a tower's foot, a snapped top, a fallen lintel)
 grows in at its foot only once it has fallen, and never stops a walk.
