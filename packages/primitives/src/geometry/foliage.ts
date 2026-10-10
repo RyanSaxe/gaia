@@ -340,7 +340,7 @@ const SPRAY_CUTS = {
 } as const;
 
 /** A crown's share of the sparse sprays along each twig: full sprays fill a clump with fewer, and every twig keeps the spray at its tip. */
-const CROWN_SHARE = 1;
+const CROWN_SHARE = 0.34;
 
 /**
  * Clumps of leaves where a canopy's mass is: one at every tip and, for a
