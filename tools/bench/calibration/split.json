@@ -1,5 +1,23 @@
 {
-  "about": "The calibration set splits by repository: wording is tuned and curves are fitted on one half, and every measure is reported on the other, so a wording can't pass by fitting the examples it is graded on (round 6, calibration page).",
-  "fit": ["click", "fd", "git-history", "SWE-agent"],
-  "heldOut": ["cobra", "zustand", "full-stack-fastapi-template", "gaia"]
+  "about": "The calibration set splits by repository: wording is tuned on one half, and every measure is reported on the other, so a wording can't pass by fitting the examples it is graded on (round 6, calibration page). The poorly kept repositories are held out, and each should average below every well-kept one (round 8, decisions page).",
+  "fit": [
+    "click",
+    "fd",
+    "git-history",
+    "SWE-agent"
+  ],
+  "heldOut": [
+    "cobra",
+    "zustand",
+    "full-stack-fastapi-template",
+    "gaia",
+    "DVWA",
+    "GildedRose",
+    "jQuery-File-Upload"
+  ],
+  "poorlyKept": [
+    "DVWA",
+    "GildedRose",
+    "jQuery-File-Upload"
+  ]
 }

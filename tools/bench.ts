@@ -35,6 +35,8 @@ import type { Cloned, CodeGraph, UnderstandPlan, UnderstandProgress } from "@gai
 
 interface Repo {
   readonly name: string;
+  /** Paths deleted after checkout, such as vendored copies of other projects. */
+  readonly drop?: readonly string[];
   /** A folder in this repository, for Gaia itself. */
   readonly root?: string;
   readonly address?: string;
@@ -79,6 +81,7 @@ async function rootOf(r: Repo): Promise<string> {
     git("fetch", "--quiet", "origin", r.commit);
   }
   git("-c", "advice.detachedHead=false", "checkout", "--quiet", r.commit);
+  for (const path of r.drop ?? []) rmSync(resolve(result.root, path), { recursive: true, force: true });
   return result.root;
 }
 
@@ -218,8 +221,8 @@ function spearman(a: readonly number[], b: readonly number[]): number {
  * questions and their mutations, which come with step 4.
  */
 async function calibrate(): Promise<void> {
-  const split = JSON.parse(readFileSync(resolve(repo, "tools/bench/calibration/split.json"), "utf8")) as { fit: string[]; heldOut: string[] };
-  type Seen = { score: number; value: number; lines?: number; cognitive?: number };
+  const split = JSON.parse(readFileSync(resolve(repo, "tools/bench/calibration/split.json"), "utf8")) as { fit: string[]; heldOut: string[]; poorlyKept?: string[] };
+  type Seen = { score: number; value: number; lines?: number; cognitive?: number; repo: string };
   const scores = new Map<string, Seen[]>();
   const choices = new Map<string, Map<string, number>>();
   const yesNo = new Map<string, number[]>();
@@ -240,7 +243,7 @@ async function calibrate(): Promise<void> {
         if (typeof a !== "object" || a === null) return;
         const o = a as Record<string, unknown>;
         if (typeof o.score === "number" && typeof o.value === "number") {
-          const seen: Seen = { score: o.score, value: o.value, ...(deciding ? { lines: n.measures.lines, cognitive: n.measures.cognitive ?? 0 } : {}) };
+          const seen: Seen = { score: o.score, value: o.value, repo: name, ...(deciding ? { lines: n.measures.lines, cognitive: n.measures.cognitive ?? 0 } : {}) };
           scores.set(question, [...(scores.get(question) ?? []), seen]);
         } else if (typeof o.choice === "string") {
           const c = choices.get(question) ?? new Map<string, number>();
@@ -275,6 +278,28 @@ async function calibrate(): Promise<void> {
         : "";
     const fails = [largest > 0.6 && "a level over 60%", levels.some((l) => l === 0) && "a level unused", apart < 0.5 && "percentiles close"].filter(Boolean);
     console.log(`  ${question}: ${seen.length} answers, ${levels.map((l) => pct(l, seen.length)).join(" / ")}; percentiles ${apart.toFixed(2)} apart${overlap}; ${fails.length === 0 ? "passes spread" : `fails: ${fails.join(", ")}`}`);
+  }
+  // Separation and range: each poorly kept repository should average below
+  // every well-kept one, and reach the bottom levels more often.
+  const poorly = new Set(split.poorlyKept ?? []);
+  if (poorly.size > 0) {
+    console.log("separation: each poorly kept repository's mean below every well-kept one's; range: answers in the bottom two levels");
+    for (const [question, seen] of [...scores].sort(([a], [b]) => a.localeCompare(b))) {
+      const byRepo = new Map<string, Seen[]>();
+      for (const x of seen) byRepo.set(x.repo, [...(byRepo.get(x.repo) ?? []), x]);
+      const mean = (xs: Seen[]): number => xs.reduce((n, x) => n + x.score, 0) / xs.length;
+      const low = (xs: Seen[]): number => xs.filter((x) => Math.round(x.score) <= 1).length / xs.length;
+      const kept = [...byRepo].filter(([r]) => !poorly.has(r));
+      const bad = [...byRepo].filter(([r]) => poorly.has(r));
+      if (kept.length === 0 || bad.length === 0) continue;
+      const lowestKept = Math.min(...kept.map(([, xs]) => mean(xs)));
+      const separated = bad.every(([, xs]) => mean(xs) < lowestKept);
+      const keptLow = kept.reduce((n, [, xs]) => n + low(xs) * xs.length, 0) / kept.reduce((n, [, xs]) => n + xs.length, 0);
+      console.log(
+        `  ${question}: well kept ${kept.map(([r, xs]) => `${r} ${mean(xs).toFixed(2)}`).join(", ")}; poorly kept ${bad.map(([r, xs]) => `${r} ${mean(xs).toFixed(2)}`).join(", ")}; ` +
+          `${separated ? "separated" : "NOT separated"}; bottom two levels ${pct(Math.round(keptLow * 1000), 1000)} well kept, ${bad.map(([r, xs]) => `${r} ${pct(Math.round(low(xs) * 1000), 1000)}`).join(", ")}`,
+      );
+    }
   }
   for (const [question, c] of [...choices].sort(([a], [b]) => a.localeCompare(b))) {
     const total = [...c.values()].reduce((a, b) => a + b, 0);
