@@ -137,6 +137,18 @@ describe("the Jev runner", () => {
     }
   }, 120_000);
 
+  it("asks again about a reference whose candidates changed, and about nothing else of it", async () => {
+    const root = codebase("relink", { "src/a.ts": fn("a", "return helper(x);"), "src/one.ts": fn("helper", "return x;"), "src/two.ts": fn("helper", "return -x;") });
+    const data = join(scratch, "relink-data");
+    const calleeQuestions = (sent: Sent) => sent.flatMap((r) => Object.entries(r.questions).filter(([id]) => id.startsWith("callee:")));
+    expect(calleeQuestions(await understand(engineAt(data), root)).length).toBe(1);
+    expect(calleeQuestions(await understand(engineAt(data), root)).length).toBe(0);
+    writeFileSync(join(root, "src/three.ts"), fn("helper", "return 2 * x;"));
+    const asked = calleeQuestions(await understand(engineAt(data), root));
+    expect(asked.length).toBe(1);
+    expect(Object.keys((asked[0]?.[1] as { criteria: Record<string, string> }).criteria)).toContain("def:src/three.ts#helper");
+  }, 60_000);
+
   it("asks about a directory only once everything under it is answered, the root last", async () => {
     const root = codebase("nested", { "a/b/c/deep.ts": fn("deep", "return x;"), "a/b/mid.ts": fn("mid", "return x;"), "a/top.ts": fn("top", "return x;") });
     const sent = await understand(engineAt(join(scratch, "nested-data")), root);

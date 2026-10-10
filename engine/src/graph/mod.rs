@@ -183,9 +183,20 @@ pub fn build(root: &Path) -> Result<CodeGraph, String> {
     build_with(root, &lineage::Store, &Links::new())
 }
 
-/// Which target Jev chose for each pending reference, by `ref_key`: the
-/// target's id, or "outside", with the call and its probability.
-pub type Links = HashMap<String, (String, String, f64)>;
+/// The target Jev chose for a pending reference.
+pub struct Link {
+    /// The target's id, or "outside".
+    pub target: String,
+    /// The call that chose it, with its version.
+    pub call: String,
+    pub p: f64,
+    /// The candidates it chose among, sorted. The answer holds only while
+    /// they are still the reference's candidates.
+    pub candidates: Vec<String>,
+}
+
+/// Jev's links, by `ref_key`.
+pub type Links = HashMap<String, Link>;
 
 /// A pending reference's identity, which a link answer is held under.
 pub fn ref_key(r: &PendingRef) -> String {
@@ -377,14 +388,17 @@ fn build_with(
         .collect();
     let resolved = resolve::run(&units, &dirs);
     edges.extend(resolved.edges);
-    // References Jev resolved become edges; ones it put outside leave the pending list.
+    // References Jev resolved become edges, and ones it put outside leave the
+    // pending list; one whose candidates changed since is pending again.
     let mut pending: Vec<PendingRef> = Vec::new();
     for r in resolved.pending {
-        match links.get(&ref_key(&r)) {
-            Some((target, _, _)) if target == "outside" => {}
-            Some((target, call, p)) => edges.push(Edge {
+        let mut offered = r.candidates.clone();
+        offered.sort();
+        match links.get(&ref_key(&r)).filter(|l| l.candidates == offered) {
+            Some(l) if l.target == "outside" => {}
+            Some(l) => edges.push(Edge {
                 from: r.from.clone(),
-                to: target.clone(),
+                to: l.target.clone(),
                 kind: if r.kind == "import" {
                     "imports"
                 } else {
@@ -392,8 +406,8 @@ fn build_with(
                 },
                 by: Filled {
                     by: "jev",
-                    call: Some(call.clone()),
-                    p: Some(*p),
+                    call: Some(l.call.clone()),
+                    p: Some(l.p),
                 },
                 at: Some(r.at),
             }),
