@@ -2,7 +2,7 @@
 //! engine protocol over stdin and stdout until stdin closes.
 
 mod clone;
-mod git;
+mod graph;
 mod jev;
 mod project;
 mod rpc;

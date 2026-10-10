@@ -1,0 +1,16 @@
+@import url("base.css");
+
+/* TODO: dark mode */
+#listing > ul {
+  margin: 0;
+}
+
+.name:hover {
+  color: rebeccapurple;
+}
+
+@media (max-width: 600px) {
+  .name {
+    font-size: 14px;
+  }
+}

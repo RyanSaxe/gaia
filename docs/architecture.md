@@ -31,7 +31,7 @@ crosses: code facts, Jev requests and answers, and store records. Geometry
 never crosses, because the renderer builds it. `EngineMethods` in
 `packages/schema/src/engine.ts` is the TypeScript side of the protocol, and
 `engine/src/rpc.rs` the Rust side. The engine answers `engine.ping`,
-`project.open`, `project.locate` and `project.clone`, Jev's
+`project.open`, `project.graph`, `project.locate` and `project.clone`, Jev's
 `jev.estimate`, `jev.status`, `jev.ask` and `jev.batch`, and the app-data
 store's `store.get`, `store.read` and `store.put`. The store (`engine/src/store.rs`) keeps one JSON file of tables
 (`StoreTable`) per project, `<data>/projects/<project id>/store.json`, replaced through a
@@ -355,6 +355,33 @@ same through renames and moves, and the world is to seed geometry from it.
 Three store tables hold Jev's side: `calls` keeps raw responses by request
 hash, `held` the answer the graph shows for each question by lineage, and
 `lineage` the last graph's lineage map and definition fingerprints.
+
+`project.graph` shares `project.open`'s walk and parses every file whose
+extension the language table names (`engine/languages.toml`). Twenty-one
+languages are compiled in, from TypeScript to YAML, and the table is the
+engine's only knowledge of them. For each file the engine runs the
+grammar's own tags query, when it ships one, and then our query file in
+`engine/queries/`. One loop (`engine/src/graph/parse.rs`) turns every match
+into the graph by its capture name:
+- `@definition.<role>` becomes a definition, with its signature, its doc (a
+  docstring, or the comments directly above it), its owner (a Go receiver, a
+  Rust impl, an enclosing class) and its parent. A definition inside a
+  function is kept only when it runs or holds definitions itself.
+- `@block.<shape>` becomes one of ten kinds of block: branch, loop, match,
+  try, closure, scope, concurrent, unsafe, data and markup.
+- `@reference.import` and `@reference.call` become pending references.
+- `@decide.*` marks the decisions the measures count.
+
+Each function gets its cognitive complexity (SonarSource's definition), its
+cyclomatic complexity (McCabe's), its deepest nesting, its parameters and
+its debt markers. Each file and directory gets its lines and its history
+from git. A file whose path matches one of its language's conventions, such
+as Go's `*_test.go`, is tagged with it as evidence for Jev; no file name
+decides anything. A file with no grammar is still a node, with its lines,
+size, hash and history. `unparsed` counts what a grammar could not read,
+such as TypeScript 5's `export type *`, which tree-sitter-typescript 0.23
+does not know. Parses are kept by content hash while the engine runs, and
+Gaia's graph builds in under a second.
 
 The graph is built beside `project.open`, and nothing the world reads
 changes until the world moves onto it. Updating a world while its files

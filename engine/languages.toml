@@ -1,0 +1,157 @@
+# The engine's only knowledge of languages. Each entry names the extensions
+# it reads, where its grammar comes from, and its conventions. A grammar
+# compiled into the engine names its crate; `engine/queries/<language>.scm`
+# holds our query file for it, run after the grammar's own tags query when
+# it ships one.
+#
+# A convention is a path pattern a language's community follows. A file
+# whose path matches one is tagged with it, and the tag goes into Jev's
+# state as evidence. It never decides anything on its own.
+
+[typescript]
+extensions = ["ts", "mts", "cts"]
+grammar = { crate = "tree-sitter-typescript" }
+conventions = [
+  { tag = "js:test-file", path = "**/*.{test,spec}.*" },
+  { tag = "js:test-file", path = "**/__tests__/**" },
+  { tag = "ts:declarations", path = "**/*.d.ts" },
+]
+
+[tsx]
+extensions = ["tsx"]
+grammar = { crate = "tree-sitter-typescript" }
+conventions = [
+  { tag = "js:test-file", path = "**/*.{test,spec}.*" },
+  { tag = "js:test-file", path = "**/__tests__/**" },
+  { tag = "js:story", path = "**/*.stories.*" },
+]
+
+[javascript]
+extensions = ["js", "jsx", "mjs", "cjs"]
+grammar = { crate = "tree-sitter-javascript" }
+conventions = [
+  { tag = "js:test-file", path = "**/*.{test,spec}.*" },
+  { tag = "js:test-file", path = "**/__tests__/**" },
+  { tag = "js:story", path = "**/*.stories.*" },
+]
+
+[python]
+extensions = ["py", "pyi"]
+grammar = { crate = "tree-sitter-python" }
+conventions = [
+  { tag = "python:test-file", path = "**/test_*.py" },
+  { tag = "python:test-file", path = "**/*_test.py" },
+  { tag = "pytest:conftest", path = "**/conftest.py" },
+  { tag = "python:package-init", path = "**/__init__.py" },
+]
+
+[go]
+extensions = ["go"]
+grammar = { crate = "tree-sitter-go" }
+conventions = [
+  { tag = "go:test-file", path = "**/*_test.go" },
+  { tag = "go:test-data", path = "**/testdata/**" },
+]
+
+[rust]
+extensions = ["rs"]
+grammar = { crate = "tree-sitter-rust" }
+conventions = [
+  { tag = "rust:integration-test", path = "**/tests/**/*.rs" },
+  { tag = "rust:build-script", path = "**/build.rs" },
+  { tag = "rust:bench", path = "**/benches/**" },
+]
+
+[java]
+extensions = ["java"]
+grammar = { crate = "tree-sitter-java" }
+conventions = [
+  { tag = "java:test-source", path = "**/src/test/**" },
+  { tag = "java:test-file", path = "**/*Test.java" },
+]
+
+[c]
+extensions = ["c"]
+grammar = { crate = "tree-sitter-c" }
+conventions = []
+
+[cpp]
+extensions = ["cc", "cpp", "cxx", "h", "hh", "hpp", "hxx"]
+grammar = { crate = "tree-sitter-cpp" }
+conventions = []
+
+[c-sharp]
+extensions = ["cs"]
+grammar = { crate = "tree-sitter-c-sharp" }
+conventions = [
+  { tag = "csharp:test-file", path = "**/*Tests.cs" },
+  { tag = "csharp:test-file", path = "**/*Test.cs" },
+]
+
+[ruby]
+extensions = ["rb"]
+grammar = { crate = "tree-sitter-ruby" }
+conventions = [
+  { tag = "ruby:spec", path = "**/*_spec.rb" },
+  { tag = "ruby:test-file", path = "**/test_*.rb" },
+  { tag = "ruby:test-file", path = "**/*_test.rb" },
+]
+
+[php]
+extensions = ["php"]
+grammar = { crate = "tree-sitter-php" }
+conventions = [
+  { tag = "php:test-file", path = "**/*Test.php" },
+]
+
+[swift]
+extensions = ["swift"]
+grammar = { crate = "tree-sitter-swift" }
+conventions = [
+  { tag = "swift:test-file", path = "**/*Tests.swift" },
+]
+
+[kotlin]
+extensions = ["kt", "kts"]
+grammar = { crate = "tree-sitter-kotlin-ng" }
+conventions = [
+  { tag = "kotlin:test-source", path = "**/src/test/**" },
+  { tag = "kotlin:test-file", path = "**/*Test.kt" },
+]
+
+[bash]
+extensions = ["sh", "bash"]
+grammar = { crate = "tree-sitter-bash" }
+conventions = []
+
+[html]
+extensions = ["html", "htm"]
+grammar = { crate = "tree-sitter-html" }
+conventions = []
+
+[css]
+extensions = ["css"]
+grammar = { crate = "tree-sitter-css" }
+conventions = []
+
+[markdown]
+extensions = ["md", "markdown"]
+grammar = { crate = "tree-sitter-md" }
+# Links and other inline text are a second grammar, run over each `inline` node.
+inline = { grammar = "markdown-inline", over = "inline" }
+conventions = []
+
+[json]
+extensions = ["json"]
+grammar = { crate = "tree-sitter-json" }
+conventions = []
+
+[toml]
+extensions = ["toml"]
+grammar = { crate = "tree-sitter-toml-ng" }
+conventions = []
+
+[yaml]
+extensions = ["yml", "yaml"]
+grammar = { crate = "tree-sitter-yaml" }
+conventions = []
