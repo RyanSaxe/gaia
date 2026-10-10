@@ -230,6 +230,12 @@ for (const [world, calls] of Object.entries(results)) {
       const bar = Math.max(typical, POP_FLOOR);
       const worst = steps.reduce((a, b) => (b[2] > a[2] ? b : a));
       const pops = steps.filter((s) => s[2] > bar);
+      // A walk where neither the steps nor the wind changed a pixel never drew its frames, as on an overloaded machine: it proves nothing.
+      if (typical === 0 && worst[2] === 0) {
+        line(`  ${key}: no frame changed, not even with the wind, so the walk measured nothing; run it again`);
+        process.exitCode = 1;
+        continue;
+      }
       line(`  ${key}: ${steps.length} steps; worst block ${f(worst[2])} at ${f(worst[0], 0)} m; the wind's ${f(typical)} (its median along the walk); ${pops.length} pops${pops.length > 0 ? ` (at ${pops.map((s) => f(s[0], 0)).join(", ")} m)` : ""}`);
     } else if (key.startsWith("swap ")) {
       // A step passes when it changes the plant's part of the screen no more than the wind does there in half a second, or too little to show.
