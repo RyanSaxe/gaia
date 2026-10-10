@@ -10,6 +10,7 @@
     {"name": "SWE-agent", "address": "https://github.com/SWE-agent/SWE-agent", "commit": "3ea751c087f32b16e039a2233dd6eefecef325d5"},
     {"name": "DVWA", "address": "https://github.com/digininja/DVWA", "commit": "068d974487a297c155c48722f9fcf7180a83adc4"},
     {"name": "GildedRose", "address": "https://github.com/emilybache/GildedRose-Refactoring-Kata", "commit": "d6407909c73b2ba61bfa7568af0d9bdce1902fd5"},
-    {"name": "jQuery-File-Upload", "address": "https://github.com/blueimp/jQuery-File-Upload", "commit": "0e92a4d4613d4ed5231ee0d8513519f2e04f99ba", "drop": ["js/vendor", "test/vendor"]}
+    {"name": "jQuery-File-Upload", "address": "https://github.com/blueimp/jQuery-File-Upload", "commit": "0e92a4d4613d4ed5231ee0d8513519f2e04f99ba", "drop": ["js/vendor", "test/vendor"]},
+    {"name": "proving", "root": "node_modules/.cache/gaia-bench/proving", "make": ["pnpm", "proving", "--code", "node_modules/.cache/gaia-bench/proving"]}
   ]
 }

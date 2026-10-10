@@ -27,7 +27,7 @@
 // definitions keep their identity at TO: by id alone, and by lineage.
 
 import { execFileSync, spawn } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { createInterface } from "node:readline";
@@ -37,6 +37,8 @@ interface Repo {
   readonly name: string;
   /** Paths deleted after checkout, such as vendored copies of other projects. */
   readonly drop?: readonly string[];
+  /** A command that writes `root` when it is missing, run from this repository. */
+  readonly make?: readonly string[];
   /** A folder in this repository, for Gaia itself. */
   readonly root?: string;
   readonly address?: string;
@@ -70,7 +72,12 @@ async function call<T>(method: string, params: object, dataDir?: string): Promis
 
 /** The repository's folder, cloned and at its pinned commit. */
 async function rootOf(r: Repo): Promise<string> {
-  if (r.root !== undefined) return resolve(repo, r.root);
+  if (r.root !== undefined) {
+    const root = resolve(repo, r.root);
+    const [command, ...rest] = r.make ?? [];
+    if (command !== undefined && !existsSync(root)) execFileSync(command, rest, { cwd: repo, env, stdio: "inherit" });
+    return root;
+  }
   if (r.address === undefined || r.commit === undefined) throw new Error(`${r.name} needs a root, or an address and a commit`);
   const { result } = await call<Cloned>("project.clone", { address: r.address });
   if (!result.cloned) throw new Error(`${r.name} could not be cloned: ${result.why}`);
