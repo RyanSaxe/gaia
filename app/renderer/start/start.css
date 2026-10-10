@@ -39,8 +39,7 @@
 .start-table.leaving .table-sheet { transform: scale(1.14); rotate: 0deg; }
 .start-table.leaving .table-wood { opacity: 0; transition: opacity 0.9s ease; }
 
-.sheet-mark { position: absolute; left: 4.2%; top: 5.5%; width: clamp(96px, 11vw, 150px); opacity: 0.92; }
-.sheet-mark svg { display: block; width: 100%; height: auto; }
+.sheet-mark { position: absolute; left: 4.2%; top: 5.5%; width: clamp(96px, 11vw, 150px); height: auto; }
 .sheet-say {
   position: absolute; left: 4.4%; top: calc(5.5% + clamp(62px, 7vw, 92px)); margin: 0;
   font-style: italic; font-size: clamp(15px, 1.5vw, 19px); color: var(--ink-soft); letter-spacing: 0.02em;

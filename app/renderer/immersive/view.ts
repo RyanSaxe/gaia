@@ -16,7 +16,7 @@
 
 import type { PlaceArea } from "@gaia/terrain";
 import { areaVitality } from "@gaia/world";
-import { LOGO_SVG } from "../brand/logo.ts";
+import { SLIP_LOGO } from "../brand/logo.ts";
 import { onTap } from "../lab.ts";
 import { worldService } from "../service.ts";
 import type { WorldHandle } from "../terrain/lab.ts";
@@ -155,7 +155,7 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
   slip.setAttribute("role", "dialog");
   slip.setAttribute("aria-label", "Gaia");
   slip.innerHTML = /* html */ `
-    <div class="slip-mark">${LOGO_SVG}</div>
+    <img class="slip-mark" src="${SLIP_LOGO}" alt="Gaia">
     <div class="slip-world">the world of <i data-ref="world-name"></i></div>
     <div class="slip-head">Wandering</div>
     ${WANDER}
