@@ -678,16 +678,34 @@ pub fn next(root: &Path, max: Option<usize>) -> Result<Value, String> {
         .filter(|&i| !w.answered.contains(&w.planned[i].hash))
         .take(max.unwrap_or(DEFAULT_SLICE))
         .collect();
-    if ready.is_empty() {
+    let unsettled = unsettled(
+        &w,
+        &store::read(&w.project, "held")?,
+        &store::read(&w.project, "calls")?,
+    );
+    if ready.is_empty() && unsettled.is_empty() {
         return Ok(json!({ "sent": 0, "failed": 0, "left": 0, "settled": [] }));
     }
+    // A link held anew changes the graph every other request is built on,
+    // so this slice only holds; the next builds on the graph it leaves.
+    let ready = if unsettled.iter().any(|(_, pass)| *pass == LINK) {
+        Vec::new()
+    } else {
+        ready
+    };
     let requests: Vec<Value> = ready
         .iter()
         .map(|&i| w.planned[i].request.clone())
         .collect();
-    let (answers, overloaded) = client::send_all(requests, concurrency)?;
+    let (answers, overloaded) = if requests.is_empty() {
+        (Vec::new(), false)
+    } else {
+        client::send_all(requests, concurrency)?
+    };
     let concurrency = if overloaded {
         (concurrency / 2).max(1)
+    } else if ready.is_empty() {
+        concurrency
     } else {
         (concurrency + CONCURRENCY_STEP).min(client::CONCURRENCY)
     };
@@ -745,6 +763,7 @@ pub fn next(root: &Path, max: Option<usize>) -> Result<Value, String> {
     let held = store::read(&w.project, "held")?;
     let answered = |h: &str| w.answered.contains(h) || fresh.contains_key(h);
     let mut settled: BTreeSet<String> = BTreeSet::new();
+    touched.extend(unsettled);
     for (unit, pass) in touched {
         let mine: Vec<&Planned> = w
             .planned
@@ -798,9 +817,12 @@ pub fn next(root: &Path, max: Option<usize>) -> Result<Value, String> {
             if field == "link" {
                 value["candidates"] = json!(offered.get(&node));
             }
-            // A link answer chosen among other candidates never holds.
+            // A link answer chosen among other candidates, or by an earlier
+            // version of its call, never holds: the graph reads only current ones.
             let keep = held.get(&key).is_some_and(|h| {
-                h["candidates"] == value["candidates"] && !hold::replaces(&h["answer"], &fresh)
+                h["candidates"] == value["candidates"]
+                    && (field != "link" || h["call"] == value["call"])
+                    && !hold::replaces(&h["answer"], &fresh)
             });
             if !keep {
                 writes.push(json!({ "table": "held", "key": key, "value": value }));
@@ -811,11 +833,61 @@ pub fn next(root: &Path, max: Option<usize>) -> Result<Value, String> {
         }
         settled.insert(unit.to_string());
     }
+    let held_anew = writes.iter().any(|w| w["table"] == "held");
     store::put(&w.project, &writes)?;
     let sent = ready.len() - failed;
-    // What is left counts only requests already known; answers can open more, such as a directory's.
-    let left = w.planned.iter().filter(|p| !answered(&p.hash)).count() + usize::from(sent > 0);
+    // What is left counts only requests already known; answers can open
+    // more, such as a directory's, and so can answers newly held.
+    let left = w.planned.iter().filter(|p| !answered(&p.hash)).count()
+        + usize::from(sent > 0 || held_anew);
     Ok(json!({ "sent": sent, "failed": failed, "left": left, "settled": settled }))
+}
+
+/// Units whose requests are all answered but whose answers aren't held as
+/// they are asked now: a link answer held under other candidates or an
+/// older call, or a node's answer never held. They settle without asking.
+fn unsettled<'a>(w: &'a Wanted, held: &Value, calls: &Value) -> BTreeSet<(&'a str, &'static str)> {
+    let lineage: HashMap<&str, &str> = w
+        .graph
+        .nodes
+        .iter()
+        .map(|n| match n {
+            Node::Dir(d) => (d.id.as_str(), d.lineage.as_str()),
+            Node::File(f) => (f.id.as_str(), f.lineage.as_str()),
+            Node::Def(d) => (d.id.as_str(), d.lineage.as_str()),
+            Node::Block(b) => (b.id.as_str(), b.lineage.as_str()),
+        })
+        .collect();
+    let mut out = BTreeSet::new();
+    for p in w.planned.iter().filter(|p| w.answered.contains(&p.hash)) {
+        let stale = p.questions.iter().any(|q| {
+            if q.field == "link" {
+                let h = &held[format!("{LINK}|{}", q.about)];
+                let options = q.json["criteria"].as_object().into_iter().flatten();
+                let mut offered: Vec<&str> = options
+                    .map(|(k, _)| k.as_str())
+                    .filter(|k| *k != "outside")
+                    .collect();
+                offered.sort_unstable();
+                // Only an answer that can be held counts, so a bad one never blocks sending.
+                let holdable =
+                    hold::normalize(&q.json, &calls[&p.hash]["answers"][&q.id]).is_some();
+                holdable
+                    && (h.is_null()
+                        || h["call"] != json!(q.call)
+                        || h["candidates"] != json!(offered))
+            } else {
+                let call_id = q.call.split('@').next().unwrap_or(&q.call);
+                lineage
+                    .get(q.about.as_str())
+                    .is_some_and(|l| held[format!("{l}|{call_id}|{}", q.field)].is_null())
+            }
+        });
+        if stale {
+            out.insert((p.unit.as_str(), p.pass));
+        }
+    }
+    out
 }
 
 /// Records the nodes the world chose to stand, whose deep questions go once their file is understood.
