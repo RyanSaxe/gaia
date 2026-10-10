@@ -27,6 +27,19 @@ health. Test a change here as well as in Gaia's own world.
   trail look in `app/renderer/terrain/looks.ts` is used, and every building
   and landmark stands thriving, tired and in ruin.
 
+`pnpm proving --code DIR` writes the proving ground's code instead
+(`tools/proving-code.ts`): real source for each planned file, as poor as its
+health, and `proving-manifest.json`, which says by the engine's question
+names how each source file was written.
+
+- A thriving file is small, named, documented steps, and its tests pass.
+- A ruined one is long tangles with letters for names, docs about something
+  else, emptied error handlers, state hidden at module level, unrelated
+  helpers and shims marked HACK, and its tests fail.
+
+The engine's bench writes it under `node_modules`, so Gaia's own world never
+reads it, and asks Jev about it to hold its questions to the plan.
+
 The lab lays these out with the real `layoutWorld`, `standWorld` and bake, so
 the proving ground looks as any codebase's world would. Health comes from the
 facts, as it would for real code: a ruined file has failing tests, compiler
