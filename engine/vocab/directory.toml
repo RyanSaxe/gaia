@@ -28,8 +28,8 @@ instructions = "How well does this directory's name say what it holds?"
 levels = [
   "Misleading or empty: a name such as misc, stuff or new, or one that says something the directory doesn't hold.",
   "Vague: the name points roughly the right way but a reader must look inside to know.",
-  "Clear: the name says what the directory holds, with a small surprise or two.",
-  "Exact: the name says precisely what the directory holds.",
+  "Clear: the name says what the directory holds to a reader who knows the project, or leaves out a thing or two it holds.",
+  "Exact: a reader new to the project could say what the directory holds from its name alone, and nothing inside is left out.",
 ]
 
 [cohesion]
@@ -37,8 +37,8 @@ instructions = "Does this directory group one concern, with each file where a re
 levels = [
   "A grab bag: unrelated files that share nothing but the directory.",
   "A main concern with files that belong elsewhere.",
-  "One concern with a few files in odd places.",
-  "One concern: every file belongs here and is where a reader would look.",
+  "One main concern with a file or two that could live elsewhere, or that a reader new to the project wouldn't look for here.",
+  "Tightly one concern: every file needs the others, and each is where a reader new to the project would look for it.",
 ]
 
 [doc]
