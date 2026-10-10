@@ -29,8 +29,10 @@ health. Test a change here as well as in Gaia's own world.
 
 `pnpm proving --code DIR` writes the proving ground's code instead
 (`tools/proving-code.ts`): real source for each planned file, as poor as its
-health, and `proving-manifest.json`, which says by the engine's question
-names how each source file was written.
+health, and beside it a manifest (`DIR-manifest.json`, or `--manifest
+PATH`) that says by the engine's question names how each source file was
+written. A few ruined files have names that say nothing (`ruins/oak/temp.ts`,
+`ruins/house/utils2.ts`), as poorly kept code does.
 
 - A thriving file is small, named, documented steps, and its tests pass.
 - A ruined one is long tangles with letters for names, docs about something
