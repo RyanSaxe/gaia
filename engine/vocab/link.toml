@@ -4,7 +4,7 @@
 # forced onto a file in this repository.
 
 [resolve]
-instructions = "Which of these does `{text}`, imported on line {line}, refer to? Read the configuration in the state: a package's manifest names the package its directory holds."
+instructions = "Which of these does `{text}`, imported on line {line}, refer to? Read the configuration in the state. A manifest's own name, such as the \"name\" in a package.json or the module line of a go.mod, is the package its directory holds. A package a manifest only lists among its dependencies comes from outside this repository, unless another directory's manifest gives that name as its own."
 outside = "Something outside this repository: a library, the standard library or the platform."
 
 [callee]

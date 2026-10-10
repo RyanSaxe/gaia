@@ -488,8 +488,9 @@ waits for the one before it:
 A link answer becomes an `imports` or `calls` edge filled by Jev, with its
 call and probability, before reach is counted; "outside" drops the
 reference. It is held with the candidates it chose among, and holds only
-while they stay the reference's candidates: when a new file offers
-another target, the reference is asked again. A `checks` answer above 0.5
+while they stay the reference's candidates and its call's version is
+current: when a new file offers another target, or the call changes, the
+reference is asked again. A `checks` answer above 0.5
 becomes a `checks` edge.
 
 A request stays within 30,000 tokens as `engine/src/jev/tokens.rs`

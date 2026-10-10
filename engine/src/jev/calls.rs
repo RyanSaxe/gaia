@@ -204,6 +204,17 @@ fn version_of(vocab: &str, code: u32) -> String {
     format!("{hash}-{code}")
 }
 
+/// A version from one section of a vocabulary file, for calls that share
+/// the file, so a change to one call's words leaves the others' answers.
+fn section_version(vocab: &str, section: &str, code: u32) -> String {
+    let table: toml::Table = toml::from_str(vocab).unwrap_or_default();
+    let words = table
+        .get(section)
+        .map(ToString::to_string)
+        .unwrap_or_default();
+    version_of(&words, code)
+}
+
 fn choice(instructions: &str, options: &BTreeMap<String, String>) -> Value {
     json!({ "type": "choice", "instructions": instructions, "criteria": options })
 }
@@ -214,6 +225,25 @@ fn yes_no(instructions: &str, yes: &str, no: &str) -> Value {
 
 fn score(instructions: &str, levels: &[String]) -> Value {
     json!({ "type": "score", "instructions": instructions, "criteria": levels })
+}
+
+/// The given lines with `around` lines on each side, and "…" where lines are left out.
+fn excerpt(lines: &[&str], at: &[usize], around: usize) -> String {
+    let mut out: Vec<&str> = Vec::new();
+    let mut next = 0;
+    for &i in at {
+        let start = i.saturating_sub(around).max(next);
+        if start > next {
+            out.push("…");
+        }
+        let end = (i + around + 1).min(lines.len());
+        out.extend(&lines[start..end.max(start)]);
+        next = next.max(end);
+    }
+    if next < lines.len() {
+        out.push("…");
+    }
+    out.join("\n")
 }
 
 fn file_of<'a>(unit: Unit<'a>) -> Option<&'a FileNode> {
@@ -874,7 +904,7 @@ impl Call for Resolve {
         "resolve"
     }
     fn version(&self) -> String {
-        version_of(LINK, 1)
+        section_version(LINK, "resolve", 1)
     }
     fn pass(&self) -> &'static str {
         "link"
@@ -889,36 +919,63 @@ impl Call for Resolve {
         })
     }
     fn part(&self, ctx: &Ctx, unit: Unit, budget: usize) -> Option<Value> {
-        // The configuration in each candidate directory, which names the package it holds.
+        // The configuration in each candidate directory that names an
+        // import's package, which says what that directory holds: whole when
+        // it fits, or else the lines that name it.
         let file = file_of(unit)?;
-        let mut dirs: BTreeSet<&str> = BTreeSet::new();
-        for r in ctx
+        let imports: Vec<&PendingRef> = ctx
             .pending_of
             .get(file.id.as_str())
             .into_iter()
             .flatten()
+            .copied()
             .filter(|r| r.kind == "import")
-        {
-            for c in &r.candidates {
-                if let Some(d) = c.strip_prefix("dir:") {
-                    dirs.insert(d);
-                }
-            }
-        }
+            .collect();
+        let dirs: BTreeSet<&str> = imports
+            .iter()
+            .flat_map(|r| r.candidates.iter().filter_map(|c| c.strip_prefix("dir:")))
+            .collect();
+        let names: BTreeSet<String> = imports
+            .iter()
+            .flat_map(|r| crate::graph::leading_names(&r.text))
+            .collect();
         let mut configs: Vec<Value> = Vec::new();
         let mut used = 0;
-        'dirs: for d in dirs {
+        for d in dirs {
             for f in ctx.files_in.get(d).into_iter().flatten().filter(|f| {
                 matches!(f.language.as_deref(), Some("json" | "toml" | "yaml") | None) && !f.binary
             }) {
                 let Ok(text) = std::fs::read_to_string(ctx.root.join(&f.path)) else {
                     continue;
                 };
-                used += tokens(&text);
-                if used > budget {
-                    break 'dirs;
+                let lines: Vec<&str> = text.lines().collect();
+                let naming: Vec<usize> = (0..lines.len())
+                    .filter(|&i| names.iter().any(|n| crate::graph::mentions(lines[i], n)))
+                    .collect();
+                if naming.is_empty() {
+                    continue;
                 }
-                configs.push(json!({ "path": f.path, "text": text }));
+                let shown = if used + tokens(&text) <= budget {
+                    text.clone()
+                } else {
+                    // Each named line with the line that opens the key it sits
+                    // under, so a dependency reads as one.
+                    let keys = ctx.defs_of.get(f.id.as_str()).into_iter().flatten();
+                    let mut at: BTreeSet<usize> = naming.iter().copied().collect();
+                    for d in keys {
+                        let (start, end) = (d.span.start as usize - 1, d.span.end as usize - 1);
+                        if naming.iter().any(|&i| start < i && i <= end) {
+                            at.insert(start);
+                        }
+                    }
+                    excerpt(&lines, &at.into_iter().collect::<Vec<_>>(), 2)
+                };
+                let size = tokens(&shown);
+                if used + size > budget {
+                    continue;
+                }
+                used += size;
+                configs.push(json!({ "path": f.path, "text": shown }));
             }
         }
         Some(json!({ "configuration": configs }))
@@ -973,7 +1030,7 @@ impl Call for Callee {
         "callee"
     }
     fn version(&self) -> String {
-        version_of(LINK, 1)
+        section_version(LINK, "callee", 1)
     }
     fn pass(&self) -> &'static str {
         "link"
@@ -1078,7 +1135,7 @@ impl Call for Checks {
         "checks"
     }
     fn version(&self) -> String {
-        version_of(LINK, 1)
+        section_version(LINK, "checks", 1)
     }
     fn pass(&self) -> &'static str {
         "tests"

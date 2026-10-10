@@ -224,8 +224,19 @@ fn segment_ends(s: &str) -> Vec<usize> {
     ends
 }
 
+/// The leading parts of an import's specifier, longest first: the names a
+/// configuration may give the package it comes from.
+pub(crate) fn leading_names(text: &str) -> Vec<String> {
+    let s = clean_specifier(text);
+    segment_ends(&s)
+        .iter()
+        .rev()
+        .map(|&e| s[..e].to_string())
+        .collect()
+}
+
 /// True when `needle` appears in `hay` as a whole word, not inside a longer name.
-fn mentions(hay: &str, needle: &str) -> bool {
+pub(crate) fn mentions(hay: &str, needle: &str) -> bool {
     let word = |c: char| c.is_alphanumeric() || c == '-' || c == '_' || c == '@';
     hay.match_indices(needle).any(|(i, _)| {
         let before = hay[..i].chars().next_back();
