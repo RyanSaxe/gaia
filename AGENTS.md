@@ -75,10 +75,11 @@ reports:
   is a pop;
 - the app's smoothness probe over a real walk: median, 99th percentile and
   stutters;
-- the swap test: for every flora preset at three healths, by day and at
-  night, a step in the middle of the band, where the far form comes in over
-  the full one, and the frame where the full form leaves must each change
-  less than the wind does in half a second;
+- the swap test: for every tree and bush preset at three healths, by day and
+  at night, a step in the middle of the band, where the far form comes in
+  over the full one, and the frame where the full form leaves must each
+  change less than the wind does in half a second, or no 64-pixel block by
+  a full level of 255;
 - a world with five times the trees (`pnpm probe stress`).
 
 Its window opens without taking focus; leave it uncovered while it runs.

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { BUDGET, FAR, createFrameBudget, farness } from "./woods.ts";
+import type { Realized } from "@gaia/realize";
+import { BUDGET, FAR, createFarForms, createFrameBudget, farness } from "./woods.ts";
 
 describe("a crown's form by its size on screen", () => {
   it("turns far only across the band, never at once", () => {
@@ -40,5 +41,21 @@ describe("the frame budget", () => {
     // A frame with no time passing changes nothing.
     budget.update(heavy, 0);
     expect(budget.swapPx).toBe(FAR.swapPx);
+  });
+});
+
+describe("the far forms", () => {
+  it("are baked in the order plants were given them, each at its share of the size, and take none once baking", () => {
+    const forms = createFarForms();
+    const tree = {} as Realized;
+    const bush = {} as Realized;
+    expect(forms.add(tree)).toMatchObject({ form: 0, share: 1, batch: forms.batch });
+    expect(forms.add(bush, FAR.bush)).toMatchObject({ form: 1, share: FAR.bush });
+    expect(forms.close()).toEqual([
+      { plant: tree, px: FAR.swapPx },
+      { plant: bush, px: FAR.swapPx * FAR.bush },
+    ]);
+    // A plant given a form after the bake began would draw a card that was never baked.
+    expect(() => forms.add(bush)).toThrow();
   });
 });

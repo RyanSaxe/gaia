@@ -8,9 +8,9 @@
 //   frozen, what each step changes in the detail drawn, against the wind's
 //   own change over half a second. A step above the wind is a pop.
 // - hitch: the app's smoothness probe over a real walk.
-// - swap: the swap test. For every flora preset at vitality 1, 0.5 and 0.15,
-//   by day and at 22:00, the frame where its full form leaves the band and
-//   its far form stands alone, against the wind's half-second change.
+// - swap: the swap test. For every tree and bush preset at vitality 1, 0.5
+//   and 0.15, by day and at 22:00, the frame where its full form leaves the
+//   band and its far form stands alone, against the wind's half-second change.
 // - stress: a world with five times the trees.
 //
 // The window stays hidden, at exactly the size asked for, except for the walk
@@ -50,6 +50,12 @@ const WALK = { meters: 150, step: 0.7, at: 100 };
  * the wind itself moves almost nothing, a step only shifts the grain of edges.
  */
 const POP_FLOOR = 8;
+/**
+ * A swap step that changes no block by a full level of 255 shows nothing,
+ * however still the air around it: a far bush turns far where nothing else
+ * in its part of the screen moves. Above it, a step must stay under the wind.
+ */
+const SWAP_FLOOR = 1;
 /** Seconds of walking per smoothness window; the app's probe reads the last ten seconds. */
 const HITCH_WINDOWS = 2;
 /** The window's size in CSS pixels. */
@@ -85,8 +91,8 @@ const go = (spot: string): string =>
     : spot === "turned"
       ? "(T.valley(), T.walk(T.walker().x, T.walker().z, T.walker().yawDeg + 120, -3))"
       : `(T.tour(${JSON.stringify(spot)}) ?? (() => { throw new Error(${JSON.stringify(`No tour stop named ${spot}.`)}); })())`;
-/** Opens the world at 15:30 and reports its trees. */
-const OPEN = `(await __lab.open("immersive"), await __lab.hour(15.5), await __lab.frames(30), T.scale())`;
+/** Opens the world at 15:30, waits for the bushes' far forms, which bake once it is open, and reports its trees. */
+const OPEN = `(await __lab.open("immersive"), await T.farReady(), await __lab.hour(15.5), await __lab.frames(30), T.scale())`;
 const settle = "await __lab.frames(40)";
 const bench = "(T.bench(10), +T.bench(40).toFixed(2))";
 /** Twenty-one seconds of frames first: as long as the frame budget takes to rise from the far forms' size to its most (woods.ts, `BUDGET`). */
@@ -226,12 +232,12 @@ for (const [world, calls] of Object.entries(results)) {
       const pops = steps.filter((s) => s[2] > bar);
       line(`  ${key}: ${steps.length} steps; worst block ${f(worst[2])} at ${f(worst[0], 0)} m; the wind's ${f(typical)} (its median along the walk); ${pops.length} pops${pops.length > 0 ? ` (at ${pops.map((s) => f(s[0], 0)).join(", ")} m)` : ""}`);
     } else if (key.startsWith("swap ")) {
-      // A step passes when it changes the tree's part of the screen no more than the wind does there in half a second.
+      // A step passes when it changes the plant's part of the screen no more than the wind does there in half a second, or too little to show.
       type Step = { change: { mean: number; worst: number }; wind: { mean: number; worst: number }; distance: number };
       const rows = value as { name: string; vitality: number; end: Step; middle: Step }[];
-      const over = (s: Step): boolean => s.change.worst > s.wind.worst || s.change.mean > s.wind.mean;
+      const over = (s: Step): boolean => s.change.worst > SWAP_FLOOR && (s.change.worst > s.wind.worst || s.change.mean > s.wind.mean);
       const failed = rows.filter((r) => over(r.end) || over(r.middle));
-      line(`  ${key}: ${rows.length - failed.length} of ${rows.length} presets and healths under the wind (mean / worst block over the tree, the step against the wind)`);
+      line(`  ${key}: ${rows.length - failed.length} of ${rows.length} presets and healths under the wind or a level (mean / worst block over the plant, the step against the wind)`);
       const say = (s: Step): string => `${f(s.change.mean, 2)} / ${f(s.change.worst)} against ${f(s.wind.mean, 2)} / ${f(s.wind.worst)}`;
       for (const r of rows) line(`    ${over(r.end) || over(r.middle) ? "over " : "     "} ${r.name.padEnd(16)} ${f(r.vitality, 2)}  middle of the band ${say(r.middle)} at ${f(r.middle.distance, 0)} m; its end ${say(r.end)}`);
     } else if (key.startsWith("hitch ")) {
