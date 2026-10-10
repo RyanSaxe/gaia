@@ -544,9 +544,11 @@ fn build_with(
             }
         }
     }
-    let name = canonical
-        .file_name()
-        .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+    let name = git::name(root).unwrap_or_else(|| {
+        canonical
+            .file_name()
+            .map_or_else(String::new, |n| n.to_string_lossy().into_owned())
+    });
     Ok(CodeGraph {
         project_id,
         name,
@@ -923,6 +925,63 @@ mod tests {
         }
         assert_eq!(project_id(&dir), git::root_commit(&dir).unwrap());
         assert_ne!(project_id(&dir.join("sub")), project_id(&dir));
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn a_repository_is_named_by_its_remote_or_its_main_checkout_never_a_worktree() {
+        let dir = project("named", &[("a.ts", "export const a = 1;\n")]);
+        let worktree = dir.with_file_name(format!(
+            "{}-worktree",
+            dir.file_name().unwrap().to_string_lossy()
+        ));
+        let _ = std::fs::remove_dir_all(&worktree);
+        let git = |args: &[&str]| {
+            let ok = std::process::Command::new("git")
+                .arg("-C")
+                .arg(&dir)
+                .args(args)
+                .status()
+                .unwrap()
+                .success();
+            assert!(ok, "git {args:?}");
+        };
+        git(&["init", "-q"]);
+        git(&["add", "."]);
+        git(&[
+            "-c",
+            "user.name=Gaia",
+            "-c",
+            "user.email=gaia@example.com",
+            "commit",
+            "-q",
+            "-m",
+            "one",
+        ]);
+        git(&[
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            "other",
+            worktree.to_str().unwrap(),
+        ]);
+        let checkout = dir.file_name().unwrap().to_string_lossy().into_owned();
+        assert_eq!(graph(&dir).unwrap().name, checkout);
+        assert_eq!(
+            graph(&worktree).unwrap().name,
+            checkout,
+            "a worktree takes its main checkout's name"
+        );
+        git(&[
+            "remote",
+            "add",
+            "origin",
+            "git@github.com:someone/widget.git",
+        ]);
+        assert_eq!(graph(&dir).unwrap().name, "widget");
+        assert_eq!(graph(&worktree).unwrap().name, "widget");
+        std::fs::remove_dir_all(worktree).unwrap();
         std::fs::remove_dir_all(dir).unwrap();
     }
 
