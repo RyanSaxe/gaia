@@ -3,7 +3,7 @@ import { type BuildingPlan, Library, type Role, seedOf } from "@gaia/schema";
 import { PRIMITIVES } from "@gaia/primitives";
 import { LANDMARK_PRESETS, STRUCTURE_PRESETS, realize } from "@gaia/realize";
 import { structure } from "@gaia/kinds";
-import { type BuildingComposition, type Composition, INKS, type MarkBox, drawBuilding, drawLandmark } from "./marks.ts";
+import { type BuildingComposition, type Composition, INKS, MARK_REACH, type MarkBox, drawBuilding, drawLandmark } from "./marks.ts";
 
 /** The roles whose primitives stand in the world as buildings and landmarks, so the map must ink them. */
 const DRAWN: ReadonlySet<Role> = new Set(["Footprint", "Walls", "Roof", "Openings", "Dressing", "Feature", "Landmark"]);
@@ -67,15 +67,18 @@ describe("a mark composed from a blueprint", () => {
   const SCALE = 2;
   // Strokes and the brush's offset reach a little past the points a mark places.
   const SLACK = 3 * SCALE;
-  const inside = (box: MarkBox, [x, y]: [number, number]): boolean => x >= box[0] - SLACK && x <= box[2] + SLACK && y >= box[1] - SLACK && y <= box[3] + SLACK;
+  const inside = (box: MarkBox, [x, y]: [number, number], slack = SLACK): boolean => x >= box[0] - slack && x <= box[2] + slack && y >= box[1] - slack && y <= box[3] + slack;
+  // The ground the sheets keep names off round a mark's foot, before they know what will stand there.
+  const reach: MarkBox = [200 - MARK_REACH.left * SCALE, 200 - MARK_REACH.up * SCALE, 200 + MARK_REACH.right * SCALE, 200 + MARK_REACH.down * SCALE];
 
-  it.each([1, 0.5, 0.05])("draws every building and landmark preset at vitality %s inside the box it reports, which names keep off", (v) => {
+  it.each([1, 0.5, 0.05])("draws every building and landmark preset at vitality %s inside the box it reports and the reach every mark keeps to, which names keep off", (v) => {
     for (const [name, b] of buildings) {
       const { ctx, points } = recorder();
       const box = drawBuilding(ctx, 200, 200, SCALE, b, v, name);
       expect(points.length, name).toBeGreaterThan(50);
       expect(points.every(([x, y]) => Number.isFinite(x) && Number.isFinite(y)), name).toBe(true);
       expect(points.filter((p) => !inside(box, p)), name).toEqual([]);
+      expect(points.filter(([x, y]) => !inside(reach, [x, y], -SLACK)), name).toEqual([]);
     }
     for (const [name, l] of landmarks) {
       const { ctx, points } = recorder();
@@ -83,6 +86,7 @@ describe("a mark composed from a blueprint", () => {
       expect(points.length, name).toBeGreaterThan(20);
       expect(points.every(([x, y]) => Number.isFinite(x) && Number.isFinite(y)), name).toBe(true);
       expect(points.filter((p) => !inside(box, p)), name).toEqual([]);
+      expect(points.filter(([x, y]) => !inside(reach, [x, y], -SLACK)), name).toEqual([]);
     }
   });
 });

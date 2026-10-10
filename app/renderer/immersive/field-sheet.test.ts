@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { Library } from "@gaia/schema";
+import { type CodeModel, Library } from "@gaia/schema";
 import { BIOME_PRIMITIVES, RELIEF_PRIMITIVES } from "@gaia/primitives";
-import { WILDS, bakeTerrain, groundHeightAt, heightAt, landHalf, sampleWorld } from "@gaia/terrain";
-import { nameTails } from "./map-names.ts";
+import { WILDS, bakeTerrain, groundHeightAt, heightAt, landHalf, outlinesOf, sampleWorld } from "@gaia/terrain";
+import { type Judgments, LAYOUT, type LotPlace, layoutWorld } from "@gaia/world";
+import proving from "../terrain/fixtures/proving.json";
+import provingJudged from "../terrain/fixtures/proving-judged.json";
+import { type Box, type Measure, type NameLand, type NamePlaces, nameLand, nameTails, placeNames } from "./map-names.ts";
 import { MAP_STYLE, healthColor, healthField, landWash } from "./map-styles.ts";
+import { MARK_REACH, markScale } from "./marks.ts";
 import { INK, RIM, levelsFor, reliefAt } from "./wild-ink.ts";
 
 describe("names that repeat", () => {
@@ -21,6 +25,70 @@ describe("names that repeat", () => {
     expect(tails.get("a/lib/src")).toBe("a / lib");
     expect(tails.get("b/lib/src")).toBe("b / lib");
     expect(tails.get("c/src")).toBe("c");
+  });
+});
+
+describe("where the sheets letter areas' names", () => {
+  const run = <T,>(steps: Generator<void, T>): T => {
+    for (;;) {
+      const step = steps.next();
+      if (step.done === true) return step.value;
+    }
+  };
+  // Capitals as wide as their letters and spacing, as near as a test can measure without a browser.
+  const measure: Measure = (text, font, spacing) => text.length * (0.72 * Number(/([\d.]+)px/.exec(font)?.[1] ?? 0) + spacing);
+  // The proving ground's land as the world service sends it before anything is judged: every area's outline and
+  // every lot where a building or landmark will stand. Laid out once and only read.
+  const world = layoutWorld(proving as unknown as CodeModel, provingJudged as unknown as Judgments);
+  const landWith = (lots: readonly LotPlace[]): NameLand => run(nameLand(outlinesOf(world).areas, world.size, world.size / 2, lots));
+  const land = landWith(world.things.map(({ x, z }) => ({ x, z })));
+  // A wide screen's sheet and a phone's.
+  const sheets = [800, 380].map((side) => run(placeNames(land, side, measure)));
+  const boxes = (placed: NamePlaces): Box[] => placed.places.map((p) => {
+    const [x, y] = [(p.x + land.reach) * placed.scale, (p.z + land.reach) * placed.scale];
+    return [x + p.box[0], y + p.box[1], x + p.box[2], y + p.box[3]];
+  });
+  const hits = (a: Box, b: Box): boolean => a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1];
+  // The ground any building's or landmark's mark may take round each lot, wherever on it the thing stands.
+  const markGround = (placed: NamePlaces, lots: readonly LotPlace[]): Box[] => {
+    const s = markScale(placed.scale, 1);
+    const lot = Math.max(...Object.values(LAYOUT.lotReach)) * placed.scale;
+    return lots.map(({ x, z }) => {
+      const [px, py] = [(x + land.reach) * placed.scale, (z + land.reach) * placed.scale];
+      return [px - MARK_REACH.left * s - lot, py - MARK_REACH.up * s - lot, px + MARK_REACH.right * s + lot, py + MARK_REACH.down * s + lot];
+    });
+  };
+
+  it("letters every area with ground of its own once, and not the root, which is the whole sheet", () => {
+    const areas = land.labels.filter((l) => l.area.depth > 0).map((l) => l.area.path).sort();
+    expect(areas.length).toBeGreaterThan(40);
+    for (const placed of sheets) expect(placed.places.map((p) => p.label.area.path).sort()).toEqual(areas);
+  });
+
+  it("never lets one name cover another", () => {
+    for (const placed of sheets) {
+      const all = boxes(placed);
+      for (const [i, a] of all.entries()) expect(all.slice(i + 1).filter((b) => hits(a, b))).toEqual([]);
+    }
+  });
+
+  it("keeps names off the ground every building and landmark may draw on, letting one over it only when nothing near is clear", () => {
+    const [wide] = sheets as [NamePlaces];
+    const marks = markGround(wide, land.lots);
+    const clear = boxes(wide).filter((_, i) => !(wide.places[i] as NamePlaces["places"][number]).over);
+    for (const b of clear) expect(marks.filter((m) => hits(b, m))).toEqual([]);
+    // On a wide sheet nearly every name finds room clear of the marks.
+    expect(clear.length).toBeGreaterThan(wide.places.length * 0.9);
+    // Where lots stand so close that no ground is clear of them, every name is still lettered, over them.
+    const lots: LotPlace[] = [];
+    for (let x = -world.size / 2; x <= world.size / 2; x += 60) for (let z = -world.size / 2; z <= world.size / 2; z += 60) lots.push({ x, z });
+    const crowded = run(placeNames(landWith(lots), 800, measure));
+    expect(crowded.places.length).toBe(wide.places.length);
+    expect(crowded.places.every((p) => p.over)).toBe(true);
+  });
+
+  it("places names from the land alone, so walking never moves one", () => {
+    expect(run(placeNames(structuredClone(land), 800, measure))).toEqual(sheets[0]);
   });
 });
 

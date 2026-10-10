@@ -235,7 +235,13 @@ judges its land, its own or its region's), and the areas with a question to
 Jev in flight (`asking`). The wait (`app/renderer/wait/`) paints the field
 map from these: each file's health as it settles (`settling.ts` works out
 how much of the health at each of the land's cells is settled, and paints a
-cell only once nearly all of it is), and each area's name once it settles.
+cell only once nearly all of it is), and each area's name once it settles,
+where the field map letters it: both sheets place every area's name once for
+the whole sheet with `nameLand` and `placeNames`
+(`app/renderer/immersive/map-names.ts`) from the same land, the areas'
+outlines and the lots, so a name keeps off every mark to come and the
+compass rose's corner, and nothing about where the person stands moves it
+(the field map reads the lots from the stood world's `lots`).
 Once the world is laid out, the wait gets every file's vitality, all a world
 laid out in the page itself ever sends it; the terrain lab then hands it
 each building's and landmark's mark at its laid-out place
