@@ -203,6 +203,13 @@ function flareOf(trunkRadius: number, lobes: readonly Lobe[], lift: number): Fla
   return { at, rings: [...FLARE_RINGS, 5.5].map((k) => k * trunkRadius) };
 }
 
+/**
+ * Where boughs leave the top of their parent, each starts as wide as the
+ * parent ends and narrows to its own width over this many of its widths, so
+ * the boughs of a fork swallow the top of the trunk and no ring shows there.
+ */
+const FORK_REACH = 1.4;
+
 export function buildBark(p: Resolved<typeof barkParams>, ctx: BuildContext, skel: Skeleton): Built {
   const out = new PartBuilder("bark", "solid");
   const r = ctx.rand.fork("bark");
@@ -212,6 +219,8 @@ export function buildBark(p: Resolved<typeof barkParams>, ctx: BuildContext, ske
   const flare = flareOf(trunkRadius, lobesOf(r.fork("lobes")), 1.1);
   // A tree stands on one trunk, which flares into root lobes; a shrub's many stems rise straight from the soil.
   const oneTrunk = skel.limbs.filter((l) => l.parent === -1).length === 1;
+  const children = skel.limbs.map(() => 0);
+  for (const l of skel.limbs) if (l.parent >= 0) children[l.parent] = (children[l.parent] ?? 0) + 1;
 
   // Each chain of segments is one tube, so its bark runs unbroken past the joins.
   for (const whole of chainsOf(skel)) {
@@ -244,9 +253,20 @@ export function buildBark(p: Resolved<typeof barkParams>, ctx: BuildContext, ske
       const sink = k > 0 || limb.depth === 0 ? 0 : Math.min(limb.startRadius * 1.2, len * 0.3);
       const span = len + sink;
       const start = addScaled(limb.start, dir, -sink);
-      const radiusAt = (along: number): number => limb.startRadius + (limb.endRadius - limb.startRadius) * clamp((along - sink) / len, 0, 1);
+      // A bough leaving the top of its parent starts as wide as the parent ends.
+      const parent = k === 0 && limb.depth >= 1 ? skel.limbs[limb.parent] : undefined;
+      const atTop = parent !== undefined && length(sub(limb.start, parent.end)) < parent.endRadius * 0.6;
+      const swell = atTop ? Math.max(0, parent.endRadius / limb.startRadius - 1) : 0;
+      const swellAt = sink;
+      const swellOf = (along: number): number => (swell <= 0 ? 0 : along <= swellAt ? 1 : Math.exp(-(((along - swellAt) / (limb.startRadius * FORK_REACH)) ** 2)));
+      const radiusAt = (along: number): number => (limb.startRadius + (limb.endRadius - limb.startRadius) * clamp((along - sink) / len, 0, 1)) * (1 + swell * swellOf(along));
       const count = clamp(Math.ceil(span / ((limb.startRadius + limb.endRadius) * 2.2)), 1, limb.depth === 0 ? 6 : 3);
       let alongs = Array.from({ length: count + 1 }, (_, n) => (n / count) * span);
+      if (swell > 0 && limb.startRadius > trunkRadius * 0.2) {
+        // Rings across the swelling, so it curves.
+        const extra = [0.6, 1.5].map((w) => swellAt + w * limb.startRadius).filter((a) => a < span * 0.7);
+        alongs = [...alongs, ...extra].sort((a, b) => a - b).filter((a, n, all) => n === 0 || a - (all[n - 1] as number) > limb.startRadius * 0.15);
+      }
       if (k === 0 && flared) {
         // Rings close together near the ground, so the flare curves.
         const extra = flare.rings.map((y) => y / Math.max(dir[1], 0.5)).filter((a) => a < span * 0.8);
@@ -295,14 +315,16 @@ export function buildBark(p: Resolved<typeof barkParams>, ctx: BuildContext, ske
         out.triangle(a + 1, b + 1, b);
       }
     }
-    // Close the end with a short rounded tip.
+    // Close the end with a short rounded tip. Where boughs leave the end, the
+    // tip barely rises and shades as bark, inside the boughs' swollen starts.
     const end = chain[chain.length - 1] as number;
     const lastLimb = skel.limbs[end] as Limb;
     const lastDir = normalize(sub(lastLimb.end, lastLimb.start));
     const last = ringStart + (rings.length - 1) * (radial + 1);
-    const tip = addScaled(lastLimb.end, lastDir, lastLimb.endRadius * 0.8);
+    const forked = (children[end] ?? 0) > 0;
+    const tip = addScaled(lastLimb.end, lastDir, lastLimb.endRadius * (forked ? 0.6 : 0.8));
     const b = boughs.at(end, tip);
-    const tipIndex = out.vertex(tip, lastDir, 0.7, { loss: 0, droop: b.droop, wither, glow: 0, pivot: b.bough, bough: b.bough });
+    const tipIndex = out.vertex(tip, lastDir, forked ? 0.5 : 0.7, { loss: 0, droop: b.droop, wither, glow: 0, pivot: b.bough, bough: b.bough });
     for (let j = 0; j < radial; j++) out.triangle(last + j, last + j + 1, tipIndex);
   }
 
