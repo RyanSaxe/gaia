@@ -107,7 +107,7 @@ describe("the Jev runner", () => {
     expect(file?.judged?.kind?.choice).toBeTypeOf("string");
   }, 60_000);
 
-  it("asks a file over Jev's window in pieces at its definitions, and combines their answers", async () => {
+  it("asks a file over Jev's window in pieces at its definitions, and judges the whole file from them", async () => {
     const big = Array.from({ length: 1400 }, (_, i) => fn(`f${i}`, `return x * ${i} + ${"1 + ".repeat(20)}0;`)).join("\n");
     const root = codebase("big", { "src/big.ts": big });
     const engine = engineAt(join(scratch, "big-data"));
@@ -135,6 +135,10 @@ describe("the Jev runner", () => {
       const sourceSent = requests.reduce((n, r) => n + String(r.state.source).length, 0);
       expect(sourceSent).toBeLessThan(many.length * 1.05);
     }
+    // A question about the whole file goes in the first piece only.
+    const kinds = sent.filter((r) => "profile:kind" in r.questions);
+    expect(kinds.length).toBe(1);
+    expect((kinds[0]?.state.chunk as { lines: number[] } | undefined)?.lines[0]).toBe(1);
   }, 120_000);
 
   it("asks again about a reference whose candidates changed, and about nothing else of it", async () => {

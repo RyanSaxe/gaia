@@ -506,14 +506,27 @@ fn file_requests(
             );
         }
         let weight = state["source"].as_str().map_or(0, str::len) as f64;
-        // A question about the whole file goes in every piece; one about a line, in the piece that holds it.
+        // A question about a line goes in the piece that holds it; one about
+        // the whole file in the first piece, which has the file's whole outline.
         let mine: Vec<&Asked> = questions
             .iter()
             .filter(|q| match line_of(q) {
                 Some(s) => home(s).is_none_or(|h| h == index),
-                None => true,
+                None => index == 0,
             })
             .collect();
+        // A piece carries only the parts of the calls it asks.
+        if pieces.len() > 1 {
+            let asking: HashSet<&str> = mine
+                .iter()
+                .map(|q| q.call.split('@').next().unwrap_or(""))
+                .collect();
+            for c in &calls {
+                if !asking.contains(c.id()) {
+                    state.remove(c.id());
+                }
+            }
+        }
         pack(
             pass,
             &file.id,

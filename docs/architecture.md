@@ -506,8 +506,9 @@ cut at its top-level definitions into pieces sized by their source and
 their questions together, so its source goes out about once; a line too
 long for a request, such as a minified file's, is cut inside. A question
 about a definition, a block or a reference goes in the piece that holds its
-line; one about the whole file goes in every piece, and the pieces' answers
-are combined, each weighted by how much of the file it read. A request already
+line; one about the whole file goes in the first piece, which holds the
+whole file's outline, and a piece carries only the parts of the calls it
+asks. A request already
 answered (the store's `calls` table, by the request's hash) is never sent
 again. A fresh answer replaces the one held for a node's lineage (the
 `held` table) only when it clearly differs: a choice by 0.2, a score by
@@ -520,8 +521,9 @@ definitions and blocks deepened, took 1,497 requests, 34 seconds and $0.70
 (16.6 million billed tokens). The understand pass took 57% of that, the
 deep pass 31% and the link pass 9%. The source is under a quarter of the
 tokens: each `screen` question carries its five levels' descriptions, and a
-long file's every piece repeats the outline and the questions about the
-whole file. Screening spreads over every level on each of the bench's eight
+long file's every piece repeats its outline. Asking the whole-file questions
+in the first piece only, as the runner now does, cut Gaia's estimated
+tokens by 9.7%. Screening spreads over every level on each of the bench's eight
 repositories, with no level holding more than 51% of a repository's
 definitions.
 
