@@ -36,22 +36,56 @@ export type DetailMode = "auto" | "full" | "far";
 export const FAR = { swapPx: typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches ? 64 : 128, band: 1.25 } as const;
 
 /**
- * How far toward its far form a crown spanning `px` device pixels is: 0 draws
- * the full form alone, 1 the far form alone, and in between the far form over
- * the full one, that far into the band.
+ * How far toward its far form a crown spanning `px` device pixels is, where
+ * trees turn far at `swapPx`: 0 draws the full form alone, 1 the far form
+ * alone, and in between the far form over the full one, that far into the band.
  */
-export function farness(px: number): number {
-  const top = FAR.swapPx * FAR.band;
+export function farness(px: number, swapPx: number = FAR.swapPx): number {
+  const top = swapPx * FAR.band;
   if (px >= top) return 0;
-  if (px <= FAR.swapPx) return 1;
-  return (top - px) / (top - FAR.swapPx);
+  if (px <= swapPx) return 1;
+  return (top - px) / (top - swapPx);
 }
 
-/** What a pass's own size means for detail: how many times smaller than the view it draws, and its device pixels per meter one meter away (per meter, for an orthographic pass). */
+/**
+ * The frame budget: full trees' triangles a view may draw. Past it, trees
+ * turn far at a larger crown, by at most `rise` of the swap size a second, so
+ * nearer trees turn far, each through its own band; never past `most` times
+ * the size the far forms baked at, where a card's texel spans 1.5 pixels.
+ * Below `ease` of the budget it eases back. At 2% a second a tree moves at
+ * most 5% of the way across the band in half a second, the swap test's
+ * middle step, which changes the picture less than the wind does.
+ */
+export const BUDGET = { triangles: 1_500_000, rise: 0.02, most: 1.5, ease: 0.8 } as const;
+
+export interface FrameBudget {
+  /** The crown span, in device pixels, below which a tree draws far now. */
+  readonly swapPx: number;
+  /** Takes in the full trees' triangles the last view drew and the seconds since the one before. */
+  update(fullTriangles: number, dt: number): void;
+}
+
+export function createFrameBudget(): FrameBudget {
+  let swap: number = FAR.swapPx;
+  return {
+    get swapPx() {
+      return swap;
+    },
+    update(full, dt) {
+      // `rise` a second, whatever the frame rate.
+      const step = (1 + BUDGET.rise) ** dt;
+      if (full > BUDGET.triangles) swap = Math.min(FAR.swapPx * BUDGET.most, swap * step);
+      else if (full < BUDGET.triangles * BUDGET.ease) swap = Math.max(FAR.swapPx, swap / step);
+    },
+  };
+}
+
+/** What a pass's own size means for detail: how many times smaller than the view it draws, its device pixels per meter one meter away (per meter, for an orthographic pass), and the crown span trees turn far at (`FAR.swapPx` unless the frame budget asks for more). */
 export interface PassSize {
   readonly smaller: number;
   readonly focal: number;
   readonly ortho: boolean;
+  readonly swapPx?: number;
 }
 
 const VIEW_SIZE: PassSize = { smaller: 1, focal: 0, ortho: false };
@@ -237,6 +271,7 @@ export function createCopies(plant: Realized, light: SceneLight, spots: readonly
       // A crown's span on this pass's screen, in device pixels, at distance d.
       const span = (radius: number, d: number): number => (2 * radius * size.focal) / (size.ortho ? 1 : Math.max(d, 1));
       const swapping = far !== undefined && detail === "auto" && size.focal > 0;
+      const swapPx = size.swapPx ?? FAR.swapPx;
       inBand = 0;
       farAway = 0;
       cells.forEach((cell, i) => {
@@ -245,18 +280,18 @@ export function createCopies(plant: Realized, light: SceneLight, spots: readonly
         if (d - cell.built.radius >= AIR.dissolveEnd || !frustum.intersectsSphere(cell.bounds)) return;
         const level = parts[levelFor(cell, size.smaller)] as (number | readonly number[])[];
         // Whole cells settle at once; only a cell straddling the band looks at each copy.
-        if (!swapping || span(cell.crowns[0], d + cell.built.radius) >= FAR.swapPx * FAR.band) {
+        if (!swapping || span(cell.crowns[0], d + cell.built.radius) >= swapPx * FAR.band) {
           level.push(i);
           return;
         }
-        if (span(cell.crowns[1], d - cell.built.radius) < FAR.swapPx) {
+        if (span(cell.crowns[1], d - cell.built.radius) < swapPx) {
           for (const k of cell.copies) card(k, 1);
           farAway += cell.copies.length;
           return;
         }
         const kept: number[] = [];
         for (const k of cell.copies) {
-          const f = farness(span(crowns[k * 4 + 3] as number, Math.hypot((crowns[k * 4] as number) - eye.x, (crowns[k * 4 + 1] as number) - eye.y, (crowns[k * 4 + 2] as number) - eye.z)));
+          const f = farness(span(crowns[k * 4 + 3] as number, Math.hypot((crowns[k * 4] as number) - eye.x, (crowns[k * 4 + 1] as number) - eye.y, (crowns[k * 4 + 2] as number) - eye.z)), swapPx);
           if (f < 1) kept.push(k);
           if (f > 0) card(k, f);
           if (f >= 1) farAway++;

@@ -641,7 +641,11 @@ far forms bake at that size) draws as its far form, one card baked from
 its build (`packages/render/src/far.ts`). Between 128 and 160 pixels, the band
 (`farness` in `woods.ts`), the card draws over the full tree as far into its
 form as the crown is into the band, so a tree never changes form in one
-frame. Each pass gathers its far copies into one batch, and the far cards
+frame. When the full trees a view draws pass the frame budget (`BUDGET`,
+1.5 million triangles), the view's swap size rises 2% a second, up to 1.5
+times the size the forms baked at, and eases back once the view is light
+(`createFrameBudget`): each half second a tree in the band moves across it
+no more than the swap test's middle step. Each pass gathers its far copies into one batch, and the far cards
 draw it in one call per form. Nothing past `AIR.dissolveEnd`, where the air
 has dissolved everything into the sky, draws at all. Every tree build bakes
 into its far form a few views a frame under the wait (`startFarBake`), and

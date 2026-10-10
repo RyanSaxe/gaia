@@ -1111,10 +1111,12 @@ on a phone, which bakes its cards at that size) draws as a card baked from
 the tree itself, by its own shaders, and lit
 live, so far trees look like the near ones at every hour and every health.
 Across a band from 128 to 160 pixels the card draws over the full tree, never
-fading in on its own, so nothing appears or fades as a person walks. The
-walk test (`pnpm probe steps`) holds every step toward the woods to the
-wind's own change. Nothing is drawn past where the air has dissolved it into
-the sky.
+fading in on its own, so nothing appears or fades as a person walks. In a
+dense view trees turn far at a larger crown, up to half again the size
+their cards baked at, but only 2% larger each second, so each half second a
+tree changes less than the wind moves it. The walk test (`pnpm probe
+steps`) holds every step toward the woods to the wind's own change. Nothing
+is drawn past where the air has dissolved it into the sky.
 
 A pass draws only the cells its camera sees. The sun's shadow map covers a
 box around the person, so only casters inside that box draw into it: its cost
