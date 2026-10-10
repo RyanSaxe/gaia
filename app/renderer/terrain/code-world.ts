@@ -17,8 +17,8 @@ import { FLORA_PRESETS, LANDMARK_PRESETS, TRAIL_PRESETS, WORLD_PRESETS } from "@
 import { type WorldSpec, outlinesOf } from "@gaia/terrain";
 import { type CodeWorld, type Judge, type Judgments, judgeWorld, judgedThing, keptJev, layoutWorld, planWorldRequests, requestKey, standInJev, thingsOf } from "@gaia/world";
 import type { ConsentPlan, Opening, StartChoice, StartOffer, WorldDocument } from "../../world-service/protocol.ts";
-import { postcardOf } from "../../world-service/postcard.ts";
 import { type WorldService, worldService } from "../service.ts";
+import GAIA_PICTURE from "../start/gaia-picture.webp";
 import snapshot from "./fixtures/gaia.json";
 import kept from "./fixtures/gaia-jev.json";
 import proving from "./fixtures/proving.json";
@@ -175,13 +175,13 @@ const ASKS_PROVING = typeof location !== "undefined" && new URLSearchParams(loca
 
 /**
  * The start on a page with no engine, to see it (`?start=table|signpost`):
- * Gaia's own world is the one world walked before, and any choice opens it,
+ * Gaia's own world is the one world walked before, with a picture of its map
+ * the app painted (`start/gaia-picture.webp`), and any choice opens it,
  * except an address, which a page with no engine cannot follow.
  */
 async function previewStart(veil: Veil): Promise<void> {
   const model = snapshot as unknown as CodeModel;
-  const world = layoutWorld(model, await judgeWorld(model, LOOKS, standInJev(LOOKS)));
-  const recent = [{ root: model.repository.name, name: model.repository.name, at: Date.now(), postcard: postcardOf(world) }];
+  const recent = [{ root: model.repository.name, name: model.repository.name, at: Date.now(), picture: GAIA_PICTURE }];
   let place = await veil.choose({ recent });
   while ("address" in place) place = await veil.choose({ recent, refused: { address: place.address, why: "offline" } });
   veil.opening({ stage: "reading", root: model.repository.name });

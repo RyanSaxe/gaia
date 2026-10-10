@@ -262,8 +262,8 @@ patch's outline from `placeAt`, once per world, for anything that draws them
 In the app, the lab opens on the world the world service sends. With no
 folder named, the world service answers the page's `world.open` with
 `world.start`: the worlds opened before (`RecentWorld`, kept newest first in
-the app's `settings` table under `recent-worlds`, each with a `Postcard` of
-its land's areas, land, water, buildings and landmarks), and the page shows
+the app's `settings` table under `recent-worlds`, each with the picture of
+its field map its page last painted), and the page shows
 the start (`app/renderer/start/`, see `docs/design-system.md`) over the wait
 until the person chooses a world they walked before, a folder (main's
 dialog, through the preload's `gaiaShell.chooseFolder`) or an address on
@@ -283,7 +283,18 @@ no credentials or prompts, and the user's and system's git settings
 ignored; past 500 MB or 240 seconds it gives up. A clone runs on the
 engine's one request loop, so other requests wait behind it. The copy then
 opens like any folder, and main names the window after the world
-(`world.opened`) so a reload reopens it. A
+(`world.opened`) so a reload reopens it. Once a world the service opened
+stands and the field map has painted its paper, the page paints the whole
+map once more with `drawLand`, 800 pixels a side, a tile at a time in its
+idle time, and a worker reads it back and encodes it as WebP (about 80 to
+110 KB; `app/renderer/immersive/picture.ts`). The page sends it as
+`world.picture`, and the service keeps it with the recent world that page
+opened (`RecentWorld.picture`, a data URL), one write after another so it
+never races the visit; a world opened again keeps its last picture until
+the new one comes. The store reads only a WebP data URL of at most 256,000
+characters, and a world kept before pictures were, or whose page painted
+none, comes with no picture, which the start shows as plain paper with its
+name. A
 standalone page (`pnpm lab:html`, `pnpm lab:serve`) has no engine and opens
 on Gaia's own world from `app/renderer/terrain/fixtures/gaia.json`, a
 snapshot `pnpm snapshot` writes through the engine's `project.open`, judged

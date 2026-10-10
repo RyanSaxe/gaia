@@ -528,7 +528,7 @@ const TAKE_IN = { meters: 60, px: 36 };
 const WARM_STEP = 20;
 
 /** Runs `step` in the page's idle time, passing the milliseconds left there, until it returns true. */
-function whenIdle(step: (budget: number) => boolean): () => void {
+export function whenIdle(step: (budget: number) => boolean): () => void {
   let handle = 0;
   let stopped = false;
   const hasIdle = typeof window.requestIdleCallback === "function";
