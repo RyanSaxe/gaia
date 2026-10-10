@@ -445,6 +445,12 @@ repository's history. click's "move to src" commit keeps the lineage of all
 a step a month, keeps the lineage of 1,817 of the 1,823 definitions that
 still exist.
 
+The lineage record lives in the project's store, under the project's id:
+its repository's root commit, so a clone anywhere finds it. A folder
+inside a repository is a project of its own, named by the root commit and
+its place in the repository, so opening a subfolder never takes the whole
+repository's record or answers.
+
 The graph is built beside `project.open`, and nothing the world reads
 changes until the world moves onto it. Updating a world while its files
 change on disk comes last, once the world is right without it, because it
@@ -518,6 +524,17 @@ long file's every piece repeats the outline and the questions about the
 whole file. Screening spreads over every level on each of the bench's eight
 repositories, with no level holding more than 51% of a repository's
 definitions.
+
+The calibration set splits the bench by repository
+(`tools/bench/calibration/split.json`): wording is tuned on one half and
+measured on the other. `pnpm bench --calibrate` reports, for every question
+on the held-out half, how its answers spread over its levels and how far
+it overlaps lines and cognitive complexity. `gaia-engine mutate` makes good
+definitions worse in one way each, from what the query files mark:
+parameters renamed to single letters, a doc swapped for another
+function's, an error handler emptied. `pnpm bench --mutate` asks Jev about
+the original and mutant copies, and reports how often each mutation moved
+the question it targets and how far the others moved.
 
 ## Jev
 
