@@ -11,10 +11,13 @@ const repo = resolve(import.meta.dirname, "..");
 describe("the proving ground's code", () => {
   const dir = mkdtempSync(join(tmpdir(), "gaia-proving-"));
   execFileSync(resolve(repo, "node_modules/.bin/tsx"), ["tools/proving.ts", "--code", dir], { cwd: repo, stdio: "pipe" });
-  const manifest = JSON.parse(readFileSync(join(dir, "proving-manifest.json"), "utf8")) as ManifestEntry[];
+  const manifest = JSON.parse(readFileSync(`${dir}-manifest.json`, "utf8")) as ManifestEntry[];
   const files = (readdirSync(dir, { recursive: true }) as string[]).filter((f) => /\.(ts|rs)$/.test(f));
   const text = (path: string): string => readFileSync(join(dir, path), "utf8");
-  afterAll(() => rmSync(dir, { recursive: true, force: true }));
+  afterAll(() => {
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(`${dir}-manifest.json`, { force: true });
+  });
 
   it("is code the engine can read: every TypeScript file parses", () => {
     const broken = files

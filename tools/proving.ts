@@ -19,12 +19,15 @@
 // lab's test checks the baked world shows each feature.
 //
 // `--code DIR` writes the proving ground's code instead: real source for
-// every planned file, as poor as its health (tools/proving-code.ts), with
-// `proving-manifest.json` saying how each was written, so the engine's bench
-// can hold Jev's judgments to it. DIR must lie outside Gaia's own repository
-// or under a node_modules folder, which Gaia's own world never reads.
+// every planned file, as poor as its health (tools/proving-code.ts), and a
+// manifest saying how each was written, so the engine's bench can hold Jev's
+// judgments to it. The manifest goes beside DIR (`DIR-manifest.json`, or
+// `--manifest PATH`), never in it, where it would name every file and the
+// engine would take each for used. Both must lie outside Gaia's own
+// repository or under a node_modules folder, which Gaia's own world never
+// reads.
 //
-// Usage: pnpm proving [--code DIR]
+// Usage: pnpm proving [--code DIR [--manifest PATH]]
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, relative, resolve } from "node:path";
@@ -98,7 +101,7 @@ const PLAN: readonly PlannedDir[] = [
   { path: "downs/deep/deeper", health: "well", files: ["two.ts:140"] },
   { path: "downs/deep/deeper/deeper-still", health: "tired", files: ["three.ts:120"] },
   { path: "downs/deep/deeper/deeper-still/deepest", health: "failing", files: ["four.ts:110"] },
-  { path: "downs/deep/deeper/deeper-still/deepest/bottom", health: "ruin", files: ["five.ts:100"] },
+  { path: "downs/deep/deeper/deeper-still/deepest/bottom", health: "ruin", files: ["tmp2.ts:100"] },
   { path: "downs/tiny", health: "thriving", files: ["seed.ts:4"] },
   // Mixed: thriving files beside failing ones, one failing grove among them, and a tired mill and lantern.
   { path: "mixed", health: "thriving", files: ["main.ts:160", "sound.ts:520", "steady.ts:460", "failing-grove.ts:640:decayed", "patched.ts:420:tired", "mixed.test.ts:160"], land: ["Clover hills", "No water", "Deep wood"], entity: B("Watermill", "A pipeline with sound parts beside failing ones.", "package") },
@@ -108,11 +111,11 @@ const PLAN: readonly PlannedDir[] = [
   { path: "ruins", health: "ruin", files: ["index.ts:140", "collapse.ts:620", "rubble.ts:520", "ruins.test.ts:160", "README.md:120"], land: ["Brook valley", "A brook", "Deep wood"], entity: L("Great willow", "A whole area in ruin: failing tests, compiler errors and dead code throughout.") },
   { path: "ruins/cottage", health: "ruin", files: ["index.ts:110", "hearth.ts:300"], entity: B("Thatched cottage", "A cottage in ruin.") },
   { path: "ruins/croft", health: "ruin", files: ["Cargo.toml:30", "lib.rs:200", "forge.rs:340"], entity: B("Stone croft", "A croft in ruin.", "crate") },
-  { path: "ruins/house", health: "ruin", files: ["main.ts:150", "stair.ts:320"], entity: B("Storybook house", "An application in ruin.", "app") },
+  { path: "ruins/house", health: "ruin", files: ["main.ts:150", "utils2.ts:320"], entity: B("Storybook house", "An application in ruin.", "app") },
   { path: "ruins/mill", health: "ruin", files: ["package.json:30", "index.ts:140", "race.ts:360"], entity: B("Watermill", "A mill in ruin.", "package") },
   { path: "ruins/keep", health: "ruin", files: ["Cargo.toml:30", "lib.rs:200", "walls.rs:380"], entity: L("Battlemented keep", "A keep in ruin.", "crate") },
   { path: "ruins/lighthouse", health: "ruin", files: ["index.ts:110", "lens.ts:300"], entity: L("Lantern tower", "A lantern tower in ruin.") },
-  { path: "ruins/oak", health: "ruin", files: ["index.ts:110", "hollow.ts:300"], entity: L("Great oak", "A great oak in ruin.") },
+  { path: "ruins/oak", health: "ruin", files: ["index.ts:110", "temp.ts:300"], entity: L("Great oak", "A great oak in ruin.") },
   { path: "hollow/willow", health: "tired", files: ["index.ts:110", "fronds.ts:300"], entity: L("Great willow", "A great willow gone tired.") },
 ];
 
@@ -418,19 +421,23 @@ const astray = [...planned.filter((p) => !regions.includes(p)).map((p) => `${p |
 if (astray.length > 0) throw new Error(`The proving ground lays out differently from its plan: ${astray.join("; ")}.`);
 
 const repo = resolve(import.meta.dirname, "..");
-const codeDir = parseArgs({ options: { code: { type: "string" } } }).values.code;
-if (codeDir !== undefined) {
-  const dir = resolve(codeDir);
-  const inside = relative(repo, dir);
-  if (!inside.startsWith("..") && !inside.split("/").includes("node_modules")) throw new Error(`Write the proving ground's code outside Gaia's repository or under node_modules, or Gaia's own world reads it: ${dir}.`);
+const args = parseArgs({ options: { code: { type: "string" }, manifest: { type: "string" } } }).values;
+if (args.code !== undefined) {
+  const dir = resolve(args.code);
+  const manifestPath = resolve(args.manifest ?? `${dir}-manifest.json`);
+  for (const path of [dir, manifestPath]) {
+    const inside = relative(repo, path);
+    if (!inside.startsWith("..") && !inside.split("/").includes("node_modules")) throw new Error(`Write the proving ground's code and manifest outside Gaia's repository or under node_modules, or Gaia's own world reads them: ${path}.`);
+  }
+  if (!relative(dir, manifestPath).startsWith("..")) throw new Error(`Write the manifest beside the code, not in it, or the engine takes every file it names for used: ${manifestPath}.`);
   const { code, manifest } = provingCode(files.map((facts, i) => ({ facts, health: (drafted[i] as Drafted).health })));
   for (const [path, text] of code) {
     mkdirSync(dirname(resolve(dir, path)), { recursive: true });
     writeFileSync(resolve(dir, path), text);
   }
-  writeFileSync(resolve(dir, "proving-manifest.json"), `${JSON.stringify(manifest, null, 1)}\n`);
+  writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 1)}\n`);
   const lines = [...code.values()].reduce((n, text) => n + text.split("\n").length - 1, 0);
-  console.log(`proving: wrote ${code.size} files, ${lines.toLocaleString("en-US")} lines, and the manifest of ${manifest.length} source files to ${dir}`);
+  console.log(`proving: wrote ${code.size} files, ${lines.toLocaleString("en-US")} lines, to ${dir}, and the manifest of ${manifest.length} source files to ${manifestPath}`);
   process.exit(0);
 }
 const fixtures = resolve(repo, "app/renderer/terrain/fixtures");
