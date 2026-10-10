@@ -79,6 +79,6 @@ yes = "Yes: it holds behavior a test should check."
 no = "No: there is nothing here a test of its own would check."
 
 [dead]
-instructions = "Nothing in this repository imports or calls this file. Is it dead code, or is it used from outside the repository: a public API, an entry point, a script, a test, an example, configuration or documentation?"
-yes = "Dead: nothing uses it, inside the repository or out."
-no = "Used from outside, or not code that anything would import."
+instructions = "Nothing in this repository imports, calls or names this file. Is it dead: code nothing runs, inside the repository or out? A test or a test's fixture, an entry point, a script, an example, a plugin, a public API that code outside would call, and code a tool or framework loads by its path or name are not dead."
+yes = "Dead: no code, test, tool or person outside would ever run it."
+no = "Run some way: a test, a fixture, an entry point, a script, an example, a plugin, a public API, or loaded by a tool or framework."
