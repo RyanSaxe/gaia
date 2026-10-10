@@ -573,28 +573,66 @@ person walked before, a folder on this computer, and a line to write the
 address of a place on GitHub. Nothing on it is a box or a word of jargon:
 no "repository", "clone" or "Jev". An address that leads nowhere is
 answered beneath it in a sentence in the world's voice ("Nothing open lies
-at that address. It may be private, or spelled a little differently."), the
-written address fading a little while the line or arm settles. While an
-address is asked after, ink runs along its line, or its arm creaks. Two
-directions are built, chosen by `CHOSEN_START` in `start.ts` or
-`?start=table|signpost` (a standalone page shows it only when asked, with
-Gaia's own world as the one walked before):
+at that address. It may be private, or spelled a little differently."). The
+start does not say when a world was last walked. Two directions are built,
+chosen by `CHOSEN_START` in `start.ts` or `?start=table|signpost` (a
+standalone page shows it only when asked, with Gaia's own world as the one
+walked before, pictured by `start/gaia-picture.webp`):
 
-- **The traveller's map table** (shown): the field map's paper on a dark
-  wooden table, with Gaia's mark lettered at its corner. Each world walked
-  before is a small map sheet laid on the paper a little askew: the picture
-  of its own field map in health's colors that its page painted when it was
-  last opened (plain paper for a world with none yet), its name lettered
-  beneath in italic and where it lies in small capitals. At the paper's foot an ink line waits for an address, with "or
-  open a folder on this computer" beneath it. Choosing lifts a sheet; then
-  the table falls away and the paper fills the view as the wait's. After
-  dark the lantern lights the table.
+- **The map table in 3D** (shown; `table.ts`, `table-scene.ts`): a sheet
+  folded in four on an oak table, with the worlds' cards, a quill, an
+  inkwell and a brass lantern, all meshes lit by the world's own sun, sky,
+  moon and lantern at the hour (the clock in the app, `?hour=` in the lab),
+  with the light of "Meadow morning", since no world is open yet. The table
+  faces so the sun comes from behind it on the left and rakes across the
+  paper; after dark the moon lights the sheet blue and the lantern's candle
+  warms it. The paper is made in its shader rather than painted: a warm
+  cream with broad mottling, darker toward its rim, short fibres paler and
+  darker than the sheet, a few foxing spots, the creases of its folds and a
+  fine tooth; its edges are torn at three scales with loose fibres, paler
+  and lit through, and catch the sun where they face it. The sheet settles
+  into its folds and two corners curl. Wherever something touches the table
+  or the sheet, a soft shade gathers under it, and the sun's shadows fall
+  from the world's shadow map. Everything at the sheet's distance is sharp;
+  the table beyond it is out of focus. Gaia's logo is printed at the
+  sheet's head, with "the worlds you have walked" (or "where shall we
+  wander?") under it in italic.
+  - Each world walked before is a torn card laid on the sheet a little
+    askew, bowed, one corner lifted: the picture of its own field map in
+    health's colors that its page painted when it was last opened, or plain
+    paper with its name for a world with none yet. Its name is lettered
+    beneath in the map's spaced capitals, broken onto two lines at a hyphen,
+    dot or slash when it is long, with where it lies (who keeps it on
+    GitHub, or the folder it sits in) in italic over it. Up to six worlds lie
+    in rows between the words and the line, each as large as the room
+    allows (`table-layout.ts`): one takes a card of 28 cm, six on a desktop
+    still take 13 cm. On a phone the sheet stands upright on a deeper table,
+    the inkwell and lantern beyond it and the quill at its foot, and more
+    than three worlds lie in two rows.
+  - The address is written in ink on the line from a text field no one
+    sees. While Gaia asks after it, a darker stroke of ink runs along the
+    line; an address that leads nowhere is answered under the line in
+    red-brown ink, and "or open a folder on this computer", pencil
+    underlined, moves down to make room. The folder's words open the app's
+    folder dialog.
+  - A tap on a card chooses its world: the card lifts 4 cm and straightens
+    over half a second, its shadow sliding out from under it, then rises
+    toward the person over 1.3 s and turns to face them, leaving the table's
+    light. The eye follows it, so the table falls out of focus, and the
+    table fades into the wait's own paper beneath the page. The card ends
+    at the wait's sheet's size and place and dissolves into it, and the
+    wait paints the map from there.
+  - It draws a frame only when something changes: the light as the hour
+    turns, the ink on the line, a card moving. The sun's shadow map is drawn
+    again only when the light changes. Once it has given way to the wait it
+    stops and lets go of its renderer, textures and geometry.
 - **The world's edge**: standing where the land begins, at the hour it is,
   by a wooden signpost like the fingerposts in the world. Its arms are
   painted with the worlds walked before; one points "somewhere on this
-  computer"; one is bare wood to write an address on. Hills fall away into
-  haze behind it and a path sets out; after dark the stars are out, the
-  post's lantern is lit and a few fireflies drift.
+  computer"; one is bare wood to write an address on, which creaks while the
+  address is asked after. Hills fall away into haze behind it and a path
+  sets out; after dark the stars are out, the post's lantern is lit and a
+  few fireflies drift.
 
 ## One way to touch the world
 

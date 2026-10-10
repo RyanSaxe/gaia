@@ -7,6 +7,8 @@ import type { StartChoice, StartOffer } from "../../world-service/protocol.ts";
 export interface StartPage {
   /** Shows the offer (again, with why an address led nowhere); resolves with the place chosen. */
   offer(offer: StartOffer): Promise<StartChoice>;
+  /** The hour the world shows: the table is lit by it, while the signpost follows the veil's night. */
+  hour(h: number): void;
   /** The place is on its way: the page dissolves into the wait beneath it. */
   leave(): void;
 }

@@ -6,8 +6,15 @@
 // paper.
 
 import type { StartChoice, StartOffer } from "../../world-service/protocol.ts";
-import { hashOf } from "./paint.ts";
 import { REFUSALS, type StartPage, askFolder, placeOf } from "./choice.ts";
+
+/** A repeatable 0..1 from a word and a number. */
+function hashOf(word: string, k = 0): number {
+  let h = 2166136261 ^ k;
+  for (let i = 0; i < word.length; i++) h = Math.imul(h ^ word.charCodeAt(i), 16777619);
+  h = Math.imul(h ^ (h >>> 15), 2246822507);
+  return ((h ^ (h >>> 13)) >>> 0) / 4294967296;
+}
 
 /** The edge's painting: sky, sun and moon, hills in haze, the path setting out, and the grass at the person's feet. */
 const SCENE = /* svg */ `
@@ -176,6 +183,9 @@ export function createSignpost(veil: HTMLElement): StartPage {
       }
       requestAnimationFrame(() => root.classList.add("shown"));
       return new Promise((resolve) => (settle = resolve));
+    },
+    hour() {
+      // The edge's sky follows the veil's --night.
     },
     leave() {
       settle = null;

@@ -33,6 +33,8 @@ export interface WaitView {
   night(n: number): void;
   /** The world stands and has drawn: the wait gives way to it once all that stood is on the sheet, and resolves once the world shows. */
   lift(): Promise<void>;
+  /** Where the sheet lies on the page: a map chosen on the start ends there. */
+  sheet(): DOMRect;
 }
 
 export interface Wait extends WaitView {
