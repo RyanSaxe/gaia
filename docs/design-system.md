@@ -93,7 +93,9 @@ stalks.
 
 Bark faces outward and draws front faces only. A trunk is one tube from the
 ground to its fork, and each bough one tube from its joint to its tip, so
-the bark's ridges run unbroken past the joins. Where a trunk meets the
+the bark's ridges run unbroken past the joins. Where boughs leave the top
+of a trunk or limb, each starts as wide as its parent ends and narrows to
+its own width, so no light band shows at the fork. Where a trunk meets the
 ground it flares into three to five broad root lobes that sink into the
 soil, each sized and turned a little differently, curving in to the trunk
 within about two of its widths.
