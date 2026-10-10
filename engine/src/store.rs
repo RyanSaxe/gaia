@@ -14,7 +14,10 @@ use std::path::PathBuf;
 pub const TABLES: &[&str] = &[
     "answers",
     "blueprints",
+    "calls",
     "document",
+    "held",
+    "lineage",
     "placements",
     "settings",
 ];

@@ -9,3 +9,4 @@ export * from "./document.ts";
 export * from "./jev.ts";
 export * from "./hash.ts";
 export * from "./engine.ts";
+export * from "./graph.ts";

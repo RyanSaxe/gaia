@@ -11,6 +11,7 @@ the document that did not change renders exactly as it did before.
 | Data | Contents | Made by | Status |
 | --- | --- | --- | --- |
 | Code model | Per-path facts: language, size, symbols, imports, tests, git activity, diagnostics, content hash; and entities, with their files' facts summed | The Rust engine | Rebuilt from disk at any time |
+| Code graph | A node for every directory, file, definition and block, the edges between them, the engine's measures of each and Jev's judgments | The Rust engine, with Jev | Being built beside the code model; nothing reads it yet |
 | Vitality | A value from 0 to 1 per path and per entity, and the named signals behind it | A formula over the code model, plus named Jev signals | Recomputed live |
 | World document | Regions, blueprints, instances, links and the world's art direction, as typed JSON | The world service, from Jev answers and layout, plus the person's edits | The world's source of truth, stored per project |
 | Realized world | Meshes, terrain and material parameters | The realizer | A cache keyed by content hash |
@@ -33,7 +34,7 @@ never crosses, because the renderer builds it. `EngineMethods` in
 `project.open`, `project.locate` and `project.clone`, Jev's
 `jev.estimate`, `jev.status`, `jev.ask` and `jev.batch`, and the app-data
 store's `store.get`, `store.read` and `store.put`. The store (`engine/src/store.rs`) keeps one JSON file of tables
-per project, `<data>/projects/<project id>/store.json`, replaced through a
+(`StoreTable`) per project, `<data>/projects/<project id>/store.json`, replaced through a
 rename so it is never half-written; `<data>` is the app's user-data folder,
 which main passes as `GAIA_DATA_DIR`.
 
@@ -336,6 +337,29 @@ ground it grows on, read on the page from the ground's vitality field the
 grass beneath it reads (`understoryVitality` in `stand.ts`; see Vitality),
 and each file's finer entity its file's. The ground textures take a world of
 any size.
+
+## The code graph
+
+The engine is being rebuilt to read every language the same way
+([decision 53](decisions/53-the-code-graph.md)). What it produces is the
+code graph (`CodeGraph` in `packages/schema/src/graph.ts`), which
+`project.graph` returns:
+- a node for every directory, file, definition and block;
+- an edge for every link between them: contains, imports, calls,
+  references, inherits, implements, names, changes-with and checks;
+- the engine's measures of each node, and Jev's judgments of it.
+
+Each edge says who filled it: the parser, a rule, git, or Jev with its
+probability. A node's id comes from its path and name. Its lineage stays the
+same through renames and moves, and the world is to seed geometry from it.
+Three store tables hold Jev's side: `calls` keeps raw responses by request
+hash, `held` the answer the graph shows for each question by lineage, and
+`lineage` the last graph's lineage map and definition fingerprints.
+
+The graph is built beside `project.open`, and nothing the world reads
+changes until the world moves onto it. Updating a world while its files
+change on disk comes last, once the world is right without it, because it
+complicates nearly everything else.
 
 ## Jev
 
