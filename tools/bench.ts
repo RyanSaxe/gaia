@@ -7,6 +7,7 @@
 // Usage: pnpm bench [name …] [--out results.json]
 //        pnpm bench --replay name FROM TO [--monthly]
 //        GAIA_JEV=live pnpm bench --understand [name …] [--plan]
+//        pnpm bench --calibrate
 //
 // --understand asks Jev's calls about each repository through the engine's
 // runner, keeping answers in the bench's store, so a second run sends only
@@ -163,6 +164,83 @@ async function understandRepo(r: Repo, planOnly: boolean): Promise<void> {
   }
 }
 
+/** Ranks with ties averaged, for a rank correlation. */
+function ranks(xs: readonly number[]): number[] {
+  const order = xs.map((x, i) => [x, i] as const).sort((a, b) => a[0] - b[0]);
+  const out = new Array<number>(xs.length).fill(0);
+  for (let i = 0; i < order.length; ) {
+    let j = i;
+    while (j + 1 < order.length && order[j + 1]?.[0] === order[i]?.[0]) j++;
+    for (let k = i; k <= j; k++) out[order[k]?.[1] ?? 0] = (i + j) / 2;
+    i = j + 1;
+  }
+  return out;
+}
+function spearman(a: readonly number[], b: readonly number[]): number {
+  const ra = ranks(a);
+  const rb = ranks(b);
+  const mean = (v: number[]): number => v.reduce((x, y) => x + y, 0) / Math.max(1, v.length);
+  const ma = mean(ra);
+  const mb = mean(rb);
+  let num = 0;
+  let da = 0;
+  let db = 0;
+  for (let i = 0; i < ra.length; i++) {
+    num += ((ra[i] ?? 0) - ma) * ((rb[i] ?? 0) - mb);
+    da += ((ra[i] ?? 0) - ma) ** 2;
+    db += ((rb[i] ?? 0) - mb) ** 2;
+  }
+  return da === 0 || db === 0 ? 0 : num / Math.sqrt(da * db);
+}
+
+/**
+ * The calibration measures, from the answers the bench's store holds, on
+ * the held-out half of tools/bench/calibration/split.json (round 6,
+ * calibration page). Spread and overlap for stand; profile's kinds against
+ * each ecosystem's test conventions. Caught and bleed need the quality
+ * questions and their mutations, which come with step 4.
+ */
+async function calibrate(): Promise<void> {
+  const split = JSON.parse(readFileSync(resolve(repo, "tools/bench/calibration/split.json"), "utf8")) as { fit: string[]; heldOut: string[] };
+  const stands: number[] = [];
+  const lines: number[] = [];
+  let tests = 0;
+  let testsAgree = 0;
+  for (const name of split.heldOut) {
+    const r = repos.find((x) => x.name === name);
+    if (r === undefined) continue;
+    const { result: graph } = await call<CodeGraph>("project.graph", { root: await rootOf(r), judged: true });
+    const defs = graph.nodes.flatMap((n) => (n.kind === "def" && n.judged?.stand !== undefined ? [n] : []));
+    if (defs.length === 0) {
+      console.log(`${name}: no answers yet; run pnpm bench --understand ${name} first`);
+      continue;
+    }
+    const levels = [0, 0, 0, 0, 0];
+    for (const d of defs) {
+      const score = d.judged?.stand?.score ?? 0;
+      const level = Math.min(4, Math.max(0, Math.round(score)));
+      levels[level] = (levels[level] ?? 0) + 1;
+      stands.push(d.judged?.stand?.value ?? 0);
+      // Overlap is measured only on code that makes at least one decision, so trivial functions can't inflate it.
+      if ((d.measures.cyclomatic ?? 1) >= 2) lines.push(d.measures.lines);
+    }
+    const decided = defs.filter((d) => (d.measures.cyclomatic ?? 1) >= 2);
+    const overlap = spearman(decided.map((d) => d.judged?.stand?.score ?? 0), decided.map((d) => d.measures.lines));
+    const files = graph.nodes.flatMap((n) => (n.kind === "file" && n.judged?.kind !== undefined && n.conventions.some((c) => /test|spec/.test(c)) ? [n] : []));
+    const agree = files.filter((f) => ["test", "test support"].includes(f.judged?.kind?.choice ?? "")).length;
+    tests += files.length;
+    testsAgree += agree;
+    console.log(
+      `${name}: stand ${levels.join(" / ")}, largest ${Math.round((100 * Math.max(...levels)) / defs.length)}%, every level ${levels.every((n) => n > 0) ? "used" : "NOT used"}; ` +
+        `overlap with lines ${overlap.toFixed(2)} on ${decided.length} deciding definitions; test files judged tests ${agree} of ${files.length}`,
+    );
+  }
+  const sorted = [...stands].sort((a, b) => a - b);
+  const at = (q: number): number => sorted[Math.floor(q * (sorted.length - 1))] ?? 0;
+  console.log(`held out, stand's values: 10th percentile ${at(0.1).toFixed(2)}, 90th ${at(0.9).toFixed(2)}, apart ${(at(0.9) - at(0.1)).toFixed(2)} (to pass: 0.5)`);
+  console.log(`held out, files a test convention names that profile judged a test: ${testsAgree} of ${tests}`);
+}
+
 /** Replays a repository's history and reports what keeps its identity. */
 async function replay(r: Repo, from: string, to: string, monthly: boolean): Promise<void> {
   const root = await rootOf(r);
@@ -217,10 +295,12 @@ const names = args.filter((a, i) => !a.startsWith("--") && (outAt < 0 || i !== o
 const { repos } = JSON.parse(readFileSync(resolve(repo, "tools/bench/repos.json"), "utf8")) as { repos: Repo[] };
 const replayAt = args.indexOf("--replay");
 const understanding = args.includes("--understand");
+const calibrating = args.includes("--calibrate");
 const picked = names.length > 0 ? repos.filter((r) => names.includes(r.name)) : repos;
-const chosen = replayAt >= 0 || understanding ? [] : picked;
+const chosen = replayAt >= 0 || understanding || calibrating ? [] : picked;
 
 execFileSync("cargo", ["build", "-p", "gaia-engine", "--release", "--quiet"], { cwd: repo, env, stdio: "inherit" });
+if (calibrating) await calibrate();
 if (understanding) {
   for (const r of picked) await understandRepo(r, args.includes("--plan"));
 }
