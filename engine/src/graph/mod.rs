@@ -759,11 +759,11 @@ mod tests {
                 ),
                 (
                     "src/main.rs",
-                    "use crate::util::Tool;\n\nfn main() {\n    let t = Tool::new();\n    let s = format!(\"{}\", 1);\n}\n",
+                    "use crate::util::Tool;\n\nfn main() {\n    let t = Tool::new();\n    let s = format!(\"{}\", 1);\n    let v = Vec::new();\n    let p = std::path::Path::new(\"a\").join(\"b\");\n}\n",
                 ),
                 (
                     "src/util.rs",
-                    "pub struct Tool;\n\nimpl Tool {\n    pub fn new() -> Self {\n        Tool\n    }\n}\n\npub fn format(x: u8) -> u8 {\n    x\n}\n\n#[cfg(test)]\nmod tests {\n    use super::*;\n}\n",
+                    "pub struct Tool;\n\nimpl Tool {\n    pub fn new() -> Self {\n        Tool\n    }\n}\n\npub fn format(x: u8) -> u8 {\n    x\n}\n\npub fn join(x: u8) -> u8 {\n    x\n}\n\n#[cfg(test)]\nmod tests {\n    use super::*;\n\n    struct Probe;\n\n    impl Probe {\n        fn make() -> Self {\n            Probe\n        }\n    }\n\n    fn probe() {\n        let p = Probe::make();\n    }\n}\n",
                 ),
                 (
                     "pkg/sub/a.py",
@@ -849,6 +849,24 @@ mod tests {
                 .iter()
                 .any(|e| e.to == "def:src/util.rs#format" && e.kind == "calls")
         );
+        // A path that names nothing here leads outside, as `Vec::new` does;
+        // a call on a value reaches no free function, as `.join` doesn't;
+        // and an impl inside a module owns its methods.
+        assert!(
+            !g.pending
+                .iter()
+                .any(|p| p.text == "new" || p.text == "join")
+        );
+        assert!(
+            !g.edges
+                .iter()
+                .any(|e| e.to == "def:src/util.rs#join" && e.kind == "calls")
+        );
+        assert!(edge(
+            "def:src/util.rs#tests.probe",
+            "def:src/util.rs#tests.make",
+            "calls"
+        ));
         // A literal that spells out a path names it, from the key that holds it.
         assert!(edge("def:package.json#main", "file:src/a.ts", "names"));
         // Reach, calls out and near-duplicates follow from the edges.

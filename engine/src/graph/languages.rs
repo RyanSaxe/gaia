@@ -29,6 +29,8 @@ struct Entry {
     #[serde(default)]
     implicit_self: bool,
     #[serde(default)]
+    functions_as_values: bool,
+    #[serde(default)]
     inline: Option<InlineEntry>,
     #[serde(default)]
     conventions: Vec<ConventionEntry>,
@@ -91,6 +93,9 @@ pub struct Spec {
     pub data: bool,
     /// An unqualified call can reach the caller's own class's methods.
     pub implicit_self: bool,
+    /// A call on a value can reach a function that belongs to no class, as
+    /// a JavaScript object's own functions do.
+    pub functions_as_values: bool,
     inline: Option<InlineEntry>,
     convention_tags: Vec<String>,
     conventions: GlobSet,
@@ -151,6 +156,7 @@ pub fn table() -> &'static BTreeMap<String, Spec> {
                     relative: e.relative,
                     data: e.data,
                     implicit_self: e.implicit_self,
+                    functions_as_values: e.functions_as_values,
                     inline: e.inline,
                     convention_tags: e.conventions.into_iter().map(|c| c.tag).collect(),
                     conventions: globs.build().expect("the conventions build"),
