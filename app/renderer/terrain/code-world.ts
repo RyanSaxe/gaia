@@ -19,6 +19,7 @@ import { type CodeWorld, type Judge, type Judgments, judgeWorld, judgedThing, ke
 import type { ConsentPlan, Opening, StartChoice, StartOffer, WorldDocument } from "../../world-service/protocol.ts";
 import { type WorldService, worldService } from "../service.ts";
 import GAIA_PICTURE from "../start/gaia-picture.webp";
+import { CHOSEN_MS } from "../start/start.ts";
 import snapshot from "./fixtures/gaia.json";
 import kept from "./fixtures/gaia-jev.json";
 import proving from "./fixtures/proving.json";
@@ -185,6 +186,8 @@ async function previewStart(veil: Veil): Promise<void> {
   let place = await veil.choose({ recent });
   while ("address" in place) place = await veil.choose({ recent, refused: { address: place.address, why: "offline" } });
   veil.opening({ stage: "reading", root: model.repository.name });
+  // Laying out the snapshot holds the page, so the chosen map rises into the wait's sheet first.
+  await new Promise((resolve) => setTimeout(resolve, CHOSEN_MS));
 }
 
 /** A codebase's world: judged, laid out and ready to bake. */

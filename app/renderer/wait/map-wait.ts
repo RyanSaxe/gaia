@@ -636,5 +636,6 @@ export function createMapWait(veil: HTMLElement): WaitView {
       // Nothing of the wait keeps animating, or holds its canvases, under the world.
       veil.replaceChildren();
     },
+    sheet: () => sheetEl.getBoundingClientRect(),
   };
 }

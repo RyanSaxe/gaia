@@ -1750,6 +1750,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   function frame(dt: number, now: number, at: number): void {
     if (holding > 0) return;
     if (at !== hour) applyHour(at);
+    veil.hour(at);
     // The wait follows the hour as the world will.
     const night = Math.round(light.uNightness.value * 20) / 20;
     if (night !== waitNight) veil.night((waitNight = night));

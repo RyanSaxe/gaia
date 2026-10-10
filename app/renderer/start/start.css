@@ -11,104 +11,18 @@
 :where(.start) button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
 :where(.start) input { font: inherit; color: inherit; background: none; border: 0; outline: none; padding: 0; }
 
-/* ---------- the traveller's map table ---------- */
-/* The table: dark, warm wood with a long grain, read by daylight or the lantern. */
-.table-wood {
-  position: absolute; inset: 0;
-  background:
-    repeating-linear-gradient(91deg, rgba(30, 16, 6, 0) 0 22px, rgba(30, 16, 6, 0.12) 23px 24px, rgba(30, 16, 6, 0) 25px 61px, rgba(255, 220, 170, 0.05) 62px 64px, rgba(30, 16, 6, 0) 65px 97px),
-    repeating-linear-gradient(89.4deg, rgba(20, 10, 4, 0) 0 140px, rgba(20, 10, 4, 0.16) 141px 146px, rgba(20, 10, 4, 0) 147px 260px),
-    radial-gradient(ellipse 90% 80% at 50% 50%, #7a5638, #4f3420 70%, #3a2616);
-  filter: brightness(calc(1 - var(--night, 0) * 0.55)) saturate(calc(1 - var(--night, 0) * 0.3));
-}
-.table-sheet {
-  position: absolute; left: 4.5vw; right: 4.5vw; top: 4.5vh; bottom: 5vh; rotate: -0.5deg;
-  filter: drop-shadow(0 10px 18px rgba(20, 10, 2, 0.45)) sepia(calc(var(--night, 0) * 0.35)) brightness(calc(1 - var(--night, 0) * 0.3));
-  transition: transform 1.3s cubic-bezier(0.3, 0, 0.2, 1), rotate 1.3s cubic-bezier(0.3, 0, 0.2, 1);
-}
-/* The same paper the wait paints on, creased where it folds. */
-.sheet-paper {
-  position: absolute; inset: 0;
-  background:
-    linear-gradient(90deg, transparent calc(50% - 1px), rgba(110, 84, 50, 0.1) 50%, transparent calc(50% + 1.5px)),
-    linear-gradient(0deg, transparent calc(50% - 1px), rgba(110, 84, 50, 0.08) 50%, transparent calc(50% + 1.5px)),
-    radial-gradient(ellipse 80% 70% at 50% 46%, #f1e7cd, #e4d5b2);
-}
-.sheet-paper::after { content: ""; position: absolute; inset: 0; background: radial-gradient(ellipse 120% 110% at 50% 50%, transparent 60%, rgba(120, 88, 48, 0.16)); }
-/* Leaning in: the table falls away and the sheet fills the view, as the wait's own paper. */
-.start-table.leaving .table-sheet { transform: scale(1.14); rotate: 0deg; }
-.start-table.leaving .table-wood { opacity: 0; transition: opacity 0.9s ease; }
-
-.sheet-mark { position: absolute; left: 4.2%; top: 5.5%; width: clamp(96px, 11vw, 150px); height: auto; }
-.sheet-say {
-  position: absolute; left: 4.4%; top: calc(5.5% + clamp(62px, 7vw, 92px)); margin: 0;
-  font-style: italic; font-size: clamp(15px, 1.5vw, 19px); color: var(--ink-soft); letter-spacing: 0.02em;
-}
-
-/* The worlds walked before: small painted map sheets laid on the paper, a little askew, each lettered beneath. */
-.sheet-cards {
-  position: absolute; left: 6%; right: 6%; top: 25%; margin: 0; padding: 0; list-style: none;
-  display: flex; flex-wrap: wrap; justify-content: center; gap: clamp(14px, 2.6vw, 40px) clamp(18px, 3.4vw, 52px);
-}
-.postcard {
-  display: flex; flex-direction: column; align-items: center; width: clamp(128px, 13.5vw, 184px);
-  transform: translateY(var(--lift, 0)) rotate(var(--tilt, 0deg));
-  transition: transform 0.45s cubic-bezier(0.2, 0.7, 0.3, 1), opacity 0.6s ease;
-  animation: card-laid 0.9s cubic-bezier(0.2, 0.7, 0.3, 1) both; animation-delay: calc(var(--i, 0) * 90ms + 0.25s);
-}
-@keyframes card-laid { from { opacity: 0; translate: 0 10px; } to { opacity: 1; translate: 0 0; } }
-.postcard-sheet {
-  display: block; width: 100%; aspect-ratio: 1; position: relative;
-  background: radial-gradient(ellipse at 40% 35%, #f7efd9, #ebdcb8);
-  filter: drop-shadow(0 3px 4px rgba(60, 40, 18, 0.28));
-  transition: filter 0.45s ease;
-}
-.postcard-sheet img { position: absolute; inset: 0; width: 100%; height: 100%; }
-.postcard-name { margin-top: 10px; font-style: italic; font-size: clamp(17px, 1.6vw, 21px); line-height: 1.1; text-align: center; overflow-wrap: anywhere; }
-.postcard-where { margin-top: 3px; font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; font-variant: small-caps; color: var(--ink-soft); text-align: center; }
-.postcard:hover, .postcard:focus-visible { transform: translateY(calc(var(--lift, 0px) - 5px)) rotate(calc(var(--tilt, 0deg) * 0.5)); outline: none; }
-.postcard:hover .postcard-sheet, .postcard:focus-visible .postcard-sheet { filter: drop-shadow(0 9px 10px rgba(60, 40, 18, 0.3)); }
-/* Choosing one lifts it off the paper; the others settle back. */
-.start-table.choosing .postcard:not(.chosen) { opacity: 0.35; }
-.postcard.chosen { transform: translateY(calc(var(--lift, 0px) - 12px)) rotate(0deg) scale(1.06); }
-
-/* The line to write an address on, lettered like the map, with the folder's way beneath it. */
-.sheet-line { position: absolute; left: 50%; bottom: 9%; width: min(560px, 74%); transform: translateX(-50%); text-align: center; }
-.start-table.empty .sheet-line { bottom: 38%; }
-.line-say { display: block; font-style: italic; font-size: clamp(15px, 1.45vw, 18px); color: var(--ink-soft); margin-bottom: 4px; }
-.line-row { position: relative; display: block; }
-.line-row input {
-  display: block; width: 100%; padding: 4px 6px 6px; text-align: center;
-  font-size: clamp(20px, 2vw, 26px); font-style: italic; color: var(--ink); caret-color: var(--vermilion);
-  transition: color 0.6s ease;
-}
-.line-row input::placeholder { color: rgba(122, 108, 86, 0.45); }
-.line-ink { position: absolute; left: 0; right: 0; bottom: 0; width: 100%; height: 8px; overflow: visible; }
-.line-ink path { fill: none; stroke: rgba(74, 60, 44, 0.55); stroke-width: 1.4; stroke-linecap: round; vector-effect: non-scaling-stroke; stroke-dasharray: 1 0; }
-/* While the address is read, ink runs along the line. */
-.line-row.reading .line-ink path { stroke: rgba(74, 60, 44, 0.75); stroke-dasharray: 0.3 0.7; animation: ink-run 1.1s linear infinite; }
-@keyframes ink-run { to { stroke-dashoffset: -1; } }
-.line-answer {
-  min-height: 1.4em; margin: 10px auto 0; max-width: 34em; font-style: italic; font-size: clamp(14px, 1.3vw, 16px); color: #8a4a2c;
-  opacity: 0; transform: translateY(-3px); transition: opacity 0.7s ease, transform 0.7s ease;
-}
-.start.refused .line-answer, .start.refused .edge-answer { opacity: 1; transform: none; }
-.start-table.refused .line-row input { color: rgba(74, 60, 44, 0.6); }
-.start-table.refused .line-row { animation: line-settle 0.8s ease; }
-@keyframes line-settle { 0% { transform: none; } 25% { transform: rotate(-0.6deg); } 55% { transform: rotate(0.35deg); } 100% { transform: none; } }
-.line-folder { margin-top: 12px; font-style: italic; font-size: clamp(14px, 1.3vw, 16px); color: var(--ink-soft); border-bottom: 1px dotted rgba(122, 108, 86, 0.5); padding-bottom: 1px; transition: color 0.3s ease; }
-.line-folder:hover, .line-folder:focus-visible { color: var(--ink); outline: none; }
-
-/* After dark the lantern lights the table from low on the right, warm, and its edges fall into blue. */
-.table-lantern { position: absolute; inset: 0; pointer-events: none; opacity: var(--night, 0); }
-.table-lantern::after {
-  content: ""; position: absolute; inset: 0;
-  background:
-    radial-gradient(ellipse 52% 48% at 60% 62%, rgba(255, 190, 100, 0.34), rgba(255, 206, 140, 0.12) 58%, rgba(255, 214, 160, 0) 100%),
-    radial-gradient(ellipse 80% 76% at 56% 58%, rgba(18, 22, 52, 0) 34%, rgba(16, 22, 56, 0.5) 72%, rgba(10, 14, 40, 0.82) 100%);
-  animation: table-lantern 4.6s ease-in-out infinite alternate;
-}
-@keyframes table-lantern { from { opacity: 0.84; } to { opacity: 1; } }
+/* ---------- the traveller's map table, in 3D (table.ts) ---------- */
+/* The canvas fills the page; over it lie only clear hit areas for the cards, the line and the folder's words. Once a
+   card is chosen, the table fades into the wait's paper in the canvas itself and the card, risen into the wait's
+   sheet, dissolves into it here. */
+.table-view { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.start-table.leaving { transition: opacity 0.9s cubic-bezier(0.3, 0, 0.2, 1); }
+.table-hits { position: absolute; inset: 0; }
+.table-card, .table-line, .table-folder { position: absolute; left: 0; top: 0; margin: 0; opacity: 0; }
+.start-table.choosing .table-hits { pointer-events: none; }
+/* The address is typed into a field no one sees; the ink on the line shows it. */
+.table-line input { display: block; width: 100%; height: 100%; font-size: 16px; color: transparent; caret-color: transparent; }
+.table-unseen { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
 /* ---------- the world's edge ---------- */
 .start-signpost { --n: calc(var(--night, 0) * 100%); background: #1b2236; }
@@ -189,6 +103,7 @@ button.arm-west:hover { transform: rotate(calc(var(--tilt, 0deg) * 0.4)) transla
   text-shadow: 0 0 1px rgba(30, 22, 10, 0.7), 0 1px 2px rgba(30, 22, 10, 0.55), 0 0 10px rgba(30, 22, 10, 0.4), 0 0 26px rgba(30, 22, 10, 0.3);
   opacity: 0; transform: translateY(-3px); transition: opacity 0.7s ease, transform 0.7s ease;
 }
+.start-signpost.refused .edge-answer { opacity: 1; transform: none; }
 .edge-flies { position: absolute; inset: 0; pointer-events: none; opacity: var(--night, 0); }
 .edge-flies span {
   position: absolute; left: var(--x); top: var(--y); width: 4px; height: 4px; border-radius: 50%;
