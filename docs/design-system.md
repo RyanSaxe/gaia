@@ -971,17 +971,20 @@ The three ways work together:
 
 ## Gaia's mark
 
-Gaia introduces itself with its own mark (`app/renderer/brand/`): a
-lowercase "gaia" (`logo.svg`) and a mark alone for the page's icon
-(`mark.svg`). The letters are cut from wood like the fingerpost arms, in a
-calligraphic serif (Alegreya Black). The "ai" is freshly painted moss green
-over the grain; on the outer "g" and "a" the paint has flaked away and the
-wood has greyed and split, the way an arm weathers with its area. The i's
-dot is a leaf on a twig, and the icon is an end-grain round with the leaf.
-The letters are outlines from an open-licence typeface; the SVG files are
-the source, and nothing redraws the mark in code. Every file is plain
-paths, with no filters, gradients or IDs, so it inlines any number of times
-and stays sharp at 16 px. The mark heads the slip and the start.
+Gaia introduces itself with its own mark (`app/renderer/brand/`). Where it
+is shown large, at the head of the start's sheet and of the slip the
+compass opens, it is the reviewer's logo: a lowercase "gaia" in rounded
+stone letters, the "ai" grown over with moss and leaves and the outer "g"
+and "a" cracked and weathered, the way an area greys as its health falls.
+It is a picture, not shapes, so it ships as WebP at the sizes it is shown
+at on a 2x screen and no larger: 264 px wide for the slip's 132, and 640 px
+for the start's sheet. On the slip it is multiplied into the paper, so its
+pale stone takes the paper's tone, and the lantern's after dark, instead of
+sitting on the flat paper like a cut-out; on the start it is printed into
+the lit sheet, so the table's light falls on it with the paper's. Wherever
+the mark is drawn small, as the window's icon, it is the flat round mark
+(`mark.svg`): an end-grain round with a leaf, plain paths that stay sharp
+at 16 px, where the logo's stone and moss would blur.
 
 ## Trails
 

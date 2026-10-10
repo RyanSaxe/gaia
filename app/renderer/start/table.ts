@@ -5,7 +5,7 @@
 // becomes the wait's.
 
 import type { StartChoice, StartOffer } from "../../world-service/protocol.ts";
-import { LOGO_SVG } from "../brand/logo.ts";
+import { SHEET_LOGO } from "../brand/logo.ts";
 import { FILTERS, deckle, hashOf } from "./paint.ts";
 import { REFUSALS, type StartPage, askFolder, placeOf } from "./choice.ts";
 
@@ -23,7 +23,7 @@ export function createTable(veil: HTMLElement): StartPage {
     <div class="table-wood"></div>
     <div class="table-sheet">
       <div class="sheet-paper"></div>
-      <div class="sheet-mark" aria-label="Gaia">${LOGO_SVG}</div>
+      <img class="sheet-mark" src="${SHEET_LOGO}" alt="Gaia">
       <p class="sheet-say">the worlds you have walked</p>
       <ol class="sheet-cards"></ol>
       <form class="sheet-line" autocomplete="off">

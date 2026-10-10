@@ -470,8 +470,9 @@ details.json pre { font: 11px/1.45 ui-monospace, "SF Mono", Menlo, monospace; ba
   box-shadow: 0 14px 36px rgba(30, 22, 10, 0.28); opacity: 0; transform: translateY(-6px); transition: opacity 0.2s ease, transform 0.2s ease;
 }
 .way-slip.open { opacity: 1; transform: none; pointer-events: auto; }
-.slip-mark { width: 132px; margin: 2px auto 0; }
-.slip-mark svg { display: block; width: 100%; height: auto; }
+/* Gaia's logo, printed on the slip: multiplied into the paper, so its pale stone takes the paper's tone and the
+   lantern's at night, rather than sitting on it like a cut-out. */
+.slip-mark { display: block; width: 132px; height: auto; margin: 2px auto 0; mix-blend-mode: multiply; }
 .slip-world { text-align: center; font-size: 13px; color: var(--ink-soft); margin: 2px 0 12px; }
 .slip-world i { color: var(--ink); font-size: 14.5px; font-weight: 600; }
 .slip-head { font-size: 10px; font-weight: 600; letter-spacing: 0.24em; text-transform: uppercase; color: var(--ink-soft); margin: 2px 6px 6px; padding-top: 10px; border-top: 1px solid var(--paper-line); }
