@@ -348,13 +348,21 @@ export interface Clump {
  */
 export const CLUMP_TRIANGLE_BUDGET = 24_000;
 
-/** Each leaf's spray cut, and its sprays' size: a few broad maple leaves fill a larger spray than many small ovals. */
+/**
+ * Each leaf's spray cut, and its sprays' size: a few broad maple leaves fill
+ * a larger spray than many small ovals. A crown's sprays are full: the
+ * family's leaves crowded around a short stalk, nearly all leaf, so fewer
+ * layers of them fill a crown.
+ */
 const SPRAY_CUTS = {
-  pointed: { cut: CUT.cluster, card: 1 },
-  oval: { cut: CUT.oval, card: 0.95 },
-  lobed: { cut: CUT.lobed, card: 1.12 },
-  blossom: { cut: CUT.umbels, card: 1.12 },
+  pointed: { cut: CUT.crowdedPointed, card: 1 },
+  oval: { cut: CUT.crowded, card: 0.95 },
+  lobed: { cut: CUT.crowdedLobed, card: 1.12 },
+  blossom: { cut: CUT.crowdedUmbels, card: 1.12 },
 } as const;
+
+/** A crown's share of the sparse sprays along each twig: full sprays fill a clump with fewer, and every twig keeps the spray at its tip. */
+const CROWN_SHARE = 0.34;
 
 /**
  * Clumps of leaves where a canopy's mass is: one at every tip and, for a
@@ -409,7 +417,7 @@ export function buildLeafClumps(p: Resolved<typeof leafClumpsParams>, ctx: Build
   const spray = SPRAY_CUTS[p.leaf];
   // Leaves keep near their own size on a great tree: its sprays grow only with the root of its scale,
   // so each covers s times the area and its clumps need 1/s as many twigs per square meter.
-  const look: ClumpLook = { twigs: 15 / Math.max(1, s), sprays: 8, half: 0.25 * spray.card * (s <= 1 ? s : Math.sqrt(s)), cut: spray.cut, shape: p.shape, ground: 0 };
+  const look: ClumpLook = { twigs: 15 / Math.max(1, s), sprays: 8 * CROWN_SHARE, half: 0.25 * spray.card * (s <= 1 ? s : Math.sqrt(s)), cut: spray.cut, shape: p.shape, ground: 0 };
   // Every clump stays, so the crown keeps its shape; a crown over budget thins all its twigs evenly.
   let density = 1;
   const triangles = (): number => clumps.reduce((n, c) => n + twigsOf(look, c.radius, density) * TRIANGLES_PER_TWIG, 0);
@@ -441,7 +449,11 @@ export interface ClumpLook {
   readonly ground: number;
 }
 
-/** Each twig is a three-sided tube in two segments and a fork in one, with its sprays: 12 + 6 + 2 per spray. */
+/**
+ * Each twig is a three-sided tube in two segments and a fork in one, with
+ * its sprays: 12 + 6 + 2 per spray, counted at a full twig's twelve sprays,
+ * so a crown of fewer full sprays stays well inside its budget.
+ */
 const TRIANGLES_PER_TWIG = 18 + 2 * 12;
 const twigsOf = (look: ClumpLook, radius: number, density: number): number => Math.max(4, Math.round(look.twigs * radius * radius * density));
 
