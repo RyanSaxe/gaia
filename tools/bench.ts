@@ -212,42 +212,71 @@ function spearman(a: readonly number[], b: readonly number[]): number {
  */
 async function calibrate(): Promise<void> {
   const split = JSON.parse(readFileSync(resolve(repo, "tools/bench/calibration/split.json"), "utf8")) as { fit: string[]; heldOut: string[] };
-  const stands: number[] = [];
-  const lines: number[] = [];
+  type Seen = { score: number; value: number; lines?: number; cognitive?: number };
+  const scores = new Map<string, Seen[]>();
+  const choices = new Map<string, Map<string, number>>();
+  const yesNo = new Map<string, number[]>();
   let tests = 0;
   let testsAgree = 0;
   for (const name of split.heldOut) {
     const r = repos.find((x) => x.name === name);
     if (r === undefined) continue;
     const { result: graph } = await call<CodeGraph>("project.graph", { root: await rootOf(r), judged: true });
-    const defs = graph.nodes.flatMap((n) => (n.kind === "def" && n.judged?.stand !== undefined ? [n] : []));
-    if (defs.length === 0) {
+    if (!graph.nodes.some((n) => n.judged !== undefined)) {
       console.log(`${name}: no answers yet; run pnpm bench --understand ${name} first`);
       continue;
     }
-    const levels = [0, 0, 0, 0, 0];
-    for (const d of defs) {
-      const score = d.judged?.stand?.score ?? 0;
-      const level = Math.min(4, Math.max(0, Math.round(score)));
-      levels[level] = (levels[level] ?? 0) + 1;
-      stands.push(d.judged?.stand?.value ?? 0);
+    for (const n of graph.nodes) {
       // Overlap is measured only on code that makes at least one decision, so trivial functions can't inflate it.
-      if ((d.measures.cyclomatic ?? 1) >= 2) lines.push(d.measures.lines);
+      const deciding = (n.kind === "def" || n.kind === "block") && (n.measures.cyclomatic ?? 1) >= 2;
+      const visit = (question: string, a: unknown): void => {
+        if (typeof a !== "object" || a === null) return;
+        const o = a as Record<string, unknown>;
+        if (typeof o.score === "number" && typeof o.value === "number") {
+          const seen: Seen = { score: o.score, value: o.value, ...(deciding ? { lines: n.measures.lines, cognitive: n.measures.cognitive ?? 0 } : {}) };
+          scores.set(question, [...(scores.get(question) ?? []), seen]);
+        } else if (typeof o.choice === "string") {
+          const c = choices.get(question) ?? new Map<string, number>();
+          c.set(o.choice, (c.get(o.choice) ?? 0) + 1);
+          choices.set(question, c);
+        } else if (typeof o.p === "number" && typeof o.call === "string") {
+          yesNo.set(question, [...(yesNo.get(question) ?? []), o.p]);
+        } else {
+          for (const [k, v] of Object.entries(o)) visit(`${question}.${k}`, v);
+        }
+      };
+      for (const [k, v] of Object.entries(n.judged ?? {})) visit(`${n.kind}.${k}`, v);
     }
-    const decided = defs.filter((d) => (d.measures.cyclomatic ?? 1) >= 2);
-    const overlap = spearman(decided.map((d) => d.judged?.stand?.score ?? 0), decided.map((d) => d.measures.lines));
     const files = graph.nodes.flatMap((n) => (n.kind === "file" && n.judged?.kind !== undefined && n.conventions.some((c) => /test|spec/.test(c)) ? [n] : []));
-    const agree = files.filter((f) => ["test", "test support"].includes(f.judged?.kind?.choice ?? "")).length;
     tests += files.length;
-    testsAgree += agree;
-    console.log(
-      `${name}: stand ${levels.join(" / ")}, largest ${Math.round((100 * Math.max(...levels)) / defs.length)}%, every level ${levels.every((n) => n > 0) ? "used" : "NOT used"}; ` +
-        `overlap with lines ${overlap.toFixed(2)} on ${decided.length} deciding definitions; test files judged tests ${agree} of ${files.length}`,
-    );
+    testsAgree += files.filter((f) => ["test", "test support"].includes(f.judged?.kind?.choice ?? "")).length;
   }
-  const sorted = [...stands].sort((a, b) => a - b);
-  const at = (q: number): number => sorted[Math.floor(q * (sorted.length - 1))] ?? 0;
-  console.log(`held out, stand's values: 10th percentile ${at(0.1).toFixed(2)}, 90th ${at(0.9).toFixed(2)}, apart ${(at(0.9) - at(0.1)).toFixed(2)} (to pass: 0.5)`);
+  const pct = (n: number, of: number): string => `${Math.round((100 * n) / Math.max(1, of))}%`;
+  console.log(`held out (${split.heldOut.join(", ")}); to pass: no level over 60%, every level used, values' 10th to 90th percentiles 0.5 apart, overlap under 0.8`);
+  for (const [question, seen] of [...scores].sort(([a], [b]) => a.localeCompare(b))) {
+    // The number of levels, from any answer whose value is above zero: value = score / top.
+    const top = Math.round(Math.max(...seen.map((x) => (x.value > 0 ? x.score / x.value : 0))));
+    const levels = Array.from({ length: top + 1 }, (_, l) => seen.filter((x) => Math.round(x.score) === l).length);
+    const largest = Math.max(...levels) / seen.length;
+    const values = seen.map((x) => x.value).sort((a, b) => a - b);
+    const at = (q: number): number => values[Math.floor(q * (values.length - 1))] ?? 0;
+    const apart = at(0.9) - at(0.1);
+    const measured = seen.filter((x) => x.lines !== undefined);
+    const overlap =
+      measured.length >= 20
+        ? `; overlap with lines ${spearman(measured.map((x) => x.score), measured.map((x) => x.lines ?? 0)).toFixed(2)}, cognitive ${spearman(measured.map((x) => x.score), measured.map((x) => x.cognitive ?? 0)).toFixed(2)} on ${measured.length}`
+        : "";
+    const fails = [largest > 0.6 && "a level over 60%", levels.some((l) => l === 0) && "a level unused", apart < 0.5 && "percentiles close"].filter(Boolean);
+    console.log(`  ${question}: ${seen.length} answers, ${levels.map((l) => pct(l, seen.length)).join(" / ")}; percentiles ${apart.toFixed(2)} apart${overlap}; ${fails.length === 0 ? "passes spread" : `fails: ${fails.join(", ")}`}`);
+  }
+  for (const [question, c] of [...choices].sort(([a], [b]) => a.localeCompare(b))) {
+    const total = [...c.values()].reduce((a, b) => a + b, 0);
+    const [first, n] = [...c].sort((a, b) => b[1] - a[1])[0] ?? ["", 0];
+    console.log(`  ${question}: ${total} answers over ${c.size} options, the most "${first}" at ${pct(n, total)}`);
+  }
+  for (const [question, ps] of [...yesNo].sort(([a], [b]) => a.localeCompare(b))) {
+    console.log(`  ${question}: ${ps.length} answers, yes in ${pct(ps.filter((p) => p >= 0.5).length, ps.length)}`);
+  }
   console.log(`held out, files a test convention names that profile judged a test: ${testsAgree} of ${tests}`);
 }
 
