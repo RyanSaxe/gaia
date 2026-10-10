@@ -31,6 +31,8 @@ describe("the proving ground's code", () => {
     const questions = ["naming", "doc", "readability", "errors", "change", "cohesion"] as const;
     for (const e of manifest) {
       const code = text(e.path);
+      expect(e.vitality, e.path).toBeGreaterThanOrEqual(0);
+      expect(e.vitality, e.path).toBeLessThanOrEqual(1);
       if (e.health === "thriving") {
         // A thriving file has nothing for a question to find.
         for (const q of questions) expect(e[q], `${e.path} ${q}`).toBe("good");

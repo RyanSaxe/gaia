@@ -12,10 +12,11 @@ import type { FileFacts, SymbolFact } from "@gaia/schema";
 
 export type Health = "thriving" | "well" | "tired" | "failing" | "ruin" | "decayed";
 
-/** A planned file: its facts, as the proving ground's code model holds them, and its health. */
+/** A planned file: its facts, as the proving ground's code model holds them, its health, and the vitality its patch has in the proving ground's world. */
 export interface PlannedFile {
   readonly facts: FileFacts;
   readonly health: Health;
+  readonly vitality: number;
 }
 
 /** What a question should find in a file: the engine's own question names. */
@@ -24,6 +25,9 @@ export type Level = "good" | "fair" | "poor";
 /** How one file was written, keyed by the engine's question names. */
 export interface ManifestEntry {
   readonly path: string;
+  /** The vitality the file's patch has in the proving ground's world, 0 to 1: what a page shows (decision 43). */
+  readonly vitality: number;
+  /** The plan's word for how the file fares, which picks how it is written; a page never shows it. */
   readonly health: Health;
   readonly planned: number;
   readonly lines: number;
@@ -368,7 +372,7 @@ function documented(s: SymbolFact, recipe: Recipe | undefined, w: Words, spoil: 
   return text === "" ? [] : [`/** ${text} */`];
 }
 
-function writeTypeScript(file: PlannedFile, importable: ReadonlyMap<string, FileFacts>): { text: string; entry: Omit<ManifestEntry, "path" | "health" | "planned" | "lines" | "dead"> } {
+function writeTypeScript(file: PlannedFile, importable: ReadonlyMap<string, FileFacts>): { text: string; entry: Omit<ManifestEntry, "path" | "vitality" | "health" | "planned" | "lines" | "dead"> } {
   const f = file.facts;
   const spoil = SPOIL[file.health];
   const r = streamOf(f.path);
@@ -556,7 +560,7 @@ const RUST: Readonly<Record<string, { readonly doc: string; readonly lines: (nam
   carry: { doc: "The total rate the readings carry.", lines: (n, r) => [`pub fn ${n}(readings: &[${r}]) -> f64 {`, `    readings.iter().map(|reading| reading.rate).sum()`, `}`] },
 };
 
-function writeRust(file: PlannedFile, crateFiles: readonly PlannedFile[]): { text: string; entry: Omit<ManifestEntry, "path" | "health" | "planned" | "lines" | "dead"> } {
+function writeRust(file: PlannedFile, crateFiles: readonly PlannedFile[]): { text: string; entry: Omit<ManifestEntry, "path" | "vitality" | "health" | "planned" | "lines" | "dead"> } {
   const f = file.facts;
   const spoil = SPOIL[file.health];
   const r = streamOf(f.path);
@@ -685,7 +689,7 @@ export function provingCode(files: readonly PlannedFile[]): { code: Map<string, 
     const f = file.facts;
     const dead = f.kind === "source" && f.importedBy.every((by) => facts.get(by)?.kind === "test");
     let text: string;
-    let entry: Omit<ManifestEntry, "path" | "health" | "planned" | "lines" | "dead"> | null = null;
+    let entry: Omit<ManifestEntry, "path" | "vitality" | "health" | "planned" | "lines" | "dead"> | null = null;
     if (f.kind === "test") text = writeTest(file, facts, health);
     else if (f.path.endsWith(".ts")) ({ text, entry } = writeTypeScript(file, facts));
     else if (f.path.endsWith(".rs")) {
@@ -693,7 +697,7 @@ export function provingCode(files: readonly PlannedFile[]): { code: Map<string, 
       ({ text, entry } = writeRust(file, files.filter((o) => o.facts.path.split("/").slice(0, -1).join("/") === dir)));
     } else text = writeOther(file);
     code.set(f.path, text);
-    if (entry !== null) manifest.push({ path: f.path, health: file.health, planned: f.lines, lines: text.split("\n").length - 1, ...entry, dead });
+    if (entry !== null) manifest.push({ path: f.path, vitality: Math.round(file.vitality * 100) / 100, health: file.health, planned: f.lines, lines: text.split("\n").length - 1, ...entry, dead });
   }
   return { code, manifest };
 }
