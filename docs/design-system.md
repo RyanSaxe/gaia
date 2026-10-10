@@ -664,7 +664,7 @@ landmarks wear their health in their marks: roofs dry and rot, smoke stops,
 a tower's top falls and a ring's stones lie down, as they do in the world.
 The colors read as the world's own seasons, so the map carries no legend.
 The wait paints the same washes (`wash.ts`), each file's health as it
-settles.
+settles, and letters every area's name where the map letters it.
 
 Past the land the paper stays unwashed, because the wild stands for no code
 and color means health, and ink draws the wild as an old survey
@@ -904,16 +904,37 @@ The three ways work together:
   narrow edge of paper softening their letters. A name another area shares
   carries just enough of its path above it, in small italic, to tell it
   apart ("world" above SRC where another SRC sits elsewhere; `nameTails`),
-  worked out from the folder names alone. Where the
+  worked out from the folder names alone. Every area with ground of its
+  own is lettered, and in the place the wait lettered it: both sheets
+  place the names once for the whole sheet with `placeNames`
+  (`map-names.ts`), from the areas' outlines and the lots where buildings
+  and landmarks will stand, never from where the person stands. A name
+  sits on its area's widest ground and never covers another name. It keeps
+  off the compass rose's corner and off every building's and landmark's
+  mark, keeping clear of all the ground any mark could take round its lot,
+  since the wait letters names before it knows what will stand there.
+  Where its own spot is taken it tries spots along its own slant and on
+  every side of the mark in its way, then the same a little smaller, and
+  only as a last resort sits over a mark, edged in paper as names are over
+  trees. The smallest areas are lettered first, since they have the least
+  room; a name whose own ground is hemmed in by others stands just beside
+  it, and beside its own building or landmark when that is in the way.
+  Where the
   person stands, a small traveller in a vermilion cloak and a straw hat
   stands on the map on their own soft shadow, their last few footprints
   behind them along the way they look, the file underfoot lettered beside
-  them; after dark their lantern glows. A compass rose is inked in the
+  them, the traveller and the file standing over the names, which never
+  move for them; after dark their lantern glows. A compass rose is inked in the
   lower right corner, and a tap on the rose finds the traveller.
   After dark the sheet is read by the lantern: a warm pool low on the
   right, its edges falling into blue. Areas and patches are drawn from the
-  outlines `outlinesOf` traces, never from a fixed shape. Names stay one size at any
-  zoom and the larger area's name wins where two would collide. It pans
+  outlines `outlinesOf` traces, never from a fixed shape. Names move with
+  the land as the map pans and zooms and stay one size as it comes close;
+  only a view that shows the land smaller than the whole sheet, opened from
+  the wild, letters them smaller. As the map comes to its next level down,
+  a name that stood off its own ground on the whole sheet fades across to
+  its place there, where the land has room for it, as the files' names
+  fade in. It pans
   and zooms by drag, pinch or scroll; a phone opens it close around the
   person, a wide screen shows it whole. Close in, past 2.4 times the whole
   sheet's zoom, the map shows its next level down: each file's patch in

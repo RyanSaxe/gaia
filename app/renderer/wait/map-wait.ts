@@ -20,11 +20,13 @@
 // here redraws per frame and a busy page thread never stalls the sheet.
 
 import type { Outline } from "@gaia/terrain";
+import type { LotPlace } from "@gaia/world";
 import type { FilePatch } from "../../world-service/protocol.ts";
 import type { StoodWorld } from "../terrain/lab.ts";
-import { type AreaLabel, MARGIN, NUDGES, drawRivers, drawTrails, drawTrees, labelsOf, letterName, markScale, nameBox, nameSizeFor, nearestAreas, paintRelief, strokeContours } from "../immersive/field-map.ts";
+import { MARGIN, drawRivers, drawTrails, drawTrees, letterName, nearestAreas, paintRelief, strokeContours } from "../immersive/field-map.ts";
+import { CELL, type NameLand, canvasMeasure, nameLand, placeNames } from "../immersive/map-names.ts";
 import { DECKLE_MASK, MAP_STYLE, dryness, healthColor, landWash } from "../immersive/map-styles.ts";
-import { stampBuilding, stampLandmark } from "../immersive/marks.ts";
+import { markScale, stampBuilding, stampLandmark } from "../immersive/marks.ts";
 import { PAPER, type WashArea, type WashSheet, easeRing, fadeMask, floatWash, layWash, ringsPath } from "../immersive/wash.ts";
 import { layGround } from "../immersive/wild-ink.ts";
 import { type CellBox, type SettlingHealth, settlingHealth } from "./settling.ts";
@@ -37,8 +39,6 @@ import type { WaitView } from "./wait.ts";
  * start after the first; and the moment after the last thing arrived before the paper folds away, and the fold.
  */
 const PACE = { penMs: 1300, penSpreadMs: 2100, washMs: 1400, nameMs: 900, nameGapMs: 120, markMs: 700, markGapMs: [200, 600], marksMs: 5000, reliefMs: 1400, reliefGapMs: 300, restMs: 300, foldMs: 1100 } as const;
-/** The land's cells, meters a side, as the field map samples them. */
-const CELL = 5;
 /** Paper pixels round a change that are painted again with it: as far as its wash bleeds, and a cell for the smoothing of its cells. */
 const AROUND = 40;
 /** The most a run of idle work may take, ms, and how much of an idle slot it leaves. */
@@ -47,43 +47,10 @@ const SPARE_MS = 2;
 
 const STYLE = MAP_STYLE;
 const SVG = "http://www.w3.org/2000/svg";
-const parentOf = (path: string): string => (path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "");
 const wait = (ms: number): Promise<void> => new Promise((r) => window.setTimeout(r, ms));
 const frame = (): Promise<void> => new Promise((r) => requestAnimationFrame(() => r()));
 /** Shows `el` by its CSS transition: a frame after it joins the page, so it starts from nothing. */
 const show = (el: Element): void => void requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add("shown")));
-
-/**
- * Marks with `id` the cells (`n` a side, `CELL` meters, from (-reach, -reach)) whose middles lie inside `rings`,
- * even-odd, so a ring inside another cuts it out: a row at a time, between each pair of the rings' crossings.
- */
-function fillCells(cells: Int16Array, n: number, reach: number, rings: readonly (readonly number[])[], id: number): void {
-  const rows: number[][] = Array.from({ length: n }, () => []);
-  const row = (z: number): number => (z + reach) / CELL - 0.5;
-  for (const ring of rings) {
-    const count = ring.length / 2;
-    for (let k = 0; k < count; k++) {
-      const ax = ring[k * 2] as number;
-      const az = ring[k * 2 + 1] as number;
-      const bx = ring[((k + 1) % count) * 2] as number;
-      const bz = ring[((k + 1) % count) * 2 + 1] as number;
-      const [ra, rb] = [row(az), row(bz)];
-      // The rows whose middles this edge crosses, each counted once where two edges meet.
-      for (let j = Math.max(0, Math.ceil(Math.min(ra, rb))); j <= Math.min(n - 1, Math.ceil(Math.max(ra, rb)) - 1); j++) {
-        const t = (j - ra) / (rb - ra);
-        (rows[j] as number[]).push(ax + (bx - ax) * t);
-      }
-    }
-  }
-  for (const [j, xs] of rows.entries()) {
-    xs.sort((a, b) => a - b);
-    for (let q = 0; q + 1 < xs.length; q += 2) {
-      const i0 = Math.max(0, Math.ceil(((xs[q] as number) + reach) / CELL - 0.5));
-      const i1 = Math.min(n - 1, Math.ceil(((xs[q + 1] as number) + reach) / CELL - 0.5) - 1);
-      for (let i = i0; i <= i1; i++) cells[j * n + i] = id;
-    }
-  }
-}
 
 /** A ring of x, z pairs with every other point. */
 function thin(ring: readonly number[]): number[] {
@@ -223,7 +190,7 @@ export function createMapWait(veil: HTMLElement): WaitView {
   let reliefShown: Promise<void> = Promise.resolve();
 
   // ---------- the land is divided ----------
-  function divide(size: number, outlines: readonly Outline[], patches: readonly FilePatch[]): void {
+  function divide(size: number, outlines: readonly Outline[], patches: readonly FilePatch[], lots: readonly LotPlace[]): void {
     const reach = size / 2 + MARGIN;
     const half = size / 2;
     layPaper(reach);
@@ -277,26 +244,10 @@ export function createMapWait(veil: HTMLElement): WaitView {
           show(sheetEl);
           yield;
 
-          // Each cell's area: its own ground, rastered from the outlines with its subdirectories cut out, and past
-          // the areas the nearest one, as the field map samples the land.
-          const n = Math.ceil((reach * 2) / CELL);
-          // The outlines as traced, not eased, so neighbors share their edges exactly and no sliver between them
-          // reads as an area's own ground.
-          const at = new Int16Array(n * n).fill(-1);
-          for (const [i, o] of outlines.entries()) {
-            const holes = outlines.flatMap((c) => (c.depth === o.depth + 1 && parentOf(c.path) === o.path ? c.rings : []));
-            fillCells(at, n, reach, [...o.rings, ...holes], i);
-            if (i % 4 === 3) yield;
-          }
-          // A cell whose middle the tracing put on the far side of a border, its area's alone among its neighbors,
-          // goes to most of them, so no sliver reads as an area's own ground.
-          for (let c = 0; c < n * n; c++) {
-            const i = c % n;
-            const around = [i > 0 ? at[c - 1] : undefined, i < n - 1 ? at[c + 1] : undefined, at[c - n], at[c + n]].filter((k): k is number => k !== undefined);
-            if (around.includes(at[c] as number)) continue;
-            const most = around.reduce((best, k) => (around.filter((q) => q === k).length > around.filter((q) => q === best).length ? k : best), around[0] ?? -1);
-            at[c] = most;
-          }
+          // Each cell's area, from the outlines as traced (`nameLand`, as the field map rasters them for its names), and
+          // past the areas the nearest one, as the field map samples the land.
+          const named = yield* nameLand(outlines, size, reach, lots);
+          const { at, n } = named;
           const nearest = nearestAreas(at, n);
           yield;
           const fade = yield* fadeMask(STYLE);
@@ -337,11 +288,9 @@ export function createMapWait(veil: HTMLElement): WaitView {
           show(hedges);
           yield;
 
-          // Every name's place, worked out once as the map places them on its whole sheet, the largest area's
-          // first, so a name lettered later never moves one lettered before it.
-          const labels = labelsOf(at, n, CELL, reach, outlines.map((o) => ({ path: o.path, depth: o.depth, name: o.path.slice(o.path.lastIndexOf("/") + 1) })));
-          yield;
-          land.names = yield* placeNames(labels, at, n, reach);
+          // Every name's place, worked out once as the field map places them on its whole sheet, the same size as this
+          // one, so a name lettered later never moves one lettered before it.
+          land.names = yield* letterNames(named);
           for (const path of [...land.names.keys()].filter((p) => namesWaiting.has(p))) letter(path);
           namesWaiting.clear();
           if (marksWaiting !== null) drawMarks(marksWaiting);
@@ -352,36 +301,22 @@ export function createMapWait(veil: HTMLElement): WaitView {
     );
   }
 
-  /** Each area's name lettered on its own canvas where it goes, waiting to be shown: names keep off each other, wholly on the sheet and on their own ground. */
-  function* placeNames(labels: readonly AreaLabel<{ readonly path: string; readonly depth: number; readonly name: string }>[], at: Int16Array, n: number, reach: number): Generator<void, Map<string, HTMLElement>> {
+  /**
+   * Each area's name lettered on its own canvas where `placeNames` puts it, the place the field map letters it in,
+   * waiting to be shown: no name is left out, none covers another, and each keeps off the marks to come and the
+   * rose's corner.
+   */
+  function* letterNames(named: NameLand): Generator<void, Map<string, HTMLElement>> {
     const out = new Map<string, HTMLElement>();
-    const zoom = side / (reach * 2);
-    const sx = (x: number): number => (x + reach) * zoom;
-    const wx = (x: number): number => x / zoom - reach;
-    const areaAt = (x: number, z: number): number => {
-      const i = Math.floor((x + reach) / CELL);
-      const j = Math.floor((z + reach) / CELL);
-      return i < 0 || j < 0 || i >= n || j >= n ? -1 : (at[j * n + i] as number);
-    };
-    const half = reach - MARGIN;
-    const taken: [number, number, number, number][] = [];
-    const free = (x0: number, y0: number, x1: number, y1: number): boolean => taken.every(([a, b, c, d]) => x1 < a || x0 > c || y1 < b || y0 > d);
-    const measure = document.createElement("canvas").getContext("2d") as CanvasRenderingContext2D;
-    const nameSize = nameSizeFor(side);
-    for (const l of [...labels].sort((a, b) => b.cells - a.cells)) {
-      // The repository's root is the whole sheet, and it is not lettered.
-      if (l.area.depth === 0) continue;
-      const boxAt = nameBox(measure, l, nameSize);
-      const onLand = ([x0, y0, x1, y1]: [number, number, number, number]): boolean =>
-        areaAt(wx((x0 + x1) / 2), wx((y0 + y1) / 2)) === l.index && [x0, x1].every((x) => [y0, y1].every((y) => wx(x) ** 4 + wx(y) ** 4 < half ** 4));
-      const fits = (box: [number, number, number, number]): boolean => box[0] > 4 && box[1] > 4 && box[2] < side - 4 && box[3] < side - 4 && free(...box) && onLand(box);
-      const spot = NUDGES.map(([dx, dy]) => [sx(l.x) + dx, sx(l.z) + dy] as const).find(([cx, cy]) => fits(boxAt(cx, cy)));
-      if (spot === undefined) continue;
-      taken.push(boxAt(...spot));
+    const placing = yield* placeNames(named, side, canvasMeasure(document.createElement("canvas").getContext("2d") as CanvasRenderingContext2D));
+    const zoom = side / (named.reach * 2);
+    // A sheet smaller than names are placed for letters them smaller, as the field map does.
+    const shrink = Math.min(1, zoom / placing.scale);
+    for (const p of placing.places) {
       // The lettering on its own canvas, level, turned by its wrapper to the way the area runs and written along it.
       const pad = 6;
-      const w = boxAt.halfW * 2 + pad * 2;
-      const h = boxAt.top + 12 + pad * 2;
+      const w = p.halfW * 2 + pad * 2;
+      const h = p.top + 12 + pad * 2;
       const canvas = document.createElement("canvas");
       canvas.width = Math.ceil(w * dpr);
       canvas.height = Math.ceil(h * dpr);
@@ -389,20 +324,20 @@ export function createMapWait(veil: HTMLElement): WaitView {
       canvas.style.height = `${h}px`;
       const c = canvas.getContext("2d") as CanvasRenderingContext2D;
       c.setTransform(dpr, 0, 0, dpr, 0, 0);
-      letterName(c, { ...l, angle: 0 }, w / 2, boxAt.top + pad, nameSize, STYLE);
+      letterName(c, { ...p.label, angle: 0 }, w / 2, p.top + pad, p.size, STYLE);
       const el = document.createElement("div");
       el.className = "wait-name";
-      el.style.left = placed(spot[0], -w / 2);
-      el.style.top = placed(spot[1], -boxAt.top - pad);
+      el.style.left = placed((p.x + named.reach) * zoom, -w / 2);
+      el.style.top = placed((p.z + named.reach) * zoom, -p.top - pad);
       el.style.width = `${w}px`;
       el.style.height = `${h}px`;
-      el.style.transformOrigin = `${w / 2}px ${boxAt.top + pad}px`;
-      el.style.transform = `rotate(${l.angle.toFixed(4)}rad)`;
+      el.style.transformOrigin = `${w / 2}px ${p.top + pad}px`;
+      el.style.transform = `rotate(${p.label.angle.toFixed(4)}rad)${shrink < 1 ? ` scale(${shrink.toFixed(4)})` : ""}`;
       const slide = document.createElement("div");
       slide.className = "wait-reveal";
       slide.append(canvas);
       el.append(slide);
-      out.set(l.area.path, el);
+      out.set(p.label.area.path, el);
       yield;
     }
     return out;
@@ -673,7 +608,7 @@ export function createMapWait(veil: HTMLElement): WaitView {
 
   return {
     opening(o) {
-      if (o.stage === "land") divide(o.size, o.areas, o.patches);
+      if (o.stage === "land") divide(o.size, o.areas, o.patches, o.lots);
       else if (o.stage === "health") settle(o.vitality);
       else if (o.stage === "asking") for (const path of Object.keys(o.settled)) letter(path);
     },

@@ -44,7 +44,7 @@ const GLASS = "#3f3a36";
 /** The dark inside a broken roof or wall. */
 const HOLLOW = "rgba(44,34,25,0.86)";
 
-/** Units a meter on a building's mark: a unit is the map's MARK_METERS of land, so close in a building stands at the land's own size. */
+/** Units a meter on a building's mark: a unit is `MARK_METERS` of land, so close in a building stands at the land's own size. */
 const K = 1.5;
 /** Units a meter on a landmark's mark, a little under the land's own size, so a soaring tower stays a mark. */
 const LK = 1.15;
@@ -2326,6 +2326,17 @@ function greatWillow(pen: Pen, look: Look, f: number, age: number, seed: number)
 
 /** A box in pixels: left, top, right, bottom. */
 export type MarkBox = [number, number, number, number];
+
+/** How a mark grows with the land close in: its scale per pixel a meter, about a building's width over its drawing's. */
+const MARK_METERS = 0.67;
+/** A mark's scale at `zoom` pixels a meter: a legible size on the whole sheet, growing with the land as the map comes close, as the trees do. */
+export const markScale = (zoom: number, grow: number): number => Math.max(1.1 * grow, MARK_METERS * zoom);
+/**
+ * How far any mark reaches from its foot, units, its ink included: the widest range and the tallest tower and its
+ * smoke. The sheets keep names off this much round every lot before they know what will stand there, so a contract
+ * test holds every building and landmark to it.
+ */
+export const MARK_REACH = { left: 22, right: 24, up: 37, down: 11 } as const;
 
 /**
  * Draws a building at (x, y), the middle of its footprint on the ground there, at `s` pixels a unit, worn by

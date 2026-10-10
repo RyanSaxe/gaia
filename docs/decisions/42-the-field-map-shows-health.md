@@ -50,3 +50,5 @@ Refined by [45](45-the-wild-is-inked-as-a-survey.md): past the land the wild is 
 Its marks are drawn from each building's and landmark's blueprint since [decision 47](47-each-mark-is-drawn-from-its-blueprint.md).
 
 The wait paints this map as the world opens since [decision 49](49-the-wait-paints-todays-map.md).
+
+Every area is lettered, in the place the wait letters it, since [decision 50](50-every-area-s-name-in-the-same-place.md).

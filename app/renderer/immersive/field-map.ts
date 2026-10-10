@@ -28,8 +28,8 @@ import { onTap } from "../lab.ts";
 import type { StoodWorld } from "../terrain/lab.ts";
 import { DECKLE_MASK, MAP_STYLE, type MapStyle, TRAVELLER_SVG, dryness, healthColor, healthField, landWash } from "./map-styles.ts";
 import { chained, contour, isoline, simplified } from "./isolines.ts";
-import { nameTails } from "./map-names.ts";
-import { stampBuilding, stampLandmark } from "./marks.ts";
+import { type AreaLabel, type Box, CELL, type NameLand, type NamePlace, type NamePlaces, PARENT_FONT, ROSE, SERIF, canvasMeasure, nameFont, nameLand, nameSpacing, placeNames } from "./map-names.ts";
+import { markScale, stampBuilding, stampLandmark } from "./marks.ts";
 import { PAPER, type WashArea, type WashSheet, easeRing, fadeMask, floatWash, layWash, paintAt, rimPath, ringsPath } from "./wash.ts";
 import { INK, type LandView, RIM, type WildInk, createWildInk, layGround, reliefAt } from "./wild-ink.ts";
 
@@ -97,13 +97,8 @@ export const MARGIN = 0;
 const AREA_CELL = 5;
 const HILL_CELL = 5;
 const WATER_CELL = 2.5;
-/** Where an area's name may step to, in pixels, when its own spot is taken. */
-export const NUDGES: readonly (readonly [number, number])[] = [[0, 0], [0, 26], [0, -26], [34, 10], [-34, 10], [0, 48], [0, -48], [56, 0], [-56, 0], [40, 36], [-40, 36], [40, -36], [-40, -36]];
 /** The paper is painted in steps of a millisecond or two, as many as fit in the page's idle time with this much to spare, ms. */
 const SPARE_MS = 2;
-const SERIF = `"Iowan Old Style", Georgia, "Times New Roman", serif`;
-/** The folders lettered above a name that repeats. */
-const PARENT_FONT = `italic 600 10px ${SERIF}`;
 
 const hash = (x: number, z: number): number => {
   const s = Math.sin(x * 127.1 + z * 311.7) * 43758.5453;
@@ -117,30 +112,14 @@ const mixRgb = (a: string, b: string, t: number): [number, number, number] => {
   return [ch(16), ch(8), ch(0)];
 };
 
-/** Where an area's name is lettered on the sheet. */
-export interface AreaLabel<A = PlaceArea> {
-  readonly area: A;
-  readonly index: number;
-  /** The box its ground spans, meters: a tap on its name brings the map round to it. */
-  readonly bounds: readonly [number, number, number, number];
-  /** Where its name is written: the area's widest ground. */
-  readonly x: number;
-  readonly z: number;
-  readonly cells: number;
-  /** The way the area runs, radians from east toward south: its name is lettered along it. */
-  readonly angle: number;
-  /** The folders lettered above its name, when another area shares the name (`nameTails`); otherwise empty. */
-  readonly above: string;
-}
-
 export interface Paper {
   readonly canvas: HTMLCanvasElement;
   readonly reach: number;
   readonly style: MapStyle;
-  /** Where to write each area's name: its heart, how much land it holds, and the way it runs. */
-  readonly areaLabels: readonly AreaLabel[];
-  /** Which area's own ground holds a point, by its index in `areaLabels`, or -1: where a nudged name may go. */
-  readonly areaAt: (x: number, z: number) => number;
+  /** The land as the sheets letter it (`nameLand`): where each area's name goes when nothing is in the way, its heart, and the lots its names keep off. */
+  readonly names: NameLand;
+  /** The area whose own ground holds a point, as the names see the land, or undefined past it. */
+  readonly labelAt: (x: number, z: number) => AreaLabel | undefined;
   /** Every directory's vitality, its subdirectories' included, by its path; "" is the whole world's. */
   readonly vitality: ReadonlyMap<string, number>;
   /**
@@ -153,27 +132,6 @@ export interface Paper {
   readonly patches: readonly { readonly path: Path2D; readonly x: number; readonly z: number; readonly radius: number; readonly name: string; readonly area: string }[];
   /** The wild past the land, in ink, drawn wherever the paint is not. */
   readonly wild: WildInk;
-}
-
-/**
- * The way a patch of ground runs, from the sums of its cells' positions: its
- * long axis kept within a gentle slant so a name along it reads upright
- * (radians from east toward south, none for a round patch), and its length.
- */
-function axisOf(s: { readonly x: number; readonly z: number; readonly xx: number; readonly zz: number; readonly xz: number; readonly cells: number }): { angle: number; length: number } {
-  const mx = s.x / s.cells;
-  const mz = s.z / s.cells;
-  const vx = s.xx / s.cells - mx * mx;
-  const vz = s.zz / s.cells - mz * mz;
-  const vxz = s.xz / s.cells - mx * mz;
-  const spread = Math.sqrt(((vx - vz) / 2) ** 2 + vxz * vxz);
-  const long = (vx + vz) / 2 + spread;
-  const short = Math.max(1e-6, (vx + vz) / 2 - spread);
-  let angle = 0.5 * Math.atan2(2 * vxz, vx - vz);
-  if (angle > Math.PI / 2) angle -= Math.PI;
-  if (angle < -Math.PI / 2) angle += Math.PI;
-  const elongated = Math.max(0, Math.min(1, (Math.sqrt(long / short) - 1.3) / 1.2));
-  return { angle: Math.max(-0.42, Math.min(0.42, angle)) * elongated, length: Math.sqrt(long) * 3.4 };
 }
 
 /**
@@ -340,16 +298,19 @@ function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place
   }
   yield;
 
-  const areaLabels = labelsOf(at, n, AREA_CELL, reach, areas);
-  const areaAt = (x: number, z: number): number => {
-    const i = Math.floor((x + reach) / AREA_CELL);
-    const j = Math.floor((z + reach) / AREA_CELL);
-    return i < 0 || j < 0 || i >= n || j >= n ? -1 : (at[j * n + i] as number);
+  // Where each area's name goes, from the outlines as traced and the lots where buildings and landmarks stand, as
+  // the wait works it out from the same land before anything stands.
+  const names = yield* nameLand(traced.areas, size, reach, stood.lots);
+  const labelOf = new Map(names.labels.map((l) => [l.index, l]));
+  const labelAt = (x: number, z: number): AreaLabel | undefined => {
+    const i = Math.floor((x + reach) / CELL);
+    const j = Math.floor((z + reach) / CELL);
+    return i < 0 || j < 0 || i >= names.n || j >= names.n ? undefined : labelOf.get(names.at[j * names.n + i] as number);
   };
   const borders = outlines.areas.filter((o) => o.depth > 0).map((o) => ({ path: meterPath(o.rings), depth: o.depth }));
   // Past the paint, the wild is inked as views need it, where the paint gives way to bare paper.
   const wild = createWildInk(t, style, reach, fade);
-  return { canvas, reach, style, areaLabels, areaAt, vitality, patches, contours, borders, wild };
+  return { canvas, reach, style, names, labelAt, vitality, patches, contours, borders, wild };
 }
 
 /** For each cell, the area nearest it: its own (`at`, -1 where none), or past them the nearest cell's area. */
@@ -367,76 +328,6 @@ export function nearestAreas(at: Int16Array, n: number): Int16Array {
     }
   }
   return nearest;
-}
-
-/**
- * Where each area's name is lettered, from a raster of the land: `at` names the area whose own ground holds each of
- * its cells (`n` a side, `cell` meters, from the sheet's corner `reach` meters out) by its index in `areas`, or -1.
- * A name sits on the cell of its area's own ground farthest from its edges, nearest its middle among equals, so it
- * never sits on its rim or past the land's edge, and runs the way its area runs.
- */
-export function labelsOf<A extends { readonly path: string; readonly depth: number }>(at: Int16Array, n: number, cell: number, reach: number, areas: readonly A[]): AreaLabel<A>[] {
-  const sums = areas.map(() => ({ x: 0, z: 0, xx: 0, zz: 0, xz: 0, cells: 0, i0: n, i1: -1, j0: n, j1: -1 }));
-  for (let j = 0; j < n; j++) {
-    for (let i = 0; i < n; i++) {
-      const s = sums[at[j * n + i] as number];
-      if (s === undefined) continue;
-      const x = -reach + (i + 0.5) * cell;
-      const z = -reach + (j + 0.5) * cell;
-      s.x += x;
-      s.z += z;
-      s.xx += x * x;
-      s.zz += z * z;
-      s.xz += x * z;
-      s.cells += 1;
-      s.i0 = Math.min(s.i0, i);
-      s.i1 = Math.max(s.i1, i);
-      s.j0 = Math.min(s.j0, j);
-      s.j1 = Math.max(s.j1, j);
-    }
-  }
-  // How far each cell lies from its area's edge, in cells, uncapped: a name goes where its area is widest.
-  const deep = new Float32Array(n * n).fill(n);
-  for (let j = 0; j < n; j++) {
-    for (let i = 0; i < n; i++) {
-      const c = j * n + i;
-      const k = at[c];
-      if (i === 0 || j === 0 || i === n - 1 || j === n - 1 || at[c - 1] !== k || at[c + 1] !== k || at[c - n] !== k || at[c + n] !== k) deep[c] = 0;
-    }
-  }
-  for (let c = 0; c < n * n; c++) {
-    if (c % n > 0) deep[c] = Math.min(deep[c] as number, (deep[c - 1] as number) + 1);
-    if (c >= n) deep[c] = Math.min(deep[c] as number, (deep[c - n] as number) + 1);
-  }
-  for (let c = n * n - 1; c >= 0; c--) {
-    if (c % n < n - 1) deep[c] = Math.min(deep[c] as number, (deep[c + 1] as number) + 1);
-    if (c < n * n - n) deep[c] = Math.min(deep[c] as number, (deep[c + n] as number) + 1);
-  }
-  const tails = nameTails(areas.filter((a) => a.depth > 0).map((a) => a.path));
-  return areas.flatMap((area, k): AreaLabel<A>[] => {
-    const s = sums[k] as (typeof sums)[number];
-    if (s.cells === 0) return [];
-    const mx = s.x / s.cells;
-    const mz = s.z / s.cells;
-    let x = mx;
-    let z = mz;
-    let best = -Infinity;
-    for (let j = s.j0; j <= s.j1; j++) {
-      for (let i = s.i0; i <= s.i1; i++) {
-        if (at[j * n + i] !== k) continue;
-        const cx = -reach + (i + 0.5) * cell;
-        const cz = -reach + (j + 0.5) * cell;
-        const score = (deep[j * n + i] as number) - Math.hypot(cx - mx, cz - mz) / (cell * 40);
-        if (score > best) {
-          best = score;
-          x = cx;
-          z = cz;
-        }
-      }
-    }
-    const edge = (i: number): number => -reach + i * cell;
-    return [{ area, index: k, bounds: [edge(s.i0), edge(s.j0), edge(s.i1 + 1), edge(s.j1 + 1)], x, z, cells: s.cells, angle: axisOf(s).angle, above: tails.get(area.path) ?? "" }];
-  });
 }
 
 /**
@@ -620,10 +511,10 @@ function meterPath(rings: readonly (readonly number[])[]): Path2D {
 
 /** How long a tap on the map waits for a second press (a double tap zooms instead), ms. */
 const PICK_WAIT_MS = 240;
-/** The compass rose's middle, from the sheet's lower right corner, and how far round it a tap finds you, pixels. */
-const ROSE = { right: 46, bottom: 62, reach: 30 };
 /** How close the map comes, as a multiple of the whole sheet's zoom, before each file's patch and name are drawn. */
 export const CLOSE = 2.4;
+/** How much the marks, trees and ways grow as the map comes this close, as a multiple of the whole sheet's zoom: a little, and never shrinking below legible. */
+const growAt = (near: number): number => Math.min(1.6, Math.max(1, Math.sqrt(near) * 0.85));
 /** The map opening out of the minimap and folding back into it, and gliding to an area whose name was tapped, ms. */
 const UNFOLD_MS = 640;
 const FOLD_MS = 360;
@@ -659,8 +550,6 @@ const TREE_TONES = 8;
 const TREE_GREEN: readonly [number, number, number] = [95, 148, 71];
 /** The linework's widths in pixels at every zoom: a contour, an index contour, an area's border and its hedgerow. */
 const LINE = { contour: 0.85, index: 1.4, border: 1, hedge: 3.2 };
-/** How a mark grows with the land close in: its scale per pixel a meter, about a building's width over its drawing's. */
-const MARK_METERS = 0.67;
 
 /**
  * The land as the sheet shows it in a view `w` by `h` pixels: the painted
@@ -832,33 +721,6 @@ export function drawTrees(ctx: CanvasRenderingContext2D, trees: StoodWorld["tree
   ctx.fill(lights);
 }
 
-/** A mark's scale at `zoom` pixels a meter: a legible size on the whole sheet, growing with the land as the map comes close, as the trees do. */
-export const markScale = (zoom: number, grow: number): number => Math.max(1.1 * grow, MARK_METERS * zoom);
-
-/** The size areas' names are lettered at on a sheet `w` pixels wide. */
-export const nameSizeFor = (w: number): number => (w < 520 ? 12.5 : 13.5);
-
-/**
- * The box an area's name takes on the sheet when lettered at (x, y) at `nameSize`, its slanted lettering and the
- * folders above it; and, along the way it runs, how far its lettering reaches either side of (x, y) and above it.
- */
-export function nameBox(ctx: CanvasRenderingContext2D, l: AreaLabel<{ readonly name: string }>, nameSize: number): ((x: number, y: number) => [number, number, number, number]) & { readonly halfW: number; readonly top: number } {
-  ctx.font = `600 ${nameSize}px ${SERIF}`;
-  ctx.letterSpacing = `${(nameSize * 0.17).toFixed(1)}px`;
-  const nameW = ctx.measureText(l.area.name.toUpperCase()).width;
-  ctx.letterSpacing = "0px";
-  ctx.font = PARENT_FONT;
-  const parentW = l.above === "" ? 0 : ctx.measureText(l.above).width;
-  const halfW = Math.max(nameW, parentW) / 2 + 4;
-  const top = l.above === "" ? 11 : 21;
-  const cos = Math.abs(Math.cos(l.angle));
-  const sin = Math.abs(Math.sin(l.angle));
-  const hw = halfW * cos + ((top + 12) / 2) * sin;
-  const hh = halfW * sin + ((top + 12) / 2) * cos;
-  const at = (x: number, y: number): [number, number, number, number] => [x - hw, y - hh - (top - 12) / 2, x + hw, y + hh - (top - 12) / 2];
-  return Object.assign(at, { halfW, top });
-}
-
 /**
  * Letters an area's name at (x, y) in ink, in upright, widely spaced capitals as a survey map letters its regions,
  * along the way the area runs, with the folders that tell a repeated name apart above it in italic.
@@ -874,8 +736,8 @@ export function letterName(ctx: CanvasRenderingContext2D, l: AreaLabel<{ readonl
     ctx.font = PARENT_FONT;
     letter(ctx, l.above, 0, -12, `rgba(${mixRgb(style.ink, style.ink, 0).join(",")},0.8)`, halo, 2.5);
   }
-  ctx.font = `600 ${nameSize}px ${SERIF}`;
-  ctx.letterSpacing = `${(nameSize * 0.17).toFixed(1)}px`;
+  ctx.font = nameFont(nameSize);
+  ctx.letterSpacing = `${nameSpacing(nameSize)}px`;
   letter(ctx, l.area.name.toUpperCase(), 0, 2, style.ink, halo, 4.5);
   ctx.letterSpacing = "0px";
   ctx.restore();
@@ -951,6 +813,30 @@ export function createFieldMap(
   let doubled = false;
   /** A glide under way, to an area whose name was tapped. */
   let glide = 0;
+  /**
+   * Every area's name placed on the paper for the sheet's side (`placeNames`): on the whole sheet, as the wait
+   * places them, and for the map's next level down, where the land has room for each name on its own ground.
+   */
+  let placed: { paper: Paper; side: number; whole: NamePlaces; close: NamePlaces } | null = null;
+  const measure = canvasMeasure(document.createElement("canvas").getContext("2d") as CanvasRenderingContext2D);
+  /** The open sheet's side, pixels: names are placed for it, as the wait places them for its own sheet, the same size. */
+  const sheetSide = (): number => Math.min(canvas.clientWidth, canvas.clientHeight) || Math.min(window.innerWidth * 0.94, window.innerHeight * 0.9, 980);
+  function* placing(p: Paper, side: number): Generator<void, NonNullable<typeof placed>> {
+    const whole = yield* placeNames(p.names, side, measure);
+    const close = yield* placeNames(p.names, side * CLOSE, measure, growAt(CLOSE));
+    return { paper: p, side, whole, close };
+  }
+  /** The names placed for the paper and the sheet's side: placed while the paper is painted, and again only if the sheet changes size. */
+  function namesOn(p: Paper): NonNullable<typeof placed> {
+    const side = sheetSide();
+    if (placed?.paper !== p || placed.side !== side) {
+      const steps = placing(p, side);
+      let step = steps.next();
+      while (step.done !== true) step = steps.next();
+      placed = step.value;
+    }
+    return placed;
+  }
 
   /** Takes one step of painting; true once the paper is done. */
   function paintStep(): boolean {
@@ -981,9 +867,13 @@ export function createFieldMap(
     }
     return false;
   }
-  /** Paints the paper, then inks the wild around the person before it is shown, so the minimap never waits on it. */
+  /**
+   * Paints the paper and places its names, then inks the wild around the person before it is shown, so the minimap
+   * never waits on it.
+   */
   function* paperAndInk(): Generator<void, Paper> {
     const fresh = yield* paintPaper(source.stood(), source.placeAt, source.places(), style);
+    placed = yield* placing(fresh, sheetSide());
     fresh.wild.want([minimapView()]);
     while (fresh.wild.step()) yield;
     return fresh;
@@ -1125,13 +1015,11 @@ export function createFieldMap(
     const visible = (x: number, y: number, pad: number): boolean => x > -pad && x < w + pad && y > -pad && y < h + pad;
     // Marks and names grow a little as the map comes closer, and never shrink below legible.
     const near = view.zoom / Math.max(view.fit, 1e-6);
-    const grow = Math.min(1.6, Math.max(1, Math.sqrt(near) * 0.85));
+    const grow = growAt(near);
     const halo = `rgba(${mixRgb(style.paper, style.paper, 0).join(",")},0.82)`;
 
     // Close in, the map's next level down: each file's patch in fine dotted ink.
     const close = Math.max(0, Math.min(1, (near - CLOSE) / 0.8));
-    const wx = (x: number): number => view.x + (x - w / 2) / view.zoom;
-    const wz = (y: number): number => view.z + (y - h / 2) / view.zoom;
     // The wild's ink a view has not had inked yet comes in from the page's idle time, and the sheet is drawn again.
     const marks = drawLand(ctx, w, h, paper, stood, view, grow, false);
     inkInIdle();
@@ -1146,42 +1034,46 @@ export function createFieldMap(
       ctx.restore();
     }
 
-    // Names keep off the drawn marks and each other, and off the compass rose in the lower right corner.
-    const taken: [number, number, number, number][] = [[w - ROSE.right - 34, h - ROSE.bottom - 46, w, h], ...marks];
-    // The traveller and the file lettered beside them.
-    const hx = sx(person.x);
-    const hy = sy(person.z);
-    taken.push([hx - 12, hy - 30, hx + 18 + hereFile.offsetWidth, hy + 8]);
-    const free = (x0: number, y0: number, x1: number, y1: number): boolean => taken.every(([a, b, c, d]) => x1 < a || x0 > c || y1 < b || y0 > d);
-
     // Names are lettered on the land itself in ink, in upright, widely spaced capitals as a survey map letters its
     // regions, along the way each area runs, the paper just around the letters keeping them clear of the paint. A
-    // name that repeats carries just enough of its path above it, in italic, to tell it apart (`nameTails`). Names
-    // stay one size at any zoom, and where two would collide the larger area's wins.
+    // name that repeats carries just enough of its path above it, in italic, to tell it apart (`nameTails`). Every
+    // area's name is lettered where `placeNames` put it for the whole sheet, the place the wait letters it in: it
+    // moves with the land as the map pans and zooms and stays one size as the map comes close, lettered smaller only
+    // on a view that shows the land smaller than the whole sheet. Where the person stands plays no part: the
+    // traveller and the file beside them stand over the names. As the map comes to its next level down, a name that
+    // had to stand off its own ground on the whole sheet fades across to its place there, as the files' names fade in.
+    const { whole, close: closeIn } = namesOn(paper);
     labelCount = 0;
     names = [];
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    const nameSize = nameSizeFor(w);
-    const { areaAt } = paper;
-    const half = paper.reach - MARGIN;
-    const edge = half ** 4;
-    for (const l of [...paper.areaLabels].sort((a, b) => b.cells - a.cells)) {
-      // The repository's root is the whole sheet, and it is not lettered.
-      if (l.area.depth === 0 || !visible(sx(l.x), sy(l.z), 0)) continue;
-      const boxAt = nameBox(ctx, l, nameSize);
-      // A name sits wholly on the sheet and on the land or not at all, its middle on its own area's ground.
-      const onLand = ([x0, y0, x1, y1]: [number, number, number, number]): boolean =>
-        areaAt(wx((x0 + x1) / 2), wz((y0 + y1) / 2)) === l.index && [x0, x1].every((x) => [y0, y1].every((y) => wx(x) ** 4 + wz(y) ** 4 < edge));
-      const fits = (box: [number, number, number, number]): boolean => box[0] > 4 && box[1] > 4 && box[2] < w - 4 && box[3] < h - 4 && free(...box) && onLand(box);
-      const spot = NUDGES.map(([dx, dy]) => [sx(l.x) + dx, sy(l.z) + dy] as const).find(([cx, cy]) => fits(boxAt(cx, cy)));
-      if (spot === undefined) continue;
-      const [x, y] = spot;
-      taken.push(boxAt(x, y));
-      names.push({ box: boxAt(x, y), x: l.x, z: l.z, bounds: l.bounds });
-      labelCount++;
-      letterName(ctx, l, x, y, nameSize, style);
+    /** Every name lettered on this view, which the smaller names keep off. */
+    const taken: Box[] = [];
+    /** Letters a name placed for `scale` pixels a meter, faded to `alpha`; whether it shows on this view. */
+    const placeName = (p: NamePlace, scale: number, alpha: number): boolean => {
+      const shrink = Math.min(1, view.zoom / scale);
+      const x = sx(p.x);
+      const y = sy(p.z);
+      const box: [number, number, number, number] = [x + p.box[0] * shrink, y + p.box[1] * shrink, x + p.box[2] * shrink, y + p.box[3] * shrink];
+      if (alpha <= 0 || box[2] < 0 || box[0] > w || box[3] < 0 || box[1] > h) return false;
+      taken.push(box);
+      if (alpha >= 0.5) names.push({ box, x: p.label.x, z: p.label.z, bounds: p.label.bounds });
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.translate(x, y);
+      ctx.scale(shrink, shrink);
+      letterName(ctx, p.label, 0, 0, p.size, style);
+      ctx.restore();
+      return true;
+    };
+    const closeOf = new Map(closeIn.places.map((p) => [p.label.area.path, p]));
+    for (const p of whole.places) {
+      const q = closeOf.get(p.label.area.path) ?? p;
+      // The same place on both levels is lettered once.
+      const same = Math.hypot(sx(q.x) - sx(p.x), sy(q.z) - sy(p.z)) < 1 && q.size === p.size;
+      const shown = same ? placeName(p, whole.scale, 1) : [placeName(p, whole.scale, 1 - close), placeName(q, closeIn.scale, close)].includes(true);
+      if (shown) labelCount++;
     }
+    const apart = (box: Box, from: readonly Box[]): boolean => from.every(([a, b, c, d]) => box[2] < a || box[0] > c || box[3] < b || box[1] > d);
+    const rose: Box = [w - ROSE.right - 34, h - ROSE.bottom - 46, w, h];
 
     // Close in, each file's name is lettered small on its patch, and a tap on it goes there.
     if (close > 0) {
@@ -1193,7 +1085,7 @@ export function createFieldMap(
         const y = sy(p.z);
         const halfW = ctx.measureText(p.name).width / 2 + 2;
         const box: [number, number, number, number] = [x - halfW, y - 7, x + halfW, y + 7];
-        if (!visible(x, y, -10) || !free(...box)) continue;
+        if (!visible(x, y, -10) || !apart(box, [rose, ...marks, ...taken])) continue;
         taken.push(box);
         names.push({ box, x: p.x, z: p.z });
         letter(ctx, p.name, x, y, "rgba(58,47,34,0.92)", halo, 2.5);
@@ -1209,7 +1101,7 @@ export function createFieldMap(
         const y = sy(m.z) + m.below * grow + 6;
         const halfW = ctx.measureText(m.name).width / 2 + 3;
         const box: [number, number, number, number] = [x - halfW, y - 8, x + halfW, y + 8];
-        if (!visible(x, y, 0) || !taken.slice(marks.length + 4).every(([a, b, c, d]) => box[2] < a || box[0] > c || box[3] < b || box[1] > d)) continue;
+        if (!visible(x, y, 0) || !apart(box, taken)) continue;
         taken.push(box);
         letter(ctx, m.name, x, y, style.ink, halo, 3);
       }
@@ -1488,7 +1380,7 @@ export function createFieldMap(
     if (onPick === undefined) return;
     const x = name?.x ?? view.x + (px - rect.width / 2) / view.zoom;
     const z = name?.z ?? view.z + (py - rect.height / 2) / view.zoom;
-    const label = paper.areaLabels[paper.areaAt(x, z)];
+    const label = paper.labelAt(x, z);
     const heart = label === undefined ? undefined : { x: label.x, z: label.z };
     cancelPick();
     pick = {

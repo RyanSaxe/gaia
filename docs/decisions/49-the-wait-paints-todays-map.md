@@ -39,3 +39,5 @@ waiting screen's board: How the wait paints the map, When names are
 lettered, While the world bakes) and its thread, as round 7's Agreed (The
 waiting screen) records it. It supersedes the wait of
 [decision 35](35-one-field-sheet.md), its land colors and its brush.
+
+The wait letters every area's name where the field map letters it, keeping names off the lots to come, since [decision 50](50-every-area-s-name-in-the-same-place.md).

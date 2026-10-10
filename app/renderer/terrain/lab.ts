@@ -253,6 +253,11 @@ export interface StoodWorld {
   readonly trees: readonly { readonly x: number; readonly z: number; readonly vitality: number }[];
   /** Each area's ground cover, by its path: the one the ground shader paints its own ground with. */
   readonly grounds: ReadonlyMap<string, GroundSpec>;
+  /**
+   * Where each building and landmark was laid out to stand: its entity's lot's middle (`CodeThing`), as the wait
+   * learns it with the land, or where it stands in a world not laid out from code. The sheets' names keep off these.
+   */
+  readonly lots: readonly { readonly x: number; readonly z: number }[];
 }
 
 /** Things another layer stands in the world on each bake: the ground they keep bare and what stops a walker. */
@@ -1564,6 +1569,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
         const ground = regionGrounds[code !== null ? (code.world.areas[i]?.region ?? 0) : i];
         return ground === undefined ? [] : [[a.path, ground] as const];
       })),
+      lots: (code !== null ? code.world.things : [...settlement.buildings.map((b) => b.site), ...ways.sites.map((s) => s.site)]).map(({ x, z }) => ({ x, z })),
     };
   }
 
