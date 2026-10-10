@@ -430,7 +430,8 @@ if (args.code !== undefined) {
     if (!inside.startsWith("..") && !inside.split("/").includes("node_modules")) throw new Error(`Write the proving ground's code and manifest outside Gaia's repository or under node_modules, or Gaia's own world reads them: ${path}.`);
   }
   if (!relative(dir, manifestPath).startsWith("..")) throw new Error(`Write the manifest beside the code, not in it, or the engine takes every file it names for used: ${manifestPath}.`);
-  const { code, manifest } = provingCode(files.map((facts, i) => ({ facts, health: (drafted[i] as Drafted).health })));
+  const vitality = new Map(world.patches.map((p) => [p.path, p.vitality]));
+  const { code, manifest } = provingCode(files.map((facts, i) => ({ facts, health: (drafted[i] as Drafted).health, vitality: vitality.get(facts.path) ?? 1 })));
   for (const [path, text] of code) {
     mkdirSync(dirname(resolve(dir, path)), { recursive: true });
     writeFileSync(resolve(dir, path), text);
