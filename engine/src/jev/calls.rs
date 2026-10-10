@@ -939,13 +939,13 @@ impl Call for Resolve {
                     .candidates
                     .iter()
                     .map(|c| {
-                        (
-                            c.clone(),
-                            format!(
-                                "{} in this repository",
-                                c.trim_start_matches("file:").trim_start_matches("dir:")
-                            ),
-                        )
+                        let path = c.trim_start_matches("file:").trim_start_matches("dir:");
+                        let words = if path.is_empty() {
+                            "The repository's root directory".to_string()
+                        } else {
+                            format!("{path} in this repository")
+                        };
+                        (c.clone(), words)
                     })
                     .collect();
                 options.insert("outside".into(), v.outside.clone());
