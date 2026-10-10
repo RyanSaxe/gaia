@@ -68,11 +68,15 @@ async function understand(engine: ReturnType<typeof engineAt>, root: string) {
 
 const fn = (name: string, body: string): string => `export function ${name}(x: number): number {\n  ${body}\n}\n`;
 
+type Sent = Awaited<ReturnType<typeof understand>>;
+/** Requests about files, as opposed to directories, whose state holds the directory call's part. */
+const aboutFiles = (sent: Sent): Sent => sent.filter((r) => r.state.directory === undefined);
+
 describe("the Jev runner", () => {
   it("asks every call about one file in one request, and reopening sends nothing", async () => {
     const root = codebase("small", { "src/a.ts": fn("a", "return x + 1;"), "src/b.ts": fn("b", "return x * 2;") });
     const data = join(scratch, "small-data");
-    const sent = await understand(engineAt(data), root);
+    const sent = aboutFiles(await understand(engineAt(data), root));
     expect(sent.map((r) => r.state.path).sort()).toEqual(["src/a.ts", "src/b.ts"]);
     for (const r of sent) {
       const ids = Object.keys(r.questions);
@@ -92,11 +96,11 @@ describe("the Jev runner", () => {
     const data = join(scratch, "edits-data");
     await understand(engineAt(data), root);
     writeFileSync(join(root, "src/a.ts"), fn("a", "return x + 10;"));
-    const edited = await understand(engineAt(data), root);
+    const edited = aboutFiles(await understand(engineAt(data), root));
     expect(edited.map((r) => r.state.path)).toEqual(["src/a.ts"]);
     renameSync(join(root, "src/b.ts"), join(root, "src/renamed.ts"));
     const engine = engineAt(data);
-    const renamed = await understand(engine, root);
+    const renamed = aboutFiles(await understand(engine, root));
     expect(renamed.map((r) => r.state.path)).toEqual(["src/renamed.ts"]);
     const graph: CodeGraph = await engine.call("project.graph", { root, judged: true });
     const file = graph.nodes.find((n) => n.id === "file:src/renamed.ts");
@@ -107,7 +111,7 @@ describe("the Jev runner", () => {
     const big = Array.from({ length: 1400 }, (_, i) => fn(`f${i}`, `return x * ${i} + ${"1 + ".repeat(20)}0;`)).join("\n");
     const root = codebase("big", { "src/big.ts": big });
     const engine = engineAt(join(scratch, "big-data"));
-    const sent = await understand(engine, root);
+    const sent = aboutFiles(await understand(engine, root));
     expect(sent.length).toBeGreaterThan(1);
     expect(sent.every((r) => r.state.chunk !== undefined)).toBe(true);
     const graph: CodeGraph = await engine.call("project.graph", { root, judged: true });
@@ -116,15 +120,49 @@ describe("the Jev runner", () => {
   }, 120_000);
 
   it("cuts a file with more questions than fit into pieces with their own source, asking each question once", async () => {
-    const many = Array.from({ length: 300 }, (_, i) => `export const g${i} = (x: number): number => x + ${i};`).join("\n");
-    const root = codebase("many", { "src/many.ts": many });
-    const sent = await understand(engineAt(join(scratch, "many-data")), root);
-    expect(sent.length).toBeGreaterThan(1);
-    const asked = sent.flatMap((r) => Object.keys(r.questions).filter((id) => id.startsWith("screen:def:")));
-    expect(asked.length).toBe(300);
-    expect(new Set(asked).size).toBe(300);
-    // The source goes out once, in pieces, rather than again with every batch of questions.
-    const sourceSent = sent.reduce((n, r) => n + String(r.state.source).length, 0);
-    expect(sourceSent).toBeLessThan(many.length * 1.05);
+    // Two files beside it define `helper`, so every call to it waits for Jev to choose.
+    const many = Array.from({ length: 300 }, (_, i) => `export const g${i} = (x: number): number => helper(x) + ${i};`).join("\n");
+    const root = codebase("many", { "src/many.ts": many, "src/one.ts": fn("helper", "return x;"), "src/two.ts": fn("helper", "return -x;") });
+    const sent = aboutFiles(await understand(engineAt(join(scratch, "many-data")), root)).filter((r) => r.state.path === "src/many.ts");
+    const asking = (prefix: string): Sent => sent.filter((r) => Object.keys(r.questions).some((id) => id.startsWith(prefix)));
+    for (const prefix of ["screen:def:", "callee:"]) {
+      const requests = asking(prefix);
+      expect(requests.length).toBeGreaterThan(1);
+      const asked = requests.flatMap((r) => Object.keys(r.questions).filter((id) => id.startsWith(prefix)));
+      expect(asked.length).toBe(300);
+      expect(new Set(asked).size).toBe(300);
+      // The source goes out once per pass, in pieces, rather than again with every batch of questions.
+      const sourceSent = requests.reduce((n, r) => n + String(r.state.source).length, 0);
+      expect(sourceSent).toBeLessThan(many.length * 1.05);
+    }
   }, 120_000);
+
+  it("asks about a directory only once everything under it is answered, the root last", async () => {
+    const root = codebase("nested", { "a/b/c/deep.ts": fn("deep", "return x;"), "a/b/mid.ts": fn("mid", "return x;"), "a/top.ts": fn("top", "return x;") });
+    const sent = await understand(engineAt(join(scratch, "nested-data")), root);
+    const at = (pred: (r: Sent[number]) => boolean): number => sent.findIndex(pred);
+    const dirAt = (path: string): number => at((r) => r.state.directory !== undefined && r.state.path === path);
+    const fileAt = (path: string): number => at((r) => r.state.directory === undefined && r.state.path === path);
+    expect(dirAt("a/b/c")).toBeGreaterThan(fileAt("a/b/c/deep.ts"));
+    expect(dirAt("a/b")).toBeGreaterThan(dirAt("a/b/c"));
+    expect(dirAt("a/b")).toBeGreaterThan(fileAt("a/b/mid.ts"));
+    expect(dirAt("a")).toBeGreaterThan(dirAt("a/b"));
+    expect(sent.at(-1)?.state.path).toBe("(the repository's root)");
+  }, 60_000);
+
+  it("asks the deep questions about exactly the nodes the world chose", async () => {
+    const root = codebase("deepen", { "src/a.ts": fn("chosen", "return x + 1;") + fn("other", "return x - 1;") });
+    const engine = engineAt(join(scratch, "deepen-data"));
+    await understand(engine, root);
+    const before = standIn.received.length;
+    await engine.call("understand.deepen", { root, nodes: ["def:src/a.ts#chosen"] });
+    for (;;) if ((await engine.call("understand.next", { root })).left === 0) break;
+    const deepIds = standIn.received.slice(before).flatMap((r) => Object.keys((r.body as { questions: Record<string, unknown> }).questions)).filter((id) => id.startsWith("definition:"));
+    expect(deepIds.length).toBeGreaterThan(0);
+    expect(deepIds.every((id) => id.startsWith("definition:chosen:"))).toBe(true);
+    const graph: CodeGraph = await engine.call("project.graph", { root, judged: true });
+    const chosen = graph.nodes.find((n) => n.id === "def:src/a.ts#chosen");
+    expect(chosen?.judged?.role?.choice).toBeTypeOf("string");
+    expect(chosen?.judged?.quality?.readability).toBeDefined();
+  }, 60_000);
 });

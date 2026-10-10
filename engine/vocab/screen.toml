@@ -4,6 +4,7 @@
 # names signs Jev can find in the code.
 
 [stand]
+dir = "This directory could stand in a world made from its code as its own place, with a building of its own, or be one more stretch of the land. How much does it deserve to stand on its own?"
 file = "This file could stand in a world made from its code as its own landmark a person walks up to, or be part of the scenery. How much does it deserve to stand on its own?"
 def = "`{name}`, on lines {start} to {end}, could stand in a world made from this code as its own thing a person walks up to, or be part of the scenery. How much does it deserve to stand on its own?"
 block = "The {shape} block on lines {start} to {end}, inside `{holder}`, could stand in a world made from this code as its own thing a person walks up to, or be part of the scenery. How much does it deserve to stand on its own?"

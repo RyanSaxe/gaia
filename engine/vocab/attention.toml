@@ -1,0 +1,16 @@
+# The attention call: why a person walking past should look, with routine
+# as one option. A callout is a node whose answer isn't routine; the world
+# decides how many show.
+
+instructions = "Why would someone reading this codebase stop to look at {what}?"
+
+[options]
+"routine" = "Routine: nothing a visitor needs to look at."
+"heart" = "The heart of the work: where the main work of this part happens."
+"intricate" = "Intricate: subtle logic worth reading slowly."
+"fragile" = "Fragile: a change here easily breaks something."
+"failure path" = "A failure path: how errors are caught, reported or swallowed."
+"workaround" = "A workaround: a hack, special case or compatibility shim."
+"doorway" = "A doorway: where control enters, such as an entry point, a handler or a command."
+"hot path" = "A hot path: work done often or at scale, where speed matters."
+"unfinished" = "Unfinished: marked as such, or plainly incomplete."

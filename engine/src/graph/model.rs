@@ -146,6 +146,22 @@ pub struct Edge {
 #[derive(Serialize, Debug)]
 pub struct Filled {
     pub by: &'static str,
+    /// The Jev call that filled it, with its version.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub call: Option<String>,
+    /// Jev's probability for its answer.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub p: Option<f64>,
+}
+
+impl Filled {
+    pub fn by(by: &'static str) -> Self {
+        Filled {
+            by,
+            call: None,
+            p: None,
+        }
+    }
 }
 
 #[derive(Serialize, Debug)]

@@ -15,6 +15,7 @@ pub mod walk;
 
 use model::{
     BlockNode, CodeGraph, DefNode, DirNode, Edge, FileNode, Filled, History, Measures, Node,
+    PendingRef,
 };
 use parse::FileParse;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
@@ -172,18 +173,44 @@ fn contains_edge(from: &str, to: &str) -> Edge {
         from: from.to_string(),
         to: to.to_string(),
         kind: "contains",
-        by: Filled { by: "parser" },
+        by: Filled::by("parser"),
         at: None,
     }
 }
 
 /// Builds the code graph of the project at `root`.
 pub fn build(root: &Path) -> Result<CodeGraph, String> {
-    build_with(root, &lineage::Store)
+    build_with(root, &lineage::Store, &Links::new())
+}
+
+/// Which target Jev chose for each pending reference, by `ref_key`: the
+/// target's id, or "outside", with the call and its probability.
+pub type Links = HashMap<String, (String, String, f64)>;
+
+/// A pending reference's identity, which a link answer is held under.
+pub fn ref_key(r: &PendingRef) -> String {
+    format!("{}|{}|{}|{}", r.from, r.kind, r.text, r.at.start)
+}
+
+/// The project's id: its root commit, so it names the project wherever it
+/// is cloned, or else a hash of its folder's path.
+pub fn project_id(root: &Path) -> String {
+    let canonical = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
+    git::root_commit(root)
+        .unwrap_or_else(|| walk::content_hash(canonical.to_string_lossy().as_bytes()))
+}
+
+/// Builds the graph with the references Jev resolved as edges, before reach is counted.
+pub fn build_linked(root: &Path, links: &Links) -> Result<CodeGraph, String> {
+    build_with(root, &lineage::Store, links)
 }
 
 /// Builds the graph, matching lineage against the record `keeper` holds.
-fn build_with(root: &Path, keeper: &dyn lineage::Keeper) -> Result<CodeGraph, String> {
+fn build_with(
+    root: &Path,
+    keeper: &dyn lineage::Keeper,
+    links: &Links,
+) -> Result<CodeGraph, String> {
     if !root.is_dir() {
         return Err(format!("{} is not a directory.", root.display()));
     }
@@ -350,6 +377,29 @@ fn build_with(root: &Path, keeper: &dyn lineage::Keeper) -> Result<CodeGraph, St
         .collect();
     let resolved = resolve::run(&units, &dirs);
     edges.extend(resolved.edges);
+    // References Jev resolved become edges; ones it put outside leave the pending list.
+    let mut pending: Vec<PendingRef> = Vec::new();
+    for r in resolved.pending {
+        match links.get(&ref_key(&r)) {
+            Some((target, _, _)) if target == "outside" => {}
+            Some((target, call, p)) => edges.push(Edge {
+                from: r.from.clone(),
+                to: target.clone(),
+                kind: if r.kind == "import" {
+                    "imports"
+                } else {
+                    "calls"
+                },
+                by: Filled {
+                    by: "jev",
+                    call: Some(call.clone()),
+                    p: Some(*p),
+                },
+                at: Some(r.at),
+            }),
+            None => pending.push(r),
+        }
+    }
     let walked: HashSet<&str> = files.iter().map(|f| f.path.as_str()).collect();
     let commit_files: Vec<Vec<String>> = commits.into_iter().map(|c| c.files).collect();
     edges.extend(reach::changes_with(&commit_files, &walked));
@@ -402,11 +452,9 @@ fn build_with(root: &Path, keeper: &dyn lineage::Keeper) -> Result<CodeGraph, St
             Node::Block(_) => {}
         }
     }
-    let pending = resolved.pending;
 
     let canonical = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
-    let project_id = git::root_commit(root)
-        .unwrap_or_else(|| walk::content_hash(canonical.to_string_lossy().as_bytes()));
+    let project_id = project_id(root);
 
     // Lineage, matched against the last graph this project kept.
     let commit = git::head(root);
@@ -505,7 +553,7 @@ mod tests {
     }
 
     fn graph(root: &Path) -> Result<CodeGraph, String> {
-        build_with(root, &Memory::default())
+        build_with(root, &Memory::default(), &Links::new())
     }
 
     fn fixtures() -> PathBuf {
@@ -841,7 +889,7 @@ mod tests {
                 })
                 .collect()
         };
-        let first = lineage(&build_with(&dir, &keeper).unwrap());
+        let first = lineage(&build_with(&dir, &keeper, &Links::new()).unwrap());
 
         // A directory renamed, a function moved to another file, another file edited.
         git(&["mv", "lib", "src"]);
@@ -861,7 +909,7 @@ mod tests {
         .unwrap();
         git(&["add", "-A"]);
         git(&["commit", "-q", "-m", "two"]);
-        let second = lineage(&build_with(&dir, &keeper).unwrap());
+        let second = lineage(&build_with(&dir, &keeper, &Links::new()).unwrap());
         for (now, then) in [
             ("dir:src", "dir:lib"),
             ("file:src/walk.ts", "file:lib/walk.ts"),
@@ -884,7 +932,7 @@ mod tests {
         std::fs::write(dir.join("src/walk/list.ts"), list).unwrap();
         git(&["add", "-A"]);
         git(&["commit", "-q", "-m", "three"]);
-        let third = lineage(&build_with(&dir, &keeper).unwrap());
+        let third = lineage(&build_with(&dir, &keeper, &Links::new()).unwrap());
         assert_eq!(
             third.get("def:src/walk/core.ts#walk"),
             first.get("def:lib/walk.ts#walk")

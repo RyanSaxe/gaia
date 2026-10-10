@@ -1,0 +1,75 @@
+# The quality call: how well code is written, asked of each file in its
+# understand request, and of each definition and block the world chose in
+# its deep request. Every level names signs Jev can find in the code.
+
+[file.naming]
+instructions = "How well do this file's path and name say what it holds?"
+levels = [
+  "Misleading or empty: a name such as utils2, misc or new_stuff, or one that says something the file doesn't do.",
+  "Vague: the name points roughly the right way but a reader must open the file to know what is in it.",
+  "Clear: the path and name say what the file holds, with a small surprise or two inside.",
+  "Exact: the path and name say precisely what the file holds and nothing else.",
+]
+
+[file.cohesion]
+instructions = "Does this file hold one concern, or several unrelated ones?"
+levels = [
+  "Several unrelated concerns: parts that share nothing but the file, such as parsing, drawing and storage side by side.",
+  "A main concern with unrelated extras bolted on: helpers or features that belong elsewhere.",
+  "One concern with a few loosely related pieces.",
+  "One concern: every part serves the same purpose.",
+]
+
+[def.readability]
+instructions = "How easily can a reader follow `{name}`, on lines {start} to {end}?"
+levels = [
+  "Hard to follow: nesting four or more levels deep, long stretches doing several jobs at once, or control flow a reader must trace by hand.",
+  "Takes effort: some nesting or a long body; a reader must hold several values or cases in mind at once.",
+  "Clear: one job, mostly flat, steps in a sensible order; one careful read is enough.",
+  "Reads at a glance: short, one job, flat, every line obvious.",
+]
+
+[def.naming]
+instructions = "How well do the names in `{name}`, on lines {start} to {end}, say what they stand for: the definition's own name, its parameters and its local variables?"
+levels = [
+  "Misleading or meaningless: single letters for values that matter, names like tmp, data2 or flag, or names that say the wrong thing.",
+  "Vague: names that point the right way but leave a reader guessing what they hold.",
+  "Clear: most names say what they hold; a few are generic.",
+  "Exact: every name says precisely what it holds or does.",
+]
+
+[def.doc]
+instructions = "How well does the doc comment of `{name}`, on lines {start} to {end}, describe what it actually does?"
+levels = [
+  "Wrong: it describes other code, an old version, or the opposite of what the code does.",
+  "Thin or stale: it is mostly a restatement of the name, or misses what matters, such as side effects or failure cases.",
+  "Accurate: it says what the code does, with a gap or two.",
+  "Accurate and complete: it says what the code does, what it needs and what can go wrong.",
+]
+
+[def.errors]
+instructions = "How does `{name}`, on lines {start} to {end}, handle the failures it can meet?"
+[def.errors.options]
+"handles each" = "Handles each failure it can meet: checks, recovers or reports each one deliberately."
+"passes up" = "Passes failures to its caller on purpose, such as by returning an error or rethrowing, without losing them."
+"partly" = "Handles some failures and ignores others it can plainly meet."
+"swallows" = "Swallows errors: catches or receives them and does nothing, or hides them behind a default."
+"none" = "Meets no failures: nothing in it can fail in a way it should handle."
+
+[def.change]
+instructions = "How likely is a change to `{name}`, on lines {start} to {end}, to break something elsewhere without anyone noticing?"
+levels = [
+  "Safe: pure, or touches only its own values; what it returns says everything it does.",
+  "Mostly safe: a small side effect or two, each visible in its signature or plainly named.",
+  "Risky: it reads or writes shared state, depends on the order it is called in, or changes things other code relies on.",
+  "Dangerous: hidden global state, effects on other files or modules, or an order of calls that nothing enforces.",
+]
+
+[block.readability]
+instructions = "How easily can a reader follow the {shape} block on lines {start} to {end}, inside `{holder}`?"
+levels = [
+  "Hard to follow: deep nesting, several jobs at once, or conditions a reader must trace by hand.",
+  "Takes effort: some nesting or a long body with several cases in mind at once.",
+  "Clear: one job, mostly flat, one careful read is enough.",
+  "Reads at a glance: short and obvious.",
+]
