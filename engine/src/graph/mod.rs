@@ -728,7 +728,7 @@ mod tests {
                 (
                     "src/a.ts",
                     &format!(
-                        "import {{ helper, Tool }} from \"./b\";\nimport {{ widget }} from \"./widgets\";\nimport React from \"react\";\nimport _ from \"lodash\";\n\nexport function caller(obj: unknown) {{\n  helper();\n  obj.render();\n  widget();\n}}\n\nexport function slugA(input: string) {{\n{body}}}\n"
+                        "import {{ helper, Tool }} from \"./b\";\nimport {{ widget }} from \"./widgets\";\nimport React from \"react\";\nimport _ from \"lodash\";\nimport {{ extra }} from \"demo/extra\";\n\nexport function caller(obj: unknown) {{\n  helper();\n  obj.render();\n  widget();\n}}\n\nexport function slugA(input: string) {{\n{body}}}\n"
                     ),
                 ),
                 (
@@ -737,6 +737,7 @@ mod tests {
                         "export function helper() {{\n  return 1;\n}}\n\nexport class Tool {{\n  render() {{\n    return this.size();\n  }}\n  size() {{\n    return 2;\n  }}\n}}\n\nexport function outer() {{\n  const inner = () => 3;\n  return inner();\n}}\n\nexport function slugB(input: string) {{\n{body}}}\n"
                     ),
                 ),
+                ("src/extra.ts", "export const extra = 1;\n"),
                 (
                     "src/widgets/index.ts",
                     "export function widget() {\n  return inner();\n}\n",
@@ -747,7 +748,7 @@ mod tests {
                 ),
                 (
                     "src/util.rs",
-                    "pub struct Tool;\n\nimpl Tool {\n    pub fn new() -> Self {\n        Tool\n    }\n}\n\npub fn format(x: u8) -> u8 {\n    x\n}\n",
+                    "pub struct Tool;\n\nimpl Tool {\n    pub fn new() -> Self {\n        Tool\n    }\n}\n\npub fn format(x: u8) -> u8 {\n    x\n}\n\n#[cfg(test)]\nmod tests {\n    use super::*;\n}\n",
                 ),
                 (
                     "pkg/sub/a.py",
@@ -780,6 +781,15 @@ mod tests {
             !g.pending.iter().any(|p| p.text == "lodash"),
             "nothing names lodash, so it is outside"
         );
+        // A sub-path of the package a configuration names offers the file
+        // below it with that last name; `super` inside a module is its file.
+        let extra = g
+            .pending
+            .iter()
+            .find(|p| p.text == "demo/extra")
+            .expect("demo/extra goes to Jev");
+        assert!(extra.candidates.contains(&"file:src/extra.ts".to_string()));
+        assert!(edge("def:src/util.rs#tests", "file:src/util.rs", "imports"));
         // Calls: one target by rule; an owner or `this` narrows; a receiver
         // the rule cannot place goes to Jev; a function's locals stay local;
         // a macro reaches only a macro.

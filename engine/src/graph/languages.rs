@@ -54,6 +54,9 @@ pub struct Relative {
     pub prefix: String,
     /// "here", "parent", "ancestors" or "dots".
     pub from: String,
+    /// "file" when, inside a module definition, the prefix names the file holding it.
+    #[serde(default)]
+    pub in_module: Option<String>,
 }
 
 /// A file a grammar's release publishes, and the SHA-256 it must have.

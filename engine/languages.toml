@@ -19,7 +19,9 @@
 # from the importing file's directory ("here"), the one above it ("parent"),
 # each directory above it in turn ("ancestors"), or, for Python's leading
 # dots, here for one dot and one more directory up for each dot after it
-# ("dots"). A call resolves only to a
+# ("dots"). `in_module = "file"` marks a prefix that, inside a module
+# definition such as Rust's `mod tests { }`, names the file holding it,
+# since that module is the file's child. A call resolves only to a
 # definition in its own language's `family`, which is the language itself
 # unless named. `data = true` marks a format that holds configuration rather
 # than code, which the import rule searches for package names.
@@ -79,7 +81,7 @@ conventions = [
 ]
 
 [rust]
-relative = [{ prefix = "self::", from = "here" }, { prefix = "super::", from = "ancestors" }, { prefix = "crate::", from = "ancestors" }]
+relative = [{ prefix = "self::", from = "here", in_module = "file" }, { prefix = "super::", from = "ancestors", in_module = "file" }, { prefix = "crate::", from = "ancestors" }]
 extensions = ["rs"]
 grammar = { crate = "tree-sitter-rust" }
 conventions = [

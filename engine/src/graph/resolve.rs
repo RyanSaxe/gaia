@@ -146,6 +146,20 @@ impl<'a> Paths<'a> {
         Vec::new()
     }
 
+    /// True when a node id is a file with one of `extensions`, or a
+    /// directory holding one somewhere below. No extensions admit anything.
+    fn of_family(&self, id: &str, extensions: &[&str]) -> bool {
+        if extensions.is_empty() {
+            return true;
+        }
+        match id.strip_prefix("dir:") {
+            Some(d) => extensions
+                .iter()
+                .any(|e| self.holding.get(*e).is_some_and(|h| h.contains(d))),
+            None => extensions.iter().any(|e| id.ends_with(&format!(".{e}"))),
+        }
+    }
+
     /// Paths, as node ids, whose last segments are all of `segments`.
     fn ending_with(&self, segments: &[&str]) -> Vec<String> {
         let Some(last) = segments.last() else {
@@ -239,7 +253,8 @@ impl Rules<'_> {
             .collect()
     }
 
-    fn import(&self, k: usize, text: &str) -> Outcome {
+    /// `in_module` says the import sits inside a module definition.
+    fn import(&self, k: usize, text: &str, in_module: bool) -> Outcome {
         let unit = &self.units[k];
         let spec = unit.spec;
         let s = clean_specifier(text);
@@ -251,9 +266,21 @@ impl Rules<'_> {
 
         // Relative forms resolve from where they point.
         for r in spec.map(|s| s.relative.as_slice()).unwrap_or_default() {
-            let Some(rest) = s.strip_prefix(r.prefix.as_str()) else {
-                continue;
+            // A prefix on its own, as Rust's `use super::*` cleans to `super`.
+            let bare = r.prefix.trim_end_matches([':', '/']);
+            let rest = match s.strip_prefix(r.prefix.as_str()) {
+                Some(rest) => rest,
+                None if !bare.is_empty() && bare != r.prefix && s == bare => "",
+                None => continue,
             };
+            if in_module && r.in_module.as_deref() == Some("file") {
+                // One step up from a module inside the file is the file; any
+                // further step resolves as it would at the file's top level.
+                if rest == bare || rest.starts_with(r.prefix.as_str()) {
+                    return self.import(k, rest, false);
+                }
+                return Outcome::Edge(unit.id());
+            }
             let starts: Vec<String> = match r.from.as_str() {
                 "here" => vec![here.to_string()],
                 "parent" => vec![parent(here).to_string()],
@@ -349,12 +376,12 @@ impl Rules<'_> {
     /// paths ending with its trailing segments.
     fn candidates(&self, k: usize, s: &str) -> Outcome {
         let own = self.units[k].id();
-        let known = self.candidates_of.borrow().get(s).cloned();
+        let spec = self.units[k].spec;
+        let key = format!("{}|{s}", spec.map_or("", |sp| sp.family.as_str()));
+        let known = self.candidates_of.borrow().get(&key).cloned();
         let all = known.unwrap_or_else(|| {
-            let found = self.find_candidates(s);
-            self.candidates_of
-                .borrow_mut()
-                .insert(s.to_string(), found.clone());
+            let found = self.find_candidates(s, &self.family_extensions(spec));
+            self.candidates_of.borrow_mut().insert(key, found.clone());
             found
         });
         let out: Vec<String> = all.into_iter().filter(|c| *c != own).collect();
@@ -365,7 +392,7 @@ impl Rules<'_> {
         }
     }
 
-    fn find_candidates(&self, s: &str) -> Vec<String> {
+    fn find_candidates(&self, s: &str, ext: &[&str]) -> Vec<String> {
         let mut out: Vec<String> = Vec::new();
         let segs = segments(s);
         let ends = segment_ends(s);
@@ -386,6 +413,34 @@ impl Rules<'_> {
                     normalize(dir, &rest).unwrap_or_default()
                 };
                 let named = self.paths.named(&target, &[]);
+                if named.is_empty() && !rest.is_empty() {
+                    // A sub-path of a package or alias the configuration names,
+                    // such as `zustand/vanilla` or `@/utils`, may name a file of
+                    // its family below it by its last segment. A file wins over
+                    // a directory of the same name beside it, as in `named`.
+                    let below = |id: &String| {
+                        let p = id.trim_start_matches("file:").trim_start_matches("dir:");
+                        dir.is_empty() || p.starts_with(&format!("{dir}/"))
+                    };
+                    let found: Vec<String> = self
+                        .paths
+                        .ending_with(&segs[segs.len() - 1..])
+                        .into_iter()
+                        .filter(|id| below(id) && self.paths.of_family(id, ext))
+                        .collect();
+                    let shadowed = |id: &String| {
+                        id.strip_prefix("dir:").is_some_and(|d| {
+                            found
+                                .iter()
+                                .any(|f| f.starts_with("file:") && stem(&f[5..]) == d)
+                        })
+                    };
+                    for id in found.iter().filter(|id| !shadowed(id)) {
+                        if !out.contains(id) {
+                            out.push(id.clone());
+                        }
+                    }
+                }
                 let id = named
                     .into_iter()
                     .next()
@@ -458,8 +513,11 @@ pub fn run(units: &[Unit], dirs: &BTreeSet<String>) -> Resolved {
     };
     for (k, u) in units.iter().enumerate() {
         let Some(p) = u.parse else { continue };
+        let in_module = |def: Option<usize>| {
+            std::iter::successors(def, |&i| p.defs[i].parent).any(|i| p.defs[i].role == "module")
+        };
         for r in p.refs.iter().filter(|r| r.kind == RefKind::Import) {
-            match rules.import(k, &r.text) {
+            match rules.import(k, &r.text, in_module(r.from)) {
                 Outcome::Edge(to) => {
                     imported[k].extend(files_of(&to));
                     push(&mut edges, u.from(r.from), to, "imports", r.at);
