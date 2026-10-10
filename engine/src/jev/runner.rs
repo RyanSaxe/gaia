@@ -124,11 +124,18 @@ fn links(held: &Value) -> crate::graph::Links {
         .filter_map(|(key, v)| {
             let r = key.strip_prefix(&format!("{LINK}|"))?;
             let target = v["answer"]["choice"].as_str()?.to_string();
-            let p = v["answer"]["p"][&target].as_f64().unwrap_or(0.0);
-            Some((
-                r.to_string(),
-                (target, v["call"].as_str().unwrap_or("").to_string(), p),
-            ))
+            let link = crate::graph::Link {
+                p: v["answer"]["p"][&target].as_f64().unwrap_or(0.0),
+                target,
+                call: v["call"].as_str().unwrap_or("").to_string(),
+                candidates: v["candidates"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|c| c.as_str().map(str::to_string))
+                    .collect(),
+            };
+            Some((r.to_string(), link))
         })
         .collect()
 }
@@ -726,6 +733,8 @@ pub fn next(root: &Path, max: Option<usize>) -> Result<Value, String> {
             continue;
         }
         let mut gathered: BTreeMap<(String, String, String), Vec<(f64, Value)>> = BTreeMap::new();
+        // The candidates each link question offered, sorted, held with its answer.
+        let mut offered: HashMap<String, Vec<&str>> = HashMap::new();
         for p in &mine {
             let answers = fresh
                 .get(&p.hash)
@@ -733,6 +742,15 @@ pub fn next(root: &Path, max: Option<usize>) -> Result<Value, String> {
                 .or_else(|| stored.get(&p.hash).map(|k| k["answers"].clone()))
                 .unwrap_or(Value::Null);
             for q in &p.questions {
+                if q.field == "link" {
+                    let options = q.json["criteria"].as_object().into_iter().flatten();
+                    let mut c: Vec<&str> = options
+                        .map(|(k, _)| k.as_str())
+                        .filter(|k| *k != "outside")
+                        .collect();
+                    c.sort_unstable();
+                    offered.insert(q.about.clone(), c);
+                }
                 if let Some(a) = hold::normalize(&q.json, &answers[&q.id]) {
                     gathered
                         .entry((q.about.clone(), q.call.clone(), q.field.clone()))
@@ -754,11 +772,16 @@ pub fn next(root: &Path, max: Option<usize>) -> Result<Value, String> {
                 };
                 format!("{l}|{call_id}|{field}")
             };
-            let keep = held
-                .get(&key)
-                .is_some_and(|h| !hold::replaces(&h["answer"], &fresh));
+            let mut value = json!({ "answer": fresh, "call": call });
+            if field == "link" {
+                value["candidates"] = json!(offered.get(&node));
+            }
+            // A link answer chosen among other candidates never holds.
+            let keep = held.get(&key).is_some_and(|h| {
+                h["candidates"] == value["candidates"] && !hold::replaces(&h["answer"], &fresh)
+            });
             if !keep {
-                writes.push(json!({ "table": "held", "key": key, "value": { "answer": fresh, "call": call } }));
+                writes.push(json!({ "table": "held", "key": key, "value": value }));
             }
             if field != "link" {
                 settled.insert(node);
