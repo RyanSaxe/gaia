@@ -90,12 +90,13 @@ describe("judging a codebase with Jev", () => {
     // Judging costs less than the default limit, so Gaia asks Jev with no question at all.
     expect(first.asked).toHaveLength(0);
     expect(first.sent.length).toBeGreaterThan(0);
-    // The land's outlines and every file's patch come before any judging, exactly as the finished world has them.
+    // The land's outlines, every file's patch and every lot come before any judging, exactly as the finished world has them.
     const land = first.shown.findIndex((o) => o.stage === "land");
     expect(land).toBeGreaterThan(first.shown.findIndex((o) => o.stage === "reading"));
     expect(land).toBeLessThan(first.shown.findIndex((o) => o.stage === "asking"));
     const patches = first.document.world.patches.map(({ path, name, area, x, z, radius }) => ({ path, name, area, x, z, radius }));
-    expect(first.shown[land]).toEqual({ stage: "land", name: "tiny", size: first.document.world.size, areas: outlinesOf(first.document.world).areas, patches });
+    const lots = first.document.world.things.map(({ x, z }) => ({ x, z }));
+    expect(first.shown[land]).toEqual({ stage: "land", name: "tiny", size: first.document.world.size, areas: outlinesOf(first.document.world).areas, patches, lots });
     // Each file's health is named once, as the finished world has it, the health its facts settle straight after the land.
     expect(first.shown[land + 1]?.stage).toBe("health");
     const health = first.shown.flatMap((o) => (o.stage === "health" ? Object.entries(o.vitality) : []));

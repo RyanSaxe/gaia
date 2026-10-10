@@ -149,7 +149,7 @@ describe("a world laid out from code", () => {
     expect(bigger.size).toBeGreaterThan(world.size);
   });
 
-  it("knows the land before anything is judged: however Jev judges, every area, patch and cell is the same", async () => {
+  it("knows the land before anything is judged: however Jev judges, every area, patch, cell and lot is the same", async () => {
     const judged = await judgeWorld(model(), LOOKS, standInJev(LOOKS));
     const landmarks = { ...judged, things: Object.fromEntries(Object.keys(judged.things).map((path) => [path, { as: "landmark" as const, look: "" }])) };
     const land = landOf(model());
@@ -158,6 +158,7 @@ describe("a world laid out from code", () => {
       expect(world.cells).toEqual(land.cells);
       expect(world.areas.map(({ path, x, z }) => ({ path, x, z }))).toEqual(land.areas.map(({ path, x, z }) => ({ path, x, z })));
       expect(world.patches.map(({ path, x, z, radius }) => ({ path, x, z, radius }))).toEqual(land.patches.map(({ path, x, z, radius }) => ({ path, x, z, radius })));
+      expect(world.things.map(({ x, z }) => ({ x, z }))).toEqual(land.lots);
     }
   });
 
