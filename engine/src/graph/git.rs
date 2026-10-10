@@ -90,6 +90,44 @@ pub fn toplevel(root: &Path) -> Option<std::path::PathBuf> {
     std::path::Path::new(&top).canonicalize().ok()
 }
 
+/// The repository's name: the last part of its `origin` remote's address,
+/// or with no remote the folder of its main checkout, which its worktrees
+/// share. A worktree's folder or a branch never changes it.
+pub fn name(root: &Path) -> Option<String> {
+    let git = |args: &[&str]| {
+        let out = Command::new("git")
+            .env("GIT_NO_LAZY_FETCH", "1")
+            .arg("-C")
+            .arg(root)
+            .args(args)
+            .output()
+            .ok()?;
+        out.status
+            .success()
+            .then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
+            .filter(|s| !s.is_empty())
+    };
+    if let Some(url) = git(&["config", "--get", "remote.origin.url"]) {
+        let last = url.trim_end_matches('/').rsplit(['/', ':']).next()?;
+        let name = last.strip_suffix(".git").unwrap_or(last);
+        if !name.is_empty() {
+            return Some(name.to_string());
+        }
+    }
+    let common = std::path::PathBuf::from(git(&[
+        "rev-parse",
+        "--path-format=absolute",
+        "--git-common-dir",
+    ])?);
+    // A submodule keeps its history elsewhere, so its own folder names it.
+    let checkout = if common.file_name()? == ".git" {
+        common.parent()?.to_path_buf()
+    } else {
+        std::path::PathBuf::from(git(&["rev-parse", "--show-toplevel"])?)
+    };
+    Some(checkout.file_name()?.to_string_lossy().into_owned())
+}
+
 /// The commit checked out, if the root is in git.
 pub fn head(root: &Path) -> Option<String> {
     let out = Command::new("git")
