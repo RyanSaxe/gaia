@@ -1,0 +1,5 @@
+{
+  "about": "The calibration set splits by repository: wording is tuned and curves are fitted on one half, and every measure is reported on the other, so a wording can't pass by fitting the examples it is graded on (round 6, calibration page).",
+  "fit": ["click", "fd", "git-history", "SWE-agent"],
+  "heldOut": ["cobra", "zustand", "full-stack-fastapi-template", "gaia"]
+}
