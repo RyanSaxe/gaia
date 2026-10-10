@@ -8,14 +8,15 @@ pub mod git;
 mod languages;
 mod model;
 mod parse;
+mod reach;
+mod resolve;
 pub mod walk;
 
 use model::{
     BlockNode, CodeGraph, DefNode, DirNode, Edge, FileNode, Filled, History, Measures, Node,
-    PendingRef,
 };
-use parse::{FileParse, RefKind};
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use parse::FileParse;
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::Path;
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -172,6 +173,7 @@ fn contains_edge(from: &str, to: &str) -> Edge {
         to: to.to_string(),
         kind: "contains",
         by: Filled { by: "parser" },
+        at: None,
     }
 }
 
@@ -189,7 +191,8 @@ pub fn build(root: &Path) -> Result<CodeGraph, String> {
         .map_or(0, |d| d.as_secs() as i64);
     let mut file_touches: HashMap<String, Touches> = HashMap::new();
     let mut dir_touches: HashMap<String, Touches> = HashMap::new();
-    for c in git::history(root) {
+    let commits = git::history(root);
+    for c in &commits {
         let mut dirs: BTreeSet<String> = BTreeSet::new();
         for f in &c.files {
             let t = file_touches.entry(f.clone()).or_default();
@@ -221,7 +224,7 @@ pub fn build(root: &Path) -> Result<CodeGraph, String> {
 
     let mut nodes: Vec<Node> = Vec::new();
     let mut edges: Vec<Edge> = Vec::new();
-    let mut pending: Vec<PendingRef> = Vec::new();
+    let mut all_def_ids: Vec<Vec<String>> = vec![Vec::new(); files.len()];
     for (dir, lines) in &dir_lines {
         let id = format!("dir:{dir}");
         if !dir.is_empty() {
@@ -319,22 +322,78 @@ pub fn build(root: &Path) -> Result<CodeGraph, String> {
                 depth: b.depth,
             }));
         }
-        for r in &p.refs {
-            let kind = match r.kind {
-                RefKind::Import => "import",
-                RefKind::Call => "call",
-                // References and implementations resolve with the rules, by name.
-                RefKind::Reference | RefKind::Implements => continue,
-            };
-            pending.push(PendingRef {
-                from: r.from.map_or(file_id.clone(), |i| def_ids[i].clone()),
-                kind,
-                text: r.text.clone(),
-                at: r.at,
-                candidates: Vec::new(),
+        all_def_ids[k] = def_ids;
+    }
+
+    // The rules: imports, calls, references and names, by rule or pending.
+    let dirs: BTreeSet<String> = dir_lines.keys().cloned().collect();
+    let units: Vec<resolve::Unit> = files
+        .iter()
+        .zip(&parsed)
+        .zip(&all_def_ids)
+        .map(|((f, p), ids)| resolve::Unit {
+            path: &f.path,
+            spec: languages::of_path(&f.path),
+            parse: p.as_deref(),
+            def_ids: ids,
+            text: f.text.as_deref(),
+        })
+        .collect();
+    let resolved = resolve::run(&units, &dirs);
+    edges.extend(resolved.edges);
+    let walked: HashSet<&str> = files.iter().map(|f| f.path.as_str()).collect();
+    let commit_files: Vec<Vec<String>> = commits.into_iter().map(|c| c.files).collect();
+    edges.extend(reach::changes_with(&commit_files, &walked));
+
+    // What the edges imply for each node.
+    let mut items: Vec<reach::Item> = Vec::new();
+    let mut bodies: Vec<reach::Body> = Vec::new();
+    for (k, (f, p)) in files.iter().zip(&parsed).enumerate() {
+        items.push(reach::Item {
+            id: format!("file:{}", f.path),
+            file: k,
+            is_file: true,
+        });
+        let Some(p) = p else { continue };
+        for (d, id) in p.defs.iter().zip(&all_def_ids[k]) {
+            items.push(reach::Item {
+                id: id.clone(),
+                file: k,
+                is_file: false,
             });
+            if d.callable && d.shingles >= reach::MIN_SHINGLES {
+                bodies.push(reach::Body {
+                    id,
+                    file: k,
+                    start: d.span.start,
+                    end: d.span.end,
+                    fingerprint: &d.fingerprint,
+                });
+            }
         }
     }
+    let file_dirs: Vec<String> = files
+        .iter()
+        .map(|f| parent_dir(&f.path).to_string())
+        .collect();
+    let reaches = reach::reach(&items, &file_dirs, &dirs, &edges);
+    let calls_out = reach::calls_out(&edges);
+    let mut duplicates = reach::duplicates(&bodies);
+    for n in &mut nodes {
+        match n {
+            Node::Dir(d) => d.measures.reach = reaches.get(&d.id).copied(),
+            Node::File(f) => f.measures.reach = reaches.get(&f.id).copied(),
+            Node::Def(d) => {
+                d.measures.reach = reaches.get(&d.id).copied();
+                if d.measures.params.is_some() {
+                    d.measures.calls_out = Some(calls_out.get(&d.id).copied().unwrap_or(0));
+                }
+                d.measures.duplicates = duplicates.remove(&d.id);
+            }
+            Node::Block(_) => {}
+        }
+    }
+    let pending = resolved.pending;
 
     let canonical = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
     let project_id = git::root_commit(root)
@@ -425,16 +484,19 @@ mod tests {
                         spec.name, file.path
                     );
                 }
+                // An import or call may resolve, go pending or lie outside, so the parse is checked.
                 let kind = match capture {
-                    "reference.import" => "import",
-                    "reference.call" | "reference.send" => "call",
+                    "reference.import" => parse::RefKind::Import,
+                    "reference.call" | "reference.send" => parse::RefKind::Call,
                     _ => continue,
                 };
-                let found = g.pending.iter().any(|r| r.kind == kind && in_file(&r.from));
+                let text = std::fs::read_to_string(fixtures().join(&file.path)).unwrap();
+                let parsed = parse::parse(&loaded, &text).unwrap();
                 assert!(
-                    found,
-                    "{}'s @{capture} makes a pending {kind} in {}",
-                    spec.name, file.path
+                    parsed.refs.iter().any(|r| r.kind == kind),
+                    "{}'s @{capture} makes a reference in {}",
+                    spec.name,
+                    file.path
                 );
             }
         }
@@ -473,7 +535,7 @@ mod tests {
                 assert!(
                     p.refs
                         .iter()
-                        .any(|r| r.kind == RefKind::Call && r.text == "helper")
+                        .any(|r| r.kind == parse::RefKind::Call && r.text == "helper")
                 );
             }
         }
@@ -510,6 +572,134 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn the_rules_resolve_what_has_one_target_and_leave_the_rest_to_jev() {
+        let body = "  const parts = [];\n  for (const p of input.split(\"/\")) {\n    if (p.length > 0) {\n      parts.push(p.trim());\n    }\n  }\n  return parts.join(\"-\");\n";
+        let dir = project(
+            "rules",
+            &[
+                (
+                    "package.json",
+                    "{ \"name\": \"demo\", \"main\": \"src/a.ts\", \"dependencies\": { \"react\": \"19\" } }\n",
+                ),
+                (
+                    "src/a.ts",
+                    &format!(
+                        "import {{ helper, Tool }} from \"./b\";\nimport {{ widget }} from \"./widgets\";\nimport React from \"react\";\nimport _ from \"lodash\";\n\nexport function caller(obj: unknown) {{\n  helper();\n  obj.render();\n  widget();\n}}\n\nexport function slugA(input: string) {{\n{body}}}\n"
+                    ),
+                ),
+                (
+                    "src/b.ts",
+                    &format!(
+                        "export function helper() {{\n  return 1;\n}}\n\nexport class Tool {{\n  render() {{\n    return this.size();\n  }}\n  size() {{\n    return 2;\n  }}\n}}\n\nexport function outer() {{\n  const inner = () => 3;\n  return inner();\n}}\n\nexport function slugB(input: string) {{\n{body}}}\n"
+                    ),
+                ),
+                (
+                    "src/widgets/index.ts",
+                    "export function widget() {\n  return inner();\n}\n",
+                ),
+                (
+                    "src/main.rs",
+                    "use crate::util::Tool;\n\nfn main() {\n    let t = Tool::new();\n    let s = format!(\"{}\", 1);\n}\n",
+                ),
+                (
+                    "src/util.rs",
+                    "pub struct Tool;\n\nimpl Tool {\n    pub fn new() -> Self {\n        Tool\n    }\n}\n\npub fn format(x: u8) -> u8 {\n    x\n}\n",
+                ),
+                (
+                    "pkg/sub/a.py",
+                    "from .b import f\nfrom ..top import g\n\n\ndef run():\n    return f() + g()\n",
+                ),
+                ("pkg/sub/b.py", "def f():\n    return 1\n"),
+                ("pkg/top.py", "def g():\n    return 2\n"),
+            ],
+        );
+        let g = build(&dir).unwrap();
+        let edge = |from: &str, to: &str, kind: &str| {
+            g.edges
+                .iter()
+                .any(|e| e.from == from && e.to == to && e.kind == kind)
+        };
+        // Imports: relative forms resolve, a directory is its own node, and a
+        // package a configuration names goes to Jev with that configuration's directory.
+        assert!(edge("file:src/a.ts", "file:src/b.ts", "imports"));
+        assert!(edge("file:src/a.ts", "dir:src/widgets", "imports"));
+        assert!(edge("file:src/main.rs", "file:src/util.rs", "imports"));
+        assert!(edge("file:pkg/sub/a.py", "file:pkg/sub/b.py", "imports"));
+        assert!(edge("file:pkg/sub/a.py", "file:pkg/top.py", "imports"));
+        let react = g
+            .pending
+            .iter()
+            .find(|p| p.text == "react")
+            .expect("react goes to Jev");
+        assert_eq!(react.candidates, vec!["dir:".to_string()]);
+        assert!(
+            !g.pending.iter().any(|p| p.text == "lodash"),
+            "nothing names lodash, so it is outside"
+        );
+        // Calls: one target by rule; an owner or `this` narrows; a receiver
+        // the rule cannot place goes to Jev; a function's locals stay local;
+        // a macro reaches only a macro.
+        assert!(edge("def:src/a.ts#caller", "def:src/b.ts#helper", "calls"));
+        assert!(edge(
+            "def:src/a.ts#caller",
+            "def:src/widgets/index.ts#widget",
+            "calls"
+        ));
+        assert!(edge(
+            "def:src/b.ts#Tool.render",
+            "def:src/b.ts#Tool.size",
+            "calls"
+        ));
+        assert!(edge(
+            "def:src/b.ts#outer",
+            "def:src/b.ts#outer.inner",
+            "calls"
+        ));
+        assert!(edge(
+            "def:src/main.rs#main",
+            "def:src/util.rs#Tool.new",
+            "calls"
+        ));
+        assert!(edge("def:pkg/sub/a.py#run", "def:pkg/sub/b.py#f", "calls"));
+        let render = g
+            .pending
+            .iter()
+            .find(|p| p.text == "render")
+            .expect("obj.render goes to Jev");
+        assert_eq!(
+            render.candidates,
+            vec!["def:src/b.ts#Tool.render".to_string()]
+        );
+        assert!(
+            !g.edges
+                .iter()
+                .any(|e| e.from == "def:src/widgets/index.ts#widget" && e.kind == "calls")
+        );
+        assert!(
+            !g.edges
+                .iter()
+                .any(|e| e.to == "def:src/util.rs#format" && e.kind == "calls")
+        );
+        // A literal that spells out a path names it, from the key that holds it.
+        assert!(edge("def:package.json#main", "file:src/a.ts", "names"));
+        // Reach, calls out and near-duplicates follow from the edges.
+        let defs = defs(&g);
+        assert_eq!(
+            defs["def:src/b.ts#helper"]
+                .measures
+                .reach
+                .map(|r| (r.files, r.defs)),
+            Some((1, 1))
+        );
+        assert_eq!(defs["def:src/a.ts#caller"].measures.calls_out, Some(2));
+        assert_eq!(
+            defs["def:src/a.ts#slugA"].measures.duplicates,
+            Some(vec!["def:src/b.ts#slugB".to_string()])
+        );
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]

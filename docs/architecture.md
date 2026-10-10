@@ -397,6 +397,35 @@ such as TypeScript 5's `export type *`, which tree-sitter-typescript 0.23
 does not know. Parses are kept by content hash while the engine runs, and
 Gaia's graph builds in under a second.
 
+Then the rules (`engine/src/graph/resolve.rs`) turn each import, call and
+named path into an edge when exactly one target fits. Anything with several
+possible targets goes pending, with every candidate, for Jev. Anything with
+none is outside the repository and gets neither:
+- An import's relative forms resolve from where they point, by the prefixes
+  the language table lists, such as `./`, Python's leading dots and Rust's
+  `crate::`. Other forms resolve when exactly one path ends with all their
+  segments, as `click.core` names `src/click/core.py`. An import that names
+  a directory points at the directory. A package name goes to Jev with the
+  directories whose configuration mentions it.
+- A call or reference looks for definitions with its name in the caller's
+  language family: first in its own file, then in the files it imports, then
+  in its own directory. What the call names before its name narrows the
+  candidates: an owner (`Batch::new`), a file or package (`utils.join`), or
+  `self` and its kin for the caller's own class. An unqualified call never
+  reaches another class's method, except in languages whose methods call
+  their own class's without `self`. A definition inside a function is local
+  to it, and a macro call reaches only a macro. A receiver the rule cannot
+  place, such as `err` in `err.Error()`, sends the call to Jev.
+- A string literal that spells out a path in the repository becomes a
+  `names` edge, so configuration and prompts link to the code that loads
+  them.
+
+On a hand check of the bench, 175 of 175 imports and 199 of 200 calls the
+rules resolved were right (`tools/bench/labels/`). From the edges the engine
+then counts each node's reach, each function's calls out, the files that
+change together in git, and near-duplicate functions, whose body
+fingerprints agree on 85% or more.
+
 The graph is built beside `project.open`, and nothing the world reads
 changes until the world moves onto it. Updating a world while its files
 change on disk comes last, once the world is right without it, because it
