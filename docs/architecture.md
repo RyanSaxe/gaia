@@ -431,6 +431,25 @@ changes until the world moves onto it. Updating a world while its files
 change on disk comes last, once the world is right without it, because it
 complicates nearly everything else.
 
+## The Jev runner
+
+The engine asks Jev about the code graph itself, so a call never sends
+anything on its own and every answer lands in one place. The protocol has
+four methods:
+- `understand.plan` builds every request Jev's calls would send about a
+  project and looks each up in the store's `calls` table. It sends nothing.
+- `understand.next` sends whatever is ready, in slices, and returns the
+  nodes that settled, so a waiting screen can paint each as it lands.
+- `understand.deepen` queues the deep questions for the nodes the world
+  chooses to stand.
+- `understand.ask` asks one call about one node at once, for a follow-up a
+  person asks.
+
+`project.graph` with `judged: true` includes every answer the project's
+store holds ([decision 54](decisions/54-understanding-in-slices.md)).
+Nothing calls these methods yet; the world moves onto them once the calls
+are built.
+
 ## Jev
 
 Jev answers three question types about one JSON state: `choice` (up to 255
