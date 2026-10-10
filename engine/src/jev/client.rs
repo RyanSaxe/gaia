@@ -21,8 +21,10 @@ pub const ENDPOINT: &str = "https://openrouter.ai/api/alpha/decisions";
 /// USD per million input tokens for typesafe/jev-1.13; output tokens are free.
 /// From OpenRouter's model page as recorded on 2026-10-06.
 pub const USD_PER_MILLION_INPUT: f64 = 0.042;
-/// Concurrent requests: OpenRouter's Jev cookbook ran 8 workers without a 429.
-pub const CONCURRENCY: usize = 8;
+/// Concurrent requests at most. In round 4 of the engine plan, 64 at a time
+/// answered 245 requests in 2.2 s where 8 took 11.0, with no failures, and
+/// more did not help. The runner sends fewer when Jev says it is overloaded.
+pub const CONCURRENCY: usize = 64;
 /// OpenRouter's own example request is 858 bytes of JSON billed as 476 input
 /// tokens, so Jev counts about 1.8 bytes per token. An estimate until a live
 /// run reports `usage.input_tokens`.
@@ -138,10 +140,25 @@ fn key(endpoint: &Endpoint) -> Result<String, String> {
     Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
 }
 
+/// Why one request failed: Jev said it was overloaded (429 or 503, after
+/// curl's own retries), or anything else.
+pub enum Failure {
+    Overloaded(String),
+    Other(String),
+}
+
+impl Failure {
+    fn message(self) -> String {
+        match self {
+            Failure::Overloaded(m) | Failure::Other(m) => m,
+        }
+    }
+}
+
 /// Posts one request with curl, the key passed on stdin as a header. curl
 /// retries a transient failure (a timeout, 429 or 5xx) twice, and gives up on
 /// one request after 90 seconds.
-fn send(url: &str, key: &str, request: &Value) -> Result<Value, String> {
+fn send(url: &str, key: &str, request: &Value) -> Result<Value, Failure> {
     let started = Instant::now();
     let mut child = Command::new("curl")
         .args([
@@ -153,6 +170,8 @@ fn send(url: &str, key: &str, request: &Value) -> Result<Value, String> {
             "90",
             "--retry",
             "2",
+            "--write-out",
+            "\n%{http_code}",
             "-X",
             "POST",
             url,
@@ -167,24 +186,37 @@ fn send(url: &str, key: &str, request: &Value) -> Result<Value, String> {
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .map_err(|e| format!("Could not start curl: {e}"))?;
+        .map_err(|e| Failure::Other(format!("Could not start curl: {e}")))?;
     child
         .stdin
         .take()
-        .ok_or("curl has no stdin")?
+        .ok_or(Failure::Other("curl has no stdin".into()))?
         .write_all(format!("Authorization: Bearer {key}\n").as_bytes())
-        .map_err(|e| format!("Could not hand curl the key: {e}"))?;
+        .map_err(|e| Failure::Other(format!("Could not hand curl the key: {e}")))?;
     let out = child
         .wait_with_output()
-        .map_err(|e| format!("curl failed: {e}"))?;
-    let body: Value = serde_json::from_slice(&out.stdout).map_err(|_| {
-        format!(
+        .map_err(|e| Failure::Other(format!("curl failed: {e}")))?;
+    let text = String::from_utf8_lossy(&out.stdout);
+    let (body_text, status) = text.rsplit_once('\n').unwrap_or((&text, ""));
+    let overloaded = matches!(status.trim(), "429" | "503");
+    let body: Value = serde_json::from_str(body_text).map_err(|_| {
+        let m = format!(
             "Jev answered with no JSON: {}",
             String::from_utf8_lossy(&out.stderr)
-        )
+        );
+        if overloaded {
+            Failure::Overloaded(m)
+        } else {
+            Failure::Other(m)
+        }
     })?;
     if !out.status.success() {
-        return Err(format!("Jev refused the request: {body}"));
+        let m = format!("Jev refused the request: {body}");
+        return Err(if overloaded {
+            Failure::Overloaded(m)
+        } else {
+            Failure::Other(m)
+        });
     }
     // The shape of `JevResponse` in packages/schema/src/jev.ts.
     Ok(json!({
@@ -200,6 +232,12 @@ fn send(url: &str, key: &str, request: &Value) -> Result<Value, String> {
 /// Each answer is a `JevResponse`, or `{ "error": … }` for a request that
 /// failed on its own; the whole batch fails only when nothing can be sent.
 pub fn batch(requests: Vec<Value>) -> Result<Vec<Value>, String> {
+    send_all(requests, CONCURRENCY).map(|(answers, _)| answers)
+}
+
+/// Sends every request, `concurrency` at a time, in the order asked, and
+/// says whether Jev reported being overloaded for any of them.
+pub fn send_all(requests: Vec<Value>, concurrency: usize) -> Result<(Vec<Value>, bool), String> {
     if !live() {
         return Err(
             "Jev is off: the engine sends nothing until it runs with GAIA_JEV=live.".into(),
@@ -212,18 +250,24 @@ pub fn batch(requests: Vec<Value>) -> Result<Vec<Value>, String> {
         requests.into_iter().enumerate().collect::<Vec<_>>(),
     ));
     let results = Arc::new(Mutex::new(Vec::new()));
-    let workers: Vec<_> = (0..CONCURRENCY)
+    let overloaded = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let workers: Vec<_> = (0..concurrency.max(1))
         .map(|_| {
-            let (url, key, jobs, results) = (
+            let (url, key, jobs, results, overloaded) = (
                 Arc::clone(&url),
                 Arc::clone(&key),
                 Arc::clone(&jobs),
                 Arc::clone(&results),
+                Arc::clone(&overloaded),
             );
             std::thread::spawn(move || {
                 while let Some((i, request)) = jobs.lock().map(|mut j| j.pop()).ok().flatten() {
-                    let answer =
-                        send(&url, &key, &request).unwrap_or_else(|e| json!({ "error": e }));
+                    let answer = send(&url, &key, &request).unwrap_or_else(|e| {
+                        if let Failure::Overloaded(_) = e {
+                            overloaded.store(true, std::sync::atomic::Ordering::Relaxed);
+                        }
+                        json!({ "error": e.message() })
+                    });
                     if let Ok(mut r) = results.lock() {
                         r.push((i, answer));
                     }
@@ -239,7 +283,8 @@ pub fn batch(requests: Vec<Value>) -> Result<Vec<Value>, String> {
         .into_inner()
         .map_err(|e| e.to_string())?;
     results.sort_by_key(|(i, _)| *i);
-    Ok(results.into_iter().map(|(_, r)| r).collect())
+    let overloaded = overloaded.load(std::sync::atomic::Ordering::Relaxed);
+    Ok((results.into_iter().map(|(_, r)| r).collect(), overloaded))
 }
 
 #[cfg(test)]

@@ -469,6 +469,36 @@ store holds ([decision 54](decisions/54-understanding-in-slices.md)).
 Nothing calls these methods yet; the world moves onto them once the calls
 are built.
 
+The runner (`engine/src/jev/runner.rs`) makes one request per file. The
+request holds the file's source, an outline of its definitions, and every
+applicable call's part and questions. Each call (`engine/src/jev/calls.rs`)
+names, for every question, the node it is about and where its answer goes
+in that node's `judged`. Its words live in its vocabulary file in
+`engine/vocab/`, and its version is that file's hash. The first two calls
+are `profile`, a file's kind, responsibilities, whether it needs tests and,
+when nothing reaches it, whether it is dead; and `screen`, how much the
+file, each definition and each block deserves to stand.
+
+A request stays within 30,000 tokens as `engine/src/jev/tokens.rs`
+estimates them, deterministically, so a request is laid out the same way on
+every open and its stored answer is found again. A file that doesn't fit is
+cut at its top-level definitions into pieces sized by their source and
+their questions together, so its source goes out about once; a line too
+long for a request, such as a minified file's, is cut inside. A question
+about the whole file goes in every piece, and the pieces' answers are
+combined, each weighted by how much of the file it read. A request already
+answered (the store's `calls` table, by the request's hash) is never sent
+again. A fresh answer replaces the one held for a node's lineage (the
+`held` table) only when it clearly differs: a choice by 0.2, a score by
+half a level, a yes-or-no by crossing 0.5 by 0.15. Up to 64 requests go at
+once; when Jev says it is overloaded, half as many, and 8 more after each
+slice it takes without complaint.
+
+On six of the bench's repositories, `profile` and `screen` together
+answered in 1.5 to 4.6 seconds each and billed $0.42 in all. Screening
+spread over every level, with no level holding more than 48% of a
+repository's definitions.
+
 ## Jev
 
 Jev answers three question types about one JSON state: `choice` (up to 255

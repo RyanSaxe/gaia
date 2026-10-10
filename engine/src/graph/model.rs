@@ -29,6 +29,8 @@ pub struct DirNode {
     pub id: String,
     pub lineage: String,
     pub measures: Measures,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub judged: Option<serde_json::Value>,
     pub path: String,
 }
 
@@ -38,6 +40,8 @@ pub struct FileNode {
     pub id: String,
     pub lineage: String,
     pub measures: Measures,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub judged: Option<serde_json::Value>,
     pub path: String,
     pub language: Option<String>,
     pub bytes: u64,
@@ -53,6 +57,8 @@ pub struct DefNode {
     pub id: String,
     pub lineage: String,
     pub measures: Measures,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub judged: Option<serde_json::Value>,
     pub file: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub parent: Option<String>,
@@ -72,6 +78,8 @@ pub struct BlockNode {
     pub id: String,
     pub lineage: String,
     pub measures: Measures,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub judged: Option<serde_json::Value>,
     /// The innermost definition holding the block, or its file when no definition does.
     pub def: String,
     pub shape: String,
