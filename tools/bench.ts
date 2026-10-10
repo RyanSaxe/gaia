@@ -82,6 +82,7 @@ function measure(graph: CodeGraph, ms: number) {
     roles: tally(defs, (d) => d.role),
     blocks: tally(blocks, (b) => b.shape),
     pending: tally(graph.pending, (p) => p.kind),
+    edges: tally(graph.edges, (e) => `${e.kind} by ${e.by.by}`),
     unparsed: files.reduce((n, f) => n + f.unparsed, 0),
     unparsedFiles: files.filter((f) => f.unparsed > 0).map((f) => f.path),
     conventions: tally(
@@ -114,6 +115,7 @@ for (const r of chosen) {
   console.log(`  languages: ${words(m.languages)}`);
   console.log(`  definitions: ${words(m.roles)}`);
   console.log(`  blocks: ${words(m.blocks)}`);
+  console.log(`  edges: ${words(m.edges)}`);
   if (Object.keys(m.conventions).length > 0) console.log(`  conventions: ${words(m.conventions)}`);
 }
 if (out !== undefined) writeFileSync(resolve(out), `${JSON.stringify(results, null, 2)}\n`);

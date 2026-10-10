@@ -1,0 +1,1607 @@
+{
+ "about": "Edges the rules filled, sampled across the bench (25 per repository, seeded) and checked by hand against the source. Step 2, round 7 of pair session engine-jev.",
+ "kind": "calls",
+ "labels": [
+  {
+   "repo": "click",
+   "from": "file:tests/test_deprecations.py",
+   "line": 163,
+   "source": "lambda: click.Option([\"--import\"]),",
+   "to": "def:src/click/core.py#Option",
+   "right": true
+  },
+  {
+   "repo": "click",
+   "from": "def:tests/test_termui.py#test_editor_nonexistent_exception",
+   "line": 617,
+   "source": "Editor(editor=\"nonexistent\").edit_files([\"f.txt\"])",
+   "to": "def:src/click/_termui_impl.py#Editor",
+   "right": true
+  },
+  {
+   "repo": "click",
+   "from": "def:src/click/core.py#Group.invoke",
+   "line": 2102,
+   "source": "cmd_name, cmd, args = self.resolve_command(ctx, args)",
+   "to": "def:src/click/core.py#Group.resolve_command",
+   "right": true
+  },
+  {
+   "repo": "click",
+   "from": "def:examples/termui/termui.py#progress",
+   "line": 67,
+   "source": "process_slowly(item)",
+   "to": "def:examples/termui/termui.py#progress.process_slowly",
+   "right": true
+  },
+  {
+   "repo": "click",
+   "from": "def:src/click/shell_completion.py#ShellComplete.complete",
+   "line": 384,
+   "source": "completions = self.get_completions(args, incomplete)",
+   "to": "def:src/click/shell_completion.py#ShellComplete.get_completions",
+   "right": true
+  },
+  {
+   "repo": "click",
+   "from": "def:src/click/_compat.py#get_binary_stdin",
+   "line": 320,
+   "source": "reader = _find_binary_reader(sys.stdin)",
+   "to": "def:src/click/_compat.py#_find_binary_reader",
+   "right": true
+  },
+  {
+   "repo": "click",
+   "from": "def:src/click/core.py#Group.format_commands",
+   "line": 2015,
+   "source": "for subcommand in self.list_commands(ctx):",
+   "to": "def:src/click/core.py#Group.list_commands",
+   "right": true
+  },
+  {
+   "repo": "click",
+   "from": "def:tests/test_shell_completion.py#test_path_types",
+   "line": 197,
+   "source": "cli = Command(\"cli\", params=[Option([\"-f\"], type=type)])",
+   "to": "def:src/click/core.py#Command",
+   "right": true
+  },
+  {
+   "repo": "click",
+   "from": "def:tests/test_context.py#test_with_resource_nested_exception",
+   "line": 627,
+   "source": "rv = ctx.with_resource(TestContext(base_val=base_val))",
+   "to": "def:tests/test_context.py#test_with_resource_nested_exception.TestContext",
+   "right": true
+  },
+  {
+   "repo": "click",
+   "from": "def:src/click/_compat.py#_force_correct_text_reader",
+   "line": 293,
+   "source": "return _force_correct_text_stream(",
+   "to": "def:src/click/_compat.py#_force_correct_text_stream",
+   "right": true
+  },
+  {
+   "repo": "click",
+   "from": "def:src/click/termui.py#style",
+   "line": 741,
+   "source": "bits.append(f\"\\033[{_interpret_color(fg)}m\")",
+   "to": "def:src/click/termui.py#_interpret_color",
+   "right": true
+  },
+  {
+   "repo": "click",
+   "from": "def:src/click/_termui_impl.py#ProgressBar.update",
+   "line": 341,
+   "source": "self.render_progress()",
+   "to": "def:src/click/_termui_impl.py#ProgressBar.render_progress",
+   "right": true
+  },
+  {
+   "repo": "click",
+   "from": "def:src/click/core.py#Argument.get_usage_pieces",
+   "line": 3985,
+   "source": "return [self.make_metavar(ctx)]",
+   "to": "def:src/click/core.py#Argument.make_metavar",
+   "right": true
+  },
+  {
+   "repo": "click",
+   "from": "def:src/click/termui.py#_build_prompt",
+   "line": 124,
+   "source": "default_preview = f\" [{_format_default(default)}]\"",
+   "to": "def:src/click/termui.py#_format_default",
+   "right": true
+  },
+  {
+   "repo": "click",
+   "from": "def:src/click/testing.py#CliRunner.isolation",
+   "line": 447,
+   "source": "t.BinaryIO, EchoingStdin(bytes_input, stream_mixer.stdout)",
+   "to": "def:src/click/testing.py#EchoingStdin",
+   "right": true
+  },
+  {
+   "repo": "click",
+   "from": "def:tests/test_termui.py#test_get_pager_file_missing_pager_keeps_borrowed_stream_open",
+   "line": 1026,
+   "source": "with click.get_pager_file() as pager:",
+   "to": "def:src/click/_termui_impl.py#get_pager_file",
+   "right": true
+  },
+  {
+   "repo": "click",
+   "from": "def:tests/test_testing.py#test_prompts",
+   "line": 131,
+   "source": "runner = CliRunner()",
+   "to": "def:src/click/testing.py#CliRunner",
+   "right": true
+  },
+  {
+   "repo": "click",
+   "from": "def:src/click/testing.py#CliRunner.isolation",
+   "line": 459,
+   "source": "sys.stdout = _NamedTextIOWrapper(",
+   "to": "def:src/click/testing.py#_NamedTextIOWrapper",
+   "right": true
+  },
+  {
+   "repo": "click",
+   "from": "def:tests/test_utils/test_echo.py#test_echo_writing_to_standard_error",
+   "line": 129,
+   "source": "emulate_input(\"asdlkj\\n\")",
+   "to": "def:tests/test_utils/test_echo.py#test_echo_writing_to_standard_error.emulate_input",
+   "right": true
+  },
+  {
+   "repo": "click",
+   "from": "def:tests/test_testing.py#test_capture_pytest_matrix.cli",
+   "line": 821,
+   "source": "click.echo(\"inside-stderr\", err=True)",
+   "to": "def:src/click/utils.py#echo",
+   "right": true
+  },
+  {
+   "repo": "click",
+   "from": "def:tests/test_shell_completion.py#test_option_multiple",
+   "line": 261,
+   "source": "assert _get_words(cli, [\"-m\"], \"\") == [\"a\", \"b\"]",
+   "to": "def:tests/test_shell_completion.py#_get_words",
+   "right": true
+  },
+  {
+   "repo": "click",
+   "from": "def:tests/test_testing.py#test_args.cli_args",
+   "line": 400,
+   "source": "click.echo(foo)",
+   "to": "def:src/click/utils.py#echo",
+   "right": true
+  },
+  {
+   "repo": "click",
+   "from": "def:src/click/_textwrap.py#TextWrapper._wrap_chunks",
+   "line": 118,
+   "source": "if chunks and term_len(chunks[-1]) > width:",
+   "to": "def:src/click/_compat.py#term_len",
+   "right": true
+  },
+  {
+   "repo": "click",
+   "from": "def:src/click/core.py#Parameter.process_value",
+   "line": 2826,
+   "source": "if self.required and self.value_is_missing(value):",
+   "to": "def:src/click/core.py#Parameter.value_is_missing",
+   "right": true
+  },
+  {
+   "repo": "click",
+   "from": "def:src/click/formatting.py#wrap_text",
+   "line": 65,
+   "source": "wrapper = TextWrapper(",
+   "to": "def:src/click/_textwrap.py#TextWrapper",
+   "right": true
+  },
+  {
+   "repo": "cobra",
+   "from": "def:command_test.go#TestRequiredFlags",
+   "line": 858,
+   "source": "assertNoErr(t, c.MarkFlagRequired(\"foo2\"))",
+   "to": "def:cobra_test.go#assertNoErr",
+   "right": true
+  },
+  {
+   "repo": "cobra",
+   "from": "def:command.go#Command.execute",
+   "line": 921,
+   "source": "return c.FlagErrorFunc()(c, err)",
+   "to": "def:command.go#Command.FlagErrorFunc",
+   "right": true
+  },
+  {
+   "repo": "cobra",
+   "from": "def:completions_test.go#TestValidArgsNotValidArgsFunc",
+   "line": 2308,
+   "source": "output, err = executeCommand(rootCmd, ShellCompNoDescRequestCmd, \"t\")",
+   "to": "def:command_test.go#executeCommand",
+   "right": true
+  },
+  {
+   "repo": "cobra",
+   "from": "def:bash_completions.go#writePreamble",
+   "line": 401,
+   "source": "ShellCompDirectiveFilterFileExt, ShellCompDirectiveFilterDirs, activeHelpEnvVar(name)))",
+   "to": "def:active_help.go#activeHelpEnvVar",
+   "right": true
+  },
+  {
+   "repo": "cobra",
+   "from": "def:completions_test.go#TestArgsNotDetectedAsFlagsCompletionInGo",
+   "line": 3636,
+   "source": "output, err := executeCommand(&root, args...)",
+   "to": "def:command_test.go#executeCommand",
+   "right": true
+  },
+  {
+   "repo": "cobra",
+   "from": "def:doc/yaml_docs_test.go#TestGenYamlDoc",
+   "line": 41,
+   "source": "checkStringContains(t, output, fmt.Sprintf(\"- %s - %s\", echoSubCmd.CommandPath(), echoSubCmd.Short))",
+   "to": "def:doc/cmd_test.go#checkStringContains",
+   "right": true
+  },
+  {
+   "repo": "cobra",
+   "from": "def:flag_groups.go#Command.ValidateFlagGroups",
+   "line": 94,
+   "source": "processFlagForGroupAnnotation(flags, pflag, requiredAsGroupAnnotation, groupStatus)",
+   "to": "def:flag_groups.go#processFlagForGroupAnnotation",
+   "right": true
+  },
+  {
+   "repo": "cobra",
+   "from": "def:bash_completions.go#gen",
+   "line": 676,
+   "source": "writeRequiredFlag(buf, cmd)",
+   "to": "def:bash_completions.go#writeRequiredFlag",
+   "right": true
+  },
+  {
+   "repo": "cobra",
+   "from": "def:powershell_completions.go#Command.genPowerShellCompletion",
+   "line": 315,
+   "source": "genPowerShellComp(buf, c.Name(), includeDesc)",
+   "to": "def:powershell_completions.go#genPowerShellComp",
+   "right": true
+  },
+  {
+   "repo": "cobra",
+   "from": "def:args_test.go#TestMaximumNArgs_WithMoreArgs_WithValid",
+   "line": 302,
+   "source": "c := getCommand(MaximumNArgs(2), true)",
+   "to": "def:args_test.go#getCommand",
+   "right": true
+  },
+  {
+   "repo": "cobra",
+   "from": "def:bash_completions_test.go#TestBashCompletionTraverseChildren",
+   "line": 268,
+   "source": "assertNoErr(t, c.GenBashCompletion(buf))",
+   "to": "def:cobra_test.go#assertNoErr",
+   "right": true
+  },
+  {
+   "repo": "cobra",
+   "from": "def:args_test.go#TestNoDuplicateArgs_WithValid_WithDuplicateArgs",
+   "line": 182,
+   "source": "c := getCommand(NoDuplicateArgs, true)",
+   "to": "def:args_test.go#getCommand",
+   "right": true
+  },
+  {
+   "repo": "cobra",
+   "from": "def:completions.go#Command.InitDefaultCompletionCmd",
+   "line": 864,
+   "source": "`, c.Root().Name()),",
+   "to": "def:command.go#Command.Root",
+   "right": true
+  },
+  {
+   "repo": "cobra",
+   "from": "def:powershell_completions.go#Command.genPowerShellCompletion",
+   "line": 315,
+   "source": "genPowerShellComp(buf, c.Name(), includeDesc)",
+   "to": "def:command.go#Command.Name",
+   "right": true
+  },
+  {
+   "repo": "cobra",
+   "from": "def:doc/yaml_docs.go#GenYamlCustom",
+   "line": 101,
+   "source": "yamlDoc.Description = forceMultiLine(cmd.Long)",
+   "to": "def:doc/util.go#forceMultiLine",
+   "right": true
+  },
+  {
+   "repo": "cobra",
+   "from": "def:args_test.go#TestExactValidArgs",
+   "line": 530,
+   "source": "expectSuccess(output, err, t)",
+   "to": "def:args_test.go#expectSuccess",
+   "right": true
+  },
+  {
+   "repo": "cobra",
+   "from": "def:command.go#Command.ArgsLenAtDash",
+   "line": 902,
+   "source": "return c.Flags().ArgsLenAtDash()",
+   "to": "def:command.go#Command.Flags",
+   "right": true
+  },
+  {
+   "repo": "cobra",
+   "from": "def:command.go#Command.ParseFlags",
+   "line": 1880,
+   "source": "c.Flags().ParseErrorsAllowlist = flag.ParseErrorsAllowlist(c.FParseErrWhitelist)",
+   "to": "def:command.go#Command.Flags",
+   "right": true
+  },
+  {
+   "repo": "cobra",
+   "from": "def:command.go#Command.InitDefaultHelpCmd",
+   "line": 1297,
+   "source": "CheckErr(c.Root().Usage())",
+   "to": "def:cobra.go#CheckErr",
+   "right": true
+  },
+  {
+   "repo": "cobra",
+   "from": "def:bash_completions_test.go#TestBashCompletions",
+   "line": 213,
+   "source": "check(t, output, `local_nonpersistent_flags+=(\"--two=\")`)",
+   "to": "def:bash_completions_test.go#check",
+   "right": true
+  },
+  {
+   "repo": "cobra",
+   "from": "def:completions_test.go#TestFlagNameCompletionRepeat",
+   "line": 745,
+   "source": "output, err = executeCommand(rootCmd, ShellCompNoDescRequestCmd, \"--first\", \"1\", \"--second=false\", \"--\")",
+   "to": "def:command_test.go#executeCommand",
+   "right": true
+  },
+  {
+   "repo": "cobra",
+   "from": "def:completions_test.go#TestFlagNameCompletionRepeat",
+   "line": 793,
+   "source": "output, err = executeCommand(rootCmd, ShellCompNoDescRequestCmd, \"-l\", \"1\", \"-l=2\", \"-a\", \"val\", \"-\")",
+   "to": "def:command_test.go#executeCommand",
+   "right": true
+  },
+  {
+   "repo": "cobra",
+   "from": "def:doc/rest_docs_test.go#TestGenRSTDoc",
+   "line": 39,
+   "source": "checkStringContains(t, output, echoSubCmd.Short)",
+   "to": "def:doc/cmd_test.go#checkStringContains",
+   "right": true
+  },
+  {
+   "repo": "cobra",
+   "from": "def:command.go#Command.findSuggestions",
+   "line": 789,
+   "source": "if suggestions := c.SuggestionsFor(arg); len(suggestions) > 0 {",
+   "to": "def:command.go#Command.SuggestionsFor",
+   "right": true
+  },
+  {
+   "repo": "cobra",
+   "from": "def:command_test.go#TestVersionFlagExecutedOnSubcommand",
+   "line": 1304,
+   "source": "output, err := executeCommand(rootCmd, \"--version\", \"sub\")",
+   "to": "def:command_test.go#executeCommand",
+   "right": true
+  },
+  {
+   "repo": "fd",
+   "from": "def:doc/screencast.sh#main",
+   "line": 47,
+   "source": "enter \"fd -e md --exec wc -l\"",
+   "to": "def:doc/screencast.sh#enter",
+   "right": true
+  },
+  {
+   "repo": "fd",
+   "from": "def:src/fmt/mod.rs#FormatTemplate.generate",
+   "line": 123,
+   "source": "&remove_extension(basename(path).as_ref()),",
+   "to": "def:src/fmt/input.rs#basename",
+   "right": true
+  },
+  {
+   "repo": "fd",
+   "from": "def:tests/tests.rs#get_test_env_with_abs_path",
+   "line": 50,
+   "source": "let env = TestEnv::new(dirs, files);",
+   "to": "def:tests/testenv/mod.rs#TestEnv.new",
+   "right": true
+  },
+  {
+   "repo": "fd",
+   "from": "def:src/exec/mod.rs#CommandSet.new",
+   "line": 46,
+   "source": ".map(|args| CommandTemplate::new(args, ExecutionMode::OneByOne))",
+   "to": "def:src/exec/mod.rs#CommandTemplate.new",
+   "right": true
+  },
+  {
+   "repo": "fd",
+   "from": "def:src/exec/job.rs#job",
+   "line": 39,
+   "source": "ret = merge_exitcodes([ret, code]);",
+   "to": "def:src/exit_codes.rs#merge_exitcodes",
+   "right": true
+  },
+  {
+   "repo": "fd",
+   "from": "def:tests/tests.rs#test_base_directory",
+   "line": 2758,
+   "source": "let (te, abs_path) = get_test_env_with_abs_path(DEFAULT_DIRS, DEFAULT_FILES);",
+   "to": "def:tests/tests.rs#get_test_env_with_abs_path",
+   "right": true
+  },
+  {
+   "repo": "fd",
+   "from": "def:src/exec/mod.rs#tests.generate_custom_path_separator_windows",
+   "line": 475,
+   "source": "check!(r\"C:foo\\bar\", \"C:foo#bar\");",
+   "to": "def:src/exec/mod.rs#tests.generate_custom_path_separator_windows.check",
+   "right": true
+  },
+  {
+   "repo": "fd",
+   "from": "def:tests/tests.rs#test_symlink_and_absolute_path",
+   "line": 1778,
+   "source": "&format!(",
+   "to": "def:tests/tests.rs#format",
+   "right": false,
+   "why": "`format!` is the standard macro, not tests.rs's function `format`; a macro call now reaches only macros."
+  },
+  {
+   "repo": "fd",
+   "from": "def:tests/tests.rs#test_empty_pattern",
+   "line": 296,
+   "source": "let te = TestEnv::new(DEFAULT_DIRS, DEFAULT_FILES);",
+   "to": "def:tests/testenv/mod.rs#TestEnv.new",
+   "right": true
+  },
+  {
+   "repo": "fd",
+   "from": "def:tests/testenv/mod.rs#TestEnv.assert_success_and_get_output",
+   "line": 240,
+   "source": "let output = self.run_command(path.as_ref(), args);",
+   "to": "def:tests/testenv/mod.rs#TestEnv.run_command",
+   "right": true
+  },
+  {
+   "repo": "fd",
+   "from": "def:tests/tests.rs#test_and_pattern_starts_with_dash",
+   "line": 148,
+   "source": "let te = TestEnv::new(DEFAULT_DIRS, AND_EXTRA_FILES);",
+   "to": "def:tests/testenv/mod.rs#TestEnv.new",
+   "right": true
+  },
+  {
+   "repo": "fd",
+   "from": "def:tests/tests.rs#test_simple",
+   "line": 65,
+   "source": "let te = TestEnv::new(DEFAULT_DIRS, DEFAULT_FILES);",
+   "to": "def:tests/testenv/mod.rs#TestEnv.new",
+   "right": true
+  },
+  {
+   "repo": "fd",
+   "from": "def:src/output.rs#print_entry",
+   "line": 29,
+   "source": "print_entry_colorized(stdout, entry, config, ls_colors)?;",
+   "to": "def:src/output.rs#print_entry_colorized",
+   "right": true
+  },
+  {
+   "repo": "fd",
+   "from": "def:tests/tests.rs#test_type_empty",
+   "line": 1621,
+   "source": "create_file_with_size(te.test_root().join(\"5_bytes.foo\"), 5);",
+   "to": "def:tests/tests.rs#create_file_with_size",
+   "right": true
+  },
+  {
+   "repo": "fd",
+   "from": "def:src/exec/mod.rs#CommandTemplate.new",
+   "line": 231,
+   "source": "let tmpl = FormatTemplate::parse(arg);",
+   "to": "def:src/fmt/mod.rs#FormatTemplate.parse",
+   "right": true
+  },
+  {
+   "repo": "fd",
+   "from": "def:src/output.rs#print_entry_uncolorized~2",
+   "line": 190,
+   "source": "print_entry_uncolorized_base(stdout, entry, config)",
+   "to": "def:src/output.rs#print_entry_uncolorized_base",
+   "right": true
+  },
+  {
+   "repo": "fd",
+   "from": "def:src/fmt/mod.rs#FormatTemplate.generate",
+   "line": 132,
+   "source": "s.push(Self::replace_separator(path.as_ref(), path_separator))",
+   "to": "def:src/fmt/mod.rs#FormatTemplate.replace_separator",
+   "right": true
+  },
+  {
+   "repo": "fd",
+   "from": "def:src/fmt/mod.rs#FormatTemplate.generate",
+   "line": 122,
+   "source": "BasenameNoExt => s.push(Self::replace_separator(",
+   "to": "def:src/fmt/mod.rs#FormatTemplate.replace_separator",
+   "right": true
+  },
+  {
+   "repo": "fd",
+   "from": "def:src/walk.rs#WorkerState.scan",
+   "line": 632,
+   "source": "self.spawn_senders(walker, tx);",
+   "to": "def:src/walk.rs#WorkerState.spawn_senders",
+   "right": true
+  },
+  {
+   "repo": "fd",
+   "from": "def:tests/tests.rs#test_extension",
+   "line": 1676,
+   "source": "let te2 = TestEnv::new(&[], &[\"spam.bar.baz\", \"egg.bar.baz\", \"yolk.bar.baz.sig\"]);",
+   "to": "def:tests/testenv/mod.rs#TestEnv.new",
+   "right": true
+  },
+  {
+   "repo": "fd",
+   "from": "def:src/walk.rs#BatchSender.new",
+   "line": 83,
+   "source": "batch: Batch::new(),",
+   "to": "def:src/walk.rs#Batch.new",
+   "right": true
+  },
+  {
+   "repo": "fd",
+   "from": "def:tests/testenv/mod.rs#TestEnv.assert_output_raw",
+   "line": 271,
+   "source": "let output = self.assert_success_and_get_output(\".\", args);",
+   "to": "def:tests/testenv/mod.rs#TestEnv.assert_success_and_get_output",
+   "right": true
+  },
+  {
+   "repo": "fd",
+   "from": "def:tests/tests.rs#test_and_plus_extension",
+   "line": 168,
+   "source": "let te = TestEnv::new(DEFAULT_DIRS, AND_EXTRA_FILES);",
+   "to": "def:tests/testenv/mod.rs#TestEnv.new",
+   "right": true
+  },
+  {
+   "repo": "fd",
+   "from": "def:tests/tests.rs#test_single_and_multithreaded_execution",
+   "line": 2879,
+   "source": "let te = TestEnv::new(DEFAULT_DIRS, DEFAULT_FILES);",
+   "to": "def:tests/testenv/mod.rs#TestEnv.new",
+   "right": true
+  },
+  {
+   "repo": "fd",
+   "from": "def:src/exec/mod.rs#CommandSet.execute_batch",
+   "line": 105,
+   "source": "return handle_cmd_error(Some(&builder.cmd), e);",
+   "to": "def:src/exec/command.rs#handle_cmd_error",
+   "right": true
+  },
+  {
+   "repo": "full-stack-fastapi-template",
+   "from": "def:backend/tests/crud/test_user.py#test_check_if_user_is_superuser",
+   "line": 55,
+   "source": "password = random_lower_string()",
+   "to": "def:backend/tests/utils/utils.py#random_lower_string",
+   "right": true
+  },
+  {
+   "repo": "full-stack-fastapi-template",
+   "from": "def:frontend/src/client/client/utils.gen.ts#createQuerySerializer.querySerializer",
+   "line": 40,
+   "source": "const serializedObject = serializeObjectParam({",
+   "to": "def:frontend/src/client/core/pathSerializer.gen.ts#serializeObjectParam",
+   "right": true
+  },
+  {
+   "repo": "full-stack-fastapi-template",
+   "from": "def:backend/tests/crud/test_user.py#test_check_if_user_is_active",
+   "line": 38,
+   "source": "email = random_email()",
+   "to": "def:backend/tests/utils/utils.py#random_email",
+   "right": true
+  },
+  {
+   "repo": "full-stack-fastapi-template",
+   "from": "def:backend/tests/api/routes/test_login.py#test_login_with_bcrypt_password_upgrades_to_argon2",
+   "line": 133,
+   "source": "email = random_email()",
+   "to": "def:backend/tests/utils/utils.py#random_email",
+   "right": true
+  },
+  {
+   "repo": "full-stack-fastapi-template",
+   "from": "file:frontend/tests/sign-up.spec.ts",
+   "line": 101,
+   "source": "await fillForm(page, fullName, email, password, password)",
+   "to": "def:frontend/tests/sign-up.spec.ts#fillForm",
+   "right": true
+  },
+  {
+   "repo": "full-stack-fastapi-template",
+   "from": "def:backend/tests/api/routes/test_login.py#test_login_with_argon2_password_keeps_hash",
+   "line": 167,
+   "source": "email = random_email()",
+   "to": "def:backend/tests/utils/utils.py#random_email",
+   "right": true
+  },
+  {
+   "repo": "full-stack-fastapi-template",
+   "from": "def:backend/tests/crud/test_user.py#test_not_authenticate_user",
+   "line": 32,
+   "source": "password = random_lower_string()",
+   "to": "def:backend/tests/utils/utils.py#random_lower_string",
+   "right": true
+  },
+  {
+   "repo": "full-stack-fastapi-template",
+   "from": "def:backend/tests/crud/test_user.py#test_authenticate_user",
+   "line": 21,
+   "source": "email = random_email()",
+   "to": "def:backend/tests/utils/utils.py#random_email",
+   "right": true
+  },
+  {
+   "repo": "full-stack-fastapi-template",
+   "from": "def:backend/tests/api/routes/test_users.py#test_update_user_me_email_exists",
+   "line": 287,
+   "source": "user_in = UserCreate(email=username, password=password)",
+   "to": "def:backend/app/models.py#UserCreate",
+   "right": true
+  },
+  {
+   "repo": "full-stack-fastapi-template",
+   "from": "def:frontend/src/client/client/client.gen.ts#createClient.makeSseFn",
+   "line": 118,
+   "source": "const { opts, url } = await beforeRequest(options);",
+   "to": "def:frontend/src/client/client/client.gen.ts#createClient.beforeRequest",
+   "right": true
+  },
+  {
+   "repo": "full-stack-fastapi-template",
+   "from": "file:backend/app/alembic/env.py",
+   "line": 84,
+   "source": "run_migrations_offline()",
+   "to": "def:backend/app/alembic/env.py#run_migrations_offline",
+   "right": true
+  },
+  {
+   "repo": "full-stack-fastapi-template",
+   "from": "def:backend/app/api/routes/login.py#login_access_token",
+   "line": 38,
+   "source": "return Token(",
+   "to": "def:backend/app/models.py#Token",
+   "right": true
+  },
+  {
+   "repo": "full-stack-fastapi-template",
+   "from": "file:frontend/tests/admin.spec.ts",
+   "line": 187,
+   "source": "const password = randomPassword()",
+   "to": "def:frontend/tests/utils/random.ts#randomPassword",
+   "right": true
+  },
+  {
+   "repo": "full-stack-fastapi-template",
+   "from": "def:backend/tests/utils/item.py#create_random_item",
+   "line": 14,
+   "source": "description = random_lower_string()",
+   "to": "def:backend/tests/utils/utils.py#random_lower_string",
+   "right": true
+  },
+  {
+   "repo": "full-stack-fastapi-template",
+   "from": "file:scripts/prepare_release.py",
+   "line": 175,
+   "source": "app()",
+   "to": "def:scripts/prepare_release.py#app",
+   "right": true
+  },
+  {
+   "repo": "full-stack-fastapi-template",
+   "from": "def:backend/tests/api/routes/test_users.py#test_create_user_by_normal_user",
+   "line": 169,
+   "source": "password = random_lower_string()",
+   "to": "def:backend/tests/utils/utils.py#random_lower_string",
+   "right": true
+  },
+  {
+   "repo": "full-stack-fastapi-template",
+   "from": "file:frontend/tests/user-settings.spec.ts",
+   "line": 74,
+   "source": "await logInUser(page, email, password)",
+   "to": "def:frontend/tests/utils/user.ts#logInUser",
+   "right": true
+  },
+  {
+   "repo": "full-stack-fastapi-template",
+   "from": "file:frontend/tests/user-settings.spec.ts",
+   "line": 250,
+   "source": "await logInUser(page, firstSuperuser, firstSuperuserPassword)",
+   "to": "def:frontend/tests/utils/user.ts#logInUser",
+   "right": true
+  },
+  {
+   "repo": "full-stack-fastapi-template",
+   "from": "def:backend/tests/api/routes/test_users.py#test_get_existing_user_as_superuser",
+   "line": 63,
+   "source": "username = random_email()",
+   "to": "def:backend/tests/utils/utils.py#random_email",
+   "right": true
+  },
+  {
+   "repo": "full-stack-fastapi-template",
+   "from": "def:backend/app/core/config.py#settings",
+   "line": 91,
+   "source": "settings = Settings()  # type: ignore # ty: ignore[unused-ignore-comment]",
+   "to": "def:backend/app/core/config.py#Settings",
+   "right": true
+  },
+  {
+   "repo": "full-stack-fastapi-template",
+   "from": "def:backend/tests/api/routes/test_login.py#test_reset_password",
+   "line": 83,
+   "source": "email = random_email()",
+   "to": "def:backend/tests/utils/utils.py#random_email",
+   "right": true
+  },
+  {
+   "repo": "full-stack-fastapi-template",
+   "from": "def:backend/app/api/routes/login.py#reset_password",
+   "line": 91,
+   "source": "user_in_update = UserUpdate(password=body.new_password)",
+   "to": "def:backend/app/models.py#UserUpdate",
+   "right": true
+  },
+  {
+   "repo": "full-stack-fastapi-template",
+   "from": "def:backend/tests/api/routes/test_login.py#test_login_with_argon2_password_keeps_hash",
+   "line": 168,
+   "source": "password = random_lower_string()",
+   "to": "def:backend/tests/utils/utils.py#random_lower_string",
+   "right": true
+  },
+  {
+   "repo": "full-stack-fastapi-template",
+   "from": "def:frontend/src/client/client/utils.gen.ts#setAuthParams",
+   "line": 95,
+   "source": "const token = await getAuthToken(auth, options.auth);",
+   "to": "def:frontend/src/client/core/auth.gen.ts#getAuthToken",
+   "right": true
+  },
+  {
+   "repo": "full-stack-fastapi-template",
+   "from": "def:backend/app/api/deps.py#get_current_user",
+   "line": 35,
+   "source": "token_data = TokenPayload(**payload)",
+   "to": "def:backend/app/models.py#TokenPayload",
+   "right": true
+  },
+  {
+   "repo": "gaia",
+   "from": "def:packages/terrain/src/paths.ts#networkOf",
+   "line": 685,
+   "source": "const found = [...meeting].filter(([, ids]) => new Set(ids).size >= 3).sort((a, b) => traffic(b[1]) - traffic(",
+   "to": "def:packages/terrain/src/paths.ts#networkOf.traffic",
+   "right": true
+  },
+  {
+   "repo": "gaia",
+   "from": "def:packages/primitives/src/geometry/building/frame.ts#roofY",
+   "line": 98,
+   "source": "const top = wallTop(plan, m);",
+   "to": "def:packages/primitives/src/geometry/building/frame.ts#wallTop",
+   "right": true
+  },
+  {
+   "repo": "gaia",
+   "from": "def:app/renderer/terrain/card.ts#createCard.show",
+   "line": 63,
+   "source": "const word = el(\"b\", undefined, standing(v));",
+   "to": "def:app/renderer/terrain/card.ts#standing",
+   "right": true
+  },
+  {
+   "repo": "gaia",
+   "from": "def:app/renderer/immersive/marks.ts#drawBlock",
+   "line": 925,
+   "source": "face(pen, wall.outline, wall.lit ? lit(wallC, 0.12) : shaded(wallC, 0.16));",
+   "to": "def:app/renderer/immersive/marks.ts#shaded",
+   "right": true
+  },
+  {
+   "repo": "gaia",
+   "from": "def:packages/primitives/src/geometry/building/layout.ts#layOutCottage.forwardWing",
+   "line": 94,
+   "source": "const forwardWing = (t: number): Mass => wing(g, main, [0, 1], t, clamp(0.68 * D, 3.2, 4.6), 0.55 * D + 1.3, l",
+   "to": "def:packages/primitives/src/geometry/building/layout.ts#wing",
+   "right": true
+  },
+  {
+   "repo": "gaia",
+   "from": "file:packages/terrain/test/scatter.test.ts",
+   "line": 82,
+   "source": "const tan = Math.tan((ruleOf(p).maxSlope * Math.PI) / 180);",
+   "to": "def:packages/terrain/test/scatter.test.ts#ruleOf",
+   "right": true
+  },
+  {
+   "repo": "gaia",
+   "from": "def:packages/realize/src/detail.ts#detailAt",
+   "line": 136,
+   "source": "glow: pick(c.glow, 1),",
+   "to": "def:packages/realize/src/detail.ts#detailAt.pick",
+   "right": true
+  },
+  {
+   "repo": "gaia",
+   "from": "def:app/renderer/immersive/map-names.ts#placeNames.inside",
+   "line": 374,
+   "source": "b[0] > EDGE && b[1] > EDGE && b[2] < sheet - EDGE && b[3] < sheet - EDGE && !hits(b, rose) && [b[0], b[2]].eve",
+   "to": "def:app/renderer/immersive/map-names.ts#hits",
+   "right": true
+  },
+  {
+   "repo": "gaia",
+   "from": "def:packages/terrain/src/site.ts#findSite",
+   "line": 121,
+   "source": "const off = surfaceHalfWidth(s) + d + plan.depth / 2;",
+   "to": "def:packages/terrain/src/water.ts#surfaceHalfWidth",
+   "right": true
+  },
+  {
+   "repo": "gaia",
+   "from": "file:packages/realize/test/realize.test.ts",
+   "line": 186,
+   "source": "expect(grown(1)).toBe(0);",
+   "to": "def:packages/realize/test/realize.test.ts#grown",
+   "right": true
+  },
+  {
+   "repo": "gaia",
+   "from": "def:app/renderer/immersive/field-map.ts#createFieldMap.warm",
+   "line": 956,
+   "source": "const views = [minimapView()];",
+   "to": "def:app/renderer/immersive/field-map.ts#createFieldMap.minimapView",
+   "right": true
+  },
+  {
+   "repo": "gaia",
+   "from": "def:packages/terrain/src/walk.ts#waterDepthAt",
+   "line": 67,
+   "source": "return inWilds(t, x, z) ? 0 : Math.max(0, heightAt(t.lattice, x, z, depthField(t)));",
+   "to": "def:packages/terrain/src/walk.ts#depthField",
+   "right": true
+  },
+  {
+   "repo": "gaia",
+   "from": "def:engine/src/project.rs#manifests",
+   "line": 351,
+   "source": "name: toml_string(text, \"package\", \"name\")",
+   "to": "def:engine/src/project.rs#toml_string",
+   "right": true
+  },
+  {
+   "repo": "gaia",
+   "from": "def:packages/primitives/src/geometry/landmark/tower.ts#buildLookoutTower.jagged",
+   "line": 271,
+   "source": "const n = 0.5 + 0.5 * fbm3(Math.cos(a) * 2.6, Math.sin(a) * 2.6, 0.3, seed, 3);",
+   "to": "def:packages/primitives/src/geometry/kit.ts#fbm3",
+   "right": true
+  },
+  {
+   "repo": "gaia",
+   "from": "def:packages/terrain/src/water.ts#carveStream",
+   "line": 161,
+   "source": "const z1 = Math.min(l.n - 1, Math.ceil(toIndex(maxZ + reach)));",
+   "to": "def:packages/terrain/src/water.ts#carveStream.toIndex",
+   "right": true
+  },
+  {
+   "repo": "gaia",
+   "from": "file:app/world-service/recent.test.ts",
+   "line": 36,
+   "source": "await keepPicture(engine, \"/code/gaia\", picture(\"B\"));",
+   "to": "def:app/world-service/recent.test.ts#picture",
+   "right": true
+  },
+  {
+   "repo": "gaia",
+   "from": "def:packages/primitives/src/relief.ts#build~4",
+   "line": 218,
+   "source": "scale(0.9, noise(seedOf(ctx, \"floor\"), 36, 3, 0.45)),",
+   "to": "def:packages/primitives/src/relief.ts#seedOf",
+   "right": true
+  },
+  {
+   "repo": "gaia",
+   "from": "def:app/renderer/immersive/marks.ts#drawLookoutTower",
+   "line": 1788,
+   "source": "const [X, Z] = ringPoint(sides, sides === 0 ? ahead : -Math.PI / 2, wallAt(h / LK));",
+   "to": "def:app/renderer/immersive/marks.ts#ringPoint",
+   "right": true
+  },
+  {
+   "repo": "gaia",
+   "from": "def:app/world-service/open-world.ts#openWorld",
+   "line": 92,
+   "source": "if (f !== undefined && !waitsOnJev(f)) settleHealth(p.path, p.vitality);",
+   "to": "def:app/world-service/open-world.ts#openWorld.settleHealth",
+   "right": true
+  },
+  {
+   "repo": "gaia",
+   "from": "def:app/renderer/terrain/lab.ts#createTerrainLab.drawn",
+   "line": 2354,
+   "source": "name(\"far trees\", [treeSet.cards?.object]);",
+   "to": "def:app/renderer/terrain/lab.ts#createTerrainLab.drawn.name",
+   "right": true
+  },
+  {
+   "repo": "gaia",
+   "from": "def:app/renderer/immersive/field-map.ts#paintPaper.washAreaOf",
+   "line": 264,
+   "source": "dry: ground(path) ? dryness(ownVitality(path)) : 0,",
+   "to": "def:app/renderer/immersive/field-map.ts#paintPaper.ground",
+   "right": true
+  },
+  {
+   "repo": "gaia",
+   "from": "def:packages/world/src/outline.ts#fileAt",
+   "line": 142,
+   "source": "const doc = trim(f.doc, level.doc);",
+   "to": "def:packages/world/src/outline.ts#trim",
+   "right": true
+  },
+  {
+   "repo": "gaia",
+   "from": "def:packages/primitives/src/rock.ts#build~3",
+   "line": 66,
+   "source": "build: (p, ctx) => buildStoneCluster(p, ctx),",
+   "to": "def:packages/primitives/src/geometry/rock.ts#buildStoneCluster",
+   "right": true
+  },
+  {
+   "repo": "gaia",
+   "from": "def:app/renderer/terrain/lab.ts#createTerrainLab.landingNear",
+   "line": 1960,
+   "source": "return { x: lx, z: lz, yaw: aim === null ? walker.yaw : toward(aim.x, aim.z) };",
+   "to": "def:app/renderer/terrain/lab.ts#createTerrainLab.landingNear.toward",
+   "right": true
+  },
+  {
+   "repo": "gaia",
+   "from": "def:packages/primitives/src/geometry/foliage.ts#emitFrond",
+   "line": 896,
+   "source": "const span = points.slice(1).reduce((n, q, i) => n + length(sub(q, points[i] as Vec3)), 0);",
+   "to": "def:packages/primitives/src/geometry/kit.ts#sub",
+   "right": true
+  },
+  {
+   "repo": "git-history",
+   "from": "file:src/git-providers/language-detector.test.js",
+   "line": 181,
+   "source": "expect(getLanguage(\"my-file.lua\")).toBe(\"lua\");",
+   "to": "def:src/git-providers/language-detector.js#getLanguage",
+   "right": true
+  },
+  {
+   "repo": "git-history",
+   "from": "file:src/git-providers/language-detector.test.js",
+   "line": 275,
+   "source": "expect(getLanguage(\"my-file\")).toBe(\"js\");",
+   "to": "def:src/git-providers/language-detector.js#getLanguage",
+   "right": true
+  },
+  {
+   "repo": "git-history",
+   "from": "file:src/git-providers/language-detector.test.js",
+   "line": 52,
+   "source": "expect(getLanguage(\"my-file.yml\")).toBe(\"yaml\");",
+   "to": "def:src/git-providers/language-detector.js#getLanguage",
+   "right": true
+  },
+  {
+   "repo": "git-history",
+   "from": "file:src/git-providers/language-detector.test.js",
+   "line": 5,
+   "source": "expect(getLanguage(\"my-file.js\")).toBe(\"js\");",
+   "to": "def:src/git-providers/language-detector.js#getLanguage",
+   "right": true
+  },
+  {
+   "repo": "git-history",
+   "from": "file:src/git-providers/language-detector.test.js",
+   "line": 134,
+   "source": "expect(getLanguage(\"my-file.cc\")).toBe(\"cpp\");",
+   "to": "def:src/git-providers/language-detector.js#getLanguage",
+   "right": true
+  },
+  {
+   "repo": "git-history",
+   "from": "def:src/git-providers/github-provider.js#showLanding",
+   "line": 35,
+   "source": "const [repo, ,] = getUrlParams();",
+   "to": "def:src/git-providers/github-provider.js#getUrlParams",
+   "right": true
+  },
+  {
+   "repo": "git-history",
+   "from": "def:src/git-providers/github-provider.js#getVersions",
+   "line": 89,
+   "source": "const params = { ...getParams(), last };",
+   "to": "def:src/git-providers/github-provider.js#getParams",
+   "right": true
+  },
+  {
+   "repo": "git-history",
+   "from": "file:src/git-providers/language-detector.test.js",
+   "line": 265,
+   "source": "expect(getLanguage(\"my-file.wasm\")).toBe(\"wasm\");",
+   "to": "def:src/git-providers/language-detector.js#getLanguage",
+   "right": true
+  },
+  {
+   "repo": "git-history",
+   "from": "def:src/git-providers/providers.js#getGitProvider",
+   "line": 19,
+   "source": "source = source || getSource();",
+   "to": "def:src/git-providers/sources.js#getSource",
+   "right": true
+  },
+  {
+   "repo": "git-history",
+   "from": "file:src/git-providers/language-detector.test.js",
+   "line": 95,
+   "source": "expect(getLanguage(\"my-file.less\")).toBe(\"less\");",
+   "to": "def:src/git-providers/language-detector.js#getLanguage",
+   "right": true
+  },
+  {
+   "repo": "git-history",
+   "from": "file:src/git-providers/language-detector.test.js",
+   "line": 70,
+   "source": "expect(getLanguage(\"my-file.pl\")).toBe(\"perl\");",
+   "to": "def:src/git-providers/language-detector.js#getLanguage",
+   "right": true
+  },
+  {
+   "repo": "git-history",
+   "from": "file:src/git-providers/language-detector.test.js",
+   "line": 241,
+   "source": "expect(getLanguage(\"my-file.smallbasic\")).toBe(\"small basic\");",
+   "to": "def:src/git-providers/language-detector.js#getLanguage",
+   "right": true
+  },
+  {
+   "repo": "git-history",
+   "from": "file:src/utils.test.js",
+   "line": 23,
+   "source": "expect(prevIndex(fiveItems, 0)).toBe(0);",
+   "to": "def:src/utils.js#prevIndex",
+   "right": true
+  },
+  {
+   "repo": "git-history",
+   "from": "file:src/git-providers/language-detector.test.js",
+   "line": 217,
+   "source": "expect(getLanguage(\"my-file.pug\")).toBe(\"pug\");",
+   "to": "def:src/git-providers/language-detector.js#getLanguage",
+   "right": true
+  },
+  {
+   "repo": "git-history",
+   "from": "def:src/git-providers/cli-provider.js#getVersions",
+   "line": 13,
+   "source": "const params = { path: getPath(), last };",
+   "to": "def:src/git-providers/cli-provider.js#getPath",
+   "right": true
+  },
+  {
+   "repo": "git-history",
+   "from": "file:src/git-providers/language-detector.test.js",
+   "line": 99,
+   "source": "expect(getLanguage(\"my-file.scss\")).toBe(\"scss\");",
+   "to": "def:src/git-providers/language-detector.js#getLanguage",
+   "right": true
+  },
+  {
+   "repo": "git-history",
+   "from": "def:src/git-providers/gitlab-provider.js#getVersions",
+   "line": 77,
+   "source": "const params = { ...getParams(), last };",
+   "to": "def:src/git-providers/gitlab-provider.js#getParams",
+   "right": true
+  },
+  {
+   "repo": "git-history",
+   "from": "def:src/git-providers/language-detector.js#loadLanguage",
+   "line": 81,
+   "source": "const deps = getLanguageDependencies(lang);",
+   "to": "def:src/git-providers/language-detector.js#getLanguageDependencies",
+   "right": true
+  },
+  {
+   "repo": "git-history",
+   "from": "file:src/git-providers/language-detector.test.js",
+   "line": 249,
+   "source": "expect(getLanguage(\"my-file.scheme\")).toBe(\"scheme\");",
+   "to": "def:src/git-providers/language-detector.js#getLanguage",
+   "right": true
+  },
+  {
+   "repo": "git-history",
+   "from": "file:src/git-providers/language-detector.test.js",
+   "line": 233,
+   "source": "expect(getLanguage(\"my-file.rb\")).toBe(\"ruby\");",
+   "to": "def:src/git-providers/language-detector.js#getLanguage",
+   "right": true
+  },
+  {
+   "repo": "git-history",
+   "from": "def:src/scroller.js#Scroller.reducer",
+   "line": 61,
+   "source": "const targetTop = getScrollTop(",
+   "to": "def:src/utils.js#getScrollTop",
+   "right": true
+  },
+  {
+   "repo": "git-history",
+   "from": "file:src/git-providers/language-detector.test.js",
+   "line": 117,
+   "source": "expect(getLanguage(\"my-file.clj\")).toBe(\"clojure\");",
+   "to": "def:src/git-providers/language-detector.js#getLanguage",
+   "right": true
+  },
+  {
+   "repo": "git-history",
+   "from": "def:src/git-providers/vscode-provider.js#getVersions",
+   "line": 49,
+   "source": "changes: getChanges(slides[i])",
+   "to": "def:src/git-providers/differ.js#getChanges",
+   "right": true
+  },
+  {
+   "repo": "git-history",
+   "from": "def:cli/git.js#exports",
+   "line": 58,
+   "source": "commit.content = await getContent(commit, path);",
+   "to": "def:cli/git.js#getContent",
+   "right": true
+  },
+  {
+   "repo": "git-history",
+   "from": "file:src/git-providers/language-detector.test.js",
+   "line": 139,
+   "source": "expect(getLanguage(\"my-file.cs\")).toBe(\"csharp\");",
+   "to": "def:src/git-providers/language-detector.js#getLanguage",
+   "right": true
+  },
+  {
+   "repo": "swe-agent",
+   "from": "def:tests/test_run_single.py#test_run_single_raises_exception",
+   "line": 25,
+   "source": "rsc = RunSingleConfig(agent=DefaultAgentConfig(model=InstantEmptySubmitModelConfig()))",
+   "to": "def:sweagent/agent/models.py#InstantEmptySubmitModelConfig",
+   "right": true
+  },
+  {
+   "repo": "swe-agent",
+   "from": "def:sweagent/run/compare_runs.py#run_from_cli",
+   "line": 123,
+   "source": "compare_many(args.paths)",
+   "to": "def:sweagent/run/compare_runs.py#compare_many",
+   "right": true
+  },
+  {
+   "repo": "swe-agent",
+   "from": "def:sweagent/run/hooks/open_pr.py#OpenPRHook.__init__",
+   "line": 131,
+   "source": "self.logger = get_logger(\"swea-open_pr\", emoji=\"\u26a1\ufe0f\")",
+   "to": "def:sweagent/utils/log.py#get_logger",
+   "right": true
+  },
+  {
+   "repo": "swe-agent",
+   "from": "file:docs/usage/memory_sentinel.py",
+   "line": 140,
+   "source": "main()",
+   "to": "def:docs/usage/memory_sentinel.py#main",
+   "right": true
+  },
+  {
+   "repo": "swe-agent",
+   "from": "def:sweagent/agent/agents.py#get_agent_from_config",
+   "line": 246,
+   "source": "return RetryAgent.from_config(config)",
+   "to": "def:sweagent/agent/agents.py#RetryAgent.from_config",
+   "right": true
+  },
+  {
+   "repo": "swe-agent",
+   "from": "def:sweagent/agent/extra/shell_agent.py#ShellAgent.human_step_in",
+   "line": 38,
+   "source": "human_config = HumanModelConfig(name=\"human\", catch_eof=False)",
+   "to": "def:sweagent/agent/models.py#HumanModelConfig",
+   "right": true
+  },
+  {
+   "repo": "swe-agent",
+   "from": "def:tests/test_models.py#test_user_agent_header_with_other_extra_headers",
+   "line": 99,
+   "source": "mock_response = _make_mock_response()",
+   "to": "def:tests/test_models.py#_make_mock_response",
+   "right": true
+  },
+  {
+   "repo": "swe-agent",
+   "from": "def:sweagent/inspector/fileViewer.js#fetchFiles",
+   "line": 19,
+   "source": "const baseUrl = getBaseUrl();",
+   "to": "def:sweagent/inspector/fileViewer.js#getBaseUrl",
+   "right": true
+  },
+  {
+   "repo": "swe-agent",
+   "from": "def:sweagent/agent/reviewer.py#ReviewerConfig.get_reviewer",
+   "line": 177,
+   "source": "return Reviewer(self, model)",
+   "to": "def:sweagent/agent/reviewer.py#Reviewer",
+   "right": true
+  },
+  {
+   "repo": "swe-agent",
+   "from": "def:sweagent/run/hooks/apply_patch.py#SaveApplyPatchHook.on_instance_completed",
+   "line": 38,
+   "source": "patch_path = self._save_patch(instance_id, result.info)",
+   "to": "def:sweagent/run/hooks/apply_patch.py#SaveApplyPatchHook._save_patch",
+   "right": true
+  },
+  {
+   "repo": "swe-agent",
+   "from": "def:sweagent/run/_progress.py#RunBatchProgressManager._save_overview_data_yaml",
+   "line": 158,
+   "source": "path.write_text(yaml.dump(self._get_overview_data(), indent=4))",
+   "to": "def:sweagent/run/_progress.py#RunBatchProgressManager._get_overview_data",
+   "right": true
+  },
+  {
+   "repo": "swe-agent",
+   "from": "def:sweagent/run/run_batch.py#RunBatch.__init__",
+   "line": 180,
+   "source": "for hook in hooks or [SaveApplyPatchHook(show_success_message=False)]:",
+   "to": "def:sweagent/run/hooks/apply_patch.py#SaveApplyPatchHook",
+   "right": true
+  },
+  {
+   "repo": "swe-agent",
+   "from": "def:sweagent/agent/models.py#get_model",
+   "line": 903,
+   "source": "return LiteLLMModel(args, tools)",
+   "to": "def:sweagent/agent/models.py#LiteLLMModel",
+   "right": true
+  },
+  {
+   "repo": "swe-agent",
+   "from": "def:tests/test_problem_statement_multimodal.py#TestSWEBenchMultimodalProblemStatement.test_get_problem_statement_no_images",
+   "line": 25,
+   "source": "problem_statement = SWEBenchMultimodalProblemStatement(text=\"Test problem statement\", issue_images=[])",
+   "to": "def:sweagent/agent/problem_statement.py#SWEBenchMultimodalProblemStatement",
+   "right": true
+  },
+  {
+   "repo": "swe-agent",
+   "from": "file:sweagent/run/quick_stats.py",
+   "line": 96,
+   "source": "run_from_cli()",
+   "to": "def:sweagent/run/quick_stats.py#run_from_cli",
+   "right": true
+  },
+  {
+   "repo": "swe-agent",
+   "from": "def:sweagent/run/run_batch.py#RunBatch.__init__",
+   "line": 168,
+   "source": "add_file_handler(",
+   "to": "def:sweagent/utils/log.py#add_file_handler",
+   "right": true
+  },
+  {
+   "repo": "swe-agent",
+   "from": "def:tests/conftest.py#dummy_env",
+   "line": 102,
+   "source": "env = SWEEnv.from_config(dummy_env_args)",
+   "to": "def:sweagent/environment/swe_env.py#SWEEnv.from_config",
+   "right": true
+  },
+  {
+   "repo": "swe-agent",
+   "from": "def:sweagent/agent/reviewer.py#ChooserRetryLoop.review_model_stats",
+   "line": 515,
+   "source": "return InstanceStats()",
+   "to": "def:sweagent/agent/models.py#InstanceStats",
+   "right": true
+  },
+  {
+   "repo": "swe-agent",
+   "from": "def:sweagent/run/batch_instances.py#ExpertInstancesFromFile.get_instance_configs",
+   "line": 364,
+   "source": "return _filter_batch_items(instances, filter_=self.filter, slice_=self.slice, shuffle=self.shuffle)",
+   "to": "def:sweagent/run/batch_instances.py#_filter_batch_items",
+   "right": true
+  },
+  {
+   "repo": "swe-agent",
+   "from": "def:tests/test_run_single.py#agent_config_with_commands",
+   "line": 38,
+   "source": "Bundle(path=TOOLS_DIR / \"submit\"),",
+   "to": "def:sweagent/tools/bundle.py#Bundle",
+   "right": true
+  },
+  {
+   "repo": "swe-agent",
+   "from": "def:tests/test_utils.py#test_convert_path_to_abspath",
+   "line": 10,
+   "source": "assert _convert_path_to_abspath(\"sadf\") == REPO_ROOT / \"sadf\"",
+   "to": "def:sweagent/utils/config.py#_convert_path_to_abspath",
+   "right": true
+  },
+  {
+   "repo": "swe-agent",
+   "from": "def:tests/test_tools_command_parsing.py#test_argument_name_patterns",
+   "line": 103,
+   "source": "arguments=[Argument(name=name, type=\"string\", description=\"test\", required=True)],",
+   "to": "def:sweagent/tools/commands.py#Argument",
+   "right": true
+  },
+  {
+   "repo": "swe-agent",
+   "from": "def:sweagent/run/common.py#BasicCLI.get_config",
+   "line": 329,
+   "source": "+ yaml.dump(_shorten_strings(config_merged))",
+   "to": "def:sweagent/run/common.py#_shorten_strings",
+   "right": true
+  },
+  {
+   "repo": "swe-agent",
+   "from": "def:sweagent/run/common.py#BasicCLI.get_config",
+   "line": 317,
+   "source": "cl_options_dict = _parse_args_to_nested_dict(remaining_args)",
+   "to": "def:sweagent/run/common.py#_parse_args_to_nested_dict",
+   "right": true
+  },
+  {
+   "repo": "swe-agent",
+   "from": "def:sweagent/utils/patch_formatter.py#PatchFormatter.__init__",
+   "line": 25,
+   "source": "self._read_files(original=False)",
+   "to": "def:sweagent/utils/patch_formatter.py#PatchFormatter._read_files",
+   "right": true
+  },
+  {
+   "repo": "zustand",
+   "from": "file:tests/persistSync.test.tsx",
+   "line": 692,
+   "source": "const { storage, setItemSpy } = createPersistentStore(null)",
+   "to": "def:tests/persistSync.test.tsx#createPersistentStore",
+   "right": true
+  },
+  {
+   "repo": "zustand",
+   "from": "file:tests/devtools.test.tsx",
+   "line": 1653,
+   "source": "const connections = getUnnamedConnectionApis(",
+   "to": "def:tests/devtools.test.tsx#getUnnamedConnectionApis",
+   "right": true
+  },
+  {
+   "repo": "zustand",
+   "from": "file:tests/devtools.test.tsx",
+   "line": 2453,
+   "source": "const [subscriber] = getUnnamedConnectionSubscribers(",
+   "to": "def:tests/devtools.test.tsx#getUnnamedConnectionSubscribers",
+   "right": true
+  },
+  {
+   "repo": "zustand",
+   "from": "file:tests/devtools.test.tsx",
+   "line": 2559,
+   "source": "getKeyFromOptions(options2),",
+   "to": "def:tests/devtools.test.tsx#getKeyFromOptions",
+   "right": true
+  },
+  {
+   "repo": "zustand",
+   "from": "def:src/middleware/devtools.ts#devtoolsImpl",
+   "line": 406,
+   "source": "setStateFromDevtools(lastComputedState[store])",
+   "to": "def:src/middleware/devtools.ts#devtoolsImpl.setStateFromDevtools",
+   "right": true
+  },
+  {
+   "repo": "zustand",
+   "from": "file:tests/devtools.test.tsx",
+   "line": 531,
+   "source": "const [connectionSubscriber] = getNamedConnectionSubscribers(undefined)",
+   "to": "def:tests/devtools.test.tsx#getNamedConnectionSubscribers",
+   "right": true
+  },
+  {
+   "repo": "zustand",
+   "from": "def:tests/persistAsync.test.tsx#getItem~16",
+   "line": 764,
+   "source": "await sleep(10)",
+   "to": "def:tests/test-utils.ts#sleep",
+   "right": true
+  },
+  {
+   "repo": "zustand",
+   "from": "def:src/middleware/devtools.ts#devtoolsImpl",
+   "line": 350,
+   "source": "if (shouldDispatchFromDevtools(api)) {",
+   "to": "def:src/middleware/devtools.ts#shouldDispatchFromDevtools",
+   "right": true
+  },
+  {
+   "repo": "zustand",
+   "from": "file:tests/devtools.test.tsx",
+   "line": 2608,
+   "source": "getKeyFromOptions(options2),",
+   "to": "def:tests/devtools.test.tsx#getKeyFromOptions",
+   "right": true
+  },
+  {
+   "repo": "zustand",
+   "from": "def:examples/demo/src/components/SnippetLang.jsx#SnippetLang",
+   "line": 6,
+   "source": "onChange={(e) => setLang(e.currentTarget.value)}",
+   "to": "def:examples/demo/src/components/CodePreview.jsx#setLang",
+   "right": true
+  },
+  {
+   "repo": "zustand",
+   "from": "def:src/middleware/devtools.ts#devtoolsImpl",
+   "line": 387,
+   "source": "setStateFromDevtools(state)",
+   "to": "def:src/middleware/devtools.ts#devtoolsImpl.setStateFromDevtools",
+   "right": true
+  },
+  {
+   "repo": "zustand",
+   "from": "file:tests/devtools.test.tsx",
+   "line": 408,
+   "source": "const [connectionSubscriber] = getNamedConnectionSubscribers(undefined)",
+   "to": "def:tests/devtools.test.tsx#getNamedConnectionSubscribers",
+   "right": true
+  },
+  {
+   "repo": "zustand",
+   "from": "def:tests/persistAsync.test.tsx#Component",
+   "line": 306,
+   "source": "setName('test')",
+   "to": "def:tests/persistAsync.test.tsx#setName",
+   "right": true
+  },
+  {
+   "repo": "zustand",
+   "from": "file:tests/devtools.test.tsx",
+   "line": 1879,
+   "source": "const connections = getUnnamedConnectionApis(",
+   "to": "def:tests/devtools.test.tsx#getUnnamedConnectionApis",
+   "right": true
+  },
+  {
+   "repo": "zustand",
+   "from": "file:tests/devtools.test.tsx",
+   "line": 712,
+   "source": "const [connectionSubscriber] = getNamedConnectionSubscribers(undefined)",
+   "to": "def:tests/devtools.test.tsx#getNamedConnectionSubscribers",
+   "right": true
+  },
+  {
+   "repo": "zustand",
+   "from": "def:examples/demo/src/components/CopyButton.jsx#CopyButton",
+   "line": 14,
+   "source": "copyToClipboard(code).then(() => {",
+   "to": "def:examples/demo/src/utils/copy-to-clipboard.js#copyToClipboard",
+   "right": true
+  },
+  {
+   "repo": "zustand",
+   "from": "file:tests/devtools.test.tsx",
+   "line": 1889,
+   "source": "] = getUnnamedConnectionSubscribers(",
+   "to": "def:tests/devtools.test.tsx#getUnnamedConnectionSubscribers",
+   "right": true
+  },
+  {
+   "repo": "zustand",
+   "from": "def:src/vanilla/shallow.ts#shallow",
+   "line": 67,
+   "source": "return compareIterables(valueA, valueB)",
+   "to": "def:src/vanilla/shallow.ts#compareIterables",
+   "right": true
+  },
+  {
+   "repo": "zustand",
+   "from": "file:tests/devtools.test.tsx",
+   "line": 448,
+   "source": "const [connectionSubscriber] = getNamedConnectionSubscribers(undefined)",
+   "to": "def:tests/devtools.test.tsx#getNamedConnectionSubscribers",
+   "right": true
+  },
+  {
+   "repo": "zustand",
+   "from": "file:tests/devtools.test.tsx",
+   "line": 1478,
+   "source": "] = getUnnamedConnectionSubscribers(",
+   "to": "def:tests/devtools.test.tsx#getUnnamedConnectionSubscribers",
+   "right": true
+  },
+  {
+   "repo": "zustand",
+   "from": "file:tests/devtools.test.tsx",
+   "line": 692,
+   "source": "const [connectionSubscriber] = getNamedConnectionSubscribers(undefined)",
+   "to": "def:tests/devtools.test.tsx#getNamedConnectionSubscribers",
+   "right": true
+  },
+  {
+   "repo": "zustand",
+   "from": "def:src/middleware/persist.ts#persistImpl",
+   "line": 372,
+   "source": "hydrate()",
+   "to": "def:src/middleware/persist.ts#persistImpl.hydrate",
+   "right": true
+  },
+  {
+   "repo": "zustand",
+   "from": "file:tests/devtools.test.tsx",
+   "line": 588,
+   "source": "const [connection] = getNamedConnectionApis(undefined)",
+   "to": "def:tests/devtools.test.tsx#getNamedConnectionApis",
+   "right": true
+  },
+  {
+   "repo": "zustand",
+   "from": "def:examples/demo/src/components/Fireflies.jsx#Fireflies",
+   "line": 45,
+   "source": "Math.sin(angle) * radius * r(),",
+   "to": "def:examples/demo/src/components/Fireflies.jsx#r",
+   "right": true
+  },
+  {
+   "repo": "zustand",
+   "from": "file:tests/devtools.test.tsx",
+   "line": 2557,
+   "source": "const subscribers = getNamedConnectionSubscribers(",
+   "to": "def:tests/devtools.test.tsx#getNamedConnectionSubscribers",
+   "right": true
+  }
+ ]
+}

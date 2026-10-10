@@ -14,8 +14,21 @@
 # A convention is a path pattern a language's community follows. A file
 # whose path matches one is tagged with it, and the tag goes into Jev's
 # state as evidence. It never decides anything on its own.
+#
+# The import rule reads `relative`: the prefixes that make an import start
+# from the importing file's directory ("here"), the one above it ("parent"),
+# each directory above it in turn ("ancestors"), or, for Python's leading
+# dots, here for one dot and one more directory up for each dot after it
+# ("dots"). A call resolves only to a
+# definition in its own language's `family`, which is the language itself
+# unless named. `data = true` marks a format that holds configuration rather
+# than code, which the import rule searches for package names.
+# `implicit_self = true` marks a language whose methods call their own
+# class's methods without naming `self` or `this`.
 
 [typescript]
+family = "js"
+relative = [{ prefix = "./", from = "here" }, { prefix = "../", from = "parent" }]
 extensions = ["ts", "mts", "cts"]
 grammar = { crate = "tree-sitter-typescript" }
 conventions = [
@@ -25,6 +38,8 @@ conventions = [
 ]
 
 [tsx]
+family = "js"
+relative = [{ prefix = "./", from = "here" }, { prefix = "../", from = "parent" }]
 extensions = ["tsx"]
 grammar = { crate = "tree-sitter-typescript" }
 conventions = [
@@ -34,6 +49,8 @@ conventions = [
 ]
 
 [javascript]
+family = "js"
+relative = [{ prefix = "./", from = "here" }, { prefix = "../", from = "parent" }]
 extensions = ["js", "jsx", "mjs", "cjs"]
 grammar = { crate = "tree-sitter-javascript" }
 conventions = [
@@ -43,6 +60,7 @@ conventions = [
 ]
 
 [python]
+relative = [{ prefix = ".", from = "dots" }]
 extensions = ["py", "pyi"]
 grammar = { crate = "tree-sitter-python" }
 conventions = [
@@ -61,6 +79,7 @@ conventions = [
 ]
 
 [rust]
+relative = [{ prefix = "self::", from = "here" }, { prefix = "super::", from = "ancestors" }, { prefix = "crate::", from = "ancestors" }]
 extensions = ["rs"]
 grammar = { crate = "tree-sitter-rust" }
 conventions = [
@@ -70,6 +89,7 @@ conventions = [
 ]
 
 [java]
+implicit_self = true
 extensions = ["java"]
 grammar = { crate = "tree-sitter-java" }
 conventions = [
@@ -78,16 +98,20 @@ conventions = [
 ]
 
 [c]
+family = "c"
 extensions = ["c"]
 grammar = { crate = "tree-sitter-c" }
 conventions = []
 
 [cpp]
+implicit_self = true
+family = "c"
 extensions = ["cc", "cpp", "cxx", "h", "hh", "hpp", "hxx"]
 grammar = { crate = "tree-sitter-cpp" }
 conventions = []
 
 [c-sharp]
+implicit_self = true
 extensions = ["cs"]
 grammar = { crate = "tree-sitter-c-sharp" }
 conventions = [
@@ -96,6 +120,7 @@ conventions = [
 ]
 
 [ruby]
+implicit_self = true
 extensions = ["rb"]
 grammar = { crate = "tree-sitter-ruby" }
 conventions = [
@@ -112,6 +137,7 @@ conventions = [
 ]
 
 [swift]
+implicit_self = true
 extensions = ["swift"]
 grammar = { crate = "tree-sitter-swift" }
 conventions = [
@@ -119,6 +145,7 @@ conventions = [
 ]
 
 [kotlin]
+implicit_self = true
 extensions = ["kt", "kts"]
 grammar = { crate = "tree-sitter-kotlin-ng" }
 conventions = [
@@ -149,16 +176,19 @@ inline = { grammar = "markdown-inline", over = "inline" }
 conventions = []
 
 [json]
+data = true
 extensions = ["json"]
 grammar = { crate = "tree-sitter-json" }
 conventions = []
 
 [toml]
+data = true
 extensions = ["toml"]
 grammar = { crate = "tree-sitter-toml-ng" }
 conventions = []
 
 [yaml]
+data = true
 extensions = ["yml", "yaml"]
 grammar = { crate = "tree-sitter-yaml" }
 conventions = []
@@ -180,6 +210,7 @@ conventions = [
 ]
 
 [scala]
+implicit_self = true
 extensions = ["scala", "sc"]
 grammar = { wasm = "https://github.com/tree-sitter/tree-sitter-scala/releases/download/v0.26.2/tree-sitter-scala.wasm", sha256 = "37d7fe5a91ca98941dc05493b0c05a0df0f36df5035890fa00b02497c68aaac3" }
 tags = { url = "https://raw.githubusercontent.com/tree-sitter/tree-sitter-scala/v0.26.2/queries/tags.scm", sha256 = "f56794ad2bc9ae5c7ffd332a40fa67a3af65880e18ba4124a0053f0bfff54757" }

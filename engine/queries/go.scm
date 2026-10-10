@@ -2,6 +2,7 @@
 (import_spec path: (interpreted_string_literal) @name) @reference.import
 (method_declaration
   receiver: (parameter_list (parameter_declaration type: [(type_identifier) @owner (pointer_type (type_identifier) @owner)]))) @scope
+(method_declaration receiver: (parameter_list (parameter_declaration name: (identifier) @self)))
 
 (if_statement) @block.branch
 (for_statement) @block.loop

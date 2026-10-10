@@ -41,6 +41,15 @@ pub struct Def {
     pub signature: String,
     pub doc: Option<String>,
     pub measures: Measures,
+    /// It takes parameters, or its role says it runs.
+    pub callable: bool,
+    /// A MinHash of its text's word shingles, for near-duplicates and lineage.
+    pub fingerprint: Vec<u16>,
+    /// How many distinct shingles its text has.
+    pub shingles: usize,
+    /// The name its body calls its own receiver by, when a grammar marks it
+    /// with `@self`: the `c` of Go's `func (c *Command)`.
+    pub self_name: Option<String>,
 }
 
 pub struct Block {
@@ -65,6 +74,10 @@ pub struct Ref {
     pub text: String,
     pub at: Span,
     pub from: Option<usize>,
+    /// What a call names before its own name: `Batch` in `Batch::new`, `self` in `self.push`.
+    pub qualifier: Option<String>,
+    /// A macro invocation, such as Rust's `format!(…)`, which reaches only a macro.
+    pub macro_call: bool,
 }
 
 #[allow(dead_code)]
@@ -72,6 +85,53 @@ pub struct Literal {
     pub text: String,
     pub at: Span,
     pub from: Option<usize>,
+}
+
+/// The number of hashes in a fingerprint.
+pub const FINGERPRINT: usize = 64;
+
+fn splitmix(mut x: u64) -> u64 {
+    x = x.wrapping_add(0x9e37_79b9_7f4a_7c15);
+    x = (x ^ (x >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+    x = (x ^ (x >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+    x ^ (x >> 31)
+}
+
+/// A MinHash of a text's word 3-grams, and how many distinct ones it has.
+pub fn fingerprint(text: &str) -> (Vec<u16>, usize) {
+    let words: Vec<&str> = text
+        .split(|c: char| !(c.is_alphanumeric() || c == '_'))
+        .filter(|w| !w.is_empty())
+        .collect();
+    let mut shingles: HashSet<u64> = HashSet::new();
+    let width = words.len().clamp(1, 3);
+    for w in words.windows(width) {
+        let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+        for part in w {
+            for b in part.bytes().chain(std::iter::once(0)) {
+                h ^= u64::from(b);
+                h = h.wrapping_mul(0x0100_0000_01b3);
+            }
+        }
+        shingles.insert(h);
+    }
+    let mins = (0..FINGERPRINT as u64)
+        .map(|seed| {
+            let salt = splitmix(seed);
+            shingles
+                .iter()
+                .map(|h| (splitmix(h ^ salt) >> 48) as u16)
+                .min()
+                .unwrap_or(u16::MAX)
+        })
+        .collect();
+    (mins, shingles.len())
+}
+
+/// The share of hashes two fingerprints agree on: an estimate of their shingles' overlap.
+pub fn similarity(a: &[u16], b: &[u16]) -> f64 {
+    let same = a.iter().zip(b).filter(|(x, y)| x == y).count();
+    same as f64 / FINGERPRINT as f64
 }
 
 /// Roles that hold other definitions rather than run.
@@ -863,7 +923,24 @@ pub fn parse(lang: &Loaded, src: &str) -> Result<FileParse, String> {
             (None, Some(o)) => format!("{o}.{name}"),
             (None, None) => name.clone(),
         };
+        // The body alone, so a copy under another name, or the same
+        // definition renamed, still matches.
+        let body = node
+            .child_by_field_name("body")
+            .or_else(|| functions[i].and_then(|f| f.child_by_field_name("body")))
+            .unwrap_or(*node);
+        let (fingerprint, shingles) = fingerprint(text(body, src));
+        let self_name = hits
+            .iter()
+            .find(|h| {
+                h.what == "self" && contains(*node, h.node) && innermost_def(h.node) == Some(k)
+            })
+            .map(|h| text(h.node, src).to_string());
         defs.push(Def {
+            self_name,
+            callable: params[i].is_some(),
+            fingerprint,
+            shingles,
             name: name.clone(),
             qualified,
             role: role.clone(),
@@ -896,12 +973,38 @@ pub fn parse(lang: &Loaded, src: &str) -> Result<FileParse, String> {
                 _ => return None,
             };
             let at = h.name.unwrap_or(h.node);
+            // The qualifier is the text before the name in the expression that
+            // holds both: the match itself, or, when a tags query captures a
+            // call by its arguments, the name's own parent (`ctx.lineTo`).
+            let qualifier = h
+                .name
+                .and_then(|n| {
+                    let holder = if n.start_byte() > h.node.start_byte() && contains(h.node, n) {
+                        Some(h.node)
+                    } else {
+                        n.parent().filter(|p| p.start_byte() < n.start_byte())
+                    };
+                    holder.map(|p| (p, n))
+                })
+                // Only text that ends in a member or path separator qualifies a
+                // name: `ctx.` and `Batch::` do, `new ` and `impl ` don't.
+                .map(|(p, n)| src[p.start_byte()..n.start_byte()].trim_end())
+                .filter(|q| q.ends_with('.') || q.ends_with("::") || q.ends_with("->"))
+                .map(|q| {
+                    q.trim_end_matches(|c: char| ".:->?!".contains(c))
+                        .trim_end()
+                })
+                .and_then(|q| q.rsplit(['.', ':', '>', ' ', '(', '&', '*']).next())
+                .map(str::to_string)
+                .filter(|q| !q.is_empty());
             let text = clean(text(at, src));
             (!text.is_empty()).then(|| Ref {
                 kind,
                 text,
                 at: span_of(at),
                 from: innermost_def(h.node),
+                qualifier,
+                macro_call: h.node.kind().contains("macro"),
             })
         })
         .collect();

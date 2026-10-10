@@ -92,9 +92,21 @@ pub struct Measures {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub params: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub calls_out: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reach: Option<Reach>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub history: Option<History>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub markers: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub duplicates: Option<Vec<String>>,
+}
+
+#[derive(Serialize, Debug, Clone, Copy, Default)]
+pub struct Reach {
+    pub files: u32,
+    pub defs: u32,
 }
 
 #[derive(Serialize, Debug, Clone)]
@@ -119,6 +131,8 @@ pub struct Edge {
     pub to: String,
     pub kind: &'static str,
     pub by: Filled,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub at: Option<Span>,
 }
 
 #[derive(Serialize, Debug)]

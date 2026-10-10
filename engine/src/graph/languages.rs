@@ -21,6 +21,14 @@ struct Entry {
     #[serde(default)]
     tags: Option<Remote>,
     #[serde(default)]
+    family: Option<String>,
+    #[serde(default)]
+    relative: Vec<Relative>,
+    #[serde(default)]
+    data: bool,
+    #[serde(default)]
+    implicit_self: bool,
+    #[serde(default)]
     inline: Option<InlineEntry>,
     #[serde(default)]
     conventions: Vec<ConventionEntry>,
@@ -38,6 +46,14 @@ pub enum Grammar {
         wasm: String,
         sha256: String,
     },
+}
+
+/// An import prefix that starts from somewhere near the importing file.
+#[derive(Deserialize, Clone)]
+pub struct Relative {
+    pub prefix: String,
+    /// "here", "parent", "ancestors" or "dots".
+    pub from: String,
 }
 
 /// A file a grammar's release publishes, and the SHA-256 it must have.
@@ -65,6 +81,13 @@ pub struct Spec {
     pub grammar: Grammar,
     pub tags: Option<Remote>,
     pub extensions: Vec<String>,
+    /// Calls resolve only within a family: TypeScript, TSX and JavaScript are one.
+    pub family: String,
+    pub relative: Vec<Relative>,
+    /// A configuration format, such as JSON, rather than code.
+    pub data: bool,
+    /// An unqualified call can reach the caller's own class's methods.
+    pub implicit_self: bool,
     inline: Option<InlineEntry>,
     convention_tags: Vec<String>,
     conventions: GlobSet,
@@ -121,6 +144,10 @@ pub fn table() -> &'static BTreeMap<String, Spec> {
                     grammar: e.grammar,
                     tags: e.tags,
                     extensions: e.extensions,
+                    family: e.family.unwrap_or_else(|| name.clone()),
+                    relative: e.relative,
+                    data: e.data,
+                    implicit_self: e.implicit_self,
                     inline: e.inline,
                     convention_tags: e.conventions.into_iter().map(|c| c.tag).collect(),
                     conventions: globs.build().expect("the conventions build"),

@@ -1,0 +1,1406 @@
+{
+ "about": "Edges the rules filled, sampled across the bench (25 per repository, seeded) and checked by hand against the source. Step 2, round 7 of pair session engine-jev.",
+ "kind": "imports",
+ "labels": [
+  {
+   "repo": "click",
+   "from": "file:src/click/__init__.py",
+   "line": 73,
+   "source": "from .utils import open_file as open_file",
+   "to": "file:src/click/utils.py",
+   "right": true
+  },
+  {
+   "repo": "click",
+   "from": "file:src/click/__init__.py",
+   "line": 56,
+   "source": "from .types import BOOL as BOOL",
+   "to": "file:src/click/types.py",
+   "right": true
+  },
+  {
+   "repo": "click",
+   "from": "file:src/click/__init__.py",
+   "line": 48,
+   "source": "from .termui import getchar as getchar",
+   "to": "file:src/click/termui.py",
+   "right": true
+  },
+  {
+   "repo": "click",
+   "from": "file:src/click/core.py",
+   "line": 38,
+   "source": "from .globals import push_context",
+   "to": "file:src/click/globals.py",
+   "right": true
+  },
+  {
+   "repo": "click",
+   "from": "def:src/click/termui.py#get_pager_file",
+   "line": 360,
+   "source": "from ._termui_impl import get_pager_file",
+   "to": "file:src/click/_termui_impl.py",
+   "right": true
+  },
+  {
+   "repo": "click",
+   "from": "file:src/click/shell_completion.py",
+   "line": 14,
+   "source": "from .core import Parameter",
+   "to": "file:src/click/core.py",
+   "right": true
+  },
+  {
+   "repo": "click",
+   "from": "file:src/click/__init__.py",
+   "line": 11,
+   "source": "from .core import Command as Command",
+   "to": "file:src/click/core.py",
+   "right": true
+  },
+  {
+   "repo": "click",
+   "from": "file:src/click/__init__.py",
+   "line": 67,
+   "source": "from .types import Tuple as Tuple",
+   "to": "file:src/click/types.py",
+   "right": true
+  },
+  {
+   "repo": "click",
+   "from": "file:src/click/core.py",
+   "line": 35,
+   "source": "from .formatting import HelpFormatter",
+   "to": "file:src/click/formatting.py",
+   "right": true
+  },
+  {
+   "repo": "click",
+   "from": "file:src/click/exceptions.py",
+   "line": 15,
+   "source": "from .core import Context",
+   "to": "file:src/click/core.py",
+   "right": true
+  },
+  {
+   "repo": "click",
+   "from": "file:src/click/__init__.py",
+   "line": 34,
+   "source": "from .exceptions import ClickException as ClickException",
+   "to": "file:src/click/exceptions.py",
+   "right": true
+  },
+  {
+   "repo": "click",
+   "from": "file:src/click/decorators.py",
+   "line": 13,
+   "source": "from .core import Parameter",
+   "to": "file:src/click/core.py",
+   "right": true
+  },
+  {
+   "repo": "click",
+   "from": "file:src/click/__init__.py",
+   "line": 35,
+   "source": "from .exceptions import FileError as FileError",
+   "to": "file:src/click/exceptions.py",
+   "right": true
+  },
+  {
+   "repo": "click",
+   "from": "file:src/click/__init__.py",
+   "line": 71,
+   "source": "from .utils import format_filename as format_filename",
+   "to": "file:src/click/utils.py",
+   "right": true
+  },
+  {
+   "repo": "click",
+   "from": "file:tests/test_termui.py",
+   "line": 19,
+   "source": "from click._compat import WIN",
+   "to": "file:src/click/_compat.py",
+   "right": true
+  },
+  {
+   "repo": "click",
+   "from": "file:src/click/__init__.py",
+   "line": 61,
+   "source": "from .types import FloatRange as FloatRange",
+   "to": "file:src/click/types.py",
+   "right": true
+  },
+  {
+   "repo": "click",
+   "from": "file:tests/test_parser.py",
+   "line": 5,
+   "source": "from click.shell_completion import split_arg_string",
+   "to": "file:src/click/shell_completion.py",
+   "right": true
+  },
+  {
+   "repo": "click",
+   "from": "file:src/click/utils.py",
+   "line": 19,
+   "source": "from ._compat import strip_ansi",
+   "to": "file:src/click/_compat.py",
+   "right": true
+  },
+  {
+   "repo": "click",
+   "from": "file:src/click/termui.py",
+   "line": 15,
+   "source": "from . import _compat",
+   "to": "dir:src/click",
+   "right": true
+  },
+  {
+   "repo": "click",
+   "from": "file:src/click/_textwrap.py",
+   "line": 7,
+   "source": "from ._compat import _ansi_re",
+   "to": "file:src/click/_compat.py",
+   "right": true
+  },
+  {
+   "repo": "click",
+   "from": "file:src/click/__init__.py",
+   "line": 32,
+   "source": "from .exceptions import BadOptionUsage as BadOptionUsage",
+   "to": "file:src/click/exceptions.py",
+   "right": true
+  },
+  {
+   "repo": "click",
+   "from": "file:tests/test_testing.py",
+   "line": 12,
+   "source": "from click.testing import CliRunner",
+   "to": "file:src/click/testing.py",
+   "right": true
+  },
+  {
+   "repo": "click",
+   "from": "file:tests/test_shell_completion.py",
+   "line": 10,
+   "source": "from click.core import Command",
+   "to": "file:src/click/core.py",
+   "right": true
+  },
+  {
+   "repo": "click",
+   "from": "file:src/click/termui.py",
+   "line": 23,
+   "source": "from .types import ParamType",
+   "to": "file:src/click/types.py",
+   "right": true
+  },
+  {
+   "repo": "click",
+   "from": "file:src/click/types.py",
+   "line": 18,
+   "source": "from .utils import _LazyFile",
+   "to": "file:src/click/utils.py",
+   "right": true
+  },
+  {
+   "repo": "fd",
+   "from": "file:src/walk.rs",
+   "line": 22,
+   "source": "use crate::filesystem;",
+   "to": "file:src/filesystem.rs",
+   "right": true
+  },
+  {
+   "repo": "fd",
+   "from": "file:src/main.rs",
+   "line": 32,
+   "source": "use crate::config::Config;",
+   "to": "file:src/config.rs",
+   "right": true
+  },
+  {
+   "repo": "fd",
+   "from": "file:src/exec/job.rs",
+   "line": 2,
+   "source": "use crate::exit_codes::{ExitCode, merge_exitcodes};",
+   "to": "file:src/exit_codes.rs",
+   "right": true
+  },
+  {
+   "repo": "fd",
+   "from": "file:src/output.rs",
+   "line": 6,
+   "source": "use crate::config::Config;",
+   "to": "file:src/config.rs",
+   "right": true
+  },
+  {
+   "repo": "fd",
+   "from": "file:src/dir_entry.rs",
+   "line": 9,
+   "source": "use crate::filesystem::strip_current_dir;",
+   "to": "file:src/filesystem.rs",
+   "right": true
+  },
+  {
+   "repo": "fd",
+   "from": "file:src/walk.rs",
+   "line": 23,
+   "source": "use crate::output;",
+   "to": "file:src/output.rs",
+   "right": true
+  },
+  {
+   "repo": "fd",
+   "from": "file:src/error.rs",
+   "line": 4,
+   "source": "use crate::sanitize::write_sanitized;",
+   "to": "file:src/sanitize.rs",
+   "right": true
+  },
+  {
+   "repo": "fd",
+   "from": "file:src/exec/mod.rs",
+   "line": 13,
+   "source": "use crate::exec::command::OutputBuffer;",
+   "to": "file:src/exec/command.rs",
+   "right": true
+  },
+  {
+   "repo": "fd",
+   "from": "file:src/hyperlink.rs",
+   "line": 1,
+   "source": "use crate::filesystem::absolute_path;",
+   "to": "file:src/filesystem.rs",
+   "right": true
+  },
+  {
+   "repo": "fd",
+   "from": "file:src/main.rs",
+   "line": 31,
+   "source": "use crate::cli::{ColorWhen, HyperlinkWhen, Opts};",
+   "to": "file:src/cli.rs",
+   "right": true
+  },
+  {
+   "repo": "fd",
+   "from": "file:src/output.rs",
+   "line": 10,
+   "source": "use crate::sanitize::sanitize_for_term;",
+   "to": "file:src/sanitize.rs",
+   "right": true
+  },
+  {
+   "repo": "fd",
+   "from": "file:src/main.rs",
+   "line": 34,
+   "source": "use crate::exit_codes::ExitCode;",
+   "to": "file:src/exit_codes.rs",
+   "right": true
+  },
+  {
+   "repo": "fd",
+   "from": "file:src/walk.rs",
+   "line": 21,
+   "source": "use crate::exit_codes::{ExitCode, merge_exitcodes};",
+   "to": "file:src/exit_codes.rs",
+   "right": true
+  },
+  {
+   "repo": "fd",
+   "from": "file:src/config.rs",
+   "line": 11,
+   "source": "use crate::fmt::FormatTemplate;",
+   "to": "dir:src/fmt",
+   "right": true
+  },
+  {
+   "repo": "fd",
+   "from": "file:src/cli.rs",
+   "line": 14,
+   "source": "use crate::exec::CommandSet;",
+   "to": "dir:src/exec",
+   "right": true
+  },
+  {
+   "repo": "fd",
+   "from": "file:src/filter/mod.rs",
+   "line": 1,
+   "source": "pub use self::size::SizeFilter;",
+   "to": "file:src/filter/size.rs",
+   "right": true
+  },
+  {
+   "repo": "fd",
+   "from": "file:src/filetypes.rs",
+   "line": 1,
+   "source": "use crate::dir_entry;",
+   "to": "file:src/dir_entry.rs",
+   "right": true
+  },
+  {
+   "repo": "fd",
+   "from": "file:src/exec/command.rs",
+   "line": 6,
+   "source": "use crate::exit_codes::ExitCode;",
+   "to": "file:src/exit_codes.rs",
+   "right": true
+  },
+  {
+   "repo": "fd",
+   "from": "file:src/exec/mod.rs",
+   "line": 17,
+   "source": "use self::command::{execute_commands, handle_cmd_error};",
+   "to": "file:src/exec/command.rs",
+   "right": true
+  },
+  {
+   "repo": "fd",
+   "from": "file:src/filesystem.rs",
+   "line": 12,
+   "source": "use crate::dir_entry;",
+   "to": "file:src/dir_entry.rs",
+   "right": true
+  },
+  {
+   "repo": "fd",
+   "from": "file:src/fmt/mod.rs",
+   "line": 11,
+   "source": "use self::input::{basename, dirname, remove_extension};",
+   "to": "file:src/fmt/input.rs",
+   "right": true
+  },
+  {
+   "repo": "fd",
+   "from": "file:src/main.rs",
+   "line": 37,
+   "source": "use crate::filter::OwnerFilter;",
+   "to": "dir:src/filter",
+   "right": true
+  },
+  {
+   "repo": "fd",
+   "from": "file:src/output.rs",
+   "line": 9,
+   "source": "use crate::hyperlink::PathUrl;",
+   "to": "file:src/hyperlink.rs",
+   "right": true
+  },
+  {
+   "repo": "fd",
+   "from": "file:tests/tests.rs",
+   "line": 15,
+   "source": "use crate::testenv::TestEnv;",
+   "to": "dir:tests/testenv",
+   "right": true
+  },
+  {
+   "repo": "fd",
+   "from": "file:src/config.rs",
+   "line": 10,
+   "source": "use crate::filter::{SizeFilter, TimeFilter};",
+   "to": "dir:src/filter",
+   "right": true
+  },
+  {
+   "repo": "full-stack-fastapi-template",
+   "from": "file:backend/app/api/routes/private.py",
+   "line": 7,
+   "source": "from app.core.security import get_password_hash",
+   "to": "file:backend/app/core/security.py",
+   "right": true
+  },
+  {
+   "repo": "full-stack-fastapi-template",
+   "from": "file:frontend/tests/auth.setup.ts",
+   "line": 2,
+   "source": "import { firstSuperuser, firstSuperuserPassword } from \"./config.ts\"",
+   "to": "file:frontend/tests/config.ts",
+   "right": true
+  },
+  {
+   "repo": "full-stack-fastapi-template",
+   "from": "file:backend/tests/crud/test_user.py",
+   "line": 6,
+   "source": "from app.core.security import verify_password",
+   "to": "file:backend/app/core/security.py",
+   "right": true
+  },
+  {
+   "repo": "full-stack-fastapi-template",
+   "from": "file:backend/tests/api/routes/test_users.py",
+   "line": 12,
+   "source": "from tests.utils.utils import random_email, random_lower_string",
+   "to": "file:backend/tests/utils/utils.py",
+   "right": true
+  },
+  {
+   "repo": "full-stack-fastapi-template",
+   "from": "file:frontend/src/components/Sidebar/AppSidebar.tsx",
+   "line": 13,
+   "source": "import { User } from \"./User\"",
+   "to": "file:frontend/src/components/Sidebar/User.tsx",
+   "right": true
+  },
+  {
+   "repo": "full-stack-fastapi-template",
+   "from": "file:backend/app/api/main.py",
+   "line": 3,
+   "source": "from app.api.routes import items, login, private, users, utils",
+   "to": "dir:backend/app/api/routes",
+   "right": true
+  },
+  {
+   "repo": "full-stack-fastapi-template",
+   "from": "file:frontend/src/client/client/index.ts",
+   "line": 23,
+   "source": "export { createConfig } from './utils.gen';",
+   "to": "file:frontend/src/client/client/utils.gen.ts",
+   "right": true
+  },
+  {
+   "repo": "full-stack-fastapi-template",
+   "from": "file:backend/app/api/routes/users.py",
+   "line": 14,
+   "source": "from app.core.security import get_password_hash, verify_password",
+   "to": "file:backend/app/core/security.py",
+   "right": true
+  },
+  {
+   "repo": "full-stack-fastapi-template",
+   "from": "file:backend/tests/conftest.py",
+   "line": 9,
+   "source": "from app.main import app",
+   "to": "file:backend/app/main.py",
+   "right": true
+  },
+  {
+   "repo": "full-stack-fastapi-template",
+   "from": "file:backend/app/alembic/env.py",
+   "line": 22,
+   "source": "from app.models import SQLModel  # noqa",
+   "to": "file:backend/app/models.py",
+   "right": true
+  },
+  {
+   "repo": "full-stack-fastapi-template",
+   "from": "file:frontend/src/components/Common/Logo.tsx",
+   "line": 5,
+   "source": "import icon from \"/assets/images/fastapi-icon.svg\"",
+   "to": "file:frontend/public/assets/images/fastapi-icon.svg",
+   "right": true
+  },
+  {
+   "repo": "full-stack-fastapi-template",
+   "from": "file:frontend/src/main.tsx",
+   "line": 12,
+   "source": "import { ThemeProvider } from \"./components/theme-provider\"",
+   "to": "file:frontend/src/components/theme-provider.tsx",
+   "right": true
+  },
+  {
+   "repo": "full-stack-fastapi-template",
+   "from": "file:packages/react-email/emails/new_account.tsx",
+   "line": 6,
+   "source": "import { Link } from \"../ui/Link\"",
+   "to": "file:packages/react-email/ui/Link.tsx",
+   "right": true
+  },
+  {
+   "repo": "full-stack-fastapi-template",
+   "from": "file:backend/tests/conftest.py",
+   "line": 8,
+   "source": "from app.core.db import engine, init_db",
+   "to": "file:backend/app/core/db.py",
+   "right": true
+  },
+  {
+   "repo": "full-stack-fastapi-template",
+   "from": "file:frontend/src/client/core/serverSentEvents.gen.ts",
+   "line": 3,
+   "source": "import type { Config } from './types.gen';",
+   "to": "file:frontend/src/client/core/types.gen.ts",
+   "right": true
+  },
+  {
+   "repo": "full-stack-fastapi-template",
+   "from": "file:frontend/src/client/client/index.ts",
+   "line": 11,
+   "source": "export { serializeQueryKeyValue } from '../core/queryKeySerializer.gen';",
+   "to": "file:frontend/src/client/core/queryKeySerializer.gen.ts",
+   "right": true
+  },
+  {
+   "repo": "full-stack-fastapi-template",
+   "from": "file:backend/tests/api/routes/test_users.py",
+   "line": 10,
+   "source": "from app.models import User, UserCreate",
+   "to": "file:backend/app/models.py",
+   "right": true
+  },
+  {
+   "repo": "full-stack-fastapi-template",
+   "from": "file:frontend/src/hooks/useAuth.ts",
+   "line": 12,
+   "source": "import useCustomToast from \"./useCustomToast\"",
+   "to": "file:frontend/src/hooks/useCustomToast.ts",
+   "right": true
+  },
+  {
+   "repo": "full-stack-fastapi-template",
+   "from": "file:backend/app/core/db.py",
+   "line": 5,
+   "source": "from app.models import User, UserCreate",
+   "to": "file:backend/app/models.py",
+   "right": true
+  },
+  {
+   "repo": "full-stack-fastapi-template",
+   "from": "file:frontend/src/client/client.gen.ts",
+   "line": 3,
+   "source": "import { type ClientOptions, type Config, createClient, createConfig } from './client';",
+   "to": "dir:frontend/src/client/client",
+   "right": true
+  },
+  {
+   "repo": "full-stack-fastapi-template",
+   "from": "file:frontend/src/client/index.ts",
+   "line": 4,
+   "source": "export type { Body_login_login_access_token, ClientOptions, HTTPValidationError, ItemCreate, ItemPublic, items",
+   "to": "file:frontend/src/client/types.gen.ts",
+   "right": true
+  },
+  {
+   "repo": "full-stack-fastapi-template",
+   "from": "file:backend/app/main.py",
+   "line": 8,
+   "source": "from app.api.main import api_router",
+   "to": "file:backend/app/api/main.py",
+   "right": true
+  },
+  {
+   "repo": "full-stack-fastapi-template",
+   "from": "file:packages/react-email/emails/new_account.tsx",
+   "line": 3,
+   "source": "import { Callout, Detail } from \"../ui/Callout\"",
+   "to": "file:packages/react-email/ui/Callout.tsx",
+   "right": true
+  },
+  {
+   "repo": "full-stack-fastapi-template",
+   "from": "file:backend/tests/api/routes/test_items.py",
+   "line": 7,
+   "source": "from tests.utils.item import create_random_item",
+   "to": "file:backend/tests/utils/item.py",
+   "right": true
+  },
+  {
+   "repo": "full-stack-fastapi-template",
+   "from": "file:frontend/src/components/Admin/columns.tsx",
+   "line": 7,
+   "source": "import { UserActionsMenu } from \"./UserActionsMenu\"",
+   "to": "file:frontend/src/components/Admin/UserActionsMenu.tsx",
+   "right": true
+  },
+  {
+   "repo": "gaia",
+   "from": "file:packages/terrain/src/scatter.ts",
+   "line": 16,
+   "source": "import type { Terrain } from \"./world.ts\";",
+   "to": "file:packages/terrain/src/world.ts",
+   "right": true
+  },
+  {
+   "repo": "gaia",
+   "from": "file:packages/primitives/src/index.ts",
+   "line": 14,
+   "source": "export { type FootbridgeDeck, buildCairn, buildEdgingStones, buildFootbridge, buildSteppingStones, footbridgeD",
+   "to": "file:packages/primitives/src/geometry/crossing.ts",
+   "right": true
+  },
+  {
+   "repo": "gaia",
+   "from": "file:app/renderer/immersive/field-map.ts",
+   "line": 30,
+   "source": "import { chained, contour, isoline, simplified } from \"./isolines.ts\";",
+   "to": "file:app/renderer/immersive/isolines.ts",
+   "right": true
+  },
+  {
+   "repo": "gaia",
+   "from": "file:packages/world/src/index.ts",
+   "line": 8,
+   "source": "export * from \"./judging.ts\";",
+   "to": "file:packages/world/src/judging.ts",
+   "right": true
+  },
+  {
+   "repo": "gaia",
+   "from": "file:packages/terrain/src/scatter.ts",
+   "line": 13,
+   "source": "import { heightAt } from \"./lattice.ts\";",
+   "to": "file:packages/terrain/src/lattice.ts",
+   "right": true
+  },
+  {
+   "repo": "gaia",
+   "from": "file:packages/schema/src/index.ts",
+   "line": 6,
+   "source": "export * from \"./primitive.ts\";",
+   "to": "file:packages/schema/src/primitive.ts",
+   "right": true
+  },
+  {
+   "repo": "gaia",
+   "from": "file:packages/primitives/src/geometry/landmark/stones.ts",
+   "line": 8,
+   "source": "import type { standingStonesParams } from \"../../landmark.ts\";",
+   "to": "file:packages/primitives/src/landmark.ts",
+   "right": true
+  },
+  {
+   "repo": "gaia",
+   "from": "file:packages/realize/src/index.ts",
+   "line": 1,
+   "source": "export * from \"./realize.ts\";",
+   "to": "file:packages/realize/src/realize.ts",
+   "right": true
+  },
+  {
+   "repo": "gaia",
+   "from": "file:app/renderer/terrain/cover.ts",
+   "line": 11,
+   "source": "import { CLEARING_GLSL, type Clearings } from \"./clearings.ts\";",
+   "to": "file:app/renderer/terrain/clearings.ts",
+   "right": true
+  },
+  {
+   "repo": "gaia",
+   "from": "file:app/renderer/terrain/lab.ts",
+   "line": 114,
+   "source": "import { groundVitalityAt, setGroundOwnership, showGroundVitality } from \"./vitality.ts\";",
+   "to": "file:app/renderer/terrain/vitality.ts",
+   "right": true
+  },
+  {
+   "repo": "gaia",
+   "from": "file:packages/render/src/sway.ts",
+   "line": 7,
+   "source": "import { WIND_FIELD_GLSL } from \"./wind-field.ts\";",
+   "to": "file:packages/render/src/wind-field.ts",
+   "right": true
+  },
+  {
+   "repo": "gaia",
+   "from": "file:app/renderer/start/start.ts",
+   "line": 23,
+   "source": "import \"./start.css\";",
+   "to": "file:app/renderer/start/start.css",
+   "right": true
+  },
+  {
+   "repo": "gaia",
+   "from": "file:packages/primitives/src/geometry/landmark/shared.ts",
+   "line": 6,
+   "source": "import { type Channels, type PartBuilder, type V3, cross, icosphere, normalize, sub } from \"../kit.ts\";",
+   "to": "file:packages/primitives/src/geometry/kit.ts",
+   "right": true
+  },
+  {
+   "repo": "gaia",
+   "from": "file:app/main/index.ts",
+   "line": 12,
+   "source": "import type { FromMain, ToMain } from \"../world-service/protocol.ts\";",
+   "to": "file:app/world-service/protocol.ts",
+   "right": true
+  },
+  {
+   "repo": "gaia",
+   "from": "file:app/renderer/wait/map-wait.ts",
+   "line": 26,
+   "source": "import { MARGIN, drawRivers, drawTrails, drawTrees, letterName, nearestAreas, paintRelief, strokeContours } fr",
+   "to": "file:app/renderer/immersive/field-map.ts",
+   "right": true
+  },
+  {
+   "repo": "gaia",
+   "from": "file:packages/render/src/instances.ts",
+   "line": 16,
+   "source": "import type { SceneLight } from \"./light.ts\";",
+   "to": "file:packages/render/src/light.ts",
+   "right": true
+  },
+  {
+   "repo": "gaia",
+   "from": "file:packages/primitives/src/geometry/building/garden.ts",
+   "line": 8,
+   "source": "import { type Channels, LOSS_BAND, PartBuilder, type V3, addScaled, icosphere, lossThreshold, normalize, sub }",
+   "to": "file:packages/primitives/src/geometry/kit.ts",
+   "right": true
+  },
+  {
+   "repo": "gaia",
+   "from": "file:tools/lab-html.ts",
+   "line": 9,
+   "source": "import { LAB_BUILD, labBundle, labPage } from \"./lab-page.ts\";",
+   "to": "file:tools/lab-page.ts",
+   "right": true
+  },
+  {
+   "repo": "gaia",
+   "from": "file:app/renderer/flora/lab.ts",
+   "line": 15,
+   "source": "import { type Lab, type Shot, onTap, refs, slug } from \"../lab.ts\";",
+   "to": "file:app/renderer/lab.ts",
+   "right": true
+  },
+  {
+   "repo": "gaia",
+   "from": "file:packages/schema/src/index.ts",
+   "line": 3,
+   "source": "export * from \"./relief.ts\";",
+   "to": "file:packages/schema/src/relief.ts",
+   "right": true
+  },
+  {
+   "repo": "gaia",
+   "from": "file:packages/primitives/src/library.ts",
+   "line": 6,
+   "source": "import { RELIEF_PRIMITIVES } from \"./relief.ts\";",
+   "to": "file:packages/primitives/src/relief.ts",
+   "right": true
+  },
+  {
+   "repo": "gaia",
+   "from": "file:packages/primitives/src/library.ts",
+   "line": 9,
+   "source": "import { STRUCTURE_PRIMITIVES } from \"./structure.ts\";",
+   "to": "file:packages/primitives/src/structure.ts",
+   "right": true
+  },
+  {
+   "repo": "gaia",
+   "from": "file:packages/primitives/src/index.ts",
+   "line": 4,
+   "source": "export * from \"./relief.ts\";",
+   "to": "file:packages/primitives/src/relief.ts",
+   "right": true
+  },
+  {
+   "repo": "gaia",
+   "from": "file:app/renderer/wait/wait.ts",
+   "line": 18,
+   "source": "import type { StoodWorld } from \"../terrain/lab.ts\";",
+   "to": "file:app/renderer/terrain/lab.ts",
+   "right": true
+  },
+  {
+   "repo": "gaia",
+   "from": "file:app/renderer/terrain/measure.test.ts",
+   "line": 2,
+   "source": "import { pictureChange } from \"./measure.ts\";",
+   "to": "file:app/renderer/terrain/measure.ts",
+   "right": true
+  },
+  {
+   "repo": "git-history",
+   "from": "file:src/git-providers/cli-provider.js",
+   "line": 2,
+   "source": "import { SOURCE } from \"./sources\";",
+   "to": "file:src/git-providers/sources.js",
+   "right": true
+  },
+  {
+   "repo": "git-history",
+   "from": "file:src/landing.js",
+   "line": 11,
+   "source": "import { ReactComponent as VsCodeLogo } from \"./icons/vscode.svg\";",
+   "to": "file:src/icons/vscode.svg",
+   "right": true
+  },
+  {
+   "repo": "git-history",
+   "from": "file:src/git-providers/bitbucket-provider.js",
+   "line": 5,
+   "source": "import { SOURCE } from \"./sources\";",
+   "to": "file:src/git-providers/sources.js",
+   "right": true
+  },
+  {
+   "repo": "git-history",
+   "from": "file:src/landing.js",
+   "line": 6,
+   "source": "import addy from \"./avatar.addy.jpg\";",
+   "to": "file:src/avatar.addy.jpg",
+   "right": true
+  },
+  {
+   "repo": "git-history",
+   "from": "file:src/scroller.js",
+   "line": 5,
+   "source": "import { nextIndex, prevIndex, getScrollTop } from \"./utils\";",
+   "to": "file:src/utils.js",
+   "right": true
+  },
+  {
+   "repo": "git-history",
+   "from": "file:src/git-providers/vscode-provider.js",
+   "line": 2,
+   "source": "import { getSlides, getChanges } from \"./differ\";",
+   "to": "file:src/git-providers/differ.js",
+   "right": true
+  },
+  {
+   "repo": "git-history",
+   "from": "file:src/git-providers/versioner.worker.js",
+   "line": 6,
+   "source": "import bitbucket from \"./bitbucket-commit-fetcher\";",
+   "to": "file:src/git-providers/bitbucket-commit-fetcher.js",
+   "right": true
+  },
+  {
+   "repo": "git-history",
+   "from": "file:src/git-providers/gitlab-provider.js",
+   "line": 4,
+   "source": "import versioner from \"./versioner\";",
+   "to": "file:src/git-providers/versioner.js",
+   "right": true
+  },
+  {
+   "repo": "git-history",
+   "from": "file:cli/cli.js",
+   "line": 3,
+   "source": "const runServer = require(\"./server\");",
+   "to": "file:cli/server.js",
+   "right": true
+  },
+  {
+   "repo": "git-history",
+   "from": "file:src/git-providers/providers.js",
+   "line": 1,
+   "source": "const { SOURCE, getSource } = require(\"./sources\");",
+   "to": "file:src/git-providers/sources.js",
+   "right": true
+  },
+  {
+   "repo": "git-history",
+   "from": "file:src/git-providers/providers.js",
+   "line": 14,
+   "source": "[SOURCE.BITBUCKET]: require(\"./bitbucket-provider\").default",
+   "to": "file:src/git-providers/bitbucket-provider.js",
+   "right": true
+  },
+  {
+   "repo": "git-history",
+   "from": "file:src/git-providers/cli-provider.js",
+   "line": 1,
+   "source": "import versioner from \"./versioner\";",
+   "to": "file:src/git-providers/versioner.js",
+   "right": true
+  },
+  {
+   "repo": "git-history",
+   "from": "file:src/app.js",
+   "line": 5,
+   "source": "import getGitProvider from \"./git-providers/providers\";",
+   "to": "file:src/git-providers/providers.js",
+   "right": true
+  },
+  {
+   "repo": "git-history",
+   "from": "file:src/git-providers/versioner.worker.js",
+   "line": 5,
+   "source": "import gitlab from \"./gitlab-commit-fetcher\";",
+   "to": "file:src/git-providers/gitlab-commit-fetcher.js",
+   "right": true
+  },
+  {
+   "repo": "git-history",
+   "from": "file:vscode-ext/test-git.js",
+   "line": 5,
+   "source": "const getCommits = require(\"./git\");",
+   "to": "file:vscode-ext/git.js",
+   "right": true
+  },
+  {
+   "repo": "git-history",
+   "from": "file:src/scroller.story.js",
+   "line": 3,
+   "source": "import Scroller from \"./scroller\";",
+   "to": "file:src/scroller.js",
+   "right": true
+  },
+  {
+   "repo": "git-history",
+   "from": "file:src/git-providers/providers.js",
+   "line": 11,
+   "source": "[SOURCE.CLI]: require(\"./cli-provider\").default,",
+   "to": "file:src/git-providers/cli-provider.js",
+   "right": true
+  },
+  {
+   "repo": "git-history",
+   "from": "file:src/landing.js",
+   "line": 5,
+   "source": "import github from \"./avatar.github.jpg\";",
+   "to": "file:src/avatar.github.jpg",
+   "right": true
+  },
+  {
+   "repo": "git-history",
+   "from": "file:src/git-providers/providers.js",
+   "line": 12,
+   "source": "[SOURCE.GITLAB]: require(\"./gitlab-provider\").default,",
+   "to": "file:src/git-providers/gitlab-provider.js",
+   "right": true
+  },
+  {
+   "repo": "git-history",
+   "from": "file:src/git-providers/versioner.worker.js",
+   "line": 8,
+   "source": "import { SOURCE } from \"./sources\";",
+   "to": "file:src/git-providers/sources.js",
+   "right": true
+  },
+  {
+   "repo": "git-history",
+   "from": "file:src/git-providers/language-detector.test.js",
+   "line": 1,
+   "source": "import { getLanguage, getLanguageDependencies } from \"./language-detector\";",
+   "to": "file:src/git-providers/language-detector.js",
+   "right": true
+  },
+  {
+   "repo": "git-history",
+   "from": "file:src/scroller.js",
+   "line": 2,
+   "source": "import useChildren from \"./use-virtual-children\";",
+   "to": "file:src/use-virtual-children.js",
+   "right": true
+  },
+  {
+   "repo": "git-history",
+   "from": "file:src/index.js",
+   "line": 1,
+   "source": "import App from \"./app\";",
+   "to": "file:src/app.js",
+   "right": true
+  },
+  {
+   "repo": "git-history",
+   "from": "file:src/use-spring.story.js",
+   "line": 3,
+   "source": "import useSpring from \"./use-spring\";",
+   "to": "file:src/use-spring.js",
+   "right": true
+  },
+  {
+   "repo": "git-history",
+   "from": "file:src/landing.js",
+   "line": 12,
+   "source": "import \"./landing.css\";",
+   "to": "file:src/landing.css",
+   "right": true
+  },
+  {
+   "repo": "swe-agent",
+   "from": "file:sweagent/run/run_batch.py",
+   "line": 65,
+   "source": "from sweagent.utils.log import (",
+   "to": "file:sweagent/utils/log.py",
+   "right": true
+  },
+  {
+   "repo": "swe-agent",
+   "from": "file:sweagent/agent/extra/shell_agent.py",
+   "line": 6,
+   "source": "from sweagent.agent.problem_statement import ProblemStatement, ProblemStatementConfig",
+   "to": "file:sweagent/agent/problem_statement.py",
+   "right": true
+  },
+  {
+   "repo": "swe-agent",
+   "from": "file:sweagent/agent/history_processors.py",
+   "line": 10,
+   "source": "from sweagent.types import History, HistoryItem",
+   "to": "file:sweagent/types.py",
+   "right": true
+  },
+  {
+   "repo": "swe-agent",
+   "from": "file:tests/test_problem_statement_multimodal.py",
+   "line": 5,
+   "source": "from sweagent.agent.problem_statement import SWEBenchMultimodalProblemStatement",
+   "to": "file:sweagent/agent/problem_statement.py",
+   "right": true
+  },
+  {
+   "repo": "swe-agent",
+   "from": "file:tests/test_models.py",
+   "line": 11,
+   "source": "from sweagent.types import History",
+   "to": "file:sweagent/types.py",
+   "right": true
+  },
+  {
+   "repo": "swe-agent",
+   "from": "file:sweagent/run/run_batch.py",
+   "line": 64,
+   "source": "from sweagent.utils.config import load_environment_variables",
+   "to": "file:sweagent/utils/config.py",
+   "right": true
+  },
+  {
+   "repo": "swe-agent",
+   "from": "file:sweagent/run/hooks/abstract.py",
+   "line": 2,
+   "source": "from sweagent.environment.swe_env import SWEEnv",
+   "to": "file:sweagent/environment/swe_env.py",
+   "right": true
+  },
+  {
+   "repo": "swe-agent",
+   "from": "file:sweagent/run/inspector_cli.py",
+   "line": 20,
+   "source": "from sweagent.utils.serialization import _yaml_serialization_with_linebreaks",
+   "to": "file:sweagent/utils/serialization.py",
+   "right": true
+  },
+  {
+   "repo": "swe-agent",
+   "from": "file:sweagent/utils/config.py",
+   "line": 10,
+   "source": "from sweagent.utils.log import get_logger",
+   "to": "file:sweagent/utils/log.py",
+   "right": true
+  },
+  {
+   "repo": "swe-agent",
+   "from": "file:tests/test_run_replay.py",
+   "line": 8,
+   "source": "from sweagent.run.run_replay import RunReplay, RunReplayConfig",
+   "to": "file:sweagent/run/run_replay.py",
+   "right": true
+  },
+  {
+   "repo": "swe-agent",
+   "from": "file:sweagent/agent/reviewer.py",
+   "line": 24,
+   "source": "from sweagent.tools.parsing import ActionParser",
+   "to": "file:sweagent/tools/parsing.py",
+   "right": true
+  },
+  {
+   "repo": "swe-agent",
+   "from": "file:sweagent/run/run_replay.py",
+   "line": 38,
+   "source": "from sweagent.agent.models import ReplayModelConfig",
+   "to": "file:sweagent/agent/models.py",
+   "right": true
+  },
+  {
+   "repo": "swe-agent",
+   "from": "file:tests/test_models.py",
+   "line": 9,
+   "source": "from sweagent.tools.parsing import Identity",
+   "to": "file:sweagent/tools/parsing.py",
+   "right": true
+  },
+  {
+   "repo": "swe-agent",
+   "from": "file:sweagent/agent/agents.py",
+   "line": 33,
+   "source": "from sweagent.agent.reviewer import (",
+   "to": "file:sweagent/agent/reviewer.py",
+   "right": true
+  },
+  {
+   "repo": "swe-agent",
+   "from": "file:sweagent/tools/tools.py",
+   "line": 22,
+   "source": "from sweagent.tools.bundle import Bundle",
+   "to": "file:sweagent/tools/bundle.py",
+   "right": true
+  },
+  {
+   "repo": "swe-agent",
+   "from": "file:sweagent/run/run_batch.py",
+   "line": 62,
+   "source": "from sweagent.run.run_single import RunSingleConfig",
+   "to": "file:sweagent/run/run_single.py",
+   "right": true
+  },
+  {
+   "repo": "swe-agent",
+   "from": "def:sweagent/run/run.py#main",
+   "line": 98,
+   "source": "from sweagent.run.run_replay import run_from_cli as run_replay_main",
+   "to": "file:sweagent/run/run_replay.py",
+   "right": true
+  },
+  {
+   "repo": "swe-agent",
+   "from": "file:sweagent/run/common.py",
+   "line": 19,
+   "source": "from sweagent.types import AgentInfo, AgentRunResult",
+   "to": "file:sweagent/types.py",
+   "right": true
+  },
+  {
+   "repo": "swe-agent",
+   "from": "file:sweagent/run/hooks/apply_patch.py",
+   "line": 13,
+   "source": "from sweagent.run.hooks.abstract import RunHook",
+   "to": "file:sweagent/run/hooks/abstract.py",
+   "right": true
+  },
+  {
+   "repo": "swe-agent",
+   "from": "file:sweagent/agent/action_sampler.py",
+   "line": 10,
+   "source": "from sweagent.exceptions import FormatError",
+   "to": "file:sweagent/exceptions.py",
+   "right": true
+  },
+  {
+   "repo": "swe-agent",
+   "from": "file:sweagent/run/hooks/open_pr.py",
+   "line": 9,
+   "source": "from sweagent.run.hooks.abstract import RunHook",
+   "to": "file:sweagent/run/hooks/abstract.py",
+   "right": true
+  },
+  {
+   "repo": "swe-agent",
+   "from": "file:tests/test_history_processors.py",
+   "line": 7,
+   "source": "from sweagent.types import History",
+   "to": "file:sweagent/types.py",
+   "right": true
+  },
+  {
+   "repo": "swe-agent",
+   "from": "file:tests/test_run_single.py",
+   "line": 13,
+   "source": "from sweagent.run.run_single import RunSingle, RunSingleConfig",
+   "to": "file:sweagent/run/run_single.py",
+   "right": true
+  },
+  {
+   "repo": "swe-agent",
+   "from": "file:sweagent/run/hooks/open_pr.py",
+   "line": 17,
+   "source": "from sweagent.utils.log import get_logger",
+   "to": "file:sweagent/utils/log.py",
+   "right": true
+  },
+  {
+   "repo": "swe-agent",
+   "from": "file:sweagent/run/batch_instances.py",
+   "line": 27,
+   "source": "from sweagent.utils.log import get_logger",
+   "to": "file:sweagent/utils/log.py",
+   "right": true
+  },
+  {
+   "repo": "zustand",
+   "from": "file:src/index.ts",
+   "line": 2,
+   "source": "export * from './react.ts'",
+   "to": "file:src/react.ts",
+   "right": true
+  },
+  {
+   "repo": "zustand",
+   "from": "file:src/middleware/ssrSafe.ts",
+   "line": 1,
+   "source": "import type { StateCreator, StoreMutatorIdentifier } from '../vanilla.ts'",
+   "to": "file:src/vanilla.ts",
+   "right": true
+  },
+  {
+   "repo": "zustand",
+   "from": "file:examples/demo/src/components/Scene.jsx",
+   "line": 17,
+   "source": "import leaves2Url from '../resources/leaves2.png'",
+   "to": "file:examples/demo/src/resources/leaves2.png",
+   "right": true
+  },
+  {
+   "repo": "zustand",
+   "from": "file:examples/demo/src/components/Scene.jsx",
+   "line": 18,
+   "source": "import '../materials/layerMaterial'",
+   "to": "file:examples/demo/src/materials/layerMaterial.js",
+   "right": true
+  },
+  {
+   "repo": "zustand",
+   "from": "file:examples/demo/src/components/Scene.jsx",
+   "line": 13,
+   "source": "import starsUrl from '../resources/stars.png'",
+   "to": "file:examples/demo/src/resources/stars.png",
+   "right": true
+  },
+  {
+   "repo": "zustand",
+   "from": "file:tests/persistAsync.test.tsx",
+   "line": 9,
+   "source": "import { replacer, reviver, sleep } from './test-utils'",
+   "to": "file:tests/test-utils.ts",
+   "right": true
+  },
+  {
+   "repo": "zustand",
+   "from": "file:examples/demo/src/components/Scene.jsx",
+   "line": 14,
+   "source": "import groundUrl from '../resources/ground.png'",
+   "to": "file:examples/demo/src/resources/ground.png",
+   "right": true
+  },
+  {
+   "repo": "zustand",
+   "from": "file:examples/demo/src/main.jsx",
+   "line": 2,
+   "source": "import './styles.css'",
+   "to": "file:examples/demo/src/styles.css",
+   "right": true
+  },
+  {
+   "repo": "zustand",
+   "from": "file:src/traditional.ts",
+   "line": 10,
+   "source": "} from './vanilla.ts'",
+   "to": "file:src/vanilla.ts",
+   "right": true
+  },
+  {
+   "repo": "zustand",
+   "from": "file:src/middleware.ts",
+   "line": 8,
+   "source": "export { combine } from './middleware/combine.ts'",
+   "to": "file:src/middleware/combine.ts",
+   "right": true
+  },
+  {
+   "repo": "zustand",
+   "from": "file:src/react.ts",
+   "line": 9,
+   "source": "} from './vanilla.ts'",
+   "to": "file:src/vanilla.ts",
+   "right": true
+  },
+  {
+   "repo": "zustand",
+   "from": "file:src/shallow.ts",
+   "line": 1,
+   "source": "export { shallow } from './vanilla/shallow.ts'",
+   "to": "file:src/vanilla/shallow.ts",
+   "right": true
+  },
+  {
+   "repo": "zustand",
+   "from": "file:src/middleware/immer.ts",
+   "line": 3,
+   "source": "import type { StateCreator, StoreMutatorIdentifier } from '../vanilla.ts'",
+   "to": "file:src/vanilla.ts",
+   "right": true
+  },
+  {
+   "repo": "zustand",
+   "from": "file:examples/demo/src/components/Scene.jsx",
+   "line": 11,
+   "source": "import Fireflies from './Fireflies'",
+   "to": "file:examples/demo/src/components/Fireflies.jsx",
+   "right": true
+  },
+  {
+   "repo": "zustand",
+   "from": "file:examples/demo/src/App.jsx",
+   "line": 2,
+   "source": "import CodePreview from './components/CodePreview'",
+   "to": "file:examples/demo/src/components/CodePreview.jsx",
+   "right": true
+  },
+  {
+   "repo": "zustand",
+   "from": "file:src/index.ts",
+   "line": 1,
+   "source": "export * from './vanilla.ts'",
+   "to": "file:src/vanilla.ts",
+   "right": true
+  },
+  {
+   "repo": "zustand",
+   "from": "file:examples/starter/src/index.tsx",
+   "line": 5,
+   "source": "import mascot from './assets/zustand-mascot.svg'",
+   "to": "file:examples/starter/src/assets/zustand-mascot.svg",
+   "right": true
+  },
+  {
+   "repo": "zustand",
+   "from": "file:examples/demo/src/components/Scene.jsx",
+   "line": 15,
+   "source": "import bearUrl from '../resources/bear.png'",
+   "to": "file:examples/demo/src/resources/bear.png",
+   "right": true
+  },
+  {
+   "repo": "zustand",
+   "from": "file:src/middleware.ts",
+   "line": 6,
+   "source": "} from './middleware/devtools.ts'",
+   "to": "file:src/middleware/devtools.ts",
+   "right": true
+  },
+  {
+   "repo": "zustand",
+   "from": "file:src/react.ts",
+   "line": 2,
+   "source": "import { createStore } from './vanilla.ts'",
+   "to": "file:src/vanilla.ts",
+   "right": true
+  },
+  {
+   "repo": "zustand",
+   "from": "file:tests/persistSync.test.tsx",
+   "line": 6,
+   "source": "import { replacer, reviver } from './test-utils'",
+   "to": "file:tests/test-utils.ts",
+   "right": true
+  },
+  {
+   "repo": "zustand",
+   "from": "file:src/middleware.ts",
+   "line": 17,
+   "source": "export { ssrSafe as unstable_ssrSafe } from './middleware/ssrSafe.ts'",
+   "to": "file:src/middleware/ssrSafe.ts",
+   "right": true
+  },
+  {
+   "repo": "zustand",
+   "from": "file:src/middleware/subscribeWithSelector.ts",
+   "line": 1,
+   "source": "import type { StateCreator, StoreMutatorIdentifier } from '../vanilla.ts'",
+   "to": "file:src/vanilla.ts",
+   "right": true
+  },
+  {
+   "repo": "zustand",
+   "from": "file:examples/demo/src/main.jsx",
+   "line": 4,
+   "source": "import App from './App'",
+   "to": "file:examples/demo/src/App.jsx",
+   "right": true
+  },
+  {
+   "repo": "zustand",
+   "from": "file:examples/demo/src/App.jsx",
+   "line": 3,
+   "source": "import Details from './components/Details'",
+   "to": "file:examples/demo/src/components/Details.jsx",
+   "right": true
+  }
+ ]
+}
