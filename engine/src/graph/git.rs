@@ -74,6 +74,22 @@ pub fn root_commit(root: &Path) -> Option<String> {
         .map(|l| l.trim().chars().take(12).collect())
 }
 
+/// The top of the working tree holding `root`, if it is in git.
+pub fn toplevel(root: &Path) -> Option<std::path::PathBuf> {
+    let out = Command::new("git")
+        .env("GIT_NO_LAZY_FETCH", "1")
+        .arg("-C")
+        .arg(root)
+        .args(["rev-parse", "--show-toplevel"])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let top = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    std::path::Path::new(&top).canonicalize().ok()
+}
+
 /// The commit checked out, if the root is in git.
 pub fn head(root: &Path) -> Option<String> {
     let out = Command::new("git")

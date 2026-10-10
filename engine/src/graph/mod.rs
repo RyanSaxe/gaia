@@ -204,12 +204,20 @@ pub fn ref_key(r: &PendingRef) -> String {
     format!("{}|{}|{}|{}", r.from, r.kind, r.text, r.at.start)
 }
 
-/// The project's id: its root commit, so it names the project wherever it
-/// is cloned, or else a hash of its folder's path.
+/// The project's id: its repository's root commit, so it names the project
+/// wherever it is cloned. A folder inside a repository is a project of its
+/// own, named by the root commit and where the folder sits; a folder
+/// outside git is named by a hash of its path.
 pub fn project_id(root: &Path) -> String {
     let canonical = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
-    git::root_commit(root)
-        .unwrap_or_else(|| walk::content_hash(canonical.to_string_lossy().as_bytes()))
+    match (git::root_commit(root), git::toplevel(root)) {
+        (Some(commit), Some(top)) if top == canonical => commit,
+        (Some(commit), Some(top)) => {
+            let inside = canonical.strip_prefix(&top).unwrap_or(&canonical);
+            walk::content_hash(format!("{commit}/{}", inside.display()).as_bytes())
+        }
+        _ => walk::content_hash(canonical.to_string_lossy().as_bytes()),
+    }
 }
 
 /// Builds the graph with the references Jev resolved as edges, before reach is counted.
@@ -883,6 +891,37 @@ mod tests {
             defs["def:src/a.ts#slugA"].measures.duplicates,
             Some(vec!["def:src/b.ts#slugB".to_string()])
         );
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn a_folder_inside_a_repository_is_a_project_of_its_own() {
+        let dir = project("inside", &[("sub/a.ts", "export const a = 1;\n")]);
+        for args in [
+            &["init", "-q"][..],
+            &["add", "."],
+            &[
+                "-c",
+                "user.name=Gaia",
+                "-c",
+                "user.email=gaia@example.com",
+                "commit",
+                "-q",
+                "-m",
+                "one",
+            ],
+        ] {
+            let ok = std::process::Command::new("git")
+                .arg("-C")
+                .arg(&dir)
+                .args(args)
+                .status()
+                .unwrap()
+                .success();
+            assert!(ok, "git {args:?}");
+        }
+        assert_eq!(project_id(&dir), git::root_commit(&dir).unwrap());
+        assert_ne!(project_id(&dir.join("sub")), project_id(&dir));
         std::fs::remove_dir_all(dir).unwrap();
     }
 
