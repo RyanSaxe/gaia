@@ -89,6 +89,8 @@ const go = (spot: string): string =>
 const OPEN = `(await __lab.open("immersive"), await __lab.hour(15.5), await __lab.frames(30), T.scale())`;
 const settle = "await __lab.frames(40)";
 const bench = "(T.bench(10), +T.bench(40).toFixed(2))";
+/** Twenty-one seconds of frames first: as long as the frame budget takes to rise from the far forms' size to its most (woods.ts, `BUDGET`). */
+const budgetSettles = "T.bench(1260)";
 
 const jobs: Job[] = [];
 for (const [world, preset] of Object.entries(SPOTS)) {
@@ -96,7 +98,7 @@ for (const [world, preset] of Object.entries(SPOTS)) {
   const spots = values.spot ?? preset;
   const calls: Call[] = [{ key: "open", js: OPEN }];
   for (const spot of spots) {
-    if (measures.has("drawn")) calls.push({ key: `drawn ${spot}`, js: `(${go(spot)}, ${settle}, { ms: ${bench}, drawn: T.drawn(), woods: T.scale(), understory: T.understoryDrawn() })` });
+    if (measures.has("drawn")) calls.push({ key: `drawn ${spot}`, js: `(${go(spot)}, ${settle}, ${budgetSettles}, { ms: ${bench}, drawn: T.drawn(), woods: T.scale(), understory: T.understoryDrawn() })` });
     if (measures.has("steps")) calls.push({ key: `steps ${spot}`, js: `(${go(spot)}, ${settle}, T.steps(${WALK.meters}, ${WALK.step}, ${WALK.at}))` });
   }
   if (measures.has("hitch")) {
@@ -201,7 +203,7 @@ for (const [world, calls] of Object.entries(results)) {
   line(`\n${world}`);
   for (const [key, value] of Object.entries(calls)) {
     if (key.startsWith("drawn ") || key.startsWith("stress ")) {
-      const { ms, drawn, trees, woods, understory } = value as { ms: number; drawn: Tally; trees?: number; woods?: { treesDrawn: number; treesInBand: number; treesFar: number }; understory?: Record<string, { copies: number; triangles: number }> };
+      const { ms, drawn, trees, woods, understory } = value as { ms: number; drawn: Tally; trees?: number; woods?: { treesDrawn: number; treesInBand: number; treesFar: number; swapPx: number }; understory?: Record<string, { copies: number; triangles: number }> };
       const kinds = [...new Set(Object.values(drawn).flatMap((p) => Object.keys(p)))].sort((a, b) => (drawn.view[b]?.triangles ?? 0) - (drawn.view[a]?.triangles ?? 0));
       const sum = (pass: keyof Tally, k: "calls" | "triangles"): number => Object.values(drawn[pass]).reduce((n, d) => n + d[k], 0);
       line(`  ${key}${trees === undefined ? "" : ` (${trees} trees)`}: ${f(ms, 2)} ms a frame; triangles (millions) and draw calls, view / mirror / shadow:`);
@@ -210,7 +212,7 @@ for (const [world, calls] of Object.entries(results)) {
         const at = (pass: keyof Tally) => drawn[pass][k] ?? { calls: 0, triangles: 0 };
         line(`    ${k.padEnd(12)} ${m(at("view").triangles)} / ${m(at("mirror").triangles)} / ${m(at("shadow").triangles)}   calls ${at("view").calls} / ${at("mirror").calls} / ${at("shadow").calls}`);
       }
-      if (woods !== undefined) line(`    trees in view: ${woods.treesDrawn - woods.treesInBand} full, ${woods.treesInBand} in the band, ${woods.treesFar} far`);
+      if (woods !== undefined) line(`    trees in view: ${woods.treesDrawn - woods.treesInBand} full, ${woods.treesInBand} in the band, ${woods.treesFar} far; turning far at ${woods.swapPx} px`);
       if (understory !== undefined) {
         const kinds = Object.entries(understory).sort(([, a], [, b]) => b.triangles - a.triangles);
         line(`    understory in view, by kind: ${kinds.map(([k, d]) => `${k} ${m(d.triangles)}M (${d.copies})`).join(", ")}`);
