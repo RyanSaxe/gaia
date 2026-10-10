@@ -61,6 +61,84 @@ pub struct Block {
     pub index: usize,
 }
 
+/// Where a definition can be made worse on purpose, for the calibration
+/// set's mutations. Ranges are in bytes.
+#[derive(Default)]
+pub struct Sites {
+    /// Each parameter's name, with every use of it in the definition.
+    pub params: Vec<(String, Vec<(usize, usize)>)>,
+    /// Its doc comment or docstring.
+    pub doc: Option<(usize, usize)>,
+    /// Each error handler's body, and whether braces hold it.
+    pub handlers: Vec<(usize, usize, bool)>,
+}
+
+/// Names a parameter list may hold that aren't the caller's to name.
+const RECEIVERS: &[&str] = &["self", "this", "cls", "_"];
+
+/// The names a parameter binds: its `name` or `pattern`, or its first identifier.
+fn param_names(p: Node) -> Vec<Node> {
+    if p.kind() == "identifier" {
+        return vec![p];
+    }
+    for field in ["name", "pattern"] {
+        let mut c = p.walk();
+        let named: Vec<Node> = p
+            .children_by_field_name(field, &mut c)
+            .filter(|n| n.kind() == "identifier")
+            .collect();
+        if !named.is_empty() {
+            return named;
+        }
+    }
+    let mut c = p.walk();
+    p.named_children(&mut c)
+        .find(|n| n.kind() == "identifier")
+        .into_iter()
+        .collect()
+}
+
+/// The body of an error handler: its `body`, or its last block.
+fn handler_body(clause: Node) -> Option<Node> {
+    clause.child_by_field_name("body").or_else(|| {
+        let mut c = clause.walk();
+        clause
+            .named_children(&mut c)
+            .filter(|n| n.kind().contains("block") || n.kind().contains("body"))
+            .last()
+    })
+}
+
+/// The run of comments directly above a definition, as `doc_above` reads it, as a byte range.
+fn doc_above_range(def: Node, src: &str) -> Option<(usize, usize)> {
+    let mut node = def;
+    while let Some(p) = node.parent() {
+        if p.end_byte() != def.end_byte() || p.parent().is_none() {
+            break;
+        }
+        node = p;
+    }
+    let mut range: Option<(usize, usize)> = None;
+    let mut top = node.start_position().row;
+    let mut prev = node.prev_named_sibling();
+    while let Some(p) = prev {
+        if p.end_position().row + 1 < top {
+            break;
+        }
+        if is_comment(p) {
+            if !is_directive(&comment_words(text(p, src))) {
+                let end = range.map_or(p.end_byte(), |(_, e)| e);
+                range = Some((p.start_byte(), end));
+            }
+        } else if !p.kind().contains("attribute") {
+            break;
+        }
+        top = p.start_position().row;
+        prev = p.prev_named_sibling();
+    }
+    range
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum RefKind {
     Import,
@@ -583,6 +661,19 @@ fn comments_in<'t>(node: Node<'t>, out: &mut Vec<Node<'t>>) {
 
 /// Parses one file and reads everything its queries capture.
 pub fn parse(lang: &Loaded, src: &str) -> Result<FileParse, String> {
+    parse_inner(lang, src, false).map(|(p, _)| p)
+}
+
+/// The parse, and where each of its definitions can be made worse, in the same order.
+pub fn parse_with_sites(lang: &Loaded, src: &str) -> Result<(FileParse, Vec<Sites>), String> {
+    parse_inner(lang, src, true)
+}
+
+fn parse_inner(
+    lang: &Loaded,
+    src: &str,
+    with_sites: bool,
+) -> Result<(FileParse, Vec<Sites>), String> {
     let mut parser = Parser::new();
     if lang.wasm {
         parser
@@ -1049,12 +1140,70 @@ pub fn parse(lang: &Loaded, src: &str) -> Result<FileParse, String> {
         markers: Some(markers_in(root)),
         ..Default::default()
     };
-    Ok(FileParse {
-        unparsed: count_unparsed(root),
-        measures,
-        defs,
-        blocks,
-        refs,
-        literals,
-    })
+    let sites = if with_sites {
+        order
+            .iter()
+            .enumerate()
+            .map(|(k, &i)| {
+                let node = found[i].0;
+                let mine = |n: Node| innermost_def(n) == Some(k);
+                let listed: Vec<Node> = functions[i]
+                    .and_then(|f| f.child_by_field_name("parameters"))
+                    .into_iter()
+                    .chain(param_lists.iter().copied().filter(|l| mine(*l)))
+                    .flat_map(|l| {
+                        let mut c = l.walk();
+                        l.named_children(&mut c).collect::<Vec<_>>()
+                    })
+                    .chain(single_params.iter().copied().filter(|n| mine(*n)))
+                    .collect();
+                let mut params: Vec<(String, Vec<(usize, usize)>)> = Vec::new();
+                for n in listed.into_iter().flat_map(param_names) {
+                    let name = text(n, src);
+                    if !RECEIVERS.contains(&name) && !params.iter().any(|(p, _)| p == name) {
+                        params.push((name.to_string(), Vec::new()));
+                    }
+                }
+                let mut stack = vec![node];
+                while let Some(n) = stack.pop() {
+                    if n.kind() == "identifier"
+                        && let Some((_, uses)) = params.iter_mut().find(|(p, _)| p == text(n, src))
+                    {
+                        uses.push((n.start_byte(), n.end_byte()));
+                    }
+                    let mut c = n.walk();
+                    stack.extend(n.children(&mut c));
+                }
+                let doc = docstrings
+                    .iter()
+                    .find(|n| contains(node, **n) && mine(**n))
+                    .map(|n| (n.start_byte(), n.end_byte()))
+                    .or_else(|| doc_above_range(node, src));
+                let handlers = hits
+                    .iter()
+                    .filter(|h| h.what == "decide.catch" && mine(h.node))
+                    .filter_map(|h| handler_body(h.node))
+                    .map(|b| (b.start_byte(), b.end_byte(), text(b, src).starts_with('{')))
+                    .collect();
+                Sites {
+                    params,
+                    doc,
+                    handlers,
+                }
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
+    Ok((
+        FileParse {
+            unparsed: count_unparsed(root),
+            measures,
+            defs,
+            blocks,
+            refs,
+            literals,
+        },
+        sites,
+    ))
 }

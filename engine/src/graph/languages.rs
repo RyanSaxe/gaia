@@ -31,6 +31,8 @@ struct Entry {
     #[serde(default)]
     functions_as_values: bool,
     #[serde(default)]
+    empty_block: Option<String>,
+    #[serde(default)]
     inline: Option<InlineEntry>,
     #[serde(default)]
     conventions: Vec<ConventionEntry>,
@@ -96,6 +98,8 @@ pub struct Spec {
     /// A call on a value can reach a function that belongs to no class, as
     /// a JavaScript object's own functions do.
     pub functions_as_values: bool,
+    /// A block that does nothing, for a language whose blocks have no braces.
+    pub empty_block: Option<String>,
     inline: Option<InlineEntry>,
     convention_tags: Vec<String>,
     conventions: GlobSet,
@@ -157,6 +161,7 @@ pub fn table() -> &'static BTreeMap<String, Spec> {
                     data: e.data,
                     implicit_self: e.implicit_self,
                     functions_as_values: e.functions_as_values,
+                    empty_block: e.empty_block,
                     inline: e.inline,
                     convention_tags: e.conventions.into_iter().map(|c| c.tag).collect(),
                     conventions: globs.build().expect("the conventions build"),

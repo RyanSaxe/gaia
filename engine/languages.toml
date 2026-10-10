@@ -30,7 +30,9 @@
 # true` marks one where a call on a value, such as `store.inc()`, can reach
 # a function that belongs to no class: an object's own functions, or a
 # Kotlin extension. Elsewhere a call on a value the rule cannot place
-# reaches only methods.
+# reaches only methods. `empty_block` is a block that does nothing, for a
+# language whose blocks have no braces; the calibration set's mutations
+# empty an error handler with it, or with `{}` where braces hold it.
 
 [typescript]
 functions_as_values = true
@@ -69,6 +71,7 @@ conventions = [
 ]
 
 [python]
+empty_block = "pass"
 relative = [{ prefix = ".", from = "dots" }]
 extensions = ["py", "pyi"]
 grammar = { crate = "tree-sitter-python" }

@@ -1,5 +1,6 @@
 //! The gaia-engine binary. `--version` prints its version; `rpc` serves the
-//! engine protocol over stdin and stdout until stdin closes.
+//! engine protocol over stdin and stdout until stdin closes; `mutate ROOT
+//! OUT [PER_KIND]` writes the calibration set's mutations of a repository.
 
 mod clone;
 mod graph;
@@ -28,8 +29,24 @@ fn main() -> ExitCode {
                 ExitCode::FAILURE
             }
         },
+        Some("mutate") if args.len() >= 3 => {
+            let per_kind = args.get(3).and_then(|n| n.parse().ok()).unwrap_or(20);
+            let out = std::path::Path::new(&args[2]);
+            match graph::mutate::run(std::path::Path::new(&args[1]), out, per_kind) {
+                Ok(manifest) => {
+                    println!("{manifest}");
+                    ExitCode::SUCCESS
+                }
+                Err(error) => {
+                    eprintln!("gaia-engine: {error}");
+                    ExitCode::FAILURE
+                }
+            }
+        }
         _ => {
-            eprintln!("usage: gaia-engine --version | gaia-engine rpc");
+            eprintln!(
+                "usage: gaia-engine --version | gaia-engine rpc | gaia-engine mutate ROOT OUT [PER_KIND]"
+            );
             ExitCode::from(2)
         }
     }

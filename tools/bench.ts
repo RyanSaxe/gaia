@@ -8,11 +8,18 @@
 //        pnpm bench --replay name FROM TO [--monthly]
 //        GAIA_JEV=live pnpm bench --understand [name …] [--plan]
 //        pnpm bench --calibrate
+//        GAIA_JEV=live pnpm bench --mutate [name …] [--plan]
 //
 // --understand asks Jev's calls about each repository through the engine's
 // runner, keeping answers in the bench's store, so a second run sends only
 // what changed. It reports what was sent and billed, and how the stand
 // scores of definitions spread over their levels. --plan only estimates.
+//
+// --calibrate reports how every question's held answers spread on the
+// held-out half. --mutate makes the calibration set's mutations of each
+// repository (the held-out half by default) with gaia-engine mutate, asks
+// Jev about the original and mutant copies, and reports how often each
+// mutation moved the question it targets and how far the others moved.
 //
 // A replay opens the repository at each commit from FROM to TO along its
 // first parents (one a month with --monthly), carrying lineage from one to
@@ -280,6 +287,92 @@ async function calibrate(): Promise<void> {
   console.log(`held out, files a test convention names that profile judged a test: ${testsAgree} of ${tests}`);
 }
 
+/** One mutation, as `gaia-engine mutate` lists it. */
+interface Mutation {
+  readonly kind: string;
+  readonly def: string;
+  readonly file: string;
+  readonly moves: string;
+  readonly toward: "lower" | string;
+  readonly leaves: readonly string[];
+}
+
+/**
+ * Asks Jev about each mutation's original and mutant copies, as separate
+ * projects with only the mutated files, and reports the calibration page's
+ * caught and bleed for each kind.
+ */
+async function mutations(names: readonly string[], planOnly: boolean): Promise<void> {
+  const split = JSON.parse(readFileSync(resolve(repo, "tools/bench/calibration/split.json"), "utf8")) as { heldOut: string[] };
+  const picked = repos.filter((r) => (names.length > 0 ? names : split.heldOut).includes(r.name));
+  type Seen = { mutation: Mutation; before: unknown; after: unknown; leaves: [unknown, unknown][] };
+  const seen: Seen[] = [];
+  const at = (graph: CodeGraph, def: string, field: string): unknown => {
+    const node = graph.nodes.find((n) => n.id === def);
+    return field.split(".").reduce<unknown>((o, k) => (typeof o === "object" && o !== null ? (o as Record<string, unknown>)[k] : undefined), node?.judged);
+  };
+  for (const r of picked) {
+    const out = resolve(repo, "node_modules/.cache/gaia-bench/mutants", r.name);
+    const listed = JSON.parse(execFileSync(engine, ["mutate", await rootOf(r), out, "20"], { env, encoding: "utf8" })) as { mutations: Mutation[] };
+    for (const kind of [...new Set(listed.mutations.map((m) => m.kind))]) {
+      const mine = listed.mutations.filter((m) => m.kind === kind);
+      const graphs: CodeGraph[] = [];
+      for (const side of ["original", "mutant"]) {
+        const root = resolve(out, kind, side);
+        const engineSession = session();
+        try {
+          const plan = await engineSession.call<UnderstandPlan>("understand.plan", { root });
+          console.log(`${r.name} ${kind} ${side}: ${plan.pending.reduce((n, p) => n + p.requests, 0)} requests to send now; estimated $${plan.estimate.estimatedUsd.toFixed(4)}`);
+          if (planOnly) continue;
+          const drain = async (): Promise<void> => {
+            for (;;) {
+              const p = await engineSession.call<UnderstandProgress>("understand.next", { root });
+              if (p.left === 0 || p.sent === 0) break;
+            }
+          };
+          await drain();
+          await engineSession.call("understand.deepen", { root, nodes: mine.map((m) => m.def) });
+          await drain();
+          graphs.push(await engineSession.call<CodeGraph>("project.graph", { root, judged: true }));
+        } finally {
+          engineSession.close();
+        }
+      }
+      const [original, mutant] = graphs;
+      if (original === undefined || mutant === undefined) continue;
+      for (const m of mine) {
+        seen.push({ mutation: m, before: at(original, m.def, m.moves), after: at(mutant, m.def, m.moves), leaves: m.leaves.map((l) => [at(original, m.def, l), at(mutant, m.def, l)]) });
+      }
+    }
+  }
+  if (planOnly) return;
+  const score = (a: unknown): number | undefined => (typeof a === "object" && a !== null && typeof (a as { score?: unknown }).score === "number" ? (a as { score: number }).score : undefined);
+  const choice = (a: unknown): string | undefined => (typeof a === "object" && a !== null ? (a as { choice?: string }).choice : undefined);
+  console.log("caught: the targeted question worse in at least 90%, by 0.5 levels on average; bleed: the others move under 0.2 levels on average");
+  for (const kind of [...new Set(seen.map((s) => s.mutation.kind))]) {
+    const mine = seen.filter((s) => s.mutation.kind === kind);
+    const answered = mine.filter((s) => s.before !== undefined && s.after !== undefined);
+    let caught = 0;
+    const drops: number[] = [];
+    for (const s of answered) {
+      if (s.mutation.toward === "lower") {
+        const [b, a] = [score(s.before), score(s.after)];
+        if (b === undefined || a === undefined) continue;
+        drops.push(b - a);
+        if (a < b) caught++;
+      } else if (choice(s.after) === s.mutation.toward && choice(s.before) !== s.mutation.toward) {
+        caught++;
+      }
+    }
+    const moved = mine.flatMap((s) => s.leaves.flatMap(([b, a]) => (score(b) !== undefined && score(a) !== undefined ? [Math.abs((score(a) ?? 0) - (score(b) ?? 0))] : [])));
+    const mean = (xs: number[]): string => (xs.length === 0 ? "-" : (xs.reduce((x, y) => x + y, 0) / xs.length).toFixed(2));
+    console.log(
+      `  ${kind}: ${answered.length} of ${mine.length} answered; caught ${caught} (${Math.round((100 * caught) / Math.max(1, answered.length))}%)` +
+        `${drops.length > 0 ? `, mean drop ${mean(drops)} levels` : ""}; bleed ${mean(moved)} levels over ${moved.length} answers`,
+    );
+  }
+}
+
 /** Replays a repository's history and reports what keeps its identity. */
 async function replay(r: Repo, from: string, to: string, monthly: boolean): Promise<void> {
   const root = await rootOf(r);
@@ -335,11 +428,13 @@ const { repos } = JSON.parse(readFileSync(resolve(repo, "tools/bench/repos.json"
 const replayAt = args.indexOf("--replay");
 const understanding = args.includes("--understand");
 const calibrating = args.includes("--calibrate");
+const mutating = args.includes("--mutate");
 const picked = names.length > 0 ? repos.filter((r) => names.includes(r.name)) : repos;
-const chosen = replayAt >= 0 || understanding || calibrating ? [] : picked;
+const chosen = replayAt >= 0 || understanding || calibrating || mutating ? [] : picked;
 
 execFileSync("cargo", ["build", "-p", "gaia-engine", "--release", "--quiet"], { cwd: repo, env, stdio: "inherit" });
 if (calibrating) await calibrate();
+if (mutating) await mutations(names, args.includes("--plan"));
 if (understanding) {
   for (const r of picked) await understandRepo(r, args.includes("--plan"));
 }
