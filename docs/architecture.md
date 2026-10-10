@@ -372,6 +372,20 @@ into the graph by its capture name:
 - `@reference.import` and `@reference.call` become pending references.
 - `@decide.*` marks the decisions the measures count.
 
+Any other language loads at runtime as WebAssembly, through tree-sitter's
+`wasm` feature, from the `.wasm` file its grammar's own release publishes.
+The table names that file and its SHA-256, and the grammar's tags query when
+it has one. The engine downloads each the first time a project needs it,
+checks the hash, and keeps it in `<data>/grammars/`. Apart from Jev and
+`project.clone`, this is the engine's only network use; without a network,
+those files are read as having no grammar. Lua, Elixir, Scala, Zig, Haskell
+and OCaml load this way today. With no query file of ours, such a language
+falls back: its tags query finds definitions and calls, and node kinds most
+grammars share, such as `if_statement` or a node with a `name` field ending
+in `_declaration`, give blocks, decisions and, with no tags query either,
+definitions. The fallback's measures are approximate: Scala's `&&`, for one,
+is an `infix_expression` it does not count.
+
 Each function gets its cognitive complexity (SonarSource's definition), its
 cyclomatic complexity (McCabe's), its deepest nesting, its parameters and
 its debt markers. Each file and directory gets its lines and its history

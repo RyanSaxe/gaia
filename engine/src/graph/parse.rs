@@ -11,7 +11,7 @@
 //! - `@block.<shape>`; `@decide.else`, `.elseif`, `.case`, `.catch` and
 //!   `.logic`, which the measures count; `@literal`.
 
-use super::languages::Loaded;
+use super::languages::{self, Loaded};
 use super::model::{Measures, Span};
 use std::collections::{HashMap, HashSet};
 use streaming_iterator::StreamingIterator;
@@ -134,6 +134,70 @@ fn collect<'t>(query: &Query, root: Node<'t>, src: &[u8], from_tags: bool, out: 
                 from_tags,
             });
         }
+    }
+}
+
+/// What a language without our query file still yields, read from node
+/// kinds most grammars share: blocks, the decisions the measures count, and
+/// definitions too when it has no tags query either.
+fn fallback<'t>(root: Node<'t>, definitions: bool, src: &str, out: &mut Vec<Hit<'t>>) {
+    let mut stack = vec![root];
+    while let Some(n) = stack.pop() {
+        let mut c = n.walk();
+        stack.extend(n.named_children(&mut c));
+        let kind = n.kind();
+        let words: Vec<&str> = kind.split('_').collect();
+        let has = |w: &[&str]| words.iter().any(|x| w.contains(x));
+        let construct =
+            kind.ends_with("statement") || kind.ends_with("expression") || words.len() == 1;
+        let name = n.child_by_field_name("name");
+        let named_definition = kind.ends_with("_definition")
+            || kind.ends_with("_declaration")
+            || kind.ends_with("_item")
+            || matches!(kind, "function" | "method" | "class" | "module");
+        let what = if definitions && named_definition && name.is_some() {
+            let role = kind
+                .trim_end_matches("_definition")
+                .trim_end_matches("_declaration")
+                .trim_end_matches("_item");
+            format!("definition.{role}")
+        } else if has(&["elif", "elsif", "elseif"]) || kind == "else_if_clause" {
+            "decide.elseif".into()
+        } else if matches!(kind, "else" | "else_clause" | "else_statement") {
+            "decide.else".into()
+        } else if has(&["if"]) && construct {
+            "block.branch".into()
+        } else if has(&["for", "while", "loop", "repeat", "until"]) && construct {
+            "block.loop".into()
+        } else if has(&["switch", "match", "case", "when", "select"]) && construct {
+            "block.match".into()
+        } else if has(&["try"]) && construct {
+            "block.try".into()
+        } else if has(&["lambda", "closure"])
+            || matches!(
+                kind,
+                "anonymous_function" | "function_expression" | "arrow_function" | "func_literal"
+            )
+        {
+            "block.closure".into()
+        } else if has(&["catch", "rescue", "except"]) {
+            "decide.catch".into()
+        } else if has(&["case", "arm", "alternative"]) && !construct {
+            "decide.case".into()
+        } else if has(&["binary", "boolean"])
+            && matches!(operator(n, src).as_str(), "&&" | "||" | "and" | "or")
+        {
+            "decide.logic".into()
+        } else {
+            continue;
+        };
+        out.push(Hit {
+            what,
+            node: n,
+            name,
+            owner: None,
+            from_tags: false,
+        });
     }
 }
 
@@ -458,6 +522,11 @@ fn comments_in<'t>(node: Node<'t>, out: &mut Vec<Node<'t>>) {
 /// Parses one file and reads everything its queries capture.
 pub fn parse(lang: &Loaded, src: &str) -> Result<FileParse, String> {
     let mut parser = Parser::new();
+    if lang.wasm {
+        parser
+            .set_wasm_store(languages::wasm_store()?)
+            .map_err(|e| e.to_string())?;
+    }
     parser
         .set_language(&lang.language)
         .map_err(|e| e.to_string())?;
@@ -471,7 +540,10 @@ pub fn parse(lang: &Loaded, src: &str) -> Result<FileParse, String> {
     if let Some(tags) = &lang.tags {
         collect(tags, root, bytes, true, &mut hits);
     }
-    collect(&lang.ours, root, bytes, false, &mut hits);
+    match &lang.ours {
+        Some(ours) => collect(ours, root, bytes, false, &mut hits),
+        None => fallback(root, lang.tags.is_none(), src, &mut hits),
+    }
 
     // Literals from an inline grammar, such as Markdown's links.
     let mut inline_literals: Vec<(String, Span)> = Vec::new();
