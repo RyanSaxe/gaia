@@ -1,0 +1,84 @@
+# The profile call: what kind of file this is, what it does, and whether it
+# needs tests of its own, asked once for every file in its understand
+# request. Changing a word here changes the call's version, so every file is
+# asked again; a new word stays only if the calibration set says it helps.
+
+[kind]
+instructions = "What kind of file is this? Read its source and path, and choose the one option that describes most of it."
+
+[kind.options]
+"test" = "A test: it checks other code by running it and asserting what happens."
+"test support" = "Test support: fixtures, fakes, mocks or helpers that tests use, with no tests of its own."
+"type definitions" = "Types, interfaces or schemas only, with no behavior."
+"data model" = "Classes or records that describe the domain's data, such as database models, with little behavior."
+"constants or tables" = "Static data: constants, presets, lookup tables, theme values or strings."
+"core logic" = "The algorithms or rules the project exists for: the work only this project does."
+"utility" = "Small general-purpose helpers that many other files use."
+"UI component" = "One piece of a user interface: something drawn on screen and reused."
+"UI page or view" = "A whole screen, page or view, composed of components."
+"styling" = "Styles or themes, written as CSS or in code."
+"request handler" = "Answers requests from outside: HTTP routes, RPC methods or message handlers."
+"service client" = "Calls an external service or API on the project's behalf."
+"storage" = "Reads and writes persistent data: database access, repositories, files as storage."
+"command-line interface" = "Defines commands, arguments and options for a command-line program."
+"entry point" = "Starts the program and wires the rest together: main, server start, app bootstrap."
+"build or tooling" = "Build, release, code generation or developer tooling written as code, not the program itself."
+"glue or re-export" = "Mostly re-exports or registers code defined elsewhere: an index, barrel or registry."
+"plugin or extension" = "Extends a host program through its plugin or extension interface."
+"concurrency" = "Workers, queues, threads, async tasks or schedulers."
+"parser or format" = "Reads or writes a file format, protocol or language."
+"generated" = "Produced by a tool rather than written by hand, such as a lockfile or generated client."
+"example or demo" = "Shows how to use the code; not part of the program itself."
+"migration" = "Changes a database schema or moves stored data between versions."
+"runtime settings" = "Settings the program reads while it runs, or code that loads and checks them."
+"dependency manifest" = "Declares the project's name, version and the packages it depends on."
+"build configuration" = "Declares how the project builds, bundles, compiles or type-checks."
+"CI and automation" = "Continuous integration, release automation or repository workflows."
+"tool settings" = "Settings for editors, linters, formatters or other developer tools."
+"documentation" = "Prose for people to read: guides, references, notes or a readme."
+"prompt or agent instructions" = "Instructions or prompts written for a language model or an AI agent to follow."
+
+[does]
+instructions = "Does a substantial part of this file {what}?"
+yes = "Yes: a substantial part of the file does this."
+no = "No, or only in passing."
+
+[does.options]
+"parse" = "parse or decode input"
+"validate" = "validate input or check invariants"
+"transform" = "transform data from one shape to another"
+"render" = "render or draw something a person sees"
+"events" = "handle user input or events"
+"state" = "manage application state"
+"persist" = "store or load persistent data"
+"network" = "talk to the network or an external service"
+"files" = "read or write files on disk"
+"processes" = "spawn or manage processes, threads or async tasks"
+"orchestrate" = "orchestrate the steps of a pipeline or workflow"
+"configure" = "configure the program or read settings"
+"observe" = "log, measure or report what happens"
+"auth" = "authenticate users or check permissions"
+"math" = "do math, geometry or numerical computation"
+"format" = "format text or output for display"
+"cache" = "cache results"
+"types" = "define types, interfaces or schemas"
+"public-api" = "define what other projects import from this one"
+"wire" = "wire components together or register them"
+"errors" = "handle errors or recover from failure"
+"cli" = "define command-line commands or options"
+"assert" = "run tests or assertions"
+"fixtures" = "provide test fixtures, fakes or helpers"
+"os" = "wrap an operating-system or platform feature"
+"algorithm" = "implement a data structure or algorithm"
+"generate" = "generate code, files or documents"
+"secure" = "secure data with encryption, hashing or secrets"
+
+[needs_tests]
+instructions = "Does this file hold behavior that a test of its own should check: decisions, calculations, parsing or side effects, rather than only types, constants, styles, configuration, prose or re-exports?"
+yes = "Yes: it holds behavior a test should check."
+no = "No: there is nothing here a test of its own would check."
+
+[dead]
+instructions = "Nothing in this repository imports or calls this file. Is it dead code, or is it used from outside the repository: a public API, an entry point, a script, a test, an example, configuration or documentation?"
+yes = "Dead: nothing uses it, inside the repository or out."
+no = "Used from outside, or not code that anything would import."

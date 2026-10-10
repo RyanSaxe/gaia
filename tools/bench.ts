@@ -6,6 +6,12 @@
 // time is a cold start's.
 // Usage: pnpm bench [name …] [--out results.json]
 //        pnpm bench --replay name FROM TO [--monthly]
+//        GAIA_JEV=live pnpm bench --understand [name …] [--plan]
+//
+// --understand asks Jev's calls about each repository through the engine's
+// runner, keeping answers in the bench's store, so a second run sends only
+// what changed. It reports what was sent and billed, and how the stand
+// scores of definitions spread over their levels. --plan only estimates.
 //
 // A replay opens the repository at each commit from FROM to TO along its
 // first parents (one a month with --monthly), carrying lineage from one to
@@ -17,7 +23,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { createInterface } from "node:readline";
-import type { Cloned, CodeGraph } from "@gaia/schema";
+import type { Cloned, CodeGraph, UnderstandPlan, UnderstandProgress } from "@gaia/schema";
 
 interface Repo {
   readonly name: string;
@@ -100,6 +106,63 @@ function measure(graph: CodeGraph, ms: number) {
   };
 }
 
+/** One engine kept open for a run of requests, as the app keeps it. */
+function session() {
+  const child = spawn(engine, ["rpc"], { env, stdio: ["pipe", "pipe", "inherit"] });
+  const lines = createInterface({ input: child.stdout });
+  const waiting = new Map<number, (v: { result?: unknown; error?: { message: string } }) => void>();
+  lines.on("line", (line) => {
+    const r = JSON.parse(line) as { id: number; result?: unknown; error?: { message: string } };
+    waiting.get(r.id)?.(r);
+    waiting.delete(r.id);
+  });
+  let id = 0;
+  return {
+    call<T>(method: string, params: object): Promise<T> {
+      const n = ++id;
+      child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id: n, method, params })}\n`);
+      return new Promise((done, fail) => waiting.set(n, (r) => (r.result === undefined ? fail(new Error(`${method}: ${r.error?.message}`)) : done(r.result as T))));
+    },
+    close: () => child.stdin.end(),
+  };
+}
+
+/** Asks Jev's calls about a repository, and reports what it cost and how stand spreads. */
+async function understandRepo(r: Repo, planOnly: boolean): Promise<void> {
+  const root = await rootOf(r);
+  const engine = session();
+  const usd = (records: Record<string, { costUsd?: number }>): number => Object.values(records).reduce((n, v) => n + (v.costUsd ?? 0), 0);
+  try {
+    const plan = await engine.call<UnderstandPlan>("understand.plan", { root });
+    const pendingRequests = plan.pending.reduce((n, p) => n + p.requests, 0);
+    const kept = plan.pending.reduce((n, p) => n + p.kept, 0);
+    console.log(`${r.name}: ${pendingRequests} requests to send, ${kept} kept; estimated $${plan.estimate.estimatedUsd.toFixed(4)}, priced by what Jev billed this project so far`);
+    if (planOnly) return;
+    const graph0 = await engine.call<CodeGraph>("project.graph", { root });
+    const before = usd((await engine.call<{ records: Record<string, { costUsd?: number }> }>("store.read", { project: graph0.projectId, table: "calls" })).records);
+    let sent = 0;
+    let failed = 0;
+    const t0 = performance.now();
+    for (;;) {
+      const p = await engine.call<UnderstandProgress>("understand.next", { root });
+      sent += p.sent;
+      failed += p.failed;
+      if (p.left === 0 || p.sent === 0) break;
+    }
+    const seconds = (performance.now() - t0) / 1000;
+    const graph = await engine.call<CodeGraph>("project.graph", { root, judged: true });
+    const after = usd((await engine.call<{ records: Record<string, { costUsd?: number }> }>("store.read", { project: graph.projectId, table: "calls" })).records);
+    const stands = graph.nodes.flatMap((n) => (n.kind === "def" && n.judged?.stand !== undefined ? [n.judged.stand.score] : []));
+    const levels = [0, 0, 0, 0, 0];
+    for (const s of stands) levels[Math.min(4, Math.max(0, Math.round(s)))] = (levels[Math.min(4, Math.max(0, Math.round(s)))] ?? 0) + 1;
+    const mean = stands.reduce((a, b) => a + b, 0) / Math.max(1, stands.length);
+    console.log(`  sent ${sent}, failed ${failed}, ${seconds.toFixed(1)} s, billed $${(after - before).toFixed(4)}`);
+    console.log(`  stand over ${stands.length} definitions, plumbing to landmark: ${levels.join(" / ")}; mean ${mean.toFixed(2)}; largest level ${Math.round((100 * Math.max(...levels)) / Math.max(1, stands.length))}%`);
+  } finally {
+    engine.close();
+  }
+}
+
 /** Replays a repository's history and reports what keeps its identity. */
 async function replay(r: Repo, from: string, to: string, monthly: boolean): Promise<void> {
   const root = await rootOf(r);
@@ -153,9 +216,14 @@ const out = outAt >= 0 ? args[outAt + 1] : undefined;
 const names = args.filter((a, i) => !a.startsWith("--") && (outAt < 0 || i !== outAt + 1));
 const { repos } = JSON.parse(readFileSync(resolve(repo, "tools/bench/repos.json"), "utf8")) as { repos: Repo[] };
 const replayAt = args.indexOf("--replay");
-const chosen = replayAt >= 0 ? [] : names.length > 0 ? repos.filter((r) => names.includes(r.name)) : repos;
+const understanding = args.includes("--understand");
+const picked = names.length > 0 ? repos.filter((r) => names.includes(r.name)) : repos;
+const chosen = replayAt >= 0 || understanding ? [] : picked;
 
 execFileSync("cargo", ["build", "-p", "gaia-engine", "--release", "--quiet"], { cwd: repo, env, stdio: "inherit" });
+if (understanding) {
+  for (const r of picked) await understandRepo(r, args.includes("--plan"));
+}
 if (replayAt >= 0) {
   const [name, from, to] = args.slice(replayAt + 1, replayAt + 4);
   const r = repos.find((x) => x.name === name);

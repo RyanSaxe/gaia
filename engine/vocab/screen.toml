@@ -1,0 +1,16 @@
+# The screen call: how much each file, definition and block deserves to
+# stand in the world on its own. The engine ranks every node by it and the
+# world chooses what stands; only those get the deep questions. Each level
+# names signs Jev can find in the code.
+
+[stand]
+file = "This file could stand in a world made from its code as its own landmark a person walks up to, or be part of the scenery. How much does it deserve to stand on its own?"
+def = "`{name}`, on lines {start} to {end}, could stand in a world made from this code as its own thing a person walks up to, or be part of the scenery. How much does it deserve to stand on its own?"
+block = "The {shape} block on lines {start} to {end}, inside `{holder}`, could stand in a world made from this code as its own thing a person walks up to, or be part of the scenery. How much does it deserve to stand on its own?"
+levels = [
+  "Plumbing: a getter, setter, re-export, glue or generated code, or a few lines that decide nothing; nothing a visitor would want to see.",
+  "A small helper: short and ordinary, such as a conversion, a check or a format that other code calls; fine as part of the scenery.",
+  "A real piece of the work: it makes decisions or carries out a meaningful step, and is worth noticing when walking past.",
+  "A notable piece: core logic other parts rely on, an intricate algorithm or a hub many things pass through; worth a place of its own.",
+  "A landmark: one of the few things that define what this code is and does, such as its main algorithm, central structure or entry point.",
+]

@@ -7,7 +7,7 @@
 pub mod git;
 mod languages;
 mod lineage;
-mod model;
+pub mod model;
 mod parse;
 mod reach;
 mod resolve;
@@ -237,6 +237,7 @@ fn build_with(root: &Path, keeper: &dyn lineage::Keeper) -> Result<CodeGraph, St
         }
         nodes.push(Node::Dir(DirNode {
             lineage: fresh_lineage(&id),
+            judged: None,
             id,
             measures: Measures {
                 lines: *lines,
@@ -273,6 +274,7 @@ fn build_with(root: &Path, keeper: &dyn lineage::Keeper) -> Result<CodeGraph, St
         measures.history = file_touches.get(&f.path).and_then(|t| t.history(now));
         nodes.push(Node::File(FileNode {
             lineage: fresh_lineage(&file_id),
+            judged: None,
             id: file_id.clone(),
             measures,
             path: f.path.clone(),
@@ -295,6 +297,7 @@ fn build_with(root: &Path, keeper: &dyn lineage::Keeper) -> Result<CodeGraph, St
             edges.push(contains_edge(parent.as_deref().unwrap_or(&file_id), id));
             nodes.push(Node::Def(DefNode {
                 lineage: fresh_lineage(id),
+                judged: None,
                 id: id.clone(),
                 measures: d.measures.clone(),
                 file: file_id.clone(),
@@ -316,6 +319,7 @@ fn build_with(root: &Path, keeper: &dyn lineage::Keeper) -> Result<CodeGraph, St
             edges.push(contains_edge(holder, &id));
             nodes.push(Node::Block(BlockNode {
                 lineage: fresh_lineage(&id),
+                judged: None,
                 id,
                 measures: Measures {
                     lines: b.span.end - b.span.start + 1,
