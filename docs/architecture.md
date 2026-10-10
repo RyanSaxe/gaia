@@ -451,6 +451,11 @@ inside a repository is a project of its own, named by the root commit and
 its place in the repository, so opening a subfolder never takes the whole
 repository's record or answers.
 
+The graph's name, which every request to Jev carries as `repository`, is
+the repository's own: the last part of its `origin` remote's address, or
+with no remote its main checkout's folder. A worktree or a branch never
+changes it, and it plays no part in telling projects apart.
+
 The graph is built beside `project.open`, and nothing the world reads
 changes until the world moves onto it. Updating a world while its files
 change on disk comes last, once the world is right without it, because it
