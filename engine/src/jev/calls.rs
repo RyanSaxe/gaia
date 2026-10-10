@@ -16,7 +16,7 @@ use crate::graph::model::{CodeGraph, DefNode, DirNode, FileNode, Node, PendingRe
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 use sha2::{Digest, Sha256};
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::Path;
 use std::sync::OnceLock;
 
@@ -63,10 +63,46 @@ pub struct Ctx<'a> {
     pub held: HashMap<String, Map<String, Value>>,
     /// The nodes the world chose to stand.
     pub deep: &'a BTreeSet<String>,
+    /// Every node an import, call, reference, implementation or name from
+    /// another file points at.
+    pub used: HashSet<&'a str>,
+}
+
+/// The file a node id names or lies in: `src/a.ts` for `file:src/a.ts` or `def:src/a.ts#f`.
+fn file_part(id: &str) -> &str {
+    let rest = id.split_once(':').map_or(id, |(_, r)| r);
+    rest.split_once('#').map_or(rest, |(f, _)| f)
 }
 
 fn parent_dir(path: &str) -> &str {
     path.rsplit_once('/').map_or("", |(d, _)| d)
+}
+
+impl Ctx<'_> {
+    /// Something in the repository points at the file, at a definition in
+    /// it, or at its own directory, as `from app.routes import items` does;
+    /// a package's entry file is named by its manifest.
+    fn reached(&self, file: &FileNode) -> bool {
+        self.used.contains(file.id.as_str())
+            || self
+                .used
+                .contains(format!("dir:{}", parent_dir(&file.path)).as_str())
+            || self
+                .defs_of
+                .get(file.id.as_str())
+                .into_iter()
+                .flatten()
+                .any(|d| self.used.contains(d.id.as_str()))
+    }
+
+    /// The file holds code that runs: at least one function or method.
+    fn runs(&self, file: &FileNode) -> bool {
+        self.defs_of
+            .get(file.id.as_str())
+            .into_iter()
+            .flatten()
+            .any(|d| d.measures.params.is_some())
+    }
 }
 
 impl<'a> Ctx<'a> {
@@ -90,6 +126,17 @@ impl<'a> Ctx<'a> {
             lineage: HashMap::new(),
             held: HashMap::new(),
             deep,
+            used: graph
+                .edges
+                .iter()
+                .filter(|e| {
+                    matches!(
+                        e.kind,
+                        "imports" | "calls" | "references" | "implements" | "names"
+                    ) && file_part(&e.from) != file_part(&e.to)
+                })
+                .map(|e| e.to.as_str())
+                .collect(),
         };
         for n in &graph.nodes {
             match n {
@@ -348,7 +395,7 @@ impl Call for Profile {
         }
         Some(json!({ "neighbours": neighbours }))
     }
-    fn questions(&self, _: &Ctx, unit: Unit) -> Vec<Question> {
+    fn questions(&self, ctx: &Ctx, unit: Unit) -> Vec<Question> {
         let Some(file) = file_of(unit) else {
             return Vec::new();
         };
@@ -385,11 +432,9 @@ impl Call for Profile {
             ),
             line: None,
         });
-        if file
-            .measures
-            .reach
-            .is_some_and(|r| r.files == 0 && r.defs == 0)
-        {
+        // Dead means code that runs and nothing uses: docs, data and
+        // configuration aren't asked, nor a file anything points at.
+        if ctx.runs(file) && !ctx.reached(file) {
             out.push(Question {
                 id: "profile:dead".into(),
                 about: about(),
