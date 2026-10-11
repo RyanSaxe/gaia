@@ -6,9 +6,10 @@
 // which appends each to .lab/telemetry.jsonl at the repository's root.
 // Usage: pnpm lab:serve   (LAB_PORT=5181 pnpm lab:serve for a second server)
 
-import { createServer } from "node:http";
+import { execFile } from "node:child_process";
+import { type ServerResponse, createServer } from "node:http";
 import { networkInterfaces } from "node:os";
-import { resolve } from "node:path";
+import { isAbsolute, resolve } from "node:path";
 import { gzipSync } from "node:zlib";
 import { context } from "esbuild";
 import { LAB_BUILD, type LabBundle, labBundle, labPage } from "./lab-page.ts";
@@ -62,6 +63,10 @@ const server = createServer((req, res) => {
     handleTelemetry(req, res, TELEMETRY);
     return;
   }
+  if (path === "/source") {
+    serveSource(req.url ?? "", res);
+    return;
+  }
   if (path !== "/" && path !== "/index.html") {
     res.writeHead(404, { "content-type": "text/plain" }).end("Not found");
     return;
@@ -82,6 +87,25 @@ const server = createServer((req, res) => {
   });
   res.end(req.method === "HEAD" ? undefined : body);
 });
+
+/**
+ * A file of Gaia's own code as the lab's world has it, for the journal's code
+ * pages: read from the commit the snapshot fixtures were made at, so its lines
+ * match the definitions' spans in `gaia-graph.json`.
+ */
+const SNAPSHOT_COMMIT = "1fe65bf";
+const REPO = resolve(import.meta.dirname, "..");
+function serveSource(url: string, res: ServerResponse): void {
+  const file = new URLSearchParams(url.split("?")[1] ?? "").get("path") ?? "";
+  if (file === "" || isAbsolute(file) || file.split("/").some((p) => p === ".." || p === "") || !/^[\w./@+-]+$/.test(file)) {
+    res.writeHead(400, { "content-type": "text/plain" }).end("Not a path in the repository.");
+    return;
+  }
+  execFile("git", ["show", `${SNAPSHOT_COMMIT}:${file}`], { cwd: REPO, maxBuffer: 8 * 1024 * 1024 }, (error, text) => {
+    if (error !== null) res.writeHead(404, { "content-type": "text/plain" }).end("Not in the snapshot.");
+    else res.writeHead(200, { "content-type": "text/plain; charset=utf-8", "cache-control": "max-age=3600" }).end(text);
+  });
+}
 
 server.on("error", (error: NodeJS.ErrnoException) => {
   console.error(error.code === "EADDRINUSE" ? `Port ${PORT} on ${host} is in use. Is another pnpm lab:serve running?` : error.message);
