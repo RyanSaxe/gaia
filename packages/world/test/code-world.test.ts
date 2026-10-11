@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { CodeGraph, CodeModel, DefNode, EntityFacts, FileFacts, JevClient, JevQuestion, JevResponse } from "@gaia/schema";
 import { cellUnder, placeAt } from "@gaia/terrain";
-import { type Judge, type Looks, codeGraph, judgeWorld, keptJev, landOf, layoutWorld, planWorldRequests, requestKey, standInJev } from "@gaia/world";
+import { type Judge, type Looks, codeGraph, journalOf, judgeWorld, keptJev, landOf, layoutWorld, planWorldRequests, requestKey, standInJev } from "@gaia/world";
 
 const file = (path: string, lines: number, kind: FileFacts["kind"] = "source"): FileFacts => ({
   path,
@@ -187,6 +187,11 @@ describe("a world laid out from code", () => {
     expect(share(world)).toBeGreaterThan(share(layoutWorld(model(), judged)));
     // The land is known before Jev answers, with the graph too.
     expect(landOf(model(), graph).cells).toEqual(world.cells);
+    // The journal has one page for every directory below the root, every file and every definition, each after the one it sits under.
+    const journal = journalOf(world);
+    expect(new Set(journal.entries.map((e) => e.of)).size).toBe(world.areas.length - 1 + world.patches.length + world.symbols.length);
+    expect(journal.entries.length).toBe(world.areas.length - 1 + world.patches.length + world.symbols.length);
+    for (const e of journal.entries) if (e.under !== undefined) expect(journal.entry(e.under)?.page).toBeLessThan(e.page);
   });
 
   it("knows the land before anything is judged: however Jev judges, every area, patch, cell and lot is the same", async () => {
