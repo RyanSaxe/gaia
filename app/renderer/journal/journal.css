@@ -8,15 +8,37 @@
 .jb-inner { position: absolute; left: 0; top: 0; width: 0; height: 0; transform-style: preserve-3d; }
 .jb-inner > div, .jb-inner > button { position: absolute; }
 
-/* The back board under the right-hand pages, the block of pages' edges, and the right-hand page. */
+/* The spine, one piece of leather the boards are bound to, showing at the head and tail between them; the back board
+   under the right-hand pages; and the block of leaves under each open page, their edges showing at the fore-edge, the
+   head and the tail, and dipping into the gutter with the page. */
+.jb-spine {
+  left: -9px; top: calc(var(--ph) / -2 - var(--ov) - 2px); width: 18px; height: calc(var(--ph) + var(--ov) * 2 + 4px); border-radius: 5px;
+  background: var(--leather) 50% 50% / 800px; filter: brightness(0.72); box-shadow: inset 4px 0 5px rgba(10, 4, 0, 0.5), inset -4px 0 5px rgba(10, 4, 0, 0.5);
+  transform: translateZ(-3.5px);
+}
 .jb-board {
   left: 0; top: calc(var(--ph) / -2 - var(--ov)); width: calc(var(--pw) + var(--ov)); height: calc(var(--ph) + var(--ov) * 2);
-  border-radius: 4px 12px 12px 4px; background: var(--leather) 40% 60% / 800px; box-shadow: inset 0 0 22px rgba(20, 8, 0, 0.6), 0 10px 30px rgba(20, 12, 4, 0.35);
+  border-radius: 0 12px 12px 0; background: var(--leather) 40% 60% / 800px;
+  box-shadow: inset 0 0 22px rgba(20, 8, 0, 0.6), inset 0 1px 0 rgba(255, 220, 170, 0.1), 0 10px 30px rgba(20, 12, 4, 0.35);
   transform: translateZ(-3px); pointer-events: auto;
 }
 .jb-block {
-  left: 2px; top: calc(var(--ph) / -2); width: calc(var(--pw) - 2px); height: var(--ph); transform: translateZ(-1.5px);
-  background: linear-gradient(90deg, #cdbd98, #ddd0b0 3%, #e7dcc0); box-shadow: 1px 2px 2px rgba(40, 24, 8, 0.35);
+  left: 0; top: calc(var(--ph) / -2 - 2px); width: calc(var(--pw) + 4px); height: calc(var(--ph) + 4px); transform: translateZ(-1.5px);
+  background:
+    repeating-linear-gradient(90deg, #efe6cd 0 1px, #c4b593 1px 2px) right top / 4px 100% no-repeat,
+    repeating-linear-gradient(0deg, #efe6cd 0 1px, #c4b593 1px 2px) left top / 100% 2px no-repeat,
+    repeating-linear-gradient(0deg, #efe6cd 0 1px, #c4b593 1px 2px) left bottom / 100% 2px no-repeat,
+    linear-gradient(90deg, #b9a983, #d9cdae 4%, #e5dabe);
+  clip-path: path("M0 2 C 10 0.6, 24 0, 44 0 L 524 0 L 524 664 L 44 664 C 24 664, 10 663.4, 0 662 Z");
+}
+.jb-block.left {
+  left: calc(var(--ov) - 4px); top: calc(var(--ov) - 2px); transform: none;
+  background:
+    repeating-linear-gradient(90deg, #c4b593 0 1px, #efe6cd 1px 2px) left top / 4px 100% no-repeat,
+    repeating-linear-gradient(0deg, #efe6cd 0 1px, #c4b593 1px 2px) left top / 100% 2px no-repeat,
+    repeating-linear-gradient(0deg, #efe6cd 0 1px, #c4b593 1px 2px) left bottom / 100% 2px no-repeat,
+    linear-gradient(270deg, #b9a983, #d9cdae 4%, #e5dabe);
+  clip-path: path("M0 0 L 480 0 C 500 0, 514 0.6, 524 2 L 524 662 C 514 663.4, 500 664, 480 664 L 0 664 Z");
 }
 .jb-right { left: 0; top: calc(var(--ph) / -2); width: var(--pw); height: var(--ph); pointer-events: auto; }
 
@@ -33,7 +55,10 @@
   border-radius: 4px 12px 12px 4px; background: var(--leather) 30% 40% / 800px; pointer-events: auto;
   box-shadow: inset 0 0 24px rgba(20, 8, 0, 0.6), inset 0 0 0 1px rgba(255, 220, 170, 0.05);
 }
-.jb-cover > .back { border-radius: 12px 4px 4px 12px; background: var(--leather) 60% 40% / 800px; pointer-events: auto; }
+.jb-cover > .back {
+  border-radius: 12px 0 0 12px; background: var(--leather) 60% 40% / 800px; pointer-events: auto;
+  box-shadow: inset 0 0 22px rgba(20, 8, 0, 0.6), inset 0 1px 0 rgba(255, 220, 170, 0.1);
+}
 .jb-stitch { position: absolute; inset: 9px 12px 9px 9px; border-radius: 9px; border: 1.5px dashed rgba(226, 196, 150, 0.5); pointer-events: none; }
 .jb-slip { position: absolute; left: 26px; top: 24px; width: 156px; height: 156px; transform: rotate(-1.5deg); }
 .jb-strap {
@@ -72,11 +97,17 @@
   position: absolute; inset: 0; overflow: hidden; color: #3b3026; background: var(--paper) center / cover; background-color: #f1e7cf;
   display: flex; flex-direction: column; box-sizing: border-box; padding: 40px 40px 50px 58px;
 }
-.jb-right .jp, .jb-leaf .front .jp { border-radius: 0 3px 3px 0; }
-.jb-left .jp, .jb-leaf .back .jp { border-radius: 3px 0 0 3px; }
+/* An open page bends down into the gutter: its head and tail dip toward the spine, and the bend is shaded, darkest in the
+   fold, easing off, then a faint light where the page rises toward you. */
+.jb-right .jp, .jb-leaf .front .jp { clip-path: path("M0 4.5 C 10 1.6, 24 0, 44 0 L 517 0 Q 520 0, 520 3 L 520 657 Q 520 660, 517 660 L 44 660 C 24 660, 10 658.4, 0 655.5 Z"); }
+.jb-left .jp, .jb-leaf .back .jp { clip-path: path("M3 0 L 476 0 C 496 0, 510 1.6, 520 4.5 L 520 655.5 C 510 658.4, 496 660, 476 660 L 3 660 Q 0 660, 0 657 L 0 3 Q 0 0, 3 0 Z"); }
 .jp::after { content: ""; position: absolute; inset: 0; pointer-events: none; }
-.jb-right .jp::after, .jb-leaf .front .jp::after { background: linear-gradient(90deg, rgba(70, 44, 16, 0.42), rgba(70, 44, 16, 0.12) 7%, rgba(70, 44, 16, 0) 16%); }
-.jb-left .jp::after, .jb-leaf .back .jp::after { background: linear-gradient(270deg, rgba(70, 44, 16, 0.42), rgba(70, 44, 16, 0.12) 7%, rgba(70, 44, 16, 0) 16%); }
+.jb-right .jp::after, .jb-leaf .front .jp::after {
+  background: linear-gradient(90deg, rgba(52, 32, 12, 0.58), rgba(52, 32, 12, 0.34) 1.2%, rgba(52, 32, 12, 0.16) 4%, rgba(52, 32, 12, 0.05) 8%, rgba(255, 250, 235, 0.1) 11.5%, rgba(255, 250, 235, 0) 17%);
+}
+.jb-left .jp::after, .jb-leaf .back .jp::after {
+  background: linear-gradient(270deg, rgba(52, 32, 12, 0.58), rgba(52, 32, 12, 0.34) 1.2%, rgba(52, 32, 12, 0.16) 4%, rgba(52, 32, 12, 0.05) 8%, rgba(255, 250, 235, 0.1) 11.5%, rgba(255, 250, 235, 0) 17%);
+}
 .jp-folio { position: absolute; bottom: 16px; font: 13px/1 "Bradley Hand", Georgia, cursive; color: #8a7558; }
 .jb-right .jp-folio, .jb-leaf .front .jp-folio { right: 30px; }
 .jb-left .jp-folio, .jb-leaf .back .jp-folio { left: 26px; }
