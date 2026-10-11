@@ -165,7 +165,7 @@ const el = (tag: string, cls: string, parent: HTMLElement, html = ""): HTMLEleme
   return node;
 };
 
-export function createMinimap(root: HTMLElement, map: FieldMap, stood: () => StoodWorld, places: () => WorldPlaces): Minimap {
+export function createMinimap(root: HTMLElement, map: FieldMap, stood: () => StoodWorld, places: () => WorldPlaces, unfold: () => void = () => map.open(true)): Minimap {
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   const scrap = el("div", "minimap", root);
   scrap.style.setProperty("--deckle", DECKLE_MASK);
@@ -268,12 +268,12 @@ export function createMinimap(root: HTMLElement, map: FieldMap, stood: () => Sto
     const r = scrap.getBoundingClientRect();
     const does = tapOn(e.clientX - r.left, e.clientY - r.top);
     if (does === "tuck") tuck(true);
-    else if (does === "unfold") map.open(true);
+    else if (does === "unfold") unfold();
   });
   touch.addEventListener("keydown", (e) => {
     if (e.code !== "Enter" && e.code !== "Space") return;
     if (tucked) tuck(false);
-    else map.open(true);
+    else unfold();
   });
 
   // ---------- the area's name, lettered afresh on crossing into another ----------

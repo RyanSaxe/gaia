@@ -1,0 +1,116 @@
+/* The traveller's journal (book.ts, page.ts): a worn leather book, its cream pages printed in round 29's type, at
+   the lower right when closed with the minimap on a slip under a strap, held open in the middle of the view. The
+   book's own pixels: a page is --pw by --ph, the boards overhang by --ov. */
+.journal { position: absolute; inset: 0; pointer-events: none; perspective: 2400px; perspective-origin: 50% 46%; z-index: 3; }
+.journal-catch { position: absolute; inset: 0; }
+.journal.open .journal-catch { pointer-events: auto; }
+.journal-book { position: absolute; left: 0; top: 0; width: 0; height: 0; transform-style: preserve-3d; transform-origin: 0 0; }
+.jb-inner { position: absolute; left: 0; top: 0; width: 0; height: 0; transform-style: preserve-3d; }
+.jb-inner > div, .jb-inner > button { position: absolute; }
+
+/* The back board under the right-hand pages, the block of pages' edges, and the right-hand page. */
+.jb-board {
+  left: 0; top: calc(var(--ph) / -2 - var(--ov)); width: calc(var(--pw) + var(--ov)); height: calc(var(--ph) + var(--ov) * 2);
+  border-radius: 4px 12px 12px 4px; background: var(--leather) 40% 60% / 800px; box-shadow: inset 0 0 22px rgba(20, 8, 0, 0.6), 0 10px 30px rgba(20, 12, 4, 0.35);
+  transform: translateZ(-3px); pointer-events: auto;
+}
+.jb-block {
+  left: 2px; top: calc(var(--ph) / -2); width: calc(var(--pw) - 2px); height: var(--ph); transform: translateZ(-1.5px);
+  background: linear-gradient(90deg, #cdbd98, #ddd0b0 3%, #e7dcc0); box-shadow: 1px 2px 2px rgba(40, 24, 8, 0.35);
+}
+.jb-right { left: 0; top: calc(var(--ph) / -2); width: var(--pw); height: var(--ph); pointer-events: auto; }
+
+/* The cover swings on the spine: shut, it lies over the right-hand pages; open, its back is the left-hand page. */
+.jb-cover {
+  left: 0; top: calc(var(--ph) / -2 - var(--ov)); width: calc(var(--pw) + var(--ov)); height: calc(var(--ph) + var(--ov) * 2);
+  transform-origin: 0 50%; transform-style: preserve-3d; transform: translateZ(3px) rotateY(0deg);
+  transition: transform 900ms cubic-bezier(.45, .05, .3, 1);
+}
+.jb-cover.open { transform: translateZ(0.4px) rotateY(-179.6deg); }
+.jb-face { position: absolute; inset: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+.jb-face.back { transform: rotateY(180deg); }
+.jb-cover > .front {
+  border-radius: 4px 12px 12px 4px; background: var(--leather) 30% 40% / 800px; pointer-events: auto;
+  box-shadow: inset 0 0 24px rgba(20, 8, 0, 0.6), inset 0 0 0 1px rgba(255, 220, 170, 0.05);
+}
+.jb-cover > .back { border-radius: 12px 4px 4px 12px; background: var(--leather) 60% 40% / 800px; pointer-events: auto; }
+.jb-stitch { position: absolute; inset: 9px 12px 9px 9px; border-radius: 9px; border: 1.5px dashed rgba(226, 196, 150, 0.5); pointer-events: none; }
+.jb-slip { position: absolute; left: 26px; top: 24px; width: 156px; height: 156px; transform: rotate(-1.5deg); }
+.jb-strap {
+  position: absolute; left: 0; right: 0; top: 158px; height: 26px; background: var(--leather) 10% 80% / 600px; filter: brightness(0.82);
+  box-shadow: 0 2px 3px rgba(10, 4, 0, 0.55), inset 0 1px 0 rgba(255, 220, 170, 0.12), inset 0 -2px 3px rgba(10, 4, 0, 0.45); pointer-events: none;
+}
+.jb-left { position: absolute; left: var(--ov); top: var(--ov); width: var(--pw); height: var(--ph); }
+
+/* The minimap, lying on the slip: it keeps its own drawing, laid in the slip instead of the screen's corner. */
+.jb-slip .minimap { position: absolute; left: 0; top: 0; right: auto; bottom: auto; }
+
+/* A leaf turning over the spine, a page on each face. */
+.jb-leaf {
+  left: 0; top: calc(var(--ph) / -2); width: var(--pw); height: var(--ph); transform-origin: 0 50%; transform-style: preserve-3d;
+  transform: translateZ(1.2px) rotateY(0deg);
+}
+.jb-leaf.over { transform: translateZ(1.6px) rotateY(-179.6deg); }
+.jb-leaf.turning { transition: transform 720ms cubic-bezier(.45, .05, .3, 1); }
+.jb-leaf[hidden] { display: none; }
+
+/* The outer margins turn the page; the tabs on the fore-edge open each top chapter. */
+.jb-margin { top: calc(var(--ph) / -2); width: 40px; height: var(--ph); cursor: pointer; pointer-events: auto; transform: translateZ(2px); }
+.jb-margin.right { left: calc(var(--pw) - 40px); }
+.jb-margin.left { left: calc(var(--pw) * -1); }
+.journal:not(.open) .jb-margin, .journal:not(.open) .jb-tabs { display: none; }
+.jb-tabs { left: calc(var(--pw) - 4px); top: calc(var(--ph) / -2); width: 0; height: var(--ph); transform: translateZ(-2px); }
+.jb-tab {
+  position: absolute; left: 0; width: 40px; height: 74px; border: 0; padding: 0; border-radius: 0 7px 7px 0; cursor: pointer; pointer-events: auto;
+  background: var(--paper) 30% 30% / 600px; background-color: #efe4c9; box-shadow: 2px 2px 3px rgba(20, 10, 2, 0.3), inset -1px 0 0 rgba(120, 90, 50, 0.15);
+}
+.jb-tab span { position: absolute; left: 50%; top: 50%; transform: translate(-42%, -50%) rotate(90deg); font: 14px/1 "Bradley Hand", Georgia, cursive; color: #5a4532; white-space: nowrap; }
+.jb-tab.on { width: 46px; background-color: #f6eedb; }
+
+/* A page: cream paper, the spine's shadow falling across its inner edge. */
+.jp {
+  position: absolute; inset: 0; overflow: hidden; color: #3b3026; background: var(--paper) center / cover; background-color: #f1e7cf;
+  display: flex; flex-direction: column; box-sizing: border-box; padding: 40px 40px 50px 58px;
+}
+.jb-right .jp, .jb-leaf .front .jp { border-radius: 0 3px 3px 0; }
+.jb-left .jp, .jb-leaf .back .jp { border-radius: 3px 0 0 3px; }
+.jp::after { content: ""; position: absolute; inset: 0; pointer-events: none; }
+.jb-right .jp::after, .jb-leaf .front .jp::after { background: linear-gradient(90deg, rgba(70, 44, 16, 0.42), rgba(70, 44, 16, 0.12) 7%, rgba(70, 44, 16, 0) 16%); }
+.jb-left .jp::after, .jb-leaf .back .jp::after { background: linear-gradient(270deg, rgba(70, 44, 16, 0.42), rgba(70, 44, 16, 0.12) 7%, rgba(70, 44, 16, 0) 16%); }
+.jp-folio { position: absolute; bottom: 16px; font: 13px/1 "Bradley Hand", Georgia, cursive; color: #8a7558; }
+.jb-right .jp-folio, .jb-leaf .front .jp-folio { right: 30px; }
+.jb-left .jp-folio, .jb-leaf .back .jp-folio { left: 26px; }
+.jp-picture canvas, .jp-picture img { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+.jp-head { margin-right: 12px; flex: none; }
+.jp-where { font: 600 9px/1.3 "Iowan Old Style", Georgia, serif; letter-spacing: .22em; text-transform: uppercase; color: #8a7458; }
+.jp-title { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-top: 8px; }
+.jp-name { font: italic 600 31px/1.08 "Iowan Old Style", Georgia, serif; color: #33281d; overflow-wrap: anywhere; }
+.jp-vit { display: flex; align-items: center; gap: 9px; font: 22px/1 "Bradley Hand", Georgia, cursive; color: #4a3a26; }
+.jp-vit i, .jp-row-vit i { display: block; width: 26px; height: 16px; border-radius: 50% 46% 52% 44%; opacity: 0.75; }
+.jp-sig { font: 10.6px/1.45 "SF Mono", ui-monospace, Menlo, monospace; color: #5c4c3a; margin-top: 12px; overflow-wrap: anywhere; }
+.jp-rule { height: 1px; margin: 18px 0 0; background: linear-gradient(90deg, rgba(120, 92, 60, 0.35), rgba(120, 92, 60, 0.1)); }
+/* Nothing on a page scrolls: what the page can't hold is left off at a whole line (book.ts). */
+.jp-body { flex: 1; min-height: 0; margin-top: 14px; overflow: hidden; position: relative; }
+.jp-past { visibility: hidden; }
+
+/* A list: each row its name, a dotted leader, its vitality and its page; a tap turns there. */
+.jp-rows { display: flex; flex-direction: column; font-family: "Iowan Old Style", Georgia, serif; padding-right: 12px; }
+.jp-row {
+  display: flex; align-items: baseline; border: 0; background: none; padding: 0; text-align: left; cursor: pointer; color: inherit;
+  font: 14.5px/1.68 "Iowan Old Style", Georgia, serif;
+}
+.jp-row.d0 { font-style: italic; font-weight: 600; }
+.jp-row.d1 { padding-left: 20px; } .jp-row.d2 { padding-left: 40px; font-size: 13.5px; color: #5c4c3a; } .jp-row.d3 { padding-left: 60px; font-size: 13px; color: #5c4c3a; }
+.jp-row:hover .jp-row-name { text-decoration: underline; text-decoration-color: rgba(120, 92, 60, 0.4); text-underline-offset: 3px; }
+.jp-row-name { white-space: nowrap; overflow: hidden; text-overflow: clip; max-width: 62%; }
+.jp-dots { flex: 1; border-bottom: 1.4px dotted rgba(122, 95, 69, 0.42); margin: 0 9px 5px; min-width: 12px; }
+.jp-row-vit { display: inline-flex; align-items: center; gap: 6px; margin-right: 14px; font: 14px/1 "Bradley Hand", Georgia, cursive; color: #5a4632; font-style: normal; font-weight: normal; }
+.jp-row-vit i { width: 14px; height: 9px; }
+.jp-row-page { font: 14px/1 "Bradley Hand", Georgia, cursive; color: #7a5f45; min-width: 38px; text-align: right; font-style: normal; font-weight: normal; }
+
+/* Code: round 29's type, its line numbers by hand down a pencil-ruled gutter; a long line wraps under a hanging indent. */
+.jp-code { font: 10.7px/1.6 "SF Mono", ui-monospace, Menlo, monospace; color: #3a2f24; }
+.jp-line { display: grid; grid-template-columns: 2.4em 1fr; column-gap: 1.1em; position: relative; }
+.jp-ln { text-align: right; color: #8f7a5c; font: 12.5px/1.6 "Bradley Hand", Georgia, cursive; border-right: 1px solid rgba(120, 95, 65, 0.38); padding-right: 0.5em; }
+.jp-text { white-space: pre-wrap; overflow-wrap: anywhere; padding-left: calc(var(--ind) * 1ch + 2ch); text-indent: -2ch; }

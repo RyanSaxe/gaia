@@ -52,7 +52,7 @@ import { createWait } from "../wait/wait.ts";
 import { withStart } from "../start/start.ts";
 import { createCard } from "./card.ts";
 import { LANDMARK_ENTITIES, type Represented, SAMPLE_ENTITIES, SAMPLE_FILES, representEntity, representFile } from "./samples.ts";
-import { type Judge, entityVitalityOf, groundVitality, judgedThing } from "@gaia/world";
+import { type CodeWorld, type Judge, entityVitalityOf, groundVitality, judgedThing } from "@gaia/world";
 import { type CodeLab, codeWorld, judgedOf, representSymbol } from "./code-world.ts";
 import { createSettlement } from "./settlement.ts";
 import { createSigns } from "./signs.ts";
@@ -225,6 +225,8 @@ export interface WorldHandle {
   placeAt(x: number, z: number): Place;
   /** Every area and file patch of the world standing now. */
   places(): WorldPlaces;
+  /** The world laid out from code, when this one was: every definition standing in it among the rest. */
+  code(): CodeWorld | null;
   /** The world as it stands now. */
   stood(): StoodWorld;
   /** Calls `listener` after every bake the lab takes on. */
@@ -2083,6 +2085,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     person: () => ({ x: walker.x, z: walker.z, yaw: walker.yaw, walking: goal !== null || [...keys].some((k) => k !== "ShiftLeft" && k !== "ShiftRight") }),
     placeAt: (x, z) => placeAt(places, x, z),
     places: () => places,
+    code: () => code?.world ?? null,
     stood: stoodWorld,
     onStood: (listener) => stoodListeners.push(listener),
     onLifted: (listener) => liftedListeners.push(listener),
