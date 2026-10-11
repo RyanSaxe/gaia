@@ -61,6 +61,7 @@
 }
 .jb-stitch { position: absolute; inset: 9px 12px 9px 9px; border-radius: 9px; border: 1.5px dashed rgba(226, 196, 150, 0.5); pointer-events: none; }
 .jb-slip { position: absolute; left: 26px; top: 24px; width: 156px; height: 156px; transform: rotate(-1.5deg); }
+.journal.left-corner .jb-slip { left: auto; right: 26px; transform: rotate(1.5deg); }
 .jb-strap {
   position: absolute; left: 0; right: 0; top: 158px; height: 26px; background: var(--leather) 10% 80% / 600px; filter: brightness(0.82);
   box-shadow: 0 2px 3px rgba(10, 4, 0, 0.55), inset 0 1px 0 rgba(255, 220, 170, 0.12), inset 0 -2px 3px rgba(10, 4, 0, 0.45); pointer-events: none;
