@@ -274,10 +274,15 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
     };
     void settledSoon(whole).then((ready) => {
       if (ready) return over(TURN_MS);
-      // The page beneath is whole; the painting on the leaf's far side is not yet, so the leaf lifts and waits.
+      // The page beneath is whole; the picture on the leaf's far side is not yet, so the leaf lifts and waits, then the
+      // spread is drawn again out of sight, now whole, before the leaf comes over.
       leaf.style.transition = `transform ${HOLD.ms}ms cubic-bezier(.2,.7,.3,1)`;
       leaf.style.transform = `translateZ(1.4px) rotateY(${forward ? HOLD.forward : HOLD.back}deg)`;
-      void whole.then(() => over(HOLD.rest));
+      void whole.then(() => {
+        const again = pages.spread(target);
+        put(forward ? leafBack : left, again.left);
+        over(HOLD.rest);
+      });
     });
     const done = (): void => {
       leaf.style.transition = "";
@@ -321,6 +326,8 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
         cover.classList.remove("open");
         void whole.then(() => {
           if (!open) return;
+          // Drawn again under the shut cover, now whole, before it opens.
+          show(opensAt);
           cover.style.transitionDelay = "0ms";
           cover.classList.add("open");
         });

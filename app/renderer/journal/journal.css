@@ -205,3 +205,7 @@ button.jp-name { border: 0; background: none; padding: 0; text-align: left; curs
 
 /* A map or a painting can be tapped: a map's land and a page's picture take you into the world. */
 .jp-picture .jp-tap { cursor: pointer; }
+
+/* You are here on a map's page: the field map's own traveller, standing on the land, never above the page. */
+.jp-here { position: absolute; width: 0; height: 0; pointer-events: none; }
+.jp-here .field-map-traveller { position: absolute; left: -26px; top: -26px; width: 52px; height: 52px; overflow: visible; }
