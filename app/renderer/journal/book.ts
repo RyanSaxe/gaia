@@ -372,15 +372,18 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
 
   /**
    * A page is turned by taking it: pressed and drawn toward the spine, the
-   * leaf follows the finger or the mouse, and let go past halfway it falls
-   * over, short of it it falls back. A press that hardly moves is a tap, and
-   * taps go on to the rows, names and pictures as before.
+   * spot taken stays under the finger or the mouse as the leaf turns, and let
+   * go past halfway it falls over, short of it it falls back. A press that
+   * hardly moves is a tap, and taps go on to the rows, names and pictures as
+   * before.
    */
-  let taken: { readonly side: "left" | "right"; readonly x0: number; readonly y0: number; turn: Turn | null; progress: number; width: number } | null = null;
+  let taken: { readonly side: "left" | "right"; readonly x0: number; readonly y0: number; turn: Turn | null; progress: number; reach: number } | null = null;
   let dragged = false;
   const take = (side: "left" | "right") => (e: PointerEvent): void => {
     if (!open || turning || e.button !== 0) return;
-    taken = { side, x0: e.clientX, y0: e.clientY, turn: null, progress: 0, width: Math.max(1, (side === "right" ? right : left).getBoundingClientRect().width) };
+    // How far from the spine the page was taken: that spot is what follows the pointer.
+    const r = (side === "right" ? right : left).getBoundingClientRect();
+    taken = { side, x0: e.clientX, y0: e.clientY, turn: null, progress: 0, reach: Math.max(40, side === "right" ? e.clientX - r.left : r.right - e.clientX) };
   };
   right.addEventListener("pointerdown", take("right"));
   left.addEventListener("pointerdown", take("left"));
@@ -398,11 +401,16 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
       }
       taken.turn = beginTurn(target);
       dragged = true;
+      // The hand that holds a page closes on it.
+      root.classList.add("taking");
     }
-    taken.progress = Math.max(0, Math.min(1, toward / (taken.width * 2)));
+    // Turned by an angle, the spot taken lies its reach times the angle's cosine from the spine: the angle that puts it
+    // under the pointer.
+    taken.progress = Math.acos(Math.max(-1, Math.min(1, 1 - toward / taken.reach))) / Math.PI;
     taken.turn.hold(taken.progress);
   });
   const letGo = (): void => {
+    root.classList.remove("taking");
     if (taken?.turn != null) {
       if (taken.progress >= 0.5) taken.turn.finish(taken.progress);
       else taken.turn.cancel(taken.progress);
@@ -472,7 +480,11 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
     m.addEventListener("pointerenter", () => open && !turning && page.classList.add("lift"));
     m.addEventListener("pointerleave", () => page.classList.remove("lift"));
     m.addEventListener("pointerdown", (e) => {
+      // Taken, the page lies flat at once: easing back from its lift under the leaf that takes over would flicker.
+      page.style.transition = "none";
       page.classList.remove("lift");
+      void page.offsetWidth;
+      page.style.transition = "";
       take(side)(e);
     });
     m.addEventListener("click", (e) => {
