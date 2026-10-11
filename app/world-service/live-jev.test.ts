@@ -100,7 +100,7 @@ describe("judging a codebase with Jev", () => {
     expect(land).toBeLessThan(first.shown.findIndex((o) => o.stage === "asking"));
     const patches = first.document.world.patches.map(({ path, name, area, x, z, radius }) => ({ path, name, area, x, z, radius }));
     const lots = first.document.world.things.map(({ x, z }) => ({ x, z }));
-    expect(first.shown[land]).toEqual({ stage: "land", name: "tiny", size: first.document.world.size, areas: outlinesOf(first.document.world).areas, patches, lots });
+    expect(first.shown[land]).toEqual({ stage: "land", name: "tiny", size: first.document.world.size, aspect: first.document.world.aspect, areas: outlinesOf(first.document.world).areas, patches, lots });
     // Each file's health is named once, as the finished world has it, the health its facts settle straight after the land.
     expect(first.shown[land + 1]?.stage).toBe("health");
     const health = first.shown.flatMap((o) => (o.stage === "health" ? Object.entries(o.vitality) : []));
