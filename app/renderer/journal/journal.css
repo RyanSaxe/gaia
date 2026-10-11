@@ -114,3 +114,21 @@
 .jp-line { display: grid; grid-template-columns: 2.4em 1fr; column-gap: 1.1em; position: relative; }
 .jp-ln { text-align: right; color: #8f7a5c; font: 12.5px/1.6 "Bradley Hand", Georgia, cursive; border-right: 1px solid rgba(120, 95, 65, 0.38); padding-right: 0.5em; }
 .jp-text { white-space: pre-wrap; overflow-wrap: anywhere; padding-left: calc(var(--ind) * 1ch + 2ch); text-indent: -2ch; }
+
+/* Jev's mark: a soft painted stroke in the gutter beside what it points out, its color the kind and its strength how sure. */
+.jp-marked { position: relative; }
+.jp-row.jp-marked::before, .jp-line.jp-marked::before {
+  content: ""; position: absolute; top: 3px; bottom: 3px; width: 5px; border-radius: 3px; background: var(--mark); opacity: var(--mark-strength); pointer-events: none;
+}
+.jp-row.jp-marked::before { left: -16px; }
+.jp-line.jp-marked::before { left: calc(2.4em + 0.35em); top: 0; bottom: 0; border-radius: 0; }
+.jp-line.jp-marked:not(.jp-marked + .jp-marked)::before { top: 3px; border-radius: 3px 3px 0 0; }
+.jp-line.jp-marked:has(+ .jp-line:not(.jp-marked))::before, .jp-line.jp-marked:last-child::before { bottom: 3px; border-radius: 0 0 3px 3px; }
+
+/* A page a list runs on to carries a running head instead of the heading. */
+.jp-running { font: 600 9px/1.3 "Iowan Old Style", Georgia, serif; letter-spacing: .22em; text-transform: uppercase; color: #8a7458; padding-bottom: 8px; border-bottom: 1px solid rgba(120, 92, 60, 0.18); }
+
+/* The title page: the world's name, large, and its vitality. */
+.jp-title-page { justify-content: center; align-items: center; }
+.jp-title-middle { display: flex; flex-direction: column; align-items: center; gap: 18px; margin-top: -40px; }
+.jp-book-name { font: italic 600 46px/1.1 "Iowan Old Style", Georgia, serif; color: #33281d; }
