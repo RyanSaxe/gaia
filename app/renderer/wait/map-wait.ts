@@ -133,12 +133,14 @@ export function createMapWait(veil: HTMLElement): WaitView {
     <div class="wait-paper"></div>
     <div class="wait-sheet">
       <div class="wait-body">
-        <canvas class="wait-ground"></canvas>
-        <div class="wait-layers"></div>
-        <canvas class="wait-hedges"></canvas>
-        <svg class="wait-ink" xmlns="${SVG}"></svg>
-        <div class="wait-marks"></div>
-        <div class="wait-names"></div>
+        <div class="wait-square">
+          <canvas class="wait-ground"></canvas>
+          <div class="wait-layers"></div>
+          <canvas class="wait-hedges"></canvas>
+          <svg class="wait-ink" xmlns="${SVG}"></svg>
+          <div class="wait-marks"></div>
+          <div class="wait-names"></div>
+        </div>
       </div>
     </div>
     <div class="wait-lantern"></div>`;
@@ -215,6 +217,8 @@ export function createMapWait(veil: HTMLElement): WaitView {
   // ---------- the land is divided ----------
   function divide(size: number, aspect: number | undefined, outlines: readonly Outline[], patches: readonly FilePatch[], lots: readonly LotPlace[]): void {
     const reach = size / 2 + MARGIN;
+    // The sheet takes the land's shape: as wide as ever, and as deep as the land and its margin.
+    sheetEl.style.setProperty("--aspect", Math.max(1, reach / (size / 2 / (aspect ?? 1) + MARGIN)).toFixed(4));
     layPaper(reach);
     ink.setAttribute("viewBox", `${-reach} ${-reach} ${reach * 2} ${reach * 2}`);
     let rim = "";

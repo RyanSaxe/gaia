@@ -23,13 +23,18 @@
 
 /* The sheet: the field map's own (lab.css `.field-map`), the same size, paper, torn edge, creases and lantern's pool,
    with no fringe, title or turned-down corner. It folds away as the field map does. Its shadow is a still box under
-   it rather than a drop-shadow filter, which would blur the whole sheet again on every frame anything on it moves. */
+   it rather than a drop-shadow filter, which would blur the whole sheet again on every frame anything on it moves.
+   Once the land is divided the sheet takes its shape (`--aspect`, width over depth): as wide as ever and as deep as
+   the land, its paper folding in from above and below, and everything on it is laid on the square the land's
+   width makes, which the sheet shows the middle of. */
 .wait-sheet {
-  position: absolute; left: 50%; top: 50%; width: min(94vw, 90vh, 980px); aspect-ratio: 1;
+  --side: min(94vw, 90vh, 980px);
+  position: absolute; left: 50%; top: 50%; width: var(--side); height: calc(var(--side) / var(--aspect, 1));
   transform: translate(-50%, -50%); transform-origin: 50% 45%;
   filter: sepia(calc(var(--night, 0) * 0.3)) brightness(calc(1 - var(--night, 0) * 0.16));
-  transition: opacity 0.5s ease, transform 0.6s ease-in;
+  transition: opacity 0.5s ease, transform 0.6s ease-in, height 0.6s cubic-bezier(0.3, 0.1, 0.3, 1);
 }
+.wait-square { position: absolute; left: 0; top: 50%; width: 100%; aspect-ratio: 1; transform: translateY(-50%); }
 .wait-sheet::before { content: ""; position: absolute; inset: 0.6% 0.6% 0.4%; box-shadow: 0 16px 26px rgba(25, 18, 8, 0.36); }
 .wait-sheet.folding { opacity: 0; transform: translate(-50%, -50%) perspective(1600px) rotateX(10deg) scale(0.95, 0.82); }
 .wait-body, .wait-body::after { position: absolute; inset: 0; }
