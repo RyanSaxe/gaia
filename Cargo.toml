@@ -1,3 +1,14 @@
 [workspace]
 members = ["engine"]
 resolver = "3"
+
+# A debug engine is what the app and the tests run, so it is built to be
+# quick: dependencies, tree-sitter's C parsers above all, fully optimized
+# (built once), and the engine itself lightly. On Gaia a judged graph takes
+# about 1 s instead of 6 to 9, for a clean build of 47 s instead of 19 and
+# an edit's rebuild of about 2 s instead of 1.
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3
