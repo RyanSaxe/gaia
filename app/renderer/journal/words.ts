@@ -5,6 +5,7 @@
 // definition is its code. The book draws whatever words it is handed, so a
 // new kind of page needs nothing new in the book.
 
+import type { Judged, Span } from "@gaia/schema";
 import type { CodeSymbol, Journal, JournalEntry } from "@gaia/world";
 
 /**
@@ -16,6 +17,26 @@ export interface Mark {
   readonly kind: "understand" | "improve";
   /** How sure Jev is, 0 to 1. */
   readonly sure: number;
+}
+
+/** What Jev judged about a node, in the graph's own terms; a block's judgment names the lines it covers. */
+export interface Judgment {
+  readonly judged: Judged;
+  readonly lines?: Span;
+}
+
+/** The reasons to stop and look that are key to understanding; the rest, but routine, are where it could be better. */
+const UNDERSTAND = new Set(["heart", "intricate", "doorway", "hot path"]);
+
+/**
+ * How a page shows what Jev judged: the one place a judgment becomes
+ * something seen. For now an attention that isn't routine is a mark, as sure
+ * as Jev is of it.
+ */
+export function markOf(judged: Judged): Mark | undefined {
+  const a = judged.attention;
+  if (a === undefined || a.choice === "routine") return undefined;
+  return { kind: UNDERSTAND.has(a.choice) ? "understand" : "improve", sure: a.p[a.choice] ?? 0 };
 }
 
 /** One line of a list, indented by how deep it sits under the page's own subject. */
@@ -62,10 +83,8 @@ export interface WordsSource {
   vitality(of: string): number;
   /** A file's lines, or undefined until they arrive. */
   lines(path: string): readonly string[] | undefined;
-  /** What Jev points out about a folder, entity, file or definition, if anything. */
-  marked?(of: string): Mark | undefined;
-  /** The lines Jev points out in a definition. */
-  markedLines?(id: string): readonly (Mark & { readonly from: number; readonly to: number })[];
+  /** What Jev judged about a folder, entity, file or definition, and about each block of a definition's lines. */
+  judged?(of: string): readonly Judgment[];
 }
 
 const folders = (path: string): string[] => path.split("/").slice(0, -1);
@@ -85,7 +104,8 @@ export function contentsWords(src: WordsSource): PageWords {
 const vitalityPath = (e: JournalEntry): string => (e.kind === "definition" ? e.of.slice(0, e.of.indexOf("#")) : e.of);
 
 function rowOf(src: WordsSource, e: JournalEntry, depth: number): Row {
-  const mark = src.marked?.(e.of);
+  const own = src.judged?.(e.of).find((j) => j.lines === undefined);
+  const mark = own === undefined ? undefined : markOf(own.judged);
   return { of: e.of, name: e.name, depth, vitality: src.vitality(vitalityPath(e)), page: e.page, ...(mark === undefined ? {} : { mark }) };
 }
 
@@ -114,11 +134,15 @@ export function wordsOf(src: WordsSource, e: JournalEntry): PageWords {
   const line = symbol?.line ?? 1;
   const count = symbol?.lines ?? 1;
   const signature = text?.[line - 1]?.trim();
+  const marks = (src.judged?.(e.of) ?? []).flatMap((j) => {
+    const mark = j.lines === undefined ? undefined : markOf(j.judged);
+    return mark === undefined || j.lines === undefined ? [] : [{ ...mark, from: j.lines.start, to: j.lines.end }];
+  });
   return {
     path: file.split("/"),
     name: e.name,
     vitality: src.vitality(file),
     ...(signature === undefined ? {} : { signature }),
-    body: { kind: "code", first: line + 1, lines: text?.slice(line, line + count - 1) ?? [], opensAt: line + 1, marks: src.markedLines?.(e.of) ?? [] },
+    body: { kind: "code", first: line + 1, lines: text?.slice(line, line + count - 1) ?? [], opensAt: line + 1, marks },
   };
 }

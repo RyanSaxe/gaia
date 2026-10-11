@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { journalOf } from "@gaia/world";
-import { type WordsSource, contentsWords, wordsOf } from "./words.ts";
+import { type Judgment, type WordsSource, contentsWords, wordsOf } from "./words.ts";
 
 const MATH = "core/math.ts";
 const world = {
@@ -40,5 +40,18 @@ describe("what a journal page says", () => {
     expect(calc.body.kind === "code" && calc.body.lines).toEqual(TEXT.slice(2, 6));
     // Until the file's text arrives, a definition says where it is and what it is called, and holds no code.
     expect(wordsOf(source(undefined), j.entry(`${MATH}#Calc`)!)).toMatchObject({ name: "Calc", body: { kind: "code", lines: [] } });
+  });
+
+  it("reads what Jev judged in the graph's own terms: a node's attention marks its row, a block's marks its lines, and routine marks nothing", () => {
+    const attention = (choice: string, p: number) => ({ attention: { choice, p: { [choice]: p, routine: 1 - p }, call: "attention" } });
+    const judged: Record<string, readonly Judgment[]> = {
+      [`${MATH}#Calc`]: [{ judged: attention("heart", 0.8) }, { judged: attention("fragile", 0.6), lines: { start: 3, end: 3 } }, { judged: attention("routine", 0.9), lines: { start: 5, end: 6 } }],
+      [`${MATH}#Calc.add`]: [{ judged: attention("routine", 0.7) }],
+    };
+    const src = { ...source(TEXT), judged: (of: string) => judged[of] ?? [] };
+    const file = wordsOf(src, src.journal.entry(MATH)!);
+    expect(file.body.kind === "rows" && file.body.rows.map((r) => r.mark)).toEqual([{ kind: "understand", sure: 0.8 }, undefined]);
+    const calc = wordsOf(src, src.journal.entry(`${MATH}#Calc`)!);
+    expect(calc.body.kind === "code" && calc.body.marks).toEqual([{ kind: "improve", sure: 0.6, from: 3, to: 3 }]);
   });
 });
