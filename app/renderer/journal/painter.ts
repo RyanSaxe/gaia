@@ -110,18 +110,8 @@ function valueNoise(w: number, h: number, cell: number, r: () => number): (x: nu
 const clamp255 = (v: number): number => Math.max(0, Math.min(255, v)) | 0;
 const rgb = (c: RGB): string => `rgb(${clamp255(c[0])},${clamp255(c[1])},${clamp255(c[2])})`;
 
-/**
- * Paints `job`. `progress`, when given, is handed the painting so far every
- * `every` milliseconds of painting, so a page can show it being painted.
- */
-export function paint(job: PaintJob, progress?: (so: OffscreenCanvas) => void, every = 150): OffscreenCanvas {
+export function paint(job: PaintJob): OffscreenCanvas {
   const { w, h } = job;
-  let shown = performance.now();
-  const tick = (): void => {
-    if (progress === undefined || performance.now() - shown < every) return;
-    progress(painting);
-    shown = performance.now();
-  };
   const r = rng(job.seed);
   const canvas = (cw: number, ch: number): [OffscreenCanvas, Ctx] => {
     const c = new OffscreenCanvas(cw, ch);
@@ -316,7 +306,6 @@ export function paint(job: PaintJob, progress?: (so: OffscreenCanvas) => void, e
       }
       if (path.length < 2) path.push([x0 + rad * 0.4, y0 - rad * 0.15]);
       stroke(path, rad, col, layer.thing ? 0.95 : 0.9);
-      tick();
     }
   }
 

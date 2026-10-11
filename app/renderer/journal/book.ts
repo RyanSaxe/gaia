@@ -28,6 +28,8 @@ export interface BookPages {
   tabs(): readonly { readonly name: string; readonly at: string; readonly from: string }[];
   /** Settles once everything a place's spread needs, such as a file's text, has come, so its pages are drawn whole. */
   ready?(at: string): Promise<void>;
+  /** Settles once a place's painting is whole: a page is never seen before its painting. */
+  painted?(at: string): Promise<void>;
 }
 
 export interface JournalBook {
@@ -47,6 +49,15 @@ export interface JournalBook {
 
 /** A page's size in the book's own pixels, and how far the boards overhang the pages. */
 export const PAGE = { w: 520, h: 660, overhang: 10 } as const;
+/** The longest a turn waits for a file's text, ms, and for a painting, which only one that failed to come takes. */
+const TEXT_AT_MOST = 900;
+const PAINTED_AT_MOST = 15000;
+/**
+ * A leaf whose next page is still being painted lifts at once and waits at
+ * its edge, so a tap is always answered: how far it lifts (degrees, the
+ * painting still out of sight) and how slowly, ms. Then it comes over.
+ */
+const HOLD = { forward: -64, back: -175, ms: 1600, rest: 520 } as const;
 /** How long a leaf takes to turn, the cover to swing, and the book to travel between its corner and your hands, ms. */
 const TURN_MS = 720;
 const COVER_MS = 900;
@@ -170,8 +181,13 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
     at = place;
     markTabs(place);
   }
+  const after = (ms: number): Promise<void> => new Promise<void>((r) => window.setTimeout(r, ms));
   /** Waits until a place's spread can be drawn whole, but never long: a slow file is drawn without its code rather than held. */
-  const readied = (place: string): Promise<void> => Promise.race([pages.ready?.(place) ?? Promise.resolve(), new Promise<void>((r) => window.setTimeout(r, 900))]);
+  const readied = (place: string): Promise<void> => Promise.race([pages.ready?.(place) ?? Promise.resolve(), after(TEXT_AT_MOST)]);
+  /** Settles once a place's painting is whole; one that never comes is shown bare after a while. */
+  const painted = (place: string): Promise<void> => Promise.race([pages.painted?.(place) ?? Promise.resolve(), after(PAINTED_AT_MOST)]);
+  /** Whether a promise has already settled, or settles within a moment. */
+  const settledSoon = (p: Promise<void>): Promise<boolean> => Promise.race([p.then(() => true), after(40).then(() => false)]);
   /** Whether `place` lies in the part of the book a tab begins at `chapter`: from it to the next tab's. */
   function within(place: string, chapter: string): boolean {
     const list = pages.tabs();
@@ -248,9 +264,23 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
       put(left, to.left);
     }
     void leaf.offsetWidth;
-    leaf.classList.add("turning");
-    leaf.classList.toggle("over", forward);
-    window.setTimeout(() => {
+    const whole = painted(target);
+    const over = (rest: number): void => {
+      leaf.style.transform = "";
+      leaf.style.transition = rest === TURN_MS ? "" : `transform ${rest}ms cubic-bezier(.3,.1,.3,1)`;
+      leaf.classList.add("turning");
+      leaf.classList.toggle("over", forward);
+      window.setTimeout(done, rest + 40);
+    };
+    void settledSoon(whole).then((ready) => {
+      if (ready) return over(TURN_MS);
+      // The page beneath is whole; the painting on the leaf's far side is not yet, so the leaf lifts and waits.
+      leaf.style.transition = `transform ${HOLD.ms}ms cubic-bezier(.2,.7,.3,1)`;
+      leaf.style.transform = `translateZ(1.4px) rotateY(${forward ? HOLD.forward : HOLD.back}deg)`;
+      void whole.then(() => over(HOLD.rest));
+    });
+    const done = (): void => {
+      leaf.style.transition = "";
       if (forward) put(left, leafBack.firstElementChild as HTMLElement | null);
       else put(right, leafFront.firstElementChild as HTMLElement | null);
       leaf.hidden = true;
@@ -266,7 +296,7 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
         queued = null;
         turnTo(next);
       }
-    }, TURN_MS + 40);
+    };
   }
 
   // ---------- opening and closing ----------
@@ -277,12 +307,24 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
     root.classList.toggle("open", on);
     onOpen(on);
     if (on) {
-      show(place0 ?? "map");
-      // Lifted from the corner first, the cover swinging open as it arrives.
+      const opensAt = place0 ?? "map";
+      show(opensAt);
+      // Lifted from the corner first, the cover swinging open as it arrives; if the page it opens onto is still being
+      // painted, the book waits shut in your hands and opens once it is whole.
       book.style.transition = `transform ${TRAVEL_MS}ms cubic-bezier(.45,.05,.3,1)`;
       inner.style.transition = `transform ${COVER_MS}ms cubic-bezier(.45,.05,.3,1) ${TRAVEL_MS * 0.45}ms`;
       cover.style.transitionDelay = `${TRAVEL_MS * 0.45}ms`;
       place(true);
+      const whole = painted(opensAt);
+      void settledSoon(whole).then((ready) => {
+        if (ready || !open) return;
+        cover.classList.remove("open");
+        void whole.then(() => {
+          if (!open) return;
+          cover.style.transitionDelay = "0ms";
+          cover.classList.add("open");
+        });
+      });
     } else {
       // The cover swings shut over the page you were reading, then the book is set back in its corner.
       inner.style.transition = `transform ${COVER_MS}ms cubic-bezier(.45,.05,.3,1)`;

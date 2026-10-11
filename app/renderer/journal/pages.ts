@@ -11,8 +11,9 @@ import type { BookPages, Spread } from "./book.ts";
 import { fullItems, renderFullPage, renderPage, renderPicture, renderTitle } from "./page.ts";
 import { type Full, type PageWords, type WordsSource, appendixWords, contentsWords, wordsOf } from "./words.ts";
 
-/** How many of the things after an open page are painted ahead of the reader. */
+/** How many of the things after an open page, and before it, are painted ahead of the reader. */
 const AHEAD = 4;
+const BEHIND = 2;
 /** How many rows of a list a page holds: under the heading, and under a running head on the pages it runs on to. */
 export const ROOM: PageRoom = { first: 18, next: 21 };
 
@@ -27,6 +28,8 @@ export interface JournalPagesSource {
   picture(of: string): HTMLElement;
   /** The title page's frontispiece: the world around the repository's own building or landmark, painted wide. */
   frontispiece(): HTMLElement;
+  /** Settles once the thing a page is about is painted, or the title page's frontispiece with "": a page is never seen before its painting. */
+  painted(of: string): Promise<void>;
   /** Paints the things these pages are about next, in this order. */
   ahead(ofs: readonly string[]): void;
   /** Turns the book to a place, for a row tapped on a page. */
@@ -217,9 +220,9 @@ export function journalPages(src: JournalPagesSource): BookPages {
       }
       const e = words.journal.entry(of as string);
       if (e === undefined) return { left: blank(), right: blank() };
-      // The next few things in the book are painted next, so turning on rarely finds bare paper.
+      // The things on either side in the book are painted next, so a turn rarely waits on a painting.
       const here = words.journal.entries.indexOf(e);
-      src.ahead(words.journal.entries.slice(here + 1, here + 1 + AHEAD).filter((n) => n.kind !== "chapter").map((n) => n.of));
+      src.ahead([...words.journal.entries.slice(here + 1, here + 1 + AHEAD), ...words.journal.entries.slice(Math.max(0, here - BEHIND), here)].filter((n) => n.kind !== "chapter").map((n) => n.of));
       return entrySpread(words, e, k);
     },
     next(at, by) {
@@ -253,12 +256,19 @@ export function journalPages(src: JournalPagesSource): BookPages {
     },
     async ready(at) {
       const full = fullAt(at);
-      const of = full?.id ?? (at.split(SEP)[0] as string);
-      const e = src.words()?.journal.entry(of);
+      const e = src.words()?.journal.entry(full?.id ?? (at.split(SEP)[0] as string));
       if (e?.kind !== "definition") return;
       await src.text(e.of.slice(0, e.of.indexOf("#")));
       // A definition's appendix is laid out before the leaf that shows it moves.
       if (full !== null) pagesInFull(full.id);
+    },
+    painted(at) {
+      if (fullAt(at) !== null) return Promise.resolve();
+      const [of, k = "0"] = at.split(SEP);
+      // The title page faces the contents, and a thing's first spread faces its painting.
+      if (of === "contents") return k === "0" ? src.painted("") : Promise.resolve();
+      const e = src.words()?.journal.entry(of as string);
+      return e !== undefined && k === "0" && e.kind !== "chapter" ? src.painted(e.of) : Promise.resolve();
     },
     tabs() {
       const words = index().words;
