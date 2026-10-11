@@ -6,7 +6,7 @@
 // on its land; every name keeps clear of the page's edge and of the fold.
 
 import type { Place, WorldPlaces } from "@gaia/terrain";
-import { landReach } from "@gaia/terrain";
+import { landReach, pastTheEdge } from "@gaia/terrain";
 import { type Paper, drawLand, letterName } from "../immersive/field-map.ts";
 import { canvasMeasure, nameFont, nameSpacing, placeNames } from "../immersive/map-names.ts";
 import type { StoodWorld } from "../terrain/lab.ts";
@@ -51,6 +51,16 @@ export function drawMapPage(src: MapSource, area: string, w: number, h: number, 
     const zs = own.map((k) => k.z);
     const [x0, x1, z0, z1] = [Math.min(...xs) - 12, Math.max(...xs) + 12, Math.min(...zs) - 12, Math.max(...zs) + 12];
     view = { x: (x0 + x1) / 2, z: (z0 + z1) / 2, zoom: Math.min(w / (x1 - x0), h / (z1 - z0)) };
+    // A folder at the land's edge: the map slides in toward the land's middle until the whole page is land, the
+    // folder against that side of the page, so the page is painted to its edges and never shows the wild past it.
+    const hw = w / 2 / view.zoom;
+    const hh = h / 2 / view.zoom;
+    const inside = (cx: number, cz: number): boolean => [-1, 1].every((sx) => [-1, 1].every((sz) => pastTheEdge(places, cx + sx * hw, cz + sz * hh) <= 0));
+    for (let t = 1; t >= 0; t -= 0.02) {
+      if (!inside(view.x * t, view.z * t) && t > 0) continue;
+      view = { ...view, x: view.x * t, z: view.z * t };
+      break;
+    }
   }
   drawLand(ctx, w, h, paper, src.stood(), view, 1.35, true);
   const sx = (x: number): number => (x - view.x) * view.zoom + w / 2;
