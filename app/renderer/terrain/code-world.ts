@@ -12,7 +12,7 @@
 // each directory's area and land, each file's patch and what grows on it,
 // each entity's building or landmark on its lot, and the trails between them.
 
-import { type Blueprint, type CodeGraph, type CodeModel, type EntityFacts, type FileFacts, type JevResponse, type SymbolFact, rand, seedOf } from "@gaia/schema";
+import { type Blueprint, type CodeGraph, type CodeModel, type EntityFacts, type FileFacts, type JevResponse, type Judged, type Span, type SymbolFact, rand, seedOf } from "@gaia/schema";
 import { FLORA_PRESETS, LANDMARK_PRESETS, TRAIL_PRESETS, WORLD_PRESETS } from "@gaia/realize";
 import { type WorldSpec, outlinesOf } from "@gaia/terrain";
 import { type CodeWorld, type Judge, type Judgments, judgeWorld, judgedThing, keptJev, layoutWorld, planWorldRequests, requestKey, standInJev, thingsOf } from "@gaia/world";
@@ -22,6 +22,7 @@ import GAIA_PICTURE from "../start/gaia-picture.webp";
 import { CHOSEN_MS } from "../start/start.ts";
 import snapshot from "./fixtures/gaia.json";
 import snapshotGraph from "./fixtures/gaia-graph.json";
+import snapshotSaid from "./fixtures/gaia-said.json";
 import kept from "./fixtures/gaia-jev.json";
 import proving from "./fixtures/proving.json";
 import provingJudged from "./fixtures/proving-judged.json";
@@ -57,6 +58,13 @@ export interface CodeLab {
   readonly stand: StandCode;
   /** Who judged a thing, by `judgedThing` ("file:src/main.ts", "entity:packages/world"). */
   readonly judgeOf: (thing: string) => Judge;
+  /**
+   * What Jev judged about a folder, a file or a definition, by its path or id,
+   * and about each block of a definition's lines: for Gaia's snapshot, Jev's
+   * answers from the engine's judged graph (`fixtures/gaia-said.json`, written
+   * by `pnpm journal-said`); none yet for a world the service opens.
+   */
+  readonly said: (of: string) => readonly { readonly judged: Judged; readonly lines?: Span }[];
   /** How the judging went, in words. */
   readonly summary: string;
 }
@@ -225,12 +233,16 @@ export async function codeWorld(veil: Veil): Promise<CodeLab> {
       landed = false;
     }
   }
+  const fromSnapshot = !ASKS_PROVING && document.model === (snapshot as unknown as CodeModel);
   // Traced once now, while the world loads, so the field map never traces them mid-walk.
   const outlines = outlinesOf(document.world);
   // A world laid out here, with no world service, shows its land only now.
   if (!landed) veil.opening({ stage: "land", name: document.world.name, size: document.world.size, ...(document.world.aspect === undefined ? {} : { aspect: document.world.aspect }), areas: outlines.areas, patches: document.world.patches, lots: document.world.things.map(({ x, z }) => ({ x, z })) });
   veil.baking(Object.fromEntries(document.world.patches.map((p) => [p.path, p.vitality])));
-  return codeLab(document);
+  const lab = codeLab(document);
+  if (!fromSnapshot) return lab;
+  const said = (snapshotSaid as unknown as { said: Readonly<Record<string, readonly { judged: Judged; lines?: Span }[]>> }).said;
+  return { ...lab, said: (of) => said[of] ?? [] };
 }
 
 /**
@@ -296,6 +308,7 @@ export function codeLab({ model, world, judges, summary }: WorldDocument): CodeL
   return {
     world,
     spec,
+    said: () => [],
     files: new Map(model.files.map((f) => [f.path, f])),
     buildings: houses.map((t) => ({ facts: entities.get(t.path) as EntityFacts, building: t.look })),
     landmarks: rises.map((t) => ({ preset: landmarkIndex(t.look), facts: entities.get(t.path) as EntityFacts })),

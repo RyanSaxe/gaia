@@ -10,7 +10,7 @@
 
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { type Blueprint, type BuildingPlan, type GroundSpec, Library, type Palette, type RouteSpec, type SeasonSpec, blueprintOf, seedOf } from "@gaia/schema";
+import { type Blueprint, type BuildingPlan, type GroundSpec, type Judged, Library, type Palette, type RouteSpec, type SeasonSpec, type Span, blueprintOf, seedOf } from "@gaia/schema";
 import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, LANDMARK_PRIMITIVES, NO_SHIFT, ROUTE_PRIMITIVES, RELIEF_PRIMITIVES, ROCK_PRIMITIVES, WILDFLOWER_PRIMITIVES, WORLD_PRIMITIVES, hex, mixLab } from "@gaia/primitives";
 import { biome, flora, landmark, link, world as worldKind } from "@gaia/kinds";
 import { defaultParams, validate } from "@gaia/world";
@@ -260,6 +260,8 @@ export interface WorldHandle {
    * nothing stands for it, or while the world is changing.
    */
   view(id: string, w: number, h: number): Promise<{ readonly color: Pixels; readonly mask: Pixels } | null>;
+  /** What Jev judged about a folder, a file or a definition, by its path or id, and about each block of a definition's lines. */
+  judged(of: string): readonly { readonly judged: Judged; readonly lines?: Span }[];
   /** Calls `listener` with what a person has walked up to when its card opens, and with null when it closes. */
   onCard(listener: (thing: CardThing | null) => void): void;
   /**
@@ -2209,6 +2211,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     landing: (x, z, heart) => landingNear(x, z, heart),
     place: (at) => walkTo(at.x, at.z, at.yaw),
     view: (id, w, h) => viewOf(id, w, h),
+    judged: (of) => code?.said(of) ?? [],
     onCard: (listener) => cardListeners.push(listener),
     onHeading: (listener) => headingListeners.push(listener),
   };

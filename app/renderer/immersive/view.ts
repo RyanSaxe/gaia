@@ -183,7 +183,7 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
     if (code !== null) {
       const pooled = areaVitality(code.patches.map((p) => ({ area: p.area, vitality: p.vitality, size: p.radius * p.radius })));
       const own = new Map([...code.patches.map((p) => [p.path, p.vitality] as const), ...code.things.map((t) => [entityOf(t.path), t.vitality] as const)]);
-      words = { journal: journalOf(code, ROOM), world: code, vitality: (of) => own.get(of) ?? pooled.get(of) ?? 1, lines: (path) => source.lines(path) ?? undefined };
+      words = { journal: journalOf(code, ROOM), world: code, vitality: (of) => own.get(of) ?? pooled.get(of) ?? 1, lines: (path) => source.lines(path) ?? undefined, judged: (of) => world.judged(standsFor(of)) };
     }
     // A directory's vitality: its files', its subdirectories' included, pooled by the ground each holds, as the map washes it.
     const vitality = areaVitality(world.places().patches.map((p) => ({ area: p.area, vitality: p.vitality, size: p.radius * p.radius })));
