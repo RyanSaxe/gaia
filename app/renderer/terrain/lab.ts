@@ -308,6 +308,8 @@ const LAND = { dry: 0.02, wade: 0.45, clear: 1.1, reach: 40, ring: 1.5 };
  * and the painter looks a little up, into the sky.
  */
 const PAINTING = { hour: 15.5, fov: 46, fill: 0.5, wideFill: 0.16, wideLift: 0.12, sunSide: 0.6 } as const;
+/** A file with nothing standing on it is painted as its patch of ground: how tall a view of it frames, and how far it reaches at most, meters. */
+const PATCH_SEEN = { height: 1.6, reach: 14 } as const;
 /** A landing faces along a trail this close, else the area's building or landmark this close, meters. */
 const FACE_TRAIL = 14;
 const FACE_THING = 160;
@@ -1943,11 +1945,33 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
 
   const capture = createCapture(renderer);
   const captureCamera = new THREE.PerspectiveCamera(PAINTING.fov, 1, 0.2, 4500);
-  /** What stands for `id`: the thing itself, or for a file without a tree, the largest of its definitions. */
-  function subjectOf(id: string): Subject | undefined {
+  /** What a painting is seen of: where it stands, how tall, how far it reaches, and where to stand to see it. */
+  type Seen = Pick<Subject, "x" | "z" | "height" | "reach" | "stand">;
+  /**
+   * What stands for `id`: the thing itself; for a file without a tree, the
+   * largest of its definitions; and for a file with nothing standing on it,
+   * such as a document, its own patch of ground.
+   */
+  function subjectOf(id: string): Seen | undefined {
     const own = subjects.find((s) => s.represented.id === id);
     if (own !== undefined) return own;
-    return subjects.filter((s) => s.represented.id.startsWith(`${id}#`)).sort((a, b) => b.height - a.height)[0];
+    const largest = subjects.filter((s) => s.represented.id.startsWith(`${id}#`)).sort((a, b) => b.height - a.height)[0];
+    if (largest !== undefined) return largest;
+    const cells = code?.world.cells.filter((k) => k.file === id) ?? [];
+    if (cells.length === 0) return undefined;
+    const x = cells.reduce((n, k) => n + k.x, 0) / cells.length;
+    const z = cells.reduce((n, k) => n + k.z, 0) / cells.length;
+    const reach = Math.min(PATCH_SEEN.reach, Math.max(...cells.map((k) => Math.hypot(k.x - x, k.z - z))) + 2);
+    return {
+      x,
+      z,
+      height: PATCH_SEEN.height,
+      reach,
+      stand: (fx, fz) => {
+        const d = Math.hypot(fx - x, fz - z) || 1;
+        return { x: x + ((fx - x) / d) * (reach + 3), z: z + ((fz - z) / d) * (reach + 3) };
+      },
+    };
   }
   /**
    * Where to stand to see `s` whole from `distance` meters off: on the side
@@ -1955,7 +1979,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
    * and inside the land, and nothing solid or no rise of the ground stands
    * between. A building is seen from where its sign is read, farther back.
    */
-  function viewpointOf(s: Subject, distance: number, eye: number, aim: number): { x: number; z: number } {
+  function viewpointOf(s: Seen, distance: number, eye: number, aim: number): { x: number; z: number } {
     const fixed = s.stand(s.x + 1, s.z);
     const other = s.stand(s.x - 1, s.z);
     const sun = light.uSunDirection.value;
