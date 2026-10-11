@@ -11,7 +11,7 @@
 // first. Everything Jev does not answer is judged by the stand-in, and the
 // document says which.
 
-import type { EngineClient, FileFacts, JevClient, JevResponse } from "@gaia/schema";
+import type { CodeGraph, EngineClient, FileFacts, GraphNode, JevClient, JevResponse } from "@gaia/schema";
 import { outlinesOf } from "@gaia/terrain";
 import { type Judge, NEEDS_TESTS, areaOfRequest, judgeWorld, judgedThing, keptJev, landOf, layoutWorld, planWorldRequests, requestKey, standInJev, thingsOf, unshare, vitalityOf } from "@gaia/world";
 import { LOOKS } from "../renderer/terrain/looks.ts";
@@ -45,6 +45,43 @@ export async function spendLimit(engine: EngineClient): Promise<number> {
 export async function setSpendLimit(engine: EngineClient, usd: number): Promise<void> {
   if (!Number.isFinite(usd) || usd < 0) throw new Error(`Not a spend limit: ${usd}`);
   await engine.call("store.put", { project: APP_STORE, writes: [{ table: "settings", key: LIMIT_KEY, value: { usd } }] });
+}
+
+/**
+ * The graph the layout reads: directories, files and definitions, with stand
+ * as each one's only judgment, and no blocks or edges. Each definition keeps
+ * what places and sizes it and nothing else.
+ */
+export function standingGraph(graph: CodeGraph): CodeGraph {
+  const stand = (n: GraphNode) => (n.judged?.stand === undefined ? {} : { judged: { stand: n.judged.stand } });
+  const nodes = graph.nodes.flatMap((n): GraphNode[] => {
+    switch (n.kind) {
+      case "block":
+        return [];
+      case "def":
+        return [
+          {
+            kind: "def",
+            id: n.id,
+            lineage: n.lineage,
+            file: n.file,
+            ...(n.parent === undefined ? {} : { parent: n.parent }),
+            name: n.name,
+            role: n.role,
+            span: n.span,
+            signature: n.signature,
+            ...(n.doc === undefined ? {} : { doc: n.doc }),
+            measures: { lines: n.measures.lines },
+            ...stand(n),
+          },
+        ];
+      default: {
+        const { judged: _, ...rest } = n;
+        return [{ ...rest, ...stand(n) }];
+      }
+    }
+  });
+  return { ...graph, nodes, edges: [], pending: [] };
 }
 
 export interface OpenWorldOptions {
