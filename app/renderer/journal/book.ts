@@ -517,7 +517,8 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
   window.addEventListener(
     "keydown",
     (e) => {
-      if (!open) return;
+      // Typing in the finder laid over the book is the finder's.
+      if (!open || e.target instanceof HTMLInputElement) return;
       // While the book is open the world waits: no key reaches it.
       if (e.code === "Escape" || e.code === "KeyM") setOpen(false);
       else if (e.code === "ArrowRight" || e.code === "ArrowLeft") {

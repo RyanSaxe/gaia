@@ -22,6 +22,7 @@ import { worldService } from "../service.ts";
 import type { Landing, WorldHandle } from "../terrain/lab.ts";
 import { createCompass } from "./compass.ts";
 import { createJournalBook } from "../journal/book.ts";
+import { type Findable, createFinder, findablesOf } from "../journal/finder.ts";
 import { drawMapPage, halfOf } from "../journal/maps.ts";
 import { ROOM, journalPages } from "../journal/pages.ts";
 import { createPaintings } from "../journal/paintings.ts";
@@ -310,11 +311,29 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
     setSlip(false);
     map.open(false);
   });
+  /** Everything the finder turns the journal to, for the world standing now. */
+  let findable: { readonly words: WordsSource; readonly items: readonly Findable[] } | null = null;
+  const finder = createFinder(
+    layer,
+    () => {
+      if (words === null) return [];
+      if (findable?.words !== words) findable = { words, items: findablesOf(words.journal) };
+      return findable.items;
+    },
+    (at) => journal.open(at),
+  );
   // Escape folds whatever paper is open before anything under it hears the key.
   window.addEventListener(
     "keydown",
     (e) => {
-      if (!active) return;
+      if (!active || e.target instanceof HTMLInputElement) return;
+      // "/" lays the finder over the world, or over the open book.
+      if (e.key === "/" && !jumping) {
+        finder.open();
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
       // M opens the journal, at the map; while it is open, the book has every key.
       if (e.code === "KeyM" && !jumping && !journal.isOpen) {
         journal.open();
@@ -344,6 +363,7 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
       layer.hidden = !on;
       if (!on) {
         setSlip(false);
+        finder.close();
         journal.close();
       }
       apply();

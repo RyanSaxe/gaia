@@ -243,3 +243,28 @@ button.jp-name { border: 0; background: none; padding: 0; text-align: left; curs
 .jp-code.prose .jp-text { padding-left: 0; text-indent: 0; white-space: pre-wrap; }
 .jp-code.prose .jp-line.h1, .jp-code.prose .jp-line.h2 { font: italic 600 16px/1.4 "Iowan Old Style", Georgia, serif; padding-top: 4px; }
 .jp-code.prose .jp-line.h3, .jp-code.prose .jp-line.h4, .jp-code.prose .jp-line.h5, .jp-code.prose .jp-line.h6 { font: italic 600 13.5px/1.45 "Iowan Old Style", Georgia, serif; }
+
+/* The finder: a slip of the journal's paper laid over the world when "/" is pressed. What is typed is written in
+   ink on a pencil rule; each thing found is a row as the journal's contents set them, the letters that matched
+   inked darker, where it lives in small capitals, and its page by hand. */
+.finder { position: fixed; inset: 0; z-index: 60; display: flex; justify-content: center; align-items: flex-start; padding-top: 14vh; }
+.finder[hidden] { display: none; }
+.finder-slip {
+  width: min(540px, calc(100vw - 32px)); padding: 14px 18px 12px; border-radius: 6px; background: #f4ecd8; color: #33281d;
+  box-shadow: 0 14px 34px rgba(30, 22, 10, 0.26), 0 0 0 1px rgba(74, 60, 44, 0.08);
+}
+.finder-ask {
+  display: block; width: 100%; box-sizing: border-box; border: 0; border-bottom: 1px solid rgba(120, 95, 65, 0.38); background: none; outline: none;
+  padding: 2px 2px 6px; font: italic 600 24px/1.2 "Iowan Old Style", Georgia, serif; color: #33281d; caret-color: #7a5f45;
+}
+.finder-found { display: flex; flex-direction: column; margin-top: 6px; }
+.finder-found:empty { display: none; }
+.finder-row {
+  display: grid; grid-template-columns: auto 1fr auto; align-items: baseline; column-gap: 10px; border: 0; background: none; text-align: left;
+  padding: 5px 6px; border-radius: 4px; cursor: pointer; color: inherit;
+}
+.finder-row.on { background: rgba(122, 95, 69, 0.11); }
+.finder-name { font: 15px/1.4 "Iowan Old Style", Georgia, serif; color: #5a4632; white-space: nowrap; }
+.finder-name b { font-weight: 600; color: #2a2016; }
+.finder-where { font: 600 8.5px/1.3 "Iowan Old Style", Georgia, serif; letter-spacing: .16em; text-transform: uppercase; color: #8a7458; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.finder-page { font: 14px/1 "Bradley Hand", Georgia, cursive; color: #7a5f45; }
