@@ -75,8 +75,11 @@ async function open(root: string, data: string, approve: boolean) {
   });
   const sent = standIn.received.slice(before);
   const about = sent.map(({ body }) => {
-    const s = body.state as Record<string, { path?: string; name?: string }>;
-    return s.file ? `file:${s.file.path}` : s.entity ? `entity:${s.entity.path}` : s.directory ? `area:${s.directory.path}` : "world";
+    const s = body.state as Record<string, { path?: string; name?: string } | string>;
+    // Understanding's requests name their file or directory by its path at the top of the state.
+    if (typeof s.path === "string") return `understand:${s.path}`;
+    const { file, entity, directory } = s as Record<string, { path?: string } | undefined>;
+    return file ? `file:${file.path}` : entity ? `entity:${entity.path}` : directory ? `area:${directory.path}` : "world";
   });
   return { document, asked, shown, sent, about };
 }
@@ -112,14 +115,20 @@ describe("judging a codebase with Jev", () => {
     }
     expect(Object.keys(named).sort()).toEqual(first.document.world.areas.map((a) => a.path).sort());
     expect(named).toEqual(areaLands(first.document.world));
-    // Every request went out once, with the placeholder key and nothing but the model, facts and questions.
-    for (const { authorization, body } of first.sent) {
+    // Every request went out once, with the placeholder key and nothing but the model, its state and questions. Judging
+    // the looks reads facts only; understanding reads the source, as the reviewer allowed.
+    for (const [i, { authorization, body }] of first.sent.entries()) {
       expect(authorization).toBe("Bearer local-stand-in");
       expect(Object.keys(body).sort()).toEqual(["model", "questions", "state"]);
-      expect(JSON.stringify(body)).not.toContain("secretSourceLine");
+      if (!first.about[i]?.startsWith("understand:")) expect(JSON.stringify(body)).not.toContain("secretSourceLine");
     }
-    expect(new Set(first.about).size).toBe(first.sent.length);
-    expect(first.about).toEqual(expect.arrayContaining(["world", "file:src/shape.ts", "file:README.md"]));
+    const judging = first.about.filter((a) => !a.startsWith("understand:"));
+    expect(new Set(judging).size).toBe(judging.length);
+    expect(first.about).toEqual(expect.arrayContaining(["world", "file:src/shape.ts", "file:README.md", "understand:src/shape.ts"]));
+    // Understanding went only as far as standing needs, never to a directory, and every definition stands by Jev's stand.
+    const states = first.sent.map(({ body }) => body.state as Record<string, unknown>);
+    expect(states.some((s) => typeof s.path === "string" && s.directory !== undefined)).toBe(false);
+    expect(first.document.world.symbols.find((s) => s.name === "shape")?.stand).toEqual(expect.any(Number));
     // Jev judged everything but the request it refused, which the stand-in judged.
     expect(first.document.judges["file:README.md"]).toBe("stand-in");
     expect(Object.entries(first.document.judges).filter(([, j]) => j === "stand-in").map(([t]) => t)).toEqual(["file:README.md"]);

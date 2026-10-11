@@ -19,6 +19,9 @@ function heldEngine(): { engine: EngineClient; held: (() => void)[] } {
     "store.put": () => ({ ok: true }),
     "jev.status": () => ({ live: true, key: true }),
     "jev.estimate": ({ requests }) => ({ endpoint: "held", requests: requests.length, questions: 0, bytes: 0, estimatedTokens: 0, estimatedUsd: 0, usdPerMillionInputTokens: 0, concurrency: 8, live: true }),
+    // Nothing to understand: the proving ground has no graph here, so its symbols stand as the code model has them.
+    "project.graph": () => ({ projectId: "proving", name: "proving", nodes: [], edges: [], pending: [] }),
+    "understand.plan": () => ({ pending: [], estimate: { endpoint: "held", requests: 0, questions: 0, bytes: 0, estimatedTokens: 0, estimatedUsd: 0, usdPerMillionInputTokens: 0, concurrency: 8, live: true } }),
   };
   const engine = {
     call: async (method: string, params: { requests: JevRequest[] }) => {

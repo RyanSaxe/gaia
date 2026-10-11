@@ -1,7 +1,9 @@
 // Opening a codebase's world: the engine reads the code, the land is divided,
-// Jev judges every look, and the world is laid out. The land's division
-// depends on the code alone, so its outlines and every file's patch go to the
-// renderer before any judging; each file's health follows as soon as nothing
+// Jev judges every look, Jev's understanding gives every definition its stand,
+// and the world is laid out. The land's division depends on the code alone
+// (the engine's graph of it, divided down to each definition, but never its
+// stand), so its outlines and every file's patch go to the renderer before
+// any judging; each file's health follows as soon as nothing
 // still to be judged can change it, and each area is named as its judgments
 // settle: the wait paints the map as the world is judged. Jev's answers are kept in the project's
 // app-data store, keyed by each request's hash, so reopening asks again only
@@ -103,7 +105,10 @@ export async function openWorld({ engine, root, consent, progress }: OpenWorldOp
   const keys = planned.map((p) => requestKey(p.request));
 
   // The land, outlined as the finished map draws it, every file's patch and every entity's lot, before anything is judged.
-  const land = landOf(model);
+  // Every definition in the engine's graph, with whatever stand Jev's held answers already give it.
+  const graphNow = async (): Promise<CodeGraph> => standingGraph(await engine.call("project.graph", { root, judged: true }));
+  let graph = await graphNow();
+  const land = landOf(model, graph);
   progress({ stage: "land", name, size: land.size, areas: outlinesOf(land).areas, patches: land.patches.map(({ path, name, area, x, z, radius }) => ({ path, name, area, x, z, radius })), lots: land.lots });
 
   // Each file's health goes to the renderer once nothing still to be judged can change it. Its vitality reads one
@@ -133,16 +138,27 @@ export async function openWorld({ engine, root, consent, progress }: OpenWorldOp
   const { records } = await engine.call("store.read", { project, table: "answers" });
   const stored = new Map(Object.entries(records as Record<string, JevResponse>));
   const missing = planned.filter((_, i) => !stored.has(keys[i] as string));
+  // Understanding goes only as far as the world needs to stand: Jev's links and every definition's stand.
+  const understanding = await engine.call("understand.plan", { root, through: "understand" });
+  const toUnderstand = understanding.pending.reduce((n, p) => n + p.requests, 0);
+  // What goes to Jev: understanding's share is planned before Jev's links are in, so it settles to what was sent.
+  let total = missing.length + toUnderstand;
 
-  // Whether Jev is asked about the things it has not judged yet, and if not, why.
+  // Whether Jev is asked about the things it has not judged or understood yet, and if not, why.
   let ask = false;
   let why = "";
-  if (missing.length > 0) {
+  if (total > 0) {
     const status = await engine.call("jev.status", {});
     if (!status.live) why = "Jev is off; start Gaia with GAIA_JEV=live to ask it";
     else if (!status.key) why = "no OpenRouter key in the Keychain (gaia-openrouter)";
     else {
-      const estimate = await engine.call("jev.estimate", { requests: missing.map((p) => p.request) });
+      const judging = missing.length > 0 ? await engine.call("jev.estimate", { requests: missing.map((p) => p.request) }) : undefined;
+      const estimate = {
+        endpoint: judging?.endpoint ?? understanding.estimate.endpoint,
+        requests: (judging?.requests ?? 0) + understanding.estimate.requests,
+        estimatedTokens: (judging?.estimatedTokens ?? 0) + understanding.estimate.estimatedTokens,
+        estimatedUsd: (judging?.estimatedUsd ?? 0) + understanding.estimate.estimatedUsd,
+      };
       const limitUsd = await spendLimit(engine);
       console.log(`gaia: ${name}: ${estimate.requests} requests to judge, about ${estimate.estimatedTokens} tokens, $${estimate.estimatedUsd.toFixed(4)} (${Number.isFinite(limitUsd) ? `limit $${limitUsd}` : "no limit"})`);
       if (estimate.estimatedUsd <= limitUsd) ask = true;
@@ -177,6 +193,8 @@ export async function openWorld({ engine, root, consent, progress }: OpenWorldOp
 
   const judges = new Map<string, Judge>();
   const failures: string[] = [];
+  /** Understanding requests Jev refused. */
+  let misunderstood = 0;
   let answered = 0;
   // Each area is settled once every request about a thing on its land is (its files, its entity and itself) and
   // its land is judged: its own, or its region's when it has no land of its own.
@@ -206,7 +224,7 @@ export async function openWorld({ engine, root, consent, progress }: OpenWorldOp
   /** Questions in flight, by the area they are about. */
   const inFlight = new Map<string, number>();
   const asking = (): void =>
-    progress({ stage: "asking", name, total: missing.length, answered, failed: failures.length, settled: settledAreas(), asking: [...inFlight].filter(([, n]) => n > 0).map(([area]) => area) });
+    progress({ stage: "asking", name, total, answered, failed: failures.length + misunderstood, settled: settledAreas(), asking: [...inFlight].filter(([, n]) => n > 0).map(([area]) => area) });
   if (ask) asking();
   const kept = keptJev(ask ? engineJev(engine) : null, standInJev(LOOKS), {
     stored,
@@ -257,6 +275,24 @@ export async function openWorld({ engine, root, consent, progress }: OpenWorldOp
   await new Promise((resolve) => setTimeout(resolve, 0));
   await Promise.all(writes);
 
+  // Then understanding, a slice at a time, until nothing is left or a slice moves nothing, as when Jev refuses every
+  // request in it; the world is laid out on the stand it leaves.
+  if (ask && toUnderstand > 0) {
+    let understood = 0;
+    for (;;) {
+      const slice = await engine.call("understand.next", { root, through: "understand" });
+      understood += slice.sent + slice.failed;
+      answered += slice.sent + slice.failed;
+      misunderstood += slice.failed;
+      total = Math.max(total, answered);
+      if (slice.left === 0 || (slice.sent === 0 && slice.settled.length === 0)) break;
+      asking();
+    }
+    total = missing.length + understood;
+    asking();
+    graph = await graphNow();
+  }
+
   const byThing = Object.fromEntries(planned.flatMap((p, i) => thingsOf(p).map((t) => [judgedThing(t), judges.get(keys[i] as string) ?? "stand-in"] as const)));
   const things = Object.keys(byThing).length;
   const byJev = Object.values(byThing).filter((j) => j === "jev").length;
@@ -265,9 +301,10 @@ export async function openWorld({ engine, root, consent, progress }: OpenWorldOp
       ? [`${plural(things, "thing")} judged by the stand-in`]
       : [`${plural(byJev, "thing")} judged by Jev`, ...(byJev < things ? [`${plural(things - byJev, "thing")} by the stand-in`] : [])];
   if (billed > 0) parts.push(`$${billed.toFixed(4)} billed`);
-  if (failures.length > 0) parts.push(`${plural(failures.length, "request")} failed (${failures[0]})`);
+  const failed = failures.length + misunderstood;
+  if (failed > 0) parts.push(`${plural(failed, "request")} failed${failures[0] === undefined ? "" : ` (${failures[0]})`}`);
   else if (why !== "") parts.push(why);
-  const world = layoutWorld(model, judgments);
+  const world = layoutWorld(model, judgments, graph);
   // Any file no answer was about is settled now, before the document.
   for (const p of world.patches) settleHealth(p.path, p.vitality);
   sendHealth();
