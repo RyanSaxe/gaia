@@ -11,7 +11,7 @@ import { type Journal, type JournalEntry, type PageRoom, entityOf } from "@gaia/
 import type { BookPages, Spread } from "./book.ts";
 import { type CaptionFact, captionOf } from "./caption.ts";
 import { tapsOf } from "./maps.ts";
-import { fullItems, renderFullPage, renderPage, renderPicture, renderTitle, renderTraveller } from "./page.ts";
+import { fullItems, pagePx, renderCross, renderFullPage, renderNameLine, renderPage, renderPicture, renderTitle, renderTraveller } from "./page.ts";
 import { type Full, type PageWords, type WordsSource, appendixWords, contentsWords, fileOfEntry, wordsOf } from "./words.ts";
 
 /** A page's size, its own pixels. */
@@ -19,6 +19,8 @@ const PAGE_SIZE = { w: 520, h: 660 } as const;
 /** How many of the things after an open page, and before it, are painted ahead of the reader. */
 const AHEAD = 5;
 const BEHIND = 5;
+/** How near a tap must fall to a map's pencil cross to travel there, in the page's pixels. */
+const CROSS_REACH = 16;
 /** How many rows of a list a page holds: under the heading, and under a running head on the pages it runs on to. */
 export const ROOM: PageRoom = { first: 18, next: 21 };
 
@@ -225,10 +227,16 @@ export function journalPages(src: JournalPagesSource): BookPages {
   const blank = (f = ""): HTMLElement => renderPicture(null, f);
   /**
    * A map's page: the traveller stands where the person is, as on the field
-   * map, when they are on this page; a tap on a folder's name turns to its
-   * chapter, and a tap on its land takes the person there.
+   * map, when they are on this page. A tap on a folder's or a file's name
+   * turns to its page. A tap on the land marks the spot with a pencil cross,
+   * and a second tap on the cross takes the person there; a tap elsewhere
+   * moves it, so a near miss of a name never sends anyone away. On a
+   * computer, a name under the pointer is underlined in pencil, and the
+   * pointer is a hand over a name or the cross and a crosshair over the land.
    */
   const mapPage = (map: HTMLElement | null, f: string, caption: readonly CaptionFact[] = []): HTMLElement => {
+    let cross: { readonly px: number; readonly py: number; readonly el: HTMLElement } | null = null;
+    const onCross = (px: number, py: number): boolean => cross !== null && Math.hypot(px - cross.px, py - cross.py) < CROSS_REACH;
     const page = renderPicture(
       map,
       f,
@@ -237,11 +245,33 @@ export function journalPages(src: JournalPagesSource): BookPages {
         if (taps === null) return;
         const name = taps.name(px, py);
         if (name !== null) return src.turnTo(name);
-        const at = taps.at(px, py);
-        src.travelTo(at.x, at.z);
+        if (cross !== null && onCross(px, py)) {
+          const at = taps.at(cross.px, cross.py);
+          return src.travelTo(at.x, at.z);
+        }
+        cross?.el.remove();
+        cross = { px, py, el: renderCross(px, py) };
+        page.append(cross.el);
       },
       caption,
     );
+    if (map !== null) {
+      map.classList.add("jp-map");
+      let line: HTMLElement | null = null;
+      map.onpointermove = (e) => {
+        if (e.pointerType !== "mouse") return;
+        const { px, py } = pagePx(map, e);
+        const box = tapsOf(map)?.nameBox(px, py) ?? null;
+        line?.remove();
+        line = box === null ? null : renderNameLine(box);
+        if (line !== null) page.append(line);
+        map.style.cursor = box !== null || onCross(px, py) ? "pointer" : "crosshair";
+      };
+      map.onpointerleave = () => {
+        line?.remove();
+        line = null;
+      };
+    }
     const taps = tapsOf(map);
     const me = src.person();
     const here = taps?.page(me.x, me.z);

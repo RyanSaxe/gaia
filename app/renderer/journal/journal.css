@@ -80,8 +80,8 @@
 .jb-leaf[hidden] { display: none; }
 
 /* The outer margins turn the page; the tabs on the fore-edge open each top chapter. */
-.jb-margin { top: calc(var(--ph) / -2); width: 40px; height: var(--ph); cursor: pointer; pointer-events: auto; transform: translateZ(2px); }
-.jb-margin.right { left: calc(var(--pw) - 40px); }
+.jb-margin { top: calc(var(--ph) / -2); width: 64px; height: var(--ph); cursor: pointer; pointer-events: auto; transform: translateZ(2px); }
+.jb-margin.right { left: calc(var(--pw) - 64px); }
 .jb-margin.left { left: calc(var(--pw) * -1); }
 .journal:not(.open) .jb-margin, .journal:not(.open) .jb-tabs { display: none; }
 .jb-tabs { left: calc(var(--pw) - 4px); top: calc(var(--ph) / -2); width: 0; height: var(--ph); transform: translateZ(-2px); }
@@ -134,7 +134,6 @@
 }
 .jp-row.d0 { font-style: italic; font-weight: 600; }
 .jp-row.d1 { padding-left: 20px; } .jp-row.d2 { padding-left: 40px; font-size: 13.5px; color: #5c4c3a; } .jp-row.d3 { padding-left: 60px; font-size: 13px; color: #5c4c3a; }
-.jp-row:hover .jp-row-name { text-decoration: underline; text-decoration-color: rgba(120, 92, 60, 0.4); text-underline-offset: 3px; }
 .jp-row-name { white-space: nowrap; overflow: hidden; text-overflow: clip; max-width: 62%; }
 .jp-dots { flex: 1; border-bottom: 1.4px dotted rgba(122, 95, 69, 0.42); margin: 0 9px 5px; min-width: 12px; }
 .jp-row-vit { display: inline-flex; align-items: center; gap: 6px; margin-right: 14px; font: 14px/1 "Bradley Hand", Georgia, cursive; color: #5a4632; font-style: normal; font-weight: normal; }
@@ -204,7 +203,23 @@ button.jp-name { border: 0; background: none; padding: 0; text-align: left; curs
 .jp-title-wash { display: block; width: 62px; height: 20px; border-radius: 50% 46% 52% 44%; opacity: 0.85; filter: url(#jp-wash); }
 
 /* A map or a painting can be tapped: a map's land and a page's picture take you into the world. */
-.jp-picture .jp-tap { cursor: pointer; }
+/* On a computer, everything that can be clicked answers the pointer and nothing else does: a name, a row, a fold or a
+   way back inks darker with a pencil underline, a painting lifts a little, and the pointer is a hand. A phone, with no
+   pointer to answer, stays as it is. */
+.jp-row, button.jp-name, .jp-fold, .jp-back { cursor: default; }
+@media (hover: hover) and (pointer: fine) {
+  .jp-row, button.jp-name, .jp-fold, .jp-back, .jp-picture .jp-tap:not(.jp-map) { cursor: pointer; }
+  .jp-row:hover .jp-row-name, button.jp-name:hover, .jp-fold:hover, .jp-back:hover {
+    color: #1e160e; text-decoration: underline; text-decoration-color: rgba(122, 95, 69, 0.6); text-decoration-thickness: 1.2px; text-underline-offset: 4px;
+  }
+  .jp-picture .jp-tap:not(.jp-map) { transition: filter 160ms ease-out; }
+  .jp-picture .jp-tap:not(.jp-map):hover { filter: brightness(1.06) saturate(1.05); }
+}
+/* A spot marked on a map, and a name's underline while the pointer is on it. */
+.jp-cross { position: absolute; width: 0; height: 0; pointer-events: none; }
+.jp-cross svg { position: absolute; left: -9px; top: -9px; width: 18px; height: 18px; overflow: visible; }
+.jp-cross path { fill: none; stroke: #b8452c; stroke-width: 2.6; stroke-linecap: round; }
+.jp-name-line { position: absolute; height: 0; border-bottom: 1.4px solid rgba(58, 47, 34, 0.55); pointer-events: none; }
 
 /* You are here on a map's page: the field map's own traveller, standing on the land, never above the page. */
 .jp-here { position: absolute; width: 0; height: 0; pointer-events: none; }
