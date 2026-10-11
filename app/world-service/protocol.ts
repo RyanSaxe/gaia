@@ -94,7 +94,7 @@ export type Opening =
    * its place is all a sheet needs to keep names off the mark to come. Sent
    * once, before any judging.
    */
-  | { readonly stage: "land"; readonly name: string; readonly size: number; readonly areas: readonly Outline[]; readonly patches: readonly FilePatch[]; readonly lots: readonly LotPlace[] }
+  | { readonly stage: "land"; readonly name: string; readonly size: number; readonly aspect?: number; readonly areas: readonly Outline[]; readonly patches: readonly FilePatch[]; readonly lots: readonly LotPlace[] }
   /**
    * Asking Jev about the things it has not judged; `answered` counts those settled, `failed` those the stand-in
    * took over, and `settled` names every area (a directory's path, "" for the root) whose things and land are all
