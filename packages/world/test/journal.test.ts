@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type JournalSource, journalOf } from "@gaia/world";
+import { type JournalSource, entityOf, journalOf } from "@gaia/world";
 
 const area = (path: string) => ({ path, name: path.split("/").pop() || "demo", parent: path === "" ? null : path.split("/").slice(0, -1).join("/") });
 const patch = (path: string) => ({ path, name: path.split("/").pop() as string, area: path.split("/").slice(0, -1).join("/") });
@@ -49,5 +49,25 @@ describe("the traveller's journal", () => {
     expect(journal.entry(`${MATH}#Calc.add`)?.under).toBe(`${MATH}#Calc`);
     expect(journal.entry("docs")?.under).toBeUndefined();
     expect(journal.entries.map((e) => e.page)).toEqual(journal.entries.map((_, i) => 2 * i + 1));
+  });
+
+  it("gives each thing that stands its own spread, first in its directory's chapter, and runs a long list on overleaf", () => {
+    const journal = journalOf(
+      { ...DEMO, things: [{ path: "", name: "demo" }, { path: "packages/core", name: "@demo/core" }, { path: "docs", name: "guide" }], trails: [{ from: "docs", to: "packages/core" }, { from: "packages/app", to: "packages/core" }] },
+      { first: 2, next: 3 },
+    );
+    const order = journal.entries.map((e) => e.of);
+    // The repository's own spread comes before every chapter, and an entity's right after its directory's.
+    expect(order.slice(0, 3)).toEqual([entityOf(""), "docs", entityOf("docs")]);
+    expect(order.indexOf(entityOf("packages/core"))).toBe(order.indexOf("packages/core") + 1);
+    // An entity's page lists the things its trails join it to; a trail to something that isn't a thing joins nothing.
+    expect(journal.entry(entityOf("packages/core"))?.lists).toEqual([entityOf("docs")]);
+    expect(journal.entry(entityOf("packages/core"))?.under).toBe("packages/core");
+    // math.ts lists its five definitions: two on its first page, three on the next, a left-hand page; the right-hand page
+    // facing it is left blank, so the next entry opens on a spread of its own, its picture on the left.
+    const math = journal.entry(MATH);
+    expect(math?.pages).toBe(2);
+    expect(journal.entry(`${MATH}#Opts`)?.page).toBe((math?.page ?? 0) + 4);
+    expect(journal.entry("docs")?.pages).toBe(1);
   });
 });

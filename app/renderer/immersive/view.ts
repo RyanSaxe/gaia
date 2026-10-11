@@ -15,14 +15,14 @@
 // world for the start (`picture.ts`).
 
 import type { PlaceArea } from "@gaia/terrain";
-import { areaVitality, journalOf } from "@gaia/world";
+import { areaVitality, entityOf, journalOf } from "@gaia/world";
 import { SLIP_LOGO } from "../brand/logo.ts";
 import { onTap } from "../lab.ts";
 import { worldService } from "../service.ts";
 import type { WorldHandle } from "../terrain/lab.ts";
 import { createCompass } from "./compass.ts";
 import { createJournalBook } from "../journal/book.ts";
-import { journalPages } from "../journal/pages.ts";
+import { ROOM, journalPages } from "../journal/pages.ts";
 import { createSourceText } from "../journal/source.ts";
 import type { WordsSource } from "../journal/words.ts";
 import { createFieldMap, drawLand } from "./field-map.ts";
@@ -146,7 +146,11 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
   if (scrap !== null) journal.slip.append(scrap);
   // A thing walked up to after a tap opens the journal at its page; walking past never does.
   world.onCard((thing) => {
-    if (active && thing !== null) journal.open(words?.journal.entry(thing.represented.id) === undefined ? "contents" : thing.represented.id);
+    if (!active || thing === null) return;
+    // A building or landmark is its entity's page; anything else is its own.
+    const id = thing.represented.id;
+    const at = [entityOf(id), id].find((of) => words?.journal.entry(of) !== undefined);
+    journal.open(at ?? "contents");
   });
   world.onHeading((thing) => minimap.heading(thing));
   const markers = createMarkers(world.light);
@@ -171,8 +175,8 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
     const code = world.code();
     if (code !== null) {
       const pooled = areaVitality(code.patches.map((p) => ({ area: p.area, vitality: p.vitality, size: p.radius * p.radius })));
-      const files = new Map(code.patches.map((p) => [p.path, p.vitality]));
-      words = { journal: journalOf(code), world: code, vitality: (path) => files.get(path) ?? pooled.get(path) ?? 1, lines: (path) => source.lines(path) ?? undefined };
+      const own = new Map([...code.patches.map((p) => [p.path, p.vitality] as const), ...code.things.map((t) => [entityOf(t.path), t.vitality] as const)]);
+      words = { journal: journalOf(code, ROOM), world: code, vitality: (of) => own.get(of) ?? pooled.get(of) ?? 1, lines: (path) => source.lines(path) ?? undefined };
     }
     // A directory's vitality: its files', its subdirectories' included, pooled by the ground each holds, as the map washes it.
     const vitality = areaVitality(world.places().patches.map((p) => ({ area: p.area, vitality: p.vitality, size: p.radius * p.radius })));

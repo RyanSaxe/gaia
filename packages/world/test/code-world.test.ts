@@ -187,10 +187,11 @@ describe("a world laid out from code", () => {
     expect(share(world)).toBeGreaterThan(share(layoutWorld(model(), judged)));
     // The land is known before Jev answers, with the graph too.
     expect(landOf(model(), graph).cells).toEqual(world.cells);
-    // The journal has one page for every directory below the root, every file and every definition, each after the one it sits under.
+    // The journal has one entry for every directory below the root, every thing standing, every file and every definition, each after the one it sits under.
     const journal = journalOf(world);
-    expect(new Set(journal.entries.map((e) => e.of)).size).toBe(world.areas.length - 1 + world.patches.length + world.symbols.length);
-    expect(journal.entries.length).toBe(world.areas.length - 1 + world.patches.length + world.symbols.length);
+    const count = world.areas.length - 1 + world.things.length + world.patches.length + world.symbols.length;
+    expect(new Set(journal.entries.map((e) => e.of)).size).toBe(count);
+    expect(journal.entries.length).toBe(count);
     for (const e of journal.entries) if (e.under !== undefined) expect(journal.entry(e.under)?.page).toBeLessThan(e.page);
   });
 

@@ -7,6 +7,17 @@
 
 import type { CodeSymbol, Journal, JournalEntry } from "@gaia/world";
 
+/**
+ * What Jev points out, marked the same way at every level: a definition's
+ * lines, a file's definitions, a folder's files and folders, an entity's
+ * trails. Key to understanding, or could be better; stronger the surer Jev is.
+ */
+export interface Mark {
+  readonly kind: "understand" | "improve";
+  /** How sure Jev is, 0 to 1. */
+  readonly sure: number;
+}
+
 /** One line of a list, indented by how deep it sits under the page's own subject. */
 export interface Row {
   readonly of: string;
@@ -14,6 +25,7 @@ export interface Row {
   readonly depth: number;
   readonly vitality: number;
   readonly page: number;
+  readonly mark?: Mark;
 }
 
 export interface Rows {
@@ -28,6 +40,8 @@ export interface Code {
   readonly lines: readonly string[];
   /** The line the page opens on. */
   readonly opensAt: number;
+  /** The lines Jev points out, by line number. */
+  readonly marks: readonly (Mark & { readonly from: number; readonly to: number })[];
 }
 
 export interface PageWords {
@@ -44,10 +58,14 @@ export interface PageWords {
 export interface WordsSource {
   readonly journal: Journal;
   readonly world: { readonly name: string; readonly symbols: readonly Pick<CodeSymbol, "id" | "line" | "lines">[] };
-  /** A folder's vitality, its subfolders' included, or a file's, by path. */
-  vitality(path: string): number;
+  /** A folder's vitality, its subfolders' included, a file's by its path, or an entity's by `entity:<path>`. */
+  vitality(of: string): number;
   /** A file's lines, or undefined until they arrive. */
   lines(path: string): readonly string[] | undefined;
+  /** What Jev points out about a folder, entity, file or definition, if anything. */
+  marked?(of: string): Mark | undefined;
+  /** The lines Jev points out in a definition. */
+  markedLines?(id: string): readonly (Mark & { readonly from: number; readonly to: number })[];
 }
 
 const folders = (path: string): string[] => path.split("/").slice(0, -1);
@@ -67,11 +85,17 @@ export function contentsWords(src: WordsSource): PageWords {
 const vitalityPath = (e: JournalEntry): string => (e.kind === "definition" ? e.of.slice(0, e.of.indexOf("#")) : e.of);
 
 function rowOf(src: WordsSource, e: JournalEntry, depth: number): Row {
-  return { of: e.of, name: e.name, depth, vitality: src.vitality(vitalityPath(e)), page: e.page };
+  const mark = src.marked?.(e.of);
+  return { of: e.of, name: e.name, depth, vitality: src.vitality(vitalityPath(e)), page: e.page, ...(mark === undefined ? {} : { mark }) };
 }
 
 /** The words of one entry's page. */
 export function wordsOf(src: WordsSource, e: JournalEntry): PageWords {
+  if (e.kind === "entity") {
+    // An entity lists the things its trails join it to.
+    const path = e.of.slice("entity:".length);
+    return { path: path === "" ? [] : path.split("/"), name: e.name, vitality: src.vitality(e.of), body: { kind: "rows", rows: e.lists.map((of) => rowOf(src, src.journal.entry(of) as JournalEntry, 0)) } };
+  }
   if (e.kind === "chapter") return { path: folders(e.of), name: e.name, vitality: src.vitality(e.of), body: { kind: "rows", rows: e.lists.map((of) => rowOf(src, src.journal.entry(of) as JournalEntry, 0)) } };
   if (e.kind === "file") {
     // A file lists every definition in it, the ones inside another under it.
@@ -95,6 +119,6 @@ export function wordsOf(src: WordsSource, e: JournalEntry): PageWords {
     name: e.name,
     vitality: src.vitality(file),
     ...(signature === undefined ? {} : { signature }),
-    body: { kind: "code", first: line + 1, lines: text?.slice(line, line + count - 1) ?? [], opensAt: line + 1 },
+    body: { kind: "code", first: line + 1, lines: text?.slice(line, line + count - 1) ?? [], opensAt: line + 1, marks: src.markedLines?.(e.of) ?? [] },
   };
 }

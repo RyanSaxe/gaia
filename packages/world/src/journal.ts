@@ -2,25 +2,30 @@
 // the world, in the order a file explorer lists the code. Each directory is a
 // chapter, its subdirectories chapters inside it, then its files; each file's
 // definitions follow it in the order they are written, and the definitions
-// inside one follow it. Every entry is one spread: the right-hand page names
-// it and lists what it holds, and the left-hand page pictures it. The book
-// says only what each page is about, what it lists and its number; the
+// inside one follow it. A directory that is also an entity, standing in the
+// world as a building or a landmark, has the entity's spread first in its
+// chapter, and the repository's own comes first of all. Every entry opens on
+// a spread: the left-hand page pictures it, and the right-hand page names it
+// and lists what it holds, a long list running on over the pages after. The
+// book says only what each page is about, what it lists and its pages; the
 // journal draws the rest from the world.
 
-import type { CodeArea, CodePatch, CodeSymbol } from "./code-world.ts";
+import type { CodeArea, CodePatch, CodeSymbol, CodeThing, CodeTrail } from "./code-world.ts";
 
 export interface JournalEntry {
-  /** A chapter is a directory, a file is a file, and a definition is one of its definitions. */
-  readonly kind: "chapter" | "file" | "definition";
-  /** What it is about: a directory's or a file's path, or a definition's id (`<file>#<name>`). */
+  /** A chapter is a directory, an entity is the thing a directory stands as, a file is a file, a definition one of its definitions. */
+  readonly kind: "chapter" | "entity" | "file" | "definition";
+  /** What it is about: a directory's or a file's path, a definition's id (`<file>#<name>`), or `entity:<path>`. */
   readonly of: string;
   readonly name: string;
-  /** The entry it sits under; a top-level chapter and a file at the root sit under none. */
+  /** The entry it sits under; a top-level chapter, a file at the root and the repository's entity sit under none. */
   readonly under?: string;
-  /** What its page lists, each an entry of its own, in the book's order. */
+  /** What its page lists, each an entry of its own: what it holds, or for an entity the entities its trails join it to. */
   readonly lists: readonly string[];
-  /** The number of the right-hand page, which names it; the left-hand page, one before, pictures it. */
+  /** Its first right-hand page, which names it; the left-hand page before it pictures it. */
   readonly page: number;
+  /** How many pages its words take from `page` on: a list too long for one runs on overleaf. */
+  readonly pages: number;
 }
 
 export interface Journal {
@@ -30,9 +35,28 @@ export interface Journal {
   readonly contents: readonly string[];
   /** Every entry, in reading order. */
   readonly entries: readonly JournalEntry[];
-  /** The entry about a directory, a file or a definition, by its path or id. */
+  /** The entry about a directory, an entity, a file or a definition, by its `of`. */
   entry(of: string): JournalEntry | undefined;
 }
+
+/** How many of a list's rows a page holds: the first page, under its heading, and each page the list runs on to. */
+export interface PageRoom {
+  readonly first: number;
+  readonly next: number;
+}
+
+/** The parts of a world the journal reads: its places and things, what holds each, and the trails between things. */
+export interface JournalSource {
+  readonly name: string;
+  readonly areas: readonly Pick<CodeArea, "path" | "name" | "parent">[];
+  readonly patches: readonly Pick<CodePatch, "path" | "name" | "area">[];
+  readonly symbols: readonly Pick<CodeSymbol, "id" | "file" | "parent" | "name" | "line">[];
+  readonly things?: readonly Pick<CodeThing, "path" | "name">[];
+  readonly trails?: readonly Pick<CodeTrail, "from" | "to">[];
+}
+
+/** The entry about the entity a directory stands as. */
+export const entityOf = (path: string): string => `entity:${path}`;
 
 interface Item {
   readonly kind: JournalEntry["kind"];
@@ -49,15 +73,7 @@ const push = <K, V>(m: Map<K, V[]>, k: K, v: V): void => {
   else list.push(v);
 };
 
-/** The parts of a world the journal reads: its places and things, and what holds each. */
-export interface JournalSource {
-  readonly name: string;
-  readonly areas: readonly Pick<CodeArea, "path" | "name" | "parent">[];
-  readonly patches: readonly Pick<CodePatch, "path" | "name" | "area">[];
-  readonly symbols: readonly Pick<CodeSymbol, "id" | "file" | "parent" | "name" | "line">[];
-}
-
-export function journalOf(world: JournalSource): Journal {
+export function journalOf(world: JournalSource, room: PageRoom = { first: Infinity, next: Infinity }): Journal {
   // What each page lists, by what it is about: "" is the root, whose list is the contents.
   const chapters = new Map<string, Item[]>();
   const files = new Map<string, Item[]>();
@@ -65,21 +81,63 @@ export function journalOf(world: JournalSource): Journal {
   for (const a of world.areas) if (a.parent !== null) push(chapters, a.parent, { kind: "chapter", of: a.path, name: a.name });
   for (const p of world.patches) push(files, p.area, { kind: "file", of: p.path, name: p.name });
   for (const s of world.symbols) push(definitions, s.parent ?? s.file, { item: { kind: "definition", of: s.id, name: s.name }, line: s.line });
-  const listOf = (kind: JournalEntry["kind"] | "root", of: string): Item[] =>
-    kind === "chapter" || kind === "root"
-      ? [...(chapters.get(of) ?? []).sort(byName), ...(files.get(of) ?? []).sort(byName)]
-      : (definitions.get(of) ?? []).sort((a, b) => a.line - b.line || byName(a.item, b.item)).map((d) => d.item);
+  const things = new Map((world.things ?? []).map((t) => [t.path, t]));
+  const joined = new Map<string, Set<string>>();
+  for (const t of world.trails ?? []) {
+    if (!things.has(t.from) || !things.has(t.to) || t.from === t.to) continue;
+    if (!joined.has(t.from)) joined.set(t.from, new Set());
+    if (!joined.has(t.to)) joined.set(t.to, new Set());
+    joined.get(t.from)?.add(t.to);
+    joined.get(t.to)?.add(t.from);
+  }
+  const entityItem = (path: string): Item => ({ kind: "entity", of: entityOf(path), name: things.get(path)?.name ?? path });
+  const listOf = (item: Item | { kind: "root"; of: string }): Item[] => {
+    if (item.kind === "chapter" || item.kind === "root") return [...(chapters.get(item.of) ?? []).sort(byName), ...(files.get(item.of) ?? []).sort(byName)];
+    if (item.kind === "entity") return [...(joined.get(item.of.slice("entity:".length)) ?? [])].map(entityItem).sort(byName);
+    return (definitions.get(item.of) ?? []).sort((a, b) => a.line - b.line || byName(a.item, b.item)).map((d) => d.item);
+  };
+  /** How many rows a page about `item` lists: a file lists every definition in it, nested ones included. */
+  const rowsOf = (item: Item, lists: readonly Item[]): number => {
+    if (item.kind === "definition") return 0;
+    if (item.kind !== "file") return lists.length;
+    let n = 0;
+    const walk = (of: string): void => {
+      for (const d of definitions.get(of) ?? []) {
+        n++;
+        walk(d.item.of);
+      }
+    };
+    walk(item.of);
+    return n;
+  };
+  const pagesFor = (rows: number): number => (rows <= room.first ? 1 : 1 + Math.ceil((rows - room.first) / room.next));
 
   const entries: JournalEntry[] = [];
   const index = new Map<string, JournalEntry>();
-  const visit = (item: Item, under: string | undefined): void => {
-    const lists = listOf(item.kind, item.of);
-    const entry: JournalEntry = { ...item, ...(under === undefined ? {} : { under }), lists: lists.map((l) => l.of), page: 2 * entries.length + 1 };
+  /** The next left-hand page, where an entry's picture goes. */
+  let picture = 0;
+  const add = (item: Item, under: string | undefined, lists: readonly Item[]): void => {
+    const pages = pagesFor(rowsOf(item, lists));
+    const entry: JournalEntry = { ...item, ...(under === undefined ? {} : { under }), lists: lists.map((l) => l.of), page: picture + 1, pages };
     entries.push(entry);
     index.set(entry.of, entry);
-    for (const l of lists) visit(l, item.of);
+    // The next picture is a left-hand page: an entry whose words end on a right-hand page leaves the page after it blank.
+    picture += pages % 2 === 1 ? pages + 1 : pages + 2;
   };
-  const contents = listOf("root", "");
+  const visit = (item: Item, under: string | undefined): void => {
+    const lists = listOf(item);
+    add(item, under, lists);
+    if (item.kind === "chapter" && things.has(item.of)) {
+      const entity = entityItem(item.of);
+      add(entity, item.of, listOf(entity));
+    }
+    if (item.kind !== "entity") for (const l of lists) visit(l, item.of);
+  };
+  if (things.has("")) {
+    const root = entityItem("");
+    add(root, undefined, listOf(root));
+  }
+  const contents = listOf({ kind: "root", of: "" });
   for (const item of contents) visit(item, undefined);
   return { name: world.name, contents: contents.map((c) => c.of), entries, entry: (of) => index.get(of) };
 }
