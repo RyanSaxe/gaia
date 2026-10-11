@@ -112,17 +112,23 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
     const body = page.querySelector<HTMLElement>(".jp-body");
     if (body === null) return;
     const bottom = body.clientHeight;
-    const lines = [...body.querySelectorAll<HTMLElement>(".jp-line, .jp-row")];
-    for (const line of lines) line.classList.toggle("jp-past", line.offsetTop + line.offsetHeight > bottom);
-    // A definition too long for its page folds where the page ends: the last line that fits makes room for the fold.
-    const fold = body.querySelector<HTMLElement>(".jp-fold");
-    const past = lines.filter((l) => l.classList.contains("jp-past")).length;
-    if (fold !== null && past > 0) {
-      const last = lines.filter((l) => !l.classList.contains("jp-past")).at(-1);
+    /** How far down the page's body a row sits, through the code and notes that hold it. */
+    const down = (e: HTMLElement): number => {
+      let y = 0;
+      for (let n: HTMLElement | null = e; n !== null && n !== body; n = n.offsetParent as HTMLElement | null) y += n.offsetTop;
+      return y;
+    };
+    const rows = [...body.querySelectorAll<HTMLElement>(".jp-line, .jp-row, .jp-said-row")];
+    for (const row of rows) row.classList.toggle("jp-past", down(row) + row.offsetHeight > bottom);
+    // A definition too long for its page folds where the page ends: the last row that fits makes room for the fold.
+    const fold = body.querySelector<HTMLElement>(".jp-fold.after");
+    if (fold !== null && rows.some((r) => r.classList.contains("jp-past"))) {
+      const last = rows.filter((r) => !r.classList.contains("jp-past")).at(-1);
       if (last !== undefined) {
         last.classList.add("jp-past");
-        fold.style.top = `${last.offsetTop}px`;
-        fold.textContent = `${(past + 1).toLocaleString("en-US")} more lines`;
+        const more = rows.filter((r) => r.classList.contains("jp-past") && r.classList.contains("jp-line")).length;
+        fold.style.top = `${down(last)}px`;
+        fold.textContent = `${more.toLocaleString("en-US")} more ${more === 1 ? "line" : "lines"}`;
         fold.classList.add("shown");
       }
     }

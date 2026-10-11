@@ -130,7 +130,9 @@ button.jp-name { border: 0; background: none; padding: 0; text-align: left; curs
   display: none; position: absolute; left: 0; right: 12px; border: 0; background: none; padding: 0; cursor: pointer;
   font: 13px/1.6 "Bradley Hand", Georgia, cursive; color: #7a5f45; align-items: center; gap: 10px;
 }
-.jp-fold.shown { display: flex; }
+.jp-fold.shown, .jp-fold.before { display: flex; }
+.jp-fold.before { position: static; margin-bottom: 2px; }
+.jp-fold.after { left: 20px; }
 .jp-fold::before, .jp-fold::after { content: ""; flex: 1; border-bottom: 1.4px dotted rgba(122, 95, 69, 0.5); }
 .jp-fold::before { flex: none; width: 3.5em; }
 
