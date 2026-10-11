@@ -40,10 +40,9 @@ import type { WaitView } from "./wait.ts";
  * How the map paints itself, ms, as wait.css times it: the pen over one border and the most it staggers over all of
  * them; a wash coming in; a name being lettered, and the least time between two; a mark coming in, the time between
  * two marks, at least and at most, and the most all the marks take; the relief's wash staggered over the areas, and
- * one area's coming in; the pen over the rivers and the trails, when it starts on each after the relief begins, how
+ * one area's coming in; the pen over the rivers and the trails, when it starts on each once the world stands, how
  * far it goes a millisecond in the sheet's pixels, the least and the most one line takes, and the time between two
- * lines; the field map's own drawing of it all laid over at the end; and the moment after the last thing arrived
- * before the paper folds away, and the fold.
+ * lines; and the moment after the last thing arrived before the paper folds away, and the fold.
  */
 const PACE = {
   penMs: 1300,
@@ -54,10 +53,9 @@ const PACE = {
   markMs: 700,
   markGapMs: [200, 600],
   marksMs: 5000,
-  relief: { spreadMs: 1200, ms: 1000 },
+  relief: { spreadMs: 1000, ms: 800 },
   rivers: { startMs: 250, pxPerMs: 0.5, ms: [600, 2000], gapMs: 120 },
   trails: { startMs: 700, pxPerMs: 0.7, ms: [400, 1400], gapMs: 60 },
-  wholeMs: 500,
   restMs: 300,
   foldMs: 1100,
 } as const;
@@ -582,9 +580,14 @@ export function createMapWait(veil: HTMLElement): WaitView {
       return;
     }
     reliefShown = (async () => {
+      const zoom = side / (l.reach * 2);
+      // The pen sets out over the rivers and the trails at once, while the relief is painted out of sight.
+      const pens = penLines(l, stood, zoom);
+      const pensDone = wait(pens.ms);
+      layers.append(pens.svg);
+      show(pens.svg);
       // Over the washes as they finally lie, so the relief comes in over exactly what is there.
       await allWashed();
-      const zoom = side / (l.reach * 2);
       const sx = (x: number): number => (x + l.reach) * zoom;
       const sheetOf = (from: CanvasImageSource): CanvasRenderingContext2D => {
         const canvas = document.createElement("canvas");
@@ -593,7 +596,19 @@ export function createMapWait(veil: HTMLElement): WaitView {
         c.drawImage(from, 0, 0);
         return c;
       };
-      const drawn = await new Promise<{ readonly whole: HTMLCanvasElement; readonly washes: readonly HTMLCanvasElement[] }>((resolve) =>
+      // The relief washes in over each area's own ground, from the middle outward, under the pen's lines: each area as
+      // soon as it is cut, at its time from the first.
+      const washes: HTMLCanvasElement[] = [];
+      let first = 0;
+      const lay = (layer: HTMLCanvasElement, share: number): void => {
+        if (washes.length === 0) first = performance.now();
+        washes.push(layer);
+        layer.style.transitionDuration = `${PACE.relief.ms}ms`;
+        layer.style.transitionDelay = `${Math.max(0, Math.round(first + share * PACE.relief.spreadMs - performance.now()))}ms`;
+        layers.insertBefore(layer, pens.svg);
+        show(layer);
+      };
+      const whole = await new Promise<HTMLCanvasElement>((resolve) =>
         work(
           (function* (): Generator<void> {
             // What washes in over the areas: the hills and the ponds, the contours over them and the trees. And the
@@ -613,42 +628,25 @@ export function createMapWait(veil: HTMLElement): WaitView {
             drawTrails(whole, stood.ways, sx, sx, zoom, 1, STYLE);
             for (const c of [lands, whole]) drawTrees(c, stood.trees, sx, sx, zoom, 1, STYLE, () => true);
             yield;
-            const washes = yield* reliefWashes(l, lands.canvas);
-            resolve({ whole: whole.canvas, washes });
+            yield* reliefWashes(l, lands.canvas, lay);
+            resolve(whole.canvas);
           })(),
         ),
       );
-      // The relief washes in over each area's own ground, from the middle outward; the pen draws the rivers and then
-      // the trails as it does.
-      drawn.washes.forEach((layer, q) => {
-        layer.style.transitionDuration = `${PACE.relief.ms}ms`;
-        layer.style.transitionDelay = `${Math.round((q / Math.max(1, drawn.washes.length - 1)) * PACE.relief.spreadMs)}ms`;
-        layers.append(layer);
-        show(layer);
-      });
-      const pens = penLines(l, stood, zoom);
-      layers.append(pens.svg);
-      show(pens.svg);
-      await wait(Math.max(PACE.relief.spreadMs + PACE.relief.ms, pens.ms));
-      // Then the field map's own drawing of all of it is laid over, the same but for where a line crosses a tree, and
-      // the sheet keeps it.
-      const whole = drawn.whole;
-      whole.className = "wait-relief";
-      whole.style.transitionDuration = `${PACE.wholeMs}ms`;
-      layers.append(whole);
-      show(whole);
-      await wait(PACE.wholeMs + 100);
+      await Promise.all([wait(first + PACE.relief.spreadMs + PACE.relief.ms - performance.now()), pensDone]);
+      // Then the sheet keeps the field map's own drawing of all of it, in the frame the washes and the pen's lines go:
+      // the same but for where a line crosses a tree.
       groundCtx.drawImage(whole, 0, 0);
-      for (const layer of [...drawn.washes, pens.svg, whole]) layer.remove();
+      for (const layer of [...washes, pens.svg]) layer.remove();
     })();
   }
 
   /**
    * The relief over each area's own ground, as the cells divide the sheet, feathered a little past it so neighbors
-   * coming in overlap softly: each a layer waiting to be shown, nearest the middle first. Every pixel is wholly
-   * inside one area's layer, so once all are in the sheet is the relief exactly.
+   * coming in overlap softly: each a layer handed to `lay` as it is cut, nearest the middle first, with its share of
+   * the way out. Every pixel is wholly inside one area's layer, so once all are in the sheet is the relief exactly.
    */
-  function* reliefWashes(l: Land, from: HTMLCanvasElement): Generator<void, HTMLCanvasElement[]> {
+  function* reliefWashes(l: Land, from: HTMLCanvasElement, lay: (layer: HTMLCanvasElement, share: number) => void): Generator<void> {
     const { n, nearest } = l;
     const cellPx = (CELL * l.device) / (l.reach * 2);
     const boxes = new Map<number, { i0: number; j0: number; i1: number; j1: number; x: number; z: number; m: number }>();
@@ -663,8 +661,7 @@ export function createMapWait(veil: HTMLElement): WaitView {
     yield;
     const pad = Math.ceil(FEATHER.reach + FEATHER.soft * 3);
     const order = [...boxes].sort(([, a], [, b]) => Math.hypot(a.x / a.m - n / 2, a.z / a.m - n / 2) - Math.hypot(b.x / b.m - n / 2, b.z / b.m - n / 2));
-    const out: HTMLCanvasElement[] = [];
-    for (const [a, b] of order) {
+    for (const [q, [a, b]] of order.entries()) {
       const [i0, j0, i1, j1] = [Math.max(0, b.i0 - pad), Math.max(0, b.j0 - pad), Math.min(n - 1, b.i1 + pad), Math.min(n - 1, b.j1 + pad)];
       const [cols, rows] = [i1 - i0 + 1, j1 - j0 + 1];
       // Its own cells, and the same reached a little farther, a pixel a cell.
@@ -678,11 +675,17 @@ export function createMapWait(veil: HTMLElement): WaitView {
           for (let dj = -r; dj <= r; dj++) for (let di = -r; di <= r; di++) if (di * di + dj * dj <= r * r && i + di >= i0 && i + di <= i1 && j + dj >= j0 && j + dj <= j1) reached.data[((j + dj - j0) * cols + (i + di - i0)) * 4 + 3] = 255;
         }
       }
-      const cells = document.createElement("canvas");
-      cells.width = cols;
-      cells.height = rows;
-      const cc = cells.getContext("2d") as CanvasRenderingContext2D;
-      // In whole pixels of the sheet, so the layer lies on it exactly.
+      // The reach softened into a feather a pixel a cell, where a blur is cheap, and its own ground whole.
+      const [cells, soft] = [document.createElement("canvas"), document.createElement("canvas")];
+      cells.width = soft.width = cols;
+      cells.height = soft.height = rows;
+      (cells.getContext("2d") as CanvasRenderingContext2D).putImageData(reached, 0, 0);
+      const sc = soft.getContext("2d") as CanvasRenderingContext2D;
+      sc.filter = `blur(${FEATHER.soft}px)`;
+      sc.drawImage(cells, 0, 0);
+      (cells.getContext("2d") as CanvasRenderingContext2D).putImageData(own, 0, 0);
+      // In whole pixels of the sheet, so the layer lies on it exactly: the feather drawn smooth, its own ground
+      // whole over it, then the relief cut to the two.
       const [x0, y0] = [Math.floor(i0 * cellPx), Math.floor(j0 * cellPx)];
       const [x1, y1] = [Math.min(l.device, Math.ceil((i1 + 1) * cellPx)), Math.min(l.device, Math.ceil((j1 + 1) * cellPx))];
       const layer = document.createElement("canvas");
@@ -690,13 +693,7 @@ export function createMapWait(veil: HTMLElement): WaitView {
       layer.height = y1 - y0;
       const c = layer.getContext("2d") as CanvasRenderingContext2D;
       const [ox, oy, w, h] = [i0 * cellPx - x0, j0 * cellPx - y0, cols * cellPx, rows * cellPx];
-      // The reach softened into a feather, then its own ground whole over it, then the relief cut to the two.
-      cc.putImageData(reached, 0, 0);
-      c.filter = `blur(${(FEATHER.soft * cellPx).toFixed(2)}px)`;
-      c.drawImage(cells, ox, oy, w, h);
-      c.filter = "none";
-      cc.clearRect(0, 0, cols, rows);
-      cc.putImageData(own, 0, 0);
+      c.drawImage(soft, ox, oy, w, h);
       c.imageSmoothingEnabled = false;
       c.drawImage(cells, ox, oy, w, h);
       c.globalCompositeOperation = "source-in";
@@ -706,10 +703,9 @@ export function createMapWait(veil: HTMLElement): WaitView {
       layer.style.top = `${(y0 / l.device) * 100}%`;
       layer.style.width = `${(layer.width / l.device) * 100}%`;
       layer.style.height = `${(layer.height / l.device) * 100}%`;
-      out.push(layer);
+      lay(layer, q / Math.max(1, order.length - 1));
       yield;
     }
-    return out;
   }
 
   /**
