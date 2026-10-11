@@ -112,7 +112,7 @@ export async function openWorld({ engine, root, consent, progress }: OpenWorldOp
   if (understanding.graph === undefined) throw new Error("understand.plan gave no graph.");
   let graph = standingGraph(understanding.graph);
   const land = landOf(model, graph);
-  progress({ stage: "land", name, size: land.size, areas: outlinesOf(land).areas, patches: land.patches.map(({ path, name, area, x, z, radius }) => ({ path, name, area, x, z, radius })), lots: land.lots });
+  progress({ stage: "land", name, size: land.size, ...(land.aspect === undefined ? {} : { aspect: land.aspect }), areas: outlinesOf(land).areas, patches: land.patches.map(({ path, name, area, x, z, radius }) => ({ path, name, area, x, z, radius })), lots: land.lots });
 
   // Each file's health goes to the renderer once nothing still to be judged can change it. Its vitality reads one
   // judgment, whether the file holds behavior that needs tests of its own (`NEEDS_TESTS`), and only when its request
