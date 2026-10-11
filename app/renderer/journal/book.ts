@@ -112,7 +112,20 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
     const body = page.querySelector<HTMLElement>(".jp-body");
     if (body === null) return;
     const bottom = body.clientHeight;
-    for (const line of body.querySelectorAll<HTMLElement>(".jp-line, .jp-row")) line.classList.toggle("jp-past", line.offsetTop + line.offsetHeight > bottom);
+    const lines = [...body.querySelectorAll<HTMLElement>(".jp-line, .jp-row")];
+    for (const line of lines) line.classList.toggle("jp-past", line.offsetTop + line.offsetHeight > bottom);
+    // A definition too long for its page folds where the page ends: the last line that fits makes room for the fold.
+    const fold = body.querySelector<HTMLElement>(".jp-fold");
+    const past = lines.filter((l) => l.classList.contains("jp-past")).length;
+    if (fold !== null && past > 0) {
+      const last = lines.filter((l) => !l.classList.contains("jp-past")).at(-1);
+      if (last !== undefined) {
+        last.classList.add("jp-past");
+        fold.style.top = `${last.offsetTop}px`;
+        fold.textContent = `${(past + 1).toLocaleString("en-US")} more lines`;
+        fold.classList.add("shown");
+      }
+    }
     paintMarks(body);
   }
   /** One brush stroke down the gutter for each run of lines a mark covers, and one beside each marked row. */
