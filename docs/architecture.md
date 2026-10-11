@@ -875,6 +875,12 @@ heart (`CUT.core`) also leaves near the eye, shrinking to its center by its
 own size (`CORE_NEAR` in `packages/render/src/plant.ts`), in the view only:
 its shadow stays, so the shade under a fir never changes as a person walks.
 
+The grass draws all its 150,000 blades in one call (`createGrass` in
+`app/renderer/terrain/cover.ts`). A blade past its own thinning band, where
+it has narrowed to nothing, or lying wholly outside the drawing camera's view
+skips the rest of its vertex shader and draws nothing, as it drew before, so
+most blades cost a few instructions.
+
 `createPlantInstances` in `@gaia/render` draws many copies of one plant, one
 instanced mesh per part and level, and `draw` packs the copies it is given
 into each level's instance buffer. Which copies draw, and at which level, is

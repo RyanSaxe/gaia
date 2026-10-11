@@ -13,11 +13,23 @@ import { TRAIL_GLSL, trailUniforms } from "./trails.ts";
 import { VITALITY_GLSL, vitalityUniforms } from "./vitality.ts";
 import { GROUND_DECLINE } from "@gaia/terrain";
 
+/**
+ * The farthest any point of a blade reaches from its foot, meters: the
+ * tallest blade is 1.3 times its cover's height, a fourth taller again with
+ * a flower, and the tallest cover (silver grass) is 0.85 m, so 1.4 m; a
+ * blade's spine keeps its length however it bends.
+ */
+const BLADE_REACH = 2;
+/** Three's frustum planes are right, left, bottom, top, far and near; the far plane culls nothing a blade's reach does not. */
+const CULLING_PLANES = [0, 1, 2, 3, 5] as const;
+
 const GRASS_VERT = /* glsl */ `
 ${CLEARINGS_GLSL}
 uniform float uTime;
 uniform float uWind;
 uniform vec3 uCenter;
+// The drawing camera's frustum, but its far plane: each plane's inward normal and offset.
+uniform vec4 uFrustum[5];
 ${GROUND_SAMPLE_GLSL}
 ${WILD_GLSL}
 ${TRAIL_GLSL}
@@ -69,12 +81,28 @@ void main() {
   // travels with them while every blade keeps a fixed spot on the ground.
   float reach = aThin.y;
   vec2 xz = uCenter.xz + mod(aBlade.xy * reach * 2.0 - uCenter.xz + reach, reach * 2.0) - reach;
+  // Most blades draw nothing: past their thinning band (below) they have
+  // narrowed to nothing, and most of the rest lie outside the view. Such a
+  // blade skips the work below and collapses outside the view, so it costs
+  // a few instructions and draws exactly the nothing it drew before.
+  float from = reach * mix(0.5, 0.8, aThin.x);
+  float far = length(xz - uCenter.xz);
+  if (far >= from + reach * 0.2) {
+    gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+    return;
+  }
   // Past the land the blade stands on the wild land: no water, no trails. The
   // wild land is gentle and each sample of it costs noise, so its slope is
   // read forward, from two samples rather than four.
   bool wild = inWild(xz);
   vec4 g4 = wild ? vec4(wildHeight(xz), -1000.0, 1000.0, 1000.0) : groundSample4(xz);
   vec3 g = g4.xyz;
+  for (int i = 0; i < 5; i++) {
+    if (dot(uFrustum[i].xyz, vec3(xz.x, g.x, xz.y)) + uFrustum[i].w < -${BLADE_REACH.toFixed(1)}) {
+      gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+      return;
+    }
+  }
   float e = 0.6;
   float sx = wild ? (wildHeight(xz + vec2(e, 0.0)) - g.x) * 2.0 : groundAt(xz + vec2(e, 0.0)).x - groundAt(xz - vec2(e, 0.0)).x;
   float sz = wild ? (wildHeight(xz + vec2(0.0, e)) - g.x) * 2.0 : groundAt(xz + vec2(0.0, e)).x - groundAt(xz - vec2(0.0, e)).x;
@@ -90,8 +118,7 @@ void main() {
   // the ground, so walking never changes which of them stand.
   float r2 = fract(aSeed.x * 7.13 + aSeed.z * 3.71);
   float r3 = fract(aSeed.y * 5.31 + aThin.x * 9.17);
-  float from = reach * mix(0.5, 0.8, aThin.x);
-  float near = 1.0 - smoothstep(from, from + reach * 0.2, length(xz - uCenter.xz));
+  float near = 1.0 - smoothstep(from, from + reach * 0.2, far);
   float banks = step(mix(1.3, 3.0, r2), g.z);
   float steep = step(r3, 1.0 - smoothstep(0.35, 0.7, grade) * 0.8);
 
@@ -313,6 +340,7 @@ export function createGrass(light: SceneLight, ground: GroundTexture, covers: Re
   geometry.setAttribute("aThin", new THREE.InstancedBufferAttribute(thin, 2));
   geometry.instanceCount = count;
   const center = { value: new THREE.Vector3() };
+  const frustumPlanes = { value: Array.from({ length: 5 }, () => new THREE.Vector4()) };
   const clearings = createClearings();
   const material = new THREE.ShaderMaterial({
     vertexShader: GRASS_VERT,
@@ -323,6 +351,7 @@ export function createGrass(light: SceneLight, ground: GroundTexture, covers: Re
       ...ground.uniforms,
       ...covers.uniforms,
       uCenter: center,
+      uFrustum: frustumPlanes,
       ...trailUniforms,
       ...under.uniforms,
       ...vitalityUniforms,
@@ -332,5 +361,16 @@ export function createGrass(light: SceneLight, ground: GroundTexture, covers: Re
   });
   const mesh = new THREE.Mesh(geometry, material);
   mesh.frustumCulled = false;
+  // Each camera that draws the grass (the view, a painting's) culls its blades by its own frustum.
+  const frustum = new THREE.Frustum();
+  const viewProjection = new THREE.Matrix4();
+  mesh.onBeforeRender = (_renderer, _scene, camera) => {
+    frustum.setFromProjectionMatrix(viewProjection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
+    for (let i = 0; i < CULLING_PLANES.length; i++) {
+      const plane = frustum.planes[CULLING_PLANES[i] as number] as THREE.Plane;
+      (frustumPlanes.value[i] as THREE.Vector4).set(plane.normal.x, plane.normal.y, plane.normal.z, plane.constant);
+    }
+    material.uniformsNeedUpdate = true;
+  };
   return { mesh, follow: (c) => center.value.copy(c), clear: (list) => clearings.set(list) };
 }
