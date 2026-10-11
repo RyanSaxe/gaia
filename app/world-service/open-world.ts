@@ -105,9 +105,12 @@ export async function openWorld({ engine, root, consent, progress }: OpenWorldOp
   const keys = planned.map((p) => requestKey(p.request));
 
   // The land, outlined as the finished map draws it, every file's patch and every entity's lot, before anything is judged.
-  // Every definition in the engine's graph, with whatever stand Jev's held answers already give it.
-  const graphNow = async (): Promise<CodeGraph> => standingGraph(await engine.call("project.graph", { root, judged: true }));
-  let graph = await graphNow();
+  // What understanding still has to ask, going only as far as the world needs to stand (Jev's links and every
+  // definition's stand), and the graph that plan was built on: every definition, with whatever stand Jev's held
+  // answers already give it.
+  const understanding = await engine.call("understand.plan", { root, through: "understand", graph: true });
+  if (understanding.graph === undefined) throw new Error("understand.plan gave no graph.");
+  let graph = standingGraph(understanding.graph);
   const land = landOf(model, graph);
   progress({ stage: "land", name, size: land.size, areas: outlinesOf(land).areas, patches: land.patches.map(({ path, name, area, x, z, radius }) => ({ path, name, area, x, z, radius })), lots: land.lots });
 
@@ -138,8 +141,6 @@ export async function openWorld({ engine, root, consent, progress }: OpenWorldOp
   const { records } = await engine.call("store.read", { project, table: "answers" });
   const stored = new Map(Object.entries(records as Record<string, JevResponse>));
   const missing = planned.filter((_, i) => !stored.has(keys[i] as string));
-  // Understanding goes only as far as the world needs to stand: Jev's links and every definition's stand.
-  const understanding = await engine.call("understand.plan", { root, through: "understand" });
   const toUnderstand = understanding.pending.reduce((n, p) => n + p.requests, 0);
   // What goes to Jev: understanding's share is planned before Jev's links are in, so it settles to what was sent.
   let total = missing.length + toUnderstand;
@@ -290,7 +291,7 @@ export async function openWorld({ engine, root, consent, progress }: OpenWorldOp
     }
     total = missing.length + understood;
     asking();
-    graph = await graphNow();
+    graph = standingGraph(await engine.call("project.graph", { root, judged: true }));
   }
 
   const byThing = Object.fromEntries(planned.flatMap((p, i) => thingsOf(p).map((t) => [judgedThing(t), judges.get(keys[i] as string) ?? "stand-in"] as const)));

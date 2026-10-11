@@ -496,11 +496,13 @@ four methods:
 `project.graph` with `judged: true` builds the graph with Jev's links and
 includes every answer the project's store holds
 ([decision 54](decisions/54-understanding-in-slices.md)). Opening a world
-uses them: once Jev has judged the looks, `openWorld` calls
-`understand.next` through `understand` until nothing is left, counting its
-requests on the wait with judging's, then lays the world out on
-`project.graph` with `judged: true`, trimmed by `standingGraph`, so every
-definition stands by Jev's stand. A plan counts understanding's requests
+uses them. `openWorld` divides the land on the graph `understand.plan`
+gives with `graph: true`, so planning and the land share one build. Once
+Jev has judged the looks, it calls `understand.next` through `understand`
+until nothing is left, counting its requests on the wait with judging's,
+then lays the world out on `project.graph` with `judged: true`, both
+graphs trimmed by `standingGraph`, so every definition stands by Jev's
+stand. A plan counts understanding's requests
 before Jev's links are in, built on the graph as it stands, so the cost the
 person sees includes them; they go out only once the links are.
 
