@@ -213,8 +213,9 @@ tags its look suits, with a tie-break seeded by the question. The document
 records who judged each thing (`judgedThing`, such as `file:src/main.ts`),
 and a thing's card says so. `engineJev` in the world service is the live
 client. Jev is asked only when the engine has a key and runs with
-`GAIA_JEV=live`. A run whose cost (`jev.estimate`) is within the person's
-spend limit goes ahead with no question; the limit is one number for every
+`GAIA_JEV=live`. A run's cost is judging's (`jev.estimate`) and
+understanding's (`understand.plan` through `understand`, below) together; a
+run within the person's spend limit goes ahead with no question; the limit is one number for every
 project, kept in the app's own settings (the store's `app` project,
 `settings` table, `jev-spend-limit`). Until the person sets one
 (`setSpendLimit`; no screen sets it yet), `DEFAULT_SPEND_LIMIT_USD` in
@@ -225,9 +226,11 @@ remembered in the project's `settings` table until the limit changes. The
 world stays under the wait while Jev answers, because a judgment that
 changed after the world stood would swap trees, buildings and land in view.
 The land's division depends on the code alone (an entity's lot is the same
-ground, 900 m², whether a building or a landmark stands on it), so
-`landOf(model)` in `@gaia/world` gives every area, patch, cell and lot before
-anything is judged, equal to the finished layout's: a lot (`LotPlace`) is
+ground, 900 m², whether a building or a landmark stands on it, and a file's
+plots follow its definitions' lines, never their stand), so
+`landOf(model, graph)` in `@gaia/world`, given the engine's graph trimmed by
+`standingGraph`, gives every area, patch, cell and lot before anything is
+judged, equal to the finished layout's: a lot (`LotPlace`) is
 the middle of the ground kept for an entity, which its building or landmark
 stands within `LAYOUT.lotReach` of, whichever Jev makes it. `openWorld`
 sends the renderer the areas' outlines, every file's patch and every lot
@@ -492,8 +495,14 @@ four methods:
 
 `project.graph` with `judged: true` builds the graph with Jev's links and
 includes every answer the project's store holds
-([decision 54](decisions/54-understanding-in-slices.md)). Nothing in the
-app calls these methods yet; the world moves onto them next.
+([decision 54](decisions/54-understanding-in-slices.md)). Opening a world
+uses them: once Jev has judged the looks, `openWorld` calls
+`understand.next` through `understand` until nothing is left, counting its
+requests on the wait with judging's, then lays the world out on
+`project.graph` with `judged: true`, trimmed by `standingGraph`, so every
+definition stands by Jev's stand. A plan counts understanding's requests
+before Jev's links are in, built on the graph as it stands, so the cost the
+person sees includes them; they go out only once the links are.
 
 The runner (`engine/src/jev/runner.rs`) makes one request per file or
 directory in each pass. A file's request holds its source, an outline of
