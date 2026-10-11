@@ -72,6 +72,9 @@ struct Planned {
     /// Bytes of source it read, which weigh a chunk's answers.
     weight: f64,
     questions: Vec<Asked>,
+    /// Built only so a plan can count it: what it waits on isn't answered
+    /// yet, so it is never sent or held.
+    waiting: bool,
 }
 
 #[derive(Clone)]
@@ -349,6 +352,7 @@ fn pack(
             request,
             weight,
             questions: batch.iter().map(|q| (*q).clone()).collect(),
+            waiting: false,
         });
         batch.clear();
     };
@@ -593,16 +597,20 @@ fn wanted(root: &Path, deep: &BTreeSet<String>) -> Result<Wanted, String> {
             .collect();
         let links_done = link.iter().all(|p| answered.contains(&p.hash));
         planned.extend(link);
-        if links_done {
-            // Understanding, and what waits on a file's understanding.
-            let mut understood: HashSet<&str> = HashSet::new();
-            for f in &files {
-                let reqs = file_requests(&ctx, root, &graph.name, f, &of("understand"));
-                if done(&reqs) {
-                    understood.insert(f.id.as_str());
-                }
-                planned.extend(reqs);
+        // Understanding waits for every link. Until then its requests are
+        // built on the graph as it stands, so a plan can say what they cost.
+        let mut understood: HashSet<&str> = HashSet::new();
+        for f in &files {
+            let mut reqs = file_requests(&ctx, root, &graph.name, f, &of("understand"));
+            if !links_done {
+                reqs.iter_mut().for_each(|p| p.waiting = true);
+            } else if done(&reqs) {
+                understood.insert(f.id.as_str());
             }
+            planned.extend(reqs);
+        }
+        if links_done {
+            // What waits on a file's understanding.
             for f in files.iter().filter(|f| understood.contains(f.id.as_str())) {
                 planned.extend(file_requests(&ctx, root, &graph.name, f, &of("tests")));
                 planned.extend(file_requests(&ctx, root, &graph.name, f, &of("deep")));
@@ -694,7 +702,7 @@ pub fn next(root: &Path, max: Option<usize>, last: Option<&str>) -> Result<Value
     let mut w = wanted(root, &deep)?;
     through(&mut w, last)?;
     let ready: Vec<usize> = (0..w.planned.len())
-        .filter(|&i| !w.answered.contains(&w.planned[i].hash))
+        .filter(|&i| !w.planned[i].waiting && !w.answered.contains(&w.planned[i].hash))
         .take(max.unwrap_or(DEFAULT_SLICE))
         .collect();
     let unsettled = unsettled(
@@ -787,7 +795,7 @@ pub fn next(root: &Path, max: Option<usize>, last: Option<&str>) -> Result<Value
         let mine: Vec<&Planned> = w
             .planned
             .iter()
-            .filter(|p| p.unit == unit && p.pass == pass)
+            .filter(|p| p.unit == unit && p.pass == pass && !p.waiting)
             .collect();
         if !mine.iter().all(|p| answered(&p.hash)) {
             continue;
@@ -878,7 +886,11 @@ fn unsettled<'a>(w: &'a Wanted, held: &Value, calls: &Value) -> BTreeSet<(&'a st
         })
         .collect();
     let mut out = BTreeSet::new();
-    for p in w.planned.iter().filter(|p| w.answered.contains(&p.hash)) {
+    for p in w
+        .planned
+        .iter()
+        .filter(|p| !p.waiting && w.answered.contains(&p.hash))
+    {
         let stale = p.questions.iter().any(|q| {
             if q.field == "link" {
                 let h = &held[format!("{LINK}|{}", q.about)];
