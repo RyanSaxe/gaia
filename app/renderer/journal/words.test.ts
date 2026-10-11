@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { journalOf, ownOf } from "@gaia/world";
 import { captionOf } from "./caption.ts";
-import { type Judgment, type WordsSource, contentsWords, wordsOf } from "./words.ts";
+import { type Judgment, type WordsSource, contentsWords, proseOf, wordsOf } from "./words.ts";
 
 const MATH = "core/math.ts";
 const world = {
@@ -67,6 +67,14 @@ describe("what a journal page says", () => {
     expect(file.body.kind === "rows" && file.body.rows.map((r) => r.mark)).toEqual([undefined, { kind: "understand", sure: 0.8 }, undefined]);
     const calc = wordsOf(src, src.journal.entry(`${MATH}#Calc`)!);
     expect(calc.body.kind === "code" && calc.body.marks).toEqual([{ kind: "improve", sure: 0.6, from: 3, to: 3 }]);
+  });
+
+  it("sets a document as its paragraphs: wrapped lines joined, each heading, item and fenced line its own", () => {
+    const doc = ["# Gaia", "", "Gaia turns a codebase into", "a [world](https://gaia.dev) to wander.", "", "", "- one item that", "  runs on", "- **two**", "```ts", "const x = 1;", "```", "Done."];
+    expect(proseOf(doc)).toEqual({
+      lines: ["# Gaia", "", "Gaia turns a codebase into a world to wander.", "", "• one item that runs on", "• two", "const x = 1;", "Done."],
+      pre: [false, false, false, false, false, false, true, false],
+    });
   });
 
   it("captions a thing with what Jev says of it, each answer by its name, leaving out what says nothing", () => {

@@ -118,9 +118,11 @@ function codeOf(at: readonly number[], body: Full, base: number, pieces: readonl
     // The surest mark over a line is the one its gutter shows.
     marked(row, body.marks.filter((m) => m.from <= n && n <= m.to).sort((a, b) => b.sure - a.sure)[0]);
     if (body.prose === true) {
-      // A document's heading is set as one, without the marks that make it.
-      const heading = /^(#{1,6})\s+(.*)$/.exec(line);
+      // A document's heading is set as one, without the marks that make it; a fenced block's lines as code.
+      const heading = body.pre?.[k] === true ? null : /^(#{1,6})\s+(.*)$/.exec(line);
       if (heading !== null) row.classList.add(`h${(heading[1] as string).length}`);
+      if (body.pre?.[k] === true) row.classList.add("pre");
+      else if (line === "") row.classList.add("gap");
       row.append(el("span", "jp-ln", String(n)), el("span", "jp-text", heading === null ? line : (heading[2] as string)));
     } else {
       const text = inkedLine(pieces[k], line);

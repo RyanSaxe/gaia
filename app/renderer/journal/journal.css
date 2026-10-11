@@ -242,6 +242,9 @@ button.jp-name { border: 0; background: none; padding: 0; text-align: left; curs
 .jp-code.prose .jp-text { padding-left: 0; text-indent: 0; white-space: pre-wrap; }
 .jp-code.prose .jp-line.h1, .jp-code.prose .jp-line.h2 { font: italic 600 16px/1.4 "Iowan Old Style", Georgia, serif; padding-top: 4px; }
 .jp-code.prose .jp-line.h3, .jp-code.prose .jp-line.h4, .jp-code.prose .jp-line.h5, .jp-code.prose .jp-line.h6 { font: italic 600 13.5px/1.45 "Iowan Old Style", Georgia, serif; }
+.jp-code.prose .jp-line.gap { height: 0.55em; }
+.jp-code.prose .jp-line.pre { font: 10.4px/1.5 "SF Mono", ui-monospace, Menlo, monospace; color: #4a3d2e; }
+.jp-code.prose .jp-line.pre .jp-text { padding-left: 1.2em; }
 
 /* The finder: a slip of the journal's paper laid over the world when "/" is pressed. What is typed is written in
    ink on a pencil rule; each thing found is a row as the journal's contents set them, the letters that matched

@@ -145,7 +145,8 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
         last.classList.add("jp-past");
         const more = rows.filter((r) => r.classList.contains("jp-past") && r.classList.contains("jp-line")).length;
         fold.style.top = `${down(last)}px`;
-        fold.textContent = `${more.toLocaleString("en-US")} more ${more === 1 ? "line" : "lines"}`;
+        // A document's lines are its paragraphs, so its fold just reads on.
+        fold.textContent = body.querySelector(".jp-code.prose") !== null ? "read on" : `${more.toLocaleString("en-US")} more ${more === 1 ? "line" : "lines"}`;
         fold.classList.add("shown");
       }
     }

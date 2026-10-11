@@ -75,8 +75,10 @@ interface Text {
   /** The lines Jev points out, by line number. */
   readonly marks: readonly (Mark & { readonly from: number; readonly to: number })[];
   readonly folded?: readonly Folded[];
-  /** Set as prose, not code: a document's text. */
+  /** Set as prose, not code: a document's text, its lines its paragraphs. */
   readonly prose?: boolean;
+  /** Which of a document's lines are set as code: a fenced block's. */
+  readonly pre?: readonly boolean[];
   /** How many lines of a file too long to set are left out after these. */
   readonly rest?: number;
 }
@@ -204,8 +206,8 @@ function rowOf(src: WordsSource, e: JournalEntry, depth: number): Row {
 
 /** The words of one entry's page. */
 export function wordsOf(src: WordsSource, e: JournalEntry): PageWords {
-  if (e.kind === "entity") {
-    // An entity lists the things its trails join it to.
+  if (e.kind === "entity" && e.text === undefined) {
+    // An entity with no README lists the things its trails join it to.
     const path = e.of.slice("entity:".length);
     return { path: path === "" ? [] : path.split("/"), name: e.name, vitality: src.vitality(e.of), body: { kind: "rows", rows: e.lists.map((of) => rowOf(src, src.journal.entry(of) as JournalEntry, 0)) } };
   }
@@ -222,8 +224,9 @@ export function wordsOf(src: WordsSource, e: JournalEntry): PageWords {
     for (const of of e.lists) walk(of, 0);
     return { path: folders(e.of), name: e.name, vitality: src.vitality(e.of), body: { kind: "rows", rows } };
   }
-  if (e.kind === "own" || e.kind === "file") {
-    // Its own text: a file with definitions its lines outside them, each definition folded to the line it begins on.
+  if (e.kind === "own" || e.kind === "file" || e.kind === "entity") {
+    // Its own text: a file with definitions its lines outside them, each definition folded to the line it begins on;
+    // a folder's thing, its README.
     const file = fileOfEntry(e) as string;
     const held = e.kind === "own" ? (src.journal.entry(file)?.lists ?? []) : [];
     const folded = held.flatMap((of): Folded[] => {
@@ -231,12 +234,15 @@ export function wordsOf(src: WordsSource, e: JournalEntry): PageWords {
       const d = src.journal.entry(of);
       return s === undefined || d === undefined || s.lines < 2 ? [] : [{ from: s.line + 1, to: s.line + s.lines - 1, of, page: d.page }];
     });
-    const text = setOf(src.lines(file));
+    const set = setOf(src.lines(file));
+    const prose = PROSE.test(file) ? proseOf(set.lines) : null;
+    const text = prose === null ? set : { ...set, lines: prose.lines };
+    const thing = e.of.slice("entity:".length);
     return {
-      path: folders(file),
+      path: e.kind !== "entity" ? folders(file) : thing === "" ? [] : thing.split("/"),
       name: e.name,
       vitality: src.vitality(e.of),
-      body: { kind: "code", first: 1, lines: text.lines, opensAt: 1, marks: [], ...(folded.length > 0 ? { folded } : {}), ...(PROSE.test(file) ? { prose: true } : {}), ...(text.rest > 0 ? { rest: text.rest } : {}) },
+      body: { kind: "code", first: 1, lines: text.lines, opensAt: 1, marks: [], ...(folded.length > 0 ? { folded } : {}), ...(prose === null ? {} : { prose: true, pre: prose.pre }), ...(text.rest > 0 ? { rest: text.rest } : {}) },
     };
   }
   const symbol = src.world.symbols.find((s) => s.id === e.of);
@@ -265,16 +271,72 @@ export function wordsOf(src: WordsSource, e: JournalEntry): PageWords {
   };
 }
 
-/** The file whose text an entry's page shows: a definition's, a file with definitions as a thing of its own, or a file with none. */
+/** The file whose text an entry's page shows: a definition's, a file with definitions as a thing of its own, a file with none, or a folder's README. */
 export function fileOfEntry(e: JournalEntry): string | undefined {
   if (e.kind === "definition") return e.of.slice(0, e.of.indexOf("#"));
   if (e.kind === "own") return e.of.slice("own:".length);
   if (e.kind === "file" && e.lists.length === 0) return e.of;
+  if (e.kind === "entity") return e.text;
   return undefined;
 }
 
 /** A document, whose text is set as prose. */
 const PROSE = /\.(md|mdx|markdown|txt|rst)$/i;
+/**
+ * A document's text as its paragraphs: lines a writer wrapped by hand joined
+ * into one, a heading, a list item, a quote, a table row and a blank line
+ * each its own, a list item with a bullet, a fenced block's lines kept as
+ * they are, set as code, without its fences. Links and images say their
+ * words, and emphasis and code marks are dropped.
+ */
+export function proseOf(lines: readonly string[]): { readonly lines: readonly string[]; readonly pre: readonly boolean[] } {
+  const out: string[] = [];
+  const pre: boolean[] = [];
+  let paragraph: string[] = [];
+  const flush = (): void => {
+    if (paragraph.length === 0) return;
+    out.push(paragraph.join(" "));
+    pre.push(false);
+    paragraph = [];
+  };
+  const inline = (line: string): string =>
+    line
+      .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
+      .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+      .replace(/(\*\*|__)(.+?)\1/g, "$2")
+      .replace(/`([^`]+)`/g, "$1");
+  let fenced = false;
+  for (const raw of lines) {
+    if (/^\s*(```|~~~)/.test(raw)) {
+      flush();
+      fenced = !fenced;
+      continue;
+    }
+    if (fenced) {
+      out.push(raw);
+      pre.push(true);
+      continue;
+    }
+    const line = inline(raw).trim();
+    if (line === "") {
+      flush();
+      // One blank line between paragraphs, however many the writer left.
+      if (out.length > 0 && out[out.length - 1] !== "") {
+        out.push("");
+        pre.push(false);
+      }
+    } else if (/^(#{1,6}\s|[-*+]\s|\d+[.)]\s|>|\||<)/.test(line)) {
+      flush();
+      // A list item is set with a bullet.
+      paragraph = [line.replace(/^[-*+]\s+/, "• ")];
+      // A heading, a table row or a line of markup stands alone; a list item or a quote runs on over its lines.
+      if (/^(#{1,6}\s|\||<)/.test(line)) flush();
+    } else paragraph.push(line);
+  }
+  flush();
+  return { lines: out, pre };
+}
+
 /** The most of a file the journal sets: so many lines, each cut at what a page holds. A one-line data file can run to half a megabyte. */
 const SET = { lines: 2000, chars: 1500 } as const;
 /**

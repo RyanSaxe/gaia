@@ -55,7 +55,7 @@ describe("the traveller's journal", () => {
     expect(journal.entries.map((e) => e.page)).toEqual(journal.entries.map((_, i) => 2 * i + 1));
   });
 
-  it("lists each thing that stands first in its directory's chapter, its spread next, and runs a long list on overleaf", () => {
+  it("lists each thing that stands first in its directory's chapter, its spread next facing its README, and runs a long list on overleaf", () => {
     const journal = journalOf(
       { ...DEMO, things: [{ path: "", name: "demo" }, { path: "packages/core", name: "@demo/core" }, { path: "docs", name: "guide" }], trails: [{ from: "docs", to: "packages/core" }, { from: "packages/app", to: "packages/core" }] },
       { first: 2, next: 3 },
@@ -66,8 +66,11 @@ describe("the traveller's journal", () => {
     expect(journal.contents[0]).toBe(entityOf(""));
     expect(journal.entry("packages/core")?.lists[0]).toBe(entityOf("packages/core"));
     expect(order.indexOf(entityOf("packages/core"))).toBe(order.indexOf("packages/core") + 1);
-    // An entity's page lists the things its trails join it to; a trail to something that isn't a thing joins nothing.
+    // A thing faces its folder's README; with none, its page lists the things its trails join it to, and a trail to
+    // something that isn't a thing joins nothing.
+    expect(journal.entry(entityOf(""))).toMatchObject({ text: "README.md", lists: [], pages: 1 });
     expect(journal.entry(entityOf("packages/core"))?.lists).toEqual([entityOf("docs")]);
+    expect(journal.entry(entityOf("packages/core"))?.text).toBeUndefined();
     expect(journal.entry(entityOf("packages/core"))?.under).toBe("packages/core");
     // math.ts lists itself and its five definitions: two on its first page, three on each after; ending on a right-hand
     // page, the next entry opens on a spread of its own, its picture on the left.
