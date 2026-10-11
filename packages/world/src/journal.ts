@@ -7,8 +7,9 @@
 // itself as a thing: a directory standing as a building or a landmark has
 // that entity's spread first, and a file has its own, its painting facing its
 // own code. A leaf (a definition, or a file with nothing standing in it) is
-// its picture facing its content. The repository's own entity comes first of
-// all. Every entry opens on a spread: the left-hand page pictures it, and the
+// its picture facing its content. A folder's thing faces the folder's
+// README, or with none the things its trails join it to. The repository's own
+// entity comes first of all. Every entry opens on a spread: the left-hand page pictures it, and the
 // right-hand page names it and lists or shows what it holds, a long list
 // running on over the pages after. The book says only what each page is
 // about, what it lists and its pages; the journal draws the rest.
@@ -29,6 +30,8 @@ export interface JournalEntry {
   readonly under?: string;
   /** What its page lists, each an entry of its own: what it holds, or for an entity the entities its trails join it to. */
   readonly lists: readonly string[];
+  /** The file whose text a thing's page shows instead of a list: a folder's README. */
+  readonly text?: string;
   /** Its first right-hand page, which names it; the left-hand page before it pictures it. */
   readonly page: number;
   /** How many pages its words take from `page` on: a list too long for one runs on overleaf. */
@@ -100,10 +103,16 @@ export function journalOf(world: JournalSource, room: PageRoom = { first: Infini
     joined.get(t.to)?.add(t.from);
   }
   const entityItem = (path: string): Item => ({ kind: "entity", of: entityOf(path), name: things.get(path)?.name ?? path });
+  /** Each folder's README, which its thing's page shows. */
+  const readmes = new Map<string, string>();
+  for (const p of world.patches) if (/^readme(\.(md|markdown|txt|rst))?$/i.test(p.name) && !readmes.has(p.area)) readmes.set(p.area, p.path);
   const listOf = (item: Item | { kind: "root"; of: string }): Item[] => {
     // A container's first row is itself as a thing.
     if (item.kind === "chapter" || item.kind === "root") return [...(things.has(item.of) ? [entityItem(item.of)] : []), ...(chapters.get(item.of) ?? []).sort(byName), ...(files.get(item.of) ?? []).sort(byName)];
-    if (item.kind === "entity") return [...(joined.get(item.of.slice("entity:".length)) ?? [])].map(entityItem).sort(byName);
+    if (item.kind === "entity") {
+      const folder = item.of.slice("entity:".length);
+      return readmes.has(folder) ? [] : [...(joined.get(folder) ?? [])].map(entityItem).sort(byName);
+    }
     if (item.kind === "own") return [];
     const held = (definitions.get(item.of) ?? []).sort((a, b) => a.line - b.line || byName(a.item, b.item)).map((d) => d.item);
     return item.kind === "file" && held.length > 0 ? [{ kind: "own", of: ownOf(item.of), name: item.name }, ...held] : held;
@@ -131,7 +140,8 @@ export function journalOf(world: JournalSource, room: PageRoom = { first: Infini
   let picture = 0;
   const add = (item: Item, under: string | undefined, lists: readonly Item[]): void => {
     const pages = pagesFor(rowsOf(item, lists));
-    const entry: JournalEntry = { ...item, ...(under === undefined ? {} : { under }), lists: lists.map((l) => l.of), page: picture + 1, pages };
+    const text = item.kind === "entity" ? readmes.get(item.of.slice("entity:".length)) : undefined;
+    const entry: JournalEntry = { ...item, ...(under === undefined ? {} : { under }), lists: lists.map((l) => l.of), ...(text === undefined ? {} : { text }), page: picture + 1, pages };
     entries.push(entry);
     index.set(entry.of, entry);
     // The next picture is a left-hand page: an entry whose words end on a right-hand page leaves the page after it blank.
