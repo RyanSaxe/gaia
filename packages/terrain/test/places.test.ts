@@ -90,7 +90,7 @@ describe("whose ground a point is, and how alive it is", () => {
     const sites: OwnedSite[] = [];
     for (let x = -144; x <= 144; x += 16) for (let z = -144; z <= 144; z += 16) sites.push({ x, z, owner: Math.hypot(x + 72, z) < 20 ? 2 : x < 0 ? 0 : 1 });
     const vitality = [1, 0.1, 0.45];
-    const own = ownershipOf(sites, size, size + 80);
+    const own = ownershipOf(sites, { size }, size + 80);
     const values = vitalityOver(own, vitality);
     const ownerAt = (x: number, z: number): number => sites[siteAt(sites, x, z)]!.owner;
 
@@ -111,7 +111,7 @@ describe("whose ground a point is, and how alive it is", () => {
     for (const z of [-90, 37, 101]) {
       let edge = -60;
       while (ownerAt(edge + 0.25, z) === 0) edge += 0.25;
-      const share = (x: number, owner: number): number => groundOwners(sites, size, x, z).find((s) => s.owner === owner)?.share ?? 0;
+      const share = (x: number, owner: number): number => groundOwners(sites, { size }, x, z).find((s) => s.owner === owner)?.share ?? 0;
       expect(share(edge, 0)).toBeGreaterThan(0.25);
       expect(share(edge, 0)).toBeLessThan(0.75);
       expect(share(edge - 3, 0)).toBeGreaterThan(0.6);
@@ -122,13 +122,13 @@ describe("whose ground a point is, and how alive it is", () => {
     }
 
     // Past the land the ground is the wild's, which thrives.
-    expect(groundOwners(sites, size, size / 2 + 20, 0)).toEqual([{ owner: WILD_OWNER, share: 1 }]);
+    expect(groundOwners(sites, { size }, size / 2 + 20, 0)).toEqual([{ owner: WILD_OWNER, share: 1 }]);
     expect(vitalityAt(own, values, size / 2 + 30, 10)).toBe(1);
 
     // Rows worked out apart, as the bake's threads do, give the same bytes.
     const grid = ownershipGrid(size + 80);
-    const top = ownershipRows(sites, size, grid, 0, 40);
-    const rest = ownershipRows(sites, size, grid, 40, grid.n);
+    const top = ownershipRows(sites, { size }, grid, 0, 40);
+    const rest = ownershipRows(sites, { size }, grid, 40, grid.n);
     expect([...top.owners, ...rest.owners]).toEqual([...own.owners]);
     expect([...top.shares, ...rest.shares]).toEqual([...own.shares]);
   });

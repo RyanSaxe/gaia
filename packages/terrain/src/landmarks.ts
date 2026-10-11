@@ -9,6 +9,7 @@ import type { Occupied } from "./scatter.ts";
 import type { Circle } from "./site.ts";
 import { isWet } from "./plants.ts";
 import type { Terrain } from "./world.ts";
+import { withinLand } from "./edge.ts";
 
 export interface LandmarkSite {
   readonly x: number;
@@ -52,6 +53,7 @@ export function findLandmarkSite(t: Terrain, region: number, radius: number, avo
       const iz = Math.round((z - l.origin) / l.spacing);
       // A landmark laid out on a lot stands on it, whichever region's land that is.
       if (within !== null ? Math.hypot(x - within.x, z - within.z) > within.radius : t.region[iz * l.n + ix] !== region) continue;
+      if (!withinLand(t.spec, x, z, LANDMARK_SITE.margin + radius)) continue;
       if (avoid.some((o) => Math.hypot(o.x - x, o.z - z) < o.radius + radius)) continue;
       let steep = slopeAt(l, x, z);
       for (let k = 0; k < 8 && steep <= LANDMARK_SITE.maxSlope; k++) {

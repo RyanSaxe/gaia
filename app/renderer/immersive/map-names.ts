@@ -21,6 +21,7 @@
 import type { Outline } from "@gaia/terrain";
 import { LAYOUT, type LotPlace } from "@gaia/world";
 import { MARK_REACH, markScale } from "./marks.ts";
+import { pastTheEdge } from "@gaia/terrain";
 
 /** The land's cells, meters a side, as both sheets sample them for names. */
 export const CELL = 5;
@@ -93,6 +94,8 @@ export interface NameLand {
   /** How far the sheet reaches from the land's middle, and the land's own half side, meters. */
   readonly reach: number;
   readonly half: number;
+  /** How much wider than deep the land is (`LandOutline`). */
+  readonly aspect?: number;
   /** The area whose own ground holds each cell (`CELL` meters, `n` a side, from (-reach, -reach)) by its index in the outlines, or -1. */
   readonly at: Int16Array;
   readonly n: number;
@@ -160,7 +163,7 @@ export function canvasMeasure(ctx: CanvasRenderingContext2D): Measure {
  * is the land's side and `reach` how far the sheet reaches from its middle,
  * meters; `lots` are where its buildings and landmarks will stand.
  */
-export function* nameLand(areas: readonly Outline[], size: number, reach: number, lots: readonly LotPlace[]): Generator<void, NameLand> {
+export function* nameLand(areas: readonly Outline[], size: number, reach: number, lots: readonly LotPlace[], aspect?: number): Generator<void, NameLand> {
   const n = Math.ceil((reach * 2) / CELL);
   const at = new Int16Array(n * n).fill(-1);
   const parentOf = (path: string): string => (path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "");
@@ -180,7 +183,7 @@ export function* nameLand(areas: readonly Outline[], size: number, reach: number
   yield;
   const labels = labelsOf(at, n, CELL, reach, areas.map((o) => ({ path: o.path, depth: o.depth, name: o.path.slice(o.path.lastIndexOf("/") + 1) })));
   yield;
-  return { reach, half: size / 2, at, n, labels, lots };
+  return { reach, half: size / 2, ...(aspect === undefined ? {} : { aspect }), at, n, labels, lots };
 }
 
 /**
@@ -369,9 +372,8 @@ export function* placeNames(land: NameLand, side: number, measure: Measure, grow
   const marks: Box[] = land.lots.map(({ x, z }) => [px(x) - MARK_REACH.left * s - lot, px(z) - MARK_REACH.up * s - lot, px(x) + MARK_REACH.right * s + lot, px(z) + MARK_REACH.down * s + lot]);
   const lotArea = land.lots.map(({ x, z }) => areaAt(px(x), px(z)));
   const rose: Box = [sheet - ROSE.right - 34, sheet - ROSE.bottom - 46, sheet, sheet];
-  const edge = land.half ** 4;
   const inside = (b: Box): boolean =>
-    b[0] > EDGE && b[1] > EDGE && b[2] < sheet - EDGE && b[3] < sheet - EDGE && !hits(b, rose) && [b[0], b[2]].every((x) => [b[1], b[3]].every((y) => meters(x) ** 4 + meters(y) ** 4 < edge));
+    b[0] > EDGE && b[1] > EDGE && b[2] < sheet - EDGE && b[3] < sheet - EDGE && !hits(b, rose) && [b[0], b[2]].every((x) => [b[1], b[3]].every((y) => pastTheEdge({ size: land.half * 2, ...(land.aspect === undefined ? {} : { aspect: land.aspect }) }, meters(x), meters(y)) < 0));
   const named: Box[] = [];
   const clear = (b: Box): boolean => named.every((o) => !hits(b, o));
   const covers = (b: Box): number => marks.reduce((sum, m) => sum + overlap(b, m), 0);

@@ -182,7 +182,8 @@ async function snapshotWorld(why: string): Promise<WorldDocument> {
  */
 export function provingWorld(): WorldDocument {
   const model = proving as unknown as CodeModel;
-  const world = layoutWorld(model, provingJudged as unknown as Judgments);
+  // The proving ground keeps a square, so everything its tests look for stands where they look.
+  const world = layoutWorld(model, provingJudged as unknown as Judgments, undefined, 1);
   return { root: model.repository.name, model, world, judges: {}, summary: "The proving ground: every choice fixed so each feature shows" };
 }
 
@@ -227,7 +228,7 @@ export async function codeWorld(veil: Veil): Promise<CodeLab> {
   // Traced once now, while the world loads, so the field map never traces them mid-walk.
   const outlines = outlinesOf(document.world);
   // A world laid out here, with no world service, shows its land only now.
-  if (!landed) veil.opening({ stage: "land", name: document.world.name, size: document.world.size, areas: outlines.areas, patches: document.world.patches, lots: document.world.things.map(({ x, z }) => ({ x, z })) });
+  if (!landed) veil.opening({ stage: "land", name: document.world.name, size: document.world.size, ...(document.world.aspect === undefined ? {} : { aspect: document.world.aspect }), areas: outlines.areas, patches: document.world.patches, lots: document.world.things.map(({ x, z }) => ({ x, z })) });
   veil.baking(Object.fromEntries(document.world.patches.map((p) => [p.path, p.vitality])));
   return codeLab(document);
 }

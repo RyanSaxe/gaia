@@ -8,6 +8,7 @@ import type { BuildingPlan } from "@gaia/schema";
 import { heightAt, worldOf } from "./lattice.ts";
 import { surfaceHalfWidth } from "./water.ts";
 import { DRY, type Terrain } from "./world.ts";
+import { withinLand } from "./edge.ts";
 
 export interface BuildingSite {
   readonly x: number;
@@ -127,7 +128,7 @@ export function findSite(t: Terrain, plan: BuildingPlan, taken: readonly Buildin
     }
   }
   const everywhere: { x: number; z: number; yaw: number }[] = [];
-  for (let z = -half; z <= half; z += 12) for (let x = -half; x <= half; x += 12) everywhere.push({ x, z, yaw: Math.atan2(-x, -z) });
+  for (let z = -half; z <= half; z += 12) for (let x = -half; x <= half; x += 12) if (withinLand(t.spec, x, z, 34)) everywhere.push({ x, z, yaw: Math.atan2(-x, -z) });
   // Beside the water first; anywhere in the world when the banks are full.
   return gentlest(t, plan, candidates, taken, apart, beside, half) ?? gentlest(t, plan, everywhere, taken, apart, beside, half) ?? { x: 0, z: 0, yaw: 0, level: heightAt(t.lattice, 0, 0) };
 }
@@ -136,7 +137,7 @@ function gentlest(t: Terrain, plan: BuildingPlan, candidates: readonly { x: numb
   let best: BuildingSite | null = null;
   let bestScore = Infinity;
   for (const c of candidates) {
-    if (Math.abs(c.x) > half || Math.abs(c.z) > half) continue;
+    if (Math.abs(c.x) > half || !withinLand(t.spec, c.x, c.z, 34)) continue;
     if (taken.some((o) => Math.hypot(o.x - c.x, o.z - c.z) < apart)) continue;
     const site: BuildingSite = { ...c, level: 0 };
     const pts = yardSamples(plan, site, 1.5, 0, beside);
