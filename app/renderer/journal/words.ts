@@ -106,7 +106,7 @@ export interface PageWords {
 export interface WordsSource {
   readonly journal: Journal;
   readonly world: { readonly name: string; readonly symbols: readonly Pick<CodeSymbol, "id" | "line" | "lines">[] };
-  /** A folder's vitality, its subfolders' included, a file's by its path, or an entity's by `entity:<path>`. */
+  /** Each item's own vitality: a folder's, a file's by its path, a definition's by its id, or an entity's by `entity:<path>`. */
   vitality(of: string): number;
   /** A file's lines, or undefined until they arrive. */
   lines(path: string): readonly string[] | undefined;
@@ -176,13 +176,11 @@ export function contentsWords(src: WordsSource): PageWords {
   return { path: [], name: src.world.name, vitality: src.vitality(""), body: { kind: "rows", rows } };
 }
 
-/** A definition's vitality is its file's. */
-const vitalityPath = (e: JournalEntry): string => (e.kind === "definition" ? e.of.slice(0, e.of.indexOf("#")) : e.of);
 
 function rowOf(src: WordsSource, e: JournalEntry, depth: number): Row {
   const own = src.judged?.(e.of).find((j) => j.lines === undefined);
   const mark = own === undefined ? undefined : markOf(own.judged);
-  return { of: e.of, name: e.name, depth, vitality: src.vitality(vitalityPath(e)), page: e.page, ...(mark === undefined ? {} : { mark }) };
+  return { of: e.of, name: e.name, depth, vitality: src.vitality(e.of), page: e.page, ...(mark === undefined ? {} : { mark }) };
 }
 
 /** The words of one entry's page. */
@@ -224,7 +222,7 @@ export function wordsOf(src: WordsSource, e: JournalEntry): PageWords {
   return {
     path: file.split("/"),
     name: e.name,
-    vitality: src.vitality(file),
+    vitality: src.vitality(e.of),
     ...(signature === undefined ? {} : { signature }),
     body: { kind: "code", first: line + 1, lines: text?.slice(line, line + count - 1) ?? [], opensAt, marks, notes: pointed.map((b) => ({ lines: b.lines, facts: factsOf(b.judged) })) },
   };
