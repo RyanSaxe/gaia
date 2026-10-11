@@ -303,7 +303,10 @@ by Jev's answers kept for that snapshot in `fixtures/gaia-jev.json` (written
 by `pnpm jev-world`, keyed by request hash like the app's store), with the
 stand-in judging any request they no longer answer; `?judge=stand-in` shows
 the stand-in's world. So does the app if the world service cannot open its
-folder. `?world=sample` (or `?world=small`) and
+folder. Beside those fixtures, `fixtures/gaia-graph.json` holds the
+engine's graph of the same commit, which the layout is moving onto. `pnpm
+graph-snapshot` writes it, trimmed by `standingGraph` to directories, files
+and definitions, each with the stand Jev's held answers give it. `?world=sample` (or `?world=small`) and
 the Terrain view's "Sample world" button show the sample world instead.
 `?world=proving` (and `GAIA_PROJECT=proving` in the app) shows the proving
 ground: a made-up codebase (`fixtures/proving.json`) laid out with
