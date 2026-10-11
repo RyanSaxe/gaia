@@ -312,11 +312,14 @@ export function codeLab({ model, world, judges, summary }: WorldDocument): CodeL
         const areaOf = new Map(world.areas.map((a, i) => [a.path, i]));
         return world.cells.map((c) => ({ x: c.x, z: c.z, patch: c.file === null || c.file === undefined ? -1 : (patchOf.get(c.file) ?? -1), area: areaOf.get(c.area) ?? 0 }));
       })(),
-      symbols: world.symbols.map((s) => {
-        const form = FORMS[s.form] ?? (Object.values(FORMS)[0] as (typeof FORMS)[string]);
-        const variant = form.preset;
-        return { x: s.x, z: s.z, rule: form.rule, variant, radius: form.rule === "flowers" ? 0.8 : 1, scale: symbolScale(s.lines, form.rule, s.stand), vitality: s.vitality };
-      }),
+      symbols: (() => {
+        const patchOf = new Map(world.patches.map((p, i) => [p.path, i]));
+        return world.symbols.map((s) => {
+          const form = FORMS[s.form] ?? (Object.values(FORMS)[0] as (typeof FORMS)[string]);
+          const patch = patchOf.get(s.file);
+          return { x: s.x, z: s.z, rule: form.rule, variant: form.preset, radius: form.rule === "flowers" ? 0.8 : 1, scale: symbolScale(s.lines, form.rule, s.stand), vitality: s.vitality, ...(patch === undefined ? {} : { patch }) };
+        });
+      })(),
       // Trails joining parts of the code no other trail joins route first, then the most wanted.
       trails: world.trails.map((t) => ({ from: t.from, to: t.to, want: (t.spans === true ? 1 : 0) + t.want, style: Math.max(0, TRAIL_PRESETS.findIndex((p) => p.name === t.look)) })),
     },

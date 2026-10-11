@@ -95,6 +95,8 @@ export interface StandSymbol {
   readonly scale: number;
   /** Its file's vitality. */
   readonly vitality: number;
+  /** Its file's patch, by index into `StandCode.patches`: it never stands off it. */
+  readonly patch?: number;
 }
 
 /**
@@ -517,25 +519,32 @@ export function standWorld(t: Terrain, req: StandRequest): Stand {
     ...landmarks.map((s) => ({ x: s.site.x, z: s.site.z, radius: (req.landmarks[s.landmark]?.base ?? 2) + 1 })),
   ];
   // A file's definitions stand where the layout put them, kept off water, steep ground and whatever else stands:
-  // the largest first, so a file's landmark keeps its plot, each moved a little where its spot is taken, and stood
-  // a size smaller where nothing near is clear rather than left out.
+  // the largest first, so a file's landmark keeps its plot, each moved a little where its spot is taken (elsewhere
+  // on its patch if nothing near is clear, never off it), and stood a size smaller rather than left out.
   const standing: Placement[] = [];
   /** Each standing entity with the room decoration leaves it, so nothing crowds it. */
   const roomy: Occupied[] = [];
   const syms = code?.symbols ?? [];
+  const cells = code?.cells ?? [];
   const symbols = syms.map(() => -1);
   const order = syms.map((_, i) => i).sort((a, b) => (syms[b] as StandSymbol).radius * (syms[b] as StandSymbol).scale - (syms[a] as StandSymbol).radius * (syms[a] as StandSymbol).scale || a - b);
   for (const i of order) {
     const sym = syms[i] as StandSymbol;
     let at: [number, number, number] | null = null;
-    for (const shrink of SHRINKS) {
-      const reach = sym.radius * sym.scale * shrink;
-      const clash = (x: number, z: number): boolean => isWet(t, x, z) || slopeAt(t.lattice, x, z) > 24 || blocked(x, z) || occupied.some((o) => Math.hypot(o.x - x, o.z - z) < o.radius + reach);
-      for (let k = 0; at === null && k <= 24; k++) {
-        const a = k * 2.4;
-        const x = sym.x + Math.cos(a) * k * 0.6;
-        const z = sym.z + Math.sin(a) * k * 0.6;
-        if (!clash(x, z)) at = [x, z, shrink];
+    // Where it may try: around its plot's middle, then around each of its patch's other cells, nearest first.
+    const own = sym.patch === undefined || cells.length === 0 ? [] : cells.filter((c) => c.patch === sym.patch).sort((a, b) => Math.hypot(a.x - sym.x, a.z - sym.z) - Math.hypot(b.x - sym.x, b.z - sym.z));
+    for (const from of [{ x: sym.x, z: sym.z }, ...own]) {
+      for (const shrink of SHRINKS) {
+        const reach = sym.radius * sym.scale * shrink;
+        const clash = (x: number, z: number): boolean =>
+          (sym.patch !== undefined && cells.length > 0 && cells[siteAt(cells, x, z)]?.patch !== sym.patch) || isWet(t, x, z) || slopeAt(t.lattice, x, z) > 24 || blocked(x, z) || occupied.some((o) => Math.hypot(o.x - x, o.z - z) < o.radius + reach);
+        for (let k = 0; at === null && k <= 24; k++) {
+          const a = k * 2.4;
+          const x = from.x + Math.cos(a) * k * 0.6;
+          const z = from.z + Math.sin(a) * k * 0.6;
+          if (!clash(x, z)) at = [x, z, shrink];
+        }
+        if (at !== null) break;
       }
       if (at !== null) break;
     }
