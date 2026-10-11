@@ -57,7 +57,9 @@ const PAINTED_AT_MOST = 15000;
  * its edge, so a tap is always answered: how far it lifts (degrees, the
  * painting still out of sight) and how slowly, ms. Then it comes over.
  */
-const HOLD = { forward: -64, back: -175, ms: 1600, rest: 520 } as const;
+const HOLD = { forward: -64, back: -175, ms: 1600 } as const;
+/** How far a page must be drawn toward the spine before it is taken rather than tapped, px. */
+const DRAG = { start: 12 } as const;
 /** How long a leaf takes to turn, the cover to swing, and the book to travel between its corner and your hands, ms. */
 const TURN_MS = 720;
 const COVER_MS = 900;
@@ -245,12 +247,32 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
       turning = false;
       return;
     }
+    beginTurn(target).finish(0);
+  }
+
+  /**
+   * A turn under way: the leaf laid with the pages it carries, the new pages
+   * beneath, so a tap or a drag can carry it over (`finish`) or let it fall
+   * back (`cancel`). A leaf whose far side's picture is still being made lifts
+   * no further than keeps it out of sight (`HOLD`) until it is whole.
+   */
+  interface Turn {
+    readonly forward: boolean;
+    /** Sets the leaf this far over, 0 lying where it started to 1 turned, as a hand holds it. */
+    hold(progress: number): void;
+    /** Carries the leaf the rest of the way from `progress`, waiting at its edge for a picture still being made. */
+    finish(progress: number): void;
+    /** Lets the leaf fall back from `progress` and lays the pages as they were. */
+    cancel(progress: number): void;
+  }
+  function beginTurn(target: string): Turn {
     const from = at;
     const forward = from === null || pages.order(from, target) < 0;
     const to = pages.spread(target);
     turning = true;
     leaf.hidden = false;
     leaf.classList.remove("over", "turning");
+    leaf.style.transition = "none";
     if (forward) {
       // The right page lifts and turns over onto the left, showing the new left page on its back; the new right page lies beneath.
       put(leafFront, right.firstElementChild as HTMLElement | null);
@@ -263,29 +285,29 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
       put(leafFront, to.right);
       put(left, to.left);
     }
+    // The tabs move with the page as it turns.
+    markTabs(target);
     void leaf.offsetWidth;
     const whole = painted(target);
-    const over = (rest: number): void => {
-      leaf.style.transform = "";
-      leaf.style.transition = rest === TURN_MS ? "" : `transform ${rest}ms cubic-bezier(.3,.1,.3,1)`;
-      leaf.classList.add("turning");
-      leaf.classList.toggle("over", forward);
-      window.setTimeout(done, rest + 40);
-    };
-    void settledSoon(whole).then((ready) => {
-      if (ready) return over(TURN_MS);
-      // The page beneath is whole; the picture on the leaf's far side is not yet, so the leaf lifts and waits, then the
-      // spread is drawn again out of sight, now whole, before the leaf comes over.
-      leaf.style.transition = `transform ${HOLD.ms}ms cubic-bezier(.2,.7,.3,1)`;
-      leaf.style.transform = `translateZ(1.4px) rotateY(${forward ? HOLD.forward : HOLD.back}deg)`;
-      void whole.then(() => {
-        const again = pages.spread(target);
-        put(forward ? leafBack : left, again.left);
-        over(HOLD.rest);
-      });
+    let ready = false;
+    void whole.then(() => {
+      // Drawn again out of sight, now whole, before the leaf can show it.
+      if (!turning) return;
+      put(forward ? leafBack : left, pages.spread(target).left);
+      ready = true;
     });
+    /** The leaf's angle at `progress` over, held short of showing a picture not yet whole. */
+    const angleAt = (progress: number): number => {
+      const deg = forward ? -179.6 * progress : -179.6 * (1 - progress);
+      return ready ? deg : forward ? Math.max(deg, HOLD.forward) : Math.min(deg, HOLD.back);
+    };
+    const lay = (deg: number, ms: number, ease = "cubic-bezier(.3,.1,.3,1)"): void => {
+      leaf.style.transition = ms > 0 ? `transform ${ms}ms ${ease}` : "none";
+      leaf.style.transform = `translateZ(1.4px) rotateY(${deg.toFixed(2)}deg)`;
+    };
     const done = (): void => {
       leaf.style.transition = "";
+      leaf.style.transform = "";
       if (forward) put(left, leafBack.firstElementChild as HTMLElement | null);
       else put(right, leafFront.firstElementChild as HTMLElement | null);
       leaf.hidden = true;
@@ -302,7 +324,101 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
         turnTo(next);
       }
     };
+    return {
+      forward,
+      hold: (progress) => lay(angleAt(progress), 0),
+      finish(progress) {
+        const over = (from: number): void => {
+          const rest = Math.max(160, TURN_MS * (1 - from));
+          lay(forward ? -179.6 : 0, rest);
+          window.setTimeout(done, rest + 40);
+        };
+        void settledSoon(whole).then((now) => {
+          if (now) return over(progress);
+          // The page beneath is whole; the picture on the leaf's far side is not yet, so the leaf lifts and waits.
+          lay(angleAt(Math.max(progress, 0.5)), HOLD.ms, "cubic-bezier(.2,.7,.3,1)");
+          void whole.then(() => over(Math.max(progress, 0.5)));
+        });
+      },
+      cancel(progress) {
+        const back = Math.max(160, TURN_MS * progress);
+        lay(forward ? 0 : -179.6, back);
+        window.setTimeout(() => {
+          // The pages lie as they were before the leaf was taken.
+          if (forward) {
+            put(right, leafFront.firstElementChild as HTMLElement | null);
+            put(leafBack, null);
+          } else {
+            put(left, leafBack.firstElementChild as HTMLElement | null);
+            put(leafFront, null);
+          }
+          leaf.style.transition = "";
+          leaf.style.transform = "";
+          leaf.hidden = true;
+          leaf.classList.remove("turning", "over");
+          turning = false;
+          if (at !== null) markTabs(at);
+        }, back + 40);
+      },
+    };
   }
+
+  // ---------- turning a page by hand ----------
+
+  /**
+   * A page is turned by taking it: pressed and drawn toward the spine, the
+   * leaf follows the finger or the mouse, and let go past halfway it falls
+   * over, short of it it falls back. A press that hardly moves is a tap, and
+   * taps go on to the rows, names and pictures as before.
+   */
+  let taken: { readonly side: "left" | "right"; readonly x0: number; readonly y0: number; turn: Turn | null; progress: number; width: number } | null = null;
+  let dragged = false;
+  const take = (side: "left" | "right") => (e: PointerEvent): void => {
+    if (!open || turning || e.button !== 0) return;
+    taken = { side, x0: e.clientX, y0: e.clientY, turn: null, progress: 0, width: Math.max(1, (side === "right" ? right : left).getBoundingClientRect().width) };
+  };
+  right.addEventListener("pointerdown", take("right"));
+  left.addEventListener("pointerdown", take("left"));
+  window.addEventListener("pointermove", (e) => {
+    if (taken === null) return;
+    const dx = e.clientX - taken.x0;
+    const toward = taken.side === "right" ? -dx : dx;
+    if (taken.turn === null) {
+      // A page is taken only when drawn toward the spine, further than a tap's wobble.
+      if (toward < DRAG.start || Math.abs(e.clientY - taken.y0) > toward) return;
+      const target = at === null ? null : pages.next(at, taken.side === "right" ? 1 : -1);
+      if (target === null || turning) {
+        taken = null;
+        return;
+      }
+      taken.turn = beginTurn(target);
+      dragged = true;
+    }
+    taken.progress = Math.max(0, Math.min(1, toward / (taken.width * 2)));
+    taken.turn.hold(taken.progress);
+  });
+  const letGo = (): void => {
+    if (taken?.turn != null) {
+      if (taken.progress >= 0.5) taken.turn.finish(taken.progress);
+      else taken.turn.cancel(taken.progress);
+    }
+    taken = null;
+    // The click that ends a drag comes at once; any other click after it is a tap again.
+    if (dragged) window.setTimeout(() => (dragged = false), 0);
+  };
+  window.addEventListener("pointerup", letGo);
+  window.addEventListener("pointercancel", letGo);
+  // A drag is not a tap: the click that ends it never reaches a row or a picture.
+  window.addEventListener(
+    "click",
+    (e) => {
+      if (!dragged) return;
+      dragged = false;
+      e.stopPropagation();
+      e.preventDefault();
+    },
+    true,
+  );
 
   // ---------- opening and closing ----------
 
@@ -346,6 +462,14 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
   // The outer margin of each page turns it; a tap on the cover's slip while closed opens the book.
   const margin = (side: "left" | "right"): HTMLElement => {
     const m = el(`jb-margin ${side}`, inner);
+    // Its edge lifts a little under the pointer, the way a page invites you to take it, and it can be taken from here.
+    const page = side === "right" ? right : cover;
+    m.addEventListener("pointerenter", () => open && !turning && page.classList.add("lift"));
+    m.addEventListener("pointerleave", () => page.classList.remove("lift"));
+    m.addEventListener("pointerdown", (e) => {
+      page.classList.remove("lift");
+      take(side)(e);
+    });
     m.addEventListener("click", (e) => {
       e.stopPropagation();
       if (!open || at === null) return;

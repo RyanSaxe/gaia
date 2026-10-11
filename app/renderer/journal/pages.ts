@@ -251,9 +251,12 @@ export function journalPages(src: JournalPagesSource): BookPages {
       }
       const e = words.journal.entry(of as string);
       if (e === undefined) return { left: blank(), right: blank() };
-      // The things on either side in the book are painted next, so a turn rarely waits on a painting.
+      // The things on either side in the book are painted next, and their code fetched, so a turn, or a page taken by
+      // hand, rarely waits on either.
       const here = words.journal.entries.indexOf(e);
-      src.ahead([...words.journal.entries.slice(here + 1, here + 1 + AHEAD), ...words.journal.entries.slice(Math.max(0, here - BEHIND), here)].filter((n) => n.kind !== "chapter").map((n) => n.of));
+      const around = [...words.journal.entries.slice(here + 1, here + 1 + AHEAD), ...words.journal.entries.slice(Math.max(0, here - BEHIND), here)];
+      src.ahead(around.filter((n) => n.kind !== "chapter").map((n) => n.of));
+      for (const n of [e, ...around]) if (n.kind === "definition") void src.text(n.of.slice(0, n.of.indexOf("#")));
       return entrySpread(words, e, k);
     },
     next(at, by) {
