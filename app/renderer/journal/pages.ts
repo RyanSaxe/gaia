@@ -13,8 +13,8 @@ import { fullItems, renderFullPage, renderPage, renderPicture, renderTitle } fro
 import { type Full, type PageWords, type WordsSource, appendixWords, contentsWords, wordsOf } from "./words.ts";
 
 /** How many of the things after an open page, and before it, are painted ahead of the reader. */
-const AHEAD = 4;
-const BEHIND = 2;
+const AHEAD = 5;
+const BEHIND = 5;
 /** How many rows of a list a page holds: under the heading, and under a running head on the pages it runs on to. */
 export const ROOM: PageRoom = { first: 18, next: 21 };
 
