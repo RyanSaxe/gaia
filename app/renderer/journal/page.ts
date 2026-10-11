@@ -335,6 +335,30 @@ export function renderTraveller(px: number, py: number, yaw: number): HTMLElemen
   return here;
 }
 
+/** A spot marked on a map's page: a vermilion pencil cross, the field map's own mark. A second click on it travels there. */
+export function renderCross(px: number, py: number): HTMLElement {
+  const cross = el("div", "jp-cross");
+  cross.innerHTML = '<svg viewBox="0 0 18 18"><path d="M3 3 L15 15 M15 3 L3 15"/></svg>';
+  cross.style.left = `${((px / PAGE_W) * 100).toFixed(2)}%`;
+  cross.style.top = `${((py / PAGE_H) * 100).toFixed(2)}%`;
+  return cross;
+}
+
+/** A pencil underline under a name lettered on a map, while the pointer is on it; `box` in the page's pixels. */
+export function renderNameLine(box: readonly [number, number, number, number]): HTMLElement {
+  const line = el("div", "jp-name-line");
+  line.style.left = `${((box[0] / PAGE_W) * 100).toFixed(2)}%`;
+  line.style.width = `${(((box[2] - box[0]) / PAGE_W) * 100).toFixed(2)}%`;
+  line.style.top = `${(((box[3] - 3) / PAGE_H) * 100).toFixed(2)}%`;
+  return line;
+}
+
+/** A pointer's spot on a picture, in the page's own pixels, which the book's turn and tilt leave alone. */
+export const pagePx = (picture: HTMLElement, e: MouseEvent): { readonly px: number; readonly py: number } => ({
+  px: (e.offsetX * PAGE_W) / (picture.offsetWidth || PAGE_W),
+  py: (e.offsetY * PAGE_H) / (picture.offsetHeight || PAGE_H),
+});
+
 /**
  * A left-hand page: its picture, its caption and its number. `onTap`, given,
  * hears a tap on the picture, at a spot in the page's own pixels.
@@ -345,11 +369,12 @@ export function renderPicture(picture: HTMLElement | null, folio: string, onTap?
     page.append(picture);
     if (onTap !== undefined) {
       picture.classList.add("jp-tap");
-      picture.addEventListener("click", (e) => {
+      // One handler, set afresh: a map or a painting is the same element each time its page is drawn.
+      picture.onclick = (e) => {
         e.stopPropagation();
-        // The tap in the picture's own layout pixels, which the book's turn and tilt leave alone.
-        onTap((e.offsetX * PAGE_W) / (picture.offsetWidth || PAGE_W), (e.offsetY * PAGE_H) / (picture.offsetHeight || PAGE_H));
-      });
+        const at = pagePx(picture, e);
+        onTap(at.px, at.py);
+      };
     }
   }
   if (caption.length > 0) {

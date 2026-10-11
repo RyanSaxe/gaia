@@ -32,6 +32,8 @@ type Box = [number, number, number, number];
 export interface MapTaps {
   at(px: number, py: number): { readonly x: number; readonly z: number };
   name(px: number, py: number): string | null;
+  /** The box a name under (px, py) is lettered in, in the page's pixels, or null over the land. */
+  nameBox(px: number, py: number): readonly [number, number, number, number] | null;
   /** Where a spot in the world lies on the page, in its pixels. */
   page(x: number, z: number): { readonly px: number; readonly py: number };
 }
@@ -86,6 +88,7 @@ export function drawMapPage(src: MapSource, area: string, w: number, h: number, 
     at: (px, py) => ({ x: mx(px), z: mz(py) }),
     page: (x, z) => ({ px: sx(x), py: sy(z) }),
     name: (px, py) => named.find(({ box: b }) => px >= b[0] && px <= b[2] && py >= b[1] && py <= b[3])?.path ?? null,
+    nameBox: (px, py) => named.find(({ box: b }) => px >= b[0] && px <= b[2] && py >= b[1] && py <= b[3])?.box ?? null,
   });
   const clear = (b: Box): boolean => taken.every((o) => b[2] < o[0] || b[0] > o[2] || b[3] < o[1] || b[1] > o[3]);
   const onPage = (b: Box): boolean => b[0] > NAME.edge && b[1] > NAME.edge && b[2] < w - NAME.edge && b[3] < h - NAME.edge;
@@ -249,6 +252,10 @@ export function halfOf(spread: HTMLCanvasElement, side: "left" | "right"): HTMLC
     taps.set(half, {
       at: (px, py) => whole.at(px + shift, py),
       name: (px, py) => whole.name(px + shift, py),
+      nameBox: (px, py) => {
+        const b = whole.nameBox(px + shift, py);
+        return b === null ? null : [b[0] - shift, b[1], b[2] - shift, b[3]];
+      },
       page: (x, z) => {
         const at = whole.page(x, z);
         return { px: at.px - shift, py: at.py };

@@ -385,8 +385,12 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
     const r = (side === "right" ? right : left).getBoundingClientRect();
     taken = { side, x0: e.clientX, y0: e.clientY, turn: null, progress: 0, reach: Math.max(40, side === "right" ? e.clientX - r.left : r.right - e.clientX) };
   };
-  right.addEventListener("pointerdown", take("right"));
-  left.addEventListener("pointerdown", take("left"));
+  // A finger takes a page anywhere on it; a mouse only by its edge, so a press while reading never starts a turn.
+  const takeByHand = (side: "left" | "right") => (e: PointerEvent): void => {
+    if (e.pointerType === "touch") take(side)(e);
+  };
+  right.addEventListener("pointerdown", takeByHand("right"));
+  left.addEventListener("pointerdown", takeByHand("left"));
   window.addEventListener("pointermove", (e) => {
     if (taken === null) return;
     const dx = e.clientX - taken.x0;
