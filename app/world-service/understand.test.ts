@@ -168,6 +168,19 @@ describe("the Jev runner", () => {
     expect(Object.keys((asked[0]?.[1] as { criteria: Record<string, string> }).criteria)).toContain("def:src/three.ts#helper");
   }, 60_000);
 
+  it("counts understanding in a plan before Jev's links are in, and sends it only after them", async () => {
+    const root = codebase("waits", { "src/a.ts": fn("a", "return helper(x);"), "src/one.ts": fn("helper", "return x;"), "src/two.ts": fn("helper", "return -x;") });
+    const engine = engineAt(join(scratch, "waits-data"));
+    const plan = await engine.call("understand.plan", { root, through: "understand" });
+    const of = (pass: string): number => plan.pending.find((p) => p.pass === pass)?.requests ?? 0;
+    expect([of("link"), of("understand")]).toEqual([1, 3]);
+    const before = standIn.received.length;
+    await engine.call("understand.next", { root, through: "understand" });
+    const first = standIn.received.slice(before).map((r) => Object.keys((r.body as { questions: Record<string, unknown> }).questions));
+    expect(first).toHaveLength(1);
+    expect(first[0]?.every((id) => id.startsWith("callee:"))).toBe(true);
+  }, 60_000);
+
   it("holds an answered link again without asking, when its held answer is out of date", async () => {
     const root = codebase("reheld", { "src/a.ts": fn("a", "return helper(x);"), "src/one.ts": fn("helper", "return x;"), "src/two.ts": fn("helper", "return -x;") });
     const engine = engineAt(join(scratch, "reheld-data"));
