@@ -25,6 +25,8 @@ export interface JournalPagesSource {
   map(area: string): HTMLElement | null;
   /** The painting of the thing a page is about, for its left-hand page, filling in as it is painted. */
   picture(of: string): HTMLElement;
+  /** The title page's frontispiece: the world around the repository's own building or landmark, painted wide. */
+  frontispiece(): HTMLElement;
   /** Paints the things these pages are about next, in this order. */
   ahead(ofs: readonly string[]): void;
   /** Turns the book to a place, for a row tapped on a page. */
@@ -211,7 +213,7 @@ export function journalPages(src: JournalPagesSource): BookPages {
         const contents = contentsWords(words);
         const page = (p: number): HTMLElement =>
           contents.body.kind === "rows" && rowsOn(p).from < contents.body.rows.length ? renderPage({ ...contents, name: "Contents", path: [] }, roman(p + 2), src.turnTo, rowsOn(p)) : blank();
-        return k === 0 ? { left: renderTitle(words.world.name, words.vitality(""), roman(1)), right: page(0) } : { left: page(2 * k - 1), right: page(2 * k) };
+        return k === 0 ? { left: renderTitle(words.world.name, words.vitality(""), roman(1), src.frontispiece()), right: page(0) } : { left: page(2 * k - 1), right: page(2 * k) };
       }
       const e = words.journal.entry(of as string);
       if (e === undefined) return { left: blank(), right: blank() };
