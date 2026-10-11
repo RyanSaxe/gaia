@@ -81,6 +81,7 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
   const catcher = el("journal-catch", root);
   const book = el("journal-book", root);
   const inner = el("jb-inner", book);
+  el("jb-spine", inner);
   el("jb-board", inner);
   el("jb-block", inner);
   const right = el("jb-right", inner);
@@ -94,6 +95,7 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
   el("jb-stitch", coverFront);
   const slip = el("jb-slip", coverFront);
   el("jb-strap", coverFront);
+  el("jb-block left", coverBack);
   const left = el("jb-left", coverBack);
   leaf.hidden = true;
 
