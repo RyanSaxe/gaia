@@ -6,18 +6,22 @@
 // it as the map spreads it (`settling.ts`), so the sheet never shows a color
 // it later changes. Each area's name is lettered in the map's survey capitals
 // once its last answer is in. While the world bakes, the pen draws each
-// building's and landmark's mark at its laid-out place, one by one; once the
-// world stands, its hill shade, water, contours, trails and trees come in;
-// then the paper folds away into the world, as a jump on the map does.
-// Nothing else moves: a lull is a still map.
+// building's and landmark's mark at its laid-out place, one by one. Once the
+// world stands, its relief is drawn in with the same hand: the hills, ponds,
+// contours and trees wash in over each area's own ground, from the middle
+// outward as the pen went over the borders, while the pen draws each river
+// from its source to its mouth and each trail along its way. Then the paper
+// folds away into the world, as a jump on the map does. Nothing else moves:
+// a lull is a still map.
 //
 // The washes are painted by the field map's own painter (`wash.ts`) in the
 // page's idle time, a few milliseconds a step: each change is laid on a
 // canvas over just the part of the sheet it touches, paper and all, shown by
 // a CSS opacity transition over what was there, then copied into the sheet
 // beneath it. Names and marks are small canvases revealed by transforms, and
-// the borders are SVG paths drawn by a transition of their dash, so nothing
-// here redraws per frame and a busy page thread never stalls the sheet.
+// the borders, rivers and trails are SVG paths drawn by a transition of their
+// dash, so nothing here redraws per frame and a busy page thread never stalls
+// the sheet.
 
 import type { Outline } from "@gaia/terrain";
 import type { LotPlace } from "@gaia/world";
@@ -35,10 +39,30 @@ import type { WaitView } from "./wait.ts";
 /**
  * How the map paints itself, ms, as wait.css times it: the pen over one border and the most it staggers over all of
  * them; a wash coming in; a name being lettered, and the least time between two; a mark coming in, the time between
- * two marks, at least and at most, and the most all the marks take; the relief coming in, and its second layer's
- * start after the first; and the moment after the last thing arrived before the paper folds away, and the fold.
+ * two marks, at least and at most, and the most all the marks take; the relief's wash staggered over the areas, and
+ * one area's coming in; the pen over the rivers and the trails, when it starts on each after the relief begins, how
+ * far it goes a millisecond in the sheet's pixels, the least and the most one line takes, and the time between two
+ * lines; the field map's own drawing of it all laid over at the end; and the moment after the last thing arrived
+ * before the paper folds away, and the fold.
  */
-const PACE = { penMs: 1300, penSpreadMs: 2100, washMs: 1400, nameMs: 900, nameGapMs: 120, markMs: 700, markGapMs: [200, 600], marksMs: 5000, reliefMs: 1400, reliefGapMs: 300, restMs: 300, foldMs: 1100 } as const;
+const PACE = {
+  penMs: 1300,
+  penSpreadMs: 2100,
+  washMs: 1400,
+  nameMs: 900,
+  nameGapMs: 120,
+  markMs: 700,
+  markGapMs: [200, 600],
+  marksMs: 5000,
+  relief: { spreadMs: 1200, ms: 1000 },
+  rivers: { startMs: 250, pxPerMs: 0.5, ms: [600, 2000], gapMs: 120 },
+  trails: { startMs: 700, pxPerMs: 0.7, ms: [400, 1400], gapMs: 60 },
+  wholeMs: 500,
+  restMs: 300,
+  foldMs: 1100,
+} as const;
+/** How far an area's relief wash reaches past its own ground, and how soft its edge is, in cells. */
+const FEATHER = { reach: 2, soft: 0.8 } as const;
 /** Paper pixels round a change that are painted again with it: as far as its wash bleeds, and a cell for the smoothing of its cells. */
 const AROUND = 40;
 /** The most a run of idle work may take, ms, and how much of an idle slot it leaves. */
@@ -48,7 +72,6 @@ const SPARE_MS = 2;
 const STYLE = MAP_STYLE;
 const SVG = "http://www.w3.org/2000/svg";
 const wait = (ms: number): Promise<void> => new Promise((r) => window.setTimeout(r, ms));
-const frame = (): Promise<void> => new Promise((r) => requestAnimationFrame(() => r()));
 /** Shows `el` by its CSS transition: a frame after it joins the page, so it starts from nothing. */
 const show = (el: Element): void => void requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add("shown")));
 
@@ -561,46 +584,195 @@ export function createMapWait(veil: HTMLElement): WaitView {
     reliefShown = (async () => {
       // Over the washes as they finally lie, so the relief comes in over exactly what is there.
       await allWashed();
-      const sheets: HTMLCanvasElement[] = [];
-      await new Promise<void>((resolve) =>
+      const zoom = side / (l.reach * 2);
+      const sx = (x: number): number => (x + l.reach) * zoom;
+      const sheetOf = (from: CanvasImageSource): CanvasRenderingContext2D => {
+        const canvas = document.createElement("canvas");
+        canvas.width = canvas.height = l.device;
+        const c = canvas.getContext("2d") as CanvasRenderingContext2D;
+        c.drawImage(from, 0, 0);
+        return c;
+      };
+      const drawn = await new Promise<{ readonly whole: HTMLCanvasElement; readonly washes: readonly HTMLCanvasElement[] }>((resolve) =>
         work(
           (function* (): Generator<void> {
-            const zoom = side / (l.reach * 2);
-            const sx = (x: number): number => (x + l.reach) * zoom;
-            const sheetOf = (from: CanvasImageSource): CanvasRenderingContext2D => {
-              const canvas = document.createElement("canvas");
-              canvas.width = canvas.height = l.device;
-              canvas.className = "wait-relief";
-              const c = canvas.getContext("2d") as CanvasRenderingContext2D;
-              c.drawImage(from, 0, 0);
-              sheets.push(canvas);
-              return c;
-            };
-            // The hills, the ponds and the rivers first; then the contours over them, the trails and the trees.
-            const hills = sheetOf(ground);
-            const contours = yield* paintRelief(hills, stood.terrain, STYLE, l.reach, l.device);
-            hills.setTransform(dpr, 0, 0, dpr, 0, 0);
-            drawRivers(hills, stood.terrain.streams, sx, sx, zoom);
+            // What washes in over the areas: the hills and the ponds, the contours over them and the trees. And the
+            // whole relief as the field map draws it, the rivers and the trails too, laid over once it is all in.
+            const lands = sheetOf(ground);
+            const contours = yield* paintRelief(lands, stood.terrain, STYLE, l.reach, l.device);
+            const whole = sheetOf(lands.canvas);
+            whole.setTransform(dpr, 0, 0, dpr, 0, 0);
+            drawRivers(whole, stood.terrain.streams, sx, sx, zoom);
             yield;
-            const lines = sheetOf(hills.canvas);
-            lines.setTransform(dpr * zoom, 0, 0, dpr * zoom, dpr * (side / 2), dpr * (side / 2));
-            strokeContours(lines, contours, zoom, STYLE);
-            lines.setTransform(dpr, 0, 0, dpr, 0, 0);
+            for (const c of [lands, whole]) {
+              c.setTransform(dpr * zoom, 0, 0, dpr * zoom, dpr * (side / 2), dpr * (side / 2));
+              strokeContours(c, contours, zoom, STYLE);
+              c.setTransform(dpr, 0, 0, dpr, 0, 0);
+              yield;
+            }
+            drawTrails(whole, stood.ways, sx, sx, zoom, 1, STYLE);
+            for (const c of [lands, whole]) drawTrees(c, stood.trees, sx, sx, zoom, 1, STYLE, () => true);
             yield;
-            drawTrails(lines, stood.ways, sx, sx, zoom, 1, STYLE);
-            drawTrees(lines, stood.trees, sx, sx, zoom, 1, STYLE, () => true);
-            resolve();
+            const washes = yield* reliefWashes(l, lands.canvas);
+            resolve({ whole: whole.canvas, washes });
           })(),
         ),
       );
-      for (const [q, canvas] of sheets.entries()) {
-        layers.append(canvas);
-        await frame();
-        await frame();
-        canvas.classList.add("shown");
-        await wait(q === sheets.length - 1 ? PACE.reliefMs : PACE.reliefGapMs);
-      }
+      // The relief washes in over each area's own ground, from the middle outward; the pen draws the rivers and then
+      // the trails as it does.
+      drawn.washes.forEach((layer, q) => {
+        layer.style.transitionDuration = `${PACE.relief.ms}ms`;
+        layer.style.transitionDelay = `${Math.round((q / Math.max(1, drawn.washes.length - 1)) * PACE.relief.spreadMs)}ms`;
+        layers.append(layer);
+        show(layer);
+      });
+      const pens = penLines(l, stood, zoom);
+      layers.append(pens.svg);
+      show(pens.svg);
+      await wait(Math.max(PACE.relief.spreadMs + PACE.relief.ms, pens.ms));
+      // Then the field map's own drawing of all of it is laid over, the same but for where a line crosses a tree, and
+      // the sheet keeps it.
+      const whole = drawn.whole;
+      whole.className = "wait-relief";
+      whole.style.transitionDuration = `${PACE.wholeMs}ms`;
+      layers.append(whole);
+      show(whole);
+      await wait(PACE.wholeMs + 100);
+      groundCtx.drawImage(whole, 0, 0);
+      for (const layer of [...drawn.washes, pens.svg, whole]) layer.remove();
     })();
+  }
+
+  /**
+   * The relief over each area's own ground, as the cells divide the sheet, feathered a little past it so neighbors
+   * coming in overlap softly: each a layer waiting to be shown, nearest the middle first. Every pixel is wholly
+   * inside one area's layer, so once all are in the sheet is the relief exactly.
+   */
+  function* reliefWashes(l: Land, from: HTMLCanvasElement): Generator<void, HTMLCanvasElement[]> {
+    const { n, nearest } = l;
+    const cellPx = (CELL * l.device) / (l.reach * 2);
+    const boxes = new Map<number, { i0: number; j0: number; i1: number; j1: number; x: number; z: number; m: number }>();
+    for (let c = 0; c < n * n; c++) {
+      const a = nearest[c] as number;
+      if (a < 0) continue;
+      const [i, j] = [c % n, Math.floor(c / n)];
+      const b = boxes.get(a);
+      if (b === undefined) boxes.set(a, { i0: i, j0: j, i1: i, j1: j, x: i, z: j, m: 1 });
+      else Object.assign(b, { i0: Math.min(b.i0, i), j0: Math.min(b.j0, j), i1: Math.max(b.i1, i), j1: Math.max(b.j1, j), x: b.x + i, z: b.z + j, m: b.m + 1 });
+    }
+    yield;
+    const pad = Math.ceil(FEATHER.reach + FEATHER.soft * 3);
+    const order = [...boxes].sort(([, a], [, b]) => Math.hypot(a.x / a.m - n / 2, a.z / a.m - n / 2) - Math.hypot(b.x / b.m - n / 2, b.z / b.m - n / 2));
+    const out: HTMLCanvasElement[] = [];
+    for (const [a, b] of order) {
+      const [i0, j0, i1, j1] = [Math.max(0, b.i0 - pad), Math.max(0, b.j0 - pad), Math.min(n - 1, b.i1 + pad), Math.min(n - 1, b.j1 + pad)];
+      const [cols, rows] = [i1 - i0 + 1, j1 - j0 + 1];
+      // Its own cells, and the same reached a little farther, a pixel a cell.
+      const own = new ImageData(cols, rows);
+      const reached = new ImageData(cols, rows);
+      const r = FEATHER.reach;
+      for (let j = j0; j <= j1; j++) {
+        for (let i = i0; i <= i1; i++) {
+          if (nearest[j * n + i] !== a) continue;
+          own.data[((j - j0) * cols + (i - i0)) * 4 + 3] = 255;
+          for (let dj = -r; dj <= r; dj++) for (let di = -r; di <= r; di++) if (di * di + dj * dj <= r * r && i + di >= i0 && i + di <= i1 && j + dj >= j0 && j + dj <= j1) reached.data[((j + dj - j0) * cols + (i + di - i0)) * 4 + 3] = 255;
+        }
+      }
+      const cells = document.createElement("canvas");
+      cells.width = cols;
+      cells.height = rows;
+      const cc = cells.getContext("2d") as CanvasRenderingContext2D;
+      // In whole pixels of the sheet, so the layer lies on it exactly.
+      const [x0, y0] = [Math.floor(i0 * cellPx), Math.floor(j0 * cellPx)];
+      const [x1, y1] = [Math.min(l.device, Math.ceil((i1 + 1) * cellPx)), Math.min(l.device, Math.ceil((j1 + 1) * cellPx))];
+      const layer = document.createElement("canvas");
+      layer.width = x1 - x0;
+      layer.height = y1 - y0;
+      const c = layer.getContext("2d") as CanvasRenderingContext2D;
+      const [ox, oy, w, h] = [i0 * cellPx - x0, j0 * cellPx - y0, cols * cellPx, rows * cellPx];
+      // The reach softened into a feather, then its own ground whole over it, then the relief cut to the two.
+      cc.putImageData(reached, 0, 0);
+      c.filter = `blur(${(FEATHER.soft * cellPx).toFixed(2)}px)`;
+      c.drawImage(cells, ox, oy, w, h);
+      c.filter = "none";
+      cc.clearRect(0, 0, cols, rows);
+      cc.putImageData(own, 0, 0);
+      c.imageSmoothingEnabled = false;
+      c.drawImage(cells, ox, oy, w, h);
+      c.globalCompositeOperation = "source-in";
+      c.drawImage(from, x0, y0, layer.width, layer.height, 0, 0, layer.width, layer.height);
+      layer.className = "wait-layer";
+      layer.style.left = `${(x0 / l.device) * 100}%`;
+      layer.style.top = `${(y0 / l.device) * 100}%`;
+      layer.style.width = `${(layer.width / l.device) * 100}%`;
+      layer.style.height = `${(layer.height / l.device) * 100}%`;
+      out.push(layer);
+      yield;
+    }
+    return out;
+  }
+
+  /**
+   * The pen's lines over the relief: each river from its source to its mouth in the field map's bank, water and
+   * glint, the longest first, then each trail along its way in its dots, at the pen's pace; with how long the pen
+   * takes over them all.
+   */
+  function penLines(l: Land, stood: StoodWorld, zoom: number): { readonly svg: SVGSVGElement; readonly ms: number } {
+    const svg = document.createElementNS(SVG, "svg");
+    svg.setAttribute("class", "wait-pens");
+    svg.setAttribute("viewBox", `${-l.reach} ${-l.reach} ${l.reach * 2} ${l.reach * 2}`);
+    const f = (v: number): string => v.toFixed(2);
+    /** A line's length on the sheet, and how long the pen takes over it. */
+    const timed = (points: readonly (readonly [number, number])[], pace: { readonly pxPerMs: number; readonly ms: readonly [number, number] }): number => {
+      let length = 0;
+      for (let k = 1; k < points.length; k++) length += Math.hypot((points[k] as [number, number])[0] - (points[k - 1] as [number, number])[0], (points[k] as [number, number])[1] - (points[k - 1] as [number, number])[1]);
+      return Math.max(pace.ms[0], Math.min(pace.ms[1], (length * zoom) / pace.pxPerMs));
+    };
+    const pen = (d: string, stroke: string, width: number, ms: number, delay: number, extra = ""): string =>
+      `<path class="pen" d="${d}" pathLength="1" stroke="${stroke}" stroke-width="${f(width / zoom)}" style="transition-duration:${Math.round(ms)}ms;transition-delay:${Math.round(delay)}ms"${extra}/>`;
+    let end = 0;
+    let html = "";
+    // Rivers, as `drawRivers` draws them: the same curve through each stream's stations and the same three strokes.
+    const streams = [...stood.terrain.streams].filter((s) => s.stations.length > 1).sort((a, b) => b.stations.length - a.stations.length);
+    streams.forEach((stream, q) => {
+      const st = stream.stations;
+      const first = st[0] as (typeof st)[number];
+      const last = st[st.length - 1] as (typeof st)[number];
+      let d = `M${f(first.x)} ${f(first.z)}`;
+      for (let k = 1; k < st.length - 1; k++) {
+        const [a, b] = [st[k] as (typeof st)[number], st[k + 1] as (typeof st)[number]];
+        d += `Q${f(a.x)} ${f(a.z)} ${f((a.x + b.x) / 2)} ${f((a.z + b.z) / 2)}`;
+      }
+      d += `L${f(last.x)} ${f(last.z)}`;
+      const width = 2 * Math.max(...st.map((s) => s.halfWidth)) * zoom;
+      const ms = timed(
+        st.map((s) => [s.x, s.z] as const),
+        PACE.rivers,
+      );
+      const delay = PACE.rivers.startMs + q * PACE.rivers.gapMs;
+      end = Math.max(end, delay + ms);
+      html += pen(d, "rgba(40,84,104,0.5)", Math.max(3.4, width + 2.6), ms, delay) + pen(d, "rgb(150,203,204)", Math.max(1.9, width), ms, delay) + pen(d, "rgba(250,244,222,0.45)", Math.max(0.5, width * 0.16), ms, delay);
+    });
+    // Trails, as `drawTrails` dots them, shown through a mask the pen draws along each.
+    const stride = Math.max(2, Math.round(3 / zoom)) * 2;
+    let dots = "";
+    let reveal = "";
+    stood.ways.forEach((trail, q) => {
+      const p = trail.points;
+      const points: [number, number][] = [];
+      for (let k = 0; k < p.length; k += stride) points.push([p[k] as number, p[k + 1] as number]);
+      if (points.length < 2) return;
+      const d = points.map(([x, z], k) => `${k === 0 ? "M" : "L"}${f(x)} ${f(z)}`).join("");
+      const width = 1.9 + trail.style.width * 0.35;
+      const ms = timed(points, PACE.trails);
+      const delay = PACE.trails.startMs + q * PACE.trails.gapMs;
+      end = Math.max(end, delay + ms);
+      dots += `<path d="${d}" fill="none" stroke="${STYLE.trail}" stroke-width="${f(width / zoom)}" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="${f(0.1 / zoom)} ${f(5.5 / zoom)}"/>`;
+      reveal += pen(d, "#fff", width * 4, ms, delay);
+    });
+    const box = `x="${-l.reach}" y="${-l.reach}" width="${l.reach * 2}" height="${l.reach * 2}"`;
+    svg.innerHTML = `<defs><mask id="wait-trails" maskUnits="userSpaceOnUse" ${box}>${reveal}</mask></defs>${html}<g mask="url(#wait-trails)">${dots}</g>`;
+    return { svg, ms: end };
   }
 
   return {
