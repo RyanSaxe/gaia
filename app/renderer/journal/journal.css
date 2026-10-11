@@ -123,6 +123,33 @@
 .jp-stroke.row { left: -15px; }
 .jp-stroke.line { left: calc(2.4em + 0.35em); }
 
+/* A definition's name, and where a long one's page ends, its fold: both turn to it in full, in the appendix. The fold is
+   an elision across the code, a dotted rule with how many lines it holds written by hand. */
+button.jp-name { border: 0; background: none; padding: 0; text-align: left; cursor: pointer; }
+.jp-fold {
+  display: none; position: absolute; left: 0; right: 12px; border: 0; background: none; padding: 0; cursor: pointer;
+  font: 13px/1.6 "Bradley Hand", Georgia, cursive; color: #7a5f45; align-items: center; gap: 10px;
+}
+.jp-fold.shown { display: flex; }
+.jp-fold::before, .jp-fold::after { content: ""; flex: 1; border-bottom: 1.4px dotted rgba(122, 95, 69, 0.5); }
+.jp-fold::before { flex: none; width: 3.5em; }
+
+/* In the appendix, everything Jev says about a definition comes before its code: each answer under its question, its
+   strength how sure Jev is, a score's wash as full as it stands; a block's answers under its lines. */
+.jp-back { border: 0; background: none; padding: 0; text-align: left; cursor: pointer; display: block; width: 100%; }
+.jp-said { display: flex; flex-direction: column; padding-right: 12px; margin-bottom: 14px; }
+.jp-said-row { font: 13px/1.62 "Iowan Old Style", Georgia, serif; }
+.jp-said-block { font: 600 8.5px/1.3 "Iowan Old Style", Georgia, serif; letter-spacing: .2em; text-transform: uppercase; color: #8a7458; padding-top: 6px; }
+/* What Jev says about a block stands in the code's own column, just above the block's first line, smaller. */
+.jp-said.in-code { margin: 0 0 2px calc(2.4em * 10.7 / 13 + 1.1em * 10.7 / 13); font-size: 13px; }
+.jp-said.in-code .jp-said-row.jp-fact { font-size: 11.5px; line-height: 1.5; }
+.jp-said.in-code .jp-fact-answer { font-size: 12.5px; }
+.jp-fact { display: flex; align-items: baseline; }
+.jp-fact-asked { font-variant: small-caps; letter-spacing: .04em; color: #6a5640; white-space: nowrap; }
+.jp-fact-answer { display: inline-flex; align-items: center; gap: 7px; font: 14px/1 "Bradley Hand", Georgia, cursive; color: #4a3a26; white-space: nowrap; }
+.jp-fact-answer i { display: block; width: 14px; height: 9px; border-radius: 50% 46% 52% 44%; background: #8a6a48; filter: url(#jp-wash); }
+.jp-fact-answer i.level { width: 30px; background: linear-gradient(90deg, #8a6a48 calc(var(--level) * 100%), rgba(122, 95, 69, 0.14) calc(var(--level) * 100%)); }
+
 /* A page a list runs on to carries a running head instead of the heading. */
 .jp-running { font: 600 9px/1.3 "Iowan Old Style", Georgia, serif; letter-spacing: .22em; text-transform: uppercase; color: #8a7458; padding-bottom: 8px; border-bottom: 1px solid rgba(120, 92, 60, 0.18); }
 

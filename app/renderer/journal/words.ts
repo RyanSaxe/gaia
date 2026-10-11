@@ -5,7 +5,7 @@
 // definition is its code. The book draws whatever words it is handed, so a
 // new kind of page needs nothing new in the book.
 
-import type { Judged, Span } from "@gaia/schema";
+import type { Choice, Judged, Score, Span, YesNo } from "@gaia/schema";
 import type { CodeSymbol, Journal, JournalEntry } from "@gaia/world";
 
 /**
@@ -65,6 +65,31 @@ export interface Code {
   readonly marks: readonly (Mark & { readonly from: number; readonly to: number })[];
 }
 
+/** One thing Jev says about a node, in plain words: what it was asked, and its answer. */
+export interface Fact {
+  readonly asked: string;
+  readonly answer: string;
+  /** How sure Jev is of a choice or a yes or no, 0 to 1. */
+  readonly sure?: number;
+  /** Where a score stands between its lowest level and its top, 0 to 1. */
+  readonly level?: number;
+}
+
+/** What Jev says about a definition itself, or about a block of its lines. */
+export interface Said {
+  readonly lines?: Span;
+  readonly facts: readonly Fact[];
+}
+
+/** A definition in full, for the appendix: everything Jev says about it, then every line of its code. */
+export interface Full {
+  readonly kind: "full";
+  readonly said: readonly Said[];
+  readonly first: number;
+  readonly lines: readonly string[];
+  readonly marks: readonly (Mark & { readonly from: number; readonly to: number })[];
+}
+
 export interface PageWords {
   /** The folders it lives in, outermost first, its file last for a definition: ["app", "world-service", "open-world.ts"]. */
   readonly path: readonly string[];
@@ -72,7 +97,7 @@ export interface PageWords {
   readonly vitality: number;
   /** A definition's first line, as the code writes it. */
   readonly signature?: string;
-  readonly body: Rows | Code;
+  readonly body: Rows | Code | Full;
 }
 
 /** What the words are read from: the world, each place's and file's vitality, and a file's text once it has arrived. */
@@ -85,6 +110,55 @@ export interface WordsSource {
   lines(path: string): readonly string[] | undefined;
   /** What Jev judged about a folder, entity, file or definition, and about each block of a definition's lines. */
   judged?(of: string): readonly Judgment[];
+}
+
+/** What each question Jev answers is called on the page; a question not named here is called by its own key. */
+const ASKED: Readonly<Record<string, string>> = {
+  kind: "kind",
+  role: "role",
+  attention: "why look",
+  stand: "stands out",
+  readability: "reads",
+  naming: "named",
+  doc: "documented",
+  errors: "errors",
+  change: "risk in changing",
+  cohesion: "holds together",
+  breaks: "a bug would break",
+  central: "central",
+  needsTests: "needs tests",
+  dead: "unused",
+};
+
+/**
+ * Everything Jev judged about a node, as the page says it: each answer under
+ * the question it answers, whatever questions the node was asked, so the
+ * journal follows Jev's questions as they change. A choice says its option
+ * and how sure Jev is; a score where it stands; a yes or no which, and how
+ * sure. Of what a node does, only what Jev says it does.
+ */
+export function factsOf(judged: Judged): Fact[] {
+  const facts: Fact[] = [];
+  const asked = (key: string): string => ASKED[key] ?? key;
+  const add = (key: string, a: Choice | Score | YesNo | undefined): void => {
+    if (a === undefined) return;
+    if ("choice" in a) facts.push({ asked: asked(key), answer: a.choice, sure: a.p[a.choice] ?? 0 });
+    else if ("score" in a) facts.push({ asked: asked(key), answer: a.score.toFixed(1), level: a.value });
+    else facts.push({ asked: asked(key), answer: a.p >= 0.5 ? "yes" : "no", sure: Math.max(a.p, 1 - a.p) });
+  };
+  add("attention", judged.attention);
+  add("role", judged.role);
+  add("kind", judged.kind);
+  for (const [k, q] of Object.entries(judged.quality ?? {})) add(k, q);
+  if (judged.importance !== undefined) {
+    add("breaks", judged.importance.breaks);
+    add("central", judged.importance.central);
+  }
+  add("needsTests", judged.needsTests);
+  add("dead", judged.dead);
+  add("stand", judged.stand);
+  for (const [k, yes] of Object.entries(judged.does ?? {})) if (yes.p >= 0.5) facts.push({ asked: "does", answer: k, sure: yes.p });
+  return facts;
 }
 
 const folders = (path: string): string[] => path.split("/").slice(0, -1);
@@ -145,4 +219,18 @@ export function wordsOf(src: WordsSource, e: JournalEntry): PageWords {
     ...(signature === undefined ? {} : { signature }),
     body: { kind: "code", first: line + 1, lines: text?.slice(line, line + count - 1) ?? [], opensAt: line + 1, marks },
   };
+}
+
+/** A definition's words for the appendix: its name and signature, everything Jev says about it, then all of its code. */
+export function appendixWords(src: WordsSource, e: JournalEntry): PageWords {
+  const page = wordsOf(src, e);
+  const judged = src.judged?.(e.of) ?? [];
+  const said: Said[] = [...judged]
+    .sort((a, b) => (a.lines?.start ?? 0) - (b.lines?.start ?? 0))
+    .flatMap((j) => {
+      const facts = factsOf(j.judged);
+      return facts.length === 0 ? [] : [{ ...(j.lines === undefined ? {} : { lines: j.lines }), facts }];
+    });
+  if (page.body.kind !== "code") return page;
+  return { ...page, body: { kind: "full", said, first: page.body.first, lines: page.body.lines, marks: page.body.marks } };
 }
