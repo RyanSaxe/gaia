@@ -23,8 +23,8 @@ export interface Paintings {
    * thing small in its land, as the title page's frontispiece shows the world.
    */
   picture(id: string, wide?: boolean): HTMLCanvasElement;
-  /** Paints these after anything asked for, in this order. */
-  ahead(ids: readonly string[]): void;
+  /** Paints these after anything asked for, in this order; `wide`, as the title page's frontispiece. */
+  ahead(ids: readonly string[], wide?: boolean): void;
   /** How far the painting of `id` is: not begun, under way, done, or nothing stands for it. */
   state(id: string): "waiting" | "painting" | "done" | "none";
   /** Forgets every painting, for a world that changed. */
@@ -138,8 +138,8 @@ export function createPaintings(view: (id: string, w: number, h: number, wide?: 
       }
       return canvas;
     },
-    ahead(ids) {
-      for (const id of ids) if (entry(id).state === "waiting" && !queue.includes(id)) queue.push(id);
+    ahead(things, wide = false) {
+      for (const id of things.map((t) => (wide ? `${WIDE}${t}` : t))) if (entry(id).state === "waiting" && !queue.includes(id)) queue.push(id);
       void next();
     },
     state: (id) => paintings.get(id)?.state ?? "waiting",
