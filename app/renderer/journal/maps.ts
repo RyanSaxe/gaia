@@ -45,23 +45,7 @@ export function drawMapPage(src: MapSource, area: string, w: number, h: number, 
   if (area === "") {
     const reach = landReach(places);
     view = { x: 0, z: 0, zoom: Math.max(w / (reach.x * 2), h / (reach.z * 2)) * 1.02 };
-  } else {
-    const own = places.cells.filter((k) => mine(k.area));
-    const xs = own.map((k) => k.x);
-    const zs = own.map((k) => k.z);
-    const [x0, x1, z0, z1] = [Math.min(...xs) - 12, Math.max(...xs) + 12, Math.min(...zs) - 12, Math.max(...zs) + 12];
-    view = { x: (x0 + x1) / 2, z: (z0 + z1) / 2, zoom: Math.min(w / (x1 - x0), h / (z1 - z0)) };
-    // A folder at the land's edge: the map slides in toward the land's middle until the whole page is land, the
-    // folder against that side of the page, so the page is painted to its edges and never shows the wild past it.
-    const hw = w / 2 / view.zoom;
-    const hh = h / 2 / view.zoom;
-    const inside = (cx: number, cz: number): boolean => [-1, 1].every((sx) => [-1, 1].every((sz) => pastTheEdge(places, cx + sx * hw, cz + sz * hh) <= 0));
-    for (let t = 1; t >= 0; t -= 0.02) {
-      if (!inside(view.x * t, view.z * t) && t > 0) continue;
-      view = { ...view, x: view.x * t, z: view.z * t };
-      break;
-    }
-  }
+  } else view = folderView(places, area, w, h);
   drawLand(ctx, w, h, paper, src.stood(), view, 1.35, true);
   const sx = (x: number): number => (x - view.x) * view.zoom + w / 2;
   const sy = (z: number): number => (z - view.z) * view.zoom + h / 2;
@@ -121,6 +105,77 @@ export function drawMapPage(src: MapSource, area: string, w: number, h: number, 
     letterName(ctx, p.label, x, y, p.size, paper.style);
   }
   return canvas;
+}
+
+/** How far inside the land's rim every corner of a folder's map keeps, meters, so the page is painted to its edges. */
+const INSIDE = 6;
+
+/**
+ * The view of a folder's map: of every page-shaped window that fits wholly
+ * inside the land, the one most nearly the folder's own land, the most of the
+ * folder and the least of the land around it. The page is painted to its
+ * edges, and a folder whose land is not the page's shape runs off them.
+ */
+function folderView(places: WorldPlaces, area: string, w: number, h: number): { x: number; z: number; zoom: number } {
+  const reach = landReach(places);
+  // The land's cells counted on a grid, the folder's and all, summed so any window's count is four lookups.
+  const n = 96;
+  const [bx, bz] = [(reach.x * 2) / n, (reach.z * 2) / n];
+  const sums = [new Float64Array((n + 1) * (n + 1)), new Float64Array((n + 1) * (n + 1))] as const;
+  let own = 0;
+  let [mx, mz] = [0, 0];
+  for (const k of places.cells) {
+    const i = Math.max(0, Math.min(n - 1, Math.floor((k.x + reach.x) / bx)));
+    const j = Math.max(0, Math.min(n - 1, Math.floor((k.z + reach.z) / bz)));
+    const at = (j + 1) * (n + 1) + i + 1;
+    sums[0][at] = (sums[0][at] as number) + 1;
+    if (k.area === area || k.area.startsWith(`${area}/`)) {
+      sums[1][at] = (sums[1][at] as number) + 1;
+      own++;
+      mx += k.x;
+      mz += k.z;
+    }
+  }
+  [mx, mz] = [mx / Math.max(1, own), mz / Math.max(1, own)];
+  const v = (t: Float64Array, i: number, j: number): number => t[j * (n + 1) + i] as number;
+  for (const t of sums) for (let j = 1; j <= n; j++) for (let i = 1; i <= n; i++) t[j * (n + 1) + i] = v(t, i, j) + v(t, i, j - 1) + v(t, i - 1, j) - v(t, i - 1, j - 1);
+  const count = (t: Float64Array, x: number, z: number, hw: number, hh: number): number => {
+    const i0 = Math.max(0, Math.min(n, Math.round((x - hw + reach.x) / bx)));
+    const i1 = Math.max(0, Math.min(n, Math.round((x + hw + reach.x) / bx)));
+    const j0 = Math.max(0, Math.min(n, Math.round((z - hh + reach.z) / bz)));
+    const j1 = Math.max(0, Math.min(n, Math.round((z + hh + reach.z) / bz)));
+    return v(t, i1, j1) - v(t, i1, j0) - v(t, i0, j1) + v(t, i0, j0);
+  };
+  // The land is convex, so a window is inside it when its corners are.
+  const fits = (x: number, z: number, hw: number, hh: number): boolean => [-1, 1].every((sx) => [-1, 1].every((sz) => pastTheEdge(places, x + sx * hw, z + sz * hh) <= -INSIDE));
+  /**
+   * How nearly a window is the folder's land: what it holds of the folder over all the land the two cover, a little
+   * less the farther it sits from the folder's middle, so a small folder's map is centered on it.
+   */
+  const share = (x: number, z: number, hw: number, hh: number): number => {
+    const mine = count(sums[1], x, z, hw, hh);
+    return (mine / (own + count(sums[0], x, z, hw, hh) - mine)) * (1 - 0.25 * Math.min(1, Math.hypot(x - mx, z - mz) / Math.hypot(hw, hh)));
+  };
+  let best = { x: 0, z: 0, zoom: Math.max(w / (reach.x * 2), h / (reach.z * 2)), share: -1 };
+  const consider = (x: number, z: number, zoom: number): void => {
+    const [hw, hh] = [w / 2 / zoom, h / 2 / zoom];
+    if (zoom > closest || !fits(x, z, hw, hh)) return;
+    const s = share(x, z, hw, hh);
+    if (s > best.share) best = { x, z, zoom, share: s };
+  };
+  // The widest window that fits is a page as tall as the land; the narrowest, a fifth of that, so even a small
+  // folder's map holds some of the land around it at a scale its trees and ways still read at.
+  const widest = Math.max(w / (reach.x * 2), h / (reach.z * 2));
+  const closest = widest * 5;
+  for (let zoom = widest; zoom <= closest; zoom *= 1.08) {
+    for (let j = 0; j <= 24; j++) for (let i = 0; i <= 24; i++) consider(-reach.x + (reach.x * 2 * i) / 24, -reach.z + (reach.z * 2 * j) / 24, zoom);
+  }
+  // Then finer, around the best.
+  for (let step = (reach.x * 2) / 48; step > 1; step /= 2) {
+    const { x, z, zoom } = best;
+    for (const [dx, dz, dzoom] of [[step, 0, 1], [-step, 0, 1], [0, step, 1], [0, -step, 1], [0, 0, 1.03], [0, 0, 1 / 1.03]] as const) consider(x + dx, z + dz, zoom * dzoom);
+  }
+  return { x: best.x, z: best.z, zoom: best.zoom };
 }
 
 /** A page-sized half of a spread's map, as a canvas of its own. */
