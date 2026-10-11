@@ -304,6 +304,9 @@ export function buildingClearings(b: { readonly plan: BuildingPlan; readonly bes
 const landmarkCount = (regions: number): number => Math.min(regions, Math.max(2, Math.round(Math.sqrt(regions) * 1.4)));
 
 /** How far trees keep from a landmark's middle: a great tree's crown needs room. */
+/** The sizes a crowded definition tries, largest first, before it is left out: its own, then a little smaller. */
+const SHRINKS = [1, 0.75, 0.55] as const;
+
 const treeClearance = (lm: StandLandmark): number => lm.base + (lm.name.startsWith("Great") ? 12 : 5);
 
 /**
@@ -513,27 +516,38 @@ export function standWorld(t: Terrain, req: StandRequest): Stand {
     ...trailDiscs(network, 0.5),
     ...landmarks.map((s) => ({ x: s.site.x, z: s.site.z, radius: (req.landmarks[s.landmark]?.base ?? 2) + 1 })),
   ];
-  // A file's finer entities stand where the layout put them, kept off water, steep ground and whatever else stands.
+  // A file's definitions stand where the layout put them, kept off water, steep ground and whatever else stands:
+  // the largest first, so a file's landmark keeps its plot, each moved a little where its spot is taken, and stood
+  // a size smaller where nothing near is clear rather than left out.
   const standing: Placement[] = [];
   /** Each standing entity with the room decoration leaves it, so nothing crowds it. */
   const roomy: Occupied[] = [];
-  const symbols = (code?.symbols ?? []).map((sym, i): number => {
-    const reach = sym.radius * sym.scale;
-    const clash = (x: number, z: number): boolean => isWet(t, x, z) || slopeAt(t.lattice, x, z) > 24 || blocked(x, z) || occupied.some((o) => Math.hypot(o.x - x, o.z - z) < o.radius + reach);
-    let at: [number, number] | null = clash(sym.x, sym.z) ? null : [sym.x, sym.z];
-    for (let k = 1; at === null && k <= 8; k++) {
-      const a = k * 2.4;
-      const x = sym.x + Math.cos(a) * k * 0.6;
-      const z = sym.z + Math.sin(a) * k * 0.6;
-      if (!clash(x, z)) at = [x, z];
+  const syms = code?.symbols ?? [];
+  const symbols = syms.map(() => -1);
+  const order = syms.map((_, i) => i).sort((a, b) => (syms[b] as StandSymbol).radius * (syms[b] as StandSymbol).scale - (syms[a] as StandSymbol).radius * (syms[a] as StandSymbol).scale || a - b);
+  for (const i of order) {
+    const sym = syms[i] as StandSymbol;
+    let at: [number, number, number] | null = null;
+    for (const shrink of SHRINKS) {
+      const reach = sym.radius * sym.scale * shrink;
+      const clash = (x: number, z: number): boolean => isWet(t, x, z) || slopeAt(t.lattice, x, z) > 24 || blocked(x, z) || occupied.some((o) => Math.hypot(o.x - x, o.z - z) < o.radius + reach);
+      for (let k = 0; at === null && k <= 24; k++) {
+        const a = k * 2.4;
+        const x = sym.x + Math.cos(a) * k * 0.6;
+        const z = sym.z + Math.sin(a) * k * 0.6;
+        if (!clash(x, z)) at = [x, z, shrink];
+      }
+      if (at !== null) break;
     }
-    if (at === null) return -1;
-    const [x, z] = at;
+    if (at === null) continue;
+    const [x, z, shrink] = at;
+    const scale = sym.scale * shrink;
+    const reach = sym.radius * scale;
     occupied.push({ x, z, radius: reach + 0.4 });
     roomy.push({ x, z, radius: reach + 2.2 });
-    standing.push({ rule: sym.rule, variant: sym.variant, x, y: heightAt(t.lattice, x, z) - 0.05, z, yaw: ((i * 2.399) % (Math.PI * 2)), scale: sym.scale, radius: reach, slope: [0, 0], region: t.region[Math.round((z - t.lattice.origin) / t.lattice.spacing) * t.lattice.n + Math.round((x - t.lattice.origin) / t.lattice.spacing)] ?? 0, vitality: sym.vitality });
-    return standing.length - 1;
-  });
+    standing.push({ rule: sym.rule, variant: sym.variant, x, y: heightAt(t.lattice, x, z) - 0.05, z, yaw: ((i * 2.399) % (Math.PI * 2)), scale, radius: reach, slope: [0, 0], region: t.region[Math.round((z - t.lattice.origin) / t.lattice.spacing) * t.lattice.n + Math.round((x - t.lattice.origin) / t.lattice.spacing)] ?? 0, vitality: sym.vitality });
+    symbols[i] = standing.length - 1;
+  }
   // The understory grows where it belongs: it reads the groves' crowns, and in a world from code each region's character.
   const rules = code === undefined ? req.understory.rules : req.understory.rules.map((rule) => ({ ...rule, regions: t.spec.regions.map((_, i) => (rule.regions?.[i] ?? 1) * (code.regions[i]?.understory[rule.id] ?? 1)) }));
   const open = code === undefined ? req.understory.open : t.spec.regions.map((_, i) => code.regions[i]?.open ?? req.understory.open?.[i]);
