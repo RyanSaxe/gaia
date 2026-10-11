@@ -1,6 +1,6 @@
-# Working as four sessions
+# Working as three sessions
 
-Four sessions build Gaia at once. Each is its own pair session with the
+Three sessions build Gaia at once. Each is its own pair session with the
 reviewer, works in its own worktree and branch, and merges into `main` in
 small pieces. This page says who owns what, how work reaches `main`, and how
 each worktree keeps the current world to iterate on.
@@ -8,7 +8,6 @@ each worktree keeps the current world to iterate on.
 | Session | Worktree | Branch | Lab port |
 | --- | --- | --- | --- |
 | Components | `~/worktrees/gaia-v3/components` | `components` | 5181 |
-| Paper and wayfinding | `~/worktrees/gaia-v3/paper` | `paper` | 5182 |
 | Engine and Jev | `~/worktrees/gaia-v3/engine-jev` | `engine-jev` | 5183 |
 | World | `~/worktrees/gaia-v3/world` | `world` | 5184 |
 
@@ -28,10 +27,6 @@ and leaves the change to that session.
   - `packages/primitives`, `packages/kinds` and `packages/realize`, except the wind field (below).
   - The plant, bark and building shaders in `packages/render` (`plant.ts`, `instances.ts`, `smoke.ts`, `sway.ts`).
   - The Components tab (`app/renderer/flora`, `app/renderer/world`).
-- **Paper and wayfinding:** everything the person reads.
-  - The field map, the minimap, selection and the sketch page.
-  - The waiting screen, the start page and the mark.
-  - `app/renderer/immersive`, `wait`, `start` and `brand`, and their styles in `app/renderer/lab.css`.
 - **Engine and Jev:** reading code and asking Jev.
   - `engine/` and the facts in `packages/schema/src/facts.ts`.
   - Request planning and judging in `packages/world` (`planWorldRequests`, `judgeWorld`, the stand-in, the designs, `outline.ts`, `judging.ts`, `context.ts`, `planner.ts`).
@@ -44,6 +39,7 @@ and leaves the change to that session.
   - Light, sky and the wind field (`light.ts`, `shadow.ts`, `clearings.ts`, `wind-field.ts` in `packages/render`; `day.ts`, `sky.ts`, `world.ts`, `wind-field.ts` in `packages/realize`).
   - The app shell (`app/main`, `app/preload`, `app/world-service/index.ts`).
   - Smoothness, the proving ground, CI, `AGENTS.md`, the README and merging to `main`.
+  - Everything the person reads, taken over from the Paper and wayfinding session when it closed in round 30: the traveller's journal, the field map, the minimap, selection and a thing's page; the waiting screen, the start page and the mark (`app/renderer/immersive`, `wait`, `start` and `brand`, and their styles in `app/renderer/lab.css`).
 
 **Wind is split by what it is.**
 - The field is World's: where and when it blows, its direction, breeze, gusts and overall strength (`wind-field.ts` in `packages/realize` and `packages/render`: `WIND_FIELD`, `gustAt`, `windDirAt` and `WIND_FIELD_GLSL`).
