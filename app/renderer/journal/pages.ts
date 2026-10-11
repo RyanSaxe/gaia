@@ -1,16 +1,18 @@
 // What the journal opens onto, spread by spread: the map across the
 // endpapers; the title page facing the contents, the contents running on as
 // far as they need; then each place and thing in the order the code's tree
-// lists them (`journalOf`), its picture facing its first page, and a long
-// list running on over the spreads after. Each spread is drawn from its words
-// (`words.ts`) and its picture when it comes into view; until the pictures
-// are painted, a left-hand page is bare paper.
+// lists them (`journalOf`). A container, a folder or a file with
+// definitions, faces its map; a thing faces its painting, captioned with
+// what Jev says of it; a long list runs on over the spreads after. Each
+// spread is drawn from its words (`words.ts`) and its picture when it comes
+// into view, never before its picture is ready.
 
-import type { Journal, JournalEntry, PageRoom } from "@gaia/world";
+import { type Journal, type JournalEntry, type PageRoom, entityOf } from "@gaia/world";
 import type { BookPages, Spread } from "./book.ts";
+import { type CaptionFact, captionOf } from "./caption.ts";
 import { tapsOf } from "./maps.ts";
 import { fullItems, renderFullPage, renderPage, renderPicture, renderTitle, renderTraveller } from "./page.ts";
-import { type Full, type PageWords, type WordsSource, appendixWords, contentsWords, wordsOf } from "./words.ts";
+import { type Full, type PageWords, type WordsSource, appendixWords, contentsWords, fileOfEntry, wordsOf } from "./words.ts";
 
 /** A page's size, its own pixels. */
 const PAGE_SIZE = { w: 520, h: 660 } as const;
@@ -25,7 +27,7 @@ export interface JournalPagesSource {
   words(): WordsSource | null;
   /** One half of the whole land's map across the endpapers, or null before the map is painted. */
   endpaper(side: "left" | "right"): HTMLElement | null;
-  /** A folder's own map, for its chapter's left-hand page, or null before the map is painted. */
+  /** A folder's or a file's own map, for its left-hand page, or null before the map is painted. */
   map(area: string): HTMLElement | null;
   /** The painting of the thing a page is about, for its left-hand page, filling in as it is painted. */
   picture(of: string): HTMLElement;
@@ -45,8 +47,25 @@ export interface JournalPagesSource {
   travelTo(x: number, z: number): void;
   /** Takes the person to a thing, where its painting was seen from: a page's picture tapped. */
   travel(of: string): void;
-  /** Settles once a file's text has come, for a definition's page. */
+  /** Settles once a file's text has come, for a definition's page or a file's. */
   text(path: string): Promise<void>;
+}
+
+/** Whether an entry is a container, whose first spread faces its map: a folder, or a file with definitions. */
+const mapped = (e: JournalEntry): boolean => e.kind === "chapter" || (e.kind === "file" && e.lists.length > 0);
+
+/**
+ * What a thing's caption says, from what Jev judged about it: a definition's,
+ * a file's, or a folder's on its entity's painting, or on its map when it
+ * stands as nothing. A file with definitions says it on its own page.
+ */
+function captionFor(words: WordsSource, e: JournalEntry): CaptionFact[] {
+  const own = (of: string) => words.judged?.(of).find((j) => j.lines === undefined);
+  if (e.kind === "definition") return captionOf("definition", own(e.of));
+  if (e.kind === "own" || (e.kind === "file" && e.lists.length === 0)) return captionOf("file", own(e.of));
+  if (e.kind === "entity") return captionOf("folder", own(e.of));
+  if (e.kind === "chapter" && words.journal.entry(entityOf(e.of)) === undefined) return captionOf("folder", own(e.of));
+  return [];
 }
 
 /** The spreads a list of `rows` takes from its first page on: the first page faces its picture, the rest come two to a spread. */
@@ -56,10 +75,10 @@ const spreadsOf = (pages: number): number => 1 + Math.ceil((pages - 1) / 2);
 const SEP = "§";
 const nth = (of: string, k: number): string => (k === 0 ? of : `${of}${SEP}${k}`);
 /**
- * The appendix at the back: every definition in full, in the book's order,
- * each opening on a spread of its own. A place there names the definition
- * and its spread, or "end" for its last, whose number is known once its code
- * has come and been laid out.
+ * The appendix at the back: every definition and every file's own text in
+ * full, in the book's order, each opening on a spread of its own. A place
+ * there names the entry and its spread, or "end" for its last, whose number
+ * is known once its text has come and been laid out.
  */
 const APPENDIX = "appendix:";
 const inFull = (id: string, k: number | "end"): string => `${APPENDIX}${id}${SEP}${k}`;
@@ -114,11 +133,11 @@ type Slice = { readonly from: number; readonly to: number };
 function layOut(words: PageWords, body: Full, host: HTMLElement): Slice[] {
   const total = fullItems(body).length;
   const measure = (first: boolean, slice: Slice): { room: number; rows: { top: number; bottom: number }[] } => {
-    const page = renderFullPage(words, body, "", slice, first, () => {});
+    const page = renderFullPage(words, body, "", slice, first, () => {}, () => {});
     host.replaceChildren(page);
     const holder = page.querySelector(".jp-body") as HTMLElement;
     const top = holder.getBoundingClientRect().top;
-    const rows = [...holder.querySelectorAll<HTMLElement>(".jp-said-row, .jp-line")].map((r) => {
+    const rows = [...holder.querySelectorAll<HTMLElement>(".jp-said-row, .jp-line, .jp-fold.inline, .jp-rest")].map((r) => {
       const b = r.getBoundingClientRect();
       return { top: b.top - top, bottom: b.bottom - top };
     });
@@ -151,18 +170,18 @@ export function journalPages(src: JournalPagesSource): BookPages {
     }
     return indexed;
   };
-  /** Each definition's place in the appendix's order, and how its full code falls into pages once laid out. */
+  /** Each entry's place in the appendix's order, and how its full text falls into pages once laid out. */
   let definitions: { words: WordsSource | null; ids: readonly string[]; at: Map<string, number>; laid: Map<string, Slice[]> } | null = null;
   const inOrder = (): NonNullable<typeof definitions> => {
     const words = src.words();
     if (definitions === null || definitions.words !== words) {
-      const ids = words?.journal.entries.filter((e) => e.kind === "definition").map((e) => e.of) ?? [];
+      const ids = words?.journal.entries.filter((e) => fileOfEntry(e) !== undefined).map((e) => e.of) ?? [];
       definitions = { words, ids, at: new Map(ids.map((id, k) => [id, k])), laid: new Map() };
     }
     return definitions;
   };
   let host: HTMLElement | null = null;
-  /** A definition's pages in the appendix, laid out once its code has come; null before. */
+  /** An entry's pages in the appendix, laid out once its text has come; null before. */
   function pagesInFull(id: string): Slice[] | null {
     const words = src.words();
     const e = words?.journal.entry(id);
@@ -171,7 +190,8 @@ export function journalPages(src: JournalPagesSource): BookPages {
     const known = order.laid.get(id);
     if (known !== undefined) return known;
     const said = appendixWords(words, e);
-    if (said.body.kind !== "full" || words.lines(id.slice(0, id.indexOf("#"))) === undefined) return null;
+    const file = fileOfEntry(e);
+    if (said.body.kind !== "full" || file === undefined || words.lines(file) === undefined) return null;
     if (host === null) {
       host = document.createElement("div");
       host.className = "journal-measure";
@@ -195,7 +215,7 @@ export function journalPages(src: JournalPagesSource): BookPages {
     const kk = spreadIn(id, k);
     const page = (p: number): HTMLElement => {
       const slice = laid[p];
-      return slice === undefined ? blank() : renderFullPage(said, body, `${e.page.toLocaleString("en-US")}${lettered(p)}`, slice, p === 0, () => src.turnTo(id));
+      return slice === undefined ? blank() : renderFullPage(said, body, `${e.page.toLocaleString("en-US")}${lettered(p)}`, slice, p === 0, () => src.turnTo(id), src.turnTo);
     };
     return { left: page(2 * kk), right: page(2 * kk + 1) };
   }
@@ -208,15 +228,20 @@ export function journalPages(src: JournalPagesSource): BookPages {
    * map, when they are on this page; a tap on a folder's name turns to its
    * chapter, and a tap on its land takes the person there.
    */
-  const mapPage = (map: HTMLElement | null, f: string): HTMLElement => {
-    const page = renderPicture(map, f, (px, py) => {
-      const taps = tapsOf(map);
-      if (taps === null) return;
-      const name = taps.name(px, py);
-      if (name !== null) return src.turnTo(name);
-      const at = taps.at(px, py);
-      src.travelTo(at.x, at.z);
-    });
+  const mapPage = (map: HTMLElement | null, f: string, caption: readonly CaptionFact[] = []): HTMLElement => {
+    const page = renderPicture(
+      map,
+      f,
+      (px, py) => {
+        const taps = tapsOf(map);
+        if (taps === null) return;
+        const name = taps.name(px, py);
+        if (name !== null) return src.turnTo(name);
+        const at = taps.at(px, py);
+        src.travelTo(at.x, at.z);
+      },
+      caption,
+    );
     const taps = tapsOf(map);
     const me = src.person();
     const here = taps?.page(me.x, me.z);
@@ -227,10 +252,11 @@ export function journalPages(src: JournalPagesSource): BookPages {
   function entrySpread(words: WordsSource, e: JournalEntry, k: number): Spread {
     const said = wordsOf(words, e);
     // Page p of the entry's words (0 for the first): its number, and the slice of the list it holds.
-    const toFull = e.kind === "definition" ? () => src.turnTo(inFull(e.of, 0)) : undefined;
+    const toFull = fileOfEntry(e) !== undefined ? () => src.turnTo(inFull(e.of, 0)) : undefined;
     const page = (p: number): HTMLElement => (p >= e.pages ? blank() : renderPage(said, folio(e.page + p), src.turnTo, said.body.kind === "rows" ? rowsOn(p) : undefined, toFull));
-    // A chapter faces its folder's map; anything that stands faces its painting, bare paper until it is painted.
-    if (k === 0) return { left: e.kind === "chapter" ? mapPage(src.map(e.of), folio(e.page - 1)) : renderPicture(src.picture(e.of), folio(e.page - 1), () => src.travel(e.of)), right: page(0) };
+    // A container faces its map; a thing faces its painting, each captioned with what Jev says of it.
+    const caption = captionFor(words, e);
+    if (k === 0) return { left: mapped(e) ? mapPage(src.map(e.of), folio(e.page - 1), caption) : renderPicture(src.picture(e.of), folio(e.page - 1), () => src.travel(e.of), caption), right: page(0) };
     return { left: page(2 * k - 1), right: page(2 * k) };
   }
 
@@ -255,8 +281,11 @@ export function journalPages(src: JournalPagesSource): BookPages {
       // hand, rarely waits on either.
       const here = words.journal.entries.indexOf(e);
       const around = [...words.journal.entries.slice(here + 1, here + 1 + AHEAD), ...words.journal.entries.slice(Math.max(0, here - BEHIND), here)];
-      src.ahead(around.filter((n) => n.kind !== "chapter").map((n) => n.of));
-      for (const n of [e, ...around]) if (n.kind === "definition") void src.text(n.of.slice(0, n.of.indexOf("#")));
+      src.ahead(around.filter((n) => !mapped(n)).map((n) => n.of));
+      for (const n of [e, ...around]) {
+        const file = fileOfEntry(n);
+        if (file !== undefined) void src.text(file);
+      }
       return entrySpread(words, e, k);
     },
     next(at, by) {
@@ -291,20 +320,21 @@ export function journalPages(src: JournalPagesSource): BookPages {
     async ready(at) {
       const full = fullAt(at);
       const e = src.words()?.journal.entry(full?.id ?? (at.split(SEP)[0] as string));
-      if (e?.kind !== "definition") return;
-      await src.text(e.of.slice(0, e.of.indexOf("#")));
-      // A definition's appendix is laid out before the leaf that shows it moves.
+      const file = e === undefined ? undefined : fileOfEntry(e);
+      if (file === undefined) return;
+      await src.text(file);
+      // An entry's appendix is laid out before the leaf that shows it moves.
       if (full !== null) pagesInFull(full.id);
     },
     painted(at) {
       if (fullAt(at) !== null) return Promise.resolve();
       const [of, k = "0"] = at.split(SEP);
-      // The endpapers and a chapter's first spread are maps.
-      if (of === "map" || (k === "0" && src.words()?.journal.entry(of as string)?.kind === "chapter")) return src.mapped();
+      // The endpapers and a container's first spread are maps.
+      const e = src.words()?.journal.entry(of as string);
+      if (of === "map" || (k === "0" && e !== undefined && mapped(e))) return src.mapped();
       // The title page faces the contents, and a thing's first spread faces its painting.
       if (of === "contents") return k === "0" ? src.painted("") : Promise.resolve();
-      const e = src.words()?.journal.entry(of as string);
-      return e !== undefined && k === "0" && e.kind !== "chapter" ? src.painted(e.of) : Promise.resolve();
+      return e !== undefined && k === "0" ? src.painted(e.of) : Promise.resolve();
     },
     tabs() {
       const words = index().words;

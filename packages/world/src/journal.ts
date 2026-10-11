@@ -2,20 +2,27 @@
 // the world, in the order a file explorer lists the code. Each directory is a
 // chapter, its subdirectories chapters inside it, then its files; each file's
 // definitions follow it in the order they are written, and the definitions
-// inside one follow it. A directory that is also an entity, standing in the
-// world as a building or a landmark, has the entity's spread first in its
-// chapter, and the repository's own comes first of all. Every entry opens on
-// a spread: the left-hand page pictures it, and the right-hand page names it
-// and lists what it holds, a long list running on over the pages after. The
-// book says only what each page is about, what it lists and its pages; the
-// journal draws the rest from the world.
+// inside one follow it. A container (a directory, or a file with definitions)
+// opens on its map facing what it holds, and the first thing it holds is
+// itself as a thing: a directory standing as a building or a landmark has
+// that entity's spread first, and a file has its own, its painting facing its
+// own code. A leaf (a definition, or a file with nothing standing in it) is
+// its picture facing its content. The repository's own entity comes first of
+// all. Every entry opens on a spread: the left-hand page pictures it, and the
+// right-hand page names it and lists or shows what it holds, a long list
+// running on over the pages after. The book says only what each page is
+// about, what it lists and its pages; the journal draws the rest.
 
 import type { CodeArea, CodePatch, CodeSymbol, CodeThing, CodeTrail } from "./code-world.ts";
 
 export interface JournalEntry {
-  /** A chapter is a directory, an entity is the thing a directory stands as, a file is a file, a definition one of its definitions. */
-  readonly kind: "chapter" | "entity" | "file" | "definition";
-  /** What it is about: a directory's or a file's path, a definition's id (`<file>#<name>`), or `entity:<path>`. */
+  /**
+   * A chapter is a directory, an entity is the thing a directory stands as, a
+   * file is a file, its own is a file with definitions as a thing of its own
+   * (its own code), and a definition one of its definitions.
+   */
+  readonly kind: "chapter" | "entity" | "file" | "own" | "definition";
+  /** What it is about: a directory's or a file's path, a definition's id (`<file>#<name>`), `entity:<path>` or `own:<path>`. */
   readonly of: string;
   readonly name: string;
   /** The entry it sits under; a top-level chapter, a file at the root and the repository's entity sit under none. */
@@ -57,6 +64,8 @@ export interface JournalSource {
 
 /** The entry about the entity a directory stands as. */
 export const entityOf = (path: string): string => `entity:${path}`;
+/** The entry about a file with definitions as a thing of its own: its own code. */
+export const ownOf = (path: string): string => `own:${path}`;
 
 interface Item {
   readonly kind: JournalEntry["kind"];
@@ -92,15 +101,19 @@ export function journalOf(world: JournalSource, room: PageRoom = { first: Infini
   }
   const entityItem = (path: string): Item => ({ kind: "entity", of: entityOf(path), name: things.get(path)?.name ?? path });
   const listOf = (item: Item | { kind: "root"; of: string }): Item[] => {
-    if (item.kind === "chapter" || item.kind === "root") return [...(chapters.get(item.of) ?? []).sort(byName), ...(files.get(item.of) ?? []).sort(byName)];
+    // A container's first row is itself as a thing.
+    if (item.kind === "chapter" || item.kind === "root") return [...(things.has(item.of) ? [entityItem(item.of)] : []), ...(chapters.get(item.of) ?? []).sort(byName), ...(files.get(item.of) ?? []).sort(byName)];
     if (item.kind === "entity") return [...(joined.get(item.of.slice("entity:".length)) ?? [])].map(entityItem).sort(byName);
-    return (definitions.get(item.of) ?? []).sort((a, b) => a.line - b.line || byName(a.item, b.item)).map((d) => d.item);
+    if (item.kind === "own") return [];
+    const held = (definitions.get(item.of) ?? []).sort((a, b) => a.line - b.line || byName(a.item, b.item)).map((d) => d.item);
+    return item.kind === "file" && held.length > 0 ? [{ kind: "own", of: ownOf(item.of), name: item.name }, ...held] : held;
   };
   /** How many rows a page about `item` lists: a file lists every definition in it, nested ones included. */
   const rowsOf = (item: Item, lists: readonly Item[]): number => {
-    if (item.kind === "definition") return 0;
+    if (item.kind === "definition" || item.kind === "own") return 0;
     if (item.kind !== "file") return lists.length;
-    let n = 0;
+    // A file lists itself, when it holds definitions, then every definition in it.
+    let n = lists.length > 0 ? 1 : 0;
     const walk = (of: string): void => {
       for (const d of definitions.get(of) ?? []) {
         n++;
@@ -127,16 +140,9 @@ export function journalOf(world: JournalSource, room: PageRoom = { first: Infini
   const visit = (item: Item, under: string | undefined): void => {
     const lists = listOf(item);
     add(item, under, lists);
-    if (item.kind === "chapter" && things.has(item.of)) {
-      const entity = entityItem(item.of);
-      add(entity, item.of, listOf(entity));
-    }
-    if (item.kind !== "entity") for (const l of lists) visit(l, item.of);
+    // An entity lists the things it is joined to, which have chapters of their own; its own lists nothing.
+    if (item.kind !== "entity" && item.kind !== "own") for (const l of lists) visit(l, item.of);
   };
-  if (things.has("")) {
-    const root = entityItem("");
-    add(root, undefined, listOf(root));
-  }
   const contents = listOf({ kind: "root", of: "" });
   for (const item of contents) visit(item, undefined);
   return { name: world.name, contents: contents.map((c) => c.of), entries, entry: (of) => index.get(of) };
