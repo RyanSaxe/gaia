@@ -19,7 +19,7 @@ import { areaVitality, entityOf, journalOf } from "@gaia/world";
 import { SLIP_LOGO } from "../brand/logo.ts";
 import { onTap } from "../lab.ts";
 import { worldService } from "../service.ts";
-import type { WorldHandle } from "../terrain/lab.ts";
+import type { Landing, WorldHandle } from "../terrain/lab.ts";
 import { createCompass } from "./compass.ts";
 import { createJournalBook } from "../journal/book.ts";
 import { drawMapPage, halfOf } from "../journal/maps.ts";
@@ -81,9 +81,11 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
   layer.append(cover);
   let jumping = false;
   function jump(x: number, z: number, heart?: { readonly x: number; readonly z: number }): boolean {
-    if (jumping) return false;
     const at = world.landing(x, z, heart);
-    if (at === null) return false;
+    return at !== null && jumpTo(at);
+  }
+  function jumpTo(at: Landing): boolean {
+    if (jumping) return false;
     jumping = true;
     map.open(false);
     cover.classList.add("on");
@@ -169,6 +171,17 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
       frontispiece: () => paintings.picture("", true),
       ahead: (ofs) => paintings.ahead(ofs.map(standsFor)),
       turnTo: (at) => journal.turnTo(at),
+      // Words turn pages; a map's land and a page's picture take the person into the world, the book shutting as they go.
+      travelTo: (x, z) => {
+        journal.close();
+        jump(x, z);
+      },
+      travel: (of) => {
+        const at = world.seenFrom(standsFor(of));
+        if (at === null) return;
+        journal.close();
+        jumpTo(at);
+      },
       text: (path) => source.when(path),
     }),
     (open) => {

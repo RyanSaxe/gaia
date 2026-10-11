@@ -25,6 +25,15 @@ const DPR = 2;
 
 type Box = [number, number, number, number];
 
+/** What a tap on a map finds: the spot in the world under it, or the folder whose name it falls on. */
+export interface MapTaps {
+  at(px: number, py: number): { readonly x: number; readonly z: number };
+  name(px: number, py: number): string | null;
+}
+const taps = new WeakMap<HTMLCanvasElement, MapTaps>();
+/** How to read a tap on a map the journal drew, in its page's pixels; null for anything else. */
+export const tapsOf = (canvas: HTMLElement | null): MapTaps | null => (canvas instanceof HTMLCanvasElement ? (taps.get(canvas) ?? null) : null);
+
 /**
  * A map `w` by `h` pixels of the land of the folder at `area` ("" for the
  * whole land): the whole land covers the page, so a land in the page's shape
@@ -52,6 +61,12 @@ export function drawMapPage(src: MapSource, area: string, w: number, h: number, 
   const mx = (px: number): number => (px - w / 2) / view.zoom + view.x;
   const mz = (py: number): number => (py - h / 2) / view.zoom + view.z;
   const taken: Box[] = [];
+  /** Each name lettered, and the folder it names. */
+  const named: { readonly box: Box; readonly path: string }[] = [];
+  taps.set(canvas, {
+    at: (px, py) => ({ x: mx(px), z: mz(py) }),
+    name: (px, py) => named.find(({ box: b }) => px >= b[0] && px <= b[2] && py >= b[1] && py <= b[3])?.path ?? null,
+  });
   const clear = (b: Box): boolean => taken.every((o) => b[2] < o[0] || b[0] > o[2] || b[3] < o[1] || b[1] > o[3]);
   const onPage = (b: Box): boolean => b[0] > NAME.edge && b[1] > NAME.edge && b[2] < w - NAME.edge && b[3] < h - NAME.edge;
   const offFold = (b: Box): boolean => !fold || b[2] < w / 2 - NAME.fold || b[0] > w / 2 + NAME.fold;
@@ -88,6 +103,7 @@ export function drawMapPage(src: MapSource, area: string, w: number, h: number, 
     }
     if (spot === null) continue;
     taken.push(spot.box);
+    named.push({ box: spot.box, path: a.path });
     letterName(ctx, { area: { name: a.name }, angle: 0, above: "" } as never, spot.x, spot.y, spot.size, paper.style);
   }
 
@@ -102,6 +118,7 @@ export function drawMapPage(src: MapSource, area: string, w: number, h: number, 
     const box: Box = [x + p.box[0], y + p.box[1], x + p.box[2], y + p.box[3]];
     if (!onPage(box) || !offFold(box) || !clear(box)) continue;
     taken.push(box);
+    named.push({ box, path: p.label.area.path });
     letterName(ctx, p.label, x, y, p.size, paper.style);
   }
   return canvas;
@@ -184,5 +201,8 @@ export function halfOf(spread: HTMLCanvasElement, side: "left" | "right"): HTMLC
   half.width = spread.width / 2;
   half.height = spread.height;
   (half.getContext("2d") as CanvasRenderingContext2D).drawImage(spread, side === "left" ? 0 : -spread.width / 2, 0);
+  const whole = taps.get(spread);
+  const shift = side === "left" ? 0 : spread.width / 2 / DPR;
+  if (whole !== undefined) taps.set(half, { at: (px, py) => whole.at(px + shift, py), name: (px, py) => whole.name(px + shift, py) });
   return half;
 }

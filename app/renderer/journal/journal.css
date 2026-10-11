@@ -202,3 +202,6 @@ button.jp-name { border: 0; background: none; padding: 0; text-align: left; curs
   paint-order: stroke fill; -webkit-text-stroke: 9px rgba(241, 231, 207, 0.82);
 }
 .jp-title-wash { display: block; width: 62px; height: 20px; border-radius: 50% 46% 52% 44%; opacity: 0.85; filter: url(#jp-wash); }
+
+/* A map or a painting can be tapped: a map's land and a page's picture take you into the world. */
+.jp-picture .jp-tap { cursor: pointer; }

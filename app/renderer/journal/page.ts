@@ -29,6 +29,10 @@ export function healthColor(v: number): string {
   return "rgb(111,154,74)";
 }
 
+/** A page's size in its own pixels, as the book lays it. */
+const PAGE_W = 520;
+const PAGE_H = 660;
+
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, text?: string): HTMLElementTagNameMap[K] => {
   const e = document.createElement(tag);
   e.className = cls;
@@ -278,10 +282,23 @@ export function renderTitle(name: string, vitality: number, folio: string, paint
   return page;
 }
 
-/** A left-hand page: its picture, until it is painted bare paper, and its number. */
-export function renderPicture(picture: HTMLElement | null, folio: string): HTMLElement {
+/**
+ * A left-hand page: its picture and its number. `onTap`, given, hears a tap
+ * on the picture, at a spot in the page's own pixels.
+ */
+export function renderPicture(picture: HTMLElement | null, folio: string, onTap?: (px: number, py: number) => void): HTMLElement {
   const page = el("div", "jp jp-picture");
-  if (picture !== null) page.append(picture);
+  if (picture !== null) {
+    page.append(picture);
+    if (onTap !== undefined) {
+      picture.classList.add("jp-tap");
+      picture.addEventListener("click", (e) => {
+        e.stopPropagation();
+        // The tap in the picture's own layout pixels, which the book's turn and tilt leave alone.
+        onTap((e.offsetX * PAGE_W) / (picture.offsetWidth || PAGE_W), (e.offsetY * PAGE_H) / (picture.offsetHeight || PAGE_H));
+      });
+    }
+  }
   page.append(el("div", "jp-folio", folio));
   return page;
 }

@@ -8,6 +8,7 @@
 
 import type { Journal, JournalEntry, PageRoom } from "@gaia/world";
 import type { BookPages, Spread } from "./book.ts";
+import { tapsOf } from "./maps.ts";
 import { fullItems, renderFullPage, renderPage, renderPicture, renderTitle } from "./page.ts";
 import { type Full, type PageWords, type WordsSource, appendixWords, contentsWords, wordsOf } from "./words.ts";
 
@@ -34,6 +35,10 @@ export interface JournalPagesSource {
   ahead(ofs: readonly string[]): void;
   /** Turns the book to a place, for a row tapped on a page. */
   turnTo(at: string): void;
+  /** Takes the person to the spot in the world a map was tapped at. */
+  travelTo(x: number, z: number): void;
+  /** Takes the person to a thing, where its painting was seen from: a page's picture tapped. */
+  travel(of: string): void;
   /** Settles once a file's text has come, for a definition's page. */
   text(path: string): Promise<void>;
 }
@@ -192,6 +197,16 @@ export function journalPages(src: JournalPagesSource): BookPages {
   const folio = (n: number): string => (n > 0 ? n.toLocaleString("en-US") : "");
   const roman = (n: number): string => ["", "i", "ii", "iii", "iv", "v", "vi", "vii", "viii", "ix", "x"][n] ?? String(n);
   const blank = (f = ""): HTMLElement => renderPicture(null, f);
+  /** A map's page: a tap on a folder's name turns to its chapter, and a tap on its land takes the person there. */
+  const mapPage = (map: HTMLElement | null, f: string): HTMLElement =>
+    renderPicture(map, f, (px, py) => {
+      const taps = tapsOf(map);
+      if (taps === null) return;
+      const name = taps.name(px, py);
+      if (name !== null) return src.turnTo(name);
+      const at = taps.at(px, py);
+      src.travelTo(at.x, at.z);
+    });
 
   function entrySpread(words: WordsSource, e: JournalEntry, k: number): Spread {
     const said = wordsOf(words, e);
@@ -199,7 +214,7 @@ export function journalPages(src: JournalPagesSource): BookPages {
     const toFull = e.kind === "definition" ? () => src.turnTo(inFull(e.of, 0)) : undefined;
     const page = (p: number): HTMLElement => (p >= e.pages ? blank() : renderPage(said, folio(e.page + p), src.turnTo, said.body.kind === "rows" ? rowsOn(p) : undefined, toFull));
     // A chapter faces its folder's map; anything that stands faces its painting, bare paper until it is painted.
-    if (k === 0) return { left: renderPicture(e.kind === "chapter" ? src.map(e.of) : src.picture(e.of), folio(e.page - 1)), right: page(0) };
+    if (k === 0) return { left: e.kind === "chapter" ? mapPage(src.map(e.of), folio(e.page - 1)) : renderPicture(src.picture(e.of), folio(e.page - 1), () => src.travel(e.of)), right: page(0) };
     return { left: page(2 * k - 1), right: page(2 * k) };
   }
 
@@ -208,7 +223,7 @@ export function journalPages(src: JournalPagesSource): BookPages {
       const full = fullAt(at);
       if (full !== null) return fullSpread(full.id, full.k);
       const words = src.words();
-      if (at === "map" || words === null) return { left: renderPicture(src.endpaper("left"), ""), right: renderPicture(src.endpaper("right"), "") };
+      if (at === "map" || words === null) return { left: mapPage(src.endpaper("left"), ""), right: mapPage(src.endpaper("right"), "") };
       const [of, kk] = at.split(SEP);
       const k = Number(kk ?? 0);
       if (of === "contents") {
