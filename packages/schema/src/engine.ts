@@ -28,8 +28,12 @@ export interface EngineMethods {
    * each up in the store; sends nothing. A request already answered is
    * kept, never sent again (`docs/architecture.md`, "The Jev runner").
    */
-  /** With `through`, only the passes up to that one, such as `understand` for what the world needs to stand. */
-  "understand.plan": { params: { root: string; through?: Pass }; result: UnderstandPlan };
+  /**
+   * With `through`, only the passes up to that one, such as `understand` for
+   * what the world needs to stand. With `graph`, the judged graph it planned
+   * on too, as `project.graph` with `judged: true` gives it, built once.
+   */
+  "understand.plan": { params: { root: string; through?: Pass; graph?: boolean }; result: UnderstandPlan };
   /**
    * Sends every request whose waits are met, up to `max` (256 by default),
    * as many at once as Jev takes, and returns the nodes that settled, so the
@@ -136,6 +140,8 @@ export type Pass = "link" | "understand" | "deep" | "tests" | "dirs";
 export interface UnderstandPlan {
   readonly pending: readonly { readonly pass: Pass; readonly requests: number; readonly kept: number }[];
   readonly estimate: JevEstimate;
+  /** Only when asked for with `graph`. */
+  readonly graph?: CodeGraph;
 }
 
 /** One slice of understanding. */

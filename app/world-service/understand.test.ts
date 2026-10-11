@@ -104,6 +104,9 @@ describe("the Jev runner", () => {
     const rest = await understand(engine, root);
     expect(rest.length).toBeGreaterThan(0);
     expect(rest.every((r) => r.state.directory !== undefined)).toBe(true);
+    // A plan asked for its graph gives the judged graph, the one the world is laid out on.
+    const planned = await engine.call("understand.plan", { root, through: "understand", graph: true });
+    expect(planned.graph).toEqual(await engine.call("project.graph", { root, judged: true }));
   }, 60_000);
 
   it("asks again only the requests whose state an edit changed, and a renamed file keeps its answers", async () => {
