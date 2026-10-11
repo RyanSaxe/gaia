@@ -16,7 +16,7 @@
 // handmade paper anchored to the world too, the same under the land's paint
 // and past it, so no seam shows where the land's sheet ends.
 
-import { type Terrain, WILDS, WILD_THICKETS, heightAt, wildHash, wildPatch, wildRollAt, wildScrub, wildShare, wildThicket } from "@gaia/terrain";
+import { heightAt, pastTheEdge, type Terrain, WILD_THICKETS, wildHash, wildPatch, wildRollAt, WILDS, wildScrub, wildShare, wildThicket } from "@gaia/terrain";
 import { chained, isoline } from "./isolines.ts";
 import type { MapStyle } from "./map-styles.ts";
 
@@ -43,11 +43,19 @@ const smooth = (v: number): number => {
 
 /** The ground's height as the sheet draws it: the land's own, eased at its rim (`RIM`), and the wild's roll past it. */
 export function reliefAt(t: Terrain, x: number, z: number): number {
-  const half = t.spec.size / 2;
-  const r = Math.pow(Math.abs(x) ** 4 + Math.abs(z) ** 4, 0.25);
-  const toRim = half - r;
+  const toRim = -pastTheEdge(t.spec, x, z);
   if (toRim >= RIM.inner) return heightAt(t.lattice, x, z);
-  const pull = Math.min(1, (half - RIM.held) / Math.max(r, 1e-6));
+  // Drawn in along its ray from the middle to where the edge is held.
+  let pull = 1;
+  if (toRim < RIM.held) {
+    let lo = 0;
+    for (let i = 0; i < 20; i++) {
+      const f = (lo + pull) / 2;
+      if (pastTheEdge(t.spec, x * f, z * f) < -RIM.held) lo = f;
+      else pull = f;
+    }
+    pull = lo;
+  }
   const held = heightAt(t.lattice, x * pull, z * pull);
   if (toRim < 0) return held + (wildRollAt(t, x, z) - held) * smooth(-toRim / WILDS.settle);
   return held + (heightAt(t.lattice, x, z) - held) * smooth((toRim - RIM.held) / (RIM.inner - RIM.held));

@@ -57,7 +57,7 @@ export function createBaker(threads = Math.max(1, Math.min(4, (navigator.hardwar
         const k0 = Math.min(grid.n, k * rows);
         const k1 = Math.min(grid.n, k0 + rows);
         if (k1 <= k0) return;
-        const reply = await ask(w, { kind: "own", sites, size: world.size, grid, k0, k1 });
+        const reply = await ask(w, { kind: "own", sites, land: { size: world.size, ...(world.aspect === undefined ? {} : { aspect: world.aspect }) }, grid, k0, k1 });
         if (reply.kind === "failed") throw new Error(reply.message);
         if (reply.kind !== "owned") return;
         owners.set(reply.owners, reply.k0 * grid.n * taps);

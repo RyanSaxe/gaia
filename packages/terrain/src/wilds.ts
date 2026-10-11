@@ -10,6 +10,7 @@
 
 import { heightAt } from "./lattice.ts";
 import { TERRAIN, type Terrain } from "./world.ts";
+import { landReach } from "./edge.ts";
 
 export const WILDS = {
   /** The coarse ring for views from above: rings and segments around, 7,680 vertices, one draw call. */
@@ -79,12 +80,12 @@ const bases = new WeakMap<Terrain, number>();
 export function wildBase(t: Terrain): number {
   let base = bases.get(t);
   if (base === undefined) {
-    const r = t.spec.size / 2 - TERRAIN.rimWidth;
+    const h = landReach(t.spec);
     const n = 360;
     let sum = 0;
     for (let s = 0; s < n; s++) {
       const a = (s / n) * Math.PI * 2;
-      sum += heightAt(t.lattice, Math.cos(a) * r, Math.sin(a) * r);
+      sum += heightAt(t.lattice, Math.cos(a) * (h.x - TERRAIN.rimWidth), Math.sin(a) * (h.z - TERRAIN.rimWidth));
     }
     base = sum / n;
     bases.set(t, base);

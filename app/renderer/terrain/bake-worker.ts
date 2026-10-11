@@ -10,13 +10,13 @@
 
 import { Library } from "@gaia/schema";
 import { BIOME_PRIMITIVES, RELIEF_PRIMITIVES } from "@gaia/primitives";
-import { type ComposedRows, type OwnedSite, type Terrain, type WorldSpec, composeRows, finishTerrain, landformsOf, ownershipRows } from "@gaia/terrain";
+import { type ComposedRows, type LandOutline, type OwnedSite, type Terrain, type WorldSpec, composeRows, finishTerrain, landformsOf, ownershipRows } from "@gaia/terrain";
 import { type Stand, type StandRequest, standWorld } from "./stand.ts";
 
 export type BakeJob =
   | { readonly kind: "compose"; readonly world: WorldSpec; readonly z0: number; readonly z1: number }
   | { readonly kind: "finish"; readonly world: WorldSpec; readonly parts: readonly ComposedRows[]; readonly stand: StandRequest }
-  | { readonly kind: "own"; readonly sites: readonly OwnedSite[]; readonly size: number; readonly grid: { readonly n: number; readonly origin: number; readonly spacing: number }; readonly k0: number; readonly k1: number };
+  | { readonly kind: "own"; readonly sites: readonly OwnedSite[]; readonly land: LandOutline; readonly grid: { readonly n: number; readonly origin: number; readonly spacing: number }; readonly k0: number; readonly k1: number };
 
 export type BakeRequest = BakeJob & { readonly id: number };
 
@@ -41,7 +41,7 @@ scope.onmessage = (e) => {
   let moved: Transferable[] = [];
   try {
     if (req.kind === "own") {
-      const rows = ownershipRows(req.sites, req.size, req.grid, req.k0, req.k1);
+      const rows = ownershipRows(req.sites, req.land, req.grid, req.k0, req.k1);
       reply = { id: req.id, kind: "owned", k0: req.k0, ...rows };
       moved = [rows.owners.buffer, rows.shares.buffer];
     } else if (req.kind === "compose") {

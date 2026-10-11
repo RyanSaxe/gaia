@@ -414,7 +414,7 @@ const gaps = [
   ...Object.keys(LANDMARKS).flatMap((l) => (things.filter((t) => t.as === "landmark" && t.look === l).length >= 3 ? [] : [`three landmarks "${l}"`])),
 ];
 if (gaps.length > 0) throw new Error(`The proving ground lacks ${gaps.join(", ")}.`);
-const world = layoutWorld(model, judged);
+const world = layoutWorld(model, judged, undefined, 1);
 const regions = world.regions.map((r) => r.area);
 const planned = Object.keys(judged.lands);
 const astray = [...planned.filter((p) => !regions.includes(p)).map((p) => `${p || "(root)"} has no land of its own`), ...regions.filter((p) => !planned.includes(p)).map((p) => `${p} has land but no planned look`)];

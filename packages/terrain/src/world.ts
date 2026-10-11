@@ -15,6 +15,7 @@ import { RELIEF_BUDGET, type ReliefReport, measureRelief, withinBudget } from ".
 import { type LandSite, LAND_WARP, siteAt, warpPoint } from "./land.ts";
 import { type Lattice, createLattice, worldOf } from "./lattice.ts";
 import { type SolvedPond, type SolvedStream, carvePond, carveStream, shoreField, solvePond, solveStream } from "./water.ts";
+import { type LandOutline, pastTheEdge, withinLand } from "./edge.ts";
 
 export interface RegionSpec {
   /** The directory the region stands for. */
@@ -42,8 +43,10 @@ export interface RegionSpec {
 }
 
 export interface WorldSpec {
-  /** Side of the walkable square, meters. */
+  /** The land's width, west to east, meters: the side of its square when it has no `aspect`. */
   readonly size: number;
+  /** How much wider than deep the land is (`LandOutline`); a world laid out from code takes `LAND_ASPECT`. */
+  readonly aspect?: number;
   readonly regions: readonly RegionSpec[];
 }
 
@@ -265,12 +268,9 @@ function coverFromBlend(spec: WorldSpec, x: number, z: number, out: Float64Array
   for (let i = 0; i < spec.regions.length; i++) out[i] = (out[i] as number) / total;
 }
 
-/** The world's edge: a gentle rise around a rounded square, with a little wander. */
-export function rimAt(size: number, x: number, z: number): number {
-  const half = size / 2;
-  const e = Math.pow(Math.abs(x) ** 4 + Math.abs(z) ** 4, 0.25);
-  const start = half + TERRAIN.rimOvershoot - TERRAIN.rimWidth;
-  const rise = smooth((e - start) / TERRAIN.rimWidth);
+/** The world's edge: a gentle rise around the land's rounded rectangle (`pastTheEdge`), with a little wander. */
+export function rimAt(land: LandOutline, x: number, z: number): number {
+  const rise = smooth((pastTheEdge(land, x, z) - TERRAIN.rimOvershoot + TERRAIN.rimWidth) / TERRAIN.rimWidth);
   if (rise === 0) return 0;
   const wander = fieldAt({ op: "noise", seed: 77, wavelength: 70, octaves: 2, gain: 0.5, angle: 0, stretch: 1, style: "smooth" }, x, z);
   return TERRAIN.rim * rise * (0.8 + 0.3 * wander);
@@ -296,7 +296,7 @@ export function composer(spec: WorldSpec, landforms: readonly Landform[]): (x: n
   const weights = new Float64Array(spec.regions.length);
   return (x, z) => {
     regionWeights(spec, x, z, weights);
-    return blended(spec, landforms, weights, x, z) + rimAt(spec.size, x, z);
+    return blended(spec, landforms, weights, x, z) + rimAt(spec, x, z);
   };
 }
 
@@ -341,7 +341,7 @@ export function composeRows(spec: WorldSpec, landforms: readonly Landform[], z0:
       const x = worldOf(lattice, ix);
       const k = (iz - z0) * n + ix;
       regionWeights(spec, x, z, weights);
-      raw[k] = blended(spec, landforms, weights, x, z) + rimAt(spec.size, x, z);
+      raw[k] = blended(spec, landforms, weights, x, z) + rimAt(spec, x, z);
       coverFromBlend(spec, x, z, weights);
       // The largest shares, largest first; ties keep the lower index.
       top.fill(-1);
@@ -396,8 +396,7 @@ export function finishTerrain(spec: WorldSpec, landforms: readonly Landform[], p
 
   // Fit: scale the relief about its mean until the walkable square fits the
   // budget. Range, slopes and steps all shrink with the scale.
-  const half = spec.size / 2;
-  const inside = (ix: number, iz: number): boolean => Math.abs(worldOf(lattice, ix)) <= half && Math.abs(worldOf(lattice, iz)) <= half;
+  const inside = (ix: number, iz: number): boolean => withinLand(spec, worldOf(lattice, ix), worldOf(lattice, iz));
   let mean = 0;
   for (const h of raw) mean += h;
   mean /= raw.length;
@@ -470,7 +469,6 @@ export function bakeTerrain(spec: WorldSpec, lib: Library): Terrain {
 function keptRun(spec: WorldSpec, ri: number, local: Float32Array): Float32Array | null {
   const r = spec.regions[ri] as RegionSpec;
   const weights = new Float64Array(spec.regions.length);
-  const limit = spec.size / 2 - 30;
   let best: [number, number] = [0, 0];
   let start = -1;
   const count = local.length / 2;
@@ -484,7 +482,7 @@ function keptRun(spec: WorldSpec, ri: number, local: Float32Array): Float32Array
       weights.forEach((w, i) => {
         if (i !== ri) others = Math.max(others, w);
       });
-      ok = Math.abs(x) < limit && Math.abs(z) < limit && others < 0.75;
+      ok = withinLand(spec, x, z, 30) && others < 0.75;
     }
     if (ok && start < 0) start = k;
     if (!ok && start >= 0) {

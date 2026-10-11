@@ -6,6 +6,7 @@
 import { rand } from "@gaia/schema";
 import { type Lattice, heightAt, slopeAt } from "./lattice.ts";
 import { DRY, type Terrain } from "./world.ts";
+import { landReach, withinLand } from "./edge.ts";
 
 /** Plants stand only on ground gentler than this, degrees. */
 export const PLANT_SLOPE = 24;
@@ -191,12 +192,12 @@ export function scatterPlants(t: Terrain, count: number, seed: number, trunkRadi
   const l = t.lattice;
   const half = t.spec.size / 2 - 24;
   const regionAt = (x: number, z: number): number => t.region[Math.round((z - l.origin) / l.spacing) * l.n + Math.round((x - l.origin) / l.spacing)] ?? 0;
-  const fits = (x: number, z: number): boolean => Math.abs(x) <= half && Math.abs(z) <= half && slopeAt(l, x, z) <= PLANT_SLOPE && !isWet(t, x, z);
+  const fits = (x: number, z: number): boolean => withinLand(t.spec, x, z, 24) && slopeAt(l, x, z) <= PLANT_SLOPE && !isWet(t, x, z);
   // Grove hearts: seeded spots, each kept by its region's landform, drawn until the grove trees reach `count`.
-  const area = (2 * half) ** 2 / 10_000;
+  const area = (2 * (landReach(t.spec).x - 24) * 2 * (landReach(t.spec).z - 24)) / 10_000;
   const heart = (): { x: number; z: number; trees: number; spacing: number; seed: number } | null => {
     const x = r.range(-half, half);
-    const z = r.range(-half, half);
+    const z = r.range(-landReach(t.spec).z + 24, landReach(t.spec).z - 24);
     const form = GROVES_BY_LANDFORM[t.spec.regions[regionAt(x, z)]?.biome.slots.relief?.use ?? ""] ?? { groves: 0.4, trees: [3, 10] as const, spacing: 9 };
     const keep = r.next();
     const size = r.next();

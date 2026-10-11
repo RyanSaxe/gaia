@@ -14,6 +14,7 @@ import { fbm } from "@gaia/primitives";
 import { heightAt, slopeAt, worldOf } from "./lattice.ts";
 import type { Occupied } from "./scatter.ts";
 import { DRY, type Terrain } from "./world.ts";
+import { withinLand } from "./edge.ts";
 
 export const TRAILS = {
   /** Meters per routing cell. */
@@ -445,12 +446,10 @@ function regionIndex(t: Terrain, x: number, z: number): number {
 /** Each region's walkable ground, square meters. */
 function regionAreas(t: Terrain): number[] {
   const l = t.lattice;
-  const half = t.spec.size / 2;
   const areas = t.spec.regions.map(() => 0);
   for (let iz = 0; iz < l.n; iz++) {
-    if (Math.abs(worldOf(l, iz)) > half) continue;
     for (let ix = 0; ix < l.n; ix++) {
-      if (Math.abs(worldOf(l, ix)) > half) continue;
+      if (!withinLand(t.spec, worldOf(l, ix), worldOf(l, iz))) continue;
       const r = t.region[iz * l.n + ix] ?? 0;
       areas[r] = (areas[r] ?? 0) + l.spacing * l.spacing;
     }

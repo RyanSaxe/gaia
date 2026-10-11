@@ -14,6 +14,7 @@ import { heightAt } from "./lattice.ts";
 import { type Lattice, slopeAt } from "./lattice.ts";
 import { groundPlane, isWet, lowestUnder } from "./plants.ts";
 import type { Terrain } from "./world.ts";
+import { withinLand } from "./edge.ts";
 
 /**
  * The kinds of place the understory chooses by: under a grove's canopy, at a
@@ -230,6 +231,7 @@ export function scatterComponents(t: Terrain, rules: readonly ScatterRule[], see
       const j = grid.fork(`${ix},${iz}`);
       const x = -half + (ix + j.next()) * SITE;
       const z = -half + (iz + j.next()) * SITE;
+      if (!withinLand(t.spec, x, z, EDGE_MARGIN)) continue;
       sites.push({ x, z, region: regionAt(t, x, z), place: placeAt(x, z), key: `${ix},${iz}` });
     }
   }
