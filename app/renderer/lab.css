@@ -487,7 +487,9 @@ details.json pre { font: 11px/1.45 ui-monospace, "SF Mono", Menlo, monospace; ba
    comes, and folds away quicker than it opened. */
 .field-map {
   --side: min(94vw, 90vh, 980px);
-  position: absolute; left: calc(50% - var(--side) / 2); top: calc(50% - var(--side) / 2); width: var(--side); height: var(--side);
+  /* In the land's shape (`--aspect`, width over depth, from field-map.ts): as wide as ever, as deep as the land. */
+  --depth: calc(var(--side) / var(--aspect, 1));
+  position: absolute; left: calc(50% - var(--side) / 2); top: calc(50% - var(--depth) / 2); width: var(--side); height: var(--depth);
   overflow: hidden; pointer-events: none; transform-origin: 50% 50%;
   opacity: 0; transition: opacity calc(var(--unfold, 360ms) * 0.8) ease-in calc(var(--unfold, 360ms) * 0.2), transform var(--unfold, 360ms) cubic-bezier(0.5, 0, 0.75, 0.4);
 }
@@ -525,6 +527,7 @@ details.json pre { font: 11px/1.45 ui-monospace, "SF Mono", Menlo, monospace; ba
 }
 
 @media (max-width: 699px) {
+  /* A phone's map fills the screen and opens close around the person, so the land's shape would only shrink it. */
   .field-map { left: 8px; top: 8px; width: calc(100% - 16px); height: calc(100% - 16px); }
   .field-map { --fold: 44px; }
   .way-button, .slip-view { min-height: 44px; }

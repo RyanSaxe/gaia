@@ -511,6 +511,8 @@ function meterPath(rings: readonly (readonly number[])[]): Path2D {
 
 /** The paper just around a small name, keeping it clear of the paint. */
 export const haloOf = (style: MapStyle): string => `rgba(${mixRgb(style.paper, style.paper, 0).join(",")},0.82)`;
+/** How far the land and its margin reach from the middle north and south, meters: the paper's reach on a square land. */
+const landDepth = (paper: Paper): number => Math.min(paper.reach, (paper.reach - MARGIN) / (paper.names.aspect ?? 1) + MARGIN);
 /** How long a tap on the map waits for a second press (a double tap zooms instead), ms. */
 const PICK_WAIT_MS = 240;
 /** How close the map comes, as a multiple of the whole sheet's zoom, before each file's patch and name are drawn. */
@@ -822,7 +824,8 @@ export function createFieldMap(
   let placed: { paper: Paper; side: number; whole: NamePlaces; close: NamePlaces } | null = null;
   const measure = canvasMeasure(document.createElement("canvas").getContext("2d") as CanvasRenderingContext2D);
   /** The open sheet's side, pixels: names are placed for it, as the wait places them for its own sheet, the same size. */
-  const sheetSide = (): number => Math.min(canvas.clientWidth, canvas.clientHeight) || Math.min(window.innerWidth * 0.94, window.innerHeight * 0.9, 980);
+  // The sheet is as wide as the land's square: its depth is the land's.
+  const sheetSide = (): number => canvas.clientWidth || Math.min(window.innerWidth * 0.94, window.innerHeight * 0.9, 980);
   function* placing(p: Paper, side: number): Generator<void, NonNullable<typeof placed>> {
     const whole = yield* placeNames(p.names, side, measure);
     const close = yield* placeNames(p.names, side * CLOSE, measure, growAt(CLOSE));
@@ -850,6 +853,8 @@ export function createFieldMap(
     timing.longestStepMs = Math.max(timing.longestStepMs, ms);
     if (next.done === true) {
       paper = next.value;
+      // The sheet takes the land's shape: as wide as ever, and as deep as the land and its margin.
+      sheet.style.setProperty("--aspect", (paper.reach / landDepth(paper)).toFixed(4));
       painting = null;
       // Ink that comes in while the map is open is laid at the next frame, however many tiles land before it.
       paper.wild.onLanded(() => {
@@ -920,18 +925,19 @@ export function createFieldMap(
   }
 
   /**
-   * The sheet's extent for a view `w` by `h` pixels, meters, and the zoom that fits it: the land's square on the
-   * land; from the wild, grown to take the traveller in, `TAKE_IN` past them.
+   * The sheet's extent for a view `w` by `h` pixels, meters, and the zoom that fits it: the land and its margin on
+   * the land; from the wild, grown to take the traveller in, `TAKE_IN` past them.
    */
   function sheetFor(w: number, h: number): { box: [number, number, number, number]; fit: number } {
     const r = paper?.reach ?? 604;
+    const d = paper === null ? r : landDepth(paper);
     const fitOf = (b: readonly number[]): number => Math.min(w / ((b[2] as number) - (b[0] as number)), h / ((b[3] as number) - (b[1] as number)));
-    let grown: [number, number, number, number] = [-r, -r, r, r];
+    let grown: [number, number, number, number] = [-r, -d, r, d];
     if (!person.wild) return { box: grown, fit: fitOf(grown) };
     // The margin in meters keeps the traveller a few pixels in from the edge however small the land has become.
     let margin = TAKE_IN.meters;
     for (let k = 0; k < 3; k++) {
-      grown = [Math.min(-r, person.x - margin), Math.min(-r, person.z - margin), Math.max(r, person.x + margin), Math.max(r, person.z + margin)];
+      grown = [Math.min(-r, person.x - margin), Math.min(-d, person.z - margin), Math.max(r, person.x + margin), Math.max(d, person.z + margin)];
       margin = Math.max(TAKE_IN.meters, TAKE_IN.px / fitOf(grown));
     }
     return { box: grown, fit: fitOf(grown) };
@@ -958,7 +964,7 @@ export function createFieldMap(
     const views = [minimapView()];
     if (w > 0 && h > 0) {
       const sheet = sheetFor(w, h);
-      const close = Math.min(w, h) < 560;
+      const close = w < 560;
       const zoom = close ? sheet.fit * 2.2 : sheet.fit;
       const [cx, cz] = close ? [person.x, person.z] : [(sheet.box[0] + sheet.box[2]) / 2, (sheet.box[1] + sheet.box[3]) / 2];
       views.push({ box: [cx - w / 2 / zoom, cz - h / 2 / zoom, cx + w / 2 / zoom, cz + h / 2 / zoom], zoom });
@@ -1169,8 +1175,9 @@ export function createFieldMap(
     const sheet = sheetFor(w, h);
     box = sheet.box;
     view.fit = sheet.fit;
-    // A phone opens close enough to read the names around the person; a wide screen shows it all.
-    const close = Math.min(w, h) < 560;
+    // A phone opens close enough to read the names around the person; a wide screen shows it all. The sheet is as
+    // wide as the screen allows and only as deep as the land, so its width tells them apart.
+    const close = w < 560;
     view.zoom = close ? view.fit * 2.2 : view.fit;
     view.x = close ? person.x : (box[0] + box[2]) / 2;
     view.z = close ? person.z : (box[1] + box[3]) / 2;
