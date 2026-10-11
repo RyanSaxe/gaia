@@ -240,13 +240,19 @@ function foldOf(lines: number, inFull: () => void, where: "before" | "after"): H
   return fold;
 }
 
-/** The title page, facing the contents: the world's name and its vitality, large. */
-export function renderTitle(name: string, vitality: number, folio: string): HTMLElement {
-  const page = el("div", "jp jp-title-page");
+/**
+ * The title page, facing the contents: a frontispiece painting of the world
+ * running to the page's edges, the world's name lettered across its sky as
+ * the map letters a place, and its vitality as a wash beneath.
+ */
+export function renderTitle(name: string, vitality: number, folio: string, painting: HTMLElement): HTMLElement {
+  const page = el("div", "jp jp-picture jp-title-page");
   page.style.setProperty("--health", healthColor(vitality));
-  const middle = el("div", "jp-title-middle");
-  middle.append(el("div", "jp-book-name", name), reading(vitality, "jp-vit"));
-  page.append(middle, el("div", "jp-folio", folio));
+  const lettered = el("div", "jp-title-lettering");
+  const wash = el("i", "jp-title-wash");
+  wash.style.background = healthColor(vitality);
+  lettered.append(el("div", "jp-book-name", name), wash);
+  page.append(painting, lettered, el("div", "jp-folio", folio));
   return page;
 }
 

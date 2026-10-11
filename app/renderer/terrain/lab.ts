@@ -256,10 +256,11 @@ export interface WorldHandle {
    * definition stands as, by what it stands for (an entity's path, a file's
    * path or a definition's id), seen in the afternoon light from where it can
    * be seen, with a mask of where the thing itself shows. A file with no tree
-   * of its own is seen through the largest of its definitions. Null when
-   * nothing stands for it, or while the world is changing.
+   * of its own is seen through the largest of its definitions. `wide` sees it
+   * small in its land under a wide sky, for the title page. Null when nothing
+   * stands for it, or while the world is changing.
    */
-  view(id: string, w: number, h: number): Promise<{ readonly color: Pixels; readonly mask: Pixels } | null>;
+  view(id: string, w: number, h: number, wide?: boolean): Promise<{ readonly color: Pixels; readonly mask: Pixels } | null>;
   /** What Jev judged about a folder, a file or a definition, by its path or id, and about each block of a definition's lines. */
   judged(of: string): readonly { readonly judged: Judged; readonly lines?: Span }[];
   /** Calls `listener` with what a person has walked up to when its card opens, and with null when it closes. */
@@ -302,9 +303,11 @@ const LAND = { dry: 0.02, wade: 0.45, clear: 1.1, reach: 40, ring: 1.5 };
  * How the journal's paintings are seen: every one in the same afternoon
  * light, so the book's paintings belong together; through a lens a little
  * longer than a person's eye; the thing filling about half the painting's
- * height; and the sun a little to one side behind the painter.
+ * height; and the sun a little to one side behind the painter. Wide, as the
+ * title page's frontispiece shows the world, the thing is small in its land
+ * and the painter looks a little up, into the sky.
  */
-const PAINTING = { hour: 15.5, fov: 46, fill: 0.5, sunSide: 0.6 } as const;
+const PAINTING = { hour: 15.5, fov: 46, fill: 0.5, wideFill: 0.16, wideLift: 0.12, sunSide: 0.6 } as const;
 /** A landing faces along a trail this close, else the area's building or landmark this close, meters. */
 const FACE_TRAIL = 14;
 const FACE_THING = 160;
@@ -1979,7 +1982,8 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     }
     return { x: s.x + Math.sin(first) * distance, z: s.z + Math.cos(first) * distance };
   }
-  function viewOf(id: string, w: number, h: number): Promise<{ color: Pixels; mask: Pixels } | null> {
+  /** `wide`: the thing small in the land around it under a wide sky, as a frontispiece shows the world. */
+  function viewOf(id: string, w: number, h: number, wide = false): Promise<{ color: Pixels; mask: Pixels } | null> {
     const s = subjectOf(id);
     if (s === undefined || holding > 0) return Promise.resolve(null);
     const was = hour;
@@ -1988,10 +1992,12 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       const aspect = w / h;
       const tan = Math.tan(THREE.MathUtils.degToRad(PAINTING.fov) / 2);
       // Far enough back that the thing fills about half the painting's height and most of its width.
-      const distance = Math.max(s.height / (2 * tan * PAINTING.fill), (2 * s.reach) / (2 * tan * aspect * 0.7), s.reach + 2.5);
-      // A small thing is seen as a painter would crouch to it; anything taller from a person's eye.
-      const eye = Math.min(EYE_HEIGHT, Math.max(0.9, s.height * 0.8 + 0.5));
-      const aim = s.height * 0.55;
+      const fill = wide ? PAINTING.wideFill : PAINTING.fill;
+      const distance = Math.max(s.height / (2 * tan * fill), (2 * s.reach) / (2 * tan * aspect * (wide ? 0.35 : 0.7)), s.reach + 2.5);
+      // A small thing is seen as a painter would crouch to it; anything taller from a person's eye. Wide, the eye looks
+      // a little up, so the sky takes the painting's upper part.
+      const eye = wide ? EYE_HEIGHT : Math.min(EYE_HEIGHT, Math.max(0.9, s.height * 0.8 + 0.5));
+      const aim = wide ? EYE_HEIGHT + Math.tan(PAINTING.wideLift) * distance : s.height * 0.55;
       const at = viewpointOf(s, distance, eye, aim);
       const base = heightAt(terrain.lattice, s.x, s.z);
       captureCamera.fov = PAINTING.fov;
@@ -2210,7 +2216,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     },
     landing: (x, z, heart) => landingNear(x, z, heart),
     place: (at) => walkTo(at.x, at.z, at.yaw),
-    view: (id, w, h) => viewOf(id, w, h),
+    view: (id, w, h, wide) => viewOf(id, w, h, wide),
     judged: (of) => code?.said(of) ?? [],
     onCard: (listener) => cardListeners.push(listener),
     onHeading: (listener) => headingListeners.push(listener),

@@ -137,6 +137,7 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
       },
       map: (area) => mapOf(area, 520, 660, false),
       picture: (of) => paintings.picture(standsFor(of)),
+      frontispiece: () => paintings.picture("", true),
       ahead: (ofs) => paintings.ahead(ofs.map(standsFor)),
       turnTo: (at) => journal.turnTo(at),
       text: (path) => source.when(path),

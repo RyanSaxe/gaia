@@ -19,9 +19,10 @@ export interface Paintings {
   /**
    * The painting of what `id` stands for, on a canvas of its own: as far as
    * it is painted, filling in as the painter works. Asking for one that
-   * isn't painted yet paints it before anything else.
+   * isn't painted yet paints it before anything else. `wide` paints the
+   * thing small in its land, as the title page's frontispiece shows the world.
    */
-  picture(id: string): HTMLCanvasElement;
+  picture(id: string, wide?: boolean): HTMLCanvasElement;
   /** Paints these after anything asked for, in this order. */
   ahead(ids: readonly string[]): void;
   /** How far the painting of `id` is: not begun, under way, done, or nothing stands for it. */
@@ -38,10 +39,12 @@ interface Painting {
   readonly shown: Set<HTMLCanvasElement>;
 }
 
+/** What a painting is of, as its queue and store name it: a thing, or a thing seen wide. */
+const WIDE = "wide:";
 /** A painting's seed: the same thing is always painted with the same strokes. */
 const seedOf = (id: string): number => [...id].reduce((h, c) => Math.imul(h ^ c.charCodeAt(0), 16777619), 2166136261) >>> 0;
 
-export function createPaintings(view: (id: string, w: number, h: number) => Promise<{ readonly color: Pixels; readonly mask: Pixels } | null>): Paintings {
+export function createPaintings(view: (id: string, w: number, h: number, wide?: boolean) => Promise<{ readonly color: Pixels; readonly mask: Pixels } | null>): Paintings {
   const paintings = new Map<string, Painting>();
   const queue: string[] = [];
   let worker: Worker | null = null;
@@ -79,7 +82,8 @@ export function createPaintings(view: (id: string, w: number, h: number) => Prom
     p.state = "painting";
     const mine = era;
     try {
-      const seen = await view(id, VIEW.w, VIEW.h);
+      const wide = id.startsWith(WIDE);
+      const seen = await view(wide ? id.slice(WIDE.length) : id, VIEW.w, VIEW.h, wide);
       if (mine !== era) return;
       if (seen === null) {
         p.state = "none";
@@ -118,7 +122,8 @@ export function createPaintings(view: (id: string, w: number, h: number) => Prom
   }
 
   return {
-    picture(id) {
+    picture(thing, wide = false) {
+      const id = wide ? `${WIDE}${thing}` : thing;
       const canvas = document.createElement("canvas");
       canvas.width = PAINTED.w;
       canvas.height = PAINTED.h;
