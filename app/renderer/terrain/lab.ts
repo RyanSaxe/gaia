@@ -257,8 +257,8 @@ export interface WorldHandle {
    * path or a definition's id), seen in the afternoon light from where it can
    * be seen, with a mask of where the thing itself shows. A file with no tree
    * of its own is seen through the largest of its definitions. `wide` sees it
-   * small in its land under a wide sky, for the title page. Null when nothing
-   * stands for it, or while the world is changing.
+   * small in its land under a wide sky, for the title page. While the world is
+   * changing it waits for it to settle. Null when nothing stands for it.
    */
   view(id: string, w: number, h: number, wide?: boolean): Promise<{ readonly color: Pixels; readonly mask: Pixels } | null>;
   /** What Jev judged about a folder, a file or a definition, by its path or id, and about each block of a definition's lines. */
@@ -1984,8 +1984,10 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   }
   /** `wide`: the thing small in the land around it under a wide sky, as a frontispiece shows the world. */
   function viewOf(id: string, w: number, h: number, wide = false): Promise<{ color: Pixels; mask: Pixels } | null> {
+    // While the world is changing it draws nothing; the view waits for it to settle.
+    if (holding > 0) return warmed.then(() => viewOf(id, w, h, wide));
     const s = subjectOf(id);
-    if (s === undefined || holding > 0) return Promise.resolve(null);
+    if (s === undefined) return Promise.resolve(null);
     const was = hour;
     applyHour(PAINTING.hour);
     try {

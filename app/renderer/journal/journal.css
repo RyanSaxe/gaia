@@ -32,7 +32,7 @@
   clip-path: path("M0 2 C 10 0.6, 24 0, 44 0 L 524 0 L 524 664 L 44 664 C 24 664, 10 663.4, 0 662 Z");
 }
 .jb-block.left {
-  left: calc(var(--ov) - 4px); top: calc(var(--ov) - 2px); transform: none;
+  position: absolute; left: calc(var(--ov) - 4px); top: calc(var(--ov) - 2px); transform: none;
   background:
     repeating-linear-gradient(90deg, #c4b593 0 1px, #efe6cd 1px 2px) left top / 4px 100% no-repeat,
     repeating-linear-gradient(0deg, #efe6cd 0 1px, #c4b593 1px 2px) left top / 100% 2px no-repeat,

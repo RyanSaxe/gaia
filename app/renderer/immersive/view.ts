@@ -172,8 +172,9 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
   let standing = false;
   world.onStood(() => {
     standing = true;
-    // A world stood afresh is painted afresh.
+    // A world stood afresh is painted afresh, its title page first, out of sight, so the journal never opens on bare paper there.
     paintings.clear();
+    paintings.ahead([""], true);
     // The ways of knowing where you are come in as the veil lifts: nothing names a place before the world stands.
     layer.classList.add("standing");
     // A new world writes where the person stands afresh.
