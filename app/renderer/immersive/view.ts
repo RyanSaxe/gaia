@@ -24,6 +24,7 @@ import { createCompass } from "./compass.ts";
 import { createJournalBook } from "../journal/book.ts";
 import { drawMapPage, halfOf } from "../journal/maps.ts";
 import { ROOM, journalPages } from "../journal/pages.ts";
+import { createPaintings } from "../journal/paintings.ts";
 import { createSourceText } from "../journal/source.ts";
 import type { WordsSource } from "../journal/words.ts";
 import { createFieldMap } from "./field-map.ts";
@@ -113,6 +114,10 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
   const source = createSourceText(service);
   /** What the journal's pages are read from, for the world standing now. */
   let words: WordsSource | null = null;
+  /** Each thing's painting: the world's own view of it, painted the first time its page opens. */
+  const paintings = createPaintings(world.view);
+  /** What stands in the world for a page: an entity's building or landmark by its path, a file or a definition as itself. */
+  const standsFor = (of: string): string => (of.startsWith("entity:") ? of.slice("entity:".length) : of);
   /** Each map the journal holds, drawn once per painted paper: the whole land across the endpapers, and each folder's. */
   let maps: { paper: unknown; drawn: Map<string, HTMLCanvasElement | null> } | null = null;
   function mapOf(area: string, w: number, h: number, fold: boolean): HTMLCanvasElement | null {
@@ -131,6 +136,8 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
         return spread === null ? null : halfOf(spread, side);
       },
       map: (area) => mapOf(area, 520, 660, false),
+      picture: (of) => paintings.picture(standsFor(of)),
+      ahead: (ofs) => paintings.ahead(ofs.map(standsFor)),
       turnTo: (at) => journal.turnTo(at),
       text: (path) => source.when(path),
     }),
@@ -164,6 +171,8 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
   let standing = false;
   world.onStood(() => {
     standing = true;
+    // A world stood afresh is painted afresh.
+    paintings.clear();
     // The ways of knowing where you are come in as the veil lifts: nothing names a place before the world stands.
     layer.classList.add("standing");
     // A new world writes where the person stands afresh.
@@ -293,6 +302,8 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
       slip: (on: boolean) => setSlip(on),
       /** Opens the journal at a place (the map, "contents", or a thing's path or id), or shuts it with null. */
       journal: (at?: string | null) => (at === null ? journal.close() : journal.open(at)),
+      /** How far the painting of a page's thing is: waiting, painting, done, or none when nothing stands for it. */
+      painting: (of: string) => paintings.state(standsFor(of)),
       /** Tucks the minimap below the screen's foot, or brings it back, as a tap on its edge does. */
       tuck: (on: boolean) => minimap.tuck(on),
       /** Where the person is, what each way of knowing it shows now, and the page of the thing they stopped at. */

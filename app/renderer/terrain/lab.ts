@@ -37,6 +37,7 @@ import {
 } from "@gaia/render";
 import { type Capsule, clearanceAt, COVER_TAPS, type Deck, decksOf, DRY, EYE_HEIGHT, footingAt, FULL_WORLD, GAIT, groundHeightAt, heightAt, type Intent, junctionVitality, latticeOf, NO_SOLIDS, NO_TRAILS, outlineShape, withinLand, piecesShapes, type Place, placeAt, planWalk, randomWorld, regionPlaces, RELIEF_BUDGET, sampleWorld, SHORE_CAP, sightlines, siteToWorld, SMALL_WORLD, type Solids, type SolidShape, solidsOf, stanceAt, standAt, stride, type Stride, type Terrain, TERRAIN, type TrailNetwork, type Walk, WALK_TO, walkStep, wallsShape, waterDepthAt, type Way, wayAhead, wayVitalityAt, wayWear, WILDS, type WorldPlaces, type WorldSpec } from "@gaia/terrain";
 import { createSky } from "../world/environment.ts";
+import { type Pixels, createCapture } from "./capture.ts";
 import { renderInspector } from "../inspector.ts";
 import { type Lab, type Shot, onTap, refs, slug, tapSlop } from "../lab.ts";
 import { createSheet } from "../sheet.ts";
@@ -249,6 +250,16 @@ export interface WorldHandle {
   landing(x: number, z: number, heart?: { readonly x: number; readonly z: number }): Landing | null;
   /** Puts the person at a landing at once: only under cover of a transition, so nothing is seen to jump. */
   place(at: Landing): void;
+  /**
+   * The world's own view of a thing, for its painting in the journal, `w` by
+   * `h` pixels: its building, landmark or tree, or the plant or stone a
+   * definition stands as, by what it stands for (an entity's path, a file's
+   * path or a definition's id), seen in the afternoon light from where it can
+   * be seen, with a mask of where the thing itself shows. A file with no tree
+   * of its own is seen through the largest of its definitions. Null when
+   * nothing stands for it, or while the world is changing.
+   */
+  view(id: string, w: number, h: number): Promise<{ readonly color: Pixels; readonly mask: Pixels } | null>;
   /** Calls `listener` with what a person has walked up to when its card opens, and with null when it closes. */
   onCard(listener: (thing: CardThing | null) => void): void;
   /**
@@ -285,6 +296,13 @@ export interface Landing {
 /** A bark vertex lower than this, meters, belongs to the trunk's base where it meets the ground. */
 const TRUNK_BASE = 0.05;
 const LAND = { dry: 0.02, wade: 0.45, clear: 1.1, reach: 40, ring: 1.5 };
+/**
+ * How the journal's paintings are seen: every one in the same afternoon
+ * light, so the book's paintings belong together; through a lens a little
+ * longer than a person's eye; the thing filling about half the painting's
+ * height; and the sun a little to one side behind the painter.
+ */
+const PAINTING = { hour: 15.5, fov: 46, fill: 0.5, sunSide: 0.6 } as const;
 /** A landing faces along a trail this close, else the area's building or landmark this close, meters. */
 const FACE_TRAIL = 14;
 const FACE_THING = 160;
@@ -1696,6 +1714,14 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   /** Each pass's draw calls and triangles in the last frame. */
   const passes = { shadow: { calls: 0, triangles: 0 }, mirror: { calls: 0, triangles: 0 }, view: { calls: 0, triangles: 0 } };
   let waitNight = -1;
+  /** The sun's shadow, cast by every plant, building and landmark over the ground framed by `shadow.frame`. */
+  function castShadows(): void {
+    shadow.render(renderer, scene, [...views(), ...understory.casters(), ...wildGrowth.all(), ...farCardSets(), ...(swapping === null ? [] : [swapping])], [sky.mesh, ground.wilds, ground.fine, ground.coarse, ground.mirror, grass.mesh, water.group, signs.mesh, ...understory.quiet()]);
+  }
+  /** The water's mirror as `eye` sees it, showing `show`; the draw calls it took. */
+  function mirror(eye: THREE.PerspectiveCamera, show: THREE.Object3D[], dt: number): number {
+    return water.mirror(renderer, scene, eye, [...mirrorHide, ...understory.quiet(), ...understory.casters().map((c) => c.object), ...wildGrowth.all().map((c) => c.object)], show, dt);
+  }
   function frame(dt: number, now: number, at: number): void {
     if (holding > 0) return;
     if (at !== hour) applyHour(at);
@@ -1724,10 +1750,10 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     refreshSight(now);
     // Every pass thins distant detail from where the person's eyes are.
     light.uEye.value.copy(mode === "walk" ? detailEye : camera.position);
-    shadow.render(renderer, scene, [...views(), ...understory.casters(), ...wildGrowth.all(), ...farCardSets(), ...(swapping === null ? [] : [swapping])], [sky.mesh, ground.wilds, ground.fine, ground.coarse, ground.mirror, grass.mesh, water.group, signs.mesh, ...understory.quiet()]);
+    castShadows();
     frameCalls = renderer.info.render.calls;
     passes.shadow = { calls: renderer.info.render.calls, triangles: renderer.info.render.triangles };
-    const mirrorCalls = water.mirror(renderer, scene, camera, [...mirrorHide, ...understory.quiet(), ...understory.casters().map((c) => c.object), ...wildGrowth.all().map((c) => c.object)], mirrorShow(), dt);
+    const mirrorCalls = mirror(camera, mirrorShow(), dt);
     frameCalls += mirrorCalls;
     passes.mirror = { calls: mirrorCalls, triangles: mirrorCalls > 0 ? renderer.info.render.triangles : 0 };
     renderer.render(scene, camera);
@@ -1906,6 +1932,84 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       return { x: lx, z: lz, yaw: Math.atan2(-best.tx * sign, -best.tz * sign) };
     }
     return { x: lx, z: lz, yaw: aim === null ? walker.yaw : toward(aim.x, aim.z) };
+  }
+
+  // ---------- the world's own view of a thing, for its painting in the journal ----------
+
+  const capture = createCapture(renderer);
+  const captureCamera = new THREE.PerspectiveCamera(PAINTING.fov, 1, 0.2, 4500);
+  /** What stands for `id`: the thing itself, or for a file without a tree, the largest of its definitions. */
+  function subjectOf(id: string): Subject | undefined {
+    const own = subjects.find((s) => s.represented.id === id);
+    if (own !== undefined) return own;
+    return subjects.filter((s) => s.represented.id.startsWith(`${id}#`)).sort((a, b) => b.height - a.height)[0];
+  }
+  /**
+   * Where to stand to see `s` whole from `distance` meters off: on the side
+   * the afternoon sun lights, turning around it until the spot is dry, clear
+   * and inside the land, and nothing solid or no rise of the ground stands
+   * between. A building is seen from where its sign is read, farther back.
+   */
+  function viewpointOf(s: Subject, distance: number, eye: number, aim: number): { x: number; z: number } {
+    const fixed = s.stand(s.x + 1, s.z);
+    const other = s.stand(s.x - 1, s.z);
+    const sun = light.uSunDirection.value;
+    const first = fixed.x === other.x && fixed.z === other.z ? Math.atan2(fixed.x - s.x, fixed.z - s.z) : Math.atan2(sun.x, sun.z) + PAINTING.sunSide;
+    const base = heightAt(terrain.lattice, s.x, s.z);
+    const clearFrom = (x: number, z: number): boolean => {
+      if (!withinLand(world, x, z, 2) || waterDepthAt(terrain, x, z) > LAND.wade || clearanceAt(solids, x, z) < 0.6) return false;
+      const from = heightAt(terrain.lattice, x, z) + eye;
+      const to = base + aim;
+      const span = Math.hypot(s.x - x, s.z - z);
+      for (let d = 1; d < span - s.reach - 0.5; d += 1) {
+        const t = d / span;
+        const [px, pz] = [x + (s.x - x) * t, z + (s.z - z) * t];
+        if (clearanceAt(solids, px, pz) < 0.25 || heightAt(terrain.lattice, px, pz) > from + (to - from) * t - 0.3) return false;
+      }
+      return true;
+    };
+    for (let k = 0; k < 16; k++) {
+      // Turning a little farther each way in turn: 0, +22.5°, -22.5°, +45°, …
+      const turn = Math.ceil(k / 2) * (k % 2 === 1 ? 1 : -1) * (Math.PI / 8);
+      const x = s.x + Math.sin(first + turn) * distance;
+      const z = s.z + Math.cos(first + turn) * distance;
+      if (clearFrom(x, z)) return { x, z };
+    }
+    return { x: s.x + Math.sin(first) * distance, z: s.z + Math.cos(first) * distance };
+  }
+  function viewOf(id: string, w: number, h: number): Promise<{ color: Pixels; mask: Pixels } | null> {
+    const s = subjectOf(id);
+    if (s === undefined || holding > 0) return Promise.resolve(null);
+    const was = hour;
+    applyHour(PAINTING.hour);
+    try {
+      const aspect = w / h;
+      const tan = Math.tan(THREE.MathUtils.degToRad(PAINTING.fov) / 2);
+      // Far enough back that the thing fills about half the painting's height and most of its width.
+      const distance = Math.max(s.height / (2 * tan * PAINTING.fill), (2 * s.reach) / (2 * tan * aspect * 0.7), s.reach + 2.5);
+      // A small thing is seen as a painter would crouch to it; anything taller from a person's eye.
+      const eye = Math.min(EYE_HEIGHT, Math.max(0.9, s.height * 0.8 + 0.5));
+      const aim = s.height * 0.55;
+      const at = viewpointOf(s, distance, eye, aim);
+      const base = heightAt(terrain.lattice, s.x, s.z);
+      captureCamera.fov = PAINTING.fov;
+      captureCamera.aspect = aspect;
+      captureCamera.position.set(at.x, heightAt(terrain.lattice, at.x, at.z) + eye, at.z);
+      captureCamera.lookAt(s.x, base + aim, s.z);
+      // Every pass thins its detail from the painter's eye, the finest ground and the grass gather around it, and
+      // the sun's shadow and the water's mirror are drawn for that view.
+      light.uEye.value.copy(captureCamera.position);
+      ground.follow(at.x, at.z);
+      grass.follow(captureCamera.position);
+      shadowCenter.set((at.x + s.x) / 2, base, (at.z + s.z) / 2);
+      shadow.frame(shadowCenter, Math.max(40, distance + s.reach));
+      castShadows();
+      mirror(captureCamera, [ground.mirror], 0);
+      // The next frame sets the person's eye, ground, grass, shadow and mirror again.
+      return capture.shoot(scene, captureCamera, [sky.mesh, ground.wilds, ground.fine, ground.coarse, ground.mirror, grass.mesh, water.group, signs.mesh], { x: s.x, z: s.z, base, height: s.height, reach: s.reach }, w, h);
+    } finally {
+      applyHour(was);
+    }
   }
 
   // ---------- measuring: what a step of walking changes, and walking as a person would ----------
@@ -2104,6 +2208,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     },
     landing: (x, z, heart) => landingNear(x, z, heart),
     place: (at) => walkTo(at.x, at.z, at.yaw),
+    view: (id, w, h) => viewOf(id, w, h),
     onCard: (listener) => cardListeners.push(listener),
     onHeading: (listener) => headingListeners.push(listener),
   };

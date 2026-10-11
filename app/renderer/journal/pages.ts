@@ -11,6 +11,8 @@ import type { BookPages, Spread } from "./book.ts";
 import { renderPage, renderPicture, renderTitle } from "./page.ts";
 import { type WordsSource, contentsWords, wordsOf } from "./words.ts";
 
+/** How many of the things after an open page are painted ahead of the reader. */
+const AHEAD = 4;
 /** How many rows of a list a page holds: under the heading, and under a running head on the pages it runs on to. */
 export const ROOM: PageRoom = { first: 18, next: 21 };
 
@@ -21,6 +23,10 @@ export interface JournalPagesSource {
   endpaper(side: "left" | "right"): HTMLElement | null;
   /** A folder's own map, for its chapter's left-hand page, or null before the map is painted. */
   map(area: string): HTMLElement | null;
+  /** The painting of the thing a page is about, for its left-hand page, filling in as it is painted. */
+  picture(of: string): HTMLElement;
+  /** Paints the things these pages are about next, in this order. */
+  ahead(ofs: readonly string[]): void;
   /** Turns the book to a place, for a row tapped on a page. */
   turnTo(at: string): void;
   /** Settles once a file's text has come, for a definition's page. */
@@ -58,7 +64,7 @@ export function journalPages(src: JournalPagesSource): BookPages {
     // Page p of the entry's words (0 for the first): its number, and the slice of the list it holds.
     const page = (p: number): HTMLElement => (p >= e.pages ? blank() : renderPage(said, folio(e.page + p), src.turnTo, said.body.kind === "rows" ? rowsOn(p) : undefined));
     // A chapter faces its folder's map; anything that stands faces its painting, bare paper until it is painted.
-    if (k === 0) return { left: renderPicture(e.kind === "chapter" ? src.map(e.of) : null, folio(e.page - 1)), right: page(0) };
+    if (k === 0) return { left: renderPicture(e.kind === "chapter" ? src.map(e.of) : src.picture(e.of), folio(e.page - 1)), right: page(0) };
     return { left: page(2 * k - 1), right: page(2 * k) };
   }
 
@@ -76,7 +82,11 @@ export function journalPages(src: JournalPagesSource): BookPages {
         return k === 0 ? { left: renderTitle(words.world.name, words.vitality(""), roman(1)), right: page(0) } : { left: page(2 * k - 1), right: page(2 * k) };
       }
       const e = words.journal.entry(of as string);
-      return e === undefined ? { left: blank(), right: blank() } : entrySpread(words, e, k);
+      if (e === undefined) return { left: blank(), right: blank() };
+      // The next few things in the book are painted next, so turning on rarely finds bare paper.
+      const here = words.journal.entries.indexOf(e);
+      src.ahead(words.journal.entries.slice(here + 1, here + 1 + AHEAD).filter((n) => n.kind !== "chapter").map((n) => n.of));
+      return entrySpread(words, e, k);
     },
     next(at, by) {
       const { order, places } = index();
