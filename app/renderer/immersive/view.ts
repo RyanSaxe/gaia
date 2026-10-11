@@ -15,17 +15,20 @@
 // world for the start (`picture.ts`).
 
 import type { PlaceArea } from "@gaia/terrain";
-import { areaVitality } from "@gaia/world";
+import { areaVitality, journalOf } from "@gaia/world";
 import { SLIP_LOGO } from "../brand/logo.ts";
 import { onTap } from "../lab.ts";
 import { worldService } from "../service.ts";
 import type { WorldHandle } from "../terrain/lab.ts";
 import { createCompass } from "./compass.ts";
-import { createFieldMap } from "./field-map.ts";
+import { createJournalBook } from "../journal/book.ts";
+import { journalPages } from "../journal/pages.ts";
+import { createSourceText } from "../journal/source.ts";
+import type { WordsSource } from "../journal/words.ts";
+import { createFieldMap, drawLand } from "./field-map.ts";
 import { MARKER_LAYER, createMarkers } from "./markers.ts";
 import { createMinimap } from "./minimap.ts";
 import { paintPicture } from "./picture.ts";
-import { createSketchPage } from "./sketch.ts";
 
 /** The lab's debugging views, which the slip leads back to. */
 export interface LabViews {
@@ -101,9 +104,50 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
     },
     jump,
   );
-  const minimap = createMinimap(layer, map, world.stood, world.places);
-  const sketch = createSketchPage(layer);
-  world.onCard((thing) => sketch.show(active ? thing : null));
+  const minimap = createMinimap(layer, map, world.stood, world.places, () => journal.open());
+
+  // ---------- the traveller's journal, closed in the corner with the minimap on its cover ----------
+
+  const service = worldService();
+  const source = createSourceText(service);
+  /** What the journal's pages are read from, for the world standing now. */
+  let words: WordsSource | null = null;
+  /** The whole land, drawn once per painted paper, cut in two across the endpapers. */
+  let endpapers: { paper: unknown; canvas: HTMLCanvasElement } | null = null;
+  function mapHalf(side: "left" | "right"): HTMLElement | null {
+    const paper = map.paper();
+    if (paper === null) return null;
+    if (endpapers?.paper !== paper) {
+      const canvas = document.createElement("canvas");
+      canvas.width = 2080;
+      canvas.height = 1320;
+      const ctx = canvas.getContext("2d") as CanvasRenderingContext2D;
+      ctx.scale(2, 2);
+      const size = world.places().size;
+      drawLand(ctx, 1040, 660, paper, world.stood(), { x: 0, z: 0, zoom: (Math.min(1040, 660) / size) * 0.96 }, 1.35, true);
+      endpapers = { paper, canvas };
+    }
+    const half = document.createElement("canvas");
+    half.width = 1040;
+    half.height = 1320;
+    (half.getContext("2d") as CanvasRenderingContext2D).drawImage(endpapers.canvas, side === "left" ? 0 : -1040, 0);
+    return half;
+  }
+  const journal = createJournalBook(
+    layer,
+    journalPages({ words: () => words, map: mapHalf, turnTo: (at) => journal.turnTo(at) }),
+    (open) => {
+      if (open) setSlip(false);
+    },
+  );
+  source.onArrive(() => journal.refresh());
+  // The minimap lies on the slip under the strap across the journal's cover.
+  const scrap = layer.querySelector(".minimap");
+  if (scrap !== null) journal.slip.append(scrap);
+  // A thing walked up to after a tap opens the journal at its page; walking past never does.
+  world.onCard((thing) => {
+    if (active && thing !== null) journal.open(words?.journal.entry(thing.represented.id) === undefined ? "contents" : thing.represented.id);
+  });
   world.onHeading((thing) => minimap.heading(thing));
   const markers = createMarkers(world.light);
   world.scene.add(markers.group);
@@ -124,13 +168,18 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
     minimap.show(active);
     map.invalidate();
     worldName.textContent = world.places().name;
+    const code = world.code();
+    if (code !== null) {
+      const pooled = areaVitality(code.patches.map((p) => ({ area: p.area, vitality: p.vitality, size: p.radius * p.radius })));
+      const files = new Map(code.patches.map((p) => [p.path, p.vitality]));
+      words = { journal: journalOf(code), world: code, vitality: (path) => files.get(path) ?? pooled.get(path) ?? 1, lines: (path) => source.lines(path) ?? undefined };
+    }
     // A directory's vitality: its files', its subdirectories' included, pooled by the ground each holds, as the map washes it.
     const vitality = areaVitality(world.places().patches.map((p) => ({ area: p.area, vitality: p.vitality, size: p.radius * p.radius })));
     markers.vitality((path) => vitality.get(path) ?? 1);
   });
 
   // The first map painted after the world stands is pictured for the start; a page with no world service keeps none.
-  const service = worldService();
   let pictured = false;
   map.onPainted(() => {
     const paper = map.paper();
@@ -183,7 +232,14 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
   window.addEventListener(
     "keydown",
     (e) => {
-      if (!active || e.code !== "Escape") return;
+      if (!active) return;
+      // M opens the journal, at the map; while it is open, the book has every key.
+      if (e.code === "KeyM" && !jumping && !journal.isOpen) {
+        journal.open();
+        e.stopPropagation();
+        return;
+      }
+      if (e.code !== "Escape") return;
       if (map.isOpen) map.open(false);
       else if (slip.classList.contains("open")) setSlip(false);
       else return;
@@ -206,7 +262,7 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
       layer.hidden = !on;
       if (!on) {
         setSlip(false);
-        sketch.show(null);
+        journal.close();
       }
       apply();
     },
@@ -233,14 +289,14 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
       jumping: () => jumping,
       /** Opens or closes the slip in the corner. */
       slip: (on: boolean) => setSlip(on),
-      /** Unfolds or folds the rest of the thing's page that shows. */
-      unfold: (on: boolean) => sketch.unfold(on),
+      /** Opens the journal at a place (the map, "contents", or a thing's path or id), or shuts it with null. */
+      journal: (at?: string | null) => (at === null ? journal.close() : journal.open(at)),
       /** Tucks the minimap below the screen's foot, or brings it back, as a tap on its edge does. */
       tuck: (on: boolean) => minimap.tuck(on),
       /** Where the person is, what each way of knowing it shows now, and the page of the thing they stopped at. */
       state: () => {
         const p = world.person();
-        return { place: world.placeAt(p.x, p.z), minimap: minimap.state(), compass: compass.state(), map: map.state(), markers: markers.crossings().length, sketch: sketch.state() };
+        return { place: world.placeAt(p.x, p.z), minimap: minimap.state(), compass: compass.state(), map: map.state(), markers: markers.crossings().length, journal: journal.state() };
       },
       crossings: () => markers.crossings(),
       /** A picture of the whole map as the start lays it on its table: a WebP data URL, or null before the map is painted. */
