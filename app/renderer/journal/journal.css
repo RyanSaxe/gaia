@@ -146,6 +146,14 @@
 .jp-line { display: grid; grid-template-columns: 2.4em 1fr; column-gap: 1.1em; position: relative; }
 .jp-ln { text-align: right; color: #8f7a5c; font: 12.5px/1.6 "Bradley Hand", Georgia, cursive; border-right: 1px solid rgba(120, 95, 65, 0.38); padding-right: 0.5em; }
 .jp-text { white-space: pre-wrap; overflow-wrap: anywhere; padding-left: calc(var(--ind) * 1ch + 2ch); text-indent: -2ch; }
+/* Round 23's slate hues, deepened to read on cream. */
+.ink-kw { color: #3a49b4; }
+.ink-str { color: #93407f; }
+.ink-num { color: #4f6b8f; }
+.ink-fn { color: #1f6787; }
+.ink-type { color: #6a4fb3; }
+.ink-prop { color: #4a4036; }
+.ink-com { color: #8a7f6c; font-style: italic; }
 
 /* Jev's mark: a soft brush stroke in the gutter beside what it points out, its color the kind and its strength how
    sure; one stroke runs the length of a marked block of lines (book.ts paints them once a page is laid out). */

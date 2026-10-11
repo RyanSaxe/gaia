@@ -7,6 +7,7 @@
 // rest a drag away. Nothing fades.
 
 import type { Span } from "@gaia/schema";
+import { type Piece, highlight } from "./highlight.ts";
 import type { Fact, Full, Mark, PageWords, Row, Said } from "./words.ts";
 
 /** The field map's health colors: russet when failing, ochre as it declines, green when well. */
@@ -78,14 +79,35 @@ const indentOf = (line: string): number => {
 /** How far a definition's lines are indented in common: what its code is set back by on the page. */
 const baseIndent = (lines: readonly string[]): number => Math.min(...lines.filter((l) => l.trim() !== "").map(indentOf), Infinity);
 
-function codeOf(first: number, lines: readonly string[], marks: readonly (Mark & { readonly from: number; readonly to: number })[], base = baseIndent(lines)): HTMLElement {
+/** A definition's signature, inked as its code is. */
+function signatureOf(signature: string, path: string): HTMLElement {
+  const sig = el("div", "jp-sig");
+  sig.append(...inkedLine(highlight([signature], path)[0], signature).childNodes);
+  return sig;
+}
+
+/** A line's text as its pieces, inked by what each is, without the indent the page sets as a hanging indent. */
+function inkedLine(pieces: readonly Piece[] | undefined, line: string): HTMLElement {
+  const text = el("span", "jp-text");
+  let lead = true;
+  for (const p of pieces ?? [{ text: line }]) {
+    const t = lead ? p.text.trimStart() : p.text;
+    if (t === "") continue;
+    lead = false;
+    if (p.ink === undefined) text.append(document.createTextNode(t));
+    else text.append(el("span", `ink-${p.ink}`, t));
+  }
+  return text;
+}
+
+function codeOf(first: number, lines: readonly string[], marks: readonly (Mark & { readonly from: number; readonly to: number })[], base = baseIndent(lines), pieces?: readonly (readonly Piece[])[]): HTMLElement {
   const code = el("div", "jp-code");
   lines.forEach((line, k) => {
     const row = el("div", "jp-line");
     row.dataset.line = String(first + k);
     // The surest mark over a line is the one its gutter shows.
     marked(row, marks.filter((m) => m.from <= first + k && first + k <= m.to).sort((a, b) => b.sure - a.sure)[0]);
-    const text = el("span", "jp-text", line.trim());
+    const text = inkedLine(pieces?.[k], line);
     text.style.setProperty("--ind", String(Number.isFinite(base) ? indentOf(line) - base : 0));
     row.append(el("span", "jp-ln", String(first + k)), text);
     code.append(row);
@@ -118,7 +140,7 @@ export function renderPage(words: PageWords, folio: string, turnTo: (of: string)
     }
     title.append(name, reading(words.vitality, "jp-vit"));
     head.append(title);
-    if (words.signature !== undefined) head.append(el("div", "jp-sig", words.signature));
+    if (words.signature !== undefined) head.append(signatureOf(words.signature, words.path.join("/")));
     head.append(el("div", "jp-rule"));
   }
   const body = el("div", "jp-body");
@@ -129,7 +151,7 @@ export function renderPage(words: PageWords, folio: string, turnTo: (of: string)
     const skipped = code.opensAt - code.first;
     const shown: Full = { kind: "full", said: code.notes, first: code.opensAt, lines: code.lines.slice(skipped), marks: code.marks };
     if (skipped > 0 && inFull !== undefined) body.append(foldOf(skipped, inFull, "before"));
-    setItems(body, shown, fullItems(shown), baseIndent(code.lines));
+    setItems(body, shown, fullItems(shown), baseIndent(code.lines), highlight(code.lines, words.path.join("/")).slice(skipped));
     // Where a long definition's page ends, a fold: the book shows it, with how many lines it holds, when lines are left over.
     if (inFull !== undefined) body.append(foldOf(0, inFull, "after"));
   }
@@ -197,24 +219,24 @@ export function renderFullPage(words: PageWords, body: Full, folio: string, item
     const title = el("div", "jp-title");
     title.append(backTo(el("button", "jp-name", words.name)), reading(words.vitality, "jp-vit"));
     head.append(title);
-    if (words.signature !== undefined) head.append(el("div", "jp-sig", words.signature));
+    if (words.signature !== undefined) head.append(signatureOf(words.signature, words.path.join("/")));
     head.append(el("div", "jp-rule"));
   }
   const content = el("div", "jp-body");
-  setItems(content, body, fullItems(body).slice(items.from, items.to), baseIndent(body.lines));
+  setItems(content, body, fullItems(body).slice(items.from, items.to), baseIndent(body.lines), highlight(body.lines, words.path.join("/")));
   page.append(head, content, el("div", "jp-folio", folio));
   return page;
 }
 
 /** Sets `items` of a definition on a page: a run of its lines as code, a run of what Jev says as its rows. */
-function setItems(content: HTMLElement, body: Full, items: readonly FullItem[], base: number): void {
+function setItems(content: HTMLElement, body: Full, items: readonly FullItem[], base: number, pieces: readonly (readonly Piece[])[]): void {
   let run: FullItem[] = [];
   const close = (): void => {
     const [start] = run;
     if (start === undefined) return;
     if (start.kind === "line") {
       const at = run.map((r) => (r.kind === "line" ? r.at : 0));
-      content.append(codeOf(body.first + (at[0] as number), at.map((k) => body.lines[k] as string), body.marks, base));
+      content.append(codeOf(body.first + (at[0] as number), at.map((k) => body.lines[k] as string), body.marks, base, at.map((k) => pieces[k] ?? [])));
     } else {
       const said = el("div", `jp-said${start.kind === "fact" && !start.block ? "" : " in-code"}`);
       for (const r of run) said.append(r.kind === "block" ? el("div", "jp-said-row jp-said-block", r.lines.start === r.lines.end ? `line ${r.lines.start}` : `lines ${r.lines.start}–${r.lines.end}`) : factOf((r as Extract<FullItem, { kind: "fact" }>).fact, (r as Extract<FullItem, { kind: "fact" }>).block));
