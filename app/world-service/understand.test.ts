@@ -20,11 +20,12 @@ let scratch = "";
 let standIn: StandIn;
 const engines: ChildProcess[] = [];
 
+// A clean engine build takes minutes on CI's machines, and another test file's build may hold cargo's lock meanwhile.
 beforeAll(async () => {
   execFileSync("cargo", ["build", "-p", "gaia-engine", "--quiet"], { cwd: REPO, env: { ...process.env, PATH: `${process.env.HOME}/.cargo/bin:${process.env.PATH}` }, stdio: "inherit" });
   scratch = mkdtempSync(join(tmpdir(), "gaia-understand-"));
   standIn = await startOpenRouterStandIn();
-}, 300_000);
+}, 900_000);
 
 afterAll(async () => {
   for (const e of engines) e.kill();
