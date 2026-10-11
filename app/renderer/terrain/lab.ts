@@ -268,6 +268,12 @@ export interface WorldHandle {
   /** Calls `listener` with what a person has walked up to when its card opens, and with null when it closes. */
   onCard(listener: (thing: CardThing | null) => void): void;
   /**
+   * Calls `listener` with what a tapped thing stands for, by its path or id.
+   * Once anything listens, a tap on a thing no longer walks the person up to
+   * it: the listener opens it instead.
+   */
+  onPick(listener: (id: string) => void): void;
+  /**
    * Calls `listener` with the thing a person is walking up to, or has walked
    * up to while its card shows, from the tap that sends them; null once they
    * turn to something else or its card closes.
@@ -1025,6 +1031,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   /** The thing the person is walking up to, or whose card shows. */
   let heading: Subject | null = null;
   const headingListeners: ((thing: Heading | null) => void)[] = [];
+  const pickListeners: ((id: string) => void)[] = [];
   function headFor(s: Subject | null): void {
     if (s === heading) return;
     heading = s;
@@ -1338,7 +1345,9 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     ].sort((a, b) => a.distance - b.distance);
     const nearest = hits[0];
     if (nearest !== undefined && nearest.subject !== undefined && (land === null || nearest.distance < land.distance + 0.5)) {
-      approach(nearest.subject);
+      // With a journal listening, a tap on a thing opens its page where the person stands; otherwise they walk up to it.
+      if (pickListeners.length > 0) for (const l of pickListeners) l(nearest.subject.represented.id);
+      else approach(nearest.subject);
       return;
     }
     // A tap on a rock, a bush, a fingerpost or a boundary stone walks up to it, not to the ground hidden behind it.
@@ -2265,6 +2274,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     seenFrom: (id) => seenFromOf(id),
     judged: (of) => code?.said(of) ?? [],
     onCard: (listener) => cardListeners.push(listener),
+    onPick: (listener) => pickListeners.push(listener),
     onHeading: (listener) => headingListeners.push(listener),
   };
 

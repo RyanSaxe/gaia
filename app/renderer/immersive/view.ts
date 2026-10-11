@@ -193,18 +193,20 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
     (open) => {
       if (open) setSlip(false);
     },
+    // The lower left is being tried (`?journal=left`); the lower right is where it rests.
+    new URLSearchParams(location.search).get("journal") === "left" ? "left" : "right",
   );
   source.onArrive(() => journal.refresh());
   // The minimap lies on the slip under the strap across the journal's cover.
   const scrap = layer.querySelector(".minimap");
   if (scrap !== null) journal.slip.append(scrap);
-  // A thing walked up to after a tap opens the journal at its page; walking past never does.
-  world.onCard((thing) => {
-    if (!active || thing === null) return;
+  // The journal opens only when asked: a tap on the closed book opens it at the map, and a tap on a thing in the
+  // world opens it at that thing's page, where the person stands. It never opens on its own.
+  world.onPick((id) => {
+    if (!active) return;
     // A building or landmark is its entity's page; anything else is its own.
-    const id = thing.represented.id;
     const at = [entityOf(id), id].find((of) => words?.journal.entry(of) !== undefined);
-    journal.open(at ?? "contents");
+    if (at !== undefined) journal.open(at);
   });
   world.onHeading((thing) => minimap.heading(thing));
   const markers = createMarkers(world.light);
