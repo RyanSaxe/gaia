@@ -91,6 +91,21 @@ describe("the Jev runner", () => {
     expect(standIn.received.length).toBe(before);
   }, 60_000);
 
+  it("sends only the passes up to the one named, and the rest once asked for all", async () => {
+    const root = codebase("through", { "src/a.ts": fn("a", "return x + 1;"), "src/b.ts": fn("b", "return x * 2;") });
+    const engine = engineAt(join(scratch, "through-data"));
+    const before = standIn.received.length;
+    for (;;) if ((await engine.call("understand.next", { root, through: "understand" })).left === 0) break;
+    const sent = standIn.received.slice(before).map((r) => r.body as { state: Record<string, unknown> });
+    expect(sent.map((r) => r.state.path).sort()).toEqual(["src/a.ts", "src/b.ts"]);
+    expect(pending(await engine.call("understand.plan", { root, through: "understand" }))).toBe(0);
+    const all = await engine.call("understand.plan", { root });
+    expect(all.pending.filter((p) => p.requests > 0).map((p) => p.pass)).toEqual(["dirs"]);
+    const rest = await understand(engine, root);
+    expect(rest.length).toBeGreaterThan(0);
+    expect(rest.every((r) => r.state.directory !== undefined)).toBe(true);
+  }, 60_000);
+
   it("asks again only the requests whose state an edit changed, and a renamed file keeps its answers", async () => {
     const root = codebase("edits", { "src/a.ts": fn("a", "return x + 1;"), "src/b.ts": fn("b", "return x * 2;"), "src/c.ts": fn("c", "return x - 3;") });
     const data = join(scratch, "edits-data");

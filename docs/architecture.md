@@ -473,6 +473,8 @@ four methods:
   project and looks each up in the store's `calls` table. It sends nothing.
 - `understand.next` sends whatever is ready, in slices, and returns the
   nodes that settled, so a waiting screen can paint each as it lands.
+  Given `through`, both send only the passes up to that one: `understand`
+  covers the links and the stand every definition is sized by.
 - `understand.deepen` queues the deep questions for the nodes the world
   chooses to stand.
 - `understand.ask` asks one call about one node at once, for a follow-up a

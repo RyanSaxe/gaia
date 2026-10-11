@@ -28,13 +28,15 @@ export interface EngineMethods {
    * each up in the store; sends nothing. A request already answered is
    * kept, never sent again (`docs/architecture.md`, "The Jev runner").
    */
-  "understand.plan": { params: { root: string }; result: UnderstandPlan };
+  /** With `through`, only the passes up to that one, such as `understand` for what the world needs to stand. */
+  "understand.plan": { params: { root: string; through?: Pass }; result: UnderstandPlan };
   /**
    * Sends every request whose waits are met, up to `max` (256 by default),
    * as many at once as Jev takes, and returns the nodes that settled, so the
-   * waiting screen can paint them. Call it until nothing is left.
+   * waiting screen can paint them. Call it until nothing is left. With
+   * `through`, only the passes up to that one are sent.
    */
-  "understand.next": { params: { root: string; max?: number }; result: UnderstandProgress };
+  "understand.next": { params: { root: string; max?: number; through?: Pass }; result: UnderstandProgress };
   /** Queues the deep questions for the nodes the world chose to stand. */
   "understand.deepen": { params: { root: string; nodes: readonly NodeId[] }; result: UnderstandPlan };
   /** Asks one call about one node straight away, for a follow-up a person asks. */

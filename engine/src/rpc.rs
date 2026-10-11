@@ -58,14 +58,17 @@ pub fn handle(line: &str) -> Value {
             None => Err((INVALID_PARAMS, "project.graph needs a root.".into())),
         },
         "understand.plan" => match p["root"].as_str() {
-            Some(root) => crate::jev::runner::plan(Path::new(root)).map_err(|e| (FAILED, e)),
+            Some(root) => crate::jev::runner::plan(Path::new(root), p["through"].as_str())
+                .map_err(|e| (FAILED, e)),
             None => Err((INVALID_PARAMS, "understand.plan needs a root.".into())),
         },
         "understand.next" => match p["root"].as_str() {
-            Some(root) => {
-                crate::jev::runner::next(Path::new(root), p["max"].as_u64().map(|m| m as usize))
-                    .map_err(|e| (FAILED, e))
-            }
+            Some(root) => crate::jev::runner::next(
+                Path::new(root),
+                p["max"].as_u64().map(|m| m as usize),
+                p["through"].as_str(),
+            )
+            .map_err(|e| (FAILED, e)),
             None => Err((INVALID_PARAMS, "understand.next needs a root.".into())),
         },
         "understand.deepen" => match (p["root"].as_str(), p["nodes"].as_array()) {
