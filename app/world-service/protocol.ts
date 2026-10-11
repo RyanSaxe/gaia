@@ -120,7 +120,9 @@ export type ToRenderer =
   /** No folder is named: the page offers the start, and answers with `world.choose`. Sent again, with `refused`, when a written address leads nowhere. */
   | { readonly type: "world.start"; readonly offer: StartOffer }
   | { readonly type: "world.document"; readonly document: WorldDocument }
-  | { readonly type: "world.failed"; readonly root: string; readonly message: string };
+  | { readonly type: "world.failed"; readonly root: string; readonly message: string }
+  /** A file's text, answering `world.source`: its lines, or null when it can't be read or lies outside the folder. */
+  | { readonly type: "world.source"; readonly path: string; readonly lines: readonly string[] | null };
 
 /** Renderer → world service. */
 export type FromRenderer =
@@ -131,7 +133,9 @@ export type FromRenderer =
   /** The place chosen on the start page. */
   | { readonly type: "world.choose"; readonly place: StartChoice }
   /** A picture of the world this page opened (`RecentWorld.picture`), painted once its field map is: kept with it among the recent worlds. */
-  | { readonly type: "world.picture"; readonly picture: string };
+  | { readonly type: "world.picture"; readonly picture: string }
+  /** Asks for a file of the world this page opened, by its project-relative path, for the journal's code pages. */
+  | { readonly type: "world.source"; readonly path: string };
 
 /** The status bar's words for each state. */
 export function statusText(status: EngineStatus | "standalone"): string {

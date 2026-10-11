@@ -9,6 +9,8 @@
 // stands, its page sends a picture of its field map, kept with it among the
 // recent worlds for the start.
 
+import { readFile, realpath } from "node:fs/promises";
+import { resolve, sep } from "node:path";
 import type { Unreachable } from "@gaia/schema";
 import type { MessagePortMain } from "electron";
 import { createEngineClient } from "./engine-client.ts";
@@ -84,6 +86,22 @@ async function offerStart(port: MessagePortMain, refused?: { address: string; wh
   } catch (error) {
     send(port, { type: "world.failed", root: "", message: (error as Error).message });
   }
+}
+
+/** Sends a file of the world `port` opened, as its lines; null when it can't be read or lies outside that folder. */
+async function sendSource(port: MessagePortMain, path: string): Promise<void> {
+  const folder = openedOn.get(port);
+  let lines: string[] | null = null;
+  if (folder !== undefined) {
+    try {
+      const base = await realpath(folder);
+      const file = await realpath(resolve(base, path));
+      if (file.startsWith(base + sep)) lines = (await readFile(file, "utf8")).split(/\r?\n/);
+    } catch {
+      lines = null;
+    }
+  }
+  send(port, { type: "world.source", path, lines });
 }
 
 /** Opens the world for one page; whatever it says goes to that page's port only. `github` names a place cloned from GitHub. */
@@ -163,6 +181,7 @@ parent.on("message", (event) => {
         const m = e.data as FromRenderer;
         if (m.type === "world.open") void (root === null ? offerStart(port) : open(port, root));
         else if (m.type === "world.choose") void choose(port, m.place);
+        else if (m.type === "world.source") void sendSource(port, m.path);
         else if (m.type === "world.picture") {
           const folder = openedOn.get(port);
           if (folder !== undefined) void keep(() => keepPicture(engine, folder, m.picture));
