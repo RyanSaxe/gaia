@@ -509,6 +509,8 @@ function meterPath(rings: readonly (readonly number[])[]): Path2D {
   return p;
 }
 
+/** The paper just around a small name, keeping it clear of the paint. */
+export const haloOf = (style: MapStyle): string => `rgba(${mixRgb(style.paper, style.paper, 0).join(",")},0.82)`;
 /** How long a tap on the map waits for a second press (a double tap zooms instead), ms. */
 const PICK_WAIT_MS = 240;
 /** How close the map comes, as a multiple of the whole sheet's zoom, before each file's patch and name are drawn. */
@@ -1016,7 +1018,7 @@ export function createFieldMap(
     // Marks and names grow a little as the map comes closer, and never shrink below legible.
     const near = view.zoom / Math.max(view.fit, 1e-6);
     const grow = growAt(near);
-    const halo = `rgba(${mixRgb(style.paper, style.paper, 0).join(",")},0.82)`;
+    const halo = haloOf(style);
 
     // Close in, the map's next level down: each file's patch in fine dotted ink.
     const close = Math.max(0, Math.min(1, (near - CLOSE) / 0.8));

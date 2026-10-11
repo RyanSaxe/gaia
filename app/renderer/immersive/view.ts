@@ -15,7 +15,7 @@
 // world for the start (`picture.ts`).
 
 import type { PlaceArea } from "@gaia/terrain";
-import { areaVitality, entityOf, journalOf } from "@gaia/world";
+import { areaVitality, entityOf, journalOf, ownOf } from "@gaia/world";
 import { SLIP_LOGO } from "../brand/logo.ts";
 import { onTap } from "../lab.ts";
 import { worldService } from "../service.ts";
@@ -146,8 +146,11 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
     const by = (t: { x: number; z: number }): number => Math.hypot(t.x - p.x, t.z - p.z);
     paintings.near([...paintable].filter((t) => by(t) < NEAR.reach).sort((a, b) => by(a) - by(b)).slice(0, NEAR.count).map((t) => t.id));
   }, NEAR.every);
-  /** What stands in the world for a page: an entity's building or landmark by its path, a file or a definition as itself. */
-  const standsFor = (of: string): string => (of.startsWith("entity:") ? of.slice("entity:".length) : of);
+  /**
+   * What stands in the world for a page: an entity's building or landmark by its path, a file's own page by the
+   * file, a file or a definition as itself.
+   */
+  const standsFor = (of: string): string => (of.startsWith("entity:") ? of.slice("entity:".length) : of.startsWith("own:") ? of.slice("own:".length) : of);
   /** Each map the journal holds, drawn once per painted paper: the whole land across the endpapers, and each folder's. */
   let maps: { paper: unknown; drawn: Map<string, HTMLCanvasElement | null> } | null = null;
   function mapOf(area: string, w: number, h: number, fold: boolean): HTMLCanvasElement | null {
@@ -204,8 +207,8 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
   // world opens it at that thing's page, where the person stands. It never opens on its own.
   world.onPick((id) => {
     if (!active) return;
-    // A building or landmark is its entity's page; anything else is its own.
-    const at = [entityOf(id), id].find((of) => words?.journal.entry(of) !== undefined);
+    // A building or landmark is its entity's page, a file's tree its file's own page, and anything else its own.
+    const at = [entityOf(id), ownOf(id), id].find((of) => words?.journal.entry(of) !== undefined);
     if (at !== undefined) journal.open(at);
   });
   world.onHeading((thing) => minimap.heading(thing));
@@ -251,7 +254,7 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
       const pooled = areaVitality(code.patches.map((p) => ({ area: p.area, vitality: p.vitality, size: p.radius * p.radius })));
       // Every item's own vitality, as the world carries it: a definition's is its own slot, whatever fills it.
       const own = new Map([...code.patches.map((p) => [p.path, p.vitality] as const), ...code.symbols.map((d) => [d.id, d.vitality] as const), ...code.things.map((t) => [entityOf(t.path), t.vitality] as const)]);
-      words = { journal: journalOf(code, ROOM), world: code, vitality: (of) => own.get(of) ?? pooled.get(of) ?? 1, lines: (path) => source.lines(path) ?? undefined, judged: (of) => world.judged(standsFor(of)) };
+      words = { journal: journalOf(code, ROOM), world: code, vitality: (of) => own.get(of) ?? own.get(standsFor(of)) ?? pooled.get(of) ?? 1, lines: (path) => source.lines(path) ?? undefined, judged: (of) => world.judged(standsFor(of)) };
     }
     // A directory's vitality: its files', its subdirectories' included, pooled by the ground each holds, as the map washes it.
     const vitality = areaVitality(world.places().patches.map((p) => ({ area: p.area, vitality: p.vitality, size: p.radius * p.radius })));
