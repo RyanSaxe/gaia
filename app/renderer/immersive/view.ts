@@ -132,6 +132,7 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
       },
       map: (area) => mapOf(area, 520, 660, false),
       turnTo: (at) => journal.turnTo(at),
+      text: (path) => source.when(path),
     }),
     (open) => {
       if (open) setSlip(false);

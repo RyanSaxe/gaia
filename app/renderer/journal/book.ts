@@ -26,6 +26,8 @@ export interface BookPages {
   order(a: string, b: string): number;
   /** The fore-edge's tabs: each top chapter's name and place. */
   tabs(): readonly { readonly name: string; readonly at: string }[];
+  /** Settles once everything a place's spread needs, such as a file's text, has come, so its pages are drawn whole. */
+  ready?(at: string): Promise<void>;
 }
 
 export interface JournalBook {
@@ -62,6 +64,14 @@ const el = (cls: string, parent?: HTMLElement): HTMLDivElement => {
 
 export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: (open: boolean) => void): JournalBook {
   const root = el("journal", layer);
+  // The brush: a stroke or a wash of color laid by hand, its edge wandering a little, as the mocks paint them.
+  root.insertAdjacentHTML(
+    "beforeend",
+    `<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+      <filter id="jp-wash" x="-10%" y="-20%" width="120%" height="140%"><feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="3" seed="4" result="t"/><feDisplacementMap in="SourceGraphic" in2="t" scale="16" xChannelSelector="R" yChannelSelector="G" result="d"/><feGaussianBlur in="d" stdDeviation="1.2"/></filter>
+      <filter id="jp-brush" x="-60%" y="-5%" width="220%" height="110%"><feTurbulence type="fractalNoise" baseFrequency="0.06" numOctaves="2" seed="7" result="t"/><feDisplacementMap in="SourceGraphic" in2="t" scale="6" xChannelSelector="R" yChannelSelector="G" result="d"/><feGaussianBlur in="d" stdDeviation="0.7"/></filter>
+    </svg>`,
+  );
   root.style.setProperty("--leather", `url(${LEATHER})`);
   root.style.setProperty("--paper", `url(${PAPER})`);
   root.style.setProperty("--pw", `${PAGE.w}px`);
@@ -92,24 +102,55 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
   let turning = false;
   let queued: string | null = null;
 
+  // A page is finished the moment it is laid in the book, before anything can see it: it ends on a whole line, and
+  // Jev's marks are painted beside what they point at, so no page is ever seen changing.
   const put = (into: HTMLElement, page: HTMLElement | null): void => {
     into.replaceChildren(...(page === null ? [] : [page]));
-    if (page !== null) requestAnimationFrame(() => endOnWholeLine(page));
+    if (page !== null) finish(page);
   };
-  /** A page ends on a whole line or row: one its body cuts short is left off. */
-  function endOnWholeLine(page: HTMLElement): void {
+  function finish(page: HTMLElement): void {
     const body = page.querySelector<HTMLElement>(".jp-body");
     if (body === null) return;
     const bottom = body.clientHeight;
     for (const line of body.querySelectorAll<HTMLElement>(".jp-line, .jp-row")) line.classList.toggle("jp-past", line.offsetTop + line.offsetHeight > bottom);
+    paintMarks(body);
+  }
+  /** One brush stroke down the gutter for each run of lines a mark covers, and one beside each marked row. */
+  function paintMarks(body: HTMLElement): void {
+    for (const old of body.querySelectorAll(".jp-stroke")) old.remove();
+    const shown = [...body.querySelectorAll<HTMLElement>(".jp-marked:not(.jp-past)")];
+    const runs: HTMLElement[][] = [];
+    for (const e of shown) {
+      const last = runs[runs.length - 1]?.at(-1);
+      const joins = last !== undefined && e.classList.contains("jp-line") && last.nextElementSibling === e && last.style.getPropertyValue("--mark") === e.style.getPropertyValue("--mark") && last.style.getPropertyValue("--mark-strength") === e.style.getPropertyValue("--mark-strength");
+      if (joins) runs[runs.length - 1]?.push(e);
+      else runs.push([e]);
+    }
+    for (const run of runs) {
+      const first = run[0] as HTMLElement;
+      const end = run[run.length - 1] as HTMLElement;
+      const holder = first.parentElement as HTMLElement;
+      const stroke = document.createElement("i");
+      stroke.className = `jp-stroke ${first.classList.contains("jp-row") ? "row" : "line"}`;
+      stroke.style.top = `${first.offsetTop + 3}px`;
+      stroke.style.height = `${end.offsetTop + end.offsetHeight - first.offsetTop - 6}px`;
+      stroke.style.background = first.style.getPropertyValue("--mark");
+      stroke.style.opacity = first.style.getPropertyValue("--mark-strength");
+      holder.append(stroke);
+    }
+  }
+  function markTabs(place: string): void {
+    for (const t of tabs.children) t.classList.toggle("on", (t as HTMLElement).dataset.at !== undefined && within(place, (t as HTMLElement).dataset.at as string));
   }
   function show(place: string): void {
     const s = pages.spread(place);
     put(left, s.left);
     put(right, s.right);
     at = place;
-    for (const t of tabs.children) t.classList.toggle("on", (t as HTMLElement).dataset.at !== undefined && within(place, (t as HTMLElement).dataset.at as string));
+    markTabs(place);
   }
+  /** Waits until a place's spread can be drawn whole, but never long: a slow file is drawn without its code rather than held. */
+  const readied = (place: string): Promise<void> => Promise.race([pages.ready?.(place) ?? Promise.resolve(), new Promise<void>((r) => window.setTimeout(r, 900))]);
   /** Whether `place` lies in the chapter at `chapter`: it is the chapter or comes after it and before the next tab. */
   function within(place: string, chapter: string): boolean {
     const list = pages.tabs();
@@ -159,6 +200,14 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
       queued = target;
       return;
     }
+    turning = true;
+    void readied(target).then(() => turnNow(target));
+  }
+  function turnNow(target: string): void {
+    if (!open) {
+      turning = false;
+      return;
+    }
     const from = at;
     const forward = from === null || pages.order(from, target) < 0;
     const to = pages.spread(target);
@@ -188,7 +237,9 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
       put(leafFront, null);
       put(leafBack, null);
       turning = false;
-      show(target);
+      // The pages lying open are the ones that turned: nothing is drawn again once a turn is done.
+      at = target;
+      markTabs(target);
       if (queued !== null) {
         const next = queued;
         queued = null;
@@ -285,7 +336,8 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
         if (place0 !== undefined) turnTo(place0);
         return;
       }
-      setOpen(true, place0);
+      // The book is lifted once the page it opens at can be drawn whole.
+      void readied(place0 ?? "map").then(() => setOpen(true, place0));
     },
     turnTo,
     close: () => setOpen(false),

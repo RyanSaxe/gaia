@@ -23,6 +23,8 @@ export interface JournalPagesSource {
   map(area: string): HTMLElement | null;
   /** Turns the book to a place, for a row tapped on a page. */
   turnTo(at: string): void;
+  /** Settles once a file's text has come, for a definition's page. */
+  text(path: string): Promise<void>;
 }
 
 /** The spreads a list of `rows` takes from its first page on: the first page faces its picture, the rest come two to a spread. */
@@ -83,6 +85,10 @@ export function journalPages(src: JournalPagesSource): BookPages {
     order(a, b) {
       const { order } = index();
       return (order.get(a) ?? 0) - (order.get(b) ?? 0);
+    },
+    ready(at) {
+      const e = src.words()?.journal.entry(at.split(SEP)[0] as string);
+      return e?.kind === "definition" ? src.text(e.of.slice(0, e.of.indexOf("#"))) : Promise.resolve();
     },
     tabs() {
       const journal: Journal | undefined = index().words?.journal;
