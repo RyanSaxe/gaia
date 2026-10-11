@@ -22,24 +22,36 @@ export interface PaintJob {
 }
 
 type RGB = [number, number, number];
+/** An image the painter reads from: RGBA rows, `w` by `h`, `s` of the painting's pixels to each of its own. */
+interface Img {
+  readonly data: Uint8ClampedArray;
+  readonly w: number;
+  readonly h: number;
+  readonly s: number;
+}
 type Point = [number, number];
 type Ctx = OffscreenCanvasRenderingContext2D;
 
+/** The most bristles a stroke is drawn with: a wide stroke's bristles show only at its edges, under the finer strokes laid over it. */
+const BRISTLES = 8;
+/** The narrowest brush, pixels, whose stroke catches the light along one side. */
+const SHEEN = 9;
 /** The color the strokes are laid on, where none reach. */
 const GROUND = "#d9cfae";
 
 /**
  * The layers of strokes, coarse to fine: each brush's radius, how blurred the
  * view it copies is, how many steps a stroke takes along the shapes, whether
- * it paints only the thing, and how far the painting so far must stray from
- * the view before it paints there.
+ * it paints only the thing, how far the painting so far must stray from the
+ * view before it paints there, and how far apart its strokes start, in
+ * brush widths.
  */
 const LAYERS = [
-  { r: 46, blur: 26, steps: 4, thing: false, stray: -1 },
-  { r: 26, blur: 13, steps: 5, thing: false, stray: 22 },
-  { r: 15, blur: 7, steps: 5, thing: false, stray: 30 },
-  { r: 10, blur: 4, steps: 5, thing: true, stray: 14 },
-  { r: 6, blur: 2.5, steps: 4, thing: true, stray: 12 },
+  { r: 46, blur: 26, steps: 4, thing: false, stray: -1, spacing: 0.7 },
+  { r: 26, blur: 13, steps: 5, thing: false, stray: 22, spacing: 0.7 },
+  { r: 15, blur: 7, steps: 5, thing: false, stray: 30, spacing: 0.7 },
+  { r: 10, blur: 4, steps: 5, thing: true, stray: 14, spacing: 0.7 },
+  { r: 6, blur: 2.5, steps: 4, thing: true, stray: 16, spacing: 0.9 },
 ] as const;
 
 function rng(seed: number): () => number {
@@ -124,16 +136,22 @@ export function paint(job: PaintJob): OffscreenCanvas {
   };
   const color = source(job.color);
   const mask = source(job.mask);
-  /** An image scaled to `cw` by `ch` and blurred by about `blur` of those pixels. */
-  const grab = (im: OffscreenCanvas, blur: number, cw = w, ch = h): Uint8ClampedArray => {
-    const [, x] = canvas(cw, ch);
+  /**
+   * An image scaled to `cw` by `ch` and blurred by about `blur` of those
+   * pixels. A heavily blurred image holds no fine detail, so it is made and
+   * kept smaller, `s` of its pixels to one of the painting's.
+   */
+  const grab = (im: OffscreenCanvas, blur: number, cw = w, ch = h): Img => {
+    const s = Math.max(1, Math.min(4, Math.floor(blur / 3)));
+    const [iw, ih] = [Math.ceil(cw / s), Math.ceil(ch / s)];
+    const [, x] = canvas(iw, ih);
     x.imageSmoothingQuality = "high";
-    x.drawImage(im, 0, 0, cw, ch);
-    return blurred(x.getImageData(0, 0, cw, ch).data, cw, ch, blur);
+    x.drawImage(im, 0, 0, iw, ih);
+    return { data: blurred(x.getImageData(0, 0, iw, ih).data, iw, ih, blur / s), w: iw, h: ih, s };
   };
-  const at = (d: Uint8ClampedArray, x: number, y: number): RGB => {
-    const i = (Math.max(0, Math.min(h - 1, y | 0)) * w + Math.max(0, Math.min(w - 1, x | 0))) * 4;
-    return [d[i] as number, d[i + 1] as number, d[i + 2] as number];
+  const at = (img: Img, x: number, y: number): RGB => {
+    const i = (Math.max(0, Math.min(img.h - 1, (y / img.s) | 0)) * img.w + Math.max(0, Math.min(img.w - 1, (x / img.s) | 0))) * 4;
+    return [img.data[i] as number, img.data[i + 1] as number, img.data[i + 2] as number];
   };
   const differ = (a: RGB, b: RGB): number => Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]);
   const thingMask = grab(mask, 2);
@@ -144,7 +162,7 @@ export function paint(job: PaintJob): OffscreenCanvas {
   const q = 4;
   const fw = Math.ceil(w / q);
   const fh = Math.ceil(h / q);
-  const small = grab(color, 3, fw, fh);
+  const small = grab(color, 3, fw, fh).data;
   const lum = new Float32Array(fw * fh);
   for (let i = 0; i < fw * fh; i++) lum[i] = 0.3 * (small[i * 4] as number) + 0.59 * (small[i * 4 + 1] as number) + 0.11 * (small[i * 4 + 2] as number);
   const tensor = [new Float32Array(fw * fh), new Float32Array(fw * fh), new Float32Array(fw * fh)] as const;
@@ -189,7 +207,7 @@ export function paint(job: PaintJob): OffscreenCanvas {
 
   /** A bristle brush: several thin lines across the stroke's width, each its own shade, converging at both ends. */
   function stroke(pts: Point[], rad: number, col: RGB, alpha: number): void {
-    const n = Math.max(4, Math.round(rad / 2.2));
+    const n = Math.min(BRISTLES, Math.max(4, Math.round(rad / 2.2)));
     const last = pts.length - 1;
     const normals = pts.map((_, k): Point => {
       const a = pts[Math.max(0, k - 1)] as Point;
@@ -235,7 +253,11 @@ export function paint(job: PaintJob): OffscreenCanvas {
         to,
       );
     }
-    // Thick paint catches the light along one side.
+    // Thick paint catches the light along one side, where a stroke is wide enough to show it.
+    if (rad < SHEEN) {
+      ctx.globalAlpha = 1;
+      return;
+    }
     ctx.globalAlpha = alpha * 0.16;
     ctx.strokeStyle = "#fff6e4";
     ctx.lineWidth = Math.max(1, rad * 0.12);
@@ -250,18 +272,19 @@ export function paint(job: PaintJob): OffscreenCanvas {
   const coarse = grab(color, 20);
   for (const layer of LAYERS) {
     const ref = grab(color, layer.blur);
-    const cur = ctx.getImageData(0, 0, w, h).data;
+    const cur: Img = { data: ctx.getImageData(0, 0, w, h).data, w, h, s: 1 };
     const rad = layer.r;
     const spots: Point[] = [];
     // Each cell of a grid the brush's size paints where the painting so far strays most from the view.
-    for (let gy = 0; gy < h; gy += rad * 0.7) {
-      for (let gx = 0; gx < w; gx += rad * 0.7) {
+    const step = rad * layer.spacing;
+    for (let gy = 0; gy < h; gy += step) {
+      for (let gx = 0; gx < w; gx += step) {
         let best: Point = [gx, gy];
         let worst = -1;
         let sum = 0;
         for (let k = 0; k < 5; k++) {
-          const x = gx + r() * rad * 0.7;
-          const y = gy + r() * rad * 0.7;
+          const x = gx + r() * step;
+          const y = gy + r() * step;
           const e = differ(at(ref, x, y), at(cur, x, y));
           sum += e;
           if (e > worst) {
