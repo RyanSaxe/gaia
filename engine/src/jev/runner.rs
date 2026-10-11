@@ -47,6 +47,20 @@ const CONCURRENCY_STEP: usize = 8;
 const DEFAULT_SLICE: usize = 256;
 /// Held link answers are kept under this prefix and the reference's key.
 const LINK: &str = "link";
+/// The passes in the order their requests wait on each other.
+const PASSES: [&str; 5] = [LINK, "understand", "tests", "deep", "dirs"];
+
+/// Keeps only the requests of the passes up to `through`, or all of them.
+fn through(w: &mut Wanted, through: Option<&str>) -> Result<(), String> {
+    let Some(last) = through else {
+        return Ok(());
+    };
+    let rank = |pass: &str| PASSES.iter().position(|p| *p == pass);
+    let last = rank(last).ok_or_else(|| format!("No pass is called {last}."))?;
+    w.planned
+        .retain(|p| rank(p.pass).is_some_and(|r| r <= last));
+    Ok(())
+}
 
 /// One request, and what each of its questions is about.
 struct Planned {
@@ -663,17 +677,22 @@ fn summary(w: &Wanted) -> Value {
     })
 }
 
-/// Says what the project wants asked now and what is already answered. Sends nothing.
-pub fn plan(root: &Path) -> Result<Value, String> {
+/// Says what the project wants asked now, in the passes up to `last` or in
+/// all of them, and what is already answered. Sends nothing.
+pub fn plan(root: &Path, last: Option<&str>) -> Result<Value, String> {
     let (deep, _) = session_of(root)?;
-    Ok(summary(&wanted(root, &deep)?))
+    let mut w = wanted(root, &deep)?;
+    through(&mut w, last)?;
+    Ok(summary(&w))
 }
 
-/// Sends up to `max` requests that are ready, and holds the answers of every
-/// file or directory a pass has now fully answered.
-pub fn next(root: &Path, max: Option<usize>) -> Result<Value, String> {
+/// Sends up to `max` requests that are ready, in the passes up to `last` or
+/// in all of them, and holds the answers of every file or directory a pass
+/// has now fully answered.
+pub fn next(root: &Path, max: Option<usize>, last: Option<&str>) -> Result<Value, String> {
     let (deep, concurrency) = session_of(root)?;
-    let w = wanted(root, &deep)?;
+    let mut w = wanted(root, &deep)?;
+    through(&mut w, last)?;
     let ready: Vec<usize> = (0..w.planned.len())
         .filter(|&i| !w.answered.contains(&w.planned[i].hash))
         .take(max.unwrap_or(DEFAULT_SLICE))
