@@ -124,18 +124,14 @@ export function renderPage(words: PageWords, folio: string, turnTo: (of: string)
   const body = el("div", "jp-body");
   if (words.body.kind === "rows") body.append(rowsOf(rows === undefined ? words.body.rows : words.body.rows.slice(rows.from, rows.to), turnTo));
   else if (words.body.kind === "code") {
-    const code = codeOf(words.body.first, words.body.lines, words.body.marks);
+    // From the line it opens at, with what Jev says above the block or two it points out; lines above it fold away.
+    const code = words.body;
+    const skipped = code.opensAt - code.first;
+    const shown: Full = { kind: "full", said: code.notes, first: code.opensAt, lines: code.lines.slice(skipped), marks: code.marks };
+    if (skipped > 0 && inFull !== undefined) body.append(foldOf(skipped, inFull, "before"));
+    setItems(body, shown, fullItems(shown), baseIndent(code.lines));
     // Where a long definition's page ends, a fold: the book shows it, with how many lines it holds, when lines are left over.
-    if (inFull !== undefined) {
-      const fold = el("button", "jp-fold");
-      fold.type = "button";
-      fold.addEventListener("click", (e) => {
-        e.stopPropagation();
-        inFull();
-      });
-      code.append(fold);
-    }
-    body.append(code);
+    if (inFull !== undefined) body.append(foldOf(0, inFull, "after"));
   }
   page.append(head, body, el("div", "jp-folio", folio));
   return page;
@@ -205,7 +201,13 @@ export function renderFullPage(words: PageWords, body: Full, folio: string, item
     head.append(el("div", "jp-rule"));
   }
   const content = el("div", "jp-body");
-  const base = baseIndent(body.lines);
+  setItems(content, body, fullItems(body).slice(items.from, items.to), baseIndent(body.lines));
+  page.append(head, content, el("div", "jp-folio", folio));
+  return page;
+}
+
+/** Sets `items` of a definition on a page: a run of its lines as code, a run of what Jev says as its rows. */
+function setItems(content: HTMLElement, body: Full, items: readonly FullItem[], base: number): void {
   let run: FullItem[] = [];
   const close = (): void => {
     const [start] = run;
@@ -220,13 +222,22 @@ export function renderFullPage(words: PageWords, body: Full, folio: string, item
     }
     run = [];
   };
-  for (const item of fullItems(body).slice(items.from, items.to)) {
+  for (const item of items) {
     if (run.length > 0 && (run[0]?.kind === "line") !== (item.kind === "line")) close();
     run.push(item);
   }
   close();
-  page.append(head, content, el("div", "jp-folio", folio));
-  return page;
+}
+
+/** A fold: a dotted rule across the code with how many lines it holds, which turns to the definition in full. */
+function foldOf(lines: number, inFull: () => void, where: "before" | "after"): HTMLElement {
+  const fold = el("button", `jp-fold ${where}`, lines > 0 ? `${lines.toLocaleString("en-US")} ${lines === 1 ? "line" : "lines"} ${where === "before" ? "before" : "more"}` : "");
+  fold.type = "button";
+  fold.addEventListener("click", (e) => {
+    e.stopPropagation();
+    inFull();
+  });
+  return fold;
 }
 
 /** The title page, facing the contents: the world's name and its vitality, large. */

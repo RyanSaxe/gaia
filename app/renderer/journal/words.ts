@@ -63,6 +63,8 @@ export interface Code {
   readonly opensAt: number;
   /** The lines Jev points out, by line number. */
   readonly marks: readonly (Mark & { readonly from: number; readonly to: number })[];
+  /** What Jev says about the block or two a page points out, Jev's surest of each kind, shown just above each. */
+  readonly notes: readonly Said[];
 }
 
 /** One thing Jev says about a node, in plain words: what it was asked, and its answer. */
@@ -208,18 +210,28 @@ export function wordsOf(src: WordsSource, e: JournalEntry): PageWords {
   const line = symbol?.line ?? 1;
   const count = symbol?.lines ?? 1;
   const signature = text?.[line - 1]?.trim();
-  const marks = (src.judged?.(e.of) ?? []).flatMap((j) => {
+  const blocks = (src.judged?.(e.of) ?? []).flatMap((j) => {
     const mark = j.lines === undefined ? undefined : markOf(j.judged);
-    return mark === undefined || j.lines === undefined ? [] : [{ ...mark, from: j.lines.start, to: j.lines.end }];
+    return mark === undefined || j.lines === undefined ? [] : [{ mark, lines: j.lines, judged: j.judged }];
   });
+  const marks = blocks.map((b) => ({ ...b.mark, from: b.lines.start, to: b.lines.end }));
+  // A page points out a block or two: Jev's surest of each kind, one key to understanding and one that could be better,
+  // each with what Jev says about it. A definition too long for its page opens at the first of them.
+  const pointed = (["understand", "improve"] as const)
+    .flatMap((kind) => [...blocks].filter((b) => b.mark.kind === kind).sort((a, b) => b.mark.sure - a.mark.sure).slice(0, 1))
+    .sort((a, b) => a.lines.start - b.lines.start);
+  const opensAt = count - 1 > FITS && pointed[0] !== undefined ? pointed[0].lines.start : line + 1;
   return {
     path: file.split("/"),
     name: e.name,
     vitality: src.vitality(file),
     ...(signature === undefined ? {} : { signature }),
-    body: { kind: "code", first: line + 1, lines: text?.slice(line, line + count - 1) ?? [], opensAt: line + 1, marks },
+    body: { kind: "code", first: line + 1, lines: text?.slice(line, line + count - 1) ?? [], opensAt, marks, notes: pointed.map((b) => ({ lines: b.lines, facts: factsOf(b.judged) })) },
   };
 }
+
+/** How many lines after its signature a definition's page holds whole, about. */
+const FITS = 24;
 
 /** A definition's words for the appendix: its name and signature, everything Jev says about it, then all of its code. */
 export function appendixWords(src: WordsSource, e: JournalEntry): PageWords {
