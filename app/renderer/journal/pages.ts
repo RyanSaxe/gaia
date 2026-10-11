@@ -9,9 +9,11 @@
 import type { Journal, JournalEntry, PageRoom } from "@gaia/world";
 import type { BookPages, Spread } from "./book.ts";
 import { tapsOf } from "./maps.ts";
-import { fullItems, renderFullPage, renderPage, renderPicture, renderTitle } from "./page.ts";
+import { fullItems, renderFullPage, renderPage, renderPicture, renderTitle, renderTraveller } from "./page.ts";
 import { type Full, type PageWords, type WordsSource, appendixWords, contentsWords, wordsOf } from "./words.ts";
 
+/** A page's size, its own pixels. */
+const PAGE_SIZE = { w: 520, h: 660 } as const;
 /** How many of the things after an open page, and before it, are painted ahead of the reader. */
 const AHEAD = 5;
 const BEHIND = 5;
@@ -35,6 +37,10 @@ export interface JournalPagesSource {
   ahead(ofs: readonly string[]): void;
   /** Turns the book to a place, for a row tapped on a page. */
   turnTo(at: string): void;
+  /** Settles once the map's paper is painted: a map's page is never seen before its map. */
+  mapped(): Promise<void>;
+  /** Where the person stands and which way they look (radians, 0 looking toward -z), for the maps' traveller. */
+  person(): { readonly x: number; readonly z: number; readonly yaw: number };
   /** Takes the person to the spot in the world a map was tapped at. */
   travelTo(x: number, z: number): void;
   /** Takes the person to a thing, where its painting was seen from: a page's picture tapped. */
@@ -197,9 +203,13 @@ export function journalPages(src: JournalPagesSource): BookPages {
   const folio = (n: number): string => (n > 0 ? n.toLocaleString("en-US") : "");
   const roman = (n: number): string => ["", "i", "ii", "iii", "iv", "v", "vi", "vii", "viii", "ix", "x"][n] ?? String(n);
   const blank = (f = ""): HTMLElement => renderPicture(null, f);
-  /** A map's page: a tap on a folder's name turns to its chapter, and a tap on its land takes the person there. */
-  const mapPage = (map: HTMLElement | null, f: string): HTMLElement =>
-    renderPicture(map, f, (px, py) => {
+  /**
+   * A map's page: the traveller stands where the person is, as on the field
+   * map, when they are on this page; a tap on a folder's name turns to its
+   * chapter, and a tap on its land takes the person there.
+   */
+  const mapPage = (map: HTMLElement | null, f: string): HTMLElement => {
+    const page = renderPicture(map, f, (px, py) => {
       const taps = tapsOf(map);
       if (taps === null) return;
       const name = taps.name(px, py);
@@ -207,6 +217,12 @@ export function journalPages(src: JournalPagesSource): BookPages {
       const at = taps.at(px, py);
       src.travelTo(at.x, at.z);
     });
+    const taps = tapsOf(map);
+    const me = src.person();
+    const here = taps?.page(me.x, me.z);
+    if (here !== undefined && here.px > 0 && here.px < PAGE_SIZE.w && here.py > 0 && here.py < PAGE_SIZE.h) page.append(renderTraveller(here.px, here.py, me.yaw));
+    return page;
+  };
 
   function entrySpread(words: WordsSource, e: JournalEntry, k: number): Spread {
     const said = wordsOf(words, e);
@@ -280,6 +296,8 @@ export function journalPages(src: JournalPagesSource): BookPages {
     painted(at) {
       if (fullAt(at) !== null) return Promise.resolve();
       const [of, k = "0"] = at.split(SEP);
+      // The endpapers and a chapter's first spread are maps.
+      if (of === "map" || (k === "0" && src.words()?.journal.entry(of as string)?.kind === "chapter")) return src.mapped();
       // The title page faces the contents, and a thing's first spread faces its painting.
       if (of === "contents") return k === "0" ? src.painted("") : Promise.resolve();
       const e = src.words()?.journal.entry(of as string);

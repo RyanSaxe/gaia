@@ -29,6 +29,8 @@ type Box = [number, number, number, number];
 export interface MapTaps {
   at(px: number, py: number): { readonly x: number; readonly z: number };
   name(px: number, py: number): string | null;
+  /** Where a spot in the world lies on the page, in its pixels. */
+  page(x: number, z: number): { readonly px: number; readonly py: number };
 }
 const taps = new WeakMap<HTMLCanvasElement, MapTaps>();
 /** How to read a tap on a map the journal drew, in its page's pixels; null for anything else. */
@@ -65,6 +67,7 @@ export function drawMapPage(src: MapSource, area: string, w: number, h: number, 
   const named: { readonly box: Box; readonly path: string }[] = [];
   taps.set(canvas, {
     at: (px, py) => ({ x: mx(px), z: mz(py) }),
+    page: (x, z) => ({ px: sx(x), py: sy(z) }),
     name: (px, py) => named.find(({ box: b }) => px >= b[0] && px <= b[2] && py >= b[1] && py <= b[3])?.path ?? null,
   });
   const clear = (b: Box): boolean => taken.every((o) => b[2] < o[0] || b[0] > o[2] || b[3] < o[1] || b[1] > o[3]);
@@ -203,6 +206,15 @@ export function halfOf(spread: HTMLCanvasElement, side: "left" | "right"): HTMLC
   (half.getContext("2d") as CanvasRenderingContext2D).drawImage(spread, side === "left" ? 0 : -spread.width / 2, 0);
   const whole = taps.get(spread);
   const shift = side === "left" ? 0 : spread.width / 2 / DPR;
-  if (whole !== undefined) taps.set(half, { at: (px, py) => whole.at(px + shift, py), name: (px, py) => whole.name(px + shift, py) });
+  if (whole !== undefined) {
+    taps.set(half, {
+      at: (px, py) => whole.at(px + shift, py),
+      name: (px, py) => whole.name(px + shift, py),
+      page: (x, z) => {
+        const at = whole.page(x, z);
+        return { px: at.px - shift, py: at.py };
+      },
+    });
+  }
   return half;
 }

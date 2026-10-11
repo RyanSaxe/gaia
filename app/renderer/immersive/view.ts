@@ -171,6 +171,12 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
       frontispiece: () => paintings.picture("", true),
       ahead: (ofs) => paintings.ahead(ofs.map(standsFor)),
       turnTo: (at) => journal.turnTo(at),
+      person: () => world.person(),
+      mapped: () =>
+        new Promise<void>((resolve) => {
+          const look = (): void => void (map.paper() !== null ? resolve() : window.setTimeout(look, 150));
+          look();
+        }),
       // Words turn pages; a map's land and a page's picture take the person into the world, the book shutting as they go.
       travelTo: (x, z) => {
         journal.close();

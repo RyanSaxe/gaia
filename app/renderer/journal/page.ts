@@ -7,6 +7,7 @@
 // rest a drag away. Nothing fades.
 
 import type { Span } from "@gaia/schema";
+import { TRAVELLER_SVG } from "../immersive/map-styles.ts";
 import { type Piece, highlight } from "./highlight.ts";
 import type { Fact, Full, Mark, PageWords, Row, Said } from "./words.ts";
 
@@ -280,6 +281,16 @@ export function renderTitle(name: string, vitality: number, folio: string, paint
   lettered.append(el("div", "jp-book-name", name), wash);
   page.append(painting, lettered, el("div", "jp-folio", folio));
   return page;
+}
+
+/** You are here, on a map's page: the field map's own traveller, their footprints behind them along the way they look. */
+export function renderTraveller(px: number, py: number, yaw: number): HTMLElement {
+  const here = el("div", "jp-here");
+  here.innerHTML = TRAVELLER_SVG;
+  here.style.left = `${((px / PAGE_W) * 100).toFixed(2)}%`;
+  here.style.top = `${((py / PAGE_H) * 100).toFixed(2)}%`;
+  here.querySelector(".traveller-steps")?.setAttribute("transform", `rotate(${((-yaw * 180) / Math.PI).toFixed(1)})`);
+  return here;
 }
 
 /**
