@@ -11,14 +11,20 @@ export interface SourceText {
   lines(path: string): readonly string[] | null | undefined;
   /** Hears each file's lines arrive. */
   onArrive(listener: (path: string) => void): void;
+  /** Settles once a file's lines have come, or are known not to be had. */
+  when(path: string): Promise<void>;
 }
 
 export function createSourceText(service: WorldService | null): SourceText {
   const files = new Map<string, readonly string[] | null | "asked">();
   const listeners: ((path: string) => void)[] = [];
+  /** Who waits for each file, each heard once. */
+  const waiting = new Map<string, (() => void)[]>();
   const arrive = (path: string, lines: readonly string[] | null): void => {
     files.set(path, lines);
     for (const l of listeners) l(path);
+    for (const w of waiting.get(path) ?? []) w();
+    waiting.delete(path);
   };
   service?.on((m) => {
     if (m.type === "world.source") arrive(m.path, m.lines);
@@ -45,5 +51,9 @@ export function createSourceText(service: WorldService | null): SourceText {
       return undefined;
     },
     onArrive: (listener) => listeners.push(listener),
+    when(path) {
+      if (this.lines(path) !== undefined) return Promise.resolve();
+      return new Promise((resolve) => waiting.set(path, [...(waiting.get(path) ?? []), resolve]));
+    },
   };
 }

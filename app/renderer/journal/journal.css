@@ -87,7 +87,7 @@
 .jp-title { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-top: 8px; }
 .jp-name { font: italic 600 31px/1.08 "Iowan Old Style", Georgia, serif; color: #33281d; overflow-wrap: anywhere; }
 .jp-vit { display: flex; align-items: center; gap: 9px; font: 22px/1 "Bradley Hand", Georgia, cursive; color: #4a3a26; }
-.jp-vit i, .jp-row-vit i { display: block; width: 26px; height: 16px; border-radius: 50% 46% 52% 44%; opacity: 0.75; }
+.jp-vit i, .jp-row-vit i { display: block; width: 26px; height: 16px; border-radius: 50% 46% 52% 44%; opacity: 0.75; filter: url(#jp-wash); }
 .jp-sig { font: 10.6px/1.45 "SF Mono", ui-monospace, Menlo, monospace; color: #5c4c3a; margin-top: 12px; overflow-wrap: anywhere; }
 .jp-rule { height: 1px; margin: 18px 0 0; background: linear-gradient(90deg, rgba(120, 92, 60, 0.35), rgba(120, 92, 60, 0.1)); }
 /* Nothing on a page scrolls: what the page can't hold is left off at a whole line (book.ts). */
@@ -116,15 +116,12 @@
 .jp-ln { text-align: right; color: #8f7a5c; font: 12.5px/1.6 "Bradley Hand", Georgia, cursive; border-right: 1px solid rgba(120, 95, 65, 0.38); padding-right: 0.5em; }
 .jp-text { white-space: pre-wrap; overflow-wrap: anywhere; padding-left: calc(var(--ind) * 1ch + 2ch); text-indent: -2ch; }
 
-/* Jev's mark: a soft painted stroke in the gutter beside what it points out, its color the kind and its strength how sure. */
-.jp-marked { position: relative; }
-.jp-row.jp-marked::before, .jp-line.jp-marked::before {
-  content: ""; position: absolute; top: 3px; bottom: 3px; width: 5px; border-radius: 3px; background: var(--mark); opacity: var(--mark-strength); pointer-events: none;
-}
-.jp-row.jp-marked::before { left: -15px; }
-.jp-line.jp-marked::before { left: calc(2.4em + 0.35em); top: 0; bottom: 0; border-radius: 0; }
-.jp-line.jp-marked:not(.jp-marked + .jp-marked)::before { top: 3px; border-radius: 3px 3px 0 0; }
-.jp-line.jp-marked:has(+ .jp-line:not(.jp-marked))::before, .jp-line.jp-marked:last-child::before { bottom: 3px; border-radius: 0 0 3px 3px; }
+/* Jev's mark: a soft brush stroke in the gutter beside what it points out, its color the kind and its strength how
+   sure; one stroke runs the length of a marked block of lines (book.ts paints them once a page is laid out). */
+.jp-rows, .jp-code { position: relative; }
+.jp-stroke { position: absolute; width: 5px; border-radius: 3px; pointer-events: none; filter: url(#jp-brush); }
+.jp-stroke.row { left: -15px; }
+.jp-stroke.line { left: calc(2.4em + 0.35em); }
 
 /* A page a list runs on to carries a running head instead of the heading. */
 .jp-running { font: 600 9px/1.3 "Iowan Old Style", Georgia, serif; letter-spacing: .22em; text-transform: uppercase; color: #8a7458; padding-bottom: 8px; border-bottom: 1px solid rgba(120, 92, 60, 0.18); }
