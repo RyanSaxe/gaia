@@ -91,7 +91,8 @@
 .jp-sig { font: 10.6px/1.45 "SF Mono", ui-monospace, Menlo, monospace; color: #5c4c3a; margin-top: 12px; overflow-wrap: anywhere; }
 .jp-rule { height: 1px; margin: 18px 0 0; background: linear-gradient(90deg, rgba(120, 92, 60, 0.35), rgba(120, 92, 60, 0.1)); }
 /* Nothing on a page scrolls: what the page can't hold is left off at a whole line (book.ts). */
-.jp-body { flex: 1; min-height: 0; margin-top: 14px; overflow: hidden; position: relative; }
+/* The body reaches a little left of the text, so a mark in the gutter beside a row is not cut off. */
+.jp-body { flex: 1; min-height: 0; margin-top: 14px; overflow: hidden; position: relative; margin-left: -20px; padding-left: 20px; }
 .jp-past { visibility: hidden; }
 
 /* A list: each row its name, a dotted leader, its vitality and its page; a tap turns there. */
@@ -120,7 +121,7 @@
 .jp-row.jp-marked::before, .jp-line.jp-marked::before {
   content: ""; position: absolute; top: 3px; bottom: 3px; width: 5px; border-radius: 3px; background: var(--mark); opacity: var(--mark-strength); pointer-events: none;
 }
-.jp-row.jp-marked::before { left: -16px; }
+.jp-row.jp-marked::before { left: -15px; }
 .jp-line.jp-marked::before { left: calc(2.4em + 0.35em); top: 0; bottom: 0; border-radius: 0; }
 .jp-line.jp-marked:not(.jp-marked + .jp-marked)::before { top: 3px; border-radius: 3px 3px 0 0; }
 .jp-line.jp-marked:has(+ .jp-line:not(.jp-marked))::before, .jp-line.jp-marked:last-child::before { bottom: 3px; border-radius: 0 0 3px 3px; }
