@@ -126,8 +126,10 @@ export interface CellPlace {
 export interface WorldPlaces {
   /** The repository's name, which names the world. */
   readonly name: string;
-  /** Side of the codebase's square of land, meters; past its rounded edge is the wild, which stands for no directory. */
+  /** The codebase's land's width, west to east, meters; past its rounded edge is the wild, which stands for no directory. */
   readonly size: number;
+  /** How much wider than deep the land is: 1, a square, when absent; a world laid out from code takes the journal spread's proportions. */
+  readonly aspect?: number;
   readonly areas: readonly AreaPlace[];
   readonly patches: readonly PatchPlace[];
   readonly cells: readonly CellPlace[];
