@@ -151,6 +151,16 @@ describe("the proving ground", () => {
       expect(terrain.ponds.length).toBeGreaterThanOrEqual(2);
     });
 
+    it("stands every definition the layout lays out, each on its own file's patch, however crowded its ground", () => {
+      expect(stood.symbols.length).toBe(doc.world.symbols.length);
+      stood.symbols.forEach((i, k) => {
+        const s = doc.world.symbols[k]!;
+        expect(i, s.id).toBeGreaterThanOrEqual(0);
+        const p = stood.placements[i]!;
+        expect(placeAt(doc.world, p.x, p.z).file?.path, s.id).toBe(s.file);
+      });
+    });
+
     it("grows the understory with the vitality of the ground it stands on, so the ruins' bushes and flowers fail", () => {
       // The page shows each scattered placement's vitality from the ground's vitality field, as the grass beneath it reads it, and each file's finer entity its file's.
       const shown = understoryVitality(stood, (k) => code.stand.symbols[k]!.vitality, (x, z) => vitalityAt(own, groundField, x, z));
