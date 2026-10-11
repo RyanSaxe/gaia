@@ -371,3 +371,52 @@ export function divideLand(root: LandNode, size: number): Land {
   });
   return { step, leaves: out };
 }
+
+/** Ground within a leaf, held by one of a smaller tree's leaves: where the thing on it stands, and how much it holds. */
+export interface Plot {
+  readonly x: number;
+  readonly z: number;
+  /** Square meters. */
+  readonly ground: number;
+}
+
+/**
+ * Divides one leaf's ground among a smaller tree exactly as the land is
+ * divided, down to its own leaves: a file's patch among its definitions, and
+ * a definition's plot among the definitions inside it. `points` are the
+ * leaf's raster cells (`LeafLand.inner`) and `step` the raster's spacing; a
+ * plot stands at its cells' middle, moved onto its own ground.
+ */
+export function dividePlots(root: LandNode, points: readonly (readonly [number, number])[], step: number): ReadonlyMap<string, Plot> {
+  const out = new Map<string, Plot>();
+  if (points.length === 0) return out;
+  const px = Float64Array.from(points, (p) => p[0]);
+  const pz = Float64Array.from(points, (p) => p[1]);
+  const warped = points.map((p) => warpPoint(p[0], p[1]));
+  const r: Raster = { step, n: 0, half: 0, px, pz, wx: Float64Array.from(warped, (w) => w[0]), wz: Float64Array.from(warped, (w) => w[1]), at: new Int32Array(0) };
+  const shares = new Map<string, Int32Array>();
+  divide(r, root, Int32Array.from({ length: points.length }, (_, i) => i), shares);
+  for (const leaf of leavesOf(root)) {
+    const mine = shares.get(leaf.id);
+    if (mine === undefined || mine.length === 0) continue;
+    let x = 0;
+    let z = 0;
+    for (const q of mine) {
+      x += px[q] as number;
+      z += pz[q] as number;
+    }
+    x /= mine.length;
+    z /= mine.length;
+    let best = mine[0] as number;
+    let near = Infinity;
+    for (const q of mine) {
+      const d = ((px[q] as number) - x) ** 2 + ((pz[q] as number) - z) ** 2;
+      if (d < near) {
+        near = d;
+        best = q;
+      }
+    }
+    out.set(leaf.id, { x: px[best] as number, z: pz[best] as number, ground: mine.length * step * step });
+  }
+  return out;
+}

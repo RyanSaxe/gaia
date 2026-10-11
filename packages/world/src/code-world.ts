@@ -20,6 +20,7 @@
 import {
   type AreaPlace,
   type CellPlace,
+  type CodeGraph,
   type CodeModel,
   type EntityFacts,
   type FileFacts,
@@ -35,7 +36,8 @@ import {
 } from "@gaia/schema";
 import type { LandSite } from "@gaia/terrain";
 import { symbolsOf } from "./graph.ts";
-import { LAND_SHARE, type LandNode, divideLand } from "./land.ts";
+import { type StandingDef, definitionsOf } from "./definitions.ts";
+import { LAND_SHARE, type LandNode, divideLand, dividePlots } from "./land.ts";
 import { certainty } from "./context.ts";
 import { type OutlineReading, areaOutline, areaReadings, bodySize, entityOutline, entityReadings, fileOutline, fileReadings, fileSize, howMany, importersOf, outlineOrder, symbolSize, tokensOf } from "./outline.ts";
 import { MODEL } from "./planner.ts";
@@ -157,11 +159,13 @@ export interface CodeThing {
   readonly vitality: number;
 }
 
-/** A file's finer entity standing on its patch: a function, a class, a type or a constant. */
+/** A definition standing on its file's patch, on its own plot: a function, a method, a class or a type. */
 export interface CodeSymbol {
-  /** `<file>#<name>`, its identity. */
+  /** `<file>#<name>`, qualified by what encloses it (`app/x.ts#World.open`): its identity. */
   readonly id: string;
   readonly file: string;
+  /** The definition it sits inside, by id. */
+  readonly parent?: string;
   readonly name: string;
   readonly kind: SymbolFact["kind"];
   readonly exported: boolean;
@@ -169,7 +173,9 @@ export interface CodeSymbol {
   readonly line: number;
   readonly lines: number;
   readonly doc?: string;
-  /** What it stands as: a form key Jev chose for its kind in its file. */
+  /** How much it matters, 0 (plumbing) to 4 (a landmark), from Engine's graph; its size follows it. */
+  readonly stand?: number;
+  /** What it stands as: a form key Jev chose for it, or for its kind in its file. */
   readonly form: string;
   readonly x: number;
   readonly z: number;
@@ -243,13 +249,10 @@ export const LAYOUT = {
   /** A directory has its own land when it holds this share of the code's ground, not counting its own lands. */
   regionShare: 0.03,
   maxRegions: 24,
-  /** Square meters of a patch for each finer entity standing on it, the most on one patch, and in the world. */
-  symbolGround: 240,
-  symbolsPerPatch: 6,
-  symbols: 420,
-  /** Meters between things standing on a patch, and kept clear around its first tree. */
-  symbolGap: 4.5,
-  treeClear: 5,
+  /** Square meters each definition standing on a file's patch adds to it, on top of the file's lines. */
+  defGround: 120,
+  /** How many of a file's definitions Jev is asked a form for by name; the rest stand as their kind's form. */
+  formsByName: 6,
 } as const;
 
 // ---------- the tree of directories ----------
@@ -462,7 +465,7 @@ export function fileWords(f: FileFacts): Record<string, unknown> {
     const n = f.symbols.filter((s) => s.kind === kind).length;
     if (n > 0) declares[KIND_PLURALS[kind]] = howMany(n);
   }
-  const standing = standingSymbols(f).slice(0, LAYOUT.symbolsPerPatch);
+  const standing = standingSymbols(f).slice(0, LAYOUT.formsByName);
   const kind = f.kind ?? "source";
   return {
     path: f.path,
@@ -687,8 +690,8 @@ export function planWorldRequests(model: CodeModel, looks: Looks, options: PlanO
     const standing = standingSymbols(f);
     const forms: Record<string, JevQuestion> = {};
     if (judged) {
-      // Each finer entity that may stand on the patch, on its own: the layout stands at most `symbolsPerPatch`, the first of `standingSymbols`.
-      for (const s of standing.slice(0, LAYOUT.symbolsPerPatch)) {
+      // The first of a file's finer entities, each on its own (`formsByName`); the rest stand as their kind's form.
+      for (const s of standing.slice(0, LAYOUT.formsByName)) {
         if (forms[`form#${s.name}`] !== undefined) continue;
         forms[`form#${s.name}`] = choice(
           `The ${KIND_WORDS[s.kind]} \`${s.name}\`, listed in \`standing\`, stands on this file's patch as one small thing a person can walk up to and read about. Which suits it best? Judge by what its name and doc comment say it does, its size and whether other files can use it.`,
@@ -1147,8 +1150,8 @@ export function standInJev(looks: Looks): JevClient {
 
 // ---------- laying the world out ----------
 
-/** A file's ground, square meters: its lines, weighed by the part it plays. */
-const groundOfFile = (f: FileFacts): number => weightOf(f) * LAYOUT.m2PerLine;
+/** A file's ground, square meters: its lines, weighed by the part it plays, and room for each definition standing on it. */
+const groundOfFile = (f: FileFacts, defs: number): number => weightOf(f) * LAYOUT.m2PerLine + defs * LAYOUT.defGround;
 
 /**
  * The tree whose land `divideLand` divides: each directory's own ground (its
@@ -1157,13 +1160,13 @@ const groundOfFile = (f: FileFacts): number => weightOf(f) * LAYOUT.m2PerLine;
  * which takes its place among the rest so trails between areas never all
  * cross it.
  */
-function landTree(dirs: Map<string, Dir>, lots: ReadonlyMap<string, number>): LandNode {
+function landTree(dirs: Map<string, Dir>, lots: ReadonlyMap<string, number>, defs: ReadonlyMap<string, readonly StandingDef[]>): LandNode {
   const node = (path: string): LandNode => {
     const d = dirs.get(path) as Dir;
     const own: LandNode[] = [];
     const lot = lots.get(path);
     if (lot !== undefined) own.push({ id: `lot:${path}`, ground: lot, children: [], heart: true });
-    for (const f of d.files) own.push({ id: `file:${f.path}`, ground: groundOfFile(f), children: [] });
+    for (const f of d.files) own.push({ id: `file:${f.path}`, ground: groundOfFile(f, defs.get(f.path)?.length ?? 0), children: [] });
     const subs = d.children.map(node);
     if (subs.length === 0) return { id: `dir:${path}`, ground: 0, children: own };
     const children = own.length === 0 ? subs : [{ id: `own:${path}`, ground: 0, children: own, heart: path !== "" }, ...subs];
@@ -1173,34 +1176,35 @@ function landTree(dirs: Map<string, Dir>, lots: ReadonlyMap<string, number>): La
 }
 
 /**
- * Where a patch's finer entities stand: spread over its ground, each the
- * farthest it can get from its first tree and the others, at least
- * `LAYOUT.symbolGap` apart; as many as its ground allows, largest first.
+ * Where a file's definitions stand: its patch divided among them the way the
+ * land is divided, each definition's plot among the definitions inside it,
+ * with the file's own ground (where its trees grow) at the heart. Each plot
+ * is as large as its definition's own lines, weighed like the file's, plus
+ * `LAYOUT.defGround`; every definition stands at its plot's middle.
  */
-function standSymbols(f: FileFacts, heart: { x: number; z: number }, inner: readonly (readonly [number, number])[], ground: number, room: number): { symbol: SymbolFact; x: number; z: number }[] {
-  const want = Math.min(LAYOUT.symbolsPerPatch, Math.floor(ground / LAYOUT.symbolGround), room);
-  const candidates = standingSymbols(f).slice(0, Math.max(0, want));
-  // Each placed thing keeps others this far off: the first tree its crown, a symbol the gap.
-  const placed: { x: number; z: number; keep: number }[] = [{ ...heart, keep: LAYOUT.treeClear }];
-  const out: { symbol: SymbolFact; x: number; z: number }[] = [];
-  for (const symbol of candidates) {
-    const r = rand(seedOf(`${f.path}#${symbol.name}`));
-    let best: readonly [number, number] | null = null;
-    let score = -Infinity;
-    for (const p of inner) {
-      const room = Math.min(...placed.map((q) => Math.hypot(p[0] - q.x, p[1] - q.z) - q.keep));
-      if (room < 0) continue;
-      const s = Math.min(room, 9) + r.next() * 1.5;
-      if (s > score) {
-        score = s;
-        best = p;
-      }
-    }
-    if (best === null) continue;
-    placed.push({ x: best[0], z: best[1], keep: LAYOUT.symbolGap });
-    out.push({ symbol, x: best[0], z: best[1] });
+function plotDefinitions(f: FileFacts, defs: readonly StandingDef[], leaf: { readonly x: number; readonly z: number; readonly inner: readonly (readonly [number, number])[] }, step: number): { def: StandingDef; x: number; z: number }[] {
+  if (defs.length === 0) return [];
+  const perLine = LAYOUT.m2PerLine * LAYOUT.kindWeight[f.kind ?? "source"];
+  const inside = new Map<string, StandingDef[]>();
+  for (const d of defs) {
+    const key = d.parent ?? "";
+    const list = inside.get(key);
+    if (list === undefined) inside.set(key, [d]);
+    else list.push(d);
   }
-  return out;
+  const own = (lines: number, within: readonly StandingDef[]): number => Math.max(1, lines - within.reduce((n, c) => n + c.lines, 0));
+  const node = (d: StandingDef): LandNode => {
+    const kids = inside.get(d.id) ?? [];
+    const self: LandNode = { id: `def:${d.id}`, ground: own(d.lines, kids) * perLine + LAYOUT.defGround, children: [], heart: true };
+    return kids.length === 0 ? self : { id: `in:${d.id}`, ground: 0, children: [self, ...kids.map(node)] };
+  };
+  const top = inside.get("") ?? [];
+  const root: LandNode = { id: `file:${f.path}`, ground: 0, children: [{ id: `own:${f.path}`, ground: own(f.lines, top) * perLine, children: [], heart: true }, ...top.map(node)] };
+  const plots = dividePlots(root, leaf.inner.length > 0 ? leaf.inner : [[leaf.x, leaf.z]], step);
+  return defs.map((def) => {
+    const p = plots.get(`def:${def.id}`) ?? { x: leaf.x, z: leaf.z };
+    return { def, x: p.x, z: p.z };
+  });
 }
 
 /**
@@ -1238,17 +1242,27 @@ function chooseTrails(wanted: readonly CodeTrail[], standing: readonly string[],
   return [...spanning, ...rest];
 }
 
-/** Each code model's division of the land, made once: it depends on the code alone. */
-const divided = new WeakMap<CodeModel, { readonly dirs: ReturnType<typeof directoriesOf>; readonly size: number; readonly land: ReturnType<typeof divideLand> }>();
-function divisionOf(model: CodeModel): { readonly dirs: ReturnType<typeof directoriesOf>; readonly size: number; readonly land: ReturnType<typeof divideLand> } {
-  const kept = divided.get(model);
+interface Division {
+  readonly dirs: ReturnType<typeof directoriesOf>;
+  readonly size: number;
+  readonly land: ReturnType<typeof divideLand>;
+  readonly defs: ReadonlyMap<string, readonly StandingDef[]>;
+}
+
+/** Each code model's division of the land, made once for it and its graph: it depends on the code alone. */
+const divided = new WeakMap<CodeModel, Map<CodeGraph | null, Division>>();
+function divisionOf(model: CodeModel, graph?: CodeGraph): Division {
+  const forModel = divided.get(model) ?? new Map<CodeGraph | null, Division>();
+  divided.set(model, forModel);
+  const kept = forModel.get(graph ?? null);
   if (kept !== undefined) return kept;
   const dirs = directoriesOf(model, model.repository.name);
+  const defs = definitionsOf(model, graph);
   const lots = new Map(model.entities.map((e) => [e.path, LAYOUT.lot]));
-  const total = model.files.reduce((n, f) => n + groundOfFile(f), 0) + lots.size * LAYOUT.lot;
+  const total = model.files.reduce((n, f) => n + groundOfFile(f, defs.get(f.path)?.length ?? 0), 0) + lots.size * LAYOUT.lot;
   const size = Math.max(LAYOUT.minSize, Math.ceil(Math.sqrt(total / LAND_SHARE) / 10) * 10);
-  const made = { dirs, size, land: divideLand(landTree(dirs, lots), size) };
-  divided.set(model, made);
+  const made = { dirs, size, land: divideLand(landTree(dirs, lots, defs), size), defs };
+  forModel.set(graph ?? null, made);
   return made;
 }
 
@@ -1270,8 +1284,8 @@ export interface LotPlace {
  * answered, because the land's division depends on the code alone. Opening a
  * world shows it while Jev answers.
  */
-export function landOf(model: CodeModel): WorldPlaces & { readonly lots: readonly LotPlace[] } {
-  const w = layoutWorld(model, UNJUDGED);
+export function landOf(model: CodeModel, graph?: CodeGraph): WorldPlaces & { readonly lots: readonly LotPlace[] } {
+  const w = layoutWorld(model, UNJUDGED, graph);
   return {
     name: w.name,
     size: w.size,
@@ -1290,10 +1304,14 @@ export function areaLands(world: Pick<CodeWorld, "areas" | "regions">): Record<s
   }));
 }
 
-/** Lays out the world from the code and Jev's judgments. */
-export function layoutWorld(model: CodeModel, judged: Judgments): CodeWorld {
+/**
+ * Lays out the world from the code and Jev's judgments. With Engine's graph,
+ * every definition it holds stands, sized by its stand; without one, the code
+ * model's top-level symbols do.
+ */
+export function layoutWorld(model: CodeModel, judged: Judgments, graph?: CodeGraph): CodeWorld {
   const name = model.repository.name;
-  const { dirs, size, land } = divisionOf(model);
+  const { dirs, size, land, defs } = divisionOf(model, graph);
   const entityAt = new Map(model.entities.map((e) => [e.path, e]));
   const files = new Map(model.files.map((f) => [f.path, f]));
 
@@ -1344,19 +1362,21 @@ export function layoutWorld(model: CodeModel, judged: Judgments): CodeWorld {
     const needsTests = judged.needsTests?.[path];
     const vitality = vitalityOf(f, [], needsTests === undefined ? {} : { needsTests }).vitality;
     patches.push({ path, name: baseName(path), area, x: leaf.x, z: leaf.z, radius: Math.sqrt(leaf.ground / Math.PI), vitality, lines: f.lines, kind: f.kind ?? "source", vibe: judged.vibes[path] ?? "", ground: leaf.ground, cell, ...(needsTests === undefined ? {} : { needsTests }) });
-    for (const s of standSymbols(f, leaf, leaf.inner, leaf.ground, LAYOUT.symbols - symbols.length)) {
+    for (const { def, x, z } of plotDefinitions(f, defs.get(path) ?? [], leaf, land.step)) {
       symbols.push({
-        id: `${path}#${s.symbol.name}`,
+        id: def.id,
         file: path,
-        name: s.symbol.name,
-        kind: s.symbol.kind,
-        exported: s.symbol.exported,
-        line: s.symbol.line ?? 0,
-        lines: s.symbol.lines ?? 1,
-        ...(s.symbol.doc === undefined ? {} : { doc: s.symbol.doc }),
-        form: judged.forms[path]?.[`#${s.symbol.name}`] ?? judged.forms[path]?.[s.symbol.kind] ?? "",
-        x: s.x,
-        z: s.z,
+        ...(def.parent === undefined ? {} : { parent: def.parent }),
+        name: def.name,
+        kind: def.kind,
+        exported: def.exported,
+        line: def.line,
+        lines: def.lines,
+        ...(def.doc === undefined ? {} : { doc: def.doc }),
+        ...(def.stand === undefined ? {} : { stand: def.stand }),
+        form: (def.parent === undefined ? judged.forms[path]?.[`#${def.name}`] : undefined) ?? judged.forms[path]?.[def.kind] ?? "",
+        x,
+        z,
         vitality,
       });
     }

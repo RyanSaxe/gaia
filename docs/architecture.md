@@ -144,8 +144,9 @@ how many of its files import the other.
 (`packages/world/src/land.ts`). Each directory's land is divided among its own
 ground (its files and its entity's lot, kept together at its heart) and its
 subdirectories, each in proportion to its code (26 m² a line, weighed by the
-part the file plays: code most, configuration and data least); then each of
-those is divided the same way, down to the files. Every division is a
+part the file plays: code most, configuration and data least, and 120 m² for
+each definition standing on it); then each of those is divided the same way,
+down to the files. Every division is a
 relaxed, weighted nearest-site division of a raster of the land, starting
 from spots seeded by each child's path, so the same code gives the same land
 and a small change moves it a little. The divisions are measured from points
@@ -166,12 +167,21 @@ cells are its files' (`RegionSpec.sites`). The terrain blends landforms and
 covers by distance to those cells, so a region's cover changes exactly where
 its areas end. Smaller directories are areas on their parent's land.
 
-On each file's patch stand its finer entities, largest first, as many as its
-ground allows (one per 240 m², at most six, and 420 in the world), spread
-apart and clear of its first tree. Each stands as one of the understory's
-own blueprints, drawn instanced with the rest of the understory at no extra
-draw calls, with its file's vitality, and a person can walk up to it to
-read its card: its kind, doc comment, where it is declared and its size.
+On each file's patch every definition stands, nested ones included: each
+function, method, class and type, never a plain value, a stylesheet rule, a
+document's section or a data file's key (`definitionsOf` in
+`packages/world/src/definitions.ts`). The patch is divided the way the land
+is (`dividePlots`): the file's own ground, where its trees grow, at its
+heart, and a plot for each definition as large as its own lines plus 120 m²;
+a definition's plot is divided again among the definitions inside it, and
+each stands at its plot's middle. With Engine's graph (`project.graph`,
+judged) the definitions are the graph's, and each carries its stand, from
+plumbing to a landmark, which sets its size; without one, the code model's
+top-level symbols stand, sized by their length. Each stands as one of the
+understory's own blueprints, drawn instanced with the rest of the
+understory at no extra draw calls, with its file's vitality, and a person
+can walk up to it to read its card: its kind, doc comment, where it is
+declared and its size.
 
 **The meaning.** The engine gives structure and sizes; Jev gives meaning.
 Jev judges every choice a reasonable person could make differently: the

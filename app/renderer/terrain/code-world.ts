@@ -102,10 +102,22 @@ export function representSymbol(s: CodeWorld["symbols"][number], file: FileFacts
   };
 }
 
-/** A symbol's size where it stands: larger for a longer one, within what its blueprint looks right at. */
-export const symbolScale = (lines: SymbolFact["lines"], rule: string): number => {
-  const t = Math.min(1, Math.log2(1 + (lines ?? 1)) / 8);
-  return rule === "rocks" ? 0.45 + 0.75 * t : rule === "shrubs" ? 0.6 + 0.6 * t : 0.8 + 0.4 * t;
+/** The sizes each kind of standing thing looks right between, by how much it matters: a stone can grow to a landmark, a flower barely grows. */
+const STAND_SCALE: Readonly<Record<string, readonly [number, number]>> = { rocks: [0.4, 2.2], shrubs: [0.5, 1.6], flowers: [0.7, 1.3] };
+
+/**
+ * How large a definition stands, within what its blueprint looks right at:
+ * by how much it matters (Engine's stand, 0 to 4) when Jev has judged it, so
+ * a file's heart stands as its landmark and a helper as a pebble; by its
+ * length until then, as before.
+ */
+export const symbolScale = (lines: SymbolFact["lines"], rule: string, stand?: number): number => {
+  if (stand === undefined) {
+    const t = Math.min(1, Math.log2(1 + (lines ?? 1)) / 8);
+    return rule === "rocks" ? 0.45 + 0.75 * t : rule === "shrubs" ? 0.6 + 0.6 * t : 0.8 + 0.4 * t;
+  }
+  const [small, large] = STAND_SCALE[rule] ?? [0.7, 1.3];
+  return small + (large - small) * Math.min(1, Math.max(0, stand / 4)) ** 1.3;
 };
 
 /** Trees on a file's patch, as its area's character grows them: more for a longer file, at least the one that names it. */
@@ -300,7 +312,7 @@ export function codeLab({ model, world, judges, summary }: WorldDocument): CodeL
       symbols: world.symbols.map((s) => {
         const form = FORMS[s.form] ?? (Object.values(FORMS)[0] as (typeof FORMS)[string]);
         const variant = form.preset;
-        return { x: s.x, z: s.z, rule: form.rule, variant, radius: form.rule === "flowers" ? 0.8 : 1, scale: symbolScale(s.lines, form.rule), vitality: s.vitality };
+        return { x: s.x, z: s.z, rule: form.rule, variant, radius: form.rule === "flowers" ? 0.8 : 1, scale: symbolScale(s.lines, form.rule, s.stand), vitality: s.vitality };
       }),
       // Trails joining parts of the code no other trail joins route first, then the most wanted.
       trails: world.trails.map((t) => ({ from: t.from, to: t.to, want: (t.spans === true ? 1 : 0) + t.want, style: Math.max(0, TRAIL_PRESETS.findIndex((p) => p.name === t.look)) })),

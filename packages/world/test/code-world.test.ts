@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { CodeModel, EntityFacts, FileFacts, JevClient, JevQuestion, JevResponse } from "@gaia/schema";
+import type { CodeGraph, CodeModel, DefNode, EntityFacts, FileFacts, JevClient, JevQuestion, JevResponse } from "@gaia/schema";
 import { cellUnder, placeAt } from "@gaia/terrain";
 import { type Judge, type Looks, codeGraph, judgeWorld, keptJev, landOf, layoutWorld, planWorldRequests, requestKey, standInJev } from "@gaia/world";
 
@@ -147,6 +147,46 @@ describe("a world laid out from code", () => {
     expect(world.regions.reduce((n, r) => n + r.sites.length, 0)).toBe(world.cells.length);
     const bigger = layoutWorld(model(30), await judgeWorld(model(30), LOOKS, standInJev(LOOKS)));
     expect(bigger.size).toBeGreaterThan(world.size);
+  });
+
+  it("with Engine's graph, stands every definition on its own plot, nested ones under their parent, sized by their stand; never a plain value or a stylesheet rule", async () => {
+    const math = "packages/core/src/math.ts";
+    const def = (name: string, role: string, start: number, end: number, stand?: number, parent?: string): DefNode => ({
+      kind: "def", id: `def:${math}#${parent === undefined ? name : `${parent}.${name}`}`, lineage: name, file: `file:${math}`, name, role, span: { start, end },
+      signature: `${role} ${name}`, measures: { lines: end - start + 1 }, ...(parent === undefined ? {} : { parent: `def:${math}#${parent}` }),
+      ...(stand === undefined ? {} : { judged: { stand: { score: stand, value: stand / 4, call: "screen" } } }),
+    });
+    const graph: CodeGraph = {
+      projectId: "demo", name: "demo", edges: [], pending: [],
+      nodes: [
+        { kind: "file", id: `file:${math}`, lineage: "m", path: math, language: "typescript", bytes: 1, hash: "", binary: false, unparsed: 0, conventions: [], measures: { lines: 300 } },
+        { kind: "file", id: "file:README.md", lineage: "r", path: "README.md", language: "markdown", bytes: 1, hash: "", binary: false, unparsed: 0, conventions: [], measures: { lines: 80 } },
+        def("Opts", "interface", 1, 8, 1),
+        def("PI", "constant", 9, 9, 0.2),
+        def("Calc", "class", 10, 200, 3.6),
+        def("add", "method", 20, 40, 1.2, "Calc"),
+        def("mul", "method", 50, 90, 2.4, "Calc"),
+        def("square", "function", 210, 220),
+        { ...def("Usage", "section", 1, 20, 2), id: "def:README.md#Usage", file: "file:README.md" },
+      ],
+    };
+    const judged = await judgeWorld(model(), LOOKS, standInJev(LOOKS));
+    const world = layoutWorld(model(), judged, graph);
+    const standing = world.symbols.filter((s) => s.file === math);
+    expect(standing.map((s) => s.id).sort()).toEqual([`${math}#Calc`, `${math}#Calc.add`, `${math}#Calc.mul`, `${math}#Opts`, `${math}#square`]);
+    expect(world.symbols.filter((s) => s.file !== math)).toEqual([]);
+    const by = new Map(standing.map((s) => [s.name, s]));
+    expect(by.get("add")?.parent).toBe(`${math}#Calc`);
+    expect(by.get("Calc")?.stand).toBe(3.6);
+    expect(by.get("square")?.stand).toBeUndefined();
+    // Each stands on its file's patch, on a plot of its own.
+    for (const s of standing) expect(placeAt(world, s.x, s.z).file?.path).toBe(math);
+    expect(new Set(standing.map((s) => `${s.x},${s.z}`)).size).toBe(standing.length);
+    // The patch holds room for its definitions: with them, math.ts is a larger share of the land than with the code model's two.
+    const share = (w: typeof world) => w.patches.find((p) => p.path === math)!.ground / w.patches.reduce((n, p) => n + p.ground, 0);
+    expect(share(world)).toBeGreaterThan(share(layoutWorld(model(), judged)));
+    // The land is known before Jev answers, with the graph too.
+    expect(landOf(model(), graph).cells).toEqual(world.cells);
   });
 
   it("knows the land before anything is judged: however Jev judges, every area, patch, cell and lot is the same", async () => {
