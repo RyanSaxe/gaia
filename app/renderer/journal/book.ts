@@ -24,8 +24,8 @@ export interface BookPages {
   next(at: string, by: 1 | -1): string | null;
   /** Negative when `a` comes before `b` in the book. */
   order(a: string, b: string): number;
-  /** The fore-edge's tabs: each top chapter's name and place. */
-  tabs(): readonly { readonly name: string; readonly at: string }[];
+  /** The fore-edge's tabs: each one's name, the place it opens at, and the chapter its part of the book begins with. */
+  tabs(): readonly { readonly name: string; readonly at: string; readonly from: string }[];
   /** Settles once everything a place's spread needs, such as a file's text, has come, so its pages are drawn whole. */
   ready?(at: string): Promise<void>;
 }
@@ -159,7 +159,7 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
     }
   }
   function markTabs(place: string): void {
-    for (const t of tabs.children) t.classList.toggle("on", (t as HTMLElement).dataset.at !== undefined && within(place, (t as HTMLElement).dataset.at as string));
+    for (const t of tabs.children) t.classList.toggle("on", (t as HTMLElement).dataset.from !== undefined && within(place, (t as HTMLElement).dataset.from as string));
   }
   function show(place: string): void {
     const s = pages.spread(place);
@@ -170,12 +170,12 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
   }
   /** Waits until a place's spread can be drawn whole, but never long: a slow file is drawn without its code rather than held. */
   const readied = (place: string): Promise<void> => Promise.race([pages.ready?.(place) ?? Promise.resolve(), new Promise<void>((r) => window.setTimeout(r, 900))]);
-  /** Whether `place` lies in the chapter at `chapter`: it is the chapter or comes after it and before the next tab. */
+  /** Whether `place` lies in the part of the book a tab begins at `chapter`: from it to the next tab's. */
   function within(place: string, chapter: string): boolean {
     const list = pages.tabs();
-    const k = list.findIndex((t) => t.at === chapter);
+    const k = list.findIndex((t) => t.from === chapter);
     const next = list[k + 1];
-    return pages.order(chapter, place) <= 0 && (next === undefined || pages.order(place, next.at) < 0);
+    return pages.order(chapter, place) <= 0 && (next === undefined || pages.order(place, next.from) < 0);
   }
 
   // ---------- where the book is: its corner, or held open ----------
@@ -320,6 +320,7 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
         tab.type = "button";
         tab.className = "jb-tab";
         tab.dataset.at = t.at;
+        tab.dataset.from = t.from;
         tab.style.top = `${40 + k * 84}px`;
         const name = document.createElement("span");
         name.textContent = t.name;

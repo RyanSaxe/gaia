@@ -58,6 +58,34 @@ const lettered = (n: number): string => (n < 26 ? String.fromCharCode(97 + n) : 
 const rowsOn = (page: number): { from: number; to: number } =>
   page === 0 ? { from: 0, to: ROOM.first } : { from: ROOM.first + (page - 1) * ROOM.next, to: ROOM.first + page * ROOM.next };
 
+/** How many tabs the fore-edge holds at a size that reads. */
+export const TABS = 7;
+
+/**
+ * The fore-edge's tabs for these top folders, in the contents' order: one
+ * each while they fit, and past that a thumb index, as a dictionary's, each
+ * tab a run of folders as even as the count allows, lettered by where its run
+ * begins and ends, with a second letter where a neighbor shares the first.
+ */
+export function thumbIndex(names: readonly string[], room = TABS): { readonly from: number; readonly to: number; readonly label: string }[] {
+  if (names.length <= room) return names.map((name, k) => ({ from: k, to: k + 1, label: name }));
+  const runs = Array.from({ length: room }, (_, k) => ({ from: Math.round((k * names.length) / room), to: Math.round(((k + 1) * names.length) / room) }));
+  const key = (name: string): string => name.replace(/^[^a-z0-9]+/i, "").toLowerCase();
+  const letters = (name: string, n: number): string => key(name).slice(0, n);
+  const first = runs.map((r) => names[r.from] as string);
+  const last = runs.map((r) => names[r.to - 1] as string);
+  return runs.map((r, k) => {
+    const prev = last[k - 1];
+    const next = first[k + 1];
+    const before = prev !== undefined && letters(prev, 1) === letters(first[k] as string, 1) ? 2 : 1;
+    const after = next !== undefined && letters(next, 1) === letters(last[k] as string, 1) ? 2 : 1;
+    // A run of one folder is lettered once, as far as either neighbor needs.
+    if (r.to - r.from === 1) return { ...r, label: letters(first[k] as string, Math.max(before, after)) };
+    const [a, b] = [letters(first[k] as string, before), letters(last[k] as string, after)];
+    return { ...r, label: a === b ? a : `${a}–${b}` };
+  });
+}
+
 /** A run of a definition's items in full, one page's worth. */
 type Slice = { readonly from: number; readonly to: number };
 
@@ -231,10 +259,21 @@ export function journalPages(src: JournalPagesSource): BookPages {
       if (full !== null) pagesInFull(full.id);
     },
     tabs() {
-      const journal: Journal | undefined = index().words?.journal;
-      return (journal?.contents ?? []).flatMap((of) => {
+      const words = index().words;
+      const journal: Journal | undefined = words?.journal;
+      const chapters = (journal?.contents ?? []).flatMap((of) => {
         const e = journal?.entry(of);
-        return e?.kind === "chapter" ? [{ name: e.name, at: of }] : [];
+        return e?.kind === "chapter" ? [e] : [];
+      });
+      if (chapters.length <= TABS || words === null || words === undefined) return chapters.map((e) => ({ name: e.name, at: e.of, from: e.of }));
+      // A thumb index opens the contents at the spread where its run begins.
+      const listed = contentsWords(words).body;
+      const rows = listed.kind === "rows" ? listed.rows.map((r) => r.of) : [];
+      return thumbIndex(chapters.map((e) => e.name)).map((run) => {
+        const from = (chapters[run.from] as JournalEntry).of;
+        const page = Math.max(0, rows.indexOf(from));
+        const p = page < ROOM.first ? 0 : 1 + Math.floor((page - ROOM.first) / ROOM.next);
+        return { name: run.label, at: nth("contents", Math.ceil(p / 2)), from };
       });
     },
   };
