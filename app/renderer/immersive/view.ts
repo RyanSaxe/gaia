@@ -25,6 +25,7 @@ import { createJournalBook } from "../journal/book.ts";
 import { drawMapPage, halfOf } from "../journal/maps.ts";
 import { ROOM, journalPages } from "../journal/pages.ts";
 import { createPaintings } from "../journal/paintings.ts";
+import { browserPaintings } from "../journal/painting-store.ts";
 import { createSourceText } from "../journal/source.ts";
 import type { WordsSource } from "../journal/words.ts";
 import { createFieldMap } from "./field-map.ts";
@@ -33,6 +34,11 @@ import { createMinimap } from "./minimap.ts";
 import { paintPicture } from "./picture.ts";
 
 /** The lab's debugging views, which the slip leads back to. */
+/** The painter the journal's kept paintings were made by: a new one paints them all afresh. */
+const PAINTER = "painter-1";
+/** The things near the person painted while they stand still: within `reach` meters, the nearest `count`, looked at every `every` ms once they have moved `moved` meters. */
+const NEAR = { reach: 120, count: 24, every: 3000, moved: 15 } as const;
+
 export interface LabViews {
   readonly views: readonly { readonly id: string; readonly name: string }[];
   leave(id: string): void;
@@ -114,8 +120,30 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
   const source = createSourceText(service);
   /** What the journal's pages are read from, for the world standing now. */
   let words: WordsSource | null = null;
-  /** Each thing's painting: the world's own view of it, painted the first time its page opens. */
-  const paintings = createPaintings(world.view);
+  /**
+   * Each painting's key where it is kept: its world, its thing and the
+   * thing's vitality, which its painting shows, so a thing that changed is
+   * painted afresh. A new painter makes every painting afresh.
+   */
+  const keyOf = (thing: string, wide: boolean): string | null => {
+    const code = world.code();
+    if (code === null || words === null) return null;
+    const of = words.journal.entry(entityOf(thing)) !== undefined ? entityOf(thing) : thing.includes("#") ? thing.slice(0, thing.indexOf("#")) : thing;
+    return [code.projectId, Math.round(code.size), PAINTER, wide ? `wide:${thing}` : thing, words.vitality(of).toFixed(2)].join("|");
+  };
+  /** Each thing's painting: the world's own view of it, made before its page is ever seen, and kept with the world. */
+  const paintings = createPaintings({ view: world.view, store: browserPaintings(), keyOf, idle: () => !world.person().walking });
+  /** Where each thing a page is about stands: buildings and landmarks, definitions, and each file's patch. */
+  let paintable: readonly { readonly id: string; readonly x: number; readonly z: number }[] = [];
+  let paintedFrom = { x: Infinity, z: Infinity };
+  // While the person stands still, the things nearest them are painted, so a page they walk up to is ready.
+  window.setInterval(() => {
+    const p = world.person();
+    if (paintable.length === 0 || p.walking || Math.hypot(p.x - paintedFrom.x, p.z - paintedFrom.z) < NEAR.moved) return;
+    paintedFrom = { x: p.x, z: p.z };
+    const by = (t: { x: number; z: number }): number => Math.hypot(t.x - p.x, t.z - p.z);
+    paintings.near([...paintable].filter((t) => by(t) < NEAR.reach).sort((a, b) => by(a) - by(b)).slice(0, NEAR.count).map((t) => t.id));
+  }, NEAR.every);
   /** What stands in the world for a page: an entity's building or landmark by its path, a file or a definition as itself. */
   const standsFor = (of: string): string => (of.startsWith("entity:") ? of.slice("entity:".length) : of);
   /** Each map the journal holds, drawn once per painted paper: the whole land across the endpapers, and each folder's. */
@@ -137,6 +165,7 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
       },
       map: (area) => mapOf(area, 520, 660, false),
       picture: (of) => paintings.picture(standsFor(of)),
+      painted: (of) => (of === "" ? paintings.painted("", true) : paintings.painted(standsFor(of))),
       frontispiece: () => paintings.picture("", true),
       ahead: (ofs) => paintings.ahead(ofs.map(standsFor)),
       turnTo: (at) => journal.turnTo(at),
@@ -172,9 +201,24 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
   let standing = false;
   world.onStood(() => {
     standing = true;
-    // A world stood afresh is painted afresh, its title page first, out of sight, so the journal never opens on bare paper there.
+    // A world stood afresh is painted afresh, or found kept: its title page first, out of sight.
     paintings.clear();
     paintings.ahead([""], true);
+    const stood = world.code();
+    if (stood !== null) {
+      const patches = new Map<string, { x: number; z: number; n: number }>();
+      for (const k of stood.cells) {
+        if (k.file === null || k.file === undefined) continue;
+        const at = patches.get(k.file) ?? { x: 0, z: 0, n: 0 };
+        patches.set(k.file, { x: at.x + k.x, z: at.z + k.z, n: at.n + 1 });
+      }
+      paintable = [
+        ...stood.things.map((t) => ({ id: t.path, x: t.x, z: t.z })),
+        ...stood.symbols.map((d) => ({ id: d.id, x: d.x, z: d.z })),
+        ...[...patches].map(([id, at]) => ({ id, x: at.x / at.n, z: at.z / at.n })),
+      ];
+      paintedFrom = { x: Infinity, z: Infinity };
+    }
     // The ways of knowing where you are come in as the veil lifts: nothing names a place before the world stands.
     layer.classList.add("standing");
     // A new world writes where the person stands afresh.
