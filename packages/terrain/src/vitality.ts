@@ -9,6 +9,7 @@
 // vitality rewrites a small texture and never rebakes anything.
 
 import { type LandSite, nearestSite, warpPoint } from "./land.ts";
+import { type LandOutline, pastTheEdge } from "./edge.ts";
 
 /** A site of the land's division and the owner of its cell's ground, by index into the caller's list of owners. */
 export interface OwnedSite extends LandSite {
@@ -105,15 +106,12 @@ function bucketsOf(sites: readonly OwnedSite[]): Buckets {
   return made;
 }
 
-/** How far (x, z) lies past the land's rounded square, meters (negative inside), as `placeAt` draws its edge. */
-const pastTheRim = (size: number, x: number, z: number): number => (Math.abs(x) ** 4 + Math.abs(z) ** 4) ** 0.25 - size / 2;
-
 const smooth = (t: number): number => t * t * (3 - 2 * t);
 
 /** Fills `owners` and `shares` with whose ground (x, z) is (see `groundOwners`), unsorted, and returns how many. */
-function ownersInto(sites: readonly OwnedSite[], size: number, x: number, z: number, soft: number, owners: Int32Array, shares: Float64Array): number {
+function ownersInto(sites: readonly OwnedSite[], land: LandOutline, x: number, z: number, soft: number, owners: Int32Array, shares: Float64Array): number {
   const half = GROUND_VITALITY.rim / 2;
-  const past = pastTheRim(size, x, z);
+  const past = pastTheEdge(land, x, z);
   const wild = past <= -half ? 0 : past >= half ? 1 : smooth((past + half) / (2 * half));
   if (wild >= 1 || sites.length === 0) {
     owners[0] = WILD_OWNER;
@@ -173,10 +171,10 @@ function ownersInto(sites: readonly OwnedSite[], size: number, x: number, z: num
  * evenly. Within `GROUND_VITALITY.rim` of the land's edge the wild takes
  * over. Shares sum to 1, largest first.
  */
-export function groundOwners(sites: readonly OwnedSite[], size: number, x: number, z: number, soft: number = GROUND_VITALITY.soft): Share[] {
+export function groundOwners(sites: readonly OwnedSite[], land: LandOutline, x: number, z: number, soft: number = GROUND_VITALITY.soft): Share[] {
   const owners = new Int32Array(MOST + 1);
   const shares = new Float64Array(MOST + 1);
-  const count = ownersInto(sites, size, x, z, soft, owners, shares);
+  const count = ownersInto(sites, land, x, z, soft, owners, shares);
   return Array.from({ length: count }, (_, k) => ({ owner: owners[k] as number, share: shares[k] as number })).sort((p, q) => q.share - p.share || p.owner - q.owner);
 }
 
@@ -192,7 +190,7 @@ export function ownershipGrid(extent: number, spacing: number = GROUND_VITALITY.
  * independent, so a bake may work them out in parts, on several threads,
  * and get the same bytes as all at once.
  */
-export function ownershipRows(sites: readonly OwnedSite[], size: number, grid: { readonly n: number; readonly origin: number; readonly spacing: number }, k0: number, k1: number, soft: number = GROUND_VITALITY.soft): { owners: Uint16Array; shares: Uint8Array } {
+export function ownershipRows(sites: readonly OwnedSite[], land: LandOutline, grid: { readonly n: number; readonly origin: number; readonly spacing: number }, k0: number, k1: number, soft: number = GROUND_VITALITY.soft): { owners: Uint16Array; shares: Uint8Array } {
   const { n, origin, spacing } = grid;
   const taps = GROUND_VITALITY.taps;
   for (const s of sites) if (s.owner < 0 || s.owner >= WILD_TAP) throw new Error(`Ground has at most ${WILD_TAP} owners, numbered from 0; a site names owner ${s.owner}.`);
@@ -202,7 +200,7 @@ export function ownershipRows(sites: readonly OwnedSite[], size: number, grid: {
   const much = new Float64Array(MOST + 1);
   for (let k = k0; k < k1; k++) {
     for (let i = 0; i < n; i++) {
-      const count = ownersInto(sites, size, origin + i * spacing, origin + k * spacing, soft, who, much);
+      const count = ownersInto(sites, land, origin + i * spacing, origin + k * spacing, soft, who, much);
       // The largest shares first, ties to the lower owner.
       const kept = Math.min(taps, count);
       let total = 0;
@@ -230,9 +228,9 @@ export function ownershipRows(sites: readonly OwnedSite[], size: number, grid: {
 }
 
 /** Whose ground every sample of a grid `extent` meters across, centered on the world, is: `ownershipRows` over every row. */
-export function ownershipOf(sites: readonly OwnedSite[], size: number, extent: number, soft: number = GROUND_VITALITY.soft, spacing: number = GROUND_VITALITY.spacing): Ownership {
+export function ownershipOf(sites: readonly OwnedSite[], land: LandOutline, extent: number, soft: number = GROUND_VITALITY.soft, spacing: number = GROUND_VITALITY.spacing): Ownership {
   const grid = ownershipGrid(extent, spacing);
-  return { ...grid, ...ownershipRows(sites, size, grid, 0, grid.n, soft) };
+  return { ...grid, ...ownershipRows(sites, land, grid, 0, grid.n, soft) };
 }
 
 /**

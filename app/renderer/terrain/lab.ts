@@ -35,60 +35,7 @@ import {
   createSunShadow,
   type SceneLight,
 } from "@gaia/render";
-import {
-  COVER_TAPS,
-  type Deck,
-  DRY,
-  EYE_HEIGHT,
-  GAIT,
-  type Intent,
-  type Stride,
-  FULL_WORLD,
-  SHORE_CAP,
-  SMALL_WORLD,
-  type TrailNetwork,
-  type Way,
-  NO_TRAILS,
-  type Capsule,
-  type Place,
-  type WorldPlaces,
-  NO_SOLIDS,
-  RELIEF_BUDGET,
-  type SolidShape,
-  type Solids,
-  clearanceAt,
-  decksOf,
-  footingAt,
-  outlineShape,
-  piecesShapes,
-  placeAt,
-  planWalk,
-  type Terrain,
-  type Walk,
-  type WorldSpec,
-  groundHeightAt,
-  heightAt,
-  regionPlaces,
-  latticeOf,
-  randomWorld,
-  sampleWorld,
-  sightlines,
-  siteToWorld,
-  wayWear,
-  wayVitalityAt,
-  junctionVitality,
-  solidsOf,
-  stanceAt,
-  standAt,
-  stride,
-  TERRAIN,
-  WALK_TO,
-  WILDS,
-  walkStep,
-  wallsShape,
-  wayAhead,
-  waterDepthAt,
-} from "@gaia/terrain";
+import { type Capsule, clearanceAt, COVER_TAPS, type Deck, decksOf, DRY, EYE_HEIGHT, footingAt, FULL_WORLD, GAIT, groundHeightAt, heightAt, type Intent, junctionVitality, latticeOf, NO_SOLIDS, NO_TRAILS, outlineShape, withinLand, piecesShapes, type Place, placeAt, planWalk, randomWorld, regionPlaces, RELIEF_BUDGET, sampleWorld, SHORE_CAP, sightlines, siteToWorld, SMALL_WORLD, type Solids, type SolidShape, solidsOf, stanceAt, standAt, stride, type Stride, type Terrain, TERRAIN, type TrailNetwork, type Walk, WALK_TO, walkStep, wallsShape, waterDepthAt, type Way, wayAhead, wayVitalityAt, wayWear, WILDS, type WorldPlaces, type WorldSpec } from "@gaia/terrain";
 import { createSky } from "../world/environment.ts";
 import { renderInspector } from "../inspector.ts";
 import { type Lab, type Shot, onTap, refs, slug, tapSlop } from "../lab.ts";
@@ -1878,7 +1825,6 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     }
     const patches = code?.world.patches ?? [];
     const own = groundVitality(patches.map((p) => ({ area: p.area, vitality: p.vitality, size: p.radius * p.radius })));
-    const half = world.size / 2 - 4;
     return tourStops({
       things: [
         ...settlement.buildings.map((b) => {
@@ -1898,7 +1844,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       areas: (code?.world.areas ?? []).map((a) => ({ path: a.path, x: a.x, z: a.z, ground: a.ground, depth: a.depth, vitality: own.get(a.path) ?? 1 })),
       groves: [...groves].map(([i, g]) => ({ path: patches[i]?.path ?? `patch ${i}`, x: g.x / g.trees, z: g.z / g.trees, trees: g.trees, vitality: patches[i]?.vitality ?? 1 })),
       ponds: terrain.ponds.map((p) => ({ x: p.x, z: p.z, reach: p.reach })),
-      standable: (x, z) => Math.abs(x) < half && Math.abs(z) < half && waterDepthAt(terrain, x, z) <= LAND.dry && clearanceAt(solids, x, z) >= LAND.clear,
+      standable: (x, z) => withinLand(world, x, z, 4) && waterDepthAt(terrain, x, z) <= LAND.dry && clearanceAt(solids, x, z) >= LAND.clear,
     });
   }
 

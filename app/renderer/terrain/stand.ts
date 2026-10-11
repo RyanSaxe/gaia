@@ -9,45 +9,7 @@
 
 import { type BuildingPlan, type Built, type RouteSpec, rand } from "@gaia/schema";
 import { areaVitality } from "@gaia/world";
-import {
-  type BuildingSite,
-  type Capsule,
-  type Circle,
-  PLANT_SLOPE,
-  type Extent,
-  type LandmarkSite,
-  type Occupied,
-  type Placement,
-  type ScatterRule,
-  type Terrain,
-  type TrailEnd,
-  type TrailNetwork,
-  type TrailRequest,
-  type WildsRing,
-  type LandSite,
-  type Habitat,
-  type OwnedSite,
-  growGrove,
-  trunkIndex,
-  clearingsOf,
-  findLandmarkSite,
-  findSite,
-  groundedBase,
-  heightAt,
-  isWet,
-  levelPad,
-  levelTrails,
-  planTrails,
-  scatterComponents,
-  scatterPlants,
-  siteToWorld,
-  siteAt,
-  slopeAt,
-  trailDiscs,
-  trailField,
-  trailPlaces,
-  wildsRing,
-} from "@gaia/terrain";
+import { type BuildingSite, type Capsule, type Circle, clearingsOf, type Extent, findLandmarkSite, findSite, groundedBase, growGrove, type Habitat, heightAt, isWet, type LandmarkSite, type LandSite, levelPad, levelTrails, type Occupied, type OwnedSite, withinLand, type Placement, PLANT_SLOPE, planTrails, scatterComponents, scatterPlants, type ScatterRule, siteAt, siteToWorld, slopeAt, type Terrain, trailDiscs, type TrailEnd, trailField, type TrailNetwork, trailPlaces, type TrailRequest, trunkIndex, wildsRing, type WildsRing } from "@gaia/terrain";
 
 /** A building to site: its plan, what stands beside it, and the name its trails go by. */
 export interface StandBuilding {
@@ -452,7 +414,6 @@ const TRUNK_GAP = 4.5;
  */
 function plantPatches(t: Terrain, req: StandRequest, code: StandCode, blocked: (x: number, z: number) => boolean, glades: readonly Occupied[]): StandTree[] {
   const { builds, bases, crowns } = req.trees;
-  const half = t.spec.size / 2 - 24;
   const trees: StandTree[] = [];
   const index = trunkIndex();
   const onPatch = (j: number, x: number, z: number): boolean => code.cells.length === 0 || code.cells[siteAt(code.cells, x, z)]?.patch === j;
@@ -463,7 +424,7 @@ function plantPatches(t: Terrain, req: StandRequest, code: StandCode, blocked: (
     for (let k = 0; k < builds; k++) crown += (crowns[p.preset * builds + k] ?? 4) / builds;
     const spacing = Math.max(TRUNK_GAP, crown * 2 * p.stature * p.closeness);
     const fits = (x: number, z: number): boolean =>
-      Math.abs(x) <= half && Math.abs(z) <= half && onPatch(j, x, z) && slopeAt(t.lattice, x, z) <= PLANT_SLOPE && !isWet(t, x, z) && !blocked(x, z) && !inGlade(x, z);
+      withinLand(t.spec, x, z, 24) && onPatch(j, x, z) && slopeAt(t.lattice, x, z) <= PLANT_SLOPE && !isWet(t, x, z) && !blocked(x, z) && !inGlade(x, z);
     const grown = growGrove({ x: p.heart.x, z: p.heart.z, count: p.trees, spacing, reach: p.reach, seed: p.seed }, fits, (x, z, gap) => index.crowded(x, z, Math.min(gap, spacing)));
     const r = rand(p.seed ^ 0x5bd1e995);
     for (const [x, z] of grown) {

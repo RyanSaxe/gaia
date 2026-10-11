@@ -22,7 +22,7 @@
 // inked ahead of the person in the same idle time. Opened from the wild, the
 // sheet grows to take the traveller in.
 
-import { type Place, type PlaceArea, type Terrain, type WorldPlaces, outlinesOf, waterDepthAt } from "@gaia/terrain";
+import { outlinesOf, pastTheEdge, type Place, type PlaceArea, type Terrain, waterDepthAt, type WorldPlaces } from "@gaia/terrain";
 import { areaVitality, groundVitality } from "@gaia/world";
 import { onTap } from "../lab.ts";
 import type { StoodWorld } from "../terrain/lab.ts";
@@ -212,7 +212,7 @@ function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place
   }
 
   // Where the paint gives way to bare paper at the sheet's edge, as a small mask drawn large.
-  const fade = yield* fadeMask(style);
+  const fade = yield* fadeMask(style, places.aspect ?? 1);
 
   // Washes: color on the map is health. Every area starts from the same healthy land, a little lighter or darker by
   // its path, and each file's health spreads over the ground around it (`healthField`), across area borders too, so
@@ -266,6 +266,7 @@ function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place
   const sheet: WashSheet = {
     reach,
     half,
+    ...(places.aspect === undefined ? {} : { aspect: places.aspect }),
     n,
     cell: AREA_CELL,
     nearest,
@@ -300,7 +301,7 @@ function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place
 
   // Where each area's name goes, from the outlines as traced and the lots where buildings and landmarks stand, as
   // the wait works it out from the same land before anything stands.
-  const names = yield* nameLand(traced.areas, size, reach, stood.lots);
+  const names = yield* nameLand(traced.areas, size, reach, stood.lots, places.aspect);
   const labelOf = new Map(names.labels.map((l) => [l.index, l]));
   const labelAt = (x: number, z: number): AreaLabel | undefined => {
     const i = Math.floor((x + reach) / CELL);
@@ -337,7 +338,6 @@ export function nearestAreas(at: Int16Array, n: number): Int16Array {
  * for a view to stroke at its own size.
  */
 export function* paintRelief(ctx: CanvasRenderingContext2D, t: Terrain, style: MapStyle, reach: number, side: number): Generator<void, Paper["contours"]> {
-  const half = t.spec.size / 2;
   const size = t.spec.size;
   const scale = side / (reach * 2);
   const k = side / PAPER;
@@ -363,8 +363,8 @@ export function* paintRelief(ctx: CanvasRenderingContext2D, t: Terrain, style: M
       const lit = (gx + gz) * style.relief;
       // Over the band where the ground is eased toward the rim, and past it, the eased heights would shade in stripes
       // along their rays, so the shading fades out across the band and is gone at the rim.
-      const inside = Math.max(0, Math.min(1, (half - Math.pow(x ** 4 + z ** 4, 0.25)) / RIM.inner));
-      const fadeHere = paintAt(style, (i + 0.5) / hn, (j + 0.5) / hn) * inside * inside * (3 - 2 * inside);
+      const inside = Math.max(0, Math.min(1, -pastTheEdge(t.spec, x, z) / RIM.inner));
+      const fadeHere = paintAt(style, (i + 0.5) / hn, (j + 0.5) / hn, t.spec.aspect ?? 1) * inside * inside * (3 - 2 * inside);
       shadeImg.data.set([sr, sg, sb, Math.round(255 * Math.max(0, Math.min(1, -lit)) * fadeHere)], c * 4);
       lightImg.data.set([lr, lg, lb, Math.round(255 * Math.max(0, Math.min(1, lit)) * fadeHere)], c * 4);
     }
@@ -410,7 +410,7 @@ export function* paintRelief(ctx: CanvasRenderingContext2D, t: Terrain, style: M
     isoline(heights, hn, step * c.interval, (x0, y0, x1, y1) => {
       const mx = hm((x0 + x1) / 2);
       const mz = hm((y0 + y1) / 2);
-      if (mx ** 4 + mz ** 4 > (half - RIM.held) ** 4) return;
+      if (pastTheEdge(t.spec, mx, mz) > -RIM.held) return;
       segments.push(hm(x0), hm(y0), hm(x1), hm(y1));
     });
     // Joined into lines and eased of points that add nothing, so a view strokes a few long lines, not thousands of
@@ -585,7 +585,7 @@ export function drawLand(ctx: CanvasRenderingContext2D, w: number, h: number, pa
   ctx.lineCap = ctx.lineJoin = "round";
   strokeContours(ctx, paper.contours, view.zoom, style);
   ctx.save();
-  ctx.clip(rimPath(paper.reach - MARGIN - 3));
+  ctx.clip(rimPath({ size: (paper.reach - MARGIN) * 2, ...(paper.names.aspect === undefined ? {} : { aspect: paper.names.aspect }) }, 3));
   for (const b of paper.borders) {
     ctx.strokeStyle = "rgba(52,80,40,0.16)";
     ctx.lineWidth = (b.depth === 1 ? LINE.hedge * 1.35 : LINE.hedge) / view.zoom;

@@ -10,6 +10,7 @@
 // other.
 
 import type { MapStyle } from "./map-styles.ts";
+import { type LandOutline, pastTheEdge } from "@gaia/terrain";
 
 /** The sheet's side in pixels, which every width and count here is given at. */
 export const PAPER = 2048;
@@ -22,6 +23,8 @@ export interface WashSheet {
   /** How far the sheet reaches from the land's middle, meters, and the land's own half-width, inside which pigment pools. */
   readonly reach: number;
   readonly half: number;
+  /** How much wider than deep the land is (`LandOutline`). */
+  readonly aspect?: number;
   /** Cells a side, each `cell` meters, from the sheet's corner, and the area nearest each, by its index in `areas`. */
   readonly n: number;
   readonly cell: number;
@@ -100,17 +103,31 @@ export function ringsPath(rings: readonly (readonly number[])[], px: (v: number)
   return p;
 }
 
-/** The land's rounded square `r` meters from its middle, through `px` (meters to the sheet's pixels): what keeps a pen inside the land. */
-export function rimPath(r: number, px: (v: number) => number = (v) => v): Path2D {
-  const p = new Path2D();
-  for (let k = 0; k <= 180; k++) {
-    const a = (k / 180) * Math.PI * 2;
+/** The land's edge, `inset` meters inside it, as points around it in meters (`pastTheEdge`). */
+export function rimPoints(land: LandOutline, inset: number, count = 180): [number, number][] {
+  const size = land.size;
+  const out: [number, number][] = [];
+  for (let k = 0; k <= count; k++) {
+    const a = (k / count) * Math.PI * 2;
     const c = Math.cos(a);
     const s = Math.sin(a);
-    const d = r / Math.pow(Math.abs(c) ** 4 + Math.abs(s) ** 4, 0.25);
-    if (k === 0) p.moveTo(px(c * d), px(s * d));
-    else p.lineTo(px(c * d), px(s * d));
+    // Along each ray from the middle, the distance where the edge less the inset falls.
+    let lo = 0;
+    let hi = size;
+    for (let i = 0; i < 24; i++) {
+      const d = (lo + hi) / 2;
+      if (pastTheEdge(land, c * d, s * d) < -inset) lo = d;
+      else hi = d;
+    }
+    out.push([c * lo, s * lo]);
   }
+  return out;
+}
+
+/** The land's edge `inset` meters inside it, through `px` (meters to the sheet's pixels): what keeps a pen inside the land. */
+export function rimPath(land: LandOutline, inset: number, px: (v: number) => number = (v) => v): Path2D {
+  const p = new Path2D();
+  rimPoints(land, inset).forEach(([x, z], k) => (k === 0 ? p.moveTo(px(x), px(z)) : p.lineTo(px(x), px(z))));
   p.closePath();
   return p;
 }
@@ -147,8 +164,9 @@ function valueNoise(x: number, y: number, seed: number): number {
 }
 
 /** How much paint the sheet holds at (u, v), its corners 0 and 1: full inside, giving way raggedly to bare paper at the edge. */
-export function paintAt(style: MapStyle, u: number, v: number): number {
-  const edge = Math.min(u, 1 - u, v, 1 - v);
+export function paintAt(style: MapStyle, u: number, v: number, aspect = 1): number {
+  // The sheet spans the land's width; north and south the paint ends where the land does.
+  const edge = Math.min(u, 1 - u, 0.5 / aspect - Math.abs(v - 0.5));
   const rag = (valueNoise(u * 22, v * 22, 3) - 0.5) * 2 * style.ragged + (valueNoise(u * 96, v * 96, 11) - 0.5) * style.ragged * 0.7;
   const t = Math.max(0, Math.min(1, (edge + rag - style.fade[0]) / (style.fade[1] - style.fade[0])));
   return t * t * (3 - 2 * t);
@@ -158,14 +176,14 @@ export function paintAt(style: MapStyle, u: number, v: number): number {
 const FADE_CELLS = 384;
 
 /** Where the paint gives way to bare paper at the sheet's edge, as a small mask in its alpha, painted a band of rows a step. */
-export function* fadeMask(style: MapStyle): Generator<void, HTMLCanvasElement> {
+export function* fadeMask(style: MapStyle, aspect = 1): Generator<void, HTMLCanvasElement> {
   const fade = document.createElement("canvas");
   fade.width = fade.height = FADE_CELLS;
   const g = fade.getContext("2d") as CanvasRenderingContext2D;
   const img = g.createImageData(FADE_CELLS, FADE_CELLS);
   for (let j0 = 0; j0 < FADE_CELLS; j0 += 96) {
     for (let j = j0; j < Math.min(FADE_CELLS, j0 + 96); j++) {
-      for (let i = 0; i < FADE_CELLS; i++) img.data[(j * FADE_CELLS + i) * 4 + 3] = Math.round(255 * paintAt(style, (i + 0.5) / FADE_CELLS, (j + 0.5) / FADE_CELLS));
+      for (let i = 0; i < FADE_CELLS; i++) img.data[(j * FADE_CELLS + i) * 4 + 3] = Math.round(255 * paintAt(style, (i + 0.5) / FADE_CELLS, (j + 0.5) / FADE_CELLS, aspect));
     }
     yield;
   }
@@ -254,7 +272,7 @@ export function* layWash(g: CanvasRenderingContext2D, under: CanvasImageSource, 
   // The pooling stops a little inside the land's rim, so no rim is drawn along it.
   g.save();
   g.globalCompositeOperation = "source-atop";
-  g.clip(rimPath(sheet.half - 8, px));
+  g.clip(rimPath({ size: sheet.half * 2, ...(sheet.aspect === undefined ? {} : { aspect: sheet.aspect }) }, 8, px));
   const pooled = [...sheet.areas.entries()].sort(([, a], [, b]) => a.depth - b.depth);
   for (const [step, [k, a]] of pooled.entries()) {
     const at = extent(k);

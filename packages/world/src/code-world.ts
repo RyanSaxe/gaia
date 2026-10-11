@@ -34,10 +34,10 @@ import {
   rand,
   seedOf,
 } from "@gaia/schema";
-import type { LandSite } from "@gaia/terrain";
+import { LAND_ASPECT, type LandSite, landArea } from "@gaia/terrain";
 import { symbolsOf } from "./graph.ts";
 import { type StandingDef, definitionsOf } from "./definitions.ts";
-import { LAND_SHARE, type LandNode, divideLand, dividePlots } from "./land.ts";
+import { type LandNode, divideLand, dividePlots } from "./land.ts";
 import { certainty } from "./context.ts";
 import { type OutlineReading, areaOutline, areaReadings, bodySize, entityOutline, entityReadings, fileOutline, fileReadings, fileSize, howMany, importersOf, outlineOrder, symbolSize, tokensOf } from "./outline.ts";
 import { MODEL } from "./planner.ts";
@@ -1245,24 +1245,36 @@ function chooseTrails(wanted: readonly CodeTrail[], standing: readonly string[],
 interface Division {
   readonly dirs: ReturnType<typeof directoriesOf>;
   readonly size: number;
+  readonly aspect: number;
   readonly land: ReturnType<typeof divideLand>;
   readonly defs: ReadonlyMap<string, readonly StandingDef[]>;
 }
 
 /** Each code model's division of the land, made once for it and its graph: it depends on the code alone. */
-const divided = new WeakMap<CodeModel, Map<CodeGraph | null, Division>>();
-function divisionOf(model: CodeModel, graph?: CodeGraph): Division {
-  const forModel = divided.get(model) ?? new Map<CodeGraph | null, Division>();
+const divided = new WeakMap<CodeModel, Map<string, Division>>();
+const graphIds = new WeakMap<CodeGraph, number>();
+let graphCount = 0;
+/** A key for a graph object (or none), so a division made on one graph is never mistaken for another's. */
+function graphKey(graph: CodeGraph | undefined): string {
+  if (graph === undefined) return "none";
+  let id = graphIds.get(graph);
+  if (id === undefined) graphIds.set(graph, (id = ++graphCount));
+  return String(id);
+}
+function divisionOf(model: CodeModel, graph: CodeGraph | undefined, aspect: number): Division {
+  const forModel = divided.get(model) ?? new Map<string, Division>();
   divided.set(model, forModel);
-  const kept = forModel.get(graph ?? null);
+  const key = `${graphKey(graph)}|${aspect}`;
+  const kept = forModel.get(key);
   if (kept !== undefined) return kept;
   const dirs = directoriesOf(model, model.repository.name);
   const defs = definitionsOf(model, graph);
   const lots = new Map(model.entities.map((e) => [e.path, LAYOUT.lot]));
   const total = model.files.reduce((n, f) => n + groundOfFile(f, defs.get(f.path)?.length ?? 0), 0) + lots.size * LAYOUT.lot;
-  const size = Math.max(LAYOUT.minSize, Math.ceil(Math.sqrt(total / LAND_SHARE) / 10) * 10);
-  const made = { dirs, size, land: divideLand(landTree(dirs, lots, defs), size), defs };
-  forModel.set(graph ?? null, made);
+  // The land's width, so its rounded rectangle holds every square meter asked for.
+  const size = Math.max(LAYOUT.minSize, Math.ceil(Math.sqrt(total / landArea({ size: 1, aspect })) / 10) * 10);
+  const made = { dirs, size, aspect, land: divideLand(landTree(dirs, lots, defs), { size, aspect }), defs };
+  forModel.set(key, made);
   return made;
 }
 
@@ -1284,11 +1296,12 @@ export interface LotPlace {
  * answered, because the land's division depends on the code alone. Opening a
  * world shows it while Jev answers.
  */
-export function landOf(model: CodeModel, graph?: CodeGraph): WorldPlaces & { readonly lots: readonly LotPlace[] } {
-  const w = layoutWorld(model, UNJUDGED, graph);
+export function landOf(model: CodeModel, graph?: CodeGraph, aspect: number = LAND_ASPECT): WorldPlaces & { readonly lots: readonly LotPlace[] } {
+  const w = layoutWorld(model, UNJUDGED, graph, aspect);
   return {
     name: w.name,
     size: w.size,
+    aspect: w.aspect ?? aspect,
     areas: w.areas.map(({ path, name, depth, parent, x, z }) => ({ path, name, depth, parent, x, z })),
     patches: w.patches.map(({ path, name, area, x, z, radius, vitality }) => ({ path, name, area, x, z, radius, vitality })),
     cells: w.cells,
@@ -1309,9 +1322,13 @@ export function areaLands(world: Pick<CodeWorld, "areas" | "regions">): Record<s
  * every definition it holds stands, sized by its stand; without one, the code
  * model's top-level symbols do.
  */
-export function layoutWorld(model: CodeModel, judged: Judgments, graph?: CodeGraph): CodeWorld {
+/**
+ * Lays a world out from code. Its land takes the journal spread's proportions (`LAND_ASPECT`) unless `aspect` says
+ * otherwise: the proving ground keeps a square, so its streams, bridges and ruins stay where its tests expect them.
+ */
+export function layoutWorld(model: CodeModel, judged: Judgments, graph?: CodeGraph, aspect: number = LAND_ASPECT): CodeWorld {
   const name = model.repository.name;
-  const { dirs, size, land, defs } = divisionOf(model, graph);
+  const { dirs, size, land, defs } = divisionOf(model, graph, aspect);
   const entityAt = new Map(model.entities.map((e) => [e.path, e]));
   const files = new Map(model.files.map((f) => [f.path, f]));
 
@@ -1428,6 +1445,7 @@ export function layoutWorld(model: CodeModel, judged: Judgments, graph?: CodeGra
     name,
     projectId: model.projectId,
     size,
+    aspect,
     world: judged.world,
     areas,
     patches,

@@ -15,7 +15,7 @@
 // change to the code moves the land a little.
 
 import { rand, seedOf } from "@gaia/schema";
-import { type LandSite, nearestSite, warpPoint } from "@gaia/terrain";
+import { type LandOutline, type LandSite, nearestSite, pastTheEdge, warpPoint } from "@gaia/terrain";
 
 /** A node of the tree whose land is divided: a directory, its own ground, or a leaf (a file or a lot). */
 export interface LandNode {
@@ -46,11 +46,8 @@ export interface Land {
   readonly leaves: readonly LeafLand[];
 }
 
-/** Whether (x, z) lies on the land: inside the walkable square's rounded edge. */
-export const onLand = (size: number, x: number, z: number): boolean => Math.abs(x) ** 4 + Math.abs(z) ** 4 <= (size / 2) ** 4;
-
-/** Share of a square the land's rounded square covers. */
-export const LAND_SHARE = 0.927;
+/** Whether (x, z) lies on the land: inside its rounded edge (`pastTheEdge`). */
+export const onLand = (land: LandOutline, x: number, z: number): boolean => pastTheEdge(land, x, z) <= 0;
 
 interface Raster {
   readonly step: number;
@@ -65,7 +62,8 @@ interface Raster {
   readonly at: Int32Array;
 }
 
-function rasterOf(size: number, step: number): Raster {
+function rasterOf(land: LandOutline, step: number): Raster {
+  const size = land.size;
   const n = Math.ceil(size / step);
   const half = (n * step) / 2;
   const at = new Int32Array(n * n).fill(-1);
@@ -77,7 +75,7 @@ function rasterOf(size: number, step: number): Raster {
     for (let i = 0; i < n; i++) {
       const x = -half + (i + 0.5) * step;
       const z = -half + (j + 0.5) * step;
-      if (!onLand(size, x, z)) continue;
+      if (!onLand(land, x, z)) continue;
       at[j * n + i] = px.length;
       const [a, b] = warpPoint(x, z);
       px.push(x);
@@ -176,14 +174,14 @@ function relax(r: Raster, cells: Int32Array, targets: Float64Array, sx: Float64A
 }
 
 /** Divides `cells` among a node's children, then each child's share among its own, down to the leaves. */
-function divide(r: Raster, node: LandNode, cells: Int32Array, out: Map<string, Int32Array>): void {
+function divide(r: Raster, node: LandNode, cells: Int32Array, out: Map<string, Int32Array>, aspect = 1): void {
   if (node.children.length === 0) {
     out.set(node.id, cells);
     return;
   }
   const kids = node.children;
   if (kids.length === 1) {
-    divide(r, kids[0] as LandNode, cells, out);
+    divide(r, kids[0] as LandNode, cells, out, aspect);
     return;
   }
   const grounds = kids.map(groundOf);
@@ -198,6 +196,21 @@ function divide(r: Raster, node: LandNode, cells: Int32Array, out: Map<string, I
   cx /= Math.max(1, cells.length);
   cz /= Math.max(1, cells.length);
   const spread = Math.sqrt(cells.length / Math.PI) * r.step;
+  // On a land that isn't square, seeds are scattered in each part's own proportions, so a long part's children
+  // spread along it rather than round its middle. A square land scatters them in a circle at every level, as always.
+  let fx = 1;
+  let fz = 1;
+  if (aspect !== 1) {
+    let vx = 0;
+    let vz = 0;
+    for (const q of cells) {
+      vx += ((r.wx[q] as number) - cx) ** 2;
+      vz += ((r.wz[q] as number) - cz) ** 2;
+    }
+    const mean = Math.sqrt((vx + vz) / 2) || 1;
+    fx = Math.sqrt(vx) / mean || 1;
+    fz = Math.sqrt(vz) / mean || 1;
+  }
   const sx = new Float64Array(kids.length);
   const sz = new Float64Array(kids.length);
   const reach = new Float64Array(kids.length);
@@ -206,8 +219,8 @@ function divide(r: Raster, node: LandNode, cells: Int32Array, out: Map<string, I
     const h = rand(seedOf(kid.id));
     const a = h.next() * Math.PI * 2;
     const d = kid.heart === true ? 0 : spread * (0.3 + 0.55 * Math.sqrt(h.next()));
-    const tx = cx + Math.cos(a) * d;
-    const tz = cz + Math.sin(a) * d;
+    const tx = cx + Math.cos(a) * d * fx;
+    const tz = cz + Math.sin(a) * d * fz;
     let best = Infinity;
     for (const q of cells) {
       const e = ((r.wx[q] as number) - tx) ** 2 + ((r.wz[q] as number) - tz) ** 2;
@@ -234,7 +247,7 @@ function divide(r: Raster, node: LandNode, cells: Int32Array, out: Map<string, I
   });
   const parts: number[][] = kids.map(() => []);
   owner.forEach((o, c) => (parts[o] as number[]).push(cells[c] as number));
-  kids.forEach((kid, j) => divide(r, kid, Int32Array.from(parts[j] as number[]), out));
+  kids.forEach((kid, j) => divide(r, kid, Int32Array.from(parts[j] as number[]), out, aspect));
 }
 
 /** The leaves of a tree, in order. */
@@ -315,12 +328,13 @@ function sitesOf(r: Raster, leaves: readonly LandNode[], shares: ReadonlyMap<str
 }
 
 /** Divides a world of side `size` among a tree's leaves, by the ground each asks for. */
-export function divideLand(root: LandNode, size: number): Land {
+export function divideLand(root: LandNode, land: LandOutline): Land {
+  const size = land.size;
   const step = Math.max(2.5, Math.min(6, size / 230));
-  const r = rasterOf(size, step);
+  const r = rasterOf(land, step);
   const all = Int32Array.from({ length: r.px.length }, (_, i) => i);
   const shares = new Map<string, Int32Array>();
-  divide(r, root, all, shares);
+  divide(r, root, all, shares, land.aspect ?? 1);
   const leaves = leavesOf(root);
   const drawn = sitesOf(r, leaves, shares);
   const sites = drawn.map((d) => d.site);

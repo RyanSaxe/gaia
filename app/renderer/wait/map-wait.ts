@@ -27,7 +27,7 @@ import { MARGIN, drawRivers, drawTrails, drawTrees, letterName, nearestAreas, pa
 import { CELL, type NameLand, canvasMeasure, nameLand, placeNames } from "../immersive/map-names.ts";
 import { DECKLE_MASK, MAP_STYLE, dryness, healthColor, landWash } from "../immersive/map-styles.ts";
 import { markScale, stampBuilding, stampLandmark } from "../immersive/marks.ts";
-import { PAPER, type WashArea, type WashSheet, easeRing, fadeMask, floatWash, layWash, ringsPath } from "../immersive/wash.ts";
+import { easeRing, fadeMask, floatWash, layWash, PAPER, rimPoints, ringsPath, type WashArea, type WashSheet } from "../immersive/wash.ts";
 import { layGround } from "../immersive/wild-ink.ts";
 import { type CellBox, type SettlingHealth, settlingHealth } from "./settling.ts";
 import type { WaitView } from "./wait.ts";
@@ -87,6 +87,8 @@ function pathOf(rings: readonly (readonly number[])[]): string {
 /** The land as the sheet paints it, once divided. */
 interface Land {
   readonly reach: number;
+  /** How much wider than deep the land is (`LandOutline`). */
+  readonly aspect?: number;
   /** The canvases' side in their own pixels, and how many of them a sheet's pixel takes. */
   readonly device: number;
   readonly k: number;
@@ -190,17 +192,12 @@ export function createMapWait(veil: HTMLElement): WaitView {
   let reliefShown: Promise<void> = Promise.resolve();
 
   // ---------- the land is divided ----------
-  function divide(size: number, outlines: readonly Outline[], patches: readonly FilePatch[], lots: readonly LotPlace[]): void {
+  function divide(size: number, aspect: number | undefined, outlines: readonly Outline[], patches: readonly FilePatch[], lots: readonly LotPlace[]): void {
     const reach = size / 2 + MARGIN;
-    const half = size / 2;
     layPaper(reach);
     ink.setAttribute("viewBox", `${-reach} ${-reach} ${reach * 2} ${reach * 2}`);
     let rim = "";
-    for (let q = 0; q <= 180; q++) {
-      const a = (q / 180) * Math.PI * 2;
-      const d = (half - 3) / Math.pow(Math.abs(Math.cos(a)) ** 4 + Math.abs(Math.sin(a)) ** 4, 0.25);
-      rim += `${q === 0 ? "M" : "L"}${(Math.cos(a) * d).toFixed(1)} ${(Math.sin(a) * d).toFixed(1)}`;
-    }
+    rimPoints({ size, ...(aspect === undefined ? {} : { aspect }) }, 3).forEach(([x, z], q) => (rim += `${q === 0 ? "M" : "L"}${x.toFixed(1)} ${z.toFixed(1)}`));
     rim += "Z";
     ink.innerHTML = `<defs><clipPath id="wait-land"><path d="${rim}"/></clipPath></defs><g clip-path="url(#wait-land)"></g>`;
     const pens = ink.lastElementChild as SVGGElement;
@@ -246,11 +243,11 @@ export function createMapWait(veil: HTMLElement): WaitView {
 
           // Each cell's area, from the outlines as traced (`nameLand`, as the field map rasters them for its names), and
           // past the areas the nearest one, as the field map samples the land.
-          const named = yield* nameLand(outlines, size, reach, lots);
+          const named = yield* nameLand(outlines, size, reach, lots, aspect);
           const { at, n } = named;
           const nearest = nearestAreas(at, n);
           yield;
-          const fade = yield* fadeMask(STYLE);
+          const fade = yield* fadeMask(STYLE, aspect ?? 1);
           const paths = outlines.map((o) => o.path);
           const health = yield* settlingHealth(
             { n, cell: CELL, reach, nearest, areas: paths },
@@ -266,7 +263,7 @@ export function createMapWait(veil: HTMLElement): WaitView {
           const under = document.createElement("canvas");
           under.width = under.height = n;
           // The health come in so far washes in now, while the hedgerows and the names are made ready.
-          land = { reach, device, k: device / PAPER, n, paths, lands: paths.map((p) => landWash(STYLE, p)), nearest, washes, fade, health, under: under.getContext("2d") as CanvasRenderingContext2D, names: null };
+          land = { reach, ...(aspect === undefined ? {} : { aspect }), device, k: device / PAPER, n, paths, lands: paths.map((p) => landWash(STYLE, p)), nearest, washes, fade, health, under: under.getContext("2d") as CanvasRenderingContext2D, names: null };
           settle({});
           yield;
 
@@ -436,7 +433,7 @@ export function createMapWait(veil: HTMLElement): WaitView {
     const s = scratch.getContext("2d") as CanvasRenderingContext2D;
     s.setTransform(l.k, 0, 0, l.k, bleed - rx, bleed - ry);
     // What the areas' rims are as this change starts: one settling while it is painted waits for its own layer.
-    const sheet: WashSheet = { reach: l.reach, half: l.reach - MARGIN, n: l.n, cell: CELL, nearest: l.nearest, areas: [...l.washes], fade: l.fade };
+    const sheet: WashSheet = { reach: l.reach, half: l.reach - MARGIN, ...(l.aspect === undefined ? {} : { aspect: l.aspect }), n: l.n, cell: CELL, nearest: l.nearest, areas: [...l.washes], fade: l.fade };
     yield* layWash(s, l.under.canvas, sheet, STYLE, [x0 - bleed / l.k, y0 - bleed / l.k, x1 + bleed / l.k, y1 + bleed / l.k]);
     const layer = document.createElement("canvas");
     layer.width = rw;
@@ -608,7 +605,7 @@ export function createMapWait(veil: HTMLElement): WaitView {
 
   return {
     opening(o) {
-      if (o.stage === "land") divide(o.size, o.areas, o.patches, o.lots);
+      if (o.stage === "land") divide(o.size, o.aspect, o.areas, o.patches, o.lots);
       else if (o.stage === "health") settle(o.vitality);
       else if (o.stage === "asking") for (const path of Object.keys(o.settled)) letter(path);
     },

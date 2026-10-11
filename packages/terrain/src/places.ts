@@ -13,6 +13,7 @@
 import type { CellPlace, PatchPlace, WorldPlaces } from "@gaia/schema";
 import { siteAt } from "./land.ts";
 import type { WorldSpec } from "./world.ts";
+import { type LandOutline, pastTheEdge } from "./edge.ts";
 
 export type { AreaPlace, CellPlace, PatchPlace, WorldPlaces } from "@gaia/schema";
 
@@ -28,9 +29,9 @@ export type PlaceArea = Place["area"];
 /** The wild land past the codebase's: an area that stands for no directory. */
 export const WILD_AREA: PlaceArea = { path: "", name: "The wilds", depth: -1 };
 
-/** Whether (x, z) lies past the codebase's land, a square `size` meters across with rounded corners, where the rim crests: the wild. */
-export function pastTheLand(size: number, x: number, z: number): boolean {
-  return Math.abs(x) ** 4 + Math.abs(z) ** 4 > (size / 2) ** 4;
+/** Whether (x, z) lies past the codebase's land, where the rim crests (`pastTheEdge`): the wild. */
+export function pastTheLand(land: LandOutline, x: number, z: number): boolean {
+  return pastTheEdge(land, x, z) > 0;
 }
 
 /** Side of a patch bucket, meters. */
@@ -88,13 +89,13 @@ function discAt(world: WorldPlaces, index: Index, x: number, z: number): Place["
 
 /** The cell under (x, z), or -1 past the land or in a world with no cells. */
 export function cellUnder(world: WorldPlaces, x: number, z: number): number {
-  if (pastTheLand(world.size, x, z) || world.cells.length === 0) return -1;
+  if (pastTheLand(world, x, z) || world.cells.length === 0) return -1;
   return siteAt(world.cells, x, z);
 }
 
 /** The area and the file patch under (x, z). */
 export function placeAt(world: WorldPlaces, x: number, z: number): Place {
-  if (pastTheLand(world.size, x, z)) return { area: WILD_AREA, file: null };
+  if (pastTheLand(world, x, z)) return { area: WILD_AREA, file: null };
   const index = indexOf(world);
   const k = cellUnder(world, x, z);
   const cell = k < 0 ? undefined : (world.cells[k] as CellPlace);

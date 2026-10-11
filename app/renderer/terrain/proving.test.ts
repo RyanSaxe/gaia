@@ -32,7 +32,7 @@ const clearOfEdges = (x: number, z: number): boolean => {
   return AROUND.every(([dx, dz]) => ownerOf(x + dx, z + dz) === owner);
 };
 /** The ground's vitality field as the page builds it: whose ground each sample is, weighed by each owner's vitality. */
-const own = ownershipOf(groundSites(code.stand), doc.world.size, doc.world.size + TERRAIN.skirt * 2);
+const own = ownershipOf(groundSites(code.stand), doc.world, doc.world.size + TERRAIN.skirt * 2);
 const tables = ownerVitality(doc.world, (path) => doc.world.patches.find((p) => p.path === path)?.vitality ?? 1);
 const groundField = vitalityOver(own, tables.ground);
 const waterField = vitalityOver(own, tables.area);
