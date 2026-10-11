@@ -22,10 +22,11 @@ import { worldService } from "../service.ts";
 import type { WorldHandle } from "../terrain/lab.ts";
 import { createCompass } from "./compass.ts";
 import { createJournalBook } from "../journal/book.ts";
+import { drawMapPage, halfOf } from "../journal/maps.ts";
 import { ROOM, journalPages } from "../journal/pages.ts";
 import { createSourceText } from "../journal/source.ts";
 import type { WordsSource } from "../journal/words.ts";
-import { createFieldMap, drawLand } from "./field-map.ts";
+import { createFieldMap } from "./field-map.ts";
 import { MARKER_LAYER, createMarkers } from "./markers.ts";
 import { createMinimap } from "./minimap.ts";
 import { paintPicture } from "./picture.ts";
@@ -112,30 +113,26 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
   const source = createSourceText(service);
   /** What the journal's pages are read from, for the world standing now. */
   let words: WordsSource | null = null;
-  /** The whole land, drawn once per painted paper, cut in two across the endpapers. */
-  let endpapers: { paper: unknown; canvas: HTMLCanvasElement } | null = null;
-  function mapHalf(side: "left" | "right"): HTMLElement | null {
+  /** Each map the journal holds, drawn once per painted paper: the whole land across the endpapers, and each folder's. */
+  let maps: { paper: unknown; drawn: Map<string, HTMLCanvasElement | null> } | null = null;
+  function mapOf(area: string, w: number, h: number, fold: boolean): HTMLCanvasElement | null {
     const paper = map.paper();
     if (paper === null) return null;
-    if (endpapers?.paper !== paper) {
-      const canvas = document.createElement("canvas");
-      canvas.width = 2080;
-      canvas.height = 1320;
-      const ctx = canvas.getContext("2d") as CanvasRenderingContext2D;
-      ctx.scale(2, 2);
-      const size = world.places().size;
-      drawLand(ctx, 1040, 660, paper, world.stood(), { x: 0, z: 0, zoom: (Math.min(1040, 660) / size) * 0.96 }, 1.35, true);
-      endpapers = { paper, canvas };
-    }
-    const half = document.createElement("canvas");
-    half.width = 1040;
-    half.height = 1320;
-    (half.getContext("2d") as CanvasRenderingContext2D).drawImage(endpapers.canvas, side === "left" ? 0 : -1040, 0);
-    return half;
+    if (maps?.paper !== paper) maps = { paper, drawn: new Map() };
+    if (!maps.drawn.has(area)) maps.drawn.set(area, drawMapPage({ paper: map.paper, stood: world.stood, places: world.places, placeAt: world.placeAt }, area, w, h, fold));
+    return maps.drawn.get(area) ?? null;
   }
   const journal = createJournalBook(
     layer,
-    journalPages({ words: () => words, map: mapHalf, turnTo: (at) => journal.turnTo(at) }),
+    journalPages({
+      words: () => words,
+      endpaper: (side) => {
+        const spread = mapOf("", 1040, 660, true);
+        return spread === null ? null : halfOf(spread, side);
+      },
+      map: (area) => mapOf(area, 520, 660, false),
+      turnTo: (at) => journal.turnTo(at),
+    }),
     (open) => {
       if (open) setSlip(false);
     },

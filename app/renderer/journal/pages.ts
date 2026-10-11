@@ -17,8 +17,10 @@ export const ROOM: PageRoom = { first: 18, next: 21 };
 export interface JournalPagesSource {
   /** The words' source for the world standing now, or null before one stands. */
   words(): WordsSource | null;
-  /** One half of the map across the endpapers, or null before it is painted. */
-  map(side: "left" | "right"): HTMLElement | null;
+  /** One half of the whole land's map across the endpapers, or null before the map is painted. */
+  endpaper(side: "left" | "right"): HTMLElement | null;
+  /** A folder's own map, for its chapter's left-hand page, or null before the map is painted. */
+  map(area: string): HTMLElement | null;
   /** Turns the book to a place, for a row tapped on a page. */
   turnTo(at: string): void;
 }
@@ -53,14 +55,15 @@ export function journalPages(src: JournalPagesSource): BookPages {
     const said = wordsOf(words, e);
     // Page p of the entry's words (0 for the first): its number, and the slice of the list it holds.
     const page = (p: number): HTMLElement => (p >= e.pages ? blank() : renderPage(said, folio(e.page + p), src.turnTo, said.body.kind === "rows" ? rowsOn(p) : undefined));
-    if (k === 0) return { left: renderPicture(null, folio(e.page - 1)), right: page(0) };
+    // A chapter faces its folder's map; anything that stands faces its painting, bare paper until it is painted.
+    if (k === 0) return { left: renderPicture(e.kind === "chapter" ? src.map(e.of) : null, folio(e.page - 1)), right: page(0) };
     return { left: page(2 * k - 1), right: page(2 * k) };
   }
 
   return {
     spread(at): Spread {
       const words = src.words();
-      if (at === "map" || words === null) return { left: renderPicture(src.map("left"), ""), right: renderPicture(src.map("right"), "") };
+      if (at === "map" || words === null) return { left: renderPicture(src.endpaper("left"), ""), right: renderPicture(src.endpaper("right"), "") };
       const [of, kk] = at.split(SEP);
       const k = Number(kk ?? 0);
       if (of === "contents") {
