@@ -43,6 +43,13 @@ export interface Veil {
   choose(offer: StartOffer): Promise<StartChoice>;
 }
 
+/** What Jev judged about a node, or a block of a definition's lines, with each answer's name in the vocabulary by where it sits ("quality.readability"). */
+export interface Said {
+  readonly judged: Judged;
+  readonly lines?: Span;
+  readonly names?: Readonly<Record<string, string>>;
+}
+
 export interface CodeLab {
   readonly world: CodeWorld;
   /** The terrain's regions: one per directory with land of its own. */
@@ -62,9 +69,10 @@ export interface CodeLab {
    * What Jev judged about a folder, a file or a definition, by its path or id,
    * and about each block of a definition's lines: for Gaia's snapshot, Jev's
    * answers from the engine's judged graph (`fixtures/gaia-said.json`, written
-   * by `pnpm journal-said`); none yet for a world the service opens.
+   * by `pnpm journal-said`), each answer with its name in the vocabulary; none
+   * yet for a world the service opens.
    */
-  readonly said: (of: string) => readonly { readonly judged: Judged; readonly lines?: Span }[];
+  readonly said: (of: string) => readonly Said[];
   /** How the judging went, in words. */
   readonly summary: string;
 }
@@ -241,7 +249,7 @@ export async function codeWorld(veil: Veil): Promise<CodeLab> {
   veil.baking(Object.fromEntries(document.world.patches.map((p) => [p.path, p.vitality])));
   const lab = codeLab(document);
   if (!fromSnapshot) return lab;
-  const said = (snapshotSaid as unknown as { said: Readonly<Record<string, readonly { judged: Judged; lines?: Span }[]>> }).said;
+  const said = (snapshotSaid as unknown as { said: Readonly<Record<string, readonly Said[]>> }).said;
   return { ...lab, said: (of) => said[of] ?? [] };
 }
 

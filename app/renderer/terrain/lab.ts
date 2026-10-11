@@ -10,7 +10,7 @@
 
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { type Blueprint, type BuildingPlan, type GroundSpec, type Judged, Library, type Palette, type RouteSpec, type SeasonSpec, type Span, blueprintOf, seedOf } from "@gaia/schema";
+import { type Blueprint, type BuildingPlan, type GroundSpec, Library, type Palette, type RouteSpec, type SeasonSpec, blueprintOf, seedOf } from "@gaia/schema";
 import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, LANDMARK_PRIMITIVES, NO_SHIFT, ROUTE_PRIMITIVES, RELIEF_PRIMITIVES, ROCK_PRIMITIVES, WILDFLOWER_PRIMITIVES, WORLD_PRIMITIVES, hex, mixLab } from "@gaia/primitives";
 import { biome, flora, landmark, link, world as worldKind } from "@gaia/kinds";
 import { defaultParams, validate } from "@gaia/world";
@@ -54,7 +54,7 @@ import { withStart } from "../start/start.ts";
 import { createCard } from "./card.ts";
 import { LANDMARK_ENTITIES, type Represented, SAMPLE_ENTITIES, SAMPLE_FILES, representEntity, representFile } from "./samples.ts";
 import { type CodeWorld, type Judge, entityVitalityOf, groundVitality, judgedThing } from "@gaia/world";
-import { type CodeLab, codeWorld, judgedOf, representSymbol } from "./code-world.ts";
+import { type CodeLab, type Said, codeWorld, judgedOf, representSymbol } from "./code-world.ts";
 import { createSettlement } from "./settlement.ts";
 import { createSigns } from "./signs.ts";
 import { type Baked, createBaker } from "./baker.ts";
@@ -264,7 +264,7 @@ export interface WorldHandle {
   /** Where a thing's painting is seen from, looking at it: where a picture tapped in the journal takes the person. Null when nothing stands for it. */
   seenFrom(id: string): Landing | null;
   /** What Jev judged about a folder, a file or a definition, by its path or id, and about each block of a definition's lines. */
-  judged(of: string): readonly { readonly judged: Judged; readonly lines?: Span }[];
+  judged(of: string): readonly Said[];
   /** Calls `listener` with what a person has walked up to when its card opens, and with null when it closes. */
   onCard(listener: (thing: CardThing | null) => void): void;
   /**
