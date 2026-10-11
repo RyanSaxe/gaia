@@ -660,11 +660,12 @@ finger and keys all follow the same three rules.
   the ground hidden behind it. A drag looks around and never walks. W A S D
   or the arrows walk and Shift hurries. A drag or a key takes the view back
   from a turn at once. Touching the world never does anything but move you.
-- **Everything else is paper.** The minimap at the lower right and the
-  compass at the top right, and a thing's page while the person stops at
-  it, are the only things on the screen that are not the world: a tap on
-  the minimap's land (or M) unfolds the field map out of it, a tap on its
-  edge tucks it away, and the compass opens the slip. A tap on the open map
+- **Everything else is paper.** The closed journal at the lower left,
+  with the minimap on its cover, and the compass at the top right are the
+  only things on the screen that are not the world: a tap on the journal
+  or the minimap's land (or M) opens the journal at its map, a tap on the
+  minimap's edge tucks it away, "/" lays the journal's finder over the
+  world, and the compass opens the slip. A tap on the open map
   is the one way to travel far at once: it is a paper action, so it belongs
   to the map, never to the world.
 - **Paper you open holds the world still.** While the map or the slip is
@@ -885,7 +886,8 @@ codebase's land is the wild, which names nothing.
 The three ways work together:
 
 - **The minimap.** A torn scrap of the field map, about 156 px square,
-  lies at the lower right (`app/renderer/immersive/minimap.ts`): the land
+  lies under the strap of the closed journal's cover at the lower left
+  (`app/renderer/immersive/minimap.ts`): the land
   around the person, about 130 m across, as the map paints it, turned with
   them so the way they face is always up. The traveller stands a little
   below its middle, so more of the way ahead shows, their footprints behind

@@ -65,7 +65,7 @@ const TURN_MS = 720;
 const COVER_MS = 900;
 const TRAVEL_MS = 1050;
 /** The closed book's tilt in its corner, degrees, and how much of the view the open book may take. */
-const CORNER_TILT = -6;
+const CORNER_TILT = 6;
 /** The closed book in its corner: a little smaller than the slip's own size, and close in to the screen's edges, px. */
 const CORNER = { scale: 0.86, margin: { x: 12, y: 14 } } as const;
 const FILL = { w: 0.94, h: 0.88 } as const;
@@ -77,7 +77,7 @@ const el = (cls: string, parent?: HTMLElement): HTMLDivElement => {
   return e;
 };
 
-export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: (open: boolean) => void, corner: "right" | "left" = "right"): JournalBook {
+export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: (open: boolean) => void): JournalBook {
   const root = el("journal", layer);
   // The brush: a stroke or a wash of color laid by hand, its edge wandering a little, as the mocks paint them.
   root.insertAdjacentHTML(
@@ -87,7 +87,6 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
       <filter id="jp-brush" x="-60%" y="-5%" width="220%" height="110%"><feTurbulence type="fractalNoise" baseFrequency="0.06" numOctaves="2" seed="7" result="t"/><feDisplacementMap in="SourceGraphic" in2="t" scale="6" xChannelSelector="R" yChannelSelector="G" result="d"/><feGaussianBlur in="d" stdDeviation="0.7"/></filter>
     </svg>`,
   );
-  root.classList.toggle("left-corner", corner === "left");
   root.style.setProperty("--leather", `url(${LEATHER})`);
   root.style.setProperty("--paper", `url(${PAPER})`);
   root.style.setProperty("--pw", `${PAGE.w}px`);
@@ -208,16 +207,15 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
     const vw = layer.clientWidth || window.innerWidth;
     const vh = layer.clientHeight || window.innerHeight;
     const scale = Math.min((vw * FILL.w) / (PAGE.w * 2 + PAGE.overhang * 2), (vh * FILL.h) / (PAGE.h + PAGE.overhang * 2));
-    // The slip's middle, in the closed book's own pixels from the book's middle, is laid in the corner: at the lower
-    // left the slip lies by the cover's outer edge, so the book hangs off that side as it does off the right.
-    const right = corner === "right";
-    const slipX = (right ? 1 : -1) * (26 + 92 - PAGE.w / 2);
+    // The slip's middle, in the closed book's own pixels from the book's middle, is laid in the lower left corner:
+    // the slip lies by the cover's outer edge, so the book hangs off the screen's left and bottom.
+    const slipX = -(26 + 92 - PAGE.w / 2);
     const slipY = 24 + 92 - PAGE.h / 2 - PAGE.overhang;
     const side = 156 * CORNER.scale;
-    const mx = right ? vw - CORNER.margin.x - side / 2 : CORNER.margin.x + side / 2;
+    const mx = CORNER.margin.x + side / 2;
     const my = vh - CORNER.margin.y - side / 2;
     const k = (156 / 184) * CORNER.scale;
-    const tilt = right ? CORNER_TILT : -CORNER_TILT;
+    const tilt = CORNER_TILT;
     const a = (tilt * Math.PI) / 180;
     const cx = mx - k * (slipX * Math.cos(a) - slipY * Math.sin(a));
     const cy = my - k * (slipX * Math.sin(a) + slipY * Math.cos(a));

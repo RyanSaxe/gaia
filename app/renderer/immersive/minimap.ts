@@ -1,4 +1,4 @@
-// The minimap: a torn scrap of the field map at the lower right, about 156 px
+// The minimap: a torn scrap of the field map on the closed journal, about 156 px
 // square, showing the land around the person as the map paints it, turned
 // with them so the way they face is always up. The traveller stands a little
 // below its middle, so more of the way ahead shows. It is the local land,
@@ -7,9 +7,10 @@
 // top right corner points north (`compass.ts`). After 2.5 s in a new area the
 // old name fades and the new one is lettered across the land, as the field
 // map letters areas; in the wild the old name fades and nothing is written.
-// A tap on its land unfolds the field map out of it. A tap on its outer edge
-// tucks it down past the screen's foot, leaving its top 50 px (the name and a
-// band of turning land), and a tap on what shows brings it back. Walking up
+// A tap on its land unfolds the field map out of it, or does what the view
+// asks instead: in the app, it opens the journal at its map. A tap on its
+// outer edge tucks it down past the screen's foot, leaving its top 50 px (the
+// name and a band of turning land), and a tap on what shows brings it back. Walking up
 // to a thing, a vermilion pencil ring is drawn round it with its name in the
 // traveller's hand.
 //

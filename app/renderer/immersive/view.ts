@@ -197,8 +197,6 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
     (open) => {
       if (open) setSlip(false);
     },
-    // The lower left is being tried (`?journal=left`); the lower right is where it rests.
-    new URLSearchParams(location.search).get("journal") === "left" ? "left" : "right",
   );
   source.onArrive(() => journal.refresh());
   // The minimap lies on the slip under the strap across the journal's cover.
