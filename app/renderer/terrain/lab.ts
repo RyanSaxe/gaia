@@ -50,7 +50,7 @@ import { createUnderstory } from "./understory.ts";
 import { createClearings } from "./clearings.ts";
 import { type Ways, createWays, setTrailEnds, setTrailPlaces } from "./trails.ts";
 import { reportStage } from "../telemetry.ts";
-import { createWait } from "../wait/wait.ts";
+import { takeWait } from "../wait/wait.ts";
 import { withStart } from "../start/start.ts";
 import { createCard } from "./card.ts";
 import { LANDMARK_ENTITIES, type Represented, SAMPLE_ENTITIES, SAMPLE_FILES, representEntity, representFile } from "./samples.ts";
@@ -1846,7 +1846,8 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   }
 
   /** The wait the first world opens behind (app/renderer/wait/): it lifts once the world stands and has drawn. */
-  const veil = withStart(createWait($("veil")), $("veil"));
+  const waiting = takeWait($("veil"));
+  const veil = withStart(waiting.wait, waiting.veil);
   // The first world's hills, water and trees come in on the wait's sheet as soon as it stands.
   let stoodOnce = false;
   stoodListeners.push(() => {

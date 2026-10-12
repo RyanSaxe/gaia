@@ -15,6 +15,11 @@ import { createStats } from "./stats.ts";
 import { reportStage, startTelemetry } from "./telemetry.ts";
 import { type TerrainLab, createTerrainLab } from "./terrain/lab.ts";
 import { type Immersive, createImmersive } from "./immersive/view.ts";
+import { startWaitEarly } from "./wait/wait.ts";
+import { Library, seedOf } from "@gaia/schema";
+import { WORLD_PRIMITIVES } from "@gaia/primitives";
+import { world as worldKind } from "@gaia/kinds";
+import { WORLD_PRESETS, realizeSky } from "@gaia/realize";
 import { createWorldLab } from "./world/lab.ts";
 
 THREE.ColorManagement.enabled = false;
@@ -117,8 +122,24 @@ function loop(now: number): void {
 
 // `?view=terrain` opens a debugging view first; the lab otherwise opens into the world.
 const askedView = new URLSearchParams(location.search).get("view") as View | null;
-open(askedView !== null && VIEWS.includes(askedView) ? askedView : "immersive");
-requestAnimationFrame(loop);
+const firstView: View = askedView !== null && VIEWS.includes(askedView) ? askedView : "immersive";
+if (firstView === "immersive" && shell !== null) {
+  // Building the world's page holds the page for a moment: the wait's sheet shows first, and the page is built
+  // once it has been drawn, so no one ever sees the lab's bare frame.
+  shell.classList.add("immersive");
+  // The default world's night at the clock's hour, to the twentieth the world's first frame sets it to.
+  const sky = realizeSky({ blueprint: (WORLD_PRESETS[0] as (typeof WORLD_PRESETS)[number]).world, kind: worldKind }, new Library(WORLD_PRIMITIVES), seedOf("terrain-lab/sky"), clock.hour());
+  startWaitEarly(shell, Math.round(sky.light.nightness * 20) / 20);
+  requestAnimationFrame(() =>
+    setTimeout(() => {
+      open(firstView);
+      requestAnimationFrame(loop);
+    }),
+  );
+} else {
+  open(firstView);
+  requestAnimationFrame(loop);
+}
 
 // Served to a device by `pnpm lab:serve`, the lab says how far it got opening
 // a world, and any error on the way, so a device that fails says where.
