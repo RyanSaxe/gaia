@@ -5,17 +5,17 @@
 // can see. Placement reruns whenever the land is rebaked.
 
 import * as THREE from "three";
-import { type AnyKind, type Library, seedOf } from "@gaia/schema";
-import { flora, rock, wildflowers } from "@gaia/kinds";
-import { FLOWER_PRESETS, type Preset, ROCK_PRESETS, type Realized, SHRUB_PRESETS, realize } from "@gaia/realize";
+import { type Library, seedOf } from "@gaia/schema";
+import { FLOWER_PRESETS, type Preset, ROCK_PRESETS, type Realized, SHRUB_PRESETS } from "@gaia/realize";
 import type { SceneLight } from "@gaia/render";
 import { type Habitat, type Occupied, type Placement, type ScatterRule, type Terrain, type WorldSpec, scatterComponents } from "@gaia/terrain";
 import type { Clearings } from "./clearings.ts";
+import { type BuildAsk, type BuildKind, made } from "./made.ts";
 import { type Copies, FAR, type FarForms, type FarOf, createCopies } from "./woods.ts";
 
 interface Group {
   readonly id: string;
-  readonly kind: AnyKind;
+  readonly kind: BuildKind;
   readonly presets: readonly Preset[];
   readonly weights: readonly number[];
   /** Whether the group's instances draw into the sun's shadow map. */
@@ -52,7 +52,7 @@ const seeded = (presets: readonly Preset[], weights: readonly number[], n: numbe
 const GROUPS: readonly Group[] = [
   {
     id: "rocks",
-    kind: rock,
+    kind: "rock",
     ...seeded(ROCK_PRESETS, [3, 0.5, 1, 2, 1, 0.7], 2),
     casts: true,
     clears: 0.92,
@@ -64,7 +64,7 @@ const GROUPS: readonly Group[] = [
   },
   {
     id: "shrubs",
-    kind: flora,
+    kind: "flora",
     ...seeded(SHRUB_PRESETS, [1, 1, 0.7, 0.6], 3),
     casts: true,
     clears: 0.55,
@@ -76,7 +76,7 @@ const GROUPS: readonly Group[] = [
   },
   {
     id: "flowers",
-    kind: wildflowers,
+    kind: "wildflowers",
     ...seeded(FLOWER_PRESETS, [1.2, 1, 0.8, 0.8, 0.8, 0.7], 1),
     casts: false,
     clears: 0,
@@ -87,6 +87,12 @@ const GROUPS: readonly Group[] = [
     places: [{ open: 2, edge: 0.8, under: 0, wet: 0.2, dry: 0.6 }, { open: 1, dry: 2.5, under: 0, wet: 0 }, { under: 6, edge: 1.6, open: 0.05, wet: 0.2, dry: 0 }, { open: 1, wet: 1.4, edge: 0.6, under: 0 }, { wet: 6, open: 0.25, edge: 0.2, under: 0, dry: 0 }, { open: 1.2, edge: 0.7, under: 0, wet: 0.2 }],
   },
 ];
+
+/** Each build of a group, one per preset as listed. */
+const asksOf = (g: Group): BuildAsk[] => g.presets.map((p, i) => ({ kind: g.kind, blueprint: p.blueprint, seed: seedOf(`terrain-lab/${g.id}/${i}`), facts: { scale: 1, age: 120 } }));
+
+/** Every build the understory makes, for making ahead. */
+export const understoryBuilds = (): BuildAsk[] => GROUPS.flatMap(asksOf);
 
 /** A component's reach where it meets the ground, in 48 directions around its origin. */
 function outlineOf(plant: Realized): Float32Array {
@@ -155,7 +161,7 @@ export interface Understory {
 /** `farForms` takes the far form of every build whose group turns far; without it, nothing does. */
 export function createUnderstory(scene: THREE.Scene, light: SceneLight, lib: Library, clearings: Clearings, farForms?: FarForms): Understory {
   const built = GROUPS.map((g) => {
-    const plants = g.presets.map((p, i) => realize(p.blueprint, g.kind, lib, { seed: seedOf(`terrain-lab/${g.id}/${i}`), facts: { scale: 1, age: 120 } }));
+    const plants = asksOf(g).map((ask) => made(ask, lib));
     const reach = plants.map(outlineOf);
     const tops = plants.map((p) => p.parts.reduce((top, part) => part.positions.reduce((t, v, i) => (i % 3 === 1 ? Math.max(t, v) : t), top), 0));
     const far = plants.map((p) => (g.far ? farForms?.add(p, FAR.bush) : undefined));

@@ -12,11 +12,12 @@
 
 import type * as THREE from "three";
 import { type GroundSpec, type Library, blueprintOf, seedOf } from "@gaia/schema";
-import { biome, flora } from "@gaia/kinds";
-import { type Realized, realize, realizeRegion } from "@gaia/realize";
+import { biome } from "@gaia/kinds";
+import { type Realized, realizeRegion } from "@gaia/realize";
 import type { InstanceSpot, SceneLight } from "@gaia/render";
 import { NO_SHIFT, hex } from "@gaia/primitives";
 import { type Terrain, WILD_THICKETS, wildHeightAt, wildThicket } from "@gaia/terrain";
+import { type BuildAsk, made } from "./made.ts";
 import type { RegionCovers } from "./regions.ts";
 import { type Copies, FAR, type FarForms, type FarOf, createCopies } from "./woods.ts";
 
@@ -62,6 +63,9 @@ const WILD_BUSHES = [
     palette: { use: "palette@1", params: { family: "deep-forest", contrast: "balanced" } },
   })],
 ] as const;
+
+/** Each wild bush's build, for making ahead. */
+export const wildBushBuilds = (): BuildAsk[] => WILD_BUSHES.map(([, blueprint], i) => ({ kind: "flora", blueprint, seed: seedOf(`wilds/bush-${i}`), facts: { scale: 1, age: 120 } }));
 
 export interface WildGrowth {
   /** Every instanced blueprint, for culling each pass, warming and the sun's shadow. */
@@ -148,7 +152,7 @@ function wildGround(lib: Library): [GroundSpec, GroundSpec] {
  */
 export function createWildGrowth(scene: THREE.Scene, light: SceneLight, covers: RegionCovers, biomeLib: Library, floraLib: Library, farForms?: FarForms): WildGrowth {
   covers.wild(wildGround(biomeLib));
-  const plants: Realized[] = WILD_BUSHES.map(([, bp], i) => realize(bp, flora, floraLib, { seed: seedOf(`wilds/bush-${i}`), facts: { scale: 1, age: 120 } }));
+  const plants: Realized[] = wildBushBuilds().map((ask) => made(ask, floraLib));
   const fars = plants.map((p) => farForms?.add(p, FAR.bush));
   const views = plants.map((p, i) => {
     const view = createCopies(p, light, [], fars[i]);

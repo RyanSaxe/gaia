@@ -12,9 +12,9 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { type Blueprint, type BuildingPlan, type GroundSpec, Library, type Palette, type RouteSpec, type SeasonSpec, blueprintOf, seedOf } from "@gaia/schema";
 import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, LANDMARK_PRIMITIVES, NO_SHIFT, ROUTE_PRIMITIVES, RELIEF_PRIMITIVES, ROCK_PRIMITIVES, WILDFLOWER_PRIMITIVES, WORLD_PRIMITIVES, hex, mixLab } from "@gaia/primitives";
-import { biome, flora, landmark, link, world as worldKind } from "@gaia/kinds";
+import { biome, link, world as worldKind } from "@gaia/kinds";
 import { defaultParams, validate } from "@gaia/world";
-import { FLORA_PRESETS, LANDMARK_PRESETS, type Realized, TRAIL_PRESETS, WORLD_PRESETS, buildSlots, mergeParts, realize, realizeRegion, realizeSky } from "@gaia/realize";
+import { FLORA_PRESETS, LANDMARK_PRESETS, type Realized, TRAIL_PRESETS, WORLD_PRESETS, buildSlots, mergeParts, realizeRegion, realizeSky } from "@gaia/realize";
 import {
   FAR_COPY,
   type FarCards,
@@ -45,8 +45,9 @@ import { createGrass } from "./cover.ts";
 import { createGround, createGroundTexture } from "./ground.ts";
 import { createRegionCovers } from "./regions.ts";
 import { createWater } from "./water.ts";
-import { createWildGrowth } from "./wilds.ts";
-import { createUnderstory } from "./understory.ts";
+import { createWildGrowth, wildBushBuilds } from "./wilds.ts";
+import { createUnderstory, understoryBuilds } from "./understory.ts";
+import { type BuildAsk, made, makeAhead } from "./made.ts";
 import { createClearings } from "./clearings.ts";
 import { type Ways, createWays, setTrailEnds, setTrailPlaces } from "./trails.ts";
 import { reportStage } from "../telemetry.ts";
@@ -56,7 +57,7 @@ import { createCard } from "./card.ts";
 import { LANDMARK_ENTITIES, type Represented, SAMPLE_ENTITIES, SAMPLE_FILES, representEntity, representFile } from "./samples.ts";
 import { type CodeWorld, type Judge, entityVitalityOf, groundVitality, judgedThing } from "@gaia/world";
 import { type CodeLab, type Said, codeWorld, judgedOf, representSymbol } from "./code-world.ts";
-import { createSettlement } from "./settlement.ts";
+import { createSettlement, settlementBuilds } from "./settlement.ts";
 import { createSigns } from "./signs.ts";
 import { type Baked, createBaker } from "./baker.ts";
 import { type Stand, type StandRequest, type StandingLandmark, landmarkBase, ownerVitality, understoryVitality } from "./stand.ts";
@@ -337,6 +338,7 @@ const SAMPLE_NAME = "the sample world";
 
 /** Which world the lab opens on: Gaia's own, unless the page's address asks for the sample world (`?world=sample`, or `?world=small` for its 320 m version). */
 const ASKED_WORLD = new URLSearchParams(location.search).get("world");
+const OPENS_CODE = ASKED_WORLD !== "sample" && ASKED_WORLD !== "small";
 /** Frames the first world draws under the wait before it lifts, its shaders already compiled (`warmSoon`), so it moves smoothly from the first. */
 const LIFT_FRAMES = 4;
 /**
@@ -355,6 +357,13 @@ const FOG = { walk: 0.0042, overview: 0.0008 * Math.min(1, 320 / SCALE.size) };
 /** Seeded builds per flora preset, and the trees the lab plants unless a hook asks otherwise: as dense as the small world's 22 over 320 m. */
 const TREE_BUILDS = 3;
 const TREES = Math.round(22 * (SCALE.size / 320) ** 2);
+/** Each flora preset's seeded builds, preset by preset, as the woods copy them. */
+const TREE_ASKS: readonly BuildAsk[] = FLORA_PRESETS.flatMap((preset, p) =>
+  Array.from({ length: TREE_BUILDS }, (_, k): BuildAsk => ({ kind: "flora", blueprint: preset.blueprint, seed: seedOf(`terrain-lab/tree-${p}-${k}`), facts: { scale: 1, age: 120 } })),
+);
+const LANDMARK_ASKS: readonly BuildAsk[] = LANDMARK_PRESETS.map((preset, i) => ({ kind: "landmark", blueprint: preset.blueprint, seed: seedOf(`terrain-lab/landmark-${i}`), facts: { scale: 1 } }));
+/** Every build the terrain lab makes as it opens, whatever world it shows: what the page makes ahead (made.ts). */
+export const openingBuilds = (): BuildAsk[] => [...TREE_ASKS, ...LANDMARK_ASKS, ...understoryBuilds(), ...wildBushBuilds()];
 
 /** Level, dry ground the size of a world's lattice: what the lab holds, behind its veil, until the first bake arrives. */
 function levelGround(spec: WorldSpec): Terrain {
@@ -408,7 +417,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   const landmarkLib = new Library([...LANDMARK_PRIMITIVES, ...FLORA_PRIMITIVES]);
   const routeLib = new Library(ROUTE_PRIMITIVES);
   const landmarks = LANDMARK_PRESETS.map((preset, i) => {
-    const built = realize(preset.blueprint, landmark, landmarkLib, { seed: seedOf(`terrain-lab/landmark-${i}`), facts: { scale: 1 } });
+    const built = made(LANDMARK_ASKS[i] as BuildAsk, landmarkLib);
     return { name: preset.name, blueprint: preset.blueprint, built, base: landmarkBase(built) };
   });
   const trailStyles = TRAIL_PRESETS.map((p) => buildSlots(p.blueprint, link, routeLib, { seed: 1, facts: {} }).get("route")?.output as RouteSpec);
@@ -427,8 +436,9 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
 
   const light = createSceneLight();
   light.uFogDensity.value = FOG.walk;
-  // A building for each sample entity, near the stream, each on a pad leveled into the bake.
-  let settlement = createSettlement(light);
+  // A building for each sample entity, near the stream, each on a pad leveled into the bake; none yet when the
+  // codebase's world opens first, which brings its own.
+  let settlement = createSettlement(light, OPENS_CODE ? [] : SAMPLE_ENTITIES);
   /** Gaia's own world when "This codebase" is shown: what every area, patch, building, landmark and trail stands for. */
   let code: CodeLab | null = null;
   /** The world whose light, sky and air the lab shows: the codebase's own once it is shown. */
@@ -595,29 +605,27 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
 
   // Trees are copies of a few seeded builds of each preset, drawn as
   // instances: hundreds of trees cost a few draw calls per build.
-  const variants: TreeVariant[] = FLORA_PRESETS.flatMap((preset, p) =>
-    Array.from({ length: TREE_BUILDS }, (_, k) => {
-      const plant = realize(preset.blueprint, flora, floraLib, { seed: seedOf(`terrain-lab/tree-${p}-${k}`), facts: { scale: 1, age: 120 } });
-      const bark = plant.parts.find((part) => part.swatch === "bark");
-      // The trunk's base is every bark vertex at the ground, however many sides or lobes the trunk has.
-      let trunk = 0;
-      if (bark !== undefined) {
-        for (let i = 0; i < bark.positions.length; i += 3) {
-          if ((bark.positions[i + 1] as number) < TRUNK_BASE) trunk = Math.max(trunk, Math.hypot(bark.positions[i] as number, bark.positions[i + 2] as number));
-        }
+  const variants: TreeVariant[] = TREE_ASKS.map((ask) => {
+    const plant = made(ask, floraLib);
+    const bark = plant.parts.find((part) => part.swatch === "bark");
+    // The trunk's base is every bark vertex at the ground, however many sides or lobes the trunk has.
+    let trunk = 0;
+    if (bark !== undefined) {
+      for (let i = 0; i < bark.positions.length; i += 3) {
+        if ((bark.positions[i + 1] as number) < TRUNK_BASE) trunk = Math.max(trunk, Math.hypot(bark.positions[i] as number, bark.positions[i + 2] as number));
       }
-      const base = Math.max(0.5, trunk);
-      let height = 1;
-      let radius = 1;
-      for (const part of plant.parts) {
-        for (let i = 0; i < part.positions.length; i += 3) {
-          height = Math.max(height, part.positions[i + 1] as number);
-          radius = Math.max(radius, Math.hypot(part.positions[i] as number, part.positions[i + 2] as number));
-        }
+    }
+    const base = Math.max(0.5, trunk);
+    let height = 1;
+    let radius = 1;
+    for (const part of plant.parts) {
+      for (let i = 0; i < part.positions.length; i += 3) {
+        height = Math.max(height, part.positions[i + 1] as number);
+        radius = Math.max(radius, Math.hypot(part.positions[i] as number, part.positions[i + 2] as number));
       }
-      return { plant, base, trunk, height, radius };
-    }),
-  );
+    }
+    return { plant, base, trunk, height, radius };
+  });
   let treeCount = TREES;
   let trees: readonly Tree[] = [];
   /** Each tree's copy among its build's instances. */
@@ -1815,6 +1823,8 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     reportStage("judging");
     code = on ? await codeWorld(veil) : null;
     reportStage("laid out", { things: code?.world.things.length ?? 0, symbols: code?.world.symbols.length ?? 0 });
+    // The buildings are made on other threads while the wait draws the land.
+    await makeAhead(settlementBuilds(code?.buildings ?? SAMPLE_ENTITIES));
     liveFileVitality.clear();
     for (const v of settlement.views()) scene.remove(v.object);
     settlement = createSettlement(light, code?.buildings ?? SAMPLE_ENTITIES);
@@ -1859,8 +1869,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   refreshStats();
   refreshPanel();
   // The first world bakes behind a quiet veil, which lifts once it stands.
-  const startWithCode = ASKED_WORLD !== "sample" && ASKED_WORLD !== "small";
-  const ready = Promise.all([startWithCode ? showCodebase(true) : rebake(world).then(() => valleyView()), farBaked]).then(async () => {
+  const ready = Promise.all([OPENS_CODE ? showCodebase(true) : rebake(world).then(() => valleyView()), farBaked]).then(async () => {
     await warmed;
     // The world's first frames draw under the paper, so the world shows only once it moves smoothly.
     for (let k = 0; k < LIFT_FRAMES; k++) await new Promise((r) => requestAnimationFrame(r));
