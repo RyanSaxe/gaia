@@ -934,9 +934,9 @@ woods choose the full form by (`farChoice`, and its twin `FAR_CHOICE_GLSL`),
 so no far copy costs the page's thread anything per pass. Each form draws
 in one call per set (solid and fading) for each plant per pass. Nothing past
 `AIR.dissolveEnd`, where the air has dissolved everything into the sky,
-draws at all. The understory's shrubs and the wild's bushes take far forms
-too, baked and turned far at a quarter of the trees' size (`FAR.bush`);
-drifts of flowers and rocks draw their own levels only. Every plant that turns far is listed once in `createFarForms`,
+draws at all. The understory's shrubs, rocks and drifts of flowers and the
+wild's bushes take far forms too, baked and turned far at a quarter of the
+trees' size (`FAR.bush`, set per understory group). Every plant that turns far is listed once in `createFarForms`,
 in the far cards' form order. Each build bakes into its far form a few views
 a frame under the wait (`startFarBake`), and the wait lifts only once all of
 them are ready. A baked form is kept in the
