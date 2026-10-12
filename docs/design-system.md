@@ -1190,7 +1190,10 @@ on a phone, which bakes its cards at that size) draws as a card baked from
 the tree itself, by its own shaders, and lit
 live, so far trees look like the near ones at every hour and every health.
 Across a band from 128 to 160 pixels the card draws over the full tree, never
-fading in on its own, so nothing appears or fades as a person walks. In a
+fading in on its own, so nothing appears or fades as a person walks. Just
+past the band the full tree dissolves under its whole card, so the thin
+strands, needles and berries a card cannot hold fade away instead of
+vanishing in one frame. In a
 dense view trees turn far at a larger crown, up to half again the size
 their cards baked at, but only 2% larger each second, so each half second a
 tree changes less than the wind moves it. Bushes turn far the same way at a

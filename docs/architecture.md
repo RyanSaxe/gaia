@@ -897,8 +897,14 @@ A crown under `FAR.swapPx` (128, or 64 on a touch-first screen, whose
 far forms bake at that size) draws as its far form, one card baked from
 its build (`packages/render/src/far.ts`). Between 128 and 160 pixels, the band
 (`farness` in `woods.ts`), the card draws over the full tree as far into its
-form as the crown is into the band, so a tree never changes form in one
-frame. When the full trees a view draws pass the frame budget (`BUDGET`,
+form as the crown is into the band. Past the band, down to 128 / 1.15 (about
+111) pixels (`FAR.leave`), the full tree still draws under its card, now
+drawn whole, and dissolves (`nearLeaves` in `packages/render/src/instances.ts`):
+its leaves thin through their own coverage, its bark is screened away pixel by
+pixel, so whatever the card does not cover, such as a willow's strands or a
+fir's needles, is gone before the full tree stops drawing. A tree never
+changes form in one frame. The sun's shadow, a flat pass, keeps the full form
+only to the band's end, where the card starts to cast. When the full trees a view draws pass the frame budget (`BUDGET`,
 1.5 million triangles), the view's swap size rises 2% a second, up to 1.5
 times the size the forms baked at, and eases back once the view is light
 (`createFrameBudget`): each half second a tree in the band moves across it

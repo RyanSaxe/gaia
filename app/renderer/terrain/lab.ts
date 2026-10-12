@@ -2172,16 +2172,20 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
    * One copy of preset `name`'s first build (`farPresets`), at `vitality`,
    * stands alone straight ahead of the eye. With the wind's clock frozen, only the point detail is
    * chosen from moves back, so the crown's span on screen shrinks:
-   * - `end`: from just inside the band's far end to just past it, the frame
-   *   where the full form leaves and the far form stands alone;
    * - `middle`: from halfway into the band to 5% farther, the far form
-   *   coming in over the full one.
+   *   coming in over the full one;
+   * - `whole`: from just inside the band's far end to just past it, where
+   *   the far form comes to draw whole over the full one;
+   * - `leaving`: from halfway through the full form's dissolve past the band
+   *   (`FAR.leave`) to 5% farther;
+   * - `end`: from just before the dissolve's end to just past it, the frame
+   *   where the full form leaves and the far form stands alone.
    * Each is held to the wind's half-second change at the same spot, all
    * measured over the plant's own part of the screen. Every other plant that
    * turns far and the grass hide while it runs; flowers and rocks stay, as
    * the world around it. Null when there is no such preset.
    */
-  function swapTest(name: string, vitality: number): { end: SwapStep; middle: SwapStep } | null {
+  function swapTest(name: string, vitality: number): { middle: SwapStep; whole: SwapStep; leaving: SwapStep; end: SwapStep } | null {
     const preset = farPresets().find((f) => f.name === name);
     if (preset === undefined) return null;
     const gl = renderer.getContext();
@@ -2198,6 +2202,8 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     const eye = camera.position.clone();
     const swapPx = farBudget.swapPx * (preset.far.share ?? 1);
     const span = (f: number): number => swapPx * FAR.band - f * swapPx * (FAR.band - 1);
+    const leavePx = swapPx / FAR.leave;
+    const leaving = (g: number): number => swapPx - g * (swapPx - leavePx);
     const others = instanced().filter((o) => o.far !== undefined);
     const hidden = others.map((o) => o.object.visible);
     const grassShown = grass.mesh.visible;
@@ -2231,7 +2237,12 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     };
     try {
       copy.object.visible = true;
-      return { end: step(copy, span(0.995), swapPx - 0.1), middle: step(copy, span(0.5), span(0.55)) };
+      return {
+        middle: step(copy, span(0.5), span(0.55)),
+        whole: step(copy, span(0.995), swapPx - 0.1),
+        leaving: step(copy, leaving(0.5), leaving(0.55)),
+        end: step(copy, leavePx + 0.1, leavePx - 0.1),
+      };
     } finally {
       swapping = null;
       copy.object.visible = false;

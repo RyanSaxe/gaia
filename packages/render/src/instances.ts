@@ -63,6 +63,12 @@ export interface PlantInstances extends PlantView {
   readonly reach: number;
   /** Sets one copy's vitality; the shader reads it per instance. */
   setVitalityAt(index: number, v: number): void;
+  /**
+   * For the pass about to render, at `focal` device pixels of focal length:
+   * a copy whose crown spans fewer than `from` pixels dissolves, gone at
+   * `to`, where only its far card draws. A focal of 0 dissolves nothing.
+   */
+  nearLeaves(focal: number, from: number, to: number): void;
   /** Draws, in the pass about to render, the copies given for each level, packed into its instance buffer; levels not given draw nothing. */
   draw(levels: readonly LevelCopies[]): void;
   /**
@@ -100,8 +106,41 @@ function instanced(vertex: string): string {
   return out;
 }
 
-const INSTANCED_VERT = instanced(PLANT_VERT);
+/**
+ * The near form leaving a far card's place: once a copy's crown spans fewer
+ * device pixels than `uNearLeaves.y` on this pass's screen, the copy
+ * dissolves, until at `uNearLeaves.z` it is gone and its far card stands
+ * alone. Its crown is measured as `crownsOf` in woods.ts measures it, from
+ * the copy's own matrix, so the dissolve ends where the copy stops drawing.
+ * `uNearLeaves.x` is the pass's focal length in device pixels; 0 never
+ * dissolves.
+ */
+const NEAR_LEAVES_VERT = /* glsl */ `
+  {
+    float scale = length(instanceMatrix[0].xz);
+    vec3 crown = instanceMatrix[3].xyz + uCrown.xyz * scale;
+    float span = 2.0 * uCrown.w * scale * uNearLeaves.x / max(distance(crown, uEye), 1.0);
+    vNearGone = uNearLeaves.x > 0.0 ? clamp((uNearLeaves.y - span) / max(uNearLeaves.y - uNearLeaves.z, 1e-3), 0.0, 1.0) : 0.0;
+  }
+  gl_Position = projectionMatrix * viewMatrix * world;`;
+
+const INSTANCED_VERT = swap(
+  swap(instanced(PLANT_VERT), "void main() {", "uniform vec4 uCrown;\nuniform vec3 uNearLeaves;\nvarying float vNearGone;\nvoid main() {"),
+  "  gl_Position = projectionMatrix * viewMatrix * world;",
+  NEAR_LEAVES_VERT,
+);
 const INSTANCED_DEPTH = instanced(DEPTH_VERT);
+// A leaving copy's leaves thin through their own coverage, sample by sample;
+// a part drawn without coverage (bark, trunks) is screened away pixel by
+// pixel in an even scatter. Both draw exactly as before until it leaves.
+const INSTANCED_FRAG = swap(
+  swap(PLANT_FRAG, "void main() {", "varying float vNearGone;\nvoid main() {"),
+  "  gl_FragColor = vec4(aerial(shoulder(color), vWorld) + glow * (1.0 - uNightness * 0.35), cover);",
+  `  gl_FragColor = vec4(aerial(shoulder(color), vWorld) + glow * (1.0 - uNightness * 0.35), cover * (1.0 - vNearGone));
+#ifndef COVERAGE
+  if (fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) < vNearGone) discard;
+#endif`,
+);
 
 const vec3Of = (c: readonly number[]): THREE.Vector3 => new THREE.Vector3(c[0] ?? 0, c[1] ?? 0, c[2] ?? 0);
 const trianglesOf = (parts: readonly Part[]): number => parts.reduce((n, p) => n + p.indices.length / 3, 0);
@@ -176,6 +215,8 @@ export function createPlantInstances(plant: Realized, light: SceneLight, spots: 
     uHeight: { value: height },
     uVariety: { value: 1 },
     uDetail: { value: 1 },
+    uCrown: { value: new THREE.Vector4(sphere.center.x, sphere.center.y, sphere.center.z, sphere.radius) },
+    uNearLeaves: { value: new THREE.Vector3(0, 0, 0) },
   };
   const materials = new Map<string, { color: THREE.ShaderMaterial; depth: THREE.ShaderMaterial }>();
   const materialFor = (part: Part): { color: THREE.ShaderMaterial; depth: THREE.ShaderMaterial } => {
@@ -187,7 +228,8 @@ export function createPlantInstances(plant: Realized, light: SceneLight, spots: 
     const made = {
       color: new THREE.ShaderMaterial({
         vertexShader: INSTANCED_VERT,
-        fragmentShader: PLANT_FRAG,
+        fragmentShader: INSTANCED_FRAG,
+        defines: part.cutout.some((c) => c !== 0) ? { COVERAGE: "" } : {},
         uniforms: {
           ...light,
           ...shared,
@@ -322,6 +364,9 @@ export function createPlantInstances(plant: Realized, light: SceneLight, spots: 
       }
     },
     drawn: () => lastDrawn,
+    nearLeaves(focal, from, to) {
+      shared.uNearLeaves.value.set(focal, from, to);
+    },
     useDepth(on) {
       for (const m of meshes) m.mesh.material = on ? m.depth : m.color;
     },

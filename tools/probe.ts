@@ -9,8 +9,10 @@
 //   own change over half a second. A step above the wind is a pop.
 // - hitch: the app's smoothness probe over a real walk.
 // - swap: the swap test. For every tree and bush preset at vitality 1, 0.5
-//   and 0.15, by day and at 22:00, the frame where its full form leaves the
-//   band and its far form stands alone, against the wind's half-second change.
+//   and 0.15, by day and at 22:00, steps through its change of form: the far
+//   form coming in over the full one, coming to draw whole, the full form
+//   dissolving under it, and the frame where it leaves and the far form stands
+//   alone, each against the wind's half-second change.
 // - stress: a world with five times the trees.
 //
 // The window stays hidden, at exactly the size asked for, except for the walk
@@ -240,12 +242,17 @@ for (const [world, calls] of Object.entries(results)) {
     } else if (key.startsWith("swap ")) {
       // A step passes when it changes the plant's part of the screen no more than the wind does there in half a second, or too little to show.
       type Step = { change: { mean: number; worst: number }; wind: { mean: number; worst: number }; distance: number };
-      const rows = value as { name: string; vitality: number; end: Step; middle: Step }[];
+      const STEPS = ["middle", "whole", "leaving", "end"] as const;
+      const rows = value as ({ name: string; vitality: number } & Record<(typeof STEPS)[number], Step>)[];
       const over = (s: Step): boolean => s.change.worst > SWAP_FLOOR && (s.change.worst > s.wind.worst || s.change.mean > s.wind.mean);
-      const failed = rows.filter((r) => over(r.end) || over(r.middle));
+      const failing = (r: (typeof rows)[number]): boolean => STEPS.some((k) => over(r[k]));
+      const failed = rows.filter(failing);
       line(`  ${key}: ${rows.length - failed.length} of ${rows.length} presets and healths under the wind or a level (mean / worst block over the plant, the step against the wind)`);
       const say = (s: Step): string => `${f(s.change.mean, 2)} / ${f(s.change.worst)} against ${f(s.wind.mean, 2)} / ${f(s.wind.worst)}`;
-      for (const r of rows) line(`    ${over(r.end) || over(r.middle) ? "over " : "     "} ${r.name.padEnd(16)} ${f(r.vitality, 2)}  middle of the band ${say(r.middle)} at ${f(r.middle.distance, 0)} m; its end ${say(r.end)}`);
+      for (const r of rows) {
+        line(`    ${failing(r) ? "over " : "     "} ${r.name.padEnd(16)} ${f(r.vitality, 2)}  middle of the band ${say(r.middle)} at ${f(r.middle.distance, 0)} m; whole ${say(r.whole)}`);
+        line(`                            dissolving ${say(r.leaving)}; the full form leaving ${say(r.end)} at ${f(r.end.distance, 0)} m`);
+      }
     } else if (key.startsWith("hitch ")) {
       const s = value as { medianMs: number; p99Ms: number; maxMs: number; stutters: number };
       line(`  ${key}: median ${f(s.medianMs, 2)} ms, p99 ${f(s.p99Ms, 1)}, max ${f(s.maxMs, 1)}, ${s.stutters} stutters`);
