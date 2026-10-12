@@ -65,7 +65,7 @@ import { type Stand, type StandRequest, type StandingLandmark, landmarkBase, own
 import { groundVitalityAt, setGroundOwnership, showGroundVitality } from "./vitality.ts";
 import { type TourStop, tourStops } from "./tour.ts";
 import { type Change, pictureChange, tallyFrame } from "./measure.ts";
-import { type Copies, type DetailMode, FAR, type FarOf, type PassSize, TURN, createCopies, createFarForms } from "./woods.ts";
+import { type Copies, type DetailMode, FAR, type FarOf, GONE, type PassSize, TURN, createCopies, createFarForms } from "./woods.ts";
 import { contentHash, openFarStore } from "./far-store.ts";
 
 const TEMPLATE = /* html */ `
@@ -764,6 +764,8 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     for (const cards of farCardSets()) cards.pass(size.focal, size.ortho);
     for (const v of swapping === null ? instanced() : [swapping]) v.cull(passCamera, size);
   };
+  /** A step of walking: half a second at walking pace, as the walk test steps. */
+  const WALK_STEP = 0.7;
   /** One step of the swap test: how much it changes the tree's part of the screen, the wind's change there, and how far away the tree stands. */
   interface SwapStep {
     readonly change: Change;
@@ -2359,13 +2361,20 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
    * - `leaving`: from halfway through the full form's dissolve past the band
    *   (`FAR.leave`) to 5% farther;
    * - `end`: from just before the dissolve's end to just past it, the frame
-   *   where the full form leaves and the far form stands alone.
+   *   where the full form leaves and the far form stands alone;
+   * - `dissolving`: from halfway into the band where a crown too small to see
+   *   dissolves (`GONE`), one step of walking farther;
+   * - `gone`: the step of walking across that band's end, where the copy
+   *   stops drawing;
+   * these two over at least a 64-pixel block around the copy, as the walk
+   * test measures, since the crown spans only a few pixels.
    * Each is held to the wind's half-second change at the same spot, all
    * measured over the plant's own part of the screen. Every other plant that
-   * turns far and the grass hide while it runs. Null when there is no such
-   * preset.
+   * turns far and the grass hide while it runs. A plant whose crown is still
+   * too large to dissolve where the air has already hidden it stands there
+   * all the same, and changes nothing. Null when there is no such preset.
    */
-  function swapTest(name: string, vitality: number): { middle: SwapStep; whole: SwapStep; leaving: SwapStep; end: SwapStep } | null {
+  function swapTest(name: string, vitality: number): { middle: SwapStep; whole: SwapStep; leaving: SwapStep; end: SwapStep; dissolving: SwapStep; gone: SwapStep } | null {
     const preset = farPresets().find((f) => f.name === name);
     if (preset === undefined) return null;
     const gl = renderer.getContext();
@@ -2384,6 +2393,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     const span = (f: number): number => swapPx * FAR.band - f * swapPx * (FAR.band - 1);
     const leavePx = swapPx / FAR.leave;
     const leaving = (g: number): number => swapPx - g * (swapPx - leavePx);
+    const going = (g: number): number => GONE.start - g * (GONE.start - GONE.end);
     const others = instanced().filter((o) => o.far !== undefined);
     const hidden = others.map((o) => o.object.visible);
     const grassShown = grass.mesh.visible;
@@ -2393,16 +2403,23 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     const was = frozen;
     const t = light.uTime.value;
     /** Stands the tree where its crown spans `from` pixels, and measures moving the detail back until it spans `to`. */
-    const step = (stood: Copies, from: number, to: number): SwapStep => {
-      const distance = (2 * crown.radius * focal) / from;
-      const back = (2 * crown.radius * focal) / to - distance;
+    const at = (px: number): number => (2 * crown.radius * focal) / px;
+    /** Stands the copy where its crown spans `from` pixels, and measures moving the detail back until it spans `to`. */
+    const step = (stood: Copies, from: number, to: number): SwapStep => walk(stood, from, at(to) - at(from), 0);
+    /**
+     * Stands the copy where its crown spans `from` pixels, and measures moving the detail back `back` meters, over the
+     * crown's part of the screen and at least a `block`-pixel square around it.
+     */
+    const walk = (stood: Copies, from: number, back: number, block: number): SwapStep => {
+      const distance = at(from);
       // The crown's middle at the eye's height, straight ahead.
       stood.respot([{ x: eye.x + dx * distance - crown.center.x, y: eye.y - crown.center.y, z: eye.z + dz * distance - crown.center.z, yaw: 0, scale: 1, vitality }]);
       stood.setVitality(vitality);
       const corners = [-1, 1].flatMap((sx) => [-1, 1].flatMap((sy) => [-1, 1].map((sz) => new THREE.Vector3(eye.x + dx * distance + sx * crown.radius, eye.y + sy * crown.radius, eye.z + dz * distance + sz * crown.radius).project(camera))));
       const px = corners.map((c) => ((c.x + 1) / 2) * gl.drawingBufferWidth);
       const py = corners.map((c) => ((c.y + 1) / 2) * gl.drawingBufferHeight);
-      const rect = [Math.floor(Math.min(...px)), Math.floor(Math.min(...py)), Math.ceil(Math.max(...px)), Math.ceil(Math.max(...py))] as const;
+      const [mx, my] = [(Math.min(...px) + Math.max(...px)) / 2, (Math.min(...py) + Math.max(...py)) / 2];
+      const rect = [Math.floor(Math.min(...px, mx - block / 2)), Math.floor(Math.min(...py, my - block / 2)), Math.ceil(Math.max(...px, mx + block / 2)), Math.ceil(Math.max(...py, my + block / 2))] as const;
       const changeIn = (a: Uint8Array, b: Uint8Array): Change => pictureChange(a, b, gl.drawingBufferWidth, gl.drawingBufferHeight, 64, rect);
       frozen = t;
       detailPin = { x: eye.x, z: eye.z };
@@ -2422,6 +2439,9 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
         whole: step(copy, span(0.995), swapPx - 0.1),
         leaving: step(copy, leaving(0.5), leaving(0.55)),
         end: step(copy, leavePx + 0.1, leavePx - 0.1),
+        // Too small to see, a crown dissolves over hundreds of meters: each is held to a step of walking, over a block.
+        dissolving: walk(copy, going(0.5), WALK_STEP, 64),
+        gone: walk(copy, (2 * crown.radius * focal) / (at(GONE.end) - WALK_STEP / 2), WALK_STEP, 64),
       };
     } finally {
       swapping = null;

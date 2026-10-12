@@ -1221,10 +1221,15 @@ strands, needles and berries a card cannot hold fade away instead of
 vanishing in one frame. Trees turn far at the same size however dense the
 view, so the woods never thin to keep frames up. Bushes, rocks and drifts of
 flowers turn far the same way at a quarter of the size, 32 pixels (16 on a
-phone). The walk test (`pnpm probe steps`) holds every step toward the
-woods to the wind's own change, and the swap test (`pnpm probe swap`) holds
-every far-turning preset's change of form to the same. Nothing is drawn past
-where the air has dissolved it into the sky.
+phone). Anything that stands in copies, in either form, dissolves once its
+crown spans fewer than 8 device pixels and is gone by 4, as the grass ends a
+short way out: at a window 1860 pixels tall, a rock a meter across (a crown
+of half a meter) goes between 210 and 420 m, and the smallest bush between
+460 and 930 m. The walk test (`pnpm probe steps`) holds every step toward
+the woods to the wind's own change, and the swap test (`pnpm probe swap`)
+holds every far-turning preset's change of form, and its step across the
+dissolve, to the same. Nothing is drawn past where the air has dissolved it
+into the sky.
 
 A pass draws only the cells its camera sees. The sun's shadow map covers a
 box around the person, so only casters inside that box draw into it: its cost

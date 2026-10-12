@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { TILE, type WorldSpec, frameOf, worldOf } from "@gaia/terrain";
-import { GONE, createStanding, seenTo } from "./standing.ts";
+import { createStanding, seenTo } from "./standing.ts";
+import { GONE } from "./woods.ts";
 
 // A 3 km world: its land is some thirteen tiles a side.
 const spec: WorldSpec = { size: 3000, regions: [] };

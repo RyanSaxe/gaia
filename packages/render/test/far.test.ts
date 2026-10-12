@@ -1,8 +1,8 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
-import { type FarForm, type FarTurn, type InstanceSpot, createFarCards, createSceneLight, crownsOf, farChoice, placesOf } from "@gaia/render";
+import { type FarForm, type FarTurn, type InstanceSpot, createFarCards, createSceneLight, crownsOf, farChoice, goneness, placesOf } from "@gaia/render";
 
-const TURN: FarTurn = { band: 1.25, leave: 1.15 };
+const TURN: FarTurn = { band: 1.25, leave: 1.15, gone: { start: 8, end: 4 } };
 const SWAP = 128;
 
 /** A form with one-texel atlases: enough for its cards to stand and choose, with nothing to bake. */
@@ -35,6 +35,18 @@ describe("a copy's form by its crown's size on a pass's screen", () => {
   it("in a flat pass (the sun's shadow), keeps the full form only to the band's end", () => {
     expect(farChoice(SWAP * 0.93, SWAP, TURN, true)).toEqual({ full: false, card: 1 });
     expect(farChoice(SWAP * 1.12, SWAP, TURN, true).full).toBe(true);
+  });
+
+  it("dissolves a crown too small to see across its band, whatever its form, and draws nothing once it is gone", () => {
+    expect(goneness(TURN.gone.start + 1, TURN.gone)).toBe(0);
+    expect(goneness((TURN.gone.start + TURN.gone.end) / 2, TURN.gone)).toBeCloseTo(0.5, 6);
+    expect(goneness(TURN.gone.end, TURN.gone)).toBe(1);
+    // A crown dissolving draws as it otherwise would; gone, it draws in no form.
+    expect(farChoice(6, SWAP, TURN, false)).toEqual({ full: false, card: 1 });
+    expect(farChoice(6, 1000, TURN, false).full).toBe(false);
+    expect(farChoice(TURN.gone.end, SWAP, TURN, false)).toEqual({ full: false, card: 0 });
+    // A form that never turns far keeps its full form until it is gone.
+    expect(farChoice(TURN.gone.end + 0.1, 0, TURN, false).full).toBe(true);
   });
 });
 

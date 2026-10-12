@@ -5,7 +5,7 @@ import { FLORA_PRIMITIVES } from "@gaia/primitives";
 import { flora } from "@gaia/kinds";
 import { FLORA_PRESETS, type Realized, realize } from "@gaia/realize";
 import { type FarForm, createFarCards, createSceneLight, farChoice } from "@gaia/render";
-import { FAR, type PassSize, TURN, createCopies, createFarForms, farness } from "./woods.ts";
+import { FAR, GONE, type PassSize, TURN, createCopies, createFarForms, farness, goneAt } from "./woods.ts";
 
 describe("a crown's form by its size on screen", () => {
   it("turns far only across the band, never at once", () => {
@@ -38,6 +38,16 @@ describe("the far forms", () => {
     ]);
     // A plant given a form after the bake began would draw a card that was never baked.
     expect(() => forms.add(bush)).toThrow();
+  });
+});
+
+describe("a crown too small to see", () => {
+  it("is gone past the distance goneAt gives, at any focal length", () => {
+    for (const [radius, focal] of [[0.5, 1678], [1, 1443], [6, 800]] as const) {
+      const d = goneAt(radius, focal);
+      expect((2 * radius * focal) / d).toBeCloseTo(GONE.end, 9);
+      expect(farChoice((2 * radius * focal) / (d * 1.001), FAR.swapPx * FAR.bush, TURN, false)).toEqual({ full: false, card: 0 });
+    }
   });
 });
 
@@ -74,7 +84,7 @@ describe("a copy turning far", () => {
   };
 
   it("keeps its full form exactly where its card's rule keeps it: across the band, and past it until it has dissolved", () => {
-    for (const px of [FAR.swapPx * 2, FAR.swapPx * 1.12, FAR.swapPx * 0.93, (FAR.swapPx / FAR.leave) * 0.95, 20]) {
+    for (const px of [FAR.swapPx * 2, FAR.swapPx * 1.12, FAR.swapPx * 0.93, (FAR.swapPx / FAR.leave) * 0.95, 20, 6]) {
       expect(perspective(px), `${px} px`).toBe(farChoice(px, FAR.swapPx, TURN, false).full);
     }
     // Its cards stood once, in the copies' own object, so hiding the copies hides them.
@@ -89,5 +99,24 @@ describe("a copy turning far", () => {
     const flatFocal = (px: number): number => px / (2 * crown.radius);
     expect(fullAt(camera, { smaller: 1, focal: flatFocal(FAR.swapPx * 0.93), ortho: true })).toBe(false);
     expect(fullAt(camera, { smaller: 1, focal: flatFocal(FAR.swapPx * 1.12), ortho: true })).toBe(true);
+  });
+
+  it("draws nothing once its crown is too small to see, even with no far form", () => {
+    const alone = createCopies(plant, light, [{ x: 0, y: 0, z: 0, yaw: 0, scale: 1 }]);
+    const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 100000);
+    // A short focal length keeps the copy well within where the air dissolves everything.
+    const short = 80;
+    const at = (px: number): boolean => {
+      camera.position.set(crown.center.x, crown.center.y, crown.center.z + (2 * crown.radius * short) / px);
+      camera.lookAt(crown.center);
+      camera.updateMatrixWorld();
+      light.uEye.value.copy(camera.position);
+      alone.cull(camera, { smaller: 1, focal: short, ortho: false });
+      return alone.drawn().copies > 0;
+    };
+    // Across the dissolve it still draws (its shader dissolves it); once gone, its cell draws nothing.
+    expect(at(GONE.start + 1)).toBe(true);
+    expect(at((GONE.start + GONE.end) / 2)).toBe(true);
+    expect(at(GONE.end * 0.9)).toBe(false);
   });
 });

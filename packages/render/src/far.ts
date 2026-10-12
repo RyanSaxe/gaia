@@ -464,11 +464,19 @@ export function farFormFrom(data: FarFormData): FarForm | null {
  * When copies turn far, in every pass: across `band` times the size a copy
  * turns far at, its card comes in over its full form; past the band, in a
  * perspective pass, its full form still dissolves under its whole card until
- * its crown has shrunk `leave` times more.
+ * its crown has shrunk `leave` times more. Whatever its form, a copy whose
+ * crown spans fewer device pixels than `gone.start` dissolves, and by
+ * `gone.end` is gone.
  */
 export interface FarTurn {
   readonly band: number;
   readonly leave: number;
+  readonly gone: { readonly start: number; readonly end: number };
+}
+
+/** How far a crown spanning `px` device pixels has dissolved for being too small to see: 0 whole, 1 gone. */
+export function goneness(px: number, gone: FarTurn["gone"]): number {
+  return Math.min(1, Math.max(0, (gone.start - px) / (gone.start - gone.end)));
 }
 
 /**
@@ -496,10 +504,12 @@ export function farness(px: number, swapPx: number, band: number): number {
  * fade, 0 for no card, below 1 over the full form, and 1 alone. A flat pass
  * (`ortho`, the sun's shadow) keeps the full form only to the band's end; a
  * perspective one keeps it, dissolving, until it spans `swapPx / turn.leave`.
+ * A copy spanning `turn.gone.end` pixels or fewer draws in neither form.
  * The woods choose each copy's full form by it, and the card's shader
  * (`FAR_CHOICE_GLSL`) its card, so the two always agree.
  */
 export function farChoice(px: number, swapPx: number, turn: FarTurn, ortho: boolean): { full: boolean; card: number } {
+  if (px <= turn.gone.end) return { full: false, card: 0 };
   const f = farness(px, swapPx, turn.band);
   const leavePx = ortho ? swapPx : swapPx / turn.leave;
   const full = f < 1 || px > leavePx;
@@ -507,10 +517,11 @@ export function farChoice(px: number, swapPx: number, turn: FarTurn, ortho: bool
 }
 
 /**
- * GLSL twin of `farChoice`, measuring the crown as the woods do: its card's
- * fade for the pass (`uFarPass`: its focal length in device pixels, 0 to
- * draw no card, and 1 for a flat pass), where the form turns far at
- * `uFarSwap` pixels. A crown whose nearest point lies past where the air has
+ * GLSL twin of `farChoice` and `goneness`, measuring the crown as the woods
+ * do: its card's fade for the pass (`uFarPass`: its focal length in device
+ * pixels, 0 to draw no card, and 1 for a flat pass), where the form turns far
+ * at `uFarSwap` pixels, and in `gone` how far it has dissolved for being too
+ * small to see. A crown whose nearest point lies past where the air has
  * dissolved everything into the sky draws no card.
  */
 export const FAR_CHOICE_GLSL = /* glsl */ `
@@ -518,12 +529,16 @@ uniform vec2 uFarPass;
 uniform float uFarSwap;
 uniform float uFarBand;
 uniform float uFarLeave;
-float farCard(vec4 crown) {
+uniform vec2 uFarGone;
+float farCard(vec4 crown, out float gone) {
+  gone = 0.0;
   float focal = uFarPass.x;
   float d = distance(crown.xyz, uEye);
   if (focal <= 0.0 || d - crown.w >= ${AIR.dissolveEnd.toFixed(1)}) return 0.0;
   bool level = uFarPass.y > 0.5;
   float px = 2.0 * crown.w * focal / (level ? 1.0 : max(d, 1.0));
+  if (px <= uFarGone.y) return 0.0;
+  gone = clamp((uFarGone.x - px) / (uFarGone.x - uFarGone.y), 0.0, 1.0);
   float top = uFarSwap * uFarBand;
   if (px >= top) return 0.0;
   float f = px <= uFarSwap ? 1.0 : (top - px) / (top - uFarSwap);
@@ -570,6 +585,7 @@ varying vec3 vToEye;
 varying float vYaw;
 varying float vVitality;
 varying float vFade;
+varying float vGone;
 varying float vScale;
 ${WIND_GLSL}
 // The plant shader's per-copy shape variety (applyVariety), at full variety.
@@ -586,7 +602,8 @@ mat3 yawMat(float a) { float c = cos(a); float s = sin(a); return mat3(c, 0.0, -
 void main() {
   // Whether this set draws the copy in this pass: the solid set a card standing alone, the fading set one over
   // its full form. Any other copy collapses outside the view and costs nothing more.
-  float fade = farCard(aCrown);
+  float gone;
+  float fade = farCard(aCrown, gone);
 #ifdef FADING
   bool drawn = fade > 0.0 && fade < 1.0;
 #else
@@ -634,6 +651,7 @@ void main() {
   vYaw = aSpot.w;
   vVitality = aMore.y;
   vFade = fade;
+  vGone = gone;
   vScale = s;
   gl_Position = projectionMatrix * viewMatrix * vec4(world, 1.0);
 }
@@ -715,6 +733,7 @@ varying vec3 vWorld;
 varying vec3 vToEye;
 varying float vYaw;
 varying float vFade;
+varying float vGone;
 varying float vScale;
 void main() {
   views();
@@ -751,7 +770,8 @@ void main() {
   color += nightTone(albedo) * uMoonColor * moonBack;
   color += nightLight(albedo, n, world, uFoliage * 0.85, mix(1.0, shadow, uMoonShadow));
   vec3 glow = l0.rgb / healthy * (l1.a / healthy) * vVitality * (1.0 + uNightness * 0.6);
-  gl_FragColor = vec4(aerial(shoulder(color), world) + glow * (1.0 - uNightness * 0.35), cover * vFade);
+  // Too small to see, a card dissolves through its coverage as the full form leaves.
+  gl_FragColor = vec4(aerial(shoulder(color), world) + glow * (1.0 - uNightness * 0.35), cover * vFade * (1.0 - vGone));
   // Its depth is the baked surface's, so what stands in front of the tree hides it as the near form would.
   vec4 clip = projectionMatrix * viewMatrix * vec4(world, 1.0);
   gl_FragDepth = clamp(0.5 + 0.5 * clip.z / clip.w, 0.0, 1.0);
@@ -823,7 +843,7 @@ export interface FarCards {
 export function createFarCards(forms: readonly FarForm[], light: SceneLight, swapPx: readonly number[], turn: FarTurn): FarCards {
   if (swapPx.length !== forms.length) throw new Error(`createFarCards was given ${forms.length} forms and ${swapPx.length} sizes they turn far at.`);
   const card = new THREE.PlaneGeometry(2, 2, 1, 5);
-  const pass = { uFarPass: { value: new THREE.Vector2(0, 0) }, uFarBand: { value: turn.band }, uFarLeave: { value: turn.leave } };
+  const pass = { uFarPass: { value: new THREE.Vector2(0, 0) }, uFarBand: { value: turn.band }, uFarLeave: { value: turn.leave }, uFarGone: { value: new THREE.Vector2(turn.gone.start, turn.gone.end) } };
   const materials = forms.map((form, k) => {
     const [l0, l1, l2, l3] = form.atlas.layers;
     const uniforms = {
