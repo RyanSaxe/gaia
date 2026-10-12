@@ -25,7 +25,9 @@ levels = [
 
 # Quality, one question per concept, from the reviewer's table (round 13).
 # Jev scores every one; `weight` is how much each counts in the engine's
-# arithmetic. A concept missing at a level simply isn't asked there.
+# arithmetic. A concept missing at a level simply isn't asked there. A
+# concept asked as a choice has `values`, and an option left out of them,
+# such as robustness's "nothing can fail", doesn't count at all.
 
 [definition.correctness]
 weight = 1.0
@@ -109,13 +111,18 @@ levels = [
 
 [definition.robustness]
 weight = 1.0
-instructions = "Does `{name}`, on lines {start} to {end} handle invalid inputs, unavailable dependencies and unexpected conditions deliberately?"
-levels = [
-  "Fragile: bad input or a failing dependency crashes it, corrupts state or is silently swallowed.",
-  "Brittle: it handles some failures and ignores others it can plainly meet.",
-  "Robust: it handles the failures it can meet, deliberately, or passes them on clearly.",
-  "Resilient: every failure it can meet is handled or reported on purpose, and nothing is swallowed.",
-]
+instructions = "Does `{name}`, on lines {start} to {end}, handle invalid inputs, unavailable dependencies and unexpected conditions deliberately?"
+[definition.robustness.options]
+"fragile" = "Fragile: bad input or a failing dependency crashes it, corrupts state or is silently swallowed."
+"brittle" = "Brittle: it handles some failures and ignores others it can plainly meet."
+"robust" = "Robust: it handles the failures it can meet, deliberately, or passes them on clearly."
+"resilient" = "Resilient: every failure it can meet is handled or reported on purpose, and nothing is swallowed."
+"nothing can fail" = "Nothing here can fail: it meets no invalid input, dependency or condition it should handle, such as plain arithmetic on values it is given."
+[definition.robustness.values]
+"fragile" = 0.0
+"brittle" = 0.35
+"robust" = 0.75
+"resilient" = 1.0
 
 [definition.efficiency]
 weight = 1.0
