@@ -2,15 +2,15 @@
 // rings that follow them, the same rings at a quarter of their detail for the
 // water's mirror, a coarse whole-world mesh for the overview, a coarse ring
 // of the wild land past the rim for views from
-// above, a float texture of the lattice for every shader that stands on the
-// ground, and the painterly ground material, colored by each region's ground
+// above, the lattice as a clipmap around the person for every shader that
+// stands on the ground (`CLIP`), and the painterly ground material, colored by each region's ground
 // cover and dried by the ground's vitality. Past the land the rings draw the
 // wild land themselves, from the same function the walk stands on
 // (`wildHeightAt` and its twin here, `WILD_GLSL`), so wherever the person
 // goes the ground goes on.
 //
 // The rings never change shape on the CPU: each is a fixed grid, and its
-// vertex shader reads heights from the lattice texture. Every ring's vertices
+// vertex shader reads heights from its own level of the clipmap. Every ring's vertices
 // are lattice samples, each coarser ring's a strict subset of the finer one's.
 // Toward its outer edge a ring morphs, by the person's distance, into exactly
 // the next ring's surface (the lattice's own triangle split makes the fine
@@ -26,11 +26,37 @@ import { TRAIL_GLSL, trailUniforms } from "./trails.ts";
 import { VITALITY_GLSL, vitalityUniforms } from "./vitality.ts";
 import { GROUND_DECLINE } from "@gaia/terrain";
 
-/** Height, water level, distance to the water and to the nearest trail's edge per lattice sample, for shaders that sample the ground. */
+/**
+ * The ground as a clipmap: height, water level, distance to the water and to
+ * the nearest trail's edge, held only around the person, as games hold their
+ * terrain. Level k holds every 2^k-th lattice sample in a square of
+ * `CLIP.size` of them centered near the person, on the world's own grid of
+ * 2^k spacings, which is where ring k of the ground's rings sets its vertices:
+ * so each ring reads exactly the samples it drew from before, and the land's
+ * memory on the GPU is the same at any world size. Readers between samples
+ * take the finest level that holds the point, blended into the next one near
+ * its window's edge.
+ */
+export const CLIP = {
+  /** Samples per side of every level. */
+  size: 512,
+  /** Levels: the ground's rings and the water's mirror reach the seventh, 64 spacings a sample. */
+  levels: 7,
+  /** How far, in its own samples, the person may move from a level's middle before it is laid again around them. */
+  recenter: 64,
+  /** Rows of a level laid a frame while it is laid again. */
+  rowsPerFrame: 64,
+  /** Past this many of its samples from a level's middle, after a jump or a new world, the level is laid at once. */
+  urgent: 96,
+} as const;
+
+/** Height, water level, distance to the water and to the nearest trail's edge, around the person, for shaders that sample the ground. */
 export interface GroundTexture {
-  readonly texture: THREE.DataTexture;
+  readonly texture: THREE.DataArrayTexture;
   readonly uniforms: {
-    readonly uGround: { value: THREE.DataTexture };
+    readonly uClip: { value: THREE.DataArrayTexture };
+    /** Each level's first sample, in that level's own grid units (world over spacing times 2^k). */
+    readonly uClipOrigin: { value: THREE.Vector2[] };
     readonly uGroundN: { value: number };
     readonly uGroundOrigin: { value: number };
     readonly uGroundSpacing: { value: number };
@@ -38,106 +64,175 @@ export interface GroundTexture {
     readonly uLand: { value: number };
     readonly uWildBase: { value: number };
   };
-  /** Takes on a new bake; `packed` is the texture's data, trails included, when a bake thread packed it already. */
+  /** Takes on a new bake; `packed` is the bake's data for every sample, trails included, when a bake thread packed it. */
   update(t: Terrain, packed?: Float32Array): void;
   /** The trail field from `trailField`, or null for no trails. */
   setTrails(field: Float32Array | null): void;
+  /** Keeps every level around the person at (x, z), laying one again a few rows a frame when they have moved far enough. */
+  follow(x: number, z: number): void;
 }
 
+/** Trail distances are kept on the page in 16 bits, this many meters a step: 0.4 mm, so they reach ±13 m, past `TRAILS.reach`. */
+const TRAIL_STEP = 4e-4;
+const toStep = (meters: number): number => Math.max(-32767, Math.min(32767, Math.round(meters / TRAIL_STEP)));
+
 export function createGroundTexture(t: Terrain): GroundTexture {
-  let { n } = t.lattice;
-  /** The texels, held only from writing them until the GPU has them; null once it has. */
-  let data: Float32Array | null = new Float32Array(n * n * 4);
-  /** The bake the texels come from, to write them again once the page has let its copy go. */
-  let source = t;
-  const texture = new THREE.DataTexture(data, n, n, THREE.RGBAFormat, THREE.FloatType);
+  const { size, levels } = CLIP;
+  const layer = size * size * 4;
+  const data = new Float32Array(layer * levels);
+  const texture = new THREE.DataArrayTexture(data, size, size, levels);
+  texture.format = THREE.RGBAFormat;
+  texture.type = THREE.FloatType;
   texture.minFilter = THREE.NearestFilter;
   texture.magFilter = THREE.NearestFilter;
-  // Once uploaded, the page lets its copy go: a later write rebuilds it from the bake (`writable`).
-  texture.onUpdate = () => {
-    data = null;
-    texture.image = { data: null as unknown as Float32Array, width: n, height: n };
-  };
-  /** The texels to write into: the copy held, or one rebuilt from the bake, its trails cleared. */
-  const writable = (): Float32Array => {
-    if (data !== null) return data;
-    const d = new Float32Array(n * n * 4);
-    const { heights } = source.lattice;
-    for (let i = 0, j = 0; i < n * n; i++, j += 4) {
-      d[j] = heights[i] as number;
-      d[j + 1] = source.waterLevel[i] as number;
-      d[j + 2] = source.shore[i] as number;
-      d[j + 3] = TRAILS.reach;
-    }
-    data = d;
-    texture.image = { data: d, width: n, height: n };
-    return d;
-  };
+  texture.generateMipmaps = false;
+  let source = t;
+  /** Each sample's distance to a trail's edge, which the bake gives once: kept to lay the levels again. */
+  let trails: Int16Array | null = null;
+  const origins = Array.from({ length: levels }, () => new THREE.Vector2());
   const uniforms = {
-    uGround: { value: texture },
-    uGroundN: { value: n },
+    uClip: { value: texture },
+    uClipOrigin: { value: origins },
+    uGroundN: { value: t.lattice.n },
     uGroundOrigin: { value: t.lattice.origin },
     uGroundSpacing: { value: t.lattice.spacing },
     uLand: { value: landHalf(t) },
     uWildBase: { value: 0 },
   };
+  /** Writes level k's rows [r0, r1) for the window whose first sample is (ox, oz), in level k's grid units, into `into` at `at`. */
+  const lay = (k: number, ox: number, oz: number, r0: number, r1: number, into: Float32Array, at: number): void => {
+    const { n, origin, spacing } = source.lattice;
+    const { heights } = source.lattice;
+    const water = source.waterLevel;
+    const shore = source.shore;
+    const step = 2 ** k;
+    const index = (u: number): number => Math.min(n - 1, Math.max(0, Math.round(u * step - origin / spacing)));
+    for (let r = r0; r < r1; r++) {
+      const j = index(oz + r) * n;
+      let o = at + r * size * 4;
+      for (let c = 0; c < size; c++, o += 4) {
+        const i = j + index(ox + c);
+        into[o] = heights[i] as number;
+        into[o + 1] = water[i] as number;
+        into[o + 2] = shore[i] as number;
+        into[o + 3] = trails === null ? TRAILS.reach : (trails[i] as number) * TRAIL_STEP;
+      }
+    }
+  };
+  /** Level k's window around (x, z): its first sample, in its own grid units, on a step of `CLIP.recenter`. */
+  const windowAt = (k: number, x: number, z: number): [number, number] => {
+    const unit = source.lattice.spacing * 2 ** k;
+    const snap = (v: number): number => Math.round(v / unit / CLIP.recenter) * CLIP.recenter - size / 2;
+    return [snap(x), snap(z)];
+  };
+  let viewer = { x: 0, z: 0 };
+  /** A level being laid again, a few rows a frame, before it takes over. */
+  let laying: { k: number; ox: number; oz: number; row: number; rows: Float32Array } | null = null;
+  const layAll = (): void => {
+    laying = null;
+    for (let k = 0; k < levels; k++) {
+      const [ox, oz] = windowAt(k, viewer.x, viewer.z);
+      lay(k, ox, oz, 0, size, data, k * layer);
+      (origins[k] as THREE.Vector2).set(ox, oz);
+    }
+    texture.needsUpdate = true;
+  };
   const update = (next: Terrain, packed?: Float32Array): void => {
     source = next;
-    // A world of another size: a texture of its size.
-    if (next.lattice.n !== n || next.lattice.origin !== uniforms.uGroundOrigin.value) {
-      n = next.lattice.n;
-      data = new Float32Array(n * n * 4).fill(TRAILS.reach);
-      texture.dispose();
-      texture.image = { data, width: n, height: n };
-      uniforms.uGroundN.value = n;
-      uniforms.uGroundOrigin.value = next.lattice.origin;
-    }
+    uniforms.uGroundN.value = next.lattice.n;
+    uniforms.uGroundOrigin.value = next.lattice.origin;
+    uniforms.uGroundSpacing.value = next.lattice.spacing;
     uniforms.uLand.value = landHalf(next);
     uniforms.uWildBase.value = wildBase(next);
-    if (packed !== undefined && packed.length === n * n * 4) {
-      data = packed;
-      texture.image = { data, width: n, height: n };
-      texture.needsUpdate = true;
-      return;
-    }
-    const heights = next.lattice.heights;
-    const water = next.waterLevel;
-    const shore = next.shore;
-    const d = writable();
-    for (let i = 0, j = 0; i < n * n; i++, j += 4) {
-      d[j] = heights[i] as number;
-      d[j + 1] = water[i] as number;
-      d[j + 2] = shore[i] as number;
-    }
-    texture.needsUpdate = true;
+    const count = next.lattice.n * next.lattice.n;
+    if (packed !== undefined && packed.length === count * 4) {
+      const field = new Int16Array(count);
+      for (let i = 0; i < count; i++) field[i] = toStep(packed[i * 4 + 3] as number);
+      trails = field;
+    } else if (trails !== null && trails.length !== count) trails = null;
+    layAll();
   };
   const setTrails = (field: Float32Array | null): void => {
-    const d = writable();
-    for (let i = 0; i < n * n; i++) d[i * 4 + 3] = field?.[i] ?? TRAILS.reach;
-    texture.needsUpdate = true;
+    if (field === null) trails = null;
+    else {
+      const out = new Int16Array(field.length);
+      for (let i = 0; i < field.length; i++) out[i] = toStep(field[i] as number);
+      trails = out;
+    }
+    layAll();
   };
+  const follow = (x: number, z: number): void => {
+    viewer = { x, z };
+    for (let k = 0; k < levels; k++) {
+      const [ox, oz] = windowAt(k, x, z);
+      const o = origins[k] as THREE.Vector2;
+      if (ox === o.x && oz === o.y) continue;
+      const unit = source.lattice.spacing * 2 ** k;
+      const off = Math.max(Math.abs(x / unit - o.x - size / 2), Math.abs(z / unit - o.y - size / 2));
+      if (off > CLIP.urgent) {
+        // Far from its window, after a jump or a new world: laid now, before a ring can reach past it.
+        if (laying?.k === k) laying = null;
+        lay(k, ox, oz, 0, size, data, k * layer);
+        o.set(ox, oz);
+        texture.addLayerUpdate(k);
+        texture.needsUpdate = true;
+      } else if (laying === null) laying = { k, ox, oz, row: 0, rows: new Float32Array(layer) };
+    }
+    if (laying === null) return;
+    const l = laying;
+    const r1 = Math.min(size, l.row + CLIP.rowsPerFrame);
+    lay(l.k, l.ox, l.oz, l.row, r1, l.rows, 0);
+    l.row = r1;
+    if (l.row < size) return;
+    // Laid whole: the level and its window move together, in the frame it uploads.
+    data.set(l.rows, l.k * layer);
+    (origins[l.k] as THREE.Vector2).set(l.ox, l.oz);
+    texture.addLayerUpdate(l.k);
+    texture.needsUpdate = true;
+    laying = null;
+  };
+  // Three uploads only the layers marked since the last upload; a whole new bake marks none and uploads all.
+  texture.onUpdate = () => texture.clearLayerUpdates();
   update(t);
-  setTrails(null);
-  return { texture, uniforms, update, setTrails };
+  return { texture, uniforms, update, setTrails, follow };
 }
 
 /** GLSL that reads the ground texture with the mesh's own triangle interpolation. */
 export const GROUND_SAMPLE_GLSL = /* glsl */ `
-uniform sampler2D uGround;
+uniform highp sampler2DArray uClip;
+uniform vec2 uClipOrigin[${CLIP.levels}];
 uniform float uGroundN;
 uniform float uGroundOrigin;
 uniform float uGroundSpacing;
-// Height, water level, distance to the water and signed distance to a trail's edge (x, y, z, w).
-vec4 groundSample4(vec2 xz) {
-  vec2 g = clamp((xz - uGroundOrigin) / uGroundSpacing, vec2(0.0), vec2(uGroundN - 1.001));
+// A point in level k's grid units, where its samples lie on whole numbers.
+vec2 clipGrid(vec2 xz, int k) { return xz / (uGroundSpacing * exp2(float(k))) - uClipOrigin[k]; }
+// Whether level k's window holds the cell around grid point g, with room to spare.
+bool clipHolds(vec2 g, float margin) { return all(greaterThanEqual(g, vec2(margin))) && all(lessThan(g, vec2(${CLIP.size}.0 - 1.0 - margin))); }
+vec4 clipTexel(ivec2 i, int k) { return texelFetch(uClip, ivec3(clamp(i, ivec2(0), ivec2(${CLIP.size - 1})), k), 0); }
+// Level k between its samples, with the mesh's own triangle interpolation.
+vec4 clipSample(vec2 xz, int k) {
+  vec2 g = clipGrid(xz, k);
   ivec2 i = ivec2(floor(g));
   vec2 f = g - vec2(i);
-  vec4 h00 = texelFetch(uGround, i, 0);
-  vec4 h10 = texelFetch(uGround, i + ivec2(1, 0), 0);
-  vec4 h01 = texelFetch(uGround, i + ivec2(0, 1), 0);
-  vec4 h11 = texelFetch(uGround, i + ivec2(1, 1), 0);
+  vec4 h00 = clipTexel(i, k);
+  vec4 h10 = clipTexel(i + ivec2(1, 0), k);
+  vec4 h01 = clipTexel(i + ivec2(0, 1), k);
+  vec4 h11 = clipTexel(i + ivec2(1, 1), k);
   if (f.x + f.y <= 1.0) return h00 + f.x * (h10 - h00) + f.y * (h01 - h00);
   return h11 + (1.0 - f.x) * (h01 - h11) + (1.0 - f.y) * (h10 - h11);
+}
+// Height, water level, distance to the water and signed distance to a trail's edge (x, y, z, w): from the finest
+// level whose window holds the point, blending into the next over its window's last few samples.
+vec4 groundSample4(vec2 xz) {
+  for (int k = 0; k < ${CLIP.levels}; k++) {
+    vec2 g = clipGrid(xz, k);
+    if (!clipHolds(g, 2.0) && k < ${CLIP.levels - 1}) continue;
+    vec4 here = clipSample(xz, k);
+    float edge = min(min(g.x, g.y), min(${CLIP.size}.0 - 1.0 - g.x, ${CLIP.size}.0 - 1.0 - g.y));
+    float a = k < ${CLIP.levels - 1} ? 1.0 - smoothstep(2.0, 18.0, edge) : 0.0;
+    return a > 0.0 ? mix(here, clipSample(xz, min(k + 1, ${CLIP.levels - 1})), a) : here;
+  }
+  return clipSample(xz, ${CLIP.levels - 1});
 }
 vec3 groundSample(vec2 xz) { return groundSample4(xz).xyz; }
 vec2 groundAt(vec2 xz) { return groundSample(xz).xy; }
@@ -260,33 +355,41 @@ uniform float uQuads;
 uniform float uLevels;
 uniform float uSnap;
 
-// Height, water level, distance to water and to a trail's edge at a lattice sample.
-vec4 latticeAt(vec2 xz) {
-  vec2 g = clamp(floor((xz - uGroundOrigin) / uGroundSpacing + 0.5), vec2(0.0), vec2(uGroundN - 1.0));
-  return texelFetch(uGround, ivec2(g), 0);
+uniform float uBaseLevel;
+// The clip level a ring of the given level draws from: its quads are as wide as that level's samples.
+int ringLevel(float ring) { return min(int(ring + uBaseLevel + 0.5), ${CLIP.levels - 1}); }
+// Height, water level, distance to water and to a trail's edge at a sample of level k, or of the first coarser level
+// whose window holds it.
+vec4 latticeAt(vec2 xz, int level) {
+  for (int k = level; k < ${CLIP.levels}; k++) {
+    vec2 g = clipGrid(xz, k);
+    if (clipHolds(g, 1.0) || k == ${CLIP.levels - 1}) return clipTexel(ivec2(floor(g + 0.5)), k);
+  }
+  return vec4(0.0);
 }
 
 struct GroundVertex { float y; float water; float shore; float trail; vec3 normal; };
 
 // A lattice sample's height on the land, the wild land's past it.
-float heightOf(vec2 q) { return inWild(q) ? wildHeight(q) : latticeAt(q).x; }
+float heightOf(vec2 q, int level) { return inWild(q) ? wildHeight(q) : latticeAt(q, level).x; }
 
 // A vertex on a grid of quads s meters wide: its height, water depth, shore
 // and trail distances, and the normal from its grid neighbors. The wild land
 // has no water and no trails.
-GroundVertex vertexAt(vec2 q, float s) {
-  float gx = (heightOf(q + vec2(s, 0.0)) - heightOf(q - vec2(s, 0.0))) / (2.0 * s);
-  float gz = (heightOf(q + vec2(0.0, s)) - heightOf(q - vec2(0.0, s))) / (2.0 * s);
+GroundVertex vertexAt(vec2 q, float s, int level) {
+  float gx = (heightOf(q + vec2(s, 0.0), level) - heightOf(q - vec2(s, 0.0), level)) / (2.0 * s);
+  float gz = (heightOf(q + vec2(0.0, s), level) - heightOf(q - vec2(0.0, s), level)) / (2.0 * s);
   vec3 n = normalize(vec3(-gx, 1.0, -gz));
   if (inWild(q)) return GroundVertex(wildHeight(q), -5.0, ${SHORE_CAP.toFixed(1)}, ${TRAILS.reach.toFixed(1)}, n);
-  vec4 c = latticeAt(q);
+  vec4 c = latticeAt(q, level);
   return GroundVertex(c.x, c.y > -500.0 ? c.y - c.x : -5.0, c.z, c.w, n);
 }
 
 void main() {
   float s = uBase * exp2(position.y);
   vec2 p = uCenter + position.xz * s;
-  GroundVertex v = vertexAt(p, s);
+  int level = ringLevel(position.y);
+  GroundVertex v = vertexAt(p, s, level);
   float y = v.y;
   float water = v.water;
   float shore = v.shore;
@@ -304,8 +407,8 @@ void main() {
       // of its cell's diagonal, which runs as the lattice splits its cells.
       vec2 odd = mod(position.xz, 2.0);
       vec2 e = odd.x > 0.5 && odd.y > 0.5 ? vec2(s, -s) : odd.x > 0.5 ? vec2(s, 0.0) : odd.y > 0.5 ? vec2(0.0, s) : vec2(0.0);
-      GroundVertex c0 = vertexAt(p + e, 2.0 * s);
-      GroundVertex c1 = vertexAt(p - e, 2.0 * s);
+      GroundVertex c0 = vertexAt(p + e, 2.0 * s, level);
+      GroundVertex c1 = vertexAt(p - e, 2.0 * s, level);
       y = mix(y, 0.5 * (c0.y + c1.y), a);
       water = mix(water, 0.5 * (c0.water + c1.water), a);
       shore = mix(shore, 0.5 * (c0.shore + c1.shore), a);
@@ -556,8 +659,8 @@ export function createGround(t: Terrain, light: SceneLight, covers: RegionCovers
     uLevels: { value: RINGS.levels },
     uSnap: { value: SNAP * t.lattice.spacing },
   };
-  const ringUniforms = { ...uniforms, uCenter: { value: new THREE.Vector2() }, uViewer: { value: new THREE.Vector2() }, uBase: { value: t.lattice.spacing }, uMorph: { value: 1 } };
-  const coarseUniforms = { ...uniforms, uCenter: { value: new THREE.Vector2() }, uViewer: { value: new THREE.Vector2() }, uBase: { value: t.lattice.spacing * RINGS.coarse }, uMorph: { value: 0 } };
+  const ringUniforms = { ...uniforms, uCenter: { value: new THREE.Vector2() }, uViewer: { value: new THREE.Vector2() }, uBase: { value: t.lattice.spacing }, uBaseLevel: { value: 0 }, uMorph: { value: 1 } };
+  const coarseUniforms = { ...uniforms, uCenter: { value: new THREE.Vector2() }, uViewer: { value: new THREE.Vector2() }, uBase: { value: t.lattice.spacing * RINGS.coarse }, uBaseLevel: { value: Math.log2(RINGS.coarse) }, uMorph: { value: 0 } };
   const material = new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: FRAG, uniforms: ringUniforms });
   const fine = ringsMesh(material);
   // The overview's coarse grid reads the trails from the texture at full resolution.
@@ -571,7 +674,7 @@ export function createGround(t: Terrain, light: SceneLight, covers: RegionCovers
   };
   const coarse = coarseOf(t.lattice);
   let coarseN = t.lattice.n;
-  const mirrorUniforms = { ...uniforms, uCenter: { value: new THREE.Vector2() }, uViewer: { value: new THREE.Vector2() }, uBase: { value: t.lattice.spacing * RINGS.coarse }, uMorph: { value: 1 }, uQuads: { value: RINGS.mirrorQuads }, uSnap: { value: SNAP * t.lattice.spacing * RINGS.coarse } };
+  const mirrorUniforms = { ...uniforms, uCenter: { value: new THREE.Vector2() }, uViewer: { value: new THREE.Vector2() }, uBase: { value: t.lattice.spacing * RINGS.coarse }, uBaseLevel: { value: Math.log2(RINGS.coarse) }, uMorph: { value: 1 }, uQuads: { value: RINGS.mirrorQuads }, uSnap: { value: SNAP * t.lattice.spacing * RINGS.coarse } };
   const mirror = ringsMesh(new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: FRAG, uniforms: mirrorUniforms, defines: { TRAIL_TEXTURE: "" } }), RINGS.mirrorQuads);
   mirror.visible = false;
   const wilds = new THREE.Mesh(

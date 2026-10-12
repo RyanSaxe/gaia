@@ -1831,6 +1831,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       updateWalk(dt);
       detailEye.set(detailPin?.x ?? camera.position.x, camera.position.y, detailPin?.z ?? camera.position.z);
       ground.follow(detailPin?.x ?? walker.x, detailPin?.z ?? walker.z);
+      groundTex.follow(detailPin?.x ?? walker.x, detailPin?.z ?? walker.z);
       wildGrowth.follow(detailPin?.x ?? walker.x, detailPin?.z ?? walker.z);
       lantern.follow(camera.position, forward, lanternGround, walked, dt);
       grass.follow(detailEye);

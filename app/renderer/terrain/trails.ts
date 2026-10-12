@@ -29,17 +29,7 @@ import { type Terrain, type TrailNetwork, type Way, edgeStones, junctionVitality
 export const TRAIL_GLSL = /* glsl */ `
 uniform sampler2D uTrailPlace;
 uniform sampler2D uTrailEnds;
-float trailAt(vec2 xz) {
-  vec2 g = clamp((xz - uGroundOrigin) / uGroundSpacing, vec2(0.0), vec2(uGroundN - 1.001));
-  ivec2 i = ivec2(floor(g));
-  vec2 f = g - vec2(i);
-  float h00 = texelFetch(uGround, i, 0).a;
-  float h10 = texelFetch(uGround, i + ivec2(1, 0), 0).a;
-  float h01 = texelFetch(uGround, i + ivec2(0, 1), 0).a;
-  float h11 = texelFetch(uGround, i + ivec2(1, 1), 0).a;
-  if (f.x + f.y <= 1.0) return h00 + f.x * (h10 - h00) + f.y * (h01 - h00);
-  return h11 + (1.0 - f.x) * (h01 - h11) + (1.0 - f.y) * (h10 - h11);
-}
+float trailAt(vec2 xz) { return groundSample4(xz).w; }
 // One way's wear at a packed place (its index, plus how far along it in the fraction), between its four stations.
 float trailWearOf(float packed) {
   if (packed < 0.0) return 0.0;
