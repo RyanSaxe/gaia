@@ -596,9 +596,13 @@ it.
 A folder's request scores each of its files' and subfolders' importance and
 its own quality concepts. A file's request, with its source and its
 neighbours' signatures, scores each code definition's importance and every
-quality concept, picks which definition is key, which most needs work and
-which is finest (and the same among the blocks of each definition with two
-or more), and scores the file's own concepts. Definitions whose role is
+quality concept, picks which block of each definition with two or more is
+key, which most needs work and which is finest, and scores the file's own
+concepts. A file's best and worst definitions come from their quality
+weighed by importance, so files have no picks of their own. A file too long
+for one request is cut at its top-level definitions; the whole-file
+questions go only in the first piece, so they don't take room from the
+others. Definitions whose role is
 data or markup (a CSS rule, a Markdown section, a JSON key) are never asked.
 Every request ends with a choice of what more would help: where it is used,
 the source of what it calls, its tests, or its folder's docs. Each reading

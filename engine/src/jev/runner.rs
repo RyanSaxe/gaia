@@ -195,11 +195,11 @@ fn links(held: &Value) -> crate::graph::Links {
 }
 
 /// The lines of a file split at its top-level definitions into pieces
-/// whose source and questions together stay within `limit` tokens, as
-/// 1-based line ranges. `load[i]` is the size of the questions about nodes
+/// whose source and questions together stay within `limit` tokens, or
+/// `first` for the first piece, as 1-based line ranges. `load[i]` is the size of the questions about nodes
 /// that start on line `i + 1`, so a piece carries only its own source and
 /// its own questions, and the source goes out once.
-fn chunks(text: &str, starts: &[u32], load: &[usize], limit: usize) -> Vec<(u32, u32)> {
+fn chunks(text: &str, starts: &[u32], load: &[usize], limit: usize, first: usize) -> Vec<(u32, u32)> {
     let lines: Vec<&str> = text.lines().collect();
     let total = lines.len() as u32;
     let mut cuts: Vec<u32> = starts
@@ -217,8 +217,9 @@ fn chunks(text: &str, starts: &[u32], load: &[usize], limit: usize) -> Vec<(u32,
             + 1
             + load.get((line - 1) as usize).copied().unwrap_or(0);
         let at_cut = cuts.binary_search(&line).is_ok();
+        let room = if out.is_empty() { first } else { limit };
         // A piece ends at a definition's start once it is full, or anywhere when one definition alone is too big.
-        if line > start && size + len > limit && (at_cut || size > limit) {
+        if line > start && size + len > room && (at_cut || size > room) {
             out.push((start, line - 1));
             start = line;
             size = 0;
@@ -505,9 +506,12 @@ fn file_requests(
         }
     }
     let all_questions: usize = load.iter().sum::<usize>() + whole_file;
+    // The whole-file questions go only in the first piece, so only the first
+    // piece makes room for them.
     let limit = ((budget as f64 * 0.9) as usize)
-        .saturating_sub(fixed + whole_file)
+        .saturating_sub(fixed)
         .max(2048);
+    let first = limit.saturating_sub(whole_file).max(2048);
     let ranges = if fixed + tokens(&text) + all_questions <= budget {
         vec![(1, line_count as u32)]
     } else {
@@ -519,7 +523,7 @@ fn file_requests(
             .filter(|d| d.parent.is_none())
             .map(|d| d.span.start)
             .collect();
-        chunks(&text, &starts, &load, limit)
+        chunks(&text, &starts, &load, limit, first)
     };
     let pieces = pieces_of(&text, &ranges, limit);
     let total_lines = text.lines().count() as u32;
