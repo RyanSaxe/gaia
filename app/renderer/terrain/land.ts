@@ -188,8 +188,6 @@ export function createPageLand(threads = Math.max(1, Math.min(2, (navigator.hard
   }));
   /** Where each level's window starts; NaN until a world's land lies there. */
   const origins = Array.from({ length: levels }, () => ({ x: Number.NaN, z: Number.NaN }));
-  /** What each level's move bakes into before it takes over: one per level, kept from move to move. */
-  const staging: (Level | null)[] = Array.from({ length: levels }, () => null);
   /** Each level's move under way, if any: one at a time, and the next follows once it is in. */
   const moving: (Promise<void> | null)[] = Array.from({ length: levels }, () => null);
   /** Which world the levels hold: a chunk baked for an earlier one is dropped. */
@@ -275,9 +273,12 @@ export function createPageLand(threads = Math.max(1, Math.min(2, (navigator.hard
     const mine = generation;
     const src = source;
     if (src === null) return;
-    const into = (staging[k] ??= levelOf());
     const from = store[k] as Level;
     const was = origins[k] as { x: number; z: number };
+    // A level holding nothing yet, as when a world opens, takes its chunks as they come: nothing draws it until
+    // they all have. A level that is drawn takes its new window aside, and all at once.
+    const fresh = Number.isNaN(was.x);
+    const into = fresh ? from : levelOf();
     const per = size / CHUNK;
     // Nearest the person first: the window's middle chunks.
     const order: [number, number][] = [];
@@ -296,11 +297,13 @@ export function createPageLand(threads = Math.max(1, Math.min(2, (navigator.hard
     await Promise.all(asks);
     if (mine !== generation) return;
     // The new window takes over whole, in one frame.
-    from.ground.set(into.ground);
-    from.region.set(into.region);
-    from.coverRegions.set(into.coverRegions);
-    from.coverShares.set(into.coverShares);
-    from.trailPlaces.set(into.trailPlaces);
+    if (!fresh) {
+      from.ground.set(into.ground);
+      from.region.set(into.region);
+      from.coverRegions.set(into.coverRegions);
+      from.coverShares.set(into.coverShares);
+      from.trailPlaces.set(into.trailPlaces);
+    }
     was.x = ox;
     was.z = oz;
     if (k === 0) showLevel0();
