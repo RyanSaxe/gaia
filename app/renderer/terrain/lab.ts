@@ -35,7 +35,7 @@ import {
   createSunShadow,
   type SceneLight,
 } from "@gaia/render";
-import { type Capsule, clearanceAt, COVER_TAPS, type Deck, decksOf, DRY, EYE_HEIGHT, footingAt, FULL_WORLD, GAIT, groundHeightAt, heightAt, type Intent, junctionVitality, latticeOf, NO_SOLIDS, NO_TRAILS, outlineShape, withinLand, piecesShapes, type Place, placeAt, planWalk, randomWorld, regionPlaces, RELIEF_BUDGET, sampleWorld, SHORE_CAP, sightlines, siteToWorld, SMALL_WORLD, type Solids, type SolidShape, solidsOf, stanceAt, standAt, stride, type Stride, type Terrain, TERRAIN, type TrailNetwork, type Walk, WALK_TO, walkStep, wallsShape, waterDepthAt, type Way, wayAhead, wayVitalityAt, wayWear, WILDS, type WorldPlaces, type WorldSpec } from "@gaia/terrain";
+import { type Capsule, clearanceAt, COVER_TAPS, LAND_ASPECT, type Deck, decksOf, DRY, EYE_HEIGHT, footingAt, FULL_WORLD, GAIT, groundHeightAt, heightAt, type Intent, junctionVitality, latticeOf, NO_SOLIDS, NO_TRAILS, outlineShape, withinLand, piecesShapes, type Place, placeAt, planWalk, randomWorld, regionPlaces, RELIEF_BUDGET, sampleWorld, SHORE_CAP, sightlines, siteToWorld, SMALL_WORLD, type Solids, type SolidShape, solidsOf, stanceAt, standAt, stride, type Stride, type Terrain, TERRAIN, type TrailNetwork, type Walk, WALK_TO, walkStep, wallsShape, waterDepthAt, type Way, wayAhead, wayVitalityAt, wayWear, WILDS, type WorldPlaces, type WorldSpec } from "@gaia/terrain";
 import { createSky } from "../world/environment.ts";
 import { type Pixels, createCapture } from "./capture.ts";
 import { renderInspector } from "../inspector.ts";
@@ -339,6 +339,8 @@ const SAMPLE_NAME = "the sample world";
 /** Which world the lab opens on: Gaia's own, unless the page's address asks for the sample world (`?world=sample`, or `?world=small` for its 320 m version). */
 const ASKED_WORLD = new URLSearchParams(location.search).get("world");
 const OPENS_CODE = ASKED_WORLD !== "sample" && ASKED_WORLD !== "small";
+/** The shape, width over depth, of the land the lab opens on: a codebase's takes the journal spread's, the proving ground and the sample world are square. */
+export const OPENING_ASPECT = OPENS_CODE && ASKED_WORLD !== "proving" ? LAND_ASPECT : 1;
 /** Frames the first world draws under the wait before it lifts, its shaders already compiled (`warmSoon`), so it moves smoothly from the first. */
 const LIFT_FRAMES = 4;
 /**
@@ -1856,7 +1858,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   }
 
   /** The wait the first world opens behind (app/renderer/wait/): it lifts once the world stands and has drawn. */
-  const waiting = takeWait($("veil"));
+  const waiting = takeWait($("veil"), OPENING_ASPECT);
   const veil = withStart(waiting.wait, waiting.veil);
   // The first world's hills, water and trees come in on the wait's sheet as soon as it stands.
   let stoodOnce = false;

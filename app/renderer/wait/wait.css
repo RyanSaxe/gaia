@@ -26,9 +26,10 @@
 /* The sheet: the field map's own (lab.css `.field-map`), the same size, paper, torn edge, creases and lantern's pool,
    with no fringe, title or turned-down corner. It folds away as the field map does. Its shadow is a still box under
    it rather than a drop-shadow filter, which would blur the whole sheet again on every frame anything on it moves.
-   Once the land is divided the sheet takes its shape (`--aspect`, width over depth): as wide as ever and as deep as
-   the land, its paper folding in from above and below, and everything on it is laid on the square the land's
-   width makes, which the sheet shows the middle of. */
+   It opens in the shape its land will have (`--aspect`, width over depth), so it never changes shape as it fills: as
+   wide as ever and as deep as the land, and everything on it is laid on the square the land's width makes, which the
+   sheet shows the middle of. A land of another shape than the one expected reshapes it once divided, its paper folding
+   in from above and below. */
 .wait-sheet {
   --side: min(94vw, 90vh, 980px);
   position: absolute; left: 50%; top: 50%; width: var(--side); height: calc(var(--side) / var(--aspect, 1));
