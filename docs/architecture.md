@@ -175,11 +175,11 @@ is (`dividePlots`): the file's own ground, where its trees grow, at its
 heart, and a plot for each definition as large as its own lines plus 120 m²;
 a definition's plot is divided again among the definitions inside it, and
 each stands at its plot's middle. With Engine's graph (`project.graph`,
-judged) the definitions are the graph's, and each carries its stand, from
-plumbing to a landmark, which sets its size; without one, the code model's
-top-level symbols stand, sized by their length. Each stands as one of the
-understory's own blueprints, drawn instanced with the rest of the
-understory at no extra draw calls, with its file's vitality, and a person
+judged) the definitions are the graph's, and each carries Jev's importance
+from the understanding pass, 0 to 1, which sets its size; without one, the
+code model's top-level symbols stand, sized by their length. Each stands as
+one of the understory's own blueprints, drawn instanced with the rest of the
+understory at no extra draw calls, with its own vitality, and a person
 can walk up to it to read its card: its kind, doc comment, where it is
 declared and its size.
 
@@ -214,7 +214,7 @@ records who judged each thing (`judgedThing`, such as `file:src/main.ts`),
 and a thing's card says so. `engineJev` in the world service is the live
 client. Jev is asked only when the engine has a key and runs with
 `GAIA_JEV=live`. A run's cost is judging's (`jev.estimate`) and
-understanding's (`understand.plan` through `understand`, below) together; a
+the understanding pass's (`understanding.plan`, below) together; a
 run within the person's spend limit goes ahead with no question; the limit is one number for every
 project, kept in the app's own settings (the store's `app` project,
 `settings` table, `jev-spend-limit`). Until the person sets one
@@ -227,9 +227,9 @@ world stays under the wait while Jev answers, because a judgment that
 changed after the world stood would swap trees, buildings and land in view.
 The land's division depends on the code alone (an entity's lot is the same
 ground, 900 m², whether a building or a landmark stands on it, and a file's
-plots follow its definitions' lines, never their stand), so
+plots follow its definitions' lines, never what Jev judged), so
 `landOf(model, graph)` in `@gaia/world`, given the engine's graph trimmed by
-`standingGraph`, gives every area, patch, cell and lot before anything is
+`judgedGraph`, gives every area, patch, cell and lot before anything is
 judged, equal to the finished layout's: a lot (`LotPlace`) is
 the middle of the ground kept for an entity, which its building or landmark
 stands within `LAYOUT.lotReach` of, whichever Jev makes it. `openWorld`
@@ -319,8 +319,8 @@ the stand-in's world. The page lays the snapshot out on a thread of its
 own (`app/renderer/terrain/layout-worker.ts`) while the wait draws. So does the app if the world service cannot open its
 folder. Beside those fixtures, `fixtures/gaia-graph.json` holds the
 engine's graph of the same commit, which the layout is moving onto. `pnpm
-graph-snapshot` writes it, trimmed by `standingGraph` to directories, files
-and definitions, each with the stand Jev's held answers give it. `?world=sample` (or `?world=small`) and
+graph-snapshot` writes it, trimmed by `judgedGraph` to directories, files
+and definitions, each with the importance and quality Jev's held answers give it. `?world=sample` (or `?world=small`) and
 the Terrain view's "Sample world" button show the sample world instead.
 `?world=proving` (and `GAIA_PROJECT=proving` in the app) shows the proving
 ground: a made-up codebase (`fixtures/proving.json`) laid out with
@@ -514,13 +514,17 @@ four methods:
 `project.graph` with `judged: true` builds the graph with Jev's links and
 includes every answer the project's store holds
 ([decision 54](decisions/54-understanding-in-slices.md)). Opening a world
-uses them. `openWorld` divides the land on the graph `understand.plan`
+uses them. `openWorld` divides the land on the graph `understanding.plan`
 gives with `graph: true`, so planning and the land share one build. Once
-Jev has judged the looks, it calls `understand.next` through `understand`
-until nothing is left, counting its requests on the wait with judging's,
-then lays the world out on `project.graph` with `judged: true`, both
-graphs trimmed by `standingGraph`, so every definition stands by Jev's
-stand. A plan counts understanding's requests
+Jev has judged the looks, it calls `understanding.next` until nothing is
+left, counting its requests on the wait with judging's, then lays the world
+out on `project.graph` with `judged: true`, both graphs trimmed by
+`judgedGraph`, so every definition stands by Jev's importance and vitality
+is Jev's quality. Each file's health goes to the wait once the pass is done.
+The world document carries what the pass judged (`WorldDocument.judged`, a
+`JudgedThing` for every folder, file and definition: its quality, its
+importance and each concept, every score from 0 to 1, and the blocks Jev
+picked by their lines), for the journal. A plan counts understanding's requests
 before Jev's links are in, built on the graph as it stands, so the cost the
 person sees includes them; they go out only once the links are.
 
@@ -820,7 +824,14 @@ world would make, with that estimate.
 
 ## Vitality
 
-Vitality multiplies penalties from named signals, each with a weight:
+In a world the understanding pass judged, vitality is Jev's quality
+(`judged.value.quality` on the engine's graph): a file's and a definition's
+are their own, an entity's is its folder's, and a file the pass didn't judge
+takes its nearest judged folder's (`layoutWorld`). The signals below apply
+only to a world the pass never ran on, such as the stand-in's or the proving
+ground's, until the plan retires them.
+
+Vitality from signals multiplies penalties from named signals, each with a weight:
 failing tests, compiler errors, complexity, untested code, lint warnings,
 unused code, debt markers, and named Jev judgments. A file is untested in
 full when no test reaches it and in half when only other entities' tests do,

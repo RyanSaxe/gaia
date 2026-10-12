@@ -728,6 +728,7 @@ pub fn values(graph: &mut CodeGraph) {
     let importance_top = (v.importance.levels.len().max(2) - 1) as f64;
     let mut quality: HashMap<String, (f64, u32)> = HashMap::new();
     let mut own: HashMap<String, Option<f64>> = HashMap::new();
+    let mut each: HashMap<String, Map<String, Value>> = HashMap::new();
     let mut importance: HashMap<String, f64> = HashMap::new();
     let mut parent: HashMap<String, String> = HashMap::new();
     let mut depth: HashMap<String, usize> = HashMap::new();
@@ -771,6 +772,16 @@ pub fn values(graph: &mut CodeGraph) {
             importance.insert(id.clone(), (s / importance_top).clamp(0.0, 1.0));
         }
         own.insert(id.clone(), concepts.and_then(|c| own_quality(c, axes)));
+        // Each concept Jev answered, from 0 to 1; null when the answer doesn't count, such as "nothing here can fail".
+        let answered: Map<String, Value> = concepts
+            .into_iter()
+            .flatten()
+            .filter(|(name, _)| !axes[name.as_str()].is_null())
+            .map(|(name, c)| (name.clone(), json!(concept_value(c, &axes[name.as_str()]))))
+            .collect();
+        if !answered.is_empty() {
+            each.insert(id.clone(), answered);
+        }
         if !up.is_empty() {
             parent.insert(id.clone(), up);
         }
@@ -820,11 +831,12 @@ pub fn values(graph: &mut CodeGraph) {
             Node::Block(_) => continue,
         };
         let (i, q) = (importance.get(id), quality.get(id).map(|(q, _)| *q));
-        if i.is_none() && q.is_none() {
+        let concepts = each.remove(id.as_str()).unwrap_or_default();
+        if i.is_none() && q.is_none() && concepts.is_empty() {
             continue;
         }
         let j = judged.get_or_insert_with(|| json!({}));
-        j["value"] = json!({ "importance": i, "quality": q });
+        j["value"] = json!({ "importance": i, "quality": q, "concepts": concepts });
     }
 }
 

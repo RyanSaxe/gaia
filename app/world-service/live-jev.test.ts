@@ -101,8 +101,8 @@ describe("judging a codebase with Jev", () => {
     const patches = first.document.world.patches.map(({ path, name, area, x, z, radius }) => ({ path, name, area, x, z, radius }));
     const lots = first.document.world.things.map(({ x, z }) => ({ x, z }));
     expect(first.shown[land]).toEqual({ stage: "land", name: "tiny", size: first.document.world.size, aspect: first.document.world.aspect, areas: outlinesOf(first.document.world).areas, patches, lots });
-    // Each file's health is named once, as the finished world has it, the health its facts settle straight after the land.
-    expect(first.shown[land + 1]?.stage).toBe("health");
+    // Each file's health is named once, as the finished world has it, once the understanding pass has judged it.
+    expect(first.shown.findIndex((o) => o.stage === "health")).toBeGreaterThan(first.shown.findIndex((o) => o.stage === "asking"));
     const health = first.shown.flatMap((o) => (o.stage === "health" ? Object.entries(o.vitality) : []));
     expect(health.map(([path]) => path).sort()).toEqual(patches.map((p) => p.path).sort());
     expect(Object.fromEntries(health)).toEqual(Object.fromEntries(first.document.world.patches.map((p) => [p.path, p.vitality])));
@@ -126,10 +126,16 @@ describe("judging a codebase with Jev", () => {
     const judging = first.about.filter((a) => !a.startsWith("understand:"));
     expect(new Set(judging).size).toBe(judging.length);
     expect(first.about).toEqual(expect.arrayContaining(["world", "file:src/shape.ts", "file:README.md", "understand:src/shape.ts"]));
-    // Understanding went only as far as standing needs, never to a directory, and every definition stands by Jev's stand.
+    // The understanding pass asked every folder and file, and every definition stands by Jev's importance; the
+    // document carries what it judged, every score from 0 to 1.
     const states = first.sent.map(({ body }) => body.state as Record<string, unknown>);
-    expect(states.some((s) => typeof s.path === "string" && s.directory !== undefined)).toBe(false);
-    expect(first.document.world.symbols.find((s) => s.name === "shape")?.stand).toEqual(expect.any(Number));
+    expect(states.some((s) => s["folder-axes"] !== undefined)).toBe(true);
+    expect(states.some((s) => s["file-axes"] !== undefined && s.path === "src/shape.ts")).toBe(true);
+    expect(first.document.world.symbols.find((s) => s.name === "shape")?.importance).toEqual(expect.any(Number));
+    const shape = first.document.judged["src/shape.ts#shape"];
+    expect(shape?.quality).toBeGreaterThanOrEqual(0);
+    expect(shape?.quality).toBeLessThanOrEqual(1);
+    expect(Object.keys(shape?.concepts ?? {})).toContain("readability");
     // Jev judged everything but the request it refused, which the stand-in judged.
     expect(first.document.judges["file:README.md"]).toBe("stand-in");
     expect(Object.entries(first.document.judges).filter(([, j]) => j === "stand-in").map(([t]) => t)).toEqual(["file:README.md"]);
@@ -170,10 +176,12 @@ describe("judging a codebase with Jev", () => {
     const second = await open(root, data, true);
     expect(second.asked).toHaveLength(0);
     expect(second.sent).toHaveLength(0);
-    // A new limit, still under the cost, asks again; going ahead sends every request.
+    // A new limit, still under the cost, asks again; going ahead sends every request it planned, and at most one
+    // more round of the understanding pass's where Jev asked for more.
     await setSpendLimit(engineAt(data), 1e-9);
     const third = await open(root, data, true);
     expect(third.asked).toHaveLength(1);
-    expect(third.sent).toHaveLength(third.asked[0]?.requests ?? -1);
+    expect(third.sent.length).toBeGreaterThanOrEqual(third.asked[0]?.requests ?? Number.POSITIVE_INFINITY);
+    expect(third.sent.length).toBeLessThanOrEqual(2 * (third.asked[0]?.requests ?? 0));
   }, 60_000);
 });
