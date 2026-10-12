@@ -545,7 +545,11 @@ call and probability, before reach is counted; "outside" drops the
 reference. It is held with the candidates it chose among, and holds only
 while they stay the reference's candidates and its call's version is
 current: when a new file offers another target, or the call changes, the
-reference is asked again. A `checks` answer above 0.5
+reference is asked again. A reference keeps an answer for each set of
+candidates it has had, since other links can change its candidates (a call
+whose receiver's type comes from an import Jev resolved, say); with one
+answer per reference, applying one answer could undo the other on every
+slice. A `checks` answer above 0.5
 becomes a `checks` edge.
 
 A request stays within 30,000 tokens as `engine/src/jev/tokens.rs`

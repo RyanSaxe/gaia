@@ -197,8 +197,10 @@ pub struct Link {
     pub candidates: Vec<String>,
 }
 
-/// Jev's links, by `ref_key`.
-pub type Links = HashMap<String, Link>;
+/// Jev's links, by `ref_key`: one for each set of candidates a reference
+/// has had, since which other links apply can change its candidates, and
+/// each set keeps its own answer.
+pub type Links = HashMap<String, Vec<Link>>;
 
 /// A pending reference's identity, which a link answer is held under.
 pub fn ref_key(r: &PendingRef) -> String {
@@ -404,7 +406,10 @@ fn build_with(
     for r in resolved.pending {
         let mut offered = r.candidates.clone();
         offered.sort();
-        match links.get(&ref_key(&r)).filter(|l| l.candidates == offered) {
+        match links
+            .get(&ref_key(&r))
+            .and_then(|ls| ls.iter().find(|l| l.candidates == offered))
+        {
             Some(l) if l.target == "outside" => {}
             Some(l) => edges.push(Edge {
                 from: r.from.clone(),
