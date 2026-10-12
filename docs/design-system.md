@@ -701,6 +701,21 @@ first spread's left and the last spread's right, the edge lies flat and
 leaves a click to what is under it, and nothing turns. Nothing marks the
 edges, which are paper like the rest of the page.
 
+A page of the journal gives every score as a percentage, so it reads as a
+share of 0 to 1. Beside a thing's name stand two numbers in the hand, each
+under a small spaced-capital label: its quality, with its vitality's wash,
+and its importance. Each row of a list carries its quality the same way.
+The caption under a thing's picture gives each concept of quality Jev
+answered as a percentage, and leaves out one whose answer doesn't count.
+A file's first page leads with snippets of its best and worst definitions,
+chosen by quality weighed by importance: each its first line and the block
+Jev picked, with the lines around folded into marks that say how many, and
+a tap turns to its page. What needs work most comes first when the file is
+below the world's median quality, its finest first otherwise. A long
+definition's page opens on the same block. Jev's marks are brush strokes
+in the gutter or beside a row: green for the key part, russet for what
+needs work most, slate blue for the finest.
+
 Nothing in the world lights up, rings or changes under a pointer: a thing
 looks the same whether or not a person could walk up to it, and the pointer
 stays the hand that drags the view. Selecting is shown on paper instead: a

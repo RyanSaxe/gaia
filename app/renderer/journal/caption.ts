@@ -6,6 +6,7 @@
 // whatever of them there is, and none at all before anything is judged.
 
 import type { Choice, Score, YesNo } from "@gaia/schema";
+import type { JudgedThing } from "../../world-service/protocol.ts";
 import type { Judgment } from "./words.ts";
 
 export interface CaptionFact {
@@ -42,6 +43,32 @@ const lettered = (name: string): string => {
   const bare = name.replace(/^(the|an?) /i, "");
   return /^[A-Z][a-z]/.test(bare) ? bare.charAt(0).toLowerCase() + bare.slice(1) : bare;
 };
+
+/** The concepts of quality in the order a caption letters them, each by its name on the plate. */
+const CONCEPTS: readonly (readonly [string, string])[] = [
+  ["correctness", "correctness"],
+  ["readability", "readability"],
+  ["simplicity", "simplicity"],
+  ["cohesion", "cohesion"],
+  ["coupling", "loose coupling"],
+  ["explicitness", "explicitness"],
+  ["consistency", "consistency"],
+  ["testability", "testability"],
+  ["robustness", "robustness"],
+  ["efficiency", "efficiency"],
+];
+
+/**
+ * The caption of an item the understanding pass judged: each concept it
+ * answered, as a percentage. A concept whose answer doesn't count, such as
+ * robustness where nothing can fail, is left out.
+ */
+export function conceptsCaption(thing: JudgedThing): CaptionFact[] {
+  return CONCEPTS.flatMap(([key, label]) => {
+    const v = thing.concepts[key];
+    return v == null ? [] : [{ label, value: `${Math.round(v * 100)}%` }];
+  });
+}
 
 /** The caption of an item of this kind, from what Jev judged about the item itself. */
 export function captionOf(item: keyof typeof SHOWN, judgment: Judgment | undefined): CaptionFact[] {

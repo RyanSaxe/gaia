@@ -9,7 +9,7 @@
 
 import { type Journal, type JournalEntry, type PageRoom, entityOf } from "@gaia/world";
 import type { BookPages, Spread } from "./book.ts";
-import { type CaptionFact, captionOf } from "./caption.ts";
+import { type CaptionFact, captionOf, conceptsCaption } from "./caption.ts";
 import { tapsOf } from "./maps.ts";
 import { fullItems, pagePx, renderCross, renderFullPage, renderNameLine, renderPage, renderPicture, renderTitle, renderTraveller } from "./page.ts";
 import { type Full, type PageWords, type WordsSource, appendixWords, contentsWords, fileOfEntry, wordsOf } from "./words.ts";
@@ -22,7 +22,7 @@ const BEHIND = 5;
 /** How near a tap must fall to a map's pencil cross to travel there, in the page's pixels. */
 const CROSS_REACH = 16;
 /** How many rows of a list a page holds: under the heading, and under a running head on the pages it runs on to. */
-export const ROOM: PageRoom = { first: 18, next: 21 };
+export const ROOM: PageRoom = { first: 18, next: 21, lead: 11 };
 
 export interface JournalPagesSource {
   /** The words' source for the world standing now, or null before one stands. */
@@ -62,6 +62,9 @@ const mapped = (e: JournalEntry): boolean => e.kind === "chapter" || (e.kind ===
  * stands as nothing. A file with definitions says it on its own page.
  */
 function captionFor(words: WordsSource, e: JournalEntry): CaptionFact[] {
+  // What the understanding pass judged, where it has: each concept as a percentage.
+  const thing = e.kind === "file" && e.lists.length > 0 ? undefined : words.thing?.(e.of);
+  if (thing !== undefined && (e.kind !== "chapter" || words.journal.entry(entityOf(e.of)) === undefined)) return conceptsCaption(thing);
   const own = (of: string) => words.judged?.(of).find((j) => j.lines === undefined);
   if (e.kind === "definition") return captionOf("definition", own(e.of));
   if (e.kind === "own" || (e.kind === "file" && e.lists.length === 0)) return captionOf("file", own(e.of));
@@ -91,9 +94,13 @@ const fullAt = (at: string): { id: string; k: number | "end" } | null => {
 };
 /** A page of the appendix is numbered by its definition's page in the journal and a letter: 2,055a, 2,055b, … */
 const lettered = (n: number): string => (n < 26 ? String.fromCharCode(97 + n) : lettered(Math.floor(n / 26) - 1) + String.fromCharCode(97 + (n % 26)));
-/** The rows a page holds, by the page's place in its list (0 for the first). */
-const rowsOn = (page: number): { from: number; to: number } =>
-  page === 0 ? { from: 0, to: ROOM.first } : { from: ROOM.first + (page - 1) * ROOM.next, to: ROOM.first + page * ROOM.next };
+/** The rows a page holds, by the page's place in its list (0 for the first), after the rows its first page leads with. */
+const rowsOn = (page: number, lead = 0): { from: number; to: number } => {
+  const first = ROOM.first - lead;
+  return page === 0 ? { from: 0, to: first } : { from: first + (page - 1) * ROOM.next, to: first + page * ROOM.next };
+};
+/** The file whose text an entry's page needs: what it shows, or a file's own for the snippets its list leads with. */
+const textOf = (e: JournalEntry): string | undefined => fileOfEntry(e) ?? (e.kind === "file" && e.lead !== undefined ? e.of : undefined);
 
 /** How many tabs the fore-edge holds at a size that reads. */
 export const TABS = 7;
@@ -283,7 +290,7 @@ export function journalPages(src: JournalPagesSource): BookPages {
     const said = wordsOf(words, e);
     // Page p of the entry's words (0 for the first): its number, and the slice of the list it holds.
     const toFull = fileOfEntry(e) !== undefined ? () => src.turnTo(inFull(e.of, 0)) : undefined;
-    const page = (p: number): HTMLElement => (p >= e.pages ? blank() : renderPage(said, folio(e.page + p), src.turnTo, said.body.kind === "rows" ? rowsOn(p) : undefined, toFull));
+    const page = (p: number): HTMLElement => (p >= e.pages ? blank() : renderPage(said, folio(e.page + p), src.turnTo, said.body.kind === "rows" ? rowsOn(p, e.lead) : undefined, toFull));
     // A container faces its map; a thing faces its painting, each captioned with what Jev says of it.
     const caption = captionFor(words, e);
     if (k === 0) return { left: mapped(e) ? mapPage(src.map(e.of), folio(e.page - 1), caption) : renderPicture(src.picture(e.of), folio(e.page - 1), () => src.travel(e.of), caption), right: page(0) };
@@ -313,7 +320,7 @@ export function journalPages(src: JournalPagesSource): BookPages {
       const around = [...words.journal.entries.slice(here + 1, here + 1 + AHEAD), ...words.journal.entries.slice(Math.max(0, here - BEHIND), here)];
       src.ahead(around.filter((n) => !mapped(n)).map((n) => n.of));
       for (const n of [e, ...around]) {
-        const file = fileOfEntry(n);
+        const file = textOf(n);
         if (file !== undefined) void src.text(file);
       }
       return entrySpread(words, e, k);
@@ -350,7 +357,7 @@ export function journalPages(src: JournalPagesSource): BookPages {
     async ready(at) {
       const full = fullAt(at);
       const e = src.words()?.journal.entry(full?.id ?? (at.split(SEP)[0] as string));
-      const file = e === undefined ? undefined : fileOfEntry(e);
+      const file = e === undefined ? undefined : full === null ? textOf(e) : fileOfEntry(e);
       if (file === undefined) return;
       await src.text(file);
       // An entry's appendix is laid out before the leaf that shows it moves.

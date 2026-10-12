@@ -16,12 +16,13 @@ import { type Blueprint, type CodeModel, type EntityFacts, type FileFacts, type 
 import { FLORA_PRESETS, LANDMARK_PRESETS, TRAIL_PRESETS, WORLD_PRESETS } from "@gaia/realize";
 import { type WorldSpec, outlinesOf } from "@gaia/terrain";
 import { type CodeWorld, type Judge, type Judgments, layoutWorld } from "@gaia/world";
-import type { ConsentPlan, Opening, StartChoice, StartOffer, WorldDocument } from "../../world-service/protocol.ts";
+import type { ConsentPlan, JudgedThing, Opening, StartChoice, StartOffer, WorldDocument } from "../../world-service/protocol.ts";
 import { type WorldService, worldService } from "../service.ts";
 import GAIA_PICTURE from "../start/gaia-picture.webp";
 import { CHOSEN_MS } from "../start/start.ts";
 import snapshot from "./fixtures/gaia.json";
 import snapshotSaid from "./fixtures/gaia-said.json";
+import snapshotJudged from "./fixtures/gaia-judged.json";
 import type { LayoutReply, LayoutRequest } from "./layout-worker.ts";
 import LayoutWorker from "./layout-worker.ts?worker";
 import proving from "./fixtures/proving.json";
@@ -73,6 +74,8 @@ export interface CodeLab {
    * yet for a world the service opens.
    */
   readonly said: (of: string) => readonly Said[];
+  /** What the understanding pass judged about a folder, a file or a definition, by its path or path#name. */
+  readonly thing: (of: string) => JudgedThing | undefined;
   /** How the judging went, in words. */
   readonly summary: string;
 }
@@ -181,7 +184,7 @@ function snapshotWorld(why: string): Promise<WorldDocument> {
     worker.onmessage = (e: MessageEvent<LayoutReply>) => {
       const reply = e.data;
       if ("failed" in reply) reject(new Error(`Gaia's snapshot could not be laid out: ${reply.failed}`));
-      else resolve({ root: model.repository.name, model, judged: {}, ...reply });
+      else resolve({ root: model.repository.name, model, judged: snapshotJudged as unknown as Record<string, JudgedThing>, ...reply });
     };
     worker.onerror = (e) => reject(new Error(`Gaia's snapshot could not be laid out: ${e.message}`));
     worker.postMessage({ judge: SNAPSHOT_JUDGE, why } satisfies LayoutRequest);
@@ -291,7 +294,7 @@ function patchesOf(world: CodeWorld): StandCode["patches"] {
 }
 
 /** Everything the terrain lab needs to bake and furnish a world document. */
-export function codeLab({ model, world, judges, summary }: WorldDocument): CodeLab {
+export function codeLab({ model, world, judges, summary, judged }: WorldDocument): CodeLab {
   const fallback = Object.values(LANDS)[0]?.biome;
   if (fallback === undefined) throw new Error("No lands to choose from.");
   const spec: WorldSpec = {
@@ -315,6 +318,7 @@ export function codeLab({ model, world, judges, summary }: WorldDocument): CodeL
     world,
     spec,
     said: () => [],
+    thing: (of) => judged[of],
     files: new Map(model.files.map((f) => [f.path, f])),
     buildings: houses.map((t) => ({ facts: entities.get(t.path) as EntityFacts, building: t.look })),
     landmarks: rises.map((t) => ({ preset: landmarkIndex(t.look), facts: entities.get(t.path) as EntityFacts })),

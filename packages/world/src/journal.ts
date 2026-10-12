@@ -36,6 +36,8 @@ export interface JournalEntry {
   readonly page: number;
   /** How many pages its words take from `page` on: a list too long for one runs on overleaf. */
   readonly pages: number;
+  /** Rows its first page gives to snippets of its best and worst definitions, before its list; absent when none. */
+  readonly lead?: number;
 }
 
 export interface Journal {
@@ -53,6 +55,8 @@ export interface Journal {
 export interface PageRoom {
   readonly first: number;
   readonly next: number;
+  /** Rows a file's first page gives to snippets of its best and worst definitions, when it holds two or more. */
+  readonly lead?: number;
 }
 
 /** The parts of a world the journal reads: its places and things, what holds each, and the trails between things. */
@@ -139,9 +143,12 @@ export function journalOf(world: JournalSource, room: PageRoom = { first: Infini
   /** The next left-hand page, where an entry's picture goes. */
   let picture = 0;
   const add = (item: Item, under: string | undefined, lists: readonly Item[]): void => {
-    const pages = pagesFor(rowsOf(item, lists));
+    const rows = rowsOf(item, lists);
+    // A file with two definitions or more leads with snippets of its best and worst, which take rows of its first page.
+    const lead = item.kind === "file" && rows - 1 >= 2 ? (room.lead ?? 0) : 0;
+    const pages = pagesFor(rows + lead);
     const text = item.kind === "entity" ? readmes.get(item.of.slice("entity:".length)) : undefined;
-    const entry: JournalEntry = { ...item, ...(under === undefined ? {} : { under }), lists: lists.map((l) => l.of), ...(text === undefined ? {} : { text }), page: picture + 1, pages };
+    const entry: JournalEntry = { ...item, ...(under === undefined ? {} : { under }), lists: lists.map((l) => l.of), ...(text === undefined ? {} : { text }), page: picture + 1, pages, ...(lead > 0 ? { lead } : {}) };
     entries.push(entry);
     index.set(entry.of, entry);
     // The next picture is a left-hand page: an entry whose words end on a right-hand page leaves the page after it blank.

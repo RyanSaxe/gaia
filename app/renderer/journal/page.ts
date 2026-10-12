@@ -12,7 +12,7 @@ import type { Span } from "@gaia/schema";
 import { TRAVELLER_SVG } from "../immersive/map-styles.ts";
 import type { CaptionFact } from "./caption.ts";
 import { type Piece, highlight } from "./highlight.ts";
-import type { Fact, Folded, Full, Mark, PageWords, Row, Said } from "./words.ts";
+import type { Fact, Folded, Full, Mark, PageWords, Row, Said, Snippet } from "./words.ts";
 
 /** The field map's health colors: russet when failing, ochre as it declines, green when well. */
 export function healthColor(v: number): string {
@@ -44,17 +44,34 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, text?: s
   return e;
 };
 
+/** A score as the page shows it: a percentage, so it reads as a share of 0 to 1. */
+const percent = (v: number): string => `${Math.round(Math.max(0, Math.min(1, v)) * 100)}%`;
+
 /** A vitality as the page shows it: a small wash of its health color and its reading. */
 function reading(v: number, cls: string): HTMLElement {
   const r = el("span", cls);
   const wash = el("i", "");
   wash.style.background = healthColor(v);
-  r.append(wash, document.createTextNode(v.toFixed(2)));
+  r.append(wash, document.createTextNode(percent(v)));
   return r;
 }
 
-/** Jev's mark beside a row or a line: green for key to understanding, russet for could be better, stronger the surer Jev is. */
-const MARK_COLOR = { understand: "#5f8f3e", improve: "#a4553a" } as const;
+/** A page's two numbers beside its name: its quality, as its vitality's wash and reading, and how much it matters. */
+function numbersOf(words: PageWords): HTMLElement {
+  const numbers = el("span", "jp-numbers");
+  const quality = el("span", "jp-number");
+  quality.append(el("span", "jp-number-label", "quality"), reading(words.vitality, "jp-vit"));
+  numbers.append(quality);
+  if (words.importance !== undefined) {
+    const importance = el("span", "jp-number");
+    importance.append(el("span", "jp-number-label", "importance"), el("span", "jp-imp", percent(words.importance)));
+    numbers.append(importance);
+  }
+  return numbers;
+}
+
+/** Jev's mark beside a row or a line: green for key to understanding, russet for could be better, slate blue for the finest, stronger the surer Jev is. */
+const MARK_COLOR = { understand: "#5f8f3e", improve: "#a4553a", finest: "#4d6f8f" } as const;
 function marked(e: HTMLElement, mark: Mark | undefined): void {
   if (mark === undefined) return;
   e.classList.add("jp-marked");
@@ -76,6 +93,48 @@ function rowsOf(rows: readonly Row[], turnTo: (of: string) => void): HTMLElement
     list.append(row);
   }
   return list;
+}
+
+/** What a snippet is called on the page: its kind, as the mark beside it says it. */
+const LEAD_LABEL = { finest: "finest", improve: "needs work most" } as const;
+
+/**
+ * A file's lead: each snippet a definition at a glance, marked as its finest
+ * or as what needs work most, its name and page, its first line and the block
+ * Jev picked, the rest folded away; a tap turns to the definition's page.
+ */
+function leadOf(snippets: readonly Snippet[], path: string, turnTo: (of: string) => void): HTMLElement {
+  const lead = el("div", "jp-lead");
+  for (const s of snippets) {
+    const snippet = el("button", "jp-snippet");
+    snippet.type = "button";
+    marked(snippet, { kind: s.kind, sure: 1 });
+    const head = el("span", "jp-snippet-head");
+    head.append(el("span", "jp-snippet-label", LEAD_LABEL[s.kind]), el("span", "jp-snippet-name", s.name), el("span", "jp-dots"), el("span", "jp-row-page", s.page.toLocaleString("en-US")));
+    const lines = [s.signature.text, ...s.lines];
+    const pieces = highlight(lines, path);
+    const base = baseIndent(lines);
+    const line = (k: number, n: number): HTMLElement => {
+      const row = el("span", "jp-line");
+      const text = inkedLine(pieces[k], lines[k] as string);
+      text.style.setProperty("--ind", String(Number.isFinite(base) ? indentOf(lines[k] as string) - base : 0));
+      row.append(el("span", "jp-ln", String(n)), text);
+      return row;
+    };
+    const fold = (count: number): HTMLElement => el("span", "jp-snippet-fold", `${count.toLocaleString("en-US")} ${count === 1 ? "line" : "lines"}`);
+    const code = el("span", "jp-code jp-snippet-code");
+    code.append(line(0, s.signature.n));
+    if (s.before > 0) code.append(fold(s.before));
+    s.lines.forEach((_, k) => code.append(line(k + 1, s.first + k)));
+    if (s.after > 0) code.append(fold(s.after));
+    snippet.append(head, code);
+    snippet.addEventListener("click", (e) => {
+      e.stopPropagation();
+      turnTo(s.of);
+    });
+    lead.append(snippet);
+  }
+  return lead;
 }
 
 /** Leading spaces, counted with a tab as two. */
@@ -157,12 +216,13 @@ export function renderPage(words: PageWords, folio: string, turnTo: (of: string)
         inFull();
       });
     }
-    title.append(name, reading(words.vitality, "jp-vit"));
+    title.append(name, numbersOf(words));
     head.append(title);
     if (words.signature !== undefined) head.append(signatureOf(words.signature, words.path.join("/")));
     head.append(el("div", "jp-rule"));
   }
   const body = el("div", "jp-body");
+  if (words.body.kind === "rows" && words.body.lead !== undefined && (rows === undefined || rows.from === 0)) body.append(leadOf(words.body.lead, words.path.join("/"), turnTo));
   if (words.body.kind === "rows") body.append(rowsOf(rows === undefined ? words.body.rows : words.body.rows.slice(rows.from, rows.to), turnTo));
   else if (words.body.kind === "code") {
     // From the line it opens at; lines above it fold away.
@@ -170,7 +230,7 @@ export function renderPage(words: PageWords, folio: string, turnTo: (of: string)
     const skipped = opensAt - code.first;
     const shown: Full = { ...code, kind: "full", said: [], first: opensAt, lines: code.lines.slice(skipped) };
     if (skipped > 0 && inFull !== undefined) body.append(foldOf(skipped, inFull, "before"));
-    setItems(body, shown, fullItems(shown), baseIndent(code.lines), piecesOf(code, words), turnTo);
+    setItems(body, shown, fullItems(shown), baseIndent(code.lines), piecesOf(shown, words), turnTo);
     // Where a long definition's page ends, a fold: the book shows it, with how many lines it holds, when lines are left over.
     if (inFull !== undefined) body.append(foldOf(0, inFull, "after"));
   }
@@ -251,7 +311,7 @@ export function renderFullPage(words: PageWords, body: Full, folio: string, item
   else {
     if (words.path.length > 0) head.append(backTo(el("button", "jp-where jp-back", words.path.join(" / "))));
     const title = el("div", "jp-title");
-    title.append(backTo(el("button", "jp-name", words.name)), reading(words.vitality, "jp-vit"));
+    title.append(backTo(el("button", "jp-name", words.name)), numbersOf(words));
     head.append(title);
     if (words.signature !== undefined) head.append(signatureOf(words.signature, words.path.join("/")));
     head.append(el("div", "jp-rule"));

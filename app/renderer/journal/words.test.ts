@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { journalOf, ownOf } from "@gaia/world";
-import { captionOf } from "./caption.ts";
-import { type Judgment, type WordsSource, contentsWords, proseOf, wordsOf } from "./words.ts";
+import { captionOf, conceptsCaption } from "./caption.ts";
+import { type Judgment, type WordsSource, contentsWords, leadOf, proseOf, wordsOf } from "./words.ts";
+import type { JudgedThing } from "../../world-service/protocol.ts";
 
 const MATH = "core/math.ts";
 const world = {
@@ -96,5 +97,48 @@ describe("what a journal page says", () => {
     const file: Judgment = { judged: { attention: { choice: "routine", p: { routine: 0.7 }, call: "attention" }, needsTests: { p: 0.9, call: "profile" } } };
     expect(captionOf("file", file)).toEqual([{ label: "needs tests", value: "yes", sure: 0.9 }]);
     expect(captionOf("folder", undefined)).toEqual([]);
+  });
+
+  it("with the understanding pass, leads a file with its best and worst definitions weighed by importance, folded around Jev's blocks, and opens a definition below the median at what needs work most", () => {
+    const OPS = "core/ops.ts";
+    const ops = {
+      name: "demo",
+      areas: [{ path: "", name: "demo", parent: null }, { path: "core", name: "core", parent: "" }],
+      patches: [{ path: OPS, name: "ops.ts", area: "core" }],
+      symbols: [
+        { id: `${OPS}#big`, file: OPS, name: "big", line: 2, lines: 39 },
+        { id: `${OPS}#tiny`, file: OPS, name: "tiny", line: 42, lines: 1 },
+        { id: `${OPS}#mid`, file: OPS, name: "mid", line: 44, lines: 7 },
+      ],
+    };
+    const text = Array.from({ length: 50 }, (_, i) => `line ${i + 1}`);
+    const things: Record<string, JudgedThing> = {
+      [OPS]: { quality: 0.5, importance: 0.7, concepts: {}, picks: {} },
+      [`${OPS}#big`]: { quality: 0.3, importance: 0.9, concepts: {}, picks: { weak: { start: 10, end: 12 }, finest: { start: 20, end: 22 } } },
+      [`${OPS}#tiny`]: { quality: 0.99, importance: 0.05, concepts: {}, picks: {} },
+      [`${OPS}#mid`]: { quality: 0.8, importance: 0.6, concepts: {}, picks: { finest: { start: 46, end: 47 } } },
+    };
+    const src: WordsSource = { journal: journalOf(ops, { first: 18, next: 21, lead: 11 }), world: ops, vitality: (of) => things[of]?.quality ?? 1, lines: () => text, thing: (of) => things[of], median: 0.7 };
+    // The finest among what matters is mid, not the tiny helper; the worst is the file's heart, big.
+    expect(leadOf(src, [`${OPS}#big`, `${OPS}#tiny`, `${OPS}#mid`])).toEqual({ best: `${OPS}#mid`, worst: `${OPS}#big` });
+    const file = wordsOf(src, src.journal.entry(OPS)!);
+    expect(file.importance).toBe(0.7);
+    // Below the world's median, the file leads with what needs work most, each snippet its first line and Jev's block.
+    expect(file.body.kind === "rows" && file.body.lead?.map((s) => [s.of, s.kind, s.signature.n, s.first, s.lines, s.before, s.after])).toEqual([
+      [`${OPS}#big`, "improve", 2, 10, ["line 10", "line 11", "line 12"], 7, 28],
+      [`${OPS}#mid`, "finest", 44, 46, ["line 46", "line 47"], 1, 3],
+    ]);
+    expect(file.body.kind === "rows" && file.body.rows.filter((r) => r.mark !== undefined).map((r) => [r.of, r.mark?.kind])).toEqual([[`${OPS}#big`, "improve"], [`${OPS}#mid`, "finest"]]);
+    // A long definition below the median opens at the block most in need, and marks each block Jev picked.
+    const big = wordsOf(src, src.journal.entry(`${OPS}#big`)!);
+    expect(big.body).toMatchObject({ kind: "code", opensAt: 10 });
+    expect(big.body.kind === "code" && big.body.marks.map((m) => [m.kind, m.from, m.to])).toEqual([["improve", 10, 12], ["finest", 20, 22]]);
+  });
+
+  it("captions what the understanding pass judged with each concept as a percentage, leaving out an answer that doesn't count", () => {
+    expect(conceptsCaption({ quality: 0.5, importance: 0.5, concepts: { robustness: null, coupling: 0.5, readability: 0.454 }, picks: {} })).toEqual([
+      { label: "readability", value: "45%" },
+      { label: "loose coupling", value: "50%" },
+    ]);
   });
 });
