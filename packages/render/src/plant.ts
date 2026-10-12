@@ -842,6 +842,21 @@ export function geometryOf(part: Part): THREE.BufferGeometry {
   return g;
 }
 
+/**
+ * Lets the page's copy of each of `geometry`'s buffers go once the GPU holds it, but those named in `keep` ("index"
+ * for the index): a plant's geometry never changes once built, and three reads a buffer's array only to upload it.
+ * What a ray is cast against keeps its position, normal and index, which three's raycast reads.
+ */
+export function letGoOnUpload(geometry: THREE.BufferGeometry, keep: readonly string[] = []): void {
+  const letGo = (a: THREE.BufferAttribute): void => {
+    a.onUpload(() => {
+      (a as unknown as { array: null }).array = null;
+    });
+  };
+  for (const [name, a] of Object.entries(geometry.attributes)) if (!keep.includes(name) && a instanceof THREE.BufferAttribute) letGo(a);
+  if (geometry.index !== null && !keep.includes("index")) letGo(geometry.index);
+}
+
 /** Bark, stone and a building's fabric are solid; leaves, moss and blooms are thin and scatter light. */
 export const FOLIAGE: Readonly<Record<string, number>> = {
   bark: 0, leaf: 1, bloom: 0.6, stone: 0, moss: 0.3, stem: 0.8, eye: 0.6,
@@ -864,6 +879,8 @@ export function createPlant(plant: Realized, light: SceneLight): PlantView {
   const object = new THREE.Group();
   const box = new THREE.Box3();
   const geometries = plant.parts.map(geometryOf);
+  // A building or a landmark is picked by a ray, which reads its positions, normals and index.
+  for (const g of geometries) letGoOnUpload(g, ["position", "normal", "index"]);
   for (const g of geometries) if (g.boundingBox !== null) box.union(g.boundingBox);
   const height = Math.max(0.3, box.max.y);
   const radius = Math.max(Math.abs(box.min.x), box.max.x, Math.abs(box.min.z), box.max.z, 1);

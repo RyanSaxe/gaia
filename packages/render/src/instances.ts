@@ -14,7 +14,7 @@ import * as THREE from "three";
 import type { Part, Swatch } from "@gaia/schema";
 import { FLUTTERS, type Realized, detailAt, mergeParts } from "@gaia/realize";
 import type { SceneLight } from "./light.ts";
-import { DEPTH_FRAG, DEPTH_VERT, FOLIAGE, PLANT_FRAG, PLANT_VERT, type PlantView, geometryOf, sprayColors } from "./plant.ts";
+import { DEPTH_FRAG, DEPTH_VERT, FOLIAGE, PLANT_FRAG, PLANT_VERT, type PlantView, geometryOf, letGoOnUpload, sprayColors } from "./plant.ts";
 
 /** Where one copy stands. */
 export interface InstanceSpot {
@@ -273,7 +273,10 @@ export function createPlantInstances(plant: Realized, light: SceneLight, spots: 
       meshes: parts.flatMap((part) => {
         if (part.indices.length === 0) return [];
         const { color, depth } = materialFor(part);
-        const mesh = new THREE.InstancedMesh(geometryOf(part), color, 1);
+        const geometry = geometryOf(part);
+        // No ray is cast at the copies, so the page keeps none of their buffers once the GPU holds them.
+        letGoOnUpload(geometry);
+        const mesh = new THREE.InstancedMesh(geometry, color, 1);
         mesh.instanceMatrix = attribute;
         mesh.count = 0;
         mesh.frustumCulled = false;
