@@ -128,57 +128,102 @@ function carry(cx: number, cz: number, from: Level, fx: number, fz: number, to: 
   }
 }
 
-/** A few workers that bake chunks of the land, each keeping the source of the world it was last given. */
+/** A job given to a land worker, and who waits on its answer: null when the worker ended first and the job's world has since closed. */
+interface Pending {
+  readonly job: BakeJob & { readonly world: number };
+  readonly answer: (reply: BakeReply | null) => void;
+}
+
+/** A land worker and the jobs it has yet to answer. */
+interface Thread {
+  readonly worker: Worker;
+  readonly jobs: Map<number, Pending>;
+}
+
+/**
+ * A few workers that bake chunks of the land, each keeping the source of the
+ * world it was last given. A worker that ends while it still has jobs, as
+ * the kept finishing thread does when it is let go, or that dies, hands them
+ * to the others, so nothing waits on an answer that will never come.
+ */
 function createLandWorkers(threads: number) {
-  const waiting = new Map<number, (reply: BakeReply) => void>();
   let nextId = 0;
-  const listen = (worker: Worker): { worker: Worker; busy: number } => {
+  /** The world the workers hold the source of, and that source, for a worker that starts after it was given. */
+  let kept: { readonly world: number; readonly source: LandSource } | null = null;
+  const listen = (worker: Worker): Thread => {
+    const on: Thread = { worker, jobs: new Map() };
     worker.onmessage = (e: MessageEvent<BakeReply>) => {
-      const done = waiting.get(e.data.id);
-      waiting.delete(e.data.id);
-      done?.(e.data);
+      const pending = on.jobs.get(e.data.id);
+      on.jobs.delete(e.data.id);
+      pending?.answer(e.data);
     };
-    return { worker, busy: 0 };
+    worker.onerror = (e) => {
+      e.preventDefault();
+      replace(on);
+    };
+    return on;
   };
   const workers = Array.from({ length: threads }, () => listen(new BakeWorker()));
   /** A bake's finishing thread while it is kept: chunks and tiles of its world go to it first. */
-  let whole: { worker: Worker; busy: number } | null = null;
-  const ask = (on: (typeof workers)[number], job: BakeJob): Promise<BakeReply> =>
-    new Promise((resolve) => {
-      const id = nextId++;
-      on.busy++;
-      waiting.set(id, (reply) => {
-        on.busy--;
-        resolve(reply);
-      });
-      on.worker.postMessage({ ...job, id });
-    });
-  /** The worker a job goes to: the finishing thread while it is kept, else the least busy. */
-  const pick = (): { worker: Worker; busy: number } => whole ?? workers.reduce((a, b) => (b.busy < a.busy ? b : a));
+  let whole: Thread | null = null;
+  /** The thread a job goes to: the finishing thread while it is kept, else the one with the fewest jobs. */
+  const pick = (): Thread => whole ?? workers.reduce((a, b) => (b.jobs.size < a.jobs.size ? b : a));
+  const send = (on: Thread, pending: Pending): void => {
+    const id = nextId++;
+    on.jobs.set(id, pending);
+    on.worker.postMessage({ ...pending.job, id });
+  };
+  const ask = (job: Pending["job"]): Promise<BakeReply | null> => new Promise((answer) => send(pick(), { job, answer }));
+  /** Ends a thread: what it had yet to answer goes to another while its world is still `open`, and is let go if not. */
+  const end = (on: Thread, open: number | undefined): void => {
+    on.worker.terminate();
+    const jobs = [...on.jobs.values()];
+    on.jobs.clear();
+    for (const pending of jobs) {
+      if (pending.job.world === open) send(pick(), pending);
+      else pending.answer(null);
+    }
+  };
+  /** A land worker that died is replaced by a fresh one given the kept world's source; a finishing thread that died is let go. */
+  const replace = (on: Thread): void => {
+    if (on === whole) whole = null;
+    const i = workers.indexOf(on);
+    if (i >= 0) {
+      const fresh = listen(new BakeWorker());
+      workers[i] = fresh;
+      if (kept !== null) send(fresh, { job: { kind: "land", ...kept }, answer: () => undefined });
+    }
+    end(on, kept?.world);
+  };
   return {
     async keep(world: number, source: LandSource): Promise<void> {
-      await Promise.all([...workers, ...(whole === null ? [] : [whole])].map((w) => ask(w, { kind: "land", world, source })));
+      kept = { world, source };
+      await Promise.all([...workers, ...(whole === null ? [] : [whole])].map((on) => new Promise<BakeReply | null>((answer) => send(on, { job: { kind: "land", world, source }, answer }))));
     },
-    /** Takes on a bake's finishing thread, ending the one kept before. */
+    /** Takes on a new world's finishing thread, ending the one kept before and letting go of what it had yet to answer. */
     adopt(worker: Worker): void {
-      whole?.worker.terminate();
+      const was = whole;
       whole = listen(worker);
+      if (was !== null) end(was, undefined);
     },
-    /** Ends the kept finishing thread, letting go of the whole world it holds. */
+    /** Ends the kept finishing thread, letting go of the whole world it holds; the land workers take on what it had yet to answer. */
     drop(): void {
-      whole?.worker.terminate();
+      const was = whole;
       whole = null;
+      if (was !== null) end(was, kept?.world);
     },
-    async chunk(world: number, k: number, cx: number, cz: number): Promise<Chunk> {
-      const free = pick();
-      const reply = await ask(free, { kind: "chunk", world, k, cx, cz });
+    /** Chunk (cx, cz) of level `k`; null when world `world` closed before a worker could answer. */
+    async chunk(world: number, k: number, cx: number, cz: number): Promise<Chunk | null> {
+      const reply = await ask({ kind: "chunk", world, k, cx, cz });
+      if (reply === null) return null;
       if (reply.kind === "failed") throw new Error(reply.message);
       if (reply.kind !== "chunk") throw new Error(`A land worker answered a chunk with "${reply.kind}".`);
       return reply.chunk;
     },
-    async things(world: number, ti: number, tj: number): Promise<readonly Placement[]> {
-      const free = pick();
-      const reply = await ask(free, { kind: "things", world, ti, tj });
+    /** What stands in tile (ti, tj); null when world `world` closed before a worker could answer. */
+    async things(world: number, ti: number, tj: number): Promise<readonly Placement[] | null> {
+      const reply = await ask({ kind: "things", world, ti, tj });
+      if (reply === null) return null;
       if (reply.kind === "failed") throw new Error(reply.message);
       if (reply.kind !== "things") throw new Error(`A land worker answered a tile's things with "${reply.kind}".`);
       return reply.placements;
@@ -315,7 +360,7 @@ export function createPageLand(threads = Math.max(1, Math.min(2, (navigator.hard
       const held = cx * CHUNK >= was.x && cz * CHUNK >= was.z && cx * CHUNK + CHUNK <= was.x + size && cz * CHUNK + CHUNK <= was.z + size;
       if (held) carry(cx, cz, from, was.x, was.z, into, ox, oz);
       else if (chunkPastLand(src.plan, k, cx, cz)) place(emptyChunk(src.plan, k, cx, cz), ox, oz, into);
-      else asks.push(workers.chunk(mine, k, cx, cz).then((c) => (mine === generation ? place(c, ox, oz, into) : undefined)));
+      else asks.push(workers.chunk(mine, k, cx, cz).then((c) => (c !== null && mine === generation ? place(c, ox, oz, into) : undefined)));
     }
     await Promise.all(asks);
     if (mine !== generation) return;
