@@ -73,6 +73,14 @@ export const TERRAIN = {
   rimOvershoot: 15,
   /** Water may cut this far below the lowest fitted ground, so fitting leaves room for it. */
   waterMargin: 1.6,
+  /** The relief is fitted on a survey of every this-many samples a side, as land baked in tiles must be. */
+  survey: 4,
+  /**
+   * A survey misses the steepest meter of a slope, so a fit it has to scale
+   * down is taken this share flatter, which keeps every sample inside the
+   * budget: at 5 km a 4 m survey alone overshoots by 0.12%.
+   */
+  surveyMargin: 0.002,
 } as const;
 
 /** Marks a lattice sample with no water over it. */
@@ -395,25 +403,20 @@ export function finishTerrain(spec: WorldSpec, landforms: readonly Landform[], p
   if (filled !== n) throw new Error(`Composed rows end at ${filled} of ${n}.`);
 
   // Fit: scale the relief about its mean until the walkable square fits the
-  // budget. Range, slopes and steps all shrink with the scale.
-  const inside = (ix: number, iz: number): boolean => withinLand(spec, worldOf(lattice, ix), worldOf(lattice, iz));
-  let mean = 0;
-  for (const h of raw) mean += h;
-  mean /= raw.length;
-  const scaled = (k: number): Float32Array => raw.map((h) => mean + (h - mean) * k);
-  const fits = (k: number): boolean => withinBudget(measureRelief(lattice, scaled(k), inside), TERRAIN.waterMargin);
-  let fit = 1;
-  if (!fits(1)) {
-    let lo = 0.1;
-    let hi = 1;
-    for (let step = 0; step < 14; step++) {
-      const mid = (lo + hi) / 2;
-      if (fits(mid)) lo = mid;
-      else hi = mid;
-    }
-    fit = lo;
-  }
-  const heights = scaled(fit);
+  // budget. Range, slopes and steps all shrink with the scale. The scale is
+  // found on a survey of every `TERRAIN.survey`th sample, checked once at
+  // every sample, and searched for at every sample only when the survey's
+  // overshoots, so a large world fits in two passes over its samples, not
+  // fifteen, and land up to 3 km across comes out exactly as before.
+  const s = TERRAIN.survey;
+  const sn = Math.floor((n - 1) / s) + 1;
+  const surveyed = new Float32Array(sn * sn);
+  for (let j = 0; j < sn; j++) for (let i = 0; i < sn; i++) surveyed[j * sn + i] = raw[j * s * n + i * s] as number;
+  const survey: Lattice = { ...lattice, n: sn, spacing: lattice.spacing * s, heights: surveyed };
+  let { mean, fit } = fitRelief(spec, survey);
+  if (fit < 1) fit *= 1 - TERRAIN.surveyMargin;
+  if (!fitsBudget(spec, lattice, raw, mean, fit)) ({ mean, fit } = fitRelief(spec, { ...lattice, heights: raw }));
+  const heights = raw.map((h) => mean + (h - mean) * fit);
   const final: Lattice = { ...lattice, heights };
 
   // Water, solved from the fitted ground and cut into it.
@@ -451,9 +454,32 @@ export function finishTerrain(spec: WorldSpec, landforms: readonly Landform[], p
     streams,
     ponds,
     fit,
-    report: measureRelief(final, heights, inside),
+    report: measureRelief(final, heights, (ix, iz) => withinLand(spec, worldOf(final, ix), worldOf(final, iz))),
     landforms,
   };
+}
+
+/** Whether `heights` scaled about `mean` by `fit` keep the walkable square inside the relief budget, with room for water. */
+function fitsBudget(spec: WorldSpec, l: Lattice, heights: Float32Array, mean: number, fit: number): boolean {
+  const inside = (ix: number, iz: number): boolean => withinLand(spec, worldOf(l, ix), worldOf(l, iz));
+  return withinBudget(measureRelief(l, heights.map((h) => mean + (h - mean) * fit), inside), TERRAIN.waterMargin);
+}
+
+/** The largest scale about its mean that keeps `l`'s heights inside the budget: 1 when they already fit, else found to 14 halvings. */
+function fitRelief(spec: WorldSpec, l: Lattice): { mean: number; fit: number } {
+  let mean = 0;
+  for (const h of l.heights) mean += h;
+  mean /= l.heights.length;
+  const fits = (k: number): boolean => fitsBudget(spec, l, l.heights, mean, k);
+  if (fits(1)) return { mean, fit: 1 };
+  let lo = 0.1;
+  let hi = 1;
+  for (let step = 0; step < 14; step++) {
+    const mid = (lo + hi) / 2;
+    if (fits(mid)) lo = mid;
+    else hi = mid;
+  }
+  return { mean, fit: lo };
 }
 
 /** Bakes the world's one height truth. */
