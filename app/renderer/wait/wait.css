@@ -1,6 +1,8 @@
 /* The wait while a world is read, judged and baked (app/renderer/wait/). Everything that moves is an opacity or
    transform animation, or a pen's dash, so it runs on the compositor while the page stands the world. */
-.veil[data-wait] { display: block; overflow: hidden; background: none; transition: opacity 1.1s cubic-bezier(0.3, 0, 0.2, 1), visibility 0s linear 1.1s; }
+/* Night is a number the wait eases to, so a wait that shows before the world's hour is known darkens gently. */
+@property --night { syntax: "<number>"; inherits: true; initial-value: 0; }
+.veil[data-wait] { display: block; overflow: hidden; background: none; transition: opacity 1.1s cubic-bezier(0.3, 0, 0.2, 1), visibility 0s linear 1.1s, --night 1.2s ease; }
 
 /* ---------- the map paints itself ---------- */
 /* Under the sheet, the map's own paper, creased where it folds, as a jump's cover is; it dissolves into the world. */
