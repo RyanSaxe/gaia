@@ -99,6 +99,8 @@ const HILL_CELL = 5;
 const WATER_CELL = 2.5;
 /** The paper is painted in steps of a millisecond or two, as many as fit in the page's idle time with this much to spare, ms. */
 const SPARE_MS = 2;
+/** How long the relief's painting runs before it lets the page draw, ms: a few, so the wait's lines never stall. */
+const RELIEF_STEP_MS = 4;
 
 const hash = (x: number, z: number): number => {
   const s = Math.sin(x * 127.1 + z * 311.7) * 43758.5453;
@@ -338,6 +340,13 @@ export function nearestAreas(at: Int16Array, n: number): Int16Array {
  * for a view to stroke at its own size.
  */
 export function* paintRelief(ctx: CanvasRenderingContext2D, t: Terrain, style: MapStyle, reach: number, side: number): Generator<void, Paper["contours"]> {
+  // The grids below are larger in a larger world, so their loops let the page draw by time, not by rows.
+  let since = performance.now();
+  const due = (): boolean => {
+    if (performance.now() - since < RELIEF_STEP_MS) return false;
+    since = performance.now();
+    return true;
+  };
   const size = t.spec.size;
   const scale = side / (reach * 2);
   const k = side / PAPER;
@@ -368,7 +377,7 @@ export function* paintRelief(ctx: CanvasRenderingContext2D, t: Terrain, style: M
       shadeImg.data.set([sr, sg, sb, Math.round(255 * Math.max(0, Math.min(1, -lit)) * fadeHere)], c * 4);
       lightImg.data.set([lr, lg, lb, Math.round(255 * Math.max(0, Math.min(1, lit)) * fadeHere)], c * 4);
     }
-    if (j % 14 === 13) yield;
+    if (due()) yield;
   }
   const hill = document.createElement("canvas");
   hill.width = hill.height = hn;
@@ -438,7 +447,7 @@ export function* paintRelief(ctx: CanvasRenderingContext2D, t: Terrain, style: M
       const pond = t.ponds.some((q) => Math.hypot(q.x - x, q.z - z) < q.reach * 1.35);
       wet[j * wn + i] = pond && waterDepthAt(t, x, z) > 0.04 ? 1 : 0;
     }
-    if (j % 20 === 19) yield;
+    if (due()) yield;
   }
   const depth = wetDistance(wet, wn);
   yield;
