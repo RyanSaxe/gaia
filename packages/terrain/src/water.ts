@@ -4,7 +4,7 @@
 // that line. A pond fills to just under the lowest point of its rim. The
 // carve math follows v2's linear carve (src/world/compile/linear/carve.ts).
 
-import { type Lattice, heightAt, worldOf } from "./lattice.ts";
+import { type Lattice, heightAt, worldOf, worldOfZ } from "./lattice.ts";
 
 /** The waterline sits this far below the ground along the bed before carving. */
 const INSET = 0.2;
@@ -15,7 +15,7 @@ export const BANK = 3.5;
 /** Banks never climb steeper than this grade (about 28 degrees), however deep the cut. */
 const BANK_GRADE = 0.53;
 /** The farthest a bank cut can reach past the water's edge, meters. */
-const BANK_REACH = 14;
+export const BANK_REACH = 14;
 /** Channel depth never exceeds this share of the half width, so its walls stay walkable. */
 const CHANNEL_SHAPE = 0.35;
 /** Spring and seep: the stream narrows to nothing over this many meters at each end. */
@@ -155,16 +155,17 @@ export function carveStream(l: Lattice, heights: Float32Array, level: Float32Arr
     maxZ = Math.max(maxZ, s.z);
   }
   const toIndex = (w: number): number => (w - l.origin) / l.spacing;
+  const toIndexZ = (w: number): number => (w - (l.originZ ?? l.origin)) / l.spacing;
   const x0 = Math.max(0, Math.floor(toIndex(minX - reach)));
   const x1 = Math.min(l.n - 1, Math.ceil(toIndex(maxX + reach)));
-  const z0 = Math.max(0, Math.floor(toIndex(minZ - reach)));
-  const z1 = Math.min(l.n - 1, Math.ceil(toIndex(maxZ + reach)));
+  const z0 = Math.max(0, Math.floor(toIndexZ(minZ - reach)));
+  const z1 = Math.min(l.n - 1, Math.ceil(toIndexZ(maxZ + reach)));
   for (let iz = z0; iz <= z1; iz++) {
     for (let ix = x0; ix <= x1; ix++) {
       const i = iz * l.n + ix;
-      const segments = cells.at(worldOf(l, ix), worldOf(l, iz));
+      const segments = cells.at(worldOf(l, ix), worldOfZ(l, iz));
       if (segments === undefined) continue;
-      const s = nearest(stream.stations, segments, worldOf(l, ix), worldOf(l, iz));
+      const s = nearest(stream.stations, segments, worldOf(l, ix), worldOfZ(l, iz));
       const h = heights[i] as number;
       if (s.distance < s.halfWidth) {
         const profile = 1 - (s.distance / s.halfWidth) ** 2;
@@ -206,13 +207,14 @@ export function solvePond(l: Lattice, heights: Float32Array, x: number, z: numbe
 
 export function carvePond(l: Lattice, heights: Float32Array, level: Float32Array, pond: SolvedPond, depth: number): void {
   const toIndex = (w: number): number => (w - l.origin) / l.spacing;
+  const toIndexZ = (w: number): number => (w - (l.originZ ?? l.origin)) / l.spacing;
   const x0 = Math.max(0, Math.floor(toIndex(pond.x - pond.reach)));
   const x1 = Math.min(l.n - 1, Math.ceil(toIndex(pond.x + pond.reach)));
-  const z0 = Math.max(0, Math.floor(toIndex(pond.z - pond.reach)));
-  const z1 = Math.min(l.n - 1, Math.ceil(toIndex(pond.z + pond.reach)));
+  const z0 = Math.max(0, Math.floor(toIndexZ(pond.z - pond.reach)));
+  const z1 = Math.min(l.n - 1, Math.ceil(toIndexZ(pond.z + pond.reach)));
   for (let iz = z0; iz <= z1; iz++) {
     for (let ix = x0; ix <= x1; ix++) {
-      const r = Math.hypot(worldOf(l, ix) - pond.x, worldOf(l, iz) - pond.z);
+      const r = Math.hypot(worldOf(l, ix) - pond.x, worldOfZ(l, iz) - pond.z);
       if (r > pond.reach) continue;
       const i = iz * l.n + ix;
       const h = heights[i] as number;
