@@ -128,7 +128,7 @@ interface Land {
   names: ReadonlyMap<string, HTMLElement> | null;
 }
 
-export function createMapWait(veil: HTMLElement): WaitView {
+export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
   veil.innerHTML = /* html */ `
     <div class="wait-paper"></div>
     <div class="wait-sheet">
@@ -146,6 +146,8 @@ export function createMapWait(veil: HTMLElement): WaitView {
     <div class="wait-lantern"></div>`;
   const sheetEl = veil.querySelector(".wait-sheet") as HTMLElement;
   sheetEl.style.setProperty("--deckle", DECKLE_MASK);
+  // The sheet opens in the land's shape, which `divide` gives it again, so the paper never changes shape as it fills.
+  sheetEl.style.setProperty("--aspect", Math.max(1, aspect).toFixed(4));
   const ground = veil.querySelector(".wait-ground") as HTMLCanvasElement;
   const layers = veil.querySelector(".wait-layers") as HTMLElement;
   const hedges = veil.querySelector(".wait-hedges") as HTMLCanvasElement;
@@ -217,7 +219,7 @@ export function createMapWait(veil: HTMLElement): WaitView {
   // ---------- the land is divided ----------
   function divide(size: number, aspect: number | undefined, outlines: readonly Outline[], patches: readonly FilePatch[], lots: readonly LotPlace[]): void {
     const reach = size / 2 + MARGIN;
-    // The sheet takes the land's shape: as wide as ever, and as deep as the land and its margin.
+    // The sheet opened in the shape the land was to have; a land of another shape reshapes it.
     sheetEl.style.setProperty("--aspect", Math.max(1, reach / (size / 2 / (aspect ?? 1) + MARGIN)).toFixed(4));
     layPaper(reach);
     ink.setAttribute("viewBox", `${-reach} ${-reach} ${reach * 2} ${reach * 2}`);

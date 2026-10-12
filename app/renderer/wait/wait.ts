@@ -50,10 +50,11 @@ let early: { veil: HTMLElement; wait: Wait } | null = null;
 /**
  * Lays the wait over `host` before anything else of the world's page is
  * built, so the first frame a person sees is the wait's sheet, not an empty
- * page while the world's page builds behind it, already `night` dark. The
- * world takes it when it makes its own (`takeWait`).
+ * page while the world's page builds behind it, already `night` dark and in
+ * the shape its land will have (`aspect`, width over depth). The world takes
+ * it when it makes its own (`takeWait`).
  */
-export function startWaitEarly(host: HTMLElement, night: number): void {
+export function startWaitEarly(host: HTMLElement, night: number, aspect: number): void {
   const veil = document.createElement("div");
   veil.className = "veil";
   veil.dataset.ref = "veil";
@@ -61,22 +62,22 @@ export function startWaitEarly(host: HTMLElement, night: number): void {
   // As dark as the world's first frame will make it, so the paper does not darken once that frame comes.
   veil.style.setProperty("--night", night.toFixed(2));
   host.append(veil);
-  early = { veil, wait: createWait(veil) };
+  early = { veil, wait: createWait(veil, aspect) };
 }
 
-/** The wait laid early, standing in `slot`'s place, or a new wait in `slot`. */
-export function takeWait(slot: HTMLElement): { veil: HTMLElement; wait: Wait } {
-  if (early === null) return { veil: slot, wait: createWait(slot) };
+/** The wait laid early, standing in `slot`'s place, or a new wait in `slot` in the shape `aspect`. */
+export function takeWait(slot: HTMLElement, aspect: number): { veil: HTMLElement; wait: Wait } {
+  if (early === null) return { veil: slot, wait: createWait(slot, aspect) };
   const taken = early;
   early = null;
   slot.replaceWith(taken.veil);
   return taken;
 }
 
-/** The wait in `veil`, a layer over the stage that lifts once the world stands. */
-export function createWait(veil: HTMLElement): Wait {
+/** The wait in `veil`, a layer over the stage that lifts once the world stands, its sheet in the land's shape `aspect`. */
+export function createWait(veil: HTMLElement, aspect: number): Wait {
   veil.dataset.wait = "";
-  const view = createMapWait(veil);
+  const view = createMapWait(veil, aspect);
   return {
     ...view,
     ask(plan) {
