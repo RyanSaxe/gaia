@@ -929,6 +929,31 @@ for the view, the mirror's and the shadow's targets and the shadow's depth,
 while the world draws no frames, so the wait never stutters as a world
 opens.
 
+Detail gives way only while frames come late (`createGovernor` in
+`app/renderer/terrain/adapt.ts`). A device that keeps its screen's pace draws
+exactly what Gaia draws at full detail. After each frame the governor weighs
+the gap since the last one against the screen's refresh, never taken as
+slower than 60 a second: more than 1.5 refreshes is late, and more than 3 is a
+stall, other work that less detail would not cure, which counts neither way.
+When more than 10% of the frames in the last 2 s since detail last changed
+came late, detail steps down, at most every half second, least visible first:
+far cards read only the one baked view nearest the eye (`ONE_VIEW` in
+`packages/render/src/far.ts`); then the sun's shadow and the water's
+reflection redraw on alternate frames, each keeping the last one between; then
+the view draws fewer pixels, 0.04 of each side a step, down to half, into a
+multisampled target scaled up to the screen by Catmull-Rom and
+contrast-adaptive sharpening (`createUpscaler`). Once fewer than 1 frame in
+100 has come late for 8 s after the last step down, detail steps back up, a
+step every 2 s while frames keep the pace. A step up that brings late frames
+back is tried again only after twice the wait before, up to 64 s, while steps
+below it go on, so detail settles at the most a device can draw and never
+hunts. The governor rests until the world is open and the bushes' cards are
+in, and for 3 s after any world change, and each browser keeps where its
+detail settled (`localStorage`) so a phone starts there next time.
+`?detail=full`, `?detail=least` or a share such as `?detail=0.75` holds a
+step to judge it by eye, and the lab's `ballast` hook draws every pass again
+to stand in for a slower GPU.
+
 ## Time
 
 A world's hour is the person's local time. Only the renderer reads the clock
