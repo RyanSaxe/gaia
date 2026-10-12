@@ -94,7 +94,12 @@ export function createBaker(threads = Math.max(1, Math.min(4, (navigator.hardwar
   return {
     bake(world, stand) {
       const done = queue.then(() => run(world, stand));
-      queue = done.catch(() => undefined);
+      // The queue waits on the bake but keeps nothing of it: a bake's stand
+      // and terrain are the lab's to keep or let go once it takes them on.
+      queue = done.then(
+        () => undefined,
+        () => undefined,
+      );
       return done;
     },
   };

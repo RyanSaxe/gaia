@@ -36,11 +36,24 @@ export interface Clearings {
 export function createClearings(t: Terrain): Clearings {
   let l = t.lattice;
   let n = Math.ceil(((l.n - 1) * l.spacing) / RESOLUTION);
-  let data = new Uint8Array(n * n);
+  /** The mask's texels, held only from drawing them until the GPU has them. */
+  let data: Uint8Array | null = new Uint8Array(n * n);
   const texture = new THREE.DataTexture(data, n, n, THREE.RedFormat, THREE.UnsignedByteType);
   texture.minFilter = THREE.LinearFilter;
   texture.magFilter = THREE.LinearFilter;
   texture.needsUpdate = true;
+  // Once uploaded, the page lets its copy go: every draw paints the whole mask afresh.
+  texture.onUpdate = () => {
+    data = null;
+    texture.image = { data: null as unknown as Uint8Array, width: n, height: n };
+  };
+  const writable = (): Uint8Array => {
+    if (data === null) {
+      data = new Uint8Array(n * n);
+      texture.image = { data, width: n, height: n };
+    }
+    return data;
+  };
   const uniforms = {
     uClearing: { value: texture },
     uClearingOrigin: { value: l.origin },
@@ -49,6 +62,7 @@ export function createClearings(t: Terrain): Clearings {
   let outlines: readonly Clearing[] = [];
   let capsules: readonly Capsule[] = [];
   const draw = (): void => {
+    const data = writable();
     data.fill(0);
     for (const c of capsules) {
       const i0 = Math.max(0, Math.floor((Math.min(c.ax, c.bx) - c.radius - l.origin) / RESOLUTION));

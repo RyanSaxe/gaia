@@ -46,10 +46,33 @@ export interface GroundTexture {
 
 export function createGroundTexture(t: Terrain): GroundTexture {
   let { n } = t.lattice;
-  let data: Float32Array = new Float32Array(n * n * 4);
+  /** The texels, held only from writing them until the GPU has them; null once it has. */
+  let data: Float32Array | null = new Float32Array(n * n * 4);
+  /** The bake the texels come from, to write them again once the page has let its copy go. */
+  let source = t;
   const texture = new THREE.DataTexture(data, n, n, THREE.RGBAFormat, THREE.FloatType);
   texture.minFilter = THREE.NearestFilter;
   texture.magFilter = THREE.NearestFilter;
+  // Once uploaded, the page lets its copy go: a later write rebuilds it from the bake (`writable`).
+  texture.onUpdate = () => {
+    data = null;
+    texture.image = { data: null as unknown as Float32Array, width: n, height: n };
+  };
+  /** The texels to write into: the copy held, or one rebuilt from the bake, its trails cleared. */
+  const writable = (): Float32Array => {
+    if (data !== null) return data;
+    const d = new Float32Array(n * n * 4);
+    const { heights } = source.lattice;
+    for (let i = 0, j = 0; i < n * n; i++, j += 4) {
+      d[j] = heights[i] as number;
+      d[j + 1] = source.waterLevel[i] as number;
+      d[j + 2] = source.shore[i] as number;
+      d[j + 3] = TRAILS.reach;
+    }
+    data = d;
+    texture.image = { data: d, width: n, height: n };
+    return d;
+  };
   const uniforms = {
     uGround: { value: texture },
     uGroundN: { value: n },
@@ -59,6 +82,7 @@ export function createGroundTexture(t: Terrain): GroundTexture {
     uWildBase: { value: 0 },
   };
   const update = (next: Terrain, packed?: Float32Array): void => {
+    source = next;
     // A world of another size: a texture of its size.
     if (next.lattice.n !== n || next.lattice.origin !== uniforms.uGroundOrigin.value) {
       n = next.lattice.n;
@@ -79,15 +103,17 @@ export function createGroundTexture(t: Terrain): GroundTexture {
     const heights = next.lattice.heights;
     const water = next.waterLevel;
     const shore = next.shore;
+    const d = writable();
     for (let i = 0, j = 0; i < n * n; i++, j += 4) {
-      data[j] = heights[i] as number;
-      data[j + 1] = water[i] as number;
-      data[j + 2] = shore[i] as number;
+      d[j] = heights[i] as number;
+      d[j + 1] = water[i] as number;
+      d[j + 2] = shore[i] as number;
     }
     texture.needsUpdate = true;
   };
   const setTrails = (field: Float32Array | null): void => {
-    for (let i = 0; i < n * n; i++) data[i * 4 + 3] = field?.[i] ?? TRAILS.reach;
+    const d = writable();
+    for (let i = 0; i < n * n; i++) d[i * 4 + 3] = field?.[i] ?? TRAILS.reach;
     texture.needsUpdate = true;
   };
   update(t);

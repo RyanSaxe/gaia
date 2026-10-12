@@ -425,13 +425,22 @@ export async function farFormData(renderer: THREE.WebGLRenderer, form: FarForm):
 /** A far form rebuilt from stored data, its atlases filtered and mipmapped as a bake's are; null when the data is from another version of the bake. */
 export function farFormFrom(data: FarFormData): FarForm | null {
   if (data.version !== FAR_BAKE_VERSION) return null;
+  // The closures below read only these, so the stored record, its pixels included, is not kept with them.
+  const { width, height } = data;
   const layers = data.layers.map((pixels) => {
-    const t = new THREE.DataTexture(pixels, data.width, data.height, THREE.RGBAFormat, THREE.UnsignedByteType);
+    const t = new THREE.DataTexture(pixels, width, height, THREE.RGBAFormat, THREE.UnsignedByteType);
     t.minFilter = THREE.LinearMipmapLinearFilter;
     t.magFilter = THREE.LinearFilter;
     t.generateMipmaps = true;
     t.flipY = false;
     t.needsUpdate = true;
+    // Once the GPU holds the atlas, the page lets its own copy go: the form
+    // stays in the far store, so nothing is lost but memory, and a copy of
+    // every atlas would hold some 300 MB.
+    t.onUpdate = () => {
+      t.image = { data: null as unknown as Uint8Array, width, height };
+      t.onUpdate = null;
+    };
     return t;
   });
   const [x, y, z] = data.bounds.center;
