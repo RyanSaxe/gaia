@@ -82,7 +82,13 @@ export const trailUniforms = {
 /** Takes on a bake's `trailPlaces`, two numbers per lattice sample of an `n` by `n` lattice. */
 export function setTrailPlaces(places: Float32Array, n: number): void {
   const old = trailUniforms.uTrailPlace.value;
-  trailUniforms.uTrailPlace.value = texture(places, n, n, THREE.RGFormat);
+  const next = texture(places, n, n, THREE.RGFormat);
+  // Each bake makes the places afresh, so once the GPU has them the page lets its copy go.
+  next.onUpdate = () => {
+    next.image = { data: null as unknown as Float32Array, width: n, height: n };
+    next.onUpdate = null;
+  };
+  trailUniforms.uTrailPlace.value = next;
   old.dispose();
 }
 

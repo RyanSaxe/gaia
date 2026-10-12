@@ -912,7 +912,11 @@ in the far cards' form order. Each build bakes into its far form a few views
 a frame under the wait (`startFarBake`), and the wait lifts only once all of
 them are ready. A baked form is kept in the
 browser's IndexedDB (`app/renderer/terrain/far-store.ts`), keyed by a hash of
-the build, the bake's version and the swap size, so each build bakes once.
+the build, the bake's version and the swap size, so each build bakes once. A
+form read back from the store keeps its pixels in the page only until the GPU
+holds them (`farFormFrom`'s `onUpdate`). The land's textures (the ground's,
+the trails' and the clearings') do the same, and are written again from the
+bake when a new world bakes, so the page holds each texture once, not twice.
 A new world settles in over a few frames (`adopt`), and every shader it
 needs compiles off the page's thread (`warmSoon`, three's `compileAsync`)
 for the view, the mirror's and the shadow's targets and the shadow's depth,
