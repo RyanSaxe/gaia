@@ -142,16 +142,48 @@ fn about_def(d: &DefNode) -> [(&'static str, String); 3] {
     ]
 }
 
+/// A level's or option's short name: its words before the colon. Each
+/// request carries every concept's full levels once, in its `rubric`, and
+/// each question offers only the short names, so a long file's questions
+/// don't repeat the same descriptions for every definition.
+fn short(text: &str) -> String {
+    text.split_once(':')
+        .map_or(text, |(name, _)| name)
+        .trim()
+        .to_string()
+}
+
 fn scale_json(instructions: String, levels: &[String]) -> Value {
-    json!({ "type": "score", "instructions": instructions, "criteria": levels })
+    let names: Vec<String> = levels.iter().map(|l| short(l)).collect();
+    json!({ "type": "score", "instructions": instructions, "criteria": names })
 }
 
 fn concept_json(c: &Concept, instructions: String) -> Value {
     if c.options.is_empty() {
         scale_json(instructions, &c.levels)
     } else {
-        json!({ "type": "choice", "instructions": instructions, "criteria": c.options })
+        let names: BTreeMap<&String, String> =
+            c.options.iter().map(|(k, v)| (k, short(v))).collect();
+        json!({ "type": "choice", "instructions": instructions, "criteria": names })
     }
+}
+
+/// Every concept's full levels or options, and importance's, by name: what
+/// the short names in a request's questions mean.
+fn rubric(concepts: &[&BTreeMap<String, Concept>]) -> Value {
+    let mut out = Map::new();
+    out.insert("importance".into(), json!(vocab().importance.levels));
+    for set in concepts {
+        for (name, c) in *set {
+            let full = if c.options.is_empty() {
+                json!(c.levels)
+            } else {
+                json!(c.options)
+            };
+            out.insert(name.clone(), full);
+        }
+    }
+    Value::Object(out)
 }
 
 /// A definition that is code rather than data or markup.
@@ -487,6 +519,7 @@ impl Call for FolderAxes {
             out.insert("docs".into(), json!(docs));
         }
         out.insert("parts".into(), json!(parts));
+        out.insert("rubric".into(), rubric(&[&vocab().folder]));
         add_readings(&mut out, ctx, Unit::Dir(dir), budget / 4);
         Some(Value::Object(out))
     }
@@ -576,6 +609,10 @@ impl Call for FileAxes {
         out.insert("above".into(), json!(above(ctx, parent_dir(&file.path))));
         out.insert("importance".into(), json!(own));
         out.insert("neighbours".into(), json!(neighbours));
+        out.insert(
+            "rubric".into(),
+            rubric(&[&vocab().definition, &vocab().file]),
+        );
         add_readings(&mut out, ctx, Unit::File(file), budget / 4);
         Some(Value::Object(out))
     }
