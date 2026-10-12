@@ -28,7 +28,8 @@ describe("what stands on the land, tile by tile", () => {
         const [x, z] = middle(ti, tj);
         const near = Math.hypot(x, z) - (TILE.size * Math.SQRT2) / 2;
         if (Math.hypot(x, z) + TILE.size < reach) expect(held.has(`${ti},${tj}`), `tile ${ti},${tj}`).toBe(true);
-        if (near > reach) expect(held.has(`${ti},${tj}`), `tile ${ti},${tj}`).toBe(false);
+        // Tiles are asked for 150 m before they can be seen, so one a worker brings comes in time.
+        if (near > reach + 150) expect(held.has(`${ti},${tj}`), `tile ${ti},${tj}`).toBe(false);
       }
     }
     // Walking far off lets the old tiles go once they lie well past the reach, and stands the new ones.
@@ -39,7 +40,7 @@ describe("what stands on the land, tile by tile", () => {
     for (const key of now) {
       const [ti, tj] = key.split(",").map(Number) as [number, number];
       const [x, z] = middle(ti, tj);
-      expect(Math.hypot(x - 1300, z - 1300) - TILE.size).toBeLessThan(reach + 200);
+      expect(Math.hypot(x - 1300, z - 1300) - TILE.size).toBeLessThan(reach + 150 + 200);
     }
   });
 
