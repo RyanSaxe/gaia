@@ -1199,11 +1199,7 @@ their cards baked at, but only 2% larger each second, so each half second a
 tree changes less than the wind moves it. Bushes turn far the same way at a
 quarter of the size, 32 pixels (16 on a phone). The walk test (`pnpm probe
 steps`) holds every step toward the woods to the wind's own change. Nothing
-is drawn past where the air has dissolved it into the sky. On a device that cannot keep its screen's pace, detail gives way while
-frames come late, least visible first: far trees read one baked view, the
-shadow and the reflection redraw every other frame, and then the view draws
-fewer pixels, scaled up sharply. A device that keeps the pace sees
-everything.
+is drawn past where the air has dissolved it into the sky.
 
 A pass draws only the cells its camera sees. The sun's shadow map covers a
 box around the person, so only casters inside that box draw into it: its cost
