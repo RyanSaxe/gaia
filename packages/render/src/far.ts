@@ -579,14 +579,24 @@ vec2 gUv1;
 vec2 gUv2;
 vec2 gUv3;
 void views() {
+#ifdef ONE_VIEW
+  // Only the view nearest the eye, read where it lies: a quarter of the reads.
+  vec2 cell = vW.x >= max(vW.y, max(vW.z, vW.w)) ? vCells0.xy : vW.y >= max(vW.z, vW.w) ? vCells0.zw : vW.z >= vW.w ? vCells1.xy : vCells1.zw;
+  gUv0 = frameUv(cell, viewDir(cell), vQ);
+#else
   gUv0 = seen(vCells0.xy);
   gUv1 = seen(vCells0.zw);
   gUv2 = seen(vCells1.xy);
   gUv3 = seen(vCells1.zw);
+#endif
 }
 // Half a level finer than the mipmaps pick: blending four views already softens the card.
 vec4 tap(sampler2D t) {
+#ifdef ONE_VIEW
+  return texture2D(t, gUv0, -0.5);
+#else
   return texture2D(t, gUv0, -0.5) * vW.x + texture2D(t, gUv1, -0.5) * vW.y + texture2D(t, gUv2, -0.5) * vW.z + texture2D(t, gUv3, -0.5) * vW.w;
+#endif
 }
 // The share of the texel covered at vitality v, between the baked slices at
 // 1, 0.6, 0.3 and 0.1, its edge sharpened: blending four views and their
@@ -647,9 +657,12 @@ void main() {
   color += nightLight(albedo, n, world, uFoliage * 0.85, mix(1.0, shadow, uMoonShadow));
   vec3 glow = l0.rgb / healthy * (l1.a / healthy) * vVitality * (1.0 + uNightness * 0.6);
   gl_FragColor = vec4(aerial(shoulder(color), world) + glow * (1.0 - uNightness * 0.35), cover * vFade);
-  // Its depth is the baked surface's, so what stands in front of the tree hides it as the near form would.
+  // Its depth is the baked surface's, so what stands in front of the tree hides it as the near form would;
+  // with one view the card keeps its own depth, so the GPU can skip card pixels hidden behind others.
+#ifndef ONE_VIEW
   vec4 clip = projectionMatrix * viewMatrix * vec4(world, 1.0);
   gl_FragDepth = clamp(0.5 + 0.5 * clip.z / clip.w, 0.0, 1.0);
+#endif
 }
 `;
 

@@ -50,6 +50,7 @@ import { createUnderstory } from "./understory.ts";
 import { createClearings } from "./clearings.ts";
 import { type Ways, createWays, setTrailEnds, setTrailPlaces } from "./trails.ts";
 import { reportStage } from "../telemetry.ts";
+import { type Detail, askedDetail, createGovernor, createUpscaler } from "./adapt.ts";
 import { createWait } from "../wait/wait.ts";
 import { withStart } from "../start/start.ts";
 import { createCard } from "./card.ts";
@@ -1566,6 +1567,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       for (const listener of stoodListeners) listener();
     } finally {
       letGo();
+      governor.rest(performance.now() + 3000);
     }
   }
 
@@ -1760,8 +1762,37 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   function mirror(eye: THREE.PerspectiveCamera, show: THREE.Object3D[], dt: number): number {
     return water.mirror(renderer, scene, eye, [...mirrorHide, ...understory.quiet(), ...understory.casters().map((c) => c.object), ...wildGrowth.all().map((c) => c.object)], show, dt);
   }
+  /** Extra draws of each pass every frame, for tests that stand in for a slower GPU (`ballast` hook). */
+  const ballast = { draws: 0, target: new THREE.WebGLRenderTarget(1, 1, { samples: 4 }) };
+  /** Detail that gives way only while frames come late (`adapt.ts`), and what it needs. */
+  const governor = createGovernor();
+  governor.hold(askedDetail(location.search));
+  // Until the world has opened and its bushes' cards are in, frames come late for reasons detail does not touch.
+  governor.rest(Infinity);
+  const upscaler = createUpscaler();
+  let frameCount = 0;
+  /** Far cards take the one-view shader or the full one as the governor says, including cards baked later. */
+  function syncCards(oneView: boolean): void {
+    for (const set of farSets) {
+      set.cards?.object.traverse((o) => {
+        const m = (o as THREE.Mesh).material as THREE.ShaderMaterial | undefined;
+        if (m?.isShaderMaterial !== true || m.fragmentShader.indexOf("gl_FragDepth") < 0) return;
+        if (("ONE_VIEW" in m.defines) === oneView) return;
+        if (oneView) m.defines.ONE_VIEW = "";
+        else delete m.defines.ONE_VIEW;
+        m.needsUpdate = true;
+      });
+    }
+  }
   function frame(dt: number, now: number, at: number): void {
     if (holding > 0) return;
+    governor.update(dt * 1000, now);
+    const detail = governor.detail;
+    frameCount++;
+    syncCards(detail.cards);
+    // On alternate frames the shadow, then the reflection, is not drawn again: each keeps last frame's.
+    const skipShadow = detail.alternate && frameCount % 2 === 0;
+    const skipMirror = detail.alternate && frameCount % 2 === 1;
     if (at !== hour) applyHour(at);
     veil.hour(at);
     // The wait follows the hour as the world will.
@@ -1777,7 +1808,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       grass.follow(detailEye);
       water.wade(walker.x, walker.z, walker.yaw, walked, dt);
       shadowCenter.set(walker.x - Math.sin(walker.yaw) * 18, walker.eye, walker.z - Math.cos(walker.yaw) * 18);
-      shadow.frame(shadowCenter, 40);
+      if (!skipShadow) shadow.frame(shadowCenter, 40);
     } else {
       orbit.update();
       // The lantern waits where the person stood.
@@ -1788,13 +1819,26 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     refreshSight(now);
     // Every pass thins distant detail from where the person's eyes are.
     light.uEye.value.copy(mode === "walk" ? detailEye : camera.position);
-    castShadows();
+    if (!skipShadow) castShadows();
     frameCalls = renderer.info.render.calls;
     passes.shadow = { calls: renderer.info.render.calls, triangles: renderer.info.render.triangles };
-    const mirrorCalls = mirror(camera, mirrorShow(), dt);
+    const mirrorCalls = skipMirror ? 0 : mirror(camera, mirrorShow(), dt);
     frameCalls += mirrorCalls;
     passes.mirror = { calls: mirrorCalls, triangles: mirrorCalls > 0 ? renderer.info.render.triangles : 0 };
-    renderer.render(scene, camera);
+    if (detail.scale < 1) upscaler.render(renderer, scene, camera, detail.scale);
+    else renderer.render(scene, camera);
+    // A test's ballast: every pass this frame drew, drawn again at its own detail, to stand in for a GPU this many times slower.
+    for (let k = 0; k < ballast.draws; k++) {
+      if (!skipShadow) castShadows();
+      if (!skipMirror) mirror(camera, mirrorShow(), 0);
+      const size = renderer.getDrawingBufferSize(bufferSize);
+      const w = Math.max(1, Math.round(size.x * detail.scale));
+      const h = Math.max(1, Math.round(size.y * detail.scale));
+      if (ballast.target.width !== w || ballast.target.height !== h) ballast.target.setSize(w, h);
+      renderer.setRenderTarget(ballast.target);
+      renderer.render(scene, camera);
+      renderer.setRenderTarget(null);
+    }
     frameCalls += renderer.info.render.calls;
     passes.view = { calls: renderer.info.render.calls, triangles: renderer.info.render.triangles };
     farBudget.update(
@@ -1866,6 +1910,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     for (const listener of liftedListeners) listener();
   });
   const bushesBaked = ready.then(() => bakeFar(bushSet, FAR_BAKE.walkingMs)).then(() => reportStage("bush cards", { ms: Math.round(bushSet.ms) }));
+  void bushesBaked.finally(() => governor.wake(performance.now() + 2000));
   $("codebase").addEventListener("click", () => void showCodebase(code === null));
 
   // ---------- shots: each relief primitive under every region, from above ----------
@@ -2316,6 +2361,9 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       ways: ways.network.ways.length,
       bakeMs: Math.round(bakeMs),
       farBakeMs: Math.round(treeSet.ms),
+      oneViewCards: governor.detail.cards,
+      alternatePasses: governor.detail.alternate,
+      drawScale: governor.detail.scale,
     }),
     setActive(on) {
       active = on;
@@ -2527,6 +2575,13 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       /** Shows or hides the far trees' cards alone, for seeing what they draw. */
       showFarTrees: (on: boolean) => {
         if (treeSet.cards !== null) treeSet.cards.object.visible = on;
+      },
+      /** Draws every pass `draws` more times each frame, off screen, to stand in for a GPU that many times slower. */
+      ballast: (draws: number) => void (ballast.draws = draws),
+      /** What the frame draws now (`adapt.ts`); given a detail, holds it there, and given null, lets frames choose again. */
+      adapt: (hold?: Detail | null) => {
+        if (hold !== undefined) governor.hold(hold);
+        return governor.detail;
       },
       /** Shows or hides every tree, for comparing frame costs. */
       showTrees: (on: boolean) => {
