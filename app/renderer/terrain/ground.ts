@@ -19,10 +19,11 @@
 
 import * as THREE from "three";
 import { LIGHT_GLSL, type SceneLight, hexToVec3 } from "@gaia/render";
-import { COVER_TAPS, SHORE_CAP, TRAILS, type Terrain, WILDS, type WildsRing, type Way, landHalf, wildBase, wildsRing } from "@gaia/terrain";
+import { SHORE_CAP, TRAILS, type Terrain, WILDS, type WildsRing, frameOf, landHalf, wildBase, wildsRing } from "@gaia/terrain";
+import { CLIP, type PageLand } from "./land.ts";
 import { SWARD_GLSL } from "../world/environment.ts";
-import { REGIONS_GLSL, type RegionCovers, TUFT_GLSL, layCovers } from "./regions.ts";
-import { TRAIL_GLSL, layTrailPlaces, trailUniforms } from "./trails.ts";
+import { REGIONS_GLSL, type RegionCovers, TUFT_GLSL } from "./regions.ts";
+import { TRAIL_GLSL, trailUniforms } from "./trails.ts";
 import { VITALITY_GLSL, vitalityUniforms } from "./vitality.ts";
 import { GROUND_DECLINE } from "@gaia/terrain";
 
@@ -39,18 +40,7 @@ import { GROUND_DECLINE } from "@gaia/terrain";
  * together. Readers between samples take the finest level that holds the
  * point, blended into the next one near its window's edge (`clipLevel`).
  */
-export const CLIP = {
-  /** Samples per side of every level. */
-  size: 512,
-  /** Levels: the ground's rings and the water's mirror reach the seventh, 64 spacings a sample. */
-  levels: 7,
-  /** How far, in its own samples, the person may move from a level's middle before it is laid again around them. */
-  recenter: 64,
-  /** Rows of a level laid a frame while it is laid again. */
-  rowsPerFrame: 64,
-  /** Past this many of its samples from a level's middle, after a jump or a new world, the level is laid at once. */
-  urgent: 96,
-} as const;
+export { CLIP };
 
 /** The land around the person, for shaders that sample it: the ground, its covers and the ways on it. */
 export interface GroundTexture {
@@ -72,198 +62,73 @@ export interface GroundTexture {
     readonly uLand: { value: number };
     readonly uWildBase: { value: number };
   };
-  /**
-   * Takes on a new bake; `packed` is the bake's data for every sample, trails
-   * included, when a bake thread packed it, and `ways` the ways it stood.
-   */
-  update(t: Terrain, packed?: Float32Array, ways?: readonly Way[]): void;
-  /** The trail field from `trailField`, or null for no trails. */
-  setTrails(field: Float32Array | null): void;
-  /** Keeps every level around the person at (x, z), laying one again a few rows a frame when they have moved far enough. */
-  follow(x: number, z: number): void;
+  /** Takes on the world the land just opened. */
+  update(t: Terrain): void;
 }
 
-/** Trail distances are kept on the page in 16 bits, this many meters a step: 0.4 mm, so they reach ±13 m, past `TRAILS.reach`. */
-const TRAIL_STEP = 4e-4;
-const toStep = (meters: number): number => Math.max(-32767, Math.min(32767, Math.round(meters / TRAIL_STEP)));
-
-/** One texture laid on the clipmap's windows, each texel from the lattice sample under it. */
-interface ClipLayer {
-  readonly texture: THREE.DataArrayTexture;
-  /** Lays rows [r0, r1) of level k aside, for a window on lattice columns `columns` and rows `rows`. */
-  lay(k: number, columns: Int32Array, rows: Int32Array, r0: number, r1: number): void;
-  /** Moves level k, laid aside, into the texture, to upload with the next frame. */
-  commit(k: number): void;
-}
-
-type Texels = Float32Array | Uint8Array;
-
-/** A layer whose every level `data` holds; `write` puts level k's rows [r0, r1) into `into` from `at`. */
-function clipLayer<A extends Texels>(
-  data: A,
-  format: THREE.PixelFormat,
-  type: THREE.TextureDataType,
-  write: (k: number, columns: Int32Array, rows: Int32Array, r0: number, r1: number, into: A, at: number) => void,
-): ClipLayer {
-  const { size, levels } = CLIP;
-  const texture = new THREE.DataArrayTexture(data, size, size, levels);
+/** A texture over every level of the page's land, `data` level after level: a level's layer uploads in the frame after it moves. */
+function clipTexture(data: Float32Array | Uint8Array, format: THREE.PixelFormat, type: THREE.TextureDataType): THREE.DataArrayTexture {
+  const texture = new THREE.DataArrayTexture(data, CLIP.size, CLIP.size, CLIP.levels);
   texture.format = format;
   texture.type = type;
   texture.minFilter = THREE.NearestFilter;
   texture.magFilter = THREE.NearestFilter;
   texture.generateMipmaps = false;
-  // Three uploads only the layers marked since the last upload.
+  // Three uploads only the layers marked since the last upload; a new world marks none and uploads all.
   texture.onUpdate = () => texture.clearLayerUpdates();
-  const layer = data.length / levels;
-  const aside = data.slice(0, layer) as A;
-  return {
-    texture,
-    lay: (k, columns, rows, r0, r1) => write(k, columns, rows, r0, r1, aside, 0),
-    commit(k) {
-      data.set(aside, k * layer);
-      texture.addLayerUpdate(k);
-      texture.needsUpdate = true;
-    },
-  };
+  return texture;
 }
 
-export function createGroundTexture(t: Terrain): GroundTexture {
-  const { size, levels } = CLIP;
-  let source = t;
-  /** Each sample's distance to a trail's edge, which the bake gives once: kept to lay the levels again. */
-  let trails: Int16Array | null = null;
-  /** The ways the bake stood, which every level's trail places are laid from. */
-  let ways: readonly Way[] = [];
-  const ground = clipLayer(new Float32Array(size * size * 4 * levels), THREE.RGBAFormat, THREE.FloatType, (_k, columns, rows, r0, r1, into, at) => {
-    const { n, heights } = source.lattice;
-    const water = source.waterLevel;
-    const shore = source.shore;
-    for (let r = r0; r < r1; r++) {
-      const j = (rows[r] as number) * n;
-      let o = at + r * size * 4;
-      for (let c = 0; c < size; c++, o += 4) {
-        const i = j + (columns[c] as number);
-        into[o] = heights[i] as number;
-        into[o + 1] = water[i] as number;
-        into[o + 2] = shore[i] as number;
-        into[o + 3] = trails === null ? TRAILS.reach : (trails[i] as number) * TRAIL_STEP;
-      }
-    }
-  });
-  const coverRegions = clipLayer(new Uint8Array(size * size * COVER_TAPS * levels), THREE.RGBAFormat, THREE.UnsignedByteType, (_k, columns, rows, r0, r1, into, at) =>
-    layCovers(source.coverRegions, source.lattice.n, columns, rows, r0, r1, into, at),
-  );
-  const coverShares = clipLayer(new Uint8Array(size * size * COVER_TAPS * levels), THREE.RGBAFormat, THREE.UnsignedByteType, (_k, columns, rows, r0, r1, into, at) =>
-    layCovers(source.coverShares, source.lattice.n, columns, rows, r0, r1, into, at),
-  );
-  const places = clipLayer(new Float32Array(size * size * 2 * levels), THREE.RGFormat, THREE.FloatType, (k, columns, rows, r0, r1, into, at) =>
-    layTrailPlaces(source, ways, k, columns, rows, r0, r1, into, at),
-  );
-  const layers = [ground, coverRegions, coverShares, places];
+/** The land's textures over `land`'s levels, whose data they are: every level's layers and its window move together. */
+export function createGroundTexture(land: PageLand): GroundTexture {
+  const { levels } = CLIP;
+  const ground = clipTexture(land.ground, THREE.RGBAFormat, THREE.FloatType);
+  const coverRegions = clipTexture(land.coverRegions, THREE.RGBAFormat, THREE.UnsignedByteType);
+  const coverShares = clipTexture(land.coverShares, THREE.RGBAFormat, THREE.UnsignedByteType);
+  const places = clipTexture(land.trailPlaces, THREE.RGFormat, THREE.FloatType);
+  const textures = [ground, coverRegions, coverShares, places];
   const origins = Array.from({ length: levels }, () => new THREE.Vector2());
+  const frame = frameOf(land.terrain.spec);
   const uniforms = {
-    uClip: { value: ground.texture },
+    uClip: { value: ground },
     uClipOrigin: { value: origins },
-    uCoverRegions: { value: coverRegions.texture },
-    uCoverShares: { value: coverShares.texture },
-    uTrailPlace: { value: places.texture },
-    uGroundN: { value: t.lattice.n },
-    uGroundOrigin: { value: t.lattice.origin },
-    uGroundSpacing: { value: t.lattice.spacing },
-    uLand: { value: landHalf(t) },
+    uCoverRegions: { value: coverRegions },
+    uCoverShares: { value: coverShares },
+    uTrailPlace: { value: places },
+    uGroundN: { value: frame.n },
+    uGroundOrigin: { value: frame.origin },
+    uGroundSpacing: { value: frame.spacing },
+    uLand: { value: landHalf(land.terrain) },
     uWildBase: { value: 0 },
   };
-  const columns = new Int32Array(size);
-  const rows = new Int32Array(size);
-  /** The lattice samples under level k's window whose first sample is (ox, oz), in its own grid units: past the lattice, its edge. */
-  const under = (k: number, ox: number, oz: number): void => {
-    const { n, origin, spacing } = source.lattice;
-    const step = 2 ** k;
-    const index = (u: number): number => Math.min(n - 1, Math.max(0, Math.round(u * step - origin / spacing)));
-    for (let c = 0; c < size; c++) {
-      columns[c] = index(ox + c);
-      rows[c] = index(oz + c);
+  const show = (k: number): void => {
+    const o = land.origins[k] as { x: number; z: number };
+    (origins[k] as THREE.Vector2).set(o.x, o.z);
+  };
+  land.onMoved = (k) => {
+    show(k);
+    for (const t of textures) {
+      t.addLayerUpdate(k);
+      t.needsUpdate = true;
     }
   };
-  /** Lays rows [r0, r1) of level k of every layer aside, for the window whose first sample is (ox, oz). */
-  const lay = (k: number, ox: number, oz: number, r0: number, r1: number): void => {
-    under(k, ox, oz);
-    for (const l of layers) l.lay(k, columns, rows, r0, r1);
+  return {
+    texture: ground,
+    uniforms,
+    update(t) {
+      const world = frameOf(t.spec);
+      uniforms.uGroundN.value = world.n;
+      uniforms.uGroundOrigin.value = world.origin;
+      uniforms.uGroundSpacing.value = world.spacing;
+      uniforms.uLand.value = landHalf(t);
+      uniforms.uWildBase.value = wildBase(t);
+      for (let k = 0; k < levels; k++) show(k);
+      for (const tex of textures) {
+        tex.clearLayerUpdates();
+        tex.needsUpdate = true;
+      }
+    },
   };
-  /** Level k, laid aside, takes over: every layer and the window move together, in the frame they upload. */
-  const commit = (k: number, ox: number, oz: number): void => {
-    for (const l of layers) l.commit(k);
-    (origins[k] as THREE.Vector2).set(ox, oz);
-  };
-  /** Level k's window around (x, z): its first sample, in its own grid units, on a step of `CLIP.recenter`. */
-  const windowAt = (k: number, x: number, z: number): [number, number] => {
-    const unit = source.lattice.spacing * 2 ** k;
-    const snap = (v: number): number => Math.round(v / unit / CLIP.recenter) * CLIP.recenter - size / 2;
-    return [snap(x), snap(z)];
-  };
-  let viewer = { x: 0, z: 0 };
-  /** A level being laid again aside, a few rows a frame, before it takes over. */
-  let laying: { k: number; ox: number; oz: number; row: number } | null = null;
-  const layAll = (): void => {
-    laying = null;
-    for (let k = 0; k < levels; k++) {
-      const [ox, oz] = windowAt(k, viewer.x, viewer.z);
-      lay(k, ox, oz, 0, size);
-      commit(k, ox, oz);
-    }
-  };
-  const update = (next: Terrain, packed?: Float32Array, stood: readonly Way[] = []): void => {
-    source = next;
-    ways = stood;
-    uniforms.uGroundN.value = next.lattice.n;
-    uniforms.uGroundOrigin.value = next.lattice.origin;
-    uniforms.uGroundSpacing.value = next.lattice.spacing;
-    uniforms.uLand.value = landHalf(next);
-    uniforms.uWildBase.value = wildBase(next);
-    const count = next.lattice.n * next.lattice.n;
-    if (packed !== undefined && packed.length === count * 4) {
-      const field = new Int16Array(count);
-      for (let i = 0; i < count; i++) field[i] = toStep(packed[i * 4 + 3] as number);
-      trails = field;
-    } else if (trails !== null && trails.length !== count) trails = null;
-    layAll();
-  };
-  const setTrails = (field: Float32Array | null): void => {
-    if (field === null) trails = null;
-    else {
-      const out = new Int16Array(field.length);
-      for (let i = 0; i < field.length; i++) out[i] = toStep(field[i] as number);
-      trails = out;
-    }
-    layAll();
-  };
-  const follow = (x: number, z: number): void => {
-    viewer = { x, z };
-    for (let k = 0; k < levels; k++) {
-      const [ox, oz] = windowAt(k, x, z);
-      const o = origins[k] as THREE.Vector2;
-      if (ox === o.x && oz === o.y) continue;
-      const unit = source.lattice.spacing * 2 ** k;
-      const off = Math.max(Math.abs(x / unit - o.x - size / 2), Math.abs(z / unit - o.y - size / 2));
-      if (off > CLIP.urgent) {
-        // Far from its window, after a jump or a new world: laid now, before a ring can reach past it. A level
-        // half laid aside is laid again from its start.
-        laying = null;
-        lay(k, ox, oz, 0, size);
-        commit(k, ox, oz);
-      } else if (laying === null) laying = { k, ox, oz, row: 0 };
-    }
-    if (laying === null) return;
-    const l = laying;
-    const r1 = Math.min(size, l.row + CLIP.rowsPerFrame);
-    lay(l.k, l.ox, l.oz, l.row, r1);
-    l.row = r1;
-    if (l.row < size) return;
-    commit(l.k, l.ox, l.oz);
-    laying = null;
-  };
-  update(t);
-  return { texture: ground.texture, uniforms, update, setTrails, follow };
 }
 
 /** GLSL that reads the ground texture with the mesh's own triangle interpolation. */
@@ -761,14 +626,14 @@ export function createGround(t: Terrain, light: SceneLight, covers: RegionCovers
   // The overview's coarse grid reads the trails from the texture at full resolution.
   const coarseMaterial = new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: FRAG, uniforms: coarseUniforms, defines: { TRAIL_TEXTURE: "" } });
   // The whole lattice: the same grid, one level, centered on the world.
-  const coarseOf = (l: Terrain["lattice"]): THREE.Mesh => {
+  const coarseOf = (l: { readonly n: number; readonly spacing: number }): THREE.Mesh => {
     const quads = 2 * Math.ceil(((l.n - 1) * l.spacing) / (2 * RINGS.coarse * l.spacing));
     const into = { pos: [] as number[], index: [] as number[] };
     grid(quads, 0, () => true, into);
     return meshOf(into.pos, into.index, coarseMaterial);
   };
-  const coarse = coarseOf(t.lattice);
-  let coarseN = t.lattice.n;
+  const coarse = coarseOf(frameOf(t.spec));
+  let coarseN = frameOf(t.spec).n;
   const mirrorUniforms = { ...uniforms, uCenter: { value: new THREE.Vector2() }, uViewer: { value: new THREE.Vector2() }, uBase: { value: t.lattice.spacing * RINGS.coarse }, uBaseLevel: { value: Math.log2(RINGS.coarse) }, uMorph: { value: 1 }, uQuads: { value: RINGS.mirrorQuads }, uSnap: { value: SNAP * t.lattice.spacing * RINGS.coarse } };
   const mirror = ringsMesh(new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: FRAG, uniforms: mirrorUniforms, defines: { TRAIL_TEXTURE: "" } }), RINGS.mirrorQuads);
   mirror.visible = false;
@@ -778,10 +643,11 @@ export function createGround(t: Terrain, light: SceneLight, covers: RegionCovers
   );
   wilds.frustumCulled = false;
   const update = (next: Terrain, made?: WildsRing): void => {
-    if (next.lattice.n !== coarseN) {
-      coarseN = next.lattice.n;
+    const world = frameOf(next.spec);
+    if (world.n !== coarseN) {
+      coarseN = world.n;
       coarse.geometry.dispose();
-      coarse.geometry = coarseOf(next.lattice).geometry;
+      coarse.geometry = coarseOf(world).geometry;
     }
     wilds.geometry.dispose();
     wilds.geometry = wildsGeometry(next, made);

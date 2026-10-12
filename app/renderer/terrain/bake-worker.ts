@@ -1,29 +1,40 @@
 // The bake's own thread. A page runs a few of these: each composes bands of
 // lattice rows, and one finishes the bake (fitting, water, shore) and stands
 // the world's things on it (`standWorld`: the buildings' pads, the landmarks,
-// the trails, the trees, the understory, the wild land's ring and the ground
-// texture's data), while the others work out whose ground each sample of the
-// land is (`ownershipRows`, which the ground's vitality reads), so the page
-// keeps drawing every frame while a world bakes.
+// the trails, the trees, the understory and the wild land's ring), while the
+// others work out whose ground each sample of the land is (`ownershipRows`,
+// which the ground's vitality reads), so the page keeps drawing every frame
+// while a world bakes. The whole world's land stays here: the page takes its
+// plan and what standing did to it, and the land workers (the same thread,
+// asked for chunks) bake the land around the person from those alone.
 // They run the same pure functions a bake on the page would, so the result
 // is byte-identical.
 
 import { Library } from "@gaia/schema";
 import { BIOME_PRIMITIVES, RELIEF_PRIMITIVES } from "@gaia/primitives";
-import { type ComposedRows, type LandOutline, type OwnedSite, type Terrain, type WorldSpec, composeRows, finishTerrain, landformsOf, ownershipRows } from "@gaia/terrain";
+import { type ComposedRows, type LandOutline, type OwnedSite, type Placement, type ReliefReport, type WorldSpec, composeRows, finishTerrain, landformsOf, ownershipRows, planOf, wildBase } from "@gaia/terrain";
+import { type Chunk, type LandSource, chunkBuffers, standChunk, standTileThings } from "./land-chunks.ts";
 import { type Stand, type StandRequest, standWorld } from "./stand.ts";
 
 export type BakeJob =
   | { readonly kind: "compose"; readonly world: WorldSpec; readonly z0: number; readonly z1: number }
-  | { readonly kind: "finish"; readonly world: WorldSpec; readonly parts: readonly ComposedRows[]; readonly stand: StandRequest }
-  | { readonly kind: "own"; readonly sites: readonly OwnedSite[]; readonly land: LandOutline; readonly grid: { readonly n: number; readonly origin: number; readonly spacing: number }; readonly k0: number; readonly k1: number };
+  /** `tiles` are the tiles whose understory stands with the world; any other stands later (`things`). */
+  | { readonly kind: "finish"; readonly world: WorldSpec; readonly parts: readonly ComposedRows[]; readonly stand: StandRequest; readonly tiles?: readonly (readonly [number, number])[] }
+  | { readonly kind: "own"; readonly sites: readonly OwnedSite[]; readonly land: LandOutline; readonly grid: { readonly n: number; readonly origin: number; readonly spacing: number }; readonly k0: number; readonly k1: number }
+  /** Keeps a world's land source, by the page's number for it, for the chunks asked of it after. */
+  | { readonly kind: "land"; readonly world: number; readonly source: LandSource }
+  | { readonly kind: "chunk"; readonly world: number; readonly k: number; readonly cx: number; readonly cz: number }
+  | { readonly kind: "things"; readonly world: number; readonly ti: number; readonly tj: number };
 
 export type BakeRequest = BakeJob & { readonly id: number };
 
 export type BakeReply =
   | { readonly id: number; readonly kind: "composed"; readonly rows: ComposedRows }
-  | { readonly id: number; readonly kind: "finished"; readonly terrain: Terrain; readonly stand: Stand }
+  | { readonly id: number; readonly kind: "finished"; readonly land: LandSource; readonly report: ReliefReport; readonly wildBase: number; readonly stand: Stand }
   | { readonly id: number; readonly kind: "owned"; readonly k0: number; readonly owners: Uint16Array; readonly shares: Uint8Array }
+  | { readonly id: number; readonly kind: "kept" }
+  | { readonly id: number; readonly kind: "chunk"; readonly chunk: Chunk }
+  | { readonly id: number; readonly kind: "things"; readonly placements: readonly Placement[] }
   | { readonly id: number; readonly kind: "failed"; readonly message: string };
 
 interface WorkerScope {
@@ -34,13 +45,26 @@ interface WorkerScope {
 const scope = globalThis as unknown as WorkerScope;
 // The same library the terrain lab bakes with.
 const lib = new Library([...RELIEF_PRIMITIVES, ...BIOME_PRIMITIVES]);
+/** The land source of the world the page shows, by its number: only the newest is kept. */
+let source: { readonly world: number; readonly source: LandSource } | null = null;
 
 scope.onmessage = (e) => {
   const req = e.data;
   let reply: BakeReply;
   let moved: Transferable[] = [];
   try {
-    if (req.kind === "own") {
+    if (req.kind === "land") {
+      source = { world: req.world, source: req.source };
+      reply = { id: req.id, kind: "kept" };
+    } else if (req.kind === "chunk") {
+      if (source === null || source.world !== req.world) throw new Error(`No land source for world ${req.world}.`);
+      const chunk = standChunk(source.source, req.k, req.cx, req.cz);
+      reply = { id: req.id, kind: "chunk", chunk };
+      moved = chunkBuffers(chunk);
+    } else if (req.kind === "things") {
+      if (source === null || source.world !== req.world) throw new Error(`No land source for world ${req.world}.`);
+      reply = { id: req.id, kind: "things", placements: standTileThings(source.source, req.ti, req.tj) };
+    } else if (req.kind === "own") {
       const rows = ownershipRows(req.sites, req.land, req.grid, req.k0, req.k1);
       reply = { id: req.id, kind: "owned", k0: req.k0, ...rows };
       moved = [rows.owners.buffer, rows.shares.buffer];
@@ -50,9 +74,11 @@ scope.onmessage = (e) => {
       moved = [rows.raw.buffer, rows.region.buffer, rows.coverRegions.buffer, rows.coverShares.buffer];
     } else {
       const t = finishTerrain(req.world, landformsOf(req.world, lib), req.parts);
-      const stood = standWorld(t, req.stand);
-      reply = { id: req.id, kind: "finished", terrain: t, stand: stood };
-      moved = [t.lattice.heights.buffer, t.waterLevel.buffer, t.shore.buffer, t.region.buffer, t.coverRegions.buffer, t.coverShares.buffer, stood.wilds.positions.buffer, stood.wilds.indices.buffer, stood.ground.buffer];
+      const stood = standWorld(t, req.stand, req.tiles);
+      // The wild base reads the stood land all around its rim, which only the whole world holds; the page cannot measure it.
+      const base = wildBase(t);
+      reply = { id: req.id, kind: "finished", land: { plan: planOf(t), edits: stood.edits, ways: stood.network.ways, scatter: stood.scatter }, report: t.report, wildBase: base, stand: stood };
+      moved = [stood.wilds.positions.buffer, stood.wilds.indices.buffer];
     }
   } catch (error) {
     reply = { id: req.id, kind: "failed", message: error instanceof Error ? error.message : String(error) };

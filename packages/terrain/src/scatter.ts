@@ -73,6 +73,25 @@ export interface ScatterGround {
   readonly open?: readonly (Habitat | undefined)[];
 }
 
+/** A rectangle of the world, meters: x from x0 to x1, z from z0 to z1. */
+export interface Area {
+  readonly x0: number;
+  readonly x1: number;
+  readonly z0: number;
+  readonly z1: number;
+}
+
+/**
+ * Where a scatter works: the group sites it scatters (those standing in
+ * `sites`), and the groups it keeps (those whose site stands in `keep`), so a
+ * tile of the land scatters its own groups with its neighbors' around them
+ * and keeps only its own. Absent, every site of the land, all kept.
+ */
+export interface ScatterWithin {
+  readonly sites: Area;
+  readonly keep: Area;
+}
+
 /** Something already standing that new placements keep clear of, such as a tree. */
 export interface Occupied {
   readonly x: number;
@@ -216,23 +235,29 @@ function placesOf(t: Terrain, ground: ScatterGround) {
  * chance its density, its region's weight and that place give, picking its
  * variants for the place. Pure: the same terrain, rules, seed and ground
  * always give the same placements, and a site's placements depend only on
- * what stands near it.
+ * what stands near it. `within` scatters only some of the land's sites and
+ * keeps the groups of fewer still: a tile's own, among its neighbors'.
  */
-export function scatterComponents(t: Terrain, rules: readonly ScatterRule[], seed: number, occupied: readonly Occupied[] = [], ground: ScatterGround = {}): Placement[] {
+export function scatterComponents(t: Terrain, rules: readonly ScatterRule[], seed: number, occupied: readonly Occupied[] = [], ground: ScatterGround = {}, within?: ScatterWithin): Placement[] {
   const l = t.lattice;
   const half = t.spec.size / 2 - EDGE_MARGIN;
   const taken = standing(occupied);
   const placeAt = placesOf(t, ground);
-  const sites: { x: number; z: number; region: number; place: Habitat; key: string }[] = [];
+  const sites: { x: number; z: number; region: number; place: Habitat; key: string; kept: boolean }[] = [];
   const grid = rand(seed).fork("sites");
   const cells = Math.floor((2 * half) / SITE);
-  for (let iz = 0; iz < cells; iz++) {
-    for (let ix = 0; ix < cells; ix++) {
+  // The cells whose site may stand in the area scattered: a site lies within its own cell.
+  const first = (v: number): number => Math.max(0, Math.floor((v + half) / SITE));
+  const last = (v: number): number => Math.min(cells - 1, Math.floor((v + half) / SITE));
+  const [i0, i1, k0, k1] = within === undefined ? [0, cells - 1, 0, cells - 1] : [first(within.sites.x0), last(within.sites.x1), first(within.sites.z0), last(within.sites.z1)];
+  const inside = (a: Area | undefined, x: number, z: number): boolean => a === undefined || (x >= a.x0 && x < a.x1 && z >= a.z0 && z < a.z1);
+  for (let iz = k0; iz <= k1; iz++) {
+    for (let ix = i0; ix <= i1; ix++) {
       const j = grid.fork(`${ix},${iz}`);
       const x = -half + (ix + j.next()) * SITE;
       const z = -half + (iz + j.next()) * SITE;
-      if (!withinLand(t.spec, x, z, EDGE_MARGIN)) continue;
-      sites.push({ x, z, region: regionAt(t, x, z), place: placeAt(x, z), key: `${ix},${iz}` });
+      if (!withinLand(t.spec, x, z, EDGE_MARGIN) || !inside(within?.sites, x, z)) continue;
+      sites.push({ x, z, region: regionAt(t, x, z), place: placeAt(x, z), key: `${ix},${iz}`, kept: inside(within?.keep, x, z) });
     }
   }
   const out: Placement[] = [];
@@ -273,7 +298,7 @@ export function scatterComponents(t: Terrain, rules: readonly ScatterRule[], see
             slope = plane.slope;
           }
           const placed: Placement = { rule: rule.id, variant, x, y, z, yaw, scale, radius, slope, region: regionAt(t, x, z) };
-          mine.push(placed);
+          if (site.kept) mine.push(placed);
           taken.add({ x, z, radius });
         }
     }

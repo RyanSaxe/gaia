@@ -1,15 +1,15 @@
 // What stands on a freshly baked world, worked out from plain data: each
 // building's site and leveled pad, the landmarks' sites, the trails between
 // them leveled into the ground, the trees and the understory kept off all of
-// these, the wild land's ring, and the ground texture's data with the trail
-// field in its fourth channel; and who owns each cell's ground, whose
-// vitality the ground shows. It levels the lattice, so it runs before the
-// ground is packed. No Three.js and no DOM: the bake worker runs it, and the
-// same terrain and request give the same stand on any thread.
+// these, and the wild land's ring; and who owns each cell's ground, whose
+// vitality the ground shows. It levels the lattice and says how
+// (`Stand.edits`), so a tile of the land baked alone is leveled the same.
+// No Three.js and no DOM: the bake worker runs it, and the same terrain and
+// request give the same stand on any thread.
 
 import { type BuildingPlan, type Built, type RouteSpec, rand } from "@gaia/schema";
 import { areaVitality } from "@gaia/world";
-import { type BuildingSite, type Capsule, type Circle, clearingsOf, discOf, type Extent, findLandmarkSite, findSite, groundedBase, growGrove, type Habitat, heightAt, isWet, type LandEdits, type LandmarkSite, type LandSite, levelPad, levelTrails, type Occupied, type OwnedSite, type PadEdit, withinLand, type Placement, PLANT_SLOPE, planTrails, scatterComponents, scatterPlants, type ScatterRule, siteAt, siteToWorld, slopeAt, type Terrain, trailDiscs, type TrailEnd, trailField, type TrailNetwork, type TrailRequest, trunkIndex, type WayEdit, wildsRing, type WildsRing } from "@gaia/terrain";
+import { type Area, type BuildingSite, type Capsule, type Circle, clearingsOf, discOf, type Extent, findLandmarkSite, frameOf, findSite, groundedBase, growGrove, type Habitat, heightAt, isWet, type LandEdits, type LandmarkSite, type LandSite, levelPad, levelTrails, type Occupied, type OwnedSite, type PadEdit, withinLand, type Placement, PLANT_SLOPE, planTrails, scatterComponents, scatterPlants, type ScatterRule, siteAt, siteToWorld, slopeAt, type Terrain, TILE, trailDiscs, type TrailEnd, type TrailNetwork, type TrailRequest, trunkIndex, type WayEdit, wildsRing, type WildsRing, type WorldSpec, worldOf } from "@gaia/terrain";
 
 /** A building to site: its plan, what stands beside it, and the name its trails go by. */
 export interface StandBuilding {
@@ -125,14 +125,67 @@ export interface Stand {
   /** The paths: the ways of tread, the trails (dependencies) walking them, the junctions and any trail dropped, with why. */
   readonly network: TrailNetwork;
   readonly trees: readonly StandTree[];
+  /** The symbols' placements first, then the understory of each tile in `tiles`, tile by tile. */
   readonly placements: readonly Placement[];
   /** In a world laid out from code, each symbol's placement in `placements`, or -1 where nothing could stand. */
   readonly symbols: readonly number[];
+  /** The tiles whose understory stood with the world, in `placements`' order, and how many placements each holds; any other tile's stands later, by `scatter`. */
+  readonly tiles: readonly { readonly ti: number; readonly tj: number; readonly count: number }[];
+  /** How every tile's understory is scattered (`scatterTile`). */
+  readonly scatter: ScatterPlan;
   readonly wilds: WildsRing;
-  /** Height, water level, distance to the water and to a trail's edge per lattice sample: the ground texture's data. */
-  readonly ground: Float32Array;
   /** What standing did to the land, in order, so a tile of it baked alone can be leveled the same (`standTile` in @gaia/terrain). */
   readonly edits: LandEdits;
+}
+
+/** What every tile's understory scatters by: the rules, seed and places, and what already stands for it to keep clear of. */
+export interface ScatterPlan {
+  readonly rules: readonly ScatterRule[];
+  readonly seed: number;
+  readonly open?: readonly (Habitat | undefined)[];
+  /** What the understory keeps clear of: trees, buildings and their walks, trails, landmarks, and the symbols with room around them. */
+  readonly occupied: readonly Occupied[];
+  /** The trees' crowns, which say where ground lies under a grove or at a wood's edge. */
+  readonly canopy: readonly Occupied[];
+}
+
+/**
+ * How far past a tile its scatter works, meters: its neighbors' groups that
+ * may crowd its own (three of the scatter's 12 m cells), and how far a group
+ * reads around it beyond that.
+ */
+export const TILE_SCATTER = { sites: 36, reads: 24 } as const;
+
+/** Samples a tile's land holds past each of its sides to stand its things alone (`scatterTile` on `tileTerrain`). */
+export const TILE_READS = Math.ceil(TILE_SCATTER.sites + TILE_SCATTER.reads) + 2;
+
+/** The world rectangle tile (ti, tj) of the land covers: its lattice samples, a tile's size of them a side. */
+export function tileArea(spec: WorldSpec, ti: number, tj: number): Area {
+  const frame = frameOf(spec);
+  return { x0: worldOf(frame, ti * TILE.size), x1: worldOf(frame, (ti + 1) * TILE.size), z0: worldOf(frame, tj * TILE.size), z1: worldOf(frame, (tj + 1) * TILE.size) };
+}
+
+/** Every tile of the land, row by row. */
+export function tilesOf(spec: WorldSpec): [number, number][] {
+  const per = Math.ceil(frameOf(spec).n / TILE.size);
+  const out: [number, number][] = [];
+  for (let tj = 0; tj < per; tj++) for (let ti = 0; ti < per; ti++) out.push([ti, tj]);
+  return out;
+}
+
+/**
+ * The understory of tile (ti, tj): the groups whose sites stand in it,
+ * scattered among its neighbors' within `TILE_SCATTER.sites`, on land `t`
+ * that holds the tile and `TILE_SCATTER` around it. A tile's understory
+ * depends on the tile alone, so it stands the same whenever it is stood.
+ */
+export function scatterTile(t: Terrain, plan: ScatterPlan, ti: number, tj: number): Placement[] {
+  const keep = tileArea(t.spec, ti, tj);
+  const grow = (a: Area, m: number): Area => ({ x0: a.x0 - m, x1: a.x1 + m, z0: a.z0 - m, z1: a.z1 + m });
+  const sites = grow(keep, TILE_SCATTER.sites);
+  const reach = grow(sites, TILE_SCATTER.reads);
+  const near = (o: Occupied): boolean => o.x + o.radius >= reach.x0 && o.x - o.radius < reach.x1 && o.z + o.radius >= reach.z0 && o.z - o.radius < reach.z1;
+  return scatterComponents(t, plan.rules, plan.seed, plan.occupied.filter(near), { canopy: plan.canopy.filter(near), ...(plan.open === undefined ? {} : { open: plan.open }) }, { sites, keep });
 }
 
 /** The reach of a feature's solid parts in the house's frame, or null when it has none. */
@@ -436,8 +489,12 @@ function plantPatches(t: Terrain, req: StandRequest, code: StandCode, blocked: (
   return trees;
 }
 
-/** Stands everything on a finished bake, leveling the lattice under the buildings and the trails first. */
-export function standWorld(t: Terrain, req: StandRequest): Stand {
+/**
+ * Stands everything on a finished bake, leveling the lattice under the
+ * buildings and the trails first; the understory of `tiles` only, or of every
+ * tile when absent.
+ */
+export function standWorld(t: Terrain, req: StandRequest, tiles?: readonly (readonly [number, number])[]): Stand {
   const code = req.code;
   const sites: BuildingSite[] = [];
   const pads: PadEdit[] = [];
@@ -521,17 +578,14 @@ export function standWorld(t: Terrain, req: StandRequest): Stand {
   const rules = code === undefined ? req.understory.rules : req.understory.rules.map((rule) => ({ ...rule, regions: t.spec.regions.map((_, i) => (rule.regions?.[i] ?? 1) * (code.regions[i]?.understory[rule.id] ?? 1)) }));
   const open = code === undefined ? req.understory.open : t.spec.regions.map((_, i) => code.regions[i]?.open ?? req.understory.open?.[i]);
   const canopy = trees.map((tr) => ({ x: tr.x, z: tr.z, radius: (req.trees.crowns[tr.variant] ?? 4) * tr.scale }));
-  // What is scattered takes the vitality of the ground it grows on once the page knows it (`understoryVitality`).
-  const placements = [...standing, ...scatterComponents(t, rules, req.understory.seed, [...occupied, ...roomy], { canopy, ...(open === undefined ? {} : { open }) })];
+  const scatter: ScatterPlan = { rules, seed: req.understory.seed, ...(open === undefined ? {} : { open }), occupied: [...occupied, ...roomy], canopy };
+  // Each tile scatters its own; what is scattered takes the vitality of the ground it grows on once the page knows it (`understoryVitality`).
+  const placements: Placement[] = [...standing];
+  const stood = (tiles ?? tilesOf(t.spec)).map(([ti, tj]) => {
+    const own = scatterTile(t, scatter, ti, tj);
+    for (const p of own) placements.push(p);
+    return { ti, tj, count: own.length };
+  });
 
-  const n = t.lattice.n * t.lattice.n;
-  const field = trailField(t, network.ways);
-  const ground = new Float32Array(n * 4);
-  for (let i = 0; i < n; i++) {
-    ground[i * 4] = t.lattice.heights[i] as number;
-    ground[i * 4 + 1] = t.waterLevel[i] as number;
-    ground[i * 4 + 2] = t.shore[i] as number;
-    ground[i * 4 + 3] = field[i] as number;
-  }
-  return { sites, landmarks, network, trees, placements, symbols, wilds: wildsRing(t), ground, edits: { pads, discs: landmarks.map((s) => discOf(s.site)), ways } };
+  return { sites, landmarks, network, trees, placements, symbols, tiles: stood, scatter, wilds: wildsRing(t), edits: { pads, discs: landmarks.map((s) => discOf(s.site)), ways } };
 }
