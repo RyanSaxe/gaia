@@ -13,6 +13,12 @@ export interface Lattice {
   readonly originZ?: number;
   /** Row-major: index = iz * n + ix. */
   readonly heights: Float32Array;
+  /**
+   * For a window of the land: reads `values` (its heights or another of its
+   * arrays) past the window's edge, from wherever the land there is held.
+   * Absent, a read past the edge takes the edge's samples.
+   */
+  readonly beyond?: (x: number, z: number, values: Float32Array) => number;
 }
 
 export function createLattice(extent: number, spacing: number): Lattice {
@@ -20,18 +26,24 @@ export function createLattice(extent: number, spacing: number): Lattice {
   return { n, spacing, origin: (-(n - 1) * spacing) / 2, heights: new Float32Array(n * n) };
 }
 
+/** Where a lattice's samples lie, without the samples. */
+export type LatticeFrame = Pick<Lattice, "n" | "spacing" | "origin" | "originZ">;
+
 /** World x of column `i`, and world z of row `i` on a lattice whose rows start where its columns do. */
-export const worldOf = (l: Lattice, i: number): number => l.origin + i * l.spacing;
+export const worldOf = (l: Pick<Lattice, "origin" | "spacing">, i: number): number => l.origin + i * l.spacing;
 /** World z of row `i`. */
-export const worldOfZ = (l: Lattice, i: number): number => (l.originZ ?? l.origin) + i * l.spacing;
+export const worldOfZ = (l: Pick<Lattice, "origin" | "originZ" | "spacing">, i: number): number => (l.originZ ?? l.origin) + i * l.spacing;
 
 /**
  * Height at any point, interpolated exactly as the mesh draws it: each cell
  * splits along the diagonal from (ix+1, iz) to (ix, iz+1).
  */
 export function heightAt(l: Lattice, x: number, z: number, values: Float32Array = l.heights): number {
-  const gx = Math.min(l.n - 1.000001, Math.max(0, (x - l.origin) / l.spacing));
-  const gz = Math.min(l.n - 1.000001, Math.max(0, (z - (l.originZ ?? l.origin)) / l.spacing));
+  const ux = (x - l.origin) / l.spacing;
+  const uz = (z - (l.originZ ?? l.origin)) / l.spacing;
+  if (l.beyond !== undefined && (ux < 0 || uz < 0 || ux > l.n - 1 || uz > l.n - 1)) return l.beyond(x, z, values);
+  const gx = Math.min(l.n - 1.000001, Math.max(0, ux));
+  const gz = Math.min(l.n - 1.000001, Math.max(0, uz));
   const ix = Math.floor(gx);
   const iz = Math.floor(gz);
   const fx = gx - ix;

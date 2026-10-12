@@ -90,8 +90,9 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
     jumping = true;
     map.open(false);
     cover.classList.add("on");
-    window.setTimeout(() => {
-      world.place(at);
+    window.setTimeout(async () => {
+      // The land around the new place is baked while the paper holds the view.
+      await world.place(at);
       // The new place writes its name as the world dissolves in.
       minimap.show(active);
       let frames = 0;

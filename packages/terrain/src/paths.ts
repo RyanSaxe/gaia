@@ -885,9 +885,9 @@ export function unpackPlace(packed: number): { way: number; along: number } | nu
  * at its last (see `unpackPlace`), so a shader can read the way's wear, which
  * follows the vitality of every trail walking it, live (`wayWear`).
  */
-export function trailPlaces(t: Pick<Terrain, "lattice" | "waterLevel">, ways: readonly Way[]): Float32Array {
+export function trailPlaces(t: Pick<Terrain, "lattice" | "waterLevel">, ways: readonly Way[], reach: number = TRAILS.reach): Float32Array {
   const every = Int32Array.from({ length: t.lattice.n }, (_, i) => i);
-  return trailPlacesOn(t, ways, every, every);
+  return trailPlacesOn(t, ways, every, every, reach);
 }
 
 /**
@@ -923,9 +923,9 @@ export function trailPlacesOn(t: Pick<Terrain, "lattice" | "waterLevel">, ways: 
   // The grid's bounds on the ground: a segment farther than its reach from them visits none of its samples.
   const x0 = worldOf(l, columns[0] as number);
   const x1 = worldOf(l, columns[width - 1] as number);
+  const oz = l.originZ ?? l.origin;
   const z0 = worldOfZ(l, rows[0] as number);
   const z1 = worldOfZ(l, rows[rows.length - 1] as number);
-  const oz = l.originZ ?? l.origin;
   ways.forEach((trail, index) => {
     const half = trail.style.width / 2;
     const near = half + reach;
@@ -933,7 +933,7 @@ export function trailPlacesOn(t: Pick<Terrain, "lattice" | "waterLevel">, ways: 
     const count = pts.length / 2;
     const last = Math.max(1, count - 1);
     const touched: number[] = [];
-    // Each segment visits the grid's samples within reach of it, as `nearPoints` visits the lattice's.
+    // Each segment visits the grid's samples within reach of it, as `nearSegments` visits the lattice's.
     for (let k = 0; k + 1 < count; k++) {
       const ax = pts[k * 2] as number;
       const az = pts[k * 2 + 1] as number;

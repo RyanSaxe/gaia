@@ -4,8 +4,8 @@
 // A trail stands for a dependency between two entities and walks the ways of
 // one network; each way's wear follows the vitality of every trail walking
 // it (`wayWear` in @gaia/terrain): a second texture of the land's clipmap
-// says which ways each sample lies on and how far along them, laid from the
-// ways themselves (`layTrailPlaces`), and a tiny one holds each way's wear at
+// says which ways each sample lies on and how far along them, baked from the
+// ways themselves with the land's chunks (`land-chunks.ts`), and a tiny one holds each way's wear at
 // a few stations along it, rewritten live, so a way between thriving
 // entities is worn bare and one only failing entities walk grows over, with
 // nothing rebaked. The footbridges, stepping stones, edging stones and the
@@ -17,7 +17,7 @@ import { type Built, type Library, seedOf } from "@gaia/schema";
 import { buildCairn, buildEdgingStones, buildFootbridge, buildSteppingStones } from "@gaia/primitives";
 import { type Realized, mergeParts } from "@gaia/realize";
 import { type PlantView, type SceneLight, createPlant } from "@gaia/render";
-import { TRAILS, type Terrain, type TrailNetwork, type Way, edgeStones, junctionVitality, trailPlacesOn, wayVitalityAt, wayWear } from "@gaia/terrain";
+import { type Terrain, type TrailNetwork, type Way, edgeStones, junctionVitality, wayVitalityAt, wayWear } from "@gaia/terrain";
 
 /**
  * GLSL: the signed distance to the nearest way's edge, meters, negative on
@@ -62,32 +62,6 @@ float trailWearAt(vec2 xz) {
   return a > 0.0 ? mix(w, trailWearLevel(p, k + 1), a) : w;
 }
 `;
-
-/**
- * How far past its edge a way names the samples of clip level k, `spacing`
- * meters apart at level 0. The shaders read a way's wear only within 2 m of
- * its edge (`edge < 2.0`), from the corners of the level's cell around the
- * point, which lie up to a cell's diagonal away. So a coarse level names the
- * way that far out, with a meter to spare, and a far trail reads as worn as
- * it does from every sample. Levels whose cells fit within `TRAILS.reach`
- * hold the places `trailPlaces` gives.
- */
-export const placeReach = (k: number, spacing: number): number => Math.max(TRAILS.reach, 3 + 2 ** k * spacing * Math.SQRT2);
-
-/**
- * Lays rows [r0, r1) of clip level k's trail places into `into` from `at`:
- * which ways each lattice sample at columns `columns` of rows `rows` lies on,
- * found from the ways themselves (`trailPlacesOn`), so the page keeps no
- * copy of the whole land's.
- */
-export function layTrailPlaces(t: Terrain, ways: readonly Way[], k: number, columns: Int32Array, rows: Int32Array, r0: number, r1: number, into: Float32Array, at: number): void {
-  const width = columns.length;
-  if (ways.length === 0) {
-    into.fill(-1, at + r0 * width * 2, at + r1 * width * 2);
-    return;
-  }
-  into.set(trailPlacesOn(t, ways, columns, rows.subarray(r0, r1), placeReach(k, t.lattice.spacing)), at + r0 * width * 2);
-}
 
 const texture = (data: Float32Array, width: number, height: number, format: THREE.PixelFormat): THREE.DataTexture => {
   const t = new THREE.DataTexture(data, width, height, format, THREE.FloatType);

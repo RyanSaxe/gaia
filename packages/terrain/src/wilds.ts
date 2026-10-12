@@ -9,7 +9,7 @@
 // around the world, for views from above.
 
 import { heightAt } from "./lattice.ts";
-import { TERRAIN, type Terrain } from "./world.ts";
+import { TERRAIN, type Terrain, frameOf } from "./world.ts";
 import { landReach } from "./edge.ts";
 
 export const WILDS = {
@@ -76,6 +76,8 @@ export function wildNoise(x: number, z: number): number {
 }
 
 const bases = new WeakMap<Terrain, number>();
+/** Gives a window of the land (`Lattice.beyond`) the wild base its whole world measured, which the window cannot measure itself. */
+export const knowWildBase = (t: Terrain, base: number): void => void bases.set(t, base);
 /** The wild roll's middle: the mean height of the land just inside the rim, so the wild lies level with the land and the rim is a crest between them. */
 export function wildBase(t: Terrain): number {
   let base = bases.get(t);
@@ -96,7 +98,7 @@ export function wildBase(t: Terrain): number {
 const smooth = (t: number): number => fade(Math.max(0, Math.min(1, t)));
 
 /** The half side of the square where the baked lattice hands over to the wild land: the lattice's own edge, rim and skirt included. */
-export const landHalf = (t: Terrain): number => -t.lattice.origin - TERRAIN.spacing;
+export const landHalf = (t: Pick<Terrain, "spec">): number => -frameOf(t.spec).origin - TERRAIN.spacing;
 
 /** How far a point lies past the land's square: negative inside it, the distance to it outside. */
 export function wildPast(t: Terrain, x: number, z: number): number {
