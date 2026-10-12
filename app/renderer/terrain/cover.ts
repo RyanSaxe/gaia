@@ -372,5 +372,13 @@ export function createGrass(light: SceneLight, ground: GroundTexture, covers: Re
     }
     material.uniformsNeedUpdate = true;
   };
-  return { mesh, follow: (c) => center.value.copy(c), clear: (list) => clearings.set(list) };
+  return {
+    mesh,
+    follow(c) {
+      center.value.copy(c);
+      // The clearings' mask lies around the grass, wherever it gathers.
+      under.follow(c.x, c.z);
+    },
+    clear: (list) => clearings.set(list),
+  };
 }
