@@ -57,7 +57,7 @@ import { createCard } from "./card.ts";
 import { LANDMARK_ENTITIES, type Represented, SAMPLE_ENTITIES, SAMPLE_FILES, representEntity, representFile } from "./samples.ts";
 import { type CodeWorld, type Judge, entityVitalityOf, groundVitality, judgedThing } from "@gaia/world";
 import { type CodeLab, type Said, codeWorld, judgedOf, representSymbol } from "./code-world.ts";
-import { createSettlement, settlementBuilds } from "./settlement.ts";
+import { type Building, createSettlement, settlementBuilds } from "./settlement.ts";
 import { createSigns } from "./signs.ts";
 import { type Baked, createBaker } from "./baker.ts";
 import { createPageLand } from "./land.ts";
@@ -562,7 +562,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     entityVitality.set(id, v);
     settlement.buildings.forEach((b, i) => {
       if (b.represented.id !== id) return;
-      b.view.setVitality(v);
+      settlement.setVitality(b, v);
       signs.setVitality(i, v);
     });
     showVitality();
@@ -987,6 +987,26 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     tile: (ti, tj) => built?.pieces.filter((p) => tileKeyOf(p.x, p.z) === `${ti},${tj}`) ?? [],
     stand: (held) => built?.stand(held),
   });
+  standing.add<Building>({
+    name: "buildings",
+    largest: () => settlement.buildings.reduce((r, b) => Math.max(r, b.radius, b.height / 2), 0),
+    tile(ti, tj) {
+      const here = settlement.buildings.filter((b) => tileKeyOf(b.site.x, b.site.z) === `${ti},${tj}`);
+      // A building far off has no meshes: its build is made on a worker before its tile stands.
+      const missing = here.flatMap((b) => (b.view === null ? [b.ask] : []));
+      return missing.length === 0 ? here : makeAhead(missing).then(() => here);
+    },
+    stand: (held) => settlement.stand(held, scene),
+  });
+  standing.add<number>({
+    name: "landmarks",
+    largest: () => landmarkViews.reduce((r, v) => Math.max(r, v.radius, v.height / 2), 0),
+    tile: (ti, tj) => ways.sites.flatMap((s, i) => (tileKeyOf(s.site.x, s.site.z) === `${ti},${tj}` ? [i] : [])),
+    stand(held) {
+      const keep = new Set(held);
+      landmarkViews.forEach((v, i) => (v.object.visible = keep.has(i)));
+    },
+  });
   /** The tiles of a world whose understory the bake stands with it: as far around (x, z) as the understory is seen. */
   const tilesNear = (spec: WorldSpec, x: number, z: number): [number, number][] => {
     const reach = seenTo(understory.largest(), viewFocal());
@@ -1021,7 +1041,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       x: b.site.x,
       z: b.site.z,
       stand: () => settlement.standOf(b),
-      height: b.view.height,
+      height: b.height,
       reach: Math.hypot(b.plan.width, b.plan.depth) / 2,
       stop: STOP_AT.great,
     }));
@@ -1460,7 +1480,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     const hits = [
       ...(thing === null || symbol === undefined ? [] : [{ distance: thing.distance, subject: symbol }]),
       ...(tree === null ? [] : [{ distance: tree.distance, subject: subjects.find((s) => s.x === tree.tree.x && s.z === tree.tree.z) }]),
-      ...(building === undefined ? [] : [{ distance: building.distance, subject: subjects.find((s) => settlement.buildings.some((b) => b.view.object.getObjectById(building.object.id) !== undefined && s.x === b.site.x && s.z === b.site.z)) }]),
+      ...(building === undefined ? [] : [{ distance: building.distance, subject: subjects.find((s) => settlement.buildings.some((b) => b.view?.object.getObjectById(building.object.id) !== undefined && b.view !== null && s.x === b.site.x && s.z === b.site.z)) }]),
       ...(sign === undefined ? [] : [{ distance: sign.distance, subject: signSubjects[sign.instanceId ?? -1] }]),
       ...(rise === undefined || riseSite === undefined ? [] : [{ distance: rise.distance, subject: subjects.find((s) => s.x === riseSite.x && s.z === riseSite.z) }]),
     ].sort((a, b) => a.distance - b.distance);
@@ -2492,7 +2512,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     hook: {
       cottage: () => {
         const b = settlement.buildings[0];
-        return b === undefined ? null : { ...b.site, triangles: b.view.triangles, width: b.plan.width, depth: b.plan.depth };
+        return b === undefined ? null : { ...b.site, triangles: b.view?.triangles ?? 0, width: b.plan.width, depth: b.plan.depth };
       },
       /** Each standing landmark: its name, site, height and triangles. */
       landmarks: () =>
@@ -2549,7 +2569,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
         })),
       /** Every building: what it stands for, where, and its vitality now. */
       buildings: () =>
-        settlement.buildings.map((b) => ({ name: b.represented.name, building: b.kindName, ...b.site, width: b.plan.width, depth: b.plan.depth, triangles: b.view.triangles, vitality: b.view.vitality, sign: settlement.signOf(b), stand: settlement.standOf(b) })),
+        settlement.buildings.map((b) => ({ name: b.represented.name, building: b.kindName, ...b.site, width: b.plan.width, depth: b.plan.depth, triangles: b.view?.triangles ?? 0, vitality: b.vitality, sign: settlement.signOf(b), stand: settlement.standOf(b) })),
       /** Sets building `i`'s vitality, and its sign's. */
       vitality: (i: number, v: number) => {
         const b = settlement.buildings[i];

@@ -349,12 +349,24 @@ card each. Only past 200,000, a world gone wrong, does every grove give up
 the same share, though each keeps the one tree that names its file. The understory then grows where it belongs (`scatterComponents`):
 each candidate site on a grid fixed to the world reads its kind of place from
 the trees' crowns, the water and the slope, so a change in one place moves
-nothing elsewhere. It stands a tile at a time: each tile scatters its own
-groups among its neighbors' (`scatterTile`), so it stands the same whenever
-it is stood, alone on its own land as with the whole world. The page holds
-the understory of the tiles within 1.65 km of the person, past where the air
-dissolves the land into the sky, asks its land workers for each tile it
-comes near, and lets go of tiles left 1.85 km behind. Each scattered placement shows the vitality of the
+nothing elsewhere. It is scattered a tile at a time: each tile scatters its
+own groups among its neighbors' (`scatterTile`), so it stands the same
+whenever it is stood, alone on its own land as with the whole world.
+
+Everything that stands on the land stands by tile
+(`app/renderer/terrain/standing.ts`). A component adds a stander: the size of
+its largest thing, what stands in a tile, and how to stand a set of its
+things. A thing is seen only while it spans a few pixels on screen (`GONE`,
+`seenTo`), so a stander's tiles stand as far from the person as its largest
+thing can be seen, up to where the air dissolves the land at 1.4 km, and go
+200 m past that. A tile's things come at once from the world's plan, or from
+the land workers for the understory, and a stander stands again when its
+tiles change, one stander a frame. The trees, the understory, the trails'
+crossings, cairns and edging stones (a way's stones a 256 m square at a
+time), the buildings and the landmarks are standers. A building far off
+keeps no meshes: its build is made on a worker before its tile stands
+again. A jump and an opening wait for the tiles around the person. A new
+component stands by tiles by adding a stander. Each scattered placement shows the vitality of the
 ground it grows on, read on the page from the ground's vitality field the
 grass beneath it reads (`understoryVitality` in `stand.ts`; see Vitality),
 and each file's finer entity its file's. The ground textures take a world of

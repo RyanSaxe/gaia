@@ -12,6 +12,7 @@ import { structure } from "@gaia/kinds";
 import { STRUCTURE_PRESETS, mergeParts } from "@gaia/realize";
 import { type PlantView, type SceneLight, createPlant } from "@gaia/render";
 import type { BuildingSite, Capsule, Extent } from "@gaia/terrain";
+import type * as THREE from "three";
 import { type BuildAsk, made } from "./made.ts";
 import { type Represented, SAMPLE_ENTITIES, type SampleEntity, representEntity } from "./samples.ts";
 import { type StandBuilding, blockedBy, buildingClearings, extentOf, signOf, standOf } from "./stand.ts";
@@ -21,7 +22,15 @@ export interface Building {
   readonly represented: Represented;
   /** The building's own name, such as "Watermill". */
   readonly kindName: string;
-  readonly view: PlantView;
+  /** Its meshes while its tile stands (`Settlement.stand`); null while it lies far off. */
+  view: PlantView | null;
+  /** Its height and the horizontal radius of its bounds, meters, whether or not it stands. */
+  readonly height: number;
+  readonly radius: number;
+  /** What builds it again when its tile comes near. */
+  readonly ask: BuildAsk;
+  /** The vitality it shows, kept while it stands far off. */
+  vitality: number;
   /** The blueprint it was built from and the colors it was given, which its mark on the map is drawn from. */
   readonly blueprint: Blueprint;
   readonly palette: Palette;
@@ -52,7 +61,16 @@ export interface Settlement {
   signOf(b: Building): Spot;
   /** Where a person stops to read the sign and look at the building. */
   standOf(b: Building): { x: number; z: number };
+  /** The meshes of the buildings that stand now. */
   views(): PlantView[];
+  /**
+   * Stands exactly `held` into `scene`: builds the meshes of any that lie
+   * far off, from the build made for it ahead (`makeAhead`) or else in
+   * place, and lets go of the meshes of the rest.
+   */
+  stand(held: readonly Building[], scene: THREE.Object3D): void;
+  /** Sets a building's vitality, standing or not. */
+  setVitality(b: Building, v: number): void;
 }
 
 const lib = new Library([...STRUCTURE_PRIMITIVES, ...FLORA_PRIMITIVES]);
@@ -77,7 +95,8 @@ export function createSettlement(light: SceneLight, entities: readonly SampleEnt
   const asks = settlementBuilds(entities);
   const buildings: Building[] = entities.map((entity, i) => {
     const preset = presetOf(entity);
-    const built = made(asks[i] as BuildAsk, lib);
+    const ask = asks[i] as BuildAsk;
+    const built = made(ask, lib);
     const view = createPlant({ ...built, parts: mergeParts(built.parts) }, light);
     const represented = representEntity(entity.facts);
     view.setVitality(represented.report.vitality);
@@ -86,6 +105,10 @@ export function createSettlement(light: SceneLight, entities: readonly SampleEnt
       represented,
       kindName: preset.name,
       view,
+      height: view.height,
+      radius: view.radius,
+      ask,
+      vitality: represented.report.vitality,
       blueprint: preset.blueprint,
       palette: built.palette,
       plan: built.slots.get("footprint")?.output as BuildingPlan,
@@ -100,14 +123,38 @@ export function createSettlement(light: SceneLight, entities: readonly SampleEnt
     seat(sites) {
       buildings.forEach((b, i) => {
         b.site = sites[i] ?? b.site;
-        b.view.object.position.set(b.site.x, b.site.level, b.site.z);
-        b.view.object.rotation.y = b.site.yaw;
+        b.view?.object.position.set(b.site.x, b.site.level, b.site.z);
+        if (b.view !== null) b.view.object.rotation.y = b.site.yaw;
       });
     },
     blocked: (x, z, margin) => buildings.some((b) => blockedBy(b, b.site, x, z, margin)),
     clearings: () => buildings.flatMap((b) => buildingClearings(b, b.site)),
     signOf: (b) => signOf(b.plan, b.site),
     standOf: (b) => standOf(b.plan, b.site),
-    views: () => buildings.map((b) => b.view),
+    views: () => buildings.flatMap((b) => (b.view === null ? [] : [b.view])),
+    stand(held, scene) {
+      const keep = new Set(held);
+      for (const b of buildings) {
+        if (!keep.has(b)) {
+          if (b.view === null) continue;
+          scene.remove(b.view.object);
+          b.view.dispose();
+          b.view = null;
+          continue;
+        }
+        if (b.view !== null) continue;
+        const built = made(b.ask, lib);
+        const view = createPlant({ ...built, parts: mergeParts(built.parts) }, light);
+        view.object.position.set(b.site.x, b.site.level, b.site.z);
+        view.object.rotation.y = b.site.yaw;
+        view.setVitality(b.vitality);
+        scene.add(view.object);
+        b.view = view;
+      }
+    },
+    setVitality(b, v) {
+      b.vitality = v;
+      b.view?.setVitality(v);
+    },
   };
 }
