@@ -2,7 +2,9 @@
 // rows side by side, then one of them finishes the bake while the others
 // work out, for a world laid out from code, whose ground each part of the
 // land is, so drawing never waits on a bake. Bands go to whichever worker is
-// free, so a band of costly landforms never holds the rest back.
+// free, so a band of costly landforms never holds the rest back. Each bake's
+// workers end with it: an idle worker keeps its heap, some 50 MB of a bake's
+// leftovers apiece, until it happens to collect, and a phone cannot spare it.
 
 import { type ComposedRows, GROUND_VITALITY, type Ownership, type Terrain, type WorldSpec, latticeOf, ownershipGrid } from "@gaia/terrain";
 import type { BakeJob, BakeReply } from "./bake-worker.ts";
@@ -25,16 +27,20 @@ export interface Baker {
 const BAND = 96;
 
 export function createBaker(threads = Math.max(1, Math.min(4, (navigator.hardwareConcurrency || 2) - 2))): Baker {
-  const workers = Array.from({ length: threads }, () => new BakeWorker());
   const waiting = new Map<number, { resolve: (reply: BakeReply) => void }>();
   let nextId = 0;
-  for (const w of workers) {
-    w.onmessage = (e: MessageEvent<BakeReply>) => {
-      const job = waiting.get(e.data.id);
-      waiting.delete(e.data.id);
-      job?.resolve(e.data);
-    };
-  }
+  const spawn = (): Worker[] =>
+    Array.from({ length: threads }, () => {
+      const w = new BakeWorker();
+      w.onmessage = (e: MessageEvent<BakeReply>) => {
+        const job = waiting.get(e.data.id);
+        waiting.delete(e.data.id);
+        job?.resolve(e.data);
+      };
+      return w;
+    });
+  // The first bake's workers start with the page, so that bake begins at once.
+  let started: Worker[] | null = spawn();
   const ask = (worker: Worker, job: BakeJob, transfer: Transferable[] = []): Promise<BakeReply> =>
     new Promise((resolve) => {
       const id = nextId++;
@@ -69,6 +75,15 @@ export function createBaker(threads = Math.max(1, Math.min(4, (navigator.hardwar
 
   let queue: Promise<unknown> = Promise.resolve();
   async function run(world: WorldSpec, stand: StandRequest): Promise<Baked> {
+    const workers = started ?? spawn();
+    started = null;
+    try {
+      return await bakeOn(workers, world, stand);
+    } finally {
+      for (const w of workers) w.terminate();
+    }
+  }
+  async function bakeOn(workers: readonly Worker[], world: WorldSpec, stand: StandRequest): Promise<Baked> {
     const { n } = latticeOf(world);
     const bands: [number, number][] = [];
     for (let z = 0; z < n; z += BAND) bands.push([z, Math.min(n, z + BAND)]);
