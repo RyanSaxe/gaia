@@ -518,20 +518,37 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   const landmarkPool = new Map<string, PlantView>();
   let built: Ways | null = null;
   /** Stands each landmark on its site and builds the trails' crossings; the ground texture already carries the trails. */
-  function placeWays(): void {
-    for (const v of landmarkPool.values()) v.object.visible = false;
+  /** Each standing landmark's key in the pool of landmark views: its preset, and which of that preset's it is. */
+  const poolKeys = (sites: readonly StandingLandmark[]): string[] => {
     const seen = new Map<number, number>();
-    landmarkViews = ways.sites.map((s) => {
-      const lm = landmarks[s.landmark] as (typeof landmarks)[number];
+    return sites.map((s) => {
       const nth = seen.get(s.landmark) ?? 0;
       seen.set(s.landmark, nth + 1);
-      const key = `${s.landmark}#${nth}`;
-      let view = landmarkPool.get(key);
-      if (view === undefined) {
-        view = createPlant({ ...lm.built, parts: mergeParts(lm.built.parts) }, light);
-        landmarkPool.set(key, view);
-        scene.add(view.object);
-      }
+      return `${s.landmark}#${nth}`;
+    });
+  };
+  /** A pooled view of landmark `i`, made now and added to the scene. */
+  const poolLandmark = (i: number, key: string): PlantView => {
+    const lm = landmarks[i] as (typeof landmarks)[number];
+    const view = createPlant({ ...lm.built, parts: mergeParts(lm.built.parts) }, light);
+    landmarkPool.set(key, view);
+    scene.add(view.object);
+    return view;
+  };
+  /** Makes the pooled views `sites` need that the pool lacks, one between each `wait`, so placing them builds nothing. */
+  async function poolLandmarks(sites: readonly StandingLandmark[], wait: () => Promise<void>): Promise<void> {
+    for (const [k, key] of poolKeys(sites).entries()) {
+      if (landmarkPool.has(key)) continue;
+      poolLandmark((sites[k] as StandingLandmark).landmark, key).object.visible = false;
+      await wait();
+    }
+  }
+  function placeWays(): void {
+    for (const v of landmarkPool.values()) v.object.visible = false;
+    const keys = poolKeys(ways.sites);
+    landmarkViews = ways.sites.map((s, k) => {
+      const key = keys[k] as string;
+      const view = landmarkPool.get(key) ?? poolLandmark(s.landmark, key);
       view.object.visible = true;
       view.object.position.set(s.site.x, s.site.y - 0.05, s.site.z);
       // The door faces where its first trail arrives, or the first building.
@@ -906,7 +923,6 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
             })),
           );
     warmSoon();
-    placeSigns();
   }
   let solids: Solids = NO_SOLIDS;
   /** In the codebase's world, each symbol's placement among the understory's, or -1. */
@@ -1559,6 +1575,9 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     const nextFrame = (): Promise<void> => new Promise((r) => requestAnimationFrame(() => r()));
     holding++;
     try {
+      // What the new world stands that has never stood is made first, a thing a frame, while the old world still shows.
+      await poolLandmarks(stood.landmarks, nextFrame);
+      await understory.prepare(stood.placements, nextFrame);
       world = next;
       terrain = baked;
       // Areas first, so whatever stands beside the trails knows where it is; files join when the trees stand.
@@ -1584,6 +1603,8 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       wildGrowth.update(terrain);
       await nextFrame();
       plant(stood);
+      await nextFrame();
+      placeSigns();
       endWalk();
       walker.moved = true;
       refreshStats();

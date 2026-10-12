@@ -144,6 +144,12 @@ export interface Understory {
   /** Every instanced blueprint, for culling each pass and forcing detail. */
   readonly all: () => readonly Copies[];
   readonly placements: () => readonly Placement[];
+  /**
+   * Makes the instances of every blueprint `placements` uses that has none
+   * yet, one blueprint between each `wait`, so standing them (`place`) only
+   * moves copies. They are made in the order `place` would make them.
+   */
+  prepare(placements: readonly Placement[], wait: () => Promise<void>): Promise<void>;
   /** Sets each placement's vitality, by its index in `placements()`, on its copy; nothing moves or rebuilds. */
   setVitality(vitality: ArrayLike<number>): void;
   /** A placed component's reach at the ground in 48 directions and its top above its origin, at scale 1, by the rule and variant its placement names. */
@@ -237,6 +243,20 @@ export function createUnderstory(scene: THREE.Scene, light: SceneLight, lib: Lib
         counts.set(key, copy + 1);
         return { key, copy };
       });
+    },
+    async prepare(given, wait) {
+      for (const { group, plants, far } of built) {
+        for (const [variant, plant] of plants.entries()) {
+          const key = `${group.id}/${variant}`;
+          if (kept.has(key) || !given.some((p) => p.rule === group.id && p.variant === variant)) continue;
+          const view = createCopies(plant, light, [], far[variant]);
+          scene.add(view.object);
+          const entry = { group, view };
+          kept.set(key, entry);
+          views.push(entry);
+          await wait();
+        }
+      }
     },
     setVitality(vitality) {
       copies.forEach((c, i) => kept.get(c.key)?.view.setVitalityAt(c.copy, vitality[i] ?? 1));
