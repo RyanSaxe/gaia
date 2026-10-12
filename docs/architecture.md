@@ -914,7 +914,7 @@ The woods also measure every tree's crown in each pass's own device pixels.
 A crown under `FAR.swapPx` (128, or 64 on a touch-first screen, whose
 far forms bake at that size) draws as its far form, one card baked from
 its build (`packages/render/src/far.ts`). Between 128 and 160 pixels, the band
-(`farness` in `woods.ts`), the card draws over the full tree as far into its
+(`farness` in `packages/render/src/far.ts`), the card draws over the full tree as far into its
 form as the crown is into the band. Past the band, down to 128 / 1.15 (about
 111) pixels (`FAR.leave`), the full tree still draws under its card, now
 drawn whole, and dissolves (`nearLeaves` in `packages/render/src/instances.ts`):
@@ -924,12 +924,19 @@ fir's needles, is gone before the full tree stops drawing. A tree never
 changes form in one frame. The sun's shadow, a flat pass, keeps the full form
 only to the band's end, where the card starts to cast. Trees turn far at
 the same size however dense the view: detail never gives way to the frame
-rate. Each pass gathers its far copies into one batch, and the far cards
-draw it in one call per form. Nothing past `AIR.dissolveEnd`, where the air
-has dissolved everything into the sky, draws at all. The understory's shrubs
-and the wild's bushes take far forms too, baked and turned far at a quarter
-of the trees' size (`FAR.bush`); drifts of flowers and rocks draw their own
-levels only. Every plant that turns far is listed once in `createFarForms`,
+rate. The woods choose only the full form; each card chooses itself. A
+plant's copies stand in its cards' instance buffers (`FarCopies`), written
+only when the copies stand or a vitality changes, and before each pass the
+far cards are told only the pass's focal length and whether it is flat. The
+card's vertex shader measures its copy's crown on that pass's screen and
+draws it whole, fading over its full form, or not at all, by the rule the
+woods choose the full form by (`farChoice`, and its twin `FAR_CHOICE_GLSL`),
+so no far copy costs the page's thread anything per pass. Each form draws
+in one call per set (solid and fading) for each plant per pass. Nothing past
+`AIR.dissolveEnd`, where the air has dissolved everything into the sky,
+draws at all. The understory's shrubs and the wild's bushes take far forms
+too, baked and turned far at a quarter of the trees' size (`FAR.bush`);
+drifts of flowers and rocks draw their own levels only. Every plant that turns far is listed once in `createFarForms`,
 in the far cards' form order. Each build bakes into its far form a few views
 a frame under the wait (`startFarBake`), and the wait lifts only once all of
 them are ready. A baked form is kept in the

@@ -5,13 +5,18 @@
 // foliage, and how much of each texel it covers at four vitalities. A card
 // (`createFarCards`) faces the eye, blends the four nearest views, cuts and
 // colors them at its copy's vitality and lights them with the scene's own
-// light, so a far tree keeps its shape, health, sway and night. Which copies
-// draw far, and how far into the band each is, is the woods' choice
-// (app/renderer/terrain/woods.ts). After the World session's proof.
+// light, so a far tree keeps its shape, health, sway and night. Each copy's
+// card stands in buffers written once, when the copies are placed
+// (`FarCopies`); every pass the card's vertex shader measures the copy's
+// crown on that pass's screen and draws it far, fading over its full form,
+// or not at all, by the same rule the woods choose the full form by
+// (`farChoice`, and its twin `FAR_CHOICE_GLSL`). After the World session's proof.
 
 import * as THREE from "three";
 import type { Part } from "@gaia/schema";
-import { FLUTTERS, type Realized, mergeParts } from "@gaia/realize";
+import { AIR, FLUTTERS, type Realized, mergeParts } from "@gaia/realize";
+import type { InstanceSpot } from "./instances.ts";
+import { copySeed } from "./instances.ts";
 import { LIGHT_GLSL, type SceneLight } from "./light.ts";
 import { FOLIAGE, PLANT_FRAG, PLANT_VERT, geometryOf, sprayColors } from "./plant.ts";
 import { WIND_GLSL } from "./sway.ts";
@@ -455,9 +460,97 @@ export function farFormFrom(data: FarFormData): FarForm | null {
   };
 }
 
+/**
+ * When copies turn far, in every pass: across `band` times the size a copy
+ * turns far at, its card comes in over its full form; past the band, in a
+ * perspective pass, its full form still dissolves under its whole card until
+ * its crown has shrunk `leave` times more.
+ */
+export interface FarTurn {
+  readonly band: number;
+  readonly leave: number;
+}
+
+/**
+ * A card's fade over a full form still dissolving under it: whole to the eye,
+ * short of 1 only so the card still draws over the full form, as it does
+ * inside the band.
+ */
+const OVER = 1 - 1 / 1024;
+
+/**
+ * How far toward its far form a crown spanning `px` device pixels is, where
+ * it turns far at `swapPx`: 0 draws the full form alone, 1 the far form alone,
+ * and in between the far form over the full one, that far into the band.
+ */
+export function farness(px: number, swapPx: number, band: number): number {
+  const top = swapPx * band;
+  if (px >= top) return 0;
+  if (px <= swapPx) return 1;
+  return (top - px) / (top - swapPx);
+}
+
+/**
+ * How a copy whose crown spans `px` device pixels on a pass's screen draws,
+ * where it turns far at `swapPx`: whether its full form draws, and its card's
+ * fade, 0 for no card, below 1 over the full form, and 1 alone. A flat pass
+ * (`ortho`, the sun's shadow) keeps the full form only to the band's end; a
+ * perspective one keeps it, dissolving, until it spans `swapPx / turn.leave`.
+ * The woods choose each copy's full form by it, and the card's shader
+ * (`FAR_CHOICE_GLSL`) its card, so the two always agree.
+ */
+export function farChoice(px: number, swapPx: number, turn: FarTurn, ortho: boolean): { full: boolean; card: number } {
+  const f = farness(px, swapPx, turn.band);
+  const leavePx = ortho ? swapPx : swapPx / turn.leave;
+  const full = f < 1 || px > leavePx;
+  return { full, card: f > 0 ? (full ? Math.min(f, OVER) : 1) : 0 };
+}
+
+/**
+ * GLSL twin of `farChoice`, measuring the crown as the woods do: its card's
+ * fade for the pass (`uFarPass`: its focal length in device pixels, 0 to
+ * draw no card, and 1 for a flat pass), where the form turns far at
+ * `uFarSwap` pixels. A crown whose nearest point lies past where the air has
+ * dissolved everything into the sky draws no card.
+ */
+export const FAR_CHOICE_GLSL = /* glsl */ `
+uniform vec2 uFarPass;
+uniform float uFarSwap;
+uniform float uFarBand;
+uniform float uFarLeave;
+float farCard(vec4 crown) {
+  float focal = uFarPass.x;
+  float d = distance(crown.xyz, uEye);
+  if (focal <= 0.0 || d - crown.w >= ${AIR.dissolveEnd.toFixed(1)}) return 0.0;
+  bool level = uFarPass.y > 0.5;
+  float px = 2.0 * crown.w * focal / (level ? 1.0 : max(d, 1.0));
+  float top = uFarSwap * uFarBand;
+  if (px >= top) return 0.0;
+  float f = px <= uFarSwap ? 1.0 : (top - px) / (top - uFarSwap);
+  float leavePx = level ? uFarSwap : uFarSwap / uFarLeave;
+  bool full = f < 1.0 || px > leavePx;
+  return full ? min(f, ${OVER.toFixed(10)}) : 1.0;
+}
+`;
+
+/**
+ * Each copy's crown: the center and radius of the plant's built bounds
+ * `sphere` (at scale 1, unturned), where the copy stands at its scale, four
+ * numbers per copy. A copy's size on screen is measured by it, the same for
+ * its full form and its card.
+ */
+export function crownsOf(spots: readonly InstanceSpot[], sphere: THREE.Sphere): Float32Array {
+  const crowns = new Float32Array(spots.length * 4);
+  spots.forEach((s, k) => crowns.set([s.x + sphere.center.x * s.scale, s.y + sphere.center.y * s.scale, s.z + sphere.center.z * s.scale, sphere.radius * s.scale], k * 4));
+  return crowns;
+}
+
 const CARD_VERT = /* glsl */ `
 attribute vec4 aSpot; // x, y, z, yaw
-attribute vec4 aMore; // scale, vitality, seed, fade
+attribute vec4 aMore; // scale, vitality, seed
+attribute vec4 aCrown; // what its size on screen is measured by (crownsOf)
+uniform vec3 uEye;
+${FAR_CHOICE_GLSL}
 uniform float uTime;
 uniform float uWind;
 uniform vec3 uCenter;
@@ -491,6 +584,18 @@ vec3 variety(vec3 p, vec3 root) {
 }
 mat3 yawMat(float a) { float c = cos(a); float s = sin(a); return mat3(c, 0.0, -s, 0.0, 1.0, 0.0, s, 0.0, c); }
 void main() {
+  // Whether this set draws the copy in this pass: the solid set a card standing alone, the fading set one over
+  // its full form. Any other copy collapses outside the view and costs nothing more.
+  float fade = farCard(aCrown);
+#ifdef FADING
+  bool drawn = fade > 0.0 && fade < 1.0;
+#else
+  bool drawn = fade >= 1.0;
+#endif
+  if (!drawn) {
+    gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+    return;
+  }
   vec3 root = aSpot.xyz;
   float s = aMore.x;
   mat3 R = yawMat(aSpot.w);
@@ -528,7 +633,7 @@ void main() {
   vToEye = V;
   vYaw = aSpot.w;
   vVitality = aMore.y;
-  vFade = aMore.w;
+  vFade = fade;
   vScale = s;
   gl_Position = projectionMatrix * viewMatrix * vec4(world, 1.0);
 }
@@ -675,127 +780,156 @@ void main() {
 /** How a card reads its bake: the coverage remapped from this range to 0 to 1, and how far toward the sun, in radii, it reads its shadow. */
 export const CARD = { coverEdge: [0.25, 0.75], shadowLift: 0.2 } as const;
 
-/** Floats per copy given to `draw`: form, x, y, z, yaw, scale, vitality, seed, fade. */
-export const FAR_COPY = 9;
-
-/** Every far form's cards, drawn instanced, one solid and one fading set per form. */
-export interface FarCards {
+/** Every copy of one plant that turns far, as its form's cards: in buffers written when the copies are placed, read by every pass. */
+export interface FarCopies {
+  /** The solid and the fading set's meshes: to add where the copies' full forms stand, so hiding them hides their cards. */
   readonly object: THREE.Group;
   /**
-   * Draws `count` copies laid out `FAR_COPY` floats each in `copies`: the
-   * form's index, where it stands (x, y, z), its yaw, scale, vitality and
-   * seed, and its fade, 1 when wholly far and below 1 inside the band, where
-   * the card draws over its near form, that much of it.
+   * Stands the copies, seven numbers each in `places`: where (x, y, z), yaw,
+   * scale, vitality and seed (`placesOf`), and four in `crowns` (`crownsOf`).
    */
-  draw(copies: Float32Array, count: number): void;
-  /** Swaps every card to its depth material for the shadow pass, and back. */
+  place(places: Float32Array, crowns: Float32Array): void;
+  /** Sets copy `index`'s vitality, which its card shows. */
+  setVitalityAt(index: number, v: number): void;
+  /** Swaps to the depth material for the sun's shadow: a card standing alone casts, one inside the band does not. */
   useDepth(on: boolean): void;
   dispose(): void;
 }
 
-export function createFarCards(forms: readonly FarForm[], light: SceneLight): FarCards {
-  const object = new THREE.Group();
+/** Each copy as its card draws it, seven numbers per copy: where it stands (x, y, z), its yaw, scale, vitality and seed. */
+export function placesOf(spots: readonly InstanceSpot[]): Float32Array {
+  const places = new Float32Array(spots.length * 7);
+  spots.forEach((s, k) => places.set([s.x, s.y, s.z, s.yaw, s.scale, s.vitality ?? 1, copySeed(s)], k * 7));
+  return places;
+}
+
+/** Every far form's cards, one solid and one fading material per form, drawn for each plant's copies from their own buffers. */
+export interface FarCards {
+  /** The cards of form `form` for one plant's copies. */
+  copies(form: number): FarCopies;
+  /**
+   * For the pass about to render: its focal length in device pixels, the
+   * crown span in pixels of a meter one meter away (or of a meter, for a
+   * flat pass), 0 to draw no card; and whether it is flat, as the sun's
+   * shadow is.
+   */
+  pass(focal: number, ortho: boolean): void;
+  /** Shows or hides every card of these forms, for seeing what they draw. */
+  show(on: boolean): void;
+  dispose(): void;
+}
+
+/** The cards of `forms`, each turning far where its copies' crowns span `swapPx[k]` device pixels, by `turn`. */
+export function createFarCards(forms: readonly FarForm[], light: SceneLight, swapPx: readonly number[], turn: FarTurn): FarCards {
+  if (swapPx.length !== forms.length) throw new Error(`createFarCards was given ${forms.length} forms and ${swapPx.length} sizes they turn far at.`);
   const card = new THREE.PlaneGeometry(2, 2, 1, 5);
-  const sets = forms.map((form) => {
-    const sides = [false, true].map((fading) => {
-      // A geometry holds room for so many copies; three fixes how many an
-      // instanced geometry may draw when it is first bound, so outgrowing it
-      // takes a new geometry, never new attributes on the old one.
+  const pass = { uFarPass: { value: new THREE.Vector2(0, 0) }, uFarBand: { value: turn.band }, uFarLeave: { value: turn.leave } };
+  const materials = forms.map((form, k) => {
+    const [l0, l1, l2, l3] = form.atlas.layers;
+    const uniforms = {
+      ...light,
+      ...pass,
+      uFarSwap: { value: swapPx[k] as number },
+      uLayer0: { value: l0 },
+      uLayer1: { value: l1 },
+      uLayer2: { value: l2 },
+      uLayer3: { value: l3 },
+      uCenter: { value: form.bounds.center },
+      uRadius: { value: form.bounds.radius },
+      uHeight: { value: form.bounds.height },
+      uSway: { value: form.atlas.sway },
+      uFrequency: { value: form.atlas.frequency },
+      uElev: { value: [...FAR_VIEWS.elevations] },
+      uCoverEdge: { value: new THREE.Vector2(CARD.coverEdge[0], CARD.coverEdge[1]) },
+      uShadowLift: { value: CARD.shadowLift },
+    };
+    return {
+      solid: new THREE.ShaderMaterial({ vertexShader: CARD_VERT, fragmentShader: CARD_FRAG, uniforms, side: THREE.DoubleSide, alphaToCoverage: true }),
+      fading: new THREE.ShaderMaterial({ vertexShader: CARD_VERT, fragmentShader: CARD_FRAG, uniforms, defines: { FADING: "" }, side: THREE.DoubleSide, transparent: true, depthWrite: false }),
+      depth: new THREE.ShaderMaterial({ vertexShader: CARD_VERT, fragmentShader: CARD_DEPTH_FRAG, uniforms, side: THREE.DoubleSide }),
+    };
+  });
+  const sets = new Set<FarCopies>();
+  return {
+    copies(form) {
+      const m = materials[form];
+      if (m === undefined) throw new Error(`No far form ${form}; there are ${forms.length}.`);
+      const object = new THREE.Group();
+      // Both sets read the same copies; a geometry holds room for so many, and three fixes how many an instanced
+      // geometry may draw when it is first bound, so outgrowing it takes a new geometry, never new attributes.
       const geometryFor = (room: number): THREE.InstancedBufferGeometry => {
         const g = new THREE.InstancedBufferGeometry();
         g.index = card.index;
         g.setAttribute("position", card.getAttribute("position"));
-        g.setAttribute("aSpot", new THREE.InstancedBufferAttribute(new Float32Array(room * 4), 4));
-        g.setAttribute("aMore", new THREE.InstancedBufferAttribute(new Float32Array(room * 4), 4));
+        g.setAttribute("aSpot", new THREE.InstancedBufferAttribute(new Float32Array(Math.max(1, room) * 4), 4));
+        g.setAttribute("aMore", new THREE.InstancedBufferAttribute(new Float32Array(Math.max(1, room) * 4), 4));
+        g.setAttribute("aCrown", new THREE.InstancedBufferAttribute(new Float32Array(Math.max(1, room) * 4), 4));
         g.instanceCount = 0;
         return g;
       };
-      let capacity = 16;
-      const [l0, l1, l2, l3] = form.atlas.layers;
-      const uniforms = {
-        ...light,
-        uLayer0: { value: l0 },
-        uLayer1: { value: l1 },
-        uLayer2: { value: l2 },
-        uLayer3: { value: l3 },
-        uCenter: { value: form.bounds.center },
-        uRadius: { value: form.bounds.radius },
-        uHeight: { value: form.bounds.height },
-        uSway: { value: form.atlas.sway },
-        uFrequency: { value: form.atlas.frequency },
-        uElev: { value: [...FAR_VIEWS.elevations] },
-        uCoverEdge: { value: new THREE.Vector2(CARD.coverEdge[0], CARD.coverEdge[1]) },
-        uShadowLift: { value: CARD.shadowLift },
-      };
-      const color = new THREE.ShaderMaterial({
-        vertexShader: CARD_VERT,
-        fragmentShader: CARD_FRAG,
-        uniforms,
-        side: THREE.DoubleSide,
-        ...(fading ? { transparent: true, depthWrite: false } : { alphaToCoverage: true }),
-      });
-      const depth = new THREE.ShaderMaterial({ vertexShader: CARD_VERT, fragmentShader: CARD_DEPTH_FRAG, uniforms, side: THREE.DoubleSide });
-      const mesh = new THREE.Mesh(geometryFor(capacity), color);
-      mesh.frustumCulled = false;
-      if (fading) mesh.renderOrder = 2;
-      object.add(mesh);
-      return {
-        mesh,
-        color,
-        depth,
-        fading,
-        fill(list: readonly number[], copies: Float32Array): void {
-          if (list.length > capacity) {
-            capacity = Math.ceil(list.length * 1.25);
-            mesh.geometry.dispose();
-            mesh.geometry = geometryFor(capacity);
+      let room = 0;
+      let geometry = geometryFor(room);
+      const solid = new THREE.Mesh(geometry, m.solid);
+      const fading = new THREE.Mesh(geometry, m.fading);
+      for (const mesh of [solid, fading]) {
+        // The vertex shader places every card, and collapses those it does not draw: the mesh's bounds mean nothing.
+        mesh.frustumCulled = false;
+        object.add(mesh);
+      }
+      fading.renderOrder = 2;
+      const attribute = (name: string): THREE.InstancedBufferAttribute => geometry.getAttribute(name) as THREE.InstancedBufferAttribute;
+      const set: FarCopies = {
+        object,
+        place(places, crowns) {
+          const count = places.length / 7;
+          if (count > room) {
+            room = Math.ceil(count * 1.25);
+            geometry.dispose();
+            geometry = geometryFor(room);
+            solid.geometry = geometry;
+            fading.geometry = geometry;
           }
-          const geometry = mesh.geometry as THREE.InstancedBufferGeometry;
-          const a = geometry.getAttribute("aSpot") as THREE.InstancedBufferAttribute;
-          const b = geometry.getAttribute("aMore") as THREE.InstancedBufferAttribute;
-          list.forEach((c, k) => {
-            const o = c * FAR_COPY;
-            a.array.set([copies[o + 1] as number, copies[o + 2] as number, copies[o + 3] as number, copies[o + 4] as number], k * 4);
-            b.array.set([copies[o + 5] as number, copies[o + 6] as number, copies[o + 7] as number, copies[o + 8] as number], k * 4);
-          });
-          a.needsUpdate = true;
-          b.needsUpdate = true;
-          geometry.instanceCount = list.length;
+          const spot = attribute("aSpot");
+          const more = attribute("aMore");
+          for (let k = 0; k < count; k++) {
+            spot.array.set(places.subarray(k * 7, k * 7 + 4), k * 4);
+            more.array.set(places.subarray(k * 7 + 4, k * 7 + 7), k * 4);
+          }
+          attribute("aCrown").array.set(crowns.subarray(0, count * 4));
+          for (const name of ["aSpot", "aMore", "aCrown"]) attribute(name).needsUpdate = true;
+          geometry.instanceCount = count;
+        },
+        setVitalityAt(index, v) {
+          const more = attribute("aMore");
+          more.array[index * 4 + 1] = v;
+          more.needsUpdate = true;
+        },
+        useDepth(on) {
+          solid.material = on ? m.depth : m.solid;
+          fading.visible = !on;
+        },
+        dispose() {
+          geometry.dispose();
+          object.removeFromParent();
+          sets.delete(set);
         },
       };
-    });
-    return sides;
-  });
-  return {
-    object,
-    draw(copies, count) {
-      const lists = forms.map(() => [[] as number[], [] as number[]]);
-      for (let c = 0; c < count; c++) {
-        const form = copies[c * FAR_COPY] as number;
-        const fade = copies[c * FAR_COPY + 8] as number;
-        const list = lists[form];
-        if (list === undefined) throw new Error(`draw was given form ${form}, and there are ${forms.length}.`);
-        (list[fade < 1 ? 1 : 0] as number[]).push(c);
-      }
-      sets.forEach((sides, f) => sides.forEach((side, k) => side.fill((lists[f] as number[][])[k] as number[], copies)));
+      sets.add(set);
+      return set;
     },
-    useDepth(on) {
-      // Inside the band the near form still casts the shadow, so a fading card casts none.
-      for (const sides of sets) {
-        for (const side of sides) {
-          side.mesh.material = on ? side.depth : side.color;
-          side.mesh.visible = !(on && side.fading);
-        }
-      }
+    pass(focal, ortho) {
+      pass.uFarPass.value.set(focal, ortho ? 1 : 0);
+    },
+    show(on) {
+      for (const m of materials) for (const material of [m.solid, m.fading, m.depth]) material.visible = on;
     },
     dispose() {
+      for (const set of [...sets]) set.dispose();
       card.dispose();
-      for (const sides of sets) {
-        for (const side of sides) {
-          side.mesh.geometry.dispose();
-          side.color.dispose();
-          side.depth.dispose();
-        }
+      for (const m of materials) {
+        m.solid.dispose();
+        m.fading.dispose();
+        m.depth.dispose();
       }
     },
   };
