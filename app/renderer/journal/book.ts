@@ -502,7 +502,12 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
     m.style.transformOrigin = side === "right" ? "calc(64px - var(--pw)) 50%" : "var(--pw) 50%";
     // Its edge lifts a little under the pointer, the way a page invites you to take it, and it can be taken from here.
     const page = side === "right" ? right : cover;
-    m.addEventListener("pointerenter", () => open && !turning && page.classList.add("lift"));
+    // Only where a page lies that way: the first spread's left edge and the last one's right stay flat, the pointer plain.
+    m.addEventListener("pointerenter", () => {
+      const turns = open && at !== null && pages.next(at, side === "right" ? 1 : -1) !== null;
+      m.classList.toggle("none", !turns);
+      if (turns && !turning) page.classList.add("lift");
+    });
     m.addEventListener("pointerleave", () => page.classList.remove("lift"));
     m.addEventListener("pointerdown", (e) => {
       // Taken, the page lies flat at once: easing back from its lift under the leaf that takes over would flicker.
