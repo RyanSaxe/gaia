@@ -13,7 +13,7 @@ import { fbm, fieldAt } from "@gaia/primitives";
 import { resolveParams } from "@gaia/realize";
 import { RELIEF_BUDGET, type ReliefReport, measureRelief, withinBudget } from "./budget.ts";
 import { type LandSite, LAND_WARP, siteAt, warpPoint } from "./land.ts";
-import { type Lattice, createLattice, worldOf, worldOfZ } from "./lattice.ts";
+import { type Lattice, type LatticeFrame, createLattice, worldOf, worldOfZ } from "./lattice.ts";
 import { BANK_REACH, SHORE_CAP, type SolvedPond, type SolvedStream, carvePond, carveStream, shoreField, solvePond, solveStream } from "./water.ts";
 import { type LandOutline, pastTheEdge, withinLand } from "./edge.ts";
 
@@ -104,12 +104,25 @@ export interface Terrain {
   readonly coverShares: Uint8Array;
   readonly streams: readonly SolvedStream[];
   readonly ponds: readonly SolvedPond[];
-  /** The vertical scale applied to fit the budget; 1 means the landforms fit as chosen. */
+  /** The vertical scale applied to fit the budget, about `mean`; 1 means the landforms fit as chosen. */
   readonly fit: number;
+  readonly mean: number;
+  /** Each pond's depth, in the order of `ponds`. */
+  readonly pondDepths: readonly number[];
   /** Relief over the walkable square. */
   readonly report: ReliefReport;
   readonly landforms: readonly Landform[];
 }
+
+/** The plan a bake of the whole world followed: what a tile of it needs to be baked alone (`bakeTile`). */
+export const planOf = (t: Terrain): TerrainPlan => ({
+  spec: t.spec,
+  landforms: t.landforms,
+  mean: t.mean,
+  fit: t.fit,
+  streams: t.streams,
+  ponds: t.ponds.map((pond, i) => ({ pond, depth: t.pondDepths[i] as number })),
+});
 
 type ErasedBuild = (params: unknown, ctx: BuildContext, input: unknown) => unknown;
 
@@ -326,13 +339,19 @@ export interface ComposedRows {
 /** The baked lattice's shape for a world: samples every TERRAIN.spacing meters over the walkable square and its skirt. */
 export const latticeOf = (spec: WorldSpec): Lattice => createLattice(spec.size + TERRAIN.skirt * 2, TERRAIN.spacing);
 
+/** The world lattice's frame alone, as `latticeOf` lays it, without its samples: for reading positions, not heights. */
+export function frameOf(spec: WorldSpec): { readonly n: number; readonly spacing: number; readonly origin: number } {
+  const n = Math.round((spec.size + TERRAIN.skirt * 2) / TERRAIN.spacing) + 1;
+  return { n, spacing: TERRAIN.spacing, origin: (-(n - 1) * TERRAIN.spacing) / 2 };
+}
+
 /**
  * Composes lattice rows [z0, z1): each sample's blended height and its cover.
  * Rows are independent, so a bake may compose them in parts, on several
  * threads, and get the same bytes as composing them at once.
  */
 export function composeRows(spec: WorldSpec, landforms: readonly Landform[], z0: number, z1: number): ComposedRows {
-  const lattice = latticeOf(spec);
+  const lattice = frameOf(spec);
   return { z0, z1, ...composeRect(spec, landforms, lattice, 0, lattice.n, z0, z1) };
 }
 
@@ -345,7 +364,7 @@ type ComposedRect = Omit<ComposedRows, "z0" | "z1">;
  * sample is composed alone from where it stands, so the same point gives the
  * same bytes in any of them.
  */
-function composeRect(spec: WorldSpec, landforms: readonly Landform[], l: Lattice, x0: number, x1: number, z0: number, z1: number): ComposedRect {
+function composeRect(spec: WorldSpec, landforms: readonly Landform[], l: LatticeFrame, x0: number, x1: number, z0: number, z1: number): ComposedRect {
   const count = spec.regions.length;
   if (count > 255) throw new Error(`A world holds at most 255 regions; this one has ${count}.`);
   const n = x1 - x0;
@@ -447,6 +466,8 @@ export function finishTerrain(spec: WorldSpec, landforms: readonly Landform[], p
     streams,
     ponds: ponds.map((p) => p.pond),
     fit,
+    mean,
+    pondDepths: ponds.map((p) => p.depth),
     report: measureRelief(final, heights, (ix, iz) => withinLand(spec, worldOf(final, ix), worldOf(final, iz))),
     landforms,
   };
@@ -562,10 +583,11 @@ export const TILE = { size: 256, margin: Math.ceil(SHORE_CAP / TERRAIN.spacing) 
 
 /** One tile of a world's land, as the whole world's bake would hold it. */
 export interface TerrainTile {
-  /** The world lattice's column and row of the tile's first sample, and its samples a side. */
+  /** The world lattice's column and row of the tile's first sample, its samples a side, and how many of the world's samples apart they lie. */
   readonly x0: number;
   readonly z0: number;
   readonly n: number;
+  readonly stride: number;
   /** Row-major over the tile, as `Terrain`'s arrays are over the world. */
   readonly heights: Float32Array;
   readonly waterLevel: Float32Array;
@@ -579,13 +601,16 @@ export interface TerrainTile {
  * Bakes the tile whose first sample is the world lattice's column `x0`, row
  * `z0`, from `plan` alone: its own ground composed with a margin, fitted, the
  * plan's water cut in and the shore measured, byte for byte as a bake of the
- * whole world holds those samples.
+ * whole world holds those samples. With a `stride`, the tile takes every
+ * stride-th sample of the world's lattice, as a coarser level of the land
+ * does: the same heights, water and cover there, and the shore measured
+ * between its own samples.
  */
-export function bakeTile(plan: TerrainPlan, x0: number, z0: number, size: number = TILE.size): TerrainTile {
-  const world = latticeOf(plan.spec);
-  const m = TILE.margin;
+export function bakeTile(plan: TerrainPlan, x0: number, z0: number, size: number = TILE.size, stride = 1): TerrainTile {
+  const world = frameOf(plan.spec);
+  const m = stride === 1 ? TILE.margin : Math.ceil(SHORE_CAP / (world.spacing * stride)) + 1;
   const side = size + 2 * m;
-  const frame: Lattice = { n: side, spacing: world.spacing, origin: worldOf(world, x0 - m), originZ: worldOf(world, z0 - m), heights: new Float32Array(0) };
+  const frame: Lattice = { n: side, spacing: world.spacing * stride, origin: worldOf(world, x0 - m * stride), originZ: worldOf(world, z0 - m * stride), heights: new Float32Array(0) };
   const composed = composeRect(plan.spec, plan.landforms, frame, 0, side, 0, side);
   const heights = composed.raw.map((h) => plan.mean + (h - plan.mean) * plan.fit);
   const window: Lattice = { ...frame, heights };
@@ -603,6 +628,7 @@ export function bakeTile(plan: TerrainPlan, x0: number, z0: number, size: number
     x0,
     z0,
     n: size,
+    stride,
     heights: inner(heights, 1),
     waterLevel: inner(waterLevel, 1),
     shore: inner(shore, 1),
@@ -638,7 +664,7 @@ function fitRelief(spec: WorldSpec, l: Lattice): { mean: number; fit: number } {
 /** Bakes the world's one height truth. */
 export function bakeTerrain(spec: WorldSpec, lib: Library): Terrain {
   const landforms = landformsOf(spec, lib);
-  return finishTerrain(spec, landforms, [composeRows(spec, landforms, 0, latticeOf(spec).n)]);
+  return finishTerrain(spec, landforms, [composeRows(spec, landforms, 0, frameOf(spec).n)]);
 }
 
 /**

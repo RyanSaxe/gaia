@@ -14,7 +14,7 @@ import { type Blueprint, type BuildingPlan, type GroundSpec, Library, type Palet
 import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, LANDMARK_PRIMITIVES, NO_SHIFT, ROUTE_PRIMITIVES, RELIEF_PRIMITIVES, ROCK_PRIMITIVES, WILDFLOWER_PRIMITIVES, WORLD_PRIMITIVES, hex, mixLab } from "@gaia/primitives";
 import { biome, link, world as worldKind } from "@gaia/kinds";
 import { defaultParams, validate } from "@gaia/world";
-import { FLORA_PRESETS, LANDMARK_PRESETS, type Realized, TRAIL_PRESETS, WORLD_PRESETS, buildSlots, mergeParts, realizeRegion, realizeSky } from "@gaia/realize";
+import { AIR, FLORA_PRESETS, LANDMARK_PRESETS, type Realized, TRAIL_PRESETS, WORLD_PRESETS, buildSlots, mergeParts, realizeRegion, realizeSky } from "@gaia/realize";
 import {
   FAR_COPY,
   type FarCards,
@@ -35,7 +35,7 @@ import {
   createSunShadow,
   type SceneLight,
 } from "@gaia/render";
-import { type Capsule, clearanceAt, COVER_TAPS, LAND_ASPECT, type Deck, decksOf, DRY, EYE_HEIGHT, footingAt, FULL_WORLD, GAIT, groundHeightAt, heightAt, type Intent, junctionVitality, latticeOf, NO_SOLIDS, NO_TRAILS, outlineShape, withinLand, piecesShapes, type Place, placeAt, planWalk, randomWorld, regionPlaces, RELIEF_BUDGET, sampleWorld, SHORE_CAP, sightlines, siteToWorld, SMALL_WORLD, type Solids, type SolidShape, solidsOf, stanceAt, standAt, stride, type Stride, type Terrain, TERRAIN, type TrailNetwork, type Walk, WALK_TO, walkStep, wallsShape, waterDepthAt, type Way, wayAhead, wayVitalityAt, wayWear, WILDS, type WorldPlaces, type WorldSpec } from "@gaia/terrain";
+import { type Capsule, clearanceAt, type Placement, LAND_ASPECT, type Deck, decksOf, EYE_HEIGHT, footingAt, FULL_WORLD, GAIT, groundHeightAt, heightAt, type Intent, junctionVitality, NO_SOLIDS, NO_TRAILS, outlineShape, withinLand, piecesShapes, type Place, placeAt, planWalk, randomWorld, regionPlaces, RELIEF_BUDGET, sampleWorld, sightlines, siteToWorld, SMALL_WORLD, type Solids, type SolidShape, solidsOf, stanceAt, standAt, stride, type Stride, type Terrain, TERRAIN, type TrailNetwork, type Walk, WALK_TO, walkStep, wallsShape, waterDepthAt, type Way, wayAhead, wayVitalityAt, wayWear, WILDS, type WorldPlaces, type WorldSpec } from "@gaia/terrain";
 import { createSky } from "../world/environment.ts";
 import { type Pixels, createCapture } from "./capture.ts";
 import { renderInspector } from "../inspector.ts";
@@ -60,7 +60,8 @@ import { type CodeLab, type Said, codeWorld, judgedOf, representSymbol } from ".
 import { createSettlement, settlementBuilds } from "./settlement.ts";
 import { createSigns } from "./signs.ts";
 import { type Baked, createBaker } from "./baker.ts";
-import { type Stand, type StandRequest, type StandingLandmark, landmarkBase, ownerVitality, understoryVitality } from "./stand.ts";
+import { createPageLand } from "./land.ts";
+import { type Stand, type StandRequest, type StandingLandmark, landmarkBase, ownerVitality, tileArea, tilesOf, understoryVitality } from "./stand.ts";
 import { groundVitalityAt, setGroundOwnership, showGroundVitality } from "./vitality.ts";
 import { type TourStop, tourStops } from "./tour.ts";
 import { type Change, pictureChange, tallyFrame } from "./measure.ts";
@@ -257,8 +258,8 @@ export interface WorldHandle {
    * toward the area's building or landmark, else toward `heart`.
    */
   landing(x: number, z: number, heart?: { readonly x: number; readonly z: number }): Landing | null;
-  /** Puts the person at a landing at once: only under cover of a transition, so nothing is seen to jump. */
-  place(at: Landing): void;
+  /** Puts the person at a landing at once: only under cover of a transition, so nothing is seen to jump. Resolves once the land around them is in. */
+  place(at: Landing): Promise<void>;
   /**
    * The world's own view of a thing, for its painting in the journal, `w` by
    * `h` pixels: its building, landmark or tree, or the plant or stone a
@@ -374,28 +375,6 @@ const LANDMARK_ASKS: readonly BuildAsk[] = LANDMARK_PRESETS.map((preset, i) => (
 /** Every build the terrain lab makes as it opens, whatever world it shows: what the page makes ahead (made.ts). */
 export const openingBuilds = (): BuildAsk[] => [...TREE_ASKS, ...LANDMARK_ASKS, ...understoryBuilds(), ...wildBushBuilds()];
 
-/** Level, dry ground the size of a world's lattice: what the lab holds, behind its veil, until the first bake arrives. */
-function levelGround(spec: WorldSpec): Terrain {
-  const lattice = latticeOf(spec);
-  const count = lattice.n * lattice.n;
-  const shares = new Uint8Array(count * COVER_TAPS);
-  for (let i = 0; i < count; i++) shares[i * COVER_TAPS] = 255;
-  return {
-    spec,
-    lattice,
-    waterLevel: new Float32Array(count).fill(DRY),
-    shore: new Float32Array(count).fill(SHORE_CAP),
-    region: new Uint8Array(count),
-    coverRegions: new Uint8Array(count * COVER_TAPS),
-    coverShares: shares,
-    streams: [],
-    ponds: [],
-    fit: 1,
-    report: { min: 0, max: 0, range: 0, maxSlope: 0, walkShare: 1, maxStep: 0 },
-    landforms: [],
-  };
-}
-
 export function createTerrainLab(root: HTMLElement): TerrainLab {
   root.innerHTML = TEMPLATE;
   const $ = refs(root);
@@ -406,7 +385,9 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
 
   const baker = createBaker();
   let world: WorldSpec = sampleWorld(SCALE);
-  let terrain: Terrain = levelGround(world);
+  // The land around the person, baked in chunks from each world's plan: its level, dry placeholder until the first world opens.
+  const land = createPageLand();
+  const terrain: Terrain = land.terrain;
   let bakeMs = 0;
   // What another layer stands beside the trails, and where a person is.
   /** What stops a walker without the furnishing. */
@@ -505,7 +486,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
 
   const scene = new THREE.Scene();
   const sky = createSky(light);
-  const groundTex = createGroundTexture(terrain);
+  const groundTex = createGroundTexture(land);
   const ground = createGround(terrain, light, covers, groundTex);
   const clearings = createClearings(terrain);
   const grass = createGrass(light, groundTex, covers, clearings);
@@ -889,9 +870,40 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       return i;
     });
     // Nothing of the understory stands in a building, on its walk, on a trail or under a landmark: the bake thread kept it clear.
-    understory.place(terrain, world, [], understoryDensity, stood.placements);
+    // The symbols' placements come first and stay; each tile's understory follows, held while the tile is near.
+    const scattered = stood.tiles.reduce((n, t) => n + t.count, 0);
+    symbolsStood = stood.placements.slice(0, stood.placements.length - scattered);
+    understoryTiles.clear();
+    let from = symbolsStood.length;
+    for (const t of stood.tiles) {
+      understoryTiles.set(`${t.ti},${t.tj}`, stood.placements.slice(from, from + t.count));
+      from += t.count;
+    }
+    thingsAt = { x: walker.x, z: walker.z };
+    understory.place(terrain, world, [], understoryDensity, heldPlacements());
     showUnderstoryVitality();
-    // What stops a walker: each trunk at its base, the rocks and bushes by their outlines at the ground, and the cottage's walls.
+    buildSolids();
+    // Each tree's file is the ground around it, out to most of its crown.
+    // In the codebase's world every file has its own patch; in the sample world a file's patch is the ground around its tree, out to most of its crown.
+    places =
+      code !== null
+        ? code.world
+        : regionPlaces(
+            terrain.spec,
+            SAMPLE_NAME,
+            trees.map((t) => ({
+              path: t.represented.id,
+              name: t.represented.name,
+              x: t.x,
+              z: t.z,
+              radius: Math.max(4, Math.min(7, (variants[t.variant] as TreeVariant).radius * t.scale * 0.8)),
+              vitality: t.represented.report.vitality,
+            })),
+          );
+    warmSoon();
+  }
+  /** What stops a walker: each trunk at its base, the rocks and bushes standing near by their outlines at the ground, and the cottage's walls. */
+  function buildSolids(): void {
     const trunks: SolidShape[] = trees.flatMap((t) => {
       const trunk = (variants[t.variant] as TreeVariant).trunk * t.scale;
       return trunk > 0 ? [{ x: t.x, z: t.z, radius: trunk }] : [];
@@ -918,26 +930,68 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     });
     bodies = [...trunks, ...components, ...standing, ...buildings];
     solids = solidsOf(furnishSolid ? [...bodies, ...furnished.solids] : bodies);
-    // Each tree's file is the ground around it, out to most of its crown.
-    // In the codebase's world every file has its own patch; in the sample world a file's patch is the ground around its tree, out to most of its crown.
-    places =
-      code !== null
-        ? code.world
-        : regionPlaces(
-            terrain.spec,
-            SAMPLE_NAME,
-            trees.map((t) => ({
-              path: t.represented.id,
-              name: t.represented.name,
-              x: t.x,
-              z: t.z,
-              radius: Math.max(4, Math.min(7, (variants[t.variant] as TreeVariant).radius * t.scale * 0.8)),
-              vitality: t.represented.report.vitality,
-            })),
-          );
-    warmSoon();
   }
   let solids: Solids = NO_SOLIDS;
+
+  // ---------- the understory, tile by tile ----------
+
+  /**
+   * How near a tile of the land must lie for its understory to stand, meters
+   * from the person to its nearest point: past where the air dissolves the
+   * land into the sky, so nothing is seen to come; and how far it may lie
+   * before it is let go, farther still, so a step back and forth keeps it.
+   */
+  const THINGS = { ask: AIR.dissolveEnd + 250, hold: AIR.dissolveEnd + 450 } as const;
+  /** The symbols' placements, which stand wherever the person is, before every tile's. */
+  let symbolsStood: readonly Placement[] = [];
+  /** Each held tile's understory, by "ti,tj". */
+  const understoryTiles = new Map<string, readonly Placement[]>();
+  /** Tiles asked of the land workers and not yet come. */
+  const askedTiles = new Set<string>();
+  /** Where the held tiles were last weighed, and whether the understory must be stood again. */
+  let thingsAt = { x: 0, z: 0 };
+  let restandSoon = false;
+  const heldPlacements = (): Placement[] => [...symbolsStood, ...[...understoryTiles.values()].flat()];
+  const tileDistance = (ti: number, tj: number, x: number, z: number): number => {
+    const a = tileArea(world, ti, tj);
+    return Math.hypot(Math.max(a.x0 - x, 0, x - a.x1), Math.max(a.z0 - z, 0, z - a.z1));
+  };
+  /** The tiles whose understory should stand around (x, z). */
+  const tilesNear = (spec: WorldSpec, x: number, z: number): [number, number][] =>
+    tilesOf(spec).filter(([ti, tj]) => {
+      const a = tileArea(spec, ti, tj);
+      return Math.hypot(Math.max(a.x0 - x, 0, x - a.x1), Math.max(a.z0 - z, 0, z - a.z1)) <= THINGS.ask;
+    });
+  /** Lets go of tiles left far behind and asks the workers for tiles come near, once the person has walked a little way. */
+  function followThings(x: number, z: number): void {
+    if (Math.hypot(x - thingsAt.x, z - thingsAt.z) < 24) return;
+    thingsAt = { x, z };
+    for (const key of [...understoryTiles.keys()]) {
+      const [ti, tj] = key.split(",").map(Number) as [number, number];
+      if (tileDistance(ti, tj, x, z) <= THINGS.hold) continue;
+      understoryTiles.delete(key);
+      restandSoon = true;
+    }
+    const asking = world;
+    for (const [ti, tj] of tilesNear(world, x, z)) {
+      const key = `${ti},${tj}`;
+      if (understoryTiles.has(key) || askedTiles.has(key)) continue;
+      askedTiles.add(key);
+      void land.things(ti, tj).then((placed) => {
+        askedTiles.delete(key);
+        if (placed === null || world !== asking || tileDistance(ti, tj, walker.x, walker.z) > THINGS.hold) return;
+        understoryTiles.set(key, placed);
+        restandSoon = true;
+      });
+    }
+  }
+  /** Stands the held tiles' understory again: their copies move, nothing rebuilds. */
+  function restandUnderstory(): void {
+    restandSoon = false;
+    understory.place(terrain, world, [], understoryDensity, heldPlacements());
+    showUnderstoryVitality();
+    buildSolids();
+  }
   /** In the codebase's world, each symbol's placement among the understory's, or -1. */
   let symbolPlacements: readonly number[] = [];
   /** The subject each symbol's placement stands for, by its index in the understory's placements. */
@@ -1584,7 +1638,8 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
    * page long enough for the wait to stutter. The world draws no frames
    * until it has all settled in.
    */
-  async function adopt(next: WorldSpec, baked: Terrain, stood: Stand, ownership: Baked["ownership"]): Promise<void> {
+  async function adopt(next: WorldSpec, baked: Baked): Promise<void> {
+    const { stand: stood, ownership } = baked;
     const nextFrame = (): Promise<void> => new Promise((r) => requestAnimationFrame(() => r()));
     holding++;
     try {
@@ -1592,7 +1647,8 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       await poolLandmarks(stood.landmarks, nextFrame);
       await understory.prepare(stood.placements, nextFrame);
       world = next;
-      terrain = baked;
+      // The land around where the person stands, before anything is stood on it.
+      await land.open({ source: baked.land, report: baked.report, wildBase: baked.wildBase }, walker.x, walker.z);
       // Areas first, so whatever stands beside the trails knows where it is; files join when the trees stand.
       places = code !== null ? code.world : regionPlaces(terrain.spec, SAMPLE_NAME, []);
       clearings.fit(terrain);
@@ -1606,7 +1662,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       placeBuildings();
       await nextFrame();
       updateCovers();
-      groundTex.update(terrain, stood.ground, stood.network.ways);
+      groundTex.update(terrain);
       setGroundOwnership(ownership);
       showLandVitality();
       await nextFrame();
@@ -1655,11 +1711,11 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     const t0 = performance.now();
     $("random").textContent = "Baking…";
     reportStage("baking", { size: next.size });
-    const baked = await baker.bake(next, standRequest(next));
+    const baked = await baker.bake(next, standRequest(next), tilesNear(next, walker.x, walker.z));
     if (mine !== asked) return false;
     bakeMs = performance.now() - t0;
     reportStage("baked", { size: next.size, bakeMs: Math.round(bakeMs) });
-    await adopt(next, baked.terrain, baked.stand, baked.ownership);
+    await adopt(next, baked);
     reportStage("stood", { size: next.size, trees: trees.length });
     $("random").textContent = "Random terrain";
     return true;
@@ -1830,8 +1886,10 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       updateWalk(dt);
       detailEye.set(detailPin?.x ?? camera.position.x, camera.position.y, detailPin?.z ?? camera.position.z);
       ground.follow(detailPin?.x ?? walker.x, detailPin?.z ?? walker.z);
-      groundTex.follow(detailPin?.x ?? walker.x, detailPin?.z ?? walker.z);
+      land.follow(detailPin?.x ?? walker.x, detailPin?.z ?? walker.z);
       wildGrowth.follow(detailPin?.x ?? walker.x, detailPin?.z ?? walker.z);
+      followThings(walker.x, walker.z);
+      if (restandSoon) restandUnderstory();
       lantern.follow(camera.position, forward, lanternGround, walked, dt);
       grass.follow(detailEye);
       water.wade(walker.x, walker.z, walker.yaw, walked, dt);
@@ -2360,7 +2418,10 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       resize();
     },
     landing: (x, z, heart) => landingNear(x, z, heart),
-    place: (at) => walkTo(at.x, at.z, at.yaw),
+    place: (at) => {
+      walkTo(at.x, at.z, at.yaw);
+      return land.around(at.x, at.z);
+    },
     view: (id, w, h, wide) => viewOf(id, w, h, wide),
     seenFrom: (id) => seenFromOf(id),
     judged: (of) => code?.said(of) ?? [],

@@ -3,8 +3,8 @@ import { type BuildingPlan, Library, type RouteSpec, seedOf } from "@gaia/schema
 import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, RELIEF_PRIMITIVES, ROUTE_PRIMITIVES, STRUCTURE_PRIMITIVES } from "@gaia/primitives";
 import { link, structure } from "@gaia/kinds";
 import { STRUCTURE_PRESETS, TRAIL_PRESETS, buildSlots, realize } from "@gaia/realize";
-import { bakeTerrain, heightAt, planTerrain, sampleWorld, siteToWorld, standTile, trailPlaces } from "@gaia/terrain";
-import { type StandCode, type StandRequest, standWorld } from "./stand.ts";
+import { type Placement, SHORE_CAP, TILE, bakeTerrain, frameOf, heightAt, planTerrain, sampleWorld, siteToWorld, standTile, tileTerrain, trailField, trailPlaces } from "@gaia/terrain";
+import { type StandCode, type StandRequest, TILE_SCATTER, scatterTile, standWorld, tilesOf } from "./stand.ts";
 
 const lib = new Library([...RELIEF_PRIMITIVES, ...BIOME_PRIMITIVES]);
 const buildingLib = new Library([...STRUCTURE_PRIMITIVES, ...FLORA_PRIMITIVES]);
@@ -29,6 +29,7 @@ const bytes = (a: ArrayBufferView): Buffer => Buffer.from(a.buffer, a.byteOffset
 const baked = bakeTerrain(sampleWorld(), lib);
 const pristine = structuredClone(baked);
 const forTiles = structuredClone(baked);
+const forScatter = structuredClone(baked);
 
 describe("standing a world's things on a bake", () => {
   it("stands the same things whether the bake crossed to another thread or not, leveling the pads first", () => {
@@ -37,14 +38,14 @@ describe("standing a world's things on a bake", () => {
     const there = structuredClone(pristine);
     const a = standWorld(here, request);
     const b = standWorld(there, request);
-    expect(bytes(a.ground).equals(bytes(b.ground))).toBe(true);
+    expect(b.edits).toEqual(a.edits);
     expect(bytes(here.lattice.heights).equals(bytes(there.lattice.heights))).toBe(true);
     expect(b.sites).toEqual(a.sites);
     expect(b.network).toEqual(a.network);
     expect(b.trees).toEqual(a.trees);
     expect(b.placements).toEqual(a.placements);
     expect(a.network.ways.length).toBeGreaterThan(0);
-    // The ground texture's data is the leveled lattice: each house stands on its own flat pad.
+    // Each house stands on its own flat pad.
     a.sites.forEach((site, i) => {
       const plan = request.buildings[i]!.plan;
       for (const [lx, lz] of [[0, 0], [plan.width / 2, 0], [0, -plan.depth / 2]] as const) {
@@ -52,8 +53,6 @@ describe("standing a world's things on a bake", () => {
         expect(Math.abs(heightAt(here.lattice, x, z) - site.level)).toBeLessThan(0.02);
       }
     });
-    const n = here.lattice.n;
-    for (let k = 0; k < n * n; k += 1009) expect(a.ground[k * 4]).toBe(here.lattice.heights[k]);
     // Nothing stands in a house: trees keep six meters off its walls.
     for (const t of a.trees) {
       for (const site of a.sites) expect(Math.hypot(t.x - site.x, t.z - site.z)).toBeGreaterThan(4);
@@ -98,17 +97,18 @@ describe("standing a world's things on a bake", () => {
     for (const tr of stood.network.trails) expect(["packages/a->packages/b", "packages/a->packages/c"]).toContain(tr.id);
   });
 
-  // Bakes and levels every 64-sample tile of the land: two seconds alone, several when other work shares the machine.
+  // Bakes and levels every 64-sample tile of the land, and the land twice more at coarser strides: two seconds alone,
+  // several when other work shares the machine.
   it("bakes each tile of the land alone, leveled as standing leveled the world, sample for sample", { timeout: 20_000 }, () => {
     const t = forTiles;
     const stood = standWorld(t, request);
-    // The whole stood land's places, which each tile's must match.
-    const places = trailPlaces(t, stood.network.ways);
     expect(stood.edits.pads.length).toBe(request.buildings.length);
     expect(stood.edits.ways.length).toBeGreaterThan(0);
     const plan = planTerrain(t.spec, t.landforms);
     const size = 64;
     const { n } = t.lattice;
+    const field = trailField(t, stood.network.ways);
+    const places = trailPlaces(t, stood.network.ways);
     const differ = { heights: 0, water: 0, shore: 0, field: 0, places: 0 };
     for (let z0 = 0; z0 < n; z0 += size) {
       for (let x0 = 0; x0 < n; x0 += size) {
@@ -120,12 +120,55 @@ describe("standing a world's things on a bake", () => {
             if (tile.heights[k] !== t.lattice.heights[w]) differ.heights++;
             if (tile.waterLevel[k] !== t.waterLevel[w]) differ.water++;
             if (tile.shore[k] !== t.shore[w]) differ.shore++;
-            if (tile.trailField[k] !== stood.ground[w * 4 + 3]) differ.field++;
+            if (tile.trailField[k] !== field[w]) differ.field++;
             if (tile.trailPlaces[k * 2] !== places[w * 2] || tile.trailPlaces[k * 2 + 1] !== places[w * 2 + 1]) differ.places++;
           }
         }
       }
     }
     expect(differ).toEqual({ heights: 0, water: 0, shore: 0, field: 0, places: 0 });
+    // A coarser level takes every stride-th sample: the same land, but for the shore it measures between its own
+    // samples, and the treads it eases by that shore, all close to the water.
+    for (const stride of [2, 4]) {
+      const side = Math.ceil(n / stride);
+      const tile = standTile(plan, stood.edits, stood.network.ways, 0, 0, side, stride);
+      let wet = 0;
+      const coarse = { water: 0, region: 0, dryHeights: 0 };
+      for (let j = 0; j * stride < n; j++) {
+        for (let i = 0; i * stride < n; i++) {
+          const w = j * stride * n + i * stride;
+          const k = j * side + i;
+          if (tile.waterLevel[k] !== t.waterLevel[w]) coarse.water++;
+          if (tile.region[k] !== t.region[w]) coarse.region++;
+          if ((t.shore[w] as number) < SHORE_CAP) wet++;
+          else if (tile.heights[k] !== t.lattice.heights[w]) coarse.dryHeights++;
+        }
+      }
+      expect(coarse, `stride ${stride}`).toEqual({ water: 0, region: 0, dryHeights: 0 });
+      expect(wet).toBeGreaterThan(0);
+    }
+  });
+
+  // Each tile's window is a few hundred meters a side: a second or so of baking when other work shares the machine.
+  it("scatters a tile's understory alone, on its own window of the land, as it stands with the world", { timeout: 20_000 }, () => {
+    const t = forScatter;
+    const stood = standWorld(t, request);
+    const plan = planTerrain(t.spec, t.landforms);
+    const m = Math.ceil(TILE_SCATTER.sites + TILE_SCATTER.reads) + 2;
+    const tiles = tilesOf(t.spec);
+    expect(tiles.length).toBeGreaterThan(1);
+    let total = 0;
+    for (const [ti, tj] of tiles) {
+      const withWorld = scatterTile(t, stood.scatter, ti, tj);
+      const window = tileTerrain(plan, standTile(plan, stood.edits, stood.network.ways, ti * TILE.size - m, tj * TILE.size - m, TILE.size + 2 * m));
+      // The same groups and members; heights read between samples from the window's own origin differ only in rounding.
+      const settled = (ps: readonly Placement[]) => ps.map((p) => ({ ...p, y: Math.round(p.y * 1e9) }));
+      expect(settled(scatterTile(window, stood.scatter, ti, tj)), `tile (${ti}, ${tj})`).toEqual(settled(withWorld));
+      total += withWorld.length;
+    }
+    // Every tile's own groups, and no group twice: the world's understory is its tiles'.
+    expect(stood.placements.length - stood.symbols.length).toBe(total);
+    expect(total).toBeGreaterThan(0);
+    expect(frameOf(t.spec).n).toBeGreaterThan(TILE.size);
   });
 });

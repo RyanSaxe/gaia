@@ -3,38 +3,17 @@
 // and `coverShares`: each lattice sample's largest few), interpolated between
 // samples as the lattice is, so the cover drifts across the same wide band
 // where the land changes, in the same patches the bake measured. The shares
-// ride in the land's clipmap (`CLIP` in ground.ts), laid from the bake's own
-// bytes by `layCovers`. The last two slots hold the wild's own two covers,
-// which grow past the land.
+// ride in the land's clipmap (`CLIP` in ground.ts), baked with the land's
+// chunks (`land-chunks.ts`). The last two slots hold the wild's own two
+// covers, which grow past the land.
 
 import * as THREE from "three";
 import type { GroundSpec } from "@gaia/schema";
-import { COVER_TAPS, type Terrain, type WorldSpec, landRadius } from "@gaia/terrain";
+import { type Terrain, type WorldSpec, landRadius } from "@gaia/terrain";
 
 export const MAX_REGIONS = 32;
 /** The slots of the wild's two covers, after every region's. */
 const WILD_SLOTS = [MAX_REGIONS - 2, MAX_REGIONS - 1] as const;
-
-/** Lattice sample (i, j) of `n` a side: where its four cover taps lie in the bake's `coverRegions` or `coverShares`, in 32-bit words. */
-const coverAt = (n: number, i: number, j: number): number => j * n + i;
-
-/**
- * Lays rows [r0, r1) of a clipmap level's covers into `into` from byte `at`:
- * each texel the taps (`coverRegions` or `coverShares`) of the lattice sample
- * under it, at columns `columns` of rows `rows`, four bytes as the bake wrote
- * them, copied as one word.
- */
-export function layCovers(taps: Uint8Array, n: number, columns: Int32Array, rows: Int32Array, r0: number, r1: number, into: Uint8Array, at: number): void {
-  if (COVER_TAPS !== 4) throw new Error("The cover textures hold four regions per lattice sample.");
-  const from = new Uint32Array(taps.buffer, taps.byteOffset, taps.length / 4);
-  const to = new Uint32Array(into.buffer, into.byteOffset + at, (into.length - at) / 4);
-  const width = columns.length;
-  for (let r = r0; r < r1; r++) {
-    const j = rows[r] as number;
-    let o = r * width;
-    for (let c = 0; c < width; c++, o++) to[o] = from[coverAt(n, columns[c] as number, j)] as number;
-  }
-}
 
 const vectors = <T>(make: () => T): { value: T[] } => ({ value: Array.from({ length: MAX_REGIONS }, make) });
 
