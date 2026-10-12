@@ -40,7 +40,10 @@
     linear-gradient(270deg, #b9a983, #d9cdae 4%, #e5dabe);
   clip-path: path("M0 0 L 480 0 C 500 0, 514 0.6, 524 2 L 524 662 C 514 663.4, 500 664, 480 664 L 0 664 Z");
 }
-.jb-right { left: 0; top: calc(var(--ph) / -2); width: var(--pw); height: var(--ph); pointer-events: auto; }
+/* The right-hand page stands in the book's own 3D space rather than flattened onto its holder: flattened, Chromium's
+   hit test misses the page's clipped shape over its lower half and finds the holder, so a click there missed what it
+   was on, a row or the map. */
+.jb-right { left: 0; top: calc(var(--ph) / -2); width: var(--pw); height: var(--ph); pointer-events: auto; transform-style: preserve-3d; }
 
 /* The cover swings on the spine: shut, it lies over the right-hand pages; open, its back is the left-hand page. */
 .jb-cover {
@@ -49,6 +52,9 @@
   transition: transform 900ms cubic-bezier(.45, .05, .3, 1);
 }
 .jb-cover.open { transform: translateZ(0.4px) rotateY(-179.6deg); }
+/* Open, the cover's front is turned away under the left-hand page: the minimap's touch on its slip would otherwise
+   still catch clicks meant for the page's top corner. */
+.jb-cover.open > .front * { pointer-events: none; }
 .jb-face { position: absolute; inset: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden; }
 .jb-face.back { transform: rotateY(180deg); }
 .jb-cover > .front {
