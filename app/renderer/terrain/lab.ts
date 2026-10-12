@@ -741,6 +741,15 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   const warmCamera = new THREE.PerspectiveCamera();
   /** While above 0, the world is changing (shaders compiling, a new world settling in) and draws no frames: the wait, or the world as it stood, holds. */
   let holding = 0;
+  /** Who waits for the world to settle, woken once nothing holds it. */
+  const awaitingSettled: (() => void)[] = [];
+  /** Lets go of one hold on the world; the last to let go wakes whoever waits on it. */
+  const letGo = (): void => {
+    holding--;
+    if (holding === 0) for (const wake of awaitingSettled.splice(0)) wake();
+  };
+  /** Settles once nothing holds the world: at once if nothing does, else when the last hold lets go, never sooner. */
+  const settled = (): Promise<void> => (holding === 0 ? Promise.resolve() : new Promise((wake) => awaitingSettled.push(wake)));
   let warmed: Promise<void> = Promise.resolve();
   /**
    * Readies everything to draw without holding the page: every shader the
@@ -768,7 +777,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
         warm();
         reportStage("shaders");
       } finally {
-        holding--;
+        letGo();
       }
     });
   }
@@ -1556,7 +1565,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       refreshPanel();
       for (const listener of stoodListeners) listener();
     } finally {
-      holding--;
+      letGo();
     }
   }
 
@@ -2057,8 +2066,10 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     }
   }
   function viewOf(id: string, w: number, h: number, wide = false): Promise<{ color: Pixels; mask: Pixels } | null> {
-    // While the world is changing it draws nothing; the view waits for it to settle.
-    if (holding > 0) return warmed.then(() => viewOf(id, w, h, wide));
+    // While the world is changing it draws nothing; the view waits for whatever holds it, shaders warming or a new world
+    // settling in, to let go. Waiting on the warming alone, a view asked for while a new world settled in retried at
+    // once, forever, and the page never drew another frame.
+    if (holding > 0) return settled().then(() => viewOf(id, w, h, wide));
     const s = subjectOf(id);
     if (s === undefined) return Promise.resolve(null);
     const was = hour;
