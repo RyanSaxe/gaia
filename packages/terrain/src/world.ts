@@ -452,8 +452,17 @@ export function finishTerrain(spec: WorldSpec, landforms: readonly Landform[], p
   const final: Lattice = { ...lattice, heights };
 
   // Water, solved from the fitted ground and cut into it.
+  const { streams, ponds } = solveWater(spec, landforms, lattice, (x0, z0, side) => {
+    const out = new Float32Array(side * side);
+    for (let j = 0; j < side; j++) {
+      const row = Math.min(n - 1, z0 + j) * n;
+      for (let i = 0; i < side; i++) out[j * side + i] = heights[row + Math.min(n - 1, x0 + i)] as number;
+    }
+    return out;
+  });
   const waterLevel = new Float32Array(n * n).fill(DRY);
-  const { streams, ponds } = cutWater(spec, landforms, final, waterLevel);
+  for (const s of streams) carveStream(final, heights, waterLevel, s);
+  for (const p of ponds) carvePond(final, heights, waterLevel, p.pond, p.depth);
 
   return {
     spec,
@@ -474,54 +483,60 @@ export function finishTerrain(spec: WorldSpec, landforms: readonly Landform[], p
 }
 
 /**
- * Solves each stream from the fitted ground along its bed, after the ones
- * before it have been cut, and cuts it in; then each pond from the ground
- * around it. Reads and writes only the ground within `waterReach` of the
- * beds, so a plan that composes just that solves the same water.
+ * Solves the world's water bed by bed, in order: each stream from the fitted
+ * ground along its bed, after the ones before it have been cut in, then each
+ * pond from the ground around it. Each bed is solved on a window of just the
+ * ground it reads, `side` samples square from lattice sample (`x0`, `z0`),
+ * which `groundOf` gives fitted, with the beds before it cut in again. So a
+ * plan that composes only those windows and a bake of the whole world that
+ * copies them out of its ground solve the same water, to the bit.
  */
-function cutWater(spec: WorldSpec, landforms: readonly Landform[], l: Lattice, waterLevel: Float32Array): { streams: SolvedStream[]; ponds: { pond: SolvedPond; depth: number }[] } {
+function solveWater(
+  spec: WorldSpec,
+  landforms: readonly Landform[],
+  world: LatticeFrame,
+  groundOf: (x0: number, z0: number, side: number) => Float32Array,
+): { streams: SolvedStream[]; ponds: { pond: SolvedPond; depth: number }[] } {
   const streams: SolvedStream[] = [];
   const ponds: { pond: SolvedPond; depth: number }[] = [];
-  spec.regions.forEach((r, ri) => {
-    for (const bed of (landforms[ri] as Landform).water) {
-      if (bed.kind !== "stream") continue;
-      const path = keptRun(spec, ri, bed.path);
-      const solved = path === null ? null : solveStream(l, path, bed.width, bed.depth);
-      if (solved === null) continue;
-      carveStream(l, l.heights, waterLevel, solved);
-      streams.push(solved);
+  for (const bed of waterBeds(spec, landforms, world)) {
+    const [x0, x1, z0, z1] = bed.rect;
+    const side = Math.max(x1 - x0, z1 - z0);
+    const heights = groundOf(x0, z0, side);
+    const window: Lattice = { n: side, spacing: world.spacing, origin: worldOf(world, x0), originZ: worldOfZ(world, z0), heights };
+    const level = new Float32Array(side * side).fill(DRY);
+    for (const s of streams) carveStream(window, heights, level, s);
+    for (const p of ponds) carvePond(window, heights, level, p.pond, p.depth);
+    if (bed.kind === "stream") {
+      const solved = solveStream(window, bed.path, bed.width, bed.depth);
+      if (solved !== null) streams.push(solved);
+    } else {
+      const solved = solvePond(window, heights, bed.x, bed.z, bed.radius);
+      if (solved !== null) ponds.push({ pond: solved, depth: bed.depth });
     }
-  });
-  spec.regions.forEach((r, ri) => {
-    for (const bed of (landforms[ri] as Landform).water) {
-      if (bed.kind !== "pond") continue;
-      const solved = solvePond(l, l.heights, r.x + bed.x, r.z + bed.z, bed.radius);
-      if (solved === null) continue;
-      carvePond(l, l.heights, waterLevel, solved, bed.depth);
-      ponds.push({ pond: solved, depth: bed.depth });
-    }
-  });
+  }
   return { streams, ponds };
 }
 
-/** The lattice rectangles, [x0, x1) by [z0, z1), within which the water reads or cuts the ground (`cutWater`). */
-function waterReach(spec: WorldSpec, landforms: readonly Landform[], l: Lattice): [number, number, number, number][] {
-  const rects: [number, number, number, number][] = [];
+/** A bed of water as `solveWater` solves it, in its order, with the lattice rectangle, [x0, x1) by [z0, z1), within which it reads and cuts the ground. */
+type WaterBed = { readonly rect: readonly [number, number, number, number] } & (
+  | { readonly kind: "stream"; readonly path: Float32Array; readonly width: number; readonly depth: number }
+  | { readonly kind: "pond"; readonly x: number; readonly z: number; readonly radius: number; readonly depth: number }
+);
+
+/** Every bed of the world's water in the order `solveWater` solves them: each region's streams, then each region's ponds. */
+function waterBeds(spec: WorldSpec, landforms: readonly Landform[], l: Lattice | LatticeFrame): WaterBed[] {
   const toIndex = (w: number): number => (w - l.origin) / l.spacing;
-  const add = (minX: number, maxX: number, minZ: number, maxZ: number, reach: number): void => {
-    rects.push([
-      Math.max(0, Math.floor(toIndex(minX - reach)) - 1),
-      Math.min(l.n, Math.ceil(toIndex(maxX + reach)) + 2),
-      Math.max(0, Math.floor(toIndex(minZ - reach)) - 1),
-      Math.min(l.n, Math.ceil(toIndex(maxZ + reach)) + 2),
-    ]);
-  };
+  const rect = (minX: number, maxX: number, minZ: number, maxZ: number, reach: number): [number, number, number, number] => [
+    Math.max(0, Math.floor(toIndex(minX - reach)) - 1),
+    Math.min(l.n, Math.ceil(toIndex(maxX + reach)) + 2),
+    Math.max(0, Math.floor(toIndex(minZ - reach)) - 1),
+    Math.min(l.n, Math.ceil(toIndex(maxZ + reach)) + 2),
+  ];
+  const beds: WaterBed[] = [];
   spec.regions.forEach((r, ri) => {
     for (const bed of (landforms[ri] as Landform).water) {
-      if (bed.kind === "pond") {
-        add(r.x + bed.x, r.x + bed.x, r.z + bed.z, r.z + bed.z, bed.radius * 1.3);
-        continue;
-      }
+      if (bed.kind !== "stream") continue;
       const path = keptRun(spec, ri, bed.path);
       if (path === null) continue;
       let minX = Infinity;
@@ -534,10 +549,18 @@ function waterReach(spec: WorldSpec, landforms: readonly Landform[], l: Lattice)
         minZ = Math.min(minZ, path[k + 1] as number);
         maxZ = Math.max(maxZ, path[k + 1] as number);
       }
-      add(minX, maxX, minZ, maxZ, Math.max(1.1, bed.width / 2) + BANK_REACH);
+      beds.push({ kind: "stream", path, width: bed.width, depth: bed.depth, rect: rect(minX, maxX, minZ, maxZ, Math.max(1.1, bed.width / 2) + BANK_REACH) });
     }
   });
-  return rects;
+  spec.regions.forEach((r, ri) => {
+    for (const bed of (landforms[ri] as Landform).water) {
+      if (bed.kind !== "pond") continue;
+      const x = r.x + bed.x;
+      const z = r.z + bed.z;
+      beds.push({ kind: "pond", x, z, radius: bed.radius, depth: bed.depth, rect: rect(x, x, z, z, bed.radius * 1.3) });
+    }
+  });
+  return beds;
 }
 
 /** What a world decides once, before any of its land is composed in full: how its relief is fitted, and its water. */
@@ -567,14 +590,10 @@ export function planTerrain(spec: WorldSpec, landforms: readonly Landform[]): Te
   const surveyed = fitRelief(spec, { ...surveyFrame, heights: composeRect(spec, landforms, surveyFrame, 0, sn, 0, sn).raw });
   const { mean } = surveyed;
   const fit = surveyed.fit < 1 ? surveyed.fit * (1 - TERRAIN.surveyMargin) : 1;
-  const heights = new Float32Array(n * n);
-  for (const [x0, x1, z0, z1] of waterReach(spec, landforms, lattice)) {
-    const raw = composeRect(spec, landforms, lattice, x0, x1, z0, z1).raw;
-    for (let iz = z0; iz < z1; iz++) {
-      for (let ix = x0; ix < x1; ix++) heights[iz * n + ix] = mean + ((raw[(iz - z0) * (x1 - x0) + ix - x0] as number) - mean) * fit;
-    }
-  }
-  const { streams, ponds } = cutWater(spec, landforms, { ...lattice, heights }, new Float32Array(n * n).fill(DRY));
+  const { streams, ponds } = solveWater(spec, landforms, lattice, (x0, z0, side) => {
+    const frame: LatticeFrame = { n: side, spacing: lattice.spacing, origin: worldOf(lattice, x0), originZ: worldOfZ(lattice, z0) };
+    return composeRect(spec, landforms, frame, 0, side, 0, side).raw.map((h) => mean + (h - mean) * fit);
+  });
   return { spec, landforms, mean, fit, streams, ponds };
 }
 
