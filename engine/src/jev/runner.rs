@@ -135,17 +135,33 @@ fn billed_per_estimated(project: &str) -> f64 {
 
 /// The references Jev resolved, from the held answers, by reference key.
 /// An answer from an earlier version of its call no longer holds.
+/// Where a link answer is held: its reference and the candidates it chose
+/// among. A reference whose candidates change with other links (a call
+/// whose receiver's type comes from an import Jev resolved, say) keeps an
+/// answer for each set, so applying one never undoes the other.
+fn link_key<S: AsRef<str>>(reference: &str, candidates: &[S]) -> String {
+    let joined: Vec<&str> = candidates.iter().map(AsRef::as_ref).collect();
+    let digest: String = Sha256::digest(joined.join("\n").as_bytes())
+        .iter()
+        .take(4)
+        .map(|b| format!("{b:02x}"))
+        .collect();
+    format!("{LINK}|{reference}|~{digest}")
+}
+
 fn links(held: &Value) -> crate::graph::Links {
     let current: HashSet<String> = calls::registry()
         .into_iter()
         .filter(|c| c.pass() == LINK)
         .map(|c| format!("{}@{}", c.id(), c.version()))
         .collect();
-    held.as_object()
+    let mut out = crate::graph::Links::new();
+    let found = held
+        .as_object()
         .into_iter()
         .flatten()
         .filter_map(|(key, v)| {
-            let r = key.strip_prefix(&format!("{LINK}|"))?;
+            let (r, _) = key.strip_prefix(&format!("{LINK}|"))?.rsplit_once("|~")?;
             if !current.contains(v["call"].as_str()?) {
                 return None;
             }
@@ -162,8 +178,11 @@ fn links(held: &Value) -> crate::graph::Links {
                     .collect(),
             };
             Some((r.to_string(), link))
-        })
-        .collect()
+        });
+    for (r, link) in found {
+        out.entry(r).or_default().push(link);
+    }
+    out
 }
 
 /// The lines of a file split at its top-level definitions into pieces
@@ -840,7 +859,7 @@ pub fn next(root: &Path, max: Option<usize>, last: Option<&str>) -> Result<Value
             };
             let call_id = call.split('@').next().unwrap_or(&call);
             let key = if field == "link" {
-                format!("{LINK}|{node}")
+                link_key(&node, offered.get(&node).map_or(&[][..], Vec::as_slice))
             } else {
                 let Some(l) = lineage.get(node.as_str()) else {
                     continue;
@@ -900,13 +919,13 @@ fn unsettled<'a>(w: &'a Wanted, held: &Value, calls: &Value) -> BTreeSet<(&'a st
     {
         let stale = p.questions.iter().any(|q| {
             if q.field == "link" {
-                let h = &held[format!("{LINK}|{}", q.about)];
                 let options = q.json["criteria"].as_object().into_iter().flatten();
                 let mut offered: Vec<&str> = options
                     .map(|(k, _)| k.as_str())
                     .filter(|k| *k != "outside")
                     .collect();
                 offered.sort_unstable();
+                let h = &held[link_key(&q.about, &offered)];
                 // Only an answer that can be held counts, so a bad one never blocks sending.
                 let holdable =
                     hold::normalize(&q.json, &calls[&p.hash]["answers"][&q.id]).is_some();
@@ -1090,8 +1109,8 @@ mod tests {
             .unwrap();
         let answer = json!({ "choice": "file:x.ts", "p": { "file:x.ts": 0.9 } });
         let held = json!({
-            "link|now": { "answer": answer, "call": format!("resolve@{}", resolve.version()), "candidates": ["file:x.ts"] },
-            "link|before": { "answer": answer, "call": "resolve@00000000-1", "candidates": ["file:x.ts"] },
+            link_key("now", &["file:x.ts"]): { "answer": answer, "call": format!("resolve@{}", resolve.version()), "candidates": ["file:x.ts"] },
+            link_key("before", &["file:x.ts"]): { "answer": answer, "call": "resolve@00000000-1", "candidates": ["file:x.ts"] },
         });
         let l = links(&held);
         assert!(l.contains_key("now"));
