@@ -115,7 +115,7 @@ export interface Judged {
   /**
    * The understanding pass's answers, keyed by concept: "importance" (as its
    * container judged it), and quality concepts such as "readability",
-   * "safety" or "organization" (`engine/vocab/understanding.toml`).
+   * "cohesion" or "robustness" (`engine/vocab/understanding.toml`).
    */
   readonly axes?: Readonly<Record<string, Score | Choice>>;
   /** Which of a container's parts stand out, as choices over their ids: "key", "weak" and "finest". */
