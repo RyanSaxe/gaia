@@ -3,7 +3,7 @@ import { type BuildingPlan, Library, type RouteSpec, seedOf } from "@gaia/schema
 import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, RELIEF_PRIMITIVES, ROUTE_PRIMITIVES, STRUCTURE_PRIMITIVES } from "@gaia/primitives";
 import { link, structure } from "@gaia/kinds";
 import { STRUCTURE_PRESETS, TRAIL_PRESETS, buildSlots, realize } from "@gaia/realize";
-import { bakeTerrain, heightAt, sampleWorld, siteToWorld } from "@gaia/terrain";
+import { bakeTerrain, heightAt, planTerrain, sampleWorld, siteToWorld, standTile } from "@gaia/terrain";
 import { type StandCode, type StandRequest, standWorld } from "./stand.ts";
 
 const lib = new Library([...RELIEF_PRIMITIVES, ...BIOME_PRIMITIVES]);
@@ -28,6 +28,7 @@ const bytes = (a: ArrayBufferView): Buffer => Buffer.from(a.buffer, a.byteOffset
 /** The sample world, baked once; standing levels a bake's ground, so each test stands its own copy. */
 const baked = bakeTerrain(sampleWorld(), lib);
 const pristine = structuredClone(baked);
+const forTiles = structuredClone(baked);
 
 describe("standing a world's things on a bake", () => {
   it("stands the same things whether the bake crossed to another thread or not, leveling the pads first", () => {
@@ -96,5 +97,33 @@ describe("standing a world's things on a bake", () => {
     expect(Math.hypot(sym.x + 55, sym.z + 40)).toBeLessThan(5);
     expect(stood.network.trails.length).toBeGreaterThan(0);
     for (const tr of stood.network.trails) expect(["packages/a->packages/b", "packages/a->packages/c"]).toContain(tr.id);
+  });
+
+  it("bakes each tile of the land alone, leveled as standing leveled the world, sample for sample", () => {
+    const t = forTiles;
+    const stood = standWorld(t, request);
+    expect(stood.edits.pads.length).toBe(request.buildings.length);
+    expect(stood.edits.ways.length).toBeGreaterThan(0);
+    const plan = planTerrain(t.spec, t.landforms);
+    const size = 64;
+    const { n } = t.lattice;
+    const differ = { heights: 0, water: 0, shore: 0, field: 0, places: 0 };
+    for (let z0 = 0; z0 < n; z0 += size) {
+      for (let x0 = 0; x0 < n; x0 += size) {
+        const tile = standTile(plan, stood.edits, stood.network.ways, x0, z0, size);
+        for (let j = 0; j < Math.min(size, n - z0); j++) {
+          for (let i = 0; i < Math.min(size, n - x0); i++) {
+            const w = (z0 + j) * n + x0 + i;
+            const k = j * size + i;
+            if (tile.heights[k] !== t.lattice.heights[w]) differ.heights++;
+            if (tile.waterLevel[k] !== t.waterLevel[w]) differ.water++;
+            if (tile.shore[k] !== t.shore[w]) differ.shore++;
+            if (tile.trailField[k] !== stood.ground[w * 4 + 3]) differ.field++;
+            if (tile.trailPlaces[k * 2] !== stood.trailPlaces[w * 2] || tile.trailPlaces[k * 2 + 1] !== stood.trailPlaces[w * 2 + 1]) differ.places++;
+          }
+        }
+      }
+    }
+    expect(differ).toEqual({ heights: 0, water: 0, shore: 0, field: 0, places: 0 });
   });
 });

@@ -9,7 +9,7 @@
 
 import { type BuildingPlan, type Built, type RouteSpec, rand } from "@gaia/schema";
 import { areaVitality } from "@gaia/world";
-import { type BuildingSite, type Capsule, type Circle, clearingsOf, type Extent, findLandmarkSite, findSite, groundedBase, growGrove, type Habitat, heightAt, isWet, type LandmarkSite, type LandSite, levelPad, levelTrails, type Occupied, type OwnedSite, withinLand, type Placement, PLANT_SLOPE, planTrails, scatterComponents, scatterPlants, type ScatterRule, siteAt, siteToWorld, slopeAt, type Terrain, trailDiscs, type TrailEnd, trailField, type TrailNetwork, trailPlaces, type TrailRequest, trunkIndex, wildsRing, type WildsRing } from "@gaia/terrain";
+import { type BuildingSite, type Capsule, type Circle, clearingsOf, discOf, type Extent, findLandmarkSite, findSite, groundedBase, growGrove, type Habitat, heightAt, isWet, type LandEdits, type LandmarkSite, type LandSite, levelPad, levelTrails, type Occupied, type OwnedSite, type PadEdit, withinLand, type Placement, PLANT_SLOPE, planTrails, scatterComponents, scatterPlants, type ScatterRule, siteAt, siteToWorld, slopeAt, type Terrain, trailDiscs, type TrailEnd, trailField, type TrailNetwork, trailPlaces, type TrailRequest, trunkIndex, type WayEdit, wildsRing, type WildsRing } from "@gaia/terrain";
 
 /** A building to site: its plan, what stands beside it, and the name its trails go by. */
 export interface StandBuilding {
@@ -133,6 +133,8 @@ export interface Stand {
   readonly ground: Float32Array;
   /** Which ways each lattice sample lies on and how far along them (`trailPlaces`), two per sample. */
   readonly trailPlaces: Float32Array;
+  /** What standing did to the land, in order, so a tile of it baked alone can be leveled the same (`standTile` in @gaia/terrain). */
+  readonly edits: LandEdits;
 }
 
 /** The reach of a feature's solid parts in the house's frame, or null when it has none. */
@@ -279,7 +281,7 @@ const treeClearance = (lm: StandLandmark): number => lm.base + (lm.name.startsWi
  * want between every place (a spanning tree by distance, then a loop or two)
  * and levels their treads into the ground.
  */
-function settleWays(t: Terrain, req: StandRequest, sites: readonly BuildingSite[]): { landmarks: StandingLandmark[]; network: TrailNetwork } {
+function settleWays(t: Terrain, req: StandRequest, sites: readonly BuildingSite[]): { landmarks: StandingLandmark[]; network: TrailNetwork; ways: WayEdit[] } {
   const homes = req.buildings.map((b, i) => ({ ...b, site: sites[i] as BuildingSite }));
   const around = (b: (typeof homes)[number], margin: number): Occupied => ({ x: b.site.x, z: b.site.z, radius: Math.hypot(b.plan.width, b.plan.depth) / 2 + margin });
   const door = (b: (typeof homes)[number]): TrailEnd => ({ id: b.name, ...standOf(b.plan, b.site) });
@@ -338,15 +340,14 @@ function settleWays(t: Terrain, req: StandRequest, sites: readonly BuildingSite[
     ...placed.map((s) => ({ x: s.site.x, z: s.site.z, radius: (req.landmarks[s.landmark]?.base ?? 2) + 0.8 })),
   ];
   const network = planTrails(t, requests, 41, keepOut);
-  levelTrails(t, network.ways);
-  return { landmarks: placed, network };
+  return { landmarks: placed, network, ways: levelTrails(t, network.ways) };
 }
 
 /**
  * A world laid out from code: each building on its lot, each landmark on
  * its lot, and the trails Jev wants between them, leveled into the ground.
  */
-function settleCode(t: Terrain, req: StandRequest, code: StandCode, sites: readonly BuildingSite[]): { landmarks: StandingLandmark[]; network: TrailNetwork } {
+function settleCode(t: Terrain, req: StandRequest, code: StandCode, sites: readonly BuildingSite[]): { landmarks: StandingLandmark[]; network: TrailNetwork; ways: WayEdit[] } {
   const homes = req.buildings.map((b, i) => ({ ...b, site: sites[i] as BuildingSite, id: code.lots[i]?.id ?? b.name }));
   const avoid: Occupied[] = homes.map((b) => ({ x: b.site.x, z: b.site.z, radius: Math.hypot(b.plan.width, b.plan.depth) / 2 + 2 }));
   const landmarks: StandingLandmark[] = [];
@@ -399,8 +400,7 @@ function settleCode(t: Terrain, req: StandRequest, code: StandCode, sites: reado
     ...landmarks.map((s) => ({ x: s.site.x, z: s.site.z, radius: (req.landmarks[s.landmark]?.base ?? 2) + 0.8 })),
   ];
   const network = planTrails(t, requests, 41, keepOut);
-  levelTrails(t, network.ways);
-  return { landmarks, network };
+  return { landmarks, network, ways: levelTrails(t, network.ways) };
 }
 
 /** Fewest meters between trunks, whatever the crowns. */
@@ -442,12 +442,13 @@ function plantPatches(t: Terrain, req: StandRequest, code: StandCode, blocked: (
 export function standWorld(t: Terrain, req: StandRequest): Stand {
   const code = req.code;
   const sites: BuildingSite[] = [];
+  const pads: PadEdit[] = [];
   req.buildings.forEach((b, i) => {
     const site = findSite(t, b.plan, sites, 30, b.beside, code?.lots[i] ?? null);
-    levelPad(t, b.plan, site, b.beside);
+    pads.push(levelPad(t, b.plan, site, b.beside));
     sites.push(site);
   });
-  const { landmarks, network } = code === undefined ? settleWays(t, req, sites) : settleCode(t, req, code, sites);
+  const { landmarks, network, ways } = code === undefined ? settleWays(t, req, sites) : settleCode(t, req, code, sites);
 
   // Trees keep off the trails and their cairns, out of the buildings and out from under a landmark.
   const clear: Occupied[] = [...trailDiscs(network, 1.6), ...landmarks.map((s) => ({ x: s.site.x, z: s.site.z, radius: treeClearance(req.landmarks[s.landmark] as StandLandmark) }))];
@@ -534,5 +535,5 @@ export function standWorld(t: Terrain, req: StandRequest): Stand {
     ground[i * 4 + 2] = t.shore[i] as number;
     ground[i * 4 + 3] = field[i] as number;
   }
-  return { sites, landmarks, network, trees, placements, symbols, wilds: wildsRing(t), ground, trailPlaces: trailPlaces(t, network.ways) };
+  return { sites, landmarks, network, trees, placements, symbols, wilds: wildsRing(t), ground, trailPlaces: trailPlaces(t, network.ways), edits: { pads, discs: landmarks.map((s) => discOf(s.site)), ways } };
 }
