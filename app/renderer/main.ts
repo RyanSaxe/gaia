@@ -12,7 +12,7 @@ import { createFloraLab } from "./flora/lab.ts";
 import type { Lab } from "./lab.ts";
 import { setFavicon } from "./brand/logo.ts";
 import { createStats } from "./stats.ts";
-import { startTelemetry } from "./telemetry.ts";
+import { reportStage, startTelemetry } from "./telemetry.ts";
 import { type TerrainLab, createTerrainLab } from "./terrain/lab.ts";
 import { type Immersive, createImmersive } from "./immersive/view.ts";
 import { createWorldLab } from "./world/lab.ts";
@@ -119,6 +119,12 @@ function loop(now: number): void {
 const askedView = new URLSearchParams(location.search).get("view") as View | null;
 open(askedView !== null && VIEWS.includes(askedView) ? askedView : "immersive");
 requestAnimationFrame(loop);
+
+// Served to a device by `pnpm lab:serve`, the lab says how far it got opening
+// a world, and any error on the way, so a device that fails says where.
+reportStage("page");
+window.addEventListener("error", (e) => reportStage("error", { message: String(e.message).slice(0, 300) }));
+window.addEventListener("unhandledrejection", (e) => reportStage("error", { message: String((e.reason as Error | undefined)?.message ?? e.reason).slice(0, 300) }));
 
 // Served to a device by `pnpm lab:serve`, the lab reports how smooth it runs there.
 if (
