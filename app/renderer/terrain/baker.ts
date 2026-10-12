@@ -43,7 +43,7 @@ export interface Baker {
 const BAND = 96;
 
 export function createBaker(threads = Math.max(1, Math.min(4, (navigator.hardwareConcurrency || 2) - 2))): Baker {
-  const waiting = new Map<number, { resolve: (reply: BakeReply) => void }>();
+  const waiting = new Map<number, { worker: Worker; resolve: (reply: BakeReply) => void }>();
   let nextId = 0;
   const spawn = (): Worker[] =>
     Array.from({ length: threads }, () => {
@@ -53,6 +53,15 @@ export function createBaker(threads = Math.max(1, Math.min(4, (navigator.hardwar
         waiting.delete(e.data.id);
         job?.resolve(e.data);
       };
+      // A thread that dies (out of memory, say) fails the jobs it held, so the bake fails rather than waiting forever.
+      w.onerror = (e) => {
+        e.preventDefault();
+        for (const [id, job] of waiting) {
+          if (job.worker !== w) continue;
+          waiting.delete(id);
+          job.resolve({ id, kind: "failed", message: `A bake thread stopped: ${e.message}` });
+        }
+      };
       return w;
     });
   // The first bake's workers start with the page, so that bake begins at once.
@@ -60,7 +69,7 @@ export function createBaker(threads = Math.max(1, Math.min(4, (navigator.hardwar
   const ask = (worker: Worker, job: BakeJob, transfer: Transferable[] = []): Promise<BakeReply> =>
     new Promise((resolve) => {
       const id = nextId++;
-      waiting.set(id, { resolve });
+      waiting.set(id, { worker, resolve });
       worker.postMessage({ ...job, id }, transfer);
     });
 
