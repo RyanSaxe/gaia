@@ -774,7 +774,8 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   }
   /** The copy the swap test stands alone while it runs (`swapTest`), when it does. */
   let swapping: Copies | null = null;
-  const swapCopies = new Map<number, Copies>();
+  /** Each preset's copy the swap test stands alone, by its far form: the trees' and the bushes' forms are numbered apart. */
+  const swapCopies = new Map<FarOf, Copies>();
   // Uploads every tree's and the understory's geometry, at every level, in
   // one render while the planting already holds the frame, so no level's
   // first appearance ever costs a frame.
@@ -2379,11 +2380,11 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     if (preset === undefined) return null;
     const gl = renderer.getContext();
     const focal = gl.drawingBufferHeight / 2 / Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2);
-    let copy = swapCopies.get(preset.far.form);
+    let copy = swapCopies.get(preset.far);
     if (copy === undefined) {
       copy = createCopies(preset.plant(), light, [], preset.far);
       scene.add(copy.object);
-      swapCopies.set(preset.far.form, copy);
+      swapCopies.set(preset.far, copy);
     }
     const crown = copy.crown;
     const dx = -Math.sin(walker.yaw);
