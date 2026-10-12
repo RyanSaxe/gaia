@@ -49,6 +49,7 @@ import { createWildGrowth } from "./wilds.ts";
 import { createUnderstory } from "./understory.ts";
 import { createClearings } from "./clearings.ts";
 import { type Ways, createWays, setTrailEnds, setTrailPlaces } from "./trails.ts";
+import { reportStage } from "../telemetry.ts";
 import { createWait } from "../wait/wait.ts";
 import { withStart } from "../start/start.ts";
 import { createCard } from "./card.ts";
@@ -420,6 +421,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   const canvas = root.querySelector("canvas") as HTMLCanvasElement;
   const stage = root.querySelector(".stage") as HTMLElement;
   const renderer = createRenderer(canvas);
+  canvas.addEventListener("webglcontextlost", () => reportStage("context lost"));
   renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
@@ -686,7 +688,10 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     set.forms.batch.baked = true;
     set.ms = performance.now() - t0;
   }
-  const farBaked = bakeFar(treeSet, FAR_BAKE.ms).then(warmSoon);
+  const farBaked = bakeFar(treeSet, FAR_BAKE.ms).then(() => {
+    reportStage("tree cards", { ms: Math.round(treeSet.ms) });
+    warmSoon();
+  });
   const farCardSets = (): FarCards[] => farSets.flatMap((set) => (set.cards === null ? [] : [set.cards]));
   // Each tree build's instances are made a build a frame while the wait holds,
   // so a world's planting only moves copies.
@@ -761,6 +766,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
           renderer.setRenderTarget(null);
         }
         warm();
+        reportStage("shaders");
       } finally {
         holding--;
       }
@@ -1581,10 +1587,13 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     const mine = ++asked;
     const t0 = performance.now();
     $("random").textContent = "Baking…";
+    reportStage("baking", { size: next.size });
     const baked = await baker.bake(next, standRequest(next));
     if (mine !== asked) return false;
     bakeMs = performance.now() - t0;
+    reportStage("baked", { size: next.size, bakeMs: Math.round(bakeMs) });
     await adopt(next, baked.terrain, baked.stand, baked.ownership);
+    reportStage("stood", { size: next.size, trees: trees.length });
     $("random").textContent = "Random terrain";
     return true;
   }
@@ -1792,7 +1801,9 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
    * the bake.
    */
   async function showCodebase(on: boolean): Promise<void> {
+    reportStage("judging");
     code = on ? await codeWorld(veil) : null;
+    reportStage("laid out", { things: code?.world.things.length ?? 0, symbols: code?.world.symbols.length ?? 0 });
     liveFileVitality.clear();
     for (const v of settlement.views()) scene.remove(v.object);
     settlement = createSettlement(light, code?.buildings ?? SAMPLE_ENTITIES);
@@ -1842,9 +1853,10 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     // The world's first frames draw under the paper, so the world shows only once it moves smoothly.
     for (let k = 0; k < LIFT_FRAMES; k++) await new Promise((r) => requestAnimationFrame(r));
     await veil.lift();
+    reportStage("lifted");
     for (const listener of liftedListeners) listener();
   });
-  const bushesBaked = ready.then(() => bakeFar(bushSet, FAR_BAKE.walkingMs));
+  const bushesBaked = ready.then(() => bakeFar(bushSet, FAR_BAKE.walkingMs)).then(() => reportStage("bush cards", { ms: Math.round(bushSet.ms) }));
   $("codebase").addEventListener("click", () => void showCodebase(code === null));
 
   // ---------- shots: each relief primitive under every region, from above ----------
