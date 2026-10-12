@@ -94,9 +94,25 @@ export function setTrailEnds(network: TrailNetwork, vitalityOf: (place: string) 
   ends.needsUpdate = true;
 }
 
+/** One thing built along the trails: a crossing, a square of a way's edging stones, or a cairn. */
+export interface WayPiece {
+  /** Its middle, and how far it reaches from there, meters. */
+  readonly x: number;
+  readonly z: number;
+  readonly reach: number;
+  /** The radius of the largest single thing in it, meters: a bridge, a stone, a cairn. */
+  readonly size: number;
+}
+
 export interface Ways {
-  /** Every component built along the trails, for shadows and the mirror. */
+  /** Every component built along the trails that stands now, for shadows and the mirror. */
   readonly views: readonly PlantView[];
+  /** Every piece, to stand by the tile that holds its middle. */
+  readonly pieces: readonly WayPiece[];
+  /** The radius of the largest single thing among the pieces, meters. */
+  readonly largest: number;
+  /** Stands exactly these pieces: builds any not built and lets go of the rest. */
+  stand(pieces: readonly WayPiece[]): void;
   /** Sets each crossing's, edging's and cairn's vitality from the trails walking its way (`wayVitalityAt`, `junctionVitality`). */
   setVitality(vitalityOf: (place: string) => number): void;
   dispose(): void;
@@ -123,43 +139,90 @@ function alongOf(trail: Way, x: number, z: number): number {
   return best / Math.max(1, count - 1);
 }
 
-/** Builds each way's crossings and edging stones, and each junction's cairn, and adds them to the scene. */
-/** `edging` is each way's edging stones when the bake set them on the whole land; otherwise they are set on `t`. */
+/** Side of the squares a way's edging stones are built in, meters: each square's stones are one mesh, held while it is near. */
+const EDGING_SQUARE = 256;
+
+/**
+ * Each way's crossings and edging stones, and each junction's cairn, as
+ * pieces that stand only while their tile does (`stand`), a way's edging
+ * stones a square of the land at a time. `edging` is each way's stones when
+ * the bake set them on the whole land; otherwise they are set on `t`.
+ */
 export function createWays(scene: THREE.Scene, light: SceneLight, lib: Library, t: Terrain, network: TrailNetwork, edging?: readonly (readonly EdgeStone[])[]): Ways {
   const palette = STONE_PALETTE(lib);
-  const placed: { view: PlantView; vitality: (of: (place: string) => number) => number }[] = [];
-  const show = (built: Built, x: number, y: number, z: number, yaw: number, vitality: (of: (place: string) => number) => number): void => {
-    if (built.parts.length === 0) return;
-    const view = createPlant({ parts: mergeParts(built.parts), motion: { sway: 0, frequency: 0 }, palette, slots: new Map() }, light);
-    view.object.position.set(x, y, z);
-    view.object.rotation.y = yaw;
-    scene.add(view.object);
-    placed.push({ view, vitality });
-  };
-  const add = (built: Built, x: number, y: number, z: number, yaw: number, way: number, along: number): void => show(built, x, y, z, yaw, (of) => wayVitalityAt(network, way, along, of));
+  interface Piece extends WayPiece {
+    readonly build: () => { built: Built; at: readonly [number, number, number, number] };
+    readonly vitality: (of: (place: string) => number) => number;
+    view: PlantView | null;
+  }
+  const pieces: Piece[] = [];
+  let vitalityOf: ((place: string) => number) | null = null;
+  const piece = (x: number, z: number, reach: number, size: number, build: Piece["build"], vitality: Piece["vitality"]): void => void pieces.push({ x, z, reach, size, build, vitality, view: null });
   network.ways.forEach((trail, i) => {
     trail.crossings.forEach((c, k) => {
       const seed = seedOf(`${trail.id}/crossing${k}`);
       const along = alongOf(trail, c.x, c.z);
-      if (trail.style.crossing === "footbridge") add(buildFootbridge(c.span, trail.style.width, seed), c.x, c.bank, c.z, c.yaw, i, along);
-      else add(buildSteppingStones(c.span, seed), c.x, c.level, c.z, c.yaw, i, along);
+      const vitality = (of: (place: string) => number): number => wayVitalityAt(network, i, along, of);
+      if (trail.style.crossing === "footbridge") piece(c.x, c.z, c.span, c.span / 2, () => ({ built: buildFootbridge(c.span, trail.style.width, seed), at: [c.x, c.bank, c.z, c.yaw] }), vitality);
+      else piece(c.x, c.z, c.span, c.span / 2, () => ({ built: buildSteppingStones(c.span, seed), at: [c.x, c.level, c.z, c.yaw] }), vitality);
     });
-    // One mesh of edging stones per way, so each follows its own way's vitality.
+    // The edging stones of a way, a square at a time, each square's one mesh following its way's vitality.
     const stones = edging?.[i] ?? edgeStones(t, trail, seedOf(`${trail.id}/edging`));
-    if (stones.length > 0) add(buildEdgingStones(stones, seedOf(`${trail.id}/edging-stones`)), 0, 0, 0, 0, i, 0.5);
+    const squares = new Map<string, EdgeStone[]>();
+    for (const st of stones) {
+      const key = `${Math.floor(st.x / EDGING_SQUARE)},${Math.floor(st.z / EDGING_SQUARE)}`;
+      const list = squares.get(key);
+      if (list === undefined) squares.set(key, [st]);
+      else list.push(st);
+    }
+    for (const [key, list] of squares) {
+      const [sx, sz] = key.split(",").map(Number) as [number, number];
+      piece((sx + 0.5) * EDGING_SQUARE, (sz + 0.5) * EDGING_SQUARE, EDGING_SQUARE * Math.SQRT1_2, list.reduce((r, st) => Math.max(r, st.size / 2), 0), () => ({ built: buildEdgingStones(list, seedOf(`${trail.id}/edging-stones/${key}`)), at: [0, 0, 0, 0] }), (of) => wayVitalityAt(network, i, 0.5, of));
+    }
   });
   // A small cairn beside a junction, where it suits.
   for (const j of network.junctions) {
-    if (j.cairn === null) continue;
-    show(buildCairn(seedOf(`${j.id}/cairn`)), j.cairn.x, j.cairn.y, j.cairn.z, seedOf(`${j.id}/turn`) % 628 / 100, (of) => junctionVitality(network, j, of));
+    const cairn = j.cairn;
+    if (cairn === null) continue;
+    piece(cairn.x, cairn.z, 2, 0.8, () => ({ built: buildCairn(seedOf(`${j.id}/cairn`)), at: [cairn.x, cairn.y, cairn.z, seedOf(`${j.id}/turn`) % 628 / 100] }), (of) => junctionVitality(network, j, of));
   }
+  const views: PlantView[] = [];
+  const drop = (p: Piece): void => {
+    if (p.view === null) return;
+    scene.remove(p.view.object);
+    p.view.dispose();
+    views.splice(views.indexOf(p.view), 1);
+    p.view = null;
+  };
   return {
-    views: placed.map((p) => p.view),
-    setVitality(vitalityOf) {
-      for (const p of placed) p.view.setVitality(p.vitality(vitalityOf));
+    views,
+    largest: pieces.reduce((r, p) => Math.max(r, p.size), 0),
+    setVitality(of) {
+      vitalityOf = of;
+      for (const p of pieces) p.view?.setVitality(p.vitality(of));
+    },
+    pieces,
+    stand(wanted) {
+      const keep = new Set(wanted);
+      for (const p of pieces) {
+        if (!keep.has(p)) {
+          drop(p);
+          continue;
+        }
+        if (p.view !== null) continue;
+        const { built, at } = p.build();
+        if (built.parts.length === 0) continue;
+        const view = createPlant({ parts: mergeParts(built.parts), motion: { sway: 0, frequency: 0 }, palette, slots: new Map() }, light);
+        view.object.position.set(at[0], at[1], at[2]);
+        view.object.rotation.y = at[3];
+        if (vitalityOf !== null) view.setVitality(p.vitality(vitalityOf));
+        scene.add(view.object);
+        views.push(view);
+        p.view = view;
+      }
     },
     dispose() {
-      for (const p of placed) p.view.dispose();
+      for (const p of pieces) drop(p);
     },
   };
 }
