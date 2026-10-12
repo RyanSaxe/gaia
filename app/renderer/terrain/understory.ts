@@ -161,23 +161,28 @@ export interface Understory {
   /** Copies and triangles each kind of the understory drew in the last pass. */
   readonly drawnByKind: () => Record<string, { copies: number; triangles: number }>;
   /** Each preset that turns far, by its first build: what the swap test stands alone. */
-  readonly farPresets: readonly { readonly name: string; readonly plant: Realized; readonly far: FarOf }[];
+  readonly farPresets: readonly { readonly name: string; readonly plant: () => Realized; readonly far: FarOf }[];
 }
 
 /** `farForms` takes the far form of every build whose group turns far; without it, nothing does. */
 export function createUnderstory(scene: THREE.Scene, light: SceneLight, lib: Library, clearings: Clearings, farForms?: FarForms): Understory {
   const built = GROUPS.map((g) => {
-    const plants = asksOf(g).map((ask) => made(ask, lib));
-    const reach = plants.map(outlineOf);
-    const tops = plants.map((p) => p.parts.reduce((top, part) => part.positions.reduce((t, v, i) => (i % 3 === 1 ? Math.max(t, v) : t), top), 0));
-    const far = plants.map((p) => (g.far ? farForms?.add(p, FAR.bush) : undefined));
-    return { group: g, plants, far, radii: plants.map(footprintOf), reach, tops, outlines: reach.map((o) => o.map((r) => r * g.clears)) };
+    const asks = asksOf(g);
+    const fresh = asks.map((ask) => made(ask, lib));
+    const reach = fresh.map(outlineOf);
+    const tops = fresh.map((p) => p.parts.reduce((top, part) => part.positions.reduce((t, v, i) => (i % 3 === 1 ? Math.max(t, v) : t), top), 0));
+    const far = fresh.map((p) => (g.far ? farForms?.add(p, FAR.bush) : undefined));
+    // Each build is held only until its instances are made (`instancesOf`) and its far form baked; asked for after
+    // that, it is realized again, the same build.
+    const plants: (Realized | null)[] = [...fresh];
+    const plant = (variant: number): Realized => plants[variant] ?? made(asks[variant] as BuildAsk, lib);
+    return { group: g, plants, plant, far, radii: fresh.map(footprintOf), reach, tops, outlines: reach.map((o) => o.map((r) => r * g.clears)) };
   });
   // A seeded group lists its presets once per seed, so a preset's first build comes first.
-  const farPresets = built.flatMap(({ group, plants, far }) =>
+  const farPresets = built.flatMap(({ group, plant, far }) =>
     group.presets.flatMap((preset, i) => {
       const f = far[i];
-      return f === undefined || group.presets.indexOf(preset) !== i ? [] : [{ name: preset.name, plant: plants[i] as Realized, far: f }];
+      return f === undefined || group.presets.indexOf(preset) !== i ? [] : [{ name: preset.name, plant: () => plant(i), far: f }];
     }),
   );
   const views: { group: Group; view: Copies }[] = [];
@@ -217,8 +222,8 @@ export function createUnderstory(scene: THREE.Scene, light: SceneLight, lib: Lib
       );
       // Each blueprint keeps its instances from bake to bake and only moves its
       // copies, so a new world never rebuilds a blueprint's geometry or levels.
-      for (const { group, plants, far } of built) {
-        plants.forEach((plant, variant) => {
+      for (const { group, plants, plant, far } of built) {
+        plants.forEach((_, variant) => {
           const spots = placed
             .filter((p) => p.rule === group.id && p.variant === variant)
             .map((p) => ({ x: p.x, y: p.y, z: p.z, yaw: p.yaw, scale: p.scale, slope: p.slope, hue: ((((p.x * 12.9898 + p.z * 78.233) % 1) + 1) % 1) * 0.04 - 0.02, ...(p.vitality === undefined ? {} : { vitality: p.vitality }) }));
@@ -229,7 +234,8 @@ export function createUnderstory(scene: THREE.Scene, light: SceneLight, lib: Lib
             return;
           }
           if (spots.length === 0) return;
-          const view = createCopies(plant, light, spots, far[variant]);
+          const view = createCopies(plant(variant), light, spots, far[variant]);
+          plants[variant] = null;
           scene.add(view.object);
           const entry = { group, view };
           kept.set(key, entry);
@@ -245,11 +251,12 @@ export function createUnderstory(scene: THREE.Scene, light: SceneLight, lib: Lib
       });
     },
     async prepare(given, wait) {
-      for (const { group, plants, far } of built) {
-        for (const [variant, plant] of plants.entries()) {
+      for (const { group, plants, plant, far } of built) {
+        for (const variant of plants.keys()) {
           const key = `${group.id}/${variant}`;
           if (kept.has(key) || !given.some((p) => p.rule === group.id && p.variant === variant)) continue;
-          const view = createCopies(plant, light, [], far[variant]);
+          const view = createCopies(plant(variant), light, [], far[variant]);
+          plants[variant] = null;
           scene.add(view.object);
           const entry = { group, view };
           kept.set(key, entry);

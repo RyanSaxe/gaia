@@ -848,7 +848,7 @@ export const FOLIAGE: Readonly<Record<string, number>> = {
   wall: 0, timber: 0, roof: 0.12, masonry: 0, trim: 0, glass: 0,
 };
 /** The colors a spray borrows: its stalks the bark's, a blossom spray's petals the family's bloom and its few fresh leaves the stem green. */
-export const sprayColors = (plant: Realized): { uBark: { value: THREE.Vector3 }; uStem: { value: THREE.Vector3 }; uBloomColor: { value: THREE.Vector3 } } => ({
+export const sprayColors = (plant: Pick<Realized, "palette">): { uBark: { value: THREE.Vector3 }; uStem: { value: THREE.Vector3 }; uBloomColor: { value: THREE.Vector3 } } => ({
   uBark: { value: vec3Of(plant.palette.swatches.bark?.healthy ?? [0.4, 0.33, 0.3]) },
   uStem: { value: vec3Of(plant.palette.swatches.stem?.healthy ?? plant.palette.swatches.leaf?.healthy ?? [0.4, 0.6, 0.3]) },
   uBloomColor: { value: vec3Of(plant.palette.swatches.bloom?.healthy ?? plant.palette.swatches.leaf?.healthy ?? [1, 0.9, 0.92]) },
@@ -859,6 +859,8 @@ const LAMP = new Set(["glass"]);
 const CLOSED = new Set(["bark", "stone"]);
 
 export function createPlant(plant: Realized, light: SceneLight): PlantView {
+  // Only the palette is read once the plant stands, so the parts' arrays go once the meshes are made.
+  const { palette } = plant;
   const object = new THREE.Group();
   const box = new THREE.Box3();
   const geometries = plant.parts.map(geometryOf);
@@ -894,7 +896,7 @@ export function createPlant(plant: Realized, light: SceneLight): PlantView {
   const meshes: { mesh: THREE.Mesh; color: THREE.ShaderMaterial; depth: THREE.ShaderMaterial }[] = [];
   const veils: THREE.Mesh[] = [];
   plant.parts.forEach((part, i) => {
-    const swatch: Swatch = plant.palette.swatches[part.swatch] ?? { healthy: [1, 0, 1], decline: [1, 0, 1] };
+    const swatch: Swatch = palette.swatches[part.swatch] ?? { healthy: [1, 0, 1], decline: [1, 0, 1] };
     if (part.swatch === "smoke") {
       // Smoke drifts in its own soft material and casts no shadow.
       const material = createSmokeMaterial(light, shared, vec3Of(swatch.healthy));
@@ -919,7 +921,7 @@ export function createPlant(plant: Realized, light: SceneLight): PlantView {
         ...perPart,
         uHealthy: { value: vec3Of(swatch.healthy) },
         uDecline: { value: vec3Of(swatch.decline) },
-        ...sprayColors(plant),
+        ...sprayColors({ palette }),
         uFoliage: { value: foliage },
         uLamp: { value: LAMP.has(part.swatch) ? 1 : 0 },
       },
