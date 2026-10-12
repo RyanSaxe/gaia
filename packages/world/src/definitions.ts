@@ -2,9 +2,9 @@
 // ones included: a function, a method, a class or a type. A variable or a
 // constant that holds a plain value does not, and neither does a stylesheet
 // rule, a document's section or a data file's key. Engine's graph says what
-// is defined where, inside what, and how much each matters (its stand, from
-// plumbing to a landmark); without a graph, the code model's top-level
-// symbols stand, with no stand of their own.
+// is defined where, inside what, and how much each matters (Jev's importance,
+// from 0 to 1); without a graph, the code model's top-level symbols stand,
+// with no importance of their own.
 
 import type { CodeGraph, CodeModel, DefNode, FileFacts, SymbolFact } from "@gaia/schema";
 
@@ -22,8 +22,8 @@ export interface StandingDef {
   readonly line: number;
   readonly lines: number;
   readonly doc?: string;
-  /** How much it matters, 0 (plumbing) to 4 (a landmark); absent until Jev has judged it. */
-  readonly stand?: number;
+  /** How much it matters, 0 to 1: Jev's importance from the understanding pass; absent until Jev has judged it. */
+  readonly importance?: number;
 }
 
 /** Roles whose definitions hold no code that stands: a plain value, a stylesheet rule, a section, a key, markup. */
@@ -78,7 +78,7 @@ export function definitionsOf(model: CodeModel, graph?: CodeGraph): ReadonlyMap<
     // A definition inside one that does not stand (a constant's arrow, say) hangs from the nearest that does.
     let parent = n.parent;
     while (parent !== undefined && !kept.has(parent)) parent = every.get(parent)?.parent;
-    const stand = n.judged?.stand?.score;
+    const importance = n.judged?.value?.importance ?? undefined;
     const def: StandingDef = {
       id: idOf(n),
       file: path,
@@ -89,7 +89,7 @@ export function definitionsOf(model: CodeModel, graph?: CodeGraph): ReadonlyMap<
       line: n.span.start,
       lines: Math.max(1, n.span.end - n.span.start + 1),
       ...(n.doc === undefined ? {} : { doc: n.doc }),
-      ...(stand === undefined ? {} : { stand }),
+      ...(importance === undefined ? {} : { importance }),
     };
     const list = out.get(path);
     if (list === undefined) out.set(path, [def]);

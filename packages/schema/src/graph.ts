@@ -128,7 +128,12 @@ export interface Judged {
    * quality gathered upward, each container's parts weighted by their lines
    * and blended with its own. Null where nothing was answered.
    */
-  readonly value?: { readonly importance: number | null; readonly quality: number | null };
+  readonly value?: {
+    readonly importance: number | null;
+    readonly quality: number | null;
+    /** Each concept Jev answered, from 0 to 1; null where the answer doesn't count, such as robustness's "nothing here can fail". */
+    readonly concepts: Readonly<Record<string, number | null>>;
+  };
 }
 
 export interface GraphEdge {

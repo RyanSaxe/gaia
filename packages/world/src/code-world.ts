@@ -173,8 +173,8 @@ export interface CodeSymbol {
   readonly line: number;
   readonly lines: number;
   readonly doc?: string;
-  /** How much it matters, 0 (plumbing) to 4 (a landmark), from Engine's graph; its size follows it. */
-  readonly stand?: number;
+  /** How much it matters, 0 to 1, Jev's importance from Engine's graph; its size follows it. */
+  readonly importance?: number;
   /** What it stands as: a form key Jev chose for it, or for its kind in its file. */
   readonly form: string;
   readonly x: number;
@@ -1319,7 +1319,7 @@ export function areaLands(world: Pick<CodeWorld, "areas" | "regions">): Record<s
 
 /**
  * Lays out the world from the code and Jev's judgments. With Engine's graph,
- * every definition it holds stands, sized by its stand; without one, the code
+ * every definition it holds stands, sized by its importance; without one, the code
  * model's top-level symbols do.
  */
 /**
@@ -1331,6 +1331,16 @@ export function layoutWorld(model: CodeModel, judged: Judgments, graph?: CodeGra
   const { dirs, size, land, defs } = divisionOf(model, graph, aspect);
   const entityAt = new Map(model.entities.map((e) => [e.path, e]));
   const files = new Map(model.files.map((f) => [f.path, f]));
+  // Vitality is Jev's quality from the understanding pass, and a thing it didn't judge takes its nearest judged
+  // folder's. A world the pass never ran on, such as the stand-in's, keeps the code model's signals.
+  const quality = new Map((graph?.nodes ?? []).flatMap((n) => (n.kind !== "block" && typeof n.judged?.value?.quality === "number" ? [[n.id, n.judged.value.quality] as const] : [])));
+  const folderQuality = (path: string): number | undefined => {
+    for (let p: string | null = path; p !== null; p = p === "" ? null : parentOf(p)) {
+      const q = quality.get(`dir:${p}`);
+      if (q !== undefined) return q;
+    }
+    return undefined;
+  };
 
   const regionsOf = regionPaths(dirs);
   const regionIndex = new Map(regionsOf.map((p, i) => [p, i]));
@@ -1372,12 +1382,12 @@ export function layoutWorld(model: CodeModel, judged: Judgments, graph?: CodeGra
     if (kind === "lot") {
       const e = entityAt.get(path) as EntityFacts;
       const t = judged.things[path] ?? { as: "building", look: "" };
-      things.push({ path, name: e.name, as: t.as, look: t.look, area: path, x: leaf.x, z: leaf.z, lot: LAYOUT.lotReach[t.as], vitality: entityVitalityOf(e).vitality });
+      things.push({ path, name: e.name, as: t.as, look: t.look, area: path, x: leaf.x, z: leaf.z, lot: LAYOUT.lotReach[t.as], vitality: folderQuality(path) ?? entityVitalityOf(e).vitality });
       continue;
     }
     const f = files.get(path) as FileFacts;
     const needsTests = judged.needsTests?.[path];
-    const vitality = vitalityOf(f, [], needsTests === undefined ? {} : { needsTests }).vitality;
+    const vitality = quality.get(`file:${path}`) ?? folderQuality(parentOf(path)) ?? vitalityOf(f, [], needsTests === undefined ? {} : { needsTests }).vitality;
     patches.push({ path, name: baseName(path), area, x: leaf.x, z: leaf.z, radius: Math.sqrt(leaf.ground / Math.PI), vitality, lines: f.lines, kind: f.kind ?? "source", vibe: judged.vibes[path] ?? "", ground: leaf.ground, cell, ...(needsTests === undefined ? {} : { needsTests }) });
     for (const { def, x, z } of plotDefinitions(f, defs.get(path) ?? [], leaf, land.step)) {
       symbols.push({
@@ -1390,11 +1400,11 @@ export function layoutWorld(model: CodeModel, judged: Judgments, graph?: CodeGra
         line: def.line,
         lines: def.lines,
         ...(def.doc === undefined ? {} : { doc: def.doc }),
-        ...(def.stand === undefined ? {} : { stand: def.stand }),
+        ...(def.importance === undefined ? {} : { importance: def.importance }),
         form: (def.parent === undefined ? judged.forms[path]?.[`#${def.name}`] : undefined) ?? judged.forms[path]?.[def.kind] ?? "",
         x,
         z,
-        vitality,
+        vitality: quality.get(`def:${def.id}`) ?? vitality,
       });
     }
   }

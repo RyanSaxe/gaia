@@ -124,17 +124,17 @@ const STAND_SCALE: Readonly<Record<string, readonly [number, number]>> = { rocks
 
 /**
  * How large a definition stands, within what its blueprint looks right at:
- * by how much it matters (Engine's stand, 0 to 4) when Jev has judged it, so
+ * by how much it matters (Jev's importance, 0 to 1) when Jev has judged it, so
  * a file's heart stands as its landmark and a helper as a pebble; by its
  * length until then, as before.
  */
-export const symbolScale = (lines: SymbolFact["lines"], rule: string, stand?: number): number => {
-  if (stand === undefined) {
+export const symbolScale = (lines: SymbolFact["lines"], rule: string, importance?: number): number => {
+  if (importance === undefined) {
     const t = Math.min(1, Math.log2(1 + (lines ?? 1)) / 8);
     return rule === "rocks" ? 0.45 + 0.75 * t : rule === "shrubs" ? 0.6 + 0.6 * t : 0.8 + 0.4 * t;
   }
   const [small, large] = STAND_SCALE[rule] ?? [0.7, 1.3];
-  return small + (large - small) * Math.min(1, Math.max(0, stand / 4)) ** 1.3;
+  return small + (large - small) * Math.min(1, Math.max(0, importance)) ** 1.3;
 };
 
 /** Trees on a file's patch, as its area's character grows them: more for a longer file, at least the one that names it. */
@@ -181,7 +181,7 @@ function snapshotWorld(why: string): Promise<WorldDocument> {
     worker.onmessage = (e: MessageEvent<LayoutReply>) => {
       const reply = e.data;
       if ("failed" in reply) reject(new Error(`Gaia's snapshot could not be laid out: ${reply.failed}`));
-      else resolve({ root: model.repository.name, model, ...reply });
+      else resolve({ root: model.repository.name, model, judged: {}, ...reply });
     };
     worker.onerror = (e) => reject(new Error(`Gaia's snapshot could not be laid out: ${e.message}`));
     worker.postMessage({ judge: SNAPSHOT_JUDGE, why } satisfies LayoutRequest);
@@ -198,7 +198,7 @@ export function provingWorld(): WorldDocument {
   const model = proving as unknown as CodeModel;
   // The proving ground keeps a square, so everything its tests look for stands where they look.
   const world = layoutWorld(model, provingJudged as unknown as Judgments, undefined, 1);
-  return { root: model.repository.name, model, world, judges: {}, summary: "The proving ground: every choice fixed so each feature shows" };
+  return { root: model.repository.name, model, world, judges: {}, summary: "The proving ground: every choice fixed so each feature shows", judged: {} };
 }
 
 /** Whether the page asks for the proving ground (`?world=proving`), which opens with or without an engine. */
@@ -337,7 +337,7 @@ export function codeLab({ model, world, judges, summary }: WorldDocument): CodeL
         return world.symbols.map((s) => {
           const form = FORMS[s.form] ?? (Object.values(FORMS)[0] as (typeof FORMS)[string]);
           const patch = patchOf.get(s.file);
-          return { x: s.x, z: s.z, rule: form.rule, variant: form.preset, radius: form.rule === "flowers" ? 0.8 : 1, scale: symbolScale(s.lines, form.rule, s.stand), vitality: s.vitality, ...(patch === undefined ? {} : { patch }) };
+          return { x: s.x, z: s.z, rule: form.rule, variant: form.preset, radius: form.rule === "flowers" ? 0.8 : 1, scale: symbolScale(s.lines, form.rule, s.importance), vitality: s.vitality, ...(patch === undefined ? {} : { patch }) };
         });
       })(),
       // Trails joining parts of the code no other trail joins route first, then the most wanted.

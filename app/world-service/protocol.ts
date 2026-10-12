@@ -2,7 +2,7 @@
 // engine lines go to the world service, and the world service talks to the
 // renderer over its own MessagePort.
 
-import type { CodeModel, PatchPlace, Unreachable } from "@gaia/schema";
+import type { CodeModel, PatchPlace, Span, Unreachable } from "@gaia/schema";
 import type { Outline } from "@gaia/terrain";
 import type { CodeWorld, Judge, LotPlace } from "@gaia/world";
 
@@ -54,6 +54,16 @@ export type EngineStatus =
   | { readonly state: "connected"; readonly version: string }
   | { readonly state: "restarting" };
 
+/** What the understanding pass judged about a folder, file or definition: every score from 0 to 1. */
+export interface JudgedThing {
+  readonly quality: number | null;
+  readonly importance: number | null;
+  /** Each concept Jev answered; null where the answer doesn't count, such as robustness's "nothing here can fail". */
+  readonly concepts: Readonly<Record<string, number | null>>;
+  /** The blocks Jev picked inside a definition, by their lines; absent where it chose none. */
+  readonly picks: { readonly key?: Span; readonly weak?: Span; readonly finest?: Span };
+}
+
 /** A codebase's world as the renderer receives it: the code, the world laid out from it, and who judged each thing. */
 export interface WorldDocument {
   /** The folder it is the world of. */
@@ -64,6 +74,11 @@ export interface WorldDocument {
   readonly judges: Readonly<Record<string, Judge>>;
   /** How the judging went, in words for the status line, such as "248 judged by Jev". */
   readonly summary: string;
+  /**
+   * What the understanding pass judged, by path for folders and files ("app/world-service") and by path and
+   * qualified name for definitions ("app/world-service/open-world.ts#openWorld.ask"), as the journal names them.
+   */
+  readonly judged: Readonly<Record<string, JudgedThing>>;
 }
 
 /** What a live run would send and cost, shown to the person only when it costs more than their spend limit. */
