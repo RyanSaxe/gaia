@@ -705,6 +705,26 @@ function networkOf(t: Terrain, g: Grid, routed: readonly { req: TrailRequest; ce
 
 // ---------- the ground under the ways ----------
 
+/** The lattice rectangle `nearSegments` visits for a way's points at `reach`: every sample within reach of a segment lies inside it. */
+function reachBox(l: Terrain["lattice"], pts: Float32Array | readonly number[], reach: number): { i0: number; i1: number; j0: number; j1: number } {
+  let i0 = l.n - 1;
+  let i1 = 0;
+  let j0 = l.n - 1;
+  let j1 = 0;
+  for (let k = 0; k + 1 < pts.length / 2; k++) {
+    const ax = pts[k * 2] as number;
+    const az = pts[k * 2 + 1] as number;
+    const bx = pts[k * 2 + 2] as number;
+    const bz = pts[k * 2 + 3] as number;
+    i0 = Math.min(i0, Math.max(0, Math.floor((Math.min(ax, bx) - reach - l.origin) / l.spacing)));
+    i1 = Math.max(i1, Math.min(l.n - 1, Math.ceil((Math.max(ax, bx) + reach - l.origin) / l.spacing)));
+    j0 = Math.min(j0, Math.max(0, Math.floor((Math.min(az, bz) - reach - l.origin) / l.spacing)));
+    j1 = Math.max(j1, Math.min(l.n - 1, Math.ceil((Math.max(az, bz) + reach - l.origin) / l.spacing)));
+  }
+  // A way of one point visits nothing: an empty box.
+  return i1 < i0 || j1 < j0 ? { i0: 0, i1: -1, j0: 0, j1: -1 } : { i0, i1, j0, j1 };
+}
+
 /** Visits every lattice sample within `reach` of each segment, with its distance and the nearest point's index along the way. */
 function nearSegments(t: Terrain, way: Way, reach: number, visit: (index: number, distance: number, along: number) => void): void {
   const l = t.lattice;
@@ -759,25 +779,36 @@ export function levelTrails(t: Terrain, ways: readonly Way[]): void {
       grade[k] = sum / n;
     }
     const half = trail.style.width / 2;
-    const best = new Float32Array(l.n * l.n).fill(Infinity);
-    const target = new Float32Array(l.n * l.n);
-    nearSegments(t, trail, half + TRAILS.blend, (index, d, along) => {
-      if (d >= (best[index] as number)) return;
-      best[index] = d;
+    const reach = half + TRAILS.blend;
+    // Only the samples within reach of the way can change, so the scratch
+    // covers the rectangle around it, not the whole land: the same samples
+    // move by the same amounts, at a fraction of the memory and the time.
+    const box = reachBox(l, pts, reach);
+    const w0 = box.i1 - box.i0 + 1;
+    const best = new Float32Array(w0 * (box.j1 - box.j0 + 1)).fill(Infinity);
+    const target = new Float32Array(best.length);
+    nearSegments(t, trail, reach, (index, d, along) => {
+      const local = (Math.floor(index / l.n) - box.j0) * w0 + (index % l.n) - box.i0;
+      if (d >= (best[local] as number)) return;
+      best[local] = d;
       const k = Math.min(count - 1, Math.floor(along));
       const f = along - k;
-      target[index] = (grade[k] as number) * (1 - f) + (grade[Math.min(count - 1, k + 1)] as number) * f;
+      target[local] = (grade[k] as number) * (1 - f) + (grade[Math.min(count - 1, k + 1)] as number) * f;
     });
-    for (let i = 0; i < best.length; i++) {
-      const d = best[i] as number;
-      if (d === Infinity || (t.waterLevel[i] as number) > DRY / 2) continue;
-      const u = Math.max(0, Math.min(1, (d - half - 0.3) / TRAILS.blend));
-      const shore = Math.max(0, Math.min(1, ((t.shore[i] as number) - 1.5) / 2.5));
-      const w = (1 - u * u * (3 - 2 * u)) * shore * shore * (3 - 2 * shore);
-      if (w <= 0) continue;
-      const h = l.heights[i] as number;
-      const delta = Math.max(-TRAILS.maxCut, Math.min(TRAILS.maxCut, (target[i] as number) - h));
-      l.heights[i] = h + delta * w;
+    for (let j = box.j0; j <= box.j1; j++) {
+      for (let i = box.i0; i <= box.i1; i++) {
+        const local = (j - box.j0) * w0 + (i - box.i0);
+        const index = j * l.n + i;
+        const d = best[local] as number;
+        if (d === Infinity || (t.waterLevel[index] as number) > DRY / 2) continue;
+        const u = Math.max(0, Math.min(1, (d - half - 0.3) / TRAILS.blend));
+        const shore = Math.max(0, Math.min(1, ((t.shore[index] as number) - 1.5) / 2.5));
+        const w = (1 - u * u * (3 - 2 * u)) * shore * shore * (3 - 2 * shore);
+        if (w <= 0) continue;
+        const h = l.heights[index] as number;
+        const delta = Math.max(-TRAILS.maxCut, Math.min(TRAILS.maxCut, (target[local] as number) - h));
+        l.heights[index] = h + delta * w;
+      }
     }
   }
 }
