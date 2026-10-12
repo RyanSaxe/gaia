@@ -94,27 +94,32 @@ export interface FarForms {
   readonly count: number;
   /** Gives `plant` a far form baked at `share` of `FAR.swapPx`: what its copies take as their `far`. */
   add(plant: Realized, share?: number): FarOf;
-  /** Every plant added, in form order, and the crown span in device pixels its form bakes at. Nothing may be added after. */
+  /**
+   * Every plant added, in form order, and the crown span in device pixels its form bakes at. Nothing may be added
+   * after, and the forms keep the plants no longer: the caller holds them only while their forms bake.
+   */
   close(): readonly { readonly plant: Realized; readonly px: number }[];
 }
 
 export function createFarForms(): FarForms {
   const batch = createFarBatch();
   const plants: { plant: Realized; px: number }[] = [];
+  let count = 0;
   let closed = false;
   return {
     batch,
     get count() {
-      return plants.length;
+      return count;
     },
     add(plant, share = 1) {
       if (closed) throw new Error("The far forms are already baking; add every plant before they bake.");
       plants.push({ plant, px: FAR.swapPx * share });
-      return { form: plants.length - 1, batch, share };
+      count = plants.length;
+      return { form: count - 1, batch, share };
     },
     close() {
       closed = true;
-      return plants;
+      return plants.splice(0);
     },
   };
 }

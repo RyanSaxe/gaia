@@ -71,7 +71,7 @@ export interface WildGrowth {
   /** Every instanced blueprint, for culling each pass, warming and the sun's shadow. */
   readonly all: () => readonly Copies[];
   /** Each bush by name, with its build and far form: what the swap test stands alone. */
-  readonly farPresets: readonly { readonly name: string; readonly plant: Realized; readonly far: FarOf }[];
+  readonly farPresets: readonly { readonly name: string; readonly plant: () => Realized; readonly far: FarOf }[];
   /** Takes on a new bake: stands the bushes again around the anchor. */
   update(t: Terrain): void;
   /** Called every frame the person walks: the anchor jumps to them once they are far from it. */
@@ -152,16 +152,18 @@ function wildGround(lib: Library): [GroundSpec, GroundSpec] {
  */
 export function createWildGrowth(scene: THREE.Scene, light: SceneLight, covers: RegionCovers, biomeLib: Library, floraLib: Library, farForms?: FarForms): WildGrowth {
   covers.wild(wildGround(biomeLib));
-  const plants: Realized[] = wildBushBuilds().map((ask) => made(ask, floraLib));
+  const asks = wildBushBuilds();
+  const plants: Realized[] = asks.map((ask) => made(ask, floraLib));
   const fars = plants.map((p) => farForms?.add(p, FAR.bush));
   const views = plants.map((p, i) => {
     const view = createCopies(p, light, [], fars[i]);
     scene.add(view.object);
     return view;
   });
-  const farPresets = plants.flatMap((plant, i) => {
+  // A bush's build goes once its instances are made and its far form baked; the swap test realizes it again.
+  const farPresets = asks.flatMap((ask, i) => {
     const far = fars[i];
-    return far === undefined ? [] : [{ name: (WILD_BUSHES[i] as (typeof WILD_BUSHES)[number])[0], plant, far }];
+    return far === undefined ? [] : [{ name: (WILD_BUSHES[i] as (typeof WILD_BUSHES)[number])[0], plant: () => made(ask, floraLib), far }];
   });
   let terrain: Terrain | null = null;
   const cache = new Map<string, ReturnType<typeof thicketIn>>();

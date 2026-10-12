@@ -171,6 +171,8 @@ interface Level {
 }
 
 export function createPlantInstances(plant: Realized, light: SceneLight, spots: readonly InstanceSpot[]): PlantInstances {
+  // Only the palette is read once the copies stand, so the parts' arrays go once the levels are made.
+  const { palette } = plant;
   const object = new THREE.Group();
 
   const box = new THREE.Box3();
@@ -222,7 +224,7 @@ export function createPlantInstances(plant: Realized, light: SceneLight, spots: 
   const materialFor = (part: Part): { color: THREE.ShaderMaterial; depth: THREE.ShaderMaterial } => {
     const hit = materials.get(part.swatch);
     if (hit !== undefined) return hit;
-    const swatch: Swatch = plant.palette.swatches[part.swatch] ?? { healthy: [1, 0, 1], decline: [1, 0, 1] };
+    const swatch: Swatch = palette.swatches[part.swatch] ?? { healthy: [1, 0, 1], decline: [1, 0, 1] };
     const foliage = FOLIAGE[part.swatch] ?? 0.5;
     const perPart = { uFlutter: { value: FLUTTERS.has(part.swatch) ? 1 : 0 } };
     const made = {
@@ -236,7 +238,7 @@ export function createPlantInstances(plant: Realized, light: SceneLight, spots: 
           ...perPart,
           uHealthy: { value: vec3Of(swatch.healthy) },
           uDecline: { value: vec3Of(swatch.decline) },
-          ...sprayColors(plant),
+          ...sprayColors({ palette }),
           uFoliage: { value: foliage },
           uLamp: { value: 0 },
         },

@@ -156,7 +156,6 @@ const FURNISHING_TOP = 2.4;
 
 /** One seeded build of a flora preset: every tree is a copy of one. */
 interface TreeVariant {
-  readonly plant: Realized;
   /** Radius of the trunk's bottom ring, for grounding. */
   readonly base: number;
   /** The trunk's own radius at its base: what stops a walker. */
@@ -632,8 +631,15 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
 
   // Trees are copies of a few seeded builds of each preset, drawn as
   // instances: hundreds of trees cost a few draw calls per build.
-  const variants: TreeVariant[] = TREE_ASKS.map((ask) => {
-    const plant = made(ask, floraLib);
+  /**
+   * Each tree build, held only until its instances are made and its far form
+   * is baked; asked for after that (the swap test, a build no world has
+   * planted yet), it is realized again, the same build.
+   */
+  const treeBuilds: (Realized | null)[] = TREE_ASKS.map((ask) => made(ask, floraLib));
+  const treeBuild = (k: number): Realized => treeBuilds[k] ?? made(TREE_ASKS[k] as BuildAsk, floraLib);
+  const variants: TreeVariant[] = treeBuilds.map((built) => {
+    const plant = built as Realized;
     const bark = plant.parts.find((part) => part.swatch === "bark");
     // The trunk's base is every bark vertex at the ground, however many sides or lobes the trunk has.
     let trunk = 0;
@@ -651,7 +657,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
         radius = Math.max(radius, Math.hypot(part.positions[i] as number, part.positions[i + 2] as number));
       }
     }
-    return { plant, base, trunk, height, radius };
+    return { base, trunk, height, radius };
   });
   let treeCount = TREES;
   let trees: readonly Tree[] = [];
@@ -668,7 +674,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   // index among the variants, and the understory's and the wild's bushes.
   const treeForms = createFarForms();
   const bushForms = createFarForms();
-  const treeFar: readonly FarOf[] = variants.map((v) => treeForms.add(v.plant));
+  const treeFar: readonly FarOf[] = variants.map((_, k) => treeForms.add(treeBuild(k)));
 
   // Rocks, bushes and wildflowers, scattered around the trees.
   const understory = createUnderstory(scene, light, new Library([...FLORA_PRIMITIVES, ...ROCK_PRIMITIVES, ...WILDFLOWER_PRIMITIVES]), clearings, bushForms);
@@ -733,12 +739,14 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   // Each tree build's instances are made a build a frame while the wait holds,
   // so a world's planting only moves copies.
   void (async (): Promise<void> => {
-    for (const [k, v] of variants.entries()) {
+    for (const k of variants.keys()) {
       if (!groves.has(k)) {
-        const view = createCopies(v.plant, light, [], treeFar[k]);
+        const view = createCopies(treeBuild(k), light, [], treeFar[k]);
         scene.add(view.object);
         groves.set(k, view);
       }
+      // Its instances made, the build is the far form's alone until that bakes (`bakeFar`).
+      treeBuilds[k] = null;
       await new Promise((r) => requestAnimationFrame(r));
     }
   })();
@@ -859,7 +867,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     trees = stood.trees.map((t) => ({ ...t, represented: representFile(fileOf(t), judgedOf(t.patch === undefined ? undefined : code?.world.patches[t.patch])) }));
     symbolPlacements = stood.symbols;
     // Each build keeps its instances from bake to bake and only moves its copies.
-    treeViews = variants.flatMap((v, k) => {
+    treeViews = variants.flatMap((_, k) => {
       const spots = trees.filter((t) => t.variant === k).map((t) => ({ x: t.x, y: t.y, z: t.z, yaw: t.yaw, scale: t.scale, vitality: treeVitality(t) }));
       const had = groves.get(k);
       if (had !== undefined) {
@@ -867,9 +875,10 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
         return [had];
       }
       if (spots.length === 0) return [];
-      const view = createCopies(v.plant, light, spots, treeFar[k]);
+      const view = createCopies(treeBuild(k), light, spots, treeFar[k]);
       scene.add(view.object);
       groves.set(k, view);
+      treeBuilds[k] = null;
       return [view];
     });
     // Each tree's copy among its build's, so a file's trees take a new vitality live.
@@ -2209,8 +2218,8 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   }
 
   /** Every preset that turns far, by name: each tree preset's first build, then the bushes. */
-  const farPresets = (): readonly { readonly name: string; readonly plant: Realized; readonly far: FarOf }[] => [
-    ...FLORA_PRESETS.map((preset, p) => ({ name: preset.name, plant: (variants[p * TREE_BUILDS] as TreeVariant).plant, far: treeFar[p * TREE_BUILDS] as FarOf })),
+  const farPresets = (): readonly { readonly name: string; readonly plant: () => Realized; readonly far: FarOf }[] => [
+    ...FLORA_PRESETS.map((preset, p) => ({ name: preset.name, plant: () => treeBuild(p * TREE_BUILDS), far: treeFar[p * TREE_BUILDS] as FarOf })),
     ...understory.farPresets,
     ...wildGrowth.farPresets,
   ];
@@ -2240,7 +2249,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     const focal = gl.drawingBufferHeight / 2 / Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2);
     let copy = swapCopies.get(preset.far.form);
     if (copy === undefined) {
-      copy = createCopies(preset.plant, light, [], preset.far);
+      copy = createCopies(preset.plant(), light, [], preset.far);
       scene.add(copy.object);
       swapCopies.set(preset.far.form, copy);
     }
