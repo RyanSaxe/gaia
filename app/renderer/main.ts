@@ -121,6 +121,8 @@ function loop(now: number): void {
   requestAnimationFrame(loop);
 }
 
+/** Settles once the first view is open: scripted checks open views only after it, as a person sees them. */
+let opened: Promise<void> = Promise.resolve();
 // `?view=terrain` opens a debugging view first; the lab otherwise opens into the world.
 const askedView = new URLSearchParams(location.search).get("view") as View | null;
 const firstView: View = askedView !== null && VIEWS.includes(askedView) ? askedView : "immersive";
@@ -134,7 +136,7 @@ if (firstView === "immersive" && shell !== null) {
   const sky = realizeSky({ blueprint: (WORLD_PRESETS[0] as (typeof WORLD_PRESETS)[number]).world, kind: worldKind }, new Library(WORLD_PRIMITIVES), seedOf("terrain-lab/sky"), clock.hour());
   startWaitEarly(shell, Math.round(sky.light.nightness * 20) / 20, OPENING_ASPECT);
   const drawn = new Promise((r) => requestAnimationFrame(() => setTimeout(r)));
-  void Promise.all([builds, drawn]).then(() => {
+  opened = Promise.all([builds, drawn]).then(() => {
     open(firstView);
     requestAnimationFrame(loop);
   });
@@ -184,6 +186,7 @@ declare global {
 window.__lab = {
   /** Opens a view ("immersive", or a lab's tab) and waits until it has something to show, such as its first baked world. */
   open: async (view: View) => {
+    await opened;
     open(view);
     await labOf(tabOf(view)).ready;
     await frames(3);

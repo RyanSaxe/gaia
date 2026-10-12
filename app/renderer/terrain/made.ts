@@ -25,6 +25,8 @@ export interface BuildAsk {
 
 /** Builds made ahead and not yet taken. */
 const ready = new Map<string, Realized>();
+/** Builds being made ahead that have not come yet. One asked for meanwhile is realized in place, and dropped when it comes. */
+const making = new Set<string>();
 const keyOf = (ask: BuildAsk): string => JSON.stringify([ask.kind, ask.seed, ask.facts, ask.blueprint]);
 
 /**
@@ -33,7 +35,8 @@ const keyOf = (ask: BuildAsk): string => JSON.stringify([ask.kind, ask.seed, ask
  * it did not make is realized in place when asked for.
  */
 export function makeAhead(asks: readonly BuildAsk[], threads = Math.max(1, Math.min(4, (navigator.hardwareConcurrency || 2) - 2))): Promise<void> {
-  const left = asks.filter((ask) => !ready.has(keyOf(ask)));
+  const left = asks.filter((ask) => !ready.has(keyOf(ask)) && !making.has(keyOf(ask)));
+  for (const ask of left) making.add(keyOf(ask));
   let next = 0;
   const work = (): Promise<void> =>
     new Promise((done) => {
@@ -50,7 +53,7 @@ export function makeAhead(asks: readonly BuildAsk[], threads = Math.max(1, Math.
       };
       worker.onmessage = (e: MessageEvent<MakeReply>) => {
         const ask = left[e.data.id];
-        if ("built" in e.data && ask !== undefined) ready.set(keyOf(ask), e.data.built);
+        if (ask !== undefined && making.delete(keyOf(ask)) && "built" in e.data) ready.set(keyOf(ask), e.data.built);
         give();
       };
       worker.onerror = finish;
@@ -64,5 +67,6 @@ export function made(ask: BuildAsk, lib: Library): Realized {
   const key = keyOf(ask);
   const built = ready.get(key);
   ready.delete(key);
+  making.delete(key);
   return built ?? realize(ask.blueprint, KINDS[ask.kind], lib, { seed: ask.seed, facts: ask.facts });
 }
