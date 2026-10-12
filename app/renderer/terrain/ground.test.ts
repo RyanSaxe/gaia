@@ -77,7 +77,8 @@ function treadPoints(ground: Ground, k: number): [number, number][] {
   return out;
 }
 
-describe("the land's clipmap", () => {
+// Each test lays every level of the clipmap, the trails' places among them: up to a second alone, several when other work shares the machine.
+describe("the land's clipmap", { timeout: 20_000 }, () => {
   it("holds in each level the land's own samples on that level's grid, as the rings read them", () => {
     const ground = createGroundTexture(terrain);
     for (let k = 0; k < CLIP.levels; k++) for (const [x, z] of gridPoints(k)) expect(heightsAt(ground, k, x, z)).toEqual(sample(x, z));

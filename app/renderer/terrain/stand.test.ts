@@ -98,7 +98,8 @@ describe("standing a world's things on a bake", () => {
     for (const tr of stood.network.trails) expect(["packages/a->packages/b", "packages/a->packages/c"]).toContain(tr.id);
   });
 
-  it("bakes each tile of the land alone, leveled as standing leveled the world, sample for sample", () => {
+  // Bakes and levels every 64-sample tile of the land: two seconds alone, several when other work shares the machine.
+  it("bakes each tile of the land alone, leveled as standing leveled the world, sample for sample", { timeout: 20_000 }, () => {
     const t = forTiles;
     const stood = standWorld(t, request);
     // The whole stood land's places, which each tile's must match.
