@@ -390,6 +390,8 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   const land = createPageLand();
   const terrain: Terrain = land.terrain;
   let bakeMs = 0;
+  /** Milliseconds each step of the last world's opening took, on the bake's threads and then on the page. */
+  let openingSteps: Record<string, number> = {};
   // What another layer stands beside the trails, and where a person is.
   /** What stops a walker without the furnishing. */
   let bodies: SolidShape[] = [];
@@ -1643,6 +1645,12 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
    */
   async function adopt(next: WorldSpec, baked: Baked): Promise<void> {
     const { stand: stood, ownership } = baked;
+    let since = performance.now();
+    const mark = (step: string): void => {
+      const now = performance.now();
+      openingSteps[step] = Math.round(now - since);
+      since = now;
+    };
     const nextFrame = (): Promise<void> => new Promise((r) => requestAnimationFrame(() => r()));
     holding++;
     try {
@@ -1650,8 +1658,10 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       await poolLandmarks(stood.landmarks, nextFrame);
       await understory.prepare(stood.placements, nextFrame);
       world = next;
+      mark("pool");
       // The land around where the person stands, before anything is stood on it.
       await land.open({ source: baked.land, report: baked.report, wildBase: baked.wildBase }, walker.x, walker.z);
+      mark("land");
       // Areas first, so whatever stands beside the trails knows where it is; files join when the trees stand.
       places = code !== null ? code.world : regionPlaces(terrain.spec, SAMPLE_NAME, []);
       clearings.fit(terrain);
@@ -1673,9 +1683,12 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       water.update(terrain);
       wildGrowth.update(terrain);
       await nextFrame();
+      mark("ground");
       plant(stood);
+      mark("plant");
       await nextFrame();
       placeSigns();
+      mark("signs");
       endWalk();
       walker.moved = true;
       refreshStats();
@@ -1717,6 +1730,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     const baked = await baker.bake(next, standRequest(next), tilesNear(next, walker.x, walker.z));
     if (mine !== asked) return false;
     bakeMs = performance.now() - t0;
+    openingSteps = { ...baked.stand.took };
     reportStage("baked", { size: next.size, bakeMs: Math.round(bakeMs) });
     await adopt(next, baked);
     reportStage("stood", { size: next.size, trees: trees.length });
@@ -2577,7 +2591,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       regions: () =>
         world.regions.map((r, i) => ({ i, id: r.id, x: Math.round(r.x), z: Math.round(r.z), landform: landformName(i), cover: coverName(i) })),
       streams: () => terrain.streams.map((s) => s.stations.filter((_, k) => k % 10 === 0).map((p) => [Math.round(p.x), Math.round(p.z), +p.level.toFixed(2)])),
-      report: () => ({ ...terrain.report, fit: terrain.fit, bakeMs: Math.round(bakeMs) }),
+      report: () => ({ ...terrain.report, fit: terrain.fit, bakeMs: Math.round(bakeMs), steps: openingSteps }),
       info: () => renderer.info.render,
       /** Draw calls in the whole last frame (shadow, mirror and view), and the water's mirror. */
       water: () => ({ ...water.stats(), frameCalls }),

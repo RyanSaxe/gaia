@@ -99,6 +99,7 @@ export function createBaker(threads = Math.max(1, Math.min(4, (navigator.hardwar
     for (let z = 0; z < n; z += BAND) bands.push([z, Math.min(n, z + BAND)]);
     const parts: ComposedRows[] = [];
     let next = 0;
+    const t0 = performance.now();
     // Each worker takes the next band as soon as it finishes one.
     await Promise.all(
       workers.map(async (w) => {
@@ -110,11 +111,12 @@ export function createBaker(threads = Math.max(1, Math.min(4, (navigator.hardwar
         }
       }),
     );
+    const composed = Math.round(performance.now() - t0);
     const moved = parts.flatMap((p) => [p.raw.buffer, p.region.buffer, p.coverRegions.buffer, p.coverShares.buffer]);
     const finisher = workers[0] as Worker;
     const [reply, ownership] = await Promise.all([ask(finisher, { kind: "finish", world, parts, stand, ...(tiles === undefined ? {} : { tiles }) }, moved), own(world, stand, workers.length > 1 ? workers.slice(1) : [finisher])]);
     if (reply.kind !== "finished") throw new Error(reply.kind === "failed" ? reply.message : "The bake finished without a terrain.");
-    return { land: reply.land, report: reply.report, wildBase: reply.wildBase, stand: reply.stand, ownership };
+    return { land: reply.land, report: reply.report, wildBase: reply.wildBase, stand: { ...reply.stand, took: { compose: composed, ...reply.stand.took, finished: Math.round(performance.now() - t0) } }, ownership };
   }
   return {
     bake(world, stand, tiles) {

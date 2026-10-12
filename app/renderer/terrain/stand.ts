@@ -138,6 +138,8 @@ export interface Stand {
   readonly edging: readonly (readonly EdgeStone[])[];
   /** What standing did to the land, in order, so a tile of it baked alone can be leveled the same (`standTile` in @gaia/terrain). */
   readonly edits: LandEdits;
+  /** Milliseconds each step of standing took: the buildings' sites, the landmarks and trails, the trees, the symbols, the understory, and the wild ring with the edging stones. */
+  readonly took: Readonly<Record<string, number>>;
 }
 
 /** What every tile's understory scatters by: the rules, seed and places, and what already stands for it to keep clear of. */
@@ -497,6 +499,13 @@ function plantPatches(t: Terrain, req: StandRequest, code: StandCode, blocked: (
  * tile when absent.
  */
 export function standWorld(t: Terrain, req: StandRequest, tiles?: readonly (readonly [number, number])[]): Stand {
+  const took: Record<string, number> = {};
+  let since = performance.now();
+  const mark = (step: string): void => {
+    const now = performance.now();
+    took[step] = Math.round(now - since);
+    since = now;
+  };
   const code = req.code;
   const sites: BuildingSite[] = [];
   const pads: PadEdit[] = [];
@@ -505,7 +514,9 @@ export function standWorld(t: Terrain, req: StandRequest, tiles?: readonly (read
     pads.push(levelPad(t, b.plan, site, b.beside));
     sites.push(site);
   });
+  mark("sites");
   const { landmarks, network, ways } = code === undefined ? settleWays(t, req, sites) : settleCode(t, req, code, sites);
+  mark("ways");
 
   // Trees keep off the trails and their cairns, out of the buildings and out from under a landmark.
   const clear: Occupied[] = [...trailDiscs(network, 1.6), ...landmarks.map((s) => ({ x: s.site.x, z: s.site.z, radius: treeClearance(req.landmarks[s.landmark] as StandLandmark) }))];
@@ -524,6 +535,7 @@ export function standWorld(t: Terrain, req: StandRequest, tiles?: readonly (read
           return [{ index: i, x: s.x, y: groundedBase(t.lattice, s.x, s.z, base), z: s.z, variant, scale, yaw: i * 1.7 }];
         });
 
+  mark("trees");
   // Nothing of the understory stands in a building, on its walk, on a trail or under a landmark.
   const homes = req.buildings.flatMap((b, k) =>
     buildingClearings(b, sites[k] as BuildingSite).flatMap((c) => {
@@ -576,6 +588,7 @@ export function standWorld(t: Terrain, req: StandRequest, tiles?: readonly (read
     standing.push({ rule: sym.rule, variant: sym.variant, x, y: heightAt(t.lattice, x, z) - 0.05, z, yaw: ((i * 2.399) % (Math.PI * 2)), scale, radius: reach, slope: [0, 0], region: t.region[Math.round((z - t.lattice.origin) / t.lattice.spacing) * t.lattice.n + Math.round((x - t.lattice.origin) / t.lattice.spacing)] ?? 0, vitality: sym.vitality });
     symbols[i] = standing.length - 1;
   }
+  mark("symbols");
   // The understory grows where it belongs: it reads the groves' crowns, and in a world from code each region's character.
   const rules = code === undefined ? req.understory.rules : req.understory.rules.map((rule) => ({ ...rule, regions: t.spec.regions.map((_, i) => (rule.regions?.[i] ?? 1) * (code.regions[i]?.understory[rule.id] ?? 1)) }));
   const open = code === undefined ? req.understory.open : t.spec.regions.map((_, i) => code.regions[i]?.open ?? req.understory.open?.[i]);
@@ -589,6 +602,9 @@ export function standWorld(t: Terrain, req: StandRequest, tiles?: readonly (read
     return { ti, tj, count: own.length };
   });
 
+  mark("understory");
+  const wilds = wildsRing(t);
   const edging = network.ways.map((way) => edgeStones(t, way, seedOf(`${way.id}/edging`)));
-  return { sites, landmarks, network, trees, placements, symbols, tiles: stood, scatter, wilds: wildsRing(t), edging, edits: { pads, discs: landmarks.map((s) => discOf(s.site)), ways } };
+  mark("wilds");
+  return { sites, landmarks, network, trees, placements, symbols, tiles: stood, scatter, wilds, edging, edits: { pads, discs: landmarks.map((s) => discOf(s.site)), ways }, took };
 }
