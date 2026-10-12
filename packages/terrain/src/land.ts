@@ -35,7 +35,7 @@ export function warpPoint(x: number, z: number): [number, number] {
   ];
 }
 
-/** Side of a lookup cell, meters. */
+/** Side of a lookup cell where sites stand close, meters; where they stand sparse a cell holds about one site's ground. */
 const CELL = 16;
 /** How far past its outermost sites a lookup grid reaches, meters; beyond it a lookup reads every site. */
 const MARGIN = 220;
@@ -43,6 +43,8 @@ const MARGIN = 220;
 interface Grid {
   readonly x0: number;
   readonly z0: number;
+  /** Side of its cells, meters. */
+  readonly cell: number;
   readonly nx: number;
   readonly nz: number;
   /** Per lookup cell, where its candidates start in `ids` (and end at the next cell's start). */
@@ -70,20 +72,23 @@ function gridOf(sites: readonly LandSite[]): Grid {
   }
   const x0 = minX - MARGIN;
   const z0 = minZ - MARGIN;
-  const nx = Math.max(1, Math.ceil((maxX + MARGIN - x0) / CELL));
-  const nz = Math.max(1, Math.ceil((maxZ + MARGIN - z0) / CELL));
+  // A few sites over a large land take cells about as wide as each one's ground: a 16 m cell there searches rings
+  // of empty cells hundreds of meters out from every one. The cells only narrow which sites a lookup reads.
+  const cell = Math.max(CELL, Math.sqrt(((maxX - minX + 2 * MARGIN) * (maxZ - minZ + 2 * MARGIN)) / Math.max(1, sites.length)) / 2);
+  const nx = Math.max(1, Math.ceil((maxX + MARGIN - x0) / cell));
+  const nz = Math.max(1, Math.ceil((maxZ + MARGIN - z0) / cell));
   // Sites bucketed by lookup cell, so each cell reads only the sites around it.
   const bucket: number[][] = Array.from({ length: nx * nz }, () => []);
-  sites.forEach((s, k) => (bucket[Math.floor((s.z - z0) / CELL) * nx + Math.floor((s.x - x0) / CELL)] as number[]).push(k));
+  sites.forEach((s, k) => (bucket[Math.floor((s.z - z0) / cell) * nx + Math.floor((s.x - x0) / cell)] as number[]).push(k));
   const starts = new Int32Array(nx * nz + 1);
   const ids: number[] = [];
   const near: number[] = [];
   for (let j = 0; j < nz; j++) {
     for (let i = 0; i < nx; i++) {
-      const ax = x0 + i * CELL;
-      const az = z0 + j * CELL;
-      const lo = (s: LandSite): number => Math.hypot(Math.max(ax - s.x, 0, s.x - ax - CELL), Math.max(az - s.z, 0, s.z - az - CELL)) - (s.reach ?? 0);
-      const hi = (s: LandSite): number => Math.hypot(Math.max(Math.abs(s.x - ax), Math.abs(s.x - ax - CELL)), Math.max(Math.abs(s.z - az), Math.abs(s.z - az - CELL))) - (s.reach ?? 0);
+      const ax = x0 + i * cell;
+      const az = z0 + j * cell;
+      const lo = (s: LandSite): number => Math.hypot(Math.max(ax - s.x, 0, s.x - ax - cell), Math.max(az - s.z, 0, s.z - az - cell)) - (s.reach ?? 0);
+      const hi = (s: LandSite): number => Math.hypot(Math.max(Math.abs(s.x - ax), Math.abs(s.x - ax - cell)), Math.max(Math.abs(s.z - az), Math.abs(s.z - az - cell))) - (s.reach ?? 0);
       // Grow a ring of buckets until it holds a site, then read every bucket that could hold a nearer one.
       let bestHi = Infinity;
       let ring = 0;
@@ -96,7 +101,7 @@ function gridOf(sites: readonly LandSite[]): Grid {
           }
         }
       }
-      const reachOut = Math.ceil((bestHi + 2 * maxReach) / CELL) + 1;
+      const reachOut = Math.ceil((bestHi + 2 * maxReach) / cell) + 1;
       near.length = 0;
       for (let dj = -reachOut; dj <= reachOut; dj++) {
         if (j + dj < 0 || j + dj >= nz) continue;
@@ -112,7 +117,7 @@ function gridOf(sites: readonly LandSite[]): Grid {
     }
   }
   starts[nx * nz] = ids.length;
-  const grid = { x0, z0, nx, nz, starts, ids: Int32Array.from(ids) };
+  const grid = { x0, z0, cell, nx, nz, starts, ids: Int32Array.from(ids) };
   grids.set(sites, grid);
   return grid;
 }
@@ -120,8 +125,8 @@ function gridOf(sites: readonly LandSite[]): Grid {
 /** The site nearest to an already warped point (wx, wz), less its reach. Ties keep the lower index. */
 export function nearestSite(sites: readonly LandSite[], wx: number, wz: number): number {
   const g = gridOf(sites);
-  const i = Math.floor((wx - g.x0) / CELL);
-  const j = Math.floor((wz - g.z0) / CELL);
+  const i = Math.floor((wx - g.x0) / g.cell);
+  const j = Math.floor((wz - g.z0) / g.cell);
   let best = 0;
   let nearest = Infinity;
   const visit = (k: number): void => {
