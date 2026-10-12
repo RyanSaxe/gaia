@@ -22,8 +22,12 @@ interface Group {
   readonly casts: boolean;
   /** How much of its outline at the ground is kept clear of grass, 0 for none. */
   readonly clears: number;
-  /** Whether a copy small on screen draws as its build's far form. Drifts of flowers and rocks wait on far forms of their own. */
-  readonly far: boolean;
+  /**
+   * The crown span, as a share of `FAR.swapPx`, at which a copy small on
+   * screen draws as its build's far form, and its form bakes: one texel to a
+   * pixel where it turns.
+   */
+  readonly far: number;
   readonly rule: Omit<ScatterRule, "id" | "variants" | "regions">;
   /** Density per landform: rocks crowd terraces and basins, flowers favor open meadow. */
   readonly landforms: Readonly<Record<string, number>>;
@@ -56,7 +60,7 @@ const GROUPS: readonly Group[] = [
     ...seeded(ROCK_PRESETS, [3, 0.5, 1, 2, 1, 0.7], 2),
     casts: true,
     clears: 0.92,
-    far: false,
+    far: FAR.bush,
     rule: { groups: 3.5, members: [1, 4], spread: 6, mix: "member", scale: [0.7, 1.25], maxSlope: 22, waterClearance: 1.5, ground: "lowest", sink: 0.05, places: { dry: 3, wet: 0.7, under: 0.4, edge: 0.5, open: 0.18 } },
     landforms: { "terraces@1": 1.8, "basin@1": 1.4, "valley@1": 1, "rolling-hills@1": 1, "meadow@1": 0.6, "dunes@1": 0.3 },
     // Mossy boulder, standing stone, bench stone, stone family, shale ledge, sandstone.
@@ -68,7 +72,7 @@ const GROUPS: readonly Group[] = [
     ...seeded(SHRUB_PRESETS, [1, 1, 0.7, 0.6], 3),
     casts: true,
     clears: 0.55,
-    far: true,
+    far: FAR.bush,
     rule: { groups: 5, members: [1, 5], spread: 5, mix: "member", scale: [0.75, 1.2], maxSlope: 24, waterClearance: 2, ground: "lowest", sink: 0.06, places: { edge: 1.7, under: 0.5, wet: 1.2, dry: 0.3, open: 0.02 } },
     landforms: { "valley@1": 1.3, "rolling-hills@1": 1.2, "basin@1": 1, "terraces@1": 0.8, "meadow@1": 0.7, "dunes@1": 0.4 },
     // Box mound, blueberry, rhododendron, feather shrub (the reeds' stand-in by water).
@@ -80,7 +84,7 @@ const GROUPS: readonly Group[] = [
     ...seeded(FLOWER_PRESETS, [1.2, 1, 0.8, 0.8, 0.8, 0.7], 1),
     casts: false,
     clears: 0,
-    far: false,
+    far: FAR.bush,
     rule: { groups: 6.5, members: [2, 5], spread: 7, mix: "group", scale: [0.8, 1.15], maxSlope: 20, waterClearance: 1, ground: "plane", sink: 0.02, places: { open: 1.3, edge: 1, under: 0.9, wet: 1.4, dry: 0.5 } },
     landforms: { "meadow@1": 1.6, "rolling-hills@1": 1.3, "valley@1": 1.1, "basin@1": 0.8, "terraces@1": 0.7, "dunes@1": 0.3 },
     // Daisies, poppies, bluebells (the woodland floor), lupines, marigolds (marsh marigolds by water), pink asters.
@@ -143,6 +147,8 @@ export interface Understory {
   readonly quiet: () => readonly THREE.Object3D[];
   /** Every instanced blueprint, for culling each pass and forcing detail. */
   readonly all: () => readonly Copies[];
+  /** Every instanced blueprint and the group it stands for, such as "rocks", for counting what each kind draws. */
+  readonly grouped: () => readonly { readonly group: string; readonly view: Copies }[];
   readonly placements: () => readonly Placement[];
   /**
    * Makes the instances of every blueprint `placements` uses that has none
@@ -173,7 +179,7 @@ export function createUnderstory(scene: THREE.Scene, light: SceneLight, lib: Lib
     const fresh = asks.map((ask) => made(ask, lib));
     const reach = fresh.map(outlineOf);
     const tops = fresh.map((p) => p.parts.reduce((top, part) => part.positions.reduce((t, v, i) => (i % 3 === 1 ? Math.max(t, v) : t), top), 0));
-    const far = fresh.map((p) => (g.far ? farForms?.add(p, FAR.bush) : undefined));
+    const far = fresh.map((p) => farForms?.add(p, g.far));
     // Each build is held only until its instances are made (`instancesOf`) and its far form baked; asked for after
     // that, it is realized again, the same build.
     const plants: (Realized | null)[] = [...fresh];
@@ -273,6 +279,7 @@ export function createUnderstory(scene: THREE.Scene, light: SceneLight, lib: Lib
     casters: () => views.filter((v) => v.group.casts).map((v) => v.view),
     quiet: () => views.filter((v) => !v.group.casts).map((v) => v.view.object),
     all: () => views.map((v) => v.view),
+    grouped: () => views.map((v) => ({ group: v.group.id, view: v.view })),
     placements: () => placed,
     footprint: (rule, variant) => {
       const b = built.find((x) => x.group.id === rule);

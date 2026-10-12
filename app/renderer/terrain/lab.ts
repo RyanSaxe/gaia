@@ -2362,8 +2362,8 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
    *   where the full form leaves and the far form stands alone.
    * Each is held to the wind's half-second change at the same spot, all
    * measured over the plant's own part of the screen. Every other plant that
-   * turns far and the grass hide while it runs; flowers and rocks stay, as
-   * the world around it. Null when there is no such preset.
+   * turns far and the grass hide while it runs. Null when there is no such
+   * preset.
    */
   function swapTest(name: string, vitality: number): { middle: SwapStep; whole: SwapStep; leaving: SwapStep; end: SwapStep } | null {
     const preset = farPresets().find((f) => f.name === name);
@@ -2697,7 +2697,9 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
         name("wild bushes", wildGrowth.all().map((v) => v.object));
         // Each plant's cards stand inside its full form's object: named after, so they count apart.
         name("far trees", treeViews.map((v) => v.cards ?? undefined));
-        name("far bushes", [...understory.all(), ...wildGrowth.all()].map((v) => v.cards ?? undefined));
+        name("far bushes", [...understory.grouped().filter((g) => g.group === "shrubs").map((g) => g.view), ...wildGrowth.all()].map((v) => v.cards ?? undefined));
+        name("far rocks", understory.grouped().filter((g) => g.group === "rocks").map((g) => g.view.cards ?? undefined));
+        name("far flowers", understory.grouped().filter((g) => g.group === "flowers").map((g) => g.view.cards ?? undefined));
         name("grass", [grass.mesh]);
         name("ground", [ground.fine, ground.coarse, ground.mirror, ground.wilds]);
         name("water", [water.group]);

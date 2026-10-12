@@ -8,11 +8,12 @@
 //   frozen, what each step changes in the detail drawn, against the wind's
 //   own change over half a second. A step above the wind is a pop.
 // - hitch: the app's smoothness probe over a real walk.
-// - swap: the swap test. For every tree and bush preset at vitality 1, 0.5
-//   and 0.15, by day and at 22:00, steps through its change of form: the far
-//   form coming in over the full one, coming to draw whole, the full form
-//   dissolving under it, and the frame where it leaves and the far form stands
-//   alone, each against the wind's half-second change.
+// - swap: the swap test. For every preset that turns far (trees, bushes,
+//   rocks and drifts of flowers) at vitality 1, 0.5 and 0.15, by day and at
+//   22:00, steps through its change of form: the far form coming in over the
+//   full one, coming to draw whole, the full form dissolving under it, and the
+//   frame where it leaves and the far form stands alone, each against the
+//   wind's half-second change.
 // - stress: a world with five times the trees.
 //
 // The window stays hidden, at exactly the size asked for, except for the walk
