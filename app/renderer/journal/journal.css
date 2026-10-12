@@ -127,6 +127,20 @@
 .jp-name { font: italic 600 31px/1.08 "Iowan Old Style", Georgia, serif; color: #33281d; overflow-wrap: anywhere; }
 .jp-vit { display: flex; align-items: center; gap: 9px; font: 22px/1 "Bradley Hand", Georgia, cursive; color: #4a3a26; }
 .jp-vit i, .jp-row-vit i { display: block; width: 26px; height: 16px; border-radius: 50% 46% 52% 44%; opacity: 0.75; filter: url(#jp-wash); }
+.jp-numbers { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex: none; }
+.jp-number { display: flex; align-items: center; gap: 10px; }
+.jp-number-label { font: 600 8.5px/1.3 "Iowan Old Style", Georgia, serif; letter-spacing: .18em; text-transform: uppercase; color: #8a7458; }
+.jp-imp { font: 17px/1 "Bradley Hand", Georgia, cursive; color: #4a3a26; }
+/* A file's lead: its best and worst definitions at a glance, before its list, each a tap from its page. */
+.jp-lead { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; position: relative; }
+.jp-snippet { display: block; width: 100%; text-align: left; background: none; border: 0; padding: 0; font: inherit; color: inherit; position: relative; }
+.jp-snippet-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 3px; }
+.jp-snippet-label { font: 600 8.5px/1.3 "Iowan Old Style", Georgia, serif; letter-spacing: .18em; text-transform: uppercase; color: #8a7458; }
+.jp-snippet-name { font: italic 600 15px/1.2 "Iowan Old Style", Georgia, serif; color: #33281d; }
+.jp-snippet-code { display: block; }
+.jp-snippet-code .jp-line { display: grid; }
+.jp-snippet-fold { display: block; margin-left: calc(2.4em + 1.1em); font: 12px/1.6 "Bradley Hand", Georgia, cursive; color: #7a5f45; }
+.jp-snippet-fold::before { content: "⋯ "; }
 .jp-sig { font: 10.6px/1.45 "SF Mono", ui-monospace, Menlo, monospace; color: #5c4c3a; margin-top: 12px; overflow-wrap: anywhere; }
 .jp-rule { height: 1px; margin: 18px 0 0; background: linear-gradient(90deg, rgba(120, 92, 60, 0.35), rgba(120, 92, 60, 0.1)); }
 /* Nothing on a page scrolls: what the page can't hold is left off at a whole line (book.ts). */

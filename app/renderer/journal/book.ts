@@ -176,7 +176,7 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
       const end = run[run.length - 1] as HTMLElement;
       const holder = first.parentElement as HTMLElement;
       const stroke = document.createElement("i");
-      stroke.className = `jp-stroke ${first.classList.contains("jp-row") ? "row" : "line"}`;
+      stroke.className = `jp-stroke ${first.classList.contains("jp-row") || first.classList.contains("jp-snippet") ? "row" : "line"}`;
       stroke.style.top = `${first.offsetTop + 3}px`;
       stroke.style.height = `${end.offsetTop + end.offsetHeight - first.offsetTop - 6}px`;
       stroke.style.background = first.style.getPropertyValue("--mark");
