@@ -56,3 +56,4 @@ One file per decision the reviewer settled in the pair sessions that designed Ga
 - [Crowns fill with full sprays, and the trees pass](52-crowns-fill-with-full-sprays.md)
 - [The engine reads code into one graph, and Jev judges every node of it](53-the-code-graph.md)
 - [The engine understands a codebase in slices, and the world asks for each](54-understanding-in-slices.md)
+- [Every key turns you that way and walks you forward](55-every-key-walks-you-forward.md)

@@ -280,14 +280,18 @@ where a walk will end: touching the world just walks. `planWalk` and
 A person walks like a person, not a sliding camera (`stride` in
 `@gaia/terrain`, every parameter in its `GAIT` table). The body eases into a
 stride over about a second, two steps, and settles over about 0.7 s when it
-stops, so velocity never jumps; the arrow keys ease into and out of a turn.
+stops, so velocity never jumps.
 A person always faces the way they walk, never stepping backwards or
-sideways: W or the up arrow walks ahead, A and D or the arrow keys turn, S
-or the down arrow stops a tapped walk, and vim's k, h, l and j do the same.
-A tapped walk turns toward its way first, walking only as fast as the
-person faces it, so a spot behind them is reached by turning round and
-setting off. Their momentum turns with them, and a drag that turns the view
-takes over from a tapped walk.
+sideways. Each key is a way to walk: W or the up arrow walks ahead; A or
+the left arrow turns the person to face left and walks them that way, D or
+the right arrow to the right, and S or the down arrow turns them around;
+vim's k, h, l and j do the same. A key turns from the way the keys already
+walk, so left pressed twice turns them around, and holding keys keeps them
+walking that way until they let go. The keys' way and a tapped walk both
+turn the person at a turn's pace, walking only as fast as they face their
+way, so a way behind them is walked by turning round and setting off.
+Their momentum turns with them, and a drag that turns the view turns the
+keys' way with it and takes over from a tapped walk.
 The grade along the way sets the pace by Tobler's hiking function made
 gentler: a 12% climb walks at about 79% of the pace, a descent of up to 16%
 is a little quicker (at most 10%), and a steep descent is careful; no grade
