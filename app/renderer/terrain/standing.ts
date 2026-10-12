@@ -4,9 +4,9 @@
 // only while it spans a few pixels on screen (`GONE`), as the grass ends a
 // short way out, so how far a stander's tiles reach follows from its largest
 // thing's size, up to where the air dissolves the land. The world holds every
-// tile within that reach of the person, asks for a tile's things as it comes
-// near (at once from the world's plan, or from a worker), lets go of a tile
-// left well behind, and stands a stander's things again when its tiles
+// tile within that reach of the person, asks for a tile's things a little
+// before it comes that near (at once from the world's plan, or from a
+// worker), lets go of a tile left well behind, and stands a stander's things again when its tiles
 // change, one stander a frame. A new component stands by tiles by adding a
 // stander, with no tiling of its own; a world of any size holds only what can
 // be seen.
@@ -46,7 +46,9 @@ export interface Standing {
   held(): Record<string, number>;
 }
 
-/** How far past its sight a held tile goes, meters: a step back and forth keeps it. */
+/** How far ahead of its sight a tile is asked for, meters: one a worker brings has come before any of it can be seen. */
+const AHEAD = 150;
+/** How far past that a held tile goes, meters: a step back and forth keeps it. */
 const LET_GO = 200;
 /** How far the person walks before the tiles near them are weighed again, meters. */
 const STEP = 24;
@@ -87,7 +89,7 @@ export function createStanding(focal: () => number): Standing {
   const ask = <T>(h: Held<T>, x: number, z: number): Promise<void>[] => {
     const mine = generation;
     const waits: Promise<void>[] = [];
-    for (const [ti, tj] of within(x, z, sight(h))) {
+    for (const [ti, tj] of within(x, z, sight(h) + AHEAD)) {
       const key = `${ti},${tj}`;
       if (h.tiles.has(key) || h.asking.has(key)) continue;
       const got = h.stander.tile(ti, tj);
@@ -137,7 +139,7 @@ export function createStanding(focal: () => number): Standing {
         for (const h of all) {
           for (const key of [...h.tiles.keys()]) {
             const [ti, tj] = key.split(",").map(Number) as [number, number];
-            if (distance(ti, tj, x, z) <= sight(h) + LET_GO) continue;
+            if (distance(ti, tj, x, z) <= sight(h) + AHEAD + LET_GO) continue;
             h.tiles.delete(key);
             h.dirty = true;
           }
