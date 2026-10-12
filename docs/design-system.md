@@ -682,6 +682,20 @@ finger and keys all follow the same three rules.
   does not hold the world; a tap on it unfolds the rest of it, a tap
   elsewhere walks there and leaving lets it go.
 
+The open journal's pages turn the way a book's do. A click or a tap on bare
+paper turns that way, the right-hand page forward and the left back.
+Anything on a page that answers a click of its own keeps it: a row, a name,
+a fold, a way back, a map or a picture. The outer fifth of each page is its
+edge. It lifts a little under the pointer, and a click there turns the page,
+over a map or a picture too, though a row, a name, a fold or a way back
+under it keeps its click. A mouse can take a page by its edge and a finger
+anywhere, and either can draw it over. A swipe sideways on a trackpad, or
+the wheel, turns one page a gesture, however long its momentum runs, and
+the arrow keys turn one at a time. Where no page lies that way, on the
+first spread's left and the last spread's right, the edge lies flat and
+leaves a click to what is under it, and nothing turns. Nothing marks the
+edges, which are paper like the rest of the page.
+
 Nothing in the world lights up, rings or changes under a pointer: a thing
 looks the same whether or not a person could walk up to it, and the pointer
 stays the hand that drags the view. Selecting is shown on paper instead: a

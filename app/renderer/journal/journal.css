@@ -85,10 +85,11 @@
 .jb-leaf.turning { transition: transform 720ms cubic-bezier(.45, .05, .3, 1); }
 .jb-leaf[hidden] { display: none; }
 
-/* The outer margins turn the page; the tabs on the fore-edge open each top chapter. */
-.jb-margin { top: calc(var(--ph) / -2); width: 64px; height: var(--ph); cursor: pointer; pointer-events: auto; transform: translateZ(2px); }
-.jb-margin.right { left: calc(var(--pw) - 64px); }
-.jb-margin.none { cursor: default; }
+/* The outer margins, a fifth of each page, turn it. They draw nothing and only catch the pointer. Where no page lies
+   that way a margin stands aside for what is under it. The tabs on the fore-edge open each top chapter. */
+.jb-margin { top: calc(var(--ph) / -2); width: var(--edge); height: var(--ph); cursor: pointer; pointer-events: auto; transform: translateZ(2px); }
+.jb-margin.right { left: calc(var(--pw) - var(--edge)); }
+.jb-margin.none { pointer-events: none; }
 .jb-margin.left { left: calc(var(--pw) * -1); }
 .journal:not(.open) .jb-margin, .journal:not(.open) .jb-tabs { display: none; }
 .jb-tabs { left: calc(var(--pw) - 4px); top: calc(var(--ph) / -2); width: 0; height: var(--ph); transform: translateZ(-2px); }
