@@ -9,9 +9,10 @@
 import { type Blueprint, type BuildingPlan, type Built, Library, type Palette, seedOf } from "@gaia/schema";
 import { FLORA_PRIMITIVES, STRUCTURE_PRIMITIVES } from "@gaia/primitives";
 import { structure } from "@gaia/kinds";
-import { STRUCTURE_PRESETS, mergeParts, realize } from "@gaia/realize";
+import { STRUCTURE_PRESETS, mergeParts } from "@gaia/realize";
 import { type PlantView, type SceneLight, createPlant } from "@gaia/render";
 import type { BuildingSite, Capsule, Extent } from "@gaia/terrain";
+import { type BuildAsk, made } from "./made.ts";
 import { type Represented, SAMPLE_ENTITIES, type SampleEntity, representEntity } from "./samples.ts";
 import { type StandBuilding, blockedBy, buildingClearings, extentOf, signOf, standOf } from "./stand.ts";
 
@@ -56,13 +57,27 @@ export interface Settlement {
 
 const lib = new Library([...STRUCTURE_PRIMITIVES, ...FLORA_PRIMITIVES]);
 
+const presetOf = (entity: SampleEntity): (typeof STRUCTURE_PRESETS)[number] => {
+  const preset = STRUCTURE_PRESETS.find((p) => p.name === entity.building);
+  if (preset === undefined) throw new Error(`There is no building called ${entity.building}.`);
+  return preset;
+};
+
+/** Each entity's building, for making ahead. */
+export const settlementBuilds = (entities: readonly SampleEntity[]): BuildAsk[] =>
+  entities.map((entity) => ({
+    kind: "structure",
+    blueprint: presetOf(entity).blueprint,
+    seed: seedOf(`terrain-lab/${entity.facts.path}`),
+    facts: Object.fromEntries(Object.entries(structure.facts).map(([k, bind]) => [k, bind(entity.facts)])),
+  }));
+
 /** A building for each entity, each the building Jev chose for it: the sample entities unless a world names its own. */
 export function createSettlement(light: SceneLight, entities: readonly SampleEntity[] = SAMPLE_ENTITIES): Settlement {
-  const buildings: Building[] = entities.map((entity) => {
-    const preset = STRUCTURE_PRESETS.find((p) => p.name === entity.building);
-    if (preset === undefined) throw new Error(`There is no building called ${entity.building}.`);
-    const facts = Object.fromEntries(Object.entries(structure.facts).map(([k, bind]) => [k, bind(entity.facts)]));
-    const built = realize(preset.blueprint, structure, lib, { seed: seedOf(`terrain-lab/${entity.facts.path}`), facts });
+  const asks = settlementBuilds(entities);
+  const buildings: Building[] = entities.map((entity, i) => {
+    const preset = presetOf(entity);
+    const built = made(asks[i] as BuildAsk, lib);
     const view = createPlant({ ...built, parts: mergeParts(built.parts) }, light);
     const represented = representEntity(entity.facts);
     view.setVitality(represented.report.vitality);
