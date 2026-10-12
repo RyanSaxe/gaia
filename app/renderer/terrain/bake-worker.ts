@@ -12,9 +12,9 @@
 
 import { Library } from "@gaia/schema";
 import { BIOME_PRIMITIVES, RELIEF_PRIMITIVES } from "@gaia/primitives";
-import { type ComposedRows, type LandOutline, type OwnedSite, type Placement, type ReliefReport, type WorldSpec, composeRows, finishTerrain, landformsOf, ownershipRows, planOf, wildBase } from "@gaia/terrain";
-import { type Chunk, type LandSource, chunkBuffers, standChunk, standTileThings } from "./land-chunks.ts";
-import { type Stand, type StandRequest, standWorld } from "./stand.ts";
+import { type ComposedRows, type LandOutline, type OwnedSite, type Placement, type ReliefReport, type Terrain, type WorldSpec, composeRows, finishTerrain, landformsOf, ownershipRows, planOf, wildBase } from "@gaia/terrain";
+import { type Chunk, type LandSource, chunkBuffers, cutChunk, standChunk, standTileThings } from "./land-chunks.ts";
+import { type Stand, type StandRequest, scatterTile, standWorld } from "./stand.ts";
 
 export type BakeJob =
   | { readonly kind: "compose"; readonly world: WorldSpec; readonly z0: number; readonly z1: number }
@@ -61,6 +61,13 @@ const keptWorld = (world: WorldSpec): WorldSpec => {
 };
 /** The land source of the world the page shows, by its number: only the newest is kept. */
 let source: { readonly world: number; readonly source: LandSource } | null = null;
+/**
+ * The whole stood land this thread last finished. The page keeps the
+ * finishing thread a while after a bake: the first chunks and tiles of the
+ * world it opens are cut from this at once instead of baked again
+ * (`cutChunk`, `scatterTile`), the same samples and the same things.
+ */
+let whole: Terrain | null = null;
 
 scope.onmessage = (e) => {
   const req = e.data;
@@ -72,12 +79,12 @@ scope.onmessage = (e) => {
       reply = { id: req.id, kind: "kept" };
     } else if (req.kind === "chunk") {
       if (source === null || source.world !== req.world) throw new Error(`No land source for world ${req.world}.`);
-      const chunk = standChunk(source.source, req.k, req.cx, req.cz);
+      const chunk = whole === null ? standChunk(source.source, req.k, req.cx, req.cz) : cutChunk(whole, source.source, req.k, req.cx, req.cz);
       reply = { id: req.id, kind: "chunk", chunk };
       moved = chunkBuffers(chunk);
     } else if (req.kind === "things") {
       if (source === null || source.world !== req.world) throw new Error(`No land source for world ${req.world}.`);
-      reply = { id: req.id, kind: "things", placements: standTileThings(source.source, req.ti, req.tj) };
+      reply = { id: req.id, kind: "things", placements: whole === null ? standTileThings(source.source, req.ti, req.tj) : scatterTile(whole, source.source.scatter, req.ti, req.tj) };
     } else if (req.kind === "own") {
       const rows = ownershipRows(req.sites, req.land, req.grid, req.k0, req.k1);
       reply = { id: req.id, kind: "owned", k0: req.k0, ...rows };
@@ -93,6 +100,7 @@ scope.onmessage = (e) => {
       const t = finishTerrain(world, landformsOf(world, lib), req.parts);
       const finished = Math.round(performance.now() - t0);
       const stood = standWorld(t, req.stand, req.tiles);
+      whole = t;
       // The wild base reads the stood land all around its rim, which only the whole world holds; the page cannot measure it.
       const base = wildBase(t);
       reply = { id: req.id, kind: "finished", land: { plan: planOf(t), edits: stood.edits, ways: stood.network.ways, scatter: stood.scatter }, report: t.report, wildBase: base, stand: { ...stood, took: { finish: finished, ...stood.took } } };

@@ -13,7 +13,9 @@
 // level that holds the point (`Lattice.beyond`). When the person walks a
 // chunk from a level's middle, the workers bake the chunks its window moves
 // onto, and the level moves once they all have come, so a window never shows
-// half old and half new.
+// half old and half new. Through a world's opening the bake's own finishing
+// thread, which still holds the whole stood world, cuts the chunks and tiles
+// asked of it at once (`LandWorld.whole`).
 
 import { type Lattice, type Placement, type ReliefReport, type Terrain, type WorldSpec, frameOf, heightAt, knowWildBase, worldOf, worldOfZ } from "@gaia/terrain";
 import type { BakeJob, BakeReply } from "./bake-worker.ts";
@@ -35,7 +37,12 @@ export interface LandWorld {
   readonly source: LandSource;
   readonly report: ReliefReport;
   readonly wildBase: number;
+  /** The bake's finishing thread, which still holds the whole stood world and cuts the opening's chunks and tiles at once (`Baked.whole`). */
+  readonly whole?: Worker;
 }
+
+/** How long the land keeps a bake's finishing thread after its world opens, ms: through the opening and a first jump. */
+const KEEP_WHOLE_MS = 30_000;
 
 export interface PageLand {
   /** The land near the person, to the meter: level 0's window as a `Terrain`. The same object for the page's life; its arrays change in place as the window moves. */
@@ -125,15 +132,17 @@ function carry(cx: number, cz: number, from: Level, fx: number, fz: number, to: 
 function createLandWorkers(threads: number) {
   const waiting = new Map<number, (reply: BakeReply) => void>();
   let nextId = 0;
-  const workers = Array.from({ length: threads }, () => {
-    const worker = new BakeWorker();
+  const listen = (worker: Worker): { worker: Worker; busy: number } => {
     worker.onmessage = (e: MessageEvent<BakeReply>) => {
       const done = waiting.get(e.data.id);
       waiting.delete(e.data.id);
       done?.(e.data);
     };
     return { worker, busy: 0 };
-  });
+  };
+  const workers = Array.from({ length: threads }, () => listen(new BakeWorker()));
+  /** A bake's finishing thread while it is kept: chunks and tiles of its world go to it first. */
+  let whole: { worker: Worker; busy: number } | null = null;
   const ask = (on: (typeof workers)[number], job: BakeJob): Promise<BakeReply> =>
     new Promise((resolve) => {
       const id = nextId++;
@@ -144,19 +153,31 @@ function createLandWorkers(threads: number) {
       });
       on.worker.postMessage({ ...job, id });
     });
+  /** The worker a job goes to: the finishing thread while it is kept, else the least busy. */
+  const pick = (): { worker: Worker; busy: number } => whole ?? workers.reduce((a, b) => (b.busy < a.busy ? b : a));
   return {
     async keep(world: number, source: LandSource): Promise<void> {
-      await Promise.all(workers.map((w) => ask(w, { kind: "land", world, source })));
+      await Promise.all([...workers, ...(whole === null ? [] : [whole])].map((w) => ask(w, { kind: "land", world, source })));
+    },
+    /** Takes on a bake's finishing thread, ending the one kept before. */
+    adopt(worker: Worker): void {
+      whole?.worker.terminate();
+      whole = listen(worker);
+    },
+    /** Ends the kept finishing thread, letting go of the whole world it holds. */
+    drop(): void {
+      whole?.worker.terminate();
+      whole = null;
     },
     async chunk(world: number, k: number, cx: number, cz: number): Promise<Chunk> {
-      const free = workers.reduce((a, b) => (b.busy < a.busy ? b : a));
+      const free = pick();
       const reply = await ask(free, { kind: "chunk", world, k, cx, cz });
       if (reply.kind === "failed") throw new Error(reply.message);
       if (reply.kind !== "chunk") throw new Error(`A land worker answered a chunk with "${reply.kind}".`);
       return reply.chunk;
     },
     async things(world: number, ti: number, tj: number): Promise<readonly Placement[]> {
-      const free = workers.reduce((a, b) => (b.busy < a.busy ? b : a));
+      const free = pick();
       const reply = await ask(free, { kind: "things", world, ti, tj });
       if (reply.kind === "failed") throw new Error(reply.message);
       if (reply.kind !== "things") throw new Error(`A land worker answered a tile's things with "${reply.kind}".`);
@@ -196,6 +217,8 @@ export function createPageLand(threads = Math.max(1, Math.min(2, (navigator.hard
   /** Meters between the world lattice's samples. */
   let spacing = 1;
   let onMoved: ((k: number) => void) | null = null;
+  /** When the kept finishing thread is let go. */
+  let letGo: ReturnType<typeof setTimeout> | undefined;
   /** How many holds are on the levels; while any is, they stay where it put them. */
   let held = 0;
 
@@ -339,6 +362,12 @@ export function createPageLand(threads = Math.max(1, Math.min(2, (navigator.hard
       const mine = generation;
       source = next.source;
       const plan = next.source.plan;
+      clearTimeout(letGo);
+      if (next.whole === undefined) workers.drop();
+      else {
+        workers.adopt(next.whole);
+        letGo = setTimeout(() => workers.drop(), KEEP_WHOLE_MS);
+      }
       await workers.keep(mine, next.source);
       if (mine !== generation) return;
       view.spec = plan.spec;

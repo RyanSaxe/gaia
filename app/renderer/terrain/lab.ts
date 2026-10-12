@@ -1660,7 +1660,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       world = next;
       mark("pool");
       // The land around where the person stands, before anything is stood on it.
-      await land.open({ source: baked.land, report: baked.report, wildBase: baked.wildBase }, walker.x, walker.z);
+      await land.open({ source: baked.land, report: baked.report, wildBase: baked.wildBase, whole: baked.whole }, walker.x, walker.z);
       mark("land");
       // Areas first, so whatever stands beside the trails knows where it is; files join when the trees stand.
       places = code !== null ? code.world : regionPlaces(terrain.spec, SAMPLE_NAME, []);
@@ -1728,7 +1728,11 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     $("random").textContent = "Baking…";
     reportStage("baking", { size: next.size });
     const baked = await baker.bake(next, standRequest(next), tilesNear(next, walker.x, walker.z));
-    if (mine !== asked) return false;
+    if (mine !== asked) {
+      // A newer world was asked for: this one's finishing thread holds a world no one will take.
+      baked.whole.terminate();
+      return false;
+    }
     bakeMs = performance.now() - t0;
     openingSteps = { ...baked.stand.took };
     reportStage("baked", { size: next.size, bakeMs: Math.round(bakeMs) });

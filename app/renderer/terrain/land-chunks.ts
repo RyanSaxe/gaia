@@ -6,7 +6,7 @@
 // (`standTile`). The same workers stand a tile's understory on the tile's own
 // land (`standTileThings`). No Three.js and no DOM: a worker runs it.
 
-import { DRY, type LandEdits, type Placement, SHORE_CAP, TILE, TRAILS, type TerrainPlan, type Way, frameOf, standTile, tileTerrain } from "@gaia/terrain";
+import { DRY, type LandEdits, type Placement, SHORE_CAP, type StoodTile, TILE, TRAILS, type Terrain, type TerrainPlan, type Way, cutTile, frameOf, standTile, tileTerrain } from "@gaia/terrain";
 import { type ScatterPlan, TILE_READS, scatterTile } from "./stand.ts";
 
 /** What a land worker needs to bake any chunk of a world, and stand any tile's things: its plan, what standing did to it, its ways, and how its understory scatters. */
@@ -71,12 +71,8 @@ export function emptyChunk(plan: TerrainPlan, k: number, cx: number, cz: number)
   return { k, cx, cz, ground, region: new Uint8Array(count), coverRegions: new Uint8Array(count * 4), coverShares: shares, trailPlaces: new Float32Array(count * 2).fill(-1) };
 }
 
-/** Bakes chunk (cx, cz) of level `k` from `source` alone: the stood land's samples there. */
-export function standChunk(source: LandSource, k: number, cx: number, cz: number): Chunk {
-  const { plan } = source;
-  if (chunkPastLand(plan, k, cx, cz)) return emptyChunk(plan, k, cx, cz);
-  const frame = frameOf(plan.spec);
-  const tile = standTile(plan, source.edits, source.ways, latticeIndex(frame, k, cx * CHUNK), latticeIndex(frame, k, cz * CHUNK), CHUNK, 2 ** k, placeReach(k, frame.spacing));
+/** A stood tile of a chunk's samples, packed as the chunk carries them. */
+function chunkOf(k: number, cx: number, cz: number, tile: StoodTile): Chunk {
   const count = CHUNK * CHUNK;
   const ground = new Float32Array(count * 4);
   for (let i = 0; i < count; i++) {
@@ -86,6 +82,22 @@ export function standChunk(source: LandSource, k: number, cx: number, cz: number
     ground[i * 4 + 3] = tile.trailField[i] as number;
   }
   return { k, cx, cz, ground, region: tile.region, coverRegions: tile.coverRegions, coverShares: tile.coverShares, trailPlaces: tile.trailPlaces };
+}
+
+/** Bakes chunk (cx, cz) of level `k` from `source` alone: the stood land's samples there. */
+export function standChunk(source: LandSource, k: number, cx: number, cz: number): Chunk {
+  const { plan } = source;
+  if (chunkPastLand(plan, k, cx, cz)) return emptyChunk(plan, k, cx, cz);
+  const frame = frameOf(plan.spec);
+  return chunkOf(k, cx, cz, standTile(plan, source.edits, source.ways, latticeIndex(frame, k, cx * CHUNK), latticeIndex(frame, k, cz * CHUNK), CHUNK, 2 ** k, placeReach(k, frame.spacing)));
+}
+
+/** Chunk (cx, cz) of level `k` cut from `whole`, a world's whole stood land, which a bake still holds: what `standChunk` bakes there. */
+export function cutChunk(whole: Terrain, source: LandSource, k: number, cx: number, cz: number): Chunk {
+  const { plan } = source;
+  if (chunkPastLand(plan, k, cx, cz)) return emptyChunk(plan, k, cx, cz);
+  const frame = frameOf(plan.spec);
+  return chunkOf(k, cx, cz, cutTile(whole, source.ways, latticeIndex(frame, k, cx * CHUNK), latticeIndex(frame, k, cz * CHUNK), CHUNK, 2 ** k, placeReach(k, frame.spacing)));
 }
 
 /** The buffers a chunk carries between threads. */
