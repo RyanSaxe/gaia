@@ -1,7 +1,7 @@
 // What stands on the land, a tile at a time. Every component that stands in
 // the world adds a stander: how large its largest thing can be, what stands in
 // a tile of the land, and how to stand a set of its things. A thing is seen
-// only while it spans a few pixels on screen (`GONE`), as the grass ends a
+// only while it spans a few pixels on screen (`GONE` in woods.ts), as the grass ends a
 // short way out, so how far a stander's tiles reach follows from its largest
 // thing's size, up to where the air dissolves the land. The world holds every
 // tile within that reach of the person, asks for a tile's things a little
@@ -13,12 +13,10 @@
 
 import { AIR } from "@gaia/realize";
 import { TILE, type WorldSpec, frameOf, worldOf } from "@gaia/terrain";
+import { goneAt } from "./woods.ts";
 
-/** A thing spanning fewer device pixels than `end` on screen is not drawn: it has dissolved away by then. */
-export const GONE = { end: 4 } as const;
-
-/** How far a thing of `radius` meters stays seen, for a screen of `focal` device pixels a radian: until it spans `GONE.end` pixels, or the air dissolves it. */
-export const seenTo = (radius: number, focal: number): number => Math.min(AIR.dissolveEnd, (2 * radius * focal) / GONE.end);
+/** How far a thing of `radius` meters stays seen, for a screen of `focal` device pixels a radian: until it is gone (`goneAt`), or the air dissolves it. */
+export const seenTo = (radius: number, focal: number): number => Math.min(AIR.dissolveEnd, goneAt(radius, focal));
 
 export interface Stander<T> {
   /** Names it in reports. */

@@ -13,7 +13,8 @@
 // @gaia/render). Just past the band, where the far form already draws whole,
 // the full form dissolves before it leaves (`FAR.leave`). The woods choose
 // only the full form; each copy's card is chosen by the card's own shader, by
-// the same rule, from buffers written when the copies are placed. How a plant
+// the same rule, from buffers written when the copies are placed. Whatever
+// its form, a crown too small to see dissolves and goes (`GONE`). How a plant
 // looks at each level is the plant's own (`createPlantInstances` in
 // @gaia/render); this decides only which copies draw it.
 
@@ -42,8 +43,21 @@ export type DetailMode = "auto" | "full" | "far";
  */
 export const FAR = { swapPx: typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches ? 64 : 128, band: 1.25, bush: 0.25, leave: 1.15 } as const;
 
+/**
+ * Too small to see: a copy whose crown spans fewer device pixels than `start`
+ * on a pass's screen dissolves, through the plant's own dissolve, full form
+ * or far, and by `end` it is gone; a cell whose largest crown spans fewer
+ * than `end` at its nearest point does not draw at all. A crown is its plant's
+ * built bounds, times the copy's scale. Past its reach a thing is gone as the
+ * grass is past its own.
+ */
+export const GONE = { start: 8, end: 4 } as const;
+
+/** Meters from the eye past which a crown of `radius` meters is gone, on a pass of `focal` device pixels' focal length. */
+export const goneAt = (radius: number, focal: number): number => (2 * radius * focal) / GONE.end;
+
 /** When every copy turns far and goes, as the far cards' shader reads it. */
-export const TURN: FarTurn = { band: FAR.band, leave: FAR.leave };
+export const TURN: FarTurn = { band: FAR.band, leave: FAR.leave, gone: GONE };
 
 /**
  * How far toward its far form a crown spanning `px` device pixels is, where
@@ -280,13 +294,14 @@ export function createCopies(plant: Realized, light: SceneLight, spots: readonly
       // `leavePx`; the sun's shadow, a flat pass, keeps the full form to the band's end, as the card casts from there.
       const leaves = swapping && !size.ortho;
       const leavePx = leaves ? swapPx / FAR.leave : swapPx;
-      view.nearLeaves(leaves ? size.focal : 0, swapPx, leavePx);
+      view.nearLeaves(sized && !size.ortho ? size.focal : 0, leaves ? swapPx : 0, leaves ? leavePx : 0, [GONE.start, GONE.end]);
       inBand = 0;
       farAway = 0;
       cells.forEach((cell, i) => {
         const d = cell.built.center.distanceTo(eye);
-        // Past where the air dissolves everything into the sky, nothing shows.
+        // Past where the air dissolves everything into the sky, nothing shows; nor does a cell whose every crown is too small to see.
         if (d - cell.built.radius >= AIR.dissolveEnd || !frustum.intersectsSphere(cell.bounds)) return;
+        if (sized && !size.ortho && span(cell.crowns[1], d - cell.built.radius) <= GONE.end) return;
         const level = parts[levelFor(cell, size.smaller)] as (number | readonly number[])[];
         // Whole cells settle at once; only a cell straddling the band looks at each copy.
         if (!swapping || span(cell.crowns[0], d + cell.built.radius) >= swapPx * FAR.band) {
