@@ -16,7 +16,6 @@ import { biome, link, world as worldKind } from "@gaia/kinds";
 import { defaultParams, validate } from "@gaia/world";
 import { FLORA_PRESETS, LANDMARK_PRESETS, type Realized, TRAIL_PRESETS, WORLD_PRESETS, buildSlots, mergeParts, realizeRegion, realizeSky } from "@gaia/realize";
 import {
-  FAR_COPY,
   type FarCards,
   LANTERN,
   type PlantView,
@@ -66,7 +65,7 @@ import { type Stand, type StandRequest, type StandingLandmark, landmarkBase, own
 import { groundVitalityAt, setGroundOwnership, showGroundVitality } from "./vitality.ts";
 import { type TourStop, tourStops } from "./tour.ts";
 import { type Change, pictureChange, tallyFrame } from "./measure.ts";
-import { type Copies, type DetailMode, FAR, type FarOf, type PassSize, createCopies, createFarForms } from "./woods.ts";
+import { type Copies, type DetailMode, FAR, type FarOf, type PassSize, TURN, createCopies, createFarForms } from "./woods.ts";
 import { contentHash, openFarStore } from "./far-store.ts";
 
 const TEMPLATE = /* html */ `
@@ -687,7 +686,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   // frame shows a far tree before its card. The bushes' bake once the world is
   // open: until then every bush draws its full form, and the far ones then
   // change by less than a level of 255 as their cards come in.
-  const farSets = [treeForms, bushForms].map((forms) => ({ forms, cards: null as FarCards | null, ms: 0 }));
+  const farSets = [treeForms, bushForms].map((forms) => ({ forms, ms: 0 }));
   const [treeSet, bushSet] = farSets as [(typeof farSets)[number], (typeof farSets)[number]];
   const farStore = openFarStore();
   /** Bakes or reads every form of `set`, `ms` milliseconds a frame, and draws its cards from then on. */
@@ -695,7 +694,9 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     const t0 = performance.now();
     const store = await farStore;
     const forms: FarForm[] = [];
+    const turns: number[] = [];
     for (const { plant, px } of set.forms.close()) {
+      turns.push(px);
       const key = contentHash(plant.parts, plant.motion, plant.palette, FAR_BAKE_VERSION, px);
       const kept = (await store?.get(key).catch(() => undefined)) as FarFormData | undefined;
       const stored = kept === undefined ? null : farFormFrom(kept);
@@ -720,17 +721,15 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
         await new Promise((r) => requestAnimationFrame(r));
       }
     }
-    const cards = createFarCards(forms, light);
-    scene.add(cards.object);
-    set.cards = cards;
-    set.forms.batch.baked = true;
+    // Each plant's copies take their cards from here, standing in buffers of their own (`createCopies`).
+    set.forms.cards = createFarCards(forms, light, turns, TURN);
     set.ms = performance.now() - t0;
   }
   const farBaked = bakeFar(treeSet, FAR_BAKE.ms).then(() => {
     reportStage("tree cards", { ms: Math.round(treeSet.ms) });
     warmSoon();
   });
-  const farCardSets = (): FarCards[] => farSets.flatMap((set) => (set.cards === null ? [] : [set.cards]));
+  const farCardSets = (): FarCards[] => farSets.flatMap((set) => (set.forms.cards === null ? [] : [set.forms.cards]));
   // Each tree build's instances are made a build a frame while the wait holds,
   // so a world's planting only moves copies.
   void (async (): Promise<void> => {
@@ -761,9 +760,9 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
         : passCamera instanceof THREE.OrthographicCamera
           ? { smaller: 1, focal: height / (passCamera.top - passCamera.bottom), ortho: true }
           : { smaller: 1, focal: 0, ortho: false };
-    for (const set of farSets) set.forms.batch.count = 0;
+    // Each card measures its copy's crown on this pass's screen itself, from buffers written when the copies stood.
+    for (const cards of farCardSets()) cards.pass(size.focal, size.ortho);
     for (const v of swapping === null ? instanced() : [swapping]) v.cull(passCamera, size);
-    for (const set of farSets) set.cards?.draw(set.forms.batch.copies, set.forms.batch.count);
   };
   /** One step of the swap test: how much it changes the tree's part of the screen, the wind's change there, and how far away the tree stands. */
   interface SwapStep {
@@ -806,7 +805,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
         await renderer.compileAsync(scene, warmCamera);
         renderer.setRenderTarget(warmTarget);
         await renderer.compileAsync(scene, warmCamera);
-        const depth = [...views(), ...understory.casters(), ...wildGrowth.all(), ...farCardSets()];
+        const depth = [...views(), ...understory.casters(), ...wildGrowth.all()];
         for (const v of depth) v.useDepth(true);
         try {
           await renderer.compileAsync(scene, warmCamera);
@@ -821,16 +820,9 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       }
     });
   }
-  /** Every level of every instanced plant, and every far card solid and fading, readied to draw one copy. */
+  /** Every level of every instanced plant readied to draw one copy, and its far cards, once baked, standing. */
   function readyToWarm(): void {
     for (const v of instanced()) v.warm();
-    for (const { forms, cards } of farSets) {
-      if (cards === null) continue;
-      for (let k = 0; k < forms.count; k++) {
-        for (const fade of [1, 0.5]) forms.batch.copies.set([k, 0, 0, 0, 0, 1, 1, 0, fade], (k * 2 + (fade < 1 ? 1 : 0)) * FAR_COPY);
-      }
-      cards.draw(forms.batch.copies, forms.count * 2);
-    }
   }
   function warm(): void {
     warming = true;
@@ -1929,7 +1921,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   let waitNight = -1;
   /** The sun's shadow, cast by every plant, building and landmark over the ground framed by `shadow.frame`. */
   function castShadows(): void {
-    shadow.render(renderer, scene, [...views(), ...understory.casters(), ...wildGrowth.all(), ...farCardSets(), ...(swapping === null ? [] : [swapping])], [sky.mesh, ground.wilds, ground.fine, ground.coarse, ground.mirror, grass.mesh, water.group, signs.mesh, ...understory.quiet()]);
+    shadow.render(renderer, scene, [...views(), ...understory.casters(), ...wildGrowth.all(), ...(swapping === null ? [] : [swapping])], [sky.mesh, ground.wilds, ground.fine, ground.coarse, ground.mirror, grass.mesh, water.group, signs.mesh, ...understory.quiet()]);
   }
   /** The water's mirror as `eye` sees it, showing `show`; the draw calls it took. */
   function mirror(eye: THREE.PerspectiveCamera, show: THREE.Object3D[], dt: number): number {
@@ -2701,10 +2693,11 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
           for (const o of objects) if (o !== undefined) kinds.set(o, kind);
         };
         name("trees", treeViews.map((v) => v.object));
-        name("far trees", [treeSet.cards?.object]);
-        name("far bushes", [bushSet.cards?.object]);
         name("understory", [...understory.all().map((v) => v.object), ...understory.quiet()]);
         name("wild bushes", wildGrowth.all().map((v) => v.object));
+        // Each plant's cards stand inside its full form's object: named after, so they count apart.
+        name("far trees", treeViews.map((v) => v.cards ?? undefined));
+        name("far bushes", [...understory.all(), ...wildGrowth.all()].map((v) => v.cards ?? undefined));
         name("grass", [grass.mesh]);
         name("ground", [ground.fine, ground.coarse, ground.mirror, ground.wilds]);
         name("water", [water.group]);
@@ -2733,13 +2726,10 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       /** Walks as a person would for `seconds` of real time (`wander`). */
       wander,
       /** Shows or hides the far trees' cards alone, for seeing what they draw. */
-      showFarTrees: (on: boolean) => {
-        if (treeSet.cards !== null) treeSet.cards.object.visible = on;
-      },
+      showFarTrees: (on: boolean) => treeSet.forms.cards?.show(on),
       /** Shows or hides every tree, for comparing frame costs. */
       showTrees: (on: boolean) => {
         for (const v of treeViews) v.object.visible = on;
-        if (treeSet.cards !== null) treeSet.cards.object.visible = on;
       },
       /** Draw calls in one whole frame: the shadow pass and the view together. */
       calls: () => {
