@@ -112,6 +112,23 @@ export interface Judged {
   readonly needsTests?: YesNo;
   /** Asked only when nothing in the repository reaches it. */
   readonly dead?: YesNo;
+  /**
+   * The understanding pass's answers, keyed by concept: "importance" (as its
+   * container judged it), and quality concepts such as "readability",
+   * "safety" or "organization" (`engine/vocab/understanding.toml`).
+   */
+  readonly axes?: Readonly<Record<string, Score | Choice>>;
+  /** Which of a container's parts stand out, as choices over their ids: "key", "weak" and "finest". */
+  readonly picks?: Readonly<Record<string, Choice>>;
+  /** What more Jev asked to read, by round: "usages", "related", "tests", "docs" or "nothing". */
+  readonly more?: Readonly<Record<string, Choice>>;
+  /**
+   * What the engine works out from the understanding pass, each from 0 to 1:
+   * importance as the item's container judged it (the root is 1), and
+   * quality gathered upward, each container's parts weighted by their lines
+   * and blended with its own. Null where nothing was answered.
+   */
+  readonly value?: { readonly importance: number | null; readonly quality: number | null };
 }
 
 export interface GraphEdge {

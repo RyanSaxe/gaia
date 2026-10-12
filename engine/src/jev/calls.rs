@@ -10,7 +10,9 @@
 //! `understand` (profile, quality, importance, screen, attention) waits for
 //! every link, because importance reads reach; `tests` (checks) waits for a
 //! file's kind; `deep` (definition, block) waits for the world's choice;
-//! `dirs` (directory) waits for everything under each directory.
+//! `dirs` (directory) waits for everything under each directory. The
+//! understanding pass (`axes.rs`) has its own order: after `link`,
+//! `folders` top-down, then `files`, each after its folder.
 
 use crate::graph::model::{CodeGraph, DefNode, DirNode, FileNode, Node, PendingRef};
 use serde::Deserialize;
@@ -66,6 +68,11 @@ pub struct Ctx<'a> {
     /// Every node an import, call, reference, implementation or name from
     /// another file points at.
     pub used: HashSet<&'a str>,
+    /// Where each definition is called or referenced from another file:
+    /// the calling node and the line it's on.
+    pub uses_of: HashMap<&'a str, Vec<(&'a str, u32)>>,
+    /// The definitions in other files each definition calls.
+    pub calls_out: HashMap<&'a str, Vec<&'a str>>,
 }
 
 /// The file a node id names or lies in: `src/a.ts` for `file:src/a.ts` or `def:src/a.ts#f`.
@@ -137,7 +144,27 @@ impl<'a> Ctx<'a> {
                 })
                 .map(|e| e.to.as_str())
                 .collect(),
+            uses_of: HashMap::new(),
+            calls_out: HashMap::new(),
         };
+        for e in graph.edges.iter().filter(|e| {
+            matches!(e.kind, "calls" | "references" | "implements")
+                && e.to.starts_with("def:")
+                && file_part(&e.from) != file_part(&e.to)
+        }) {
+            if let Some(at) = &e.at {
+                ctx.uses_of
+                    .entry(e.to.as_str())
+                    .or_default()
+                    .push((e.from.as_str(), at.start));
+            }
+            if e.kind == "calls" {
+                ctx.calls_out
+                    .entry(e.from.as_str())
+                    .or_default()
+                    .push(e.to.as_str());
+            }
+        }
         for n in &graph.nodes {
             match n {
                 Node::Def(d) => {
@@ -1408,6 +1435,8 @@ pub fn registry() -> Vec<&'static dyn Call> {
         &Definition,
         &Block,
         &Directory,
+        &super::axes::FolderAxes,
+        &super::axes::FileAxes,
     ]
 }
 
@@ -1477,9 +1506,17 @@ mod tests {
                         "link",
                     ]
                     .contains(&q.field.as_str())
-                        || ["does.", "quality.", "importance.", "checks:"]
-                            .iter()
-                            .any(|p| q.field.starts_with(p));
+                        || [
+                            "does.",
+                            "quality.",
+                            "importance.",
+                            "checks:",
+                            "axes.",
+                            "picks.",
+                            "more.",
+                        ]
+                        .iter()
+                        .any(|p| q.field.starts_with(p));
                     assert!(
                         known,
                         "{}'s answer goes to a field the graph has: {}",

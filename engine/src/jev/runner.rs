@@ -50,6 +50,15 @@ const LINK: &str = "link";
 /// The passes in the order their requests wait on each other.
 const PASSES: [&str; 5] = [LINK, "understand", "tests", "deep", "dirs"];
 
+/// Which set of questions a project is asked: today's calls, or the
+/// understanding pass's (importance and quality at every level), which
+/// replace them once the world reads them.
+#[derive(Clone, Copy, PartialEq)]
+pub enum Design {
+    Calls,
+    Understanding,
+}
+
 /// Keeps only the requests of the passes up to `through`, or all of them.
 fn through(w: &mut Wanted, through: Option<&str>) -> Result<(), String> {
     let Some(last) = through else {
@@ -586,7 +595,7 @@ struct Wanted {
     answered: HashSet<String>,
 }
 
-fn wanted(root: &Path, deep: &BTreeSet<String>) -> Result<Wanted, String> {
+fn wanted(root: &Path, deep: &BTreeSet<String>, design: Design) -> Result<Wanted, String> {
     let project = crate::graph::project_id(root);
     let held = store::read(&project, "held")?;
     let graph = crate::graph::build_linked(root, &links(&held))?;
@@ -616,59 +625,65 @@ fn wanted(root: &Path, deep: &BTreeSet<String>) -> Result<Wanted, String> {
             .collect();
         let links_done = link.iter().all(|p| answered.contains(&p.hash));
         planned.extend(link);
-        // Understanding waits for every link. Until then its requests are
-        // built on the graph as it stands, so a plan can say what they cost.
-        let mut understood: HashSet<&str> = HashSet::new();
-        for f in &files {
-            let mut reqs = file_requests(&ctx, root, &graph.name, f, &of("understand"));
-            if !links_done {
-                reqs.iter_mut().for_each(|p| p.waiting = true);
-            } else if done(&reqs) {
-                understood.insert(f.id.as_str());
-            }
-            planned.extend(reqs);
-        }
-        if links_done {
-            // What waits on a file's understanding.
-            for f in files.iter().filter(|f| understood.contains(f.id.as_str())) {
-                planned.extend(file_requests(&ctx, root, &graph.name, f, &of("tests")));
-                planned.extend(file_requests(&ctx, root, &graph.name, f, &of("deep")));
-            }
-            // Directories, deepest first: each waits for its files and its subdirectories.
-            let mut dirs: Vec<&DirNode> = graph
-                .nodes
-                .iter()
-                .filter_map(|n| if let Node::Dir(d) = n { Some(d) } else { None })
-                .collect();
-            dirs.sort_by_key(|d| {
-                std::cmp::Reverse(if d.path.is_empty() {
-                    0
-                } else {
-                    d.path.matches('/').count() + 1
-                })
-            });
-            let mut dir_done: HashSet<&str> = HashSet::new();
-            for d in dirs {
-                let files_ready = ctx
-                    .files_in
-                    .get(d.path.as_str())
-                    .into_iter()
-                    .flatten()
-                    .all(|f| f.binary || understood.contains(f.id.as_str()));
-                let subdirs_ready = ctx
-                    .dirs_in
-                    .get(d.path.as_str())
-                    .into_iter()
-                    .flatten()
-                    .all(|s| dir_done.contains(s.id.as_str()));
-                if !(files_ready && subdirs_ready) {
-                    continue;
-                }
-                let reqs = dir_requests(&ctx, &graph.name, d, &of("dirs"));
-                if done(&reqs) {
-                    dir_done.insert(d.id.as_str());
+        if design == Design::Understanding {
+            planned.extend(understanding(
+                &ctx, root, &graph, &files, links_done, &answered,
+            ));
+        } else {
+            // Understanding waits for every link. Until then its requests are
+            // built on the graph as it stands, so a plan can say what they cost.
+            let mut understood: HashSet<&str> = HashSet::new();
+            for f in &files {
+                let mut reqs = file_requests(&ctx, root, &graph.name, f, &of("understand"));
+                if !links_done {
+                    reqs.iter_mut().for_each(|p| p.waiting = true);
+                } else if done(&reqs) {
+                    understood.insert(f.id.as_str());
                 }
                 planned.extend(reqs);
+            }
+            if links_done {
+                // What waits on a file's understanding.
+                for f in files.iter().filter(|f| understood.contains(f.id.as_str())) {
+                    planned.extend(file_requests(&ctx, root, &graph.name, f, &of("tests")));
+                    planned.extend(file_requests(&ctx, root, &graph.name, f, &of("deep")));
+                }
+                // Directories, deepest first: each waits for its files and its subdirectories.
+                let mut dirs: Vec<&DirNode> = graph
+                    .nodes
+                    .iter()
+                    .filter_map(|n| if let Node::Dir(d) = n { Some(d) } else { None })
+                    .collect();
+                dirs.sort_by_key(|d| {
+                    std::cmp::Reverse(if d.path.is_empty() {
+                        0
+                    } else {
+                        d.path.matches('/').count() + 1
+                    })
+                });
+                let mut dir_done: HashSet<&str> = HashSet::new();
+                for d in dirs {
+                    let files_ready = ctx
+                        .files_in
+                        .get(d.path.as_str())
+                        .into_iter()
+                        .flatten()
+                        .all(|f| f.binary || understood.contains(f.id.as_str()));
+                    let subdirs_ready = ctx
+                        .dirs_in
+                        .get(d.path.as_str())
+                        .into_iter()
+                        .flatten()
+                        .all(|s| dir_done.contains(s.id.as_str()));
+                    if !(files_ready && subdirs_ready) {
+                        continue;
+                    }
+                    let reqs = dir_requests(&ctx, &graph.name, d, &of("dirs"));
+                    if done(&reqs) {
+                        dir_done.insert(d.id.as_str());
+                    }
+                    planned.extend(reqs);
+                }
             }
         }
     }
@@ -678,6 +693,58 @@ fn wanted(root: &Path, deep: &BTreeSet<String>) -> Result<Wanted, String> {
         planned,
         answered,
     })
+}
+
+/// The understanding pass's requests: folders top-down, each once its
+/// parent's request is answered, and each file once its folder's is, so
+/// every request carries what was found above it. Until then a request is
+/// built on what is known, marked waiting, so a plan can count it.
+fn understanding(
+    ctx: &Ctx,
+    root: &Path,
+    graph: &CodeGraph,
+    files: &[&FileNode],
+    links_done: bool,
+    answered: &HashSet<String>,
+) -> Vec<Planned> {
+    let calls = calls::registry();
+    let of = |pass: &str| -> Vec<&dyn Call> {
+        calls.iter().copied().filter(|c| c.pass() == pass).collect()
+    };
+    let done = |reqs: &[Planned]| reqs.iter().all(|p| answered.contains(&p.hash));
+    let mut dirs: Vec<&DirNode> = graph
+        .nodes
+        .iter()
+        .filter_map(|n| if let Node::Dir(d) = n { Some(d) } else { None })
+        .collect();
+    dirs.sort_by_key(|d| {
+        if d.path.is_empty() {
+            0
+        } else {
+            d.path.matches('/').count() + 1
+        }
+    });
+    let parent = |path: &str| path.rsplit_once('/').map_or("", |(d, _)| d).to_string();
+    let mut out = Vec::new();
+    let mut dir_done: HashSet<String> = HashSet::new();
+    for d in dirs {
+        let mut reqs = dir_requests(ctx, &graph.name, d, &of("folders"));
+        let ready = links_done && (d.path.is_empty() || dir_done.contains(&parent(&d.path)));
+        if !ready {
+            reqs.iter_mut().for_each(|p| p.waiting = true);
+        } else if done(&reqs) {
+            dir_done.insert(d.path.clone());
+        }
+        out.extend(reqs);
+    }
+    for f in files {
+        let mut reqs = file_requests(ctx, root, &graph.name, f, &of("files"));
+        if !(links_done && dir_done.contains(&parent(&f.path))) {
+            reqs.iter_mut().for_each(|p| p.waiting = true);
+        }
+        out.extend(reqs);
+    }
+    out
 }
 
 fn summary(w: &Wanted) -> Value {
@@ -709,9 +776,21 @@ fn summary(w: &Wanted) -> Value {
 /// it also gives the judged graph it planned on, as `judged_graph` would,
 /// so a caller needing both builds the graph once.
 pub fn plan(root: &Path, last: Option<&str>, graph: bool) -> Result<Value, String> {
+    plan_with(root, last, graph, Design::Calls)
+}
+
+/// `plan`, for the given design. The understanding pass has no `through`.
+pub fn plan_with(
+    root: &Path,
+    last: Option<&str>,
+    graph: bool,
+    design: Design,
+) -> Result<Value, String> {
     let (deep, _) = session_of(root)?;
-    let mut w = wanted(root, &deep)?;
-    through(&mut w, last)?;
+    let mut w = wanted(root, &deep, design)?;
+    if design == Design::Calls {
+        through(&mut w, last)?;
+    }
     let mut out = summary(&w);
     if graph {
         judge(&mut w.graph, &store::read(&w.project, "held")?);
@@ -724,9 +803,21 @@ pub fn plan(root: &Path, last: Option<&str>, graph: bool) -> Result<Value, Strin
 /// in all of them, and holds the answers of every file or directory a pass
 /// has now fully answered.
 pub fn next(root: &Path, max: Option<usize>, last: Option<&str>) -> Result<Value, String> {
+    next_with(root, max, last, Design::Calls)
+}
+
+/// `next`, for the given design. The understanding pass has no `through`.
+pub fn next_with(
+    root: &Path,
+    max: Option<usize>,
+    last: Option<&str>,
+    design: Design,
+) -> Result<Value, String> {
     let (deep, concurrency) = session_of(root)?;
-    let mut w = wanted(root, &deep)?;
-    through(&mut w, last)?;
+    let mut w = wanted(root, &deep, design)?;
+    if design == Design::Calls {
+        through(&mut w, last)?;
+    }
     let ready: Vec<usize> = (0..w.planned.len())
         .filter(|&i| !w.planned[i].waiting && !w.answered.contains(&w.planned[i].hash))
         .take(max.unwrap_or(DEFAULT_SLICE))
@@ -958,7 +1049,7 @@ pub fn deepen(root: &Path, nodes: &[String]) -> Result<Value, String> {
             concurrency,
         },
     );
-    Ok(summary(&wanted(root, &deep)?))
+    Ok(summary(&wanted(root, &deep, Design::Calls)?))
 }
 
 /// Asks one call about one node's file or directory straight away, and returns its answers.
@@ -1095,6 +1186,7 @@ fn judge(graph: &mut CodeGraph, held: &Value) {
         *judged = Some(Value::Object(j));
     }
     graph.edges.extend(checks);
+    super::axes::values(graph);
 }
 
 #[cfg(test)]

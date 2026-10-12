@@ -1,0 +1,253 @@
+# The understanding pass: importance and quality at every level. Folders
+# are asked top-down, each in its parent's light; each file after its
+# folder. A request is about one container, and its questions are about the
+# container's parts: each part's importance, each definition's quality
+# concepts, which parts stand out, and the container's own quality. The
+# concepts, their levels, the picks and how the engine weighs them are all
+# here, so reshaping them changes no engine code.
+
+# Definitions with these roles are data or markup rather than code (a CSS
+# rule, a Markdown section, a JSON key), so they are never asked about.
+[parts]
+skip_roles = ["rule", "section", "key", "element", "property", "field", "variable", "constant"]
+
+# Importance, asked of every part in its container's request, in the light
+# of the project and of everything above it.
+[importance]
+instructions = "How much does {what} matter to what this project exists to do, given what holds it?"
+levels = [
+  "Incidental: tooling, glue or scaffolding the project could do without.",
+  "Supporting: it helps the work along, and the project would get by without it.",
+  "Part of the work: it does some of what the project is for.",
+  "Core: it does a large part of what the project is for, and much would fail without it.",
+  "The heart: the project is, above all, this.",
+]
+
+# Quality, one question per concept, from the reviewer's table (round 13).
+# Jev scores every one; `weight` is how much each counts in the engine's
+# arithmetic. A concept missing at a level simply isn't asked there.
+
+[definition.correctness]
+weight = 1.0
+instructions = "Does `{name}`, on lines {start} to {end} do what it is supposed to, including at boundaries and edge cases?"
+levels = [
+  "Wrong: it plainly mishandles common cases or does something other than its name and signature promise.",
+  "Shaky: the main path works, but boundaries, empty inputs or edge cases are wrong or unhandled.",
+  "Sound: it does what it should, with at most a rare edge case left uncertain.",
+  "Exact: it does what it should at every boundary and edge case a reader can think of.",
+]
+
+[definition.readability]
+weight = 1.0
+instructions = "How easily can someone understand the intent, behavior and structure of `{name}`, on lines {start} to {end}?"
+levels = [
+  "Hard to follow: a reader must trace it by hand to know what it does or why.",
+  "Takes effort: a reader must hold several values, cases or jumps in mind at once.",
+  "Clear: one careful read is enough to know what it does and why.",
+  "Reads at a glance: its intent and behavior are obvious on sight.",
+]
+
+[definition.simplicity]
+weight = 1.0
+instructions = "Does `{name}`, on lines {start} to {end} use only as much complexity as its problem requires?"
+levels = [
+  "Overbuilt: machinery, indirection or special cases far beyond what the problem needs.",
+  "Heavier than needed: some needless layers, flags or special cases.",
+  "Simple: little that could be taken away; a special case or layer here and there.",
+  "As simple as it can be: nothing could be removed without losing what it does.",
+]
+
+[definition.cohesion]
+weight = 1.0
+instructions = "Does `{name}`, on lines {start} to {end} have one clear, focused purpose, with what belongs together kept together?"
+levels = [
+  "Scattered: several unrelated jobs side by side.",
+  "Mixed: a main purpose with unrelated pieces bolted on.",
+  "Focused: one purpose, with a piece that might sit better elsewhere.",
+  "One thing: every part serves one clear purpose.",
+]
+
+[definition.coupling]
+weight = 1.0
+instructions = "How limited and explicit are the dependencies of `{name}`, on lines {start} to {end}, so that changing it, or what it relies on, doesn't unexpectedly affect the other?"
+levels = [
+  "Tangled: it reaches into other code's internals or shared state, so a change here or there breaks the other.",
+  "Tight: it depends on many things or on details that could change under it.",
+  "Loose: a few dependencies, each through a clear interface.",
+  "Independent: its dependencies are few, explicit and stable.",
+]
+
+[definition.explicitness]
+weight = 1.0
+instructions = "Are the assumptions, dependencies, state changes and failure modes of `{name}`, on lines {start} to {end} visible, with few hidden surprises?"
+levels = [
+  "Hidden: it changes state, assumes things or fails in ways a reader can't see from where it's used.",
+  "Partly hidden: some side effects, assumptions or failures aren't visible.",
+  "Mostly visible: what it does, needs and can fail with is clear, with a small surprise or two.",
+  "Nothing hidden: every effect, assumption and failure is visible from its signature and body.",
+]
+
+[definition.consistency]
+weight = 1.0
+instructions = "Does `{name}`, on lines {start} to {end} handle similar problems in similar ways, with names, conventions and patterns that match the code around it?"
+levels = [
+  "Inconsistent: it goes against the conventions and patterns around it.",
+  "Uneven: it follows some conventions and breaks others.",
+  "Consistent: it matches the code around it, with a small deviation.",
+  "Seamless: names, patterns and conventions all match what a reader expects here.",
+]
+
+[definition.testability]
+weight = 1.0
+instructions = "Can the behavior of `{name}`, on lines {start} to {end} be verified, and its failures isolated, without elaborate setup?"
+levels = [
+  "Untestable in practice: it needs the whole system, real I/O or hidden state to check.",
+  "Awkward: checking it needs heavy setup, fakes or reaching into internals.",
+  "Testable: it can be checked with modest setup.",
+  "Trivially testable: inputs in, results out, nothing to set up.",
+]
+
+[definition.robustness]
+weight = 1.0
+instructions = "Does `{name}`, on lines {start} to {end} handle invalid inputs, unavailable dependencies and unexpected conditions deliberately?"
+levels = [
+  "Fragile: bad input or a failing dependency crashes it, corrupts state or is silently swallowed.",
+  "Brittle: it handles some failures and ignores others it can plainly meet.",
+  "Robust: it handles the failures it can meet, deliberately, or passes them on clearly.",
+  "Resilient: every failure it can meet is handled or reported on purpose, and nothing is swallowed.",
+]
+
+[definition.efficiency]
+weight = 1.0
+instructions = "Does `{name}`, on lines {start} to {end} use time, memory and other resources appropriately for what it actually has to do?"
+levels = [
+  "Wasteful: clearly needless work, such as repeated expensive calls or loading far more than it uses.",
+  "Loose: some avoidable work that could matter at real sizes.",
+  "Appropriate: its cost fits its job.",
+  "Lean: it does what it must and nothing more, at any size it will meet.",
+]
+
+[file.readability]
+weight = 1.0
+instructions = "How easily can someone understand the intent, behavior and structure of this file?"
+levels = [
+  "Hard to follow: a reader must trace it by hand to know what it does or why.",
+  "Takes effort: a reader must hold several values, cases or jumps in mind at once.",
+  "Clear: one careful read is enough to know what it does and why.",
+  "Reads at a glance: its intent and behavior are obvious on sight.",
+]
+
+[file.simplicity]
+weight = 1.0
+instructions = "Does this file use only as much complexity as its problem requires?"
+levels = [
+  "Overbuilt: machinery, indirection or special cases far beyond what the problem needs.",
+  "Heavier than needed: some needless layers, flags or special cases.",
+  "Simple: little that could be taken away; a special case or layer here and there.",
+  "As simple as it can be: nothing could be removed without losing what it does.",
+]
+
+[file.cohesion]
+weight = 1.0
+instructions = "Does this file have one clear, focused purpose, with what belongs together kept together?"
+levels = [
+  "Scattered: several unrelated jobs side by side.",
+  "Mixed: a main purpose with unrelated pieces bolted on.",
+  "Focused: one purpose, with a piece that might sit better elsewhere.",
+  "One thing: every part serves one clear purpose.",
+]
+
+[file.coupling]
+weight = 1.0
+instructions = "How limited and explicit are the dependencies of this file, so that changing it, or what it relies on, doesn't unexpectedly affect the other?"
+levels = [
+  "Tangled: it reaches into other code's internals or shared state, so a change here or there breaks the other.",
+  "Tight: it depends on many things or on details that could change under it.",
+  "Loose: a few dependencies, each through a clear interface.",
+  "Independent: its dependencies are few, explicit and stable.",
+]
+
+[file.consistency]
+weight = 1.0
+instructions = "Does this file handle similar problems in similar ways, with names, conventions and patterns that match the code around it?"
+levels = [
+  "Inconsistent: it goes against the conventions and patterns around it.",
+  "Uneven: it follows some conventions and breaks others.",
+  "Consistent: it matches the code around it, with a small deviation.",
+  "Seamless: names, patterns and conventions all match what a reader expects here.",
+]
+
+[file.testability]
+weight = 1.0
+instructions = "Can the behavior of this file be verified, and its failures isolated, without elaborate setup?"
+levels = [
+  "Untestable in practice: it needs the whole system, real I/O or hidden state to check.",
+  "Awkward: checking it needs heavy setup, fakes or reaching into internals.",
+  "Testable: it can be checked with modest setup.",
+  "Trivially testable: inputs in, results out, nothing to set up.",
+]
+
+[folder.cohesion]
+weight = 1.0
+instructions = "Does this folder have one clear, focused purpose, with what belongs together kept together?"
+levels = [
+  "Scattered: several unrelated jobs side by side.",
+  "Mixed: a main purpose with unrelated pieces bolted on.",
+  "Focused: one purpose, with a piece that might sit better elsewhere.",
+  "One thing: every part serves one clear purpose.",
+]
+
+[folder.coupling]
+weight = 1.0
+instructions = "How limited and explicit are the dependencies of this folder, so that changing it, or what it relies on, doesn't unexpectedly affect the other?"
+levels = [
+  "Tangled: it reaches into other code's internals or shared state, so a change here or there breaks the other.",
+  "Tight: it depends on many things or on details that could change under it.",
+  "Loose: a few dependencies, each through a clear interface.",
+  "Independent: its dependencies are few, explicit and stable.",
+]
+
+[folder.consistency]
+weight = 1.0
+instructions = "Does this folder handle similar problems in similar ways, with names, conventions and patterns that match the code around it?"
+levels = [
+  "Inconsistent: it goes against the conventions and patterns around it.",
+  "Uneven: it follows some conventions and breaks others.",
+  "Consistent: it matches the code around it, with a small deviation.",
+  "Seamless: names, patterns and conventions all match what a reader expects here.",
+]
+
+# Which parts of a container stand out, as choices over the parts. `none`
+# is always an option.
+[picks.key]
+instructions = "Which of these is the key to understanding {what}?"
+none = "None stands out: no single one is the key."
+
+[picks.weak]
+instructions = "Which of these most needs work in {what}: the one a careful reviewer would fix first?"
+none = "None needs work more than the others."
+
+[picks.finest]
+instructions = "Which of these is the finest in {what}: the one most worth showing as an example of well-made code?"
+none = "None stands out as especially well made."
+
+# How the engine gathers quality upward: a container's quality is its
+# parts' quality, weighted by their lines, blended with its own.
+[gather]
+parts = 0.75
+own = 0.25
+
+# Asking for more: every request ends with a choice of what would help Jev
+# judge it better. Every reading above `threshold` (when "nothing" isn't the
+# answer) is added to the state and the same questions are asked again, up
+# to `rounds` more times.
+[more]
+threshold = 0.3
+rounds = 1
+instructions = "What would help you most to judge this better?"
+[more.options]
+"usages" = "Where it is used: the lines in other files that call or import it."
+"related" = "The source of what it calls in other files."
+"tests" = "The tests that reach it."
+"docs" = "Its folder's own documentation."
+"nothing" = "Nothing: what is here is enough."
