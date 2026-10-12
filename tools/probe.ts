@@ -12,8 +12,8 @@
 //   rocks and drifts of flowers) at vitality 1, 0.5 and 0.15, by day and at
 //   22:00, steps through its change of form: the far form coming in over the
 //   full one, coming to draw whole, the full form dissolving under it, and the
-//   frame where it leaves and the far form stands alone, each against the
-//   wind's half-second change.
+//   frame where it leaves and the far form stands alone; then, too small to
+//   see, dissolving and gone. Each is held against the wind's half-second change.
 // - stress: a world with five times the trees.
 //
 // The window stays hidden, at exactly the size asked for, except for the walk
@@ -244,7 +244,7 @@ for (const [world, calls] of Object.entries(results)) {
     } else if (key.startsWith("swap ")) {
       // A step passes when it changes the plant's part of the screen no more than the wind does there in half a second, or too little to show.
       type Step = { change: { mean: number; worst: number }; wind: { mean: number; worst: number }; distance: number };
-      const STEPS = ["middle", "whole", "leaving", "end"] as const;
+      const STEPS = ["middle", "whole", "leaving", "end", "dissolving", "gone"] as const;
       const rows = value as ({ name: string; vitality: number } & Record<(typeof STEPS)[number], Step>)[];
       const over = (s: Step): boolean => s.change.worst > SWAP_FLOOR && (s.change.worst > s.wind.worst || s.change.mean > s.wind.mean);
       const failing = (r: (typeof rows)[number]): boolean => STEPS.some((k) => over(r[k]));
@@ -254,6 +254,7 @@ for (const [world, calls] of Object.entries(results)) {
       for (const r of rows) {
         line(`    ${failing(r) ? "over " : "     "} ${r.name.padEnd(16)} ${f(r.vitality, 2)}  middle of the band ${say(r.middle)} at ${f(r.middle.distance, 0)} m; whole ${say(r.whole)}`);
         line(`                            dissolving ${say(r.leaving)}; the full form leaving ${say(r.end)} at ${f(r.end.distance, 0)} m`);
+        line(`                            too small: dissolving ${say(r.dissolving)}; gone ${say(r.gone)} at ${f(r.gone.distance, 0)} m`);
       }
     } else if (key.startsWith("hitch ")) {
       const s = value as { medianMs: number; p99Ms: number; maxMs: number; stutters: number };

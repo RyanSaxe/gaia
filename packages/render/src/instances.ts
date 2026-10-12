@@ -66,9 +66,12 @@ export interface PlantInstances extends PlantView {
   /**
    * For the pass about to render, at `focal` device pixels of focal length:
    * a copy whose crown spans fewer than `from` pixels dissolves, gone at
-   * `to`, where only its far card draws. A focal of 0 dissolves nothing.
+   * `to`, where only its far card draws (0 and 0 for no far card); and,
+   * far card or not, a copy whose crown spans fewer than `gone[0]` pixels
+   * dissolves, gone at `gone[1]`, too small to see. A focal of 0 dissolves
+   * nothing.
    */
-  nearLeaves(focal: number, from: number, to: number): void;
+  nearLeaves(focal: number, from: number, to: number, gone: readonly [number, number]): void;
   /** Draws, in the pass about to render, the copies given for each level, packed into its instance buffer; levels not given draw nothing. */
   draw(levels: readonly LevelCopies[]): void;
   /**
@@ -107,11 +110,12 @@ function instanced(vertex: string): string {
 }
 
 /**
- * The near form leaving a far card's place: once a copy's crown spans fewer
- * device pixels than `uNearLeaves.y` on this pass's screen, the copy
- * dissolves, until at `uNearLeaves.z` it is gone and its far card stands
- * alone. Its crown is measured as `crownsOf` in woods.ts measures it, from
- * the copy's own matrix, so the dissolve ends where the copy stops drawing.
+ * The near form leaving: once a copy's crown spans fewer device pixels than
+ * `uNearLeaves.y` on this pass's screen, the copy dissolves, until at
+ * `uNearLeaves.z` it is gone and its far card stands alone; and below
+ * `uNearGone.x` pixels it dissolves too small to see, gone at `uNearGone.y`.
+ * Its crown is measured as `crownsOf` in @gaia/render measures it, from the
+ * copy's own matrix, so the dissolve ends where the copy stops drawing.
  * `uNearLeaves.x` is the pass's focal length in device pixels; 0 never
  * dissolves.
  */
@@ -120,12 +124,14 @@ const NEAR_LEAVES_VERT = /* glsl */ `
     float scale = length(instanceMatrix[0].xz);
     vec3 crown = instanceMatrix[3].xyz + uCrown.xyz * scale;
     float span = 2.0 * uCrown.w * scale * uNearLeaves.x / max(distance(crown, uEye), 1.0);
-    vNearGone = uNearLeaves.x > 0.0 ? clamp((uNearLeaves.y - span) / max(uNearLeaves.y - uNearLeaves.z, 1e-3), 0.0, 1.0) : 0.0;
+    float leaving = clamp((uNearLeaves.y - span) / max(uNearLeaves.y - uNearLeaves.z, 1e-3), 0.0, 1.0);
+    float small = clamp((uNearGone.x - span) / max(uNearGone.x - uNearGone.y, 1e-3), 0.0, 1.0);
+    vNearGone = uNearLeaves.x > 0.0 ? max(leaving, small) : 0.0;
   }
   gl_Position = projectionMatrix * viewMatrix * world;`;
 
 const INSTANCED_VERT = swap(
-  swap(instanced(PLANT_VERT), "void main() {", "uniform vec4 uCrown;\nuniform vec3 uNearLeaves;\nvarying float vNearGone;\nvoid main() {"),
+  swap(instanced(PLANT_VERT), "void main() {", "uniform vec4 uCrown;\nuniform vec3 uNearLeaves;\nuniform vec2 uNearGone;\nvarying float vNearGone;\nvoid main() {"),
   "  gl_Position = projectionMatrix * viewMatrix * world;",
   NEAR_LEAVES_VERT,
 );
@@ -219,6 +225,7 @@ export function createPlantInstances(plant: Realized, light: SceneLight, spots: 
     uDetail: { value: 1 },
     uCrown: { value: new THREE.Vector4(sphere.center.x, sphere.center.y, sphere.center.z, sphere.radius) },
     uNearLeaves: { value: new THREE.Vector3(0, 0, 0) },
+    uNearGone: { value: new THREE.Vector2(0, 0) },
   };
   const materials = new Map<string, { color: THREE.ShaderMaterial; depth: THREE.ShaderMaterial }>();
   const materialFor = (part: Part): { color: THREE.ShaderMaterial; depth: THREE.ShaderMaterial } => {
@@ -369,8 +376,9 @@ export function createPlantInstances(plant: Realized, light: SceneLight, spots: 
       }
     },
     drawn: () => lastDrawn,
-    nearLeaves(focal, from, to) {
+    nearLeaves(focal, from, to, gone) {
       shared.uNearLeaves.value.set(focal, from, to);
+      shared.uNearGone.value.set(gone[0], gone[1]);
     },
     useDepth(on) {
       for (const m of meshes) m.mesh.material = on ? m.depth : m.color;

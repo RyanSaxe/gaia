@@ -936,7 +936,11 @@ in one call per set (solid and fading) for each plant per pass. Nothing past
 `AIR.dissolveEnd`, where the air has dissolved everything into the sky,
 draws at all. The understory's shrubs, rocks and drifts of flowers and the
 wild's bushes take far forms too, baked and turned far at a quarter of the
-trees' size (`FAR.bush`, set per understory group). Every plant that turns far is listed once in `createFarForms`,
+trees' size (`FAR.bush`, set per understory group). Whatever its form, a
+thing whose crown spans fewer than 8 device pixels dissolves through its
+own dissolve, and by 4 it is gone (`GONE` and `goneAt` in `woods.ts`, which
+`standing.ts` reads too); a cell whose largest crown spans under 4 pixels at
+its nearest point draws nothing. Every plant that turns far is listed once in `createFarForms`,
 in the far cards' form order. Each build bakes into its far form a few views
 a frame under the wait (`startFarBake`), and the wait lifts only once all of
 them are ready. A baked form is kept in the
