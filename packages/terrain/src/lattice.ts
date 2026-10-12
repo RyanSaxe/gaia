@@ -7,8 +7,10 @@ export interface Lattice {
   readonly n: number;
   /** Meters between samples. */
   readonly spacing: number;
-  /** World x and z of sample 0; the lattice is centered on the world origin. */
+  /** World x and z of sample 0; the world's lattice is centered on the world origin. */
   readonly origin: number;
+  /** World z of sample 0 when it differs from x's, as for a tile of the land; `origin` when absent. */
+  readonly originZ?: number;
   /** Row-major: index = iz * n + ix. */
   readonly heights: Float32Array;
 }
@@ -18,7 +20,10 @@ export function createLattice(extent: number, spacing: number): Lattice {
   return { n, spacing, origin: (-(n - 1) * spacing) / 2, heights: new Float32Array(n * n) };
 }
 
+/** World x of column `i`, and world z of row `i` on a lattice whose rows start where its columns do. */
 export const worldOf = (l: Lattice, i: number): number => l.origin + i * l.spacing;
+/** World z of row `i`. */
+export const worldOfZ = (l: Lattice, i: number): number => (l.originZ ?? l.origin) + i * l.spacing;
 
 /**
  * Height at any point, interpolated exactly as the mesh draws it: each cell
@@ -26,7 +31,7 @@ export const worldOf = (l: Lattice, i: number): number => l.origin + i * l.spaci
  */
 export function heightAt(l: Lattice, x: number, z: number, values: Float32Array = l.heights): number {
   const gx = Math.min(l.n - 1.000001, Math.max(0, (x - l.origin) / l.spacing));
-  const gz = Math.min(l.n - 1.000001, Math.max(0, (z - l.origin) / l.spacing));
+  const gz = Math.min(l.n - 1.000001, Math.max(0, (z - (l.originZ ?? l.origin)) / l.spacing));
   const ix = Math.floor(gx);
   const iz = Math.floor(gz);
   const fx = gx - ix;

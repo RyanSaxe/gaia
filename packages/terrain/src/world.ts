@@ -13,8 +13,8 @@ import { fbm, fieldAt } from "@gaia/primitives";
 import { resolveParams } from "@gaia/realize";
 import { RELIEF_BUDGET, type ReliefReport, measureRelief, withinBudget } from "./budget.ts";
 import { type LandSite, LAND_WARP, siteAt, warpPoint } from "./land.ts";
-import { type Lattice, createLattice, worldOf } from "./lattice.ts";
-import { type SolvedPond, type SolvedStream, carvePond, carveStream, shoreField, solvePond, solveStream } from "./water.ts";
+import { type Lattice, createLattice, worldOf, worldOfZ } from "./lattice.ts";
+import { BANK_REACH, SHORE_CAP, type SolvedPond, type SolvedStream, carvePond, carveStream, shoreField, solvePond, solveStream } from "./water.ts";
 import { type LandOutline, pastTheEdge, withinLand } from "./edge.ts";
 
 export interface RegionSpec {
@@ -333,9 +333,22 @@ export const latticeOf = (spec: WorldSpec): Lattice => createLattice(spec.size +
  */
 export function composeRows(spec: WorldSpec, landforms: readonly Landform[], z0: number, z1: number): ComposedRows {
   const lattice = latticeOf(spec);
-  const { n } = lattice;
+  return { z0, z1, ...composeRect(spec, landforms, lattice, 0, lattice.n, z0, z1) };
+}
+
+/** The composed ground of a rectangle of samples, before fitting and water: columns [x0, x1) of rows [z0, z1), row by row. */
+type ComposedRect = Omit<ComposedRows, "z0" | "z1">;
+
+/**
+ * Composes columns [x0, x1) of rows [z0, z1) of lattice `l`, which may lie
+ * anywhere: the world's own lattice, a coarser survey of it, or a tile. Every
+ * sample is composed alone from where it stands, so the same point gives the
+ * same bytes in any of them.
+ */
+function composeRect(spec: WorldSpec, landforms: readonly Landform[], l: Lattice, x0: number, x1: number, z0: number, z1: number): ComposedRect {
   const count = spec.regions.length;
   if (count > 255) throw new Error(`A world holds at most 255 regions; this one has ${count}.`);
+  const n = x1 - x0;
   const rows = z1 - z0;
   const raw = new Float32Array(rows * n);
   const region = new Uint8Array(rows * n);
@@ -344,10 +357,10 @@ export function composeRows(spec: WorldSpec, landforms: readonly Landform[], z0:
   const weights = new Float64Array(count);
   const top = new Int32Array(COVER_TAPS);
   for (let iz = z0; iz < z1; iz++) {
-    const z = worldOf(lattice, iz);
-    for (let ix = 0; ix < n; ix++) {
-      const x = worldOf(lattice, ix);
-      const k = (iz - z0) * n + ix;
+    const z = worldOfZ(l, iz);
+    for (let ix = x0; ix < x1; ix++) {
+      const x = worldOf(l, ix);
+      const k = (iz - z0) * n + ix - x0;
       regionWeights(spec, x, z, weights);
       raw[k] = blended(spec, landforms, weights, x, z) + rimAt(spec, x, z);
       coverFromBlend(spec, x, z, weights);
@@ -380,7 +393,7 @@ export function composeRows(spec: WorldSpec, landforms: readonly Landform[], z0:
       region[k] = Math.max(0, top[0] as number);
     }
   }
-  return { z0, z1, raw, region, coverRegions, coverShares };
+  return { raw, region, coverRegions, coverShares };
 }
 
 /** Fits composed rows (covering every lattice row, in order) into the budget, then solves and cuts the water. */
@@ -421,27 +434,7 @@ export function finishTerrain(spec: WorldSpec, landforms: readonly Landform[], p
 
   // Water, solved from the fitted ground and cut into it.
   const waterLevel = new Float32Array(n * n).fill(DRY);
-  const streams: SolvedStream[] = [];
-  const ponds: SolvedPond[] = [];
-  spec.regions.forEach((r, ri) => {
-    for (const bed of (landforms[ri] as Landform).water) {
-      if (bed.kind !== "stream") continue;
-      const path = keptRun(spec, ri, bed.path);
-      const solved = path === null ? null : solveStream(final, path, bed.width, bed.depth);
-      if (solved === null) continue;
-      carveStream(final, heights, waterLevel, solved);
-      streams.push(solved);
-    }
-  });
-  spec.regions.forEach((r, ri) => {
-    for (const bed of (landforms[ri] as Landform).water) {
-      if (bed.kind !== "pond") continue;
-      const solved = solvePond(final, heights, r.x + bed.x, r.z + bed.z, bed.radius);
-      if (solved === null) continue;
-      carvePond(final, heights, waterLevel, solved, bed.depth);
-      ponds.push(solved);
-    }
-  });
+  const { streams, ponds } = cutWater(spec, landforms, final, waterLevel);
 
   return {
     spec,
@@ -452,10 +445,170 @@ export function finishTerrain(spec: WorldSpec, landforms: readonly Landform[], p
     coverRegions,
     coverShares,
     streams,
-    ponds,
+    ponds: ponds.map((p) => p.pond),
     fit,
     report: measureRelief(final, heights, (ix, iz) => withinLand(spec, worldOf(final, ix), worldOf(final, iz))),
     landforms,
+  };
+}
+
+/**
+ * Solves each stream from the fitted ground along its bed, after the ones
+ * before it have been cut, and cuts it in; then each pond from the ground
+ * around it. Reads and writes only the ground within `waterReach` of the
+ * beds, so a plan that composes just that solves the same water.
+ */
+function cutWater(spec: WorldSpec, landforms: readonly Landform[], l: Lattice, waterLevel: Float32Array): { streams: SolvedStream[]; ponds: { pond: SolvedPond; depth: number }[] } {
+  const streams: SolvedStream[] = [];
+  const ponds: { pond: SolvedPond; depth: number }[] = [];
+  spec.regions.forEach((r, ri) => {
+    for (const bed of (landforms[ri] as Landform).water) {
+      if (bed.kind !== "stream") continue;
+      const path = keptRun(spec, ri, bed.path);
+      const solved = path === null ? null : solveStream(l, path, bed.width, bed.depth);
+      if (solved === null) continue;
+      carveStream(l, l.heights, waterLevel, solved);
+      streams.push(solved);
+    }
+  });
+  spec.regions.forEach((r, ri) => {
+    for (const bed of (landforms[ri] as Landform).water) {
+      if (bed.kind !== "pond") continue;
+      const solved = solvePond(l, l.heights, r.x + bed.x, r.z + bed.z, bed.radius);
+      if (solved === null) continue;
+      carvePond(l, l.heights, waterLevel, solved, bed.depth);
+      ponds.push({ pond: solved, depth: bed.depth });
+    }
+  });
+  return { streams, ponds };
+}
+
+/** The lattice rectangles, [x0, x1) by [z0, z1), within which the water reads or cuts the ground (`cutWater`). */
+function waterReach(spec: WorldSpec, landforms: readonly Landform[], l: Lattice): [number, number, number, number][] {
+  const rects: [number, number, number, number][] = [];
+  const toIndex = (w: number): number => (w - l.origin) / l.spacing;
+  const add = (minX: number, maxX: number, minZ: number, maxZ: number, reach: number): void => {
+    rects.push([
+      Math.max(0, Math.floor(toIndex(minX - reach)) - 1),
+      Math.min(l.n, Math.ceil(toIndex(maxX + reach)) + 2),
+      Math.max(0, Math.floor(toIndex(minZ - reach)) - 1),
+      Math.min(l.n, Math.ceil(toIndex(maxZ + reach)) + 2),
+    ]);
+  };
+  spec.regions.forEach((r, ri) => {
+    for (const bed of (landforms[ri] as Landform).water) {
+      if (bed.kind === "pond") {
+        add(r.x + bed.x, r.x + bed.x, r.z + bed.z, r.z + bed.z, bed.radius * 1.3);
+        continue;
+      }
+      const path = keptRun(spec, ri, bed.path);
+      if (path === null) continue;
+      let minX = Infinity;
+      let maxX = -Infinity;
+      let minZ = Infinity;
+      let maxZ = -Infinity;
+      for (let k = 0; k < path.length; k += 2) {
+        minX = Math.min(minX, path[k] as number);
+        maxX = Math.max(maxX, path[k] as number);
+        minZ = Math.min(minZ, path[k + 1] as number);
+        maxZ = Math.max(maxZ, path[k + 1] as number);
+      }
+      add(minX, maxX, minZ, maxZ, Math.max(1.1, bed.width / 2) + BANK_REACH);
+    }
+  });
+  return rects;
+}
+
+/** What a world decides once, before any of its land is composed in full: how its relief is fitted, and its water. */
+export interface TerrainPlan {
+  readonly spec: WorldSpec;
+  readonly landforms: readonly Landform[];
+  /** Every sample's height is its composed height scaled about `mean` by `fit`. */
+  readonly mean: number;
+  readonly fit: number;
+  readonly streams: readonly SolvedStream[];
+  readonly ponds: readonly { readonly pond: SolvedPond; readonly depth: number }[];
+}
+
+/**
+ * Plans a world's land without composing all of it: fits the relief on a
+ * survey, as `finishTerrain` does, and solves the water from the ground
+ * composed along its beds alone. Where `finishTerrain`'s check at every
+ * sample keeps the survey's fit, which it does for every world up to 3 km and
+ * for the 5 km sample world, the plan and the whole-world bake agree exactly.
+ */
+export function planTerrain(spec: WorldSpec, landforms: readonly Landform[]): TerrainPlan {
+  const lattice = latticeOf(spec);
+  const { n } = lattice;
+  const s = TERRAIN.survey;
+  const sn = Math.floor((n - 1) / s) + 1;
+  const surveyFrame: Lattice = { ...lattice, n: sn, spacing: lattice.spacing * s };
+  const surveyed = fitRelief(spec, { ...surveyFrame, heights: composeRect(spec, landforms, surveyFrame, 0, sn, 0, sn).raw });
+  const { mean } = surveyed;
+  const fit = surveyed.fit < 1 ? surveyed.fit * (1 - TERRAIN.surveyMargin) : 1;
+  const heights = new Float32Array(n * n);
+  for (const [x0, x1, z0, z1] of waterReach(spec, landforms, lattice)) {
+    const raw = composeRect(spec, landforms, lattice, x0, x1, z0, z1).raw;
+    for (let iz = z0; iz < z1; iz++) {
+      for (let ix = x0; ix < x1; ix++) heights[iz * n + ix] = mean + ((raw[(iz - z0) * (x1 - x0) + ix - x0] as number) - mean) * fit;
+    }
+  }
+  const { streams, ponds } = cutWater(spec, landforms, { ...lattice, heights }, new Float32Array(n * n).fill(DRY));
+  return { spec, landforms, mean, fit, streams, ponds };
+}
+
+/** Land is baked in square tiles of `size` samples a side, each composed with a margin wide enough for its shore. */
+export const TILE = { size: 256, margin: Math.ceil(SHORE_CAP / TERRAIN.spacing) + 1 } as const;
+
+/** One tile of a world's land, as the whole world's bake would hold it. */
+export interface TerrainTile {
+  /** The world lattice's column and row of the tile's first sample, and its samples a side. */
+  readonly x0: number;
+  readonly z0: number;
+  readonly n: number;
+  /** Row-major over the tile, as `Terrain`'s arrays are over the world. */
+  readonly heights: Float32Array;
+  readonly waterLevel: Float32Array;
+  readonly shore: Float32Array;
+  readonly region: Uint8Array;
+  readonly coverRegions: Uint8Array;
+  readonly coverShares: Uint8Array;
+}
+
+/**
+ * Bakes the tile whose first sample is the world lattice's column `x0`, row
+ * `z0`, from `plan` alone: its own ground composed with a margin, fitted, the
+ * plan's water cut in and the shore measured, byte for byte as a bake of the
+ * whole world holds those samples.
+ */
+export function bakeTile(plan: TerrainPlan, x0: number, z0: number, size: number = TILE.size): TerrainTile {
+  const world = latticeOf(plan.spec);
+  const m = TILE.margin;
+  const side = size + 2 * m;
+  const frame: Lattice = { n: side, spacing: world.spacing, origin: worldOf(world, x0 - m), originZ: worldOf(world, z0 - m), heights: new Float32Array(0) };
+  const composed = composeRect(plan.spec, plan.landforms, frame, 0, side, 0, side);
+  const heights = composed.raw.map((h) => plan.mean + (h - plan.mean) * plan.fit);
+  const window: Lattice = { ...frame, heights };
+  const waterLevel = new Float32Array(side * side).fill(DRY);
+  for (const stream of plan.streams) carveStream(window, heights, waterLevel, stream);
+  for (const { pond, depth } of plan.ponds) carvePond(window, heights, waterLevel, pond, depth);
+  const shore = shoreField(window, heights, waterLevel);
+  /** The tile's own samples, `per` values each, without the margin. */
+  const inner = <T extends Float32Array | Uint8Array>(a: T, per: number): T => {
+    const out = a.slice(0, size * size * per) as T;
+    for (let j = 0; j < size; j++) out.set(a.subarray(((j + m) * side + m) * per, ((j + m) * side + m + size) * per), j * size * per);
+    return out;
+  };
+  return {
+    x0,
+    z0,
+    n: size,
+    heights: inner(heights, 1),
+    waterLevel: inner(waterLevel, 1),
+    shore: inner(shore, 1),
+    region: inner(composed.region, 1),
+    coverRegions: inner(composed.coverRegions, COVER_TAPS),
+    coverShares: inner(composed.coverShares, COVER_TAPS),
   };
 }
 
