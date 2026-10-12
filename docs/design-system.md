@@ -1219,10 +1219,12 @@ fading in on its own, so nothing appears or fades as a person walks. Just
 past the band the full tree dissolves under its whole card, so the thin
 strands, needles and berries a card cannot hold fade away instead of
 vanishing in one frame. Trees turn far at the same size however dense the
-view, so the woods never thin to keep frames up. Bushes turn far the same way at a
-quarter of the size, 32 pixels (16 on a phone). The walk test (`pnpm probe
-steps`) holds every step toward the woods to the wind's own change. Nothing
-is drawn past where the air has dissolved it into the sky.
+view, so the woods never thin to keep frames up. Bushes, rocks and drifts of
+flowers turn far the same way at a quarter of the size, 32 pixels (16 on a
+phone). The walk test (`pnpm probe steps`) holds every step toward the
+woods to the wind's own change, and the swap test (`pnpm probe swap`) holds
+every far-turning preset's change of form to the same. Nothing is drawn past
+where the air has dissolved it into the sky.
 
 A pass draws only the cells its camera sees. The sun's shadow map covers a
 box around the person, so only casters inside that box draw into it: its cost
