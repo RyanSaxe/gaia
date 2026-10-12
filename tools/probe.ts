@@ -166,7 +166,8 @@ async function probe() {
     await win.webContents.executeJavaScript("new Promise((r) => { const t = () => (window.__lab ? r() : setTimeout(t, 50)); t(); })");
     const view = await win.webContents.executeJavaScript("[innerWidth, innerHeight]");
     if (view[0] !== width || view[1] !== height) throw new Error("The window is " + view.join("x") + ", not " + width + "x" + height + ": something resized it.");
-    results[job.world] = {};
+    // The screen's own ratio wins over the one asked for, so the report says which the world drew at.
+    results[job.world] = { ratio: await win.webContents.executeJavaScript("devicePixelRatio") };
     for (const call of job.calls) {
       say(job.world + ": " + call.key);
       // Shown without taking focus, while the smoothness walk runs.
@@ -204,7 +205,9 @@ const m = (n: number): string => (n / 1e6).toFixed(2);
 const f = (n: number, d = 1): string => n.toFixed(d);
 const line = (s: string): void => void process.stdout.write(`${s}\n`);
 
-line(`Probe at ${WIDTH}x${HEIGHT} CSS pixels, device pixel ratio ${dpr}; load average ${f(load)} before, ${f(loadavg()[0] ?? 0)} after.`);
+const ratios = [...new Set(Object.values(results).map((calls) => (calls as { ratio?: number }).ratio).filter((r): r is number => r !== undefined))];
+const drewAt = ratios.length === 0 ? `${dpr}` : ratios.join(" and ");
+line(`Probe at ${WIDTH}x${HEIGHT} CSS pixels, device pixel ratio ${drewAt}${ratios.some((r) => r !== dpr) ? ` (asked for ${dpr}; Electron draws at the screen's own ratio, so compare runs only on the same screen)` : ""}; load average ${f(load)} before, ${f(loadavg()[0] ?? 0)} after.`);
 for (const [world, calls] of Object.entries(results)) {
   line(`\n${world}`);
   for (const [key, value] of Object.entries(calls)) {
