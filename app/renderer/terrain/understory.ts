@@ -154,6 +154,8 @@ export interface Understory {
   setVitality(vitality: ArrayLike<number>): void;
   /** A placed component's reach at the ground in 48 directions and its top above its origin, at scale 1, by the rule and variant its placement names. */
   readonly footprint: (rule: string, variant: number) => { readonly outline: Float32Array; readonly top: number } | undefined;
+  /** The radius of the largest thing it can place, meters: any variant of any group at its largest scale. */
+  largest(): number;
   /** Shows or hides everything, for comparing frame costs. */
   show(on: boolean): void;
   /** What was placed, its triangles at full detail, its meshes, and the triangles the last pass drew. */
@@ -277,6 +279,7 @@ export function createUnderstory(scene: THREE.Scene, light: SceneLight, lib: Lib
       const outline = b?.reach[variant];
       return b === undefined || outline === undefined ? undefined : { outline, top: b.tops[variant] ?? 0 };
     },
+    largest: () => built.reduce((r, { group, radii }) => Math.max(r, ...radii.map((radius) => radius * group.rule.scale[1])), 0),
     show(on) {
       for (const v of views) v.view.object.visible = on;
     },
