@@ -10,6 +10,7 @@
 import "./journal.css";
 import LEATHER from "./leather.webp";
 import PAPER from "./paper.webp";
+import { swipes } from "./swipe.ts";
 
 /** The two pages a place in the book opens onto. */
 export interface Spread {
@@ -49,6 +50,8 @@ export interface JournalBook {
 
 /** A page's size in the book's own pixels, and how far the boards overhang the pages. */
 export const PAGE = { w: 520, h: 660, overhang: 10 } as const;
+/** How wide a page's edge is, its outer fifth, in the book's pixels: a click there turns the page, over a map or a picture too. */
+const EDGE = PAGE.w / 5;
 /** The longest a turn waits for a file's text, ms, and for a painting, which only one that failed to come takes. */
 const TEXT_AT_MOST = 900;
 const PAINTED_AT_MOST = 15000;
@@ -96,6 +99,7 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
   root.style.setProperty("--pw", `${PAGE.w}px`);
   root.style.setProperty("--ph", `${PAGE.h}px`);
   root.style.setProperty("--ov", `${PAGE.overhang}px`);
+  root.style.setProperty("--edge", `${EDGE}px`);
   // While the book is open the world waits under it: a tap anywhere but the book shuts it.
   const catcher = el("journal-catch", root);
   const book = el("journal-book", root);
@@ -189,6 +193,7 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
     put(right, s.right);
     at = place;
     markTabs(place);
+    layEdges();
   }
   const after = (ms: number): Promise<void> => new Promise<void>((r) => window.setTimeout(r, ms));
   /** Waits until a place's spread can be drawn whole, but never long: a slow file is drawn without its code rather than held. */
@@ -341,6 +346,7 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
       // The pages lying open are the ones that turned: nothing is drawn again once a turn is done.
       at = target;
       markTabs(target);
+      layEdges();
       if (queued !== null) {
         const next = queued;
         queued = null;
@@ -381,6 +387,7 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
           leaf.classList.remove("turning", "over");
           turning = false;
           if (at !== null) markTabs(at);
+          layEdges();
         }, back + 40);
       },
     };
@@ -392,8 +399,8 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
    * A page is turned by taking it: pressed and drawn toward the spine, the
    * spot taken stays under the finger or the mouse as the leaf turns, and let
    * go past halfway it falls over, short of it it falls back. A press that
-   * hardly moves is a tap, and taps go on to the rows, names and pictures as
-   * before.
+   * hardly moves is a tap, and a tap goes on to the row, name or picture under
+   * it, or turns the page from bare paper (below).
    */
   let taken: { readonly side: "left" | "right"; readonly x0: number; readonly y0: number; turn: Turn | null; progress: number; reach: number } | null = null;
   let dragged = false;
@@ -494,19 +501,62 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
 
   // ---------- touching the book ----------
 
-  // The outer margin of each page turns it; a tap on the cover's slip while closed opens the book.
+  /** Whether a page lies that way from the open spread: the first spread's left and the last one's right turn nowhere. */
+  const turns = (side: "left" | "right"): boolean => open && at !== null && pages.next(at, side === "right" ? 1 : -1) !== null;
+  /** Turns to the next spread forward (1) or back (-1), if there is one. */
+  function turnBy(by: 1 | -1): void {
+    const to = open && at !== null ? pages.next(at, by) : null;
+    if (to !== null) turnTo(to);
+  }
+  /**
+   * Lays each margin over its page as the spread lies now. Where no page lies that way it stands aside, flat, and a
+   * click there is the page's own. Over a row, a name, a fold or a way back it leaves a hole, so those keep their
+   * own clicks and their underline; over the map, a picture or bare paper the margin is the page's edge.
+   */
+  function layEdges(): void {
+    for (const m of margins) {
+      const side = m.classList.contains("right") ? "right" : "left";
+      m.classList.toggle("none", !turns(side));
+      m.style.clipPath = holesFor(side);
+    }
+  }
+  /** The margin's shape as a clip path: its strip less every button on the page under it, or none when it covers none. */
+  function holesFor(side: "left" | "right"): string {
+    const page = (side === "right" ? right : left).firstElementChild;
+    if (!(page instanceof HTMLElement)) return "";
+    // The strip's left side, in the page's own pixels.
+    const from = side === "right" ? PAGE.w - EDGE : 0;
+    const holes: { x0: number; x1: number; y0: number; y1: number }[] = [];
+    for (const b of page.querySelectorAll<HTMLElement>("button")) {
+      // A fold not shown, or a row past the page's end, takes no click.
+      if (b.offsetParent === null || b.closest(".jp-past") !== null) continue;
+      let [x, y] = [0, 0];
+      for (let n: HTMLElement | null = b; n !== null && n !== page; n = n.offsetParent as HTMLElement | null) {
+        x += n.offsetLeft;
+        y += n.offsetTop;
+      }
+      const [x0, x1] = [Math.max(0, x - from), Math.min(EDGE, x + b.offsetWidth - from)];
+      if (x1 <= x0) continue;
+      // Rows one under the next make one hole: a seam between two would lift the page as the pointer crossed it.
+      const last = holes.at(-1);
+      if (last !== undefined && last.x0 === x0 && last.x1 === x1 && y <= last.y1 + 1 && y >= last.y0) last.y1 = Math.max(last.y1, y + b.offsetHeight);
+      else holes.push({ x0, x1, y0: y, y1: y + b.offsetHeight });
+    }
+    if (holes.length === 0) return "";
+    return `path(evenodd, "M0 0H${EDGE}V${PAGE.h}H0Z${holes.map((h) => `M${h.x0} ${h.y0}H${h.x1}V${h.y1}H${h.x0}Z`).join("")}")`;
+  }
+
+  // The outer fifth of each page is its edge, which turns it; a tap on the cover's slip while closed opens the book.
   const margin = (side: "left" | "right"): HTMLElement => {
     const m = el(`jb-margin ${side}`, inner);
     margins.push(m);
     // Scaled about the spine, where the open book's middle meets the view's (`liftMargins`).
-    m.style.transformOrigin = side === "right" ? "calc(64px - var(--pw)) 50%" : "var(--pw) 50%";
+    m.style.transformOrigin = side === "right" ? "calc(var(--edge) - var(--pw)) 50%" : "var(--pw) 50%";
     // Its edge lifts a little under the pointer, the way a page invites you to take it, and it can be taken from here.
     const page = side === "right" ? right : cover;
-    // Only where a page lies that way: the first spread's left edge and the last one's right stay flat, the pointer plain.
+    // Only where a page lies that way: the first spread's left edge and the last one's right stay flat (`layEdges`).
     m.addEventListener("pointerenter", () => {
-      const turns = open && at !== null && pages.next(at, side === "right" ? 1 : -1) !== null;
-      m.classList.toggle("none", !turns);
-      if (turns && !turning) page.classList.add("lift");
+      if (turns(side) && !turning) page.classList.add("lift");
     });
     m.addEventListener("pointerleave", () => page.classList.remove("lift"));
     m.addEventListener("pointerdown", (e) => {
@@ -519,14 +569,29 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
     });
     m.addEventListener("click", (e) => {
       e.stopPropagation();
-      if (!open || at === null) return;
-      const to = pages.next(at, side === "right" ? 1 : -1);
-      if (to !== null) turnTo(to);
+      turnBy(side === "right" ? 1 : -1);
     });
     return m;
   };
   margin("left");
   margin("right");
+  // A click on bare paper turns that way too: the right-hand page forward, the left back. Whatever on a page answers a
+  // click of its own (a row, a name, a fold, a way back, a map or a picture) stops it before it gets here.
+  right.addEventListener("click", () => turnBy(1));
+  left.addEventListener("click", () => turnBy(-1));
+  // So does a swipe sideways on a trackpad, or the wheel, one page a gesture. Nothing on a page scrolls, so the wheel
+  // over the open book is always a turn. A pinch is a zoom, and is left alone.
+  const swiped = swipes();
+  book.addEventListener(
+    "wheel",
+    (e) => {
+      if (!open || e.ctrlKey) return;
+      e.preventDefault();
+      const by = swiped(e.deltaX, e.deltaY, e.timeStamp);
+      if (by !== null) turnBy(by);
+    },
+    { passive: false },
+  );
   catcher.addEventListener("click", () => setOpen(false));
   // The closed book's cover, around the slip, lifts it too.
   coverFront.addEventListener("click", () => {
@@ -562,10 +627,7 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
       if (!open || e.target instanceof HTMLInputElement) return;
       // While the book is open the world waits: no key reaches it.
       if (e.code === "Escape" || e.code === "KeyM") setOpen(false);
-      else if (e.code === "ArrowRight" || e.code === "ArrowLeft") {
-        const to = at === null ? null : pages.next(at, e.code === "ArrowRight" ? 1 : -1);
-        if (to !== null) turnTo(to);
-      }
+      else if (e.code === "ArrowRight" || e.code === "ArrowLeft") turnBy(e.code === "ArrowRight" ? 1 : -1);
       e.stopPropagation();
       if (e.code !== "Tab") e.preventDefault();
     },
