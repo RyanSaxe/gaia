@@ -416,6 +416,8 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   interface Settled {
     readonly sites: readonly StandingLandmark[];
     readonly network: TrailNetwork;
+    /** Each way's edging stones, set by the bake on the whole land. */
+    readonly edging?: Stand["edging"];
   }
 
   const canvas = root.querySelector("canvas") as HTMLCanvasElement;
@@ -541,7 +543,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     });
     ways.sites.forEach((s, i) => entityOfPlace.set(s.id, landmarkEntity(i).id));
     built?.dispose();
-    built = createWays(scene, light, landmarkLib, terrain, ways.network);
+    built = createWays(scene, light, landmarkLib, terrain, ways.network, ways.edging);
     showVitality();
   }
 
@@ -1654,7 +1656,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       places = code !== null ? code.world : regionPlaces(terrain.spec, SAMPLE_NAME, []);
       clearings.fit(terrain);
       settlement.seat(stood.sites);
-      ways = { sites: stood.landmarks, network: stood.network };
+      ways = { sites: stood.landmarks, network: stood.network, edging: stood.edging };
       decks = decksOf(stood.network.ways);
       placeWays();
       furnished = furnisher?.(stoodWorld()) ?? UNFURNISHED;

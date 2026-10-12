@@ -7,9 +7,9 @@
 // No Three.js and no DOM: the bake worker runs it, and the same terrain and
 // request give the same stand on any thread.
 
-import { type BuildingPlan, type Built, type RouteSpec, rand } from "@gaia/schema";
+import { type BuildingPlan, type Built, type RouteSpec, rand, seedOf } from "@gaia/schema";
 import { areaVitality } from "@gaia/world";
-import { type Area, type BuildingSite, type Capsule, type Circle, clearingsOf, discOf, type Extent, findLandmarkSite, frameOf, findSite, groundedBase, growGrove, type Habitat, heightAt, isWet, type LandEdits, type LandmarkSite, type LandSite, levelPad, levelTrails, type Occupied, type OwnedSite, type PadEdit, withinLand, type Placement, PLANT_SLOPE, planTrails, scatterComponents, scatterPlants, type ScatterRule, siteAt, siteToWorld, slopeAt, type Terrain, TILE, trailDiscs, type TrailEnd, type TrailNetwork, type TrailRequest, trunkIndex, type WayEdit, wildsRing, type WildsRing, type WorldSpec, worldOf } from "@gaia/terrain";
+import { type Area, type BuildingSite, type Capsule, type Circle, clearingsOf, discOf, type EdgeStone, edgeStones, type Extent, findLandmarkSite, frameOf, findSite, groundedBase, growGrove, type Habitat, heightAt, isWet, type LandEdits, type LandmarkSite, type LandSite, levelPad, levelTrails, type Occupied, type OwnedSite, type PadEdit, withinLand, type Placement, PLANT_SLOPE, planTrails, scatterComponents, scatterPlants, type ScatterRule, siteAt, siteToWorld, slopeAt, type Terrain, TILE, trailDiscs, type TrailEnd, type TrailNetwork, type TrailRequest, trunkIndex, type WayEdit, wildsRing, type WildsRing, type WorldSpec, worldOf } from "@gaia/terrain";
 
 /** A building to site: its plan, what stands beside it, and the name its trails go by. */
 export interface StandBuilding {
@@ -134,6 +134,8 @@ export interface Stand {
   /** How every tile's understory is scattered (`scatterTile`). */
   readonly scatter: ScatterPlan;
   readonly wilds: WildsRing;
+  /** Each way's edging stones, in the order of `network.ways`, set on the stood land, which only the bake's thread holds whole. */
+  readonly edging: readonly (readonly EdgeStone[])[];
   /** What standing did to the land, in order, so a tile of it baked alone can be leveled the same (`standTile` in @gaia/terrain). */
   readonly edits: LandEdits;
 }
@@ -587,5 +589,6 @@ export function standWorld(t: Terrain, req: StandRequest, tiles?: readonly (read
     return { ti, tj, count: own.length };
   });
 
-  return { sites, landmarks, network, trees, placements, symbols, tiles: stood, scatter, wilds: wildsRing(t), edits: { pads, discs: landmarks.map((s) => discOf(s.site)), ways } };
+  const edging = network.ways.map((way) => edgeStones(t, way, seedOf(`${way.id}/edging`)));
+  return { sites, landmarks, network, trees, placements, symbols, tiles: stood, scatter, wilds: wildsRing(t), edging, edits: { pads, discs: landmarks.map((s) => discOf(s.site)), ways } };
 }
