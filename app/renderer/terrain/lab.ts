@@ -49,7 +49,7 @@ import { createWildGrowth, wildBushBuilds } from "./wilds.ts";
 import { createUnderstory, understoryBuilds } from "./understory.ts";
 import { type BuildAsk, made, makeAhead } from "./made.ts";
 import { createClearings } from "./clearings.ts";
-import { type Ways, createWays, setTrailEnds, setTrailPlaces } from "./trails.ts";
+import { type Ways, createWays, setTrailEnds } from "./trails.ts";
 import { reportStage } from "../telemetry.ts";
 import { takeWait } from "../wait/wait.ts";
 import { withStart } from "../start/start.ts";
@@ -1599,7 +1599,6 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       settlement.seat(stood.sites);
       ways = { sites: stood.landmarks, network: stood.network };
       decks = decksOf(stood.network.ways);
-      setTrailPlaces(stood.trailPlaces, baked.lattice.n);
       placeWays();
       furnished = furnisher?.(stoodWorld()) ?? UNFURNISHED;
       // In the codebase's world a landmark stands for an entity and takes its vitality.
@@ -1607,7 +1606,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       placeBuildings();
       await nextFrame();
       updateCovers();
-      groundTex.update(terrain, stood.ground);
+      groundTex.update(terrain, stood.ground, stood.network.ways);
       setGroundOwnership(ownership);
       showLandVitality();
       await nextFrame();

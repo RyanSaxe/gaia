@@ -9,7 +9,7 @@
 
 import { type BuildingPlan, type Built, type RouteSpec, rand } from "@gaia/schema";
 import { areaVitality } from "@gaia/world";
-import { type BuildingSite, type Capsule, type Circle, clearingsOf, discOf, type Extent, findLandmarkSite, findSite, groundedBase, growGrove, type Habitat, heightAt, isWet, type LandEdits, type LandmarkSite, type LandSite, levelPad, levelTrails, type Occupied, type OwnedSite, type PadEdit, withinLand, type Placement, PLANT_SLOPE, planTrails, scatterComponents, scatterPlants, type ScatterRule, siteAt, siteToWorld, slopeAt, type Terrain, trailDiscs, type TrailEnd, trailField, type TrailNetwork, trailPlaces, type TrailRequest, trunkIndex, type WayEdit, wildsRing, type WildsRing } from "@gaia/terrain";
+import { type BuildingSite, type Capsule, type Circle, clearingsOf, discOf, type Extent, findLandmarkSite, findSite, groundedBase, growGrove, type Habitat, heightAt, isWet, type LandEdits, type LandmarkSite, type LandSite, levelPad, levelTrails, type Occupied, type OwnedSite, type PadEdit, withinLand, type Placement, PLANT_SLOPE, planTrails, scatterComponents, scatterPlants, type ScatterRule, siteAt, siteToWorld, slopeAt, type Terrain, trailDiscs, type TrailEnd, trailField, type TrailNetwork, type TrailRequest, trunkIndex, type WayEdit, wildsRing, type WildsRing } from "@gaia/terrain";
 
 /** A building to site: its plan, what stands beside it, and the name its trails go by. */
 export interface StandBuilding {
@@ -131,8 +131,6 @@ export interface Stand {
   readonly wilds: WildsRing;
   /** Height, water level, distance to the water and to a trail's edge per lattice sample: the ground texture's data. */
   readonly ground: Float32Array;
-  /** Which ways each lattice sample lies on and how far along them (`trailPlaces`), two per sample. */
-  readonly trailPlaces: Float32Array;
   /** What standing did to the land, in order, so a tile of it baked alone can be leveled the same (`standTile` in @gaia/terrain). */
   readonly edits: LandEdits;
 }
@@ -535,5 +533,5 @@ export function standWorld(t: Terrain, req: StandRequest): Stand {
     ground[i * 4 + 2] = t.shore[i] as number;
     ground[i * 4 + 3] = field[i] as number;
   }
-  return { sites, landmarks, network, trees, placements, symbols, wilds: wildsRing(t), ground, trailPlaces: trailPlaces(t, network.ways), edits: { pads, discs: landmarks.map((s) => discOf(s.site)), ways } };
+  return { sites, landmarks, network, trees, placements, symbols, wilds: wildsRing(t), ground, edits: { pads, discs: landmarks.map((s) => discOf(s.site)), ways } };
 }
