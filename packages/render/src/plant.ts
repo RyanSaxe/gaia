@@ -14,7 +14,8 @@ const f = (x: number): string => x.toFixed(4);
 /** Where a fir frond's heart is gone and where it is whole, in multiples of its own size from the eye. */
 
 // The scalar channels ride four to an attribute (see \`geometryOf\`), so an
-// instanced plant stays well inside WebGL's 16 attribute slots.
+// instanced plant stays well inside WebGL's 16 attribute slots: those that
+// color a vertex in aLook, those that move it in aLife.
 const CHANNELS_GLSL = /* glsl */ `
 attribute vec4 aLook;
 attribute vec4 aLife;
@@ -25,10 +26,10 @@ attribute vec4 aPiece;
 attribute vec3 aCutout;
 #define aShade aLook.x
 #define aTint aLook.y
-#define aLoss aLook.z
-#define aDroop aLook.w
-#define aWither aLife.x
-#define aGlow aLife.y
+#define aWither aLook.z
+#define aGlow aLook.w
+#define aLoss aLife.x
+#define aDroop aLife.y
 #define aClose aLife.z
 #define aLeave aLife.w
 uniform float uVitality;
@@ -790,16 +791,28 @@ export interface PlantView {
 
 const vec3Of = (c: readonly number[]): THREE.Vector3 => new THREE.Vector3(c[0] ?? 0, c[1] ?? 0, c[2] ?? 0);
 
-/** Interleaves four per-vertex scalars into one vec4 attribute. */
-function four(a: Float32Array, b: Float32Array, c: Float32Array, d: Float32Array): THREE.BufferAttribute {
-  const out = new Float32Array(a.length * 4);
-  for (let i = 0; i < a.length; i++) {
-    out[i * 4] = a[i] as number;
-    out[i * 4 + 1] = b[i] as number;
-    out[i * 4 + 2] = c[i] as number;
-    out[i * 4 + 3] = d[i] as number;
+/** Interleaves per-vertex scalars, one from each column, into values for one attribute. */
+function interleave(...columns: readonly Float32Array[]): Float32Array {
+  const size = columns.length;
+  const out = new Float32Array((columns[0]?.length ?? 0) * size);
+  columns.forEach((column, k) => {
+    for (let i = 0; i < column.length; i++) out[i * size + k] = column[i] as number;
+  });
+  return out;
+}
+
+/**
+ * `values`, `size` to a vertex and each within -1 to 1, as normalized 16-bit integers four to a vertex: the shader
+ * reads each back within 1/32767 of what was written. Three values still take four slots: on macOS, ANGLE's Metal
+ * backend copies any vertex buffer whose stride is not a multiple of four bytes into a second, padded one.
+ */
+function snorm16(values: Float32Array, size: number): THREE.BufferAttribute {
+  const n = values.length / size;
+  const out = new Int16Array(n * 4);
+  for (let i = 0; i < n; i++) {
+    for (let k = 0; k < size; k++) out[i * 4 + k] = Math.round(Math.min(1, Math.max(-1, values[i * size + k] as number)) * 32767);
   }
-  return new THREE.BufferAttribute(out, 4);
+  return new THREE.BufferAttribute(out, 4, true);
 }
 /** A part whose pieces fall, grow, rot or spin, which its material compiles in. */
 const hasRuin = (part: Part): boolean => {
@@ -819,15 +832,18 @@ export function geometryOf(part: Part): THREE.BufferGeometry {
     leave[i] = frames.reach[i * 2 + 1] as number;
   }
   const center = (k: number): Float32Array => frames.center.filter((_, i) => i % 3 === k);
+  // Normals and the channels that color a vertex, which the contract holds within -1 to 1 (tint within 0.1, the rest
+  // 0 to 1), take 16 bits. Whatever moves a vertex keeps full floats: a loss threshold off by 1/65534 moves a leaf's
+  // edge across the samples it covers.
   g.setAttribute("position", new THREE.BufferAttribute(part.positions, 3));
-  g.setAttribute("normal", new THREE.BufferAttribute(part.normals, 3));
+  g.setAttribute("normal", snorm16(part.normals, 3));
   g.setAttribute("aCutout", new THREE.BufferAttribute(part.cutout, 3));
   g.setAttribute("aPivot", new THREE.BufferAttribute(ch.pivot, 3));
   g.setAttribute("aBough", new THREE.BufferAttribute(ch.bough, 3));
   g.setAttribute("aTwig", new THREE.BufferAttribute(ch.twig, 3));
-  g.setAttribute("aLook", four(part.shade, part.tint, ch.loss, ch.droop));
-  g.setAttribute("aLife", four(ch.wither, ch.glow, ch.close, leave));
-  g.setAttribute("aPiece", four(center(0), center(1), center(2), start));
+  g.setAttribute("aLook", snorm16(interleave(part.shade, part.tint, ch.wither, ch.glow), 4));
+  g.setAttribute("aLife", new THREE.BufferAttribute(interleave(ch.loss, ch.droop, ch.close, leave), 4));
+  g.setAttribute("aPiece", new THREE.BufferAttribute(interleave(center(0), center(1), center(2), start), 4));
   if (hasRuin(part)) {
     const n = part.shade.length;
     const c = part.channels;
@@ -836,7 +852,8 @@ export function geometryOf(part: Part): THREE.BufferGeometry {
     g.setAttribute("aRot", new THREE.BufferAttribute(c.rot ?? new Float32Array(n), 1));
     g.setAttribute("aSpin", new THREE.BufferAttribute(c.spin ?? new Float32Array(n * 3), 3));
   }
-  g.setIndex(new THREE.BufferAttribute(part.indices, 1));
+  // A 16-bit index when every vertex numbers below 65,535, which WebGL 2 keeps for restarting a strip.
+  g.setIndex(new THREE.BufferAttribute(n < 65536 ? new Uint16Array(part.indices) : part.indices, 1));
   g.computeBoundingSphere();
   g.computeBoundingBox();
   return g;

@@ -14,9 +14,10 @@ uniform float uTime;
 uniform float uWind;
 uniform float uVitality;
 attribute vec4 aLook;
+attribute vec4 aLife;
 attribute vec3 aPivot;
 #define aShade aLook.x
-#define aLoss aLook.z
+#define aLoss aLife.x
 varying float vAlpha;
 varying vec2 vCorner;
 varying vec3 vWorld;
