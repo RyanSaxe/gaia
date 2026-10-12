@@ -247,6 +247,7 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
     // A new world writes where the person stands afresh.
     minimap.show(active);
     map.invalidate();
+    map.show(active);
     worldName.textContent = world.places().name;
     const code = world.code();
     if (code !== null) {
@@ -349,7 +350,9 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
 
   let active = false;
   function apply(): void {
-    map.show(active);
+    // The map paints its paper only once a world stands: before that it would paint the placeholder land the lab
+    // holds until the first bake, and keep it.
+    map.show(active && standing);
     minimap.show(active);
   }
 
