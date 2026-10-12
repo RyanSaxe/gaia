@@ -17,7 +17,7 @@ import { type Built, type Library, seedOf } from "@gaia/schema";
 import { buildCairn, buildEdgingStones, buildFootbridge, buildSteppingStones } from "@gaia/primitives";
 import { type Realized, mergeParts } from "@gaia/realize";
 import { type PlantView, type SceneLight, createPlant } from "@gaia/render";
-import { type Terrain, type TrailNetwork, type Way, edgeStones, junctionVitality, wayVitalityAt, wayWear } from "@gaia/terrain";
+import { type EdgeStone, type Terrain, type TrailNetwork, type Way, edgeStones, junctionVitality, wayVitalityAt, wayWear } from "@gaia/terrain";
 
 /**
  * GLSL: the signed distance to the nearest way's edge, meters, negative on
@@ -124,7 +124,8 @@ function alongOf(trail: Way, x: number, z: number): number {
 }
 
 /** Builds each way's crossings and edging stones, and each junction's cairn, and adds them to the scene. */
-export function createWays(scene: THREE.Scene, light: SceneLight, lib: Library, t: Terrain, network: TrailNetwork): Ways {
+/** `edging` is each way's edging stones when the bake set them on the whole land; otherwise they are set on `t`. */
+export function createWays(scene: THREE.Scene, light: SceneLight, lib: Library, t: Terrain, network: TrailNetwork, edging?: readonly (readonly EdgeStone[])[]): Ways {
   const palette = STONE_PALETTE(lib);
   const placed: { view: PlantView; vitality: (of: (place: string) => number) => number }[] = [];
   const show = (built: Built, x: number, y: number, z: number, yaw: number, vitality: (of: (place: string) => number) => number): void => {
@@ -144,7 +145,7 @@ export function createWays(scene: THREE.Scene, light: SceneLight, lib: Library, 
       else add(buildSteppingStones(c.span, seed), c.x, c.level, c.z, c.yaw, i, along);
     });
     // One mesh of edging stones per way, so each follows its own way's vitality.
-    const stones = edgeStones(t, trail, seedOf(`${trail.id}/edging`));
+    const stones = edging?.[i] ?? edgeStones(t, trail, seedOf(`${trail.id}/edging`));
     if (stones.length > 0) add(buildEdgingStones(stones, seedOf(`${trail.id}/edging-stones`)), 0, 0, 0, 0, i, 0.5);
   });
   // A small cairn beside a junction, where it suits.
