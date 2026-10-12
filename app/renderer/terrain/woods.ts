@@ -9,9 +9,11 @@
 // Nothing past where the air has dissolved it into the sky draws at all.
 // Every copy's crown also has a size on each pass's screen: a crown under
 // `FAR.swapPx` device pixels draws as the plant's far form, and across a band
-// above that the far form draws over the full one (`farness`). How a plant
-// looks at each level is the plant's own (`createPlantInstances` in
-// @gaia/render); this decides only which copies draw it.
+// above that the far form draws over the full one (`farness`). Just past the
+// band, where the far form already draws whole, the full form dissolves
+// before it leaves (`FAR.leave`). How a plant looks at each level is the
+// plant's own (`createPlantInstances` in @gaia/render); this decides only
+// which copies draw it.
 
 import * as THREE from "three";
 import { AIR, type Realized } from "@gaia/realize";
@@ -36,7 +38,14 @@ export type DetailMode = "auto" | "full" | "far";
  * away, and most bushes in view stand farther (in the proving ground's
  * valley, 36 of 601 stay full).
  */
-export const FAR = { swapPx: typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches ? 64 : 128, band: 1.25, bush: 0.25 } as const;
+export const FAR = { swapPx: typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches ? 64 : 128, band: 1.25, bush: 0.25, leave: 1.15 } as const;
+
+/**
+ * A card's fade over a full form still dissolving under it (`FAR.leave`):
+ * whole to the eye, short of 1 only so the card still draws over the full
+ * form, as it does inside the band.
+ */
+const OVER = 1 - 1 / 1024;
 
 /**
  * How far toward its far form a crown spanning `px` device pixels is, where
@@ -250,7 +259,7 @@ export function createCopies(plant: Realized, light: SceneLight, spots: readonly
   /** What each level draws in this pass: a whole cell by its index, or the copies kept from a cell straddling the band. */
   const parts: (number | readonly number[])[][] = levels.map(() => []);
 
-  /** Puts copy `k` into the far batch, drawn that far into its far form. */
+  /** Puts copy `k` into the far batch, drawn that far into its far form; below 1, over its full form. */
   const card = (k: number, fade: number): void => {
     if (far === undefined) return;
     const batch = far.batch;
@@ -313,6 +322,11 @@ export function createCopies(plant: Realized, light: SceneLight, spots: readonly
       const span = (radius: number, d: number): number => (2 * radius * size.focal) / (size.ortho ? 1 : Math.max(d, 1));
       const swapping = far !== undefined && far.batch.baked && detail === "auto" && size.focal > 0;
       const swapPx = (size.swapPx ?? FAR.swapPx) * (far?.share ?? 1);
+      // Past the band's end a perspective pass's full form dissolves under its whole card until its crown spans
+      // `leavePx`; the sun's shadow, a flat pass, keeps the full form to the band's end, as the card casts from there.
+      const leaves = swapping && !size.ortho;
+      const leavePx = leaves ? swapPx / FAR.leave : swapPx;
+      view.nearLeaves(leaves ? size.focal : 0, swapPx, leavePx);
       inBand = 0;
       farAway = 0;
       cells.forEach((cell, i) => {
@@ -325,17 +339,19 @@ export function createCopies(plant: Realized, light: SceneLight, spots: readonly
           level.push(i);
           return;
         }
-        if (span(cell.crowns[1], d - cell.built.radius) < swapPx) {
+        if (span(cell.crowns[1], d - cell.built.radius) < leavePx) {
           for (const k of cell.copies) card(k, 1);
           farAway += cell.copies.length;
           return;
         }
         const kept: number[] = [];
         for (const k of cell.copies) {
-          const f = farness(span(crowns[k * 4 + 3] as number, Math.hypot((crowns[k * 4] as number) - eye.x, (crowns[k * 4 + 1] as number) - eye.y, (crowns[k * 4 + 2] as number) - eye.z)), swapPx);
-          if (f < 1) kept.push(k);
-          if (f > 0) card(k, f);
-          if (f >= 1) farAway++;
+          const px = span(crowns[k * 4 + 3] as number, Math.hypot((crowns[k * 4] as number) - eye.x, (crowns[k * 4 + 1] as number) - eye.y, (crowns[k * 4 + 2] as number) - eye.z));
+          const f = farness(px, swapPx);
+          const full = f < 1 || px > leavePx;
+          if (full) kept.push(k);
+          if (f > 0) card(k, full ? Math.min(f, OVER) : 1);
+          if (!full) farAway++;
           else if (f > 0) inBand++;
         }
         if (kept.length === cell.copies.length) level.push(i);
