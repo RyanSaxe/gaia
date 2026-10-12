@@ -274,7 +274,8 @@ describe("the understanding pass", () => {
     expect(part.above.every((a) => typeof a.cohesion === "number")).toBe(true);
     expect(part.importance).toBeTypeOf("number");
     // It picks among the file's definitions; a definition with two or more blocks has its blocks picked among.
-    expect(Object.keys(mid.questions)).toEqual(expect.arrayContaining(["pick-key:file", "pick-weak:mid", "importance:mid", "readability:mid", "robustness:mid", "own:cohesion"]));
+    expect(Object.keys(mid.questions)).toEqual(expect.arrayContaining(["pick-weak:mid", "importance:mid", "readability:mid", "robustness:mid", "own:cohesion"]));
+    expect(Object.keys(mid.questions).filter((q) => q.endsWith(":file"))).toEqual([]);
     expect(Object.keys(mid.questions)).not.toContain("pick-key:other");
     // The engine gathers it: every item's importance and quality from 0 to 1, the root's importance 1.
     const graph: CodeGraph = await engine.call("project.graph", { root, judged: true });
@@ -297,5 +298,19 @@ describe("the understanding pass", () => {
     }
     // Reopening asks nothing again.
     expect((await understanding(engineAt(join(scratch, "axes-data")), root)).length).toBe(0);
+  }, 60_000);
+
+  it("cuts a big file so each piece holds as many definitions as fit, asking each once and the whole file only in the first", async () => {
+    const big = Array.from({ length: 240 }, (_, i) => fn(`f${i}`, `return x + ${i};`)).join("\n");
+    const root = codebase("axes-big", { "big.ts": big });
+    const sent = (await understanding(engineAt(join(scratch, "axes-big-data")), root)).filter((r) => {
+      const part = r.state["file-axes"] as { readings?: object } | undefined;
+      return part !== undefined && part.readings === undefined;
+    });
+    const asked = sent.map((r) => Object.keys(r.questions).filter((q) => q.startsWith("importance:")).length);
+    expect(sent.length).toBeGreaterThan(1);
+    expect(asked.reduce((a, b) => a + b, 0)).toBe(240);
+    expect(asked.filter((n) => n > 0).every((n) => n >= 10)).toBe(true);
+    expect(sent.filter((r) => Object.keys(r.questions).some((q) => q.startsWith("own:"))).length).toBe(1);
   }, 60_000);
 });

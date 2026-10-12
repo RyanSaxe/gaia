@@ -4,8 +4,9 @@
 //! scores how much each of its files and subfolders matters, and the
 //! folder's own quality concepts. A file's request scores how much each of
 //! its definitions matters and each one's quality concepts, picks which
-//! definitions (and which blocks of each definition) stand out, and scores
-//! the file's own concepts. Folders go top-down, each in its parent's
+//! blocks of each definition stand out, and scores the file's own concepts.
+//! A file's best and worst definitions come from their quality weighed by
+//! importance, so a file has no picks of its own. Folders go top-down, each in its parent's
 //! light, and each file after its folder, so every request carries the
 //! project's own description and what was found above it. The engine then
 //! gathers quality upward by arithmetic (`values`). Every word, level,
@@ -674,23 +675,6 @@ impl Call for FileAxes {
                     &blocks,
                 );
             }
-        }
-        if defs.len() >= 2 {
-            let options: BTreeMap<String, String> = defs
-                .iter()
-                .map(|d| {
-                    (
-                        d.id.clone(),
-                        format!(
-                            "`{}`, on lines {} to {}.",
-                            qualified(&d.id),
-                            d.span.start,
-                            d.span.end
-                        ),
-                    )
-                })
-                .collect();
-            pick_questions(&mut out, "file", &file.id, "this file", &options);
         }
         for (name, c) in &v.file {
             out.push(Question {
