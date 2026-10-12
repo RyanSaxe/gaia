@@ -61,6 +61,10 @@ const HOLD = { forward: -64, back: -175, ms: 1600 } as const;
 /** How far a page must be drawn toward the spine before it is taken rather than tapped, px. */
 const DRAG = { start: 12 } as const;
 /** How long a leaf takes to turn, the cover to swing, and the book to travel between its corner and your hands, ms. */
+/** How far the margins stand toward the eye, in the book's pixels, past the 36 a lifted page's edge rises (`liftMargins`). */
+const MARGIN_LIFT = 40;
+/** The journal's perspective in journal.css, which the margins' scale undoes. */
+const MARGIN_PERSPECTIVE = 2400;
 const TURN_MS = 720;
 const COVER_MS = 900;
 const TRAVEL_MS = 1050;
@@ -227,11 +231,25 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
     };
   }
   const closedShift = `translateX(${-(PAGE.w / 2 + PAGE.overhang / 2)}px)`;
+  /** The outer margins that turn the pages, made with the rest of the book's touch below. */
+  const margins: HTMLElement[] = [];
   function place(isOpen: boolean): void {
     const p = poses();
     book.style.transform = isOpen ? p.held : p.corner;
     inner.style.transform = isOpen ? "translateX(0)" : closedShift;
     cover.classList.toggle("open", isOpen);
+    liftMargins(p.scale);
+  }
+  /**
+   * Stands the margins in front of a page lifting under the pointer and of the open cover, whose edges rise some 36
+   * of the book's pixels toward the eye: lower, a lifted page would cover its own margin, the pointer would leave it,
+   * the page would settle and the margin show again, over and over, and the left margin, under the cover, would never
+   * be reached at all. Raised that far they would look larger and stand farther out, so each is scaled back about
+   * the spine by as much as the view's perspective (`.journal` in journal.css) enlarges it, and covers the same edge.
+   */
+  function liftMargins(scale: number): void {
+    const k = (MARGIN_PERSPECTIVE - MARGIN_LIFT * scale) / MARGIN_PERSPECTIVE;
+    for (const m of margins) m.style.transform = `translateZ(${MARGIN_LIFT}px) scale(${k})`;
   }
   place(false);
   window.addEventListener("resize", () => place(open));
@@ -479,6 +497,9 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
   // The outer margin of each page turns it; a tap on the cover's slip while closed opens the book.
   const margin = (side: "left" | "right"): HTMLElement => {
     const m = el(`jb-margin ${side}`, inner);
+    margins.push(m);
+    // Scaled about the spine, where the open book's middle meets the view's (`liftMargins`).
+    m.style.transformOrigin = side === "right" ? "calc(64px - var(--pw)) 50%" : "var(--pw) 50%";
     // Its edge lifts a little under the pointer, the way a page invites you to take it, and it can be taken from here.
     const page = side === "right" ? right : cover;
     m.addEventListener("pointerenter", () => open && !turning && page.classList.add("lift"));
