@@ -6,13 +6,15 @@
 // describe the same code. Opening a checkout updates its project's lineage
 // record, so for an older commit point GAIA_DATA_DIR at a copy of the store.
 // Builds the engine first.
+// It writes beside it `gaia-judged.json`, what the understanding pass judged
+// about every folder, file and definition (`judgedThings`), for the journal.
 // Usage: GAIA_DATA_DIR=dir pnpm graph-snapshot [root] [out.json]
 
 import { execFileSync, spawnSync } from "node:child_process";
 import { writeFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import type { CodeGraph } from "@gaia/schema";
-import { judgedGraph } from "../app/world-service/open-world.ts";
+import { judgedGraph, judgedThings } from "../app/world-service/open-world.ts";
 
 const repo = resolve(import.meta.dirname, "..");
 const root = resolve(process.argv[2] ?? repo);
@@ -30,5 +32,7 @@ const defs = graph.nodes.filter((n) => n.kind === "def");
 const standing = defs.filter((n) => typeof n.judged?.value?.importance === "number").length;
 if (standing === 0) throw new Error(`No definition has an importance in ${process.env.GAIA_DATA_DIR}: Jev's answers for this project are not there.`);
 writeFileSync(out, `${JSON.stringify(graph)}\n`);
+const things = judgedThings(response.result);
+writeFileSync(resolve(dirname(out), "gaia-judged.json"), `${JSON.stringify(things)}\n`);
 const files = graph.nodes.filter((n) => n.kind === "file").length;
-console.log(`${out}: ${files} files, ${defs.length} definitions, ${standing} with an importance`);
+console.log(`${out}: ${files} files, ${defs.length} definitions, ${standing} with an importance; ${Object.keys(things).length} judged things beside it`);
