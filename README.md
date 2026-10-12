@@ -28,7 +28,8 @@ of a public repository on GitHub. `GAIA_PROJECT=$PWD pnpm dev` opens this
 repository's own world directly.
 
 In the world, click or tap the ground to walk there, drag to look around,
-and walk with W A S D or the arrow keys (Shift hurries). Press M for the
+and walk ahead with W or the up arrow, turning with A and D or the left and
+right arrows (Shift hurries). You always face the way you walk. Press M for the
 field map, and tap a place on it to travel there.
 
 ### Connecting Jev

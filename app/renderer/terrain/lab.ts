@@ -111,7 +111,7 @@ const SKY_WORLD = WORLD_PRESETS[0];
 
 /** Each mode's hint, for a mouse and keyboard and for touch. */
 const HINTS = {
-  walk: ["Click the ground to walk there, drag to look; WASD and Shift work too", "Tap the ground to walk there, drag to look"],
+  walk: ["Click the ground to walk there, drag to look; W walks ahead, A and D turn, Shift hurries", "Tap the ground to walk there, drag to look"],
   overview: ["Drag to orbit, scroll to zoom, click a region", "Drag to orbit, pinch to zoom, tap a region"],
 };
 const MOVE = new Set(["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "ShiftLeft", "ShiftRight"]);
@@ -1271,6 +1271,8 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     if (!drag.looking && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) <= tapSlop(e)) return;
     drag.looking = true;
     turn = null;
+    // Turning by hand takes over from a tap's walk: the person walks only where they face.
+    if (goal !== null && e.clientX !== drag.x) endWalk();
     walker.yaw -= (e.clientX - drag.x) * 0.0045;
     walker.pitch = Math.max(-1.1, Math.min(1.1, walker.pitch - (e.clientY - drag.y) * 0.0045));
     drag.x = e.clientX;
@@ -1446,45 +1448,51 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   /** Where the lantern's hand height is measured from: the ground, or while swimming, low enough that the lantern stays above the water. */
   let lanternGround = 0;
   /** What the person asks of their body this frame: the keys first, then a tap's walk, moved on along its way, braking to arrive and ended there. */
+  /** How far a tap's walk has the person still to turn to face its way, radians, the short way round; 0 with no walk. */
+  let wayOff = 0;
+  /**
+   * A person walks only where they face, never backwards or sideways: W or
+   * the up arrow walks ahead, and a tap's walk turns the person toward the
+   * way and walks only as fast as they face it, so they turn first where the
+   * way lies behind them.
+   */
   function intent(at: Stride): Intent {
-    let f = 0;
-    let s = 0;
-    if (keys.has("KeyW") || keys.has("ArrowUp")) f += 1;
-    if (keys.has("KeyS") || keys.has("ArrowDown")) f -= 1;
-    if (keys.has("KeyD")) s += 1;
-    if (keys.has("KeyA")) s -= 1;
-    if (f !== 0 || s !== 0) {
-      const sy = Math.sin(walker.yaw);
-      const cy = Math.cos(walker.yaw);
-      return { dx: -sy * f + cy * s, dz: -cy * f - sy * s, speed: WALK_TO.pace * (keys.has("ShiftLeft") || keys.has("ShiftRight") ? GAIT.hurry : 1) };
-    }
+    wayOff = 0;
+    const ahead = { dx: -Math.sin(walker.yaw), dz: -Math.cos(walker.yaw) };
+    if (keys.has("KeyW") || keys.has("ArrowUp")) return { ...ahead, speed: WALK_TO.pace * (keys.has("ShiftLeft") || keys.has("ShiftRight") ? GAIT.hurry : 1) };
     if (goal === null) return STAND;
-    // The view stays where the person looks; only the feet follow the way.
     const heading = wayAhead(goal, at);
     goal = heading.walk;
     if (heading.remaining <= WALK_TO.reach) {
       finishWalk();
       return STAND;
     }
-    const dx = heading.aim.x - at.x;
-    const dz = heading.aim.z - at.z;
-    const length = Math.max(1e-9, Math.hypot(dx, dz));
+    wayOff = ((((Math.atan2(-(heading.aim.x - at.x), -(heading.aim.z - at.z)) - walker.yaw) % TAU) + TAU * 1.5) % TAU) - TAU / 2;
+    const facing = Math.max(0, Math.cos(wayOff)) ** 2;
     const braking = Math.sqrt(2 * GAIT.arrive * Math.max(0, heading.remaining - WALK_TO.reach * 0.6));
-    return { dx: dx / length, dz: dz / length, speed: Math.min(heading.pace, braking) };
+    return { ...ahead, speed: Math.min(heading.pace, braking) * facing };
   }
   function updateWalk(dt: number): void {
     const fromX = walker.x;
     const fromZ = walker.z;
     // A hook may have moved the walker: the body stands where the walker is.
     if (body === null || body.x !== walker.x || body.z !== walker.z) body = { ...(body ?? standAt(terrain, decks, walker.x, walker.z)), x: walker.x, z: walker.z };
-    // The arrow keys turn the view, easing into a turn and out of it.
-    const turning = (keys.has("ArrowLeft") ? 1 : 0) - (keys.has("ArrowRight") ? 1 : 0);
+    // The arrow keys, or A and D, turn the person, easing into a turn and out of it.
+    const turning = (keys.has("ArrowLeft") || keys.has("KeyA") ? 1 : 0) - (keys.has("ArrowRight") || keys.has("KeyD") ? 1 : 0);
     yawRate += (turning * GAIT.turn - yawRate) * (1 - Math.exp((-dt * 3) / GAIT.turnEase));
     if (Math.abs(yawRate) < 1e-4 && turning === 0) yawRate = 0;
     walker.yaw += yawRate * dt;
     // Water and the grade slow the body, solids turn it aside, and it eases into and out of its stride.
     const asked = intent(body);
-    body = stride(terrain, solids, decks, body, asked, dt);
+    // A tap's walk turns the person toward its way, easing in as the keys' turn does, never faster than it.
+    if (wayOff !== 0) walker.yaw += Math.max(-GAIT.turn * dt, Math.min(GAIT.turn * dt, wayOff * (1 - Math.exp((-dt * 3) / GAIT.turnEase))));
+    // The body moves only where the person faces: its momentum turns with them, and none of it carries sideways or back.
+    const fx = -Math.sin(walker.yaw);
+    const fz = -Math.cos(walker.yaw);
+    const along = Math.max(0, body.vx * fx + body.vz * fz);
+    const pull = body.ax * fx + body.az * fz;
+    body = { ...body, vx: fx * along, vz: fz * along, ax: fx * pull, az: fz * pull };
+    body = stride(terrain, solids, decks, body, asked.speed > 0 ? { dx: fx, dz: fz, speed: asked.speed } : asked, dt);
     if (goal !== null && body.blocked) finishWalk();
     walker.x = body.x;
     walker.z = body.z;
@@ -2590,7 +2598,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       /**
        * Walks the lab's own walk for `seconds` at 60 frames a second without
        * drawing, holding `keys` (codes) for `hold` seconds or walking a tap to
-       * `to`, and records each frame: [t, x, z, speed, camera y, eye ride, footing, depth, on a deck].
+       * `to`, and records each frame: [t, x, z, speed, camera y, eye ride, footing, depth, on a deck, facing (yaw)].
        */
       trace: (seconds: number, drive: { keys?: readonly string[]; hold?: number; to?: readonly [number, number] }) => {
         keys.clear();
@@ -2602,7 +2610,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
           updateWalk(1 / 60);
           const f = footingAt(terrain, decks, walker.x, walker.z);
           const b = body as Stride;
-          rows.push([i / 60, walker.x, walker.z, Math.hypot(b.vx, b.vz), camera.position.y, walker.eye, f.ground, f.depth, f.deck ? 1 : 0]);
+          rows.push([i / 60, walker.x, walker.z, Math.hypot(b.vx, b.vz), camera.position.y, walker.eye, f.ground, f.depth, f.deck ? 1 : 0, walker.yaw]);
         }
         keys.clear();
         return rows;
