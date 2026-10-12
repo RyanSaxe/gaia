@@ -12,21 +12,21 @@
 // each directory's area and land, each file's patch and what grows on it,
 // each entity's building or landmark on its lot, and the trails between them.
 
-import { type Blueprint, type CodeGraph, type CodeModel, type EntityFacts, type FileFacts, type JevResponse, type Judged, type Span, type SymbolFact, rand, seedOf } from "@gaia/schema";
+import { type Blueprint, type CodeModel, type EntityFacts, type FileFacts, type Judged, type Span, type SymbolFact, rand, seedOf } from "@gaia/schema";
 import { FLORA_PRESETS, LANDMARK_PRESETS, TRAIL_PRESETS, WORLD_PRESETS } from "@gaia/realize";
 import { type WorldSpec, outlinesOf } from "@gaia/terrain";
-import { type CodeWorld, type Judge, type Judgments, judgeWorld, judgedThing, keptJev, layoutWorld, planWorldRequests, requestKey, standInJev, thingsOf } from "@gaia/world";
+import { type CodeWorld, type Judge, type Judgments, layoutWorld } from "@gaia/world";
 import type { ConsentPlan, Opening, StartChoice, StartOffer, WorldDocument } from "../../world-service/protocol.ts";
 import { type WorldService, worldService } from "../service.ts";
 import GAIA_PICTURE from "../start/gaia-picture.webp";
 import { CHOSEN_MS } from "../start/start.ts";
 import snapshot from "./fixtures/gaia.json";
-import snapshotGraph from "./fixtures/gaia-graph.json";
 import snapshotSaid from "./fixtures/gaia-said.json";
-import kept from "./fixtures/gaia-jev.json";
+import type { LayoutReply, LayoutRequest } from "./layout-worker.ts";
+import LayoutWorker from "./layout-worker.ts?worker";
 import proving from "./fixtures/proving.json";
 import provingJudged from "./fixtures/proving-judged.json";
-import { CHARACTERS, type Character, FORMS, LANDS, LOOKS } from "./looks.ts";
+import { CHARACTERS, type Character, FORMS, LANDS } from "./looks.ts";
 import type { Represented, SampleEntity } from "./samples.ts";
 import { type CodePatch, type FileJudged, vitalityOf } from "@gaia/world";
 import type { StandCode, StandLot } from "./stand.ts";
@@ -171,23 +171,21 @@ function serviceWorld(service: WorldService, veil: Veil): Promise<WorldDocument>
 const SNAPSHOT_JUDGE = typeof location === "undefined" || new URLSearchParams(location.search).get("judge") !== "stand-in" ? "jev" : "stand-in";
 
 /**
- * Gaia's own world from the bundled snapshot: the world of a page with no
- * engine. Jev's answers kept for the snapshot judge it, as the app's store
- * would; the stand-in judges whatever they do not answer, such as a request
- * whose questions or options changed since Jev was asked. Engine's graph of
- * the same commit (`fixtures/gaia-graph.json`, written by `pnpm
- * graph-snapshot`) stands every definition, sized by its stand.
+ * Gaia's own world from the bundled snapshot (`snapshot.ts`), the world of a
+ * page with no engine, laid out on a thread of its own while the wait draws.
  */
-async function snapshotWorld(why: string): Promise<WorldDocument> {
+function snapshotWorld(why: string): Promise<WorldDocument> {
   const model = snapshot as unknown as CodeModel;
-  const stored = new Map(SNAPSHOT_JUDGE === "jev" ? Object.entries((kept as { answers: Record<string, JevResponse> }).answers) : []);
-  const byKey = new Map<string, Judge>();
-  const jev = keptJev(null, standInJev(LOOKS), { stored, keep: () => undefined, settled: (key, judge) => byKey.set(key, judge) });
-  const world = layoutWorld(model, await judgeWorld(model, LOOKS, jev), snapshotGraph as unknown as CodeGraph);
-  const judges = Object.fromEntries(planWorldRequests(model, LOOKS).flatMap((p) => thingsOf(p).map((t) => [judgedThing(t), byKey.get(requestKey(p.request)) ?? "stand-in"] as const)));
-  const byJev = Object.values(judges).filter((j) => j === "jev").length;
-  const summary = byJev === 0 ? `Every thing judged by the stand-in (${why})` : `${byJev} of ${Object.keys(judges).length} things judged by Jev, from answers kept for this snapshot (${why})`;
-  return { root: model.repository.name, model, world, judges, summary };
+  const worker = new LayoutWorker();
+  return new Promise<WorldDocument>((resolve, reject) => {
+    worker.onmessage = (e: MessageEvent<LayoutReply>) => {
+      const reply = e.data;
+      if ("failed" in reply) reject(new Error(`Gaia's snapshot could not be laid out: ${reply.failed}`));
+      else resolve({ root: model.repository.name, model, ...reply });
+    };
+    worker.onerror = (e) => reject(new Error(`Gaia's snapshot could not be laid out: ${e.message}`));
+    worker.postMessage({ judge: SNAPSHOT_JUDGE, why } satisfies LayoutRequest);
+  }).finally(() => worker.terminate());
 }
 
 /**
@@ -218,7 +216,7 @@ async function previewStart(veil: Veil): Promise<void> {
   let place = await veil.choose({ recent });
   while ("address" in place) place = await veil.choose({ recent, refused: { address: place.address, why: "offline" } });
   veil.opening({ stage: "reading", root: model.repository.name });
-  // Laying out the snapshot holds the page, so the chosen map rises into the wait's sheet first.
+  // The chosen map rises into the wait's sheet before the land it opens on comes in.
   await new Promise((resolve) => setTimeout(resolve, CHOSEN_MS));
 }
 
