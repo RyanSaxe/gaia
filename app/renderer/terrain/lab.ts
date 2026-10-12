@@ -323,9 +323,10 @@ const LAND = { dry: 0.02, wade: 0.45, clear: 1.1, reach: 40, ring: 1.5 };
  * longer than a person's eye; the thing filling about half the painting's
  * height; and the sun a little to one side behind the painter. Wide, as the
  * title page's frontispiece shows the world, the thing is small in its land
- * and the painter looks a little up, into the sky.
+ * and the painter looks a little up, into the sky. A thing farther than
+ * `near` meters from the person is painted on land held around it.
  */
-const PAINTING = { hour: 15.5, fov: 46, fill: 0.5, wideFill: 0.16, wideLift: 0.12, sunSide: 0.6 } as const;
+const PAINTING = { hour: 15.5, fov: 46, fill: 0.5, wideFill: 0.16, wideLift: 0.12, sunSide: 0.6, near: 120 } as const;
 /** A journal page's painting, wide to tall. */
 const PAINTED_ASPECT = 520 / 660;
 /** A file with nothing standing on it is painted as its patch of ground: how tall a view of it frames, and how far it reaches at most, meters. */
@@ -2094,6 +2095,8 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
 
   const capture = createCapture(renderer);
   const captureCamera = new THREE.PerspectiveCamera(PAINTING.fov, 1, 0.2, 4500);
+  /** The painting of a far place under way, which the next waits for. */
+  let painting: Promise<void> = Promise.resolve();
   /** What a painting is seen of: where it stands, how tall, how far it reaches, and where to stand to see it. */
   type Seen = Pick<Subject, "x" | "z" | "height" | "reach" | "stand">;
   /**
@@ -2187,6 +2190,17 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     if (holding > 0) return settled().then(() => viewOf(id, w, h, wide));
     const s = subjectOf(id);
     if (s === undefined) return Promise.resolve(null);
+    // A place beyond the land the person stands in is painted on its own: the land holds around it while it is
+    // painted, one painting at a time, and then follows the person again.
+    if (Math.hypot(s.x - walker.x, s.z - walker.z) > PAINTING.near) {
+      const done = painting.then(() => land.hold(s.x, s.z)).then((release) => paintView(s, w, h, wide).finally(release));
+      painting = done.then(() => undefined, () => undefined);
+      return done;
+    }
+    return paintView(s, w, h, wide);
+  }
+  /** Paints `s` on the land as it now lies, at the painting's hour. */
+  function paintView(s: NonNullable<ReturnType<typeof subjectOf>>, w: number, h: number, wide: boolean): Promise<{ color: Pixels; mask: Pixels } | null> {
     const was = hour;
     applyHour(PAINTING.hour);
     try {
