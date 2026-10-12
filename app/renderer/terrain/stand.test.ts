@@ -3,7 +3,7 @@ import { type BuildingPlan, Library, type RouteSpec, seedOf } from "@gaia/schema
 import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, RELIEF_PRIMITIVES, ROUTE_PRIMITIVES, STRUCTURE_PRIMITIVES } from "@gaia/primitives";
 import { link, structure } from "@gaia/kinds";
 import { STRUCTURE_PRESETS, TRAIL_PRESETS, buildSlots, realize } from "@gaia/realize";
-import { bakeTerrain, heightAt, planTerrain, sampleWorld, siteToWorld, standTile } from "@gaia/terrain";
+import { bakeTerrain, heightAt, planTerrain, sampleWorld, siteToWorld, standTile, trailPlaces } from "@gaia/terrain";
 import { type StandCode, type StandRequest, standWorld } from "./stand.ts";
 
 const lib = new Library([...RELIEF_PRIMITIVES, ...BIOME_PRIMITIVES]);
@@ -38,7 +38,6 @@ describe("standing a world's things on a bake", () => {
     const a = standWorld(here, request);
     const b = standWorld(there, request);
     expect(bytes(a.ground).equals(bytes(b.ground))).toBe(true);
-    expect(bytes(a.trailPlaces).equals(bytes(b.trailPlaces))).toBe(true);
     expect(bytes(here.lattice.heights).equals(bytes(there.lattice.heights))).toBe(true);
     expect(b.sites).toEqual(a.sites);
     expect(b.network).toEqual(a.network);
@@ -102,6 +101,8 @@ describe("standing a world's things on a bake", () => {
   it("bakes each tile of the land alone, leveled as standing leveled the world, sample for sample", () => {
     const t = forTiles;
     const stood = standWorld(t, request);
+    // The whole stood land's places, which each tile's must match.
+    const places = trailPlaces(t, stood.network.ways);
     expect(stood.edits.pads.length).toBe(request.buildings.length);
     expect(stood.edits.ways.length).toBeGreaterThan(0);
     const plan = planTerrain(t.spec, t.landforms);
@@ -119,7 +120,7 @@ describe("standing a world's things on a bake", () => {
             if (tile.waterLevel[k] !== t.waterLevel[w]) differ.water++;
             if (tile.shore[k] !== t.shore[w]) differ.shore++;
             if (tile.trailField[k] !== stood.ground[w * 4 + 3]) differ.field++;
-            if (tile.trailPlaces[k * 2] !== stood.trailPlaces[w * 2] || tile.trailPlaces[k * 2 + 1] !== stood.trailPlaces[w * 2 + 1]) differ.places++;
+            if (tile.trailPlaces[k * 2] !== places[w * 2] || tile.trailPlaces[k * 2 + 1] !== places[w * 2 + 1]) differ.places++;
           }
         }
       }

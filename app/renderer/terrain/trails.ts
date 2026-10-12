@@ -3,9 +3,10 @@
 // so the ground paints worn earth and the grass parts from the same samples.
 // A trail stands for a dependency between two entities and walks the ways of
 // one network; each way's wear follows the vitality of every trail walking
-// it (`wayWear` in @gaia/terrain): a second texture says which ways each
-// sample lies on and how far along them, and a tiny one holds each way's
-// wear at a few stations along it, rewritten live, so a way between thriving
+// it (`wayWear` in @gaia/terrain): a second texture of the land's clipmap
+// says which ways each sample lies on and how far along them, laid from the
+// ways themselves (`layTrailPlaces`), and a tiny one holds each way's wear at
+// a few stations along it, rewritten live, so a way between thriving
 // entities is worn bare and one only failing entities walk grows over, with
 // nothing rebaked. The footbridges, stepping stones, edging stones and the
 // junctions' cairns are ordinary components in the plant material, so they
@@ -16,7 +17,7 @@ import { type Built, type Library, seedOf } from "@gaia/schema";
 import { buildCairn, buildEdgingStones, buildFootbridge, buildSteppingStones } from "@gaia/primitives";
 import { type Realized, mergeParts } from "@gaia/realize";
 import { type PlantView, type SceneLight, createPlant } from "@gaia/render";
-import { type Terrain, type TrailNetwork, type Way, edgeStones, junctionVitality, wayVitalityAt, wayWear } from "@gaia/terrain";
+import { TRAILS, type Terrain, type TrailNetwork, type Way, edgeStones, junctionVitality, trailPlacesOn, wayVitalityAt, wayWear } from "@gaia/terrain";
 
 /**
  * GLSL: the signed distance to the nearest way's edge, meters, negative on
@@ -27,7 +28,7 @@ import { type Terrain, type TrailNetwork, type Way, edgeStones, junctionVitality
  * first.
  */
 export const TRAIL_GLSL = /* glsl */ `
-uniform sampler2D uTrailPlace;
+uniform highp sampler2DArray uTrailPlace;
 uniform sampler2D uTrailEnds;
 float trailAt(vec2 xz) { return groundSample4(xz).w; }
 // One way's wear at a packed place (its index, plus how far along it in the fraction), between its four stations.
@@ -38,22 +39,55 @@ float trailWearOf(float packed) {
   float f = clamp((packed - k) / 0.999, 0.0, 1.0) * 3.0;
   return f < 1.0 ? mix(s.x, s.y, f) : f < 2.0 ? mix(s.y, s.z, f - 1.0) : mix(s.z, s.w, f - 2.0);
 }
-float trailWearSample(ivec2 i) {
-  vec2 p = texelFetch(uTrailPlace, i, 0).xy;
+float trailWearSample(ivec2 i, int level) {
+  vec2 p = texelFetch(uTrailPlace, clipAt(i, level), 0).xy;
   return max(trailWearOf(p.x), trailWearOf(p.y));
 }
-float trailWearAt(vec2 xz) {
-  vec2 g = clamp((xz - uGroundOrigin) / uGroundSpacing, vec2(0.0), vec2(uGroundN - 1.001));
+float trailWearLevel(vec2 p, int level) {
+  vec2 g = clipLatticeGrid(p, level);
   ivec2 i = ivec2(floor(g));
   vec2 f = g - vec2(i);
-  float h00 = trailWearSample(i);
-  float h10 = trailWearSample(i + ivec2(1, 0));
-  float h01 = trailWearSample(i + ivec2(0, 1));
-  float h11 = trailWearSample(i + ivec2(1, 1));
+  float h00 = trailWearSample(i, level);
+  float h10 = trailWearSample(i + ivec2(1, 0), level);
+  float h01 = trailWearSample(i + ivec2(0, 1), level);
+  float h11 = trailWearSample(i + ivec2(1, 1), level);
   if (f.x + f.y <= 1.0) return h00 + f.x * (h10 - h00) + f.y * (h01 - h00);
   return h11 + (1.0 - f.x) * (h01 - h11) + (1.0 - f.y) * (h10 - h11);
 }
+float trailWearAt(vec2 xz) {
+  vec2 p = clipLattice(xz);
+  float a;
+  int k = clipLevel(clipWorld(p), a);
+  float w = trailWearLevel(p, k);
+  return a > 0.0 ? mix(w, trailWearLevel(p, k + 1), a) : w;
+}
 `;
+
+/**
+ * How far past its edge a way names the samples of clip level k, `spacing`
+ * meters apart at level 0. The shaders read a way's wear only within 2 m of
+ * its edge (`edge < 2.0`), from the corners of the level's cell around the
+ * point, which lie up to a cell's diagonal away. So a coarse level names the
+ * way that far out, with a meter to spare, and a far trail reads as worn as
+ * it does from every sample. Levels whose cells fit within `TRAILS.reach`
+ * hold the places `trailPlaces` gives.
+ */
+export const placeReach = (k: number, spacing: number): number => Math.max(TRAILS.reach, 3 + 2 ** k * spacing * Math.SQRT2);
+
+/**
+ * Lays rows [r0, r1) of clip level k's trail places into `into` from `at`:
+ * which ways each lattice sample at columns `columns` of rows `rows` lies on,
+ * found from the ways themselves (`trailPlacesOn`), so the page keeps no
+ * copy of the whole land's.
+ */
+export function layTrailPlaces(t: Terrain, ways: readonly Way[], k: number, columns: Int32Array, rows: Int32Array, r0: number, r1: number, into: Float32Array, at: number): void {
+  const width = columns.length;
+  if (ways.length === 0) {
+    into.fill(-1, at + r0 * width * 2, at + r1 * width * 2);
+    return;
+  }
+  into.set(trailPlacesOn(t, ways, columns, rows.subarray(r0, r1), placeReach(k, t.lattice.spacing)), at + r0 * width * 2);
+}
 
 const texture = (data: Float32Array, width: number, height: number, format: THREE.PixelFormat): THREE.DataTexture => {
   const t = new THREE.DataTexture(data, width, height, format, THREE.FloatType);
@@ -63,24 +97,10 @@ const texture = (data: Float32Array, width: number, height: number, format: THRE
   return t;
 };
 
-/** The paths' textures, shared by the ground and the grass: which ways each sample lies on, and each way's wear at its stations. */
+/** Each way's wear at its stations, shared by the ground and the grass. */
 export const trailUniforms = {
-  uTrailPlace: { value: texture(new Float32Array([-1, -1]), 1, 1, THREE.RGFormat) },
   uTrailEnds: { value: texture(new Float32Array(4), 1, 1, THREE.RGBAFormat) },
 };
-
-/** Takes on a bake's `trailPlaces`, two numbers per lattice sample of an `n` by `n` lattice. */
-export function setTrailPlaces(places: Float32Array, n: number): void {
-  const old = trailUniforms.uTrailPlace.value;
-  const next = texture(places, n, n, THREE.RGFormat);
-  // Each bake makes the places afresh, so once the GPU has them the page lets its copy go.
-  next.onUpdate = () => {
-    next.image = { data: null as unknown as Float32Array, width: n, height: n };
-    next.onUpdate = null;
-  };
-  trailUniforms.uTrailPlace.value = next;
-  old.dispose();
-}
 
 /**
  * Each way's wear at its stations, from the vitality of the entities every

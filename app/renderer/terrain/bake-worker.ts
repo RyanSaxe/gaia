@@ -52,7 +52,7 @@ scope.onmessage = (e) => {
       const t = finishTerrain(req.world, landformsOf(req.world, lib), req.parts);
       const stood = standWorld(t, req.stand);
       reply = { id: req.id, kind: "finished", terrain: t, stand: stood };
-      moved = [t.lattice.heights.buffer, t.waterLevel.buffer, t.shore.buffer, t.region.buffer, t.coverRegions.buffer, t.coverShares.buffer, stood.wilds.positions.buffer, stood.wilds.indices.buffer, stood.ground.buffer, stood.trailPlaces.buffer];
+      moved = [t.lattice.heights.buffer, t.waterLevel.buffer, t.shore.buffer, t.region.buffer, t.coverRegions.buffer, t.coverShares.buffer, stood.wilds.positions.buffer, stood.wilds.indices.buffer, stood.ground.buffer];
     }
   } catch (error) {
     reply = { id: req.id, kind: "failed", message: error instanceof Error ? error.message : String(error) };
