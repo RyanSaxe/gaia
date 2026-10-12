@@ -589,8 +589,9 @@ every level, with every word, level, weight and pick in
 the root first and each folder once its parent's request is answered, and
 each file once its folder's is. So every request carries the project's own
 words (the opening of the root's largest Markdown file) and what was found
-above it, as typed answers: each enclosing folder's importance and
-organization, and, for a file, its own importance as its folder judged it.
+above it, as typed answers: each enclosing folder's importance and its own
+quality concepts, and, for a file, its own importance as its folder judged
+it.
 
 A folder's request scores each of its files' and subfolders' importance and
 its own quality concepts. A file's request, with its source and its

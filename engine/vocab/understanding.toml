@@ -14,7 +14,7 @@ skip_roles = ["rule", "section", "key", "element", "property", "field", "variabl
 # Importance, asked of every part in its container's request, in the light
 # of the project and of everything above it.
 [importance]
-instructions = "How much does {what} matter to what this project exists to do, given what holds it?"
+instructions = "How much does {what}, matter to what this project exists to do, given what holds it?"
 levels = [
   "Incidental: tooling, glue or scaffolding the project could do without.",
   "Supporting: it helps the work along, and the project would get by without it.",
@@ -31,7 +31,7 @@ levels = [
 
 [definition.correctness]
 weight = 1.0
-instructions = "Does `{name}`, on lines {start} to {end} do what it is supposed to, including at boundaries and edge cases?"
+instructions = "Does `{name}`, on lines {start} to {end}, do what it is supposed to, including at boundaries and edge cases?"
 levels = [
   "Wrong: it plainly mishandles common cases or does something other than its name and signature promise.",
   "Shaky: the main path works, but boundaries, empty inputs or edge cases are wrong or unhandled.",
@@ -51,7 +51,7 @@ levels = [
 
 [definition.simplicity]
 weight = 1.0
-instructions = "Does `{name}`, on lines {start} to {end} use only as much complexity as its problem requires?"
+instructions = "Does `{name}`, on lines {start} to {end}, use only as much complexity as its problem requires?"
 levels = [
   "Overbuilt: machinery, indirection or special cases far beyond what the problem needs.",
   "Heavier than needed: some needless layers, flags or special cases.",
@@ -61,7 +61,7 @@ levels = [
 
 [definition.cohesion]
 weight = 1.0
-instructions = "Does `{name}`, on lines {start} to {end} have one clear, focused purpose, with what belongs together kept together?"
+instructions = "Does `{name}`, on lines {start} to {end}, have one clear, focused purpose, with what belongs together kept together?"
 levels = [
   "Scattered: several unrelated jobs side by side.",
   "Mixed: a main purpose with unrelated pieces bolted on.",
@@ -81,7 +81,7 @@ levels = [
 
 [definition.explicitness]
 weight = 1.0
-instructions = "Are the assumptions, dependencies, state changes and failure modes of `{name}`, on lines {start} to {end} visible, with few hidden surprises?"
+instructions = "Are the assumptions, dependencies, state changes and failure modes of `{name}`, on lines {start} to {end}, visible, with few hidden surprises?"
 levels = [
   "Hidden: it changes state, assumes things or fails in ways a reader can't see from where it's used.",
   "Partly hidden: some side effects, assumptions or failures aren't visible.",
@@ -91,7 +91,7 @@ levels = [
 
 [definition.consistency]
 weight = 1.0
-instructions = "Does `{name}`, on lines {start} to {end} handle similar problems in similar ways, with names, conventions and patterns that match the code around it?"
+instructions = "Does `{name}`, on lines {start} to {end}, handle similar problems in similar ways, with names, conventions and patterns that match the code around it?"
 levels = [
   "Inconsistent: it goes against the conventions and patterns around it.",
   "Uneven: it follows some conventions and breaks others.",
@@ -101,7 +101,7 @@ levels = [
 
 [definition.testability]
 weight = 1.0
-instructions = "Can the behavior of `{name}`, on lines {start} to {end} be verified, and its failures isolated, without elaborate setup?"
+instructions = "Can the behavior of `{name}`, on lines {start} to {end}, be verified, and its failures isolated, without elaborate setup?"
 levels = [
   "Untestable in practice: it needs the whole system, real I/O or hidden state to check.",
   "Awkward: checking it needs heavy setup, fakes or reaching into internals.",
@@ -126,7 +126,7 @@ instructions = "Does `{name}`, on lines {start} to {end}, handle invalid inputs,
 
 [definition.efficiency]
 weight = 1.0
-instructions = "Does `{name}`, on lines {start} to {end} use time, memory and other resources appropriately for what it actually has to do?"
+instructions = "Does `{name}`, on lines {start} to {end}, use time, memory and other resources appropriately for what it actually has to do?"
 levels = [
   "Wasteful: clearly needless work, such as repeated expensive calls or loading far more than it uses.",
   "Loose: some avoidable work that could matter at real sizes.",

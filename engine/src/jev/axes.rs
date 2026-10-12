@@ -2,10 +2,10 @@
 //!
 //! A request is about one container and its parts. A folder's request
 //! scores how much each of its files and subfolders matters, and the
-//! folder's own organization. A file's request scores how much each of its
-//! definitions matters and each one's quality concepts, picks which
+//! folder's own quality concepts. A file's request scores how much each of
+//! its definitions matters and each one's quality concepts, picks which
 //! definitions (and which blocks of each definition) stand out, and scores
-//! the file's own arrangement. Folders go top-down, each in its parent's
+//! the file's own concepts. Folders go top-down, each in its parent's
 //! light, and each file after its folder, so every request carries the
 //! project's own description and what was found above it. The engine then
 //! gathers quality upward by arithmetic (`values`). Every word, level,
@@ -219,7 +219,8 @@ fn prose(ctx: &Ctx, dir: &str, budget: usize) -> Option<String> {
 }
 
 /// What was found above a folder or file: each enclosing folder's
-/// importance and organization, from the root down, as typed answers.
+/// importance and its own quality concepts, from the root down, as typed
+/// answers.
 fn above(ctx: &Ctx, dir: &str) -> Vec<Value> {
     let mut chain: Vec<&str> = Vec::new();
     let mut d = dir;
@@ -237,11 +238,16 @@ fn above(ctx: &Ctx, dir: &str) -> Vec<Value> {
             let id = format!("dir:{p}");
             let a = ctx.answers(&id);
             let score = |f: &str| a.and_then(|m| m.get(f)).and_then(|v| v["score"].as_f64());
-            json!({
-                "path": if p.is_empty() { "(the repository's root)" } else { p },
-                "importance": score("axes.importance"),
-                "organization": score("axes.organization"),
-            })
+            let mut found = Map::new();
+            found.insert(
+                "path".into(),
+                json!(if p.is_empty() { "(the repository's root)" } else { p }),
+            );
+            found.insert("importance".into(), json!(score("axes.importance")));
+            for name in vocab().folder.keys() {
+                found.insert(name.clone(), json!(score(&format!("axes.{name}"))));
+            }
+            Value::Object(found)
         })
         .collect()
 }
@@ -463,7 +469,7 @@ fn file_of<'a>(unit: Unit<'a>) -> Option<&'a FileNode> {
 }
 
 /// A folder's request: how much each of its parts matters, and its own
-/// organization.
+/// quality concepts.
 pub struct FolderAxes;
 
 impl Call for FolderAxes {

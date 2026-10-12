@@ -267,10 +267,11 @@ describe("the understanding pass", () => {
     expect(fileAt("a/b/mid.ts")).toBeGreaterThan(folderAt("a/b"));
     // A file's request carries the project's own words and what was found above it, as typed answers.
     const mid = sent[fileAt("a/b/mid.ts")] as (typeof sent)[number];
-    const part = mid.state["file-axes"] as { project: string; above: { path: string; importance: number | null }[]; importance: number | null };
+    const part = mid.state["file-axes"] as { project: string; above: { path: string; importance: number | null; cohesion: number | null }[]; importance: number | null };
     expect(part.project).toContain("measures shapes");
     expect(part.above.map((a) => a.path)).toEqual(["(the repository's root)", "a", "a/b"]);
     expect(part.above.slice(1).every((a) => typeof a.importance === "number")).toBe(true);
+    expect(part.above.every((a) => typeof a.cohesion === "number")).toBe(true);
     expect(part.importance).toBeTypeOf("number");
     // It picks among the file's definitions; a definition with two or more blocks has its blocks picked among.
     expect(Object.keys(mid.questions)).toEqual(expect.arrayContaining(["pick-key:file", "pick-weak:mid", "importance:mid", "readability:mid", "robustness:mid", "own:cohesion"]));
