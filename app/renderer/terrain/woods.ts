@@ -59,45 +59,11 @@ export function farness(px: number, swapPx: number = FAR.swapPx): number {
   return (top - px) / (top - swapPx);
 }
 
-/**
- * The frame budget: full trees' triangles a view may draw. Past it, trees
- * turn far at a larger crown, by at most `rise` of the swap size a second, so
- * nearer trees turn far, each through its own band; never past `most` times
- * the size the far forms baked at, where a card's texel spans 1.5 pixels.
- * Below `ease` of the budget it eases back. At 2% a second a tree moves at
- * most 5% of the way across the band in half a second, the swap test's
- * middle step, which changes the picture less than the wind does.
- */
-export const BUDGET = { triangles: 1_500_000, rise: 0.02, most: 1.5, ease: 0.8 } as const;
-
-export interface FrameBudget {
-  /** The crown span, in device pixels, below which a tree draws far now. */
-  readonly swapPx: number;
-  /** Takes in the full trees' triangles the last view drew and the seconds since the one before. */
-  update(fullTriangles: number, dt: number): void;
-}
-
-export function createFrameBudget(): FrameBudget {
-  let swap: number = FAR.swapPx;
-  return {
-    get swapPx() {
-      return swap;
-    },
-    update(full, dt) {
-      // `rise` a second, whatever the frame rate.
-      const step = (1 + BUDGET.rise) ** dt;
-      if (full > BUDGET.triangles) swap = Math.min(FAR.swapPx * BUDGET.most, swap * step);
-      else if (full < BUDGET.triangles * BUDGET.ease) swap = Math.max(FAR.swapPx, swap / step);
-    },
-  };
-}
-
-/** What a pass's own size means for detail: how many times smaller than the view it draws, its device pixels per meter one meter away (per meter, for an orthographic pass), and the crown span trees turn far at (`FAR.swapPx` unless the frame budget asks for more; a smaller far form turns far at its share of it). */
+/** What a pass's own size means for detail: how many times smaller than the view it draws, and its device pixels per meter one meter away (per meter, for an orthographic pass). */
 export interface PassSize {
   readonly smaller: number;
   readonly focal: number;
   readonly ortho: boolean;
-  readonly swapPx?: number;
 }
 
 const VIEW_SIZE: PassSize = { smaller: 1, focal: 0, ortho: false };
@@ -321,7 +287,7 @@ export function createCopies(plant: Realized, light: SceneLight, spots: readonly
       // A crown's span on this pass's screen, in device pixels, at distance d.
       const span = (radius: number, d: number): number => (2 * radius * size.focal) / (size.ortho ? 1 : Math.max(d, 1));
       const swapping = far !== undefined && far.batch.baked && detail === "auto" && size.focal > 0;
-      const swapPx = (size.swapPx ?? FAR.swapPx) * (far?.share ?? 1);
+      const swapPx = FAR.swapPx * (far?.share ?? 1);
       // Past the band's end a perspective pass's full form dissolves under its whole card until its crown spans
       // `leavePx`; the sun's shadow, a flat pass, keeps the full form to the band's end, as the card casts from there.
       const leaves = swapping && !size.ortho;
