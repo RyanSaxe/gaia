@@ -5,7 +5,7 @@
 // all stand on the same flat ground and nothing floats.
 
 import type { BuildingPlan } from "@gaia/schema";
-import { heightAt, worldOf } from "./lattice.ts";
+import { type Lattice, heightAt, worldOf, worldOfZ } from "./lattice.ts";
 import { surfaceHalfWidth } from "./water.ts";
 import { DRY, type Terrain } from "./world.ts";
 import { withinLand } from "./edge.ts";
@@ -159,22 +159,40 @@ function gentlest(t: Terrain, plan: BuildingPlan, candidates: readonly { x: numb
   return best;
 }
 
-/** Levels the lattice under the yard to the site's level, blending back to the land over PAD_BLEND meters. */
-export function levelPad(t: Terrain, plan: BuildingPlan, site: BuildingSite, beside: Extent | null = null): void {
-  const l = t.lattice;
-  const y = yardOf(plan, beside);
+/** A pad leveled into the land, as data: what `levelPad` did, so a tile of the land baked alone can do it again. */
+export interface PadEdit {
+  readonly site: BuildingSite;
+  /** The yard in the building's own frame. */
+  readonly yard: Extent;
+}
+
+/** Levels the lattice under the yard to the site's level, blending back to the land over PAD_BLEND meters; returns what it did. */
+export function levelPad(t: Terrain, plan: BuildingPlan, site: BuildingSite, beside: Extent | null = null): PadEdit {
+  const edit = { site, yard: yardOf(plan, beside) };
+  applyPad(t.lattice, edit);
+  return edit;
+}
+
+/**
+ * Levels a pad into `l`, which may be the world's lattice or any window of
+ * it: each sample moves by what its own place and the pad say, so a window
+ * gets the same bytes as the world's lattice holds there.
+ */
+export function applyPad(l: Lattice, edit: PadEdit): void {
+  const { site, yard: y } = edit;
   const cx = (y.x0 + y.x1) / 2;
   const cz = (y.z0 + y.z1) / 2;
   const hx = (y.x1 - y.x0) / 2;
   const hz = (y.z1 - y.z0) / 2;
   const reach = Math.hypot(hx, hz) + PAD_BLEND + Math.hypot(cx, cz);
+  const oz = l.originZ ?? l.origin;
   const i0 = Math.max(0, Math.floor((site.x - reach - l.origin) / l.spacing));
   const i1 = Math.min(l.n - 1, Math.ceil((site.x + reach - l.origin) / l.spacing));
-  const k0 = Math.max(0, Math.floor((site.z - reach - l.origin) / l.spacing));
-  const k1 = Math.min(l.n - 1, Math.ceil((site.z + reach - l.origin) / l.spacing));
+  const k0 = Math.max(0, Math.floor((site.z - reach - oz) / l.spacing));
+  const k1 = Math.min(l.n - 1, Math.ceil((site.z + reach - oz) / l.spacing));
   for (let iz = k0; iz <= k1; iz++) {
     for (let ix = i0; ix <= i1; ix++) {
-      const [lx, lz] = worldToSite(site, worldOf(l, ix), worldOf(l, iz));
+      const [lx, lz] = worldToSite(site, worldOf(l, ix), worldOfZ(l, iz));
       const dx = Math.max(0, Math.abs(lx - cx) - hx);
       const dz = Math.max(0, Math.abs(lz - cz) - hz);
       const u = Math.min(1, Math.hypot(dx, dz) / PAD_BLEND);

@@ -4,7 +4,7 @@
 // stands. Its footprint is then leveled into the baked lattice, blending
 // back into the land, as a cottage's pad is.
 
-import { heightAt, slopeAt, worldOf } from "./lattice.ts";
+import { type Lattice, heightAt, slopeAt, worldOf, worldOfZ } from "./lattice.ts";
 import type { Occupied } from "./scatter.ts";
 import type { Circle } from "./site.ts";
 import { isWet } from "./plants.ts";
@@ -16,8 +16,21 @@ export interface LandmarkSite {
   readonly z: number;
   /** The leveled footprint's height: the landmark's ground. */
   readonly y: number;
+  /** The leveled footprint's radius, meters. */
+  readonly radius: number;
   readonly region: number;
 }
+
+/** A landmark's footprint leveled into the land, as data, so a tile of the land baked alone can level it again. */
+export interface DiscEdit {
+  readonly x: number;
+  readonly z: number;
+  readonly radius: number;
+  readonly level: number;
+}
+
+/** The edit that leveled a landmark's site. */
+export const discOf = (site: LandmarkSite): DiscEdit => ({ x: site.x, z: site.z, radius: site.radius, level: site.y });
 
 export const LANDMARK_SITE = {
   /** Meters between candidate sites. */
@@ -72,8 +85,8 @@ export function findLandmarkSite(t: Terrain, region: number, radius: number, avo
       if (best === null || score > best.score) best = { x, z, score };
     }
   }
-  if (best === null) return within === null ? null : { x: within.x, z: within.z, y: levelDisc(t, within.x, within.z, radius), region };
-  return { x: best.x, z: best.z, y: levelDisc(t, best.x, best.z, radius), region };
+  if (best === null) return within === null ? null : { x: within.x, z: within.z, y: levelDisc(t, within.x, within.z, radius), radius, region };
+  return { x: best.x, z: best.z, y: levelDisc(t, best.x, best.z, radius), radius, region };
 }
 
 /** Levels a disc of ground to its mean height, blending back to the land; returns that height. */
@@ -89,14 +102,26 @@ function levelDisc(t: Terrain, x: number, z: number, radius: number): number {
     }
   }
   const level = sum / n;
+  applyDisc(l, { x, z, radius, level });
+  return level;
+}
+
+/**
+ * Levels a landmark's disc into `l`, which may be the world's lattice or any
+ * window of it: each sample moves by what its own place and the disc say, so
+ * a window gets the same bytes as the world's lattice holds there.
+ */
+export function applyDisc(l: Lattice, edit: DiscEdit): void {
+  const { x, z, radius, level } = edit;
+  const oz = l.originZ ?? l.origin;
   const reach = radius + LANDMARK_SITE.blend;
   const i0 = Math.max(0, Math.floor((x - reach - l.origin) / l.spacing));
   const i1 = Math.min(l.n - 1, Math.ceil((x + reach - l.origin) / l.spacing));
-  const j0 = Math.max(0, Math.floor((z - reach - l.origin) / l.spacing));
-  const j1 = Math.min(l.n - 1, Math.ceil((z + reach - l.origin) / l.spacing));
+  const j0 = Math.max(0, Math.floor((z - reach - oz) / l.spacing));
+  const j1 = Math.min(l.n - 1, Math.ceil((z + reach - oz) / l.spacing));
   for (let j = j0; j <= j1; j++) {
     for (let i = i0; i <= i1; i++) {
-      const d = Math.hypot(worldOf(l, i) - x, worldOf(l, j) - z);
+      const d = Math.hypot(worldOf(l, i) - x, worldOfZ(l, j) - z);
       const u = Math.max(0, Math.min(1, (d - radius) / LANDMARK_SITE.blend));
       const w = 1 - u * u * (3 - 2 * u);
       if (w <= 0) continue;
@@ -104,5 +129,4 @@ function levelDisc(t: Terrain, x: number, z: number, radius: number): number {
       l.heights[k] = (l.heights[k] as number) + (level - (l.heights[k] as number)) * w;
     }
   }
-  return level;
 }
