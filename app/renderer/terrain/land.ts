@@ -55,6 +55,12 @@ export interface PageLand {
   follow(x: number, z: number): void;
   /** Moves every level around (x, z), as after a jump: resolves once all of them hold it. */
   around(x: number, z: number): Promise<void>;
+  /**
+   * Holds every level around (x, z), as a painting of a place far from the
+   * person needs: resolves once they hold it, with a call that lets them
+   * follow the person again. Until then `follow` moves nothing.
+   */
+  hold(x: number, z: number): Promise<() => void>;
   /** Tile (ti, tj)'s understory, stood on the workers from the open world's plan; null if another world has opened since. */
   things(ti: number, tj: number): Promise<readonly Placement[] | null>;
   /** Called with a level's index each time its window moves. */
@@ -192,6 +198,8 @@ export function createPageLand(threads = Math.max(1, Math.min(2, (navigator.hard
   /** Meters between the world lattice's samples. */
   let spacing = 1;
   let onMoved: ((k: number) => void) | null = null;
+  /** How many holds are on the levels; while any is, they stay where it put them. */
+  let held = 0;
 
   const level0 = store[0] as Level;
   const heights = new Float32Array(LAYER);
@@ -345,12 +353,22 @@ export function createPageLand(threads = Math.max(1, Math.min(2, (navigator.hard
       await Promise.all(Array.from({ length: levels }, (_, k) => moveAround(k, x, z)));
     },
     follow(x, z) {
-      if (source === null) return;
+      if (source === null || held > 0) return;
       for (let k = 0; k < levels; k++) if (moving[k] === null) void moveAround(k, x, z);
     },
     async around(x, z) {
       if (source === null) return;
       await Promise.all(Array.from({ length: levels }, (_, k) => moveAround(k, x, z)));
+    },
+    async hold(x, z) {
+      held++;
+      if (source !== null) await Promise.all(Array.from({ length: levels }, (_, k) => moveAround(k, x, z)));
+      let released = false;
+      return () => {
+        if (released) return;
+        released = true;
+        held--;
+      };
     },
     async things(ti, tj) {
       const mine = generation;
