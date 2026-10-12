@@ -281,6 +281,12 @@ A person walks like a person, not a sliding camera (`stride` in
 `@gaia/terrain`, every parameter in its `GAIT` table). The body eases into a
 stride over about a second, two steps, and settles over about 0.7 s when it
 stops, so velocity never jumps; the arrow keys ease into and out of a turn.
+A person always faces the way they walk, never stepping backwards or
+sideways: W walks ahead, A and D or the arrow keys turn, and a tapped walk
+turns toward its way first, walking only as fast as the person faces it,
+so a spot behind them is reached by turning round and setting off. Their
+momentum turns with them, and a drag that turns the view takes over from
+a tapped walk.
 The grade along the way sets the pace by Tobler's hiking function made
 gentler: a 12% climb walks at about 79% of the pace, a descent of up to 16%
 is a little quicker (at most 10%), and a steep descent is careful; no grade
