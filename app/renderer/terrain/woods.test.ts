@@ -4,8 +4,8 @@ import { Library, seedOf } from "@gaia/schema";
 import { FLORA_PRIMITIVES } from "@gaia/primitives";
 import { flora } from "@gaia/kinds";
 import { FLORA_PRESETS, type Realized, realize } from "@gaia/realize";
-import { createSceneLight } from "@gaia/render";
-import { FAR, type PassSize, createCopies, createFarForms, farness } from "./woods.ts";
+import { type FarForm, createFarCards, createSceneLight, farChoice } from "@gaia/render";
+import { FAR, type PassSize, TURN, createCopies, createFarForms, farness } from "./woods.ts";
 
 describe("a crown's form by its size on screen", () => {
   it("turns far only across the band, never at once", () => {
@@ -30,7 +30,7 @@ describe("the far forms", () => {
     const forms = createFarForms();
     const tree = {} as Realized;
     const bush = {} as Realized;
-    expect(forms.add(tree)).toMatchObject({ form: 0, share: 1, batch: forms.batch });
+    expect(forms.add(tree)).toMatchObject({ form: 0, share: 1, forms });
     expect(forms.add(bush, FAR.bush)).toMatchObject({ form: 1, share: FAR.bush });
     expect(forms.close()).toEqual([
       { plant: tree, px: FAR.swapPx },
@@ -47,38 +47,38 @@ describe("a copy turning far", () => {
   const forms = createFarForms();
   const far = forms.add(plant);
   forms.close();
-  far.batch.baked = true;
+  // A form with one-texel atlases: the woods only need its cards to stand.
+  const form: FarForm = {
+    bounds: { center: new THREE.Vector3(), radius: 1, height: 2 },
+    bytes: 16,
+    ms: 0,
+    atlas: { layers: [0, 1, 2, 3].map(() => new THREE.DataTexture(new Uint8Array(4), 1, 1)), frame: 1, sway: 0, frequency: 1 },
+    dispose: () => undefined,
+  };
+  forms.cards = createFarCards([form], light, [FAR.swapPx], TURN);
   const copies = createCopies(plant, light, [{ x: 0, y: 0, z: 0, yaw: 0, scale: 1 }], far);
   const crown = copies.crown;
   const focal = 800;
-  /** One pass with the copy's crown spanning `px` device pixels: whether its full form draws, and its card's fade (null without a card). */
-  const drawnAt = (px: number, camera: THREE.Camera, size: PassSize): { full: boolean; card: number | null } => {
+  /** One pass with the copy's crown spanning `px` device pixels: whether its full form draws. */
+  const fullAt = (camera: THREE.Camera, size: PassSize): boolean => {
     camera.updateMatrixWorld();
     light.uEye.value.copy(camera.position);
-    far.batch.count = 0;
     copies.cull(camera, size);
-    return { full: copies.drawn().copies > 0, card: far.batch.count === 0 ? null : (far.batch.copies[8] as number) };
+    return copies.drawn().copies > 0;
   };
-  const perspective = (px: number): { full: boolean; card: number | null } => {
+  const perspective = (px: number): boolean => {
     const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 10000);
     camera.position.set(crown.center.x, crown.center.y, crown.center.z + (2 * crown.radius * focal) / px);
     camera.lookAt(crown.center);
-    return drawnAt(px, camera, { smaller: 1, focal, ortho: false });
+    return fullAt(camera, { smaller: 1, focal, ortho: false });
   };
-  it("keeps its full form past the band, under its whole card, until it has dissolved", () => {
-    // Inside the band the card draws over the full form, that far into it.
-    const band = perspective(FAR.swapPx * 1.12);
-    expect(band.full).toBe(true);
-    expect(band.card).toBeGreaterThan(0);
-    expect(band.card).toBeLessThan(1);
-    // Past the band's end the full form still draws, dissolving, and the card draws over it whole.
-    const leaving = perspective(FAR.swapPx * 0.93);
-    expect(leaving.full).toBe(true);
-    expect(leaving.card).toBeGreaterThan(0.99);
-    expect(leaving.card).toBeLessThan(1);
-    // Once dissolved, only the card draws, standing alone.
-    const gone = perspective((FAR.swapPx / FAR.leave) * 0.95);
-    expect(gone).toEqual({ full: false, card: 1 });
+
+  it("keeps its full form exactly where its card's rule keeps it: across the band, and past it until it has dissolved", () => {
+    for (const px of [FAR.swapPx * 2, FAR.swapPx * 1.12, FAR.swapPx * 0.93, (FAR.swapPx / FAR.leave) * 0.95, 20]) {
+      expect(perspective(px), `${px} px`).toBe(farChoice(px, FAR.swapPx, TURN, false).full);
+    }
+    // Its cards stood once, in the copies' own object, so hiding the copies hides them.
+    expect(copies.cards?.parent).toBe(copies.object);
   });
 
   it("in the sun's flat shadow pass, keeps its full form only to the band's end", () => {
@@ -87,7 +87,7 @@ describe("a copy turning far", () => {
     camera.lookAt(crown.center);
     // A flat pass measures a crown by its size alone, whatever its distance.
     const flatFocal = (px: number): number => px / (2 * crown.radius);
-    expect(drawnAt(FAR.swapPx * 0.93, camera, { smaller: 1, focal: flatFocal(FAR.swapPx * 0.93), ortho: true })).toEqual({ full: false, card: 1 });
-    expect(drawnAt(FAR.swapPx * 1.12, camera, { smaller: 1, focal: flatFocal(FAR.swapPx * 1.12), ortho: true }).full).toBe(true);
+    expect(fullAt(camera, { smaller: 1, focal: flatFocal(FAR.swapPx * 0.93), ortho: true })).toBe(false);
+    expect(fullAt(camera, { smaller: 1, focal: flatFocal(FAR.swapPx * 1.12), ortho: true })).toBe(true);
   });
 });

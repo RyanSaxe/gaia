@@ -9,15 +9,17 @@
 // Nothing past where the air has dissolved it into the sky draws at all.
 // Every copy's crown also has a size on each pass's screen: a crown under
 // `FAR.swapPx` device pixels draws as the plant's far form, and across a band
-// above that the far form draws over the full one (`farness`). Just past the
-// band, where the far form already draws whole, the full form dissolves
-// before it leaves (`FAR.leave`). How a plant looks at each level is the
-// plant's own (`createPlantInstances` in @gaia/render); this decides only
-// which copies draw it.
+// above that the far form draws over the full one (`farChoice` in
+// @gaia/render). Just past the band, where the far form already draws whole,
+// the full form dissolves before it leaves (`FAR.leave`). The woods choose
+// only the full form; each copy's card is chosen by the card's own shader, by
+// the same rule, from buffers written when the copies are placed. How a plant
+// looks at each level is the plant's own (`createPlantInstances` in
+// @gaia/render); this decides only which copies draw it.
 
 import * as THREE from "three";
 import { AIR, type Realized } from "@gaia/realize";
-import { FAR_COPY, type InstanceSpot, type LevelCopies, type PlantView, type SceneLight, copySeed, createPlantInstances } from "@gaia/render";
+import { type FarCards, type FarCopies, type FarTurn, type InstanceSpot, type LevelCopies, type PlantView, type SceneLight, createPlantInstances, crownsOf, farChoice, farness as farnessOf, placesOf } from "@gaia/render";
 
 /** The side of a cell, in meters. */
 export const COPY_CELL = 32;
@@ -40,24 +42,15 @@ export type DetailMode = "auto" | "full" | "far";
  */
 export const FAR = { swapPx: typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches ? 64 : 128, band: 1.25, bush: 0.25, leave: 1.15 } as const;
 
-/**
- * A card's fade over a full form still dissolving under it (`FAR.leave`):
- * whole to the eye, short of 1 only so the card still draws over the full
- * form, as it does inside the band.
- */
-const OVER = 1 - 1 / 1024;
+/** When every copy turns far and goes, as the far cards' shader reads it. */
+export const TURN: FarTurn = { band: FAR.band, leave: FAR.leave };
 
 /**
  * How far toward its far form a crown spanning `px` device pixels is, where
  * trees turn far at `swapPx`: 0 draws the full form alone, 1 the far form
  * alone, and in between the far form over the full one, that far into the band.
  */
-export function farness(px: number, swapPx: number = FAR.swapPx): number {
-  const top = swapPx * FAR.band;
-  if (px >= top) return 0;
-  if (px <= swapPx) return 1;
-  return (top - px) / (top - swapPx);
-}
+export const farness = (px: number, swapPx: number = FAR.swapPx): number => farnessOf(px, swapPx, FAR.band);
 
 /** What a pass's own size means for detail: how many times smaller than the view it draws, and its device pixels per meter one meter away (per meter, for an orthographic pass). */
 export interface PassSize {
@@ -68,46 +61,34 @@ export interface PassSize {
 
 const VIEW_SIZE: PassSize = { smaller: 1, focal: 0, ortho: false };
 
-/** Every far copy one pass draws, from every blueprint, laid out for the far cards (`FAR_COPY` floats each). */
-export interface FarBatch {
-  copies: Float32Array;
-  count: number;
-  /** Whether its forms are baked and their cards draw: until then every copy draws its full form. */
-  baked: boolean;
-}
-
-function createFarBatch(): FarBatch {
-  return { copies: new Float32Array(FAR_COPY * 256), count: 0, baked: false };
-}
-
-/** A blueprint's far form: its index among the far cards' forms, and the batch each pass gathers far copies into. */
+/** A blueprint's far form: its index among its set's forms, and the set, whose cards draw it once baked. */
 export interface FarOf {
   readonly form: number;
-  readonly batch: FarBatch;
-  /** The crown span its form baked at, as a share of `FAR.swapPx`, and so of the size every pass turns trees far at; 1 when omitted. */
+  readonly forms: FarForms;
+  /** The crown span its form baked at, as a share of `FAR.swapPx`, and so of the size every pass turns it far at; 1 when omitted. */
   readonly share?: number;
 }
 
-/** Plants that take far forms, in their far cards' form order, and the one batch every pass gathers their far copies into. */
+/** Plants that take far forms, in their far cards' form order, and the cards once their forms have baked. */
 export interface FarForms {
-  readonly batch: FarBatch;
   readonly count: number;
+  /** The cards of every form, once baked: until then every copy draws its full form. */
+  cards: FarCards | null;
   /** Gives `plant` a far form baked at `share` of `FAR.swapPx`: what its copies take as their `far`. */
   add(plant: Realized, share?: number): FarOf;
   /**
-   * Every plant added, in form order, and the crown span in device pixels its form bakes at. Nothing may be added
-   * after, and the forms keep the plants no longer: the caller holds them only while their forms bake.
+   * Every plant added, in form order, and the crown span in device pixels its form bakes and turns far at. Nothing
+   * may be added after, and the forms keep the plants no longer: the caller holds them only while their forms bake.
    */
   close(): readonly { readonly plant: Realized; readonly px: number }[];
 }
 
 export function createFarForms(): FarForms {
-  const batch = createFarBatch();
   const plants: { plant: Realized; px: number }[] = [];
   let count = 0;
   let closed = false;
-  return {
-    batch,
+  const forms: FarForms = {
+    cards: null,
     get count() {
       return count;
     },
@@ -115,13 +96,14 @@ export function createFarForms(): FarForms {
       if (closed) throw new Error("The far forms are already baking; add every plant before they bake.");
       plants.push({ plant, px: FAR.swapPx * share });
       count = plants.length;
-      return { form: count - 1, batch, share };
+      return { form: count - 1, forms, share };
     },
     close() {
       closed = true;
       return plants.splice(0);
     },
   };
+  return forms;
 }
 
 /** Every copy of one blueprint, and which of them each pass draws. */
@@ -133,6 +115,8 @@ export interface Copies extends PlantView {
   readonly crown: THREE.Sphere;
   /** Its far form, when a copy small on screen turns far. */
   readonly far: FarOf | undefined;
+  /** Its copies' far cards, once its far form has baked: they stand inside `object`. */
+  readonly cards: THREE.Object3D | null;
   /** Sets one copy's vitality; the shader reads it per instance. */
   setVitalityAt(index: number, v: number): void;
   /**
@@ -167,20 +151,6 @@ interface Cell {
   readonly crowns: readonly [number, number];
 }
 
-/** Each copy as its far form draws it: where it stands (x, y, z), its yaw, scale, vitality and seed. */
-function placesOf(spots: readonly InstanceSpot[]): Float32Array {
-  const places = new Float32Array(spots.length * 7);
-  spots.forEach((s, k) => places.set([s.x, s.y, s.z, s.yaw, s.scale, s.vitality ?? 1, copySeed(s)], k * 7));
-  return places;
-}
-
-/** Each copy's crown: the center and radius of its built bounds, four numbers per copy. */
-function crownsOf(spots: readonly InstanceSpot[], sphere: THREE.Sphere): Float32Array {
-  const crowns = new Float32Array(spots.length * 4);
-  spots.forEach((s, k) => crowns.set([s.x + sphere.center.x * s.scale, s.y + sphere.center.y * s.scale, s.z + sphere.center.z * s.scale, sphere.radius * s.scale], k * 4));
-  return crowns;
-}
-
 /** The cells copies of a plant stand in, given the plant's built bounds at scale 1 and how far past them it reaches as drawn. */
 function cellsOf(spots: readonly InstanceSpot[], sphere: THREE.Sphere, reach: number): Cell[] {
   const byCell = new Map<string, number[]>();
@@ -211,8 +181,9 @@ function cellsOf(spots: readonly InstanceSpot[], sphere: THREE.Sphere, reach: nu
 
 /**
  * Stands `spots` copies of a realized plant, each pass drawing the ones it can
- * see at the detail they need. Given its far form, a copy whose crown is small
- * on a pass's screen goes into `far.batch` instead, or as well inside the band.
+ * see at the detail they need. Given its far form, once that has baked each
+ * copy also has a card, which draws itself where the copy is small on a
+ * pass's screen; the full form leaves there.
  */
 export function createCopies(plant: Realized, light: SceneLight, spots: readonly InstanceSpot[], far?: FarOf): Copies {
   const view = createPlantInstances(plant, light, spots);
@@ -223,6 +194,10 @@ export function createCopies(plant: Realized, light: SceneLight, spots: readonly
   let inBand = 0;
   let farAway = 0;
   let detail: DetailMode = "auto";
+  /** The copies' cards, made once the far form has baked. */
+  let cards: FarCopies | null = null;
+  /** Whether the copies draw their depth, for the sun's shadow: cards made meanwhile must too. */
+  let depth = false;
   const frustum = new THREE.Frustum();
   const viewProjection = new THREE.Matrix4();
   /** Each level's copies as last packed, kept while the same cells draw it. */
@@ -230,20 +205,17 @@ export function createCopies(plant: Realized, light: SceneLight, spots: readonly
   /** What each level draws in this pass: a whole cell by its index, or the copies kept from a cell straddling the band. */
   const parts: (number | readonly number[])[][] = levels.map(() => []);
 
-  /** Puts copy `k` into the far batch, drawn that far into its far form; below 1, over its full form. */
-  const card = (k: number, fade: number): void => {
-    if (far === undefined) return;
-    const batch = far.batch;
-    if ((batch.count + 1) * FAR_COPY > batch.copies.length) {
-      const grown = new Float32Array(batch.copies.length * 2);
-      grown.set(batch.copies);
-      batch.copies = grown;
+  /** The copies' cards, made from their places and crowns the first time they are wanted once the far form has baked. */
+  const cardsNow = (): FarCopies | null => {
+    const baked = far?.forms.cards ?? null;
+    if (cards === null && baked !== null && far !== undefined) {
+      cards = baked.copies(far.form);
+      cards.place(places, crowns);
+      // Made in the middle of the sun's shadow pass, they draw its depth, never their color into the map they read.
+      cards.useDepth(depth);
+      view.object.add(cards.object);
     }
-    const o = batch.count * FAR_COPY;
-    batch.copies[o] = far.form;
-    batch.copies.set(places.subarray(k * 7, k * 7 + 7), o + 1);
-    batch.copies[o + 8] = fade;
-    batch.count++;
+    return cards;
   };
 
   const levelFor = (cell: Cell, smaller: number): number => {
@@ -262,6 +234,9 @@ export function createCopies(plant: Realized, light: SceneLight, spots: readonly
     levels,
     crown: view.built.clone(),
     far,
+    get cards() {
+      return cards?.object ?? null;
+    },
     get count() {
       return view.count;
     },
@@ -279,11 +254,15 @@ export function createCopies(plant: Realized, light: SceneLight, spots: readonly
     },
     setVitality(v) {
       view.setVitality(v);
-      for (let k = 0; k < view.count; k++) places[k * 7 + 5] = view.vitality;
+      for (let k = 0; k < view.count; k++) {
+        places[k * 7 + 5] = view.vitality;
+        cards?.setVitalityAt(k, view.vitality);
+      }
     },
     setVitalityAt(index, v) {
       view.setVitalityAt(index, v);
       places[index * 7 + 5] = Math.min(1, Math.max(0, v));
+      cards?.setVitalityAt(index, places[index * 7 + 5] as number);
     },
     cull(camera, size = VIEW_SIZE) {
       frustum.setFromProjectionMatrix(viewProjection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
@@ -291,7 +270,11 @@ export function createCopies(plant: Realized, light: SceneLight, spots: readonly
       const eye = light.uEye.value;
       // A crown's span on this pass's screen, in device pixels, at distance d.
       const span = (radius: number, d: number): number => (2 * radius * size.focal) / (size.ortho ? 1 : Math.max(d, 1));
-      const swapping = far !== undefined && far.batch.baked && detail === "auto" && size.focal > 0;
+      const sized = size.focal > 0;
+      const card = cardsNow();
+      // Each card chooses itself on the GPU, by the same rule as the full form below; forced detail draws none.
+      if (card !== null) card.object.visible = detail === "auto";
+      const swapping = card !== null && detail === "auto" && sized;
       const swapPx = FAR.swapPx * (far?.share ?? 1);
       // Past the band's end a perspective pass's full form dissolves under its whole card until its crown spans
       // `leavePx`; the sun's shadow, a flat pass, keeps the full form to the band's end, as the card casts from there.
@@ -311,19 +294,16 @@ export function createCopies(plant: Realized, light: SceneLight, spots: readonly
           return;
         }
         if (span(cell.crowns[1], d - cell.built.radius) < leavePx) {
-          for (const k of cell.copies) card(k, 1);
           farAway += cell.copies.length;
           return;
         }
         const kept: number[] = [];
         for (const k of cell.copies) {
           const px = span(crowns[k * 4 + 3] as number, Math.hypot((crowns[k * 4] as number) - eye.x, (crowns[k * 4 + 1] as number) - eye.y, (crowns[k * 4 + 2] as number) - eye.z));
-          const f = farness(px, swapPx);
-          const full = f < 1 || px > leavePx;
+          const { full, card: fade } = farChoice(px, swapPx, TURN, size.ortho);
           if (full) kept.push(k);
-          if (f > 0) card(k, full ? Math.min(f, OVER) : 1);
-          if (!full) farAway++;
-          else if (f > 0) inBand++;
+          else if (fade > 0) farAway++;
+          if (full && fade > 0) inBand++;
         }
         if (kept.length === cell.copies.length) level.push(i);
         else if (kept.length > 0) level.push(kept);
@@ -335,16 +315,28 @@ export function createCopies(plant: Realized, light: SceneLight, spots: readonly
       });
       view.draw(packed);
     },
-    warm: () => view.warm(),
+    warm() {
+      view.warm();
+      // The cards stand in the scene from here, so their shaders compile with everything else.
+      cardsNow();
+    },
     respot(next) {
       view.respot(next);
       cells = cellsOf(next, view.built, view.reach);
       crowns = crownsOf(next, view.built);
       places = placesOf(next);
+      cards?.place(places, crowns);
       packed = levels.map(() => ({ copies: [], key: "" }));
     },
     drawn: () => ({ ...view.drawn(), band: inBand, far: farAway }),
-    useDepth: (on) => view.useDepth(on),
-    dispose: () => view.dispose(),
+    useDepth(on) {
+      depth = on;
+      view.useDepth(on);
+      cards?.useDepth(on);
+    },
+    dispose() {
+      cards?.dispose();
+      view.dispose();
+    },
   };
 }
