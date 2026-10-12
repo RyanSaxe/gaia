@@ -63,7 +63,7 @@ import { type Stand, type StandRequest, type StandingLandmark, landmarkBase, own
 import { groundVitalityAt, setGroundOwnership, showGroundVitality } from "./vitality.ts";
 import { type TourStop, tourStops } from "./tour.ts";
 import { type Change, pictureChange, tallyFrame } from "./measure.ts";
-import { type Copies, type DetailMode, FAR, type FarOf, type PassSize, createCopies, createFarForms, createFrameBudget } from "./woods.ts";
+import { type Copies, type DetailMode, FAR, type FarOf, type PassSize, createCopies, createFarForms } from "./woods.ts";
 import { contentHash, openFarStore } from "./far-store.ts";
 
 const TEMPLATE = /* html */ `
@@ -654,8 +654,6 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   const farSets = [treeForms, bushForms].map((forms) => ({ forms, cards: null as FarCards | null, ms: 0 }));
   const [treeSet, bushSet] = farSets as [(typeof farSets)[number], (typeof farSets)[number]];
   const farStore = openFarStore();
-  // A heavy view turns trees far a little sooner (woods.ts, `BUDGET`).
-  const farBudget = createFrameBudget();
   /** Bakes or reads every form of `set`, `ms` milliseconds a frame, and draws its cards from then on. */
   async function bakeFar(set: (typeof farSets)[number], ms: number): Promise<void> {
     const t0 = performance.now();
@@ -717,7 +715,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     const height = target === null ? renderer.getDrawingBufferSize(bufferSize).y : target.height;
     const size: PassSize =
       passCamera instanceof THREE.PerspectiveCamera
-        ? { smaller: target === null ? 1 : renderer.getSize(viewSize).y / target.height, focal: height / 2 / Math.tan(THREE.MathUtils.degToRad(passCamera.fov) / 2), ortho: false, swapPx: farBudget.swapPx }
+        ? { smaller: target === null ? 1 : renderer.getSize(viewSize).y / target.height, focal: height / 2 / Math.tan(THREE.MathUtils.degToRad(passCamera.fov) / 2), ortho: false }
         : passCamera instanceof THREE.OrthographicCamera
           ? { smaller: 1, focal: height / (passCamera.top - passCamera.bottom), ortho: true }
           : { smaller: 1, focal: 0, ortho: false };
@@ -1805,10 +1803,6 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     renderer.render(scene, camera);
     frameCalls += renderer.info.render.calls;
     passes.view = { calls: renderer.info.render.calls, triangles: renderer.info.render.triangles };
-    farBudget.update(
-      treeViews.reduce((n, v) => n + v.drawn().triangles, 0),
-      dt,
-    );
   }
 
   /**
@@ -2208,7 +2202,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     const dx = -Math.sin(walker.yaw);
     const dz = -Math.cos(walker.yaw);
     const eye = camera.position.clone();
-    const swapPx = farBudget.swapPx * (preset.far.share ?? 1);
+    const swapPx = FAR.swapPx * (preset.far.share ?? 1);
     const span = (f: number): number => swapPx * FAR.band - f * swapPx * (FAR.band - 1);
     const leavePx = swapPx / FAR.leave;
     const leaving = (g: number): number => swapPx - g * (swapPx - leavePx);
@@ -2650,8 +2644,8 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
         levels: instanced().map((v) => v.levels),
         drawn: instanced().reduce((n, v) => n + v.drawn().copies, 0),
         drawnTriangles: instanced().reduce((n, v) => n + v.drawn().triangles, 0),
-        /** The crown span trees turn far at now, in device pixels: `FAR.swapPx` or more when a view is heavy. */
-        swapPx: Math.round(farBudget.swapPx),
+        /** The crown span trees turn far at, in device pixels (`FAR.swapPx`). */
+        swapPx: FAR.swapPx,
         /** Milliseconds every tree build took to bake into its far form, and then every bush build. */
         farBakeMs: Math.round(treeSet.ms),
         bushBakeMs: Math.round(bushSet.ms),

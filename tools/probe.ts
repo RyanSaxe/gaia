@@ -97,8 +97,6 @@ const go = (spot: string): string =>
 const OPEN = `(await __lab.open("immersive"), await T.farReady(), await __lab.hour(15.5), await __lab.frames(30), T.scale())`;
 const settle = "await __lab.frames(40)";
 const bench = "(T.bench(10), +T.bench(40).toFixed(2))";
-/** Twenty-one seconds of frames first: as long as the frame budget takes to rise from the far forms' size to its most (woods.ts, `BUDGET`). */
-const budgetSettles = "T.bench(1260)";
 
 const jobs: Job[] = [];
 for (const [world, preset] of Object.entries(SPOTS)) {
@@ -106,7 +104,7 @@ for (const [world, preset] of Object.entries(SPOTS)) {
   const spots = values.spot ?? preset;
   const calls: Call[] = [{ key: "open", js: OPEN }];
   for (const spot of spots) {
-    if (measures.has("drawn")) calls.push({ key: `drawn ${spot}`, js: `(${go(spot)}, ${settle}, ${budgetSettles}, { ms: ${bench}, drawn: T.drawn(), woods: T.scale(), understory: T.understoryDrawn() })` });
+    if (measures.has("drawn")) calls.push({ key: `drawn ${spot}`, js: `(${go(spot)}, ${settle}, { ms: ${bench}, drawn: T.drawn(), woods: T.scale(), understory: T.understoryDrawn() })` });
     if (measures.has("steps")) calls.push({ key: `steps ${spot}`, js: `(${go(spot)}, ${settle}, T.steps(${WALK.meters}, ${WALK.step}, ${WALK.at}))` });
   }
   if (measures.has("hitch")) {

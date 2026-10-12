@@ -904,11 +904,9 @@ its leaves thin through their own coverage, its bark is screened away pixel by
 pixel, so whatever the card does not cover, such as a willow's strands or a
 fir's needles, is gone before the full tree stops drawing. A tree never
 changes form in one frame. The sun's shadow, a flat pass, keeps the full form
-only to the band's end, where the card starts to cast. When the full trees a view draws pass the frame budget (`BUDGET`,
-1.5 million triangles), the view's swap size rises 2% a second, up to 1.5
-times the size the forms baked at, and eases back once the view is light
-(`createFrameBudget`): each half second a tree in the band moves across it
-no more than the swap test's middle step. Each pass gathers its far copies into one batch, and the far cards
+only to the band's end, where the card starts to cast. Trees turn far at
+the same size however dense the view: detail never gives way to the frame
+rate. Each pass gathers its far copies into one batch, and the far cards
 draw it in one call per form. Nothing past `AIR.dissolveEnd`, where the air
 has dissolved everything into the sky, draws at all. The understory's shrubs
 and the wild's bushes take far forms too, baked and turned far at a quarter
