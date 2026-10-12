@@ -21,6 +21,12 @@ export interface Baked {
   readonly report: ReliefReport;
   readonly wildBase: number;
   readonly stand: Stand;
+  /**
+   * The bake's finishing thread, which still holds the whole stood world: the
+   * page's land takes it on to cut its first chunks and tiles at once, and
+   * ends it when it no longer needs it.
+   */
+  readonly whole: Worker;
   /** In a world laid out from code, whose ground every part of the land is (`ownershipOf`); null in the sample world, whose ground is all the wild's. */
   readonly ownership: Ownership | null;
 }
@@ -87,10 +93,15 @@ export function createBaker(threads = Math.max(1, Math.min(4, (navigator.hardwar
   async function run(world: WorldSpec, stand: StandRequest, tiles?: readonly (readonly [number, number])[]): Promise<Baked> {
     const workers = started ?? spawn();
     started = null;
+    let kept: Worker | null = null;
     try {
-      return await bakeOn(workers, world, stand, tiles);
+      const baked = await bakeOn(workers, world, stand, tiles);
+      kept = baked.whole;
+      // The page's land answers the finishing thread from here on.
+      kept.onmessage = null;
+      return baked;
     } finally {
-      for (const w of workers) w.terminate();
+      for (const w of workers) if (w !== kept) w.terminate();
     }
   }
   async function bakeOn(workers: readonly Worker[], world: WorldSpec, stand: StandRequest, tiles?: readonly (readonly [number, number])[]): Promise<Baked> {
@@ -116,7 +127,7 @@ export function createBaker(threads = Math.max(1, Math.min(4, (navigator.hardwar
     const finisher = workers[0] as Worker;
     const [reply, ownership] = await Promise.all([ask(finisher, { kind: "finish", world, parts, stand, ...(tiles === undefined ? {} : { tiles }) }, moved), own(world, stand, workers.length > 1 ? workers.slice(1) : [finisher])]);
     if (reply.kind !== "finished") throw new Error(reply.kind === "failed" ? reply.message : "The bake finished without a terrain.");
-    return { land: reply.land, report: reply.report, wildBase: reply.wildBase, stand: { ...reply.stand, took: { compose: composed, ...reply.stand.took, finished: Math.round(performance.now() - t0) } }, ownership };
+    return { land: reply.land, report: reply.report, wildBase: reply.wildBase, stand: { ...reply.stand, took: { compose: composed, ...reply.stand.took, finished: Math.round(performance.now() - t0) } }, whole: finisher, ownership };
   }
   return {
     bake(world, stand, tiles) {

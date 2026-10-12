@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { Library } from "@gaia/schema";
 import { BIOME_PRIMITIVES, RELIEF_PRIMITIVES } from "@gaia/primitives";
 import { DRY, FULL_WORLD, SHORE_CAP, bakeTerrain, planOf, sampleWorld } from "@gaia/terrain";
-import { CHUNK, chunkPastLand, latticeIndex, standChunk } from "./land-chunks.ts";
+import { CHUNK, chunkPastLand, cutChunk, latticeIndex, standChunk } from "./land-chunks.ts";
 
 // Baked once for the file: the full sample world, 1.2 km across, so its coarser levels' chunks reach past the land.
 const terrain = bakeTerrain(sampleWorld(FULL_WORLD), new Library([...RELIEF_PRIMITIVES, ...BIOME_PRIMITIVES]));
@@ -42,5 +42,16 @@ describe("the land's chunks", () => {
     const chunk = standChunk(source, 0, far, 0);
     expect(chunk.ground[1]).toBe(DRY);
     expect(chunk.ground[2]).toBe(SHORE_CAP);
+  });
+
+  it("cuts a chunk from a whole world's land as a land worker bakes it from the plan alone", () => {
+    for (const [k, cx, cz] of [[0, 0, 0], [0, -3, 2], [1, 1, -2], [2, 0, -1], [3, 0, 0]] as const) {
+      const baked = standChunk(source, k, cx, cz);
+      const cut = cutChunk(terrain, source, k, cx, cz);
+      expect(Array.from(cut.ground), `level ${k}, chunk (${cx}, ${cz})`).toEqual(Array.from(baked.ground));
+      expect(Array.from(cut.region)).toEqual(Array.from(baked.region));
+      expect(Array.from(cut.coverShares)).toEqual(Array.from(baked.coverShares));
+      expect(Array.from(cut.trailPlaces)).toEqual(Array.from(baked.trailPlaces));
+    }
   });
 });
