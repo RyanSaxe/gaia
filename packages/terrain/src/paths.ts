@@ -231,11 +231,20 @@ interface Grid {
   readonly edges: Uint16Array;
   /** Routing cells from the nearest way, 0 on one, up to `TRAILS.besideCells + 1` for far. */
   readonly near: Uint8Array;
-  // Scratch for each search.
+  /** Whether each block of `GRID_BLOCK` by `GRID_BLOCK` cells has read its ground yet: a block reads it when a search first reaches it. */
+  readonly ready: Uint8Array;
+  /** Fills a block's height, slope, depth and wander. */
+  readonly fill: (block: number) => void;
+  // Scratch for each search, valid where `seen` holds the search's number; a cell is settled where `settled` does.
   readonly cost: Float64Array;
   readonly came: Int32Array;
-  readonly done: Uint8Array;
+  readonly seen: Uint32Array;
+  readonly settled: Uint32Array;
+  searches: number;
 }
+
+/** Cells a side of the blocks the routing grid reads its ground in. */
+const GRID_BLOCK = 32;
 
 function gridOf(t: Terrain, seed: number, avoid: readonly Occupied[]): Grid {
   const half = t.spec.size / 2 - TRAILS.margin;
@@ -245,19 +254,25 @@ function gridOf(t: Terrain, seed: number, avoid: readonly Occupied[]): Grid {
   const slope = new Float32Array(n * n);
   const depth = new Float32Array(n * n);
   const wander = new Float32Array(n * n);
-  for (let j = 0; j < n; j++) {
-    for (let i = 0; i < n; i++) {
-      const x = origin + i * TRAILS.cell;
-      const z = origin + j * TRAILS.cell;
-      const k = j * n + i;
-      const h = heightAt(t.lattice, x, z);
-      height[k] = h;
-      slope[k] = slopeAt(t.lattice, x, z);
-      const level = heightAt(t.lattice, x, z, t.waterLevel);
-      depth[k] = level > DRY / 2 ? Math.max(0.01, level - h) : 0;
-      wander[k] = 0.5 + 0.5 * fbm(seed, x / TRAILS.wander, z / TRAILS.wander, 2, 0.5);
+  const blocks = Math.ceil(n / GRID_BLOCK);
+  // Only the ground a search reaches is read, block by block: a large world's routes cross a small part of it.
+  const fill = (block: number): void => {
+    const bi = (block % blocks) * GRID_BLOCK;
+    const bj = Math.floor(block / blocks) * GRID_BLOCK;
+    for (let j = bj; j < Math.min(n, bj + GRID_BLOCK); j++) {
+      for (let i = bi; i < Math.min(n, bi + GRID_BLOCK); i++) {
+        const x = origin + i * TRAILS.cell;
+        const z = origin + j * TRAILS.cell;
+        const k = j * n + i;
+        const h = heightAt(t.lattice, x, z);
+        height[k] = h;
+        slope[k] = slopeAt(t.lattice, x, z);
+        const level = heightAt(t.lattice, x, z, t.waterLevel);
+        depth[k] = level > DRY / 2 ? Math.max(0.01, level - h) : 0;
+        wander[k] = 0.5 + 0.5 * fbm(seed, x / TRAILS.wander, z / TRAILS.wander, 2, 0.5);
+      }
     }
-  }
+  };
   const blocked = new Uint8Array(n * n);
   for (const o of avoid) {
     const reach = Math.ceil(o.radius / TRAILS.cell) + 1;
@@ -271,7 +286,16 @@ function gridOf(t: Terrain, seed: number, avoid: readonly Occupied[]): Grid {
     }
   }
   const near = new Uint8Array(n * n).fill(TRAILS.besideCells + 1);
-  return { n, origin, height, slope, depth, wander, blocked, edges: new Uint16Array(n * n), near, cost: new Float64Array(n * n), came: new Int32Array(n * n), done: new Uint8Array(n * n) };
+  return { n, origin, height, slope, depth, wander, blocked, edges: new Uint16Array(n * n), near, ready: new Uint8Array(blocks * blocks), fill, cost: new Float64Array(n * n), came: new Int32Array(n * n), seen: new Uint32Array(n * n), settled: new Uint32Array(n * n), searches: 0 };
+}
+
+/** Cell k's ground, read now if its block has not been. */
+function readyCell(g: Grid, k: number): void {
+  const blocks = Math.ceil(g.n / GRID_BLOCK);
+  const block = Math.floor(Math.floor(k / g.n) / GRID_BLOCK) * blocks + Math.floor((k % g.n) / GRID_BLOCK);
+  if (g.ready[block] === 1) return;
+  g.ready[block] = 1;
+  g.fill(block);
 }
 
 const cellOf = (g: Grid, x: number, z: number): number => {
@@ -284,21 +308,24 @@ const cellZ = (g: Grid, k: number): number => g.origin + Math.floor(k / g.n) * T
 
 /** The cheapest chain of cells between two cells, or null when none exists. Steps along the network's ways cost `TRAILS.join`; ground beside a way costs more. */
 function search(g: Grid, start: number, goal: number, winding: number): number[] | null {
-  const { n, cost, came, done } = g;
-  cost.fill(Infinity);
-  came.fill(-1);
-  done.fill(0);
+  const { n, cost, came, seen, settled } = g;
+  // This search's number marks the cells it reached and settled; every other cell reads as unreached.
+  const id = ++g.searches;
+  const costOf = (k: number): number => (seen[k] === id ? (cost[k] as number) : Infinity);
+  readyCell(g, start);
   const gi = goal % n;
   const gj = Math.floor(goal / n);
   // Below the cheapest step per meter, so the search still finds a long way round along the network.
   const guess = (k: number): number => Math.hypot((k % n) - gi, Math.floor(k / n) - gj) * TRAILS.cell * TRAILS.join * 0.95;
   const heap = new Heap();
   cost[start] = 0;
+  came[start] = -1;
+  seen[start] = id;
   heap.push(start, guess(start));
   while (heap.size > 0) {
     const k = heap.pop();
-    if (done[k] === 1) continue;
-    done[k] = 1;
+    if (settled[k] === id) continue;
+    settled[k] = id;
     if (k === goal) break;
     const i = k % n;
     const j = Math.floor(k / n);
@@ -309,7 +336,8 @@ function search(g: Grid, start: number, goal: number, winding: number): number[]
       const nj = j + dj;
       if (ni < 0 || nj < 0 || ni >= n || nj >= n) continue;
       const m = nj * n + ni;
-      if (done[m] === 1 || (g.blocked[m] === 1 && m !== goal)) continue;
+      if (settled[m] === id || (g.blocked[m] === 1 && m !== goal)) continue;
+      readyCell(g, m);
       const deep = g.depth[m] as number;
       if (deep > TRAILS.deep) continue;
       const run = Math.hypot(di, dj) * TRAILS.cell;
@@ -325,14 +353,15 @@ function search(g: Grid, start: number, goal: number, winding: number): number[]
         if (near > 0 && near <= TRAILS.besideCells && m !== goal) step *= TRAILS.beside;
       }
       const next = (cost[k] as number) + step;
-      if (next < (cost[m] as number)) {
+      if (next < costOf(m)) {
         cost[m] = next;
         came[m] = k;
+        seen[m] = id;
         heap.push(m, next + guess(m));
       }
     }
   }
-  if (came[goal] === -1) return null;
+  if (seen[goal] !== id || goal === start) return null;
   const cells: number[] = [];
   for (let k = goal; k !== -1; k = came[k] as number) {
     cells.push(k);
