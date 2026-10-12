@@ -1115,9 +1115,9 @@ to a failing entity grows over alone. What is built on a way (footbridges,
 stepping stones, edging stones) takes its liveliest trail's vitality where
 it stands, since a way is kept in repair by whoever still walks it
 (`wayVitalityAt`), and a cairn its liveliest way's (`junctionVitality`).
-Where ways meet, the more worn one shows, so no seam appears. The bake
-records which way each ground sample lies on and how far along it
-(`trailPlaces`); the ground and grass shaders read each way's wear at four
+Where ways meet, the more worn one shows, so no seam appears. The land's
+clipmap records which way each ground sample lies on and how far along it
+(`trailPlacesOn`); the ground and grass shaders read each way's wear at four
 stations along it from a small texture, rewritten from the entities'
 vitality whenever it changes (`wayWearAt` is the CPU reference), so a
 change in vitality never rebakes anything.

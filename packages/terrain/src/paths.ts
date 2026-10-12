@@ -886,26 +886,85 @@ export function unpackPlace(packed: number): { way: number; along: number } | nu
  * follows the vitality of every trail walking it, live (`wayWear`).
  */
 export function trailPlaces(t: Pick<Terrain, "lattice" | "waterLevel">, ways: readonly Way[]): Float32Array {
+  const every = Int32Array.from({ length: t.lattice.n }, (_, i) => i);
+  return trailPlacesOn(t, ways, every, every);
+}
+
+/**
+ * `trailPlaces` on a grid of the lattice's samples: columns `columns` of rows
+ * `rows` (lattice indices, neither list ever decreasing, so a grid may repeat
+ * the lattice's edge), row by row, with every way reaching `reach` meters past
+ * its edge. Each sample comes out as `trailPlaces` gives it, wherever it lies
+ * in a grid, so a window of the land around the person, or every 2^k-th
+ * sample of it, is laid from the ways alone.
+ */
+export function trailPlacesOn(t: Pick<Terrain, "lattice" | "waterLevel">, ways: readonly Way[], columns: Int32Array, rows: Int32Array, reach: number = TRAILS.reach): Float32Array {
   const l = t.lattice;
-  const n = l.n * l.n;
+  const width = columns.length;
+  const n = width * rows.length;
   const d1 = new Float32Array(n).fill(Infinity);
   const d2 = new Float32Array(n).fill(Infinity);
   const p1 = new Float32Array(n).fill(-1);
   const p2 = new Float32Array(n).fill(-1);
   const mine = new Float32Array(n).fill(Infinity);
   const along = new Float32Array(n);
+  /** The first position in `list` holding `v` or more. */
+  const from = (list: Int32Array, v: number): number => {
+    let lo = 0;
+    let hi = list.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if ((list[mid] as number) < v) lo = mid + 1;
+      else hi = mid;
+    }
+    return lo;
+  };
+  if (n === 0) return new Float32Array(0);
+  // The grid's bounds on the ground: a segment farther than its reach from them visits none of its samples.
+  const x0 = worldOf(l, columns[0] as number);
+  const x1 = worldOf(l, columns[width - 1] as number);
+  const z0 = worldOfZ(l, rows[0] as number);
+  const z1 = worldOfZ(l, rows[rows.length - 1] as number);
+  const oz = l.originZ ?? l.origin;
   ways.forEach((trail, index) => {
     const half = trail.style.width / 2;
-    const last = Math.max(1, trail.points.length / 2 - 1);
+    const near = half + reach;
+    const pts = trail.points;
+    const count = pts.length / 2;
+    const last = Math.max(1, count - 1);
     const touched: number[] = [];
-    nearSegments(t, trail, half + TRAILS.reach, (i, d, k) => {
-      if ((t.waterLevel[i] as number) > DRY / 2) return;
-      if ((mine[i] as number) === Infinity) touched.push(i);
-      if (d - half < (mine[i] as number)) {
-        mine[i] = d - half;
-        along[i] = k / last;
+    // Each segment visits the grid's samples within reach of it, as `nearPoints` visits the lattice's.
+    for (let k = 0; k + 1 < count; k++) {
+      const ax = pts[k * 2] as number;
+      const az = pts[k * 2 + 1] as number;
+      const bx = pts[k * 2 + 2] as number;
+      const bz = pts[k * 2 + 3] as number;
+      if (Math.max(az, bz) + near < z0 || Math.min(az, bz) - near > z1 || Math.max(ax, bx) + near < x0 || Math.min(ax, bx) - near > x1) continue;
+      const c0 = from(columns, Math.max(0, Math.floor((Math.min(ax, bx) - near - l.origin) / l.spacing)));
+      const c1 = from(columns, Math.min(l.n - 1, Math.ceil((Math.max(ax, bx) + near - l.origin) / l.spacing)) + 1);
+      const r0 = from(rows, Math.max(0, Math.floor((Math.min(az, bz) - near - oz) / l.spacing)));
+      const r1 = from(rows, Math.min(l.n - 1, Math.ceil((Math.max(az, bz) + near - oz) / l.spacing)) + 1);
+      const dx = bx - ax;
+      const dz = bz - az;
+      const len2 = Math.max(1e-9, dx * dx + dz * dz);
+      for (let r = r0; r < r1; r++) {
+        const j = rows[r] as number;
+        const z = worldOfZ(l, j);
+        for (let c = c0; c < c1; c++) {
+          const i = columns[c] as number;
+          const x = worldOf(l, i);
+          const u = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / len2));
+          const d = Math.hypot(x - ax - dx * u, z - az - dz * u);
+          if (d > near || (t.waterLevel[j * l.n + i] as number) > DRY / 2) continue;
+          const s = r * width + c;
+          if ((mine[s] as number) === Infinity) touched.push(s);
+          if (d - half < (mine[s] as number)) {
+            mine[s] = d - half;
+            along[s] = (k + u) / last;
+          }
+        }
       }
-    });
+    }
     for (const i of touched) {
       const d = mine[i] as number;
       const p = packPlace(index, along[i] as number);
