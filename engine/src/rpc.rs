@@ -75,6 +75,26 @@ pub fn handle(line: &str) -> Value {
             .map_err(|e| (FAILED, e)),
             None => Err((INVALID_PARAMS, "understand.next needs a root.".into())),
         },
+        "understanding.plan" => match p["root"].as_str() {
+            Some(root) => crate::jev::runner::plan_with(
+                Path::new(root),
+                None,
+                p["graph"].as_bool() == Some(true),
+                crate::jev::runner::Design::Understanding,
+            )
+            .map_err(|e| (FAILED, e)),
+            None => Err((INVALID_PARAMS, "understanding.plan needs a root.".into())),
+        },
+        "understanding.next" => match p["root"].as_str() {
+            Some(root) => crate::jev::runner::next_with(
+                Path::new(root),
+                p["max"].as_u64().map(|m| m as usize),
+                None,
+                crate::jev::runner::Design::Understanding,
+            )
+            .map_err(|e| (FAILED, e)),
+            None => Err((INVALID_PARAMS, "understanding.next needs a root.".into())),
+        },
         "understand.deepen" => match (p["root"].as_str(), p["nodes"].as_array()) {
             (Some(root), Some(nodes)) => {
                 let nodes: Vec<String> = nodes

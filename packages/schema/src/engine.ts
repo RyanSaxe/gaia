@@ -41,6 +41,14 @@ export interface EngineMethods {
    * `through`, only the passes up to that one are sent.
    */
   "understand.next": { params: { root: string; max?: number; through?: Pass }; result: UnderstandProgress };
+  /**
+   * The understanding pass (importance and quality at every level), beside
+   * today's calls until the world reads it: what it would send, and the
+   * judged graph with `graph`.
+   */
+  "understanding.plan": { params: { root: string; graph?: boolean }; result: UnderstandPlan };
+  /** Sends the understanding pass's ready requests, folders top-down and each file after its folder. */
+  "understanding.next": { params: { root: string; max?: number }; result: UnderstandProgress };
   /** Queues the deep questions for the nodes the world chose to stand. */
   "understand.deepen": { params: { root: string; nodes: readonly NodeId[] }; result: UnderstandPlan };
   /** Asks one call about one node straight away, for a follow-up a person asks. */
@@ -134,7 +142,7 @@ export interface JevEstimate {
 }
 
 /** The passes of understanding, in the order their waits allow (`docs/architecture.md`, "The Jev runner"). */
-export type Pass = "link" | "understand" | "deep" | "tests" | "dirs";
+export type Pass = "link" | "understand" | "deep" | "tests" | "dirs" | "folders" | "files";
 
 /** What understanding a project would send, pass by pass, and what it would cost. */
 export interface UnderstandPlan {

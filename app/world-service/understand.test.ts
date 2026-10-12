@@ -237,3 +237,64 @@ describe("the Jev runner", () => {
     expect(chosen?.judged?.quality?.readability).toBeDefined();
   }, 60_000);
 });
+
+describe("the understanding pass", () => {
+  /** Asks the understanding pass until nothing is left; returns the requests the stand-in received meanwhile. */
+  async function understanding(engine: ReturnType<typeof engineAt>, root: string) {
+    const before = standIn.received.length;
+    for (;;) {
+      const p = await engine.call("understanding.next", { root });
+      if (p.left === 0 || (p.sent === 0 && p.settled.length === 0)) break;
+    }
+    return standIn.received.slice(before).map((r) => r.body as { state: Record<string, unknown>; questions: Record<string, { criteria: unknown }> });
+  }
+
+  it("asks each folder in its parent's light and each file in its folder's, then gathers importance and quality", async () => {
+    const root = codebase("axes", {
+      "README.md": "# Tiny\n\nA tiny project that measures shapes.\n",
+      "a/top.ts": fn("top", "return x;"),
+      "a/b/mid.ts": fn("mid", "if (x > 1) { return x; }\n  for (const y of [x]) { x += y; }\n  return x;") + fn("other", "return x - 1;"),
+    });
+    const engine = engineAt(join(scratch, "axes-data"));
+    const sent = await understanding(engine, root);
+    const folderAt = (path: string): number => sent.findIndex((r) => r.state["folder-axes"] !== undefined && r.state.path === path);
+    const fileAt = (path: string): number => sent.findIndex((r) => r.state["file-axes"] !== undefined && r.state.path === path);
+    // Top-down: the root, then each folder, and each file only after its folder.
+    expect(folderAt("(the repository's root)")).toBe(0);
+    expect(folderAt("a")).toBeGreaterThan(folderAt("(the repository's root)"));
+    expect(folderAt("a/b")).toBeGreaterThan(folderAt("a"));
+    expect(fileAt("a/top.ts")).toBeGreaterThan(folderAt("a"));
+    expect(fileAt("a/b/mid.ts")).toBeGreaterThan(folderAt("a/b"));
+    // A file's request carries the project's own words and what was found above it, as typed answers.
+    const mid = sent[fileAt("a/b/mid.ts")] as (typeof sent)[number];
+    const part = mid.state["file-axes"] as { project: string; above: { path: string; importance: number | null }[]; importance: number | null };
+    expect(part.project).toContain("measures shapes");
+    expect(part.above.map((a) => a.path)).toEqual(["(the repository's root)", "a", "a/b"]);
+    expect(part.above.slice(1).every((a) => typeof a.importance === "number")).toBe(true);
+    expect(part.importance).toBeTypeOf("number");
+    // It picks among the file's definitions; a definition with two or more blocks has its blocks picked among.
+    expect(Object.keys(mid.questions)).toEqual(expect.arrayContaining(["pick-key:file", "pick-weak:mid", "importance:mid", "readability:mid", "robustness:mid", "own:cohesion"]));
+    expect(Object.keys(mid.questions)).not.toContain("pick-key:other");
+    // The engine gathers it: every item's importance and quality from 0 to 1, the root's importance 1.
+    const graph: CodeGraph = await engine.call("project.graph", { root, judged: true });
+    const value = (id: string) => graph.nodes.find((n) => n.id === id)?.judged?.value;
+    expect(value("dir:")?.importance).toBe(1);
+    for (const id of ["dir:a", "file:a/b/mid.ts", "def:a/b/mid.ts#mid"]) {
+      expect(value(id)?.importance, id).toBeGreaterThanOrEqual(0);
+      expect(value(id)?.quality, id).toBeGreaterThanOrEqual(0);
+      expect(value(id)?.quality, id).toBeLessThanOrEqual(1);
+    }
+    // Where Jev asked for more, the same questions went again once, with the readings it chose and no "more" question.
+    const byFile = new Map<string, (typeof sent)[number][]>();
+    for (const r of sent) if (r.state["file-axes"] !== undefined) byFile.set(r.state.path as string, [...(byFile.get(r.state.path as string) ?? []), r]);
+    for (const [path, rs] of byFile) {
+      expect(rs.length, path).toBeLessThanOrEqual(2);
+      if (rs.length === 2) {
+        expect((rs[1]?.state["file-axes"] as { readings?: object }).readings, path).toBeDefined();
+        expect(Object.keys(rs[1]?.questions ?? {}).some((q) => q.startsWith("more:")), path).toBe(false);
+      }
+    }
+    // Reopening asks nothing again.
+    expect((await understanding(engineAt(join(scratch, "axes-data")), root)).length).toBe(0);
+  }, 60_000);
+});

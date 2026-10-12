@@ -580,6 +580,36 @@ tokens by 9.7%. Screening spreads over every level on each of the bench's eight
 repositories, with no level holding more than 51% of a repository's
 definitions.
 
+### The understanding pass
+
+Beside today's calls, `understanding.plan` and `understanding.next` run the
+understanding pass (`engine/src/jev/axes.rs`): importance and quality at
+every level, with every word, level, weight and pick in
+`engine/vocab/understanding.toml`. After the link pass, folders go top-down,
+the root first and each folder once its parent's request is answered, and
+each file once its folder's is. So every request carries the project's own
+words (the opening of the root's largest Markdown file) and what was found
+above it, as typed answers: each enclosing folder's importance and
+organization, and, for a file, its own importance as its folder judged it.
+
+A folder's request scores each of its files' and subfolders' importance and
+its own quality concepts. A file's request, with its source and its
+neighbours' signatures, scores each code definition's importance and every
+quality concept, picks which definition is key, which most needs work and
+which is finest (and the same among the blocks of each definition with two
+or more), and scores the file's own concepts. Definitions whose role is
+data or markup (a CSS rule, a Markdown section, a JSON key) are never asked.
+Every request ends with a choice of what more would help: where it is used,
+the source of what it calls, its tests, or its folder's docs. Each reading
+Jev wants above the threshold is added, and the same questions are asked
+again, up to the set number of rounds.
+
+The engine then works out `judged.value` for every folder, file and
+definition: importance as its container judged it (the root is 1), and
+quality as the weighted mean of its concepts, gathered upward with each
+container's top-level parts weighted by their lines and blended with its
+own.
+
 The calibration set splits the bench by repository
 (`tools/bench/calibration/split.json`): wording is tuned on one half and
 measured on the other. `pnpm bench --calibrate` reports, for every question
