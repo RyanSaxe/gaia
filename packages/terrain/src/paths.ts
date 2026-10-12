@@ -11,7 +11,7 @@
 
 import type { RouteSpec } from "@gaia/schema";
 import { fbm } from "@gaia/primitives";
-import { heightAt, slopeAt, worldOf } from "./lattice.ts";
+import { type Lattice, heightAt, slopeAt, worldOf, worldOfZ } from "./lattice.ts";
 import type { Occupied } from "./scatter.ts";
 import { DRY, type Terrain } from "./world.ts";
 import { withinLand } from "./edge.ts";
@@ -439,7 +439,7 @@ function crossingsOf(t: Terrain, points: Float32Array): Crossing[] {
 function regionIndex(t: Terrain, x: number, z: number): number {
   const l = t.lattice;
   const ix = Math.max(0, Math.min(l.n - 1, Math.round((x - l.origin) / l.spacing)));
-  const iz = Math.max(0, Math.min(l.n - 1, Math.round((z - l.origin) / l.spacing)));
+  const iz = Math.max(0, Math.min(l.n - 1, Math.round((z - (l.originZ ?? l.origin)) / l.spacing)));
   return t.region[iz * l.n + ix] ?? 0;
 }
 
@@ -705,8 +705,9 @@ function networkOf(t: Terrain, g: Grid, routed: readonly { req: TrailRequest; ce
 
 // ---------- the ground under the ways ----------
 
-/** The lattice rectangle `nearSegments` visits for a way's points at `reach`: every sample within reach of a segment lies inside it. */
-function reachBox(l: Terrain["lattice"], pts: Float32Array | readonly number[], reach: number): { i0: number; i1: number; j0: number; j1: number } {
+/** The lattice rectangle `nearPoints` visits for a way's points at `reach`: every sample within reach of a segment lies inside it. */
+function reachBox(l: Lattice, pts: Float32Array | readonly number[], reach: number): { i0: number; i1: number; j0: number; j1: number } {
+  const oz = l.originZ ?? l.origin;
   let i0 = l.n - 1;
   let i1 = 0;
   let j0 = l.n - 1;
@@ -718,17 +719,21 @@ function reachBox(l: Terrain["lattice"], pts: Float32Array | readonly number[], 
     const bz = pts[k * 2 + 3] as number;
     i0 = Math.min(i0, Math.max(0, Math.floor((Math.min(ax, bx) - reach - l.origin) / l.spacing)));
     i1 = Math.max(i1, Math.min(l.n - 1, Math.ceil((Math.max(ax, bx) + reach - l.origin) / l.spacing)));
-    j0 = Math.min(j0, Math.max(0, Math.floor((Math.min(az, bz) - reach - l.origin) / l.spacing)));
-    j1 = Math.max(j1, Math.min(l.n - 1, Math.ceil((Math.max(az, bz) + reach - l.origin) / l.spacing)));
+    j0 = Math.min(j0, Math.max(0, Math.floor((Math.min(az, bz) - reach - oz) / l.spacing)));
+    j1 = Math.max(j1, Math.min(l.n - 1, Math.ceil((Math.max(az, bz) + reach - oz) / l.spacing)));
   }
-  // A way of one point visits nothing: an empty box.
+  // A way of one point, or one wholly outside the lattice, visits nothing: an empty box.
   return i1 < i0 || j1 < j0 ? { i0: 0, i1: -1, j0: 0, j1: -1 } : { i0, i1, j0, j1 };
 }
 
-/** Visits every lattice sample within `reach` of each segment, with its distance and the nearest point's index along the way. */
-function nearSegments(t: Terrain, way: Way, reach: number, visit: (index: number, distance: number, along: number) => void): void {
-  const l = t.lattice;
-  const pts = way.points;
+/**
+ * Visits every sample of `l` within `reach` of each segment of `pts`, with
+ * its distance and the nearest point's index along the way. `l` may be the
+ * world's lattice or any window of it: a sample is visited with the same
+ * distance and place along the way in either.
+ */
+function nearPoints(l: Lattice, pts: Float32Array, reach: number, visit: (index: number, distance: number, along: number) => void): void {
+  const oz = l.originZ ?? l.origin;
   const count = pts.length / 2;
   for (let k = 0; k + 1 < count; k++) {
     const ax = pts[k * 2] as number;
@@ -737,13 +742,13 @@ function nearSegments(t: Terrain, way: Way, reach: number, visit: (index: number
     const bz = pts[k * 2 + 3] as number;
     const i0 = Math.max(0, Math.floor((Math.min(ax, bx) - reach - l.origin) / l.spacing));
     const i1 = Math.min(l.n - 1, Math.ceil((Math.max(ax, bx) + reach - l.origin) / l.spacing));
-    const j0 = Math.max(0, Math.floor((Math.min(az, bz) - reach - l.origin) / l.spacing));
-    const j1 = Math.min(l.n - 1, Math.ceil((Math.max(az, bz) + reach - l.origin) / l.spacing));
+    const j0 = Math.max(0, Math.floor((Math.min(az, bz) - reach - oz) / l.spacing));
+    const j1 = Math.min(l.n - 1, Math.ceil((Math.max(az, bz) + reach - oz) / l.spacing));
     const dx = bx - ax;
     const dz = bz - az;
     const len2 = Math.max(1e-9, dx * dx + dz * dz);
     for (let j = j0; j <= j1; j++) {
-      const z = worldOf(l, j);
+      const z = worldOfZ(l, j);
       for (let i = i0; i <= i1; i++) {
         const x = worldOf(l, i);
         const u = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / len2));
@@ -754,61 +759,90 @@ function nearSegments(t: Terrain, way: Way, reach: number, visit: (index: number
   }
 }
 
+/** Visits every lattice sample within `reach` of each segment of a way, with its distance and the nearest point's index along the way. */
+const nearSegments = (t: Pick<Terrain, "lattice">, way: Way, reach: number, visit: (index: number, distance: number, along: number) => void): void => nearPoints(t.lattice, way.points, reach, visit);
+
 /**
  * Eases the baked ground under each way toward the tread's own smoothed
  * grade, blending back to the land over `TRAILS.blend` meters, as a cottage's
  * pad does. A trail on a hillside benches gently into it; bumps along the
  * tread soften. Water and the banks next to it are never touched, and no
- * sample moves more than `TRAILS.maxCut`.
+ * sample moves more than `TRAILS.maxCut`. Returns each way's edit, in order.
  */
-export function levelTrails(t: Terrain, ways: readonly Way[]): void {
-  const l = t.lattice;
-  for (const trail of ways) {
-    const pts = trail.points;
-    const count = pts.length / 2;
-    const ground = new Float32Array(count);
-    for (let k = 0; k < count; k++) ground[k] = heightAt(l, pts[k * 2] as number, pts[k * 2 + 1] as number);
-    const grade = new Float32Array(count);
-    for (let k = 0; k < count; k++) {
-      let sum = 0;
-      let n = 0;
-      for (let m = Math.max(0, k - TRAILS.grade); m <= Math.min(count - 1, k + TRAILS.grade); m++) {
-        sum += ground[m] as number;
-        n++;
-      }
-      grade[k] = sum / n;
+export function levelTrails(t: Terrain, ways: readonly Way[]): WayEdit[] {
+  return ways.map((trail) => {
+    const edit = wayEdit(t.lattice, trail);
+    applyWay(t, edit);
+    return edit;
+  });
+}
+
+/** A way's tread leveled into the land, as data: what `levelTrails` did for it, so a tile of the land baked alone can do it again. */
+export interface WayEdit {
+  readonly points: Float32Array;
+  /** Half the tread's width, meters. */
+  readonly half: number;
+  /** The tread's smoothed grade at each point, from the ground as it stood when the way was leveled. */
+  readonly grade: Float32Array;
+}
+
+/** The edit that levels `trail` into the ground of `l` as it stands now. */
+function wayEdit(l: Lattice, trail: Way): WayEdit {
+  const pts = trail.points;
+  const count = pts.length / 2;
+  const ground = new Float32Array(count);
+  for (let k = 0; k < count; k++) ground[k] = heightAt(l, pts[k * 2] as number, pts[k * 2 + 1] as number);
+  const grade = new Float32Array(count);
+  for (let k = 0; k < count; k++) {
+    let sum = 0;
+    let n = 0;
+    for (let m = Math.max(0, k - TRAILS.grade); m <= Math.min(count - 1, k + TRAILS.grade); m++) {
+      sum += ground[m] as number;
+      n++;
     }
-    const half = trail.style.width / 2;
-    const reach = half + TRAILS.blend;
-    // Only the samples within reach of the way can change, so the scratch
-    // covers the rectangle around it, not the whole land: the same samples
-    // move by the same amounts, at a fraction of the memory and the time.
-    const box = reachBox(l, pts, reach);
-    const w0 = box.i1 - box.i0 + 1;
-    const best = new Float32Array(w0 * (box.j1 - box.j0 + 1)).fill(Infinity);
-    const target = new Float32Array(best.length);
-    nearSegments(t, trail, reach, (index, d, along) => {
-      const local = (Math.floor(index / l.n) - box.j0) * w0 + (index % l.n) - box.i0;
-      if (d >= (best[local] as number)) return;
-      best[local] = d;
-      const k = Math.min(count - 1, Math.floor(along));
-      const f = along - k;
-      target[local] = (grade[k] as number) * (1 - f) + (grade[Math.min(count - 1, k + 1)] as number) * f;
-    });
-    for (let j = box.j0; j <= box.j1; j++) {
-      for (let i = box.i0; i <= box.i1; i++) {
-        const local = (j - box.j0) * w0 + (i - box.i0);
-        const index = j * l.n + i;
-        const d = best[local] as number;
-        if (d === Infinity || (t.waterLevel[index] as number) > DRY / 2) continue;
-        const u = Math.max(0, Math.min(1, (d - half - 0.3) / TRAILS.blend));
-        const shore = Math.max(0, Math.min(1, ((t.shore[index] as number) - 1.5) / 2.5));
-        const w = (1 - u * u * (3 - 2 * u)) * shore * shore * (3 - 2 * shore);
-        if (w <= 0) continue;
-        const h = l.heights[index] as number;
-        const delta = Math.max(-TRAILS.maxCut, Math.min(TRAILS.maxCut, (target[local] as number) - h));
-        l.heights[index] = h + delta * w;
-      }
+    grade[k] = sum / n;
+  }
+  return { points: pts, half: trail.style.width / 2, grade };
+}
+
+/**
+ * Levels one way's tread into `t`, which may be the world's land or any
+ * window of it: each sample moves by what its own place, water and shore and
+ * the way say, so a window gets the same bytes as the world holds there.
+ */
+export function applyWay(t: Pick<Terrain, "lattice" | "waterLevel" | "shore">, edit: WayEdit): void {
+  const l = t.lattice;
+  const { points: pts, half, grade } = edit;
+  const count = pts.length / 2;
+  const reach = half + TRAILS.blend;
+  // Only the samples within reach of the way can change, so the scratch
+  // covers the rectangle around it, not the whole land: the same samples
+  // move by the same amounts, at a fraction of the memory and the time.
+  const box = reachBox(l, pts, reach);
+  const w0 = box.i1 - box.i0 + 1;
+  const best = new Float32Array(Math.max(0, w0 * (box.j1 - box.j0 + 1))).fill(Infinity);
+  const target = new Float32Array(best.length);
+  nearPoints(l, pts, reach, (index, d, along) => {
+    const local = (Math.floor(index / l.n) - box.j0) * w0 + (index % l.n) - box.i0;
+    if (d >= (best[local] as number)) return;
+    best[local] = d;
+    const k = Math.min(count - 1, Math.floor(along));
+    const f = along - k;
+    target[local] = (grade[k] as number) * (1 - f) + (grade[Math.min(count - 1, k + 1)] as number) * f;
+  });
+  for (let j = box.j0; j <= box.j1; j++) {
+    for (let i = box.i0; i <= box.i1; i++) {
+      const local = (j - box.j0) * w0 + (i - box.i0);
+      const index = j * l.n + i;
+      const d = best[local] as number;
+      if (d === Infinity || (t.waterLevel[index] as number) > DRY / 2) continue;
+      const u = Math.max(0, Math.min(1, (d - half - 0.3) / TRAILS.blend));
+      const shore = Math.max(0, Math.min(1, ((t.shore[index] as number) - 1.5) / 2.5));
+      const w = (1 - u * u * (3 - 2 * u)) * shore * shore * (3 - 2 * shore);
+      if (w <= 0) continue;
+      const h = l.heights[index] as number;
+      const delta = Math.max(-TRAILS.maxCut, Math.min(TRAILS.maxCut, (target[local] as number) - h));
+      l.heights[index] = h + delta * w;
     }
   }
 }
@@ -818,7 +852,7 @@ export function levelTrails(t: Terrain, ways: readonly Way[]): void {
  * meters: negative on the tread, capped at `TRAILS.reach`. The ground paints
  * worn earth from it and the grass parts along it; water reads as far.
  */
-export function trailField(t: Terrain, ways: readonly Way[]): Float32Array {
+export function trailField(t: Pick<Terrain, "lattice" | "waterLevel">, ways: readonly Way[]): Float32Array {
   const l = t.lattice;
   const field = new Float32Array(l.n * l.n).fill(TRAILS.reach);
   for (const trail of ways) {
@@ -851,7 +885,7 @@ export function unpackPlace(packed: number): { way: number; along: number } | nu
  * at its last (see `unpackPlace`), so a shader can read the way's wear, which
  * follows the vitality of every trail walking it, live (`wayWear`).
  */
-export function trailPlaces(t: Terrain, ways: readonly Way[]): Float32Array {
+export function trailPlaces(t: Pick<Terrain, "lattice" | "waterLevel">, ways: readonly Way[]): Float32Array {
   const l = t.lattice;
   const n = l.n * l.n;
   const d1 = new Float32Array(n).fill(Infinity);

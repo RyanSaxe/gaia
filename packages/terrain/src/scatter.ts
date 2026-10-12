@@ -166,7 +166,7 @@ function standing(first: readonly Occupied[]) {
 function regionAt(t: Terrain, x: number, z: number): number {
   const l = t.lattice;
   const ix = Math.max(0, Math.min(l.n - 1, Math.round((x - l.origin) / l.spacing)));
-  const iz = Math.max(0, Math.min(l.n - 1, Math.round((z - l.origin) / l.spacing)));
+  const iz = Math.max(0, Math.min(l.n - 1, Math.round((z - (l.originZ ?? l.origin)) / l.spacing)));
   return t.region[iz * l.n + ix] ?? 0;
 }
 
