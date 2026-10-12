@@ -112,10 +112,18 @@ const SKY_WORLD = WORLD_PRESETS[0];
 
 /** Each mode's hint, for a mouse and keyboard and for touch. */
 const HINTS = {
-  walk: ["Click the ground to walk there, drag to look; W walks ahead, A and D turn, Shift hurries", "Tap the ground to walk there, drag to look"],
+  walk: ["Click the ground to walk there, drag to look; W or k walks ahead, A and D or h and l turn, Shift hurries", "Tap the ground to walk there, drag to look"],
   overview: ["Drag to orbit, scroll to zoom, click a region", "Drag to orbit, pinch to zoom, tap a region"],
 };
-const MOVE = new Set(["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "ShiftLeft", "ShiftRight"]);
+/** The keys that move a person, W A S D, the arrows or vim's k h j l: ahead, turning left or right, stopping, and hurrying. */
+const KEYS = {
+  ahead: ["KeyW", "ArrowUp", "KeyK"],
+  left: ["KeyA", "ArrowLeft", "KeyH"],
+  right: ["KeyD", "ArrowRight", "KeyL"],
+  stop: ["KeyS", "ArrowDown", "KeyJ"],
+  hurry: ["ShiftLeft", "ShiftRight"],
+} as const;
+const MOVE = new Set<string>(Object.values(KEYS).flat());
 /** How far a tap's ray looks for the ground, meters. */
 const REACH = 900;
 /** How much of each understory component's outline at the ground stops a walker: all of a rock, and a bush's heart, so the walk brushes its outer leaves. */
@@ -1247,13 +1255,14 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   /** Where a tap or click is walking the walker, if anywhere. */
   let goal: Walk | null = null;
   const keys = new Set<string>();
+  const held = (group: readonly string[]): boolean => group.some((k) => keys.has(k));
   window.addEventListener("keydown", (e) => {
     if (!active || e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) return;
     if (MOVE.has(e.code)) {
       keys.add(e.code);
       e.preventDefault();
       // The keys take over from a tap's walk and a turn; Shift alone moves nothing, so it leaves them be.
-      if (e.code !== "ShiftLeft" && e.code !== "ShiftRight") {
+      if (!(KEYS.hurry as readonly string[]).includes(e.code)) {
         endWalk();
         turn = null;
       }
@@ -1459,7 +1468,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   /** How far a tap's walk has the person still to turn to face its way, radians, the short way round; 0 with no walk. */
   let wayOff = 0;
   /**
-   * A person walks only where they face, never backwards or sideways: W or
+   * A person walks only where they face, never backwards or sideways: W, k or
    * the up arrow walks ahead, and a tap's walk turns the person toward the
    * way and walks only as fast as they face it, so they turn first where the
    * way lies behind them.
@@ -1467,7 +1476,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   function intent(at: Stride): Intent {
     wayOff = 0;
     const ahead = { dx: -Math.sin(walker.yaw), dz: -Math.cos(walker.yaw) };
-    if (keys.has("KeyW") || keys.has("ArrowUp")) return { ...ahead, speed: WALK_TO.pace * (keys.has("ShiftLeft") || keys.has("ShiftRight") ? GAIT.hurry : 1) };
+    if (held(KEYS.ahead)) return { ...ahead, speed: WALK_TO.pace * (held(KEYS.hurry) ? GAIT.hurry : 1) };
     if (goal === null) return STAND;
     const heading = wayAhead(goal, at);
     goal = heading.walk;
@@ -1485,8 +1494,8 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     const fromZ = walker.z;
     // A hook may have moved the walker: the body stands where the walker is.
     if (body === null || body.x !== walker.x || body.z !== walker.z) body = { ...(body ?? standAt(terrain, decks, walker.x, walker.z)), x: walker.x, z: walker.z };
-    // The arrow keys, or A and D, turn the person, easing into a turn and out of it.
-    const turning = (keys.has("ArrowLeft") || keys.has("KeyA") ? 1 : 0) - (keys.has("ArrowRight") || keys.has("KeyD") ? 1 : 0);
+    // The arrow keys, A and D, or h and l turn the person, easing into a turn and out of it.
+    const turning = (held(KEYS.left) ? 1 : 0) - (held(KEYS.right) ? 1 : 0);
     yawRate += (turning * GAIT.turn - yawRate) * (1 - Math.exp((-dt * 3) / GAIT.turnEase));
     if (Math.abs(yawRate) < 1e-4 && turning === 0) yawRate = 0;
     walker.yaw += yawRate * dt;
