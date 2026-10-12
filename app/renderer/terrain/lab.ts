@@ -682,7 +682,11 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       const kept = (await store?.get(key).catch(() => undefined)) as FarFormData | undefined;
       const stored = kept === undefined ? null : farFormFrom(kept);
       if (stored !== null) {
+        // Its layers go to the GPU now, a form a frame: drawn first all at once, a set's uploads held one frame, in
+        // the shadow pass, for a tenth of a second or more just after the world appeared.
+        for (const layer of stored.atlas.layers) renderer.initTexture(layer);
         forms.push(stored);
+        await new Promise((r) => requestAnimationFrame(r));
         continue;
       }
       const bake = startFarBake(renderer, plant, px);
