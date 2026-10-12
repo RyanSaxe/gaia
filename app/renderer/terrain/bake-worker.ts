@@ -45,6 +45,20 @@ interface WorkerScope {
 const scope = globalThis as unknown as WorkerScope;
 // The same library the terrain lab bakes with.
 const lib = new Library([...RELIEF_PRIMITIVES, ...BIOME_PRIMITIVES]);
+/**
+ * The world this thread last composed or finished, and its spec as text. Each
+ * job brings its own copy of the world, and the land caches what it reads
+ * quickly by spec (`regionField`, which walks every region's sites over the
+ * land): a copy found equal to the last is swapped for it, so a world's bands
+ * build that once on each thread, not once a band.
+ */
+let lastWorld: { readonly json: string; readonly world: WorldSpec } | null = null;
+const keptWorld = (world: WorldSpec): WorldSpec => {
+  const json = JSON.stringify(world);
+  if (lastWorld?.json === json) return lastWorld.world;
+  lastWorld = { json, world };
+  return world;
+};
 /** The land source of the world the page shows, by its number: only the newest is kept. */
 let source: { readonly world: number; readonly source: LandSource } | null = null;
 
@@ -69,15 +83,19 @@ scope.onmessage = (e) => {
       reply = { id: req.id, kind: "owned", k0: req.k0, ...rows };
       moved = [rows.owners.buffer, rows.shares.buffer];
     } else if (req.kind === "compose") {
-      const rows = composeRows(req.world, landformsOf(req.world, lib), req.z0, req.z1);
+      const world = keptWorld(req.world);
+      const rows = composeRows(world, landformsOf(world, lib), req.z0, req.z1);
       reply = { id: req.id, kind: "composed", rows };
       moved = [rows.raw.buffer, rows.region.buffer, rows.coverRegions.buffer, rows.coverShares.buffer];
     } else {
-      const t = finishTerrain(req.world, landformsOf(req.world, lib), req.parts);
+      const world = keptWorld(req.world);
+      const t0 = performance.now();
+      const t = finishTerrain(world, landformsOf(world, lib), req.parts);
+      const finished = Math.round(performance.now() - t0);
       const stood = standWorld(t, req.stand, req.tiles);
       // The wild base reads the stood land all around its rim, which only the whole world holds; the page cannot measure it.
       const base = wildBase(t);
-      reply = { id: req.id, kind: "finished", land: { plan: planOf(t), edits: stood.edits, ways: stood.network.ways, scatter: stood.scatter }, report: t.report, wildBase: base, stand: stood };
+      reply = { id: req.id, kind: "finished", land: { plan: planOf(t), edits: stood.edits, ways: stood.network.ways, scatter: stood.scatter }, report: t.report, wildBase: base, stand: { ...stood, took: { finish: finished, ...stood.took } } };
       moved = [stood.wilds.positions.buffer, stood.wilds.indices.buffer];
     }
   } catch (error) {
