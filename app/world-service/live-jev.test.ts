@@ -154,6 +154,16 @@ describe("judging a codebase with Jev", () => {
     expect(asking.at(-1)).toMatchObject({ total: first.sent.length, answered: first.sent.length, asking: [] });
     // While a question is out, its area is named as being worked on, for the wait to show.
     expect(asking.some((o) => o.asking.length > 0)).toBe(true);
+    // After the understanding pass, the wait is told each file whose things Jev chose what they stand as, and each
+    // file and area whose building, landmark, land or sky it composed, each once, so its pencil keeps moving.
+    const after = first.shown.map((o) => o.stage).lastIndexOf("understood");
+    const standing = first.shown.flatMap((o, i) => (o.stage === "standing" ? [{ i, o }] : []));
+    expect(standing.length).toBeGreaterThan(0);
+    expect(standing.every(({ i }) => i > after)).toBe(true);
+    const chosen = standing.flatMap(({ o }) => o.chosen.files);
+    expect([...chosen].sort()).toEqual(first.document.world.patches.map((p) => p.path).sort());
+    expect(new Set(chosen).size).toBe(chosen.length);
+    expect(standing.flatMap(({ o }) => o.composed.areas)).toContain("");
 
     // Reopening on a new engine asks nothing it has answered, and never asks the person again.
     const second = await open(root, data, true);

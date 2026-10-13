@@ -126,6 +126,23 @@ export interface OpenWorldOptions {
   readonly standIn?: boolean;
 }
 
+/**
+ * What a request after the looks settles, from what its state names, for the wait's pencil: what a file's or an
+ * entity's things stand as, or the composing of a file's or a definition's building or landmark (by its file), or of
+ * an entity's, a land's or the sky's (by its area, "" for the sky). A trail's composing names nothing.
+ */
+function settledByState(request: { readonly state?: unknown; readonly questions: Readonly<Record<string, unknown>> }): { readonly by: "chosen" | "composed"; readonly file?: string; readonly area?: string } | null {
+  const s = (request.state ?? {}) as Record<string, { path?: string; file?: string } | undefined>;
+  const own = (path: string | undefined): string => (path === undefined || path.startsWith("(") ? "" : path);
+  const by = Object.keys(request.questions).some((id) => /^[a-z]+\.(use|present)$/.test(id)) || (s as Record<string, unknown>).decided !== undefined ? "composed" : "chosen";
+  if (s.file?.path !== undefined) return { by, file: s.file.path };
+  if (s.definition?.file !== undefined) return { by, file: s.definition.file };
+  if (s.entity !== undefined) return { by, area: own(s.entity.path) };
+  if (s.directory !== undefined) return { by, area: own(s.directory.path) };
+  if (s.repository !== undefined) return { by, area: "" };
+  return null;
+}
+
 /** The area a request after the looks is about, from what its state names: a file's or a definition's folder, an entity's or a directory's own, a trail's first end; the root for the sky. */
 function areaOfState(state: unknown): string {
   const s = (state ?? {}) as Record<string, { path?: string; file?: string; from?: { path?: string } } | undefined>;
@@ -268,6 +285,23 @@ export async function openWorld({ engine, root, consent, progress, standIn = fal
     : keptJev(ask ? engineJev(engine) : null, { stored, keep, ...(unasked === undefined ? {} : { unasked }) });
   // A request counts as settled once its answer, whoever gave it, is in hand: an area's answer names its land.
   const counted = new Set<string>();
+  // What the standing pass and composing have settled, each named once, sent together a moment after it comes.
+  const penciled = new Set<string>();
+  let due: { chosen: { files: string[]; areas: string[] }; composed: { files: string[]; areas: string[] } } | null = null;
+  const pencil = (settled: ReturnType<typeof settledByState>): void => {
+    if (settled === null) return;
+    const [list, path] = settled.file !== undefined ? (["files", settled.file] as const) : (["areas", settled.area ?? ""] as const);
+    if (penciled.has(`${settled.by}:${list}:${path}`)) return;
+    penciled.add(`${settled.by}:${list}:${path}`);
+    if (due === null) {
+      due = { chosen: { files: [], areas: [] }, composed: { files: [], areas: [] } };
+      setTimeout(() => {
+        if (due !== null) progress({ stage: "standing", ...due });
+        due = null;
+      }, 0);
+    }
+    due[settled.by][list].push(path);
+  };
   const jev: JevClient = {
     async ask(request) {
       const key = requestKey(request);
@@ -291,12 +325,16 @@ export async function openWorld({ engine, root, consent, progress, standIn = fal
           answered++;
           asking();
         }
-      } else if (p === undefined && ask && !stored.has(key) && !counted.has(key)) {
-        // What things stand as and their composing are asked after the looks: each answer still moves the count on.
+      } else if (p === undefined && !counted.has(key)) {
+        // What things stand as and their composing are asked after the looks: each answer moves the count on, and the
+        // pencil goes over the code it settled, kept or asked, so the wait draws something until the world stands.
         counted.add(key);
-        answered++;
-        total = Math.max(total, answered);
-        asking();
+        if (ask && !stored.has(key)) {
+          answered++;
+          total = Math.max(total, answered);
+          asking();
+        }
+        pencil(settledByState(request));
       }
       return response;
     },

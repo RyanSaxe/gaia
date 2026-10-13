@@ -605,7 +605,10 @@ direction and weight for each stage: an area's ground while its looks are
 asked, and across again once the folder pass reaches it, the shallowest
 areas first; a file's own ground (the cells its health weighs most in)
 once Jev has read its links, across once Jev has read it for its quality,
-and once more when Jev reads closer round it. The pencil is on the paper
+and once more when Jev reads closer round it. After the pass it goes over a
+file or an area once more when Jev has chosen what its things stand as, and
+again once the building, landmark, land or sky Jev raised there is composed,
+so the sheet keeps moving until the world stands. The pencil is on the paper
 itself and runs to the paper's edge as the wash does, never short of it at
 a rounded rim, and each wash takes it away in just the measure that it
 paints, so the finished map holds none of it.
