@@ -438,9 +438,10 @@ void main() {
 /**
  * The pass to the screen. Everything between `uFocus` and `uFocusFar` is
  * sharp, so the whole sheet reads, and the blur grows outside that band, as
- * through a camera focused on the sheet. The table fades into the wait's
- * paper beneath the page as `uFade` rises, and a chosen card, drawn on its
- * own and in focus, lies over both. The canvas is premultiplied.
+ * through a camera focused on the sheet. A chosen card, drawn on its own and
+ * in focus, lies over the table as much as `uLifting` says: whole while it
+ * rises, then giving way to the wait's sheet laid over it. The lifted card's
+ * layer is premultiplied, and the table under it is opaque.
  */
 export const POST_VERTEX = /* glsl */ `
 void main() { gl_Position = vec4(position.xy, 0.0, 1.0); }
@@ -457,7 +458,6 @@ uniform float uFocus;
 uniform float uFocusFar;
 uniform float uAperture;
 uniform float uMaxBlur;
-uniform float uFade;
 uniform float uVignette;
 uniform float uLifting;
 float linear(float z) { float ndc = z * 2.0 - 1.0; return 2.0 * uNear * uFar / (uFar + uNear - ndc * (uFar - uNear)); }
@@ -483,8 +483,7 @@ void main() {
   vec3 color = acc / sum;
   vec2 q = uv - 0.5;
   color *= 1.0 - uVignette * smoothstep(0.25, 0.85, length(q * vec2(1.0, 1.15)));
-  vec4 table = vec4(color, 1.0) * (1.0 - uFade);
-  vec4 lift = uLifting > 0.5 ? texture2D(tLift, uv) : vec4(0.0);
-  gl_FragColor = lift + table * (1.0 - lift.a);
+  vec4 lift = uLifting > 0.0 ? texture2D(tLift, uv) * uLifting : vec4(0.0);
+  gl_FragColor = lift + vec4(color, 1.0) * (1.0 - lift.a);
 }
 `;

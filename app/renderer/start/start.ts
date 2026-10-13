@@ -12,7 +12,10 @@
 //   name the worlds walked before, one pointing to somewhere on this
 //   computer, and one blank arm to write an address on.
 // The start lies over the wait, inside its veil, so it reads the same
-// `--night` and, once a place is chosen, dissolves into the wait's paper.
+// `--night`. Once a place is chosen, the table stays behind the wait, its
+// card risen into the wait's sheet, until the world shows; a world opened
+// with no start rises from the same table. The signpost dissolves into the
+// wait's paper.
 
 import type { StartChoice, StartOffer } from "../../world-service/protocol.ts";
 import { localHour } from "../clock.ts";
@@ -35,7 +38,7 @@ export function startStyle(): StartStyle {
 
 /** The wait with the start, which the page shows when no world is named. */
 export interface WaitWithStart extends Wait {
-  /** Offers the start in the wait's veil; resolves with the place chosen. The next `opening` takes it away. */
+  /** Offers the start in the wait's veil; resolves with the place chosen. The next `opening` sends it behind the wait. */
   choose(offer: StartOffer): Promise<StartChoice>;
   /** The hour the world shows, each frame: the start is lit by it. */
   hour(h: number): void;
@@ -43,20 +46,37 @@ export interface WaitWithStart extends Wait {
 
 /** The wait, with the start laid over it in its veil when no world is named. */
 export function withStart(wait: Wait, veil: HTMLElement, style: StartStyle = startStyle()): WaitWithStart {
+  /** The start, from when it is offered (or a world opens with no start, on the table) until the world shows. */
   let page: StartPage | null = null;
+  /** Whether the place is on its way, so the page takes no more choices. */
+  let left = false;
   // Until the first frame says otherwise, the hour the clock shows: the person's own, or `?hour=`.
   const asked = Number(new URLSearchParams(location.search).get("hour") ?? Number.NaN);
   let hour = Number.isFinite(asked) ? asked : localHour(new Date());
+  const table = (): StartPage => createTable(veil, { hour, sheet: wait.sheet, chosen: wait.chosen });
   return {
     ...wait,
     opening(o) {
-      page?.leave();
-      page = null;
+      // A world opened with no start, as on a reload, rises from the same table a chosen one does.
+      if (page === null && style === "table" && o.stage === "reading") page = table();
+      if (!left) page?.leave();
+      left = true;
       wait.opening(o);
     },
     choose(offer) {
-      page ??= style === "table" ? createTable(veil, { hour, sheet: wait.sheet, chosen: wait.chosen }) : createSignpost(veil);
+      // Offered again after a place was on its way, the start begins afresh.
+      if (left) {
+        page?.close();
+        page = null;
+        left = false;
+      }
+      page ??= style === "table" ? table() : createSignpost(veil);
       return page.offer(offer);
+    },
+    async lift() {
+      await wait.lift();
+      page?.close();
+      page = null;
     },
     hour(h) {
       if (h === hour) return;

@@ -57,16 +57,20 @@ let early: { veil: HTMLElement; wait: Wait } | null = null;
  * Lays the wait over `host` before anything else of the world's page is
  * built, so the first frame a person sees is the wait's sheet, not an empty
  * page while the world's page builds behind it, already `night` dark and in
- * the shape its land will have (`aspect`, width over depth). The world takes
- * it when it makes its own (`takeWait`).
+ * the shape its land will have (`aspect`, width over depth). With
+ * `underTable`, the start's map table is coming (`start.css`): the sheet
+ * stays unseen beneath it from the first frame, and only the paper shows
+ * until the table does. The world takes it when it makes its own
+ * (`takeWait`).
  */
-export function startWaitEarly(host: HTMLElement, night: number, aspect: number): void {
+export function startWaitEarly(host: HTMLElement, night: number, aspect: number, underTable = false): void {
   const veil = document.createElement("div");
   veil.className = "veil";
   veil.dataset.ref = "veil";
   veil.setAttribute("aria-label", "The world is being made");
   // As dark as the world's first frame will make it, so the paper does not darken once that frame comes.
   veil.style.setProperty("--night", night.toFixed(2));
+  if (underTable) veil.dataset.table = "front";
   host.append(veil);
   early = { veil, wait: createWait(veil, aspect) };
 }

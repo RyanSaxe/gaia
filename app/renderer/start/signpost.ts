@@ -192,5 +192,8 @@ export function createSignpost(veil: HTMLElement): StartPage {
       root.classList.add("leaving");
       window.setTimeout(() => root.remove(), 1400);
     },
+    close() {
+      root.remove();
+    },
   };
 }

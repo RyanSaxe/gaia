@@ -1,5 +1,6 @@
-/* The start (app/renderer/start/): laid over the wait inside its veil, so it reads the same --night and dissolves into
-   the wait's paper once a place is chosen. No boxes: lettering on paper and paint on wood, in the map's ink and serif. */
+/* The start (app/renderer/start/): laid over the wait inside its veil, so it reads the same --night. Once a place is
+   chosen the table stays behind the wait and the signpost dissolves into the wait's paper. No boxes: lettering on paper
+   and paint on wood, in the map's ink and serif. */
 .start {
   --ink: #4a3c2c; --ink-soft: #7a6c56; --vermilion: #b8452c; --moss: #5d7a45;
   position: absolute; inset: 0; z-index: 4; overflow: hidden;
@@ -12,11 +13,14 @@
 :where(.start) input { font: inherit; color: inherit; background: none; border: 0; outline: none; padding: 0; }
 
 /* ---------- the traveller's map table, in 3D (table.ts) ---------- */
-/* The canvas fills the page; over it lie only clear hit areas for the cards, the line and the folder's words. Once a
-   card is chosen, the table fades into the wait's paper in the canvas itself and the card, risen into the wait's
-   sheet, dissolves into it here. */
+/* The canvas fills the page; over it lie only clear hit areas for the cards, the line and the folder's words. While the
+   table is in front, the wait's sheet lies unseen beneath it. Once the chosen card has risen to the sheet's place, the
+   table goes behind the wait, held still and out of focus, and the sheet comes in over the card (its own 0.5 s opacity
+   transition, table.ts SHEET_IN_MS), until the sheet folds into the world and the table goes with the veil. */
 .table-view { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
-.start-table.leaving { transition: opacity 0.9s cubic-bezier(0.3, 0, 0.2, 1); }
+.veil[data-table="front"] .wait-sheet { opacity: 0; }
+.veil[data-table="behind"] .start-table { z-index: 0; }
+.veil[data-table="behind"] .wait-sheet { z-index: 1; }
 .table-hits { position: absolute; inset: 0; }
 .table-card, .table-line, .table-folder { position: absolute; left: 0; top: 0; margin: 0; opacity: 0; }
 .start-table.choosing .table-hits { pointer-events: none; }
