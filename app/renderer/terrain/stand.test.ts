@@ -76,7 +76,7 @@ describe("standing a world's things on a bake", () => {
         { x: 20, z: -70, rule: "trees", variant: 1, radius: 1, scale: 0.7, vitality: 0.4 },
       ],
       regions: [],
-      trails: [{ from: "packages/a", to: "packages/b", want: 0.9, style: 0 }, { from: "packages/a", to: "packages/c", want: 0.8, style: 1 }],
+      trails: [{ from: "packages/a", to: "packages/b", want: 0.9, style: styles[0]! }, { from: "packages/a", to: "packages/c", want: 0.8, style: styles[1]! }],
     };
     const stood = standWorld(t, { ...request, code });
     stood.sites.forEach((site, i) => {

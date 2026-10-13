@@ -172,29 +172,40 @@ and a person can walk up to it to read its card: its kind, doc comment,
 where it is declared and its size.
 
 **The meaning.** The engine gives structure and sizes; Jev gives meaning.
-Jev judges every choice a reasonable person could make differently: the
-repository's art direction, each region's land, whether that land holds
-water and why (a brook where the code flows along chains of its own imports,
+Jev judges every choice a reasonable person could make differently: whether
+each region's land holds water and why (a brook where the code flows along chains of its own imports,
 a still pond where much of the code leans on it, none where it stands on its
 own: the option's words are the reason, stored with the choice), what that
 land's ground is like (its character: its undergrowth, how its open ground
 lies and how large its trees grow, again with its reason), what each
 definition stands as (a tree, a stone, a bush or flowers, each asked on its
 own), whether each entity is a building or a landmark, and how much it would
-walk each dependency. Jev never names a building or landmark preset: once the
-understanding pass has judged the code, `composeWorld` composes each one part
-by part through the planner (`composeThings` in
-`packages/world/src/compose.ts`), its structure first and then each stage's
-details, one request a wave, each part asked in its own instruction from its
-kind's slot (`Slot.ask`). Each composing request carries what the new engine
-established about the entity (`composingState`): its form, exports and
-dependencies as `factsOf` reads them from the graph, its importance and
-quality concepts from the understanding pass, and its files, lines,
-languages, folders, history and most important definitions from the graph. The blueprint it makes is the thing's
-(`CodeThing.blueprint`), and the renderer realizes each thing from its own;
-the world's composing vocabulary is `Looks.compose` (`COMPOSING` in
-`app/renderer/terrain/looks.ts`). A world written by hand, the proving ground,
-names its buildings and landmarks by preset instead (`presetBlueprint`). `planWorldRequests` builds one request
+walk each dependency. Jev never names a preset: once the understanding pass
+has judged the code, `composeWorld` composes the world part by part through
+the planner (`composeThings` in `packages/world/src/compose.ts`): its sky
+(the world kind's light, sky, season and wind), each region's land (the
+biome kind's relief, ground cover, air, accents and natives), each entity's
+building or landmark, and each trail Jev would walk (the link kind's route:
+its width, wear, edging, winding and crossing). Each is composed its
+structure first and then each stage's details, one request a wave, each part
+asked in its own instruction from its kind's slot (`Slot.ask`). Each
+composing request carries what the new engine established about its part of
+the code: the repository for the sky (`repositoryState`), the directory and
+the water Jev judged its land holds for a land (`areaState`), the entity's
+form, exports and dependencies as `factsOf` reads them from the graph for
+a building or landmark (`composingState`), and for a trail the two entities
+and how many of the first's files import the second's (`trailState`); each
+with its importance and quality concepts from the understanding pass and its
+files, lines, languages, folders, history and most important definitions
+from the graph. The blueprints it makes are the world's (`Judgments.sky`,
+`Judgments.lands`, `CodeThing.blueprint`, `CodeTrail.route`), and the renderer
+realizes each from its own: the sky with `realizeSky`, each region's land
+with its water (`withWater`), each thing, and each trail's route, which the
+stand walks as it was composed (`StandCode.trails`). The world's composing
+vocabulary is `Looks.compose` (`COMPOSING` in
+`app/renderer/terrain/looks.ts`). A world written by hand, the proving
+ground, names its sky, lands, things and trails by their hand-filled looks
+instead (`presetBlueprint`). `planWorldRequests` builds one request
 per thing, from facts and doc comments only, with options shuffled by the
 thing's path, in the shape a design chooses ("What a request carries" under
 Jev). Given Engine's graph it asks about the definitions the layout will
@@ -251,11 +262,10 @@ slice read (stage `understood`: the files and areas whose requests in one
 of the pass's passes are all answered), which the wait draws as the
 pencil going over that code. Every file is named once, before the
 document, whether or not Jev is asked. With every answer it also names the areas
-whose judgments have all settled, each with the land judged for its ground
-(stage `asking`, `settled`, area path to land name: an area settles once
-every request about its files, its entity and itself has, and the one that
-judges its land, its own or its region's), and the areas with a question to
-Jev in flight (`asking`). The wait (`app/renderer/wait/`) paints the field
+whose judgments have all settled (stage `asking`, `settled`, the areas' paths:
+an area settles once every request about its files, its entity and itself
+has, and its region's own; its land is composed later, once the code is
+understood), and the areas with a question to Jev in flight (`asking`). The wait (`app/renderer/wait/`) paints the field
 map from these: each file's health as it settles (`settling.ts` works out
 how much of the health at each of the land's cells is settled, and paints a
 cell only once nearly all of it is), and each area's name once it settles,

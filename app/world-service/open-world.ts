@@ -175,7 +175,7 @@ export async function openWorld({ engine, root, consent, progress }: OpenWorldOp
     else if (!status.key) why = "no OpenRouter key in the Keychain (gaia-openrouter)";
     else {
       const judging = missing.length > 0 ? await engine.call("jev.estimate", { requests: missing.map((p) => p.request) }) : undefined;
-      concurrency = judging?.concurrency ?? understanding?.estimate.concurrency ?? 1;
+      concurrency = judging?.concurrency ?? understanding?.estimate.concurrency ?? (await engine.call("jev.estimate", { requests: [] })).concurrency;
       const estimate = {
         endpoint: judging?.endpoint ?? understanding?.estimate.endpoint ?? "",
         requests: (judging?.requests ?? 0) + (understanding?.estimate.requests ?? 0),
@@ -238,15 +238,9 @@ export async function openWorld({ engine, root, consent, progress }: OpenWorldOp
     for (let p = area; p !== ""; p = p.includes("/") ? p.slice(0, p.lastIndexOf("/")) : "") if (regions.has(p)) return p;
     return "";
   };
-  const lands = new Map<string, string>();
-  const settledAreas = (): Record<string, string> => {
-    const out: Record<string, string> = {};
-    for (const [area, n] of unsettled) {
-      const judged = lands.get(regionOf(area));
-      if (n === 0 && judged !== undefined) out[area] = judged;
-    }
-    return out;
-  };
+  /** The regions whose own request is answered: an area is settled once everything on its land is, its region's own request included. */
+  const regionsAnswered = new Set<string>();
+  const settledAreas = (): string[] => [...unsettled].filter(([area, n]) => n === 0 && regionsAnswered.has(regionOf(area))).map(([area]) => area);
   /** Questions in flight, by the area they are about. */
   const inFlight = new Map<string, number>();
   const asking = (): void =>
@@ -279,8 +273,7 @@ export async function openWorld({ engine, root, consent, progress }: OpenWorldOp
         counted.add(key);
         const area = areaOfRequest(p);
         unsettled.set(area, (unsettled.get(area) ?? 1) - 1);
-        const judged = response.answers.land;
-        if (p.about === "area" && judged?.type === "choice") lands.set(p.target, judged.choice);
+        if (p.about === "area") regionsAnswered.add(p.target);
         if (ask && !stored.has(key)) {
           answered++;
           asking();
@@ -325,7 +318,7 @@ export async function openWorld({ engine, root, consent, progress }: OpenWorldOp
   }
   // Every building and landmark is composed part by part once the code is understood, each request carrying what the
   // pass found about its entity, so it is asked once and stays while the code does.
-  const composed = await composeWorld(facts, LOOKS, jev, judgments, { graph, concurrency: understanding.estimate.concurrency });
+  const composed = await composeWorld(facts, LOOKS, jev, judgments, { graph, concurrency });
   // Its answers are kept before the world is handed over, as the looks' were.
   await new Promise((resolve) => setTimeout(resolve, 0));
   await Promise.all(writes);

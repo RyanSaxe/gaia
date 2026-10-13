@@ -1,11 +1,14 @@
-// The looks a codebase's world chooses among: each option's words, which Jev
-// reads, and the facts it suits, which only the stand-in judge reads. Keys
-// are the lab's hand-filled presets, so a choice names a blueprint. Lands are
-// biome blueprints of their own: a landform with a ground cover.
+// What a codebase's world is made from. Jev composes its sky, its lands,
+// its buildings, landmarks and trails part by part (`COMPOSING`), and
+// chooses among the looks here for what is still a choice: each definition's
+// form, whether a land holds water, and what an area's ground is like. Each
+// option's words are what Jev reads, and the facts it suits only the
+// stand-in judge reads. The hand-filled lands and trails are for worlds
+// written by hand, such as the proving ground, never offered to Jev.
 
-import { landmark, structure } from "@gaia/kinds";
+import { biome, landmark, link, structure, world } from "@gaia/kinds";
 import { PRIMITIVES } from "@gaia/primitives";
-import { LANDMARK_PRESETS, STRUCTURE_PRESETS } from "@gaia/realize";
+import { LANDMARK_PRESETS, STRUCTURE_PRESETS, TRAIL_PRESETS, WORLD_PRESETS } from "@gaia/realize";
 import { type Blueprint, type FilledSlot, Library, type PrimitiveId, blueprintOf } from "@gaia/schema";
 import type { Composing, Look, Looks } from "@gaia/world";
 
@@ -85,15 +88,6 @@ export const TRAILS: Readonly<Record<string, Look>> = {
   "Faint wandering track": look("A faint, half grassed-over track that meanders: only one or a few of its files import the other.", "leaf", "module", "small"),
 };
 
-export const WORLDS: Readonly<Record<string, Look>> = {
-  "Meadow morning": look("Clear spring morning light over green meadows, a light breeze.", "typescript", "busy", "young"),
-  "Amber steppe": look("Warm amber light over dry steppe, late summer.", "old", "large"),
-  "Frost hollow": look("Cold winter light, frost on the ground.", "quiet", "old"),
-  "Firefly dusk": look("A long golden dusk with fireflies.", "rust", "quiet"),
-  "Monsoon terraces": look("Soft wet light over green terraces in the rains.", "python", "busy"),
-  "Heather moor": look("Grey-violet light over heather moors and wind.", "small", "quiet"),
-};
-
 /**
  * What a file's finer entity stands as on its patch: a tree, a stone, a bush
  * or a drift of flowers. A tree is one of the lab's trees (`rule` "trees" and
@@ -169,23 +163,25 @@ export const CHARACTERS: Readonly<Record<string, Character>> = {
   },
 };
 
-/** A hand-filled building's or landmark's blueprint, by the name of its look: for a world written by hand, such as the proving ground. */
-export function presetBlueprint(as: "building" | "landmark", look: string): Blueprint {
-  const preset = (as === "building" ? STRUCTURE_PRESETS : LANDMARK_PRESETS).find((p) => p.name === look);
-  if (preset === undefined) throw new Error(`There is no ${as} called ${look}.`);
-  return preset.blueprint;
+/** A hand-filled blueprint, by the name of its look: for a world written by hand, such as the proving ground. */
+export function presetBlueprint(as: "building" | "landmark" | "land" | "trail" | "world", look: string): Blueprint {
+  const found =
+    as === "land"
+      ? LANDS[look]?.biome
+      : as === "world"
+        ? WORLD_PRESETS.find((p) => p.name === look)?.world
+        : (as === "building" ? STRUCTURE_PRESETS : as === "landmark" ? LANDMARK_PRESETS : TRAIL_PRESETS).find((p) => p.name === look)?.blueprint;
+  if (found === undefined) throw new Error(`There is no ${as} called ${look}.`);
+  return found;
 }
 
-/** What Jev composes buildings and landmarks from, part by part: their kinds, and every primitive that could fill a part. */
-export const COMPOSING: Composing = { building: structure, landmark, lib: new Library(PRIMITIVES) };
+/** What Jev composes the world from, part by part: the sky, each land, building, landmark and trail's kind, and every primitive that could fill a part. */
+export const COMPOSING: Composing = { building: structure, landmark, world, biome, link, lib: new Library(PRIMITIVES) };
 
 export const LOOKS: Looks = {
   compose: COMPOSING,
-  world: WORLDS,
-  land: Object.fromEntries(Object.entries(LANDS).map(([k, l]) => [k, l.look])),
   building: BUILDINGS,
   landmark: LANDMARKS,
-  trail: TRAILS,
   form: Object.fromEntries(Object.entries(FORMS).map(([k, f]) => [k, f.look])),
   water: WATERS,
   character: Object.fromEntries(Object.entries(CHARACTERS).map(([k, c]) => [k, c.look])),

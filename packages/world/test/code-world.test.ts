@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { landmark, structure } from "@gaia/kinds";
+import { biome, landmark, link, structure, world as worldKind } from "@gaia/kinds";
 import { PRIMITIVES } from "@gaia/primitives";
 import { type CodeGraph, type CodeFacts, type DefNode, type EntityFacts, type FileFacts, type JevClient, type JevQuestion, type JevRequest, type JevResponse, Library } from "@gaia/schema";
 import { cellUnder, placeAt } from "@gaia/terrain";
@@ -56,12 +56,9 @@ function facts(grow = 1): CodeFacts {
 
 const set = (...keys: string[]) => Object.fromEntries(keys.map((k, i) => [k, { doc: `Option ${k}.`, suits: i === 0 ? ["docs", "config"] : ["source", "package"] }]));
 const LOOKS: Looks = {
-  compose: { building: structure, landmark, lib: new Library(PRIMITIVES) },
-  world: set("Dawn", "Dusk"),
-  land: set("Moor", "Valley", "Hills"),
+  compose: { building: structure, landmark, world: worldKind, biome, link, lib: new Library(PRIMITIVES) },
   building: set("Cottage", "Mill"),
   landmark: set("Tower", "Oak"),
-  trail: set("Path", "Track"),
   form: set("Stone", "Bush"),
   water: set("Dry", "Brook"),
   character: set("Meadow land", "Wood"),
@@ -71,7 +68,7 @@ const LOOKS: Looks = {
 const composed = async (m: CodeFacts, jev: JevClient) => composeWorld(m, LOOKS, jev, await judgeWorld(m, LOOKS, jev));
 
 describe("a world laid out from code", () => {
-  it("composes every building and landmark part by part, each part in its own words, never offering Jev a preset or the old model's signals", async () => {
+  it("composes the whole world part by part, its sky and every land, building, landmark and trail, each part in its own words, never offering Jev a preset or the old model's signals", async () => {
     const asked: JevRequest[] = [];
     const standIn = standInJev(LOOKS);
     const jev: JevClient = { ask: (r) => (asked.push(r), standIn.ask(r)) };
@@ -95,6 +92,21 @@ describe("a world laid out from code", () => {
       expect(t.blueprint.kind, path).toBe(k.id);
       expect(validate(t.blueprint, k, LOOKS.compose.lib), path).toEqual([]);
     }
+    // The sky, each region's land and each trail Jev would walk are composed the same way.
+    if (judged.sky === undefined) throw new Error("No sky was composed.");
+    expect(judged.sky.kind).toBe(worldKind.id);
+    expect(validate(judged.sky, worldKind, LOOKS.compose.lib)).toEqual([]);
+    expect(Object.keys(judged.lands).sort()).toEqual(Object.keys(judged.waters).sort());
+    for (const [path, land] of Object.entries(judged.lands)) expect(validate(land, biome, LOOKS.compose.lib), path).toEqual([]);
+    expect(judged.trails.length).toBeGreaterThan(0);
+    for (const t of judged.trails) {
+      if (t.route === undefined) throw new Error(`Nothing was composed for the trail ${t.from} to ${t.to}.`);
+      expect(validate(t.route, link, LOOKS.compose.lib), `${t.from}->${t.to}`).toEqual([]);
+    }
+    // Laid out, the world stands under its composed sky, and each region on its composed land.
+    const laid = layoutWorld(facts(), judged);
+    expect(laid.sky).toEqual(judged.sky);
+    for (const r of laid.regions) expect(r.biome, r.area).toEqual(judged.lands[r.area]);
   });
 
   it("asks Jev only about the code's structure, with options it can answer, and the stand-in answers every question from them", async () => {
@@ -269,7 +281,7 @@ describe("a world laid out from code", () => {
     // Every area with land of its own is judged for what its ground is like, and its region carries the choice.
     expect(Object.keys(judged.characters).sort()).toEqual(Object.keys(judged.waters).sort());
     for (const r of layoutWorld(facts(), judged).regions) expect(Object.keys(LOOKS.character)).toContain(r.character);
-    const world = layoutWorld(facts(), { ...judged, trails: [{ from: "packages/app", to: "packages/core", want: 0.9, look: "Path" }, { from: "", to: "packages/core", want: 0.6, look: "Track" }, { from: "", to: "packages/app", want: 0.3, look: "Path" }] });
+    const world = layoutWorld(facts(), { ...judged, trails: [{ from: "packages/app", to: "packages/core", want: 0.9 }, { from: "", to: "packages/core", want: 0.6 }, { from: "", to: "packages/app", want: 0.3 }] });
     expect(world.trails.map((t) => `${t.from}->${t.to}`)).toEqual(["packages/app->packages/core", "->packages/core"]);
     expect(world.trails.every((t) => t.spans)).toBe(true);
   });
@@ -305,10 +317,10 @@ describe("a world laid out from code", () => {
 
   it("keeps Jev's answers: a stored one is used without asking, and one outside the options is left to the stand-in", async () => {
     const planned = planWorldRequests(facts(), LOOKS);
-    const world = planned.find((p) => p.about === "world");
+    const area = planned.find((p) => p.about === "area");
     const file = planned.find((p) => p.about === "file");
     const standIn = standInJev(LOOKS);
-    const stored = await standIn.ask(world!.request);
+    const stored = await standIn.ask(area!.request);
     const asked: string[] = [];
     // A Jev that answers every choice with an option it was never offered.
     const wayward: JevClient = {
@@ -319,8 +331,8 @@ describe("a world laid out from code", () => {
     };
     const kept: JevResponse[] = [];
     const judges = new Map<string, Judge>();
-    const jev = keptJev(wayward, standIn, { stored: new Map([[requestKey(world!.request), stored]]), keep: (_, r) => kept.push(r), settled: (k, j) => judges.set(k, j) });
-    expect(await jev.ask(world!.request)).toEqual(stored);
+    const jev = keptJev(wayward, standIn, { stored: new Map([[requestKey(area!.request), stored]]), keep: (_, r) => kept.push(r), settled: (k, j) => judges.set(k, j) });
+    expect(await jev.ask(area!.request)).toEqual(stored);
     const form = (await jev.ask(file!.request)).answers["form#x"];
     expect(form?.type === "choice" && Object.keys(LOOKS.form)).toContain(form?.type === "choice" ? form.choice : "");
     expect(form).toEqual((await standIn.ask(file!.request)).answers["form#x"]);

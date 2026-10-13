@@ -1,18 +1,395 @@
 {
- "world": "Meadow morning",
+ "sky": {
+  "id": "bp-1a6a33d3",
+  "kind": "world",
+  "slots": {
+   "light": {
+    "use": "daylight@1",
+    "params": {
+     "path": "middling",
+     "warmth": "neutral",
+     "brush": "painterly",
+     "moon": "silver moon",
+     "stars": "many"
+    }
+   },
+   "sky": {
+    "use": "sky@1",
+    "params": {
+     "character": "powder blue",
+     "clouds": "fair-weather puffs",
+     "cover": "scattered"
+    }
+   },
+   "season": {
+    "use": "season@1",
+    "params": {
+     "season": "spring",
+     "strength": "clearly"
+    }
+   },
+   "wind": {
+    "use": "wind@1",
+    "params": {
+     "strength": "breezy"
+    }
+   }
+  }
+ },
  "lands": {
-  "": "Home lawn",
-  "crossings": "Brook valley",
-  "fords": "Meandering vale",
-  "hollow": "Mossy basin",
-  "pondside": "Pond meadow",
-  "hills": "Clover hills",
-  "terraces": "Silver terraces",
-  "moor": "Heather moor",
-  "dunes": "Golden dunes",
-  "downs": "Broad downs",
-  "mixed": "Clover hills",
-  "ruins": "Brook valley"
+  "": {
+   "id": "bp-016e4d6d",
+   "kind": "biome",
+   "slots": {
+    "relief": {
+     "use": "meadow@1",
+     "params": {
+      "undulation": "flat as a lawn",
+      "tilt": "slightly tilted",
+      "facing": "south"
+     }
+    },
+    "cover": {
+     "use": "ground-cover@1",
+     "params": {
+      "cover": "lush grass",
+      "length": "natural",
+      "wildflowers": "a scattering"
+     }
+    },
+    "natives": {
+     "use": "native-families@1",
+     "params": {
+      "families": []
+     }
+    }
+   }
+  },
+  "crossings": {
+   "id": "bp-167fddac",
+   "kind": "biome",
+   "slots": {
+    "relief": {
+     "use": "valley@1",
+     "params": {
+      "depth": "moderate",
+      "width": "open",
+      "run": "north-south",
+      "fall": "gentle",
+      "meander": "winding",
+      "stream": "brook"
+     }
+    },
+    "cover": {
+     "use": "ground-cover@1",
+     "params": {
+      "cover": "lush grass",
+      "length": "natural",
+      "wildflowers": "a scattering"
+     }
+    },
+    "natives": {
+     "use": "native-families@1",
+     "params": {
+      "families": []
+     }
+    }
+   }
+  },
+  "fords": {
+   "id": "bp-1cb6f019",
+   "kind": "biome",
+   "slots": {
+    "relief": {
+     "use": "valley@1",
+     "params": {
+      "depth": "shallow",
+      "width": "broad",
+      "run": "east-west",
+      "fall": "nearly level",
+      "meander": "strongly meandering",
+      "stream": "trickle"
+     }
+    },
+    "cover": {
+     "use": "ground-cover@1",
+     "params": {
+      "cover": "clover meadow",
+      "length": "natural",
+      "wildflowers": "a scattering"
+     }
+    },
+    "natives": {
+     "use": "native-families@1",
+     "params": {
+      "families": []
+     }
+    }
+   }
+  },
+  "hollow": {
+   "id": "bp-1cd05a9d",
+   "kind": "biome",
+   "slots": {
+    "relief": {
+     "use": "basin@1",
+     "params": {
+      "depth": "a bowl",
+      "size": "medium",
+      "rim": "a soft rim",
+      "pond": true
+     }
+    },
+    "cover": {
+     "use": "ground-cover@1",
+     "params": {
+      "cover": "moss",
+      "length": "natural",
+      "wildflowers": "a scattering"
+     }
+    },
+    "natives": {
+     "use": "native-families@1",
+     "params": {
+      "families": []
+     }
+    }
+   }
+  },
+  "pondside": {
+   "id": "bp-163d4f73",
+   "kind": "biome",
+   "slots": {
+    "relief": {
+     "use": "basin@1",
+     "params": {
+      "depth": "a shallow dip",
+      "size": "wide",
+      "rim": "melting into the land",
+      "pond": true
+     }
+    },
+    "cover": {
+     "use": "ground-cover@1",
+     "params": {
+      "cover": "lush grass",
+      "length": "natural",
+      "wildflowers": "a scattering"
+     }
+    },
+    "natives": {
+     "use": "native-families@1",
+     "params": {
+      "families": []
+     }
+    }
+   }
+  },
+  "hills": {
+   "id": "bp-11b5a69c",
+   "kind": "biome",
+   "slots": {
+    "relief": {
+     "use": "rolling-hills@1",
+     "params": {
+      "height": "rolling",
+      "breadth": "moderately spaced",
+      "roughness": "softly uneven",
+      "grain": "round"
+     }
+    },
+    "cover": {
+     "use": "ground-cover@1",
+     "params": {
+      "cover": "clover meadow",
+      "length": "natural",
+      "wildflowers": "a scattering"
+     }
+    },
+    "natives": {
+     "use": "native-families@1",
+     "params": {
+      "families": []
+     }
+    }
+   }
+  },
+  "terraces": {
+   "id": "bp-010d8c3d",
+   "kind": "biome",
+   "slots": {
+    "relief": {
+     "use": "terraces@1",
+     "params": {
+      "form": "terraced hill",
+      "rise": "waist-high",
+      "climb": "a hillside",
+      "facing": "south",
+      "edge": "soft and grassy"
+     }
+    },
+    "cover": {
+     "use": "ground-cover@1",
+     "params": {
+      "cover": "silver grass",
+      "length": "natural",
+      "wildflowers": "a scattering"
+     }
+    },
+    "natives": {
+     "use": "native-families@1",
+     "params": {
+      "families": []
+     }
+    }
+   }
+  },
+  "moor": {
+   "id": "bp-0a655f51",
+   "kind": "biome",
+   "slots": {
+    "relief": {
+     "use": "meadow@1",
+     "params": {
+      "undulation": "softly undulating",
+      "tilt": "slightly tilted",
+      "facing": "east"
+     }
+    },
+    "cover": {
+     "use": "ground-cover@1",
+     "params": {
+      "cover": "heather",
+      "length": "natural",
+      "wildflowers": "a scattering"
+     }
+    },
+    "natives": {
+     "use": "native-families@1",
+     "params": {
+      "families": []
+     }
+    }
+   }
+  },
+  "dunes": {
+   "id": "bp-16015f48",
+   "kind": "biome",
+   "slots": {
+    "relief": {
+     "use": "dunes@1",
+     "params": {
+      "height": "low dunes",
+      "spacing": "even",
+      "wind": "from the west",
+      "wander": "wavering"
+     }
+    },
+    "cover": {
+     "use": "ground-cover@1",
+     "params": {
+      "cover": "golden steppe",
+      "length": "natural",
+      "wildflowers": "a scattering"
+     }
+    },
+    "natives": {
+     "use": "native-families@1",
+     "params": {
+      "families": []
+     }
+    }
+   }
+  },
+  "downs": {
+   "id": "bp-0b27ee05",
+   "kind": "biome",
+   "slots": {
+    "relief": {
+     "use": "rolling-hills@1",
+     "params": {
+      "height": "gentle",
+      "breadth": "broad and sweeping",
+      "roughness": "smooth",
+      "grain": "diagonal"
+     }
+    },
+    "cover": {
+     "use": "ground-cover@1",
+     "params": {
+      "cover": "silver grass",
+      "length": "natural",
+      "wildflowers": "a scattering"
+     }
+    },
+    "natives": {
+     "use": "native-families@1",
+     "params": {
+      "families": []
+     }
+    }
+   }
+  },
+  "mixed": {
+   "id": "bp-11b5a69c",
+   "kind": "biome",
+   "slots": {
+    "relief": {
+     "use": "rolling-hills@1",
+     "params": {
+      "height": "rolling",
+      "breadth": "moderately spaced",
+      "roughness": "softly uneven",
+      "grain": "round"
+     }
+    },
+    "cover": {
+     "use": "ground-cover@1",
+     "params": {
+      "cover": "clover meadow",
+      "length": "natural",
+      "wildflowers": "a scattering"
+     }
+    },
+    "natives": {
+     "use": "native-families@1",
+     "params": {
+      "families": []
+     }
+    }
+   }
+  },
+  "ruins": {
+   "id": "bp-167fddac",
+   "kind": "biome",
+   "slots": {
+    "relief": {
+     "use": "valley@1",
+     "params": {
+      "depth": "moderate",
+      "width": "open",
+      "run": "north-south",
+      "fall": "gentle",
+      "meander": "winding",
+      "stream": "brook"
+     }
+    },
+    "cover": {
+     "use": "ground-cover@1",
+     "params": {
+      "cover": "lush grass",
+      "length": "natural",
+      "wildflowers": "a scattering"
+     }
+    },
+    "natives": {
+     "use": "native-families@1",
+     "params": {
+      "families": []
+     }
+    }
+   }
+  }
  },
  "waters": {
   "": "No water",
@@ -1666,187 +2043,652 @@
    "from": "crossings/west-bank",
    "to": "crossings/east-bank",
    "want": 0.92,
-   "look": "Worn footpath"
+   "route": {
+    "id": "bp-0da2bd76",
+    "kind": "link",
+    "slots": {
+     "route": {
+      "use": "trail@1",
+      "params": {
+       "width": "a path two could walk",
+       "wear": "well trodden",
+       "edging": "none",
+       "winding": "gently curving",
+       "crossing": "footbridge"
+      }
+     }
+    }
+   }
   },
   {
    "from": "crossings/mill",
    "to": "crossings/east-bank",
    "want": 0.8,
-   "look": "Stone-edged path"
+   "route": {
+    "id": "bp-1bbdbafe",
+    "kind": "link",
+    "slots": {
+     "route": {
+      "use": "trail@1",
+      "params": {
+       "width": "a path two could walk",
+       "wear": "bare, beaten earth",
+       "edging": "stones",
+       "winding": "gently curving",
+       "crossing": "stepping stones"
+      }
+     }
+    }
+   }
   },
   {
    "from": "crossings/west-bank",
    "to": "crossings/mill",
    "want": 0.7,
-   "look": "Faint wandering track"
+   "route": {
+    "id": "bp-1a276edd",
+    "kind": "link",
+    "slots": {
+     "route": {
+      "use": "trail@1",
+      "params": {
+       "width": "a narrow footpath",
+       "wear": "faint, half grassed over",
+       "edging": "none",
+       "winding": "meandering",
+       "crossing": "stepping stones"
+      }
+     }
+    }
+   }
   },
   {
    "from": "fords/jetty",
    "to": "fords/gravel",
    "want": 0.9,
-   "look": "Faint wandering track"
+   "route": {
+    "id": "bp-1a276edd",
+    "kind": "link",
+    "slots": {
+     "route": {
+      "use": "trail@1",
+      "params": {
+       "width": "a narrow footpath",
+       "wear": "faint, half grassed over",
+       "edging": "none",
+       "winding": "meandering",
+       "crossing": "stepping stones"
+      }
+     }
+    }
+   }
   },
   {
    "from": "ruins/cottage",
    "to": "ruins/mill",
    "want": 0.9,
-   "look": "Worn footpath"
+   "route": {
+    "id": "bp-0da2bd76",
+    "kind": "link",
+    "slots": {
+     "route": {
+      "use": "trail@1",
+      "params": {
+       "width": "a path two could walk",
+       "wear": "well trodden",
+       "edging": "none",
+       "winding": "gently curving",
+       "crossing": "footbridge"
+      }
+     }
+    }
+   }
   },
   {
    "from": "ruins/croft",
    "to": "ruins/keep",
    "want": 0.85,
-   "look": "Faint wandering track"
+   "route": {
+    "id": "bp-1a276edd",
+    "kind": "link",
+    "slots": {
+     "route": {
+      "use": "trail@1",
+      "params": {
+       "width": "a narrow footpath",
+       "wear": "faint, half grassed over",
+       "edging": "none",
+       "winding": "meandering",
+       "crossing": "stepping stones"
+      }
+     }
+    }
+   }
   },
   {
    "from": "ruins/house",
    "to": "ruins/lighthouse",
    "want": 0.8,
-   "look": "Stone-edged path"
+   "route": {
+    "id": "bp-1bbdbafe",
+    "kind": "link",
+    "slots": {
+     "route": {
+      "use": "trail@1",
+      "params": {
+       "width": "a path two could walk",
+       "wear": "bare, beaten earth",
+       "edging": "stones",
+       "winding": "gently curving",
+       "crossing": "stepping stones"
+      }
+     }
+    }
+   }
   },
   {
    "from": "ruins/oak",
    "to": "ruins",
    "want": 0.75,
-   "look": "Faint wandering track"
+   "route": {
+    "id": "bp-1a276edd",
+    "kind": "link",
+    "slots": {
+     "route": {
+      "use": "trail@1",
+      "params": {
+       "width": "a narrow footpath",
+       "wear": "faint, half grassed over",
+       "edging": "none",
+       "winding": "meandering",
+       "crossing": "stepping stones"
+      }
+     }
+    }
+   }
   },
   {
    "from": "ruins/keep",
    "to": "ruins/house",
    "want": 0.7,
-   "look": "Faint wandering track"
+   "route": {
+    "id": "bp-1a276edd",
+    "kind": "link",
+    "slots": {
+     "route": {
+      "use": "trail@1",
+      "params": {
+       "width": "a narrow footpath",
+       "wear": "faint, half grassed over",
+       "edging": "none",
+       "winding": "meandering",
+       "crossing": "stepping stones"
+      }
+     }
+    }
+   }
   },
   {
    "from": "",
    "to": "hollow",
    "want": 0.95,
-   "look": "Worn footpath"
+   "route": {
+    "id": "bp-0da2bd76",
+    "kind": "link",
+    "slots": {
+     "route": {
+      "use": "trail@1",
+      "params": {
+       "width": "a path two could walk",
+       "wear": "well trodden",
+       "edging": "none",
+       "winding": "gently curving",
+       "crossing": "footbridge"
+      }
+     }
+    }
+   }
   },
   {
    "from": "crossings/mill",
    "to": "hollow",
    "want": 0.9,
-   "look": "Worn footpath"
+   "route": {
+    "id": "bp-0da2bd76",
+    "kind": "link",
+    "slots": {
+     "route": {
+      "use": "trail@1",
+      "params": {
+       "width": "a path two could walk",
+       "wear": "well trodden",
+       "edging": "none",
+       "winding": "gently curving",
+       "crossing": "footbridge"
+      }
+     }
+    }
+   }
   },
   {
    "from": "downs",
    "to": "hollow",
    "want": 0.88,
-   "look": "Worn footpath"
+   "route": {
+    "id": "bp-0da2bd76",
+    "kind": "link",
+    "slots": {
+     "route": {
+      "use": "trail@1",
+      "params": {
+       "width": "a path two could walk",
+       "wear": "well trodden",
+       "edging": "none",
+       "winding": "gently curving",
+       "crossing": "footbridge"
+      }
+     }
+    }
+   }
   },
   {
    "from": "hills/oak",
    "to": "hollow",
    "want": 0.86,
-   "look": "Stone-edged path"
+   "route": {
+    "id": "bp-1bbdbafe",
+    "kind": "link",
+    "slots": {
+     "route": {
+      "use": "trail@1",
+      "params": {
+       "width": "a path two could walk",
+       "wear": "bare, beaten earth",
+       "edging": "stones",
+       "winding": "gently curving",
+       "crossing": "stepping stones"
+      }
+     }
+    }
+   }
   },
   {
    "from": "mixed",
    "to": "hollow",
    "want": 0.84,
-   "look": "Stone-edged path"
+   "route": {
+    "id": "bp-1bbdbafe",
+    "kind": "link",
+    "slots": {
+     "route": {
+      "use": "trail@1",
+      "params": {
+       "width": "a path two could walk",
+       "wear": "bare, beaten earth",
+       "edging": "stones",
+       "winding": "gently curving",
+       "crossing": "stepping stones"
+      }
+     }
+    }
+   }
   },
   {
    "from": "pondside",
    "to": "hollow",
    "want": 0.83,
-   "look": "Worn footpath"
+   "route": {
+    "id": "bp-0da2bd76",
+    "kind": "link",
+    "slots": {
+     "route": {
+      "use": "trail@1",
+      "params": {
+       "width": "a path two could walk",
+       "wear": "well trodden",
+       "edging": "none",
+       "winding": "gently curving",
+       "crossing": "footbridge"
+      }
+     }
+    }
+   }
   },
   {
    "from": "terraces/croft",
    "to": "hollow",
    "want": 0.8,
-   "look": "Faint wandering track"
+   "route": {
+    "id": "bp-1a276edd",
+    "kind": "link",
+    "slots": {
+     "route": {
+      "use": "trail@1",
+      "params": {
+       "width": "a narrow footpath",
+       "wear": "faint, half grassed over",
+       "edging": "none",
+       "winding": "meandering",
+       "crossing": "stepping stones"
+      }
+     }
+    }
+   }
   },
   {
    "from": "fords/gravel",
    "to": "hollow",
    "want": 0.78,
-   "look": "Stone-edged path"
+   "route": {
+    "id": "bp-1bbdbafe",
+    "kind": "link",
+    "slots": {
+     "route": {
+      "use": "trail@1",
+      "params": {
+       "width": "a path two could walk",
+       "wear": "bare, beaten earth",
+       "edging": "stones",
+       "winding": "gently curving",
+       "crossing": "stepping stones"
+      }
+     }
+    }
+   }
   },
   {
    "from": "ruins/mill",
    "to": "hollow",
    "want": 0.76,
-   "look": "Faint wandering track"
+   "route": {
+    "id": "bp-1a276edd",
+    "kind": "link",
+    "slots": {
+     "route": {
+      "use": "trail@1",
+      "params": {
+       "width": "a narrow footpath",
+       "wear": "faint, half grassed over",
+       "edging": "none",
+       "winding": "meandering",
+       "crossing": "stepping stones"
+      }
+     }
+    }
+   }
   },
   {
    "from": "pondside/records",
    "to": "pondside",
    "want": 0.7,
-   "look": "Faint wandering track"
+   "route": {
+    "id": "bp-1a276edd",
+    "kind": "link",
+    "slots": {
+     "route": {
+      "use": "trail@1",
+      "params": {
+       "width": "a narrow footpath",
+       "wear": "faint, half grassed over",
+       "edging": "none",
+       "winding": "meandering",
+       "crossing": "stepping stones"
+      }
+     }
+    }
+   }
   },
   {
    "from": "hills/kiln",
    "to": "hills/oak",
    "want": 0.7,
-   "look": "Faint wandering track"
+   "route": {
+    "id": "bp-1a276edd",
+    "kind": "link",
+    "slots": {
+     "route": {
+      "use": "trail@1",
+      "params": {
+       "width": "a narrow footpath",
+       "wear": "faint, half grassed over",
+       "edging": "none",
+       "winding": "meandering",
+       "crossing": "stepping stones"
+      }
+     }
+    }
+   }
   },
   {
    "from": "terraces/ring",
    "to": "terraces/croft",
    "want": 0.72,
-   "look": "Stone-edged path"
+   "route": {
+    "id": "bp-1bbdbafe",
+    "kind": "link",
+    "slots": {
+     "route": {
+      "use": "trail@1",
+      "params": {
+       "width": "a path two could walk",
+       "wear": "bare, beaten earth",
+       "edging": "stones",
+       "winding": "gently curving",
+       "crossing": "stepping stones"
+      }
+     }
+    }
+   }
   },
   {
    "from": "moor/archive",
    "to": "",
    "want": 0.75,
-   "look": "Stone-edged path"
+   "route": {
+    "id": "bp-1bbdbafe",
+    "kind": "link",
+    "slots": {
+     "route": {
+      "use": "trail@1",
+      "params": {
+       "width": "a path two could walk",
+       "wear": "bare, beaten earth",
+       "edging": "stones",
+       "winding": "gently curving",
+       "crossing": "stepping stones"
+      }
+     }
+    }
+   }
   },
   {
    "from": "moor/henge",
    "to": "moor/archive",
    "want": 0.7,
-   "look": "Faint wandering track"
+   "route": {
+    "id": "bp-1a276edd",
+    "kind": "link",
+    "slots": {
+     "route": {
+      "use": "trail@1",
+      "params": {
+       "width": "a narrow footpath",
+       "wear": "faint, half grassed over",
+       "edging": "none",
+       "winding": "meandering",
+       "crossing": "stepping stones"
+      }
+     }
+    }
+   }
   },
   {
    "from": "dunes/keep",
    "to": "downs",
    "want": 0.74,
-   "look": "Stone-edged path"
+   "route": {
+    "id": "bp-1bbdbafe",
+    "kind": "link",
+    "slots": {
+     "route": {
+      "use": "trail@1",
+      "params": {
+       "width": "a path two could walk",
+       "wear": "bare, beaten earth",
+       "edging": "stones",
+       "winding": "gently curving",
+       "crossing": "stepping stones"
+      }
+     }
+    }
+   }
   },
   {
    "from": "dunes/ledger",
    "to": "dunes/keep",
    "want": 0.7,
-   "look": "Faint wandering track"
+   "route": {
+    "id": "bp-1a276edd",
+    "kind": "link",
+    "slots": {
+     "route": {
+      "use": "trail@1",
+      "params": {
+       "width": "a narrow footpath",
+       "wear": "faint, half grassed over",
+       "edging": "none",
+       "winding": "meandering",
+       "crossing": "stepping stones"
+      }
+     }
+    }
+   }
   },
   {
    "from": "downs/oak",
    "to": "downs",
    "want": 0.7,
-   "look": "Faint wandering track"
+   "route": {
+    "id": "bp-1a276edd",
+    "kind": "link",
+    "slots": {
+     "route": {
+      "use": "trail@1",
+      "params": {
+       "width": "a narrow footpath",
+       "wear": "faint, half grassed over",
+       "edging": "none",
+       "winding": "meandering",
+       "crossing": "stepping stones"
+      }
+     }
+    }
+   }
   },
   {
    "from": "mixed/workshop",
    "to": "mixed",
    "want": 0.72,
-   "look": "Stone-edged path"
+   "route": {
+    "id": "bp-1bbdbafe",
+    "kind": "link",
+    "slots": {
+     "route": {
+      "use": "trail@1",
+      "params": {
+       "width": "a path two could walk",
+       "wear": "bare, beaten earth",
+       "edging": "stones",
+       "winding": "gently curving",
+       "crossing": "stepping stones"
+      }
+     }
+    }
+   }
   },
   {
    "from": "mixed/beacon",
    "to": "mixed",
    "want": 0.7,
-   "look": "Faint wandering track"
+   "route": {
+    "id": "bp-1a276edd",
+    "kind": "link",
+    "slots": {
+     "route": {
+      "use": "trail@1",
+      "params": {
+       "width": "a narrow footpath",
+       "wear": "faint, half grassed over",
+       "edging": "none",
+       "winding": "meandering",
+       "crossing": "stepping stones"
+      }
+     }
+    }
+   }
   },
   {
    "from": "downs/deep",
    "to": "downs",
    "want": 0.7,
-   "look": "Faint wandering track"
+   "route": {
+    "id": "bp-1a276edd",
+    "kind": "link",
+    "slots": {
+     "route": {
+      "use": "trail@1",
+      "params": {
+       "width": "a narrow footpath",
+       "wear": "faint, half grassed over",
+       "edging": "none",
+       "winding": "meandering",
+       "crossing": "stepping stones"
+      }
+     }
+    }
+   }
   },
   {
    "from": "hollow/willow",
    "to": "hollow",
    "want": 0.7,
-   "look": "Faint wandering track"
+   "route": {
+    "id": "bp-1a276edd",
+    "kind": "link",
+    "slots": {
+     "route": {
+      "use": "trail@1",
+      "params": {
+       "width": "a narrow footpath",
+       "wear": "faint, half grassed over",
+       "edging": "none",
+       "winding": "meandering",
+       "crossing": "stepping stones"
+      }
+     }
+    }
+   }
   },
   {
    "from": "",
    "to": "crossings/mill",
    "want": 0.7,
-   "look": "Stone-edged path"
+   "route": {
+    "id": "bp-1bbdbafe",
+    "kind": "link",
+    "slots": {
+     "route": {
+      "use": "trail@1",
+      "params": {
+       "width": "a path two could walk",
+       "wear": "bare, beaten earth",
+       "edging": "stones",
+       "winding": "gently curving",
+       "crossing": "stepping stones"
+      }
+     }
+    }
+   }
   }
  ],
  "forms": {

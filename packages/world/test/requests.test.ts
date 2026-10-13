@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { landmark, structure } from "@gaia/kinds";
+import { biome, landmark, link, structure, world as worldKind } from "@gaia/kinds";
 import { PRIMITIVES } from "@gaia/primitives";
 import { type CodeFacts, type FileFacts, type JevAnswer, type JevClient, type JevQuestion, type JevRequest, Library } from "@gaia/schema";
 import {
@@ -64,12 +64,9 @@ function facts(): CodeFacts {
 
 const set = (...keys: string[]) => Object.fromEntries(keys.map((k, i) => [k, { doc: `Option ${k}.`, suits: i === 0 ? ["docs"] : ["source"] }]));
 const LOOKS: Looks = {
-  compose: { building: structure, landmark, lib: new Library(PRIMITIVES) },
-  world: set("Dawn", "Dusk"),
-  land: set("Moor", "Valley"),
+  compose: { building: structure, landmark, world: worldKind, biome, link, lib: new Library(PRIMITIVES) },
   building: set("Cottage", "Mill"),
   landmark: set("Tower", "Oak"),
-  trail: set("Path", "Track"),
   form: set("Stone", "Bush"),
   water: set("Dry", "Brook"),
   character: set("Meadow land", "Wood"),
@@ -190,14 +187,14 @@ describe("context that grows by Jev's choice", () => {
     expect(plain.every((e) => e.second === undefined)).toBe(true);
   });
 
-  it("judges top-down when a design carries character: a file reads its area's land and water, an area the world's light", async () => {
+  it("judges top-down when a design carries character: a file reads whether its area's land holds water", async () => {
     const exchanges: Exchange[] = [];
     const judged = await judgeWorld(facts(), LOOKS, standInJev(LOOKS), { design: "outline", trace: (e) => exchanges.push(e) });
-    const area = exchanges.find((e) => e.about === "area")!;
-    expect((area.first.request.state as { world: string }).world.startsWith(`${judged.world}:`)).toBe(true);
+    // The sky and the lands are composed once the code is understood, so nothing here reads them.
+    expect(exchanges.some((e) => e.about === "world")).toBe(false);
     const f = exchanges.find((e) => e.target === "pkg/src/a.ts")!;
-    const land = (f.first.request.state as { land: { area: string; landform: string; water: string } }).land;
-    expect(land.landform.startsWith(`${judged.lands[land.area === "(the repository's root)" ? "" : land.area]}:`)).toBe(true);
+    const land = (f.first.request.state as { land: { area: string; landform?: string; water: string } }).land;
+    expect(land.landform).toBeUndefined();
     expect(land.water.startsWith(`${judged.waters[land.area === "(the repository's root)" ? "" : land.area]}:`)).toBe(true);
   });
 });
