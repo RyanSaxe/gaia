@@ -8,7 +8,6 @@ pub mod git;
 mod languages;
 mod lineage;
 pub mod model;
-pub mod mutate;
 mod parse;
 mod reach;
 mod resolve;
