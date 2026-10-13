@@ -16,6 +16,7 @@ import { type LandSite, LAND_WARP, siteAt, warpPoint } from "./land.ts";
 import { type Lattice, type LatticeFrame, createLattice, worldOf, worldOfZ } from "./lattice.ts";
 import { BANK_REACH, SHORE_CAP, type SolvedPond, type SolvedStream, carvePond, carveStream, shoreField, solvePond, solveStream } from "./water.ts";
 import { type LandOutline, pastTheEdge, withinLand } from "./edge.ts";
+import { routeRivers, valleySurface } from "./rivers.ts";
 
 export interface RegionSpec {
   /** The directory the region stands for. */
@@ -131,7 +132,7 @@ export const regionExtent = (spec: WorldSpec): number => spec.size / Math.sqrt(M
 /** Builds each region's landform from its stored biome blueprint. */
 export function landformsOf(spec: WorldSpec, lib: Library): Landform[] {
   const extent = regionExtent(spec);
-  return spec.regions.map((r) => {
+  const own = spec.regions.map((r) => {
     const slot = r.biome.slots.relief;
     if (slot === undefined) throw new Error(`Region ${r.id} has no relief.`);
     const p: AnyPrimitive = lib.get(slot.use);
@@ -140,6 +141,21 @@ export function landformsOf(spec: WorldSpec, lib: Library): Landform[] {
     const params = resolveParams(p, slot.params, root.fork("params"), `${r.id}.relief`);
     return (p.build as ErasedBuild)(params, { rand: root.fork("relief"), facts: { extent } }, null) as Landform;
   });
+  // Rivers follow the land: routed over the ground the regions compose, rim and all, and carved into every region's.
+  const weights = new Float64Array(spec.regions.length);
+  const ground = (lfs: readonly Landform[]) => (x: number, z: number): number => {
+    regionWeights(spec, x, z, weights);
+    return blended(spec, lfs, weights, x, z) + rimAt(spec, x, z);
+  };
+  const regionAt = (x: number, z: number): number => {
+    regionWeights(spec, x, z, weights);
+    let best = 0;
+    weights.forEach((w, i) => {
+      if (w > (weights[best] as number)) best = i;
+    });
+    return best;
+  };
+  return routeRivers(spec, own, ground, regionAt);
 }
 
 const smooth = (t: number): number => {
@@ -317,8 +333,14 @@ export function composer(spec: WorldSpec, landforms: readonly Landform[]): (x: n
   const weights = new Float64Array(spec.regions.length);
   return (x, z) => {
     regionWeights(spec, x, z, weights);
-    return blended(spec, landforms, weights, x, z) + rimAt(spec, x, z);
+    return cutToValleys(landforms, x, z, blended(spec, landforms, weights, x, z) + rimAt(spec, x, z));
   };
+}
+
+/** The ground at (x, z) cut down to the world's river valleys, where they reach. */
+function cutToValleys(landforms: readonly Landform[], x: number, z: number, h: number): number {
+  const net = landforms[0]?.valleys;
+  return net === undefined ? h : Math.min(h, valleySurface(net, x, z));
 }
 
 /** How many regions' shares of the cover each lattice sample keeps: more than ever meet at one point. */
@@ -381,7 +403,7 @@ function composeRect(spec: WorldSpec, landforms: readonly Landform[], l: Lattice
       const x = worldOf(l, ix);
       const k = (iz - z0) * n + ix - x0;
       regionWeights(spec, x, z, weights);
-      raw[k] = blended(spec, landforms, weights, x, z) + rimAt(spec, x, z);
+      raw[k] = cutToValleys(landforms, x, z, blended(spec, landforms, weights, x, z) + rimAt(spec, x, z));
       coverFromBlend(spec, x, z, weights);
       // The largest shares, largest first; ties keep the lower index.
       top.fill(-1);
@@ -508,7 +530,7 @@ function solveWater(
     for (const s of streams) carveStream(window, heights, level, s);
     for (const p of ponds) carvePond(window, heights, level, p.pond, p.depth);
     if (bed.kind === "stream") {
-      const solved = solveStream(window, bed.path, bed.width, bed.depth);
+      const solved = solveStream(window, bed.path, bed.width, bed.depth, bed.widths === undefined ? {} : { widths: bed.widths, seep: bed.seep ?? true, ...(bed.floors === undefined ? {} : { floors: bed.floors }) });
       if (solved !== null) streams.push(solved);
     } else {
       const solved = solvePond(window, heights, bed.x, bed.z, bed.radius);
@@ -520,7 +542,7 @@ function solveWater(
 
 /** A bed of water as `solveWater` solves it, in its order, with the lattice rectangle, [x0, x1) by [z0, z1), within which it reads and cuts the ground. */
 type WaterBed = { readonly rect: readonly [number, number, number, number] } & (
-  | { readonly kind: "stream"; readonly path: Float32Array; readonly width: number; readonly depth: number }
+  | { readonly kind: "stream"; readonly path: Float32Array; readonly width: number; readonly depth: number; readonly widths?: Float32Array; readonly seep?: boolean; readonly floors?: Float32Array }
   | { readonly kind: "pond"; readonly x: number; readonly z: number; readonly radius: number; readonly depth: number }
 );
 
@@ -537,7 +559,8 @@ function waterBeds(spec: WorldSpec, landforms: readonly Landform[], l: Lattice |
   spec.regions.forEach((r, ri) => {
     for (const bed of (landforms[ri] as Landform).water) {
       if (bed.kind !== "stream") continue;
-      const path = keptRun(spec, ri, bed.path);
+      // A river's whole course runs past its region; a stream of a valley's own runs while its region holds it.
+      const path = bed.widths !== undefined ? Float32Array.from(bed.path, (v, k) => v + (k % 2 === 0 ? r.x : r.z)) : keptRun(spec, ri, bed.path);
       if (path === null) continue;
       let minX = Infinity;
       let maxX = -Infinity;
@@ -549,7 +572,7 @@ function waterBeds(spec: WorldSpec, landforms: readonly Landform[], l: Lattice |
         minZ = Math.min(minZ, path[k + 1] as number);
         maxZ = Math.max(maxZ, path[k + 1] as number);
       }
-      beds.push({ kind: "stream", path, width: bed.width, depth: bed.depth, rect: rect(minX, maxX, minZ, maxZ, Math.max(1.1, bed.width / 2) + BANK_REACH) });
+      beds.push({ kind: "stream", path, width: bed.width, depth: bed.depth, ...(bed.widths === undefined ? {} : { widths: bed.widths, seep: bed.seep ?? true, ...(bed.floors === undefined ? {} : { floors: bed.floors }) }), rect: rect(minX, maxX, minZ, maxZ, Math.max(1.1, bed.width / 2) + BANK_REACH) });
     }
   });
   spec.regions.forEach((r, ri) => {

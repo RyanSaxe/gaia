@@ -92,15 +92,17 @@ const MEANDER = [4, 30] as const;
 /** The bends' two waves: the second, shorter one keeps them from repeating; together they bend this much sharper than one. */
 const WAVES = { second: 0.15, apart: 2.1, sharper: 0.85 + 0.15 * 2.1 * 2.1 } as const;
 
+/** What sets how a stream bends: its valley's seed, winding (meters), floor share and half width. */
+export type BendOf = Pick<Extract<HeightField, { op: "trough" }>, "seed" | "meander" | "floor" | "halfWidth">;
+
 /**
- * The sideways offset of a stream's bed `width` meters wide at distance `u` along its trough: the trough's own axis,
- * and the stream's meanders across the floor at its own scale, which the trough's long winding alone never shows.
+ * How far a stream `width` meters wide swings from its valley's own line at distance `s` along it: its meanders
+ * across the floor at its own scale.
  */
-export function bedOffset(f: Extract<HeightField, { op: "trough" }>, u: number, width: number): number {
+export function bedBend(f: BendOf, s: number, width: number): number {
   const m = Math.max(0, Math.min(1, (f.meander - MEANDER[0]) / (MEANDER[1] - MEANDER[0])));
   const apart = width * (BENDS.apart[0] + (BENDS.apart[1] - BENDS.apart[0]) * m);
   const k = (Math.PI * 2) / apart;
-  // As wide as the bends may swing without turning tighter than the tightest a stream turns, and within the floor.
   // As wide as the bends may swing without turning tighter than the tightest a stream turns, its channel on the floor
   // and the floor's gentle toe, never up the valley's sides: a winding valley's stream swings as wide as that allows,
   // a straight one's hardly at all.
@@ -108,7 +110,15 @@ export function bedOffset(f: Extract<HeightField, { op: "trough" }>, u: number, 
   const swing = Math.min(onFloor, 1 / (BENDS.tightest * width * k * k * WAVES.sharper)) * Math.min(1, 0.15 + 1.4 * m);
   const p1 = ((f.seed % 811) / 811) * Math.PI * 2;
   const p2 = ((f.seed % 467) / 467) * Math.PI * 2;
-  return troughOffset(f, u) + swing * ((1 - WAVES.second) * Math.sin(u * k + p1) + WAVES.second * Math.sin(u * k * WAVES.apart + p2));
+  return swing * ((1 - WAVES.second) * Math.sin(s * k + p1) + WAVES.second * Math.sin(s * k * WAVES.apart + p2));
+}
+
+/**
+ * The sideways offset of a stream's bed `width` meters wide at distance `u` along its trough: the trough's own axis,
+ * and the stream's meanders across the floor at its own scale, which the trough's long winding alone never shows.
+ */
+export function bedOffset(f: Extract<HeightField, { op: "trough" }>, u: number, width: number): number {
+  return troughOffset(f, u) + bedBend(f, u, width);
 }
 
 export function fieldAt(f: HeightField, x: number, z: number): number {
