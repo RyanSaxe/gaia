@@ -535,8 +535,9 @@ close it.
 
 While a codebase's world opens, the wait covers the screen
 (`app/renderer/wait/`). It shows no words, counts or percentages and never
-names Jev or OpenRouter: the progress a person sees is the world coming to
-be, as the field map paints itself (see The field sheet). The field map's
+names Jev or OpenRouter while it goes well: the progress a person sees is
+the world coming to be, as the field map paints itself (see The field
+sheet). Only a world that cannot be judged speaks, on its slip, and plainly. The field map's
 own sheet lies before the start's map table, out of focus and still behind
 it, the same size, paper and torn edge, with no fringe of wood, title or
 turned-down corner. In the app only that paper shows for the moment
@@ -596,11 +597,13 @@ the world shows only after its first frames have drawn under the wait. The
 washes, names and marks are painted a few milliseconds at a time in the
 page's idle time, as the map paints its paper. When
 judging would cost more than the person's spend limit, a small slip of warm
-paper at the foot of the wait says what it costs against the limit and
-that without it the world is drawn from the code alone, with two answers:
-Go ahead, in moss green, and Not for this world, in ink, which the project
-remembers until the limit changes. The world appears only once it is fully
-judged.
+paper at the foot of the wait says what it costs against the limit, with
+two answers: Go ahead, in moss green, and Not now, in ink, which leaves the
+world unopened. When a world cannot be judged (Jev is off, or a request Jev
+could not answer once it was retried), the same slip says what failed and
+why, with one answer, Try again, in moss green, and the wait stays: nothing
+is shown in the world's place and nothing is guessed. The world appears only
+once it is fully judged, and always by Jev.
 
 ## The start
 

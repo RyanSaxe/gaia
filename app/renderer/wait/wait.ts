@@ -13,8 +13,10 @@
 // pen line's dash, so it keeps moving on the compositor while the page's
 // thread is busy standing the world, and the wait never competes with the bake.
 // The one question the wait may ask, when judging would cost more than the
-// person's limit, is a small paper slip: go ahead, or draw this world from
-// the code alone, which the project remembers until the limit changes.
+// person's limit, is a small paper slip: go ahead, or not now, which leaves
+// the world unopened. When a world cannot be judged (Jev is off, or a request
+// it could not answer), the same slip says what failed and why, and the wait
+// stays: a world is always Jev's, never quietly guessed.
 
 import type { ConsentPlan, Opening } from "../../world-service/protocol.ts";
 import type { StoodWorld } from "../terrain/lab.ts";
@@ -50,6 +52,8 @@ export interface WaitView {
 export interface Wait extends WaitView {
   /** Asks whether to spend past the limit, on a small slip of paper; resolves true to go ahead. */
   ask(plan: ConsentPlan): Promise<boolean>;
+  /** The world could not be opened: says why on the same slip, with a way to try again, and the wait stays. */
+  failed(message: string): void;
 }
 
 const dollars = (usd: number): string => `$${usd < 0.01 ? usd.toFixed(3) : usd.toFixed(2)}`;
@@ -88,45 +92,58 @@ export function takeWait(slot: HTMLElement, aspect: number): { veil: HTMLElement
   return taken;
 }
 
+/**
+ * A small slip of warm paper at the foot of the wait, with its words and one or two answers: the one way the wait
+ * speaks. `answered` gets the chosen answer's value once the slip has gone.
+ */
+function slipIn(veil: HTMLElement): (words: HTMLElement, answers: readonly (readonly [string, boolean | string])[], answered: (value: string) => void) => void {
+  return (words, answers, answered) => {
+    const slip = document.createElement("div");
+    slip.className = "wait-slip";
+    slip.setAttribute("role", "dialog");
+    const choices = document.createElement("div");
+    choices.className = "wait-choices";
+    const buttons = answers.map(([text, value]) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = text;
+      b.dataset.answer = String(value);
+      return b;
+    });
+    choices.append(...buttons);
+    slip.append(words, choices);
+    (veil.parentElement ?? veil).append(slip);
+    buttons[0]?.focus({ preventScroll: true });
+    choices.addEventListener("click", (e) => {
+      const answer = (e.target as HTMLElement).closest<HTMLButtonElement>("button")?.dataset.answer;
+      if (answer === undefined) return;
+      slip.classList.add("leaving");
+      window.setTimeout(() => slip.remove(), 400);
+      answered(answer);
+    });
+  };
+}
+
 /** The wait in `veil`, a layer over the stage that lifts once the world stands, its sheet in the land's shape `aspect`. */
 export function createWait(veil: HTMLElement, aspect: number): Wait {
   veil.dataset.wait = "";
   const view = createMapWait(veil, aspect);
+  const slip = slipIn(veil);
   return {
     ...view,
     ask(plan) {
-      const slip = document.createElement("div");
-      slip.className = "wait-slip";
-      slip.setAttribute("role", "dialog");
       const words = document.createElement("p");
       words.append("Judging ");
       const name = document.createElement("i");
       name.textContent = plan.name;
-      words.append(name, ` costs about ${dollars(plan.estimatedUsd)}, over your ${dollars(plan.limitUsd)} limit. Without it, the world is drawn from the code alone.`);
-      const choices = document.createElement("div");
-      choices.className = "wait-choices";
-      const button = (text: string, answer: boolean): HTMLButtonElement => {
-        const b = document.createElement("button");
-        b.type = "button";
-        b.textContent = text;
-        b.dataset.answer = String(answer);
-        return b;
-      };
-      const yes = button("Go ahead", true);
-      // Declining is remembered for this project until the limit changes.
-      choices.append(yes, button("Not for this world", false));
-      slip.append(words, choices);
-      (veil.parentElement ?? veil).append(slip);
-      yes.focus({ preventScroll: true });
-      return new Promise((resolve) => {
-        choices.addEventListener("click", (e) => {
-          const answer = (e.target as HTMLElement).closest<HTMLButtonElement>("button")?.dataset.answer;
-          if (answer === undefined) return;
-          slip.classList.add("leaving");
-          window.setTimeout(() => slip.remove(), 400);
-          resolve(answer === "true");
-        });
-      });
+      words.append(name, ` costs about ${dollars(plan.estimatedUsd)}, over your ${dollars(plan.limitUsd)} limit.`);
+      return new Promise((resolve) => slip(words, [["Go ahead", true], ["Not now", false]], (answer) => resolve(answer === "true")));
+    },
+    failed(message) {
+      const words = document.createElement("p");
+      words.textContent = message;
+      // Trying again opens the same world afresh: the page reopens what main named it after.
+      slip(words, [["Try again", true]], () => window.location.reload());
     },
   };
 }

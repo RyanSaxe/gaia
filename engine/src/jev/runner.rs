@@ -705,7 +705,7 @@ pub fn next(root: &Path, max: Option<usize>) -> Result<Value, String> {
         &store::read(&w.project, "calls")?,
     );
     if ready.is_empty() && unsettled.is_empty() {
-        return Ok(json!({ "sent": 0, "failed": 0, "left": 0, "settled": [], "quality": {} }));
+        return Ok(json!({ "sent": 0, "failed": 0, "failures": [], "left": 0, "settled": [], "quality": {} }));
     }
     // A link held anew changes the graph every other request is built on,
     // so this slice only holds; the next builds on the graph it leaves.
@@ -738,20 +738,16 @@ pub fn next(root: &Path, max: Option<usize>) -> Result<Value, String> {
     let mut writes: Vec<Value> = Vec::new();
     let mut fresh: HashMap<String, Value> = HashMap::new();
     let (mut failed, mut estimated, mut billed) = (0usize, 0usize, 0u64);
+    // Which requests failed, once the client has retried them, and why: a caller fails the world with them.
+    let mut failures: Vec<Value> = Vec::new();
     let mut touched: BTreeSet<(&str, &str)> = BTreeSet::new();
     for (&i, answer) in ready.iter().zip(&answers) {
         let p = &w.planned[i];
         if let Some(e) = answer.get("error") {
+            let error: String = e.as_str().unwrap_or("").chars().take(300).collect();
             if failed < 3 {
-                eprintln!(
-                    "gaia-engine: a request about {} failed: {}",
-                    p.unit,
-                    e.as_str()
-                        .unwrap_or("")
-                        .chars()
-                        .take(300)
-                        .collect::<String>()
-                );
+                eprintln!("gaia-engine: a request about {} failed: {}", p.unit, error);
+                failures.push(json!({ "unit": p.unit, "error": error }));
             }
             failed += 1;
             continue;
@@ -892,7 +888,7 @@ pub fn next(root: &Path, max: Option<usize>) -> Result<Value, String> {
             }
         }
     }
-    Ok(json!({ "sent": sent, "failed": failed, "left": left, "settled": settled, "quality": quality }))
+    Ok(json!({ "sent": sent, "failed": failed, "failures": failures, "left": left, "settled": settled, "quality": quality }))
 }
 
 /// Units whose requests are all answered but whose answers aren't held as

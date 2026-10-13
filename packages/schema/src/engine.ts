@@ -140,6 +140,8 @@ export interface UnderstandPlan {
 export interface UnderstandProgress {
   readonly sent: number;
   readonly failed: number;
+  /** The first few requests that failed once the engine's client retried them: what each was about, and why. */
+  readonly failures: readonly { readonly unit: NodeId; readonly error: string }[];
   readonly left: number;
   /** Nodes whose requests are all answered. */
   readonly settled: readonly NodeId[];

@@ -59,7 +59,7 @@ commit.
 | `@gaia/schema` | The type builder, ports and vitality channels, primitive and kind contracts, code facts, the world document, Jev's wire format, the engine protocol, content identity | Nothing |
 | `@gaia/primitives` | Primitive declarations and geometry, palettes, the manifest `PRIMITIVES` | schema |
 | `@gaia/kinds` | The flora, structure, rock, wildflowers, landmark, link, biome and world kinds | schema |
-| `@gaia/world` | The question planner, answer rules, context gathering, file and entity vitality, type-space tools, `WorldChange`, and the world laid out from code: the code graph, the requests Jev answers about it, the stand-in judge, the division of the land and the layout | schema, terrain (the land's division rule) |
+| `@gaia/world` | The question planner, answer rules, context gathering, file and entity vitality, type-space tools, `WorldChange`, and the world laid out from code: the code graph, the requests Jev answers about it, the development-only stand-in judge, the division of the land and the layout | schema, terrain (the land's division rule) |
 | `@gaia/realize` | Blueprint to parts, world and region looks at an hour, the light between a day's keys, the sky and air references, presets, channel math, detail by distance | schema, primitives |
 | `@gaia/render` | Three.js materials, light and shadow, and instanced copies of a component at each level of detail | schema, realize, three |
 | `@gaia/terrain` | Relief composition, the baked heightfield, water, the endless wild land past the rim, what grows on it (its covers and thickets) and the ground's height anywhere, walking, wading and swimming, a walker's gait (easing, grade, the eyes' ride over the ground and footbridge decks), the solids that stop a walk and the way around them, sight lines, where plants, the understory and landmarks stand, the routes of trails, how land divides into cells (`siteAt`), where a point is (its area and the file underfoot, `placeAt`, and every area's and patch's outline, `outlinesOf`), and whose ground it is and how alive (`groundOwners`, `ownershipOf`, `groundLook`) | schema, primitives, realize |
@@ -222,25 +222,35 @@ own ground takes its place among the other areas rather than at the middle,
 so trails between areas do not all cross it. `keptJev`
 (`packages/world/src/judging.ts`) keeps Jev's answers: each request's key is
 the hash of the whole request (`requestKey`), so a stored answer is used
-without asking and only requests whose facts changed are asked again; an
-answer that does not fit its options, or a request Jev fails, is judged by
-`standInJev`, a deterministic stand-in that scores each option by the fact
-tags its look suits, with a tie-break seeded by the question. The document
-records who judged each thing (`judgedThing`, such as `file:src/main.ts`),
-and a thing's card says so. `engineJev` in the world service is the live
-client. Jev is asked only when the engine has a key and runs with
-`GAIA_JEV=live`. A run's cost is judging's (`jev.estimate`) and
+without asking and only requests whose facts changed are asked again. A
+request Jev cannot answer, once the engine's client has retried it (a
+timeout, a 429 or a 5xx, twice), or an answer outside its options, rejects
+with `RequestFailed`, naming the request (`requestSubject`) and why, and the
+opening fails with it (`world.failed`); so does an understanding slice with a
+failed request (`UnderstandProgress.failures`). Nothing guesses an answer in
+a request's place: a world is always Jev's. Jev is asked only when the engine
+has a key and runs with `GAIA_JEV=live`; without one, a world that needs an
+answer fails and says how to turn Jev on, and one whose every answer is kept
+opens from the store. For development only, `GAIA_JEV=stand-in` (and the
+standalone lab's `?judge=stand-in`) opens a world that `standInJev` judges
+on purpose, a deterministic stand-in that scores each option by the fact
+tags its look suits, with a tie-break seeded by the question; nothing is
+sent to Jev then, and the understanding pass is not run. It is never on by
+default and never offered to a person. The document records who judged each
+thing (`judgedThing`, such as `file:src/main.ts`), and a thing's card says
+so. `engineJev` in the world service is the live client. A run's cost is judging's (`jev.estimate`) and
 the understanding pass's (`understanding.plan`, below) together. Planning
 the pass takes seconds and only says what it will cost, so it is planned
-only when there is a limit to weigh it against; with no limit the pass runs
-as it goes. A run within the person's spend limit goes ahead with no question; the limit is one number for every
+only when there is a limit to weigh it against, or when Jev cannot be asked
+and the opening must know whether anything is left to ask; with no limit the
+pass runs as it goes. A run within the person's spend limit goes ahead with no question; the limit is one number for every
 project, kept in the app's own settings (the store's `app` project,
 `settings` table, `jev-spend-limit`). Until the person sets one
 (`setSpendLimit`; no screen sets it yet), `DEFAULT_SPEND_LIMIT_USD` in
 `app/world-service/open-world.ts` is no limit at all, while Gaia is being
 built, so every run goes ahead and only prints its estimate. A run that costs more asks first, with
-the cost and the limit (`world.consent`); choosing the stand-in is
-remembered in the project's `settings` table until the limit changes. The
+the cost and the limit (`world.consent`); declining leaves the world
+unopened (`world.failed`), and the next opening asks again. The
 world stays under the wait while Jev answers, because a judgment that
 changed after the world stood would swap trees, buildings and land in view.
 The land's division depends on the code alone (an entity's lot is the same
@@ -334,11 +344,13 @@ on Gaia's own world from `app/renderer/terrain/fixtures/gaia-graph.json`,
 the engine's judged graph `pnpm graph-snapshot` writes, laid out from the
 facts `factsOf` derives from it, judged
 by Jev's answers kept for that snapshot in `fixtures/gaia-jev.json` (written
-by `pnpm jev-world`, keyed by request hash like the app's store), with the
-stand-in judging any request they no longer answer; `?judge=stand-in` shows
-the stand-in's world. The page lays the snapshot out on a thread of its
-own (`app/renderer/terrain/layout-worker.ts`) while the wait draws. So does the app if the world service cannot open its
-folder. Beside those fixtures, `fixtures/gaia-graph.json` holds the
+by `pnpm jev-world`, which judges and composes it, keyed by request hash like
+the app's store) alone: a request they no longer answer fails the page,
+naming it, until `pnpm jev-world` keeps its answer. For development only,
+`?judge=stand-in` shows the stand-in's world. The page lays the snapshot out
+on a thread of its own (`app/renderer/terrain/layout-worker.ts`) while the
+wait draws. The app never falls back on it: a folder the world service cannot
+open says why on the wait. Beside those fixtures, `fixtures/gaia-graph.json` holds the
 engine's graph of the same commit, which the layout is moving onto. `pnpm
 graph-snapshot` writes it, trimmed by `judgedGraph` to directories, files
 and definitions, each with the importance and quality Jev's held answers give it. `?world=sample` (or `?world=small`) and

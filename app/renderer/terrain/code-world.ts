@@ -1,14 +1,15 @@
 // "This codebase": a codebase's world. Inside the app it comes from the world
 // service, which opens the folder main names (Gaia's own repository unless
-// the person opens another), has Jev or the stand-in judge it, and lays it
-// out; while that happens the wait paints the land as it is judged
-// (app/renderer/wait/), and asks the person only before spending past their
-// limit. A standalone page (the
-// offline HTML, `pnpm lab:serve`) has no engine: it lays out the engine's
-// graph of this repository (`fixtures/gaia-graph.json`, written by `pnpm
-// graph-snapshot`), judged by Jev's answers kept for it (`fixtures/gaia-jev.json`,
-// written by `pnpm jev-world`), or by the stand-in with `?judge=stand-in` and
-// wherever no kept answer fits. Everything else follows from the code:
+// the person opens another), has Jev judge it, and lays it out; while that
+// happens the wait paints the land as it is judged (app/renderer/wait/), and
+// asks the person only before spending past their limit. A world that cannot
+// be judged says why on the wait, and nothing is shown in its place. A
+// standalone page (the offline HTML, `pnpm lab:serve`) has no engine: it lays
+// out the engine's graph of this repository (`fixtures/gaia-graph.json`,
+// written by `pnpm graph-snapshot`), judged by Jev's answers kept for it
+// (`fixtures/gaia-jev.json`, written by `pnpm jev-world`) alone, failing on a
+// request with no kept answer; a developer's `?judge=stand-in` has the
+// stand-in judge it instead. Everything else follows from the code:
 // each directory's area and land, each file's patch and what grows on it,
 // each entity's building or landmark on its lot, and the trails between them.
 
@@ -40,6 +41,8 @@ export interface Veil {
   baking(health: Readonly<Record<string, number>>): void;
   /** Asks whether to send `plan` to Jev; resolves true to go ahead. */
   ask(plan: ConsentPlan): Promise<boolean>;
+  /** The world could not be opened: says why, and the wait stays. */
+  failed(message: string): void;
   /** Offers the start when no folder is named (app/renderer/start/); resolves with the place chosen. The next `opening` takes it away. */
   choose(offer: StartOffer): Promise<StartChoice>;
 }
@@ -141,7 +144,7 @@ function serviceWorld(service: WorldService, veil: Veil): Promise<WorldDocument>
   });
 }
 
-/** Who judges a page with no engine: Jev's kept answers, unless the page asks for the stand-in (`?judge=stand-in`). */
+/** Who judges a page with no engine: Jev's kept answers, unless a developer asks for the stand-in (`?judge=stand-in`). */
 const SNAPSHOT_JUDGE = typeof location === "undefined" || new URLSearchParams(location.search).get("judge") !== "stand-in" ? "jev" : "stand-in";
 
 /**
@@ -200,18 +203,18 @@ export async function codeWorld(veil: Veil): Promise<CodeLab> {
   let document: WorldDocument;
   let landed = false;
   const watched: Veil = { ...veil, opening: (o) => ((landed ||= o.stage === "land"), veil.opening(o)) };
-  if (ASKS_PROVING) document = provingWorld();
-  else if (service === null) {
-    if (typeof location !== "undefined" && new URLSearchParams(location.search).has("start")) await previewStart(veil);
-    document = await snapshotWorld("no engine on a standalone page");
-  } else {
-    try {
-      document = await serviceWorld(service, watched);
-    } catch (error) {
-      console.error(`gaia: showing Gaia's snapshot instead: ${(error as Error).message}`);
-      document = await snapshotWorld(`the world service could not open it: ${(error as Error).message}`);
-      landed = false;
-    }
+  // A world that cannot be opened says why on the wait, which stays: nothing else is shown in its place.
+  try {
+    if (ASKS_PROVING) document = provingWorld();
+    else if (service === null) {
+      if (typeof location !== "undefined" && new URLSearchParams(location.search).has("start")) await previewStart(veil);
+      document = await snapshotWorld("no engine on a standalone page");
+    } else document = await serviceWorld(service, watched);
+  } catch (error) {
+    const message = (error as Error).message;
+    console.error(`gaia: could not open the world: ${message}`);
+    veil.failed(message);
+    throw error;
   }
   // Traced once now, while the world loads, so the field map never traces them mid-walk.
   const outlines = outlinesOf(document.world);

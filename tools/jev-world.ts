@@ -1,16 +1,19 @@
 // Judges and composes Gaia's snapshot world (the facts of
-// `app/renderer/terrain/fixtures/gaia-graph.json`, `factsOf`) once with Jev, the way
-// the app does, and keeps the answers by request key
-// in `fixtures/gaia-jev.json`, the lab's own copy of what the app keeps per
-// project. The lab lays the snapshot out with those answers, so a page with
-// no engine shows Jev's world. Answers already kept are never asked again,
-// so a run can be cut short with --limit and finished later; answers to
-// requests the world no longer makes are dropped.
+// `app/renderer/terrain/fixtures/gaia-graph.json`, `factsOf`) once with Jev,
+// the way the app does, and keeps the answers by request key in
+// `fixtures/gaia-jev.json`, the lab's own copy of what the app keeps per
+// project. The lab lays the snapshot out with those answers alone, so a page
+// with no engine shows Jev's world, and fails on any request with no kept
+// answer. Answers already kept are never asked again, so a run can be cut
+// short with --limit and finished later; once a whole run has asked every
+// request, answers to requests the world no longer makes are dropped.
 //
 // Nothing reaches OpenRouter unless the judge is `jev`, the engine runs with
-// GAIA_JEV=live, and --spend-up-to covers twice the engine's estimate. While
-// it runs, a request that would take the reported cost past --spend-up-to is
-// not sent: the stand-in judges it and it is not kept.
+// GAIA_JEV=live, and --spend-up-to covers twice the engine's estimate of the
+// looks. Composing follows from those answers, so it is not planned ahead:
+// its cost counts against --spend-up-to as it goes. A request that would take
+// the reported cost past --spend-up-to is not sent, and the run stops there,
+// keeping what was answered.
 //
 // Usage: pnpm jev-world [--judge jev|local] [--design judged] [--limit 5]
 //          [--spend-up-to 0.05] [--out fixtures/gaia-jev.json] [--ledger ledger.jsonl]
@@ -21,7 +24,7 @@ import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs
 import { resolve } from "node:path";
 import { createInterface } from "node:readline";
 import type { CodeGraph, EngineClient, JevClient, JevResponse } from "@gaia/schema";
-import { DEFAULT_DESIGN, DESIGNS, type DesignName, composeWorld, factsOf, judgeWorld, keptJev, planWorldRequests, requestKey, standInJev } from "@gaia/world";
+import { DEFAULT_DESIGN, DESIGNS, type DesignName, composeWorld, factsOf, judgeWorld, keptJev, planWorldRequests, requestKey } from "@gaia/world";
 import { createEngineClient } from "../app/world-service/engine-client.ts";
 import { engineJev } from "../app/world-service/jev.ts";
 import { LOOKS } from "../app/renderer/terrain/looks.ts";
@@ -101,29 +104,28 @@ const guarded: JevClient = {
     return r;
   },
 };
-const failures: string[] = [];
 const asked = new Set<string>();
 const started = Date.now();
+/** Why the run stopped before every request was answered, if it did: a limit, or a request Jev could not answer. */
+let stopped: string | undefined;
+const jev = keptJev(guarded, {
+  stored: new Map(Object.entries(kept.answers)),
+  keep: (key, response) => {
+    kept.answers[key] = response;
+  },
+  settled: (key) => asked.add(key),
+});
 try {
-  const jev = keptJev(guarded, standInJev(LOOKS), {
-    stored: new Map(Object.entries(kept.answers)),
-    keep: (key, response) => {
-      kept.answers[key] = response;
-    },
-    settled: (key, _judge, failure) => {
-      asked.add(key);
-      if (failure !== undefined && !failure.startsWith("over --")) failures.push(failure);
-    },
-  });
-  // Then every building, landmark, the sky, each land and each trail is composed on those judgments, as the app does
-  // once the code is understood, so the lab keeps Jev's compositions too.
   await composeWorld(facts, LOOKS, jev, await judgeWorld(facts, LOOKS, jev, { design, graph }), { graph, concurrency: estimate.concurrency });
+} catch (error) {
+  stopped = (error as Error).message;
 } finally {
   engine?.kill();
   await closeStandIn?.();
 }
-// Answers to requests the world no longer makes (its questions or options changed) are dropped.
-for (const key of Object.keys(kept.answers)) if (!asked.has(key)) delete kept.answers[key];
+// Once a whole run has asked every request, answers to requests the world no longer makes (its questions or options
+// changed) are dropped.
+if (stopped === undefined) for (const key of Object.keys(kept.answers)) if (!asked.has(key)) delete kept.answers[key];
 writeFileSync(out, `${JSON.stringify(kept, null, 1)}\n`);
 
 ms.sort((a, b) => a - b);
@@ -132,7 +134,7 @@ const summary = {
   time: new Date().toISOString(),
   what: `jev-world ${design} (${judge})`,
   requests: sent,
-  failed: failures.length,
+  stopped: stopped ?? null,
   inputTokens: tokens,
   estimatedUsd: +estimate.estimatedUsd.toFixed(6),
   reportedUsd: +spent.toFixed(6),
@@ -141,5 +143,8 @@ const summary = {
   kept: Object.keys(kept.answers).length,
 };
 console.log(JSON.stringify(summary));
-if (failures.length > 0) console.error(`Failed: ${[...new Set(failures)].slice(0, 5).join(" | ")}`);
+if (stopped !== undefined) {
+  console.error(`Stopped before every request was answered: ${stopped}`);
+  if (!/over --(limit|spend-up-to)/.test(stopped)) process.exitCode = 1;
+}
 if (ledger !== "") appendFileSync(ledger, `${JSON.stringify(summary)}\n`);

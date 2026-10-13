@@ -110,6 +110,8 @@ async function open(port: MessagePortMain, folder: string, github?: string): Pro
     const document = await openWorld({
       engine,
       root: folder,
+      // For development only: GAIA_JEV=stand-in opens a world the stand-in judges on purpose, sending nothing to Jev.
+      standIn: process.env.GAIA_JEV === "stand-in",
       progress: (opening) => send(port, { type: "world.progress", opening }),
       consent: (plan) =>
         new Promise<boolean>((resolve, reject) => {
