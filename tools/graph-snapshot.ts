@@ -1,10 +1,10 @@
 // Writes the engine's judged code graph of a project, trimmed to what the
 // layout reads (`judgedGraph`), to a JSON snapshot for the terrain lab.
 // Each node's importance and quality come from the Jev answers held in the store
-// under GAIA_DATA_DIR; nothing is asked. Take it from a checkout at the
-// commit `gaia.json` was taken at, so the lab's code model and graph
-// describe the same code. Opening a checkout updates its project's lineage
-// record, so for an older commit point GAIA_DATA_DIR at a copy of the store.
+// under GAIA_DATA_DIR; nothing is asked. The lab lays its world out from
+// this graph alone (`codeModelOf`). Opening a checkout updates its project's
+// lineage record, so for an older commit point GAIA_DATA_DIR at a copy of
+// the store.
 // Builds the engine first.
 // It writes beside it `gaia-judged.json`, what the understanding pass judged
 // about every folder, file and definition (`judgedThings`), for the journal.

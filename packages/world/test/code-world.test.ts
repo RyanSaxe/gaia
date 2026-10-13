@@ -1,27 +1,21 @@
 import { describe, expect, it } from "vitest";
 import type { CodeGraph, CodeModel, DefNode, EntityFacts, FileFacts, JevClient, JevQuestion, JevResponse } from "@gaia/schema";
 import { cellUnder, placeAt } from "@gaia/terrain";
-import { type Judge, type Looks, codeGraph, journalOf, judgeWorld, keptJev, landOf, layoutWorld, planWorldRequests, requestKey, standInJev } from "@gaia/world";
+import { type Judge, type Looks, journalOf, judgeWorld, keptJev, landOf, layoutWorld, planWorldRequests, requestKey, standInJev } from "@gaia/world";
 
-const file = (path: string, lines: number, kind: FileFacts["kind"] = "source"): FileFacts => ({
+const file = (path: string, lines: number): FileFacts => ({
   path,
   language: path.endsWith(".rs") ? "rust" : path.endsWith(".md") ? "markdown" : "typescript",
-  kind,
-  contentHash: "",
   lines,
-  symbols: [
-    { name: "x", kind: "function", exported: true, doc: "Does x.", line: 3, lines: Math.max(1, Math.round(lines / 3)) },
-    { name: "helper", kind: "function", exported: false, line: 40, lines: Math.max(1, Math.round(lines / 4)) },
-  ],
+  // Only code defines functions; a manifest's keys and a document's sections never stand.
+  symbols: /\.(ts|rs)$/.test(path)
+    ? [
+        { name: "x", kind: "function", exported: true, line: 3, lines: Math.max(1, Math.round(lines / 3)) },
+        { name: "helper", kind: "function", exported: false, line: 40, lines: Math.max(1, Math.round(lines / 4)) },
+      ]
+    : [],
   imports: [],
   importedBy: [],
-  doc: `The ${path} file.`,
-  tests: { coveredBy: [], own: [], failing: [] },
-  complexity: { functions: 1, longestFunction: 10, maxNesting: 1 },
-  diagnostics: { errors: 0, warnings: 0, lint: 0 },
-  debtMarkers: 0,
-  unused: false,
-  git: { daysSinceFirstCommit: 10, daysSinceLastCommit: 2, commitsLast14Days: 1, commits: 4, authors: 1 },
 });
 
 const entity = (path: string, name: string, dependsOn: string[], dependents: string[]): EntityFacts => ({
@@ -30,28 +24,22 @@ const entity = (path: string, name: string, dependsOn: string[], dependents: str
   form: "package",
   files: 3,
   lines: 600,
-  languages: ["typescript"],
   exports: 10,
   dependsOn,
   dependents,
-  tests: { files: 1, failing: 0, covered: 1 },
-  diagnostics: { errors: 0, warnings: 0, lint: 0 },
-  debtMarkers: 0,
-  unusedExports: 0,
-  git: { daysSinceFirstCommit: 10, commitsLast14Days: 2, contributors: 1 },
 });
 
 /** A small repository, its code scaled by `grow`. */
 function model(grow = 1): CodeModel {
   const files = [
-    file("package.json", 20, "config"),
-    file("README.md", 80, "docs"),
-    file("packages/core/package.json", 15, "config"),
+    file("package.json", 20),
+    file("README.md", 80),
+    file("packages/core/package.json", 15),
     file("packages/core/src/index.ts", 10),
     file("packages/core/src/math.ts", 300 * grow),
     file("packages/core/src/shapes.ts", 420 * grow),
-    file("packages/core/test/math.test.ts", 90, "test"),
-    file("packages/app/package.json", 15, "config"),
+    file("packages/core/test/math.test.ts", 90),
+    file("packages/app/package.json", 15),
     file("packages/app/src/main.ts", 250 * grow),
     file("packages/app/src/ui/panel.ts", 180 * grow),
     file("packages/app/src/ui/menu.ts", 120 * grow),
@@ -60,7 +48,7 @@ function model(grow = 1): CodeModel {
     projectId: "demo",
     files,
     entities: [entity("", "demo", [], []), entity("packages/app", "@demo/app", ["packages/core"], []), entity("packages/core", "@demo/core", [], ["packages/app"])],
-    repository: { name: "demo", files: files.length, lines: files.reduce((n, f) => n + f.lines, 0), languages: { typescript: 1000 }, ageDays: 10, commitsLast30Days: 12, contributors: 1 },
+    repository: { name: "demo", files: files.length, lines: files.reduce((n, f) => n + f.lines, 0) },
   };
 }
 
@@ -77,7 +65,7 @@ const LOOKS: Looks = {
 };
 
 describe("a world laid out from code", () => {
-  it("asks Jev only about facts and doc comments, with options it can answer, and the stand-in answers every question from them", async () => {
+  it("asks Jev only about the code's structure, with options it can answer, and the stand-in answers every question from them", async () => {
     const requests = planWorldRequests(model(), LOOKS);
     // Every file with something standing on its patch: the seven that aren't config or docs.
     expect(requests.filter((r) => r.about === "file")).toHaveLength(7);
@@ -97,16 +85,6 @@ describe("a world laid out from code", () => {
     const a = layoutWorld(model(), await judgeWorld(model(), LOOKS, jev));
     const b = layoutWorld(model(), await judgeWorld(model(), LOOKS, standInJev(LOOKS)));
     expect(b).toEqual(a);
-  });
-
-  it("builds one graph of the code: directories hold files, files hold their functions, entities depend on entities", () => {
-    const g = codeGraph(model());
-    const node = (id: string) => g.nodes.find((n) => n.id === id);
-    expect(node("file:packages/core/src/math.ts")?.parent).toBe("dir:packages/core/src");
-    expect(node("symbol:packages/core/src/math.ts#helper")).toMatchObject({ kind: "symbol", parent: "file:packages/core/src/math.ts", lines: 75, symbol: { exported: false } });
-    expect(node("dir:packages/core")?.lines).toBe(15 + 10 + 300 + 420 + 90);
-    expect(g.edges).toContainEqual({ from: "entity:packages/app", to: "entity:packages/core", kind: "depends", weight: 1 });
-    expect(g.edges).toContainEqual({ from: "dir:packages/app/src", to: "dir:packages/app/src/ui", kind: "contains", weight: 1 });
   });
 
   it("divides the land among directories and files by their code, with no gaps, nested as the tree nests, and what placeAt reads agrees", async () => {

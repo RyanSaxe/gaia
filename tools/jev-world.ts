@@ -1,5 +1,5 @@
-// Judges Gaia's snapshot world (`app/renderer/terrain/fixtures/gaia.json`,
-// with the definitions of `gaia-graph.json` standing) once with Jev, the way
+// Judges Gaia's snapshot world (the code model of
+// `app/renderer/terrain/fixtures/gaia-graph.json`, `codeModelOf`) once with Jev, the way
 // the app does, and keeps the answers by request key
 // in `fixtures/gaia-jev.json`, the lab's own copy of what the app keeps per
 // project. The lab lays the snapshot out with those answers, so a page with
@@ -14,14 +14,14 @@
 //
 // Usage: pnpm jev-world [--judge jev|local] [--design judged] [--limit 5]
 //          [--spend-up-to 0.05] [--out fixtures/gaia-jev.json] [--ledger ledger.jsonl]
-//          [--model gaia.json] [--graph gaia-graph.json]
+//          [--graph gaia-graph.json]
 
 import { type ChildProcess, execFileSync, spawn } from "node:child_process";
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createInterface } from "node:readline";
-import type { CodeGraph, CodeModel, EngineClient, JevClient, JevResponse } from "@gaia/schema";
-import { DEFAULT_DESIGN, DESIGNS, type DesignName, judgeWorld, keptJev, planWorldRequests, requestKey, standInJev } from "@gaia/world";
+import type { CodeGraph, EngineClient, JevClient, JevResponse } from "@gaia/schema";
+import { DEFAULT_DESIGN, DESIGNS, type DesignName, codeModelOf, judgeWorld, keptJev, planWorldRequests, requestKey, standInJev } from "@gaia/world";
 import { createEngineClient } from "../app/world-service/engine-client.ts";
 import { engineJev } from "../app/world-service/jev.ts";
 import { LOOKS } from "../app/renderer/terrain/looks.ts";
@@ -39,8 +39,8 @@ const limit = Number(flag("limit", "Infinity"));
 const allowed = Number(flag("spend-up-to", "0"));
 const out = resolve(flag("out", resolve(repo, "app/renderer/terrain/fixtures/gaia-jev.json")));
 const ledger = flag("ledger", "");
-const model = JSON.parse(readFileSync(resolve(flag("model", resolve(repo, "app/renderer/terrain/fixtures/gaia.json"))), "utf8")) as CodeModel;
 const graph = JSON.parse(readFileSync(resolve(flag("graph", resolve(repo, "app/renderer/terrain/fixtures/gaia-graph.json"))), "utf8")) as CodeGraph;
+const model = codeModelOf(graph);
 
 /** The kept answers: what the app's `answers` table holds for a project, by request key. */
 interface Kept {

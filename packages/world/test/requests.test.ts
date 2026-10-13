@@ -23,23 +23,14 @@ import {
 const file = (path: string, lines: number, imports: string[] = [], importedBy: string[] = []): FileFacts => ({
   path,
   language: "typescript",
-  kind: path.includes(".test.") ? "test" : "source",
-  contentHash: "",
   lines,
   symbols: [
-    { name: "run", kind: "function", exported: true, doc: "Runs the thing.", line: 3, lines: 40 },
-    { name: "Shape", kind: "class", exported: true, doc: "A shape.", line: 50, lines: 60 },
+    { name: "run", kind: "function", exported: true, line: 3, lines: 40 },
+    { name: "Shape", kind: "class", exported: true, line: 50, lines: 60 },
     { name: "helper", kind: "function", exported: false, line: 120, lines: 12 },
   ],
   imports,
   importedBy,
-  doc: `The ${path} file.`,
-  tests: { coveredBy: path.includes(".test.") ? [] : ["pkg/test/a.test.ts"], own: path.includes(".test.") ? [] : ["pkg/test/a.test.ts"], failing: [] },
-  complexity: { functions: 3, longestFunction: 40, maxNesting: 2 },
-  diagnostics: { errors: 0, warnings: 0, lint: 0 },
-  debtMarkers: 0,
-  unused: false,
-  git: { daysSinceFirstCommit: 10, daysSinceLastCommit: 2, commitsLast14Days: 1, commits: 4, authors: 1 },
 });
 
 function model(): CodeModel {
@@ -56,21 +47,16 @@ function model(): CodeModel {
     form: "package" as const,
     files: 2,
     lines: 500,
-    languages: ["typescript"],
     exports: 4,
     dependsOn,
     dependents,
-    tests: { files: 1, failing: 0, covered: 1 },
-    diagnostics: { errors: 0, warnings: 0, lint: 0 },
-    debtMarkers: 0,
     unusedExports: 0,
-    git: { daysSinceFirstCommit: 10, commitsLast14Days: 1, contributors: 1 },
   });
   return {
     projectId: "demo",
     files,
     entities: [entity("pkg", "pkg", [], ["app"]), entity("app", "app", ["pkg"], [])],
-    repository: { name: "demo", files: files.length, lines: 840, languages: { typescript: 840 }, ageDays: 10, commitsLast30Days: 12, contributors: 1 },
+    repository: { name: "demo", files: files.length, lines: 840 },
   };
 }
 
@@ -89,8 +75,7 @@ const LOOKS: Looks = {
 /** A huge file: hundreds of symbols with long docs and hundreds of imports. */
 const huge: FileFacts = {
   ...file("pkg/src/huge.ts", 9000, Array.from({ length: 300 }, (_, i) => `pkg/src/dep${i}.ts`), Array.from({ length: 300 }, (_, i) => `pkg/src/user${i}.ts`)),
-  doc: "A very long doc comment. ".repeat(80),
-  symbols: Array.from({ length: 500 }, (_, i) => ({ name: `symbol${i}`, kind: "function" as const, exported: i % 2 === 0, doc: "Explains at length. ".repeat(30), line: i * 18 + 1, lines: 17 })),
+  symbols: Array.from({ length: 500 }, (_, i) => ({ name: `symbol${i}`, kind: "function" as const, exported: i % 2 === 0, line: i * 18 + 1, lines: 17 })),
 };
 
 describe("what Jev reads about a thing", () => {
@@ -104,8 +89,8 @@ describe("what Jev reads about a thing", () => {
     }
     // A small file's outline is whole: every symbol, with its doc.
     expect(fileOutline(model().files[1]!).symbols).toEqual([
-      { name: "Shape", kind: "class", exported: true, size: "medium", doc: "A shape." },
-      { name: "run", kind: "function", exported: true, size: "medium", doc: "Runs the thing." },
+      { name: "Shape", kind: "class", exported: true, size: "medium" },
+      { name: "run", kind: "function", exported: true, size: "medium" },
       { name: "helper", kind: "function", exported: false, size: "short" },
     ]);
     // A huge one keeps as much as fits and says how much it left out.
@@ -187,7 +172,7 @@ describe("context that grows by Jev's choice", () => {
     const exchanges: Exchange[] = [];
     const judged = await judgeWorld(model(), LOOKS, unsureAboutFunctions(log), { design: "escalate", trace: (e) => exchanges.push(e) });
     const a = exchanges.find((e) => e.target === "pkg/src/a.ts")!;
-    expect(Object.keys(a.first.request.questions)).toEqual(expect.arrayContaining(["form:function", `${MORE}imports`, `${MORE}importers`, `${MORE}tests`, SOURCE_WISH]));
+    expect(Object.keys(a.first.request.questions)).toEqual(expect.arrayContaining(["form:function", `${MORE}imports`, `${MORE}importers`, SOURCE_WISH]));
     expect(a.second?.read).toEqual(["imports"]);
     expect(Object.keys(a.second!.request.questions)).toEqual(["form:function"]);
     expect((a.second!.request.state as { itImports: { name: string }[] }).itImports.map((b) => b.name)).toEqual(["pkg/src/b.ts"]);

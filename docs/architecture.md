@@ -10,7 +10,7 @@ the document that did not change renders exactly as it did before.
 
 | Data | Contents | Made by | Status |
 | --- | --- | --- | --- |
-| Code model | Per-path facts: language, size, symbols, imports, tests, git activity, diagnostics, content hash; and entities, with their files' facts summed | The Rust engine | Rebuilt from disk at any time |
+| Code model | Per-path facts the world is laid out from: language, size, definitions and imports both ways; and entities, with their size, surface and dependencies | `codeModelOf` in `@gaia/world`, from the code graph alone | Derived from the graph whenever a world opens |
 | Code graph | A node for every directory, file, definition and block, the edges between them, the engine's measures of each and Jev's judgments, and each directory's entity | The Rust engine, with Jev | Read for every definition's stand, importance and quality; the world moves onto it alone next |
 | Vitality | A value from 0 to 1 per path and per entity, and the named signals behind it | A formula over the code model, plus named Jev signals | Recomputed live |
 | World document | Regions, blueprints, instances, links and the world's art direction, as typed JSON | The world service, from Jev answers and layout, plus the person's edits | The world's source of truth, stored per project |
@@ -22,7 +22,7 @@ the document that did not change renders exactly as it did before.
 | --- | --- | --- |
 | Main | TypeScript (Electron) | The window and the app's lifecycle. It starts the engine and the world service, restarts the engine if it exits, and names the folder whose world each page opens: `GAIA_PROJECT`, one chosen with File > Open Folder, or none, and then the page offers the start (File > Choose a World returns to it). |
 | Engine | Rust (`gaia-engine`) | Files, parsing, git, test reports, the code model, the app-data store and the Jev client with the key from the macOS Keychain. |
-| World service | TypeScript (Electron utility process) | Kinds and primitives, the question planner, answer rules, vitality and the world document. It opens a codebase's world (`openWorld` in `app/world-service/open-world.ts`): the engine's `project.open`, Jev's judgments, kept in the store, and `layoutWorld`, and sends the renderer the result (`WorldDocument`) over its MessagePort. |
+| World service | TypeScript (Electron utility process) | Kinds and primitives, the question planner, answer rules, vitality and the world document. It opens a codebase's world (`openWorld` in `app/world-service/open-world.ts`): the engine's `project.graph`, the code model `codeModelOf` derives from it, Jev's judgments, kept in the store, and `layoutWorld`, and sends the renderer the result (`WorldDocument`) over its MessagePort. |
 | Renderer | TypeScript | The UI, the Three.js scene, the realizer and the clock. In slice 1 the renderer is the lab. The lab opens into the world, full screen at eye height (`app/renderer/immersive/`), with its debugging views (Components, Terrain and Skies) behind tabs; the immersive world is the terrain lab's world without its chrome, plus three ways of telling a person where they are (a minimap of the land around them with the area's name, the field map that unfolds out of it, and markers in the world), read through `placeAt` and drawn on one field sheet (`docs/design-system.md`, "The field sheet"); touching the world only moves the person, and stopping at a thing that stands for code raises its page at the lower left; a tap on the open field map sends the person to that place, landing where `WorldHandle.landing` says, under a fold of paper that hides the move. The terrain lab bakes its world on worker threads (`app/renderer/terrain/bake-worker.ts`): a few workers compose bands of lattice rows with `composeRows`, and one finishes the bake with `finishTerrain`, which scales the relief into the budget by a fit found on a survey of every 4th sample and checked once at every sample, and stands the world's things on it. On the page the land is a clipmap (`createPageLand` in `app/renderer/terrain/land.ts`): seven levels of 512 by 512 samples centered near the person, level k every 2^k-th sample on the world's own grid, where ground ring k sets its vertices, so the rings read exactly the samples they did. The page never holds the whole world's land: its land workers bake each level's window in 64-sample chunks from the world's plan alone (`app/renderer/terrain/land-chunks.ts`), and a level moves once the person has walked a chunk from its middle and every chunk of its new window has come, so a window never shows half old and half new. Every texture that holds a value per lattice sample takes its data from the levels: the ground's height, water and distances, each sample's covers, and which ways each sample lies on (`createGroundTexture` in `ground.ts`), so the land's memory on the page and the GPU is the same at any world size. A coarse level names a way as far out as a reader of its cells asks (`placeReach`), so a far trail stays as worn as a near one, and a reader between samples takes the finest level that holds the point and blends into the next near its window's edge (`clipLevel`). The clearings' mask, which only the grass reads, is one window 256 m across around the grass, drawn again from the outlines and capsules as the grass moves on (`app/renderer/terrain/clearings.ts`). Level 0, the land within a few hundred meters to the meter, is the page's `Terrain`; a read past it falls to the finest level that holds the point (`Lattice.beyond`), and a jump waits under its fold of paper until the land around its landing has come. The land a tile at a time: `planTerrain` makes the world's whole-world decisions once, the fit from the survey and the water from the ground along its beds alone, each bed solved on a window of just the ground it reads with the beds before it cut in again, so the plan never holds a lattice the size of the world (the whole world's bake solves its water on the same windows, so the two agree to the bit); `bakeTile` bakes any tile from the plan with a margin for its shore, or every stride-th sample of it for a coarser level; and `standTile` levels it under the buildings' pads, the landmarks' footings and the trails' treads as standing the world recorded them (`LandEdits`), byte for byte as the stood world holds it (`app/renderer/terrain/stand.test.ts`). The finishing worker stands the world's things with `standWorld` (`app/renderer/terrain/stand.ts`): each building's site and pad, the landmarks' sites, the network of trails leveled into the ground, the trees, and the understory of the tiles near the person, while the others work out whose ground each part of the land is (`ownershipRows`, see Vitality), so drawing never waits on a bake. It hands the page the world's plan, what standing did to the land and how the understory scatters (`LandSource`); the whole world's land stays on the worker. The components every world opens with (the trees, landmarks and bushes) and a codebase's buildings are realized on worker threads too (`app/renderer/terrain/made.ts`), made ahead while the wait draws: the page takes each build as it is made, and realizes in place any build it asks for that was not made ahead, the same either way since the realizer is pure. Each build is held only until its meshes are made and its far form baked; one asked for after that, such as by the swap test, is realized again. A plant's meshes keep no copy of their buffers on the page once the GPU holds them (`letGoOnUpload`), but for the positions, normals and index of what a ray picks: a building or a landmark. |
 
 The world service talks to the engine in newline-delimited JSON-RPC 2.0 over
@@ -50,8 +50,8 @@ own. Either way it never follows a symbolic link and leaves out any file over
 2 MiB. The graph records the commit it read (`CodeGraph.commit`), the world
 document carries it, and the journal's code comes from that same commit
 (`project.source`), so its lines always match the graph's even after a new
-commit. `project.open` reads the snapshot and reports each file's
-facts, the entities, and the repository (`CodeModel`). Each file is
+commit. `project.open`, which the world no longer reads, reports each
+file's facts, the entities, and the repository from the snapshot. Each file is
 read by a careful line-based pass for TypeScript, JavaScript and Rust
 (`engine/src/source.rs`), with a small lexer that keeps strings and comments
 apart from code: its language and kind (source, test, config, data, docs,
@@ -140,22 +140,23 @@ instances of one blueprint vary and each is identical on every run.
 
 ## A world from code
 
-`@gaia/world` turns a code model (`CodeModel`, what `project.open` returns)
-into a world document (`CodeWorld`, in `packages/world/src/code-world.ts`) in
-three steps: code to graph, graph to land, and Jev's meaning on top.
+`@gaia/world` turns the engine's code graph into a world document
+(`CodeWorld`, in `packages/world/src/code-world.ts`) in three steps: graph to
+code model, code model to land, and Jev's meaning on top.
 
-**The graph.** `codeGraph` builds one graph from the facts: directories
-contain directories and files, files contain their finer entities
-(functions, classes, types and constants, each with its size and doc
-comment), and entities are rooted at directories. Edges say what contains
-what, which file imports which, and which entity depends on which, weighed by
-how many of its files import the other.
+**The code model.** `codeModelOf` (`packages/world/src/code-model.ts`)
+derives from the graph alone the facts the world is laid out from: each
+file's size, language, definitions (every one it exports, and the functions
+and classes at its top level) and imports both ways, and each entity a
+directory holds, with its files, size, the surface its entry gathers and the
+entities its files import from. Only the code's structure is here, the facts
+the new engine reads too: tool signals, test coverage, history, file kinds
+and doc comments are not facts the world reads.
 
 **The land.** `layoutWorld` lays the graph out as land with `divideLand`
 (`packages/world/src/land.ts`). Each directory's land is divided among its own
 ground (its files and its entity's lot, kept together at its heart) and its
-subdirectories, each in proportion to its code (26 m² a line, weighed by the
-part the file plays: code most, configuration and data least, and 120 m² for
+subdirectories, each in proportion to its code (26 m² a line, and 120 m² for
 each definition standing on it); then each of those is divided the same way,
 down to the files. Every division is a
 relaxed, weighted nearest-site division of a raster of the land, starting
@@ -324,8 +325,9 @@ characters, and a world kept before pictures were, or whose page painted
 none, comes with no picture, which the start shows as plain paper with its
 name. A
 standalone page (`pnpm lab:html`, `pnpm lab:serve`) has no engine and opens
-on Gaia's own world from `app/renderer/terrain/fixtures/gaia.json`, a
-snapshot `pnpm snapshot` writes through the engine's `project.open`, judged
+on Gaia's own world from `app/renderer/terrain/fixtures/gaia-graph.json`,
+the engine's judged graph `pnpm graph-snapshot` writes, laid out from the
+code model `codeModelOf` derives from it, judged
 by Jev's answers kept for that snapshot in `fixtures/gaia-jev.json` (written
 by `pnpm jev-world`, keyed by request hash like the app's store), with the
 stand-in judging any request they no longer answer; `?judge=stand-in` shows
@@ -503,8 +505,8 @@ the repository's own: the last part of its `origin` remote's address, or
 with no remote its main checkout's folder. A worktree or a branch never
 changes it, and it plays no part in telling projects apart.
 
-The graph is built beside `project.open`, and nothing the world reads
-changes until the world moves onto it. Updating a world while its files
+The world reads the graph alone; `project.open`'s older code model is no
+longer read, and goes with its extraction. Updating a world while its files
 change on disk comes last, once the world is right without it, because it
 complicates nearly everything else.
 

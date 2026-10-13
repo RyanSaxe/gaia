@@ -7,7 +7,7 @@
 // covers the engine's own estimate.
 //
 // Usage: pnpm compare-jev [--judge stand-in|local|jev] [--designs first,revised,outline,escalate,shared,shared-outline,judged]
-//          [--model fixture.json] [--repeat 2] [--spend-up-to 0.20] [--out report.json] [--keep-runs yes] [--ledger spend.jsonl]
+//          [--graph gaia-graph.json] [--repeat 2] [--spend-up-to 0.20] [--out report.json] [--keep-runs yes] [--ledger spend.jsonl]
 //   stand-in: the deterministic stand-in judge, in process.
 //   local:    the real engine binary, live, against a local stand-in for OpenRouter (proves the path).
 //   jev:      the real engine binary and the Keychain's key: real answers, real cost.
@@ -16,8 +16,8 @@ import { type ChildProcess, execFileSync, spawn } from "node:child_process";
 import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createInterface } from "node:readline";
-import type { CodeModel, EngineClient, JevAnswer, JevClient, JevEstimate } from "@gaia/schema";
-import { DESIGNS, type DesignName, type Exchange, MORE, SOURCE_WISH, judgeWorld, planWorldRequests, requestKey, standInJev, tokensOf } from "@gaia/world";
+import type { CodeGraph, CodeModel, EngineClient, JevAnswer, JevClient, JevEstimate } from "@gaia/schema";
+import { DESIGNS, type DesignName, type Exchange, MORE, SOURCE_WISH, codeModelOf, judgeWorld, planWorldRequests, requestKey, standInJev, tokensOf } from "@gaia/world";
 import { createEngineClient } from "../app/world-service/engine-client.ts";
 import { engineJev } from "../app/world-service/jev.ts";
 import { LOOKS } from "../app/renderer/terrain/looks.ts";
@@ -31,7 +31,7 @@ const flag = (name: string, fallback: string): string => {
 const judge = flag("judge", "stand-in");
 const designs = flag("designs", "first,revised,outline,escalate,shared,shared-outline,judged").split(",") as DesignName[];
 const repeat = Number(flag("repeat", judge === "stand-in" ? "1" : "2"));
-const model = JSON.parse(readFileSync(resolve(flag("model", resolve(repo, "app/renderer/terrain/fixtures/gaia.json"))), "utf8")) as CodeModel;
+const model = codeModelOf(JSON.parse(readFileSync(resolve(flag("graph", resolve(repo, "app/renderer/terrain/fixtures/gaia-graph.json"))), "utf8")) as CodeGraph);
 for (const d of designs) if (!(d in DESIGNS)) throw new Error(`Unknown design ${d}; choose from ${Object.keys(DESIGNS).join(", ")}.`);
 
 /** A question's family: what it judges, whatever thing it is about. */
@@ -153,10 +153,10 @@ try {
 
 // ---------- what a one-line edit asks again ----------
 
-/** Requests whose key changes when one file grows by a line at its top, and their tokens, averaged over every source file. */
+/** Requests whose key changes when one file grows by a line at its top, and their tokens, averaged over every file that declares something. */
 function reasksPerEdit(design: DesignName): { requests: number; tokens: number } {
   const before = new Set(planWorldRequests(model, LOOKS, { design }).map((p) => requestKey(p.request)));
-  const sources = model.files.filter((f) => (f.kind ?? "source") === "source");
+  const sources = model.files.filter((f) => f.symbols.length > 0);
   let changed = 0;
   let tokens = 0;
   for (const f of sources) {

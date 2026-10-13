@@ -819,101 +819,100 @@
    "#keepUtils2": "Fir",
    "#Utils2Sorter": "Blueberry",
    "#Utils2Trace": "Cherry",
-   "#UTILS2_FOLD": "Rhododendron",
-   "#measureUtils2": "Autumn maple"
+   "#UTILS2_FOLD": "Rhododendron"
   },
   "ruins/index.ts": {
-   "#keepRuins": "Lantern willow",
+   "#keepRuins": "Autumn maple",
    "#RuinsSorter": "Feather shrub"
   },
   "ruins/keep/lib.rs": {
-   "#sortKeep": "Fir",
+   "#sortKeep": "Lantern willow",
    "#KeepTracer": "Bluebells",
-   "#KeepFold": "Cherry"
+   "#KeepFold": "Fir"
   },
   "ruins/keep/walls.rs": {
-   "#turnWalls": "Autumn maple",
+   "#turnWalls": "Cherry",
    "#WallsKeeper": "Daisies",
-   "#WallsSort": "Lantern willow",
+   "#WallsSort": "Autumn maple",
    "#WALLS_TRACE": "Standing stone",
-   "#foldWalls": "Fir"
+   "#foldWalls": "Lantern willow"
   },
   "ruins/lighthouse/index.ts": {
-   "#gatherLighthouse": "Cherry",
+   "#gatherLighthouse": "Fir",
    "#LighthouseWeigher": "Mossy boulder"
   },
   "ruins/lighthouse/lens.ts": {
-   "#measureLens": "Autumn maple",
+   "#measureLens": "Cherry",
    "#LensJoiner": "Stone family",
-   "#LensGather": "Lantern willow",
+   "#LensGather": "Autumn maple",
    "#LENS_WEIGH": "Bench stone"
   },
   "ruins/mill/index.ts": {
-   "#mendMill": "Fir",
+   "#mendMill": "Lantern willow",
    "#MillTurner": "Box mound"
   },
   "ruins/mill/race.ts": {
-   "#carryRace": "Cherry",
+   "#carryRace": "Fir",
    "#RaceSettler": "Blueberry",
-   "#RaceMend": "Autumn maple",
+   "#RaceMend": "Cherry",
    "#RACE_TURN": "Rhododendron",
-   "#keepRace": "Lantern willow"
+   "#keepRace": "Autumn maple"
   },
   "ruins/oak/index.ts": {
-   "#measureOak": "Fir",
+   "#measureOak": "Lantern willow",
    "#OakJoiner": "Feather shrub"
   },
   "ruins/oak/temp.ts": {
-   "#traceTemp": "Cherry",
+   "#traceTemp": "Fir",
    "#TempFolder": "Bluebells",
-   "#TempMeasure": "Autumn maple",
+   "#TempMeasure": "Cherry",
    "#TEMP_JOIN": "Daisies"
   },
   "ruins/rubble.ts": {
-   "#carryRubble": "Lantern willow",
+   "#carryRubble": "Autumn maple",
    "#RubbleSettler": "Standing stone",
-   "#RubbleMend": "Fir",
+   "#RubbleMend": "Lantern willow",
    "#RUBBLE_TURN": "Mossy boulder",
-   "#keepRubble": "Cherry",
+   "#keepRubble": "Fir",
    "#sortRubble": "Stone family",
-   "#traceRubble": "Autumn maple"
+   "#traceRubble": "Cherry"
   },
   "terraces/croft/lib.rs": {
-   "#traceCroft": "Lantern willow",
+   "#traceCroft": "Autumn maple",
    "#CroftFolder": "Bench stone",
-   "#CroftMeasure": "Fir"
+   "#CroftMeasure": "Lantern willow"
   },
   "terraces/croft/press.rs": {
-   "#keepPress": "Cherry",
+   "#keepPress": "Fir",
    "#PressSorter": "Box mound",
-   "#PressTrace": "Autumn maple",
+   "#PressTrace": "Cherry",
    "#PRESS_FOLD": "Blueberry",
-   "#measurePress": "Lantern willow"
+   "#measurePress": "Autumn maple"
   },
   "terraces/pipeline.ts": {
-   "#tracePipeline": "Fir",
+   "#tracePipeline": "Lantern willow",
    "#PipelineFolder": "Rhododendron",
-   "#PipelineMeasure": "Cherry",
+   "#PipelineMeasure": "Fir",
    "#PIPELINE_JOIN": "Feather shrub",
-   "#gatherPipeline": "Autumn maple"
+   "#gatherPipeline": "Cherry"
   },
   "terraces/ring/index.ts": {
-   "#joinRing": "Lantern willow",
+   "#joinRing": "Autumn maple",
    "#RingGatherer": "Bluebells"
   },
   "terraces/ring/schema.ts": {
-   "#foldSchema": "Fir",
+   "#foldSchema": "Lantern willow",
    "#SchemaMeasurer": "Daisies",
-   "#SchemaJoin": "Cherry",
+   "#SchemaJoin": "Fir",
    "#SCHEMA_GATHER": "Standing stone",
-   "#weighSchema": "Autumn maple"
+   "#weighSchema": "Cherry"
   },
   "terraces/steps.ts": {
-   "#carrySteps": "Lantern willow",
+   "#carrySteps": "Autumn maple",
    "#StepsSettler": "Mossy boulder",
-   "#StepsMend": "Fir",
+   "#StepsMend": "Lantern willow",
    "#STEPS_TURN": "Stone family",
-   "#keepSteps": "Cherry",
+   "#keepSteps": "Fir",
    "#sortSteps": "Bench stone"
   }
  },
@@ -1051,7 +1050,7 @@
   "fords/jetty": 0.5,
   "fords/gravel": 0.5,
   "hollow": 1,
-  "pondside": 0.5903361344537815,
+  "pondside": 0.5873287671232876,
   "pondside/records": 0.5,
   "hills/kiln": 0.5,
   "hills/oak": 1,
@@ -1064,13 +1063,13 @@
   "downs": 1,
   "downs/oak": 0.5,
   "downs/deep": 1,
-  "mixed": 0.6669491525423729,
+  "mixed": 0.663527397260274,
   "mixed/workshop": 0.5,
   "mixed/beacon": 0.5,
   "ruins": 0.03,
   "ruins/cottage": 0.030000000000000002,
-  "ruins/croft": 0.030000000000000002,
-  "ruins/house": 0.03,
+  "ruins/croft": 0.03,
+  "ruins/house": 0.030000000000000002,
   "ruins/mill": 0.03,
   "ruins/keep": 0.030000000000000002,
   "ruins/lighthouse": 0.030000000000000002,

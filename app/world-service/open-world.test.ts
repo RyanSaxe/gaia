@@ -1,26 +1,44 @@
 import { describe, expect, it } from "vitest";
-import type { CodeModel, EngineClient, JevRequest } from "@gaia/schema";
-import { landOf, standInJev } from "@gaia/world";
+import type { CodeGraph, CodeModel, EngineClient, GraphNode, JevRequest } from "@gaia/schema";
+import { codeModelOf, landOf, standInJev } from "@gaia/world";
 import { LOOKS } from "../renderer/terrain/looks.ts";
 import proving from "../renderer/terrain/fixtures/proving.json";
 import { openWorld } from "./open-world.ts";
 import type { Opening } from "./protocol.ts";
 
-const model = proving as unknown as CodeModel;
+/** The proving ground as the engine's graph gives it: its directories and entities, files, definitions and imports. */
+function graphOf(m: CodeModel): CodeGraph {
+  const dirs = new Set<string>([""]);
+  for (const f of m.files) for (let d = f.path; d.includes("/"); ) dirs.add((d = d.slice(0, d.lastIndexOf("/"))));
+  const entities = new Map(m.entities.map((e) => [e.path, e]));
+  const nodes: GraphNode[] = [
+    ...[...dirs].map((path): GraphNode => {
+      const e = entities.get(path);
+      return { kind: "dir", id: `dir:${path}`, lineage: path, path, measures: { lines: 0 }, ...(e === undefined ? {} : { entity: { name: e.name, form: e.form, ...(e.entry === undefined ? {} : { entry: e.entry }) } }) };
+    }),
+    ...m.files.flatMap((f): GraphNode[] => [
+      { kind: "file", id: `file:${f.path}`, lineage: f.path, path: f.path, language: f.language, bytes: 1, hash: "", binary: false, unparsed: 0, conventions: [], measures: { lines: f.lines } },
+      ...f.symbols.map((s): GraphNode => ({ kind: "def", id: `def:${f.path}#${s.name}`, lineage: s.name, file: `file:${f.path}`, name: s.name, role: s.kind, span: { start: s.line ?? 1, end: (s.line ?? 1) + (s.lines ?? 1) - 1 }, signature: s.name, exported: s.exported, measures: { lines: s.lines ?? 1 } })),
+    ]),
+  ];
+  const edges = m.files.flatMap((f) => f.imports.map((to) => ({ from: `file:${f.path}`, to: `file:${to}`, kind: "imports" as const, by: { by: "rule" as const } })));
+  return { projectId: "proving", name: "proving", nodes, edges, pending: [] };
+}
+const graph = graphOf(proving as unknown as CodeModel);
+const model = codeModelOf(graph);
 
 /** An engine with Jev live and nothing kept, whose every batch of answers waits until `release` lets it go. */
 function heldEngine(): { engine: EngineClient; held: (() => void)[] } {
   const standIn = standInJev(LOOKS);
   const held: (() => void)[] = [];
   const results: Record<string, (params: { requests: JevRequest[] }) => unknown> = {
-    "project.open": () => model,
     "store.read": () => ({ records: {} }),
     "store.get": () => null,
     "store.put": () => ({ ok: true }),
     "jev.status": () => ({ live: true, key: true }),
     "jev.estimate": ({ requests }) => ({ endpoint: "held", requests: requests.length, questions: 0, bytes: 0, estimatedTokens: 0, estimatedUsd: 0, usdPerMillionInputTokens: 0, concurrency: 8, live: true }),
-    // Nothing to understand: the proving ground has no graph here, so its symbols stand as the code model has them.
-    "project.graph": () => ({ projectId: "proving", name: "proving", nodes: [], edges: [], pending: [] }),
+    // The proving ground's graph, with nothing judged and nothing to understand.
+    "project.graph": () => graph,
     "understanding.plan": () => ({
       pending: [],
       estimate: { endpoint: "held", requests: 0, questions: 0, bytes: 0, estimatedTokens: 0, estimatedUsd: 0, usdPerMillionInputTokens: 0, concurrency: 8, live: true },

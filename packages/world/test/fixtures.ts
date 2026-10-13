@@ -4,22 +4,14 @@ import type { FileFacts, JevAnswer, JevRequest } from "@gaia/schema";
 export const SCANNER: FileFacts = {
   path: "src-tauri/src/scanner.rs",
   language: "rust",
-  contentHash: "9f1c…",
   lines: 299,
   symbols: [
-    { name: "scan_project", kind: "function", exported: true, doc: "Walks the project and hashes every file." },
+    { name: "scan_project", kind: "function", exported: true },
     { name: "FileEntry", kind: "type", exported: true },
     { name: "DirectorySummary", kind: "type", exported: true },
   ],
   imports: ["src-tauri/src/lib.rs"],
   importedBy: ["src-tauri/src/commands.rs"],
-  doc: "Walks a project with gitignore support and records hashes, line counts and languages.",
-  tests: { coveredBy: [], own: [], failing: [] },
-  complexity: { functions: 9, longestFunction: 58, maxNesting: 4 },
-  diagnostics: { errors: 0, warnings: 1, lint: 2 },
-  debtMarkers: 2,
-  unused: false,
-  git: { daysSinceFirstCommit: 171, daysSinceLastCommit: 2, commitsLast14Days: 0, commits: 3, authors: 1 },
 };
 
 /**

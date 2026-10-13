@@ -5,8 +5,8 @@
 // (app/renderer/wait/), and asks the person only before spending past their
 // limit. A standalone page (the
 // offline HTML, `pnpm lab:serve`) has no engine: it lays out the engine's
-// snapshot of this repository (`fixtures/gaia.json`, written by `pnpm
-// snapshot`), judged by Jev's answers kept for it (`fixtures/gaia-jev.json`,
+// graph of this repository (`fixtures/gaia-graph.json`, written by `pnpm
+// graph-snapshot`), judged by Jev's answers kept for it (`fixtures/gaia-jev.json`,
 // written by `pnpm jev-world`), or by the stand-in with `?judge=stand-in` and
 // wherever no kept answer fits. Everything else follows from the code:
 // each directory's area and land, each file's patch and what grows on it,
@@ -20,8 +20,8 @@ import type { ConsentPlan, JudgedThing, Opening, StartChoice, StartOffer, WorldD
 import { type WorldService, worldService } from "../service.ts";
 import GAIA_PICTURE from "../start/gaia-picture.webp";
 import { CHOSEN_MS } from "../start/start.ts";
-import snapshot from "./fixtures/gaia.json";
 import snapshotJudged from "./fixtures/gaia-judged.json";
+import { snapshotModel } from "./snapshot-model.ts";
 import type { LayoutReply, LayoutRequest } from "./layout-worker.ts";
 import LayoutWorker from "./layout-worker.ts?worker";
 import proving from "./fixtures/proving.json";
@@ -84,7 +84,7 @@ export function withWater(biome: Blueprint, water: string): Blueprint {
   return biome;
 }
 
-const KIND_NAMES: Readonly<Record<SymbolFact["kind"], string>> = { function: "Function", class: "Class", type: "Type", constant: "Constant", module: "Module" };
+const KIND_NAMES: Readonly<Record<SymbolFact["kind"], string>> = { function: "Function", class: "Class", type: "Type", module: "Module" };
 const LANGUAGE_NAMES: Readonly<Record<string, string>> = { typescript: "TypeScript", javascript: "JavaScript", rust: "Rust" };
 
 /** What a card says about a file's finer entity: its name, kind, doc comment, where it is declared and its own vitality. */
@@ -147,7 +147,7 @@ const SNAPSHOT_JUDGE = typeof location === "undefined" || new URLSearchParams(lo
  * page with no engine, laid out on a thread of its own while the wait draws.
  */
 function snapshotWorld(why: string): Promise<WorldDocument> {
-  const model = snapshot as unknown as CodeModel;
+  const model = snapshotModel();
   const worker = new LayoutWorker();
   return new Promise<WorldDocument>((resolve, reject) => {
     worker.onmessage = (e: MessageEvent<LayoutReply>) => {
@@ -183,7 +183,7 @@ const ASKS_PROVING = typeof location !== "undefined" && new URLSearchParams(loca
  * except an address, which a page with no engine cannot follow.
  */
 async function previewStart(veil: Veil): Promise<void> {
-  const model = snapshot as unknown as CodeModel;
+  const model = snapshotModel();
   const recent = [{ root: model.repository.name, name: model.repository.name, at: Date.now(), picture: GAIA_PICTURE }];
   let place = await veil.choose({ recent });
   while ("address" in place) place = await veil.choose({ recent, refused: { address: place.address, why: "offline" } });
