@@ -434,6 +434,9 @@ function smoothLine(points: [number, number][], spacing: number): Float32Array {
   return new Float32Array(out);
 }
 
+/** Water shallower than this under a tread is stepped over, never bridged, meters. */
+const WADE_DEPTH = 0.05;
+
 /** Where two segments, a to b and c to d, meet: how far along a to b, 0 to 1, or null when they don't. */
 function meet(ax: number, az: number, bx: number, bz: number, cx: number, cz: number, dx: number, dz: number): number | null {
   const den = (bx - ax) * (dz - cz) - (bz - az) * (dx - cx);
@@ -500,6 +503,10 @@ function crossingsOf(t: Terrain, points: Float32Array): Crossing[] {
       i++;
     }
     if (within % 2 === 0) continue;
+    // A course crossed where its spring or seep has run dry, or a damp spot, is stepped over: nothing to bridge.
+    let deepest = 0;
+    for (let k = a; k <= b; k++) deepest = Math.max(deepest, waterDepthAt(t, px(k), pz(k)));
+    if (deepest < WADE_DEPTH) continue;
     const ax = px(a);
     const az = pz(a);
     const bx = px(b);

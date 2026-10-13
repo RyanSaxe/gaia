@@ -3,7 +3,7 @@ import { type BuildingPlan, type Built, Library, type RouteSpec, seedOf } from "
 import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, LANDMARK_PRIMITIVES, RELIEF_PRIMITIVES, ROUTE_PRIMITIVES, STRUCTURE_PRIMITIVES } from "@gaia/primitives";
 import { landmark, link, structure } from "@gaia/kinds";
 import { FLORA_PRESETS, LANDMARK_PRESETS, STRUCTURE_PRESETS, TRAIL_PRESETS, buildSlots, realize } from "@gaia/realize";
-import { type ScatterRule, TERRAIN, type Terrain, bakeTerrain, groundLook, junctionVitality, ownershipOf, placeAt, vitalityAt, vitalityOver, wayVitalityAt } from "@gaia/terrain";
+import { type ScatterRule, TERRAIN, type Terrain, bakeTerrain, groundLook, junctionVitality, ownershipOf, placeAt, vitalityAt, vitalityOver, waterDepthAt, wayVitalityAt } from "@gaia/terrain";
 import { type Judgments, areaVitality, groundVitality } from "@gaia/world";
 import { codeLab, provingWorld } from "./code-world.ts";
 import { BUILDINGS, CHARACTERS, FORMS, LANDMARKS, LANDS, TRAILS, WATERS, presetBlueprint } from "./looks.ts";
@@ -147,6 +147,12 @@ describe("the proving ground", () => {
       const place = (id: string): number => vitalityOf.get(id) ?? 1;
       const crossings = net.ways.flatMap((w, i) => w.crossings.map(() => ({ kind: w.style.crossing, vitality: wayVitalityAt(net, i, 0.5, place) })));
       for (const kind of ["footbridge", "stepping-stones"] as const) expect(crossings.some((c) => c.kind === kind), kind).toBe(true);
+      // Each spans water, from dry ground to dry ground.
+      for (const c of net.ways.flatMap((w) => w.crossings)) {
+        const at = (s: number): readonly [number, number] => [c.x + Math.cos(-c.yaw) * s, c.z + Math.sin(-c.yaw) * s];
+        for (const end of [-c.span / 2, c.span / 2]) expect(waterDepthAt(terrain, ...at(end)), `${c.x}, ${c.z} ends dry`).toBeLessThan(0.01);
+        expect(Math.max(...Array.from({ length: 21 }, (_, i) => waterDepthAt(terrain, ...at(-c.span / 2 + (c.span * i) / 20)))), `${c.x}, ${c.z} spans water`).toBeGreaterThan(0.1);
+      }
       expect(crossings.some((c) => c.vitality > 0.85)).toBe(true);
       expect(crossings.some((c) => c.vitality < 0.12)).toBe(true);
       const cairns = net.junctions.filter((j) => j.cairn !== null).map((j) => junctionVitality(net, j, place));

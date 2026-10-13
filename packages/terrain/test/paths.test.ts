@@ -140,7 +140,7 @@ describe("trails", { timeout: 20_000 }, () => {
     }
   });
 
-  it("crosses a stream on a bridge or stones wherever its tread crosses one, each spanning the water from dry bank to dry bank", () => {
+  it("crosses a stream on a bridge or stones wherever its tread crosses its water, each spanning the water from dry bank to dry bank", () => {
     /** Where two segments meet, if they do. */
     const meet = (ax: number, az: number, bx: number, bz: number, cx: number, cz: number, dx: number, dz: number): readonly [number, number] | null => {
       const den = (bx - ax) * (dz - cz) - (bz - az) * (dx - cx);
@@ -171,7 +171,8 @@ describe("trails", { timeout: 20_000 }, () => {
           const u = Math.max(0, Math.min(1, ((x - ax) * (bx - ax) + (z - az) * (bz - az)) / (c.span * c.span)));
           return Math.hypot(x - (ax + (bx - ax) * u), z - (az + (bz - az) * u)) < 1.5;
         };
-        for (const at of over) expect(way.crossings.some((c) => onDeck(c, at)), `${way.id} crosses a stream at ${at.map((v) => v.toFixed(1))} with nothing to cross on`).toBe(true);
+        // Where there is water to cross: a course's dry spring or seep is stepped over.
+        for (const at of over.filter((at) => waterDepthAt(t, ...at) > 0.1)) expect(way.crossings.some((c) => onDeck(c, at)), `${way.id} crosses a stream at ${at.map((v) => v.toFixed(1))} with nothing to cross on`).toBe(true);
         for (const c of way.crossings) {
           crossings++;
           const where = `${way.id}'s crossing at ${c.x.toFixed(1)}, ${c.z.toFixed(1)}`;
