@@ -13,7 +13,7 @@
 // `FileOutline.spans` keeps them for the source-reading step, which reads
 // only the symbols Jev names (docs/architecture.md, "Jev").
 
-import type { CodeModel, EntityFacts, FileFacts, SymbolFact } from "@gaia/schema";
+import type { CodeFacts, EntityFacts, FileFacts, SymbolFact } from "@gaia/schema";
 
 /** Bytes per token, as the engine's `jev.estimate` counts them (calibrated on OpenRouter's published example). */
 export const BYTES_PER_TOKEN = 1.8;
@@ -186,18 +186,18 @@ function childDirs(files: readonly FileFacts[], dir: string): string[] {
 }
 
 /** A directory's outline: its own files and its subdirectories, as rich as `budget` allows. */
-export function areaOutline(model: CodeModel, dir: string, budget: number = OUTLINE.tokens.area): AreaOutline {
-  const all = under(model.files, dir);
-  const own = directlyIn(model.files, dir).sort(weightier);
+export function areaOutline(facts: CodeFacts, dir: string, budget: number = OUTLINE.tokens.area): AreaOutline {
+  const all = under(facts.files, dir);
+  const own = directlyIn(facts.files, dir).sort(weightier);
   const inside = new Set(all.map((f) => f.path));
-  const entity = model.entities.find((e) => e.path === dir);
+  const entity = facts.entities.find((e) => e.path === dir);
   const imports = {
     withinItself: all.reduce((n, f) => n + f.imports.filter((i) => inside.has(i)).length, 0),
     toOtherDirectories: all.reduce((n, f) => n + f.imports.filter((i) => !inside.has(i)).length, 0),
     fromOtherDirectories: all.reduce((n, f) => n + f.importedBy.filter((i) => !inside.has(i)).length, 0),
   };
-  const subs = childDirs(model.files, dir).map((c) => {
-    const files = under(model.files, c);
+  const subs = childDirs(facts.files, dir).map((c) => {
+    const files = under(facts.files, c);
     return { name: baseName(c), files: files.length, size: bodySize(files.reduce((n, f) => n + f.lines, 0)) };
   });
   return fit(budget, (level) => ({
@@ -232,22 +232,22 @@ export interface EntityOutline {
 }
 
 /** How many of `from`'s files import from `to`'s, the weight `layoutWorld` gives a trail. */
-export function importersOf(model: CodeModel, from: EntityFacts, to: EntityFacts): number {
-  const roots = model.entities.map((e) => e.path);
+export function importersOf(facts: CodeFacts, from: EntityFacts, to: EntityFacts): number {
+  const roots = facts.entities.map((e) => e.path);
   const owner = (p: string): string | undefined => roots.filter((r) => r === "" || p === r || p.startsWith(`${r}/`)).sort((a, b) => b.length - a.length)[0];
-  return model.files.filter((f) => owner(f.path) === from.path && f.imports.some((i) => owner(i) === to.path)).length;
+  return facts.files.filter((f) => owner(f.path) === from.path && f.imports.some((i) => owner(i) === to.path)).length;
 }
 
 /** An entity's outline, as rich as `budget` allows. */
-export function entityOutline(model: CodeModel, e: EntityFacts, budget: number = OUTLINE.tokens.entity): EntityOutline {
-  const entities = new Map(model.entities.map((x) => [x.path, x]));
-  const roots = model.entities.map((x) => x.path);
-  const own = model.files
+export function entityOutline(facts: CodeFacts, e: EntityFacts, budget: number = OUTLINE.tokens.entity): EntityOutline {
+  const entities = new Map(facts.entities.map((x) => [x.path, x]));
+  const roots = facts.entities.map((x) => x.path);
+  const own = facts.files
     .filter((f) => roots.filter((r) => r === "" || f.path === r || f.path.startsWith(`${r}/`)).sort((a, b) => b.length - a.length)[0] === e.path)
     .sort(weightier);
   const dependsOn = e.dependsOn.flatMap((p) => {
     const o = entities.get(p);
-    return o === undefined ? [] : [{ name: o.name, importers: `${howMany(importersOf(model, e, o))} of its files`, dependents: o.dependents.length }];
+    return o === undefined ? [] : [{ name: o.name, importers: `${howMany(importersOf(facts, e, o))} of its files`, dependents: o.dependents.length }];
   });
   return fit(budget, (level) => {
     return {
@@ -275,11 +275,11 @@ export interface OutlineReading {
 }
 
 /** The readings a file's second request may carry: its imports', importers' and neighbours' outlines. Empty readings are left out. */
-export function fileReadings(model: CodeModel, f: FileFacts, budget: number = OUTLINE.tokens.reading): Record<string, OutlineReading> {
-  const files = new Map(model.files.map((x) => [x.path, x]));
+export function fileReadings(facts: CodeFacts, f: FileFacts, budget: number = OUTLINE.tokens.reading): Record<string, OutlineReading> {
+  const files = new Map(facts.files.map((x) => [x.path, x]));
   const briefs = (paths: readonly string[]): FileBrief[] =>
     fit(budget, (level) => [...paths].sort().flatMap((p) => (files.has(p) ? [briefAt(files.get(p) as FileFacts, level, p)] : [])).slice(0, Math.max(level.files, 1)));
-  const neighbours = directlyIn(model.files, parentOf(f.path)).filter((x) => x.path !== f.path).sort(weightier);
+  const neighbours = directlyIn(facts.files, parentOf(f.path)).filter((x) => x.path !== f.path).sort(weightier);
   const out: Record<string, OutlineReading> = {};
   if (f.imports.length > 0) out.imports = { describe: "the outlines of the files it imports", state: { itImports: briefs(f.imports) } };
   if (f.importedBy.length > 0) out.importers = { describe: "the outlines of the files that import it", state: { importedBy: briefs(f.importedBy) } };
@@ -291,16 +291,16 @@ export function fileReadings(model: CodeModel, f: FileFacts, budget: number = OU
 }
 
 /** The readings an area's second request may carry: every one of its files, and its sibling directories. */
-export function areaReadings(model: CodeModel, dir: string, budget: number = OUTLINE.tokens.reading): Record<string, OutlineReading> {
-  const all = under(model.files, dir).sort(weightier);
+export function areaReadings(facts: CodeFacts, dir: string, budget: number = OUTLINE.tokens.reading): Record<string, OutlineReading> {
+  const all = under(facts.files, dir).sort(weightier);
   const out: Record<string, OutlineReading> = {};
   if (all.length > 0) out.files = { describe: "the outlines of every file under this directory", state: { allFiles: fit(budget, (level) => all.slice(0, level.files * 3).map((f) => briefAt(f, level, dir === "" ? f.path : f.path.slice(dir.length + 1)))) } };
   if (dir !== "") {
-    const siblings = childDirs(model.files, parentOf(dir)).filter((c) => c !== dir);
+    const siblings = childDirs(facts.files, parentOf(dir)).filter((c) => c !== dir);
     if (siblings.length > 0) {
       out.neighbours = {
         describe: "the directories beside it, each with its size and what it says it is",
-        state: { besideIt: fit(budget, (level) => siblings.slice(0, level.files).map((c) => ({ name: baseName(c), size: bodySize(under(model.files, c).reduce((n, f) => n + f.lines, 0)) }))) },
+        state: { besideIt: fit(budget, (level) => siblings.slice(0, level.files).map((c) => ({ name: baseName(c), size: bodySize(under(facts.files, c).reduce((n, f) => n + f.lines, 0)) }))) },
       };
     }
   }
@@ -308,8 +308,8 @@ export function areaReadings(model: CodeModel, dir: string, budget: number = OUT
 }
 
 /** The readings an entity's second request may carry: the outlines of the entities it leans on, and of those that lean on it. */
-export function entityReadings(model: CodeModel, e: EntityFacts, budget: number = OUTLINE.tokens.reading): Record<string, OutlineReading> {
-  const entities = new Map(model.entities.map((x) => [x.path, x]));
+export function entityReadings(facts: CodeFacts, e: EntityFacts, budget: number = OUTLINE.tokens.reading): Record<string, OutlineReading> {
+  const entities = new Map(facts.entities.map((x) => [x.path, x]));
   const brief = (paths: readonly string[]) =>
     fit(budget, (level) =>
       paths.flatMap((p) => {

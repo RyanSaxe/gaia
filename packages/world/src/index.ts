@@ -4,7 +4,7 @@ export * from "./vitality.ts";
 export * from "./context.ts";
 export * from "./space.ts";
 export type * from "./changes.ts";
-export * from "./code-model.ts";
+export * from "./facts.ts";
 export * from "./code-world.ts";
 export * from "./definitions.ts";
 export * from "./journal.ts";

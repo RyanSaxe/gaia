@@ -1,5 +1,5 @@
-// Judges Gaia's snapshot world (the code model of
-// `app/renderer/terrain/fixtures/gaia-graph.json`, `codeModelOf`) once with Jev, the way
+// Judges Gaia's snapshot world (the facts of
+// `app/renderer/terrain/fixtures/gaia-graph.json`, `factsOf`) once with Jev, the way
 // the app does, and keeps the answers by request key
 // in `fixtures/gaia-jev.json`, the lab's own copy of what the app keeps per
 // project. The lab lays the snapshot out with those answers, so a page with
@@ -21,7 +21,7 @@ import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs
 import { resolve } from "node:path";
 import { createInterface } from "node:readline";
 import type { CodeGraph, EngineClient, JevClient, JevResponse } from "@gaia/schema";
-import { DEFAULT_DESIGN, DESIGNS, type DesignName, codeModelOf, judgeWorld, keptJev, planWorldRequests, requestKey, standInJev } from "@gaia/world";
+import { DEFAULT_DESIGN, DESIGNS, type DesignName, factsOf, judgeWorld, keptJev, planWorldRequests, requestKey, standInJev } from "@gaia/world";
 import { createEngineClient } from "../app/world-service/engine-client.ts";
 import { engineJev } from "../app/world-service/jev.ts";
 import { LOOKS } from "../app/renderer/terrain/looks.ts";
@@ -40,7 +40,7 @@ const allowed = Number(flag("spend-up-to", "0"));
 const out = resolve(flag("out", resolve(repo, "app/renderer/terrain/fixtures/gaia-jev.json")));
 const ledger = flag("ledger", "");
 const graph = JSON.parse(readFileSync(resolve(flag("graph", resolve(repo, "app/renderer/terrain/fixtures/gaia-graph.json"))), "utf8")) as CodeGraph;
-const model = codeModelOf(graph);
+const facts = factsOf(graph);
 
 /** The kept answers: what the app's `answers` table holds for a project, by request key. */
 interface Kept {
@@ -73,7 +73,7 @@ if (!status.live || !status.key) throw new Error("Jev needs GAIA_JEV=live and th
 
 // What this run would send: the requests not kept yet, at most --limit of them. A design that carries
 // character plans its lower waves from the answers above, so the estimate covers its first wave's shape.
-const missing = planWorldRequests(model, LOOKS, { design, graph }).filter((p) => kept.answers[requestKey(p.request)] === undefined);
+const missing = planWorldRequests(facts, LOOKS, { design, graph }).filter((p) => kept.answers[requestKey(p.request)] === undefined);
 const toSend = missing.slice(0, limit);
 const estimate = await client.call("jev.estimate", { requests: toSend.map((p) => p.request) });
 const ceiling = estimate.estimatedUsd * 2;
@@ -105,7 +105,7 @@ const failures: string[] = [];
 const asked = new Set<string>();
 const started = Date.now();
 try {
-  await judgeWorld(model, LOOKS, keptJev(guarded, standInJev(LOOKS), {
+  await judgeWorld(facts, LOOKS, keptJev(guarded, standInJev(LOOKS), {
     stored: new Map(Object.entries(kept.answers)),
     keep: (key, response) => {
       kept.answers[key] = response;

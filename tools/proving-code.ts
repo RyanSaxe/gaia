@@ -12,7 +12,7 @@ import type { PlannedFacts, PlannedSymbol } from "./proving.ts";
 
 export type Health = "thriving" | "well" | "tired" | "failing" | "ruin" | "decayed";
 
-/** A planned file: its facts, as the proving ground's code model holds them, its health, and the vitality its patch has in the proving ground's world. */
+/** A planned file: its facts, as the proving ground's plan holds them, its health, and the vitality its patch has in the proving ground's world. */
 export interface PlannedFile {
   readonly facts: PlannedFacts;
   readonly health: Health;

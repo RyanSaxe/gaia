@@ -3,7 +3,7 @@
 //! ignored files and uncommitted edits are never part of the world, and a
 //! submodule is only a pointer. Outside git, in a repository with no commits
 //! yet, or in a folder nothing of which is committed, it is every file on
-//! disk that .gitignore keeps. `project.open`, `project.graph`, the requests
+//! disk that .gitignore keeps. `project.graph`, the requests
 //! Jev is sent and the journal's code (`project.source`) all read through it.
 
 use std::collections::HashMap;

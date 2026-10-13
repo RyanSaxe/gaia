@@ -10,17 +10,17 @@ describe("the engine client", () => {
     client.on((e) => events.push(e));
 
     const ping = client.call("engine.ping", {});
-    const open = client.call("project.open", { root: "/repo" });
+    const open = client.call("project.graph", { root: "/repo" });
     const [first, second] = sent;
     expect(first).toMatchObject({ jsonrpc: "2.0", method: "engine.ping", params: {} });
-    expect(second).toMatchObject({ method: "project.open", params: { root: "/repo" } });
+    expect(second).toMatchObject({ method: "project.graph", params: { root: "/repo" } });
 
-    client.receive(JSON.stringify({ jsonrpc: "2.0", id: second?.id, error: { code: -32601, message: "Unknown method project.open" } }));
+    client.receive(JSON.stringify({ jsonrpc: "2.0", id: second?.id, error: { code: -32601, message: "Unknown method project.graph" } }));
     client.receive(JSON.stringify({ event: "engine.error", message: "disk full" }));
     client.receive(JSON.stringify({ jsonrpc: "2.0", id: first?.id, result: { version: "0.1.0" } }));
 
     await expect(ping).resolves.toEqual({ version: "0.1.0" });
-    await expect(open).rejects.toThrow("Unknown method project.open");
+    await expect(open).rejects.toThrow("Unknown method project.graph");
     expect(events).toEqual([{ event: "engine.error", message: "disk full" }]);
   });
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CodeGraph, DefNode, DirNode, FileNode, GraphEdge } from "@gaia/schema";
-import { codeModelOf } from "@gaia/world";
+import { factsOf } from "@gaia/world";
 
 const dir = (path: string, entity?: DirNode["entity"]): DirNode => ({ kind: "dir", id: `dir:${path}`, lineage: path, path, measures: { lines: 0 }, ...(entity === undefined ? {} : { entity }) });
 const file = (path: string, lines: number): FileNode => ({ kind: "file", id: `file:${path}`, lineage: path, path, language: "typescript", bytes: 1, hash: "", binary: false, unparsed: 0, conventions: [], measures: { lines } });
@@ -44,9 +44,9 @@ const GRAPH: CodeGraph = {
   edges: [imports(`file:${index}`, math), imports(`def:${main}#start`, index), imports(`file:${main}`, main)],
 };
 
-describe("the code model, read from the engine's graph alone", () => {
-  const model = codeModelOf(GRAPH);
-  const at = (path: string) => model.files.find((f) => f.path === path);
+describe("the code facts, read from the engine's graph alone", () => {
+  const facts = factsOf(GRAPH);
+  const at = (path: string) => facts.files.find((f) => f.path === path);
 
   it("lists a file's exported definitions and its top-level functions and classes, never a nested or non-code one", () => {
     expect(at(math)?.symbols.map((s) => [s.name, s.kind, s.exported])).toEqual([
@@ -64,13 +64,13 @@ describe("the code model, read from the engine's graph alone", () => {
   });
 
   it("gives each declared entity its files, size, the surface its entry gathers, and the entities it leans on", () => {
-    const e = model.entities.find((x) => x.path === core);
+    const e = facts.entities.find((x) => x.path === core);
     expect(e).toMatchObject({ name: "@demo/core", form: "package", entry: index, files: 2, lines: 122, exports: 2, dependents: ["packages/app"], dependsOn: [] });
-    expect(model.entities.find((x) => x.path === "packages/app")?.dependsOn).toEqual([core]);
+    expect(facts.entities.find((x) => x.path === "packages/app")?.dependsOn).toEqual([core]);
   });
 
   it("names the repository as the graph does and sizes it by its files", () => {
-    expect(model.projectId).toBe("demo");
-    expect(model.repository).toEqual({ name: "demo", files: 3, lines: 162 });
+    expect(facts.projectId).toBe("demo");
+    expect(facts.repository).toEqual({ name: "demo", files: 3, lines: 162 });
   });
 });

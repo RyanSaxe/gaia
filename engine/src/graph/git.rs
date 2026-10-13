@@ -5,7 +5,7 @@
 //! and trees are all there, and `GIT_NO_LAZY_FETCH` makes git fail rather
 //! than fetch anything missing.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::path::Path;
 use std::process::Command;
 
@@ -180,27 +180,6 @@ pub fn renames(root: &Path, from: &str, to: &str) -> Option<BTreeMap<String, Str
     Some(now)
 }
 
-/// Per file: the first commit's time, the times of every commit, and its authors.
-#[derive(Default)]
-pub struct FileHistory {
-    pub first: Option<i64>,
-    pub commits: Vec<i64>,
-    pub authors: BTreeSet<String>,
-}
-
-pub fn by_file(commits: &[Commit]) -> BTreeMap<String, FileHistory> {
-    let mut out: BTreeMap<String, FileHistory> = BTreeMap::new();
-    for c in commits {
-        for f in &c.files {
-            let h = out.entry(f.clone()).or_default();
-            h.first = Some(h.first.map_or(c.at, |t| t.min(c.at)));
-            h.commits.push(c.at);
-            h.authors.insert(c.author.clone());
-        }
-    }
-    out
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -210,11 +189,8 @@ mod tests {
         let log = "\u{1e}200\u{1f}a@x\n\nsrc/a.ts\nsrc/b.ts\n\u{1e}100\u{1f}b@x\n\nsrc/a.ts\n";
         let commits = parse(log);
         assert_eq!(commits.len(), 2);
-        let files = by_file(&commits);
-        let a = &files["src/a.ts"];
-        assert_eq!(a.first, Some(100));
-        assert_eq!(a.commits.len(), 2);
-        assert_eq!(a.authors.len(), 2);
-        assert_eq!(files["src/b.ts"].first, Some(200));
+        assert_eq!((commits[0].at, commits[0].author.as_str()), (200, "a@x"));
+        assert_eq!(commits[0].files, vec!["src/a.ts".to_string(), "src/b.ts".to_string()]);
+        assert_eq!((commits[1].at, commits[1].files.len()), (100, 1));
     }
 }

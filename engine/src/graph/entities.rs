@@ -6,13 +6,10 @@
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 
-/// A file as entity detection reads it: its path, its text when it has one,
-/// the part it plays (`source::kind_of`) and its leading comment.
+/// A file as entity detection reads it: its path, and its text when it has one.
 pub(crate) struct Listed<'a> {
     pub path: &'a str,
     pub text: Option<&'a str>,
-    pub kind: &'a str,
-    pub doc: Option<&'a str>,
 }
 
 /// An entity found from a manifest or a directory's files, before its facts are summed.
@@ -22,11 +19,8 @@ pub(crate) struct Found {
     pub form: &'static str,
     pub manifest: Option<String>,
     pub entry: Option<String>,
-    pub doc: Option<String>,
     /// For a package: subpath → target file, from package.json's `exports`.
     pub exports_map: BTreeMap<String, String>,
-    /// Names (packages) or paths (crates) of the entities its manifest depends on.
-    pub manifest_deps: Vec<String>,
 }
 
 pub(crate) fn dir_of(path: &str) -> &str {
@@ -56,11 +50,6 @@ pub(crate) fn normalize(dir: &str, rel: &str) -> Option<String> {
     Some(parts.join("/"))
 }
 
-/// True when `path` lies in the directory `root` ("" is the project's root).
-pub(crate) fn within(path: &str, root: &str) -> bool {
-    root.is_empty() || path == root || path.starts_with(&format!("{root}/"))
-}
-
 /// A value from a TOML section, read line by line: enough for a Cargo.toml's name and description.
 fn toml_string(text: &str, section: &str, key: &str) -> Option<String> {
     let mut inside = false;
@@ -80,26 +69,6 @@ fn toml_string(text: &str, section: &str, key: &str) -> Option<String> {
         }
     }
     None
-}
-
-/// A Cargo.toml's path dependencies, as directories relative to it.
-fn cargo_path_deps(text: &str) -> Vec<String> {
-    let mut inside = false;
-    let mut out = Vec::new();
-    for line in text.lines() {
-        let l = line.trim();
-        if l.starts_with('[') {
-            inside = l.ends_with("dependencies]");
-            continue;
-        }
-        if inside && let Some(at) = l.find("path") {
-            let rest = &l[at + 4..];
-            if let Some(v) = rest.split('"').nth(1) {
-                out.push(v.to_string());
-            }
-        }
-    }
-    out
 }
 
 pub(crate) fn manifests(files: &[Listed]) -> Vec<Found> {
@@ -163,53 +132,31 @@ pub(crate) fn manifests(files: &[Listed]) -> Vec<Found> {
                     .map(|c| join(&dir, c))
                     .find(|c| paths.contains(c.as_str()))
                 });
-            let mut deps = Vec::new();
-            for field in [
-                "dependencies",
-                "devDependencies",
-                "peerDependencies",
-                "optionalDependencies",
-            ] {
-                if let Some(Value::Object(m)) = json.get(field) {
-                    deps.extend(m.keys().cloned());
-                }
-            }
             out.push(Found {
                 name: json
                     .get("name")
                     .and_then(Value::as_str)
                     .map(String::from)
                     .unwrap_or_else(|| dir.rsplit('/').next().unwrap_or("").to_string()),
-                doc: json
-                    .get("description")
-                    .and_then(Value::as_str)
-                    .map(String::from),
                 path: dir,
                 form: "package",
                 manifest: Some(f.path.to_string()),
                 entry,
                 exports_map,
-                manifest_deps: deps,
             });
         } else if name == "Cargo.toml" && text.lines().any(|l| l.trim() == "[package]") {
             let entry = ["src/lib.rs", "src/main.rs"]
                 .iter()
                 .map(|c| join(&dir, c))
                 .find(|c| paths.contains(c.as_str()));
-            let deps = cargo_path_deps(text)
-                .iter()
-                .filter_map(|p| normalize(&dir, p))
-                .collect();
             out.push(Found {
                 name: toml_string(text, "package", "name")
                     .unwrap_or_else(|| dir.rsplit('/').next().unwrap_or("").to_string()),
-                doc: toml_string(text, "package", "description"),
                 path: dir,
                 form: "crate",
                 manifest: Some(f.path.to_string()),
                 entry,
                 exports_map: BTreeMap::new(),
-                manifest_deps: deps,
             });
         }
     }
@@ -241,7 +188,7 @@ pub(crate) fn directory_entities(files: &[Listed], found: &[Found]) -> Vec<Found
     for f in files {
         let name = f.path.rsplit('/').next().unwrap_or("");
         let dir = dir_of(f.path);
-        if dir.is_empty() || roots.contains(dir) || entries.contains(f.path) || f.kind == "test" {
+        if dir.is_empty() || roots.contains(dir) || entries.contains(f.path) {
             continue;
         }
         let form = if INDEX_FILES.contains(&name) {
@@ -263,9 +210,7 @@ pub(crate) fn directory_entities(files: &[Listed], found: &[Found]) -> Vec<Found
                 form,
                 manifest: None,
                 entry: Some(f.path.to_string()),
-                doc: f.doc.map(String::from),
                 exports_map: BTreeMap::new(),
-                manifest_deps: Vec::new(),
             },
         );
     }

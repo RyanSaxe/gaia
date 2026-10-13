@@ -119,7 +119,7 @@ async function open(port: MessagePortMain, folder: string, github?: string): Pro
     });
     console.log(`gaia: opened ${folder}: ${document.summary}`);
     send(port, { type: "world.document", document });
-    const name = github ?? document.model.repository.name;
+    const name = github ?? document.facts.repository.name;
     toMain({ type: "world.opened", root: folder, name });
     openedOn.set(port, { folder, ...(document.commit === undefined ? {} : { commit: document.commit }) });
     await keep(() => keepRecent(engine, { root: folder, name, ...(github === undefined ? {} : { github }), at: Date.now() }));

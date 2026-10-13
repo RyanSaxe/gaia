@@ -278,17 +278,12 @@ fn build_with(
         }
     }
 
-    // The entities rooted in its directories. A module's index is never a test's (`entities.rs`).
+    // The entities rooted in its directories (`entities.rs`).
     let listed: Vec<entities::Listed> = files
         .iter()
         .map(|f| entities::Listed {
             path: &f.path,
             text: f.text.as_deref(),
-            kind: match f.text {
-                Some(_) => crate::source::kind_of(&f.path, crate::source::language_of(&f.path)),
-                None => "data",
-            },
-            doc: None,
         })
         .collect();
     let mut found = entities::manifests(&listed);

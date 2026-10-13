@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type CodeModel, Library } from "@gaia/schema";
+import { type CodeFacts, Library } from "@gaia/schema";
 import { BIOME_PRIMITIVES, RELIEF_PRIMITIVES } from "@gaia/primitives";
 import { WILDS, bakeTerrain, groundHeightAt, heightAt, landHalf, outlinesOf, sampleWorld } from "@gaia/terrain";
 import { type Judgments, LAYOUT, type LotPlace, layoutWorld } from "@gaia/world";
@@ -39,7 +39,7 @@ describe("where the sheets letter areas' names", () => {
   const measure: Measure = (text, font, spacing) => text.length * (0.72 * Number(/([\d.]+)px/.exec(font)?.[1] ?? 0) + spacing);
   // The proving ground's land as the world service sends it before anything is judged: every area's outline and
   // every lot where a building or landmark will stand. Laid out once and only read.
-  const world = layoutWorld(proving as unknown as CodeModel, provingJudged as unknown as Judgments, undefined, 1);
+  const world = layoutWorld(proving as unknown as CodeFacts, provingJudged as unknown as Judgments, undefined, 1);
   const landWith = (lots: readonly LotPlace[]): NameLand => run(nameLand(outlinesOf(world).areas, world.size, world.size / 2, lots));
   const land = landWith(world.things.map(({ x, z }) => ({ x, z })));
   // A wide screen's sheet and a phone's.

@@ -1,6 +1,6 @@
 // The facts the world is laid out from: each file's and entity's code
 // structure, as the world derives it from the engine's code graph
-// (`codeModelOf` in @gaia/world). Only what the new engine uses, or what
+// (`factsOf` in @gaia/world). Only what the new engine uses, or what
 // composing needs, is here: sizes, definitions, imports and the entities
 // manifests declare. Tool signals, test coverage, history and file kinds are
 // not facts the world reads.
@@ -89,4 +89,12 @@ export interface RepositoryFacts {
   readonly name: string;
   readonly files: number;
   readonly lines: number;
+}
+
+/** The facts one project's world is laid out from, as `factsOf` in @gaia/world derives them from its code graph. */
+export interface CodeFacts {
+  readonly projectId: string;
+  readonly files: readonly FileFacts[];
+  readonly entities: readonly EntityFacts[];
+  readonly repository: RepositoryFacts;
 }

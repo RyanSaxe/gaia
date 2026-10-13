@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
-import type { CodeGraph, CodeModel, EngineClient, GraphNode, JevRequest } from "@gaia/schema";
-import { codeModelOf, landOf, standInJev } from "@gaia/world";
+import type { CodeGraph, CodeFacts, EngineClient, GraphNode, JevRequest } from "@gaia/schema";
+import { factsOf, landOf, standInJev } from "@gaia/world";
 import { LOOKS } from "../renderer/terrain/looks.ts";
 import proving from "../renderer/terrain/fixtures/proving.json";
 import { openWorld } from "./open-world.ts";
 import type { Opening } from "./protocol.ts";
 
 /** The proving ground as the engine's graph gives it: its directories and entities, files, definitions and imports. */
-function graphOf(m: CodeModel): CodeGraph {
+function graphOf(m: CodeFacts): CodeGraph {
   const dirs = new Set<string>([""]);
   for (const f of m.files) for (let d = f.path; d.includes("/"); ) dirs.add((d = d.slice(0, d.lastIndexOf("/"))));
   const entities = new Map(m.entities.map((e) => [e.path, e]));
@@ -24,8 +24,8 @@ function graphOf(m: CodeModel): CodeGraph {
   const edges = m.files.flatMap((f) => f.imports.map((to) => ({ from: `file:${f.path}`, to: `file:${to}`, kind: "imports" as const, by: { by: "rule" as const } })));
   return { projectId: "proving", name: "proving", nodes, edges, pending: [] };
 }
-const graph = graphOf(proving as unknown as CodeModel);
-const model = codeModelOf(graph);
+const graph = graphOf(proving as unknown as CodeFacts);
+const facts = factsOf(graph);
 
 /** An engine with Jev live and nothing kept, whose every batch of answers waits until `release` lets it go. */
 function heldEngine(): { engine: EngineClient; held: (() => void)[] } {
@@ -71,7 +71,7 @@ describe("opening a world", () => {
     // Before any answer: the land, every file's patch as the finished world lays it out, and no health yet, since a
     // file's vitality is Jev's quality.
     const land = shown.find((o) => o.stage === "land");
-    expect(land?.stage === "land" && land.patches.map((p) => p.path)).toEqual(landOf(model).patches.map((p) => p.path));
+    expect(land?.stage === "land" && land.patches.map((p) => p.path)).toEqual(landOf(facts).patches.map((p) => p.path));
     expect(named(shown)).toEqual([]);
 
     while (!done) {

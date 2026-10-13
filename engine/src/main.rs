@@ -4,9 +4,7 @@
 mod clone;
 mod graph;
 mod jev;
-mod project;
 mod rpc;
-mod source;
 mod store;
 
 use std::io::{self, BufRead, Write};

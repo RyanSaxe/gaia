@@ -12,7 +12,7 @@
 // each directory's area and land, each file's patch and what grows on it,
 // each entity's building or landmark on its lot, and the trails between them.
 
-import { type Blueprint, type CodeModel, type EntityFacts, type FileFacts, type SymbolFact, rand, seedOf } from "@gaia/schema";
+import { type Blueprint, type CodeFacts, type EntityFacts, type FileFacts, type SymbolFact, rand, seedOf } from "@gaia/schema";
 import { LANDMARK_PRESETS, TRAIL_PRESETS, WORLD_PRESETS } from "@gaia/realize";
 import { type WorldSpec, outlinesOf } from "@gaia/terrain";
 import { type CodeWorld, type Judge, type Judgments, layoutWorld } from "@gaia/world";
@@ -21,7 +21,7 @@ import { type WorldService, worldService } from "../service.ts";
 import GAIA_PICTURE from "../start/gaia-picture.webp";
 import { CHOSEN_MS } from "../start/start.ts";
 import snapshotJudged from "./fixtures/gaia-judged.json";
-import { snapshotModel } from "./snapshot-model.ts";
+import { snapshotFacts } from "./snapshot-facts.ts";
 import type { LayoutReply, LayoutRequest } from "./layout-worker.ts";
 import LayoutWorker from "./layout-worker.ts?worker";
 import proving from "./fixtures/proving.json";
@@ -147,13 +147,13 @@ const SNAPSHOT_JUDGE = typeof location === "undefined" || new URLSearchParams(lo
  * page with no engine, laid out on a thread of its own while the wait draws.
  */
 function snapshotWorld(why: string): Promise<WorldDocument> {
-  const model = snapshotModel();
+  const facts = snapshotFacts();
   const worker = new LayoutWorker();
   return new Promise<WorldDocument>((resolve, reject) => {
     worker.onmessage = (e: MessageEvent<LayoutReply>) => {
       const reply = e.data;
       if ("failed" in reply) reject(new Error(`Gaia's snapshot could not be laid out: ${reply.failed}`));
-      else resolve({ root: model.repository.name, model, judged: snapshotJudged as unknown as Record<string, JudgedThing>, ...reply });
+      else resolve({ root: facts.repository.name, facts, judged: snapshotJudged as unknown as Record<string, JudgedThing>, ...reply });
     };
     worker.onerror = (e) => reject(new Error(`Gaia's snapshot could not be laid out: ${e.message}`));
     worker.postMessage({ judge: SNAPSHOT_JUDGE, why } satisfies LayoutRequest);
@@ -167,10 +167,10 @@ function snapshotWorld(why: string): Promise<WorldDocument> {
  * `pnpm proving`). It is laid out, stood and baked like any codebase's world.
  */
 export function provingWorld(): WorldDocument {
-  const model = proving as unknown as CodeModel;
+  const facts = proving as unknown as CodeFacts;
   // The proving ground keeps a square, so everything its tests look for stands where they look.
-  const world = layoutWorld(model, provingJudged as unknown as Judgments, undefined, 1);
-  return { root: model.repository.name, model, world, judges: {}, summary: "The proving ground: every choice fixed so each feature shows", judged: {} };
+  const world = layoutWorld(facts, provingJudged as unknown as Judgments, undefined, 1);
+  return { root: facts.repository.name, facts, world, judges: {}, summary: "The proving ground: every choice fixed so each feature shows", judged: {} };
 }
 
 /** Whether the page asks for the proving ground (`?world=proving`), which opens with or without an engine. */
@@ -183,11 +183,11 @@ const ASKS_PROVING = typeof location !== "undefined" && new URLSearchParams(loca
  * except an address, which a page with no engine cannot follow.
  */
 async function previewStart(veil: Veil): Promise<void> {
-  const model = snapshotModel();
-  const recent = [{ root: model.repository.name, name: model.repository.name, at: Date.now(), picture: GAIA_PICTURE }];
+  const facts = snapshotFacts();
+  const recent = [{ root: facts.repository.name, name: facts.repository.name, at: Date.now(), picture: GAIA_PICTURE }];
   let place = await veil.choose({ recent });
   while ("address" in place) place = await veil.choose({ recent, refused: { address: place.address, why: "offline" } });
-  veil.opening({ stage: "reading", root: model.repository.name });
+  veil.opening({ stage: "reading", root: facts.repository.name });
   // The chosen map rises into the wait's sheet before the land it opens on comes in.
   await new Promise((resolve) => setTimeout(resolve, CHOSEN_MS));
 }
@@ -220,7 +220,7 @@ export async function codeWorld(veil: Veil): Promise<CodeLab> {
 }
 
 /** Everything the terrain lab needs to bake and furnish a world document. */
-export function codeLab({ model, world, judges, summary, judged }: WorldDocument): CodeLab {
+export function codeLab({ facts, world, judges, summary, judged }: WorldDocument): CodeLab {
   const fallback = Object.values(LANDS)[0]?.biome;
   if (fallback === undefined) throw new Error("No lands to choose from.");
   const spec: WorldSpec = {
@@ -235,7 +235,7 @@ export function codeLab({ model, world, judges, summary, judged }: WorldDocument
       biome: withWater(LANDS[r.land]?.biome ?? fallback, r.water),
     })),
   };
-  const entities = new Map(model.entities.map((e) => [e.path, e]));
+  const entities = new Map(facts.entities.map((e) => [e.path, e]));
   const lot = (t: CodeWorld["things"][number]): StandLot => ({ id: t.path, x: t.x, z: t.z, radius: t.lot * 0.6 });
   const houses = world.things.filter((t) => t.as === "building");
   const rises = world.things.filter((t) => t.as === "landmark");
@@ -244,7 +244,7 @@ export function codeLab({ model, world, judges, summary, judged }: WorldDocument
     world,
     spec,
     thing: (of) => judged[of],
-    files: new Map(model.files.map((f) => [f.path, f])),
+    files: new Map(facts.files.map((f) => [f.path, f])),
     buildings: houses.map((t) => ({ facts: entities.get(t.path) as EntityFacts, building: t.look, vitality: t.vitality })),
     landmarks: rises.map((t) => ({ preset: landmarkIndex(t.look), facts: entities.get(t.path) as EntityFacts, vitality: t.vitality })),
     sky: WORLD_PRESETS.find((p) => p.name === world.world) ?? WORLD_PRESETS[0],

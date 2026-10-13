@@ -1,7 +1,7 @@
 // Writes the proving ground: a made-up codebase whose world holds every
 // feature a world can show, so each can be walked up to and tested. It
-// writes the code model (`app/renderer/terrain/fixtures/proving.json`, the
-// shape `project.open` returns) and the choices Jev would make about it
+// writes the facts its world is laid out from
+// (`app/renderer/terrain/fixtures/proving.json`, `CodeFacts`) and the choices Jev would make about it
 // (`fixtures/proving-judged.json`, a `Judgments`), both from the plan below.
 // The lab lays it out with the real `layoutWorld`, `standWorld` and bake
 // (`?world=proving`), so what it shows is what any codebase would get.
@@ -31,7 +31,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, relative, resolve } from "node:path";
 import { parseArgs } from "node:util";
-import type { CodeModel, EntityFacts, EntityForm, FileFacts, SymbolFact } from "@gaia/schema";
+import type { CodeFacts, EntityFacts, EntityForm, FileFacts, SymbolFact } from "@gaia/schema";
 import { type Judgments, layoutWorld } from "@gaia/world";
 import { BUILDINGS, CHARACTERS, FORMS, LANDMARKS, LANDS, TRAILS, WATERS } from "../app/renderer/terrain/looks.ts";
 import { provingCode } from "./proving-code.ts";
@@ -336,7 +336,7 @@ const files: PlannedFacts[] = drafted.map((f) => {
 });
 
 /** What the world reads of a planned file: its size, language, definitions and imports. */
-const factsOf = (f: PlannedFacts): FileFacts => ({
+const factsOfPlan = (f: PlannedFacts): FileFacts => ({
   path: f.path,
   language: f.language,
   lines: f.lines,
@@ -383,10 +383,10 @@ const entities: EntityFacts[] = PLAN.filter((d) => d.entity !== undefined).map((
   };
 });
 
-const model: CodeModel = {
+const facts: CodeFacts = {
   projectId: "proving",
   repository: { name: "proving", files: files.length, lines: files.reduce((n, f) => n + f.lines, 0) },
-  files: [...files].sort((a, b) => (a.path < b.path ? -1 : 1)).map(factsOf),
+  files: [...files].sort((a, b) => (a.path < b.path ? -1 : 1)).map(factsOfPlan),
   entities: [...entities].sort((a, b) => (a.path < b.path ? -1 : 1)),
 };
 
@@ -439,7 +439,7 @@ const gaps = [
   ...Object.keys(LANDMARKS).flatMap((l) => (things.filter((t) => t.as === "landmark" && t.look === l).length >= 3 ? [] : [`three landmarks "${l}"`])),
 ];
 if (gaps.length > 0) throw new Error(`The proving ground lacks ${gaps.join(", ")}.`);
-const world = layoutWorld(model, judged, undefined, 1);
+const world = layoutWorld(facts, judged, undefined, 1);
 const regions = world.regions.map((r) => r.area);
 const planned = Object.keys(judged.lands);
 const astray = [...planned.filter((p) => !regions.includes(p)).map((p) => `${p || "(root)"} has no land of its own`), ...regions.filter((p) => !planned.includes(p)).map((p) => `${p} has land but no planned look`)];
@@ -467,10 +467,10 @@ if (args.code !== undefined) {
   process.exit(0);
 }
 const fixtures = resolve(repo, "app/renderer/terrain/fixtures");
-writeFileSync(resolve(fixtures, "proving.json"), `${JSON.stringify(model)}\n`);
+writeFileSync(resolve(fixtures, "proving.json"), `${JSON.stringify(facts)}\n`);
 writeFileSync(resolve(fixtures, "proving-judged.json"), `${JSON.stringify(judged, null, 1)}\n`);
 const band = (v: number): string => (v >= 0.85 ? "thriving" : v >= 0.6 ? "well" : v >= 0.35 ? "tired" : v >= 0.12 ? "failing" : "ruin");
 const count = (vs: readonly number[]): string => Object.entries(vs.reduce<Record<string, number>>((n, v) => ((n[band(v)] = (n[band(v)] ?? 0) + 1), n), {})).map(([k, n]) => `${n} ${k}`).join(", ");
-console.log(`proving: ${model.files.length} files, ${model.repository.lines.toLocaleString("en-US")} lines, ${entities.length} entities; a ${world.size} m world of ${world.regions.length} lands and ${world.areas.length} areas`);
+console.log(`proving: ${facts.files.length} files, ${facts.repository.lines.toLocaleString("en-US")} lines, ${entities.length} entities; a ${world.size} m world of ${world.regions.length} lands and ${world.areas.length} areas`);
 console.log(`  files: ${count(world.patches.map((p) => p.vitality))}`);
 console.log(`  entities: ${count(world.things.map((t) => t.vitality))}`);

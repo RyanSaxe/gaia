@@ -1,13 +1,13 @@
-// The code model the world is laid out from, derived from the engine's code
-// graph alone (`codeModelOf`): each file's size, language, definitions and
+// The facts the world is laid out from, derived from the engine's code
+// graph alone (`factsOf`): each file's size, language, definitions and
 // imports both ways, and each entity a manifest or an entry file declares,
 // with its size, public surface and the entities it leans on. These are the
 // code's structure, which the new engine reads too; tool signals, test
 // coverage, history and file kinds are not facts the world reads.
 
-import type { CodeGraph, CodeModel, DefNode, DirNode, EntityFacts, FileFacts, FileNode, SymbolFact } from "@gaia/schema";
+import type { CodeGraph, CodeFacts, DefNode, DirNode, EntityFacts, FileFacts, FileNode, SymbolFact } from "@gaia/schema";
 
-/** A definition's role, as the kind of symbol the code model names. */
+/** A definition's role, as the kind of symbol the facts name. */
 const KIND_OF_ROLE: Readonly<Record<string, SymbolFact["kind"]>> = {
   function: "function",
   method: "function",
@@ -55,8 +55,8 @@ function symbolsOf(defs: readonly DefNode[]): SymbolFact[] {
   return [...byName.values()].sort((a, b) => (a.line ?? 0) - (b.line ?? 0) || byText(a.name, b.name));
 }
 
-/** The code model the world reads, from the engine's code graph. The same graph always gives the same model. */
-export function codeModelOf(graph: CodeGraph): CodeModel {
+/** The facts the world reads, from the engine's code graph. The same graph always gives the same facts. */
+export function factsOf(graph: CodeGraph): CodeFacts {
   const files = graph.nodes.filter((n): n is FileNode => n.kind === "file").sort((a, b) => byText(a.path, b.path));
   const pathOf = new Map(files.map((f) => [f.id, f.path]));
   const defsIn = new Map<string, DefNode[]>();

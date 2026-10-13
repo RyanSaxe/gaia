@@ -3,10 +3,10 @@
 // constant that holds a plain value does not, and neither does a stylesheet
 // rule, a document's section or a data file's key. Engine's graph says what
 // is defined where, inside what, and how much each matters (Jev's importance,
-// from 0 to 1); without a graph, the code model's top-level symbols stand,
+// from 0 to 1); without a graph, the facts' top-level symbols stand,
 // with no importance of their own.
 
-import type { CodeGraph, CodeModel, DefNode, SymbolFact } from "@gaia/schema";
+import type { CodeGraph, CodeFacts, DefNode, SymbolFact } from "@gaia/schema";
 
 /** A definition that stands on its file's patch. */
 export interface StandingDef {
@@ -49,10 +49,10 @@ const KIND_OF_ROLE: Readonly<Record<string, SymbolFact["kind"]>> = {
 /**
  * Each file's standing definitions, by path, in the order they are written,
  * every definition before the ones inside it. With a graph, every definition
- * it holds stands; without one, the code model's top-level symbols.
+ * it holds stands; without one, the facts' top-level symbols.
  */
-export function definitionsOf(model: CodeModel, graph?: CodeGraph): ReadonlyMap<string, readonly StandingDef[]> {
-  const files = new Map(model.files.map((f) => [f.path, f]));
+export function definitionsOf(facts: CodeFacts, graph?: CodeGraph): ReadonlyMap<string, readonly StandingDef[]> {
+  const files = new Map(facts.files.map((f) => [f.path, f]));
   const out = new Map<string, StandingDef[]>();
   if (graph === undefined) {
     for (const f of files.values()) {
