@@ -20,8 +20,7 @@
 //
 // `--code DIR` writes the proving ground's code instead: real source for
 // every planned file, as poor as its health (tools/proving-code.ts), and a
-// manifest saying how each was written, so the engine's bench can hold Jev's
-// judgments to it. The manifest goes beside DIR (`DIR-manifest.json`, or
+// manifest saying how each was written. The manifest goes beside DIR (`DIR-manifest.json`, or
 // `--manifest PATH`), never in it, where it would name every file and the
 // engine would take each for used. Both must lie outside Gaia's own
 // repository or under a node_modules folder, which Gaia's own world never

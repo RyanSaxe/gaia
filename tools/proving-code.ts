@@ -4,8 +4,8 @@
 // thriving file is small, named and documented steps; a ruined one is long
 // tangles with letters for names, docs about something else, emptied error
 // handlers, state hidden at module level, unrelated helpers, shims marked
-// HACK, copied blocks and TODOs. The manifest says, by the engine's question
-// names, how each file was written, so the bench can hold Jev's answers to it.
+// HACK, copied blocks and TODOs. The manifest says how each file was
+// written: which of those faults it was given, and how badly.
 // The same plan always writes the same code.
 
 import type { FileFacts, SymbolFact } from "@gaia/schema";
@@ -19,10 +19,10 @@ export interface PlannedFile {
   readonly vitality: number;
 }
 
-/** What a question should find in a file: the engine's own question names. */
+/** How badly a file was given one fault: not at all, a little, or throughout. */
 export type Level = "good" | "fair" | "poor";
 
-/** How one file was written, keyed by the engine's question names. */
+/** How one file was written: its plan, and how badly it was given each fault. */
 export interface ManifestEntry {
   readonly path: string;
   /** The vitality the file's patch has in the proving ground's world, 0 to 1: what a page shows (decision 43). */
@@ -37,10 +37,6 @@ export interface ManifestEntry {
   readonly errors: Level;
   readonly change: Level;
   readonly cohesion: Level;
-  /** Whether nothing but tests reaches it. */
-  readonly dead: boolean;
-  /** The reasons to look a callout should find, besides "routine". */
-  readonly attention: readonly string[];
 }
 
 /** How a health spoils a file. Length, nesting and TODOs come from the file's own facts. */
@@ -372,7 +368,7 @@ function documented(s: SymbolFact, recipe: Recipe | undefined, w: Words, spoil: 
   return text === "" ? [] : [`/** ${text} */`];
 }
 
-function writeTypeScript(file: PlannedFile, importable: ReadonlyMap<string, FileFacts>): { text: string; entry: Omit<ManifestEntry, "path" | "vitality" | "health" | "planned" | "lines" | "dead"> } {
+function writeTypeScript(file: PlannedFile, importable: ReadonlyMap<string, FileFacts>): { text: string; entry: Omit<ManifestEntry, "path" | "vitality" | "health" | "planned" | "lines"> } {
   const f = file.facts;
   const spoil = SPOIL[file.health];
   const r = streamOf(f.path);
@@ -488,7 +484,6 @@ function writeTypeScript(file: PlannedFile, importable: ReadonlyMap<string, File
       errors: level(swallowed >= 2, swallowed === 1),
       change: level(spoil.hidden && ruin, spoil.hidden),
       cohesion: level(spoil.unrelated >= 2, spoil.unrelated === 1),
-      attention: [...(/TODO|FIXME|XXX/.test(text) ? ["unfinished"] : []), ...(text.includes("HACK:") ? ["workaround"] : []), ...(ruin && f.importedBy.length >= 2 ? ["fragile"] : [])],
     },
   };
 }
@@ -560,7 +555,7 @@ const RUST: Readonly<Record<string, { readonly doc: string; readonly lines: (nam
   carry: { doc: "The total rate the readings carry.", lines: (n, r) => [`pub fn ${n}(readings: &[${r}]) -> f64 {`, `    readings.iter().map(|reading| reading.rate).sum()`, `}`] },
 };
 
-function writeRust(file: PlannedFile, crateFiles: readonly PlannedFile[]): { text: string; entry: Omit<ManifestEntry, "path" | "vitality" | "health" | "planned" | "lines" | "dead"> } {
+function writeRust(file: PlannedFile, crateFiles: readonly PlannedFile[]): { text: string; entry: Omit<ManifestEntry, "path" | "vitality" | "health" | "planned" | "lines"> } {
   const f = file.facts;
   const spoil = SPOIL[file.health];
   const r = streamOf(f.path);
@@ -638,7 +633,6 @@ function writeRust(file: PlannedFile, crateFiles: readonly PlannedFile[]): { tex
       errors: "good",
       change: level(spoil.hidden && ruin, spoil.hidden),
       cohesion: "good",
-      attention: f.debtMarkers > 0 ? ["unfinished"] : [],
     },
   };
 }
@@ -687,9 +681,8 @@ export function provingCode(files: readonly PlannedFile[]): { code: Map<string, 
   const manifest: ManifestEntry[] = [];
   for (const file of files) {
     const f = file.facts;
-    const dead = f.kind === "source" && f.importedBy.every((by) => facts.get(by)?.kind === "test");
     let text: string;
-    let entry: Omit<ManifestEntry, "path" | "vitality" | "health" | "planned" | "lines" | "dead"> | null = null;
+    let entry: Omit<ManifestEntry, "path" | "vitality" | "health" | "planned" | "lines"> | null = null;
     if (f.kind === "test") text = writeTest(file, facts, health);
     else if (f.path.endsWith(".ts")) ({ text, entry } = writeTypeScript(file, facts));
     else if (f.path.endsWith(".rs")) {
@@ -697,7 +690,7 @@ export function provingCode(files: readonly PlannedFile[]): { code: Map<string, 
       ({ text, entry } = writeRust(file, files.filter((o) => o.facts.path.split("/").slice(0, -1).join("/") === dir)));
     } else text = writeOther(file);
     code.set(f.path, text);
-    if (entry !== null) manifest.push({ path: f.path, vitality: Math.round(file.vitality * 100) / 100, health: file.health, planned: f.lines, lines: text.split("\n").length - 1, ...entry, dead });
+    if (entry !== null) manifest.push({ path: f.path, vitality: Math.round(file.vitality * 100) / 100, health: file.health, planned: f.lines, lines: text.split("\n").length - 1, ...entry });
   }
   return { code, manifest };
 }

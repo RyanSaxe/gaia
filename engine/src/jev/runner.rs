@@ -963,7 +963,7 @@ fn judge(graph: &mut CodeGraph, held: &Value) {
             let filled = if let Some(choice) = a["choice"].as_str() {
                 json!({ "choice": choice, "p": a["p"], "call": call })
             } else if let Some(score) = a["score"].as_f64() {
-                // Until the calibration set fits each question's curve, a score's value is its share of the scale.
+                // A score's value is its share of the scale.
                 let top = (a["levels"].as_f64().unwrap_or(2.0) - 1.0).max(1.0);
                 json!({ "score": score, "value": (score / top).clamp(0.0, 1.0), "call": call })
             } else {

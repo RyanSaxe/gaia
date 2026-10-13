@@ -28,19 +28,19 @@ describe("the proving ground's code", () => {
 
   it("says how every source file was written, and writes it that way", () => {
     expect(manifest.map((e) => e.path).sort()).toEqual(files.filter((f) => !f.endsWith(".test.ts")).sort());
-    const questions = ["naming", "doc", "readability", "errors", "change", "cohesion"] as const;
+    const faults = ["naming", "doc", "readability", "errors", "change", "cohesion"] as const;
     for (const e of manifest) {
       const code = text(e.path);
       expect(e.vitality, e.path).toBeGreaterThanOrEqual(0);
       expect(e.vitality, e.path).toBeLessThanOrEqual(1);
       if (e.health === "thriving") {
-        // A thriving file has nothing for a question to find.
-        for (const q of questions) expect(e[q], `${e.path} ${q}`).toBe("good");
+        // A thriving file was given no fault.
+        for (const q of faults) expect(e[q], `${e.path} ${q}`).toBe("good");
         expect(code).not.toMatch(/TODO|FIXME|HACK|catch \(e\) \{\}|: any\b/);
       }
       if (e.health === "ruin" && e.path.endsWith(".ts")) {
-        // A ruined one has every fault the plan gives ruin, where the engine's questions look.
-        for (const q of questions) expect(e[q], `${e.path} ${q}`).toBe("poor");
+        // A ruined one has every fault the plan gives ruin, throughout.
+        for (const q of faults) expect(e[q], `${e.path} ${q}`).toBe("poor");
         expect(code).toMatch(/HACK:/);
         expect(code).toMatch(/catch \(e\) \{\}/);
         expect(code).toMatch(/let ready = false;/);

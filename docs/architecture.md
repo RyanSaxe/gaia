@@ -598,15 +598,6 @@ quality as the weighted mean of its concepts, gathered upward with each
 container's top-level parts weighted by their lines and blended with its
 own.
 
-The calibration set splits the bench by repository
-(`tools/bench/calibration/split.json`), so wording can be tuned on one half
-and measured on the other. `gaia-engine mutate` makes good definitions
-worse in one way each, from what the query files mark: parameters renamed
-to single letters, a doc swapped for another function's, an error handler
-emptied. Both were built to calibrate the calls the understanding pass
-replaced: each mutation still names the field of those calls it should
-move, and no bench mode asks Jev about the understanding pass on them.
-
 ## Jev
 
 Jev answers three question types about one JSON state: `choice` (up to 255

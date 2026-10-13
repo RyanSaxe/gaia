@@ -30,8 +30,8 @@ health. Test a change here as well as in Gaia's own world.
 `pnpm proving --code DIR` writes the proving ground's code instead
 (`tools/proving-code.ts`): real source for each planned file, as poor as its
 health, and beside it a manifest (`DIR-manifest.json`, or `--manifest
-PATH`) that says by the engine's question names how each source file was
-written. A few ruined files have names that say nothing (`ruins/oak/temp.ts`,
+PATH`) that says how each source file was written: which faults it was
+given, and how badly. A few ruined files have names that say nothing (`ruins/oak/temp.ts`,
 `ruins/house/utils2.ts`), as poorly kept code does.
 
 - A thriving file is small, named, documented steps, and its tests pass.
@@ -40,7 +40,7 @@ written. A few ruined files have names that say nothing (`ruins/oak/temp.ts`,
   helpers and shims marked HACK, and its tests fail.
 
 The engine's bench writes it under `node_modules`, so Gaia's own world never
-reads it, and asks Jev about it to hold its questions to the plan.
+reads it, and parses it with the other repositories.
 
 The lab lays these out with the real `layoutWorld`, `standWorld` and bake, so
 the proving ground looks as any codebase's world would. Its vitality is the

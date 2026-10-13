@@ -168,7 +168,7 @@ export interface Choice {
   readonly call: string;
 }
 
-/** Jev's score, and the value from 0 to 1 that the world reads, through the question's calibration curve. */
+/** Jev's score, and its share of the question's scale, from 0 to 1, which the world reads. */
 export interface Score {
   readonly score: number;
   readonly value: number;
