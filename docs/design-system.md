@@ -251,7 +251,7 @@ bottom by 1.5 m and the person swims at 30% of the pace. Eyes stay 1.6 m
 above the ground until the water nears them, then ease down as the bottom
 falls away until they float 0.3 m above the surface, and rise again the same
 way climbing out: the eye height is a smooth function of depth, so it never
-jumps. A swimmer bobs gently, 3 cm every 2.8 s, and the wading rings go on.
+jumps. The wading rings go on as a person swims.
 At night a swimmer holds the lantern just above the water.
 
 Solid things stop a person: tree trunks at the bark of their base, rocks and
@@ -277,54 +277,37 @@ nearest place it can reach. The view never turns on its own. Nothing marks
 where a walk will end: touching the world just walks. `planWalk` and
 `wayAhead` in `@gaia/terrain` plan the way and say where to head next.
 
-A person walks like a person, not a sliding camera (`stride` in
-`@gaia/terrain`, every parameter in its `GAIT` table). The body eases into a
-stride over about a second, two steps, and settles over about 0.7 s when it
-stops, so velocity never jumps.
-A person always faces the way they walk, never stepping backwards or
-sideways. Each key is a way to walk: W or the up arrow walks ahead; A or
-the left arrow turns the person to face left and walks them that way, D or
-the right arrow to the right, and S or the down arrow turns them around;
-vim's k, h, l and j do the same. A key turns from the way the keys already
-walk, so left pressed twice turns them around, and holding keys keeps them
-walking that way until they let go. The keys' way and a tapped walk both
-turn the person at a turn's pace, walking only as fast as they face their
-way, so a way behind them is walked by turning round and setting off.
-Their momentum turns with them, and a drag that turns the view turns the
-keys' way with it and takes over from a tapped walk.
-The grade along the way sets the pace by Tobler's hiking function made
-gentler: a 12% climb walks at about 79% of the pace, a descent of up to 16%
-is a little quicker (at most 10%), and a steep descent is careful; no grade
-slows a person below 35%. The eyes ride 1.6 m over the mean footing within
-half a meter, which smooths away the lattice's facets, on a critically
-damped spring read ahead of the body by the spring's own lag, so on a slope
-they keep their height within 3 cm and never overshoot or float. A
-footbridge's deck is ground to walk on: stepping up onto it lifts the eyes
-as a step, and the person crosses dry above the water. Each step lifts the
-eyes about a centimeter (1.1 cm at a walk, 1.8 cm running with Shift, half
-the rise and fall) at 1.9 steps a second (2.6 running, a longer stride),
-lowest as a foot falls; they sway 6 mm from side to side once every two
-steps. The stride only translates the eyes: it never rolls or pitches the
-view, so distant land holds still. It fades in and out with speed, wading
-softens it by up to 65%, and a swimmer bobs gently instead. `GAIT.on`
-switches the stride off and keeps the rest.
+The view moves only as the person moves it. Nothing bobs, sways or rolls
+the eyes, nothing turns the view to frame a thing or to face a walk's way,
+and no turn ever speeds up: camera motion the person did not make, and a
+turn that accelerates, are what make a desktop walk sickening (round 20's
+movement thread; Meta's locomotion guidance keeps accelerations brief and
+rare and makes snap turns its comfort default). The body (`stride` in
+`@gaia/terrain`, every parameter in its `GAIT` table) gets going at once
+and stops at once, reaching 95% of its pace in 0.15 s and stopping in
+0.12 s, never overshooting. The grade along the way sets the pace by
+Tobler's hiking function made gentler (Tobler 1993): a 12% climb walks at
+about 79% of the pace, a descent of up to 16% is a little quicker (at most
+10%), and a steep descent is careful; no grade slows a person below 35%.
+The eyes ride 1.6 m over the mean footing within half a meter, which smooths
+away the lattice's facets, on a critically damped spring read ahead of the
+body by the spring's own lag, so on a slope they keep their height within
+3 cm and never overshoot or float. A footbridge's deck is ground to walk on:
+stepping up onto it lifts the eyes as a step, and the person crosses dry
+above the water. A tapped walk carries the person along its way while they
+keep looking where they looked.
 
-These numbers follow the research on walking and comfort. A walking head
-rises and falls once each step at about 2 Hz and sways once each stride at
-about 1 Hz (Hirasaki et al. 1999, "Effects of walking velocity on vertical
-head and body movements during locomotion", Exp Brain Res 127); camera
-oscillations of that kind make desktop walking feel like walking (Lécuyer
-et al. 2006, IEEE VR; Terziman et al. 2013, IEEE TVCG 19(4), which also
-slows the walk on slopes). Motion sickness peaks for vertical motion between
-0.1 and 0.5 Hz (ISO 2631-1) and for visual motion at 0.2 to 0.4 Hz (Diels
-and Howarth 2013, Human Factors 55(3)), so the stride stays above that band
-at 1.4 to 2.6 Hz, its sway at about 1 Hz, and the eyes' motion carries
-nothing above 4 Hz. The rise is kept well under a real head's few centimeters, since a
-screen cannot steady the gaze as the eyes' reflexes do, and the switch
-follows the Game Accessibility Guidelines and Xbox Accessibility Guideline
-117. Tobler's function is from Tobler 1993; a person reaches a steady pace in
-two or three steps (Najafi et al. 2010, Gait & Posture 32(1)) and can stop
-in one.
+The keys walk and turn the person (`steerStep` in `@gaia/terrain`, every
+number in its `STEER` table; chosen in round 22's walking thread). ↑ walks
+ahead. A tap of ← or → nudges the person 8°, turned at a steady 60° a
+second, and holding the key turns on at that same rate, standing or
+walking, until it is let go: there are no big turns and no turn ever speeds
+up. ↓ walks backward at 65% of the pace, still facing ahead, the view never
+turning, and ← or → turn as usual while it does; ↑ and ↓ together stand.
+Shift hurries the walk ahead (2.4 times the pace) and leaves the walk back
+at its own careful pace. Rounds 20 to 22 tried and set aside keys that face
+the way pressed in a swing, strafing with a mouse or drag look, tank turns,
+snap and blink turns, quick turns and walking into a turn.
 
 A winding valley swings about ±20 m to either side once every 250 m, a
 whole swing every four of its own widths, carrying its floor and stream with it: a straight
@@ -522,11 +505,8 @@ and it leans on its post. All signs draw as one instanced mesh.
 Tapping a building, a tree, a sign, or the stone, bush or flowers a
 function or class stands as walks the person up to it (to the end of a
 building's walk, just outside a tree's crown, or a couple of steps from a
-function's stone on their side), and
-when they arrive the view turns gently, in about a second, to frame the
-thing. A low thing, such as a function's stone or bush, is framed by its
-own middle, looking down at it at the person's feet. A thing already close
-counts as arrived. A new tap or a key cancels the walk and nothing opens.
+function's stone on their side), and their card opens when they arrive;
+the view stays where they look. A thing already close counts as arrived. A new tap or a key cancels the walk and nothing opens.
 
 In the immersive world, a tap on a thing opens the journal at its page: a
 building's or landmark's entity, a tree's file, and anything else its own.
@@ -709,9 +689,10 @@ finger and keys all follow the same three rules.
   stops them). On a thing (a building, a tree, a landmark or its sign) they
   open the journal at its page. A
   tap on a rock, a bush, a fingerpost or a boundary stone walks up to it, never to
-  the ground hidden behind it. A drag looks around and never walks. W A S D
-  or the arrows walk and Shift hurries. A drag or a key takes the view back
-  from a turn at once. Touching the world never does anything but move you.
+  the ground hidden behind it. A drag looks around and never walks, and the
+  keys walk and turn as Terrain, walking, says. Nothing turns
+  the view but the person. Touching the world never does anything but move
+  you.
 - **Everything else is paper.** The closed journal at the lower left,
   with the minimap on its cover, and the compass at the top right are the
   only things on the screen that are not the world: a tap on the journal
