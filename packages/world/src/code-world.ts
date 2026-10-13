@@ -48,6 +48,8 @@ import { type Composed, type Composing, areaState, composeThings, composingState
 export interface Look {
   readonly doc: string;
   readonly suits: readonly string[];
+  /** What a place with this look has that a part may need, such as running water for a waterwheel. */
+  readonly holds?: readonly string[];
 }
 
 export type LookSet = Readonly<Record<string, Look>>;
@@ -943,11 +945,14 @@ export async function composeWorld(facts: CodeFacts, looks: Looks, jev: JevClien
   const graph = options.graph;
   const entity = (path: string): Pick<EntityFacts, "path" | "name"> & Partial<EntityFacts> => facts.entities.find((e) => e.path === path) ?? { name: baseName(path) || facts.repository.name, path };
   const regions = Object.keys(judged.waters).sort();
+  // What an entity's place has is what its region's water holds.
+  const regionSet = new Set(regions);
+  const has = (path: string): readonly string[] => looks.water[judged.waters[regionFor(regionSet, path)] ?? ""]?.holds ?? [];
   const trailId = (t: CodeTrail): string => `trail:${t.from}->${t.to}`;
   const things: Composed[] = [
     { path: "world:", as: "world", state: repositoryState(graph, facts.repository.name) },
     ...regions.map((path): Composed => ({ path: `land:${path}`, as: "biome", state: areaState(graph, path, lookWords(looks.water, judged.waters[path])) })),
-    ...Object.entries(judged.things).map(([path, t]): Composed => ({ path, as: t.as, state: composingState(graph, entity(path)) })),
+    ...Object.entries(judged.things).map(([path, t]): Composed => ({ path, as: t.as, state: composingState(graph, entity(path)), has: has(path) })),
     ...judged.trails.map((t): Composed => ({ path: trailId(t), as: "link", state: trailState(graph, entity(t.from), entity(t.to)) })),
   ];
   const blueprints = await composeThings(looks.compose, jev, things, options.concurrency ?? 8);

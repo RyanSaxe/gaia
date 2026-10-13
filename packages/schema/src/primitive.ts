@@ -23,6 +23,12 @@ export interface Primitive<R extends Role = Role, P extends Params = Params> {
   readonly params: P;
   /** Slots of the primitive's own, filled in a later request. Their input is this primitive's output. */
   readonly slots?: Readonly<Record<string, Slot>>;
+  /**
+   * What a place must have for this primitive to stand there, such as running
+   * water for a waterwheel. A thing whose place lacks any of them is never
+   * offered it; where it has them all, Jev chooses as it would.
+   */
+  readonly needs?: readonly string[];
   readonly build: (params: Resolved<P>, ctx: BuildContext, input: RoleInput<R>) => RoleOutput<R>;
 }
 
@@ -45,6 +51,7 @@ export interface AnyPrimitive {
   readonly doc: string;
   readonly params: Params;
   readonly slots?: Readonly<Record<string, Slot>>;
+  readonly needs?: readonly string[];
   readonly build: (params: never, ctx: BuildContext, input: never) => unknown;
 }
 
@@ -66,8 +73,10 @@ export class Library {
     return p;
   }
 
-  /** The primitives that can fill a slot of this role, in a stable order. */
-  forRole(role: Role): AnyPrimitive[] {
-    return [...this.#byId.values()].filter((p) => p.role === role).sort((a, b) => a.id.localeCompare(b.id));
+  /** The primitives that can fill a slot of this role, in a stable order; given what a place has, only those whose needs it meets. */
+  forRole(role: Role, has?: readonly string[]): AnyPrimitive[] {
+    return [...this.#byId.values()]
+      .filter((p) => p.role === role && (has === undefined || (p.needs ?? []).every((n) => has.includes(n))))
+      .sort((a, b) => a.id.localeCompare(b.id));
   }
 }

@@ -113,6 +113,14 @@ flag or a set. A blueprint stores the words Jev chose. A primitive's `build`
 receives numbers, which the seed picks between neighboring levels, so
 instances of one blueprint vary and each is identical on every run.
 
+A primitive may say what its place must have for it to stand there
+(`needs`), as a waterwheel needs running water. The planner offers a slot
+only the primitives whose needs the thing's place meets (`has` on the
+target), and Jev chooses among those as it would; nothing overrides its
+pick. A building's place has what its region's water holds: a water look
+says so (`holds`), and a brook or a trickle holds running water. Composing
+runs before the land is laid out, so the place is the region, not the lot.
+
 ## A world from code
 
 `@gaia/world` turns the engine's code graph into a world document

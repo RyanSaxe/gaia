@@ -110,6 +110,29 @@ describe("a world laid out from code", () => {
     for (const r of laid.regions) expect(r.biome, r.area).toEqual(judged.lands[r.area]);
   });
 
+  it("offers a building only the features its region's water lets stand there, and leaves the pick among them to Jev", async () => {
+    const looks: Looks = { ...LOOKS, water: { Dry: { doc: "Option Dry.", suits: ["docs"] }, Brook: { doc: "Option Brook.", suits: ["source"], holds: ["running water"] } } };
+    const needing = PRIMITIVES.filter((p) => p.role === "Feature" && (p.needs ?? []).length > 0);
+    expect(needing.length).toBeGreaterThan(0);
+    const offered = async (water: string): Promise<Set<string>> => {
+      const asked: JevRequest[] = [];
+      const standIn = standInJev(looks);
+      const jev: JevClient = { ask: (r) => (asked.push(r), standIn.ask(r)) };
+      const judged = await judgeWorld(facts(), looks, jev);
+      const everywhere = Object.fromEntries(Object.keys(judged.waters).map((path) => [path, water]));
+      const buildings = Object.fromEntries(Object.keys(judged.things).map((path) => [path, { as: "building" as const }]));
+      await composeWorld(facts(), looks, jev, { ...judged, waters: everywhere, things: buildings });
+      return new Set(asked.flatMap((r) => Object.keys((r.questions["feature.use"] as { criteria?: object } | undefined)?.criteria ?? {})));
+    };
+    const dry = await offered("Dry");
+    const wet = await offered("Brook");
+    expect(wet.size).toBeGreaterThan(0);
+    for (const p of needing) {
+      expect(dry.has(p.id), p.id).toBe(false);
+      expect(wet.has(p.id), p.id).toBe(true);
+    }
+  });
+
   it("asks Jev only about the code's structure, with options it can answer, and the stand-in answers every question from them", async () => {
     const requests = planWorldRequests(facts(), LOOKS);
     // Every file with something standing on its patch: the seven that aren't config or docs.

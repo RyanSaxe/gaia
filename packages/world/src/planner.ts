@@ -28,6 +28,8 @@ export interface Target {
   /** Stable ID that seeds option order, such as a region path. */
   readonly id: string;
   readonly state: Readonly<Record<string, unknown>>;
+  /** What the thing's place has that a primitive may need, such as running water; none when absent. */
+  readonly has?: readonly string[];
 }
 
 type Ref =
@@ -39,6 +41,8 @@ type Ref =
 export interface Wave {
   readonly request: JevRequest;
   readonly refs: Readonly<Record<string, Ref>>;
+  /** For a structure wave: the primitives each slot was offered, by id. A slot offered none is left out. */
+  readonly offered?: Readonly<Record<string, readonly string[]>>;
 }
 
 /** Which primitive fills each slot, after the structure request. Absent optional slots are left out. */
@@ -81,7 +85,15 @@ function questionFor(field: Field, context: string, label: string, target: Targe
 export function planStructure(k: AnyKind, lib: Library, target: Target): Wave {
   const questions: Record<string, JevQuestion> = {};
   const refs: Record<string, Ref> = {};
+  const offered: Record<string, readonly string[]> = {};
   for (const [name, s] of Object.entries(k.slots)) {
+    // Only the primitives whose needs the place meets; a part none of them can fill is not asked about.
+    const fitting = lib.forRole(s.role, target.has ?? []);
+    if (fitting.length === 0) {
+      if (s.optional) continue;
+      throw new Error(`No ${s.role} primitive fits ${target.id || "the repository's root"}'s place.`);
+    }
+    offered[name] = fitting.map((p) => p.id);
     // A part with its own instruction is asked about in it: what the part says about the code.
     const context = s.ask === undefined ? `${k.doc} This is about its ${name}.` : `${k.doc} Its ${name}: ${s.ask}`;
     if (s.optional) {
@@ -92,7 +104,7 @@ export function planStructure(k: AnyKind, lib: Library, target: Target): Wave {
       };
       refs[`${name}.present`] = { is: "present", slot: name };
     }
-    const candidates = shuffled(lib.forRole(s.role), `${name}.use`, target);
+    const candidates = shuffled(fitting, `${name}.use`, target);
     if (candidates.length === 1) continue;
     questions[`${name}.use`] = {
       type: "choice",
@@ -101,25 +113,26 @@ export function planStructure(k: AnyKind, lib: Library, target: Target): Wave {
     };
     refs[`${name}.use`] = { is: "use", slot: name };
   }
-  return { request: { model: MODEL, state: target.state, questions }, refs };
+  return { request: { model: MODEL, state: target.state, questions }, refs, offered };
 }
 
 export function readStructure(k: AnyKind, lib: Library, wave: Wave, answers: Readonly<Record<string, JevAnswer>>): Structure {
   const out: Record<string, string> = {};
+  const offered = wave.offered;
+  if (offered === undefined) throw new Error("readStructure reads the wave planStructure made.");
   for (const name of slotOrder(k)) {
     const s = k.slots[name] as AnyKind["slots"][string];
+    const candidates = offered[name] ?? [];
+    if (candidates.length === 0) continue;
     if (s.optional && !yes(answers[`${name}.present`])) continue;
     // A slot fed by an absent slot has nothing to grow on, whatever Jev said.
     if (s.on !== undefined && !(s.on in out)) continue;
-    const candidates = lib.forRole(s.role);
-    const only = candidates.length === 1 ? candidates[0] : undefined;
-    const chosen = only?.id ?? pick(answers[`${name}.use`]);
-    if (chosen === undefined || !candidates.some((p) => p.id === chosen)) {
-      throw new Error(`Jev's answer for ${name}.use is not a ${s.role} primitive.`);
+    const chosen = candidates.length === 1 ? candidates[0] : pick(answers[`${name}.use`]);
+    if (chosen === undefined || !candidates.includes(chosen)) {
+      throw new Error(`Jev's answer for ${name}.use is not a ${s.role} primitive it was offered.`);
     }
     out[name] = chosen;
   }
-  void wave;
   return out;
 }
 

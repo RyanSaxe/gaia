@@ -112,11 +112,11 @@ export const FORMS: Readonly<Record<string, { readonly look: Look; readonly rule
   Daisies: { look: look("A drift of daisies: a small constant or value scattered through the code.", "constant", "config", "small"), rule: "flowers", preset: 0 },
 };
 
-/** Whether an area's land holds water, and the reason each choice gives. */
+/** Whether an area's land holds water, and the reason each choice gives. Running water is what a waterwheel needs. */
 export const WATERS: Readonly<Record<string, Look>> = {
   "No water": look("No water: the area's code stands on its own, reading little from its neighbors and passing little on.", "dry", "still", "docs", "config", "test"),
-  "A brook": look("A brook runs through: the area's code flows, one file feeding the next along chains of its own imports.", "flow", "large"),
-  "A trickle": look("A thin trickle: a little flows through, files passing a few things along to each other.", "flow", "small"),
+  "A brook": { ...look("A brook runs through: the area's code flows, one file feeding the next along chains of its own imports.", "flow", "large"), holds: ["running water"] },
+  "A trickle": { ...look("A thin trickle: a little flows through, files passing a few things along to each other.", "flow", "small"), holds: ["running water"] },
   "A still pond": look("A still pond gathers: much of the code leans on this area, and what it holds settles here.", "crossroads", "schema", "data"),
 };
 

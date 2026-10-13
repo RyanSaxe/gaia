@@ -28,12 +28,14 @@ export interface Composed {
   readonly path: string;
   readonly as: ComposedAs;
   readonly state: Readonly<Record<string, unknown>>;
+  /** What its place has that a part may need, such as running water; none when absent. */
+  readonly has?: readonly string[];
 }
 
 /** Composes one thing: its structure, then each stage's details, and the blueprint they make. */
 export async function composeThing(c: Composing, jev: JevClient, thing: Composed): Promise<Blueprint> {
   const k = c[thing.as];
-  const target: Target = { id: thing.path, state: thing.state };
+  const target: Target = { id: thing.path, state: thing.state, ...(thing.has === undefined ? {} : { has: thing.has }) };
   const structureWave = planStructure(k, c.lib, target);
   const structure = readStructure(k, c.lib, structureWave, await answersOf(jev, structureWave));
   const waves: Wave[] = [];
