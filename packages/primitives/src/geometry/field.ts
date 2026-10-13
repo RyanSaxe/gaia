@@ -65,12 +65,20 @@ function ridged(seed: number, x: number, z: number, octaves: number, gain: numbe
   return sum / norm;
 }
 
-/** The sideways offset of a trough's axis at distance `u` along it. */
+/** A valley's bends: the second, shorter wave keeps them from repeating, and no bend turns tighter than this many half widths, so its shoulders never fold onto each other. */
+const VALLEY_BENDS = { second: 0.15, apart: 2.1, tightest: 1.5 } as const;
+
+/**
+ * The sideways offset of a trough's axis at distance `u` along it: it swings `meander` meters to either side every
+ * `meanderWavelength`, or less where a bend that wide would turn tighter than the valley's floor allows.
+ */
 export function troughOffset(f: Extract<HeightField, { op: "trough" }>, u: number): number {
   const p1 = ((f.seed % 997) / 997) * Math.PI * 2;
   const p2 = ((f.seed % 613) / 613) * Math.PI * 2;
   const w = (Math.PI * 2) / f.meanderWavelength;
-  return f.meander * f.halfWidth * (0.7 * Math.sin(u * w + p1) + 0.3 * Math.sin(u * w * 2.3 + p2));
+  const sharper = 1 - VALLEY_BENDS.second + VALLEY_BENDS.second * VALLEY_BENDS.apart * VALLEY_BENDS.apart;
+  const swing = Math.min(f.meander, 1 / (VALLEY_BENDS.tightest * f.halfWidth * w * w * sharper));
+  return swing * ((1 - VALLEY_BENDS.second) * Math.sin(u * w + p1) + VALLEY_BENDS.second * Math.sin(u * w * VALLEY_BENDS.apart + p2));
 }
 
 /**
@@ -80,8 +88,8 @@ export function troughOffset(f: Extract<HeightField, { op: "trough" }>, u: numbe
 const BENDS = { apart: [10, 26], tightest: 2 } as const;
 /** The trough's flat floor, as a share of its half width (`fieldAt`'s trough): a stream swings at most twice as far. */
 const FLOOR = 0.14;
-/** The trough's winding, from straight to strongly meandering, which sets how its stream winds. */
-const MEANDER = [0.08, 0.6] as const;
+/** The trough's winding, meters, from straight to strongly meandering (`valley@1`), which sets how its stream winds. */
+const MEANDER = [4, 30] as const;
 /** The bends' two waves: the second, shorter one keeps them from repeating; together they bend this much sharper than one. */
 const WAVES = { second: 0.15, apart: 2.1, sharper: 0.85 + 0.15 * 2.1 * 2.1 } as const;
 
@@ -129,7 +137,19 @@ export function fieldAt(f: HeightField, x: number, z: number): number {
       const s = Math.sin(f.angle);
       const u = x * c + z * s;
       const v = -x * s + z * c;
-      const across = Math.abs(v - troughOffset(f, u)) / f.halfWidth;
+      // How far from the axis itself, where it bends, not across the valley's run, so a bend keeps the valley's own
+      // width and sides: the nearest point of the axis, found by a few Newton steps from the point straight across.
+      let a = u;
+      for (let step = 0; step < 4; step++) {
+        const off = troughOffset(f, a);
+        const d1 = (troughOffset(f, a + 0.5) - troughOffset(f, a - 0.5)) / 1;
+        const d2 = (troughOffset(f, a + 0.5) - 2 * off + troughOffset(f, a - 0.5)) / 0.25;
+        const g1 = a - u + (off - v) * d1;
+        const g2 = 1 + d1 * d1 + (off - v) * d2;
+        if (g2 <= 0) break;
+        a -= g1 / g2;
+      }
+      const across = Math.hypot(a - u, troughOffset(f, a) - v) / f.halfWidth;
       return smooth(0.14, 1, across);
     }
     case "plane": {

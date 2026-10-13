@@ -28,7 +28,7 @@ export type HeightField =
       readonly seed: number;
       readonly angle: number;
       readonly halfWidth: number;
-      /** Sideways swing of the axis, as a fraction of the half width. */
+      /** Sideways swing of the axis, meters, from one bend to the next `meanderWavelength` meters along it. */
       readonly meander: number;
       readonly meanderWavelength: number;
     }

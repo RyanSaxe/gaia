@@ -326,8 +326,13 @@ follows the Game Accessibility Guidelines and Xbox Accessibility Guideline
 two or three steps (Najafi et al. 2010, Gait & Posture 32(1)) and can stop
 in one.
 
-A stream winds across its valley's floor at its own scale, besides the
-valley's own long winding: its bends lie 10 to 26 channel widths apart,
+A winding valley swings about ±20 m to either side once every 250 m, a
+whole swing every four of its own widths, carrying its floor and stream with it: a straight
+one barely bends and a strongly meandering one swings up to ±30 m, never
+turning tighter than one and a half times its half width, so its floor and
+shoulders keep their shape through every bend (`troughOffset` in
+`@gaia/primitives`). A stream winds across its valley's floor at its own scale
+besides: its bends lie 10 to 26 channel widths apart,
 farther and swinging wider the more the valley winds, never turning tighter
 than two widths, and within twice the floor (`bedOffset` in
 `@gaia/primitives`), so a straight valley's stream barely wavers and a

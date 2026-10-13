@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { type CodeFacts, Library } from "@gaia/schema";
 import { BIOME_PRIMITIVES, RELIEF_PRIMITIVES } from "@gaia/primitives";
-import { WILDS, bakeTerrain, groundHeightAt, heightAt, landHalf, outlinesOf, sampleWorld } from "@gaia/terrain";
+import { WILDS, bakeTerrain, groundHeightAt, heightAt, landHalf, outlinesOf, pastTheEdge, sampleWorld } from "@gaia/terrain";
 import { type Judgments, LAYOUT, type LotPlace, layoutWorld } from "@gaia/world";
 import proving from "../terrain/fixtures/proving.json";
 import provingJudged from "../terrain/fixtures/proving-judged.json";
@@ -146,10 +146,14 @@ describe("the wild past the land", () => {
       const a = (k / 16) * Math.PI * 2;
       const [cx, cz] = [Math.cos(a), Math.sin(a)];
       expect(reliefAt(t, cx * out * 1.5, cz * out * 1.5)).toBeCloseTo(groundHeightAt(t, cx * out * 1.5, cz * out * 1.5), 6);
-      // From where the rim's easing begins, across the rim and far out into the wild, the ground never steps, so no
-      // contours crowd into a ring where the land ends.
+      // From where the rim's easing begins, across the rim and far out into the wild, the easing never steps, so no
+      // contours crowd into a ring where the land ends: on the land it is never steeper than the land itself, whose
+      // own banks and risers may be, and past it never more than a gentle slope.
       for (let r = t.spec.size / 2 - RIM.inner - 20; r < out * 1.5; r += 0.5) {
-        expect(Math.abs(reliefAt(t, cx * (r + 0.5), cz * (r + 0.5)) - reliefAt(t, cx * r, cz * r))).toBeLessThan(0.25);
+        const step = Math.abs(reliefAt(t, cx * (r + 0.5), cz * (r + 0.5)) - reliefAt(t, cx * r, cz * r));
+        const onLand = pastTheEdge(t.spec, cx * (r + 0.5), cz * (r + 0.5)) <= 0;
+        const own = onLand ? Math.abs(heightAt(t.lattice, cx * (r + 0.5), cz * (r + 0.5)) - heightAt(t.lattice, cx * r, cz * r)) : 0;
+        expect(step).toBeLessThan(Math.max(0.25, own + 0.01));
       }
     }
   });
