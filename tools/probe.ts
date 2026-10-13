@@ -12,8 +12,10 @@
 //   rocks and drifts of flowers) at vitality 1, 0.5 and 0.15, by day and at
 //   22:00, steps through its change of form: the far form coming in over the
 //   full one, coming to draw whole, the full form dissolving under it, and the
-//   frame where it leaves and the far form stands alone; then, too small to
-//   see, dissolving and gone. Each is held against the wind's half-second change.
+//   frame where it leaves and the far form stands alone; where a copy's own
+//   views give way to its build's shared card past the haze; then, too small
+//   to see, dissolving and gone. Each is held against the wind's half-second
+//   change.
 // - stress: a world with five times the trees.
 // - paint: the painter check. Standing still in Gaia's world with the wind's
 //   clock frozen while the journal's painter paints the things farthest
@@ -28,7 +30,7 @@
 // are only worth comparing from a quiet machine: other work on the GPU or CPU
 // makes them noisy, so the probe prints the load average it ran at.
 // Usage: pnpm probe [drawn] [steps] [hitch] [stress] [swap] [paint] [--world gaia|proving|sample]
-//          [--size METERS] [--spot NAME] [--dpr 1|2] [--json FILE]
+//          [--size METERS] [--spot NAME] [--dpr 1|2] [--window 1900x930] [--json FILE]
 // The sample world is measured only when asked for, at --size meters across.
 // A spot is "valley", "turned" or a tour stop (`__lab.terrain.tour()` lists
 // them, such as "ruined bridge"); --world and --spot may repeat.
@@ -67,18 +69,22 @@ const POP_FLOOR = 8;
 const SWAP_FLOOR = 1;
 /** Seconds of walking per smoothness window; the app's probe reads the last ten seconds. */
 const HITCH_WINDOWS = 2;
-/** The window's size in CSS pixels. */
-const WIDTH = 1280;
-const HEIGHT = 800;
-
 const { values, positionals } = parseArgs({
   allowPositionals: true,
-  options: { dpr: { type: "string", default: "2" }, json: { type: "string" }, world: { type: "string", multiple: true }, spot: { type: "string", multiple: true }, size: { type: "string" } },
+  options: { dpr: { type: "string" }, window: { type: "string", default: "1280x800" }, json: { type: "string" }, world: { type: "string", multiple: true }, spot: { type: "string", multiple: true }, size: { type: "string" } },
 });
+/** The window's size in CSS pixels: 1900x930 is the reviewer's. */
+const [WIDTH, HEIGHT] = values.window.split("x").map(Number) as [number, number];
+if (!(WIDTH > 0 && HEIGHT > 0)) throw new Error(`--window takes a size such as 1900x930, not ${values.window}.`);
 const asked = positionals.length === 0 ? [...MEASURES] : positionals;
 for (const m of asked) if (!(MEASURES as readonly string[]).includes(m)) throw new Error(`No measure named ${m}; choose from ${MEASURES.join(", ")}.`);
 const measures = new Set(asked as Measure[]);
-const dpr = Number(values.dpr);
+/**
+ * The device pixel ratio the world draws at. Electron draws at the screen's
+ * own ratio whatever it is asked, so a ratio asked for is set on the page
+ * before the lab reads it; with none asked, the screen's own.
+ */
+const dpr = values.dpr === undefined ? null : Number(values.dpr);
 
 /** One page load: the world to open, then each call's JavaScript, run in order with `T` as `__lab.terrain`. */
 interface Job {
@@ -102,7 +108,8 @@ const go = (spot: string): string =>
       : `(T.tour(${JSON.stringify(spot)}) ?? (() => { throw new Error(${JSON.stringify(`No tour stop named ${spot}.`)}); })())`;
 /** Opens the world at 15:30, waits for the bushes' far forms, which bake once it is open, and reports its trees. */
 const OPEN = `(await __lab.open("immersive"), await T.farReady(), await __lab.hour(15.5), await __lab.frames(30), T.scale())`;
-const settle = "await __lab.frames(40)";
+/** After a move, far plants bake their own views as the wait would (`ownFill`), then the frames settle. */
+const settle = "(await __lab.terrain.ownFill?.(), await __lab.frames(40))";
 const bench = "(T.bench(10), +T.bench(40).toFixed(2))";
 
 const jobs: Job[] = [];
@@ -147,7 +154,8 @@ const repo = resolve(import.meta.dirname, "..");
 const scratch = mkdtempSync(join(tmpdir(), "gaia-probe-"));
 const page = join(scratch, "lab.html");
 const out = join(scratch, "out.json");
-writeFileSync(page, labPage(labBundle(await build(LAB_BUILD))));
+const lab = labPage(labBundle(await build(LAB_BUILD)));
+writeFileSync(page, dpr === null ? lab : lab.replace("<head>", `<head><script>Object.defineProperty(window, "devicePixelRatio", { get: () => ${dpr} });</script>`));
 
 // Electron runs this as its main process: each job opens the lab on its world and runs its calls.
 const main = join(scratch, "main.mjs");
@@ -155,8 +163,7 @@ writeFileSync(
   main,
   `import { app, BrowserWindow, powerSaveBlocker } from "electron";
 import { writeFileSync } from "node:fs";
-const { page, out, jobs, width, height, dpr } = JSON.parse(process.env.GAIA_PROBE);
-app.commandLine.appendSwitch("force-device-scale-factor", String(dpr));
+const { page, out, jobs, width, height } = JSON.parse(process.env.GAIA_PROBE);
 app.commandLine.appendSwitch("ignore-gpu-blocklist");
 // A window without focus belongs to a background app, which macOS would slow (App Nap).
 app.commandLine.appendSwitch("disable-renderer-backgrounding");
@@ -202,7 +209,7 @@ app.whenReady().then(probe).then(
 
 const load = loadavg()[0] ?? 0;
 const electron = createRequire(resolve(repo, "app/package.json"))("electron") as string;
-const env: NodeJS.ProcessEnv = { ...process.env, GAIA_PROBE: JSON.stringify({ page, out, jobs, width: WIDTH, height: HEIGHT, dpr }) };
+const env: NodeJS.ProcessEnv = { ...process.env, GAIA_PROBE: JSON.stringify({ page, out, jobs, width: WIDTH, height: HEIGHT }) };
 delete env.ELECTRON_RUN_AS_NODE;
 const run = spawnSync(electron, [main], { env, stdio: ["ignore", "inherit", "inherit"] });
 if (run.status !== 0) throw new Error(`Electron exited with ${run.status ?? run.signal}`);
@@ -218,8 +225,8 @@ const f = (n: number, d = 1): string => n.toFixed(d);
 const line = (s: string): void => void process.stdout.write(`${s}\n`);
 
 const ratios = [...new Set(Object.values(results).map((calls) => (calls as { ratio?: number }).ratio).filter((r): r is number => r !== undefined))];
-const drewAt = ratios.length === 0 ? `${dpr}` : ratios.join(" and ");
-line(`Probe at ${WIDTH}x${HEIGHT} CSS pixels, device pixel ratio ${drewAt}${ratios.some((r) => r !== dpr) ? ` (asked for ${dpr}; Electron draws at the screen's own ratio, so compare runs only on the same screen)` : ""}; load average ${f(load)} before, ${f(loadavg()[0] ?? 0)} after.`);
+const drewAt = ratios.length === 0 ? `${dpr ?? "the screen's own"}` : ratios.join(" and ");
+line(`Probe at ${WIDTH}x${HEIGHT} CSS pixels, device pixel ratio ${drewAt}${dpr === null ? " (the screen's own: compare runs only on the same screen)" : ""}; load average ${f(load)} before, ${f(loadavg()[0] ?? 0)} after.`);
 for (const [world, calls] of Object.entries(results)) {
   line(`\n${world}`);
   for (const [key, value] of Object.entries(calls)) {
@@ -275,7 +282,7 @@ for (const [world, calls] of Object.entries(results)) {
     } else if (key.startsWith("swap ")) {
       // A step passes when it changes the plant's part of the screen no more than the wind does there in half a second, or too little to show.
       type Step = { change: { mean: number; worst: number }; wind: { mean: number; worst: number }; distance: number };
-      const STEPS = ["middle", "whole", "leaving", "end", "dissolving", "gone"] as const;
+      const STEPS = ["middle", "whole", "leaving", "end", "haze", "dissolving", "gone"] as const;
       const rows = value as ({ name: string; vitality: number } & Record<(typeof STEPS)[number], Step>)[];
       const over = (s: Step): boolean => s.change.worst > SWAP_FLOOR && (s.change.worst > s.wind.worst || s.change.mean > s.wind.mean);
       const failing = (r: (typeof rows)[number]): boolean => STEPS.some((k) => over(r[k]));
@@ -285,6 +292,7 @@ for (const [world, calls] of Object.entries(results)) {
       for (const r of rows) {
         line(`    ${failing(r) ? "over " : "     "} ${r.name.padEnd(16)} ${f(r.vitality, 2)}  middle of the band ${say(r.middle)} at ${f(r.middle.distance, 0)} m; whole ${say(r.whole)}`);
         line(`                            dissolving ${say(r.leaving)}; the full form leaving ${say(r.end)} at ${f(r.end.distance, 0)} m`);
+        line(`                            own views giving way past the haze ${say(r.haze)} at ${f(r.haze.distance, 0)} m`);
         line(`                            too small: dissolving ${say(r.dissolving)}; gone ${say(r.gone)} at ${f(r.gone.distance, 0)} m`);
       }
     } else if (key.startsWith("hitch ")) {
