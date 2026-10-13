@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { Library, type RouteSpec } from "@gaia/schema";
 import { BIOME_PRIMITIVES, RELIEF_PRIMITIVES } from "@gaia/primitives";
-import { NO_TRAILS, STEER, TRAVEL, type Travel, type TrailEnd, type TrailRequest, type Trip, type Walker, bakeTerrain, planTrails, planTrip, sampleWorld, travelFrom, travelStep, trailWay } from "@gaia/terrain";
+import { BODY_RADIUS, NO_SOLIDS, NO_TRAILS, STEER, TRAVEL, type Travel, type TrailEnd, type TrailRequest, type Trip, type Walker, acrossWay, bakeTerrain, clearanceAt, planTrails, planTrip, sampleWorld, solidsOf, travelFrom, travelStep, trailWay, waterDepthAt } from "@gaia/terrain";
 
 const lib = new Library([...RELIEF_PRIMITIVES, ...BIOME_PRIMITIVES]);
 const STYLE: RouteSpec = { width: 1.4, wear: 0.7, edging: "none", winding: 0.45, crossing: "footbridge" };
@@ -135,6 +135,38 @@ describe("travel along the trails", { timeout: 20_000 }, () => {
     const steps = take(trip, trip.heading[0] as number);
     expect(Math.max(...steps.map((s) => s.v))).toBeLessThanOrEqual(35 + 1e-6);
     expect(Math.max(...steps.map((s) => s.v))).toBeGreaterThan(TRAVEL.pace);
+  });
+
+  it("goes straight across the land around deep water, wading only the shallows, and around what stands", () => {
+    const pond = t.ponds[0] as (typeof t.ponds)[number];
+    const from = { x: pond.x - pond.reach * 2.5, z: pond.z };
+    const to = { x: pond.x + pond.reach * 2.5, z: pond.z };
+    /** Points a meter or less apart from a to b. */
+    const along = (a: Walker, b: Walker): Walker[] => {
+      const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.z - a.z)));
+      return Array.from({ length: n + 1 }, (_, i) => ({ x: a.x + ((b.x - a.x) * i) / n, z: a.z + ((b.z - a.z) * i) / n }));
+    };
+    // Straight over, it would swim the pond.
+    expect(Math.max(...along(from, to).map((p) => waterDepthAt(t, p.x, p.z)))).toBeGreaterThan(1);
+    // A boulder stands on the bank on the way round.
+    const solids = solidsOf([{ x: pond.x, z: pond.z - pond.reach * 1.3, radius: 3 }, { x: pond.x, z: pond.z + pond.reach * 1.3, radius: 3 }]);
+    for (const s of [NO_SOLIDS, solids]) {
+      const way = acrossWay(t, s, from, to) as Walker[];
+      expect(way).not.toBeNull();
+      expect(way[0]).toEqual(from);
+      expect(Math.hypot((way[way.length - 1] as Walker).x - to.x, (way[way.length - 1] as Walker).z - to.z)).toBeLessThan(0.5);
+      let length = 0;
+      for (let i = 1; i < way.length; i++) {
+        const a = way[i - 1] as Walker;
+        const b = way[i] as Walker;
+        length += Math.hypot(b.x - a.x, b.z - a.z);
+        for (const p of along(a, b)) {
+          expect(waterDepthAt(t, p.x, p.z)).toBeLessThan(0.6);
+          expect(clearanceAt(s, p.x, p.z)).toBeGreaterThanOrEqual(BODY_RADIUS - 1e-3);
+        }
+      }
+      expect(length).toBeLessThan(Math.hypot(to.x - from.x, to.z - from.z) * 2.5);
+    }
   });
 
   it("goes no faster than a hurried walk off the tread", () => {
