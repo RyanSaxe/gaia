@@ -127,19 +127,19 @@ export async function openWorld({ engine, root, consent, progress }: OpenWorldOp
   const model = await engine.call("project.open", { root });
   const project = model.projectId;
   const name = model.repository.name;
-  // The land, outlined as the finished map draws it, every file's patch and every entity's lot, before anything is judged.
-  // What understanding still has to ask, going only as far as the world needs to stand (Jev's links and every
-  // definition's stand), and the graph that plan was built on: every definition, with whatever stand Jev's held
-  // answers already give it.
-  const understanding = await engine.call("understanding.plan", { root, graph: true });
-  if (understanding.graph === undefined) throw new Error("understanding.plan gave no graph.");
-  let judged = understanding.graph;
+  // The land, outlined as the finished map draws it, every file's patch and every entity's lot, as soon as the graph
+  // exists: every definition, with whatever stand Jev's held answers already give it. Planning what understanding
+  // still has to ask takes longer, so it comes after, while the wait draws the borders.
+  let judged = await engine.call("project.graph", { root, judged: true });
   let graph = judgedGraph(judged);
+  const land = landOf(model, graph);
+  progress({ stage: "land", name, size: land.size, ...(land.aspect === undefined ? {} : { aspect: land.aspect }), areas: outlinesOf(land).areas, patches: land.patches.map(({ path, name, area, x, z, radius }) => ({ path, name, area, x, z, radius })), lots: land.lots });
+  // What understanding still has to ask, going only as far as the world needs to stand: Jev's links and every
+  // definition's stand.
+  const understanding = await engine.call("understanding.plan", { root });
   // Each file's request names the definitions the graph stands on its patch, as the layout stands them.
   const planned = planWorldRequests(model, LOOKS, { graph });
   const keys = planned.map((p) => requestKey(p.request));
-  const land = landOf(model, graph);
-  progress({ stage: "land", name, size: land.size, ...(land.aspect === undefined ? {} : { aspect: land.aspect }), areas: outlinesOf(land).areas, patches: land.patches.map(({ path, name, area, x, z, radius }) => ({ path, name, area, x, z, radius })), lots: land.lots });
 
   // Each file's health is Jev's quality, so it goes to the renderer once the understanding pass has judged it.
   const healthUnsent = new Set(land.patches.map((p) => p.path));
@@ -289,6 +289,9 @@ export async function openWorld({ engine, root, consent, progress }: OpenWorldOp
     let understood = 0;
     for (;;) {
       const slice = await engine.call("understanding.next", { root });
+      // Each file the slice settled is washed in now, at the quality the world will show.
+      for (const [path, quality] of Object.entries(slice.quality)) settleHealth(path, quality);
+      sendHealth();
       understood += slice.sent + slice.failed;
       answered += slice.sent + slice.failed;
       misunderstood += slice.failed;

@@ -707,7 +707,7 @@ pub fn next(root: &Path, max: Option<usize>) -> Result<Value, String> {
         &store::read(&w.project, "calls")?,
     );
     if ready.is_empty() && unsettled.is_empty() {
-        return Ok(json!({ "sent": 0, "failed": 0, "left": 0, "settled": [] }));
+        return Ok(json!({ "sent": 0, "failed": 0, "left": 0, "settled": [], "quality": {} }));
     }
     // A link held anew changes the graph every other request is built on,
     // so this slice only holds; the next builds on the graph it leaves.
@@ -864,7 +864,37 @@ pub fn next(root: &Path, max: Option<usize>) -> Result<Value, String> {
     // newly held.
     let left = w.planned.iter().filter(|p| !answered(&p.hash)).count()
         + usize::from(sent > 0 || held_anew);
-    Ok(json!({ "sent": sent, "failed": failed, "left": left, "settled": settled }))
+    // Each file this slice settled for good has its quality now, so a caller can show it as the file's health at once
+    // rather than after the whole pass. A file is settled for good once nothing more will be asked about it: its
+    // answers can ask for readings, which a request of their own then asks again, so its requests are planned anew
+    // on what is held now and each must be answered.
+    let mut quality = serde_json::Map::new();
+    if settled.iter().any(|s| s.starts_with("file:")) {
+        let held = store::read(&w.project, "held")?;
+        let final_files: HashSet<String> = {
+            let ctx = Ctx::new(&w.graph, root, &held);
+            let files: Vec<&dyn Call> = calls::registry().into_iter().filter(|c| c.pass() == "files").collect();
+            w.graph
+                .nodes
+                .iter()
+                .filter_map(|n| if let Node::File(f) = n { Some(f) } else { None })
+                .filter(|f| settled.contains(&f.id))
+                .filter(|f| file_requests(&ctx, root, &w.graph.name, f, &files).iter().all(|p| answered(&p.hash)))
+                .map(|f| f.id.clone())
+                .collect()
+        };
+        let mut graph = w.graph;
+        judge(&mut graph, &held);
+        for n in &graph.nodes {
+            if let Node::File(f) = n
+                && final_files.contains(&f.id)
+                && let Some(q) = f.judged.as_ref().and_then(|j| j["value"]["quality"].as_f64())
+            {
+                quality.insert(f.path.clone(), json!(q));
+            }
+        }
+    }
+    Ok(json!({ "sent": sent, "failed": failed, "left": left, "settled": settled, "quality": quality }))
 }
 
 /// Units whose requests are all answered but whose answers aren't held as
