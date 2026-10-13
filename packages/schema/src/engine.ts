@@ -145,6 +145,8 @@ export interface UnderstandProgress {
   readonly left: number;
   /** Nodes whose requests are all answered. */
   readonly settled: readonly NodeId[];
+  /** Each file among `settled` that has its quality now, by path, 0 to 1: the health the world will show for it. */
+  readonly quality: Readonly<Record<string, number>>;
 }
 
 /** Pushed by the engine without a request. */

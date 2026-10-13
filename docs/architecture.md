@@ -237,14 +237,13 @@ judged, equal to the finished layout's: a lot (`LotPlace`) is
 the middle of the ground kept for an entity, which its building or landmark
 stands within `LAYOUT.lotReach` of, whichever Jev makes it. `openWorld`
 sends the renderer the areas' outlines, every file's patch and every lot
-(`world.progress` stage `land`) before it asks Jev. It sends each file's health once nothing still
-to be judged can change it (stage `health`, file path to vitality, exactly
-as the finished world has it): a file's vitality reads one judgment,
-whether it holds behavior that needs tests of its own, and only when its
-request asks that and no test of its own reaches it, so every other file's
-health goes out with the land and the rest as their answers come in
-(`judgeWorld`'s `trace`). Every file is named once, before the document,
-whether or not Jev is asked. With every answer it also names the areas
+(`world.progress` stage `land`) as soon as the graph exists, before it
+plans or asks Jev anything. It sends each file's health once nothing more
+will be asked about it (stage `health`, file path to vitality, exactly as
+the finished world has it): a file's vitality is its quality, which
+`understanding.next` reports for each file a slice settled for good, so
+files wash in as the pass goes. Every file is named once, before the
+document, whether or not Jev is asked. With every answer it also names the areas
 whose judgments have all settled, each with the land judged for its ground
 (stage `asking`, `settled`, area path to land name: an area settles once
 every request about its files, its entity and itself has, and the one that
@@ -500,18 +499,24 @@ two methods:
 - `understanding.plan` builds every request Jev would be sent about a
   project and looks each up in the store's `calls` table. It sends nothing.
 - `understanding.next` sends whatever is ready, in slices, and returns the
-  nodes that settled, so a waiting screen can paint each as it lands.
+  nodes that settled, and the quality of each file settled for good, so a
+  waiting screen can paint each as it lands. A file is settled for good once
+  nothing more will be asked about it: its requests, planned anew on what
+  is held now, are all answered, since an answer that asks for readings
+  brings a request of its own.
 
 `project.graph` with `judged: true` builds the graph with Jev's links and
 includes every answer the project's store holds for the calls the engine
 asks ([decision 54](decisions/54-understanding-in-slices.md)). Opening a world
-uses them. `openWorld` divides the land on the graph `understanding.plan`
-gives with `graph: true`, so planning and the land share one build. Once
+uses them. `openWorld` divides the land on `project.graph` with `judged:
+true` as soon as the graph exists, then plans with `understanding.plan`,
+which takes several times longer, while the wait draws the borders. Once
 Jev has judged the looks, it calls `understanding.next` until nothing is
-left, counting its requests on the wait with judging's, then lays the world
-out on `project.graph` with `judged: true`, both graphs trimmed by
-`judgedGraph`, so every definition stands by Jev's importance and vitality
-is Jev's quality. Each file's health goes to the wait once the pass is done.
+left, counting its requests on the wait with judging's, and sends each
+file's health as a slice settles it for good. It lays the world out on
+`project.graph` with `judged: true`, both graphs trimmed by `judgedGraph`,
+so every definition stands by Jev's importance and vitality is Jev's
+quality.
 The world document carries what the pass judged (`WorldDocument.judged`, a
 `JudgedThing` for every folder, file and definition: its quality, its
 importance and each concept, every score from 0 to 1, and the blocks Jev
