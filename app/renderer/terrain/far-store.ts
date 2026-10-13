@@ -2,7 +2,8 @@
 // seconds of frames under the wait, and the same builds stand in every
 // world, so each form is stored in this browser's IndexedDB, keyed by
 // everything that makes it, and baked again only when the build or the bake
-// changes.
+// changes. Far plants' own views are kept the same way, one view a record
+// (`own-views.ts`).
 
 /** Two 32-bit FNV-1a lanes, so the key is 64 bits: accidental matches never happen in practice. */
 const LANES = [0x811c9dc5, 0x01000193 ^ 0x5bd1e995] as const;
@@ -56,12 +57,12 @@ export interface FarStore {
   put(key: string, data: unknown): Promise<void>;
 }
 
-/** This browser's stored far forms, or null where IndexedDB is unavailable, as in some private windows. */
-export async function openFarStore(): Promise<FarStore | null> {
+/** This browser's stored far forms, or its far plants' own views, or null where IndexedDB is unavailable, as in some private windows. */
+export async function openFarStore(what: "forms" | "views" = "forms"): Promise<FarStore | null> {
   const db = await new Promise<IDBDatabase | null>((resolve) => {
     try {
-      const open = indexedDB.open("gaia-far-forms", 1);
-      open.onupgradeneeded = () => open.result.createObjectStore("forms");
+      const open = indexedDB.open(`gaia-far-${what}`, 1);
+      open.onupgradeneeded = () => open.result.createObjectStore(what);
       open.onsuccess = () => resolve(open.result);
       open.onerror = () => resolve(null);
     } catch {
@@ -71,7 +72,7 @@ export async function openFarStore(): Promise<FarStore | null> {
   if (db === null) return null;
   const request = <T>(mode: IDBTransactionMode, run: (forms: IDBObjectStore) => IDBRequest<T>): Promise<T> =>
     new Promise((resolve, reject) => {
-      const r = run(db.transaction("forms", mode).objectStore("forms"));
+      const r = run(db.transaction(what, mode).objectStore(what));
       r.onsuccess = () => resolve(r.result);
       r.onerror = () => reject(r.error ?? new Error("The far-form store failed."));
     });

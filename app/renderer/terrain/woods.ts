@@ -88,17 +88,25 @@ export interface FarForms {
   readonly count: number;
   /** The cards of every form, once baked: until then every copy draws its full form. */
   cards: FarCards | null;
-  /** Gives `plant` a far form baked at `share` of `FAR.swapPx`: what its copies take as their `far`. */
-  add(plant: Realized, share?: number): FarOf;
   /**
-   * Every plant added, in form order, and the crown span in device pixels its form bakes and turns far at. Nothing
-   * may be added after, and the forms keep the plants no longer: the caller holds them only while their forms bake.
+   * Gives `plant` a far form turning far at `share` of `FAR.swapPx`, baked at
+   * `bake` of it (`share` when omitted): what its copies take as their `far`.
+   * A plant whose copies draw their own views near the band (`own-views.ts`)
+   * needs its form only past the haze, so it bakes smaller.
    */
-  close(): readonly { readonly plant: Realized; readonly px: number }[];
+  add(plant: Realized, share?: number, bake?: number): FarOf;
+  /**
+   * Every plant added, in form order, with the crown span in device pixels it
+   * turns far at, and the size its form bakes at. Nothing may be added after.
+   */
+  close(): readonly { readonly plant: Realized; readonly px: number; readonly bakePx: number }[];
+  /** Form `form`'s plant, kept to bake its copies' own views from (`own-views.ts`). */
+  plantOf(form: number): Realized | undefined;
 }
 
 export function createFarForms(): FarForms {
-  const plants: { plant: Realized; px: number }[] = [];
+  const plants: { plant: Realized; px: number; bakePx: number }[] = [];
+  const kept: Realized[] = [];
   let count = 0;
   let closed = false;
   const forms: FarForms = {
@@ -106,9 +114,10 @@ export function createFarForms(): FarForms {
     get count() {
       return count;
     },
-    add(plant, share = 1) {
+    add(plant, share = 1, bake = share) {
       if (closed) throw new Error("The far forms are already baking; add every plant before they bake.");
-      plants.push({ plant, px: FAR.swapPx * share });
+      plants.push({ plant, px: FAR.swapPx * share, bakePx: FAR.swapPx * bake });
+      kept.push(plant);
       count = plants.length;
       return { form: count - 1, forms, share };
     },
@@ -116,6 +125,7 @@ export function createFarForms(): FarForms {
       closed = true;
       return plants.splice(0);
     },
+    plantOf: (form) => kept[form],
   };
   return forms;
 }
@@ -131,6 +141,10 @@ export interface Copies extends PlantView {
   readonly far: FarOf | undefined;
   /** Its copies' far cards, once its far form has baked: they stand inside `object`. */
   readonly cards: THREE.Object3D | null;
+  /** Each copy's crown, four numbers (`crownsOf`), and its place, seven (`placesOf`), as its card reads them; new arrays after `respot`. */
+  readonly placed: { readonly crowns: Float32Array; readonly places: Float32Array };
+  /** Sets copy `index`'s own far views (`OwnViews`), which its card draws while it holds any. */
+  setOwn(index: number, own: ArrayLike<number>): void;
   /** Sets one copy's vitality; the shader reads it per instance. */
   setVitalityAt(index: number, v: number): void;
   /**
@@ -205,6 +219,8 @@ export function createCopies(plant: Realized, light: SceneLight, spots: readonly
   let cells = cellsOf(spots, view.built, view.reach);
   let crowns = crownsOf(spots, view.built);
   let places = placesOf(spots);
+  /** Each copy's own views, eight numbers (`OwnViews`), for cards made after they were set. */
+  let own = new Float32Array(spots.length * 8);
   let inBand = 0;
   let farAway = 0;
   let detail: DetailMode = "auto";
@@ -224,7 +240,7 @@ export function createCopies(plant: Realized, light: SceneLight, spots: readonly
     const baked = far?.forms.cards ?? null;
     if (cards === null && baked !== null && far !== undefined) {
       cards = baked.copies(far.form);
-      cards.place(places, crowns);
+      cards.place(places, crowns, own);
       // Made in the middle of the sun's shadow pass, they draw its depth, never their color into the map they read.
       cards.useDepth(depth);
       view.object.add(cards.object);
@@ -250,6 +266,13 @@ export function createCopies(plant: Realized, light: SceneLight, spots: readonly
     far,
     get cards() {
       return cards?.object ?? null;
+    },
+    get placed() {
+      return { crowns, places };
+    },
+    setOwn(index, views) {
+      own.set(views, index * 8);
+      cards?.setOwn(index, views);
     },
     get count() {
       return view.count;
@@ -340,7 +363,8 @@ export function createCopies(plant: Realized, light: SceneLight, spots: readonly
       cells = cellsOf(next, view.built, view.reach);
       crowns = crownsOf(next, view.built);
       places = placesOf(next);
-      cards?.place(places, crowns);
+      own = new Float32Array(next.length * 8);
+      cards?.place(places, crowns, own);
       packed = levels.map(() => ({ copies: [], key: "" }));
     },
     drawn: () => ({ ...view.drawn(), band: inBand, far: farAway }),

@@ -65,3 +65,4 @@ One file per decision the reviewer settled in the pair sessions that designed Ga
 - [Every tree is a definition Jev chose to be a tree](61-every-tree-is-a-definition-jev-chose.md)
 - [The journal reads best and weak, with a meter for each number](62-the-journal-reads-best-and-weak-with-meters.md)
 - [Rivers follow the land, as one network](63-rivers-follow-the-land-as-one-network.md)
+- [Far plants draw their own views until the haze, then a shared look](64-far-plants-draw-their-own-views-until-the-haze.md)

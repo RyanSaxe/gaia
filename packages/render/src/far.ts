@@ -150,15 +150,23 @@ export interface FarBake {
   cancel(): void;
 }
 
-/**
- * Starts baking `plant` into its far form, each view `framePx` texels
- * across: the crown span on screen, in device pixels, at which the woods
- * turn it far, so one texel covers about one pixel there. The views see the
- * plant as the near form looks from that distance: still air, full detail
- * thinned as the eye would thin it, leaves merged to that pixel size.
- */
-export function startFarBake(renderer: THREE.WebGLRenderer, plant: Realized, framePx = 128): FarBake {
-  let spent = 0;
+/** What every bake of one plant draws with: its meshes in each output, the camera and a multisampled row of `tiles` views of up to `framePx` texels. */
+interface BakeRig {
+  readonly sphere: THREE.Sphere;
+  readonly radius: number;
+  readonly height: number;
+  /** Resolves once every shader the bake uses has compiled, and each output has drawn once into the row. */
+  readonly ready: Promise<void>;
+  /** Clears the row, color and depth. */
+  clearRow(): void;
+  /** Draws pass `pass` of view (i, j) into tile `tile` of the row, `size` texels across (`framePx` when omitted). */
+  draw(i: number, j: number, pass: Pass, tile: number, size?: number): void;
+  /** Resolves `tiles` tiles of the row, from tile `from`, into `target` at texel (x, y), its channels mapped by `pass`; each `size` texels across. */
+  resolve(pass: Pass, target: THREE.WebGLRenderTarget, from: number, tiles: number, x: number, y: number, size?: number): void;
+  free(): void;
+}
+
+function bakeRig(renderer: THREE.WebGLRenderer, plant: Realized, framePx: number, tiles: number): BakeRig {
   const parts = mergeParts(plant.parts).filter((p: Part) => p.indices.length > 0);
   const box = new THREE.Box3();
   const point = new THREE.Vector3();
@@ -170,13 +178,12 @@ export function startFarBake(renderer: THREE.WebGLRenderer, plant: Realized, fra
   const height = Math.max(0.3, box.max.y);
   // Padding for the wind's bend and pieces growing toward a pixel.
   const radius = sphere.radius * 1.04;
-  const cols = FAR_VIEWS.azimuths;
-  const rows = FAR_VIEWS.elevations.length;
   const px = framePx * SUPERSAMPLE;
 
   // Where the eye stands when this plant turns far, so detail thins as it would there.
   const pxPerRad = renderer.getDrawingBufferSize(new THREE.Vector2()).y / ((FOV * Math.PI) / 180);
-  const eyeAt = (2 * radius * pxPerRad) / framePx;
+  // A view `size` texels across sees the plant from where it spans that many pixels.
+  const eyeAt = (size: number): number => (2 * radius * pxPerRad) / size;
   // Still air, and a shadow map of its own: an unset sampler would read whatever the bake last bound, even the target it draws into.
   const unlit = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1);
   unlit.needsUpdate = true;
@@ -220,11 +227,9 @@ export function startFarBake(renderer: THREE.WebGLRenderer, plant: Realized, fra
   });
 
   // One elevation row at a time keeps the multisampled target small.
-  const row = new THREE.WebGLRenderTarget(cols * px, px, { depthBuffer: true, type: THREE.UnsignedByteType, samples: 4 });
+  const row = new THREE.WebGLRenderTarget(tiles * px, px, { depthBuffer: true, type: THREE.UnsignedByteType, samples: 4 });
   row.texture.minFilter = THREE.NearestFilter;
   row.texture.magFilter = THREE.NearestFilter;
-  // Mipmaps are made once, when the last chunk is in.
-  const layers = [0, 1, 2, 3].map(() => new THREE.WebGLRenderTarget(cols * framePx, rows * framePx, { depthBuffer: false, generateMipmaps: false, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter }));
   const downUniforms = { uSrc: { value: row.texture }, uOrigin: { value: new THREE.Vector2() }, uMap: { value: new THREE.Matrix4() } };
   const down = new THREE.ShaderMaterial({
     vertexShader: QUAD_VERT,
@@ -271,16 +276,71 @@ export function startFarBake(renderer: THREE.WebGLRenderer, plant: Realized, fra
     }
   })();
 
-  const free = (): void => {
-    row.dispose();
-    down.dispose();
-    unlit.dispose();
-    quad.geometry.dispose();
-    for (const m of meshes) {
-      m.mesh.geometry.dispose();
-      for (const mat of m.materials.values()) mat.dispose();
-    }
+  return {
+    sphere,
+    radius,
+    height,
+    ready,
+    clearRow() {
+      row.scissorTest = false;
+      renderer.setRenderTarget(row);
+      renderer.clear(true, true, true);
+    },
+    draw(i, j, pass, tile, size = framePx) {
+      shared.uVitality.value = pass.vitality;
+      shared.uColorVitality.value = pass.colorVitality;
+      for (const m of meshes) m.mesh.material = m.materials.get(pass.output) as THREE.ShaderMaterial;
+      const dir = farViewDir(i, j);
+      camera.position.copy(sphere.center).addScaledVector(dir, 2 * radius + 1000);
+      camera.up.set(0, 1, 0);
+      camera.lookAt(sphere.center);
+      camera.updateMatrixWorld();
+      bake.uBakeDir.value.copy(dir);
+      light.uEye.value.copy(sphere.center).addScaledVector(dir, eyeAt(size));
+      const at = size * SUPERSAMPLE;
+      row.viewport.set(tile * at, 0, at, at);
+      row.scissor.set(tile * at, 0, at, at);
+      row.scissorTest = true;
+      renderer.setRenderTarget(row);
+      renderer.render(scene, camera);
+      row.scissorTest = false;
+    },
+    resolve(pass, target, from, count, x, y, size = framePx) {
+      const was = target.viewport.clone();
+      target.viewport.set(x, y, count * size, size);
+      downUniforms.uOrigin.value.set(x - from * size, y);
+      downUniforms.uMap.value.copy(mapOf(pass.to));
+      renderer.setRenderTarget(target);
+      renderer.render(quadScene, quadCamera);
+      target.viewport.copy(was);
+    },
+    free() {
+      row.dispose();
+      down.dispose();
+      unlit.dispose();
+      quad.geometry.dispose();
+      for (const m of meshes) {
+        m.mesh.geometry.dispose();
+        for (const mat of m.materials.values()) mat.dispose();
+      }
+    },
   };
+}
+
+/**
+ * Starts baking `plant` into its far form, each view `framePx` texels
+ * across: the crown span on screen, in device pixels, at which the woods
+ * turn it far, so one texel covers about one pixel there. The views see the
+ * plant as the near form looks from that distance: still air, full detail
+ * thinned as the eye would thin it, leaves merged to that pixel size.
+ */
+export function startFarBake(renderer: THREE.WebGLRenderer, plant: Realized, framePx = 128): FarBake {
+  let spent = 0;
+  const cols = FAR_VIEWS.azimuths;
+  const rows = FAR_VIEWS.elevations.length;
+  const rig = bakeRig(renderer, plant, framePx, cols);
+  // Mipmaps are made once, when the last chunk is in.
+  const layers = [0, 1, 2, 3].map(() => new THREE.WebGLRenderTarget(cols * framePx, rows * framePx, { depthBuffer: false, generateMipmaps: false, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter }));
   let next = -1;
   let done: FarForm | null = null;
   const steps = rows * PASSES.length * cols;
@@ -297,48 +357,24 @@ export function startFarBake(renderer: THREE.WebGLRenderer, plant: Realized, fra
     const pk = Math.floor(k / cols);
     const j = Math.floor(pk / PASSES.length);
     const pass = PASSES[pk % PASSES.length] as Pass;
-    shared.uVitality.value = pass.vitality;
-    shared.uColorVitality.value = pass.colorVitality;
-    for (const m of meshes) m.mesh.material = m.materials.get(pass.output) as THREE.ShaderMaterial;
-    if (i === 0) {
-      row.scissorTest = false;
-      renderer.setRenderTarget(row);
-      renderer.clear(true, true, true);
-    }
-    const dir = farViewDir(i, j);
-    camera.position.copy(sphere.center).addScaledVector(dir, 2 * radius + 1000);
-    camera.up.set(0, 1, 0);
-    camera.lookAt(sphere.center);
-    camera.updateMatrixWorld();
-    bake.uBakeDir.value.copy(dir);
-    light.uEye.value.copy(sphere.center).addScaledVector(dir, eyeAt);
-    row.viewport.set(i * px, 0, px, px);
-    row.scissor.set(i * px, 0, px, px);
-    row.scissorTest = true;
-    renderer.setRenderTarget(row);
-    renderer.render(scene, camera);
-    row.scissorTest = false;
+    if (i === 0) rig.clearRow();
+    rig.draw(i, j, pass, i);
     if (i < cols - 1) return;
-    const target = layers[pass.layer] as THREE.WebGLRenderTarget;
-    target.viewport.set(0, j * framePx, cols * framePx, framePx);
-    downUniforms.uOrigin.value.set(0, j * framePx);
-    downUniforms.uMap.value.copy(mapOf(pass.to));
-    renderer.setRenderTarget(target);
-    renderer.render(quadScene, quadCamera);
-    target.viewport.set(0, 0, cols * framePx, rows * framePx);
+    rig.resolve(pass, layers[pass.layer] as THREE.WebGLRenderTarget, 0, cols, 0, j * framePx);
   };
   const finish = (): FarForm => {
     // Every chunk is in: make each atlas's mipmaps once.
     const empty = new THREE.Scene();
+    const camera = new THREE.Camera();
     for (const layer of layers) {
       layer.texture.generateMipmaps = true;
       renderer.setRenderTarget(layer);
-      renderer.render(empty, quadCamera);
+      renderer.render(empty, camera);
     }
-    free();
+    rig.free();
     const bytes = Math.round(cols * framePx * rows * framePx * 4 * layers.length * (4 / 3));
     return {
-      bounds: { center: sphere.center.clone(), radius, height },
+      bounds: { center: rig.sphere.center.clone(), radius: rig.radius, height: rig.height },
       bytes,
       ms: spent,
       atlas: { layers: layers.map((l) => l.texture), frame: framePx, sway: plant.motion.sway, frequency: plant.motion.frequency, targets: layers },
@@ -349,7 +385,7 @@ export function startFarBake(renderer: THREE.WebGLRenderer, plant: Realized, fra
   };
   let cancelled = false;
   return {
-    ready,
+    ready: rig.ready,
     step(budgetMs, views = Number.POSITIVE_INFINITY) {
       if (done !== null || cancelled) return done;
       const t0 = performance.now();
@@ -373,7 +409,7 @@ export function startFarBake(renderer: THREE.WebGLRenderer, plant: Realized, fra
     cancel() {
       if (done !== null || cancelled) return;
       cancelled = true;
-      free();
+      rig.free();
       for (const l of layers) l.dispose();
     },
   };
@@ -385,6 +421,56 @@ export function bakeFarForm(renderer: THREE.WebGLRenderer, plant: Realized, fram
   let form: FarForm | null = null;
   while (form === null) form = bake.step(Number.POSITIVE_INFINITY);
   return form;
+}
+
+/**
+ * One plant's own views, baked one at a time at any size up to `maxPx`
+ * texels, each seen as `startFarBake` sees it, into a tile of four layers laid
+ * out as a far form's atlas is: what a copy's own far views are made of
+ * (`createFarCards`).
+ */
+export interface FarViews {
+  /** Resolves once every shader the bake uses has compiled. */
+  readonly ready: Promise<void>;
+  /** Bakes view (i, j), `size` texels square, into the tile at texel (x, y) of each of `layers`, which it clears first. */
+  bake(i: number, j: number, size: number, layers: readonly THREE.WebGLRenderTarget[], x: number, y: number): void;
+  dispose(): void;
+}
+
+/** Starts baking single views of `plant`, up to `maxPx` texels across. */
+export function startFarViews(renderer: THREE.WebGLRenderer, plant: Realized, maxPx: number): FarViews {
+  const rig = bakeRig(renderer, plant, maxPx, 1);
+  return {
+    ready: rig.ready,
+    bake(i, j, size, layers, x, y) {
+      if (size > maxPx) throw new Error(`A view of ${size} texels is larger than the ${maxPx} these views bake at most.`);
+      const was = { target: renderer.getRenderTarget(), auto: renderer.autoClear, color: renderer.getClearColor(new THREE.Color()), alpha: renderer.getClearAlpha() };
+      renderer.autoClear = false;
+      renderer.setClearColor(0x000000, 0);
+      // Each pass adds its channels into the tile, so the tile starts empty.
+      for (const layer of layers) {
+        layer.scissor.set(x, y, size, size);
+        layer.scissorTest = true;
+        renderer.setRenderTarget(layer);
+        renderer.clear(true, false, false);
+        layer.scissorTest = false;
+      }
+      for (const pass of PASSES) {
+        rig.clearRow();
+        rig.draw(i, j, pass, 0, size);
+        rig.resolve(pass, layers[pass.layer] as THREE.WebGLRenderTarget, 0, 1, x, y, size);
+      }
+      renderer.setRenderTarget(was.target);
+      renderer.autoClear = was.auto;
+      renderer.setClearColor(was.color, was.alpha);
+    },
+    dispose: () => rig.free(),
+  };
+}
+
+/** Four layers of `width` by `height` texels, as a far form's atlas has, for views to bake or be copied into. */
+export function farViewLayers(width: number, height: number): THREE.WebGLRenderTarget[] {
+  return [0, 1, 2, 3].map(() => new THREE.WebGLRenderTarget(width, height, { depthBuffer: false, generateMipmaps: false, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter }));
 }
 
 /**
@@ -564,6 +650,8 @@ const CARD_VERT = /* glsl */ `
 attribute vec4 aSpot; // x, y, z, yaw
 attribute vec4 aMore; // scale, vitality, seed
 attribute vec4 aCrown; // what its size on screen is measured by (crownsOf)
+attribute vec4 aOwnA; // its own views: x, y of their 2 by 2 tiles in the own atlas, in texels; a tile's size; which tiles hold their view (bits 1, 2, 4, 8)
+attribute vec4 aOwnB; // the azimuths its two columns of tiles hold, and the elevations its two rows hold
 uniform vec3 uEye;
 ${FAR_CHOICE_GLSL}
 uniform float uTime;
@@ -587,6 +675,10 @@ varying float vVitality;
 varying float vFade;
 varying float vGone;
 varying float vScale;
+varying float vOwn;
+varying vec4 vTiles0;
+varying vec4 vTiles1;
+varying float vTileSize;
 ${WIND_GLSL}
 // The plant shader's per-copy shape variety (applyVariety), at full variety.
 vec3 variety(vec3 p, vec3 root) {
@@ -599,6 +691,14 @@ vec3 variety(vec3 p, vec3 root) {
   return q;
 }
 mat3 yawMat(float a) { float c = cos(a); float s = sin(a); return mat3(c, 0.0, -s, 0.0, 1.0, 0.0, s, 0.0, c); }
+// Whether the copy's own tiles hold view (i, j), and where its tile is.
+float ownTile(float i, float j, out vec2 tile) {
+  float c = abs(i - aOwnB.x) < 0.5 ? 0.0 : abs(i - aOwnB.y) < 0.5 ? 1.0 : -1.0;
+  float r = abs(j - aOwnB.z) < 0.5 ? 0.0 : abs(j - aOwnB.w) < 0.5 ? 1.0 : -1.0;
+  tile = aOwnA.xy + vec2(max(c, 0.0), max(r, 0.0)) * aOwnA.z;
+  if (c < 0.0 || r < 0.0) return 0.0;
+  return mod(floor(aOwnA.w / exp2(c + 2.0 * r)), 2.0);
+}
 void main() {
   // Whether this set draws the copy in this pass: the solid set a card standing alone, the fading set one over
   // its full form. Any other copy collapses outside the view and costs nothing more.
@@ -637,6 +737,26 @@ void main() {
   vW = vec4((1.0 - fi) * (1.0 - fj), fi * (1.0 - fj), (1.0 - fi) * fj, fi * fj);
   vCells0 = vec4(i0, j0, i1, j0);
   vCells1 = vec4(i0, j1, i1, j1);
+  // Drawn from its own views when it holds any of the four: a view still baking gives its weight to the rest.
+  vOwn = 0.0;
+  vTiles0 = vec4(0.0);
+  vTiles1 = vec4(0.0);
+  vTileSize = aOwnA.z;
+  if (aOwnA.w > 0.5) {
+    vec2 t0;
+    vec2 t1;
+    vec2 t2;
+    vec2 t3;
+    vec4 held = vec4(ownTile(i0, j0, t0), ownTile(i1, j0, t1), ownTile(i0, j1, t2), ownTile(i1, j1, t3));
+    vec4 w = vW * held;
+    float sum = w.x + w.y + w.z + w.w;
+    if (sum > 1e-3) {
+      vW = w / sum;
+      vOwn = 1.0;
+      vTiles0 = vec4(t0, t1);
+      vTiles1 = vec4(t2, t3);
+    }
+  }
   vQ = q;
   vVl = Vl;
   // Placed as the near form is: its variety, then the whole plant's bend in the wind.
@@ -657,12 +777,25 @@ void main() {
 }
 `;
 
-/** What a card shows at a texel: coverage at its vitality, color, normal, foliage, glow and depth. */
+/**
+ * What a card shows at a texel: coverage at its vitality, color, normal,
+ * foliage, glow and depth, read from its form's atlas, or from the copy's own
+ * views in the own atlas when it holds them.
+ */
 const CARD_TAP_GLSL = /* glsl */ `
 uniform sampler2D uLayer0;
 uniform sampler2D uLayer1;
 uniform sampler2D uLayer2;
 uniform sampler2D uLayer3;
+uniform sampler2D uOwn0;
+uniform sampler2D uOwn1;
+uniform sampler2D uOwn2;
+uniform sampler2D uOwn3;
+uniform vec2 uOwnSize;
+varying float vOwn;
+varying vec4 vTiles0;
+varying vec4 vTiles1;
+varying float vTileSize;
 uniform float uRadius;
 uniform vec2 uCoverEdge;
 uniform float uElev[${FAR_VIEWS.elevations.length}];
@@ -678,39 +811,47 @@ vec3 viewDir(vec2 cell) {
   float el = radians(uElev[int(cell.y)]);
   return vec3(cos(el) * cos(az), sin(el), cos(el) * sin(az));
 }
-// Where a point p, from the plant's center, falls in a view's frame of the atlas.
-vec2 frameUv(vec2 cell, vec3 dir, vec3 p) {
+bool gOwn;
+// One layer at uv, of the own atlas or the form's. Half a level finer than the form's mipmaps pick: blending four
+// views already softens the card. The own atlas has no mipmaps: its tiles are about a texel to a pixel.
+vec4 at0(vec2 uv) { return gOwn ? texture2D(uOwn0, uv) : texture2D(uLayer0, uv, -0.5); }
+vec4 at1(vec2 uv) { return gOwn ? texture2D(uOwn1, uv) : texture2D(uLayer1, uv, -0.5); }
+vec4 at2(vec2 uv) { return gOwn ? texture2D(uOwn2, uv) : texture2D(uLayer2, uv, -0.5); }
+vec4 at3(vec2 uv) { return gOwn ? texture2D(uOwn3, uv) : texture2D(uLayer3, uv, -0.5); }
+// Where a point p, from the plant's center, falls in a view's frame: the cell's in the form's atlas, or its tile's.
+vec2 frameUv(vec2 cell, vec2 tile, vec3 dir, vec3 p) {
   vec3 right = normalize(cross(vec3(0.0, 1.0, 0.0), dir));
   vec3 up = cross(dir, right);
-  vec2 f = vec2(dot(p, right), dot(p, up)) / uRadius * 0.5 + 0.5;
-  return (cell + clamp(f, 0.0, 1.0)) / GRID;
+  vec2 f = clamp(vec2(dot(p, right), dot(p, up)) / uRadius * 0.5 + 0.5, 0.0, 1.0);
+  return gOwn ? (tile + f * vTileSize) / uOwnSize : (cell + f) / GRID;
 }
 // Where the eye's ray through this point of the card meets the plant, as one
 // view saw it: the view's depth there moves the point along the ray, so the
 // four views line up on the same surface instead of ghosting thin strands.
-vec2 seen(vec2 cell) {
+vec2 seen(vec2 cell, vec2 tile) {
   vec3 dir = viewDir(cell);
-  vec2 uv = frameUv(cell, dir, vQ);
-  vec4 l0 = texture2D(uLayer0, uv, -0.5);
+  vec2 uv = frameUv(cell, tile, dir, vQ);
+  vec4 l0 = at0(uv);
   if (l0.a < 0.05) return uv;
-  float d = (texture2D(uLayer2, uv, -0.5).a / l0.a - 0.5) * 2.0 * uRadius;
+  float d = (at2(uv).a / l0.a - 0.5) * 2.0 * uRadius;
   float t = (dot(vQ, dir) - d) / max(dot(vVl, dir), 0.3);
-  return frameUv(cell, dir, vQ - vVl * t);
+  return frameUv(cell, tile, dir, vQ - vVl * t);
 }
 vec2 gUv0;
 vec2 gUv1;
 vec2 gUv2;
 vec2 gUv3;
 void views() {
-  gUv0 = seen(vCells0.xy);
-  gUv1 = seen(vCells0.zw);
-  gUv2 = seen(vCells1.xy);
-  gUv3 = seen(vCells1.zw);
+  gOwn = vOwn > 0.5;
+  gUv0 = seen(vCells0.xy, vTiles0.xy);
+  gUv1 = seen(vCells0.zw, vTiles0.zw);
+  gUv2 = seen(vCells1.xy, vTiles1.xy);
+  gUv3 = seen(vCells1.zw, vTiles1.zw);
 }
-// Half a level finer than the mipmaps pick: blending four views already softens the card.
-vec4 tap(sampler2D t) {
-  return texture2D(t, gUv0, -0.5) * vW.x + texture2D(t, gUv1, -0.5) * vW.y + texture2D(t, gUv2, -0.5) * vW.z + texture2D(t, gUv3, -0.5) * vW.w;
-}
+vec4 tap0() { return at0(gUv0) * vW.x + at0(gUv1) * vW.y + at0(gUv2) * vW.z + at0(gUv3) * vW.w; }
+vec4 tap1() { return at1(gUv0) * vW.x + at1(gUv1) * vW.y + at1(gUv2) * vW.z + at1(gUv3) * vW.w; }
+vec4 tap2() { return at2(gUv0) * vW.x + at2(gUv1) * vW.y + at2(gUv2) * vW.z + at2(gUv3) * vW.w; }
+vec4 tap3() { return at3(gUv0) * vW.x + at3(gUv1) * vW.y + at3(gUv2) * vW.z + at3(gUv3) * vW.w; }
 // The share of the texel covered at vitality v, between the baked slices at
 // 1, 0.6, 0.3 and 0.1, its edge sharpened: blending four views and their
 // mipmaps softens it, and a soft edge would dither into a halo.
@@ -737,13 +878,13 @@ varying float vGone;
 varying float vScale;
 void main() {
   views();
-  vec4 l0 = tap(uLayer0);
-  vec4 l3 = tap(uLayer3);
+  vec4 l0 = tap0();
+  vec4 l3 = tap3();
   float healthy = max(l0.a, 1e-4);
   float cover = coverAt(l0, l3, vVitality);
   if (cover < 0.02) discard;
-  vec4 l1 = tap(uLayer1);
-  vec4 l2 = tap(uLayer2);
+  vec4 l1 = tap1();
+  vec4 l2 = tap2();
   // Color between healthy (1) and withered (0), as the plant's wither channel mixes it.
   vec3 albedo = mix(l0.rgb / healthy, l1.rgb / max(l3.b, 1e-4), 1.0 - vVitality);
   vec3 nl = normalize(l2.rgb / healthy * 2.0 - 1.0);
@@ -787,9 +928,9 @@ varying vec3 vToEye;
 varying float vScale;
 void main() {
   views();
-  vec4 l0 = tap(uLayer0);
-  if (coverAt(l0, tap(uLayer3), vVitality) < 0.5) discard;
-  vec4 l2 = tap(uLayer2);
+  vec4 l0 = tap0();
+  if (coverAt(l0, tap3(), vVitality) < 0.5) discard;
+  vec4 l2 = tap2();
   vec3 world = vWorld - vToEye * ((l2.a / max(l0.a, 1e-4) - 0.5) * 2.0 * uRadius * vScale);
   vec4 clip = projectionMatrix * viewMatrix * vec4(world, 1.0);
   gl_FragDepth = clamp(0.5 + 0.5 * clip.z / clip.w, 0.0, 1.0);
@@ -808,9 +949,16 @@ export interface FarCopies {
    * Stands the copies, seven numbers each in `places`: where (x, y, z), yaw,
    * scale, vitality and seed (`placesOf`), and four in `crowns` (`crownsOf`).
    */
-  place(places: Float32Array, crowns: Float32Array): void;
+  place(places: Float32Array, crowns: Float32Array, own?: Float32Array): void;
   /** Sets copy `index`'s vitality, which its card shows. */
   setVitalityAt(index: number, v: number): void;
+  /**
+   * Sets copy `index`'s own views, eight numbers (`OwnViews`): where its tiles
+   * stand in the own atlas, their size and which hold their view, then the
+   * azimuths and elevations they hold. A copy holding none draws its form's
+   * card. `own` in `place` holds every copy's eight.
+   */
+  setOwn(index: number, own: ArrayLike<number>): void;
   /** Swaps to the depth material for the sun's shadow: a card standing alone casts, one inside the band does not. */
   useDepth(on: boolean): void;
   dispose(): void;
@@ -836,19 +984,29 @@ export interface FarCards {
   pass(focal: number, ortho: boolean): void;
   /** Shows or hides every card of these forms, for seeing what they draw. */
   show(on: boolean): void;
+  /** Reads copies' own views from these four layers, `width` by `height` texels (`setOwn`). */
+  own(layers: readonly THREE.Texture[], width: number, height: number): void;
   dispose(): void;
 }
+
+/** The eight numbers of a copy's own views: x, y of its 2 by 2 tiles in texels, a tile's size, the bits of the tiles holding their view, then the azimuths of its two columns and the elevations of its two rows. */
+export type OwnViews = readonly [number, number, number, number, number, number, number, number];
 
 /** The cards of `forms`, each turning far where its copies' crowns span `swapPx[k]` device pixels, by `turn`. */
 export function createFarCards(forms: readonly FarForm[], light: SceneLight, swapPx: readonly number[], turn: FarTurn): FarCards {
   if (swapPx.length !== forms.length) throw new Error(`createFarCards was given ${forms.length} forms and ${swapPx.length} sizes they turn far at.`);
   const card = new THREE.PlaneGeometry(2, 2, 1, 5);
   const pass = { uFarPass: { value: new THREE.Vector2(0, 0) }, uFarBand: { value: turn.band }, uFarLeave: { value: turn.leave }, uFarGone: { value: new THREE.Vector2(turn.gone.start, turn.gone.end) } };
+  // Until a copy holds its own views, the own atlas is a texel no card reads.
+  const none = new THREE.DataTexture(new Uint8Array(4), 1, 1);
+  none.needsUpdate = true;
+  const owned = { uOwn0: { value: none as THREE.Texture }, uOwn1: { value: none as THREE.Texture }, uOwn2: { value: none as THREE.Texture }, uOwn3: { value: none as THREE.Texture }, uOwnSize: { value: new THREE.Vector2(1, 1) } };
   const materials = forms.map((form, k) => {
     const [l0, l1, l2, l3] = form.atlas.layers;
     const uniforms = {
       ...light,
       ...pass,
+      ...owned,
       uFarSwap: { value: swapPx[k] as number },
       uLayer0: { value: l0 },
       uLayer1: { value: l1 },
@@ -884,6 +1042,8 @@ export function createFarCards(forms: readonly FarForm[], light: SceneLight, swa
         g.setAttribute("aSpot", new THREE.InstancedBufferAttribute(new Float32Array(Math.max(1, room) * 4), 4));
         g.setAttribute("aMore", new THREE.InstancedBufferAttribute(new Float32Array(Math.max(1, room) * 4), 4));
         g.setAttribute("aCrown", new THREE.InstancedBufferAttribute(new Float32Array(Math.max(1, room) * 4), 4));
+        g.setAttribute("aOwnA", new THREE.InstancedBufferAttribute(new Float32Array(Math.max(1, room) * 4), 4));
+        g.setAttribute("aOwnB", new THREE.InstancedBufferAttribute(new Float32Array(Math.max(1, room) * 4), 4));
         g.instanceCount = 0;
         return g;
       };
@@ -900,7 +1060,7 @@ export function createFarCards(forms: readonly FarForm[], light: SceneLight, swa
       const attribute = (name: string): THREE.InstancedBufferAttribute => geometry.getAttribute(name) as THREE.InstancedBufferAttribute;
       const set: FarCopies = {
         object,
-        place(places, crowns) {
+        place(places, crowns, own) {
           const count = places.length / 7;
           if (count > room) {
             room = Math.ceil(count * 1.25);
@@ -916,8 +1076,28 @@ export function createFarCards(forms: readonly FarForm[], light: SceneLight, swa
             more.array.set(places.subarray(k * 7 + 4, k * 7 + 7), k * 4);
           }
           attribute("aCrown").array.set(crowns.subarray(0, count * 4));
-          for (const name of ["aSpot", "aMore", "aCrown"]) attribute(name).needsUpdate = true;
+          const ownA = attribute("aOwnA");
+          const ownB = attribute("aOwnB");
+          ownA.array.fill(0);
+          ownB.array.fill(0);
+          if (own !== undefined) {
+            for (let k = 0; k < count; k++) {
+              ownA.array.set(own.subarray(k * 8, k * 8 + 4), k * 4);
+              ownB.array.set(own.subarray(k * 8 + 4, k * 8 + 8), k * 4);
+            }
+          }
+          for (const name of ["aSpot", "aMore", "aCrown", "aOwnA", "aOwnB"]) attribute(name).needsUpdate = true;
           geometry.instanceCount = count;
+        },
+        setOwn(index, own) {
+          const ownA = attribute("aOwnA");
+          const ownB = attribute("aOwnB");
+          for (let n = 0; n < 4; n++) {
+            ownA.array[index * 4 + n] = own[n] as number;
+            ownB.array[index * 4 + n] = own[n + 4] as number;
+          }
+          ownA.needsUpdate = true;
+          ownB.needsUpdate = true;
         },
         setVitalityAt(index, v) {
           const more = attribute("aMore");
@@ -943,9 +1123,14 @@ export function createFarCards(forms: readonly FarForm[], light: SceneLight, swa
     show(on) {
       for (const m of materials) for (const material of [m.solid, m.fading, m.depth]) material.visible = on;
     },
+    own(layers, width, height) {
+      [owned.uOwn0, owned.uOwn1, owned.uOwn2, owned.uOwn3].forEach((u, n) => (u.value = layers[n] ?? none));
+      owned.uOwnSize.value.set(width, height);
+    },
     dispose() {
       for (const set of [...sets]) set.dispose();
       card.dispose();
+      none.dispose();
       for (const m of materials) {
         m.solid.dispose();
         m.fading.dispose();

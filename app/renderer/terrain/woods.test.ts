@@ -26,16 +26,21 @@ describe("a crown's form by its size on screen", () => {
 });
 
 describe("the far forms", () => {
-  it("are baked in the order plants were given them, each at its share of the size, and take none once baking", () => {
+  it("are baked in the order plants were given them, each at its share of the size or smaller, and take none once baking", () => {
     const forms = createFarForms();
     const tree = {} as Realized;
     const bush = {} as Realized;
+    const thing = {} as Realized;
     expect(forms.add(tree)).toMatchObject({ form: 0, share: 1, forms });
     expect(forms.add(bush, FAR.bush)).toMatchObject({ form: 1, share: FAR.bush });
+    // A plant whose copies draw their own views near the band turns far at its share and bakes only for past the haze.
+    expect(forms.add(thing, 1, 0.25)).toMatchObject({ form: 2, share: 1 });
     expect(forms.close()).toEqual([
-      { plant: tree, px: FAR.swapPx },
-      { plant: bush, px: FAR.swapPx * FAR.bush },
+      { plant: tree, px: FAR.swapPx, bakePx: FAR.swapPx },
+      { plant: bush, px: FAR.swapPx * FAR.bush, bakePx: FAR.swapPx * FAR.bush },
+      { plant: thing, px: FAR.swapPx, bakePx: FAR.swapPx * 0.25 },
     ]);
+    expect(forms.plantOf(2)).toBe(thing);
     // A plant given a form after the bake began would draw a card that was never baked.
     expect(() => forms.add(bush)).toThrow();
   });
