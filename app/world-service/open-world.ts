@@ -279,7 +279,9 @@ export async function openWorld({ engine, root, consent, progress }: OpenWorldOp
       return response;
     },
   };
-  const judgments = await judgeWorld(model, LOOKS, jev, { graph });
+  // As many looks at once as the engine sends Jev at once: `engineJev` gathers each round into one batch, and the
+  // engine serves one call at a time, so fewer in flight only makes the looks, and the names they letter, wait.
+  const judgments = await judgeWorld(model, LOOKS, jev, { graph, concurrency: understanding.estimate.concurrency });
   await new Promise((resolve) => setTimeout(resolve, 0));
   await Promise.all(writes);
 
