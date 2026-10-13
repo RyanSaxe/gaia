@@ -66,10 +66,12 @@ describe("the traveller's journal", () => {
     expect(journal.contents[0]).toBe(entityOf(""));
     expect(journal.entry("packages/core")?.lists[0]).toBe(entityOf("packages/core"));
     expect(order.indexOf(entityOf("packages/core"))).toBe(order.indexOf("packages/core") + 1);
-    // A thing faces its folder's README; with none, its page lists the things its trails join it to, and a trail to
-    // something that isn't a thing joins nothing.
+    // A thing faces its folder's README; with none, its page lists what its folder holds, so it always leads down to
+    // the code, and its trails by their way: what it imports from and what imports from it. A trail to something that
+    // isn't a thing joins nothing.
     expect(journal.entry(entityOf(""))).toMatchObject({ text: "README.md", lists: [], pages: 1 });
-    expect(journal.entry(entityOf("packages/core"))?.lists).toEqual([entityOf("docs")]);
+    expect(journal.entry(entityOf("packages/core"))).toMatchObject({ lists: ["packages/core/index.ts", MATH], uses: [], usedBy: [entityOf("docs")] });
+    expect(journal.entry(entityOf("docs"))).toMatchObject({ lists: ["docs/guide.md"], uses: [entityOf("packages/core")], usedBy: [] });
     expect(journal.entry(entityOf("packages/core"))?.text).toBeUndefined();
     expect(journal.entry(entityOf("packages/core"))?.under).toBe("packages/core");
     // math.ts lists itself and its five definitions: two on its first page, three on each after; ending on a right-hand

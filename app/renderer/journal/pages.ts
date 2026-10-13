@@ -12,7 +12,7 @@ import { type Journal, type JournalEntry, type PageRoom, entityOf } from "@gaia/
 import type { BookPages, Spread } from "./book.ts";
 import { type CaptionFact, conceptsCaption } from "./caption.ts";
 import { tapsOf } from "./maps.ts";
-import { fullItems, pagePx, renderCross, renderFullPage, renderNameLine, renderPage, renderPicture, renderTitle, renderTraveller } from "./page.ts";
+import { type InFull, fullItems, pagePx, renderCross, renderFullPage, renderNameLine, renderPage, renderPicture, renderTitle, renderTraveller } from "./page.ts";
 import { type Full, type PageWords, type WordsSource, appendixWords, contentsWords, fileOfEntry, leadFiles, wordsOf } from "./words.ts";
 
 /** A page's size, its own pixels. */
@@ -25,7 +25,7 @@ const LEAF_REACH = 600;
 /** How near a tap must fall to a map's pencil cross to travel there, in the page's pixels. */
 const CROSS_REACH = 16;
 /** How many rows of a list a page holds: under the heading, and under a running head on the pages it runs on to. */
-export const ROOM: PageRoom = { first: 18, next: 21, lead: 11 };
+export const ROOM: PageRoom = { first: 18, next: 21, lead: 6 };
 
 export interface JournalPagesSource {
   /** The words' source for the world standing now, or null before one stands. */
@@ -228,6 +228,8 @@ export function journalPages(src: JournalPagesSource): BookPages {
   }
 
   const folio = (n: number): string => (n > 0 ? n.toLocaleString("en-US") : "");
+  /** Where an entry is set in full: a turn to its first spread in the appendix, whose first page is its page's number lettered "a". */
+  const fullOf = (of: string): InFull => ({ turn: () => src.turnTo(inFull(of, 0)), folio: `${(src.words()?.journal.entry(of)?.page ?? 0).toLocaleString("en-US")}${lettered(0)}` });
   const roman = (n: number): string => ["", "i", "ii", "iii", "iv", "v", "vi", "vii", "viii", "ix", "x"][n] ?? String(n);
   const blank = (f = ""): HTMLElement => renderPicture(null, f);
   /**
@@ -287,8 +289,7 @@ export function journalPages(src: JournalPagesSource): BookPages {
   function entrySpread(words: WordsSource, e: JournalEntry, k: number): Spread {
     const said = wordsOf(words, e);
     // Page p of the entry's words (0 for the first): its number, and the slice of the list it holds.
-    const toFull = fileOfEntry(e) !== undefined ? () => src.turnTo(inFull(e.of, 0)) : undefined;
-    const page = (p: number): HTMLElement => (p >= e.pages ? blank() : renderPage(said, folio(e.page + p), src.turnTo, said.body.kind === "rows" ? rowsOn(p, e.lead) : undefined, toFull));
+    const page = (p: number): HTMLElement => (p >= e.pages ? blank() : renderPage(said, folio(e.page + p), src.turnTo, said.body.kind === "rows" ? rowsOn(p, e.lead) : undefined, fileOfEntry(e) === undefined ? undefined : fullOf(e.of), fullOf));
     // A container faces its map; a thing faces its painting, each captioned with what Jev says of it.
     const caption = captionFor(words, e);
     if (k === 0) return { left: mapped(e) ? mapPage(src.map(e.of), folio(e.page - 1), caption) : renderPicture(src.picture(e.of), folio(e.page - 1), () => src.travel(e.of), caption), right: page(0) };

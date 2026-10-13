@@ -300,10 +300,7 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
       const pooled = areaVitality(code.patches.map((p) => ({ area: p.area, vitality: p.vitality, size: p.radius * p.radius })));
       // Every item's own vitality, as the world carries it: a definition's is its own slot, whatever fills it.
       const own = new Map([...code.patches.map((p) => [p.path, p.vitality] as const), ...code.symbols.map((d) => [d.id, d.vitality] as const), ...code.things.map((t) => [entityOf(t.path), t.vitality] as const)]);
-      // The world's median quality, by its files: a page below it leads with what needs work most.
-      const qualities = code.patches.map((p) => p.vitality).sort((a, b) => a - b);
-      const median = qualities[Math.floor(qualities.length / 2)] ?? 0.5;
-      words = { journal: journalOf(code, ROOM), world: code, vitality: (of) => own.get(of) ?? own.get(standsFor(of)) ?? pooled.get(of) ?? 1, lines: (path) => source.lines(path) ?? undefined, thing: (of) => world.thing(standsFor(of)), median };
+      words = { journal: journalOf(code, ROOM), world: code, vitality: (of) => own.get(of) ?? own.get(standsFor(of)) ?? pooled.get(of) ?? 1, lines: (path) => source.lines(path) ?? undefined, thing: (of) => world.thing(standsFor(of)) };
     }
     // A directory's vitality: its files', its subdirectories' included, pooled by the ground each holds, as the map washes it.
     const vitality = areaVitality(world.places().patches.map((p) => ({ area: p.area, vitality: p.vitality, size: p.radius * p.radius })));

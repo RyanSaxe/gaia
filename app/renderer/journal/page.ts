@@ -75,8 +75,8 @@ function numbersOf(words: PageWords): HTMLElement {
   return numbers;
 }
 
-/** A mark beside a row or a line: green for key to understanding, russet for what needs work most, slate blue for a page's best part. */
-const MARK_COLOR = { understand: "#5f8f3e", improve: "#a4553a", finest: "#4d6f8f" } as const;
+/** A mark beside a line of the appendix: green for key to understanding, russet for what needs work most. */
+const MARK_COLOR = { understand: "#5f8f3e", improve: "#a4553a" } as const;
 function marked(e: HTMLElement, mark: Mark | undefined): void {
   if (mark === undefined) return;
   e.classList.add("jp-marked");
@@ -88,7 +88,6 @@ function rowsOf(rows: readonly Row[], turnTo: (of: string) => void): HTMLElement
   for (const r of rows) {
     const row = el("button", `jp-row d${Math.min(r.depth, 3)}`);
     row.type = "button";
-    marked(row, r.mark);
     row.append(el("span", "jp-row-name", r.name), el("span", "jp-dots"), meter(r.vitality, healthColor(r.vitality), "jp-row-meter"), ...(r.importance === undefined ? [] : [meter(r.importance, INK, "jp-row-meter")]), el("span", "jp-row-page", r.page.toLocaleString("en-US")));
     row.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -99,45 +98,109 @@ function rowsOf(rows: readonly Row[], turnTo: (of: string) => void): HTMLElement
   return list;
 }
 
-/** What a marked block is called on the page, in a column of its own: its kind, as the stroke beside it says it. */
-const MARK_LABEL = { finest: "best", improve: "weak", understand: "key" } as const;
+/** An entity's trails, at its page's foot, by their way: what it imports from and what imports from it, each name a tap to its page. */
+function trailsOf(trails: NonNullable<PageWords["trails"]>, turnTo: (of: string) => void): HTMLElement {
+  const foot = el("div", "jp-trails");
+  for (const [label, rows] of [["uses", trails.uses], ["used by", trails.usedBy]] as const) {
+    if (rows.length === 0) continue;
+    const line = el("div", "jp-trail-line");
+    line.append(el("span", "jp-number-label", label));
+    const names = el("span", "jp-trail-names");
+    rows.forEach((r, k) => {
+      if (k > 0) names.append(el("span", "jp-trail-sep", " · "));
+      const b = el("button", "jp-trail-name", r.name);
+      b.type = "button";
+      b.addEventListener("click", (e) => {
+        e.stopPropagation();
+        turnTo(r.of);
+      });
+      names.append(b);
+    });
+    line.append(names);
+    foot.append(line);
+  }
+  return foot;
+}
+
+/** What a marked block is called in the appendix, in its stroke's color where its code starts. */
+const MARK_LABEL = { improve: "weak", understand: "key" } as const;
 
 /**
- * A page's lead: each snippet a definition at a glance, marked as the best
- * or as what needs work most, its name and page, its first line and the block
- * Jev picked, the rest folded away; a tap turns to the definition's page.
+ * A page's lead: the definition that matters most, at a glance, unmarked:
+ * the name of the part it stands for and that part's page, then its first
+ * line and its key block, the rest folded away. A tap on the name turns to
+ * that part's page; a tap on the code, to the definition in full, as the
+ * reference under it says.
  */
-function leadOf(snippets: readonly Snippet[], path: string, turnTo: (of: string) => void): HTMLElement {
+function leadOf(s: Snippet, path: string, turnTo: (of: string) => void, fullOf: ((of: string) => InFull) | undefined): HTMLElement {
   const lead = el("div", "jp-lead");
-  for (const s of snippets) {
-    const snippet = el("button", "jp-snippet");
-    snippet.type = "button";
-    marked(snippet, { kind: s.kind });
-    const head = el("span", "jp-snippet-head");
-    head.append(el("span", "jp-mark-label", MARK_LABEL[s.kind]), el("span", "jp-snippet-name", s.name), el("span", "jp-dots"), el("span", "jp-row-page", s.page.toLocaleString("en-US")));
-    const lines = [s.signature.text, ...s.lines];
-    const pieces = highlight(lines, path);
-    const base = baseIndent(lines);
-    const line = (k: number, n: number): HTMLElement => {
-      const row = el("span", "jp-line");
-      const text = inkedLine(pieces[k], lines[k] as string);
-      text.style.setProperty("--ind", String(Number.isFinite(base) ? indentOf(lines[k] as string) - base : 0));
-      row.append(el("span", "jp-ln", String(n)), text);
-      return row;
-    };
-    const code = el("span", "jp-code jp-snippet-code");
-    code.append(line(0, s.signature.n));
-    if (s.before > 0) code.append(foldOf(linesOf(s.before)));
-    s.lines.forEach((_, k) => code.append(line(k + 1, s.first + k)));
-    if (s.after > 0) code.append(foldOf(linesOf(s.after)));
-    snippet.append(head, code);
-    snippet.addEventListener("click", (e) => {
+  const snippet = el("button", "jp-snippet");
+  snippet.type = "button";
+  const head = el("span", "jp-snippet-head");
+  head.append(el("span", "jp-snippet-name", s.name), el("span", "jp-dots"), el("span", "jp-row-page", s.page.toLocaleString("en-US")));
+  const lines = [s.signature.text, ...s.lines];
+  const pieces = highlight(lines, path);
+  const base = baseIndent(lines);
+  const line = (k: number, n: number): HTMLElement => {
+    const row = el("span", "jp-line");
+    const text = inkedLine(pieces[k], lines[k] as string);
+    text.style.setProperty("--ind", String(Number.isFinite(base) ? indentOf(lines[k] as string) - base : 0));
+    row.append(el("span", "jp-ln", String(n)), text);
+    return row;
+  };
+  const code = el("span", "jp-code jp-snippet-code");
+  code.append(line(0, s.signature.n));
+  if (s.before > 0) code.append(foldOf(linesOf(s.before)));
+  s.lines.forEach((_, k) => code.append(line(k + 1, s.first + k)));
+  if (s.after > 0) code.append(foldOf(linesOf(s.after)));
+  const full = fullOf?.(s.shows);
+  if (full !== undefined) {
+    code.classList.add("jp-tapcode");
+    code.addEventListener("click", (e) => {
       e.stopPropagation();
-      turnTo(s.of);
+      full.turn();
     });
-    lead.append(snippet);
+    // A snippet is a button itself, which never holds another, so its reference is lettered, not a button.
+    code.append(referenceOf(`in full, p. ${full.folio}`, full.turn, "on", "span"));
   }
+  snippet.append(head, code);
+  snippet.addEventListener("click", (e) => {
+    e.stopPropagation();
+    turnTo(s.of);
+  });
+  lead.append(snippet);
   return lead;
+}
+
+/**
+ * A reference by hand, as a book says where something goes on: "→ in full,
+ * p. 5,415a" to the appendix, or "← back to its page, p. 5,415". A tap goes
+ * where it says.
+ */
+function referenceOf(says: string, tap: () => void, way: "on" | "back", tag: "button" | "span" = "button"): HTMLElement {
+  const ref = el(tag, way === "back" ? "jp-xref back" : "jp-xref", says);
+  if (ref instanceof HTMLButtonElement) ref.type = "button";
+  ref.addEventListener("click", (e) => {
+    e.stopPropagation();
+    tap();
+  });
+  return ref;
+}
+
+/** Where a thing lives, in small capitals, each folder a tap to its page, and in a definition's path its file a tap to the file's. */
+function whereOf(path: readonly string[], turnTo: (of: string) => void): HTMLElement {
+  const where = el("div", "jp-where");
+  path.forEach((name, k) => {
+    if (k > 0) where.append(el("span", "jp-crumb-sep", " / "));
+    const step = el("button", "jp-crumb", name);
+    step.type = "button";
+    step.addEventListener("click", (e) => {
+      e.stopPropagation();
+      turnTo(path.slice(0, k + 1).join("/"));
+    });
+    where.append(step);
+  });
+  return where;
 }
 
 /** Leading spaces, counted with a tab as two. */
@@ -198,19 +261,29 @@ function codeOf(at: readonly number[], body: Full, base: number, pieces: readonl
   return code;
 }
 
+/** Where a page's text is set in full: a turn there, and the number of its first page in the appendix, such as "5,475a". */
+export interface InFull {
+  readonly turn: () => void;
+  readonly folio: string;
+}
+
 /**
  * A page from its words; `turnTo` turns the book to a row's page, and `folio`
  * is the page's number. A list too long for one page is drawn a slice of rows
  * at a time: the first page under the full heading, each page it runs on to
- * under a running head, as a book's pages carry one.
+ * under a running head, as a book's pages carry one. A page with text names
+ * where it is set in full (`full`): its name, its folds and its code turn
+ * there, and a reference at its foot says where. `fullOf` names where any
+ * definition is set in full, for the code a page leads with.
  */
-export function renderPage(words: PageWords, folio: string, turnTo: (of: string) => void, rows?: { readonly from: number; readonly to: number }, inFull?: () => void): HTMLElement {
+export function renderPage(words: PageWords, folio: string, turnTo: (of: string) => void, rows?: { readonly from: number; readonly to: number }, full?: InFull, fullOf?: (of: string) => InFull): HTMLElement {
+  const inFull = full?.turn;
   const page = el("div", "jp");
   page.style.setProperty("--health", healthColor(words.vitality));
   const head = el("div", "jp-head");
   if (rows !== undefined && rows.from > 0) head.append(el("div", "jp-running", [...words.path, words.name].join(" / ")));
   else {
-    if (words.path.length > 0) head.append(el("div", "jp-where", words.path.join(" / ")));
+    if (words.path.length > 0) head.append(whereOf(words.path, turnTo));
     const title = el("div", "jp-title");
     // A definition's name turns to it in full, in the appendix.
     const name = el(inFull === undefined ? "span" : "button", "jp-name", words.name);
@@ -227,9 +300,11 @@ export function renderPage(words: PageWords, folio: string, turnTo: (of: string)
     head.append(el("div", "jp-rule"));
   }
   const body = el("div", "jp-body");
-  if (words.body.kind === "rows" && words.body.lead !== undefined && (rows === undefined || rows.from === 0)) body.append(leadOf(words.body.lead, words.path.join("/"), turnTo));
-  if (words.body.kind === "rows") body.append(rowsOf(rows === undefined ? words.body.rows : words.body.rows.slice(rows.from, rows.to), turnTo));
-  else if (words.body.kind === "code") {
+  if (words.body.kind === "rows" && words.body.lead !== undefined && (rows === undefined || rows.from === 0)) body.append(leadOf(words.body.lead, words.path.join("/"), turnTo, fullOf));
+  if (words.body.kind === "rows") {
+    body.append(rowsOf(rows === undefined ? words.body.rows : words.body.rows.slice(rows.from, rows.to), turnTo));
+    if (words.trails !== undefined && (rows === undefined || rows.from === 0)) body.append(trailsOf(words.trails, turnTo));
+  } else if (words.body.kind === "code") {
     // From the line it opens at; lines above it fold away.
     const { opensAt, kind: _, ...code } = words.body;
     const skipped = opensAt - code.first;
@@ -237,7 +312,19 @@ export function renderPage(words: PageWords, folio: string, turnTo: (of: string)
     if (skipped > 0 && inFull !== undefined) body.append(foldOf(linesOf(skipped), inFull));
     setItems(body, shown, fullItems(shown), baseIndent(code.lines), piecesOf(shown, words), turnTo);
     // Where a long definition's page ends, a fold: the book shows it, with how many lines it holds, when lines are left over.
-    if (inFull !== undefined) body.append(foldOf("", inFull, "after"));
+    if (full !== undefined) {
+      body.append(foldOf("", full.turn, "after"));
+      // The code itself is a tap to it in full, and the page's foot says where that is.
+      for (const code of body.querySelectorAll<HTMLElement>(".jp-code")) {
+        code.classList.add("jp-tapcode");
+        code.addEventListener("click", (e) => {
+          e.stopPropagation();
+          full.turn();
+        });
+      }
+      page.append(head, body, referenceOf(`in full, p. ${full.folio}`, full.turn, "on"), el("div", "jp-folio", folio));
+      return page;
+    }
   }
   page.append(head, body, el("div", "jp-folio", folio));
   return page;
@@ -273,8 +360,9 @@ const piecesOf = (body: Pick<Full, "lines" | "prose">, words: PageWords): Piece[
 
 /**
  * A page of a definition in full, in the appendix: `items` of its
- * `fullItems`, its first page under the full heading and the rest under a
- * running head; both turn back to its page in the journal.
+ * `fullItems`, its first page under the full heading, its path a way up to
+ * each folder, and a reference back to its page in the journal at its foot;
+ * the rest under a running head, which turns back there too.
  */
 export function renderFullPage(words: PageWords, body: Full, folio: string, items: { readonly from: number; readonly to: number }, first: boolean, back: () => void, turnTo: (of: string) => void): HTMLElement {
   const page = el("div", "jp jp-full");
@@ -290,7 +378,7 @@ export function renderFullPage(words: PageWords, body: Full, folio: string, item
   };
   if (!first) head.append(backTo(el("button", "jp-running jp-back", [...words.path, words.name].join(" / "))));
   else {
-    if (words.path.length > 0) head.append(backTo(el("button", "jp-where jp-back", words.path.join(" / "))));
+    if (words.path.length > 0) head.append(whereOf(words.path, turnTo));
     const title = el("div", "jp-title");
     title.append(backTo(el("button", "jp-name", words.name)), numbersOf(words));
     head.append(title);
@@ -299,7 +387,8 @@ export function renderFullPage(words: PageWords, body: Full, folio: string, item
   }
   const content = el("div", "jp-body");
   setItems(content, body, fullItems(body).slice(items.from, items.to), baseIndent(body.lines), piecesOf(body, words), turnTo);
-  page.append(head, content, el("div", "jp-folio", folio));
+  // Its first page says by hand where its page in the journal is: the appendix's number without its letter.
+  page.append(head, content, ...(first ? [referenceOf(`back to its page, p. ${folio.replace(/[a-z]+$/, "")}`, back, "back")] : []), el("div", "jp-folio", folio));
   return page;
 }
 
