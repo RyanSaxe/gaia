@@ -1075,4 +1075,32 @@ mod tests {
         w.answered.insert("h2".into());
         assert_eq!(unsettled(&w, &json!({}), &calls), BTreeSet::from([("file:a.ts", LINK)]));
     }
+
+    #[test]
+    fn a_folder_s_request_stays_the_same_once_its_own_answers_are_held() {
+        let root = std::env::temp_dir().join(format!("gaia-runner-own-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("src")).unwrap();
+        std::fs::write(root.join("a.ts"), "export const a = 1;\n").unwrap();
+        std::fs::write(root.join("src/b.ts"), "export const b = 2;\n").unwrap();
+        let graph = crate::graph::build(&root).unwrap();
+        let folders: Vec<&dyn Call> = calls::registry().into_iter().filter(|c| c.pass() == "folders").collect();
+        let dirs: Vec<&DirNode> = graph.nodes.iter().filter_map(|n| if let Node::Dir(d) = n { Some(d) } else { None }).collect();
+        let hashes = |held: &Value, d: &DirNode| -> Vec<String> {
+            dir_requests(&Ctx::new(&graph, &root, held), &graph.name, d, &folders).into_iter().map(|p| p.hash).collect()
+        };
+        for d in dirs {
+            // Every answer the folder's own request gave about the folder itself, held as the runner holds it.
+            let mut held = Map::new();
+            for p in dir_requests(&Ctx::new(&graph, &root, &json!({})), &graph.name, d, &folders) {
+                for q in p.questions.iter().filter(|q| q.about == d.id) {
+                    let call = q.call.split('@').next().unwrap();
+                    held.insert(format!("{}|{call}|{}", d.lineage, q.field), json!({ "answer": { "score": 3.0, "levels": 5 }, "call": q.call }));
+                }
+            }
+            assert!(!held.is_empty(), "{} is asked about itself", d.id);
+            assert_eq!(hashes(&json!({}), d), hashes(&Value::Object(held), d), "{}'s request never carries its own answers", d.id);
+        }
+        let _ = std::fs::remove_dir_all(&root);
+    }
 }
