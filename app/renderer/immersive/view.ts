@@ -29,7 +29,7 @@ import { createPaintings } from "../journal/paintings.ts";
 import { browserPaintings } from "../journal/painting-store.ts";
 import { createSourceText } from "../journal/source.ts";
 import type { WordsSource } from "../journal/words.ts";
-import { createFieldMap } from "./field-map.ts";
+import { createFieldMap, drawLand } from "./field-map.ts";
 import { MARKER_LAYER, createMarkers } from "./markers.ts";
 import { createMinimap } from "./minimap.ts";
 import { paintPicture } from "./picture.ts";
@@ -52,7 +52,9 @@ export interface Immersive {
 }
 
 /** A jump's timing, matching lab.css: the paper clouds over and holds a moment, frames for the ground and grass to follow under it, and the world dissolving in, ms. */
-const JUMP = { coverMs: 480, settleFrames: 4, revealMs: 1100 };
+/** A jump: how long the paper takes to cover the view, the frames drawn under it before it lifts, how long it takes
+ * to lift, ms, and how many meters across the paper's map of the place shows. */
+const JUMP = { coverMs: 480, settleFrames: 4, revealMs: 1100, span: 190 };
 
 /** How to wander, as the slip says it: a mouse and keys, or a finger. */
 const WANDER = /* html */ `
@@ -89,6 +91,7 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
     if (jumping) return false;
     jumping = true;
     map.open(false);
+    layPlace(at);
     cover.classList.add("on");
     window.setTimeout(async () => {
       // The land around the new place is baked while the paper holds the view.
@@ -102,11 +105,36 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
           return;
         }
         cover.classList.remove("on");
-        window.setTimeout(() => (jumping = false), JUMP.revealMs);
+        window.setTimeout(() => {
+          jumping = false;
+          cover.replaceChildren();
+        }, JUMP.revealMs);
       };
       requestAnimationFrame(settle);
     }, JUMP.coverMs);
     return true;
+  }
+  /**
+   * The paper that covers a jump is the map around where it lands, drawn as the field map draws it, so the view is
+   * never a blank sheet however long the land there takes: it comes slowly closer to the place (lab.css `.jump-map`).
+   */
+  function layPlace(at: Landing): void {
+    const paper = map.paper();
+    const w = layer.clientWidth;
+    const h = layer.clientHeight;
+    if (paper === null || w === 0 || h === 0) {
+      cover.replaceChildren();
+      return;
+    }
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const canvas = document.createElement("canvas");
+    canvas.className = "jump-map";
+    canvas.width = Math.round(w * dpr);
+    canvas.height = Math.round(h * dpr);
+    const ctx = canvas.getContext("2d") as CanvasRenderingContext2D;
+    ctx.scale(dpr, dpr);
+    drawLand(ctx, w, h, paper, world.stood(), { x: at.x, z: at.z, zoom: Math.max(w, h) / JUMP.span }, 1.35);
+    cover.replaceChildren(canvas);
   }
   const map = createFieldMap(
     layer,

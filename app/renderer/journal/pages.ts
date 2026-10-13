@@ -5,7 +5,8 @@
 // definitions, faces its map; a thing faces its painting, captioned with
 // what Jev says of it; a long list runs on over the spreads after. Each
 // spread is drawn from its words (`words.ts`) and its picture when it comes
-// into view, never before its picture is ready.
+// into view, never before its picture is ready. While a page is still being
+// made, the book leafs through pages that are whole already (`leaf`).
 
 import { type Journal, type JournalEntry, type PageRoom, entityOf } from "@gaia/world";
 import type { BookPages, Spread } from "./book.ts";
@@ -19,6 +20,8 @@ const PAGE_SIZE = { w: 520, h: 660 } as const;
 /** How many of the things after an open page, and before it, are painted ahead of the reader. */
 const AHEAD = 5;
 const BEHIND = 5;
+/** How far along the book a page whole already is looked for, to leaf through while another is made, in spreads. */
+const LEAF_REACH = 600;
 /** How near a tap must fall to a map's pencil cross to travel there, in the page's pixels. */
 const CROSS_REACH = 16;
 /** How many rows of a list a page holds: under the heading, and under a running head on the pages it runs on to. */
@@ -292,6 +295,46 @@ export function journalPages(src: JournalPagesSource): BookPages {
     return { left: page(2 * k - 1), right: page(2 * k) };
   }
 
+  function nextPlace(at: string, by: 1 | -1): string | null {
+    const { order, places } = index();
+    const full = fullAt(at);
+    if (full === null) {
+      const k = (order.get(at) ?? 0) + by;
+      // Past the journal's last page comes the appendix.
+      if (k === places.length && by === 1) return inOrder().ids[0] === undefined ? null : inFull(inOrder().ids[0] as string, 0);
+      return places[k] ?? null;
+    }
+    const { ids, at: where } = inOrder();
+    const n = where.get(full.id) ?? 0;
+    const k = spreadIn(full.id, full.k);
+    if (by === 1) {
+      if (k + 1 < Math.ceil((pagesInFull(full.id)?.length ?? 1) / 2)) return inFull(full.id, k + 1);
+      return ids[n + 1] === undefined ? null : inFull(ids[n + 1] as string, 0);
+    }
+    if (k > 0) return inFull(full.id, k - 1);
+    return n > 0 ? inFull(ids[n - 1] as string, "end") : (places[places.length - 1] ?? null);
+  }
+  /**
+   * Whether a place's spread can be drawn whole now, with nothing to wait for: the contents after the title page, a
+   * folder's list running on, the map and a page whose code has come, beside its map, and the appendix's pages of code
+   * that has come. A thing's painting is never one, since it may still be being made.
+   */
+  function wholeNow(at: string): boolean {
+    const words = src.words();
+    if (words === null) return false;
+    const full = fullAt(at);
+    if (full !== null) return pagesInFull(full.id) !== null;
+    const [of, kk] = at.split(SEP);
+    const k = Number(kk ?? 0);
+    if (of === "map") return src.endpaper("left") !== null;
+    if (of === "contents") return k > 0;
+    const e = words.journal.entry(of as string);
+    if (e === undefined) return false;
+    if (e.kind === "chapter" && k > 0) return true;
+    if (!textsOf(words, e).every((f) => words.lines(f) !== undefined)) return false;
+    return k > 0 || (mapped(e) && src.map(e.of) !== null);
+  }
+
   return {
     spread(at): Spread {
       const full = fullAt(at);
@@ -317,24 +360,18 @@ export function journalPages(src: JournalPagesSource): BookPages {
       for (const n of [e, ...around]) for (const file of textsOf(words, n)) void src.text(file);
       return entrySpread(words, e, k);
     },
-    next(at, by) {
-      const { order, places } = index();
-      const full = fullAt(at);
-      if (full === null) {
-        const k = (order.get(at) ?? 0) + by;
-        // Past the journal's last page comes the appendix.
-        if (k === places.length && by === 1) return inOrder().ids[0] === undefined ? null : inFull(inOrder().ids[0] as string, 0);
-        return places[k] ?? null;
+    next: nextPlace,
+    leaf(from, toward) {
+      // The nearest page whole already on the way toward the one asked for, or else the nearest the other way.
+      const forward = this.order(from, toward) < 0;
+      for (const by of forward ? ([1, -1] as const) : ([-1, 1] as const)) {
+        let at: string | null = from;
+        for (let n = 0; n < LEAF_REACH && at !== null; n++) {
+          at = nextPlace(at, by);
+          if (at !== null && at !== toward && wholeNow(at)) return at;
+        }
       }
-      const { ids, at: where } = inOrder();
-      const n = where.get(full.id) ?? 0;
-      const k = spreadIn(full.id, full.k);
-      if (by === 1) {
-        if (k + 1 < Math.ceil((pagesInFull(full.id)?.length ?? 1) / 2)) return inFull(full.id, k + 1);
-        return ids[n + 1] === undefined ? null : inFull(ids[n + 1] as string, 0);
-      }
-      if (k > 0) return inFull(full.id, k - 1);
-      return n > 0 ? inFull(ids[n - 1] as string, "end") : (places[places.length - 1] ?? null);
+      return null;
     },
     order(a, b) {
       const { order } = index();

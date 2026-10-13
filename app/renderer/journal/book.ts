@@ -32,6 +32,8 @@ export interface BookPages {
   ready?(at: string): Promise<void>;
   /** Settles once a place's painting is whole: a page is never seen before its painting. */
   painted?(at: string): Promise<void>;
+  /** A place whose spread is whole already, near `from` and on the way toward `toward` where one is, to leaf through while `toward` is made whole; null when none is. */
+  leaf?(from: string, toward: string): string | null;
 }
 
 export interface JournalBook {
@@ -53,9 +55,13 @@ export interface JournalBook {
 export const PAGE = { w: 520, h: 660, overhang: 10 } as const;
 /** How wide a page's edge is, its outer fifth, in the book's pixels: a click there turns the page, over a map or a picture too. */
 const EDGE = PAGE.w / 5;
-/** The longest a turn waits for a file's text, ms, and for a painting, which only one that failed to come takes. */
-const TEXT_AT_MOST = 900;
-const PAINTED_AT_MOST = 15000;
+/** The longest the book waits for a page to be whole, ms, which only text or a painting that failed to come takes. */
+const WHOLE_AT_MOST = 20000;
+/**
+ * How slowly the book leafs through pages whole already while the one asked for is made whole: ms a leaf, and the
+ * pause between leaves; and how long the next page or the one before waits under a lifted page first, ms.
+ */
+const LEAF = { ms: 1500, pause: 240, beside: 1500 } as const;
 /**
  * A leaf whose next page is still being painted lifts at once and waits at
  * its edge, so a tap is always answered: how far it lifts (degrees, the
@@ -196,10 +202,11 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
     layEdges();
   }
   const after = (ms: number): Promise<void> => new Promise<void>((r) => window.setTimeout(r, ms));
-  /** Waits until a place's spread can be drawn whole, but never long: a slow file is drawn without its code rather than held. */
-  const readied = (place: string): Promise<void> => Promise.race([pages.ready?.(place) ?? Promise.resolve(), after(TEXT_AT_MOST)]);
-  /** Settles once a place's painting is whole; one that never comes is shown bare after a while. */
-  const painted = (place: string): Promise<void> => Promise.race([pages.painted?.(place) ?? Promise.resolve(), after(PAINTED_AT_MOST)]);
+  /** Settles once a place's spread can be drawn whole, its code and its painting come; one that never comes is shown as it stands after a while. */
+  const wholeAt = (place: string): Promise<void> =>
+    Promise.race([Promise.all([pages.ready?.(place), pages.painted?.(place)]).then(() => undefined), after(WHOLE_AT_MOST)]);
+  /** Settles once a place's painting is whole, as `wholeAt` does. */
+  const painted = (place: string): Promise<void> => Promise.race([pages.painted?.(place) ?? Promise.resolve(), after(WHOLE_AT_MOST)]);
   /** Whether a promise has already settled, or settles within a moment. */
   const settledSoon = (p: Promise<void>): Promise<boolean> => Promise.race([p.then(() => true), after(40).then(() => false)]);
   /** Whether `place` lies in the part of the book a tab begins at `chapter`: from it to the next tab's. */
@@ -268,7 +275,19 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
       return;
     }
     turning = true;
-    void readied(target).then(() => turnNow(target));
+    const ready = wholeAt(target);
+    void settledSoon(ready).then((now) => {
+      if (now) return turnNow(target);
+      if (at === null || (pages.next(at, 1) !== target && pages.next(at, -1) !== target)) return leafToward(target, ready);
+      // The page beside: it lifts under the hand, as at its edge, and leafs on only if that page is long in coming.
+      const page = pages.order(at, target) < 0 ? right : cover;
+      page.classList.add("lift");
+      void Promise.race([ready.then(() => true), after(LEAF.beside).then(() => false)]).then((came) => {
+        page.classList.remove("lift");
+        if (came) turnNow(target);
+        else leafToward(target, ready);
+      });
+    });
   }
   function turnNow(target: string): void {
     if (!open) {
@@ -276,6 +295,33 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
       return;
     }
     beginTurn(target).finish(0);
+  }
+  /**
+   * A page not yet whole is never turned to: the book leafs slowly through pages that are whole already, the way a
+   * reader looks for a page, and turns to it once it is whole, so nothing on a page is ever seen arriving.
+   */
+  function leafToward(target: string, ready: Promise<void>): void {
+    let isWhole = false;
+    void ready.then(() => (isWhole = true));
+    const step = (): void => {
+      if (!open) {
+        turning = false;
+        return;
+      }
+      // Asked for another page meanwhile: that one is looked for instead.
+      if (queued !== null) {
+        const next = queued;
+        queued = null;
+        turning = false;
+        turnTo(next);
+        return;
+      }
+      if (isWhole) return turnNow(target);
+      const through = at === null ? null : (pages.leaf?.(at, target) ?? null);
+      if (through === null) return void ready.then(step);
+      beginTurn(through, LEAF.ms).finish(0, () => window.setTimeout(step, LEAF.pause));
+    };
+    step();
   }
 
   /**
@@ -288,12 +334,12 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
     readonly forward: boolean;
     /** Sets the leaf this far over, 0 lying where it started to 1 turned, as a hand holds it. */
     hold(progress: number): void;
-    /** Carries the leaf the rest of the way from `progress`, waiting at its edge for a picture still being made. */
-    finish(progress: number): void;
+    /** Carries the leaf the rest of the way from `progress`, waiting at its edge for a picture still being made; `then` goes on leafing. */
+    finish(progress: number, then?: () => void): void;
     /** Lets the leaf fall back from `progress` and lays the pages as they were. */
     cancel(progress: number): void;
   }
-  function beginTurn(target: string): Turn {
+  function beginTurn(target: string, ms = TURN_MS): Turn {
     const from = at;
     const forward = from === null || pages.order(from, target) < 0;
     const to = pages.spread(target);
@@ -333,7 +379,7 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
       leaf.style.transition = ms > 0 ? `transform ${ms}ms ${ease}` : "none";
       leaf.style.transform = `translateZ(1.4px) rotateY(${deg.toFixed(2)}deg)`;
     };
-    const done = (): void => {
+    const done = (then?: () => void): void => {
       leaf.style.transition = "";
       leaf.style.transform = "";
       if (forward) put(left, leafBack.firstElementChild as HTMLElement | null);
@@ -342,11 +388,13 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
       leaf.classList.remove("turning", "over");
       put(leafFront, null);
       put(leafBack, null);
-      turning = false;
       // The pages lying open are the ones that turned: nothing is drawn again once a turn is done.
       at = target;
       markTabs(target);
       layEdges();
+      // Leafing on toward a page still being made, the book is still turning.
+      if (then !== undefined) return then();
+      turning = false;
       if (queued !== null) {
         const next = queued;
         queued = null;
@@ -356,11 +404,11 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
     return {
       forward,
       hold: (progress) => lay(angleAt(progress), 0),
-      finish(progress) {
+      finish(progress, then) {
         const over = (from: number): void => {
-          const rest = Math.max(160, TURN_MS * (1 - from));
+          const rest = Math.max(160, ms * (1 - from));
           lay(forward ? -179.6 : 0, rest);
-          window.setTimeout(done, rest + 40);
+          window.setTimeout(() => done(then), rest + 40);
         };
         void settledSoon(whole).then((now) => {
           if (now) return over(progress);
@@ -641,8 +689,15 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
         if (place0 !== undefined) turnTo(place0);
         return;
       }
-      // The book is lifted once the page it opens at can be drawn whole.
-      void readied(place0 ?? "map").then(() => setOpen(true, place0));
+      // The book is lifted at the page it opens at once that is whole; a page still being made, it opens at the map
+      // and leafs on to.
+      const target = place0 ?? "map";
+      const ready = wholeAt(target);
+      void settledSoon(ready).then((now) => {
+        if (now || target === "map") return void ready.then(() => setOpen(true, target));
+        setOpen(true, "map");
+        window.setTimeout(() => turnTo(target), TRAVEL_MS + COVER_MS * 0.5);
+      });
     },
     turnTo,
     close: () => setOpen(false),
