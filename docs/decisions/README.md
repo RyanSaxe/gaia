@@ -57,3 +57,8 @@ One file per decision the reviewer settled in the pair sessions that designed Ga
 - [The engine reads code into one graph, and Jev judges every node of it](53-the-code-graph.md)
 - [The engine understands a codebase in slices, and the world asks for each](54-understanding-in-slices.md)
 - [Every key turns you that way and walks you forward](55-every-key-walks-you-forward.md)
+- [Importance and quality at every level, judged top-down with the whole project in view](56-importance-and-quality-at-every-level.md)
+- [Quality is the reviewer's ten concepts, and vitality is quality alone](57-quality-is-ten-concepts-and-vitality-is-quality.md)
+- [A big file is cut so each piece holds what fits, and nothing Jev reads is trimmed](58-a-big-file-is-cut-so-each-piece-holds-what-fits.md)
+- [The journal shows every score as a percentage, and leads each page with its best and worst](59-the-journal-shows-scores-as-percentages-and-leads-with-best-and-worst.md)
+- [One way of understanding code: the understanding pass replaces today's calls](60-one-way-of-understanding-code.md)
