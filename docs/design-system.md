@@ -328,7 +328,11 @@ second squared, and takes each bend slowly enough that the way 12 m ahead
 turns at most 80% of a held key's 60° a second, so the view turns only as
 the person could have turned it, never faster and never easing. Facing
 away, the view first turns at that same rate, and the body sets off once it
-faces the way. A drag looks out to the side while the trip carries on, and
+faces the way. Nothing appears as the person goes: every 40 m mark within
+300 m ahead is asked of the standers before the body reaches it, and the
+body never passes the last mark whose tiles have all come, slowing at its
+steady rate to wait there if they lag. A drag looks out to the side while
+the trip carries on, and
 the view follows the way again once it looks along it. Any key, or a tap on
 the world, takes over: the trip slows at 9 m a second squared to walking
 pace and hands the person to the walk. Nearer than 120 m the trip walks
