@@ -18,8 +18,6 @@ const BANK_GRADE = 0.53;
 export const BANK_REACH = 14;
 /** Channel depth never exceeds this share of the half width, so its walls stay walkable. */
 const CHANNEL_SHAPE = 0.35;
-/** How far past its water's edge a routed river's banks stand above its water, meters. */
-const SIDE = 1;
 /** The deepest a routed river's water lies below its valley's floor, meters. */
 const BELOW_FLOOR = 0.5;
 /** Spring and seep: the stream narrows to nothing over this many meters at each end. */
@@ -102,7 +100,7 @@ export function solveStream(l: Lattice, path: Float32Array, width: number, depth
       const tx = (path[b * 2] as number) - (path[a * 2] as number);
       const tz = (path[b * 2 + 1] as number) - (path[a * 2 + 1] as number);
       const len = Math.hypot(tx, tz) || 1;
-      const out = halfWidth + SIDE;
+      const out = halfWidth + BANK * 0.5;
       level = Math.min(level, heightAt(l, x - (tz / len) * out, z + (tx / len) * out) - INSET, heightAt(l, x + (tz / len) * out, z - (tx / len) * out) - INSET);
     }
     // A dip the stream passes never drags its water below its own valley's floor, so it never cuts a gorge after.
