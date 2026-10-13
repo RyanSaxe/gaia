@@ -24,7 +24,7 @@ import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs
 import { resolve } from "node:path";
 import { createInterface } from "node:readline";
 import type { CodeGraph, EngineClient, JevClient, JevResponse } from "@gaia/schema";
-import { DEFAULT_DESIGN, DESIGNS, type DesignName, composeWorld, factsOf, judgeWorld, keptJev, planWorldRequests, requestKey } from "@gaia/world";
+import { DEFAULT_DESIGN, DESIGNS, type DesignName, composeWorld, factsOf, judgeWorld, keptJev, planStanding, planWorldRequests, requestKey } from "@gaia/world";
 import { createEngineClient } from "../app/world-service/engine-client.ts";
 import { engineJev } from "../app/world-service/jev.ts";
 import { LOOKS } from "../app/renderer/terrain/looks.ts";
@@ -74,9 +74,11 @@ else throw new Error(`Unknown judge ${judge}; choose jev or local.`);
 const status = await client.call("jev.status", {});
 if (!status.live || !status.key) throw new Error("Jev needs GAIA_JEV=live and the gaia-openrouter key in the Keychain.");
 
-// What this run would send: the requests not kept yet, at most --limit of them. A design that carries
-// character plans its lower waves from the answers above, so the estimate covers its first wave's shape.
-const missing = planWorldRequests(facts, LOOKS, { design, graph }).filter((p) => kept.answers[requestKey(p.request)] === undefined);
+// What this run would send: the requests not kept yet, at most --limit of them, the looks' and what every thing
+// stands as. A design that carries character plans its lower waves from the answers above, so the estimate covers its
+// first wave's shape.
+const standing = DESIGNS[design].questions === "judged" ? planStanding(facts, LOOKS, { graph }).requests : [];
+const missing = [...planWorldRequests(facts, LOOKS, { design, graph }), ...standing].filter((p) => kept.answers[requestKey(p.request)] === undefined);
 const toSend = missing.slice(0, limit);
 const estimate = await client.call("jev.estimate", { requests: toSend.map((p) => p.request) });
 const ceiling = estimate.estimatedUsd * 2;
@@ -116,7 +118,7 @@ const jev = keptJev(guarded, {
   settled: (key) => asked.add(key),
 });
 try {
-  await composeWorld(facts, LOOKS, jev, await judgeWorld(facts, LOOKS, jev, { design, graph }), { graph, concurrency: estimate.concurrency });
+  await composeWorld(facts, LOOKS, jev, await judgeWorld(facts, LOOKS, jev, { design, graph }), { graph, design, concurrency: estimate.concurrency });
 } catch (error) {
   stopped = (error as Error).message;
 } finally {

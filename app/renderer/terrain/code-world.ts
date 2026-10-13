@@ -10,10 +10,11 @@
 // (`fixtures/gaia-jev.json`, written by `pnpm jev-world`) alone, failing on a
 // request with no kept answer; a developer's `?judge=stand-in` has the
 // stand-in judge it instead. Everything else follows from the code:
-// each directory's area and land, each file's patch and what grows on it,
-// each entity's building or landmark on its lot, and the trails between them.
+// each directory's area and land, each file's patch, and what each entity,
+// file and definition stands as: flowers, a stone, a bush, a tree, or a
+// building or a landmark Jev composed, and the trails between the entities.
 
-import { type Blueprint, type CodeFacts, type EntityFacts, type FileFacts, type RouteSpec, type SymbolFact, rand, seedOf } from "@gaia/schema";
+import { type Blueprint, type CodeFacts, type EntityFacts, type FileFacts, type RouteSpec, type SymbolFact, type ThingFacts, rand, seedOf } from "@gaia/schema";
 import { link } from "@gaia/kinds";
 import { TRAIL_PRESETS, WORLD_PRESETS, buildSlots } from "@gaia/realize";
 import { type WorldSpec, outlinesOf } from "@gaia/terrain";
@@ -28,10 +29,10 @@ import type { LayoutReply, LayoutRequest } from "./layout-worker.ts";
 import LayoutWorker from "./layout-worker.ts?worker";
 import proving from "./fixtures/proving.json";
 import provingJudged from "./fixtures/proving-judged.json";
-import { CHARACTERS, COMPOSING, FORMS, LANDS } from "./looks.ts";
-import type { Represented, SampleEntity } from "./samples.ts";
+import { CHARACTERS, COMPOSED_FORMS, COMPOSING, FORMS, LANDS } from "./looks.ts";
+import { type Represented, type SampleEntity, representEntity, representFile } from "./samples.ts";
 import { composedName } from "./settlement.ts";
-import type { StandCode, StandLot } from "./stand.ts";
+import { AS_THING, type StandCode, type StandLot } from "./stand.ts";
 
 /** The wait a world opens behind: it shows how opening goes, and asks before spending past the limit. */
 export interface Veil {
@@ -52,10 +53,15 @@ export interface CodeLab {
   /** The terrain's regions: one per directory with land of its own. */
   readonly spec: WorldSpec;
   readonly files: ReadonlyMap<string, FileFacts>;
-  /** The entities buildings stand for, each with the building Jev composed, in the order the stand sites them. */
+  /** What each building stands for (an entity, a file or a definition), with the building Jev composed, in the order the stand sites them. */
   readonly buildings: readonly SampleEntity[];
-  /** The entities landmarks stand for: the landmark Jev composed for each and its facts, in the order the stand sites them. */
-  readonly landmarks: readonly { readonly path: string; readonly blueprint: Blueprint; readonly facts: EntityFacts; readonly vitality: number }[];
+  /** What each landmark stands for: the landmark Jev composed for it, its numbers, what its page says and who judged it, in the order the stand sites them. */
+  readonly landmarks: readonly { readonly path: string; readonly blueprint: Blueprint; readonly facts: ThingFacts; readonly vitality: number; readonly represented: Represented; readonly judged: Judged }[];
+  /**
+   * What each of `stand.symbols` stands for, by its index: a definition (as `world.symbols` holds them, in order),
+   * then each file and entity standing as flowers, a stone, a bush or a tree (`world.standing`).
+   */
+  readonly standing: (i: number) => StandingOf | undefined;
   /** The light, sky, season and wind the world takes: what Jev composed, by name for the lab's reports. */
   readonly sky: { readonly name: string; readonly world: Blueprint } | undefined;
   /** What the bake thread needs to stand this world's things, given the request's trail styles. */
@@ -230,6 +236,49 @@ function routeOf(route: Blueprint | undefined): RouteSpec {
   return buildSlots(blueprint, link, COMPOSING.lib, { seed: 1, facts: {} }).get("route")?.output as RouteSpec;
 }
 
+/** Who judged a thing's form: the request it was asked in, by what it was about. */
+export interface Judged {
+  readonly about: "file" | "entity";
+  readonly target: string;
+}
+
+/** What one of the stand's symbols stands for: its page, its file (none for an entity's), its form and who judged it. */
+export interface StandingOf {
+  readonly represented: Represented;
+  readonly file?: string;
+  readonly form: string;
+  readonly judged: Judged;
+}
+
+/** A file's page, when the file stands as a thing of its own. */
+const representStanding = (s: CodeWorld["standing"][number], files: ReadonlyMap<string, FileFacts>, entities: ReadonlyMap<string, EntityFacts>): Represented => {
+  if (s.of === "file") {
+    const f = files.get(s.path);
+    if (f === undefined) throw new Error(`${s.path} stands in the world but is not among its files.`);
+    return representFile(f, s.vitality);
+  }
+  const e = entities.get(s.path);
+  if (e === undefined) throw new Error(`${s.path || "The repository's root"} stands as an entity but is not one.`);
+  return representEntity(e, s.vitality);
+};
+
+/** The numbers a building or a landmark is built from, and its page, for whatever it stands for. */
+function thingOf(t: CodeWorld["things"][number], world: CodeWorld, files: ReadonlyMap<string, FileFacts>, entities: ReadonlyMap<string, EntityFacts>): { facts: ThingFacts; represented: Represented; judged: Judged } {
+  const of = t.of ?? "entity";
+  if (of === "entity") {
+    const e = entities.get(t.path);
+    if (e === undefined) throw new Error(`${t.path || "The repository's root"} stands as an entity but is not one.`);
+    return { facts: e, represented: representEntity(e, t.vitality), judged: { about: "entity", target: t.path } };
+  }
+  const file = files.get(t.file ?? "");
+  if (file === undefined) throw new Error(`${t.path} stands on ${t.file ?? "no file"}, which is not among the world's files.`);
+  const facts: ThingFacts = t.facts ?? { path: t.path, name: t.name, lines: file.lines, exports: 0, dependents: [] };
+  if (of === "file") return { facts, represented: representFile(file, t.vitality), judged: { about: "file", target: file.path } };
+  const sym = world.symbols.find((s) => s.id === t.path);
+  if (sym === undefined) throw new Error(`${t.path} stands as a definition but is not one.`);
+  return { facts, represented: representSymbol(sym, file), judged: { about: "file", target: file.path } };
+}
+
 /** Everything the terrain lab needs to bake and furnish a world document. */
 export function codeLab({ facts, world, judges, summary, judged }: WorldDocument): CodeLab {
   const fallback = Object.values(LANDS)[0]?.biome;
@@ -247,20 +296,35 @@ export function codeLab({ facts, world, judges, summary, judged }: WorldDocument
     })),
   };
   const entities = new Map(facts.entities.map((e) => [e.path, e]));
+  const files = new Map(facts.files.map((f) => [f.path, f]));
   const lot = (t: CodeWorld["things"][number]): StandLot => ({ id: t.path, x: t.x, z: t.z, radius: t.lot * 0.6 });
   const houses = world.things.filter((t) => t.as === "building");
   const rises = world.things.filter((t) => t.as === "landmark");
+  // What each of the stand's symbols stands for: every definition, then each file and entity standing as a plant, a stone or flowers.
+  const symbolOf = (i: number): StandingOf | undefined => {
+    const sym = world.symbols[i];
+    if (sym !== undefined) {
+      const file = files.get(sym.file);
+      return file === undefined ? undefined : { represented: representSymbol(sym, file), file: sym.file, form: sym.form, judged: { about: "file", target: sym.file } };
+    }
+    const own = world.standing[i - world.symbols.length];
+    if (own === undefined) return undefined;
+    return { represented: representStanding(own, files, entities), ...(own.file === undefined ? {} : { file: own.file }), form: own.form, judged: { about: own.of, target: own.path } };
+  };
   return {
     world,
     spec,
     thing: (of) => judged[of],
-    files: new Map(facts.files.map((f) => [f.path, f])),
-    buildings: houses.map((t) => ({ facts: entities.get(t.path) as EntityFacts, blueprint: t.blueprint, kindName: composedName(t.blueprint), vitality: t.vitality })),
-    landmarks: rises.map((t) => ({ path: t.path, blueprint: t.blueprint, facts: entities.get(t.path) as EntityFacts, vitality: t.vitality })),
+    files,
+    buildings: houses.map((t) => ({ ...thingOf(t, world, files, entities), blueprint: t.blueprint, kindName: composedName(t.blueprint), vitality: t.vitality })),
+    landmarks: rises.map((t) => ({ path: t.path, blueprint: t.blueprint, vitality: t.vitality, ...thingOf(t, world, files, entities) })),
+    standing: symbolOf,
     sky: world.sky === undefined ? WORLD_PRESETS[0] : { name: "composed", world: world.sky },
     stand: {
       lots: houses.map(lot),
       landmarks: rises.map((t, i) => ({ landmark: i, lot: lot(t) })),
+      // An entity standing as a plant, a stone or flowers: its trails end at its lot's middle.
+      places: world.standing.flatMap((s) => (s.of === "entity" ? [{ id: s.path, x: s.x, z: s.z, radius: 2 }] : [])),
       patches: world.patches.map((p) => ({ x: p.x, z: p.z, radius: p.radius })),
       regions: world.regions.map((r) => {
         const c = CHARACTERS[r.character];
@@ -279,13 +343,17 @@ export function codeLab({ facts, world, judges, summary, judged }: WorldDocument
           const area = areas.get(world.patches[patchOf.get(file) ?? -1]?.area ?? "");
           return CHARACTERS[world.regions[area?.region ?? 0]?.character ?? ""]?.stature ?? 1;
         };
-        return world.symbols.map((s) => {
-          // A definition Jev chose nothing for stands as a plain stone, never as a tree that would stand for a judgment.
-          const form = FORMS[s.form] ?? (FORMS["Standing stone"] as (typeof FORMS)[string]);
-          const patch = patchOf.get(s.file);
-          const scale = symbolScale(s.lines, form.rule, s.importance) * (form.rule === "trees" ? statureOf(s.file) : 1);
+        const symbol = (s: { readonly x: number; readonly z: number; readonly form: string; readonly lines: number; readonly importance?: number; readonly vitality: number; readonly file?: string }, who: string): StandCode["symbols"][number] => {
+          // A definition standing as a building or a landmark is one of the world's things, stood with them.
+          if (COMPOSED_FORMS[s.form] !== undefined) return { x: s.x, z: s.z, rule: AS_THING, variant: 0, radius: 0, scale: 0, vitality: s.vitality };
+          const form = FORMS[s.form];
+          // Every thing stands as the form Jev chose for it; one with none is a fault, never a default form.
+          if (form === undefined) throw new Error(`${who} stands as "${s.form}", which is no form Jev was offered.`);
+          const patch = s.file === undefined ? undefined : patchOf.get(s.file);
+          const scale = symbolScale(s.lines, form.rule, s.importance) * (form.rule === "trees" && s.file !== undefined ? statureOf(s.file) : 1);
           return { x: s.x, z: s.z, rule: form.rule, variant: form.preset, radius: form.rule === "flowers" ? 0.8 : 1, scale, vitality: s.vitality, ...(patch === undefined ? {} : { patch }) };
-        });
+        };
+        return [...world.symbols.map((s) => symbol(s, s.id)), ...world.standing.map((s) => symbol(s, s.path || "The repository's root"))];
       })(),
       // Trails joining parts of the code no other trail joins route first, then the most wanted.
       // Each trail keeps the width, wear, edging, winding and crossing Jev composed for it.

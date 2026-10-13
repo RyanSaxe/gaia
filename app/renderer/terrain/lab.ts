@@ -55,7 +55,7 @@ import { withStart } from "../start/start.ts";
 import { createCard } from "./card.ts";
 import { LANDMARK_ENTITIES, type Represented, SAMPLE_ENTITIES, SAMPLE_FILES, SAMPLE_VITALITY, representEntity, representFile } from "./samples.ts";
 import { type CodeWorld, type Judge, groundVitality, judgedThing } from "@gaia/world";
-import { type CodeLab, codeWorld, representSymbol } from "./code-world.ts";
+import { type CodeLab, codeWorld } from "./code-world.ts";
 import type { JudgedThing } from "../../world-service/protocol.ts";
 import { type Building, composedName, createSettlement, settlementBuilds } from "./settlement.ts";
 import { createSigns } from "./signs.ts";
@@ -469,7 +469,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   const entityOfPlace = new Map<string, string>();
   /** Learns the entities of the world now shown: the codebase's own, or the samples. */
   function knowEntities(): void {
-    landmarkEntities = code === null ? LANDMARK_ENTITIES.map((e) => representEntity(e, SAMPLE_VITALITY[e.path] ?? 1)) : code.landmarks.map((l) => representEntity(l.facts, l.vitality));
+    landmarkEntities = code === null ? LANDMARK_ENTITIES.map((e) => representEntity(e, SAMPLE_VITALITY[e.path] ?? 1)) : code.landmarks.map((l) => l.represented);
     entityVitality.clear();
     entityOfPlace.clear();
     for (const r of [...settlement.buildings.map((b) => b.represented), ...landmarkEntities]) entityVitality.set(r.id, r.vitality);
@@ -603,8 +603,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   }
   /** Each finer entity shows its file's vitality, and every scattered rock, bush and flower its ground's, read from the field the grass reads. */
   function showUnderstoryVitality(): void {
-    const symbols = code?.world.symbols ?? [];
-    const own = (k: number): number => liveFileVitality.get(symbols[k]?.file ?? "") ?? code?.stand.symbols[k]?.vitality ?? 1;
+    const own = (k: number): number => liveFileVitality.get(code?.standing(k)?.file ?? "") ?? code?.stand.symbols[k]?.vitality ?? 1;
     understory.setVitality(understoryVitality({ placements: understory.placements(), symbols: symbolPlacements }, own, (x, z) => groundVitalityAt(x, z).ground));
   }
   placeWays();
@@ -671,8 +670,8 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   let trees: readonly Tree[] = [];
   /** Each tree's copy among its build's instances. */
   let treeCopies: readonly number[] = [];
-  /** The definition a tree stands for in the codebase's world, and so its file. */
-  const treeSymbol = (t: { readonly symbol?: number }) => (t.symbol === undefined ? undefined : code?.world.symbols[t.symbol]);
+  /** What a tree stands for in the codebase's world (a definition, a file or an entity), and so its file. */
+  const treeSymbol = (t: { readonly symbol?: number }) => (t.symbol === undefined ? undefined : code?.standing(t.symbol));
   const treeFile = (t: { readonly symbol?: number }): string | undefined => treeSymbol(t)?.file;
   const treeVitality = (t: Tree): number => liveFileVitality.get(treeFile(t) ?? "") ?? t.represented.vitality;
   let treeViews: Copies[] = [];
@@ -898,8 +897,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     // In the codebase's world each tree is a definition, and takes its vitality.
     trees = stood.trees.map((t) => {
       const sym = treeSymbol(t);
-      const file = sym === undefined ? undefined : code?.files.get(sym.file);
-      if (sym !== undefined && file !== undefined) return { ...t, represented: representSymbol(sym, file) };
+      if (sym !== undefined) return { ...t, represented: sym.represented };
       const sample = SAMPLE_FILES[t.index % SAMPLE_FILES.length] as (typeof SAMPLE_FILES)[number];
       return { ...t, represented: representFile(sample, SAMPLE_VITALITY[sample.path] ?? 1) };
     });
@@ -1057,7 +1055,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     const buildingSubjects: Subject[] = settlement.buildings.map((b) => ({
       represented: b.represented,
       standsAs: withArticle(b.kindName),
-      ...judged("entity", b.represented.id),
+      ...judged(b.entity.judged?.about ?? "entity", b.entity.judged?.target ?? b.represented.id),
       x: b.site.x,
       z: b.site.z,
       stand: () => settlement.standOf(b),
@@ -1069,14 +1067,14 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     const landmarkSubjects: Subject[] = code === null
       ? []
       : ways.sites.flatMap((s, i) => {
-          const facts = code?.landmarks[i]?.facts;
+          const thing = code?.landmarks[i];
           const lm = landmarks[s.landmark];
-          if (facts === undefined || lm === undefined) return [];
+          if (thing === undefined || lm === undefined) return [];
           const { x, z } = s.site;
           return [{
-            represented: representEntity(facts, code?.landmarks[i]?.vitality ?? 1),
+            represented: thing.represented,
             standsAs: withArticle(lm.name),
-            ...judged("entity", facts.path),
+            ...judged(thing.judged.about, thing.judged.target),
             x,
             z,
             height: landmarkViews[i]?.height ?? 6,
@@ -1096,8 +1094,8 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       return {
         represented: tree.represented,
         standsAs: sym === undefined ? "A tree" : withArticle(sym.form),
-        // A definition's form is judged with its file.
-        ...judged("file", sym?.file ?? tree.represented.id),
+        // A definition's form is judged with its file, a file's in its own request and an entity's in its own.
+        ...judged(sym?.judged.about ?? "file", sym?.judged.target ?? tree.represented.id),
         x,
         z,
         height: (variants[tree.variant] as TreeVariant).height * tree.scale,
@@ -1115,17 +1113,16 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     const placed = understory.placements();
     const symbolEntries: (readonly [number, Subject])[] = code === null
       ? []
-      : code.world.symbols.flatMap((sym, i) => {
-          const at = symbolPlacements[i] ?? -1;
+      : symbolPlacements.flatMap((at, i) => {
           const p = placed[at];
-          const file = code?.files.get(sym.file);
-          if (p === undefined || file === undefined) return [];
+          const sym = code?.standing(i);
+          if (p === undefined || sym === undefined) return [];
           const { x, z } = p;
           return [[at, {
-            represented: representSymbol(sym, file),
+            represented: sym.represented,
             standsAs: withArticle(sym.form),
-            // A symbol's form is judged with its file.
-            ...judged("file", sym.file),
+            // A definition's form is judged with its file, a file's in its own request and an entity's in its own.
+            ...judged(sym.judged.about, sym.judged.target),
             x,
             z,
             height: (understory.footprint(p.rule, p.variant)?.top ?? 0.8) * p.scale,

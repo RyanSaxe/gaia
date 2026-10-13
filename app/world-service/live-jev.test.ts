@@ -131,8 +131,8 @@ describe("judging a codebase with Jev", () => {
     const judging = first.about.filter((a) => !a.startsWith("understand:"));
     expect(new Set(judging).size).toBe(judging.length);
     expect(first.about).toEqual(expect.arrayContaining(["area:(the repository's root)", "file:src/shape.ts", "understand:src/shape.ts"]));
-    // A file with nothing standing on its patch is never asked about.
-    expect(first.about).not.toContain("file:README.md");
+    // Every file is asked what it stands as, one that defines nothing too.
+    expect(first.about).toContain("file:README.md");
     // The understanding pass asked every folder and file, and every definition stands by Jev's importance; the
     // document carries what it judged, every score from 0 to 1.
     const states = first.sent.map(({ body }) => body.state as Record<string, unknown>);
@@ -147,10 +147,11 @@ describe("judging a codebase with Jev", () => {
     expect(new Set(Object.values(first.document.judges))).toEqual(new Set(["jev"]));
     expect(first.document.summary).not.toContain("stand-in");
     const asking = first.shown.filter((o) => o.stage === "asking");
-    // Composing follows from the answers, so it is never planned or counted ahead; every building and landmark was composed.
+    // Composing follows from the answers, so it is never planned ahead; every building and landmark was composed, and
+    // each answer, what a thing stands as and composing included, is counted as it comes.
     const composed = first.about.filter((a) => a.startsWith("compose:")).length;
     expect(composed).toBeGreaterThan(0);
-    expect(asking.at(-1)).toMatchObject({ total: first.sent.length - composed, answered: first.sent.length - composed, asking: [] });
+    expect(asking.at(-1)).toMatchObject({ total: first.sent.length, answered: first.sent.length, asking: [] });
     // While a question is out, its area is named as being worked on, for the wait to show.
     expect(asking.some((o) => o.asking.length > 0)).toBe(true);
 
@@ -160,12 +161,13 @@ describe("judging a codebase with Jev", () => {
     expect(second.about).toEqual([]);
     expect(second.document.world).toEqual(first.document.world);
 
-    // A file that changed is asked about again, with what its facts touch; untouched files are not.
+    // A file that changed is asked about again, with what its facts touch, and less goes out than the first time. What
+    // a thing stands as is asked again where its offer or its importance changed: one more definition moves every rank
+    // a little, which in a world of a few things carries most of them across a range.
     appendFileSync(join(root, "src/shape.ts"), `\n/** The area of a circle. */\nexport const circle = (r: number): number => Math.PI * r * r;\n`);
     const third = await open(root, data, true);
     expect(third.about).toEqual(expect.arrayContaining(["file:src/shape.ts"]));
-    expect(third.about).not.toContain("file:src/index.ts");
-    expect(third.about).not.toContain("file:package.json");
+    expect(third.sent.length).toBeLessThan(first.sent.length);
   }, 60_000);
 
   it("fails the opening when Jev refuses a request the client has retried, naming it and why, with nothing guessed", async () => {
