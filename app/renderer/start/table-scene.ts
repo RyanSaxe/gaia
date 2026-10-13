@@ -51,6 +51,11 @@ export interface Rect {
   readonly h: number;
 }
 
+/** The wait's sheet a chosen card rises into: where it lies on the canvas, and how dark the veil has it (its --night). */
+export interface Sheet extends Rect {
+  readonly night: number;
+}
+
 export interface TableScene {
   readonly canvas: HTMLCanvasElement;
   /** Lights the table as the world is lit at hour `h`; whether the light changed, so a frame is worth drawing. */
@@ -61,9 +66,12 @@ export interface TableScene {
    * Card `index`, `t` seconds after its lift began, ending at the wait's sheet `to` (CSS pixels on the canvas); before
    * 0, a fresh card is still coming down onto the sheet. Null puts every card back.
    */
-  choose(index: number | null, t: number, to?: Rect): void;
-  /** A fresh card of plain paper in the land's shape `aspect` (width over depth), in the middle of the sheet; its index, to choose. */
-  fresh(aspect: number): number;
+  choose(index: number | null, t: number, to?: Sheet): void;
+  /**
+   * A fresh card in the land's shape `aspect` (width over depth) whose face is `face`, the wait's sheet as it is painted
+   * now, so it rises into that sheet as the sheet itself; its index, to choose.
+   */
+  fresh(aspect: number, face: HTMLCanvasElement | null): number;
   /** How much of the risen card still shows, 1 to 0: the wait's sheet lies over it and it gives way. */
   withdraw(shown: number): void;
   resize(w: number, h: number, dpr: number): void;
@@ -110,7 +118,11 @@ const meadow = (() => {
   return (h: number): WorldLook => realizeWorld({ blueprint: preset.world, kind: worldKind }, { blueprint: preset.biome, kind: biome }, lib, seedOf("start/table"), h);
 })();
 
-export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], logo: HTMLImageElement, size: { w: number; h: number; dpr: number }): TableScene {
+/**
+ * The table for `worlds`, with Gaia's `logo` on its sheet. `deckle` is the wait's sheet's torn edge (`DECKLE_MASK`), which
+ * a chosen card takes as its own as it becomes that sheet.
+ */
+export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], logo: HTMLImageElement, deckle: HTMLImageElement, size: { w: number; h: number; dpr: number }): TableScene {
   const canvas = document.createElement("canvas");
   // Opaque: the table is always whole behind the wait, and the focus pass writes every pixel. Targets still clear to
   // nothing, so the lifted card's own layer is clear around it.
@@ -202,6 +214,13 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
     t.anisotropy = 8;
   }
   const [wx0, wy0, wx1, wy1] = writingBox(l);
+  // The wait's sheet's deckle, stretched to the card as the page stretches it to the sheet (mask-size 100% 100%).
+  const deckleCanvas = document.createElement("canvas");
+  deckleCanvas.width = deckleCanvas.height = 2048;
+  (deckleCanvas.getContext("2d") as CanvasRenderingContext2D).drawImage(deckle, 0, 0, 2048, 2048);
+  const deckleTexture = new THREE.CanvasTexture(deckleCanvas);
+  deckleTexture.colorSpace = THREE.NoColorSpace;
+  deckleTexture.anisotropy = 8;
   let folder: SheetBox = [0, 0, 0, 0];
   const paper = (o: { size: [number, number]; seed: number; base: number; tear: number; self: number; folded?: boolean; picture?: THREE.Texture | null }): THREE.ShaderMaterial =>
     material(
@@ -224,6 +243,9 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
         uFlat: { value: 0 },
         uAxisX: { value: axisX.clone() },
         uAxisY: { value: axisY.clone() },
+        uDeckle: { value: deckleTexture },
+        uSheetPx: { value: new THREE.Vector2(1, 1) },
+        uSheetNight: { value: 0 },
       },
       { side: THREE.DoubleSide, alphaToCoverage: true },
     );
@@ -236,7 +258,7 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
   const pictures: THREE.Texture[] = [];
   const cards: Card[] = [];
   /** Card `i` at `c` on the sheet, with its picture, as deep as `deep`. */
-  const makeCard = (i: number, c: CardPlace, picture: HTMLImageElement | null, deep: number): Card => {
+  const makeCard = (i: number, c: CardPlace, picture: HTMLImageElement | HTMLCanvasElement | null, deep: number): Card => {
     const r = seeded(500 + i * 13);
     const turn = (r() - 0.5) * 0.09;
     const curled = Math.floor(r() * 4);
@@ -384,6 +406,9 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
       uMaxBlur: { value: 9 },
       uVignette: { value: 0.2 },
       uLifting: { value: 0 },
+      uShadowBox: { value: new THREE.Vector4() },
+      uShadow: { value: 0 },
+      uDpr: { value: 1 },
     },
     depthTest: false,
     depthWrite: false,
@@ -446,6 +471,8 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
   let liftShown = 1;
   /** Whether the chosen card is a fresh one not yet coming down onto the sheet, so nowhere to be seen. */
   let unlaid = false;
+  /** How much of the wait's sheet's shadow the risen card casts, as it becomes that sheet. */
+  let shadowShown = 0;
   function shape(c: Card, flatness: number): void {
     const position = c.mesh.geometry.getAttribute("position") as THREE.BufferAttribute;
     const at = position.array as Float32Array;
@@ -453,7 +480,7 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
     position.needsUpdate = true;
     c.mesh.geometry.computeVertexNormals();
   }
-  function choose(index: number | null, t: number, to?: Rect): void {
+  function choose(index: number | null, t: number, to?: Sheet): void {
     for (const c of cards) {
       c.group.position.copy(c.restAt);
       c.group.quaternion.copy(c.restTurn);
@@ -467,6 +494,7 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
     heldShade.y = 0;
     setU("uFocus", restFocus);
     setU("uFocusFar", restFar);
+    setU("uShadow", 0);
     shadowDirty = true;
     const c = index === null ? undefined : cards[index];
     lifted = c ?? null;
@@ -494,9 +522,19 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
     c.group.position.copy(raised).lerp(finalAt, b);
     c.group.position.y += Math.sin(b * Math.PI) * 0.05;
     c.group.quaternion.copy(straight).slerp(finalTurn, b);
-    // As it rises it leaves the table's light and becomes the picture the wait shows.
+    // As it rises it leaves the table's light and becomes the wait's sheet, drawn as the page draws that sheet: its size
+    // and the veil's night, and the sheet's own shadow under it on the table, over the box it covers on the canvas.
     const u = c.mesh.material.uniforms;
-    (u.uFlat as THREE.IUniform).value = ease((t - 0.6) / 1.0);
+    const flat = ease((t - 0.6) / 1.0);
+    (u.uFlat as THREE.IUniform).value = flat;
+    (u.uSheetPx as THREE.IUniform<THREE.Vector2>).value.set(end.w, end.h);
+    (u.uSheetNight as THREE.IUniform).value = to?.night ?? 0;
+    c.group.updateMatrixWorld(true);
+    const corners = ([[-1, -1], [1, -1], [1, 1], [-1, 1]] as const).map(([sx, sz]) => new THREE.Vector3((sx * c.side) / 2, 0, (sz * c.deep) / 2).applyMatrix4(c.group.matrixWorld).project(camera));
+    const xs = corners.map((p) => ((p.x + 1) / 2) * size.w * size.dpr);
+    const ys = corners.map((p) => ((p.y + 1) / 2) * size.h * size.dpr);
+    (pu.uShadowBox as THREE.IUniform<THREE.Vector4>).value.set(Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys));
+    shadowShown = flat;
     (u.uLifted as THREE.IUniform).value = b > 0 ? 1 : 0;
     (casterSoft[c.caster] as THREE.Vector4).y = 0.38 * (1 - a) * (1 - down);
     // Its shadow is a soft box where the sun's shadow map would draw it, so it softens, slides away from the light
@@ -553,6 +591,8 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
       renderer.render(lifted.group, camera);
     }
     setU("uLifting", showing ? liftShown : 0);
+    setU("uShadow", showing ? shadowShown * liftShown : 0);
+    setU("uDpr", size.dpr);
     renderer.setRenderTarget(null);
     renderer.clear();
     renderer.render(postQuad, postCamera);
@@ -575,9 +615,9 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
       writing.needsUpdate = true;
     },
     choose,
-    fresh(aspect) {
+    fresh(aspect, face) {
       const at = freshPlace();
-      cards.push(makeCard(cards.length, at, null, at.side / Math.max(1, aspect)));
+      cards.push(makeCard(cards.length, at, face, at.side / Math.max(1, aspect)));
       shadowDirty = true;
       return cards.length - 1;
     },
@@ -624,7 +664,7 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
         o.geometry.dispose();
         for (const m of Array.isArray(o.material) ? o.material : [o.material]) (m as THREE.Material).dispose();
       });
-      for (const t of [ink, writing, featherTexture, ...pictures]) t.dispose();
+      for (const t of [ink, writing, featherTexture, deckleTexture, ...pictures]) t.dispose();
       postQuad.geometry.dispose();
       post.dispose();
       depthOnly.dispose();

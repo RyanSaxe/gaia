@@ -14,11 +14,11 @@
 
 /* ---------- the traveller's map table, in 3D (table.ts) ---------- */
 /* The canvas fills the page; over it lie only clear hit areas for the cards, the line and the folder's words. While the
-   table is in front, the wait's sheet lies unseen beneath it. Once the chosen card has risen to the sheet's place, the
-   table goes behind the wait, held still and out of focus, and the sheet comes in over the card (its own 0.5 s opacity
-   transition, table.ts SHEET_IN_MS), until the sheet folds into the world and the table goes with the veil. */
+   table is in front, the wait's sheet lies unseen beneath it. Once the chosen card has risen to the sheet's place, drawn
+   as the page draws the sheet, the table goes behind the wait, held still and out of focus, and the sheet shows in the
+   card's place in the same frame, with no fade, until it folds into the world and the table goes with the veil. */
 .table-view { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
-.veil[data-table="front"] .wait-sheet { opacity: 0; }
+.veil[data-table="front"] .wait-sheet { visibility: hidden; }
 .veil[data-table="behind"] .start-table { z-index: 0; }
 .veil[data-table="behind"] .wait-sheet { z-index: 1; }
 .table-hits { position: absolute; inset: 0; }

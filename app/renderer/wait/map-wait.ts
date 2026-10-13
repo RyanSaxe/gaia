@@ -184,23 +184,33 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
   layPaper(560);
 
   // ---------- a map chosen on the start ----------
-  /** The chosen world's picture, lying on the sheet as its paint once laid, and the land shape it is in. */
+  /** The chosen world's picture, lying on the sheet as its paint, and the land shape it is in. */
   let chosen: { readonly el: HTMLImageElement; readonly aspect: number } | null = null;
-  function choose(picture: string, aspect: number): () => void {
+  function choose(picture: string, aspect: number): void {
     chosen?.el.remove();
     // The sheet takes the chosen map's shape before anything comes in, so the map rises into a sheet of its own shape.
     sheetEl.style.setProperty("--aspect", Math.max(1, aspect).toFixed(4));
     const el = document.createElement("img");
     el.className = "wait-chosen";
     el.alt = "";
-    el.hidden = true;
     el.src = picture;
+    // Decoded now, while the card rises, so the sheet shows it the moment it takes the card's place.
+    void el.decode().catch(() => undefined);
     // As wide as the square the sheet is drawn on, and as deep as the land and its margin, in its middle.
     el.style.top = `${((1 - 1 / Math.max(1, aspect)) * 50).toFixed(3)}%`;
     el.style.height = `${(100 / Math.max(1, aspect)).toFixed(3)}%`;
     ground.after(el);
     chosen = { el, aspect };
-    return () => (el.hidden = false);
+  }
+  /** The sheet's paper as it is painted now, in the sheet's shape: the middle of the square it is drawn on. */
+  function face(): HTMLCanvasElement {
+    const shape = Math.max(1, Number.parseFloat(sheetEl.style.getPropertyValue("--aspect")) || 1);
+    const h = Math.max(1, Math.round(device / shape));
+    const c = document.createElement("canvas");
+    c.width = device;
+    c.height = h;
+    (c.getContext("2d") as CanvasRenderingContext2D).drawImage(ground, 0, (device - h) / 2, device, h, 0, 0, device, h);
+    return c;
   }
 
   let land: Land | null = null;
@@ -794,6 +804,7 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
       });
     },
     chosen: choose,
+    face,
     marks: drawMarks,
     stood: relief,
     night(n) {
