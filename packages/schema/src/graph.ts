@@ -99,26 +99,13 @@ export interface Measures {
 
 /** Jev's answers as held: a fresh answer replaces a held one only when it clearly differs. */
 export interface Judged {
-  readonly stand?: Score;
-  readonly kind?: Choice;
-  readonly does?: Readonly<Record<string, YesNo>>;
-  readonly role?: Choice;
-  /** Keyed by question, such as "readability" or "errors". */
-  readonly quality?: Readonly<Record<string, Score | Choice>>;
-  readonly importance?: { readonly breaks: Score; readonly central: Score };
-  /** Why a person should look; "routine" is one of the options. */
-  readonly attention?: Choice;
-  /** Whether it holds behavior a test should check. */
-  readonly needsTests?: YesNo;
-  /** Asked only when nothing in the repository reaches it. */
-  readonly dead?: YesNo;
   /**
    * The understanding pass's answers, keyed by concept: "importance" (as its
    * container judged it), and quality concepts such as "readability",
    * "cohesion" or "robustness" (`engine/vocab/understanding.toml`).
    */
   readonly axes?: Readonly<Record<string, Score | Choice>>;
-  /** Which of a container's parts stand out, as choices over their ids: "key", "weak" and "finest". */
+  /** Which of a definition's blocks stand out, as choices over their ids: "key" and "weak". */
   readonly picks?: Readonly<Record<string, Choice>>;
   /** What more Jev asked to read, by round: "usages", "related", "tests", "docs" or "nothing". */
   readonly more?: Readonly<Record<string, Choice>>;
@@ -145,7 +132,7 @@ export interface GraphEdge {
   readonly at?: Span;
 }
 
-export type EdgeKind = "contains" | "imports" | "calls" | "references" | "inherits" | "implements" | "names" | "changes-with" | "checks";
+export type EdgeKind = "contains" | "imports" | "calls" | "references" | "inherits" | "implements" | "names" | "changes-with";
 
 /** The parser, the rules and git are certain; Jev's answers carry its probability. */
 export type Filled = { readonly by: "parser" | "rule" | "git" } | { readonly by: "jev"; readonly call: string; readonly p: number };
@@ -173,11 +160,6 @@ export interface History {
   /** Commits in the last 14 days. */
   readonly recent: number;
   readonly authors: number;
-}
-
-export interface YesNo {
-  readonly p: number;
-  readonly call: string;
 }
 
 export interface Choice {
