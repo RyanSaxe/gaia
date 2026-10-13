@@ -10,7 +10,7 @@ export const WALK_PLAYGROUND = typeof location !== "undefined" && new URLSearchP
 
 /** A tunable number: its label, unit, range and step, and whether a way of walking uses it. */
 interface Knob {
-  readonly key: keyof SteerScheme & ("rate" | "nudgeFor" | "nudge" | "keep" | "pace" | "back" | "side" | "blink" | "snap" | "sensitivity");
+  readonly key: keyof SteerScheme & ("rate" | "nudgeFor" | "nudge" | "keep" | "quick" | "pace" | "back" | "side" | "blink" | "snap" | "sensitivity");
   readonly label: string;
   readonly unit: string;
   readonly min: number;
@@ -23,10 +23,11 @@ interface Knob {
 const KNOBS: readonly Knob[] = [
   { key: "rate", label: "Turn", unit: "°/s", min: 10, max: 180, step: 5, uses: (s) => s.walk === "strafe" || s.walk === "face" || (s.turn !== "none" && s.big !== "snap") },
   { key: "nudge", label: "Nudge", unit: "°", min: 1, max: 30, step: 1, uses: (s) => s.walk === "face" },
-  { key: "keep", label: "Held", unit: "°/s", min: 0, max: 90, step: 5, zero: "off", uses: (s) => s.walk === "face" },
+  { key: "keep", label: "Held", unit: "°/s", min: 0, max: 90, step: 5, zero: "off", uses: (s) => s.walk === "face" && s.bigTurn !== "held" },
+  { key: "quick", label: "Quick", unit: "s a quarter", min: 0.15, max: 0.5, step: 0.01, uses: (s) => s.walk === "face" && s.bigTurn === "quick" },
   { key: "nudgeFor", label: "Nudge", unit: "s", min: 0.05, max: 0.5, step: 0.01, uses: (s) => s.walk !== "strafe" && s.turn === "nudge" },
   { key: "snap", label: "Step", unit: "°", min: 10, max: 90, step: 5, uses: (s) => s.big === "snap" },
-  { key: "blink", label: "Blink", unit: "s", min: 0, max: 0.6, step: 0.02, zero: "a cut", uses: (s) => s.big === "blink" || s.walk === "face" },
+  { key: "blink", label: "Blink", unit: "s", min: 0.1, max: 0.6, step: 0.02, uses: (s) => s.big === "blink" },
   { key: "pace", label: "Walk", unit: "m/s", min: 1, max: 8, step: 0.1, uses: () => true },
   { key: "back", label: "Back", unit: "× walk", min: 0.1, max: 1, step: 0.05, uses: (s) => s.walk !== "none" && s.walk !== "face" && s.big !== "blink" },
   { key: "side", label: "Aside", unit: "× walk", min: 0.1, max: 1, step: 0.05, uses: (s) => s.walk === "strafe" },
@@ -90,9 +91,25 @@ export function createWalkPlayground(parent: HTMLElement, first: SteerSchemeId, 
         row.append(document.createTextNode(k.label), input, value);
         return row;
       }),
-      ...(scheme.walk === "face" ? [toggle("↑ with ← → faces the diagonal", "diagonal")] : []),
+      ...(scheme.walk === "face" ? [bigTurns()] : []),
+      ...(scheme.walk === "face" && scheme.bigTurn !== "held" ? [toggle("↑ with ← → faces the diagonal", "diagonal")] : []),
     );
     use();
+  }
+  /** Face and go's way of making a big turn, from still or with ↓. */
+  function bigTurns(): HTMLElement {
+    const row = document.createElement("label");
+    row.className = "walk-toggle";
+    const choice = document.createElement("select");
+    for (const [value, text] of [["walk", "Walk into it"], ["quick", "Quick turn"], ["cut", "Cut"], ["held", "Held nudges only"]] as const) choice.append(new Option(text, value));
+    choice.value = scheme.bigTurn;
+    choice.addEventListener("change", () => {
+      scheme = { ...scheme, bigTurn: choice.value as SteerScheme["bigTurn"] };
+      apply();
+    });
+    settle(choice);
+    row.append(document.createTextNode("Big turns"), choice);
+    return row;
   }
   /** A yes-or-no setting of the way of walking, as a checkbox. */
   function toggle(text: string, key: "diagonal"): HTMLElement {
