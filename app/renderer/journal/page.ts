@@ -46,24 +46,30 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, text?: s
 /** A score as the page shows it: a percentage, so it reads as a share of 0 to 1. */
 const percent = (v: number): string => `${Math.round(Math.max(0, Math.min(1, v)) * 100)}%`;
 
-/** A vitality as the page shows it: a small wash of its health color and its reading. */
-function reading(v: number, cls: string): HTMLElement {
-  const r = el("span", cls);
-  const wash = el("i", "");
-  wash.style.background = healthColor(v);
-  r.append(wash, document.createTextNode(percent(v)));
-  return r;
+/** The ink an importance's meter is drawn in; a quality's is its health color. */
+const INK = "#6b5640";
+
+/** A score as the page shows it: a short meter filled to its share, then its percentage. */
+function meter(v: number, color: string, cls: string): HTMLElement {
+  const m = el("span", cls);
+  const track = el("i", "jp-track");
+  const fill = el("b", "");
+  fill.style.width = percent(v);
+  fill.style.background = color;
+  track.append(fill);
+  m.append(track, el("span", "jp-pct", percent(v)));
+  return m;
 }
 
-/** A page's two numbers beside its name: its quality, as its vitality's wash and reading, and how much it matters. */
+/** A page's two numbers beside its name, each with its meter: its quality, in its health color, and how much it matters, in ink. */
 function numbersOf(words: PageWords): HTMLElement {
   const numbers = el("span", "jp-numbers");
   const quality = el("span", "jp-number");
-  quality.append(el("span", "jp-number-label", "quality"), reading(words.vitality, "jp-vit"));
+  quality.append(el("span", "jp-number-label", "quality"), meter(words.vitality, healthColor(words.vitality), "jp-meter"));
   numbers.append(quality);
   if (words.importance !== undefined) {
     const importance = el("span", "jp-number");
-    importance.append(el("span", "jp-number-label", "importance"), el("span", "jp-imp", percent(words.importance)));
+    importance.append(el("span", "jp-number-label", "importance"), meter(words.importance, INK, "jp-meter"));
     numbers.append(importance);
   }
   return numbers;
@@ -83,7 +89,7 @@ function rowsOf(rows: readonly Row[], turnTo: (of: string) => void): HTMLElement
     const row = el("button", `jp-row d${Math.min(r.depth, 3)}`);
     row.type = "button";
     marked(row, r.mark);
-    row.append(el("span", "jp-row-name", r.name), el("span", "jp-dots"), reading(r.vitality, "jp-row-vit"), el("span", "jp-row-page", r.page.toLocaleString("en-US")));
+    row.append(el("span", "jp-row-name", r.name), el("span", "jp-dots"), meter(r.vitality, healthColor(r.vitality), "jp-row-meter"), ...(r.importance === undefined ? [] : [meter(r.importance, INK, "jp-row-meter")]), el("span", "jp-row-page", r.page.toLocaleString("en-US")));
     row.addEventListener("click", (e) => {
       e.stopPropagation();
       turnTo(r.of);
@@ -93,8 +99,8 @@ function rowsOf(rows: readonly Row[], turnTo: (of: string) => void): HTMLElement
   return list;
 }
 
-/** What a snippet is called on the page: its kind, as the mark beside it says it. */
-const LEAD_LABEL = { finest: "best", improve: "needs work most" } as const;
+/** What a marked block is called on the page, in a column of its own: its kind, as the stroke beside it says it. */
+const MARK_LABEL = { finest: "best", improve: "weak", understand: "key" } as const;
 
 /**
  * A page's lead: each snippet a definition at a glance, marked as the best
@@ -108,7 +114,7 @@ function leadOf(snippets: readonly Snippet[], path: string, turnTo: (of: string)
     snippet.type = "button";
     marked(snippet, { kind: s.kind });
     const head = el("span", "jp-snippet-head");
-    head.append(el("span", "jp-snippet-label", LEAD_LABEL[s.kind]), el("span", "jp-snippet-name", s.name), el("span", "jp-dots"), el("span", "jp-row-page", s.page.toLocaleString("en-US")));
+    head.append(el("span", "jp-snippet-label", MARK_LABEL[s.kind]), el("span", "jp-snippet-name", s.name), el("span", "jp-dots"), el("span", "jp-row-page", s.page.toLocaleString("en-US")));
     const lines = [s.signature.text, ...s.lines];
     const pieces = highlight(lines, path);
     const base = baseIndent(lines);
@@ -172,8 +178,10 @@ function codeOf(at: readonly number[], body: Full, base: number, pieces: readonl
     const n = body.first + k;
     const row = el("div", "jp-line");
     row.dataset.line = String(n);
-    // The first mark over a line is the one its gutter shows.
-    marked(row, body.marks.find((m) => m.from <= n && n <= m.to));
+    // The first mark over a line is the one its stroke shows; the block's first line says what it is.
+    const mark = body.marks.find((m) => m.from <= n && n <= m.to);
+    marked(row, mark);
+    if (mark !== undefined && mark.from === n) row.dataset.label = MARK_LABEL[mark.kind];
     if (body.prose === true) {
       // A document's heading is set as one, without the marks that make it; a fenced block's lines as code.
       const heading = body.pre?.[k] === true ? null : /^(#{1,6})\s+(.*)$/.exec(line);

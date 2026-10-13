@@ -16,8 +16,8 @@ const world = {
     { path: "README.md", name: "README.md", area: "" },
   ],
   symbols: [
-    { id: `${MATH}#Calc`, file: MATH, name: "Calc", line: 2, lines: 5 },
-    { id: `${MATH}#Calc.add`, file: MATH, parent: `${MATH}#Calc`, name: "add", line: 3, lines: 1 },
+    { id: `${MATH}#Calc`, file: MATH, name: "Calc", kind: "class" as const, line: 2, lines: 5 },
+    { id: `${MATH}#Calc.add`, file: MATH, parent: `${MATH}#Calc`, name: "add", kind: "function" as const, line: 3, lines: 1 },
   ],
 };
 const TEXT = ["// math", "export class Calc {", "  add(a: number) { return a + 1; }", "", "  // more", "}"];
@@ -65,16 +65,16 @@ describe("what a journal page says", () => {
     });
   });
 
-  it("leads a file with its best and worst definitions weighed by importance, folded around Jev's blocks, and opens a definition below the median at what needs work most", () => {
+  it("leads a file with its weak and best definitions weighed by importance, folded around Jev's blocks, and opens a definition below the median at what needs work most", () => {
     const OPS = "core/ops.ts";
     const ops = {
       name: "demo",
       areas: [{ path: "", name: "demo", parent: null }, { path: "core", name: "core", parent: "" }],
       patches: [{ path: OPS, name: "ops.ts", area: "core" }],
       symbols: [
-        { id: `${OPS}#big`, file: OPS, name: "big", line: 2, lines: 39 },
-        { id: `${OPS}#tiny`, file: OPS, name: "tiny", line: 42, lines: 1 },
-        { id: `${OPS}#mid`, file: OPS, name: "mid", line: 44, lines: 7 },
+        { id: `${OPS}#big`, file: OPS, name: "big", kind: "function" as const, line: 2, lines: 39 },
+        { id: `${OPS}#tiny`, file: OPS, name: "tiny", kind: "function" as const, line: 42, lines: 1 },
+        { id: `${OPS}#mid`, file: OPS, name: "mid", kind: "function" as const, line: 44, lines: 7 },
       ],
     };
     const text = Array.from({ length: 50 }, (_, i) => `line ${i + 1}`);
@@ -85,8 +85,16 @@ describe("what a journal page says", () => {
       [`${OPS}#mid`]: { quality: 0.8, importance: 0.6, concepts: {}, picks: { key: { start: 46, end: 47 } } },
     };
     const src: WordsSource = { journal: journalOf(ops, { first: 18, next: 21, lead: 11 }), world: ops, vitality: (of) => things[of]?.quality ?? 1, lines: () => text, thing: (of) => things[of], median: 0.7 };
-    // The finest among what matters is mid, not the tiny helper; the worst is the file's heart, big.
-    expect(leadOf(src, [`${OPS}#big`, `${OPS}#tiny`, `${OPS}#mid`])).toEqual({ best: `${OPS}#mid`, worst: `${OPS}#big` });
+    // The weak part is the file's heart, big; the best, the finest among what matters, is mid, not the tiny helper.
+    const parts = [`${OPS}#big`, `${OPS}#tiny`, `${OPS}#mid`];
+    expect(leadOf(src, OPS, parts)).toEqual({ best: `${OPS}#mid`, worst: `${OPS}#big` });
+    // A type is never the best, however clean and important.
+    const shape = { id: `${OPS}#Shape`, file: OPS, name: "Shape", kind: "type" as const, line: 51, lines: 3 };
+    const typed: WordsSource = { ...src, world: { ...ops, symbols: [...ops.symbols, shape] }, thing: (of) => (of === shape.id ? { quality: 0.99, importance: 0.95, concepts: {}, picks: {} } : things[of]) };
+    expect(leadOf(typed, OPS, [...parts, shape.id])).toEqual({ best: `${OPS}#mid`, worst: `${OPS}#big` });
+    // Nothing is its best unless it scores above the page itself.
+    const strong: WordsSource = { ...src, thing: (of) => (of === OPS ? { quality: 0.995, importance: 0.7, concepts: {}, picks: {} } : things[of]) };
+    expect(leadOf(strong, OPS, parts)).toEqual({ worst: `${OPS}#big` });
     const file = wordsOf(src, src.journal.entry(OPS)!);
     expect(file.importance).toBe(0.7);
     // Below the world's median, the file leads with what needs work most, each snippet its first line and Jev's block.
@@ -113,10 +121,10 @@ describe("what a journal page says", () => {
       areas: [{ path: "", name: "demo", parent: null }, { path: "core", name: "core", parent: "" }],
       patches: [{ path: A, name: "a.ts", area: "core" }, { path: B, name: "b.ts", area: "core" }],
       symbols: [
-        { id: `${A}#good`, file: A, name: "good", line: 1, lines: 4 },
-        { id: `${A}#fine`, file: A, name: "fine", line: 6, lines: 4 },
-        { id: `${B}#bad`, file: B, name: "bad", line: 1, lines: 4 },
-        { id: `${B}#ok`, file: B, name: "ok", line: 6, lines: 4 },
+        { id: `${A}#good`, file: A, name: "good", kind: "function" as const, line: 1, lines: 4 },
+        { id: `${A}#fine`, file: A, name: "fine", kind: "function" as const, line: 6, lines: 4 },
+        { id: `${B}#bad`, file: B, name: "bad", kind: "function" as const, line: 1, lines: 4 },
+        { id: `${B}#ok`, file: B, name: "ok", kind: "function" as const, line: 6, lines: 4 },
       ],
     };
     const text = Array.from({ length: 10 }, (_, i) => `line ${i + 1}`);

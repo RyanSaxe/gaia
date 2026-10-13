@@ -689,22 +689,29 @@ edges, which are paper like the rest of the page.
 
 A page of the journal gives every score as a percentage, so it reads as a
 share of 0 to 1. Beside a thing's name stand two numbers in the hand, each
-under a small spaced-capital label: its quality, with its vitality's wash,
-and its importance. Each row of a list carries its quality the same way.
+under a small spaced-capital label and after a short meter filled to its
+share: its quality, the meter in its health color, and its importance, the
+meter in ink. Each row of a list carries both the same way, smaller, each
+percentage at one width so the meters line up down the list.
 The caption under a thing's picture gives each concept of quality Jev
 answered as a percentage, and leaves out one whose answer doesn't count.
-A file's first page leads with snippets of its best and worst definitions,
-and a folder's with its best and worst files, each shown by its own best
-or worst definition, all chosen by quality weighed by importance: each its
-first line and a block (the one Jev picked as needing work most for the
-worst, its key block for the best), with the lines around folded into
-marks that say how many, and a tap turns to its page. What needs work most
-comes first when the page is below the world's median quality, its best
-first otherwise. A long definition's page opens on the block that most
-needs work when it is below the median, and on its key block otherwise.
-Its appendix is the code alone, with the same marks. The marks are brush
-strokes in the gutter or beside a row: green for the key block, russet for
-what needs work most, slate blue for a page's best part.
+A file's first page leads with snippets of its weak and best definitions,
+and a folder's with its weak and best files, each shown by its own weak or
+best definition. The weak part is the one most in need among what matters
+most (its lack of quality weighed by importance); the best is chosen from
+the rest, among code that runs (never a type) scoring above the page
+itself, by quality weighed by importance, so a page may have none. Each
+snippet is its first line and a block (the one Jev picked as weak, or its
+key block for the best), with the lines around folded into marks that say
+how many, and a tap turns to its page. The weak part comes first when the
+page is below the world's median quality, its best first otherwise. A long
+definition's page opens on its weak block when it is below the median, and
+on its key block otherwise. Its appendix is the code alone, with the same
+marks. The marks are brush strokes in the margin, left of the handwritten
+line numbers and their pencil rule, or beside a row: green for the key
+block, russet for the weak part, slate blue for a page's best. Each marked
+block is labeled in its stroke's color, **key**, **weak** or **best**, in a
+column of its own so the names after it line up.
 
 Nothing in the world lights up, rings or changes under a pointer: a thing
 looks the same whether or not a person could walk up to it, and the pointer

@@ -63,3 +63,4 @@ One file per decision the reviewer settled in the pair sessions that designed Ga
 - [The journal shows every score as a percentage, and leads each page with its best and worst](59-the-journal-shows-scores-as-percentages-and-leads-with-best-and-worst.md)
 - [One way of understanding code: the understanding pass replaces today's calls](60-one-way-of-understanding-code.md)
 - [Every tree is a definition Jev chose to be a tree](61-every-tree-is-a-definition-jev-chose.md)
+- [The journal reads best and weak, with a meter for each number](62-the-journal-reads-best-and-weak-with-meters.md)

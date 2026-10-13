@@ -125,17 +125,21 @@
 .jp-where { font: 600 9px/1.3 "Iowan Old Style", Georgia, serif; letter-spacing: .22em; text-transform: uppercase; color: #8a7458; }
 .jp-title { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-top: 8px; }
 .jp-name { font: italic 600 31px/1.08 "Iowan Old Style", Georgia, serif; color: #33281d; overflow-wrap: anywhere; }
-.jp-vit { display: flex; align-items: center; gap: 9px; font: 22px/1 "Bradley Hand", Georgia, cursive; color: #4a3a26; }
-.jp-vit i, .jp-row-vit i { display: block; width: 26px; height: 16px; border-radius: 50% 46% 52% 44%; opacity: 0.75; filter: url(#jp-wash); }
+/* A score: a short meter filled to its share, a quality's in its health color and an importance's in ink, then its percentage. */
+.jp-meter { display: flex; align-items: center; gap: 9px; font: 20px/1 "Bradley Hand", Georgia, cursive; color: #4a3a26; }
+.jp-track { display: block; width: 40px; height: 6px; border-radius: 3px; background: rgba(120, 95, 65, 0.16); overflow: hidden; }
+.jp-track b { display: block; height: 100%; border-radius: 3px; opacity: 0.85; }
+/* Each percentage keeps one width, so a row's meters line up down the list. */
+.jp-pct { display: inline-block; min-width: 2.3em; text-align: right; }
 .jp-numbers { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex: none; }
 .jp-number { display: flex; align-items: center; gap: 10px; }
 .jp-number-label { font: 600 8.5px/1.3 "Iowan Old Style", Georgia, serif; letter-spacing: .18em; text-transform: uppercase; color: #8a7458; }
-.jp-imp { font: 17px/1 "Bradley Hand", Georgia, cursive; color: #4a3a26; }
 /* A file's lead: its best and worst definitions at a glance, before its list, each a tap from its page. */
 .jp-lead { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; position: relative; }
 .jp-snippet { display: block; width: 100%; text-align: left; background: none; border: 0; padding: 0; font: inherit; color: inherit; position: relative; }
 .jp-snippet-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 3px; }
-.jp-snippet-label { font: 600 8.5px/1.3 "Iowan Old Style", Georgia, serif; letter-spacing: .18em; text-transform: uppercase; color: #8a7458; }
+/* What a marked block is, in a column of its own so the names after it line up, in its stroke's color. */
+.jp-snippet-label { flex: none; width: 40px; font: 600 8.5px/1.3 "Iowan Old Style", Georgia, serif; letter-spacing: .18em; text-transform: uppercase; color: var(--mark, #8a7458); }
 .jp-snippet-name { font: italic 600 15px/1.2 "Iowan Old Style", Georgia, serif; color: #33281d; }
 .jp-snippet-code { display: block; }
 .jp-snippet-code .jp-line { display: grid; }
@@ -158,8 +162,8 @@
 .jp-row.d1 { padding-left: 20px; } .jp-row.d2 { padding-left: 40px; font-size: 13.5px; color: #5c4c3a; } .jp-row.d3 { padding-left: 60px; font-size: 13px; color: #5c4c3a; }
 .jp-row-name { white-space: nowrap; overflow: hidden; text-overflow: clip; max-width: 62%; }
 .jp-dots { flex: 1; border-bottom: 1.4px dotted rgba(122, 95, 69, 0.42); margin: 0 9px 5px; min-width: 12px; }
-.jp-row-vit { display: inline-flex; align-items: center; gap: 6px; margin-right: 14px; font: 14px/1 "Bradley Hand", Georgia, cursive; color: #5a4632; font-style: normal; font-weight: normal; }
-.jp-row-vit i { width: 14px; height: 9px; }
+.jp-row-meter { display: inline-flex; align-items: center; gap: 5px; margin-right: 10px; font: 14px/1 "Bradley Hand", Georgia, cursive; color: #5a4632; font-style: normal; font-weight: normal; }
+.jp-row-meter .jp-track { width: 22px; height: 5px; }
 .jp-row-page { font: 14px/1 "Bradley Hand", Georgia, cursive; color: #7a5f45; min-width: 38px; text-align: right; font-style: normal; font-weight: normal; }
 
 /* Code: round 29's type, its line numbers by hand down a pencil-ruled gutter; a long line wraps under a hanging indent. */
@@ -181,7 +185,12 @@
 .jp-rows, .jp-code { position: relative; }
 .jp-stroke { position: absolute; width: 5px; border-radius: 3px; pointer-events: none; filter: url(#jp-brush); }
 .jp-stroke.row { left: -15px; }
-.jp-stroke.line { left: calc(2.4em + 0.35em); }
+.jp-stroke.line { left: -15px; }
+/* A marked block's first line says what the block is, above its code. */
+.jp-line[data-label]::before {
+  content: attr(data-label); grid-column: 1 / -1; margin: 6px 0 2px calc(2.4em + 1.1em);
+  font: 600 7.5px/1.3 "Iowan Old Style", Georgia, serif; letter-spacing: .16em; text-transform: uppercase; color: var(--mark);
+}
 
 /* A definition's name, and where a long one's page ends, its fold: both turn to it in full, in the appendix. The fold is
    an elision across the code, a dotted rule with how many lines it holds written by hand. */
