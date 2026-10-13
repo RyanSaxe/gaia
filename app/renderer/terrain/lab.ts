@@ -2441,8 +2441,8 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
    * milliseconds, the land's least lead, and every tile that stood within
    * sight of the person.
    */
-  async function travelTest(x0: number, z0: number, x1: number, z1: number, pace: number, every = 3, cap = 400) {
-    walkTo(x0, z0, 0);
+  async function travelTest(x0: number, z0: number, x1: number, z1: number, pace: number, every = 3, cap = 400, pitch = -0.05) {
+    walkTo(x0, z0, 0, pitch);
     await Promise.all([land.around(x0, z0), standing.ready(x0, z0)]);
     const at = landingNear(x1, z1);
     travelPace = pace;
@@ -2499,6 +2499,8 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     } finally {
       driving = false;
       frozen = was;
+      // A trip the test stopped early ends where it was.
+      if (trip === t) trip = null;
     }
     return {
       pace,
