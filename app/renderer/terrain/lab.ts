@@ -2214,10 +2214,16 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     if (holding > 0) return settled().then(() => viewOf(id, w, h, wide));
     const s = subjectOf(id);
     if (s === undefined) return Promise.resolve(null);
-    // A place beyond the land the person stands in is painted on its own: the land holds around it while it is
-    // painted, one painting at a time, and then follows the person again.
+    // A place beyond the land the person stands in is painted on land made ready around it to one side, one
+    // painting at a time, while the person's land goes on following them: swapped in only for the painting's own
+    // drawing, so nothing the person sees ever changes for it.
     if (Math.hypot(s.x - walker.x, s.z - walker.z) > PAINTING.near) {
-      const done = painting.then(() => land.hold(s.x, s.z)).then((release) => paintView(s, w, h, wide).finally(release));
+      const done = painting
+        .then(() => land.aside(s.x, s.z))
+        .then((aside) => {
+          if (aside === null) return null;
+          return aside.paint(() => paintView(s, w, h, wide));
+        });
       painting = done.then(() => undefined, () => undefined);
       return done;
     }

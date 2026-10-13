@@ -30,6 +30,12 @@ export const CLIP = {
   levels: 7,
   /** How far, in its own samples, the person may move from a level's middle before it moves around them: one chunk. */
   recenter: CHUNK,
+  /**
+   * Layers past the levels where a painting of a far place has its own finest
+   * levels made ready (`PageLand.aside`): 512 m at 1 m and 1 km at 2 m. The
+   * person's levels are never drawn from them.
+   */
+  aside: 2,
 } as const;
 
 /** A world's land as the page takes it on: the source the workers bake from, and what only the whole world could measure. */
@@ -63,15 +69,22 @@ export interface PageLand {
   /** Moves every level around (x, z), as after a jump: resolves once all of them hold it. */
   around(x: number, z: number): Promise<void>;
   /**
-   * Holds every level around (x, z), as a painting of a place far from the
-   * person needs: resolves once they hold it, with a call that lets them
-   * follow the person again. Until then `follow` moves nothing.
+   * The land a painting of a place far from the person needs, made ready to
+   * one side while the levels go on following the person: each of the finest
+   * levels whose window around (x, z) is not the person's own is baked into a
+   * layer of its own (`CLIP.aside`).
+   * Resolves with `paint`, which runs `draw` with those levels drawn from
+   * their layers and points them back at the person's own before it returns,
+   * so no frame drawn for the person ever shows them; null if another world
+   * opened first.
    */
-  hold(x: number, z: number): Promise<() => void>;
+  aside(x: number, z: number): Promise<{ paint<T>(draw: () => T): T } | null>;
   /** Tile (ti, tj)'s understory, stood on the workers from the open world's plan; null if another world has opened since. */
   things(ti: number, tj: number): Promise<readonly Placement[] | null>;
-  /** Called with a level's index each time its window moves. */
-  onMoved: ((k: number) => void) | null;
+  /** Which layer each level is drawn from: its own, or a painting's set aside while that painting is drawn. */
+  readonly layers: readonly number[];
+  /** Called with a level's index each time its window or layer changes, and whether that layer's data is new to the GPU. */
+  onMoved: ((k: number, fresh: boolean) => void) | null;
 }
 
 const LAYER = CLIP.size * CLIP.size;
@@ -98,6 +111,15 @@ function windowAt(spacing: number, k: number, x: number, z: number): { x: number
   const unit = spacing * 2 ** k;
   const snap = (v: number): number => Math.round(v / unit / CLIP.recenter) * CLIP.recenter - CLIP.size / 2;
   return { x: snap(x), z: snap(z) };
+}
+
+/** Copies every array of one level into another's. */
+function copyLevel(from: Level, to: Level): void {
+  to.ground.set(from.ground);
+  to.region.set(from.region);
+  to.coverRegions.set(from.coverRegions);
+  to.coverShares.set(from.coverShares);
+  to.trailPlaces.set(from.trailPlaces);
 }
 
 /** Writes `chunk` into a level's arrays whose window starts at (ox, oz). */
@@ -239,19 +261,23 @@ export function createPageLand(threads = Math.max(1, Math.min(2, (navigator.hard
   const { size, levels } = CLIP;
   const workers = createLandWorkers(threads);
   const all = {
-    ground: new Float32Array(LAYER * 4 * levels),
-    region: new Uint8Array(LAYER * levels),
-    coverRegions: new Uint8Array(LAYER * 4 * levels),
-    coverShares: new Uint8Array(LAYER * 4 * levels),
-    trailPlaces: new Float32Array(LAYER * 2 * levels),
+    ground: new Float32Array(LAYER * 4 * (levels + CLIP.aside)),
+    region: new Uint8Array(LAYER * (levels + CLIP.aside)),
+    coverRegions: new Uint8Array(LAYER * 4 * (levels + CLIP.aside)),
+    coverShares: new Uint8Array(LAYER * 4 * (levels + CLIP.aside)),
+    trailPlaces: new Float32Array(LAYER * 2 * (levels + CLIP.aside)),
   };
-  const store: Level[] = Array.from({ length: levels }, (_, k) => ({
+  /** Each layer's samples: the levels' own, then the layers set aside for paintings. */
+  const layered: Level[] = Array.from({ length: levels + CLIP.aside }, (_, k) => ({
     ground: all.ground.subarray(k * LAYER * 4, (k + 1) * LAYER * 4),
     region: all.region.subarray(k * LAYER, (k + 1) * LAYER),
     coverRegions: all.coverRegions.subarray(k * LAYER * 4, (k + 1) * LAYER * 4),
     coverShares: all.coverShares.subarray(k * LAYER * 4, (k + 1) * LAYER * 4),
     trailPlaces: all.trailPlaces.subarray(k * LAYER * 2, (k + 1) * LAYER * 2),
   }));
+  /** Each level's samples as the land is read: its own layer, but for the moment a painting is drawn. */
+  const store: Level[] = layered.slice(0, levels);
+  const layers = Array.from({ length: levels }, (_, k) => k);
   /** Where each level's window starts; NaN until a world's land lies there. */
   const origins = Array.from({ length: levels }, () => ({ x: Number.NaN, z: Number.NaN }));
   /** Each level's move under way, if any: one at a time, and the next follows once it is in. */
@@ -261,11 +287,9 @@ export function createPageLand(threads = Math.max(1, Math.min(2, (navigator.hard
   let source: LandSource | null = null;
   /** Meters between the world lattice's samples. */
   let spacing = 1;
-  let onMoved: ((k: number) => void) | null = null;
+  let onMoved: ((k: number, fresh: boolean) => void) | null = null;
   /** When the kept finishing thread is let go. */
   let letGo: ReturnType<typeof setTimeout> | undefined;
-  /** How many holds are on the levels; while any is, they stay where it put them. */
-  let held = 0;
 
   const level0 = store[0] as Level;
   const heights = new Float32Array(LAYER);
@@ -328,7 +352,7 @@ export function createPageLand(threads = Math.max(1, Math.min(2, (navigator.hard
     lattice.spacing = world.spacing;
     lattice.origin = worldOf(world, latticeIndex(world, 0, o.x));
     lattice.originZ = worldOfZ(world, latticeIndex(world, 0, o.z));
-    const g = level0.ground;
+    const g = (store[0] as Level).ground;
     for (let i = 0; i < LAYER; i++) {
       heights[i] = g[i * 4] as number;
       waterLevel[i] = g[i * 4 + 1] as number;
@@ -336,17 +360,13 @@ export function createPageLand(threads = Math.max(1, Math.min(2, (navigator.hard
     }
   };
 
-  /** Moves level `k` to window (ox, oz): carries over the chunks both windows hold, bakes the rest, and takes over once all are in. */
-  async function move(k: number, ox: number, oz: number): Promise<void> {
-    const mine = generation;
-    const src = source;
-    if (src === null) return;
+  /**
+   * Fills `into` with level `k`'s window at (ox, oz): the chunks the level's window now holds are carried over,
+   * the rest baked. Resolves once all are in.
+   */
+  function fill(k: number, ox: number, oz: number, into: Level, mine: number, src: LandSource): Promise<void> {
     const from = store[k] as Level;
     const was = origins[k] as { x: number; z: number };
-    // A level holding nothing yet, as when a world opens, takes its chunks as they come: nothing draws it until
-    // they all have. A level that is drawn takes its new window aside, and all at once.
-    const fresh = Number.isNaN(was.x);
-    const into = fresh ? from : levelOf();
     const per = size / CHUNK;
     // Nearest the person first: the window's middle chunks.
     const order: [number, number][] = [];
@@ -362,20 +382,28 @@ export function createPageLand(threads = Math.max(1, Math.min(2, (navigator.hard
       else if (chunkPastLand(src.plan, k, cx, cz)) place(emptyChunk(src.plan, k, cx, cz), ox, oz, into);
       else asks.push(workers.chunk(mine, k, cx, cz).then((c) => (c !== null && mine === generation ? place(c, ox, oz, into) : undefined)));
     }
-    await Promise.all(asks);
+    return Promise.all(asks).then(() => undefined);
+  }
+
+  /** Moves level `k` to window (ox, oz): carries over the chunks both windows hold, bakes the rest, and takes over once all are in. */
+  async function move(k: number, ox: number, oz: number): Promise<void> {
+    const mine = generation;
+    const src = source;
+    if (src === null) return;
+    const from = store[k] as Level;
+    const was = origins[k] as { x: number; z: number };
+    // A level holding nothing yet, as when a world opens, takes its chunks as they come: nothing draws it until
+    // they all have. A level that is drawn takes its new window aside, and all at once.
+    const fresh = Number.isNaN(was.x);
+    const into = fresh ? from : levelOf();
+    await fill(k, ox, oz, into, mine, src);
     if (mine !== generation) return;
     // The new window takes over whole, in one frame.
-    if (!fresh) {
-      from.ground.set(into.ground);
-      from.region.set(into.region);
-      from.coverRegions.set(into.coverRegions);
-      from.coverShares.set(into.coverShares);
-      from.trailPlaces.set(into.trailPlaces);
-    }
+    if (!fresh) copyLevel(into, from);
     was.x = ox;
     was.z = oz;
     if (k === 0) showLevel0();
-    onMoved?.(k);
+    onMoved?.(k, true);
   }
 
   /** Moves level `k` around (x, z) unless it is already there; after any move under way. Resolves once it holds (x, z). */
@@ -396,6 +424,7 @@ export function createPageLand(threads = Math.max(1, Math.min(2, (navigator.hard
     terrain: view,
     ...all,
     origins,
+    layers,
     get onMoved() {
       return onMoved;
     },
@@ -430,21 +459,61 @@ export function createPageLand(threads = Math.max(1, Math.min(2, (navigator.hard
       await Promise.all(Array.from({ length: levels }, (_, k) => moveAround(k, x, z)));
     },
     follow(x, z) {
-      if (source === null || held > 0) return;
+      if (source === null) return;
       for (let k = 0; k < levels; k++) if (moving[k] === null) void moveAround(k, x, z);
     },
     async around(x, z) {
       if (source === null) return;
       await Promise.all(Array.from({ length: levels }, (_, k) => moveAround(k, x, z)));
     },
-    async hold(x, z) {
-      held++;
-      if (source !== null) await Promise.all(Array.from({ length: levels }, (_, k) => moveAround(k, x, z)));
-      let released = false;
-      return () => {
-        if (released) return;
-        released = true;
-        held--;
+    async aside(x, z) {
+      const mine = generation;
+      const src = source;
+      if (src === null) return null;
+      // Only the finest levels are set aside, into layers of their own: past them a painting's distance is drawn
+      // from the person's own coarser levels, which hold it as well as the land they see.
+      const apart: { k: number; ox: number; oz: number }[] = [];
+      const fills: Promise<void>[] = [];
+      for (let k = 0; k < CLIP.aside; k++) {
+        const at = windowAt(spacing, k, x, z);
+        const o = origins[k] as { x: number; z: number };
+        if (o.x === at.x && o.z === at.z) continue;
+        apart.push({ k, ox: at.x, oz: at.z });
+        fills.push(fill(k, at.x, at.z, layered[levels + k] as Level, mine, src));
+      }
+      await Promise.all(fills);
+      if (mine !== generation) return null;
+      let fresh = true;
+      return {
+        paint(draw) {
+          // Drawing from the set-aside layers and back takes one task, so no frame drawn for the person falls
+          // between; their own layers are never touched, so nothing of theirs goes to the GPU again.
+          const kept = apart.map(({ k, ox, oz }) => {
+            const o = origins[k] as { x: number; z: number };
+            const was = { x: o.x, z: o.z };
+            o.x = ox;
+            o.z = oz;
+            store[k] = layered[levels + k] as Level;
+            layers[k] = levels + k;
+            if (k === 0) showLevel0();
+            onMoved?.(k, fresh);
+            return { k, was };
+          });
+          fresh = false;
+          try {
+            return draw();
+          } finally {
+            for (const { k, was } of kept) {
+              const o = origins[k] as { x: number; z: number };
+              o.x = was.x;
+              o.z = was.z;
+              store[k] = layered[k] as Level;
+              layers[k] = k;
+              if (k === 0) showLevel0();
+              onMoved?.(k, false);
+            }
+          }
+        },
       };
     },
     async things(ti, tj) {
