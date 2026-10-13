@@ -209,6 +209,8 @@ export const waterwheel = primitive({
   role: "Feature",
   doc: "A mill's wooden waterwheel turning slowly beside the house in a stone-lined pit, for an entity that turns what it is given into something new. It slows to a stop as the code fails.",
   params: waterwheelParams,
+  // A wheel turns only where water runs past.
+  needs: ["running water"],
   build: (p, ctx, plan) => buildWaterwheel(p, ctx, plan),
 });
 

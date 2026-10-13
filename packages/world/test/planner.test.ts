@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { Library, kind, slot } from "@gaia/schema";
-import { FLORA_PRIMITIVES, PALETTE_FAMILIES } from "@gaia/primitives";
-import { flora } from "@gaia/kinds";
+import { FLORA_PRIMITIVES, PALETTE_FAMILIES, STRUCTURE_PRIMITIVES } from "@gaia/primitives";
+import { flora, structure } from "@gaia/kinds";
 import { assemble, planDetails, planStructure, readStructure, validate } from "@gaia/world";
 import { SCANNER, fakeJev } from "./fixtures.ts";
 
@@ -87,6 +87,37 @@ describe("slot dependencies", () => {
     const { crown: _crown, ...rest } = bp.slots;
     const broken = { ...bp, slots: { ...rest, bloom: { use: "blossoms@1" as const, params: { form: "petals", count: "plenty" } } } };
     expect(validate(broken, flora, lib)).toContain("bloom is on crown, which is absent.");
+  });
+});
+
+describe("what a part needs of its place", () => {
+  const buildings = new Library([...STRUCTURE_PRIMITIVES, ...FLORA_PRIMITIVES]);
+  const features = STRUCTURE_PRIMITIVES.filter((p) => p.role === "Feature");
+  const needing = features.find((p) => (p.needs?.length ?? 0) > 0);
+  const offered = (has?: readonly string[]): string[] => [...(planStructure(structure, buildings, { ...subject, ...(has === undefined ? {} : { has }) }).offered?.feature ?? [])].sort();
+
+  it("offers a part only where its place has all it needs, and the rest everywhere", () => {
+    expect(needing).toBeDefined();
+    const needs = needing?.needs ?? [];
+    expect(offered()).toEqual(features.filter((p) => p !== needing).map((p) => p.id).sort());
+    expect(offered(needs)).toEqual(features.map((p) => p.id).sort());
+  });
+
+  it("keeps Jev's pick among what was offered, and never stands a part the place was not offered, whatever Jev answered", () => {
+    const id = needing?.id ?? "";
+    const there = planStructure(structure, buildings, { ...subject, has: needing?.needs ?? [] });
+    expect(readStructure(structure, buildings, there, fakeJev(there.request, { "feature.present": true, "feature.use": id })).feature).toBe(id);
+    const elsewhere = planStructure(structure, buildings, subject);
+    const answers = { ...fakeJev(elsewhere.request, { "feature.present": true }), "feature.use": { type: "choice" as const, choice: id, probabilities: { [id]: 1 }, confidence: 1 } };
+    // A stray answer is refused, or ignored where only one part was offered.
+    const stood = (): string | undefined => {
+      try {
+        return readStructure(structure, buildings, elsewhere, answers).feature;
+      } catch {
+        return undefined;
+      }
+    };
+    expect(stood()).not.toBe(id);
   });
 });
 
