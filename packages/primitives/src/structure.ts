@@ -226,7 +226,7 @@ export const towerParams = {
 export const tower = primitive({
   id: "tower@1",
   role: "Feature",
-  doc: "A tall square tower rising from the back corner of the house, its narrow windows lamplit at night, for code that feels proud and aloof, keeping itself apart and looking down on the rest. It crumbles from the top as the code fails.",
+  doc: "A tall square tower rising from the back corner of the house, its narrow windows lamplit at night, for code that feels dreamy and far-off, with its head in the clouds. It crumbles from the top as the code fails.",
   params: towerParams,
   build: (p, ctx, plan) => buildTower(p, ctx, plan),
 });

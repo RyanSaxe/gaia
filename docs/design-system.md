@@ -482,7 +482,7 @@ side:
 | Feature | Its feel | As it fails |
 | --- | --- | --- |
 | Waterwheel | Quaint and old-fashioned, doing things the way they were always done | It slows, and stands still below 0.1 |
-| Tower | Proud and aloof, keeping itself apart and looking down on the rest | It crumbles from the top |
+| Tower | Dreamy and far-off, with its head in the clouds | It crumbles from the top |
 | Dovecote: a round stone cote under a cone and lantern, or a painted cote on a post, its doves circling | Sociable and chatty, forever off to the others and back | The doves fly home and stay in, the door swings open, the cote on a post lurches |
 | Well: a stone ring under a little roof on posts, or beside a sweep with a stone weight | Mysterious, hard to see into, with depths few have explored | The water sinks away, the bucket falls in, coping stones fall in, moss on the coping |
 | Bell: a dark iron bell in a stone arch or a frame of raked timbers, rung by a rope | Brash and urgent, quick to sound off | It hangs askew from 0.4, and is gone by 0.14 |
