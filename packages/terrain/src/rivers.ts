@@ -21,6 +21,7 @@ import type { HeightField, Landform, PondBed, StreamBed, ValleyCourse, ValleyNet
 import { bedBend, fbm, troughOffset } from "@gaia/primitives";
 import { RELIEF_BUDGET } from "./budget.ts";
 import { withinLand } from "./edge.ts";
+import { BANK } from "./water.ts";
 import type { WorldSpec } from "./world.ts";
 
 export const RIVERS = {
@@ -48,6 +49,11 @@ export const RIVERS = {
   shortest: 12,
   /** How far out from a pond's middle its rim lies, in the pond's radii, where a river's valley ends. */
   pondRim: 1.4,
+  /** How many points either side of a point a line's bend there is measured over, and the tightest a stream's bed bends there, in its own widths. */
+  bendReach: 3,
+  bedTightest: 2,
+  /** How many cells a river's first heading from its spring is taken over, which its headwater runs straight back along. */
+  heading: 18,
   /** A spring rises at least this far inside the land's edge, meters, clear of its rim. */
   springFromEdge: 90,
   /** The routing ground's faint roll: meters, over this many meters. */
@@ -171,23 +177,75 @@ function resample(points: readonly number[]): number[] {
  */
 function wound(line: readonly number[], trough: Trough, tail: number, shiftX: number, shiftZ: number): number[] {
   const count = line.length / 2;
+  const ease = Array.from({ length: count }, (_, k) => {
+    const t = tail === 0 ? 1 : Math.min(1, (count - 1 - k) / tail);
+    return t * t * (3 - 2 * t);
+  });
+  // It rises where the land sends it, and winds only once it is under way.
+  const offs = held(
+    line,
+    Array.from({ length: count }, (_, k) => {
+      const r = Math.min(1, k / (RIVERS.meet / RIVERS.step));
+      return troughOffset(trough, k * RIVERS.step) * (ease[k] as number) * r * r * (3 - 2 * r);
+    }),
+    () => trough.halfWidth,
+  );
   const out = new Array<number>(line.length);
   for (let k = 0; k < count; k++) {
-    const a = Math.max(0, k - 1);
-    const b = Math.min(count - 1, k + 1);
-    const tx = (line[b * 2] as number) - (line[a * 2] as number);
-    const tz = (line[b * 2 + 1] as number) - (line[a * 2 + 1] as number);
-    const len = Math.hypot(tx, tz) || 1;
-    const left = count - 1 - k;
-    const t = tail === 0 ? 1 : Math.min(1, left / tail);
-    const ease = t * t * (3 - 2 * t);
-    // It rises where the land sends it, and winds only once it is under way.
-    const r = Math.min(1, k / (RIVERS.meet / RIVERS.step));
-    const off = troughOffset(trough, k * RIVERS.step) * ease * r * r * (3 - 2 * r);
-    out[k * 2] = (line[k * 2] as number) - (tz / len) * off + shiftX * (1 - ease);
-    out[k * 2 + 1] = (line[k * 2 + 1] as number) + (tx / len) * off + shiftZ * (1 - ease);
+    const [nx, nz] = leftOf(line, k);
+    out[k * 2] = (line[k * 2] as number) + nx * (offs[k] as number) + shiftX * (1 - (ease[k] as number));
+    out[k * 2 + 1] = (line[k * 2 + 1] as number) + nz * (offs[k] as number) + shiftZ * (1 - (ease[k] as number));
   }
   return out;
+}
+
+/** The curvature of a line at point `k`, from the turn between its chords `RIVERS.bendReach` points either side, positive turning left. */
+function curvatureAt(line: readonly number[], k: number): number {
+  const count = line.length / 2;
+  const a = Math.max(0, k - RIVERS.bendReach);
+  const b = Math.min(count - 1, k + RIVERS.bendReach);
+  if (a === k || b === k) return 0;
+  const ax = (line[k * 2] as number) - (line[a * 2] as number);
+  const az = (line[k * 2 + 1] as number) - (line[a * 2 + 1] as number);
+  const bx = (line[b * 2] as number) - (line[k * 2] as number);
+  const bz = (line[b * 2 + 1] as number) - (line[k * 2 + 1] as number);
+  return Math.atan2(ax * bz - az * bx, ax * bx + az * bz) / ((Math.hypot(ax, az) + Math.hypot(bx, bz)) / 2 || 1);
+}
+
+/**
+ * Sideways offsets along a line, to its left where positive, each held where it swings to the inside of a bend so
+ * the offset line there bends no tighter than `tightest(k)` meters and never folds back on itself; the holding
+ * eases into the offsets either side of it.
+ */
+function held(line: readonly number[], offs: readonly number[], tightest: (k: number) => number): number[] {
+  const cut = offs.map((off, k) => {
+    const curvature = curvatureAt(line, k);
+    if (off * curvature <= 0) return 0;
+    return Math.sign(off) * Math.min(Math.abs(off), Math.max(0, 1 / Math.abs(curvature) - tightest(k))) - off;
+  });
+  let eased = cut;
+  for (let pass = 0; pass < RIVERS.passes; pass++) {
+    const q = eased.slice();
+    for (let k = 1; k < eased.length - 1; k++) {
+      const r = Math.min(RIVERS.reach, k, eased.length - 1 - k);
+      let sum = 0;
+      for (let j = k - r; j <= k + r; j++) sum += eased[j] as number;
+      q[k] = sum / (2 * r + 1);
+    }
+    eased = q;
+  }
+  return offs.map((off, k) => off + (eased[k] as number));
+}
+
+/** The unit normal to the left of a line, x and z pairs, at point `k`. */
+function leftOf(line: ArrayLike<number>, k: number): readonly [number, number] {
+  const count = line.length / 2;
+  const a = Math.max(0, k - 1);
+  const b = Math.min(count - 1, k + 1);
+  const tx = (line[b * 2] as number) - (line[a * 2] as number);
+  const tz = (line[b * 2 + 1] as number) - (line[a * 2 + 1] as number);
+  const len = Math.hypot(tx, tz) || 1;
+  return [-tz / len, tx / len];
 }
 
 /** A course smoothed so the routing grid's eight directions never show, its two ends where they were. */
@@ -355,6 +413,22 @@ export function routeRivers(
       k = next;
     }
     if (cells.length < 3) return;
+    // Its headwater: where the land parts around its spring, its water comes from across the rest of its region,
+    // straight back the way it sets off, so its valley spans its region as the area's river should; never alongside
+    // its own course further down.
+    const reach = Math.max(1, Math.round((v.trough.halfWidth * RIVERS.alongside) / RIVERS.cell));
+    const first = cells[Math.min(cells.length - 1, RIVERS.heading)] as number;
+    const back = Math.hypot((spring % n) - (first % n), Math.floor(spring / n) - Math.floor(first / n));
+    const head: number[] = [];
+    for (let t = 1; back > 0; t++) {
+      const i = Math.round((spring % n) + (((spring % n) - (first % n)) / back) * t);
+      const j = Math.round(Math.floor(spring / n) + ((Math.floor(spring / n) - Math.floor(first / n)) / back) * t);
+      const k = j * n + i;
+      if (i < 0 || j < 0 || i >= n || j >= n || inside[k] !== 1 || region[k] !== ri || (owner[k] as number) >= 0 || !withinLand(spec, at(i), at(j), RIVERS.springFromEdge)) break;
+      if (cells.some((c, ci) => ci > RIVERS.heading && Math.max(Math.abs((c % n) - i), Math.abs(Math.floor(c / n) - j)) <= reach)) break;
+      head.push(k);
+    }
+    cells.unshift(...head.reverse());
     const index = rivers.length;
     // A river claims the ground its valley spans either side of it too, so one that comes alongside it joins it
     // rather than running beside it in a valley of its own.
@@ -472,19 +546,29 @@ export function routeRivers(
     const meetZ = rv.into === null ? 0 : (bends[rv.into.river]?.[joinIndex(rv.into.river, rv.into.at) * 2 + 1] ?? 0);
     const path = new Float32Array(count * 2);
     const bend = new Float32Array(count * 2);
-    let along = 0;
-    for (let k = 0; k < count; k++) {
-      const a = Math.max(0, k - 1);
-      const b = Math.min(count - 1, k + 1);
-      const tx = (course[b * 2] as number) - (course[a * 2] as number);
-      const tz = (course[b * 2 + 1] as number) - (course[a * 2 + 1] as number);
-      const len = Math.hypot(tx, tz) || 1;
-      if (k > 0) along = (along * (widths[k] as number)) / (widths[k - 1] as number) + RIVERS.step;
+    const tails = Array.from({ length: count }, (_, k) => {
       const t = rv.into === null ? 1 : Math.min(1, (count - 1 - k) / (RIVERS.meet / RIVERS.step));
-      const fade = t * t * (3 - 2 * t);
-      const off = bedBend(v.trough, along, widths[k] as number) * fade;
-      bend[k * 2] = -(tz / len) * off + meetX * (1 - fade);
-      bend[k * 2 + 1] = (tx / len) * off + meetZ * (1 - fade);
+      return t * t * (3 - 2 * t);
+    });
+    // Its loops ease in from its spring, as its valley's winding does.
+    const fades = tails.map((t, k) => {
+      const r = Math.min(1, k / (RIVERS.meet / RIVERS.step));
+      return t * r * r * (3 - 2 * r);
+    });
+    let along = 0;
+    const offs = held(
+      course,
+      Array.from({ length: count }, (_, k) => {
+        if (k > 0) along = (along * (widths[k] as number)) / (widths[k - 1] as number) + RIVERS.step;
+        return bedBend(v.trough, along, widths[k] as number) * (fades[k] as number);
+      }),
+      (k) => RIVERS.bedTightest * (widths[k] as number),
+    );
+    for (let k = 0; k < count; k++) {
+      const [nx, nz] = leftOf(course, k);
+      const tail = tails[k] as number;
+      bend[k * 2] = nx * (offs[k] as number) + meetX * (1 - tail);
+      bend[k * 2 + 1] = nz * (offs[k] as number) + meetZ * (1 - tail);
       path[k * 2] = (course[k * 2] as number) + (bend[k * 2] as number) - r.x;
       path[k * 2 + 1] = (course[k * 2 + 1] as number) + (bend[k * 2 + 1] as number) - r.z;
     }
@@ -519,15 +603,23 @@ export function routeRivers(
     beds.set(rv.source, list);
   });
   const net = valleyNet(spec, valleyCourses);
-  // Where a river falls steeply its valley lies lower than its own floor, cut by the valley below it: the stream's
-  // floor is the ground the valleys leave beneath it, never above it, and only ever descending.
+  // Where a river falls steeply, or its headwater crosses a slope, the ground beside it lies lower than its own floor:
+  // the stream's floor is the lowest ground the valleys leave beneath it and at its water's edges, so it never stands
+  // above its banks, and only ever descends.
+  const cutGround = (x: number, z: number): number => Math.min(height(x, z), valleySurface(net, x, z));
   for (const [ri, list] of beds) {
     const r = spec.regions[ri] as WorldSpec["regions"][number];
     for (const bed of list) {
       const floors = bed.floors as Float32Array;
+      const p = bed.path;
+      const count = p.length / 2;
       let lowestYet = Infinity;
-      for (let k = 0; k < floors.length; k++) {
-        lowestYet = Math.min(lowestYet, floors[k] as number, valleySurface(net, r.x + (bed.path[k * 2] as number), r.z + (bed.path[k * 2 + 1] as number)));
+      for (let k = 0; k < count; k++) {
+        const x = r.x + (p[k * 2] as number);
+        const z = r.z + (p[k * 2 + 1] as number);
+        const [nx, nz] = leftOf(p, k);
+        const out = ((bed.widths?.[k] ?? bed.width) as number) / 2 + BANK * 0.5;
+        lowestYet = Math.min(lowestYet, floors[k] as number, cutGround(x, z), cutGround(x + nx * out, z + nz * out), cutGround(x - nx * out, z - nz * out));
         floors[k] = lowestYet;
       }
     }
