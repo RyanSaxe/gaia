@@ -324,9 +324,11 @@ round 23's travel thread). The trip walks around whatever stands between
 them and the nearest tread, follows the shortest way along the ways to the
 tread nearest the place, and leaves it for the place. Where that way is more
 than 1.5 times the straight distance, or no trail goes there, it goes
-straight across the land instead (round 24's pick): around water deeper than
-0.4 m, wading a brook, and around whatever stands (`acrossWay` in
-`@gaia/terrain`). It hurries at 20 m a second on the tread and straight
+straight across the land instead (round 24's pick), keeping out of the water
+as it keeps clear of whatever stands: it crosses a stream on a trail's
+footbridge or stepping stones, or else where the stream is narrowest and
+shallow enough to wade, and goes around deeper water (`acrossWay` in
+`@gaia/terrain`). Wherever any trip wades it goes at walking pace. It hurries at 20 m a second on the tread and straight
 across, and 8 joining and leaving the tread, gets going and slows at a steady 6 m a
 second squared, and takes each bend slowly enough that the way 12 m ahead
 turns at most 80% of a held key's 60° a second, so the view turns only as
