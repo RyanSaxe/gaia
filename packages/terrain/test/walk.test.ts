@@ -351,13 +351,30 @@ describe("a walker's stride", () => {
     return frames;
   };
   const speedOf = (b: Stride): number => Math.hypot(b.vx, b.vz);
+  /**
+   * Dry ground near `dry` whose grade westward holds steady over the first 2 m, so the pace the grade allows stays
+   * put while a walker heading west gets going: overshoot is then judged on the gait alone, whatever the land.
+   */
+  const evenGround = (): Walker => {
+    for (let r = 0; r <= 200; r += 4) {
+      for (let a = 0; a < 16; a++) {
+        const x = dry.x + r * Math.cos((a * Math.PI) / 8);
+        const z = dry.z + r * Math.sin((a * Math.PI) / 8);
+        if (waterDepthAt(t, x, z) > 0 || waterDepthAt(t, x - 2, z) > 0) continue;
+        const h = [0, 1, 2, 3, 4].map((d) => groundHeightAt(t, x - d * 0.5, z));
+        const grades = h.slice(1).map((y, i) => (h[i]! - y) / 0.5);
+        if (Math.max(...grades) - Math.min(...grades) < 1e-3) return { x, z };
+      }
+    }
+    throw new Error("No dry ground with a steady grade near the sample world's dry land.");
+  };
 
   it("gets going and stops at once, never overshooting or turning, and its eyes ride the ground without bob or jitter", () => {
-    const frames = walkThen([], dry, -1, 0, 6, 3);
+    const frames = walkThen([], evenGround(), -1, 0, 6, 3);
     const striding = frames.slice(120, 360);
     const pace = striding.reduce((m, f) => Math.max(m, speedOf(f.body)), 0);
     // Under way within a fraction of a second, as the keys walk in games, and never overshooting: while it gets going
-    // its speed only rises (the grade underfoot changes it far more slowly than a frame).
+    // on a steady grade, its speed only rises.
     expect(speedOf(frames[Math.round(0.15 * 60)]!.body)).toBeGreaterThan(pace * 0.9);
     const going = frames.slice(0, Math.round(0.3 * 60));
     for (let i = 1; i < going.length; i++) expect(speedOf(going[i]!.body)).toBeGreaterThanOrEqual(speedOf(going[i - 1]!.body) - 1e-3);
