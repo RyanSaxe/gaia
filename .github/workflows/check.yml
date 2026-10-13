@@ -1,5 +1,5 @@
 # The same checks as the pre-commit hook (.githooks/pre-commit), on every pull
-# request and every push to main: the type checker, the lint rules and the
+# request and every push to main or develop: the type checker, the lint rules and the
 # tests, then the engine's tests and clippy. A branch's push isn't checked apart
 # from its pull request, so each change takes one macOS runner, not two.
 # macOS, because Gaia is a Mac app and its engine keeps the Jev key in the
@@ -8,7 +8,7 @@ name: check
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
 
 permissions:
