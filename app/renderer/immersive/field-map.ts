@@ -654,34 +654,49 @@ export function strokeContours(ctx: CanvasRenderingContext2D, contours: Paper["c
 }
 
 /**
- * Rivers: a bank, the water and a glint, along each stream's stations, its width the stream's own once the map is
- * close enough and never thinner than a line. `sx` and `sy` take meters to the view's pixels, `zoom` of them a meter.
+ * A river's course through each of its stations, as SVG path data: a curve from its source to its mouth. `to` takes
+ * meters to the drawing's own units. The field map, its picture and the wait's pen all draw this one course.
  */
+export function riverCourse(stations: Terrain["streams"][number]["stations"], to: (x: number, z: number) => readonly [number, number]): string {
+  const first = stations[0];
+  const last = stations[stations.length - 1];
+  if (first === undefined || last === undefined) return "";
+  const f = (v: number): string => v.toFixed(2);
+  const at = (x: number, z: number): string => to(x, z).map(f).join(" ");
+  let d = `M${at(first.x, first.z)}`;
+  for (let k = 1; k < stations.length - 1; k++) {
+    const a = stations[k] as (typeof stations)[number];
+    const b = stations[k + 1] as (typeof stations)[number];
+    d += `Q${at(a.x, a.z)} ${at((a.x + b.x) / 2, (a.z + b.z) / 2)}`;
+  }
+  return `${d}L${at(last.x, last.z)}`;
+}
+
+/**
+ * A river's three strokes, a bank, the water and a glint, in pixels: its width the stream's own once the map is close
+ * enough, `zoom` pixels a meter, and never thinner than a line.
+ */
+export function riverStrokes(stations: Terrain["streams"][number]["stations"], zoom: number): readonly { readonly color: string; readonly width: number }[] {
+  const width = 2 * Math.max(...stations.map((q) => q.halfWidth)) * zoom;
+  return [
+    { color: "rgba(40,84,104,0.5)", width: Math.max(3.4, width + 2.6) },
+    { color: "rgb(150,203,204)", width: Math.max(1.9, width) },
+    { color: "rgba(250,244,222,0.45)", width: Math.max(0.5, width * 0.16) },
+  ];
+}
+
+/** Rivers along their courses (`riverCourse`, `riverStrokes`). `sx` and `sy` take meters to the view's pixels, `zoom` of them a meter. */
 export function drawRivers(ctx: CanvasRenderingContext2D, streams: Terrain["streams"], sx: (x: number) => number, sy: (z: number) => number, zoom: number): void {
   ctx.lineCap = ctx.lineJoin = "round";
   for (const stream of streams) {
-    const st = stream.stations;
-    const first = st[0];
-    const last = st[st.length - 1];
-    if (first === undefined || last === undefined) continue;
-    const line = new Path2D();
-    line.moveTo(sx(first.x), sy(first.z));
-    for (let k = 1; k < st.length - 1; k++) {
-      const a = st[k] as (typeof st)[number];
-      const b = st[k + 1] as (typeof st)[number];
-      line.quadraticCurveTo(sx(a.x), sy(a.z), sx((a.x + b.x) / 2), sy((a.z + b.z) / 2));
+    const d = riverCourse(stream.stations, (x, z) => [sx(x), sy(z)]);
+    if (d === "") continue;
+    const line = new Path2D(d);
+    for (const stroke of riverStrokes(stream.stations, zoom)) {
+      ctx.strokeStyle = stroke.color;
+      ctx.lineWidth = stroke.width;
+      ctx.stroke(line);
     }
-    line.lineTo(sx(last.x), sy(last.z));
-    const width = 2 * Math.max(...st.map((q) => q.halfWidth)) * zoom;
-    ctx.strokeStyle = "rgba(40,84,104,0.5)";
-    ctx.lineWidth = Math.max(3.4, width + 2.6);
-    ctx.stroke(line);
-    ctx.strokeStyle = "rgb(150,203,204)";
-    ctx.lineWidth = Math.max(1.9, width);
-    ctx.stroke(line);
-    ctx.strokeStyle = "rgba(250,244,222,0.45)";
-    ctx.lineWidth = Math.max(0.5, width * 0.16);
-    ctx.stroke(line);
   }
 }
 

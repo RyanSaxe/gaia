@@ -937,8 +937,9 @@ The three ways work together:
   looks the same on the whole sheet and close in: fine sepia contours from
   the real heights, every 1.2 m and every fifth heavier; each area's border
   as a soft hedgerow under a fine line; and each river as a line with a
-  bank and a glint, as wide as the stream once the map comes close and
-  never thinner than a line. Ponds are washed blue, darker toward their
+  bank and a glint along its real course, as wide as the stream once the
+  map comes close and never thinner than a line, one drawing shared by
+  the map, its picture and the wait's pen (`riverCourse`). Ponds are washed blue, darker toward their
   middle; trails are dotted; trees are round crowns in their files'
   health. Each kind of building and landmark has its own mark (`marks.ts`):
   an ink drawing over watercolor washes in its real colors, true to its
