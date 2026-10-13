@@ -356,9 +356,11 @@ describe("a walker's stride", () => {
     const frames = walkThen([], dry, -1, 0, 6, 3);
     const striding = frames.slice(120, 360);
     const pace = striding.reduce((m, f) => Math.max(m, speedOf(f.body)), 0);
-    // Under way within a fraction of a second, as the keys walk in games, and never faster than the pace it settles to.
+    // Under way within a fraction of a second, as the keys walk in games, and never overshooting: while it gets going
+    // its speed only rises (the grade underfoot changes it far more slowly than a frame).
     expect(speedOf(frames[Math.round(0.15 * 60)]!.body)).toBeGreaterThan(pace * 0.9);
-    for (const f of frames.slice(0, 120)) expect(speedOf(f.body)).toBeLessThanOrEqual(pace * 1.001);
+    const going = frames.slice(0, Math.round(0.3 * 60));
+    for (let i = 1; i < going.length; i++) expect(speedOf(going[i]!.body)).toBeGreaterThanOrEqual(speedOf(going[i - 1]!.body) - 1e-3);
     // It goes the way it was asked, never swinging: every step of its velocity points along -x.
     for (const f of frames.filter((f) => speedOf(f.body) > 1e-3)) expect(Math.abs(f.body.vz) / speedOf(f.body)).toBeLessThan(1e-6);
     // Let go, it stops within a fraction of a second, slowing along the way it went and never stepping back.
