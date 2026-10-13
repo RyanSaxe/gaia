@@ -9,11 +9,11 @@ import { kind, slot } from "@gaia/schema";
 export const landmark = kind({
   id: "landmark",
   subject: "thing",
-  doc: "A great thing that rises above the land and can be seen and steered by from far away, standing for one thing in the code: a package, a file or a definition.",
+  doc: "A great thing a person knows from far across the land and finds their way by, standing for one thing in the code: a package, a file or a definition.",
   represents: "The very few things in the code a person steers by, whatever they are: a package, a file or a single definition the whole repository turns on.",
   slots: {
     form: slot("Landmark", {
-      ask: "the great thing says what part the code it stands for plays for the code that steers by it: a great tree for living code much of the rest grows from, a lookout tower for code that watches over or coordinates the rest and gives it its bearings, standing stones for the old foundations the rest was set on.",
+      ask: "the great thing is the feeling a person carries away from it across the land: choose the one whose feel suits the code it stands for.",
     }),
     motion: slot("Motion", { optional: true, ask: "whether it moves in the wind, as a living thing does." }),
     palette: slot("Palette", { ask: "its colors say the mood of the code it stands for, and how it stands out from its land." }),

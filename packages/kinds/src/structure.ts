@@ -17,15 +17,15 @@ export const structure = kind({
     "The few things in the code that much of the rest leans on, whatever they are: a package, a file or a single definition. Its massing, storeys and roofs say how big and how gathered it is, and its feature gives it a character of its own.",
   slots: {
     footprint: slot("Footprint", {
-      ask: "its plan is how the code it stands for is put together: one block for a single, focused purpose, an L or a T for a main part with a concern at its side, a long range for stages that hand work along in a row, a cluster for many modules working together. Its size and storeys grow with how much code it holds and how much it offers the rest, and how trim or crooked it stands says how tidy or makeshift that code is.",
+      ask: "its plan is the building's whole bearing, how it sits on the land, how it spreads and how high it rises: choose the plan, the shape and the storeys whose feel suits the code it stands for, and stand it trim or crooked as that code feels tidy or makeshift.",
     }),
     body: slot("Walls", {
       on: "footprint",
-      ask: "its walls say what the code it stands for is made of: heavy stone for code that is old, steady and leaned on, light timber framing for newer code that is still being reshaped.",
+      ask: "its walls are the first thing a person feels about it from the path: choose the walls whose feel suits the code it stands for.",
     }),
     roof: slot("Roof", {
       on: "footprint",
-      ask: "its roof says how the code it stands for keeps what is inside it: soft thatch for informal, homely code, neat courses of tiles or slate for tidy code with a clear public face.",
+      ask: "its roof is the mood it sits under: choose the roof whose feel suits the code it stands for.",
     }),
     feature: slot("Feature", {
       on: "footprint",
@@ -34,9 +34,9 @@ export const structure = kind({
     }),
     openings: slot("Openings", {
       on: "footprint",
-      ask: "its windows and door say how open the code it stands for is: many for one with a wide surface the rest of the code uses, few for one that keeps to itself.",
+      ask: "its windows and door say how open and welcoming the code it stands for feels: many for code that greets everyone, few for code that keeps to itself.",
     }),
-    ornaments: slot("Dressing", { on: "footprint", ask: "the small things around it say how cared for and lived in the code it stands for is." }),
+    ornaments: slot("Dressing", { on: "footprint", ask: "the small things around it say how cared for and lived in the code it stands for feels." }),
     palette: slot("Palette", { ask: "its colors say the mood of the code it stands for, and how it sits on its land." }),
   },
   stages: [
