@@ -53,9 +53,9 @@ import { reportStage } from "../telemetry.ts";
 import { takeWait } from "../wait/wait.ts";
 import { withStart } from "../start/start.ts";
 import { createCard } from "./card.ts";
-import { LANDMARK_ENTITIES, type Represented, SAMPLE_ENTITIES, SAMPLE_FILES, representEntity, representFile } from "./samples.ts";
-import { type CodeWorld, type Judge, entityVitalityOf, groundVitality, judgedThing } from "@gaia/world";
-import { type CodeLab, codeWorld, judgedOf, representSymbol } from "./code-world.ts";
+import { LANDMARK_ENTITIES, type Represented, SAMPLE_ENTITIES, SAMPLE_FILES, SAMPLE_VITALITY, representEntity, representFile } from "./samples.ts";
+import { type CodeWorld, type Judge, groundVitality, judgedThing } from "@gaia/world";
+import { type CodeLab, codeWorld, representSymbol } from "./code-world.ts";
 import type { JudgedThing } from "../../world-service/protocol.ts";
 import { type Building, createSettlement, settlementBuilds } from "./settlement.ts";
 import { createSigns } from "./signs.ts";
@@ -457,10 +457,10 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   const entityOfPlace = new Map<string, string>();
   /** Learns the entities of the world now shown: the codebase's own, or the samples. */
   function knowEntities(): void {
-    landmarkEntities = (code?.landmarks.map((l) => l.facts) ?? LANDMARK_ENTITIES).map(representEntity);
+    landmarkEntities = code === null ? LANDMARK_ENTITIES.map((e) => representEntity(e, SAMPLE_VITALITY[e.path] ?? 1)) : code.landmarks.map((l) => representEntity(l.facts, l.vitality));
     entityVitality.clear();
     entityOfPlace.clear();
-    for (const r of [...settlement.buildings.map((b) => b.represented), ...landmarkEntities]) entityVitality.set(r.id, r.report.vitality);
+    for (const r of [...settlement.buildings.map((b) => b.represented), ...landmarkEntities]) entityVitality.set(r.id, r.vitality);
     settlement.buildings.forEach((b, i) => {
       entityOfPlace.set(b.represented.name, b.represented.id);
       const lot = code?.stand.lots[i];
@@ -660,7 +660,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   let treeCopies: readonly number[] = [];
   /** The file a tree grows for, in the codebase's world. */
   const treeFile = (t: { readonly patch?: number }): string | undefined => (t.patch === undefined ? undefined : code?.world.patches[t.patch]?.path);
-  const treeVitality = (t: Tree): number => liveFileVitality.get(treeFile(t) ?? "") ?? t.represented.report.vitality;
+  const treeVitality = (t: Tree): number => liveFileVitality.get(treeFile(t) ?? "") ?? t.represented.vitality;
   let treeViews: Copies[] = [];
   /** Each build's instances by variant, kept for the life of the lab. */
   const groves = new Map<number, Copies>();
@@ -886,7 +886,11 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       const patch = t.patch === undefined ? undefined : code?.world.patches[t.patch];
       return (patch === undefined ? undefined : code?.files.get(patch.path)) ?? (SAMPLE_FILES[t.index % SAMPLE_FILES.length] as (typeof SAMPLE_FILES)[number]);
     };
-    trees = stood.trees.map((t) => ({ ...t, represented: representFile(fileOf(t), judgedOf(t.patch === undefined ? undefined : code?.world.patches[t.patch])) }));
+    trees = stood.trees.map((t) => {
+      const file = fileOf(t);
+      const patch = t.patch === undefined ? undefined : code?.world.patches[t.patch];
+      return { ...t, represented: representFile(file, patch?.vitality ?? SAMPLE_VITALITY[file.path] ?? 1) };
+    });
     treesByTile = new Map();
     for (const t of trees) {
       const key = tileKeyOf(t.x, t.z);
@@ -923,7 +927,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
               x: t.x,
               z: t.z,
               radius: Math.max(4, Math.min(7, (variants[t.variant] as TreeVariant).radius * t.scale * 0.8)),
-              vitality: t.represented.report.vitality,
+              vitality: t.represented.vitality,
             })),
           );
     warmSoon();
@@ -1058,7 +1062,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
           if (facts === undefined || lm === undefined) return [];
           const { x, z } = s.site;
           return [{
-            represented: representEntity(facts),
+            represented: representEntity(facts, code?.landmarks[i]?.vitality ?? 1),
             standsAs: withArticle(lm.name),
             ...judged("entity", facts.path),
             x,
@@ -1095,7 +1099,6 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     });
     // A file's functions and classes stand on its patch: walk up to one to read what it is.
     const placed = understory.placements();
-    const patchByPath = new Map(code?.world.patches.map((p) => [p.path, p]) ?? []);
     const symbolEntries: (readonly [number, Subject])[] = code === null
       ? []
       : code.world.symbols.flatMap((sym, i) => {
@@ -1105,7 +1108,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
           if (p === undefined || file === undefined) return [];
           const { x, z } = p;
           return [[at, {
-            represented: representSymbol(sym, file, judgedOf(patchByPath.get(sym.file))),
+            represented: representSymbol(sym, file),
             standsAs: withArticle(sym.form),
             // A symbol's form is judged with its file.
             ...judged("file", sym.file),
@@ -1136,7 +1139,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     signs.set([
       ...settlement.buildings.map((b) => {
         const at = settlement.signOf(b);
-        return { ...at, y: heightAt(terrain.lattice, at.x, at.z), scale: 1, name: b.represented.name, note: b.represented.what, vitality: b.represented.report.vitality };
+        return { ...at, y: heightAt(terrain.lattice, at.x, at.z), scale: 1, name: b.represented.name, note: b.represented.what, vitality: b.represented.vitality };
       }),
       ...landmarkSubjects.map((l, i) => {
         const view = landmarkViews[i];
@@ -1145,7 +1148,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
         const r = (lm?.base ?? 2) + 3;
         const x = l.x + Math.sin(yaw) * r + Math.cos(yaw) * 1.6;
         const z = l.z + Math.cos(yaw) * r - Math.sin(yaw) * 1.6;
-        return { x, y: heightAt(terrain.lattice, x, z), z, yaw, scale: 1, name: l.represented.name, note: l.represented.what, vitality: l.represented.report.vitality };
+        return { x, y: heightAt(terrain.lattice, x, z), z, yaw, scale: 1, name: l.represented.name, note: l.represented.what, vitality: l.represented.vitality };
       }),
       ...plaqued.map(({ tree }) => {
         const { x, z } = tree;
@@ -1153,7 +1156,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
         const d = Math.hypot(x, z) || 1;
         const px = x - (x / d) * (base + 0.75);
         const pz = z - (z / d) * (base + 0.75);
-        return { x: px, y: heightAt(terrain.lattice, px, pz) - 0.05, z: pz, yaw: Math.atan2(-x, -z), scale: 0.42, name: tree.represented.name, note: "", vitality: tree.represented.report.vitality };
+        return { x: px, y: heightAt(terrain.lattice, px, pz) - 0.05, z: pz, yaw: Math.atan2(-x, -z), scale: 0.42, name: tree.represented.name, note: "", vitality: tree.represented.vitality };
       }),
     ]);
   }
@@ -1739,13 +1742,12 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     return {
       terrain,
       ways: ways.network.ways,
-      buildings: settlement.buildings.map((b) => ({ x: b.site.x, z: b.site.z, name: b.represented.name, kind: b.kindName, vitality: b.represented.report.vitality, plan: b.plan, blueprint: b.blueprint, palette: b.palette })),
+      buildings: settlement.buildings.map((b) => ({ x: b.site.x, z: b.site.z, name: b.represented.name, kind: b.kindName, vitality: b.represented.vitality, plan: b.plan, blueprint: b.blueprint, palette: b.palette })),
       landmarks: ways.sites.map((s, i) => {
-        const facts = code?.landmarks[i]?.facts;
         const lm = landmarks[s.landmark] as (typeof landmarks)[number];
-        return { x: s.site.x, z: s.site.z, name: lm.name, vitality: facts === undefined ? 1 : entityVitalityOf(facts).vitality, blueprint: lm.blueprint, palette: lm.built.palette };
+        return { x: s.site.x, z: s.site.z, name: lm.name, vitality: code?.landmarks[i]?.vitality ?? 1, blueprint: lm.blueprint, palette: lm.built.palette };
       }),
-      trees: trees.map((t) => ({ x: t.x, z: t.z, vitality: t.represented.report.vitality })),
+      trees: trees.map((t) => ({ x: t.x, z: t.z, vitality: t.represented.vitality })),
       // A codebase's area shows its region's ground; each of the sample world's regions is one area.
       grounds: new Map(places.areas.flatMap((a, i) => {
         const ground = regionGrounds[code !== null ? (code.world.areas[i]?.region ?? 0) : i];
@@ -2006,10 +2008,10 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     const houses = c.world.things.filter((t) => t.as === "building");
     const rises = c.world.things.filter((t) => t.as === "landmark");
     return {
-      buildings: settlement.buildings.map((b, i) => ({ x: houses[i]?.x ?? 0, z: houses[i]?.z ?? 0, name: b.represented.name, kind: b.kindName, vitality: b.represented.report.vitality, plan: b.plan, blueprint: b.blueprint, palette: b.palette })),
+      buildings: settlement.buildings.map((b, i) => ({ x: houses[i]?.x ?? 0, z: houses[i]?.z ?? 0, name: b.represented.name, kind: b.kindName, vitality: b.represented.vitality, plan: b.plan, blueprint: b.blueprint, palette: b.palette })),
       landmarks: c.landmarks.map((l, i) => {
         const lm = landmarks[l.preset] as (typeof landmarks)[number];
-        return { x: rises[i]?.x ?? 0, z: rises[i]?.z ?? 0, name: lm.name, vitality: entityVitalityOf(l.facts).vitality, blueprint: lm.blueprint, palette: lm.built.palette };
+        return { x: rises[i]?.x ?? 0, z: rises[i]?.z ?? 0, name: lm.name, vitality: l.vitality, blueprint: lm.blueprint, palette: lm.built.palette };
       }),
     };
   }
@@ -2619,7 +2621,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
         const s = subjects[i];
         if (s !== undefined) approach(s);
       },
-      subjects: () => subjects.map((s) => ({ name: s.represented.name, standsAs: s.standsAs, judge: s.judge, x: s.x, z: s.z, vitality: s.represented.report.vitality })),
+      subjects: () => subjects.map((s) => ({ name: s.represented.name, standsAs: s.standsAs, judge: s.judge, x: s.x, z: s.z, vitality: s.represented.vitality })),
       card: () => (card.shown === null ? null : { name: card.shown.name, what: card.shown.what }),
       /** Whether the view is turning on its own to frame a thing the person arrived at. */
       turning: () => turn !== null,
@@ -2834,7 +2836,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
         return { x: rect.left + ((p.x + 1) / 2) * rect.width, y: rect.top + ((1 - p.y) / 2) * rect.height };
       },
       ponds: () => terrain.ponds.map((p) => ({ x: p.x, z: p.z, reach: p.reach })),
-      plants: () => trees.map((t) => ({ x: t.x, z: t.z, height: (variants[t.variant] as TreeVariant).height * t.scale, region: regionAt(t.x, t.z), preset: FLORA_PRESETS[Math.floor(t.variant / TREE_BUILDS)]?.name ?? "", vitality: t.represented.report.vitality })),
+      plants: () => trees.map((t) => ({ x: t.x, z: t.z, height: (variants[t.variant] as TreeVariant).height * t.scale, region: regionAt(t.x, t.z), preset: FLORA_PRESETS[Math.floor(t.variant / TREE_BUILDS)]?.name ?? "", vitality: t.represented.vitality })),
       /** Replants `trees` trees and the understory at `density` times its usual count, for measuring at scale; the bake thread stands them again. */
       forest: async (count: number, density = 1) => {
         treeCount = count;

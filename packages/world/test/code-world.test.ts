@@ -262,20 +262,18 @@ describe("a world laid out from code", () => {
     expect(world.trails.every((t) => t.spans)).toBe(true);
   });
 
-  it("under the judged design, asks each standing symbol's form on its own and whether a source file needs tests, which its vitality reads", async () => {
+  it("under the judged design, asks each standing symbol's form on its own", async () => {
     const planned = planWorldRequests(model(), LOOKS, { design: "judged" });
     const math = planned.find((p) => p.target === "packages/core/src/math.ts")!;
-    expect(Object.keys(math.request.questions).sort()).toEqual(["form#helper", "form#x", "tests", "vibe"]);
-    // Only source files are asked whether they need tests.
+    expect(Object.keys(math.request.questions).sort()).toEqual(["form#helper", "form#x", "vibe"]);
     expect(Object.keys(planned.find((p) => p.target === "README.md")!.request.questions)).toEqual(["vibe"]);
-    // A Jev that says no file needs tests and gives each symbol its own form.
+    // A Jev that gives each symbol its own form.
     const standIn = standInJev(LOOKS);
     const jev: JevClient = {
       async ask(request) {
         const r = await standIn.ask(request);
         const answers = { ...r.answers };
         for (const id of Object.keys(request.questions)) {
-          if (id === "tests") answers[id] = { type: "noul", noul: 0.05 };
           if (id.startsWith("form#")) answers[id] = { type: "choice", choice: id === "form#x" ? "Stone" : "Bush", probabilities: {}, confidence: 1 };
         }
         return { ...r, answers };
@@ -285,11 +283,6 @@ describe("a world laid out from code", () => {
     const world = layoutWorld(model(), judged);
     const forms = Object.fromEntries(world.symbols.filter((s) => s.file === "packages/core/src/math.ts").map((s) => [s.name, s.form]));
     expect(forms).toEqual({ x: "Stone", helper: "Bush" });
-    // No test reaches main.ts: it loses vitality for that only as far as Jev judges it needs tests.
-    const unjudged = layoutWorld(model(), { ...judged, needsTests: {} });
-    const vitality = (w: typeof world) => w.patches.find((p) => p.path === "packages/app/src/main.ts")!.vitality;
-    expect(vitality(world)).toBeGreaterThan(vitality(unjudged));
-    expect(1 - vitality(world)).toBeCloseTo((1 - vitality(unjudged)) * 0.05, 5);
   });
 
   it("keeps Jev's answers: a stored one is used without asking, and one outside the options is left to the stand-in", async () => {

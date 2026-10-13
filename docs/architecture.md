@@ -801,25 +801,13 @@ world would make, with that estimate.
 
 ## Vitality
 
-In a world the understanding pass judged, vitality is Jev's quality
-(`judged.value.quality` on the engine's graph): a file's and a definition's
-are their own, an entity's is its folder's, and a file the pass didn't judge
-takes its nearest judged folder's (`layoutWorld`). The signals below apply
-only to a world the pass never ran on, such as the stand-in's or the proving
-ground's, until the plan retires them.
-
-Vitality from signals multiplies penalties from named signals, each with a weight:
-failing tests, compiler errors, complexity, untested code, lint warnings,
-unused code, debt markers, and named Jev judgments. A file is untested in
-full when no test reaches it and in half when only other entities' tests do,
-and that penalty is scaled by Jev's probability that the file holds behavior
-a test should check (`FileJudged.needsTests`, asked by the `judged` design),
-so a file of types or styles loses nothing for having no tests of its own. An entity's signals read
-the same facts as shares of the whole (`entityVitalityOf`), so one failing
-test in a large package costs less than half its tests failing. Each term
-carries a reading in words, such as "2 of 4 test files failing", for the
-card that tells a person what a thing is. Activity, from recent commits, is
-a separate channel that never lowers vitality.
+A thing's vitality is Jev's quality (`judged.value.quality` on the engine's
+graph): a file's and a definition's are their own, an entity's is its
+folder's, and a file the pass didn't judge takes its nearest judged
+folder's (`layoutWorld`). A world no graph judges, such as the proving
+ground, takes the quality fixed with its looks (`Judgments.quality`), and a
+thing nothing judged, as in a world opened without Jev, is whole. A card
+shows a thing's vitality as a percentage.
 
 A directory's vitality pools its files' (`areaVitality` in `@gaia/world`):
 every file under it, its subdirectories' included, weighted by its size,
@@ -856,17 +844,6 @@ Gaia's world) and never rebakes: the lab's
 file's under a directory, on its trees, its finer entities, its ground and
 what grows there, and its area's lots and water, and `__lab.terrain.groundVitality(x, z)` reads the texture as the
 shaders do.
-
-What a thing's page says is one typed value, `PageContent` in
-`app/renderer/immersive/sketch.ts`: up to two notes, each tied to a part of
-the thing's sketch, and the rest, a list of entries each a fact beside its
-label or a line of prose. One function, `describe`, makes it; today it
-fills the notes with `symptomsOf`, which turns the vitality's signals into
-a few words about what is specific to this thing and says nothing of a
-signal nearly every file shares, and the rest with the doc comment's first
-sentence and the facts the code knows. The Engine and Jev session owns
-what goes in it and may change the type; the page shows whatever it holds
-within its limits (`docs/design-system.md`, "What a thing says").
 
 Every primitive writes five per-vertex vitality channels: `loss` (the vitality
 below which a piece collapses to its pivot, or a spray's leaves drop in

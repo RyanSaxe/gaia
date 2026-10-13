@@ -4,7 +4,7 @@ import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, LANDMARK_PRIMITIVES, RELIEF_PRIMITI
 import { landmark, link, structure } from "@gaia/kinds";
 import { FLORA_PRESETS, LANDMARK_PRESETS, STRUCTURE_PRESETS, TRAIL_PRESETS, buildSlots, realize } from "@gaia/realize";
 import { type ScatterRule, TERRAIN, type Terrain, bakeTerrain, groundLook, junctionVitality, ownershipOf, placeAt, vitalityAt, vitalityOver, wayVitalityAt } from "@gaia/terrain";
-import { type Judgments, areaVitality, entityVitalityOf, groundVitality } from "@gaia/world";
+import { type Judgments, areaVitality, groundVitality } from "@gaia/world";
 import { codeLab, provingWorld } from "./code-world.ts";
 import { BUILDINGS, CHARACTERS, FORMS, LANDMARKS, LANDS, TRAILS, VIBES, WATERS } from "./looks.ts";
 import { type Stand, extentOf, groundSites, landmarkBase, ownerVitality, standWorld, understoryVitality } from "./stand.ts";
@@ -13,7 +13,7 @@ import judgedFixture from "./fixtures/proving-judged.json";
 const judged = judgedFixture as unknown as Judgments;
 const doc = provingWorld();
 const code = codeLab(doc);
-const vitalityOf = new Map(doc.model.entities.map((e) => [e.path, entityVitalityOf(e).vitality]));
+const vitalityOf = new Map(doc.world.things.map((t) => [t.path, t.vitality]));
 /** Each area's vitality, every file under it pooled by size. */
 const pooled = areaVitality(doc.world.patches.map((p) => ({ area: p.area, vitality: p.vitality, size: p.radius * p.radius })));
 /** What a point's own ground is (its file's patch, its area's lot, or the wild), and that ground's vitality. */
