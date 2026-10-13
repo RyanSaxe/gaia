@@ -80,11 +80,13 @@ terrain finds its route. A `structure`'s footprint lays out one
 `BuildingPlan`: the masses the building is joined from (each a block or a
 round turret with its own storeys and roof form: gable, hip, half-hip,
 lean-to or cone), its floor, and where every door and window goes. Its body,
-roof, openings, ornaments and optional feature (a `waterwheel@1`, a
-`tower@1`) each build on that plan, so walls rise to the roofline over them
-and everything agrees by construction. The geometry lives in
-`packages/primitives/src/geometry/building/`, one file per part: layout,
-frame (reading the plan), walls, roofs, openings, garden, ruin and features.
+roof, openings, ornaments and optional feature (a `waterwheel@1` or a
+`tower@1` against the house, or a `dovecote@1`, `well@1`, `bell@1`,
+`forge@1` or `granary@1` in its yard) each build on that plan, so walls
+rise to the roofline over them and everything agrees by construction. The
+geometry lives in `packages/primitives/src/geometry/building/`, one file per
+part: layout, frame (reading the plan), walls, roofs, openings, garden,
+ruin, features and yard.
 
 An **entity** is a named unit of the code with a boundary, a public surface,
 things that depend on it and a health of its own: a package or crate, as

@@ -14,9 +14,13 @@
 import type { Blueprint, BuildingPlan, Mass, Opening, Palette, Params, Resolved, RoofForm, Rgb } from "@gaia/schema";
 import {
   PRIMITIVES,
+  bellParams,
   casementsParams,
   cottageGardenParams,
+  dovecoteParams,
   fieldstoneParams,
+  forgeParams,
+  granaryParams,
   greatTreeParams,
   lookoutTowerParams,
   standingStonesParams,
@@ -25,6 +29,7 @@ import {
   timberFrameParams,
   towerParams,
   waterwheelParams,
+  wellParams,
 } from "@gaia/primitives";
 
 type Pt = readonly [number, number];
@@ -1369,6 +1374,31 @@ export const INKS: Readonly<Record<string, Ink>> = {
     draw: (pen, house, look, p) => drawArchiveTower(pen, house, look, p.height, p.cap),
   }),
 
+  "dovecote@1": feature(dovecoteParams, {
+    place: (house) => yardAt(house, 2.15, -house.plan.depth * 0.18),
+    draw: (pen, house, look, p) => drawDovecote(pen, house, look, p.cote, p.flock),
+  }),
+
+  "well@1": feature(wellParams, {
+    place: (house, p) => yardAt(house, 2.3 + p.width, -0.25),
+    draw: (pen, house, look, p) => drawWell(pen, house, look, p.head, p.width),
+  }),
+
+  "bell@1": feature(bellParams, {
+    place: (house) => yardAt(house, 2.4, -house.plan.depth * 0.18),
+    draw: (pen, house, look, p) => drawBell(pen, house, look, p.hanging, p.bell),
+  }),
+
+  "forge@1": feature(forgeParams, {
+    place: (house) => yardAt(house, 2.2, -house.plan.depth * 0.2),
+    draw: (pen, house, look, p) => drawForge(pen, house, look, p.shelter, p.stack),
+  }),
+
+  "granary@1": feature(granaryParams, {
+    place: (house, p) => yardAt(house, 1.6 + clamp(p.size * 0.72, 1.5, 2.1) / 2, -house.plan.depth * 0.12),
+    draw: (pen, house, look, p) => drawGranary(pen, house, look, p.size, p.roof),
+  }),
+
   "lookout-tower@1": landmark(lookoutTowerParams, { draw: (pen, look, p, seed) => drawLookoutTower(pen, look, p, seed) }),
   "standing-stones@1": landmark(standingStonesParams, { draw: (pen, look, p, seed) => drawStones(pen, look, p, seed) }),
   "great-tree@1": landmark(greatTreeParams, { draw: (pen, look, p, seed) => drawGreatTree(pen, look, p, seed) }),
@@ -1564,6 +1594,345 @@ function lantern(pen: Pen, X: number, Z: number, half: number, base: number, loo
     const c = worn(look.hue("roof", "#5f6e86"), w, 0.4);
     face(pen, [[X - half - e, Z - half - e, top], [X + half + e, Z - half - e, top], [X, Z, apex]], c);
     face(pen, [[X - half - e, Z - half - e, top], [X, Z, apex], [X - half - e, Z + half + e, top]], lit(c, 0.22));
+  }
+}
+
+// Features in the yard: each stands where its own build puts it, `x` meters out from the free side and `z` along it.
+
+/** Where a feature in the yard stands, in units: `x` meters out from the house's free side and `z` along it toward the door. */
+function yardAt(house: House, x: number, z: number): [number, number] {
+  const [X, Z] = fromPlan(house.side * (house.plan.width / 2 + x), 0, z);
+  return [X, Z];
+}
+
+/** A round column at (`X`, `Z`) from `h0` up to `h1` units, `r` units round: lit from the west, its top a disc, course lines every `course` units when given. */
+function column(pen: Pen, X: number, Z: number, h0: number, h1: number, r: number, color: string, top: string | null, course?: number): void {
+  const { ctx, s } = pen;
+  const [bx, by] = pen.at(X, Z, h0);
+  const [tx, ty] = pen.at(X, Z, h1);
+  pen.reach(bx, by, r * s * 1.1);
+  pen.reach(tx, ty, r * s * 1.1);
+  const rr = r * s;
+  const body = new Path2D();
+  body.moveTo(tx - rr, ty);
+  body.lineTo(bx - rr, by);
+  body.ellipse(bx, by, rr, rr * 0.405, 0, Math.PI, 0, true);
+  body.lineTo(tx + rr, ty);
+  body.ellipse(tx, ty, rr, rr * 0.405, 0, 0, Math.PI, false);
+  body.closePath();
+  const g = ctx.createLinearGradient(bx - rr, 0, bx + rr, 0);
+  g.addColorStop(0, lit(color, 0.12));
+  g.addColorStop(0.3, lit(color, 0.32));
+  g.addColorStop(1, shaded(color, 0.32));
+  ctx.fillStyle = g;
+  ctx.fill(body);
+  if (course !== undefined && pen.fine > 0.02) {
+    ctx.save();
+    ctx.clip(body);
+    ctx.beginPath();
+    for (let h = h0 + course; h < h1 - 0.2; h += course) {
+      const [cx, cy] = pen.at(X, Z, h);
+      ctx.moveTo(cx - rr, cy);
+      ctx.ellipse(cx, cy, rr, rr * 0.405, 0, Math.PI, 0, true);
+    }
+    ctx.lineWidth = pen.line * 0.45;
+    ctx.strokeStyle = rgba(INK, 0.35 * pen.fine);
+    ctx.stroke();
+    ctx.restore();
+  }
+  ctx.lineWidth = pen.line;
+  ctx.strokeStyle = INK;
+  ctx.stroke(body);
+  if (top !== null) {
+    ctx.beginPath();
+    ctx.ellipse(tx, ty, rr, rr * 0.405, 0, 0, Math.PI * 2);
+    ctx.fillStyle = top;
+    ctx.fill();
+    ctx.lineWidth = pen.line * 0.8;
+    ctx.stroke();
+  }
+}
+
+/** A cone at (`X`, `Z`) from a ring `r` units round at `base` up to `apex`, lit from the west. */
+function cone(pen: Pen, X: number, Z: number, base: number, r: number, apex: number, color: string): void {
+  const { ctx, s } = pen;
+  const [bx, by] = pen.at(X, Z, base);
+  const [ax, ay] = pen.at(X, Z, apex);
+  const rr = r * s;
+  pen.reach(bx, by, rr * 1.1);
+  const body = new Path2D();
+  body.moveTo(ax, ay);
+  body.lineTo(bx - rr, by);
+  body.ellipse(bx, by, rr, rr * 0.405, 0, Math.PI, 0, true);
+  body.closePath();
+  const g = ctx.createLinearGradient(bx - rr, 0, bx + rr, 0);
+  g.addColorStop(0, lit(color, 0.2));
+  g.addColorStop(0.35, lit(color, 0.3));
+  g.addColorStop(1, shaded(color, 0.3));
+  ctx.fillStyle = g;
+  ctx.fill(body);
+  ctx.lineWidth = pen.line;
+  ctx.strokeStyle = INK;
+  ctx.stroke(body);
+}
+
+/** A gabled roof whose ridge runs north and south over [x0, x1] × [z0, z1] units, its eaves at `eave` and its ridge at `ridge`; `gable` washes its south gable, or leaves it open. */
+function gableRoof(pen: Pen, x0: number, x1: number, z0: number, z1: number, eave: number, ridge: number, color: string, gable: string | null): void {
+  const xc = (x0 + x1) / 2;
+  face(pen, [[xc, z0, ridge], [x1, z0, eave], [x1, z1, eave], [xc, z1, ridge]], shaded(color, 0.22));
+  face(pen, [[x0, z0, eave], [x0, z1, eave], [xc, z1, ridge], [xc, z0, ridge]], lit(color, 0.2));
+  if (gable !== null) face(pen, [[x0 + 0.3, z0, eave], [x1 - 0.3, z0, eave], [xc, z0, ridge - 0.3]], shaded(gable, 0.14));
+}
+
+/** A few doves over a cote, gliding in quick strokes of the pen: fewer as the code fails, until none fly. */
+function doves(pen: Pen, X: number, Z: number, height: number, count: number, seed: number): void {
+  const { ctx, s } = pen;
+  ctx.beginPath();
+  for (let k = 0; k < count; k++) {
+    const a = noise(seed, k + 700) * Math.PI * 2;
+    const [px, py] = pen.at(X + Math.cos(a) * (2.6 + noise(seed, k + 710) * 2.4), Z + Math.sin(a) * 2.2, height + 1.2 + noise(seed, k + 720) * 2.6);
+    pen.reach(px, py, 1.2 * s);
+    const span = (0.55 + noise(seed, k + 730) * 0.25) * s;
+    ctx.moveTo(px - span, py - span * 0.35);
+    ctx.quadraticCurveTo(px - span * 0.4, py - span * 0.55, px, py);
+    ctx.quadraticCurveTo(px + span * 0.4, py - span * 0.55, px + span, py - span * 0.35);
+  }
+  ctx.lineWidth = pen.line * 0.6;
+  ctx.strokeStyle = INK;
+  ctx.stroke();
+}
+
+/** A dovecote: a squat round stone cote under a cone and lantern, or a painted box on a post; its doves leave as the code fails. */
+function drawDovecote(pen: Pen, house: House, look: Look, cote: string, flock: number): void {
+  const w = look.w;
+  const roofC = worn(look.hue("roof", "#8a6a50"), w, 0.6);
+  const flying = Math.round(flock * 0.6 * ease(w.v, 0.45, 0.85));
+  if (cote === "a cote on a post") {
+    const [X, Z] = yardAt(house, 1.6, -house.plan.depth * 0.15);
+    const top = 3.0 * K;
+    const lean = ease(w.v, 0.22, 0.08) * 1.4;
+    ink(pen, on(pen, [[X, Z, 0], [X, Z, top]]), false, 2.2);
+    ink(pen, on(pen, [[X, Z, 0], [X, Z, top]]), false, 1.1, worn(look.hue("timber", "#6b4f3a"), w));
+    const paint = worn(look.hue("trim", "#7fa36a"), w);
+    const hx = 0.5 * K;
+    const hz = 0.66 * K;
+    const h0 = top + 0.06 * K;
+    const h1 = top + 1.06 * K;
+    box(pen, X - hx + lean, X + hx + lean, Z - hz, Z + hz, h0, h1, paint);
+    for (const [dx, h] of [[-0.25, 0.3], [0, 0.3], [0.25, 0.3], [-0.12, 0.62], [0.12, 0.62]] as const) pane(pen, [[X + dx * K * 2 - 0.13 + lean, Z - hz, h0 + h * K], [X + dx * K * 2 + 0.13 + lean, Z - hz, h0 + h * K], [X + dx * K * 2 + 0.13 + lean, Z - hz, h0 + h * K + 0.28], [X + dx * K * 2 - 0.13 + lean, Z - hz, h0 + h * K + 0.28]], "#2c2219");
+    gableRoof(pen, X - hx - 0.3 + lean, X + hx + 0.3 + lean, Z - hz - 0.25, Z + hz + 0.25, h1, h1 + 0.75 * K, roofC, null);
+    doves(pen, X, Z, h1, flying, w.seed + 11);
+    return;
+  }
+  const R = 1.15;
+  const H = 3.4;
+  const [X, Z] = yardAt(house, 1.0 + R, -house.plan.depth * 0.18);
+  const stone = worn(look.hue("masonry", "#b8b0a0"), w);
+  castShadow(pen, ellipseFeet(X, Z, R * K, R * K, (H + 1.6) * K));
+  column(pen, X, Z, 0, H * K, R * K, stone, null, 0.45 * K);
+  // The rat ledge round its middle, the flight holes under the eaves and its door.
+  const { ctx, s } = pen;
+  const [lx, ly] = pen.at(X, Z, 1.75 * K);
+  ctx.beginPath();
+  ctx.ellipse(lx, ly, (R + 0.08) * K * s, (R + 0.08) * K * s * 0.405, 0, Math.PI * 0.05, Math.PI * 0.95);
+  ctx.lineWidth = pen.line * 1.1;
+  ctx.strokeStyle = INK;
+  ctx.stroke();
+  ctx.fillStyle = "#2c2219";
+  for (let k = 0; k < 5; k++) {
+    const a = Math.PI * (0.18 + k * 0.16);
+    const [hx, hy] = pen.at(X + Math.cos(a) * R * K * 0.96, Z - Math.sin(a) * R * K * 0.96, (H - 0.5 - (k % 2) * 0.45) * K);
+    ctx.beginPath();
+    ctx.ellipse(hx, hy, 0.22 * s, 0.3 * s, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  const door = house.side * 0.95;
+  pane(pen, [[X + door * R * K - 0.45, Z - 0.35 * K, 0], [X + door * R * K + 0.45, Z - 0.35 * K, 0], [X + door * R * K + 0.45, Z - 0.35 * K, 1.6], [X + door * R * K - 0.45, Z - 0.35 * K, 1.6]], "#3a2c20", true);
+  const rotted = ease(w.v, 0.5, 0.1);
+  cone(pen, X, Z, H * K, (R + 0.32) * K, (H + 1.3) * K, roofC);
+  if (rotted > 0.05) {
+    const [hx, hy] = pen.at(X - R * K * 0.35, Z - R * K * 0.2, (H + 0.45) * K);
+    ctx.beginPath();
+    ctx.ellipse(hx, hy, 0.9 * s * rotted * K, 0.55 * s * rotted * K, -0.3, 0, Math.PI * 2);
+    ctx.fillStyle = HOLLOW;
+    ctx.fill();
+  }
+  column(pen, X, Z, (H + 1.25) * K, (H + 1.8) * K, 0.32 * K, worn(look.hue("timber", "#6b4f3a"), w), null);
+  cone(pen, X, Z, (H + 1.8) * K, 0.5 * K, (H + 2.3) * K, roofC);
+  ivy(pen, X + R * K * 0.7, Z - R * K * 0.6, H * K, w.ivy * 0.55, w.seed + 13, 1);
+  doves(pen, X, Z, (H + 1.3) * K, flying, w.seed + 11);
+}
+
+/** A well: a ring of stone round dark water, under a little roof on two posts or beside a sweep; its water dulls and its bucket goes as the code fails. */
+function drawWell(pen: Pen, house: House, look: Look, head: string, width: number): void {
+  const w = look.w;
+  const outer = width + 0.3;
+  const [X, Z] = yardAt(house, 2.0 + outer, -0.25);
+  const stone = worn(look.hue("masonry", "#b8b0a0"), w);
+  const timber = worn(look.hue("timber", "#6b4f3a"), w);
+  const { ctx, s } = pen;
+  const top = 0.82 * K;
+  column(pen, X, Z, 0, top, outer * K, stone, lit(stone, 0.32), 0.3 * K);
+  const [cx, cy] = pen.at(X, Z, top);
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, width * K * s, width * K * s * 0.405, 0, 0, Math.PI * 2);
+  ctx.fillStyle = mix("#2c2a2a", mix("#4f7f9a", "#2c2a2a", 0.35), ease(w.v, 0.3, 0.7));
+  ctx.fill();
+  ctx.lineWidth = pen.line * 0.7;
+  ctx.strokeStyle = INK;
+  ctx.stroke();
+  const bucket = w.v > 0.3;
+  if (head === "a sweep") {
+    const px = X + house.side * (outer + 0.95) * K;
+    ink(pen, on(pen, [[px, Z, 0], [px, Z, 2.15 * K]]), false, 2);
+    ink(pen, on(pen, [[px, Z, 0], [px, Z, 2.15 * K]]), false, 1, timber);
+    const tip = ease(w.v, 0.24, 0.1) * 0.8 * K;
+    const pole: P3[] = [[X, Z, 1.75 * K - tip], [px + (px - X) * 0.55, Z, 2.15 * K + (0.4 * K + tip) * 0.55 + 0.2]];
+    ink(pen, on(pen, pole), false, 1.7);
+    ink(pen, on(pen, pole), false, 0.8, timber);
+    rubble(pen, (pole[1] as P3)[0], Z, 0.6, w.seed + 3, stone);
+    if (bucket) ink(pen, on(pen, [[X, Z, 1.75 * K], [X, Z, 1.3 * K]]), false, 0.5);
+  } else {
+    const postZ = (outer + 0.09) * K;
+    for (const dz of [-postZ, postZ]) {
+      ink(pen, on(pen, [[X, Z + dz, 0], [X, Z + dz, 2.35 * K]]), false, 2);
+      ink(pen, on(pen, [[X, Z + dz, 0], [X, Z + dz, 2.35 * K]]), false, 1, timber);
+    }
+    ink(pen, on(pen, [[X, Z - postZ, 1.5 * K], [X, Z + postZ, 1.5 * K]]), false, 1.4);
+    if (bucket) ink(pen, on(pen, [[X, Z, 1.5 * K], [X, Z, 1.25 * K]]), false, 0.5);
+    const ex = (outer * 0.75 + 0.25) * K;
+    gableRoof(pen, X - ex, X + ex, Z - postZ - 0.45, Z + postZ + 0.45, 1.85 * K, 2.6 * K, worn(look.hue("roof", "#8a6a50"), w, 0.6), null);
+  }
+  if (bucket) box(pen, X - 0.22, X + 0.22, Z - 0.2, Z + 0.2, 0.98 * K, 1.26 * K, timber);
+}
+
+/** A bell under a little roof, its arch or frame facing the front, in stone or raked timbers; it hangs askew and then is gone as the code fails. */
+function drawBell(pen: Pen, house: House, look: Look, hanging: string, size: number): void {
+  const w = look.w;
+  const [X, Z] = yardAt(house, 2.4, -house.plan.depth * 0.18);
+  const half = (size + 0.3) * K;
+  const spring = 2.05 * K;
+  const stone = worn(look.hue("masonry", "#b8b0a0"), w);
+  const timber = worn(look.hue("timber", "#6b4f3a"), w);
+  const pier = 0.46 * K;
+  const front = Z - pier / 2;
+  let ridge: number;
+  let span: number;
+  if (hanging === "a timber frame") {
+    const legX = half + 0.2 * K;
+    for (const dx of [-legX, legX]) {
+      const legs: P3[] = [[X + dx, Z - 0.62 * K, 0], [X + dx, Z, spring + 0.2 * K], [X + dx, Z + 0.62 * K, 0]];
+      ink(pen, on(pen, legs), false, 1.9);
+      ink(pen, on(pen, legs), false, 0.9, timber);
+    }
+    ink(pen, on(pen, [[X - legX, Z, spring + 0.15 * K], [X + legX, Z, spring + 0.15 * K]]), false, 1.5);
+    ridge = spring + 0.85 * K;
+    span = legX + 0.3 * K;
+  } else {
+    const rise = half + 0.16 * K;
+    const wallTop = spring + rise + 0.32 * K;
+    const arch: P3[] = [];
+    for (let k = 0; k <= 10; k++) arch.push([X + Math.cos((k / 10) * Math.PI) * half, front, spring + Math.sin((k / 10) * Math.PI) * half]);
+    box(pen, X - half - pier, X - half, front, Z + pier / 2, 0, spring, stone);
+    face(pen, [[X - half - pier, front, 0], [X - half - pier, front, wallTop], [X + half + pier, front, wallTop], [X + half + pier, front, 0], [X + half, front, 0], ...arch, [X - half, front, 0]], shaded(stone, 0.14));
+    face(pen, [[X - half - pier, front, wallTop], [X + half + pier, front, wallTop], [X + half + pier, Z + pier / 2, wallTop], [X - half - pier, Z + pier / 2, wallTop]], lit(stone, 0.3));
+    ridge = wallTop + 0.55 * K;
+    span = half + pier + 0.18 * K;
+  }
+  // The bell in the opening, dark iron, hanging askew as the code fails and then gone.
+  if (w.v > 0.14) {
+    const tilt = ease(w.v, 0.4, 0.26) * 0.5;
+    const hang: P3 = [X, front - 0.1, spring - 0.05 * K];
+    const bell = (u: number, t: number): P3 => [hang[0] + u * Math.cos(tilt) + t * Math.sin(tilt), hang[1], hang[2] - (t * Math.cos(tilt) - u * Math.sin(tilt))];
+    const B = size * K;
+    const H = 1.2 * B;
+    face(pen, [bell(-0.45 * B, 0), bell(0.45 * B, 0), bell(0.62 * B, H * 0.55), bell(B, H), bell(-B, H), bell(-0.62 * B, H * 0.55)], mix("#4a4440", "#2f2b29", 0.3));
+  }
+  // The little roof, its ridge along the arch, a slope toward the viewer.
+  const eave = ridge - 0.55 * K;
+  const ez = (hanging === "a timber frame" ? 0.62 : 0.53) * K;
+  const roofC = worn(look.hue("roof", "#8a6a50"), w, 0.6);
+  face(pen, [[X - span, Z + ez, eave], [X - span, Z, ridge], [X + span, Z, ridge], [X + span, Z + ez, eave]], shaded(roofC, 0.1));
+  face(pen, [[X - span, Z - ez, eave], [X + span, Z - ez, eave], [X + span, Z, ridge], [X - span, Z, ridge]], shaded(roofC, 0.2));
+  face(pen, [[X - span, Z - ez, eave], [X - span, Z, ridge], [X - span, Z + ez, eave]], lit(timber, 0.15));
+}
+
+/** A smith's forge: a tall stack and a hearth under a hood, smoking and glowing while the code is healthy, in an open shed or under the sky. */
+function drawForge(pen: Pen, house: House, look: Look, shelter: string, stack: number): void {
+  const w = look.w;
+  const at = (x: number, z: number): [number, number] => yardAt(house, x, -house.plan.depth * 0.2 + z);
+  const stone = worn(look.hue("masonry", "#b8b0a0"), w);
+  const timber = worn(look.hue("timber", "#6b4f3a"), w);
+  const sx = house.side;
+  const span = (x0: number, x1: number): [number, number] => {
+    const a = at(x0, 0)[0];
+    const b = at(x1, 0)[0];
+    return [Math.min(a, b), Math.max(a, b)];
+  };
+  const [, Z] = at(0, 0);
+  if (shelter === "an open shed") {
+    const [x0, x1] = span(0.9, 4.05);
+    const fallen = ease(w.v, 0.24, 0.12);
+    for (const x of [x0, x1]) for (const dz of [-1.45 * K, 1.45 * K]) ink(pen, on(pen, [[x, Z + dz, 0], [x, Z + dz, (x === (sx > 0 ? x1 : x0) ? 2.2 : 2.85) * K * (1 - fallen * (x === (sx > 0 ? x1 : x0) ? 0.6 : 0))]]), false, 1.6);
+    if (fallen < 0.9) {
+      const hi = 2.95 * K;
+      const lo = 2.25 * K;
+      const [hx, lx] = sx > 0 ? [x0 - 0.3, x1 + 0.3] : [x1 + 0.3, x0 - 0.3];
+      const roofC = worn(look.hue("roof", "#8a6a50"), w, 0.7);
+      face(pen, [[hx, Z - 1.7 * K, hi], [lx, Z - 1.7 * K, lo], [lx, Z + 1.7 * K, lo], [hx, Z + 1.7 * K, hi]], sx > 0 ? shaded(roofC, 0.12) : lit(roofC, 0.18));
+      hatch(pen, [[[hx, Z - 1.7 * K, hi], [hx, Z - 1.7 * K, hi - 0.6 * K]], [[lx, Z - 1.7 * K, lo], [lx, Z - 1.7 * K, lo - 0.5 * K]]], INK, 0.8);
+    }
+  }
+  const [hx0, hx1] = span(1.7, 2.6);
+  box(pen, hx0, hx1, Z - 0.6 * K, Z + 0.6 * K, 0, 0.82 * K, stone);
+  const glow = ease(w.v, 0.34, 0.72);
+  if (glow > 0.02) {
+    const [gx, gy] = pen.at((hx0 + hx1) / 2, Z, 0.84 * K);
+    pen.ctx.beginPath();
+    pen.ctx.ellipse(gx, gy, 0.8 * pen.s, 0.4 * pen.s, 0, 0, Math.PI * 2);
+    pen.ctx.fillStyle = rgba(mix(look.hue("glass", "#ffb055"), "#ff9a3c", 0.5), 0.85 * glow);
+    pen.ctx.fill();
+  }
+  const [sx0, sx1] = span(1.15, 1.7);
+  box(pen, sx0, sx1, Z - 0.4 * K, Z + 0.4 * K, 0, stack * K, stone);
+  smoke(pen, pen.at((sx0 + sx1) / 2, Z, (stack + 0.4) * K), w.smoke);
+  const [ax] = at(3.35, 0);
+  box(pen, ax - 0.35, ax + 0.35, Z - 0.6, Z - 0.1, 0, 0.75 * K, timber);
+  box(pen, ax - 0.45, ax + 0.45, Z - 0.65, Z - 0.05, 0.75 * K, 0.88 * K, "#3f3a36");
+}
+
+/** A boarded granary raised on staddle stones, gabled or hipped; it slumps over as the code fails. */
+function drawGranary(pen: Pen, house: House, look: Look, size: number, roofForm: string): void {
+  const w = look.w;
+  const L = size;
+  const W = clamp(L * 0.72, 1.5, 2.1);
+  const [X, Z] = yardAt(house, 1.6 + W / 2, -house.plan.depth * 0.12);
+  const stone = worn(look.hue("masonry", "#b8b0a0"), w);
+  const timber = worn(look.hue("timber", "#6b4f3a"), w);
+  const slump = ease(w.v, 0.2, 0.06) * 0.5 * K * house.side;
+  const hx = (W / 2) * K;
+  const hz = (L / 2) * K;
+  for (const dx of [-hx + 0.3, hx - 0.3]) {
+    for (const dz of [-hz + 0.3, hz - 0.3]) {
+      box(pen, X + dx - 0.15, X + dx + 0.15, Z + dz - 0.15, Z + dz + 0.15, 0, 0.5 * K, stone);
+      box(pen, X + dx - 0.4, X + dx + 0.4, Z + dz - 0.35, Z + dz + 0.35, 0.5 * K, 0.62 * K, stone);
+    }
+  }
+  const floor = 0.9 * K;
+  const eave = 2.37 * K;
+  box(pen, X - hx + slump, X + hx + slump, Z - hz, Z + hz, floor - slump * 0.3 * house.side, eave, timber);
+  hatch(pen, Array.from({ length: 6 }, (_, k) => [[X - hx + slump, Z - hz, floor + ((k + 1) * (eave - floor)) / 7], [X + hx + slump, Z - hz, floor + ((k + 1) * (eave - floor)) / 7]] as P3[]), rgba(INK, 0.45), 0.5);
+  const roofC = worn(look.hue("roof", "#8a6a50"), w, 0.6);
+  const over = 0.28 * K;
+  const ridge = eave + (W / 2 + 0.28) * 0.95 * K;
+  if (roofForm === "hipped") {
+    const r0 = Z - Math.max(0, hz - hx);
+    const r1 = Z + Math.max(0, hz - hx);
+    const [x0, x1] = [X - hx - over + slump, X + hx + over + slump];
+    face(pen, [[x0, Z - hz - over, eave], [x1, Z - hz - over, eave], [X + slump, r0, ridge]], shaded(roofC, 0.16));
+    face(pen, [[x0, Z - hz - over, eave], [x0, Z + hz + over, eave], [X + slump, r1, ridge], [X + slump, r0, ridge]], lit(roofC, 0.2));
+  } else {
+    gableRoof(pen, X - hx - over + slump, X + hx + over + slump, Z - hz - 0.22 * K, Z + hz + 0.22 * K, eave, ridge, roofC, timber);
   }
 }
 

@@ -453,6 +453,16 @@ seconds; it slows as vitality falls and stands still below 0.1. An
 archive's tower rises from the back corner, rendered between stone quoins,
 taller the more of the code depends on it, its narrow windows lamplit at
 night under a steep cap or an open lantern room whose lamp burns after dusk.
+A waterwheel is offered only where the building's region holds running
+water. The rest stand in the yard beside the free side:
+
+| Feature | The code it suits | As it fails |
+| --- | --- | --- |
+| Dovecote: a round stone cote under a cone and lantern, or a painted cote on a post, its doves circling | Carries messages from one part of the code to another: a queue, a channel, a notifier | The doves fly home and stay in, the door swings open, the cote on a post lurches |
+| Well: a stone ring under a little roof on posts, or beside a sweep with a stone weight | A store the others keep their things in and draw from | The water sinks away, the bucket falls in, coping stones fall in, moss on the coping |
+| Bell: a dark iron bell in a stone arch or a frame of raked timbers, rung by a rope | Raises signals the others wait for and answer: an event emitter, hooks, alarms | It hangs askew from 0.4, and is gone by 0.14 |
+| Forge: a stone hearth, plastered hood and chimney, an anvil and a quench trough, in an open shed or under the sky | Makes the tools the rest is built with: a compiler, a bundler, code generation | Its smoke thins, its fire stops glowing at dusk, the shed's covering falls in and its outer posts fall |
+| Granary: a boarded store on mushroom-shaped staddle stones, gabled or hipped, its steps stopping short of the door | Keeps what was made so it need not be made again: a cache, stored results | Its boards rot through, the outer staddles topple and it slumps over |
 
 A failing building falls to ruin, and reads from 40 m. It gives way first
 at the front corner away from the door, where a person walking up sees it:
@@ -841,6 +851,11 @@ each slot's primitive is inked, and the palette gives every wash:
 | `cottage-garden@1` | The walk, a picket fence, flowers under the windows, a lantern by the door, a woodpile |
 | `waterwheel@1` | The wheel at the free end, turned 35 degrees toward the viewer so it reads as a wheel, its flume or race |
 | `tower@1` | A square tower at the back corner, quoined, under a pyramid cap or an open lantern |
+| `dovecote@1` | A round stone column under a cone and lantern, or a painted box on a post, with doves gliding over it |
+| `well@1` | A ring of stone round dark water, under a little roof on two posts or beside a sweep |
+| `bell@1` | A dark bell in a stone arch or an A-frame of timbers, under a little roof |
+| `forge@1` | A tall stack smoking over a hearth that glows, an anvil on its stump, in an open shed or under the sky |
+| `granary@1` | A boarded box on mushroom posts, gabled or hipped, leaning as it slumps |
 
 One wear rule runs on every mass, as the building's ruin does: the roof
 rots through from the weak corner (the front corner away from the door),

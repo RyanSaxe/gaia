@@ -7,6 +7,7 @@
 
 import { primitive, t } from "@gaia/schema";
 import { buildTower, buildWaterwheel } from "./geometry/building/features.ts";
+import { buildBell, buildDovecote, buildForge, buildGranary, buildWell } from "./geometry/building/yard.ts";
 import { buildGarden } from "./geometry/building/garden.ts";
 import { layOutCottage } from "./geometry/building/layout.ts";
 import { buildCasements } from "./geometry/building/openings.ts";
@@ -230,4 +231,84 @@ export const tower = primitive({
   build: (p, ctx, plan) => buildTower(p, ctx, plan),
 });
 
-export const STRUCTURE_PRIMITIVES = [cottagePlan, timberFrame, fieldstone, thatch, tiles, casements, cottageGarden, waterwheel, tower];
+export const dovecoteParams = {
+  cote: t.choice("What the doves live in", {
+    "a round stone cote": "A squat round dovecote of rough stone with a ledge round its middle, its conical roof crowned by a little open lantern the doves fly in and out of",
+    "a cote on a post": "A small painted dovecote raised on a tall post, rows of arched doorways under its pitched roof, each with a ledge to land on",
+  }),
+  flock: t.scale("How many doves keep it", { "a few doves": 4, "a flock": 8, "a great flock": 13 }),
+};
+
+export const dovecote = primitive({
+  id: "dovecote@1",
+  role: "Feature",
+  doc: "A dovecote beside the house, its doves circling over it and settling on its ledges, for an entity that carries messages from one part of the code to another: a message queue, a channel, a mailer or a notifier that delivers what others send. Its doves fly home and stay in as the code fails, and the cote falls into disrepair.",
+  params: dovecoteParams,
+  build: (p, ctx, plan) => buildDovecote(p, ctx, plan),
+});
+
+export const wellParams = {
+  head: t.choice("What stands over the well", {
+    "a little roof": "A small shingled roof on two posts over the winch, the bucket hanging on its rope",
+    "a sweep": "A long wooden pole balanced on a forked post, a stone weight at one end and the bucket at the other",
+  }),
+  width: t.scale("How wide the well is", { "a narrow well": 0.55, "a wide well": 0.75, "a great well": 0.95 }),
+};
+
+export const well = primitive({
+  id: "well@1",
+  role: "Feature",
+  doc: "A round stone well in the yard beside the house, for an entity the rest of the code keeps its things in and draws them from: a store, a database or shared state. Its water sinks away, its bucket falls in and its coping loosens as the code fails.",
+  params: wellParams,
+  build: (p, ctx, plan) => buildWell(p, ctx, plan),
+});
+
+export const bellParams = {
+  hanging: t.choice("What the bell hangs in", {
+    "a stone arch": "Two stone piers joined by a round arch under a little gabled roof",
+    "a timber frame": "Two frames of raked timber legs joined by the beam the bell hangs from, under a small shingled roof",
+  }),
+  bell: t.scale("How big the bell is", { "a small bell": 0.3, "a chapel bell": 0.42, "a great bell": 0.56 }),
+};
+
+export const bell = primitive({
+  id: "bell@1",
+  role: "Feature",
+  doc: "A dark iron bell hung beside the house under a little roof, rung by a rope, for an entity that raises signals the rest of the code waits for and answers when they sound: an event emitter, hooks, triggers, alarms and alerts. Its bell hangs askew and then is gone as the code fails, and its roof rots through.",
+  params: bellParams,
+  build: (p, ctx, plan) => buildBell(p, ctx, plan),
+});
+
+export const forgeParams = {
+  shelter: t.choice("What shelters the forge", {
+    "an open shed": "An open-fronted shed of timber posts under one sloping roof, the hearth at its back",
+    "open to the sky": "The hearth and its chimney standing alone in the yard, the anvil beside them",
+  }),
+  stack: t.scale("How tall its chimney stands", { "a short stack": 3.3, "a tall stack": 4.1, "a soaring stack": 5 }),
+};
+
+export const forge = primitive({
+  id: "forge@1",
+  role: "Feature",
+  doc: "A smith's forge beside the house: a stone hearth under a plastered hood and chimney, an anvil on its stump and a quench trough, for an entity that makes the tools the rest of the code is built with: a compiler, a bundler, a build step or code generation. Its chimney smokes and its fire glows at dusk while the code is healthy; it goes cold and its shelter falls in as the code fails.",
+  params: forgeParams,
+  build: (p, ctx, plan) => buildForge(p, ctx, plan),
+});
+
+export const granaryParams = {
+  size: t.scale("How much it holds", { "a small store": 1.9, "a granary": 2.4, "a great granary": 3 }),
+  roof: t.choice("How it is roofed", {
+    gabled: "Two slopes meeting at a ridge over boarded gables",
+    hipped: "Slopes on every side meeting in a short ridge, low and snug",
+  }),
+};
+
+export const granary = primitive({
+  id: "granary@1",
+  role: "Feature",
+  doc: "A boarded granary raised on mushroom-shaped staddle stones beside the house, for an entity that keeps what was made so it need not be made again: a cache, stored results or saved state. Its boards rot through and it slumps off its stones as the code fails.",
+  params: granaryParams,
+  build: (p, ctx, plan) => buildGranary(p, ctx, plan),
+});
+
+export const STRUCTURE_PRIMITIVES = [cottagePlan, timberFrame, fieldstone, thatch, tiles, casements, cottageGarden, waterwheel, tower, dovecote, well, bell, forge, granary];

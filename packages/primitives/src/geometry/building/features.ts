@@ -27,7 +27,7 @@ class Moved extends PartBuilder {
 }
 
 /** The side wall (+1 or -1 along x) a feature takes: away from a gable chimney. */
-const featureSide = (plan: BuildingPlan): 1 | -1 => (plan.masses[0]?.ridge === "x" ? (chimneyEnd(plan) === 1 ? -1 : 1) : 1);
+export const featureSide = (plan: BuildingPlan): 1 | -1 => (plan.masses[0]?.ridge === "x" ? (chimneyEnd(plan) === 1 ? -1 : 1) : 1);
 
 // ---------- waterwheel ----------
 
