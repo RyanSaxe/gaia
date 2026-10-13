@@ -10,6 +10,7 @@
 import "./journal.css";
 import LEATHER from "./leather.webp";
 import PAPER from "./paper.webp";
+import { linesOf } from "./page.ts";
 import { swipes } from "./swipe.ts";
 
 /** The two pages a place in the book opens onto. */
@@ -154,7 +155,7 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
         const more = rows.filter((r) => r.classList.contains("jp-past") && r.classList.contains("jp-line")).length;
         fold.style.top = `${down(last)}px`;
         // A document's lines are its paragraphs, so its fold just reads on.
-        fold.textContent = body.querySelector(".jp-code.prose") !== null ? "read on" : `${more.toLocaleString("en-US")} more ${more === 1 ? "line" : "lines"}`;
+        fold.textContent = body.querySelector(".jp-code.prose") !== null ? "read on" : linesOf(more);
         fold.classList.add("shown");
       }
     }

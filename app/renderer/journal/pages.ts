@@ -141,7 +141,7 @@ function layOut(words: PageWords, body: Full, host: HTMLElement): Slice[] {
     host.replaceChildren(page);
     const holder = page.querySelector(".jp-body") as HTMLElement;
     const top = holder.getBoundingClientRect().top;
-    const rows = [...holder.querySelectorAll<HTMLElement>(".jp-line, .jp-fold.inline, .jp-rest")].map((r) => {
+    const rows = [...holder.querySelectorAll<HTMLElement>(".jp-line, .jp-fold")].map((r) => {
       const b = r.getBoundingClientRect();
       return { top: b.top - top, bottom: b.bottom - top };
     });

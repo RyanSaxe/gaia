@@ -711,7 +711,11 @@ marks. The marks are brush strokes in the margin, left of the handwritten
 line numbers and their pencil rule, or beside a row: green for the key
 block, russet for the weak part, slate blue for a page's best. Each marked
 block is labeled in its stroke's color, **key**, **weak** or **best**, in a
-column of its own so the names after it line up.
+column of its own so the names after it line up. Every fold reads the same,
+"⋯ 20 lines" by hand where the code starts, and is a tap to its lines where
+they can be read elsewhere: around a snippet's block, before and after a
+definition's page, a definition folded in its file's text (with its page),
+and past what the appendix sets.
 
 Nothing in the world lights up, rings or changes under a pointer: a thing
 looks the same whether or not a person could walk up to it, and the pointer
