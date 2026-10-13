@@ -43,9 +43,13 @@ The engine's bench writes it under `node_modules`, so Gaia's own world never
 reads it, and asks Jev about it to hold its questions to the plan.
 
 The lab lays these out with the real `layoutWorld`, `standWorld` and bake, so
-the proving ground looks as any codebase's world would. Health comes from the
-facts, as it would for real code: a ruined file has failing tests, compiler
-errors, deep nesting, lint warnings, TODOs and nothing importing it.
+the proving ground looks as any codebase's world would. Its vitality is the
+quality fixed with its looks (`Judgments.quality` in `proving-judged.json`),
+as Jev's quality would give it: each file's by its planned health, from 1 for
+thriving to 0.03 for ruin, and each entity's its own files' pooled by their
+lines. Its facts still read as its health would: a ruined file has failing
+tests, compiler errors, deep nesting, lint warnings, TODOs and nothing
+importing it.
 
 Directory names say what each area is for, so the minimap's name tells you
 where you are:
@@ -68,9 +72,9 @@ where each stop looks (x, z in meters from the middle):
 
 | Stop | What is there | Looks at |
 | --- | --- | --- |
-| `bridge` | A footbridge in `crossings`, vitality 1.00 | 11, 249 |
-| `ruined bridge` | A footbridge in `ruins`, vitality 0.05 | 255, 13 |
-| `stepping stones` | Stepping stones in `fords`, vitality 0.57 | -193, -336 |
+| `bridge` | A footbridge in `crossings`, whose ground is at vitality 1.00 | 11, 249 |
+| `ruined bridge` | A footbridge in `ruins`, whose ground is at vitality 0.03 | 255, 13 |
+| `stepping stones` | Stepping stones in `fords`, whose ground is at vitality 0.75 | -193, -336 |
 | `cairn`, `ruined cairn` | Cairns where three ways meet, in `hollow` and `ruins/house` | -251, 311 and 450, -67 |
 | `pond`, `pond 2` | The ponds of `hollow` and `pondside` | -232, 390 and 63, -417 |
 | `ruined building`, `thriving building` | The ruined croft in `ruins`, the thriving one in `terraces` | 125, -62 and 445, 206 |

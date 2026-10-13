@@ -98,8 +98,8 @@ export function createSettlement(light: SceneLight, entities: readonly SampleEnt
     const ask = asks[i] as BuildAsk;
     const built = made(ask, lib);
     const view = createPlant({ ...built, parts: mergeParts(built.parts) }, light);
-    const represented = representEntity(entity.facts);
-    view.setVitality(represented.report.vitality);
+    const represented = representEntity(entity.facts, entity.vitality);
+    view.setVitality(represented.vitality);
     return {
       entity,
       represented,
@@ -108,7 +108,7 @@ export function createSettlement(light: SceneLight, entities: readonly SampleEnt
       height: view.height,
       radius: view.radius,
       ask,
-      vitality: represented.report.vitality,
+      vitality: represented.vitality,
       blueprint: preset.blueprint,
       palette: built.palette,
       plan: built.slots.get("footprint")?.output as BuildingPlan,

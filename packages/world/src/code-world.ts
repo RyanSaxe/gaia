@@ -41,7 +41,6 @@ import { type LandNode, divideLand, dividePlots } from "./land.ts";
 import { certainty } from "./context.ts";
 import { type OutlineReading, areaOutline, areaReadings, bodySize, entityOutline, entityReadings, fileOutline, fileReadings, fileSize, howMany, importersOf, outlineOrder, symbolSize, tokensOf } from "./outline.ts";
 import { MODEL } from "./planner.ts";
-import { entityVitalityOf, vitalityOf } from "./vitality.ts";
 
 /** One option Jev may choose: what it is like (Jev reads this) and the facts it suits (the stand-in reads these). */
 export interface Look {
@@ -114,8 +113,12 @@ export interface Judgments {
    * about each one: what the file's finer entities stand as.
    */
   readonly forms: Readonly<Record<string, Readonly<Record<string, string>>>>;
-  /** File → Jev's probability that it holds behavior a test should check, for a design that asks (`judged`). Vitality reads it. */
-  readonly needsTests?: Readonly<Record<string, number>>;
+  /**
+   * File or directory → its quality, 0 to 1, for a world no engine graph
+   * judges: the proving ground's, fixed with its looks. Vitality reads it
+   * where the graph gives none.
+   */
+  readonly quality?: Readonly<Record<string, number>>;
   /** Directory → water key, for the directories that are regions. */
   readonly waters: Readonly<Record<string, string>>;
   /** Directory → character key, for the directories that are regions: how its trees and open ground lie. */
@@ -138,8 +141,6 @@ export interface CodePatch extends PatchPlace {
   readonly ground: number;
   /** Its first cell in `cells`; its ground is every cell naming it. */
   readonly cell: number;
-  /** Jev's probability that the file needs tests of its own, when Jev was asked: its vitality reads it. */
-  readonly needsTests?: number;
 }
 
 /** An entity standing in the world: a building or a landmark on its lot. */
@@ -572,9 +573,6 @@ export function entityWords(model: CodeModel, e: EntityFacts): Record<string, un
   };
 }
 
-/** The question `judged` asks of every source file, whose answer vitality reads. */
-export const NEEDS_TESTS = "tests";
-
 /** The nearest directory with land of its own that holds a path's directory. */
 function regionFor(regions: ReadonlySet<string>, dir: string): string {
   for (let p: string | null = dir; p !== null; p = p === "" ? null : parentOf(p)) if (regions.has(p)) return p;
@@ -729,17 +727,7 @@ export function planWorldRequests(model: CodeModel, looks: Looks, options: PlanO
       ? choice("This file becomes a patch of ground in its directory's area, and what grows there shows what the file is and does. Which suits this file? Judge by the part it plays, its size and how much code imports it, not by what its words are about: a file about light or grass is judged like any other.", docs(looks.vibe), "vibe", f.path, salt)
       : choice("This file becomes a patch of ground in its directory's area. What grows on it?", docs(looks.vibe), "vibe", f.path, salt);
     const kindsStanding = judged ? (Object.keys(forms).length === 0 ? [] : ["functions, classes, types and constants"]) : Object.keys(forms).map((id) => `${KIND_WORDS[id.slice("form:".length) as SymbolFact["kind"]]}s`);
-    const tests: Record<string, JevQuestion> =
-      judged && (f.kind ?? "source") === "source"
-        ? {
-            [NEEDS_TESTS]: {
-              type: "noul",
-              instructions: "Does this file hold behavior a test should check: logic that could break when someone changes it? Files of only types, constants, presets, markup or styles, and files that only pass on what they import, hold none.",
-              criteria: { true: "It holds behavior a test should check.", false: "It holds nothing a test needs to check." },
-            },
-          }
-        : {};
-    ask("file", f.path, state, { vibe, ...forms, ...tests }, { readings: fileReadings(model, f), decides: `what grows on this file's patch${kindsStanding.length === 0 ? "" : ` and what its ${kindsStanding.join(" and ")} stand as`}` });
+    ask("file", f.path, state, { vibe, ...forms }, { readings: fileReadings(model, f), decides: `what grows on this file's patch${kindsStanding.length === 0 ? "" : ` and what its ${kindsStanding.join(" and ")} stand as`}` });
   }
   const entities = new Map(model.entities.map((e) => [e.path, e]));
   const things = {
@@ -974,7 +962,6 @@ export async function judgeWorld(model: CodeModel, looks: Looks, jev: JevClient,
   const forms: Record<string, Record<string, string>> = {};
   const waters: Record<string, string> = {};
   const characters: Record<string, string> = {};
-  const needsTests: Record<string, number> = {};
   for (const { p, a } of answered) {
     if (p.about === "world") world = pickOf(a.world) ?? world;
     else if (p.about === "area") {
@@ -989,8 +976,6 @@ export async function judgeWorld(model: CodeModel, looks: Looks, jev: JevClient,
         else if (id.startsWith("form#")) mine[id.slice("form".length)] = pickOf(a[id]) ?? first(looks.form);
       }
       if (Object.keys(mine).length > 0) forms[p.target] = mine;
-      const tests = a[NEEDS_TESTS];
-      if (tests?.type === "noul") needsTests[p.target] = tests.noul;
     } else {
       // Revised questions ask building-or-landmark on its own, then each look; the first asked one choice over both.
       const stands = pickOf(a.stands);
@@ -1006,7 +991,7 @@ export async function judgeWorld(model: CodeModel, looks: Looks, jev: JevClient,
       }
     }
   }
-  return { world, lands, vibes, things, trails, forms, waters, characters, ...(Object.keys(needsTests).length === 0 ? {} : { needsTests }) };
+  return { world, lands, vibes, things, trails, forms, waters, characters };
 }
 
 // ---------- the stand-in judge ----------
@@ -1125,11 +1110,6 @@ export function standInJev(looks: Looks): JevClient {
           const probabilities = Object.fromEntries(scores.map(([k, s]) => [k, Math.exp(2 * s) / total]));
           const [best] = [...scores].sort((a, b) => b[1] - a[1])[0] ?? [""];
           answers[id] = { type: "choice", choice: best, probabilities, confidence: probabilities[best] ?? 0 };
-        } else if (q.type === "noul" && id === NEEDS_TESTS) {
-          // Whether a file needs tests: one that declares functions or classes does.
-          const declares = (state.file as { declares?: unknown } | undefined)?.declares;
-          const acts = typeof declares === "object" && declares !== null && ("functions" in declares || "classes" in declares);
-          answers[id] = { type: "noul", noul: acts ? 0.8 : 0.15 };
         } else if (q.type === "noul" && id.startsWith(MORE)) {
           // Whether a reading would help: seeded, so some requests grow their context and the path is exercised.
           answers[id] = { type: "noul", noul: 0.2 + 0.6 * rand(seedOf(`${target}:${id}`)).next() };
@@ -1332,7 +1312,8 @@ export function layoutWorld(model: CodeModel, judged: Judgments, graph?: CodeGra
   const entityAt = new Map(model.entities.map((e) => [e.path, e]));
   const files = new Map(model.files.map((f) => [f.path, f]));
   // Vitality is Jev's quality from the understanding pass, and a thing it didn't judge takes its nearest judged
-  // folder's. A world the pass never ran on, such as the stand-in's, keeps the code model's signals.
+  // folder's. A world no graph judges takes the quality fixed with its looks (the proving ground's), and a thing
+  // nothing judged at all, as in a world opened without Jev, is whole.
   const quality = new Map((graph?.nodes ?? []).flatMap((n) => (n.kind !== "block" && typeof n.judged?.value?.quality === "number" ? [[n.id, n.judged.value.quality] as const] : [])));
   const folderQuality = (path: string): number | undefined => {
     for (let p: string | null = path; p !== null; p = p === "" ? null : parentOf(p)) {
@@ -1382,13 +1363,12 @@ export function layoutWorld(model: CodeModel, judged: Judgments, graph?: CodeGra
     if (kind === "lot") {
       const e = entityAt.get(path) as EntityFacts;
       const t = judged.things[path] ?? { as: "building", look: "" };
-      things.push({ path, name: e.name, as: t.as, look: t.look, area: path, x: leaf.x, z: leaf.z, lot: LAYOUT.lotReach[t.as], vitality: folderQuality(path) ?? entityVitalityOf(e).vitality });
+      things.push({ path, name: e.name, as: t.as, look: t.look, area: path, x: leaf.x, z: leaf.z, lot: LAYOUT.lotReach[t.as], vitality: folderQuality(path) ?? judged.quality?.[path] ?? 1 });
       continue;
     }
     const f = files.get(path) as FileFacts;
-    const needsTests = judged.needsTests?.[path];
-    const vitality = quality.get(`file:${path}`) ?? folderQuality(parentOf(path)) ?? vitalityOf(f, [], needsTests === undefined ? {} : { needsTests }).vitality;
-    patches.push({ path, name: baseName(path), area, x: leaf.x, z: leaf.z, radius: Math.sqrt(leaf.ground / Math.PI), vitality, lines: f.lines, kind: f.kind ?? "source", vibe: judged.vibes[path] ?? "", ground: leaf.ground, cell, ...(needsTests === undefined ? {} : { needsTests }) });
+    const vitality = quality.get(`file:${path}`) ?? folderQuality(parentOf(path)) ?? judged.quality?.[path] ?? 1;
+    patches.push({ path, name: baseName(path), area, x: leaf.x, z: leaf.z, radius: Math.sqrt(leaf.ground / Math.PI), vitality, lines: f.lines, kind: f.kind ?? "source", vibe: judged.vibes[path] ?? "", ground: leaf.ground, cell });
     for (const { def, x, z } of plotDefinitions(f, defs.get(path) ?? [], leaf, land.step)) {
       symbols.push({
         id: def.id,

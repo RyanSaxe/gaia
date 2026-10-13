@@ -33,12 +33,15 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, relative, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import type { CodeModel, EntityFacts, EntityForm, FileFacts, FileKind, SymbolFact } from "@gaia/schema";
-import { type Judgments, entityVitalityOf, layoutWorld } from "@gaia/world";
+import { type Judgments, layoutWorld } from "@gaia/world";
 import { BUILDINGS, CHARACTERS, FORMS, LANDMARKS, LANDS, TRAILS, VIBES, WATERS } from "../app/renderer/terrain/looks.ts";
 import { provingCode } from "./proving-code.ts";
 
-/** How a file or an entity fares, from every signal clear to every signal failing; `decayed` is ruin with no tests at all, so it drags its entity down less. */
+/** How a file or an entity fares, from thriving to ruin; `decayed` is ruin with no tests at all, so it drags its entity down less. */
 type Health = "thriving" | "well" | "tired" | "failing" | "ruin" | "decayed";
+
+/** The quality each health stands for, as Jev's quality would give it: what the proving ground's vitality is. */
+const QUALITY: Readonly<Record<Health, number>> = { thriving: 1, well: 0.75, tired: 0.5, failing: 0.25, decayed: 0.1, ruin: 0.03 };
 
 interface PlannedDir {
   readonly path: string;
@@ -69,7 +72,7 @@ const PLAN: readonly PlannedDir[] = [
   // A brook runs through a thriving wood; its banks' entities lean on each other across it.
   { path: "crossings", health: "thriving", files: ["flow.ts:520", "channel.ts:480", "banks.ts:420", "weir.ts:360", "crossings.test.ts:180", "NOTES.md:90"], land: ["Brook valley", "A brook", "Deep wood"] },
   { path: "crossings/west-bank", health: "thriving", files: ["index.ts:140", "path.ts:300"], entity: B("Thatched cottage", "Keeps the west bank's paths: a small module doing one modest job.") },
-  { path: "crossings/east-bank", health: "well", files: ["index.ts:120", "gate.ts:280"], entity: B("Storybook house", "The east bank's gatehouse: the process a person starts to cross.", "app") },
+  { path: "crossings/east-bank", health: "thriving", files: ["index.ts:120", "gate.ts:280"], entity: B("Storybook house", "The east bank's gatehouse: the process a person starts to cross.", "app") },
   { path: "crossings/mill", health: "thriving", files: ["package.json:30", "index.ts:160", "wheel.ts:380"], entity: B("Watermill", "Turns the brook's flow into work: a pipeline from one kind of data to another.", "package") },
   // A trickle through groves of mixed health, crossed by faint tracks on stepping stones.
   { path: "fords", health: "well", files: ["shallows.ts:460", "reeds.ts:380", "stones.ts:300", "fords.test.ts:140"], land: ["Meandering vale", "A trickle", "Groves and clearings"] },
@@ -373,7 +376,6 @@ const model: CodeModel = {
 
 const vibes: Record<string, string> = {};
 const forms: Record<string, Record<string, string>> = {};
-const needsTests: Record<string, number> = {};
 const trees = Object.keys(VIBES).filter((v) => v !== "Open meadow");
 const formKeys = Object.keys(FORMS);
 let tree = 0;
@@ -381,7 +383,6 @@ let form = 0;
 for (const f of model.files) {
   const acts = f.kind === "source" || f.kind === "script";
   vibes[f.path] = acts ? (trees[tree++ % trees.length] as string) : "Open meadow";
-  needsTests[f.path] = f.kind === "source" ? 0.85 : 0.1;
   if (f.kind === "source" && f.symbols.length > 0) forms[f.path] = Object.fromEntries(f.symbols.map((s) => [`#${s.name}`, formKeys[form++ % formKeys.length] as string]));
 }
 const judged: Judgments = {
@@ -393,7 +394,16 @@ const judged: Judgments = {
   things: Object.fromEntries(PLAN.flatMap((d) => (d.entity === undefined ? [] : [[d.path, { as: d.entity.as, look: d.entity.look }]]))),
   trails: TRAIL_PLAN.map(([from, to, look, want]) => ({ from, to, want, look })),
   forms,
-  needsTests,
+  // Every file's quality by its health, and every entity's its own files' pooled by their lines.
+  quality: Object.fromEntries([
+    ...drafted.map((f) => [f.path, QUALITY[f.health]] as const),
+    ...PLAN.flatMap((d) => {
+      if (d.entity === undefined) return [];
+      const own = drafted.filter((f) => f.dir === d.path);
+      const lines = own.reduce((n, f) => n + f.lines, 0);
+      return [[d.path, lines === 0 ? QUALITY[d.health] : own.reduce((n, f) => n + QUALITY[f.health] * f.lines, 0) / lines] as const];
+    }),
+  ]),
 };
 
 // ---------- the plan covers every option, and lays out as planned ----------
@@ -448,4 +458,4 @@ const band = (v: number): string => (v >= 0.85 ? "thriving" : v >= 0.6 ? "well" 
 const count = (vs: readonly number[]): string => Object.entries(vs.reduce<Record<string, number>>((n, v) => ((n[band(v)] = (n[band(v)] ?? 0) + 1), n), {})).map(([k, n]) => `${n} ${k}`).join(", ");
 console.log(`proving: ${model.files.length} files, ${model.repository.lines.toLocaleString("en-US")} lines, ${entities.length} entities; a ${world.size} m world of ${world.regions.length} lands and ${world.areas.length} areas`);
 console.log(`  files: ${count(world.patches.map((p) => p.vitality))}`);
-console.log(`  entities: ${count(entities.map((e) => entityVitalityOf(e).vitality))}`);
+console.log(`  entities: ${count(world.things.map((t) => t.vitality))}`);

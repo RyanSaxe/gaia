@@ -28,7 +28,6 @@ import proving from "./fixtures/proving.json";
 import provingJudged from "./fixtures/proving-judged.json";
 import { CHARACTERS, type Character, FORMS, LANDS } from "./looks.ts";
 import type { Represented, SampleEntity } from "./samples.ts";
-import { type CodePatch, type FileJudged, vitalityOf } from "@gaia/world";
 import type { StandCode, StandLot } from "./stand.ts";
 
 /** The wait a world opens behind: it shows how opening goes, and asks before spending past the limit. */
@@ -51,7 +50,7 @@ export interface CodeLab {
   /** The entities buildings stand for, each with the building Jev chose, in the order the stand sites them. */
   readonly buildings: readonly SampleEntity[];
   /** The entities landmarks stand for: which landmark preset and its facts. */
-  readonly landmarks: readonly { readonly preset: number; readonly facts: EntityFacts }[];
+  readonly landmarks: readonly { readonly preset: number; readonly facts: EntityFacts; readonly vitality: number }[];
   /** The world preset whose light, sky and air the world takes. */
   readonly sky: (typeof WORLD_PRESETS)[number] | undefined;
   /** What the bake thread needs to stand this world's things, given the request's trail styles. */
@@ -85,14 +84,11 @@ export function withWater(biome: Blueprint, water: string): Blueprint {
   return biome;
 }
 
-/** What Jev judged about a patch's file that its vitality reads. */
-export const judgedOf = (patch: CodePatch | undefined): FileJudged => (patch?.needsTests === undefined ? {} : { needsTests: patch.needsTests });
-
 const KIND_NAMES: Readonly<Record<SymbolFact["kind"], string>> = { function: "Function", class: "Class", type: "Type", constant: "Constant", module: "Module" };
 const LANGUAGE_NAMES: Readonly<Record<string, string>> = { typescript: "TypeScript", javascript: "JavaScript", rust: "Rust" };
 
-/** What a card says about a file's finer entity: its name, kind, doc comment, where it is declared and its file's health. */
-export function representSymbol(s: CodeWorld["symbols"][number], file: FileFacts, judged: FileJudged = {}): Represented {
+/** What a card says about a file's finer entity: its name, kind, doc comment, where it is declared and its own vitality. */
+export function representSymbol(s: CodeWorld["symbols"][number], file: FileFacts): Represented {
   return {
     id: s.id,
     name: s.name,
@@ -102,7 +98,7 @@ export function representSymbol(s: CodeWorld["symbols"][number], file: FileFacts
     size: `${s.lines.toLocaleString()} ${s.lines === 1 ? "line" : "lines"} of ${file.lines.toLocaleString()} in its file`,
     dependsOn: [],
     dependents: [],
-    report: vitalityOf(file, [], judged),
+    vitality: s.vitality,
   };
 }
 
@@ -299,8 +295,8 @@ export function codeLab({ model, world, judges, summary, judged }: WorldDocument
     spec,
     thing: (of) => judged[of],
     files: new Map(model.files.map((f) => [f.path, f])),
-    buildings: houses.map((t) => ({ facts: entities.get(t.path) as EntityFacts, building: t.look })),
-    landmarks: rises.map((t) => ({ preset: landmarkIndex(t.look), facts: entities.get(t.path) as EntityFacts })),
+    buildings: houses.map((t) => ({ facts: entities.get(t.path) as EntityFacts, building: t.look, vitality: t.vitality })),
+    landmarks: rises.map((t) => ({ preset: landmarkIndex(t.look), facts: entities.get(t.path) as EntityFacts, vitality: t.vitality })),
     sky: WORLD_PRESETS.find((p) => p.name === world.world) ?? WORLD_PRESETS[0],
     stand: {
       lots: houses.map(lot),

@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { EntityFacts } from "@gaia/schema";
 import { landmark, link, structure } from "@gaia/kinds";
-import { entityVitalityOf } from "@gaia/world";
 
 /** A package as the engine would describe it: the world package of this repository. */
 const WORLD: EntityFacts = {
@@ -25,14 +24,6 @@ const WORLD: EntityFacts = {
 };
 
 describe("entities", () => {
-  it("declines with the share of an entity's tests that fail, and says why", () => {
-    const healthy = entityVitalityOf(WORLD);
-    const failing = entityVitalityOf({ ...WORLD, tests: { ...WORLD.tests, failing: 2 } });
-    expect(healthy.vitality).toBeGreaterThan(0.85);
-    expect(failing.vitality).toBeLessThan(healthy.vitality * 0.5);
-    expect(failing.terms.find((t) => t.id === "tests")?.reading).toBe("2 of 4 test files failing");
-  });
-
   it("sizes a building from its entity: larger with more code, taller with more depending on it", () => {
     const bind = (e: EntityFacts) => Object.fromEntries(Object.entries(structure.facts).map(([k, f]) => [k, f(e)]));
     const small = bind(WORLD);
