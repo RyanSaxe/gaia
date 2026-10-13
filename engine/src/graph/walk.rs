@@ -29,7 +29,9 @@ pub fn content_hash(bytes: &[u8]) -> String {
 
 /// Every regular file under `root` that .gitignore keeps, in path order.
 /// Nothing outside the root is ever read: symlinks, to files or
-/// directories, are skipped, never followed.
+/// directories, are skipped, never followed, and so is any folder below the
+/// root that is a git checkout of its own (a worktree, a nested repository or
+/// a submodule), which is another project.
 pub fn walk(root: &Path) -> Vec<Walked> {
     let mut out = Vec::new();
     let walker = ignore::WalkBuilder::new(root)
@@ -38,7 +40,7 @@ pub fn walk(root: &Path) -> Vec<Walked> {
         .require_git(false)
         // A link could lead anywhere on the disk, and a cloned repository chooses its own.
         .follow_links(false)
-        .filter_entry(|e| e.file_name() != ".git")
+        .filter_entry(|e| e.file_name() != ".git" && !(e.depth() > 0 && e.file_type().is_some_and(|t| t.is_dir()) && e.path().join(".git").exists()))
         .build();
     for entry in walker.flatten() {
         if !entry.file_type().is_some_and(|t| t.is_file()) {
@@ -64,4 +66,27 @@ pub fn walk(root: &Path) -> Vec<Walked> {
     }
     out.sort_by(|a, b| a.path.cmp(&b.path));
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_folder_that_is_a_checkout_of_its_own_is_another_project() {
+        let root = std::env::temp_dir().join(format!("gaia-walk-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("src")).unwrap();
+        std::fs::create_dir_all(root.join(".claude/worktrees/agent/src")).unwrap();
+        std::fs::create_dir_all(root.join("vendor/lib")).unwrap();
+        std::fs::write(root.join("src/a.ts"), "export const a = 1;\n").unwrap();
+        // A worktree's .git is a file pointing at its repository; a nested repository's is a folder.
+        std::fs::write(root.join(".claude/worktrees/agent/.git"), "gitdir: /elsewhere\n").unwrap();
+        std::fs::write(root.join(".claude/worktrees/agent/src/a.ts"), "export const a = 1;\n").unwrap();
+        std::fs::create_dir_all(root.join("vendor/lib/.git")).unwrap();
+        std::fs::write(root.join("vendor/lib/b.ts"), "export const b = 2;\n").unwrap();
+        let paths: Vec<String> = walk(&root).into_iter().map(|w| w.path).collect();
+        assert_eq!(paths, vec!["src/a.ts".to_string()]);
+        std::fs::remove_dir_all(&root).unwrap();
+    }
 }
