@@ -31,7 +31,7 @@ import { MARGIN, drawRivers, drawTrails, drawTrees, letterName, nearestAreas, pa
 import { CELL, type NameLand, canvasMeasure, nameLand, placeNames } from "../immersive/map-names.ts";
 import { DECKLE_MASK, MAP_STYLE, dryness, healthColor, landWash } from "../immersive/map-styles.ts";
 import { markScale, stampBuilding, stampLandmark } from "../immersive/marks.ts";
-import { easeRing, fadeMask, floatWash, layWash, PAPER, rimPoints, ringsPath, type WashArea, type WashSheet } from "../immersive/wash.ts";
+import { borderPath, easeRing, fadeMask, floatWash, layWash, PAPER, rimPoints, ringsPath, type WashArea, type WashSheet } from "../immersive/wash.ts";
 import { layGround } from "../immersive/wild-ink.ts";
 import { type CellBox, type SettlingHealth, settlingHealth } from "./settling.ts";
 import type { WaitView } from "./wait.ts";
@@ -79,30 +79,6 @@ function thin(ring: readonly number[]): number[] {
   const out: number[] = [];
   for (let k = 0; k < ring.length; k += 4) out.push(ring[k] as number, ring[k + 1] as number);
   return out;
-}
-
-/** A ring as an SVG path through the middles of its edges, bending at its corners, as a pen draws it. */
-function pathOf(rings: readonly (readonly number[])[]): string {
-  let d = "";
-  const f = (v: number): string => v.toFixed(1);
-  for (const ring of rings) {
-    const count = ring.length / 2;
-    if (count < 3) continue;
-    const at = (k: number): [number, number] => {
-      const i = ((k % count) + count) % count;
-      return [ring[i * 2] as number, ring[i * 2 + 1] as number];
-    };
-    const [ax, ay] = at(0);
-    let [bx, by] = at(1);
-    d += `M${f((ax + bx) / 2)} ${f((ay + by) / 2)}`;
-    for (let k = 1; k <= count; k++) {
-      const [cx, cy] = at(k + 1);
-      d += `Q${f(bx)} ${f(by)} ${f((bx + cx) / 2)} ${f((by + cy) / 2)}`;
-      [bx, by] = [cx, cy];
-    }
-    d += "Z";
-  }
-  return d;
 }
 
 /** The land as the sheet paints it, once divided. */
@@ -236,8 +212,12 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
           // The outlines follow the lattice they were traced on, a point a meter: eased into a pen's line, and every
           // other point kept, still finer than a pixel on the sheet.
           const eased: (readonly (readonly number[])[])[] = [];
+          // Each area's border as the field map draws it, never along the land's own edge.
+          const borders: string[] = [];
+          const edge = { size, ...(aspect === undefined ? {} : { aspect }) };
           for (const [i, o] of outlines.entries()) {
             eased.push(o.rings.map((r) => thin(easeRing(r))));
+            borders.push(borderPath(o.rings, edge));
             if (i % 4 === 3) yield;
           }
           // The pen draws every area's border from the middle outward, keeping inside the land as the map's
@@ -256,7 +236,7 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
           const lines: SVGPathElement[] = [];
           for (const [q, { o, i }] of order.entries()) {
             const line = document.createElementNS(SVG, "path");
-            line.setAttribute("d", pathOf(eased[i] ?? []));
+            line.setAttribute("d", borders[i] ?? "");
             line.setAttribute("pathLength", "1");
             line.setAttribute("stroke-width", ((o.depth === 1 ? 1.3 : 1) * perPixel).toFixed(2));
             line.style.transitionDuration = `${PACE.penMs}ms`;
@@ -306,7 +286,7 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
           h.strokeStyle = "rgba(52,80,40,0.16)";
           for (const { o, i } of order) {
             h.lineWidth = (o.depth === 1 ? 3.2 * 1.35 : 3.2) / scale;
-            h.stroke(ringsPath(eased[i] ?? [], (v) => v));
+            h.stroke(new Path2D(borders[i] ?? ""));
             yield;
           }
           show(hedges);

@@ -30,7 +30,7 @@ import { DECKLE_MASK, MAP_STYLE, type MapStyle, TRAVELLER_SVG, dryness, healthCo
 import { chained, contour, isoline, simplified } from "./isolines.ts";
 import { type AreaLabel, type Box, CELL, type NameLand, type NamePlace, type NamePlaces, PARENT_FONT, ROSE, SERIF, canvasMeasure, nameFont, nameLand, nameSpacing, placeNames } from "./map-names.ts";
 import { markScale, stampBuilding, stampLandmark } from "./marks.ts";
-import { PAPER, type WashArea, type WashSheet, easeRing, fadeMask, floatWash, layWash, paintAt, rimPath, ringsPath } from "./wash.ts";
+import { PAPER, type WashArea, type WashSheet, borderPath, easeRing, fadeMask, floatWash, layWash, paintAt, rimPath, ringsPath } from "./wash.ts";
 import { INK, type LandView, RIM, type WildInk, createWildInk, layGround, reliefAt } from "./wild-ink.ts";
 
 export interface FieldMap {
@@ -312,7 +312,7 @@ function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place
     const j = Math.floor((z + reach) / CELL);
     return i < 0 || j < 0 || i >= names.n || j >= names.n ? undefined : labelOf.get(names.at[j * names.n + i] as number);
   };
-  const borders = outlines.areas.filter((o) => o.depth > 0).map((o) => ({ path: meterPath(o.rings), depth: o.depth }));
+  const borders = outlines.areas.filter((o) => o.depth > 0).map((o) => ({ path: new Path2D(borderPath(o.rings, t.spec)), depth: o.depth }));
   // Past the paint, the wild is inked as views need it, where the paint gives way to bare paper.
   const wild = createWildInk(t, style, reach, fade);
   return { canvas, reach, style, names, labelAt, vitality, patches, contours, borders, wild };
