@@ -304,7 +304,17 @@ small card that switches between them live and tunes each one's numbers.
 In every way the speeds are constant and a turn the keys make runs at one
 steady rate or happens out of sight:
 
-- **Walk and look** (shown): W A S D or the arrows walk ahead, back (at
+- **Face and go** (shown, asked for in round 21): a direction pressed
+  while still faces the person that way at once, ← a quarter left, → right
+  and ↓ about, as a cut or at the darkest of a 0.1 s blink, never a
+  rotation; held, they walk on forward that way, looking ahead, and to go
+  on ahead after stopping takes ↑. A second ← while still turns another
+  quarter, and ↑ with ← or → pressed together faces the diagonal between.
+  While walking, a tap of ← or → nudges the way 8°, paid out at a steady
+  60° a second, and a side key held after its nudge keeps turning at 30° a
+  second; ↓ turns them about. Shift hurries. The cut or blink, the nudge,
+  the held turn (0 for none) and the diagonal are tuned in the card.
+- **Walk and look**: W A S D or the arrows walk ahead, back (at
   65% of the pace) and step aside (90%), a pair walking the diagonal no
   faster than either alone, and a drag turns the view one to one. Shift
   with ← or → turns the view at a steady 60° a second; a double tap of W or

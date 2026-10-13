@@ -114,7 +114,7 @@ const NO_SEASON: SeasonSpec = { swatches: {}, ground: NO_SHIFT, frost: 0, fall: 
 const SKY_WORLD = WORLD_PRESETS[0] as (typeof WORLD_PRESETS)[number];
 
 /** The way of walking the app shows (`@gaia/terrain`'s steer.ts); `?walk=playground` switches and tunes it live (walk-playground.ts). */
-const STEERING: SteerSchemeId = "shooter";
+const STEERING: SteerSchemeId = "face-and-go";
 /** Each mode's hint, for a mouse and keyboard and for touch. */
 const HINTS = {
   walk: [`Click the ground to walk there. ${SCHEMES[STEERING].name}`, "Tap the ground to walk there, drag to look"],
