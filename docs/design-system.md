@@ -297,45 +297,17 @@ stepping up onto it lifts the eyes as a step, and the person crosses dry
 above the water. A tapped walk carries the person along its way while they
 keep looking where they looked.
 
-How the keys walk and turn is one of several ways of walking, each data in
-`@gaia/terrain`'s `SCHEMES` (steer.ts); the app shows the one `STEERING`
-names in the terrain lab, and the lab page with `?walk=playground` shows a
-small card that switches between them live and tunes each one's numbers.
-In every way the speeds are constant and a turn the keys make runs at one
-steady rate or happens out of sight:
-
-- **Face and go** (shown; its walking chosen in round 22's walking thread):
-  ↑ walks ahead. A tap of ← or → nudges the person 8°, turned at a steady
-  60° a second, and holding the key turns on at that same steady rate,
-  standing or walking, until it is let go: there are no big turns, only
-  turning for as long as a key is held. ↓ walks backward at 65% of the pace,
-  still facing ahead, the view never turning, and ← or → turn as usual
-  while it does; ↑ and ↓ together stand. Shift hurries the walk ahead
-  (2.4 times the pace) and leaves the walk back at its own careful pace.
-  The playground also offers face and go's other ways of making a big turn,
-  from still or with ↓, which round 22 tried and set aside: walking into
-  it (setting off at once and curving round at the steady rate until facing
-  the new way, ↓ turning about in place); a cut; and a quick turn, one
-  rotation at a constant speed, a quarter in 0.25 s. A blink proved
-  disorienting.
-- **Walk and look**: W A S D or the arrows walk ahead, back (at
-  65% of the pace) and step aside (90%), a pair walking the diagonal no
-  faster than either alone, and a drag turns the view one to one. Shift
-  with ← or → turns the view at a steady 60° a second; a double tap of W or
-  ↑ hurries while it is held.
-- **Mouse look**: the same, with a click capturing the mouse to look, as in
-  desktop games, until Esc lets it go.
-- **Look around**: ↑ walks and ↓ steps back slowly (40%), and ← or → turn
-  the view at a steady 45° a second while held, so a tap nudges it a few
-  degrees.
-- **Blink turns**: a tap of ← or → nudges the view (60° a second for at
-  most 0.15 s); a double tap turns a quarter, and ↓ turns about, under a
-  0.2 s blink, the view dimming to the warm dark of closed eyes and facing
-  the new way at its darkest, so nothing rotates on screen.
-- **Turn in steps**: each press of ← or → turns 30° at once, as VR's snap
-  turn.
-- **Tank**: ↑ walks, ↓ backs (65%), ← or → turn at a steady 90° a second.
-- **Click to go**: a click walks the person there and the keys only nudge.
+The keys walk and turn the person (`steerStep` in `@gaia/terrain`, every
+number in its `STEER` table; chosen in round 22's walking thread). ↑ walks
+ahead. A tap of ← or → nudges the person 8°, turned at a steady 60° a
+second, and holding the key turns on at that same rate, standing or
+walking, until it is let go: there are no big turns and no turn ever speeds
+up. ↓ walks backward at 65% of the pace, still facing ahead, the view never
+turning, and ← or → turn as usual while it does; ↑ and ↓ together stand.
+Shift hurries the walk ahead (2.4 times the pace) and leaves the walk back
+at its own careful pace. Rounds 20 to 22 tried and set aside keys that face
+the way pressed in a swing, strafing with a mouse or drag look, tank turns,
+snap and blink turns, quick turns and walking into a turn.
 
 A winding valley swings about ±20 m to either side once every 250 m, a
 whole swing every four of its own widths, carrying its floor and stream with it: a straight
@@ -718,7 +690,7 @@ finger and keys all follow the same three rules.
   open the journal at its page. A
   tap on a rock, a bush, a fingerpost or a boundary stone walks up to it, never to
   the ground hidden behind it. A drag looks around and never walks, and the
-  keys walk as the way of walking says (Terrain, walking). Nothing turns
+  keys walk and turn as Terrain, walking, says. Nothing turns
   the view but the person. Touching the world never does anything but move
   you.
 - **Everything else is paper.** The closed journal at the lower left,
