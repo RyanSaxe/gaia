@@ -710,13 +710,15 @@ answered as a percentage, and leaves out one whose answer doesn't count.
 A file's first page leads with snippets of its best and worst definitions,
 and a folder's with its best and worst files, each shown by its own best
 or worst definition, all chosen by quality weighed by importance: each its
-first line and the block Jev picked, with the lines around folded into
+first line and a block (the one Jev picked as needing work most for the
+worst, its key block for the best), with the lines around folded into
 marks that say how many, and a tap turns to its page. What needs work most
-comes first when the page is below the world's median quality, its finest
-first otherwise. A long definition's page opens on the same block. Its
-appendix is the code alone, with the same marks. Jev's marks are brush strokes
-in the gutter or beside a row: green for the key part, russet for what
-needs work most, slate blue for the finest.
+comes first when the page is below the world's median quality, its best
+first otherwise. A long definition's page opens on the block that most
+needs work when it is below the median, and on its key block otherwise.
+Its appendix is the code alone, with the same marks. The marks are brush
+strokes in the gutter or beside a row: green for the key block, russet for
+what needs work most, slate blue for a page's best part.
 
 Nothing in the world lights up, rings or changes under a pointer: a thing
 looks the same whether or not a person could walk up to it, and the pointer

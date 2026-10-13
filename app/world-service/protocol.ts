@@ -61,7 +61,7 @@ export interface JudgedThing {
   /** Each concept Jev answered; null where the answer doesn't count, such as robustness's "nothing here can fail". */
   readonly concepts: Readonly<Record<string, number | null>>;
   /** The blocks Jev picked inside a definition, by their lines; absent where it chose none. */
-  readonly picks: { readonly key?: Span; readonly weak?: Span; readonly finest?: Span };
+  readonly picks: { readonly key?: Span; readonly weak?: Span };
 }
 
 /** A codebase's world as the renderer receives it: the code, the world laid out from it, and who judged each thing. */

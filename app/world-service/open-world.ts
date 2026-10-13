@@ -102,8 +102,8 @@ export function judgedThings(graph: CodeGraph): Record<string, JudgedThing> {
     const value = n.judged?.value;
     if (value === undefined) continue;
     const key = n.kind === "def" ? `${pathOf.get(n.file) ?? ""}#${n.id.slice(n.id.indexOf("#") + 1)}` : n.path;
-    const picks: { key?: Span; weak?: Span; finest?: Span } = {};
-    for (const pick of ["key", "weak", "finest"] as const) {
+    const picks: { key?: Span; weak?: Span } = {};
+    for (const pick of ["key", "weak"] as const) {
       const span = spans.get(n.judged?.picks?.[pick]?.choice ?? "");
       if (span !== undefined) picks[pick] = span;
     }

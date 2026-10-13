@@ -224,8 +224,10 @@ levels = [
   "Seamless: names, patterns and conventions all match what a reader expects here.",
 ]
 
-# Which parts of a container stand out, as choices over the parts. `none`
-# is always an option.
+# Which parts of a definition stand out, as choices over its blocks. `none`
+# is always an option. There is no "finest": asked beside "most needs
+# work", Jev named the same block for both in more than half of Gaia's
+# definitions (round 16).
 [picks.key]
 instructions = "Which of these is the key to understanding {what}?"
 none = "None stands out: no single one is the key."
@@ -233,10 +235,6 @@ none = "None stands out: no single one is the key."
 [picks.weak]
 instructions = "Which of these most needs work in {what}: the one a careful reviewer would fix first?"
 none = "None needs work more than the others."
-
-[picks.finest]
-instructions = "Which of these is the finest in {what}: the one most worth showing as an example of well-made code?"
-none = "None stands out as especially well made."
 
 # How the engine gathers quality upward: a container's quality is its
 # parts' quality, weighted by their lines, blended with its own.
