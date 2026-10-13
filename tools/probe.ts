@@ -168,7 +168,8 @@ async function probe() {
     const view = await win.webContents.executeJavaScript("[innerWidth, innerHeight]");
     if (view[0] !== width || view[1] !== height) throw new Error("The window is " + view.join("x") + ", not " + width + "x" + height + ": something resized it.");
     // The screen's own ratio wins over the one asked for, so the report says which the world drew at.
-    results[job.world] = { ratio: await win.webContents.executeJavaScript("devicePixelRatio") };
+    // A world measured by several jobs, as Gaia's is by the walks and the swap test, keeps every job's results.
+    results[job.world] = { ...(results[job.world] ?? {}), ratio: await win.webContents.executeJavaScript("devicePixelRatio") };
     for (const call of job.calls) {
       say(job.world + ": " + call.key);
       // Shown without taking focus, while the smoothness walk runs.
