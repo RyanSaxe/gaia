@@ -519,7 +519,10 @@ impl Call for FolderAxes {
         if let Some(words) = project_words(ctx, budget / 6) {
             out.insert("project".into(), json!(words));
         }
-        out.insert("above".into(), json!(above(ctx, parent_dir(&dir.path))));
+        // The folders that hold this one, never itself: the root holds nothing, and a request carrying its own
+        // answers would change once they are held and be asked again, and so would everything below it.
+        let holders = if dir.path.is_empty() { Vec::new() } else { above(ctx, parent_dir(&dir.path)) };
+        out.insert("above".into(), json!(holders));
         if !dir.path.is_empty()
             && let Some(docs) = prose(ctx, &dir.path, budget / 6)
         {
