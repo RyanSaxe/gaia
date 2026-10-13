@@ -253,20 +253,23 @@ function faceStep(s: Steering, t: number, yaw: number, dt: number): Steered {
     if (Math.abs(left - step) < 1e-9) steering = { ...steering, turning: null };
   }
   if (steering.goAt !== null && t + dt >= steering.goAt && steering.turning === null) steering = { ...steering, going: directionDown(s.down), goAt: null };
+  /** How much of this step the nudges still owed took, seconds: a turn held on starts only in what they leave. */
+  let spent = 0;
   if (steering.owed !== 0) {
     const pay = Math.sign(steering.owed) * Math.min(Math.abs(steering.owed), rate * dt);
     y += pay;
+    spent = Math.abs(pay) / rate;
     steering = { ...steering, owed: steering.owed - pay };
   }
   // A side key held turns on after its nudge: with held nudges only at the steady rate, standing or walking; otherwise
-  // while walking, at `keep`.
+  // while walking, at `keep`. Never in the same moment as a nudge, however a press falls between frames.
   const held = sc.bigTurn === "held";
   const on = held ? sc.rate : steering.going ? sc.keep : 0;
   if (on > 0) {
     for (const [key, h] of s.down) {
       if (!isSide(key) || !h.turns) continue;
-      const from = h.at + sc.nudge / sc.rate;
-      y += sign(key) * on * DEG * Math.max(0, t + dt - Math.max(t, from));
+      const from = Math.max(t + spent, h.at + sc.nudge / sc.rate);
+      y += sign(key) * on * DEG * Math.max(0, t + dt - from);
     }
   }
   // With held nudges only, ↑ walks ahead and ↓ back, still facing ahead; together they stand. Shift hurries only ahead.

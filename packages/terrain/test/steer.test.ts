@@ -150,6 +150,24 @@ describe("face and go", () => {
     expect(at(play(held, [{ key: "ahead", at: 0 }, { key: "back", at: 0 }], 0.5).frames, 0.3).ahead).toBe(0);
   });
 
+  it("a held side key turns at the steady rate however its press falls between frames", () => {
+    // As the page steps: a key pressed between frames is seen at the next frame, which steps on from then.
+    const step = 1 / 60;
+    for (const pressed of [0.101, 0.105, 0.112]) {
+      let s = steering(held);
+      let yaw = 0;
+      let fastest = 0;
+      for (let t = 0; t < 1.5; t += step) {
+        if (t >= pressed && !s.down.has("left")) s = steerPress(s, "left", pressed, yaw);
+        const next = steerStep(s, t, yaw, step);
+        fastest = Math.max(fastest, Math.abs(next.yaw - yaw) / step);
+        s = next.steering;
+        yaw = next.yaw;
+      }
+      expect(deg(fastest)).toBeLessThanOrEqual(go.rate + 1e-6);
+    }
+  });
+
   it("with held nudges only, ↑ walks ahead and ← held turns the walk at the steady rate", () => {
     const walking = play(held, [{ key: "ahead", at: 0, hold: 2 }, { key: "left", at: 0.5, hold: 1 }], 2.5);
     expect(at(walking.frames, 1).ahead).toBe(1);
