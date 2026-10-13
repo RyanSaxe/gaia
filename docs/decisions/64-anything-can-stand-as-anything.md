@@ -7,15 +7,14 @@ range of rank by importance among the world's own entities, files and
 definitions together, from 0 for the least important to 1 for the most, and
 a thing is offered every form whose range holds its rank. The ranges are wide
 and overlap, smallest first: flowers 0 to 0.55, stones 0 to 0.75, bushes 0.15
-to 0.92, trees 0.35 to 1, buildings 0.97 to 1 and landmarks 0.98 to 1
-(`SIZES` in `app/renderer/terrain/looks.ts`). On Gaia's own world 95% of
-things are offered two to four sizes, those ranked 0.92 to 0.97 the trees
-alone, and the most important 2% a tree, a building or a landmark. Jev picks
-a building 81% of the times it is offered one, so the building range's width
-sets how many there are: from 0.90 it raised 217 of Gaia's 2,702 things to
-buildings (8%), and the range starts at 0.97 to keep them to about 3%. A rank
-is a share of the world's own things, so each
-form is offered to the same share in a world of any size. The ranges are
+to 0.97, trees 0.35 to 1, buildings 0.97 to 1 and landmarks 0.98 to 1
+(`SIZES` in `app/renderer/terrain/looks.ts`). Every rank is offered at least
+two sizes, and the most important 2% a tree, a building or a landmark. Jev
+picks a building 81% of the times it is offered one, so the building range's
+width sets how many there are: from 0.90 it raised 217 of Gaia's 2,702 things
+to buildings (8%), and the range starts at 0.97 to keep them to about 3%. A
+rank is a share of the world's own things, so each form is offered to the
+same share in a world of any size. The ranges are
 code, read through the same rule that offers a waterwheel only beside running
 water (`meets`); Jev's importance places each thing, and nothing else limits
 or overrides its pick.
