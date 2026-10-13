@@ -38,17 +38,17 @@ export interface DirNode extends NodeBase {
   readonly kind: "dir";
   /** "" for the root. */
   readonly path: string;
-  /** The package, crate, module, app or service rooted here. */
+  /** The package or crate rooted here. */
   readonly entity?: Entity;
 }
 
-/** What a directory is the root of, as its manifest, or its index, main or server file, says. */
+/** What a directory is the root of, as its manifest says. */
 export interface Entity {
   /** The manifest's name, else the directory's. */
   readonly name: string;
-  readonly form: "package" | "crate" | "module" | "app" | "service";
-  /** The file that declares it, such as package.json; absent for a module. */
-  readonly manifest?: string;
+  readonly form: "package" | "crate";
+  /** The file that declares it, such as package.json. */
+  readonly manifest: string;
   /** The file that defines its public surface, such as src/index.ts. */
   readonly entry?: string;
 }

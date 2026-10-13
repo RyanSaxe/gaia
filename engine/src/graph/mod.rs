@@ -286,8 +286,7 @@ fn build_with(
             text: f.text.as_deref(),
         })
         .collect();
-    let mut found = entities::manifests(&listed);
-    found.extend(entities::directory_entities(&listed, &found));
+    let found = entities::manifests(&listed);
     let entity_at: BTreeMap<String, Entity> = found
         .iter()
         .map(|e| {
@@ -1237,6 +1236,7 @@ mod tests {
 
     #[test]
     fn a_folder_carries_the_package_rooted_there_its_imports_resolve_by_name_and_exports_are_marked() {
+        // Only a manifest makes an entity: a folder holding a main, server or index file and no manifest is none.
         let dir = project(
             "facts",
             &[
@@ -1258,6 +1258,9 @@ mod tests {
                     "[package]\nname = \"demo-engine\"\n",
                 ),
                 ("engine/src/lib.rs", "pub fn open() {}\nfn close() {}\n"),
+                ("tools/cli/main.ts", "export const run = () => 0;\n"),
+                ("services/api/server.ts", "export const listen = () => 0;\n"),
+                ("lib/util/index.ts", "export const id = (x: number) => x;\n"),
             ],
         );
         let g = graph(&dir).unwrap();
@@ -1273,6 +1276,10 @@ mod tests {
         let engine = entity("engine").expect("the crate's folder holds it");
         assert_eq!((engine.name.as_str(), engine.form), ("demo-engine", "crate"));
         assert!(entity("packages").is_none());
+        assert_eq!(core.manifest, "packages/core/package.json");
+        for named in ["tools/cli", "services/api", "lib/util"] {
+            assert!(entity(named).is_none(), "{named} has a main, server or index file but no manifest");
+        }
         // A workspace package imported by its manifest's name is its entry, by rule.
         assert!(g.edges.iter().any(|e| e.kind == "imports"
             && e.from == "file:packages/app/src/index.ts"

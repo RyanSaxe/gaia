@@ -87,9 +87,9 @@ and everything agrees by construction. The geometry lives in
 frame (reading the plan), walls, roofs, openings, garden, ruin and features.
 
 An **entity** is a named unit of the code with a boundary, a public surface,
-things that depend on it and a health of its own: a package or crate (found
-from its manifest), a service or app (from a binary or server entry point),
-or a module (a directory whose index file gives it a public surface).
+things that depend on it and a health of its own: a package or crate, as
+its manifest (`package.json`, `Cargo.toml`) declares it. Only a manifest
+makes one; no file's name or path decides that a directory is an entity.
 `EntityFacts` in `packages/schema/src/facts.ts` is what the engine will
 report for each: its root path (its identity), name, form, manifest, entry,
 doc, size, exports, the entities it depends on and that depend on it, and
@@ -409,10 +409,9 @@ code graph (`CodeGraph` in `packages/schema/src/graph.ts`), which
 - an edge for every link between them: contains, imports, calls,
   references, inherits, implements, names and changes-with;
 - the engine's measures of each node, and Jev's judgments of it;
-- each directory's entity: the package or crate its manifest declares, or
-  the module, app or service its own index, main or server file makes it
-  (`entities.rs`); and whether a definition is exported (`export`, or Rust's
-  `pub`). An import that spells a workspace package's manifest name, or a
+- each directory's entity: the package or crate its manifest declares,
+  and nothing else (`entities.rs`); and whether a definition is exported
+  (`export`, or Rust's `pub`). An import that spells a workspace package's manifest name, or a
   subpath through its exports, resolves to that file by rule.
 
 Each edge says who filled it: the parser, a rule, git, or Jev with its
