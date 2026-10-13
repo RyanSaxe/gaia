@@ -33,6 +33,13 @@ export interface EngineMethods {
    */
   "understanding.plan": { params: { root: string; graph?: boolean }; result: UnderstandPlan };
   /**
+   * A file's text as the world reads it, by its path relative to the root:
+   * at `commit` (the graph's), or else at the commit checked out, or from
+   * disk outside git. Null when that snapshot has no such file, it is
+   * binary, or the path leaves the root.
+   */
+  "project.source": { params: { root: string; path: string; commit?: string }; result: { lines: readonly string[] | null } };
+  /**
    * Sends every request whose waits are met, up to `max` (256 by default),
    * as many at once as Jev takes: the links first, then folders top-down
    * and each file after its folder. Returns the nodes that settled, so the

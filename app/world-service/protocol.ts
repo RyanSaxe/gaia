@@ -68,6 +68,8 @@ export interface JudgedThing {
 export interface WorldDocument {
   /** The folder it is the world of. */
   readonly root: string;
+  /** The commit it was built from, whose files the journal reads; absent when the folder was read from disk. */
+  readonly commit?: string;
   readonly model: CodeModel;
   readonly world: CodeWorld;
   /** Who judged each thing, by `judgedThing` ("file:src/main.ts"); a thing missing here was judged by the stand-in. */
