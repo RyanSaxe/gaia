@@ -15,6 +15,7 @@ import { type Lattice, heightAt, slopeAt, worldOf, worldOfZ } from "./lattice.ts
 import type { Occupied } from "./scatter.ts";
 import { DRY, type Terrain } from "./world.ts";
 import { withinLand } from "./edge.ts";
+import { waterDepthAt } from "./walk.ts";
 
 export const TRAILS = {
   /** Meters per routing cell. */
@@ -267,8 +268,8 @@ function gridOf(t: Terrain, seed: number, avoid: readonly Occupied[]): Grid {
         const h = heightAt(t.lattice, x, z);
         height[k] = h;
         slope[k] = slopeAt(t.lattice, x, z);
-        const level = heightAt(t.lattice, x, z, t.waterLevel);
-        depth[k] = level > DRY / 2 ? Math.max(0.01, level - h) : 0;
+        // The water's own depth: a bank keeps the level beside the water (`carveStream`) over ground that is dry.
+        depth[k] = waterDepthAt(t, x, z);
         wander[k] = 0.5 + 0.5 * fbm(seed, x / TRAILS.wander, z / TRAILS.wander, 2, 0.5);
       }
     }
@@ -433,24 +434,76 @@ function smoothLine(points: [number, number][], spacing: number): Float32Array {
   return new Float32Array(out);
 }
 
-const wetAt = (t: Terrain, x: number, z: number): boolean => heightAt(t.lattice, x, z, t.waterLevel) > DRY / 2;
+/** Where two segments, a to b and c to d, meet: how far along a to b, 0 to 1, or null when they don't. */
+function meet(ax: number, az: number, bx: number, bz: number, cx: number, cz: number, dx: number, dz: number): number | null {
+  const den = (bx - ax) * (dz - cz) - (bz - az) * (dx - cx);
+  if (den === 0) return null;
+  const u = ((cx - ax) * (dz - cz) - (cz - az) * (dx - cx)) / den;
+  const v = ((cx - ax) * (bz - az) - (cz - az) * (bx - ax)) / den;
+  return u >= 0 && u <= 1 && v >= 0 && v <= 1 ? u : null;
+}
 
+/**
+ * Where the tread `points` crosses a stream: once for each stretch of it under water that goes from one bank to the
+ * other, across the stream's course, spanning it from the last dry point before to the first dry one after. A tread
+ * that only runs along a bank, or wades in and out on one side, crosses nothing: the level a bank records beside
+ * the water (`carveStream`) is not water to bridge.
+ */
 function crossingsOf(t: Terrain, points: Float32Array): Crossing[] {
   const count = points.length / 2;
-  const out: Crossing[] = [];
-  let k = 0;
-  while (k < count) {
-    if (!wetAt(t, points[k * 2] as number, points[k * 2 + 1] as number)) {
-      k++;
-      continue;
+  const px = (k: number): number => points[k * 2] as number;
+  const pz = (k: number): number => points[k * 2 + 1] as number;
+  const wet = (k: number): boolean => waterDepthAt(t, px(k), pz(k)) > 0;
+  /** The point `f` points along the tread. */
+  const along = (f: number): [number, number] => {
+    const k = Math.min(count - 2, Math.floor(f));
+    return [px(k) + (px(k + 1) - px(k)) * (f - k), pz(k) + (pz(k + 1) - pz(k)) * (f - k)];
+  };
+  // How far along the tread, in points, it crosses each stream's course.
+  const over: number[] = [];
+  for (const stream of t.streams) {
+    const st = stream.stations;
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minZ = Infinity;
+    let maxZ = -Infinity;
+    for (const q of st) {
+      minX = Math.min(minX, q.x);
+      maxX = Math.max(maxX, q.x);
+      minZ = Math.min(minZ, q.z);
+      maxZ = Math.max(maxZ, q.z);
     }
-    const a = Math.max(0, k - 1);
-    while (k < count && wetAt(t, points[k * 2] as number, points[k * 2 + 1] as number)) k++;
-    const b = Math.min(count - 1, k);
-    const ax = points[a * 2] as number;
-    const az = points[a * 2 + 1] as number;
-    const bx = points[b * 2] as number;
-    const bz = points[b * 2 + 1] as number;
+    for (let k = 0; k + 1 < count; k++) {
+      if (Math.max(px(k), px(k + 1)) < minX || Math.min(px(k), px(k + 1)) > maxX || Math.max(pz(k), pz(k + 1)) < minZ || Math.min(pz(k), pz(k + 1)) > maxZ) continue;
+      for (let j = 0; j + 1 < st.length; j++) {
+        const a = st[j] as (typeof st)[number];
+        const b = st[j + 1] as (typeof st)[number];
+        const u = meet(px(k), pz(k), px(k + 1), pz(k + 1), a.x, a.z, b.x, b.z);
+        if (u !== null) over.push(k + u);
+      }
+    }
+  }
+  over.sort((a, b) => a - b);
+  const out: Crossing[] = [];
+  let i = 0;
+  while (i < over.length) {
+    // The stretch under water around this crossing of the course, from the last dry point before to the first after.
+    let a = Math.floor(over[i] as number);
+    while (a > 0 && wet(a)) a--;
+    let b = Math.ceil(over[i] as number);
+    while (b < count - 1 && wet(b)) b++;
+    // Every crossing of a course within the stretch is one way over: an even count comes back to the bank it left.
+    const course = over[i] as number;
+    let within = 0;
+    while (i < over.length && (over[i] as number) <= b) {
+      within++;
+      i++;
+    }
+    if (within % 2 === 0) continue;
+    const ax = px(a);
+    const az = pz(a);
+    const bx = px(b);
+    const bz = pz(b);
     const x = (ax + bx) / 2;
     const z = (az + bz) / 2;
     out.push({
@@ -458,7 +511,8 @@ function crossingsOf(t: Terrain, points: Float32Array): Crossing[] {
       z,
       yaw: -Math.atan2(bz - az, bx - ax),
       span: Math.hypot(bx - ax, bz - az) + 1.6,
-      level: heightAt(t.lattice, x, z, t.waterLevel),
+      // The water's surface where the tread crosses the stream's course, which lies under the deck whatever the chord.
+      level: heightAt(t.lattice, ...along(course), t.waterLevel),
       bank: Math.max(heightAt(t.lattice, ax, az), heightAt(t.lattice, bx, bz)),
     });
   }

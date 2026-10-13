@@ -72,9 +72,9 @@ where each stop looks (x, z in meters from the middle):
 
 | Stop | What is there | Looks at |
 | --- | --- | --- |
-| `bridge` | A footbridge in `crossings`, whose ground is at vitality 1.00 | 11, 249 |
-| `ruined bridge` | A footbridge in `ruins`, whose ground is at vitality 0.03 | 255, 13 |
-| `stepping stones` | Stepping stones in `fords`, whose ground is at vitality 0.75 | -193, -336 |
+| `bridge` | A footbridge in `crossings`, whose ground is at vitality 1.00 | 3, 248 |
+| `ruined bridge` | A footbridge in `ruins`, whose ground is at vitality 0.03 | 279, -20 |
+| `stepping stones` | Stepping stones in `fords`, whose ground is at vitality 0.75 | -196, -351 |
 | `cairn`, `ruined cairn` | Cairns where three ways meet, in `hollow` and `ruins/house` | -251, 311 and 450, -67 |
 | `pond`, `pond 2` | The ponds of `hollow` and `pondside` | -232, 390 and 63, -417 |
 | `ruined building`, `thriving building` | The ruined croft in `ruins`, the thriving one in `terraces` | 125, -62 and 445, 206 |

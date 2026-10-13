@@ -1062,7 +1062,8 @@ it wanders, and whether it crosses a stream on stepping stones or a small
 footbridge. Jev never draws the route. `planTrails` in `@gaia/terrain`
 walks every trail over one network of paths, found over the baked ground:
 the cheapest way at a gentle grade, around steep ground, ponds and deep
-water, across a stream where it is narrow, and wandering off the easiest
+water, across a stream where it is narrow, wading only where there is water
+(a bank beside it is dry ground), and wandering off the easiest
 line by a seeded field as far as the winding allows. Trails route most
 wanted first, and each takes the ways earlier ones made wherever that is
 less than about twice as far (walking a way costs 0.45 of fresh ground),
@@ -1086,10 +1087,12 @@ the cover's own soil, darker down the trodden middle, with a ragged edge;
 just outside it the grass is dulled and trampled shorter. Blades part along
 the tread: each stands only past its own seeded edge, so the border is
 ragged, and a faint trail keeps more blades on it. Trees keep 1.6 m off a
-tread and the understory half a meter, and both keep off a cairn. A way
-crosses a stream on a footbridge where it carries three trails or more, is
-1.8 m wide or more, or a trail on it asks for one, and on stepping stones
-otherwise. A footbridge's deck and stepping stones are walkable. Planks go
+tread and the understory half a meter, and both keep off a cairn. Wherever a
+way's tread crosses a stream's course, it crosses on a footbridge where it
+carries three trails or more, is 1.8 m wide or more, or a trail on it asks
+for one, and on stepping stones otherwise, spanning the water from the last
+dry ground before it to the first after. A tread that only runs along a
+bank, or wades in and out on one side, crosses nothing. A footbridge's deck and stepping stones are walkable. Planks go
 missing and rails sag as vitality falls.
 
 A trail's wear follows the vitality of the two entities it joins, live.

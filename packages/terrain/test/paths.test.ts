@@ -3,6 +3,7 @@ import { Library, type RouteSpec } from "@gaia/schema";
 import { BIOME_PRIMITIVES, RELIEF_PRIMITIVES } from "@gaia/primitives";
 import {
   TRAILS,
+  type Crossing,
   type Terrain,
   type TrailEnd,
   type TrailNetwork,
@@ -137,6 +138,51 @@ describe("trails", { timeout: 20_000 }, () => {
         }
       }
     }
+  });
+
+  it("crosses a stream on a bridge or stones wherever its tread crosses one, each spanning the water from dry bank to dry bank", () => {
+    /** Where two segments meet, if they do. */
+    const meet = (ax: number, az: number, bx: number, bz: number, cx: number, cz: number, dx: number, dz: number): readonly [number, number] | null => {
+      const den = (bx - ax) * (dz - cz) - (bz - az) * (dx - cx);
+      if (den === 0) return null;
+      const u = ((cx - ax) * (dz - cz) - (cz - az) * (dx - cx)) / den;
+      const v = ((cx - ax) * (bz - az) - (cz - az) * (bx - ax)) / den;
+      return u >= 0 && u <= 1 && v >= 0 && v <= 1 ? [ax + (bx - ax) * u, az + (bz - az) * u] : null;
+    };
+    let crossings = 0;
+    for (const { t, network } of planned) {
+      for (const way of network.ways) {
+        // Every point where the tread crosses a stream's course.
+        const over: (readonly [number, number])[] = [];
+        const p = way.points;
+        for (let k = 0; k + 1 < p.length / 2; k++) {
+          for (const stream of t.streams) {
+            const st = stream.stations;
+            for (let j = 0; j + 1 < st.length; j++) {
+              const at = meet(p[k * 2]!, p[k * 2 + 1]!, p[k * 2 + 2]!, p[k * 2 + 3]!, st[j]!.x, st[j]!.z, st[j + 1]!.x, st[j + 1]!.z);
+              if (at !== null) over.push(at);
+            }
+          }
+        }
+        const deck = (c: Crossing, s: number): readonly [number, number] => [c.x + Math.cos(-c.yaw) * s, c.z + Math.sin(-c.yaw) * s];
+        const onDeck = (c: Crossing, [x, z]: readonly [number, number]): boolean => {
+          const [ax, az] = deck(c, -c.span / 2);
+          const [bx, bz] = deck(c, c.span / 2);
+          const u = Math.max(0, Math.min(1, ((x - ax) * (bx - ax) + (z - az) * (bz - az)) / (c.span * c.span)));
+          return Math.hypot(x - (ax + (bx - ax) * u), z - (az + (bz - az) * u)) < 1.5;
+        };
+        for (const at of over) expect(way.crossings.some((c) => onDeck(c, at)), `${way.id} crosses a stream at ${at.map((v) => v.toFixed(1))} with nothing to cross on`).toBe(true);
+        for (const c of way.crossings) {
+          crossings++;
+          const where = `${way.id}'s crossing at ${c.x.toFixed(1)}, ${c.z.toFixed(1)}`;
+          expect(over.some((at) => onDeck(c, at)), `${where} crosses a stream`).toBe(true);
+          for (const end of [-c.span / 2, c.span / 2]) expect(waterDepthAt(t, ...deck(c, end)), `${where} ends on dry ground`).toBeLessThan(0.01);
+          const depths = Array.from({ length: 21 }, (_, i) => waterDepthAt(t, ...deck(c, -c.span / 2 + (c.span * i) / 20)));
+          expect(Math.max(...depths), `${where} spans water`).toBeGreaterThan(0.1);
+        }
+      }
+    }
+    expect(crossings).toBeGreaterThan(0);
   });
 
   it("knows, on every sample of a tread, which way it is and how far along from its first point to its last", () => {
