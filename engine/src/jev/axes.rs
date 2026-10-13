@@ -482,14 +482,28 @@ impl Call for FolderAxes {
             parts.push(entry);
         }
         for s in ctx.dirs_in.get(dir.path.as_str()).into_iter().flatten() {
-            let files: Vec<&str> = ctx
+            let names: Vec<&str> = ctx
                 .files_in
                 .get(s.path.as_str())
                 .into_iter()
                 .flatten()
                 .map(|f| f.path.rsplit('/').next().unwrap_or(&f.path))
                 .collect();
-            parts.push(json!({ "part": s.id, "lines": s.measures.lines, "files": files }));
+            // A folder of thousands of files names as many as fit an eighth of the room, and counts the rest.
+            let mut files: Vec<&str> = Vec::new();
+            let mut size = 0;
+            for name in &names {
+                size += tokens(name) + 3;
+                if size > budget / 8 {
+                    break;
+                }
+                files.push(name);
+            }
+            let mut entry = json!({ "part": s.id, "lines": s.measures.lines, "files": files });
+            if files.len() < names.len() {
+                entry["more"] = json!(names.len() - files.len());
+            }
+            parts.push(entry);
         }
         let mut out = Map::new();
         if let Some(words) = project_words(ctx, budget / 6) {
