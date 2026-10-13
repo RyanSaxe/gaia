@@ -34,8 +34,7 @@ import {
   createSunShadow,
   type SceneLight,
 } from "@gaia/render";
-import { createWalkPlayground, WALK_PLAYGROUND } from "./walk-playground.ts";
-import { type Capsule, clearanceAt, frameOf, type Placement, TILE, LAND_ASPECT, type Deck, decksOf, EYE_HEIGHT, footingAt, FULL_WORLD, GAIT, groundHeightAt, heightAt, type Intent, junctionVitality, NO_SOLIDS, NO_TRAILS, outlineShape, withinLand, piecesShapes, type Place, placeAt, planWalk, randomWorld, regionPlaces, RELIEF_BUDGET, sampleWorld, sightlines, siteToWorld, SMALL_WORLD, type Solids, type SolidShape, solidsOf, stanceAt, standAt, keysLine, SCHEMES, type SteerScheme, type SteerSchemeId, steerAlong, type Steered, type Steering, steering, steerPress, steerRelease, steerStep, stride, type Stride, type WalkKey, type Terrain, TERRAIN, type TrailNetwork, type Walk, WALK_TO, walkStep, wallsShape, waterDepthAt, type Way, wayAhead, wayVitalityAt, wayWear, WILDS, type WorldPlaces, type WorldSpec } from "@gaia/terrain";
+import { type Capsule, clearanceAt, frameOf, type Placement, TILE, LAND_ASPECT, type Deck, decksOf, EYE_HEIGHT, footingAt, FULL_WORLD, GAIT, groundHeightAt, heightAt, type Intent, junctionVitality, NO_SOLIDS, NO_TRAILS, outlineShape, withinLand, piecesShapes, type Place, placeAt, planWalk, randomWorld, regionPlaces, RELIEF_BUDGET, sampleWorld, sightlines, siteToWorld, SMALL_WORLD, type Solids, type SolidShape, solidsOf, stanceAt, standAt, steerAlong, type Steered, type Steering, steering, steerPress, steerRelease, steerStep, stride, type Stride, type WalkKey, type Terrain, TERRAIN, type TrailNetwork, type Walk, WALK_TO, walkStep, wallsShape, waterDepthAt, type Way, wayAhead, wayVitalityAt, wayWear, WILDS, type WorldPlaces, type WorldSpec } from "@gaia/terrain";
 import { createSky } from "../world/environment.ts";
 import { type Pixels, createCapture } from "./capture.ts";
 import { renderInspector } from "../inspector.ts";
@@ -113,11 +112,9 @@ const TEMPLATE = /* html */ `
 const NO_SEASON: SeasonSpec = { swatches: {}, ground: NO_SHIFT, frost: 0, fall: hex(0xd9a04a) };
 const SKY_WORLD = WORLD_PRESETS[0] as (typeof WORLD_PRESETS)[number];
 
-/** The way of walking the app shows (`@gaia/terrain`'s steer.ts); `?walk=playground` switches and tunes it live (walk-playground.ts). */
-const STEERING: SteerSchemeId = "face-and-go";
 /** Each mode's hint, for a mouse and keyboard and for touch. */
 const HINTS = {
-  walk: [`Click the ground to walk there, drag to look; ${keysLine(SCHEMES[STEERING])}`, "Tap the ground to walk there, drag to look"],
+  walk: ["Click the ground to walk there, drag to look; ↑ walks; ← → nudge, and turn on steadily while held, standing or walking; ↓ walks back, still facing ahead; Shift hurries", "Tap the ground to walk there, drag to look"],
   overview: ["Drag to orbit, scroll to zoom, click a region", "Drag to orbit, pinch to zoom, tap a region"],
 };
 /** The keys that move a person, W A S D, the arrows or vim's k h j l: ahead, left, right or back, and Shift. */
@@ -128,6 +125,8 @@ const KEYS = {
   back: ["KeyS", "ArrowDown", "KeyJ"],
   hurry: ["ShiftLeft", "ShiftRight"],
 } as const;
+/** How far a hand's move turns the view, radians a pixel: one to one, with no easing or drift. */
+const LOOK = 0.0045;
 /** Each key steering reads, by what it is to steering. */
 const STEER_KEYS = new Map<string, WalkKey>([...(["ahead", "left", "right", "back"] as const).flatMap((way) => KEYS[way].map((code) => [code, way] as const)), ...KEYS.hurry.map((code) => [code, "shift"] as const)]);
 /** The keys that walk or turn, as against Shift alone. */
@@ -439,10 +438,6 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
 
   const canvas = root.querySelector("canvas") as HTMLCanvasElement;
   const stage = root.querySelector(".stage") as HTMLElement;
-  /** A blink: the view dims to the warm dark of closed eyes while a big turn happens out of sight (`steerStep`). */
-  const blink = document.createElement("div");
-  blink.className = "walk-blink";
-  stage.append(blink);
   const renderer = createRenderer(canvas);
   canvas.addEventListener("webglcontextlost", () => reportStage("context lost"));
   renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
@@ -1354,40 +1349,34 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   /** Where a tap or click is walking the walker, if anywhere. */
   let goal: Walk | null = null;
   const keys = new Set<string>();
-  /** The keys' hold on the person: how they walk and turn them (`steerStep`), by the way of walking chosen. */
-  let steer: Steering = steering(SCHEMES[STEERING]);
+  /** The keys' hold on the person: how they walk and turn them (`steerStep`). */
+  let steer: Steering = steering();
   const clock = (): number => performance.now() / 1000;
   /** Whether a code other than `code` holds the same way down, as W and the up arrow both walk ahead. */
   const heldElsewhere = (code: string, way: WalkKey): boolean => [...keys].some((k) => k !== code && STEER_KEYS.get(k) === way);
   function press(code: string): void {
     const way = STEER_KEYS.get(code);
-    if (way !== undefined && !heldElsewhere(code, way)) steer = steerPress(steer, way, clock(), walker.yaw);
+    if (way !== undefined && !heldElsewhere(code, way)) steer = steerPress(steer, way, clock());
     keys.add(code);
   }
   function release(code?: string): void {
     if (code === undefined) {
       keys.clear();
-      steer = steerRelease(steer, undefined, clock());
+      steer = steerRelease(steer);
       return;
     }
     keys.delete(code);
     const way = STEER_KEYS.get(code);
-    if (way !== undefined && !heldElsewhere(code, way)) steer = steerRelease(steer, way, clock());
+    if (way !== undefined && !heldElsewhere(code, way)) steer = steerRelease(steer, way);
   }
-  /** Changes the way of walking, as the playground does: the keys let go, so nothing carries over. */
-  function steerWith(scheme: SteerScheme): void {
-    keys.clear();
-    steer = steering(scheme);
-  }
-  if (WALK_PLAYGROUND) createWalkPlayground(document.body, STEERING, steerWith);
   window.addEventListener("keydown", (e) => {
     if (!active || e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) return;
     if (STEER_KEYS.has(e.code)) {
       e.preventDefault();
       if (e.repeat) return;
       press(e.code);
-      // The keys take over from a tap's walk where they walk; Shift alone moves nothing, and keys that only nudge leave it be.
-      if (WALK_KEYS.has(e.code) && steer.scheme.walk !== "none") endWalk();
+      // The keys take over from a tap's walk; Shift alone moves nothing, so it leaves it be.
+      if (WALK_KEYS.has(e.code)) endWalk();
     } else if (e.code === "Escape" && card.shown !== null) hideCard();
   });
   window.addEventListener("keyup", (e) => release(e.code));
@@ -1415,17 +1404,11 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     drag.x = e.clientX;
     drag.y = e.clientY;
   });
-  /** Turns the view by a hand's move of (dx, dy) pixels, at the way of walking's sensitivity, never easing or drifting after. */
+  /** Turns the view by a hand's move of (dx, dy) pixels, one to one, never easing or drifting after. */
   function look(dx: number, dy: number): void {
-    const k = (steer.scheme.sensitivity * Math.PI) / 180;
-    walker.yaw -= dx * k;
-    walker.pitch = Math.max(-1.1, Math.min(1.1, walker.pitch - dy * k));
+    walker.yaw -= dx * LOOK;
+    walker.pitch = Math.max(-1.1, Math.min(1.1, walker.pitch - dy * LOOK));
   }
-  // Where the way of walking captures the mouse, a click captures it and the mouse looks, as in desktop games; Esc lets it go.
-  const captured = (): boolean => document.pointerLockElement === canvas;
-  document.addEventListener("mousemove", (e) => {
-    if (captured() && mode === "walk") look(e.movementX, e.movementY);
-  });
   for (const type of ["pointerup", "pointercancel"] as const) {
     canvas.addEventListener(type, (e) => {
       if (e.pointerId === drag.id) drag.id = -1;
@@ -1484,10 +1467,6 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   // tree or a sign walks the person up to it and then says what it is, and a
   // tap on the ground walks there.
   onTap(canvas, (e) => {
-    if (mode === "walk" && steer.scheme.look === "pointer") {
-      if (!captured()) void canvas.requestPointerLock();
-      return;
-    }
     const ray = aim(e);
     if (mode === "overview") {
       // The coarse mesh is placed by its shader, so the pick marches the heightfield instead.
@@ -1598,18 +1577,15 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   /** What the person asks of their body this frame: the keys first, then a tap's walk, moved on along its way, braking to arrive and ended there. */
   /**
    * Where the person walks, never turning where they look: the keys walk
-   * them as the way of walking says (`steerStep`), and a tap's walk carries
-   * them along its way while they keep looking where they looked.
+   * them ahead or back along where they look (`steerStep`), and a tap's walk
+   * carries them along its way while they keep looking where they looked.
    */
   function intent(at: Stride, steered: Steered): Intent {
-    if (steered.ahead !== 0 || steered.left !== 0) {
-      const { ahead, left } = steered;
-      const share = Math.hypot(ahead, left);
-      const dx = -Math.sin(walker.yaw) * ahead - Math.cos(walker.yaw) * left;
-      const dz = -Math.cos(walker.yaw) * ahead + Math.sin(walker.yaw) * left;
-      return { dx: dx / share, dz: dz / share, speed: steer.scheme.pace * share * (steered.hurry ? GAIT.hurry : 1) };
+    if (steered.ahead !== 0) {
+      const way = Math.sign(steered.ahead);
+      return { dx: -Math.sin(walker.yaw) * way, dz: -Math.cos(walker.yaw) * way, speed: WALK_TO.pace * Math.abs(steered.ahead) * (steered.hurry ? GAIT.hurry : 1) };
     }
-    if (steer.scheme.walk !== "none" && [...keys].some((k) => WALK_KEYS.has(k))) return STAND;
+    if ([...keys].some((k) => WALK_KEYS.has(k))) return STAND;
     if (goal === null) return STAND;
     const heading = wayAhead(goal, at);
     goal = heading.walk;
@@ -1625,11 +1601,10 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     const fromZ = walker.z;
     // A hook may have moved the walker: the body stands where the walker is.
     if (body === null || body.x !== walker.x || body.z !== walker.z) body = { ...(body ?? standAt(terrain, decks, walker.x, walker.z)), x: walker.x, z: walker.z };
-    // The keys turn the view only as the way of walking says, at one steady rate or out of sight under a blink.
+    // The keys turn the view only at their one steady rate.
     const steered = steerStep(steer, clock(), walker.yaw, dt);
     steer = steered.steering;
     walker.yaw = steered.yaw;
-    blink.style.opacity = steered.dim === 0 ? "0" : (steered.dim * 0.92).toFixed(3);
     // Water and the grade slow the body, solids turn it aside, and it gets going and stops at once, never overshooting.
     body = stride(terrain, solids, decks, body, intent(body, steered), dt);
     if (goal !== null && body.blocked) finishWalk();
@@ -2452,13 +2427,10 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   /**
    * Walks for `seconds` of real time as a person would: forward all along,
    * turning the view about 70° left or right every 2.5 s as a hand drags it,
-   * over half a second, and running a third of the time, as ↑ and Shift walk
-   * in the look-around way of walking. The app's smoothness probe
-   * (`__lab.smoothness()`) reads the frames.
+   * over half a second, and running a third of the time with Shift. The
+   * app's smoothness probe (`__lab.smoothness()`) reads the frames.
    */
   function wander(seconds: number): Promise<{ x: number; z: number }> {
-    const was = steer.scheme;
-    steerWith(SCHEMES["look-around"]);
     return new Promise((done) => {
       const t0 = performance.now();
       let turned = -1;
@@ -2468,7 +2440,6 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
         const beat = Math.floor(t / 2.5);
         if (t >= seconds) {
           release();
-          steerWith(was);
           done({ x: walker.x, z: walker.z });
           return;
         }
