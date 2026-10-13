@@ -53062,45 +53062,6 @@
    "model": "typesafe/jev-1.13-20260917",
    "ms": 350
   },
-  "0ed291ba721e04": {
-   "answers": {
-    "body.use": {
-     "choice": "timber-frame@1",
-     "confidence": 0.52,
-     "probabilities": {
-      "fieldstone@1": 0.24,
-      "timber-frame@1": 0.76
-     },
-     "type": "choice"
-    },
-    "feature.present": {
-     "noul": 0.74,
-     "type": "noul"
-    },
-    "feature.use": {
-     "choice": "waterwheel@1",
-     "confidence": 0.16,
-     "probabilities": {
-      "tower@1": 0.42,
-      "waterwheel@1": 0.58
-     },
-     "type": "choice"
-    },
-    "roof.use": {
-     "choice": "tiles@1",
-     "confidence": 0.58,
-     "probabilities": {
-      "thatch@1": 0.21,
-      "tiles@1": 0.79
-     },
-     "type": "choice"
-    }
-   },
-   "costUsd": 0.000061824,
-   "inputTokens": 1472,
-   "model": "typesafe/jev-1.13-20260917",
-   "ms": 538
-  },
   "15d277b1b04995": {
    "answers": {
     "form.use": {
@@ -53144,84 +53105,6 @@
    "inputTokens": 1431,
    "model": "typesafe/jev-1.13-20260917",
    "ms": 372
-  },
-  "066309eafb96e6": {
-   "answers": {
-    "body.use": {
-     "choice": "timber-frame@1",
-     "confidence": 0.42,
-     "probabilities": {
-      "fieldstone@1": 0.29,
-      "timber-frame@1": 0.71
-     },
-     "type": "choice"
-    },
-    "feature.present": {
-     "noul": 0.84,
-     "type": "noul"
-    },
-    "feature.use": {
-     "choice": "waterwheel@1",
-     "confidence": 1,
-     "probabilities": {
-      "tower@1": 0,
-      "waterwheel@1": 1
-     },
-     "type": "choice"
-    },
-    "roof.use": {
-     "choice": "tiles@1",
-     "confidence": 0.98,
-     "probabilities": {
-      "thatch@1": 0.01,
-      "tiles@1": 0.99
-     },
-     "type": "choice"
-    }
-   },
-   "costUsd": 0.000071022,
-   "inputTokens": 1691,
-   "model": "typesafe/jev-1.13-20260917",
-   "ms": 343
-  },
-  "1e607d93aeea5c": {
-   "answers": {
-    "body.use": {
-     "choice": "timber-frame@1",
-     "confidence": 0.64,
-     "probabilities": {
-      "fieldstone@1": 0.18,
-      "timber-frame@1": 0.82
-     },
-     "type": "choice"
-    },
-    "feature.present": {
-     "noul": 0.8,
-     "type": "noul"
-    },
-    "feature.use": {
-     "choice": "waterwheel@1",
-     "confidence": 0.96,
-     "probabilities": {
-      "tower@1": 0.02,
-      "waterwheel@1": 0.98
-     },
-     "type": "choice"
-    },
-    "roof.use": {
-     "choice": "tiles@1",
-     "confidence": 0.96,
-     "probabilities": {
-      "thatch@1": 0.02,
-      "tiles@1": 0.98
-     },
-     "type": "choice"
-    }
-   },
-   "costUsd": 0.000064134,
-   "inputTokens": 1527,
-   "model": "typesafe/jev-1.13-20260917",
-   "ms": 326
   },
   "05bb8b21f5ddc1": {
    "answers": {
@@ -57297,272 +57180,6 @@
    "model": "typesafe/jev-1.13-20260917",
    "ms": 337
   },
-  "040542b5eb881d": {
-   "answers": {
-    "body.framing": {
-     "choice": "posts and rails",
-     "confidence": 0.22,
-     "probabilities": {
-      "close studding": 0.11,
-      "crossed braces": 0.41,
-      "posts and rails": 0.48
-     },
-     "type": "choice"
-    },
-    "body.plaster": {
-     "confidence": 0.74,
-     "legend": {
-      "0": "smooth and fresh",
-      "1": "hand-laid",
-      "2": "lumpy and old"
-     },
-     "probabilities": {
-      "0": 0.08,
-      "1": 0.83,
-      "2": 0.09
-     },
-     "score": 1.01,
-     "type": "score"
-    },
-    "feature.drive": {
-     "choice": "undershot",
-     "confidence": 0.3,
-     "probabilities": {
-      "overshot": 0.35,
-      "undershot": 0.65
-     },
-     "type": "choice"
-    },
-    "feature.wheel": {
-     "confidence": 0.41,
-     "legend": {
-      "0": "a small wheel",
-      "1": "a tall wheel",
-      "2": "a great wheel"
-     },
-     "probabilities": {
-      "0": 0.13,
-      "1": 0.61,
-      "2": 0.26
-     },
-     "score": 1.12,
-     "type": "score"
-    },
-    "footprint.attachments:lean-to": {
-     "noul": 0.55,
-     "type": "noul"
-    },
-    "footprint.attachments:porch": {
-     "noul": 0.61,
-     "type": "noul"
-    },
-    "footprint.attachments:turret": {
-     "noul": 0.3,
-     "type": "noul"
-    },
-    "footprint.base": {
-     "confidence": 0.66,
-     "legend": {
-      "0": "low on the ground",
-      "1": "on a stone plinth",
-      "2": "raised up steps"
-     },
-     "probabilities": {
-      "0": 0.15,
-      "1": 0.77,
-      "2": 0.08
-     },
-     "score": 0.93,
-     "type": "score"
-    },
-    "footprint.character": {
-     "confidence": 0.78,
-     "legend": {
-      "0": "trim and square",
-      "1": "gently settled",
-      "2": "crooked, like a storybook"
-     },
-     "probabilities": {
-      "0": 0.06,
-      "1": 0.85,
-      "2": 0.09
-     },
-     "score": 1.02,
-     "type": "score"
-    },
-    "footprint.heights": {
-     "choice": "level",
-     "confidence": 0.52,
-     "probabilities": {
-      "level": 0.76,
-      "stepped": 0.24
-     },
-     "type": "choice"
-    },
-    "footprint.massing": {
-     "choice": "a single block",
-     "confidence": 0.29,
-     "probabilities": {
-      "a T": 0.05,
-      "a cluster": 0.24,
-      "a long range": 0.16,
-      "a single block": 0.43,
-      "an L": 0.12
-     },
-     "type": "choice"
-    },
-    "footprint.roof": {
-     "choice": "gabled",
-     "confidence": 1,
-     "probabilities": {
-      "gabled": 1,
-      "half-hipped": 0,
-      "hipped": 0
-     },
-     "type": "choice"
-    },
-    "footprint.roofline": {
-     "confidence": 0.32,
-     "legend": {
-      "0": "low and spreading",
-      "1": "steep",
-      "2": "tall and steep"
-     },
-     "probabilities": {
-      "0": 0.28,
-      "1": 0.55,
-      "2": 0.17
-     },
-     "score": 0.89,
-     "type": "score"
-    },
-    "footprint.shape": {
-     "choice": "long",
-     "confidence": 0.22,
-     "probabilities": {
-      "gable-fronted": 0.21,
-      "long": 0.48,
-      "snug": 0.31
-     },
-     "type": "choice"
-    },
-    "footprint.size": {
-     "confidence": 0.53,
-     "legend": {
-      "0": "tiny",
-      "1": "modest",
-      "2": "roomy"
-     },
-     "probabilities": {
-      "0": 0,
-      "1": 0.31,
-      "2": 0.6900000000000001
-     },
-     "score": 1.68,
-     "type": "score"
-    },
-    "footprint.storeys": {
-     "confidence": 0.5,
-     "legend": {
-      "0": "one storey",
-      "1": "two storeys",
-      "2": "three storeys"
-     },
-     "probabilities": {
-      "0": 0.13,
-      "1": 0.67,
-      "2": 0.2
-     },
-     "score": 1.08,
-     "type": "score"
-    },
-    "footprint.windows": {
-     "confidence": 0.38,
-     "legend": {
-      "0": "a few",
-      "1": "several",
-      "2": "many"
-     },
-     "probabilities": {
-      "0": 0.22,
-      "1": 0.59,
-      "2": 0.19
-     },
-     "score": 0.97,
-     "type": "score"
-    },
-    "palette.contrast": {
-     "confidence": 0.5,
-     "legend": {
-      "0": "soft",
-      "1": "balanced",
-      "2": "vivid"
-     },
-     "probabilities": {
-      "0": 0.27,
-      "1": 0.67,
-      "2": 0.06
-     },
-     "score": 0.8,
-     "type": "score"
-    },
-    "palette.family": {
-     "choice": "lantern-dusk",
-     "confidence": 0.18,
-     "probabilities": {
-      "autumn-ember": 0.03,
-      "bluebell-wood": 0.05,
-      "cherry-blossom": 0.01,
-      "deep-forest": 0.15,
-      "desert-sage": 0.25,
-      "lantern-dusk": 0.27,
-      "silver-birch": 0.04,
-      "spring-meadow": 0.08,
-      "teal-gold": 0.12
-     },
-     "type": "choice"
-    },
-    "roof.chimney": {
-     "choice": "none",
-     "confidence": 0.45,
-     "probabilities": {
-      "gable": 0.26,
-      "none": 0.63,
-      "ridge": 0.11
-     },
-     "type": "choice"
-    },
-    "roof.covering": {
-     "choice": "slates",
-     "confidence": 0.88,
-     "probabilities": {
-      "pantiles": 0.03,
-      "shingles": 0.05,
-      "slates": 0.92
-     },
-     "type": "choice"
-    },
-    "roof.overhang": {
-     "confidence": 0.31,
-     "legend": {
-      "0": "neat and close",
-      "1": "sheltering",
-      "2": "deep and low"
-     },
-     "probabilities": {
-      "0": 0.45,
-      "1": 0.54,
-      "2": 0.01
-     },
-     "score": 0.56,
-     "type": "score"
-    }
-   },
-   "costUsd": 0.000245532,
-   "inputTokens": 5846,
-   "model": "typesafe/jev-1.13-20260917",
-   "ms": 313
-  },
   "0da924cf7a65fb": {
    "answers": {
     "form.crown": {
@@ -57814,538 +57431,6 @@
    "inputTokens": 2980,
    "model": "typesafe/jev-1.13-20260917",
    "ms": 265
-  },
-  "0219b1e283f02e": {
-   "answers": {
-    "body.framing": {
-     "choice": "posts and rails",
-     "confidence": 0.22,
-     "probabilities": {
-      "close studding": 0.08,
-      "crossed braces": 0.44,
-      "posts and rails": 0.48
-     },
-     "type": "choice"
-    },
-    "body.plaster": {
-     "confidence": 0.74,
-     "legend": {
-      "0": "smooth and fresh",
-      "1": "hand-laid",
-      "2": "lumpy and old"
-     },
-     "probabilities": {
-      "0": 0.09,
-      "1": 0.83,
-      "2": 0.08
-     },
-     "score": 0.99,
-     "type": "score"
-    },
-    "feature.drive": {
-     "choice": "undershot",
-     "confidence": 0.54,
-     "probabilities": {
-      "overshot": 0.23,
-      "undershot": 0.77
-     },
-     "type": "choice"
-    },
-    "feature.wheel": {
-     "confidence": 0.27,
-     "legend": {
-      "0": "a small wheel",
-      "1": "a tall wheel",
-      "2": "a great wheel"
-     },
-     "probabilities": {
-      "0": 0.04,
-      "1": 0.41,
-      "2": 0.55
-     },
-     "score": 1.51,
-     "type": "score"
-    },
-    "footprint.attachments:lean-to": {
-     "noul": 0.51,
-     "type": "noul"
-    },
-    "footprint.attachments:porch": {
-     "noul": 0.56,
-     "type": "noul"
-    },
-    "footprint.attachments:turret": {
-     "noul": 0.29,
-     "type": "noul"
-    },
-    "footprint.base": {
-     "confidence": 0.71,
-     "legend": {
-      "0": "low on the ground",
-      "1": "on a stone plinth",
-      "2": "raised up steps"
-     },
-     "probabilities": {
-      "0": 0.08,
-      "1": 0.81,
-      "2": 0.11
-     },
-     "score": 1.04,
-     "type": "score"
-    },
-    "footprint.character": {
-     "confidence": 0.78,
-     "legend": {
-      "0": "trim and square",
-      "1": "gently settled",
-      "2": "crooked, like a storybook"
-     },
-     "probabilities": {
-      "0": 0.09,
-      "1": 0.85,
-      "2": 0.06
-     },
-     "score": 0.97,
-     "type": "score"
-    },
-    "footprint.heights": {
-     "choice": "level",
-     "confidence": 0.4,
-     "probabilities": {
-      "level": 0.7,
-      "stepped": 0.3
-     },
-     "type": "choice"
-    },
-    "footprint.massing": {
-     "choice": "a single block",
-     "confidence": 0.14,
-     "probabilities": {
-      "a T": 0.09,
-      "a cluster": 0.25,
-      "a long range": 0.15,
-      "a single block": 0.31,
-      "an L": 0.2
-     },
-     "type": "choice"
-    },
-    "footprint.roof": {
-     "choice": "gabled",
-     "confidence": 1,
-     "probabilities": {
-      "gabled": 1,
-      "half-hipped": 0,
-      "hipped": 0
-     },
-     "type": "choice"
-    },
-    "footprint.roofline": {
-     "confidence": 0.35,
-     "legend": {
-      "0": "low and spreading",
-      "1": "steep",
-      "2": "tall and steep"
-     },
-     "probabilities": {
-      "0": 0.16,
-      "1": 0.57,
-      "2": 0.27
-     },
-     "score": 1.1,
-     "type": "score"
-    },
-    "footprint.shape": {
-     "choice": "long",
-     "confidence": 0.34,
-     "probabilities": {
-      "gable-fronted": 0.22,
-      "long": 0.56,
-      "snug": 0.22
-     },
-     "type": "choice"
-    },
-    "footprint.size": {
-     "confidence": 0.56,
-     "legend": {
-      "0": "tiny",
-      "1": "modest",
-      "2": "roomy"
-     },
-     "probabilities": {
-      "0": 0,
-      "1": 0.29,
-      "2": 0.71
-     },
-     "score": 1.7,
-     "type": "score"
-    },
-    "footprint.storeys": {
-     "confidence": 0.53,
-     "legend": {
-      "0": "one storey",
-      "1": "two storeys",
-      "2": "three storeys"
-     },
-     "probabilities": {
-      "0": 0.11,
-      "1": 0.69,
-      "2": 0.2
-     },
-     "score": 1.09,
-     "type": "score"
-    },
-    "footprint.windows": {
-     "confidence": 0.25,
-     "legend": {
-      "0": "a few",
-      "1": "several",
-      "2": "many"
-     },
-     "probabilities": {
-      "0": 0.13,
-      "1": 0.5,
-      "2": 0.37
-     },
-     "score": 1.24,
-     "type": "score"
-    },
-    "palette.contrast": {
-     "confidence": 0.49,
-     "legend": {
-      "0": "soft",
-      "1": "balanced",
-      "2": "vivid"
-     },
-     "probabilities": {
-      "0": 0.28,
-      "1": 0.66,
-      "2": 0.06
-     },
-     "score": 0.78,
-     "type": "score"
-    },
-    "palette.family": {
-     "choice": "lantern-dusk",
-     "confidence": 0.19,
-     "probabilities": {
-      "autumn-ember": 0.02,
-      "bluebell-wood": 0.08,
-      "cherry-blossom": 0.01,
-      "deep-forest": 0.1,
-      "desert-sage": 0.24,
-      "lantern-dusk": 0.28,
-      "silver-birch": 0.05,
-      "spring-meadow": 0.09,
-      "teal-gold": 0.13
-     },
-     "type": "choice"
-    },
-    "roof.chimney": {
-     "choice": "none",
-     "confidence": 0.33,
-     "probabilities": {
-      "gable": 0.3,
-      "none": 0.55,
-      "ridge": 0.15
-     },
-     "type": "choice"
-    },
-    "roof.covering": {
-     "choice": "slates",
-     "confidence": 0.91,
-     "probabilities": {
-      "pantiles": 0.03,
-      "shingles": 0.03,
-      "slates": 0.94
-     },
-     "type": "choice"
-    },
-    "roof.overhang": {
-     "confidence": 0.31,
-     "legend": {
-      "0": "neat and close",
-      "1": "sheltering",
-      "2": "deep and low"
-     },
-     "probabilities": {
-      "0": 0.55,
-      "1": 0.44,
-      "2": 0.01
-     },
-     "score": 0.45,
-     "type": "score"
-    }
-   },
-   "costUsd": 0.00025473,
-   "inputTokens": 6065,
-   "model": "typesafe/jev-1.13-20260917",
-   "ms": 377
-  },
-  "15296569dadd5c": {
-   "answers": {
-    "body.framing": {
-     "choice": "posts and rails",
-     "confidence": 0.4,
-     "probabilities": {
-      "close studding": 0.08,
-      "crossed braces": 0.32,
-      "posts and rails": 0.6
-     },
-     "type": "choice"
-    },
-    "body.plaster": {
-     "confidence": 0.73,
-     "legend": {
-      "0": "smooth and fresh",
-      "1": "hand-laid",
-      "2": "lumpy and old"
-     },
-     "probabilities": {
-      "0": 0.09,
-      "1": 0.82,
-      "2": 0.09
-     },
-     "score": 1,
-     "type": "score"
-    },
-    "feature.drive": {
-     "choice": "undershot",
-     "confidence": 0.58,
-     "probabilities": {
-      "overshot": 0.21,
-      "undershot": 0.79
-     },
-     "type": "choice"
-    },
-    "feature.wheel": {
-     "confidence": 0.31,
-     "legend": {
-      "0": "a small wheel",
-      "1": "a tall wheel",
-      "2": "a great wheel"
-     },
-     "probabilities": {
-      "0": 0.09,
-      "1": 0.54,
-      "2": 0.37
-     },
-     "score": 1.28,
-     "type": "score"
-    },
-    "footprint.attachments:lean-to": {
-     "noul": 0.49,
-     "type": "noul"
-    },
-    "footprint.attachments:porch": {
-     "noul": 0.52,
-     "type": "noul"
-    },
-    "footprint.attachments:turret": {
-     "noul": 0.3,
-     "type": "noul"
-    },
-    "footprint.base": {
-     "confidence": 0.8,
-     "legend": {
-      "0": "low on the ground",
-      "1": "on a stone plinth",
-      "2": "raised up steps"
-     },
-     "probabilities": {
-      "0": 0.07,
-      "1": 0.87,
-      "2": 0.06
-     },
-     "score": 0.99,
-     "type": "score"
-    },
-    "footprint.character": {
-     "confidence": 0.74,
-     "legend": {
-      "0": "trim and square",
-      "1": "gently settled",
-      "2": "crooked, like a storybook"
-     },
-     "probabilities": {
-      "0": 0.07,
-      "1": 0.83,
-      "2": 0.1
-     },
-     "score": 1.03,
-     "type": "score"
-    },
-    "footprint.heights": {
-     "choice": "level",
-     "confidence": 0.52,
-     "probabilities": {
-      "level": 0.76,
-      "stepped": 0.24
-     },
-     "type": "choice"
-    },
-    "footprint.massing": {
-     "choice": "a single block",
-     "confidence": 0.31,
-     "probabilities": {
-      "a T": 0.07,
-      "a cluster": 0.19,
-      "a long range": 0.06,
-      "a single block": 0.45,
-      "an L": 0.23
-     },
-     "type": "choice"
-    },
-    "footprint.roof": {
-     "choice": "gabled",
-     "confidence": 1,
-     "probabilities": {
-      "gabled": 1,
-      "half-hipped": 0,
-      "hipped": 0
-     },
-     "type": "choice"
-    },
-    "footprint.roofline": {
-     "confidence": 0.38,
-     "legend": {
-      "0": "low and spreading",
-      "1": "steep",
-      "2": "tall and steep"
-     },
-     "probabilities": {
-      "0": 0.27,
-      "1": 0.59,
-      "2": 0.14
-     },
-     "score": 0.87,
-     "type": "score"
-    },
-    "footprint.shape": {
-     "choice": "long",
-     "confidence": 0.11,
-     "probabilities": {
-      "gable-fronted": 0.28,
-      "long": 0.41,
-      "snug": 0.31
-     },
-     "type": "choice"
-    },
-    "footprint.size": {
-     "confidence": 0.41,
-     "legend": {
-      "0": "tiny",
-      "1": "modest",
-      "2": "roomy"
-     },
-     "probabilities": {
-      "0": 0.01,
-      "1": 0.37,
-      "2": 0.62
-     },
-     "score": 1.62,
-     "type": "score"
-    },
-    "footprint.storeys": {
-     "confidence": 0.61,
-     "legend": {
-      "0": "one storey",
-      "1": "two storeys",
-      "2": "three storeys"
-     },
-     "probabilities": {
-      "0": 0.15,
-      "1": 0.74,
-      "2": 0.11
-     },
-     "score": 0.96,
-     "type": "score"
-    },
-    "footprint.windows": {
-     "confidence": 0.31,
-     "legend": {
-      "0": "a few",
-      "1": "several",
-      "2": "many"
-     },
-     "probabilities": {
-      "0": 0.14,
-      "1": 0.54,
-      "2": 0.32
-     },
-     "score": 1.18,
-     "type": "score"
-    },
-    "palette.contrast": {
-     "confidence": 0.46,
-     "legend": {
-      "0": "soft",
-      "1": "balanced",
-      "2": "vivid"
-     },
-     "probabilities": {
-      "0": 0.3,
-      "1": 0.64,
-      "2": 0.06
-     },
-     "score": 0.76,
-     "type": "score"
-    },
-    "palette.family": {
-     "choice": "desert-sage",
-     "confidence": 0.19,
-     "probabilities": {
-      "autumn-ember": 0.02,
-      "bluebell-wood": 0.05,
-      "cherry-blossom": 0.01,
-      "deep-forest": 0.18,
-      "desert-sage": 0.27999999999999997,
-      "lantern-dusk": 0.15,
-      "silver-birch": 0.02,
-      "spring-meadow": 0.2,
-      "teal-gold": 0.09
-     },
-     "type": "choice"
-    },
-    "roof.chimney": {
-     "choice": "none",
-     "confidence": 0.49,
-     "probabilities": {
-      "gable": 0.2,
-      "none": 0.66,
-      "ridge": 0.14
-     },
-     "type": "choice"
-    },
-    "roof.covering": {
-     "choice": "slates",
-     "confidence": 0.88,
-     "probabilities": {
-      "pantiles": 0.05,
-      "shingles": 0.03,
-      "slates": 0.92
-     },
-     "type": "choice"
-    },
-    "roof.overhang": {
-     "confidence": 0.29,
-     "legend": {
-      "0": "neat and close",
-      "1": "sheltering",
-      "2": "deep and low"
-     },
-     "probabilities": {
-      "0": 0.54,
-      "1": 0.45,
-      "2": 0.01
-     },
-     "score": 0.48,
-     "type": "score"
-    }
-   },
-   "costUsd": 0.000247842,
-   "inputTokens": 5901,
-   "model": "typesafe/jev-1.13-20260917",
-   "ms": 338
   },
   "171effedc2ebb8": {
    "answers": {
@@ -58765,63 +57850,6 @@
    "inputTokens": 1145,
    "model": "typesafe/jev-1.13-20260917",
    "ms": 296
-  },
-  "0604b507b4dcb6": {
-   "answers": {
-    "openings.door": {
-     "choice": "plank",
-     "confidence": 0.67,
-     "probabilities": {
-      "arched": 0.01,
-      "hooded": 0.21,
-      "plank": 0.78
-     },
-     "type": "choice"
-    },
-    "openings.panes": {
-     "choice": "four panes",
-     "confidence": 0.25,
-     "probabilities": {
-      "four panes": 0.5,
-      "one pane": 0.04,
-      "six panes": 0.46
-     },
-     "type": "choice"
-    },
-    "openings.shutters": {
-     "noul": 0.12,
-     "type": "noul"
-    },
-    "ornaments.extras:fence": {
-     "noul": 0.74,
-     "type": "noul"
-    },
-    "ornaments.extras:flower boxes": {
-     "noul": 0.86,
-     "type": "noul"
-    },
-    "ornaments.extras:lantern": {
-     "noul": 0.86,
-     "type": "noul"
-    },
-    "ornaments.extras:woodpile": {
-     "noul": 0.81,
-     "type": "noul"
-    },
-    "ornaments.walk": {
-     "choice": "stepping stones",
-     "confidence": 0.18,
-     "probabilities": {
-      "flagstones": 0.41,
-      "stepping stones": 0.59
-     },
-     "type": "choice"
-    }
-   },
-   "costUsd": 0.000101094,
-   "inputTokens": 2407,
-   "model": "typesafe/jev-1.13-20260917",
-   "ms": 218
   },
   "082b8453ebdc53": {
    "answers": {
@@ -59274,84 +58302,6 @@
    "model": "typesafe/jev-1.13-20260917",
    "ms": 358
   },
-  "09a6ffddc56412": {
-   "answers": {
-    "body.use": {
-     "choice": "timber-frame@1",
-     "confidence": 0.2,
-     "probabilities": {
-      "fieldstone@1": 0.4,
-      "timber-frame@1": 0.6
-     },
-     "type": "choice"
-    },
-    "feature.present": {
-     "noul": 0.72,
-     "type": "noul"
-    },
-    "feature.use": {
-     "choice": "waterwheel@1",
-     "confidence": 0.82,
-     "probabilities": {
-      "tower@1": 0.09,
-      "waterwheel@1": 0.91
-     },
-     "type": "choice"
-    },
-    "roof.use": {
-     "choice": "tiles@1",
-     "confidence": 0.06,
-     "probabilities": {
-      "thatch@1": 0.47,
-      "tiles@1": 0.53
-     },
-     "type": "choice"
-    }
-   },
-   "costUsd": 0.000069846,
-   "inputTokens": 1663,
-   "model": "typesafe/jev-1.13-20260917",
-   "ms": 441
-  },
-  "06d0c9958da2f8": {
-   "answers": {
-    "body.use": {
-     "choice": "timber-frame@1",
-     "confidence": 0.66,
-     "probabilities": {
-      "fieldstone@1": 0.17,
-      "timber-frame@1": 0.83
-     },
-     "type": "choice"
-    },
-    "feature.present": {
-     "noul": 0.75,
-     "type": "noul"
-    },
-    "feature.use": {
-     "choice": "waterwheel@1",
-     "confidence": 0.84,
-     "probabilities": {
-      "tower@1": 0.08,
-      "waterwheel@1": 0.92
-     },
-     "type": "choice"
-    },
-    "roof.use": {
-     "choice": "tiles@1",
-     "confidence": 0.26,
-     "probabilities": {
-      "thatch@1": 0.37,
-      "tiles@1": 0.63
-     },
-     "type": "choice"
-    }
-   },
-   "costUsd": 0.000068964,
-   "inputTokens": 1642,
-   "model": "typesafe/jev-1.13-20260917",
-   "ms": 353
-  },
   "1b168a3780c91d": {
    "answers": {
     "form.use": {
@@ -59373,84 +58323,6 @@
    "inputTokens": 1368,
    "model": "typesafe/jev-1.13-20260917",
    "ms": 288
-  },
-  "03f9a2bec43c08": {
-   "answers": {
-    "body.use": {
-     "choice": "timber-frame@1",
-     "confidence": 0.46,
-     "probabilities": {
-      "fieldstone@1": 0.27,
-      "timber-frame@1": 0.73
-     },
-     "type": "choice"
-    },
-    "feature.present": {
-     "noul": 0.8,
-     "type": "noul"
-    },
-    "feature.use": {
-     "choice": "waterwheel@1",
-     "confidence": 1,
-     "probabilities": {
-      "tower@1": 0,
-      "waterwheel@1": 1
-     },
-     "type": "choice"
-    },
-    "roof.use": {
-     "choice": "tiles@1",
-     "confidence": 0.98,
-     "probabilities": {
-      "thatch@1": 0.01,
-      "tiles@1": 0.99
-     },
-     "type": "choice"
-    }
-   },
-   "costUsd": 0.000070224,
-   "inputTokens": 1672,
-   "model": "typesafe/jev-1.13-20260917",
-   "ms": 325
-  },
-  "1c814df7e1d67f": {
-   "answers": {
-    "body.use": {
-     "choice": "timber-frame@1",
-     "confidence": 0.48,
-     "probabilities": {
-      "fieldstone@1": 0.26,
-      "timber-frame@1": 0.74
-     },
-     "type": "choice"
-    },
-    "feature.present": {
-     "noul": 0.79,
-     "type": "noul"
-    },
-    "feature.use": {
-     "choice": "waterwheel@1",
-     "confidence": 0.96,
-     "probabilities": {
-      "tower@1": 0.02,
-      "waterwheel@1": 0.98
-     },
-     "type": "choice"
-    },
-    "roof.use": {
-     "choice": "tiles@1",
-     "confidence": 0.98,
-     "probabilities": {
-      "thatch@1": 0.01,
-      "tiles@1": 0.99
-     },
-     "type": "choice"
-    }
-   },
-   "costUsd": 0.00007224,
-   "inputTokens": 1720,
-   "model": "typesafe/jev-1.13-20260917",
-   "ms": 334
   },
   "047122ce71ee13": {
    "answers": {
@@ -60287,538 +59159,6 @@
    "model": "typesafe/jev-1.13-20260917",
    "ms": 1112
   },
-  "0ea6f5904f3bcf": {
-   "answers": {
-    "body.framing": {
-     "choice": "posts and rails",
-     "confidence": 0.2,
-     "probabilities": {
-      "close studding": 0.09,
-      "crossed braces": 0.44,
-      "posts and rails": 0.47
-     },
-     "type": "choice"
-    },
-    "body.plaster": {
-     "confidence": 0.74,
-     "legend": {
-      "0": "smooth and fresh",
-      "1": "hand-laid",
-      "2": "lumpy and old"
-     },
-     "probabilities": {
-      "0": 0.06,
-      "1": 0.83,
-      "2": 0.11
-     },
-     "score": 1.05,
-     "type": "score"
-    },
-    "feature.drive": {
-     "choice": "undershot",
-     "confidence": 0.34,
-     "probabilities": {
-      "overshot": 0.33,
-      "undershot": 0.67
-     },
-     "type": "choice"
-    },
-    "feature.wheel": {
-     "confidence": 0.68,
-     "legend": {
-      "0": "a small wheel",
-      "1": "a tall wheel",
-      "2": "a great wheel"
-     },
-     "probabilities": {
-      "0": 0.04,
-      "1": 0.13,
-      "2": 0.83
-     },
-     "score": 1.79,
-     "type": "score"
-    },
-    "footprint.attachments:lean-to": {
-     "noul": 0.6,
-     "type": "noul"
-    },
-    "footprint.attachments:porch": {
-     "noul": 0.59,
-     "type": "noul"
-    },
-    "footprint.attachments:turret": {
-     "noul": 0.38,
-     "type": "noul"
-    },
-    "footprint.base": {
-     "confidence": 0.83,
-     "legend": {
-      "0": "low on the ground",
-      "1": "on a stone plinth",
-      "2": "raised up steps"
-     },
-     "probabilities": {
-      "0": 0.05,
-      "1": 0.89,
-      "2": 0.06
-     },
-     "score": 1,
-     "type": "score"
-    },
-    "footprint.character": {
-     "confidence": 0.64,
-     "legend": {
-      "0": "trim and square",
-      "1": "gently settled",
-      "2": "crooked, like a storybook"
-     },
-     "probabilities": {
-      "0": 0.04,
-      "1": 0.76,
-      "2": 0.2
-     },
-     "score": 1.16,
-     "type": "score"
-    },
-    "footprint.heights": {
-     "choice": "level",
-     "confidence": 0.18,
-     "probabilities": {
-      "level": 0.59,
-      "stepped": 0.41
-     },
-     "type": "choice"
-    },
-    "footprint.massing": {
-     "choice": "a cluster",
-     "confidence": 0.84,
-     "probabilities": {
-      "a T": 0.02,
-      "a cluster": 0.87,
-      "a long range": 0.03,
-      "a single block": 0.04,
-      "an L": 0.04
-     },
-     "type": "choice"
-    },
-    "footprint.roof": {
-     "choice": "gabled",
-     "confidence": 1,
-     "probabilities": {
-      "gabled": 1,
-      "half-hipped": 0,
-      "hipped": 0
-     },
-     "type": "choice"
-    },
-    "footprint.roofline": {
-     "confidence": 0,
-     "legend": {
-      "0": "low and spreading",
-      "1": "steep",
-      "2": "tall and steep"
-     },
-     "probabilities": {
-      "0": 0.38,
-      "1": 0.35,
-      "2": 0.27
-     },
-     "score": 0.88,
-     "type": "score"
-    },
-    "footprint.shape": {
-     "choice": "long",
-     "confidence": 0.58,
-     "probabilities": {
-      "gable-fronted": 0.19,
-      "long": 0.72,
-      "snug": 0.09
-     },
-     "type": "choice"
-    },
-    "footprint.size": {
-     "confidence": 0.97,
-     "legend": {
-      "0": "tiny",
-      "1": "modest",
-      "2": "roomy"
-     },
-     "probabilities": {
-      "0": 0,
-      "1": 0.02,
-      "2": 0.98
-     },
-     "score": 1.97,
-     "type": "score"
-    },
-    "footprint.storeys": {
-     "confidence": 0.43,
-     "legend": {
-      "0": "one storey",
-      "1": "two storeys",
-      "2": "three storeys"
-     },
-     "probabilities": {
-      "0": 0.13,
-      "1": 0.62,
-      "2": 0.25
-     },
-     "score": 1.12,
-     "type": "score"
-    },
-    "footprint.windows": {
-     "confidence": 0.04,
-     "legend": {
-      "0": "a few",
-      "1": "several",
-      "2": "many"
-     },
-     "probabilities": {
-      "0": 0.14,
-      "1": 0.36,
-      "2": 0.5
-     },
-     "score": 1.36,
-     "type": "score"
-    },
-    "palette.contrast": {
-     "confidence": 0.55,
-     "legend": {
-      "0": "soft",
-      "1": "balanced",
-      "2": "vivid"
-     },
-     "probabilities": {
-      "0": 0.24,
-      "1": 0.7,
-      "2": 0.06
-     },
-     "score": 0.82,
-     "type": "score"
-    },
-    "palette.family": {
-     "choice": "desert-sage",
-     "confidence": 0.13,
-     "probabilities": {
-      "autumn-ember": 0.03,
-      "bluebell-wood": 0.05,
-      "cherry-blossom": 0.01,
-      "deep-forest": 0.22,
-      "desert-sage": 0.23,
-      "lantern-dusk": 0.22,
-      "silver-birch": 0.02,
-      "spring-meadow": 0.12,
-      "teal-gold": 0.1
-     },
-     "type": "choice"
-    },
-    "roof.chimney": {
-     "choice": "none",
-     "confidence": 0.37,
-     "probabilities": {
-      "gable": 0.29,
-      "none": 0.58,
-      "ridge": 0.13
-     },
-     "type": "choice"
-    },
-    "roof.covering": {
-     "choice": "slates",
-     "confidence": 0.86,
-     "probabilities": {
-      "pantiles": 0.05,
-      "shingles": 0.04,
-      "slates": 0.91
-     },
-     "type": "choice"
-    },
-    "roof.overhang": {
-     "confidence": 0.35,
-     "legend": {
-      "0": "neat and close",
-      "1": "sheltering",
-      "2": "deep and low"
-     },
-     "probabilities": {
-      "0": 0.42,
-      "1": 0.5700000000000001,
-      "2": 0.01
-     },
-     "score": 0.59,
-     "type": "score"
-    }
-   },
-   "costUsd": 0.000253554,
-   "inputTokens": 6037,
-   "model": "typesafe/jev-1.13-20260917",
-   "ms": 313
-  },
-  "0b5b733e968b3a": {
-   "answers": {
-    "body.framing": {
-     "choice": "posts and rails",
-     "confidence": 0.33,
-     "probabilities": {
-      "close studding": 0.12,
-      "crossed braces": 0.33,
-      "posts and rails": 0.55
-     },
-     "type": "choice"
-    },
-    "body.plaster": {
-     "confidence": 0.79,
-     "legend": {
-      "0": "smooth and fresh",
-      "1": "hand-laid",
-      "2": "lumpy and old"
-     },
-     "probabilities": {
-      "0": 0.06,
-      "1": 0.86,
-      "2": 0.08
-     },
-     "score": 1.02,
-     "type": "score"
-    },
-    "feature.drive": {
-     "choice": "undershot",
-     "confidence": 0.36,
-     "probabilities": {
-      "overshot": 0.32,
-      "undershot": 0.68
-     },
-     "type": "choice"
-    },
-    "feature.wheel": {
-     "confidence": 0.47,
-     "legend": {
-      "0": "a small wheel",
-      "1": "a tall wheel",
-      "2": "a great wheel"
-     },
-     "probabilities": {
-      "0": 0.04,
-      "1": 0.27,
-      "2": 0.69
-     },
-     "score": 1.64,
-     "type": "score"
-    },
-    "footprint.attachments:lean-to": {
-     "noul": 0.55,
-     "type": "noul"
-    },
-    "footprint.attachments:porch": {
-     "noul": 0.56,
-     "type": "noul"
-    },
-    "footprint.attachments:turret": {
-     "noul": 0.33,
-     "type": "noul"
-    },
-    "footprint.base": {
-     "confidence": 0.67,
-     "legend": {
-      "0": "low on the ground",
-      "1": "on a stone plinth",
-      "2": "raised up steps"
-     },
-     "probabilities": {
-      "0": 0.09,
-      "1": 0.78,
-      "2": 0.13
-     },
-     "score": 1.04,
-     "type": "score"
-    },
-    "footprint.character": {
-     "confidence": 0.78,
-     "legend": {
-      "0": "trim and square",
-      "1": "gently settled",
-      "2": "crooked, like a storybook"
-     },
-     "probabilities": {
-      "0": 0.03,
-      "1": 0.85,
-      "2": 0.12
-     },
-     "score": 1.09,
-     "type": "score"
-    },
-    "footprint.heights": {
-     "choice": "level",
-     "confidence": 0.24,
-     "probabilities": {
-      "level": 0.62,
-      "stepped": 0.38
-     },
-     "type": "choice"
-    },
-    "footprint.massing": {
-     "choice": "a cluster",
-     "confidence": 0.8,
-     "probabilities": {
-      "a T": 0.02,
-      "a cluster": 0.84,
-      "a long range": 0.03,
-      "a single block": 0.05,
-      "an L": 0.06
-     },
-     "type": "choice"
-    },
-    "footprint.roof": {
-     "choice": "gabled",
-     "confidence": 1,
-     "probabilities": {
-      "gabled": 1,
-      "half-hipped": 0,
-      "hipped": 0
-     },
-     "type": "choice"
-    },
-    "footprint.roofline": {
-     "confidence": 0.15,
-     "legend": {
-      "0": "low and spreading",
-      "1": "steep",
-      "2": "tall and steep"
-     },
-     "probabilities": {
-      "0": 0.35,
-      "1": 0.43,
-      "2": 0.22
-     },
-     "score": 0.87,
-     "type": "score"
-    },
-    "footprint.shape": {
-     "choice": "long",
-     "confidence": 0.52,
-     "probabilities": {
-      "gable-fronted": 0.18,
-      "long": 0.68,
-      "snug": 0.14
-     },
-     "type": "choice"
-    },
-    "footprint.size": {
-     "confidence": 0.93,
-     "legend": {
-      "0": "tiny",
-      "1": "modest",
-      "2": "roomy"
-     },
-     "probabilities": {
-      "0": 0,
-      "1": 0.05,
-      "2": 0.95
-     },
-     "score": 1.95,
-     "type": "score"
-    },
-    "footprint.storeys": {
-     "confidence": 0.28,
-     "legend": {
-      "0": "one storey",
-      "1": "two storeys",
-      "2": "three storeys"
-     },
-     "probabilities": {
-      "0": 0.07,
-      "1": 0.52,
-      "2": 0.41
-     },
-     "score": 1.34,
-     "type": "score"
-    },
-    "footprint.windows": {
-     "confidence": 0.2,
-     "legend": {
-      "0": "a few",
-      "1": "several",
-      "2": "many"
-     },
-     "probabilities": {
-      "0": 0.11,
-      "1": 0.47,
-      "2": 0.42
-     },
-     "score": 1.31,
-     "type": "score"
-    },
-    "palette.contrast": {
-     "confidence": 0.59,
-     "legend": {
-      "0": "soft",
-      "1": "balanced",
-      "2": "vivid"
-     },
-     "probabilities": {
-      "0": 0.22,
-      "1": 0.73,
-      "2": 0.05
-     },
-     "score": 0.83,
-     "type": "score"
-    },
-    "palette.family": {
-     "choice": "lantern-dusk",
-     "confidence": 0.2,
-     "probabilities": {
-      "autumn-ember": 0.02,
-      "bluebell-wood": 0.07,
-      "cherry-blossom": 0.01,
-      "deep-forest": 0.12,
-      "desert-sage": 0.21,
-      "lantern-dusk": 0.29,
-      "silver-birch": 0.03,
-      "spring-meadow": 0.12,
-      "teal-gold": 0.13
-     },
-     "type": "choice"
-    },
-    "roof.chimney": {
-     "choice": "none",
-     "confidence": 0.4,
-     "probabilities": {
-      "gable": 0.26,
-      "none": 0.6,
-      "ridge": 0.14
-     },
-     "type": "choice"
-    },
-    "roof.covering": {
-     "choice": "slates",
-     "confidence": 0.86,
-     "probabilities": {
-      "pantiles": 0.03,
-      "shingles": 0.06,
-      "slates": 0.91
-     },
-     "type": "choice"
-    },
-    "roof.overhang": {
-     "confidence": 0.34,
-     "legend": {
-      "0": "neat and close",
-      "1": "sheltering",
-      "2": "deep and low"
-     },
-     "probabilities": {
-      "0": 0.43,
-      "1": 0.56,
-      "2": 0.01
-     },
-     "score": 0.58,
-     "type": "score"
-    }
-   },
-   "costUsd": 0.000252672,
-   "inputTokens": 6016,
-   "model": "typesafe/jev-1.13-20260917",
-   "ms": 286
-  },
   "079dc6839dac39": {
    "answers": {
     "form.crown": {
@@ -60931,652 +59271,6 @@
    "model": "typesafe/jev-1.13-20260917",
    "ms": 293
   },
-  "198d9ba918c53a": {
-   "answers": {
-    "body.framing": {
-     "choice": "posts and rails",
-     "confidence": 0.27,
-     "probabilities": {
-      "close studding": 0.11,
-      "crossed braces": 0.38,
-      "posts and rails": 0.51
-     },
-     "type": "choice"
-    },
-    "body.plaster": {
-     "confidence": 0.76,
-     "legend": {
-      "0": "smooth and fresh",
-      "1": "hand-laid",
-      "2": "lumpy and old"
-     },
-     "probabilities": {
-      "0": 0.08,
-      "1": 0.84,
-      "2": 0.08
-     },
-     "score": 1,
-     "type": "score"
-    },
-    "feature.drive": {
-     "choice": "undershot",
-     "confidence": 0.42,
-     "probabilities": {
-      "overshot": 0.29,
-      "undershot": 0.71
-     },
-     "type": "choice"
-    },
-    "feature.wheel": {
-     "confidence": 0.16,
-     "legend": {
-      "0": "a small wheel",
-      "1": "a tall wheel",
-      "2": "a great wheel"
-     },
-     "probabilities": {
-      "0": 0.05,
-      "1": 0.46,
-      "2": 0.49
-     },
-     "score": 1.44,
-     "type": "score"
-    },
-    "footprint.attachments:lean-to": {
-     "noul": 0.52,
-     "type": "noul"
-    },
-    "footprint.attachments:porch": {
-     "noul": 0.58,
-     "type": "noul"
-    },
-    "footprint.attachments:turret": {
-     "noul": 0.31,
-     "type": "noul"
-    },
-    "footprint.base": {
-     "confidence": 0.73,
-     "legend": {
-      "0": "low on the ground",
-      "1": "on a stone plinth",
-      "2": "raised up steps"
-     },
-     "probabilities": {
-      "0": 0.09,
-      "1": 0.82,
-      "2": 0.09
-     },
-     "score": 1,
-     "type": "score"
-    },
-    "footprint.character": {
-     "confidence": 0.77,
-     "legend": {
-      "0": "trim and square",
-      "1": "gently settled",
-      "2": "crooked, like a storybook"
-     },
-     "probabilities": {
-      "0": 0.07,
-      "1": 0.85,
-      "2": 0.08
-     },
-     "score": 1.01,
-     "type": "score"
-    },
-    "footprint.heights": {
-     "choice": "level",
-     "confidence": 0.34,
-     "probabilities": {
-      "level": 0.67,
-      "stepped": 0.33
-     },
-     "type": "choice"
-    },
-    "footprint.massing": {
-     "choice": "a cluster",
-     "confidence": 0.2,
-     "probabilities": {
-      "a T": 0.08,
-      "a cluster": 0.36,
-      "a long range": 0.14,
-      "a single block": 0.22,
-      "an L": 0.2
-     },
-     "type": "choice"
-    },
-    "footprint.roof": {
-     "choice": "gabled",
-     "confidence": 1,
-     "probabilities": {
-      "gabled": 1,
-      "half-hipped": 0,
-      "hipped": 0
-     },
-     "type": "choice"
-    },
-    "footprint.roofline": {
-     "confidence": 0.27,
-     "legend": {
-      "0": "low and spreading",
-      "1": "steep",
-      "2": "tall and steep"
-     },
-     "probabilities": {
-      "0": 0.3,
-      "1": 0.51,
-      "2": 0.19
-     },
-     "score": 0.89,
-     "type": "score"
-    },
-    "footprint.shape": {
-     "choice": "long",
-     "confidence": 0.55,
-     "probabilities": {
-      "gable-fronted": 0.17,
-      "long": 0.7,
-      "snug": 0.13
-     },
-     "type": "choice"
-    },
-    "footprint.size": {
-     "confidence": 0.73,
-     "legend": {
-      "0": "tiny",
-      "1": "modest",
-      "2": "roomy"
-     },
-     "probabilities": {
-      "0": 0,
-      "1": 0.18,
-      "2": 0.82
-     },
-     "score": 1.82,
-     "type": "score"
-    },
-    "footprint.storeys": {
-     "confidence": 0.52,
-     "legend": {
-      "0": "one storey",
-      "1": "two storeys",
-      "2": "three storeys"
-     },
-     "probabilities": {
-      "0": 0.09,
-      "1": 0.68,
-      "2": 0.23
-     },
-     "score": 1.14,
-     "type": "score"
-    },
-    "footprint.windows": {
-     "confidence": 0.03,
-     "legend": {
-      "0": "a few",
-      "1": "several",
-      "2": "many"
-     },
-     "probabilities": {
-      "0": 0.12,
-      "1": 0.41,
-      "2": 0.47
-     },
-     "score": 1.34,
-     "type": "score"
-    },
-    "palette.contrast": {
-     "confidence": 0.5,
-     "legend": {
-      "0": "soft",
-      "1": "balanced",
-      "2": "vivid"
-     },
-     "probabilities": {
-      "0": 0.26,
-      "1": 0.67,
-      "2": 0.07
-     },
-     "score": 0.81,
-     "type": "score"
-    },
-    "palette.family": {
-     "choice": "desert-sage",
-     "confidence": 0.19,
-     "probabilities": {
-      "autumn-ember": 0.02,
-      "bluebell-wood": 0.07,
-      "cherry-blossom": 0.01,
-      "deep-forest": 0.17,
-      "desert-sage": 0.27999999999999997,
-      "lantern-dusk": 0.15,
-      "silver-birch": 0.03,
-      "spring-meadow": 0.16,
-      "teal-gold": 0.11
-     },
-     "type": "choice"
-    },
-    "roof.chimney": {
-     "choice": "none",
-     "confidence": 0.4,
-     "probabilities": {
-      "gable": 0.24,
-      "none": 0.6,
-      "ridge": 0.16
-     },
-     "type": "choice"
-    },
-    "roof.covering": {
-     "choice": "slates",
-     "confidence": 0.92,
-     "probabilities": {
-      "pantiles": 0.03,
-      "shingles": 0.02,
-      "slates": 0.95
-     },
-     "type": "choice"
-    },
-    "roof.overhang": {
-     "confidence": 0.31,
-     "legend": {
-      "0": "neat and close",
-      "1": "sheltering",
-      "2": "deep and low"
-     },
-     "probabilities": {
-      "0": 0.55,
-      "1": 0.44,
-      "2": 0.01
-     },
-     "score": 0.46,
-     "type": "score"
-    }
-   },
-   "costUsd": 0.000253932,
-   "inputTokens": 6046,
-   "model": "typesafe/jev-1.13-20260917",
-   "ms": 266
-  },
-  "0d3113626e73d4": {
-   "answers": {
-    "body.framing": {
-     "choice": "posts and rails",
-     "confidence": 0.22,
-     "probabilities": {
-      "close studding": 0.07,
-      "crossed braces": 0.45,
-      "posts and rails": 0.48
-     },
-     "type": "choice"
-    },
-    "body.plaster": {
-     "confidence": 0.74,
-     "legend": {
-      "0": "smooth and fresh",
-      "1": "hand-laid",
-      "2": "lumpy and old"
-     },
-     "probabilities": {
-      "0": 0.07,
-      "1": 0.83,
-      "2": 0.1
-     },
-     "score": 1.03,
-     "type": "score"
-    },
-    "feature.drive": {
-     "choice": "undershot",
-     "confidence": 0.36,
-     "probabilities": {
-      "overshot": 0.32,
-      "undershot": 0.68
-     },
-     "type": "choice"
-    },
-    "feature.wheel": {
-     "confidence": 0.28,
-     "legend": {
-      "0": "a small wheel",
-      "1": "a tall wheel",
-      "2": "a great wheel"
-     },
-     "probabilities": {
-      "0": 0.06,
-      "1": 0.36,
-      "2": 0.58
-     },
-     "score": 1.52,
-     "type": "score"
-    },
-    "footprint.attachments:lean-to": {
-     "noul": 0.54,
-     "type": "noul"
-    },
-    "footprint.attachments:porch": {
-     "noul": 0.6,
-     "type": "noul"
-    },
-    "footprint.attachments:turret": {
-     "noul": 0.38,
-     "type": "noul"
-    },
-    "footprint.base": {
-     "confidence": 0.9,
-     "legend": {
-      "0": "low on the ground",
-      "1": "on a stone plinth",
-      "2": "raised up steps"
-     },
-     "probabilities": {
-      "0": 0.03,
-      "1": 0.93,
-      "2": 0.04
-     },
-     "score": 1.01,
-     "type": "score"
-    },
-    "footprint.character": {
-     "confidence": 0.74,
-     "legend": {
-      "0": "trim and square",
-      "1": "gently settled",
-      "2": "crooked, like a storybook"
-     },
-     "probabilities": {
-      "0": 0.05,
-      "1": 0.83,
-      "2": 0.12
-     },
-     "score": 1.07,
-     "type": "score"
-    },
-    "footprint.heights": {
-     "choice": "level",
-     "confidence": 0.02,
-     "probabilities": {
-      "level": 0.51,
-      "stepped": 0.49
-     },
-     "type": "choice"
-    },
-    "footprint.massing": {
-     "choice": "a cluster",
-     "confidence": 0.47,
-     "probabilities": {
-      "a T": 0.06,
-      "a cluster": 0.58,
-      "a long range": 0.07,
-      "a single block": 0.12,
-      "an L": 0.17
-     },
-     "type": "choice"
-    },
-    "footprint.roof": {
-     "choice": "gabled",
-     "confidence": 1,
-     "probabilities": {
-      "gabled": 1,
-      "half-hipped": 0,
-      "hipped": 0
-     },
-     "type": "choice"
-    },
-    "footprint.roofline": {
-     "confidence": 0.28,
-     "legend": {
-      "0": "low and spreading",
-      "1": "steep",
-      "2": "tall and steep"
-     },
-     "probabilities": {
-      "0": 0.29,
-      "1": 0.52,
-      "2": 0.19
-     },
-     "score": 0.9,
-     "type": "score"
-    },
-    "footprint.shape": {
-     "choice": "long",
-     "confidence": 0.41,
-     "probabilities": {
-      "gable-fronted": 0.21,
-      "long": 0.61,
-      "snug": 0.18
-     },
-     "type": "choice"
-    },
-    "footprint.size": {
-     "confidence": 0.71,
-     "legend": {
-      "0": "tiny",
-      "1": "modest",
-      "2": "roomy"
-     },
-     "probabilities": {
-      "0": 0,
-      "1": 0.19,
-      "2": 0.81
-     },
-     "score": 1.8,
-     "type": "score"
-    },
-    "footprint.storeys": {
-     "confidence": 0.53,
-     "legend": {
-      "0": "one storey",
-      "1": "two storeys",
-      "2": "three storeys"
-     },
-     "probabilities": {
-      "0": 0.12,
-      "1": 0.69,
-      "2": 0.19
-     },
-     "score": 1.07,
-     "type": "score"
-    },
-    "footprint.windows": {
-     "confidence": 0.25,
-     "legend": {
-      "0": "a few",
-      "1": "several",
-      "2": "many"
-     },
-     "probabilities": {
-      "0": 0.14,
-      "1": 0.5,
-      "2": 0.36
-     },
-     "score": 1.23,
-     "type": "score"
-    },
-    "palette.contrast": {
-     "confidence": 0.56,
-     "legend": {
-      "0": "soft",
-      "1": "balanced",
-      "2": "vivid"
-     },
-     "probabilities": {
-      "0": 0.23,
-      "1": 0.71,
-      "2": 0.06
-     },
-     "score": 0.83,
-     "type": "score"
-    },
-    "palette.family": {
-     "choice": "lantern-dusk",
-     "confidence": 0.17,
-     "probabilities": {
-      "autumn-ember": 0.03,
-      "bluebell-wood": 0.1,
-      "cherry-blossom": 0.01,
-      "deep-forest": 0.15,
-      "desert-sage": 0.21,
-      "lantern-dusk": 0.26,
-      "silver-birch": 0.03,
-      "spring-meadow": 0.08,
-      "teal-gold": 0.13
-     },
-     "type": "choice"
-    },
-    "roof.chimney": {
-     "choice": "none",
-     "confidence": 0.37,
-     "probabilities": {
-      "gable": 0.27,
-      "none": 0.58,
-      "ridge": 0.15
-     },
-     "type": "choice"
-    },
-    "roof.covering": {
-     "choice": "slates",
-     "confidence": 0.86,
-     "probabilities": {
-      "pantiles": 0.04,
-      "shingles": 0.05,
-      "slates": 0.91
-     },
-     "type": "choice"
-    },
-    "roof.overhang": {
-     "confidence": 0.27,
-     "legend": {
-      "0": "neat and close",
-      "1": "sheltering",
-      "2": "deep and low"
-     },
-     "probabilities": {
-      "0": 0.48,
-      "1": 0.51,
-      "2": 0.01
-     },
-     "score": 0.53,
-     "type": "score"
-    }
-   },
-   "costUsd": 0.000255948,
-   "inputTokens": 6094,
-   "model": "typesafe/jev-1.13-20260917",
-   "ms": 266
-  },
-  "150a221874a090": {
-   "answers": {
-    "openings.door": {
-     "choice": "plank",
-     "confidence": 0.48,
-     "probabilities": {
-      "arched": 0.03,
-      "hooded": 0.32,
-      "plank": 0.65
-     },
-     "type": "choice"
-    },
-    "openings.panes": {
-     "choice": "four panes",
-     "confidence": 0.28,
-     "probabilities": {
-      "four panes": 0.52,
-      "one pane": 0.02,
-      "six panes": 0.46
-     },
-     "type": "choice"
-    },
-    "openings.shutters": {
-     "noul": 0.13,
-     "type": "noul"
-    },
-    "ornaments.extras:fence": {
-     "noul": 0.81,
-     "type": "noul"
-    },
-    "ornaments.extras:flower boxes": {
-     "noul": 0.89,
-     "type": "noul"
-    },
-    "ornaments.extras:lantern": {
-     "noul": 0.86,
-     "type": "noul"
-    },
-    "ornaments.extras:woodpile": {
-     "noul": 0.89,
-     "type": "noul"
-    },
-    "ornaments.walk": {
-     "choice": "stepping stones",
-     "confidence": 0.12,
-     "probabilities": {
-      "flagstones": 0.44,
-      "stepping stones": 0.56
-     },
-     "type": "choice"
-    }
-   },
-   "costUsd": 0.000109074,
-   "inputTokens": 2597,
-   "model": "typesafe/jev-1.13-20260917",
-   "ms": 273
-  },
-  "1e1d1fd87e2d15": {
-   "answers": {
-    "openings.door": {
-     "choice": "plank",
-     "confidence": 0.64,
-     "probabilities": {
-      "arched": 0.02,
-      "hooded": 0.22,
-      "plank": 0.76
-     },
-     "type": "choice"
-    },
-    "openings.panes": {
-     "choice": "six panes",
-     "confidence": 0.27,
-     "probabilities": {
-      "four panes": 0.46,
-      "one pane": 0.03,
-      "six panes": 0.51
-     },
-     "type": "choice"
-    },
-    "openings.shutters": {
-     "noul": 0.12,
-     "type": "noul"
-    },
-    "ornaments.extras:fence": {
-     "noul": 0.78,
-     "type": "noul"
-    },
-    "ornaments.extras:flower boxes": {
-     "noul": 0.89,
-     "type": "noul"
-    },
-    "ornaments.extras:lantern": {
-     "noul": 0.86,
-     "type": "noul"
-    },
-    "ornaments.extras:woodpile": {
-     "noul": 0.88,
-     "type": "noul"
-    },
-    "ornaments.walk": {
-     "choice": "flagstones",
-     "confidence": 0,
-     "probabilities": {
-      "flagstones": 0.5,
-      "stepping stones": 0.5
-     },
-     "type": "choice"
-    }
-   },
-   "costUsd": 0.000108192,
-   "inputTokens": 2576,
-   "model": "typesafe/jev-1.13-20260917",
-   "ms": 223
-  },
   "1496059a446dba": {
    "answers": {
     "openings.door": {
@@ -61634,25 +59328,2173 @@
    "model": "typesafe/jev-1.13-20260917",
    "ms": 226
   },
-  "0ac029b79229b6": {
+  "048b190f40f5c2": {
+   "answers": {
+    "body.use": {
+     "choice": "timber-frame@1",
+     "confidence": 0.4,
+     "probabilities": {
+      "fieldstone@1": 0.3,
+      "timber-frame@1": 0.7
+     },
+     "type": "choice"
+    },
+    "feature.present": {
+     "noul": 0.59,
+     "type": "noul"
+    },
+    "feature.use": {
+     "choice": "tower@1",
+     "confidence": 0.41,
+     "probabilities": {
+      "bell@1": 0,
+      "dovecote@1": 0.01,
+      "forge@1": 0.3,
+      "granary@1": 0.01,
+      "tower@1": 0.51,
+      "well@1": 0.17
+     },
+     "type": "choice"
+    },
+    "roof.use": {
+     "choice": "thatch@1",
+     "confidence": 0.02,
+     "probabilities": {
+      "thatch@1": 0.51,
+      "tiles@1": 0.49
+     },
+     "type": "choice"
+    }
+   },
+   "costUsd": 0.000083622,
+   "inputTokens": 1991,
+   "model": "typesafe/jev-1.13-20260917",
+   "ms": 365
+  },
+  "0da686bd5e3fce": {
+   "answers": {
+    "body.use": {
+     "choice": "timber-frame@1",
+     "confidence": 0.58,
+     "probabilities": {
+      "fieldstone@1": 0.21,
+      "timber-frame@1": 0.79
+     },
+     "type": "choice"
+    },
+    "feature.present": {
+     "noul": 0.61,
+     "type": "noul"
+    },
+    "feature.use": {
+     "choice": "tower@1",
+     "confidence": 0.54,
+     "probabilities": {
+      "bell@1": 0.01,
+      "dovecote@1": 0.05,
+      "forge@1": 0.21,
+      "granary@1": 0.01,
+      "tower@1": 0.62,
+      "well@1": 0.1
+     },
+     "type": "choice"
+    },
+    "roof.use": {
+     "choice": "tiles@1",
+     "confidence": 0.26,
+     "probabilities": {
+      "thatch@1": 0.37,
+      "tiles@1": 0.63
+     },
+     "type": "choice"
+    }
+   },
+   "costUsd": 0.00008274,
+   "inputTokens": 1970,
+   "model": "typesafe/jev-1.13-20260917",
+   "ms": 1171
+  },
+  "06858e157eb55d": {
+   "answers": {
+    "body.use": {
+     "choice": "timber-frame@1",
+     "confidence": 0.6,
+     "probabilities": {
+      "fieldstone@1": 0.2,
+      "timber-frame@1": 0.8
+     },
+     "type": "choice"
+    },
+    "feature.present": {
+     "noul": 0.5,
+     "type": "noul"
+    },
+    "feature.use": {
+     "choice": "tower@1",
+     "confidence": 0.46,
+     "probabilities": {
+      "bell@1": 0,
+      "dovecote@1": 0,
+      "forge@1": 0.37,
+      "granary@1": 0.02,
+      "tower@1": 0.55,
+      "well@1": 0.06
+     },
+     "type": "choice"
+    },
+    "roof.use": {
+     "choice": "tiles@1",
+     "confidence": 0.48,
+     "probabilities": {
+      "thatch@1": 0.26,
+      "tiles@1": 0.74
+     },
+     "type": "choice"
+    }
+   },
+   "costUsd": 0.0000756,
+   "inputTokens": 1800,
+   "model": "typesafe/jev-1.13-20260917",
+   "ms": 347
+  },
+  "07096f94064848": {
+   "answers": {
+    "body.use": {
+     "choice": "timber-frame@1",
+     "confidence": 0.28,
+     "probabilities": {
+      "fieldstone@1": 0.36,
+      "timber-frame@1": 0.64
+     },
+     "type": "choice"
+    },
+    "feature.present": {
+     "noul": 0.71,
+     "type": "noul"
+    },
+    "feature.use": {
+     "choice": "waterwheel@1",
+     "confidence": 0.84,
+     "probabilities": {
+      "bell@1": 0,
+      "dovecote@1": 0,
+      "forge@1": 0.14,
+      "granary@1": 0,
+      "tower@1": 0,
+      "waterwheel@1": 0.86,
+      "well@1": 0
+     },
+     "type": "choice"
+    },
+    "roof.use": {
+     "choice": "tiles@1",
+     "confidence": 0.98,
+     "probabilities": {
+      "thatch@1": 0.01,
+      "tiles@1": 0.99
+     },
+     "type": "choice"
+    }
+   },
+   "costUsd": 0.000087234,
+   "inputTokens": 2077,
+   "model": "typesafe/jev-1.13-20260917",
+   "ms": 1076
+  },
+  "0dffd70ce15ee7": {
+   "answers": {
+    "body.use": {
+     "choice": "timber-frame@1",
+     "confidence": 0.62,
+     "probabilities": {
+      "fieldstone@1": 0.19,
+      "timber-frame@1": 0.81
+     },
+     "type": "choice"
+    },
+    "feature.present": {
+     "noul": 0.7,
+     "type": "noul"
+    },
+    "feature.use": {
+     "choice": "waterwheel@1",
+     "confidence": 0.8,
+     "probabilities": {
+      "bell@1": 0,
+      "dovecote@1": 0,
+      "forge@1": 0.02,
+      "granary@1": 0,
+      "tower@1": 0.15,
+      "waterwheel@1": 0.83,
+      "well@1": 0
+     },
+     "type": "choice"
+    },
+    "roof.use": {
+     "choice": "tiles@1",
+     "confidence": 0.96,
+     "probabilities": {
+      "thatch@1": 0.02,
+      "tiles@1": 0.98
+     },
+     "type": "choice"
+    }
+   },
+   "costUsd": 0.000080346,
+   "inputTokens": 1913,
+   "model": "typesafe/jev-1.13-20260917",
+   "ms": 290
+  },
+  "1f78a9ea5dfda0": {
+   "answers": {
+    "body.use": {
+     "choice": "timber-frame@1",
+     "confidence": 0.5,
+     "probabilities": {
+      "fieldstone@1": 0.25,
+      "timber-frame@1": 0.75
+     },
+     "type": "choice"
+    },
+    "feature.present": {
+     "noul": 0.72,
+     "type": "noul"
+    },
+    "feature.use": {
+     "choice": "waterwheel@1",
+     "confidence": 0.98,
+     "probabilities": {
+      "bell@1": 0,
+      "dovecote@1": 0,
+      "forge@1": 0.01,
+      "granary@1": 0,
+      "tower@1": 0.01,
+      "waterwheel@1": 0.98,
+      "well@1": 0
+     },
+     "type": "choice"
+    },
+    "roof.use": {
+     "choice": "tiles@1",
+     "confidence": 0.98,
+     "probabilities": {
+      "thatch@1": 0.01,
+      "tiles@1": 0.99
+     },
+     "type": "choice"
+    }
+   },
+   "costUsd": 0.000086436,
+   "inputTokens": 2058,
+   "model": "typesafe/jev-1.13-20260917",
+   "ms": 305
+  },
+  "1e49c37e2dd92d": {
+   "answers": {
+    "body.use": {
+     "choice": "timber-frame@1",
+     "confidence": 0.48,
+     "probabilities": {
+      "fieldstone@1": 0.26,
+      "timber-frame@1": 0.74
+     },
+     "type": "choice"
+    },
+    "feature.present": {
+     "noul": 0.65,
+     "type": "noul"
+    },
+    "feature.use": {
+     "choice": "waterwheel@1",
+     "confidence": 0.86,
+     "probabilities": {
+      "bell@1": 0,
+      "dovecote@1": 0,
+      "forge@1": 0.03,
+      "granary@1": 0,
+      "tower@1": 0.09,
+      "waterwheel@1": 0.88,
+      "well@1": 0
+     },
+     "type": "choice"
+    },
+    "roof.use": {
+     "choice": "tiles@1",
+     "confidence": 0.98,
+     "probabilities": {
+      "thatch@1": 0.01,
+      "tiles@1": 0.99
+     },
+     "type": "choice"
+    }
+   },
+   "costUsd": 0.000088452,
+   "inputTokens": 2106,
+   "model": "typesafe/jev-1.13-20260917",
+   "ms": 356
+  },
+  "1353c0e0373115": {
+   "answers": {
+    "body.framing": {
+     "choice": "crossed braces",
+     "confidence": 0.2,
+     "probabilities": {
+      "close studding": 0.1,
+      "crossed braces": 0.47,
+      "posts and rails": 0.43
+     },
+     "type": "choice"
+    },
+    "body.plaster": {
+     "confidence": 0.76,
+     "legend": {
+      "0": "smooth and fresh",
+      "1": "hand-laid",
+      "2": "lumpy and old"
+     },
+     "probabilities": {
+      "0": 0.06,
+      "1": 0.84,
+      "2": 0.1
+     },
+     "score": 1.04,
+     "type": "score"
+    },
+    "feature.cap": {
+     "choice": "lantern",
+     "confidence": 0.9,
+     "probabilities": {
+      "lantern": 0.95,
+      "pyramid": 0.05
+     },
+     "type": "choice"
+    },
+    "feature.height": {
+     "confidence": 0.46,
+     "legend": {
+      "0": "a storey above",
+      "1": "tall",
+      "2": "soaring"
+     },
+     "probabilities": {
+      "0": 0.17,
+      "1": 0.64,
+      "2": 0.19
+     },
+     "score": 1.02,
+     "type": "score"
+    },
+    "footprint.attachments:lean-to": {
+     "noul": 0.44,
+     "type": "noul"
+    },
+    "footprint.attachments:porch": {
+     "noul": 0.49,
+     "type": "noul"
+    },
+    "footprint.attachments:turret": {
+     "noul": 0.34,
+     "type": "noul"
+    },
+    "footprint.base": {
+     "confidence": 0.85,
+     "legend": {
+      "0": "low on the ground",
+      "1": "on a stone plinth",
+      "2": "raised up steps"
+     },
+     "probabilities": {
+      "0": 0.05,
+      "1": 0.9,
+      "2": 0.05
+     },
+     "score": 1,
+     "type": "score"
+    },
+    "footprint.character": {
+     "confidence": 0.55,
+     "legend": {
+      "0": "trim and square",
+      "1": "gently settled",
+      "2": "crooked, like a storybook"
+     },
+     "probabilities": {
+      "0": 0.05,
+      "1": 0.7,
+      "2": 0.25
+     },
+     "score": 1.19,
+     "type": "score"
+    },
+    "footprint.heights": {
+     "choice": "stepped",
+     "confidence": 0.44,
+     "probabilities": {
+      "level": 0.28,
+      "stepped": 0.72
+     },
+     "type": "choice"
+    },
+    "footprint.massing": {
+     "choice": "a cluster",
+     "confidence": 0.68,
+     "probabilities": {
+      "a T": 0.04,
+      "a cluster": 0.74,
+      "a long range": 0.01,
+      "a single block": 0.04,
+      "an L": 0.17
+     },
+     "type": "choice"
+    },
+    "footprint.roof": {
+     "choice": "hipped",
+     "confidence": 0.48,
+     "probabilities": {
+      "gabled": 0.24,
+      "half-hipped": 0.11,
+      "hipped": 0.65
+     },
+     "type": "choice"
+    },
+    "footprint.roofline": {
+     "confidence": 0.28,
+     "legend": {
+      "0": "low and spreading",
+      "1": "steep",
+      "2": "tall and steep"
+     },
+     "probabilities": {
+      "0": 0.11,
+      "1": 0.26,
+      "2": 0.63
+     },
+     "score": 1.51,
+     "type": "score"
+    },
+    "footprint.shape": {
+     "choice": "long",
+     "confidence": 0.4,
+     "probabilities": {
+      "gable-fronted": 0.1,
+      "long": 0.6,
+      "snug": 0.3
+     },
+     "type": "choice"
+    },
+    "footprint.size": {
+     "confidence": 0.95,
+     "legend": {
+      "0": "tiny",
+      "1": "modest",
+      "2": "roomy"
+     },
+     "probabilities": {
+      "0": 0,
+      "1": 0.03,
+      "2": 0.97
+     },
+     "score": 1.96,
+     "type": "score"
+    },
+    "footprint.storeys": {
+     "confidence": 0.37,
+     "legend": {
+      "0": "one storey",
+      "1": "two storeys",
+      "2": "three storeys"
+     },
+     "probabilities": {
+      "0": 0.29,
+      "1": 0.58,
+      "2": 0.13
+     },
+     "score": 0.84,
+     "type": "score"
+    },
+    "footprint.windows": {
+     "confidence": 0,
+     "legend": {
+      "0": "a few",
+      "1": "several",
+      "2": "many"
+     },
+     "probabilities": {
+      "0": 0.21,
+      "1": 0.32,
+      "2": 0.47
+     },
+     "score": 1.26,
+     "type": "score"
+    },
+    "palette.contrast": {
+     "confidence": 0.28,
+     "legend": {
+      "0": "soft",
+      "1": "balanced",
+      "2": "vivid"
+     },
+     "probabilities": {
+      "0": 0.44,
+      "1": 0.52,
+      "2": 0.04
+     },
+     "score": 0.6,
+     "type": "score"
+    },
+    "palette.family": {
+     "choice": "desert-sage",
+     "confidence": 0.22,
+     "probabilities": {
+      "autumn-ember": 0.01,
+      "bluebell-wood": 0.03,
+      "cherry-blossom": 0.01,
+      "deep-forest": 0.14,
+      "desert-sage": 0.31,
+      "lantern-dusk": 0.22,
+      "silver-birch": 0.03,
+      "spring-meadow": 0.16,
+      "teal-gold": 0.09
+     },
+     "type": "choice"
+    },
+    "roof.chimney": {
+     "choice": "none",
+     "confidence": 0.43,
+     "probabilities": {
+      "gable": 0.02,
+      "none": 0.62,
+      "ridge": 0.36
+     },
+     "type": "choice"
+    },
+    "roof.overhang": {
+     "confidence": 0.27,
+     "legend": {
+      "0": "neat and close",
+      "1": "sheltering",
+      "2": "deep and low"
+     },
+     "probabilities": {
+      "0": 0.02,
+      "1": 0.45,
+      "2": 0.53
+     },
+     "score": 1.5,
+     "type": "score"
+    },
+    "roof.thickness": {
+     "confidence": 0.91,
+     "legend": {
+      "0": "trim",
+      "1": "plump",
+      "2": "deep and soft"
+     },
+     "probabilities": {
+      "0": 0,
+      "1": 0.06,
+      "2": 0.94
+     },
+     "score": 1.93,
+     "type": "score"
+    }
+   },
+   "costUsd": 0.000250404,
+   "inputTokens": 5962,
+   "model": "typesafe/jev-1.13-20260917",
+   "ms": 276
+  },
+  "1401110a47c11d": {
+   "answers": {
+    "body.framing": {
+     "choice": "posts and rails",
+     "confidence": 0.28,
+     "probabilities": {
+      "close studding": 0.16,
+      "crossed braces": 0.32,
+      "posts and rails": 0.52
+     },
+     "type": "choice"
+    },
+    "body.plaster": {
+     "confidence": 0.79,
+     "legend": {
+      "0": "smooth and fresh",
+      "1": "hand-laid",
+      "2": "lumpy and old"
+     },
+     "probabilities": {
+      "0": 0.06,
+      "1": 0.86,
+      "2": 0.08
+     },
+     "score": 1.02,
+     "type": "score"
+    },
+    "feature.cap": {
+     "choice": "lantern",
+     "confidence": 0.84,
+     "probabilities": {
+      "lantern": 0.92,
+      "pyramid": 0.08
+     },
+     "type": "choice"
+    },
+    "feature.height": {
+     "confidence": 0.56,
+     "legend": {
+      "0": "a storey above",
+      "1": "tall",
+      "2": "soaring"
+     },
+     "probabilities": {
+      "0": 0.18,
+      "1": 0.71,
+      "2": 0.11
+     },
+     "score": 0.93,
+     "type": "score"
+    },
+    "footprint.attachments:lean-to": {
+     "noul": 0.43,
+     "type": "noul"
+    },
+    "footprint.attachments:porch": {
+     "noul": 0.5,
+     "type": "noul"
+    },
+    "footprint.attachments:turret": {
+     "noul": 0.35,
+     "type": "noul"
+    },
+    "footprint.base": {
+     "confidence": 0.74,
+     "legend": {
+      "0": "low on the ground",
+      "1": "on a stone plinth",
+      "2": "raised up steps"
+     },
+     "probabilities": {
+      "0": 0.06,
+      "1": 0.83,
+      "2": 0.11
+     },
+     "score": 1.06,
+     "type": "score"
+    },
+    "footprint.character": {
+     "confidence": 0.71,
+     "legend": {
+      "0": "trim and square",
+      "1": "gently settled",
+      "2": "crooked, like a storybook"
+     },
+     "probabilities": {
+      "0": 0.07,
+      "1": 0.81,
+      "2": 0.12
+     },
+     "score": 1.05,
+     "type": "score"
+    },
+    "footprint.heights": {
+     "choice": "stepped",
+     "confidence": 0.44,
+     "probabilities": {
+      "level": 0.28,
+      "stepped": 0.72
+     },
+     "type": "choice"
+    },
+    "footprint.massing": {
+     "choice": "a cluster",
+     "confidence": 0.47,
+     "probabilities": {
+      "a T": 0.07,
+      "a cluster": 0.58,
+      "a long range": 0.01,
+      "a single block": 0.06,
+      "an L": 0.28
+     },
+     "type": "choice"
+    },
+    "footprint.roof": {
+     "choice": "gabled",
+     "confidence": 1,
+     "probabilities": {
+      "gabled": 1,
+      "half-hipped": 0,
+      "hipped": 0
+     },
+     "type": "choice"
+    },
+    "footprint.roofline": {
+     "confidence": 0.23,
+     "legend": {
+      "0": "low and spreading",
+      "1": "steep",
+      "2": "tall and steep"
+     },
+     "probabilities": {
+      "0": 0.09,
+      "1": 0.33,
+      "2": 0.58
+     },
+     "score": 1.49,
+     "type": "score"
+    },
+    "footprint.shape": {
+     "choice": "long",
+     "confidence": 0.12,
+     "probabilities": {
+      "gable-fronted": 0.2,
+      "long": 0.41,
+      "snug": 0.39
+     },
+     "type": "choice"
+    },
+    "footprint.size": {
+     "confidence": 0.91,
+     "legend": {
+      "0": "tiny",
+      "1": "modest",
+      "2": "roomy"
+     },
+     "probabilities": {
+      "0": 0,
+      "1": 0.06,
+      "2": 0.94
+     },
+     "score": 1.93,
+     "type": "score"
+    },
+    "footprint.storeys": {
+     "confidence": 0.28,
+     "legend": {
+      "0": "one storey",
+      "1": "two storeys",
+      "2": "three storeys"
+     },
+     "probabilities": {
+      "0": 0.05,
+      "1": 0.52,
+      "2": 0.43
+     },
+     "score": 1.38,
+     "type": "score"
+    },
+    "footprint.windows": {
+     "confidence": 0.02,
+     "legend": {
+      "0": "a few",
+      "1": "several",
+      "2": "many"
+     },
+     "probabilities": {
+      "0": 0.11,
+      "1": 0.43,
+      "2": 0.46
+     },
+     "score": 1.35,
+     "type": "score"
+    },
+    "palette.contrast": {
+     "confidence": 0.58,
+     "legend": {
+      "0": "soft",
+      "1": "balanced",
+      "2": "vivid"
+     },
+     "probabilities": {
+      "0": 0.22,
+      "1": 0.72,
+      "2": 0.06
+     },
+     "score": 0.84,
+     "type": "score"
+    },
+    "palette.family": {
+     "choice": "lantern-dusk",
+     "confidence": 0.29,
+     "probabilities": {
+      "autumn-ember": 0.01,
+      "bluebell-wood": 0.05,
+      "cherry-blossom": 0.01,
+      "deep-forest": 0.06,
+      "desert-sage": 0.3,
+      "lantern-dusk": 0.37,
+      "silver-birch": 0.04,
+      "spring-meadow": 0.06,
+      "teal-gold": 0.1
+     },
+     "type": "choice"
+    },
+    "roof.chimney": {
+     "choice": "none",
+     "confidence": 0.33,
+     "probabilities": {
+      "gable": 0.25,
+      "none": 0.55,
+      "ridge": 0.2
+     },
+     "type": "choice"
+    },
+    "roof.covering": {
+     "choice": "slates",
+     "confidence": 0.85,
+     "probabilities": {
+      "pantiles": 0.08,
+      "shingles": 0.02,
+      "slates": 0.9
+     },
+     "type": "choice"
+    },
+    "roof.overhang": {
+     "confidence": 0.4,
+     "legend": {
+      "0": "neat and close",
+      "1": "sheltering",
+      "2": "deep and low"
+     },
+     "probabilities": {
+      "0": 0.61,
+      "1": 0.38,
+      "2": 0.01
+     },
+     "score": 0.39,
+     "type": "score"
+    }
+   },
+   "costUsd": 0.00025242,
+   "inputTokens": 6010,
+   "model": "typesafe/jev-1.13-20260917",
+   "ms": 294
+  },
+  "0e4a8633ec72a8": {
+   "answers": {
+    "body.framing": {
+     "choice": "posts and rails",
+     "confidence": 0.4,
+     "probabilities": {
+      "close studding": 0.08,
+      "crossed braces": 0.32,
+      "posts and rails": 0.6
+     },
+     "type": "choice"
+    },
+    "body.plaster": {
+     "confidence": 0.77,
+     "legend": {
+      "0": "smooth and fresh",
+      "1": "hand-laid",
+      "2": "lumpy and old"
+     },
+     "probabilities": {
+      "0": 0.07,
+      "1": 0.85,
+      "2": 0.08
+     },
+     "score": 1.01,
+     "type": "score"
+    },
+    "footprint.attachments:lean-to": {
+     "noul": 0.5,
+     "type": "noul"
+    },
+    "footprint.attachments:porch": {
+     "noul": 0.53,
+     "type": "noul"
+    },
+    "footprint.attachments:turret": {
+     "noul": 0.25,
+     "type": "noul"
+    },
+    "footprint.base": {
+     "confidence": 0.62,
+     "legend": {
+      "0": "low on the ground",
+      "1": "on a stone plinth",
+      "2": "raised up steps"
+     },
+     "probabilities": {
+      "0": 0.14,
+      "1": 0.75,
+      "2": 0.11
+     },
+     "score": 0.97,
+     "type": "score"
+    },
+    "footprint.character": {
+     "confidence": 0.82,
+     "legend": {
+      "0": "trim and square",
+      "1": "gently settled",
+      "2": "crooked, like a storybook"
+     },
+     "probabilities": {
+      "0": 0.08,
+      "1": 0.88,
+      "2": 0.04
+     },
+     "score": 0.96,
+     "type": "score"
+    },
+    "footprint.heights": {
+     "choice": "level",
+     "confidence": 0.7,
+     "probabilities": {
+      "level": 0.85,
+      "stepped": 0.15
+     },
+     "type": "choice"
+    },
+    "footprint.massing": {
+     "choice": "a single block",
+     "confidence": 0.41,
+     "probabilities": {
+      "a T": 0.04,
+      "a cluster": 0.24,
+      "a long range": 0.08,
+      "a single block": 0.53,
+      "an L": 0.11
+     },
+     "type": "choice"
+    },
+    "footprint.roof": {
+     "choice": "gabled",
+     "confidence": 1,
+     "probabilities": {
+      "gabled": 1,
+      "half-hipped": 0,
+      "hipped": 0
+     },
+     "type": "choice"
+    },
+    "footprint.roofline": {
+     "confidence": 0.32,
+     "legend": {
+      "0": "low and spreading",
+      "1": "steep",
+      "2": "tall and steep"
+     },
+     "probabilities": {
+      "0": 0.27,
+      "1": 0.55,
+      "2": 0.18
+     },
+     "score": 0.91,
+     "type": "score"
+    },
+    "footprint.shape": {
+     "choice": "snug",
+     "confidence": 0.1,
+     "probabilities": {
+      "gable-fronted": 0.23,
+      "long": 0.37,
+      "snug": 0.4
+     },
+     "type": "choice"
+    },
+    "footprint.size": {
+     "confidence": 0.47,
+     "legend": {
+      "0": "tiny",
+      "1": "modest",
+      "2": "roomy"
+     },
+     "probabilities": {
+      "0": 0,
+      "1": 0.35,
+      "2": 0.65
+     },
+     "score": 1.64,
+     "type": "score"
+    },
+    "footprint.storeys": {
+     "confidence": 0.52,
+     "legend": {
+      "0": "one storey",
+      "1": "two storeys",
+      "2": "three storeys"
+     },
+     "probabilities": {
+      "0": 0.15,
+      "1": 0.68,
+      "2": 0.17
+     },
+     "score": 1.02,
+     "type": "score"
+    },
+    "footprint.windows": {
+     "confidence": 0.35,
+     "legend": {
+      "0": "a few",
+      "1": "several",
+      "2": "many"
+     },
+     "probabilities": {
+      "0": 0.22,
+      "1": 0.57,
+      "2": 0.21
+     },
+     "score": 1,
+     "type": "score"
+    },
+    "palette.contrast": {
+     "confidence": 0.47,
+     "legend": {
+      "0": "soft",
+      "1": "balanced",
+      "2": "vivid"
+     },
+     "probabilities": {
+      "0": 0.3,
+      "1": 0.65,
+      "2": 0.05
+     },
+     "score": 0.75,
+     "type": "score"
+    },
+    "palette.family": {
+     "choice": "desert-sage",
+     "confidence": 0.26,
+     "probabilities": {
+      "autumn-ember": 0.04,
+      "bluebell-wood": 0.04,
+      "cherry-blossom": 0.01,
+      "deep-forest": 0.11,
+      "desert-sage": 0.34,
+      "lantern-dusk": 0.28,
+      "silver-birch": 0.04,
+      "spring-meadow": 0.07,
+      "teal-gold": 0.07
+     },
+     "type": "choice"
+    },
+    "roof.chimney": {
+     "choice": "none",
+     "confidence": 0.41,
+     "probabilities": {
+      "gable": 0.26,
+      "none": 0.61,
+      "ridge": 0.13
+     },
+     "type": "choice"
+    },
+    "roof.covering": {
+     "choice": "slates",
+     "confidence": 0.86,
+     "probabilities": {
+      "pantiles": 0.04,
+      "shingles": 0.05,
+      "slates": 0.91
+     },
+     "type": "choice"
+    },
+    "roof.overhang": {
+     "confidence": 0.29,
+     "legend": {
+      "0": "neat and close",
+      "1": "sheltering",
+      "2": "deep and low"
+     },
+     "probabilities": {
+      "0": 0.54,
+      "1": 0.45,
+      "2": 0.01
+     },
+     "score": 0.47,
+     "type": "score"
+    }
+   },
+   "costUsd": 0.000228102,
+   "inputTokens": 5431,
+   "model": "typesafe/jev-1.13-20260917",
+   "ms": 257
+  },
+  "1e16cb78cc23c3": {
+   "answers": {
+    "body.framing": {
+     "choice": "posts and rails",
+     "confidence": 0.28,
+     "probabilities": {
+      "close studding": 0.07,
+      "crossed braces": 0.41,
+      "posts and rails": 0.52
+     },
+     "type": "choice"
+    },
+    "body.plaster": {
+     "confidence": 0.77,
+     "legend": {
+      "0": "smooth and fresh",
+      "1": "hand-laid",
+      "2": "lumpy and old"
+     },
+     "probabilities": {
+      "0": 0.08,
+      "1": 0.85,
+      "2": 0.07
+     },
+     "score": 1,
+     "type": "score"
+    },
+    "feature.drive": {
+     "choice": "undershot",
+     "confidence": 0.46,
+     "probabilities": {
+      "overshot": 0.27,
+      "undershot": 0.73
+     },
+     "type": "choice"
+    },
+    "feature.wheel": {
+     "confidence": 0.19,
+     "legend": {
+      "0": "a small wheel",
+      "1": "a tall wheel",
+      "2": "a great wheel"
+     },
+     "probabilities": {
+      "0": 0.06,
+      "1": 0.42,
+      "2": 0.52
+     },
+     "score": 1.47,
+     "type": "score"
+    },
+    "footprint.attachments:lean-to": {
+     "noul": 0.53,
+     "type": "noul"
+    },
+    "footprint.attachments:porch": {
+     "noul": 0.54,
+     "type": "noul"
+    },
+    "footprint.attachments:turret": {
+     "noul": 0.31,
+     "type": "noul"
+    },
+    "footprint.base": {
+     "confidence": 0.66,
+     "legend": {
+      "0": "low on the ground",
+      "1": "on a stone plinth",
+      "2": "raised up steps"
+     },
+     "probabilities": {
+      "0": 0.09,
+      "1": 0.77,
+      "2": 0.14
+     },
+     "score": 1.05,
+     "type": "score"
+    },
+    "footprint.character": {
+     "confidence": 0.77,
+     "legend": {
+      "0": "trim and square",
+      "1": "gently settled",
+      "2": "crooked, like a storybook"
+     },
+     "probabilities": {
+      "0": 0.08,
+      "1": 0.85,
+      "2": 0.07
+     },
+     "score": 0.99,
+     "type": "score"
+    },
+    "footprint.heights": {
+     "choice": "level",
+     "confidence": 0.34,
+     "probabilities": {
+      "level": 0.67,
+      "stepped": 0.33
+     },
+     "type": "choice"
+    },
+    "footprint.massing": {
+     "choice": "a single block",
+     "confidence": 0.09,
+     "probabilities": {
+      "a T": 0.11,
+      "a cluster": 0.22,
+      "a long range": 0.17,
+      "a single block": 0.27,
+      "an L": 0.23
+     },
+     "type": "choice"
+    },
+    "footprint.roof": {
+     "choice": "gabled",
+     "confidence": 1,
+     "probabilities": {
+      "gabled": 1,
+      "half-hipped": 0,
+      "hipped": 0
+     },
+     "type": "choice"
+    },
+    "footprint.roofline": {
+     "confidence": 0.41,
+     "legend": {
+      "0": "low and spreading",
+      "1": "steep",
+      "2": "tall and steep"
+     },
+     "probabilities": {
+      "0": 0.16,
+      "1": 0.61,
+      "2": 0.23
+     },
+     "score": 1.07,
+     "type": "score"
+    },
+    "footprint.shape": {
+     "choice": "long",
+     "confidence": 0.36,
+     "probabilities": {
+      "gable-fronted": 0.22,
+      "long": 0.5700000000000001,
+      "snug": 0.21
+     },
+     "type": "choice"
+    },
+    "footprint.size": {
+     "confidence": 0.61,
+     "legend": {
+      "0": "tiny",
+      "1": "modest",
+      "2": "roomy"
+     },
+     "probabilities": {
+      "0": 0,
+      "1": 0.26,
+      "2": 0.74
+     },
+     "score": 1.73,
+     "type": "score"
+    },
+    "footprint.storeys": {
+     "confidence": 0.61,
+     "legend": {
+      "0": "one storey",
+      "1": "two storeys",
+      "2": "three storeys"
+     },
+     "probabilities": {
+      "0": 0.09,
+      "1": 0.74,
+      "2": 0.17
+     },
+     "score": 1.08,
+     "type": "score"
+    },
+    "footprint.windows": {
+     "confidence": 0.31,
+     "legend": {
+      "0": "a few",
+      "1": "several",
+      "2": "many"
+     },
+     "probabilities": {
+      "0": 0.13,
+      "1": 0.54,
+      "2": 0.33
+     },
+     "score": 1.2,
+     "type": "score"
+    },
+    "palette.contrast": {
+     "confidence": 0.52,
+     "legend": {
+      "0": "soft",
+      "1": "balanced",
+      "2": "vivid"
+     },
+     "probabilities": {
+      "0": 0.26,
+      "1": 0.68,
+      "2": 0.06
+     },
+     "score": 0.8,
+     "type": "score"
+    },
+    "palette.family": {
+     "choice": "lantern-dusk",
+     "confidence": 0.21,
+     "probabilities": {
+      "autumn-ember": 0.02,
+      "bluebell-wood": 0.08,
+      "cherry-blossom": 0.01,
+      "deep-forest": 0.09,
+      "desert-sage": 0.24,
+      "lantern-dusk": 0.3,
+      "silver-birch": 0.04,
+      "spring-meadow": 0.08,
+      "teal-gold": 0.14
+     },
+     "type": "choice"
+    },
+    "roof.chimney": {
+     "choice": "none",
+     "confidence": 0.31,
+     "probabilities": {
+      "gable": 0.3,
+      "none": 0.54,
+      "ridge": 0.16
+     },
+     "type": "choice"
+    },
+    "roof.covering": {
+     "choice": "slates",
+     "confidence": 0.89,
+     "probabilities": {
+      "pantiles": 0.04,
+      "shingles": 0.03,
+      "slates": 0.93
+     },
+     "type": "choice"
+    },
+    "roof.overhang": {
+     "confidence": 0.31,
+     "legend": {
+      "0": "neat and close",
+      "1": "sheltering",
+      "2": "deep and low"
+     },
+     "probabilities": {
+      "0": 0.55,
+      "1": 0.44,
+      "2": 0.01
+     },
+     "score": 0.46,
+     "type": "score"
+    }
+   },
+   "costUsd": 0.000253134,
+   "inputTokens": 6027,
+   "model": "typesafe/jev-1.13-20260917",
+   "ms": 313
+  },
+  "021ac8774629ce": {
+   "answers": {
+    "body.framing": {
+     "choice": "posts and rails",
+     "confidence": 0.37,
+     "probabilities": {
+      "close studding": 0.12,
+      "crossed braces": 0.3,
+      "posts and rails": 0.58
+     },
+     "type": "choice"
+    },
+    "body.plaster": {
+     "confidence": 0.71,
+     "legend": {
+      "0": "smooth and fresh",
+      "1": "hand-laid",
+      "2": "lumpy and old"
+     },
+     "probabilities": {
+      "0": 0.11,
+      "1": 0.8099999999999999,
+      "2": 0.08
+     },
+     "score": 0.97,
+     "type": "score"
+    },
+    "feature.drive": {
+     "choice": "undershot",
+     "confidence": 0.62,
+     "probabilities": {
+      "overshot": 0.19,
+      "undershot": 0.81
+     },
+     "type": "choice"
+    },
+    "feature.wheel": {
+     "confidence": 0.41,
+     "legend": {
+      "0": "a small wheel",
+      "1": "a tall wheel",
+      "2": "a great wheel"
+     },
+     "probabilities": {
+      "0": 0.09,
+      "1": 0.61,
+      "2": 0.3
+     },
+     "score": 1.21,
+     "type": "score"
+    },
+    "footprint.attachments:lean-to": {
+     "noul": 0.42,
+     "type": "noul"
+    },
+    "footprint.attachments:porch": {
+     "noul": 0.55,
+     "type": "noul"
+    },
+    "footprint.attachments:turret": {
+     "noul": 0.29,
+     "type": "noul"
+    },
+    "footprint.base": {
+     "confidence": 0.74,
+     "legend": {
+      "0": "low on the ground",
+      "1": "on a stone plinth",
+      "2": "raised up steps"
+     },
+     "probabilities": {
+      "0": 0.09,
+      "1": 0.83,
+      "2": 0.08
+     },
+     "score": 0.99,
+     "type": "score"
+    },
+    "footprint.character": {
+     "confidence": 0.79,
+     "legend": {
+      "0": "trim and square",
+      "1": "gently settled",
+      "2": "crooked, like a storybook"
+     },
+     "probabilities": {
+      "0": 0.06,
+      "1": 0.86,
+      "2": 0.08
+     },
+     "score": 1.02,
+     "type": "score"
+    },
+    "footprint.heights": {
+     "choice": "level",
+     "confidence": 0.56,
+     "probabilities": {
+      "level": 0.78,
+      "stepped": 0.22
+     },
+     "type": "choice"
+    },
+    "footprint.massing": {
+     "choice": "a single block",
+     "confidence": 0.3,
+     "probabilities": {
+      "a T": 0.08,
+      "a cluster": 0.19,
+      "a long range": 0.06,
+      "a single block": 0.44,
+      "an L": 0.23
+     },
+     "type": "choice"
+    },
+    "footprint.roof": {
+     "choice": "gabled",
+     "confidence": 1,
+     "probabilities": {
+      "gabled": 1,
+      "half-hipped": 0,
+      "hipped": 0
+     },
+     "type": "choice"
+    },
+    "footprint.roofline": {
+     "confidence": 0.4,
+     "legend": {
+      "0": "low and spreading",
+      "1": "steep",
+      "2": "tall and steep"
+     },
+     "probabilities": {
+      "0": 0.25,
+      "1": 0.6,
+      "2": 0.15
+     },
+     "score": 0.91,
+     "type": "score"
+    },
+    "footprint.shape": {
+     "choice": "long",
+     "confidence": 0.2,
+     "probabilities": {
+      "gable-fronted": 0.23,
+      "long": 0.47,
+      "snug": 0.3
+     },
+     "type": "choice"
+    },
+    "footprint.size": {
+     "confidence": 0.4,
+     "legend": {
+      "0": "tiny",
+      "1": "modest",
+      "2": "roomy"
+     },
+     "probabilities": {
+      "0": 0.01,
+      "1": 0.38,
+      "2": 0.61
+     },
+     "score": 1.61,
+     "type": "score"
+    },
+    "footprint.storeys": {
+     "confidence": 0.61,
+     "legend": {
+      "0": "one storey",
+      "1": "two storeys",
+      "2": "three storeys"
+     },
+     "probabilities": {
+      "0": 0.12,
+      "1": 0.74,
+      "2": 0.14
+     },
+     "score": 1.02,
+     "type": "score"
+    },
+    "footprint.windows": {
+     "confidence": 0.31,
+     "legend": {
+      "0": "a few",
+      "1": "several",
+      "2": "many"
+     },
+     "probabilities": {
+      "0": 0.16,
+      "1": 0.54,
+      "2": 0.3
+     },
+     "score": 1.14,
+     "type": "score"
+    },
+    "palette.contrast": {
+     "confidence": 0.49,
+     "legend": {
+      "0": "soft",
+      "1": "balanced",
+      "2": "vivid"
+     },
+     "probabilities": {
+      "0": 0.29,
+      "1": 0.66,
+      "2": 0.05
+     },
+     "score": 0.76,
+     "type": "score"
+    },
+    "palette.family": {
+     "choice": "desert-sage",
+     "confidence": 0.16,
+     "probabilities": {
+      "autumn-ember": 0.02,
+      "bluebell-wood": 0.05,
+      "cherry-blossom": 0.01,
+      "deep-forest": 0.19,
+      "desert-sage": 0.25,
+      "lantern-dusk": 0.16,
+      "silver-birch": 0.02,
+      "spring-meadow": 0.21,
+      "teal-gold": 0.09
+     },
+     "type": "choice"
+    },
+    "roof.chimney": {
+     "choice": "none",
+     "confidence": 0.41,
+     "probabilities": {
+      "gable": 0.25,
+      "none": 0.61,
+      "ridge": 0.14
+     },
+     "type": "choice"
+    },
+    "roof.covering": {
+     "choice": "slates",
+     "confidence": 0.86,
+     "probabilities": {
+      "pantiles": 0.05,
+      "shingles": 0.04,
+      "slates": 0.91
+     },
+     "type": "choice"
+    },
+    "roof.overhang": {
+     "confidence": 0.28,
+     "legend": {
+      "0": "neat and close",
+      "1": "sheltering",
+      "2": "deep and low"
+     },
+     "probabilities": {
+      "0": 0.53,
+      "1": 0.46,
+      "2": 0.01
+     },
+     "score": 0.48,
+     "type": "score"
+    }
+   },
+   "costUsd": 0.000246246,
+   "inputTokens": 5863,
+   "model": "typesafe/jev-1.13-20260917",
+   "ms": 287
+  },
+  "1e1eb58594b915": {
+   "answers": {
+    "body.framing": {
+     "choice": "posts and rails",
+     "confidence": 0.3,
+     "probabilities": {
+      "close studding": 0.12,
+      "crossed braces": 0.35,
+      "posts and rails": 0.53
+     },
+     "type": "choice"
+    },
+    "body.plaster": {
+     "confidence": 0.74,
+     "legend": {
+      "0": "smooth and fresh",
+      "1": "hand-laid",
+      "2": "lumpy and old"
+     },
+     "probabilities": {
+      "0": 0.07,
+      "1": 0.83,
+      "2": 0.1
+     },
+     "score": 1.03,
+     "type": "score"
+    },
+    "feature.drive": {
+     "choice": "undershot",
+     "confidence": 0.54,
+     "probabilities": {
+      "overshot": 0.23,
+      "undershot": 0.77
+     },
+     "type": "choice"
+    },
+    "feature.wheel": {
+     "confidence": 0.17,
+     "legend": {
+      "0": "a small wheel",
+      "1": "a tall wheel",
+      "2": "a great wheel"
+     },
+     "probabilities": {
+      "0": 0.05,
+      "1": 0.45,
+      "2": 0.5
+     },
+     "score": 1.44,
+     "type": "score"
+    },
+    "footprint.attachments:lean-to": {
+     "noul": 0.53,
+     "type": "noul"
+    },
+    "footprint.attachments:porch": {
+     "noul": 0.54,
+     "type": "noul"
+    },
+    "footprint.attachments:turret": {
+     "noul": 0.29,
+     "type": "noul"
+    },
+    "footprint.base": {
+     "confidence": 0.77,
+     "legend": {
+      "0": "low on the ground",
+      "1": "on a stone plinth",
+      "2": "raised up steps"
+     },
+     "probabilities": {
+      "0": 0.08,
+      "1": 0.85,
+      "2": 0.07
+     },
+     "score": 0.99,
+     "type": "score"
+    },
+    "footprint.character": {
+     "confidence": 0.79,
+     "legend": {
+      "0": "trim and square",
+      "1": "gently settled",
+      "2": "crooked, like a storybook"
+     },
+     "probabilities": {
+      "0": 0.06,
+      "1": 0.86,
+      "2": 0.08
+     },
+     "score": 1.02,
+     "type": "score"
+    },
+    "footprint.heights": {
+     "choice": "level",
+     "confidence": 0.42,
+     "probabilities": {
+      "level": 0.71,
+      "stepped": 0.29
+     },
+     "type": "choice"
+    },
+    "footprint.massing": {
+     "choice": "a cluster",
+     "confidence": 0.18,
+     "probabilities": {
+      "a T": 0.06,
+      "a cluster": 0.34,
+      "a long range": 0.19,
+      "a single block": 0.24,
+      "an L": 0.17
+     },
+     "type": "choice"
+    },
+    "footprint.roof": {
+     "choice": "gabled",
+     "confidence": 1,
+     "probabilities": {
+      "gabled": 1,
+      "half-hipped": 0,
+      "hipped": 0
+     },
+     "type": "choice"
+    },
+    "footprint.roofline": {
+     "confidence": 0.23,
+     "legend": {
+      "0": "low and spreading",
+      "1": "steep",
+      "2": "tall and steep"
+     },
+     "probabilities": {
+      "0": 0.32,
+      "1": 0.49,
+      "2": 0.19
+     },
+     "score": 0.87,
+     "type": "score"
+    },
+    "footprint.shape": {
+     "choice": "long",
+     "confidence": 0.51,
+     "probabilities": {
+      "gable-fronted": 0.16,
+      "long": 0.67,
+      "snug": 0.17
+     },
+     "type": "choice"
+    },
+    "footprint.size": {
+     "confidence": 0.67,
+     "legend": {
+      "0": "tiny",
+      "1": "modest",
+      "2": "roomy"
+     },
+     "probabilities": {
+      "0": 0,
+      "1": 0.22,
+      "2": 0.78
+     },
+     "score": 1.77,
+     "type": "score"
+    },
+    "footprint.storeys": {
+     "confidence": 0.53,
+     "legend": {
+      "0": "one storey",
+      "1": "two storeys",
+      "2": "three storeys"
+     },
+     "probabilities": {
+      "0": 0.12,
+      "1": 0.69,
+      "2": 0.19
+     },
+     "score": 1.07,
+     "type": "score"
+    },
+    "footprint.windows": {
+     "confidence": 0.01,
+     "legend": {
+      "0": "a few",
+      "1": "several",
+      "2": "many"
+     },
+     "probabilities": {
+      "0": 0.11,
+      "1": 0.44,
+      "2": 0.45
+     },
+     "score": 1.35,
+     "type": "score"
+    },
+    "palette.contrast": {
+     "confidence": 0.52,
+     "legend": {
+      "0": "soft",
+      "1": "balanced",
+      "2": "vivid"
+     },
+     "probabilities": {
+      "0": 0.26,
+      "1": 0.68,
+      "2": 0.06
+     },
+     "score": 0.8,
+     "type": "score"
+    },
+    "palette.family": {
+     "choice": "desert-sage",
+     "confidence": 0.19,
+     "probabilities": {
+      "autumn-ember": 0.02,
+      "bluebell-wood": 0.07,
+      "cherry-blossom": 0.01,
+      "deep-forest": 0.18,
+      "desert-sage": 0.27999999999999997,
+      "lantern-dusk": 0.15,
+      "silver-birch": 0.02,
+      "spring-meadow": 0.17,
+      "teal-gold": 0.1
+     },
+     "type": "choice"
+    },
+    "roof.chimney": {
+     "choice": "none",
+     "confidence": 0.37,
+     "probabilities": {
+      "gable": 0.29,
+      "none": 0.58,
+      "ridge": 0.13
+     },
+     "type": "choice"
+    },
+    "roof.covering": {
+     "choice": "slates",
+     "confidence": 0.88,
+     "probabilities": {
+      "pantiles": 0.05,
+      "shingles": 0.03,
+      "slates": 0.92
+     },
+     "type": "choice"
+    },
+    "roof.overhang": {
+     "confidence": 0.35,
+     "legend": {
+      "0": "neat and close",
+      "1": "sheltering",
+      "2": "deep and low"
+     },
+     "probabilities": {
+      "0": 0.58,
+      "1": 0.41,
+      "2": 0.01
+     },
+     "score": 0.44,
+     "type": "score"
+    }
+   },
+   "costUsd": 0.000252336,
+   "inputTokens": 6008,
+   "model": "typesafe/jev-1.13-20260917",
+   "ms": 446
+  },
+  "1ea826127f28e1": {
+   "answers": {
+    "body.framing": {
+     "choice": "crossed braces",
+     "confidence": 0.22,
+     "probabilities": {
+      "close studding": 0.07,
+      "crossed braces": 0.48,
+      "posts and rails": 0.45
+     },
+     "type": "choice"
+    },
+    "body.plaster": {
+     "confidence": 0.73,
+     "legend": {
+      "0": "smooth and fresh",
+      "1": "hand-laid",
+      "2": "lumpy and old"
+     },
+     "probabilities": {
+      "0": 0.09,
+      "1": 0.82,
+      "2": 0.09
+     },
+     "score": 1,
+     "type": "score"
+    },
+    "feature.drive": {
+     "choice": "undershot",
+     "confidence": 0.38,
+     "probabilities": {
+      "overshot": 0.31,
+      "undershot": 0.69
+     },
+     "type": "choice"
+    },
+    "feature.wheel": {
+     "confidence": 0.34,
+     "legend": {
+      "0": "a small wheel",
+      "1": "a tall wheel",
+      "2": "a great wheel"
+     },
+     "probabilities": {
+      "0": 0.05,
+      "1": 0.34,
+      "2": 0.61
+     },
+     "score": 1.55,
+     "type": "score"
+    },
+    "footprint.attachments:lean-to": {
+     "noul": 0.58,
+     "type": "noul"
+    },
+    "footprint.attachments:porch": {
+     "noul": 0.58,
+     "type": "noul"
+    },
+    "footprint.attachments:turret": {
+     "noul": 0.35,
+     "type": "noul"
+    },
+    "footprint.base": {
+     "confidence": 0.88,
+     "legend": {
+      "0": "low on the ground",
+      "1": "on a stone plinth",
+      "2": "raised up steps"
+     },
+     "probabilities": {
+      "0": 0.03,
+      "1": 0.92,
+      "2": 0.05
+     },
+     "score": 1.02,
+     "type": "score"
+    },
+    "footprint.character": {
+     "confidence": 0.74,
+     "legend": {
+      "0": "trim and square",
+      "1": "gently settled",
+      "2": "crooked, like a storybook"
+     },
+     "probabilities": {
+      "0": 0.05,
+      "1": 0.83,
+      "2": 0.12
+     },
+     "score": 1.07,
+     "type": "score"
+    },
+    "footprint.heights": {
+     "choice": "level",
+     "confidence": 0.04,
+     "probabilities": {
+      "level": 0.52,
+      "stepped": 0.48
+     },
+     "type": "choice"
+    },
+    "footprint.massing": {
+     "choice": "a cluster",
+     "confidence": 0.46,
+     "probabilities": {
+      "a T": 0.06,
+      "a cluster": 0.57,
+      "a long range": 0.07,
+      "a single block": 0.13,
+      "an L": 0.17
+     },
+     "type": "choice"
+    },
+    "footprint.roof": {
+     "choice": "gabled",
+     "confidence": 1,
+     "probabilities": {
+      "gabled": 1,
+      "half-hipped": 0,
+      "hipped": 0
+     },
+     "type": "choice"
+    },
+    "footprint.roofline": {
+     "confidence": 0.25,
+     "legend": {
+      "0": "low and spreading",
+      "1": "steep",
+      "2": "tall and steep"
+     },
+     "probabilities": {
+      "0": 0.31,
+      "1": 0.5,
+      "2": 0.19
+     },
+     "score": 0.88,
+     "type": "score"
+    },
+    "footprint.shape": {
+     "choice": "long",
+     "confidence": 0.46,
+     "probabilities": {
+      "gable-fronted": 0.19,
+      "long": 0.64,
+      "snug": 0.17
+     },
+     "type": "choice"
+    },
+    "footprint.size": {
+     "confidence": 0.73,
+     "legend": {
+      "0": "tiny",
+      "1": "modest",
+      "2": "roomy"
+     },
+     "probabilities": {
+      "0": 0,
+      "1": 0.18,
+      "2": 0.8200000000000001
+     },
+     "score": 1.81,
+     "type": "score"
+    },
+    "footprint.storeys": {
+     "confidence": 0.55,
+     "legend": {
+      "0": "one storey",
+      "1": "two storeys",
+      "2": "three storeys"
+     },
+     "probabilities": {
+      "0": 0.12,
+      "1": 0.7,
+      "2": 0.18
+     },
+     "score": 1.06,
+     "type": "score"
+    },
+    "footprint.windows": {
+     "confidence": 0.34,
+     "legend": {
+      "0": "a few",
+      "1": "several",
+      "2": "many"
+     },
+     "probabilities": {
+      "0": 0.15,
+      "1": 0.56,
+      "2": 0.29
+     },
+     "score": 1.14,
+     "type": "score"
+    },
+    "palette.contrast": {
+     "confidence": 0.56,
+     "legend": {
+      "0": "soft",
+      "1": "balanced",
+      "2": "vivid"
+     },
+     "probabilities": {
+      "0": 0.24,
+      "1": 0.71,
+      "2": 0.05
+     },
+     "score": 0.82,
+     "type": "score"
+    },
+    "palette.family": {
+     "choice": "lantern-dusk",
+     "confidence": 0.2,
+     "probabilities": {
+      "autumn-ember": 0.03,
+      "bluebell-wood": 0.09,
+      "cherry-blossom": 0.01,
+      "deep-forest": 0.14,
+      "desert-sage": 0.17,
+      "lantern-dusk": 0.29,
+      "silver-birch": 0.03,
+      "spring-meadow": 0.09,
+      "teal-gold": 0.15
+     },
+     "type": "choice"
+    },
+    "roof.chimney": {
+     "choice": "none",
+     "confidence": 0.37,
+     "probabilities": {
+      "gable": 0.25,
+      "none": 0.58,
+      "ridge": 0.17
+     },
+     "type": "choice"
+    },
+    "roof.covering": {
+     "choice": "slates",
+     "confidence": 0.88,
+     "probabilities": {
+      "pantiles": 0.03,
+      "shingles": 0.05,
+      "slates": 0.92
+     },
+     "type": "choice"
+    },
+    "roof.overhang": {
+     "confidence": 0.29,
+     "legend": {
+      "0": "neat and close",
+      "1": "sheltering",
+      "2": "deep and low"
+     },
+     "probabilities": {
+      "0": 0.46,
+      "1": 0.53,
+      "2": 0.01
+     },
+     "score": 0.54,
+     "type": "score"
+    }
+   },
+   "costUsd": 0.000254352,
+   "inputTokens": 6056,
+   "model": "typesafe/jev-1.13-20260917",
+   "ms": 276
+  },
+  "147711d1348a62": {
    "answers": {
     "openings.door": {
      "choice": "plank",
-     "confidence": 0.64,
+     "confidence": 0.72,
      "probabilities": {
       "arched": 0.02,
-      "hooded": 0.22,
-      "plank": 0.76
+      "hooded": 0.17,
+      "plank": 0.81
      },
      "type": "choice"
     },
     "openings.panes": {
      "choice": "six panes",
-     "confidence": 0.27,
+     "confidence": 0.23,
      "probabilities": {
-      "four panes": 0.47,
+      "four panes": 0.49,
       "one pane": 0.02,
-      "six panes": 0.51
+      "six panes": 0.49
      },
      "type": "choice"
     },
@@ -61662,6 +61504,177 @@
     },
     "ornaments.extras:fence": {
      "noul": 0.79,
+     "type": "noul"
+    },
+    "ornaments.extras:flower boxes": {
+     "noul": 0.91,
+     "type": "noul"
+    },
+    "ornaments.extras:lantern": {
+     "noul": 0.9,
+     "type": "noul"
+    },
+    "ornaments.extras:woodpile": {
+     "noul": 0.85,
+     "type": "noul"
+    },
+    "ornaments.walk": {
+     "choice": "stepping stones",
+     "confidence": 0.32,
+     "probabilities": {
+      "flagstones": 0.34,
+      "stepping stones": 0.66
+     },
+     "type": "choice"
+    }
+   },
+   "costUsd": 0.000109032,
+   "inputTokens": 2596,
+   "model": "typesafe/jev-1.13-20260917",
+   "ms": 225
+  },
+  "01e16a546252e7": {
+   "answers": {
+    "openings.door": {
+     "choice": "plank",
+     "confidence": 0.77,
+     "probabilities": {
+      "arched": 0.01,
+      "hooded": 0.14,
+      "plank": 0.85
+     },
+     "type": "choice"
+    },
+    "openings.panes": {
+     "choice": "four panes",
+     "confidence": 0.23,
+     "probabilities": {
+      "four panes": 0.49,
+      "one pane": 0.02,
+      "six panes": 0.49
+     },
+     "type": "choice"
+    },
+    "openings.shutters": {
+     "noul": 0.11,
+     "type": "noul"
+    },
+    "ornaments.extras:fence": {
+     "noul": 0.75,
+     "type": "noul"
+    },
+    "ornaments.extras:flower boxes": {
+     "noul": 0.89,
+     "type": "noul"
+    },
+    "ornaments.extras:lantern": {
+     "noul": 0.88,
+     "type": "noul"
+    },
+    "ornaments.extras:woodpile": {
+     "noul": 0.85,
+     "type": "noul"
+    },
+    "ornaments.walk": {
+     "choice": "flagstones",
+     "confidence": 0.02,
+     "probabilities": {
+      "flagstones": 0.51,
+      "stepping stones": 0.49
+     },
+     "type": "choice"
+    }
+   },
+   "costUsd": 0.000108402,
+   "inputTokens": 2581,
+   "model": "typesafe/jev-1.13-20260917",
+   "ms": 230
+  },
+  "1097de21db93b7": {
+   "answers": {
+    "openings.door": {
+     "choice": "plank",
+     "confidence": 0.66,
+     "probabilities": {
+      "arched": 0.02,
+      "hooded": 0.21,
+      "plank": 0.77
+     },
+     "type": "choice"
+    },
+    "openings.panes": {
+     "choice": "four panes",
+     "confidence": 0.27,
+     "probabilities": {
+      "four panes": 0.51,
+      "one pane": 0.03,
+      "six panes": 0.46
+     },
+     "type": "choice"
+    },
+    "openings.shutters": {
+     "noul": 0.11,
+     "type": "noul"
+    },
+    "ornaments.extras:fence": {
+     "noul": 0.69,
+     "type": "noul"
+    },
+    "ornaments.extras:flower boxes": {
+     "noul": 0.82,
+     "type": "noul"
+    },
+    "ornaments.extras:lantern": {
+     "noul": 0.78,
+     "type": "noul"
+    },
+    "ornaments.extras:woodpile": {
+     "noul": 0.83,
+     "type": "noul"
+    },
+    "ornaments.walk": {
+     "choice": "stepping stones",
+     "confidence": 0.28,
+     "probabilities": {
+      "flagstones": 0.36,
+      "stepping stones": 0.64
+     },
+     "type": "choice"
+    }
+   },
+   "costUsd": 0.000097818,
+   "inputTokens": 2329,
+   "model": "typesafe/jev-1.13-20260917",
+   "ms": 217
+  },
+  "08b4438004a593": {
+   "answers": {
+    "openings.door": {
+     "choice": "plank",
+     "confidence": 0.58,
+     "probabilities": {
+      "arched": 0.02,
+      "hooded": 0.26,
+      "plank": 0.72
+     },
+     "type": "choice"
+    },
+    "openings.panes": {
+     "choice": "six panes",
+     "confidence": 0.23,
+     "probabilities": {
+      "four panes": 0.48,
+      "one pane": 0.03,
+      "six panes": 0.49
+     },
+     "type": "choice"
+    },
+    "openings.shutters": {
+     "noul": 0.12,
+     "type": "noul"
+    },
+    "ornaments.extras:fence": {
+     "noul": 0.78,
      "type": "noul"
     },
     "ornaments.extras:flower boxes": {
@@ -61678,18 +61691,18 @@
     },
     "ornaments.walk": {
      "choice": "stepping stones",
-     "confidence": 0.02,
+     "confidence": 0.16,
      "probabilities": {
-      "flagstones": 0.49,
-      "stepping stones": 0.51
+      "flagstones": 0.42,
+      "stepping stones": 0.58
      },
      "type": "choice"
     }
    },
-   "costUsd": 0.000111468,
-   "inputTokens": 2654,
+   "costUsd": 0.00011151,
+   "inputTokens": 2655,
    "model": "typesafe/jev-1.13-20260917",
-   "ms": 225
+   "ms": 239
   }
  }
 }
