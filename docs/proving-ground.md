@@ -21,10 +21,10 @@ health. Test a change here as well as in Gaia's own world.
 
 - `app/renderer/terrain/fixtures/proving.json`: the code model, in the shape
   the engine's `project.open` returns. It has 126 files and 32 entities in a
-  950 m world of 12 lands and 45 areas.
+  970 m world of 12 lands and 45 areas.
 - `app/renderer/terrain/fixtures/proving-judged.json`: the choices Jev would
-  make about it, fixed so that every land, water, character, tree, form and
-  trail look in `app/renderer/terrain/looks.ts` is used, and every building
+  make about it, fixed so that every land, water, character, form (the
+  trees among them) and trail look in `app/renderer/terrain/looks.ts` is used, and every building
   and landmark stands thriving, tired and in ruin.
 
 `pnpm proving --code DIR` writes the proving ground's code instead
@@ -79,7 +79,7 @@ where each stop looks (x, z in meters from the middle):
 | `pond`, `pond 2` | The ponds of `hollow` and `pondside` | -232, 390 and 63, -417 |
 | `ruined building`, `thriving building` | The ruined croft in `ruins`, the thriving one in `terraces` | 125, -62 and 445, 206 |
 | `ruined landmark`, `thriving landmark` | The keep in `ruins`, the stone ring on the moor | 173, -132 and -455, 119 |
-| `thriving grove`, `failing grove` | The 14 trees of `crossings/flow.ts` and the 17 dying ones of `mixed/failing-grove.ts` | 5, 390 and 331, -251 |
+| `thriving grove`, `failing grove` | The 4 trees of `crossings/channel.ts` and the 4 dying ones of `mixed/failing-grove.ts`, each a definition | 29, 302 and 353, -195 |
 | `thriving area`, `failing area` | `downs` and `ruins` | -237, 39 and 315, 73 |
 | `large area`, `tiny area`, `deep nesting` | `ruins`, `downs/tiny` and `downs/deep/deeper/deeper-still/deepest/bottom` | 315, 73; -59, -11; -361, -86 |
 
@@ -97,13 +97,9 @@ has thinned to straw over dry ground with bare earth between, and the brook
 runs brown and still; under `mixed/failing-grove.ts` one patch has dried
 while its neighbors stay green.
 
-It is also harder to draw than Gaia's own world: 479 trees grow on 950 m
-against Gaia's 489 on 1,120 m, three of its lands are deep woods, and most of
-its trees are willows, firs and cherries rather than maples. Where the hitch
-probe starts, in `crossings`, a frame draws about 8.7 million tree triangles
-against 0.85 million at Gaia's start, and the walk's median frame is 9.5 to
-11.7 ms against Gaia's 8.3 ms. A codebase whose world grows woods like these
-would stutter the same way.
+Every other definition of its source files stands as a tree, going round
+the four kinds, so it grows trees on every file at every health. In Gaia's
+own world Jev chose a tree for about one definition in ten (236 of 2,398).
 
 ## Changing it
 

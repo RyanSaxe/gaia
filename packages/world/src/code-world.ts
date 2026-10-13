@@ -56,17 +56,15 @@ export interface Looks {
   readonly world: LookSet;
   /** A directory's land: landform and ground cover. */
   readonly land: LookSet;
-  /** What grows on a file's patch. */
-  readonly vibe: LookSet;
   readonly building: LookSet;
   readonly landmark: LookSet;
   /** How a trail between two entities looks. */
   readonly trail: LookSet;
-  /** What a file's finer entity (a function, a class, a type, a constant) stands as on its patch. */
+  /** What a file's finer entity (a function, a class, a type, a constant) stands as on its patch: a tree, a stone, a bush or flowers. */
   readonly form: LookSet;
   /** Whether an area's land holds water, and why: each option's words are the reason recorded with the choice. */
   readonly water: LookSet;
-  /** How an area's trees and open ground lie: a deep wood, groves and clearings, a meadow with a few old trees, a heath, a wet hollow. */
+  /** An area's ground: its undergrowth, its open ground and how large its trees grow. */
   readonly character: LookSet;
 }
 
@@ -82,7 +80,7 @@ export interface WorldRequest {
   readonly decides?: string;
   /**
    * For a design that shares state: the things this one request judges, each
-   * with its questions as sent (`vibe@src/a.ts`) and as planned (`vibe`).
+   * with its questions as sent (`form#plan@src/a.ts`) and as planned (`form#plan`).
    * Absent when the request judges only its own `about` and `target`.
    */
   readonly carries?: readonly CarriedThing[];
@@ -101,16 +99,15 @@ export interface Judgments {
   readonly world: string;
   /** Directory → land key, for the directories that are regions. */
   readonly lands: Readonly<Record<string, string>>;
-  /** File → vibe key. */
-  readonly vibes: Readonly<Record<string, string>>;
   /** Entity → whether a building or a landmark stands for it, and which. */
   readonly things: Readonly<Record<string, { readonly as: "building" | "landmark"; readonly look: string }>>;
   /** Dependencies Jev would walk, with how much it wants each and its look. */
   readonly trails: readonly CodeTrail[];
   /**
    * File → form key, by symbol kind (`function`) when a design asks about each
-   * kind of a file's finer entities, or by `#name` (`#growGrove`) when it asks
-   * about each one: what the file's finer entities stand as.
+   * kind of a file's finer entities, or by `#` and its qualified name
+   * (`#openWorld`, `#World.open`) when it asks about each one: what the file's
+   * finer entities stand as.
    */
   readonly forms: Readonly<Record<string, Readonly<Record<string, string>>>>;
   /**
@@ -121,7 +118,7 @@ export interface Judgments {
   readonly quality?: Readonly<Record<string, number>>;
   /** Directory → water key, for the directories that are regions. */
   readonly waters: Readonly<Record<string, string>>;
-  /** Directory → character key, for the directories that are regions: how its trees and open ground lie. */
+  /** Directory → character key, for the directories that are regions: its undergrowth, open ground and how large its trees grow. */
   readonly characters: Readonly<Record<string, string>>;
 }
 
@@ -135,8 +132,6 @@ export interface CodeArea extends AreaPlace {
 export interface CodePatch extends PatchPlace {
   readonly lines: number;
   readonly kind: string;
-  /** What grows on it: a vibe key. */
-  readonly vibe: string;
   /** Square meters of ground its cell holds. */
   readonly ground: number;
   /** Its first cell in `cells`; its ground is every cell naming it. */
@@ -252,8 +247,8 @@ export const LAYOUT = {
   maxRegions: 24,
   /** Square meters each definition standing on a file's patch adds to it, on top of the file's lines. */
   defGround: 120,
-  /** How many of a file's definitions Jev is asked a form for by name; the rest stand as their kind's form. */
-  formsByName: 6,
+  /** How many of a file's definitions one request asks a form for: a larger file's are asked over several, so each fits Jev's window. */
+  formsPerRequest: 24,
 } as const;
 
 // ---------- the tree of directories ----------
@@ -410,7 +405,7 @@ export const DESIGNS = {
   shared: { state: "facts", questions: "revised", character: false, escalate: false, share: "area" },
   /** The same, over outlines: the area's outline and each of its files', sizes in words, so a small edit asks again rarely. */
   "shared-outline": { state: "outline", questions: "revised", character: false, escalate: false, share: "area" },
-  /** Round 15's, what the app asks: summary facts in words with areas compared, each standing symbol judged on its own, and Jev judging whether a file needs tests. */
+  /** What the app asks: summary facts in words with areas compared, and every definition standing on a file's patch judged on its own. */
   judged: { state: "words", questions: "judged", character: false, escalate: false },
 } as const satisfies Readonly<Record<string, Design>>;
 
@@ -427,6 +422,8 @@ export interface Character {
 
 export interface PlanOptions {
   readonly design?: DesignName | Design;
+  /** Engine's graph, whose definitions stand on each file's patch as the layout stands them; without it, the code model's. */
+  readonly graph?: CodeGraph;
   /** What has been judged above each thing; `judgeWorld` fills it wave by wave. */
   readonly character?: Character;
   /** Reorders every question's options: the same requests in another order, to measure how much order sways Jev. */
@@ -459,14 +456,13 @@ const historyWords = (g: FileFacts["git"]): string =>
 const testsWords = (f: FileFacts): string =>
   f.tests.own.length > 0 ? `${howMany(f.tests.own.length)} of its own entity's tests reach it` : f.tests.coveredBy.length > 0 ? "only tests of other entities reach it" : "no test reaches it";
 
-/** A file as `judged` sends it: what it declares, its size and links in words, how far tests reach it, how often it changed and the finer entities that may stand on its patch. */
-export function fileWords(f: FileFacts): Record<string, unknown> {
+/** A file as `judged` sends it: what it declares, its size and links in words, how far tests reach it, how often it changed and the definitions standing on its patch that the request asks about. */
+export function fileWords(f: FileFacts, standing: readonly StandingDef[] = []): Record<string, unknown> {
   const declares: Record<string, string> = {};
   for (const kind of ["function", "class", "type", "constant", "module"] as const) {
     const n = f.symbols.filter((s) => s.kind === kind).length;
     if (n > 0) declares[KIND_PLURALS[kind]] = howMany(n);
   }
-  const standing = standingSymbols(f).slice(0, LAYOUT.formsByName);
   const kind = f.kind ?? "source";
   return {
     path: f.path,
@@ -480,7 +476,7 @@ export function fileWords(f: FileFacts): Record<string, unknown> {
     importedBy: `${howMany(f.importedBy.length)} project files`,
     ...(kind === "test" ? {} : { tests: testsWords(f) }),
     history: historyWords(f.git),
-    ...(standing.length === 0 ? {} : { standing: standing.map((s) => ({ name: s.name, kind: s.kind, size: symbolSize(s.lines ?? 1), exported: s.exported, ...(s.doc === undefined ? {} : { doc: trim(s.doc, 120) }) })) }),
+    ...(standing.length === 0 ? {} : { standing: standing.map((d) => ({ name: d.id.slice(d.file.length + 1), kind: d.kind, size: symbolSize(d.lines), exported: d.exported, ...(d.doc === undefined ? {} : { doc: trim(d.doc, 120) }) })) }),
   };
 }
 
@@ -667,13 +663,13 @@ export function planWorldRequests(model: CodeModel, looks: Looks, options: PlanO
         ? {
             land: choice("This directory becomes an area of the world. Which land suits it: its landform and its ground cover? Whether the land holds water is asked separately, so judge only its shape and its cover.", docs(looks.land), "land", path, salt),
             water: choice("Does this directory's land hold water? Each option gives a reason drawn from how the directory's code imports and is imported; choose the one whose reason fits it best.", docs(looks.water), "water", path, salt),
-            character: choice("How do this area's trees and open ground lie? Choose the option whose reason fits this directory best.", docs(looks.character), "character", path, salt),
+            character: choice("What is this area's ground like: what grows between the things standing on it, how its open ground lies and how large its trees grow? Choose the option whose reason fits this directory best.", docs(looks.character), "character", path, salt),
           }
         : {
             land: choice("This directory becomes an area of the world. Which land suits it: its landform and ground cover?", docs(looks.land), "land", path, salt),
             water: choice("Does this area's land hold water? Choose the option whose reason fits this directory best.", docs(looks.water), "water", path, salt),
           },
-      { readings: areaReadings(model, path), decides: "which land this directory's area has, whether that land holds water, and how its trees and open ground lie" },
+      { readings: areaReadings(model, path), decides: "which land this directory's area has, whether that land holds water, and what its ground is like" },
     );
   }
   /** What was judged about the land a thing stands on, for a design that carries character. */
@@ -684,27 +680,38 @@ export function planWorldRequests(model: CodeModel, looks: Looks, options: PlanO
     if (land === undefined && water === undefined) return {};
     return { land: { area: region === "" ? "(the repository's root)" : region, ...(land === undefined ? {} : { landform: land }), ...(water === undefined ? {} : { water }) } };
   };
+  const standingDefs = definitionsOf(model, options.graph);
   for (const f of [...model.files].sort(byPath)) {
+    if (judged) {
+      // Every definition standing on the file's patch is asked about on its own: what it stands as is Jev's call. A
+      // large file's are asked over several requests, each listing the definitions it asks about.
+      const defs = standingDefs.get(f.path) ?? [];
+      for (let from = 0; from < defs.length; from += LAYOUT.formsPerRequest) {
+        const some = defs.slice(from, from + LAYOUT.formsPerRequest);
+        const forms: Record<string, JevQuestion> = {};
+        for (const d of some) {
+          const name = d.id.slice(d.file.length + 1);
+          forms[`form#${name}`] = choice(
+            `The ${KIND_WORDS[d.kind]} \`${name}\`, listed in \`standing\`, stands on this file's patch as one thing a person can walk up to and read about. Which suits it best? Judge by what its name and doc comment say it does, its size and whether other files can use it.`,
+            docs(looks.form),
+            `form#${name}`,
+            f.path,
+            salt,
+          );
+        }
+        ask("file", f.path, { file: fileWords(f, some) }, forms, { readings: fileReadings(model, f), decides: "what this file's functions, classes, types and constants stand as" });
+      }
+      continue;
+    }
     const standing = standingSymbols(f);
     const forms: Record<string, JevQuestion> = {};
-    if (judged) {
-      // The first of a file's finer entities, each on its own (`formsByName`); the rest stand as their kind's form.
-      for (const s of standing.slice(0, LAYOUT.formsByName)) {
-        if (forms[`form#${s.name}`] !== undefined) continue;
-        forms[`form#${s.name}`] = choice(
-          `The ${KIND_WORDS[s.kind]} \`${s.name}\`, listed in \`standing\`, stands on this file's patch as one small thing a person can walk up to and read about. Which suits it best? Judge by what its name and doc comment say it does, its size and whether other files can use it.`,
-          docs(looks.form),
-          `form#${s.name}`,
-          f.path,
-          salt,
-        );
-      }
-    }
-    for (const kind of judged ? [] : [...new Set(standing.map((s) => s.kind))].sort()) {
+    for (const kind of [...new Set(standing.map((s) => s.kind))].sort()) {
       forms[`form:${kind}`] = revised
-        ? choice(`Each ${KIND_WORDS[kind]} declared in this file stands on the file's patch as one small thing a person can walk up to and read about. Which suits this file's ${KIND_WORDS[kind]}s best?`, docs(looks.form), `form:${kind}`, f.path, salt)
+        ? choice(`Each ${KIND_WORDS[kind]} declared in this file stands on the file's patch as one thing a person can walk up to and read about. Which suits this file's ${KIND_WORDS[kind]}s best?`, docs(looks.form), `form:${kind}`, f.path, salt)
         : choice(`Each ${KIND_WORDS[kind]} in this file stands on its patch as something a person can walk up to. What does each stand as?`, docs(looks.form), `form:${kind}`, f.path, salt);
     }
+    // A file with nothing standing on its patch has nothing to ask.
+    if (Object.keys(forms).length === 0) continue;
     const state =
       design.state === "outline"
         ? { file: fileOutline(f), ...landOf(parentOf(f.path)) }
@@ -723,11 +730,8 @@ export function planWorldRequests(model: CodeModel, looks: Looks, options: PlanO
               ...(standing.length === 0 ? {} : { standing: standing.slice(0, 8).map((s) => ({ name: s.name, kind: s.kind, lines: s.lines ?? 1, exported: s.exported, ...(s.doc === undefined ? {} : { doc: trim(s.doc, 100) }) })) }),
             },
           };
-    const vibe = revised
-      ? choice("This file becomes a patch of ground in its directory's area, and what grows there shows what the file is and does. Which suits this file? Judge by the part it plays, its size and how much code imports it, not by what its words are about: a file about light or grass is judged like any other.", docs(looks.vibe), "vibe", f.path, salt)
-      : choice("This file becomes a patch of ground in its directory's area. What grows on it?", docs(looks.vibe), "vibe", f.path, salt);
-    const kindsStanding = judged ? (Object.keys(forms).length === 0 ? [] : ["functions, classes, types and constants"]) : Object.keys(forms).map((id) => `${KIND_WORDS[id.slice("form:".length) as SymbolFact["kind"]]}s`);
-    ask("file", f.path, state, { vibe, ...forms }, { readings: fileReadings(model, f), decides: `what grows on this file's patch${kindsStanding.length === 0 ? "" : ` and what its ${kindsStanding.join(" and ")} stand as`}` });
+    const kindsStanding = Object.keys(forms).map((id) => `${KIND_WORDS[id.slice("form:".length) as SymbolFact["kind"]]}s`);
+    ask("file", f.path, state, forms, { readings: fileReadings(model, f), decides: `what this file's ${kindsStanding.join(" and ")} stand as` });
   }
   const entities = new Map(model.entities.map((e) => [e.path, e]));
   const things = {
@@ -934,7 +938,7 @@ export async function judgeWorld(model: CodeModel, looks: Looks, jev: JevClient,
     return out;
   };
   const first = (set: LookSet): string => Object.keys(set).sort()[0] ?? "";
-  const plan = (character: Character): WorldRequest[] => planWorldRequests(model, looks, { design, character, ...(options.shuffle === undefined ? {} : { shuffle: options.shuffle }) });
+  const plan = (character: Character): WorldRequest[] => planWorldRequests(model, looks, { design, character, ...(options.graph === undefined ? {} : { graph: options.graph }), ...(options.shuffle === undefined ? {} : { shuffle: options.shuffle }) });
   const answered: { p: WorldRequest; a: Readonly<Record<string, JevAnswer>> }[] = [];
   const run = async (planned: WorldRequest[]): Promise<void> => {
     const answers = await askAll(planned);
@@ -956,7 +960,6 @@ export async function judgeWorld(model: CodeModel, looks: Looks, jev: JevClient,
   }
   let world = first(looks.world);
   const lands: Record<string, string> = {};
-  const vibes: Record<string, string> = {};
   const things: Record<string, { as: "building" | "landmark"; look: string }> = {};
   const trails: CodeTrail[] = [];
   const forms: Record<string, Record<string, string>> = {};
@@ -969,8 +972,8 @@ export async function judgeWorld(model: CodeModel, looks: Looks, jev: JevClient,
       waters[p.target] = pickOf(a.water) ?? first(looks.water);
       characters[p.target] = pickOf(a.character) ?? first(looks.character);
     } else if (p.about === "file") {
-      vibes[p.target] = pickOf(a.vibe) ?? first(looks.vibe);
-      const mine: Record<string, string> = {};
+      // A large file's forms are asked over several requests.
+      const mine: Record<string, string> = { ...forms[p.target] };
       for (const id of Object.keys(p.request.questions)) {
         if (id.startsWith("form:")) mine[id.slice("form:".length)] = pickOf(a[id]) ?? first(looks.form);
         else if (id.startsWith("form#")) mine[id.slice("form".length)] = pickOf(a[id]) ?? first(looks.form);
@@ -991,7 +994,7 @@ export async function judgeWorld(model: CodeModel, looks: Looks, jev: JevClient,
       }
     }
   }
-  return { world, lands, vibes, things, trails, forms, waters, characters };
+  return { world, lands, things, trails, forms, waters, characters };
 }
 
 // ---------- the stand-in judge ----------
@@ -1064,7 +1067,7 @@ function tagsOf(state: Record<string, unknown>): string[] {
  */
 export function standInJev(looks: Looks): JevClient {
   const suits = new Map<string, readonly string[]>();
-  for (const [prefix, set] of [["", looks.world], ["", looks.land], ["", looks.vibe], ["", looks.trail], ["", looks.form], ["", looks.water], ["", looks.character], ["building:", looks.building], ["landmark:", looks.landmark]] as const) {
+  for (const [prefix, set] of [["", looks.world], ["", looks.land], ["", looks.trail], ["", looks.form], ["", looks.water], ["", looks.character], ["building:", looks.building], ["landmark:", looks.landmark]] as const) {
     for (const [key, look] of Object.entries(set)) suits.set(`${prefix}${key}`, [...(suits.get(`${prefix}${key}`) ?? []), ...look.suits]);
   }
   const judge: JevClient = {
@@ -1259,7 +1262,10 @@ function divisionOf(model: CodeModel, graph: CodeGraph | undefined, aspect: numb
 }
 
 /** Judgments that decide nothing: what the land is laid out with before Jev answers. */
-const UNJUDGED: Judgments = { world: "", lands: {}, vibes: {}, things: {}, trails: [], forms: {}, waters: {}, characters: {} };
+/** What a definition stands as: the form Jev chose for it, or for its kind in its file; "" when Jev chose none. */
+const formOf = (mine: Readonly<Record<string, string>> | undefined, def: StandingDef): string => mine?.[`#${def.id.slice(def.file.length + 1)}`] ?? mine?.[def.kind] ?? "";
+
+const UNJUDGED: Judgments = { world: "", lands: {}, things: {}, trails: [], forms: {}, waters: {}, characters: {} };
 
 /**
  * Where an entity's building or landmark will stand: its lot's middle, meters, a thing's `x` and `z`. Whichever it
@@ -1368,7 +1374,7 @@ export function layoutWorld(model: CodeModel, judged: Judgments, graph?: CodeGra
     }
     const f = files.get(path) as FileFacts;
     const vitality = quality.get(`file:${path}`) ?? folderQuality(parentOf(path)) ?? judged.quality?.[path] ?? 1;
-    patches.push({ path, name: baseName(path), area, x: leaf.x, z: leaf.z, radius: Math.sqrt(leaf.ground / Math.PI), vitality, lines: f.lines, kind: f.kind ?? "source", vibe: judged.vibes[path] ?? "", ground: leaf.ground, cell });
+    patches.push({ path, name: baseName(path), area, x: leaf.x, z: leaf.z, radius: Math.sqrt(leaf.ground / Math.PI), vitality, lines: f.lines, kind: f.kind ?? "source", ground: leaf.ground, cell });
     for (const { def, x, z } of plotDefinitions(f, defs.get(path) ?? [], leaf, land.step)) {
       symbols.push({
         id: def.id,
@@ -1381,7 +1387,7 @@ export function layoutWorld(model: CodeModel, judged: Judgments, graph?: CodeGra
         lines: def.lines,
         ...(def.doc === undefined ? {} : { doc: def.doc }),
         ...(def.importance === undefined ? {} : { importance: def.importance }),
-        form: (def.parent === undefined ? judged.forms[path]?.[`#${def.name}`] : undefined) ?? judged.forms[path]?.[def.kind] ?? "",
+        form: formOf(judged.forms[path], def),
         x,
         z,
         vitality: quality.get(`def:${def.id}`) ?? vitality,

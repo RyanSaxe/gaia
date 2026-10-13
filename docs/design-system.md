@@ -364,10 +364,10 @@ same gusts reach the trees and bushes (see Leaves).
 
 ### Vitality on the land
 
-The ground takes the vitality of whatever it belongs to, as the trees do: a
-file's patch its file's, an area's own ground (its lots) its area's, every
+The ground takes the vitality of whatever it belongs to: a file's patch its
+file's, an area's own ground (its lots) its area's, every
 file under the area pooled by size (`areaVitality`), and the wild past the
-land always thrives. A failing grove in a healthy area is one sick patch in a
+land always thrives. A failing file in a healthy area is one sick patch in a
 living place, and a ruined area is ruin all through. One patch's health eases
 into its neighbor's over about 7 m, wider where the land's warp gathers the
 ground and narrower where it spreads it, and the land hands its ground to the
@@ -1181,8 +1181,8 @@ cast into it.
 | Paths | the network's treads cover at most 5% of any region's ground and 2% of the land |
 | Open ground | at least 40% of a region |
 | Landmarks | at most 1 per region |
-| Tree spacing | about half a crown width to a crown between trunks in a grove, set by its area's character, never under 4.5 m; wider toward a grove's margin |
-| Trees | every tree a world's areas call for, at most 48 to a file's grove; only past 200,000 does every grove give up the same share, keeping the tree that names its file |
+| Tree spacing | a tree keeps its crown's width from every other definition, never under 4.5 m between trunks |
+| Trees | one for each definition Jev chooses a tree for, and no others in a world from code |
 
 Jev decides which dependencies become trails: every one it would walk. The
 network, not a count of trails, holds the composition: `planTrails` routes
@@ -1192,34 +1192,35 @@ its own, so the world is never dominated by paths. A trail it cannot keep
 is listed with the reason (`TrailNetwork.dropped`). Landmarks stand
 about a quarter of the world's width apart.
 
-## Groves and open ground
+## Trees and open ground
 
-Land reads as groves, woods and copses with meadows and clearings between,
-never as an orchard. Each file's trees stand as one grove on its own patch:
-close-set at its heart, where crowns touch, thinning into scattered trees at
-its margin, inside an outline of a few seeded lobes, so no two groves share a
-shape and none is a circle. A longer file grows more trees, set a little
-closer; a file that describes or configures grows none, so its patch is a
-clearing. Each of a file's functions and classes stands in a small glade of
-its own among its trees. Each area's character, which Jev chooses with its
-reason, decides how its groves lie:
+Every tree in a world from code is a definition. Jev chooses what each
+definition stands as, on its own: one of four trees (a lantern willow, a
+fir, a cherry or an autumn maple), a stone, a bush or a drift of flowers. A
+tree stands near where the layout put its definition, sized by its
+importance, keeping its crown's width from everything else that stands for
+code, so each tree reads as one thing, and a tap on it opens that
+definition's page. Where Jev picks trees for many of a file's definitions,
+its patch grows a copse; a file whose definitions are small routines is low
+bushes and stones. Each area's character, which Jev chooses with its reason,
+decides its ground:
 
 | Character | Its land |
 | --- | --- |
-| Deep wood | Its files' groves gather on the sides of their patches nearest the area's heart and knit into one wood, with meadow at its rim |
-| Groves and clearings | Each grove keeps to its patch's middle, with clearings between |
-| Old meadow | Open meadow where a file's one or two old trees, a third larger, stand alone among flowers |
-| Rocky heath | Few, smaller trees; stones and low scrub over dry open ground |
-| Wet hollow | Groves knit as in a wood, more loosely; reeds and marsh flowers over damp open ground |
+| Deep wood | Thick shrubs in the shade, and its trees grow a little taller |
+| Groves and clearings | An even scatter of stones, shrubs and flowers |
+| Old meadow | Open meadow thick with flowers, where trees grow a third larger |
+| Rocky heath | Stones and low scrub over dry open ground, and its trees stay small |
+| Wet hollow | Reeds and marsh flowers over damp open ground |
 
-In the sample world, which has no code behind it, groves gather by landform:
+In the sample world, which has no code behind it, trees gather by landform:
 valleys and hills hold the most and the largest, a meadow a few lone trees.
 
 ## Understory
 
 The understory grows where it belongs. Rocks lie in groups, bushes in
 thickets, and wildflowers in drifts of one species, and each grows in its own
-kind of place: shrubs and bluebells under a grove's canopy, shrubs at a
+kind of place: shrubs and bluebells under a tree's canopy, shrubs at a
 wood's edge and a lone tree's foot, daisies, poppies, lupines and asters in
 open meadow and clearings, marsh marigolds and tall feathery shrubs by water,
 stones where the ground is dry or steep (and on terraces, dunes and a heath's

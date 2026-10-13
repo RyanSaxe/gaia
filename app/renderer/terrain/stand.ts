@@ -9,7 +9,7 @@
 
 import { type BuildingPlan, type Built, type RouteSpec, rand, seedOf } from "@gaia/schema";
 import { areaVitality } from "@gaia/world";
-import { type Area, type BuildingSite, type Capsule, type Circle, clearingsOf, discOf, type EdgeStone, edgeStones, type Extent, findLandmarkSite, frameOf, findSite, groundedBase, growGrove, type Habitat, heightAt, isWet, type LandEdits, type LandmarkSite, type LandSite, levelPad, levelTrails, type Occupied, type OwnedSite, type PadEdit, withinLand, type Placement, PLANT_SLOPE, planTrails, scatterComponents, scatterPlants, type ScatterRule, siteAt, siteToWorld, slopeAt, type Terrain, TILE, trailDiscs, type TrailEnd, type TrailNetwork, type TrailRequest, trunkIndex, type WayEdit, wildsRing, type WildsRing, type WorldSpec, worldOf } from "@gaia/terrain";
+import { type Area, type BuildingSite, type Capsule, type Circle, clearingsOf, discOf, type EdgeStone, edgeStones, type Extent, findLandmarkSite, frameOf, findSite, groundedBase, type Habitat, heightAt, isWet, type LandEdits, type LandmarkSite, type LandSite, levelPad, levelTrails, type Occupied, type OwnedSite, type PadEdit, type Placement, PLANT_SLOPE, planTrails, scatterComponents, scatterPlants, type ScatterRule, siteAt, siteToWorld, slopeAt, type Terrain, TILE, trailDiscs, type TrailEnd, type TrailNetwork, type TrailRequest, type WayEdit, wildsRing, type WildsRing, type WorldSpec, worldOf } from "@gaia/terrain";
 
 /** A building to site: its plan, what stands beside it, and the name its trails go by. */
 export interface StandBuilding {
@@ -29,33 +29,20 @@ export interface StandLot extends Circle {
   readonly id: string;
 }
 
-/** One file's patch: its heart and how far its ground reaches, and how many trees of which flora preset grow on it (preset -1: none), as one grove. */
-export interface StandPatch extends Circle {
-  readonly trees: number;
-  readonly preset: number;
-  /** Where its grove gathers: the patch's middle, or, where an area's groves knit into one wood, its side nearest the area's heart. */
-  readonly heart: { readonly x: number; readonly z: number };
-  /** Trunks this many crown widths apart at the grove's heart; they thin toward its margin. */
-  readonly closeness: number;
-  /** How far from its heart the grove may reach, meters. */
-  readonly reach: number;
-  /** How large its trees grow, a multiplier: a meadow's lone old trees stand larger. */
-  readonly stature: number;
-  /** Seeds its trees, from its file's path, so a change elsewhere never moves them. */
-  readonly seed: number;
-}
+/** One file's patch: its middle and how far its ground reaches. */
+export type StandPatch = Circle;
 
-/** A file's finer entity standing on its patch, as one of the understory's blueprints. */
+/** A file's finer entity standing on its patch: as a tree, or as one of the understory's blueprints. */
 export interface StandSymbol {
   readonly x: number;
   readonly z: number;
-  /** The understory rule and variant it stands as. */
+  /** The understory rule and variant it stands as, or "trees" and the flora preset of the tree it stands as. */
   readonly rule: string;
   readonly variant: number;
-  /** Its footprint's radius at scale 1, meters, and its scale. */
+  /** Its footprint's radius at scale 1, meters (a tree's comes from its crown), and its scale. */
   readonly radius: number;
   readonly scale: number;
-  /** Its file's vitality. */
+  /** Its own vitality. */
   readonly vitality: number;
   /** Its file's patch, by index into `StandCode.patches`: it never stands off it. */
   readonly patch?: number;
@@ -63,8 +50,9 @@ export interface StandSymbol {
 
 /**
  * A world laid out from code (`layoutWorld` in @gaia/world): each building
- * and landmark on its entity's lot, the trees on their files' patches, and
- * the trails Jev wants between entities. Without it, the sample world's
+ * and landmark on its entity's lot, each definition on its file's patch as
+ * a tree or as part of the understory, and the trails Jev wants between
+ * entities. Without it, the sample world's
  * rules place everything.
  */
 export interface StandCode {
@@ -74,7 +62,7 @@ export interface StandCode {
   readonly landmarks: readonly { readonly landmark: number; readonly lot: StandLot }[];
   readonly patches: readonly StandPatch[];
   /**
-   * The land's cells, each part of one patch (its index) or of a lot (-1): a tree grows only on its own patch's cells.
+   * The land's cells, each part of one patch (its index) or of a lot (-1): a definition stands only on its own patch's cells.
    * `area` indexes the world's areas: the directory whose ground the cell is.
    */
   readonly cells: readonly (LandSite & { readonly patch: number; readonly area: number })[];
@@ -98,7 +86,7 @@ export interface StandRequest {
   readonly code?: StandCode;
 }
 
-/** Where one tree stands and which build it copies; `index` is its place in the scatter, which names the file it stands for. */
+/** Where one tree stands and which build it copies; `index` is its place among the trees. */
 export interface StandTree {
   readonly index: number;
   readonly x: number;
@@ -107,8 +95,8 @@ export interface StandTree {
   readonly variant: number;
   readonly scale: number;
   readonly yaw: number;
-  /** In a world laid out from code, the patch (and so the file) it grows on. */
-  readonly patch?: number;
+  /** In a world laid out from code, the definition it stands for, by index into `StandCode.symbols`. */
+  readonly symbol?: number;
 }
 
 /** A landmark standing on its site; `landmark` indexes the request's landmarks, and `id` is the place its trails name. */
@@ -127,7 +115,7 @@ export interface Stand {
   readonly trees: readonly StandTree[];
   /** The symbols' placements first, then the understory of each tile in `tiles`, tile by tile. */
   readonly placements: readonly Placement[];
-  /** In a world laid out from code, each symbol's placement in `placements`, or -1 where nothing could stand. */
+  /** In a world laid out from code, each symbol's placement in `placements`, or -1 where it stands as a tree or nothing could stand. */
   readonly symbols: readonly number[];
   /** The tiles whose understory stood with the world, in `placements`' order, and how many placements each holds; any other tile's stands later, by `scatter`. */
   readonly tiles: readonly { readonly ti: number; readonly tj: number; readonly count: number }[];
@@ -462,38 +450,6 @@ function settleCode(t: Terrain, req: StandRequest, code: StandCode, sites: reado
 const TRUNK_GAP = 4.5;
 
 /**
- * The trees on each file's patch, as one grove: close-set at its heart and
- * thinning toward its margin, on its own cells' dry, gentle ground, clear of
- * what stands, of every other grove's trees and of the file's own finer
- * entities, which each keep a small glade.
- */
-function plantPatches(t: Terrain, req: StandRequest, code: StandCode, blocked: (x: number, z: number) => boolean, glades: readonly Occupied[]): StandTree[] {
-  const { builds, bases, crowns } = req.trees;
-  const trees: StandTree[] = [];
-  const index = trunkIndex();
-  const onPatch = (j: number, x: number, z: number): boolean => code.cells.length === 0 || code.cells[siteAt(code.cells, x, z)]?.patch === j;
-  const inGlade = (x: number, z: number): boolean => glades.some((g) => Math.hypot(g.x - x, g.z - z) < g.radius);
-  code.patches.forEach((p, j) => {
-    if (p.preset < 0 || p.trees <= 0) return;
-    let crown = 0;
-    for (let k = 0; k < builds; k++) crown += (crowns[p.preset * builds + k] ?? 4) / builds;
-    const spacing = Math.max(TRUNK_GAP, crown * 2 * p.stature * p.closeness);
-    const fits = (x: number, z: number): boolean =>
-      withinLand(t.spec, x, z, 24) && onPatch(j, x, z) && slopeAt(t.lattice, x, z) <= PLANT_SLOPE && !isWet(t, x, z) && !blocked(x, z) && !inGlade(x, z);
-    const grown = growGrove({ x: p.heart.x, z: p.heart.z, count: p.trees, spacing, reach: p.reach, seed: p.seed }, fits, (x, z, gap) => index.crowded(x, z, Math.min(gap, spacing)));
-    const r = rand(p.seed ^ 0x5bd1e995);
-    for (const [x, z] of grown) {
-      index.add(x, z);
-      const variant = p.preset * builds + Math.floor(r.next() * builds);
-      const scale = p.stature * (0.85 + r.next() * 0.45);
-      const base = (bases[variant] ?? 0.5) * scale;
-      trees.push({ index: trees.length, x, y: groundedBase(t.lattice, x, z, base), z, variant, scale, yaw: r.next() * Math.PI * 2, patch: j });
-    }
-  });
-  return trees;
-}
-
-/**
  * Stands everything on a finished bake, leveling the lattice under the
  * buildings and the trails first; the understory of `tiles` only, or of every
  * tile when absent.
@@ -521,12 +477,11 @@ export function standWorld(t: Terrain, req: StandRequest, tiles?: readonly (read
   // Trees keep off the trails and their cairns, out of the buildings and out from under a landmark.
   const clear: Occupied[] = [...trailDiscs(network, 1.6), ...landmarks.map((s) => ({ x: s.site.x, z: s.site.z, radius: treeClearance(req.landmarks[s.landmark] as StandLandmark) }))];
   const blocked = (x: number, z: number): boolean => req.buildings.some((b, k) => blockedBy(b, sites[k] as BuildingSite, x, z, 6)) || clear.some((o) => Math.hypot(o.x - x, o.z - z) < o.radius);
-  const { count, seed, presets, builds, bases } = req.trees;
-  // A file's finer entities each keep a small glade among its trees.
-  const glades: Occupied[] = (code?.symbols ?? []).map((sym) => ({ x: sym.x, z: sym.z, radius: sym.radius * sym.scale + 2.6 }));
-  const trees =
+  const { count, seed, presets, builds, bases, crowns } = req.trees;
+  // In a world from code every tree is a definition, stood with the rest of them below.
+  const trees: StandTree[] =
     code !== undefined
-      ? plantPatches(t, req, code, blocked, glades)
+      ? []
       : scatterPlants(t, count, seed).flatMap((s, i): StandTree[] => {
           if (blocked(s.x, s.z)) return [];
           const variant = (i % presets) * builds + (Math.floor(i / presets) % builds);
@@ -551,24 +506,36 @@ export function standWorld(t: Terrain, req: StandRequest, tiles?: readonly (read
   ];
   // A file's definitions stand where the layout put them, kept off water, steep ground and whatever else stands:
   // the largest first, so a file's landmark keeps its plot, each moved a little where its spot is taken (elsewhere
-  // on its patch if nothing near is clear, never off it), and stood a size smaller rather than left out.
+  // on its patch if nothing near is clear, never off it), and stood a size smaller rather than left out. One that
+  // stands as a tree keeps its crown's width from every other, so each tree reads as one thing.
   const standing: Placement[] = [];
+  /** The crowns of the trees stood so far, which nothing else that stands for code stands under. */
+  const crowned: Occupied[] = [];
+  const treeBuild = (sym: StandSymbol): number => sym.variant * builds + Math.floor(rand(seedOf(`tree:${sym.x.toFixed(2)},${sym.z.toFixed(2)}`)).next() * builds);
+  const crownOf = (sym: StandSymbol): number => Math.max(TRUNK_GAP / 2, (crowns[treeBuild(sym)] ?? 4) * 0.55);
+  const footprint = (sym: StandSymbol): number => (sym.rule === "trees" ? crownOf(sym) : sym.radius) * sym.scale;
   /** Each standing entity with the room decoration leaves it, so nothing crowds it. */
   const roomy: Occupied[] = [];
   const syms = code?.symbols ?? [];
   const cells = code?.cells ?? [];
   const symbols = syms.map(() => -1);
-  const order = syms.map((_, i) => i).sort((a, b) => (syms[b] as StandSymbol).radius * (syms[b] as StandSymbol).scale - (syms[a] as StandSymbol).radius * (syms[a] as StandSymbol).scale || a - b);
+  const order = syms.map((_, i) => i).sort((a, b) => footprint(syms[b] as StandSymbol) - footprint(syms[a] as StandSymbol) || a - b);
   for (const i of order) {
     const sym = syms[i] as StandSymbol;
+    const tree = sym.rule === "trees";
     let at: [number, number, number] | null = null;
     // Where it may try: around its plot's middle, then around each of its patch's other cells, nearest first.
     const own = sym.patch === undefined || cells.length === 0 ? [] : cells.filter((c) => c.patch === sym.patch).sort((a, b) => Math.hypot(a.x - sym.x, a.z - sym.z) - Math.hypot(b.x - sym.x, b.z - sym.z));
     for (const from of [{ x: sym.x, z: sym.z }, ...own]) {
       for (const shrink of SHRINKS) {
-        const reach = sym.radius * sym.scale * shrink;
+        const reach = footprint(sym) * shrink;
         const clash = (x: number, z: number): boolean =>
-          (sym.patch !== undefined && cells.length > 0 && cells[siteAt(cells, x, z)]?.patch !== sym.patch) || isWet(t, x, z) || slopeAt(t.lattice, x, z) > 24 || blocked(x, z) || occupied.some((o) => Math.hypot(o.x - x, o.z - z) < o.radius + reach);
+          (sym.patch !== undefined && cells.length > 0 && cells[siteAt(cells, x, z)]?.patch !== sym.patch) ||
+          isWet(t, x, z) ||
+          slopeAt(t.lattice, x, z) > (tree ? PLANT_SLOPE : 24) ||
+          blocked(x, z) ||
+          occupied.some((o) => Math.hypot(o.x - x, o.z - z) < o.radius + reach) ||
+          crowned.some((o) => Math.hypot(o.x - x, o.z - z) < o.radius + reach);
         for (let k = 0; at === null && k <= 24; k++) {
           const a = k * 2.4;
           const x = from.x + Math.cos(a) * k * 0.6;
@@ -582,7 +549,15 @@ export function standWorld(t: Terrain, req: StandRequest, tiles?: readonly (read
     if (at === null) continue;
     const [x, z, shrink] = at;
     const scale = sym.scale * shrink;
-    const reach = sym.radius * scale;
+    const reach = footprint(sym) * shrink;
+    if (tree) {
+      // The understory may grow under a tree's crown, but nothing else that stands for code.
+      const variant = treeBuild(sym);
+      trees.push({ index: trees.length, x, y: groundedBase(t.lattice, x, z, (bases[variant] ?? 0.5) * scale), z, variant, scale, yaw: (i * 2.399) % (Math.PI * 2), symbol: i });
+      occupied.push({ x, z, radius: 1.6 });
+      crowned.push({ x, z, radius: reach });
+      continue;
+    }
     occupied.push({ x, z, radius: reach + 0.4 });
     roomy.push({ x, z, radius: reach + 2.2 });
     standing.push({ rule: sym.rule, variant: sym.variant, x, y: heightAt(t.lattice, x, z) - 0.05, z, yaw: ((i * 2.399) % (Math.PI * 2)), scale, radius: reach, slope: [0, 0], region: t.region[Math.round((z - t.lattice.origin) / t.lattice.spacing) * t.lattice.n + Math.round((x - t.lattice.origin) / t.lattice.spacing)] ?? 0, vitality: sym.vitality });

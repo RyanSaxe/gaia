@@ -78,7 +78,6 @@ const set = (...keys: string[]) => Object.fromEntries(keys.map((k, i) => [k, { d
 const LOOKS: Looks = {
   world: set("Dawn", "Dusk"),
   land: set("Moor", "Valley"),
-  vibe: set("Meadow", "Oak", "Fir"),
   building: set("Cottage", "Mill"),
   landmark: set("Tower", "Oak"),
   trail: set("Path", "Track"),
@@ -161,8 +160,8 @@ describe("what Jev reads about a thing", () => {
   });
 });
 
-/** A Jev that is unsure about every file's vibe until it has read the file's imports, and says the imports would help. */
-function unsureAboutVibes(log: JevRequest[]): JevClient {
+/** A Jev that is unsure what a file's functions stand as until it has read the file's imports, and says the imports would help. */
+function unsureAboutFunctions(log: JevRequest[]): JevClient {
   return {
     async ask(request) {
       log.push(request);
@@ -172,8 +171,8 @@ function unsureAboutVibes(log: JevRequest[]): JevClient {
         if (q.type === "noul") answers[id] = { type: "noul", noul: id === `${MORE}imports` ? 0.9 : 0.2 };
         else if (q.type === "choice") {
           const keys = Object.keys(q.criteria);
-          const sure = id !== "vibe" || "itImports" in state;
-          const choice = id === "vibe" && sure ? "Oak" : (keys[0] as string);
+          const sure = id !== "form:function" || "itImports" in state;
+          const choice = id === "form:function" && sure ? "Bush" : (keys[0] as string);
           answers[id] = { type: "choice", choice, probabilities: Object.fromEntries(keys.map((k) => [k, k === choice ? 0.8 : 0.2 / (keys.length - 1)])), confidence: sure ? 0.8 : 0.3 };
         } else answers[id] = { type: "score", score: 0, probabilities: { 0: 1 }, confidence: 1 };
       }
@@ -186,20 +185,20 @@ describe("context that grows by Jev's choice", () => {
   it("asks an unsure file again with the readings Jev chose, asking only what it was unsure of, and keeps the surer answer", async () => {
     const log: JevRequest[] = [];
     const exchanges: Exchange[] = [];
-    const judged = await judgeWorld(model(), LOOKS, unsureAboutVibes(log), { design: "escalate", trace: (e) => exchanges.push(e) });
+    const judged = await judgeWorld(model(), LOOKS, unsureAboutFunctions(log), { design: "escalate", trace: (e) => exchanges.push(e) });
     const a = exchanges.find((e) => e.target === "pkg/src/a.ts")!;
-    expect(Object.keys(a.first.request.questions)).toEqual(expect.arrayContaining(["vibe", `${MORE}imports`, `${MORE}importers`, `${MORE}tests`, SOURCE_WISH]));
+    expect(Object.keys(a.first.request.questions)).toEqual(expect.arrayContaining(["form:function", `${MORE}imports`, `${MORE}importers`, `${MORE}tests`, SOURCE_WISH]));
     expect(a.second?.read).toEqual(["imports"]);
-    expect(Object.keys(a.second!.request.questions)).toEqual(["vibe"]);
+    expect(Object.keys(a.second!.request.questions)).toEqual(["form:function"]);
     expect((a.second!.request.state as { itImports: { name: string }[] }).itImports.map((b) => b.name)).toEqual(["pkg/src/b.ts"]);
-    expect(judged.vibes["pkg/src/a.ts"]).toBe("Oak");
+    expect(judged.forms["pkg/src/a.ts"]?.function).toBe("Bush");
     // A file that imports nothing reads the first reading Gaia offers instead.
     const b = exchanges.find((e) => e.target === "pkg/src/b.ts")!;
     expect(b.second?.read).toEqual([Object.keys(fileReadings(model(), model().files[2]!))[0]]);
     // The world and areas were sure: one request each. Without escalation, never a second.
     expect(exchanges.find((e) => e.about === "world")?.second).toBeUndefined();
     const plain: Exchange[] = [];
-    await judgeWorld(model(), LOOKS, unsureAboutVibes([]), { design: "outline", trace: (e) => plain.push(e) });
+    await judgeWorld(model(), LOOKS, unsureAboutFunctions([]), { design: "outline", trace: (e) => plain.push(e) });
     expect(plain.every((e) => e.second === undefined)).toBe(true);
   });
 

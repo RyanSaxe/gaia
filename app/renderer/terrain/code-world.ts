@@ -13,7 +13,7 @@
 // each entity's building or landmark on its lot, and the trails between them.
 
 import { type Blueprint, type CodeModel, type EntityFacts, type FileFacts, type SymbolFact, rand, seedOf } from "@gaia/schema";
-import { FLORA_PRESETS, LANDMARK_PRESETS, TRAIL_PRESETS, WORLD_PRESETS } from "@gaia/realize";
+import { LANDMARK_PRESETS, TRAIL_PRESETS, WORLD_PRESETS } from "@gaia/realize";
 import { type WorldSpec, outlinesOf } from "@gaia/terrain";
 import { type CodeWorld, type Judge, type Judgments, layoutWorld } from "@gaia/world";
 import type { ConsentPlan, JudgedThing, Opening, StartChoice, StartOffer, WorldDocument } from "../../world-service/protocol.ts";
@@ -26,7 +26,7 @@ import type { LayoutReply, LayoutRequest } from "./layout-worker.ts";
 import LayoutWorker from "./layout-worker.ts?worker";
 import proving from "./fixtures/proving.json";
 import provingJudged from "./fixtures/proving-judged.json";
-import { CHARACTERS, type Character, FORMS, LANDS } from "./looks.ts";
+import { CHARACTERS, FORMS, LANDS } from "./looks.ts";
 import type { Represented, SampleEntity } from "./samples.ts";
 import type { StandCode, StandLot } from "./stand.ts";
 
@@ -103,7 +103,7 @@ export function representSymbol(s: CodeWorld["symbols"][number], file: FileFacts
 }
 
 /** The sizes each kind of standing thing looks right between, by how much it matters: a stone can grow to a landmark, a flower barely grows. */
-const STAND_SCALE: Readonly<Record<string, readonly [number, number]>> = { rocks: [0.4, 2.2], shrubs: [0.5, 1.6], flowers: [0.7, 1.3] };
+const STAND_SCALE: Readonly<Record<string, readonly [number, number]>> = { trees: [0.55, 1.35], rocks: [0.4, 2.2], shrubs: [0.5, 1.6], flowers: [0.7, 1.3] };
 
 /**
  * How large a definition stands, within what its blueprint looks right at:
@@ -114,22 +114,11 @@ const STAND_SCALE: Readonly<Record<string, readonly [number, number]>> = { rocks
 export const symbolScale = (lines: SymbolFact["lines"], rule: string, importance?: number): number => {
   if (importance === undefined) {
     const t = Math.min(1, Math.log2(1 + (lines ?? 1)) / 8);
-    return rule === "rocks" ? 0.45 + 0.75 * t : rule === "shrubs" ? 0.6 + 0.6 * t : 0.8 + 0.4 * t;
+    return rule === "trees" ? 0.7 + 0.5 * t : rule === "rocks" ? 0.45 + 0.75 * t : rule === "shrubs" ? 0.6 + 0.6 * t : 0.8 + 0.4 * t;
   }
   const [small, large] = STAND_SCALE[rule] ?? [0.7, 1.3];
   return small + (large - small) * Math.min(1, Math.max(0, importance)) ** 1.3;
 };
-
-/** Trees on a file's patch, as its area's character grows them: more for a longer file, at least the one that names it. */
-export const treesFor = (lines: number, character: Character): number => Math.min(48, Math.max(1, Math.round(lines * character.perLine)));
-
-/**
- * A world grows every tree its areas call for: far trees cost a card, so
- * woods may be as large as their land. Each file's grove stops at 48
- * (`treesFor`), so no one file can run away with a patch; this bound only
- * catches a world gone wrong, where every grove gives up the same share.
- */
-const TREE_BOUND = 200_000;
 
 /** The world from the world service: opened, judged and laid out there, with the wait kept up to date. */
 function serviceWorld(service: WorldService, veil: Veil): Promise<WorldDocument> {
@@ -230,45 +219,6 @@ export async function codeWorld(veil: Veil): Promise<CodeLab> {
   return codeLab(document);
 }
 
-/**
- * Each file's patch as one grove, as its area's character grows it: in a
- * deep wood or a wet hollow every file's grove gathers on the side of its
- * patch nearest its area's heart, so an area's groves knit into one wood with
- * open ground at its rim; elsewhere each grove keeps to its patch's middle,
- * with clearings between. A longer file grows more trees, set a little
- * closer; a file that describes or configures grows none.
- */
-function patchesOf(world: CodeWorld): StandCode["patches"] {
-  const fallback = CHARACTERS["Groves and clearings"] as Character;
-  const areas = new Map(world.areas.map((a) => [a.path, a]));
-  const cellsOf = new Map<string, { x: number; z: number }[]>();
-  for (const c of world.cells) if (c.file !== null && c.file !== undefined) cellsOf.set(c.file, [...(cellsOf.get(c.file) ?? []), c]);
-  const planned = world.patches.map((p) => {
-    const area = areas.get(p.area);
-    const character = CHARACTERS[world.regions[area?.region ?? 0]?.character ?? ""] ?? fallback;
-    const preset = FLORA_PRESETS.findIndex((f) => f.name === p.vibe);
-    // The patch's cell nearest its area's heart, where a wood gathers.
-    const toward = area === undefined ? p : (cellsOf.get(p.path) ?? [p]).reduce((b, c) => (Math.hypot(c.x - area.x, c.z - area.z) < Math.hypot(b.x - area.x, b.z - area.z) ? c : b), p as { x: number; z: number });
-    const heart = character.knit ? { x: toward.x, z: toward.z } : { x: p.x, z: p.z };
-    const big = Math.min(1, Math.max(0, Math.log2(p.lines / 50) / 5));
-    return {
-      x: p.x,
-      z: p.z,
-      radius: p.radius,
-      preset,
-      trees: preset < 0 ? 0 : treesFor(p.lines, character),
-      heart,
-      closeness: character.closeness * (1.1 - 0.25 * big),
-      reach: p.radius * (character.knit ? 1.7 : 0.75),
-      stature: character.stature,
-      seed: seedOf(`grove:${p.path}`),
-    };
-  });
-  const wanted = planned.reduce((n, p) => n + p.trees, 0);
-  const share = Math.min(1, TREE_BOUND / Math.max(1, wanted));
-  return planned.map((p) => (p.trees === 0 ? p : { ...p, trees: Math.max(1, Math.round(p.trees * share)) }));
-}
-
 /** Everything the terrain lab needs to bake and furnish a world document. */
 export function codeLab({ model, world, judges, summary, judged }: WorldDocument): CodeLab {
   const fallback = Object.values(LANDS)[0]?.biome;
@@ -301,7 +251,7 @@ export function codeLab({ model, world, judges, summary, judged }: WorldDocument
     stand: {
       lots: houses.map(lot),
       landmarks: rises.map((t) => ({ landmark: landmarkIndex(t.look), lot: lot(t) })),
-      patches: patchesOf(world),
+      patches: world.patches.map((p) => ({ x: p.x, z: p.z, radius: p.radius })),
       regions: world.regions.map((r) => {
         const c = CHARACTERS[r.character];
         return { understory: c?.understory ?? {}, ...(c?.open === undefined ? {} : { open: c.open }) };
@@ -313,10 +263,17 @@ export function codeLab({ model, world, judges, summary, judged }: WorldDocument
       })(),
       symbols: (() => {
         const patchOf = new Map(world.patches.map((p, i) => [p.path, i]));
+        const areas = new Map(world.areas.map((a) => [a.path, a]));
+        // A tree grows as large as its area's ground lets trees grow: taller in a deep wood, smaller on a heath.
+        const statureOf = (file: string): number => {
+          const area = areas.get(world.patches[patchOf.get(file) ?? -1]?.area ?? "");
+          return CHARACTERS[world.regions[area?.region ?? 0]?.character ?? ""]?.stature ?? 1;
+        };
         return world.symbols.map((s) => {
           const form = FORMS[s.form] ?? (Object.values(FORMS)[0] as (typeof FORMS)[string]);
           const patch = patchOf.get(s.file);
-          return { x: s.x, z: s.z, rule: form.rule, variant: form.preset, radius: form.rule === "flowers" ? 0.8 : 1, scale: symbolScale(s.lines, form.rule, s.importance), vitality: s.vitality, ...(patch === undefined ? {} : { patch }) };
+          const scale = symbolScale(s.lines, form.rule, s.importance) * (form.rule === "trees" ? statureOf(s.file) : 1);
+          return { x: s.x, z: s.z, rule: form.rule, variant: form.preset, radius: form.rule === "flowers" ? 0.8 : 1, scale, vitality: s.vitality, ...(patch === undefined ? {} : { patch }) };
         });
       })(),
       // Trails joining parts of the code no other trail joins route first, then the most wanted.

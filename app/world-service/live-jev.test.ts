@@ -29,8 +29,8 @@ const engines: ChildProcess[] = [];
 beforeAll(async () => {
   execFileSync("cargo", ["build", "-p", "gaia-engine", "--quiet"], { cwd: REPO, env: { ...process.env, PATH: `${process.env.HOME}/.cargo/bin:${process.env.PATH}` }, stdio: "inherit" });
   scratch = mkdtempSync(join(tmpdir(), "gaia-live-jev-"));
-  // The stand-in refuses one request, as OpenRouter might.
-  standIn = await startOpenRouterStandIn({ refuse: ({ state }) => (state as { file?: { path?: string } }).file?.path === "README.md" });
+  // The stand-in refuses one request, as OpenRouter might: the world's.
+  standIn = await startOpenRouterStandIn({ refuse: ({ questions }) => "world" in questions });
 }, 900_000);
 
 afterAll(async () => {
@@ -125,7 +125,9 @@ describe("judging a codebase with Jev", () => {
     }
     const judging = first.about.filter((a) => !a.startsWith("understand:"));
     expect(new Set(judging).size).toBe(judging.length);
-    expect(first.about).toEqual(expect.arrayContaining(["world", "file:src/shape.ts", "file:README.md", "understand:src/shape.ts"]));
+    expect(first.about).toEqual(expect.arrayContaining(["world", "file:src/shape.ts", "understand:src/shape.ts"]));
+    // A file with nothing standing on its patch is never asked about.
+    expect(first.about).not.toContain("file:README.md");
     // The understanding pass asked every folder and file, and every definition stands by Jev's importance; the
     // document carries what it judged, every score from 0 to 1.
     const states = first.sent.map(({ body }) => body.state as Record<string, unknown>);
@@ -137,8 +139,8 @@ describe("judging a codebase with Jev", () => {
     expect(shape?.quality).toBeLessThanOrEqual(1);
     expect(Object.keys(shape?.concepts ?? {})).toContain("readability");
     // Jev judged everything but the request it refused, which the stand-in judged.
-    expect(first.document.judges["file:README.md"]).toBe("stand-in");
-    expect(Object.entries(first.document.judges).filter(([, j]) => j === "stand-in").map(([t]) => t)).toEqual(["file:README.md"]);
+    expect(first.document.judges["world:"]).toBe("stand-in");
+    expect(Object.entries(first.document.judges).filter(([, j]) => j === "stand-in").map(([t]) => t)).toEqual(["world:"]);
     expect(first.document.summary).toContain("1 request failed");
     const asking = first.shown.filter((o) => o.stage === "asking");
     expect(asking.at(-1)).toMatchObject({ total: first.sent.length, answered: first.sent.length, failed: 1, asking: [] });
@@ -148,13 +150,13 @@ describe("judging a codebase with Jev", () => {
     // Reopening on a new engine asks nothing it has answered, and never asks the person again.
     const second = await open(root, data, true);
     expect(second.asked).toHaveLength(0);
-    expect(second.about).toEqual(["file:README.md"]);
+    expect(second.about).toEqual(["world"]);
     expect(second.document.world).toEqual(first.document.world);
 
     // A file that changed is asked about again, with what its facts touch; untouched files are not.
     appendFileSync(join(root, "src/shape.ts"), `\n/** The area of a circle. */\nexport const circle = (r: number): number => Math.PI * r * r;\n`);
     const third = await open(root, data, true);
-    expect(third.about).toEqual(expect.arrayContaining(["file:src/shape.ts", "file:README.md"]));
+    expect(third.about).toEqual(expect.arrayContaining(["file:src/shape.ts", "world"]));
     expect(third.about).not.toContain("file:src/index.ts");
     expect(third.about).not.toContain("file:package.json");
   }, 60_000);
