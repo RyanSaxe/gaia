@@ -305,15 +305,22 @@ In every way the speeds are constant and a turn the keys make runs at one
 steady rate or happens out of sight:
 
 - **Face and go** (shown, asked for in round 21): a direction pressed
-  while still faces the person that way at once, ← a quarter left, → right
-  and ↓ about, as a cut or at the darkest of a 0.1 s blink, never a
-  rotation; held, they walk on forward that way, looking ahead, and to go
-  on ahead after stopping takes ↑. A second ← while still turns another
-  quarter, and ↑ with ← or → pressed together faces the diagonal between.
-  While walking, a tap of ← or → nudges the way 8°, paid out at a steady
-  60° a second, and a side key held after its nudge keeps turning at 30° a
-  second; ↓ turns them about. Shift hurries. The cut or blink, the nudge,
-  the held turn (0 for none) and the diagonal are tuned in the card.
+  while still turns the person to face it, ← a quarter left, → right and ↓
+  about; held, they walk on forward that way, looking ahead, and to go on
+  ahead after stopping takes ↑. ↑ with ← or → pressed together faces the
+  diagonal between. While walking, a tap of ← or → nudges the way 8°, paid
+  out at a steady 60° a second, a side key held after its nudge keeps
+  turning at 30° a second, and Shift hurries. How a big turn is made, from
+  still or with ↓, is its own choice (round 22's walking thread, where a
+  blink proved disorienting): by default the person walks into it, setting
+  off at once and curving round at the steady 60° a second until facing the
+  new way, while ↓ turns them about in place at that rate and then walks on
+  (walking a U would sweep some 8 m wide through whatever is beside them);
+  or a cut, facing the new way at once; or a quick turn, one rotation at a
+  constant speed, a quarter in 0.25 s; or held nudges only, where a side
+  key turns at the steady rate standing or walking for as long as it is
+  held and ↓ held turns toward about. The nudge, the held turn, the big
+  turns, the quick turn's time and the diagonal are tuned in the card.
 - **Walk and look**: W A S D or the arrows walk ahead, back (at
   65% of the pace) and step aside (90%), a pair walking the diagonal no
   faster than either alone, and a drag turns the view one to one. Shift
