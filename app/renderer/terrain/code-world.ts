@@ -13,7 +13,7 @@
 // each entity's building or landmark on its lot, and the trails between them.
 
 import { type Blueprint, type CodeFacts, type EntityFacts, type FileFacts, type SymbolFact, rand, seedOf } from "@gaia/schema";
-import { LANDMARK_PRESETS, TRAIL_PRESETS, WORLD_PRESETS } from "@gaia/realize";
+import { TRAIL_PRESETS, WORLD_PRESETS } from "@gaia/realize";
 import { type WorldSpec, outlinesOf } from "@gaia/terrain";
 import { type CodeWorld, type Judge, type Judgments, layoutWorld } from "@gaia/world";
 import type { ConsentPlan, JudgedThing, Opening, StartChoice, StartOffer, WorldDocument } from "../../world-service/protocol.ts";
@@ -28,6 +28,7 @@ import proving from "./fixtures/proving.json";
 import provingJudged from "./fixtures/proving-judged.json";
 import { CHARACTERS, FORMS, LANDS } from "./looks.ts";
 import type { Represented, SampleEntity } from "./samples.ts";
+import { composedName } from "./settlement.ts";
 import type { StandCode, StandLot } from "./stand.ts";
 
 /** The wait a world opens behind: it shows how opening goes, and asks before spending past the limit. */
@@ -47,10 +48,10 @@ export interface CodeLab {
   /** The terrain's regions: one per directory with land of its own. */
   readonly spec: WorldSpec;
   readonly files: ReadonlyMap<string, FileFacts>;
-  /** The entities buildings stand for, each with the building Jev chose, in the order the stand sites them. */
+  /** The entities buildings stand for, each with the building Jev composed, in the order the stand sites them. */
   readonly buildings: readonly SampleEntity[];
-  /** The entities landmarks stand for: which landmark preset and its facts. */
-  readonly landmarks: readonly { readonly preset: number; readonly facts: EntityFacts; readonly vitality: number }[];
+  /** The entities landmarks stand for: the landmark Jev composed for each and its facts, in the order the stand sites them. */
+  readonly landmarks: readonly { readonly path: string; readonly blueprint: Blueprint; readonly facts: EntityFacts; readonly vitality: number }[];
   /** The world preset whose light, sky and air the world takes. */
   readonly sky: (typeof WORLD_PRESETS)[number] | undefined;
   /** What the bake thread needs to stand this world's things, given the request's trail styles. */
@@ -239,18 +240,17 @@ export function codeLab({ facts, world, judges, summary, judged }: WorldDocument
   const lot = (t: CodeWorld["things"][number]): StandLot => ({ id: t.path, x: t.x, z: t.z, radius: t.lot * 0.6 });
   const houses = world.things.filter((t) => t.as === "building");
   const rises = world.things.filter((t) => t.as === "landmark");
-  const landmarkIndex = (name: string): number => Math.max(0, LANDMARK_PRESETS.findIndex((p) => p.name === name));
   return {
     world,
     spec,
     thing: (of) => judged[of],
     files: new Map(facts.files.map((f) => [f.path, f])),
-    buildings: houses.map((t) => ({ facts: entities.get(t.path) as EntityFacts, building: t.look, vitality: t.vitality })),
-    landmarks: rises.map((t) => ({ preset: landmarkIndex(t.look), facts: entities.get(t.path) as EntityFacts, vitality: t.vitality })),
+    buildings: houses.map((t) => ({ facts: entities.get(t.path) as EntityFacts, blueprint: t.blueprint, kindName: composedName(t.blueprint), vitality: t.vitality })),
+    landmarks: rises.map((t) => ({ path: t.path, blueprint: t.blueprint, facts: entities.get(t.path) as EntityFacts, vitality: t.vitality })),
     sky: WORLD_PRESETS.find((p) => p.name === world.world) ?? WORLD_PRESETS[0],
     stand: {
       lots: houses.map(lot),
-      landmarks: rises.map((t) => ({ landmark: landmarkIndex(t.look), lot: lot(t) })),
+      landmarks: rises.map((t, i) => ({ landmark: i, lot: lot(t) })),
       patches: world.patches.map((p) => ({ x: p.x, z: p.z, radius: p.radius })),
       regions: world.regions.map((r) => {
         const c = CHARACTERS[r.character];

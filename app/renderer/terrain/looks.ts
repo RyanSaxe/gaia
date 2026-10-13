@@ -3,8 +3,11 @@
 // are the lab's hand-filled presets, so a choice names a blueprint. Lands are
 // biome blueprints of their own: a landform with a ground cover.
 
-import { type Blueprint, type FilledSlot, type PrimitiveId, blueprintOf } from "@gaia/schema";
-import type { Look, Looks } from "@gaia/world";
+import { landmark, structure } from "@gaia/kinds";
+import { PRIMITIVES } from "@gaia/primitives";
+import { LANDMARK_PRESETS, STRUCTURE_PRESETS } from "@gaia/realize";
+import { type Blueprint, type FilledSlot, Library, type PrimitiveId, blueprintOf } from "@gaia/schema";
+import type { Composing, Look, Looks } from "@gaia/world";
 
 const look = (doc: string, ...suits: string[]): Look => ({ doc, suits });
 
@@ -166,7 +169,18 @@ export const CHARACTERS: Readonly<Record<string, Character>> = {
   },
 };
 
+/** A hand-filled building's or landmark's blueprint, by the name of its look: for a world written by hand, such as the proving ground. */
+export function presetBlueprint(as: "building" | "landmark", look: string): Blueprint {
+  const preset = (as === "building" ? STRUCTURE_PRESETS : LANDMARK_PRESETS).find((p) => p.name === look);
+  if (preset === undefined) throw new Error(`There is no ${as} called ${look}.`);
+  return preset.blueprint;
+}
+
+/** What Jev composes buildings and landmarks from, part by part: their kinds, and every primitive that could fill a part. */
+export const COMPOSING: Composing = { building: structure, landmark, lib: new Library(PRIMITIVES) };
+
 export const LOOKS: Looks = {
+  compose: COMPOSING,
   world: WORLDS,
   land: Object.fromEntries(Object.entries(LANDS).map(([k, l]) => [k, l.look])),
   building: BUILDINGS,

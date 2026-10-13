@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
-import type { CodeGraph, CodeFacts, DefNode, EntityFacts, FileFacts, JevClient, JevQuestion, JevResponse } from "@gaia/schema";
+import { landmark, structure } from "@gaia/kinds";
+import { PRIMITIVES } from "@gaia/primitives";
+import { type CodeGraph, type CodeFacts, type DefNode, type EntityFacts, type FileFacts, type JevClient, type JevQuestion, type JevRequest, type JevResponse, Library } from "@gaia/schema";
 import { cellUnder, placeAt } from "@gaia/terrain";
-import { type Judge, type Looks, journalOf, judgeWorld, keptJev, landOf, layoutWorld, planWorldRequests, requestKey, standInJev } from "@gaia/world";
+import { type Judge, type Looks, composeWorld, journalOf, judgeWorld, keptJev, landOf, layoutWorld, planWorldRequests, requestKey, standInJev, validate } from "@gaia/world";
 
 const file = (path: string, lines: number): FileFacts => ({
   path,
@@ -54,6 +56,7 @@ function facts(grow = 1): CodeFacts {
 
 const set = (...keys: string[]) => Object.fromEntries(keys.map((k, i) => [k, { doc: `Option ${k}.`, suits: i === 0 ? ["docs", "config"] : ["source", "package"] }]));
 const LOOKS: Looks = {
+  compose: { building: structure, landmark, lib: new Library(PRIMITIVES) },
   world: set("Dawn", "Dusk"),
   land: set("Moor", "Valley", "Hills"),
   building: set("Cottage", "Mill"),
@@ -64,7 +67,36 @@ const LOOKS: Looks = {
   character: set("Meadow land", "Wood"),
 };
 
+/** What Jev judged about a world, every building and landmark composed: what a world is laid out from. */
+const composed = async (m: CodeFacts, jev: JevClient) => composeWorld(m, LOOKS, jev, await judgeWorld(m, LOOKS, jev));
+
 describe("a world laid out from code", () => {
+  it("composes every building and landmark part by part, each part in its own words, never offering Jev a preset or the old model's signals", async () => {
+    const asked: JevRequest[] = [];
+    const standIn = standInJev(LOOKS);
+    const jev: JevClient = { ask: (r) => (asked.push(r), standIn.ask(r)) };
+    const judged = await composeWorld(facts(), LOOKS, jev, await judgeWorld(facts(), LOOKS, jev));
+    const presets = new Set([...Object.keys(LOOKS.building), ...Object.keys(LOOKS.landmark)]);
+    const composing = asked.filter((r) => Object.keys(r.questions).some((id) => /^[a-z]+\.(use|present)$/.test(id)) || (r.state as Record<string, unknown> | undefined)?.decided !== undefined);
+    expect(composing.length).toBeGreaterThan(0);
+    for (const r of asked) {
+      for (const q of Object.values(r.questions)) {
+        if (q.type === "choice") expect(Object.keys(q.criteria).filter((k) => presets.has(k) || presets.has(k.replace(/^[a-z]+:/, "")))).toEqual([]);
+      }
+    }
+    for (const r of composing) {
+      for (const q of Object.values(r.questions)) expect(q.instructions).not.toContain("Which form fits it best?");
+      expect(JSON.stringify(r.state)).not.toMatch(/"(tests|coveredByTests|failing|diagnostics|unusedExports|debtMarkers)"/);
+    }
+    expect(Object.keys(judged.things).sort()).toEqual(facts().entities.map((e) => e.path).sort());
+    for (const [path, t] of Object.entries(judged.things)) {
+      const k = t.as === "building" ? structure : landmark;
+      if (t.blueprint === undefined) throw new Error(`Nothing was composed for ${path}.`);
+      expect(t.blueprint.kind, path).toBe(k.id);
+      expect(validate(t.blueprint, k, LOOKS.compose.lib), path).toEqual([]);
+    }
+  });
+
   it("asks Jev only about the code's structure, with options it can answer, and the stand-in answers every question from them", async () => {
     const requests = planWorldRequests(facts(), LOOKS);
     // Every file with something standing on its patch: the seven that aren't config or docs.
@@ -82,13 +114,13 @@ describe("a world laid out from code", () => {
       }
     }
     // The same code gives the same world, answer for answer.
-    const a = layoutWorld(facts(), await judgeWorld(facts(), LOOKS, jev));
-    const b = layoutWorld(facts(), await judgeWorld(facts(), LOOKS, standInJev(LOOKS)));
+    const a = layoutWorld(facts(), await composed(facts(), jev));
+    const b = layoutWorld(facts(), await composed(facts(), standInJev(LOOKS)));
     expect(b).toEqual(a);
   });
 
   it("divides the land among directories and files by their code, with no gaps, nested as the tree nests, and what placeAt reads agrees", async () => {
-    const world = layoutWorld(facts(), await judgeWorld(facts(), LOOKS, standInJev(LOOKS)));
+    const world = layoutWorld(facts(), await composed(facts(), standInJev(LOOKS)));
     // Every point of the land is one file's patch or one entity's lot, in its directory's area.
     const half = world.size / 2;
     const counts = new Map<string, number>();
@@ -123,7 +155,7 @@ describe("a world laid out from code", () => {
     // Each region's land is its cells, so its cover changes exactly where its areas end.
     for (const r of world.regions) expect(r.sites.length).toBeGreaterThan(0);
     expect(world.regions.reduce((n, r) => n + r.sites.length, 0)).toBe(world.cells.length);
-    const bigger = layoutWorld(facts(30), await judgeWorld(facts(30), LOOKS, standInJev(LOOKS)));
+    const bigger = layoutWorld(facts(30), await composed(facts(30), standInJev(LOOKS)));
     expect(bigger.size).toBeGreaterThan(world.size);
   });
 
@@ -189,7 +221,7 @@ describe("a world laid out from code", () => {
         def("mul", 50, 90),
       ],
     };
-    const world = layoutWorld(facts(), await judgeWorld(facts(), LOOKS, standInJev(LOOKS)), graph);
+    const world = layoutWorld(facts(), await composed(facts(), standInJev(LOOKS)), graph);
     const patch = (path: string) => world.patches.find((p) => p.path === path)?.vitality;
     expect(patch(math)).toBe(0.3);
     expect(patch("packages/core/src/shapes.ts")).toBe(0.4);
@@ -199,8 +231,10 @@ describe("a world laid out from code", () => {
   });
 
   it("knows the land before anything is judged: however Jev judges, every area, patch, cell and lot is the same", async () => {
-    const judged = await judgeWorld(facts(), LOOKS, standInJev(LOOKS));
-    const landmarks = { ...judged, things: Object.fromEntries(Object.keys(judged.things).map((path) => [path, { as: "landmark" as const, look: "" }])) };
+    const judged = await composed(facts(), standInJev(LOOKS));
+    const blueprint = Object.values(judged.things)[0]?.blueprint;
+    if (blueprint === undefined) throw new Error("Nothing stands.");
+    const landmarks = { ...judged, things: Object.fromEntries(Object.keys(judged.things).map((path) => [path, { as: "landmark" as const, blueprint }])) };
     const land = landOf(facts());
     for (const world of [layoutWorld(facts(), judged), layoutWorld(facts(), landmarks)]) {
       expect(world.size).toBe(land.size);
@@ -212,10 +246,10 @@ describe("a world laid out from code", () => {
   });
 
   it("moves little when a little code changes", async () => {
-    const before = layoutWorld(facts(), await judgeWorld(facts(), LOOKS, standInJev(LOOKS)));
+    const before = layoutWorld(facts(), await composed(facts(), standInJev(LOOKS)));
     const grown = facts();
     const changed: CodeFacts = { ...grown, files: grown.files.map((f) => (f.path === "packages/app/src/ui/menu.ts" ? { ...f, lines: f.lines + 12 } : f)) };
-    const after = layoutWorld(changed, await judgeWorld(changed, LOOKS, standInJev(LOOKS)));
+    const after = layoutWorld(changed, await composed(changed, standInJev(LOOKS)));
     const moved = before.patches.map((p) => {
       const q = after.patches.find((o) => o.path === p.path)!;
       return Math.hypot(p.x - q.x, p.z - q.z);
@@ -227,7 +261,7 @@ describe("a world laid out from code", () => {
   });
 
   it("lets Jev choose each symbol's form and each area's water and character, and chooses trails that join every connected part first", async () => {
-    const judged = await judgeWorld(facts(), LOOKS, standInJev(LOOKS));
+    const judged = await composed(facts(), standInJev(LOOKS));
     expect(Object.keys(judged.forms)).toContain("packages/core/src/math.ts");
     // The default design asks each symbol that may stand on its own: `#x` is math.ts's function x.
     expect(["Stone", "Bush"]).toContain(judged.forms["packages/core/src/math.ts"]!["#x"]);

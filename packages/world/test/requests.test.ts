@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import type { CodeFacts, FileFacts, JevAnswer, JevClient, JevQuestion, JevRequest } from "@gaia/schema";
+import { landmark, structure } from "@gaia/kinds";
+import { PRIMITIVES } from "@gaia/primitives";
+import { type CodeFacts, type FileFacts, type JevAnswer, type JevClient, type JevQuestion, type JevRequest, Library } from "@gaia/schema";
 import {
   DESIGNS,
   type DesignName,
@@ -62,6 +64,7 @@ function facts(): CodeFacts {
 
 const set = (...keys: string[]) => Object.fromEntries(keys.map((k, i) => [k, { doc: `Option ${k}.`, suits: i === 0 ? ["docs"] : ["source"] }]));
 const LOOKS: Looks = {
+  compose: { building: structure, landmark, lib: new Library(PRIMITIVES) },
   world: set("Dawn", "Dusk"),
   land: set("Moor", "Valley"),
   building: set("Cottage", "Mill"),
