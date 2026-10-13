@@ -85,9 +85,11 @@ export interface Steering {
   /** Whether a double tap of ↑ has the person hurrying while ↑ is held. */
   readonly hurrying: boolean;
   /** With `face`: a turn being decided, from where the person faced, at `decide`, by every key pressed since; nudges still to pay out, radians; and whether the keys walk them. */
-  readonly pending: { readonly from: number; readonly decide: number; readonly keys: ReadonlySet<WalkKey> } | null;
+  readonly pending: { readonly at: number; readonly from: number; readonly decide: number; readonly keys: ReadonlySet<WalkKey> } | null;
   readonly owed: number;
   readonly going: boolean;
+  /** With `face`: when a key held after its turn sets the person walking, so a tap only turns them. */
+  readonly goAt: number | null;
 }
 
 /** One step: the keys' hold after it, the facing, the walk as shares of the pace ahead and to the left of the view, whether hurrying, and how dark a blink has the view, 0 to 1. */
@@ -114,11 +116,13 @@ const isSide = (key: WalkKey): key is "left" | "right" => key === "left" || key 
 const sign = (key: "left" | "right"): number => (key === "left" ? 1 : -1);
 
 export function steering(scheme: SteerScheme): Steering {
-  return { scheme, down: new Map(), tapped: null, blink: null, snapped: 0, hurrying: false, pending: null, owed: 0, going: false };
+  return { scheme, down: new Map(), tapped: null, blink: null, snapped: 0, hurrying: false, pending: null, owed: 0, going: false, goAt: null };
 }
 
 /** Keys pressed this close together, from still, are one chord, as ↑ and ← for the diagonal, seconds. */
 const CHORD = 0.05;
+/** A key that turned the person sets them walking once held this long from its press, seconds, so a tap only turns them. */
+const GO = 0.15;
 const DIRECTIONS: readonly WalkKey[] = ["ahead", "left", "right", "back"];
 const directionDown = (down: ReadonlyMap<WalkKey, Held>): boolean => DIRECTIONS.some((k) => down.has(k));
 
@@ -130,10 +134,18 @@ function facing(keys: ReadonlySet<WalkKey>, diagonal: boolean): number {
   return left === 0 ? 0 : left * (ahead && diagonal ? Math.PI / 4 : Math.PI / 2);
 }
 
-/** A turn to face a chord's way from `yaw`, made at once or at the darkest of a blink, decided once the chord has had its moment. */
+/** A turn to face a chord's way from `yaw`, decided once the chord has had its moment; it blinks only where it turns. */
 function turnFrom(s: Steering, t: number, yaw: number, keys: ReadonlySet<WalkKey>, chord: boolean): Steering {
-  const decide = t + Math.max(chord ? CHORD : 0, s.scheme.blink / 2);
-  return { ...s, pending: { from: yaw, decide, keys }, blink: s.scheme.blink > 0 ? { at: decide - s.scheme.blink / 2, to: yaw, turned: false } : null };
+  const decide = t + (chord ? CHORD : 0);
+  return blinkFor({ ...s, pending: { at: t, from: yaw, decide, keys } }, t);
+}
+
+/** Where the turn being decided turns at all and has no blink yet, one starts now, its darkest when the turn is made, which waits for it. */
+function blinkFor(s: Steering, t: number): Steering {
+  const { pending, scheme } = s;
+  if (pending === null || s.blink !== null || scheme.blink <= 0 || facing(pending.keys, scheme.diagonal) === 0) return s;
+  const decide = Math.max(pending.decide, t + scheme.blink / 2);
+  return { ...s, pending: { ...pending, decide }, blink: { at: decide - scheme.blink / 2, to: pending.from, turned: false } };
 }
 
 /** Face and go: a press faces the person its way from still, and while walking nudges it or turns them about. */
@@ -142,7 +154,7 @@ function facePress(s: Steering, key: WalkKey, t: number, yaw: number): Steering 
   const next = { ...s, down };
   if (key === "shift") return next;
   // A key joining a turn still being decided, as ← just after ↑, makes one chord with it.
-  if (s.pending !== null) return { ...next, pending: { ...s.pending, keys: new Set([...s.pending.keys, key]) } };
+  if (s.pending !== null) return blinkFor({ ...next, pending: { ...s.pending, keys: new Set([...s.pending.keys, key]) } }, t);
   if (!s.going) return turnFrom(next, t, yaw, new Set([key]), s.scheme.diagonal);
   if (isSide(key)) return { ...next, owed: s.owed + sign(key) * s.scheme.nudge * DEG };
   if (key === "back") return turnFrom(next, t, yaw, new Set(["back"]), false);
@@ -179,7 +191,7 @@ export function steerRelease(s: Steering, key: WalkKey | undefined, t: number): 
   if (held === undefined) return s;
   const down = new Map([...s.down].filter(([k]) => k !== key));
   // Face and go: letting every direction go stops the walk; a turn still being decided is made all the same.
-  if (s.scheme.walk === "face") return { ...s, down, going: s.going && directionDown(down) };
+  if (s.scheme.walk === "face") return { ...s, down, going: s.going && directionDown(down), goAt: directionDown(down) ? s.goAt : null };
   const tapped = t - held.at < TAP ? { key, at: t, yaw: held.yaw } : s.tapped;
   return { ...s, down, tapped, hurrying: key === "ahead" ? false : s.hurrying };
 }
@@ -195,9 +207,13 @@ function faceStep(s: Steering, t: number, yaw: number, dt: number): Steered {
   let steering = s;
   let y = yaw;
   if (s.pending !== null && t + dt >= s.pending.decide) {
-    y = s.pending.from + facing(s.pending.keys, sc.diagonal);
-    steering = { ...steering, pending: null, going: steering.going || directionDown(s.down) };
+    const turn = facing(s.pending.keys, sc.diagonal);
+    y = s.pending.from + turn;
+    // ↑ alone walks at once; a key that turned the person walks them on only once it is held past a tap.
+    const walks = directionDown(s.down);
+    steering = turn === 0 || steering.going ? { ...steering, pending: null, going: steering.going || walks } : { ...steering, pending: null, goAt: walks ? s.pending.at + GO : null };
   }
+  if (steering.goAt !== null && t + dt >= steering.goAt) steering = { ...steering, going: directionDown(s.down), goAt: null };
   let dim = 0;
   if (s.blink !== null) {
     const k = (t + dt - s.blink.at) / sc.blink;
