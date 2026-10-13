@@ -1,4 +1,4 @@
-// Judges Gaia's snapshot world (the facts of
+// Judges and composes Gaia's snapshot world (the facts of
 // `app/renderer/terrain/fixtures/gaia-graph.json`, `factsOf`) once with Jev, the way
 // the app does, and keeps the answers by request key
 // in `fixtures/gaia-jev.json`, the lab's own copy of what the app keeps per
@@ -21,7 +21,7 @@ import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs
 import { resolve } from "node:path";
 import { createInterface } from "node:readline";
 import type { CodeGraph, EngineClient, JevClient, JevResponse } from "@gaia/schema";
-import { DEFAULT_DESIGN, DESIGNS, type DesignName, factsOf, judgeWorld, keptJev, planWorldRequests, requestKey, standInJev } from "@gaia/world";
+import { DEFAULT_DESIGN, DESIGNS, type DesignName, composeWorld, factsOf, judgeWorld, keptJev, planWorldRequests, requestKey, standInJev } from "@gaia/world";
 import { createEngineClient } from "../app/world-service/engine-client.ts";
 import { engineJev } from "../app/world-service/jev.ts";
 import { LOOKS } from "../app/renderer/terrain/looks.ts";
@@ -105,7 +105,7 @@ const failures: string[] = [];
 const asked = new Set<string>();
 const started = Date.now();
 try {
-  await judgeWorld(facts, LOOKS, keptJev(guarded, standInJev(LOOKS), {
+  const jev = keptJev(guarded, standInJev(LOOKS), {
     stored: new Map(Object.entries(kept.answers)),
     keep: (key, response) => {
       kept.answers[key] = response;
@@ -114,7 +114,10 @@ try {
       asked.add(key);
       if (failure !== undefined && !failure.startsWith("over --")) failures.push(failure);
     },
-  }), { design, graph });
+  });
+  // Then every building, landmark, the sky, each land and each trail is composed on those judgments, as the app does
+  // once the code is understood, so the lab keeps Jev's compositions too.
+  await composeWorld(facts, LOOKS, jev, await judgeWorld(facts, LOOKS, jev, { design, graph }), { graph, concurrency: estimate.concurrency });
 } finally {
   engine?.kill();
   await closeStandIn?.();
