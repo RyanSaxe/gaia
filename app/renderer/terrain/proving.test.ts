@@ -47,7 +47,8 @@ describe("the proving ground", () => {
     expect(used(TRAILS, judged.trails.map((t) => t.look))).toEqual([]);
     for (const [as, looks] of [["building", BUILDINGS], ["landmark", LANDMARKS]] as const) {
       for (const look of Object.keys(looks)) {
-        const healths = doc.world.things.filter((t) => t.as === as && t.look === look).map((t) => vitalityOf.get(t.path) ?? 1);
+        const blueprint = (as === "building" ? STRUCTURE_PRESETS : LANDMARK_PRESETS).find((p) => p.name === look)?.blueprint.id;
+        const healths = doc.world.things.filter((t) => t.as === as && t.blueprint.id === blueprint).map((t) => vitalityOf.get(t.path) ?? 1);
         expect(healths.some((v) => v >= 0.85), `a thriving ${look}`).toBe(true);
         expect(healths.some((v) => v >= 0.35 && v < 0.85), `a tired ${look}`).toBe(true);
         expect(healths.some((v) => v < 0.12), `a ${look} in ruin`).toBe(true);
@@ -122,13 +123,14 @@ describe("the proving ground", () => {
       const understory = (id: string, groups: number): ScatterRule => ({ id, variants: [{ radius: 0.8, weight: 1 }], groups, members: [1, 4], spread: 5, mix: "member", scale: [0.8, 1.2], maxSlope: 22, waterClearance: 1.5, ground: "lowest", sink: 0.05 });
       stood = standWorld(terrain, {
         buildings: code.buildings.map((b) => {
-          const preset = STRUCTURE_PRESETS.find((p) => p.name === b.building);
-          if (preset === undefined) throw new Error(`No building ${b.building}.`);
           const facts = Object.fromEntries(Object.entries(structure.facts).map(([k, bind]) => [k, bind(b.facts)]));
-          const built = realize(preset.blueprint, structure, buildingLib, { seed: seedOf(`terrain-lab/${b.facts.path}`), facts });
+          const built = realize(b.blueprint, structure, buildingLib, { seed: seedOf(`terrain-lab/${b.facts.path}`), facts });
           return { name: b.facts.name, plan: built.slots.get("footprint")?.output as BuildingPlan, beside: extentOf(built.slots.get("feature")?.output as Built | undefined) };
         }),
-        landmarks: LANDMARK_PRESETS.map((p, i) => ({ name: p.name, base: landmarkBase(realize(p.blueprint, landmark, landmarkLib, { seed: seedOf(`terrain-lab/landmark-${i}`), facts: { scale: 1 } })) })),
+        landmarks: code.landmarks.map((l) => ({
+          name: l.path,
+          base: landmarkBase(realize(l.blueprint, landmark, landmarkLib, { seed: seedOf(`terrain-lab/landmark/${l.path}`), facts: Object.fromEntries(Object.entries(landmark.facts).map(([k, bind]) => [k, bind(l.facts)])) })),
+        })),
         trailStyles: [styles[0] as RouteSpec, styles[1] as RouteSpec, styles[2] as RouteSpec],
         trees: { count: 0, seed: 9, presets: FLORA_PRESETS.length, builds: 1, bases: FLORA_PRESETS.map(() => 0.5), crowns: FLORA_PRESETS.map(() => 4) },
         understory: { rules: [understory("rocks", 3), understory("shrubs", 5), understory("flowers", 6)], seed: 5 },

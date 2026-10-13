@@ -8,7 +8,7 @@
 // on its own thread (layout-worker.ts) while the wait draws.
 
 import type { JevResponse } from "@gaia/schema";
-import { type CodeWorld, type Judge, judgeWorld, judgedThing, keptJev, layoutWorld, planWorldRequests, requestKey, standInJev, thingsOf } from "@gaia/world";
+import { type CodeWorld, type Judge, composeWorld, judgeWorld, judgedThing, keptJev, layoutWorld, planWorldRequests, requestKey, standInJev, thingsOf } from "@gaia/world";
 import { snapshotGraphOf, snapshotModel } from "./snapshot-model.ts";
 import kept from "./fixtures/gaia-jev.json";
 import { LOOKS } from "./looks.ts";
@@ -24,7 +24,7 @@ export async function laySnapshot(judge: SnapshotJudge, why: string): Promise<{ 
   const jev = keptJev(null, standInJev(LOOKS), { stored, keep: () => undefined, settled: (key, j) => byKey.set(key, j) });
   const graph = snapshotGraphOf();
   // Each request names the definitions the graph stands, so the answers kept for them meet the layout's.
-  const world = layoutWorld(model, await judgeWorld(model, LOOKS, jev, { graph }), graph);
+  const world = layoutWorld(model, await composeWorld(model, LOOKS, jev, await judgeWorld(model, LOOKS, jev, { graph }), { graph }), graph);
   const judges = Object.fromEntries(planWorldRequests(model, LOOKS, { graph }).flatMap((p) => thingsOf(p).map((t) => [judgedThing(t), byKey.get(requestKey(p.request)) ?? "stand-in"] as const)));
   const byJev = Object.values(judges).filter((j) => j === "jev").length;
   const summary = byJev === 0 ? `Every thing judged by the stand-in (${why})` : `${byJev} of ${Object.keys(judges).length} things judged by Jev, from answers kept for this snapshot (${why})`;

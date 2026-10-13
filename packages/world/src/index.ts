@@ -1,4 +1,5 @@
 export * from "./planner.ts";
+export * from "./compose.ts";
 export * from "./answers.ts";
 export * from "./vitality.ts";
 export * from "./context.ts";

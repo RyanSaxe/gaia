@@ -33,7 +33,7 @@ import { dirname, relative, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import type { CodeModel, EntityFacts, EntityForm, FileFacts, SymbolFact } from "@gaia/schema";
 import { type Judgments, layoutWorld } from "@gaia/world";
-import { BUILDINGS, CHARACTERS, FORMS, LANDMARKS, LANDS, TRAILS, WATERS } from "../app/renderer/terrain/looks.ts";
+import { BUILDINGS, CHARACTERS, FORMS, LANDMARKS, LANDS, TRAILS, WATERS, presetBlueprint } from "../app/renderer/terrain/looks.ts";
 import { provingCode } from "./proving-code.ts";
 
 /** How a file or an entity fares, from thriving to ruin; `decayed` is ruin with no tests at all, so it drags its entity down less. */
@@ -407,7 +407,8 @@ const judged: Judgments = {
   lands: Object.fromEntries(PLAN.flatMap((d) => (d.land === undefined ? [] : [[d.path, d.land[0]]]))),
   waters: Object.fromEntries(PLAN.flatMap((d) => (d.land === undefined ? [] : [[d.path, d.land[1]]]))),
   characters: Object.fromEntries(PLAN.flatMap((d) => (d.land === undefined ? [] : [[d.path, d.land[2]]]))),
-  things: Object.fromEntries(PLAN.flatMap((d) => (d.entity === undefined ? [] : [[d.path, { as: d.entity.as, look: d.entity.look }]]))),
+  // The proving ground is written by hand, not judged: each thing is the hand-filled building or landmark its plan names.
+  things: Object.fromEntries(PLAN.flatMap((d) => (d.entity === undefined ? [] : [[d.path, { as: d.entity.as, blueprint: presetBlueprint(d.entity.as, d.entity.look) }]]))),
   trails: TRAIL_PLAN.map(([from, to, look, want]) => ({ from, to, want, look })),
   forms,
   // Every file's quality by its health, and every entity's its own files' pooled by their lines.
@@ -428,7 +429,7 @@ const missing = (what: string, options: Readonly<Record<string, unknown>>, used:
   const seen = new Set(used);
   return Object.keys(options).filter((k) => !seen.has(k)).map((k) => `${what} "${k}"`);
 };
-const things = Object.values(judged.things);
+const things = PLAN.flatMap((d) => (d.entity === undefined ? [] : [d.entity]));
 const gaps = [
   ...missing("land", LANDS, Object.values(judged.lands)),
   ...missing("water", WATERS, Object.values(judged.waters)),

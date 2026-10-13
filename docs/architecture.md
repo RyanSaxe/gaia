@@ -205,14 +205,29 @@ own: the option's words are the reason, stored with the choice), what that
 land's ground is like (its character: its undergrowth, how its open ground
 lies and how large its trees grow, again with its reason), what each
 definition stands as (a tree, a stone, a bush or flowers, each asked on its
-own), whether each entity is a building or a landmark and which, and how
-much it would walk each dependency. `planWorldRequests` builds one request
+own), whether each entity is a building or a landmark, and how much it would
+walk each dependency. Jev never names a building or landmark preset: once the
+understanding pass has judged the code, `composeWorld` composes each one part
+by part through the planner (`composeThings` in
+`packages/world/src/compose.ts`), its structure first and then each stage's
+details, one request a wave, each part asked in its own instruction from its
+kind's slot (`Slot.ask`). Each composing request carries what the new engine
+established about the entity (`composingState`): its importance and quality
+concepts from the understanding pass, and its files, lines, languages,
+folders, history and most important definitions from the graph, never the
+old code model's signals. The blueprint it makes is the thing's
+(`CodeThing.blueprint`), and the renderer realizes each thing from its own;
+the world's composing vocabulary is `Looks.compose` (`COMPOSING` in
+`app/renderer/terrain/looks.ts`). A world written by hand, the proving ground,
+names its buildings and landmarks by preset instead (`presetBlueprint`). `planWorldRequests` builds one request
 per thing, from facts and doc comments only, with options shuffled by the
 thing's path, in the shape a design chooses ("What a request carries" under
 Jev). Given Engine's graph it asks about the definitions the layout will
 stand, so each answer meets its definition; a file's definitions go over as
 many requests as fit Jev's window, 24 to a request.
-`judgeWorld` asks them through any `JevClient`, eight at a time. A world
+`judgeWorld` asks them through any `JevClient`, eight at a time, and the
+opening as many at once as the engine sends Jev; composing follows the
+understanding pass. A world
 shows every dependency Jev would walk as a trail: first those that join
 parts of the code no other chosen trail joins, then the most wanted; the
 joining ones route first, and the terrain walks them all over one network

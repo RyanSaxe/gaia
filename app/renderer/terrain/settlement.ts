@@ -9,7 +9,7 @@
 import { type Blueprint, type BuildingPlan, type Built, Library, type Palette, seedOf } from "@gaia/schema";
 import { FLORA_PRIMITIVES, STRUCTURE_PRIMITIVES } from "@gaia/primitives";
 import { structure } from "@gaia/kinds";
-import { STRUCTURE_PRESETS, mergeParts } from "@gaia/realize";
+import { mergeParts } from "@gaia/realize";
 import { type PlantView, type SceneLight, createPlant } from "@gaia/render";
 import type { BuildingSite, Capsule, Extent } from "@gaia/terrain";
 import type * as THREE from "three";
@@ -75,17 +75,27 @@ export interface Settlement {
 
 const lib = new Library([...STRUCTURE_PRIMITIVES, ...FLORA_PRIMITIVES]);
 
-const presetOf = (entity: SampleEntity): (typeof STRUCTURE_PRESETS)[number] => {
-  const preset = STRUCTURE_PRESETS.find((p) => p.name === entity.building);
-  if (preset === undefined) throw new Error(`There is no building called ${entity.building}.`);
-  return preset;
-};
+/** A part's primitive in words: `timber-frame@1` is "timber frame". */
+const wordsOf = (id: string): string => id.replace(/@\d+$/, "").replace(/-/g, " ");
+
+/**
+ * What a composed thing is called, from the parts Jev chose: a building by its walls and its feature ("Fieldstone
+ * house with a tower"), a landmark by its form ("Lookout tower").
+ */
+export function composedName(bp: Blueprint): string {
+  const named = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
+  const form = bp.slots.form?.use;
+  if (form !== undefined) return named(wordsOf(form));
+  const walls = bp.slots.body?.use;
+  const feature = bp.slots.feature?.use;
+  return named(`${walls === undefined ? "" : `${wordsOf(walls)} `}house${feature === undefined ? "" : ` with a ${wordsOf(feature)}`}`);
+}
 
 /** Each entity's building, for making ahead. */
 export const settlementBuilds = (entities: readonly SampleEntity[]): BuildAsk[] =>
   entities.map((entity) => ({
     kind: "structure",
-    blueprint: presetOf(entity).blueprint,
+    blueprint: entity.blueprint,
     seed: seedOf(`terrain-lab/${entity.facts.path}`),
     facts: Object.fromEntries(Object.entries(structure.facts).map(([k, bind]) => [k, bind(entity.facts)])),
   }));
@@ -94,7 +104,6 @@ export const settlementBuilds = (entities: readonly SampleEntity[]): BuildAsk[] 
 export function createSettlement(light: SceneLight, entities: readonly SampleEntity[] = SAMPLE_ENTITIES): Settlement {
   const asks = settlementBuilds(entities);
   const buildings: Building[] = entities.map((entity, i) => {
-    const preset = presetOf(entity);
     const ask = asks[i] as BuildAsk;
     const built = made(ask, lib);
     const view = createPlant({ ...built, parts: mergeParts(built.parts) }, light);
@@ -103,13 +112,13 @@ export function createSettlement(light: SceneLight, entities: readonly SampleEnt
     return {
       entity,
       represented,
-      kindName: preset.name,
+      kindName: entity.kindName,
       view,
       height: view.height,
       radius: view.radius,
       ask,
       vitality: represented.vitality,
-      blueprint: preset.blueprint,
+      blueprint: entity.blueprint,
       palette: built.palette,
       plan: built.slots.get("footprint")?.output as BuildingPlan,
       beside: extentOf(built.slots.get("feature")?.output as Built | undefined),

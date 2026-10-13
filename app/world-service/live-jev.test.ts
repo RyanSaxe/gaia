@@ -80,6 +80,9 @@ async function open(root: string, data: string, approve: boolean) {
     // Understanding's requests name their file or directory by its path at the top of the state.
     if (typeof s.path === "string") return `understand:${s.path}`;
     const { file, entity, directory } = s as Record<string, { path?: string } | undefined>;
+    // Composing a building or landmark asks its parts, then each stage's details: one request a wave, each its own.
+    const ids = Object.keys(body.questions as object);
+    if (entity !== undefined && (s.decided !== undefined || ids.some((id) => /^[a-z]+\.(use|present)$/.test(id)))) return `compose:${entity.path}:${ids.sort().join(",")}`;
     return file ? `file:${file.path}` : entity ? `entity:${entity.path}` : directory ? `area:${directory.path}` : "world";
   });
   return { document, asked, shown, sent, about };
@@ -143,7 +146,10 @@ describe("judging a codebase with Jev", () => {
     expect(Object.entries(first.document.judges).filter(([, j]) => j === "stand-in").map(([t]) => t)).toEqual(["world:"]);
     expect(first.document.summary).toContain("1 request failed");
     const asking = first.shown.filter((o) => o.stage === "asking");
-    expect(asking.at(-1)).toMatchObject({ total: first.sent.length, answered: first.sent.length, failed: 1, asking: [] });
+    // Composing follows from the answers, so it is never planned or counted ahead; every building and landmark was composed.
+    const composed = first.about.filter((a) => a.startsWith("compose:")).length;
+    expect(composed).toBeGreaterThan(0);
+    expect(asking.at(-1)).toMatchObject({ total: first.sent.length - composed, answered: first.sent.length - composed, failed: 1, asking: [] });
     // While a question is out, its area is named as being worked on, for the wait to show.
     expect(asking.some((o) => o.asking.length > 0)).toBe(true);
 
