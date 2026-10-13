@@ -262,7 +262,9 @@ void main() {
 
   vec3 albedo = paperAt(p, px);
   if (uHasPicture > 0.5) {
-    vec2 q = (vec2(vUv.x, vUv.y) - uInset) / (1.0 - 2.0 * uInset);
+    // Its margin closes as it rises, so it reaches the wait's sheet as that sheet's picture, edge to edge.
+    float margin = uInset * (1.0 - uFlat);
+    vec2 q = (vec2(vUv.x, vUv.y) - margin) / (1.0 - 2.0 * margin);
     vec2 inside = smoothstep(vec2(0.0), vec2(0.004), q) * smoothstep(vec2(0.0), vec2(0.004), 1.0 - q);
     albedo *= mix(vec3(1.0), texture2D(uPicture, q).rgb, 0.97 * inside.x * inside.y);
   }

@@ -1,13 +1,15 @@
 // The map paints itself: the wait is the field map's own sheet, painted as
 // the world is opened (docs/design-system.md, "The field sheet"), on its
-// paper, with its torn edge and, after dark, its lantern. As soon as the land
-// is divided, a pen draws every area's border. Each file's health is washed
-// in once it is settled, whenever that is, spreading over the ground around
-// it as the map spreads it (`settling.ts`), so the sheet never shows a color
-// it later changes. Each area's name is lettered in the map's survey capitals
-// once its last answer about its looks is in, before its wash if that comes
-// later. While the world bakes, the pen draws each building's and landmark's
-// mark at its laid-out place, one by one. Once the
+// paper, with its torn edge and, after dark, its lantern. A world chosen on
+// the start rises into it as its picture, which stays as the sheet's paint
+// until the world's own covers it. As soon as the land is divided, a pen
+// draws every area's border. Each file's health is washed in once it is
+// settled, whenever that is, spreading over the ground around it as the map
+// spreads it (`settling.ts`), so the sheet never shows a color it later
+// changes. Each area's name is lettered in the map's survey capitals once its
+// last answer about its looks is in, before its wash if that comes later.
+// While the world bakes, the pen draws each building's and landmark's mark at
+// its laid-out place, one by one. Once the
 // world stands, its relief is drawn in with the same hand: the hills, ponds,
 // contours and trees wash in over each area's own ground, from the middle
 // outward as the pen went over the borders, while the pen draws each river
@@ -181,6 +183,26 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
   // Until the land comes, the sheet is the paper Gaia's own land would be painted on.
   layPaper(560);
 
+  // ---------- a map chosen on the start ----------
+  /** The chosen world's picture, lying on the sheet as its paint once laid, and the land shape it is in. */
+  let chosen: { readonly el: HTMLImageElement; readonly aspect: number } | null = null;
+  function choose(picture: string, aspect: number): () => void {
+    chosen?.el.remove();
+    // The sheet takes the chosen map's shape before anything comes in, so the map rises into a sheet of its own shape.
+    sheetEl.style.setProperty("--aspect", Math.max(1, aspect).toFixed(4));
+    const el = document.createElement("img");
+    el.className = "wait-chosen";
+    el.alt = "";
+    el.hidden = true;
+    el.src = picture;
+    // As wide as the square the sheet is drawn on, and as deep as the land and its margin, in its middle.
+    el.style.top = `${((1 - 1 / Math.max(1, aspect)) * 50).toFixed(3)}%`;
+    el.style.height = `${(100 / Math.max(1, aspect)).toFixed(3)}%`;
+    ground.after(el);
+    chosen = { el, aspect };
+    return () => (el.hidden = false);
+  }
+
   let land: Land | null = null;
   /** What came before the land was ready to take it. */
   const namesWaiting = new Set<string>();
@@ -197,7 +219,14 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
   function divide(size: number, aspect: number | undefined, outlines: readonly Outline[], patches: readonly FilePatch[], lots: readonly LotPlace[]): void {
     const reach = size / 2 + MARGIN;
     // The sheet opened in the shape the land was to have; a land of another shape reshapes it.
-    sheetEl.style.setProperty("--aspect", Math.max(1, reach / (size / 2 / (aspect ?? 1) + MARGIN)).toFixed(4));
+    const shape = Math.max(1, reach / (size / 2 / (aspect ?? 1) + MARGIN));
+    sheetEl.style.setProperty("--aspect", shape.toFixed(4));
+    // The chosen map stays as the sheet's paint, the world's own paint laid over it as it comes, unless the land has
+    // grown into another shape since it was pictured.
+    if (chosen !== null && Math.abs(chosen.aspect - shape) > 0.01) {
+      chosen.el.classList.add("gone");
+      chosen = null;
+    }
     layPaper(reach);
     ink.setAttribute("viewBox", `${-reach} ${-reach} ${reach * 2} ${reach * 2}`);
     let rim = "";
@@ -764,6 +793,7 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
         for (const path of land?.names?.keys() ?? []) letter(path);
       });
     },
+    chosen: choose,
     marks: drawMarks,
     stood: relief,
     night(n) {

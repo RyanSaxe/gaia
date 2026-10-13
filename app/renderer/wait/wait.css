@@ -53,6 +53,9 @@
 .wait-ground, .wait-hedges, .wait-ink { position: absolute; inset: 0; width: 100%; height: 100%; }
 /* Each change of health comes in over what was there, paper and all; then the relief, over each area's own ground. */
 .wait-layers { position: absolute; inset: 0; }
+/* A map chosen on the start: its picture lies on the sheet as its paint, under everything the wait paints. */
+.wait-chosen { position: absolute; left: 0; width: 100%; pointer-events: none; transition: var(--wash-in); }
+.wait-chosen.gone { opacity: 0; }
 .wait-layer { position: absolute; opacity: 0; transition: var(--wash-in); }
 .wait-layer.shown { opacity: 1; }
 /* The pen draws each border; the hedgerow's soft band under it comes in as the pen goes. */

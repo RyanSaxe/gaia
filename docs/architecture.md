@@ -301,7 +301,8 @@ engine's one request loop, so other requests wait behind it. The copy then
 opens like any folder, and main names the window after the world
 (`world.opened`) so a reload reopens it. Once a world the service opened
 stands and the field map has painted its paper, the page paints the whole
-map once more with `drawLand`, 800 pixels a side, a tile at a time in its
+map once more with `drawLand`, 800 pixels wide and as deep as its land and
+margin, so the wait's sheet can take its shape, a tile at a time in its
 idle time, and a worker reads it back and encodes it as WebP (about 80 to
 110 KB; `app/renderer/immersive/picture.ts`). The page sends it as
 `world.picture`, and the service keeps it with the recent world that page

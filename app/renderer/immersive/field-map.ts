@@ -523,7 +523,7 @@ function meterPath(rings: readonly (readonly number[])[]): Path2D {
 /** The paper just around a small name, keeping it clear of the paint. */
 export const haloOf = (style: MapStyle): string => `rgba(${mixRgb(style.paper, style.paper, 0).join(",")},0.82)`;
 /** How far the land and its margin reach from the middle north and south, meters: the paper's reach on a square land. */
-const landDepth = (paper: Paper): number => Math.min(paper.reach, (paper.reach - MARGIN) / (paper.names.aspect ?? 1) + MARGIN);
+export const landDepth = (paper: Paper): number => Math.min(paper.reach, (paper.reach - MARGIN) / (paper.names.aspect ?? 1) + MARGIN);
 /** How long a tap on the map waits for a second press (a double tap zooms instead), ms. */
 const PICK_WAIT_MS = 240;
 /** How close the map comes, as a multiple of the whole sheet's zoom, before each file's patch and name are drawn. */

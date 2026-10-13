@@ -534,7 +534,10 @@ names Jev or OpenRouter: the progress a person sees is the world coming to
 be, as the field map paints itself (see The field sheet). The field map's
 own sheet lies on its creased paper, the same size, paper and torn edge,
 with no fringe of wood, title or turned-down corner. While the code is read
-the sheet is bare and still. As soon as the land is divided, a pen draws
+the sheet is bare and still, or, for a world chosen on the start, is that
+world's picture as it was last walked, which stays as the sheet's paint
+while the wait paints the world's own over it (and folds away if the land
+has since grown into another shape). As soon as the land is divided, a pen draws
 every area's border from the middle outward, the map's fine line, with the
 hedgerow's soft band coming in under it, and never the land's rounded rim.
 Color is health, as on the map, and each file's health is washed in once it
@@ -610,10 +613,10 @@ walked before, pictured by `start/gaia-picture.webp`):
   the table beyond it is out of focus. Gaia's logo is printed at the
   sheet's head, with "the worlds you have walked" (or "where shall we
   wander?") under it in italic.
-  - Each world walked before is a torn card laid on the sheet a little
-    askew, bowed, one corner lifted: the picture of its own field map in
-    health's colors that its page painted when it was last opened, or plain
-    paper with its name for a world with none yet. Its name is lettered
+  - Each world walked before is a torn card in its land's shape, laid on
+    the sheet a little askew, bowed, one corner lifted: the picture of its
+    own field map in health's colors that its page painted when it was
+    last opened, or plain paper with its name for a world with none yet. Its name is lettered
     beneath in the map's spaced capitals, broken onto two lines at a hyphen,
     dot or slash when it is long, with where it lies (who keeps it on
     GitHub, or the folder it sits in) in italic over it. Up to six worlds lie
@@ -632,9 +635,12 @@ walked before, pictured by `start/gaia-picture.webp`):
     over half a second, its shadow sliding out from under it, then rises
     toward the person over 1.3 s and turns to face them, leaving the table's
     light. The eye follows it, so the table falls out of focus, and the
-    table fades into the wait's own paper beneath the page. The card ends
-    at the wait's sheet's size and place and dissolves into it, and the
-    wait paints the map from there.
+    table fades into the wait's own paper beneath the page, where the
+    wait's sheet has taken the card's shape. The picture's margin closes as
+    the card rises, so the card ends at the sheet's size and place as the
+    sheet's own picture, edge to edge; the sheet's copy of it is laid under
+    the card the moment it lands, the card dissolves into it, and the wait
+    paints the map from there.
   - It draws a frame only when something changes: the light as the hour
     turns, the ink on the line, a card moving. The sun's shadow map is drawn
     again only when the light changes. Once it has given way to the wait it

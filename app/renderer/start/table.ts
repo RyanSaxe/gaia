@@ -38,6 +38,11 @@ export interface TableOptions {
   readonly hour: number;
   /** Where the wait's sheet lies on the page: a chosen card ends there. */
   readonly sheet: () => DOMRect;
+  /**
+   * A card is chosen: its picture and its land's shape (width over depth), which the wait's sheet takes as its own.
+   * What it returns lays the picture on the sheet, called once the card has risen over it.
+   */
+  readonly chosen?: (picture: string, aspect: number) => () => void;
 }
 
 export function createTable(veil: HTMLElement, options: TableOptions): StartPage {
@@ -69,6 +74,8 @@ export function createTable(veil: HTMLElement, options: TableOptions): StartPage
   let readingFrom: number | null = null;
   let answerFrom: number | null = null;
   let chosen: { readonly index: number; readonly at: number } | null = null;
+  /** Lays the chosen map's picture on the wait's sheet, once the card covers it. */
+  let lay: (() => void) | null = null;
   let leaving = false;
   let gone = false;
 
@@ -103,7 +110,11 @@ export function createTable(veil: HTMLElement, options: TableOptions): StartPage
       const t = (now - chosen.at) / 1000;
       scene.choose(chosen.index, Math.min(t, CHOSEN_MS / 1000), toSheet());
       if (t * 1000 < CHOSEN_MS) moving = true;
-      else if (leaving) fadeOut();
+      else {
+        lay?.();
+        lay = null;
+        if (leaving) fadeOut();
+      }
     }
     scene.render();
     if (moving) draw();
@@ -187,6 +198,8 @@ export function createTable(veil: HTMLElement, options: TableOptions): StartPage
         b.setAttribute("aria-label", r.name);
         b.addEventListener("click", () => {
           if (settle === null || chosen !== null) return;
+          const picture = pictures[i];
+          if (r.picture !== undefined && picture !== null && picture !== undefined) lay = options.chosen?.(r.picture, picture.naturalWidth / Math.max(1, picture.naturalHeight)) ?? null;
           chosen = { index: i, at: performance.now() };
           root.classList.add("choosing");
           draw();
@@ -234,6 +247,7 @@ export function createTable(veil: HTMLElement, options: TableOptions): StartPage
       const same = scene !== null && recent.length === shown.length && recent.every((r, i) => r.root === shown[i]?.root && r.picture === shown[i]?.picture);
       shown = recent;
       chosen = null;
+      lay = null;
       readingFrom = null;
       root.classList.remove("choosing");
       if (offer.refused !== undefined) {

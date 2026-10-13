@@ -80,6 +80,8 @@ interface Card {
   readonly restAt: THREE.Vector3;
   readonly restTurn: THREE.Quaternion;
   readonly side: number;
+  /** How deep it is: its picture's shape, the land's, as wide as `side`; square with no picture. */
+  readonly deep: number;
 }
 
 const ease = (x: number): number => {
@@ -225,6 +227,8 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
     const turn = (r() - 0.5) * 0.09;
     const curled = Math.floor(r() * 4);
     const segs = 56;
+    // The card takes its picture's shape, the shape of its world's land, as wide as its place on the sheet.
+    const deep = w.picture === null ? c.side : c.side * Math.min(1, w.picture.naturalHeight / Math.max(1, w.picture.naturalWidth));
     const [cu, cv] = ([[0, 0], [1, 0], [1, 1], [0, 1]] as const)[curled] ?? [1, 1];
     const rest = new Float32Array((segs + 1) ** 2 * 3);
     const flat = new Float32Array((segs + 1) ** 2 * 3);
@@ -235,7 +239,7 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
         const [u, v] = [ix / segs, iy / segs];
         const k = iy * (segs + 1) + ix;
         const lx = (u - 0.5) * c.side;
-        const lz = (v - 0.5) * c.side;
+        const lz = (v - 0.5) * deep;
         // At rest it follows the sheet's folds beneath it, with its own bow and its curled corner.
         const under = sheetLift(c.x + Math.cos(turn) * lx - Math.sin(turn) * lz, c.y + Math.sin(turn) * lx + Math.cos(turn) * lz) - sheetLift(c.x, c.y);
         const own = 0.0022 * (2 * u - 1) ** 2 + 0.009 * Math.max(0, 1 - Math.hypot(u - cu, v - cv) / 0.32) ** 2.2;
@@ -257,7 +261,7 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
       picture.needsUpdate = true;
       pictures.push(picture);
     }
-    const mesh = new THREE.Mesh(geometry, paper({ size: [c.side, c.side], seed: 40 + i, base: 0xf2e8cc, tear: 0.9, self: i + 1, picture }));
+    const mesh = new THREE.Mesh(geometry, paper({ size: [c.side, deep], seed: 40 + i, base: 0xf2e8cc, tear: 0.9, self: i + 1, picture }));
     const group = new THREE.Group();
     group.add(mesh);
     group.position.copy(onSheet(c.x, c.y, 0.0009));
@@ -265,8 +269,8 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
     mesh.material.uniforms.uAxisX?.value.set(1, 0, 0).applyQuaternion(group.quaternion);
     mesh.material.uniforms.uAxisY?.value.set(0, 0, 1).applyQuaternion(group.quaternion);
     scene.add(group);
-    const caster = addCaster(group.position.x, group.position.z, c.side / 2 - 0.006, c.side / 2 - 0.006, turn + sheetTurn, 0.38, 0.0045, i + 1);
-    return [{ caster, restTurnAngle: turn + sheetTurn, group, mesh, rest, flat, restAt: group.position.clone(), restTurn: group.quaternion.clone(), side: c.side }];
+    const caster = addCaster(group.position.x, group.position.z, c.side / 2 - 0.006, deep / 2 - 0.006, turn + sheetTurn, 0.38, 0.0045, i + 1);
+    return [{ caster, restTurnAngle: turn + sheetTurn, group, mesh, rest, flat, restAt: group.position.clone(), restTurn: group.quaternion.clone(), side: c.side, deep }];
   });
 
   // ---------- the inkwell, the lantern and the quill ----------
@@ -438,10 +442,11 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
     shape(c, Math.max(a, b));
     const raised = c.restAt.clone().add(new THREE.Vector3(0, 0.04 * a, 0));
     const straight = c.restTurn.clone().slerp(new THREE.Quaternion(), a);
-    // The wait's sheet: the card square to the view, as large on the screen and where the wait's sheet is.
-    const end = to ?? { x: size.w * 0.05, y: (size.h - size.w * 0.9) / 2, w: size.w * 0.9, h: size.w * 0.9 };
+    // The wait's sheet: the card square to the view, as large on the screen and where the wait's sheet is, which takes
+    // the card's shape when it is chosen.
+    const end = to ?? { x: size.w * 0.05, y: (size.h - size.w * 0.9 * (c.deep / c.side)) / 2, w: size.w * 0.9, h: size.w * 0.9 * (c.deep / c.side) };
     const tan = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
-    const depth = (c.side * size.h) / (2 * end.h * tan);
+    const depth = (c.deep * size.h) / (2 * end.h * tan);
     const ndcX = ((end.x + end.w / 2) / size.w) * 2 - 1;
     const ndcY = 1 - ((end.y + end.h / 2) / size.h) * 2;
     const finalAt = new THREE.Vector3(ndcX * depth * tan * camera.aspect, ndcY * depth * tan, -depth).applyMatrix4(camera.matrixWorld);
@@ -462,7 +467,7 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
     const height = c.group.position.y - c.restAt.y;
     const from = light.uSunIntensity.value > 0.05 ? light.uSunDirection.value : light.uMoonDirection.value;
     const away = height / Math.max(0.35, from.y);
-    heldBox.set(c.restAt.x - from.x * away, c.restAt.z - from.z * away, c.side / 2 - 0.004, c.side / 2 - 0.004);
+    heldBox.set(c.restAt.x - from.x * away, c.restAt.z - from.z * away, c.side / 2 - 0.004, c.deep / 2 - 0.004);
     // Soft as paper's shadow is under an open sky: its edge spreads over a few centimetres as the card rises.
     heldShade.set(c.restTurnAngle * (1 - a), 0.75 * THREE.MathUtils.smoothstep(height, 0, 0.01) * (1 - THREE.MathUtils.smoothstep(height, 0.03, 0.3)), 0.004 + height * 0.3, c.group.position.y - 0.003);
     setU("uFade", ease((t - 0.55) / 1.2));
@@ -551,7 +556,8 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
         cards: cards.map((c, i) => {
           const at = l.cards[i] as (typeof l.cards)[number];
           const half = c.side / 2 + 0.004;
-          return onScreen([at.x - half, at.y - half, at.x + half, at.y + half]);
+          const deep = c.deep / 2 + 0.004;
+          return onScreen([at.x - half, at.y - deep, at.x + half, at.y + deep]);
         }),
         line: onScreen([l.line.x0 - 0.02, l.line.y - l.line.size * 2, l.line.x1 + 0.02, l.line.y + l.line.size * 0.6]),
         folder: onScreen([folder[0] - 0.01, folder[1], folder[2] + 0.01, folder[3]]),
