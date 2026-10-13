@@ -945,6 +945,15 @@ fn unsettled<'a>(w: &'a Wanted, held: &Value, calls: &Value) -> BTreeSet<(&'a st
             out.insert((p.unit.as_str(), p.pass));
         }
     }
+    // A unit with a request still to answer, such as a file whose link
+    // requests a slice cut in two, settles once its last one is answered:
+    // until then it must not stop the rest from being sent.
+    out.retain(|&(unit, pass)| {
+        w.planned
+            .iter()
+            .filter(|p| p.unit == unit && p.pass == pass && !p.waiting)
+            .all(|p| w.answered.contains(&p.hash))
+    });
     out
 }
 
@@ -1033,5 +1042,37 @@ mod tests {
         let l = links(&held);
         assert!(l.contains_key("now"));
         assert!(!l.contains_key("before"));
+    }
+
+    #[test]
+    fn a_file_whose_link_requests_a_slice_cut_in_two_is_still_asked_the_rest() {
+        let link = |n: u32| Planned {
+            pass: LINK,
+            unit: "file:a.ts".into(),
+            request: json!({}),
+            hash: format!("h{n}"),
+            weight: 1.0,
+            questions: vec![Asked {
+                id: format!("q{n}"),
+                about: format!("a.ts#{n}"),
+                field: "link".into(),
+                call: "resolve@1".into(),
+                json: json!({ "criteria": { "file:x.ts": "x.ts", "outside": "elsewhere" } }),
+                line: None,
+            }],
+            waiting: false,
+        };
+        let answer = json!({ "type": "choice", "choice": "file:x.ts", "probabilities": { "file:x.ts": 0.9 } });
+        let calls = json!({ "h1": { "answers": { "q1": answer } }, "h2": { "answers": { "q2": answer } } });
+        let mut w = Wanted {
+            project: "p".into(),
+            graph: CodeGraph { project_id: "p".into(), name: "p".into(), nodes: vec![], edges: vec![], pending: vec![] },
+            planned: vec![link(1), link(2)],
+            answered: HashSet::from(["h1".to_string()]),
+        };
+        // Half answered, nothing can be held yet, so nothing may hold the slice back from asking the other half.
+        assert!(unsettled(&w, &json!({}), &calls).is_empty());
+        w.answered.insert("h2".into());
+        assert_eq!(unsettled(&w, &json!({}), &calls), BTreeSet::from([("file:a.ts", LINK)]));
     }
 }
