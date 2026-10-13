@@ -41,7 +41,7 @@ import { type LandNode, divideLand, dividePlots } from "./land.ts";
 import { certainty } from "./context.ts";
 import { type OutlineReading, areaOutline, areaReadings, bodySize, entityOutline, entityReadings, fileOutline, fileReadings, fileSize, howMany, importersOf, outlineOrder, symbolSize, tokensOf } from "./outline.ts";
 import { MODEL } from "./planner.ts";
-import { type Composing, composeThings, composingState } from "./compose.ts";
+import { type Composed, type Composing, areaState, composeThings, composingState, repositoryState, trailState } from "./compose.ts";
 
 /** One option Jev may choose: what it is like (Jev reads this) and the facts it suits (the stand-in reads these). */
 export interface Look {
@@ -53,16 +53,10 @@ export type LookSet = Readonly<Record<string, Look>>;
 
 /** The options for every judgment, by key. */
 export interface Looks {
-  /** What composes each building and landmark part by part: Jev chooses their parts, never a preset. */
+  /** What composes the world part by part (its sky, lands, buildings, landmarks and trails): Jev chooses their parts, never a preset. */
   readonly compose: Composing;
-  /** The repository's art direction: light, sky, season and wind. */
-  readonly world: LookSet;
-  /** A directory's land: landform and ground cover. */
-  readonly land: LookSet;
   readonly building: LookSet;
   readonly landmark: LookSet;
-  /** How a trail between two entities looks. */
-  readonly trail: LookSet;
   /** What a file's finer entity (a function, a class, a type, a constant) stands as on its patch: a tree, a stone, a bush or flowers. */
   readonly form: LookSet;
   /** Whether an area's land holds water, and why: each option's words are the reason recorded with the choice. */
@@ -99,15 +93,16 @@ export interface CarriedThing {
 
 /** Everything Jev decided about a world. */
 export interface Judgments {
-  readonly world: string;
-  /** Directory → land key, for the directories that are regions. */
-  readonly lands: Readonly<Record<string, string>>;
+  /** The whole world's light, sky, season and wind, as Jev composed them (`composeWorld`); none until then. */
+  readonly sky?: Blueprint;
+  /** Directory → the land Jev composed for it, for the directories that are regions (`composeWorld`). */
+  readonly lands: Readonly<Record<string, Blueprint>>;
   /**
    * Entity → whether a building or a landmark stands for it, and the blueprint Jev composed for it once the
    * understanding pass has judged the code (`composeWorld`); a thing not yet composed has none and stands nowhere.
    */
   readonly things: Readonly<Record<string, { readonly as: "building" | "landmark"; readonly blueprint?: Blueprint }>>;
-  /** Dependencies Jev would walk, with how much it wants each and its look. */
+  /** Dependencies Jev would walk, with how much it wants each and, once composed, how each trail looks. */
   readonly trails: readonly CodeTrail[];
   /**
    * File → form key, by symbol kind (`function`) when a design asks about each
@@ -189,7 +184,8 @@ export interface CodeTrail {
   readonly to: string;
   /** Jev's probability that a person would walk between them, 0 to 1. */
   readonly want: number;
-  readonly look: string;
+  /** How it looks, as Jev composed it: a link blueprint whose route keeps its own width, wear, edging, winding and crossing. */
+  readonly route?: Blueprint;
   /** How many of `from`'s files import from `to`. */
   readonly weight?: number;
   /** Whether it joins two groups of entities no other chosen trail joins yet: these route first. */
@@ -204,7 +200,8 @@ export interface CodeRegion {
   readonly z: number;
   /** How far its land reaches from its middle on average, meters. */
   readonly reach: number;
-  readonly land: string;
+  /** Its land as Jev composed it: a biome blueprint. None for a world laid out before composing. */
+  readonly biome?: Blueprint;
   /** Whether its land holds water: a water key, whose words say why. */
   readonly water: string;
   /** How its trees and open ground lie: a character key, whose words say why. */
@@ -218,8 +215,8 @@ export interface CodeWorld extends WorldPlaces {
   readonly projectId: string;
   /** Side of the walkable square, meters: it grows with the codebase. */
   readonly size: number;
-  /** The world look key: the repository's art direction. */
-  readonly world: string;
+  /** The repository's art direction, its light, sky, season and wind, as Jev composed them. */
+  readonly sky?: Blueprint;
   readonly areas: readonly CodeArea[];
   readonly patches: readonly CodePatch[];
   /** Every cell of the land, each part of one file's patch or one entity's lot, naming its area and its file (null for a lot). */
@@ -417,11 +414,9 @@ export const DESIGNS = {
 export type DesignName = keyof typeof DESIGNS;
 export const DEFAULT_DESIGN: DesignName = "judged";
 
-/** Look keys judged so far, top-down, for a design that carries character. */
+/** What was judged so far, top-down, for a design that carries character: each region's water. */
 export interface Character {
-  readonly world?: string;
-  /** Region directory → land key and water key. */
-  readonly lands?: Readonly<Record<string, string>>;
+  /** Region directory → water key. */
   readonly waters?: Readonly<Record<string, string>>;
 }
 
@@ -442,9 +437,6 @@ export const MORE = "more:";
 /** The reading Jev may ask for that Gaia cannot give yet: a symbol's source. Asked, recorded, never read until the reviewer approves sending source. */
 export const SOURCE_WISH = `${MORE}source`;
 
-/** The repository's size as words, so the world's request changes only when the repository does. */
-const repoSize = (lines: number): string => (lines < 5000 ? "small" : lines < 25000 ? "modest" : lines < 80000 ? "substantial" : "large");
-const about = (n: number): string => (n < 100 ? `${n}` : `about ${Number(n.toPrecision(2)).toLocaleString("en-US")}`);
 const lookWords = (set: LookSet, key: string | undefined): string | undefined => (key === undefined || set[key] === undefined ? undefined : `${key}: ${set[key].doc}`);
 
 /** A count per file in words: how much of something each of a directory's files does on average. */
@@ -589,15 +581,8 @@ export function planWorldRequests(facts: CodeFacts, looks: Looks, options: PlanO
     }
     requests.push({ about, target, request: { model: MODEL, state, questions: asked }, ...(readings === undefined ? {} : { readings, decides: extra.decides }) });
   };
-  const r = facts.repository;
-  ask(
-    "world",
-    "",
-    revised
-      ? { repository: { name: r.name, files: about(r.files), size: repoSize(r.lines), languages: languagesOf(facts.files) } }
-      : { repository: { name: r.name, files: r.files, lines: r.lines, languages: languagesOf(facts.files) } },
-    { world: choice("This repository becomes a whole world. Which art direction suits it: its light, sky, season and wind?", docs(looks.world), "world", "", salt) },
-  );
+  // The whole world's light, sky, season and wind are composed part by part once the code is understood
+  // (`composeWorld`), so nothing about the repository as a whole is asked here.
   const regionList = regionPaths(dirs);
   const regions = new Set(regionList);
   const underDir = (p: string): FileFacts[] => {
@@ -605,7 +590,6 @@ export function planWorldRequests(facts: CodeFacts, looks: Looks, options: PlanO
     return [...x.files, ...x.children.flatMap(underDir)];
   };
   const measures = design.state === "words" ? regionList.map((p) => measureArea(underDir(p))) : [];
-  const worldWords = lookWords(looks.world, character.world);
   for (const path of regionList) {
     const d = dirs.get(path) as Dir;
     const all: FileFacts[] = [];
@@ -622,7 +606,7 @@ export function planWorldRequests(facts: CodeFacts, looks: Looks, options: PlanO
     const reached = all.reduce((n, f) => n + f.importedBy.filter((i) => !inside.has(i)).length, 0);
     const state =
       design.state === "outline"
-        ? { directory: areaOutline(facts, path), ...(worldWords === undefined ? {} : { world: worldWords }) }
+        ? { directory: areaOutline(facts, path) }
         : design.state === "words"
           ? { directory: areaWords(facts, path, d.files, all, d.children, measures) }
           : {
@@ -642,24 +626,21 @@ export function planWorldRequests(facts: CodeFacts, looks: Looks, options: PlanO
       state,
       revised
         ? {
-            land: choice("This directory becomes an area of the world. Which land suits it: its landform and its ground cover? Whether the land holds water is asked separately, so judge only its shape and its cover.", docs(looks.land), "land", path, salt),
             water: choice("Does this directory's land hold water? Each option gives a reason drawn from how the directory's code imports and is imported; choose the one whose reason fits it best.", docs(looks.water), "water", path, salt),
             character: choice("What is this area's ground like: what grows between the things standing on it, how its open ground lies and how large its trees grow? Choose the option whose reason fits this directory best.", docs(looks.character), "character", path, salt),
           }
         : {
-            land: choice("This directory becomes an area of the world. Which land suits it: its landform and ground cover?", docs(looks.land), "land", path, salt),
             water: choice("Does this area's land hold water? Choose the option whose reason fits this directory best.", docs(looks.water), "water", path, salt),
           },
-      { readings: areaReadings(facts, path), decides: "which land this directory's area has, whether that land holds water, and what its ground is like" },
+      { readings: areaReadings(facts, path), decides: "whether this directory's land holds water, and what its ground is like" },
     );
   }
-  /** What was judged about the land a thing stands on, for a design that carries character. */
+  /** What was judged about the land a thing stands on, for a design that carries character: whether it holds water. */
   const landOf = (dir: string): Record<string, unknown> => {
     const region = regionFor(regions, dir);
-    const land = lookWords(looks.land, character.lands?.[region]);
     const water = lookWords(looks.water, character.waters?.[region]);
-    if (land === undefined && water === undefined) return {};
-    return { land: { area: region === "" ? "(the repository's root)" : region, ...(land === undefined ? {} : { landform: land }), ...(water === undefined ? {} : { water }) } };
+    if (water === undefined) return {};
+    return { land: { area: region === "" ? "(the repository's root)" : region, water } };
   };
   const standingDefs = definitionsOf(facts, options.graph);
   for (const f of [...facts.files].sort(byPath)) {
@@ -749,13 +730,6 @@ export function planWorldRequests(facts: CodeFacts, looks: Looks, options: PlanO
           : `${e.name} depends on ${other.name}. Would a person walk a worn trail between the two, because ${e.name} leans on it heavily?`,
         criteria: { true: "A trail joins them.", false: "No trail joins them." },
       };
-      questions[`trail-look:${dep}`] = choice(
-        revised ? `How does the trail from ${e.name} to ${other.name} look? \`dependsOn\` says how many of ${e.name}'s files import ${other.name}.` : `How does the trail from ${e.name} to ${other.name} look?`,
-        docs(looks.trail),
-        `trail-look:${dep}`,
-        e.path,
-        salt,
-      );
     }
     const state =
       design.state === "outline"
@@ -920,29 +894,18 @@ export async function judgeWorld(facts: CodeFacts, looks: Looks, jev: JevClient,
   };
   if (!design.character) await run(plan({}));
   else {
-    await run(plan({}).filter((p) => p.about === "world"));
-    const world = pickOf(answered[0]?.a.world) ?? first(looks.world);
-    await run(plan({ world }).filter((p) => p.about === "area"));
-    const lands: Record<string, string> = {};
+    await run(plan({}).filter((p) => p.about === "area"));
     const waters: Record<string, string> = {};
-    for (const { p, a } of answered) {
-      if (p.about !== "area") continue;
-      lands[p.target] = pickOf(a.land) ?? first(looks.land);
-      waters[p.target] = pickOf(a.water) ?? first(looks.water);
-    }
-    await run(plan({ world, lands, waters }).filter((p) => p.about === "file" || p.about === "entity"));
+    for (const { p, a } of answered) if (p.about === "area") waters[p.target] = pickOf(a.water) ?? first(looks.water);
+    await run(plan({ waters }).filter((p) => p.about === "file" || p.about === "entity"));
   }
-  let world = first(looks.world);
-  const lands: Record<string, string> = {};
   const things: Record<string, { as: "building" | "landmark" }> = {};
   const trails: CodeTrail[] = [];
   const forms: Record<string, Record<string, string>> = {};
   const waters: Record<string, string> = {};
   const characters: Record<string, string> = {};
   for (const { p, a } of answered) {
-    if (p.about === "world") world = pickOf(a.world) ?? world;
-    else if (p.about === "area") {
-      lands[p.target] = pickOf(a.land) ?? first(looks.land);
+    if (p.about === "area") {
       waters[p.target] = pickOf(a.water) ?? first(looks.water);
       characters[p.target] = pickOf(a.character) ?? first(looks.character);
     } else if (p.about === "file") {
@@ -961,26 +924,40 @@ export async function judgeWorld(facts: CodeFacts, looks: Looks, jev: JevClient,
       for (const [id, answer] of Object.entries(a)) {
         if (!id.startsWith("trail:") || answer.type !== "noul") continue;
         const to = id.slice("trail:".length);
-        trails.push({ from: p.target, to, want: answer.noul, look: pickOf(a[`trail-look:${to}`]) ?? first(looks.trail) });
+        trails.push({ from: p.target, to, want: answer.noul });
       }
     }
   }
-  return { world, lands, things, trails, forms, waters, characters };
+  // The sky, each region's land and each trail's look are composed once the code is understood (`composeWorld`).
+  return { lands: {}, things, trails, forms, waters, characters };
 }
 
 /**
- * Composes every entity's building or landmark part by part, through `jev`, once the understanding pass has judged
- * the code: each composing request carries what `graph` holds about the entity (`composingState`), so it is asked
- * once and stays as it is while the code does.
+ * Composes the world part by part, through `jev`, once the understanding pass has judged the code: its sky, each
+ * region's land, each entity's building or landmark and each trail Jev would walk. Each composing request carries
+ * what `graph` holds about its part of the code (`repositoryState`, `areaState`, `composingState`, `trailState`), so
+ * it is asked once and stays as it is while the code does. Jev never names a preset.
  */
 export async function composeWorld(facts: CodeFacts, looks: Looks, jev: JevClient, judged: Judgments, options: { readonly graph?: CodeGraph; readonly concurrency?: number } = {}): Promise<Judgments> {
-  const standing = Object.entries(judged.things).map(([path, t]) => ({
-    path,
-    as: t.as,
-    state: composingState(options.graph, facts.entities.find((e) => e.path === path) ?? { name: baseName(path), path }),
-  }));
-  const blueprints = await composeThings(looks.compose, jev, standing, options.concurrency ?? 8);
-  return { ...judged, things: Object.fromEntries(standing.map((t) => [t.path, { as: t.as, blueprint: blueprints[t.path] as Blueprint }])) };
+  const graph = options.graph;
+  const entity = (path: string): Pick<EntityFacts, "path" | "name"> & Partial<EntityFacts> => facts.entities.find((e) => e.path === path) ?? { name: baseName(path) || facts.repository.name, path };
+  const regions = Object.keys(judged.waters).sort();
+  const trailId = (t: CodeTrail): string => `trail:${t.from}->${t.to}`;
+  const things: Composed[] = [
+    { path: "world:", as: "world", state: repositoryState(graph, facts.repository.name) },
+    ...regions.map((path): Composed => ({ path: `land:${path}`, as: "biome", state: areaState(graph, path, lookWords(looks.water, judged.waters[path])) })),
+    ...Object.entries(judged.things).map(([path, t]): Composed => ({ path, as: t.as, state: composingState(graph, entity(path)) })),
+    ...judged.trails.map((t): Composed => ({ path: trailId(t), as: "link", state: trailState(graph, entity(t.from), entity(t.to)) })),
+  ];
+  const blueprints = await composeThings(looks.compose, jev, things, options.concurrency ?? 8);
+  const of = (id: string): Blueprint => blueprints[id] as Blueprint;
+  return {
+    ...judged,
+    sky: of("world:"),
+    lands: Object.fromEntries(regions.map((path) => [path, of(`land:${path}`)])),
+    things: Object.fromEntries(Object.entries(judged.things).map(([path, t]) => [path, { as: t.as, blueprint: of(path) }])),
+    trails: judged.trails.map((t) => ({ ...t, route: of(trailId(t)) })),
+  };
 }
 
 // ---------- the stand-in judge ----------
@@ -1050,7 +1027,7 @@ const countOfWords = (words: string | undefined): number => COUNT_OF_WORDS[/^(no
 
 export function standInJev(looks: Looks): JevClient {
   const suits = new Map<string, readonly string[]>();
-  for (const [prefix, set] of [["", looks.world], ["", looks.land], ["", looks.trail], ["", looks.form], ["", looks.water], ["", looks.character], ["building:", looks.building], ["landmark:", looks.landmark]] as const) {
+  for (const [prefix, set] of [["", looks.form], ["", looks.water], ["", looks.character], ["building:", looks.building], ["landmark:", looks.landmark]] as const) {
     for (const [key, look] of Object.entries(set)) suits.set(`${prefix}${key}`, [...(suits.get(`${prefix}${key}`) ?? []), ...look.suits]);
   }
   const judge: JevClient = {
@@ -1250,7 +1227,7 @@ function divisionOf(facts: CodeFacts, graph: CodeGraph | undefined, aspect: numb
 /** What a definition stands as: the form Jev chose for it, or for its kind in its file; "" when Jev chose none. */
 const formOf = (mine: Readonly<Record<string, string>> | undefined, def: StandingDef): string => mine?.[`#${def.id.slice(def.file.length + 1)}`] ?? mine?.[def.kind] ?? "";
 
-const UNJUDGED: Judgments = { world: "", lands: {}, things: {}, trails: [], forms: {}, waters: {}, characters: {} };
+const UNJUDGED: Judgments = { lands: {}, things: {}, trails: [], forms: {}, waters: {}, characters: {} };
 
 /**
  * Where an entity's building or landmark will stand: its lot's middle, meters, a thing's `x` and `z`. Whichever it
@@ -1278,14 +1255,6 @@ export function landOf(facts: CodeFacts, graph?: CodeGraph, aspect: number = LAN
     cells: w.cells,
     lots,
   };
-}
-
-/** The land judged for each area's own ground, by the area's path: its region's land key. */
-export function areaLands(world: Pick<CodeWorld, "areas" | "regions">): Record<string, string> {
-  return Object.fromEntries(world.areas.flatMap((a) => {
-    const region = world.regions[a.region];
-    return region === undefined ? [] : [[a.path, region.land] as const];
-  }));
 }
 
 /**
@@ -1407,7 +1376,7 @@ function layOut(facts: CodeFacts, judged: Judgments, graph: CodeGraph | undefine
       x: m.ground > 0 ? m.x / m.ground : 0,
       z: m.ground > 0 ? m.z / m.ground : 0,
       reach: Math.sqrt(m.ground / Math.PI),
-      land: judged.lands[path] ?? "",
+      ...(judged.lands[path] === undefined ? {} : { biome: judged.lands[path] }),
       water: judged.waters[path] ?? "",
       character: judged.characters[path] ?? "",
       sites: regionSites[i] as LandSite[],
@@ -1436,7 +1405,7 @@ function layOut(facts: CodeFacts, judged: Judgments, graph: CodeGraph | undefine
       projectId: facts.projectId,
       size,
       aspect,
-      world: judged.world,
+      ...(judged.sky === undefined ? {} : { sky: judged.sky }),
       areas,
       patches,
       cells,

@@ -115,12 +115,12 @@ export type Opening =
   /**
    * Asking Jev about the things it has not judged; `answered` counts those settled, `failed` those the stand-in
    * took over, and `total` every request to be asked: under a spend limit the understanding pass's are planned and
-   * counted from the start, and with none they are counted as the pass goes. `settled` names every area (a directory's path, "" for the root) whose things and land are all
-   * judged, with the land judged for its own ground: a land's name in `looks.ts`, its region's for an area without
-   * land of its own, as `areaLands` reads it from the finished world. `asking` names the areas with a question
+   * counted from the start, and with none they are counted as the pass goes. `settled` names every area (a
+   * directory's path, "" for the root) whose things are all judged, its region's own request included. Its land is
+   * composed later, once the code is understood, so no land is named here. `asking` names the areas with a question
    * to Jev in flight now.
    */
-  | { readonly stage: "asking"; readonly name: string; readonly total: number; readonly answered: number; readonly failed: number; readonly settled: Readonly<Record<string, string>>; readonly asking: readonly string[] }
+  | { readonly stage: "asking"; readonly name: string; readonly total: number; readonly answered: number; readonly failed: number; readonly settled: readonly string[]; readonly asking: readonly string[] }
   /**
    * Files whose health has settled since the last `health`, by path: each one's vitality, exactly as the finished
    * world has it, so nothing judged later changes it. A file whose vitality reads nothing Jev judges is settled with

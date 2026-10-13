@@ -402,14 +402,14 @@ let other = 0;
 for (const f of [...files].sort((a, b) => (a.path < b.path ? -1 : 1))) {
   if (f.kind === "source" && f.symbols.length > 0) forms[f.path] = Object.fromEntries(f.symbols.map((s, k) => [`#${s.name}`, k % 2 === 0 ? (trees[tree++ % trees.length] as string) : (others[other++ % others.length] as string)]));
 }
+// The proving ground is written by hand, not judged: its sky, lands, things and trails are the hand-filled looks its plan names.
 const judged: Judgments = {
-  world: "Meadow morning",
-  lands: Object.fromEntries(PLAN.flatMap((d) => (d.land === undefined ? [] : [[d.path, d.land[0]]]))),
+  sky: presetBlueprint("world", "Meadow morning"),
+  lands: Object.fromEntries(PLAN.flatMap((d) => (d.land === undefined ? [] : [[d.path, presetBlueprint("land", d.land[0])]]))),
   waters: Object.fromEntries(PLAN.flatMap((d) => (d.land === undefined ? [] : [[d.path, d.land[1]]]))),
   characters: Object.fromEntries(PLAN.flatMap((d) => (d.land === undefined ? [] : [[d.path, d.land[2]]]))),
-  // The proving ground is written by hand, not judged: each thing is the hand-filled building or landmark its plan names.
   things: Object.fromEntries(PLAN.flatMap((d) => (d.entity === undefined ? [] : [[d.path, { as: d.entity.as, blueprint: presetBlueprint(d.entity.as, d.entity.look) }]]))),
-  trails: TRAIL_PLAN.map(([from, to, look, want]) => ({ from, to, want, look })),
+  trails: TRAIL_PLAN.map(([from, to, look, want]) => ({ from, to, want, route: presetBlueprint("trail", look) })),
   forms,
   // Every file's quality by its health, and every entity's its own files' pooled by their lines.
   quality: Object.fromEntries([
@@ -431,11 +431,11 @@ const missing = (what: string, options: Readonly<Record<string, unknown>>, used:
 };
 const things = PLAN.flatMap((d) => (d.entity === undefined ? [] : [d.entity]));
 const gaps = [
-  ...missing("land", LANDS, Object.values(judged.lands)),
+  ...missing("land", LANDS, PLAN.flatMap((d) => (d.land === undefined ? [] : [d.land[0]]))),
   ...missing("water", WATERS, Object.values(judged.waters)),
   ...missing("character", CHARACTERS, Object.values(judged.characters)),
   ...missing("form", FORMS, Object.values(forms).flatMap((f) => Object.values(f))),
-  ...missing("trail", TRAILS, judged.trails.map((t) => t.look)),
+  ...missing("trail", TRAILS, TRAIL_PLAN.map(([, , look]) => look)),
   ...Object.keys(BUILDINGS).flatMap((b) => (things.filter((t) => t.as === "building" && t.look === b).length >= 3 ? [] : [`three buildings "${b}"`])),
   ...Object.keys(LANDMARKS).flatMap((l) => (things.filter((t) => t.as === "landmark" && t.look === l).length >= 3 ? [] : [`three landmarks "${l}"`])),
 ];

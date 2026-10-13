@@ -11,7 +11,6 @@ import { createInterface } from "node:readline";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { type StandIn, startOpenRouterStandIn } from "../../tools/openrouter-stand-in.ts";
 import { outlinesOf } from "@gaia/terrain";
-import { areaLands } from "@gaia/world";
 import { createEngineClient } from "./engine-client.ts";
 import { openWorld, setSpendLimit } from "./open-world.ts";
 import type { ConsentPlan, Opening } from "./protocol.ts";
@@ -29,8 +28,8 @@ const engines: ChildProcess[] = [];
 beforeAll(async () => {
   execFileSync("cargo", ["build", "-p", "gaia-engine", "--quiet"], { cwd: REPO, env: { ...process.env, PATH: `${process.env.HOME}/.cargo/bin:${process.env.PATH}` }, stdio: "inherit" });
   scratch = mkdtempSync(join(tmpdir(), "gaia-live-jev-"));
-  // The stand-in refuses one request, as OpenRouter might: the world's.
-  standIn = await startOpenRouterStandIn({ refuse: ({ questions }) => "world" in questions });
+  // The stand-in refuses one request, as OpenRouter might: the root area's, which asks whether its land holds water.
+  standIn = await startOpenRouterStandIn({ refuse: ({ state, questions }) => "water" in questions && (state as { directory?: { path?: string } }).directory?.path === "(the repository's root)" });
 }, 900_000);
 
 afterAll(async () => {
@@ -79,11 +78,15 @@ async function open(root: string, data: string, approve: boolean) {
     const s = body.state as Record<string, { path?: string; name?: string } | string>;
     // Understanding's requests name their file or directory by its path at the top of the state.
     if (typeof s.path === "string") return `understand:${s.path}`;
-    const { file, entity, directory } = s as Record<string, { path?: string } | undefined>;
-    // Composing a building or landmark asks its parts, then each stage's details: one request a wave, each its own.
+    const { file, entity, directory, repository, trail } = s as Record<string, { path?: string; name?: string } | undefined>;
+    // Composing the sky, a land, a building, a landmark or a trail asks its parts, then each stage's details: one
+    // request a wave, each its own.
     const ids = Object.keys(body.questions as object);
-    if (entity !== undefined && (s.decided !== undefined || ids.some((id) => /^[a-z]+\.(use|present)$/.test(id)))) return `compose:${entity.path}:${ids.sort().join(",")}`;
-    return file ? `file:${file.path}` : entity ? `entity:${entity.path}` : directory ? `area:${directory.path}` : "world";
+    if (s.decided !== undefined || ids.some((id) => /^[a-z]+\.(use|present)$/.test(id))) {
+      const of = repository !== undefined ? "world" : trail !== undefined ? "trail" : (entity ?? directory)?.path;
+      return `compose:${of}:${ids.sort().join(",")}`;
+    }
+    return file ? `file:${file.path}` : entity ? `entity:${entity.path}` : directory ? `area:${directory.path}` : "repository";
   });
   return { document, asked, shown, sent, about };
 }
@@ -109,16 +112,14 @@ describe("judging a codebase with Jev", () => {
     const health = first.shown.flatMap((o) => (o.stage === "health" ? Object.entries(o.vitality) : []));
     expect(health.map(([path]) => path).sort()).toEqual(patches.map((p) => p.path).sort());
     expect(Object.fromEntries(health)).toEqual(Object.fromEntries(first.document.world.patches.map((p) => [p.path, p.vitality])));
-    // Each area is named once everything on its land is judged, with the land judged for its ground, and stays named
-    // with that land; by the end, every area, each with the finished world's land.
-    let named: Readonly<Record<string, string>> = {};
+    // Each area is named once everything on its land is judged, and stays named; by the end, every area is.
+    let named: readonly string[] = [];
     for (const o of first.shown) {
       if (o.stage !== "asking") continue;
-      expect(o.settled).toMatchObject(named);
+      expect(o.settled).toEqual(expect.arrayContaining([...named]));
       named = o.settled;
     }
-    expect(Object.keys(named).sort()).toEqual(first.document.world.areas.map((a) => a.path).sort());
-    expect(named).toEqual(areaLands(first.document.world));
+    expect([...named].sort()).toEqual(first.document.world.areas.map((a) => a.path).sort());
     // Every request went out once, with the placeholder key and nothing but the model, its state and questions. Judging
     // the looks reads facts only; understanding reads the source, as the reviewer allowed.
     for (const [i, { authorization, body }] of first.sent.entries()) {
@@ -128,7 +129,7 @@ describe("judging a codebase with Jev", () => {
     }
     const judging = first.about.filter((a) => !a.startsWith("understand:"));
     expect(new Set(judging).size).toBe(judging.length);
-    expect(first.about).toEqual(expect.arrayContaining(["world", "file:src/shape.ts", "understand:src/shape.ts"]));
+    expect(first.about).toEqual(expect.arrayContaining(["area:(the repository's root)", "file:src/shape.ts", "understand:src/shape.ts"]));
     // A file with nothing standing on its patch is never asked about.
     expect(first.about).not.toContain("file:README.md");
     // The understanding pass asked every folder and file, and every definition stands by Jev's importance; the
@@ -142,8 +143,8 @@ describe("judging a codebase with Jev", () => {
     expect(shape?.quality).toBeLessThanOrEqual(1);
     expect(Object.keys(shape?.concepts ?? {})).toContain("readability");
     // Jev judged everything but the request it refused, which the stand-in judged.
-    expect(first.document.judges["world:"]).toBe("stand-in");
-    expect(Object.entries(first.document.judges).filter(([, j]) => j === "stand-in").map(([t]) => t)).toEqual(["world:"]);
+    expect(first.document.judges["area:"]).toBe("stand-in");
+    expect(Object.entries(first.document.judges).filter(([, j]) => j === "stand-in").map(([t]) => t)).toEqual(["area:"]);
     expect(first.document.summary).toContain("1 request failed");
     const asking = first.shown.filter((o) => o.stage === "asking");
     // Composing follows from the answers, so it is never planned or counted ahead; every building and landmark was composed.
@@ -156,13 +157,13 @@ describe("judging a codebase with Jev", () => {
     // Reopening on a new engine asks nothing it has answered, and never asks the person again.
     const second = await open(root, data, true);
     expect(second.asked).toHaveLength(0);
-    expect(second.about).toEqual(["world"]);
+    expect(second.about).toEqual(["area:(the repository's root)"]);
     expect(second.document.world).toEqual(first.document.world);
 
     // A file that changed is asked about again, with what its facts touch; untouched files are not.
     appendFileSync(join(root, "src/shape.ts"), `\n/** The area of a circle. */\nexport const circle = (r: number): number => Math.PI * r * r;\n`);
     const third = await open(root, data, true);
-    expect(third.about).toEqual(expect.arrayContaining(["file:src/shape.ts", "world"]));
+    expect(third.about).toEqual(expect.arrayContaining(["file:src/shape.ts", "area:(the repository's root)"]));
     expect(third.about).not.toContain("file:src/index.ts");
     expect(third.about).not.toContain("file:package.json");
   }, 60_000);
@@ -185,11 +186,13 @@ describe("judging a codebase with Jev", () => {
     expect(second.asked).toHaveLength(0);
     expect(second.sent).toHaveLength(0);
     // A new limit, still under the cost, asks again; going ahead sends every request it planned, and at most one
-    // more round of the understanding pass's where Jev asked for more.
+    // more round of the understanding pass's where Jev asked for more. Composing follows from the answers, so it is
+    // never planned ahead.
     await setSpendLimit(engineAt(data), 1e-9);
     const third = await open(root, data, true);
     expect(third.asked).toHaveLength(1);
-    expect(third.sent.length).toBeGreaterThanOrEqual(third.asked[0]?.requests ?? Number.POSITIVE_INFINITY);
-    expect(third.sent.length).toBeLessThanOrEqual(2 * (third.asked[0]?.requests ?? 0));
+    const planned = third.sent.length - third.about.filter((a) => a.startsWith("compose:")).length;
+    expect(planned).toBeGreaterThanOrEqual(third.asked[0]?.requests ?? Number.POSITIVE_INFINITY);
+    expect(planned).toBeLessThanOrEqual(2 * (third.asked[0]?.requests ?? 0));
   }, 60_000);
 });

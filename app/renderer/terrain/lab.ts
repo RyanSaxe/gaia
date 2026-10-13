@@ -110,7 +110,7 @@ const TEMPLATE = /* html */ `
 
 /** The terrain lab's covers wear no season; its light and sky are the first named world's, at the shell's hour. */
 const NO_SEASON: SeasonSpec = { swatches: {}, ground: NO_SHIFT, frost: 0, fall: hex(0xd9a04a) };
-const SKY_WORLD = WORLD_PRESETS[0];
+const SKY_WORLD = WORLD_PRESETS[0] as (typeof WORLD_PRESETS)[number];
 
 /** Each mode's hint, for a mouse and keyboard and for touch. */
 const HINTS = {
@@ -459,7 +459,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   /** Gaia's own world when "This codebase" is shown: what every area, patch, building, landmark and trail stands for. */
   let code: CodeLab | null = null;
   /** The world whose light, sky and air the lab shows: the codebase's own once it is shown. */
-  let skyWorld = SKY_WORLD;
+  let skyWorld: { readonly name: string; readonly world: Blueprint } = SKY_WORLD;
   let ways: Settled = { sites: [], network: NO_TRAILS };
   // Every entity's vitality by its path, live: buildings and landmarks stand
   // for entities, and each trail's wear follows the two it joins. Names repeat
@@ -2906,7 +2906,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
               judged: code.summary,
               size: code.world.size,
               sky: code.sky?.name,
-              regions: code.world.regions.map((r) => ({ area: r.area, land: r.land, x: Math.round(r.x), z: Math.round(r.z) })),
+              regions: code.world.regions.map((r) => ({ area: r.area, land: r.biome?.slots.relief?.use ?? "", x: Math.round(r.x), z: Math.round(r.z) })),
               areas: code.world.areas.map((a) => ({ path: a.path, x: Math.round(a.x), z: Math.round(a.z), ground: Math.round(a.ground), depth: a.depth })),
               symbols: code.world.symbols.length,
               standingSymbols: symbolPlacements.filter((k) => k >= 0).length,

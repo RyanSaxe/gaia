@@ -12,8 +12,9 @@
 // each directory's area and land, each file's patch and what grows on it,
 // each entity's building or landmark on its lot, and the trails between them.
 
-import { type Blueprint, type CodeFacts, type EntityFacts, type FileFacts, type SymbolFact, rand, seedOf } from "@gaia/schema";
-import { TRAIL_PRESETS, WORLD_PRESETS } from "@gaia/realize";
+import { type Blueprint, type CodeFacts, type EntityFacts, type FileFacts, type RouteSpec, type SymbolFact, rand, seedOf } from "@gaia/schema";
+import { link } from "@gaia/kinds";
+import { TRAIL_PRESETS, WORLD_PRESETS, buildSlots } from "@gaia/realize";
 import { type WorldSpec, outlinesOf } from "@gaia/terrain";
 import { type CodeWorld, type Judge, type Judgments, layoutWorld } from "@gaia/world";
 import type { ConsentPlan, JudgedThing, Opening, StartChoice, StartOffer, WorldDocument } from "../../world-service/protocol.ts";
@@ -26,7 +27,7 @@ import type { LayoutReply, LayoutRequest } from "./layout-worker.ts";
 import LayoutWorker from "./layout-worker.ts?worker";
 import proving from "./fixtures/proving.json";
 import provingJudged from "./fixtures/proving-judged.json";
-import { CHARACTERS, FORMS, LANDS } from "./looks.ts";
+import { CHARACTERS, COMPOSING, FORMS, LANDS } from "./looks.ts";
 import type { Represented, SampleEntity } from "./samples.ts";
 import { composedName } from "./settlement.ts";
 import type { StandCode, StandLot } from "./stand.ts";
@@ -52,8 +53,8 @@ export interface CodeLab {
   readonly buildings: readonly SampleEntity[];
   /** The entities landmarks stand for: the landmark Jev composed for each and its facts, in the order the stand sites them. */
   readonly landmarks: readonly { readonly path: string; readonly blueprint: Blueprint; readonly facts: EntityFacts; readonly vitality: number }[];
-  /** The world preset whose light, sky and air the world takes. */
-  readonly sky: (typeof WORLD_PRESETS)[number] | undefined;
+  /** The light, sky, season and wind the world takes: what Jev composed, by name for the lab's reports. */
+  readonly sky: { readonly name: string; readonly world: Blueprint } | undefined;
   /** What the bake thread needs to stand this world's things, given the request's trail styles. */
   readonly stand: StandCode;
   /** Who judged a thing, by `judgedThing` ("file:src/main.ts", "entity:packages/world"). */
@@ -220,6 +221,12 @@ export async function codeWorld(veil: Veil): Promise<CodeLab> {
   return codeLab(document);
 }
 
+/** A trail's route as the terrain walks it: what its link blueprint builds, or the first hand-filled trail's for one not composed. */
+function routeOf(route: Blueprint | undefined): RouteSpec {
+  const blueprint = route ?? (TRAIL_PRESETS[0] as (typeof TRAIL_PRESETS)[number]).blueprint;
+  return buildSlots(blueprint, link, COMPOSING.lib, { seed: 1, facts: {} }).get("route")?.output as RouteSpec;
+}
+
 /** Everything the terrain lab needs to bake and furnish a world document. */
 export function codeLab({ facts, world, judges, summary, judged }: WorldDocument): CodeLab {
   const fallback = Object.values(LANDS)[0]?.biome;
@@ -233,7 +240,7 @@ export function codeLab({ facts, world, judges, summary, judged }: WorldDocument
       base: rand(seedOf(`base:${r.area}`)).range(-2, 2),
       reach: r.reach,
       sites: r.sites,
-      biome: withWater(LANDS[r.land]?.biome ?? fallback, r.water),
+      biome: withWater(r.biome ?? fallback, r.water),
     })),
   };
   const entities = new Map(facts.entities.map((e) => [e.path, e]));
@@ -247,7 +254,7 @@ export function codeLab({ facts, world, judges, summary, judged }: WorldDocument
     files: new Map(facts.files.map((f) => [f.path, f])),
     buildings: houses.map((t) => ({ facts: entities.get(t.path) as EntityFacts, blueprint: t.blueprint, kindName: composedName(t.blueprint), vitality: t.vitality })),
     landmarks: rises.map((t) => ({ path: t.path, blueprint: t.blueprint, facts: entities.get(t.path) as EntityFacts, vitality: t.vitality })),
-    sky: WORLD_PRESETS.find((p) => p.name === world.world) ?? WORLD_PRESETS[0],
+    sky: world.sky === undefined ? WORLD_PRESETS[0] : { name: "composed", world: world.sky },
     stand: {
       lots: houses.map(lot),
       landmarks: rises.map((t, i) => ({ landmark: i, lot: lot(t) })),
@@ -278,7 +285,8 @@ export function codeLab({ facts, world, judges, summary, judged }: WorldDocument
         });
       })(),
       // Trails joining parts of the code no other trail joins route first, then the most wanted.
-      trails: world.trails.map((t) => ({ from: t.from, to: t.to, want: (t.spans === true ? 1 : 0) + t.want, style: Math.max(0, TRAIL_PRESETS.findIndex((p) => p.name === t.look)) })),
+      // Each trail keeps the width, wear, edging, winding and crossing Jev composed for it.
+      trails: world.trails.map((t) => ({ from: t.from, to: t.to, want: (t.spans === true ? 1 : 0) + t.want, style: routeOf(t.route) })),
     },
     judgeOf: (thing) => judges[thing] ?? "stand-in",
     summary,

@@ -69,15 +69,15 @@ export interface StandCode {
   readonly symbols: readonly StandSymbol[];
   /** Per terrain region: how much of each understory rule it holds (by rule id; absent counts 1), and what its open ground reads as. */
   readonly regions: readonly { readonly understory: Readonly<Record<string, number>>; readonly open?: Habitat }[];
-  /** Trails between lots by id; `style` indexes `trailStyles`; the most wanted route first. */
-  readonly trails: readonly { readonly from: string; readonly to: string; readonly want: number; readonly style: number }[];
+  /** Trails between lots by id, each with its own route as Jev composed it; the most wanted route first. */
+  readonly trails: readonly { readonly from: string; readonly to: string; readonly want: number; readonly style: RouteSpec }[];
 }
 
 export interface StandRequest {
   readonly buildings: readonly StandBuilding[];
   /** The landmarks a world may stand; a world with more rises than kinds repeats them. */
   readonly landmarks: readonly StandLandmark[];
-  /** Trail looks: between landmarks, from a building's door, and for a loop. */
+  /** The lab's own trail looks, for a world written by hand: between landmarks, from a building's door, and for a loop. A codebase's trails carry their own (`StandCode.trails`). */
   readonly trailStyles: readonly [RouteSpec, RouteSpec, RouteSpec];
   /** How many trees, the scatter's seed, and each build's trunk and crown radius by build: tree i copies a build chosen from i. */
   readonly trees: { readonly count: number; readonly seed: number; readonly presets: number; readonly builds: number; readonly bases: readonly number[]; readonly crowns: readonly number[] };
@@ -436,7 +436,7 @@ function settleCode(t: Terrain, req: StandRequest, code: StandCode, sites: reado
     const from = spot(w.from);
     const to = spot(w.to);
     if (from === null || to === null) return [];
-    return [{ id: `${w.from}->${w.to}`, from, to, style: req.trailStyles[w.style] ?? req.trailStyles[0], want: w.want }];
+    return [{ id: `${w.from}->${w.to}`, from, to, style: w.style, want: w.want }];
   });
   const keepOut: Occupied[] = [
     ...homes.map((b) => ({ x: b.site.x, z: b.site.z, radius: Math.hypot(b.plan.width, b.plan.depth) / 2 + 0.6 })),

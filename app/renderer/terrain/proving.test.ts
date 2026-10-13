@@ -6,7 +6,7 @@ import { FLORA_PRESETS, LANDMARK_PRESETS, STRUCTURE_PRESETS, TRAIL_PRESETS, buil
 import { type ScatterRule, TERRAIN, type Terrain, bakeTerrain, groundLook, junctionVitality, ownershipOf, placeAt, vitalityAt, vitalityOver, wayVitalityAt } from "@gaia/terrain";
 import { type Judgments, areaVitality, groundVitality } from "@gaia/world";
 import { codeLab, provingWorld } from "./code-world.ts";
-import { BUILDINGS, CHARACTERS, FORMS, LANDMARKS, LANDS, TRAILS, WATERS } from "./looks.ts";
+import { BUILDINGS, CHARACTERS, FORMS, LANDMARKS, LANDS, TRAILS, WATERS, presetBlueprint } from "./looks.ts";
 import { type Stand, extentOf, groundSites, landmarkBase, ownerVitality, standWorld, understoryVitality } from "./stand.ts";
 import judgedFixture from "./fixtures/proving-judged.json";
 
@@ -40,11 +40,15 @@ const waterField = vitalityOver(own, tables.area);
 describe("the proving ground", () => {
   it("chooses every option the judge can choose, and stands every building and landmark thriving, tired and in ruin", () => {
     const used = (options: object, chosen: Iterable<string>): string[] => Object.keys(options).filter((k) => ![...chosen].includes(k));
-    expect(used(LANDS, Object.values(judged.lands))).toEqual([]);
+    // Lands and trails are hand-filled blueprints here, so each preset is found by its blueprint.
+    const blueprints = (of: Iterable<{ readonly id: string } | undefined>): Set<string> => new Set([...of].flatMap((b) => (b === undefined ? [] : [b.id])));
+    const landsUsed = blueprints(Object.values(judged.lands));
+    expect(Object.keys(LANDS).filter((k) => !landsUsed.has(presetBlueprint("land", k).id))).toEqual([]);
     expect(used(WATERS, Object.values(judged.waters))).toEqual([]);
     expect(used(CHARACTERS, Object.values(judged.characters))).toEqual([]);
     expect(used(FORMS, Object.values(judged.forms).flatMap((f) => Object.values(f)))).toEqual([]);
-    expect(used(TRAILS, judged.trails.map((t) => t.look))).toEqual([]);
+    const trailsUsed = blueprints(judged.trails.map((t) => t.route));
+    expect(Object.keys(TRAILS).filter((k) => !trailsUsed.has(presetBlueprint("trail", k).id))).toEqual([]);
     for (const [as, looks] of [["building", BUILDINGS], ["landmark", LANDMARKS]] as const) {
       for (const look of Object.keys(looks)) {
         const blueprint = (as === "building" ? STRUCTURE_PRESETS : LANDMARK_PRESETS).find((p) => p.name === look)?.blueprint.id;

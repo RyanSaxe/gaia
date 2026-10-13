@@ -1087,7 +1087,7 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
         pace();
       } else if (o.stage === "asking") {
         asked(o.asking);
-        for (const path of Object.keys(o.settled)) letter(path);
+        for (const path of o.settled) letter(path);
       } else if (o.stage === "understood") read(o.files, o.areas);
     },
     baking(health) {
