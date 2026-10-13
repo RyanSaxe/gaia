@@ -166,9 +166,9 @@ export interface Trip {
 
 /**
  * Plans a trip along `way`, its first `off.start` and last `off.end` meters
- * walked off the tread, ending facing `face` if given.
+ * walked off the tread, ending facing `face` if given, at `pace` on the tread.
  */
-export function planTrip(way: readonly Walker[], off: { readonly start: number; readonly end: number }, face: number | null = null): Trip {
+export function planTrip(way: readonly Walker[], off: { readonly start: number; readonly end: number }, face: number | null = null, pace: number = TRAVEL.pace): Trip {
   const along = [0];
   for (let i = 1; i < way.length; i++) along.push((along[i - 1] as number) + Math.hypot((way[i] as Walker).x - (way[i - 1] as Walker).x, (way[i] as Walker).z - (way[i - 1] as Walker).z));
   const length = along[along.length - 1] ?? 0;
@@ -196,7 +196,7 @@ export function planTrip(way: readonly Walker[], off: { readonly start: number; 
     const dz = (points[hi * 2 + 1] as number) - (points[lo * 2 + 1] as number);
     heading[i] = Math.hypot(dx, dz) > 1e-6 ? yawAlong(dx, dz) : i > 0 ? (heading[i - 1] as number) : 0;
   }
-  const pace = new Float32Array(n);
+  const paces = new Float32Array(n);
   for (let i = 0; i < n; i++) {
     const s = i * ds;
     // A sample within a step of the tread's end is off it too, so the pace between samples never rises past `off`.
@@ -204,12 +204,12 @@ export function planTrip(way: readonly Walker[], off: { readonly start: number; 
     // How fast the way ahead turns here, radians a meter, over the steps either side.
     let bend = 0;
     for (const j of [i - 1, i]) if (j >= 0 && j < n - 1) bend = Math.max(bend, Math.abs(turnTo(heading[j] as number, heading[j + 1] as number)) / Math.max(ds, 1e-9));
-    pace[i] = Math.min(offTread ? TRAVEL.off : TRAVEL.pace, bend > 1e-9 ? (TRAVEL.bend * TRAVEL.turn) / bend : Infinity);
+    paces[i] = Math.min(offTread ? Math.min(TRAVEL.off, pace) : pace, bend > 1e-9 ? (TRAVEL.bend * TRAVEL.turn) / bend : Infinity);
   }
   // Slowing at the steady rate for every bend ahead and to stand at the end; getting going is the step's.
-  pace[n - 1] = 0;
-  for (let i = n - 2; i >= 0; i--) pace[i] = Math.min(pace[i] as number, Math.sqrt((pace[i + 1] as number) ** 2 + 2 * TRAVEL.accel * ds));
-  return { points, heading, pace, length, face };
+  paces[n - 1] = 0;
+  for (let i = n - 2; i >= 0; i--) paces[i] = Math.min(paces[i] as number, Math.sqrt((paces[i + 1] as number) ** 2 + 2 * TRAVEL.accel * ds));
+  return { points, heading, pace: paces, length, face };
 }
 
 /** Where a trip has the person: how far along, how fast, where and facing where. */
@@ -251,6 +251,11 @@ function headingAt(trip: Trip, s: number): number {
   return a + turnTo(a, trip.heading[i + 1] as number) * (f - i);
 }
 
+/** Where a trip's way is `s` meters along. */
+export function travelPoint(trip: Trip, s: number): Walker {
+  return { x: sampleAt(trip, trip.points, s, 2, 0), z: sampleAt(trip, trip.points, s, 2, 1) };
+}
+
 /** A trip about to begin, the person facing `yaw`. */
 export function travelFrom(trip: Trip, yaw: number): Travel {
   return { s: 0, v: 0, x: trip.points[0] as number, z: trip.points[1] as number, yaw, follows: true, going: false, done: trip.length <= 0 && trip.face === null };
@@ -260,9 +265,11 @@ export function travelFrom(trip: Trip, yaw: number): Travel {
  * One step of `dt` seconds. `yaw` is where the view faces now: the trip's own
  * last yaw, or where a hand or a key turned it since. With `stop`, the person
  * has taken the keys: the trip slows them along the way at `TRAVEL.brake`
- * and leaves the view to them.
+ * and leaves the view to them. The world stands ready only `ready` meters
+ * along: the body slows at the steady rate to wait there, and goes on as it
+ * moves on.
  */
-export function travelStep(trip: Trip, at: Travel, dt: number, yaw: number, stop = false): Travel {
+export function travelStep(trip: Trip, at: Travel, dt: number, yaw: number, stop = false, ready = Infinity): Travel {
   if (at.done || dt <= 0) return at;
   const arrived = at.s >= trip.length - 1e-3;
   const ahead = arrived ? (trip.face ?? yaw) : headingAt(trip, at.s);
@@ -276,13 +283,17 @@ export function travelStep(trip: Trip, at: Travel, dt: number, yaw: number, stop
   }
   if (arrived) return { ...at, v: 0, yaw: y, follows, done: stop || !follows || Math.abs(turnTo(y, ahead)) < 1e-6 };
   const going = at.going || !follows || Math.abs(turnTo(y, ahead)) < TRAVEL.facing;
-  // The pace where this step would take the body, its square read between samples, so slowing is steady between them too.
-  const cap = paceAt(trip, Math.min(trip.length, at.s + at.v * dt));
+  // The pace where this step would take the body, its square read between samples, so slowing is steady between them
+  // too; and slowing as steadily to wait where the world ahead is not yet ready.
+  const next = Math.min(trip.length, at.s + at.v * dt);
+  const waits = ready < trip.length;
+  const cap = Math.min(paceAt(trip, next), waits ? Math.sqrt(2 * TRAVEL.accel * Math.max(0, ready - next)) : Infinity);
   let v = 0;
   if (stop) v = Math.min(cap, Math.max(0, at.v - TRAVEL.brake * dt));
+  else if (going) v = Math.min(cap, at.v + TRAVEL.accel * dt);
   // Near the end the pace falls to nothing; the body creeps the last of the way rather than never arriving.
-  else if (going) v = Math.max(Math.min(cap, at.v + TRAVEL.accel * dt), Math.min(TRAVEL.creep, at.v));
-  const s = Math.min(trip.length, at.s + ((at.v + v) / 2) * dt);
+  if (going && !stop && !waits) v = Math.max(v, Math.min(TRAVEL.creep, at.v));
+  const s = Math.min(trip.length, waits ? Math.max(at.s, ready) : Infinity, at.s + ((at.v + v) / 2) * dt);
   const x = sampleAt(trip, trip.points, s, 2, 0);
   const z = sampleAt(trip, trip.points, s, 2, 1);
   const end = s >= trip.length - 1e-3;

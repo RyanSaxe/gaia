@@ -40,6 +40,18 @@ export interface Standing {
   follow(x: number, z: number): void;
   /** Resolves once every stander's tiles within sight of (x, z) stand. */
   ready(x: number, z: number): Promise<void>;
+  /**
+   * Resolves once every stander holds its tiles within sight of (x, z),
+   * those already on their way included, for the frames that follow to
+   * stand one stander at a time: what a trip asks of the way ahead.
+   */
+  fetch(x: number, z: number): Promise<void>;
+  /**
+   * Each tile that stood while the person was within its stander's sight of
+   * it since the last call, where its things could have been seen to
+   * appear: by stander, how near the person was, and that sight.
+   */
+  late(): readonly { readonly stander: string; readonly distance: number; readonly sight: number }[];
   /** How many tiles each stander holds, for reports. */
   held(): Record<string, number>;
 }
@@ -54,7 +66,10 @@ const STEP = 24;
 interface Held<T> {
   readonly stander: Stander<T>;
   readonly tiles: Map<string, readonly T[]>;
-  readonly asking: Set<string>;
+  /** The tiles on their way, each with its wait. */
+  readonly asking: Map<string, Promise<void>>;
+  /** The tiles its things last stood from. */
+  stood: Set<string>;
   dirty: boolean;
 }
 
@@ -64,6 +79,9 @@ export function createStanding(focal: () => number): Standing {
   let spec: WorldSpec | null = null;
   let generation = 0;
   let at = { x: Number.NaN, z: Number.NaN };
+  /** Where the person was at the last follow. */
+  let person = { x: Number.NaN, z: Number.NaN };
+  let lates: { stander: string; distance: number; sight: number }[] = [];
   /** Distance from (x, z) to the nearest point of tile (ti, tj), meters. */
   const distance = (ti: number, tj: number, x: number, z: number): number => {
     const frame = frameOf(spec as WorldSpec);
@@ -89,49 +107,65 @@ export function createStanding(focal: () => number): Standing {
     const waits: Promise<void>[] = [];
     for (const [ti, tj] of within(x, z, sight(h) + AHEAD)) {
       const key = `${ti},${tj}`;
-      if (h.tiles.has(key) || h.asking.has(key)) continue;
+      if (h.tiles.has(key)) continue;
+      const coming = h.asking.get(key);
+      if (coming !== undefined) {
+        waits.push(coming);
+        continue;
+      }
       const got = h.stander.tile(ti, tj);
       if (!(got instanceof Promise)) {
         h.tiles.set(key, got);
         h.dirty = true;
         continue;
       }
-      h.asking.add(key);
-      waits.push(
-        got.then((things) => {
-          h.asking.delete(key);
-          if (things === null || mine !== generation) return;
-          h.tiles.set(key, things);
-          h.dirty = true;
-        }),
-      );
+      const wait = got.then((things) => {
+        h.asking.delete(key);
+        if (things === null || mine !== generation) return;
+        h.tiles.set(key, things);
+        h.dirty = true;
+      });
+      h.asking.set(key, wait);
+      waits.push(wait);
     }
     return waits;
   };
   const stand = <T>(h: Held<T>): void => {
     h.dirty = false;
     const keys = [...h.tiles.keys()].sort();
+    if (!Number.isNaN(person.x)) {
+      for (const key of keys) {
+        if (h.stood.has(key)) continue;
+        const [ti, tj] = key.split(",").map(Number) as [number, number];
+        const d = distance(ti, tj, person.x, person.z);
+        if (d < sight(h)) lates.push({ stander: h.stander.name, distance: Math.round(d), sight: Math.round(sight(h)) });
+      }
+    }
+    h.stood = new Set(keys);
     const things: T[] = [];
     for (const key of keys) for (const t of h.tiles.get(key) as readonly T[]) things.push(t);
     h.stander.stand(things);
   };
   return {
     add(stander) {
-      all.push({ stander, tiles: new Map(), asking: new Set(), dirty: false } as Held<unknown>);
+      all.push({ stander, tiles: new Map(), asking: new Map(), stood: new Set(), dirty: false } as Held<unknown>);
     },
     open(next, given) {
       spec = next;
       generation++;
       at = { x: Number.NaN, z: Number.NaN };
+      person = { x: Number.NaN, z: Number.NaN };
       for (const h of all) {
         h.tiles.clear();
         h.asking.clear();
+        h.stood = new Set();
         for (const [key, things] of given?.get(h.stander.name) ?? []) h.tiles.set(key, things);
         h.dirty = true;
       }
     },
     follow(x, z) {
       if (spec === null) return;
+      person = { x, z };
       if (!(Math.hypot(x - at.x, z - at.z) < STEP)) {
         at = { x, z };
         for (const h of all) {
@@ -152,6 +186,15 @@ export function createStanding(focal: () => number): Standing {
       if (spec === null) return;
       await Promise.all(all.flatMap((h) => ask(h, x, z)));
       for (const h of all) if (h.dirty) stand(h);
+    },
+    async fetch(x, z) {
+      if (spec === null) return;
+      await Promise.all(all.flatMap((h) => ask(h, x, z)));
+    },
+    late() {
+      const out = lates;
+      lates = [];
+      return out;
     },
     held: () => Object.fromEntries(all.map((h) => [h.stander.name, h.tiles.size])),
   };

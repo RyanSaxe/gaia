@@ -109,6 +109,34 @@ describe("travel along the trails", { timeout: 20_000 }, () => {
     }
   });
 
+  it("waits where the world ahead is not yet ready, slowing at its steady rate, and goes on once it is", () => {
+    const trip = planTrip(way, { start: 0, end: 0 });
+    let at = travelFrom(trip, trip.heading[0] as number);
+    // Nothing is ready: the view turns, but the body stands.
+    for (let k = 0; k < 60; k++) at = travelStep(trip, at, DT, at.yaw, false, 0);
+    expect(at.s).toBe(0);
+    // Ready to 200 m: it goes, and slows to stand there.
+    for (let k = 0; k < 60 * 40; k++) {
+      const next = travelStep(trip, at, DT, at.yaw, false, 200);
+      expect(next.s).toBeLessThanOrEqual(200);
+      expect(at.v - next.v).toBeLessThanOrEqual(TRAVEL.accel * DT * 1.05 + 1e-6);
+      at = next;
+    }
+    expect(at.s).toBeGreaterThan(199);
+    expect(at.v).toBeLessThan(0.5);
+    // Ready to the end: it goes on and arrives.
+    for (let k = 0; k < 60 * 600 && !at.done; k++) at = travelStep(trip, at, DT, at.yaw);
+    expect(at.done).toBe(true);
+    expect(at.s).toBeCloseTo(trip.length, 2);
+  });
+
+  it("goes no faster than its pace", () => {
+    const trip = planTrip(way, { start: 0, end: 0 }, null, 35);
+    const steps = take(trip, trip.heading[0] as number);
+    expect(Math.max(...steps.map((s) => s.v))).toBeLessThanOrEqual(35 + 1e-6);
+    expect(Math.max(...steps.map((s) => s.v))).toBeGreaterThan(TRAVEL.pace);
+  });
+
   it("goes no faster than a hurried walk off the tread", () => {
     const trip = planTrip(way, { start: 60, end: 60 });
     for (const s of take(trip, trip.heading[0] as number)) if (s.s < 60 || s.s > trip.length - 60) expect(s.v).toBeLessThanOrEqual(TRAVEL.off + 1e-6);
