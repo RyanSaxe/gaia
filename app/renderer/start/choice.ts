@@ -9,8 +9,13 @@ export interface StartPage {
   offer(offer: StartOffer): Promise<StartChoice>;
   /** The hour the world shows: the table is lit by it, while the signpost follows the veil's night. */
   hour(h: number): void;
-  /** The place is on its way: the page dissolves into the wait beneath it. */
+  /**
+   * The place is on its way, or a world opens with no start: the page stops taking choices. The table stays behind the
+   * wait, its card risen into the wait's sheet; the signpost dissolves into the wait.
+   */
   leave(): void;
+  /** The wait has lifted and the world shows: the page lets go of everything. */
+  close(): void;
 }
 
 /** The words for an address that leads nowhere, in the world's own voice. */

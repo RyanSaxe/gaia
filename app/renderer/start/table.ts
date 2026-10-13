@@ -2,13 +2,16 @@
 // before lie on the sheet as pictures of their field maps, and a line at the
 // sheet's foot waits for an address, written in ink from a text field no one
 // sees. Touching a card chooses its world: the card lifts, rises toward the
-// person and becomes the wait's sheet, while the table fades into the wait's
-// paper. Over the canvas lie only clear hit areas for the cards, the line and
-// the folder's words, so a pointer, a finger and the keyboard all reach them.
+// person and becomes the wait's sheet, while the table falls out of focus
+// behind it. A folder or an address gets a fresh card of plain paper, laid
+// on the sheet and risen the same way, and so does a world opened with no
+// start. The table stays behind the wait until the world shows. Over the
+// canvas lie only clear hit areas for the cards, the line and the folder's
+// words, so a pointer, a finger and the keyboard all reach them.
 //
 // The table draws a frame only when something changes: the hour, the
-// writing, a card moving. Once it has given way to the wait it stops and
-// lets go of its renderer, textures and geometry.
+// writing, a card moving. Once the wait lifts it lets go of its renderer,
+// textures and geometry.
 
 import type { StartChoice, StartOffer } from "../../world-service/protocol.ts";
 import { RECENT_KEPT } from "../../world-service/recent.ts";
@@ -16,7 +19,7 @@ import { SHEET_LOGO } from "../brand/logo.ts";
 import { REFUSALS, type StartPage, askFolder, placeOf } from "./choice.ts";
 import type { Writing } from "./table-ink.ts";
 import { tableLayout } from "./table-layout.ts";
-import { LIFT_S, RISE_S, type Rect, type TableScene, createTableScene } from "./table-scene.ts";
+import { LAY_S, LIFT_S, RISE_S, type Rect, type TableScene, createTableScene } from "./table-scene.ts";
 
 /** How long the darker stroke takes to run along the line, and an answer to be written in, seconds. */
 const READING_S = 1.2;
@@ -25,6 +28,11 @@ const ANSWER_S = 0.7;
 const UPRIGHT = 0.8;
 /** How long a chosen map takes to lift and rise into the wait's sheet, ms. */
 export const CHOSEN_MS = (LIFT_S + RISE_S) * 1000;
+/** Once the risen card lies under the wait's sheet: how long the sheet takes to come in over it (its opacity transition in wait.css), then how long the card takes to give way under it, ms. */
+const SHEET_IN_MS = 500;
+const WITHDRAW_MS = 500;
+/** How long the table takes to come in when shown, ms (start.css, `.start`). */
+const SHOWN_MS = 900;
 
 const decoded = async (src: string): Promise<HTMLImageElement> => {
   const image = new Image();
@@ -76,6 +84,8 @@ export function createTable(veil: HTMLElement, options: TableOptions): StartPage
   let chosen: { readonly index: number; readonly at: number } | null = null;
   /** Lays the chosen map's picture on the wait's sheet, once the card covers it. */
   let lay: (() => void) | null = null;
+  /** When the risen card came to lie under the wait's sheet. */
+  let landedAt: number | null = null;
   let leaving = false;
   let gone = false;
 
@@ -110,10 +120,17 @@ export function createTable(veil: HTMLElement, options: TableOptions): StartPage
       const t = (now - chosen.at) / 1000;
       scene.choose(chosen.index, Math.min(t, CHOSEN_MS / 1000), toSheet());
       if (t * 1000 < CHOSEN_MS) moving = true;
-      else {
+      else if (landedAt === null) {
+        // The card lies where the wait's sheet is: the sheet takes its picture and comes in over it, the table behind.
         lay?.();
         lay = null;
-        if (leaving) fadeOut();
+        landedAt = now;
+        veil.dataset.table = "behind";
+        moving = true;
+      } else {
+        const shown = 1 - Math.min(1, Math.max(0, (now - landedAt - SHEET_IN_MS) / WITHDRAW_MS));
+        scene.withdraw(shown);
+        moving = shown > 0;
       }
     }
     scene.render();
@@ -200,15 +217,35 @@ export function createTable(veil: HTMLElement, options: TableOptions): StartPage
           if (settle === null || chosen !== null) return;
           const picture = pictures[i];
           if (r.picture !== undefined && picture !== null && picture !== undefined) lay = options.chosen?.(r.picture, picture.naturalWidth / Math.max(1, picture.naturalHeight)) ?? null;
-          chosen = { index: i, at: performance.now() };
-          root.classList.add("choosing");
-          draw();
+          lift(i, performance.now());
           choose(placeOf(r));
         });
         return b;
       }),
     );
     placeHits();
+  }
+
+  /** Card `index` lifts from `at` and rises into the wait's sheet. */
+  function lift(index: number, at: number): void {
+    chosen = { index, at };
+    root.classList.add("choosing");
+    draw();
+  }
+  /** A world with no card of its own gets a fresh one, in the shape the wait's sheet has, laid on the sheet `after` ms from now and risen. */
+  function liftFresh(after = 0): void {
+    if (scene === null || chosen !== null) return;
+    const s = options.sheet();
+    lift(scene.fresh(s.width / Math.max(1, s.height)), performance.now() + after + LAY_S * 1000);
+  }
+  /** Shows the table once its first frame is drawn, so it comes in whole, in front of the wait. */
+  function show(): void {
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        root.classList.add("shown");
+        if (veil.dataset.table !== "behind") veil.dataset.table = "front";
+      }),
+    );
   }
 
   // A phone turned on its side, or a window made narrow, lays the table out again.
@@ -227,20 +264,6 @@ export function createTable(veil: HTMLElement, options: TableOptions): StartPage
   });
   resized.observe(root);
 
-  function fadeOut(): void {
-    if (gone || root.classList.contains("leaving")) return;
-    input.blur();
-    root.classList.add("leaving");
-    window.setTimeout(() => {
-      gone = true;
-      cancelAnimationFrame(frame);
-      resized.disconnect();
-      scene?.dispose();
-      scene = null;
-      root.remove();
-    }, 1400);
-  }
-
   return {
     offer(offer) {
       const recent = offer.recent.slice(0, RECENT_KEPT);
@@ -248,8 +271,12 @@ export function createTable(veil: HTMLElement, options: TableOptions): StartPage
       shown = recent;
       chosen = null;
       lay = null;
+      landedAt = null;
       readingFrom = null;
       root.classList.remove("choosing");
+      // Offered again on the same table, as when a place is refused, a card that had risen is back and in front.
+      scene?.withdraw(1);
+      if (veil.dataset.table === "behind") veil.dataset.table = "front";
       if (offer.refused !== undefined) {
         input.value = offer.refused.address;
         said.textContent = REFUSALS[offer.refused.why];
@@ -262,22 +289,43 @@ export function createTable(veil: HTMLElement, options: TableOptions): StartPage
         scene.choose(null, 0);
         write(writing);
         draw();
-        // Shown once its first frame is drawn, so it comes in whole.
-        requestAnimationFrame(() => requestAnimationFrame(() => root.classList.add("shown")));
+        show();
       });
       return new Promise((resolve) => (settle = resolve));
     },
     hour(h) {
       hour = h;
-      if (scene === null) return;
-      scene.hour(h);
-      draw();
+      // The page passes the hour every frame; the table draws again only when its light has changed.
+      if (scene?.hour(h) === true) draw();
     },
     leave() {
+      if (leaving) return;
       settle = null;
       leaving = true;
-      // A chosen card finishes its rise into the wait's sheet first; otherwise the table dissolves into the wait now.
-      if (chosen === null || performance.now() - chosen.at >= CHOSEN_MS) fadeOut();
+      input.blur();
+      root.classList.add("choosing");
+      // A chosen card is already on its way. A folder, an address, or a world opened with no start gets a fresh card,
+      // on the table as it is or, opened with no start, on an empty one built for it.
+      if (scene !== null) liftFresh();
+      else
+        void build([]).then(() => {
+          if (scene === null) return;
+          scene.choose(null, 0);
+          write(writing);
+          draw();
+          show();
+          // Once the empty table has come in (start.css), so the card is laid on a table already there.
+          liftFresh(SHOWN_MS);
+        });
+    },
+    close() {
+      gone = true;
+      cancelAnimationFrame(frame);
+      resized.disconnect();
+      scene?.dispose();
+      scene = null;
+      root.remove();
+      delete veil.dataset.table;
     },
   };
 }

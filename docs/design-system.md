@@ -532,8 +532,11 @@ While a codebase's world opens, the wait covers the screen
 (`app/renderer/wait/`). It shows no words, counts or percentages and never
 names Jev or OpenRouter: the progress a person sees is the world coming to
 be, as the field map paints itself (see The field sheet). The field map's
-own sheet lies on its creased paper, the same size, paper and torn edge,
-with no fringe of wood, title or turned-down corner. While the code is read
+own sheet lies before the start's map table, out of focus and still behind
+it, the same size, paper and torn edge, with no fringe of wood, title or
+turned-down corner. In the app only that paper shows for the moment
+before the table is drawn; with the signpost, or in the standalone lab
+with no start, the sheet lies on its creased paper instead. While the code is read
 the sheet is bare and still, or, for a world chosen on the start, is that
 world's picture as it was last walked, which stays as the sheet's paint
 while the wait paints the world's own over it (and folds away if the land
@@ -582,9 +585,11 @@ judged.
 ## The start
 
 When Gaia opens with no world named, the start lies over the wait
-(`app/renderer/start/`), in its veil, so it follows the same hour and, once
-a place is chosen, dissolves into the wait's paper, where the field map then
-paints itself as the world is opened. It offers the worlds a
+(`app/renderer/start/`), in its veil, so it follows the same hour. Once a
+place is chosen, its map rises from the table and becomes the wait's sheet,
+where the field map then paints itself as the world is opened, and the
+table stays behind it until the world shows. A world opened with no start,
+as on a reload, rises from the same table on a fresh card. It offers the worlds a
 person walked before, a folder on this computer, and a line to write the
 address of a place on GitHub. Nothing on it is a box or a word of jargon:
 no "repository", "clone" or "Jev". An address that leads nowhere is
@@ -634,17 +639,24 @@ walked before, pictured by `start/gaia-picture.webp`):
   - A tap on a card chooses its world: the card lifts 4 cm and straightens
     over half a second, its shadow sliding out from under it, then rises
     toward the person over 1.3 s and turns to face them, leaving the table's
-    light. The eye follows it, so the table falls out of focus, and the
-    table fades into the wait's own paper beneath the page, where the
-    wait's sheet has taken the card's shape. The picture's margin closes as
-    the card rises, so the card ends at the sheet's size and place as the
-    sheet's own picture, edge to edge; the sheet's copy of it is laid under
-    the card the moment it lands, the card dissolves into it, and the wait
-    paints the map from there.
+    light. The eye follows it, so the table falls out of focus behind it,
+    and the wait's sheet, unseen beneath the table, has taken the card's
+    shape. The picture's margin closes as the card rises, so the card ends
+    at the sheet's size and place as the sheet's own picture, edge to edge.
+    The moment it lands the table goes behind the wait, held still and out
+    of focus, and the sheet, its copy of the picture laid, comes in over the
+    card in half a second; the card then gives way under it, and the wait
+    paints the map from there. When the world stands, the sheet folds away
+    into it as ever and the table goes with the veil.
+  - A folder or an address gets a fresh card of plain paper, in the shape
+    the wait's sheet has, laid on the middle of the sheet: it comes down
+    from the person's side over 0.45 s, then lifts and rises the same way.
+    So does a world opened with no start, on an empty table.
   - It draws a frame only when something changes: the light as the hour
     turns, the ink on the line, a card moving. The sun's shadow map is drawn
-    again only when the light changes. Once it has given way to the wait it
-    stops and lets go of its renderer, textures and geometry.
+    again only when the light changes, though the page passes the hour every
+    frame. Behind the wait it draws nothing more, and once the world shows
+    it lets go of its renderer, textures and geometry.
 - **The world's edge**: standing where the land begins, at the hour it is,
   by a wooden signpost like the fingerposts in the world. Its arms are
   painted with the worlds walked before; one points "somewhere on this
