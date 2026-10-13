@@ -94,8 +94,8 @@ export const TRAILS: Readonly<Record<string, Look>> = {
  * the world's own entities, files and definitions that it is offered to (0
  * the least important, 1 the most, as `rankThings` reads it), and how big and
  * how rare it is, which ends every one of its forms' words. The ranges are
- * wide and overlap, so nearly every thing is offered two to four sizes and
- * Jev chooses among them by character; the most important things are never
+ * wide and overlap, so every thing is offered at least two sizes and Jev
+ * chooses among them by character; the most important things are never
  * offered flowers, and only they are offered a building or a landmark. Jev
  * picks a building most times it is offered one (217 of 267 on Gaia's world
  * when buildings started at 0.90), so the buildings' range is narrow to keep
@@ -105,7 +105,7 @@ export const TRAILS: Readonly<Record<string, Look>> = {
 export const SIZES = {
   flowers: { rank: [0, 0.55], words: "Flowers grow low in the grass, and many things are flowers." },
   stones: { rank: [0, 0.75], words: "A stone sits from ankle to waist high, and many things are stones." },
-  bushes: { rank: [0.15, 0.92], words: "A bush grows knee to head high, and many things are bushes." },
+  bushes: { rank: [0.15, 0.97], words: "A bush grows knee to head high, and many things are bushes." },
   trees: { rank: [0.35, 1], words: "A tree grows tall over a person, and many things are trees." },
   buildings: { rank: [0.97, 1], words: "A building is as big as a house, and buildings are scarce: few things in a world are one." },
   landmarks: { rank: [0.98, 1], words: "A landmark rises over everything around it, and landmarks are the rarest: a world holds only a handful." },
