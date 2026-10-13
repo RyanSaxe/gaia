@@ -50,6 +50,8 @@ export interface GroundTexture {
     readonly uClip: { value: THREE.DataArrayTexture };
     /** Each level's first sample, in that level's own grid units (world over spacing times 2^k). */
     readonly uClipOrigin: { value: THREE.Vector2[] };
+    /** The layer each level is read from: its own, but while a painting of a far place is drawn (`PageLand.aside`). */
+    readonly uClipLayer: { value: number[] };
     /** Each sample's cover as the bake gave it (`Terrain.coverRegions` and `coverShares`), read by `REGIONS_GLSL`. */
     readonly uCoverRegions: { value: THREE.DataArrayTexture };
     readonly uCoverShares: { value: THREE.DataArrayTexture };
@@ -66,9 +68,12 @@ export interface GroundTexture {
   update(t: Terrain): void;
 }
 
-/** A texture over every level of the page's land, `data` level after level: a level's layer uploads in the frame after it moves. */
+/**
+ * A texture over every layer of the page's land, `data` layer after layer: the levels', then those set aside for a
+ * painting. A layer uploads in the frame after it changes.
+ */
 function clipTexture(data: Float32Array | Uint8Array, format: THREE.PixelFormat, type: THREE.TextureDataType): THREE.DataArrayTexture {
-  const texture = new THREE.DataArrayTexture(data, CLIP.size, CLIP.size, CLIP.levels);
+  const texture = new THREE.DataArrayTexture(data, CLIP.size, CLIP.size, CLIP.levels + CLIP.aside);
   texture.format = format;
   texture.type = type;
   texture.minFilter = THREE.NearestFilter;
@@ -88,10 +93,12 @@ export function createGroundTexture(land: PageLand): GroundTexture {
   const places = clipTexture(land.trailPlaces, THREE.RGFormat, THREE.FloatType);
   const textures = [ground, coverRegions, coverShares, places];
   const origins = Array.from({ length: levels }, () => new THREE.Vector2());
+  const layers = Array.from({ length: levels }, (_, k) => k);
   const frame = frameOf(land.terrain.spec);
   const uniforms = {
     uClip: { value: ground },
     uClipOrigin: { value: origins },
+    uClipLayer: { value: layers },
     uCoverRegions: { value: coverRegions },
     uCoverShares: { value: coverShares },
     uTrailPlace: { value: places },
@@ -104,11 +111,13 @@ export function createGroundTexture(land: PageLand): GroundTexture {
   const show = (k: number): void => {
     const o = land.origins[k] as { x: number; z: number };
     (origins[k] as THREE.Vector2).set(o.x, o.z);
+    layers[k] = land.layers[k] as number;
   };
-  land.onMoved = (k) => {
+  land.onMoved = (k, fresh) => {
     show(k);
+    if (!fresh) return;
     for (const t of textures) {
-      t.addLayerUpdate(k);
+      t.addLayerUpdate(land.layers[k] as number);
       t.needsUpdate = true;
     }
   };
@@ -135,6 +144,8 @@ export function createGroundTexture(land: PageLand): GroundTexture {
 export const GROUND_SAMPLE_GLSL = /* glsl */ `
 uniform highp sampler2DArray uClip;
 uniform vec2 uClipOrigin[${CLIP.levels}];
+// The layer each level is read from: its own, but while a painting of a far place is drawn (PageLand.aside).
+uniform int uClipLayer[${CLIP.levels}];
 uniform float uGroundN;
 uniform float uGroundOrigin;
 uniform float uGroundSpacing;
@@ -143,7 +154,7 @@ vec2 clipGrid(vec2 xz, int k) { return xz / (uGroundSpacing * exp2(float(k))) - 
 // Whether level k's window holds the cell around grid point g, with room to spare.
 bool clipHolds(vec2 g, float margin) { return all(greaterThanEqual(g, vec2(margin))) && all(lessThan(g, vec2(${CLIP.size}.0 - 1.0 - margin))); }
 // Texel i of level k, held within the window.
-ivec3 clipAt(ivec2 i, int k) { return ivec3(clamp(i, ivec2(0), ivec2(${CLIP.size - 1})), k); }
+ivec3 clipAt(ivec2 i, int k) { return ivec3(clamp(i, ivec2(0), ivec2(${CLIP.size - 1})), uClipLayer[k]); }
 vec4 clipTexel(ivec2 i, int k) { return texelFetch(uClip, clipAt(i, k), 0); }
 // The finest level whose window holds a point's nearest sample, for readers of that one sample.
 int clipNearest(vec2 xz) {

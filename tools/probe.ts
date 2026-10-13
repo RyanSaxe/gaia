@@ -15,13 +15,19 @@
 //   frame where it leaves and the far form stands alone; then, too small to
 //   see, dissolving and gone. Each is held against the wind's half-second change.
 // - stress: a world with five times the trees.
+// - paint: the painter check. Standing still in Gaia's world with the wind's
+//   clock frozen while the journal's painter paints the things farthest
+//   away, the person's view must not change at all; and the page's frames
+//   while it paints, late ones counted. Then 30 s standing still while the
+//   app's own painter works, as it does whenever the person stops: the view
+//   must not change either.
 //
 // The window stays hidden, at exactly the size asked for, except for the walk
 // that measures smoothness: a hidden window's frames don't keep the display's
 // pace, so it shows then, without taking focus; leave it uncovered. Timings
 // are only worth comparing from a quiet machine: other work on the GPU or CPU
 // makes them noisy, so the probe prints the load average it ran at.
-// Usage: pnpm probe [drawn] [steps] [hitch] [stress] [swap] [--world gaia|proving|sample]
+// Usage: pnpm probe [drawn] [steps] [hitch] [stress] [swap] [paint] [--world gaia|proving|sample]
 //          [--size METERS] [--spot NAME] [--dpr 1|2] [--json FILE]
 // The sample world is measured only when asked for, at --size meters across.
 // A spot is "valley", "turned" or a tour stop (`__lab.terrain.tour()` lists
@@ -36,7 +42,7 @@ import { parseArgs } from "node:util";
 import { build } from "esbuild";
 import { LAB_BUILD, labBundle, labPage } from "./lab-page.ts";
 
-const MEASURES = ["drawn", "steps", "hitch", "stress", "swap"] as const;
+const MEASURES = ["drawn", "steps", "hitch", "stress", "swap", "paint"] as const;
 type Measure = (typeof MEASURES)[number];
 
 /** Where each world is measured: by the stream at the valley, turned 120° from it, and the proving ground's woods. */
@@ -120,6 +126,10 @@ if (measures.has("swap")) {
   }
   jobs.push({ world: "gaia", calls });
 }
+if (measures.has("paint")) {
+  // Looking at the view draws frames of its own, so the page's frames are counted again over paintings made unwatched.
+  jobs.push({ world: "gaia", calls: [{ key: "open", js: OPEN }, { key: "paint", js: `(${go("valley")}, ${settle}, await T.paintCheck(6))` }, { key: "paint unwatched", js: `(${go("turned")}, ${settle}, await T.paintCheck(6, false))` }, { key: "paint unwatched near", js: `(${go("turned")}, ${settle}, await T.paintCheck(6, false, true))` }, { key: "stand", js: `(${go("valley")}, ${settle}, await T.standCheck(30))` }] });
+}
 if (measures.has("stress") && (values.world === undefined || values.world.includes("sample"))) {
   // The sample world, replanted with its usual trees and then five times as many.
   const measure = `${go("valley")}, ${settle}, { trees: T.scale().trees, ms: ${bench}, drawn: T.drawn() }`;
@@ -168,7 +178,8 @@ async function probe() {
     const view = await win.webContents.executeJavaScript("[innerWidth, innerHeight]");
     if (view[0] !== width || view[1] !== height) throw new Error("The window is " + view.join("x") + ", not " + width + "x" + height + ": something resized it.");
     // The screen's own ratio wins over the one asked for, so the report says which the world drew at.
-    results[job.world] = { ratio: await win.webContents.executeJavaScript("devicePixelRatio") };
+    // A world measured by several jobs, as Gaia's is by the walks and the swap test, keeps every job's results.
+    results[job.world] = { ...(results[job.world] ?? {}), ratio: await win.webContents.executeJavaScript("devicePixelRatio") };
     for (const call of job.calls) {
       say(job.world + ": " + call.key);
       // Shown without taking focus, while the smoothness walk runs.
@@ -241,6 +252,26 @@ for (const [world, calls] of Object.entries(results)) {
         continue;
       }
       line(`  ${key}: ${steps.length} steps; worst block ${f(worst[2])} at ${f(worst[0], 0)} m; the wind's ${f(typical)} (its median along the walk); ${pops.length} pops${pops.length > 0 ? ` (at ${pops.map((s) => f(s[0], 0)).join(", ")} m)` : ""}`);
+    } else if (key === "stand") {
+      const { worst, looks } = value as { worst: number; looks: [number, number, string][] };
+      const moved = looks.filter((l, i) => i > 0 && l[2] !== (looks[i - 1] as [number, number, string])[2]).length;
+      line(`  stand: 30 s still with the painter at work; worst block changed ${f(worst, 2)} levels${worst >= SWAP_FLOOR ? " (it must not change)" : ""}; the finest land window moved ${moved} times`);
+      if (worst >= SWAP_FLOOR) process.exitCode = 1;
+    } else if (key === "paint unwatched" || key === "paint unwatched near") {
+      const { painted, intervals } = value as { painted: string[]; intervals: number[] };
+      const sorted = [...intervals].sort((a, b) => a - b);
+      const median = sorted[Math.floor(sorted.length / 2)] ?? 0;
+      const late = intervals.filter((t) => t > median * 1.5 + 4);
+      line(`  ${key}: ${painted.length} ${key.endsWith("near") ? "near" : "far"} paintings; frames ${intervals.length}, median ${f(median)} ms, ${late.length} late (${late.map((t) => f(t, 0)).join(", ")} ms)`);
+    } else if (key === "paint") {
+      // Any change at all to the person's view while the painter paints fails: nothing there moved.
+      const { painted, worst, checks, intervals } = value as { painted: string[]; worst: number; checks: number; intervals: number[] };
+      const sorted = [...intervals].sort((a, b) => a - b);
+      const median = sorted[Math.floor(sorted.length / 2)] ?? 0;
+      const late = intervals.filter((t) => t > median * 1.5 + 4);
+      line(`  paint: ${painted.length} far paintings, ${checks} looks at the person's view; worst block changed ${f(worst, 2)} levels${worst >= SWAP_FLOOR ? " (it must not change)" : ""}`);
+      line(`    frames while painting: ${intervals.length}, median ${f(median)} ms, ${late.length} late (worst ${f(Math.max(0, ...intervals))} ms)`);
+      if (worst >= SWAP_FLOOR) process.exitCode = 1;
     } else if (key.startsWith("swap ")) {
       // A step passes when it changes the plant's part of the screen no more than the wind does there in half a second, or too little to show.
       type Step = { change: { mean: number; worst: number }; wind: { mean: number; worst: number }; distance: number };

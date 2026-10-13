@@ -2214,10 +2214,16 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     if (holding > 0) return settled().then(() => viewOf(id, w, h, wide));
     const s = subjectOf(id);
     if (s === undefined) return Promise.resolve(null);
-    // A place beyond the land the person stands in is painted on its own: the land holds around it while it is
-    // painted, one painting at a time, and then follows the person again.
+    // A place beyond the land the person stands in is painted on land made ready around it to one side, one
+    // painting at a time, while the person's land goes on following them: swapped in only for the painting's own
+    // drawing, so nothing the person sees ever changes for it.
     if (Math.hypot(s.x - walker.x, s.z - walker.z) > PAINTING.near) {
-      const done = painting.then(() => land.hold(s.x, s.z)).then((release) => paintView(s, w, h, wide).finally(release));
+      const done = painting
+        .then(() => land.aside(s.x, s.z))
+        .then((aside) => {
+          if (aside === null) return null;
+          return aside.paint(() => paintView(s, w, h, wide));
+        });
       painting = done.then(() => undefined, () => undefined);
       return done;
     }
@@ -2713,6 +2719,93 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       change: frameChange,
       /** The walk test (`walkSteps`): each step's change to the detail drawn, and the wind's along the same walk. */
       steps: (meters: number, step = 0.7, at?: number) => walkSteps(meters, step, at),
+      /**
+       * The stand check. The person stands still for `seconds` with the wind's
+       * clock frozen while the page goes on as it does, the journal's painter
+       * included; every half second their view is drawn and held against the
+       * first. Nothing they see may change. Returns the worst change, and each
+       * look's [seconds, change, level 0's window].
+       */
+      standCheck: async (seconds = 30) => {
+        const was = frozen;
+        frozen = light.uTime.value;
+        const wait = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+        try {
+          await wait(300);
+          const base = grabFrame();
+          const looks: [number, number, string][] = [];
+          for (let t = 0.5; t <= seconds; t += 0.5) {
+            await wait(500);
+            const o = land.origins[0] as { x: number; z: number };
+            looks.push([t, +frameChange(base, grabFrame()).worst.toFixed(2), `${o.x},${o.z}`]);
+          }
+          return { worst: Math.max(0, ...looks.map((l) => l[1])), looks };
+        } finally {
+          frozen = was;
+        }
+      },
+      /**
+       * The painter check. With the person standing still and the wind's clock
+       * frozen, asks one at a time for paintings of the `count` things farthest
+       * from them, as the journal does, while the page's own frames go on.
+       * Every 100 ms, and once each painting is done, the person's view is
+       * drawn and held against how it was: a painting must change nothing the
+       * person sees. Returns the worst change, the frames' intervals while
+       * painting, milliseconds, and the first painting as a JPEG. Without
+       * `look` it only paints, so the frames' intervals are the painter's own;
+       * with `near` it paints the nearest things instead, which need no land
+       * of their own, for comparing what a painting costs by itself.
+       */
+      paintCheck: async (count = 6, look = true, near = false) => {
+        const from = (s: Subject): number => Math.hypot(s.x - walker.x, s.z - walker.z);
+        const far = near ? subjects.filter((s) => from(s) <= PAINTING.near).sort((a, b) => from(a) - from(b)).slice(0, count) : subjects.filter((s) => from(s) > PAINTING.near).sort((a, b) => from(b) - from(a)).slice(0, count);
+        const was = frozen;
+        frozen = light.uTime.value;
+        const intervals: number[] = [];
+        let last = performance.now();
+        let going = true;
+        const tick = (now: number): void => {
+          intervals.push(+(now - last).toFixed(1));
+          last = now;
+          if (going) requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+        const wait = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+        try {
+          await wait(300);
+          const base = look ? grabFrame() : null;
+          const changes: number[] = [];
+          let first: string | null = null;
+          for (const s of far) {
+            let done = false;
+            const job = viewOf(s.represented.id, 520, 660)
+              .then((p) => {
+                if (first !== null || p === null) return;
+                const out = document.createElement("canvas");
+                out.width = p.color.width;
+                out.height = p.color.height;
+                const ctx = out.getContext("2d") as CanvasRenderingContext2D;
+                const image = ctx.createImageData(p.color.width, p.color.height);
+                image.data.set(p.color.data);
+                ctx.putImageData(image, 0, 0);
+                first = out.toDataURL("image/jpeg", 0.9);
+              })
+              .finally(() => {
+                done = true;
+              });
+            while (!done && base !== null) {
+              await wait(100);
+              changes.push(frameChange(base, grabFrame()).worst);
+            }
+            await job;
+            if (base !== null) changes.push(frameChange(base, grabFrame()).worst);
+          }
+          return { painted: far.map((s) => s.represented.id), worst: +Math.max(0, ...changes).toFixed(2), checks: changes.length, intervals, first };
+        } finally {
+          going = false;
+          frozen = was;
+        }
+      },
       /** The swap test (`swapTest`) for preset `name` at `vitality`, and every tree and bush preset's name with none. */
       swap: (name?: string, vitality = 1) => (name === undefined ? farPresets().map((p) => p.name) : swapTest(name, vitality)),
       /** Resolves once the bushes' far forms, which bake after the wait lifts, are ready too. */
