@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { journalOf, ownOf } from "@gaia/world";
-import { captionOf, conceptsCaption } from "./caption.ts";
-import { type Judgment, type WordsSource, appendixWords, contentsWords, leadOf, proseOf, wordsOf } from "./words.ts";
+import { conceptsCaption } from "./caption.ts";
+import { type WordsSource, appendixWords, contentsWords, leadOf, proseOf, wordsOf } from "./words.ts";
 import type { JudgedThing } from "../../world-service/protocol.ts";
 
 const MATH = "core/math.ts";
@@ -57,19 +57,6 @@ describe("what a journal page says", () => {
     expect(wordsOf(image, src.journal.entry("README.md")!).body).toMatchObject({ lines: [] });
   });
 
-  it("reads what Jev judged in the graph's own terms: a node's attention marks its row, a block's marks its lines, and routine marks nothing", () => {
-    const attention = (choice: string, p: number) => ({ attention: { choice, p: { [choice]: p, routine: 1 - p }, call: "attention" } });
-    const judged: Record<string, readonly Judgment[]> = {
-      [`${MATH}#Calc`]: [{ judged: attention("heart", 0.8) }, { judged: attention("fragile", 0.6), lines: { start: 3, end: 3 } }, { judged: attention("routine", 0.9), lines: { start: 5, end: 6 } }],
-      [`${MATH}#Calc.add`]: [{ judged: attention("routine", 0.7) }],
-    };
-    const src = { ...source(TEXT), judged: (of: string) => judged[of] ?? [] };
-    const file = wordsOf(src, src.journal.entry(MATH)!);
-    expect(file.body.kind === "rows" && file.body.rows.map((r) => r.mark)).toEqual([undefined, { kind: "understand", sure: 0.8 }, undefined]);
-    const calc = wordsOf(src, src.journal.entry(`${MATH}#Calc`)!);
-    expect(calc.body.kind === "code" && calc.body.marks).toEqual([{ kind: "improve", sure: 0.6, from: 3, to: 3 }]);
-  });
-
   it("sets a document as its paragraphs: wrapped lines joined, each heading, item and fenced line its own", () => {
     const doc = ["# Gaia", "", "Gaia turns a codebase into", "a [world](https://gaia.dev) to wander.", "", "", "- one item that", "  runs on", "- **two**", "```ts", "const x = 1;", "```", "Done."];
     expect(proseOf(doc)).toEqual({
@@ -78,28 +65,7 @@ describe("what a journal page says", () => {
     });
   });
 
-  it("captions a thing with what Jev says of it, each answer by its name, leaving out what says nothing", () => {
-    const judged: Judgment = {
-      judged: {
-        attention: { choice: "heart", p: { heart: 0.8, routine: 0.2 }, call: "attention" },
-        role: { choice: "orchestrator", p: { orchestrator: 0.9 }, call: "role" },
-        quality: { readability: { score: 0.6, value: 0.2, call: "quality" }, change: { score: 2.1, value: 0.7, call: "quality" } },
-      },
-      // Change has no name, as an answer from before the engine sent them: a bare number says nothing on a caption.
-      names: { attention: "The heart of the work", "quality.readability": "Hard to follow" },
-    };
-    expect(captionOf("definition", judged)).toEqual([
-      { label: "why look", value: "heart of the work", sure: 0.8 },
-      { label: "role", value: "orchestrator", sure: 0.9 },
-      { label: "reads", value: "hard to follow" },
-    ]);
-    // A routine thing gives no reason to look; a file says whether it needs tests.
-    const file: Judgment = { judged: { attention: { choice: "routine", p: { routine: 0.7 }, call: "attention" }, needsTests: { p: 0.9, call: "profile" } } };
-    expect(captionOf("file", file)).toEqual([{ label: "needs tests", value: "yes", sure: 0.9 }]);
-    expect(captionOf("folder", undefined)).toEqual([]);
-  });
-
-  it("with the understanding pass, leads a file with its best and worst definitions weighed by importance, folded around Jev's blocks, and opens a definition below the median at what needs work most", () => {
+  it("leads a file with its best and worst definitions weighed by importance, folded around Jev's blocks, and opens a definition below the median at what needs work most", () => {
     const OPS = "core/ops.ts";
     const ops = {
       name: "demo",
@@ -133,9 +99,9 @@ describe("what a journal page says", () => {
     const big = wordsOf(src, src.journal.entry(`${OPS}#big`)!);
     expect(big.body).toMatchObject({ kind: "code", opensAt: 10 });
     expect(big.body.kind === "code" && big.body.marks.map((m) => [m.kind, m.from, m.to])).toEqual([["improve", 10, 12], ["understand", 20, 22]]);
-    // Its appendix is the code alone, with the same marks and no table of answers.
+    // Its appendix is the code alone, with the same marks.
     const full = appendixWords(src, src.journal.entry(`${OPS}#big`)!);
-    expect(full.body).toMatchObject({ kind: "full", said: [] });
+    expect(full.body).toMatchObject({ kind: "full" });
     expect(full.body.kind === "full" && full.body.marks.map((m) => m.kind)).toEqual(["improve", "understand"]);
   });
 

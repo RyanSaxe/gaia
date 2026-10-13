@@ -137,13 +137,13 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
     const body = page.querySelector<HTMLElement>(".jp-body");
     if (body === null) return;
     const bottom = body.clientHeight;
-    /** How far down the page's body a row sits, through the code and notes that hold it. */
+    /** How far down the page's body a row sits, through the code or list that holds it. */
     const down = (e: HTMLElement): number => {
       let y = 0;
       for (let n: HTMLElement | null = e; n !== null && n !== body; n = n.offsetParent as HTMLElement | null) y += n.offsetTop;
       return y;
     };
-    const rows = [...body.querySelectorAll<HTMLElement>(".jp-line, .jp-row, .jp-said-row")];
+    const rows = [...body.querySelectorAll<HTMLElement>(".jp-line, .jp-row")];
     for (const row of rows) row.classList.toggle("jp-past", down(row) + row.offsetHeight > bottom);
     // A definition too long for its page folds where the page ends: the last row that fits makes room for the fold.
     const fold = body.querySelector<HTMLElement>(".jp-fold.after");
@@ -167,7 +167,7 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
     const runs: HTMLElement[][] = [];
     for (const e of shown) {
       const last = runs[runs.length - 1]?.at(-1);
-      const joins = last !== undefined && e.classList.contains("jp-line") && last.nextElementSibling === e && last.style.getPropertyValue("--mark") === e.style.getPropertyValue("--mark") && last.style.getPropertyValue("--mark-strength") === e.style.getPropertyValue("--mark-strength");
+      const joins = last !== undefined && e.classList.contains("jp-line") && last.nextElementSibling === e && last.style.getPropertyValue("--mark") === e.style.getPropertyValue("--mark");
       if (joins) runs[runs.length - 1]?.push(e);
       else runs.push([e]);
     }
@@ -180,7 +180,6 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
       stroke.style.top = `${first.offsetTop + 3}px`;
       stroke.style.height = `${end.offsetTop + end.offsetHeight - first.offsetTop - 6}px`;
       stroke.style.background = first.style.getPropertyValue("--mark");
-      stroke.style.opacity = first.style.getPropertyValue("--mark-strength");
       holder.append(stroke);
     }
   }

@@ -55,7 +55,7 @@ import { withStart } from "../start/start.ts";
 import { createCard } from "./card.ts";
 import { LANDMARK_ENTITIES, type Represented, SAMPLE_ENTITIES, SAMPLE_FILES, representEntity, representFile } from "./samples.ts";
 import { type CodeWorld, type Judge, entityVitalityOf, groundVitality, judgedThing } from "@gaia/world";
-import { type CodeLab, type Said, codeWorld, judgedOf, representSymbol } from "./code-world.ts";
+import { type CodeLab, codeWorld, judgedOf, representSymbol } from "./code-world.ts";
 import type { JudgedThing } from "../../world-service/protocol.ts";
 import { type Building, createSettlement, settlementBuilds } from "./settlement.ts";
 import { createSigns } from "./signs.ts";
@@ -282,8 +282,6 @@ export interface WorldHandle {
   view(id: string, w: number, h: number, wide?: boolean): Promise<{ readonly color: Pixels; readonly mask: Pixels } | null>;
   /** Where a thing's painting is seen from, looking at it: where a picture tapped in the journal takes the person. Null when nothing stands for it. */
   seenFrom(id: string): Landing | null;
-  /** What Jev judged about a folder, a file or a definition, by its path or id, and about each block of a definition's lines. */
-  judged(of: string): readonly Said[];
   /** What the understanding pass judged about a folder, a file or a definition, every score from 0 to 1. */
   thing(of: string): JudgedThing | undefined;
   /** Calls `listener` with what a person has walked up to when its card opens, and with null when it closes. */
@@ -2518,7 +2516,6 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     },
     view: (id, w, h, wide) => viewOf(id, w, h, wide),
     seenFrom: (id) => seenFromOf(id),
-    judged: (of) => code?.said(of) ?? [],
     thing: (of) => code?.thing(of),
     onCard: (listener) => cardListeners.push(listener),
     onPick: (listener) => pickListeners.push(listener),

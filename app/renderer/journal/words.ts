@@ -8,42 +8,16 @@
 // text, a document's set as prose. The book draws whatever words it is
 // handed, so a new kind of page needs nothing new in the book.
 
-import type { Choice, Judged, Score, Span, YesNo } from "@gaia/schema";
 import type { CodeSymbol, Journal, JournalEntry } from "@gaia/world";
 import type { JudgedThing } from "../../world-service/protocol.ts";
 
 /**
- * What Jev points out, marked the same way at every level: a definition's
- * lines, a file's definitions, a folder's files and folders, an entity's
- * trails. Key to understanding, could be better, or the finest; stronger the
- * surer Jev is.
+ * What Jev points out, marked the same way at every level: the blocks it
+ * picked in a definition's lines, and a container's best and worst parts
+ * among its rows. Key to understanding, needs work most, or the finest.
  */
 export interface Mark {
   readonly kind: "understand" | "improve" | "finest";
-  /** How sure Jev is, 0 to 1. */
-  readonly sure: number;
-}
-
-/** What Jev judged about a node, in the graph's own terms; a block's judgment names the lines it covers. */
-export interface Judgment {
-  readonly judged: Judged;
-  readonly lines?: Span;
-  /** Each answer's name in the engine's vocabulary ("Takes effort"), by where it sits in `judged` ("quality.readability"). */
-  readonly names?: Readonly<Record<string, string>>;
-}
-
-/** The reasons to stop and look that are key to understanding; the rest, but routine, are where it could be better. */
-const UNDERSTAND = new Set(["heart", "intricate", "doorway", "hot path"]);
-
-/**
- * How a page shows what Jev judged: the one place a judgment becomes
- * something seen. For now an attention that isn't routine is a mark, as sure
- * as Jev is of it.
- */
-export function markOf(judged: Judged): Mark | undefined {
-  const a = judged.attention;
-  if (a === undefined || a.choice === "routine") return undefined;
-  return { kind: UNDERSTAND.has(a.choice) ? "understand" : "improve", sure: a.p[a.choice] ?? 0 };
 }
 
 /** One line of a list, indented by how deep it sits under the page's own subject. */
@@ -117,26 +91,9 @@ export interface Code extends Text {
   readonly opensAt: number;
 }
 
-/** One thing Jev says about a node, in plain words: what it was asked, and its answer. */
-export interface Fact {
-  readonly asked: string;
-  readonly answer: string;
-  /** How sure Jev is of a choice or a yes or no, 0 to 1. */
-  readonly sure?: number;
-  /** Where a score stands between its lowest level and its top, 0 to 1. */
-  readonly level?: number;
-}
-
-/** What Jev says about a definition itself, or about a block of its lines. */
-export interface Said {
-  readonly lines?: Span;
-  readonly facts: readonly Fact[];
-}
-
-/** A definition or a file in full, for the appendix: everything Jev says about it, then every line of its text. */
+/** A definition or a file in full, for the appendix: every line of its text. */
 export interface Full extends Text {
   readonly kind: "full";
-  readonly said: readonly Said[];
 }
 
 export interface PageWords {
@@ -159,8 +116,6 @@ export interface WordsSource {
   vitality(of: string): number;
   /** A file's lines, or undefined until they arrive. */
   lines(path: string): readonly string[] | undefined;
-  /** What Jev judged about a folder, entity, file or definition, and about each block of a definition's lines. */
-  judged?(of: string): readonly Judgment[];
   /** What the understanding pass judged about a folder, file or definition, every score from 0 to 1. */
   thing?(of: string): JudgedThing | undefined;
   /** The world's median quality: a page below it leads with what needs work most, and one above it with its best. */
@@ -187,7 +142,7 @@ export function leadOf(src: WordsSource, parts: readonly string[]): { readonly b
 /** A container's rows marked by its best and worst parts, when the understanding pass has judged them. */
 const leadMarks = (src: WordsSource, parts: readonly string[]): ReadonlyMap<string, Mark> => {
   const { best, worst } = leadOf(src, parts);
-  return new Map([...(best === undefined ? [] : [[best, { kind: "finest", sure: 1 }] as const]), ...(worst === undefined ? [] : [[worst, { kind: "improve", sure: 1 }] as const])]);
+  return new Map([...(best === undefined ? [] : [[best, { kind: "finest" }] as const]), ...(worst === undefined ? [] : [[worst, { kind: "improve" }] as const])]);
 };
 
 /**
@@ -259,57 +214,6 @@ const importanceOf = (src: WordsSource, of: string): { importance?: number } => 
   return i == null ? {} : { importance: i };
 };
 
-/** What each question Jev answers is called on the page; a question not named here is called by its own key. */
-const ASKED: Readonly<Record<string, string>> = {
-  kind: "kind",
-  role: "role",
-  attention: "why look",
-  stand: "stands out",
-  readability: "reads",
-  naming: "named",
-  doc: "documented",
-  errors: "errors",
-  change: "risk in changing",
-  cohesion: "holds together",
-  breaks: "a bug would break",
-  central: "central",
-  needsTests: "needs tests",
-  dead: "unused",
-};
-
-/**
- * Everything Jev judged about a node, as the page says it: each answer under
- * the question it answers, whatever questions the node was asked, so the
- * journal follows Jev's questions as they change. A choice says its option
- * and how sure Jev is; a score where it stands; a yes or no which, and how
- * sure; each by its name in the vocabulary when it has one. Of what a node
- * does, only what Jev says it does.
- */
-export function factsOf(judged: Judged, names: Readonly<Record<string, string>> = {}): Fact[] {
-  const facts: Fact[] = [];
-  const asked = (key: string): string => ASKED[key] ?? key;
-  const add = (key: string, a: Choice | Score | YesNo | undefined, at = key): void => {
-    if (a === undefined) return;
-    const name = names[at];
-    if ("choice" in a) facts.push({ asked: asked(key), answer: name ?? a.choice, sure: a.p[a.choice] ?? 0 });
-    else if ("score" in a) facts.push({ asked: asked(key), answer: name ?? a.score.toFixed(1), level: a.value });
-    else facts.push({ asked: asked(key), answer: a.p >= 0.5 ? "yes" : "no", sure: Math.max(a.p, 1 - a.p) });
-  };
-  add("attention", judged.attention);
-  add("role", judged.role);
-  add("kind", judged.kind);
-  for (const [k, q] of Object.entries(judged.quality ?? {})) add(k, q, `quality.${k}`);
-  if (judged.importance !== undefined) {
-    add("breaks", judged.importance.breaks, "importance.breaks");
-    add("central", judged.importance.central, "importance.central");
-  }
-  add("needsTests", judged.needsTests);
-  add("dead", judged.dead);
-  add("stand", judged.stand);
-  for (const [k, yes] of Object.entries(judged.does ?? {})) if (yes.p >= 0.5) facts.push({ asked: "does", answer: k, sure: yes.p });
-  return facts;
-}
-
 const folders = (path: string): string[] => path.split("/").slice(0, -1);
 
 /** The words of the contents: the top chapters with the chapters inside them, then the files at the root. */
@@ -323,11 +227,9 @@ export function contentsWords(src: WordsSource): PageWords {
   return { path: [], name: src.world.name, vitality: src.vitality(""), body: { kind: "rows", rows } };
 }
 
-
+/** An entry as a row of a list, marked when it is one of the best and worst parts in `lead`. */
 function rowOf(src: WordsSource, e: JournalEntry, depth: number, lead?: ReadonlyMap<string, Mark>): Row {
-  const own = src.judged?.(e.of).find((j) => j.lines === undefined);
-  // Where the understanding pass judged a container's parts, its best and worst are marked; otherwise attention marks.
-  const mark = lead !== undefined && lead.size > 0 ? lead.get(e.of) : own === undefined ? undefined : markOf(own.judged);
+  const mark = lead?.get(e.of);
   return { of: e.of, name: e.name, depth, vitality: src.vitality(e.of), page: e.page, ...(mark === undefined ? {} : { mark }) };
 }
 
@@ -393,30 +295,14 @@ export function wordsOf(src: WordsSource, e: JournalEntry): PageWords {
   const count = symbol?.lines ?? 1;
   const signature = text?.[line - 1]?.trim();
   const thing = src.thing?.(e.of);
-  let marks: (Mark & { readonly from: number; readonly to: number })[];
-  let opensAt: number;
-  if (thing !== undefined && Object.keys(thing.picks).length > 0) {
-    // The blocks Jev picked: the key one and the one most in need. A definition too long for its page opens on the one it
-    // leads with: what needs work most when it is below the world's median quality, else its key block.
-    const { key, weak } = thing.picks;
-    // Where the two overlap, the gutter shows the one most in need.
-    marks = [...(weak === undefined ? [] : [{ kind: "improve" as const, sure: 1, from: weak.start, to: weak.end }]), ...(key === undefined ? [] : [{ kind: "understand" as const, sure: 1, from: key.start, to: key.end }])];
-    const low = (thing.quality ?? 1) < (src.median ?? 0.5);
-    const leads = (low ? weak : undefined) ?? key ?? weak;
-    opensAt = count - 1 > FITS && leads !== undefined ? leads.start : line + 1;
-  } else {
-    const blocks = (src.judged?.(e.of) ?? []).flatMap((j) => {
-      const mark = j.lines === undefined ? undefined : markOf(j.judged);
-      return mark === undefined || j.lines === undefined ? [] : [{ mark, lines: j.lines, judged: j.judged }];
-    });
-    marks = blocks.map((b) => ({ ...b.mark, from: b.lines.start, to: b.lines.end }));
-    // A page points out a block or two, Jev's surest of each kind, one key to understanding and one that could be better:
-    // a definition too long for its page opens at the first of them.
-    const pointed = (["understand", "improve"] as const)
-      .flatMap((kind) => [...blocks].filter((b) => b.mark.kind === kind).sort((a, b) => b.mark.sure - a.mark.sure).slice(0, 1))
-      .sort((a, b) => a.lines.start - b.lines.start);
-    opensAt = count - 1 > FITS && pointed[0] !== undefined ? pointed[0].lines.start : line + 1;
-  }
+  // The blocks Jev picked: the key one and the one most in need. A definition too long for its page opens on the one it
+  // leads with: what needs work most when it is below the world's median quality, else its key block.
+  const { key, weak } = thing?.picks ?? {};
+  // Where the two overlap, the gutter shows the one most in need, which comes first.
+  const marks = [...(weak === undefined ? [] : [{ kind: "improve" as const, from: weak.start, to: weak.end }]), ...(key === undefined ? [] : [{ kind: "understand" as const, from: key.start, to: key.end }])];
+  const low = (thing?.quality ?? 1) < (src.median ?? 0.5);
+  const leads = (low ? weak : undefined) ?? key ?? weak;
+  const opensAt = count - 1 > FITS && leads !== undefined ? leads.start : line + 1;
   return {
     path: file.split("/"),
     name: e.name,
@@ -507,18 +393,14 @@ function setOf(lines: readonly string[] | undefined): { readonly lines: readonly
 /** How many lines after its signature a definition's page holds whole, about. */
 const FITS = 24;
 
-/** A definition's or a file's words for the appendix: its name, everything Jev says about it, then all of its text. */
+/**
+ * A definition's or a file's words for the appendix: its name, then all of
+ * its text with its marks. What Jev judged is on its page and its caption,
+ * so the appendix is the code alone.
+ */
 export function appendixWords(src: WordsSource, e: JournalEntry): PageWords {
   const page = wordsOf(src, e);
-  // What the understanding pass judged is on the page and its caption, so its appendix is the code alone, with its marks.
-  const judged = src.thing?.(e.of) !== undefined ? [] : (src.judged?.(e.of) ?? []);
-  const said: Said[] = [...judged]
-    .sort((a, b) => (a.lines?.start ?? 0) - (b.lines?.start ?? 0))
-    .flatMap((j) => {
-      const facts = factsOf(j.judged, j.names);
-      return facts.length === 0 ? [] : [{ ...(j.lines === undefined ? {} : { lines: j.lines }), facts }];
-    });
   if (page.body.kind !== "code") return page;
   const { opensAt: _, kind: __, ...text } = page.body;
-  return { ...page, body: { ...text, kind: "full", said } };
+  return { ...page, body: { ...text, kind: "full" } };
 }

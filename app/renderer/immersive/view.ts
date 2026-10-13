@@ -258,7 +258,7 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
       // The world's median quality, by its files: a page below it leads with what needs work most.
       const qualities = code.patches.map((p) => p.vitality).sort((a, b) => a - b);
       const median = qualities[Math.floor(qualities.length / 2)] ?? 0.5;
-      words = { journal: journalOf(code, ROOM), world: code, vitality: (of) => own.get(of) ?? own.get(standsFor(of)) ?? pooled.get(of) ?? 1, lines: (path) => source.lines(path) ?? undefined, judged: (of) => world.judged(standsFor(of)), thing: (of) => world.thing(standsFor(of)), median };
+      words = { journal: journalOf(code, ROOM), world: code, vitality: (of) => own.get(of) ?? own.get(standsFor(of)) ?? pooled.get(of) ?? 1, lines: (path) => source.lines(path) ?? undefined, thing: (of) => world.thing(standsFor(of)), median };
     }
     // A directory's vitality: its files', its subdirectories' included, pooled by the ground each holds, as the map washes it.
     const vitality = areaVitality(world.places().patches.map((p) => ({ area: p.area, vitality: p.vitality, size: p.radius * p.radius })));
