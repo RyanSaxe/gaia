@@ -231,18 +231,43 @@ export function carvePond(l: Lattice, heights: Float32Array, level: Float32Array
 
 /** The shore field stops counting this far from the water, meters. */
 export const SHORE_CAP = 12;
+/** The coarsest lattice spacing, meters, at which the water's edge is placed between samples: a coarser one is far views, where a line across a whole step would misplace it. */
+const EDGE_BETWEEN_AT_MOST = 2;
 
 /**
- * Distance from each lattice sample to the nearest sample under water, meters,
- * capped at SHORE_CAP: 0 in the water, growing about a meter per meter away.
- * Sand banks and the grass's edge both read it, so they always agree.
+ * Distance from each lattice sample to the water's edge, meters, capped at
+ * SHORE_CAP: 0 in the water, growing about a meter per meter away. Sand banks
+ * and the grass's edge both read it, so they always agree.
  */
 export function shoreField(l: Lattice, heights: Float32Array, level: Float32Array): Float32Array {
   const { n, spacing } = l;
   const d = new Float32Array(n * n);
-  for (let i = 0; i < n * n; i++) d[i] = (level[i] as number) > (heights[i] as number) ? 0 : SHORE_CAP;
-  // Two chamfer passes: straight steps cost one spacing, diagonal ones root two.
+  const wet = (i: number): boolean => (level[i] as number) > (heights[i] as number);
+  for (let i = 0; i < n * n; i++) d[i] = wet(i) ? 0 : SHORE_CAP;
   const diag = Math.SQRT2 * spacing;
+  // A dry sample beside the water starts at its own distance to the edge, where the neighbor's water surface meets
+  // the ground between them, rather than a whole step: so the edge is the water's, not the lattice's staircase.
+  for (let iz = 0; spacing <= EDGE_BETWEEN_AT_MOST && iz < n; iz++) {
+    for (let ix = 0; ix < n; ix++) {
+      const i = iz * n + ix;
+      if (wet(i)) continue;
+      for (let dz = -1; dz <= 1; dz++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const jx = ix + dx;
+          const jz = iz + dz;
+          if ((dx === 0 && dz === 0) || jx < 0 || jz < 0 || jx >= n || jz >= n) continue;
+          const j = jz * n + jx;
+          if (!wet(j)) continue;
+          const under = (level[j] as number) - (heights[j] as number);
+          const above = (heights[i] as number) - (level[j] as number);
+          const step = dx !== 0 && dz !== 0 ? diag : spacing;
+          // Never quite 0: only water is.
+          d[i] = Math.min(d[i] as number, Math.max(0.01, (step * Math.max(0, above)) / (under + Math.max(0, above))));
+        }
+      }
+    }
+  }
+  // Two chamfer passes: straight steps cost one spacing, diagonal ones root two.
   const relax = (i: number, j: number, cost: number): void => {
     const v = (d[j] as number) + cost;
     if (v < (d[i] as number)) d[i] = v;
