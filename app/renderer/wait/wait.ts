@@ -2,11 +2,13 @@
 // sees whenever a project opens. It shows no words, counts or percentages;
 // the progress a person sees is the world itself coming to be: the field
 // map paints itself (`map-wait.ts`). Paper, then each area's border drawn
-// with a pen as soon as the land is divided, each file's health washed in
-// as it settles and each area's name lettered as its last answer comes in,
-// the buildings and landmarks drawn while the world bakes, its hills, water
-// and trees once it stands, and the paper folding away into the world.
-// Nothing shows that work is pending: a lull is a still map.
+// with a pen as soon as the land is divided, a pencil going over each file
+// and area as Jev reads it, each file's health washed in as it settles and
+// each area's name lettered as its last answer comes in, the buildings and
+// landmarks drawn while the world bakes, its hills, water and trees once it
+// stands, and the paper folding away into the world. Every stroke is of
+// something that has happened, drawn at a hand's pace, so the sheet keeps
+// moving all the time Jev works.
 // Everything that moves is a CSS transition of opacity or transform, or a
 // pen line's dash, so it keeps moving on the compositor while the page's
 // thread is busy standing the world, and the wait never competes with the bake.
