@@ -73,9 +73,10 @@ gives the reason next to each rule.
 A **primitive** is a pure procedural function with typed parameters and a
 role, such as `branching@1` (Skeleton) or `leaf-clumps@1` (Foliage). It is code,
 versioned in its ID. A **kind** declares slots by role and the subject it
-stands for: a file (`flora`, `rock`, `wildflowers`), an entity
-(`structure`, `landmark`), a region (`biome`), a dependency between two
-entities (`link`) or the repository (`world`). A `link`'s blueprint fills only a trail's look; the
+stands for: a file (`flora`, `rock`, `wildflowers`), any thing that stands
+for code, an entity, a file or a definition (`structure`, `landmark`, which
+read its numbers from `ThingFacts`), a region (`biome`), a dependency between
+two entities (`link`) or the repository (`world`). A `link`'s blueprint fills only a trail's look; the
 terrain finds its route. A `structure`'s footprint lays out one
 `BuildingPlan`: the masses the building is joined from (each a block or a
 round turret with its own storeys and roof form: gable, hip, half-hip,
@@ -96,12 +97,15 @@ makes one; no file's name or path decides that a directory is an entity.
 report for each: its root path (its identity), name, form, manifest, entry,
 doc, size, exports, the entities it depends on and that depend on it, and
 its files' tests, diagnostics and git activity summed. Entities nest; each
-file belongs to its innermost one. Buildings and landmarks stand for
-entities, plants for files, and trails for dependencies between entities.
-Jev decides which entities become buildings, which become landmarks and
-which form suits each, with no rule fixing how many of either; the kinds
-bind only numbers from the facts (a building's size from lines, storeys from
-exports and a feature's reach from dependents; a landmark's scale from its
+file belongs to its innermost one. Anything can stand as anything, by its
+importance ([decision 64](decisions/64-anything-can-stand-as-anything.md)):
+every entity, file and definition stands as one thing, flowers, a stone, a
+bush, a tree, a building or a landmark, whichever Jev chooses among the
+forms its importance is offered; trails stand for dependencies between
+entities. The kinds bind only numbers from the facts (a building's size from
+lines, storeys from exports and a feature's reach from dependents, which are
+the entities that import an entity, the files that import a file or the
+definitions that call or name a definition; a landmark's scale from its
 dependents; a trail's traffic from how many of one entity's files import the
 other). `DependencyFacts` carries both entities' facts, so a trail can follow
 the vitality of each.
@@ -122,6 +126,10 @@ target), and Jev chooses among those as it would; nothing overrides its
 pick. A building's place has what its region's water holds: a water look
 says so (`holds`), and a brook or a trickle holds running water. Composing
 runs before the land is laid out, so the place is the region, not the lot.
+A need may also be a range of a thing's rank by importance among the
+world's own entities, files and definitions (`{ rank: [min, max] }`), from 0
+for the least important to 1 for the most; `meets` in `@gaia/schema` is the
+one rule for both, and a form's look declares its needs as a primitive does.
 
 ## A world from code
 
@@ -155,8 +163,8 @@ sites drawn from each file's share (`CodeWorld.cells`, one per 16 m or so)
 redraw the whole division as plain nearest-site cells: the rule `siteAt` in
 `@gaia/terrain` reads, so a file's ground is the same for the layout,
 `placeAt`, the map and the terrain. A file's patch is its cells; an entity's
-lot is a cell of its directory's own ground, and its building or landmark
-stands there.
+lot is a cell of its directory's own ground, and what it stands as stands
+there; a file stands at its patch's heart, its own ground's plot.
 
 A directory whose ground, with that of subdirectories that have no land of
 their own, reaches 3% of the code gets its own land: a terrain region whose
@@ -177,9 +185,15 @@ from the understanding pass, 0 to 1, which sets its size; without one, the
 facts' top-level symbols stand, sized by their length. Each stands as
 the form Jev chose for it: a tree, drawn with the woods, or one of the
 understory's own blueprints, drawn instanced with the rest of the
-understory; neither costs draw calls of its own. Each has its own vitality,
-and a person can walk up to it to read its card: its kind, doc comment,
-where it is declared and its size.
+understory; neither costs draw calls of its own. A definition Jev raises to
+a building or a landmark stands on its own plot as one of the world's
+things (`CodeThing.of`), composed part by part as an entity's is; and each
+file and entity standing as a plant, a stone or flowers is one of
+`CodeWorld.standing`, at its patch's heart or on its lot. None of this
+changes the land: a raised thing takes the ground its code already holds,
+and the definitions around it keep off it as they keep off each other. Each
+has its own vitality, and a person can walk up to it to read its card: its
+kind, doc comment, where it is declared and its size.
 
 **The meaning.** The engine gives structure and sizes; Jev gives meaning.
 Jev judges every choice a reasonable person could make differently: whether
@@ -188,14 +202,23 @@ a still pond where much of the code leans on it, none where it stands on its
 own: the option's words are the reason, stored with the choice), what that
 land's ground is like (its character: its undergrowth, how its open ground
 lies and how large its trees grow, again with its reason), what each
-definition stands as (a tree, a stone, a bush or flowers, each asked on its
-own), whether each entity is a building or a landmark, and how much it would
-walk each dependency. Jev never names a preset: once the understanding pass
-has judged the code, `composeWorld` composes the world part by part through
-the planner (`composeThings` in `packages/world/src/compose.ts`): its sky
-(the world kind's light, sky, season and wind), each region's land (the
-biome kind's relief, ground cover, air, accents and natives), each entity's
-building or landmark, and each trail Jev would walk (the link kind's route:
+entity, file and definition stands as, and how much it would walk each
+dependency. What a thing stands as is asked once the understanding pass has
+judged how much each matters (`planStanding`): each thing's rank by
+importance among the world's own things (`rankThings`, ties sharing the
+middle) offers it every form whose range holds it (`formsFor`, the ranges in
+`SIZES` in `app/renderer/terrain/looks.ts`, wide and overlapping, smallest
+first: flowers, stones, bushes, trees, buildings, landmarks), and Jev picks
+among them by each form's character; a thing offered one form alone stands
+as it unasked. A file's own question goes in the first of its definitions'
+requests, 24 to a request, each with the file's and each definition's
+importance, and an entity is asked in a request of its own. Jev never names a
+preset: `composeWorld` asks these first and then composes the world part by
+part through the planner (`composeThings` in
+`packages/world/src/compose.ts`): its sky (the world kind's light, sky,
+season and wind), each region's land (the biome kind's relief, ground cover,
+air, accents and natives), the building or landmark of every thing Jev
+raised to one, entity, file or definition, and each trail Jev would walk (the link kind's route:
 its width, wear, edging, winding and crossing). Each is composed its
 structure first and then each stage's details, one request a wave, each part
 asked in its own instruction from its kind's slot (`Slot.ask`). Each
@@ -203,7 +226,9 @@ composing request carries what the new engine established about its part of
 the code: the repository for the sky (`repositoryState`), the directory and
 the water Jev judged its land holds for a land (`areaState`), the entity's
 form, exports and dependencies as `factsOf` reads them from the graph for
-a building or landmark (`composingState`), and for a trail the two entities
+a building or landmark (`composingState`), a file's own measures and judged
+values (`fileState`), a definition's role, signature, doc and judged values
+(`definitionState`), and for a trail the two entities
 and how many of the first's files import the second's (`trailState`); each
 with its importance and quality concepts from the understanding pass and its
 files, lines, languages, folders, history and most important definitions
@@ -218,12 +243,14 @@ ground, names its sky, lands, things and trails by their hand-filled looks
 instead (`presetBlueprint`). `planWorldRequests` builds one request
 per thing, from facts and doc comments only, with options shuffled by the
 thing's path, in the shape a design chooses ("What a request carries" under
-Jev). Given Engine's graph it asks about the definitions the layout will
-stand, so each answer meets its definition; a file's definitions go over as
-many requests as fit Jev's window, 24 to a request.
+Jev); under the `judged` design it asks only each region's land and each
+entity's trails, and `planStanding` asks what each thing stands as, given
+Engine's graph about the definitions the layout will stand, so each answer
+meets its definition.
 `judgeWorld` asks them through any `JevClient`, eight at a time, and the
-opening as many at once as the engine sends Jev; composing follows the
-understanding pass. A world
+opening as many at once as the engine sends Jev; what each thing stands as
+and composing follow the understanding pass, and the opening's count of
+answers keeps moving through them. A world
 shows every dependency Jev would walk as a trail: first those that join
 parts of the code no other chosen trail joins, then the most wanted; the
 joining ones route first, and the terrain walks them all over one network
@@ -374,16 +401,21 @@ and in ruin, a whole area in ruin, streams crossed on footbridges and
 stepping stones, cairns, ponds, a tiny area and deep nesting
 (`docs/proving-ground.md`). `tourStops` (`app/renderer/terrain/tour.ts`)
 finds in any world where to stand to see each such feature. `standWorld` takes the
-layout (`StandRequest.code`): each building and landmark on its lot, each
-definition on its own file's cells near where the layout put it, and the
-trails between lots, walked over one network of ways (`Stand.network`: its
-ways of tread, the trails walking them, its junctions and any trail dropped,
-with why). A definition that stands as a tree is one of the woods' trees,
-sized by its importance and its area's character (`stature` in
+layout (`StandRequest.code`): each building and landmark where its thing
+stands (an entity's lot, a file's heart, a definition's plot), each
+definition, file and entity that stands as a plant, a stone or flowers on
+its own file's cells near where the layout put it (an entity's on its lot),
+and the trails between entities, walked over one network of ways
+(`Stand.network`: its ways of tread, the trails walking them, its junctions
+and any trail dropped, with why), ending at a building's door, a landmark's
+foot, or the lot's middle of an entity that stands as neither
+(`StandCode.places`). Buildings and landmarks are sited first, and
+everything else keeps off them. A thing that stands as a tree is one of the
+woods' trees, sized by its importance and its area's character (`stature` in
 `CHARACTERS`), with its own vitality, and keeps its crown's width from
-every other definition so each tree reads as one thing; any other stands as
-an understory placement. Every tree in a world from code is a definition,
-and a tap on one opens its page. The understory then grows where it belongs (`scatterComponents`):
+every other so each tree reads as one thing; any other stands as an
+understory placement. Every tree in a world from code is a definition, a
+file or an entity Jev chose to be one, and a tap on one opens its page. The understory then grows where it belongs (`scatterComponents`):
 each candidate site on a grid fixed to the world reads its kind of place from
 the trees' crowns, the water and the slope, so a change in one place moves
 nothing elsewhere. It is scattered a tile at a time: each tile scatters its
@@ -735,11 +767,13 @@ becomes the default. A design fixes four things:
   five entities most depended on and the root are landmarks), and each
   building and landmark the kind of entity it suits (half the buildings had
   been watermills; now the engine is a stone croft, the schema a stone
-  ring, the root a great willow). The `judged` questions ask every
-  definition that stands on a file's patch on its own (`form#<qualified
-  name>`, `LAYOUT.formsPerRequest` to a request), instead of one form for
-  every function of a file, so what each stands as, a tree among the rest,
-  is Jev's call.
+  ring, the root a great willow). Under the `judged` design, what every
+  entity, file and definition stands as is asked on its own after the
+  understanding pass (`planStanding`: `form` for a file or an entity,
+  `form#<qualified name>` for a definition, `LAYOUT.formsPerRequest` to a
+  request), among the forms its rank by importance is offered, so what each
+  stands as is Jev's call; the entity's building-or-landmark question is
+  gone.
 - **Character.** A request carries what was judged above it: an area the
   world's art direction, a file and an entity their land's landform and
   water. `judgeWorld` then asks in three waves (the world, its areas, then

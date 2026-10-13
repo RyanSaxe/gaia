@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Library, kind, slot } from "@gaia/schema";
+import { Library, kind, meets, slot } from "@gaia/schema";
 import { FLORA_PRIMITIVES, PALETTE_FAMILIES, STRUCTURE_PRIMITIVES } from "@gaia/primitives";
 import { flora, structure } from "@gaia/kinds";
 import { assemble, planDetails, planStructure, readStructure, validate } from "@gaia/world";
@@ -94,18 +94,19 @@ describe("what a part needs of its place", () => {
   const buildings = new Library([...STRUCTURE_PRIMITIVES, ...FLORA_PRIMITIVES]);
   const features = STRUCTURE_PRIMITIVES.filter((p) => p.role === "Feature");
   const needing = features.find((p) => (p.needs?.length ?? 0) > 0);
+  /** What a place must have for the needing part: the things it needs, which here are all words. */
+  const wants = (needing?.needs ?? []).filter((n): n is string => typeof n === "string");
   const offered = (has?: readonly string[]): string[] => [...(planStructure(structure, buildings, { ...subject, ...(has === undefined ? {} : { has }) }).offered?.feature ?? [])].sort();
 
   it("offers a part only where its place has all it needs, and the rest everywhere", () => {
     expect(needing).toBeDefined();
-    const needs = needing?.needs ?? [];
     expect(offered()).toEqual(features.filter((p) => p !== needing).map((p) => p.id).sort());
-    expect(offered(needs)).toEqual(features.map((p) => p.id).sort());
+    expect(offered(wants)).toEqual(features.map((p) => p.id).sort());
   });
 
   it("keeps Jev's pick among what was offered, and never stands a part the place was not offered, whatever Jev answered", () => {
     const id = needing?.id ?? "";
-    const there = planStructure(structure, buildings, { ...subject, has: needing?.needs ?? [] });
+    const there = planStructure(structure, buildings, { ...subject, has: wants });
     expect(readStructure(structure, buildings, there, fakeJev(there.request, { "feature.present": true, "feature.use": id })).feature).toBe(id);
     const elsewhere = planStructure(structure, buildings, subject);
     const answers = { ...fakeJev(elsewhere.request, { "feature.present": true }), "feature.use": { type: "choice" as const, choice: id, probabilities: { [id]: 1 }, confidence: 1 } };
@@ -118,6 +119,16 @@ describe("what a part needs of its place", () => {
       }
     };
     expect(stood()).not.toBe(id);
+  });
+
+  it("offers what needs a range of rank only to a thing whose rank lies in it, ends included, and to no place without a rank", () => {
+    const needs = ["running water", { rank: [0.9, 1] as const }];
+    expect(meets(needs, { has: ["running water"], rank: 0.95 })).toBe(true);
+    expect(meets(needs, { has: ["running water"], rank: 0.9 })).toBe(true);
+    expect(meets(needs, { has: ["running water"], rank: 0.89 })).toBe(false);
+    expect(meets(needs, { has: [], rank: 0.95 })).toBe(false);
+    expect(meets(needs, { has: ["running water"] })).toBe(false);
+    expect(meets(undefined, { has: [] })).toBe(true);
   });
 });
 

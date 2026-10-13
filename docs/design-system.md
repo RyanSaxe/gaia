@@ -420,7 +420,10 @@ on the horizon rise out of its haze. `skyColorAt` and `aerialAt` in
 
 ## Buildings
 
-A building stands for an entity. Buildings are as flexible as trees: a few
+A building stands for any entity, file or definition Jev raises to one
+among the forms its importance is offered ([decision 64](decisions/64-anything-can-stand-as-anything.md)):
+an entity's on its lot, a file's at its patch's heart, a definition's on its
+own plot. Buildings are as flexible as trees: a few
 strong axes of `cottage-plan@1` change the whole form, and walls, roofs and
 openings compose on whatever it lays out, so one set of primitives makes a
 hamlet of very different buildings.
@@ -1157,10 +1160,10 @@ change in vitality never rebakes anything.
 ## Landmarks
 
 A landmark is a great thing a person steers by: a lookout tower, a ring of
-standing stones, or a great old tree. It stands for an entity, as a
-building does: Jev decides which entities become landmarks (prominent ones
-much of the code leans on suit them) and which become buildings, and
-chooses the form. No rule fixes how many; its vitality is its entity's own. `findLandmarkSite` puts it
+standing stones, or a great old tree. It stands for any entity, file or
+definition, as a building does: only the most important things of a world
+are offered one, and among them Jev chooses, and chooses the form. No rule
+fixes how many; its vitality is the vitality of what it stands for. `findLandmarkSite` puts it
 on the most prominent gentle, dry ground of its region, a knoll or a rise
 near the region's heart, and levels its footprint into the land. Each
 reads as a silhouette through the haze from 300 m and more, and declines
@@ -1284,13 +1287,17 @@ about a quarter of the world's width apart.
 
 ## Trees and open ground
 
-Every tree in a world from code is a definition. Jev chooses what each
-definition stands as, on its own: one of four trees (a lantern willow, a
-fir, a cherry or an autumn maple), a stone, a bush or a drift of flowers. A
-tree stands near where the layout put its definition, sized by its
-importance, keeping its crown's width from everything else that stands for
-code, so each tree reads as one thing, and a tap on it opens that
-definition's page. Where Jev picks trees for many of a file's definitions,
+Every tree in a world from code is a definition, a file or an entity Jev
+chose to be one. Jev chooses what each stands as, on its own, among the
+sizes its importance is offered (flowers, stones, bushes, trees, buildings
+and landmarks, each with a wide range of rank in `SIZES`, overlapping): one
+of four trees (a lantern willow, a fir, a cherry or an autumn maple), a
+stone, a bush, a drift of flowers, a building or a landmark. Each form's
+words are its character, its size and its rarity, never a kind of code. A
+tree stands near where the layout put what it stands for (a file's at its
+patch's heart), sized by its importance, keeping its crown's width from
+everything else that stands for code, so each tree reads as one thing, and
+a tap on it opens that thing's page. Where Jev picks trees for many of a file's definitions,
 its patch grows a copse; a file whose definitions are small routines is low
 bushes and stones. Each area's character, which Jev chooses with its reason,
 decides its ground:
