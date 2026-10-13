@@ -34,7 +34,7 @@ import {
   createSunShadow,
   type SceneLight,
 } from "@gaia/render";
-import { type Capsule, clearanceAt, frameOf, type Placement, TILE, LAND_ASPECT, type Deck, decksOf, EYE_HEIGHT, footingAt, FULL_WORLD, GAIT, groundHeightAt, heightAt, type Intent, junctionVitality, NO_SOLIDS, NO_TRAILS, outlineShape, withinLand, piecesShapes, type Place, placeAt, planWalk, randomWorld, regionPlaces, RELIEF_BUDGET, sampleWorld, sightlines, siteToWorld, SMALL_WORLD, type Solids, type SolidShape, solidsOf, stanceAt, standAt, steerAlong, type Steered, type Steering, steering, steerPress, steerRelease, steerStep, stride, type Stride, carry, planTrip, TRAVEL, type Travel, travelFrom, travelPoint, travelStep, type Trip, trailWay, type Walker, type WalkKey, type Terrain, TERRAIN, type TrailNetwork, type Walk, WALK_TO, walkStep, wallsShape, waterDepthAt, type Way, wayAhead, wayVitalityAt, wayWear, WILDS, type WorldPlaces, type WorldSpec } from "@gaia/terrain";
+import { type Capsule, clearanceAt, frameOf, type Placement, TILE, LAND_ASPECT, type Deck, decksOf, EYE_HEIGHT, footingAt, FULL_WORLD, GAIT, groundHeightAt, heightAt, type Intent, junctionVitality, NO_SOLIDS, NO_TRAILS, outlineShape, withinLand, piecesShapes, type Place, placeAt, planWalk, randomWorld, regionPlaces, RELIEF_BUDGET, sampleWorld, sightlines, siteToWorld, SMALL_WORLD, type Solids, type SolidShape, solidsOf, stanceAt, standAt, steerAlong, type Steered, type Steering, steering, steerPress, steerRelease, steerStep, stride, type Stride, acrossWay, carry, planTrip, TRAVEL, type Travel, travelFrom, travelPoint, travelStep, type Trip, trailWay, type Walker, type WalkKey, type Terrain, TERRAIN, type TrailNetwork, type Walk, WALK_TO, walkStep, wallsShape, waterDepthAt, type Way, wayAhead, wayVitalityAt, wayWear, WILDS, type WorldPlaces, type WorldSpec } from "@gaia/terrain";
 import { createSky } from "../world/environment.ts";
 import { type Pixels, createCapture } from "./capture.ts";
 import { renderInspector } from "../inspector.ts";
@@ -262,10 +262,10 @@ export interface WorldHandle {
   /** Puts the person at a landing at once: only under cover of a transition, so nothing is seen to jump. Resolves once the land around them is in. */
   place(at: Landing): Promise<void>;
   /**
-   * Sends the person along the trails to a landing, the world streaming in
-   * around them as they go, until they arrive or take the keys; with `face`
-   * they end facing as the landing does. False when no trail takes them
-   * there, and nothing moves.
+   * Sends the person along the trails or straight across the land to a
+   * landing, the world streaming in around them as they go, until they arrive
+   * or take the keys; with `face` they end facing as the landing does. False
+   * when neither takes them there, and nothing moves.
    */
   travel(at: Landing, face: boolean): boolean;
   /**
@@ -1614,22 +1614,38 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
    * stands between, onto the nearest tread; along the trails to the tread
    * nearest the landing; and off it to the landing.
    */
-  function travelTo(at: Landing, face: boolean): boolean {
-    const from = { x: walker.x, z: walker.z };
+  /**
+   * The way a trip takes from `from` to a landing: walked straight there when
+   * near; else along the trails, unless their way is more than
+   * `TRAVEL.detour` times the straight distance or none goes there, when it
+   * goes straight across the land (`acrossWay`). Null where neither goes.
+   * The meters walked off the tread at each end, at the off-tread pace, and
+   * which way it went.
+   */
+  function travelWay(from: Walker, at: Walker): { way: Walker[]; off: { start: number; end: number }; by: "near" | "trails" | "across" } | null {
     const lengthOf = (way: readonly Walker[]): number => way.reduce((sum, p, i) => (i === 0 ? 0 : sum + Math.hypot(p.x - (way[i - 1] as Walker).x, p.z - (way[i - 1] as Walker).z)), 0);
-    let way: Walker[];
-    let off: { start: number; end: number };
-    if (Math.hypot(at.x - from.x, at.z - from.z) < TRAVEL_NEAR) {
-      way = [...planWalk(terrain, solids, from, at).way];
-      off = { start: lengthOf(way), end: 0 };
-    } else {
-      const tread = trailWay(ways.network, from, at);
-      if (tread === null || tread.length < 2) return false;
+    const straight = Math.hypot(at.x - from.x, at.z - from.z);
+    if (straight < TRAVEL_NEAR) {
+      const way = [...planWalk(terrain, solids, from, at).way];
+      return { way, off: { start: lengthOf(way), end: 0 }, by: "near" };
+    }
+    const tread = trailWay(ways.network, from, at);
+    let trails: { way: Walker[]; off: { start: number; end: number }; by: "trails" } | null = null;
+    if (tread !== null && tread.length >= 2) {
       const on = planWalk(terrain, solids, from, tread[0] as Walker).way;
       const leave = planWalk(terrain, solids, tread[tread.length - 1] as Walker, at).way;
-      way = [...on, ...tread.slice(1, -1), ...leave];
-      off = { start: lengthOf(on), end: lengthOf(leave) };
+      trails = { way: [...on, ...tread.slice(1, -1), ...leave], off: { start: lengthOf(on), end: lengthOf(leave) }, by: "trails" };
     }
+    if (trails !== null && lengthOf(trails.way) <= straight * TRAVEL.detour) return trails;
+    const across = acrossWay(terrain, solids, from, at);
+    // Straight across only where it is the shorter way; deep water may send it round farther than the trails go.
+    if (across === null || (trails !== null && lengthOf(across) >= lengthOf(trails.way))) return trails;
+    return { way: across, off: { start: 0, end: 0 }, by: "across" };
+  }
+  function travelTo(at: Landing, face: boolean): boolean {
+    const chosen = travelWay({ x: walker.x, z: walker.z }, at);
+    if (chosen === null) return false;
+    const { way, off } = chosen;
     endWalk();
     hideCard();
     const plan = planTrip(way, off, face ? at.yaw : null, travelPace);
@@ -2798,7 +2814,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       card: () => (card.shown === null ? null : { name: card.shown.name, what: card.shown.what }),
       closeCard: () => hideCard(),
       walk: (x: number, z: number, yawDeg: number, pitchDeg = -3) => walkTo(x, z, (yawDeg * Math.PI) / 180, (pitchDeg * Math.PI) / 180),
-      /** Sends the person along the trails to the landing nearest (x, z), as a pick on the map does, at `pace` on the tread; false where no trail goes. */
+      /** Sends the person to the landing nearest (x, z), as a pick on the map does, at `pace` on the tread and straight across; false where neither goes. */
       travel: (x: number, z: number, pace: number = TRAVEL.pace) => {
         const at = landingNear(x, z);
         travelPace = pace;
@@ -2827,19 +2843,20 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
        */
       tripTime: (x0: number, z0: number, x1: number, z1: number) => {
         const at = landingNear(x1, z1);
-        const tread = at === null ? null : trailWay(ways.network, { x: x0, z: z0 }, at);
-        if (at === null || tread === null) return null;
-        const lengthOf = (way: readonly Walker[]): number => way.reduce((sum, p, i) => (i === 0 ? 0 : sum + Math.hypot(p.x - (way[i - 1] as Walker).x, p.z - (way[i - 1] as Walker).z)), 0);
-        const on = Math.hypot((tread[0] as Walker).x - x0, (tread[0] as Walker).z - z0);
-        const leave = Math.hypot((tread[tread.length - 1] as Walker).x - at.x, (tread[tread.length - 1] as Walker).z - at.z);
-        const plan = planTrip([{ x: x0, z: z0 }, ...tread, at], { start: on, end: leave });
+        const t0 = performance.now();
+        const chosen = at === null ? null : travelWay({ x: x0, z: z0 }, at);
+        const planMs = Math.round(performance.now() - t0);
+        if (at === null || chosen === null) return null;
+        const plan = planTrip(chosen.way, chosen.off);
         let t = travelFrom(plan, plan.heading[0] as number);
         let seconds = 0;
         while (!t.done && seconds < 3600) {
           t = travelStep(plan, t, 1 / 60, t.yaw);
           seconds += 1 / 60;
         }
-        return { straight: Math.round(Math.hypot(at.x - x0, at.z - z0)), length: Math.round(plan.length), tread: Math.round(lengthOf(tread)), seconds: Math.round(seconds), walking: Math.round(plan.length / WALK_TO.pace) };
+        const tread = trailWay(ways.network, { x: x0, z: z0 }, at);
+        const trails = tread === null ? null : Math.round(tread.reduce((sum, p, i) => (i === 0 ? Math.hypot(p.x - x0, p.z - z0) : sum + Math.hypot(p.x - (tread[i - 1] as Walker).x, p.z - (tread[i - 1] as Walker).z)), 0) + Math.hypot((tread[tread.length - 1] as Walker).x - at.x, (tread[tread.length - 1] as Walker).z - at.z));
+        return { by: chosen.by, planMs, straight: Math.round(Math.hypot(at.x - x0, at.z - z0)), length: Math.round(plan.length), trails, seconds: Math.round(seconds), walking: Math.round(plan.length / WALK_TO.pace) };
       },
       /**
        * The tour (`tourStops`): with no name, every stop's name, what is there

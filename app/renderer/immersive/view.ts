@@ -88,9 +88,10 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
     return at !== null && jumpTo(at, false);
   }
   /**
-   * Takes the person to a landing: along the trails, the map folding away as
-   * they set off (round 23's travel thread), or where no trail goes, by a
-   * jump. With `face` they end facing as the landing does.
+   * Takes the person to a landing: along the trails or straight across the
+   * land, the map folding away as they set off (round 23's travel thread), or
+   * where neither goes, by a jump. With `face` they end facing as the landing
+   * does.
    */
   function jumpTo(at: Landing, face: boolean): boolean {
     if (jumping) return false;
