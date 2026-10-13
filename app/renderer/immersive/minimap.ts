@@ -207,6 +207,8 @@ export function createMinimap(root: HTMLElement, map: FieldMap, stood: () => Sto
     const paper = map.paper();
     if (idle !== 0) window.cancelIdleCallback(idle);
     idle = 0;
+    // Until its paper is painted the scrap is bare paper, and its land washes in once it is (lab.css).
+    canvas.classList.toggle("painted", paper !== null);
     if (paper === null) return;
     const t0 = performance.now();
     anchor.x = person.x;

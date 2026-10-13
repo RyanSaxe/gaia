@@ -819,7 +819,10 @@ the minimap is the land around the person, turned to the way they face; a
 tap unfolds it into the field map, which draws back from the minimap's
 close view to the whole land and turns to north up as it comes; close in,
 the map shows the next level down, each file's patch and name. A tap on a
-thing opens the journal at its page.
+thing opens the journal at its page. The minimap is cut from the field
+map's paper, which is painted first while the wait is up. Until it is, the
+scrap is bare paper, and its land washes in as the wait's layers do, never
+popping in.
 
 ## Knowing where you are
 

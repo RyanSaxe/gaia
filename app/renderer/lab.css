@@ -1,5 +1,7 @@
 :root {
   color-scheme: light dark;
+  /* How anything painted washes in: the wait's layers and the minimap's land. */
+  --wash-in: opacity 1.4s ease-out;
   --bg: #f3f0e8;
   --panel: #fbfaf6;
   --ink: #2b2a26;
@@ -318,7 +320,8 @@ details.json pre { font: 11px/1.45 ui-monospace, "SF Mono", Menlo, monospace; ba
   position: absolute; inset: 0; overflow: hidden;
   -webkit-mask-image: var(--paint); mask-image: var(--paint); -webkit-mask-size: 100% 100%; mask-size: 100% 100%;
 }
-.minimap-land { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
+.minimap-land { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; opacity: 0; transition: var(--wash-in); }
+.minimap-land.painted { opacity: 1; }
 .minimap-here { position: absolute; left: 50%; top: 60%; width: 0; height: 0; }
 .minimap-here .field-map-traveller { position: absolute; left: -22px; top: -22px; width: 44px; height: 44px; overflow: visible; }
 /* Walking up to a thing: a vermilion pencil ring drawn round it, its name beside it in the traveller's hand. */
