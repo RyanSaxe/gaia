@@ -85,10 +85,19 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
   let jumping = false;
   function jump(x: number, z: number, heart?: { readonly x: number; readonly z: number }): boolean {
     const at = world.landing(x, z, heart);
-    return at !== null && jumpTo(at);
+    return at !== null && jumpTo(at, false);
   }
-  function jumpTo(at: Landing): boolean {
+  /**
+   * Takes the person to a landing: along the trails, the map folding away as
+   * they set off (round 23's travel thread), or where no trail goes, by a
+   * jump. With `face` they end facing as the landing does.
+   */
+  function jumpTo(at: Landing, face: boolean): boolean {
     if (jumping) return false;
+    if (world.travel(at, face)) {
+      map.open(false);
+      return true;
+    }
     jumping = true;
     map.open(false);
     layPlace(at);
@@ -221,7 +230,7 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
         const at = world.seenFrom(standsFor(of));
         if (at === null) return;
         journal.close();
-        jumpTo(at);
+        jumpTo(at, true);
       },
       text: (path) => source.when(path),
     }),
