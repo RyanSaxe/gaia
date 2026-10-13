@@ -548,10 +548,17 @@ while the wait paints the world's own over it (and folds away if the land
 has since grown into another shape). As soon as the land is divided, a pen draws
 every area's border from the middle outward, the map's fine line, with the
 hedgerow's soft band coming in under it, and never the land's rounded rim.
-Color is health, as on the map, and each file's health is washed in once it
-is settled, whenever that is: most files' health follows from their code
-facts and washes in as soon as the land is divided, and a file whose health
-waits on Jev's judgment washes in when that answer comes. Each file's
+Between the borders and the washes, a pencil shows what Jev is doing to the
+code, so a person can watch their codebase being read. Each file is
+sketched round, lightly, while its area's looks are asked. It is hatched
+once Jev has read its links, cross-hatched once Jev has read it for its
+quality, and ringed again when Jev reads closer around it. Each area is
+surveyed with short hachures inside its border as the folder pass reaches
+it, the shallowest areas first. The pencil is graphite-grey and finer than
+the pen, and each file's marks fade under its wash as the wash comes in, so
+the finished map holds none of them.
+Color is health, as on the map, and each file's health is Jev's judgment of
+its quality, washed in once nothing more will be asked about the file. Each file's
 health spreads over the ground around it as the map spreads it, and a part
 of the sheet is painted only as nearly all the health there is settled, so
 a color laid is never a color that later changes; until then that part
@@ -559,7 +566,7 @@ stays bare paper (`settling.ts`). Each change is painted by the field map's
 own painter and comes in over a second or so, wet in wet. Each area's name
 is lettered in the map's survey capitals, in the place the map letters it,
 once its last answer about its looks is in, even before its health washes
-in, names settling together one after another as a pen letters them. While the world bakes, the pen draws each building's and
+in. While the world bakes, the pen draws each building's and
 landmark's mark at its laid-out place, one by one from the middle outward.
 Once the world stands, its relief is drawn in with the same hand: the pen
 draws each river from its source to its mouth and each trail along its way,
@@ -571,9 +578,15 @@ the map does, and the place's name is written on the minimap. After dark the
 sheet is read by the lantern, warm at its middle and falling into blue at
 its edges.
 
-Nothing in the wait shows that work is pending: no brush, no clear water,
-no drifting light. The only motion is real things arriving on the sheet, so
-a lull in Jev's answers is a still map.
+The sheet never sits still while Jev works, and nothing on it is made up:
+there is no brush, no clear water and no drifting light, only strokes of
+what has happened. Answers come in bursts, a slice of the understanding
+pass at a time and seconds apart, but every stroke is drawn at a hand's
+pace, one after another (`pace.ts`): names, pencil marks and washes each
+keep their own queue, drawn calmly, and faster only so that a burst is drawn
+by about when the next is due. So the pen follows the work by at most one
+burst, never runs ahead of it, and once the world is ready to bake whatever
+is left is drawn within a second and a half.
 
 Everything in the wait that moves is an opacity or transform animation, or
 a pen line's dash, so it keeps moving while the page stands the world, and

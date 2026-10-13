@@ -14,8 +14,17 @@
 // contours and trees wash in over each area's own ground, from the middle
 // outward as the pen went over the borders, while the pen draws each river
 // from its source to its mouth and each trail along its way. Then the paper
-// folds away into the world, as a jump on the map does. Nothing else moves:
-// a lull is a still map.
+// folds away into the world, as a jump on the map does.
+//
+// Between those, a pencil shows what Jev is doing to the code, file by file:
+// a file is sketched round while its area's looks are asked, hatched once
+// its links are read, cross-hatched once Jev has read it for its quality,
+// and circled again when Jev reads closer around it; each area is surveyed
+// with short hachures inside its border as the folder pass reaches it. The
+// pencil lies over the paper and fades under each file's wash as it comes.
+// Answers come in bursts, but every stroke is drawn at a hand's pace, one
+// after another (`pace.ts`), so the sheet keeps moving all the time Jev is
+// at work and never shows anything before it has happened.
 //
 // The washes are painted by the field map's own painter (`wash.ts`) in the
 // page's idle time, a few milliseconds a step: each change is laid on a
@@ -26,6 +35,7 @@
 // dash, so nothing here redraws per frame and a busy page thread never stalls
 // the sheet.
 
+import { rand, seedOf } from "@gaia/schema";
 import type { Outline } from "@gaia/terrain";
 import type { LotPlace } from "@gaia/world";
 import type { FilePatch } from "../../world-service/protocol.ts";
@@ -36,12 +46,13 @@ import { DECKLE_MASK, MAP_STYLE, dryness, healthColor, landWash } from "../immer
 import { markScale, stampBuilding, stampLandmark } from "../immersive/marks.ts";
 import { borderPath, easeRing, fadeMask, floatWash, layWash, PAPER, rimPoints, ringsPath, type WashArea, type WashSheet } from "../immersive/wash.ts";
 import { layGround } from "../immersive/wild-ink.ts";
+import { type Pace, type Pacer, pacer } from "./pace.ts";
 import { type CellBox, type SettlingHealth, settlingHealth } from "./settling.ts";
 import type { WaitView } from "./wait.ts";
 
 /**
  * How the map paints itself, ms, as wait.css times it: the pen over one border and the most it staggers over all of
- * them; a wash coming in; a name being lettered, and the least time between two; a mark coming in, the time between
+ * them; a wash coming in; a name being lettered; a mark coming in, the time between
  * two marks, at least and at most, and the most all the marks take; the relief's wash staggered over the areas, and
  * one area's coming in; the pen over the rivers and the trails, when it starts on each once the world stands, how
  * far it goes a millisecond in the sheet's pixels, the least and the most one line takes, and the time between two
@@ -52,7 +63,6 @@ const PACE = {
   penSpreadMs: 2100,
   washMs: 1400,
   nameMs: 900,
-  nameGapMs: 120,
   markMs: 700,
   markGapMs: [200, 600],
   marksMs: 5000,
@@ -62,6 +72,25 @@ const PACE = {
   restMs: 300,
   foldMs: 1100,
 } as const;
+/**
+ * Each kind of stroke's pace (`pace.ts`): names, the pencil over a file, the survey of an area and a file's wash, each
+ * at least this many ms apart when nothing presses, a burst spread over at most this long.
+ */
+const PACED: Readonly<Record<"name" | "pencil" | "survey" | "wash", Pace>> = {
+  name: { everyMs: 450, spreadMs: [4000, 20000] },
+  pencil: { everyMs: 90, spreadMs: [4000, 20000] },
+  survey: { everyMs: 600, spreadMs: [4000, 20000] },
+  wash: { everyMs: 250, spreadMs: [4000, 20000] },
+};
+/**
+ * The pencil, in meters on the land: how long one stroke takes, ms; a file's sketch round its ground, as a share of
+ * its radius; its hatching, this far apart; its closer reading's ring, as a share of its radius; and an area's survey,
+ * a tick this long inside its border this often along it.
+ */
+const PENCIL = { ms: 520, round: 0.85, hatch: 3.2, closer: 0.45, survey: { every: 11, tick: 3 } } as const;
+/** A file's pencil marks: sketched while its area is asked, hatched once its links are read, cross-hatched once read for itself, and ringed when Jev reads closer round it. */
+type Mark = "sketch" | "hatch" | "cross" | "closer";
+
 /** How far an area's relief wash reaches past its own ground, and how soft its edge is, in cells. */
 const FEATHER = { reach: 2, soft: 0.8 } as const;
 /** Paper pixels round a change that are painted again with it: as far as its wash bleeds, and a cell for the smoothing of its cells. */
@@ -115,6 +144,7 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
         <div class="wait-square">
           <canvas class="wait-ground"></canvas>
           <div class="wait-layers"></div>
+          <svg class="wait-pencil" xmlns="${SVG}"></svg>
           <canvas class="wait-hedges"></canvas>
           <svg class="wait-ink" xmlns="${SVG}"></svg>
           <div class="wait-marks"></div>
@@ -131,6 +161,7 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
   const layers = veil.querySelector(".wait-layers") as HTMLElement;
   const hedges = veil.querySelector(".wait-hedges") as HTMLCanvasElement;
   const ink = veil.querySelector(".wait-ink") as SVGSVGElement;
+  const pencilEl = veil.querySelector(".wait-pencil") as SVGSVGElement;
   const marksEl = veil.querySelector(".wait-marks") as HTMLElement;
   const namesEl = veil.querySelector(".wait-names") as HTMLElement;
   const dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -146,14 +177,6 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
     jobs.push(job);
     schedule();
   };
-  /** Runs `f` once the work asked for before it has run. */
-  const afterWork = (f: () => void): void =>
-    work(
-      (function* (): Generator<void> {
-        f();
-        yield;
-      })(),
-    );
   function schedule(): void {
     if (idleHandle !== 0 || jobs.length === 0) return;
     idleHandle = typeof window.requestIdleCallback === "function" ? window.requestIdleCallback(run, { timeout: 250 }) : window.setTimeout(() => run(), 16);
@@ -225,6 +248,193 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
   let marksDrawn: Promise<void> = Promise.resolve();
   let reliefShown: Promise<void> = Promise.resolve();
 
+  // ---------- the pace: every stroke one after another, at a hand's pace ----------
+  const names = pacer<string>(PACED.name);
+  const strokes = pacer<{ readonly path: string; readonly mark: Mark }>(PACED.pencil);
+  const surveys = pacer<string>(PACED.survey);
+  const washesDue = pacer<readonly [string, number]>(PACED.wash);
+  const pacers: readonly Pacer<unknown>[] = [names, strokes, surveys, washesDue];
+  let ticking = 0;
+  /** Draws whatever is due, and wakes again when the next stroke is. */
+  function tick(): void {
+    ticking = 0;
+    const now = performance.now();
+    for (const path of names.due(now)) letterNow(path);
+    for (const { path, mark } of strokes.due(now)) drawMark(path, mark);
+    for (const area of surveys.due(now)) survey(area);
+    const due = washesDue.due(now);
+    if (due.length > 0) settle(Object.fromEntries(due));
+    const next = Math.min(...pacers.map((q) => q.next() ?? Infinity));
+    if (Number.isFinite(next)) ticking = window.setTimeout(tick, Math.max(16, next - now));
+    else for (const resolve of paced.splice(0)) resolve();
+  }
+  /** Something new is queued: draw from now. */
+  const pace = (): void => {
+    window.clearTimeout(ticking);
+    ticking = window.setTimeout(tick, 0);
+  };
+  const paced: (() => void)[] = [];
+  /** Resolves once every queued stroke has been drawn. */
+  const allPaced = (): Promise<void> => (pacers.every((q) => q.size === 0) ? Promise.resolve() : new Promise((resolve) => paced.push(resolve)));
+
+  // ---------- the pencil: what Jev is doing to the code ----------
+  /** Each file's ground, each area's files, and each area's border as the pen eased it, in meters. */
+  let patchOf = new Map<string, FilePatch>();
+  let filesOf = new Map<string, string[]>();
+  let ringsOf = new Map<string, readonly (readonly number[])[]>();
+  /** How thick the pencil is, in meters: as thin as a hair on the sheet. */
+  let lead = 0.5;
+  /** Each file read so far: its last mark, and the slice of the pass it was last read in. */
+  const reading = new Map<string, { mark: Mark; slice: number }>();
+  const sketched = new Set<string>();
+  const surveyed = new Set<string>();
+  let slices = 0;
+  /** Each file's pencil marks, until its own wash covers them; and the files washed already, never drawn over again. */
+  const marksOf = new Map<string, SVGGElement>();
+  const washedOver = new Set<string>();
+  /** Each area's survey, until its ground's wash covers it. */
+  const surveyOf = new Map<string, SVGGElement>();
+  const pencilLand = (): SVGGElement | null => pencilEl.querySelector("g.land");
+
+  /** An area is being asked about: each of its files is sketched round. */
+  function asked(areas: readonly string[]): void {
+    const now = performance.now();
+    for (const area of areas) {
+      if (sketched.has(area)) continue;
+      sketched.add(area);
+      strokes.add((filesOf.get(area) ?? []).map((path) => ({ path, mark: "sketch" as const })), now);
+    }
+    pace();
+  }
+
+  /**
+   * A slice of the understanding pass read these files and areas. A file is first hatched (its links); read again in a
+   * later pass it is cross-hatched (itself), and again, ringed (the closer reading Jev asked for). A slice reads what
+   * the one before held a second time, so only a reading two slices after the last counts as another.
+   */
+  function read(files: readonly string[], areas: readonly string[]): void {
+    slices++;
+    const now = performance.now();
+    const marks: { readonly path: string; readonly mark: Mark }[] = [];
+    for (const path of files) {
+      const r = reading.get(path);
+      if (r === undefined) {
+        reading.set(path, { mark: "hatch", slice: slices });
+        marks.push({ path, mark: "hatch" });
+        continue;
+      }
+      const next: Mark | null = r.mark === "hatch" ? "cross" : r.mark === "cross" ? "closer" : null;
+      if (next !== null && slices - r.slice >= 2) {
+        r.mark = next;
+        marks.push({ path, mark: next });
+      }
+      r.slice = slices;
+    }
+    strokes.add(marks, now);
+    surveys.add(
+      areas.filter((a) => !surveyed.has(a) && (surveyed.add(a), true)),
+      now,
+    );
+    pace();
+  }
+
+  /** One pencil mark over a file's ground, drawn as a stroke goes. */
+  function drawMark(path: string, mark: Mark): void {
+    const p = patchOf.get(path);
+    const host = pencilLand();
+    if (p === undefined || host === null || washedOver.has(path)) return;
+    let g = marksOf.get(path);
+    if (g === undefined) {
+      g = document.createElementNS(SVG, "g");
+      host.append(g);
+      marksOf.set(path, g);
+    }
+    const r = rand(seedOf(`pencil:${mark}:${path}`));
+    const f = (v: number): string => v.toFixed(2);
+    let d = "";
+    if (mark === "sketch" || mark === "closer") {
+      // A loop round the ground, as a hand draws one: a little uneven, and running on past where it began.
+      const radius = p.radius * (mark === "sketch" ? PENCIL.round : PENCIL.closer);
+      const start = r.range(0, Math.PI * 2);
+      const [a, b] = [r.range(0, Math.PI * 2), r.range(0, Math.PI * 2)];
+      for (let k = 0; k <= 30; k++) {
+        const t = start + (k / 30) * Math.PI * 2.12;
+        const rr = radius * (1 + 0.05 * Math.sin(3 * t + a) + 0.03 * Math.sin(7 * t + b));
+        d += `${k === 0 ? "M" : "L"}${f(p.x + Math.cos(t) * rr)} ${f(p.z + Math.sin(t) * rr)}`;
+      }
+    } else {
+      // Parallel strokes across the ground, the cross-hatching the other way.
+      const radius = p.radius * PENCIL.round;
+      const angle = (mark === "hatch" ? 0.87 : -0.7) + r.range(-0.08, 0.08);
+      const [dx, dz] = [Math.cos(angle), Math.sin(angle)];
+      const n = Math.max(2, Math.min(9, Math.round((radius * 2) / PENCIL.hatch)));
+      for (let k = 1; k <= n; k++) {
+        const o = -radius + (k * 2 * radius) / (n + 1);
+        const half = Math.sqrt(Math.max(0, radius * radius - o * o)) * 0.85;
+        const [cx, cz] = [p.x - dz * o, p.z + dx * o];
+        d += `M${f(cx - dx * half)} ${f(cz - dz * half)}L${f(cx + dx * half)} ${f(cz + dz * half)}`;
+      }
+    }
+    const line = document.createElementNS(SVG, "path");
+    line.setAttribute("d", d);
+    line.setAttribute("pathLength", "1");
+    line.setAttribute("stroke-width", f(lead));
+    line.style.transitionDuration = `${PENCIL.ms}ms`;
+    g.append(line);
+    show(line);
+  }
+
+  /** An area reached by the folder pass: short hachures inside its border, all the way round. */
+  function survey(area: string): void {
+    const host = pencilLand();
+    const rings = ringsOf.get(area);
+    if (host === null || rings === undefined || rings.length === 0) return;
+    let [cx, cz, m] = [0, 0, 0];
+    for (const ring of rings) for (let q = 0; q < ring.length; q += 2, m++) [cx, cz] = [cx + (ring[q] as number), cz + (ring[q + 1] as number)];
+    [cx, cz] = [cx / Math.max(1, m), cz / Math.max(1, m)];
+    const f = (v: number): string => v.toFixed(2);
+    let d = "";
+    for (const ring of rings) {
+      let along = PENCIL.survey.every / 2;
+      for (let q = 2; q < ring.length; q += 2) {
+        const [x0, z0, x1, z1] = [ring[q - 2] as number, ring[q - 1] as number, ring[q] as number, ring[q + 1] as number];
+        along += Math.hypot(x1 - x0, z1 - z0);
+        if (along < PENCIL.survey.every) continue;
+        along = 0;
+        const toward = Math.hypot(cx - x1, cz - z1);
+        if (toward < PENCIL.survey.tick * 2) continue;
+        const [ux, uz] = [(cx - x1) / toward, (cz - z1) / toward];
+        d += `M${f(x1 + ux * 0.6)} ${f(z1 + uz * 0.6)}L${f(x1 + ux * (0.6 + PENCIL.survey.tick))} ${f(z1 + uz * (0.6 + PENCIL.survey.tick))}`;
+      }
+    }
+    if (d === "") return;
+    const line = document.createElementNS(SVG, "path");
+    line.setAttribute("d", d);
+    line.setAttribute("pathLength", "1");
+    line.setAttribute("stroke-width", f(lead));
+    line.style.transitionDuration = `${PENCIL.ms * 2}ms`;
+    const g = document.createElementNS(SVG, "g");
+    g.append(line);
+    host.append(g);
+    surveyOf.set(area, g);
+    show(line);
+  }
+
+  /** The wash has come over these files' ground and these areas': their pencil fades under it. */
+  function washOver(l: Land, cells: CellBox, grounds: readonly string[]): void {
+    for (const [path, g] of marksOf) {
+      const p = patchOf.get(path);
+      if (p === undefined) continue;
+      const i = Math.floor((p.x + l.reach) / CELL);
+      const j = Math.floor((p.z + l.reach) / CELL);
+      if (i < cells[0] || i > cells[2] || j < cells[1] || j > cells[3] || l.health.paint(j * l.n + i) < 0.5) continue;
+      g.classList.add("washed");
+      marksOf.delete(path);
+      washedOver.add(path);
+    }
+    for (const area of grounds) surveyOf.get(area)?.classList.add("washed");
+  }
+
   // ---------- the land is divided ----------
   function divide(size: number, aspect: number | undefined, outlines: readonly Outline[], patches: readonly FilePatch[], lots: readonly LotPlace[]): void {
     const reach = size / 2 + MARGIN;
@@ -245,6 +455,13 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
     ink.innerHTML = `<defs><clipPath id="wait-land"><path d="${rim}"/></clipPath></defs><g clip-path="url(#wait-land)"></g>`;
     const pens = ink.lastElementChild as SVGGElement;
     const perPixel = (reach * 2) / side;
+    // The pencil works on the same land, inside the same rim, as thin as the finest pen line.
+    pencilEl.setAttribute("viewBox", `${-reach} ${-reach} ${reach * 2} ${reach * 2}`);
+    pencilEl.innerHTML = `<g class="land" clip-path="url(#wait-land)"></g>`;
+    lead = perPixel * 0.75;
+    patchOf = new Map(patches.map((p) => [p.path, p]));
+    filesOf = new Map();
+    for (const p of patches) filesOf.set(p.area, [...(filesOf.get(p.area) ?? []), p.path]);
 
     ready = new Promise((resolve) =>
       work(
@@ -260,6 +477,7 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
             borders.push(borderPath(o.rings, edge));
             if (i % 4 === 3) yield;
           }
+          ringsOf = new Map(outlines.flatMap((o, i) => (o.depth > 0 ? [[o.path, eased[i] ?? []] as const] : [])));
           // The pen draws every area's border from the middle outward, keeping inside the land as the map's
           // hedgerows do.
           const order = outlines
@@ -335,8 +553,9 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
           // Every name's place, worked out once as the field map places them on its whole sheet, the same size as this
           // one, so a name lettered later never moves one lettered before it.
           land.names = yield* letterNames(named);
-          for (const path of [...land.names.keys()].filter((p) => namesWaiting.has(p))) letter(path);
+          names.add([...land.names.keys()].filter((p) => namesWaiting.has(p)), performance.now());
           namesWaiting.clear();
+          pace();
           if (marksWaiting !== null) drawMarks(marksWaiting);
           if (stoodWaiting !== null) relief(stoodWaiting);
           resolve();
@@ -443,6 +662,7 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
         yield;
       }
       yield* paintLayer(l, box);
+      washOver(l, box, grounds);
     }
     laying--;
     washedIfDone();
@@ -503,9 +723,17 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
   }
 
   // ---------- names, as each area's last answer comes in ----------
-  /** When the last name was lettered, so names that settle together are lettered one after another. */
+  /** When the last name was lettered, and the names asked for so far. */
   let lastName = 0;
+  const lettering = new Set<string>();
+  /** An area's last answer is in: its name is lettered in its turn, at the pace names are lettered. */
   function letter(path: string): void {
+    if (lettering.has(path)) return;
+    lettering.add(path);
+    names.add([path], performance.now());
+    pace();
+  }
+  function letterNow(path: string): void {
     if (land?.names === null || land?.names === undefined) {
       namesWaiting.add(path);
       return;
@@ -513,16 +741,9 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
     const el = land.names.get(path);
     if (el === undefined || el.dataset.due !== undefined) return;
     el.dataset.due = "";
-    // A name is lettered as soon as its area settles, whether or not its ground's wash has come, so the pen keeps
-    // moving while Jev is asked; names that settle together are lettered one after another, as a pen would letter them.
-    afterWork(() => {
-      const at = Math.max(performance.now(), lastName + PACE.nameGapMs);
-      lastName = at;
-      window.setTimeout(() => {
-        namesEl.append(el);
-        show(el);
-      }, at - performance.now());
-    });
+    namesEl.append(el);
+    show(el);
+    lastName = performance.now();
   }
 
   // ---------- marks, while the world bakes ----------
@@ -606,6 +827,7 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
       layers.append(pens.svg);
       show(pens.svg);
       // Over the washes as they finally lie, so the relief comes in over exactly what is there.
+      await allPaced();
       await allWashed();
       const sx = (x: number): number => (x + l.reach) * zoom;
       const sheetOf = (from: CanvasImageSource): CanvasRenderingContext2D => {
@@ -785,14 +1007,25 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
   return {
     opening(o) {
       if (o.stage === "land") divide(o.size, o.aspect, o.areas, o.patches, o.lots);
-      else if (o.stage === "health") settle(o.vitality);
-      else if (o.stage === "asking") for (const path of Object.keys(o.settled)) letter(path);
+      else if (o.stage === "health") {
+        washesDue.add(Object.entries(o.vitality), performance.now());
+        pace();
+      } else if (o.stage === "asking") {
+        asked(o.asking);
+        for (const path of Object.keys(o.settled)) letter(path);
+      } else if (o.stage === "understood") read(o.files, o.areas);
     },
     baking(health) {
-      settle(health);
+      // The world is ready to bake: whatever is still queued is drawn quickly now, so the pace never holds it back.
+      const now = performance.now();
+      washesDue.add(Object.entries(health), now);
+      for (const q of pacers) q.flush(now);
+      pace();
       // Every area is settled now: each name not yet lettered is, the largest area's first.
       void ready.then(() => {
         for (const path of land?.names?.keys() ?? []) letter(path);
+        names.flush(performance.now());
+        pace();
       });
     },
     chosen: choose,
@@ -804,7 +1037,7 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
     },
     async lift() {
       await ready;
-      await Promise.all([marksDrawn, reliefShown]);
+      await Promise.all([marksDrawn, reliefShown, allPaced()]);
       // And every name asked for written: the last is lettered over as long as the pen takes over a name.
       await wait(Math.max(0, lastName + PACE.nameMs - performance.now()));
       await wait(PACE.restMs);
