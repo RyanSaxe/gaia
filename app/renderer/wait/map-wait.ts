@@ -16,12 +16,13 @@
 // from its source to its mouth and each trail along its way. Then the paper
 // folds away into the world, as a jump on the map does.
 //
-// Between those, a pencil shows what Jev is doing to the code, file by file:
-// a file is sketched round while its area's looks are asked, hatched once
-// its links are read, cross-hatched once Jev has read it for its quality,
-// and circled again when Jev reads closer around it; each area is surveyed
-// with short hachures inside its border as the folder pass reaches it. The
-// pencil lies over the paper and fades under each file's wash as it comes.
+// Between those, a pencil shows what Jev is doing to the code. It shades
+// exactly the ground each wash will paint, in light graphite, one hatching
+// for each stage: an area while its looks are asked, and again once the
+// folder pass reaches it; a file once its links are read, once Jev reads it
+// for its quality, and once Jev reads closer round it. The pencil is on the
+// paper, to its edge as the wash goes, and each wash takes it away in just
+// the measure that it paints.
 // Answers come in bursts, but every stroke is drawn at a hand's pace, one
 // after another (`pace.ts`), so the sheet keeps moving all the time Jev is
 // at work and never shows anything before it has happened.
@@ -42,7 +43,7 @@ import type { FilePatch } from "../../world-service/protocol.ts";
 import type { StoodWorld } from "../terrain/lab.ts";
 import { MARGIN, drawRivers, drawTrails, drawTrees, letterName, nearestAreas, paintRelief, riverCourse, riverStrokes, strokeContours } from "../immersive/field-map.ts";
 import { CELL, type NameLand, canvasMeasure, nameLand, placeNames } from "../immersive/map-names.ts";
-import { DECKLE_MASK, MAP_STYLE, dryness, healthColor, landWash } from "../immersive/map-styles.ts";
+import { DECKLE_MASK, MAP_STYLE, dryness, healthColor, healthWeight, landWash } from "../immersive/map-styles.ts";
 import { markScale, stampBuilding, stampLandmark } from "../immersive/marks.ts";
 import { borderPath, easeRing, fadeMask, floatWash, layWash, PAPER, rimPoints, ringsPath, type WashArea, type WashSheet } from "../immersive/wash.ts";
 import { layGround } from "../immersive/wild-ink.ts";
@@ -83,13 +84,26 @@ const PACED: Readonly<Record<"name" | "pencil" | "survey" | "wash", Pace>> = {
   wash: { everyMs: 250, spreadMs: [4000, 20000] },
 };
 /**
- * The pencil, in meters on the land: how long one stroke takes, ms; a file's sketch round its ground, as a share of
- * its radius; its hatching, this far apart; its closer reading's ring, as a share of its radius; and an area's survey,
- * a tick this long inside its border this often along it.
+ * The pencil: one light graphite hatching for each stage of reading the code, laid over just the cells the wash will
+ * paint. Each is at its angle, radians, its lines this many of the sheet's CSS pixels apart, this light; a line this
+ * wide; and a mark coming in over this long, ms.
  */
-const PENCIL = { ms: 520, round: 0.85, hatch: 3.2, closer: 0.45, survey: { every: 11, tick: 3 } } as const;
-/** A file's pencil marks: sketched while its area is asked, hatched once its links are read, cross-hatched once read for itself, and ringed when Jev reads closer round it. */
-type Mark = "sketch" | "hatch" | "cross" | "closer";
+const PENCIL = {
+  graphite: "rgb(84, 78, 70)",
+  width: 0.55,
+  ms: 700,
+  styles: {
+    asked: { angle: 0.95, every: 7, alpha: 0.2 },
+    surveyed: { angle: -0.62, every: 7, alpha: 0.16 },
+    links: { angle: 0.22, every: 4.5, alpha: 0.16 },
+    quality: { angle: -1.3, every: 4.5, alpha: 0.16 },
+    closer: { angle: 1.57, every: 6, alpha: 0.13 },
+  },
+} as const;
+/** What the pencil marks: an area while its looks are asked and once the folder pass reaches it; a file once its links are read, once it is read for itself, and once Jev reads closer round it. */
+type AreaMark = "asked" | "surveyed";
+type FileMark = "links" | "quality" | "closer";
+type Stroke = { readonly of: "area"; readonly path: string; readonly mark: AreaMark } | { readonly of: "file"; readonly path: string; readonly mark: FileMark };
 
 /** How far an area's relief wash reaches past its own ground, and how soft its edge is, in cells. */
 const FEATHER = { reach: 2, soft: 0.8 } as const;
@@ -144,7 +158,6 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
         <div class="wait-square">
           <canvas class="wait-ground"></canvas>
           <div class="wait-layers"></div>
-          <svg class="wait-pencil" xmlns="${SVG}"></svg>
           <canvas class="wait-hedges"></canvas>
           <svg class="wait-ink" xmlns="${SVG}"></svg>
           <div class="wait-marks"></div>
@@ -161,7 +174,6 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
   const layers = veil.querySelector(".wait-layers") as HTMLElement;
   const hedges = veil.querySelector(".wait-hedges") as HTMLCanvasElement;
   const ink = veil.querySelector(".wait-ink") as SVGSVGElement;
-  const pencilEl = veil.querySelector(".wait-pencil") as SVGSVGElement;
   const marksEl = veil.querySelector(".wait-marks") as HTMLElement;
   const namesEl = veil.querySelector(".wait-names") as HTMLElement;
   const dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -250,18 +262,17 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
 
   // ---------- the pace: every stroke one after another, at a hand's pace ----------
   const names = pacer<string>(PACED.name);
-  const strokes = pacer<{ readonly path: string; readonly mark: Mark }>(PACED.pencil);
-  const surveys = pacer<string>(PACED.survey);
+  const fileMarks = pacer<Stroke>(PACED.pencil);
+  const areaMarks = pacer<Stroke>(PACED.survey);
   const washesDue = pacer<readonly [string, number]>(PACED.wash);
-  const pacers: readonly Pacer<unknown>[] = [names, strokes, surveys, washesDue];
+  const pacers: readonly Pacer<unknown>[] = [names, fileMarks, areaMarks, washesDue];
   let ticking = 0;
   /** Draws whatever is due, and wakes again when the next stroke is. */
   function tick(): void {
     ticking = 0;
     const now = performance.now();
     for (const path of names.due(now)) letterNow(path);
-    for (const { path, mark } of strokes.due(now)) drawMark(path, mark);
-    for (const area of surveys.due(now)) survey(area);
+    for (const stroke of [...areaMarks.due(now), ...fileMarks.due(now)]) drawMark(stroke);
     const due = washesDue.due(now);
     if (due.length > 0) settle(Object.fromEntries(due));
     const next = Math.min(...pacers.map((q) => q.next() ?? Infinity));
@@ -278,161 +289,216 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
   const allPaced = (): Promise<void> => (pacers.every((q) => q.size === 0) ? Promise.resolve() : new Promise((resolve) => paced.push(resolve)));
 
   // ---------- the pencil: what Jev is doing to the code ----------
-  /** Each file's ground, each area's files, and each area's border as the pen eased it, in meters. */
-  let patchOf = new Map<string, FilePatch>();
-  let filesOf = new Map<string, string[]>();
-  let ringsOf = new Map<string, readonly (readonly number[])[]>();
-  /** How thick the pencil is, in meters: as thin as a hair on the sheet. */
-  let lead = 0.5;
+  /**
+   * The pencil is laid on the sheet's own paper (`pencil`, the sheet's size, kept apart so each wash can lay it again
+   * under its paint): each mark shades exactly the cells its wash will paint, an area's or a file's, to the paper's
+   * edge, and a wash coming in takes the pencil away in just the measure it paints.
+   */
+  const pencil = document.createElement("canvas");
+  pencil.width = pencil.height = device;
+  const pencilCtx = pencil.getContext("2d") as CanvasRenderingContext2D;
+  /** Each file's index by path; each cell's file, the one whose health weighs most there in its area, or -1; and each file's and each area's cells' box. */
+  let fileIndex = new Map<string, number>();
+  let fileOf: Int16Array | null = null;
+  let fileBox: CellBox[] = [];
+  let areaBox: (CellBox | null)[] = [];
   /** Each file read so far: its last mark, and the slice of the pass it was last read in. */
-  const reading = new Map<string, { mark: Mark; slice: number }>();
+  const reading = new Map<string, { mark: FileMark; slice: number }>();
   const sketched = new Set<string>();
   const surveyed = new Set<string>();
   let slices = 0;
-  /** Each file's pencil marks, until its own wash covers them; and the files washed already, never drawn over again. */
-  const marksOf = new Map<string, SVGGElement>();
-  const washedOver = new Set<string>();
-  /** Each area's survey, until its ground's wash covers it. */
-  const surveyOf = new Map<string, SVGGElement>();
-  const pencilLand = (): SVGGElement | null => pencilEl.querySelector("g.land");
+  /** Marks due and not yet drawn, for want of the land or of idle time. */
+  const marksDue: Stroke[] = [];
+  let drawingMarks = false;
 
-  /** An area is being asked about: each of its files is sketched round. */
+  /** An area is being asked about: its ground is lightly shaded. */
   function asked(areas: readonly string[]): void {
     const now = performance.now();
-    for (const area of areas) {
-      if (sketched.has(area)) continue;
-      sketched.add(area);
-      strokes.add((filesOf.get(area) ?? []).map((path) => ({ path, mark: "sketch" as const })), now);
-    }
-    pace();
-  }
-
-  /**
-   * A slice of the understanding pass read these files and areas. A file is first hatched (its links); read again in a
-   * later pass it is cross-hatched (itself), and again, ringed (the closer reading Jev asked for). A slice reads what
-   * the one before held a second time, so only a reading two slices after the last counts as another.
-   */
-  function read(files: readonly string[], areas: readonly string[]): void {
-    slices++;
-    const now = performance.now();
-    const marks: { readonly path: string; readonly mark: Mark }[] = [];
-    for (const path of files) {
-      const r = reading.get(path);
-      if (r === undefined) {
-        reading.set(path, { mark: "hatch", slice: slices });
-        marks.push({ path, mark: "hatch" });
-        continue;
-      }
-      const next: Mark | null = r.mark === "hatch" ? "cross" : r.mark === "cross" ? "closer" : null;
-      if (next !== null && slices - r.slice >= 2) {
-        r.mark = next;
-        marks.push({ path, mark: next });
-      }
-      r.slice = slices;
-    }
-    strokes.add(marks, now);
-    surveys.add(
-      areas.filter((a) => !surveyed.has(a) && (surveyed.add(a), true)),
+    areaMarks.add(
+      areas.filter((a) => !sketched.has(a) && (sketched.add(a), true)).map((path) => ({ of: "area" as const, path, mark: "asked" as const })),
       now,
     );
     pace();
   }
 
-  /** One pencil mark over a file's ground, drawn as a stroke goes. */
-  function drawMark(path: string, mark: Mark): void {
-    const p = patchOf.get(path);
-    const host = pencilLand();
-    if (p === undefined || host === null || washedOver.has(path)) return;
-    let g = marksOf.get(path);
-    if (g === undefined) {
-      g = document.createElementNS(SVG, "g");
-      host.append(g);
-      marksOf.set(path, g);
-    }
-    const r = rand(seedOf(`pencil:${mark}:${path}`));
-    const f = (v: number): string => v.toFixed(2);
-    let d = "";
-    if (mark === "sketch" || mark === "closer") {
-      // A loop round the ground, as a hand draws one: a little uneven, and running on past where it began.
-      const radius = p.radius * (mark === "sketch" ? PENCIL.round : PENCIL.closer);
-      const start = r.range(0, Math.PI * 2);
-      const [a, b] = [r.range(0, Math.PI * 2), r.range(0, Math.PI * 2)];
-      for (let k = 0; k <= 30; k++) {
-        const t = start + (k / 30) * Math.PI * 2.12;
-        const rr = radius * (1 + 0.05 * Math.sin(3 * t + a) + 0.03 * Math.sin(7 * t + b));
-        d += `${k === 0 ? "M" : "L"}${f(p.x + Math.cos(t) * rr)} ${f(p.z + Math.sin(t) * rr)}`;
+  /**
+   * A slice of the understanding pass read these files and areas. A file is first shaded for its links; read again in
+   * a later pass, shaded across for itself, and again for the closer reading Jev asked for. A slice reads what the one
+   * before held a second time, so only a reading two slices after the last counts as another. An area is shaded across
+   * once the folder pass reaches it.
+   */
+  function read(files: readonly string[], areas: readonly string[]): void {
+    slices++;
+    const now = performance.now();
+    const marks: Stroke[] = [];
+    for (const path of files) {
+      const r = reading.get(path);
+      if (r === undefined) {
+        reading.set(path, { mark: "links", slice: slices });
+        marks.push({ of: "file", path, mark: "links" });
+        continue;
       }
-    } else {
-      // Parallel strokes across the ground, the cross-hatching the other way.
-      const radius = p.radius * PENCIL.round;
-      const angle = (mark === "hatch" ? 0.87 : -0.7) + r.range(-0.08, 0.08);
-      const [dx, dz] = [Math.cos(angle), Math.sin(angle)];
-      const n = Math.max(2, Math.min(9, Math.round((radius * 2) / PENCIL.hatch)));
-      for (let k = 1; k <= n; k++) {
-        const o = -radius + (k * 2 * radius) / (n + 1);
-        const half = Math.sqrt(Math.max(0, radius * radius - o * o)) * 0.85;
-        const [cx, cz] = [p.x - dz * o, p.z + dx * o];
-        d += `M${f(cx - dx * half)} ${f(cz - dz * half)}L${f(cx + dx * half)} ${f(cz + dz * half)}`;
+      const next: FileMark | null = r.mark === "links" ? "quality" : r.mark === "quality" ? "closer" : null;
+      if (next !== null && slices - r.slice >= 2) {
+        r.mark = next;
+        marks.push({ of: "file", path, mark: next });
       }
+      r.slice = slices;
     }
-    const line = document.createElementNS(SVG, "path");
-    line.setAttribute("d", d);
-    line.setAttribute("pathLength", "1");
-    line.setAttribute("stroke-width", f(lead));
-    line.style.transitionDuration = `${PENCIL.ms}ms`;
-    g.append(line);
-    show(line);
+    fileMarks.add(marks, now);
+    areaMarks.add(
+      areas.filter((a) => !surveyed.has(a) && (surveyed.add(a), true)).map((path) => ({ of: "area" as const, path, mark: "surveyed" as const })),
+      now,
+    );
+    pace();
   }
 
-  /** An area reached by the folder pass: short hachures inside its border, all the way round. */
-  function survey(area: string): void {
-    const host = pencilLand();
-    const rings = ringsOf.get(area);
-    if (host === null || rings === undefined || rings.length === 0) return;
-    let [cx, cz, m] = [0, 0, 0];
-    for (const ring of rings) for (let q = 0; q < ring.length; q += 2, m++) [cx, cz] = [cx + (ring[q] as number), cz + (ring[q + 1] as number)];
-    [cx, cz] = [cx / Math.max(1, m), cz / Math.max(1, m)];
-    const f = (v: number): string => v.toFixed(2);
-    let d = "";
-    for (const ring of rings) {
-      let along = PENCIL.survey.every / 2;
-      for (let q = 2; q < ring.length; q += 2) {
-        const [x0, z0, x1, z1] = [ring[q - 2] as number, ring[q - 1] as number, ring[q] as number, ring[q + 1] as number];
-        along += Math.hypot(x1 - x0, z1 - z0);
-        if (along < PENCIL.survey.every) continue;
-        along = 0;
-        const toward = Math.hypot(cx - x1, cz - z1);
-        if (toward < PENCIL.survey.tick * 2) continue;
-        const [ux, uz] = [(cx - x1) / toward, (cz - z1) / toward];
-        d += `M${f(x1 + ux * 0.6)} ${f(z1 + uz * 0.6)}L${f(x1 + ux * (0.6 + PENCIL.survey.tick))} ${f(z1 + uz * (0.6 + PENCIL.survey.tick))}`;
-      }
-    }
-    if (d === "") return;
-    const line = document.createElementNS(SVG, "path");
-    line.setAttribute("d", d);
-    line.setAttribute("pathLength", "1");
-    line.setAttribute("stroke-width", f(lead));
-    line.style.transitionDuration = `${PENCIL.ms * 2}ms`;
-    const g = document.createElementNS(SVG, "g");
-    g.append(line);
-    host.append(g);
-    surveyOf.set(area, g);
-    show(line);
+  /** A mark is due: drawn in the page's idle time, once the land can take it. */
+  function drawMark(stroke: Stroke): void {
+    marksDue.push(stroke);
+    drawMarksDue();
+  }
+  function drawMarksDue(): void {
+    const l = land;
+    if (l === null || fileOf === null || drawingMarks || marksDue.length === 0) return;
+    drawingMarks = true;
+    laying++;
+    work(
+      (function* (): Generator<void> {
+        for (let stroke = marksDue.shift(); stroke !== undefined; stroke = marksDue.shift()) {
+          yield* shade(l, stroke);
+          yield;
+        }
+        drawingMarks = false;
+        laying--;
+        washedIfDone();
+      })(),
+    );
   }
 
-  /** The wash has come over these files' ground and these areas': their pencil fades under it. */
-  function washOver(l: Land, cells: CellBox, grounds: readonly string[]): void {
-    for (const [path, g] of marksOf) {
-      const p = patchOf.get(path);
-      if (p === undefined) continue;
-      const i = Math.floor((p.x + l.reach) / CELL);
-      const j = Math.floor((p.z + l.reach) / CELL);
-      if (i < cells[0] || i > cells[2] || j < cells[1] || j > cells[3] || l.health.paint(j * l.n + i) < 0.5) continue;
-      g.classList.add("washed");
-      marksOf.delete(path);
-      washedOver.add(path);
+  /** Device pixels a cell of the land takes on the sheet. */
+  const cellPx = (l: Land): number => (CELL * l.device) / (l.reach * 2);
+
+  /**
+   * One mark: the stage's graphite hatching over exactly the cells of the area or file, softened at their edge as the
+   * cells are, laid into the pencil kept for the washes and shown over the sheet, less where the wash already lies.
+   */
+  function* shade(l: Land, stroke: Stroke): Generator<void> {
+    // A chosen map laid on the sheet is its paint already, over the paper the pencil goes on.
+    if (chosen !== null && !chosen.el.hidden) return;
+    const index = stroke.of === "area" ? l.paths.indexOf(stroke.path) : (fileIndex.get(stroke.path) ?? -1);
+    const box = index < 0 ? null : stroke.of === "area" ? areaBox[index] : fileBox[index];
+    if (box === null || box === undefined || fileOf === null) return;
+    const owner = stroke.of === "area" ? l.nearest : fileOf;
+    // The cells, a pixel each, with a cell's margin round them so the softened edge is whole.
+    const [i0, j0] = [Math.max(0, box[0] - 1), Math.max(0, box[1] - 1)];
+    const [i1, j1] = [Math.min(l.n - 1, box[2] + 1), Math.min(l.n - 1, box[3] + 1)];
+    const [cw, ch] = [i1 - i0 + 1, j1 - j0 + 1];
+    const cells = document.createElement("canvas");
+    cells.width = cw;
+    cells.height = ch;
+    const cctx = cells.getContext("2d") as CanvasRenderingContext2D;
+    const img = cctx.createImageData(cw, ch);
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) if (owner[j * l.n + i] === index) img.data[((j - j0) * cw + (i - i0)) * 4 + 3] = 255;
+    cctx.putImageData(img, 0, 0);
+    yield;
+    // The hatching, in the device pixels the cells cover.
+    const px = cellPx(l);
+    const rx = Math.floor(i0 * px);
+    const ry = Math.floor(j0 * px);
+    const rw = Math.min(l.device, Math.ceil((i1 + 1) * px)) - rx;
+    const rh = Math.min(l.device, Math.ceil((j1 + 1) * px)) - ry;
+    if (rw <= 0 || rh <= 0) return;
+    const tex = document.createElement("canvas");
+    tex.width = rw;
+    tex.height = rh;
+    const t = tex.getContext("2d") as CanvasRenderingContext2D;
+    const style = PENCIL.styles[stroke.mark];
+    const perCss = l.device / side;
+    const r = rand(seedOf(`pencil:${stroke.mark}:${stroke.path}`));
+    const [dx, dz] = [Math.cos(style.angle), Math.sin(style.angle)];
+    const every = style.every * perCss;
+    const reachPx = Math.hypot(rw, rh);
+    t.lineCap = "round";
+    t.strokeStyle = PENCIL.graphite;
+    t.lineWidth = PENCIL.width * perCss;
+    // Lines across the box, each a little uneven in weight and place, as a hand hatches.
+    for (let o = -reachPx / 2 + r.range(0, every); o < reachPx / 2; o += every * r.range(0.85, 1.15)) {
+      const [cx, cz] = [rw / 2 - dz * o, rh / 2 + dx * o];
+      t.globalAlpha = style.alpha * r.range(0.75, 1.15);
+      t.beginPath();
+      t.moveTo(cx - dx * reachPx, cz - dz * reachPx);
+      t.lineTo(cx + dx * reachPx, cz + dz * reachPx);
+      t.stroke();
     }
-    for (const area of grounds) surveyOf.get(area)?.classList.add("washed");
+    t.globalAlpha = 1;
+    // Only over its own cells, softened at their edge as a cell's wash is.
+    t.globalCompositeOperation = "destination-in";
+    t.imageSmoothingEnabled = true;
+    t.imageSmoothingQuality = "high";
+    t.drawImage(cells, 0, 0, cw, ch, i0 * px - rx, j0 * px - ry, cw * px, ch * px);
+    // And to the paper's edge as the wash goes, ragged and square, never short of it at a rounded rim.
+    const f = l.fade.width / l.device;
+    t.drawImage(l.fade, rx * f, ry * f, rw * f, rh * f, 0, 0, rw, rh);
+    yield;
+    pencilCtx.drawImage(tex, rx, ry);
+    // Shown over the sheet, less where the wash lies already, then laid into the sheet beneath.
+    t.globalCompositeOperation = "destination-out";
+    t.drawImage(l.under.canvas, i0, j0, cw, ch, i0 * px - rx, j0 * px - ry, cw * px, ch * px);
+    tex.className = "wait-layer";
+    tex.style.left = `${(rx / l.device) * 100}%`;
+    tex.style.top = `${(ry / l.device) * 100}%`;
+    tex.style.width = `${(rw / l.device) * 100}%`;
+    tex.style.height = `${(rh / l.device) * 100}%`;
+    tex.style.transitionDuration = `${PENCIL.ms}ms`;
+    layers.append(tex);
+    showing++;
+    show(tex);
+    window.setTimeout(() => {
+      groundCtx.drawImage(tex, rx, ry);
+      tex.remove();
+      showing--;
+      washedIfDone();
+    }, PENCIL.ms + 150);
+  }
+
+  /** Each cell's file, the one whose health weighs most there among its area's files, and each file's and area's box. */
+  function* fileCells(l: Land, patches: readonly FilePatch[]): Generator<void> {
+    const n = l.n;
+    const of = new Int16Array(n * n).fill(-1);
+    const best = new Float32Array(n * n);
+    const boxes: CellBox[] = [];
+    const center = (i: number): number => -l.reach + (i + 0.5) * CELL;
+    for (const [q, p] of patches.entries()) {
+      const k = l.paths.indexOf(p.area);
+      const f = { x: p.x, z: p.z, reach: p.radius, size: p.radius * p.radius };
+      const r = p.radius + STYLE.spread * 4;
+      const [i0, i1] = [Math.max(0, Math.floor((p.x - r + l.reach) / CELL)), Math.min(n - 1, Math.floor((p.x + r + l.reach) / CELL))];
+      const [j0, j1] = [Math.max(0, Math.floor((p.z - r + l.reach) / CELL)), Math.min(n - 1, Math.floor((p.z + r + l.reach) / CELL))];
+      for (let j = j0; j <= j1; j++) {
+        for (let i = i0; i <= i1; i++) {
+          const c = j * n + i;
+          if (l.nearest[c] !== k) continue;
+          const w = healthWeight(f, center(i), center(j), STYLE.spread);
+          if (w > (best[c] as number)) [best[c], of[c]] = [w, q];
+        }
+      }
+      if (q % 24 === 23) yield;
+    }
+    const grow = (b: CellBox | null | undefined, i: number, j: number): CellBox => (b === null || b === undefined ? [i, j, i, j] : [Math.min(b[0], i), Math.min(b[1], j), Math.max(b[2], i), Math.max(b[3], j)]);
+    const areas: (CellBox | null)[] = l.paths.map(() => null);
+    for (let c = 0; c < n * n; c++) {
+      const [i, j] = [c % n, Math.floor(c / n)];
+      const q = of[c] as number;
+      if (q >= 0) boxes[q] = grow(boxes[q], i, j);
+      const k = l.nearest[c] as number;
+      if (k >= 0) areas[k] = grow(areas[k], i, j);
+      if (c % 8192 === 8191) yield;
+    }
+    fileIndex = new Map(patches.map((p, q) => [p.path, q]));
+    fileBox = boxes;
+    areaBox = areas;
+    fileOf = of;
   }
 
   // ---------- the land is divided ----------
@@ -455,13 +521,6 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
     ink.innerHTML = `<defs><clipPath id="wait-land"><path d="${rim}"/></clipPath></defs><g clip-path="url(#wait-land)"></g>`;
     const pens = ink.lastElementChild as SVGGElement;
     const perPixel = (reach * 2) / side;
-    // The pencil works on the same land, inside the same rim, as thin as the finest pen line.
-    pencilEl.setAttribute("viewBox", `${-reach} ${-reach} ${reach * 2} ${reach * 2}`);
-    pencilEl.innerHTML = `<g class="land" clip-path="url(#wait-land)"></g>`;
-    lead = perPixel * 0.75;
-    patchOf = new Map(patches.map((p) => [p.path, p]));
-    filesOf = new Map();
-    for (const p of patches) filesOf.set(p.area, [...(filesOf.get(p.area) ?? []), p.path]);
 
     ready = new Promise((resolve) =>
       work(
@@ -477,7 +536,6 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
             borders.push(borderPath(o.rings, edge));
             if (i % 4 === 3) yield;
           }
-          ringsOf = new Map(outlines.flatMap((o, i) => (o.depth > 0 ? [[o.path, eased[i] ?? []] as const] : [])));
           // The pen draws every area's border from the middle outward, keeping inside the land as the map's
           // hedgerows do.
           const order = outlines
@@ -530,6 +588,10 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
           // The health come in so far washes in now, while the hedgerows and the names are made ready.
           land = { reach, ...(aspect === undefined ? {} : { aspect }), device, k: device / PAPER, n, paths, lands: paths.map((p) => landWash(STYLE, p)), nearest, washes, fade, health, under: under.getContext("2d") as CanvasRenderingContext2D, names: null };
           settle({});
+          yield;
+          // Which file's ground each cell is, for the pencil, then the marks that came before it.
+          yield* fileCells(land, patches);
+          drawMarksDue();
           yield;
 
           // The hedgerow under each border, a soft band of leaves, comes in as the pen goes: so soft that it is
@@ -662,7 +724,6 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
         yield;
       }
       yield* paintLayer(l, box);
-      washOver(l, box, grounds);
     }
     laying--;
     washedIfDone();
@@ -705,6 +766,18 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
     layer.height = rh;
     const c = layer.getContext("2d") as CanvasRenderingContext2D;
     c.drawImage(paper, rx, ry, rw, rh, 0, 0, rw, rh);
+    // The pencil lies on the paper still where the wash does not paint, and goes in the measure that it does.
+    const graphite = document.createElement("canvas");
+    graphite.width = rw;
+    graphite.height = rh;
+    const g = graphite.getContext("2d") as CanvasRenderingContext2D;
+    g.drawImage(pencil, rx, ry, rw, rh, 0, 0, rw, rh);
+    g.globalCompositeOperation = "destination-out";
+    g.imageSmoothingEnabled = true;
+    g.imageSmoothingQuality = "high";
+    const px = cellPx(l);
+    g.drawImage(l.under.canvas, rx / px, ry / px, rw / px, rh / px, 0, 0, rw, rh);
+    c.drawImage(graphite, 0, 0);
     yield* floatWash(c, scratch, -bleed, -bleed, STYLE, l.k);
     layer.className = "wait-layer";
     layer.style.left = `${(rx / l.device) * 100}%`;

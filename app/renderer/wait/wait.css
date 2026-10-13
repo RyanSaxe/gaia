@@ -67,16 +67,6 @@
   stroke-dasharray: 1 1; stroke-dashoffset: 1; transition-property: stroke-dashoffset; transition-timing-function: cubic-bezier(0.45, 0.05, 0.4, 1);
 }
 .wait-sheet.shown .wait-ink path { stroke-dashoffset: 0; }
-/* The pencil: what Jev is doing to the code, file by file and area by area, over the paper and under the hedgerows
-   and the ink. Each stroke is drawn as a pencil goes, and a file's marks fade under its wash as it comes. */
-.wait-pencil { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
-.wait-pencil path {
-  fill: none; stroke: rgba(78, 72, 64, 0.26); stroke-linejoin: round; stroke-linecap: round;
-  stroke-dasharray: 1 1; stroke-dashoffset: 1; transition-property: stroke-dashoffset; transition-timing-function: cubic-bezier(0.4, 0.1, 0.4, 1);
-}
-.wait-pencil path.shown { stroke-dashoffset: 0; }
-.wait-pencil g { transition: opacity 1.4s ease-out; }
-.wait-pencil g.washed { opacity: 0; }
 /* Once the world stands, the pen draws each river from its source and each trail along its way, over the relief as it
    washes in, at the pace each line's length sets. */
 .wait-pens { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
