@@ -240,6 +240,56 @@ fn choice(instructions: &str, options: &BTreeMap<String, String>) -> Value {
     json!({ "type": "choice", "instructions": instructions, "criteria": options })
 }
 
+/// The most tokens one question may take: a tenth of a request, so it always
+/// fits beside a piece of source, which takes at most nine tenths.
+pub const QUESTION_MOST: usize = 3_000;
+
+/// How many leading path segments two node ids share, as a candidate's nearness to the file asking.
+fn nearness(a: &str, b: &str) -> usize {
+    let path = |id: &str| -> Vec<String> {
+        let rest = id.split_once(':').map_or(id, |(_, r)| r);
+        let rest = rest.split('#').next().unwrap_or(rest);
+        rest.split('/').map(str::to_string).collect()
+    };
+    path(a).iter().zip(path(b).iter()).take_while(|(x, y)| x == y).count()
+}
+
+/// A link question over `candidates`, each described by `words`, with "outside" too. When every candidate
+/// will not fit in `QUESTION_MOST`, it offers the nearest to the file asking first, as many as fit, so the
+/// question is always asked.
+fn link_choice(text: &str, file: &str, candidates: &[String], words: impl Fn(&String) -> String, outside: &str) -> Value {
+    let all: BTreeMap<String, String> = candidates
+        .iter()
+        .map(|c| (c.clone(), words(c)))
+        .chain(std::iter::once(("outside".to_string(), outside.to_string())))
+        .collect();
+    let whole = choice(text, &all);
+    if tokens(&whole.to_string()) <= QUESTION_MOST {
+        return whole;
+    }
+    let mut near: Vec<(usize, &String)> = candidates.iter().enumerate().collect();
+    near.sort_by(|(i, a), (j, b)| nearness(file, b).cmp(&nearness(file, a)).then(i.cmp(j)));
+    let nearest = |n: usize| {
+        let options: BTreeMap<String, String> = near[..n]
+            .iter()
+            .map(|(_, c)| ((*c).clone(), words(c)))
+            .chain(std::iter::once(("outside".to_string(), outside.to_string())))
+            .collect();
+        choice(text, &options)
+    };
+    // The most of the nearest that fit: a question with none fits, and one with all does not.
+    let (mut fit, mut over) = (0, near.len());
+    while fit + 1 < over {
+        let n = (fit + over) / 2;
+        if tokens(&nearest(n).to_string()) <= QUESTION_MOST {
+            fit = n;
+        } else {
+            over = n;
+        }
+    }
+    nearest(fit)
+}
+
 /// The given lines with `around` lines on each side, and "…" where lines are left out.
 fn excerpt(lines: &[&str], at: &[usize], around: usize) -> String {
     let mut out: Vec<&str> = Vec::new();
@@ -389,20 +439,14 @@ impl Call for Resolve {
             .filter(|r| r.kind == "import")
             .enumerate()
             .map(|(n, r)| {
-                let mut options: BTreeMap<String, String> = r
-                    .candidates
-                    .iter()
-                    .map(|c| {
-                        let path = c.trim_start_matches("file:").trim_start_matches("dir:");
-                        let words = if path.is_empty() {
-                            "The repository's root directory".to_string()
-                        } else {
-                            format!("{path} in this repository")
-                        };
-                        (c.clone(), words)
-                    })
-                    .collect();
-                options.insert("outside".into(), v.outside.clone());
+                let words = |c: &String| {
+                    let path = c.trim_start_matches("file:").trim_start_matches("dir:");
+                    if path.is_empty() {
+                        "The repository's root directory".to_string()
+                    } else {
+                        format!("{path} in this repository")
+                    }
+                };
                 let text = v
                     .instructions
                     .replace("{text}", &r.text)
@@ -411,7 +455,7 @@ impl Call for Resolve {
                     id: ref_question("resolve", r, n),
                     about: crate::graph::ref_key(r),
                     field: "link".into(),
-                    json: choice(&text, &options),
+                    json: link_choice(&text, &file.id, &r.candidates, words, &v.outside),
                     line: Some(r.at.start),
                 }
             })
@@ -456,25 +500,19 @@ impl Call for Callee {
             .filter(|r| r.kind == "call")
             .enumerate()
             .map(|(n, r)| {
-                let mut options: BTreeMap<String, String> = r
-                    .candidates
-                    .iter()
-                    .map(|c| {
-                        let words = ctx.defs.get(c.as_str()).map_or_else(
-                            || c.clone(),
-                            |d| {
-                                format!(
-                                    "`{}` in {}: {}",
-                                    qualified(&d.id),
-                                    d.file.trim_start_matches("file:"),
-                                    d.signature
-                                )
-                            },
-                        );
-                        (c.clone(), words)
-                    })
-                    .collect();
-                options.insert("outside".into(), v.outside.clone());
+                let words = |c: &String| {
+                    ctx.defs.get(c.as_str()).map_or_else(
+                        || c.clone(),
+                        |d| {
+                            format!(
+                                "`{}` in {}: {}",
+                                qualified(&d.id),
+                                d.file.trim_start_matches("file:"),
+                                d.signature
+                            )
+                        },
+                    )
+                };
                 let text = v
                     .instructions
                     .replace("{text}", &r.text)
@@ -483,7 +521,7 @@ impl Call for Callee {
                     id: ref_question("callee", r, n),
                     about: crate::graph::ref_key(r),
                     field: "link".into(),
-                    json: choice(&text, &options),
+                    json: link_choice(&text, &file.id, &r.candidates, words, &v.outside),
                     line: Some(r.at.start),
                 }
             })
@@ -556,5 +594,21 @@ mod tests {
             }
         }
         assert!(asked > 0);
+    }
+
+    #[test]
+    fn a_link_question_with_thousands_of_candidates_offers_the_nearest_that_fit() {
+        let candidates: Vec<String> = (0..5000).map(|i| format!("file:packages/p{i}/src/index.ts")).collect();
+        let words = |c: &String| format!("{c} in this repository");
+        let asked = "Which file does `../index` on line 3 import?";
+        let q = link_choice(asked, "file:packages/p4321/src/a.ts", &candidates, words, "Outside this repository");
+        assert!(tokens(&q.to_string()) <= QUESTION_MOST);
+        let offered = q["criteria"].as_object().unwrap();
+        assert!(offered.contains_key("outside"));
+        assert!(offered.contains_key("file:packages/p4321/src/index.ts"), "the nearest candidate is offered");
+        assert!(offered.len() > 10);
+        // A question that fits offers every candidate.
+        let few = link_choice(asked, "file:packages/p1/src/a.ts", &candidates[..3], words, "Outside this repository");
+        assert_eq!(few["criteria"].as_object().unwrap().len(), 4);
     }
 }
