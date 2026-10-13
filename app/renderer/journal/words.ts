@@ -26,6 +26,8 @@ export interface Row {
   readonly name: string;
   readonly depth: number;
   readonly vitality: number;
+  /** How much it matters, 0 to 1, Jev's importance; absent before the understanding pass has judged it. */
+  readonly importance?: number;
   readonly page: number;
   readonly mark?: Mark;
 }
@@ -111,7 +113,7 @@ export interface PageWords {
 /** What the words are read from: the world, each place's and file's vitality, and a file's text once it has arrived. */
 export interface WordsSource {
   readonly journal: Journal;
-  readonly world: { readonly name: string; readonly symbols: readonly Pick<CodeSymbol, "id" | "line" | "lines">[] };
+  readonly world: { readonly name: string; readonly symbols: readonly Pick<CodeSymbol, "id" | "kind" | "line" | "lines">[] };
   /** Each item's own vitality: a folder's, a file's by its path, a definition's by its id, or an entity's by `entity:<path>`. */
   vitality(of: string): number;
   /** A file's lines, or undefined until they arrive. */
@@ -123,25 +125,30 @@ export interface WordsSource {
 }
 
 /**
- * A container's best and worst parts, among those the understanding pass
- * judged: the best is the finest among what matters most (quality weighed by
- * importance), and the worst the one most in need among what matters most, so
- * a tiny helper never leads and the file's heart can be its worst.
+ * A container's weak and best parts, among those the understanding pass
+ * judged. The weak part is the one most in need among what matters most (its
+ * lack of quality weighed by importance), so a tiny helper never leads and the
+ * file's heart can be its weak part. The best is chosen from the rest: code
+ * that runs, never a type, scoring above the container itself, the finest
+ * among what matters most; a container may have none.
  */
-export function leadOf(src: WordsSource, parts: readonly string[]): { readonly best?: string; readonly worst?: string } {
-  const judged = parts.flatMap((of) => {
-    const t = src.thing?.(of);
-    return t?.quality == null || t.importance == null ? [] : [{ of, quality: t.quality, importance: t.importance }];
+export function leadOf(src: WordsSource, of: string, parts: readonly string[]): { readonly best?: string; readonly worst?: string } {
+  const judged = parts.flatMap((part) => {
+    const t = src.thing?.(part);
+    return t?.quality == null || t.importance == null ? [] : [{ of: part, quality: t.quality, importance: t.importance }];
   });
   if (judged.length < 2) return {};
-  const best = judged.reduce((a, b) => (b.quality * b.importance > a.quality * a.importance ? b : a));
   const worst = judged.reduce((a, b) => ((1 - b.quality) * b.importance > (1 - a.quality) * a.importance ? b : a));
-  return { best: best.of, ...(worst.of === best.of ? {} : { worst: worst.of }) };
+  const own = src.thing?.(of)?.quality ?? 0;
+  const types = new Set(src.world.symbols.flatMap((s) => (s.kind === "type" ? [s.id] : [])));
+  const better = judged.filter((j) => j !== worst && !types.has(j.of) && j.quality > own);
+  const best = better.length === 0 ? undefined : better.reduce((a, b) => (b.quality * b.importance > a.quality * a.importance ? b : a));
+  return { worst: worst.of, ...(best === undefined ? {} : { best: best.of }) };
 }
 
-/** A container's rows marked by its best and worst parts, when the understanding pass has judged them. */
-const leadMarks = (src: WordsSource, parts: readonly string[]): ReadonlyMap<string, Mark> => {
-  const { best, worst } = leadOf(src, parts);
+/** A container's rows marked by its best and weak parts, when the understanding pass has judged them. */
+const leadMarks = (src: WordsSource, of: string, parts: readonly string[]): ReadonlyMap<string, Mark> => {
+  const { best, worst } = leadOf(src, of, parts);
   return new Map([...(best === undefined ? [] : [[best, { kind: "finest" }] as const]), ...(worst === undefined ? [] : [[worst, { kind: "improve" }] as const])]);
 };
 
@@ -155,7 +162,7 @@ const leadMarks = (src: WordsSource, parts: readonly string[]): ReadonlyMap<stri
  */
 function snippetsOf(src: WordsSource, e: JournalEntry, parts: readonly string[]): Snippet[] {
   if (e.lead === undefined) return [];
-  const { best, worst } = leadOf(src, parts);
+  const { best, worst } = leadOf(src, e.of, parts);
   const definitionsOf = (file: string): string[] => {
     const all: string[] = [];
     const gather = (of: string): void => {
@@ -169,9 +176,9 @@ function snippetsOf(src: WordsSource, e: JournalEntry, parts: readonly string[])
   const one = (part: string | undefined, kind: Snippet["kind"]): Snippet[] => {
     if (part === undefined) return [];
     const shown = src.journal.entry(part);
-    // A folder's file is shown by its own best or worst definition.
-    const within = shown?.kind === "file" ? leadOf(src, definitionsOf(part)) : undefined;
-    const of = within === undefined ? part : kind === "finest" ? (within.best ?? within.worst) : (within.worst ?? within.best);
+    // A folder's file is shown by its own best or weak definition, and never by its weak one as its best.
+    const within = shown?.kind === "file" ? leadOf(src, part, definitionsOf(part)) : undefined;
+    const of = within === undefined ? part : kind === "finest" ? within.best : within.worst;
     const symbol = src.world.symbols.find((s) => s.id === of);
     if (of === undefined || symbol === undefined || shown === undefined) return [];
     const text = src.lines(symbol.id.slice(0, symbol.id.indexOf("#")));
@@ -204,7 +211,7 @@ function snippetsOf(src: WordsSource, e: JournalEntry, parts: readonly string[])
 export function leadFiles(src: WordsSource, e: JournalEntry): string[] {
   if (e.lead === undefined) return [];
   if (e.kind === "file") return [e.of];
-  const { best, worst } = leadOf(src, e.lists.filter((of) => src.journal.entry(of)?.kind === "file"));
+  const { best, worst } = leadOf(src, e.of, e.lists.filter((of) => src.journal.entry(of)?.kind === "file"));
   return [best, worst].filter((p): p is string => p !== undefined);
 }
 
@@ -230,7 +237,7 @@ export function contentsWords(src: WordsSource): PageWords {
 /** An entry as a row of a list, marked when it is one of the best and worst parts in `lead`. */
 function rowOf(src: WordsSource, e: JournalEntry, depth: number, lead?: ReadonlyMap<string, Mark>): Row {
   const mark = lead?.get(e.of);
-  return { of: e.of, name: e.name, depth, vitality: src.vitality(e.of), page: e.page, ...(mark === undefined ? {} : { mark }) };
+  return { of: e.of, name: e.name, depth, vitality: src.vitality(e.of), ...importanceOf(src, e.of), page: e.page, ...(mark === undefined ? {} : { mark }) };
 }
 
 /** The words of one entry's page. */
@@ -241,7 +248,7 @@ export function wordsOf(src: WordsSource, e: JournalEntry): PageWords {
     return { path: path === "" ? [] : path.split("/"), name: e.name, vitality: src.vitality(e.of), body: { kind: "rows", rows: e.lists.map((of) => rowOf(src, src.journal.entry(of) as JournalEntry, 0)) } };
   }
   if (e.kind === "chapter") {
-    const lead = leadMarks(src, e.lists);
+    const lead = leadMarks(src, e.of, e.lists);
     const snippets = snippetsOf(src, e, e.lists.filter((of) => src.journal.entry(of)?.kind === "file"));
     return { path: folders(e.of), name: e.name, vitality: src.vitality(e.of), ...importanceOf(src, e.of), body: { kind: "rows", rows: e.lists.map((of) => rowOf(src, src.journal.entry(of) as JournalEntry, 0, lead)), ...(snippets.length > 0 ? { lead: snippets } : {}) } };
   }
@@ -255,7 +262,7 @@ export function wordsOf(src: WordsSource, e: JournalEntry): PageWords {
     };
     for (const of of e.lists) gather(of);
     const defs = all.filter((of) => src.journal.entry(of)?.kind === "definition");
-    const lead = leadMarks(src, defs);
+    const lead = leadMarks(src, e.of, defs);
     const snippets = snippetsOf(src, e, defs);
     const rows: Row[] = [];
     const walk = (of: string, depth: number): void => {

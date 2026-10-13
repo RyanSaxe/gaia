@@ -578,8 +578,9 @@ A folder's request scores each of its files' and subfolders' importance and
 its own quality concepts. A file's request, with its source and its
 neighbours' signatures, scores each code definition's importance and every
 quality concept, picks which block of each definition with two or more is
-key and which most needs work, and scores the file's own concepts. A file's best and worst definitions come from their quality
-weighed by importance, so files have no picks of their own. A file too long
+key and which most needs work, and scores the file's own concepts. A file's weak and best definitions come from their quality
+and importance (the journal chooses them; see `docs/design-system.md`), so
+files have no picks of their own. A file too long
 for one request is cut at its top-level definitions; the whole-file
 questions go only in the first piece, so they don't take room from the
 others. Definitions whose role is
