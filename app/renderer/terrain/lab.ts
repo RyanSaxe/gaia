@@ -2484,6 +2484,8 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     let lead = Infinity;
     let ended = Number.NaN;
     let held: { pin: NonNullable<typeof viewPin>; image: Uint8Array; s: number; windows: string; mirror: number } | null = null;
+    /** The most the depth walking reads ever differed from the land's own water level under the person, meters. */
+    let ghosts = 0;
     let last = performance.now();
     try {
       for (let k = 0; trip === t && performance.now() - t.began < cap * 1000; k++) {
@@ -2518,6 +2520,9 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
           const depth = level > -500 ? Math.max(0, level - heightAt(terrain.lattice, walker.x, walker.z)) : 0;
           // The water's mirror follows the person's eye, not the held view's: how far its plane moved between the two draws.
           const mirrored = +(water.stats().mirrorLevel - held.mirror).toFixed(3);
+          // The depth walking reads (`waterDepthAt`), against the land's own water level just above.
+          const cached = waterDepthAt(terrain, walker.x, walker.z);
+          ghosts = Math.max(ghosts, Math.abs(cached - depth));
           checks.push([+held.s.toFixed(1), +t.at.v.toFixed(1), +change.mean.toFixed(3), +change.worst.toFixed(2), moved, +depth.toFixed(2), mirrored, Math.round(held.pin.x), Math.round(held.pin.z)]);
           held = null;
         }
@@ -2538,6 +2543,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       checks,
       work,
       late: standing.late(),
+      ghosts: +ghosts.toFixed(2),
     };
   }
 
