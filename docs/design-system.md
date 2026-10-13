@@ -437,6 +437,15 @@ hamlet of very different buildings.
 | Attachments | a gabled porch over the door, a lean-to shed, a round turret a storey taller |
 | Character | how steep the roofs, how high the plinth, how many windows, how settled and crooked |
 
+Jev chooses each of these by feel, never by a kind of code, as it chooses
+a feature: a single block is plain and self-contained, an L companionable,
+a T balanced and formal, a long range patient and hardworking, a cluster
+rambling and gregarious; a long body easygoing, a snug one close and
+private, a gable-fronted one upright and alert; one storey humble, two
+comfortable, three lofty. Timber-framed walls are lively and sociable,
+fieldstone quiet and stubborn; thatch is old and well-loved, tiles new and
+sharp-edged.
+
 Each volume is a mass: walls standing on a rectangle (or a turret's
 octagon) under a roof of its own. Joined masses overlap where they meet, so
 a wall inside another mass is never built and a wing's roof runs into the
@@ -1162,7 +1171,9 @@ change in vitality never rebakes anything.
 A landmark is a great thing a person steers by: a lookout tower, a ring of
 standing stones, or a great old tree. It stands for any entity, file or
 definition, as a building does: only the most important things of a world
-are offered one, and among them Jev chooses, and chooses the form. No rule
+are offered one, and among them Jev chooses, and chooses the form by its
+feel: a tower lonely and wind-bitten, forever watching the horizon; standing
+stones ancient and patient; a great tree warm, alive and sprawling. No rule
 fixes how many; its vitality is the vitality of what it stands for. `findLandmarkSite` puts it
 on the most prominent gentle, dry ground of its region, a knoll or a rise
 near the region's heart, and levels its footprint into the land. Each

@@ -16,19 +16,19 @@ import { buildFieldstone, buildTimberFrame } from "./geometry/building/walls.ts"
 
 export const cottagePlanParams = {
   massing: t.choice("How the building's volumes are put together", {
-    "a single block": "One simple block under one roof",
-    "an L": "A main range with a wing jutting out at one end, its gable looking outward, the door in the corner between them",
-    "a T": "A main range with a gabled wing jutting from its middle",
-    "a long range": "A long run of joined blocks in a line, each a little narrower than the last, like a farmhouse with its byre and barn",
-    "a cluster": "A main house with wings and outbuildings joined on all round, gathered over the years",
+    "a single block": "One simple block under one roof, for code that feels plain and self-contained",
+    "an L": "A main range with a wing jutting out at one end, its gable looking outward, the door in the corner between them, for code that feels companionable, with a partner at its elbow",
+    "a T": "A main range with a gabled wing jutting from its middle, for code that feels balanced and formal, facing two ways at once",
+    "a long range": "A long run of joined blocks in a line, each a little narrower than the last, like a farmhouse with its byre and barn, for code that feels patient and hardworking, going on and on",
+    "a cluster": "A main house with wings and outbuildings joined on all round, gathered over the years, for code that feels rambling and gregarious, grown piece by piece",
   }),
   shape: t.choice("The main body's shape on the ground", {
-    long: "A low range longer than it is deep, its door in the long side under the eaves",
-    snug: "A small, nearly square body, compact and cosy",
-    "gable-fronted": "A narrow body that faces you with its pointed gable, the door beneath the peak",
+    long: "A low range longer than it is deep, its door in the long side under the eaves, for code that feels easygoing and unhurried",
+    snug: "A small, nearly square body, compact and cosy, for code that feels close and private",
+    "gable-fronted": "A narrow body that faces you with its pointed gable, the door beneath the peak, for code that feels upright and alert",
   }),
   size: t.scale("How big the main body is", { tiny: 0.85, modest: 1, roomy: 1.15 }),
-  storeys: t.scale("How many storeys the main body rises", { "one storey": 1, "two storeys": 2, "three storeys": 3 }),
+  storeys: t.scale("How many storeys the main body rises: one for code that feels humble and close to the ground, two for code that feels comfortable and settled, three for code that feels lofty and imposing", { "one storey": 1, "two storeys": 2, "three storeys": 3 }),
   heights: t.choice("How the joined parts' heights relate", {
     level: "Every part keeps the main body's storeys, under one eave line",
     stepped: "Each joined part stands a storey lower than the part it joins, so the roofs step down",
@@ -85,7 +85,7 @@ export const timberFrameParams = {
 export const timberFrame = primitive({
   id: "timber-frame@1",
   role: "Walls",
-  doc: "Whitewashed plaster walls held in a frame of dark timber beams, on a stone base.",
+  doc: "Whitewashed plaster walls held in a frame of dark timber beams, on a stone base, for code that feels lively and sociable, bright and a little busy.",
   params: timberFrameParams,
   build: (p, ctx, plan) => buildTimberFrame(p, ctx, plan),
 });
@@ -105,7 +105,7 @@ export const fieldstoneParams = {
 export const fieldstone = primitive({
   id: "fieldstone@1",
   role: "Walls",
-  doc: "Thick walls of rounded fieldstones set in pale lime mortar.",
+  doc: "Thick walls of rounded fieldstones set in pale lime mortar, for code that feels quiet and stubborn, weathered and slow to change.",
   params: fieldstoneParams,
   build: (p, ctx, plan) => buildFieldstone(p, ctx, plan),
 });
@@ -131,7 +131,7 @@ export const thatchParams = {
 export const thatch = primitive({
   id: "thatch@1",
   role: "Roof",
-  doc: "A thick, soft thatched roof in layered courses with a rolled ridge and rounded eaves.",
+  doc: "A thick, soft thatched roof in layered courses with a rolled ridge and rounded eaves, for code that feels old and well-loved, worn soft by many hands.",
   params: thatchParams,
   build: (p, ctx, plan) => buildThatch(p, ctx, plan),
 });
@@ -149,7 +149,7 @@ export const tilesParams = {
 export const tiles = primitive({
   id: "tiles@1",
   role: "Roof",
-  doc: "A gabled roof of tiles, slates or shingles in fine courses, with a gentle kick at the eaves.",
+  doc: "A gabled roof of tiles, slates or shingles in fine courses, with a gentle kick at the eaves, for code that feels new and sharp-edged, still crisp from the kiln.",
   params: tilesParams,
   build: (p, ctx, plan) => buildTiles(p, ctx, plan),
 });
