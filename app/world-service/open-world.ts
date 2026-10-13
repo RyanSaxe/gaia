@@ -16,7 +16,7 @@
 
 import type { CodeGraph, EngineClient, GraphNode, JevClient, JevResponse, Span } from "@gaia/schema";
 import { outlinesOf } from "@gaia/terrain";
-import { type Judge, areaOfRequest, factsOf, judgeWorld, judgedThing, keptJev, landOf, layoutWorld, planWorldRequests, requestKey, standInJev, thingsOf } from "@gaia/world";
+import { type Judge, areaOfRequest, composeWorld, factsOf, judgeWorld, judgedThing, keptJev, landOf, layoutWorld, planWorldRequests, requestKey, standInJev, thingsOf } from "@gaia/world";
 import { LOOKS } from "../renderer/terrain/looks.ts";
 import { engineJev } from "./jev.ts";
 import type { ConsentPlan, JudgedThing, Opening, WorldDocument } from "./protocol.ts";
@@ -308,6 +308,12 @@ export async function openWorld({ engine, root, consent, progress }: OpenWorldOp
     judged = await engine.call("project.graph", { root, judged: true });
     graph = judgedGraph(judged);
   }
+  // Every building and landmark is composed part by part once the code is understood, each request carrying what the
+  // pass found about its entity, so it is asked once and stays while the code does.
+  const composed = await composeWorld(facts, LOOKS, jev, judgments, { graph, concurrency: understanding.estimate.concurrency });
+  // Its answers are kept before the world is handed over, as the looks' were.
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await Promise.all(writes);
 
   const byThing = Object.fromEntries(planned.flatMap((p, i) => thingsOf(p).map((t) => [judgedThing(t), judges.get(keys[i] as string) ?? "stand-in"] as const)));
   const things = Object.keys(byThing).length;
@@ -320,7 +326,7 @@ export async function openWorld({ engine, root, consent, progress }: OpenWorldOp
   const failed = failures.length + misunderstood;
   if (failed > 0) parts.push(`${plural(failed, "request")} failed${failures[0] === undefined ? "" : ` (${failures[0]})`}`);
   else if (why !== "") parts.push(why);
-  const world = layoutWorld(facts, judgments, graph);
+  const world = layoutWorld(facts, composed, graph);
   // Any file no answer was about is settled now, before the document.
   for (const p of world.patches) settleHealth(p.path, p.vitality);
   sendHealth();

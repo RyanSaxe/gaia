@@ -19,6 +19,7 @@
 
 import {
   type AreaPlace,
+  type Blueprint,
   type CellPlace,
   type CodeGraph,
   type CodeFacts,
@@ -40,6 +41,7 @@ import { type LandNode, divideLand, dividePlots } from "./land.ts";
 import { certainty } from "./context.ts";
 import { type OutlineReading, areaOutline, areaReadings, bodySize, entityOutline, entityReadings, fileOutline, fileReadings, fileSize, howMany, importersOf, outlineOrder, symbolSize, tokensOf } from "./outline.ts";
 import { MODEL } from "./planner.ts";
+import { type Composing, composeThings, composingState } from "./compose.ts";
 
 /** One option Jev may choose: what it is like (Jev reads this) and the facts it suits (the stand-in reads these). */
 export interface Look {
@@ -51,6 +53,8 @@ export type LookSet = Readonly<Record<string, Look>>;
 
 /** The options for every judgment, by key. */
 export interface Looks {
+  /** What composes each building and landmark part by part: Jev chooses their parts, never a preset. */
+  readonly compose: Composing;
   /** The repository's art direction: light, sky, season and wind. */
   readonly world: LookSet;
   /** A directory's land: landform and ground cover. */
@@ -98,8 +102,11 @@ export interface Judgments {
   readonly world: string;
   /** Directory → land key, for the directories that are regions. */
   readonly lands: Readonly<Record<string, string>>;
-  /** Entity → whether a building or a landmark stands for it, and which. */
-  readonly things: Readonly<Record<string, { readonly as: "building" | "landmark"; readonly look: string }>>;
+  /**
+   * Entity → whether a building or a landmark stands for it, and the blueprint Jev composed for it once the
+   * understanding pass has judged the code (`composeWorld`); a thing not yet composed has none and stands nowhere.
+   */
+  readonly things: Readonly<Record<string, { readonly as: "building" | "landmark"; readonly blueprint?: Blueprint }>>;
   /** Dependencies Jev would walk, with how much it wants each and its look. */
   readonly trails: readonly CodeTrail[];
   /**
@@ -142,8 +149,8 @@ export interface CodeThing {
   readonly path: string;
   readonly name: string;
   readonly as: "building" | "landmark";
-  /** The building's or landmark's look key. */
-  readonly look: string;
+  /** What it is built from: the parts and settings Jev composed for it. */
+  readonly blueprint: Blueprint;
   /** The directory it stands in: its root. */
   readonly area: string;
   /** Its lot: the middle of the ground kept for it at its directory's heart, and how far a building may stand from it. */
@@ -722,8 +729,6 @@ export function planWorldRequests(facts: CodeFacts, looks: Looks, options: PlanO
             e.path,
             salt,
           ),
-          building: choice("If this entity stands as a building, which building suits it?", docs(looks.building), "building", e.path, salt),
-          landmark: choice("If this entity stands as a landmark, which landmark suits it?", docs(looks.landmark), "landmark", e.path, salt),
         }
       : {
           stands: choice(
@@ -929,7 +934,7 @@ export async function judgeWorld(facts: CodeFacts, looks: Looks, jev: JevClient,
   }
   let world = first(looks.world);
   const lands: Record<string, string> = {};
-  const things: Record<string, { as: "building" | "landmark"; look: string }> = {};
+  const things: Record<string, { as: "building" | "landmark" }> = {};
   const trails: CodeTrail[] = [];
   const forms: Record<string, Record<string, string>> = {};
   const waters: Record<string, string> = {};
@@ -949,13 +954,10 @@ export async function judgeWorld(facts: CodeFacts, looks: Looks, jev: JevClient,
       }
       if (Object.keys(mine).length > 0) forms[p.target] = mine;
     } else {
-      // Revised questions ask building-or-landmark on its own, then each look; the first asked one choice over both.
+      // Whether a building or a landmark stands for the entity is Jev's first call about it; its parts are composed
+      // later (`composeWorld`). Round 12's design asked one choice over both, as `landmark:` or `building:`.
       const stands = pickOf(a.stands);
-      if (stands === "building" || stands === "landmark") things[p.target] = { as: stands, look: pickOf(a[stands]) ?? first(looks[stands]) };
-      else {
-        const [as, look] = (stands ?? `building:${first(looks.building)}`).split(/:(.*)/s) as [string, string];
-        things[p.target] = { as: as === "landmark" ? "landmark" : "building", look };
-      }
+      things[p.target] = { as: stands === "landmark" || stands?.startsWith("landmark:") === true ? "landmark" : "building" };
       for (const [id, answer] of Object.entries(a)) {
         if (!id.startsWith("trail:") || answer.type !== "noul") continue;
         const to = id.slice("trail:".length);
@@ -964,6 +966,21 @@ export async function judgeWorld(facts: CodeFacts, looks: Looks, jev: JevClient,
     }
   }
   return { world, lands, things, trails, forms, waters, characters };
+}
+
+/**
+ * Composes every entity's building or landmark part by part, through `jev`, once the understanding pass has judged
+ * the code: each composing request carries what `graph` holds about the entity (`composingState`), so it is asked
+ * once and stays as it is while the code does.
+ */
+export async function composeWorld(facts: CodeFacts, looks: Looks, jev: JevClient, judged: Judgments, options: { readonly graph?: CodeGraph; readonly concurrency?: number } = {}): Promise<Judgments> {
+  const standing = Object.entries(judged.things).map(([path, t]) => ({
+    path,
+    as: t.as,
+    state: composingState(options.graph, { name: facts.entities.find((e) => e.path === path)?.name ?? baseName(path), path }),
+  }));
+  const blueprints = await composeThings(looks.compose, jev, standing, options.concurrency ?? 8);
+  return { ...judged, things: Object.fromEntries(standing.map((t) => [t.path, { as: t.as, blueprint: blueprints[t.path] as Blueprint }])) };
 }
 
 // ---------- the stand-in judge ----------
@@ -1060,8 +1077,8 @@ export function standInJev(looks: Looks): JevClient {
       const answers: Record<string, JevAnswer> = {};
       for (const [id, q] of Object.entries(request.questions)) {
         if (q.type === "choice") {
-          // Building-or-landmark and each look, asked apart, are judged as the one choice over both: the same thing stands either way.
-          const split = request.questions.building !== undefined && (id === "stands" || id === "building" || id === "landmark");
+          // Building or landmark is judged by how well the entity suits any building and any landmark.
+          const split = id === "stands" && q.criteria.building !== undefined && q.criteria.landmark !== undefined;
           const r = rand(seedOf(`${target}:${split ? "stands" : id}`));
           // A form question is about one kind of symbol, or one symbol: its kind is a fact it suits.
           const named = id.startsWith("form#") ? ((state.file as { standing?: { name: string; kind: string }[] } | undefined)?.standing ?? []).find((s) => `form#${s.name}` === id)?.kind : undefined;
@@ -1070,7 +1087,7 @@ export function standInJev(looks: Looks): JevClient {
           const all = keys
             .sort()
             .map((key) => [key, (suits.get(key) ?? []).filter((s) => own.has(s)).length + r.next() * 0.6] as const);
-          const scores = !split ? all : id === "stands" ? (["building", "landmark"] as const).map((as) => [as, Math.max(...all.filter(([k]) => k.startsWith(`${as}:`)).map(([, v]) => v))] as const) : all.filter(([k]) => k.startsWith(`${id}:`)).map(([k, v]) => [k.slice(id.length + 1), v] as const);
+          const scores = !split ? all : (["building", "landmark"] as const).map((as) => [as, Math.max(...all.filter(([k]) => k.startsWith(`${as}:`)).map(([, v]) => v))] as const);
           const total = scores.reduce((n, [, s]) => n + Math.exp(2 * s), 0);
           const probabilities = Object.fromEntries(scores.map(([k, s]) => [k, Math.exp(2 * s) / total]));
           const [best] = [...scores].sort((a, b) => b[1] - a[1])[0] ?? [""];
@@ -1245,7 +1262,7 @@ export interface LotPlace {
  * world shows it while Jev answers.
  */
 export function landOf(facts: CodeFacts, graph?: CodeGraph, aspect: number = LAND_ASPECT): WorldPlaces & { readonly lots: readonly LotPlace[] } {
-  const w = layoutWorld(facts, UNJUDGED, graph, aspect);
+  const { world: w, lots } = layOut(facts, UNJUDGED, graph, aspect);
   return {
     name: w.name,
     size: w.size,
@@ -1253,7 +1270,7 @@ export function landOf(facts: CodeFacts, graph?: CodeGraph, aspect: number = LAN
     areas: w.areas.map(({ path, name, depth, parent, x, z }) => ({ path, name, depth, parent, x, z })),
     patches: w.patches.map(({ path, name, area, x, z, radius, vitality }) => ({ path, name, area, x, z, radius, vitality })),
     cells: w.cells,
-    lots: w.things.map(({ x, z }) => ({ x, z })),
+    lots,
   };
 }
 
@@ -1268,13 +1285,18 @@ export function areaLands(world: Pick<CodeWorld, "areas" | "regions">): Record<s
 /**
  * Lays out the world from the code and Jev's judgments. With Engine's graph,
  * every definition it holds stands, sized by its importance; without one, the code
- * model's top-level symbols do.
+ * facts's top-level symbols do.
  */
 /**
  * Lays a world out from code. Its land takes the journal spread's proportions (`LAND_ASPECT`) unless `aspect` says
  * otherwise: the proving ground keeps a square, so its streams, bridges and ruins stay where its tests expect them.
  */
 export function layoutWorld(facts: CodeFacts, judged: Judgments, graph?: CodeGraph, aspect: number = LAND_ASPECT): CodeWorld {
+  return layOut(facts, judged, graph, aspect).world;
+}
+
+/** The world laid out, and every entity's lot, whether or not anything was composed to stand on it. */
+function layOut(facts: CodeFacts, judged: Judgments, graph: CodeGraph | undefined, aspect: number): { readonly world: CodeWorld; readonly lots: readonly LotPlace[] } {
   const name = facts.repository.name;
   const { dirs, size, land, defs } = divisionOf(facts, graph, aspect);
   const entityAt = new Map(facts.entities.map((e) => [e.path, e]));
@@ -1304,6 +1326,7 @@ export function layoutWorld(facts: CodeFacts, judged: Judgments, graph?: CodeGra
   const cells: CellPlace[] = [];
   const patches: CodePatch[] = [];
   const things: CodeThing[] = [];
+  const lots: LotPlace[] = [];
   const symbols: CodeSymbol[] = [];
   /** Per directory: ground held and the ground-weighted sum of its leaves' hearts. */
   const held = new Map<string, { ground: number; x: number; z: number; hearts: { x: number; z: number }[] }>();
@@ -1330,8 +1353,10 @@ export function layoutWorld(facts: CodeFacts, judged: Judgments, graph?: CodeGra
     }
     if (kind === "lot") {
       const e = entityAt.get(path) as EntityFacts;
-      const t = judged.things[path] ?? { as: "building", look: "" };
-      things.push({ path, name: e.name, as: t.as, look: t.look, area: path, x: leaf.x, z: leaf.z, lot: LAYOUT.lotReach[t.as], vitality: folderQuality(path) ?? judged.quality?.[path] ?? 1 });
+      // An entity nothing was composed for keeps its lot as open ground: nothing stands there that Jev didn't choose.
+      lots.push({ x: leaf.x, z: leaf.z });
+      const t = judged.things[path];
+      if (t?.blueprint !== undefined) things.push({ path, name: e.name, as: t.as, blueprint: t.blueprint, area: path, x: leaf.x, z: leaf.z, lot: LAYOUT.lotReach[t.as], vitality: folderQuality(path) ?? judged.quality?.[path] ?? 1 });
       continue;
     }
     const f = files.get(path) as FileFacts;
@@ -1400,17 +1425,20 @@ export function layoutWorld(facts: CodeFacts, judged: Judgments, graph?: CodeGra
     }
   }
   return {
-    name,
-    projectId: facts.projectId,
-    size,
-    aspect,
-    world: judged.world,
-    areas,
-    patches,
-    cells,
-    things,
-    symbols,
-    trails: chooseTrails(judged.trails, things.map((t) => t.path), weights),
-    regions,
+    world: {
+      name,
+      projectId: facts.projectId,
+      size,
+      aspect,
+      world: judged.world,
+      areas,
+      patches,
+      cells,
+      things,
+      symbols,
+      trails: chooseTrails(judged.trails, things.map((t) => t.path), weights),
+      regions,
+    },
+    lots,
   };
 }

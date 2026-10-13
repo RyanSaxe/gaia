@@ -12,7 +12,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { type Blueprint, type BuildingPlan, type GroundSpec, Library, type Palette, type RouteSpec, type SeasonSpec, blueprintOf, seedOf } from "@gaia/schema";
 import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, LANDMARK_PRIMITIVES, NO_SHIFT, ROUTE_PRIMITIVES, RELIEF_PRIMITIVES, ROCK_PRIMITIVES, WILDFLOWER_PRIMITIVES, WORLD_PRIMITIVES, hex, mixLab } from "@gaia/primitives";
-import { biome, link, world as worldKind } from "@gaia/kinds";
+import { biome, landmark as landmarkKind, link, world as worldKind } from "@gaia/kinds";
 import { defaultParams, validate } from "@gaia/world";
 import { FLORA_PRESETS, LANDMARK_PRESETS, type Realized, TRAIL_PRESETS, WORLD_PRESETS, buildSlots, mergeParts, realizeRegion, realizeSky } from "@gaia/realize";
 import {
@@ -57,7 +57,7 @@ import { LANDMARK_ENTITIES, type Represented, SAMPLE_ENTITIES, SAMPLE_FILES, SAM
 import { type CodeWorld, type Judge, groundVitality, judgedThing } from "@gaia/world";
 import { type CodeLab, codeWorld, representSymbol } from "./code-world.ts";
 import type { JudgedThing } from "../../world-service/protocol.ts";
-import { type Building, createSettlement, settlementBuilds } from "./settlement.ts";
+import { type Building, composedName, createSettlement, settlementBuilds } from "./settlement.ts";
 import { createSigns } from "./signs.ts";
 import { type Baked, createBaker } from "./baker.ts";
 import { createPageLand } from "./land.ts";
@@ -418,10 +418,23 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   // 320 m world or a kilometer; `standWorld` places them on the bake thread.
   const landmarkLib = new Library([...LANDMARK_PRIMITIVES, ...FLORA_PRIMITIVES]);
   const routeLib = new Library(ROUTE_PRIMITIVES);
-  const landmarks = LANDMARK_PRESETS.map((preset, i) => {
-    const built = made(LANDMARK_ASKS[i] as BuildAsk, landmarkLib);
-    return { name: preset.name, blueprint: preset.blueprint, built, base: landmarkBase(built) };
-  });
+  /** A landmark built and measured: its key in the view pool, what it is called, its blueprint, its build and how far its foot reaches. */
+  const landmarkOf = (name: string, ask: BuildAsk) => {
+    const built = made(ask, landmarkLib);
+    return { key: `${ask.blueprint.id}:${ask.seed}`, name, blueprint: ask.blueprint, built, base: landmarkBase(built) };
+  };
+  /** Every landmark preset: what the sample world stands and the shots show. */
+  const presetLandmarks = LANDMARK_PRESETS.map((preset, i) => landmarkOf(preset.name, LANDMARK_ASKS[i] as BuildAsk));
+  /** The landmarks of the world shown: a codebase's own, each as Jev composed it, or the presets. */
+  let landmarks = presetLandmarks;
+  /** What builds each landmark Jev composed for a codebase's world. */
+  const landmarkAsks = (c: CodeLab): BuildAsk[] =>
+    c.landmarks.map((l) => ({
+      kind: "landmark",
+      blueprint: l.blueprint,
+      seed: seedOf(`terrain-lab/landmark/${l.path}`),
+      facts: Object.fromEntries(Object.entries(landmarkKind.facts).map(([k, bind]) => [k, bind(l.facts)])),
+    }));
   const trailStyles = TRAIL_PRESETS.map((p) => buildSlots(p.blueprint, link, routeLib, { seed: 1, facts: {} }).get("route")?.output as RouteSpec);
   /** The landmarks standing and the network of paths between every place, from the last bake. */
   interface Settled {
@@ -512,13 +525,14 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   const landmarkPool = new Map<string, PlantView>();
   let built: Ways | null = null;
   /** Stands each landmark on its site and builds the trails' crossings; the ground texture already carries the trails. */
-  /** Each standing landmark's key in the pool of landmark views: its preset, and which of that preset's it is. */
+  /** Each standing landmark's key in the pool of landmark views: the landmark it is, and which of that landmark's it is. */
   const poolKeys = (sites: readonly StandingLandmark[]): string[] => {
-    const seen = new Map<number, number>();
+    const seen = new Map<string, number>();
     return sites.map((s) => {
-      const nth = seen.get(s.landmark) ?? 0;
-      seen.set(s.landmark, nth + 1);
-      return `${s.landmark}#${nth}`;
+      const key = landmarks[s.landmark]?.key ?? String(s.landmark);
+      const nth = seen.get(key) ?? 0;
+      seen.set(key, nth + 1);
+      return `${key}#${nth}`;
     });
   };
   /** A pooled view of landmark `i`, made now and added to the scene. */
@@ -1979,8 +1993,10 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     reportStage("judging");
     code = on ? await codeWorld(veil) : null;
     reportStage("laid out", { things: code?.world.things.length ?? 0, symbols: code?.world.symbols.length ?? 0 });
-    // The buildings are made on other threads while the wait draws the land.
-    await makeAhead(settlementBuilds(code?.buildings ?? SAMPLE_ENTITIES));
+    // The buildings and landmarks are made on other threads while the wait draws the land.
+    const composedLandmarks = code === null ? [] : landmarkAsks(code);
+    await makeAhead([...settlementBuilds(code?.buildings ?? SAMPLE_ENTITIES), ...composedLandmarks]);
+    landmarks = code === null ? presetLandmarks : composedLandmarks.map((ask) => landmarkOf(composedName(ask.blueprint), ask));
     liveFileVitality.clear();
     for (const v of settlement.views()) scene.remove(v.object);
     settlement = createSettlement(light, code?.buildings ?? SAMPLE_ENTITIES);
@@ -2005,7 +2021,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     return {
       buildings: settlement.buildings.map((b, i) => ({ x: houses[i]?.x ?? 0, z: houses[i]?.z ?? 0, name: b.represented.name, kind: b.kindName, vitality: b.represented.vitality, plan: b.plan, blueprint: b.blueprint, palette: b.palette })),
       landmarks: c.landmarks.map((l, i) => {
-        const lm = landmarks[l.preset] as (typeof landmarks)[number];
+        const lm = landmarks[i] as (typeof landmarks)[number];
         return { x: rises[i]?.x ?? 0, z: rises[i]?.z ?? 0, name: lm.name, vitality: l.vitality, blueprint: lm.blueprint, palette: lm.built.palette };
       }),
     };
@@ -2569,7 +2585,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       /** Stands landmark preset `i` on landmark site `at` in place of what stands there, so every form can be seen; returns where. */
       showLandmark: (i: number, at = 0) => {
         const s = ways.sites[at];
-        const lm = landmarks[i];
+        const lm = presetLandmarks[i];
         if (s === undefined || lm === undefined) return null;
         for (const [key, v] of landmarkPool) if (key.startsWith("show#") || v === landmarkViews[at]) v.object.visible = false;
         let view = landmarkPool.get(`show#${i}`);
@@ -2895,7 +2911,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
               symbols: code.world.symbols.length,
               standingSymbols: symbolPlacements.filter((k) => k >= 0).length,
               patches: code.world.patches.length,
-              things: code.world.things.map((t) => ({ path: t.path, name: t.name, as: t.as, look: t.look, x: Math.round(t.x), z: Math.round(t.z), vitality: +t.vitality.toFixed(2) })),
+              things: code.world.things.map((t) => ({ path: t.path, name: t.name, as: t.as, blueprint: t.blueprint.id, x: Math.round(t.x), z: Math.round(t.z), vitality: +t.vitality.toFixed(2) })),
               trails: code.world.trails.map((t) => `${t.from}->${t.to}`),
             },
       camera: () => ({ position: camera.position.toArray(), target: orbit.target.toArray() }),

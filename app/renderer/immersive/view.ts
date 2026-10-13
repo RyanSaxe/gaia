@@ -161,7 +161,7 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
   const keyOf = (thing: string, wide: boolean): string | null => {
     const code = world.code();
     if (code === null || words === null) return null;
-    if (standsAs?.code !== code) standsAs = { code, as: new Map([...code.symbols.map((s) => [s.id, s.form] as const), ...code.things.map((t) => [t.path, t.look] as const)]) };
+    if (standsAs?.code !== code) standsAs = { code, as: new Map([...code.symbols.map((s) => [s.id, s.form] as const), ...code.things.map((t) => [t.path, t.blueprint.id] as const)]) };
     const of = words.journal.entry(entityOf(thing)) !== undefined ? entityOf(thing) : thing;
     return [code.projectId, Math.round(code.size), PAINTER, wide ? `wide:${thing}` : thing, standsAs.as.get(thing) ?? "", words.vitality(of).toFixed(2)].join("|");
   };

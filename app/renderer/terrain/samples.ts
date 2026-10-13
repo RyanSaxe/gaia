@@ -4,7 +4,8 @@
 // to ruin (`SAMPLE_VITALITY`), so the lab shows every state before a
 // codebase is opened, and a thing's card says what it looks like.
 
-import type { EntityFacts, FileFacts } from "@gaia/schema";
+import { STRUCTURE_PRESETS } from "@gaia/realize";
+import type { Blueprint, EntityFacts, FileFacts } from "@gaia/schema";
 
 /** Something in the world a person can walk up to and ask about. */
 export interface Represented {
@@ -29,9 +30,18 @@ export interface Represented {
 export interface SampleEntity {
   readonly facts: EntityFacts;
   readonly vitality: number;
-  /** The hand-filled building Jev might choose for it. */
-  readonly building: string;
+  /** What its building is built from: the parts Jev composed for it, or a sample's hand-filled building. */
+  readonly blueprint: Blueprint;
+  /** What the building is called, such as "Watermill". */
+  readonly kindName: string;
 }
+
+/** A sample's hand-filled building, by its name. */
+const preset = (name: string): Pick<SampleEntity, "blueprint" | "kindName"> => {
+  const found = STRUCTURE_PRESETS.find((p) => p.name === name);
+  if (found === undefined) throw new Error(`There is no building called ${name}.`);
+  return { blueprint: found.blueprint, kindName: found.name };
+};
 
 const entity = (e: Partial<EntityFacts> & Pick<EntityFacts, "path" | "name" | "form">): EntityFacts => ({
   files: 10,
@@ -44,7 +54,7 @@ const entity = (e: Partial<EntityFacts> & Pick<EntityFacts, "path" | "name" | "f
 
 export const SAMPLE_ENTITIES: readonly SampleEntity[] = [
   {
-    building: "Thatched cottage",
+    ...preset("Thatched cottage"),
     vitality: 0.97,
     facts: entity({
       path: "packages/schema",
@@ -59,7 +69,7 @@ export const SAMPLE_ENTITIES: readonly SampleEntity[] = [
     }),
   },
   {
-    building: "Watermill",
+    ...preset("Watermill"),
     vitality: 0.48,
     facts: entity({
       path: "packages/realize",
@@ -75,7 +85,7 @@ export const SAMPLE_ENTITIES: readonly SampleEntity[] = [
     }),
   },
   {
-    building: "Archive tower",
+    ...preset("Archive tower"),
     vitality: 0.06,
     facts: entity({
       path: "engine",
@@ -90,7 +100,7 @@ export const SAMPLE_ENTITIES: readonly SampleEntity[] = [
     }),
   },
   {
-    building: "Merchant's hall",
+    ...preset("Merchant's hall"),
     vitality: 0.86,
     facts: entity({
       path: "app/world-service",
@@ -105,7 +115,7 @@ export const SAMPLE_ENTITIES: readonly SampleEntity[] = [
     }),
   },
   {
-    building: "Gathered farmstead",
+    ...preset("Gathered farmstead"),
     vitality: 0.66,
     facts: entity({
       path: "app/renderer/terrain",
@@ -119,7 +129,7 @@ export const SAMPLE_ENTITIES: readonly SampleEntity[] = [
     }),
   },
   {
-    building: "Stone croft",
+    ...preset("Stone croft"),
     vitality: 0.1,
     facts: entity({
       path: "app/main",
