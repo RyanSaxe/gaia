@@ -41,7 +41,7 @@ import type { Outline } from "@gaia/terrain";
 import type { LotPlace } from "@gaia/world";
 import type { FilePatch } from "../../world-service/protocol.ts";
 import type { StoodWorld } from "../terrain/lab.ts";
-import { MARGIN, drawRivers, drawTrails, drawTrees, letterName, nearestAreas, paintRelief, riverCourse, riverStrokes, strokeContours } from "../immersive/field-map.ts";
+import { MARGIN, drawRivers, drawTrails, drawTrees, letterName, nearestAreas, paintRelief, riverCourse, riverStretches, riverStrokes, strokeContours } from "../immersive/field-map.ts";
 import { CELL, type NameLand, canvasMeasure, nameLand, placeNames } from "../immersive/map-names.ts";
 import { DECKLE_MASK, MAP_STYLE, dryness, healthColor, healthWeight, landWash } from "../immersive/map-styles.ts";
 import { markScale, stampBuilding, stampLandmark } from "../immersive/marks.ts";
@@ -1044,19 +1044,29 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
       `<path class="pen" d="${d}" pathLength="1" stroke="${stroke}" stroke-width="${f(width / zoom)}" style="transition-duration:${Math.round(ms)}ms;transition-delay:${Math.round(delay)}ms"${extra}/>`;
     let end = 0;
     let html = "";
-    // Rivers, as `drawRivers` draws them: the same course and the same three strokes.
+    // Rivers, as `drawRivers` draws them: the same course in the same stretches, every river's banks first, then all
+    // the water, then the glints. The pen runs down each river stretch by stretch.
     const streams = [...stood.terrain.streams].filter((s) => s.stations.length > 1).sort((a, b) => b.stations.length - a.stations.length);
+    const layers: string[] = ["", "", ""];
     streams.forEach((stream, q) => {
       const st = stream.stations;
-      const d = riverCourse(st, (x, z) => [x, z]);
       const ms = timed(
         st.map((s) => [s.x, s.z] as const),
         PACE.rivers,
       );
       const delay = PACE.rivers.startMs + q * PACE.rivers.gapMs;
       end = Math.max(end, delay + ms);
-      for (const stroke of riverStrokes(st, zoom)) html += pen(d, stroke.color, stroke.width, ms, delay);
+      const lengthOf = (part: typeof st): number => part.reduce((sum, s, k) => (k === 0 ? 0 : sum + Math.hypot(s.x - (part[k - 1] as (typeof part)[number]).x, s.z - (part[k - 1] as (typeof part)[number]).z)), 0);
+      const total = lengthOf(st) || 1;
+      let done = 0;
+      for (const stretch of riverStretches(st, zoom)) {
+        const share = lengthOf(stretch.stations) / total;
+        const d = riverCourse(stretch.stations, (x, z) => [x, z]);
+        riverStrokes(stretch.width).forEach((stroke, layer) => (layers[layer] += pen(d, stroke.color, stroke.width, ms * share, delay + ms * done)));
+        done += share;
+      }
     });
+    html += layers.join("");
     // Trails, as `drawTrails` dots them, shown through a mask the pen draws along each.
     const stride = Math.max(2, Math.round(3 / zoom)) * 2;
     let dots = "";
