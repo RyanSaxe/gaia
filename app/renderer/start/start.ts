@@ -44,6 +44,9 @@ export interface WaitWithStart extends Wait {
   hour(h: number): void;
 }
 
+/** How long after a place is on its way the wait paints on even if no card has risen into it, ms: a card takes under 3 s. */
+const UNCOVERED_BY_MS = 6000;
+
 /** The wait, with the start laid over it in its veil when no world is named. */
 export function withStart(wait: Wait, veil: HTMLElement, style: StartStyle = startStyle()): WaitWithStart {
   /** The start, from when it is offered (or a world opens with no start, on the table) until the world shows. */
@@ -53,15 +56,38 @@ export function withStart(wait: Wait, veil: HTMLElement, style: StartStyle = sta
   // Until the first frame says otherwise, the hour the clock shows: the person's own, or `?hour=`.
   const asked = Number(new URLSearchParams(location.search).get("hour") ?? Number.NaN);
   let hour = Number.isFinite(asked) ? asked : localHour(new Date());
-  const table = (): StartPage => createTable(veil, { hour, sheet: wait.sheet, chosen: wait.chosen });
+  // While the table's card is on its way, the wait paints nothing new on its sheet, so the sheet is still what the card
+  // shows when it takes the card's place; then everything held is painted in the order it came.
+  let covered: Promise<void> = Promise.resolve();
+  let uncover = (): void => undefined;
+  const cover = (): void => {
+    covered = new Promise((resolve) => (uncover = resolve));
+  };
+  const held = (paint: () => void): void => void covered.then(paint);
+  const table = (): StartPage => {
+    cover();
+    return createTable(veil, { hour, sheet: wait.sheet, chosen: wait.chosen, face: wait.face, landed: () => uncover() });
+  };
   return {
     ...wait,
     opening(o) {
       // A world opened with no start, as on a reload, rises from the same table a chosen one does.
       if (page === null && style === "table" && o.stage === "reading") page = table();
-      if (!left) page?.leave();
+      if (!left) {
+        page?.leave();
+        window.setTimeout(() => uncover(), UNCOVERED_BY_MS);
+      }
       left = true;
-      wait.opening(o);
+      held(() => wait.opening(o));
+    },
+    baking(health) {
+      held(() => wait.baking(health));
+    },
+    marks(things) {
+      held(() => wait.marks(things));
+    },
+    stood(world) {
+      held(() => wait.stood(world));
     },
     choose(offer) {
       // Offered again after a place was on its way, the start begins afresh.
@@ -74,6 +100,7 @@ export function withStart(wait: Wait, veil: HTMLElement, style: StartStyle = sta
       return page.offer(offer);
     },
     async lift() {
+      await covered;
       await wait.lift();
       page?.close();
       page = null;

@@ -36,11 +36,13 @@ export interface WaitView {
   /** Where the sheet lies on the page: a map chosen on the start ends there. */
   sheet(): DOMRect;
   /**
-   * A map chosen on the start, as its picture and its land's shape (width over depth): the sheet takes that shape at
-   * once. The picture lies on the sheet as its paint from when the returned function is called, once the chosen map
-   * covers the sheet, until the world's own paint covers it.
+   * A map chosen on the start, as its picture and its land's shape (width over depth): the sheet takes that shape and
+   * the picture lies on it as its paint at once, under the start's table until the map has risen into its place, and
+   * stays until the world's own paint covers it.
    */
-  chosen(picture: string, aspect: number): () => void;
+  chosen(picture: string, aspect: number): void;
+  /** The sheet's paper as it is painted now, in its shape: the face of a fresh card that rises into the sheet. */
+  face(): HTMLCanvasElement;
 }
 
 export interface Wait extends WaitView {

@@ -643,15 +643,19 @@ walked before, pictured by `start/gaia-picture.webp`):
     and the wait's sheet, unseen beneath the table, has taken the card's
     shape. The picture's margin closes as the card rises, so the card ends
     at the sheet's size and place as the sheet's own picture, edge to edge.
-    The moment it lands the table goes behind the wait, held still and out
-    of focus, and the sheet, its copy of the picture laid, comes in over the
-    card in half a second; the card then gives way under it, and the wait
-    paints the map from there. When the world stands, the sheet folds away
-    into it as ever and the table goes with the veil.
-  - A folder or an address gets a fresh card of plain paper, in the shape
-    the wait's sheet has, laid on the middle of the sheet: it comes down
-    from the person's side over 0.45 s, then lifts and rises the same way.
-    So does a world opened with no start, on an empty table.
+    As it rises it comes to be drawn exactly as the page draws the wait's
+    sheet: the picture under the sheet's creases and edge shade, the sheet's
+    deckle for its edge and the sheet's shadow under it, with nothing of the
+    table's light or paper. The moment it lands the table goes behind the
+    wait, held still and out of focus, and the sheet takes the card's place
+    in that one frame, so nothing changes; the wait paints nothing new on the
+    sheet until then, and paints the map from there. When the world stands,
+    the sheet folds away into it as ever and the table goes with the veil.
+  - A folder or an address gets a fresh card, in the shape the wait's sheet
+    has and with the sheet's own bare paper for its face, laid on the line
+    where the person asked for it (in the middle of an empty sheet): it
+    comes down from the person's side over 0.45 s, then lifts and rises the
+    same way. So does a world opened with no start, on an empty table.
   - It draws a frame only when something changes: the light as the hour
     turns, the ink on the line, a card moving. The sun's shadow map is drawn
     again only when the light changes, though the page passes the hour every

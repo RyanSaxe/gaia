@@ -16,10 +16,11 @@
 import type { StartChoice, StartOffer } from "../../world-service/protocol.ts";
 import { RECENT_KEPT } from "../../world-service/recent.ts";
 import { SHEET_LOGO } from "../brand/logo.ts";
+import { DECKLE_MASK } from "../immersive/map-styles.ts";
 import { REFUSALS, type StartPage, askFolder, placeOf } from "./choice.ts";
 import type { Writing } from "./table-ink.ts";
 import { tableLayout } from "./table-layout.ts";
-import { LAY_S, LIFT_S, RISE_S, type Rect, type TableScene, createTableScene } from "./table-scene.ts";
+import { LAY_S, LIFT_S, RISE_S, type Rect, type Sheet, type TableScene, createTableScene } from "./table-scene.ts";
 
 /** How long the darker stroke takes to run along the line, and an answer to be written in, seconds. */
 const READING_S = 1.2;
@@ -28,9 +29,6 @@ const ANSWER_S = 0.7;
 const UPRIGHT = 0.8;
 /** How long a chosen map takes to lift and rise into the wait's sheet, ms. */
 export const CHOSEN_MS = (LIFT_S + RISE_S) * 1000;
-/** Once the risen card lies under the wait's sheet: how long the sheet takes to come in over it (its opacity transition in wait.css), then how long the card takes to give way under it, ms. */
-const SHEET_IN_MS = 500;
-const WITHDRAW_MS = 500;
 /** How long the table takes to come in when shown, ms (start.css, `.start`). */
 const SHOWN_MS = 900;
 
@@ -46,11 +44,12 @@ export interface TableOptions {
   readonly hour: number;
   /** Where the wait's sheet lies on the page: a chosen card ends there. */
   readonly sheet: () => DOMRect;
-  /**
-   * A card is chosen: its picture and its land's shape (width over depth), which the wait's sheet takes as its own.
-   * What it returns lays the picture on the sheet, called once the card has risen over it.
-   */
-  readonly chosen?: (picture: string, aspect: number) => () => void;
+  /** A card is chosen: its picture and its land's shape (width over depth), which the wait's sheet takes as its own. */
+  readonly chosen?: (picture: string, aspect: number) => void;
+  /** The wait's sheet as it is painted now, in its shape: a fresh card's face, so it rises into the sheet as the sheet. */
+  readonly face?: () => HTMLCanvasElement;
+  /** The chosen card has become the wait's sheet: the sheet shows in its place, and the wait may paint on. */
+  readonly landed?: () => void;
 }
 
 export function createTable(veil: HTMLElement, options: TableOptions): StartPage {
@@ -82,10 +81,9 @@ export function createTable(veil: HTMLElement, options: TableOptions): StartPage
   let readingFrom: number | null = null;
   let answerFrom: number | null = null;
   let chosen: { readonly index: number; readonly at: number } | null = null;
-  /** Lays the chosen map's picture on the wait's sheet, once the card covers it. */
-  let lay: (() => void) | null = null;
-  /** When the risen card came to lie under the wait's sheet. */
-  let landedAt: number | null = null;
+  /** Whether the chosen card has been drawn at its end, in the wait's sheet's place, and whether it has become that sheet. */
+  let arrived = false;
+  let landed = false;
   let leaving = false;
   let gone = false;
 
@@ -120,27 +118,28 @@ export function createTable(veil: HTMLElement, options: TableOptions): StartPage
       const t = (now - chosen.at) / 1000;
       scene.choose(chosen.index, Math.min(t, CHOSEN_MS / 1000), toSheet());
       if (t * 1000 < CHOSEN_MS) moving = true;
-      else if (landedAt === null) {
-        // The card lies where the wait's sheet is: the sheet takes its picture and comes in over it, the table behind.
-        lay?.();
-        lay = null;
-        landedAt = now;
-        veil.dataset.table = "behind";
+      else if (!arrived) {
+        // Drawn once exactly at its end, so the frame before the sheet takes its place is the sheet's own.
+        arrived = true;
         moving = true;
-      } else {
-        const shown = 1 - Math.min(1, Math.max(0, (now - landedAt - SHEET_IN_MS) / WITHDRAW_MS));
-        scene.withdraw(shown);
-        moving = shown > 0;
+      } else if (!landed) {
+        // The card lies where the wait's sheet is, drawn as the page draws it: in this one frame the sheet shows in its
+        // place and the card goes, the table behind them.
+        landed = true;
+        veil.dataset.table = "behind";
+        scene.withdraw(0);
+        options.landed?.();
       }
     }
     scene.render();
     if (moving) draw();
   }
-  /** The wait's sheet on the canvas. */
-  const toSheet = (): Rect => {
+  /** The wait's sheet on the canvas, and how dark the veil has it. */
+  const toSheet = (): Sheet => {
     const s = options.sheet();
     const r = root.getBoundingClientRect();
-    return { x: s.left - r.left, y: s.top - r.top, w: s.width, h: s.height };
+    const night = Number.parseFloat(getComputedStyle(veil).getPropertyValue("--night"));
+    return { x: s.left - r.left, y: s.top - r.top, w: s.width, h: s.height, night: Number.isFinite(night) ? night : 0 };
   };
   function write(next: Writing): void {
     writing = next;
@@ -190,11 +189,11 @@ export function createTable(veil: HTMLElement, options: TableOptions): StartPage
   // ---------- building the table for an offer ----------
   /** Builds the table for the worlds offered and readies it to draw. */
   async function build(recent: StartOffer["recent"]): Promise<void> {
-    const [logo, ...pictures] = await Promise.all([decoded(SHEET_LOGO), ...recent.map((r) => (r.picture === undefined ? null : decoded(r.picture).catch(() => null)))]);
+    const [logo, deckle, ...pictures] = await Promise.all([decoded(SHEET_LOGO), decoded(DECKLE_MASK.slice(5, -2)), ...recent.map((r) => (r.picture === undefined ? null : decoded(r.picture).catch(() => null)))]);
     const w = Math.max(1, root.clientWidth);
     const h = Math.max(1, root.clientHeight);
     phone = w / h < UPRIGHT;
-    const next = createTableScene(tableLayout(phone, recent.length), recent.map((world, i) => ({ world, picture: pictures[i] ?? null })), logo as HTMLImageElement, { w, h, dpr: Math.min(window.devicePixelRatio || 1, 2) });
+    const next = createTableScene(tableLayout(phone, recent.length), recent.map((world, i) => ({ world, picture: pictures[i] ?? null })), logo as HTMLImageElement, deckle as HTMLImageElement, { w, h, dpr: Math.min(window.devicePixelRatio || 1, 2) });
     next.canvas.className = "table-view";
     next.hour(hour);
     next.write(writing);
@@ -216,7 +215,7 @@ export function createTable(veil: HTMLElement, options: TableOptions): StartPage
         b.addEventListener("click", () => {
           if (settle === null || chosen !== null) return;
           const picture = pictures[i];
-          if (r.picture !== undefined && picture !== null && picture !== undefined) lay = options.chosen?.(r.picture, picture.naturalWidth / Math.max(1, picture.naturalHeight)) ?? null;
+          if (r.picture !== undefined && picture !== null && picture !== undefined) options.chosen?.(r.picture, picture.naturalWidth / Math.max(1, picture.naturalHeight));
           lift(i, performance.now());
           choose(placeOf(r));
         });
@@ -232,11 +231,14 @@ export function createTable(veil: HTMLElement, options: TableOptions): StartPage
     root.classList.add("choosing");
     draw();
   }
-  /** A world with no card of its own gets a fresh one, in the shape the wait's sheet has, laid on the sheet `after` ms from now and risen. */
+  /**
+   * A world with no card of its own gets a fresh one, in the shape the wait's sheet has and with that sheet's face,
+   * laid on the sheet `after` ms from now and risen.
+   */
   function liftFresh(after = 0): void {
     if (scene === null || chosen !== null) return;
     const s = options.sheet();
-    lift(scene.fresh(s.width / Math.max(1, s.height)), performance.now() + after + LAY_S * 1000);
+    lift(scene.fresh(s.width / Math.max(1, s.height), options.face?.() ?? null), performance.now() + after + LAY_S * 1000);
   }
   /** Shows the table once its first frame is drawn, so it comes in whole, in front of the wait. */
   function show(): void {
@@ -270,8 +272,8 @@ export function createTable(veil: HTMLElement, options: TableOptions): StartPage
       const same = scene !== null && recent.length === shown.length && recent.every((r, i) => r.root === shown[i]?.root && r.picture === shown[i]?.picture);
       shown = recent;
       chosen = null;
-      lay = null;
-      landedAt = null;
+      arrived = false;
+      landed = false;
       readingFrom = null;
       root.classList.remove("choosing");
       // Offered again on the same table, as when a place is refused, a card that had risen is back and in front.

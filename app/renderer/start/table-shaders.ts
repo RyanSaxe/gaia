@@ -147,6 +147,17 @@ void main() {
  * faces the sun. On it lie the ink (Gaia's logo, the words and the names),
  * the line being written on, and on a card its world's picture.
  */
+/** A Gaussian blur of a box, as CSS draws a box-shadow's (its standard deviation half the blur radius). */
+const BOX_BLUR = /* glsl */ `
+float erf_(float x) {
+  float t = 1.0 / (1.0 + 0.3275911 * abs(x));
+  float y = 1.0 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * exp(-x * x);
+  return sign(x) * y;
+}
+/** How much of a box from 0 to 'w' a Gaussian of 'sigma' about 'x' covers, along one side. */
+float inBox(float x, float w, float sigma) { return 0.5 * (erf_(x / (sigma * 1.41421356)) - erf_((x - w) / (sigma * 1.41421356))); }
+`;
+
 export const PAPER_FRAGMENT = /* glsl */ `
 ${LIGHT_GLSL}
 ${NOISE}
@@ -168,6 +179,9 @@ uniform float uSelf;
 uniform float uFlat;
 uniform vec3 uAxisX;
 uniform vec3 uAxisY;
+uniform sampler2D uDeckle;
+uniform vec2 uSheetPx;
+uniform float uSheetNight;
 varying vec2 vUv;
 varying vec3 vWorld;
 varying vec3 vNormal;
@@ -209,6 +223,43 @@ vec3 fibres(vec2 p, vec3 c, float px) {
     }
   }
   return c;
+}
+
+${BOX_BLUR}
+/** A colour layer laid over 'acc', both premultiplied. */
+vec4 over(vec4 layer, vec4 acc) { return layer + acc * (1.0 - layer.a); }
+/** A gradient's one rgba stop, premultiplied. */
+vec4 pm(vec3 rgb, float a) { return vec4(rgb / 255.0 * a, a); }
+/** A crease's gradient along 'x': clear 1 px before 'at', whole at it, clear again 1.5 px after. */
+float crease(float x, float at) { return x < at ? clamp(x - (at - 1.0), 0.0, 1.0) : clamp(1.0 - (x - at) / 1.5, 0.0, 1.0); }
+
+/**
+ * The wait's sheet as the page draws it (wait.css): its picture under the sheet's own overlay, blended by multiplying,
+ * then the sheet's filter. 'xy' is CSS pixels from the sheet's top left corner, 'size' its size, 'night' the veil's
+ * --night. The overlay's layers, bottom to top: the faint banding, the crease across, the crease down, the lantern's
+ * pool and the blue of the edges after dark, then the inset shade at the rim.
+ */
+vec3 waitSheet(vec3 picture, vec2 xy, vec2 size, float night) {
+  vec2 f = xy / size;
+  vec3 brown = vec3(110.0, 84.0, 50.0);
+  float band = f.x < 0.12 ? mix(0.05, 0.0, f.x / 0.12) : f.x < 0.46 ? 0.0 : f.x < 0.5 ? mix(0.0, 0.05, (f.x - 0.46) / 0.04) : f.x < 0.54 ? mix(0.05, 0.0, (f.x - 0.5) / 0.04) : f.x < 0.88 ? 0.0 : mix(0.0, 0.05, (f.x - 0.88) / 0.12);
+  vec4 acc = pm(brown, band);
+  float fromBottom = size.y - xy.y;
+  acc = over(pm(brown, 0.11 * crease(fromBottom, size.y * 0.5)), acc);
+  acc = over(pm(brown, 0.13 * crease(xy.x, size.x * 0.5)), acc);
+  // The lantern's pool, an ellipse 85% by 75% of the sheet about (64%, 80%): warm at its middle, clear by 45% of the way out, blue at its rim and past it.
+  float r = length((f - vec2(0.64, 0.8)) / vec2(0.85, 0.75));
+  vec4 warm = pm(vec3(255.0, 222.0, 170.0), night * 0.42);
+  vec4 clear = vec4(0.0);
+  vec4 blue = pm(vec3(48.0, 46.0, 80.0), night * 0.66);
+  acc = over(r < 0.45 ? mix(warm, clear, r / 0.45) : mix(clear, blue, clamp((r - 0.45) / 0.55, 0.0, 1.0)), acc);
+  // The inset shade, 44 px of blur: a Gaussian of 22 px.
+  float shade = 0.2 * (1.0 - inBox(xy.x, size.x, 22.0) * inBox(xy.y, size.y, 22.0));
+  acc = over(pm(vec3(120.0, 90.0, 50.0), shade), acc);
+  vec3 c = picture * (1.0 - acc.a + acc.rgb);
+  float sepia = night * 0.3;
+  c = mat3(0.393 + 0.607 * (1.0 - sepia), 0.349 * sepia, 0.272 * sepia, 0.769 * sepia, 0.686 + 0.314 * (1.0 - sepia), 0.534 * sepia, 0.189 * sepia, 0.168 * sepia, 0.131 + 0.869 * (1.0 - sepia)) * c;
+  return c * (1.0 - night * 0.16);
 }
 
 // The paper's own color at a point, metres from its far left corner.
@@ -258,6 +309,8 @@ void main() {
   // Loose fibres stand out of the tear, half covering it, so the edge feathers.
   float loose = step(-1.3 * MM, d) * step(d, 0.0) * step(0.62, vnoise(vec2(along / (0.22 * MM), d / (0.45 * MM)) + uSeed)) * 0.55;
   cover = max(cover, loose);
+  // Risen into the wait's sheet, its edge becomes the sheet's own deckle.
+  cover = mix(cover, texture2D(uDeckle, vUv).a, uFlat);
   if (cover < 0.03) discard;
 
   vec3 albedo = paperAt(p, px);
@@ -280,10 +333,10 @@ void main() {
       albedo = mix(albedo, ink.rgb, ink.a);
     }
   }
-  // Risen into the wait's sheet, a card is the picture the wait shows: its paper as the wait's is after dark, a
-  // little sepia and dimmer (wait.css), unlit by the table's light.
-  float sepia = uNightness * 0.3;
-  vec3 flat_ = mat3(0.393 + 0.607 * (1.0 - sepia), 0.349 * sepia, 0.272 * sepia, 0.769 * sepia, 0.686 + 0.314 * (1.0 - sepia), 0.534 * sepia, 0.189 * sepia, 0.168 * sepia, 0.131 + 0.869 * (1.0 - sepia)) * albedo * (1.0 - uNightness * 0.16);
+  // Risen into the wait's sheet, a card is that sheet as the page draws it: its picture, the sheet's overlay and filter
+  // (wait.css), unlit by the table's light and with no paper of its own.
+  vec3 picture = uHasPicture > 0.5 ? texture2D(uPicture, vUv).rgb : uBase;
+  vec3 flat_ = waitSheet(picture, vec2(vUv.x, 1.0 - vUv.y) * uSheetPx, uSheetPx, uSheetNight);
   albedo *= 1.04;
 
   vec3 n = normalize(vNormal);
@@ -301,8 +354,7 @@ void main() {
   vec3 outward = normalize(uAxisX * out_.x + uAxisY * out_.y);
   float towardSun = dot(outward, normalize(vec3(uSunDirection.x, 0.0, uSunDirection.z) + 1e-5));
   color *= 1.0 + (1.0 - smoothstep(0.0, 0.5 * MM, d)) * (towardSun * 0.18 * sunUp() - 0.1);
-  color = mix(roll(color), flat_, uFlat);
-  gl_FragColor = vec4(aerial(color, vWorld), cover);
+  gl_FragColor = vec4(mix(aerial(roll(color), vWorld), flat_, uFlat), cover);
 }
 `;
 
@@ -460,6 +512,10 @@ uniform float uAperture;
 uniform float uMaxBlur;
 uniform float uVignette;
 uniform float uLifting;
+uniform vec4 uShadowBox;
+uniform float uShadow;
+uniform float uDpr;
+${BOX_BLUR}
 float linear(float z) { float ndc = z * 2.0 - 1.0; return 2.0 * uNear * uFar / (uFar + uNear - ndc * (uFar - uNear)); }
 float coc(float d) { return clamp(max(max(1.0 / d - 1.0 / uFocus, 1.0 / uFocusFar - 1.0 / d), 0.0) * uAperture, 0.0, uMaxBlur); }
 void main() {
@@ -483,6 +539,18 @@ void main() {
   vec3 color = acc / sum;
   vec2 q = uv - 0.5;
   color *= 1.0 - uVignette * smoothstep(0.25, 0.85, length(q * vec2(1.0, 1.15)));
+  // The wait's sheet's own shadow (wait.css, .wait-sheet::before) under the risen card as it arrives: a box inset 0.6%
+  // at the sides and head and 0.4% at the foot, shadowed 16 px down and 26 px soft, and never under the box itself.
+  if (uShadow > 0.0) {
+    vec4 b = uShadowBox;
+    vec2 size = b.zw - b.xy;
+    vec4 box = vec4(b.x + 0.006 * size.x, b.y + 0.004 * size.y, b.z - 0.006 * size.x, b.w - 0.006 * size.y);
+    vec2 at = gl_FragCoord.xy;
+    vec2 q = at - vec2(box.x, box.y - 16.0 * uDpr);
+    float g = inBox(q.x, box.z - box.x, 13.0 * uDpr) * inBox(q.y, box.w - box.y, 13.0 * uDpr);
+    float under = step(box.x, at.x) * step(at.x, box.z) * step(box.y, at.y) * step(at.y, box.w);
+    color = mix(color, vec3(25.0, 18.0, 8.0) / 255.0, 0.36 * uShadow * g * (1.0 - under));
+  }
   vec4 lift = uLifting > 0.0 ? texture2D(tLift, uv) * uLifting : vec4(0.0);
   gl_FragColor = lift + vec4(color, 1.0) * (1.0 - lift.a);
 }
