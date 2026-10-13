@@ -309,6 +309,15 @@ at its own careful pace. Rounds 20 to 22 tried and set aside keys that face
 the way pressed in a swing, strafing with a mouse or drag look, tank turns,
 snap and blink turns, quick turns and walking into a turn.
 
+A river follows the land. An area Jev gives a brook or a trickle gets a
+spring where its water runs longest through that area, and the river
+reaches back from it across the area the way it sets off. From there it
+runs downhill through other areas too, until it reaches the land's edge, a
+pond, a basin's bottom, where it sinks away, or another river, which it
+joins and widens below. Its valley is carved along that whole course, with
+the cross-section and winding Jev chose for its area (`routeRivers` in
+`@gaia/terrain`).
+
 A winding valley swings about ±20 m to either side once every 250 m, a
 whole swing every four of its own widths, carrying its floor and stream with it: a straight
 one barely bends and a strongly meandering one swings up to ±30 m, never
@@ -978,9 +987,12 @@ The three ways work together:
   looks the same on the whole sheet and close in: fine sepia contours from
   the real heights, every 1.2 m and every fifth heavier; each area's border
   as a soft hedgerow under a fine line; and each river as a line with a
-  bank and a glint along its real course, as wide as the stream once the
-  map comes close and never thinner than a line, one drawing shared by
-  the map, its picture and the wait's pen (`riverCourse`). Ponds are washed blue, darker toward their
+  bank and a glint along its real course, each stretch as wide as the
+  stream there once the map comes close and never thinner than a line.
+  Every river's banks are drawn first, then all the water, then the
+  glints, so where one river joins another their water runs together as
+  one. One drawing is shared by the map, its picture and the wait's pen
+  (`riverCourse`, `riverStretches`). Ponds are washed blue, darker toward their
   middle; trails are dotted; trees are round crowns in their files'
   health. Each kind of building and landmark has its own mark (`marks.ts`):
   an ink drawing over watercolor washes in its real colors, true to its

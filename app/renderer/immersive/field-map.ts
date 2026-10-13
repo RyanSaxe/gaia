@@ -673,11 +673,27 @@ export function riverCourse(stations: Terrain["streams"][number]["stations"], to
 }
 
 /**
- * A river's three strokes, a bank, the water and a glint, in pixels: its width the stream's own once the map is close
- * enough, `zoom` pixels a meter, and never thinner than a line.
+ * A river in stretches of one drawn width each, `zoom` pixels a meter, so it is drawn narrower where it is narrower:
+ * above where another joins it and toward its ends. Each stretch ends at the station the next begins at.
  */
-export function riverStrokes(stations: Terrain["streams"][number]["stations"], zoom: number): readonly { readonly color: string; readonly width: number }[] {
-  const width = 2 * Math.max(...stations.map((q) => q.halfWidth)) * zoom;
+export function riverStretches(stations: Terrain["streams"][number]["stations"], zoom: number): readonly { readonly stations: Terrain["streams"][number]["stations"]; readonly width: number }[] {
+  const stretches: { stations: Terrain["streams"][number]["stations"]; width: number }[] = [];
+  let from = 0;
+  for (let k = 1; k <= stations.length; k++) {
+    const width = (s: number): number => 2 * (stations[s] as (typeof stations)[number]).halfWidth * zoom;
+    if (k < stations.length && Math.abs(width(k) - width(from)) < STRETCH_PX) continue;
+    const part = stations.slice(from, Math.min(stations.length, k + 1));
+    if (part.length > 1) stretches.push({ stations: part, width: Math.max(...part.map((q) => 2 * q.halfWidth * zoom)) });
+    from = k;
+  }
+  return stretches;
+}
+
+/** How much a river's drawn width may change, pixels, before a new stretch of it begins. */
+const STRETCH_PX = 0.5;
+
+/** A river's three strokes for a stretch `width` pixels wide, a bank, the water and a glint: never thinner than a line. */
+export function riverStrokes(width: number): readonly { readonly color: string; readonly width: number }[] {
   return [
     { color: "rgba(40,84,104,0.5)", width: Math.max(3.4, width + 2.6) },
     { color: "rgb(150,203,204)", width: Math.max(1.9, width) },
@@ -685,14 +701,19 @@ export function riverStrokes(stations: Terrain["streams"][number]["stations"], z
   ];
 }
 
-/** Rivers along their courses (`riverCourse`, `riverStrokes`). `sx` and `sy` take meters to the view's pixels, `zoom` of them a meter. */
+/**
+ * Rivers along their courses (`riverCourse`), each stretch at its own width (`riverStretches`, `riverStrokes`):
+ * every river's banks first, then all the water, then the glints, so where one river joins another their water runs
+ * together as one. `sx` and `sy` take meters to the view's pixels, `zoom` of them a meter.
+ */
 export function drawRivers(ctx: CanvasRenderingContext2D, streams: Terrain["streams"], sx: (x: number) => number, sy: (z: number) => number, zoom: number): void {
   ctx.lineCap = ctx.lineJoin = "round";
-  for (const stream of streams) {
-    const d = riverCourse(stream.stations, (x, z) => [sx(x), sy(z)]);
-    if (d === "") continue;
-    const line = new Path2D(d);
-    for (const stroke of riverStrokes(stream.stations, zoom)) {
+  const stretches = streams.flatMap((stream) =>
+    riverStretches(stream.stations, zoom).map((s) => ({ line: new Path2D(riverCourse(s.stations, (x, z) => [sx(x), sy(z)])), strokes: riverStrokes(s.width) })),
+  );
+  for (let layer = 0; layer < 3; layer++) {
+    for (const { line, strokes } of stretches) {
+      const stroke = strokes[layer] as (typeof strokes)[number];
       ctx.strokeStyle = stroke.color;
       ctx.lineWidth = stroke.width;
       ctx.stroke(line);
