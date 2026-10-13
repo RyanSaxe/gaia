@@ -82,11 +82,12 @@ export function planStructure(k: AnyKind, lib: Library, target: Target): Wave {
   const questions: Record<string, JevQuestion> = {};
   const refs: Record<string, Ref> = {};
   for (const [name, s] of Object.entries(k.slots)) {
-    const context = `${k.doc} This is about its ${name}.`;
+    // A part with its own instruction is asked about in it: what the part says about the code.
+    const context = s.ask === undefined ? `${k.doc} This is about its ${name}.` : `${k.doc} Its ${name}: ${s.ask}`;
     if (s.optional) {
       questions[`${name}.present`] = {
         type: "noul",
-        instructions: `${context} Should it have a ${name} (${s.role.toLowerCase()})?`,
+        instructions: s.ask === undefined ? `${context} Should it have a ${name} (${s.role.toLowerCase()})?` : `${context} Should it have one?`,
         criteria: { true: `It has a ${name}.`, false: `It has no ${name}.` },
       };
       refs[`${name}.present`] = { is: "present", slot: name };
@@ -95,7 +96,7 @@ export function planStructure(k: AnyKind, lib: Library, target: Target): Wave {
     if (candidates.length === 1) continue;
     questions[`${name}.use`] = {
       type: "choice",
-      instructions: `${context} Which form fits it best?`,
+      instructions: s.ask === undefined ? `${context} Which form fits it best?` : `${context} Which suits it?`,
       criteria: Object.fromEntries(candidates.map((p) => [p.id, p.doc])),
     };
     refs[`${name}.use`] = { is: "use", slot: name };
@@ -140,7 +141,8 @@ export function planDetails(k: AnyKind, lib: Library, structure: Structure, targ
   const state = { ...target.state, decided: describe(chosen), ...(earlier === undefined ? {} : { earlier }) };
   for (const [slotName, p] of Object.entries(chosen)) {
     if (!inStage.has(slotName)) continue;
-    const context = `${k.doc} Its ${slotName} is ${p.doc.replace(/\.$/, "").toLowerCase()}.`;
+    const ask = k.slots[slotName]?.ask;
+    const context = `${k.doc} Its ${slotName} is ${p.doc.replace(/\.$/, "").toLowerCase()}.${ask === undefined ? "" : ` ${ask}`}`;
     for (const [param, raw] of Object.entries(p.params)) {
       const id = `${slotName}.${param}`;
       const field = narrowed(raw, narrow[id]);
