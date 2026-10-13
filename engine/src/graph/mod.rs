@@ -4,6 +4,7 @@
 //! (`packages/schema/src/graph.ts`). Imports and calls go out pending;
 //! the rules that resolve them come next.
 
+pub mod entities;
 pub mod git;
 mod languages;
 mod lineage;
@@ -15,8 +16,8 @@ pub(crate) use resolve::{leading_names, mentions};
 pub mod walk;
 
 use model::{
-    BlockNode, CodeGraph, DefNode, DirNode, Edge, FileNode, Filled, History, Measures, Node,
-    PendingRef,
+    BlockNode, CodeGraph, DefNode, DirNode, Edge, Entity, FileNode, Filled, History, Measures,
+    Node, PendingRef,
 };
 use parse::FileParse;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
@@ -27,6 +28,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 const DAY: i64 = 86_400;
 /// How far back a commit counts as recent, as today's activity channel reads it.
 const RECENT_DAYS: i64 = 14;
+/// The days `History::month` counts commits over.
+const MONTH_DAYS: i64 = 30;
 
 /// Parses keyed by language and content hash, so a file is parsed again
 /// only when it changes, for as long as the engine runs.
@@ -164,6 +167,11 @@ impl Touches {
                 .iter()
                 .filter(|t| now - **t <= RECENT_DAYS * DAY)
                 .count() as u32,
+            month: self
+                .times
+                .iter()
+                .filter(|t| now - **t <= MONTH_DAYS * DAY)
+                .count() as u32,
             authors: self.authors.len() as u32,
         })
     }
@@ -277,6 +285,48 @@ fn build_with(
         }
     }
 
+    // Each file's part and leading comment, and the entities rooted in its directories.
+    let parts: Vec<&'static str> = files
+        .iter()
+        .map(|f| match f.text {
+            // A file with no text is data, whatever its name says.
+            Some(_) => crate::source::kind_of(&f.path, crate::source::language_of(&f.path)),
+            None => "data",
+        })
+        .collect();
+    let docs: Vec<Option<String>> = files
+        .iter()
+        .map(|f| f.text.as_deref().and_then(|t| crate::source::read(&f.path, t).doc))
+        .collect();
+    let listed: Vec<entities::Listed> = files
+        .iter()
+        .zip(&parts)
+        .zip(&docs)
+        .map(|((f, part), doc)| entities::Listed {
+            path: &f.path,
+            text: f.text.as_deref(),
+            kind: part,
+            doc: doc.as_deref(),
+        })
+        .collect();
+    let mut found = entities::manifests(&listed);
+    found.extend(entities::directory_entities(&listed, &found));
+    let entity_at: BTreeMap<String, Entity> = found
+        .into_iter()
+        .map(|e| {
+            (
+                e.path,
+                Entity {
+                    name: e.name,
+                    form: e.form,
+                    manifest: e.manifest,
+                    entry: e.entry,
+                    doc: e.doc,
+                },
+            )
+        })
+        .collect();
+
     let mut nodes: Vec<Node> = Vec::new();
     let mut edges: Vec<Edge> = Vec::new();
     let mut all_def_ids: Vec<Vec<String>> = vec![Vec::new(); files.len()];
@@ -295,6 +345,7 @@ fn build_with(
                 ..Default::default()
             },
             path: dir.clone(),
+            entity: entity_at.get(dir).cloned(),
         }));
     }
 
@@ -334,6 +385,8 @@ fn build_with(
             binary: f.text.is_none(),
             unparsed: p.as_ref().map_or(0, |p| p.unparsed),
             conventions: spec.map(|s| s.conventions_of(&f.path)).unwrap_or_default(),
+            part: parts[k],
+            doc: docs[k].clone(),
         }));
         let Some(p) = p else { continue };
 
@@ -358,6 +411,7 @@ fn build_with(
                 span: d.span,
                 signature: d.signature.clone(),
                 doc: d.doc.clone(),
+                exported: d.exported,
             }));
         }
         for b in &p.blocks {
@@ -1195,6 +1249,61 @@ mod tests {
             defs["def:sample.ts#Walker.walk"].doc.as_deref(),
             Some("Walks once.")
         );
+    }
+
+    #[test]
+    fn a_folder_carries_the_package_rooted_there_and_a_file_its_part_doc_and_exports() {
+        let dir = project(
+            "facts",
+            &[
+                (
+                    "packages/core/package.json",
+                    r#"{ "name": "@demo/core", "description": "The core." }"#,
+                ),
+                (
+                    "packages/core/src/index.ts",
+                    "// Sums things.\nexport function sum(a: number, b: number): number {\n  return a + b;\n}\nexport const twice = (a: number) => {\n  return a * 2;\n};\nfunction hidden(): void {}\n",
+                ),
+                ("packages/core/test/sum.test.ts", "import { sum } from \"../src/index\";\n"),
+                (
+                    "engine/Cargo.toml",
+                    "[package]\nname = \"demo-engine\"\ndescription = \"The engine.\"\n",
+                ),
+                ("engine/src/lib.rs", "pub fn open() {}\nfn close() {}\n"),
+                ("README.md", "# Demo\n"),
+            ],
+        );
+        let g = graph(&dir).unwrap();
+        let entity = |path: &str| {
+            g.nodes.iter().find_map(|n| match n {
+                Node::Dir(d) if d.path == path => d.entity.clone(),
+                _ => None,
+            })
+        };
+        let core = entity("packages/core").expect("the package's folder holds it");
+        assert_eq!((core.name.as_str(), core.form), ("@demo/core", "package"));
+        assert_eq!(core.entry.as_deref(), Some("packages/core/src/index.ts"));
+        assert_eq!(core.doc.as_deref(), Some("The core."));
+        let engine = entity("engine").expect("the crate's folder holds it");
+        assert_eq!((engine.name.as_str(), engine.form), ("demo-engine", "crate"));
+        assert!(entity("packages").is_none());
+        let file = |path: &str| {
+            g.nodes.iter().find_map(|n| match n {
+                Node::File(f) if f.path == path => Some(f),
+                _ => None,
+            })
+        };
+        assert_eq!(file("packages/core/src/index.ts").unwrap().part, "source");
+        assert_eq!(file("packages/core/src/index.ts").unwrap().doc.as_deref(), Some("Sums things."));
+        assert_eq!(file("packages/core/test/sum.test.ts").unwrap().part, "test");
+        assert_eq!(file("README.md").unwrap().part, "docs");
+        let defs = defs(&g);
+        assert!(defs["def:packages/core/src/index.ts#sum"].exported);
+        assert!(defs["def:packages/core/src/index.ts#twice"].exported);
+        assert!(!defs["def:packages/core/src/index.ts#hidden"].exported);
+        assert!(defs["def:engine/src/lib.rs#open"].exported);
+        assert!(!defs["def:engine/src/lib.rs#close"].exported);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

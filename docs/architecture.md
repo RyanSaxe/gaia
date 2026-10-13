@@ -11,7 +11,7 @@ the document that did not change renders exactly as it did before.
 | Data | Contents | Made by | Status |
 | --- | --- | --- | --- |
 | Code model | Per-path facts: language, size, symbols, imports, tests, git activity, diagnostics, content hash; and entities, with their files' facts summed | The Rust engine | Rebuilt from disk at any time |
-| Code graph | A node for every directory, file, definition and block, the edges between them, the engine's measures of each and Jev's judgments | The Rust engine, with Jev | Being built beside the code model; nothing reads it yet |
+| Code graph | A node for every directory, file, definition and block, the edges between them, the engine's measures of each and Jev's judgments, and each directory's entity | The Rust engine, with Jev | Read for every definition's stand, importance and quality; the world moves onto it alone next |
 | Vitality | A value from 0 to 1 per path and per entity, and the named signals behind it | A formula over the code model, plus named Jev signals | Recomputed live |
 | World document | Regions, blueprints, instances, links and the world's art direction, as typed JSON | The world service, from Jev answers and layout, plus the person's edits | The world's source of truth, stored per project |
 | Realized world | Meshes, terrain and material parameters | The realizer | A cache keyed by content hash |
@@ -389,7 +389,14 @@ code graph (`CodeGraph` in `packages/schema/src/graph.ts`), which
 - a node for every directory, file, definition and block;
 - an edge for every link between them: contains, imports, calls,
   references, inherits, implements, names and changes-with;
-- the engine's measures of each node, and Jev's judgments of it.
+- the engine's measures of each node, and Jev's judgments of it;
+- the facts the world was laid out from in the code model: each
+  directory's entity, the package, crate, module, app or service rooted
+  there (`entities.rs`, by manifests and index, main or server files); each
+  file's part (source, test, config, data, docs or script) and leading
+  comment; whether a definition is exported (`export`, or Rust's `pub`); and
+  each history's commits over the last 30 days. The world moves onto the
+  graph alone from here, and the code model goes once nothing reads it.
 
 Each edge says who filled it: the parser, a rule, git, or Jev with its
 probability. A node's id comes from its path and name. Its lineage stays the

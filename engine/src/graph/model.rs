@@ -35,6 +35,28 @@ pub struct DirNode {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub judged: Option<serde_json::Value>,
     pub path: String,
+    /// The package, crate, module, app or service rooted here (`entities.rs`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub entity: Option<Entity>,
+}
+
+/// What a directory is the root of, as its manifest or its index, main or server file says.
+#[derive(Serialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct Entity {
+    /// The manifest's name, else the directory's.
+    pub name: String,
+    /// "package", "crate", "module", "app" or "service".
+    pub form: &'static str,
+    /// The file that declares it, such as package.json; absent for a module.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub manifest: Option<String>,
+    /// The file that defines its public surface, such as src/index.ts.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub entry: Option<String>,
+    /// The manifest's description, else the entry's leading comment.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub doc: Option<String>,
 }
 
 #[derive(Serialize, Debug)]
@@ -52,6 +74,11 @@ pub struct FileNode {
     pub binary: bool,
     pub unparsed: u32,
     pub conventions: Vec<String>,
+    /// What part it plays, by its name and language: "source", "test", "config", "data", "docs" or "script".
+    pub part: &'static str,
+    /// Its leading comment.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub doc: Option<String>,
 }
 
 #[derive(Serialize, Debug)]
@@ -73,6 +100,8 @@ pub struct DefNode {
     pub signature: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub doc: Option<String>,
+    /// Its file exports it: `export` in TypeScript and JavaScript, `pub` in Rust.
+    pub exported: bool,
 }
 
 #[derive(Serialize, Debug)]
@@ -127,6 +156,8 @@ pub struct History {
     pub last_days: u32,
     pub commits: u32,
     pub recent: u32,
+    /// Commits in the last 30 days.
+    pub month: u32,
     pub authors: u32,
 }
 

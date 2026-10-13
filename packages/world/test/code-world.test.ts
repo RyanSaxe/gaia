@@ -153,14 +153,14 @@ describe("a world laid out from code", () => {
     const math = "packages/core/src/math.ts";
     const def = (name: string, role: string, start: number, end: number, importance?: number, parent?: string): DefNode => ({
       kind: "def", id: `def:${math}#${parent === undefined ? name : `${parent}.${name}`}`, lineage: name, file: `file:${math}`, name, role, span: { start, end },
-      signature: `${role} ${name}`, measures: { lines: end - start + 1 }, ...(parent === undefined ? {} : { parent: `def:${math}#${parent}` }),
+      signature: `${role} ${name}`, exported: false, measures: { lines: end - start + 1 }, ...(parent === undefined ? {} : { parent: `def:${math}#${parent}` }),
       ...(importance === undefined ? {} : { judged: { value: { importance, quality: null, concepts: {} } } }),
     });
     const graph: CodeGraph = {
       projectId: "demo", name: "demo", edges: [], pending: [],
       nodes: [
-        { kind: "file", id: `file:${math}`, lineage: "m", path: math, language: "typescript", bytes: 1, hash: "", binary: false, unparsed: 0, conventions: [], measures: { lines: 300 } },
-        { kind: "file", id: "file:README.md", lineage: "r", path: "README.md", language: "markdown", bytes: 1, hash: "", binary: false, unparsed: 0, conventions: [], measures: { lines: 80 } },
+        { kind: "file", id: `file:${math}`, lineage: "m", path: math, language: "typescript", bytes: 1, hash: "", binary: false, unparsed: 0, conventions: [], part: "source", measures: { lines: 300 } },
+        { kind: "file", id: "file:README.md", lineage: "r", path: "README.md", language: "markdown", bytes: 1, hash: "", binary: false, unparsed: 0, conventions: [], part: "docs", measures: { lines: 80 } },
         def("Opts", "interface", 1, 8, 0.25),
         def("PI", "constant", 9, 9, 0.05),
         def("Calc", "class", 10, 200, 0.9),
@@ -199,8 +199,8 @@ describe("a world laid out from code", () => {
   it("reads vitality from Jev's quality: a file's and a definition's are their own, and a file Jev didn't judge takes its folder's", async () => {
     const math = "packages/core/src/math.ts";
     const value = (quality: number) => ({ judged: { value: { importance: 0.5, quality, concepts: {} } } });
-    const file = (path: string, lines: number) => ({ kind: "file" as const, id: `file:${path}`, lineage: path, path, language: "typescript", bytes: 1, hash: "", binary: false, unparsed: 0, conventions: [], measures: { lines } });
-    const def = (name: string, start: number, end: number): DefNode => ({ kind: "def", id: `def:${math}#${name}`, lineage: name, file: `file:${math}`, name, role: "function", span: { start, end }, signature: `function ${name}`, measures: { lines: end - start + 1 } });
+    const file = (path: string, lines: number) => ({ kind: "file" as const, id: `file:${path}`, lineage: path, path, language: "typescript", bytes: 1, hash: "", binary: false, unparsed: 0, conventions: [], part: "source" as const, measures: { lines } });
+    const def = (name: string, start: number, end: number): DefNode => ({ kind: "def", id: `def:${math}#${name}`, lineage: name, file: `file:${math}`, name, role: "function", span: { start, end }, signature: `function ${name}`, exported: false, measures: { lines: end - start + 1 } });
     const graph: CodeGraph = {
       projectId: "demo", name: "demo", edges: [], pending: [],
       nodes: [
