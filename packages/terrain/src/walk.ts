@@ -45,26 +45,42 @@ export interface Intent {
   readonly speed: number;
 }
 
-const depthFields = new WeakMap<Terrain, Float32Array>();
+/** The water's depth at lattice sample i, 0 where it is dry. */
+const sampleDepth = (t: Terrain, i: number): number => {
+  const level = t.waterLevel[i] as number;
+  return level > DRY / 2 ? Math.max(0, level - (t.lattice.heights[i] as number)) : 0;
+};
 
-/** Water depth per lattice sample, 0 where there is no water: interpolates like the ground does. */
-function depthField(t: Terrain): Float32Array {
-  let field = depthFields.get(t);
-  if (field === undefined) {
-    const { heights } = t.lattice;
-    field = new Float32Array(heights.length);
-    for (let i = 0; i < heights.length; i++) {
-      const level = t.waterLevel[i] as number;
-      field[i] = level > DRY / 2 ? Math.max(0, level - (heights[i] as number)) : 0;
-    }
-    depthFields.set(t, field);
-  }
-  return field;
-}
-
-/** Water depth at a point: the water surface minus the ground, never below 0, and none in the wild. */
+/**
+ * Water depth at a point: the water surface minus the ground, never below 0,
+ * and none in the wild. Read afresh from the land's samples every time, as
+ * the ground is, so a land whose arrays change in place (the page's, as its
+ * window moves) is always read as it is now; past a land's window, from the
+ * finest level that holds the point.
+ */
 export function waterDepthAt(t: Terrain, x: number, z: number): number {
-  return inWilds(t, x, z) ? 0 : Math.max(0, heightAt(t.lattice, x, z, depthField(t)));
+  if (inWilds(t, x, z)) return 0;
+  const l = t.lattice;
+  const ux = (x - l.origin) / l.spacing;
+  const uz = (z - (l.originZ ?? l.origin)) / l.spacing;
+  if (l.beyond !== undefined && (ux < 0 || uz < 0 || ux > l.n - 1 || uz > l.n - 1)) {
+    const level = heightAt(l, x, z, t.waterLevel);
+    return level > DRY / 2 ? Math.max(0, level - heightAt(l, x, z)) : 0;
+  }
+  // Each corner of the cell's depth, interpolated as the ground is.
+  const gx = Math.min(l.n - 1.000001, Math.max(0, ux));
+  const gz = Math.min(l.n - 1.000001, Math.max(0, uz));
+  const ix = Math.floor(gx);
+  const iz = Math.floor(gz);
+  const fx = gx - ix;
+  const fz = gz - iz;
+  const i = iz * l.n + ix;
+  if (fx + fz <= 1) {
+    const d00 = sampleDepth(t, i);
+    return d00 + fx * (sampleDepth(t, i + 1) - d00) + fz * (sampleDepth(t, i + l.n) - d00);
+  }
+  const d11 = sampleDepth(t, i + l.n + 1);
+  return d11 + (1 - fx) * (sampleDepth(t, i + l.n) - d11) + (1 - fz) * (sampleDepth(t, i + 1) - d11);
 }
 
 const smoothstep = (lo: number, hi: number, x: number): number => {

@@ -6,6 +6,7 @@ import { STRUCTURE_PRESETS, buildSlots } from "@gaia/realize";
 import {
   BODY_RADIUS,
   type Deck,
+  DRY,
   EYE_HEIGHT,
   GAIT,
   type Stride,
@@ -74,6 +75,19 @@ describe("wading and swimming", () => {
     expect(waterDepthAt(t, pond.x, pond.z)).toBeGreaterThan(SWIM.to);
     expect(waterDepthAt(t, dry.x, dry.z)).toBe(0);
     for (let k = 0; k < 400; k++) expect(waterDepthAt(t, ((k * 37) % 300) - 150, ((k * 91) % 300) - 150)).toBeGreaterThanOrEqual(0);
+  });
+
+  it("reads the depth of the water as the land is now, when its arrays change in place as the page's land window moves", () => {
+    // The page holds one terrain for its life and writes each new window of land into its arrays.
+    const land = structuredClone(t);
+    expect(waterDepthAt(land, pond.x, pond.z)).toBeGreaterThan(SWIM.to);
+    // The window moves on to land with no water: the pond is gone from under the person.
+    land.waterLevel.fill(DRY);
+    expect(waterDepthAt(land, pond.x, pond.z)).toBe(0);
+    expect(stanceAt(land, pond.x, pond.z).depth).toBe(0);
+    // And on again to where the water stands a meter deep everywhere.
+    land.lattice.heights.forEach((h, i) => (land.waterLevel[i] = h + 1));
+    expect(waterDepthAt(land, dry.x, dry.z)).toBeCloseTo(1, 4);
   });
 
   it("slows as the water deepens, swims slower still, and is never stopped by water", () => {
