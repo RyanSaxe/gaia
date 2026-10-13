@@ -977,7 +977,7 @@ export async function composeWorld(facts: CodeFacts, looks: Looks, jev: JevClien
   const standing = Object.entries(judged.things).map(([path, t]) => ({
     path,
     as: t.as,
-    state: composingState(options.graph, { name: facts.entities.find((e) => e.path === path)?.name ?? baseName(path), path }),
+    state: composingState(options.graph, facts.entities.find((e) => e.path === path) ?? { name: baseName(path), path }),
   }));
   const blueprints = await composeThings(looks.compose, jev, standing, options.concurrency ?? 8);
   return { ...judged, things: Object.fromEntries(standing.map((t) => [t.path, { as: t.as, blueprint: blueprints[t.path] as Blueprint }])) };
