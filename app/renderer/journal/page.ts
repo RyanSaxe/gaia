@@ -114,7 +114,7 @@ function leadOf(snippets: readonly Snippet[], path: string, turnTo: (of: string)
     snippet.type = "button";
     marked(snippet, { kind: s.kind });
     const head = el("span", "jp-snippet-head");
-    head.append(el("span", "jp-snippet-label", MARK_LABEL[s.kind]), el("span", "jp-snippet-name", s.name), el("span", "jp-dots"), el("span", "jp-row-page", s.page.toLocaleString("en-US")));
+    head.append(el("span", "jp-mark-label", MARK_LABEL[s.kind]), el("span", "jp-snippet-name", s.name), el("span", "jp-dots"), el("span", "jp-row-page", s.page.toLocaleString("en-US")));
     const lines = [s.signature.text, ...s.lines];
     const pieces = highlight(lines, path);
     const base = baseIndent(lines);
@@ -125,12 +125,11 @@ function leadOf(snippets: readonly Snippet[], path: string, turnTo: (of: string)
       row.append(el("span", "jp-ln", String(n)), text);
       return row;
     };
-    const fold = (count: number): HTMLElement => el("span", "jp-snippet-fold", `${count.toLocaleString("en-US")} ${count === 1 ? "line" : "lines"}`);
     const code = el("span", "jp-code jp-snippet-code");
     code.append(line(0, s.signature.n));
-    if (s.before > 0) code.append(fold(s.before));
+    if (s.before > 0) code.append(foldOf(linesOf(s.before)));
     s.lines.forEach((_, k) => code.append(line(k + 1, s.first + k)));
-    if (s.after > 0) code.append(fold(s.after));
+    if (s.after > 0) code.append(foldOf(linesOf(s.after)));
     snippet.append(head, code);
     snippet.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -235,10 +234,10 @@ export function renderPage(words: PageWords, folio: string, turnTo: (of: string)
     const { opensAt, kind: _, ...code } = words.body;
     const skipped = opensAt - code.first;
     const shown: Full = { ...code, kind: "full", first: opensAt, lines: code.lines.slice(skipped) };
-    if (skipped > 0 && inFull !== undefined) body.append(foldOf(skipped, inFull, "before"));
+    if (skipped > 0 && inFull !== undefined) body.append(foldOf(linesOf(skipped), inFull));
     setItems(body, shown, fullItems(shown), baseIndent(code.lines), piecesOf(shown, words), turnTo);
     // Where a long definition's page ends, a fold: the book shows it, with how many lines it holds, when lines are left over.
-    if (inFull !== undefined) body.append(foldOf(0, inFull, "after"));
+    if (inFull !== undefined) body.append(foldOf("", inFull, "after"));
   }
   page.append(head, body, el("div", "jp-folio", folio));
   return page;
@@ -311,7 +310,13 @@ function setItems(content: HTMLElement, body: Full, items: readonly FullItem[], 
     const [start] = run;
     if (start === undefined) return;
     if (start.kind === "line") content.append(codeOf(run.map((r) => (r.kind === "line" ? r.at : 0)), body, base, pieces));
-    else for (const r of run) content.append(r.kind === "fold" ? foldedOf(r.fold, turnTo) : el("div", "jp-rest", `${(r as Extract<FullItem, { kind: "rest" }>).lines.toLocaleString("en-US")} more lines, not set here`));
+    else {
+      for (const r of run) {
+        // A definition with a page of its own folds to one line that turns there; past what the appendix sets, the rest.
+        if (r.kind === "fold") content.append(foldOf(`${linesOf(r.fold.to - r.fold.from + 1)}, page ${r.fold.page.toLocaleString("en-US")}`, () => turnTo(r.fold.of)));
+        else content.append(foldOf(`${linesOf((r as Extract<FullItem, { kind: "rest" }>).lines)}, not set here`));
+      }
+    }
     run = [];
   };
   const group = (item: FullItem): string => (item.kind === "line" ? "line" : "fold");
@@ -322,26 +327,25 @@ function setItems(content: HTMLElement, body: Full, items: readonly FullItem[], 
   close();
 }
 
-/** A definition folded in its file's text: how many lines it holds and its page, a tap turning to it. */
-function foldedOf(fold: Folded, turnTo: (of: string) => void): HTMLElement {
-  const lines = fold.to - fold.from + 1;
-  const row = el("button", "jp-fold inline", `${lines.toLocaleString("en-US")} ${lines === 1 ? "line" : "lines"}, page ${fold.page.toLocaleString("en-US")}`);
-  row.type = "button";
-  row.addEventListener("click", (e) => {
-    e.stopPropagation();
-    turnTo(fold.of);
-  });
-  return row;
-}
+/** How many lines, as a fold says it: "1 line", "20 lines". */
+export const linesOf = (n: number): string => `${n.toLocaleString("en-US")} ${n === 1 ? "line" : "lines"}`;
 
-/** A fold: a dotted rule across the code with how many lines it holds, which turns to the definition in full. */
-function foldOf(lines: number, inFull: () => void, where: "before" | "after"): HTMLElement {
-  const fold = el("button", `jp-fold ${where}`, lines > 0 ? `${lines.toLocaleString("en-US")} ${lines === 1 ? "line" : "lines"} ${where === "before" ? "before" : "more"}` : "");
-  fold.type = "button";
-  fold.addEventListener("click", (e) => {
-    e.stopPropagation();
-    inFull();
-  });
+/**
+ * Lines folded away, wherever code is shown: "⋯ 20 lines" in the hand at the
+ * code's indent, with anything else it says, such as the page they are on,
+ * and a tap to them where they can be read. Every fold in the journal is this
+ * one; a long definition's page folds where it ends (`after`), which the book
+ * places and words once the page is laid out.
+ */
+function foldOf(says: string, tap?: () => void, where?: "after"): HTMLElement {
+  const fold = el(tap === undefined ? "span" : "button", where === undefined ? "jp-fold" : `jp-fold ${where}`, says);
+  if (tap !== undefined) {
+    (fold as HTMLButtonElement).type = "button";
+    fold.addEventListener("click", (e) => {
+      e.stopPropagation();
+      tap();
+    });
+  }
   return fold;
 }
 
