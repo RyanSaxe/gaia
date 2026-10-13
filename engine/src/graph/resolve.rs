@@ -29,6 +29,16 @@ impl Unit<'_> {
     }
 }
 
+/// A workspace package, as its manifest declares it: an import that spells
+/// its name, or a subpath through its exports, means a file in it.
+pub struct Package<'a> {
+    pub name: &'a str,
+    pub root: &'a str,
+    pub entry: Option<&'a str>,
+    /// Subpath (`.`, `./sub`) to the file it exports there.
+    pub exports: &'a std::collections::BTreeMap<String, String>,
+}
+
 pub struct Resolved {
     pub edges: Vec<Edge>,
     pub pending: Vec<PendingRef>,
@@ -248,6 +258,7 @@ pub(crate) fn mentions(hay: &str, needle: &str) -> bool {
 struct Rules<'a> {
     units: &'a [Unit<'a>],
     paths: Paths<'a>,
+    packages: &'a [Package<'a>],
     /// Files that hold configuration rather than code, by index.
     configs: Vec<usize>,
     /// Candidates by specifier: a package is often imported from many files.
@@ -348,6 +359,13 @@ impl Rules<'_> {
             return self.candidates(k, &s);
         }
 
+        // A workspace package by its manifest's name, and a subpath through its exports.
+        if spec.is_some_and(|sp| sp.family == "js")
+            && let Some(o) = self.package(&s, &ext)
+        {
+            return o;
+        }
+
         // Other forms: at least two segments, and exactly one path ending with them.
         let segs = segments(&s);
         if segs.len() >= 2 {
@@ -362,6 +380,39 @@ impl Rules<'_> {
             }
         }
         self.candidates(k, &s)
+    }
+
+    /// The file an import naming a workspace package means: the target its
+    /// exports give the subpath, else its entry for the package itself, else
+    /// the subpath under its root. None when no package has the name.
+    fn package(&self, s: &str, ext: &[&str]) -> Option<Outcome> {
+        let pkg = self
+            .packages
+            .iter()
+            .filter(|p| s == p.name || s.starts_with(&format!("{}/", p.name)))
+            .max_by_key(|p| p.name.len())?;
+        let sub = s[pkg.name.len()..].trim_start_matches('/');
+        let key = if sub.is_empty() { ".".to_string() } else { format!("./{sub}") };
+        let target = match (pkg.exports.get(&key), sub.is_empty()) {
+            (Some(t), _) => t.clone(),
+            (None, true) => pkg.entry?.to_string(),
+            (None, false) => {
+                if pkg.root.is_empty() {
+                    sub.to_string()
+                } else {
+                    format!("{}/{sub}", pkg.root)
+                }
+            }
+        };
+        let stripped = target.strip_suffix(".js").unwrap_or(&target);
+        match self.paths.named(&target, ext).as_slice() {
+            [one] => Some(Outcome::Edge(one.clone())),
+            [] => match self.paths.named(stripped, ext).as_slice() {
+                [one] => Some(Outcome::Edge(one.clone())),
+                _ => None,
+            },
+            _ => None,
+        }
     }
 
     /// A path, then the same with one and two trailing item names dropped,
@@ -478,10 +529,11 @@ impl Rules<'_> {
 }
 
 /// Runs the rules over every file.
-pub fn run(units: &[Unit], dirs: &BTreeSet<String>) -> Resolved {
+pub fn run(units: &[Unit], dirs: &BTreeSet<String>, packages: &[Package]) -> Resolved {
     let rules = Rules {
         units,
         paths: Paths::new(units, dirs),
+        packages,
         configs: units
             .iter()
             .enumerate()

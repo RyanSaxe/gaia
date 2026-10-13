@@ -54,9 +54,6 @@ pub struct Entity {
     /// The file that defines its public surface, such as src/index.ts.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub entry: Option<String>,
-    /// The manifest's description, else the entry's leading comment.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub doc: Option<String>,
 }
 
 #[derive(Serialize, Debug)]
@@ -74,11 +71,6 @@ pub struct FileNode {
     pub binary: bool,
     pub unparsed: u32,
     pub conventions: Vec<String>,
-    /// What part it plays, by its name and language: "source", "test", "config", "data", "docs" or "script".
-    pub part: &'static str,
-    /// Its leading comment.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub doc: Option<String>,
 }
 
 #[derive(Serialize, Debug)]
@@ -156,8 +148,6 @@ pub struct History {
     pub last_days: u32,
     pub commits: u32,
     pub recent: u32,
-    /// Commits in the last 30 days.
-    pub month: u32,
     pub authors: u32,
 }
 

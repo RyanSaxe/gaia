@@ -28,8 +28,6 @@ use std::time::{SystemTime, UNIX_EPOCH};
 const DAY: i64 = 86_400;
 /// How far back a commit counts as recent, as today's activity channel reads it.
 const RECENT_DAYS: i64 = 14;
-/// The days `History::month` counts commits over.
-const MONTH_DAYS: i64 = 30;
 
 /// Parses keyed by language and content hash, so a file is parsed again
 /// only when it changes, for as long as the engine runs.
@@ -167,11 +165,6 @@ impl Touches {
                 .iter()
                 .filter(|t| now - **t <= RECENT_DAYS * DAY)
                 .count() as u32,
-            month: self
-                .times
-                .iter()
-                .filter(|t| now - **t <= MONTH_DAYS * DAY)
-                .count() as u32,
             authors: self.authors.len() as u32,
         })
     }
@@ -285,43 +278,31 @@ fn build_with(
         }
     }
 
-    // Each file's part and leading comment, and the entities rooted in its directories.
-    let parts: Vec<&'static str> = files
-        .iter()
-        .map(|f| match f.text {
-            // A file with no text is data, whatever its name says.
-            Some(_) => crate::source::kind_of(&f.path, crate::source::language_of(&f.path)),
-            None => "data",
-        })
-        .collect();
-    let docs: Vec<Option<String>> = files
-        .iter()
-        .map(|f| f.text.as_deref().and_then(|t| crate::source::read(&f.path, t).doc))
-        .collect();
+    // The entities rooted in its directories. A module's index is never a test's (`entities.rs`).
     let listed: Vec<entities::Listed> = files
         .iter()
-        .zip(&parts)
-        .zip(&docs)
-        .map(|((f, part), doc)| entities::Listed {
+        .map(|f| entities::Listed {
             path: &f.path,
             text: f.text.as_deref(),
-            kind: part,
-            doc: doc.as_deref(),
+            kind: match f.text {
+                Some(_) => crate::source::kind_of(&f.path, crate::source::language_of(&f.path)),
+                None => "data",
+            },
+            doc: None,
         })
         .collect();
     let mut found = entities::manifests(&listed);
     found.extend(entities::directory_entities(&listed, &found));
     let entity_at: BTreeMap<String, Entity> = found
-        .into_iter()
+        .iter()
         .map(|e| {
             (
-                e.path,
+                e.path.clone(),
                 Entity {
-                    name: e.name,
+                    name: e.name.clone(),
                     form: e.form,
-                    manifest: e.manifest,
-                    entry: e.entry,
-                    doc: e.doc,
+                    manifest: e.manifest.clone(),
+                    entry: e.entry.clone(),
                 },
             )
         })
@@ -385,8 +366,6 @@ fn build_with(
             binary: f.text.is_none(),
             unparsed: p.as_ref().map_or(0, |p| p.unparsed),
             conventions: spec.map(|s| s.conventions_of(&f.path)).unwrap_or_default(),
-            part: parts[k],
-            doc: docs[k].clone(),
         }));
         let Some(p) = p else { continue };
 
@@ -452,7 +431,17 @@ fn build_with(
             text: f.text.as_deref(),
         })
         .collect();
-    let resolved = resolve::run(&units, &dirs);
+    let packages: Vec<resolve::Package> = found
+        .iter()
+        .filter(|e| e.form == "package")
+        .map(|e| resolve::Package {
+            name: &e.name,
+            root: &e.path,
+            entry: e.entry.as_deref(),
+            exports: &e.exports_map,
+        })
+        .collect();
+    let resolved = resolve::run(&units, &dirs, &packages);
     edges.extend(resolved.edges);
     // References Jev resolved become edges, and ones it put outside leave the
     // pending list; one whose candidates changed since is pending again.
@@ -1252,7 +1241,7 @@ mod tests {
     }
 
     #[test]
-    fn a_folder_carries_the_package_rooted_there_and_a_file_its_part_doc_and_exports() {
+    fn a_folder_carries_the_package_rooted_there_its_imports_resolve_by_name_and_exports_are_marked() {
         let dir = project(
             "facts",
             &[
@@ -1262,15 +1251,18 @@ mod tests {
                 ),
                 (
                     "packages/core/src/index.ts",
-                    "// Sums things.\nexport function sum(a: number, b: number): number {\n  return a + b;\n}\nexport const twice = (a: number) => {\n  return a * 2;\n};\nfunction hidden(): void {}\n",
+                    "export function sum(a: number, b: number): number {\n  return a + b;\n}\nexport const twice = (a: number) => {\n  return a * 2;\n};\nfunction hidden(): void {}\n",
                 ),
-                ("packages/core/test/sum.test.ts", "import { sum } from \"../src/index\";\n"),
+                ("packages/app/package.json", r#"{ "name": "@demo/app" }"#),
+                (
+                    "packages/app/src/index.ts",
+                    "import { sum } from \"@demo/core\";\nexport const total = (n: number) => sum(n, n);\n",
+                ),
                 (
                     "engine/Cargo.toml",
-                    "[package]\nname = \"demo-engine\"\ndescription = \"The engine.\"\n",
+                    "[package]\nname = \"demo-engine\"\n",
                 ),
                 ("engine/src/lib.rs", "pub fn open() {}\nfn close() {}\n"),
-                ("README.md", "# Demo\n"),
             ],
         );
         let g = graph(&dir).unwrap();
@@ -1283,20 +1275,14 @@ mod tests {
         let core = entity("packages/core").expect("the package's folder holds it");
         assert_eq!((core.name.as_str(), core.form), ("@demo/core", "package"));
         assert_eq!(core.entry.as_deref(), Some("packages/core/src/index.ts"));
-        assert_eq!(core.doc.as_deref(), Some("The core."));
         let engine = entity("engine").expect("the crate's folder holds it");
         assert_eq!((engine.name.as_str(), engine.form), ("demo-engine", "crate"));
         assert!(entity("packages").is_none());
-        let file = |path: &str| {
-            g.nodes.iter().find_map(|n| match n {
-                Node::File(f) if f.path == path => Some(f),
-                _ => None,
-            })
-        };
-        assert_eq!(file("packages/core/src/index.ts").unwrap().part, "source");
-        assert_eq!(file("packages/core/src/index.ts").unwrap().doc.as_deref(), Some("Sums things."));
-        assert_eq!(file("packages/core/test/sum.test.ts").unwrap().part, "test");
-        assert_eq!(file("README.md").unwrap().part, "docs");
+        // A workspace package imported by its manifest's name is its entry, by rule.
+        assert!(g.edges.iter().any(|e| e.kind == "imports"
+            && e.from == "file:packages/app/src/index.ts"
+            && e.to == "file:packages/core/src/index.ts"));
+        assert!(!g.pending.iter().any(|p| p.text.contains("@demo/core")));
         let defs = defs(&g);
         assert!(defs["def:packages/core/src/index.ts#sum"].exported);
         assert!(defs["def:packages/core/src/index.ts#twice"].exported);
