@@ -12,10 +12,11 @@
 // trails, asked by `planWorldRequests` from the code's structure only. The
 // same code and the same answers always give the same world.
 //
-// Until the reviewer approves live calls, `standInJev` answers those same
-// requests: a deterministic stand-in that matches each option's `suits`
-// against tags read from the facts. Swapping in Jev is one line: pass the
-// engine's client to `judgeWorld` instead.
+// For development only, `standInJev` answers those same requests without
+// Jev: a deterministic stand-in that matches each option's `suits` against
+// tags read from the facts. A developer asks for it on purpose
+// (GAIA_JEV=stand-in, or the lab's ?judge=stand-in); a world a person opens
+// is always Jev's, or fails and says why.
 
 import {
   type AreaPlace,
@@ -1015,8 +1016,10 @@ function tagsOf(state: Record<string, unknown>): string[] {
 }
 
 /**
- * The deterministic stand-in judge: answers the requests `planWorldRequests`
- * makes, exactly as Jev would receive them, without the network. Each option
+ * The deterministic stand-in judge, for development only: answers the
+ * requests `planWorldRequests` and composing make, exactly as Jev would
+ * receive them, without the network. Never a fallback: it judges a world only
+ * when a developer asks for it (GAIA_JEV=stand-in, ?judge=stand-in). Each option
  * scores one point per fact tag its look `suits`, plus a tie-break seeded by
  * the question and the option, so equal options spread across the world.
  * A trail's probability grows with how many entities lean on its far end.

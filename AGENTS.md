@@ -38,8 +38,8 @@ You need Node 26, pnpm 10 and a stable Rust toolchain from rustup (put
 | Command | What it does |
 | --- | --- |
 | `pnpm install` | Installs dependencies and points git at `.githooks/` |
-| `pnpm dev` | Builds the engine and opens the app on the start page; `GAIA_PROJECT=/path` opens that folder's world, and `GAIA_PROJECT=proving` the proving ground |
-| `GAIA_JEV=live pnpm dev` | The same, with Jev judging through the Keychain's key (`docs/connect-jev.md`) |
+| `GAIA_JEV=live pnpm dev` | Builds the engine and opens the app on the start page, with Jev judging through the Keychain's key (`docs/connect-jev.md`); `GAIA_PROJECT=/path` opens that folder's world, and `GAIA_PROJECT=proving` the proving ground. Without `GAIA_JEV=live`, a world that needs Jev fails to open and says why |
+| `GAIA_JEV=stand-in pnpm dev` | For development only: opens a world the stand-in judges on purpose, sending nothing to Jev. Never on by default, never shown to a person |
 | `pnpm lab:html out.html` | The lab as one offline page, on Gaia's own world with Jev's kept answers |
 | `pnpm lab:serve` | That page on this Mac's Tailscale address, port 5180, rebuilt on every change |
 | `pnpm shots` | Screenshots of every primitive and world look, from Electron |
@@ -51,7 +51,7 @@ You need Node 26, pnpm 10 and a stable Rust toolchain from rustup (put
 
 The lab page takes `?view=terrain|flora|world` (a debugging view instead of
 the world), `?hour=22`, `?world=sample`, `?world=proving`, `?judge=stand-in`
-and `?start=table|signpost`. Scripts drive it through `window.__lab`:
+and `?start=table|signpost` (`?judge=stand-in` is for development only: the page otherwise runs on Jev's kept answers alone, and a request with no kept answer fails it, naming the request). Scripts drive it through `window.__lab`:
 `open(view)`, `hour(h)`, `frames(n)`, `stats()`, and each view's hooks, such
 as `__lab.terrain.walk(x, z, yawDeg, pitchDeg)`, `__lab.terrain.calls()` and
 `__lab.immersive.map(true)`, listed where each lab returns them.

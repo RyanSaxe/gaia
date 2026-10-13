@@ -22,14 +22,15 @@ const SOURCE_ONLY = "const secretSourceLine = 42;";
 
 let scratch = "";
 let standIn: StandIn;
+/** Whether the stand-in refuses the root area's request, as OpenRouter might refuse a bad one. */
+let refuseRoot = false;
 const engines: ChildProcess[] = [];
 
 // A clean engine build takes minutes on CI's machines, and another test file's build may hold cargo's lock meanwhile.
 beforeAll(async () => {
   execFileSync("cargo", ["build", "-p", "gaia-engine", "--quiet"], { cwd: REPO, env: { ...process.env, PATH: `${process.env.HOME}/.cargo/bin:${process.env.PATH}` }, stdio: "inherit" });
   scratch = mkdtempSync(join(tmpdir(), "gaia-live-jev-"));
-  // The stand-in refuses one request, as OpenRouter might: the root area's, which asks whether its land holds water.
-  standIn = await startOpenRouterStandIn({ refuse: ({ state, questions }) => "water" in questions && (state as { directory?: { path?: string } }).directory?.path === "(the repository's root)" });
+  standIn = await startOpenRouterStandIn({ refuse: ({ state, questions }) => refuseRoot && "water" in questions && (state as { directory?: { path?: string } }).directory?.path === "(the repository's root)" });
 }, 900_000);
 
 afterAll(async () => {
@@ -92,7 +93,7 @@ async function open(root: string, data: string, approve: boolean) {
 }
 
 describe("judging a codebase with Jev", () => {
-  it("sends only facts, keeps Jev's answers, asks again only what changed, and leaves a failure to the stand-in", async () => {
+  it("sends only facts, keeps Jev's answers, asks again only what changed, and judges everything with Jev", async () => {
     const root = codebase("tiny");
     const data = join(scratch, "data-live");
 
@@ -142,53 +143,58 @@ describe("judging a codebase with Jev", () => {
     expect(shape?.quality).toBeGreaterThanOrEqual(0);
     expect(shape?.quality).toBeLessThanOrEqual(1);
     expect(Object.keys(shape?.concepts ?? {})).toContain("readability");
-    // Jev judged everything but the request it refused, which the stand-in judged.
-    expect(first.document.judges["area:"]).toBe("stand-in");
-    expect(Object.entries(first.document.judges).filter(([, j]) => j === "stand-in").map(([t]) => t)).toEqual(["area:"]);
-    expect(first.document.summary).toContain("1 request failed");
+    // Jev judged everything.
+    expect(new Set(Object.values(first.document.judges))).toEqual(new Set(["jev"]));
+    expect(first.document.summary).not.toContain("stand-in");
     const asking = first.shown.filter((o) => o.stage === "asking");
     // Composing follows from the answers, so it is never planned or counted ahead; every building and landmark was composed.
     const composed = first.about.filter((a) => a.startsWith("compose:")).length;
     expect(composed).toBeGreaterThan(0);
-    expect(asking.at(-1)).toMatchObject({ total: first.sent.length - composed, answered: first.sent.length - composed, failed: 1, asking: [] });
+    expect(asking.at(-1)).toMatchObject({ total: first.sent.length - composed, answered: first.sent.length - composed, asking: [] });
     // While a question is out, its area is named as being worked on, for the wait to show.
     expect(asking.some((o) => o.asking.length > 0)).toBe(true);
 
     // Reopening on a new engine asks nothing it has answered, and never asks the person again.
     const second = await open(root, data, true);
     expect(second.asked).toHaveLength(0);
-    expect(second.about).toEqual(["area:(the repository's root)"]);
+    expect(second.about).toEqual([]);
     expect(second.document.world).toEqual(first.document.world);
 
     // A file that changed is asked about again, with what its facts touch; untouched files are not.
     appendFileSync(join(root, "src/shape.ts"), `\n/** The area of a circle. */\nexport const circle = (r: number): number => Math.PI * r * r;\n`);
     const third = await open(root, data, true);
-    expect(third.about).toEqual(expect.arrayContaining(["file:src/shape.ts", "area:(the repository's root)"]));
+    expect(third.about).toEqual(expect.arrayContaining(["file:src/shape.ts"]));
     expect(third.about).not.toContain("file:src/index.ts");
     expect(third.about).not.toContain("file:package.json");
   }, 60_000);
 
-  it("asks before spending past the limit, sends nothing when the person keeps the stand-in, and remembers that until the limit changes", async () => {
+  it("fails the opening when Jev refuses a request the client has retried, naming it and why, with nothing guessed", async () => {
+    const root = codebase("refused");
+    refuseRoot = true;
+    try {
+      await expect(open(root, join(scratch, "data-refused"), true)).rejects.toThrow(/Gaia could not finish judging the area \(the repository's root\): .*refused by the stand-in/);
+    } finally {
+      refuseRoot = false;
+    }
+  }, 60_000);
+
+  it("asks before spending past the limit, sends nothing and opens nothing when the person declines, and asks again next time", async () => {
     const root = codebase("declined");
     const data = join(scratch, "data-declined");
     await setSpendLimit(engineAt(data), 0);
-    const first = await open(root, data, false);
+    const before = standIn.received.length;
+    const asked: ConsentPlan[] = [];
+    const declined = openWorld({ engine: engineAt(data), root, consent: async (plan) => (asked.push(plan), false), progress: () => {} });
     // Past the limit the person is asked once, shown exactly what would go out and what they allow.
-    expect(first.asked).toHaveLength(1);
-    expect(first.asked[0]).toMatchObject({ name: "declined", limitUsd: 0, endpoint: standIn.endpoint });
-    expect(first.asked[0]?.estimatedUsd).toBeGreaterThan(0);
-    expect(first.asked[0]?.estimatedTokens).toBeGreaterThan(0);
-    expect(first.sent).toHaveLength(0);
-    expect(new Set(Object.values(first.document.judges))).toEqual(new Set(["stand-in"]));
-    expect(first.document.summary).toContain("you chose the stand-in");
-    // The choice holds for the project while the limit stands.
-    const second = await open(root, data, true);
-    expect(second.asked).toHaveLength(0);
-    expect(second.sent).toHaveLength(0);
-    // A new limit, still under the cost, asks again; going ahead sends every request it planned, and at most one
-    // more round of the understanding pass's where Jev asked for more. Composing follows from the answers, so it is
-    // never planned ahead.
-    await setSpendLimit(engineAt(data), 1e-9);
+    await expect(declined).rejects.toThrow(/you chose not to go ahead/);
+    expect(asked).toHaveLength(1);
+    expect(asked[0]).toMatchObject({ name: "declined", limitUsd: 0, endpoint: standIn.endpoint });
+    expect(asked[0]?.estimatedUsd).toBeGreaterThan(0);
+    expect(asked[0]?.estimatedTokens).toBeGreaterThan(0);
+    expect(standIn.received.length).toBe(before);
+    // Declining isn't remembered: the next opening asks again, and going ahead sends every request it planned, and at
+    // most one more round of the understanding pass's where Jev asked for more. Composing follows from the answers, so
+    // it is never planned ahead.
     const third = await open(root, data, true);
     expect(third.asked).toHaveLength(1);
     const planned = third.sent.length - third.about.filter((a) => a.startsWith("compose:")).length;

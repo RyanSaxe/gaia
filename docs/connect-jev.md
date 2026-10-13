@@ -105,7 +105,7 @@ places whose facts changed are asked again, usually a handful of requests.
 
 ## Where answers are kept, and starting over
 
-Each project's answers, and a stand-in choice made over the limit, live in
+Each project's answers live in
 `~/Library/Application Support/Gaia/projects/<project>/store.json`, where
 `<project>` is the first 12 characters of the repository's root commit.
 
@@ -118,15 +118,27 @@ rm -r ~/Library/Application\ Support/Gaia/projects
 security delete-generic-password -s gaia-openrouter -a openrouter
 ```
 
-Forgetting a project also forgets a stand-in choice, so the next live start
-over the limit asks again.
+## When Jev is not asked, or cannot answer
 
-## When Jev is not asked
+A world is always Jev's. Without `GAIA_JEV=live`, or without a key, a world
+that needs an answer Jev hasn't given before fails to open, and the wait says
+why and how to turn Jev on; a world whose every answer is kept still opens
+from the store. A request Jev cannot answer once the engine has retried it (a
+timeout, a 429 or a 5xx, twice), or answers outside its options, fails the
+opening the same way, naming the request and the reason. Declining a cost
+past your limit leaves the world unopened, and the next opening asks again.
+The terminal running `pnpm dev` prints how each world was judged, for example
+`gaia: opened …/gaia-v3: 273 things judged by Jev`, or why it could not open.
 
-Without `GAIA_JEV=live`, or without a key, the stand-in judges everything Jev
-has not judged before; answers already kept are still used. The terminal
-running `pnpm dev` prints how each world was judged, for example
-`gaia: opened …/gaia-v3: 273 things judged by Jev`, or why Jev was not asked.
+### For development only: the stand-in
+
+To open a world quickly without Jev, on purpose, start Gaia with
+`GAIA_JEV=stand-in pnpm dev`: a deterministic stand-in judges every look and
+composes the world, the understanding pass is not run, and nothing is sent
+to Jev. The standalone lab's `?judge=stand-in` does the same for Gaia's
+snapshot. Its answers are crude guesses, not judgments: it is never on by
+default, never offered to a person, and nothing is tuned to look good with
+it.
 
 ## Trying it without OpenRouter
 

@@ -3,7 +3,7 @@ import { biome, landmark, link, structure, world as worldKind } from "@gaia/kind
 import { PRIMITIVES } from "@gaia/primitives";
 import { type CodeGraph, type CodeFacts, type DefNode, type EntityFacts, type FileFacts, type JevClient, type JevQuestion, type JevRequest, type JevResponse, Library } from "@gaia/schema";
 import { cellUnder, placeAt } from "@gaia/terrain";
-import { type Judge, type Looks, composeWorld, journalOf, judgeWorld, keptJev, landOf, layoutWorld, planWorldRequests, requestKey, standInJev, validate } from "@gaia/world";
+import { type Looks, composeWorld, journalOf, judgeWorld, keptJev, landOf, layoutWorld, planWorldRequests, requestKey, standInJev, validate } from "@gaia/world";
 
 const file = (path: string, lines: number): FileFacts => ({
   path,
@@ -315,12 +315,11 @@ describe("a world laid out from code", () => {
     expect(forms).toEqual({ x: "Stone", helper: "Bush" });
   });
 
-  it("keeps Jev's answers: a stored one is used without asking, and one outside the options is left to the stand-in", async () => {
+  it("keeps Jev's answers: a stored one is used without asking, and a request Jev cannot answer fails, naming it and why, with nothing guessed", async () => {
     const planned = planWorldRequests(facts(), LOOKS);
     const area = planned.find((p) => p.about === "area");
     const file = planned.find((p) => p.about === "file");
-    const standIn = standInJev(LOOKS);
-    const stored = await standIn.ask(area!.request);
+    const stored = await standInJev(LOOKS).ask(area!.request);
     const asked: string[] = [];
     // A Jev that answers every choice with an option it was never offered.
     const wayward: JevClient = {
@@ -330,14 +329,16 @@ describe("a world laid out from code", () => {
       },
     };
     const kept: JevResponse[] = [];
-    const judges = new Map<string, Judge>();
-    const jev = keptJev(wayward, standIn, { stored: new Map([[requestKey(area!.request), stored]]), keep: (_, r) => kept.push(r), settled: (k, j) => judges.set(k, j) });
+    const jev = keptJev(wayward, { stored: new Map([[requestKey(area!.request), stored]]), keep: (_, r) => kept.push(r) });
     expect(await jev.ask(area!.request)).toEqual(stored);
-    const form = (await jev.ask(file!.request)).answers["form#x"];
-    expect(form?.type === "choice" && Object.keys(LOOKS.form)).toContain(form?.type === "choice" ? form.choice : "");
-    expect(form).toEqual((await standIn.ask(file!.request)).answers["form#x"]);
+    await expect(jev.ask(file!.request)).rejects.toThrow(new RegExp(`the file ${file!.target}: Jev answered outside the options`));
     expect(asked).toEqual([requestKey(file!.request)]);
     expect(kept).toEqual([]);
-    expect([...judges.values()]).toEqual(["jev", "stand-in"]);
+    // A request that fails once the client has retried it fails the same way, with the client's reason.
+    const down = keptJev({ ask: () => Promise.reject(new Error("OpenRouter answered 503")) }, { stored: new Map(), keep: () => undefined });
+    await expect(down.ask(file!.request)).rejects.toThrow(/the file .*: OpenRouter answered 503/);
+    // With Jev not to be asked, a request with no kept answer fails, saying why, rather than guessing.
+    const offline = keptJev(null, { stored: new Map(), keep: () => undefined, unasked: "Jev is off" });
+    await expect(offline.ask(area!.request)).rejects.toThrow(/no answer kept for it, and Jev is off/);
   });
 });
