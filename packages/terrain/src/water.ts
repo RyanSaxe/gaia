@@ -18,6 +18,8 @@ const BANK_GRADE = 0.53;
 export const BANK_REACH = 14;
 /** Channel depth never exceeds this share of the half width, so its walls stay walkable. */
 const CHANNEL_SHAPE = 0.35;
+/** How far past its water's edge a routed river's banks stand above its water, meters. */
+const SIDE = 1;
 /** The deepest a routed river's water lies below its valley's floor, meters. */
 const BELOW_FLOOR = 0.5;
 /** Spring and seep: the stream narrows to nothing over this many meters at each end. */
@@ -87,14 +89,25 @@ export function solveStream(l: Lattice, path: Float32Array, width: number, depth
   order.forEach((idx, k) => {
     const x = path[idx * 2] as number;
     const z = path[idx * 2 + 1] as number;
-    level = Math.min(level, heightAt(l, x, z) - INSET);
-    // A dip the stream passes never drags its water below its own valley's floor, so it never cuts a gorge after.
-    const floor = course.floors?.[idx];
-    if (floor !== undefined) level = Math.max(level, floor - BELOW_FLOOR);
     const s = along[k] as number;
     const taper = smooth(s / TAPER) * (course.seep === false ? 1 : smooth((total - s) / TAPER));
     // Never narrower than the lattice can draw, so the bed is always below the water.
     const halfWidth = Math.max(1.1, ((course.widths?.[idx] ?? width) / 2) * taper);
+    level = Math.min(level, heightAt(l, x, z) - INSET);
+    // A routed river may swing across ground that falls away to one side: its water lies below the ground either
+    // side of it too, so it is cut into the higher bank rather than standing above the lower one.
+    if (course.widths !== undefined) {
+      const a = Math.max(0, idx - 1);
+      const b = Math.min(count - 1, idx + 1);
+      const tx = (path[b * 2] as number) - (path[a * 2] as number);
+      const tz = (path[b * 2 + 1] as number) - (path[a * 2 + 1] as number);
+      const len = Math.hypot(tx, tz) || 1;
+      const out = halfWidth + SIDE;
+      level = Math.min(level, heightAt(l, x - (tz / len) * out, z + (tx / len) * out) - INSET, heightAt(l, x + (tz / len) * out, z - (tx / len) * out) - INSET);
+    }
+    // A dip the stream passes never drags its water below its own valley's floor, so it never cuts a gorge after.
+    const floor = course.floors?.[idx];
+    if (floor !== undefined) level = Math.max(level, floor - BELOW_FLOOR);
     stations.push({ x, z, level, halfWidth, depth: Math.min(depth, halfWidth * CHANNEL_SHAPE) });
   });
   return { stations };

@@ -415,7 +415,7 @@ describe("a walker's stride", () => {
     expect(gradePace(-GAIT.peak)).toBeGreaterThan(1);
     for (let s = -0.6; s < 0.6; s += 0.01) expect(gradePace(s)).toBeLessThanOrEqual(GAIT.ceiling);
     for (let s = -GAIT.peak; s < 0.6; s += 0.01) expect(gradePace(s + 0.01)).toBeLessThanOrEqual(gradePace(s));
-    // On real ground: the steepest dry 20 m line near the pond is walked up more slowly than down.
+    // On real ground: the steepest dry 20 m line near the pond that climbs all along is walked up more slowly than down.
     let line = { from: dry, dx: 1, dz: 0, rise: 0 };
     for (let a = 0; a < 32; a++) {
       const dx = Math.cos((a / 32) * Math.PI * 2);
@@ -424,7 +424,8 @@ describe("a walker's stride", () => {
         const from = { x: dry.x - 20 + dx * r, z: dry.z + dz * r };
         const rise = groundHeightAt(t, from.x + dx * 20, from.z + dz * 20) - groundHeightAt(t, from.x, from.z);
         const wet = [0, 5, 10, 15, 20].some((k) => waterDepthAt(t, from.x + dx * k, from.z + dz * k) > 0);
-        if (!wet && rise > line.rise && rise < 4) line = { from, dx, dz, rise };
+        const steady = [0, 5, 10, 15].every((k) => groundHeightAt(t, from.x + dx * (k + 5), from.z + dz * (k + 5)) - groundHeightAt(t, from.x + dx * k, from.z + dz * k) > rise / 8);
+        if (!wet && steady && rise > line.rise && rise < 4) line = { from, dx, dz, rise };
       }
     }
     expect(line.rise).toBeGreaterThan(1);
