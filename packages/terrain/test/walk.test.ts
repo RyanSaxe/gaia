@@ -14,9 +14,11 @@ import {
   type SolidShape,
   type Solids,
   type Terrain,
+  TRAVEL,
   WALK_TO,
   type Walker,
   bakeTerrain,
+  carry,
   groundHeightAt,
   landHalf,
   clearanceAt,
@@ -406,6 +408,17 @@ describe("a walker's stride", () => {
     for (const f of settled) {
       expect(speedOf(f.body)).toBeLessThan(0.01);
       expect(Math.abs(f.body.eye - settled[0]!.body.eye)).toBeLessThan(1e-3);
+    }
+  });
+
+  it("carried at travel's pace, stands exactly where it is carried, its eyes riding the ground", () => {
+    let body = standAt(t, [], dry.x, dry.z);
+    for (let i = 1; i <= 180; i++) {
+      const x = dry.x - TRAVEL.pace * i * dt;
+      body = carry(t, [], body, x, dry.z, dt);
+      expect(body.x).toBe(x);
+      expect(body.vx).toBeCloseTo(-TRAVEL.pace, 6);
+      if (i > 30) expect(Math.abs(body.eye - footingAt(t, [], body.x, body.z).eye)).toBeLessThan(0.15);
     }
   });
 

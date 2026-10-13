@@ -21,3 +21,4 @@ export * from "./places.ts";
 export * from "./land.ts";
 export * from "./vitality.ts";
 export * from "./tiles.ts";
+export * from "./travel.ts";
