@@ -34,7 +34,7 @@ const KNOBS: readonly Knob[] = [
   { key: "sensitivity", label: "Look", unit: "°/px", min: 0.03, max: 0.6, step: 0.01, uses: () => true },
 ];
 /** Where the last way tried is kept; a new key when the ways change, so the playground opens on the one asked for. */
-const KEPT = "gaia-walk-playground@22";
+const KEPT = "gaia-walk-playground@22-held";
 
 /** Lays the card on `parent`, starting from `first` or the way last tried on this browser; `chosen` gets each way and its numbers as they change. */
 export function createWalkPlayground(parent: HTMLElement, first: SteerSchemeId, chosen: (scheme: SteerScheme) => void): void {
