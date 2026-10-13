@@ -16,8 +16,8 @@ import { type ChildProcess, execFileSync, spawn } from "node:child_process";
 import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createInterface } from "node:readline";
-import type { CodeGraph, CodeModel, EngineClient, JevAnswer, JevClient, JevEstimate } from "@gaia/schema";
-import { DESIGNS, type DesignName, type Exchange, MORE, SOURCE_WISH, codeModelOf, judgeWorld, planWorldRequests, requestKey, standInJev, tokensOf } from "@gaia/world";
+import type { CodeGraph, CodeFacts, EngineClient, JevAnswer, JevClient, JevEstimate } from "@gaia/schema";
+import { DESIGNS, type DesignName, type Exchange, MORE, SOURCE_WISH, factsOf, judgeWorld, planWorldRequests, requestKey, standInJev, tokensOf } from "@gaia/world";
 import { createEngineClient } from "../app/world-service/engine-client.ts";
 import { engineJev } from "../app/world-service/jev.ts";
 import { LOOKS } from "../app/renderer/terrain/looks.ts";
@@ -31,7 +31,7 @@ const flag = (name: string, fallback: string): string => {
 const judge = flag("judge", "stand-in");
 const designs = flag("designs", "first,revised,outline,escalate,shared,shared-outline,judged").split(",") as DesignName[];
 const repeat = Number(flag("repeat", judge === "stand-in" ? "1" : "2"));
-const model = codeModelOf(JSON.parse(readFileSync(resolve(flag("graph", resolve(repo, "app/renderer/terrain/fixtures/gaia-graph.json"))), "utf8")) as CodeGraph);
+const facts = factsOf(JSON.parse(readFileSync(resolve(flag("graph", resolve(repo, "app/renderer/terrain/fixtures/gaia-graph.json"))), "utf8")) as CodeGraph);
 for (const d of designs) if (!(d in DESIGNS)) throw new Error(`Unknown design ${d}; choose from ${Object.keys(DESIGNS).join(", ")}.`);
 
 /** A question's family: what it judges, whatever thing it is about. */
@@ -110,7 +110,7 @@ async function judgeClient(): Promise<JevClient> {
   const client = startEngine({});
   const status = await client.call("jev.status", {});
   if (!status.live || !status.key) throw new Error("Jev needs GAIA_JEV=live and the gaia-openrouter key in the Keychain.");
-  const first = designs.flatMap((d) => planWorldRequests(model, LOOKS, { design: d }).map((p) => p.request));
+  const first = designs.flatMap((d) => planWorldRequests(facts, LOOKS, { design: d }).map((p) => p.request));
   const estimate: JevEstimate = await client.call("jev.estimate", { requests: first });
   const ceiling = estimate.estimatedUsd * 2 * (repeat + 1);
   const allowed = Number(flag("spend-up-to", "0"));
@@ -142,7 +142,7 @@ try {
           return r;
         },
       };
-      await judgeWorld(model, LOOKS, counted, { design, trace: (e) => exchanges.push(e), ...(reordered ? { shuffle: "reordered" } : {}) });
+      await judgeWorld(facts, LOOKS, counted, { design, trace: (e) => exchanges.push(e), ...(reordered ? { shuffle: "reordered" } : {}) });
       runs.push({ design, label: reordered ? `${design} reordered` : `${design} #${i + 1}`, exchanges, sent, costUsd });
     }
   }
@@ -155,17 +155,17 @@ try {
 
 /** Requests whose key changes when one file grows by a line at its top, and their tokens, averaged over every file that declares something. */
 function reasksPerEdit(design: DesignName): { requests: number; tokens: number } {
-  const before = new Set(planWorldRequests(model, LOOKS, { design }).map((p) => requestKey(p.request)));
-  const sources = model.files.filter((f) => f.symbols.length > 0);
+  const before = new Set(planWorldRequests(facts, LOOKS, { design }).map((p) => requestKey(p.request)));
+  const sources = facts.files.filter((f) => f.symbols.length > 0);
   let changed = 0;
   let tokens = 0;
   for (const f of sources) {
-    const owner = model.entities.filter((e) => e.path === "" || f.path.startsWith(`${e.path}/`)).sort((a, b) => b.path.length - a.path.length)[0];
-    const edited: CodeModel = {
-      ...model,
-      repository: { ...model.repository, lines: model.repository.lines + 1 },
-      files: model.files.map((x) => (x === f ? { ...x, lines: x.lines + 1, symbols: x.symbols.map((s) => ({ ...s, ...(s.line === undefined ? {} : { line: s.line + 1 }) })) } : x)),
-      entities: model.entities.map((e) => (e === owner ? { ...e, lines: e.lines + 1 } : e)),
+    const owner = facts.entities.filter((e) => e.path === "" || f.path.startsWith(`${e.path}/`)).sort((a, b) => b.path.length - a.path.length)[0];
+    const edited: CodeFacts = {
+      ...facts,
+      repository: { ...facts.repository, lines: facts.repository.lines + 1 },
+      files: facts.files.map((x) => (x === f ? { ...x, lines: x.lines + 1, symbols: x.symbols.map((s) => ({ ...s, ...(s.line === undefined ? {} : { line: s.line + 1 }) })) } : x)),
+      entities: facts.entities.map((e) => (e === owner ? { ...e, lines: e.lines + 1 } : e)),
     };
     const again = planWorldRequests(edited, LOOKS, { design }).filter((p) => !before.has(requestKey(p.request)));
     changed += again.length;
@@ -180,7 +180,7 @@ const pct = (n: number, of: number): string => (of === 0 ? "-" : `${((100 * n) /
 const report = designs.map((design) => {
   const mine = runs.filter((r) => r.design === design);
   const run = mine[0] as Run;
-  const planned = planWorldRequests(model, LOOKS, { design });
+  const planned = planWorldRequests(facts, LOOKS, { design });
   const seconds = run.exchanges.filter((e) => e.second !== undefined);
   const ms = [...run.sent.ms].sort((a, b) => a - b);
   const wishes = run.exchanges.filter((e) => e.first.answers[SOURCE_WISH]?.type === "noul" && (e.first.answers[SOURCE_WISH] as { noul: number }).noul > 0.5).length;
@@ -201,7 +201,7 @@ const report = designs.map((design) => {
   };
 });
 
-const lines: string[] = [`Judge: ${judge}. ${model.repository.name}: ${model.files.length} files, ${model.entities.length} entities.`];
+const lines: string[] = [`Judge: ${judge}. ${facts.repository.name}: ${facts.files.length} files, ${facts.entities.length} entities.`];
 for (const r of report) {
   lines.push(
     `\n${r.design}: ${r.planned.requests} requests planned, ${r.planned.questions} questions, about ${r.planned.tokens.toLocaleString("en-US")} tokens (largest ${r.planned.largestRequestTokens.toLocaleString("en-US")})`,

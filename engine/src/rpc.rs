@@ -39,14 +39,6 @@ pub fn handle(line: &str) -> Value {
     let p = &request.params;
     let outcome: Result<Value, (i64, String)> = match request.method.as_str() {
         "engine.ping" => Ok(json!({ "version": crate::VERSION })),
-        "project.open" => match p["root"].as_str() {
-            Some(root) => crate::project::open(Path::new(root))
-                .map_err(|e| (FAILED, e))
-                .and_then(|opened| {
-                    serde_json::to_value(opened).map_err(|e| (FAILED, e.to_string()))
-                }),
-            None => Err((INVALID_PARAMS, "project.open needs a root.".into())),
-        },
         "project.graph" => match p["root"].as_str() {
             Some(root) => if p["judged"].as_bool() == Some(true) {
                 crate::jev::runner::judged_graph(Path::new(root))
@@ -182,20 +174,6 @@ mod tests {
             METHOD_NOT_FOUND
         );
         assert_eq!(handle("not json")["error"]["code"], PARSE_ERROR);
-    }
-
-    #[test]
-    fn project_open_needs_a_real_directory() {
-        assert_eq!(
-            handle(r#"{"jsonrpc":"2.0","id":3,"method":"project.open","params":{}}"#)["error"]["code"],
-            INVALID_PARAMS
-        );
-        assert_eq!(
-            handle(
-                r#"{"jsonrpc":"2.0","id":4,"method":"project.open","params":{"root":"/no/such/dir"}}"#
-            )["error"]["code"],
-            FAILED
-        );
     }
 
     #[test]

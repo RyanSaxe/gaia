@@ -2,7 +2,7 @@
 // JSON-RPC over the engine's stdin and stdout. The Rust side derives the same
 // shapes from its structs. The OpenRouter key never crosses this boundary.
 
-import type { EntityFacts, FileFacts, RepositoryFacts } from "./facts.ts";
+import type { EntityFacts, FileFacts } from "./facts.ts";
 import type { CodeGraph, NodeId } from "./graph.ts";
 import type { JevRequest, JevResponse } from "./jev.ts";
 
@@ -15,7 +15,6 @@ export interface EngineMethods {
    * its root commit, so it names the project wherever it is cloned. Watching
    * the project for `facts.changed` is not built yet.
    */
-  "project.open": { params: { root: string }; result: CodeModel };
   /**
    * Walks, parses and measures the project into its code graph: a node for
    * every directory, file, definition and block, and every reference the
@@ -56,7 +55,7 @@ export interface EngineMethods {
   /**
    * Clones a public GitHub repository into Gaia's app-data folder
    * (`<data>/clones/<owner>/<repo>`), or fetches into the copy already there;
-   * the copy then opens with `project.open` like any folder. The clone runs no
+   * the copy then opens like any folder. The clone runs no
    * hooks, skips submodules and LFS content, speaks only https, keeps every
    * commit but fetches file contents only for the files checked out, and
    * gives up past a size or time cap.
@@ -110,14 +109,6 @@ export type StoreTable = "answers" | "blueprints" | "calls" | "document" | "held
 /** One request of a batch that failed on its own, and why. */
 export interface JevFailure {
   readonly error: string;
-}
-
-/** The code model of one project, as `project.open` reports it. */
-export interface CodeModel {
-  readonly projectId: string;
-  readonly files: readonly FileFacts[];
-  readonly entities: readonly EntityFacts[];
-  readonly repository: RepositoryFacts;
 }
 
 /** What a batch of Jev requests would send and cost. Tokens are estimated from the bytes until a live run reports them. */

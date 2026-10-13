@@ -2,7 +2,7 @@
 // engine lines go to the world service, and the world service talks to the
 // renderer over its own MessagePort.
 
-import type { CodeModel, PatchPlace, Span, Unreachable } from "@gaia/schema";
+import type { CodeFacts, PatchPlace, Span, Unreachable } from "@gaia/schema";
 import type { Outline } from "@gaia/terrain";
 import type { CodeWorld, Judge, LotPlace } from "@gaia/world";
 
@@ -70,7 +70,7 @@ export interface WorldDocument {
   readonly root: string;
   /** The commit it was built from, whose files the journal reads; absent when the folder was read from disk. */
   readonly commit?: string;
-  readonly model: CodeModel;
+  readonly facts: CodeFacts;
   readonly world: CodeWorld;
   /** Who judged each thing, by `judgedThing` ("file:src/main.ts"); a thing missing here was judged by the stand-in. */
   readonly judges: Readonly<Record<string, Judge>>;

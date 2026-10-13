@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { CodeModel, FileFacts, JevAnswer, JevClient, JevQuestion, JevRequest } from "@gaia/schema";
+import type { CodeFacts, FileFacts, JevAnswer, JevClient, JevQuestion, JevRequest } from "@gaia/schema";
 import {
   DESIGNS,
   type DesignName,
@@ -33,7 +33,7 @@ const file = (path: string, lines: number, imports: string[] = [], importedBy: s
   importedBy,
 });
 
-function model(): CodeModel {
+function facts(): CodeFacts {
   const files = [
     file("pkg/src/index.ts", 20, ["pkg/src/a.ts", "pkg/src/b.ts"]),
     file("pkg/src/a.ts", 250, ["pkg/src/b.ts"], ["pkg/src/index.ts", "pkg/test/a.test.ts"]),
@@ -80,7 +80,7 @@ const huge: FileFacts = {
 
 describe("what Jev reads about a thing", () => {
   it("outlines every file, area and entity within its token budget, sizes in words and no line numbers", () => {
-    const m = { ...model(), files: [...model().files, huge] };
+    const m = { ...facts(), files: [...facts().files, huge] };
     for (const f of m.files) {
       const outline = fileOutline(f);
       expect(tokensOf(outline)).toBeLessThanOrEqual(OUTLINE.tokens.file);
@@ -88,7 +88,7 @@ describe("what Jev reads about a thing", () => {
       for (const r of Object.values(fileReadings(m, f))) expect(tokensOf(r.state)).toBeLessThanOrEqual(OUTLINE.tokens.reading);
     }
     // A small file's outline is whole: every symbol, with its doc.
-    expect(fileOutline(model().files[1]!).symbols).toEqual([
+    expect(fileOutline(facts().files[1]!).symbols).toEqual([
       { name: "Shape", kind: "class", exported: true, size: "medium" },
       { name: "run", kind: "function", exported: true, size: "medium" },
       { name: "helper", kind: "function", exported: false, size: "short" },
@@ -105,7 +105,7 @@ describe("what Jev reads about a thing", () => {
   it("asks only questions Jev can answer, in every design, and the stand-in answers each with one of its options", async () => {
     const jev = standInJev(LOOKS);
     for (const design of Object.keys(DESIGNS) as DesignName[]) {
-      for (const { request } of planWorldRequests(model(), LOOKS, { design })) {
+      for (const { request } of planWorldRequests(facts(), LOOKS, { design })) {
         expect(tokensOf(request)).toBeLessThan(32_000);
         const { answers } = await jev.ask(request);
         for (const [id, q] of Object.entries(request.questions) as [string, JevQuestion][]) {
@@ -119,8 +119,8 @@ describe("what Jev reads about a thing", () => {
   });
 
   it("shares one state per area: every file's questions ride in its area's request, each naming its file, and judge the world as asking each alone does", async () => {
-    const own = planWorldRequests(model(), LOOKS, { design: "revised" });
-    const shared = planWorldRequests(model(), LOOKS, { design: "shared" });
+    const own = planWorldRequests(facts(), LOOKS, { design: "revised" });
+    const shared = planWorldRequests(facts(), LOOKS, { design: "shared" });
     expect(shared.length).toBeLessThan(own.length);
     expect(shared.some((p) => p.about === "file")).toBe(false);
     const asked = (ps: typeof own) => ps.reduce((n, p) => n + Object.keys(p.request.questions).length, 0);
@@ -133,15 +133,15 @@ describe("what Jev reads about a thing", () => {
       }
     }
     // The stand-in answers each question from its own file's facts, as Jev answers each question on its own.
-    expect(await judgeWorld(model(), LOOKS, standInJev(LOOKS), { design: "shared" })).toEqual(await judgeWorld(model(), LOOKS, standInJev(LOOKS), { design: "revised" }));
+    expect(await judgeWorld(facts(), LOOKS, standInJev(LOOKS), { design: "shared" })).toEqual(await judgeWorld(facts(), LOOKS, standInJev(LOOKS), { design: "revised" }));
   });
 
   it("asks a file again after a one-line edit only when its words change, where summary facts ask again every time", () => {
-    const edited = model();
+    const edited = facts();
     const files = edited.files.map((f) => (f.path === "pkg/src/a.ts" ? { ...f, lines: f.lines + 1, symbols: f.symbols.map((s) => ({ ...s, line: (s.line ?? 1) + 1 })) } : f));
-    const keyOf = (m: CodeModel, design: DesignName) => requestKey(planWorldRequests(m, LOOKS, { design }).find((p) => p.target === "pkg/src/a.ts")!.request);
-    expect(keyOf({ ...edited, files }, "outline")).toBe(keyOf(model(), "outline"));
-    expect(keyOf({ ...edited, files }, "revised")).not.toBe(keyOf(model(), "revised"));
+    const keyOf = (m: CodeFacts, design: DesignName) => requestKey(planWorldRequests(m, LOOKS, { design }).find((p) => p.target === "pkg/src/a.ts")!.request);
+    expect(keyOf({ ...edited, files }, "outline")).toBe(keyOf(facts(), "outline"));
+    expect(keyOf({ ...edited, files }, "revised")).not.toBe(keyOf(facts(), "revised"));
   });
 });
 
@@ -170,7 +170,7 @@ describe("context that grows by Jev's choice", () => {
   it("asks an unsure file again with the readings Jev chose, asking only what it was unsure of, and keeps the surer answer", async () => {
     const log: JevRequest[] = [];
     const exchanges: Exchange[] = [];
-    const judged = await judgeWorld(model(), LOOKS, unsureAboutFunctions(log), { design: "escalate", trace: (e) => exchanges.push(e) });
+    const judged = await judgeWorld(facts(), LOOKS, unsureAboutFunctions(log), { design: "escalate", trace: (e) => exchanges.push(e) });
     const a = exchanges.find((e) => e.target === "pkg/src/a.ts")!;
     expect(Object.keys(a.first.request.questions)).toEqual(expect.arrayContaining(["form:function", `${MORE}imports`, `${MORE}importers`, SOURCE_WISH]));
     expect(a.second?.read).toEqual(["imports"]);
@@ -179,17 +179,17 @@ describe("context that grows by Jev's choice", () => {
     expect(judged.forms["pkg/src/a.ts"]?.function).toBe("Bush");
     // A file that imports nothing reads the first reading Gaia offers instead.
     const b = exchanges.find((e) => e.target === "pkg/src/b.ts")!;
-    expect(b.second?.read).toEqual([Object.keys(fileReadings(model(), model().files[2]!))[0]]);
+    expect(b.second?.read).toEqual([Object.keys(fileReadings(facts(), facts().files[2]!))[0]]);
     // The world and areas were sure: one request each. Without escalation, never a second.
     expect(exchanges.find((e) => e.about === "world")?.second).toBeUndefined();
     const plain: Exchange[] = [];
-    await judgeWorld(model(), LOOKS, unsureAboutFunctions([]), { design: "outline", trace: (e) => plain.push(e) });
+    await judgeWorld(facts(), LOOKS, unsureAboutFunctions([]), { design: "outline", trace: (e) => plain.push(e) });
     expect(plain.every((e) => e.second === undefined)).toBe(true);
   });
 
   it("judges top-down when a design carries character: a file reads its area's land and water, an area the world's light", async () => {
     const exchanges: Exchange[] = [];
-    const judged = await judgeWorld(model(), LOOKS, standInJev(LOOKS), { design: "outline", trace: (e) => exchanges.push(e) });
+    const judged = await judgeWorld(facts(), LOOKS, standInJev(LOOKS), { design: "outline", trace: (e) => exchanges.push(e) });
     const area = exchanges.find((e) => e.about === "area")!;
     expect((area.first.request.state as { world: string }).world.startsWith(`${judged.world}:`)).toBe(true);
     const f = exchanges.find((e) => e.target === "pkg/src/a.ts")!;

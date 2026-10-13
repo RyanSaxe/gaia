@@ -1,5 +1,5 @@
-// The world a codebase becomes, from the code model the engine's graph gives
-// (`codeModelOf`): directories holding directories and files, files holding
+// The world a codebase becomes, from the facts the engine's graph gives
+// (`factsOf`): directories holding directories and files, files holding
 // their functions, classes and exported definitions, entities rooted at
 // directories, and the imports and dependencies between them. `layoutWorld`
 // lays it out as land: each directory a region of ground built of its
@@ -21,7 +21,7 @@ import {
   type AreaPlace,
   type CellPlace,
   type CodeGraph,
-  type CodeModel,
+  type CodeFacts,
   type EntityFacts,
   type FileFacts,
   type JevAnswer,
@@ -263,7 +263,7 @@ const baseName = (path: string): string => path.split("/").pop() ?? path;
 const weightOf = (f: FileFacts): number => Math.min(LAYOUT.lines[1], Math.max(LAYOUT.lines[0], f.lines));
 const byPath = <T extends { readonly path: string }>(a: T, b: T): number => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
 
-function directoriesOf(model: CodeModel, name: string): Map<string, Dir> {
+function directoriesOf(facts: CodeFacts, name: string): Map<string, Dir> {
   const dirs = new Map<string, Dir>();
   const ensure = (path: string): Dir => {
     const had = dirs.get(path);
@@ -275,7 +275,7 @@ function directoriesOf(model: CodeModel, name: string): Map<string, Dir> {
     return dir;
   };
   ensure("");
-  for (const f of [...model.files].sort(byPath)) ensure(parentOf(f.path)).files.push(f);
+  for (const f of [...facts.files].sort(byPath)) ensure(parentOf(f.path)).files.push(f);
   for (const d of dirs.values()) d.children.sort();
   return dirs;
 }
@@ -420,7 +420,7 @@ export interface Character {
 
 export interface PlanOptions {
   readonly design?: DesignName | Design;
-  /** Engine's graph, whose definitions stand on each file's patch as the layout stands them; without it, the code model's. */
+  /** Engine's graph, whose definitions stand on each file's patch as the layout stands them; without it, the facts' own. */
   readonly graph?: CodeGraph;
   /** What has been judged above each thing; `judgeWorld` fills it wave by wave. */
   readonly character?: Character;
@@ -497,9 +497,9 @@ function standing(value: number, all: readonly number[]): string {
 }
 
 /** A directory as `judged` sends it: its size, parts and imports in words, per file where a count would grow with the directory, and each compared with the repository's other areas (`others`). */
-export function areaWords(model: CodeModel, path: string, own: readonly FileFacts[], all: readonly FileFacts[], subdirectories: readonly string[], others: readonly AreaMeasure[] = []): Record<string, unknown> {
+export function areaWords(facts: CodeFacts, path: string, own: readonly FileFacts[], all: readonly FileFacts[], subdirectories: readonly string[], others: readonly AreaMeasure[] = []): Record<string, unknown> {
   const inside = new Set(all.map((f) => f.path));
-  const entity = model.entities.find((e) => e.path === path);
+  const entity = facts.entities.find((e) => e.path === path);
   const me = measureArea(all);
   return {
     path: path === "" ? "(the repository's root)" : path,
@@ -528,8 +528,8 @@ export function areaWords(model: CodeModel, path: string, own: readonly FileFact
 }
 
 /** An entity as `judged` sends it: `revised`'s facts with every count and size in words. */
-export function entityWords(model: CodeModel, e: EntityFacts): Record<string, unknown> {
-  const entities = new Map(model.entities.map((x) => [x.path, x]));
+export function entityWords(facts: CodeFacts, e: EntityFacts): Record<string, unknown> {
+  const entities = new Map(facts.entities.map((x) => [x.path, x]));
   return {
     name: e.name,
     path: e.path === "" ? "(the repository's root)" : e.path,
@@ -539,7 +539,7 @@ export function entityWords(model: CodeModel, e: EntityFacts): Record<string, un
     surface: `${howMany(e.exports)} exported symbols`,
     dependsOn: e.dependsOn.flatMap((p) => {
       const o = entities.get(p);
-      return o === undefined ? [] : [{ name: o.name, importers: `${howMany(importersOf(model, e, o))} of its files`, dependedOnBy: `${howMany(o.dependents.length)} entities` }];
+      return o === undefined ? [] : [{ name: o.name, importers: `${howMany(importersOf(facts, e, o))} of its files`, dependedOnBy: `${howMany(o.dependents.length)} entities` }];
     }),
     dependents: e.dependents.map((p) => entities.get(p)?.name ?? p),
     dependedOnBy: howMany(e.dependents.length),
@@ -553,13 +553,13 @@ function regionFor(regions: ReadonlySet<string>, dir: string): string {
 }
 
 /** The request Jev gets about each thing. State carries the code's structure only, never source. */
-export function planWorldRequests(model: CodeModel, looks: Looks, options: PlanOptions = {}): WorldRequest[] {
+export function planWorldRequests(facts: CodeFacts, looks: Looks, options: PlanOptions = {}): WorldRequest[] {
   const design = designOf(options.design);
   const revised = design.questions !== "first";
   const judged = design.questions === "judged";
   const salt = options.shuffle ?? "";
   const character = design.character ? (options.character ?? {}) : {};
-  const dirs = directoriesOf(model, model.repository.name);
+  const dirs = directoriesOf(facts, facts.repository.name);
   const requests: WorldRequest[] = [];
   const ask = (about: WorldRequest["about"], target: string, state: unknown, questions: Record<string, JevQuestion>, extra: Pick<WorldRequest, "readings" | "decides"> = {}): void => {
     const readings = design.escalate ? extra.readings : undefined;
@@ -582,13 +582,13 @@ export function planWorldRequests(model: CodeModel, looks: Looks, options: PlanO
     }
     requests.push({ about, target, request: { model: MODEL, state, questions: asked }, ...(readings === undefined ? {} : { readings, decides: extra.decides }) });
   };
-  const r = model.repository;
+  const r = facts.repository;
   ask(
     "world",
     "",
     revised
-      ? { repository: { name: r.name, files: about(r.files), size: repoSize(r.lines), languages: languagesOf(model.files) } }
-      : { repository: { name: r.name, files: r.files, lines: r.lines, languages: languagesOf(model.files) } },
+      ? { repository: { name: r.name, files: about(r.files), size: repoSize(r.lines), languages: languagesOf(facts.files) } }
+      : { repository: { name: r.name, files: r.files, lines: r.lines, languages: languagesOf(facts.files) } },
     { world: choice("This repository becomes a whole world. Which art direction suits it: its light, sky, season and wind?", docs(looks.world), "world", "", salt) },
   );
   const regionList = regionPaths(dirs);
@@ -615,9 +615,9 @@ export function planWorldRequests(model: CodeModel, looks: Looks, options: PlanO
     const reached = all.reduce((n, f) => n + f.importedBy.filter((i) => !inside.has(i)).length, 0);
     const state =
       design.state === "outline"
-        ? { directory: areaOutline(model, path), ...(worldWords === undefined ? {} : { world: worldWords }) }
+        ? { directory: areaOutline(facts, path), ...(worldWords === undefined ? {} : { world: worldWords }) }
         : design.state === "words"
-          ? { directory: areaWords(model, path, d.files, all, d.children, measures) }
+          ? { directory: areaWords(facts, path, d.files, all, d.children, measures) }
           : {
             directory: {
               path: path === "" ? "(the repository's root)" : path,
@@ -643,7 +643,7 @@ export function planWorldRequests(model: CodeModel, looks: Looks, options: PlanO
             land: choice("This directory becomes an area of the world. Which land suits it: its landform and ground cover?", docs(looks.land), "land", path, salt),
             water: choice("Does this area's land hold water? Choose the option whose reason fits this directory best.", docs(looks.water), "water", path, salt),
           },
-      { readings: areaReadings(model, path), decides: "which land this directory's area has, whether that land holds water, and what its ground is like" },
+      { readings: areaReadings(facts, path), decides: "which land this directory's area has, whether that land holds water, and what its ground is like" },
     );
   }
   /** What was judged about the land a thing stands on, for a design that carries character. */
@@ -654,8 +654,8 @@ export function planWorldRequests(model: CodeModel, looks: Looks, options: PlanO
     if (land === undefined && water === undefined) return {};
     return { land: { area: region === "" ? "(the repository's root)" : region, ...(land === undefined ? {} : { landform: land }), ...(water === undefined ? {} : { water }) } };
   };
-  const standingDefs = definitionsOf(model, options.graph);
-  for (const f of [...model.files].sort(byPath)) {
+  const standingDefs = definitionsOf(facts, options.graph);
+  for (const f of [...facts.files].sort(byPath)) {
     if (judged) {
       // Every definition standing on the file's patch is asked about on its own: what it stands as is Jev's call. A
       // large file's are asked over several requests, each listing the definitions it asks about.
@@ -673,7 +673,7 @@ export function planWorldRequests(model: CodeModel, looks: Looks, options: PlanO
             salt,
           );
         }
-        ask("file", f.path, { file: fileWords(f, some) }, forms, { readings: fileReadings(model, f), decides: "what this file's functions, classes, types and constants stand as" });
+        ask("file", f.path, { file: fileWords(f, some) }, forms, { readings: fileReadings(facts, f), decides: "what this file's functions, classes, types and constants stand as" });
       }
       continue;
     }
@@ -702,14 +702,14 @@ export function planWorldRequests(model: CodeModel, looks: Looks, options: PlanO
             },
           };
     const kindsStanding = Object.keys(forms).map((id) => `${KIND_WORDS[id.slice("form:".length) as SymbolFact["kind"]]}s`);
-    ask("file", f.path, state, forms, { readings: fileReadings(model, f), decides: `what this file's ${kindsStanding.join(" and ")} stand as` });
+    ask("file", f.path, state, forms, { readings: fileReadings(facts, f), decides: `what this file's ${kindsStanding.join(" and ")} stand as` });
   }
-  const entities = new Map(model.entities.map((e) => [e.path, e]));
+  const entities = new Map(facts.entities.map((e) => [e.path, e]));
   const things = {
     ...Object.fromEntries(Object.entries(looks.building).map(([k, l]) => [`building:${k}`, `A building: ${l.doc}`])),
     ...Object.fromEntries(Object.entries(looks.landmark).map(([k, l]) => [`landmark:${k}`, `A landmark seen from far away: ${l.doc}`])),
   };
-  for (const e of [...model.entities].sort(byPath)) {
+  for (const e of [...facts.entities].sort(byPath)) {
     const questions: Record<string, JevQuestion> = revised
       ? {
           stands: choice(
@@ -754,9 +754,9 @@ export function planWorldRequests(model: CodeModel, looks: Looks, options: PlanO
     }
     const state =
       design.state === "outline"
-        ? { entity: entityOutline(model, e), ...landOf(e.path) }
+        ? { entity: entityOutline(facts, e), ...landOf(e.path) }
         : design.state === "words"
-          ? { entity: entityWords(model, e) }
+          ? { entity: entityWords(facts, e) }
           : {
             entity: {
               name: e.name,
@@ -768,13 +768,13 @@ export function planWorldRequests(model: CodeModel, looks: Looks, options: PlanO
               dependsOn: e.dependsOn.flatMap((p) => {
                 const o = entities.get(p);
                 if (o === undefined) return [];
-                return [revised ? { name: o.name, importers: `${howMany(importersOf(model, e, o))} of its files`, dependents: o.dependents.length } : { name: o.name, dependents: o.dependents.length }];
+                return [revised ? { name: o.name, importers: `${howMany(importersOf(facts, e, o))} of its files`, dependents: o.dependents.length } : { name: o.name, dependents: o.dependents.length }];
               }),
               dependents: e.dependents.map((p) => entities.get(p)?.name ?? p),
               ...(revised ? { dependedOnBy: howMany(e.dependents.length) } : {}),
             },
           };
-    ask("entity", e.path, state, questions, { readings: entityReadings(model, e), decides: "whether this entity stands as a building or a landmark, which one, and which of its dependencies a trail follows" });
+    ask("entity", e.path, state, questions, { readings: entityReadings(facts, e), decides: "whether this entity stands as a building or a landmark, which one, and which of its dependencies a trail follows" });
   }
   return design.share === "area" ? shareByArea(requests, (path) => regionFor(regions, parentOf(path))) : requests;
 }
@@ -871,7 +871,7 @@ export interface JudgeOptions extends Omit<PlanOptions, "character"> {
 const pickOf = (a: JevAnswer | undefined): string | undefined => (a?.type === "choice" ? a.choice : undefined);
 
 /** Asks every planned request through `jev`, `concurrency` at a time; for a design that carries character, top-down in three waves (the world, its areas, then files and entities). */
-export async function judgeWorld(model: CodeModel, looks: Looks, jev: JevClient, options: JudgeOptions = {}): Promise<Judgments> {
+export async function judgeWorld(facts: CodeFacts, looks: Looks, jev: JevClient, options: JudgeOptions = {}): Promise<Judgments> {
   const design = designOf(options.design);
   const { concurrency = 8, threshold = 0.5, trace } = options;
   const askOne = async (p: WorldRequest): Promise<Readonly<Record<string, JevAnswer>>> => {
@@ -907,7 +907,7 @@ export async function judgeWorld(model: CodeModel, looks: Looks, jev: JevClient,
     return out;
   };
   const first = (set: LookSet): string => Object.keys(set).sort()[0] ?? "";
-  const plan = (character: Character): WorldRequest[] => planWorldRequests(model, looks, { design, character, ...(options.graph === undefined ? {} : { graph: options.graph }), ...(options.shuffle === undefined ? {} : { shuffle: options.shuffle }) });
+  const plan = (character: Character): WorldRequest[] => planWorldRequests(facts, looks, { design, character, ...(options.graph === undefined ? {} : { graph: options.graph }), ...(options.shuffle === undefined ? {} : { shuffle: options.shuffle }) });
   const answered: { p: WorldRequest; a: Readonly<Record<string, JevAnswer>> }[] = [];
   const run = async (planned: WorldRequest[]): Promise<void> => {
     const answers = await askAll(planned);
@@ -1195,8 +1195,8 @@ interface Division {
   readonly defs: ReadonlyMap<string, readonly StandingDef[]>;
 }
 
-/** Each code model's division of the land, made once for it and its graph: it depends on the code alone. */
-const divided = new WeakMap<CodeModel, Map<string, Division>>();
+/** Each project's division of the land, made once for its facts and its graph: it depends on the code alone. */
+const divided = new WeakMap<CodeFacts, Map<string, Division>>();
 const graphIds = new WeakMap<CodeGraph, number>();
 let graphCount = 0;
 /** A key for a graph object (or none), so a division made on one graph is never mistaken for another's. */
@@ -1206,16 +1206,16 @@ function graphKey(graph: CodeGraph | undefined): string {
   if (id === undefined) graphIds.set(graph, (id = ++graphCount));
   return String(id);
 }
-function divisionOf(model: CodeModel, graph: CodeGraph | undefined, aspect: number): Division {
-  const forModel = divided.get(model) ?? new Map<string, Division>();
-  divided.set(model, forModel);
+function divisionOf(facts: CodeFacts, graph: CodeGraph | undefined, aspect: number): Division {
+  const forModel = divided.get(facts) ?? new Map<string, Division>();
+  divided.set(facts, forModel);
   const key = `${graphKey(graph)}|${aspect}`;
   const kept = forModel.get(key);
   if (kept !== undefined) return kept;
-  const dirs = directoriesOf(model, model.repository.name);
-  const defs = definitionsOf(model, graph);
-  const lots = new Map(model.entities.map((e) => [e.path, LAYOUT.lot]));
-  const total = model.files.reduce((n, f) => n + groundOfFile(f, defs.get(f.path)?.length ?? 0), 0) + lots.size * LAYOUT.lot;
+  const dirs = directoriesOf(facts, facts.repository.name);
+  const defs = definitionsOf(facts, graph);
+  const lots = new Map(facts.entities.map((e) => [e.path, LAYOUT.lot]));
+  const total = facts.files.reduce((n, f) => n + groundOfFile(f, defs.get(f.path)?.length ?? 0), 0) + lots.size * LAYOUT.lot;
   // The land's width, so its rounded rectangle holds every square meter asked for.
   const size = Math.max(LAYOUT.minSize, Math.ceil(Math.sqrt(total / landArea({ size: 1, aspect })) / 10) * 10);
   const made = { dirs, size, aspect, land: divideLand(landTree(dirs, lots, defs), { size, aspect }), defs };
@@ -1244,8 +1244,8 @@ export interface LotPlace {
  * answered, because the land's division depends on the code alone. Opening a
  * world shows it while Jev answers.
  */
-export function landOf(model: CodeModel, graph?: CodeGraph, aspect: number = LAND_ASPECT): WorldPlaces & { readonly lots: readonly LotPlace[] } {
-  const w = layoutWorld(model, UNJUDGED, graph, aspect);
+export function landOf(facts: CodeFacts, graph?: CodeGraph, aspect: number = LAND_ASPECT): WorldPlaces & { readonly lots: readonly LotPlace[] } {
+  const w = layoutWorld(facts, UNJUDGED, graph, aspect);
   return {
     name: w.name,
     size: w.size,
@@ -1274,11 +1274,11 @@ export function areaLands(world: Pick<CodeWorld, "areas" | "regions">): Record<s
  * Lays a world out from code. Its land takes the journal spread's proportions (`LAND_ASPECT`) unless `aspect` says
  * otherwise: the proving ground keeps a square, so its streams, bridges and ruins stay where its tests expect them.
  */
-export function layoutWorld(model: CodeModel, judged: Judgments, graph?: CodeGraph, aspect: number = LAND_ASPECT): CodeWorld {
-  const name = model.repository.name;
-  const { dirs, size, land, defs } = divisionOf(model, graph, aspect);
-  const entityAt = new Map(model.entities.map((e) => [e.path, e]));
-  const files = new Map(model.files.map((f) => [f.path, f]));
+export function layoutWorld(facts: CodeFacts, judged: Judgments, graph?: CodeGraph, aspect: number = LAND_ASPECT): CodeWorld {
+  const name = facts.repository.name;
+  const { dirs, size, land, defs } = divisionOf(facts, graph, aspect);
+  const entityAt = new Map(facts.entities.map((e) => [e.path, e]));
+  const files = new Map(facts.files.map((f) => [f.path, f]));
   // Vitality is Jev's quality from the understanding pass, and a thing it didn't judge takes its nearest judged
   // folder's. A world no graph judges takes the quality fixed with its looks (the proving ground's), and a thing
   // nothing judged at all, as in a world opened without Jev, is whole.
@@ -1384,11 +1384,11 @@ export function layoutWorld(model: CodeModel, judged: Judgments, graph?: CodeGra
   });
 
   // A dependency weighs as many of one entity's files as import from the other.
-  const roots = model.entities.map((e) => e.path);
+  const roots = facts.entities.map((e) => e.path);
   const owner = (p: string): string | undefined => roots.filter((r) => r === "" || p === r || p.startsWith(`${r}/`)).sort((a, b) => b.length - a.length)[0];
   const weights = new Map<string, number>();
   const counted = new Set<string>();
-  for (const f of model.files) {
+  for (const f of facts.files) {
     const from = owner(f.path);
     if (from === undefined) continue;
     for (const to of f.imports) {
@@ -1401,7 +1401,7 @@ export function layoutWorld(model: CodeModel, judged: Judgments, graph?: CodeGra
   }
   return {
     name,
-    projectId: model.projectId,
+    projectId: facts.projectId,
     size,
     aspect,
     world: judged.world,

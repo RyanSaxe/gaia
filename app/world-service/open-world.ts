@@ -16,7 +16,7 @@
 
 import type { CodeGraph, EngineClient, GraphNode, JevClient, JevResponse, Span } from "@gaia/schema";
 import { outlinesOf } from "@gaia/terrain";
-import { type Judge, areaOfRequest, codeModelOf, judgeWorld, judgedThing, keptJev, landOf, layoutWorld, planWorldRequests, requestKey, standInJev, thingsOf } from "@gaia/world";
+import { type Judge, areaOfRequest, factsOf, judgeWorld, judgedThing, keptJev, landOf, layoutWorld, planWorldRequests, requestKey, standInJev, thingsOf } from "@gaia/world";
 import { LOOKS } from "../renderer/terrain/looks.ts";
 import { engineJev } from "./jev.ts";
 import type { ConsentPlan, JudgedThing, Opening, WorldDocument } from "./protocol.ts";
@@ -126,21 +126,21 @@ const plural = (n: number, one: string, many = `${one}s`): string => `${n.toLoca
 export async function openWorld({ engine, root, consent, progress }: OpenWorldOptions): Promise<WorldDocument> {
   progress({ stage: "reading", root });
   // The land, outlined as the finished map draws it, every file's patch and every entity's lot, as soon as the graph
-  // exists: every definition, with whatever stand Jev's held answers already give it. The code model the layout and
-  // the looks read is the graph's own (`codeModelOf`). Planning what understanding still has to ask takes longer, so
+  // exists: every definition, with whatever stand Jev's held answers already give it. The facts the layout and
+  // the looks read is the graph's own (`factsOf`). Planning what understanding still has to ask takes longer, so
   // it comes after, while the wait draws the borders.
   let judged = await engine.call("project.graph", { root, judged: true });
   let graph = judgedGraph(judged);
-  const model = codeModelOf(graph);
-  const project = model.projectId;
-  const name = model.repository.name;
-  const land = landOf(model, graph);
+  const facts = factsOf(graph);
+  const project = facts.projectId;
+  const name = facts.repository.name;
+  const land = landOf(facts, graph);
   progress({ stage: "land", name, size: land.size, ...(land.aspect === undefined ? {} : { aspect: land.aspect }), areas: outlinesOf(land).areas, patches: land.patches.map(({ path, name, area, x, z, radius }) => ({ path, name, area, x, z, radius })), lots: land.lots });
   // What understanding still has to ask, going only as far as the world needs to stand: Jev's links and every
   // definition's stand.
   const understanding = await engine.call("understanding.plan", { root });
   // Each file's request names the definitions the graph stands on its patch, as the layout stands them.
-  const planned = planWorldRequests(model, LOOKS, { graph });
+  const planned = planWorldRequests(facts, LOOKS, { graph });
   const keys = planned.map((p) => requestKey(p.request));
 
   // Each file's health is Jev's quality, so it goes to the renderer once the understanding pass has judged it.
@@ -283,7 +283,7 @@ export async function openWorld({ engine, root, consent, progress }: OpenWorldOp
   };
   // As many looks at once as the engine sends Jev at once: `engineJev` gathers each round into one batch, and the
   // engine serves one call at a time, so fewer in flight only makes the looks, and the names they letter, wait.
-  const judgments = await judgeWorld(model, LOOKS, jev, { graph, concurrency: understanding.estimate.concurrency });
+  const judgments = await judgeWorld(facts, LOOKS, jev, { graph, concurrency: understanding.estimate.concurrency });
   await new Promise((resolve) => setTimeout(resolve, 0));
   await Promise.all(writes);
 
@@ -320,9 +320,9 @@ export async function openWorld({ engine, root, consent, progress }: OpenWorldOp
   const failed = failures.length + misunderstood;
   if (failed > 0) parts.push(`${plural(failed, "request")} failed${failures[0] === undefined ? "" : ` (${failures[0]})`}`);
   else if (why !== "") parts.push(why);
-  const world = layoutWorld(model, judgments, graph);
+  const world = layoutWorld(facts, judgments, graph);
   // Any file no answer was about is settled now, before the document.
   for (const p of world.patches) settleHealth(p.path, p.vitality);
   sendHealth();
-  return { root, ...(judged.commit === undefined ? {} : { commit: judged.commit }), model, world, judges: byThing, summary: parts.join("; "), judged: judgedThings(judged) };
+  return { root, ...(judged.commit === undefined ? {} : { commit: judged.commit }), facts, world, judges: byThing, summary: parts.join("; "), judged: judgedThings(judged) };
 }

@@ -136,7 +136,7 @@ doc in the same commit, and say so in the commit message.
   `app/renderer/terrain/stand.ts`.
 - **Fixtures**: the standalone lab shows `fixtures/gaia-graph.json` (the
   engine's judged graph of this repository, with each definition's stand
-  from held answers), laid out from the code model `codeModelOf` derives
+  from held answers), laid out from the facts `factsOf` derives
   from it and judged by `fixtures/gaia-jev.json`. Regenerate the kept
   answers whenever the graph changes, since they are keyed by each
   request's hash. The

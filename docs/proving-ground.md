@@ -19,8 +19,8 @@ health. Test a change here as well as in Gaia's own world.
 
 `pnpm proving` (`tools/proving.ts`) writes two fixtures from one plan:
 
-- `app/renderer/terrain/fixtures/proving.json`: the code model, in the shape
-  the engine's `project.open` returns. It has 126 files and 32 entities in a
+- `app/renderer/terrain/fixtures/proving.json`: the facts the world is laid
+  out from (`CodeFacts`), as `factsOf` derives them from a codebase's graph. It has 126 files and 32 entities in a
   970 m world of 12 lands and 45 areas.
 - `app/renderer/terrain/fixtures/proving-judged.json`: the choices Jev would
   make about it, fixed so that every land, water, character, form (the
