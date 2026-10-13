@@ -390,13 +390,11 @@ code graph (`CodeGraph` in `packages/schema/src/graph.ts`), which
 - an edge for every link between them: contains, imports, calls,
   references, inherits, implements, names and changes-with;
 - the engine's measures of each node, and Jev's judgments of it;
-- the facts the world was laid out from in the code model: each
-  directory's entity, the package, crate, module, app or service rooted
-  there (`entities.rs`, by manifests and index, main or server files); each
-  file's part (source, test, config, data, docs or script) and leading
-  comment; whether a definition is exported (`export`, or Rust's `pub`); and
-  each history's commits over the last 30 days. The world moves onto the
-  graph alone from here, and the code model goes once nothing reads it.
+- each directory's entity: the package or crate its manifest declares, or
+  the module, app or service its own index, main or server file makes it
+  (`entities.rs`); and whether a definition is exported (`export`, or Rust's
+  `pub`). An import that spells a workspace package's manifest name, or a
+  subpath through its exports, resolves to that file by rule.
 
 Each edge says who filled it: the parser, a rule, git, or Jev with its
 probability. A node's id comes from its path and name. Its lineage stays the

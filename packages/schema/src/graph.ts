@@ -51,8 +51,6 @@ export interface Entity {
   readonly manifest?: string;
   /** The file that defines its public surface, such as src/index.ts. */
   readonly entry?: string;
-  /** The manifest's description, else the entry's leading comment. */
-  readonly doc?: string;
 }
 
 export interface FileNode extends NodeBase {
@@ -67,10 +65,6 @@ export interface FileNode extends NodeBase {
   readonly unparsed: number;
   /** Language conventions its path matches, such as "go:test-file". Evidence in Jev's state, never a rule. */
   readonly conventions: readonly string[];
-  /** What part it plays, by its name and language; a file with no text is data. */
-  readonly part: "source" | "test" | "config" | "data" | "docs" | "script";
-  /** Its leading comment. */
-  readonly doc?: string;
 }
 
 export interface DefNode extends NodeBase {
@@ -182,8 +176,6 @@ export interface History {
   readonly commits: number;
   /** Commits in the last 14 days. */
   readonly recent: number;
-  /** Commits in the last 30 days. */
-  readonly month: number;
   readonly authors: number;
 }
 
