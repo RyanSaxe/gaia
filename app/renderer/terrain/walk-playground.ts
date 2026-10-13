@@ -28,7 +28,7 @@ const KNOBS: readonly Knob[] = [
   { key: "snap", label: "Step", unit: "°", min: 10, max: 90, step: 5, uses: (s) => s.big === "snap" },
   { key: "blink", label: "Blink", unit: "s", min: 0, max: 0.6, step: 0.02, zero: "a cut", uses: (s) => s.big === "blink" || s.walk === "face" },
   { key: "pace", label: "Walk", unit: "m/s", min: 1, max: 8, step: 0.1, uses: () => true },
-  { key: "back", label: "Back", unit: "× walk", min: 0.1, max: 1, step: 0.05, uses: (s) => s.walk !== "none" && s.big !== "blink" },
+  { key: "back", label: "Back", unit: "× walk", min: 0.1, max: 1, step: 0.05, uses: (s) => s.walk !== "none" && s.walk !== "face" && s.big !== "blink" },
   { key: "side", label: "Aside", unit: "× walk", min: 0.1, max: 1, step: 0.05, uses: (s) => s.walk === "strafe" },
   { key: "sensitivity", label: "Look", unit: "°/px", min: 0.03, max: 0.6, step: 0.01, uses: () => true },
 ];
