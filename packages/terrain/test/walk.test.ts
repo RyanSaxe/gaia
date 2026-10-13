@@ -339,35 +339,36 @@ describe("walking off the land", () => {
 });
 
 describe("a walker's stride", () => {
-  /** Walks `seconds` from `from` toward (dx, dz) at `speed`, then stands for `rest` seconds: each frame's body, and the eyes' height with the stride. */
+  /** Walks `seconds` from `from` toward (dx, dz) at `speed`, then stands for `rest` seconds: each frame's body, and whether it was asked to move. */
   const walkThen = (decks: readonly Deck[], from: Walker, dx: number, dz: number, seconds: number, rest: number, speed = WALK_TO.pace) => {
     let body = standAt(t, decks, from.x, from.z);
-    const frames: { body: Stride; camera: number; moving: boolean }[] = [];
+    const frames: { body: Stride; moving: boolean }[] = [];
     for (let i = 0; i < Math.round((seconds + rest) * 60); i++) {
       const moving = i < seconds * 60;
       body = stride(t, NO_SOLIDS, decks, body, moving ? { dx, dz, speed } : { dx: 0, dz: 0, speed: 0 }, dt);
-      frames.push({ body, camera: body.eye + body.lift, moving });
+      frames.push({ body, moving });
     }
     return frames;
   };
   const speedOf = (b: Stride): number => Math.hypot(b.vx, b.vz);
 
-  it("eases into a gentle low-frequency stride that rides the ground without jitter, and comes to rest when stopped", () => {
+  it("gets going and stops at once, never overshooting or turning, and its eyes ride the ground without bob or jitter", () => {
     const frames = walkThen([], dry, -1, 0, 6, 3);
-    // No instant velocity: the body gathers speed over its first steps and sheds it over its last, as a person does
-    // (an instant start or stop at walking pace would be 250 m/s² in one frame).
-    expect(speedOf(frames[5]!.body)).toBeLessThan(WALK_TO.pace * 0.15);
-    for (let i = 1; i < frames.length; i++) expect(Math.abs(speedOf(frames[i]!.body) - speedOf(frames[i - 1]!.body)) / dt).toBeLessThan(12);
     const striding = frames.slice(120, 360);
-    // The stride rises and falls within its comfort bound (a little more where a gentle descent quickens it), and only lifts and sways: no roll, no pitch.
-    const lifts = striding.map((f) => f.body.lift);
-    expect(Math.max(...lifts) - Math.min(...lifts)).toBeGreaterThan(GAIT.lift.walk);
-    for (const l of lifts) expect(Math.abs(l)).toBeLessThanOrEqual(GAIT.lift.walk * 1.05);
+    const pace = striding.reduce((m, f) => Math.max(m, speedOf(f.body)), 0);
+    // Under way within a fraction of a second, as the keys walk in games, and never faster than the pace it settles to.
+    expect(speedOf(frames[Math.round(0.15 * 60)]!.body)).toBeGreaterThan(pace * 0.9);
+    for (const f of frames.slice(0, 120)) expect(speedOf(f.body)).toBeLessThanOrEqual(pace * 1.001);
+    // It goes the way it was asked, never swinging: every step of its velocity points along -x.
+    for (const f of frames.filter((f) => speedOf(f.body) > 1e-3)) expect(Math.abs(f.body.vz) / speedOf(f.body)).toBeLessThan(1e-6);
+    // Let go, it stops within a fraction of a second, slowing along the way it went and never stepping back.
+    const stopped = frames.findIndex((f) => !f.moving);
+    expect(speedOf(frames[stopped + Math.round(0.15 * 60)]!.body)).toBeLessThan(pace * 0.05);
+    for (const f of frames.slice(stopped)) expect(f.body.vx).toBeLessThanOrEqual(1e-9);
     // The eyes ride 1.6 m over the ground they cross, never lagging or floating by more than a few centimeters.
     for (const f of striding) expect(Math.abs(f.body.eye - footingAt(t, [], f.body.x, f.body.z).eye)).toBeLessThan(0.08);
-    // No high-frequency jitter: almost all of the eyes' vertical acceleration is the stride's own cadence, below 4 Hz.
-    // The eyes' vertical acceleration, through a Hann window so the stride's own cadence does not leak into high frequencies.
-    const acc = striding.slice(1, -1).map((f, i, all) => ((striding[i + 2]!.camera - 2 * f.camera + striding[i]!.camera) / (dt * dt)) * (0.5 - 0.5 * Math.cos((2 * Math.PI * i) / (all.length - 1))));
+    // Nothing but the ground moves them: their vertical acceleration, through a Hann window, has almost nothing above 4 Hz.
+    const acc = striding.slice(1, -1).map((f, i, all) => ((striding[i + 2]!.body.eye - 2 * f.body.eye + striding[i]!.body.eye) / (dt * dt)) * (0.5 - 0.5 * Math.cos((2 * Math.PI * i) / (all.length - 1))));
     let total = 0;
     let high = 0;
     for (let k = 1; k <= acc.length / 2; k++) {
@@ -380,13 +381,12 @@ describe("a walker's stride", () => {
       total += re * re + im * im;
       if (k / (acc.length * dt) > 4) high += re * re + im * im;
     }
-    expect(high / total).toBeLessThan(0.02);
-    // Stopped, the body settles within about a step and then holds perfectly still.
+    expect(high / Math.max(total, 1e-12)).toBeLessThan(0.02);
+    // Stopped, it holds perfectly still.
     const settled = frames.slice(Math.round(7.5 * 60));
     for (const f of settled) {
       expect(speedOf(f.body)).toBeLessThan(0.01);
-      expect(Math.abs(f.body.lift)).toBe(0);
-      expect(Math.abs(f.camera - settled[0]!.camera)).toBeLessThan(1e-3);
+      expect(Math.abs(f.body.eye - settled[0]!.body.eye)).toBeLessThan(1e-3);
     }
   });
 
