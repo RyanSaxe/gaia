@@ -34,8 +34,8 @@ import { PAPER, type WashArea, type WashSheet, easeRing, fadeMask, floatWash, la
 import { INK, type LandView, RIM, type WildInk, createWildInk, layGround, reliefAt } from "./wild-ink.ts";
 
 export interface FieldMap {
-  /** The world changed: the paper is painted again while the page is idle. */
-  invalidate(): void;
+  /** The world changed: the paper is painted again while the page is idle, or first, while the person waits for the world (`soon`). */
+  invalidate(soon?: boolean): void;
   /** Unfolds or folds the map. */
   open(on: boolean): void;
   /**
@@ -99,6 +99,8 @@ const HILL_CELL = 5;
 const WATER_CELL = 2.5;
 /** The paper is painted in steps of a millisecond or two, as many as fit in the page's idle time with this much to spare, ms. */
 const SPARE_MS = 2;
+/** While the person waits for the world, the paper is painted for at least this long every frame, ms. */
+const SOON_MS = 8;
 /** How long the relief's painting runs before it lets the page draw, ms: a few, so the wait's lines never stall. */
 const RELIEF_STEP_MS = 4;
 
@@ -540,15 +542,19 @@ const TAKE_IN = { meters: 60, px: 36 };
 /** How far the person walks before the wild's ink ahead of them is asked for again, meters. */
 const WARM_STEP = 20;
 
-/** Runs `step` in the page's idle time, passing the milliseconds left there, until it returns true. */
-export function whenIdle(step: (budget: number) => boolean): () => void {
+/**
+ * Runs `step` in the page's idle time, passing the milliseconds left there, until it returns true. Work a person is
+ * waiting on (`least`, ms) runs every frame for at least that long however busy the page is, where the page's idle
+ * time alone could leave it a step a second while a world opens.
+ */
+export function whenIdle(step: (budget: number) => boolean, least = 0): () => void {
   let handle = 0;
   let stopped = false;
   const hasIdle = typeof window.requestIdleCallback === "function";
-  const idle = (cb: (deadline?: IdleDeadline) => void): number => (hasIdle ? window.requestIdleCallback(cb, { timeout: 1000 }) : window.setTimeout(cb, 16));
+  const idle = (cb: (deadline?: IdleDeadline) => void): number => (hasIdle ? window.requestIdleCallback(cb, { timeout: least > 0 ? 16 : 1000 }) : window.setTimeout(cb, 16));
   const run = (deadline?: IdleDeadline): void => {
     if (stopped) return;
-    if (!step(deadline?.timeRemaining() ?? 4)) handle = idle(run);
+    if (!step(Math.max(least, deadline?.timeRemaining() ?? 4))) handle = idle(run);
   };
   handle = idle(run);
   return () => {
@@ -798,6 +804,8 @@ export function createFieldMap(
   const painted: (() => void)[] = [];
   /** Whether the world changed since the paper was painted. */
   let stale = true;
+  /** Whether the paper is wanted while the person waits for the world, rather than in the page's idle time. */
+  let paintSoon = false;
   let painting: Generator<void, Paper> | null = null;
   let stopPainting: (() => void) | null = null;
   const timing = { paintMs: 0, longestStepMs: 0, drawMs: 0 };
@@ -909,7 +917,7 @@ export function createFieldMap(
       do if (paintStep()) return true;
       while (performance.now() - t0 < budget - SPARE_MS);
       return false;
-    });
+    }, paintSoon ? SOON_MS + SPARE_MS : 0);
   }
 
   function size(): { w: number; h: number; dpr: number } {
@@ -1420,8 +1428,9 @@ export function createFieldMap(
 
   let lastPlace = "";
   return {
-    invalidate() {
+    invalidate(soon = false) {
       // Only the chosen way paints; another waits until it is chosen.
+      paintSoon = soon;
       if (shown) startPainting();
       else stale = true;
     },

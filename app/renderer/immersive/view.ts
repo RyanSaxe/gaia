@@ -220,7 +220,11 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
   world.furnishingSolid(true);
 
   // The first place writes its name as the wait gives way to the world, not under it.
-  world.onLifted(() => minimap.show(active));
+  let lifted = false;
+  world.onLifted(() => {
+    lifted = true;
+    minimap.show(active);
+  });
   // Markers stand beside the trails on every bake, before the grass and the walk read the ground.
   world.furnish((stood) => markers.place(stood, (x, z): PlaceArea => world.placeAt(x, z).area));
   /** Whether a world stands yet: until the first bake lands, nothing names a place. */
@@ -249,7 +253,8 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
     layer.classList.add("standing");
     // A new world writes where the person stands afresh.
     minimap.show(active);
-    map.invalidate();
+    // Under the wait, the paper the minimap is cut from is painted first, so the minimap is drawn by the time it shows.
+    map.invalidate(!lifted);
     map.show(active);
     worldName.textContent = world.places().name;
     const code = world.code();
