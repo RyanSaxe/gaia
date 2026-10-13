@@ -33,3 +33,7 @@ about 'barren'."
 
 Pair session `gaia-v3` (`f8d282bc-7712-4894-9255-dcf4699f92cb`), round 9's
 review of the cottage, built in round 10.
+
+## Superseded
+
+Partly superseded by [64](64-anything-can-stand-as-anything.md): a building stands for any entity, file or definition whose importance is offered one, never only an entity, and plants stand for definitions, files and entities alike. The rest stands: a building's feature, and its ruin through its channels.

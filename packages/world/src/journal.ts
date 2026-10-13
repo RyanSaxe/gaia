@@ -14,7 +14,7 @@
 // running on over the pages after. The book says only what each page is
 // about, what it lists and its pages; the journal draws the rest.
 
-import type { CodeArea, CodePatch, CodeSymbol, CodeThing, CodeTrail } from "./code-world.ts";
+import type { CodeArea, CodePatch, CodeStanding, CodeSymbol, CodeThing, CodeTrail } from "./code-world.ts";
 
 export interface JournalEntry {
   /**
@@ -65,7 +65,10 @@ export interface JournalSource {
   readonly areas: readonly Pick<CodeArea, "path" | "name" | "parent">[];
   readonly patches: readonly Pick<CodePatch, "path" | "name" | "area">[];
   readonly symbols: readonly Pick<CodeSymbol, "id" | "file" | "parent" | "name" | "line">[];
-  readonly things?: readonly Pick<CodeThing, "path" | "name">[];
+  /** The buildings and landmarks; only an entity's has a spread of its own here, since a file's or a definition's is its own page. */
+  readonly things?: readonly Pick<CodeThing, "path" | "name" | "of">[];
+  /** The files and entities standing as flowers, a stone, a bush or a tree. */
+  readonly standing?: readonly Pick<CodeStanding, "path" | "name" | "of">[];
   readonly trails?: readonly Pick<CodeTrail, "from" | "to">[];
 }
 
@@ -97,7 +100,8 @@ export function journalOf(world: JournalSource, room: PageRoom = { first: Infini
   for (const a of world.areas) if (a.parent !== null) push(chapters, a.parent, { kind: "chapter", of: a.path, name: a.name });
   for (const p of world.patches) push(files, p.area, { kind: "file", of: p.path, name: p.name });
   for (const s of world.symbols) push(definitions, s.parent ?? s.file, { item: { kind: "definition", of: s.id, name: s.name }, line: s.line });
-  const things = new Map((world.things ?? []).map((t) => [t.path, t]));
+  // Every entity has its thing's spread, whatever it stands as.
+  const things = new Map([...(world.things ?? []).filter((t) => (t.of ?? "entity") === "entity"), ...(world.standing ?? []).filter((t) => t.of === "entity")].map((t) => [t.path, t]));
   const joined = new Map<string, Set<string>>();
   for (const t of world.trails ?? []) {
     if (!things.has(t.from) || !things.has(t.to) || t.from === t.to) continue;

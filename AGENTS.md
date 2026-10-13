@@ -130,8 +130,9 @@ doc in the same commit, and say so in the commit message.
 - **Primitives**: `Primitive` in `packages/schema/src/primitive.ts`: closed
   parameters, a pure `build`, every vitality channel written. Adding one is
   below.
-- **The world from code**: `planWorldRequests`, `judgeWorld`, `keptJev`,
-  `landOf` and `layoutWorld` in `@gaia/world`; `bakeTerrain`, `placeAt` and
+- **The world from code**: `planWorldRequests`, `judgeWorld`,
+  `planStanding`, `composeWorld`, `keptJev`, `landOf` and `layoutWorld` in
+  `@gaia/world`; `bakeTerrain`, `placeAt` and
   `outlinesOf` in `@gaia/terrain`; `standWorld` in
   `app/renderer/terrain/stand.ts`.
 - **Fixtures**: the standalone lab shows `fixtures/gaia-graph.json` (the

@@ -26,3 +26,7 @@ throughout": landmarks and trails stand for entities.
 ## Settled
 
 Pair session `gaia-v3` (`f8d282bc-7712-4894-9255-dcf4699f92cb`), round 11.
+
+## Superseded
+
+Partly superseded by [64](64-anything-can-stand-as-anything.md): a landmark, like a building, stands for any entity, file or definition whose importance is offered one. Trails still stand for dependencies between entities, and vitality still belongs to each thing.

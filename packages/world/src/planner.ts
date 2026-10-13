@@ -30,6 +30,8 @@ export interface Target {
   readonly state: Readonly<Record<string, unknown>>;
   /** What the thing's place has that a primitive may need, such as running water; none when absent. */
   readonly has?: readonly string[];
+  /** The thing's rank by importance among the world's own things, 0 to 1, for a primitive that needs a range of it. */
+  readonly rank?: number;
 }
 
 type Ref =
@@ -88,7 +90,7 @@ export function planStructure(k: AnyKind, lib: Library, target: Target): Wave {
   const offered: Record<string, readonly string[]> = {};
   for (const [name, s] of Object.entries(k.slots)) {
     // Only the primitives whose needs the place meets; a part none of them can fill is not asked about.
-    const fitting = lib.forRole(s.role, target.has ?? []);
+    const fitting = lib.forRole(s.role, { has: target.has ?? [], ...(target.rank === undefined ? {} : { rank: target.rank }) });
     if (fitting.length === 0) {
       if (s.optional) continue;
       throw new Error(`No ${s.role} primitive fits ${target.id || "the repository's root"}'s place.`);

@@ -1,4 +1,4 @@
-import type { DependencyFacts, EntityFacts, FileFacts, RegionFacts, RepositoryFacts } from "./facts.ts";
+import type { DependencyFacts, EntityFacts, FileFacts, RegionFacts, RepositoryFacts, ThingFacts } from "./facts.ts";
 import type { Role } from "./ports.ts";
 
 export interface Slot<R extends Role = Role> {
@@ -54,14 +54,16 @@ function feeds(output: string, input: string): boolean {
 
 /**
  * What a kind stands for: one file, one entity (a package, crate, service or
- * module), one directory's region, one dependency between two entities (a
+ * module), any one thing that stands for code (an entity, a file or a
+ * definition), one directory's region, one dependency between two entities (a
  * link), or the whole repository.
  */
-export type Subject = "file" | "entity" | "region" | "link" | "repository";
+export type Subject = "file" | "entity" | "thing" | "region" | "link" | "repository";
 
 export interface SubjectFacts {
   file: FileFacts;
   entity: EntityFacts;
+  thing: ThingFacts;
   region: RegionFacts;
   link: DependencyFacts;
   repository: RepositoryFacts;
@@ -85,7 +87,7 @@ export interface Kind<S extends Subject = Subject> {
 }
 
 /** Any kind, for code that reads slots and stages but never binds facts. */
-export type AnyKind = Kind<"file"> | Kind<"entity"> | Kind<"region"> | Kind<"link"> | Kind<"repository">;
+export type AnyKind = Kind<"file"> | Kind<"entity"> | Kind<"thing"> | Kind<"region"> | Kind<"link"> | Kind<"repository">;
 
 /** The slot groups Jev answers in order: the kind's stages, or every slot at once. */
 export function stagesOf(k: AnyKind): readonly (readonly string[])[] {

@@ -56,6 +56,23 @@ export interface EntityFacts {
   readonly dependents: readonly string[];
 }
 
+/**
+ * What any thing that stands for code is, as a building's or a landmark's
+ * numbers read it: an entity (whose facts are these and more), a file or a
+ * definition. `dependents` are what lean on it: the entities that import an
+ * entity, the files that import a file, the definitions that call or name a
+ * definition.
+ */
+export interface ThingFacts {
+  /** Its identity: an entity's root directory, a file's path or a definition's `<file>#<name>`. */
+  readonly path: string;
+  readonly name: string;
+  readonly lines: number;
+  /** How much of it others may use: an entity's exported definitions, a file's, or 1 for an exported definition. */
+  readonly exports: number;
+  readonly dependents: readonly string[];
+}
+
 /** Facts about one directory, which becomes a region. */
 export interface RegionFacts {
   readonly path: string;
