@@ -547,8 +547,8 @@ a color laid is never a color that later changes; until then that part
 stays bare paper (`settling.ts`). Each change is painted by the field map's
 own painter and comes in over a second or so, wet in wet. Each area's name
 is lettered in the map's survey capitals, in the place the map letters it,
-once its last answer is in, names settling together one after another as a
-pen letters them. While the world bakes, the pen draws each building's and
+once its last answer about its looks is in, even before its health washes
+in, names settling together one after another as a pen letters them. While the world bakes, the pen draws each building's and
 landmark's mark at its laid-out place, one by one from the middle outward.
 Once the world stands, its relief is drawn in with the same hand: the pen
 draws each river from its source to its mouth and each trail along its way,

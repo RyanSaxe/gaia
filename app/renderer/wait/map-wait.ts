@@ -5,8 +5,9 @@
 // in once it is settled, whenever that is, spreading over the ground around
 // it as the map spreads it (`settling.ts`), so the sheet never shows a color
 // it later changes. Each area's name is lettered in the map's survey capitals
-// once its last answer is in. While the world bakes, the pen draws each
-// building's and landmark's mark at its laid-out place, one by one. Once the
+// once its last answer about its looks is in, before its wash if that comes
+// later. While the world bakes, the pen draws each building's and landmark's
+// mark at its laid-out place, one by one. Once the
 // world stands, its relief is drawn in with the same hand: the hills, ponds,
 // contours and trees wash in over each area's own ground, from the middle
 // outward as the pen went over the borders, while the pen draws each river
@@ -404,8 +405,6 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
       }
       yield* paintLayer(l, box);
     }
-    // A name asked for waits for its own ground's wash.
-    for (const path of grounds) if (namesAsked.delete(path)) letter(path);
     laying--;
     washedIfDone();
   }
@@ -465,8 +464,7 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
   }
 
   // ---------- names, as each area's last answer comes in ----------
-  /** Names asked for whose ground's wash has yet to come in. */
-  const namesAsked = new Set<string>();
+  /** When the last name was lettered, so names that settle together are lettered one after another. */
   let lastName = 0;
   function letter(path: string): void {
     if (land?.names === null || land?.names === undefined) {
@@ -475,13 +473,9 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
     }
     const el = land.names.get(path);
     if (el === undefined || el.dataset.due !== undefined) return;
-    if (land.health.ground(path) === undefined) {
-      namesAsked.add(path);
-      return;
-    }
     el.dataset.due = "";
-    // After the work already asked for, so a name never comes before the wash under it; names that settle together
-    // are lettered one after another, as a pen would letter them.
+    // A name is lettered as soon as its area settles, whether or not its ground's wash has come, so the pen keeps
+    // moving while Jev is asked; names that settle together are lettered one after another, as a pen would letter them.
     afterWork(() => {
       const at = Math.max(performance.now(), lastName + PACE.nameGapMs);
       lastName = at;
