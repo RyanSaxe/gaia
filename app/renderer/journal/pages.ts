@@ -9,7 +9,7 @@
 
 import { type Journal, type JournalEntry, type PageRoom, entityOf } from "@gaia/world";
 import type { BookPages, Spread } from "./book.ts";
-import { type CaptionFact, captionOf, conceptsCaption } from "./caption.ts";
+import { type CaptionFact, conceptsCaption } from "./caption.ts";
 import { tapsOf } from "./maps.ts";
 import { fullItems, pagePx, renderCross, renderFullPage, renderNameLine, renderPage, renderPicture, renderTitle, renderTraveller } from "./page.ts";
 import { type Full, type PageWords, type WordsSource, appendixWords, contentsWords, fileOfEntry, leadFiles, wordsOf } from "./words.ts";
@@ -57,19 +57,14 @@ export interface JournalPagesSource {
 const mapped = (e: JournalEntry): boolean => e.kind === "chapter" || (e.kind === "file" && e.lists.length > 0);
 
 /**
- * What a thing's caption says, from what Jev judged about it: a definition's,
- * a file's, or a folder's on its entity's painting, or on its map when it
- * stands as nothing. A file with definitions says it on its own page.
+ * What a thing's caption says, from what the understanding pass judged about
+ * it, each concept as a percentage: a definition's, a file's, or a folder's
+ * on its entity's painting, or on its map when it stands as nothing. A file
+ * with definitions says it on its own page.
  */
 function captionFor(words: WordsSource, e: JournalEntry): CaptionFact[] {
-  // What the understanding pass judged, where it has: each concept as a percentage.
   const thing = e.kind === "file" && e.lists.length > 0 ? undefined : words.thing?.(e.of);
   if (thing !== undefined && (e.kind !== "chapter" || words.journal.entry(entityOf(e.of)) === undefined)) return conceptsCaption(thing);
-  const own = (of: string) => words.judged?.(of).find((j) => j.lines === undefined);
-  if (e.kind === "definition") return captionOf("definition", own(e.of));
-  if (e.kind === "own" || (e.kind === "file" && e.lists.length === 0)) return captionOf("file", own(e.of));
-  if (e.kind === "entity") return captionOf("folder", own(e.of));
-  if (e.kind === "chapter" && words.journal.entry(entityOf(e.of)) === undefined) return captionOf("folder", own(e.of));
   return [];
 }
 
@@ -146,7 +141,7 @@ function layOut(words: PageWords, body: Full, host: HTMLElement): Slice[] {
     host.replaceChildren(page);
     const holder = page.querySelector(".jp-body") as HTMLElement;
     const top = holder.getBoundingClientRect().top;
-    const rows = [...holder.querySelectorAll<HTMLElement>(".jp-said-row, .jp-line, .jp-fold.inline, .jp-rest")].map((r) => {
+    const rows = [...holder.querySelectorAll<HTMLElement>(".jp-line, .jp-fold.inline, .jp-rest")].map((r) => {
       const b = r.getBoundingClientRect();
       return { top: b.top - top, bottom: b.bottom - top };
     });

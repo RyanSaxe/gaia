@@ -8,11 +8,10 @@
 // picture, and under it what Jev says of the thing as its caption. Nothing
 // fades.
 
-import type { Span } from "@gaia/schema";
 import { TRAVELLER_SVG } from "../immersive/map-styles.ts";
 import type { CaptionFact } from "./caption.ts";
 import { type Piece, highlight } from "./highlight.ts";
-import type { Fact, Folded, Full, Mark, PageWords, Row, Said, Snippet } from "./words.ts";
+import type { Folded, Full, Mark, PageWords, Row, Snippet } from "./words.ts";
 
 /** The field map's health colors: russet when failing, ochre as it declines, green when well. */
 export function healthColor(v: number): string {
@@ -70,13 +69,12 @@ function numbersOf(words: PageWords): HTMLElement {
   return numbers;
 }
 
-/** A mark beside a row or a line: green for key to understanding, russet for what needs work most, slate blue for a page's best part, stronger the surer Jev is. */
+/** A mark beside a row or a line: green for key to understanding, russet for what needs work most, slate blue for a page's best part. */
 const MARK_COLOR = { understand: "#5f8f3e", improve: "#a4553a", finest: "#4d6f8f" } as const;
 function marked(e: HTMLElement, mark: Mark | undefined): void {
   if (mark === undefined) return;
   e.classList.add("jp-marked");
   e.style.setProperty("--mark", MARK_COLOR[mark.kind]);
-  e.style.setProperty("--mark-strength", (0.25 + 0.75 * Math.max(0, Math.min(1, mark.sure))).toFixed(2));
 }
 
 function rowsOf(rows: readonly Row[], turnTo: (of: string) => void): HTMLElement {
@@ -108,7 +106,7 @@ function leadOf(snippets: readonly Snippet[], path: string, turnTo: (of: string)
   for (const s of snippets) {
     const snippet = el("button", "jp-snippet");
     snippet.type = "button";
-    marked(snippet, { kind: s.kind, sure: 1 });
+    marked(snippet, { kind: s.kind });
     const head = el("span", "jp-snippet-head");
     head.append(el("span", "jp-snippet-label", LEAD_LABEL[s.kind]), el("span", "jp-snippet-name", s.name), el("span", "jp-dots"), el("span", "jp-row-page", s.page.toLocaleString("en-US")));
     const lines = [s.signature.text, ...s.lines];
@@ -174,8 +172,8 @@ function codeOf(at: readonly number[], body: Full, base: number, pieces: readonl
     const n = body.first + k;
     const row = el("div", "jp-line");
     row.dataset.line = String(n);
-    // The surest mark over a line is the one its gutter shows.
-    marked(row, body.marks.filter((m) => m.from <= n && n <= m.to).sort((a, b) => b.sure - a.sure)[0]);
+    // The first mark over a line is the one its gutter shows.
+    marked(row, body.marks.find((m) => m.from <= n && n <= m.to));
     if (body.prose === true) {
       // A document's heading is set as one, without the marks that make it; a fenced block's lines as code.
       const heading = body.pre?.[k] === true ? null : /^(#{1,6})\s+(.*)$/.exec(line);
@@ -228,7 +226,7 @@ export function renderPage(words: PageWords, folio: string, turnTo: (of: string)
     // From the line it opens at; lines above it fold away.
     const { opensAt, kind: _, ...code } = words.body;
     const skipped = opensAt - code.first;
-    const shown: Full = { ...code, kind: "full", said: [], first: opensAt, lines: code.lines.slice(skipped) };
+    const shown: Full = { ...code, kind: "full", first: opensAt, lines: code.lines.slice(skipped) };
     if (skipped > 0 && inFull !== undefined) body.append(foldOf(skipped, inFull, "before"));
     setItems(body, shown, fullItems(shown), baseIndent(code.lines), piecesOf(shown, words), turnTo);
     // Where a long definition's page ends, a fold: the book shows it, with how many lines it holds, when lines are left over.
@@ -239,31 +237,19 @@ export function renderPage(words: PageWords, folio: string, turnTo: (of: string)
 }
 
 /**
- * A definition in full, as the appendix sets it: everything Jev says about
- * the definition itself first, then its lines, what Jev says about a block
- * of them standing just above the block's first line. Each item is one row
- * on the page, so a page is a run of items.
+ * A text in full, as the appendix sets it: its lines, each definition with a
+ * page of its own folded to one line, and how many lines are left out. Each
+ * item is one row on the page, so a page is a run of items.
  */
 export type FullItem =
-  | { readonly kind: "block"; readonly lines: Span }
-  | { readonly kind: "fact"; readonly fact: Fact; readonly block: boolean }
   | { readonly kind: "line"; readonly at: number }
   | { readonly kind: "fold"; readonly fold: Folded }
   | { readonly kind: "rest"; readonly lines: number };
 
 export function fullItems(body: Full): FullItem[] {
   const items: FullItem[] = [];
-  const blocks = new Map<number, Said[]>();
-  for (const said of body.said) {
-    if (said.lines === undefined) items.push(...said.facts.map((fact) => ({ kind: "fact" as const, fact, block: false })));
-    else blocks.set(said.lines.start, [...(blocks.get(said.lines.start) ?? []), said]);
-  }
   const folds = new Map((body.folded ?? []).map((f) => [f.from, f]));
   for (let k = 0; k < body.lines.length; k++) {
-    for (const said of blocks.get(body.first + k) ?? []) {
-      items.push({ kind: "block", lines: said.lines as Span });
-      items.push(...said.facts.map((fact) => ({ kind: "fact" as const, fact, block: true })));
-    }
     // A definition with a page of its own is one line here, which turns to it.
     const fold = folds.get(body.first + k);
     if (fold !== undefined) {
@@ -277,18 +263,6 @@ export function fullItems(body: Full): FullItem[] {
 
 /** Each of a text's lines as its pieces, inked by what they are; a document's are left plain. */
 const piecesOf = (body: Pick<Full, "lines" | "prose">, words: PageWords): Piece[][] => (body.prose === true ? [] : highlight(body.lines, words.path.join("/")));
-
-function factOf(fact: Fact, block: boolean): HTMLElement {
-  const row = el("div", `jp-said-row jp-fact${block ? " in-block" : ""}`);
-  const answer = el("span", "jp-fact-answer");
-  // A choice or a yes or no is as strong as Jev is sure; a score's wash fills as far as it stands.
-  const wash = el("i", fact.level !== undefined ? "level" : "sure");
-  if (fact.level !== undefined) wash.style.setProperty("--level", fact.level.toFixed(2));
-  else wash.style.opacity = (0.25 + 0.75 * (fact.sure ?? 0)).toFixed(2);
-  answer.append(wash, document.createTextNode(fact.answer));
-  row.append(el("span", "jp-fact-asked", fact.asked), el("span", "jp-dots"), answer);
-  return row;
-}
 
 /**
  * A page of a definition in full, in the appendix: `items` of its
@@ -322,23 +296,17 @@ export function renderFullPage(words: PageWords, body: Full, folio: string, item
   return page;
 }
 
-/** Sets `items` of a text on a page: a run of its lines as code or prose, a folded definition as a line, a run of what Jev says as its rows. */
+/** Sets `items` of a text on a page: a run of its lines as code or prose, and a folded definition as a line. */
 function setItems(content: HTMLElement, body: Full, items: readonly FullItem[], base: number, pieces: readonly (readonly Piece[])[], turnTo: (of: string) => void): void {
   let run: FullItem[] = [];
   const close = (): void => {
     const [start] = run;
     if (start === undefined) return;
     if (start.kind === "line") content.append(codeOf(run.map((r) => (r.kind === "line" ? r.at : 0)), body, base, pieces));
-    else if (start.kind === "fold" || start.kind === "rest") {
-      for (const r of run) content.append(r.kind === "fold" ? foldedOf(r.fold, turnTo) : el("div", "jp-rest", `${(r as Extract<FullItem, { kind: "rest" }>).lines.toLocaleString("en-US")} more lines, not set here`));
-    } else {
-      const said = el("div", `jp-said${start.kind === "fact" && !start.block ? "" : " in-code"}`);
-      for (const r of run) said.append(r.kind === "block" ? el("div", "jp-said-row jp-said-block", r.lines.start === r.lines.end ? `line ${r.lines.start}` : `lines ${r.lines.start}–${r.lines.end}`) : factOf((r as Extract<FullItem, { kind: "fact" }>).fact, (r as Extract<FullItem, { kind: "fact" }>).block));
-      content.append(said);
-    }
+    else for (const r of run) content.append(r.kind === "fold" ? foldedOf(r.fold, turnTo) : el("div", "jp-rest", `${(r as Extract<FullItem, { kind: "rest" }>).lines.toLocaleString("en-US")} more lines, not set here`));
     run = [];
   };
-  const group = (item: FullItem): string => (item.kind === "line" ? "line" : item.kind === "fold" || item.kind === "rest" ? "fold" : "said");
+  const group = (item: FullItem): string => (item.kind === "line" ? "line" : "fold");
   for (const item of items) {
     if (run.length > 0 && group(run[0] as FullItem) !== group(item)) close();
     run.push(item);
@@ -438,13 +406,11 @@ export function renderPicture(picture: HTMLElement | null, folio: string, onTap?
     }
   }
   if (caption.length > 0) {
-    // Lettered across the picture's foot, each answer as strong as Jev is sure of it.
+    // Lettered across the picture's foot.
     const plate = el("div", "jp-caption");
     for (const fact of caption) {
       const item = el("span", "jp-caption-item");
-      const value = el("span", "jp-caption-value", fact.value);
-      if (fact.sure !== undefined) value.style.opacity = (0.5 + 0.5 * fact.sure).toFixed(2);
-      item.append(el("span", "jp-caption-label", fact.label), value);
+      item.append(el("span", "jp-caption-label", fact.label), el("span", "jp-caption-value", fact.value));
       plate.append(item);
     }
     page.append(plate);
