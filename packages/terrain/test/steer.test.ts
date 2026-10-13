@@ -83,7 +83,8 @@ describe("face and go", () => {
     expect(held.yaw).toBeCloseTo(90, 6);
     expect(at(held.frames, 0.5).ahead).toBe(1);
     expect(held.last.ahead).toBe(0);
-    const tap = play(go, [{ key: "left", at: 0, hold: 0.04 }], 0.5);
+    // A tap as a hand makes it, a tenth of a second.
+    const tap = play(go, [{ key: "left", at: 0, hold: 0.1 }], 0.5);
     expect(tap.yaw).toBeCloseTo(90, 6);
     expect(tap.frames.every((f) => f.ahead === 0)).toBe(true);
   });
@@ -110,9 +111,11 @@ describe("face and go", () => {
     expect(not.yaw).toBeCloseTo(go.nudge, 6);
   });
 
-  it("↑ with ← from still faces the diagonal, or a quarter without it", () => {
+  it("↑ with ← from still faces the diagonal; without it, ↑ walks at once and ← nudges that walk", () => {
     expect(play(go, [{ key: "ahead", at: 0, hold: 0.5 }, { key: "left", at: 0.02, hold: 0.5 }], 1).yaw).toBeCloseTo(45, 6);
-    expect(play({ ...go, diagonal: false }, [{ key: "ahead", at: 0, hold: 0.5 }, { key: "left", at: 0.02, hold: 0.5 }], 1).yaw).toBeCloseTo(90, 6);
+    const off = play({ ...go, diagonal: false, keep: 0 }, [{ key: "ahead", at: 0, hold: 0.5 }, { key: "left", at: 0.02, hold: 0.5 }], 1);
+    expect(off.yaw).toBeCloseTo(go.nudge, 6);
+    expect(at(off.frames, 0.1).ahead).toBe(1);
   });
 
   it("with a blink, the turn is made at its darkest; with none, nothing dims", () => {
@@ -122,6 +125,12 @@ describe("face and go", () => {
     expect(frames[jump]!.dim).toBeGreaterThan(0.9);
     expect(frames.filter((f) => f.dim > 0).length * DT).toBeCloseTo(go.blink, 1);
     expect(play(cut, [{ key: "back", at: 0, hold: 0.1 }], 0.5).frames.every((f) => f.dim === 0)).toBe(true);
+  });
+
+  it("↑ from still walks at once and never blinks, since it turns nobody", () => {
+    const { frames } = play(go, [{ key: "ahead", at: 0, hold: 0.5 }], 0.6);
+    expect(frames.every((f) => f.dim === 0)).toBe(true);
+    expect(at(frames, 0.1).ahead).toBe(1);
   });
 
   it("Shift hurries the walk", () => {
