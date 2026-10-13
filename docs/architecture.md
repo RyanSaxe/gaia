@@ -307,7 +307,11 @@ the finished world has it): a file's vitality is its quality, which
 files wash in as the pass goes. After each slice it also sends what the
 slice read (stage `understood`: the files and areas whose requests in one
 of the pass's passes are all answered), which the wait draws as the
-pencil going over that code. Every file is named once, before the
+pencil going over that code. After the pass, as Jev chooses what each thing
+stands as and composes what it raised, it sends what each answer settled
+(stage `standing`: the files and areas whose things Jev chose, and those
+whose building, landmark, land or sky it composed, each once), which the
+wait draws as one more stroke. Every file is named once, before the
 document, whether or not Jev is asked. With every answer it also names the areas
 whose judgments have all settled (stage `asking`, `settled`, the areas' paths:
 an area settles once every request about its files, its entity and itself

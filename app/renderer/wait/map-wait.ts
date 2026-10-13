@@ -20,7 +20,9 @@
 // exactly the ground each wash will paint, in light graphite, one hatching
 // for each stage: an area while its looks are asked, and again once the
 // folder pass reaches it; a file once its links are read, once Jev reads it
-// for its quality, and once Jev reads closer round it. The pencil is on the
+// for its quality, and once Jev reads closer round it; then, after the pass,
+// a file or an area once Jev has chosen what its things stand as, and again
+// once what Jev raised there is composed. The pencil is on the
 // paper, to its edge as the wash goes, and each wash takes it away in just
 // the measure that it paints.
 // Answers come in bursts, but every stroke is drawn at a hand's pace, one
@@ -39,7 +41,7 @@
 import { rand, seedOf } from "@gaia/schema";
 import type { Outline } from "@gaia/terrain";
 import type { LotPlace } from "@gaia/world";
-import type { FilePatch } from "../../world-service/protocol.ts";
+import type { FilePatch, Settled } from "../../world-service/protocol.ts";
 import type { StoodWorld } from "../terrain/lab.ts";
 import { MARGIN, drawRivers, drawTrails, drawTrees, letterName, nearestAreas, paintRelief, riverCourse, riverStretches, riverStrokes, strokeContours } from "../immersive/field-map.ts";
 import { CELL, type NameLand, canvasMeasure, nameLand, placeNames } from "../immersive/map-names.ts";
@@ -100,11 +102,18 @@ const PENCIL = {
     links: { angle: 0.22, every: 4.5, alpha: 0.16 },
     quality: { angle: -1.3, every: 4.5, alpha: 0.16 },
     closer: { angle: 1.57, every: 6, alpha: 0.13 },
+    chosen: { angle: -0.2, every: 5.5, alpha: 0.14 },
+    composed: { angle: 0.6, every: 3.5, alpha: 0.15 },
   },
 } as const;
-/** What the pencil marks: an area while its looks are asked and once the folder pass reaches it; a file once its links are read, once it is read for itself, and once Jev reads closer round it. */
-type AreaMark = "asked" | "surveyed";
-type FileMark = "links" | "quality" | "closer";
+/**
+ * What the pencil marks: an area while its looks are asked and once the folder pass reaches it; a file once its links
+ * are read, once it is read for itself, and once Jev reads closer round it; and after the pass, a file or an area once
+ * Jev has chosen what its things stand as, and once what it raised there is composed.
+ */
+type Settling = "chosen" | "composed";
+type AreaMark = "asked" | "surveyed" | Settling;
+type FileMark = "links" | "quality" | "closer" | Settling;
 type Stroke = { readonly of: "area"; readonly path: string; readonly mark: AreaMark } | { readonly of: "file"; readonly path: string; readonly mark: FileMark };
 
 /** How far an area's relief wash reaches past its own ground, and how soft its edge is, in cells. */
@@ -352,6 +361,19 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
       areas.filter((a) => !surveyed.has(a) && (surveyed.add(a), true)).map((path) => ({ of: "area" as const, path, mark: "surveyed" as const })),
       now,
     );
+    pace();
+  }
+
+  /**
+   * After the pass, Jev has chosen what these files' and areas' things stand as, or composed what it raised there: one
+   * more stroke over each, so the sheet keeps moving until the world stands.
+   */
+  function standing(chosen: Settled, composed: Settled): void {
+    const now = performance.now();
+    const of = (by: Settling, s: Settled): Stroke[] => [...s.files.map((path) => ({ of: "file" as const, path, mark: by })), ...s.areas.map((path) => ({ of: "area" as const, path, mark: by }))];
+    const strokes = [...of("chosen", chosen), ...of("composed", composed)];
+    fileMarks.add(strokes.filter((x) => x.of === "file"), now);
+    areaMarks.add(strokes.filter((x) => x.of === "area"), now);
     pace();
   }
 
@@ -1099,6 +1121,7 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
         asked(o.asking);
         for (const path of o.settled) letter(path);
       } else if (o.stage === "understood") read(o.files, o.areas);
+      else if (o.stage === "standing") standing(o.chosen, o.composed);
     },
     baking(health) {
       // The world is ready to bake: whatever is still queued is drawn quickly now, so the pace never holds it back.

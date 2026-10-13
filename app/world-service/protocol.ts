@@ -133,7 +133,21 @@ export type Opening =
    * root) whose requests in one of its passes are all answered now. A file comes once for its links and again for
    * itself; an area once, as the pass goes down the folders. The wait shows this as the pencil going over that code.
    */
-  | { readonly stage: "understood"; readonly files: readonly string[]; readonly areas: readonly string[] };
+  | { readonly stage: "understood"; readonly files: readonly string[]; readonly areas: readonly string[] }
+  /**
+   * What Jev has just settled after the understanding pass: the files and areas whose things Jev chose what they
+   * stand as (`chosen`: a file's own request, or an entity's, by its area), and those whose building, landmark,
+   * land or sky it composed (`composed`: a file's or a definition's by its file; an entity's, a land's or, as "",
+   * the sky's by its area). Each comes once. The wait shows this as one more pencil stroke over that code, so the
+   * sheet keeps moving until the world stands.
+   */
+  | { readonly stage: "standing"; readonly chosen: Settled; readonly composed: Settled };
+
+/** Files and areas (a directory's path, "" for the root) that something settled. */
+export interface Settled {
+  readonly files: readonly string[];
+  readonly areas: readonly string[];
+}
 
 /** World service → renderer. */
 export type ToRenderer =
