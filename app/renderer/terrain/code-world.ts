@@ -270,7 +270,8 @@ export function codeLab({ model, world, judges, summary, judged }: WorldDocument
           return CHARACTERS[world.regions[area?.region ?? 0]?.character ?? ""]?.stature ?? 1;
         };
         return world.symbols.map((s) => {
-          const form = FORMS[s.form] ?? (Object.values(FORMS)[0] as (typeof FORMS)[string]);
+          // A definition Jev chose nothing for stands as a plain stone, never as a tree that would stand for a judgment.
+          const form = FORMS[s.form] ?? (FORMS["Standing stone"] as (typeof FORMS)[string]);
           const patch = patchOf.get(s.file);
           const scale = symbolScale(s.lines, form.rule, s.importance) * (form.rule === "trees" ? statureOf(s.file) : 1);
           return { x: s.x, z: s.z, rule: form.rule, variant: form.preset, radius: form.rule === "flowers" ? 0.8 : 1, scale, vitality: s.vitality, ...(patch === undefined ? {} : { patch }) };
