@@ -3,8 +3,7 @@
 //! answer replaces the one held only when it clearly differs:
 //! - a choice, when the fresh top option beats the held option's fresh
 //!   probability by 0.2;
-//! - a score, when it moves at least half a level;
-//! - a yes-or-no, when it crosses 0.5 by at least 0.15.
+//! - a score, when it moves at least half a level.
 //!
 //! Each fresh answer is compared with the held one, never with the previous
 //! fresh one, so small changes add up and show once they pass the margin.
@@ -13,10 +12,9 @@ use serde_json::{Map, Value, json};
 
 const CHOICE: f64 = 0.2;
 const SCORE: f64 = 0.5;
-const YES_NO: f64 = 0.15;
 
-/// Jev's answer to one question, in one shape: `{ choice, p }`,
-/// `{ score, levels }` or `{ yes }`.
+/// Jev's answer to one question, in one shape: `{ choice, p }` or
+/// `{ score, levels }`, the two types the calls ask.
 pub fn normalize(question: &Value, answer: &Value) -> Option<Value> {
     match answer["type"].as_str()? {
         "choice" => Some(
@@ -26,7 +24,6 @@ pub fn normalize(question: &Value, answer: &Value) -> Option<Value> {
             "score": answer["score"].as_f64()?,
             "levels": question["criteria"].as_array().map_or(0, Vec::len),
         })),
-        "noul" => Some(json!({ "yes": answer["noul"].as_f64()? })),
         _ => None,
     }
 }
@@ -58,18 +55,11 @@ pub fn combine(answers: &[(f64, Value)]) -> Option<Value> {
             .map(|(k, _)| k.clone())?;
         return Some(json!({ "choice": choice, "p": p }));
     }
-    if first.get("score").is_some() {
-        let score: f64 = answers
-            .iter()
-            .map(|(w, a)| a["score"].as_f64().unwrap_or(0.0) * w / total)
-            .sum();
-        return Some(json!({ "score": score, "levels": first["levels"] }));
-    }
-    let yes: f64 = answers
+    let score: f64 = answers
         .iter()
-        .map(|(w, a)| a["yes"].as_f64().unwrap_or(0.0) * w / total)
+        .map(|(w, a)| a["score"].as_f64().unwrap_or(0.0) * w / total)
         .sum();
-    Some(json!({ "yes": yes }))
+    Some(json!({ "score": score, "levels": first["levels"] }))
 }
 
 /// True when a fresh answer should replace the held one.
@@ -81,9 +71,6 @@ pub fn replaces(held: &Value, fresh: &Value) -> bool {
     }
     if let (Some(a), Some(b)) = (held["score"].as_f64(), fresh["score"].as_f64()) {
         return (a - b).abs() >= SCORE;
-    }
-    if let (Some(a), Some(b)) = (held["yes"].as_f64(), fresh["yes"].as_f64()) {
-        return (a - 0.5).signum() != (b - 0.5).signum() && (b - 0.5).abs() >= YES_NO;
     }
     true
 }
@@ -104,12 +91,6 @@ mod tests {
             &json!({ "score": 2.4 })
         ));
         assert!(replaces(&json!({ "score": 2.1 }), &json!({ "score": 2.6 })));
-        assert!(!replaces(&json!({ "yes": 0.6 }), &json!({ "yes": 0.45 })));
-        assert!(replaces(&json!({ "yes": 0.6 }), &json!({ "yes": 0.3 })));
-        assert!(
-            !replaces(&json!({ "yes": 0.6 }), &json!({ "yes": 0.95 })),
-            "a yes-or-no that stays on its side holds"
-        );
     }
 
     #[test]

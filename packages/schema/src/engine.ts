@@ -24,35 +24,21 @@ export interface EngineMethods {
    */
   "project.graph": { params: { root: string; judged?: boolean }; result: CodeGraph };
   /**
-   * Builds every request Jev's calls would send about the project and looks
-   * each up in the store; sends nothing. A request already answered is
-   * kept, never sent again (`docs/architecture.md`, "The Jev runner").
-   */
-  /**
-   * With `through`, only the passes up to that one, such as `understand` for
-   * what the world needs to stand. With `graph`, the judged graph it planned
-   * on too, as `project.graph` with `judged: true` gives it, built once.
-   */
-  "understand.plan": { params: { root: string; through?: Pass; graph?: boolean }; result: UnderstandPlan };
-  /**
-   * Sends every request whose waits are met, up to `max` (256 by default),
-   * as many at once as Jev takes, and returns the nodes that settled, so the
-   * waiting screen can paint them. Call it until nothing is left. With
-   * `through`, only the passes up to that one are sent.
-   */
-  "understand.next": { params: { root: string; max?: number; through?: Pass }; result: UnderstandProgress };
-  /**
-   * The understanding pass (importance and quality at every level), beside
-   * today's calls until the world reads it: what it would send, and the
-   * judged graph with `graph`.
+   * Builds every request Jev would be sent to understand the project (its
+   * links, then importance and quality at every level) and looks each up in
+   * the store; sends nothing. A request already answered is kept, never
+   * sent again (`docs/architecture.md`, "The Jev runner"). With `graph`,
+   * the judged graph it planned on too, as `project.graph` with
+   * `judged: true` gives it, built once.
    */
   "understanding.plan": { params: { root: string; graph?: boolean }; result: UnderstandPlan };
-  /** Sends the understanding pass's ready requests, folders top-down and each file after its folder. */
+  /**
+   * Sends every request whose waits are met, up to `max` (256 by default),
+   * as many at once as Jev takes: the links first, then folders top-down
+   * and each file after its folder. Returns the nodes that settled, so the
+   * waiting screen can paint them. Call it until nothing is left.
+   */
   "understanding.next": { params: { root: string; max?: number }; result: UnderstandProgress };
-  /** Queues the deep questions for the nodes the world chose to stand. */
-  "understand.deepen": { params: { root: string; nodes: readonly NodeId[] }; result: UnderstandPlan };
-  /** Asks one call about one node straight away, for a follow-up a person asks. */
-  "understand.ask": { params: { root: string; node: NodeId; call: string }; result: { answers: Readonly<Record<string, unknown>> } };
   /**
    * Where a GitHub address leads, before anything is cloned: whether it names
    * a public repository GitHub will hand over (one `git ls-remote`), and the
@@ -142,7 +128,7 @@ export interface JevEstimate {
 }
 
 /** The passes of understanding, in the order their waits allow (`docs/architecture.md`, "The Jev runner"). */
-export type Pass = "link" | "understand" | "deep" | "tests" | "dirs" | "folders" | "files";
+export type Pass = "link" | "folders" | "files";
 
 /** What understanding a project would send, pass by pass, and what it would cost. */
 export interface UnderstandPlan {

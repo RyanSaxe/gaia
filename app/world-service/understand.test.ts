@@ -1,7 +1,8 @@
 // The engine's Jev runner, end to end: the real engine binary plans and asks
-// its calls about small codebases through a local stand-in for OpenRouter's
-// Decisions API. Nothing here reaches OpenRouter: the engine refuses any
-// endpoint override that is not a loopback address.
+// the link pass and the understanding pass about small codebases through a
+// local stand-in for OpenRouter's Decisions API. Nothing here reaches
+// OpenRouter: the engine refuses any endpoint override that is not a
+// loopback address.
 
 import { type ChildProcess, execFileSync, spawn } from "node:child_process";
 import { mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } from "node:fs";
@@ -56,78 +57,57 @@ function codebase(name: string, files: Record<string, string>): string {
 
 const pending = (plan: UnderstandPlan): number => plan.pending.reduce((n, p) => n + p.requests, 0);
 
-/** Plans and sends until nothing is left; returns the requests the stand-in received meanwhile. */
-async function understand(engine: ReturnType<typeof engineAt>, root: string) {
+type Sent = { state: Record<string, unknown>; questions: Record<string, { criteria: unknown }> }[];
+
+/** Asks until nothing is left; returns the requests the stand-in received meanwhile. */
+async function understand(engine: ReturnType<typeof engineAt>, root: string): Promise<Sent> {
   const before = standIn.received.length;
-  await engine.call("understand.plan", { root });
   for (;;) {
-    const p = await engine.call("understand.next", { root });
-    if (p.left === 0) break;
+    const p = await engine.call("understanding.next", { root });
+    if (p.left === 0 || (p.sent === 0 && p.settled.length === 0)) break;
   }
-  return standIn.received.slice(before).map((r) => r.body as { state: Record<string, unknown>; questions: Record<string, unknown> });
+  return standIn.received.slice(before).map((r) => r.body as Sent[number]);
 }
 
 const fn = (name: string, body: string): string => `export function ${name}(x: number): number {\n  ${body}\n}\n`;
 
-type Sent = Awaited<ReturnType<typeof understand>>;
-/** Requests about files, as opposed to directories, whose state holds the directory call's part. */
-const aboutFiles = (sent: Sent): Sent => sent.filter((r) => r.state.directory === undefined);
+/** Requests about files, whose state holds the file's part of the understanding pass. */
+const aboutFiles = (sent: Sent): Sent => sent.filter((r) => r.state["file-axes"] !== undefined);
+/** Requests of the link pass, whose state holds neither part of the understanding pass. */
+const ofLinks = (sent: Sent): Sent => sent.filter((r) => r.state["file-axes"] === undefined && r.state["folder-axes"] === undefined);
+const calleeQuestions = (sent: Sent) => sent.flatMap((r) => Object.entries(r.questions).filter(([id]) => id.startsWith("callee:")));
 
 describe("the Jev runner", () => {
-  it("asks every call about one file in one request, and reopening sends nothing", async () => {
+  it("keeps every answer, so reopening plans and sends nothing, and a plan gives the judged graph it planned on", async () => {
     const root = codebase("small", { "src/a.ts": fn("a", "return x + 1;"), "src/b.ts": fn("b", "return x * 2;") });
     const data = join(scratch, "small-data");
-    const sent = aboutFiles(await understand(engineAt(data), root));
-    expect(sent.map((r) => r.state.path).sort()).toEqual(["src/a.ts", "src/b.ts"]);
-    for (const r of sent) {
-      const ids = Object.keys(r.questions);
-      expect(ids.some((id) => id.startsWith("profile:"))).toBe(true);
-      expect(ids.some((id) => id.startsWith("screen:"))).toBe(true);
-    }
+    expect(aboutFiles(await understand(engineAt(data), root)).length).toBeGreaterThanOrEqual(2);
     const again = engineAt(data);
-    const plan = await again.call("understand.plan", { root });
+    const plan = await again.call("understanding.plan", { root, graph: true });
     expect(pending(plan)).toBe(0);
     const before = standIn.received.length;
-    expect((await again.call("understand.next", { root })).sent).toBe(0);
+    expect((await again.call("understanding.next", { root })).sent).toBe(0);
     expect(standIn.received.length).toBe(before);
+    // The graph a plan gives is the judged graph, the one the world is laid out on.
+    expect(plan.graph).toEqual(await again.call("project.graph", { root, judged: true }));
   }, 60_000);
 
-  it("sends only the passes up to the one named, and the rest once asked for all", async () => {
-    const root = codebase("through", { "src/a.ts": fn("a", "return x + 1;"), "src/b.ts": fn("b", "return x * 2;") });
-    const engine = engineAt(join(scratch, "through-data"));
-    const before = standIn.received.length;
-    for (;;) if ((await engine.call("understand.next", { root, through: "understand" })).left === 0) break;
-    const sent = standIn.received.slice(before).map((r) => r.body as { state: Record<string, unknown> });
-    expect(sent.map((r) => r.state.path).sort()).toEqual(["src/a.ts", "src/b.ts"]);
-    expect(pending(await engine.call("understand.plan", { root, through: "understand" }))).toBe(0);
-    const all = await engine.call("understand.plan", { root });
-    expect(all.pending.filter((p) => p.requests > 0).map((p) => p.pass)).toEqual(["dirs"]);
-    const rest = await understand(engine, root);
-    expect(rest.length).toBeGreaterThan(0);
-    expect(rest.every((r) => r.state.directory !== undefined)).toBe(true);
-    // A plan asked for its graph gives the judged graph, the one the world is laid out on.
-    const planned = await engine.call("understand.plan", { root, through: "understand", graph: true });
-    expect(planned.graph).toEqual(await engine.call("project.graph", { root, judged: true }));
-  }, 60_000);
-
-  it("asks again only the requests whose state an edit changed, and a renamed file keeps its answers", async () => {
+  it("asks again only about the file an edit changed, and a renamed file keeps its answers", async () => {
     const root = codebase("edits", { "src/a.ts": fn("a", "return x + 1;"), "src/b.ts": fn("b", "return x * 2;"), "src/c.ts": fn("c", "return x - 3;") });
     const data = join(scratch, "edits-data");
     await understand(engineAt(data), root);
     writeFileSync(join(root, "src/a.ts"), fn("a", "return x + 10;"));
-    const edited = aboutFiles(await understand(engineAt(data), root));
-    expect(edited.map((r) => r.state.path)).toEqual(["src/a.ts"]);
+    const edited = await understand(engineAt(data), root);
+    expect([...new Set(edited.map((r) => r.state.path))]).toEqual(["src/a.ts"]);
     renameSync(join(root, "src/b.ts"), join(root, "src/renamed.ts"));
-    const engine = engineAt(data);
-    const renamed = aboutFiles(await understand(engine, root));
-    expect(renamed.map((r) => r.state.path)).toEqual(["src/renamed.ts"]);
-    const graph: CodeGraph = await engine.call("project.graph", { root, judged: true });
+    // Before anything is asked again, the renamed file shows the answers held for its lineage.
+    const graph: CodeGraph = await engineAt(data).call("project.graph", { root, judged: true });
     const file = graph.nodes.find((n) => n.id === "file:src/renamed.ts");
-    expect(file?.judged?.kind?.choice).toBeTypeOf("string");
+    expect(file?.judged?.value?.quality).toBeTypeOf("number");
   }, 60_000);
 
   it("asks a file over Jev's window in pieces at its definitions, and judges the whole file from them", async () => {
-    const big = Array.from({ length: 1400 }, (_, i) => fn(`f${i}`, `return x * ${i} + ${"1 + ".repeat(20)}0;`)).join("\n");
+    const big = Array.from({ length: 120 }, (_, i) => fn(`f${i}`, `return x * ${i} + ${"1 + ".repeat(350)}0;`)).join("\n");
     const root = codebase("big", { "src/big.ts": big });
     const engine = engineAt(join(scratch, "big-data"));
     const sent = aboutFiles(await understand(engine, root));
@@ -135,52 +115,43 @@ describe("the Jev runner", () => {
     expect(sent.every((r) => r.state.chunk !== undefined)).toBe(true);
     const graph: CodeGraph = await engine.call("project.graph", { root, judged: true });
     const file = graph.nodes.find((n) => n.id === "file:src/big.ts");
-    expect(file?.judged?.kind?.choice).toBeTypeOf("string");
+    expect(file?.judged?.value?.quality).toBeTypeOf("number");
   }, 120_000);
 
-  it("cuts a file with more questions than fit into pieces with their own source, asking each question once", async () => {
+  it("cuts a file with more link questions than fit into pieces with their own source, asking each question once", async () => {
     // Two files beside it define `helper`, so every call to it waits for Jev to choose.
     const many = Array.from({ length: 300 }, (_, i) => `export const g${i} = (x: number): number => helper(x) + ${i};`).join("\n");
     const root = codebase("many", { "src/many.ts": many, "src/one.ts": fn("helper", "return x;"), "src/two.ts": fn("helper", "return -x;") });
-    const sent = aboutFiles(await understand(engineAt(join(scratch, "many-data")), root)).filter((r) => r.state.path === "src/many.ts");
-    const asking = (prefix: string): Sent => sent.filter((r) => Object.keys(r.questions).some((id) => id.startsWith(prefix)));
-    for (const prefix of ["screen:def:", "callee:"]) {
-      const requests = asking(prefix);
-      expect(requests.length).toBeGreaterThan(1);
-      const asked = requests.flatMap((r) => Object.keys(r.questions).filter((id) => id.startsWith(prefix)));
-      expect(asked.length).toBe(300);
-      expect(new Set(asked).size).toBe(300);
-      // The source goes out once per pass, in pieces, rather than again with every batch of questions.
-      const sourceSent = requests.reduce((n, r) => n + String(r.state.source).length, 0);
-      expect(sourceSent).toBeLessThan(many.length * 1.05);
-    }
-    // A question about the whole file goes in the first piece only.
-    const kinds = sent.filter((r) => "profile:kind" in r.questions);
-    expect(kinds.length).toBe(1);
-    expect((kinds[0]?.state.chunk as { lines: number[] } | undefined)?.lines[0]).toBe(1);
+    const requests = ofLinks(await understand(engineAt(join(scratch, "many-data")), root)).filter((r) => r.state.path === "src/many.ts");
+    expect(requests.length).toBeGreaterThan(1);
+    const asked = calleeQuestions(requests).map(([id]) => id);
+    expect(asked.length).toBe(300);
+    expect(new Set(asked).size).toBe(300);
+    // The source goes out once, in pieces, rather than again with every batch of questions.
+    const sourceSent = requests.reduce((n, r) => n + String(r.state.source).length, 0);
+    expect(sourceSent).toBeLessThan(many.length * 1.05);
   }, 120_000);
 
   it("asks again about a reference whose candidates changed, and about nothing else of it", async () => {
     const root = codebase("relink", { "src/a.ts": fn("a", "return helper(x);"), "src/one.ts": fn("helper", "return x;"), "src/two.ts": fn("helper", "return -x;") });
     const data = join(scratch, "relink-data");
-    const calleeQuestions = (sent: Sent) => sent.flatMap((r) => Object.entries(r.questions).filter(([id]) => id.startsWith("callee:")));
     expect(calleeQuestions(await understand(engineAt(data), root)).length).toBe(1);
     expect(calleeQuestions(await understand(engineAt(data), root)).length).toBe(0);
     writeFileSync(join(root, "src/three.ts"), fn("helper", "return 2 * x;"));
     const asked = calleeQuestions(await understand(engineAt(data), root));
     expect(asked.length).toBe(1);
-    expect(Object.keys((asked[0]?.[1] as { criteria: Record<string, string> }).criteria)).toContain("def:src/three.ts#helper");
+    expect(Object.keys(asked[0]?.[1].criteria as Record<string, string>)).toContain("def:src/three.ts#helper");
   }, 60_000);
 
-  it("counts understanding in a plan before Jev's links are in, and sends it only after them", async () => {
+  it("counts the understanding pass in a plan before Jev's links are in, and sends it only after them", async () => {
     const root = codebase("waits", { "src/a.ts": fn("a", "return helper(x);"), "src/one.ts": fn("helper", "return x;"), "src/two.ts": fn("helper", "return -x;") });
     const engine = engineAt(join(scratch, "waits-data"));
-    const plan = await engine.call("understand.plan", { root, through: "understand" });
+    const plan = await engine.call("understanding.plan", { root });
     const of = (pass: string): number => plan.pending.find((p) => p.pass === pass)?.requests ?? 0;
-    expect([of("link"), of("understand")]).toEqual([1, 3]);
+    expect([of("link"), of("folders"), of("files")]).toEqual([1, 2, 3]);
     const before = standIn.received.length;
-    await engine.call("understand.next", { root, through: "understand" });
-    const first = standIn.received.slice(before).map((r) => Object.keys((r.body as { questions: Record<string, unknown> }).questions));
+    await engine.call("understanding.next", { root });
+    const first = standIn.received.slice(before).map((r) => Object.keys((r.body as Sent[number]).questions));
     expect(first).toHaveLength(1);
     expect(first[0]?.every((id) => id.startsWith("callee:"))).toBe(true);
   }, 60_000);
@@ -202,53 +173,14 @@ describe("the Jev runner", () => {
       await engine.call("store.put", { project: projectId, writes: [{ table: "held", key, value: stale }] });
       expect(await jevCalls()).toBe(0);
       const before = standIn.received.length;
-      for (;;) if ((await engine.call("understand.next", { root })).left === 0) break;
+      await understand(engine, root);
       expect(standIn.received.length).toBe(before);
       expect(await jevCalls()).toBe(1);
     }
   }, 60_000);
-
-  it("asks about a directory only once everything under it is answered, the root last", async () => {
-    const root = codebase("nested", { "a/b/c/deep.ts": fn("deep", "return x;"), "a/b/mid.ts": fn("mid", "return x;"), "a/top.ts": fn("top", "return x;") });
-    const sent = await understand(engineAt(join(scratch, "nested-data")), root);
-    const at = (pred: (r: Sent[number]) => boolean): number => sent.findIndex(pred);
-    const dirAt = (path: string): number => at((r) => r.state.directory !== undefined && r.state.path === path);
-    const fileAt = (path: string): number => at((r) => r.state.directory === undefined && r.state.path === path);
-    expect(dirAt("a/b/c")).toBeGreaterThan(fileAt("a/b/c/deep.ts"));
-    expect(dirAt("a/b")).toBeGreaterThan(dirAt("a/b/c"));
-    expect(dirAt("a/b")).toBeGreaterThan(fileAt("a/b/mid.ts"));
-    expect(dirAt("a")).toBeGreaterThan(dirAt("a/b"));
-    expect(sent.at(-1)?.state.path).toBe("(the repository's root)");
-  }, 60_000);
-
-  it("asks the deep questions about exactly the nodes the world chose", async () => {
-    const root = codebase("deepen", { "src/a.ts": fn("chosen", "return x + 1;") + fn("other", "return x - 1;") });
-    const engine = engineAt(join(scratch, "deepen-data"));
-    await understand(engine, root);
-    const before = standIn.received.length;
-    await engine.call("understand.deepen", { root, nodes: ["def:src/a.ts#chosen"] });
-    for (;;) if ((await engine.call("understand.next", { root })).left === 0) break;
-    const deepIds = standIn.received.slice(before).flatMap((r) => Object.keys((r.body as { questions: Record<string, unknown> }).questions)).filter((id) => id.startsWith("definition:"));
-    expect(deepIds.length).toBeGreaterThan(0);
-    expect(deepIds.every((id) => id.startsWith("definition:chosen:"))).toBe(true);
-    const graph: CodeGraph = await engine.call("project.graph", { root, judged: true });
-    const chosen = graph.nodes.find((n) => n.id === "def:src/a.ts#chosen");
-    expect(chosen?.judged?.role?.choice).toBeTypeOf("string");
-    expect(chosen?.judged?.quality?.readability).toBeDefined();
-  }, 60_000);
 });
 
 describe("the understanding pass", () => {
-  /** Asks the understanding pass until nothing is left; returns the requests the stand-in received meanwhile. */
-  async function understanding(engine: ReturnType<typeof engineAt>, root: string) {
-    const before = standIn.received.length;
-    for (;;) {
-      const p = await engine.call("understanding.next", { root });
-      if (p.left === 0 || (p.sent === 0 && p.settled.length === 0)) break;
-    }
-    return standIn.received.slice(before).map((r) => r.body as { state: Record<string, unknown>; questions: Record<string, { criteria: unknown }> });
-  }
-
   it("asks each folder in its parent's light and each file in its folder's, then gathers importance and quality", async () => {
     const root = codebase("axes", {
       "README.md": "# Tiny\n\nA tiny project that measures shapes.\n",
@@ -256,7 +188,7 @@ describe("the understanding pass", () => {
       "a/b/mid.ts": fn("mid", "if (x > 1) { return x; }\n  for (const y of [x]) { x += y; }\n  return x;") + fn("other", "return x - 1;"),
     });
     const engine = engineAt(join(scratch, "axes-data"));
-    const sent = await understanding(engine, root);
+    const sent = await understand(engine, root);
     const folderAt = (path: string): number => sent.findIndex((r) => r.state["folder-axes"] !== undefined && r.state.path === path);
     const fileAt = (path: string): number => sent.findIndex((r) => r.state["file-axes"] !== undefined && r.state.path === path);
     // Top-down: the root, then each folder, and each file only after its folder.
@@ -297,13 +229,13 @@ describe("the understanding pass", () => {
       }
     }
     // Reopening asks nothing again.
-    expect((await understanding(engineAt(join(scratch, "axes-data")), root)).length).toBe(0);
+    expect((await understand(engineAt(join(scratch, "axes-data")), root)).length).toBe(0);
   }, 60_000);
 
   it("cuts a big file so each piece holds as many definitions as fit, asking each once and the whole file only in the first", async () => {
     const big = Array.from({ length: 240 }, (_, i) => fn(`f${i}`, `return x + ${i};`)).join("\n");
     const root = codebase("axes-big", { "big.ts": big });
-    const sent = (await understanding(engineAt(join(scratch, "axes-big-data")), root)).filter((r) => {
+    const sent = (await understand(engineAt(join(scratch, "axes-big-data")), root)).filter((r) => {
       const part = r.state["file-axes"] as { readings?: object } | undefined;
       return part !== undefined && part.readings === undefined;
     });
