@@ -380,7 +380,7 @@ code graph (`CodeGraph` in `packages/schema/src/graph.ts`), which
 `project.graph` returns:
 - a node for every directory, file, definition and block;
 - an edge for every link between them: contains, imports, calls,
-  references, inherits, implements, names, changes-with and checks;
+  references, inherits, implements, names and changes-with;
 - the engine's measures of each node, and Jev's judgments of it.
 
 Each edge says who filled it: the parser, a rule, git, or Jev with its
