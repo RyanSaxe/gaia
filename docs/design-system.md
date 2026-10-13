@@ -446,23 +446,27 @@ shows a gap. Grass is cleared under the house and along the walk to its
 door, and its walls stop the walk. A building stays under 32,000 triangles
 and draws one mesh per swatch, at most eleven calls.
 
-A feature sets a building apart and says what its entity does, on the side
-the chimney leaves free. A mill's waterwheel turns in a stone-lined pit, fed
-by a flume on trestles or pushed round by the race, about once every nine
-seconds; it slows as vitality falls and stands still below 0.1. An
-archive's tower rises from the back corner, rendered between stone quoins,
-taller the more of the code depends on it, its narrow windows lamplit at
-night under a steep cap or an open lantern room whose lamp burns after dusk.
-A waterwheel is offered only where the building's region holds running
-water. The rest stand in the yard beside the free side:
+A feature gives a building a character, on the side the chimney leaves
+free. Each names a feel the entity's code might have, never a kind of code,
+so a world stays true as its code changes and Jev's picks can spread. A
+mill's waterwheel turns in a stone-lined pit, fed by a flume on trestles or
+pushed round by the race, about once every nine seconds; it slows as
+vitality falls and stands still below 0.1, and it is offered only where the
+building's region holds running water. A tower rises from the back corner,
+rendered between stone quoins, taller the more of the code depends on it,
+its narrow windows lamplit at night under a steep cap or an open lantern
+room whose lamp burns after dusk. The rest stand in the yard beside the free
+side:
 
-| Feature | The code it suits | As it fails |
+| Feature | Its feel | As it fails |
 | --- | --- | --- |
-| Dovecote: a round stone cote under a cone and lantern, or a painted cote on a post, its doves circling | Carries messages from one part of the code to another: a queue, a channel, a notifier | The doves fly home and stay in, the door swings open, the cote on a post lurches |
-| Well: a stone ring under a little roof on posts, or beside a sweep with a stone weight | A store the others keep their things in and draw from | The water sinks away, the bucket falls in, coping stones fall in, moss on the coping |
-| Bell: a dark iron bell in a stone arch or a frame of raked timbers, rung by a rope | Raises signals the others wait for and answer: an event emitter, hooks, alarms | It hangs askew from 0.4, and is gone by 0.14 |
-| Forge: a stone hearth, plastered hood and chimney, an anvil and a quench trough, in an open shed or under the sky | Makes the tools the rest is built with: a compiler, a bundler, code generation | Its smoke thins, its fire stops glowing at dusk, the shed's covering falls in and its outer posts fall |
-| Granary: a boarded store on mushroom-shaped staddle stones, gabled or hipped, its steps stopping short of the door | Keeps what was made so it need not be made again: a cache, stored results | Its boards rot through, the outer staddles topple and it slumps over |
+| Waterwheel | Quaint and old-fashioned, doing things the way they were always done | It slows, and stands still below 0.1 |
+| Tower | Proud and aloof, keeping itself apart and looking down on the rest | It crumbles from the top |
+| Dovecote: a round stone cote under a cone and lantern, or a painted cote on a post, its doves circling | Sociable and chatty, forever off to the others and back | The doves fly home and stay in, the door swings open, the cote on a post lurches |
+| Well: a stone ring under a little roof on posts, or beside a sweep with a stone weight | Mysterious, hard to see into, with depths few have explored | The water sinks away, the bucket falls in, coping stones fall in, moss on the coping |
+| Bell: a dark iron bell in a stone arch or a frame of raked timbers, rung by a rope | Brash and urgent, quick to sound off | It hangs askew from 0.4, and is gone by 0.14 |
+| Forge: a stone hearth, plastered hood and chimney, an anvil and a quench trough, in an open shed or under the sky | Fierce and raw, still being hammered into shape | Its smoke thins, its fire stops glowing at dusk, the shed's covering falls in and its outer posts fall |
+| Granary: a boarded store on mushroom-shaped staddle stones, gabled or hipped, its steps stopping short of the door | Thrifty and hoarding, saving everything against a rainy day | Its boards rot through, the outer staddles topple and it slumps over |
 
 A failing building falls to ruin, and reads from 40 m. It gives way first
 at the front corner away from the door, where a person walking up sees it:

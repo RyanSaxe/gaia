@@ -208,7 +208,7 @@ export const waterwheelParams = {
 export const waterwheel = primitive({
   id: "waterwheel@1",
   role: "Feature",
-  doc: "A mill's wooden waterwheel turning slowly beside the house in a stone-lined pit, for an entity that turns what it is given into something new. It slows to a stop as the code fails.",
+  doc: "A wooden waterwheel turning slowly in a stone-lined pit beside the house, for code that feels quaint and old-fashioned, unhurried, doing things the way they were always done. It slows to a stop as the code fails.",
   params: waterwheelParams,
   // A wheel turns only where water runs past.
   needs: ["running water"],
@@ -226,7 +226,7 @@ export const towerParams = {
 export const tower = primitive({
   id: "tower@1",
   role: "Feature",
-  doc: "A tall square tower at the back corner of the house, rendered with stone quoins and narrow lamplit windows, for an entity that keeps records or watches over others. Taller the more the code depends on it; it crumbles from the top as the code fails.",
+  doc: "A tall square tower rising from the back corner of the house, its narrow windows lamplit at night, for code that feels proud and aloof, keeping itself apart and looking down on the rest. It crumbles from the top as the code fails.",
   params: towerParams,
   build: (p, ctx, plan) => buildTower(p, ctx, plan),
 });
@@ -242,7 +242,7 @@ export const dovecoteParams = {
 export const dovecote = primitive({
   id: "dovecote@1",
   role: "Feature",
-  doc: "A dovecote beside the house, its doves circling over it and settling on its ledges, for an entity that carries messages from one part of the code to another: a message queue, a channel, a mailer or a notifier that delivers what others send. Its doves fly home and stay in as the code fails, and the cote falls into disrepair.",
+  doc: "A dovecote beside the house, its doves circling overhead and settling on its ledges, for code that feels sociable and chatty, forever fluttering off to the others and back. Its doves fly home and stay in as the code fails.",
   params: dovecoteParams,
   build: (p, ctx, plan) => buildDovecote(p, ctx, plan),
 });
@@ -258,7 +258,7 @@ export const wellParams = {
 export const well = primitive({
   id: "well@1",
   role: "Feature",
-  doc: "A round stone well in the yard beside the house, for an entity the rest of the code keeps its things in and draws them from: a store, a database or shared state. Its water sinks away, its bucket falls in and its coping loosens as the code fails.",
+  doc: "A round stone well in the yard, its water dark and still, for code that feels mysterious, hard to see into, with depths few have ever explored. Its water sinks away and its bucket falls in as the code fails.",
   params: wellParams,
   build: (p, ctx, plan) => buildWell(p, ctx, plan),
 });
@@ -274,7 +274,7 @@ export const bellParams = {
 export const bell = primitive({
   id: "bell@1",
   role: "Feature",
-  doc: "A dark iron bell hung beside the house under a little roof, rung by a rope, for an entity that raises signals the rest of the code waits for and answers when they sound: an event emitter, hooks, triggers, alarms and alerts. Its bell hangs askew and then is gone as the code fails, and its roof rots through.",
+  doc: "A dark iron bell hung under a little roof beside the house, for code that feels brash and urgent, quick to sound off and hard to ignore. It hangs askew and then is gone as the code fails.",
   params: bellParams,
   build: (p, ctx, plan) => buildBell(p, ctx, plan),
 });
@@ -290,7 +290,7 @@ export const forgeParams = {
 export const forge = primitive({
   id: "forge@1",
   role: "Feature",
-  doc: "A smith's forge beside the house: a stone hearth under a plastered hood and chimney, an anvil on its stump and a quench trough, for an entity that makes the tools the rest of the code is built with: a compiler, a bundler, a build step or code generation. Its chimney smokes and its fire glows at dusk while the code is healthy; it goes cold and its shelter falls in as the code fails.",
+  doc: "A smith's forge beside the house, its hearth glowing at dusk under a smoking chimney, for code that feels fierce and raw: hot, rough-edged and still being hammered into shape. It goes cold and its shelter falls in as the code fails.",
   params: forgeParams,
   build: (p, ctx, plan) => buildForge(p, ctx, plan),
 });
@@ -306,7 +306,7 @@ export const granaryParams = {
 export const granary = primitive({
   id: "granary@1",
   role: "Feature",
-  doc: "A boarded granary raised on mushroom-shaped staddle stones beside the house, for an entity that keeps what was made so it need not be made again: a cache, stored results or saved state. Its boards rot through and it slumps off its stones as the code fails.",
+  doc: "A boarded granary raised on mushroom-shaped staddle stones beside the house, for code that feels thrifty and hoarding, saving everything up against a rainy day. It rots through and slumps off its stones as the code fails.",
   params: granaryParams,
   build: (p, ctx, plan) => buildGranary(p, ctx, plan),
 });

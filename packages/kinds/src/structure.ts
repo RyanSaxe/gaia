@@ -15,7 +15,7 @@ export const structure = kind({
   subject: "entity",
   doc: "A lived-in building that stands for one entity of the code: a package, crate, service, app or module.",
   represents:
-    "Entities the rest of the code leans on: packages and crates others import, services and apps that run, and modules with a public surface. Jev chooses whether an entity stands as a building or a landmark: a lived-in, workaday one suits a building. Its massing, storeys and roofs say how big and how gathered it is, and its feature says what it does for the rest of the code.",
+    "Entities the rest of the code leans on: packages and crates others import, services and apps that run, and modules with a public surface. Jev chooses whether an entity stands as a building or a landmark: a lived-in, workaday one suits a building. Its massing, storeys and roofs say how big and how gathered it is, and its feature gives it a character of its own.",
   slots: {
     footprint: slot("Footprint", {
       ask: "its plan is how the entity's code is put together: one block for a single, focused purpose, an L or a T for a main part with a concern at its side, a long range for stages that hand work along in a row, a cluster for many modules working together. Its size and storeys grow with how much code it holds and how much it offers the rest, and how trim or crooked it stands says how tidy or makeshift that code is.",
@@ -31,7 +31,7 @@ export const structure = kind({
     feature: slot("Feature", {
       on: "footprint",
       optional: true,
-      ask: "a feature says what the entity does for the rest of the code, when it plainly does one thing the others see, and each feature names the work it stands for.",
+      ask: "a feature gives the building a character of its own, as most buildings have: something beside the house that shows how the entity's code feels. Only a building whose code has no feel of its own goes without.",
     }),
     openings: slot("Openings", {
       on: "footprint",
