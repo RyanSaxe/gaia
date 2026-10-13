@@ -18,6 +18,8 @@ const BANK_GRADE = 0.53;
 export const BANK_REACH = 14;
 /** Channel depth never exceeds this share of the half width, so its walls stay walkable. */
 const CHANNEL_SHAPE = 0.35;
+/** The deepest a routed river's water lies below its valley's floor, meters. */
+const BELOW_FLOOR = 0.5;
 /** Spring and seep: the stream narrows to nothing over this many meters at each end. */
 const TAPER = 18;
 /** A pond fills to this far below the lowest point of its rim. */
@@ -53,14 +55,26 @@ const smooth = (t: number): number => {
   return c * c * (3 - 2 * c);
 };
 
-/** Solves a stream's waterline over `path` (world x, z pairs, source first). */
-export function solveStream(l: Lattice, path: Float32Array, width: number, depth: number): SolvedStream | null {
+/** How a stream's course is given: its width at each point, source first, and whether it dries away at its end. */
+export interface StreamCourse {
+  readonly widths?: Float32Array;
+  /** Its valley's floor under each point, which only descends: its waterline never dips more than `BELOW_FLOOR` under it. */
+  readonly floors?: Float32Array;
+  /** False where it ends in another stream, a pond or past the land, so it keeps its width to its end. */
+  readonly seep?: boolean;
+}
+
+/**
+ * Solves a stream's waterline over `path` (world x, z pairs, source first). Without `widths` it runs from whichever
+ * end is higher; with them its course runs source first, as given.
+ */
+export function solveStream(l: Lattice, path: Float32Array, width: number, depth: number, course: StreamCourse = {}): SolvedStream | null {
   const count = path.length / 2;
   if (count < 4) return null;
   // Water runs downhill: start from whichever end is higher.
   const first = heightAt(l, path[0] as number, path[1] as number);
   const last = heightAt(l, path[path.length - 2] as number, path[path.length - 1] as number);
-  const order = first >= last ? [...Array(count).keys()] : [...Array(count).keys()].reverse();
+  const order = course.widths !== undefined || first >= last ? [...Array(count).keys()] : [...Array(count).keys()].reverse();
   const along: number[] = [0];
   for (let k = 1; k < count; k++) {
     const a = order[k - 1] as number;
@@ -74,10 +88,13 @@ export function solveStream(l: Lattice, path: Float32Array, width: number, depth
     const x = path[idx * 2] as number;
     const z = path[idx * 2 + 1] as number;
     level = Math.min(level, heightAt(l, x, z) - INSET);
+    // A dip the stream passes never drags its water below its own valley's floor, so it never cuts a gorge after.
+    const floor = course.floors?.[idx];
+    if (floor !== undefined) level = Math.max(level, floor - BELOW_FLOOR);
     const s = along[k] as number;
-    const taper = smooth(s / TAPER) * smooth((total - s) / TAPER);
+    const taper = smooth(s / TAPER) * (course.seep === false ? 1 : smooth((total - s) / TAPER));
     // Never narrower than the lattice can draw, so the bed is always below the water.
-    const halfWidth = Math.max(1.1, (width / 2) * taper);
+    const halfWidth = Math.max(1.1, ((course.widths?.[idx] ?? width) / 2) * taper);
     stations.push({ x, z, level, halfWidth, depth: Math.min(depth, halfWidth * CHANNEL_SHAPE) });
   });
   return { stations };
@@ -184,7 +201,8 @@ export function carveStream(l: Lattice, heights: Float32Array, level: Float32Arr
         const levee = lip + (s.level + BANK_LIP * Math.max(t, 0.35) - lip) * smooth(raw / 0.12);
         const contain = 1 - smooth((raw - 0.55) / 0.4);
         const leveed = Math.max(eased, levee);
-        heights[i] = eased + (leveed - eased) * contain;
+        // Where it meets another stream, its bank never rises in that stream's water.
+        heights[i] = (level[i] as number) > h ? eased : eased + (leveed - eased) * contain;
         if (raw <= 0.55) level[i] = Math.max(level[i] as number, s.level);
       }
     }
