@@ -70,7 +70,7 @@ function numbersOf(words: PageWords): HTMLElement {
   return numbers;
 }
 
-/** Jev's mark beside a row or a line: green for key to understanding, russet for could be better, slate blue for the finest, stronger the surer Jev is. */
+/** A mark beside a row or a line: green for key to understanding, russet for what needs work most, slate blue for a page's best part, stronger the surer Jev is. */
 const MARK_COLOR = { understand: "#5f8f3e", improve: "#a4553a", finest: "#4d6f8f" } as const;
 function marked(e: HTMLElement, mark: Mark | undefined): void {
   if (mark === undefined) return;
@@ -96,10 +96,10 @@ function rowsOf(rows: readonly Row[], turnTo: (of: string) => void): HTMLElement
 }
 
 /** What a snippet is called on the page: its kind, as the mark beside it says it. */
-const LEAD_LABEL = { finest: "finest", improve: "needs work most" } as const;
+const LEAD_LABEL = { finest: "best", improve: "needs work most" } as const;
 
 /**
- * A file's lead: each snippet a definition at a glance, marked as its finest
+ * A page's lead: each snippet a definition at a glance, marked as the best
  * or as what needs work most, its name and page, its first line and the block
  * Jev picked, the rest folded away; a tap turns to the definition's page.
  */

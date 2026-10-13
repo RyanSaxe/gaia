@@ -72,7 +72,7 @@ export interface Snippet {
   readonly of: string;
   readonly name: string;
   readonly page: number;
-  /** Its finest, or what needs work most. */
+  /** The best part, or what needs work most. */
   readonly kind: "finest" | "improve";
   /** Its first line, as the code writes it, and that line's number. */
   readonly signature: { readonly n: number; readonly text: string };
@@ -163,7 +163,7 @@ export interface WordsSource {
   judged?(of: string): readonly Judgment[];
   /** What the understanding pass judged about a folder, file or definition, every score from 0 to 1. */
   thing?(of: string): JudgedThing | undefined;
-  /** The world's median quality: a page below it leads with what needs work most, and one above it with its finest. */
+  /** The world's median quality: a page below it leads with what needs work most, and one above it with its best. */
   readonly median?: number;
 }
 
@@ -192,11 +192,11 @@ const leadMarks = (src: WordsSource, parts: readonly string[]): ReadonlyMap<stri
 
 /**
  * A page's lead: snippets of its best and worst parts, what needs work most
- * first when it is below the world's median quality, its finest first
+ * first when it is below the world's median quality, its best first
  * otherwise. A file's parts are its definitions; a folder's are its files,
- * each shown by its own best or worst definition. Each snippet folds around
- * the block Jev picked as its finest or as needing work most, or its key
- * block when Jev picked neither.
+ * each shown by its own best or worst definition. A snippet of what needs
+ * work most folds around the block Jev picked as needing work most, and one
+ * of the best part around its key block.
  */
 function snippetsOf(src: WordsSource, e: JournalEntry, parts: readonly string[]): Snippet[] {
   if (e.lead === undefined) return [];
@@ -223,7 +223,7 @@ function snippetsOf(src: WordsSource, e: JournalEntry, parts: readonly string[])
     if (text === undefined) return [];
     const picks = src.thing?.(of)?.picks ?? {};
     const end = symbol.line + symbol.lines - 1;
-    const block = (kind === "finest" ? picks.finest : picks.weak) ?? picks.key ?? { start: symbol.line + 1, end };
+    const block = (kind === "improve" ? picks.weak : undefined) ?? picks.key ?? { start: symbol.line + 1, end };
     const first = Math.max(symbol.line + 1, block.start);
     const last = Math.min(block.end, first + SNIPPET_LINES - 1, end);
     return [
@@ -396,13 +396,13 @@ export function wordsOf(src: WordsSource, e: JournalEntry): PageWords {
   let marks: (Mark & { readonly from: number; readonly to: number })[];
   let opensAt: number;
   if (thing !== undefined && Object.keys(thing.picks).length > 0) {
-    // The blocks Jev picked: the key one, the one most in need and the finest. A definition too long for its page opens
-    // folded around the one it leads with: what needs work most when it is below the world's median quality, else its finest.
-    const { key, weak, finest } = thing.picks;
-    // Where blocks overlap, the gutter shows the one most in need, then the finest, then the key one.
-    marks = [...(weak === undefined ? [] : [{ kind: "improve" as const, sure: 1, from: weak.start, to: weak.end }]), ...(finest === undefined ? [] : [{ kind: "finest" as const, sure: 1, from: finest.start, to: finest.end }]), ...(key === undefined ? [] : [{ kind: "understand" as const, sure: 1, from: key.start, to: key.end }])];
+    // The blocks Jev picked: the key one and the one most in need. A definition too long for its page opens on the one it
+    // leads with: what needs work most when it is below the world's median quality, else its key block.
+    const { key, weak } = thing.picks;
+    // Where the two overlap, the gutter shows the one most in need.
+    marks = [...(weak === undefined ? [] : [{ kind: "improve" as const, sure: 1, from: weak.start, to: weak.end }]), ...(key === undefined ? [] : [{ kind: "understand" as const, sure: 1, from: key.start, to: key.end }])];
     const low = (thing.quality ?? 1) < (src.median ?? 0.5);
-    const leads = (low ? [weak, finest] : [finest, weak]).find((b) => b !== undefined) ?? key;
+    const leads = (low ? weak : undefined) ?? key ?? weak;
     opensAt = count - 1 > FITS && leads !== undefined ? leads.start : line + 1;
   } else {
     const blocks = (src.judged?.(e.of) ?? []).flatMap((j) => {

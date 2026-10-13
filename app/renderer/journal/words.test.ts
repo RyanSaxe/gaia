@@ -114,9 +114,9 @@ describe("what a journal page says", () => {
     const text = Array.from({ length: 50 }, (_, i) => `line ${i + 1}`);
     const things: Record<string, JudgedThing> = {
       [OPS]: { quality: 0.5, importance: 0.7, concepts: {}, picks: {} },
-      [`${OPS}#big`]: { quality: 0.3, importance: 0.9, concepts: {}, picks: { weak: { start: 10, end: 12 }, finest: { start: 20, end: 22 } } },
+      [`${OPS}#big`]: { quality: 0.3, importance: 0.9, concepts: {}, picks: { weak: { start: 10, end: 12 }, key: { start: 20, end: 22 } } },
       [`${OPS}#tiny`]: { quality: 0.99, importance: 0.05, concepts: {}, picks: {} },
-      [`${OPS}#mid`]: { quality: 0.8, importance: 0.6, concepts: {}, picks: { finest: { start: 46, end: 47 } } },
+      [`${OPS}#mid`]: { quality: 0.8, importance: 0.6, concepts: {}, picks: { key: { start: 46, end: 47 } } },
     };
     const src: WordsSource = { journal: journalOf(ops, { first: 18, next: 21, lead: 11 }), world: ops, vitality: (of) => things[of]?.quality ?? 1, lines: () => text, thing: (of) => things[of], median: 0.7 };
     // The finest among what matters is mid, not the tiny helper; the worst is the file's heart, big.
@@ -132,11 +132,11 @@ describe("what a journal page says", () => {
     // A long definition below the median opens at the block most in need, and marks each block Jev picked.
     const big = wordsOf(src, src.journal.entry(`${OPS}#big`)!);
     expect(big.body).toMatchObject({ kind: "code", opensAt: 10 });
-    expect(big.body.kind === "code" && big.body.marks.map((m) => [m.kind, m.from, m.to])).toEqual([["improve", 10, 12], ["finest", 20, 22]]);
+    expect(big.body.kind === "code" && big.body.marks.map((m) => [m.kind, m.from, m.to])).toEqual([["improve", 10, 12], ["understand", 20, 22]]);
     // Its appendix is the code alone, with the same marks and no table of answers.
     const full = appendixWords(src, src.journal.entry(`${OPS}#big`)!);
     expect(full.body).toMatchObject({ kind: "full", said: [] });
-    expect(full.body.kind === "full" && full.body.marks.map((m) => m.kind)).toEqual(["improve", "finest"]);
+    expect(full.body.kind === "full" && full.body.marks.map((m) => m.kind)).toEqual(["improve", "understand"]);
   });
 
   it("leads a folder with its best and worst files weighed by importance, each shown by its own best or worst definition", () => {
