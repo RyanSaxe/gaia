@@ -42,7 +42,7 @@ You need Node 26, pnpm 10 and a stable Rust toolchain from rustup (put
 | `GAIA_JEV=stand-in pnpm dev` | For development only: opens a world the stand-in judges on purpose, sending nothing to Jev. Never on by default, never shown to a person |
 | `pnpm lab:html out.html` | The lab as one offline page, on Gaia's own world with Jev's kept answers |
 | `pnpm lab:serve` | That page on this Mac's Tailscale address, port 5180, rebuilt on every change |
-| `pnpm shots` | Screenshots of every primitive and world look, from Electron |
+| `pnpm shots` | Screenshots of every primitive and world look, from Electron, on the stand-in judge unless `GAIA_JEV` is set |
 | `pnpm readme-shots` | The README's two screenshots, into `docs/images/` |
 | `GAIA_DATA_DIR=dir pnpm graph-snapshot [root]` | Rewrites `fixtures/gaia-graph.json`, the judged graph of this repository the standalone lab is laid out from, from Jev's answers held in that store |
 | `pnpm proving` | Rewrites the proving ground's fixtures (`docs/proving-ground.md`) |

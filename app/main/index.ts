@@ -19,6 +19,8 @@ const shots = process.argv.includes("--shots");
 app.setName("Gaia");
 // Shots look the same whatever the system theme is.
 if (shots) nativeTheme.themeSource = "light";
+// Shots show how things are drawn, so they send nothing to Jev: the stand-in judges unless GAIA_JEV says otherwise.
+if (shots) process.env.GAIA_JEV ??= "stand-in";
 
 void app.whenReady().then(() => {
   const repoRoot = resolve(app.getAppPath(), "..");
