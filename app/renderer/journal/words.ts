@@ -191,20 +191,36 @@ const leadMarks = (src: WordsSource, parts: readonly string[]): ReadonlyMap<stri
 };
 
 /**
- * A file's lead: snippets of its best and worst definitions, what needs work
- * most first when the file is below the world's median quality, its finest
- * first otherwise. Each folds around the block Jev picked as its finest or as
- * needing work most, or its key block when Jev picked neither.
+ * A page's lead: snippets of its best and worst parts, what needs work most
+ * first when it is below the world's median quality, its finest first
+ * otherwise. A file's parts are its definitions; a folder's are its files,
+ * each shown by its own best or worst definition. Each snippet folds around
+ * the block Jev picked as its finest or as needing work most, or its key
+ * block when Jev picked neither.
  */
-function snippetsOf(src: WordsSource, e: JournalEntry, defs: readonly string[]): Snippet[] {
+function snippetsOf(src: WordsSource, e: JournalEntry, parts: readonly string[]): Snippet[] {
   if (e.lead === undefined) return [];
-  const text = src.lines(e.of);
-  if (text === undefined) return [];
-  const { best, worst } = leadOf(src, defs);
-  const one = (of: string | undefined, kind: Snippet["kind"]): Snippet[] => {
+  const { best, worst } = leadOf(src, parts);
+  const definitionsOf = (file: string): string[] => {
+    const all: string[] = [];
+    const gather = (of: string): void => {
+      const d = src.journal.entry(of);
+      if (d?.kind === "definition") all.push(of);
+      for (const inner of d?.lists ?? []) gather(inner);
+    };
+    for (const of of src.journal.entry(file)?.lists ?? []) gather(of);
+    return all;
+  };
+  const one = (part: string | undefined, kind: Snippet["kind"]): Snippet[] => {
+    if (part === undefined) return [];
+    const shown = src.journal.entry(part);
+    // A folder's file is shown by its own best or worst definition.
+    const within = shown?.kind === "file" ? leadOf(src, definitionsOf(part)) : undefined;
+    const of = within === undefined ? part : kind === "finest" ? (within.best ?? within.worst) : (within.worst ?? within.best);
     const symbol = src.world.symbols.find((s) => s.id === of);
-    const entry = of === undefined ? undefined : src.journal.entry(of);
-    if (of === undefined || symbol === undefined || entry === undefined) return [];
+    if (of === undefined || symbol === undefined || shown === undefined) return [];
+    const text = src.lines(symbol.id.slice(0, symbol.id.indexOf("#")));
+    if (text === undefined) return [];
     const picks = src.thing?.(of)?.picks ?? {};
     const end = symbol.line + symbol.lines - 1;
     const block = (kind === "finest" ? picks.finest : picks.weak) ?? picks.key ?? { start: symbol.line + 1, end };
@@ -212,9 +228,9 @@ function snippetsOf(src: WordsSource, e: JournalEntry, defs: readonly string[]):
     const last = Math.min(block.end, first + SNIPPET_LINES - 1, end);
     return [
       {
-        of,
-        name: entry.name,
-        page: entry.page,
+        of: part,
+        name: shown.name,
+        page: shown.page,
         kind,
         signature: { n: symbol.line, text: text[symbol.line - 1] ?? "" },
         first,
@@ -227,6 +243,14 @@ function snippetsOf(src: WordsSource, e: JournalEntry, defs: readonly string[]):
   const low = (src.thing?.(e.of)?.quality ?? 1) < (src.median ?? 0.5);
   const order: readonly [string | undefined, Snippet["kind"]][] = low ? [[worst, "improve"], [best, "finest"]] : [[best, "finest"], [worst, "improve"]];
   return order.flatMap(([of, kind]) => one(of, kind));
+}
+
+/** The files a page's lead shows text from: a file's own, or a folder's best and worst files. */
+export function leadFiles(src: WordsSource, e: JournalEntry): string[] {
+  if (e.lead === undefined) return [];
+  if (e.kind === "file") return [e.of];
+  const { best, worst } = leadOf(src, e.lists.filter((of) => src.journal.entry(of)?.kind === "file"));
+  return [best, worst].filter((p): p is string => p !== undefined);
 }
 
 /** A page's importance, when the understanding pass has judged it. */
@@ -316,7 +340,8 @@ export function wordsOf(src: WordsSource, e: JournalEntry): PageWords {
   }
   if (e.kind === "chapter") {
     const lead = leadMarks(src, e.lists);
-    return { path: folders(e.of), name: e.name, vitality: src.vitality(e.of), ...importanceOf(src, e.of), body: { kind: "rows", rows: e.lists.map((of) => rowOf(src, src.journal.entry(of) as JournalEntry, 0, lead)) } };
+    const snippets = snippetsOf(src, e, e.lists.filter((of) => src.journal.entry(of)?.kind === "file"));
+    return { path: folders(e.of), name: e.name, vitality: src.vitality(e.of), ...importanceOf(src, e.of), body: { kind: "rows", rows: e.lists.map((of) => rowOf(src, src.journal.entry(of) as JournalEntry, 0, lead)), ...(snippets.length > 0 ? { lead: snippets } : {}) } };
   }
   if (e.kind === "file" && e.lists.length > 0) {
     // A file with definitions lists itself first, as a thing of its own, then every definition in it, the ones inside
@@ -485,7 +510,8 @@ const FITS = 24;
 /** A definition's or a file's words for the appendix: its name, everything Jev says about it, then all of its text. */
 export function appendixWords(src: WordsSource, e: JournalEntry): PageWords {
   const page = wordsOf(src, e);
-  const judged = src.judged?.(e.of) ?? [];
+  // What the understanding pass judged is on the page and its caption, so its appendix is the code alone, with its marks.
+  const judged = src.thing?.(e.of) !== undefined ? [] : (src.judged?.(e.of) ?? []);
   const said: Said[] = [...judged]
     .sort((a, b) => (a.lines?.start ?? 0) - (b.lines?.start ?? 0))
     .flatMap((j) => {

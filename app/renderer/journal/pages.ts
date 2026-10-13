@@ -12,7 +12,7 @@ import type { BookPages, Spread } from "./book.ts";
 import { type CaptionFact, captionOf, conceptsCaption } from "./caption.ts";
 import { tapsOf } from "./maps.ts";
 import { fullItems, pagePx, renderCross, renderFullPage, renderNameLine, renderPage, renderPicture, renderTitle, renderTraveller } from "./page.ts";
-import { type Full, type PageWords, type WordsSource, appendixWords, contentsWords, fileOfEntry, wordsOf } from "./words.ts";
+import { type Full, type PageWords, type WordsSource, appendixWords, contentsWords, fileOfEntry, leadFiles, wordsOf } from "./words.ts";
 
 /** A page's size, its own pixels. */
 const PAGE_SIZE = { w: 520, h: 660 } as const;
@@ -99,8 +99,8 @@ const rowsOn = (page: number, lead = 0): { from: number; to: number } => {
   const first = ROOM.first - lead;
   return page === 0 ? { from: 0, to: first } : { from: first + (page - 1) * ROOM.next, to: first + page * ROOM.next };
 };
-/** The file whose text an entry's page needs: what it shows, or a file's own for the snippets its list leads with. */
-const textOf = (e: JournalEntry): string | undefined => fileOfEntry(e) ?? (e.kind === "file" && e.lead !== undefined ? e.of : undefined);
+/** The files whose text an entry's page needs: what it shows, and the files its lead's snippets come from. */
+const textsOf = (words: WordsSource | null, e: JournalEntry): string[] => [...new Set([...(fileOfEntry(e) === undefined ? [] : [fileOfEntry(e) as string]), ...(words === null ? [] : leadFiles(words, e))])];
 
 /** How many tabs the fore-edge holds at a size that reads. */
 export const TABS = 7;
@@ -319,10 +319,7 @@ export function journalPages(src: JournalPagesSource): BookPages {
       const here = words.journal.entries.indexOf(e);
       const around = [...words.journal.entries.slice(here + 1, here + 1 + AHEAD), ...words.journal.entries.slice(Math.max(0, here - BEHIND), here)];
       src.ahead(around.filter((n) => !mapped(n)).map((n) => n.of));
-      for (const n of [e, ...around]) {
-        const file = textOf(n);
-        if (file !== undefined) void src.text(file);
-      }
+      for (const n of [e, ...around]) for (const file of textsOf(words, n)) void src.text(file);
       return entrySpread(words, e, k);
     },
     next(at, by) {
@@ -356,10 +353,11 @@ export function journalPages(src: JournalPagesSource): BookPages {
     },
     async ready(at) {
       const full = fullAt(at);
-      const e = src.words()?.journal.entry(full?.id ?? (at.split(SEP)[0] as string));
-      const file = e === undefined ? undefined : full === null ? textOf(e) : fileOfEntry(e);
-      if (file === undefined) return;
-      await src.text(file);
+      const words = src.words();
+      const e = words?.journal.entry(full?.id ?? (at.split(SEP)[0] as string));
+      const files = e === undefined ? [] : full === null ? textsOf(words ?? null, e) : [fileOfEntry(e)].filter((f): f is string => f !== undefined);
+      if (files.length === 0) return;
+      await Promise.all(files.map((f) => src.text(f)));
       // An entry's appendix is laid out before the leaf that shows it moves.
       if (full !== null) pagesInFull(full.id);
     },
