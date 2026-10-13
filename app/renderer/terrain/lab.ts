@@ -2720,6 +2720,31 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       /** The walk test (`walkSteps`): each step's change to the detail drawn, and the wind's along the same walk. */
       steps: (meters: number, step = 0.7, at?: number) => walkSteps(meters, step, at),
       /**
+       * The stand check. The person stands still for `seconds` with the wind's
+       * clock frozen while the page goes on as it does, the journal's painter
+       * included; every half second their view is drawn and held against the
+       * first. Nothing they see may change. Returns the worst change, and each
+       * look's [seconds, change, level 0's window].
+       */
+      standCheck: async (seconds = 30) => {
+        const was = frozen;
+        frozen = light.uTime.value;
+        const wait = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+        try {
+          await wait(300);
+          const base = grabFrame();
+          const looks: [number, number, string][] = [];
+          for (let t = 0.5; t <= seconds; t += 0.5) {
+            await wait(500);
+            const o = land.origins[0] as { x: number; z: number };
+            looks.push([t, +frameChange(base, grabFrame()).worst.toFixed(2), `${o.x},${o.z}`]);
+          }
+          return { worst: Math.max(0, ...looks.map((l) => l[1])), looks };
+        } finally {
+          frozen = was;
+        }
+      },
+      /**
        * The painter check. With the person standing still and the wind's clock
        * frozen, asks one at a time for paintings of the `count` things farthest
        * from them, as the journal does, while the page's own frames go on.

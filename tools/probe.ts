@@ -18,7 +18,9 @@
 // - paint: the painter check. Standing still in Gaia's world with the wind's
 //   clock frozen while the journal's painter paints the things farthest
 //   away, the person's view must not change at all; and the page's frames
-//   while it paints, late ones counted.
+//   while it paints, late ones counted. Then 30 s standing still while the
+//   app's own painter works, as it does whenever the person stops: the view
+//   must not change either.
 //
 // The window stays hidden, at exactly the size asked for, except for the walk
 // that measures smoothness: a hidden window's frames don't keep the display's
@@ -126,7 +128,7 @@ if (measures.has("swap")) {
 }
 if (measures.has("paint")) {
   // Looking at the view draws frames of its own, so the page's frames are counted again over paintings made unwatched.
-  jobs.push({ world: "gaia", calls: [{ key: "open", js: OPEN }, { key: "paint", js: `(${go("valley")}, ${settle}, await T.paintCheck(6))` }, { key: "paint unwatched", js: `(${go("turned")}, ${settle}, await T.paintCheck(6, false))` }, { key: "paint unwatched near", js: `(${go("turned")}, ${settle}, await T.paintCheck(6, false, true))` }] });
+  jobs.push({ world: "gaia", calls: [{ key: "open", js: OPEN }, { key: "paint", js: `(${go("valley")}, ${settle}, await T.paintCheck(6))` }, { key: "paint unwatched", js: `(${go("turned")}, ${settle}, await T.paintCheck(6, false))` }, { key: "paint unwatched near", js: `(${go("turned")}, ${settle}, await T.paintCheck(6, false, true))` }, { key: "stand", js: `(${go("valley")}, ${settle}, await T.standCheck(30))` }] });
 }
 if (measures.has("stress") && (values.world === undefined || values.world.includes("sample"))) {
   // The sample world, replanted with its usual trees and then five times as many.
@@ -250,6 +252,11 @@ for (const [world, calls] of Object.entries(results)) {
         continue;
       }
       line(`  ${key}: ${steps.length} steps; worst block ${f(worst[2])} at ${f(worst[0], 0)} m; the wind's ${f(typical)} (its median along the walk); ${pops.length} pops${pops.length > 0 ? ` (at ${pops.map((s) => f(s[0], 0)).join(", ")} m)` : ""}`);
+    } else if (key === "stand") {
+      const { worst, looks } = value as { worst: number; looks: [number, number, string][] };
+      const moved = looks.filter((l, i) => i > 0 && l[2] !== (looks[i - 1] as [number, number, string])[2]).length;
+      line(`  stand: 30 s still with the painter at work; worst block changed ${f(worst, 2)} levels${worst >= SWAP_FLOOR ? " (it must not change)" : ""}; the finest land window moved ${moved} times`);
+      if (worst >= SWAP_FLOOR) process.exitCode = 1;
     } else if (key === "paint unwatched" || key === "paint unwatched near") {
       const { painted, intervals } = value as { painted: string[]; intervals: number[] };
       const sorted = [...intervals].sort((a, b) => a - b);
