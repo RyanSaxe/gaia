@@ -57,8 +57,8 @@ where you are:
 | Area | Land | What is there |
 | --- | --- | --- |
 | `crossings` | Brook valley, a brook, deep wood | A thriving wood. A footbridge joins the cottage on the west bank to the house on the east. |
-| `fords` | Meandering vale, a trickle | Stepping stones join the croft on the jetty to the stone ring on the gravel. |
-| `ruins` | Brook valley, a brook, deep wood | A whole area in ruin: dead trees, a ruined footbridge and cairn, and eight of the ten kinds of building and landmark in ruin. |
+| `fords` | Meandering vale, a trickle | The trail from the croft on the jetty to the stone ring on the gravel crosses the trickle on a footbridge. |
+| `ruins` | Brook valley, a brook, deep wood | A whole area in ruin: dead trees, a ruined footbridge, stepping stones and cairn, and eight of the ten kinds of building and landmark in ruin. |
 | `mixed` | Clover hills, deep wood | Thriving files beside a failing grove (`failing-grove.ts`), and tired entities. |
 | `hollow`, `pondside` | Mossy basin and pond meadow | Ponds. The hollow's lantern tower is the hub most trails lead to, so they meet at cairns. |
 | `hills`, `terraces`, `moor`, `dunes` | Clover hills, silver terraces, heather moor, golden dunes | Each remaining land without water, so its landform shows. |
@@ -72,16 +72,16 @@ where each stop looks (x, z in meters from the middle):
 
 | Stop | What is there | Looks at |
 | --- | --- | --- |
-| `bridge` | A footbridge in `crossings`, whose ground is at vitality 1.00 | 3, 248 |
-| `ruined bridge` | A footbridge in `ruins`, whose ground is at vitality 0.03 | 279, -20 |
-| `stepping stones` | Stepping stones in `fords`, whose ground is at vitality 0.75 | -196, -351 |
-| `cairn`, `ruined cairn` | Cairns where three ways meet, in `hollow` and `ruins/house` | -251, 311 and 450, -67 |
-| `pond`, `pond 2` | The ponds of `hollow` and `pondside` | -232, 390 and 63, -417 |
-| `ruined building`, `thriving building` | The ruined croft in `ruins`, the thriving one in `terraces` | 125, -62 and 445, 206 |
-| `ruined landmark`, `thriving landmark` | The keep in `ruins`, the stone ring on the moor | 173, -132 and -455, 119 |
-| `thriving grove`, `failing grove` | The 4 trees of `crossings/channel.ts` and the 4 dying ones of `mixed/failing-grove.ts`, each a definition | 29, 302 and 353, -195 |
-| `thriving area`, `failing area` | `downs` and `ruins` | -237, 39 and 315, 73 |
-| `large area`, `tiny area`, `deep nesting` | `ruins`, `downs/tiny` and `downs/deep/deeper/deeper-still/deepest/bottom` | 315, 73; -59, -11; -361, -86 |
+| `bridge` | A footbridge in `crossings`, whose ground is at vitality 1.00 | 62, 269 |
+| `ruined bridge` | A footbridge in `ruins`, whose ground is at vitality 0.13 | 173, 17 |
+| `stepping stones` | Stepping stones in `ruins`, whose ground is at vitality 0.03 | 237, -33 |
+| `cairn`, `ruined cairn` | Cairns where three ways meet, at vitality 1.00 and 0.05 | -56, 254 and 266, 14 |
+| `pond`, `pond 2` | The ponds of `hollow` and `pondside` | -230, 398 and 59, -424 |
+| `ruined building`, `thriving building` | The ruined timber frame house of `dunes/ledger`, the thriving fieldstone house of `terraces/croft` | -322, -184 and 457, 209 |
+| `ruined landmark`, `thriving landmark` | The great tree of `ruins`, the standing stones of `moor/henge` | 189, 111 and -465, 207 |
+| `thriving grove`, `failing grove` | The 4 trees of `crossings/channel.ts` and the 4 dying ones of `mixed/failing-grove.ts`, each a definition | 29, 296 and 356, -205 |
+| `thriving area`, `failing area` | `downs` and `ruins` | -247, 31 and 255, 36 |
+| `large area`, `tiny area`, `deep nesting` | `ruins`, `downs/tiny` and `downs/deep/deeper/deeper-still/deepest/bottom` | 255, 36; -82, -23; -390, -89 |
 
 Every building and landmark also has a stop named by its kind and health,
 such as `watermill (thriving)`, `watermill (tired)` and `watermill (ruin)`:
@@ -107,7 +107,8 @@ Edit the plan in `tools/proving.ts` and run `pnpm proving`. It refuses to
 write a plan that leaves an option unused or lays out differently from what
 it names. `app/renderer/terrain/proving.test.ts` then checks that the world
 still crosses its streams on footbridges and stepping stones and has cairns,
-thriving and in ruin. A change to how land divides or how trails route can
-move entities off the far banks of their streams: rename a planned directory
+thriving and in ruin. A change to how land divides, how rivers route over
+it or how trails route can move a stream away from the trails that crossed
+it, or entities off its far banks: rename a planned directory
 to move it (a directory's place is seeded by its path), and check with
 `__lab.terrain.tour()`.
