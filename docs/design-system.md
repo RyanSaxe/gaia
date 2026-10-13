@@ -326,7 +326,12 @@ follows the Game Accessibility Guidelines and Xbox Accessibility Guideline
 two or three steps (Najafi et al. 2010, Gait & Posture 32(1)) and can stop
 in one.
 
-Streams run downstream along the flow solved from their bed (`streamFlow`
+A stream winds across its valley's floor at its own scale, besides the
+valley's own long winding: its bends lie 10 to 26 channel widths apart,
+farther and swinging wider the more the valley winds, never turning tighter
+than two widths, and within twice the floor (`bedOffset` in
+`@gaia/primitives`), so a straight valley's stream barely wavers and a
+strongly meandering one loops as real streams do. Streams run downstream along the flow solved from their bed (`streamFlow`
 and `flowAt` in `@gaia/terrain`), faster where the channel narrows or the
 waterline falls. Ponds lie still, and now and then a ring spreads across one.
 Looking down, water is clear: the bed shows where it is shallow, and the
