@@ -1,7 +1,7 @@
-//! A project's entities: the packages and crates its manifests declare, and
-//! the modules, apps and services whose index, main or server file is no
-//! package's entry. Each is rooted at a directory, which the graph marks with
-//! it (`DirNode::entity`). The rules read file names and manifests only.
+//! A project's entities: the packages and crates its manifests declare. Each
+//! is rooted at the directory of its manifest, which the graph marks with it
+//! (`DirNode::entity`). Only a manifest makes an entity: no file's name decides
+//! what a directory is.
 
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
@@ -12,12 +12,12 @@ pub(crate) struct Listed<'a> {
     pub text: Option<&'a str>,
 }
 
-/// An entity found from a manifest or a directory's files, before its facts are summed.
+/// An entity found from its manifest, before its facts are summed.
 pub(crate) struct Found {
     pub path: String,
     pub name: String,
     pub form: &'static str,
-    pub manifest: Option<String>,
+    pub manifest: String,
     pub entry: Option<String>,
     /// For a package: subpath → target file, from package.json's `exports`.
     pub exports_map: BTreeMap<String, String>,
@@ -140,7 +140,7 @@ pub(crate) fn manifests(files: &[Listed]) -> Vec<Found> {
                     .unwrap_or_else(|| dir.rsplit('/').next().unwrap_or("").to_string()),
                 path: dir,
                 form: "package",
-                manifest: Some(f.path.to_string()),
+                manifest: f.path.to_string(),
                 entry,
                 exports_map,
             });
@@ -154,65 +154,11 @@ pub(crate) fn manifests(files: &[Listed]) -> Vec<Found> {
                     .unwrap_or_else(|| dir.rsplit('/').next().unwrap_or("").to_string()),
                 path: dir,
                 form: "crate",
-                manifest: Some(f.path.to_string()),
+                manifest: f.path.to_string(),
                 entry,
                 exports_map: BTreeMap::new(),
             });
         }
     }
     out
-}
-
-const INDEX_FILES: [&str; 6] = [
-    "index.ts",
-    "index.tsx",
-    "index.js",
-    "mod.rs",
-    "__init__.py",
-    "index.mjs",
-];
-const MAIN_FILES: [(&str, &str); 6] = [
-    ("main.ts", "app"),
-    ("main.tsx", "app"),
-    ("main.rs", "app"),
-    ("main.py", "app"),
-    ("server.ts", "service"),
-    ("server.js", "service"),
-];
-
-/// Modules, apps and services: directories whose index, main or server file is no package's entry.
-pub(crate) fn directory_entities(files: &[Listed], found: &[Found]) -> Vec<Found> {
-    let roots: BTreeSet<&str> = found.iter().map(|e| e.path.as_str()).collect();
-    let entries: BTreeSet<&str> = found.iter().filter_map(|e| e.entry.as_deref()).collect();
-    let mut out: BTreeMap<String, Found> = BTreeMap::new();
-    for f in files {
-        let name = f.path.rsplit('/').next().unwrap_or("");
-        let dir = dir_of(f.path);
-        if dir.is_empty() || roots.contains(dir) || entries.contains(f.path) {
-            continue;
-        }
-        let form = if INDEX_FILES.contains(&name) {
-            "module"
-        } else if let Some((_, form)) = MAIN_FILES.iter().find(|(n, _)| *n == name) {
-            form
-        } else {
-            continue;
-        };
-        // A module's index wins over a main file in the same directory.
-        if out.get(dir).is_some_and(|e| e.form == "module") {
-            continue;
-        }
-        out.insert(
-            dir.to_string(),
-            Found {
-                path: dir.to_string(),
-                name: dir.rsplit('/').next().unwrap_or(dir).to_string(),
-                form,
-                manifest: None,
-                entry: Some(f.path.to_string()),
-                exports_map: BTreeMap::new(),
-            },
-        );
-    }
-    out.into_values().collect()
 }

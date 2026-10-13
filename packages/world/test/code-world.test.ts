@@ -24,6 +24,7 @@ const entity = (path: string, name: string, dependsOn: string[], dependents: str
   path,
   name,
   form: "package",
+  manifest: `${path}/package.json`,
   files: 3,
   lines: 600,
   exports: 10,
