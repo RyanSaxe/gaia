@@ -267,10 +267,10 @@ details.json pre { font: 11px/1.45 ui-monospace, "SF Mono", Menlo, monospace; ba
 /* A blink while a big turn happens out of sight: the warm dark of closed eyes, over the world and under the paper. */
 .walk-blink { position: absolute; inset: 0; background: #15110b; opacity: 0; pointer-events: none; }
 /* The walking playground (`?walk=playground`): a small, quiet card in the corner, only on that page. */
-.walk-playground { position: fixed; top: 12px; left: 12px; z-index: 50; width: 260px; padding: 10px 12px; border-radius: 6px; background: rgba(247, 241, 227, 0.94); color: #3a3226; font: 13px "Iowan Old Style", Georgia, serif; box-shadow: 0 6px 18px rgba(25, 18, 8, 0.25); }
+.walk-playground { position: fixed; top: 12px; left: 12px; z-index: 50; width: 280px; padding: 10px 12px; border-radius: 6px; background: rgba(247, 241, 227, 0.94); color: #3a3226; font: 13px "Iowan Old Style", Georgia, serif; box-shadow: 0 6px 18px rgba(25, 18, 8, 0.25); }
 .walk-playground select { width: 100%; font: inherit; }
 .walk-playground p { margin: 6px 0 8px; font-style: italic; line-height: 1.3; }
-.walk-playground label { display: grid; grid-template-columns: 44px 1fr 70px; gap: 6px; align-items: center; margin: 3px 0; }
+.walk-playground label { display: grid; grid-template-columns: 44px 1fr 86px; gap: 6px; align-items: center; margin: 3px 0; }
 .walk-playground output { text-align: right; font-variant-numeric: tabular-nums; }
 .walk-playground button { margin-top: 6px; font: inherit; color: inherit; background: none; border: 1px solid #c9bb98; border-radius: 4px; padding: 2px 8px; cursor: pointer; }
 .lab-terrain.immersive .bar { display: none; }
