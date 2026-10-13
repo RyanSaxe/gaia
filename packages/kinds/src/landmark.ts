@@ -13,9 +13,11 @@ export const landmark = kind({
   represents:
     "Entities a person steers by: packages, crates, services and apps much of the code depends on, or that hold the world together. Jev chooses whether an entity stands as a landmark or a building; a prominent one suits a landmark, a lived-in workaday one a building.",
   slots: {
-    form: slot("Landmark"),
-    motion: slot("Motion", { optional: true }),
-    palette: slot("Palette"),
+    form: slot("Landmark", {
+      ask: "the great thing says what part this entity plays for the code that steers by it: a great tree for living code much of the rest grows from, a lookout tower for code that watches over or coordinates the rest and gives it its bearings, standing stones for the old foundations the rest was set on.",
+    }),
+    motion: slot("Motion", { optional: true, ask: "whether it moves in the wind, as a living thing does." }),
+    palette: slot("Palette", { ask: "its colors say the entity's mood, and how it stands out from its land." }),
   },
   facts: {
     // Grows with the entity's reach (how many entities depend on it) and a little with its size.
