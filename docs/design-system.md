@@ -331,12 +331,14 @@ whole swing every four of its own widths, carrying its floor and stream with it:
 one barely bends and a strongly meandering one swings up to ±30 m, never
 turning tighter than one and a half times its half width, so its floor and
 shoulders keep their shape through every bend (`troughOffset` in
-`@gaia/primitives`). A stream winds across its valley's floor at its own scale
-besides: its bends lie 10 to 26 channel widths apart,
-farther and swinging wider the more the valley winds, never turning tighter
-than two widths, and within twice the floor (`bedOffset` in
-`@gaia/primitives`), so a straight valley's stream barely wavers and a
-strongly meandering one loops as real streams do. Streams run downstream along the flow solved from their bed (`streamFlow`
+`@gaia/primitives`). Its flat floor widens with its winding, from a seventh
+of its half width when straight to a third of its whole width when winding, as
+a lowland valley's floodplain does. A stream loops across that floor at its own
+scale besides: its bends lie 10 to 26 channel widths apart, farther and
+swinging wider the more the valley winds, never turning tighter than two
+widths, its channel on the floor and the floor's gentle toe and never up the
+valley's sides (`bedOffset` in `@gaia/primitives`). So a straight valley's
+stream barely wavers, and a winding brook loops about ±12 m every 75 m. Streams run downstream along the flow solved from their bed (`streamFlow`
 and `flowAt` in `@gaia/terrain`), faster where the channel narrows or the
 waterline falls. Ponds lie still, and now and then a ring spreads across one.
 Looking down, water is clear: the bed shows where it is shallow, and the

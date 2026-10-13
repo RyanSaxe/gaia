@@ -83,11 +83,10 @@ export function troughOffset(f: Extract<HeightField, { op: "trough" }>, u: numbe
 
 /**
  * How a stream winds across its trough's floor, in channel widths: from one bend to the next as it winds from
- * hardly at all to strongly, and the tightest a bend may turn, as real streams' meanders do.
+ * hardly at all to strongly, the tightest a bend may turn, as real streams' meanders do, and how far past the floor's
+ * edge onto its gentle toe a bend may reach, as a share of the floor.
  */
-const BENDS = { apart: [10, 26], tightest: 2 } as const;
-/** The trough's flat floor, as a share of its half width (`fieldAt`'s trough): a stream swings at most twice as far. */
-const FLOOR = 0.14;
+const BENDS = { apart: [10, 26], tightest: 2, toe: 1.4 } as const;
 /** The trough's winding, meters, from straight to strongly meandering (`valley@1`), which sets how its stream winds. */
 const MEANDER = [4, 30] as const;
 /** The bends' two waves: the second, shorter one keeps them from repeating; together they bend this much sharper than one. */
@@ -102,7 +101,11 @@ export function bedOffset(f: Extract<HeightField, { op: "trough" }>, u: number, 
   const apart = width * (BENDS.apart[0] + (BENDS.apart[1] - BENDS.apart[0]) * m);
   const k = (Math.PI * 2) / apart;
   // As wide as the bends may swing without turning tighter than the tightest a stream turns, and within the floor.
-  const swing = Math.min(2 * FLOOR * f.halfWidth, 1 / (BENDS.tightest * width * k * k * WAVES.sharper)) * (0.15 + 0.85 * m);
+  // As wide as the bends may swing without turning tighter than the tightest a stream turns, its channel on the floor
+  // and the floor's gentle toe, never up the valley's sides: a winding valley's stream swings as wide as that allows,
+  // a straight one's hardly at all.
+  const onFloor = BENDS.toe * f.floor * f.halfWidth - width / 2;
+  const swing = Math.min(onFloor, 1 / (BENDS.tightest * width * k * k * WAVES.sharper)) * Math.min(1, 0.15 + 1.4 * m);
   const p1 = ((f.seed % 811) / 811) * Math.PI * 2;
   const p2 = ((f.seed % 467) / 467) * Math.PI * 2;
   return troughOffset(f, u) + swing * ((1 - WAVES.second) * Math.sin(u * k + p1) + WAVES.second * Math.sin(u * k * WAVES.apart + p2));
@@ -150,7 +153,7 @@ export function fieldAt(f: HeightField, x: number, z: number): number {
         a -= g1 / g2;
       }
       const across = Math.hypot(a - u, troughOffset(f, a) - v) / f.halfWidth;
-      return smooth(0.14, 1, across);
+      return smooth(f.floor, 1, across);
     }
     case "plane": {
       const u = x * Math.cos(f.angle) + z * Math.sin(f.angle);
