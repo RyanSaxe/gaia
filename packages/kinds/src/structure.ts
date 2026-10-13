@@ -17,13 +17,28 @@ export const structure = kind({
   represents:
     "Entities the rest of the code leans on: packages and crates others import, services and apps that run, and modules with a public surface. Jev chooses whether an entity stands as a building or a landmark: a lived-in, workaday one suits a building. Its massing, storeys and roofs say how big and how gathered it is, and its feature says what it does: a mill for one that turns input into output, a tower for one that keeps records or watches over others.",
   slots: {
-    footprint: slot("Footprint"),
-    body: slot("Walls", { on: "footprint" }),
-    roof: slot("Roof", { on: "footprint" }),
-    feature: slot("Feature", { on: "footprint", optional: true }),
-    openings: slot("Openings", { on: "footprint" }),
-    ornaments: slot("Dressing", { on: "footprint" }),
-    palette: slot("Palette"),
+    footprint: slot("Footprint", {
+      ask: "its plan is how the entity's code is put together: one block for a single, focused purpose, an L or a T for a main part with a concern at its side, a long range for stages that hand work along in a row, a cluster for many modules working together. Its size and storeys grow with how much code it holds and how much it offers the rest, and how trim or crooked it stands says how tidy or makeshift that code is.",
+    }),
+    body: slot("Walls", {
+      on: "footprint",
+      ask: "its walls say what the entity is made of: heavy stone for code that is old, steady and leaned on, light timber framing for newer code that is still being reshaped.",
+    }),
+    roof: slot("Roof", {
+      on: "footprint",
+      ask: "its roof says how the entity keeps what is inside it: soft thatch for informal, homely code, neat courses of tiles or slate for tidy code with a clear public face.",
+    }),
+    feature: slot("Feature", {
+      on: "footprint",
+      optional: true,
+      ask: "a feature says what the entity does for the rest of the code, when it plainly does one thing the others see: a tower for one that keeps records or watches over others, a waterwheel for one that turns what it is given into something new.",
+    }),
+    openings: slot("Openings", {
+      on: "footprint",
+      ask: "its windows and door say how open the entity is: many for one with a wide surface the rest of the code uses, few for one that keeps to itself.",
+    }),
+    ornaments: slot("Dressing", { on: "footprint", ask: "the small things around it say how cared for and lived in the entity's code is." }),
+    palette: slot("Palette", { ask: "its colors say the entity's mood, and how it sits on its land." }),
   },
   stages: [
     ["footprint", "body", "roof", "feature", "palette"],

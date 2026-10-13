@@ -6,10 +6,15 @@ export interface Slot<R extends Role = Role> {
   /** The slot whose output feeds this slot's input. */
   readonly on?: string;
   readonly optional: boolean;
+  /**
+   * What this part says about the code, in words Jev reads when it chooses the part and fills it: how the code it
+   * stands for shows in this part. Without it the part is asked about in the kind's words alone.
+   */
+  readonly ask?: string;
 }
 
-export function slot<R extends Role>(role: R, opts: { on?: string; optional?: boolean } = {}): Slot<R> {
-  return { role, optional: opts.optional ?? false, ...(opts.on === undefined ? {} : { on: opts.on }) };
+export function slot<R extends Role>(role: R, opts: { on?: string; optional?: boolean; ask?: string } = {}): Slot<R> {
+  return { role, optional: opts.optional ?? false, ...(opts.on === undefined ? {} : { on: opts.on }), ...(opts.ask === undefined ? {} : { ask: opts.ask }) };
 }
 
 /** What each role consumes and produces, by name, for checks at load time. */
