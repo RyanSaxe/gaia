@@ -74,14 +74,16 @@ const PACE = {
   foldMs: 1100,
 } as const;
 /**
- * Each kind of stroke's pace (`pace.ts`): names, the pencil over a file, the survey of an area and a file's wash, each
- * at least this many ms apart when nothing presses, a burst spread over at most this long.
+ * Each kind of stroke's pace (`pace.ts`): names, the pencil over a file, the pencil over an area and a file's wash, at
+ * most this many ms apart, each burst spread over at least and at most this long. A slice of the pass can take 20 s
+ * of the engine's own work and bring only a few new marks, so a burst is spread over at least 12 s and a few marks
+ * are drawn slowly: the sheet then follows the work by about 11 s on the opening's real order, and is never still.
  */
 const PACED: Readonly<Record<"name" | "pencil" | "survey" | "wash", Pace>> = {
-  name: { everyMs: 450, spreadMs: [4000, 20000] },
-  pencil: { everyMs: 90, spreadMs: [4000, 20000] },
-  survey: { everyMs: 600, spreadMs: [4000, 20000] },
-  wash: { everyMs: 250, spreadMs: [4000, 20000] },
+  name: { everyMs: 1500, spreadMs: [12000, 25000] },
+  pencil: { everyMs: 1500, spreadMs: [12000, 25000] },
+  survey: { everyMs: 2000, spreadMs: [12000, 25000] },
+  wash: { everyMs: 1500, spreadMs: [12000, 25000] },
 };
 /**
  * The pencil: one light graphite hatching for each stage of reading the code, laid over just the cells the wash will
