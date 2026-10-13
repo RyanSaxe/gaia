@@ -114,7 +114,8 @@ export type Opening =
   | { readonly stage: "land"; readonly name: string; readonly size: number; readonly aspect?: number; readonly areas: readonly Outline[]; readonly patches: readonly FilePatch[]; readonly lots: readonly LotPlace[] }
   /**
    * Asking Jev about the things it has not judged; `answered` counts those settled, `failed` those the stand-in
-   * took over, and `settled` names every area (a directory's path, "" for the root) whose things and land are all
+   * took over, and `total` every request to be asked: under a spend limit the understanding pass's are planned and
+   * counted from the start, and with none they are counted as the pass goes. `settled` names every area (a directory's path, "" for the root) whose things and land are all
    * judged, with the land judged for its own ground: a land's name in `looks.ts`, its region's for an area without
    * land of its own, as `areaLands` reads it from the finished world. `asking` names the areas with a question
    * to Jev in flight now.
@@ -126,7 +127,13 @@ export type Opening =
    * the land; any other once the answer it reads is in, whoever gave it. Every file is named once, all of them
    * before the world's document, whether or not Jev is asked.
    */
-  | { readonly stage: "health"; readonly vitality: Readonly<Record<string, number>> };
+  | { readonly stage: "health"; readonly vitality: Readonly<Record<string, number>> }
+  /**
+   * What a slice of the understanding pass has just read: the files and the areas (a directory's path, "" for the
+   * root) whose requests in one of its passes are all answered now. A file comes once for its links and again for
+   * itself; an area once, as the pass goes down the folders. The wait shows this as the pencil going over that code.
+   */
+  | { readonly stage: "understood"; readonly files: readonly string[]; readonly areas: readonly string[] };
 
 /** World service → renderer. */
 export type ToRenderer =

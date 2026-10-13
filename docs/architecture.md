@@ -204,8 +204,10 @@ records who judged each thing (`judgedThing`, such as `file:src/main.ts`),
 and a thing's card says so. `engineJev` in the world service is the live
 client. Jev is asked only when the engine has a key and runs with
 `GAIA_JEV=live`. A run's cost is judging's (`jev.estimate`) and
-the understanding pass's (`understanding.plan`, below) together; a
-run within the person's spend limit goes ahead with no question; the limit is one number for every
+the understanding pass's (`understanding.plan`, below) together. Planning
+the pass takes seconds and only says what it will cost, so it is planned
+only when there is a limit to weigh it against; with no limit the pass runs
+as it goes. A run within the person's spend limit goes ahead with no question; the limit is one number for every
 project, kept in the app's own settings (the store's `app` project,
 `settings` table, `jev-spend-limit`). Until the person sets one
 (`setSpendLimit`; no screen sets it yet), `DEFAULT_SPEND_LIMIT_USD` in
@@ -229,7 +231,10 @@ plans or asks Jev anything. It sends each file's health once nothing more
 will be asked about it (stage `health`, file path to vitality, exactly as
 the finished world has it): a file's vitality is its quality, which
 `understanding.next` reports for each file a slice settled for good, so
-files wash in as the pass goes. Every file is named once, before the
+files wash in as the pass goes. After each slice it also sends what the
+slice read (stage `understood`: the files and areas whose requests in one
+of the pass's passes are all answered), which the wait draws as the
+pencil going over that code. Every file is named once, before the
 document, whether or not Jev is asked. With every answer it also names the areas
 whose judgments have all settled, each with the land judged for its ground
 (stage `asking`, `settled`, area path to land name: an area settles once
@@ -502,11 +507,12 @@ two methods:
 includes every answer the project's store holds for the calls the engine
 asks ([decision 54](decisions/54-understanding-in-slices.md)). Opening a world
 uses them. `openWorld` divides the land on `project.graph` with `judged:
-true` as soon as the graph exists, then plans with `understanding.plan`,
-which takes several times longer, while the wait draws the borders. Once
-Jev has judged the looks, it calls `understanding.next` until nothing is
-left, counting its requests on the wait with judging's, and sends each
-file's health as a slice settles it for good. It lays the world out on
+true` as soon as the graph exists. Only under a spend limit does it plan with
+`understanding.plan`, which takes several times longer, to weigh the cost.
+Once Jev has judged the looks, it calls `understanding.next` until nothing is
+left, counting its requests on the wait with judging's, and sends what each
+slice read and each file's health as a slice settles it for good. It reads
+the graph again only if the pass asked something. It lays the world out on
 `project.graph` with `judged: true`, both graphs trimmed by `judgedGraph`,
 so every definition stands by Jev's importance and vitality is Jev's
 quality.
