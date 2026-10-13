@@ -10,19 +10,23 @@ export const WALK_PLAYGROUND = typeof location !== "undefined" && new URLSearchP
 
 /** A tunable number: its label, unit, range and step, and whether a way of walking uses it. */
 interface Knob {
-  readonly key: keyof SteerScheme & ("rate" | "nudgeFor" | "pace" | "back" | "side" | "blink" | "snap" | "sensitivity");
+  readonly key: keyof SteerScheme & ("rate" | "nudgeFor" | "nudge" | "keep" | "pace" | "back" | "side" | "blink" | "snap" | "sensitivity");
   readonly label: string;
   readonly unit: string;
   readonly min: number;
   readonly max: number;
   readonly step: number;
+  /** What 0 means, where it means something: keep-turning off, a turn made as a cut. */
+  readonly zero?: string;
   readonly uses: (s: SteerScheme) => boolean;
 }
 const KNOBS: readonly Knob[] = [
-  { key: "rate", label: "Turn", unit: "°/s", min: 10, max: 180, step: 5, uses: (s) => s.walk === "strafe" || (s.turn !== "none" && s.big !== "snap") },
+  { key: "rate", label: "Turn", unit: "°/s", min: 10, max: 180, step: 5, uses: (s) => s.walk === "strafe" || s.walk === "face" || (s.turn !== "none" && s.big !== "snap") },
+  { key: "nudge", label: "Nudge", unit: "°", min: 1, max: 30, step: 1, uses: (s) => s.walk === "face" },
+  { key: "keep", label: "Held", unit: "°/s", min: 0, max: 90, step: 5, zero: "off", uses: (s) => s.walk === "face" },
   { key: "nudgeFor", label: "Nudge", unit: "s", min: 0.05, max: 0.5, step: 0.01, uses: (s) => s.walk !== "strafe" && s.turn === "nudge" },
   { key: "snap", label: "Step", unit: "°", min: 10, max: 90, step: 5, uses: (s) => s.big === "snap" },
-  { key: "blink", label: "Blink", unit: "s", min: 0.1, max: 0.6, step: 0.02, uses: (s) => s.big === "blink" },
+  { key: "blink", label: "Blink", unit: "s", min: 0, max: 0.6, step: 0.02, zero: "a cut", uses: (s) => s.big === "blink" || s.walk === "face" },
   { key: "pace", label: "Walk", unit: "m/s", min: 1, max: 8, step: 0.1, uses: () => true },
   { key: "back", label: "Back", unit: "× walk", min: 0.1, max: 1, step: 0.05, uses: (s) => s.walk !== "none" && s.big !== "blink" },
   { key: "side", label: "Aside", unit: "× walk", min: 0.1, max: 1, step: 0.05, uses: (s) => s.walk === "strafe" },
@@ -72,7 +76,8 @@ export function createWalkPlayground(parent: HTMLElement, first: SteerSchemeId, 
         input.type = "range";
         Object.assign(input, { min: String(k.min), max: String(k.max), step: String(k.step), value: String(scheme[k.key]) });
         const show = (): void => {
-          value.textContent = `${Number(input.value).toFixed(k.step < 0.1 ? 2 : k.step < 1 ? 1 : 0)} ${k.unit}`;
+          const v = Number(input.value);
+          value.textContent = v === 0 && k.zero !== undefined ? k.zero : `${v.toFixed(k.step < 0.1 ? 2 : k.step < 1 ? 1 : 0)} ${k.unit}`;
         };
         show();
         input.addEventListener("input", () => {
@@ -84,8 +89,24 @@ export function createWalkPlayground(parent: HTMLElement, first: SteerSchemeId, 
         row.append(document.createTextNode(k.label), input, value);
         return row;
       }),
+      ...(scheme.walk === "face" ? [toggle("↑ with ← → faces the diagonal", "diagonal")] : []),
     );
     use();
+  }
+  /** A yes-or-no setting of the way of walking, as a checkbox. */
+  function toggle(text: string, key: "diagonal"): HTMLElement {
+    const row = document.createElement("label");
+    row.className = "walk-toggle";
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    box.checked = scheme[key];
+    box.addEventListener("change", () => {
+      scheme = { ...scheme, [key]: box.checked };
+      use();
+    });
+    settle(box);
+    row.append(box, document.createTextNode(text));
+    return row;
   }
   function use(): void {
     if (scheme.look !== "pointer" && document.pointerLockElement !== null) document.exitPointerLock();

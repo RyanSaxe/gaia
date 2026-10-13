@@ -30,11 +30,13 @@ function play(scheme: SteerScheme, presses: readonly Press[], until: number) {
   return { yaw: deg(yaw), frames, last: frames[frames.length - 1]! };
 }
 const at = <F extends { t: number }>(frames: readonly F[], t: number): F => frames.find((f) => f.t >= t) ?? frames[frames.length - 1]!;
+/** A turn this big from one frame to the next is made at once, a cut, not a rotation anyone watches, degrees. */
+const CUT = 20;
 /** The fastest the view turned between frames while no blink dimmed it, degrees a second, leaving out turns made at once. */
-const onScreenRate = (frames: readonly { yaw: number; dim: number }[], snap: number): number =>
+const onScreenRate = (frames: readonly { yaw: number; dim: number }[]): number =>
   Math.max(...frames.slice(1).map((f, i) => {
     const step = Math.abs(f.yaw - (frames[i]?.yaw ?? 0));
-    return f.dim > 0 || (frames[i]?.dim ?? 0) > 0 || Math.abs(step - snap) < 1e-6 ? 0 : step / DT;
+    return f.dim > 0 || (frames[i]?.dim ?? 0) > 0 || step >= CUT ? 0 : step / DT;
   }));
 const ids = Object.keys(SCHEMES) as SteerSchemeId[];
 
@@ -52,7 +54,7 @@ describe.each(ids)("walking comfortably (%s)", (id) => {
 
   it("never turns the view on screen faster than the one steady rate, and never speeds a turn up", () => {
     const { frames } = play(scheme, gestures, 5);
-    expect(onScreenRate(frames, scheme.snap)).toBeLessThanOrEqual(scheme.rate + 1e-6);
+    expect(onScreenRate(frames)).toBeLessThanOrEqual(scheme.rate + 1e-6);
   });
 
   it("walks at most at the pace, never faster on a diagonal, and stops when every key is let go, without turning", () => {
@@ -61,6 +63,70 @@ describe.each(ids)("walking comfortably (%s)", (id) => {
     expect(last.ahead).toBe(0);
     expect(last.left).toBe(0);
     expect(at(frames, 5.5).yaw).toBe(last.yaw);
+  });
+});
+
+describe("face and go", () => {
+  const go = SCHEMES["face-and-go"];
+  const cut = { ...go, blink: 0 };
+  /** Every change of facing from frame to frame: a cut is one frame's jump, with nothing turning before or after it. */
+  const turns = (frames: readonly { yaw: number }[]) => frames.slice(1).map((f, i) => f.yaw - frames[i]!.yaw).filter((d) => Math.abs(d) > 1e-9);
+
+  it.each([["left", 90], ["right", -90], ["back", 180], ["ahead", 0]] as const)("from still, %s faces that way at once, a cut and never a rotation", (key, to) => {
+    const { frames, yaw } = play(cut, [{ key, at: 0.2, hold: 0.1 }], 1);
+    expect(yaw).toBeCloseTo(to, 6);
+    if (to !== 0) expect(turns(frames)).toEqual([expect.closeTo(to, 6)]);
+  });
+
+  it("held, the person walks on forward the new way, looking ahead; a tap only turns", () => {
+    const held = play(go, [{ key: "left", at: 0, hold: 1 }], 1.5);
+    expect(held.yaw).toBeCloseTo(90, 6);
+    expect(at(held.frames, 0.5).ahead).toBe(1);
+    expect(held.last.ahead).toBe(0);
+    const tap = play(go, [{ key: "left", at: 0, hold: 0.04 }], 0.5);
+    expect(tap.yaw).toBeCloseTo(90, 6);
+    expect(tap.frames.every((f) => f.ahead === 0)).toBe(true);
+  });
+
+  it("still again, ← turns another quarter, and ↑ is what goes on ahead", () => {
+    const again = play(cut, [{ key: "left", at: 0, hold: 0.1 }, { key: "left", at: 0.5, hold: 0.1 }], 1);
+    expect(again.yaw).toBeCloseTo(180, 6);
+    const ahead = play(cut, [{ key: "left", at: 0, hold: 0.5 }, { key: "ahead", at: 1, hold: 0.5 }], 2);
+    expect(ahead.yaw).toBeCloseTo(90, 6);
+    expect(at(ahead.frames, 1.3).ahead).toBe(1);
+  });
+
+  it("walking, a tap of a side key nudges the way a few degrees at the steady rate, never in one jump", () => {
+    const { frames, yaw } = play({ ...go, keep: 0 }, [{ key: "ahead", at: 0, hold: 2 }, { key: "right", at: 1, hold: 0.1 }], 2);
+    expect(yaw).toBeCloseTo(-go.nudge, 6);
+    for (const d of turns(frames)) expect(Math.abs(d)).toBeLessThanOrEqual(go.rate * DT + 1e-9);
+    expect(at(frames, 1.5).ahead).toBe(1);
+  });
+
+  it("walking, a side key held keeps turning slowly after its nudge, and not at all with keep at 0", () => {
+    const kept = play(go, [{ key: "ahead", at: 0, hold: 3 }, { key: "left", at: 1, hold: 1.5 }], 3);
+    expect(kept.yaw).toBeCloseTo(go.nudge + go.keep * (1.5 - go.nudge / go.rate), 0);
+    const not = play({ ...go, keep: 0 }, [{ key: "ahead", at: 0, hold: 3 }, { key: "left", at: 1, hold: 1.5 }], 3);
+    expect(not.yaw).toBeCloseTo(go.nudge, 6);
+  });
+
+  it("↑ with ← from still faces the diagonal, or a quarter without it", () => {
+    expect(play(go, [{ key: "ahead", at: 0, hold: 0.5 }, { key: "left", at: 0.02, hold: 0.5 }], 1).yaw).toBeCloseTo(45, 6);
+    expect(play({ ...go, diagonal: false }, [{ key: "ahead", at: 0, hold: 0.5 }, { key: "left", at: 0.02, hold: 0.5 }], 1).yaw).toBeCloseTo(90, 6);
+  });
+
+  it("with a blink, the turn is made at its darkest; with none, nothing dims", () => {
+    const { frames } = play(go, [{ key: "back", at: 0, hold: 0.1 }], 0.5);
+    const jump = frames.findIndex((f, i) => i > 0 && Math.abs(f.yaw - frames[i - 1]!.yaw) > 10);
+    // Within a frame of the darkest.
+    expect(frames[jump]!.dim).toBeGreaterThan(0.9);
+    expect(frames.filter((f) => f.dim > 0).length * DT).toBeCloseTo(go.blink, 1);
+    expect(play(cut, [{ key: "back", at: 0, hold: 0.1 }], 0.5).frames.every((f) => f.dim === 0)).toBe(true);
+  });
+
+  it("Shift hurries the walk", () => {
+    const { frames } = play(go, [{ key: "shift", at: 0 }, { key: "ahead", at: 0.1 }], 1);
+    expect(at(frames, 0.5).hurry).toBe(true);
   });
 });
 
