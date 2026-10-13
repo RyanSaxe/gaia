@@ -84,7 +84,7 @@ export const valleyParams = {
     "northwest-southeast": "From northwest to southeast",
   }),
   fall: t.scale("How steeply the floor descends along the valley", { "nearly level": 0.005, gentle: 0.012, steady: 0.022 }),
-  meander: t.scale("How much the valley winds", { straight: 0.08, winding: 0.35, "strongly meandering": 0.6 }),
+  meander: t.scale("How much the valley winds", { straight: 4, winding: 20, "strongly meandering": 30 }),
   stream: t.choice("What runs along the floor", {
     "dry bed": "A grassy floor with no water",
     trickle: "A narrow, shallow trickle",
@@ -98,6 +98,9 @@ const RUN = {
   "northeast-southwest": (3 * Math.PI) / 4,
   "northwest-southeast": Math.PI / 4,
 } as const;
+
+/** How far along a valley one bend lies from the next, in the valley's own widths. */
+const VALLEY_BEND_WIDTHS = 250 / 64;
 
 const STREAM = { "dry bed": null, trickle: { width: 2.4, depth: 0.45 }, brook: { width: 3.8, depth: 0.7 } } as const;
 
@@ -115,7 +118,8 @@ export const valley = primitive({
       angle,
       halfWidth: p.width / 2,
       meander: p.meander,
-      meanderWavelength: 120,
+      // A valley bends once every few of its own widths, as real valleys do: an open one every 250 m.
+      meanderWavelength: VALLEY_BEND_WIDTHS * p.width,
     } as const;
     const height = sum(
       constant(-p.depth * 0.6),

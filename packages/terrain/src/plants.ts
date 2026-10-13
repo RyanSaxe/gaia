@@ -18,6 +18,10 @@ const WATER_CLEARANCE = 4;
  * little, so its bottom ring rises up to about 8 cm on one side.
  */
 export const PLANT_SINK = 0.12;
+/** The deepest a trunk's bottom ring may sink below the ground on its uphill side, meters. */
+export const PLANT_SUNK = 0.8;
+/** The widest a tree's trunk spreads at the ground, meters from its middle: the flora presets' largest is 1.11. */
+const TRUNK_REACH = 1.15;
 
 /** The height a plant's origin takes at (x, z), for a trunk base of `radius` meters. */
 export function groundedBase(l: Lattice, x: number, z: number, radius: number): number {
@@ -41,6 +45,18 @@ export function lowestUnder(l: Lattice, x: number, z: number, radius: number): n
   let low = Infinity;
   for (const [px, pz] of footprint(x, z, radius)) low = Math.min(low, heightAt(l, px, pz));
   return low;
+}
+
+/** How far the ground under a footprint rises from its lowest point to its highest. */
+function riseUnder(l: Lattice, x: number, z: number, radius: number): number {
+  let low = Infinity;
+  let high = -Infinity;
+  for (const [px, pz] of footprint(x, z, radius)) {
+    const h = heightAt(l, px, pz);
+    low = Math.min(low, h);
+    high = Math.max(high, h);
+  }
+  return high - low;
 }
 
 /**
@@ -192,7 +208,8 @@ export function scatterPlants(t: Terrain, count: number, seed: number, trunkRadi
   const l = t.lattice;
   const half = t.spec.size / 2 - 24;
   const regionAt = (x: number, z: number): number => t.region[Math.round((z - l.origin) / l.spacing) * l.n + Math.round((x - l.origin) / l.spacing)] ?? 0;
-  const fits = (x: number, z: number): boolean => withinLand(t.spec, x, z, 24) && slopeAt(l, x, z) <= PLANT_SLOPE && !isWet(t, x, z);
+  // Ground that rises across the widest trunk's foot no more than a trunk may sink on its uphill side, so none sinks deep.
+  const fits = (x: number, z: number): boolean => withinLand(t.spec, x, z, 24) && slopeAt(l, x, z) <= PLANT_SLOPE && riseUnder(l, x, z, TRUNK_REACH) <= PLANT_SUNK - PLANT_SINK && !isWet(t, x, z);
   // Grove hearts: seeded spots, each kept by its region's landform, drawn until the grove trees reach `count`.
   const area = (2 * (landReach(t.spec).x - 24) * 2 * (landReach(t.spec).z - 24)) / 10_000;
   const heart = (): { x: number; z: number; trees: number; spacing: number; seed: number } | null => {
