@@ -212,10 +212,10 @@ by part through the planner (`composeThings` in
 `packages/world/src/compose.ts`), its structure first and then each stage's
 details, one request a wave, each part asked in its own instruction from its
 kind's slot (`Slot.ask`). Each composing request carries what the new engine
-established about the entity (`composingState`): its importance and quality
-concepts from the understanding pass, and its files, lines, languages,
-folders, history and most important definitions from the graph, never the
-old code model's signals. The blueprint it makes is the thing's
+established about the entity (`composingState`): its form, exports and
+dependencies as `codeModelOf` reads them from the graph, its importance and
+quality concepts from the understanding pass, and its files, lines,
+languages, folders, history and most important definitions from the graph. The blueprint it makes is the thing's
 (`CodeThing.blueprint`), and the renderer realizes each thing from its own;
 the world's composing vocabulary is `Looks.compose` (`COMPOSING` in
 `app/renderer/terrain/looks.ts`). A world written by hand, the proving ground,

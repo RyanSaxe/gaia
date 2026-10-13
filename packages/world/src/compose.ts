@@ -3,7 +3,7 @@
 // request a wave, with what was settled before in the next wave's state. Jev
 // never names a preset: every blueprint is the parts and settings it chose.
 
-import { type AnyKind, type Blueprint, type CodeGraph, type DefNode, type DirNode, type FileNode, type JevAnswer, type JevClient, type Library, stagesOf } from "@gaia/schema";
+import { type AnyKind, type Blueprint, type CodeGraph, type DefNode, type DirNode, type EntityFacts, type FileNode, type JevAnswer, type JevClient, type Library, stagesOf } from "@gaia/schema";
 import { type Target, type Wave, assemble, planDetails, planStructure, readStructure, validate } from "./planner.ts";
 
 /** What composes a world's buildings and landmarks: their kinds and the primitives that fill them. */
@@ -64,15 +64,21 @@ const share = (v: number | null | undefined): number | undefined => (v === null 
 const trim = (text: string, n: number): string => (text.length <= n ? text : `${text.slice(0, n - 1)}…`);
 
 /**
- * What the new engine established about an entity, as its composing request carries it: how much it matters and
- * each concept of its quality from the understanding pass, its shape from the graph (files, lines, languages,
- * folders and history) and its most important definitions. Nothing from the old code model's signals. How much of
- * the rest imports it is left out until the graph resolves a bare package import to the file it loads: until then it
- * would read as nothing for a package everything uses.
+ * What the new engine established about an entity, as its composing request carries it: what it is and what it
+ * leans on and is leaned on by (its facts, which the world reads from the graph through `codeModelOf`), how much it
+ * matters and each concept of its quality from the understanding pass, its shape from the graph (files, lines,
+ * languages, folders and history) and its most important definitions. Nothing from the old code model's signals.
  */
-export function composingState(graph: CodeGraph | undefined, entity: { readonly name: string; readonly path: string }): Record<string, unknown> {
+export function composingState(graph: CodeGraph | undefined, entity: Pick<EntityFacts, "path" | "name"> & Partial<EntityFacts>): Record<string, unknown> {
   const path = entity.path;
-  const about: Record<string, unknown> = { name: entity.name, path: path === "" ? "(the repository's root)" : path };
+  const about: Record<string, unknown> = {
+    name: entity.name,
+    path: path === "" ? "(the repository's root)" : path,
+    ...(entity.form === undefined ? {} : { form: entity.form }),
+    ...(entity.exports === undefined ? {} : { exports: entity.exports }),
+    ...(entity.dependsOn === undefined ? {} : { dependsOn: entity.dependsOn.map((d) => (d === "" ? "(the repository's root)" : d)) }),
+    ...(entity.dependents === undefined ? {} : { dependedOnBy: entity.dependents.length }),
+  };
   if (graph === undefined) return { entity: about };
   const inside = (p: string): boolean => path === "" || p === path || p.startsWith(`${path}/`);
   const dir = graph.nodes.find((n): n is DirNode => n.kind === "dir" && n.path === path);
