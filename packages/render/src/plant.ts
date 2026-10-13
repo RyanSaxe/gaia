@@ -815,7 +815,7 @@ function snorm16(values: Float32Array, size: number): THREE.BufferAttribute {
   return new THREE.BufferAttribute(out, 4, true);
 }
 /** A part whose pieces fall, grow, rot or spin, which its material compiles in. */
-const hasRuin = (part: Part): boolean => {
+export const hasRuin = (part: Part): boolean => {
   const c = part.channels;
   return c.fall !== undefined || c.grow !== undefined || c.rot !== undefined || c.spin !== undefined;
 };
@@ -886,9 +886,9 @@ export const sprayColors = (plant: Pick<Realized, "palette">): { uBark: { value:
   uBloomColor: { value: vec3Of(plant.palette.swatches.bloom?.healthy ?? plant.palette.swatches.leaf?.healthy ?? [1, 0.9, 0.92]) },
 });
 /** Swatches lit from inside at night, like window glass. */
-const LAMP = new Set(["glass"]);
+export const LAMP: ReadonlySet<string> = new Set(["glass"]);
 /** Closed shapes, drawn front-faced; a building's boards and panes show from both sides. */
-const CLOSED = new Set(["bark", "stone"]);
+export const CLOSED: ReadonlySet<string> = new Set(["bark", "stone"]);
 
 export function createPlant(plant: Realized, light: SceneLight): PlantView {
   // Only the palette is read once the plant stands, so the parts' arrays go once the meshes are made.

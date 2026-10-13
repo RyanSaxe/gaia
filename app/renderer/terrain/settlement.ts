@@ -2,15 +2,15 @@
 // hand-filled building Jev might choose for it, standing near the stream on
 // its own leveled pad, apart from the others. The bake thread finds the
 // sites and levels the pads (`standWorld`); the settlement stands each
-// building on its site. Their walls and features stop the walk and clear the
+// building on its site, every standing building of a tile drawn together as
+// one batch (`createPlantBatch`), a call per material for the whole tile. Their walls and features stop the walk and clear the
 // grass, and each has a signboard at the end of its walk naming what it
 // stands for.
 
 import { type Blueprint, type BuildingPlan, type Built, type EntityFacts, Library, type Palette, type ThingFacts, seedOf } from "@gaia/schema";
 import { FLORA_PRIMITIVES, STRUCTURE_PRIMITIVES } from "@gaia/primitives";
 import { structure } from "@gaia/kinds";
-import { mergeParts } from "@gaia/realize";
-import { type PlantView, type SceneLight, createPlant } from "@gaia/render";
+import { type PlantBatch, type SceneLight, createPlantBatch } from "@gaia/render";
 import type { BuildingSite, Capsule, Extent } from "@gaia/terrain";
 import type * as THREE from "three";
 import { type BuildAsk, made } from "./made.ts";
@@ -22,8 +22,10 @@ export interface Building {
   readonly represented: Represented;
   /** The building's own name, such as "Watermill". */
   readonly kindName: string;
-  /** Its meshes while its tile stands (`Settlement.stand`); null while it lies far off. */
-  view: PlantView | null;
+  /** Its tile's batch and its place in it while its tile stands (`Settlement.stand`); null while it lies far off. */
+  standing: { readonly batch: PlantBatch; readonly member: number } | null;
+  /** The triangles its build draws. */
+  readonly triangles: number;
   /** Its height and the horizontal radius of its bounds, meters, whether or not it stands. */
   readonly height: number;
   readonly radius: number;
@@ -61,14 +63,16 @@ export interface Settlement {
   signOf(b: Building): Spot;
   /** Where a person stops to read the sign and look at the building. */
   standOf(b: Building): { x: number; z: number };
-  /** The meshes of the buildings that stand now. */
-  views(): PlantView[];
+  /** The batches of the buildings that stand now, one per tile. */
+  views(): PlantBatch[];
   /**
-   * Stands exactly `held` into `scene`: builds the meshes of any that lie
-   * far off, from the build made for it ahead (`makeAhead`) or else in
-   * place, and lets go of the meshes of the rest.
+   * Stands exactly `held` into `scene`, each tile's (`tileOf`) together as one batch: builds the batch of a tile
+   * whose buildings changed, from the builds made for them ahead (`makeAhead`) or else in place, and lets go of the
+   * batches of tiles no longer held.
    */
-  stand(held: readonly Building[], scene: THREE.Object3D): void;
+  stand(held: readonly Building[], scene: THREE.Object3D, tileOf: (b: Building) => string): void;
+  /** The standing building a ray hits first, and how far along it. */
+  pick(raycaster: THREE.Raycaster): { readonly building: Building; readonly distance: number } | undefined;
   /** Sets a building's vitality, standing or not. */
   setVitality(b: Building, v: number): void;
 }
@@ -111,16 +115,24 @@ export function createSettlement(light: SceneLight, entities: readonly SampleEnt
   const buildings: Building[] = entities.map((entity, i) => {
     const ask = asks[i] as BuildAsk;
     const built = made(ask, lib);
-    const view = createPlant({ ...built, parts: mergeParts(built.parts) }, light);
     const represented = entity.represented ?? (isEntity(entity.facts) ? representEntity(entity.facts, entity.vitality) : unrepresented(entity.facts));
-    view.setVitality(represented.vitality);
+    // Its bounds as a plant's own meshes measure them: the height of its parts, and how far they reach from its middle.
+    let height = 0.3;
+    let radius = 1;
+    for (const p of built.parts) {
+      for (let k = 0; k < p.positions.length; k += 3) {
+        height = Math.max(height, p.positions[k + 1] as number);
+        radius = Math.max(radius, Math.abs(p.positions[k] as number), Math.abs(p.positions[k + 2] as number));
+      }
+    }
     return {
       entity,
       represented,
       kindName: entity.kindName,
-      view,
-      height: view.height,
-      radius: view.radius,
+      standing: null,
+      triangles: built.parts.reduce((n, p) => n + p.indices.length / 3, 0),
+      height,
+      radius,
       ask,
       vitality: represented.vitality,
       blueprint: entity.blueprint,
@@ -131,44 +143,54 @@ export function createSettlement(light: SceneLight, entities: readonly SampleEnt
     };
   });
 
+  /** Each standing tile's batch and its buildings, in the batch's order. */
+  const batches = new Map<string, { readonly members: readonly Building[]; readonly batch: PlantBatch }>();
+  const atSite = (b: Building) => ({ x: b.site.x, y: b.site.level, z: b.site.z, yaw: b.site.yaw });
   return {
     buildings,
     requests: () => buildings.map((b) => ({ name: b.represented.name, plan: b.plan, beside: b.beside })),
     seat(sites) {
       buildings.forEach((b, i) => {
         b.site = sites[i] ?? b.site;
-        b.view?.object.position.set(b.site.x, b.site.level, b.site.z);
-        if (b.view !== null) b.view.object.rotation.y = b.site.yaw;
+        if (b.standing !== null) b.standing.batch.move(b.standing.member, atSite(b));
       });
     },
     blocked: (x, z, margin) => buildings.some((b) => blockedBy(b, b.site, x, z, margin)),
     clearings: () => buildings.flatMap((b) => buildingClearings(b, b.site)),
     signOf: (b) => signOf(b.plan, b.site),
     standOf: (b) => standOf(b.plan, b.site),
-    views: () => buildings.flatMap((b) => (b.view === null ? [] : [b.view])),
-    stand(held, scene) {
-      const keep = new Set(held);
-      for (const b of buildings) {
-        if (!keep.has(b)) {
-          if (b.view === null) continue;
-          scene.remove(b.view.object);
-          b.view.dispose();
-          b.view = null;
-          continue;
-        }
-        if (b.view !== null) continue;
-        const built = made(b.ask, lib);
-        const view = createPlant({ ...built, parts: mergeParts(built.parts) }, light);
-        view.object.position.set(b.site.x, b.site.level, b.site.z);
-        view.object.rotation.y = b.site.yaw;
-        view.setVitality(b.vitality);
-        scene.add(view.object);
-        b.view = view;
+    views: () => [...batches.values()].map((t) => t.batch),
+    stand(held, scene, tileOf) {
+      const want = new Map<string, Building[]>();
+      for (const b of held) want.set(tileOf(b), [...(want.get(tileOf(b)) ?? []), b]);
+      // A tile no longer held, or whose buildings changed, lets its batch go.
+      for (const [key, tile] of [...batches]) {
+        const next = want.get(key);
+        if (next !== undefined && next.length === tile.members.length && next.every((b) => tile.members.includes(b))) continue;
+        tile.batch.dispose();
+        for (const b of tile.members) b.standing = null;
+        batches.delete(key);
       }
+      for (const [key, members] of want) {
+        if (batches.has(key)) continue;
+        const batch = createPlantBatch(members.map((b) => ({ plant: made(b.ask, lib), ...atSite(b), vitality: b.vitality })), light);
+        members.forEach((b, member) => (b.standing = { batch, member }));
+        scene.add(batch.object);
+        batches.set(key, { members, batch });
+      }
+    },
+    pick(raycaster) {
+      let best: { building: Building; distance: number } | undefined;
+      for (const { members, batch } of batches.values()) {
+        const hit = batch.pick(raycaster);
+        const building = hit === undefined ? undefined : members[hit.member];
+        if (hit !== undefined && building !== undefined && (best === undefined || hit.distance < best.distance)) best = { building, distance: hit.distance };
+      }
+      return best;
     },
     setVitality(b, v) {
       b.vitality = v;
-      b.view?.setVitality(v);
+      b.standing?.batch.setVitality(b.standing.member, v);
     },
   };
 }
