@@ -40,17 +40,16 @@ pub struct DirNode {
     pub entity: Option<Entity>,
 }
 
-/// What a directory is the root of, as its manifest or its index, main or server file says.
+/// What a directory is the root of, as its manifest says.
 #[derive(Serialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Entity {
     /// The manifest's name, else the directory's.
     pub name: String,
-    /// "package", "crate", "module", "app" or "service".
+    /// "package" or "crate".
     pub form: &'static str,
-    /// The file that declares it, such as package.json; absent for a module.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub manifest: Option<String>,
+    /// The file that declares it, such as package.json.
+    pub manifest: String,
     /// The file that defines its public surface, such as src/index.ts.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub entry: Option<String>,

@@ -14,7 +14,7 @@ function graphOf(m: CodeFacts): CodeGraph {
   const nodes: GraphNode[] = [
     ...[...dirs].map((path): GraphNode => {
       const e = entities.get(path);
-      return { kind: "dir", id: `dir:${path}`, lineage: path, path, measures: { lines: 0 }, ...(e === undefined ? {} : { entity: { name: e.name, form: e.form, ...(e.entry === undefined ? {} : { entry: e.entry }) } }) };
+      return { kind: "dir", id: `dir:${path}`, lineage: path, path, measures: { lines: 0 }, ...(e === undefined ? {} : { entity: { name: e.name, form: e.form, manifest: e.manifest, ...(e.entry === undefined ? {} : { entry: e.entry }) } }) };
     }),
     ...m.files.flatMap((f): GraphNode[] => [
       { kind: "file", id: `file:${f.path}`, lineage: f.path, path: f.path, language: f.language, bytes: 1, hash: "", binary: false, unparsed: 0, conventions: [], measures: { lines: f.lines } },

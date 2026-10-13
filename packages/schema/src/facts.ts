@@ -33,12 +33,8 @@ export interface FileFacts {
   readonly importedBy: readonly string[];
 }
 
-/**
- * How the engine found an entity's boundary: a manifest (`package`, `crate`),
- * a deployable entry point (`service`, `app`), or a directory whose index
- * file gives it a public surface (`module`).
- */
-export type EntityForm = "package" | "crate" | "service" | "app" | "module";
+/** What declares an entity: a package's manifest (`package.json`) or a crate's (`Cargo.toml`). No file's name makes one. */
+export type EntityForm = "package" | "crate";
 
 export interface EntityFacts {
   /** The entity's root directory, project-relative. This is its identity. */
@@ -46,8 +42,8 @@ export interface EntityFacts {
   /** Its own name: the manifest's, else the root directory's. */
   readonly name: string;
   readonly form: EntityForm;
-  /** The file that declares it, such as package.json; absent for a module. */
-  readonly manifest?: string;
+  /** The file that declares it, such as package.json. */
+  readonly manifest: string;
   /** The file that defines its public surface, such as src/index.ts or src/lib.rs. */
   readonly entry?: string;
   readonly files: number;

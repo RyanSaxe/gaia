@@ -1,6 +1,6 @@
 // The facts the world is laid out from, derived from the engine's code
 // graph alone (`factsOf`): each file's size, language, definitions and
-// imports both ways, and each entity a manifest or an entry file declares,
+// imports both ways, and each entity a manifest declares,
 // with its size, public surface and the entities it leans on. These are the
 // code's structure, which the new engine reads too; tool signals, test
 // coverage, history and file kinds are not facts the world reads.
@@ -117,7 +117,7 @@ export function factsOf(graph: CodeGraph): CodeFacts {
       path,
       name: e.name,
       form: e.form,
-      ...(e.manifest === undefined ? {} : { manifest: e.manifest }),
+      manifest: e.manifest,
       ...(e.entry === undefined ? {} : { entry: e.entry }),
       files: mine.length,
       lines: mine.reduce((n, f) => n + f.lines, 0),
