@@ -1027,6 +1027,10 @@ function tagsOf(state: Record<string, unknown>): string[] {
  * the question and the option, so equal options spread across the world.
  * A trail's probability grows with how many entities lean on its far end.
  */
+/** A count said in `howMany`'s words, as a number in its range: none, one, a few (2 to 4), several (5 to 12) or many. */
+const COUNT_OF_WORDS: Readonly<Record<string, number>> = { none: 0, one: 1, "a few": 3, several: 6, many: 13 };
+const countOfWords = (words: string | undefined): number => COUNT_OF_WORDS[/^(none|one|a few|several|many)\b/.exec(words ?? "")?.[1] ?? "none"] ?? 0;
+
 export function standInJev(looks: Looks): JevClient {
   const suits = new Map<string, readonly string[]>();
   for (const [prefix, set] of [["", looks.world], ["", looks.land], ["", looks.trail], ["", looks.form], ["", looks.water], ["", looks.character], ["building:", looks.building], ["landmark:", looks.landmark]] as const) {
@@ -1079,9 +1083,11 @@ export function standInJev(looks: Looks): JevClient {
           // Whether a reading would help: seeded, so some requests grow their context and the path is exercised.
           answers[id] = { type: "noul", noul: 0.2 + 0.6 * rand(seedOf(`${target}:${id}`)).next() };
         } else if (q.type === "noul") {
-          const deps = ((state.entity as { dependsOn?: { name: string; dependents: number }[] } | undefined)?.dependsOn ?? []).find((d) => q.instructions.includes(`on ${d.name}.`));
+          const deps = ((state.entity as { dependsOn?: { name: string; dependents?: number; dependedOnBy?: string }[] } | undefined)?.dependsOn ?? []).find((d) => q.instructions.includes(`on ${d.name}.`));
           const form = (state.entity as { form?: string } | undefined)?.form;
-          const p = 0.25 + 0.08 * Math.min(5, deps?.dependents ?? 0) + (form === "app" || form === "service" ? 0.1 : 0);
+          // How many entities lean on the one depended on: a number in the facts, words (`howMany`) in the judged design.
+          const dependents = typeof deps?.dependents === "number" ? deps.dependents : countOfWords(deps?.dependedOnBy);
+          const p = 0.25 + 0.08 * Math.min(5, dependents) + (form === "app" || form === "service" ? 0.1 : 0);
           answers[id] = { type: "noul", noul: Math.min(0.95, p) };
         } else {
           answers[id] = { type: "score", score: 0, probabilities: { 0: 1 }, confidence: 1 };
