@@ -3,11 +3,11 @@
 ![A late afternoon in Gaia's own world, at eye height: a timber-framed house among cherry trees in blossom and firs, an autumn maple, daisies in the grass, and at the lower left the minimap, a torn scrap of the field map naming the area underfoot.](docs/images/world.jpg)
 
 Gaia turns a codebase into a world you walk through at eye height:
-directories become land, files grow groves, packages stand as cottages,
+directories become land, files become patches of ground where each function
+and class stands as a tree, a stone or a bush, packages stand as cottages,
 towers and great trees, and the dependencies between them wear trails. Every
-part of the world shows the health of the code it stands for, so an
-untested, tangled file grows a tired tree and a failing package falls
-slowly to ruin.
+part of the world shows the health of the code it stands for, so a tangled
+function grows a tired tree and a failing package falls slowly to ruin.
 
 What each thing becomes is chosen by Jev, a decision model reached through
 OpenRouter, from facts about the code and never its source. Without a key,

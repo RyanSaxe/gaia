@@ -202,10 +202,10 @@ interface Tree {
   readonly variant: number;
   readonly scale: number;
   readonly yaw: number;
-  /** The file it stands for. */
+  /** In the codebase's world, the definition it stands for, by index into the world's symbols. */
+  readonly symbol?: number;
+  /** What it stands for: a definition, or in the sample world a file. */
   readonly represented: Represented;
-  /** In the codebase's world, the file patch it grows on. */
-  readonly patch?: number;
 }
 
 /** The world as it stands after a bake: what a map draws and what markers stand beside. */
@@ -658,8 +658,9 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   let trees: readonly Tree[] = [];
   /** Each tree's copy among its build's instances. */
   let treeCopies: readonly number[] = [];
-  /** The file a tree grows for, in the codebase's world. */
-  const treeFile = (t: { readonly patch?: number }): string | undefined => (t.patch === undefined ? undefined : code?.world.patches[t.patch]?.path);
+  /** The definition a tree stands for in the codebase's world, and so its file. */
+  const treeSymbol = (t: { readonly symbol?: number }) => (t.symbol === undefined ? undefined : code?.world.symbols[t.symbol]);
+  const treeFile = (t: { readonly symbol?: number }): string | undefined => treeSymbol(t)?.file;
   const treeVitality = (t: Tree): number => liveFileVitality.get(treeFile(t) ?? "") ?? t.represented.vitality;
   let treeViews: Copies[] = [];
   /** Each build's instances by variant, kept for the life of the lab. */
@@ -881,15 +882,13 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   /** Stands the bake's trees and understory, placed on the bake thread, and what stops a walker. */
   function plant(stood: Stand): void {
     // Trees keep off the trails, the buildings and the landmarks; the bake thread kept them off.
-    // In the codebase's world each tree grows on its file's patch and takes that file's vitality.
-    const fileOf = (t: (typeof stood.trees)[number]) => {
-      const patch = t.patch === undefined ? undefined : code?.world.patches[t.patch];
-      return (patch === undefined ? undefined : code?.files.get(patch.path)) ?? (SAMPLE_FILES[t.index % SAMPLE_FILES.length] as (typeof SAMPLE_FILES)[number]);
-    };
+    // In the codebase's world each tree is a definition, and takes its vitality.
     trees = stood.trees.map((t) => {
-      const file = fileOf(t);
-      const patch = t.patch === undefined ? undefined : code?.world.patches[t.patch];
-      return { ...t, represented: representFile(file, patch?.vitality ?? SAMPLE_VITALITY[file.path] ?? 1) };
+      const sym = treeSymbol(t);
+      const file = sym === undefined ? undefined : code?.files.get(sym.file);
+      if (sym !== undefined && file !== undefined) return { ...t, represented: representSymbol(sym, file) };
+      const sample = SAMPLE_FILES[t.index % SAMPLE_FILES.length] as (typeof SAMPLE_FILES)[number];
+      return { ...t, represented: representFile(sample, SAMPLE_VITALITY[sample.path] ?? 1) };
     });
     treesByTile = new Map();
     for (const t of trees) {
@@ -1080,10 +1079,12 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     const treeSubjects: Subject[] = trees.map((tree) => {
       const { x, z } = tree;
       const crown = (variants[tree.variant] as TreeVariant).radius * tree.scale;
+      const sym = treeSymbol(tree);
       return {
         represented: tree.represented,
-        standsAs: "A tree",
-        ...judged("file", tree.represented.id),
+        standsAs: sym === undefined ? "A tree" : withArticle(sym.form),
+        // A definition's form is judged with its file.
+        ...judged("file", sym?.file ?? tree.represented.id),
         x,
         z,
         height: (variants[tree.variant] as TreeVariant).height * tree.scale,
@@ -1127,14 +1128,8 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     const symbolSubjects = symbolEntries.map(([, subject]) => subject);
     subjects = [...buildingSubjects, ...landmarkSubjects, ...treeSubjects, ...symbolSubjects];
     symbolAt = new Map(symbolEntries);
-    const named = new Set<number>();
-    const plaqued = trees.flatMap((tree, i) => {
-      if (tree.patch !== undefined) {
-        if (named.has(tree.patch)) return [];
-        named.add(tree.patch);
-      }
-      return [{ tree, subject: treeSubjects[i] as Subject }];
-    });
+    // A tree that stands for a definition has no plaque, as no other definition has.
+    const plaqued = trees.flatMap((tree, i) => (tree.symbol === undefined ? [{ tree, subject: treeSubjects[i] as Subject }] : []));
     signSubjects = [...buildingSubjects, ...landmarkSubjects, ...plaqued.map((p) => p.subject)];
     signs.set([
       ...settlement.buildings.map((b) => {
@@ -2059,13 +2054,16 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
 
   /** The places worth seeing in the world now shown, each with where to stand and which way to look (`tourStops`). */
   function tour(): TourStop[] {
-    const groves = new Map<number, { x: number; z: number; trees: number }>();
+    // A file's trees, its definitions that stand as trees, make its grove.
+    const groves = new Map<string, { x: number; z: number; trees: number }>();
     for (const t of trees) {
-      if (t.patch === undefined) continue;
-      const g = groves.get(t.patch) ?? { x: 0, z: 0, trees: 0 };
-      groves.set(t.patch, { x: g.x + t.x, z: g.z + t.z, trees: g.trees + 1 });
+      const file = treeFile(t);
+      if (file === undefined) continue;
+      const g = groves.get(file) ?? { x: 0, z: 0, trees: 0 };
+      groves.set(file, { x: g.x + t.x, z: g.z + t.z, trees: g.trees + 1 });
     }
     const patches = code?.world.patches ?? [];
+    const patchOf = new Map(patches.map((p) => [p.path, p]));
     const own = groundVitality(patches.map((p) => ({ area: p.area, vitality: p.vitality, size: p.radius * p.radius })));
     return tourStops({
       things: [
@@ -2084,7 +2082,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       wayVitality: (way, along) => wayVitalityAt(ways.network, way, along, vitalityOfPlace),
       junctionVitality: (j) => junctionVitality(ways.network, j, vitalityOfPlace),
       areas: (code?.world.areas ?? []).map((a) => ({ path: a.path, x: a.x, z: a.z, ground: a.ground, depth: a.depth, vitality: own.get(a.path) ?? 1 })),
-      groves: [...groves].map(([i, g]) => ({ path: patches[i]?.path ?? `patch ${i}`, x: g.x / g.trees, z: g.z / g.trees, trees: g.trees, vitality: patches[i]?.vitality ?? 1 })),
+      groves: [...groves].map(([path, g]) => ({ path, x: g.x / g.trees, z: g.z / g.trees, trees: g.trees, vitality: patchOf.get(path)?.vitality ?? 1 })),
       ponds: terrain.ponds.map((p) => ({ x: p.x, z: p.z, reach: p.reach })),
       standable: (x, z) => withinLand(world, x, z, 4) && waterDepthAt(terrain, x, z) <= LAND.dry && clearanceAt(solids, x, z) >= LAND.clear,
     });

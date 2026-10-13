@@ -6,7 +6,7 @@ import { FLORA_PRESETS, LANDMARK_PRESETS, STRUCTURE_PRESETS, TRAIL_PRESETS, buil
 import { type ScatterRule, TERRAIN, type Terrain, bakeTerrain, groundLook, junctionVitality, ownershipOf, placeAt, vitalityAt, vitalityOver, wayVitalityAt } from "@gaia/terrain";
 import { type Judgments, areaVitality, groundVitality } from "@gaia/world";
 import { codeLab, provingWorld } from "./code-world.ts";
-import { BUILDINGS, CHARACTERS, FORMS, LANDMARKS, LANDS, TRAILS, VIBES, WATERS } from "./looks.ts";
+import { BUILDINGS, CHARACTERS, FORMS, LANDMARKS, LANDS, TRAILS, WATERS } from "./looks.ts";
 import { type Stand, extentOf, groundSites, landmarkBase, ownerVitality, standWorld, understoryVitality } from "./stand.ts";
 import judgedFixture from "./fixtures/proving-judged.json";
 
@@ -43,7 +43,6 @@ describe("the proving ground", () => {
     expect(used(LANDS, Object.values(judged.lands))).toEqual([]);
     expect(used(WATERS, Object.values(judged.waters))).toEqual([]);
     expect(used(CHARACTERS, Object.values(judged.characters))).toEqual([]);
-    expect(used(VIBES, Object.values(judged.vibes))).toEqual([]);
     expect(used(FORMS, Object.values(judged.forms).flatMap((f) => Object.values(f)))).toEqual([]);
     expect(used(TRAILS, judged.trails.map((t) => t.look))).toEqual([]);
     for (const [as, looks] of [["building", BUILDINGS], ["landmark", LANDMARKS]] as const) {
@@ -151,12 +150,17 @@ describe("the proving ground", () => {
       expect(terrain.ponds.length).toBeGreaterThanOrEqual(2);
     });
 
-    it("stands every definition the layout lays out, each on its own file's patch, however crowded its ground", () => {
+    it("stands every definition the layout lays out, as a tree or part of the understory, each on its own file's patch, however crowded its ground", () => {
       expect(stood.symbols.length).toBe(doc.world.symbols.length);
+      const trees = new Map(stood.trees.map((t) => [t.symbol, t]));
+      expect(trees.size).toBeGreaterThan(0);
       stood.symbols.forEach((i, k) => {
         const s = doc.world.symbols[k]!;
-        expect(i, s.id).toBeGreaterThanOrEqual(0);
-        const p = stood.placements[i]!;
+        const tree = FORMS[s.form]?.rule === "trees";
+        // A definition stands once: as its tree, or as its placement.
+        expect(trees.has(k), s.id).toBe(tree);
+        expect(i >= 0, s.id).toBe(!tree);
+        const p = tree ? trees.get(k)! : stood.placements[i]!;
         expect(placeAt(doc.world, p.x, p.z).file?.path, s.id).toBe(s.file);
       });
     });

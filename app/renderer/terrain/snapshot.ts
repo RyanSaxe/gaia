@@ -22,8 +22,10 @@ export async function laySnapshot(judge: SnapshotJudge, why: string): Promise<{ 
   const stored = new Map(judge === "jev" ? Object.entries((kept as { answers: Record<string, JevResponse> }).answers) : []);
   const byKey = new Map<string, Judge>();
   const jev = keptJev(null, standInJev(LOOKS), { stored, keep: () => undefined, settled: (key, j) => byKey.set(key, j) });
-  const world = layoutWorld(model, await judgeWorld(model, LOOKS, jev), snapshotGraph as unknown as CodeGraph);
-  const judges = Object.fromEntries(planWorldRequests(model, LOOKS).flatMap((p) => thingsOf(p).map((t) => [judgedThing(t), byKey.get(requestKey(p.request)) ?? "stand-in"] as const)));
+  const graph = snapshotGraph as unknown as CodeGraph;
+  // Each request names the definitions the graph stands, so the answers kept for them meet the layout's.
+  const world = layoutWorld(model, await judgeWorld(model, LOOKS, jev, { graph }), graph);
+  const judges = Object.fromEntries(planWorldRequests(model, LOOKS, { graph }).flatMap((p) => thingsOf(p).map((t) => [judgedThing(t), byKey.get(requestKey(p.request)) ?? "stand-in"] as const)));
   const byJev = Object.values(judges).filter((j) => j === "jev").length;
   const summary = byJev === 0 ? `Every thing judged by the stand-in (${why})` : `${byJev} of ${Object.keys(judges).length} things judged by Jev, from answers kept for this snapshot (${why})`;
   return { world, judges, summary };

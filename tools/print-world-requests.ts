@@ -8,13 +8,14 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
-import type { CodeModel, JevEstimate } from "@gaia/schema";
+import type { CodeGraph, CodeModel, JevEstimate } from "@gaia/schema";
 import { planWorldRequests } from "@gaia/world";
 import { LOOKS } from "../app/renderer/terrain/looks.ts";
 
 const repo = resolve(import.meta.dirname, "..");
 const model = JSON.parse(readFileSync(resolve(repo, "app/renderer/terrain/fixtures/gaia.json"), "utf8")) as CodeModel;
-const planned = planWorldRequests(model, LOOKS);
+const graph = JSON.parse(readFileSync(resolve(repo, "app/renderer/terrain/fixtures/gaia-graph.json"), "utf8")) as CodeGraph;
+const planned = planWorldRequests(model, LOOKS, { graph });
 const out = process.argv[2];
 if (out !== undefined) writeFileSync(out, `${JSON.stringify(planned, null, 2)}\n`);
 else console.log(JSON.stringify(planned.map((p) => p.request), null, 2));

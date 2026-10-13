@@ -60,15 +60,6 @@ export const LANDS: Readonly<Record<string, { readonly look: Look; readonly biom
   },
 };
 
-/** What grows on a file's patch: a tree species, or open ground that its directory's cover fills. */
-export const VIBES: Readonly<Record<string, Look>> = {
-  "Lantern willow": look("Weeping willows that hang lanterns of light: a file much of the code leans on.", "hub", "large", "render", "light", "water"),
-  Fir: look("Dark, steady firs: a sturdy file that tests or guards others.", "test", "rust", "engine"),
-  Cherry: look("Cherry trees in blossom: a small, lively file of the interface.", "renderer", "lab", "app", "typescript"),
-  "Autumn maple": look("Broad maples turning gold: a substantial file of logic.", "source", "large", "typescript"),
-  "Open meadow": look("No trees: open ground in the area's own cover, for a file that describes or configures rather than acts.", "docs", "config", "data", "script", "markdown", "json", "yaml", "toml"),
-};
-
 export const BUILDINGS: Readonly<Record<string, Look>> = {
   "Thatched cottage": look("a thatched cottage, small and homely: a small entity of a few files doing one modest job", "module", "small", "leaf"),
   "Stone croft": look("a low stone croft, sturdy and plain: native code close to the machine, compiled on its own, such as an engine", "crate", "rust", "medium", "engine"),
@@ -101,11 +92,17 @@ export const WORLDS: Readonly<Record<string, Look>> = {
 };
 
 /**
- * What a file's finer entity stands as on its patch: a stone, a cairn, a bush
- * or a drift of flowers, each one of the understory's own blueprints (`rule`
- * and which of its presets), so standing hundreds costs no draw calls.
+ * What a file's finer entity stands as on its patch: a tree, a stone, a bush
+ * or a drift of flowers. A tree is one of the lab's trees (`rule` "trees" and
+ * its flora preset), drawn with the woods; anything else is one of the
+ * understory's own blueprints (`rule` and which of its presets). Either way
+ * standing hundreds costs no draw calls of its own.
  */
 export const FORMS: Readonly<Record<string, { readonly look: Look; readonly rule: string; readonly preset: number }>> = {
+  "Lantern willow": { look: look("A weeping willow hung with lanterns of light: something much of the code leans on.", "hub", "large", "render", "light", "water"), rule: "trees", preset: 0 },
+  Fir: { look: look("A dark, steady fir: sturdy code that tests or guards others.", "test", "rust", "engine"), rule: "trees", preset: 1 },
+  Cherry: { look: look("A cherry tree in blossom: a small, lively piece of the interface.", "renderer", "lab", "app", "typescript"), rule: "trees", preset: 2 },
+  "Autumn maple": { look: look("A broad maple turning gold: a substantial piece of logic.", "source", "large", "typescript", "class"), rule: "trees", preset: 3 },
   "Standing stone": { look: look("A single upright stone: one thing done plainly, that others steer by.", "function", "exported", "hub", "medium"), rule: "rocks", preset: 1 },
   "Mossy boulder": { look: look("A broad boulder gone green with moss: a heavy, settled piece of work.", "large", "class", "rust", "engine"), rule: "rocks", preset: 0 },
   "Stone family": { look: look("A family of stones, a big one and its small ones: something built of parts.", "class", "geometry", "primitives"), rule: "rocks", preset: 3 },
@@ -127,19 +124,13 @@ export const WATERS: Readonly<Record<string, Look>> = {
 };
 
 /**
- * How an area's trees and open ground lie, and what that means on the
- * ground: how many trees each line of a file grows (`perLine`), how close
- * they stand in crown widths (`closeness`), whether its files' groves gather
- * toward the area's heart and knit into one wood (`knit`) or keep to their
- * own patches' middles with clearings between, how large its trees grow
- * (`stature`), how much of each understory rule it holds, and what its open
- * ground reads as to the understory (dry heath or damp hollow).
+ * An area's ground, and what that means on it: how large the trees its
+ * definitions stand as grow (`stature`), how much of each understory rule
+ * grows between the things standing there, and what its open ground reads as
+ * to the understory (dry heath or damp hollow).
  */
 export interface Character {
   readonly look: Look;
-  readonly perLine: number;
-  readonly closeness: number;
-  readonly knit: boolean;
   readonly stature: number;
   readonly understory: Readonly<Record<string, number>>;
   readonly open?: "dry" | "wet";
@@ -147,43 +138,28 @@ export interface Character {
 
 export const CHARACTERS: Readonly<Record<string, Character>> = {
   "Deep wood": {
-    look: look("A deep wood: its files' groves run together under one canopy around the area's heart, with meadow at its rim: a large body of code dense with its own logic.", "large", "flow", "geometry", "building", "landmark", "engine", "rust"),
-    perLine: 0.04,
-    closeness: 0.56,
-    knit: true,
-    stature: 1.05,
+    look: look("A deep wood's floor: thick shrubs in the shade, and its trees grow tall: a large body of code dense with its own logic.", "large", "flow", "geometry", "building", "landmark", "engine", "rust"),
+    stature: 1.15,
     understory: { rocks: 0.7, shrubs: 1.3, flowers: 0.8 },
   },
   "Groves and clearings": {
-    look: look("Groves standing apart, each file's on its own ground, with open clearings between: code whose files each keep to themselves.", "medium", "renderer", "render", "immersive", "app", "terrain"),
-    perLine: 0.024,
-    closeness: 0.56,
-    knit: false,
+    look: look("Clearings with an even scatter of stones, shrubs and flowers: code whose files each keep to themselves.", "medium", "renderer", "render", "immersive", "app", "terrain"),
     stature: 1,
     understory: { rocks: 1, shrubs: 1, flowers: 1 },
   },
   "Old meadow": {
-    look: look("An open meadow where a few old trees stand alone, flowers in the grass: code that describes or configures, or is small and settled.", "docs", "config", "small", "still", "root", "repository", "data", "markdown"),
-    perLine: 0.006,
-    closeness: 2.5,
-    knit: false,
+    look: look("An old meadow thick with flowers, where trees grow large and broad: code that describes or configures, or is small and settled.", "docs", "config", "small", "still", "root", "repository", "data", "markdown"),
     stature: 1.3,
     understory: { rocks: 0.6, shrubs: 0.5, flowers: 1.7 },
   },
   "Rocky heath": {
-    look: look("A dry, rocky heath of stones, low scrub and a few wind-bent trees: hard-working code that checks or runs other code, spare and plain.", "test", "script", "tools", "realize", "dry"),
-    perLine: 0.012,
-    closeness: 0.9,
-    knit: false,
+    look: look("A dry, rocky heath of stones and low scrub, where trees stay small and wind-bent: hard-working code that checks or runs other code, spare and plain.", "test", "script", "tools", "realize", "dry"),
     stature: 0.85,
     understory: { rocks: 2.6, shrubs: 1.4, flowers: 0.6 },
     open: "dry",
   },
   "Wet hollow": {
-    look: look("A wet hollow of reeds and marsh flowers on soft ground, trees leaning in: ground much of the code leans on, where what it holds settles.", "crossroads", "schema", "world", "service"),
-    perLine: 0.016,
-    closeness: 0.55,
-    knit: true,
+    look: look("A wet hollow of reeds and marsh flowers on soft ground: ground much of the code leans on, where what it holds settles.", "crossroads", "schema", "world", "service"),
     stature: 1,
     understory: { rocks: 0.6, shrubs: 1.3, flowers: 1.5 },
     open: "wet",
@@ -193,7 +169,6 @@ export const CHARACTERS: Readonly<Record<string, Character>> = {
 export const LOOKS: Looks = {
   world: WORLDS,
   land: Object.fromEntries(Object.entries(LANDS).map(([k, l]) => [k, l.look])),
-  vibe: VIBES,
   building: BUILDINGS,
   landmark: LANDMARKS,
   trail: TRAILS,

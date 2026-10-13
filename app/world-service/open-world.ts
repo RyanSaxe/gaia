@@ -127,9 +127,6 @@ export async function openWorld({ engine, root, consent, progress }: OpenWorldOp
   const model = await engine.call("project.open", { root });
   const project = model.projectId;
   const name = model.repository.name;
-  const planned = planWorldRequests(model, LOOKS);
-  const keys = planned.map((p) => requestKey(p.request));
-
   // The land, outlined as the finished map draws it, every file's patch and every entity's lot, before anything is judged.
   // What understanding still has to ask, going only as far as the world needs to stand (Jev's links and every
   // definition's stand), and the graph that plan was built on: every definition, with whatever stand Jev's held
@@ -138,6 +135,9 @@ export async function openWorld({ engine, root, consent, progress }: OpenWorldOp
   if (understanding.graph === undefined) throw new Error("understanding.plan gave no graph.");
   let judged = understanding.graph;
   let graph = judgedGraph(judged);
+  // Each file's request names the definitions the graph stands on its patch, as the layout stands them.
+  const planned = planWorldRequests(model, LOOKS, { graph });
+  const keys = planned.map((p) => requestKey(p.request));
   const land = landOf(model, graph);
   progress({ stage: "land", name, size: land.size, ...(land.aspect === undefined ? {} : { aspect: land.aspect }), areas: outlinesOf(land).areas, patches: land.patches.map(({ path, name, area, x, z, radius }) => ({ path, name, area, x, z, radius })), lots: land.lots });
 
@@ -279,7 +279,7 @@ export async function openWorld({ engine, root, consent, progress }: OpenWorldOp
       return response;
     },
   };
-  const judgments = await judgeWorld(model, LOOKS, jev);
+  const judgments = await judgeWorld(model, LOOKS, jev, { graph });
   await new Promise((resolve) => setTimeout(resolve, 0));
   await Promise.all(writes);
 

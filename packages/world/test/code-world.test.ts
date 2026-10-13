@@ -68,7 +68,6 @@ const set = (...keys: string[]) => Object.fromEntries(keys.map((k, i) => [k, { d
 const LOOKS: Looks = {
   world: set("Dawn", "Dusk"),
   land: set("Moor", "Valley", "Hills"),
-  vibe: set("Meadow", "Oak", "Fir"),
   building: set("Cottage", "Mill"),
   landmark: set("Tower", "Oak"),
   trail: set("Path", "Track"),
@@ -80,7 +79,8 @@ const LOOKS: Looks = {
 describe("a world laid out from code", () => {
   it("asks Jev only about facts and doc comments, with options it can answer, and the stand-in answers every question from them", async () => {
     const requests = planWorldRequests(model(), LOOKS);
-    expect(requests.filter((r) => r.about === "file")).toHaveLength(11);
+    // Every file with something standing on its patch: the seven that aren't config or docs.
+    expect(requests.filter((r) => r.about === "file")).toHaveLength(7);
     expect(requests.filter((r) => r.about === "entity")).toHaveLength(3);
     const jev = standInJev(LOOKS);
     for (const { request } of requests) {
@@ -254,7 +254,7 @@ describe("a world laid out from code", () => {
     // The default design asks each symbol that may stand on its own: `#x` is math.ts's function x.
     expect(["Stone", "Bush"]).toContain(judged.forms["packages/core/src/math.ts"]!["#x"]);
     for (const w of Object.values(judged.waters)) expect(["Dry", "Brook"]).toContain(w);
-    // Every area with land of its own is judged for how its trees and open ground lie, and its region carries the choice.
+    // Every area with land of its own is judged for what its ground is like, and its region carries the choice.
     expect(Object.keys(judged.characters).sort()).toEqual(Object.keys(judged.waters).sort());
     for (const r of layoutWorld(model(), judged).regions) expect(Object.keys(LOOKS.character)).toContain(r.character);
     const world = layoutWorld(model(), { ...judged, trails: [{ from: "packages/app", to: "packages/core", want: 0.9, look: "Path" }, { from: "", to: "packages/core", want: 0.6, look: "Track" }, { from: "", to: "packages/app", want: 0.3, look: "Path" }] });
@@ -262,11 +262,17 @@ describe("a world laid out from code", () => {
     expect(world.trails.every((t) => t.spans)).toBe(true);
   });
 
-  it("under the judged design, asks each standing symbol's form on its own", async () => {
+  it("under the judged design, asks every standing definition's form on its own, over as many requests as its file needs", async () => {
     const planned = planWorldRequests(model(), LOOKS, { design: "judged" });
     const math = planned.find((p) => p.target === "packages/core/src/math.ts")!;
-    expect(Object.keys(math.request.questions).sort()).toEqual(["form#helper", "form#x", "vibe"]);
-    expect(Object.keys(planned.find((p) => p.target === "README.md")!.request.questions)).toEqual(["vibe"]);
+    expect(Object.keys(math.request.questions).sort()).toEqual(["form#helper", "form#x"]);
+    // A file with nothing standing on its patch is not asked about.
+    expect(planned.find((p) => p.target === "README.md")).toBeUndefined();
+    // A file with more definitions than one request asks about is asked over several, each definition once.
+    const crowded = { ...model(), files: model().files.map((f) => (f.path === "packages/core/src/math.ts" ? { ...f, symbols: Array.from({ length: 30 }, (_, k) => ({ name: `f${k}`, kind: "function" as const, exported: false, line: 1 + k * 9, lines: 8 })) } : f)) };
+    const asked = planWorldRequests(crowded, LOOKS, { design: "judged" }).filter((p) => p.target === "packages/core/src/math.ts");
+    expect(asked.length).toBe(2);
+    expect(asked.flatMap((p) => Object.keys(p.request.questions)).sort()).toEqual(Array.from({ length: 30 }, (_, k) => `form#f${k}`).sort());
     // A Jev that gives each symbol its own form.
     const standIn = standInJev(LOOKS);
     const jev: JevClient = {
@@ -296,16 +302,16 @@ describe("a world laid out from code", () => {
     const wayward: JevClient = {
       async ask(request) {
         asked.push(requestKey(request));
-        return { answers: { vibe: { type: "choice", choice: "Bamboo", probabilities: {}, confidence: 1 } }, model: "jev", costUsd: 0, ms: 1 };
+        return { answers: { "form#x": { type: "choice", choice: "Bamboo", probabilities: {}, confidence: 1 } }, model: "jev", costUsd: 0, ms: 1 };
       },
     };
     const kept: JevResponse[] = [];
     const judges = new Map<string, Judge>();
     const jev = keptJev(wayward, standIn, { stored: new Map([[requestKey(world!.request), stored]]), keep: (_, r) => kept.push(r), settled: (k, j) => judges.set(k, j) });
     expect(await jev.ask(world!.request)).toEqual(stored);
-    const vibe = (await jev.ask(file!.request)).answers.vibe;
-    expect(vibe?.type === "choice" && Object.keys(LOOKS.vibe)).toContain(vibe?.type === "choice" ? vibe.choice : "");
-    expect(vibe).toEqual((await standIn.ask(file!.request)).answers.vibe);
+    const form = (await jev.ask(file!.request)).answers["form#x"];
+    expect(form?.type === "choice" && Object.keys(LOOKS.form)).toContain(form?.type === "choice" ? form.choice : "");
+    expect(form).toEqual((await standIn.ask(file!.request)).answers["form#x"]);
     expect(asked).toEqual([requestKey(file!.request)]);
     expect(kept).toEqual([]);
     expect([...judges.values()]).toEqual(["jev", "stand-in"]);

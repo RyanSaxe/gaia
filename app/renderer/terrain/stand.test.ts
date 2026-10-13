@@ -59,18 +59,22 @@ describe("standing a world's things on a bake", () => {
     }
   });
 
-  it("stands a world laid out from code: each building and landmark on its lot, each tree on its file's patch, trails between lots", () => {
+  it("stands a world laid out from code: each building and landmark on its lot, each definition near its spot as a tree or part of the understory, trails between lots", () => {
     const t = pristine;
     const code: StandCode = {
       lots: [{ id: "packages/a", x: -40, z: 30, radius: 9 }, { id: "packages/b", x: 50, z: -20, radius: 9 }],
       landmarks: [{ landmark: 0, lot: { id: "packages/c", x: 10, z: 70, radius: 7 } }],
       patches: [
-        { x: -60, z: -50, radius: 12, trees: 4, preset: 0, heart: { x: -60, z: -50 }, closeness: 0.7, reach: 12, stature: 1, seed: 1 },
-        { x: 20, z: -70, radius: 8, trees: 2, preset: 1, heart: { x: 20, z: -70 }, closeness: 0.7, reach: 8, stature: 1, seed: 2 },
-        { x: 0, z: 0, radius: 10, trees: 0, preset: -1, heart: { x: 0, z: 0 }, closeness: 0.7, reach: 10, stature: 1, seed: 3 },
+        { x: -60, z: -50, radius: 12 },
+        { x: 20, z: -70, radius: 8 },
+        { x: 0, z: 0, radius: 10 },
       ],
       cells: [],
-      symbols: [{ x: -55, z: -40, rule: "rocks", variant: 0, radius: 0.8, scale: 1, vitality: 0.3 }],
+      symbols: [
+        { x: -55, z: -40, rule: "rocks", variant: 0, radius: 0.8, scale: 1, vitality: 0.3 },
+        { x: -64, z: -54, rule: "trees", variant: 0, radius: 1, scale: 1, vitality: 0.8 },
+        { x: 20, z: -70, rule: "trees", variant: 1, radius: 1, scale: 0.7, vitality: 0.4 },
+      ],
       regions: [],
       trails: [{ from: "packages/a", to: "packages/b", want: 0.9, style: 0 }, { from: "packages/a", to: "packages/c", want: 0.8, style: 1 }],
     };
@@ -82,14 +86,16 @@ describe("standing a world's things on a bake", () => {
     const [lm] = stood.landmarks;
     expect(lm?.landmark).toBe(0);
     expect(Math.hypot(lm!.site.x - 10, lm!.site.z - 70)).toBeLessThanOrEqual(7 + 1e-6);
-    expect(stood.trees.length).toBeGreaterThan(0);
+    // Every tree is a definition that stands as one, near where the layout put it, as the tree it was given; nothing
+    // else grows trees.
+    expect(stood.trees.map((tree) => tree.symbol).sort()).toEqual([1, 2]);
     for (const tree of stood.trees) {
-      const patch = code.patches[tree.patch!]!;
-      expect(Math.hypot(tree.x - patch.x, tree.z - patch.z)).toBeLessThanOrEqual(patch.radius);
-      expect(Math.floor(tree.variant / request.trees.builds)).toBe(patch.preset);
+      const sym = code.symbols[tree.symbol!]!;
+      expect(Math.hypot(tree.x - sym.x, tree.z - sym.z)).toBeLessThan(8);
+      expect(Math.floor(tree.variant / request.trees.builds)).toBe(sym.variant);
     }
-    expect(stood.trees.some((tree) => tree.patch === 2)).toBe(false);
-    // A file's function stands near where the layout put it, as the blueprint it was given, with its file's vitality.
+    expect(stood.symbols.slice(1)).toEqual([-1, -1]);
+    // A file's function stands near where the layout put it, as the blueprint it was given, with its own vitality.
     const sym = stood.placements[stood.symbols[0]!]!;
     expect(sym).toMatchObject({ rule: "rocks", variant: 0, vitality: 0.3 });
     expect(Math.hypot(sym.x + 55, sym.z + 40)).toBeLessThan(5);

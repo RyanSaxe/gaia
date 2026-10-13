@@ -33,7 +33,7 @@ import { dirname, relative, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import type { CodeModel, EntityFacts, EntityForm, FileFacts, FileKind, SymbolFact } from "@gaia/schema";
 import { type Judgments, layoutWorld } from "@gaia/world";
-import { BUILDINGS, CHARACTERS, FORMS, LANDMARKS, LANDS, TRAILS, VIBES, WATERS } from "../app/renderer/terrain/looks.ts";
+import { BUILDINGS, CHARACTERS, FORMS, LANDMARKS, LANDS, TRAILS, WATERS } from "../app/renderer/terrain/looks.ts";
 import { provingCode } from "./proving-code.ts";
 
 /** How a file or an entity fares, from thriving to ruin; `decayed` is ruin with no tests at all, so it drags its entity down less. */
@@ -373,23 +373,21 @@ const model: CodeModel = {
 
 // ---------- what Jev would choose ----------
 
-const vibes: Record<string, string> = {};
+// Every other definition of a source file stands as a tree, so each file grows trees at its health, and the rest go
+// round the stones, bushes and flowers.
 const forms: Record<string, Record<string, string>> = {};
-const trees = Object.keys(VIBES).filter((v) => v !== "Open meadow");
-const formKeys = Object.keys(FORMS);
+const trees = Object.keys(FORMS).filter((k) => FORMS[k]?.rule === "trees");
+const others = Object.keys(FORMS).filter((k) => FORMS[k]?.rule !== "trees");
 let tree = 0;
-let form = 0;
+let other = 0;
 for (const f of model.files) {
-  const acts = f.kind === "source" || f.kind === "script";
-  vibes[f.path] = acts ? (trees[tree++ % trees.length] as string) : "Open meadow";
-  if (f.kind === "source" && f.symbols.length > 0) forms[f.path] = Object.fromEntries(f.symbols.map((s) => [`#${s.name}`, formKeys[form++ % formKeys.length] as string]));
+  if (f.kind === "source" && f.symbols.length > 0) forms[f.path] = Object.fromEntries(f.symbols.map((s, k) => [`#${s.name}`, k % 2 === 0 ? (trees[tree++ % trees.length] as string) : (others[other++ % others.length] as string)]));
 }
 const judged: Judgments = {
   world: "Meadow morning",
   lands: Object.fromEntries(PLAN.flatMap((d) => (d.land === undefined ? [] : [[d.path, d.land[0]]]))),
   waters: Object.fromEntries(PLAN.flatMap((d) => (d.land === undefined ? [] : [[d.path, d.land[1]]]))),
   characters: Object.fromEntries(PLAN.flatMap((d) => (d.land === undefined ? [] : [[d.path, d.land[2]]]))),
-  vibes,
   things: Object.fromEntries(PLAN.flatMap((d) => (d.entity === undefined ? [] : [[d.path, { as: d.entity.as, look: d.entity.look }]]))),
   trails: TRAIL_PLAN.map(([from, to, look, want]) => ({ from, to, want, look })),
   forms,
@@ -416,7 +414,6 @@ const gaps = [
   ...missing("land", LANDS, Object.values(judged.lands)),
   ...missing("water", WATERS, Object.values(judged.waters)),
   ...missing("character", CHARACTERS, Object.values(judged.characters)),
-  ...missing("vibe", VIBES, Object.values(vibes)),
   ...missing("form", FORMS, Object.values(forms).flatMap((f) => Object.values(f))),
   ...missing("trail", TRAILS, judged.trails.map((t) => t.look)),
   ...Object.keys(BUILDINGS).flatMap((b) => (things.filter((t) => t.as === "building" && t.look === b).length >= 3 ? [] : [`three buildings "${b}"`])),

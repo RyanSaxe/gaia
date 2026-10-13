@@ -171,32 +171,35 @@ On each file's patch every definition stands, nested ones included: each
 function, method, class and type, never a plain value, a stylesheet rule, a
 document's section or a data file's key (`definitionsOf` in
 `packages/world/src/definitions.ts`). The patch is divided the way the land
-is (`dividePlots`): the file's own ground, where its trees grow, at its
-heart, and a plot for each definition as large as its own lines plus 120 m²;
+is (`dividePlots`): the file's own ground at its heart, and a plot for each
+definition as large as its own lines plus 120 m²;
 a definition's plot is divided again among the definitions inside it, and
 each stands at its plot's middle. With Engine's graph (`project.graph`,
 judged) the definitions are the graph's, and each carries Jev's importance
 from the understanding pass, 0 to 1, which sets its size; without one, the
 code model's top-level symbols stand, sized by their length. Each stands as
-one of the understory's own blueprints, drawn instanced with the rest of the
-understory at no extra draw calls, with its own vitality, and a person
-can walk up to it to read its card: its kind, doc comment, where it is
-declared and its size.
+the form Jev chose for it: a tree, drawn with the woods, or one of the
+understory's own blueprints, drawn instanced with the rest of the
+understory; neither costs draw calls of its own. Each has its own vitality,
+and a person can walk up to it to read its card: its kind, doc comment,
+where it is declared and its size.
 
 **The meaning.** The engine gives structure and sizes; Jev gives meaning.
 Jev judges every choice a reasonable person could make differently: the
 repository's art direction, each region's land, whether that land holds
 water and why (a brook where the code flows along chains of its own imports,
 a still pond where much of the code leans on it, none where it stands on its
-own: the option's words are the reason, stored with the choice), how that
-land's trees and open ground lie (its character: a deep wood, groves and
-clearings, a meadow with a few old trees, a rocky heath or a wet hollow,
-again with its reason), what grows
-on each file's patch, what each kind of a file's finer entities stands as,
-whether each entity is a building or a landmark and which, and how much it
-would walk each dependency. `planWorldRequests` builds one request per thing,
-from facts and doc comments only, with options shuffled by the thing's path,
-in the shape a design chooses ("What a request carries" under Jev).
+own: the option's words are the reason, stored with the choice), what that
+land's ground is like (its character: its undergrowth, how its open ground
+lies and how large its trees grow, again with its reason), what each
+definition stands as (a tree, a stone, a bush or flowers, each asked on its
+own), whether each entity is a building or a landmark and which, and how
+much it would walk each dependency. `planWorldRequests` builds one request
+per thing, from facts and doc comments only, with options shuffled by the
+thing's path, in the shape a design chooses ("What a request carries" under
+Jev). Given Engine's graph it asks about the definitions the layout will
+stand, so each answer meets its definition; a file's definitions go over as
+many requests as fit Jev's window, 24 to a request.
 `judgeWorld` asks them through any `JevClient`, eight at a time. A world
 shows every dependency Jev would walk as a trail: first those that join
 parts of the code no other chosen trail joins, then the most wanted; the
@@ -332,21 +335,15 @@ stepping stones, cairns, ponds, a tiny area and deep nesting
 (`docs/proving-ground.md`). `tourStops` (`app/renderer/terrain/tour.ts`)
 finds in any world where to stand to see each such feature. `standWorld` takes the
 layout (`StandRequest.code`): each building and landmark on its lot, each
-file's trees of the chosen species as one grove on its own cells with that
-file's vitality (`growGrove` in `@gaia/terrain`: close-set at its heart,
-thinning into scattered trees at its margin, inside a lobed outline seeded by
-the file's path), each finer entity as an understory placement in a small
-glade of its own, and the trails between lots,
-walked over one network of ways (`Stand.network`: its ways of tread, the
-trails walking them, its junctions and any trail dropped, with why). The area's character sets how
-many trees a line of code grows, how close they stand and how large, and
-whether its files' groves gather on the sides of their patches nearest the
-area's heart, so they knit into one wood with open ground at the area's rim,
-or keep to their patches' middles with clearings between
-(`app/renderer/terrain/looks.ts`, `CHARACTERS`); a world grows every tree
-its areas call for, at most 48 to a file's grove, since far trees cost a
-card each. Only past 200,000, a world gone wrong, does every grove give up
-the same share, though each keeps the one tree that names its file. The understory then grows where it belongs (`scatterComponents`):
+definition on its own file's cells near where the layout put it, and the
+trails between lots, walked over one network of ways (`Stand.network`: its
+ways of tread, the trails walking them, its junctions and any trail dropped,
+with why). A definition that stands as a tree is one of the woods' trees,
+sized by its importance and its area's character (`stature` in
+`CHARACTERS`), with its own vitality, and keeps its crown's width from
+every other definition so each tree reads as one thing; any other stands as
+an understory placement. Every tree in a world from code is a definition,
+and a tap on one opens its page. The understory then grows where it belongs (`scatterComponents`):
 each candidate site on a grid fixed to the world reads its kind of place from
 the trees' crowns, the water and the slope, so a change in one place moves
 nothing elsewhere. It is scattered a tile at a time: each tile scatters its
@@ -673,14 +670,11 @@ becomes the default. A design fixes four things:
   five entities most depended on and the root are landmarks), and each
   building and landmark the kind of entity it suits (half the buildings had
   been watermills; now the engine is a stone croft, the schema a stone
-  ring, the root a great willow). The vibe question says to
-  judge a file by its part, size and importers, not its subject: a file
-  about grass or light had been read as open meadow or a lantern willow.
-  Round 15's `judged` questions ask each finer entity that may stand on a
-  file's patch on its own (`form#<name>`, the first `LAYOUT.symbolsPerPatch`
-  of `standingSymbols`), instead of one form for every function of a file,
-  and ask every source file whether it holds behavior a test should check
-  (`tests`, a `noul`), which its vitality reads (see Vitality).
+  ring, the root a great willow). The `judged` questions ask every
+  definition that stands on a file's patch on its own (`form#<qualified
+  name>`, `LAYOUT.formsPerRequest` to a request), instead of one form for
+  every function of a file, so what each stands as, a tree among the rest,
+  is Jev's call.
 - **Character.** A request carries what was judged above it: an area the
   world's art direction, a file and an entity their land's landform and
   water. `judgeWorld` then asks in three waves (the world, its areas, then
@@ -688,7 +682,7 @@ becomes the default. A design fixes four things:
   below it new, so stickiness upstream protects everything downstream.
 - **Sharing.** A design with `share: "area"` asks one request per area
   instead of one per file: the area's request carries every question about
-  the files on its land, each renamed `vibe@<path>` and told which file of
+  the files on its land, each renamed `form:function@<path>` and told which file of
   the state's `files` it is about, over one state holding the area's facts
   and each file's (`SHARE.tokens`, 12,000, splits a large area into
   several). `WorldRequest.carries` names the things a shared request judges,
@@ -832,7 +826,7 @@ the texture's filtering. A change in vitality
 rewrites the texture's bytes (about 3 to 9 ms on the page's thread for
 Gaia's world) and never rebakes: the lab's
 `__lab.terrain.fileVitality(path, v)` sets a file's vitality, or every
-file's under a directory, on its trees, its finer entities, its ground and
+file's under a directory, on its definitions (trees among them), its ground and
 what grows there, and its area's lots and water, and `__lab.terrain.groundVitality(x, z)` reads the texture as the
 shaders do.
 

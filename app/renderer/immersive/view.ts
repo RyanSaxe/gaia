@@ -15,7 +15,7 @@
 // world for the start (`picture.ts`).
 
 import type { PlaceArea } from "@gaia/terrain";
-import { areaVitality, entityOf, journalOf, ownOf } from "@gaia/world";
+import { type CodeWorld, areaVitality, entityOf, journalOf } from "@gaia/world";
 import { SLIP_LOGO } from "../brand/logo.ts";
 import { onTap } from "../lab.ts";
 import { worldService } from "../service.ts";
@@ -125,15 +125,17 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
   /** What the journal's pages are read from, for the world standing now. */
   let words: WordsSource | null = null;
   /**
-   * Each painting's key where it is kept: its world, its thing and the
-   * thing's vitality, which its painting shows, so a thing that changed is
-   * painted afresh. A new painter makes every painting afresh.
+   * Each painting's key where it is kept: its world, its thing, what the
+   * thing stands as and its vitality, which its painting shows, so a thing
+   * that changed is painted afresh. A new painter makes every painting afresh.
    */
+  let standsAs: { readonly code: CodeWorld; readonly as: ReadonlyMap<string, string> } | null = null;
   const keyOf = (thing: string, wide: boolean): string | null => {
     const code = world.code();
     if (code === null || words === null) return null;
+    if (standsAs?.code !== code) standsAs = { code, as: new Map([...code.symbols.map((s) => [s.id, s.form] as const), ...code.things.map((t) => [t.path, t.look] as const)]) };
     const of = words.journal.entry(entityOf(thing)) !== undefined ? entityOf(thing) : thing;
-    return [code.projectId, Math.round(code.size), PAINTER, wide ? `wide:${thing}` : thing, words.vitality(of).toFixed(2)].join("|");
+    return [code.projectId, Math.round(code.size), PAINTER, wide ? `wide:${thing}` : thing, standsAs.as.get(thing) ?? "", words.vitality(of).toFixed(2)].join("|");
   };
   /** Each thing's painting: the world's own view of it, made before its page is ever seen, and kept with the world. */
   const paintings = createPaintings({ view: world.view, store: browserPaintings(), keyOf, idle: () => !world.person().walking });
@@ -207,8 +209,8 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
   // world opens it at that thing's page, where the person stands. It never opens on its own.
   world.onPick((id) => {
     if (!active) return;
-    // A building or landmark is its entity's page, a file's tree its file's own page, and anything else its own.
-    const at = [entityOf(id), ownOf(id), id].find((of) => words?.journal.entry(of) !== undefined);
+    // A building or landmark is its entity's page, and a definition, whatever it stands as, its own.
+    const at = [entityOf(id), id].find((of) => words?.journal.entry(of) !== undefined);
     if (at !== undefined) journal.open(at);
   });
   world.onHeading((thing) => minimap.heading(thing));
