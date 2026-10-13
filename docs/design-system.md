@@ -304,23 +304,20 @@ small card that switches between them live and tunes each one's numbers.
 In every way the speeds are constant and a turn the keys make runs at one
 steady rate or happens out of sight:
 
-- **Face and go** (shown, asked for in round 21): a direction pressed
-  while still turns the person to face it, ← a quarter left, → right and ↓
-  about; held, they walk on forward that way, looking ahead, and to go on
-  ahead after stopping takes ↑. ↑ with ← or → pressed together faces the
-  diagonal between. While walking, a tap of ← or → nudges the way 8°, paid
-  out at a steady 60° a second, a side key held after its nudge keeps
-  turning at 30° a second, and Shift hurries. How a big turn is made, from
-  still or with ↓, is its own choice (round 22's walking thread, where a
-  blink proved disorienting): by default the person walks into it, setting
-  off at once and curving round at the steady 60° a second until facing the
-  new way, while ↓ turns them about in place at that rate and then walks on
-  (walking a U would sweep some 8 m wide through whatever is beside them);
-  or a cut, facing the new way at once; or a quick turn, one rotation at a
-  constant speed, a quarter in 0.25 s; or held nudges only, where a side
-  key turns at the steady rate standing or walking for as long as it is
-  held and ↓ held turns toward about. The nudge, the held turn, the big
-  turns, the quick turn's time and the diagonal are tuned in the card.
+- **Face and go** (shown; its walking chosen in round 22's walking thread):
+  ↑ walks ahead. A tap of ← or → nudges the person 8°, turned at a steady
+  60° a second, and holding the key turns on at that same steady rate,
+  standing or walking, until it is let go: there are no big turns, only
+  turning for as long as a key is held. ↓ walks backward at 65% of the pace,
+  still facing ahead, the view never turning, and ← or → turn as usual
+  while it does; ↑ and ↓ together stand. Shift hurries the walk ahead
+  (2.4 times the pace) and leaves the walk back at its own careful pace.
+  The playground also offers face and go's other ways of making a big turn,
+  from still or with ↓, which round 22 tried and set aside: walking into
+  it (setting off at once and curving round at the steady rate until facing
+  the new way, ↓ turning about in place); a cut; and a quick turn, one
+  rotation at a constant speed, a quarter in 0.25 s. A blink proved
+  disorienting.
 - **Walk and look**: W A S D or the arrows walk ahead, back (at
   65% of the pace) and step aside (90%), a pair walking the diagonal no
   faster than either alone, and a drag turns the view one to one. Shift
