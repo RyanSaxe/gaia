@@ -803,9 +803,10 @@ pub fn values(graph: &mut CodeGraph) {
         );
     }
     importance.insert("dir:".into(), 1.0);
-    // Deepest first, so every part is settled before what holds it.
+    // Deepest first, so every part is settled before what holds it, and by id within a depth, so the sums gather in
+    // one order and the same answers always give the same values to the last bit.
     let mut order: Vec<&String> = own.keys().collect();
-    order.sort_by_key(|id| std::cmp::Reverse(depth[*id]));
+    order.sort_by(|a, b| depth[*b].cmp(&depth[*a]).then_with(|| a.cmp(b)));
     let mut gathered: HashMap<String, (f64, f64)> = HashMap::new();
     for id in order {
         let parts = gathered.get(id).map(|(sum, w)| sum / w);
@@ -912,6 +913,32 @@ mod tests {
             "{f}"
         );
         assert_eq!(value(&graph, "dir:")["importance"], json!(1.0));
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn the_same_answers_always_give_the_same_values_to_the_last_bit() {
+        let root = std::env::temp_dir().join(format!("gaia-axes-bits-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("src")).unwrap();
+        // Many files side by side, of different lengths and qualities, so a sum gathered in another order would differ.
+        for i in 0..40 {
+            let body = "  x += 1;\n".repeat(i % 7);
+            std::fs::write(root.join(format!("src/f{i}.ts")), format!("export function f{i}(x: number): number {{\n{body}  return x;\n}}\n")).unwrap();
+        }
+        let gathered = || {
+            let mut graph = crate::graph::build(&root).unwrap();
+            for i in 0..40 {
+                let score = f64::from(i % 4) * 0.7 + 0.1;
+                set(&mut graph, &format!("file:src/f{i}.ts"), json!({ "axes": { "readability": { "score": score }, "importance": { "score": 2.0 } } }));
+            }
+            values(&mut graph);
+            value(&graph, "dir:")["quality"].clone()
+        };
+        let first = gathered();
+        for _ in 0..8 {
+            assert_eq!(gathered(), first);
+        }
         std::fs::remove_dir_all(root).unwrap();
     }
 }
