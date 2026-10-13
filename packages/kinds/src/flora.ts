@@ -15,6 +15,5 @@ export const flora = kind({
   },
   facts: {
     scale: (f) => Math.min(1.4, Math.max(0.3, Math.log2(f.lines + 1) / 10)),
-    age: (f) => f.git.daysSinceFirstCommit,
   },
 });

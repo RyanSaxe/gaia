@@ -6,7 +6,7 @@
 // from 0 to 1); without a graph, the code model's top-level symbols stand,
 // with no importance of their own.
 
-import type { CodeGraph, CodeModel, DefNode, FileFacts, SymbolFact } from "@gaia/schema";
+import type { CodeGraph, CodeModel, DefNode, SymbolFact } from "@gaia/schema";
 
 /** A definition that stands on its file's patch. */
 export interface StandingDef {
@@ -44,25 +44,19 @@ const KIND_OF_ROLE: Readonly<Record<string, SymbolFact["kind"]>> = {
   namespace: "module",
 };
 
-/** Files whose definitions stand: code and its tests. */
-const standsIn = (f: FileFacts): boolean => (f.kind ?? "source") === "source" || f.kind === "test";
 
-const exportedOf = (d: DefNode): boolean => /^(export|pub)\b/.test(d.signature) || (/^[A-Z]/.test(d.name) && /^(func|type)\b/.test(d.signature));
 
 /**
  * Each file's standing definitions, by path, in the order they are written,
  * every definition before the ones inside it. With a graph, every definition
- * it holds stands; without one, the code model's top-level symbols, constants
- * left out.
+ * it holds stands; without one, the code model's top-level symbols.
  */
 export function definitionsOf(model: CodeModel, graph?: CodeGraph): ReadonlyMap<string, readonly StandingDef[]> {
-  const files = new Map(model.files.filter(standsIn).map((f) => [f.path, f]));
+  const files = new Map(model.files.map((f) => [f.path, f]));
   const out = new Map<string, StandingDef[]>();
   if (graph === undefined) {
     for (const f of files.values()) {
-      const defs = f.symbols
-        .filter((s) => s.kind !== "constant")
-        .map((s): StandingDef => ({ id: `${f.path}#${s.name}`, file: f.path, name: s.name, kind: s.kind, exported: s.exported, line: s.line ?? 0, lines: s.lines ?? 1, ...(s.doc === undefined ? {} : { doc: s.doc }) }));
+      const defs = f.symbols.map((s): StandingDef => ({ id: `${f.path}#${s.name}`, file: f.path, name: s.name, kind: s.kind, exported: s.exported, line: s.line ?? 0, lines: s.lines ?? 1 }));
       if (defs.length > 0) out.set(f.path, defs.sort((a, b) => a.line - b.line || (a.id < b.id ? -1 : 1)));
     }
     return out;
@@ -85,7 +79,7 @@ export function definitionsOf(model: CodeModel, graph?: CodeGraph): ReadonlyMap<
       ...(parent === undefined ? {} : { parent: idOf(byId.get(parent) as DefNode) }),
       name: n.name,
       kind: KIND_OF_ROLE[n.role] ?? "function",
-      exported: exportedOf(n),
+      exported: n.exported,
       line: n.span.start,
       lines: Math.max(1, n.span.end - n.span.start + 1),
       ...(n.doc === undefined ? {} : { doc: n.doc }),

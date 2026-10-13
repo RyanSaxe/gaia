@@ -1,15 +1,15 @@
-// The world a codebase becomes. The engine's facts become one code graph
-// (`codeGraph`): directories holding directories and files, files holding
-// their functions, classes and exported symbols, entities rooted at
+// The world a codebase becomes, from the code model the engine's graph gives
+// (`codeModelOf`): directories holding directories and files, files holding
+// their functions, classes and exported definitions, entities rooted at
 // directories, and the imports and dependencies between them. `layoutWorld`
-// lays that graph out as land: each directory a region of ground built of its
+// lays it out as land: each directory a region of ground built of its
 // own files and its subdirectories, sized by their code, with organic borders
 // (`divideLand`); each file a patch of that ground; each entity standing on a
 // lot at its directory's heart; a file's finer entities standing on its patch;
 // and the dependencies Jev would walk as trails. The engine gives structure
 // and sizes. Jev gives meaning: every look, what each kind of symbol stands
 // as, whether an area holds water and why, and which dependencies become
-// trails, asked by `planWorldRequests` from facts and doc comments only. The
+// trails, asked by `planWorldRequests` from the code's structure only. The
 // same code and the same answers always give the same world.
 //
 // Until the reviewer approves live calls, `standInJev` answers those same
@@ -35,7 +35,6 @@ import {
   seedOf,
 } from "@gaia/schema";
 import { LAND_ASPECT, type LandSite, landArea } from "@gaia/terrain";
-import { symbolsOf } from "./graph.ts";
 import { type StandingDef, definitionsOf } from "./definitions.ts";
 import { type LandNode, divideLand, dividePlots } from "./land.ts";
 import { certainty } from "./context.ts";
@@ -131,7 +130,6 @@ export interface CodeArea extends AreaPlace {
 
 export interface CodePatch extends PatchPlace {
   readonly lines: number;
-  readonly kind: string;
   /** Square meters of ground its cell holds. */
   readonly ground: number;
   /** Its first cell in `cells`; its ground is every cell naming it. */
@@ -230,8 +228,6 @@ export const LAYOUT = {
   m2PerLine: 26,
   /** A file's lines count between these for its patch's size. */
   lines: [20, 1500],
-  /** How much a line weighs by the part its file plays: code most, configuration and data least. */
-  kindWeight: { source: 1, test: 0.85, docs: 0.6, script: 0.6, config: 0.4, data: 0.3 },
   /**
    * Ground kept for an entity's lot at its directory's heart, square meters:
    * the same for a building or a landmark, so the land's division depends on
@@ -264,7 +260,7 @@ interface Dir {
 
 const parentOf = (path: string): string => (path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "");
 const baseName = (path: string): string => path.split("/").pop() ?? path;
-const weightOf = (f: FileFacts): number => Math.min(LAYOUT.lines[1], Math.max(LAYOUT.lines[0], f.lines)) * LAYOUT.kindWeight[f.kind ?? "source"];
+const weightOf = (f: FileFacts): number => Math.min(LAYOUT.lines[1], Math.max(LAYOUT.lines[0], f.lines));
 const byPath = <T extends { readonly path: string }>(a: T, b: T): number => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
 
 function directoriesOf(model: CodeModel, name: string): Map<string, Dir> {
@@ -334,7 +330,6 @@ function choice(instructions: string, options: Readonly<Record<string, string>>,
 }
 
 const docs = (set: LookSet): Record<string, string> => Object.fromEntries(Object.entries(set).map(([k, l]) => [k, l.doc]));
-const trim = (text: string | undefined, n: number): string | undefined => (text === undefined || text.length <= n ? text : `${text.slice(0, n - 1).trimEnd()}…`);
 const SOURCE = new Set(["typescript", "javascript", "rust", "python", "go"]);
 
 /** Languages by lines, largest first. */
@@ -344,19 +339,22 @@ function languagesOf(files: readonly FileFacts[]): string[] {
   return [...lines].filter(([l]) => SOURCE.has(l)).sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1)).map(([l]) => l);
 }
 
-const KIND_WORDS: Readonly<Record<SymbolFact["kind"], string>> = { function: "function", class: "class", type: "type", constant: "constant", module: "module" };
-const KIND_PLURALS: Readonly<Record<SymbolFact["kind"], string>> = { function: "functions", class: "classes", type: "types", constant: "constants", module: "modules" };
+const KIND_WORDS: Readonly<Record<SymbolFact["kind"], string>> = { function: "function", class: "class", type: "type", module: "module" };
+const KIND_PLURALS: Readonly<Record<SymbolFact["kind"], string>> = { function: "functions", class: "classes", type: "types", module: "modules" };
 
 /**
- * A file's finer entities that may stand on its patch: its functions and
- * classes, and the exported types and constants a doc comment describes, the
+ * A file's definitions that may stand on its patch when there is no graph:
+ * its functions and classes, each name once by its longest definition, the
  * largest first. The layout stands as many as the patch's ground allows.
  */
 export function standingSymbols(f: FileFacts): SymbolFact[] {
-  if ((f.kind ?? "source") !== "source" && f.kind !== "test") return [];
-  return symbolsOf(f)
-    .filter((s) => s.kind === "function" || s.kind === "class" || (s.exported && s.doc !== undefined && (s.kind === "type" || s.kind === "constant")))
-    .sort((a, b) => (b.lines ?? 1) * (b.exported ? 1.5 : 1) - (a.lines ?? 1) * (a.exported ? 1.5 : 1) || (a.name < b.name ? -1 : 1));
+  const byName = new Map<string, SymbolFact>();
+  for (const s of f.symbols) {
+    if (s.kind !== "function" && s.kind !== "class") continue;
+    const had = byName.get(s.name);
+    if (had === undefined || (s.lines ?? 1) > (had.lines ?? 1)) byName.set(s.name, s);
+  }
+  return [...byName.values()].sort((a, b) => (b.lines ?? 1) * (b.exported ? 1.5 : 1) - (a.lines ?? 1) * (a.exported ? 1.5 : 1) || (a.name < b.name ? -1 : 1));
 }
 
 // ---------- designs: what Jev sees and is asked ----------
@@ -437,10 +435,8 @@ export const MORE = "more:";
 /** The reading Jev may ask for that Gaia cannot give yet: a symbol's source. Asked, recorded, never read until the reviewer approves sending source. */
 export const SOURCE_WISH = `${MORE}source`;
 
-/** The repository's size, age and activity as words, so the world's request changes only when the repository does. */
+/** The repository's size as words, so the world's request changes only when the repository does. */
 const repoSize = (lines: number): string => (lines < 5000 ? "small" : lines < 25000 ? "modest" : lines < 80000 ? "substantial" : "large");
-const ageWords = (days: number): string => (days < 60 ? "new: under two months old" : days < 365 ? "under a year old" : days < 730 ? "a year or two old" : "older than two years");
-const activityWords = (commits: number): string => (commits === 0 ? "dormant" : commits < 10 ? "quiet" : commits < 50 ? "steady" : "busy");
 const about = (n: number): string => (n < 100 ? `${n}` : `about ${Number(n.toPrecision(2)).toLocaleString("en-US")}`);
 const lookWords = (set: LookSet, key: string | undefined): string | undefined => (key === undefined || set[key] === undefined ? undefined : `${key}: ${set[key].doc}`);
 
@@ -449,34 +445,22 @@ const perFile = (n: number, files: number): string => {
   const r = n / Math.max(1, files);
   return r === 0 ? "none" : r < 0.5 ? "a little" : r < 1.5 ? "some" : "a lot";
 };
-/** How often a file changed, and by how many people, in words that move only when its history does. */
-const historyWords = (g: FileFacts["git"]): string =>
-  `${g.commits <= 1 ? "committed once" : g.commits < 5 ? "changed a few times" : g.commits < 15 ? "changed several times" : "changed many times"}, by ${g.authors <= 1 ? "one person" : g.authors < 5 ? "a few people" : "many people"}`;
-/** How far a file's tests reach it, in words. */
-const testsWords = (f: FileFacts): string =>
-  f.tests.own.length > 0 ? `${howMany(f.tests.own.length)} of its own entity's tests reach it` : f.tests.coveredBy.length > 0 ? "only tests of other entities reach it" : "no test reaches it";
-
-/** A file as `judged` sends it: what it declares, its size and links in words, how far tests reach it, how often it changed and the definitions standing on its patch that the request asks about. */
+/** A file as `judged` sends it: what it declares, its size and links in words, and the definitions standing on its patch that the request asks about. */
 export function fileWords(f: FileFacts, standing: readonly StandingDef[] = []): Record<string, unknown> {
   const declares: Record<string, string> = {};
-  for (const kind of ["function", "class", "type", "constant", "module"] as const) {
+  for (const kind of ["function", "class", "type", "module"] as const) {
     const n = f.symbols.filter((s) => s.kind === kind).length;
     if (n > 0) declares[KIND_PLURALS[kind]] = howMany(n);
   }
-  const kind = f.kind ?? "source";
   return {
     path: f.path,
     language: f.language,
-    kind,
     size: fileSize(f.lines),
-    ...(f.doc === undefined ? {} : { doc: trim(f.doc, 300) }),
     declares: Object.keys(declares).length === 0 ? "nothing of its own" : declares,
-    exports: outlineOrder(f).filter((s) => s.exported).slice(0, 8).map((s) => (s.doc === undefined ? s.name : `${s.name}: ${trim(s.doc, 100)}`)),
+    exports: outlineOrder(f).filter((s) => s.exported).slice(0, 8).map((s) => s.name),
     imports: `${howMany(f.imports.length)} project files`,
     importedBy: `${howMany(f.importedBy.length)} project files`,
-    ...(kind === "test" ? {} : { tests: testsWords(f) }),
-    history: historyWords(f.git),
-    ...(standing.length === 0 ? {} : { standing: standing.map((d) => ({ name: d.id.slice(d.file.length + 1), kind: d.kind, size: symbolSize(d.lines), exported: d.exported, ...(d.doc === undefined ? {} : { doc: trim(d.doc, 120) }) })) }),
+    ...(standing.length === 0 ? {} : { standing: standing.map((d) => ({ name: d.id.slice(d.file.length + 1), kind: d.kind, size: symbolSize(d.lines), exported: d.exported })) }),
   };
 }
 
@@ -514,9 +498,6 @@ function standing(value: number, all: readonly number[]): string {
 
 /** A directory as `judged` sends it: its size, parts and imports in words, per file where a count would grow with the directory, and each compared with the repository's other areas (`others`). */
 export function areaWords(model: CodeModel, path: string, own: readonly FileFacts[], all: readonly FileFacts[], subdirectories: readonly string[], others: readonly AreaMeasure[] = []): Record<string, unknown> {
-  const kinds: Record<string, string> = {};
-  for (const f of all) kinds[f.kind ?? "source"] = "";
-  for (const k of Object.keys(kinds)) kinds[k] = howMany(all.filter((f) => (f.kind ?? "source") === k).length);
   const inside = new Set(all.map((f) => f.path));
   const entity = model.entities.find((e) => e.path === path);
   const me = measureArea(all);
@@ -525,7 +506,6 @@ export function areaWords(model: CodeModel, path: string, own: readonly FileFact
     size: bodySize(all.reduce((n, f) => n + f.lines, 0)),
     files: howMany(all.length),
     languages: languagesOf(all),
-    kinds,
     ...(entity === undefined ? {} : { entity: `${entity.name} (${entity.form})` }),
     subdirectories: subdirectories.map(baseName),
     importsPerFile: {
@@ -543,7 +523,7 @@ export function areaWords(model: CodeModel, path: string, own: readonly FileFact
             importedFromOtherDirectories: standing(me.in, others.map((o) => o.in)),
           },
         }),
-    contents: [...own].sort((a, b) => b.lines - a.lines || byPath(a, b)).slice(0, 12).map((f) => ({ name: baseName(f.path), size: fileSize(f.lines), ...(f.doc === undefined ? {} : { doc: trim(f.doc, 160) }) })),
+    contents: [...own].sort((a, b) => b.lines - a.lines || byPath(a, b)).slice(0, 12).map((f) => ({ name: baseName(f.path), size: fileSize(f.lines) })),
   };
 }
 
@@ -554,10 +534,8 @@ export function entityWords(model: CodeModel, e: EntityFacts): Record<string, un
     name: e.name,
     path: e.path === "" ? "(the repository's root)" : e.path,
     form: e.form,
-    ...(e.doc === undefined ? {} : { doc: trim(e.doc, 300) }),
     size: bodySize(e.lines),
     files: howMany(e.files),
-    languages: e.languages,
     surface: `${howMany(e.exports)} exported symbols`,
     dependsOn: e.dependsOn.flatMap((p) => {
       const o = entities.get(p);
@@ -565,7 +543,6 @@ export function entityWords(model: CodeModel, e: EntityFacts): Record<string, un
     }),
     dependents: e.dependents.map((p) => entities.get(p)?.name ?? p),
     dependedOnBy: howMany(e.dependents.length),
-    tests: { ownTestFiles: howMany(e.tests.files), sourceFilesSomeTestReaches: e.tests.covered >= 0.9 ? "nearly all" : e.tests.covered >= 0.6 ? "most" : e.tests.covered >= 0.3 ? "some" : e.tests.covered > 0 ? "few" : "none" },
   };
 }
 
@@ -575,7 +552,7 @@ function regionFor(regions: ReadonlySet<string>, dir: string): string {
   return "";
 }
 
-/** The request Jev gets about each thing. State carries facts and doc comments only, never source. */
+/** The request Jev gets about each thing. State carries the code's structure only, never source. */
 export function planWorldRequests(model: CodeModel, looks: Looks, options: PlanOptions = {}): WorldRequest[] {
   const design = designOf(options.design);
   const revised = design.questions !== "first";
@@ -598,7 +575,7 @@ export function planWorldRequests(model: CodeModel, looks: Looks, options: PlanO
       if (about === "file") {
         asked[SOURCE_WISH] = {
           type: "noul",
-          instructions: `Gaia is deciding ${extra.decides}. Would reading the code of some of its functions and classes, beyond their names, sizes and doc comments, make that decision clearer?`,
+          instructions: `Gaia is deciding ${extra.decides}. Would reading the code of some of its functions and classes, beyond their names and sizes, make that decision clearer?`,
           criteria: { true: "Reading some of its code would help decide.", false: "The outline is enough to decide." },
         };
       }
@@ -610,8 +587,8 @@ export function planWorldRequests(model: CodeModel, looks: Looks, options: PlanO
     "world",
     "",
     revised
-      ? { repository: { name: r.name, files: about(r.files), size: repoSize(r.lines), languages: languagesOf(model.files), age: ageWords(r.ageDays), activity: activityWords(r.commitsLast30Days), contributors: r.contributors } }
-      : { repository: { name: r.name, files: r.files, lines: r.lines, languages: languagesOf(model.files), ageDays: r.ageDays, commitsLast30Days: r.commitsLast30Days, contributors: r.contributors } },
+      ? { repository: { name: r.name, files: about(r.files), size: repoSize(r.lines), languages: languagesOf(model.files) } }
+      : { repository: { name: r.name, files: r.files, lines: r.lines, languages: languagesOf(model.files) } },
     { world: choice("This repository becomes a whole world. Which art direction suits it: its light, sky, season and wind?", docs(looks.world), "world", "", salt) },
   );
   const regionList = regionPaths(dirs);
@@ -631,8 +608,6 @@ export function planWorldRequests(model: CodeModel, looks: Looks, options: PlanO
       x.children.forEach(gatherAll);
     };
     gatherAll(path);
-    const kinds: Record<string, number> = {};
-    for (const f of all) kinds[f.kind ?? "source"] = (kinds[f.kind ?? "source"] ?? 0) + 1;
     const largest = [...d.files].sort((a, b) => b.lines - a.lines || byPath(a, b)).slice(0, 12);
     const inside = new Set(all.map((f) => f.path));
     const within = all.reduce((n, f) => n + f.imports.filter((i) => inside.has(i)).length, 0);
@@ -649,10 +624,9 @@ export function planWorldRequests(model: CodeModel, looks: Looks, options: PlanO
               files: all.length,
               lines: all.reduce((n, f) => n + f.lines, 0),
               languages: languagesOf(all),
-              kinds,
               subdirectories: d.children.map(baseName),
               imports: { withinItself: within, toOtherDirectories: reaching, fromOtherDirectories: reached },
-              contents: largest.map((f) => ({ name: baseName(f.path), ...(f.doc === undefined ? {} : { doc: trim(f.doc, 160) }) })),
+              contents: largest.map((f) => ({ name: baseName(f.path) })),
             },
           };
     ask(
@@ -692,7 +666,7 @@ export function planWorldRequests(model: CodeModel, looks: Looks, options: PlanO
         for (const d of some) {
           const name = d.id.slice(d.file.length + 1);
           forms[`form#${name}`] = choice(
-            `The ${KIND_WORDS[d.kind]} \`${name}\`, listed in \`standing\`, stands on this file's patch as one thing a person can walk up to and read about. Which suits it best? Judge by what its name and doc comment say it does, its size and whether other files can use it.`,
+            `The ${KIND_WORDS[d.kind]} \`${name}\`, listed in \`standing\`, stands on this file's patch as one thing a person can walk up to and read about. Which suits it best? Judge by what its name says it does, its size and whether other files can use it.`,
             docs(looks.form),
             `form#${name}`,
             f.path,
@@ -721,13 +695,10 @@ export function planWorldRequests(model: CodeModel, looks: Looks, options: PlanO
             file: {
               path: f.path,
               language: f.language,
-              kind: f.kind ?? "source",
               lines: f.lines,
-              ...(f.doc === undefined ? {} : { doc: trim(f.doc, 300) }),
-              exports: f.symbols.filter((s) => s.exported).slice(0, 8).map((s) => (s.doc === undefined ? s.name : `${s.name}: ${trim(s.doc, 100)}`)),
+              exports: f.symbols.filter((s) => s.exported).slice(0, 8).map((s) => s.name),
               importedBy: f.importedBy.length,
-              coveredByTests: f.tests.coveredBy.length,
-              ...(standing.length === 0 ? {} : { standing: standing.slice(0, 8).map((s) => ({ name: s.name, kind: s.kind, lines: s.lines ?? 1, exported: s.exported, ...(s.doc === undefined ? {} : { doc: trim(s.doc, 100) }) })) }),
+              ...(standing.length === 0 ? {} : { standing: standing.slice(0, 8).map((s) => ({ name: s.name, kind: s.kind, lines: s.lines ?? 1, exported: s.exported })) }),
             },
           };
     const kindsStanding = Object.keys(forms).map((id) => `${KIND_WORDS[id.slice("form:".length) as SymbolFact["kind"]]}s`);
@@ -791,10 +762,8 @@ export function planWorldRequests(model: CodeModel, looks: Looks, options: PlanO
               name: e.name,
               path: e.path === "" ? "(the repository's root)" : e.path,
               form: e.form,
-              ...(e.doc === undefined ? {} : { doc: trim(e.doc, 300) }),
               files: e.files,
               lines: e.lines,
-              languages: e.languages,
               exports: e.exports,
               dependsOn: e.dependsOn.flatMap((p) => {
                 const o = entities.get(p);
@@ -1012,28 +981,22 @@ const sizeOf = (value: unknown, small: number, large: number): string => {
 
 /** Tags read from the facts in a request's state: what the stand-in matches against each option's `suits`. Reads summary facts and outlines alike. */
 function tagsOf(state: Record<string, unknown>): string[] {
-  type Facts = Record<string, unknown> & { languages?: string[]; kinds?: Record<string, number>; dependents?: unknown[] };
+  type Facts = Record<string, unknown> & { languages?: string[]; dependents?: unknown[] };
   const repo = state.repository as Facts | undefined;
-  if (repo !== undefined) {
-    const busy = repo.activity !== undefined ? repo.activity === "busy" : (repo.commitsLast30Days as number) >= 50;
-    const young = repo.age !== undefined ? String(repo.age).startsWith("new") : (repo.ageDays as number) < 60;
-    return [...(repo.languages ?? []).slice(0, 1), busy ? "busy" : "quiet", young ? "young" : "old", sizeOf(repo.lines ?? repo.size, 5000, 80000)];
-  }
+  if (repo !== undefined) return [...(repo.languages ?? []).slice(0, 1), sizeOf(repo.lines ?? repo.size, 5000, 80000)];
   const dir = state.directory as Facts | undefined;
   if (dir !== undefined) {
-    const kinds = Object.entries(dir.kinds ?? {}).sort((a, b) => b[1] - a[1]);
     const imports = (dir.imports ?? {}) as { withinItself?: number; toOtherDirectories?: number; fromOtherDirectories?: number };
     const files = Math.max(1, dir.files as number);
     // How the directory's code moves: along chains of its own imports, out to others, or barely at all.
     const flow = (imports.withinItself ?? 0) >= files * 2 ? ["flow"] : (imports.fromOtherDirectories ?? 0) >= files * 2 ? ["crossroads"] : (imports.withinItself ?? 0) + (imports.toOtherDirectories ?? 0) < files * 0.3 ? ["still"] : ["dry"];
-    return [kinds[0]?.[0] ?? "source", ...(dir.languages ?? []).slice(0, 1), sizeOf(dir.lines ?? dir.size, 600, 4000), ...flow, ...words(String(dir.path))];
+    return [...(dir.languages ?? []).slice(0, 1), sizeOf(dir.lines ?? dir.size, 600, 4000), ...flow, ...words(String(dir.path))];
   }
   const file = state.file as Facts | undefined;
   if (file !== undefined) {
     const path = String(file.path);
     const hub = typeof file.importedBy === "number" ? file.importedBy >= 4 : /^(several|many)/.test(String(file.importedByCount ?? file.importedBy));
     return [
-      String(file.kind),
       String(file.language),
       sizeOf(file.lines ?? file.size, 60, 300),
       ...(hub ? ["hub"] : []),
@@ -1051,7 +1014,6 @@ function tagsOf(state: Record<string, unknown>): string[] {
       ...(dependents >= 6 ? ["hub"] : dependents === 0 ? ["leaf"] : []),
       ...(surface ? ["surface"] : []),
       ...(String(e.path).startsWith("(") ? ["root"] : []),
-      ...(e.languages ?? []),
       ...words(`${String(e.name)} ${String(e.path)}`),
     ];
   }
@@ -1162,12 +1124,12 @@ function landTree(dirs: Map<string, Dir>, lots: ReadonlyMap<string, number>, def
  * Where a file's definitions stand: its patch divided among them the way the
  * land is divided, each definition's plot among the definitions inside it,
  * with the file's own ground (where its trees grow) at the heart. Each plot
- * is as large as its definition's own lines, weighed like the file's, plus
+ * is as large as its definition's own lines, plus
  * `LAYOUT.defGround`; every definition stands at its plot's middle.
  */
 function plotDefinitions(f: FileFacts, defs: readonly StandingDef[], leaf: { readonly x: number; readonly z: number; readonly inner: readonly (readonly [number, number])[] }, step: number): { def: StandingDef; x: number; z: number }[] {
   if (defs.length === 0) return [];
-  const perLine = LAYOUT.m2PerLine * LAYOUT.kindWeight[f.kind ?? "source"];
+  const perLine = LAYOUT.m2PerLine;
   const inside = new Map<string, StandingDef[]>();
   for (const d of defs) {
     const key = d.parent ?? "";
@@ -1374,7 +1336,7 @@ export function layoutWorld(model: CodeModel, judged: Judgments, graph?: CodeGra
     }
     const f = files.get(path) as FileFacts;
     const vitality = quality.get(`file:${path}`) ?? folderQuality(parentOf(path)) ?? judged.quality?.[path] ?? 1;
-    patches.push({ path, name: baseName(path), area, x: leaf.x, z: leaf.z, radius: Math.sqrt(leaf.ground / Math.PI), vitality, lines: f.lines, kind: f.kind ?? "source", ground: leaf.ground, cell });
+    patches.push({ path, name: baseName(path), area, x: leaf.x, z: leaf.z, radius: Math.sqrt(leaf.ground / Math.PI), vitality, lines: f.lines, ground: leaf.ground, cell });
     for (const { def, x, z } of plotDefinitions(f, defs.get(path) ?? [], leaf, land.step)) {
       symbols.push({
         id: def.id,

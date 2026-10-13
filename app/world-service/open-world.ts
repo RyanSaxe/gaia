@@ -16,7 +16,7 @@
 
 import type { CodeGraph, EngineClient, GraphNode, JevClient, JevResponse, Span } from "@gaia/schema";
 import { outlinesOf } from "@gaia/terrain";
-import { type Judge, areaOfRequest, judgeWorld, judgedThing, keptJev, landOf, layoutWorld, planWorldRequests, requestKey, standInJev, thingsOf } from "@gaia/world";
+import { type Judge, areaOfRequest, codeModelOf, judgeWorld, judgedThing, keptJev, landOf, layoutWorld, planWorldRequests, requestKey, standInJev, thingsOf } from "@gaia/world";
 import { LOOKS } from "../renderer/terrain/looks.ts";
 import { engineJev } from "./jev.ts";
 import type { ConsentPlan, JudgedThing, Opening, WorldDocument } from "./protocol.ts";
@@ -53,8 +53,8 @@ export async function setSpendLimit(engine: EngineClient, usd: number): Promise<
 /**
  * The graph the layout reads: directories, files and definitions, with the
  * understanding pass's importance and quality as each one's only judgment,
- * and no blocks or edges. Each definition keeps what places and sizes it and
- * nothing else.
+ * and the imports between files, but no blocks or other edges. Each
+ * definition keeps what places and sizes it and nothing else.
  */
 export function judgedGraph(graph: CodeGraph): CodeGraph {
   const stand = (n: GraphNode) => (n.judged?.value === undefined ? {} : { judged: { value: n.judged.value } });
@@ -76,7 +76,7 @@ export function judgedGraph(graph: CodeGraph): CodeGraph {
             signature: n.signature,
             ...(n.doc === undefined ? {} : { doc: n.doc }),
             exported: n.exported,
-            measures: { lines: n.measures.lines },
+            measures: { lines: n.measures.lines, ...(n.measures.nesting === undefined ? {} : { nesting: n.measures.nesting }) },
             ...stand(n),
           },
         ];
@@ -86,7 +86,7 @@ export function judgedGraph(graph: CodeGraph): CodeGraph {
       }
     }
   });
-  return { ...graph, nodes, edges: [], pending: [] };
+  return { ...graph, nodes, edges: graph.edges.filter((e) => e.kind === "imports"), pending: [] };
 }
 
 /**
@@ -125,14 +125,15 @@ const plural = (n: number, one: string, many = `${one}s`): string => `${n.toLoca
 
 export async function openWorld({ engine, root, consent, progress }: OpenWorldOptions): Promise<WorldDocument> {
   progress({ stage: "reading", root });
-  const model = await engine.call("project.open", { root });
-  const project = model.projectId;
-  const name = model.repository.name;
   // The land, outlined as the finished map draws it, every file's patch and every entity's lot, as soon as the graph
-  // exists: every definition, with whatever stand Jev's held answers already give it. Planning what understanding
-  // still has to ask takes longer, so it comes after, while the wait draws the borders.
+  // exists: every definition, with whatever stand Jev's held answers already give it. The code model the layout and
+  // the looks read is the graph's own (`codeModelOf`). Planning what understanding still has to ask takes longer, so
+  // it comes after, while the wait draws the borders.
   let judged = await engine.call("project.graph", { root, judged: true });
   let graph = judgedGraph(judged);
+  const model = codeModelOf(graph);
+  const project = model.projectId;
+  const name = model.repository.name;
   const land = landOf(model, graph);
   progress({ stage: "land", name, size: land.size, ...(land.aspect === undefined ? {} : { aspect: land.aspect }), areas: outlinesOf(land).areas, patches: land.patches.map(({ path, name, area, x, z, radius }) => ({ path, name, area, x, z, radius })), lots: land.lots });
   // What understanding still has to ask, going only as far as the world needs to stand: Jev's links and every

@@ -1,64 +1,36 @@
-// The code model for one file. The Rust engine produces it; in the real
-// repository this file is generated from the Rust structs, never hand-edited.
+// The facts the world is laid out from: each file's and entity's code
+// structure, as the world derives it from the engine's code graph
+// (`codeModelOf` in @gaia/world). Only what the new engine uses, or what
+// composing needs, is here: sizes, definitions, imports and the entities
+// manifests declare. Tool signals, test coverage, history and file kinds are
+// not facts the world reads.
 
 /**
- * One of a file's finer entities: every symbol it exports, and the functions
- * and classes declared at its top level without exporting them
- * (`exported: false`), each with its doc comment and the lines it spans.
+ * One of a file's definitions as the world reads it: every one it exports,
+ * and the functions and classes at its top level (`exported: false`), with
+ * the lines it spans.
  */
 export interface SymbolFact {
   readonly name: string;
-  readonly kind: "function" | "class" | "type" | "constant" | "module";
+  readonly kind: "function" | "class" | "type" | "module";
   readonly exported: boolean;
-  readonly doc?: string;
   /** 1-based line of its declaration. */
   readonly line?: number;
   /** How many lines it spans, at least 1. */
   readonly lines?: number;
 }
 
-/** The part a file plays, which says what kind of ground its patch is. */
-export type FileKind = "source" | "test" | "config" | "data" | "docs" | "script";
-
+/** One file as the world reads it. */
 export interface FileFacts {
   /** Project-relative path. This is the item's identity. */
   readonly path: string;
+  /** The grammar the engine read it with, or "other". */
   readonly language: string;
-  /** What part the file plays; the engine always reports it. */
-  readonly kind?: FileKind;
-  readonly contentHash: string;
   readonly lines: number;
   readonly symbols: readonly SymbolFact[];
   /** Project-relative paths this file imports. */
   readonly imports: readonly string[];
   readonly importedBy: readonly string[];
-  /** The file's leading comment, if any. */
-  readonly doc?: string;
-  readonly tests: {
-    /** Test files that import this file, directly or through others, from anywhere in the project. */
-    readonly coveredBy: readonly string[];
-    /** Those of them that belong to the file's own entity: its package's or module's own tests, not tests elsewhere that happen to reach it. */
-    readonly own: readonly string[];
-    /** Those of them failing in the project's latest test report. */
-    readonly failing: readonly string[];
-  };
-  readonly complexity: {
-    readonly functions: number;
-    readonly longestFunction: number;
-    readonly maxNesting: number;
-  };
-  readonly diagnostics: { readonly errors: number; readonly warnings: number; readonly lint: number };
-  readonly debtMarkers: number;
-  readonly unused: boolean;
-  readonly git: {
-    readonly daysSinceFirstCommit: number;
-    /** Days since the last commit that touched it. */
-    readonly daysSinceLastCommit: number;
-    readonly commitsLast14Days: number;
-    /** Every commit that touched it, and how many people wrote them. */
-    readonly commits: number;
-    readonly authors: number;
-  };
 }
 
 /**
@@ -68,15 +40,6 @@ export interface FileFacts {
  */
 export type EntityForm = "package" | "crate" | "service" | "app" | "module";
 
-/**
- * Facts about one entity: a named unit of the code with a boundary, a public
- * surface, things that depend on it and a health of its own, such as a
- * package, a crate, a service or a module. Structures stand for entities.
- * The engine finds them from manifests (package.json, and Cargo.toml with
- * a `[package]`), binary and server entry points (main.ts, main.rs, main.py,
- * server.ts), and directories with an index file (index.ts, mod.rs,
- * __init__.py), and sums their files' facts. Entities may nest; each file belongs to its innermost entity.
- */
 export interface EntityFacts {
   /** The entity's root directory, project-relative. This is its identity. */
   readonly path: string;
@@ -87,35 +50,14 @@ export interface EntityFacts {
   readonly manifest?: string;
   /** The file that defines its public surface, such as src/index.ts or src/lib.rs. */
   readonly entry?: string;
-  /** The manifest's description, else the entry file's leading comment. */
-  readonly doc?: string;
   readonly files: number;
   readonly lines: number;
-  readonly languages: readonly string[];
-  /** Symbols its entry exports: the size of its public surface. */
+  /** Definitions its entry exports: the size of its public surface. */
   readonly exports: number;
   /** Paths of the entities it imports from. */
   readonly dependsOn: readonly string[];
   /** Paths of the entities that import from it. */
   readonly dependents: readonly string[];
-  readonly tests: {
-    /** Its own test files. */
-    readonly files: number;
-    /** Those of them failing in the project's latest test report. */
-    readonly failing: number;
-    /** Share of its source files that some test imports, 0 to 1. */
-    readonly covered: number;
-  };
-  /** Summed over its files. */
-  readonly diagnostics: { readonly errors: number; readonly warnings: number; readonly lint: number };
-  readonly debtMarkers: number;
-  /** Share of its exported symbols nothing imports, 0 to 1. */
-  readonly unusedExports: number;
-  readonly git: {
-    readonly daysSinceFirstCommit: number;
-    readonly commitsLast14Days: number;
-    readonly contributors: number;
-  };
 }
 
 /** Facts about one directory, which becomes a region. */
@@ -142,14 +84,9 @@ export interface DependencyFacts {
   readonly importers: number;
 }
 
-/** Facts about the whole repository, which the world kind reads. */
 export interface RepositoryFacts {
+  /** By its remote, as the engine's graph names it. */
   readonly name: string;
   readonly files: number;
   readonly lines: number;
-  /** Lines per language. */
-  readonly languages: Readonly<Record<string, number>>;
-  readonly ageDays: number;
-  readonly commitsLast30Days: number;
-  readonly contributors: number;
 }

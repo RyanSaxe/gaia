@@ -10,7 +10,7 @@ const subject = {
   id: SCANNER.path,
   state: {
     biome: "A quiet birch wood of small, careful utilities.",
-    file: { path: SCANNER.path, doc: SCANNER.doc, symbols: SCANNER.symbols.map((s) => s.name) },
+    file: { path: SCANNER.path, symbols: SCANNER.symbols.map((s) => s.name) },
   },
 };
 

@@ -31,7 +31,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, relative, resolve } from "node:path";
 import { parseArgs } from "node:util";
-import type { CodeModel, EntityFacts, EntityForm, FileFacts, FileKind, SymbolFact } from "@gaia/schema";
+import type { CodeModel, EntityFacts, EntityForm, FileFacts, SymbolFact } from "@gaia/schema";
 import { type Judgments, layoutWorld } from "@gaia/world";
 import { BUILDINGS, CHARACTERS, FORMS, LANDMARKS, LANDS, TRAILS, WATERS } from "../app/renderer/terrain/looks.ts";
 import { provingCode } from "./proving-code.ts";
@@ -113,7 +113,7 @@ const PLAN: readonly PlannedDir[] = [
   { path: "ruins", health: "ruin", files: ["index.ts:140", "collapse.ts:620", "rubble.ts:520", "ruins.test.ts:160", "README.md:120"], land: ["Brook valley", "A brook", "Deep wood"], entity: L("Great willow", "A whole area in ruin: failing tests, compiler errors and dead code throughout.") },
   { path: "ruins/cottage", health: "ruin", files: ["index.ts:110", "hearth.ts:300"], entity: B("Thatched cottage", "A cottage in ruin.") },
   { path: "ruins/croft", health: "ruin", files: ["Cargo.toml:30", "lib.rs:200", "forge.rs:340"], entity: B("Stone croft", "A croft in ruin.", "crate") },
-  { path: "ruins/house", health: "ruin", files: ["main.ts:150", "utils2.ts:320"], entity: B("Storybook house", "An application in ruin.", "app") },
+  { path: "ruins/house", health: "ruin", files: ["main.ts:150", "utils2.ts:280"], entity: B("Storybook house", "An application in ruin.", "app") },
   { path: "ruins/mill", health: "ruin", files: ["package.json:30", "index.ts:140", "race.ts:360"], entity: B("Watermill", "A mill in ruin.", "package") },
   { path: "ruins/keep", health: "ruin", files: ["Cargo.toml:30", "lib.rs:200", "walls.rs:380"], entity: L("Battlemented keep", "A keep in ruin.", "crate") },
   { path: "ruins/lighthouse", health: "ruin", files: ["index.ts:110", "lens.ts:300"], entity: L("Lantern tower", "A lantern tower in ruin.") },
@@ -163,6 +163,38 @@ const TRAIL_PLAN: readonly (readonly [from: string, to: string, look: string, wa
 
 // ---------- facts from health ----------
 
+/** The part a planned file plays, which decides how its code is written. Never a fact the world reads. */
+type FileKind = "source" | "test" | "config" | "data" | "docs" | "script";
+
+/**
+ * How much of its planned size each part of file keeps. The plan's sizes were
+ * written when the land gave a line of a test, a document or a configuration
+ * file less ground than a line of code; every line now has the same ground,
+ * so those files are planned smaller, and the land, its streams and the ways
+ * across them lie as the plan was drawn for.
+ */
+const GROUND: Readonly<Record<FileKind, number>> = { source: 1, test: 0.85, docs: 0.6, script: 0.6, config: 0.4, data: 0.3 };
+
+/** A planned definition: the world's fact, with the doc and the constants the written code carries. */
+export interface PlannedSymbol {
+  readonly name: string;
+  readonly kind: SymbolFact["kind"] | "constant";
+  readonly exported: boolean;
+  readonly doc?: string;
+  readonly line?: number;
+  readonly lines?: number;
+}
+
+/** A planned file: what the world reads of it, and how its code is to be written as poor as its health. */
+export interface PlannedFacts extends Omit<FileFacts, "symbols"> {
+  readonly kind: FileKind;
+  readonly symbols: readonly PlannedSymbol[];
+  readonly doc?: string;
+  readonly tests: { readonly coveredBy: readonly string[]; readonly own: readonly string[]; readonly failing: readonly string[] };
+  readonly complexity: { readonly functions: number; readonly longestFunction: number; readonly maxNesting: number };
+  readonly debtMarkers: number;
+}
+
 const LANGUAGE: Readonly<Record<string, string>> = { ts: "typescript", rs: "rust", md: "markdown", json: "json", toml: "toml", sh: "shell", csv: "other" };
 const KIND: Readonly<Record<string, FileKind>> = { ts: "source", rs: "source", md: "docs", json: "config", toml: "config", sh: "script", csv: "data" };
 const kindOf = (name: string): FileKind => (/\.test\.ts$/.test(name) ? "test" : (KIND[name.split(".").pop() ?? ""] ?? "source"));
@@ -184,27 +216,21 @@ const cap = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
 const camel = (s: string): string => s.replace(/[-.](\w)/g, (_, c: string) => c.toUpperCase());
 
 /** A source file's symbols: functions, a class, documented types and constants, sized from its lines. */
-function symbolsFor(base: string, lines: number, index: number): SymbolFact[] {
+function symbolsFor(base: string, lines: number, index: number): PlannedSymbol[] {
   const stem = camel(base);
   const count = Math.max(1, Math.min(7, Math.round(lines / 70)));
-  const out: SymbolFact[] = [];
+  const out: PlannedSymbol[] = [];
   let line = 8;
   for (let k = 0; k < count; k++) {
     const verb = VERBS[(index * 5 + k) % VERBS.length] as string;
     const span = Math.max(4, Math.round((lines * 0.7) / count));
-    const kind: SymbolFact["kind"] = k === 1 ? "class" : k === 2 ? "type" : k === 3 ? "constant" : "function";
+    const kind: PlannedSymbol["kind"] = k === 1 ? "class" : k === 2 ? "type" : k === 3 ? "constant" : "function";
     const name = kind === "class" ? `${cap(stem)}${cap(AGENT[verb] ?? `${verb}er`)}` : kind === "type" ? `${cap(stem)}${cap(verb)}` : kind === "constant" ? `${stem.toUpperCase()}_${verb.toUpperCase()}` : `${verb}${cap(stem)}`;
     out.push({ name, kind, exported: k % 3 !== 2 || kind === "type", doc: `${cap(verb)}s the ${base.replace(/-/g, " ")}.`, line, lines: kind === "type" || kind === "constant" ? Math.max(1, Math.round(span / 6)) : span });
     line += span + 2;
   }
   return out;
 }
-
-const hashOf = (text: string): string => {
-  let h = 2166136261;
-  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 16777619) >>> 0;
-  return h.toString(16).padStart(8, "0").repeat(2);
-};
 
 const parentOf = (path: string): string => (path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "");
 const join = (dir: string, name: string): string => (dir === "" ? name : `${dir}/${name}`);
@@ -215,7 +241,7 @@ interface Drafted {
   health: Health;
   kind: FileKind;
   lines: number;
-  symbols: SymbolFact[];
+  symbols: PlannedSymbol[];
   imports: Set<string>;
 }
 
@@ -226,7 +252,7 @@ PLAN.forEach((d) => {
     const [name, lines, health] = spec.split(":") as [string, string, Health | undefined];
     const kind = kindOf(name);
     const base = name.replace(/\.(test\.)?\w+$/, "");
-    drafted.push({ path: join(d.path, name), dir: d.path, health: health ?? d.health, kind, lines: Number(lines), symbols: kind === "source" ? symbolsFor(base === "index" || base === "lib" || base === "main" || base === "server" ? (d.path.split("/").pop() || "proving") : base, Number(lines), drafted.length + i) : [], imports: new Set() });
+    drafted.push({ path: join(d.path, name), dir: d.path, health: health ?? d.health, kind, lines: Math.max(1, Math.round(Number(lines) * GROUND[kind])), symbols: kind === "source" ? symbolsFor(base === "index" || base === "lib" || base === "main" || base === "server" ? (d.path.split("/").pop() || "proving") : base, Number(lines), drafted.length + i) : [], imports: new Set() });
   });
 });
 const byPath = new Map(drafted.map((f) => [f.path, f]));
@@ -278,7 +304,7 @@ const testOf = (dir: string): string | undefined => {
   return undefined;
 };
 
-const files: FileFacts[] = drafted.map((f) => {
+const files: PlannedFacts[] = drafted.map((f) => {
   const s = SIGNALS[f.health];
   const prose = f.kind !== "source" && f.kind !== "test";
   const near = testOf(f.dir);
@@ -294,7 +320,6 @@ const files: FileFacts[] = drafted.map((f) => {
     path: f.path,
     language: LANGUAGE[f.path.split(".").pop() ?? ""] ?? "other",
     kind: f.kind,
-    contentHash: hashOf(`${f.path}:${f.lines}:${f.health}`),
     lines: f.lines,
     symbols,
     imports: [...f.imports].sort(),
@@ -306,11 +331,18 @@ const files: FileFacts[] = drafted.map((f) => {
       failing: f.kind === "source" && s.failing ? reached : [],
     },
     complexity: prose ? { functions: 0, longestFunction: 0, maxNesting: 0 } : { functions: symbols.filter((y) => y.kind === "function").length, longestFunction: s.longest, maxNesting: s.nesting },
-    diagnostics: { errors: s.errors, warnings: s.lint, lint: s.lint },
     debtMarkers: s.debt,
-    unused: s.unused && f.kind === "source" && (importedBy.get(f.path) ?? []).every((b) => byPath.get(b)?.kind === "test"),
-    git: { daysSinceFirstCommit: 420, daysSinceLastCommit: s.lastDays, commitsLast14Days: s.recent, commits: 6 + s.recent * 4, authors: f.health === "ruin" ? 1 : 3 },
-  } satisfies FileFacts;
+  } satisfies PlannedFacts;
+});
+
+/** What the world reads of a planned file: its size, language, definitions and imports. */
+const factsOf = (f: PlannedFacts): FileFacts => ({
+  path: f.path,
+  language: f.language,
+  lines: f.lines,
+  symbols: f.symbols.flatMap((y) => (y.kind === "constant" ? [] : [{ name: y.name, kind: y.kind, exported: y.exported, ...(y.line === undefined ? {} : { line: y.line }), ...(y.lines === undefined ? {} : { lines: y.lines }) }])),
+  imports: f.imports,
+  importedBy: f.importedBy,
 });
 
 // ---------- entities, summed from their files ----------
@@ -328,8 +360,6 @@ for (const f of files) {
 const entities: EntityFacts[] = PLAN.filter((d) => d.entity !== undefined).map((d) => {
   const plan = d.entity as NonNullable<PlannedDir["entity"]>;
   const mine = files.filter((f) => ownerOf(f.path) === d.path);
-  const sources = mine.filter((f) => f.kind === "source");
-  const tests = mine.filter((f) => f.kind === "test");
   const depends = new Set<string>();
   for (const f of mine) for (const i of f.imports) {
     const o = ownerOf(i);
@@ -338,36 +368,25 @@ const entities: EntityFacts[] = PLAN.filter((d) => d.entity !== undefined).map((
   const entry = entryOf(d.path);
   const exported = files.find((f) => f.path === entry.path)?.symbols.filter((s) => s.exported).length ?? 0;
   const manifest = mine.find((f) => /(^|\/)(package\.json|Cargo\.toml)$/.test(f.path) && parentOf(f.path) === d.path)?.path;
-  const ownFailing = new Set(sources.flatMap((f) => f.tests.failing.filter((t) => ownerOf(t) === d.path)));
-  const ownTests = new Set([...tests.map((t) => t.path), ...sources.flatMap((f) => f.tests.own)]);
-  const sum = (pick: (f: FileFacts) => number): number => mine.reduce((n, f) => n + pick(f), 0);
+  const sum = (pick: (f: PlannedFacts) => number): number => mine.reduce((n, f) => n + pick(f), 0);
   return {
     path: d.path,
     name: d.path === "" ? "proving" : (d.path.split("/").pop() as string),
     form: plan.form,
     ...(manifest === undefined ? {} : { manifest }),
     entry: entry.path,
-    doc: plan.doc,
     files: mine.length,
     lines: sum((f) => f.lines),
-    languages: [...new Set(mine.map((f) => f.language).filter((l) => l === "typescript" || l === "rust"))],
     exports: exported,
     dependsOn: [...depends].sort(),
     dependents: dependents.get(d.path) ?? [],
-    tests: { files: ownTests.size, failing: ownFailing.size, covered: sources.length === 0 ? 1 : sources.filter((f) => f.tests.coveredBy.length > 0).length / sources.length },
-    diagnostics: { errors: sum((f) => f.diagnostics.errors), warnings: sum((f) => f.diagnostics.warnings), lint: sum((f) => f.diagnostics.lint) },
-    debtMarkers: sum((f) => f.debtMarkers),
-    unusedExports: sources.length === 0 ? 0 : sources.filter((f) => f.unused).length / sources.length,
-    git: { daysSinceFirstCommit: 420, commitsLast14Days: sum((f) => f.git.commitsLast14Days), contributors: d.health === "ruin" ? 1 : 3 },
   };
 });
 
-const languages: Record<string, number> = {};
-for (const f of files) languages[f.language] = (languages[f.language] ?? 0) + f.lines;
 const model: CodeModel = {
   projectId: "proving",
-  repository: { name: "proving", files: files.length, lines: files.reduce((n, f) => n + f.lines, 0), languages, ageDays: 420, commitsLast30Days: 60, contributors: 3 },
-  files: [...files].sort((a, b) => (a.path < b.path ? -1 : 1)),
+  repository: { name: "proving", files: files.length, lines: files.reduce((n, f) => n + f.lines, 0) },
+  files: [...files].sort((a, b) => (a.path < b.path ? -1 : 1)).map(factsOf),
   entities: [...entities].sort((a, b) => (a.path < b.path ? -1 : 1)),
 };
 
@@ -380,7 +399,7 @@ const trees = Object.keys(FORMS).filter((k) => FORMS[k]?.rule === "trees");
 const others = Object.keys(FORMS).filter((k) => FORMS[k]?.rule !== "trees");
 let tree = 0;
 let other = 0;
-for (const f of model.files) {
+for (const f of [...files].sort((a, b) => (a.path < b.path ? -1 : 1))) {
   if (f.kind === "source" && f.symbols.length > 0) forms[f.path] = Object.fromEntries(f.symbols.map((s, k) => [`#${s.name}`, k % 2 === 0 ? (trees[tree++ % trees.length] as string) : (others[other++ % others.length] as string)]));
 }
 const judged: Judgments = {

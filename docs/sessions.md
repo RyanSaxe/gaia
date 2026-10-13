@@ -31,7 +31,7 @@ and leaves the change to that session.
   - `engine/` and the facts in `packages/schema/src/facts.ts`.
   - Request planning and judging in `packages/world` (`planWorldRequests`, `judgeWorld`, the stand-in, the designs, `outline.ts`, `judging.ts`, `context.ts`, `planner.ts`).
   - The options' wording in `app/renderer/terrain/looks.ts`.
-  - `app/world-service/{open-world,jev}.ts`, the Jev tools, and the fixtures `gaia.json`, `gaia-jev.json` and `gaia-graph.json`.
+  - `app/world-service/{open-world,jev}.ts`, the Jev tools, and the fixtures `gaia-graph.json`, `gaia-judged.json` and `gaia-jev.json`.
 - **World:** the land and everything that holds the rest together.
   - Layout (`land.ts`, `layoutWorld`, `landOf`, `graph.ts`) and vitality's pooling in `packages/world`.
   - `packages/terrain`, water, trails and walking.

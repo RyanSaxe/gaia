@@ -8,13 +8,13 @@
 // written: which of those faults it was given, and how badly.
 // The same plan always writes the same code.
 
-import type { FileFacts, SymbolFact } from "@gaia/schema";
+import type { PlannedFacts, PlannedSymbol } from "./proving.ts";
 
 export type Health = "thriving" | "well" | "tired" | "failing" | "ruin" | "decayed";
 
 /** A planned file: its facts, as the proving ground's code model holds them, its health, and the vitality its patch has in the proving ground's world. */
 export interface PlannedFile {
-  readonly facts: FileFacts;
+  readonly facts: PlannedFacts;
   readonly health: Health;
   readonly vitality: number;
 }
@@ -111,7 +111,7 @@ interface Words {
   readonly limit?: string;
 }
 
-function wordsOf(f: FileFacts): Words {
+function wordsOf(f: PlannedFacts): Words {
   const type = f.symbols.find((s) => s.kind === "type");
   const constant = f.symbols.find((s) => s.kind === "constant");
   const noun = nounOf(f.path);
@@ -362,13 +362,13 @@ function tangle(name: string, w: Words, length: number, depth: number, spoil: Sp
 }
 
 /** A file's symbols in the order they are written, with the doc each gets. */
-function documented(s: SymbolFact, recipe: Recipe | undefined, w: Words, spoil: Spoil, r: ReturnType<typeof streamOf>, index: number): string[] {
+function documented(s: PlannedSymbol, recipe: Recipe | undefined, w: Words, spoil: Spoil, r: ReturnType<typeof streamOf>, index: number): string[] {
   if (spoil.docs === "some" && index % 2 === 1) return [];
   const text = spoil.docs === "wrong" ? r.pick(WRONG_DOCS) : recipe?.doc(w) ?? s.doc ?? "";
   return text === "" ? [] : [`/** ${text} */`];
 }
 
-function writeTypeScript(file: PlannedFile, importable: ReadonlyMap<string, FileFacts>): { text: string; entry: Omit<ManifestEntry, "path" | "vitality" | "health" | "planned" | "lines"> } {
+function writeTypeScript(file: PlannedFile, importable: ReadonlyMap<string, PlannedFacts>): { text: string; entry: Omit<ManifestEntry, "path" | "vitality" | "health" | "planned" | "lines"> } {
   const f = file.facts;
   const spoil = SPOIL[file.health];
   const r = streamOf(f.path);
@@ -509,7 +509,7 @@ const EXPECT: Readonly<Record<string, { readonly what: string; readonly call: (n
 /** A test of a file in this health fails, as its facts say its tests do. */
 const FAILS: ReadonlySet<Health> = new Set(["failing", "ruin", "decayed"]);
 
-function writeTest(file: PlannedFile, importable: ReadonlyMap<string, FileFacts>, health: ReadonlyMap<string, Health>): string {
+function writeTest(file: PlannedFile, importable: ReadonlyMap<string, PlannedFacts>, health: ReadonlyMap<string, Health>): string {
   const f = file.facts;
   const out: string[] = [`import { describe, expect, it } from "vitest";`];
   const subjects: { name: string; noun: string; fails: boolean }[] = [];

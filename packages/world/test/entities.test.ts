@@ -9,18 +9,11 @@ const WORLD: EntityFacts = {
   form: "package",
   manifest: "packages/world/package.json",
   entry: "packages/world/src/index.ts",
-  doc: "The question planner, answer rules, context gathering, vitality and the world document.",
   files: 9,
   lines: 980,
-  languages: ["typescript"],
   exports: 31,
   dependsOn: ["packages/schema"],
   dependents: ["app", "packages/realize"],
-  tests: { files: 4, failing: 0, covered: 0.9 },
-  diagnostics: { errors: 0, warnings: 0, lint: 2 },
-  debtMarkers: 1,
-  unusedExports: 0.05,
-  git: { daysSinceFirstCommit: 40, commitsLast14Days: 6, contributors: 2 },
 };
 
 describe("entities", () => {

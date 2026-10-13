@@ -44,8 +44,7 @@ You need Node 26, pnpm 10 and a stable Rust toolchain from rustup (put
 | `pnpm lab:serve` | That page on this Mac's Tailscale address, port 5180, rebuilt on every change |
 | `pnpm shots` | Screenshots of every primitive and world look, from Electron |
 | `pnpm readme-shots` | The README's two screenshots, into `docs/images/` |
-| `pnpm snapshot` | Rewrites `app/renderer/terrain/fixtures/gaia.json`, the code model the standalone lab shows |
-| `GAIA_DATA_DIR=dir pnpm graph-snapshot [root]` | Rewrites `fixtures/gaia-graph.json`, the judged graph the layout reads, from Jev's answers held in that store |
+| `GAIA_DATA_DIR=dir pnpm graph-snapshot [root]` | Rewrites `fixtures/gaia-graph.json`, the judged graph of this repository the standalone lab is laid out from, from Jev's answers held in that store |
 | `pnpm proving` | Rewrites the proving ground's fixtures (`docs/proving-ground.md`) |
 | `pnpm probe` | Measures both worlds in Electron: frame time, triangles by kind and pass, the walk test and smoothness |
 | `pnpm jev-world`, `pnpm compare-jev`, `pnpm print-world-requests` | Jev's kept answers for the snapshot, request designs compared, and every request printed |
@@ -135,12 +134,12 @@ doc in the same commit, and say so in the commit message.
   `landOf` and `layoutWorld` in `@gaia/world`; `bakeTerrain`, `placeAt` and
   `outlinesOf` in `@gaia/terrain`; `standWorld` in
   `app/renderer/terrain/stand.ts`.
-- **Fixtures**: the standalone lab shows `fixtures/gaia.json` (a snapshot of
-  this repository) judged by `fixtures/gaia-jev.json`. Regenerate them
-  together, since Jev's kept answers are keyed by each request's hash.
-  `fixtures/gaia-graph.json` is the engine's graph of the same commit, with
-  each definition's stand from held answers; take it from a checkout at
-  that commit. The
+- **Fixtures**: the standalone lab shows `fixtures/gaia-graph.json` (the
+  engine's judged graph of this repository, with each definition's stand
+  from held answers), laid out from the code model `codeModelOf` derives
+  from it and judged by `fixtures/gaia-jev.json`. Regenerate the kept
+  answers whenever the graph changes, since they are keyed by each
+  request's hash. The
   proving ground's `fixtures/proving.json` and `proving-judged.json` come
   from `pnpm proving`; its test fails when a new option in `looks.ts` is
   missing from them, or when its world loses a feature.
