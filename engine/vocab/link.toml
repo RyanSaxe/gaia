@@ -10,8 +10,3 @@ outside = "Something outside this repository: a library, the standard library or
 [callee]
 instructions = "Which definition does `{text}`, called on line {line}, reach?"
 outside = "Something outside this repository: a library, the standard library or a value passed in."
-
-[checks]
-instructions = "Does this test check code defined in {path}, by calling it or by testing what it does?"
-yes = "Yes: the test exercises code defined in that file."
-no = "No: it only imports it in passing, or not at all."

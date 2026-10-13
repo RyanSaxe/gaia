@@ -499,21 +499,15 @@ complicates nearly everything else.
 
 The engine asks Jev about the code graph itself, so a call never sends
 anything on its own and every answer lands in one place. The protocol has
-four methods:
-- `understand.plan` builds every request Jev's calls would send about a
+two methods:
+- `understanding.plan` builds every request Jev would be sent about a
   project and looks each up in the store's `calls` table. It sends nothing.
-- `understand.next` sends whatever is ready, in slices, and returns the
+- `understanding.next` sends whatever is ready, in slices, and returns the
   nodes that settled, so a waiting screen can paint each as it lands.
-  Given `through`, both send only the passes up to that one: `understand`
-  covers the links and the stand every definition is sized by.
-- `understand.deepen` queues the deep questions for the nodes the world
-  chooses to stand.
-- `understand.ask` asks one call about one node at once, for a follow-up a
-  person asks.
 
 `project.graph` with `judged: true` builds the graph with Jev's links and
-includes every answer the project's store holds
-([decision 54](decisions/54-understanding-in-slices.md)). Opening a world
+includes every answer the project's store holds for the calls the engine
+asks ([decision 54](decisions/54-understanding-in-slices.md)). Opening a world
 uses them. `openWorld` divides the land on the graph `understanding.plan`
 gives with `graph: true`, so planning and the land share one build. Once
 Jev has judged the looks, it calls `understanding.next` until nothing is
@@ -531,18 +525,17 @@ person sees includes them; they go out only once the links are.
 The runner (`engine/src/jev/runner.rs`) makes one request per file or
 directory in each pass. A file's request holds its source, an outline of
 its definitions, and every applicable call's part and questions. Each call
-(`engine/src/jev/calls.rs`) names, for every question, the node it is about
+(the links' in `engine/src/jev/calls.rs`, the understanding pass's in
+`engine/src/jev/axes.rs`) names, for every question, the node it is about
 and where its answer goes in that node's `judged`. Its words live in its
-vocabulary files in `engine/vocab/`, and its version is their hash. A pass
+vocabulary file in `engine/vocab/`, and its version is their hash. A pass
 waits for the one before it:
 
 | Pass | Calls | Asks about | Waits for |
 | --- | --- | --- | --- |
 | link | `resolve`, `callee` | each import or call the rules left with several candidates | nothing |
-| understand | `profile`, `quality`, `importance`, `screen`, `attention` | every file, and every definition and block in it for `screen` | every link request |
-| tests | `checks` | a file Jev judged a test: which files it checks | the file's understand pass |
-| deep | `definition`, `block` | only the nodes the world passes to `understand.deepen` | the file's understand pass |
-| dirs | `directory` | each directory, deepest first, the root last | its files and subdirectories |
+| folders | `folder-axes` | each folder, the root first | every link request, and its parent folder's request |
+| files | `file-axes` | every file that is text | its folder's request |
 
 A link answer becomes an `imports` or `calls` edge filled by Jev, with its
 call and probability, before reach is counted; "outside" drops the
@@ -553,8 +546,7 @@ reference is asked again. A reference keeps an answer for each set of
 candidates it has had, since other links can change its candidates (a call
 whose receiver's type comes from an import Jev resolved, say); with one
 answer per reference, applying one answer could undo the other on every
-slice. A `checks` answer above 0.5
-becomes a `checks` edge.
+slice.
 
 A request stays within 30,000 tokens as `engine/src/jev/tokens.rs`
 estimates them, deterministically, so a request is laid out the same way on
@@ -569,26 +561,14 @@ asks. A request already
 answered (the store's `calls` table, by the request's hash) is never sent
 again. A fresh answer replaces the one held for a node's lineage (the
 `held` table) only when it clearly differs: a choice by 0.2, a score by
-half a level, a yes-or-no by crossing 0.5 by 0.15. Up to 64 requests go at
+half a level. Up to 64 requests go at
 once; when Jev says it is overloaded, half as many, and 8 more after each
 slice it takes without complaint.
 
-Gaia's own repository, from scratch with a fifth of its screened
-definitions and blocks deepened, took 1,497 requests, 34 seconds and $0.70
-(16.6 million billed tokens). The understand pass took 57% of that, the
-deep pass 31% and the link pass 9%. The source is under a quarter of the
-tokens: each `screen` question carries its five levels' descriptions, and a
-long file's every piece repeats its outline. Asking the whole-file questions
-in the first piece only, as the runner now does, cut Gaia's estimated
-tokens by 9.7%. Screening spreads over every level on each of the bench's eight
-repositories, with no level holding more than 51% of a repository's
-definitions.
-
 ### The understanding pass
 
-Beside today's calls, `understanding.plan` and `understanding.next` run the
-understanding pass (`engine/src/jev/axes.rs`): importance and quality at
-every level, with every word, level, weight and pick in
+The understanding pass (`engine/src/jev/axes.rs`) asks importance and
+quality at every level, with every word, level, weight and pick in
 `engine/vocab/understanding.toml`. After the link pass, folders go top-down,
 the root first and each folder once its parent's request is answered, and
 each file once its folder's is. So every request carries the project's own
@@ -619,15 +599,13 @@ container's top-level parts weighted by their lines and blended with its
 own.
 
 The calibration set splits the bench by repository
-(`tools/bench/calibration/split.json`): wording is tuned on one half and
-measured on the other. `pnpm bench --calibrate` reports, for every question
-on the held-out half, how its answers spread over its levels and how far
-it overlaps lines and cognitive complexity. `gaia-engine mutate` makes good
-definitions worse in one way each, from what the query files mark:
-parameters renamed to single letters, a doc swapped for another
-function's, an error handler emptied. `pnpm bench --mutate` asks Jev about
-the original and mutant copies, and reports how often each mutation moved
-the question it targets and how far the others moved.
+(`tools/bench/calibration/split.json`), so wording can be tuned on one half
+and measured on the other. `gaia-engine mutate` makes good definitions
+worse in one way each, from what the query files mark: parameters renamed
+to single letters, a doc swapped for another function's, an error handler
+emptied. Both were built to calibrate the calls the understanding pass
+replaced: each mutation still names the field of those calls it should
+move, and no bench mode asks Jev about the understanding pass on them.
 
 ## Jev
 

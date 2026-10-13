@@ -2,28 +2,25 @@
 //! about the code graph, and when. For each file it gathers every call of a
 //! pass that applies and builds one request: the file's source, an outline
 //! of its definitions, each call's part, and every call's questions; a
-//! directory's request holds its files' and subdirectories' answers
-//! instead of source. A request too big for Jev's window is cut at the
-//! file's top-level definitions into pieces sized by source and questions
-//! together. A request already answered (the store's `calls` table, by the
-//! request's hash) is never sent again, and a fresh answer replaces a held
-//! one (the `held` table, by lineage) only when it clearly differs
-//! (`hold.rs`).
+//! directory's request holds an outline of its parts instead of source. A
+//! request too big for Jev's window is cut at the file's top-level
+//! definitions into pieces sized by source and questions together. A
+//! request already answered (the store's `calls` table, by the request's
+//! hash) is never sent again, and a fresh answer replaces a held one (the
+//! `held` table, by lineage) only when it clearly differs (`hold.rs`).
 //!
 //! Every slice rebuilds what it wants from what is answered, so the passes
-//! wait for each other: understand waits for every link, a test's checks
-//! for its kind, the deep questions for the world's choice and its file's
-//! understanding, and a directory for everything under it, deepest first.
+//! wait for each other: the understanding pass waits for every link, each
+//! folder for its parent and each file for its folder (`axes.rs`).
 //!
 //! The world drives it in slices: `plan` says what is wanted and what is
-//! already answered, `next` sends what is ready and returns the nodes that
-//! settled, `deepen` records the world's chosen nodes, and `ask` answers
-//! one follow-up at once.
+//! already answered, and `next` sends what is ready and returns the nodes
+//! that settled.
 
 use super::calls::{self, Call, Ctx, Question, Unit};
 use super::tokens::tokens;
 use super::{client, hold};
-use crate::graph::model::{CodeGraph, DirNode, Edge, FileNode, Filled, Node};
+use crate::graph::model::{CodeGraph, DirNode, FileNode, Node};
 use crate::store;
 use serde_json::{Map, Value, json};
 use sha2::{Digest, Sha256};
@@ -47,29 +44,6 @@ const CONCURRENCY_STEP: usize = 8;
 const DEFAULT_SLICE: usize = 256;
 /// Held link answers are kept under this prefix and the reference's key.
 const LINK: &str = "link";
-/// The passes in the order their requests wait on each other.
-const PASSES: [&str; 5] = [LINK, "understand", "tests", "deep", "dirs"];
-
-/// Which set of questions a project is asked: today's calls, or the
-/// understanding pass's (importance and quality at every level), which
-/// replace them once the world reads them.
-#[derive(Clone, Copy, PartialEq)]
-pub enum Design {
-    Calls,
-    Understanding,
-}
-
-/// Keeps only the requests of the passes up to `through`, or all of them.
-fn through(w: &mut Wanted, through: Option<&str>) -> Result<(), String> {
-    let Some(last) = through else {
-        return Ok(());
-    };
-    let rank = |pass: &str| PASSES.iter().position(|p| *p == pass);
-    let last = rank(last).ok_or_else(|| format!("No pass is called {last}."))?;
-    w.planned
-        .retain(|p| rank(p.pass).is_some_and(|r| r <= last));
-    Ok(())
-}
 
 /// One request, and what each of its questions is about.
 struct Planned {
@@ -96,24 +70,15 @@ struct Asked {
     line: Option<u32>,
 }
 
-/// What the world chose, and how many requests Jev takes at once, for one project root.
-struct Session {
-    deep: BTreeSet<String>,
-    concurrency: usize,
+/// How many requests Jev takes at once, for each project root.
+fn concurrencies() -> &'static Mutex<HashMap<PathBuf, usize>> {
+    static C: OnceLock<Mutex<HashMap<PathBuf, usize>>> = OnceLock::new();
+    C.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
-fn sessions() -> &'static Mutex<HashMap<PathBuf, Session>> {
-    static S: OnceLock<Mutex<HashMap<PathBuf, Session>>> = OnceLock::new();
-    S.get_or_init(|| Mutex::new(HashMap::new()))
-}
-
-fn session_of(root: &Path) -> Result<(BTreeSet<String>, usize), String> {
-    let all = sessions().lock().map_err(|e| e.to_string())?;
-    Ok(all
-        .get(root)
-        .map_or((BTreeSet::new(), client::CONCURRENCY), |s| {
-            (s.deep.clone(), s.concurrency)
-        }))
+fn concurrency_of(root: &Path) -> Result<usize, String> {
+    let all = concurrencies().lock().map_err(|e| e.to_string())?;
+    Ok(all.get(root).copied().unwrap_or(client::CONCURRENCY))
 }
 
 fn hash(request: &Value) -> String {
@@ -142,8 +107,6 @@ fn billed_per_estimated(project: &str) -> f64 {
         .unwrap_or(START_BILLED_PER_ESTIMATED)
 }
 
-/// The references Jev resolved, from the held answers, by reference key.
-/// An answer from an earlier version of its call no longer holds.
 /// Where a link answer is held: its reference and the candidates it chose
 /// among. A reference whose candidates change with other links (a call
 /// whose receiver's type comes from an import Jev resolved, say) keeps an
@@ -158,6 +121,8 @@ fn link_key<S: AsRef<str>>(reference: &str, candidates: &[S]) -> String {
     format!("{LINK}|{reference}|~{digest}")
 }
 
+/// The references Jev resolved, from the held answers, by reference key.
+/// An answer from an earlier version of its call no longer holds.
 fn links(held: &Value) -> crate::graph::Links {
     let current: HashSet<String> = calls::registry()
         .into_iter()
@@ -410,7 +375,6 @@ fn dir_requests(ctx: &Ctx, repository: &str, dir: &DirNode, calls: &[&dyn Call])
     };
     let mut state = Map::new();
     state.insert("repository".into(), json!(repository));
-    // The directory call's part goes under its own id, "directory".
     state.insert(
         "path".into(),
         json!(if dir.path.is_empty() {
@@ -599,7 +563,7 @@ struct Wanted {
     answered: HashSet<String>,
 }
 
-fn wanted(root: &Path, deep: &BTreeSet<String>, design: Design) -> Result<Wanted, String> {
+fn wanted(root: &Path) -> Result<Wanted, String> {
     let project = crate::graph::project_id(root);
     let held = store::read(&project, "held")?;
     let graph = crate::graph::build_linked(root, &links(&held))?;
@@ -609,88 +573,27 @@ fn wanted(root: &Path, deep: &BTreeSet<String>, design: Design) -> Result<Wanted
         .flatten()
         .map(|(k, _)| k.clone())
         .collect();
-    let mut planned: Vec<Planned> = Vec::new();
-    {
-        let ctx = Ctx::new(&graph, root, &held, deep);
-        let calls = calls::registry();
-        let of = |pass: &str| -> Vec<&dyn Call> {
-            calls.iter().copied().filter(|c| c.pass() == pass).collect()
-        };
+    let planned = {
+        let ctx = Ctx::new(&graph, root, &held);
+        let link: Vec<&dyn Call> = calls::registry()
+            .into_iter()
+            .filter(|c| c.pass() == LINK)
+            .collect();
         let files: Vec<&FileNode> = graph
             .nodes
             .iter()
             .filter_map(|n| if let Node::File(f) = n { Some(f) } else { None })
             .collect();
-        let done =
-            |reqs: &[Planned]| !reqs.is_empty() && reqs.iter().all(|p| answered.contains(&p.hash));
-        let link: Vec<Planned> = files
+        let mut planned: Vec<Planned> = files
             .iter()
-            .flat_map(|f| file_requests(&ctx, root, &graph.name, f, &of("link")))
+            .flat_map(|f| file_requests(&ctx, root, &graph.name, f, &link))
             .collect();
-        let links_done = link.iter().all(|p| answered.contains(&p.hash));
-        planned.extend(link);
-        if design == Design::Understanding {
-            planned.extend(understanding(
-                &ctx, root, &graph, &files, links_done, &answered,
-            ));
-        } else {
-            // Understanding waits for every link. Until then its requests are
-            // built on the graph as it stands, so a plan can say what they cost.
-            let mut understood: HashSet<&str> = HashSet::new();
-            for f in &files {
-                let mut reqs = file_requests(&ctx, root, &graph.name, f, &of("understand"));
-                if !links_done {
-                    reqs.iter_mut().for_each(|p| p.waiting = true);
-                } else if done(&reqs) {
-                    understood.insert(f.id.as_str());
-                }
-                planned.extend(reqs);
-            }
-            if links_done {
-                // What waits on a file's understanding.
-                for f in files.iter().filter(|f| understood.contains(f.id.as_str())) {
-                    planned.extend(file_requests(&ctx, root, &graph.name, f, &of("tests")));
-                    planned.extend(file_requests(&ctx, root, &graph.name, f, &of("deep")));
-                }
-                // Directories, deepest first: each waits for its files and its subdirectories.
-                let mut dirs: Vec<&DirNode> = graph
-                    .nodes
-                    .iter()
-                    .filter_map(|n| if let Node::Dir(d) = n { Some(d) } else { None })
-                    .collect();
-                dirs.sort_by_key(|d| {
-                    std::cmp::Reverse(if d.path.is_empty() {
-                        0
-                    } else {
-                        d.path.matches('/').count() + 1
-                    })
-                });
-                let mut dir_done: HashSet<&str> = HashSet::new();
-                for d in dirs {
-                    let files_ready = ctx
-                        .files_in
-                        .get(d.path.as_str())
-                        .into_iter()
-                        .flatten()
-                        .all(|f| f.binary || understood.contains(f.id.as_str()));
-                    let subdirs_ready = ctx
-                        .dirs_in
-                        .get(d.path.as_str())
-                        .into_iter()
-                        .flatten()
-                        .all(|s| dir_done.contains(s.id.as_str()));
-                    if !(files_ready && subdirs_ready) {
-                        continue;
-                    }
-                    let reqs = dir_requests(&ctx, &graph.name, d, &of("dirs"));
-                    if done(&reqs) {
-                        dir_done.insert(d.id.as_str());
-                    }
-                    planned.extend(reqs);
-                }
-            }
-        }
-    }
+        let links_done = planned.iter().all(|p| answered.contains(&p.hash));
+        planned.extend(understanding(
+            &ctx, root, &graph, &files, links_done, &answered,
+        ));
+        planned
+    };
     Ok(Wanted {
         project,
         graph,
@@ -775,26 +678,12 @@ fn summary(w: &Wanted) -> Value {
     })
 }
 
-/// Says what the project wants asked now, in the passes up to `last` or in
-/// all of them, and what is already answered. Sends nothing. With `graph`,
-/// it also gives the judged graph it planned on, as `judged_graph` would,
-/// so a caller needing both builds the graph once.
-pub fn plan(root: &Path, last: Option<&str>, graph: bool) -> Result<Value, String> {
-    plan_with(root, last, graph, Design::Calls)
-}
-
-/// `plan`, for the given design. The understanding pass has no `through`.
-pub fn plan_with(
-    root: &Path,
-    last: Option<&str>,
-    graph: bool,
-    design: Design,
-) -> Result<Value, String> {
-    let (deep, _) = session_of(root)?;
-    let mut w = wanted(root, &deep, design)?;
-    if design == Design::Calls {
-        through(&mut w, last)?;
-    }
+/// Says what the project wants asked now, and what is already answered.
+/// Sends nothing. With `graph`, it also gives the judged graph it planned
+/// on, as `judged_graph` would, so a caller needing both builds the graph
+/// once.
+pub fn plan(root: &Path, graph: bool) -> Result<Value, String> {
+    let mut w = wanted(root)?;
     let mut out = summary(&w);
     if graph {
         judge(&mut w.graph, &store::read(&w.project, "held")?);
@@ -803,25 +692,11 @@ pub fn plan_with(
     Ok(out)
 }
 
-/// Sends up to `max` requests that are ready, in the passes up to `last` or
-/// in all of them, and holds the answers of every file or directory a pass
-/// has now fully answered.
-pub fn next(root: &Path, max: Option<usize>, last: Option<&str>) -> Result<Value, String> {
-    next_with(root, max, last, Design::Calls)
-}
-
-/// `next`, for the given design. The understanding pass has no `through`.
-pub fn next_with(
-    root: &Path,
-    max: Option<usize>,
-    last: Option<&str>,
-    design: Design,
-) -> Result<Value, String> {
-    let (deep, concurrency) = session_of(root)?;
-    let mut w = wanted(root, &deep, design)?;
-    if design == Design::Calls {
-        through(&mut w, last)?;
-    }
+/// Sends up to `max` requests that are ready, and holds the answers of
+/// every file or directory a pass has now fully answered.
+pub fn next(root: &Path, max: Option<usize>) -> Result<Value, String> {
+    let concurrency = concurrency_of(root)?;
+    let w = wanted(root)?;
     let ready: Vec<usize> = (0..w.planned.len())
         .filter(|&i| !w.planned[i].waiting && !w.answered.contains(&w.planned[i].hash))
         .take(max.unwrap_or(DEFAULT_SLICE))
@@ -857,10 +732,10 @@ pub fn next_with(
     } else {
         (concurrency + CONCURRENCY_STEP).min(client::CONCURRENCY)
     };
-    sessions()
+    concurrencies()
         .lock()
         .map_err(|e| e.to_string())?
-        .insert(root.to_path_buf(), Session { deep, concurrency });
+        .insert(root.to_path_buf(), concurrency);
 
     let mut writes: Vec<Value> = Vec::new();
     let mut fresh: HashMap<String, Value> = HashMap::new();
@@ -985,7 +860,8 @@ pub fn next_with(
     store::put(&w.project, &writes)?;
     let sent = ready.len() - failed;
     // What is left counts only requests already known; answers can open
-    // more, such as a directory's, and so can answers newly held.
+    // more, such as one with the readings Jev asked for, and so can answers
+    // newly held.
     let left = w.planned.iter().filter(|p| !answered(&p.hash)).count()
         + usize::from(sent > 0 || held_anew);
     Ok(json!({ "sent": sent, "failed": failed, "left": left, "settled": settled }))
@@ -1042,79 +918,6 @@ fn unsettled<'a>(w: &'a Wanted, held: &Value, calls: &Value) -> BTreeSet<(&'a st
     out
 }
 
-/// Records the nodes the world chose to stand, whose deep questions go once their file is understood.
-pub fn deepen(root: &Path, nodes: &[String]) -> Result<Value, String> {
-    let (mut deep, concurrency) = session_of(root)?;
-    deep.extend(nodes.iter().cloned());
-    sessions().lock().map_err(|e| e.to_string())?.insert(
-        root.to_path_buf(),
-        Session {
-            deep: deep.clone(),
-            concurrency,
-        },
-    );
-    Ok(summary(&wanted(root, &deep, Design::Calls)?))
-}
-
-/// Asks one call about one node's file or directory straight away, and returns its answers.
-pub fn ask(root: &Path, node: &str, call_id: &str) -> Result<Value, String> {
-    let project = crate::graph::project_id(root);
-    let held = store::read(&project, "held")?;
-    let graph = crate::graph::build_linked(root, &links(&held))?;
-    let call = calls::registry()
-        .into_iter()
-        .find(|c| c.id() == call_id)
-        .ok_or_else(|| format!("No call named {call_id}."))?;
-    // Deep calls ask about the node itself.
-    let deep: BTreeSet<String> = std::iter::once(node.to_string()).collect();
-    let ctx = Ctx::new(&graph, root, &held, &deep);
-    let unit_id = graph
-        .nodes
-        .iter()
-        .find_map(|n| match n {
-            Node::File(f) if f.id == node => Some(f.id.as_str()),
-            Node::Dir(d) if d.id == node => Some(d.id.as_str()),
-            Node::Def(d) if d.id == node => Some(d.file.as_str()),
-            Node::Block(b) if b.id == node => Some(
-                ctx.defs
-                    .get(b.def.as_str())
-                    .map_or(b.def.as_str(), |d| d.file.as_str()),
-            ),
-            _ => None,
-        })
-        .ok_or_else(|| format!("No node {node} in this project."))?;
-    let planned = match (
-        ctx.files.get(unit_id),
-        graph.nodes.iter().find_map(|n| {
-            if let Node::Dir(d) = n {
-                (d.id == unit_id).then_some(d)
-            } else {
-                None
-            }
-        }),
-    ) {
-        (Some(f), _) => file_requests(&ctx, root, &graph.name, f, &[call]),
-        (None, Some(d)) => dir_requests(&ctx, &graph.name, d, &[call]),
-        _ => return Err(format!("Nothing holds {node}.")),
-    };
-    let (answers, _) = client::send_all(
-        planned.iter().map(|p| p.request.clone()).collect(),
-        client::CONCURRENCY,
-    )?;
-    let mut out = Map::new();
-    for (p, a) in planned.iter().zip(&answers) {
-        if let Some(e) = a.get("error") {
-            return Err(e.as_str().unwrap_or("Jev failed.").to_string());
-        }
-        for q in &p.questions {
-            if let Some(n) = hold::normalize(&q.json, &a["answers"][&q.id]) {
-                out.insert(q.id.clone(), n);
-            }
-        }
-    }
-    Ok(json!({ "answers": out }))
-}
-
 /// The project's graph with Jev's links as edges and every node's held answers as its `judged`.
 pub fn judged_graph(root: &Path) -> Result<CodeGraph, String> {
     let project = crate::graph::project_id(root);
@@ -1124,49 +927,39 @@ pub fn judged_graph(root: &Path) -> Result<CodeGraph, String> {
     Ok(graph)
 }
 
-/// Fills every node's `judged` from held answers, and adds the files each test checks as edges.
+/// Fills every node's `judged` from the held answers of the registry's
+/// calls, then works out its value (`axes::values`). Answers a store kept
+/// from calls no longer in the registry are left out.
 fn judge(graph: &mut CodeGraph, held: &Value) {
+    let current: HashSet<&str> = calls::registry()
+        .into_iter()
+        .filter(|c| c.pass() != LINK)
+        .map(|c| c.id())
+        .collect();
     let mut by_lineage: HashMap<&str, Vec<(&str, &Value)>> = HashMap::new();
     for (key, value) in held.as_object().into_iter().flatten() {
         let mut parts = key.splitn(3, '|');
-        if let (Some(l), Some(_call), Some(field)) = (parts.next(), parts.next(), parts.next())
+        if let (Some(l), Some(call), Some(field)) = (parts.next(), parts.next(), parts.next())
             && l != LINK
+            && current.contains(call)
         {
             by_lineage.entry(l).or_default().push((field, value));
         }
     }
-    let mut checks: Vec<Edge> = Vec::new();
     for n in &mut graph.nodes {
-        let (id, lineage, judged) = match n {
-            Node::Dir(d) => (d.id.clone(), d.lineage.clone(), &mut d.judged),
-            Node::File(f) => (f.id.clone(), f.lineage.clone(), &mut f.judged),
-            Node::Def(d) => (d.id.clone(), d.lineage.clone(), &mut d.judged),
-            Node::Block(b) => (b.id.clone(), b.lineage.clone(), &mut b.judged),
+        let (lineage, judged) = match n {
+            Node::Dir(d) => (d.lineage.as_str(), &mut d.judged),
+            Node::File(f) => (f.lineage.as_str(), &mut f.judged),
+            Node::Def(d) => (d.lineage.as_str(), &mut d.judged),
+            Node::Block(b) => (b.lineage.as_str(), &mut b.judged),
         };
-        let Some(entries) = by_lineage.get(lineage.as_str()) else {
+        let Some(entries) = by_lineage.get(lineage) else {
             continue;
         };
         let mut j = Map::new();
         for (field, value) in entries {
             let a = &value["answer"];
             let call = value["call"].clone();
-            if let Some(path) = field.strip_prefix("checks:") {
-                let p = a["yes"].as_f64().unwrap_or(0.0);
-                if p >= 0.5 {
-                    checks.push(Edge {
-                        from: id.clone(),
-                        to: format!("file:{path}"),
-                        kind: "checks",
-                        by: Filled {
-                            by: "jev",
-                            call: call.as_str().map(String::from),
-                            p: Some(p),
-                        },
-                        at: None,
-                    });
-                }
-                continue;
-            }
             let filled = if let Some(choice) = a["choice"].as_str() {
                 json!({ "choice": choice, "p": a["p"], "call": call })
             } else if let Some(score) = a["score"].as_f64() {
@@ -1174,9 +967,9 @@ fn judge(graph: &mut CodeGraph, held: &Value) {
                 let top = (a["levels"].as_f64().unwrap_or(2.0) - 1.0).max(1.0);
                 json!({ "score": score, "value": (score / top).clamp(0.0, 1.0), "call": call })
             } else {
-                json!({ "p": a["yes"], "call": call })
+                continue;
             };
-            // "quality.readability" goes under quality, "does.parse" under does, and so on.
+            // "axes.readability" goes under axes, "picks.key" under picks, and so on.
             match field.split_once('.') {
                 Some((group, key)) => {
                     let g = j.entry(group.to_string()).or_insert_with(|| json!({}));
@@ -1189,7 +982,6 @@ fn judge(graph: &mut CodeGraph, held: &Value) {
         }
         *judged = Some(Value::Object(j));
     }
-    graph.edges.extend(checks);
     super::axes::values(graph);
 }
 
