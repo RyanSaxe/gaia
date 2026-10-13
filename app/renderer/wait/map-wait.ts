@@ -30,7 +30,7 @@ import type { Outline } from "@gaia/terrain";
 import type { LotPlace } from "@gaia/world";
 import type { FilePatch } from "../../world-service/protocol.ts";
 import type { StoodWorld } from "../terrain/lab.ts";
-import { MARGIN, drawRivers, drawTrails, drawTrees, letterName, nearestAreas, paintRelief, strokeContours } from "../immersive/field-map.ts";
+import { MARGIN, drawRivers, drawTrails, drawTrees, letterName, nearestAreas, paintRelief, riverCourse, riverStrokes, strokeContours } from "../immersive/field-map.ts";
 import { CELL, type NameLand, canvasMeasure, nameLand, placeNames } from "../immersive/map-names.ts";
 import { DECKLE_MASK, MAP_STYLE, dryness, healthColor, landWash } from "../immersive/map-styles.ts";
 import { markScale, stampBuilding, stampLandmark } from "../immersive/marks.ts";
@@ -747,26 +747,18 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
       `<path class="pen" d="${d}" pathLength="1" stroke="${stroke}" stroke-width="${f(width / zoom)}" style="transition-duration:${Math.round(ms)}ms;transition-delay:${Math.round(delay)}ms"${extra}/>`;
     let end = 0;
     let html = "";
-    // Rivers, as `drawRivers` draws them: the same curve through each stream's stations and the same three strokes.
+    // Rivers, as `drawRivers` draws them: the same course and the same three strokes.
     const streams = [...stood.terrain.streams].filter((s) => s.stations.length > 1).sort((a, b) => b.stations.length - a.stations.length);
     streams.forEach((stream, q) => {
       const st = stream.stations;
-      const first = st[0] as (typeof st)[number];
-      const last = st[st.length - 1] as (typeof st)[number];
-      let d = `M${f(first.x)} ${f(first.z)}`;
-      for (let k = 1; k < st.length - 1; k++) {
-        const [a, b] = [st[k] as (typeof st)[number], st[k + 1] as (typeof st)[number]];
-        d += `Q${f(a.x)} ${f(a.z)} ${f((a.x + b.x) / 2)} ${f((a.z + b.z) / 2)}`;
-      }
-      d += `L${f(last.x)} ${f(last.z)}`;
-      const width = 2 * Math.max(...st.map((s) => s.halfWidth)) * zoom;
+      const d = riverCourse(st, (x, z) => [x, z]);
       const ms = timed(
         st.map((s) => [s.x, s.z] as const),
         PACE.rivers,
       );
       const delay = PACE.rivers.startMs + q * PACE.rivers.gapMs;
       end = Math.max(end, delay + ms);
-      html += pen(d, "rgba(40,84,104,0.5)", Math.max(3.4, width + 2.6), ms, delay) + pen(d, "rgb(150,203,204)", Math.max(1.9, width), ms, delay) + pen(d, "rgba(250,244,222,0.45)", Math.max(0.5, width * 0.16), ms, delay);
+      for (const stroke of riverStrokes(st, zoom)) html += pen(d, stroke.color, stroke.width, ms, delay);
     });
     // Trails, as `drawTrails` dots them, shown through a mask the pen draws along each.
     const stride = Math.max(2, Math.round(3 / zoom)) * 2;
