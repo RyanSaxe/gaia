@@ -589,12 +589,26 @@ A request stays within 30,000 tokens as `engine/src/jev/tokens.rs`
 estimates them, deterministically, so a request is laid out the same way on
 every open and its stored answer is found again. A file that doesn't fit is
 cut at its top-level definitions into pieces sized by their source and
-their questions together, so its source goes out about once; a line too
-long for a request, such as a minified file's, is cut inside. A question
-about a definition, a block or a reference goes in the piece that holds its
-line; one about the whole file goes in the first piece, which holds the
-whole file's outline, and a piece carries only the parts of the calls it
-asks. A request already
+their questions together, so its source goes out about once; a definition
+too long for a request is cut at its lines, and a line too long alone, such
+as a minified bundle's or a generated JSON file's, at character boundaries.
+A piece of a cut line says which characters it holds: its `chunk` gives its
+first and last lines and, as `characters`, how many characters of its first
+line come before it and how many of its last line it reaches, the line
+break not counted. A question about a definition, a block or a reference
+goes in the piece that holds its line, and on a cut line a definition's in
+the piece that holds its signature. One about the whole file goes in the
+first piece, which holds the whole file's outline, and in any piece asked
+about nothing it holds, so every character is read; their answers combine
+by the bytes each piece read. A piece carries only the parts of the calls
+it asks. A link question offers every candidate within 3,000 tokens, a
+tenth of a request; one with more offers the nearest to the file asking,
+by shared folders, as many as fit, and its answer is held under all of the
+reference's candidates, as the graph finds it. A folder names each
+subfolder's files within an eighth of its parts' room and counts the rest,
+and a folder whose parts don't fit one request is asked in several, each
+with a run of its parts (`partsHeld`) and the questions about them; the
+folder's own questions go with the first. A request already
 answered (the store's `calls` table, by the request's hash) is never sent
 again. A fresh answer replaces the one held for a node's lineage (the
 `held` table) only when it clearly differs: a choice by 0.2, a score by
@@ -622,8 +636,8 @@ key and which most needs work, and scores the file's own concepts. A file's weak
 and importance (the journal chooses them; see `docs/design-system.md`), so
 files have no picks of their own. A file too long
 for one request is cut at its top-level definitions; the whole-file
-questions go only in the first piece, so they don't take room from the
-others. Definitions whose role is
+questions go in the first piece and in any piece asked about nothing it
+holds, so they take no room from the others. Definitions whose role is
 data or markup (a CSS rule, a Markdown section, a JSON key) are never asked.
 Every request ends with a choice of what more would help: where it is used,
 the source of what it calls, its tests, or its folder's docs. Each reading
