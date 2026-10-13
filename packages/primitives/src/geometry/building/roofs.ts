@@ -253,7 +253,7 @@ function chimney(stack: PartBuilder, plan: BuildingPlan, f: RoofFrame, wanted: "
 }
 
 /** A few soft puffs that the smoke shader lifts, spreads and fades. Each fades away as vitality falls. */
-function smoke(b: PartBuilder, at: V3, r: Rand): void {
+export function smoke(b: PartBuilder, at: V3, r: Rand): void {
   const puffs = 7;
   for (let i = 0; i < puffs; i++) {
     const size = 0.42 + 0.18 * r.next();
