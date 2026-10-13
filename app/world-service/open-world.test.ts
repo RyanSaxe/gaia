@@ -39,6 +39,7 @@ function heldEngine(): { engine: EngineClient; held: (() => void)[] } {
     "jev.estimate": ({ requests }) => ({ endpoint: "held", requests: requests.length, questions: 0, bytes: 0, estimatedTokens: 0, estimatedUsd: 0, usdPerMillionInputTokens: 0, concurrency: 8, live: true }),
     // The proving ground's graph, with nothing judged and nothing to understand.
     "project.graph": () => graph,
+    "understanding.next": () => ({ sent: 0, failed: 0, left: 0, settled: [], quality: {} }),
     "understanding.plan": () => ({
       pending: [],
       estimate: { endpoint: "held", requests: 0, questions: 0, bytes: 0, estimatedTokens: 0, estimatedUsd: 0, usdPerMillionInputTokens: 0, concurrency: 8, live: true },

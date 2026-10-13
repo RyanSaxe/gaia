@@ -126,9 +126,8 @@ const plural = (n: number, one: string, many = `${one}s`): string => `${n.toLoca
 export async function openWorld({ engine, root, consent, progress }: OpenWorldOptions): Promise<WorldDocument> {
   progress({ stage: "reading", root });
   // The land, outlined as the finished map draws it, every file's patch and every entity's lot, as soon as the graph
-  // exists: every definition, with whatever stand Jev's held answers already give it. The facts the layout and
-  // the looks read is the graph's own (`factsOf`). Planning what understanding still has to ask takes longer, so
-  // it comes after, while the wait draws the borders.
+  // exists: every definition, with whatever stand Jev's held answers already give it. The facts the layout and the
+  // looks read are the graph's own (`factsOf`).
   let judged = await engine.call("project.graph", { root, judged: true });
   let graph = judgedGraph(judged);
   const facts = factsOf(graph);
@@ -137,8 +136,10 @@ export async function openWorld({ engine, root, consent, progress }: OpenWorldOp
   const land = landOf(facts, graph);
   progress({ stage: "land", name, size: land.size, ...(land.aspect === undefined ? {} : { aspect: land.aspect }), areas: outlinesOf(land).areas, patches: land.patches.map(({ path, name, area, x, z, radius }) => ({ path, name, area, x, z, radius })), lots: land.lots });
   // What understanding still has to ask, going only as far as the world needs to stand: Jev's links and every
-  // definition's stand.
-  const understanding = await engine.call("understanding.plan", { root });
+  // definition's stand. Planning it all takes seconds the wait would sit still through, and only says what judging will
+  // cost, so it is planned only when there is a limit to weigh that against; otherwise the pass finds its own way.
+  const limitUsd = await spendLimit(engine);
+  const understanding = Number.isFinite(limitUsd) ? await engine.call("understanding.plan", { root }) : null;
   // Each file's request names the definitions the graph stands on its patch, as the layout stands them.
   const planned = planWorldRequests(facts, LOOKS, { graph });
   const keys = planned.map((p) => requestKey(p.request));
@@ -158,27 +159,34 @@ export async function openWorld({ engine, root, consent, progress }: OpenWorldOp
   const { records } = await engine.call("store.read", { project, table: "answers" });
   const stored = new Map(Object.entries(records as Record<string, JevResponse>));
   const missing = planned.filter((_, i) => !stored.has(keys[i] as string));
-  const toUnderstand = understanding.pending.reduce((n, p) => n + p.requests, 0);
+  /** How many understanding requests are pending, when it was planned. */
+  const toUnderstand = understanding === null ? null : understanding.pending.reduce((n, p) => n + p.requests, 0);
   // What goes to Jev: understanding's share is planned before Jev's links are in, so it settles to what was sent.
-  let total = missing.length + toUnderstand;
+  let total = missing.length + (toUnderstand ?? 0);
 
   // Whether Jev is asked about the things it has not judged or understood yet, and if not, why.
   let ask = false;
   let why = "";
-  if (total > 0) {
+  /** How many looks go to Jev at once: as many as the engine sends it at once. */
+  let concurrency = 1;
+  if (total > 0 || toUnderstand === null) {
     const status = await engine.call("jev.status", {});
     if (!status.live) why = "Jev is off; start Gaia with GAIA_JEV=live to ask it";
     else if (!status.key) why = "no OpenRouter key in the Keychain (gaia-openrouter)";
     else {
       const judging = missing.length > 0 ? await engine.call("jev.estimate", { requests: missing.map((p) => p.request) }) : undefined;
+      concurrency = judging?.concurrency ?? understanding?.estimate.concurrency ?? 1;
       const estimate = {
-        endpoint: judging?.endpoint ?? understanding.estimate.endpoint,
-        requests: (judging?.requests ?? 0) + understanding.estimate.requests,
-        estimatedTokens: (judging?.estimatedTokens ?? 0) + understanding.estimate.estimatedTokens,
-        estimatedUsd: (judging?.estimatedUsd ?? 0) + understanding.estimate.estimatedUsd,
+        endpoint: judging?.endpoint ?? understanding?.estimate.endpoint ?? "",
+        requests: (judging?.requests ?? 0) + (understanding?.estimate.requests ?? 0),
+        estimatedTokens: (judging?.estimatedTokens ?? 0) + (understanding?.estimate.estimatedTokens ?? 0),
+        estimatedUsd: (judging?.estimatedUsd ?? 0) + (understanding?.estimate.estimatedUsd ?? 0),
       };
-      const limitUsd = await spendLimit(engine);
-      console.log(`gaia: ${name}: ${estimate.requests} requests to judge, about ${estimate.estimatedTokens} tokens, $${estimate.estimatedUsd.toFixed(4)} (${Number.isFinite(limitUsd) ? `limit $${limitUsd}` : "no limit"})`);
+      console.log(
+        understanding === null
+          ? `gaia: ${name}: ${estimate.requests} looks to judge, about ${estimate.estimatedTokens} tokens, $${estimate.estimatedUsd.toFixed(4)}, and the understanding pass as it goes (no limit)`
+          : `gaia: ${name}: ${estimate.requests} requests to judge, about ${estimate.estimatedTokens} tokens, $${estimate.estimatedUsd.toFixed(4)} (limit $${limitUsd})`,
+      );
       if (estimate.estimatedUsd <= limitUsd) ask = true;
       else {
         // Past the limit the person decides; choosing the stand-in is remembered for the project until the limit changes.
@@ -283,17 +291,21 @@ export async function openWorld({ engine, root, consent, progress }: OpenWorldOp
   };
   // As many looks at once as the engine sends Jev at once: `engineJev` gathers each round into one batch, and the
   // engine serves one call at a time, so fewer in flight only makes the looks, and the names they letter, wait.
-  const judgments = await judgeWorld(facts, LOOKS, jev, { graph, concurrency: understanding.estimate.concurrency });
+  const judgments = await judgeWorld(facts, LOOKS, jev, { graph, concurrency });
   await new Promise((resolve) => setTimeout(resolve, 0));
   await Promise.all(writes);
 
   // Then the understanding pass, a slice at a time, until nothing is left or a slice moves nothing, as when Jev
   // refuses every request in it; the world is laid out on the importance and quality it leaves.
-  if (ask && toUnderstand > 0) {
+  if (ask && (toUnderstand ?? 1) > 0) {
     let understood = 0;
     for (;;) {
       const slice = await engine.call("understanding.next", { root });
-      // Each file the slice settled is washed in now, at the quality the world will show.
+      // What the slice read, so the wait can show which code Jev has just been through, then each file it settled for
+      // good, washed in at the quality the world will show.
+      const files = slice.settled.flatMap((id) => (id.startsWith("file:") ? [id.slice(5)] : []));
+      const areas = slice.settled.flatMap((id) => (id.startsWith("dir:") ? [id.slice(4)] : []));
+      if (files.length > 0 || areas.length > 0) progress({ stage: "understood", files, areas });
       for (const [path, quality] of Object.entries(slice.quality)) settleHealth(path, quality);
       sendHealth();
       understood += slice.sent + slice.failed;
@@ -305,8 +317,11 @@ export async function openWorld({ engine, root, consent, progress }: OpenWorldOp
     }
     total = missing.length + understood;
     asking();
-    judged = await engine.call("project.graph", { root, judged: true });
-    graph = judgedGraph(judged);
+    // The pass changed what the graph holds only if it asked something.
+    if (understood > 0) {
+      judged = await engine.call("project.graph", { root, judged: true });
+      graph = judgedGraph(judged);
+    }
   }
 
   const byThing = Object.fromEntries(planned.flatMap((p, i) => thingsOf(p).map((t) => [judgedThing(t), judges.get(keys[i] as string) ?? "stand-in"] as const)));
