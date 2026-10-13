@@ -137,7 +137,7 @@ describe("travel along the trails", { timeout: 20_000 }, () => {
     expect(Math.max(...steps.map((s) => s.v))).toBeGreaterThan(TRAVEL.pace);
   });
 
-  it("goes straight across the land around deep water, wading only the shallows, and around what stands", () => {
+  it("goes straight across the land out of the water and around what stands", () => {
     const pond = t.ponds[0] as (typeof t.ponds)[number];
     const from = { x: pond.x - pond.reach * 2.5, z: pond.z };
     const to = { x: pond.x + pond.reach * 2.5, z: pond.z };
@@ -167,6 +167,17 @@ describe("travel along the trails", { timeout: 20_000 }, () => {
       }
       expect(length).toBeLessThan(Math.hypot(to.x - from.x, to.z - from.z) * 2.5);
     }
+  });
+
+  it("goes at walking pace wherever it wades, and a little either side", () => {
+    // A stretch of the way, 200 to 230 m along it, said to be in water.
+    const trip = planTrip(way, { start: 0, end: 0 });
+    const along: number[] = [0];
+    for (let i = 1; i < way.length; i++) along.push((along[i - 1] as number) + Math.hypot((way[i] as Walker).x - (way[i - 1] as Walker).x, (way[i] as Walker).z - (way[i - 1] as Walker).z));
+    const wet = new Set(way.filter((_, i) => (along[i] as number) >= 200 && (along[i] as number) <= 230).map((p) => `${Math.round(p.x)},${Math.round(p.z)}`));
+    const wading = planTrip(way, { start: 0, end: 0 }, null, TRAVEL.pace, (x, z) => wet.has(`${Math.round(x)},${Math.round(z)}`));
+    for (const s of take(wading, wading.heading[0] as number)) if (s.s > 202 && s.s < 228) expect(s.v).toBeLessThanOrEqual(TRAVEL.ford + 1e-6);
+    expect(Math.max(...take(trip, trip.heading[0] as number).filter((s) => s.s > 202 && s.s < 228).map((s) => s.v))).toBeGreaterThan(TRAVEL.ford);
   });
 
   it("goes no faster than a hurried walk off the tread", () => {
