@@ -393,15 +393,19 @@ export function buildMoss(p: Resolved<typeof mossParams>, ctx: BuildContext, bas
       const lift = 0.004 + g.thick * smoothstep(0.15, 0.75, m) * Math.max(0.3, lump);
       const at: V3 = [q[0] + n[0] * lift, q[1] + n[1] * lift, q[2] + n[2] * lift];
       const jitter = clamp(0.5 + 0.9 * fbm3(q[0] * 6.3, q[1] * 6.3, q[2] * 6.3, seed + 23, 2), 0, 1);
-      // On a stone that slumps in decline, moss rides along with it.
+      // Moss rides its stone through every way it declines: a slump, a fall, a shed piece, a piece growing in.
       const sag = part.channels.droop[i] as number;
       const pivot: V3 = [part.channels.pivot[i * 3] as number, part.channels.pivot[i * 3 + 1] as number, part.channels.pivot[i * 3 + 2] as number];
+      const fall = part.channels.fall;
+      const grow = part.channels.grow?.[i] ?? 0;
       const v = out.vertex(
         at,
         n,
         g.shade + 0.18 * m + 0.12 * (lump - 1) + 0.08 * n[1],
         {
-          loss: 0,
+          loss: part.channels.loss[i] as number,
+          ...(fall !== undefined && (fall[i * 4 + 3] ?? 0) > 0 ? { fall: [fall[i * 4] as number, fall[i * 4 + 1] as number, fall[i * 4 + 2] as number, fall[i * 4 + 3] as number] as const } : {}),
+          ...(grow > 0 ? { grow } : {}),
           droop: sag,
           wither: 0.85,
           glow: 0,
