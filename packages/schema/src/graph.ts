@@ -38,6 +38,21 @@ export interface DirNode extends NodeBase {
   readonly kind: "dir";
   /** "" for the root. */
   readonly path: string;
+  /** The package, crate, module, app or service rooted here. */
+  readonly entity?: Entity;
+}
+
+/** What a directory is the root of, as its manifest, or its index, main or server file, says. */
+export interface Entity {
+  /** The manifest's name, else the directory's. */
+  readonly name: string;
+  readonly form: "package" | "crate" | "module" | "app" | "service";
+  /** The file that declares it, such as package.json; absent for a module. */
+  readonly manifest?: string;
+  /** The file that defines its public surface, such as src/index.ts. */
+  readonly entry?: string;
+  /** The manifest's description, else the entry's leading comment. */
+  readonly doc?: string;
 }
 
 export interface FileNode extends NodeBase {
@@ -52,6 +67,10 @@ export interface FileNode extends NodeBase {
   readonly unparsed: number;
   /** Language conventions its path matches, such as "go:test-file". Evidence in Jev's state, never a rule. */
   readonly conventions: readonly string[];
+  /** What part it plays, by its name and language; a file with no text is data. */
+  readonly part: "source" | "test" | "config" | "data" | "docs" | "script";
+  /** Its leading comment. */
+  readonly doc?: string;
 }
 
 export interface DefNode extends NodeBase {
@@ -68,6 +87,8 @@ export interface DefNode extends NodeBase {
   /** Text up to the body, whitespace collapsed, cut at 240 characters. */
   readonly signature: string;
   readonly doc?: string;
+  /** Its file exports it: `export` in TypeScript and JavaScript, `pub` in Rust. */
+  readonly exported: boolean;
 }
 
 export interface BlockNode extends NodeBase {
@@ -161,6 +182,8 @@ export interface History {
   readonly commits: number;
   /** Commits in the last 14 days. */
   readonly recent: number;
+  /** Commits in the last 30 days. */
+  readonly month: number;
   readonly authors: number;
 }
 

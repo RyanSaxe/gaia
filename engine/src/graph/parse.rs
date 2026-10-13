@@ -40,6 +40,8 @@ pub struct Def {
     pub span: Span,
     pub signature: String,
     pub doc: Option<String>,
+    /// Its file exports it (`exported`).
+    pub exported: bool,
     pub measures: Measures,
     /// It takes parameters, or its role says it runs.
     pub callable: bool,
@@ -413,6 +415,27 @@ fn doc_above(def: Node, src: &str) -> Option<String> {
     lines.reverse();
     let doc = lines.join(" ").trim().to_string();
     (!doc.is_empty()).then_some(doc)
+}
+
+/// Whether a definition's file exports it: wrapped to its end in an `export`
+/// (TypeScript, JavaScript), or declared `pub` (Rust). Other languages
+/// export by convention, which only Jev reads.
+fn exported(def: Node, src: &str) -> bool {
+    let mut node = def;
+    while let Some(p) = node.parent() {
+        // A wrapper ends where the definition does, or one `;` after it (`export const f = () => {};`).
+        let tail = src.get(def.end_byte()..p.end_byte()).unwrap_or("x");
+        if !(tail.is_empty() || tail == ";") || p.parent().is_none() {
+            break;
+        }
+        if p.kind().contains("export") {
+            return true;
+        }
+        node = p;
+    }
+    let mut c = def.walk();
+    def.children(&mut c)
+        .any(|ch| ch.kind() == "visibility_modifier" && text(ch, src).starts_with("pub"))
 }
 
 /// The operator a logical expression applies, so runs of the same one count once.
@@ -959,6 +982,7 @@ pub fn parse(lang: &Loaded, src: &str) -> Result<FileParse, String> {
             span: span_of(*node),
             signature: signature(*node, functions[i], src),
             doc,
+            exported: exported(*node, src),
             measures,
         });
     }
