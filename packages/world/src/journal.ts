@@ -36,7 +36,7 @@ export interface JournalEntry {
   readonly page: number;
   /** How many pages its words take from `page` on: a list too long for one runs on overleaf. */
   readonly pages: number;
-  /** Rows its first page gives to snippets of its best and worst definitions, before its list; absent when none. */
+  /** Rows its first page gives to snippets of its best and worst parts (a file's definitions, a folder's files), before its list; absent when none. */
   readonly lead?: number;
 }
 
@@ -55,7 +55,7 @@ export interface Journal {
 export interface PageRoom {
   readonly first: number;
   readonly next: number;
-  /** Rows a file's first page gives to snippets of its best and worst definitions, when it holds two or more. */
+  /** Rows a first page gives to snippets of its best and worst parts: a file's definitions or a folder's files, when it holds two or more. */
   readonly lead?: number;
 }
 
@@ -144,8 +144,10 @@ export function journalOf(world: JournalSource, room: PageRoom = { first: Infini
   let picture = 0;
   const add = (item: Item, under: string | undefined, lists: readonly Item[]): void => {
     const rows = rowsOf(item, lists);
-    // A file with two definitions or more leads with snippets of its best and worst, which take rows of its first page.
-    const lead = item.kind === "file" && rows - 1 >= 2 ? (room.lead ?? 0) : 0;
+    // A file with two definitions or more, or a folder with two files or more, leads with snippets of its best and worst,
+    // which take rows of its first page.
+    const parts = item.kind === "file" ? rows - 1 : item.kind === "chapter" ? (files.get(item.of)?.length ?? 0) : 0;
+    const lead = parts >= 2 ? (room.lead ?? 0) : 0;
     const pages = pagesFor(rows + lead);
     const text = item.kind === "entity" ? readmes.get(item.of.slice("entity:".length)) : undefined;
     const entry: JournalEntry = { ...item, ...(under === undefined ? {} : { under }), lists: lists.map((l) => l.of), ...(text === undefined ? {} : { text }), page: picture + 1, pages, ...(lead > 0 ? { lead } : {}) };

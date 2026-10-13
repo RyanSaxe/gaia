@@ -708,11 +708,13 @@ and its importance. Each row of a list carries its quality the same way.
 The caption under a thing's picture gives each concept of quality Jev
 answered as a percentage, and leaves out one whose answer doesn't count.
 A file's first page leads with snippets of its best and worst definitions,
-chosen by quality weighed by importance: each its first line and the block
-Jev picked, with the lines around folded into marks that say how many, and
-a tap turns to its page. What needs work most comes first when the file is
-below the world's median quality, its finest first otherwise. A long
-definition's page opens on the same block. Jev's marks are brush strokes
+and a folder's with its best and worst files, each shown by its own best
+or worst definition, all chosen by quality weighed by importance: each its
+first line and the block Jev picked, with the lines around folded into
+marks that say how many, and a tap turns to its page. What needs work most
+comes first when the page is below the world's median quality, its finest
+first otherwise. A long definition's page opens on the same block. Its
+appendix is the code alone, with the same marks. Jev's marks are brush strokes
 in the gutter or beside a row: green for the key part, russet for what
 needs work most, slate blue for the finest.
 

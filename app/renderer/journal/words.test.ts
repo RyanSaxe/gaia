@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { journalOf, ownOf } from "@gaia/world";
 import { captionOf, conceptsCaption } from "./caption.ts";
-import { type Judgment, type WordsSource, contentsWords, leadOf, proseOf, wordsOf } from "./words.ts";
+import { type Judgment, type WordsSource, appendixWords, contentsWords, leadOf, proseOf, wordsOf } from "./words.ts";
 import type { JudgedThing } from "../../world-service/protocol.ts";
 
 const MATH = "core/math.ts";
@@ -133,6 +133,36 @@ describe("what a journal page says", () => {
     const big = wordsOf(src, src.journal.entry(`${OPS}#big`)!);
     expect(big.body).toMatchObject({ kind: "code", opensAt: 10 });
     expect(big.body.kind === "code" && big.body.marks.map((m) => [m.kind, m.from, m.to])).toEqual([["improve", 10, 12], ["finest", 20, 22]]);
+    // Its appendix is the code alone, with the same marks and no table of answers.
+    const full = appendixWords(src, src.journal.entry(`${OPS}#big`)!);
+    expect(full.body).toMatchObject({ kind: "full", said: [] });
+    expect(full.body.kind === "full" && full.body.marks.map((m) => m.kind)).toEqual(["improve", "finest"]);
+  });
+
+  it("leads a folder with its best and worst files weighed by importance, each shown by its own best or worst definition", () => {
+    const A = "core/a.ts";
+    const B = "core/b.ts";
+    const two = {
+      name: "demo",
+      areas: [{ path: "", name: "demo", parent: null }, { path: "core", name: "core", parent: "" }],
+      patches: [{ path: A, name: "a.ts", area: "core" }, { path: B, name: "b.ts", area: "core" }],
+      symbols: [
+        { id: `${A}#good`, file: A, name: "good", line: 1, lines: 4 },
+        { id: `${A}#fine`, file: A, name: "fine", line: 6, lines: 4 },
+        { id: `${B}#bad`, file: B, name: "bad", line: 1, lines: 4 },
+        { id: `${B}#ok`, file: B, name: "ok", line: 6, lines: 4 },
+      ],
+    };
+    const text = Array.from({ length: 10 }, (_, i) => `line ${i + 1}`);
+    const t = (quality: number, importance: number): JudgedThing => ({ quality, importance, concepts: {}, picks: {} });
+    const things: Record<string, JudgedThing> = { core: t(0.6, 0.8), [A]: t(0.9, 0.7), [B]: t(0.4, 0.8), [`${A}#good`]: t(0.95, 0.6), [`${A}#fine`]: t(0.7, 0.3), [`${B}#bad`]: t(0.2, 0.9), [`${B}#ok`]: t(0.8, 0.2) };
+    const src: WordsSource = { journal: journalOf(two, { first: 18, next: 21, lead: 11 }), world: two, vitality: (of) => things[of]?.quality ?? 1, lines: () => text, thing: (of) => things[of], median: 0.7 };
+    const core = wordsOf(src, src.journal.entry("core")!);
+    // Below the median, the folder leads with its worst file, b.ts, shown by bad; then its best, a.ts, shown by good.
+    expect(core.body.kind === "rows" && core.body.lead?.map((s) => [s.of, s.kind, s.signature.text])).toEqual([
+      [B, "improve", "line 1"],
+      [A, "finest", "line 1"],
+    ]);
   });
 
   it("captions what the understanding pass judged with each concept as a percentage, leaving out an answer that doesn't count", () => {
