@@ -318,6 +318,23 @@ joins and widens below. Its valley is carved along that whole course, with
 the cross-section and winding Jev chose for its area (`routeRivers` in
 `@gaia/terrain`).
 
+A pick on the map sends the person along the trails rather than jumping
+them (`travelStep` in `@gaia/terrain`, every number in its `TRAVEL` table;
+round 23's travel thread). The trip walks around whatever stands between
+them and the nearest tread, follows the shortest way along the ways to the
+tread nearest the place, and leaves it for the place. It hurries at 20 m a
+second on the tread and 8 off it, gets going and slows at a steady 6 m a
+second squared, and takes each bend slowly enough that the way 12 m ahead
+turns at most 80% of a held key's 60° a second, so the view turns only as
+the person could have turned it, never faster and never easing. Facing
+away, the view first turns at that same rate, and the body sets off once it
+faces the way. A drag looks out to the side while the trip carries on, and
+the view follows the way again once it looks along it. Any key, or a tap on
+the world, takes over: the trip slows at 9 m a second squared to walking
+pace and hands the person to the walk. Nearer than 120 m the trip walks
+straight there. Sent by a picture in the journal, it ends facing the thing,
+turning there at the same rate. Where no trail goes, the map still jumps.
+
 A winding valley swings about ±20 m to either side once every 250 m, a
 whole swing every four of its own widths, carrying its floor and stream with it: a straight
 one barely bends and a strongly meandering one swings up to ±30 m, never
@@ -722,10 +739,12 @@ finger and keys all follow the same three rules.
   or the minimap's land (or M) opens the journal at its map, a tap on the
   minimap's edge tucks it away, "/" lays the journal's finder over the
   world, and the compass opens the slip. A tap on the open map
-  is the one way to travel far at once: it is a paper action, so it belongs
-  to the map, never to the world. While the land there is made ready, the
-  paper that covers the view is the map around the place, coming slowly
-  closer, so a jump never shows a blank sheet.
+  is the one way to send the person far: it is a paper action, so it belongs
+  to the map, never to the world. The map folds away and the person travels
+  there along the trails (Terrain, travel). Where no trail goes they jump:
+  while the land there is made ready, the paper that covers the view is the
+  map around the place, coming slowly closer, so a jump never shows a blank
+  sheet.
 - **Paper you open holds the world still.** While the map or the slip is
   open, the world waits under a faint wash. A tap there folds the paper and
   moves no one, a drag there does nothing, and Esc folds it. The keys still
