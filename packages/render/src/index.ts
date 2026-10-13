@@ -1,5 +1,6 @@
 export * from "./light.ts";
 export * from "./plant.ts";
+export * from "./batch.ts";
 export * from "./shadow.ts";
 export * from "./clearings.ts";
 export * from "./instances.ts";

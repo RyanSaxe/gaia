@@ -1011,10 +1011,11 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     tile(ti, tj) {
       const here = settlement.buildings.filter((b) => tileKeyOf(b.site.x, b.site.z) === `${ti},${tj}`);
       // A building far off has no meshes: its build is made on a worker before its tile stands.
-      const missing = here.flatMap((b) => (b.view === null ? [b.ask] : []));
+      const missing = here.flatMap((b) => (b.standing === null ? [b.ask] : []));
       return missing.length === 0 ? here : makeAhead(missing).then(() => here);
     },
-    stand: (held) => settlement.stand(held, scene),
+    // Each tile's buildings stand together as one batch, drawn a call per material.
+    stand: (held) => settlement.stand(held, scene, (b) => tileKeyOf(b.site.x, b.site.z)),
   });
   standing.add<number>({
     name: "landmarks",
@@ -1482,7 +1483,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     }
     const land = groundHit(ray);
     const tree = treeHit(ray);
-    const building = raycaster.intersectObjects(settlement.views().map((v) => v.object), true)[0];
+    const building = settlement.pick(raycaster);
     const rise = code === null ? undefined : raycaster.intersectObjects(landmarkViews.map((v) => v.object), true)[0];
     const riseAt = rise === undefined ? undefined : landmarkViews.findIndex((v) => v.object.getObjectById(rise.object.id) !== undefined);
     const riseSite = riseAt === undefined ? undefined : ways.sites[riseAt]?.site;
@@ -1492,7 +1493,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     const hits = [
       ...(thing === null || symbol === undefined ? [] : [{ distance: thing.distance, subject: symbol }]),
       ...(tree === null ? [] : [{ distance: tree.distance, subject: subjects.find((s) => s.x === tree.tree.x && s.z === tree.tree.z) }]),
-      ...(building === undefined ? [] : [{ distance: building.distance, subject: subjects.find((s) => settlement.buildings.some((b) => b.view?.object.getObjectById(building.object.id) !== undefined && b.view !== null && s.x === b.site.x && s.z === b.site.z)) }]),
+      ...(building === undefined ? [] : [{ distance: building.distance, subject: subjects.find((s) => s.x === building.building.site.x && s.z === building.building.site.z) }]),
       ...(sign === undefined ? [] : [{ distance: sign.distance, subject: signSubjects[sign.instanceId ?? -1] }]),
       ...(rise === undefined || riseSite === undefined ? [] : [{ distance: rise.distance, subject: subjects.find((s) => s.x === riseSite.x && s.z === riseSite.z) }]),
     ].sort((a, b) => a.distance - b.distance);
@@ -1978,7 +1979,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   let travelPace: number = TRAVEL.pace;
   const detailEye = new THREE.Vector3();
   const shadowCenter = new THREE.Vector3();
-  const views = (): PlantView[] => [...treeViews, ...settlement.views(), ...landmarkViews, ...(built?.views ?? [])];
+  const views = (): Pick<PlantView, "object" | "useDepth">[] => [...treeViews, ...settlement.views(), ...landmarkViews, ...(built?.views ?? [])];
   const lanternEye = new THREE.Vector3();
   // The water mirrors the sky, the coarse ground, trees and the cottage, and
   // never grass or the understory: its reflection is soft, so fine detail
@@ -2755,7 +2756,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     hook: {
       cottage: () => {
         const b = settlement.buildings[0];
-        return b === undefined ? null : { ...b.site, triangles: b.view?.triangles ?? 0, width: b.plan.width, depth: b.plan.depth };
+        return b === undefined ? null : { ...b.site, triangles: b.triangles, width: b.plan.width, depth: b.plan.depth };
       },
       /** Each standing landmark: its name, site, height and triangles. */
       landmarks: () =>
@@ -2812,7 +2813,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
         })),
       /** Every building: what it stands for, where, and its vitality now. */
       buildings: () =>
-        settlement.buildings.map((b) => ({ name: b.represented.name, building: b.kindName, ...b.site, width: b.plan.width, depth: b.plan.depth, triangles: b.view?.triangles ?? 0, vitality: b.vitality, sign: settlement.signOf(b), stand: settlement.standOf(b) })),
+        settlement.buildings.map((b) => ({ name: b.represented.name, building: b.kindName, ...b.site, width: b.plan.width, depth: b.plan.depth, triangles: b.triangles, vitality: b.vitality, sign: settlement.signOf(b), stand: settlement.standOf(b) })),
       /** Sets building `i`'s vitality, and its sign's. */
       vitality: (i: number, v: number) => {
         const b = settlement.buildings[i];
