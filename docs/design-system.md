@@ -673,7 +673,9 @@ finger and keys all follow the same three rules.
   minimap's edge tucks it away, "/" lays the journal's finder over the
   world, and the compass opens the slip. A tap on the open map
   is the one way to travel far at once: it is a paper action, so it belongs
-  to the map, never to the world.
+  to the map, never to the world. While the land there is made ready, the
+  paper that covers the view is the map around the place, coming slowly
+  closer, so a jump never shows a blank sheet.
 - **Paper you open holds the world still.** While the map or the slip is
   open, the world waits under a faint wash. A tap there folds the paper and
   moves no one, a drag there does nothing, and Esc folds it. The keys still
@@ -691,7 +693,13 @@ the wheel, turns one page a gesture, however long its momentum runs, and
 the arrow keys turn one at a time. Where no page lies that way, on the
 first spread's left and the last spread's right, the edge lies flat and
 leaves a click to what is under it, and nothing turns. Nothing marks the
-edges, which are paper like the rest of the page.
+edges, which are paper like the rest of the page. A page is never turned
+to before it is whole, its code and its painting come, and nothing on a page
+changes once it is seen. While the page asked for is still being made, the
+book leafs slowly through pages that are whole already (the contents, a
+folder's list, code that has come), the way a reader looks for a page, and
+turns to it once it is whole. A book opened at a page still being made
+opens at the map and leafs on to it.
 
 A page of the journal gives every score as a percentage, so it reads as a
 share of 0 to 1. Beside a thing's name stand two numbers in the hand, each

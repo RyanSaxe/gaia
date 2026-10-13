@@ -465,6 +465,14 @@ details.json pre { font: 11px/1.45 ui-monospace, "SF Mono", Menlo, monospace; ba
   filter: sepia(calc(var(--night, 0) * 0.3)) brightness(calc(1 - var(--night, 0) * 0.45));
 }
 .jump-cover.on { opacity: 1; pointer-events: auto; transition: opacity 0.42s ease-in; }
+/* The map of where a jump lands, on the paper that covers it, coming slowly closer to the place while the land there is
+   made ready, so the view never sits still; it keeps drifting as the paper lifts into the world. */
+.jump-map {
+  position: absolute; inset: 0; width: 100%; height: 100%; transform-origin: 50% 50%;
+  animation: jump-closer 90s cubic-bezier(0.2, 0.35, 0.45, 1) forwards, jump-drift 23s ease-in-out infinite alternate;
+}
+@keyframes jump-closer { from { scale: 1; } to { scale: 1.6; } }
+@keyframes jump-drift { from { translate: -6px -4px; } to { translate: 6px 4px; } }
 
 /* The slip: Gaia's mark, how to wander, and the way back to the lab. */
 .way-slip {
