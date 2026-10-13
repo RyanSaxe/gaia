@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { journalOf, ownOf } from "@gaia/world";
 import { conceptsCaption } from "./caption.ts";
-import { type WordsSource, appendixWords, contentsWords, leadOf, proseOf, wordsOf } from "./words.ts";
+import { type WordsSource, appendixWords, contentsWords, mostImportant, proseOf, wordsOf } from "./words.ts";
 import type { JudgedThing } from "../../world-service/protocol.ts";
 
 const MATH = "core/math.ts";
@@ -65,7 +65,7 @@ describe("what a journal page says", () => {
     });
   });
 
-  it("leads a file with its weak and best definitions weighed by importance, folded around Jev's blocks, and opens a definition below the median at what needs work most", () => {
+  it("leads a file with its most important definition, plain, folded around its key block; a definition's page is its code plain, and only the appendix marks Jev's blocks", () => {
     const OPS = "core/ops.ts";
     const ops = {
       name: "demo",
@@ -84,36 +84,33 @@ describe("what a journal page says", () => {
       [`${OPS}#tiny`]: { quality: 0.99, importance: 0.05, concepts: {}, picks: {} },
       [`${OPS}#mid`]: { quality: 0.8, importance: 0.6, concepts: {}, picks: { key: { start: 46, end: 47 } } },
     };
-    const src: WordsSource = { journal: journalOf(ops, { first: 18, next: 21, lead: 11 }), world: ops, vitality: (of) => things[of]?.quality ?? 1, lines: () => text, thing: (of) => things[of], median: 0.7 };
-    // The weak part is the file's heart, big; the best, the finest among what matters, is mid, not the tiny helper.
-    const parts = [`${OPS}#big`, `${OPS}#tiny`, `${OPS}#mid`];
-    expect(leadOf(src, OPS, parts)).toEqual({ best: `${OPS}#mid`, worst: `${OPS}#big` });
-    // A type is never the best, however clean and important.
-    const shape = { id: `${OPS}#Shape`, file: OPS, name: "Shape", kind: "type" as const, line: 51, lines: 3 };
-    const typed: WordsSource = { ...src, world: { ...ops, symbols: [...ops.symbols, shape] }, thing: (of) => (of === shape.id ? { quality: 0.99, importance: 0.95, concepts: {}, picks: {} } : things[of]) };
-    expect(leadOf(typed, OPS, [...parts, shape.id])).toEqual({ best: `${OPS}#mid`, worst: `${OPS}#big` });
-    // Nothing is its best unless it scores above the page itself.
-    const strong: WordsSource = { ...src, thing: (of) => (of === OPS ? { quality: 0.995, importance: 0.7, concepts: {}, picks: {} } : things[of]) };
-    expect(leadOf(strong, OPS, parts)).toEqual({ worst: `${OPS}#big` });
+    const src: WordsSource = { journal: journalOf(ops, { first: 18, next: 21, lead: 6 }), world: ops, vitality: (of) => things[of]?.quality ?? 1, lines: () => text, thing: (of) => things[of] };
+    // The one that matters most is big, by Jev's importance alone, however its quality reads.
+    expect(mostImportant(src, [`${OPS}#big`, `${OPS}#tiny`, `${OPS}#mid`])).toBe(`${OPS}#big`);
     const file = wordsOf(src, src.journal.entry(OPS)!);
     expect(file.importance).toBe(0.7);
-    // Below the world's median, the file leads with what needs work most, each snippet its first line and Jev's block.
-    expect(file.body.kind === "rows" && file.body.lead?.map((s) => [s.of, s.kind, s.signature.n, s.first, s.lines, s.before, s.after])).toEqual([
-      [`${OPS}#big`, "improve", 2, 10, ["line 10", "line 11", "line 12"], 7, 28],
-      [`${OPS}#mid`, "finest", 44, 46, ["line 46", "line 47"], 1, 3],
-    ]);
-    expect(file.body.kind === "rows" && file.body.rows.filter((r) => r.mark !== undefined).map((r) => [r.of, r.mark?.kind])).toEqual([[`${OPS}#big`, "improve"], [`${OPS}#mid`, "finest"]]);
-    // A long definition below the median opens at the block most in need, and marks each block Jev picked.
+    // The lead is big's first line and its key block, the rest folded; it shows big's code, and no row is marked.
+    expect(file.body.kind === "rows" && file.body.lead).toEqual({
+      of: `${OPS}#big`,
+      name: "big",
+      page: src.journal.entry(`${OPS}#big`)?.page,
+      shows: `${OPS}#big`,
+      signature: { n: 2, text: "line 2" },
+      first: 20,
+      lines: ["line 20", "line 21", "line 22"],
+      before: 17,
+      after: 18,
+    });
+    expect(file.body.kind === "rows" && file.body.rows.some((r) => "mark" in r)).toBe(false);
+    // A long definition's page opens at its key block, its code plain.
     const big = wordsOf(src, src.journal.entry(`${OPS}#big`)!);
-    expect(big.body).toMatchObject({ kind: "code", opensAt: 10 });
-    expect(big.body.kind === "code" && big.body.marks.map((m) => [m.kind, m.from, m.to])).toEqual([["improve", 10, 12], ["understand", 20, 22]]);
-    // Its appendix is the code alone, with the same marks.
+    expect(big.body).toMatchObject({ kind: "code", opensAt: 20, marks: [] });
+    // Its appendix is the code with Jev's marks: the block most in need first, then the key one.
     const full = appendixWords(src, src.journal.entry(`${OPS}#big`)!);
-    expect(full.body).toMatchObject({ kind: "full" });
-    expect(full.body.kind === "full" && full.body.marks.map((m) => m.kind)).toEqual(["improve", "understand"]);
+    expect(full.body.kind === "full" && full.body.marks.map((m) => [m.kind, m.from, m.to])).toEqual([["improve", 10, 12], ["understand", 20, 22]]);
   });
 
-  it("leads a folder with its best and worst files weighed by importance, each shown by its own best or worst definition", () => {
+  it("leads a folder with its most important file, shown by that file's most important definition", () => {
     const A = "core/a.ts";
     const B = "core/b.ts";
     const two = {
@@ -130,13 +127,26 @@ describe("what a journal page says", () => {
     const text = Array.from({ length: 10 }, (_, i) => `line ${i + 1}`);
     const t = (quality: number, importance: number): JudgedThing => ({ quality, importance, concepts: {}, picks: {} });
     const things: Record<string, JudgedThing> = { core: t(0.6, 0.8), [A]: t(0.9, 0.7), [B]: t(0.4, 0.8), [`${A}#good`]: t(0.95, 0.6), [`${A}#fine`]: t(0.7, 0.3), [`${B}#bad`]: t(0.2, 0.9), [`${B}#ok`]: t(0.8, 0.2) };
-    const src: WordsSource = { journal: journalOf(two, { first: 18, next: 21, lead: 11 }), world: two, vitality: (of) => things[of]?.quality ?? 1, lines: () => text, thing: (of) => things[of], median: 0.7 };
+    const src: WordsSource = { journal: journalOf(two, { first: 18, next: 21, lead: 6 }), world: two, vitality: (of) => things[of]?.quality ?? 1, lines: () => text, thing: (of) => things[of] };
     const core = wordsOf(src, src.journal.entry("core")!);
-    // Below the median, the folder leads with its worst file, b.ts, shown by bad; then its best, a.ts, shown by good.
-    expect(core.body.kind === "rows" && core.body.lead?.map((s) => [s.of, s.kind, s.signature.text])).toEqual([
-      [B, "improve", "line 1"],
-      [A, "finest", "line 1"],
-    ]);
+    // b.ts matters most of the folder's files, and bad most of b.ts's definitions.
+    expect(core.body.kind === "rows" && core.body.lead).toMatchObject({ of: B, name: "b.ts", shows: `${B}#bad`, signature: { text: "line 1" } });
+  });
+
+  it("lists what a package's folder holds on its page, and at its foot its trails by their way", () => {
+    const pkgs = {
+      name: "demo",
+      areas: [{ path: "", name: "demo", parent: null }, { path: "app", name: "app", parent: "" }, { path: "core", name: "core", parent: "" }, { path: "core/src", name: "src", parent: "core" }],
+      patches: [{ path: "core/package.json", name: "package.json", area: "core" }, { path: "app/main.ts", name: "main.ts", area: "app" }],
+      symbols: [],
+      things: [{ path: "app", name: "@demo/app" }, { path: "core", name: "@demo/core" }],
+      trails: [{ from: "app", to: "core" }],
+    };
+    const src: WordsSource = { journal: journalOf(pkgs), world: pkgs, vitality: () => 0.5, lines: () => undefined };
+    const core = wordsOf(src, src.journal.entry("entity:core")!);
+    expect(core.body.kind === "rows" && core.body.rows.map((r) => r.name)).toEqual(["src", "package.json"]);
+    expect(core.trails && { uses: core.trails.uses.map((r) => r.name), usedBy: core.trails.usedBy.map((r) => r.name) }).toEqual({ uses: [], usedBy: ["@demo/app"] });
+    expect(wordsOf(src, src.journal.entry("entity:app")!).trails?.uses.map((r) => r.of)).toEqual(["entity:core"]);
   });
 
   it("captions what the understanding pass judged with each concept as a percentage, leaving out an answer that doesn't count", () => {

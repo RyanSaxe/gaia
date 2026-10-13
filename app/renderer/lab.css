@@ -280,7 +280,8 @@ details.json pre { font: 11px/1.45 ui-monospace, "SF Mono", Menlo, monospace; ba
   position: absolute; inset: 0; z-index: 3; pointer-events: none;
   font-family: "Iowan Old Style", Georgia, "Times New Roman", serif;
 }
-.wayfinding button { pointer-events: auto; font-family: inherit; }
+/* Weightless, so a button that sets its own type, such as the journal's folds and references, keeps it. */
+:where(.wayfinding) button { pointer-events: auto; font-family: inherit; }
 /* Until the first world stands, the veil speaks alone; then the layer comes in as the veil lifts. */
 .wayfinding { opacity: 0; transition: opacity 0.9s ease 0.2s; }
 .wayfinding.standing { opacity: 1; }

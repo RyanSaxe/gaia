@@ -779,18 +779,21 @@ finger and keys all follow the same three rules.
 The open journal's pages turn the way a book's do. A click or a tap on bare
 paper turns that way, the right-hand page forward and the left back.
 Anything on a page that answers a click of its own keeps it: a row, a name,
-a fold, a way back, a map or a picture. The outer fifth of each page is its
+a block of code, a fold, a reference, a folder in the path, a trail's name,
+a map or a picture. The outer fifth of each page is its
 edge. It lifts a little under the pointer, and a click there turns the page,
-over a map or a picture too, though a row, a name, a fold or a way back
+over a map or a picture too, though a row, a name, a fold, a reference, a
+folder in the path or a trail's name
 under it keeps its click. A mouse can take a page by its edge and a finger
 anywhere, and either can draw it over. A swipe sideways on a trackpad, or
 the wheel, turns one page a gesture, however long its momentum runs, and
 the arrow keys turn one at a time. Where no page lies that way, on the
 first spread's left and the last spread's right, the edge lies flat and
-leaves a click to what is under it, and nothing turns. Nothing marks the
-edges, which are paper like the rest of the page. A page is never turned
-to before it is whole, its code and its painting come, and nothing on a page
-changes once it is seen. While the page asked for is still being made, the
+leaves a click to what is under it, and nothing turns. Nothing marks a
+page's edge, which is paper like the rest of the page.
+
+A page is never turned to before it is whole, its code and its painting
+come, and nothing on a page changes once it is seen. While the page asked for is still being made, the
 book leafs slowly through pages that are whole already (the contents, a
 folder's list, code that has come), the way a reader looks for a page, and
 turns to it once it is whole. A book opened at a page still being made
@@ -804,27 +807,46 @@ meter in ink. Each row of a list carries both the same way, smaller, each
 percentage at one width so the meters line up down the list.
 The caption under a thing's picture gives each concept of quality Jev
 answered as a percentage, and leaves out one whose answer doesn't count.
-A file's first page leads with snippets of its weak and best definitions,
-and a folder's with its weak and best files, each shown by its own weak or
-best definition. The weak part is the one most in need among what matters
-most (its lack of quality weighed by importance); the best is chosen from
-the rest, among code that runs (never a type) scoring above the page
-itself, by quality weighed by importance, so a page may have none. Each
-snippet is its first line and a block (the one Jev picked as weak, or its
-key block for the best), with the lines around folded into marks that say
-how many, and a tap turns to its page. The weak part comes first when the
-page is below the world's median quality, its best first otherwise. A long
-definition's page opens on its weak block when it is below the median, and
-on its key block otherwise. Its appendix is the code alone, with the same
-marks. The marks are brush strokes in the margin, left of the handwritten
-line numbers and their pencil rule, or beside a row: green for the key
-block, russet for the weak part, slate blue for a page's best. Each marked
-block is labeled in its stroke's color, **key**, **weak** or **best**, in a
-column of its own so the names after it line up. Every fold reads the same,
-"⋯ 20 lines" by hand where the code starts, and is a tap to its lines where
-they can be read elsewhere: around a snippet's block, before and after a
-definition's page, a definition folded in its file's text (with its page),
-and past what the appendix sets.
+
+A file's first page leads with one snippet, of the definition Jev judged
+most important, by Jev's importance alone. A folder's first page leads with
+its most important file, shown by that file's most important definition.
+The snippet shows the definition's first line and its key block, with the
+lines around folded, and carries no label and no stroke. A tap on its name
+turns to the page of the file or definition it stands for. The rows of a
+list carry no marks. A definition's page shows its code plain, and a long
+one opens on its key block.
+
+A building or landmark opens its package's page. It lists what the
+package's folder holds, its folders and then its files, and at its foot the
+package's trails by their way: under "uses" the packages it imports from,
+and under "used by" those that import from it, each name a tap to that
+package's page. A package whose folder has a README shows the README
+instead.
+
+The appendix is the one place Jev's marks appear. In its margin, left of
+the handwritten line numbers and their pencil rule, a green brush stroke
+marks the block Jev picked as key and a russet one the block it picked as
+most needing work. Each is labeled in its stroke's color, **key** or
+**weak**, in a column of its own.
+
+Every block of code on a page is a tap to the same code in full in the
+appendix, and a reference by hand under it says where:
+"→ in full, p. 5,475a". On a definition's page the reference stands at the
+page's foot, and the definition's name turns there too. The appendix numbers a
+definition's pages by its page in the journal and a letter (5,475a, 5,475b),
+and its first page carries the way back, "← back to its page, p. 5,475".
+Each folder in the path at the top of a page, in small capitals, is a tap to
+that folder's page, and in a definition's path the file is a tap to the
+file's page. Every fold reads the same, "⋯ 20 lines" by hand where the code
+starts, and is a tap to its lines where they can be read elsewhere: around a
+snippet's block, before and after a definition's page, a definition folded
+in its file's text (with its page), and past what the appendix sets.
+
+Over a painting, which is a tap to travel to its thing, the pointer becomes
+a pointing hand, and the painting's colors never change. Folds and
+references, though each is a tap, are written in the traveller's hand like
+the page's other notes.
 
 Nothing in the world lights up, rings or changes under a pointer: a thing
 looks the same whether or not a person could walk up to it, and the pointer
@@ -845,7 +867,7 @@ material language holds them (`map-styles.ts` is its data):
 | Paint | Watercolor washes in health's colors, pooling at their rims and bleeding wet in wet; hills shaded violet and lit warm | The map, the minimap, the wait |
 | Contours | Fine sepia lines from the real heights, every 1.2 m and every fifth heavier, drawn at the view's size so they look the same at every zoom: the map is a painted topographic map, so a person can read a rise before walking it; in the wild a little lighter on the bare paper | The map and the minimap, the land and the wild |
 | Ink | One brown-black ink for names, borders, marks and sketches, and for the wild past the land, drawn as an old survey draws country; areas' names in upright, widely spaced capitals as a survey map letters its regions, small names in italic, edged with a little paper, never boxed | Every name on every sheet; the wild |
-| Hand | The traveller's own notes, in a hand: a page's numbers, a line's number, and the name of the thing walked up to | The journal and the minimap's ring |
+| Hand | The traveller's own notes, in a hand: a page's numbers, a line's number, a fold, a reference to the appendix, and the name of the thing walked up to | The journal and the minimap's ring |
 | Vermilion | The traveller's own marks: their cloak, a spot picked on the map, the pencil ring round a thing walked up to | The map and the minimap |
 
 On the map, color means health and nothing else, so the map is a window
