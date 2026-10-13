@@ -23,30 +23,6 @@ use std::sync::OnceLock;
 
 const VOCAB: &str = include_str!("../../vocab/understanding.toml");
 
-/// A file's text, read once per process and again only when it changes on
-/// disk: every slice plans every request again, and the readings and the
-/// project's own words read the same files each time.
-fn read_text(ctx: &Ctx, path: &str) -> Option<std::sync::Arc<str>> {
-    use std::sync::{Arc, Mutex};
-    type Cache = HashMap<std::path::PathBuf, (std::time::SystemTime, u64, Arc<str>)>;
-    static CACHE: OnceLock<Mutex<Cache>> = OnceLock::new();
-    let full = ctx.root.join(path);
-    let meta = std::fs::metadata(&full).ok()?;
-    let stamp = (meta.modified().ok()?, meta.len());
-    let mut cache = CACHE
-        .get_or_init(|| Mutex::new(HashMap::new()))
-        .lock()
-        .ok()?;
-    if let Some((m, l, text)) = cache.get(&full)
-        && (*m, *l) == stamp
-    {
-        return Some(text.clone());
-    }
-    let text: Arc<str> = std::fs::read_to_string(&full).ok()?.into();
-    cache.insert(full, (stamp.0, stamp.1, text.clone()));
-    Some(text)
-}
-
 #[derive(Deserialize)]
 struct Parts {
     skip_roles: Vec<String>,
@@ -207,7 +183,7 @@ fn prose(ctx: &Ctx, dir: &str, budget: usize) -> Option<String> {
         .flatten()
         .filter(|f| f.language.as_deref() == Some("markdown") && !f.binary)
         .max_by_key(|f| f.bytes)?;
-    let text = read_text(ctx, &file.path)?;
+    let text = ctx.text(&file.path)?;
     let mut out = String::new();
     for line in text.lines() {
         if tokens(&out) + tokens(line) > budget {
@@ -345,7 +321,7 @@ fn more_question(out: &mut Vec<Question>, ctx: &Ctx, id: &str) {
 
 /// The lines around `line` in a file, numbered, `around` on each side.
 fn lines_around(ctx: &Ctx, path: &str, line: u32, around: u32) -> Option<String> {
-    let text = read_text(ctx, path)?;
+    let text = ctx.text(path)?;
     let (from, to) = (line.saturating_sub(around).max(1), line + around);
     Some(
         text.lines()
@@ -419,7 +395,7 @@ fn add_readings(out: &mut Map<String, Value>, ctx: &Ctx, unit: Unit, budget: usi
                             continue;
                         };
                         let path = c.file.trim_start_matches("file:");
-                        let Some(text) = read_text(ctx, path) else {
+                        let Some(text) = ctx.text(path) else {
                             continue;
                         };
                         let body: Vec<&str> = text
@@ -441,7 +417,7 @@ fn add_readings(out: &mut Map<String, Value>, ctx: &Ctx, unit: Unit, budget: usi
                     .filter_map(|t| ctx.files.get(t))
                     .filter(|t| t.conventions.iter().any(|c| c.contains("test")))
                     .filter_map(|t| {
-                        let text = read_text(ctx, &t.path)?;
+                        let text = ctx.text(&t.path)?;
                         Some(json!({ "test": t.path, "source": &*text }))
                     })
                     .collect();

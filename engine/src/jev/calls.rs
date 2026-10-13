@@ -11,6 +11,7 @@
 //! `folders` top-down and `files`, each after its folder.
 
 use crate::graph::model::{CodeGraph, DefNode, DirNode, FileNode, Node, PendingRef};
+use crate::graph::walk::Snapshot;
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 use sha2::{Digest, Sha256};
@@ -45,7 +46,8 @@ pub type BlockRow<'a> = (&'a str, &'a str, u32, u32, &'a str);
 
 /// The graph and what Jev already answered, indexed for building requests.
 pub struct Ctx<'a> {
-    pub root: &'a Path,
+    /// The project's files as the graph read them, so every request reads the same commit.
+    pub snapshot: Snapshot,
     pub defs_of: HashMap<&'a str, Vec<&'a DefNode>>,
     pub blocks_of: HashMap<&'a str, Vec<BlockRow<'a>>>,
     /// Files each file imports, and files that import it.
@@ -79,7 +81,7 @@ fn parent_dir(path: &str) -> &str {
 impl<'a> Ctx<'a> {
     pub fn new(graph: &'a CodeGraph, root: &'a Path, held: &Value) -> Self {
         let mut ctx = Ctx {
-            root,
+            snapshot: Snapshot::of(root),
             defs_of: HashMap::new(),
             blocks_of: HashMap::new(),
             imports: HashMap::new(),
@@ -191,6 +193,11 @@ impl<'a> Ctx<'a> {
             .get(file)
             .map(|defs| defs.iter().map(|d| json!({ "name": d.name, "role": d.role, "lines": [d.span.start, d.span.end], "signature": d.signature })).collect())
             .unwrap_or_default()
+    }
+
+    /// A file's text, by its path, as the snapshot holds it.
+    pub fn text(&self, path: &str) -> Option<std::sync::Arc<str>> {
+        self.snapshot.text(path)
     }
 
     /// What Jev answered about a node, by field.
@@ -335,7 +342,7 @@ impl Call for Resolve {
             for f in ctx.files_in.get(d).into_iter().flatten().filter(|f| {
                 matches!(f.language.as_deref(), Some("json" | "toml" | "yaml") | None) && !f.binary
             }) {
-                let Ok(text) = std::fs::read_to_string(ctx.root.join(&f.path)) else {
+                let Some(text) = ctx.text(&f.path) else {
                     continue;
                 };
                 let lines: Vec<&str> = text.lines().collect();
@@ -346,7 +353,7 @@ impl Call for Resolve {
                     continue;
                 }
                 let shown = if used + tokens(&text) <= budget {
-                    text.clone()
+                    text.to_string()
                 } else {
                     // Each named line with the line that opens the key it sits
                     // under, so a dependency reads as one.
