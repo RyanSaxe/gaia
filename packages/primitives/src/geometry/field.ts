@@ -65,12 +65,39 @@ function ridged(seed: number, x: number, z: number, octaves: number, gain: numbe
   return sum / norm;
 }
 
-/** The sideways offset of a trough's axis at distance `u` along it. Streams use it to follow the floor. */
+/** The sideways offset of a trough's axis at distance `u` along it. */
 export function troughOffset(f: Extract<HeightField, { op: "trough" }>, u: number): number {
   const p1 = ((f.seed % 997) / 997) * Math.PI * 2;
   const p2 = ((f.seed % 613) / 613) * Math.PI * 2;
   const w = (Math.PI * 2) / f.meanderWavelength;
   return f.meander * f.halfWidth * (0.7 * Math.sin(u * w + p1) + 0.3 * Math.sin(u * w * 2.3 + p2));
+}
+
+/**
+ * How a stream winds across its trough's floor, in channel widths: from one bend to the next as it winds from
+ * hardly at all to strongly, and the tightest a bend may turn, as real streams' meanders do.
+ */
+const BENDS = { apart: [10, 26], tightest: 2 } as const;
+/** The trough's flat floor, as a share of its half width (`fieldAt`'s trough): a stream swings at most twice as far. */
+const FLOOR = 0.14;
+/** The trough's winding, from straight to strongly meandering, which sets how its stream winds. */
+const MEANDER = [0.08, 0.6] as const;
+/** The bends' two waves: the second, shorter one keeps them from repeating; together they bend this much sharper than one. */
+const WAVES = { second: 0.15, apart: 2.1, sharper: 0.85 + 0.15 * 2.1 * 2.1 } as const;
+
+/**
+ * The sideways offset of a stream's bed `width` meters wide at distance `u` along its trough: the trough's own axis,
+ * and the stream's meanders across the floor at its own scale, which the trough's long winding alone never shows.
+ */
+export function bedOffset(f: Extract<HeightField, { op: "trough" }>, u: number, width: number): number {
+  const m = Math.max(0, Math.min(1, (f.meander - MEANDER[0]) / (MEANDER[1] - MEANDER[0])));
+  const apart = width * (BENDS.apart[0] + (BENDS.apart[1] - BENDS.apart[0]) * m);
+  const k = (Math.PI * 2) / apart;
+  // As wide as the bends may swing without turning tighter than the tightest a stream turns, and within the floor.
+  const swing = Math.min(2 * FLOOR * f.halfWidth, 1 / (BENDS.tightest * width * k * k * WAVES.sharper)) * (0.15 + 0.85 * m);
+  const p1 = ((f.seed % 811) / 811) * Math.PI * 2;
+  const p2 = ((f.seed % 467) / 467) * Math.PI * 2;
+  return troughOffset(f, u) + swing * ((1 - WAVES.second) * Math.sin(u * k + p1) + WAVES.second * Math.sin(u * k * WAVES.apart + p2));
 }
 
 export function fieldAt(f: HeightField, x: number, z: number): number {

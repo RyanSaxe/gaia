@@ -5,7 +5,7 @@
 // mountain.
 
 import { type BuildContext, type HeightField, type Landform, type StreamBed, primitive, t } from "@gaia/schema";
-import { troughOffset } from "./geometry/field.ts";
+import { bedOffset } from "./geometry/field.ts";
 
 /** Radians from +x (east) toward +z (south). */
 const COMPASS = {
@@ -132,9 +132,22 @@ export const valley = primitive({
       const points: number[] = [];
       const c = Math.cos(angle);
       const s = Math.sin(angle);
-      for (let u = reach; u >= -reach; u -= 2) {
-        const off = troughOffset(trough, u);
-        points.push(u * c - off * s, u * s + off * c);
+      // A point every 2 m along the bed itself, however it bends, so a bend is never cut short by a straight chord.
+      const at = (u: number): [number, number] => {
+        const off = bedOffset(trough, u, bed.width);
+        return [u * c - off * s, u * s + off * c];
+      };
+      let last = at(reach);
+      points.push(...last);
+      let walked = 0;
+      for (let u = reach - 0.25; u >= -reach; u -= 0.25) {
+        const next = at(u);
+        walked += Math.hypot(next[0] - last[0], next[1] - last[1]);
+        last = next;
+        if (walked >= 2 || u - 0.25 < -reach) {
+          points.push(...next);
+          walked = 0;
+        }
       }
       water.push({ kind: "stream", path: new Float32Array(points), width: bed.width, depth: bed.depth });
     }
