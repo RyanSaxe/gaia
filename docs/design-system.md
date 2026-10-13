@@ -549,14 +549,16 @@ has since grown into another shape). As soon as the land is divided, a pen draws
 every area's border from the middle outward, the map's fine line, with the
 hedgerow's soft band coming in under it, and never the land's rounded rim.
 Between the borders and the washes, a pencil shows what Jev is doing to the
-code, so a person can watch their codebase being read. Each file is
-sketched round, lightly, while its area's looks are asked. It is hatched
-once Jev has read its links, cross-hatched once Jev has read it for its
-quality, and ringed again when Jev reads closer around it. Each area is
-surveyed with short hachures inside its border as the folder pass reaches
-it, the shallowest areas first. The pencil is graphite-grey and finer than
-the pen, and each file's marks fade under its wash as the wash comes in, so
-the finished map holds none of them.
+code, so a person can watch their codebase being read. It shades exactly
+the ground each wash will later paint, in light graphite hatching, one
+direction and weight for each stage: an area's ground while its looks are
+asked, and across again once the folder pass reaches it, the shallowest
+areas first; a file's own ground (the cells its health weighs most in)
+once Jev has read its links, across once Jev has read it for its quality,
+and once more when Jev reads closer round it. The pencil is on the paper
+itself and runs to the paper's edge as the wash does, never short of it at
+a rounded rim, and each wash takes it away in just the measure that it
+paints, so the finished map holds none of it.
 Color is health, as on the map, and each file's health is Jev's judgment of
 its quality, washed in once nothing more will be asked about the file. Each file's
 health spreads over the ground around it as the map spreads it, and a part
