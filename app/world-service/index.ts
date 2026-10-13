@@ -9,8 +9,6 @@
 // stands, its page sends a picture of its field map, kept with it among the
 // recent worlds for the start.
 
-import { readFile, realpath } from "node:fs/promises";
-import { resolve, sep } from "node:path";
 import type { Unreachable } from "@gaia/schema";
 import type { MessagePortMain } from "electron";
 import { createEngineClient } from "./engine-client.ts";
@@ -39,8 +37,8 @@ function settleable(): { promise: Promise<void>; resolve: () => void; settled: b
   return s;
 }
 
-/** The folder whose world each page opened, so the picture the page paints of it is kept with it. */
-const openedOn = new WeakMap<MessagePortMain, string>();
+/** The folder whose world each page opened and the commit it was built from: the picture the page paints is kept with it, and the journal reads that commit. */
+const openedOn = new WeakMap<MessagePortMain, { readonly folder: string; readonly commit?: string }>();
 /** Writes to the recent worlds, one after another, so a picture never races the visit it belongs to. */
 let keeping: Promise<void> = Promise.resolve();
 function keep(write: () => Promise<void>): Promise<void> {
@@ -88,15 +86,16 @@ async function offerStart(port: MessagePortMain, refused?: { address: string; wh
   }
 }
 
-/** Sends a file of the world `port` opened, as its lines; null when it can't be read or lies outside that folder. */
+/**
+ * Sends a file of the world `port` opened, as its lines, read by the engine from the commit that world was built
+ * from; null when it can't be read or lies outside that folder.
+ */
 async function sendSource(port: MessagePortMain, path: string): Promise<void> {
-  const folder = openedOn.get(port);
-  let lines: string[] | null = null;
-  if (folder !== undefined) {
+  const opened = openedOn.get(port);
+  let lines: readonly string[] | null = null;
+  if (opened !== undefined) {
     try {
-      const base = await realpath(folder);
-      const file = await realpath(resolve(base, path));
-      if (file.startsWith(base + sep)) lines = (await readFile(file, "utf8")).split(/\r?\n/);
+      lines = (await engine.call("project.source", { root: opened.folder, path, ...(opened.commit === undefined ? {} : { commit: opened.commit }) })).lines;
     } catch {
       lines = null;
     }
@@ -122,7 +121,7 @@ async function open(port: MessagePortMain, folder: string, github?: string): Pro
     send(port, { type: "world.document", document });
     const name = github ?? document.model.repository.name;
     toMain({ type: "world.opened", root: folder, name });
-    openedOn.set(port, folder);
+    openedOn.set(port, { folder, ...(document.commit === undefined ? {} : { commit: document.commit }) });
     await keep(() => keepRecent(engine, { root: folder, name, ...(github === undefined ? {} : { github }), at: Date.now() }));
   } catch (error) {
     const message = (error as Error).message;
@@ -183,7 +182,7 @@ parent.on("message", (event) => {
         else if (m.type === "world.choose") void choose(port, m.place);
         else if (m.type === "world.source") void sendSource(port, m.path);
         else if (m.type === "world.picture") {
-          const folder = openedOn.get(port);
+          const folder = openedOn.get(port)?.folder;
           if (folder !== undefined) void keep(() => keepPicture(engine, folder, m.picture));
         }
         else if (m.type === "world.consent") {

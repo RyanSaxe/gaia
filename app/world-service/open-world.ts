@@ -320,5 +320,5 @@ export async function openWorld({ engine, root, consent, progress }: OpenWorldOp
   // Any file no answer was about is settled now, before the document.
   for (const p of world.patches) settleHealth(p.path, p.vitality);
   sendHealth();
-  return { root, model, world, judges: byThing, summary: parts.join("; "), judged: judgedThings(judged) };
+  return { root, ...(judged.commit === undefined ? {} : { commit: judged.commit }), model, world, judges: byThing, summary: parts.join("; "), judged: judgedThings(judged) };
 }

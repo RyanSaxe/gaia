@@ -57,6 +57,21 @@ pub fn handle(line: &str) -> Value {
             .and_then(|graph| serde_json::to_value(graph).map_err(|e| (FAILED, e.to_string()))),
             None => Err((INVALID_PARAMS, "project.graph needs a root.".into())),
         },
+        "project.source" => match (p["root"].as_str(), p["path"].as_str()) {
+            (Some(root), Some(path)) => {
+                // The commit the world was built from, so the journal shows the code the graph read.
+                let root = Path::new(root);
+                let snapshot = match p["commit"].as_str() {
+                    Some(commit) => crate::graph::walk::Snapshot::at(root, commit),
+                    None => Some(crate::graph::walk::Snapshot::of(root)),
+                };
+                let lines = snapshot.and_then(|s| s.text(path)).map(|text| {
+                    text.split('\n').map(|l| l.strip_suffix('\r').unwrap_or(l).to_string()).collect::<Vec<_>>()
+                });
+                Ok(json!({ "lines": lines }))
+            }
+            _ => Err((INVALID_PARAMS, "project.source needs a root and a path.".into())),
+        },
         "understanding.plan" => match p["root"].as_str() {
             Some(root) => {
                 crate::jev::runner::plan(Path::new(root), p["graph"].as_bool() == Some(true))

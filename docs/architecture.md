@@ -47,8 +47,10 @@ file changes nothing until it is committed. Outside git, in a repository with
 no commits yet, or in a folder nothing of which is committed, it is the disk,
 respecting `.gitignore` and skipping any folder that is a git checkout of its
 own. Either way it never follows a symbolic link and leaves out any file over
-2 MiB. The graph records the commit it read (`CodeGraph.commit`).
-`project.open` reads the snapshot and reports each file's
+2 MiB. The graph records the commit it read (`CodeGraph.commit`), the world
+document carries it, and the journal's code comes from that same commit
+(`project.source`), so its lines always match the graph's even after a new
+commit. `project.open` reads the snapshot and reports each file's
 facts, the entities, and the repository (`CodeModel`). Each file is
 read by a careful line-based pass for TypeScript, JavaScript and Rust
 (`engine/src/source.rs`), with a small lexer that keeps strings and comments

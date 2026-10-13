@@ -187,3 +187,43 @@ fn an_endpoint_override_must_be_local_so_the_key_only_goes_to_openrouter() {
         serde_json::json!({ "key": true, "live": false })
     );
 }
+
+#[test]
+fn the_journal_reads_a_file_as_the_world_s_commit_holds_it() {
+    let root = std::env::temp_dir().join(format!("gaia-cli-source-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(&root).unwrap();
+    let git = |args: &[&str]| {
+        let out = Command::new("git")
+            .arg("-C")
+            .arg(&root)
+            .args(["-c", "user.name=Gaia", "-c", "user.email=gaia@example.com"])
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "git {args:?}");
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    };
+    git(&["init", "-q"]);
+    std::fs::write(root.join("a.ts"), "one\ntwo\n").unwrap();
+    git(&["add", "."]);
+    git(&["commit", "-q", "-m", "one"]);
+    let built = git(&["rev-parse", "HEAD"]);
+    // A commit after the world was built, and an edit not yet committed.
+    std::fs::write(root.join("a.ts"), "three\n").unwrap();
+    git(&["commit", "-q", "-am", "two"]);
+    std::fs::write(root.join("a.ts"), "four\n").unwrap();
+    let r = root.to_str().unwrap();
+    let answers = rpc(
+        &[],
+        &[
+            serde_json::json!({ "id": 1, "method": "project.source", "params": { "root": r, "path": "a.ts", "commit": built } }),
+            serde_json::json!({ "id": 2, "method": "project.source", "params": { "root": r, "path": "a.ts" } }),
+            serde_json::json!({ "id": 3, "method": "project.source", "params": { "root": r, "path": "../a.ts" } }),
+        ],
+    );
+    assert_eq!(answers[0]["result"]["lines"], serde_json::json!(["one", "two", ""]));
+    assert_eq!(answers[1]["result"]["lines"], serde_json::json!(["three", ""]));
+    assert_eq!(answers[2]["result"]["lines"], serde_json::json!(null));
+    std::fs::remove_dir_all(&root).unwrap();
+}
