@@ -28,6 +28,8 @@ export type HeightField =
       readonly seed: number;
       readonly angle: number;
       readonly halfWidth: number;
+      /** The flat floor's share of the half width, each side of the axis, where the stream winds. */
+      readonly floor: number;
       /** Sideways swing of the axis, meters, from one bend to the next `meanderWavelength` meters along it. */
       readonly meander: number;
       readonly meanderWavelength: number;

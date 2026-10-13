@@ -99,6 +99,9 @@ const RUN = {
   "northwest-southeast": Math.PI / 4,
 } as const;
 
+/** The flat floor, as a share of the half width each side: a straight valley's, a winding one's (a third of its width), and the widest. */
+const FLOOR = { straight: 0.14, winding: 1 / 3, widest: 0.38 } as const;
+
 /** How far along a valley one bend lies from the next, in the valley's own widths. */
 const VALLEY_BEND_WIDTHS = 250 / 64;
 
@@ -117,6 +120,8 @@ export const valley = primitive({
       seed: seedOf(ctx, "axis"),
       angle,
       halfWidth: p.width / 2,
+      // The more a valley winds, the wider its flat floor, so its stream has room to loop as lowland brooks do.
+      floor: Math.min(FLOOR.widest, FLOOR.straight + ((FLOOR.winding - FLOOR.straight) * p.meander) / 20),
       meander: p.meander,
       // A valley bends once every few of its own widths, as real valleys do: an open one every 250 m.
       meanderWavelength: VALLEY_BEND_WIDTHS * p.width,
