@@ -7,8 +7,9 @@
 // and slows at one steady rate; nothing bobs. A hand on the view takes it from
 // the trail until the person looks along the way ahead again.
 
+import { type Deck, deckAt } from "./gait.ts";
 import { heightAt } from "./lattice.ts";
-import type { TrailNetwork, Way } from "./paths.ts";
+import type { Crossing, TrailNetwork, Way } from "./paths.ts";
 import type { Solids } from "./solids.ts";
 import { STEER } from "./steer.ts";
 import { type Walker, planWalk } from "./walk.ts";
@@ -38,12 +39,21 @@ export const TRAVEL = {
   spacing: 1,
   /** The body never crawls slower than this before it arrives, meters a second. */
   creep: 0.3,
-  /** A trip goes straight across the land, around what stands and the deep water, where the trails' way is longer than this many times the straight distance. */
+  /** A trip goes straight across the land, around what stands and the water, where the trails' way is longer than this many times the straight distance. */
   detour: 1.5,
+  /** Wherever a trip wades, and this far either side, it goes at walking pace, meters a second, and meters. */
+  ford: 4.2,
+  fordReach: 4,
 } as const;
 
-/** The way straight across the land: its grid's cell and reach past both ends, meters; water deeper than `deep` meters is gone around, and each leg is planned around solids `leg` meters at a time. */
-const ACROSS = { cell: 4, margin: 240, deep: 0.4, leg: 80 } as const;
+/**
+ * The way straight across the land: its grid's cell and reach past both
+ * ends, meters. Water is kept out of as solids are: water up to `deep`
+ * meters is waded only where no crossing is near, each wet cell costing
+ * `wet` dry ones, so a stream is crossed where it is narrowest; deeper water
+ * is gone around. Each leg is planned around solids `leg` meters at a time.
+ */
+const ACROSS = { cell: 4, margin: 240, deep: 0.4, wet: 25, leg: 80 } as const;
 
 /** The angle from `a` to `b`, between -π and π. */
 const turnTo = (a: number, b: number): number => Math.atan2(Math.sin(b - a), Math.cos(b - a));
@@ -157,27 +167,37 @@ export function trailWay(network: TrailNetwork, from: Walker, to: Walker): Walke
 
 // ---------- the way straight across ----------
 
-/** Whether the water at (x, z) is too deep to wade across at a hurry. */
-function deepAt(t: Terrain, x: number, z: number): boolean {
-  if (inWilds(t, x, z)) return false;
+/** How deep the water is at (x, z), meters, read from the land's water level wherever the land is held; 0 on dry ground and in the wild. */
+function waterAt(t: Terrain, x: number, z: number): number {
+  if (inWilds(t, x, z)) return 0;
   const level = heightAt(t.lattice, x, z, t.waterLevel);
-  return level > DRY / 2 && level - heightAt(t.lattice, x, z) > ACROSS.deep;
+  return level > DRY / 2 ? Math.max(0, level - heightAt(t.lattice, x, z)) : 0;
 }
 
-/** Whether the straight line from a to b stays out of deep water, looked at every meter. */
+/** Water shallower than this is dry enough to walk through without a splash, meters. */
+const DAMP = 0.05;
+
+/** Whether a person at (x, z) wades: in water, and not on a footbridge's deck. */
+export function wadingAt(t: Terrain, decks: readonly Deck[], x: number, z: number): boolean {
+  return waterAt(t, x, z) > DAMP && deckAt(decks, x, z) === -Infinity;
+}
+
+/** Whether the straight line from a to b stays dry, looked at every meter. */
 function dryLine(t: Terrain, a: Walker, b: Walker): boolean {
   const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.z - a.z)));
-  for (let i = 1; i < n; i++) if (deepAt(t, a.x + ((b.x - a.x) * i) / n, a.z + ((b.z - a.z) * i) / n)) return false;
+  for (let i = 1; i < n; i++) if (waterAt(t, a.x + ((b.x - a.x) * i) / n, a.z + ((b.z - a.z) * i) / n) > DAMP) return false;
   return true;
 }
 
 /**
- * The way straight across the land from `from` to `to`: around deep water on
- * a grid of `ACROSS.cell` meters (a brook is waded), pulled taut, then
- * around whatever stands in the way a leg at a time (`planWalk`); null where
- * deep water rings either end.
+ * The way straight across the land from `from` to `to`, on a grid of
+ * `ACROSS.cell` meters: out of the water, crossing a stream on one of the
+ * trails' `crossings` (a footbridge or stepping stones) or else where it is
+ * narrowest and shallow enough to wade, then pulled taut over dry ground and
+ * planned around whatever stands in the way a leg at a time (`planWalk`);
+ * null where deep water rings either end.
  */
-export function acrossWay(t: Terrain, solids: Solids, from: Walker, to: Walker): Walker[] | null {
+export function acrossWay(t: Terrain, solids: Solids, from: Walker, to: Walker, crossings: readonly Crossing[] = []): Walker[] | null {
   const h = ACROSS.cell;
   const x0 = Math.min(from.x, to.x) - ACROSS.margin;
   const z0 = Math.min(from.z, to.z) - ACROSS.margin;
@@ -187,15 +207,26 @@ export function acrossWay(t: Terrain, solids: Solids, from: Walker, to: Walker):
   const at = (i: number): Walker => ({ x: x0 + (i % nx) * h, z: z0 + Math.floor(i / nx) * h });
   const start = cellOf(from);
   const goal = cellOf(to);
-  const state = new Uint8Array(nx * nz); // 0 unknown, 1 open, 2 deep
-  const open = (i: number): boolean => {
-    if (i === start || i === goal) return true;
+  const state = new Uint8Array(nx * nz); // 0 unknown, 1 dry, 2 wet, 3 deep
+  // A crossing's cells, from bank to bank along its axis (local +x runs along the way), are dry.
+  for (const c of crossings) {
+    const dx = Math.cos(c.yaw);
+    const dz = -Math.sin(c.yaw);
+    for (let u = -c.span / 2 - h; u <= c.span / 2 + h; u += 1) {
+      const i = cellOf({ x: c.x + dx * u, z: c.z + dz * u });
+      if (i >= 0 && i < state.length) state[i] = 1;
+    }
+  }
+  const kind = (i: number): number => {
+    if (i === start || i === goal) return 1;
     if (state[i] === 0) {
       const p = at(i);
-      state[i] = deepAt(t, p.x, p.z) ? 2 : 1;
+      const depth = waterAt(t, p.x, p.z);
+      state[i] = depth > ACROSS.deep ? 3 : depth > DAMP ? 2 : 1;
     }
-    return state[i] === 1;
+    return state[i] as number;
   };
+  const open = (i: number): boolean => kind(i) !== 3;
   const g = new Float32Array(nx * nz).fill(Infinity);
   const parent = new Int32Array(nx * nz).fill(-1);
   const done = new Uint8Array(nx * nz);
@@ -250,7 +281,7 @@ export function acrossWay(t: Terrain, solids: Solids, from: Walker, to: Walker):
         const j = i + dz * nx + dx;
         // A diagonal step never cuts a corner of deep water.
         if (!open(j) || (dx !== 0 && dz !== 0 && (!open(i + dx) || !open(i + dz * nx)))) continue;
-        const c = (g[i] as number) + (dx !== 0 && dz !== 0 ? Math.SQRT2 : 1);
+        const c = (g[i] as number) + (dx !== 0 && dz !== 0 ? Math.SQRT2 : 1) * (kind(j) === 2 ? ACROSS.wet : 1);
         if (c < (g[j] as number)) {
           g[j] = c;
           parent[j] = i;
@@ -308,9 +339,10 @@ export interface Trip {
 
 /**
  * Plans a trip along `way`, its first `off.start` and last `off.end` meters
- * walked off the tread, ending facing `face` if given, at `pace` on the tread.
+ * walked off the tread, ending facing `face` if given, at `pace` on the tread,
+ * and at walking pace wherever it is `wading` (`TRAVEL.ford`).
  */
-export function planTrip(way: readonly Walker[], off: { readonly start: number; readonly end: number }, face: number | null = null, pace: number = TRAVEL.pace): Trip {
+export function planTrip(way: readonly Walker[], off: { readonly start: number; readonly end: number }, face: number | null = null, pace: number = TRAVEL.pace, wading: (x: number, z: number) => boolean = () => false): Trip {
   const along = [0];
   for (let i = 1; i < way.length; i++) along.push((along[i - 1] as number) + Math.hypot((way[i] as Walker).x - (way[i - 1] as Walker).x, (way[i] as Walker).z - (way[i - 1] as Walker).z));
   const length = along[along.length - 1] ?? 0;
@@ -338,6 +370,13 @@ export function planTrip(way: readonly Walker[], off: { readonly start: number; 
     const dz = (points[hi * 2 + 1] as number) - (points[lo * 2 + 1] as number);
     heading[i] = Math.hypot(dx, dz) > 1e-6 ? yawAlong(dx, dz) : i > 0 ? (heading[i - 1] as number) : 0;
   }
+  // Where the way wades, and `fordReach` either side, it goes at walking pace.
+  const wet = new Uint8Array(n);
+  const reachFord = Math.ceil(TRAVEL.fordReach / Math.max(ds, 1e-9));
+  for (let i = 0; i < n; i++) {
+    if (!wading(points[i * 2] as number, points[i * 2 + 1] as number)) continue;
+    for (let j = Math.max(0, i - reachFord); j <= Math.min(n - 1, i + reachFord); j++) wet[j] = 1;
+  }
   const paces = new Float32Array(n);
   for (let i = 0; i < n; i++) {
     const s = i * ds;
@@ -346,7 +385,7 @@ export function planTrip(way: readonly Walker[], off: { readonly start: number; 
     // How fast the way ahead turns here, radians a meter, over the steps either side.
     let bend = 0;
     for (const j of [i - 1, i]) if (j >= 0 && j < n - 1) bend = Math.max(bend, Math.abs(turnTo(heading[j] as number, heading[j + 1] as number)) / Math.max(ds, 1e-9));
-    paces[i] = Math.min(offTread ? Math.min(TRAVEL.off, pace) : pace, bend > 1e-9 ? (TRAVEL.bend * TRAVEL.turn) / bend : Infinity);
+    paces[i] = Math.min(offTread ? Math.min(TRAVEL.off, pace) : pace, wet[i] === 1 ? TRAVEL.ford : Infinity, bend > 1e-9 ? (TRAVEL.bend * TRAVEL.turn) / bend : Infinity);
   }
   // Slowing at the steady rate for every bend ahead and to stand at the end; getting going is the step's.
   paces[n - 1] = 0;

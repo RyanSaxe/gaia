@@ -80,7 +80,7 @@ export function decksOf(ways: readonly Way[]): Deck[] {
 }
 
 /** The highest deck's top over a point, or -Infinity off every deck. */
-function deckAt(decks: readonly Deck[], x: number, z: number): number {
+export function deckAt(decks: readonly Deck[], x: number, z: number): number {
   let top = -Infinity;
   for (const d of decks) {
     const dx = x - d.x;
