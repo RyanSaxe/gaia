@@ -405,7 +405,6 @@ fn dir_requests(ctx: &Ctx, repository: &str, dir: &DirNode, calls: &[&dyn Call])
 /// and questions, cut to fit the window.
 fn file_requests(
     ctx: &Ctx,
-    root: &Path,
     repository: &str,
     file: &FileNode,
     calls: &[&dyn Call],
@@ -419,7 +418,7 @@ fn file_requests(
     if calls.is_empty() {
         return Vec::new();
     }
-    let Ok(text) = std::fs::read_to_string(root.join(&file.path)) else {
+    let Some(text) = ctx.text(&file.path) else {
         return Vec::new();
     };
     let budget = BUDGET;
@@ -511,7 +510,7 @@ fn file_requests(
             ),
         );
         if pieces.len() == 1 {
-            state.insert("source".into(), json!(text));
+            state.insert("source".into(), json!(&*text));
         } else {
             state.insert("source".into(), json!(&text[piece.start..piece.end]));
             state.insert(
@@ -586,11 +585,11 @@ fn wanted(root: &Path) -> Result<Wanted, String> {
             .collect();
         let mut planned: Vec<Planned> = files
             .iter()
-            .flat_map(|f| file_requests(&ctx, root, &graph.name, f, &link))
+            .flat_map(|f| file_requests(&ctx, &graph.name, f, &link))
             .collect();
         let links_done = planned.iter().all(|p| answered.contains(&p.hash));
         planned.extend(understanding(
-            &ctx, root, &graph, &files, links_done, &answered,
+            &ctx, &graph, &files, links_done, &answered,
         ));
         planned
     };
@@ -608,7 +607,6 @@ fn wanted(root: &Path) -> Result<Wanted, String> {
 /// built on what is known, marked waiting, so a plan can count it.
 fn understanding(
     ctx: &Ctx,
-    root: &Path,
     graph: &CodeGraph,
     files: &[&FileNode],
     links_done: bool,
@@ -645,7 +643,7 @@ fn understanding(
         out.extend(reqs);
     }
     for f in files {
-        let mut reqs = file_requests(ctx, root, &graph.name, f, &of("files"));
+        let mut reqs = file_requests(ctx, &graph.name, f, &of("files"));
         if !(links_done && dir_done.contains(&parent(&f.path))) {
             reqs.iter_mut().for_each(|p| p.waiting = true);
         }
@@ -879,7 +877,7 @@ pub fn next(root: &Path, max: Option<usize>) -> Result<Value, String> {
                 .iter()
                 .filter_map(|n| if let Node::File(f) = n { Some(f) } else { None })
                 .filter(|f| settled.contains(&f.id))
-                .filter(|f| file_requests(&ctx, root, &w.graph.name, f, &files).iter().all(|p| answered(&p.hash)))
+                .filter(|f| file_requests(&ctx, &w.graph.name, f, &files).iter().all(|p| answered(&p.hash)))
                 .map(|f| f.id.clone())
                 .collect()
         };
@@ -1066,7 +1064,7 @@ mod tests {
         let calls = json!({ "h1": { "answers": { "q1": answer } }, "h2": { "answers": { "q2": answer } } });
         let mut w = Wanted {
             project: "p".into(),
-            graph: CodeGraph { project_id: "p".into(), name: "p".into(), nodes: vec![], edges: vec![], pending: vec![] },
+            graph: CodeGraph { project_id: "p".into(), name: "p".into(), commit: None, nodes: vec![], edges: vec![], pending: vec![] },
             planned: vec![link(1), link(2)],
             answered: HashSet::from(["h1".to_string()]),
         };

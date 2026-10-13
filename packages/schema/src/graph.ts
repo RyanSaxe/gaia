@@ -8,6 +8,8 @@
 export interface CodeGraph {
   readonly projectId: string;
   readonly name: string;
+  /** The commit the graph was read from: in git, the tree of the commit checked out, never uncommitted files. Absent when it read the disk. */
+  readonly commit?: string;
   readonly nodes: readonly GraphNode[];
   readonly edges: readonly GraphEdge[];
   /** Imports and calls that neither a rule nor Jev has resolved yet. */

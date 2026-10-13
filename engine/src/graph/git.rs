@@ -128,20 +128,6 @@ pub fn name(root: &Path) -> Option<String> {
     Some(checkout.file_name()?.to_string_lossy().into_owned())
 }
 
-/// The commit checked out, if the root is in git.
-pub fn head(root: &Path) -> Option<String> {
-    let out = Command::new("git")
-        .env("GIT_NO_LAZY_FETCH", "1")
-        .arg("-C")
-        .arg(root)
-        .args(["rev-parse", "HEAD"])
-        .output()
-        .ok()?;
-    out.status
-        .success()
-        .then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
-}
-
 /// Where each file that existed at `from` lives at `to`, composing git's
 /// renames commit by commit, at git's own 50% similarity. Files never
 /// renamed are left out. None when `from` is not an ancestor of `to`.

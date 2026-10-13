@@ -236,7 +236,8 @@ fn build_with(
     if !root.is_dir() {
         return Err(format!("{} is not a directory.", root.display()));
     }
-    let files = walk::walk(root);
+    let snapshot = walk::Snapshot::of(root);
+    let files = snapshot.files();
     let parsed = parse_all(&files)?;
 
     // History, per file and per directory.
@@ -485,7 +486,7 @@ fn build_with(
     let project_id = project_id(root);
 
     // Lineage, matched against the last graph this project kept.
-    let commit = git::head(root);
+    let commit = snapshot.commit().map(String::from);
     let previous = keeper.load(&project_id);
     let renames = match (
         previous.as_ref().and_then(|p| p.commit.as_deref()),
@@ -495,7 +496,7 @@ fn build_with(
         _ => None,
     };
     let current = lineage::Current {
-        commit,
+        commit: commit.clone(),
         dirs: dirs.iter().map(String::as_str).collect(),
         files: files
             .iter()
@@ -556,6 +557,7 @@ fn build_with(
     Ok(CodeGraph {
         project_id,
         name,
+        commit,
         nodes,
         edges,
         pending,

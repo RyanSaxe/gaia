@@ -9,6 +9,9 @@ use serde::Serialize;
 pub struct CodeGraph {
     pub project_id: String,
     pub name: String,
+    /// The commit the graph was read from (`walk::Snapshot`), or none when it read the disk.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub commit: Option<String>,
     pub nodes: Vec<Node>,
     pub edges: Vec<Edge>,
     pub pending: Vec<PendingRef>,

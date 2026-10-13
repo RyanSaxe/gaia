@@ -185,9 +185,10 @@ fn within(path: &str, root: &str) -> bool {
     root.is_empty() || path == root || path.starts_with(&format!("{root}/"))
 }
 
-/// Every file the walk keeps (`graph::walk`), with its facts read.
+/// Every file of the project's snapshot (`graph::walk::Snapshot`), with its facts read.
 fn walk(root: &Path) -> Vec<Read> {
-    crate::graph::walk::walk(root)
+    crate::graph::walk::Snapshot::of(root)
+        .files()
         .into_iter()
         .map(|f| {
             let source = match &f.text {

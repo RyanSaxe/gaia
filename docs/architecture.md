@@ -38,8 +38,17 @@ store's `store.get`, `store.read` and `store.put`. The store (`engine/src/store.
 rename so it is never half-written; `<data>` is the app's user-data folder,
 which main passes as `GAIA_DATA_DIR`.
 
-`project.open` walks a directory, respecting `.gitignore`, never following a
-symbolic link and leaving out any file over 2 MiB, and reports each file's
+A world is read from a snapshot of the project's files
+(`engine/src/graph/walk.rs`, `Snapshot`). In a git folder with a commit, that
+is the tree of the commit checked out, listed with `git ls-tree` and read in
+one `git cat-file --batch`. Untracked and ignored files and uncommitted edits
+are never part of the world, and a submodule is only a pointer, so saving a
+file changes nothing until it is committed. Outside git, in a repository with
+no commits yet, or in a folder nothing of which is committed, it is the disk,
+respecting `.gitignore` and skipping any folder that is a git checkout of its
+own. Either way it never follows a symbolic link and leaves out any file over
+2 MiB. The graph records the commit it read (`CodeGraph.commit`).
+`project.open` reads the snapshot and reports each file's
 facts, the entities, and the repository (`CodeModel`). Each file is
 read by a careful line-based pass for TypeScript, JavaScript and Rust
 (`engine/src/source.rs`), with a small lexer that keeps strings and comments
@@ -387,7 +396,7 @@ Three store tables hold Jev's side: `calls` keeps raw responses by request
 hash, `held` the answer the graph shows for each question by lineage, and
 `lineage` the last graph's lineage map and definition fingerprints.
 
-`project.graph` shares `project.open`'s walk and parses every file whose
+`project.graph` reads the same snapshot as `project.open` and parses every file whose
 extension the language table names (`engine/languages.toml`). Twenty-one
 languages are compiled in, from TypeScript to YAML, and the table is the
 engine's only knowledge of them. For each file the engine runs the
