@@ -55,7 +55,7 @@ export function withStart(wait: Wait, veil: HTMLElement, style: StartStyle = sta
       wait.opening(o);
     },
     choose(offer) {
-      page ??= style === "table" ? createTable(veil, { hour, sheet: wait.sheet }) : createSignpost(veil);
+      page ??= style === "table" ? createTable(veil, { hour, sheet: wait.sheet, chosen: wait.chosen }) : createSignpost(veil);
       return page.offer(offer);
     },
     hour(h) {

@@ -10,7 +10,7 @@ export type PictureJob = { readonly tile: ImageBitmap; readonly x: number; reado
 export type PictureReply = { readonly laid: true } | { readonly picture: string } | { readonly failed: string };
 
 interface WorkerScope {
-  onmessage: ((e: MessageEvent<PictureJob & { readonly side: number }>) => void) | null;
+  onmessage: ((e: MessageEvent<PictureJob & { readonly width: number; readonly height: number }>) => void) | null;
   postMessage(message: PictureReply): void;
 }
 
@@ -19,13 +19,13 @@ let canvas: OffscreenCanvas | null = null;
 
 scope.onmessage = (e) => {
   const job = e.data;
-  canvas ??= new OffscreenCanvas(job.side, job.side);
+  canvas ??= new OffscreenCanvas(job.width, job.height);
   const ctx = canvas.getContext("2d") as OffscreenCanvasRenderingContext2D;
   if ("tile" in job) {
     ctx.drawImage(job.tile, job.x, job.y);
     job.tile.close();
     // Reading one pixel back waits here, off the page's thread, until the GPU has drawn the tile.
-    ctx.getImageData(job.x, job.y, 1, 1);
+    ctx.getImageData(Math.max(0, job.x), Math.max(0, job.y), 1, 1);
     scope.postMessage({ laid: true });
     return;
   }
