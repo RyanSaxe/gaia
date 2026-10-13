@@ -54,7 +54,8 @@ export interface SteerScheme {
    * (`cut`); as one steady rotation, a quarter in `quick` seconds (`quick`);
    * by walking into it, turning round a curve at `rate` until facing the new
    * way, ↓ turning about in place at `rate` (`walk`); or only ever at `rate`
-   * while a key is held, standing or walking (`held`).
+   * while a key is held, standing or walking, with ↓ walking backward still
+   * facing forward, at `back` of the pace (`held`, the app's own).
    */
   readonly bigTurn: "cut" | "quick" | "walk" | "held";
   readonly quick: number;
@@ -65,7 +66,7 @@ export interface SteerScheme {
 const BASE = { rate: 60, nudgeFor: 0.15, pace: 4.2, back: 0.4, side: 0.9, blink: 0.2, snap: 30, nudge: 8, keep: 30, diagonal: true, bigTurn: "walk", quick: 0.25, sensitivity: 0.26, look: "drag", hurry: "shift" } as const;
 /** Every way of walking the playground offers, each with its own numbers. */
 export const SCHEMES = {
-  "face-and-go": { ...BASE, label: "Face and go", name: "A direction pressed while still turns you to face it; held, you walk on; walking, ← → nudge your way; Shift hurries", walk: "face", turn: "none", big: "none" },
+  "face-and-go": { ...BASE, label: "Face and go", name: "↑ walks; ← → nudge, and turn on steadily while held, standing or walking; ↓ walks back, still facing ahead; Shift hurries", walk: "face", turn: "none", big: "none", bigTurn: "held", back: 0.65 },
   shooter: { ...BASE, label: "Walk and look", name: "W A S D walk and step aside, a drag looks, Shift with ← → turns, a double tap of W hurries", walk: "strafe", turn: "hold", big: "none", back: 0.65, hurry: "double-tap" },
   "mouse-look": { ...BASE, label: "Mouse look", name: "A click captures the mouse to look, as in desktop games; W A S D walk and step aside; Esc lets go", walk: "strafe", turn: "hold", big: "none", back: 0.65, look: "pointer", sensitivity: 0.12, hurry: "double-tap" },
   "look-around": { ...BASE, label: "Look around", name: "← → turn slowly while held, a tap nudges, ↓ steps back", walk: "ahead", turn: "hold", big: "none", rate: 45 },
@@ -75,6 +76,18 @@ export const SCHEMES = {
   "click-to-go": { ...BASE, label: "Click to go", name: "A click walks you there; the keys only nudge", walk: "none", turn: "nudge", big: "none" },
 } as const satisfies Readonly<Record<string, SteerScheme>>;
 export type SteerSchemeId = keyof typeof SCHEMES;
+
+/** One line saying what the keys do in a way of walking as it is tuned: face and go's depends on how it makes big turns. */
+export function keysLine(s: SteerScheme): string {
+  if (s.walk !== "face") return s.name;
+  const big = {
+    held: "← → nudge, and turn on steadily while held, standing or walking; ↓ walks back, still facing ahead",
+    cut: "a direction pressed while still faces you that way at once, and held walks you on; walking, ← → nudge",
+    quick: "a direction pressed while still turns you quickly and steadily to face it, and held walks you on; walking, ← → nudge",
+    walk: "a direction pressed while still sets you walking, curving round to face it; walking, ← → nudge; ↓ turns you about",
+  }[s.bigTurn];
+  return `↑ walks; ${big}; Shift hurries`;
+}
 
 /** A key down: when it was pressed, where the person faced then, and whether it turns them. */
 interface Held {
@@ -102,7 +115,7 @@ export interface Steering {
   /** With `face`: when a key held after its turn sets the person walking, so a tap only turns them. */
   readonly goAt: number | null;
   /** With `face`: a steady turn under way, to a facing at a rate, radians and radians a second; whether the person walks while it turns; and the key it lasts only while held. */
-  readonly turning: { readonly to: number; readonly rate: number; readonly walks: boolean; readonly whileHeld: WalkKey | null } | null;
+  readonly turning: { readonly to: number; readonly rate: number; readonly walks: boolean } | null;
 }
 
 /** One step: the keys' hold after it, the facing, the walk as shares of the pace ahead and to the left of the view, whether hurrying, and how dark a blink has the view, 0 to 1. */
@@ -159,12 +172,8 @@ function facePress(s: Steering, key: WalkKey, t: number, yaw: number): Steering 
   const down = new Map(s.down).set(key, { at: t, yaw, turns: isSide(key) && (s.going || held) });
   const next = { ...s, down };
   if (key === "shift") return next;
-  // Held nudges only: a side key nudges and turns on while held, ↓ turns toward about while held, and only ↑ walks.
-  if (held) {
-    if (isSide(key)) return { ...next, owed: s.owed + sign(key) * sc.nudge * DEG };
-    if (key === "back") return { ...next, turning: { to: (s.turning?.to ?? yaw) + Math.PI, rate: sc.rate * DEG, walks: true, whileHeld: "back" } };
-    return { ...next, going: true };
-  }
+  // Held nudges only: a side key nudges and turns on while held; ↑ walks ahead and ↓ back, never turning.
+  if (held) return isSide(key) ? { ...next, owed: s.owed + sign(key) * sc.nudge * DEG } : next;
   // A key joining a turn still being decided, as ← just after ↑, makes one chord with it.
   if (s.pending !== null) return { ...next, pending: { ...s.pending, keys: new Set([...s.pending.keys, key]) } };
   if (!s.going) return turnFrom(next, t, yaw, new Set([key]), sc.diagonal);
@@ -202,12 +211,8 @@ export function steerRelease(s: Steering, key: WalkKey | undefined, t: number): 
   const held = s.down.get(key);
   if (held === undefined) return s;
   const down = new Map([...s.down].filter(([k]) => k !== key));
-  // Face and go: letting every direction go stops the walk, and with held nudges only, letting ↑ go; a turn still
-  // being decided is made all the same, and one that lasts only while its key is held stops.
-  if (s.scheme.walk === "face") {
-    const walks = s.scheme.bigTurn === "held" ? down.has("ahead") : directionDown(down);
-    return { ...s, down, going: s.going && walks, goAt: walks ? s.goAt : null, turning: s.turning?.whileHeld === key ? null : s.turning };
-  }
+  // Face and go: letting every direction go stops the walk; a turn still being decided is made all the same.
+  if (s.scheme.walk === "face") return { ...s, down, going: s.going && directionDown(down), goAt: directionDown(down) ? s.goAt : null };
   const tapped = t - held.at < TAP ? { key, at: t, yaw: held.yaw } : s.tapped;
   return { ...s, down, tapped, hurrying: key === "ahead" ? false : s.hurrying };
 }
@@ -235,10 +240,10 @@ function faceStep(s: Steering, t: number, yaw: number, dt: number): Steered {
     else if (sc.bigTurn === "cut") {
       y = to;
       made = after;
-    } else if (sc.bigTurn === "quick") made = { ...after, turning: { to, rate: Math.PI / 2 / sc.quick, walks: s.going, whileHeld: null } };
+    } else if (sc.bigTurn === "quick") made = { ...after, turning: { to, rate: Math.PI / 2 / sc.quick, walks: s.going } };
     // Walking into it: the walk begins at once and curves round at the steady rate; ↓ turns about in place, then walks on.
-    else if (about) made = { ...after, turning: { to, rate, walks: false, whileHeld: null } };
-    else made = { going: s.going || walks, turning: { to, rate, walks: true, whileHeld: null } };
+    else if (about) made = { ...after, turning: { to, rate, walks: false } };
+    else made = { going: s.going || walks, turning: { to, rate, walks: true } };
     steering = { ...steering, pending: null, ...made };
   }
   if (steering.turning !== null) {
@@ -264,8 +269,11 @@ function faceStep(s: Steering, t: number, yaw: number, dt: number): Steered {
       y += sign(key) * on * DEG * Math.max(0, t + dt - Math.max(t, from));
     }
   }
-  const walking = held ? s.down.has("ahead") : directionDown(s.down);
-  const ahead = steering.going && walking && !(steering.turning !== null && !steering.turning.walks) ? 1 : 0;
+  // With held nudges only, ↑ walks ahead and ↓ back, still facing ahead; together they stand. Shift hurries only ahead.
+  const forward = s.down.has("ahead");
+  const backward = s.down.has("back");
+  const backing = forward ? 0 : -sc.back;
+  const ahead = held ? (backward ? backing : forward ? 1 : 0) : steering.going && directionDown(s.down) && !(steering.turning !== null && !steering.turning.walks) ? 1 : 0;
   return { steering, yaw: y, ahead, left: 0, hurry: ahead > 0 && s.down.has("shift"), dim: 0 };
 }
 

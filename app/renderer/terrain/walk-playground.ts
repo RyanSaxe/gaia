@@ -3,7 +3,7 @@
 // walking can be felt in the world itself before one is chosen (round 21's
 // movement page). Only that page shows it; switching never reloads the world.
 
-import { SCHEMES, type SteerScheme, type SteerSchemeId } from "@gaia/terrain";
+import { SCHEMES, type SteerScheme, type SteerSchemeId, keysLine } from "@gaia/terrain";
 
 /** Whether the page asks for the playground. */
 export const WALK_PLAYGROUND = typeof location !== "undefined" && new URLSearchParams(location.search).get("walk") === "playground";
@@ -29,7 +29,7 @@ const KNOBS: readonly Knob[] = [
   { key: "snap", label: "Step", unit: "°", min: 10, max: 90, step: 5, uses: (s) => s.big === "snap" },
   { key: "blink", label: "Blink", unit: "s", min: 0.1, max: 0.6, step: 0.02, uses: (s) => s.big === "blink" },
   { key: "pace", label: "Walk", unit: "m/s", min: 1, max: 8, step: 0.1, uses: () => true },
-  { key: "back", label: "Back", unit: "× walk", min: 0.1, max: 1, step: 0.05, uses: (s) => s.walk !== "none" && s.walk !== "face" && s.big !== "blink" },
+  { key: "back", label: "Back", unit: "× walk", min: 0.1, max: 1, step: 0.05, uses: (s) => (s.walk === "face" ? s.bigTurn === "held" : s.walk !== "none" && s.big !== "blink") },
   { key: "side", label: "Aside", unit: "× walk", min: 0.1, max: 1, step: 0.05, uses: (s) => s.walk === "strafe" },
   { key: "sensitivity", label: "Look", unit: "°/px", min: 0.03, max: 0.6, step: 0.01, uses: () => true },
 ];
@@ -69,7 +69,7 @@ export function createWalkPlayground(parent: HTMLElement, first: SteerSchemeId, 
   settle(pick);
   function apply(): void {
     pick.value = id;
-    says.textContent = scheme.name;
+    says.textContent = keysLine(scheme);
     knobs.replaceChildren(
       ...KNOBS.filter((k) => k.uses(scheme)).map((k) => {
         const row = document.createElement("label");

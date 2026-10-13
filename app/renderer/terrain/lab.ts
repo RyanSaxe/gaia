@@ -35,7 +35,7 @@ import {
   type SceneLight,
 } from "@gaia/render";
 import { createWalkPlayground, WALK_PLAYGROUND } from "./walk-playground.ts";
-import { type Capsule, clearanceAt, frameOf, type Placement, TILE, LAND_ASPECT, type Deck, decksOf, EYE_HEIGHT, footingAt, FULL_WORLD, GAIT, groundHeightAt, heightAt, type Intent, junctionVitality, NO_SOLIDS, NO_TRAILS, outlineShape, withinLand, piecesShapes, type Place, placeAt, planWalk, randomWorld, regionPlaces, RELIEF_BUDGET, sampleWorld, sightlines, siteToWorld, SMALL_WORLD, type Solids, type SolidShape, solidsOf, stanceAt, standAt, SCHEMES, type SteerScheme, type SteerSchemeId, steerAlong, type Steered, type Steering, steering, steerPress, steerRelease, steerStep, stride, type Stride, type WalkKey, type Terrain, TERRAIN, type TrailNetwork, type Walk, WALK_TO, walkStep, wallsShape, waterDepthAt, type Way, wayAhead, wayVitalityAt, wayWear, WILDS, type WorldPlaces, type WorldSpec } from "@gaia/terrain";
+import { type Capsule, clearanceAt, frameOf, type Placement, TILE, LAND_ASPECT, type Deck, decksOf, EYE_HEIGHT, footingAt, FULL_WORLD, GAIT, groundHeightAt, heightAt, type Intent, junctionVitality, NO_SOLIDS, NO_TRAILS, outlineShape, withinLand, piecesShapes, type Place, placeAt, planWalk, randomWorld, regionPlaces, RELIEF_BUDGET, sampleWorld, sightlines, siteToWorld, SMALL_WORLD, type Solids, type SolidShape, solidsOf, stanceAt, standAt, keysLine, SCHEMES, type SteerScheme, type SteerSchemeId, steerAlong, type Steered, type Steering, steering, steerPress, steerRelease, steerStep, stride, type Stride, type WalkKey, type Terrain, TERRAIN, type TrailNetwork, type Walk, WALK_TO, walkStep, wallsShape, waterDepthAt, type Way, wayAhead, wayVitalityAt, wayWear, WILDS, type WorldPlaces, type WorldSpec } from "@gaia/terrain";
 import { createSky } from "../world/environment.ts";
 import { type Pixels, createCapture } from "./capture.ts";
 import { renderInspector } from "../inspector.ts";
@@ -117,7 +117,7 @@ const SKY_WORLD = WORLD_PRESETS[0] as (typeof WORLD_PRESETS)[number];
 const STEERING: SteerSchemeId = "face-and-go";
 /** Each mode's hint, for a mouse and keyboard and for touch. */
 const HINTS = {
-  walk: [`Click the ground to walk there. ${SCHEMES[STEERING].name}`, "Tap the ground to walk there, drag to look"],
+  walk: [`Click the ground to walk there, drag to look; ${keysLine(SCHEMES[STEERING])}`, "Tap the ground to walk there, drag to look"],
   overview: ["Drag to orbit, scroll to zoom, click a region", "Drag to orbit, pinch to zoom, tap a region"],
 };
 /** The keys that move a person, W A S D, the arrows or vim's k h j l: ahead, left, right or back, and Shift. */

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SCHEMES, type SteerScheme, type SteerSchemeId, type WalkKey, steerPress, steerRelease, steerStep, steering } from "@gaia/terrain";
+import { SCHEMES, type SteerScheme, type SteerSchemeId, type WalkKey, keysLine, steerPress, steerRelease, steerStep, steering } from "@gaia/terrain";
 
 const DT = 1 / 120;
 const deg = (r: number): number => (r * 180) / Math.PI;
@@ -71,14 +71,19 @@ describe("face and go", () => {
   const go = SCHEMES["face-and-go"];
   const cut = { ...go, bigTurn: "cut" } as const;
   const quick = { ...go, bigTurn: "quick" } as const;
-  const held = { ...go, bigTurn: "held" } as const;
+  const walkInto = { ...go, bigTurn: "walk" } as const;
+  const held = go;
   /** Every change of facing from frame to frame. */
   const turns = (frames: readonly { yaw: number }[]) => frames.slice(1).map((f, i) => f.yaw - frames[i]!.yaw).filter((d) => Math.abs(d) > 1e-9);
   const steady = deg(go.rate * (Math.PI / 180)) * DT;
 
-  it("walks into a big turn by default: ← from still walks at once and curves round at the steady rate until facing left", () => {
-    expect(go.bigTurn).toBe("walk");
-    const { frames, yaw } = play(go, [{ key: "left", at: 0, hold: 3 }], 3.5);
+  it("the app's own: held nudges only, with ↓ walking back", () => {
+    expect(go.bigTurn).toBe("held");
+    expect(keysLine(go)).toContain("↓ walks back");
+  });
+
+  it("walking into it, ← from still walks at once and curves round at the steady rate until facing left", () => {
+    const { frames, yaw } = play(walkInto, [{ key: "left", at: 0, hold: 3 }], 3.5);
     expect(at(frames, 0.2).ahead).toBe(1);
     expect(at(frames, 0.8).yaw).toBeCloseTo(go.rate * 0.75, -1);
     expect(yaw).toBeCloseTo(90, 6);
@@ -86,7 +91,7 @@ describe("face and go", () => {
   });
 
   it("walking into it, ↓ turns about in place at the steady rate, then walks on if still held", () => {
-    const { frames, yaw } = play(go, [{ key: "back", at: 0, hold: 4.5 }], 5);
+    const { frames, yaw } = play(walkInto, [{ key: "back", at: 0, hold: 4.5 }], 5);
     expect(yaw).toBeCloseTo(180, 6);
     expect(at(frames, 1.5).ahead).toBe(0);
     expect(at(frames, 4).ahead).toBe(1);
@@ -133,9 +138,19 @@ describe("face and go", () => {
     expect(play(held, [{ key: "left", at: 0, hold: 0.1 }], 1).yaw).toBeCloseTo(go.nudge, 6);
   });
 
-  it("with held nudges only, ↓ held turns toward about at the steady rate, stopping at 180° or when let go", () => {
-    expect(play(held, [{ key: "back", at: 0, hold: 4 }], 4.5).yaw).toBeCloseTo(180, 6);
-    expect(play(held, [{ key: "back", at: 0, hold: 1 }], 1.5).yaw).toBeCloseTo(go.rate, 0);
+  it("with held nudges only, ↓ walks back at its share of the pace, still facing ahead, and turns only with ← or →", () => {
+    const back = play(held, [{ key: "back", at: 0, hold: 2 }], 2.5);
+    expect(at(back.frames, 1).ahead).toBeCloseTo(-go.back, 6);
+    expect(back.frames.every((f) => f.yaw === 0)).toBe(true);
+    expect(back.last.ahead).toBe(0);
+    const turning = play(held, [{ key: "back", at: 0, hold: 2 }, { key: "left", at: 0.5, hold: 1 }], 2.5);
+    expect(at(turning.frames, 1).ahead).toBeCloseTo(-go.back, 6);
+    expect(turning.yaw).toBeCloseTo(go.rate, 0);
+    // ↑ and ↓ together stand.
+    expect(at(play(held, [{ key: "ahead", at: 0 }, { key: "back", at: 0 }], 0.5).frames, 0.3).ahead).toBe(0);
+  });
+
+  it("with held nudges only, ↑ walks ahead and ← held turns the walk at the steady rate", () => {
     const walking = play(held, [{ key: "ahead", at: 0, hold: 2 }, { key: "left", at: 0.5, hold: 1 }], 2.5);
     expect(at(walking.frames, 1).ahead).toBe(1);
     expect(walking.yaw).toBeCloseTo(go.rate, 0);
@@ -166,9 +181,9 @@ describe("face and go", () => {
     expect(at(off.frames, 0.1).ahead).toBe(1);
   });
 
-  it("Shift hurries the walk", () => {
-    const { frames } = play(go, [{ key: "shift", at: 0 }, { key: "ahead", at: 0.1 }], 1);
-    expect(at(frames, 0.5).hurry).toBe(true);
+  it("Shift hurries the walk ahead, never the walk back", () => {
+    expect(at(play(go, [{ key: "shift", at: 0 }, { key: "ahead", at: 0.1 }], 1).frames, 0.5).hurry).toBe(true);
+    expect(at(play(go, [{ key: "shift", at: 0 }, { key: "back", at: 0.1 }], 1).frames, 0.5).hurry).toBe(false);
   });
 });
 
