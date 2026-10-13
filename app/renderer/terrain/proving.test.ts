@@ -6,7 +6,7 @@ import { FLORA_PRESETS, LANDMARK_PRESETS, STRUCTURE_PRESETS, TRAIL_PRESETS, buil
 import { type ScatterRule, TERRAIN, type Terrain, bakeTerrain, groundLook, junctionVitality, ownershipOf, placeAt, vitalityAt, vitalityOver, waterDepthAt, wayVitalityAt } from "@gaia/terrain";
 import { type Judgments, areaVitality, groundVitality } from "@gaia/world";
 import { codeLab, provingWorld } from "./code-world.ts";
-import { BUILDINGS, CHARACTERS, FORMS, LANDMARKS, LANDS, TRAILS, WATERS, presetBlueprint } from "./looks.ts";
+import { BUILDINGS, CHARACTERS, COMPOSED_FORMS, FORMS, LANDMARKS, LANDS, TRAILS, WATERS, presetBlueprint } from "./looks.ts";
 import { type Stand, extentOf, groundSites, landmarkBase, ownerVitality, standWorld, understoryVitality } from "./stand.ts";
 import judgedFixture from "./fixtures/proving-judged.json";
 
@@ -47,6 +47,13 @@ describe("the proving ground", () => {
     expect(used(WATERS, Object.values(judged.waters))).toEqual([]);
     expect(used(CHARACTERS, Object.values(judged.characters))).toEqual([]);
     expect(used(FORMS, Object.values(judged.forms).flatMap((f) => Object.values(f)))).toEqual([]);
+    // Anything stands as anything: an entity, a file and a definition each stand as a building and as a landmark, and
+    // every file stands as one thing of its own.
+    for (const of of ["entity", "file", "definition"] as const) {
+      for (const as of ["building", "landmark"] as const) expect(doc.world.things.some((t) => (t.of ?? "entity") === of && t.as === as), `a ${of} as a ${as}`).toBe(true);
+    }
+    expect(doc.world.standing.filter((s) => s.of === "file").length + doc.world.things.filter((t) => t.of === "file").length).toBe(doc.world.patches.length);
+    expect(used(FORMS, doc.world.standing.map((s) => s.form))).toEqual([]);
     const trailsUsed = blueprints(judged.trails.map((t) => t.route));
     expect(Object.keys(TRAILS).filter((k) => !trailsUsed.has(presetBlueprint("trail", k).id))).toEqual([]);
     for (const [as, looks] of [["building", BUILDINGS], ["landmark", LANDMARKS]] as const) {
@@ -162,19 +169,32 @@ describe("the proving ground", () => {
       expect(terrain.ponds.length).toBeGreaterThanOrEqual(2);
     });
 
-    it("stands every definition the layout lays out, as a tree or part of the understory, each on its own file's patch, however crowded its ground", () => {
-      expect(stood.symbols.length).toBe(doc.world.symbols.length);
+    it("stands every definition, file and entity the layout lays out, as a tree, part of the understory or one of the world's things, each on its own file's patch, however crowded its ground", () => {
+      expect(stood.symbols.length).toBe(doc.world.symbols.length + doc.world.standing.length);
       const trees = new Map(stood.trees.map((t) => [t.symbol, t]));
       expect(trees.size).toBeGreaterThan(0);
       stood.symbols.forEach((i, k) => {
-        const s = doc.world.symbols[k]!;
+        const s = doc.world.symbols[k] ?? doc.world.standing[k - doc.world.symbols.length]!;
+        const id = "id" in s ? s.id : s.path;
+        const raised = COMPOSED_FORMS[s.form] !== undefined;
         const tree = FORMS[s.form]?.rule === "trees";
-        // A definition stands once: as its tree, or as its placement.
-        expect(trees.has(k), s.id).toBe(tree);
-        expect(i >= 0, s.id).toBe(!tree);
+        // Each stands once: as its tree, as its placement, or as one of the world's buildings and landmarks.
+        expect(trees.has(k), id).toBe(tree);
+        expect(i >= 0, id).toBe(!tree && !raised);
+        if (raised) {
+          expect(doc.world.things.some((t) => t.path === id), id).toBe(true);
+          return;
+        }
         const p = tree ? trees.get(k)! : stood.placements[i]!;
-        expect(placeAt(doc.world, p.x, p.z).file?.path, s.id).toBe(s.file);
+        if (s.file !== undefined) expect(placeAt(doc.world, p.x, p.z).file?.path, id).toBe(s.file);
       });
+      // A file's or a definition's building or landmark stands on that file's patch.
+      const sited = [...code.buildings.map((b, i) => ({ path: b.facts.path, at: stood.sites[i]! })), ...stood.landmarks.map((l) => ({ path: l.id, at: l.site }))];
+      for (const t of doc.world.things.filter((x) => x.file !== undefined)) {
+        const at = sited.find((x) => x.path === t.path)?.at;
+        expect(at, t.path).toBeDefined();
+        expect(placeAt(doc.world, at!.x, at!.z).file?.path, t.path).toBe(t.file);
+      }
     });
 
     it("grows the understory with the vitality of the ground it stands on, so the ruins' bushes and flowers fail", () => {

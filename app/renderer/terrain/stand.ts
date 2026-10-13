@@ -32,7 +32,10 @@ export interface StandLot extends Circle {
 /** One file's patch: its middle and how far its ground reaches. */
 export type StandPatch = Circle;
 
-/** A file's finer entity standing on its patch: as a tree, or as one of the understory's blueprints. */
+/** The rule of a symbol that stands as a building or a landmark, one of the world's things: the symbols stand none of it. */
+export const AS_THING = "thing";
+
+/** A definition, a file or an entity standing as a tree or as one of the understory's blueprints; or, by `AS_THING`, as one of the world's things. */
 export interface StandSymbol {
   readonly x: number;
   readonly z: number;
@@ -58,8 +61,10 @@ export interface StandSymbol {
 export interface StandCode {
   /** Each building's lot, in the order of `buildings`. */
   readonly lots: readonly StandLot[];
-  /** Each landmark standing for an entity: which of `landmarks`, on which lot. */
+  /** Each landmark standing for a thing: which of `landmarks`, on which lot. */
   readonly landmarks: readonly { readonly landmark: number; readonly lot: StandLot }[];
+  /** Each entity standing as neither a building nor a landmark, by its path: its trails end at its lot's middle. */
+  readonly places?: readonly StandLot[];
   readonly patches: readonly StandPatch[];
   /**
    * The land's cells, each part of one patch (its index) or of a lot (-1): a definition stands only on its own patch's cells.
@@ -404,13 +409,17 @@ function settleCode(t: Terrain, req: StandRequest, code: StandCode, sites: reado
     ids.push(lot.id);
     avoid.push({ x: site.x, z: site.z, radius: lm.base + 2 });
   }
-  // A trail ends at a building's door, or at a landmark's foot facing the mean way to its trails' other ends, one spot per place so they share it.
+  // A trail ends at a building's door, at a landmark's foot facing the mean way to its trails' other ends, one spot per
+  // place so they share it, or for an entity that stands as neither, at its lot's middle.
   const end = (id: string, toward: { x: number; z: number } | null): TrailEnd | null => {
     const home = homes.find((b) => b.id === id);
     if (home !== undefined) return { id, ...standOf(home.plan, home.site) };
     const k = ids.indexOf(id);
     const s = landmarks[k];
-    if (s === undefined) return null;
+    if (s === undefined) {
+      const place = code.places?.find((p) => p.id === id);
+      return place === undefined ? null : { id, x: place.x, z: place.z };
+    }
     if (toward === null) return { id, x: s.site.x, z: s.site.z };
     const d = Math.hypot(toward.x - s.site.x, toward.z - s.site.z) || 1;
     const r = (req.landmarks[s.landmark]?.base ?? 2) + 1.8;
@@ -522,6 +531,7 @@ export function standWorld(t: Terrain, req: StandRequest, tiles?: readonly (read
   const order = syms.map((_, i) => i).sort((a, b) => footprint(syms[b] as StandSymbol) - footprint(syms[a] as StandSymbol) || a - b);
   for (const i of order) {
     const sym = syms[i] as StandSymbol;
+    if (sym.rule === AS_THING) continue;
     const tree = sym.rule === "trees";
     let at: [number, number, number] | null = null;
     // Where it may try: around its plot's middle, then around each of its patch's other cells, nearest first.

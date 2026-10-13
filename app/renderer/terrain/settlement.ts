@@ -6,7 +6,7 @@
 // grass, and each has a signboard at the end of its walk naming what it
 // stands for.
 
-import { type Blueprint, type BuildingPlan, type Built, Library, type Palette, seedOf } from "@gaia/schema";
+import { type Blueprint, type BuildingPlan, type Built, type EntityFacts, Library, type Palette, type ThingFacts, seedOf } from "@gaia/schema";
 import { FLORA_PRIMITIVES, STRUCTURE_PRIMITIVES } from "@gaia/primitives";
 import { structure } from "@gaia/kinds";
 import { mergeParts } from "@gaia/realize";
@@ -91,7 +91,12 @@ export function composedName(bp: Blueprint): string {
   return named(`${walls === undefined ? "" : `${wordsOf(walls)} `}house${feature === undefined ? "" : ` with a ${wordsOf(feature)}`}`);
 }
 
-/** Each entity's building, for making ahead. */
+const isEntity = (f: EntityFacts | ThingFacts): f is EntityFacts => "manifest" in f;
+const unrepresented = (f: ThingFacts): never => {
+  throw new Error(`The building for ${f.path} came with no page of its own.`);
+};
+
+/** Each building, for making ahead. */
 export const settlementBuilds = (entities: readonly SampleEntity[]): BuildAsk[] =>
   entities.map((entity) => ({
     kind: "structure",
@@ -107,7 +112,7 @@ export function createSettlement(light: SceneLight, entities: readonly SampleEnt
     const ask = asks[i] as BuildAsk;
     const built = made(ask, lib);
     const view = createPlant({ ...built, parts: mergeParts(built.parts) }, light);
-    const represented = representEntity(entity.facts, entity.vitality);
+    const represented = entity.represented ?? (isEntity(entity.facts) ? representEntity(entity.facts, entity.vitality) : unrepresented(entity.facts));
     view.setVitality(represented.vitality);
     return {
       entity,

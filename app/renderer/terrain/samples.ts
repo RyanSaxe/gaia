@@ -5,7 +5,7 @@
 // codebase is opened, and a thing's card says what it looks like.
 
 import { STRUCTURE_PRESETS } from "@gaia/realize";
-import type { Blueprint, EntityFacts, FileFacts } from "@gaia/schema";
+import type { Blueprint, EntityFacts, FileFacts, ThingFacts } from "@gaia/schema";
 
 /** Something in the world a person can walk up to and ask about. */
 export interface Represented {
@@ -26,9 +26,17 @@ export interface Represented {
   readonly vitality: number;
 }
 
-/** An entity and the building that stands for it. */
+/**
+ * What a building stands for and the building: a sample entity, or in a
+ * codebase's world any entity, file or definition, with its page
+ * (`represented`) and the request that judged what it stands as.
+ */
 export interface SampleEntity {
-  readonly facts: EntityFacts;
+  readonly facts: EntityFacts | ThingFacts;
+  /** What its page says; a sample entity's is made from its facts. */
+  readonly represented?: Represented;
+  /** The request that judged what it stands as; an entity's own when absent. */
+  readonly judged?: { readonly about: "file" | "entity"; readonly target: string };
   readonly vitality: number;
   /** What its building is built from: the parts Jev composed for it, or a sample's hand-filled building. */
   readonly blueprint: Blueprint;

@@ -19,7 +19,7 @@
 
 import type { CodeGraph, EngineClient, GraphNode, JevClient, JevResponse, Span } from "@gaia/schema";
 import { outlinesOf } from "@gaia/terrain";
-import { type Judge, RequestFailed, areaOfRequest, composeWorld, factsOf, judgeWorld, judgedThing, keptJev, landOf, layoutWorld, planWorldRequests, requestKey, standInJev, thingsOf } from "@gaia/world";
+import { type Judge, RequestFailed, areaOfRequest, composeWorld, factsOf, judgeWorld, judgedThing, keptJev, landOf, layoutWorld, planStanding, planWorldRequests, requestKey, standInJev, thingsOf } from "@gaia/world";
 import { LOOKS } from "../renderer/terrain/looks.ts";
 import { engineJev } from "./jev.ts";
 import type { ConsentPlan, JudgedThing, Opening, WorldDocument } from "./protocol.ts";
@@ -126,6 +126,19 @@ export interface OpenWorldOptions {
   readonly standIn?: boolean;
 }
 
+/** The area a request after the looks is about, from what its state names: a file's or a definition's folder, an entity's or a directory's own, a trail's first end; the root for the sky. */
+function areaOfState(state: unknown): string {
+  const s = (state ?? {}) as Record<string, { path?: string; file?: string; from?: { path?: string } } | undefined>;
+  const folder = (path: string): string => (path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "");
+  const own = (path: string | undefined): string => (path === undefined || path.startsWith("(") ? "" : path);
+  if (s.file?.path !== undefined) return folder(s.file.path);
+  if (s.definition?.file !== undefined) return folder(s.definition.file);
+  if (s.entity !== undefined) return own(s.entity.path);
+  if (s.directory !== undefined) return own(s.directory.path);
+  if (s.trail !== undefined) return own(s.trail.from?.path);
+  return "";
+}
+
 const plural = (n: number, one: string, many = `${one}s`): string => `${n.toLocaleString("en-US")} ${n === 1 ? one : many}`;
 
 export async function openWorld({ engine, root, consent, progress, standIn = false }: OpenWorldOptions): Promise<WorldDocument> {
@@ -145,9 +158,11 @@ export async function openWorld({ engine, root, consent, progress, standIn = fal
   // cost, so it is planned only when there is a limit to weigh that against; otherwise the pass finds its own way.
   const limitUsd = await spendLimit(engine);
   const understanding = Number.isFinite(limitUsd) ? await engine.call("understanding.plan", { root }) : null;
-  // Each file's request names the definitions the graph stands on its patch, as the layout stands them.
   const planned = planWorldRequests(facts, LOOKS, { graph });
   const keys = planned.map((p) => requestKey(p.request));
+  // What every entity, file and definition stands as is asked once the understanding pass has judged how much each
+  // matters, so it is planned again then; planned now on what is held, it says what asking it will cost.
+  const standing = planStanding(facts, LOOKS, { graph }).requests;
 
   // Each file's health is Jev's quality, so it goes to the renderer once the understanding pass has judged it.
   const healthUnsent = new Set(land.patches.map((p) => p.path));
@@ -163,7 +178,7 @@ export async function openWorld({ engine, root, consent, progress, standIn = fal
 
   const { records } = await engine.call("store.read", { project, table: "answers" });
   const stored = new Map(Object.entries(records as Record<string, JevResponse>));
-  const missing = planned.filter((_, i) => !stored.has(keys[i] as string));
+  const missing = [...planned.filter((_, i) => !stored.has(keys[i] as string)), ...standing.filter((p) => !stored.has(requestKey(p.request)))];
   /** How many understanding requests are pending, when it was planned. */
   const toUnderstand = understanding === null ? null : understanding.pending.reduce((n, p) => n + p.requests, 0);
   // What goes to Jev: understanding's share is planned before Jev's links are in, so it settles to what was sent.
@@ -257,8 +272,9 @@ export async function openWorld({ engine, root, consent, progress, standIn = fal
     async ask(request) {
       const key = requestKey(request);
       const p = plannedOf.get(key);
-      // A question going out to Jev (not one kept from before) marks its area as being worked on until it returns.
-      const out = ask && p !== undefined && !stored.has(key) ? areaOfRequest(p) : null;
+      // A question going out to Jev (not one kept from before) marks its area as being worked on until it returns: a
+      // look's area, or for what a thing stands as and its composing, the area its state names.
+      const out = ask && !stored.has(key) ? (p !== undefined ? areaOfRequest(p) : areaOfState(request.state)) : null;
       if (out !== null) {
         inFlight.set(out, (inFlight.get(out) ?? 0) + 1);
         asking();
@@ -275,6 +291,12 @@ export async function openWorld({ engine, root, consent, progress, standIn = fal
           answered++;
           asking();
         }
+      } else if (p === undefined && ask && !stored.has(key) && !counted.has(key)) {
+        // What things stand as and their composing are asked after the looks: each answer still moves the count on.
+        counted.add(key);
+        answered++;
+        total = Math.max(total, answered);
+        asking();
       }
       return response;
     },
@@ -322,7 +344,8 @@ export async function openWorld({ engine, root, consent, progress, standIn = fal
   await Promise.all(writes);
 
   const judge: Judge = standIn ? "stand-in" : "jev";
-  const byThing = Object.fromEntries(planned.flatMap((p) => thingsOf(p).map((t) => [judgedThing(t), judge] as const)));
+  // Jev judged the looks, and what every file and entity stands as (a definition's with its file's).
+  const byThing = Object.fromEntries([...planned.flatMap((p) => thingsOf(p)), ...facts.files.map((f) => ({ about: "file" as const, target: f.path })), ...facts.entities.map((e) => ({ about: "entity" as const, target: e.path }))].map((t) => [judgedThing(t), judge] as const));
   const things = Object.keys(byThing).length;
   const parts = standIn ? [`${plural(things, "thing")} judged by the stand-in (GAIA_JEV=stand-in, for development)`] : [`${plural(things, "thing")} judged by Jev`];
   if (billed > 0) parts.push(`$${billed.toFixed(4)} billed`);

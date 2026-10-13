@@ -1,6 +1,8 @@
 // Prints, and never sends, every Jev request that judging Gaia's own world
-// would make: the exact bodies the engine's connector would post to
-// OpenRouter, then how many there are and what they would cost. The cost
+// would make, the looks' and what every entity, file and definition stands
+// as: the exact bodies the engine's connector would post to OpenRouter, then
+// how many there are and what they would cost. Composing follows from the
+// answers, so it is not printed. The cost
 // comes from the engine's own `jev.estimate`, the same code that would send
 // them, which reads neither the key nor the network.
 // Usage: pnpm print-world-requests [requests.json]
@@ -9,13 +11,13 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import type { CodeGraph, JevEstimate } from "@gaia/schema";
-import { factsOf, planWorldRequests } from "@gaia/world";
+import { factsOf, planStanding, planWorldRequests } from "@gaia/world";
 import { LOOKS } from "../app/renderer/terrain/looks.ts";
 
 const repo = resolve(import.meta.dirname, "..");
 const graph = JSON.parse(readFileSync(resolve(repo, "app/renderer/terrain/fixtures/gaia-graph.json"), "utf8")) as CodeGraph;
 const facts = factsOf(graph);
-const planned = planWorldRequests(facts, LOOKS, { graph });
+const planned = [...planWorldRequests(facts, LOOKS, { graph }), ...planStanding(facts, LOOKS, { graph }).requests];
 const out = process.argv[2];
 if (out !== undefined) writeFileSync(out, `${JSON.stringify(planned, null, 2)}\n`);
 else console.log(JSON.stringify(planned.map((p) => p.request), null, 2));
