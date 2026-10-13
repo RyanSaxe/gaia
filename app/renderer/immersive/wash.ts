@@ -76,6 +76,65 @@ export function easeRing(ring: readonly number[]): number[] {
   return Array.from(pts);
 }
 
+/** How near the land's own edge, meters, a traced outline runs where it follows that edge rather than meeting another area. */
+const EDGE_RUN = 2.5;
+
+/**
+ * An area's outline as the borders the map draws, as SVG path data in
+ * meters: each ring eased into a pen's line (`easeRing`), every other point
+ * kept, and drawn as a curve through the middles of its edges, less the
+ * stretches that follow the land's own edge, which the map leaves to its
+ * paint thinning into paper. The wait's pen and hedgerows and the field
+ * map's borders all draw this one path.
+ */
+export function borderPath(rings: readonly (readonly number[])[], land: LandOutline): string {
+  const f = (v: number): string => v.toFixed(1);
+  let d = "";
+  for (const raw of rings) {
+    const count = raw.length / 2;
+    if (count < 3) continue;
+    const ring = easeRing(raw);
+    const at = (k: number): [number, number] => [ring[k * 2] as number, ring[k * 2 + 1] as number];
+    const mid = (a: number, b: number): string => {
+      const [ax, az] = at(a);
+      const [bx, bz] = at(b);
+      return `${f((ax + bx) / 2)} ${f((az + bz) / 2)}`;
+    };
+    // Whether a point is a border's, judged on the outline as traced: easing pulls a stretch along a rounded corner inward.
+    const inner = (k: number): boolean => pastTheEdge(land, raw[k * 2] as number, raw[k * 2 + 1] as number) < -EDGE_RUN;
+    const step = count < 12 ? 1 : 2;
+    const kept: number[] = [];
+    for (let k = 0; k < count; k += step) kept.push(k);
+    const edge = kept.findIndex((k) => !inner(k));
+    if (edge < 0) {
+      // A ring that never meets the edge is one closed curve.
+      const n = kept.length;
+      d += `M${mid(kept[0] as number, kept[1 % n] as number)}`;
+      for (let q = 1; q <= n; q++) d += `Q${at(kept[q % n] as number).map(f).join(" ")} ${mid(kept[q % n] as number, kept[(q + 1) % n] as number)}`;
+      d += "Z";
+      continue;
+    }
+    // Otherwise each run of border points between stretches along the edge is an open curve, started just past the
+    // edge so no run wraps round the ring's start.
+    let run: number[] = [];
+    const flush = (): void => {
+      if (run.length >= 3) {
+        d += `M${at(run[0] as number).map(f).join(" ")}`;
+        for (let q = 1; q < run.length - 1; q++) d += `Q${at(run[q] as number).map(f).join(" ")} ${mid(run[q] as number, run[q + 1] as number)}`;
+        d += `L${at(run[run.length - 1] as number).map(f).join(" ")}`;
+      }
+      run = [];
+    };
+    for (let q = 1; q <= kept.length; q++) {
+      const k = kept[(edge + q) % kept.length] as number;
+      if (inner(k)) run.push(k);
+      else flush();
+    }
+    flush();
+  }
+  return d;
+}
+
 /**
  * Rings of x, z pairs in meters as one path through `px` (meters to the
  * sheet's pixels): a curve through the middles of each ring's edges, bending
