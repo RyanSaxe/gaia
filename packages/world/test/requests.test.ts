@@ -47,6 +47,7 @@ function facts(): CodeFacts {
     path,
     name,
     form: "package" as const,
+    manifest: `${path}/package.json`,
     files: 2,
     lines: 500,
     exports: 4,

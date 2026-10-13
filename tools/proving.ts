@@ -53,7 +53,7 @@ interface PlannedDir {
   readonly entity?: { readonly form: EntityForm; readonly as: "building" | "landmark"; readonly look: string; readonly doc: string };
 }
 
-const B = (look: string, doc: string, form: EntityForm = "module") => ({ form, as: "building" as const, look, doc });
+const B = (look: string, doc: string, form: EntityForm = "package") => ({ form, as: "building" as const, look, doc });
 const L = (look: string, doc: string, form: EntityForm = "package") => ({ form, as: "landmark" as const, look, doc });
 
 /**
@@ -70,55 +70,55 @@ const PLAN: readonly PlannedDir[] = [
   },
   // A brook runs through a thriving wood; its banks' entities lean on each other across it.
   { path: "crossings", health: "thriving", files: ["flow.ts:520", "channel.ts:480", "banks.ts:420", "weir.ts:360", "crossings.test.ts:180", "NOTES.md:90"], land: ["Brook valley", "A brook", "Deep wood"] },
-  { path: "crossings/west-bank", health: "thriving", files: ["index.ts:140", "path.ts:300"], entity: B("Thatched cottage", "Keeps the west bank's paths: a small module doing one modest job.") },
-  { path: "crossings/east-bank", health: "thriving", files: ["index.ts:120", "gate.ts:280"], entity: B("Storybook house", "The east bank's gatehouse: the process a person starts to cross.", "app") },
+  { path: "crossings/west-bank", health: "thriving", files: ["package.json:30", "index.ts:140", "path.ts:300"], entity: B("Thatched cottage", "Keeps the west bank's paths: a small module doing one modest job.") },
+  { path: "crossings/east-bank", health: "thriving", files: ["package.json:30", "index.ts:120", "gate.ts:280"], entity: B("Storybook house", "The east bank's gatehouse: the process a person starts to cross.") },
   { path: "crossings/mill", health: "thriving", files: ["package.json:30", "index.ts:160", "wheel.ts:380"], entity: B("Watermill", "Turns the brook's flow into work: a pipeline from one kind of data to another.", "package") },
   // A trickle through groves of mixed health, crossed by faint tracks on stepping stones.
   { path: "fords", health: "well", files: ["shallows.ts:460", "reeds.ts:380", "stones.ts:300", "fords.test.ts:140"], land: ["Meandering vale", "A trickle", "Groves and clearings"] },
-  { path: "fords/jetty", health: "tired", files: ["index.ts:120", "landing.ts:340"], entity: B("Stone croft", "A plain, sturdy croft by the near side of the ford.", "crate") },
-  { path: "fords/gravel", health: "tired", files: ["index.ts:110", "ring.ts:320"], entity: L("Stone ring", "The shared definitions both sides of the ford agree on.") },
+  { path: "fords/jetty", health: "tired", files: ["Cargo.toml:30", "index.ts:120", "landing.ts:340"], entity: B("Stone croft", "A plain, sturdy croft by the near side of the ford.", "crate") },
+  { path: "fords/gravel", health: "tired", files: ["package.json:30", "index.ts:110", "ring.ts:320"], entity: L("Stone ring", "The shared definitions both sides of the ford agree on.") },
   // A still pond in a wet hollow, and a meadow pond with a service on its shore.
   { path: "hollow", health: "thriving", files: ["package.json:30", "index.ts:220", "pool.ts:520", "depth.ts:420", "hollow.test.ts:160"], land: ["Mossy basin", "A still pond", "Wet hollow"], entity: L("Lantern tower", "Lights the rest: the entity every other area looks to.") },
-  { path: "pondside", health: "well", files: ["server.ts:240", "queue.ts:420", "handoff.ts:380:failing", "pondside.test.ts:150"], land: ["Pond meadow", "A still pond", "Old meadow"], entity: B("Archive tower", "Keeps the records requests leave at the pond.", "service") },
-  { path: "pondside/records", health: "tired", files: ["index.ts:100", "ledger.ts:300"], entity: B("Archive tower", "An archive gone tired: untested, complex, full of TODOs.") },
+  { path: "pondside", health: "well", files: ["package.json:30", "server.ts:240", "queue.ts:420", "handoff.ts:380:failing", "pondside.test.ts:150"], land: ["Pond meadow", "A still pond", "Old meadow"], entity: B("Archive tower", "Keeps the records requests leave at the pond.") },
+  { path: "pondside/records", health: "tired", files: ["package.json:30", "index.ts:100", "ledger.ts:300"], entity: B("Archive tower", "An archive gone tired: untested, complex, full of TODOs.") },
   // Hills, terraces, moor, dunes and downs: every remaining land, each without water so its own landform shows.
   { path: "hills", health: "thriving", files: ["slopes.ts:480", "crests.ts:420", "hills.test.ts:140"], land: ["Clover hills", "No water", "Groves and clearings"] },
-  { path: "hills/kiln", health: "tired", files: ["index.ts:110", "fire.ts:300"], entity: B("Thatched cottage", "A cottage gone tired: untested and tangled.") },
+  { path: "hills/kiln", health: "tired", files: ["package.json:30", "index.ts:110", "fire.ts:300"], entity: B("Thatched cottage", "A cottage gone tired: untested and tangled.") },
   { path: "hills/oak", health: "thriving", files: ["package.json:30", "index.ts:180", "branches.ts:420"], entity: L("Great oak", "A large library the others build from.") },
   { path: "terraces", health: "thriving", files: ["steps.ts:420", "stages.test.ts:380", "order.test.ts:300", "pipeline.ts:360"], land: ["Silver terraces", "No water", "Rocky heath"] },
   { path: "terraces/croft", health: "thriving", files: ["Cargo.toml:30", "lib.rs:200", "press.rs:380"], entity: B("Stone croft", "Native code close to the machine, every test passing.", "crate") },
   { path: "terraces/ring", health: "ruin", files: ["package.json:30", "index.ts:160", "schema.ts:360"], entity: L("Stone ring", "Shared definitions in ruin: failing tests, compiler errors, nothing imports half of it.") },
   { path: "moor", health: "thriving", files: ["guide.md:620", "decisions.md:540", "glossary.md:360"], land: ["Heather moor", "No water", "Old meadow"] },
-  { path: "moor/archive", health: "thriving", files: ["index.ts:120", "catalog.ts:320"], entity: B("Archive tower", "Keeps the definitions others read, in good order.") },
-  { path: "moor/henge", health: "thriving", files: ["index.ts:120", "stones.ts:300"], entity: L("Stone ring", "The schema every entity agrees on, every test passing.") },
+  { path: "moor/archive", health: "thriving", files: ["package.json:30", "index.ts:120", "catalog.ts:320"], entity: B("Archive tower", "Keeps the definitions others read, in good order.") },
+  { path: "moor/henge", health: "thriving", files: ["package.json:30", "index.ts:120", "stones.ts:300"], entity: L("Stone ring", "The schema every entity agrees on, every test passing.") },
   { path: "dunes", health: "thriving", files: ["settings.json:700", "data.csv:900", "deploy.sh:220", "lint.toml:120"], land: ["Golden dunes", "No water", "Rocky heath"] },
   { path: "dunes/keep", health: "tired", files: ["Cargo.toml:30", "lib.rs:220", "guard.rs:380"], entity: L("Battlemented keep", "A guarded core gone tired.", "crate") },
-  { path: "dunes/ledger", health: "ruin", files: ["index.ts:120", "entries.ts:300"], entity: B("Archive tower", "Records in ruin: failing tests and errors throughout.") },
+  { path: "dunes/ledger", health: "ruin", files: ["package.json:30", "index.ts:120", "entries.ts:300"], entity: B("Archive tower", "Records in ruin: failing tests and errors throughout.") },
   // The large area: a container of many subdirectories, nested deep, with a tiny one beside.
-  { path: "downs", health: "thriving", files: ["index.ts:120", "atlas.ts:720", "survey.ts:640", "hedges.ts:520", "lanes.ts:460"], land: ["Broad downs", "No water", "Groves and clearings"], entity: L("Battlemented keep", "The guarded core the rest of the downs runs on.", "package") },
+  { path: "downs", health: "thriving", files: ["package.json:30", "index.ts:120", "atlas.ts:720", "survey.ts:640", "hedges.ts:520", "lanes.ts:460"], land: ["Broad downs", "No water", "Groves and clearings"], entity: L("Battlemented keep", "The guarded core the rest of the downs runs on.", "package") },
   { path: "downs/fields", health: "thriving", files: ["barley.ts:320", "rye.ts:280"] },
   { path: "downs/orchard", health: "well", files: ["apples.ts:300", "pears.ts:220", "orchard.test.ts:100"] },
-  { path: "downs/oak", health: "tired", files: ["index.ts:120", "roots.ts:380"], entity: L("Great oak", "A great oak gone tired.") },
-  { path: "downs/deep", health: "thriving", files: ["index.ts:120", "one.ts:160"], entity: B("Thatched cottage", "A module nested five deep, healthy at the top and in ruin at the bottom.") },
+  { path: "downs/oak", health: "tired", files: ["package.json:30", "index.ts:120", "roots.ts:380"], entity: L("Great oak", "A great oak gone tired.") },
+  { path: "downs/deep", health: "thriving", files: ["package.json:30", "index.ts:120", "one.ts:160"], entity: B("Thatched cottage", "A module nested five deep, healthy at the top and in ruin at the bottom.") },
   { path: "downs/deep/deeper", health: "well", files: ["two.ts:140"] },
   { path: "downs/deep/deeper/deeper-still", health: "tired", files: ["three.ts:120"] },
   { path: "downs/deep/deeper/deeper-still/deepest", health: "failing", files: ["four.ts:110"] },
   { path: "downs/deep/deeper/deeper-still/deepest/bottom", health: "ruin", files: ["tmp2.ts:100"] },
   { path: "downs/tiny", health: "thriving", files: ["seed.ts:4"] },
   // Mixed: thriving files beside failing ones, one failing grove among them, and a tired mill and lantern.
-  { path: "mixed", health: "thriving", files: ["main.ts:160", "sound.ts:520", "steady.ts:460", "failing-grove.ts:640:decayed", "patched.ts:420:tired", "mixed.test.ts:160"], land: ["Clover hills", "No water", "Deep wood"], entity: B("Watermill", "A pipeline with sound parts beside failing ones.", "package") },
-  { path: "mixed/workshop", health: "tired", files: ["package.json:30", "index.ts:140", "gears.ts:400"], entity: B("Storybook house", "An application gone tired: untested and complex.", "app") },
-  { path: "mixed/beacon", health: "tired", files: ["index.ts:120", "lamp.ts:340"], entity: L("Lantern tower", "A lantern tower gone tired.") },
+  { path: "mixed", health: "thriving", files: ["package.json:30", "main.ts:160", "sound.ts:520", "steady.ts:460", "failing-grove.ts:640:decayed", "patched.ts:420:tired", "mixed.test.ts:160"], land: ["Clover hills", "No water", "Deep wood"], entity: B("Watermill", "A pipeline with sound parts beside failing ones.", "package") },
+  { path: "mixed/workshop", health: "tired", files: ["package.json:30", "index.ts:140", "gears.ts:400"], entity: B("Storybook house", "An application gone tired: untested and complex.") },
+  { path: "mixed/beacon", health: "tired", files: ["package.json:30", "index.ts:120", "lamp.ts:340"], entity: L("Lantern tower", "A lantern tower gone tired.") },
   // Ruins: a whole area failing, its brook crossed by bridges in decline.
-  { path: "ruins", health: "ruin", files: ["index.ts:140", "collapse.ts:620", "rubble.ts:520", "ruins.test.ts:160", "README.md:120"], land: ["Brook valley", "A brook", "Deep wood"], entity: L("Great willow", "A whole area in ruin: failing tests, compiler errors and dead code throughout.") },
-  { path: "ruins/cottage", health: "ruin", files: ["index.ts:110", "hearth.ts:300"], entity: B("Thatched cottage", "A cottage in ruin.") },
+  { path: "ruins", health: "ruin", files: ["package.json:30", "index.ts:140", "collapse.ts:620", "rubble.ts:520", "ruins.test.ts:160", "README.md:120"], land: ["Brook valley", "A brook", "Deep wood"], entity: L("Great willow", "A whole area in ruin: failing tests, compiler errors and dead code throughout.") },
+  { path: "ruins/cottage", health: "ruin", files: ["package.json:30", "index.ts:110", "hearth.ts:300"], entity: B("Thatched cottage", "A cottage in ruin.") },
   { path: "ruins/croft", health: "ruin", files: ["Cargo.toml:30", "lib.rs:200", "forge.rs:340"], entity: B("Stone croft", "A croft in ruin.", "crate") },
-  { path: "ruins/house", health: "ruin", files: ["main.ts:150", "utils2.ts:280"], entity: B("Storybook house", "An application in ruin.", "app") },
+  { path: "ruins/house", health: "ruin", files: ["package.json:30", "main.ts:150", "utils2.ts:280"], entity: B("Storybook house", "An application in ruin.") },
   { path: "ruins/mill", health: "ruin", files: ["package.json:30", "index.ts:140", "race.ts:360"], entity: B("Watermill", "A mill in ruin.", "package") },
   { path: "ruins/keep", health: "ruin", files: ["Cargo.toml:30", "lib.rs:200", "walls.rs:380"], entity: L("Battlemented keep", "A keep in ruin.", "crate") },
-  { path: "ruins/lighthouse", health: "ruin", files: ["index.ts:110", "lens.ts:300"], entity: L("Lantern tower", "A lantern tower in ruin.") },
-  { path: "ruins/oak", health: "ruin", files: ["index.ts:110", "temp.ts:300"], entity: L("Great oak", "A great oak in ruin.") },
-  { path: "hollow/willow", health: "tired", files: ["index.ts:110", "fronds.ts:300"], entity: L("Great willow", "A great willow gone tired.") },
+  { path: "ruins/lighthouse", health: "ruin", files: ["package.json:30", "index.ts:110", "lens.ts:300"], entity: L("Lantern tower", "A lantern tower in ruin.") },
+  { path: "ruins/oak", health: "ruin", files: ["package.json:30", "index.ts:110", "temp.ts:300"], entity: L("Great oak", "A great oak in ruin.") },
+  { path: "hollow/willow", health: "tired", files: ["package.json:30", "index.ts:110", "fronds.ts:300"], entity: L("Great willow", "A great willow gone tired.") },
 ];
 
 /** Dependencies, as `from -> to`, with how a trail between them looks and how much Jev wants it. */
@@ -368,12 +368,13 @@ const entities: EntityFacts[] = PLAN.filter((d) => d.entity !== undefined).map((
   const entry = entryOf(d.path);
   const exported = files.find((f) => f.path === entry.path)?.symbols.filter((s) => s.exported).length ?? 0;
   const manifest = mine.find((f) => /(^|\/)(package\.json|Cargo\.toml)$/.test(f.path) && parentOf(f.path) === d.path)?.path;
+  if (manifest === undefined) throw new Error(`${d.path || "The root"} is planned as an entity but has no package.json or Cargo.toml to declare it.`);
   const sum = (pick: (f: PlannedFacts) => number): number => mine.reduce((n, f) => n + pick(f), 0);
   return {
     path: d.path,
     name: d.path === "" ? "proving" : (d.path.split("/").pop() as string),
     form: plan.form,
-    ...(manifest === undefined ? {} : { manifest }),
+    manifest,
     entry: entry.path,
     files: mine.length,
     lines: sum((f) => f.lines),

@@ -1081,10 +1081,9 @@ export function standInJev(looks: Looks): JevClient {
           answers[id] = { type: "noul", noul: 0.2 + 0.6 * rand(seedOf(`${target}:${id}`)).next() };
         } else if (q.type === "noul") {
           const deps = ((state.entity as { dependsOn?: { name: string; dependents?: number; dependedOnBy?: string }[] } | undefined)?.dependsOn ?? []).find((d) => q.instructions.includes(`on ${d.name}.`));
-          const form = (state.entity as { form?: string } | undefined)?.form;
           // How many entities lean on the one depended on: a number in the facts, words (`howMany`) in the judged design.
           const dependents = typeof deps?.dependents === "number" ? deps.dependents : countOfWords(deps?.dependedOnBy);
-          const p = 0.25 + 0.08 * Math.min(5, dependents) + (form === "app" || form === "service" ? 0.1 : 0);
+          const p = 0.25 + 0.08 * Math.min(5, dependents);
           answers[id] = { type: "noul", noul: Math.min(0.95, p) };
         } else {
           answers[id] = { type: "score", score: 0, probabilities: { 0: 1 }, confidence: 1 };

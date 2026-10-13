@@ -44,6 +44,7 @@ const preset = (name: string): Pick<SampleEntity, "blueprint" | "kindName"> => {
 };
 
 const entity = (e: Partial<EntityFacts> & Pick<EntityFacts, "path" | "name" | "form">): EntityFacts => ({
+  manifest: `${e.path}/${e.form === "crate" ? "Cargo.toml" : "package.json"}`,
   files: 10,
   lines: 1500,
   exports: 20,
@@ -105,7 +106,7 @@ export const SAMPLE_ENTITIES: readonly SampleEntity[] = [
     facts: entity({
       path: "app/world-service",
       name: "world-service",
-      form: "service",
+      form: "package",
       entry: "app/world-service/index.ts",
       files: 9,
       lines: 2600,
@@ -120,7 +121,7 @@ export const SAMPLE_ENTITIES: readonly SampleEntity[] = [
     facts: entity({
       path: "app/renderer/terrain",
       name: "terrain lab",
-      form: "module",
+      form: "package",
       entry: "app/renderer/terrain/lab.ts",
       files: 17,
       lines: 4600,
@@ -134,7 +135,7 @@ export const SAMPLE_ENTITIES: readonly SampleEntity[] = [
     facts: entity({
       path: "app/main",
       name: "main",
-      form: "module",
+      form: "package",
       entry: "app/main/index.ts",
       files: 4,
       lines: 420,
@@ -165,7 +166,7 @@ export const LANDMARK_ENTITIES: readonly EntityFacts[] = [
   entity({
     path: "app",
     name: "@gaia/app",
-    form: "app",
+    form: "package",
     files: 40,
     lines: 9800,
     exports: 6,
@@ -204,7 +205,7 @@ export const LANDMARK_ENTITIES: readonly EntityFacts[] = [
   entity({
     path: "tools",
     name: "tools",
-    form: "module",
+    form: "package",
     files: 6,
     lines: 700,
     exports: 4,
@@ -279,7 +280,7 @@ export const SAMPLE_FILES: readonly FileFacts[] = [
   file("packages/schema/src/hash.ts", 34),
 ];
 
-const FORMS: Readonly<Record<EntityFacts["form"], string>> = { package: "Package", crate: "Rust crate", service: "Service", app: "App", module: "Module" };
+const FORMS: Readonly<Record<EntityFacts["form"], string>> = { package: "Package", crate: "Rust crate" };
 const LANGUAGES: Readonly<Record<string, string>> = { typescript: "TypeScript", rust: "Rust" };
 const count = (n: number, one: string): string => `${n.toLocaleString()} ${n === 1 ? one : `${one}s`}`;
 /** The last part of a path, which names an entity among its neighbors; the root's entity is the repository's own. */
