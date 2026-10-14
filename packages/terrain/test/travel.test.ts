@@ -130,6 +130,20 @@ describe("travel along the trails", { timeout: 20_000 }, () => {
     expect(at.s).toBeCloseTo(trip.length, 2);
   });
 
+  it("never stands waiting for the way ahead when given a least pace: it slows to it, and goes on", () => {
+    const trip = planTrip(way, { start: 0, end: 0 });
+    let at = travelFrom(trip, trip.heading[0] as number);
+    for (let k = 0; k < 60 * 60 && !at.done; k++) {
+      const next = travelStep(trip, at, DT, at.yaw, false, 200, 4.2);
+      // Only a bend slow enough for the view, or the end, slows it below the least pace.
+      const i = Math.min(trip.pace.length - 1, Math.round((next.s / trip.length) * (trip.pace.length - 1)));
+      if (next.going && next.s > 5) expect(next.v).toBeGreaterThanOrEqual(Math.min(4.2, trip.pace[Math.max(0, i - 2)] as number, trip.pace[i] as number, trip.pace[Math.min(trip.pace.length - 1, i + 2)] as number) * 0.95);
+      expect(at.v - next.v).toBeLessThanOrEqual(TRAVEL.accel * DT * 1.05 + 1e-6);
+      at = next;
+    }
+    expect(at.s).toBeGreaterThan(200);
+  });
+
   it("goes no faster than its pace", () => {
     const trip = planTrip(way, { start: 0, end: 0 }, null, 35);
     const steps = take(trip, trip.heading[0] as number);

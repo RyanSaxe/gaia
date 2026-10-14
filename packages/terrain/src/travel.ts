@@ -447,10 +447,11 @@ export function travelFrom(trip: Trip, yaw: number): Travel {
  * last yaw, or where a hand or a key turned it since. With `stop`, the person
  * has taken the keys: the trip slows them along the way at `TRAVEL.brake`
  * and leaves the view to them. The world stands ready only `ready` meters
- * along: the body slows at the steady rate to wait there, and goes on as it
- * moves on.
+ * along: the body slows at the steady rate toward it, and goes on as it moves
+ * on; never slower than `least`, so a trip never stands waiting for the way
+ * ahead, but goes on at that pace as a walk would.
  */
-export function travelStep(trip: Trip, at: Travel, dt: number, yaw: number, stop = false, ready = Infinity): Travel {
+export function travelStep(trip: Trip, at: Travel, dt: number, yaw: number, stop = false, ready = Infinity, least = 0): Travel {
   if (at.done || dt <= 0) return at;
   const arrived = at.s >= trip.length - 1e-3;
   const ahead = arrived ? (trip.face ?? yaw) : headingAt(trip, at.s);
@@ -468,13 +469,13 @@ export function travelStep(trip: Trip, at: Travel, dt: number, yaw: number, stop
   // too; and slowing as steadily to wait where the world ahead is not yet ready.
   const next = Math.min(trip.length, at.s + at.v * dt);
   const waits = ready < trip.length;
-  const cap = Math.min(paceAt(trip, next), waits ? Math.sqrt(2 * TRAVEL.accel * Math.max(0, ready - next)) : Infinity);
+  const cap = Math.min(paceAt(trip, next), waits ? Math.max(least, Math.sqrt(2 * TRAVEL.accel * Math.max(0, ready - next))) : Infinity);
   let v = 0;
   if (stop) v = Math.min(cap, Math.max(0, at.v - TRAVEL.brake * dt));
   else if (going) v = Math.min(cap, at.v + TRAVEL.accel * dt);
   // Near the end the pace falls to nothing; the body creeps the last of the way rather than never arriving.
   if (going && !stop && !waits) v = Math.max(v, Math.min(TRAVEL.creep, at.v));
-  const s = Math.min(trip.length, waits ? Math.max(at.s, ready) : Infinity, at.s + ((at.v + v) / 2) * dt);
+  const s = Math.min(trip.length, waits && least <= 0 ? Math.max(at.s, ready) : Infinity, at.s + ((at.v + v) / 2) * dt);
   const x = sampleAt(trip, trip.points, s, 2, 0);
   const z = sampleAt(trip, trip.points, s, 2, 1);
   const end = s >= trip.length - 1e-3;
