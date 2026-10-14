@@ -7,15 +7,23 @@
 // No Three.js and no DOM: the bake worker runs it, and the same terrain and
 // request give the same stand on any thread.
 
-import { type BuildingPlan, type Built, type RouteSpec, rand, seedOf } from "@gaia/schema";
+import { type Blueprint, type BuildingPlan, type Built, type Library, type RouteSpec, rand, seedOf } from "@gaia/schema";
 import { areaVitality } from "@gaia/world";
-import { type Area, type BuildingSite, type Capsule, type Circle, clearingsOf, discOf, type EdgeStone, edgeStones, type Extent, findLandmarkSite, frameOf, findSite, groundedBase, type Habitat, heightAt, isWet, type LandEdits, type LandmarkSite, type LandSite, levelPad, levelTrails, type Occupied, type OwnedSite, type PadEdit, type Placement, PLANT_SLOPE, planTrails, scatterComponents, scatterPlants, type ScatterRule, siteAt, siteToWorld, slopeAt, type Terrain, TILE, trailDiscs, type TrailEnd, type TrailNetwork, type TrailRequest, type WayEdit, wildsRing, type WildsRing, type WorldSpec, worldOf } from "@gaia/terrain";
+import { type Area, type BuildingSite, type Capsule, type Circle, clearingsOf, discOf, type EdgeStone, edgeStones, type Extent, findBankSite, findLandmarkSite, frameOf, findSite, regionAt, groundedBase, type Habitat, heightAt, isWet, type LandEdits, type LandmarkSite, type LandSite, levelPad, levelTrails, type Occupied, type OwnedSite, type PadEdit, type Placement, PLANT_SLOPE, planTrails, scatterComponents, scatterPlants, type ScatterRule, siteAt, siteToWorld, slopeAt, type Terrain, TILE, trailDiscs, type TrailEnd, type TrailNetwork, type TrailRequest, type WayEdit, wildsRing, type WildsRing, type WorldSpec, worldOf } from "@gaia/terrain";
 
-/** A building to site: its plan, what stands beside it, and the name its trails go by. */
+/** A building to site: its plan, what stands beside it, the name its trails go by, and whether it stands on a stream's bank. */
 export interface StandBuilding {
   readonly name: string;
   readonly plan: BuildingPlan;
   readonly beside: Extent | null;
+  /** Where its feature turns, for a building whose feature needs running water (`needsBank`): it stands on the bank of its area's stream, its wheel in the water (`findBankSite`). */
+  readonly wheel?: Extent | null;
+}
+
+/** Whether a building's feature needs running water, so the building stands on a stream's bank. */
+export function needsBank(blueprint: Blueprint, lib: Library): boolean {
+  const use = blueprint.slots.feature?.use;
+  return use !== undefined && (lib.get(use).needs ?? []).includes("running water");
 }
 
 /** A landmark's name and how far its footprint reaches at the ground, meters. */
@@ -133,6 +141,8 @@ export interface Stand {
   readonly edits: LandEdits;
   /** Milliseconds each step of standing took: the buildings' sites, the landmarks and trails, the trees, the symbols, the understory, and the wild ring with the edging stones. */
   readonly took: Readonly<Record<string, number>>;
+  /** Each building whose feature needs running water that found no stream's bank to stand on, by name: none in any world the tests know. */
+  readonly dry: readonly string[];
 }
 
 /** What every tile's understory scatters by: the rules, seed and places, and what already stands for it to keep clear of. */
@@ -185,23 +195,6 @@ export function scatterTile(t: Terrain, plan: ScatterPlan, ti: number, tj: numbe
   return scatterComponents(t, plan.rules, plan.seed, plan.occupied.filter(near), { canopy: plan.canopy.filter(near), ...(plan.open === undefined ? {} : { open: plan.open }) }, { sites, keep });
 }
 
-/** The reach of a feature's solid parts in the house's frame, or null when it has none. */
-export function extentOf(feature: Built | undefined): Extent | null {
-  if (feature === undefined) return null;
-  const box = { x0: Infinity, x1: -Infinity, z0: Infinity, z1: -Infinity };
-  for (const part of feature.parts) {
-    if (part.collision !== "solid") continue;
-    for (let i = 0; i < part.positions.length; i += 3) {
-      const x = part.positions[i] as number;
-      const z = part.positions[i + 2] as number;
-      box.x0 = Math.min(box.x0, x);
-      box.x1 = Math.max(box.x1, x);
-      box.z0 = Math.min(box.z0, z);
-      box.z1 = Math.max(box.z1, z);
-    }
-  }
-  return Number.isFinite(box.x0) ? box : null;
-}
 
 /** How far a landmark reaches at the ground: its standing pieces within a meter of it, at most 10 m. Fallen stone that grows in at its foot is walked over, so it does not count. */
 export function landmarkBase(built: Pick<Built, "parts">): number {
@@ -474,8 +467,16 @@ export function standWorld(t: Terrain, req: StandRequest, tiles?: readonly (read
   const code = req.code;
   const sites: BuildingSite[] = [];
   const pads: PadEdit[] = [];
+  const dry: string[] = [];
   req.buildings.forEach((b, i) => {
-    const site = findSite(t, b.plan, sites, 30, b.beside, code?.lots[i] ?? null);
+    const lot = code?.lots[i] ?? null;
+    let site: BuildingSite = findSite(t, b.plan, sites, 30, b.beside, lot);
+    // A building whose wheel needs running water stands on the bank of its own area's stream.
+    if (b.wheel !== undefined && b.wheel !== null && b.beside !== null) {
+      const bank = findBankSite(t, b.plan, b.beside, b.wheel, regionAt(t.spec, lot?.x ?? site.x, lot?.z ?? site.z), sites, lot);
+      if (bank === null) dry.push(b.name);
+      else site = bank;
+    }
     pads.push(levelPad(t, b.plan, site, b.beside));
     sites.push(site);
   });
@@ -591,5 +592,5 @@ export function standWorld(t: Terrain, req: StandRequest, tiles?: readonly (read
   const wilds = wildsRing(t);
   const edging = network.ways.map((way) => edgeStones(t, way, seedOf(`${way.id}/edging`)));
   mark("wilds");
-  return { sites, landmarks, network, trees, placements, symbols, tiles: stood, scatter, wilds, edging, edits: { pads, discs: landmarks.map((s) => discOf(s.site)), ways }, took };
+  return { sites, landmarks, network, trees, placements, symbols, tiles: stood, scatter, wilds, edging, edits: { pads, discs: landmarks.map((s) => discOf(s.site)), ways }, took, dry };
 }
