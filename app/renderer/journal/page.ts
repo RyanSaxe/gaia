@@ -261,6 +261,21 @@ function codeOf(at: readonly number[], body: Full, base: number, pieces: readonl
   return code;
 }
 
+/**
+ * A page of a file's code as a riffle's leaf shows it in passing: the file's path as its running head, its lines
+ * from `first` set as every page sets code, and its number.
+ */
+export function renderPassingPage(path: string, first: number, lines: readonly string[], folio: string): HTMLElement {
+  const page = el("div", "jp");
+  const head = el("div", "jp-head");
+  head.append(el("div", "jp-running", path.split("/").join(" / ")));
+  const body = el("div", "jp-body");
+  const text: Full = { kind: "full", first, lines, marks: [] };
+  body.append(codeOf(lines.map((_, k) => k), text, baseIndent(lines), highlight(lines, path)));
+  page.append(head, body, el("div", "jp-folio", folio));
+  return page;
+}
+
 /** Where a page's text is set in full: a turn there, and the number of its first page in the appendix, such as "5,475a". */
 export interface InFull {
   readonly turn: () => void;
