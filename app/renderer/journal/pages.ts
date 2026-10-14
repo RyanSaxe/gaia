@@ -6,13 +6,14 @@
 // what Jev says of it; a long list runs on over the spreads after. Each
 // spread is drawn from its words (`words.ts`) and its picture when it comes
 // into view, never before its picture is ready. While a page is still being
-// made, the book leafs through pages that are whole already (`leaf`).
+// made, the book riffles toward it through pages of the code it passes
+// (`passing`).
 
 import { type Journal, type JournalEntry, type PageRoom, entityOf } from "@gaia/world";
 import type { BookPages, Spread } from "./book.ts";
 import { type CaptionFact, conceptsCaption } from "./caption.ts";
 import { tapsOf } from "./maps.ts";
-import { type InFull, fullItems, pagePx, renderCross, renderFullPage, renderNameLine, renderPage, renderPicture, renderTitle, renderTraveller } from "./page.ts";
+import { type InFull, fullItems, pagePx, renderCross, renderFullPage, renderNameLine, renderPage, renderPassingPage, renderPicture, renderTitle, renderTraveller } from "./page.ts";
 import { type Full, type PageWords, type WordsSource, appendixWords, contentsWords, fileOfEntry, leadFiles, wordsOf } from "./words.ts";
 
 /** A page's size, its own pixels. */
@@ -20,8 +21,6 @@ const PAGE_SIZE = { w: 520, h: 660 } as const;
 /** How many of the things after an open page, and before it, are painted ahead of the reader. */
 const AHEAD = 5;
 const BEHIND = 5;
-/** How far along the book a page whole already is looked for, to leaf through while another is made, in spreads. */
-const LEAF_REACH = 600;
 /** How near a tap must fall to a map's pencil cross to travel there, in the page's pixels. */
 const CROSS_REACH = 16;
 /** How many rows of a list a page holds: under the heading, and under a running head on the pages it runs on to. */
@@ -99,6 +98,11 @@ const rowsOn = (page: number, lead = 0): { from: number; to: number } => {
 };
 /** The files whose text an entry's page needs: what it shows, and the files its lead's snippets come from. */
 const textsOf = (words: WordsSource | null, e: JournalEntry): string[] => [...new Set([...(fileOfEntry(e) === undefined ? [] : [fileOfEntry(e) as string]), ...(words === null ? [] : leadFiles(words, e))])];
+
+/** A file a riffle's leaves never show: a document, or data that isn't code. */
+const NOT_CODE = /\.(md|mdx|markdown|txt|rst|json|lock|svg)$/i;
+/** How many files along a riffle's way its leaves are drawn from, and how many of a file's lines a leaf is given. */
+const PASSING = { files: 12, lines: 44 } as const;
 
 /** How many tabs the fore-edge holds at a size that reads. */
 export const TABS = 7;
@@ -315,28 +319,63 @@ export function journalPages(src: JournalPagesSource): BookPages {
     if (k > 0) return inFull(full.id, k - 1);
     return n > 0 ? inFull(ids[n - 1] as string, "end") : (places[places.length - 1] ?? null);
   }
-  /**
-   * Whether a place's spread can be drawn whole now, with nothing to wait for: the contents after the title page, a
-   * folder's list running on, the map and a page whose code has come, beside its map, and the appendix's pages of code
-   * that has come. A thing's painting is never one, since it may still be being made.
-   */
-  function wholeNow(at: string): boolean {
-    const words = src.words();
-    if (words === null) return false;
-    const full = fullAt(at);
-    if (full !== null) return pagesInFull(full.id) !== null;
-    const [of, kk] = at.split(SEP);
-    const k = Number(kk ?? 0);
-    if (of === "map") return src.endpaper("left") !== null;
-    if (of === "contents") return k > 0;
-    const e = words.journal.entry(of as string);
-    if (e === undefined) return false;
-    if (e.kind === "chapter" && k > 0) return true;
-    if (!textsOf(words, e).every((f) => words.lines(f) !== undefined)) return false;
-    return k > 0 || (mapped(e) && src.map(e.of) !== null);
-  }
+  /** Every file whose text has come, in the order it came, which a riffle's leaves can show. */
+  const arrived: string[] = [];
+  const fetchText = (file: string): void => {
+    void src.text(file).then(() => {
+      if (!arrived.includes(file) && (src.words()?.lines(file)?.length ?? 0) > 0) arrived.push(file);
+    });
+  };
+  /** A deterministic draw in 0..1 for a name. */
+  const draw = (name: string): number => ([...name].reduce((h, c) => Math.imul(h ^ c.charCodeAt(0), 16777619), 2166136261) >>> 0) / 4294967296;
 
   return {
+    passing(from, toward) {
+      const words = src.words();
+      if (words === null) return () => null;
+      const entryOf = (at: string): JournalEntry | undefined => words.journal.entry(fullAt(at)?.id ?? (at.split(SEP)[0] as string));
+      const [a, b] = [entryOf(from), entryOf(toward)];
+      const all = words.journal.entries;
+      const [i0, i1] = [a === undefined ? 0 : all.indexOf(a), b === undefined ? all.length - 1 : all.indexOf(b)];
+      const lo = Math.min(i0, i1);
+      const hi = Math.max(i0, i1);
+      // The files the way passes, a dozen spread evenly along it, asked for now so they come while the leaves fly.
+      const along: string[] = [];
+      const step = Math.max(1, Math.floor((hi - lo) / PASSING.files));
+      for (let i = lo; i <= hi; i += step) {
+        const e = all[i];
+        const file = e === undefined ? undefined : fileOfEntry(e);
+        if (file !== undefined && !NOT_CODE.test(file) && !along.includes(file)) along.push(file);
+      }
+      for (const f of along) fetchText(f);
+      const [p0, p1] = [a?.page ?? 0, b?.page ?? 0];
+      return (k, of) => {
+        const t = of <= 1 ? 0 : k / (of - 1);
+        // The file nearest this far along the way whose text has come, else any that has.
+        const want = Math.round(t * (along.length - 1));
+        const ready = (f: string): boolean => arrived.includes(f);
+        let file: string | undefined;
+        for (let d = 0; d < along.length && file === undefined; d++) file = [along[want + d], along[want - d]].find((f) => f !== undefined && ready(f));
+        file ??= arrived.length === 0 ? undefined : arrived[k % arrived.length];
+        if (file === undefined) return null;
+        const lines = words.lines(file) ?? [];
+        // Open on one of the file's definitions, drawn by the leaf's place, else its top.
+        const defs = words.world.symbols.filter((s) => s.id.startsWith(`${file}#`) && s.lines > 3);
+        const def = defs[Math.floor(draw(`${file}:${k}`) * defs.length)];
+        const first = def?.line ?? 1;
+        return renderPassingPage(file, first, lines.slice(first - 1, first - 1 + PASSING.lines).map((l) => (l.length > 400 ? `${l.slice(0, 400)} …` : l)), Math.round(p0 + t * (p1 - p0)).toLocaleString("en-US"));
+      };
+    },
+    fraction(at) {
+      // The journal runs to nine tenths of the book, and the appendix holds the rest.
+      const full = fullAt(at);
+      if (full !== null) {
+        const { ids, at: where } = inOrder();
+        return 0.9 + (0.1 * (where.get(full.id) ?? 0)) / Math.max(1, ids.length);
+      }
+      const { order, places } = index();
+      return (0.9 * (order.get(at) ?? 0)) / Math.max(1, places.length - 1);
+    },
     spread(at): Spread {
       const full = fullAt(at);
       if (full !== null) return fullSpread(full.id, full.k);
@@ -358,22 +397,10 @@ export function journalPages(src: JournalPagesSource): BookPages {
       const here = words.journal.entries.indexOf(e);
       const around = [...words.journal.entries.slice(here + 1, here + 1 + AHEAD), ...words.journal.entries.slice(Math.max(0, here - BEHIND), here)];
       src.ahead(around.filter((n) => !mapped(n)).map((n) => n.of));
-      for (const n of [e, ...around]) for (const file of textsOf(words, n)) void src.text(file);
+      for (const n of [e, ...around]) for (const file of textsOf(words, n)) fetchText(file);
       return entrySpread(words, e, k);
     },
     next: nextPlace,
-    leaf(from, toward) {
-      // The nearest page whole already on the way toward the one asked for, or else the nearest the other way.
-      const forward = this.order(from, toward) < 0;
-      for (const by of forward ? ([1, -1] as const) : ([-1, 1] as const)) {
-        let at: string | null = from;
-        for (let n = 0; n < LEAF_REACH && at !== null; n++) {
-          at = nextPlace(at, by);
-          if (at !== null && at !== toward && wholeNow(at)) return at;
-        }
-      }
-      return null;
-    },
     order(a, b) {
       const { order } = index();
       const { at: where } = inOrder();

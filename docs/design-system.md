@@ -762,6 +762,7 @@ finger and keys all follow the same three rules.
   with the minimap on its cover, and the compass at the top right are the
   only things on the screen that are not the world: a tap on the journal
   or the minimap's land (or M) opens the journal at its map, a tap on the
+  end of the journal's ribbon opens it at the ribbon's page, a tap on the
   minimap's edge tucks it away, "/" lays the journal's finder over the
   world, and the compass opens the slip. A tap on the open map
   is the one way to send the person far: it is a paper action, so it belongs
@@ -793,11 +794,55 @@ leaves a click to what is under it, and nothing turns. Nothing marks a
 page's edge, which is paper like the rest of the page.
 
 A page is never turned to before it is whole, its code and its painting
-come, and nothing on a page changes once it is seen. While the page asked for is still being made, the
-book leafs slowly through pages that are whole already (the contents, a
-folder's list, code that has come), the way a reader looks for a page, and
-turns to it once it is whole. A book opened at a page still being made
-opens at the map and leafs on to it.
+come, and nothing on a page changes once it is seen. The page beside the
+open one is reached by turning one leaf. While that page's painting is
+still coming, the leaf lifts as it does under the pointer and waits up to
+1.5 s, and if the page takes longer the book riffles to it. A page further
+away is always reached by a riffle: many leaves run over one after another,
+several in the air at once. A riffle turns up to 36 leaves, 55 ms apart,
+each over in 0.56 s, or up to 12 when the page asked for is whole already.
+Once those have turned, while the page is still being made, the leaves keep
+turning, one every 0.3 s. The last leaf carries the page asked for, once it
+is whole. The book never turns to a page in between, so it never turns back
+and forth. A book opened at a page still being made opens at the map and
+riffles on to it.
+
+Each leaf of a riffle is a page of real code from a file the riffle passes,
+set as the journal sets code, with handwritten line numbers and the same
+highlighting. The file's path is its running head, and its page number
+counts from the page the riffle left toward the page asked for. When a
+riffle starts, the book asks for a dozen files spread along the way. Until
+one of them has come, a leaf shows a file that has come already, and with
+none, faint lines of writing.
+
+A turning leaf bends. It is cut into 10 strips, each hinged to the next, so
+the part by the spine leads and the free edge trails. The bend is greatest
+in mid-turn, up to 54° between spine and edge, and there is none at either
+end. A page taken by hand bends the same way. A turning leaf casts a soft
+shadow on the page beneath, just past its edge, deepest when the leaf
+stands upright. A riffle's leaves turn flat: bending its first and last
+held the page's thread for half a second once a riffle, measured in the lab.
+
+The leaves' edges show where the book is open. Past each page, the leaves
+under it show as an edge of paper as thick as the pages lying on that side,
+from 1.5 to 9 of the book's pixels and within the boards' overhang, and a
+deep stack shades toward its outer edge. Near the front the left edge is a
+sliver and the right a deep stack, and through the book they trade places.
+They change when a turn ends. When a riffle starts, they slide over 1.8 s to
+where it will land.
+
+A crimson silk ribbon keeps the page a riffle began from: each riffle
+leaves it there. A tap on the ribbon riffles back to its page, or with the
+book shut opens the book there, and leaves the ribbon where it is. With the
+book open at its page, the ribbon lies down the gutter in the fold's shadow,
+well clear of the writing, and leaves the book at the foot to lie along its
+lower edge. With the book open elsewhere, only its tail shows, out of the
+foot of the leaves on the side its page is on. With the book shut in the
+corner, its end curls out of the book's head by the fore-edge, the part of
+the closed book left in view. Its free end sways a little and settles when a
+page's edge lifts or a leaf turns. It is drawn as silk: shaded across its
+width so one side catches the light, brighter and duller along its length,
+narrower where it twists, its end cut in a swallowtail, with a soft shadow.
 
 A page of the journal gives every score as a percentage, so it reads as a
 share of 0 to 1. Beside a thing's name stand two numbers in the hand, each
@@ -817,9 +862,9 @@ turns to the page of the file or definition it stands for. The rows of a
 list carry no marks. A definition's page shows its code plain, and a long
 one opens on its key block.
 
-A building or landmark opens its package's page. It lists what the
-package's folder holds, its folders and then its files, and at its foot the
-package's trails by their way: under "uses" the packages it imports from,
+A package's building or landmark opens the package's page. It lists what
+the package's folder holds, its folders and then its files, and at its foot
+the package's trails by their way: under "uses" the packages it imports from,
 and under "used by" those that import from it, each name a tap to that
 package's page. A package whose folder has a README shows the README
 instead.
