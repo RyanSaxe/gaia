@@ -380,7 +380,9 @@ describe("full worlds", () => {
       expect(withinBudget(t.report)).toBe(true);
       expect(t.streams.length + t.ponds.length).toBeGreaterThanOrEqual(3);
     }
-  }, 60_000);
+    // Bakes two full worlds whole: about 15 s alone here, twice that on CI's runners, and more when other work
+    // shares the machine (it took 61.6 s on CI once, against a limit of 60 s).
+  }, 150_000);
 });
 
 describe("wild land past the rim", () => {
