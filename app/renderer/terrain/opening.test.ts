@@ -1,0 +1,82 @@
+import { describe, expect, it } from "vitest";
+import { BIOME_PRIMITIVES, RELIEF_PRIMITIVES } from "@gaia/primitives";
+import { type CodeFacts, type FileFacts, Library, rand, seedOf } from "@gaia/schema";
+import { OPENING, type Terrain, amongCode, bakeTerrain, openingSpot, waterDepthAt } from "@gaia/terrain";
+import { composeWorld, judgeWorld, layoutWorld, standInJev } from "@gaia/world";
+import type { WorldDocument } from "../../world-service/protocol.ts";
+import { codeLab, provingWorld } from "./code-world.ts";
+import { LOOKS } from "./looks.ts";
+import { laySnapshot } from "./snapshot.ts";
+import { snapshotFacts } from "./snapshot-facts.ts";
+
+const lib = new Library([...RELIEF_PRIMITIVES, ...BIOME_PRIMITIVES]);
+
+/** A world's terrain as the page bakes it, and where it lands the person. */
+function landing(document: WorldDocument): { terrain: Terrain; at: ReturnType<typeof openingSpot>; world: WorldDocument["world"] } {
+  const terrain = bakeTerrain(codeLab(document).spec, lib);
+  return { terrain, at: openingSpot(terrain, document.world), world: document.world };
+}
+
+/** A made-up codebase of `seed`: a few packages of folders and files of every size, which imports and depends as it likes. */
+function randomFacts(seed: number): CodeFacts {
+  const r = rand(seedOf(`opening-${seed}`));
+  const packages = 2 + Math.floor(r.next() * 4);
+  const files: FileFacts[] = [];
+  for (let p = 0; p < packages; p++) {
+    const folders = 1 + Math.floor(r.next() * 4);
+    for (let f = 0; f < folders; f++) {
+      const count = 2 + Math.floor(r.next() * 8);
+      for (let k = 0; k < count; k++) {
+        const path = `packages/p${p}/src/f${f}/file${k}.ts`;
+        const lines = 20 + Math.floor(r.next() ** 2 * 900);
+        files.push({ path, language: "typescript", lines, symbols: [{ name: `main${k}`, kind: "function", exported: true, line: 1, lines: Math.max(1, Math.round(lines / 2)) }], imports: [], importedBy: [] });
+      }
+    }
+  }
+  files.push({ path: "README.md", language: "markdown", lines: 80, symbols: [], imports: [], importedBy: [] });
+  for (const f of files) {
+    if (r.next() < 0.5) continue;
+    const other = files[Math.floor(r.next() * files.length)] as FileFacts;
+    if (other === f) continue;
+    (f.imports as string[]).push(other.path);
+    (other.importedBy as string[]).push(f.path);
+  }
+  const entities = Array.from({ length: packages }, (_, p) => ({ path: `packages/p${p}`, name: `@demo/p${p}`, form: "package" as const, manifest: `packages/p${p}/package.json`, files: files.filter((f) => f.path.startsWith(`packages/p${p}/`)).length, lines: 600, exports: 10, dependsOn: p > 0 ? ["packages/p0"] : [], dependents: p === 0 ? Array.from({ length: packages - 1 }, (_, q) => `packages/p${q + 1}`) : [] }));
+  return { projectId: `opening-${seed}`, files, entities, repository: { name: `demo-${seed}`, files: files.length, lines: files.reduce((n, f) => n + f.lines, 0) } };
+}
+
+async function randomWorld(seed: number): Promise<WorldDocument> {
+  const facts = randomFacts(seed);
+  const jev = standInJev(LOOKS);
+  const world = layoutWorld(facts, await composeWorld(facts, LOOKS, jev, await judgeWorld(facts, LOOKS, jev)));
+  return { root: facts.repository.name, facts, world, judges: {}, summary: "a test", judged: {} };
+}
+
+/** The person stands among the code, on dry ground, looking along a stream when one runs among the code. */
+function expectAmongCode({ terrain, at, world }: ReturnType<typeof landing>, what: string): void {
+  expect(amongCode(world, at.x, at.z), `${what} lands among the code`).toBe(true);
+  expect(waterDepthAt(terrain, at.x, at.z), `${what} lands on dry ground`).toBeLessThanOrEqual(OPENING.dry);
+  expect(Number.isFinite(at.yaw), what).toBe(true);
+}
+
+describe("where a person first stands in a world from code", () => {
+  // Gaia's world bakes whole here, as the page bakes it: about 15 seconds alone, longer while other work shares the machine.
+  it("is among Gaia's own code, on dry ground beside a stream", { timeout: 180_000 }, async () => {
+    const { world, judges, summary } = await laySnapshot("jev", "a test");
+    const laid = landing({ root: world.name, facts: snapshotFacts(), world, judges, summary, judged: {} });
+    expectAmongCode(laid, "Gaia's world");
+    // Beside a stream: one runs within a few banks' width of where the person stands.
+    const nearest = Math.min(...laid.terrain.streams.flatMap((s) => s.stations.map((p) => Math.hypot(p.x - laid.at.x, p.z - laid.at.z))));
+    expect(nearest).toBeLessThan(OPENING.bank + OPENING.reach);
+  });
+
+  it("is among the proving ground's code, on dry ground", { timeout: 120_000 }, () => {
+    expectAmongCode(landing(provingWorld()), "the proving ground");
+  });
+
+  // Each made-up world is judged by the stand-in and baked whole: five to eight seconds each. In these three, a
+  // quarter of the way down the first stream lay in the wild, past the code's land.
+  it("is among the code in made-up codebases of every shape, wherever their rivers run", { timeout: 300_000 }, async () => {
+    for (const seed of [2, 4, 5]) expectAmongCode(landing(await randomWorld(seed)), `made-up world ${seed}`);
+  });
+});
