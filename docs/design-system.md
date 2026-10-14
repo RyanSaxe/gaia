@@ -336,8 +336,9 @@ the person could have turned it, never faster and never easing. Facing
 away, the view first turns at that same rate, and the body sets off once it
 faces the way. Nothing appears as the person goes: every 40 m mark within
 300 m ahead is asked of the standers before the body reaches it, and the
-body never passes the last mark whose tiles have all come, slowing at its
-steady rate to wait there if they lag. A drag looks out to the side while
+body slows at its steady rate where the marks ahead have not all come,
+though never below walking pace: a trip always arrives, and where it waits on
+the land it goes on as a walk would. A drag looks out to the side while
 the trip carries on, and
 the view follows the way again once it looks along it. Any key, or a tap on
 the world, takes over: the trip slows at 9 m a second squared to walking

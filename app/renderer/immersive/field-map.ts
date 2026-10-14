@@ -57,6 +57,8 @@ export interface FieldMap {
     readonly open: boolean;
     readonly ready: boolean;
     readonly zoom: number;
+    readonly x: number;
+    readonly z: number;
     readonly near: number;
     readonly paintMs: number;
     readonly longestStepMs: number;
@@ -1503,6 +1505,9 @@ export function createFieldMap(
       open: isOpen,
       ready: paper !== null,
       zoom: view.zoom,
+      /** The world point at the map's middle. */
+      x: view.x,
+      z: view.z,
       near: view.zoom / Math.max(1e-6, view.fit),
       paintMs: Math.round(timing.paintMs),
       longestStepMs: +timing.longestStepMs.toFixed(1),
