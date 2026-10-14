@@ -1,14 +1,17 @@
 // Where a building stands and how it meets the ground. A site is chosen on
-// dry, gentle ground near water, facing its door toward it; then a pad is
-// leveled into the baked lattice under the house and its yard, blending
-// back into the land over a few meters, so the walls, the walk and the grass
-// all stand on the same flat ground and nothing floats.
+// dry, gentle ground near water, facing its door toward it; a building whose
+// feature needs running water stands on a stream's bank instead, its wheel
+// turning in a pit in the stream. Then a pad is leveled into the baked
+// lattice under the house and its yard, blending back into the land over a
+// few meters, so the walls, the walk and the grass all stand on the same flat
+// ground and nothing floats.
 
-import type { BuildingPlan } from "@gaia/schema";
+import type { BuildingPlan, Built } from "@gaia/schema";
 import { type Lattice, heightAt, worldOf, worldOfZ } from "./lattice.ts";
 import { surfaceHalfWidth } from "./water.ts";
-import { DRY, type Terrain } from "./world.ts";
+import { DRY, type Terrain, regionAt } from "./world.ts";
 import { withinLand } from "./edge.ts";
+import { waterDepthAt } from "./walk.ts";
 
 export interface BuildingSite {
   readonly x: number;
@@ -44,6 +47,42 @@ export interface Extent {
   readonly x1: number;
   readonly z0: number;
   readonly z1: number;
+}
+
+/** The reach of a feature's solid parts in the house's frame, or null when it has none. */
+export function extentOf(feature: Built | undefined): Extent | null {
+  if (feature === undefined) return null;
+  const box = { x0: Infinity, x1: -Infinity, z0: Infinity, z1: -Infinity };
+  for (const part of feature.parts) {
+    if (part.collision !== "solid") continue;
+    for (let i = 0; i < part.positions.length; i += 3) {
+      const x = part.positions[i] as number;
+      const z = part.positions[i + 2] as number;
+      box.x0 = Math.min(box.x0, x);
+      box.x1 = Math.max(box.x1, x);
+      box.z0 = Math.min(box.z0, z);
+      box.z1 = Math.max(box.z1, z);
+    }
+  }
+  return Number.isFinite(box.x0) ? box : null;
+}
+
+/** The reach of a feature's turning parts in the house's frame, such as a mill's wheel, or null when nothing of it turns. */
+export function turningExtent(feature: Built | undefined): Extent | null {
+  if (feature === undefined) return null;
+  const box = { x0: Infinity, x1: -Infinity, z0: Infinity, z1: -Infinity };
+  for (const part of feature.parts) {
+    const spin = part.channels.spin;
+    if (spin === undefined) continue;
+    for (let i = 0; i < part.positions.length; i += 3) {
+      if (spin[i] === 0 && spin[i + 1] === 0 && spin[i + 2] === 0) continue;
+      box.x0 = Math.min(box.x0, part.positions[i] as number);
+      box.x1 = Math.max(box.x1, part.positions[i] as number);
+      box.z0 = Math.min(box.z0, part.positions[i + 2] as number);
+      box.z1 = Math.max(box.z1, part.positions[i + 2] as number);
+    }
+  }
+  return Number.isFinite(box.x0) ? box : null;
 }
 
 /** The yard in the building's own frame: the house, a margin around it, the walk out front, and anything beside it. */
@@ -164,13 +203,154 @@ export interface PadEdit {
   readonly site: BuildingSite;
   /** The yard in the building's own frame. */
   readonly yard: Extent;
+  /** For a house on a stream's bank, its wall on the water's side, as a signed x in its own frame: past it the bank and the stream are left as they lie. */
+  readonly wall?: number;
+  /** For a house on a stream's bank, the pit its wheel turns in, in its own frame, its floor no higher than `level`. */
+  readonly pit?: Extent & { readonly level: number };
 }
 
-/** Levels the lattice under the yard to the site's level, blending back to the land over PAD_BLEND meters; returns what it did. */
-export function levelPad(t: Terrain, plan: BuildingPlan, site: BuildingSite, beside: Extent | null = null): PadEdit {
-  const edit = { site, yard: yardOf(plan, beside) };
+/**
+ * Levels the lattice under the yard to the site's level, blending back to the land over PAD_BLEND meters; returns
+ * what it did. A site on a bank (`BankSite`) leaves the ground past its wall on the water's side as it lies.
+ */
+export function levelPad(t: Terrain, plan: BuildingPlan, site: BuildingSite | BankSite, beside: Extent | null = null): PadEdit {
+  const edit = { site, yard: yardOf(plan, beside), ...("wall" in site ? { wall: site.wall, pit: site.pit } : {}) };
   applyPad(t.lattice, edit);
   return edit;
+}
+
+/** A site on a stream's bank: its wall on the water's side, as a signed x in the building's own frame, and the pit its wheel turns in. */
+export interface BankSite extends BuildingSite {
+  readonly wall: number;
+  readonly pit: Extent & { readonly level: number };
+}
+
+/**
+ * How a building whose feature needs running water stands on a stream's bank: its wall on the wheel's side this far
+ * from the water's edge, meters, so the wheel turns over the water; its other sides as far from any water as every
+ * other building's yard; and its pad within `even` meters of all the ground under the house, or, where no bank is
+ * that even, within `blended`: the most its pad's blend can carry back to the land over PAD_BLEND meters while the
+ * blend stays walkable (30 degrees). Its pad lies no higher than `above` over the water, so the wheel, sunk below
+ * its floor, dips into the stream, and its wheel turns in a pit `pit` meters below the water.
+ */
+export const BANK_SITE = { gaps: [0.2, 0.3], margin: 2.5, even: 1, blended: (PAD_BLEND * Math.tan(Math.PI / 6)) / 1.5, above: 0.3, below: 0.1, pit: 0.45 } as const;
+
+/** A spot on a stream's bank where a building whose feature needs running water could stand, and how far it lies from its lot plus how uneven its ground is. */
+export interface BankSpot {
+  readonly site: BankSite;
+  readonly score: number;
+}
+
+/**
+ * Every spot on the banks of the streams through `region` (or, `along` its river, the river that rises there, its
+ * whole reach) where a building whose feature (`beside`, its `wheel` turning) needs running water could stand: the house dry, its yard's
+ * other sides as far from water as every yard keeps (`BANK_SITE.margin`), its pad within `limit` meters of the
+ * ground under it and low enough over the water for the wheel to dip in, the wheel turning in the stream and the
+ * stream running on past it, and `taken` sites 12 m away.
+ */
+export function bankSpots(t: Terrain, plan: BuildingPlan, beside: Extent, wheel: Extent, region: number, options: { readonly along?: "region" | "river"; readonly limit?: number; readonly taken?: readonly BuildingSite[]; readonly within?: Circle | null } = {}): BankSpot[] {
+  const { along = "region", limit = BANK_SITE.even, taken = [], within = null } = options;
+  const half = t.spec.size / 2 - 34;
+  // The wheel's side, its wall, where the wheel turns, and how far out what stands beside the house reaches.
+  const side = wheel.x0 + wheel.x1 >= 0 ? 1 : -1;
+  const wall = (side * plan.width) / 2;
+  const reach = Math.max(Math.abs(beside.x0), Math.abs(beside.x1));
+  const wheelX = (wheel.x0 + wheel.x1) / 2;
+  const wheelZ = (wheel.z0 + wheel.z1) / 2;
+  const streams =
+    along === "region"
+      ? t.streams.filter((s) => s.stations.some((q) => regionAt(t.spec, q.x, q.z) === region))
+      : t.streams.filter((s) => {
+          const head = s.stations[Math.min(s.stations.length - 1, 8)];
+          return head !== undefined && regionAt(t.spec, head.x, head.z) === region;
+        });
+  const spots: BankSpot[] = [];
+  for (const stream of streams) {
+    const st = stream.stations;
+    for (let k = 1; k + 1 < st.length; k++) {
+      const s = st[k] as (typeof st)[number];
+      if (along === "region" && regionAt(t.spec, s.x, s.z) !== region) continue;
+      const a = st[k - 1] as (typeof st)[number];
+      const b = st[k + 1] as (typeof st)[number];
+      const tl = Math.hypot(b.x - a.x, b.z - a.z) || 1;
+      for (const toward of [-1, 1]) {
+        // From the stream's middle toward this bank, to the water's edge.
+        const nx = (-(b.z - a.z) / tl) * toward;
+        const nz = ((b.x - a.x) / tl) * toward;
+        let edge = 0;
+        while (edge < 15 && waterDepthAt(t, s.x + nx * edge, s.z + nz * edge) > 0) edge += 0.25;
+        if (edge >= 15) continue;
+        for (const gap of BANK_SITE.gaps) {
+          const off = edge + gap + plan.width / 2;
+          const x = s.x + nx * off;
+          const z = s.z + nz * off;
+          if (Math.abs(x) > half || Math.abs(z) > half || !withinLand(t.spec, x, z, 34)) continue;
+          if (taken.some((o) => Math.hypot(o.x - x, o.z - z) < 12)) continue;
+          // The wheel's side faces the water: the house's +x runs (cos yaw, -sin yaw), toward the stream on that side.
+          const yaw = Math.atan2(nz / side, -nx / side);
+          const at = { x, z, yaw, level: 0, wall };
+          const site = (lx: number, lz: number): [number, number] => siteToWorld(at, lx, lz);
+          // The wheel's foot, where its paddles dip, turns in the water, and the stream runs on past it; the pit it turns
+          // in (below) carries the water under the rest of it.
+          const wet = (lx: number, lz: number): boolean => waterDepthAt(t, ...site(lx, lz)) > 0.05;
+          if (!wet(wheelX, wheelZ) || !wet(side * (reach + 0.6), wheelZ)) continue;
+          // The house is dry; its yard keeps the margin every yard keeps from water, but on the wheel's side.
+          const y = yardOf(plan, null);
+          let dry = true;
+          for (let lz = y.z0 - BANK_SITE.margin; lz <= y.z1 + BANK_SITE.margin + 1e-6 && dry; lz += 1) {
+            for (let lx = y.x0 - BANK_SITE.margin; lx <= y.x1 + BANK_SITE.margin + 1e-6; lx += 1) {
+              if (side * lx > plan.width / 2 - 1e-6) continue;
+              if (waterDepthAt(t, ...site(lx, lz)) > 0) {
+                dry = false;
+                break;
+              }
+            }
+          }
+          for (let lz = -plan.depth / 2; lz <= plan.depth / 2 + 1e-6 && dry; lz += 0.5) if (waterDepthAt(t, ...site(wall, lz)) > 0) dry = false;
+          if (!dry) continue;
+          // Its pad: the ground's mean under the house, but low enough over the water that the wheel dips in.
+          const water = heightAt(t.lattice, ...site(wheelX, wheelZ), t.waterLevel);
+          let sum = 0;
+          let count = 0;
+          let lo = Infinity;
+          let hi = -Infinity;
+          for (let lz = -plan.depth / 2; lz <= plan.depth / 2 + 1e-6; lz += 1) {
+            for (let lx = -plan.width / 2; lx <= plan.width / 2 + 1e-6; lx += 1) {
+              const h = heightAt(t.lattice, ...site(lx, lz));
+              sum += h;
+              count++;
+              lo = Math.min(lo, h);
+              hi = Math.max(hi, h);
+            }
+          }
+          const level = Math.min(sum / count, water + BANK_SITE.above);
+          const uneven = Math.max(hi - level, level - lo);
+          if (level < water + BANK_SITE.below || uneven > limit) continue;
+          // The wheel turns in a pit in the stream's bed, which the stream fills.
+          const pit = { x0: wheel.x0 - 0.15, x1: wheel.x1 + 0.15, z0: wheel.z0 - 0.1, z1: wheel.z1 + 0.1, level: water - BANK_SITE.pit };
+          spots.push({ site: { ...at, level, pit }, score: (within === null ? 0 : Math.hypot(x - within.x, z - within.z)) + uneven });
+        }
+      }
+    }
+  }
+  return spots;
+}
+
+/**
+ * Where a building whose feature (`beside`, its `wheel` turning) needs running water stands: the bank spot nearest its lot (`within`) on
+ * a stream through `region` (`bankSpots`); failing that, anywhere along the river that rises in `region`; failing
+ * both, the same on ground as uneven as its pad's blend can carry (`BANK_SITE.blended`). It never stands a wheel on
+ * dry ground nor a house in the water: null when no stream offers such a spot.
+ */
+export function findBankSite(t: Terrain, plan: BuildingPlan, beside: Extent, wheel: Extent, region: number, taken: readonly BuildingSite[] = [], within: Circle | null = null): BankSite | null {
+  for (const limit of [BANK_SITE.even, BANK_SITE.blended]) {
+    for (const along of ["region", "river"] as const) {
+      let best: BankSpot | null = null;
+      for (const spot of bankSpots(t, plan, beside, wheel, region, { along, limit, taken, within })) if (best === null || spot.score < best.score) best = spot;
+      if (best !== null) return best.site;
+    }
+  }
+  return null;
 }
 
 /**
@@ -190,9 +370,19 @@ export function applyPad(l: Lattice, edit: PadEdit): void {
   const i1 = Math.min(l.n - 1, Math.ceil((site.x + reach - l.origin) / l.spacing));
   const k0 = Math.max(0, Math.floor((site.z - reach - oz) / l.spacing));
   const k1 = Math.min(l.n - 1, Math.ceil((site.z + reach - oz) / l.spacing));
+  const wall = edit.wall;
   for (let iz = k0; iz <= k1; iz++) {
     for (let ix = i0; ix <= i1; ix++) {
       const [lx, lz] = worldToSite(site, worldOf(l, ix), worldOfZ(l, iz));
+      // On a bank, the bank and the stream past the wall on the water's side stay as they lie, but for the wheel's pit.
+      if (wall !== undefined && lx * Math.sign(wall) > Math.abs(wall)) {
+        const pit = edit.pit;
+        if (pit !== undefined && lx >= pit.x0 && lx <= pit.x1 && lz >= pit.z0 && lz <= pit.z1) {
+          const i = iz * l.n + ix;
+          l.heights[i] = Math.min(l.heights[i] as number, pit.level);
+        }
+        continue;
+      }
       const dx = Math.max(0, Math.abs(lx - cx) - hx);
       const dz = Math.max(0, Math.abs(lz - cz) - hz);
       const u = Math.min(1, Math.hypot(dx, dz) / PAD_BLEND);

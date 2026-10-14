@@ -11,11 +11,11 @@ import { type Blueprint, type BuildingPlan, type Built, type EntityFacts, Librar
 import { FLORA_PRIMITIVES, STRUCTURE_PRIMITIVES } from "@gaia/primitives";
 import { structure } from "@gaia/kinds";
 import { type PlantBatch, type SceneLight, createPlantBatch } from "@gaia/render";
-import type { BuildingSite, Capsule, Extent } from "@gaia/terrain";
+import { type BuildingSite, type Capsule, type Extent, extentOf, turningExtent } from "@gaia/terrain";
 import type * as THREE from "three";
 import { type BuildAsk, made } from "./made.ts";
 import { type Represented, SAMPLE_ENTITIES, type SampleEntity, representEntity } from "./samples.ts";
-import { type StandBuilding, blockedBy, buildingClearings, extentOf, signOf, standOf } from "./stand.ts";
+import { type StandBuilding, blockedBy, buildingClearings, needsBank, signOf, standOf } from "./stand.ts";
 
 export interface Building {
   readonly entity: SampleEntity;
@@ -39,6 +39,8 @@ export interface Building {
   readonly plan: BuildingPlan;
   /** What stands beside the house, such as a mill wheel, in the house's frame. */
   readonly beside: Extent | null;
+  /** Where its feature turns, such as a mill's wheel, in the house's frame. */
+  readonly wheel: Extent | null;
   site: BuildingSite;
 }
 
@@ -139,6 +141,7 @@ export function createSettlement(light: SceneLight, entities: readonly SampleEnt
       palette: built.palette,
       plan: built.slots.get("footprint")?.output as BuildingPlan,
       beside: extentOf(built.slots.get("feature")?.output as Built | undefined),
+      wheel: turningExtent(built.slots.get("feature")?.output as Built | undefined),
       site: { x: 0, z: 0, yaw: 0, level: 0 },
     };
   });
@@ -148,7 +151,7 @@ export function createSettlement(light: SceneLight, entities: readonly SampleEnt
   const atSite = (b: Building) => ({ x: b.site.x, y: b.site.level, z: b.site.z, yaw: b.site.yaw });
   return {
     buildings,
-    requests: () => buildings.map((b) => ({ name: b.represented.name, plan: b.plan, beside: b.beside })),
+    requests: () => buildings.map((b) => ({ name: b.represented.name, plan: b.plan, beside: b.beside, ...(needsBank(b.blueprint, lib) ? { wheel: b.wheel } : {}) })),
     seat(sites) {
       buildings.forEach((b, i) => {
         b.site = sites[i] ?? b.site;

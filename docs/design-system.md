@@ -500,7 +500,16 @@ so a world stays true as its code changes and Jev's picks can spread. A
 mill's waterwheel turns in a stone-lined pit, fed by a flume on trestles or
 pushed round by the race, about once every nine seconds; it slows as
 vitality falls and stands still below 0.1, and it is offered only where the
-building's region holds running water. A tower rises from the back corner,
+building's region holds running water. Its building stands on the bank of
+its area's stream, the wheel's wall 0.2 to 0.3 m from the water, the house
+dry and the rest of its yard as clear of water as any yard. The wheel turns
+in a pit 0.45 m below the water's surface, which the stream fills, its pad
+no more than 0.3 m above the water so its paddles dip in, and the stream
+runs on past it (`findBankSite` in `@gaia/terrain`). The bank nearest the
+building's lot in its own region comes first, then anywhere along the river
+that rises there, on ground that varies under 1 m beneath the house, or,
+where no bank is that even, up to 2.7 m, the most a pad's 7 m blend carries
+back to the land at a walkable grade. A tower rises from the back corner,
 rendered between stone quoins, taller the more of the code depends on it,
 its narrow windows lamplit at night under a steep cap or an open lantern
 room whose lamp burns after dusk. The rest stand in the yard beside the free

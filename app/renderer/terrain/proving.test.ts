@@ -3,11 +3,11 @@ import { type BuildingPlan, type Built, Library, type RouteSpec, seedOf } from "
 import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, LANDMARK_PRIMITIVES, RELIEF_PRIMITIVES, ROUTE_PRIMITIVES, STRUCTURE_PRIMITIVES } from "@gaia/primitives";
 import { landmark, link, structure } from "@gaia/kinds";
 import { FLORA_PRESETS, LANDMARK_PRESETS, STRUCTURE_PRESETS, TRAIL_PRESETS, buildSlots, realize } from "@gaia/realize";
-import { type ScatterRule, TERRAIN, type Terrain, bakeTerrain, groundLook, junctionVitality, ownershipOf, placeAt, vitalityAt, vitalityOver, waterDepthAt, wayVitalityAt } from "@gaia/terrain";
+import { type BuildingSite, type Extent, type ScatterRule, TERRAIN, type Terrain, bakeTerrain, extentOf, groundLook, siteToWorld, turningExtent, junctionVitality, ownershipOf, placeAt, vitalityAt, vitalityOver, waterDepthAt, wayVitalityAt } from "@gaia/terrain";
 import { type Judgments, areaVitality, groundVitality } from "@gaia/world";
 import { codeLab, provingWorld } from "./code-world.ts";
 import { BUILDINGS, CHARACTERS, COMPOSED_FORMS, FORMS, LANDMARKS, LANDS, TRAILS, WATERS, presetBlueprint } from "./looks.ts";
-import { type Stand, extentOf, groundSites, landmarkBase, ownerVitality, standWorld, understoryVitality } from "./stand.ts";
+import { type Stand, type StandBuilding, groundSites, landmarkBase, needsBank, ownerVitality, standWorld, understoryVitality } from "./stand.ts";
 import judgedFixture from "./fixtures/proving-judged.json";
 
 const judged = judgedFixture as unknown as Judgments;
@@ -123,6 +123,7 @@ describe("the proving ground", () => {
   describe("stood as the terrain lab stands it", () => {
     let terrain: Terrain;
     let stood: Stand;
+    let requests: StandBuilding[];
     // Baking and standing the 950 m world takes about 10 s in one Node thread, longer while other work shares the machine.
     beforeAll(() => {
       // The same buildings, landmarks and trail looks, seeded alike, and an understory of rocks, shrubs and flowers.
@@ -132,12 +133,14 @@ describe("the proving ground", () => {
       const routeLib = new Library(ROUTE_PRIMITIVES);
       const styles = TRAIL_PRESETS.map((p) => buildSlots(p.blueprint, link, routeLib, { seed: 1, facts: {} }).get("route")?.output as RouteSpec);
       const understory = (id: string, groups: number): ScatterRule => ({ id, variants: [{ radius: 0.8, weight: 1 }], groups, members: [1, 4], spread: 5, mix: "member", scale: [0.8, 1.2], maxSlope: 22, waterClearance: 1.5, ground: "lowest", sink: 0.05 });
-      stood = standWorld(terrain, {
-        buildings: code.buildings.map((b) => {
+      requests = code.buildings.map((b) => {
           const facts = Object.fromEntries(Object.entries(structure.facts).map(([k, bind]) => [k, bind(b.facts)]));
           const built = realize(b.blueprint, structure, buildingLib, { seed: seedOf(`terrain-lab/${b.facts.path}`), facts });
-          return { name: b.facts.name, plan: built.slots.get("footprint")?.output as BuildingPlan, beside: extentOf(built.slots.get("feature")?.output as Built | undefined) };
-        }),
+          const feature = built.slots.get("feature")?.output as Built | undefined;
+          return { name: b.facts.name, plan: built.slots.get("footprint")?.output as BuildingPlan, beside: extentOf(feature), ...(needsBank(b.blueprint, buildingLib) ? { wheel: turningExtent(feature) } : {}) };
+        });
+      stood = standWorld(terrain, {
+        buildings: requests,
         landmarks: code.landmarks.map((l) => ({
           name: l.path,
           base: landmarkBase(realize(l.blueprint, landmark, landmarkLib, { seed: seedOf(`terrain-lab/landmark/${l.path}`), facts: Object.fromEntries(Object.entries(landmark.facts).map(([k, bind]) => [k, bind(l.facts)])) })),
@@ -148,6 +151,19 @@ describe("the proving ground", () => {
         code: code.stand,
       });
     }, 120_000);
+
+    it("stands each building whose wheel needs running water on its stream's bank, its wheel in the water", () => {
+      expect(stood.dry).toEqual([]);
+      const banked = requests.flatMap((b, i) => (b.wheel !== undefined ? [{ b, site: stood.sites[i] as BuildingSite }] : []));
+      expect(banked.length).toBeGreaterThan(2);
+      for (const { b, site } of banked) {
+        expect("wall" in site, b.name).toBe(true);
+        // Its wheel turns in the stream.
+        const w = b.wheel as Extent;
+        expect(waterDepthAt(terrain, ...siteToWorld(site, (w.x0 + w.x1) / 2, (w.z0 + w.z1) / 2)), b.name).toBeGreaterThan(0);
+        expect(waterDepthAt(terrain, site.x, site.z), b.name).toBe(0);
+      }
+    });
 
     it("crosses its streams on footbridges and stepping stones, and has cairns where ways meet, thriving and in ruin", () => {
       const net = stood.network;
@@ -188,9 +204,11 @@ describe("the proving ground", () => {
         const p = tree ? trees.get(k)! : stood.placements[i]!;
         if (s.file !== undefined) expect(placeAt(doc.world, p.x, p.z).file?.path, id).toBe(s.file);
       });
-      // A file's or a definition's building or landmark stands on that file's patch.
+      // A file's or a definition's building or landmark stands on that file's patch, but a building whose wheel needs
+      // running water, which stands on its area's stream's bank.
       const sited = [...code.buildings.map((b, i) => ({ path: b.facts.path, at: stood.sites[i]! })), ...stood.landmarks.map((l) => ({ path: l.id, at: l.site }))];
-      for (const t of doc.world.things.filter((x) => x.file !== undefined)) {
+      const banked = new Set(requests.flatMap((b, i) => (b.wheel !== undefined ? [code.buildings[i]!.facts.path] : [])));
+      for (const t of doc.world.things.filter((x) => x.file !== undefined && !banked.has(x.path))) {
         const at = sited.find((x) => x.path === t.path)?.at;
         expect(at, t.path).toBeDefined();
         expect(placeAt(doc.world, at!.x, at!.z).file?.path, t.path).toBe(t.file);
