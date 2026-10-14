@@ -39,11 +39,12 @@ export interface Keeping {
 
 /** What a request is about, in words, from its state: what a failure names. */
 export function requestSubject(request: JevRequest): string {
-  const s = (request.state ?? {}) as Record<string, { path?: string; name?: string; from?: { path?: string }; to?: { path?: string } } | undefined>;
+  const s = (request.state ?? {}) as Record<string, { path?: string; name?: string; file?: string; from?: { path?: string }; to?: { path?: string } } | undefined>;
   const at = (path: string | undefined): string => (path === undefined || path === "" ? "(the repository's root)" : path);
   const composing = Object.keys(request.questions).some((id) => /^[a-z]+\.(use|present)$/.test(id)) || (s as Record<string, unknown>).decided !== undefined;
   const verb = composing ? "composing" : "judging";
   if (s.file !== undefined) return `${verb} the file ${at(s.file.path)}`;
+  if (s.definition !== undefined) return `${verb} ${s.definition.file ?? ""}#${s.definition.name ?? ""}'s building or landmark`;
   if (s.entity !== undefined) return `${verb} ${at(s.entity.path)}'s ${composing ? "building or landmark" : "entity"}`;
   if (s.directory !== undefined) return `${verb} the area ${at(s.directory.path)}${composing ? "'s land" : ""}`;
   if (s.trail !== undefined) return `${verb} the trail from ${at(s.trail.from?.path)} to ${at(s.trail.to?.path)}`;

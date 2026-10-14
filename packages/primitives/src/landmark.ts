@@ -38,7 +38,7 @@ export const lookoutTowerParams = {
 export const lookoutTower = primitive({
   id: "lookout-tower@1",
   role: "Landmark",
-  doc: "A stone tower: round, square or eight-sided, straight, tapering or in stages, with corbelled galleries and a roof, battlements, a lantern room or a broken top. Its slit windows are lit at night; it crumbles from the top down as vitality falls.",
+  doc: "A stone tower: round, square or eight-sided, straight, tapering or in stages, with corbelled galleries and a roof, battlements, a lantern room or a broken top, for code that feels lonely and wind-bitten, forever watching the horizon. Its slit windows are lit at night; it crumbles from the top down as vitality falls.",
   params: lookoutTowerParams,
   build: (p, ctx) => buildLookoutTower(p, ctx),
 });
@@ -65,7 +65,7 @@ export const standingStonesParams = {
 export const standingStones = primitive({
   id: "standing-stones@1",
   role: "Landmark",
-  doc: "Great stones set by people long ago: a ring, an avenue, a dolmen, a field of cairns or a loose group of menhirs. In decline the lintels and capstone fall first; then stones lean whole, snap or fall flat into the grass.",
+  doc: "Great stones set by people long ago: a ring, an avenue, a dolmen, a field of cairns or a loose group of menhirs, for code that feels ancient and patient, older than anything around it. In decline the lintels and capstone fall first; then stones lean whole, snap or fall flat into the grass.",
   params: standingStonesParams,
   build: (p, ctx) => buildStandingStones(p, ctx),
 });
@@ -91,7 +91,7 @@ export const greatTreeParams = {
 export const greatTree = primitive({
   id: "great-tree@1",
   role: "Landmark",
-  doc: "One great old tree with a vast crown, of a chosen form and age: an ancient one squats on a buttressed trunk with broken limbs and a bare crown top. In decline it drops its leaves and greys to a bare snag.",
+  doc: "One great old tree with a vast crown, of a chosen form and age, for code that feels warm, alive and sprawling, a gathering place: an ancient one squats on a buttressed trunk with broken limbs and a bare crown top. In decline it drops its leaves and greys to a bare snag.",
   params: greatTreeParams,
   build: (p, ctx) => buildGreatTree(p, ctx),
 });

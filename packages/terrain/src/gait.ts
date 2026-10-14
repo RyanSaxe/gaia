@@ -80,7 +80,7 @@ export function decksOf(ways: readonly Way[]): Deck[] {
 }
 
 /** The highest deck's top over a point, or -Infinity off every deck. */
-function deckAt(decks: readonly Deck[], x: number, z: number): number {
+export function deckAt(decks: readonly Deck[], x: number, z: number): number {
   let top = -Infinity;
   for (const d of decks) {
     const dx = x - d.x;
@@ -199,8 +199,19 @@ export function stride(t: Terrain, solids: Solids, decks: readonly Deck[], from:
     ax = 0;
     az = 0;
   }
-  const ahead = rideTarget(t, decks, moved.x + vx * RIDE_LAG, moved.z + vz * RIDE_LAG);
+  return { ...ride(t, decks, from, moved.x, moved.z, vx, vz, dt), ax, az, blocked: meant > 1e-4 && went < meant * WALK_TO.stall };
+}
+
+/** The eyes riding the footing as the body comes to (x, z) going (vx, vz). */
+function ride(t: Terrain, decks: readonly Deck[], from: Stride, x: number, z: number, vx: number, vz: number, dt: number): Stride {
+  const ahead = rideTarget(t, decks, x + vx * RIDE_LAG, z + vz * RIDE_LAG);
   const level = ahead + (from.level - ahead) * Math.exp(-GAIT.level * dt);
   const [eye, climb] = settle(from.eye, from.climb, level, GAIT.ride, dt);
-  return { x: moved.x, z: moved.z, vx, vz, ax, az, eye, climb, level, blocked: meant > 1e-4 && went < meant * WALK_TO.stall };
+  return { x, z, vx, vz, ax: (vx - from.vx) / dt, az: (vz - from.vz) / dt, eye, climb, level, blocked: false };
+}
+
+/** One frame of being carried to (x, z), as travel along the trails carries the body: the eyes ride the footing as a walk's do. */
+export function carry(t: Terrain, decks: readonly Deck[], from: Stride, x: number, z: number, dt: number): Stride {
+  if (dt <= 0) return from;
+  return ride(t, decks, from, x, z, (x - from.x) / dt, (z - from.z) / dt, dt);
 }

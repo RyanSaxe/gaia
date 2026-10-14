@@ -51,6 +51,22 @@ function codebase(name: string): string {
   return root;
 }
 
+/**
+ * A codebase whose imports only Jev can settle: two modules called `helpers`, which `main.py` imports by that name
+ * alone, so the rules leave the import to Jev, and what each file imports and is imported by changes once Jev's links
+ * are in.
+ */
+function linkedCodebase(name: string): string {
+  const root = join(scratch, name);
+  for (const dir of ["src/app", "src/lend", "src/keep"]) mkdirSync(join(root, dir), { recursive: true });
+  writeFileSync(join(root, "package.json"), JSON.stringify({ name, version: "1.0.0" }));
+  writeFileSync(join(root, "src/lend/helpers.py"), `"""Lending things out."""\n\n\ndef lend(item):\n    """Lends an item."""\n    return [item]\n`);
+  writeFileSync(join(root, "src/keep/helpers.py"), `"""Keeping things."""\n\n\ndef keep(item):\n    """Keeps an item."""\n    return {item: True}\n`);
+  writeFileSync(join(root, "src/app/main.py"), `"""The app: lends what it is asked for."""\nimport helpers\nfrom helpers import lend\n\n\ndef run(item):\n    """Runs the app on one item."""\n    return lend(item) + helpers.lend(item)\n`);
+  writeFileSync(join(root, "src/app/report.py"), `"""Reports on what was lent."""\nfrom helpers import lend\n\n\ndef report(items):\n    """Reports every item lent."""\n    return [lend(i) for i in items]\n`);
+  return root;
+}
+
 /** Starts the engine binary, live, against the stand-in, keeping its store in `data`. */
 function engineAt(data: string) {
   const child = spawn(ENGINE, ["rpc"], {
@@ -128,11 +144,13 @@ describe("judging a codebase with Jev", () => {
       expect(Object.keys(body).sort()).toEqual(["model", "questions", "state"]);
       if (!first.about[i]?.startsWith("understand:")) expect(JSON.stringify(body)).not.toContain("secretSourceLine");
     }
-    const judging = first.about.filter((a) => !a.startsWith("understand:"));
+    // Each request goes out once. A look may be asked twice, before and after Jev's links change the facts it reads,
+    // but never the same request twice.
+    const judging = first.sent.filter((_, i) => !first.about[i]?.startsWith("understand:")).map(({ body }) => JSON.stringify(body));
     expect(new Set(judging).size).toBe(judging.length);
     expect(first.about).toEqual(expect.arrayContaining(["area:(the repository's root)", "file:src/shape.ts", "understand:src/shape.ts"]));
-    // A file with nothing standing on its patch is never asked about.
-    expect(first.about).not.toContain("file:README.md");
+    // Every file is asked what it stands as, one that defines nothing too.
+    expect(first.about).toContain("file:README.md");
     // The understanding pass asked every folder and file, and every definition stands by Jev's importance; the
     // document carries what it judged, every score from 0 to 1.
     const states = first.sent.map(({ body }) => body.state as Record<string, unknown>);
@@ -147,12 +165,23 @@ describe("judging a codebase with Jev", () => {
     expect(new Set(Object.values(first.document.judges))).toEqual(new Set(["jev"]));
     expect(first.document.summary).not.toContain("stand-in");
     const asking = first.shown.filter((o) => o.stage === "asking");
-    // Composing follows from the answers, so it is never planned or counted ahead; every building and landmark was composed.
+    // Composing follows from the answers, so it is never planned ahead; every building and landmark was composed, and
+    // each answer, what a thing stands as and composing included, is counted as it comes.
     const composed = first.about.filter((a) => a.startsWith("compose:")).length;
     expect(composed).toBeGreaterThan(0);
-    expect(asking.at(-1)).toMatchObject({ total: first.sent.length - composed, answered: first.sent.length - composed, asking: [] });
+    expect(asking.at(-1)).toMatchObject({ total: first.sent.length, answered: first.sent.length, asking: [] });
     // While a question is out, its area is named as being worked on, for the wait to show.
     expect(asking.some((o) => o.asking.length > 0)).toBe(true);
+    // After the understanding pass, the wait is told each file whose things Jev chose what they stand as, and each
+    // file and area whose building, landmark, land or sky it composed, each once, so its pencil keeps moving.
+    const after = first.shown.map((o) => o.stage).lastIndexOf("understood");
+    const standing = first.shown.flatMap((o, i) => (o.stage === "standing" ? [{ i, o }] : []));
+    expect(standing.length).toBeGreaterThan(0);
+    expect(standing.every(({ i }) => i > after)).toBe(true);
+    const chosen = standing.flatMap(({ o }) => o.chosen.files);
+    expect([...chosen].sort()).toEqual(first.document.world.patches.map((p) => p.path).sort());
+    expect(new Set(chosen).size).toBe(chosen.length);
+    expect(standing.flatMap(({ o }) => o.composed.areas)).toContain("");
 
     // Reopening on a new engine asks nothing it has answered, and never asks the person again.
     const second = await open(root, data, true);
@@ -160,12 +189,26 @@ describe("judging a codebase with Jev", () => {
     expect(second.about).toEqual([]);
     expect(second.document.world).toEqual(first.document.world);
 
-    // A file that changed is asked about again, with what its facts touch; untouched files are not.
+    // A file that changed is asked about again, with what its facts touch, and less goes out than the first time. What
+    // a thing stands as is asked again where its offer or its importance changed: one more definition moves every rank
+    // a little, which in a world of a few things carries most of them across a range.
     appendFileSync(join(root, "src/shape.ts"), `\n/** The area of a circle. */\nexport const circle = (r: number): number => Math.PI * r * r;\n`);
     const third = await open(root, data, true);
     expect(third.about).toEqual(expect.arrayContaining(["file:src/shape.ts"]));
-    expect(third.about).not.toContain("file:src/index.ts");
-    expect(third.about).not.toContain("file:package.json");
+    expect(third.sent.length).toBeLessThan(first.sent.length);
+  }, 60_000);
+
+  it("opens a world the same way twice from the same answers, asking nothing new, even where Jev's links change what the code imports", async () => {
+    const root = linkedCodebase("linked");
+    const data = join(scratch, "data-linked");
+    const first = await open(root, data, true);
+    expect(first.sent.length).toBeGreaterThan(0);
+    const second = await open(root, data, true);
+    // Jev settled the import the rules could not, so the facts the world reads changed during the first opening.
+    expect(second.document.facts.files.find((f) => f.path === "src/app/main.py")?.imports.length).toBeGreaterThan(0);
+    expect(second.about).toEqual([]);
+    expect(second.document.facts).toEqual(first.document.facts);
+    expect(second.document.world).toEqual(first.document.world);
   }, 60_000);
 
   it("fails the opening when Jev refuses a request the client has retried, naming it and why, with nothing guessed", async () => {

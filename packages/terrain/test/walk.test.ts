@@ -15,9 +15,11 @@ import {
   type SolidShape,
   type Solids,
   type Terrain,
+  TRAVEL,
   WALK_TO,
   type Walker,
   bakeTerrain,
+  carry,
   groundHeightAt,
   landHalf,
   clearanceAt,
@@ -365,13 +367,30 @@ describe("a walker's stride", () => {
     return frames;
   };
   const speedOf = (b: Stride): number => Math.hypot(b.vx, b.vz);
+  /**
+   * Dry ground near `dry` whose grade westward holds steady over the first 2 m, so the pace the grade allows stays
+   * put while a walker heading west gets going: overshoot is then judged on the gait alone, whatever the land.
+   */
+  const evenGround = (): Walker => {
+    for (let r = 0; r <= 200; r += 4) {
+      for (let a = 0; a < 16; a++) {
+        const x = dry.x + r * Math.cos((a * Math.PI) / 8);
+        const z = dry.z + r * Math.sin((a * Math.PI) / 8);
+        if (waterDepthAt(t, x, z) > 0 || waterDepthAt(t, x - 2, z) > 0) continue;
+        const h = [0, 1, 2, 3, 4].map((d) => groundHeightAt(t, x - d * 0.5, z));
+        const grades = h.slice(1).map((y, i) => (h[i]! - y) / 0.5);
+        if (Math.max(...grades) - Math.min(...grades) < 1e-3) return { x, z };
+      }
+    }
+    throw new Error("No dry ground with a steady grade near the sample world's dry land.");
+  };
 
   it("gets going and stops at once, never overshooting or turning, and its eyes ride the ground without bob or jitter", () => {
-    const frames = walkThen([], dry, -1, 0, 6, 3);
+    const frames = walkThen([], evenGround(), -1, 0, 6, 3);
     const striding = frames.slice(120, 360);
     const pace = striding.reduce((m, f) => Math.max(m, speedOf(f.body)), 0);
     // Under way within a fraction of a second, as the keys walk in games, and never overshooting: while it gets going
-    // its speed only rises (the grade underfoot changes it far more slowly than a frame).
+    // on a steady grade, its speed only rises.
     expect(speedOf(frames[Math.round(0.15 * 60)]!.body)).toBeGreaterThan(pace * 0.9);
     const going = frames.slice(0, Math.round(0.3 * 60));
     for (let i = 1; i < going.length; i++) expect(speedOf(going[i]!.body)).toBeGreaterThanOrEqual(speedOf(going[i - 1]!.body) - 1e-3);
@@ -406,13 +425,26 @@ describe("a walker's stride", () => {
     }
   });
 
+  it("carried at travel's pace, stands exactly where it is carried, its eyes riding the ground", () => {
+    let body = standAt(t, [], dry.x, dry.z);
+    for (let i = 1; i <= 180; i++) {
+      const x = dry.x - TRAVEL.pace * i * dt;
+      body = carry(t, [], body, x, dry.z, dt);
+      expect(body.x).toBe(x);
+      expect(body.vx).toBeCloseTo(-TRAVEL.pace, 6);
+      // At five times a walk the ride reads the ground its own lag ahead, so at the brow of a descent the eyes
+      // lead the ground down by a little more than a walk's few centimeters.
+      if (i > 30) expect(Math.abs(body.eye - footingAt(t, [], body.x, body.z).eye)).toBeLessThan(0.2);
+    }
+  });
+
   it("slows climbing, quickens a little on a gentle descent, and stands on a footbridge's deck above the water", () => {
     expect(gradePace(0)).toBe(1);
     expect(gradePace(0.12)).toBeLessThan(0.85);
     expect(gradePace(-GAIT.peak)).toBeGreaterThan(1);
     for (let s = -0.6; s < 0.6; s += 0.01) expect(gradePace(s)).toBeLessThanOrEqual(GAIT.ceiling);
     for (let s = -GAIT.peak; s < 0.6; s += 0.01) expect(gradePace(s + 0.01)).toBeLessThanOrEqual(gradePace(s));
-    // On real ground: the steepest dry 20 m line near the pond is walked up more slowly than down.
+    // On real ground: the steepest dry 20 m line near the pond that climbs all along is walked up more slowly than down.
     let line = { from: dry, dx: 1, dz: 0, rise: 0 };
     for (let a = 0; a < 32; a++) {
       const dx = Math.cos((a / 32) * Math.PI * 2);
@@ -421,7 +453,8 @@ describe("a walker's stride", () => {
         const from = { x: dry.x - 20 + dx * r, z: dry.z + dz * r };
         const rise = groundHeightAt(t, from.x + dx * 20, from.z + dz * 20) - groundHeightAt(t, from.x, from.z);
         const wet = [0, 5, 10, 15, 20].some((k) => waterDepthAt(t, from.x + dx * k, from.z + dz * k) > 0);
-        if (!wet && rise > line.rise && rise < 4) line = { from, dx, dz, rise };
+        const steady = [0, 5, 10, 15].every((k) => groundHeightAt(t, from.x + dx * (k + 5), from.z + dz * (k + 5)) - groundHeightAt(t, from.x + dx * k, from.z + dz * k) > rise / 8);
+        if (!wet && steady && rise > line.rise && rise < 4) line = { from, dx, dz, rise };
       }
     }
     expect(line.rise).toBeGreaterThan(1);

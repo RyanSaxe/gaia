@@ -25,8 +25,10 @@ export async function laySnapshot(judge: SnapshotJudge, why: string): Promise<{ 
   const graph = snapshotGraphOf();
   // Each request names the definitions the graph stands, so the answers kept for them meet the layout's.
   const world = layoutWorld(facts, await composeWorld(facts, LOOKS, jev, await judgeWorld(facts, LOOKS, jev, { graph }), { graph }), graph);
-  const judges: Record<string, Judge> = Object.fromEntries(planWorldRequests(facts, LOOKS, { graph }).flatMap((p) => thingsOf(p).map((t) => [judgedThing(t), judge] as const)));
-  const things = Object.keys(judges).length;
-  const summary = judge === "stand-in" ? `${things} things judged by the stand-in (?judge=stand-in, for development; ${why})` : `${things} things judged by Jev, from answers kept for this snapshot (${why})`;
+  // Jev judged the looks, and what every file and entity stands as (a definition's with its file's).
+  const things = [...planWorldRequests(facts, LOOKS, { graph }).flatMap((p) => thingsOf(p)), ...facts.files.map((f) => ({ about: "file" as const, target: f.path })), ...facts.entities.map((e) => ({ about: "entity" as const, target: e.path }))];
+  const judges: Record<string, Judge> = Object.fromEntries(things.map((t) => [judgedThing(t), judge] as const));
+  const judgedCount = Object.keys(judges).length;
+  const summary = judge === "stand-in" ? `${judgedCount} things judged by the stand-in (?judge=stand-in, for development; ${why})` : `${judgedCount} things judged by Jev, from answers kept for this snapshot (${why})`;
   return { world, judges, summary };
 }

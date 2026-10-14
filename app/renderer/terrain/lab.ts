@@ -34,7 +34,7 @@ import {
   createSunShadow,
   type SceneLight,
 } from "@gaia/render";
-import { type Capsule, clearanceAt, frameOf, type Placement, TILE, LAND_ASPECT, type Deck, decksOf, EYE_HEIGHT, footingAt, FULL_WORLD, GAIT, groundHeightAt, heightAt, type Intent, junctionVitality, NO_SOLIDS, NO_TRAILS, outlineShape, withinLand, piecesShapes, type Place, placeAt, planWalk, randomWorld, regionPlaces, RELIEF_BUDGET, sampleWorld, sightlines, siteToWorld, SMALL_WORLD, type Solids, type SolidShape, solidsOf, stanceAt, standAt, steerAlong, type Steered, type Steering, steering, steerPress, steerRelease, steerStep, stride, type Stride, type WalkKey, type Terrain, TERRAIN, type TrailNetwork, type Walk, WALK_TO, walkStep, wallsShape, waterDepthAt, type Way, wayAhead, wayVitalityAt, wayWear, WILDS, type WorldPlaces, type WorldSpec } from "@gaia/terrain";
+import { type Capsule, clearanceAt, frameOf, type Placement, TILE, LAND_ASPECT, type Deck, decksOf, EYE_HEIGHT, footingAt, FULL_WORLD, GAIT, groundHeightAt, heightAt, type Intent, junctionVitality, NO_SOLIDS, NO_TRAILS, openingSpot, outlineShape, withinLand, piecesShapes, type Place, placeAt, planWalk, randomWorld, regionPlaces, RELIEF_BUDGET, sampleWorld, sightlines, siteToWorld, SMALL_WORLD, type Solids, type SolidShape, solidsOf, stanceAt, standAt, steerAlong, type Steered, type Steering, steering, steerPress, steerRelease, steerStep, stride, type Stride, acrossWay, carry, planTrip, TRAVEL, type Travel, wadingAt, travelFrom, travelPoint, travelStep, type Trip, trailWay, type Walker, type WalkKey, type Terrain, TERRAIN, type TrailNetwork, type Walk, WALK_TO, walkStep, wallsShape, waterDepthAt, type Way, wayAhead, wayVitalityAt, wayWear, WILDS, type WorldPlaces, type WorldSpec } from "@gaia/terrain";
 import { createSky } from "../world/environment.ts";
 import { type Pixels, createCapture } from "./capture.ts";
 import { renderInspector } from "../inspector.ts";
@@ -55,12 +55,12 @@ import { withStart } from "../start/start.ts";
 import { createCard } from "./card.ts";
 import { LANDMARK_ENTITIES, type Represented, SAMPLE_ENTITIES, SAMPLE_FILES, SAMPLE_VITALITY, representEntity, representFile } from "./samples.ts";
 import { type CodeWorld, type Judge, groundVitality, judgedThing } from "@gaia/world";
-import { type CodeLab, codeWorld, representSymbol } from "./code-world.ts";
+import { type CodeLab, codeWorld } from "./code-world.ts";
 import type { JudgedThing } from "../../world-service/protocol.ts";
 import { type Building, composedName, createSettlement, settlementBuilds } from "./settlement.ts";
 import { createSigns } from "./signs.ts";
 import { type Baked, createBaker } from "./baker.ts";
-import { createPageLand } from "./land.ts";
+import { CLIP, createPageLand } from "./land.ts";
 import { createStanding, seenTo } from "./standing.ts";
 import { type Stand, type StandRequest, type StandingLandmark, landmarkBase, ownerVitality, tileArea, tilesOf, understoryVitality } from "./stand.ts";
 import { groundVitalityAt, setGroundOwnership, showGroundVitality } from "./vitality.ts";
@@ -262,6 +262,13 @@ export interface WorldHandle {
   /** Puts the person at a landing at once: only under cover of a transition, so nothing is seen to jump. Resolves once the land around them is in. */
   place(at: Landing): Promise<void>;
   /**
+   * Sends the person along the trails or straight across the land to a
+   * landing, the world streaming in around them as they go, until they arrive
+   * or take the keys; with `face` they end facing as the landing does. False
+   * when neither takes them there, and nothing moves.
+   */
+  travel(at: Landing, face: boolean): boolean;
+  /**
    * The world's own view of a thing, for its painting in the journal, `w` by
    * `h` pixels: its building, landmark or tree, or the plant or stone a
    * definition stands as, by what it stands for (an entity's path, a file's
@@ -462,7 +469,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   const entityOfPlace = new Map<string, string>();
   /** Learns the entities of the world now shown: the codebase's own, or the samples. */
   function knowEntities(): void {
-    landmarkEntities = code === null ? LANDMARK_ENTITIES.map((e) => representEntity(e, SAMPLE_VITALITY[e.path] ?? 1)) : code.landmarks.map((l) => representEntity(l.facts, l.vitality));
+    landmarkEntities = code === null ? LANDMARK_ENTITIES.map((e) => representEntity(e, SAMPLE_VITALITY[e.path] ?? 1)) : code.landmarks.map((l) => l.represented);
     entityVitality.clear();
     entityOfPlace.clear();
     for (const r of [...settlement.buildings.map((b) => b.represented), ...landmarkEntities]) entityVitality.set(r.id, r.vitality);
@@ -596,8 +603,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   }
   /** Each finer entity shows its file's vitality, and every scattered rock, bush and flower its ground's, read from the field the grass reads. */
   function showUnderstoryVitality(): void {
-    const symbols = code?.world.symbols ?? [];
-    const own = (k: number): number => liveFileVitality.get(symbols[k]?.file ?? "") ?? code?.stand.symbols[k]?.vitality ?? 1;
+    const own = (k: number): number => liveFileVitality.get(code?.standing(k)?.file ?? "") ?? code?.stand.symbols[k]?.vitality ?? 1;
     understory.setVitality(understoryVitality({ placements: understory.placements(), symbols: symbolPlacements }, own, (x, z) => groundVitalityAt(x, z).ground));
   }
   placeWays();
@@ -664,8 +670,8 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   let trees: readonly Tree[] = [];
   /** Each tree's copy among its build's instances. */
   let treeCopies: readonly number[] = [];
-  /** The definition a tree stands for in the codebase's world, and so its file. */
-  const treeSymbol = (t: { readonly symbol?: number }) => (t.symbol === undefined ? undefined : code?.world.symbols[t.symbol]);
+  /** What a tree stands for in the codebase's world (a definition, a file or an entity), and so its file. */
+  const treeSymbol = (t: { readonly symbol?: number }) => (t.symbol === undefined ? undefined : code?.standing(t.symbol));
   const treeFile = (t: { readonly symbol?: number }): string | undefined => treeSymbol(t)?.file;
   const treeVitality = (t: Tree): number => liveFileVitality.get(treeFile(t) ?? "") ?? t.represented.vitality;
   let treeViews: Copies[] = [];
@@ -891,8 +897,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     // In the codebase's world each tree is a definition, and takes its vitality.
     trees = stood.trees.map((t) => {
       const sym = treeSymbol(t);
-      const file = sym === undefined ? undefined : code?.files.get(sym.file);
-      if (sym !== undefined && file !== undefined) return { ...t, represented: representSymbol(sym, file) };
+      if (sym !== undefined) return { ...t, represented: sym.represented };
       const sample = SAMPLE_FILES[t.index % SAMPLE_FILES.length] as (typeof SAMPLE_FILES)[number];
       return { ...t, represented: representFile(sample, SAMPLE_VITALITY[sample.path] ?? 1) };
     });
@@ -1006,10 +1011,11 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     tile(ti, tj) {
       const here = settlement.buildings.filter((b) => tileKeyOf(b.site.x, b.site.z) === `${ti},${tj}`);
       // A building far off has no meshes: its build is made on a worker before its tile stands.
-      const missing = here.flatMap((b) => (b.view === null ? [b.ask] : []));
+      const missing = here.flatMap((b) => (b.standing === null ? [b.ask] : []));
       return missing.length === 0 ? here : makeAhead(missing).then(() => here);
     },
-    stand: (held) => settlement.stand(held, scene),
+    // Each tile's buildings stand together as one batch, drawn a call per material.
+    stand: (held) => settlement.stand(held, scene, (b) => tileKeyOf(b.site.x, b.site.z)),
   });
   standing.add<number>({
     name: "landmarks",
@@ -1050,7 +1056,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     const buildingSubjects: Subject[] = settlement.buildings.map((b) => ({
       represented: b.represented,
       standsAs: withArticle(b.kindName),
-      ...judged("entity", b.represented.id),
+      ...judged(b.entity.judged?.about ?? "entity", b.entity.judged?.target ?? b.represented.id),
       x: b.site.x,
       z: b.site.z,
       stand: () => settlement.standOf(b),
@@ -1062,14 +1068,14 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     const landmarkSubjects: Subject[] = code === null
       ? []
       : ways.sites.flatMap((s, i) => {
-          const facts = code?.landmarks[i]?.facts;
+          const thing = code?.landmarks[i];
           const lm = landmarks[s.landmark];
-          if (facts === undefined || lm === undefined) return [];
+          if (thing === undefined || lm === undefined) return [];
           const { x, z } = s.site;
           return [{
-            represented: representEntity(facts, code?.landmarks[i]?.vitality ?? 1),
+            represented: thing.represented,
             standsAs: withArticle(lm.name),
-            ...judged("entity", facts.path),
+            ...judged(thing.judged.about, thing.judged.target),
             x,
             z,
             height: landmarkViews[i]?.height ?? 6,
@@ -1089,8 +1095,8 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       return {
         represented: tree.represented,
         standsAs: sym === undefined ? "A tree" : withArticle(sym.form),
-        // A definition's form is judged with its file.
-        ...judged("file", sym?.file ?? tree.represented.id),
+        // A definition's form is judged with its file, a file's in its own request and an entity's in its own.
+        ...judged(sym?.judged.about ?? "file", sym?.judged.target ?? tree.represented.id),
         x,
         z,
         height: (variants[tree.variant] as TreeVariant).height * tree.scale,
@@ -1108,17 +1114,16 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     const placed = understory.placements();
     const symbolEntries: (readonly [number, Subject])[] = code === null
       ? []
-      : code.world.symbols.flatMap((sym, i) => {
-          const at = symbolPlacements[i] ?? -1;
+      : symbolPlacements.flatMap((at, i) => {
           const p = placed[at];
-          const file = code?.files.get(sym.file);
-          if (p === undefined || file === undefined) return [];
+          const sym = code?.standing(i);
+          if (p === undefined || sym === undefined) return [];
           const { x, z } = p;
           return [[at, {
-            represented: representSymbol(sym, file),
+            represented: sym.represented,
             standsAs: withArticle(sym.form),
-            // A symbol's form is judged with its file.
-            ...judged("file", sym.file),
+            // A definition's form is judged with its file, a file's in its own request and an entity's in its own.
+            ...judged(sym.judged.about, sym.judged.target),
             x,
             z,
             height: (understory.footprint(p.rule, p.variant)?.top ?? 0.8) * p.scale,
@@ -1445,6 +1450,8 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   }
 
   function setGoal(x: number, z: number): void {
+    // A tap takes over from a trip as the keys do: it slows the person, then the walk takes them on.
+    if (trip !== null) trip.stopping = true;
     goal = planWalk(terrain, solids, walker, { x, z });
     pending = null;
     if (card.shown === null) headFor(null);
@@ -1476,7 +1483,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     }
     const land = groundHit(ray);
     const tree = treeHit(ray);
-    const building = raycaster.intersectObjects(settlement.views().map((v) => v.object), true)[0];
+    const building = settlement.pick(raycaster);
     const rise = code === null ? undefined : raycaster.intersectObjects(landmarkViews.map((v) => v.object), true)[0];
     const riseAt = rise === undefined ? undefined : landmarkViews.findIndex((v) => v.object.getObjectById(rise.object.id) !== undefined);
     const riseSite = riseAt === undefined ? undefined : ways.sites[riseAt]?.site;
@@ -1486,7 +1493,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     const hits = [
       ...(thing === null || symbol === undefined ? [] : [{ distance: thing.distance, subject: symbol }]),
       ...(tree === null ? [] : [{ distance: tree.distance, subject: subjects.find((s) => s.x === tree.tree.x && s.z === tree.tree.z) }]),
-      ...(building === undefined ? [] : [{ distance: building.distance, subject: subjects.find((s) => settlement.buildings.some((b) => b.view?.object.getObjectById(building.object.id) !== undefined && b.view !== null && s.x === b.site.x && s.z === b.site.z)) }]),
+      ...(building === undefined ? [] : [{ distance: building.distance, subject: subjects.find((s) => s.x === building.building.site.x && s.z === building.building.site.z) }]),
       ...(sign === undefined ? [] : [{ distance: sign.distance, subject: signSubjects[sign.instanceId ?? -1] }]),
       ...(rise === undefined || riseSite === undefined ? [] : [{ distance: rise.distance, subject: subjects.find((s) => s.x === riseSite.x && s.z === riseSite.z) }]),
     ].sort((a, b) => a.distance - b.distance);
@@ -1535,6 +1542,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   /** Puts the walker at a point at once, looking along `yaw`. */
   function walkTo(x: number, z: number, yaw: number, pitch = -0.05): void {
     endWalk();
+    trip = null;
     stood = 0;
     arrived = false;
     walker.x = x;
@@ -1548,8 +1556,19 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     if (mode !== "walk") setMode("walk");
   }
 
-  /** Stand on the stream's bank a quarter of the way down, looking downstream. */
+  /**
+   * Stand on a stream's bank, looking downstream: in a world from code, among the code, where the first stream with a
+   * stretch there comes nearest the repository's own area (`openingSpot`); in the sample world, a quarter of the way
+   * down its first stream.
+   */
   function valleyView(): void {
+    if (code !== null) {
+      const at = openingSpot(terrain, places);
+      // Clear of anything solid there, as a landing is.
+      const bank = landingNear(at.x, at.z);
+      walkTo(bank?.x ?? at.x, bank?.z ?? at.z, at.yaw, -0.06);
+      return;
+    }
     const st = terrain.streams[0]?.stations;
     const a = st?.[Math.floor(st.length * 0.22)];
     const b = st?.[Math.floor(st.length * 0.6)];
@@ -1574,6 +1593,79 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   const STAND: Intent = { dx: 0, dz: 0, speed: 0 };
   /** Where the lantern's hand height is measured from: the ground, or while swimming, low enough that the lantern stays above the water. */
   let lanternGround = 0;
+  /**
+   * A trip along the trails while the person travels (`travelStep`): its
+   * plan, where it has them, whether they took the keys, and the way ahead
+   * the world is made ready along: a mark every `TRAVEL_MARK` meters, each
+   * asked of the standers as the trip comes within `TRAVEL_LOOK` of it.
+   */
+  let trip: { readonly plan: Trip; at: Travel; stopping: boolean; readonly marks: { readonly s: number; asked: boolean; ready: boolean }[]; readonly began: number; setOff: number | null; waited: number } | null = null;
+  /** Nearer than this, meters, a trip walks straight there, around whatever stands between, rather than by the trails. */
+  const TRAVEL_NEAR = 120;
+  /** How far ahead along a trip the standers hold what can be seen, meters, and how far apart it is asked. */
+  const TRAVEL_LOOK = 300;
+  const TRAVEL_MARK = 40;
+  /** How far along the trip everything that can be seen from it stands ready, meters, asking the next marks within reach. */
+  function readyAlong(t: NonNullable<typeof trip>): number {
+    for (const m of t.marks) {
+      if (m.asked || m.s > t.at.s + TRAVEL_LOOK) continue;
+      m.asked = true;
+      const x = travelPoint(t.plan, m.s);
+      void standing.fetch(x.x, x.z).then(() => {
+        m.ready = true;
+      });
+    }
+    const first = t.marks.findIndex((m) => !m.ready);
+    return first === -1 ? Infinity : first === 0 ? 0 : (t.marks[first - 1] as (typeof t.marks)[number]).s;
+  }
+  /**
+   * Plans a trip to a landing: from where the person stands, around whatever
+   * stands between, onto the nearest tread; along the trails to the tread
+   * nearest the landing; and off it to the landing.
+   */
+  /**
+   * The way a trip takes from `from` to a landing: walked straight there when
+   * near; else along the trails, unless their way is more than
+   * `TRAVEL.detour` times the straight distance or none goes there, when it
+   * goes straight across the land (`acrossWay`). Null where neither goes.
+   * The meters walked off the tread at each end, at the off-tread pace, and
+   * which way it went.
+   */
+  function travelWay(from: Walker, at: Walker): { way: Walker[]; off: { start: number; end: number }; by: "near" | "trails" | "across" } | null {
+    const lengthOf = (way: readonly Walker[]): number => way.reduce((sum, p, i) => (i === 0 ? 0 : sum + Math.hypot(p.x - (way[i - 1] as Walker).x, p.z - (way[i - 1] as Walker).z)), 0);
+    const straight = Math.hypot(at.x - from.x, at.z - from.z);
+    if (straight < TRAVEL_NEAR) {
+      const way = [...planWalk(terrain, solids, from, at).way];
+      return { way, off: { start: lengthOf(way), end: 0 }, by: "near" };
+    }
+    const tread = trailWay(ways.network, from, at);
+    let trails: { way: Walker[]; off: { start: number; end: number }; by: "trails" } | null = null;
+    if (tread !== null && tread.length >= 2) {
+      const on = planWalk(terrain, solids, from, tread[0] as Walker).way;
+      const leave = planWalk(terrain, solids, tread[tread.length - 1] as Walker, at).way;
+      trails = { way: [...on, ...tread.slice(1, -1), ...leave], off: { start: lengthOf(on), end: lengthOf(leave) }, by: "trails" };
+    }
+    if (trails !== null && lengthOf(trails.way) <= straight * TRAVEL.detour) return trails;
+    const across = acrossWay(terrain, solids, from, at, ways.network.ways.flatMap((w) => w.crossings));
+    // Straight across only where it is the shorter way; deep water may send it round farther than the trails go.
+    if (across === null || (trails !== null && lengthOf(across) >= lengthOf(trails.way))) return trails;
+    return { way: across, off: { start: 0, end: 0 }, by: "across" };
+  }
+  function travelTo(at: Landing, face: boolean): boolean {
+    const chosen = travelWay({ x: walker.x, z: walker.z }, at);
+    if (chosen === null) return false;
+    const { way, off } = chosen;
+    endWalk();
+    hideCard();
+    const plan = planTrip(way, off, face ? at.yaw : null, travelPace, (x, z) => wadingAt(terrain, decks, x, z));
+    const marks = Array.from({ length: Math.floor(plan.length / TRAVEL_MARK) + 1 }, (_, i) => ({ s: Math.min(plan.length, i * TRAVEL_MARK), asked: false, ready: false }));
+    marks.push({ s: plan.length, asked: false, ready: false });
+    trip = { plan, at: travelFrom(plan, walker.yaw), stopping: false, marks, began: performance.now(), setOff: null, waited: 0 };
+    steer = steerAlong(steer);
+    if (mode !== "walk") setMode("walk");
+    return true;
+  }
+
   /** What the person asks of their body this frame: the keys first, then a tap's walk, moved on along its way, braking to arrive and ended there. */
   /**
    * Where the person walks, never turning where they look: the keys walk
@@ -1605,16 +1697,30 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     const steered = steerStep(steer, clock(), walker.yaw, dt);
     steer = steered.steering;
     walker.yaw = steered.yaw;
-    // Water and the grade slow the body, solids turn it aside, and it gets going and stops at once, never overshooting.
-    body = stride(terrain, solids, decks, body, intent(body, steered), dt);
-    if (goal !== null && body.blocked) finishWalk();
+    if (trip !== null) {
+      // A trip carries the body along its way and turns the view with the way ahead, until the keys take over:
+      // then it slows them at its steady rate, the view theirs, and hands them to the walk at walking pace.
+      if ([...keys].some((k) => WALK_KEYS.has(k))) trip.stopping = true;
+      // The body goes no farther along than the world stands ready: what can be seen from there is standing.
+      const ready = readyAlong(trip);
+      if (ready < trip.plan.length && trip.at.going && trip.at.v < 1 && trip.at.s >= ready - 1) trip.waited += dt;
+      trip.at = travelStep(trip.plan, trip.at, dt, walker.yaw, trip.stopping, ready);
+      if (trip.setOff === null && trip.at.s > 0) trip.setOff = performance.now();
+      walker.yaw = trip.at.yaw;
+      body = carry(terrain, decks, body, trip.at.x, trip.at.z, dt);
+      if (trip.at.done || (trip.stopping && trip.at.v <= WALK_TO.pace)) trip = null;
+    } else {
+      // Water and the grade slow the body, solids turn it aside, and it gets going and stops at once, never overshooting.
+      body = stride(terrain, solids, decks, body, intent(body, steered), dt);
+      if (goal !== null && body.blocked) finishWalk();
+    }
     walker.x = body.x;
     walker.z = body.z;
     if (walker.x !== fromX || walker.z !== fromZ) walker.moved = true;
     // Stopping at a thing opens its card, looked for only as the stop reaches each wait.
-    if (goal !== null || keys.size > 0) arrived = false;
+    if (goal !== null || trip !== null || keys.size > 0) arrived = false;
     const before = stood;
-    stood = !arrived && goal === null && keys.size === 0 && Math.hypot(walker.x - fromX, walker.z - fromZ) < STILL * dt ? stood + dt : 0;
+    stood = !arrived && goal === null && trip === null && keys.size === 0 && Math.hypot(walker.x - fromX, walker.z - fromZ) < STILL * dt ? stood + dt : 0;
     if ((before < STOP_AT.great && stood >= STOP_AT.great) || (before < STOP_AT.small && stood >= STOP_AT.small)) stopAt();
     // A card belongs to the thing it was opened at: walking away closes it.
     if (cardAt !== null && Math.hypot(walker.x - cardAt.x, walker.z - cardAt.z) > LEAVE_CARD) hideCard();
@@ -1624,10 +1730,11 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     const surface = footing.ground + footing.depth;
     lanternGround = footing.depth > 0 ? Math.max(walker.eye - EYE_HEIGHT, surface + LANTERN_ABOVE_WATER - (EYE_HEIGHT - LANTERN.drop)) : walker.eye - EYE_HEIGHT;
     // The eyes are where the body is, riding the ground: nothing bobs, sways or rolls the view.
-    camera.position.set(walker.x, walker.eye, walker.z);
-    const sy = Math.sin(walker.yaw);
-    const cy = Math.cos(walker.yaw);
-    forward.set(-sy * Math.cos(walker.pitch), Math.sin(walker.pitch), -cy * Math.cos(walker.pitch));
+    const eye = viewPin ?? walker;
+    camera.position.set(eye.x, eye.eye, eye.z);
+    const sy = Math.sin(eye.yaw);
+    const cy = Math.cos(eye.yaw);
+    forward.set(-sy * Math.cos(eye.pitch), Math.sin(eye.pitch), -cy * Math.cos(eye.pitch));
     camera.lookAt(camera.position.clone().add(forward));
     walked = Math.hypot(walker.x - fromX, walker.z - fromZ);
   }
@@ -1873,9 +1980,17 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   let frozen: number | null = null;
   /** Where every detail is chosen from, when pinned apart from the eye: see the `detailCenter` hook. */
   let detailPin: { readonly x: number; readonly z: number } | null = null;
+  /** Where the view is drawn from, when held apart from the person, as the travel test holds it. */
+  let viewPin: { readonly x: number; readonly z: number; readonly eye: number; readonly yaw: number; readonly pitch: number } | null = null;
+  /** While a measure draws a held view, nothing streams: the land and the standers wait for the frames that move the person. */
+  let streamHeld = false;
+  /** While a measure drives the frames itself, the app's own loop draws none. */
+  let driving = false;
+  /** Meters a second along a trip's tread: `TRAVEL.pace`, unless a measure sets another. */
+  let travelPace: number = TRAVEL.pace;
   const detailEye = new THREE.Vector3();
   const shadowCenter = new THREE.Vector3();
-  const views = (): PlantView[] => [...treeViews, ...settlement.views(), ...landmarkViews, ...(built?.views ?? [])];
+  const views = (): Pick<PlantView, "object" | "useDepth">[] => [...treeViews, ...settlement.views(), ...landmarkViews, ...(built?.views ?? [])];
   const lanternEye = new THREE.Vector3();
   // The water mirrors the sky, the coarse ground, trees and the cottage, and
   // never grass or the understory: its reflection is soft, so fine detail
@@ -1907,13 +2022,16 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       updateWalk(dt);
       detailEye.set(detailPin?.x ?? camera.position.x, camera.position.y, detailPin?.z ?? camera.position.z);
       ground.follow(detailPin?.x ?? walker.x, detailPin?.z ?? walker.z);
-      land.follow(detailPin?.x ?? walker.x, detailPin?.z ?? walker.z);
-      wildGrowth.follow(detailPin?.x ?? walker.x, detailPin?.z ?? walker.z);
-      standing.follow(walker.x, walker.z);
+      if (!streamHeld) {
+        land.follow(detailPin?.x ?? walker.x, detailPin?.z ?? walker.z);
+        wildGrowth.follow(detailPin?.x ?? walker.x, detailPin?.z ?? walker.z);
+        standing.follow(walker.x, walker.z);
+      }
       lantern.follow(camera.position, forward, lanternGround, walked, dt);
       grass.follow(detailEye);
       water.wade(walker.x, walker.z, walker.yaw, walked, dt);
-      shadowCenter.set(walker.x - Math.sin(walker.yaw) * 18, walker.eye, walker.z - Math.cos(walker.yaw) * 18);
+      const seen = viewPin ?? walker;
+      shadowCenter.set(seen.x - Math.sin(seen.yaw) * 18, seen.eye, seen.z - Math.cos(seen.yaw) * 18);
       shadow.frame(shadowCenter, 40);
     } else {
       orbit.update();
@@ -2319,6 +2437,125 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     return { steps, wind };
   }
 
+  /** The view held at `pin`, detail chosen from there and nothing streaming, drawn and read back. */
+  function heldView(pin: NonNullable<typeof viewPin>): Uint8Array {
+    viewPin = pin;
+    detailPin = { x: pin.x, z: pin.z };
+    streamHeld = true;
+    try {
+      return grabFrame(1);
+    } finally {
+      viewPin = null;
+      detailPin = null;
+      streamHeld = false;
+    }
+  }
+
+  /**
+   * The travel test. Stands the person at (x0, z0) with the land and
+   * everything on it in, then sends them to the landing nearest (x1, z1) at
+   * `pace` meters a second along the tread, driving the frames itself in
+   * real time with the wind's clock frozen. Every `every` frames the view is
+   * held where it was and drawn again, its detail chosen from there too, so
+   * the change measured is only what streaming did meanwhile: the land's
+   * windows moving and tiles standing. Each frame's work is timed to the
+   * GPU's finish. Returns the trip's length and seconds, how long it took to
+   * set off and how long it waited on the way ahead, each check's [meters
+   * along, pace, mean change, worst block, the land levels that moved as
+   * bits, the water's depth under the person, how far the water's mirror
+   * plane moved, and where the view was held], the frames' work in
+   * milliseconds, the land's least lead, and every tile that stood within
+   * sight of the person.
+   */
+  async function travelTest(x0: number, z0: number, x1: number, z1: number, pace: number, every = 3, cap = 400, pitch = -0.05) {
+    // The trip starts where a person stands: the point given may be a thing's own middle, inside it.
+    const start = landingNear(x0, z0) ?? { x: x0, z: z0 };
+    x0 = start.x;
+    z0 = start.z;
+    walkTo(x0, z0, 0, pitch);
+    await Promise.all([land.around(x0, z0), standing.ready(x0, z0)]);
+    const at = landingNear(x1, z1);
+    travelPace = pace;
+    const started = at !== null && travelTo(at, false);
+    travelPace = TRAVEL.pace;
+    const t = trip;
+    if (!started || t === null) return null;
+    const gl = renderer.getContext();
+    const pixel = new Uint8Array(4);
+    const was = frozen;
+    frozen = light.uTime.value;
+    driving = true;
+    standing.late();
+    const checks: [number, number, number, number, number, number, number, number, number][] = [];
+    /** Which land levels moved since `held`'s view was drawn, one bit a level. */
+    const windows = (): string => land.origins.map((o) => `${o.x},${o.z}`).join(" ");
+    const work: number[] = [];
+    let lead = Infinity;
+    let ended = Number.NaN;
+    let held: { pin: NonNullable<typeof viewPin>; image: Uint8Array; s: number; windows: string; mirror: number } | null = null;
+    /** The most the depth walking reads ever differed from the land's own water level under the person, meters. */
+    let ghosts = 0;
+    let last = performance.now();
+    try {
+      for (let k = 0; trip === t && performance.now() - t.began < cap * 1000; k++) {
+        // The workers' answers come in between frames, as they do between the app's own.
+        await new Promise((r) => setTimeout(r, 0));
+        if (held === null && k % every === 0) {
+          const pin = { x: walker.x, z: walker.z, eye: walker.eye, yaw: walker.yaw, pitch: walker.pitch };
+          held = { pin, image: heldView(pin), s: t.at.s, windows: windows(), mirror: water.stats().mirrorLevel };
+        }
+        const now = performance.now();
+        const dt = Math.min(0.1, (now - last) / 1000);
+        last = now;
+        gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
+        const w0 = performance.now();
+        frame(dt, now, hour);
+        gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
+        work.push(+(performance.now() - w0).toFixed(2));
+        if (trip !== t) ended = performance.now();
+        if (t.at.s > 60 && t.at.s < t.plan.length - 60) {
+          const spacing = frameOf(terrain.spec).spacing;
+          const o = land.origins[0] as { x: number; z: number };
+          lead = Math.min(lead, walker.x - o.x * spacing, (o.x + CLIP.size) * spacing - walker.x, walker.z - o.z * spacing, (o.z + CLIP.size) * spacing - walker.z);
+        }
+        if (held !== null && (k % every === every - 1 || trip !== t)) {
+          const change = frameChange(held.image, heldView(held.pin));
+          const before = held.windows.split(" ");
+          const moved = windows()
+            .split(" ")
+            .reduce((bits, w, k) => (w === before[k] ? bits : bits | (1 << k)), 0);
+          // How deep the water is under the person, from the land's own water level: wading spreads rings.
+          const level = heightAt(terrain.lattice, walker.x, walker.z, terrain.waterLevel);
+          const depth = level > -500 ? Math.max(0, level - heightAt(terrain.lattice, walker.x, walker.z)) : 0;
+          // The water's mirror follows the person's eye, not the held view's: how far its plane moved between the two draws.
+          const mirrored = +(water.stats().mirrorLevel - held.mirror).toFixed(3);
+          // The depth walking reads (`waterDepthAt`), against the land's own water level just above.
+          const cached = waterDepthAt(terrain, walker.x, walker.z);
+          ghosts = Math.max(ghosts, Math.abs(cached - depth));
+          checks.push([+held.s.toFixed(1), +t.at.v.toFixed(1), +change.mean.toFixed(3), +change.worst.toFixed(2), moved, +depth.toFixed(2), mirrored, Math.round(held.pin.x), Math.round(held.pin.z)]);
+          held = null;
+        }
+      }
+    } finally {
+      driving = false;
+      frozen = was;
+      // A trip the test stopped early ends where it was.
+      if (trip === t) trip = null;
+    }
+    return {
+      pace,
+      length: Math.round(t.plan.length),
+      seconds: +(((Number.isNaN(ended) ? performance.now() : ended) - t.began) / 1000).toFixed(1),
+      setOff: t.setOff === null ? null : Math.round(t.setOff - t.began),
+      waited: +t.waited.toFixed(1),
+      lead: Math.round(lead),
+      checks,
+      work,
+      late: standing.late(),
+      ghosts: +ghosts.toFixed(2),
+    };
+  }
+
   /** Every preset that turns far, by name: each tree preset's first build, then the bushes. */
   const farPresets = (): readonly { readonly name: string; readonly plant: () => Realized; readonly far: FarOf }[] => [
     ...FLORA_PRESETS.map((preset, p) => ({ name: preset.name, plant: () => treeBuild(p * TREE_BUILDS), far: treeFar[p * TREE_BUILDS] as FarOf })),
@@ -2467,7 +2704,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     scene,
     light,
     camera,
-    person: () => ({ x: walker.x, z: walker.z, yaw: walker.yaw, walking: goal !== null || [...keys].some((k) => k !== "ShiftLeft" && k !== "ShiftRight") }),
+    person: () => ({ x: walker.x, z: walker.z, yaw: walker.yaw, walking: goal !== null || trip !== null || [...keys].some((k) => k !== "ShiftLeft" && k !== "ShiftRight") }),
     placeAt: (x, z) => placeAt(places, x, z),
     places: () => places,
     code: () => code?.world ?? null,
@@ -2492,6 +2729,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       walkTo(at.x, at.z, at.yaw);
       return Promise.all([land.around(at.x, at.z), standing.ready(at.x, at.z)]).then(() => undefined);
     },
+    travel: (at, face) => travelTo(at, face),
     view: (id, w, h, wide) => viewOf(id, w, h, wide),
     seenFrom: (id) => seenFromOf(id),
     thing: (of) => code?.thing(of),
@@ -2506,7 +2744,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     ready,
     report: () => ({
       mode,
-      walking: goal !== null || [...keys].some((k) => k !== "ShiftLeft" && k !== "ShiftRight"),
+      walking: goal !== null || trip !== null || [...keys].some((k) => k !== "ShiftLeft" && k !== "ShiftRight"),
       worldSize: world.size,
       regions: world.regions.length,
       trees: trees.length,
@@ -2523,13 +2761,13 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       if (on) resize();
     },
     frame: (dt, now, h) => {
-      if (active) frame(dt, now, h);
+      if (active && !driving) frame(dt, now, h);
     },
     shots: (): Shot[] => RELIEF_PRIMITIVES.map((p) => ({ name: `terrain-${slug(p.id)}`, stage: () => showcase(p.id) })),
     hook: {
       cottage: () => {
         const b = settlement.buildings[0];
-        return b === undefined ? null : { ...b.site, triangles: b.view?.triangles ?? 0, width: b.plan.width, depth: b.plan.depth };
+        return b === undefined ? null : { ...b.site, triangles: b.triangles, width: b.plan.width, depth: b.plan.depth };
       },
       /** Each standing landmark: its name, site, height and triangles. */
       landmarks: () =>
@@ -2586,7 +2824,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
         })),
       /** Every building: what it stands for, where, and its vitality now. */
       buildings: () =>
-        settlement.buildings.map((b) => ({ name: b.represented.name, building: b.kindName, ...b.site, width: b.plan.width, depth: b.plan.depth, triangles: b.view?.triangles ?? 0, vitality: b.vitality, sign: settlement.signOf(b), stand: settlement.standOf(b) })),
+        settlement.buildings.map((b) => ({ name: b.represented.name, building: b.kindName, ...b.site, width: b.plan.width, depth: b.plan.depth, triangles: b.triangles, vitality: b.vitality, sign: settlement.signOf(b), stand: settlement.standOf(b) })),
       /** Sets building `i`'s vitality, and its sign's. */
       vitality: (i: number, v: number) => {
         const b = settlement.buildings[i];
@@ -2601,6 +2839,56 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       card: () => (card.shown === null ? null : { name: card.shown.name, what: card.shown.what }),
       closeCard: () => hideCard(),
       walk: (x: number, z: number, yawDeg: number, pitchDeg = -3) => walkTo(x, z, (yawDeg * Math.PI) / 180, (pitchDeg * Math.PI) / 180),
+      /** Sends the person to the landing nearest (x, z), as a pick on the map does, at `pace` on the tread and straight across; false where neither goes. */
+      travel: (x: number, z: number, pace: number = TRAVEL.pace) => {
+        const at = landingNear(x, z);
+        travelPace = pace;
+        const going = at !== null && travelTo(at, false);
+        travelPace = TRAVEL.pace;
+        return going;
+      },
+      /** How far the person stands inside each land level's window, meters, finest first: the land's lead on them, which a trip must not outrun. */
+      landLead: () => {
+        const spacing = frameOf(terrain.spec).spacing;
+        return land.origins.map((o, k) => {
+          const unit = spacing * 2 ** k;
+          const lo = { x: o.x * unit, z: o.z * unit };
+          const hi = { x: (o.x + CLIP.size) * unit, z: (o.z + CLIP.size) * unit };
+          return Math.round(Math.min(walker.x - lo.x, hi.x - walker.x, walker.z - lo.z, hi.z - walker.z));
+        });
+      },
+      /** Where a person sent to (x, z) would stand (`landingNear`), or null. */
+      landingNear: (x: number, z: number) => landingNear(x, z),
+      /** The travel test (`travelTest`). */
+      travelTest,
+      /** The trip under way, or null: how far along it and how long, its pace, and whether its view follows the way. */
+      trip: () => (trip === null ? null : { s: +trip.at.s.toFixed(1), length: Math.round(trip.plan.length), v: +trip.at.v.toFixed(2), going: trip.at.going, follows: trip.at.follows, stopping: trip.stopping }),
+      /**
+       * A trip from (x0, z0) to the landing nearest (x1, z1), planned and
+       * taken at 60 frames a second without moving anyone: its length, how
+       * much of it is on the tread, and how long it takes.
+       */
+      tripTime: (x0: number, z0: number, x1: number, z1: number) => {
+        // A trip starts where a person stands: the point given may be a thing's own middle, inside it.
+        const start = landingNear(x0, z0) ?? { x: x0, z: z0 };
+        x0 = start.x;
+        z0 = start.z;
+        const at = landingNear(x1, z1);
+        const t0 = performance.now();
+        const chosen = at === null ? null : travelWay({ x: x0, z: z0 }, at);
+        const planMs = Math.round(performance.now() - t0);
+        if (at === null || chosen === null) return null;
+        const plan = planTrip(chosen.way, chosen.off, null, TRAVEL.pace, (x, z) => wadingAt(terrain, decks, x, z));
+        let t = travelFrom(plan, plan.heading[0] as number);
+        let seconds = 0;
+        while (!t.done && seconds < 3600) {
+          t = travelStep(plan, t, 1 / 60, t.yaw);
+          seconds += 1 / 60;
+        }
+        const tread = trailWay(ways.network, { x: x0, z: z0 }, at);
+        const trails = tread === null ? null : Math.round(tread.reduce((sum, p, i) => (i === 0 ? Math.hypot(p.x - x0, p.z - z0) : sum + Math.hypot(p.x - (tread[i - 1] as Walker).x, p.z - (tread[i - 1] as Walker).z)), 0) + Math.hypot((tread[tread.length - 1] as Walker).x - at.x, (tread[tread.length - 1] as Walker).z - at.z));
+        return { by: chosen.by, planMs, straight: Math.round(Math.hypot(at.x - x0, at.z - z0)), length: Math.round(plan.length), trails, seconds: Math.round(seconds), walking: Math.round(plan.length / WALK_TO.pace) };
+      },
       /**
        * The tour (`tourStops`): with no name, every stop's name, what is there
        * and where; with a name, such as "ruined building", "bridge",

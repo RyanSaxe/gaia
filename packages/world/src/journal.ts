@@ -8,13 +8,13 @@
 // that entity's spread first, and a file has its own, its painting facing its
 // own code. A leaf (a definition, or a file with nothing standing in it) is
 // its picture facing its content. A folder's thing faces the folder's
-// README, or with none the things its trails join it to. The repository's own
+// README, or with none what the folder holds, with its trails by their way. The repository's own
 // entity comes first of all. Every entry opens on a spread: the left-hand page pictures it, and the
 // right-hand page names it and lists or shows what it holds, a long list
 // running on over the pages after. The book says only what each page is
 // about, what it lists and its pages; the journal draws the rest.
 
-import type { CodeArea, CodePatch, CodeSymbol, CodeThing, CodeTrail } from "./code-world.ts";
+import type { CodeArea, CodePatch, CodeStanding, CodeSymbol, CodeThing, CodeTrail } from "./code-world.ts";
 
 export interface JournalEntry {
   /**
@@ -28,7 +28,7 @@ export interface JournalEntry {
   readonly name: string;
   /** The entry it sits under; a top-level chapter, a file at the root and the repository's entity sit under none. */
   readonly under?: string;
-  /** What its page lists, each an entry of its own: what it holds, or for an entity the entities its trails join it to. */
+  /** What its page lists, each an entry of its own: what it holds; an entity lists what its folder holds. */
   readonly lists: readonly string[];
   /** The file whose text a thing's page shows instead of a list: a folder's README. */
   readonly text?: string;
@@ -36,8 +36,11 @@ export interface JournalEntry {
   readonly page: number;
   /** How many pages its words take from `page` on: a list too long for one runs on overleaf. */
   readonly pages: number;
-  /** Rows its first page gives to snippets of its best and worst parts (a file's definitions, a folder's files), before its list; absent when none. */
+  /** Rows its first page gives to a snippet of its most important part (a file's definition, a folder's file), before its list; absent when none. */
   readonly lead?: number;
+  /** An entity's trails by their way: the entities it imports from, and those that import from it. */
+  readonly uses?: readonly string[];
+  readonly usedBy?: readonly string[];
 }
 
 export interface Journal {
@@ -55,7 +58,7 @@ export interface Journal {
 export interface PageRoom {
   readonly first: number;
   readonly next: number;
-  /** Rows a first page gives to snippets of its best and worst parts: a file's definitions or a folder's files, when it holds two or more. */
+  /** Rows a first page gives to a snippet of its most important part, a file's definition or a folder's file, when it holds two or more. */
   readonly lead?: number;
 }
 
@@ -65,7 +68,10 @@ export interface JournalSource {
   readonly areas: readonly Pick<CodeArea, "path" | "name" | "parent">[];
   readonly patches: readonly Pick<CodePatch, "path" | "name" | "area">[];
   readonly symbols: readonly Pick<CodeSymbol, "id" | "file" | "parent" | "name" | "line">[];
-  readonly things?: readonly Pick<CodeThing, "path" | "name">[];
+  /** The buildings and landmarks; only an entity's has a spread of its own here, since a file's or a definition's is its own page. */
+  readonly things?: readonly Pick<CodeThing, "path" | "name" | "of">[];
+  /** The files and entities standing as flowers, a stone, a bush or a tree. */
+  readonly standing?: readonly Pick<CodeStanding, "path" | "name" | "of">[];
   readonly trails?: readonly Pick<CodeTrail, "from" | "to">[];
 }
 
@@ -97,14 +103,17 @@ export function journalOf(world: JournalSource, room: PageRoom = { first: Infini
   for (const a of world.areas) if (a.parent !== null) push(chapters, a.parent, { kind: "chapter", of: a.path, name: a.name });
   for (const p of world.patches) push(files, p.area, { kind: "file", of: p.path, name: p.name });
   for (const s of world.symbols) push(definitions, s.parent ?? s.file, { item: { kind: "definition", of: s.id, name: s.name }, line: s.line });
-  const things = new Map((world.things ?? []).map((t) => [t.path, t]));
-  const joined = new Map<string, Set<string>>();
+  // Every entity has its thing's spread, whatever it stands as.
+  const things = new Map([...(world.things ?? []).filter((t) => (t.of ?? "entity") === "entity"), ...(world.standing ?? []).filter((t) => t.of === "entity")].map((t) => [t.path, t]));
+  // Each trail by its way: the entity it leaves imports from the one it reaches.
+  const usesOf = new Map<string, Set<string>>();
+  const usedByOf = new Map<string, Set<string>>();
   for (const t of world.trails ?? []) {
     if (!things.has(t.from) || !things.has(t.to) || t.from === t.to) continue;
-    if (!joined.has(t.from)) joined.set(t.from, new Set());
-    if (!joined.has(t.to)) joined.set(t.to, new Set());
-    joined.get(t.from)?.add(t.to);
-    joined.get(t.to)?.add(t.from);
+    if (!usesOf.has(t.from)) usesOf.set(t.from, new Set());
+    if (!usedByOf.has(t.to)) usedByOf.set(t.to, new Set());
+    usesOf.get(t.from)?.add(t.to);
+    usedByOf.get(t.to)?.add(t.from);
   }
   const entityItem = (path: string): Item => ({ kind: "entity", of: entityOf(path), name: things.get(path)?.name ?? path });
   /** Each folder's README, which its thing's page shows. */
@@ -114,8 +123,9 @@ export function journalOf(world: JournalSource, room: PageRoom = { first: Infini
     // A container's first row is itself as a thing.
     if (item.kind === "chapter" || item.kind === "root") return [...(things.has(item.of) ? [entityItem(item.of)] : []), ...(chapters.get(item.of) ?? []).sort(byName), ...(files.get(item.of) ?? []).sort(byName)];
     if (item.kind === "entity") {
+      // An entity's page shows its folder's README; with none, it lists what its folder holds, so it always leads down.
       const folder = item.of.slice("entity:".length);
-      return readmes.has(folder) ? [] : [...(joined.get(folder) ?? [])].map(entityItem).sort(byName);
+      return readmes.has(folder) ? [] : [...(chapters.get(folder) ?? []).sort(byName), ...(files.get(folder) ?? []).sort(byName)];
     }
     if (item.kind === "own") return [];
     const held = (definitions.get(item.of) ?? []).sort((a, b) => a.line - b.line || byName(a.item, b.item)).map((d) => d.item);
@@ -144,13 +154,16 @@ export function journalOf(world: JournalSource, room: PageRoom = { first: Infini
   let picture = 0;
   const add = (item: Item, under: string | undefined, lists: readonly Item[]): void => {
     const rows = rowsOf(item, lists);
-    // A file with two definitions or more, or a folder with two files or more, leads with snippets of its best and worst,
-    // which take rows of its first page.
+    // A file with two definitions or more, or a folder with two files or more, leads with a snippet of its most important,
+    // which takes rows of its first page.
     const parts = item.kind === "file" ? rows - 1 : item.kind === "chapter" ? (files.get(item.of)?.length ?? 0) : 0;
     const lead = parts >= 2 ? (room.lead ?? 0) : 0;
     const pages = pagesFor(rows + lead);
     const text = item.kind === "entity" ? readmes.get(item.of.slice("entity:".length)) : undefined;
-    const entry: JournalEntry = { ...item, ...(under === undefined ? {} : { under }), lists: lists.map((l) => l.of), ...(text === undefined ? {} : { text }), page: picture + 1, pages, ...(lead > 0 ? { lead } : {}) };
+    const folder = item.kind === "entity" ? item.of.slice("entity:".length) : null;
+    const way = (m: ReadonlyMap<string, ReadonlySet<string>>): string[] => [...(m.get(folder as string) ?? [])].map(entityItem).sort(byName).map((i) => i.of);
+    const trails = folder === null ? {} : { uses: way(usesOf), usedBy: way(usedByOf) };
+    const entry: JournalEntry = { ...item, ...(under === undefined ? {} : { under }), lists: lists.map((l) => l.of), ...(text === undefined ? {} : { text }), page: picture + 1, pages, ...(lead > 0 ? { lead } : {}), ...trails };
     entries.push(entry);
     index.set(entry.of, entry);
     // The next picture is a left-hand page: an entry whose words end on a right-hand page leaves the page after it blank.
@@ -159,7 +172,7 @@ export function journalOf(world: JournalSource, room: PageRoom = { first: Infini
   const visit = (item: Item, under: string | undefined): void => {
     const lists = listOf(item);
     add(item, under, lists);
-    // An entity lists the things it is joined to, which have chapters of their own; its own lists nothing.
+    // An entity lists what its folder holds, which follows it in the folder's own chapter; its own lists nothing.
     if (item.kind !== "entity" && item.kind !== "own") for (const l of lists) visit(l, item.of);
   };
   const contents = listOf({ kind: "root", of: "" });

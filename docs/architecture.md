@@ -23,7 +23,7 @@ the document that did not change renders exactly as it did before.
 | Main | TypeScript (Electron) | The window and the app's lifecycle. It starts the engine and the world service, restarts the engine if it exits, and names the folder whose world each page opens: `GAIA_PROJECT`, one chosen with File > Open Folder, or none, and then the page offers the start (File > Choose a World returns to it). |
 | Engine | Rust (`gaia-engine`) | Files, parsing, git, the code graph, the app-data store and the Jev client with the key from the macOS Keychain. |
 | World service | TypeScript (Electron utility process) | Kinds and primitives, the question planner, answer rules, vitality and the world document. It opens a codebase's world (`openWorld` in `app/world-service/open-world.ts`): the engine's `project.graph`, the facts `factsOf` derives from it, Jev's judgments, kept in the store, and `layoutWorld`, and sends the renderer the result (`WorldDocument`) over its MessagePort. |
-| Renderer | TypeScript | The UI, the Three.js scene, the realizer and the clock. In slice 1 the renderer is the lab. The lab opens into the world, full screen at eye height (`app/renderer/immersive/`), with its debugging views (Components, Terrain and Skies) behind tabs; the immersive world is the terrain lab's world without its chrome, plus three ways of telling a person where they are (a minimap of the land around them with the area's name, the field map that unfolds out of it, and markers in the world), read through `placeAt` and drawn on one field sheet (`docs/design-system.md`, "The field sheet"); touching the world only moves the person, and stopping at a thing that stands for code raises its page at the lower left; a tap on the open field map sends the person to that place, landing where `WorldHandle.landing` says, under a fold of paper that hides the move. The terrain lab bakes its world on worker threads (`app/renderer/terrain/bake-worker.ts`): a few workers compose bands of lattice rows with `composeRows`, and one finishes the bake with `finishTerrain`, which scales the relief into the budget by a fit found on a survey of every 4th sample and checked once at every sample, and stands the world's things on it. On the page the land is a clipmap (`createPageLand` in `app/renderer/terrain/land.ts`): seven levels of 512 by 512 samples centered near the person, level k every 2^k-th sample on the world's own grid, where ground ring k sets its vertices, so the rings read exactly the samples they did. The page never holds the whole world's land: its land workers bake each level's window in 64-sample chunks from the world's plan alone (`app/renderer/terrain/land-chunks.ts`), and a level moves once the person has walked a chunk from its middle and every chunk of its new window has come, so a window never shows half old and half new. Every texture that holds a value per lattice sample takes its data from the levels: the ground's height, water and distances, each sample's covers, and which ways each sample lies on (`createGroundTexture` in `ground.ts`), so the land's memory on the page and the GPU is the same at any world size. A coarse level names a way as far out as a reader of its cells asks (`placeReach`), so a far trail stays as worn as a near one, and a reader between samples takes the finest level that holds the point and blends into the next near its window's edge (`clipLevel`). The clearings' mask, which only the grass reads, is one window 256 m across around the grass, drawn again from the outlines and capsules as the grass moves on (`app/renderer/terrain/clearings.ts`). Level 0, the land within a few hundred meters to the meter, is the page's `Terrain`; a read past it falls to the finest level that holds the point (`Lattice.beyond`), and a jump waits under its fold of paper until the land around its landing has come. The land a tile at a time: `planTerrain` makes the world's whole-world decisions once, the fit from the survey and the water from the ground along its beds alone, each bed solved on a window of just the ground it reads with the beds before it cut in again, so the plan never holds a lattice the size of the world (the whole world's bake solves its water on the same windows, so the two agree to the bit); `bakeTile` bakes any tile from the plan with a margin for its shore, or every stride-th sample of it for a coarser level; and `standTile` levels it under the buildings' pads, the landmarks' footings and the trails' treads as standing the world recorded them (`LandEdits`), byte for byte as the stood world holds it (`app/renderer/terrain/stand.test.ts`). The finishing worker stands the world's things with `standWorld` (`app/renderer/terrain/stand.ts`): each building's site and pad, the landmarks' sites, the network of trails leveled into the ground, the trees, and the understory of the tiles near the person, while the others work out whose ground each part of the land is (`ownershipRows`, see Vitality), so drawing never waits on a bake. It hands the page the world's plan, what standing did to the land and how the understory scatters (`LandSource`); the whole world's land stays on the worker. The components every world opens with (the trees, landmarks and bushes) and a codebase's buildings are realized on worker threads too (`app/renderer/terrain/made.ts`), made ahead while the wait draws: the page takes each build as it is made, and realizes in place any build it asks for that was not made ahead, the same either way since the realizer is pure. Each build is held only until its meshes are made and its far form baked; one asked for after that, such as by the swap test, is realized again. A plant's meshes keep no copy of their buffers on the page once the GPU holds them (`letGoOnUpload`), but for the positions, normals and index of what a ray picks: a building or a landmark. |
+| Renderer | TypeScript | The UI, the Three.js scene, the realizer and the clock. In slice 1 the renderer is the lab. The lab opens into the world, full screen at eye height (`app/renderer/immersive/`), with its debugging views (Components, Terrain and Skies) behind tabs; the immersive world is the terrain lab's world without its chrome, plus three ways of telling a person where they are (a minimap of the land around them with the area's name, the field map that unfolds out of it, and markers in the world), read through `placeAt` and drawn on one field sheet (`docs/design-system.md`, "The field sheet"); touching the world only moves the person, and stopping at a thing that stands for code raises its page at the lower left; a tap on the open field map sends the person to that place, landing where `WorldHandle.landing` says: along the trails, or straight across the land where they wander (`WorldHandle.travel`, with `trailWay`, `acrossWay`, `planTrip` and `travelStep` in `@gaia/terrain`), each mark of the way ahead asked of the standers before the person comes near it, or where neither goes, under a fold of paper that hides the move. The terrain lab bakes its world on worker threads (`app/renderer/terrain/bake-worker.ts`): a few workers compose bands of lattice rows with `composeRows`, and one finishes the bake with `finishTerrain`, which scales the relief into the budget by a fit found on a survey of every 4th sample and checked once at every sample, and stands the world's things on it. On the page the land is a clipmap (`createPageLand` in `app/renderer/terrain/land.ts`): seven levels of 512 by 512 samples centered near the person, level k every 2^k-th sample on the world's own grid, where ground ring k sets its vertices, so the rings read exactly the samples they did. The page never holds the whole world's land: its land workers bake each level's window in 64-sample chunks from the world's plan alone (`app/renderer/terrain/land-chunks.ts`), and a level moves once the person has walked a chunk from its middle and every chunk of its new window has come, so a window never shows half old and half new. Every texture that holds a value per lattice sample takes its data from the levels: the ground's height, water and distances, each sample's covers, and which ways each sample lies on (`createGroundTexture` in `ground.ts`), so the land's memory on the page and the GPU is the same at any world size. A coarse level names a way as far out as a reader of its cells asks (`placeReach`), so a far trail stays as worn as a near one, and a reader between samples takes the finest level that holds the point and blends into the next near its window's edge (`clipLevel`). The clearings' mask, which only the grass reads, is one window 256 m across around the grass, drawn again from the outlines and capsules as the grass moves on (`app/renderer/terrain/clearings.ts`). Level 0, the land within a few hundred meters to the meter, is the page's `Terrain`; a read past it falls to the finest level that holds the point (`Lattice.beyond`), and a jump waits under its fold of paper until the land around its landing has come. The land a tile at a time: `planTerrain` makes the world's whole-world decisions once, the fit from the survey and the water from the ground along its beds alone, each bed solved on a window of just the ground it reads with the beds before it cut in again, so the plan never holds a lattice the size of the world (the whole world's bake solves its water on the same windows, so the two agree to the bit); `bakeTile` bakes any tile from the plan with a margin for its shore, or every stride-th sample of it for a coarser level; and `standTile` levels it under the buildings' pads, the landmarks' footings and the trails' treads as standing the world recorded them (`LandEdits`), byte for byte as the stood world holds it (`app/renderer/terrain/stand.test.ts`). The finishing worker stands the world's things with `standWorld` (`app/renderer/terrain/stand.ts`): each building's site and pad, the landmarks' sites, the network of trails leveled into the ground, the trees, and the understory of the tiles near the person, while the others work out whose ground each part of the land is (`ownershipRows`, see Vitality), so drawing never waits on a bake. It hands the page the world's plan, what standing did to the land and how the understory scatters (`LandSource`); the whole world's land stays on the worker. The components every world opens with (the trees, landmarks and bushes) and a codebase's buildings are realized on worker threads too (`app/renderer/terrain/made.ts`), made ahead while the wait draws: the page takes each build as it is made, and realizes in place any build it asks for that was not made ahead, the same either way since the realizer is pure. Each build is held only until its meshes are made and its far form baked; one asked for after that, such as by the swap test, is realized again. A plant's meshes keep no copy of their buffers on the page once the GPU holds them (`letGoOnUpload`), but for the positions, normals and index of what a ray picks: a building or a landmark. |
 
 The world service talks to the engine in newline-delimited JSON-RPC 2.0 over
 the engine's stdin and stdout, relayed by the main process. Only small data
@@ -73,18 +73,21 @@ gives the reason next to each rule.
 A **primitive** is a pure procedural function with typed parameters and a
 role, such as `branching@1` (Skeleton) or `leaf-clumps@1` (Foliage). It is code,
 versioned in its ID. A **kind** declares slots by role and the subject it
-stands for: a file (`flora`, `rock`, `wildflowers`), an entity
-(`structure`, `landmark`), a region (`biome`), a dependency between two
-entities (`link`) or the repository (`world`). A `link`'s blueprint fills only a trail's look; the
+stands for: a file (`flora`, `rock`, `wildflowers`), any thing that stands
+for code, an entity, a file or a definition (`structure`, `landmark`, which
+read its numbers from `ThingFacts`), a region (`biome`), a dependency between
+two entities (`link`) or the repository (`world`). A `link`'s blueprint fills only a trail's look; the
 terrain finds its route. A `structure`'s footprint lays out one
 `BuildingPlan`: the masses the building is joined from (each a block or a
 round turret with its own storeys and roof form: gable, hip, half-hip,
 lean-to or cone), its floor, and where every door and window goes. Its body,
-roof, openings, ornaments and optional feature (a `waterwheel@1`, a
-`tower@1`) each build on that plan, so walls rise to the roofline over them
-and everything agrees by construction. The geometry lives in
-`packages/primitives/src/geometry/building/`, one file per part: layout,
-frame (reading the plan), walls, roofs, openings, garden, ruin and features.
+roof, openings, ornaments and optional feature (a `waterwheel@1` or a
+`tower@1` against the house, or a `dovecote@1`, `well@1`, `bell@1`,
+`forge@1` or `granary@1` in its yard) each build on that plan, so walls
+rise to the roofline over them and everything agrees by construction. The
+geometry lives in `packages/primitives/src/geometry/building/`, one file per
+part: layout, frame (reading the plan), walls, roofs, openings, garden,
+ruin, features and yard.
 
 An **entity** is a named unit of the code with a boundary, a public surface,
 things that depend on it and a health of its own: a package or crate, as
@@ -94,12 +97,15 @@ makes one; no file's name or path decides that a directory is an entity.
 report for each: its root path (its identity), name, form, manifest, entry,
 doc, size, exports, the entities it depends on and that depend on it, and
 its files' tests, diagnostics and git activity summed. Entities nest; each
-file belongs to its innermost one. Buildings and landmarks stand for
-entities, plants for files, and trails for dependencies between entities.
-Jev decides which entities become buildings, which become landmarks and
-which form suits each, with no rule fixing how many of either; the kinds
-bind only numbers from the facts (a building's size from lines, storeys from
-exports and a feature's reach from dependents; a landmark's scale from its
+file belongs to its innermost one. Anything can stand as anything, by its
+importance ([decision 64](decisions/64-anything-can-stand-as-anything.md)):
+every entity, file and definition stands as one thing, flowers, a stone, a
+bush, a tree, a building or a landmark, whichever Jev chooses among the
+forms its importance is offered; trails stand for dependencies between
+entities. The kinds bind only numbers from the facts (a building's size from
+lines, storeys from exports and a feature's reach from dependents, which are
+the entities that import an entity, the files that import a file or the
+definitions that call or name a definition; a landmark's scale from its
 dependents; a trail's traffic from how many of one entity's files import the
 other). `DependencyFacts` carries both entities' facts, so a trail can follow
 the vitality of each.
@@ -112,6 +118,18 @@ Every parameter is a closed set: a choice, a scale of described levels, a
 flag or a set. A blueprint stores the words Jev chose. A primitive's `build`
 receives numbers, which the seed picks between neighboring levels, so
 instances of one blueprint vary and each is identical on every run.
+
+A primitive may say what its place must have for it to stand there
+(`needs`), as a waterwheel needs running water. The planner offers a slot
+only the primitives whose needs the thing's place meets (`has` on the
+target), and Jev chooses among those as it would; nothing overrides its
+pick. A building's place has what its region's water holds: a water look
+says so (`holds`), and a brook or a trickle holds running water. Composing
+runs before the land is laid out, so the place is the region, not the lot.
+A need may also be a range of a thing's rank by importance among the
+world's own entities, files and definitions (`{ rank: [min, max] }`), from 0
+for the least important to 1 for the most; `meets` in `@gaia/schema` is the
+one rule for both, and a form's look declares its needs as a primitive does.
 
 ## A world from code
 
@@ -145,8 +163,8 @@ sites drawn from each file's share (`CodeWorld.cells`, one per 16 m or so)
 redraw the whole division as plain nearest-site cells: the rule `siteAt` in
 `@gaia/terrain` reads, so a file's ground is the same for the layout,
 `placeAt`, the map and the terrain. A file's patch is its cells; an entity's
-lot is a cell of its directory's own ground, and its building or landmark
-stands there.
+lot is a cell of its directory's own ground, and what it stands as stands
+there; a file stands at its patch's heart, its own ground's plot.
 
 A directory whose ground, with that of subdirectories that have no land of
 their own, reaches 3% of the code gets its own land: a terrain region whose
@@ -167,9 +185,15 @@ from the understanding pass, 0 to 1, which sets its size; without one, the
 facts' top-level symbols stand, sized by their length. Each stands as
 the form Jev chose for it: a tree, drawn with the woods, or one of the
 understory's own blueprints, drawn instanced with the rest of the
-understory; neither costs draw calls of its own. Each has its own vitality,
-and a person can walk up to it to read its card: its kind, doc comment,
-where it is declared and its size.
+understory; neither costs draw calls of its own. A definition Jev raises to
+a building or a landmark stands on its own plot as one of the world's
+things (`CodeThing.of`), composed part by part as an entity's is; and each
+file and entity standing as a plant, a stone or flowers is one of
+`CodeWorld.standing`, at its patch's heart or on its lot. None of this
+changes the land: a raised thing takes the ground its code already holds,
+and the definitions around it keep off it as they keep off each other. Each
+has its own vitality, and a person can walk up to it to read its card: its
+kind, doc comment, where it is declared and its size.
 
 **The meaning.** The engine gives structure and sizes; Jev gives meaning.
 Jev judges every choice a reasonable person could make differently: whether
@@ -178,14 +202,23 @@ a still pond where much of the code leans on it, none where it stands on its
 own: the option's words are the reason, stored with the choice), what that
 land's ground is like (its character: its undergrowth, how its open ground
 lies and how large its trees grow, again with its reason), what each
-definition stands as (a tree, a stone, a bush or flowers, each asked on its
-own), whether each entity is a building or a landmark, and how much it would
-walk each dependency. Jev never names a preset: once the understanding pass
-has judged the code, `composeWorld` composes the world part by part through
-the planner (`composeThings` in `packages/world/src/compose.ts`): its sky
-(the world kind's light, sky, season and wind), each region's land (the
-biome kind's relief, ground cover, air, accents and natives), each entity's
-building or landmark, and each trail Jev would walk (the link kind's route:
+entity, file and definition stands as, and how much it would walk each
+dependency. What a thing stands as is asked once the understanding pass has
+judged how much each matters (`planStanding`): each thing's rank by
+importance among the world's own things (`rankThings`, ties sharing the
+middle) offers it every form whose range holds it (`formsFor`, the ranges in
+`SIZES` in `app/renderer/terrain/looks.ts`, wide and overlapping, smallest
+first: flowers, stones, bushes, trees, buildings, landmarks), and Jev picks
+among them by each form's character; a thing offered one form alone stands
+as it unasked. A file's own question goes in the first of its definitions'
+requests, 24 to a request, each with the file's and each definition's
+importance, and an entity is asked in a request of its own. Jev never names a
+preset: `composeWorld` asks these first and then composes the world part by
+part through the planner (`composeThings` in
+`packages/world/src/compose.ts`): its sky (the world kind's light, sky,
+season and wind), each region's land (the biome kind's relief, ground cover,
+air, accents and natives), the building or landmark of every thing Jev
+raised to one, entity, file or definition, and each trail Jev would walk (the link kind's route:
 its width, wear, edging, winding and crossing). Each is composed its
 structure first and then each stage's details, one request a wave, each part
 asked in its own instruction from its kind's slot (`Slot.ask`). Each
@@ -193,7 +226,9 @@ composing request carries what the new engine established about its part of
 the code: the repository for the sky (`repositoryState`), the directory and
 the water Jev judged its land holds for a land (`areaState`), the entity's
 form, exports and dependencies as `factsOf` reads them from the graph for
-a building or landmark (`composingState`), and for a trail the two entities
+a building or landmark (`composingState`), a file's own measures and judged
+values (`fileState`), a definition's role, signature, doc and judged values
+(`definitionState`), and for a trail the two entities
 and how many of the first's files import the second's (`trailState`); each
 with its importance and quality concepts from the understanding pass and its
 files, lines, languages, folders, history and most important definitions
@@ -208,12 +243,14 @@ ground, names its sky, lands, things and trails by their hand-filled looks
 instead (`presetBlueprint`). `planWorldRequests` builds one request
 per thing, from facts and doc comments only, with options shuffled by the
 thing's path, in the shape a design chooses ("What a request carries" under
-Jev). Given Engine's graph it asks about the definitions the layout will
-stand, so each answer meets its definition; a file's definitions go over as
-many requests as fit Jev's window, 24 to a request.
+Jev); under the `judged` design it asks only each region's land and each
+entity's trails, and `planStanding` asks what each thing stands as, given
+Engine's graph about the definitions the layout will stand, so each answer
+meets its definition.
 `judgeWorld` asks them through any `JevClient`, eight at a time, and the
-opening as many at once as the engine sends Jev; composing follows the
-understanding pass. A world
+opening as many at once as the engine sends Jev; what each thing stands as
+and composing follow the understanding pass, and the opening's count of
+answers keeps moving through them. A world
 shows every dependency Jev would walk as a trail: first those that join
 parts of the code no other chosen trail joins, then the most wanted; the
 joining ones route first, and the terrain walks them all over one network
@@ -270,7 +307,11 @@ the finished world has it): a file's vitality is its quality, which
 files wash in as the pass goes. After each slice it also sends what the
 slice read (stage `understood`: the files and areas whose requests in one
 of the pass's passes are all answered), which the wait draws as the
-pencil going over that code. Every file is named once, before the
+pencil going over that code. After the pass, as Jev chooses what each thing
+stands as and composes what it raised, it sends what each answer settled
+(stage `standing`: the files and areas whose things Jev chose, and those
+whose building, landmark, land or sky it composed, each once), which the
+wait draws as one more stroke. Every file is named once, before the
 document, whether or not Jev is asked. With every answer it also names the areas
 whose judgments have all settled (stage `asking`, `settled`, the areas' paths:
 an area settles once every request about its files, its entity and itself
@@ -364,16 +405,21 @@ and in ruin, a whole area in ruin, streams crossed on footbridges and
 stepping stones, cairns, ponds, a tiny area and deep nesting
 (`docs/proving-ground.md`). `tourStops` (`app/renderer/terrain/tour.ts`)
 finds in any world where to stand to see each such feature. `standWorld` takes the
-layout (`StandRequest.code`): each building and landmark on its lot, each
-definition on its own file's cells near where the layout put it, and the
-trails between lots, walked over one network of ways (`Stand.network`: its
-ways of tread, the trails walking them, its junctions and any trail dropped,
-with why). A definition that stands as a tree is one of the woods' trees,
-sized by its importance and its area's character (`stature` in
+layout (`StandRequest.code`): each building and landmark where its thing
+stands (an entity's lot, a file's heart, a definition's plot), each
+definition, file and entity that stands as a plant, a stone or flowers on
+its own file's cells near where the layout put it (an entity's on its lot),
+and the trails between entities, walked over one network of ways
+(`Stand.network`: its ways of tread, the trails walking them, its junctions
+and any trail dropped, with why), ending at a building's door, a landmark's
+foot, or the lot's middle of an entity that stands as neither
+(`StandCode.places`). Buildings and landmarks are sited first, and
+everything else keeps off them. A thing that stands as a tree is one of the
+woods' trees, sized by its importance and its area's character (`stature` in
 `CHARACTERS`), with its own vitality, and keeps its crown's width from
-every other definition so each tree reads as one thing; any other stands as
-an understory placement. Every tree in a world from code is a definition,
-and a tap on one opens its page. The understory then grows where it belongs (`scatterComponents`):
+every other so each tree reads as one thing; any other stands as an
+understory placement. Every tree in a world from code is a definition, a
+file or an entity Jev chose to be one, and a tap on one opens its page. The understory then grows where it belongs (`scatterComponents`):
 each candidate site on a grid fixed to the world reads its kind of place from
 the trees' crowns, the water and the slope, so a change in one place moves
 nothing elsewhere. It is scattered a tile at a time: each tile scatters its
@@ -548,7 +594,13 @@ true` as soon as the graph exists. Only under a spend limit does it plan with
 Once Jev has judged the looks, it calls `understanding.next` until nothing is
 left, counting its requests on the wait with judging's, and sends what each
 slice read and each file's health as a slice settles it for good. It reads
-the graph again only if the pass asked something. It lays the world out on
+the graph again only if the pass asked something, and then reads the facts
+from it again too: the pass's link step resolves the imports and calls only
+Jev can, which change a file's importers, an area's imports and an entity's
+dependencies. It asks the looks again on those facts (the answers kept,
+this opening's among them, settle every look that did not change), so a
+first opening asks and lays out exactly what a reopening from the same
+answers does. It lays the world out on
 `project.graph` with `judged: true`, both graphs trimmed by `judgedGraph`,
 so every definition stands by Jev's importance and vitality is Jev's
 quality.
@@ -632,9 +684,10 @@ A folder's request scores each of its files' and subfolders' importance and
 its own quality concepts. A file's request, with its source and its
 neighbours' signatures, scores each code definition's importance and every
 quality concept, picks which block of each definition with two or more is
-key and which most needs work, and scores the file's own concepts. A file's weak and best definitions come from their quality
-and importance (the journal chooses them; see `docs/design-system.md`), so
-files have no picks of their own. A file too long
+key and which most needs work, and scores the file's own concepts. The
+definition a file's page leads with is the one Jev judged most important
+(the journal chooses it; see `docs/design-system.md`), so files have no
+picks of their own. A file too long
 for one request is cut at its top-level definitions; the whole-file
 questions go in the first piece and in any piece asked about nothing it
 holds, so they take no room from the others. Definitions whose role is
@@ -725,11 +778,13 @@ becomes the default. A design fixes four things:
   five entities most depended on and the root are landmarks), and each
   building and landmark the kind of entity it suits (half the buildings had
   been watermills; now the engine is a stone croft, the schema a stone
-  ring, the root a great willow). The `judged` questions ask every
-  definition that stands on a file's patch on its own (`form#<qualified
-  name>`, `LAYOUT.formsPerRequest` to a request), instead of one form for
-  every function of a file, so what each stands as, a tree among the rest,
-  is Jev's call.
+  ring, the root a great willow). Under the `judged` design, what every
+  entity, file and definition stands as is asked on its own after the
+  understanding pass (`planStanding`: `form` for a file or an entity,
+  `form#<qualified name>` for a definition, `LAYOUT.formsPerRequest` to a
+  request), among the forms its rank by importance is offered, so what each
+  stands as is Jev's call; the entity's building-or-landmark question is
+  gone.
 - **Character.** A request carries what was judged above it: an area the
   world's art direction, a file and an entity their land's landform and
   water. `judgeWorld` then asks in three waves (the world, its areas, then

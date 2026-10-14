@@ -309,6 +309,42 @@ at its own careful pace. Rounds 20 to 22 tried and set aside keys that face
 the way pressed in a swing, strafing with a mouse or drag look, tank turns,
 snap and blink turns, quick turns and walking into a turn.
 
+A river follows the land. An area Jev gives a brook or a trickle gets a
+spring where its water runs longest through that area, and the river
+reaches back from it across the area the way it sets off. From there it
+runs downhill through other areas too, until it reaches the land's edge, a
+pond, a basin's bottom, where it sinks away, or another river, which it
+joins and widens below. Its valley is carved along that whole course, with
+the cross-section and winding Jev chose for its area (`routeRivers` in
+`@gaia/terrain`).
+
+A pick on the map sends the person along the trails rather than jumping
+them (`travelStep` in `@gaia/terrain`, every number in its `TRAVEL` table;
+round 23's travel thread). The trip walks around whatever stands between
+them and the nearest tread, follows the shortest way along the ways to the
+tread nearest the place, and leaves it for the place. Where that way is more
+than 1.5 times the straight distance, or no trail goes there, it goes
+straight across the land instead (round 24's pick), keeping out of the water
+as it keeps clear of whatever stands: it crosses a stream on a trail's
+footbridge or stepping stones, or else where the stream is narrowest and
+shallow enough to wade, and goes around deeper water (`acrossWay` in
+`@gaia/terrain`). Wherever any trip wades it goes at walking pace. It hurries at 20 m a second on the tread and straight
+across, and 8 joining and leaving the tread, gets going and slows at a steady 6 m a
+second squared, and takes each bend slowly enough that the way 12 m ahead
+turns at most 80% of a held key's 60° a second, so the view turns only as
+the person could have turned it, never faster and never easing. Facing
+away, the view first turns at that same rate, and the body sets off once it
+faces the way. Nothing appears as the person goes: every 40 m mark within
+300 m ahead is asked of the standers before the body reaches it, and the
+body never passes the last mark whose tiles have all come, slowing at its
+steady rate to wait there if they lag. A drag looks out to the side while
+the trip carries on, and
+the view follows the way again once it looks along it. Any key, or a tap on
+the world, takes over: the trip slows at 9 m a second squared to walking
+pace and hands the person to the walk. Nearer than 120 m the trip walks
+straight there. Sent by a picture in the journal, it ends facing the thing,
+turning there at the same rate. Where neither goes, the map still jumps.
+
 A winding valley swings about ±20 m to either side once every 250 m, a
 whole swing every four of its own widths, carrying its floor and stream with it: a straight
 one barely bends and a strongly meandering one swings up to ±30 m, never
@@ -411,7 +447,10 @@ on the horizon rise out of its haze. `skyColorAt` and `aerialAt` in
 
 ## Buildings
 
-A building stands for an entity. Buildings are as flexible as trees: a few
+A building stands for any entity, file or definition Jev raises to one
+among the forms its importance is offered ([decision 64](decisions/64-anything-can-stand-as-anything.md)):
+an entity's on its lot, a file's at its patch's heart, a definition's on its
+own plot. Buildings are as flexible as trees: a few
 strong axes of `cottage-plan@1` change the whole form, and walls, roofs and
 openings compose on whatever it lays out, so one set of primitives makes a
 hamlet of very different buildings.
@@ -424,6 +463,15 @@ hamlet of very different buildings.
 | Roof form | gabled, hipped or half-hipped over the body and its wings; a lean-to's one slope; a turret's cone |
 | Attachments | a gabled porch over the door, a lean-to shed, a round turret a storey taller |
 | Character | how steep the roofs, how high the plinth, how many windows, how settled and crooked |
+
+Jev chooses each of these by feel, never by a kind of code, as it chooses
+a feature: a single block is plain and self-contained, an L companionable,
+a T balanced and formal, a long range patient and hardworking, a cluster
+rambling and gregarious; a long body easygoing, a snug one close and
+private, a gable-fronted one upright and alert; one storey humble, two
+comfortable, three lofty. Timber-framed walls are lively and sociable,
+fieldstone quiet and stubborn; thatch is old and well-loved, tiles new and
+sharp-edged.
 
 Each volume is a mass: walls standing on a rectangle (or a turret's
 octagon) under a roof of its own. Joined masses overlap where they meet, so
@@ -446,13 +494,27 @@ shows a gap. Grass is cleared under the house and along the walk to its
 door, and its walls stop the walk. A building stays under 32,000 triangles
 and draws one mesh per swatch, at most eleven calls.
 
-A feature sets a building apart and says what its entity does, on the side
-the chimney leaves free. A mill's waterwheel turns in a stone-lined pit, fed
-by a flume on trestles or pushed round by the race, about once every nine
-seconds; it slows as vitality falls and stands still below 0.1. An
-archive's tower rises from the back corner, rendered between stone quoins,
-taller the more of the code depends on it, its narrow windows lamplit at
-night under a steep cap or an open lantern room whose lamp burns after dusk.
+A feature gives a building a character, on the side the chimney leaves
+free. Each names a feel the entity's code might have, never a kind of code,
+so a world stays true as its code changes and Jev's picks can spread. A
+mill's waterwheel turns in a stone-lined pit, fed by a flume on trestles or
+pushed round by the race, about once every nine seconds; it slows as
+vitality falls and stands still below 0.1, and it is offered only where the
+building's region holds running water. A tower rises from the back corner,
+rendered between stone quoins, taller the more of the code depends on it,
+its narrow windows lamplit at night under a steep cap or an open lantern
+room whose lamp burns after dusk. The rest stand in the yard beside the free
+side:
+
+| Feature | Its feel | As it fails |
+| --- | --- | --- |
+| Waterwheel | Quaint and old-fashioned, doing things the way they were always done | It slows, and stands still below 0.1 |
+| Tower | Dreamy and far-off, with its head in the clouds | It crumbles from the top |
+| Dovecote: a round stone cote under a cone and lantern, or a painted cote on a post, its doves circling | Sociable and chatty, forever off to the others and back | The doves fly home and stay in, the door swings open, the cote on a post lurches |
+| Well: a stone ring under a little roof on posts, or beside a sweep with a stone weight | Mysterious, hard to see into, with depths few have explored | The water sinks away, the bucket falls in, coping stones fall in, moss on the coping |
+| Bell: a dark iron bell in a stone arch or a frame of raked timbers, rung by a rope | Brash and urgent, quick to sound off | It hangs askew from 0.4, and is gone by 0.14 |
+| Forge: a stone hearth, plastered hood and chimney, an anvil and a quench trough, in an open shed or under the sky | Fierce and raw, still being hammered into shape | Its smoke thins, its fire stops glowing at dusk, the shed's covering falls in and its outer posts fall |
+| Granary: a boarded store on mushroom-shaped staddle stones, gabled or hipped, its steps stopping short of the door | Thrifty and hoarding, saving everything against a rainy day | Its boards rot through, the outer staddles topple and it slumps over |
 
 A failing building falls to ruin, and reads from 40 m. It gives way first
 at the front corner away from the door, where a person walking up sees it:
@@ -543,7 +605,10 @@ direction and weight for each stage: an area's ground while its looks are
 asked, and across again once the folder pass reaches it, the shallowest
 areas first; a file's own ground (the cells its health weighs most in)
 once Jev has read its links, across once Jev has read it for its quality,
-and once more when Jev reads closer round it. The pencil is on the paper
+and once more when Jev reads closer round it. After the pass it goes over a
+file or an area once more when Jev has chosen what its things stand as, and
+again once the building, landmark, land or sky Jev raised there is composed,
+so the sheet keeps moving until the world stands. The pencil is on the paper
 itself and runs to the paper's edge as the wash does, never short of it at
 a rounded rim, and each wash takes it away in just the measure that it
 paints, so the finished map holds none of it.
@@ -697,12 +762,16 @@ finger and keys all follow the same three rules.
   with the minimap on its cover, and the compass at the top right are the
   only things on the screen that are not the world: a tap on the journal
   or the minimap's land (or M) opens the journal at its map, a tap on the
+  end of the journal's ribbon opens it at the ribbon's page, a tap on the
   minimap's edge tucks it away, "/" lays the journal's finder over the
   world, and the compass opens the slip. A tap on the open map
-  is the one way to travel far at once: it is a paper action, so it belongs
-  to the map, never to the world. While the land there is made ready, the
-  paper that covers the view is the map around the place, coming slowly
-  closer, so a jump never shows a blank sheet.
+  is the one way to send the person far: it is a paper action, so it belongs
+  to the map, never to the world. The map folds away and the person travels
+  there along the trails or straight across (Terrain, travel). Where neither
+  goes, as when deep water rings the place, they jump:
+  while the land there is made ready, the paper that covers the view is the
+  map around the place, coming slowly closer, so a jump never shows a blank
+  sheet.
 - **Paper you open holds the world still.** While the map or the slip is
   open, the world waits under a faint wash. A tap there folds the paper and
   moves no one, a drag there does nothing, and Esc folds it. The keys still
@@ -711,22 +780,69 @@ finger and keys all follow the same three rules.
 The open journal's pages turn the way a book's do. A click or a tap on bare
 paper turns that way, the right-hand page forward and the left back.
 Anything on a page that answers a click of its own keeps it: a row, a name,
-a fold, a way back, a map or a picture. The outer fifth of each page is its
+a block of code, a fold, a reference, a folder in the path, a trail's name,
+a map or a picture. The outer fifth of each page is its
 edge. It lifts a little under the pointer, and a click there turns the page,
-over a map or a picture too, though a row, a name, a fold or a way back
+over a map or a picture too, though a row, a name, a fold, a reference, a
+folder in the path or a trail's name
 under it keeps its click. A mouse can take a page by its edge and a finger
 anywhere, and either can draw it over. A swipe sideways on a trackpad, or
 the wheel, turns one page a gesture, however long its momentum runs, and
 the arrow keys turn one at a time. Where no page lies that way, on the
 first spread's left and the last spread's right, the edge lies flat and
-leaves a click to what is under it, and nothing turns. Nothing marks the
-edges, which are paper like the rest of the page. A page is never turned
-to before it is whole, its code and its painting come, and nothing on a page
-changes once it is seen. While the page asked for is still being made, the
-book leafs slowly through pages that are whole already (the contents, a
-folder's list, code that has come), the way a reader looks for a page, and
-turns to it once it is whole. A book opened at a page still being made
-opens at the map and leafs on to it.
+leaves a click to what is under it, and nothing turns. Nothing marks a
+page's edge, which is paper like the rest of the page.
+
+A page is never turned to before it is whole, its code and its painting
+come, and nothing on a page changes once it is seen. The page beside the
+open one is reached by turning one leaf. While that page's painting is
+still coming, the leaf lifts as it does under the pointer and waits up to
+1.5 s, and if the page takes longer the book riffles to it. A page further
+away is always reached by a riffle: many leaves run over one after another,
+several in the air at once. A riffle turns up to 36 leaves, 55 ms apart,
+each over in 0.56 s, or up to 12 when the page asked for is whole already.
+Once those have turned, while the page is still being made, the leaves keep
+turning, one every 0.3 s. The last leaf carries the page asked for, once it
+is whole. The book never turns to a page in between, so it never turns back
+and forth. A book opened at a page still being made opens at the map and
+riffles on to it.
+
+Each leaf of a riffle is a page of real code from a file the riffle passes,
+set as the journal sets code, with handwritten line numbers and the same
+highlighting. The file's path is its running head, and its page number
+counts from the page the riffle left toward the page asked for. When a
+riffle starts, the book asks for a dozen files spread along the way. Until
+one of them has come, a leaf shows a file that has come already, and with
+none, faint lines of writing.
+
+A turning leaf bends. It is cut into 10 strips, each hinged to the next, so
+the part by the spine leads and the free edge trails. The bend is greatest
+in mid-turn, up to 54° between spine and edge, and there is none at either
+end. A page taken by hand bends the same way. A turning leaf casts a soft
+shadow on the page beneath, just past its edge, deepest when the leaf
+stands upright. A riffle's leaves turn flat: bending its first and last
+held the page's thread for half a second once a riffle, measured in the lab.
+
+The leaves' edges show where the book is open. Past each page, the leaves
+under it show as an edge of paper as thick as the pages lying on that side,
+from 1.5 to 9 of the book's pixels and within the boards' overhang, and a
+deep stack shades toward its outer edge. Near the front the left edge is a
+sliver and the right a deep stack, and through the book they trade places.
+They change when a turn ends. When a riffle starts, they slide over 1.8 s to
+where it will land.
+
+A crimson silk ribbon keeps the page a riffle began from: each riffle
+leaves it there. A tap on the ribbon riffles back to its page, or with the
+book shut opens the book there, and leaves the ribbon where it is. With the
+book open at its page, the ribbon lies down the gutter in the fold's shadow,
+well clear of the writing, and leaves the book at the foot to lie along its
+lower edge. With the book open elsewhere, only its tail shows, out of the
+foot of the leaves on the side its page is on. With the book shut in the
+corner, its end curls out of the book's head by the fore-edge, the part of
+the closed book left in view. Its free end sways a little and settles when a
+page's edge lifts or a leaf turns. It is drawn as silk: shaded across its
+width so one side catches the light, brighter and duller along its length,
+narrower where it twists, its end cut in a swallowtail, with a soft shadow.
 
 A page of the journal gives every score as a percentage, so it reads as a
 share of 0 to 1. Beside a thing's name stand two numbers in the hand, each
@@ -736,27 +852,46 @@ meter in ink. Each row of a list carries both the same way, smaller, each
 percentage at one width so the meters line up down the list.
 The caption under a thing's picture gives each concept of quality Jev
 answered as a percentage, and leaves out one whose answer doesn't count.
-A file's first page leads with snippets of its weak and best definitions,
-and a folder's with its weak and best files, each shown by its own weak or
-best definition. The weak part is the one most in need among what matters
-most (its lack of quality weighed by importance); the best is chosen from
-the rest, among code that runs (never a type) scoring above the page
-itself, by quality weighed by importance, so a page may have none. Each
-snippet is its first line and a block (the one Jev picked as weak, or its
-key block for the best), with the lines around folded into marks that say
-how many, and a tap turns to its page. The weak part comes first when the
-page is below the world's median quality, its best first otherwise. A long
-definition's page opens on its weak block when it is below the median, and
-on its key block otherwise. Its appendix is the code alone, with the same
-marks. The marks are brush strokes in the margin, left of the handwritten
-line numbers and their pencil rule, or beside a row: green for the key
-block, russet for the weak part, slate blue for a page's best. Each marked
-block is labeled in its stroke's color, **key**, **weak** or **best**, in a
-column of its own so the names after it line up. Every fold reads the same,
-"⋯ 20 lines" by hand where the code starts, and is a tap to its lines where
-they can be read elsewhere: around a snippet's block, before and after a
-definition's page, a definition folded in its file's text (with its page),
-and past what the appendix sets.
+
+A file's first page leads with one snippet, of the definition Jev judged
+most important, by Jev's importance alone. A folder's first page leads with
+its most important file, shown by that file's most important definition.
+The snippet shows the definition's first line and its key block, with the
+lines around folded, and carries no label and no stroke. A tap on its name
+turns to the page of the file or definition it stands for. The rows of a
+list carry no marks. A definition's page shows its code plain, and a long
+one opens on its key block.
+
+A package's building or landmark opens the package's page. It lists what
+the package's folder holds, its folders and then its files, and at its foot
+the package's trails by their way: under "uses" the packages it imports from,
+and under "used by" those that import from it, each name a tap to that
+package's page. A package whose folder has a README shows the README
+instead.
+
+The appendix is the one place Jev's marks appear. In its margin, left of
+the handwritten line numbers and their pencil rule, a green brush stroke
+marks the block Jev picked as key and a russet one the block it picked as
+most needing work. Each is labeled in its stroke's color, **key** or
+**weak**, in a column of its own.
+
+Every block of code on a page is a tap to the same code in full in the
+appendix, and a reference by hand under it says where:
+"→ in full, p. 5,475a". On a definition's page the reference stands at the
+page's foot, and the definition's name turns there too. The appendix numbers a
+definition's pages by its page in the journal and a letter (5,475a, 5,475b),
+and its first page carries the way back, "← back to its page, p. 5,475".
+Each folder in the path at the top of a page, in small capitals, is a tap to
+that folder's page, and in a definition's path the file is a tap to the
+file's page. Every fold reads the same, "⋯ 20 lines" by hand where the code
+starts, and is a tap to its lines where they can be read elsewhere: around a
+snippet's block, before and after a definition's page, a definition folded
+in its file's text (with its page), and past what the appendix sets.
+
+Over a painting, which is a tap to travel to its thing, the pointer becomes
+a pointing hand, and the painting's colors never change. Folds and
+references, though each is a tap, are written in the traveller's hand like
+the page's other notes.
 
 Nothing in the world lights up, rings or changes under a pointer: a thing
 looks the same whether or not a person could walk up to it, and the pointer
@@ -777,7 +912,7 @@ material language holds them (`map-styles.ts` is its data):
 | Paint | Watercolor washes in health's colors, pooling at their rims and bleeding wet in wet; hills shaded violet and lit warm | The map, the minimap, the wait |
 | Contours | Fine sepia lines from the real heights, every 1.2 m and every fifth heavier, drawn at the view's size so they look the same at every zoom: the map is a painted topographic map, so a person can read a rise before walking it; in the wild a little lighter on the bare paper | The map and the minimap, the land and the wild |
 | Ink | One brown-black ink for names, borders, marks and sketches, and for the wild past the land, drawn as an old survey draws country; areas' names in upright, widely spaced capitals as a survey map letters its regions, small names in italic, edged with a little paper, never boxed | Every name on every sheet; the wild |
-| Hand | The traveller's own notes, in a hand: a page's numbers, a line's number, and the name of the thing walked up to | The journal and the minimap's ring |
+| Hand | The traveller's own notes, in a hand: a page's numbers, a line's number, a fold, a reference to the appendix, and the name of the thing walked up to | The journal and the minimap's ring |
 | Vermilion | The traveller's own marks: their cloak, a spot picked on the map, the pencil ring round a thing walked up to | The map and the minimap |
 
 On the map, color means health and nothing else, so the map is a window
@@ -841,6 +976,11 @@ each slot's primitive is inked, and the palette gives every wash:
 | `cottage-garden@1` | The walk, a picket fence, flowers under the windows, a lantern by the door, a woodpile |
 | `waterwheel@1` | The wheel at the free end, turned 35 degrees toward the viewer so it reads as a wheel, its flume or race |
 | `tower@1` | A square tower at the back corner, quoined, under a pyramid cap or an open lantern |
+| `dovecote@1` | A round stone column under a cone and lantern, or a painted box on a post, with doves gliding over it |
+| `well@1` | A ring of stone round dark water, under a little roof on two posts or beside a sweep |
+| `bell@1` | A dark bell in a stone arch or an A-frame of timbers, under a little roof |
+| `forge@1` | A tall stack smoking over a hearth that glows, an anvil on its stump, in an open shed or under the sky |
+| `granary@1` | A boarded box on mushroom posts, gabled or hipped, leaning as it slumps |
 
 One wear rule runs on every mass, as the building's ruin does: the roof
 rots through from the weak corner (the front corner away from the door),
@@ -867,7 +1007,11 @@ popping in.
 
 ## Knowing where you are
 
-The lab opens into the world, full screen, at eye height. Nothing sits on
+The lab opens into the world, full screen, at eye height. A world from code
+opens with the person among the code, on dry ground beside a stream,
+looking downstream: where the first stream with a stretch among the code
+comes nearest the repository's own area (`openingSpot` in `@gaia/terrain`),
+or with no stream among the code, nearest that area's heart. Nothing sits on
 it but the world, the three ways of knowing where you are, all at once, and
 the compass in the corner: no panels, no readouts. The compass
 (`app/renderer/immersive/compass.ts`) is a round of the map's paper, 44 px
@@ -959,9 +1103,12 @@ The three ways work together:
   looks the same on the whole sheet and close in: fine sepia contours from
   the real heights, every 1.2 m and every fifth heavier; each area's border
   as a soft hedgerow under a fine line; and each river as a line with a
-  bank and a glint along its real course, as wide as the stream once the
-  map comes close and never thinner than a line, one drawing shared by
-  the map, its picture and the wait's pen (`riverCourse`). Ponds are washed blue, darker toward their
+  bank and a glint along its real course, each stretch as wide as the
+  stream there once the map comes close and never thinner than a line.
+  Every river's banks are drawn first, then all the water, then the
+  glints, so where one river joins another their water runs together as
+  one. One drawing is shared by the map, its picture and the wait's pen
+  (`riverCourse`, `riverStretches`). Ponds are washed blue, darker toward their
   middle; trails are dotted; trees are round crowns in their files'
   health. Each kind of building and landmark has its own mark (`marks.ts`):
   an ink drawing over watercolor washes in its real colors, true to its
@@ -1126,10 +1273,12 @@ change in vitality never rebakes anything.
 ## Landmarks
 
 A landmark is a great thing a person steers by: a lookout tower, a ring of
-standing stones, or a great old tree. It stands for an entity, as a
-building does: Jev decides which entities become landmarks (prominent ones
-much of the code leans on suit them) and which become buildings, and
-chooses the form. No rule fixes how many; its vitality is its entity's own. `findLandmarkSite` puts it
+standing stones, or a great old tree. It stands for any entity, file or
+definition, as a building does: only the most important things of a world
+are offered one, and among them Jev chooses, and chooses the form by its
+feel: a tower lonely and wind-bitten, forever watching the horizon; standing
+stones ancient and patient; a great tree warm, alive and sprawling. No rule
+fixes how many; its vitality is the vitality of what it stands for. `findLandmarkSite` puts it
 on the most prominent gentle, dry ground of its region, a knoll or a rise
 near the region's heart, and levels its footprint into the land. Each
 reads as a silhouette through the haze from 300 m and more, and declines
@@ -1253,13 +1402,17 @@ about a quarter of the world's width apart.
 
 ## Trees and open ground
 
-Every tree in a world from code is a definition. Jev chooses what each
-definition stands as, on its own: one of four trees (a lantern willow, a
-fir, a cherry or an autumn maple), a stone, a bush or a drift of flowers. A
-tree stands near where the layout put its definition, sized by its
-importance, keeping its crown's width from everything else that stands for
-code, so each tree reads as one thing, and a tap on it opens that
-definition's page. Where Jev picks trees for many of a file's definitions,
+Every tree in a world from code is a definition, a file or an entity Jev
+chose to be one. Jev chooses what each stands as, on its own, among the
+sizes its importance is offered (flowers, stones, bushes, trees, buildings
+and landmarks, each with a wide range of rank in `SIZES`, overlapping): one
+of four trees (a lantern willow, a fir, a cherry or an autumn maple), a
+stone, a bush, a drift of flowers, a building or a landmark. Each form's
+words are its character, its size and its rarity, never a kind of code. A
+tree stands near where the layout put what it stands for (a file's at its
+patch's heart), sized by its importance, keeping its crown's width from
+everything else that stands for code, so each tree reads as one thing, and
+a tap on it opens that thing's page. Where Jev picks trees for many of a file's definitions,
 its patch grows a copse; a file whose definitions are small routines is low
 bushes and stones. Each area's character, which Jev chooses with its reason,
 decides its ground:

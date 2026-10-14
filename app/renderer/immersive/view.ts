@@ -85,10 +85,20 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
   let jumping = false;
   function jump(x: number, z: number, heart?: { readonly x: number; readonly z: number }): boolean {
     const at = world.landing(x, z, heart);
-    return at !== null && jumpTo(at);
+    return at !== null && jumpTo(at, false);
   }
-  function jumpTo(at: Landing): boolean {
+  /**
+   * Takes the person to a landing: along the trails or straight across the
+   * land, the map folding away as they set off (round 23's travel thread), or
+   * where neither goes, by a jump. With `face` they end facing as the landing
+   * does.
+   */
+  function jumpTo(at: Landing, face: boolean): boolean {
     if (jumping) return false;
+    if (world.travel(at, face)) {
+      map.open(false);
+      return true;
+    }
     jumping = true;
     map.open(false);
     layPlace(at);
@@ -221,7 +231,7 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
         const at = world.seenFrom(standsFor(of));
         if (at === null) return;
         journal.close();
-        jumpTo(at);
+        jumpTo(at, true);
       },
       text: (path) => source.when(path),
     }),
@@ -290,10 +300,7 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
       const pooled = areaVitality(code.patches.map((p) => ({ area: p.area, vitality: p.vitality, size: p.radius * p.radius })));
       // Every item's own vitality, as the world carries it: a definition's is its own slot, whatever fills it.
       const own = new Map([...code.patches.map((p) => [p.path, p.vitality] as const), ...code.symbols.map((d) => [d.id, d.vitality] as const), ...code.things.map((t) => [entityOf(t.path), t.vitality] as const)]);
-      // The world's median quality, by its files: a page below it leads with what needs work most.
-      const qualities = code.patches.map((p) => p.vitality).sort((a, b) => a - b);
-      const median = qualities[Math.floor(qualities.length / 2)] ?? 0.5;
-      words = { journal: journalOf(code, ROOM), world: code, vitality: (of) => own.get(of) ?? own.get(standsFor(of)) ?? pooled.get(of) ?? 1, lines: (path) => source.lines(path) ?? undefined, thing: (of) => world.thing(standsFor(of)), median };
+      words = { journal: journalOf(code, ROOM), world: code, vitality: (of) => own.get(of) ?? own.get(standsFor(of)) ?? pooled.get(of) ?? 1, lines: (path) => source.lines(path) ?? undefined, thing: (of) => world.thing(standsFor(of)) };
     }
     // A directory's vitality: its files', its subdirectories' included, pooled by the ground each holds, as the map washes it.
     const vitality = areaVitality(world.places().patches.map((p) => ({ area: p.area, vitality: p.vitality, size: p.radius * p.radius })));

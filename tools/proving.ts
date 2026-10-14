@@ -33,7 +33,7 @@ import { dirname, relative, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import type { CodeFacts, EntityFacts, EntityForm, FileFacts, SymbolFact } from "@gaia/schema";
 import { type Judgments, layoutWorld } from "@gaia/world";
-import { BUILDINGS, CHARACTERS, FORMS, LANDMARKS, LANDS, TRAILS, WATERS, presetBlueprint } from "../app/renderer/terrain/looks.ts";
+import { BUILDINGS, CHARACTERS, COMPOSED_FORMS, FORMS, LANDMARKS, LANDS, TRAILS, WATERS, presetBlueprint } from "../app/renderer/terrain/looks.ts";
 import { provingCode } from "./proving-code.ts";
 
 /** How a file or an entity fares, from thriving to ruin; `decayed` is ruin with no tests at all, so it drags its entity down less. */
@@ -403,13 +403,37 @@ let other = 0;
 for (const f of [...files].sort((a, b) => (a.path < b.path ? -1 : 1))) {
   if (f.kind === "source" && f.symbols.length > 0) forms[f.path] = Object.fromEntries(f.symbols.map((s, k) => [`#${s.name}`, k % 2 === 0 ? (trees[tree++ % trees.length] as string) : (others[other++ % others.length] as string)]));
 }
+// Every file stands as one thing too, at its patch's heart, round every form; and a few files and definitions stand as
+// a building or a landmark, round their hand-filled looks, so the proving ground shows a thing of every size at every
+// level of the code.
+const stands: Record<string, string> = {};
+const raised: Record<string, { as: "building" | "landmark"; blueprint: ReturnType<typeof presetBlueprint> }> = {};
+const small = Object.keys(FORMS);
+const sources = [...files].sort((a, b) => (a.path < b.path ? -1 : 1)).filter((f) => f.kind === "source" && f.symbols.length > 0);
+const raise = (id: string, as: "building" | "landmark", k: number): void => {
+  const looks = Object.keys(as === "building" ? BUILDINGS : LANDMARKS);
+  stands[id] = Object.keys(COMPOSED_FORMS).find((key) => COMPOSED_FORMS[key]?.composes === as) as string;
+  raised[id] = { as, blueprint: presetBlueprint(as, looks[k % looks.length] as string) };
+};
+[...files].sort((a, b) => (a.path < b.path ? -1 : 1)).forEach((f, k) => (stands[f.path] = small[k % small.length] as string));
+// Every seventh source file raises itself, and every eleventh raises its first definition; a building first, then a landmark.
+sources.forEach((f, k) => {
+  if (k % 7 === 3) raise(f.path, (k / 7) % 2 < 1 ? "building" : "landmark", k);
+  const first = f.symbols[0];
+  if (first !== undefined && k % 11 === 5) {
+    raise(`${f.path}#${first.name}`, (k / 11) % 2 < 1 ? "landmark" : "building", k);
+    // The definition's form is its stand, not the tree or stone it had.
+    delete (forms[f.path] as Record<string, string>)[`#${first.name}`];
+  }
+});
 // The proving ground is written by hand, not judged: its sky, lands, things and trails are the hand-filled looks its plan names.
 const judged: Judgments = {
   sky: presetBlueprint("world", "Meadow morning"),
   lands: Object.fromEntries(PLAN.flatMap((d) => (d.land === undefined ? [] : [[d.path, presetBlueprint("land", d.land[0])]]))),
   waters: Object.fromEntries(PLAN.flatMap((d) => (d.land === undefined ? [] : [[d.path, d.land[1]]]))),
   characters: Object.fromEntries(PLAN.flatMap((d) => (d.land === undefined ? [] : [[d.path, d.land[2]]]))),
-  things: Object.fromEntries(PLAN.flatMap((d) => (d.entity === undefined ? [] : [[d.path, { as: d.entity.as, blueprint: presetBlueprint(d.entity.as, d.entity.look) }]]))),
+  things: { ...Object.fromEntries(PLAN.flatMap((d) => (d.entity === undefined ? [] : [[d.path, { as: d.entity.as, blueprint: presetBlueprint(d.entity.as, d.entity.look) }]]))), ...raised },
+  stands,
   trails: TRAIL_PLAN.map(([from, to, look, want]) => ({ from, to, want, route: presetBlueprint("trail", look) })),
   forms,
   // Every file's quality by its health, and every entity's its own files' pooled by their lines.
@@ -436,6 +460,7 @@ const gaps = [
   ...missing("water", WATERS, Object.values(judged.waters)),
   ...missing("character", CHARACTERS, Object.values(judged.characters)),
   ...missing("form", FORMS, Object.values(forms).flatMap((f) => Object.values(f))),
+  ...missing("raised form", COMPOSED_FORMS, Object.values(stands)),
   ...missing("trail", TRAILS, TRAIL_PLAN.map(([, , look]) => look)),
   ...Object.keys(BUILDINGS).flatMap((b) => (things.filter((t) => t.as === "building" && t.look === b).length >= 3 ? [] : [`three buildings "${b}"`])),
   ...Object.keys(LANDMARKS).flatMap((l) => (things.filter((t) => t.as === "landmark" && t.look === l).length >= 3 ? [] : [`three landmarks "${l}"`])),
@@ -475,4 +500,5 @@ const band = (v: number): string => (v >= 0.85 ? "thriving" : v >= 0.6 ? "well" 
 const count = (vs: readonly number[]): string => Object.entries(vs.reduce<Record<string, number>>((n, v) => ((n[band(v)] = (n[band(v)] ?? 0) + 1), n), {})).map(([k, n]) => `${n} ${k}`).join(", ");
 console.log(`proving: ${facts.files.length} files, ${facts.repository.lines.toLocaleString("en-US")} lines, ${entities.length} entities; a ${world.size} m world of ${world.regions.length} lands and ${world.areas.length} areas`);
 console.log(`  files: ${count(world.patches.map((p) => p.vitality))}`);
-console.log(`  entities: ${count(world.things.map((t) => t.vitality))}`);
+console.log(`  entities: ${count(world.things.filter((t) => (t.of ?? "entity") === "entity").map((t) => t.vitality))}`);
+console.log(`  raised: ${world.things.filter((t) => t.of === "file").length} files and ${world.things.filter((t) => t.of === "definition").length} definitions as buildings or landmarks; ${world.standing.length} files standing as plants, stones or flowers`);

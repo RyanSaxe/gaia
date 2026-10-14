@@ -46,6 +46,33 @@ export type HeightField =
   | { readonly op: "product"; readonly of: readonly HeightField[] }
   | { readonly op: "scale"; readonly by: number; readonly of: HeightField };
 
+/**
+ * A river's valley along its course, as a surface the land is cut down to: its floor, rising across the valley's own
+ * cross-section to its shoulders, then on at a gentle grade until it meets the land.
+ */
+export interface ValleyCourse {
+  /** World x, z pairs from source to mouth, a few meters apart. */
+  readonly points: Float32Array;
+  /** At each point: the valley's half width, the height of its floor, and how far its shoulders rise above the floor, meters. */
+  readonly halfWidths: Float32Array;
+  readonly floors: Float32Array;
+  readonly depths: Float32Array;
+  /** The flat floor's share of the half width, each side of the course. */
+  readonly floor: number;
+}
+
+/** Every river valley of a world, in world meters, with its segments by square cells `cell` meters a side from (`x0`, `z0`), so a point finds the few near it. */
+export interface ValleyNet {
+  readonly courses: readonly ValleyCourse[];
+  readonly cell: number;
+  readonly x0: number;
+  readonly z0: number;
+  readonly cols: number;
+  readonly rows: number;
+  /** Per cell, row by row: each segment that may carve it, as its course's index times 65536 plus the segment's. */
+  readonly cells: readonly (readonly number[])[];
+}
+
 /** A stream bed from source to mouth. The world solves its waterline so the water always sits in the ground. */
 export interface StreamBed {
   readonly kind: "stream";
@@ -55,6 +82,12 @@ export interface StreamBed {
   readonly width: number;
   /** Depth of the channel below the waterline, meters. */
   readonly depth: number;
+  /** A river's whole course across the land, kept whole past its region, and its width at each point, source first. */
+  readonly widths?: Float32Array;
+  /** Whether it dries away at its end, rather than ending in another stream, a pond or at the land's edge. */
+  readonly seep?: boolean;
+  /** Its valley's floor under each point, which only descends. */
+  readonly floors?: Float32Array;
 }
 
 /** A hollow that holds still water; the world fills it to just below its lowest rim point. */
@@ -71,4 +104,6 @@ export type WaterBed = StreamBed | PondBed;
 export interface Landform {
   readonly height: HeightField;
   readonly water: readonly WaterBed[];
+  /** The world's river valleys, the same for every region of a world once its rivers are routed: the land is cut down to them. */
+  readonly valleys?: ValleyNet;
 }

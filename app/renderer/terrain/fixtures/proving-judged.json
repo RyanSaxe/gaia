@@ -2036,7 +2036,1219 @@
      }
     }
    }
+  },
+  "crossings/east-bank/index.ts": {
+   "as": "building",
+   "blueprint": {
+    "id": "bp-051ba73e",
+    "kind": "structure",
+    "slots": {
+     "footprint": {
+      "use": "cottage-plan@1",
+      "params": {
+       "massing": "a long range",
+       "shape": "long",
+       "size": "roomy",
+       "storeys": "two storeys",
+       "heights": "stepped",
+       "roof": "gabled",
+       "roofline": "steep",
+       "attachments": [],
+       "windows": "several",
+       "base": "on a stone plinth",
+       "character": "gently settled"
+      }
+     },
+     "body": {
+      "use": "fieldstone@1",
+      "params": {
+       "stones": "mixed sizes",
+       "gables": "boards"
+      }
+     },
+     "roof": {
+      "use": "tiles@1",
+      "params": {
+       "covering": "shingles",
+       "overhang": "sheltering",
+       "chimney": "gable"
+      }
+     },
+     "feature": {
+      "use": "waterwheel@1",
+      "params": {
+       "wheel": "a great wheel",
+       "drive": "overshot"
+      }
+     },
+     "openings": {
+      "use": "casements@1",
+      "params": {
+       "panes": "six panes",
+       "shutters": true,
+       "door": "plank"
+      }
+     },
+     "ornaments": {
+      "use": "cottage-garden@1",
+      "params": {
+       "extras": [
+        "lantern",
+        "woodpile"
+       ],
+       "walk": "flagstones"
+      }
+     },
+     "palette": {
+      "use": "palette@1",
+      "params": {
+       "family": "teal-gold",
+       "contrast": "balanced"
+      }
+     }
+    }
+   }
+  },
+  "crossings/mill/index.ts#mendMill": {
+   "as": "landmark",
+   "blueprint": {
+    "id": "bp-05894391",
+    "kind": "landmark",
+    "slots": {
+     "form": {
+      "use": "lookout-tower@1",
+      "params": {
+       "height": "a lookout tower",
+       "plan": "round",
+       "profile": "tapering",
+       "galleries": "a gallery at the top",
+       "crown": "an open lantern room",
+       "masonry": "dressed blocks"
+      }
+     },
+     "palette": {
+      "use": "palette@1",
+      "params": {
+       "family": "spring-meadow",
+       "contrast": "balanced"
+      }
+     }
+    }
+   }
+  },
+  "downs/atlas.ts": {
+   "as": "landmark",
+   "blueprint": {
+    "id": "bp-05894391",
+    "kind": "landmark",
+    "slots": {
+     "form": {
+      "use": "lookout-tower@1",
+      "params": {
+       "height": "a lookout tower",
+       "plan": "round",
+       "profile": "tapering",
+       "galleries": "a gallery at the top",
+       "crown": "an open lantern room",
+       "masonry": "dressed blocks"
+      }
+     },
+     "palette": {
+      "use": "palette@1",
+      "params": {
+       "family": "spring-meadow",
+       "contrast": "balanced"
+      }
+     }
+    }
+   }
+  },
+  "downs/deep/one.ts#traceOne": {
+   "as": "building",
+   "blueprint": {
+    "id": "bp-105faf16",
+    "kind": "structure",
+    "slots": {
+     "footprint": {
+      "use": "cottage-plan@1",
+      "params": {
+       "massing": "a single block",
+       "shape": "snug",
+       "size": "modest",
+       "storeys": "one storey",
+       "heights": "level",
+       "roof": "hipped",
+       "roofline": "low and spreading",
+       "attachments": [
+        "lean-to"
+       ],
+       "windows": "a few",
+       "base": "low on the ground",
+       "character": "trim and square"
+      }
+     },
+     "body": {
+      "use": "fieldstone@1",
+      "params": {
+       "stones": "mixed sizes",
+       "gables": "boards"
+      }
+     },
+     "roof": {
+      "use": "tiles@1",
+      "params": {
+       "covering": "slates",
+       "overhang": "neat and close",
+       "chimney": "ridge"
+      }
+     },
+     "openings": {
+      "use": "casements@1",
+      "params": {
+       "panes": "six panes",
+       "shutters": false,
+       "door": "plank"
+      }
+     },
+     "ornaments": {
+      "use": "cottage-garden@1",
+      "params": {
+       "extras": [
+        "lantern",
+        "woodpile"
+       ],
+       "walk": "flagstones"
+      }
+     },
+     "palette": {
+      "use": "palette@1",
+      "params": {
+       "family": "deep-forest",
+       "contrast": "balanced"
+      }
+     }
+    }
+   }
+  },
+  "downs/fields/barley.ts": {
+   "as": "building",
+   "blueprint": {
+    "id": "bp-0d2acd34",
+    "kind": "structure",
+    "slots": {
+     "footprint": {
+      "use": "cottage-plan@1",
+      "params": {
+       "massing": "a single block",
+       "shape": "gable-fronted",
+       "size": "modest",
+       "storeys": "two storeys",
+       "heights": "level",
+       "roof": "gabled",
+       "roofline": "tall and steep",
+       "attachments": [
+        "turret",
+        "porch"
+       ],
+       "windows": "several",
+       "base": "raised up steps",
+       "character": "crooked, like a storybook"
+      }
+     },
+     "body": {
+      "use": "timber-frame@1",
+      "params": {
+       "framing": "crossed braces",
+       "plaster": "lumpy and old"
+      }
+     },
+     "roof": {
+      "use": "tiles@1",
+      "params": {
+       "covering": "pantiles",
+       "overhang": "sheltering",
+       "chimney": "gable"
+      }
+     },
+     "openings": {
+      "use": "casements@1",
+      "params": {
+       "panes": "four panes",
+       "shutters": true,
+       "door": "arched"
+      }
+     },
+     "ornaments": {
+      "use": "cottage-garden@1",
+      "params": {
+       "extras": [
+        "flower boxes",
+        "fence",
+        "lantern"
+       ],
+       "walk": "stepping stones"
+      }
+     },
+     "palette": {
+      "use": "palette@1",
+      "params": {
+       "family": "autumn-ember",
+       "contrast": "balanced"
+      }
+     }
+    }
+   }
+  },
+  "downs/orchard/apples.ts": {
+   "as": "landmark",
+   "blueprint": {
+    "id": "bp-1dcaa955",
+    "kind": "landmark",
+    "slots": {
+     "form": {
+      "use": "great-tree@1",
+      "params": {
+       "form": "a great willow",
+       "size": "great",
+       "age": "old and broad",
+       "fullness": "full",
+       "bark": "gnarled and burred"
+      }
+     },
+     "motion": {
+      "use": "sway@1",
+      "params": {
+       "stiffness": "gently swaying",
+       "rhythm": "slow"
+      }
+     },
+     "palette": {
+      "use": "palette@1",
+      "params": {
+       "family": "lantern-dusk",
+       "contrast": "balanced"
+      }
+     }
+    }
+   }
+  },
+  "downs/tiny/seed.ts#joinSeed": {
+   "as": "landmark",
+   "blueprint": {
+    "id": "bp-0d5f9900",
+    "kind": "landmark",
+    "slots": {
+     "form": {
+      "use": "great-tree@1",
+      "params": {
+       "form": "a spreading oak",
+       "size": "vast",
+       "age": "ancient, storm-broken and stag-headed",
+       "fullness": "dense and lush",
+       "bark": "deeply furrowed"
+      }
+     },
+     "motion": {
+      "use": "sway@1",
+      "params": {
+       "stiffness": "stiff",
+       "rhythm": "slow"
+      }
+     },
+     "palette": {
+      "use": "palette@1",
+      "params": {
+       "family": "deep-forest",
+       "contrast": "balanced"
+      }
+     }
+    }
+   }
+  },
+  "dunes/ledger/index.ts": {
+   "as": "building",
+   "blueprint": {
+    "id": "bp-105faf16",
+    "kind": "structure",
+    "slots": {
+     "footprint": {
+      "use": "cottage-plan@1",
+      "params": {
+       "massing": "a single block",
+       "shape": "snug",
+       "size": "modest",
+       "storeys": "one storey",
+       "heights": "level",
+       "roof": "hipped",
+       "roofline": "low and spreading",
+       "attachments": [
+        "lean-to"
+       ],
+       "windows": "a few",
+       "base": "low on the ground",
+       "character": "trim and square"
+      }
+     },
+     "body": {
+      "use": "fieldstone@1",
+      "params": {
+       "stones": "mixed sizes",
+       "gables": "boards"
+      }
+     },
+     "roof": {
+      "use": "tiles@1",
+      "params": {
+       "covering": "slates",
+       "overhang": "neat and close",
+       "chimney": "ridge"
+      }
+     },
+     "openings": {
+      "use": "casements@1",
+      "params": {
+       "panes": "six panes",
+       "shutters": false,
+       "door": "plank"
+      }
+     },
+     "ornaments": {
+      "use": "cottage-garden@1",
+      "params": {
+       "extras": [
+        "lantern",
+        "woodpile"
+       ],
+       "walk": "flagstones"
+      }
+     },
+     "palette": {
+      "use": "palette@1",
+      "params": {
+       "family": "deep-forest",
+       "contrast": "balanced"
+      }
+     }
+    }
+   }
+  },
+  "fords/stones.ts": {
+   "as": "landmark",
+   "blueprint": {
+    "id": "bp-1d7962c9",
+    "kind": "landmark",
+    "slots": {
+     "form": {
+      "use": "lookout-tower@1",
+      "params": {
+       "height": "a tall tower",
+       "plan": "square",
+       "profile": "straight",
+       "galleries": "a gallery at the top",
+       "crown": "battlements",
+       "masonry": "great rough blocks"
+      }
+     },
+     "palette": {
+      "use": "palette@1",
+      "params": {
+       "family": "desert-sage",
+       "contrast": "balanced"
+      }
+     }
+    }
+   }
+  },
+  "fords/stones.ts#turnStones": {
+   "as": "building",
+   "blueprint": {
+    "id": "bp-051ba73e",
+    "kind": "structure",
+    "slots": {
+     "footprint": {
+      "use": "cottage-plan@1",
+      "params": {
+       "massing": "a long range",
+       "shape": "long",
+       "size": "roomy",
+       "storeys": "two storeys",
+       "heights": "stepped",
+       "roof": "gabled",
+       "roofline": "steep",
+       "attachments": [],
+       "windows": "several",
+       "base": "on a stone plinth",
+       "character": "gently settled"
+      }
+     },
+     "body": {
+      "use": "fieldstone@1",
+      "params": {
+       "stones": "mixed sizes",
+       "gables": "boards"
+      }
+     },
+     "roof": {
+      "use": "tiles@1",
+      "params": {
+       "covering": "shingles",
+       "overhang": "sheltering",
+       "chimney": "gable"
+      }
+     },
+     "feature": {
+      "use": "waterwheel@1",
+      "params": {
+       "wheel": "a great wheel",
+       "drive": "overshot"
+      }
+     },
+     "openings": {
+      "use": "casements@1",
+      "params": {
+       "panes": "six panes",
+       "shutters": true,
+       "door": "plank"
+      }
+     },
+     "ornaments": {
+      "use": "cottage-garden@1",
+      "params": {
+       "extras": [
+        "lantern",
+        "woodpile"
+       ],
+       "walk": "flagstones"
+      }
+     },
+     "palette": {
+      "use": "palette@1",
+      "params": {
+       "family": "teal-gold",
+       "contrast": "balanced"
+      }
+     }
+    }
+   }
+  },
+  "hollow/depth.ts": {
+   "as": "building",
+   "blueprint": {
+    "id": "bp-1f7750c4",
+    "kind": "structure",
+    "slots": {
+     "footprint": {
+      "use": "cottage-plan@1",
+      "params": {
+       "massing": "a single block",
+       "shape": "long",
+       "size": "modest",
+       "storeys": "one storey",
+       "heights": "level",
+       "roof": "gabled",
+       "roofline": "steep",
+       "attachments": [],
+       "windows": "several",
+       "base": "on a stone plinth",
+       "character": "gently settled"
+      }
+     },
+     "body": {
+      "use": "timber-frame@1",
+      "params": {
+       "framing": "posts and rails",
+       "plaster": "hand-laid"
+      }
+     },
+     "roof": {
+      "use": "thatch@1",
+      "params": {
+       "thickness": "plump",
+       "overhang": "sheltering",
+       "chimney": "gable"
+      }
+     },
+     "openings": {
+      "use": "casements@1",
+      "params": {
+       "panes": "four panes",
+       "shutters": true,
+       "door": "hooded"
+      }
+     },
+     "ornaments": {
+      "use": "cottage-garden@1",
+      "params": {
+       "extras": [
+        "flower boxes",
+        "lantern",
+        "woodpile"
+       ],
+       "walk": "stepping stones"
+      }
+     },
+     "palette": {
+      "use": "palette@1",
+      "params": {
+       "family": "spring-meadow",
+       "contrast": "balanced"
+      }
+     }
+    }
+   }
+  },
+  "hollow/willow/index.ts#measureWillow": {
+   "as": "landmark",
+   "blueprint": {
+    "id": "bp-1dcaa955",
+    "kind": "landmark",
+    "slots": {
+     "form": {
+      "use": "great-tree@1",
+      "params": {
+       "form": "a great willow",
+       "size": "great",
+       "age": "old and broad",
+       "fullness": "full",
+       "bark": "gnarled and burred"
+      }
+     },
+     "motion": {
+      "use": "sway@1",
+      "params": {
+       "stiffness": "gently swaying",
+       "rhythm": "slow"
+      }
+     },
+     "palette": {
+      "use": "palette@1",
+      "params": {
+       "family": "lantern-dusk",
+       "contrast": "balanced"
+      }
+     }
+    }
+   }
+  },
+  "mixed/beacon/lamp.ts": {
+   "as": "landmark",
+   "blueprint": {
+    "id": "bp-0d5f9900",
+    "kind": "landmark",
+    "slots": {
+     "form": {
+      "use": "great-tree@1",
+      "params": {
+       "form": "a spreading oak",
+       "size": "vast",
+       "age": "ancient, storm-broken and stag-headed",
+       "fullness": "dense and lush",
+       "bark": "deeply furrowed"
+      }
+     },
+     "motion": {
+      "use": "sway@1",
+      "params": {
+       "stiffness": "stiff",
+       "rhythm": "slow"
+      }
+     },
+     "palette": {
+      "use": "palette@1",
+      "params": {
+       "family": "deep-forest",
+       "contrast": "balanced"
+      }
+     }
+    }
+   }
+  },
+  "mixed/workshop/index.ts": {
+   "as": "building",
+   "blueprint": {
+    "id": "bp-0d8f6b18",
+    "kind": "structure",
+    "slots": {
+     "footprint": {
+      "use": "cottage-plan@1",
+      "params": {
+       "massing": "an L",
+       "shape": "snug",
+       "size": "modest",
+       "storeys": "two storeys",
+       "heights": "stepped",
+       "roof": "gabled",
+       "roofline": "tall and steep",
+       "attachments": [],
+       "windows": "several",
+       "base": "raised up steps",
+       "character": "gently settled"
+      }
+     },
+     "body": {
+      "use": "timber-frame@1",
+      "params": {
+       "framing": "close studding",
+       "plaster": "hand-laid"
+      }
+     },
+     "roof": {
+      "use": "tiles@1",
+      "params": {
+       "covering": "slates",
+       "overhang": "sheltering",
+       "chimney": "gable"
+      }
+     },
+     "feature": {
+      "use": "tower@1",
+      "params": {
+       "height": "tall",
+       "cap": "lantern"
+      }
+     },
+     "openings": {
+      "use": "casements@1",
+      "params": {
+       "panes": "six panes",
+       "shutters": false,
+       "door": "arched"
+      }
+     },
+     "ornaments": {
+      "use": "cottage-garden@1",
+      "params": {
+       "extras": [
+        "flower boxes",
+        "lantern"
+       ],
+       "walk": "flagstones"
+      }
+     },
+     "palette": {
+      "use": "palette@1",
+      "params": {
+       "family": "bluebell-wood",
+       "contrast": "balanced"
+      }
+     }
+    }
+   }
+  },
+  "moor/archive/catalog.ts#carryCatalog": {
+   "as": "building",
+   "blueprint": {
+    "id": "bp-1f7750c4",
+    "kind": "structure",
+    "slots": {
+     "footprint": {
+      "use": "cottage-plan@1",
+      "params": {
+       "massing": "a single block",
+       "shape": "long",
+       "size": "modest",
+       "storeys": "one storey",
+       "heights": "level",
+       "roof": "gabled",
+       "roofline": "steep",
+       "attachments": [],
+       "windows": "several",
+       "base": "on a stone plinth",
+       "character": "gently settled"
+      }
+     },
+     "body": {
+      "use": "timber-frame@1",
+      "params": {
+       "framing": "posts and rails",
+       "plaster": "hand-laid"
+      }
+     },
+     "roof": {
+      "use": "thatch@1",
+      "params": {
+       "thickness": "plump",
+       "overhang": "sheltering",
+       "chimney": "gable"
+      }
+     },
+     "openings": {
+      "use": "casements@1",
+      "params": {
+       "panes": "four panes",
+       "shutters": true,
+       "door": "hooded"
+      }
+     },
+     "ornaments": {
+      "use": "cottage-garden@1",
+      "params": {
+       "extras": [
+        "flower boxes",
+        "lantern",
+        "woodpile"
+       ],
+       "walk": "stepping stones"
+      }
+     },
+     "palette": {
+      "use": "palette@1",
+      "params": {
+       "family": "spring-meadow",
+       "contrast": "balanced"
+      }
+     }
+    }
+   }
+  },
+  "pondside/records/index.ts": {
+   "as": "landmark",
+   "blueprint": {
+    "id": "bp-0a7932c5",
+    "kind": "landmark",
+    "slots": {
+     "form": {
+      "use": "standing-stones@1",
+      "params": {
+       "arrangement": "ring",
+       "count": "a good many",
+       "height": "towering",
+       "lintels": true,
+       "centre": "a tall king stone",
+       "facets": "softly faceted"
+      }
+     },
+     "palette": {
+      "use": "palette@1",
+      "params": {
+       "family": "silver-birch",
+       "contrast": "balanced"
+      }
+     }
+    }
+   }
+  },
+  "ruins/cottage/index.ts#weighCottage": {
+   "as": "landmark",
+   "blueprint": {
+    "id": "bp-0a7932c5",
+    "kind": "landmark",
+    "slots": {
+     "form": {
+      "use": "standing-stones@1",
+      "params": {
+       "arrangement": "ring",
+       "count": "a good many",
+       "height": "towering",
+       "lintels": true,
+       "centre": "a tall king stone",
+       "facets": "softly faceted"
+      }
+     },
+     "palette": {
+      "use": "palette@1",
+      "params": {
+       "family": "silver-birch",
+       "contrast": "balanced"
+      }
+     }
+    }
+   }
+  },
+  "ruins/croft/lib.rs": {
+   "as": "building",
+   "blueprint": {
+    "id": "bp-051ba73e",
+    "kind": "structure",
+    "slots": {
+     "footprint": {
+      "use": "cottage-plan@1",
+      "params": {
+       "massing": "a long range",
+       "shape": "long",
+       "size": "roomy",
+       "storeys": "two storeys",
+       "heights": "stepped",
+       "roof": "gabled",
+       "roofline": "steep",
+       "attachments": [],
+       "windows": "several",
+       "base": "on a stone plinth",
+       "character": "gently settled"
+      }
+     },
+     "body": {
+      "use": "fieldstone@1",
+      "params": {
+       "stones": "mixed sizes",
+       "gables": "boards"
+      }
+     },
+     "roof": {
+      "use": "tiles@1",
+      "params": {
+       "covering": "shingles",
+       "overhang": "sheltering",
+       "chimney": "gable"
+      }
+     },
+     "feature": {
+      "use": "waterwheel@1",
+      "params": {
+       "wheel": "a great wheel",
+       "drive": "overshot"
+      }
+     },
+     "openings": {
+      "use": "casements@1",
+      "params": {
+       "panes": "six panes",
+       "shutters": true,
+       "door": "plank"
+      }
+     },
+     "ornaments": {
+      "use": "cottage-garden@1",
+      "params": {
+       "extras": [
+        "lantern",
+        "woodpile"
+       ],
+       "walk": "flagstones"
+      }
+     },
+     "palette": {
+      "use": "palette@1",
+      "params": {
+       "family": "teal-gold",
+       "contrast": "balanced"
+      }
+     }
+    }
+   }
+  },
+  "ruins/lighthouse/lens.ts": {
+   "as": "landmark",
+   "blueprint": {
+    "id": "bp-05894391",
+    "kind": "landmark",
+    "slots": {
+     "form": {
+      "use": "lookout-tower@1",
+      "params": {
+       "height": "a lookout tower",
+       "plan": "round",
+       "profile": "tapering",
+       "galleries": "a gallery at the top",
+       "crown": "an open lantern room",
+       "masonry": "dressed blocks"
+      }
+     },
+     "palette": {
+      "use": "palette@1",
+      "params": {
+       "family": "spring-meadow",
+       "contrast": "balanced"
+      }
+     }
+    }
+   }
+  },
+  "ruins/mill/race.ts#traceRace": {
+   "as": "building",
+   "blueprint": {
+    "id": "bp-0d2acd34",
+    "kind": "structure",
+    "slots": {
+     "footprint": {
+      "use": "cottage-plan@1",
+      "params": {
+       "massing": "a single block",
+       "shape": "gable-fronted",
+       "size": "modest",
+       "storeys": "two storeys",
+       "heights": "level",
+       "roof": "gabled",
+       "roofline": "tall and steep",
+       "attachments": [
+        "turret",
+        "porch"
+       ],
+       "windows": "several",
+       "base": "raised up steps",
+       "character": "crooked, like a storybook"
+      }
+     },
+     "body": {
+      "use": "timber-frame@1",
+      "params": {
+       "framing": "crossed braces",
+       "plaster": "lumpy and old"
+      }
+     },
+     "roof": {
+      "use": "tiles@1",
+      "params": {
+       "covering": "pantiles",
+       "overhang": "sheltering",
+       "chimney": "gable"
+      }
+     },
+     "openings": {
+      "use": "casements@1",
+      "params": {
+       "panes": "four panes",
+       "shutters": true,
+       "door": "arched"
+      }
+     },
+     "ornaments": {
+      "use": "cottage-garden@1",
+      "params": {
+       "extras": [
+        "flower boxes",
+        "fence",
+        "lantern"
+       ],
+       "walk": "stepping stones"
+      }
+     },
+     "palette": {
+      "use": "palette@1",
+      "params": {
+       "family": "autumn-ember",
+       "contrast": "balanced"
+      }
+     }
+    }
+   }
+  },
+  "terraces/croft/press.rs": {
+   "as": "building",
+   "blueprint": {
+    "id": "bp-0d2acd34",
+    "kind": "structure",
+    "slots": {
+     "footprint": {
+      "use": "cottage-plan@1",
+      "params": {
+       "massing": "a single block",
+       "shape": "gable-fronted",
+       "size": "modest",
+       "storeys": "two storeys",
+       "heights": "level",
+       "roof": "gabled",
+       "roofline": "tall and steep",
+       "attachments": [
+        "turret",
+        "porch"
+       ],
+       "windows": "several",
+       "base": "raised up steps",
+       "character": "crooked, like a storybook"
+      }
+     },
+     "body": {
+      "use": "timber-frame@1",
+      "params": {
+       "framing": "crossed braces",
+       "plaster": "lumpy and old"
+      }
+     },
+     "roof": {
+      "use": "tiles@1",
+      "params": {
+       "covering": "pantiles",
+       "overhang": "sheltering",
+       "chimney": "gable"
+      }
+     },
+     "openings": {
+      "use": "casements@1",
+      "params": {
+       "panes": "four panes",
+       "shutters": true,
+       "door": "arched"
+      }
+     },
+     "ornaments": {
+      "use": "cottage-garden@1",
+      "params": {
+       "extras": [
+        "flower boxes",
+        "fence",
+        "lantern"
+       ],
+       "walk": "stepping stones"
+      }
+     },
+     "palette": {
+      "use": "palette@1",
+      "params": {
+       "family": "autumn-ember",
+       "contrast": "balanced"
+      }
+     }
+    }
+   }
   }
+ },
+ "stands": {
+  "CHANGELOG.md": "Lantern willow",
+  "README.md": "Fir",
+  "build.sh": "Cherry",
+  "crossings/NOTES.md": "Autumn maple",
+  "crossings/banks.ts": "Standing stone",
+  "crossings/channel.ts": "Mossy boulder",
+  "crossings/crossings.test.ts": "Stone family",
+  "crossings/east-bank/gate.ts": "Bench stone",
+  "crossings/east-bank/index.ts": "Building",
+  "crossings/east-bank/package.json": "Blueberry",
+  "crossings/flow.ts": "Rhododendron",
+  "crossings/mill/index.ts": "Feather shrub",
+  "crossings/mill/package.json": "Bluebells",
+  "crossings/mill/wheel.ts": "Daisies",
+  "crossings/weir.ts": "Lantern willow",
+  "crossings/west-bank/index.ts": "Fir",
+  "crossings/west-bank/package.json": "Cherry",
+  "crossings/west-bank/path.ts": "Autumn maple",
+  "downs/atlas.ts": "Landmark",
+  "downs/deep/deeper/deeper-still/deepest/bottom/tmp2.ts": "Mossy boulder",
+  "downs/deep/deeper/deeper-still/deepest/four.ts": "Stone family",
+  "downs/deep/deeper/deeper-still/three.ts": "Bench stone",
+  "downs/deep/deeper/two.ts": "Box mound",
+  "downs/deep/index.ts": "Blueberry",
+  "downs/deep/one.ts": "Rhododendron",
+  "downs/deep/package.json": "Feather shrub",
+  "downs/fields/barley.ts": "Building",
+  "downs/fields/rye.ts": "Daisies",
+  "downs/hedges.ts": "Lantern willow",
+  "downs/index.ts": "Fir",
+  "downs/lanes.ts": "Cherry",
+  "downs/oak/index.ts": "Autumn maple",
+  "downs/oak/package.json": "Standing stone",
+  "downs/oak/roots.ts": "Mossy boulder",
+  "downs/orchard/apples.ts": "Landmark",
+  "downs/orchard/orchard.test.ts": "Bench stone",
+  "downs/orchard/pears.ts": "Box mound",
+  "downs/package.json": "Blueberry",
+  "downs/survey.ts": "Rhododendron",
+  "downs/tiny/seed.ts": "Feather shrub",
+  "dunes/data.csv": "Bluebells",
+  "dunes/deploy.sh": "Daisies",
+  "dunes/keep/Cargo.toml": "Lantern willow",
+  "dunes/keep/guard.rs": "Fir",
+  "dunes/keep/lib.rs": "Cherry",
+  "dunes/ledger/entries.ts": "Autumn maple",
+  "dunes/ledger/index.ts": "Building",
+  "dunes/ledger/package.json": "Mossy boulder",
+  "dunes/lint.toml": "Stone family",
+  "dunes/settings.json": "Bench stone",
+  "fords/fords.test.ts": "Box mound",
+  "fords/gravel/index.ts": "Blueberry",
+  "fords/gravel/package.json": "Rhododendron",
+  "fords/gravel/ring.ts": "Feather shrub",
+  "fords/jetty/Cargo.toml": "Bluebells",
+  "fords/jetty/index.ts": "Daisies",
+  "fords/jetty/landing.ts": "Lantern willow",
+  "fords/reeds.ts": "Fir",
+  "fords/shallows.ts": "Cherry",
+  "fords/stones.ts": "Landmark",
+  "hills/crests.ts": "Standing stone",
+  "hills/hills.test.ts": "Mossy boulder",
+  "hills/kiln/fire.ts": "Stone family",
+  "hills/kiln/index.ts": "Bench stone",
+  "hills/kiln/package.json": "Box mound",
+  "hills/oak/branches.ts": "Blueberry",
+  "hills/oak/index.ts": "Rhododendron",
+  "hills/oak/package.json": "Feather shrub",
+  "hills/slopes.ts": "Bluebells",
+  "hollow/depth.ts": "Building",
+  "hollow/hollow.test.ts": "Lantern willow",
+  "hollow/index.ts": "Fir",
+  "hollow/package.json": "Cherry",
+  "hollow/pool.ts": "Autumn maple",
+  "hollow/willow/fronds.ts": "Standing stone",
+  "hollow/willow/index.ts": "Mossy boulder",
+  "hollow/willow/package.json": "Stone family",
+  "index.ts": "Bench stone",
+  "mixed/beacon/index.ts": "Box mound",
+  "mixed/beacon/lamp.ts": "Landmark",
+  "mixed/beacon/package.json": "Rhododendron",
+  "mixed/failing-grove.ts": "Feather shrub",
+  "mixed/main.ts": "Bluebells",
+  "mixed/mixed.test.ts": "Daisies",
+  "mixed/package.json": "Lantern willow",
+  "mixed/patched.ts": "Fir",
+  "mixed/sound.ts": "Cherry",
+  "mixed/steady.ts": "Autumn maple",
+  "mixed/workshop/gears.ts": "Standing stone",
+  "mixed/workshop/index.ts": "Building",
+  "mixed/workshop/package.json": "Stone family",
+  "moor/archive/catalog.ts": "Bench stone",
+  "moor/archive/index.ts": "Box mound",
+  "moor/archive/package.json": "Blueberry",
+  "moor/decisions.md": "Rhododendron",
+  "moor/glossary.md": "Feather shrub",
+  "moor/guide.md": "Bluebells",
+  "moor/henge/index.ts": "Daisies",
+  "moor/henge/package.json": "Lantern willow",
+  "moor/henge/stones.ts": "Fir",
+  "package.json": "Cherry",
+  "pondside/handoff.ts": "Autumn maple",
+  "pondside/package.json": "Standing stone",
+  "pondside/pondside.test.ts": "Mossy boulder",
+  "pondside/queue.ts": "Stone family",
+  "pondside/records/index.ts": "Landmark",
+  "pondside/records/ledger.ts": "Box mound",
+  "pondside/records/package.json": "Blueberry",
+  "pondside/server.ts": "Rhododendron",
+  "ruins/README.md": "Feather shrub",
+  "ruins/collapse.ts": "Bluebells",
+  "ruins/cottage/hearth.ts": "Daisies",
+  "ruins/cottage/index.ts": "Lantern willow",
+  "ruins/cottage/package.json": "Fir",
+  "ruins/croft/Cargo.toml": "Cherry",
+  "ruins/croft/forge.rs": "Autumn maple",
+  "ruins/croft/lib.rs": "Building",
+  "ruins/house/main.ts": "Mossy boulder",
+  "ruins/house/package.json": "Stone family",
+  "ruins/house/utils2.ts": "Bench stone",
+  "ruins/index.ts": "Box mound",
+  "ruins/keep/Cargo.toml": "Blueberry",
+  "ruins/keep/lib.rs": "Rhododendron",
+  "ruins/keep/walls.rs": "Feather shrub",
+  "ruins/lighthouse/index.ts": "Bluebells",
+  "ruins/lighthouse/lens.ts": "Landmark",
+  "ruins/lighthouse/package.json": "Lantern willow",
+  "ruins/mill/index.ts": "Fir",
+  "ruins/mill/package.json": "Cherry",
+  "ruins/mill/race.ts": "Autumn maple",
+  "ruins/oak/index.ts": "Standing stone",
+  "ruins/oak/package.json": "Mossy boulder",
+  "ruins/oak/temp.ts": "Stone family",
+  "ruins/package.json": "Bench stone",
+  "ruins/rubble.ts": "Box mound",
+  "ruins/ruins.test.ts": "Blueberry",
+  "terraces/croft/Cargo.toml": "Rhododendron",
+  "terraces/croft/lib.rs": "Feather shrub",
+  "terraces/croft/press.rs": "Building",
+  "terraces/order.test.ts": "Daisies",
+  "terraces/pipeline.ts": "Lantern willow",
+  "terraces/ring/index.ts": "Fir",
+  "terraces/ring/package.json": "Cherry",
+  "terraces/ring/schema.ts": "Autumn maple",
+  "terraces/stages.test.ts": "Standing stone",
+  "terraces/steps.ts": "Mossy boulder",
+  "tsconfig.json": "Stone family",
+  "crossings/mill/index.ts#mendMill": "Landmark",
+  "downs/deep/one.ts#traceOne": "Building",
+  "downs/tiny/seed.ts#joinSeed": "Landmark",
+  "fords/stones.ts#turnStones": "Building",
+  "hollow/willow/index.ts#measureWillow": "Landmark",
+  "moor/archive/catalog.ts#carryCatalog": "Building",
+  "ruins/cottage/index.ts#weighCottage": "Landmark",
+  "ruins/mill/race.ts#traceRace": "Building"
  },
  "trails": [
   {
@@ -2729,7 +3941,6 @@
    "#gatherFlow": "Fir"
   },
   "crossings/mill/index.ts": {
-   "#mendMill": "Cherry",
    "#MillTurner": "Stone family"
   },
   "crossings/mill/wheel.ts": {
@@ -2785,7 +3996,6 @@
    "#DeepJoiner": "Rhododendron"
   },
   "downs/deep/one.ts": {
-   "#traceOne": "Fir",
    "#OneFolder": "Feather shrub"
   },
   "downs/fields/barley.ts": {
@@ -2854,9 +4064,7 @@
    "#weighSurvey": "Feather shrub",
    "#carrySurvey": "Autumn maple"
   },
-  "downs/tiny/seed.ts": {
-   "#joinSeed": "Lantern willow"
-  },
+  "downs/tiny/seed.ts": {},
   "dunes/keep/guard.rs": {
    "#mendGuard": "Fir",
    "#GuardTurner": "Bluebells",
@@ -2918,7 +4126,6 @@
    "#settleShallows": "Autumn maple"
   },
   "fords/stones.ts": {
-   "#turnStones": "Lantern willow",
    "#StonesKeeper": "Blueberry",
    "#StonesSort": "Fir",
    "#STONES_TRACE": "Rhododendron"
@@ -2992,7 +4199,6 @@
    "#FRONDS_JOIN": "Bluebells"
   },
   "hollow/willow/index.ts": {
-   "#measureWillow": "Lantern willow",
    "#WillowJoiner": "Daisies"
   },
   "index.ts": {
@@ -3062,7 +4268,6 @@
    "#WorkshopCarrier": "Standing stone"
   },
   "moor/archive/catalog.ts": {
-   "#carryCatalog": "Cherry",
    "#CatalogSettler": "Mossy boulder",
    "#CatalogMend": "Autumn maple",
    "#CATALOG_TURN": "Stone family",
@@ -3127,7 +4332,6 @@
    "#HEARTH_CARRY": "Daisies"
   },
   "ruins/cottage/index.ts": {
-   "#weighCottage": "Cherry",
    "#CottageCarrier": "Standing stone"
   },
   "ruins/croft/forge.rs": {
@@ -3183,7 +4387,6 @@
    "#MillJoiner": "Box mound"
   },
   "ruins/mill/race.ts": {
-   "#traceRace": "Fir",
    "#RaceFolder": "Blueberry",
    "#RaceMeasure": "Cherry",
    "#RACE_JOIN": "Rhododendron",

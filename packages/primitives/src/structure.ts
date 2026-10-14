@@ -7,6 +7,7 @@
 
 import { primitive, t } from "@gaia/schema";
 import { buildTower, buildWaterwheel } from "./geometry/building/features.ts";
+import { buildBell, buildDovecote, buildForge, buildGranary, buildWell } from "./geometry/building/yard.ts";
 import { buildGarden } from "./geometry/building/garden.ts";
 import { layOutCottage } from "./geometry/building/layout.ts";
 import { buildCasements } from "./geometry/building/openings.ts";
@@ -15,19 +16,19 @@ import { buildFieldstone, buildTimberFrame } from "./geometry/building/walls.ts"
 
 export const cottagePlanParams = {
   massing: t.choice("How the building's volumes are put together", {
-    "a single block": "One simple block under one roof",
-    "an L": "A main range with a wing jutting out at one end, its gable looking outward, the door in the corner between them",
-    "a T": "A main range with a gabled wing jutting from its middle",
-    "a long range": "A long run of joined blocks in a line, each a little narrower than the last, like a farmhouse with its byre and barn",
-    "a cluster": "A main house with wings and outbuildings joined on all round, gathered over the years",
+    "a single block": "One simple block under one roof, for code that feels plain and self-contained",
+    "an L": "A main range with a wing jutting out at one end, its gable looking outward, the door in the corner between them, for code that feels companionable, with a partner at its elbow",
+    "a T": "A main range with a gabled wing jutting from its middle, for code that feels balanced and formal, facing two ways at once",
+    "a long range": "A long run of joined blocks in a line, each a little narrower than the last, like a farmhouse with its byre and barn, for code that feels patient and hardworking, going on and on",
+    "a cluster": "A main house with wings and outbuildings joined on all round, gathered over the years, for code that feels rambling and gregarious, grown piece by piece",
   }),
   shape: t.choice("The main body's shape on the ground", {
-    long: "A low range longer than it is deep, its door in the long side under the eaves",
-    snug: "A small, nearly square body, compact and cosy",
-    "gable-fronted": "A narrow body that faces you with its pointed gable, the door beneath the peak",
+    long: "A low range longer than it is deep, its door in the long side under the eaves, for code that feels easygoing and unhurried",
+    snug: "A small, nearly square body, compact and cosy, for code that feels close and private",
+    "gable-fronted": "A narrow body that faces you with its pointed gable, the door beneath the peak, for code that feels upright and alert",
   }),
   size: t.scale("How big the main body is", { tiny: 0.85, modest: 1, roomy: 1.15 }),
-  storeys: t.scale("How many storeys the main body rises", { "one storey": 1, "two storeys": 2, "three storeys": 3 }),
+  storeys: t.scale("How many storeys the main body rises: one for code that feels humble and close to the ground, two for code that feels comfortable and settled, three for code that feels lofty and imposing", { "one storey": 1, "two storeys": 2, "three storeys": 3 }),
   heights: t.choice("How the joined parts' heights relate", {
     level: "Every part keeps the main body's storeys, under one eave line",
     stepped: "Each joined part stands a storey lower than the part it joins, so the roofs step down",
@@ -84,7 +85,7 @@ export const timberFrameParams = {
 export const timberFrame = primitive({
   id: "timber-frame@1",
   role: "Walls",
-  doc: "Whitewashed plaster walls held in a frame of dark timber beams, on a stone base.",
+  doc: "Whitewashed plaster walls held in a frame of dark timber beams, on a stone base, for code that feels lively and sociable, bright and a little busy.",
   params: timberFrameParams,
   build: (p, ctx, plan) => buildTimberFrame(p, ctx, plan),
 });
@@ -104,7 +105,7 @@ export const fieldstoneParams = {
 export const fieldstone = primitive({
   id: "fieldstone@1",
   role: "Walls",
-  doc: "Thick walls of rounded fieldstones set in pale lime mortar.",
+  doc: "Thick walls of rounded fieldstones set in pale lime mortar, for code that feels quiet and stubborn, weathered and slow to change.",
   params: fieldstoneParams,
   build: (p, ctx, plan) => buildFieldstone(p, ctx, plan),
 });
@@ -130,7 +131,7 @@ export const thatchParams = {
 export const thatch = primitive({
   id: "thatch@1",
   role: "Roof",
-  doc: "A thick, soft thatched roof in layered courses with a rolled ridge and rounded eaves.",
+  doc: "A thick, soft thatched roof in layered courses with a rolled ridge and rounded eaves, for code that feels old and well-loved, worn soft by many hands.",
   params: thatchParams,
   build: (p, ctx, plan) => buildThatch(p, ctx, plan),
 });
@@ -148,7 +149,7 @@ export const tilesParams = {
 export const tiles = primitive({
   id: "tiles@1",
   role: "Roof",
-  doc: "A gabled roof of tiles, slates or shingles in fine courses, with a gentle kick at the eaves.",
+  doc: "A gabled roof of tiles, slates or shingles in fine courses, with a gentle kick at the eaves, for code that feels new and sharp-edged, still crisp from the kiln.",
   params: tilesParams,
   build: (p, ctx, plan) => buildTiles(p, ctx, plan),
 });
@@ -207,8 +208,10 @@ export const waterwheelParams = {
 export const waterwheel = primitive({
   id: "waterwheel@1",
   role: "Feature",
-  doc: "A mill's wooden waterwheel turning slowly beside the house in a stone-lined pit, for an entity that turns what it is given into something new. It slows to a stop as the code fails.",
+  doc: "A wooden waterwheel turning slowly in a stone-lined pit beside the house, for code that feels quaint and old-fashioned, unhurried, doing things the way they were always done. It slows to a stop as the code fails.",
   params: waterwheelParams,
+  // A wheel turns only where water runs past.
+  needs: ["running water"],
   build: (p, ctx, plan) => buildWaterwheel(p, ctx, plan),
 });
 
@@ -223,9 +226,89 @@ export const towerParams = {
 export const tower = primitive({
   id: "tower@1",
   role: "Feature",
-  doc: "A tall square tower at the back corner of the house, rendered with stone quoins and narrow lamplit windows, for an entity that keeps records or watches over others. Taller the more the code depends on it; it crumbles from the top as the code fails.",
+  doc: "A tall square tower rising from the back corner of the house, its narrow windows lamplit at night, for code that feels dreamy and far-off, with its head in the clouds. It crumbles from the top as the code fails.",
   params: towerParams,
   build: (p, ctx, plan) => buildTower(p, ctx, plan),
 });
 
-export const STRUCTURE_PRIMITIVES = [cottagePlan, timberFrame, fieldstone, thatch, tiles, casements, cottageGarden, waterwheel, tower];
+export const dovecoteParams = {
+  cote: t.choice("What the doves live in", {
+    "a round stone cote": "A squat round dovecote of rough stone with a ledge round its middle, its conical roof crowned by a little open lantern the doves fly in and out of",
+    "a cote on a post": "A small painted dovecote raised on a tall post, rows of arched doorways under its pitched roof, each with a ledge to land on",
+  }),
+  flock: t.scale("How many doves keep it", { "a few doves": 4, "a flock": 8, "a great flock": 13 }),
+};
+
+export const dovecote = primitive({
+  id: "dovecote@1",
+  role: "Feature",
+  doc: "A dovecote beside the house, its doves circling overhead and settling on its ledges, for code that feels sociable and chatty, forever fluttering off to the others and back. Its doves fly home and stay in as the code fails.",
+  params: dovecoteParams,
+  build: (p, ctx, plan) => buildDovecote(p, ctx, plan),
+});
+
+export const wellParams = {
+  head: t.choice("What stands over the well", {
+    "a little roof": "A small shingled roof on two posts over the winch, the bucket hanging on its rope",
+    "a sweep": "A long wooden pole balanced on a forked post, a stone weight at one end and the bucket at the other",
+  }),
+  width: t.scale("How wide the well is", { "a narrow well": 0.55, "a wide well": 0.75, "a great well": 0.95 }),
+};
+
+export const well = primitive({
+  id: "well@1",
+  role: "Feature",
+  doc: "A round stone well in the yard, its water dark and still, for code that feels mysterious, hard to see into, with depths few have ever explored. Its water sinks away and its bucket falls in as the code fails.",
+  params: wellParams,
+  build: (p, ctx, plan) => buildWell(p, ctx, plan),
+});
+
+export const bellParams = {
+  hanging: t.choice("What the bell hangs in", {
+    "a stone arch": "Two stone piers joined by a round arch under a little gabled roof",
+    "a timber frame": "Two frames of raked timber legs joined by the beam the bell hangs from, under a small shingled roof",
+  }),
+  bell: t.scale("How big the bell is", { "a small bell": 0.3, "a chapel bell": 0.42, "a great bell": 0.56 }),
+};
+
+export const bell = primitive({
+  id: "bell@1",
+  role: "Feature",
+  doc: "A dark iron bell hung under a little roof beside the house, for code that feels brash and urgent, quick to sound off and hard to ignore. It hangs askew and then is gone as the code fails.",
+  params: bellParams,
+  build: (p, ctx, plan) => buildBell(p, ctx, plan),
+});
+
+export const forgeParams = {
+  shelter: t.choice("What shelters the forge", {
+    "an open shed": "An open-fronted shed of timber posts under one sloping roof, the hearth at its back",
+    "open to the sky": "The hearth and its chimney standing alone in the yard, the anvil beside them",
+  }),
+  stack: t.scale("How tall its chimney stands", { "a short stack": 3.3, "a tall stack": 4.1, "a soaring stack": 5 }),
+};
+
+export const forge = primitive({
+  id: "forge@1",
+  role: "Feature",
+  doc: "A smith's forge beside the house, its hearth glowing at dusk under a smoking chimney, for code that feels fierce and raw: hot, rough-edged and still being hammered into shape. It goes cold and its shelter falls in as the code fails.",
+  params: forgeParams,
+  build: (p, ctx, plan) => buildForge(p, ctx, plan),
+});
+
+export const granaryParams = {
+  size: t.scale("How much it holds", { "a small store": 1.9, "a granary": 2.4, "a great granary": 3 }),
+  roof: t.choice("How it is roofed", {
+    gabled: "Two slopes meeting at a ridge over boarded gables",
+    hipped: "Slopes on every side meeting in a short ridge, low and snug",
+  }),
+};
+
+export const granary = primitive({
+  id: "granary@1",
+  role: "Feature",
+  doc: "A boarded granary raised on mushroom-shaped staddle stones beside the house, for code that feels thrifty and hoarding, saving everything up against a rainy day. It rots through and slumps off its stones as the code fails.",
+  params: granaryParams,
+  build: (p, ctx, plan) => buildGranary(p, ctx, plan),
+});
+
+export const STRUCTURE_PRIMITIVES = [cottagePlan, timberFrame, fieldstone, thatch, tiles, casements, cottageGarden, waterwheel, tower, dovecote, well, bell, forge, granary];
