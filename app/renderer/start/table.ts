@@ -44,8 +44,8 @@ export interface TableOptions {
   readonly hour: number;
   /** Where the wait's sheet lies on the page: a chosen card ends there. */
   readonly sheet: () => DOMRect;
-  /** A card is chosen: its picture and its land's shape (width over depth), which the wait's sheet takes as its own. */
-  readonly chosen?: (picture: string, aspect: number) => void;
+  /** A card is chosen: its picture, its land's shape (width over depth), which the wait's sheet takes as its own, and the commit it pictures. */
+  readonly chosen?: (picture: string, aspect: number, commit: string | undefined) => void;
   /** The wait's sheet as it is painted now, in its shape: a fresh card's face, so it rises into the sheet as the sheet. */
   readonly face?: () => HTMLCanvasElement;
   /** The chosen card has become the wait's sheet: the sheet shows in its place, and the wait may paint on. */
@@ -215,7 +215,7 @@ export function createTable(veil: HTMLElement, options: TableOptions): StartPage
         b.addEventListener("click", () => {
           if (settle === null || chosen !== null) return;
           const picture = pictures[i];
-          if (r.picture !== undefined && picture !== null && picture !== undefined) options.chosen?.(r.picture, picture.naturalWidth / Math.max(1, picture.naturalHeight));
+          if (r.picture !== undefined && picture !== null && picture !== undefined) options.chosen?.(r.picture, picture.naturalWidth / Math.max(1, picture.naturalHeight), r.commit);
           lift(i, performance.now());
           choose(placeOf(r));
         });

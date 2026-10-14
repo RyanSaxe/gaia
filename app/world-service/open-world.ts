@@ -169,7 +169,7 @@ export async function openWorld({ engine, root, consent, progress, standIn = fal
   const project = facts.projectId;
   const name = facts.repository.name;
   const land = landOf(facts, graph);
-  progress({ stage: "land", name, size: land.size, ...(land.aspect === undefined ? {} : { aspect: land.aspect }), areas: outlinesOf(land).areas, patches: land.patches.map(({ path, name, area, x, z, radius }) => ({ path, name, area, x, z, radius })), lots: land.lots });
+  progress({ stage: "land", name, size: land.size, ...(land.aspect === undefined ? {} : { aspect: land.aspect }), ...(judged.commit === undefined ? {} : { commit: judged.commit }), areas: outlinesOf(land).areas, patches: land.patches.map(({ path, name, area, x, z, radius }) => ({ path, name, area, x, z, radius })), lots: land.lots });
   // What understanding still has to ask, going only as far as the world needs to stand: Jev's links and every
   // definition's stand. Planning it all takes seconds the wait would sit still through, and only says what judging will
   // cost, so it is planned only when there is a limit to weigh that against; otherwise the pass finds its own way.

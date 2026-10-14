@@ -35,9 +35,12 @@ export interface RecentWorld {
   /**
    * Its whole field map in health's colors, as its page painted it once the world last stood (`world.picture`): a
    * WebP data URL about 800 pixels a side (`paintPicture` in `app/renderer/immersive/picture.ts`). A world kept
-   * before pictures were, or whose page painted none, has none.
+   * before pictures were, or whose page painted none, has none. The start is offered it only while the folder's code
+   * is still the commit it was painted from.
    */
   readonly picture?: string;
+  /** The commit the world was read from when its picture was painted; a picture never comes without it. */
+  readonly commit?: string;
 }
 
 /** What the start page offers: the worlds opened before, and why the last address written led nowhere, if it did. */
@@ -109,9 +112,11 @@ export type Opening =
    * stand, as the finished world lays them out, since the division depends on
    * the code alone. Every lot is the same ground whatever stands on it, so
    * its place is all a sheet needs to keep names off the mark to come. Sent
-   * once, before any judging.
+   * once, before any judging. `commit` is the commit the code was read
+   * from, absent when it was read from disk: a picture of another commit is
+   * not this world's map.
    */
-  | { readonly stage: "land"; readonly name: string; readonly size: number; readonly aspect?: number; readonly areas: readonly Outline[]; readonly patches: readonly FilePatch[]; readonly lots: readonly LotPlace[] }
+  | { readonly stage: "land"; readonly name: string; readonly size: number; readonly aspect?: number; readonly commit?: string; readonly areas: readonly Outline[]; readonly patches: readonly FilePatch[]; readonly lots: readonly LotPlace[] }
   /**
    * Asking Jev about the things it has not judged; `answered` counts those settled, and `total` every request to be
    * asked: under a spend limit the understanding pass's are planned and counted from the start, and with none they

@@ -39,6 +39,13 @@ export interface EngineMethods {
    */
   "project.source": { params: { root: string; path: string; commit?: string }; result: { lines: readonly string[] | null } };
   /**
+   * The commit a world of `root` would be read from now, as `project.graph`
+   * reads it: the commit checked out, or null when the world would be read
+   * from disk. The start asks it to show a world's picture only while its
+   * code is the code it pictures.
+   */
+  "project.commit": { params: { root: string }; result: { commit: string | null } };
+  /**
    * Sends every request whose waits are met, up to `max` (256 by default),
    * as many at once as Jev takes: the links first, then folders top-down
    * and each file after its folder. Returns the nodes that settled, so the
