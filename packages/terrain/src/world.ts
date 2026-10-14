@@ -272,14 +272,67 @@ export function regionWeights(spec: WorldSpec, x: number, z: number, out: Float6
       if (d < nearest) nearest = d;
     }
   } else {
-    f.sites.forEach((list, r) => {
-      let d = Infinity;
-      for (const s of list) d = Math.min(d, Math.hypot(wx - s.x, wz - s.z) - (s.reach ?? 0));
-      out[r] = d;
-      if (d < nearest) nearest = d;
-    });
+    nearest = outsideDistances(f, wx, wz, out);
   }
   for (let r = 0; r < count; r++) out[r] = 1 - smooth(((out[r] as number) - nearest) / TERRAIN.blend);
+}
+
+/** Meters a side of the cells every region's sites are sorted into, for points past the region field. */
+const OUTSIDE_CELL = 64;
+/** Every region's sites sorted into cells, with each cell's bounds and its largest reach, kept with the field. */
+interface SiteCells {
+  readonly cells: readonly { readonly x0: number; readonly z0: number; readonly reach: number; readonly sites: readonly (readonly [number, LandSite])[] }[];
+}
+const siteCells = new WeakMap<RegionField, SiteCells>();
+function siteCellsOf(f: RegionField): SiteCells {
+  let had = siteCells.get(f);
+  if (had !== undefined) return had;
+  const byCell = new Map<string, { x0: number; z0: number; reach: number; sites: (readonly [number, LandSite])[] }>();
+  f.sites.forEach((list, r) => {
+    for (const s of list) {
+      const cx = Math.floor(s.x / OUTSIDE_CELL);
+      const cz = Math.floor(s.z / OUTSIDE_CELL);
+      const key = `${cx},${cz}`;
+      let cell = byCell.get(key);
+      if (cell === undefined) byCell.set(key, (cell = { x0: cx * OUTSIDE_CELL, z0: cz * OUTSIDE_CELL, reach: 0, sites: [] }));
+      cell.sites.push([r, s]);
+      cell.reach = Math.max(cell.reach, s.reach ?? 0);
+    }
+  });
+  had = { cells: [...byCell.values()] };
+  siteCells.set(f, had);
+  return had;
+}
+
+/**
+ * Each region's distance from (wx, wz) past the region field, into `out`
+ * (Infinity for a region that weighs nothing there), and the nearest: the
+ * same as measuring every site, but measuring only the sites that can be
+ * within the blend band of the nearest. A point far past the land costs as
+ * much as one beside it, however many sites the world has.
+ */
+function outsideDistances(f: RegionField, wx: number, wz: number, out: Float64Array): number {
+  const { cells } = siteCellsOf(f);
+  // The least distance any site in each cell can be, from the cell's bounds and its largest reach.
+  const least = cells.map((c) => Math.hypot(Math.max(c.x0 - wx, 0, wx - c.x0 - OUTSIDE_CELL), Math.max(c.z0 - wz, 0, wz - c.z0 - OUTSIDE_CELL)) - c.reach);
+  // Seeded from the cell that can hold the nearest site, so the first pass passes over nearly every other cell.
+  let first = 0;
+  for (let k = 1; k < least.length; k++) if ((least[k] as number) < (least[first] as number)) first = k;
+  let nearest = Infinity;
+  for (const [, s] of cells[first]?.sites ?? []) nearest = Math.min(nearest, Math.hypot(wx - s.x, wz - s.z) - (s.reach ?? 0));
+  for (let pass = 0; pass < 2; pass++) {
+    // First the nearest site, then every site within the blend band of it: no other can weigh anything.
+    const within = pass === 0 ? (): number => nearest : (): number => nearest + TERRAIN.blend;
+    cells.forEach((c, k) => {
+      if ((least[k] as number) > within()) return;
+      for (const [r, s] of c.sites) {
+        const d = Math.hypot(wx - s.x, wz - s.z) - (s.reach ?? 0);
+        if (pass === 0) nearest = Math.min(nearest, d);
+        else if (d < (out[r] as number)) out[r] = d;
+      }
+    });
+  }
+  return nearest;
 }
 
 /**
