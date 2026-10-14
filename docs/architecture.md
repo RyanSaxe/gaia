@@ -390,8 +390,9 @@ only while `project.commit` still names the commit it was painted from, so
 a map that would be drawn anew is never shown, on the start or as the
 wait's sheet. A world kept before pictures were, whose page painted none,
 whose code has moved on, or whose picture was kept before pictures said
-their commit, comes with no picture, which the start shows as plain paper
-with its name. The land stage says which commit the code was read from
+their commit, comes with no picture, which the start shows as a card of
+the wait's own bare sheet, in the sheet's shape, with its name, so it rises
+into the sheet as the sheet. The land stage says which commit the code was read from
 too, so a picture of a place on GitHub that its fetch has since moved on
 folds away from the wait's sheet as soon as the land is divided. A
 standalone page (`pnpm lab:html`, `pnpm lab:serve`) has no engine and opens

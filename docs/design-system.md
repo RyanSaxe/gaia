@@ -708,8 +708,10 @@ walked before, pictured by `start/gaia-picture.webp`):
   - Each world walked before is a torn card in its land's shape, laid on
     the sheet a little askew, bowed, one corner lifted: the picture of its
     own field map in health's colors that its page painted when it was
-    last opened, or plain paper with its name for a world with none yet,
-    or whose code has changed since, so its map will be drawn anew. Its name is lettered
+    last opened. A world with none yet, or whose code has changed since so
+    that its map will be drawn anew, lies as a card of the wait's bare
+    sheet, in the sheet's shape, as a fresh card does, so it rises into the
+    sheet with nothing changing and the map is drawn on it. Its name is lettered
     beneath in the map's spaced capitals, broken onto two lines at a hyphen,
     dot or slash when it is long, with where it lies (who keeps it on
     GitHub, or the folder it sits in) in italic over it. Up to six worlds lie
