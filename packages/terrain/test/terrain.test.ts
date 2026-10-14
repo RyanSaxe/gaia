@@ -45,6 +45,7 @@ import {
   wildShare,
   wildThicket,
   wildsRing,
+  warpPoint,
   withinBudget,
 } from "@gaia/terrain";
 
@@ -148,6 +149,24 @@ describe("terrain", { timeout: 20_000 }, () => {
         return meet ? [{ a: i, b: w.regions.indexOf(b), len, dx: (b.x - a.x) / len, dz: (b.z - a.z) / len, mid }] : [];
       }),
     );
+
+  it("weighs regions past the land, however far, exactly as measuring every site of every region would", () => {
+    const smooth = (t: number): number => {
+      const c = Math.max(0, Math.min(1, t));
+      return c * c * (3 - 2 * c);
+    };
+    for (const spec of [sampleWorld(FULL_WORLD), ...draws.slice(0, 4)]) {
+      const out = new Float64Array(spec.regions.length);
+      for (const [fx, fz] of [[1, 0], [-2, 3], [0.75, -0.6], [10, 10], [0, -0.7], [-0.62, 0.62]] as const) {
+        const [x, z] = [spec.size * fx, spec.size * fz];
+        regionWeights(spec, x, z, out);
+        const [wx, wz] = warpPoint(x, z);
+        const d = spec.regions.map((r) => Math.min(...(r.sites ?? [{ x: r.x, z: r.z, reach: r.reach ?? 0 }]).map((site) => Math.hypot(wx - site.x, wz - site.z) - (site.reach ?? 0))));
+        const nearest = Math.min(...d);
+        d.forEach((v, r) => expect(out[r]).toBeCloseTo(1 - smooth((v - nearest) / TERRAIN.blend), 12));
+      }
+    }
+  });
 
   it("eases neighboring landforms into each other over a band of 90 m or more", () => {
     let pairs = 0;
@@ -380,7 +399,9 @@ describe("full worlds", () => {
       expect(withinBudget(t.report)).toBe(true);
       expect(t.streams.length + t.ponds.length).toBeGreaterThanOrEqual(3);
     }
-  }, 60_000);
+    // Bakes two full worlds whole: about 15 s alone here, twice that on CI's runners, and more when other work
+    // shares the machine (it took 61.6 s on CI once, against a limit of 60 s).
+  }, 150_000);
 });
 
 describe("wild land past the rim", () => {

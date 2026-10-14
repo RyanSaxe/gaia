@@ -336,8 +336,9 @@ the person could have turned it, never faster and never easing. Facing
 away, the view first turns at that same rate, and the body sets off once it
 faces the way. Nothing appears as the person goes: every 40 m mark within
 300 m ahead is asked of the standers before the body reaches it, and the
-body never passes the last mark whose tiles have all come, slowing at its
-steady rate to wait there if they lag. A drag looks out to the side while
+body slows at its steady rate where the marks ahead have not all come,
+though never below walking pace: a trip always arrives, and where it waits on
+the land it goes on as a walk would. A drag looks out to the side while
 the trip carries on, and
 the view follows the way again once it looks along it. Any key, or a tap on
 the world, takes over: the trip slows at 9 m a second squared to walking
@@ -500,7 +501,16 @@ so a world stays true as its code changes and Jev's picks can spread. A
 mill's waterwheel turns in a stone-lined pit, fed by a flume on trestles or
 pushed round by the race, about once every nine seconds; it slows as
 vitality falls and stands still below 0.1, and it is offered only where the
-building's region holds running water. A tower rises from the back corner,
+building's region holds running water. Its building stands on the bank of
+its area's stream, the wheel's wall 0.2 to 0.3 m from the water, the house
+dry and the rest of its yard as clear of water as any yard. The wheel turns
+in a pit 0.45 m below the water's surface, which the stream fills, its pad
+no more than 0.3 m above the water so its paddles dip in, and the stream
+runs on past it (`findBankSite` in `@gaia/terrain`). The bank nearest the
+building's lot in its own region comes first, then anywhere along the river
+that rises there, on ground that varies under 1 m beneath the house, or,
+where no bank is that even, up to 2.7 m, the most a pad's 7 m blend carries
+back to the land at a walkable grade. A tower rises from the back corner,
 rendered between stone quoins, taller the more of the code depends on it,
 its narrow windows lamplit at night under a steep cap or an open lantern
 room whose lamp burns after dusk. The rest stand in the yard beside the free
@@ -593,9 +603,12 @@ turned-down corner. In the app only that paper shows for the moment
 before the table is drawn; with the signpost, or in the standalone lab
 with no start, the sheet lies on its creased paper instead. While the code is read
 the sheet is bare and still, or, for a world chosen on the start, is that
-world's picture as it was last walked, which stays as the sheet's paint
-while the wait paints the world's own over it (and folds away if the land
-has since grown into another shape). As soon as the land is divided, a pen draws
+world's picture as it was last walked, offered only while its code is the
+commit it pictures. That picture is the world's paint already: it stays as
+the sheet's paint, the washes going under it unseen, until the relief comes
+in over it once the world stands. It folds away if the land has since grown
+into another shape or been read from another commit, and the map is drawn
+on bare paper like any other: a person never watches a stale map. As soon as the land is divided, a pen draws
 every area's border from the middle outward, the map's fine line, with the
 hedgerow's soft band coming in under it, and never the land's rounded rim.
 Between the borders and the washes, a pencil shows what Jev is doing to the
@@ -696,7 +709,10 @@ walked before, pictured by `start/gaia-picture.webp`):
   - Each world walked before is a torn card in its land's shape, laid on
     the sheet a little askew, bowed, one corner lifted: the picture of its
     own field map in health's colors that its page painted when it was
-    last opened, or plain paper with its name for a world with none yet. Its name is lettered
+    last opened. A world with none yet, or whose code has changed since so
+    that its map will be drawn anew, lies as a card of the wait's bare
+    sheet, in the sheet's shape, as a fresh card does, so it rises into the
+    sheet with nothing changing and the map is drawn on it. Its name is lettered
     beneath in the map's spaced capitals, broken onto two lines at a hyphen,
     dot or slash when it is long, with where it lies (who keeps it on
     GitHub, or the folder it sits in) in italic over it. Up to six worlds lie

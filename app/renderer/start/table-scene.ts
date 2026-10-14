@@ -86,8 +86,8 @@ export interface TableScene {
 
 export interface TableWorld {
   readonly world: StartOffer["recent"][number];
-  /** Its picture, decoded; null for a world with none. */
-  readonly picture: HTMLImageElement | null;
+  /** Its picture, decoded, or for a world with none to show, the wait's bare sheet as a fresh card has it; null for neither. */
+  readonly picture: HTMLImageElement | HTMLCanvasElement | null;
 }
 
 interface Card {
@@ -309,8 +309,9 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
   for (const [i, w] of worlds.entries()) {
     const c = l.cards[i];
     if (c === undefined) break;
-    // The card takes its picture's shape, the shape of its world's land, as wide as its place on the sheet.
-    cards.push(makeCard(i, c, w.picture, w.picture === null ? c.side : c.side * Math.min(1, w.picture.naturalHeight / Math.max(1, w.picture.naturalWidth))));
+    // The card takes its picture's shape, the shape of its world's land (or the wait's sheet), as wide as its place on the sheet.
+    const [pw, ph] = w.picture instanceof HTMLImageElement ? [w.picture.naturalWidth, w.picture.naturalHeight] : [w.picture?.width ?? 1, w.picture?.height ?? 1];
+    cards.push(makeCard(i, c, w.picture, c.side * Math.min(1, ph / Math.max(1, pw))));
   }
   /**
    * A fresh card's place. On an empty sheet, the middle of the room between the words and the line. Among the offered

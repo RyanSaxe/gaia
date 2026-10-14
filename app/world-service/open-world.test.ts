@@ -6,7 +6,7 @@ import proving from "../renderer/terrain/fixtures/proving.json";
 import { LIMIT_KEY, openWorld } from "./open-world.ts";
 import type { Opening } from "./protocol.ts";
 
-/** The proving ground as the engine's graph gives it: its directories and entities, files, definitions and imports. */
+/** The proving ground as the engine's graph gives it, read from a commit: its directories and entities, files, definitions and imports. */
 function graphOf(m: CodeFacts): CodeGraph {
   const dirs = new Set<string>([""]);
   for (const f of m.files) for (let d = f.path; d.includes("/"); ) dirs.add((d = d.slice(0, d.lastIndexOf("/"))));
@@ -22,7 +22,7 @@ function graphOf(m: CodeFacts): CodeGraph {
     ]),
   ];
   const edges = m.files.flatMap((f) => f.imports.map((to) => ({ from: `file:${f.path}`, to: `file:${to}`, kind: "imports" as const, by: { by: "rule" as const } })));
-  return { projectId: "proving", name: "proving", nodes, edges, pending: [] };
+  return { projectId: "proving", name: "proving", commit: "c0ffee", nodes, edges, pending: [] };
 }
 const graph = graphOf(proving as unknown as CodeFacts);
 const facts = factsOf(graph);
@@ -91,7 +91,7 @@ const named = (shown: readonly Opening[]): [string, number][] => shown.flatMap((
 
 describe("opening a world", () => {
   // The proving ground is laid out twice (its land, then the finished world): about a second on a busy machine.
-  it("names each file's health once, as the finished world has it, only once its judging is done", { timeout: 20_000 }, async () => {
+  it("names each file's health once, as the finished world has it, only once its judging is done, on land that says which commit it is", { timeout: 20_000 }, async () => {
     const shown: Opening[] = [];
     const { engine, held } = heldEngine();
     let done = false;
@@ -103,6 +103,8 @@ describe("opening a world", () => {
     // file's vitality is Jev's quality.
     const land = shown.find((o) => o.stage === "land");
     expect(land?.stage === "land" && land.patches.map((p) => p.path)).toEqual(landOf(facts).patches.map((p) => p.path));
+    // The commit the code was read from, so a picture of another commit is never taken for this world's map.
+    expect(land?.stage === "land" && land.commit).toBe("c0ffee");
     expect(named(shown)).toEqual([]);
 
     while (!done) {

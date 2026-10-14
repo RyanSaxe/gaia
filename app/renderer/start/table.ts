@@ -3,7 +3,8 @@
 // sheet's foot waits for an address, written in ink from a text field no one
 // sees. Touching a card chooses its world: the card lifts, rises toward the
 // person and becomes the wait's sheet, while the table falls out of focus
-// behind it. A folder or an address gets a fresh card of plain paper, laid
+// behind it. A world with no picture to show, as one whose code has changed
+// since its map was drawn, lies as a card of the wait's bare sheet. A folder or an address gets a fresh card of plain paper, laid
 // on the sheet and risen the same way, and so does a world opened with no
 // start. The table stays behind the wait until the world shows. Over the
 // canvas lie only clear hit areas for the cards, the line and the folder's
@@ -44,8 +45,8 @@ export interface TableOptions {
   readonly hour: number;
   /** Where the wait's sheet lies on the page: a chosen card ends there. */
   readonly sheet: () => DOMRect;
-  /** A card is chosen: its picture and its land's shape (width over depth), which the wait's sheet takes as its own. */
-  readonly chosen?: (picture: string, aspect: number) => void;
+  /** A card is chosen: its picture, its land's shape (width over depth), which the wait's sheet takes as its own, and the commit it pictures. */
+  readonly chosen?: (picture: string, aspect: number, commit: string | undefined) => void;
   /** The wait's sheet as it is painted now, in its shape: a fresh card's face, so it rises into the sheet as the sheet. */
   readonly face?: () => HTMLCanvasElement;
   /** The chosen card has become the wait's sheet: the sheet shows in its place, and the wait may paint on. */
@@ -193,7 +194,10 @@ export function createTable(veil: HTMLElement, options: TableOptions): StartPage
     const w = Math.max(1, root.clientWidth);
     const h = Math.max(1, root.clientHeight);
     phone = w / h < UPRIGHT;
-    const next = createTableScene(tableLayout(phone, recent.length), recent.map((world, i) => ({ world, picture: pictures[i] ?? null })), logo as HTMLImageElement, deckle as HTMLImageElement, { w, h, dpr: Math.min(window.devicePixelRatio || 1, 2) });
+    // A world with no picture to show, as one whose code has changed since, lies as a card of the wait's own bare sheet,
+    // in the sheet's shape, so it rises into the sheet as the sheet does for a fresh card, and its map is drawn there.
+    const bare = pictures.includes(null) ? (options.face?.() ?? null) : null;
+    const next = createTableScene(tableLayout(phone, recent.length), recent.map((world, i) => ({ world, picture: pictures[i] ?? bare })), logo as HTMLImageElement, deckle as HTMLImageElement, { w, h, dpr: Math.min(window.devicePixelRatio || 1, 2) });
     next.canvas.className = "table-view";
     next.hour(hour);
     next.write(writing);
@@ -215,7 +219,7 @@ export function createTable(veil: HTMLElement, options: TableOptions): StartPage
         b.addEventListener("click", () => {
           if (settle === null || chosen !== null) return;
           const picture = pictures[i];
-          if (r.picture !== undefined && picture !== null && picture !== undefined) options.chosen?.(r.picture, picture.naturalWidth / Math.max(1, picture.naturalHeight));
+          if (r.picture !== undefined && picture !== null && picture !== undefined) options.chosen?.(r.picture, picture.naturalWidth / Math.max(1, picture.naturalHeight), r.commit);
           lift(i, performance.now());
           choose(placeOf(r));
         });

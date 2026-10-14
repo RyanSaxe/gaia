@@ -324,7 +324,7 @@ export interface Landing {
 /** Where a landing may be: water no deeper than this (dry first, then wading), this far from any solid, and how far it looks from the spot asked for, meters. */
 /** A bark vertex lower than this, meters, belongs to the trunk's base where it meets the ground. */
 const TRUNK_BASE = 0.05;
-const LAND = { dry: 0.02, wade: 0.45, clear: 1.1, reach: 40, ring: 1.5 };
+const LAND = { dry: 0.02, wade: 0.45, clear: 1.1, reach: 40, ring: 1.5, far: 160 };
 /**
  * How the journal's paintings are seen: every one in the same afternoon
  * light, so the book's paintings belong together; through a lens a little
@@ -1542,6 +1542,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   /** Puts the walker at a point at once, looking along `yaw`. */
   function walkTo(x: number, z: number, yaw: number, pitch = -0.05): void {
     endWalk();
+    if (trip !== null) tripEnd = { done: false, s: +trip.at.s.toFixed(1), length: Math.round(trip.plan.length), keys: [...keys], goal: goal !== null, by: "put elsewhere" };
     trip = null;
     stood = 0;
     arrived = false;
@@ -1599,6 +1600,8 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
    * the world is made ready along: a mark every `TRAVEL_MARK` meters, each
    * asked of the standers as the trip comes within `TRAVEL_LOOK` of it.
    */
+  /** How the last trip ended, for measuring: arrived or stopped, how far along, and what the keys and a tap's walk held then. */
+  let tripEnd: { done: boolean; s: number; length: number; keys: string[]; goal: boolean; by?: string } | null = null;
   let trip: { readonly plan: Trip; at: Travel; stopping: boolean; readonly marks: { readonly s: number; asked: boolean; ready: boolean }[]; readonly began: number; setOff: number | null; waited: number } | null = null;
   /** Nearer than this, meters, a trip walks straight there, around whatever stands between, rather than by the trails. */
   const TRAVEL_NEAR = 120;
@@ -1704,11 +1707,18 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       // The body goes no farther along than the world stands ready: what can be seen from there is standing.
       const ready = readyAlong(trip);
       if (ready < trip.plan.length && trip.at.going && trip.at.v < 1 && trip.at.s >= ready - 1) trip.waited += dt;
-      trip.at = travelStep(trip.plan, trip.at, dt, walker.yaw, trip.stopping, ready);
+      // Where the way ahead is not ready the trip slows to walking pace, never to a stand: a person sent somewhere gets
+      // there, and at that pace what stands comes in as it does for a walk.
+      trip.at = travelStep(trip.plan, trip.at, dt, walker.yaw, trip.stopping, ready, WALK_TO.pace);
       if (trip.setOff === null && trip.at.s > 0) trip.setOff = performance.now();
       walker.yaw = trip.at.yaw;
       body = carry(terrain, decks, body, trip.at.x, trip.at.z, dt);
-      if (trip.at.done || (trip.stopping && trip.at.v <= WALK_TO.pace)) trip = null;
+      if (trip.at.done || (trip.stopping && trip.at.v <= WALK_TO.pace)) {
+        tripEnd = { done: trip.at.done, s: +trip.at.s.toFixed(1), length: Math.round(trip.plan.length), keys: [...keys], goal: goal !== null };
+        // A trip the person took over says so, so one that ends short is never a mystery.
+        if (!trip.at.done) console.info(`travel: taken over at ${Math.round(trip.at.s)} of ${Math.round(trip.plan.length)} m by ${goal !== null ? "a tap on the world" : `the keys (${[...keys].join(", ")})`}`);
+        trip = null;
+      }
     } else {
       // Water and the grade slow the body, solids turn it aside, and it gets going and stops at once, never overshooting.
       body = stride(terrain, solids, decks, body, intent(body, steered), dt);
@@ -2025,7 +2035,9 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       if (!streamHeld) {
         land.follow(detailPin?.x ?? walker.x, detailPin?.z ?? walker.z);
         wildGrowth.follow(detailPin?.x ?? walker.x, detailPin?.z ?? walker.z);
-        standing.follow(walker.x, walker.z);
+        // While a trip hurries its marks ask for what its way will see; asking for walking's lead as well would only queue
+        // tiles ahead of the ones the trip waits on. Slowed to a walk, it asks as a walk does.
+        standing.follow(walker.x, walker.z, trip === null || trip.at.v <= WALK_TO.pace * 1.5);
       }
       lantern.follow(camera.position, forward, lanternGround, walked, dt);
       grass.follow(detailEye);
@@ -2205,7 +2217,19 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       }
       if (spot !== null) break;
     }
-    if (spot === null) return null;
+    // Nowhere fit near the spot in its own area, as in a wide pond or a thicket: the nearest fit ground in any area, farther out.
+    for (let r = LAND.ring; r <= LAND.far && spot === null; r += LAND.ring) {
+      const count = Math.max(1, Math.round((Math.PI * 2 * r) / LAND.ring));
+      for (let k = 0; k < count && spot === null; k++) {
+        const px = x + Math.cos((k / count) * Math.PI * 2) * r;
+        const pz = z + Math.sin((k / count) * Math.PI * 2) * r;
+        if (waterDepthAt(terrain, px, pz) <= LAND.wade && clearanceAt(solids, px, pz) >= LAND.clear) spot = { x: px, z: pz };
+      }
+    }
+    if (spot === null) {
+      console.warn(`landing: no dry ground clear of everything within ${LAND.far} m of (${Math.round(x)}, ${Math.round(z)})`);
+      return null;
+    }
     const { x: lx, z: lz } = spot;
     const toward = (tx: number, tz: number): number => Math.atan2(-(tx - lx), -(tz - lz));
     // What the person faces: the area's building or landmark if it stands near, the area's heart otherwise.
@@ -2862,7 +2886,23 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       /** The travel test (`travelTest`). */
       travelTest,
       /** The trip under way, or null: how far along it and how long, its pace, and whether its view follows the way. */
-      trip: () => (trip === null ? null : { s: +trip.at.s.toFixed(1), length: Math.round(trip.plan.length), v: +trip.at.v.toFixed(2), going: trip.at.going, follows: trip.at.follows, stopping: trip.stopping }),
+      /** How long the land's workers take to stand each of these tiles' things, one after another, ms. */
+      thingsTime: async (tiles: readonly (readonly [number, number])[]) => {
+        const out: number[] = [];
+        for (const [ti, tj] of tiles) {
+          const t0 = performance.now();
+          await land.things(ti, tj);
+          out.push(Math.round(performance.now() - t0));
+        }
+        return out;
+      },
+      /** Each tile that stood within sight of the person since last asked (`Standing.late`): things that could be seen appearing. */
+      standingLate: () => standing.late(),
+      /** The tiles each stander still waits for (`Standing.asking`). */
+      standingAsking: () => ({ ...standing.asking(), workers: land.workers() }),
+      /** The walk's own state: the keys it holds, whether a tap's walk is under way, and why the last trip ended. */
+      walkState: () => ({ keys: [...keys], goal: goal !== null, trip: trip !== null, lastEnd: tripEnd }),
+      trip: () => (trip === null ? null : { s: +trip.at.s.toFixed(1), length: Math.round(trip.plan.length), v: +trip.at.v.toFixed(2), going: trip.at.going, follows: trip.at.follows, stopping: trip.stopping, unready: trip.marks.filter((m) => !m.ready).length, asked: trip.marks.filter((m) => m.asked).length, yaw: +trip.at.yaw.toFixed(2) }),
       /**
        * A trip from (x0, z0) to the landing nearest (x1, z1), planned and
        * taken at 60 frames a second without moving anyone: its length, how
@@ -2887,7 +2927,8 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
         }
         const tread = trailWay(ways.network, { x: x0, z: z0 }, at);
         const trails = tread === null ? null : Math.round(tread.reduce((sum, p, i) => (i === 0 ? Math.hypot(p.x - x0, p.z - z0) : sum + Math.hypot(p.x - (tread[i - 1] as Walker).x, p.z - (tread[i - 1] as Walker).z)), 0) + Math.hypot((tread[tread.length - 1] as Walker).x - at.x, (tread[tread.length - 1] as Walker).z - at.z));
-        return { by: chosen.by, planMs, straight: Math.round(Math.hypot(at.x - x0, at.z - z0)), length: Math.round(plan.length), trails, seconds: Math.round(seconds), walking: Math.round(plan.length / WALK_TO.pace) };
+        const end = chosen.way[chosen.way.length - 1] as Walker;
+        return { by: chosen.by, planMs, gap: Math.round(Math.hypot(end.x - at.x, end.z - at.z)), off: [Math.round(chosen.off.start), Math.round(chosen.off.end)], straight: Math.round(Math.hypot(at.x - x0, at.z - z0)), length: Math.round(plan.length), trails, seconds: Math.round(seconds), walking: Math.round(plan.length / WALK_TO.pace) };
       },
       /**
        * The tour (`tourStops`): with no name, every stop's name, what is there

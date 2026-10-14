@@ -85,7 +85,11 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
   let jumping = false;
   function jump(x: number, z: number, heart?: { readonly x: number; readonly z: number }): boolean {
     const at = world.landing(x, z, heart);
-    return at !== null && jumpTo(at, false);
+    if (at === null) {
+      console.warn(`map: nowhere to land near (${Math.round(x)}, ${Math.round(z)})`);
+      return false;
+    }
+    return jumpTo(at, false);
   }
   /**
    * Takes the person to a landing: along the trails or straight across the
@@ -94,7 +98,10 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
    * does.
    */
   function jumpTo(at: Landing, face: boolean): boolean {
-    if (jumping) return false;
+    if (jumping) {
+      console.warn("map: a jump is still under way, so this pick goes nowhere");
+      return false;
+    }
     if (world.travel(at, face)) {
       map.open(false);
       return true;

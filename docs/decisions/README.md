@@ -67,3 +67,5 @@ One file per decision the reviewer settled in the pair sessions that designed Ga
 - [Rivers follow the land, as one network](63-rivers-follow-the-land-as-one-network.md)
 - [Anything can stand as anything, by its importance](64-anything-can-stand-as-anything.md)
 - [The journal riffles and reads like a book](65-the-journal-riffles-and-reads-like-a-book.md)
+- [A waterwheel's building stands on its brook's bank](66-a-waterwheels-building-stands-on-its-brooks-bank.md)
+- [A map is shown only while its code is the commit it pictures](67-a-map-is-shown-only-while-its-code-is-the-commit-it-pictures.md)

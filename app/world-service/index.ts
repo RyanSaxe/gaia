@@ -7,14 +7,14 @@
 // or an address on GitHub) and the service opens whatever is chosen there,
 // cloning a place on GitHub into the app's own data first. Once a world
 // stands, its page sends a picture of its field map, kept with it among the
-// recent worlds for the start.
+// recent worlds for the start while its code stays the commit it pictures.
 
 import type { Unreachable } from "@gaia/schema";
 import type { MessagePortMain } from "electron";
 import { createEngineClient } from "./engine-client.ts";
 import { openWorld } from "./open-world.ts";
 import type { EngineStatus, FromMain, FromRenderer, StartChoice, ToMain, ToRenderer } from "./protocol.ts";
-import { keepPicture, keepRecent, recentWorlds } from "./recent.ts";
+import { keepPicture, keepRecent, offeredWorlds } from "./recent.ts";
 
 const parent = process.parentPort;
 const toMain = (message: ToMain): void => parent.postMessage(message);
@@ -79,7 +79,7 @@ async function engineUp(): Promise<void> {
 async function offerStart(port: MessagePortMain, refused?: { address: string; why: Unreachable }): Promise<void> {
   try {
     await engineUp();
-    const recent = await recentWorlds(engine);
+    const recent = await offeredWorlds(engine);
     send(port, { type: "world.start", offer: refused === undefined ? { recent } : { recent, refused } });
   } catch (error) {
     send(port, { type: "world.failed", root: "", message: (error as Error).message });
@@ -184,8 +184,8 @@ parent.on("message", (event) => {
         else if (m.type === "world.choose") void choose(port, m.place);
         else if (m.type === "world.source") void sendSource(port, m.path);
         else if (m.type === "world.picture") {
-          const folder = openedOn.get(port)?.folder;
-          if (folder !== undefined) void keep(() => keepPicture(engine, folder, m.picture));
+          const opened = openedOn.get(port);
+          if (opened !== undefined) void keep(() => keepPicture(engine, opened.folder, m.picture, opened.commit));
         }
         else if (m.type === "world.consent") {
           consenting?.resolve(m.approve);

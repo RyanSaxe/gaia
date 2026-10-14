@@ -1,14 +1,18 @@
 import { describe, expect, it } from "vitest";
 import type { EngineClient } from "@gaia/schema";
-import { PICTURE_MAX, RECENT_KEY, keepPicture, keepRecent, recentWorlds } from "./recent.ts";
+import { PICTURE_MAX, RECENT_KEY, keepPicture, keepRecent, offeredWorlds, recentWorlds } from "./recent.ts";
 
-/** An engine whose store is a map in memory, holding `recent` as the app's recent worlds. */
-function storeEngine(recent?: unknown): EngineClient {
+/**
+ * An engine whose store is a map in memory, holding `recent` as the app's recent worlds, and whose folders have
+ * checked out the commits in `checkedOut` (any other is read from disk).
+ */
+function storeEngine(recent?: unknown, checkedOut: Record<string, string> = {}): EngineClient {
   const settings = new Map<string, unknown>(recent === undefined ? [] : [[RECENT_KEY, recent]]);
   return {
-    call: async (method: string, params: { key?: string; writes?: { key: string; value: unknown }[] }) => {
+    call: async (method: string, params: { key?: string; root?: string; writes?: { key: string; value: unknown }[] }) => {
       if (method === "store.get") return settings.has(params.key ?? "") ? { value: settings.get(params.key ?? "") } : null;
       if (method === "store.put") for (const w of params.writes ?? []) settings.set(w.key, w.value);
+      if (method === "project.commit") return { commit: checkedOut[params.root ?? ""] ?? null };
       return { ok: true };
     },
     on: () => () => {},
@@ -27,22 +31,40 @@ describe("the recent worlds", () => {
     const engine = storeEngine();
     await keepRecent(engine, { root: "/code/gaia", name: "gaia", at: 1 });
     await keepRecent(engine, { root: "/code/other", name: "other", at: 2 });
-    await keepPicture(engine, "/code/gaia", picture("A"));
+    await keepPicture(engine, "/code/gaia", picture("A"), "c1");
     await keepRecent(engine, { root: "/code/gaia", name: "gaia", at: 3 });
     expect(await recentWorlds(engine)).toEqual([
-      { root: "/code/gaia", name: "gaia", at: 3, picture: picture("A") },
+      { root: "/code/gaia", name: "gaia", at: 3, picture: picture("A"), commit: "c1" },
       { root: "/code/other", name: "other", at: 2 },
     ]);
-    await keepPicture(engine, "/code/gaia", picture("B"));
+    await keepPicture(engine, "/code/gaia", picture("B"), "c2");
     expect((await recentWorlds(engine))[0]?.picture).toBe(picture("B"));
   });
 
-  it("drops a picture that is not WebP, is too long, or is of a world no longer kept", async () => {
+  it("drops a picture that is not WebP, is too long, is of a world no longer kept, or is of a world read from disk", async () => {
     const engine = storeEngine();
     await keepRecent(engine, { root: "/code/gaia", name: "gaia", at: 1 });
-    await keepPicture(engine, "/code/gaia", "data:image/png;base64,AAAA");
-    await keepPicture(engine, "/code/gaia", `data:image/webp;base64,${"A".repeat(PICTURE_MAX)}`);
-    await keepPicture(engine, "/code/gone", picture("A"));
+    await keepPicture(engine, "/code/gaia", "data:image/png;base64,AAAA", "c1");
+    await keepPicture(engine, "/code/gaia", `data:image/webp;base64,${"A".repeat(PICTURE_MAX)}`, "c1");
+    await keepPicture(engine, "/code/gone", picture("A"), "c1");
+    await keepPicture(engine, "/code/gaia", picture("A"), undefined);
     expect(await recentWorlds(engine)).toEqual([{ root: "/code/gaia", name: "gaia", at: 1 }]);
+  });
+
+  it("offers a picture only while its folder's code is still the commit it was painted from", async () => {
+    const kept = [
+      { root: "/code/same", name: "same", at: 4, picture: picture("A"), commit: "c1" },
+      { root: "/code/moved", name: "moved", at: 3, picture: picture("B"), commit: "c1" },
+      { root: "/code/disk", name: "disk", at: 2, picture: picture("C"), commit: "c1" },
+      // Kept before pictures said which commit they show, as every picture an earlier Gaia painted was.
+      { root: "/code/old", name: "old", at: 1, picture: picture("D") },
+    ];
+    const engine = storeEngine(kept, { "/code/same": "c1", "/code/moved": "c2", "/code/old": "c1" });
+    expect(await offeredWorlds(engine)).toEqual([
+      { root: "/code/same", name: "same", at: 4, picture: picture("A"), commit: "c1" },
+      { root: "/code/moved", name: "moved", at: 3 },
+      { root: "/code/disk", name: "disk", at: 2 },
+      { root: "/code/old", name: "old", at: 1 },
+    ]);
   });
 });
