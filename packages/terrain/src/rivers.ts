@@ -375,11 +375,15 @@ export function routeRivers(
   valleys.forEach((v, ri) => {
     if (v === null) return;
     // Its spring: where water runs longest across its own region before it leaves, so the river Jev chose for an area
-    // runs through that area, the higher ground of two; away from the land's rim, which would drain it at once.
+    // runs through that area, the higher ground of two; away from the land's rim, which would drain it at once, or,
+    // for a region that lies wholly near the rim, anywhere it holds, so every area given water has its river.
     let spring = -1;
-    for (let k = 0; k < n * n; k++) {
-      if (inside[k] !== 1 || region[k] !== ri || !withinLand(spec, at(k % n), at(Math.floor(k / n)), RIVERS.springFromEdge)) continue;
-      if (spring < 0 || (run[k] as number) > (run[spring] as number) || ((run[k] as number) === (run[spring] as number) && (h[k] as number) > (h[spring] as number))) spring = k;
+    for (const fromEdge of [RIVERS.springFromEdge, 0]) {
+      for (let k = 0; k < n * n; k++) {
+        if (inside[k] !== 1 || region[k] !== ri || !withinLand(spec, at(k % n), at(Math.floor(k / n)), fromEdge)) continue;
+        if (spring < 0 || (run[k] as number) > (run[spring] as number) || ((run[k] as number) === (run[spring] as number) && (h[k] as number) > (h[spring] as number))) spring = k;
+      }
+      if (spring >= 0) break;
     }
     if (spring < 0 || (owner[spring] as number) >= 0) return;
     const cells: number[] = [];

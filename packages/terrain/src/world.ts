@@ -147,15 +147,7 @@ export function landformsOf(spec: WorldSpec, lib: Library): Landform[] {
     regionWeights(spec, x, z, weights);
     return blended(spec, lfs, weights, x, z) + rimAt(spec, x, z);
   };
-  const regionAt = (x: number, z: number): number => {
-    regionWeights(spec, x, z, weights);
-    let best = 0;
-    weights.forEach((w, i) => {
-      if (w > (weights[best] as number)) best = i;
-    });
-    return best;
-  };
-  return routeRivers(spec, own, ground, regionAt);
+  return routeRivers(spec, own, ground, (x, z) => regionAt(spec, x, z));
 }
 
 const smooth = (t: number): number => {
@@ -239,6 +231,17 @@ function regionField(spec: WorldSpec): RegionField {
   const field = { x0, n, sites, starts, runs: Int32Array.from(runs), order: Int32Array.from(order) };
   fields.set(spec, field);
   return field;
+}
+
+/** The region that holds (x, z) most: the index of its largest weight. */
+export function regionAt(spec: WorldSpec, x: number, z: number): number {
+  const weights = new Float64Array(spec.regions.length);
+  regionWeights(spec, x, z, weights);
+  let best = 0;
+  weights.forEach((w, i) => {
+    if (w > (weights[best] as number)) best = i;
+  });
+  return best;
 }
 
 /**
