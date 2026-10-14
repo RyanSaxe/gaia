@@ -45,6 +45,55 @@ describe("what stands on the land, tile by tile", () => {
     }
   });
 
+  it("asks a trip's way for only what can be seen from it, and walking for no more while a trip asks", async () => {
+    const asked = new Set<string>();
+    const standing = createStanding(() => FOCAL);
+    standing.add<string>({ name: "stones", largest: () => 0.5, tile: (ti, tj) => (asked.add(`${ti},${tj}`), Promise.resolve([`${ti},${tj}`])), stand: () => undefined });
+    standing.open(spec);
+    await standing.fetch(0, 0);
+    const reach = seenTo(0.5, FOCAL);
+    // Every tile within sight of the mark is asked for, and none past it: no walking lead.
+    for (const key of asked) {
+      const [ti, tj] = key.split(",").map(Number) as [number, number];
+      const [x, z] = middle(ti, tj);
+      expect(Math.hypot(x, z) - (TILE.size * Math.SQRT2) / 2).toBeLessThanOrEqual(reach + 1e-6);
+    }
+    const byTrip = asked.size;
+    expect(byTrip).toBeGreaterThan(0);
+    // Walking on far off while a trip asks: no tiles of its own.
+    standing.follow(1300, 1300, false);
+    expect(asked.size).toBe(byTrip);
+    // Walking without a trip asks for its lead as before.
+    standing.follow(1300, 1300);
+    expect(asked.size).toBeGreaterThan(byTrip);
+  });
+
+  it("never holds a trip on a tile that fails: it lets it go with a warning and asks for it again", async () => {
+    let fails = 1;
+    const stood: string[][] = [];
+    const standing = createStanding(() => FOCAL);
+    standing.add<string>({
+      name: "flaky",
+      largest: () => 0.1,
+      tile: (ti, tj) => (fails-- > 0 ? Promise.reject(new Error("a worker failed")) : Promise.resolve([`${ti},${tj}`])),
+      stand: (things) => stood.push([...things]),
+    });
+    standing.open(spec);
+    const warn = console.warn;
+    const warned: unknown[] = [];
+    console.warn = (...args: unknown[]) => void warned.push(args);
+    try {
+      // The fetch settles even though a tile failed, and the failure is said.
+      await standing.fetch(0, 0);
+      expect(warned.length).toBe(1);
+      // Asked again, the tile comes and stands.
+      await standing.ready(0, 0);
+      expect((stood[stood.length - 1] ?? []).length).toBeGreaterThan(0);
+    } finally {
+      console.warn = warn;
+    }
+  });
+
   it("drops what a worker brings for a world that has since closed", async () => {
     let release: (() => void) | null = null;
     const late = new Promise<void>((r) => (release = r));

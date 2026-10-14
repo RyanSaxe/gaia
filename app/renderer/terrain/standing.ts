@@ -36,14 +36,20 @@ export interface Standing {
    * already stood for some tiles, by stander name and then by "ti,tj".
    */
   open(spec: WorldSpec, given?: ReadonlyMap<string, ReadonlyMap<string, readonly unknown[]>>): void;
-  /** Called every frame with the person's place: holds the tiles near, lets far ones go, and stands one changed stander. */
-  follow(x: number, z: number): void;
+  /**
+   * Called every frame with the person's place: holds the tiles near, lets
+   * far ones go, and stands one changed stander. Without `asking` it asks for
+   * no tiles of its own, as while a trip asks for what its way will see.
+   */
+  follow(x: number, z: number, asking?: boolean): void;
   /** Resolves once every stander's tiles within sight of (x, z) stand. */
   ready(x: number, z: number): Promise<void>;
   /**
    * Resolves once every stander holds its tiles within sight of (x, z),
    * those already on their way included, for the frames that follow to
-   * stand one stander at a time: what a trip asks of the way ahead.
+   * stand one stander at a time: what a trip asks of the way ahead. It asks
+   * for no lead past sight: a trip's marks lie close enough together that
+   * their sights cover everything seen from its way.
    */
   fetch(x: number, z: number): Promise<void>;
   /**
@@ -54,6 +60,8 @@ export interface Standing {
   late(): readonly { readonly stander: string; readonly distance: number; readonly sight: number }[];
   /** How many tiles each stander holds, for reports. */
   held(): Record<string, number>;
+  /** The tiles each stander has asked for and not yet had, by name: how many, and a few of them. */
+  asking(): Record<string, { readonly count: number; readonly some: readonly string[] }>;
 }
 
 /** How far ahead of its sight a tile is asked for, meters: one a worker brings has come before any of it can be seen. */
@@ -79,6 +87,8 @@ export function createStanding(focal: () => number): Standing {
   let spec: WorldSpec | null = null;
   let generation = 0;
   let at = { x: Number.NaN, z: Number.NaN };
+  /** Where walking last asked for tiles from. */
+  let askedAt = { x: Number.NaN, z: Number.NaN };
   /** Where the person was at the last follow. */
   let person = { x: Number.NaN, z: Number.NaN };
   let lates: { stander: string; distance: number; sight: number }[] = [];
@@ -101,11 +111,15 @@ export function createStanding(focal: () => number): Standing {
   };
   /** How far a stander's tiles reach: as far as its largest thing can be seen. */
   const sight = <T>(h: Held<T>): number => seenTo(h.stander.largest(), focal());
-  /** Asks for every tile within the stander's sight of (x, z) that it does not hold; resolves when all have come. */
-  const ask = <T>(h: Held<T>, x: number, z: number): Promise<void>[] => {
+  /**
+   * Asks for every tile within the stander's sight of (x, z), and `lead`
+   * meters more, that it does not hold; resolves when all have come. A tile
+   * that fails is let go of with a warning, and asked for again next time.
+   */
+  const ask = <T>(h: Held<T>, x: number, z: number, lead = AHEAD): Promise<void>[] => {
     const mine = generation;
     const waits: Promise<void>[] = [];
-    for (const [ti, tj] of within(x, z, sight(h) + AHEAD)) {
+    for (const [ti, tj] of within(x, z, sight(h) + lead)) {
       const key = `${ti},${tj}`;
       if (h.tiles.has(key)) continue;
       const coming = h.asking.get(key);
@@ -119,12 +133,18 @@ export function createStanding(focal: () => number): Standing {
         h.dirty = true;
         continue;
       }
-      const wait = got.then((things) => {
-        h.asking.delete(key);
-        if (things === null || mine !== generation) return;
-        h.tiles.set(key, things);
-        h.dirty = true;
-      });
+      const wait = got.then(
+        (things) => {
+          h.asking.delete(key);
+          if (things === null || mine !== generation) return;
+          h.tiles.set(key, things);
+          h.dirty = true;
+        },
+        (error: unknown) => {
+          h.asking.delete(key);
+          console.warn(`standing: ${h.stander.name} tile ${key} failed and will be asked for again`, error);
+        },
+      );
       h.asking.set(key, wait);
       waits.push(wait);
     }
@@ -154,6 +174,7 @@ export function createStanding(focal: () => number): Standing {
       spec = next;
       generation++;
       at = { x: Number.NaN, z: Number.NaN };
+      askedAt = { x: Number.NaN, z: Number.NaN };
       person = { x: Number.NaN, z: Number.NaN };
       for (const h of all) {
         h.tiles.clear();
@@ -163,7 +184,7 @@ export function createStanding(focal: () => number): Standing {
         h.dirty = true;
       }
     },
-    follow(x, z) {
+    follow(x, z, asking = true) {
       if (spec === null) return;
       person = { x, z };
       if (!(Math.hypot(x - at.x, z - at.z) < STEP)) {
@@ -175,8 +196,13 @@ export function createStanding(focal: () => number): Standing {
             h.tiles.delete(key);
             h.dirty = true;
           }
-          void ask(h, x, z);
         }
+      }
+      // Asked from where it last asked: once asking resumes, as when a trip ends, it asks at once.
+      if (!asking) askedAt = { x: Number.NaN, z: Number.NaN };
+      else if (!(Math.hypot(x - askedAt.x, z - askedAt.z) < STEP)) {
+        askedAt = { x, z };
+        for (const h of all) void ask(h, x, z);
       }
       // One stander a frame, so no frame stands everything at once.
       const next = all.find((h) => h.dirty);
@@ -189,7 +215,7 @@ export function createStanding(focal: () => number): Standing {
     },
     async fetch(x, z) {
       if (spec === null) return;
-      await Promise.all(all.flatMap((h) => ask(h, x, z)));
+      await Promise.all(all.flatMap((h) => ask(h, x, z, 0)));
     },
     late() {
       const out = lates;
@@ -197,5 +223,6 @@ export function createStanding(focal: () => number): Standing {
       return out;
     },
     held: () => Object.fromEntries(all.map((h) => [h.stander.name, h.tiles.size])),
+    asking: () => Object.fromEntries(all.map((h) => [h.stander.name, { count: h.asking.size, some: [...h.asking.keys()].slice(0, 6) }])),
   };
 }
