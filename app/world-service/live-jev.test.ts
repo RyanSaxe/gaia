@@ -51,6 +51,22 @@ function codebase(name: string): string {
   return root;
 }
 
+/**
+ * A codebase whose imports only Jev can settle: two modules called `helpers`, which `main.py` imports by that name
+ * alone, so the rules leave the import to Jev, and what each file imports and is imported by changes once Jev's links
+ * are in.
+ */
+function linkedCodebase(name: string): string {
+  const root = join(scratch, name);
+  for (const dir of ["src/app", "src/lend", "src/keep"]) mkdirSync(join(root, dir), { recursive: true });
+  writeFileSync(join(root, "package.json"), JSON.stringify({ name, version: "1.0.0" }));
+  writeFileSync(join(root, "src/lend/helpers.py"), `"""Lending things out."""\n\n\ndef lend(item):\n    """Lends an item."""\n    return [item]\n`);
+  writeFileSync(join(root, "src/keep/helpers.py"), `"""Keeping things."""\n\n\ndef keep(item):\n    """Keeps an item."""\n    return {item: True}\n`);
+  writeFileSync(join(root, "src/app/main.py"), `"""The app: lends what it is asked for."""\nimport helpers\nfrom helpers import lend\n\n\ndef run(item):\n    """Runs the app on one item."""\n    return lend(item) + helpers.lend(item)\n`);
+  writeFileSync(join(root, "src/app/report.py"), `"""Reports on what was lent."""\nfrom helpers import lend\n\n\ndef report(items):\n    """Reports every item lent."""\n    return [lend(i) for i in items]\n`);
+  return root;
+}
+
 /** Starts the engine binary, live, against the stand-in, keeping its store in `data`. */
 function engineAt(data: string) {
   const child = spawn(ENGINE, ["rpc"], {
@@ -128,7 +144,9 @@ describe("judging a codebase with Jev", () => {
       expect(Object.keys(body).sort()).toEqual(["model", "questions", "state"]);
       if (!first.about[i]?.startsWith("understand:")) expect(JSON.stringify(body)).not.toContain("secretSourceLine");
     }
-    const judging = first.about.filter((a) => !a.startsWith("understand:"));
+    // Each request goes out once. A look may be asked twice, before and after Jev's links change the facts it reads,
+    // but never the same request twice.
+    const judging = first.sent.filter((_, i) => !first.about[i]?.startsWith("understand:")).map(({ body }) => JSON.stringify(body));
     expect(new Set(judging).size).toBe(judging.length);
     expect(first.about).toEqual(expect.arrayContaining(["area:(the repository's root)", "file:src/shape.ts", "understand:src/shape.ts"]));
     // Every file is asked what it stands as, one that defines nothing too.
@@ -178,6 +196,19 @@ describe("judging a codebase with Jev", () => {
     const third = await open(root, data, true);
     expect(third.about).toEqual(expect.arrayContaining(["file:src/shape.ts"]));
     expect(third.sent.length).toBeLessThan(first.sent.length);
+  }, 60_000);
+
+  it("opens a world the same way twice from the same answers, asking nothing new, even where Jev's links change what the code imports", async () => {
+    const root = linkedCodebase("linked");
+    const data = join(scratch, "data-linked");
+    const first = await open(root, data, true);
+    expect(first.sent.length).toBeGreaterThan(0);
+    const second = await open(root, data, true);
+    // Jev settled the import the rules could not, so the facts the world reads changed during the first opening.
+    expect(second.document.facts.files.find((f) => f.path === "src/app/main.py")?.imports.length).toBeGreaterThan(0);
+    expect(second.about).toEqual([]);
+    expect(second.document.facts).toEqual(first.document.facts);
+    expect(second.document.world).toEqual(first.document.world);
   }, 60_000);
 
   it("fails the opening when Jev refuses a request the client has retried, naming it and why, with nothing guessed", async () => {

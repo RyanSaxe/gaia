@@ -165,7 +165,7 @@ export async function openWorld({ engine, root, consent, progress, standIn = fal
   // looks read are the graph's own (`factsOf`).
   let judged = await engine.call("project.graph", { root, judged: true });
   let graph = judgedGraph(judged);
-  const facts = factsOf(graph);
+  let facts = factsOf(graph);
   const project = facts.projectId;
   const name = facts.repository.name;
   const land = landOf(facts, graph);
@@ -245,6 +245,8 @@ export async function openWorld({ engine, root, consent, progress, standIn = fal
   let billed = 0;
   const keep = (key: string, response: JevResponse): void => {
     billed += Number.isFinite(response.costUsd) ? response.costUsd : 0;
+    // Answered now, so a request asked again later in this opening (a look after Jev's links) is settled from it.
+    stored.set(key, response);
     if (pending.length === 0) {
       setTimeout(() => {
         writes.push(engine.call("store.put", { project, writes: pending }));
@@ -308,7 +310,9 @@ export async function openWorld({ engine, root, consent, progress, standIn = fal
       const p = plannedOf.get(key);
       // A question going out to Jev (not one kept from before) marks its area as being worked on until it returns: a
       // look's area, or for what a thing stands as and its composing, the area its state names.
-      const out = ask && !stored.has(key) ? (p !== undefined ? areaOfRequest(p) : areaOfState(request.state)) : null;
+      // Whether Jev answers it now, read before the answer is kept.
+      const fresh = ask && !stored.has(key);
+      const out = fresh ? (p !== undefined ? areaOfRequest(p) : areaOfState(request.state)) : null;
       if (out !== null) {
         inFlight.set(out, (inFlight.get(out) ?? 0) + 1);
         asking();
@@ -321,7 +325,7 @@ export async function openWorld({ engine, root, consent, progress, standIn = fal
         const area = areaOfRequest(p);
         unsettled.set(area, (unsettled.get(area) ?? 1) - 1);
         if (p.about === "area") regionsAnswered.add(p.target);
-        if (ask && !stored.has(key)) {
+        if (fresh) {
           answered++;
           asking();
         }
@@ -329,7 +333,7 @@ export async function openWorld({ engine, root, consent, progress, standIn = fal
         // What things stand as and their composing are asked after the looks: each answer moves the count on, and the
         // pencil goes over the code it settled, kept or asked, so the wait draws something until the world stands.
         counted.add(key);
-        if (ask && !stored.has(key)) {
+        if (fresh) {
           answered++;
           total = Math.max(total, answered);
           asking();
@@ -341,7 +345,7 @@ export async function openWorld({ engine, root, consent, progress, standIn = fal
   };
   // As many looks at once as the engine sends Jev at once: `engineJev` gathers each round into one batch, and the
   // engine serves one call at a time, so fewer in flight only makes the looks, and the names they letter, wait.
-  const judgments = await judgeWorld(facts, LOOKS, jev, { graph, concurrency });
+  let judgments = await judgeWorld(facts, LOOKS, jev, { graph, concurrency });
   await new Promise((resolve) => setTimeout(resolve, 0));
   await Promise.all(writes);
 
@@ -372,6 +376,13 @@ export async function openWorld({ engine, root, consent, progress, standIn = fal
     if (understood > 0) {
       judged = await engine.call("project.graph", { root, judged: true });
       graph = judgedGraph(judged);
+      // The pass's first step resolves the imports and calls only Jev can, so the facts read from the graph change
+      // with it: a file's importers, an area's imports, an entity's dependencies. Everything from here on reads the
+      // facts a reopening reads, and the looks are asked again on them: kept answers settle the ones that did not
+      // change with no request, so only those Jev's links changed go to Jev. The land's division reads no imports, so
+      // the land the wait drew stays as it is.
+      facts = factsOf(graph);
+      judgments = await judgeWorld(facts, LOOKS, jev, { graph, concurrency });
     }
   }
   // Every building and landmark is composed part by part once the code is understood, each request carrying what the

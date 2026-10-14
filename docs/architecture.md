@@ -594,7 +594,13 @@ true` as soon as the graph exists. Only under a spend limit does it plan with
 Once Jev has judged the looks, it calls `understanding.next` until nothing is
 left, counting its requests on the wait with judging's, and sends what each
 slice read and each file's health as a slice settles it for good. It reads
-the graph again only if the pass asked something. It lays the world out on
+the graph again only if the pass asked something, and then reads the facts
+from it again too: the pass's link step resolves the imports and calls only
+Jev can, which change a file's importers, an area's imports and an entity's
+dependencies. It asks the looks again on those facts (the answers kept,
+this opening's among them, settle every look that did not change), so a
+first opening asks and lays out exactly what a reopening from the same
+answers does. It lays the world out on
 `project.graph` with `judged: true`, both graphs trimmed by `judgedGraph`,
 so every definition stands by Jev's importance and vitality is Jev's
 quality.
