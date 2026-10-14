@@ -8,7 +8,7 @@
 // costs the same for one tile as for a hundred.
 
 import * as THREE from "three";
-import { type FarViews, farViewLayers } from "./far.ts";
+import { type FarViews, farViewLayers, farViewStage } from "./far.ts";
 
 /** Room for one copy's 2 by 2 tiles: where they start in the atlas, in texels, and a tile's size. */
 export interface OwnSlot {
@@ -74,8 +74,8 @@ void main() {
 export function createOwnAtlas(renderer: THREE.WebGLRenderer, width: number, maxHeight: number): OwnAtlas {
   let height = Math.min(512, maxHeight);
   let layers = farViewLayers(width, height);
-  const stage = farViewLayers(STAGE, STAGE);
-  for (const target of [...layers, ...stage]) renderer.initRenderTarget(target);
+  const stage = farViewStage(STAGE, STAGE);
+  for (const target of [...layers, stage]) renderer.initRenderTarget(target);
   const listeners: (() => void)[] = [];
 
   // Shelves of slots, each as tall as one size's slot, laid down the atlas as sizes need them.
@@ -100,8 +100,8 @@ export function createOwnAtlas(renderer: THREE.WebGLRenderer, width: number, max
   const scene = new THREE.Scene().add(mesh);
   const camera = new THREE.Camera();
 
-  /** Copies `count` staged rectangles from `from`'s layers into `to`'s. */
-  const copy = (from: readonly THREE.WebGLRenderTarget[], to: readonly THREE.WebGLRenderTarget[], count: number): void => {
+  /** Copies `count` staged rectangles from the `from` layers into `to`'s. */
+  const copy = (from: readonly THREE.Texture[], to: readonly THREE.WebGLRenderTarget[], count: number): void => {
     if (count === 0) return;
     dst.needsUpdate = true;
     src.needsUpdate = true;
@@ -109,7 +109,7 @@ export function createOwnAtlas(renderer: THREE.WebGLRenderer, width: number, max
     const was = { target: renderer.getRenderTarget(), auto: renderer.autoClear };
     renderer.autoClear = false;
     to.forEach((target, n) => {
-      uniforms.uSrc.value = (from[n] as THREE.WebGLRenderTarget).texture;
+      uniforms.uSrc.value = from[n] as THREE.Texture;
       uniforms.uSize.value.set(target.width, target.height);
       renderer.setRenderTarget(target);
       renderer.render(scene, camera);
@@ -124,7 +124,7 @@ export function createOwnAtlas(renderer: THREE.WebGLRenderer, width: number, max
   let rowHeight = 0;
   let staged = 0;
   const flush = (): void => {
-    copy(stage, layers, staged);
+    copy(stage.textures, layers, staged);
     staged = 0;
     stageX = 0;
     stageY = 0;
@@ -139,7 +139,7 @@ export function createOwnAtlas(renderer: THREE.WebGLRenderer, width: number, max
     for (const target of next) renderer.initRenderTarget(target);
     dst.array.set([0, 0, width, height], 0);
     src.array.set([0, 0], 0);
-    copy(layers, next, 1);
+    copy(layers.map((l) => l.texture), next, 1);
     for (const layer of layers) layer.dispose();
     layers = next;
     height = next[0]?.height ?? height;
@@ -195,7 +195,7 @@ export function createOwnAtlas(renderer: THREE.WebGLRenderer, width: number, max
       views.bake(i, j, size, stage, stageX, stageY);
       if (saved !== undefined) {
         const [x, y] = [stageX, stageY];
-        void Promise.all(stage.map((target) => renderer.readRenderTargetPixelsAsync(target, x, y, size, size, new Uint8Array(size * size * 4)) as Promise<Uint8Array>))
+        void Promise.all(stage.textures.map((_, n) => renderer.readRenderTargetPixelsAsync(stage, x, y, size, size, new Uint8Array(size * size * 4), undefined, n) as Promise<Uint8Array>))
           .then(saved)
           .catch(() => undefined);
       }
@@ -222,7 +222,7 @@ export function createOwnAtlas(renderer: THREE.WebGLRenderer, width: number, max
       listeners.push(listener);
     },
     dispose() {
-      for (const layer of [...layers, ...stage]) layer.dispose();
+      for (const layer of [...layers, stage]) layer.dispose();
       unit.dispose();
       quads.dispose();
       material.dispose();

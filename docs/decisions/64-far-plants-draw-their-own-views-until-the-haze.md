@@ -3,7 +3,7 @@
 A plant that stands for something of the code (a tree, or a bush, stone or
 drift of flowers standing for a definition) draws its far card from its own
 views: the four nearest the eye, baked from its own build at the size its
-crown covers on screen, in steps of √2, into one atlas every card reads.
+crown covers on screen, into one atlas every card reads.
 Past the haze, once its crown is under a quarter of the size its plant turns
 far at and it stands more than 550 m away, it draws its build's shared card
 instead, baked once per install at that quarter size. Copies that stand for

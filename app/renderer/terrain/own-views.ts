@@ -1,7 +1,7 @@
 // Far plants' own views. A copy that stands for something of the code (a
 // definition, or a sample world's thing) draws its far card from its own
 // views: the four nearest the eye, two azimuths by two elevations, baked from
-// its own build at the size its crown covers on screen, in steps of √2, into
+// its own build at the power of two just above the size its crown covers, into
 // the own atlas (`createOwnAtlas` in @gaia/render). Past the haze, where a
 // crown is small and far enough that another build's card changes no block
 // of the screen by a level of 255 (round 23's look-alike test), it draws its
@@ -15,13 +15,14 @@
 // are in. Copies bake ahead of need: before they reach the band where the
 // card meets the full form, and before they come out of the haze. A copy
 // coming out of the haze shows its own views only once all four are baked.
-// Every view baked is kept in the far store, keyed by its build, size and
-// direction, and read back instead of baked when it is needed again, in this
-// visit or the next.
+// Every view baked under the wait is kept in the far store, keyed by its
+// build, size and direction, and read back instead of baked when it is needed
+// again, in this visit or the next. Views baked while walking are not kept:
+// reading a view back from the GPU costs a walking frame more than baking it.
 
 import * as THREE from "three";
 import { AIR, type Realized } from "@gaia/realize";
-import { FAR_BAKE_VERSION, FAR_VIEWS, type FarCards, type FarViews, type OwnAtlas, type OwnSlot, type OwnViews, createOwnAtlas, startFarViews } from "@gaia/render";
+import { FAR_BAKE_VERSION, FAR_VIEWS, type FarCards, type FarViews, type OwnAtlas, type OwnSlot, createOwnAtlas, startFarViews } from "@gaia/render";
 import { type FarStore, contentHash } from "./far-store.ts";
 import { type Copies, FAR, GONE } from "./woods.ts";
 
@@ -32,9 +33,13 @@ const COARSE = typeof matchMedia === "function" && matchMedia("(pointer: coarse)
  *   its plant turns far at, a copy draws its build's shared card. At device
  *   pixel ratio 2, trees of 32 px stood 548 to 997 m away, and another tree's
  *   card changed no block by more than 0.1 of a level there (round 23).
- * - `ratio`: each tile size over the next smaller.
+ * - `ratio`: each tile size over the next smaller. A copy takes a larger
+ *   tile once its crown outgrows its own, and a smaller one only once its
+ *   crown spans a quarter of it: each change bakes four views.
  * - `ahead`: how far ahead of need a copy bakes: that many times the band's
  *   size, and that many times nearer than the haze.
+ * - `spread`: a walking frame looks at one in this many copies, in turn, as
+ *   a far copy's views change over many frames.
  * - `views`: views a frame may bake while walking, and under the wait or
  *   after the eye jumps more than `jump` meters between frames, until it has
  *   caught up.
@@ -43,8 +48,9 @@ const COARSE = typeof matchMedia === "function" && matchMedia("(pointer: coarse)
 export const OWN = {
   haze: 550,
   hazeShare: 0.25,
-  ratio: Math.SQRT2,
-  ahead: 1.3,
+  ratio: 2,
+  ahead: 1.15,
+  spread: 4,
   views: { walking: 4, wait: 48 },
   jump: 100,
   atlas: COARSE ? { width: 2048, maxHeight: 2048 } : { width: 4096, maxHeight: 4096 },
@@ -77,6 +83,8 @@ export interface OwnStats {
   readonly baked: number;
   readonly kept: number;
   readonly bakeMs: number;
+  /** Milliseconds every update took on the page's thread, since last read. */
+  readonly updateMs: number;
   readonly entered: number;
   readonly resized: number;
   readonly turned: number;
@@ -93,6 +101,8 @@ interface Tiles {
 interface Kept {
   now: Tiles | null;
   next: Tiles | null;
+  /** Whether it draws its own views as soon as it holds any (near the band), or only once it holds all four (out of the haze). */
+  show: boolean;
   /** What its card was last told (`OwnViews`), so it is told again only when that changes. */
   readonly written: Float32Array;
 }
@@ -113,7 +123,6 @@ const READS = 64;
 const ANSWERS = 8192;
 const COLS = FAR_VIEWS.azimuths;
 const ROWS = FAR_VIEWS.elevations.length;
-const NONE: OwnViews = [0, 0, 0, 0, 0, 0, 0, 0];
 
 const mod = (a: number, n: number): number => ((a % n) + n) % n;
 
@@ -147,6 +156,10 @@ export interface OwnViewsHandle {
   fill(sets: () => readonly OwnSet[], camera: THREE.Camera, focal: () => number, frames?: number): Promise<void>;
   /** Reads every card set's own views from the atlas, now and after it grows. */
   read(cards: FarCards): void;
+  /** For measuring what walking costs: views a walking frame bakes, and whether it keeps them in the store. */
+  tune(walking: { readonly views?: number; readonly keep?: boolean }): void;
+  /** For testing a handover: `copies` draw their shared cards whatever they hold, until called with null. */
+  share(copies: Copies | null): void;
   stats(): OwnStats;
   dispose(): void;
 }
@@ -172,17 +185,17 @@ export function createOwnViews(renderer: THREE.WebGLRenderer, store: Promise<Far
   atlas.onGrow(() => {
     for (const cards of readers) cards.own(atlas.layers, atlas.width, atlas.height);
   });
-  /** Each plant's single-view bake, once its shaders are ready. */
-  const rigs = new Map<Realized, { views: FarViews; ready: boolean }>();
-  const rigFor = (plant: Realized, maxPx: number): FarViews | null => {
+  /**
+   * Each plant's single-view bake. A bake used before its shaders have
+   * compiled off the page's thread compiles them on it, so the wait readies
+   * every plant's first (`fill`), and one asked for later, as a test's plant,
+   * still bakes at once.
+   */
+  const rigs = new Map<Realized, FarViews>();
+  const rigFor = (plant: Realized, maxPx: number): FarViews => {
     let rig = rigs.get(plant);
-    if (rig === undefined) {
-      const views = startFarViews(renderer, plant, maxPx);
-      const made = { views, ready: false };
-      void views.ready.then(() => (made.ready = true));
-      rigs.set(plant, (rig = made));
-    }
-    return rig.ready ? rig.views : null;
+    if (rig === undefined) rigs.set(plant, (rig = startFarViews(renderer, plant, maxPx)));
+    return rig;
   };
   /** Each set's copies' state, made anew when the set's copies move (`Copies.respot`). */
   const states = new Map<Copies, { places: Float32Array; kept: Kept[] }>();
@@ -192,37 +205,63 @@ export function createOwnViews(renderer: THREE.WebGLRenderer, store: Promise<Far
   const frustum = new THREE.Frustum();
   const viewProjection = new THREE.Matrix4();
   const crown = new THREE.Sphere();
+  /** The copies this frame finds views for, three entries each: set, index and state, kept between frames. */
+  const touched: (OwnSet | number | Kept)[] = [];
+  /** Copies drawing their own views, and holding tiles. */
+  let shownNow = 0;
+  let heldNow = 0;
+  let frame = 0;
   const lastEye = new THREE.Vector3(Number.NaN, 0, 0);
+  /** For measuring: views a walking frame bakes, and whether it keeps them in the store too. */
+  let walkingViews: number = OWN.views.walking;
+  let keepWalking = false;
+  let shared: Copies | null = null;
   let catchingUp = false;
   let last = { shown: 0, held: 0, missing: 0, pending: 0 };
-  let since = { baked: 0, kept: 0, bakeMs: 0, entered: 0, resized: 0, turned: 0 };
-  /** Tells copy `k`'s card what it holds, when that has changed. */
-  const tell = (set: OwnSet, k: number, kept: Kept, views: OwnViews): void => {
-    if (views.every((v, n) => kept.written[n] === v)) return;
-    kept.written.set(views);
-    set.copies.setOwn(k, views);
+  let since = { baked: 0, kept: 0, bakeMs: 0, updateMs: 0, entered: 0, resized: 0, turned: 0 };
+  /** Tells copy `k`'s card what it holds (`tiles`, or none), when that has changed. */
+  const tell = (set: OwnSet, k: number, kept: Kept, tiles: Tiles | null): void => {
+    const w = kept.written;
+    const drawn = tiles !== null;
+    if (drawn ? w[0] === tiles.slot.x && w[1] === tiles.slot.y && w[2] === tiles.slot.size && w[3] === tiles.mask && w[4] === tiles.az[0] && w[5] === tiles.az[1] && w[6] === tiles.el[0] && w[7] === tiles.el[1] : w[3] === 0) return;
+    if (drawn !== (w[3] as number) > 0) shownNow += drawn ? 1 : -1;
+    if (drawn) {
+      w[0] = tiles.slot.x;
+      w[1] = tiles.slot.y;
+      w[2] = tiles.slot.size;
+      w[3] = tiles.mask;
+      w[4] = tiles.az[0];
+      w[5] = tiles.az[1];
+      w[6] = tiles.el[0];
+      w[7] = tiles.el[1];
+    } else w.fill(0);
+    set.copies.setOwn(k, w);
   };
 
   /** Points `tiles`' columns and rows at the views the eye needs, dropping what they held there. */
+  /** Points column `i % 2` at azimuth `i`, dropping what it held: true when it turned. */
+  const column = (tiles: Tiles, i: number): boolean => {
+    const c = i % 2;
+    if (tiles.az[c] === i) return false;
+    tiles.az[c] = i;
+    tiles.mask &= ~((1 << c) | (1 << (c + 2)));
+    return true;
+  };
+  /** Points row `j % 2` at elevation `j`, dropping what it held: true when it turned. */
+  const row = (tiles: Tiles, j: number): boolean => {
+    const r = j % 2;
+    if (tiles.el[r] === j) return false;
+    tiles.el[r] = j;
+    tiles.mask &= ~(3 << (2 * r));
+    return true;
+  };
+  /** Points `tiles`' columns and rows at the views the eye needs, dropping what they held there. */
   const aim = (tiles: Tiles, i0: number, j0: number): boolean => {
-    let turned = false;
-    for (const i of [i0, mod(i0 + 1, COLS)]) {
-      const c = i % 2;
-      if (tiles.az[c] !== i) {
-        tiles.az[c] = i;
-        tiles.mask &= ~((1 << c) | (1 << (c + 2)));
-        turned = true;
-      }
-    }
-    for (const j of [j0, j0 + 1]) {
-      const r = j % 2;
-      if (tiles.el[r] !== j) {
-        tiles.el[r] = j;
-        tiles.mask &= ~((3 << (2 * r)) & 15);
-        turned = true;
-      }
-    }
-    return turned;
+    const a = column(tiles, i0);
+    const b = column(tiles, mod(i0 + 1, COLS));
+    const c = row(tiles, j0);
+    const d = row(tiles, j0 + 1);
+    return a || b || c || d;
   };
   const tilesOf = (size: number, i0: number, j0: number): Tiles | null => {
     const slot = atlas.take(size);
@@ -232,21 +271,27 @@ export function createOwnViews(renderer: THREE.WebGLRenderer, store: Promise<Far
     return tiles;
   };
 
-  function update(sets: readonly OwnSet[], eye: THREE.Vector3, camera: THREE.Camera, focal: number, views: number = OWN.views.walking, waiting = false): void {
+  function update(sets: readonly OwnSet[], eye: THREE.Vector3, camera: THREE.Camera, focal: number, views: number = walkingViews, waiting = false): void {
+    const started = performance.now();
     // An eye that jumped, as a test or a hook moves it, bakes as the wait does until it has caught up.
     if (!(lastEye.distanceTo(eye) <= OWN.jump)) catchingUp = true;
     lastEye.copy(eye);
     if (catchingUp) views = Math.max(views, OWN.views.wait);
     frustum.setFromProjectionMatrix(viewProjection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
     const jobs: Job[] = [];
-    const touched: { set: OwnSet; k: number; kept: Kept; show: "own" | "complete" }[] = [];
-    let held = 0;
+    touched.length = 0;
+    // Walking, a frame looks at a share of the copies in turn; under the wait, or catching up, at every one.
+    const spread = waiting || catchingUp ? 1 : OWN.spread;
+    frame = (frame + 1) % OWN.spread;
     for (const set of sets) {
       const far = set.copies.far;
       if (far === undefined) continue;
       const { crowns, places } = set.copies.placed;
       let state = states.get(set.copies);
+      // A set whose copies just moved is looked at whole this frame.
+      let every = spread;
       if (state === undefined || state.places !== places) {
+        every = 1;
         // The set's copies moved, as standing does tile by tile as the person walks: a copy still standing where one
         // stood keeps its tiles, and its card, made anew, is told them again.
         const where = (at: Float32Array, k: number): string => `${at[k * 7]},${at[k * 7 + 2]},${at[k * 7 + 3]}`;
@@ -254,12 +299,16 @@ export function createOwnViews(renderer: THREE.WebGLRenderer, store: Promise<Far
         state?.kept.forEach((kept, k) => before.set(where(state?.places as Float32Array, k), kept));
         const next = Array.from({ length: places.length / 7 }, (_, k): Kept => {
           const kept = before.get(where(places, k));
-          if (kept === undefined) return { now: null, next: null, written: new Float32Array(8) };
+          if (kept === undefined) return { now: null, next: null, show: false, written: new Float32Array(8) };
           before.delete(where(places, k));
+          // The card was made anew with no views.
+          if (kept.written[3] !== 0) shownNow--;
           kept.written.fill(0);
           return kept;
         });
         for (const gone of before.values()) {
+          if (gone.now !== null) heldNow--;
+          if (gone.written[3] !== 0) shownNow--;
           give(gone.now);
           give(gone.next);
         }
@@ -271,7 +320,8 @@ export function createOwnViews(renderer: THREE.WebGLRenderer, store: Promise<Far
       const hazePx = top * OWN.hazeShare;
       const sizes = sizesFrom(top);
       state.kept.forEach((kept, k) => {
-        if (set.own[k] !== 1) return;
+        // A copy still baking is looked at every frame, so the frame's views go to what is missing.
+        if (set.own[k] !== 1 || ((k + frame) % every !== 0 && (kept.now === null || (kept.now.mask === 15 && kept.next === null)))) return;
         const cx = crowns[k * 4] as number;
         const cy = crowns[k * 4 + 1] as number;
         const cz = crowns[k * 4 + 2] as number;
@@ -286,11 +336,12 @@ export function createOwnViews(renderer: THREE.WebGLRenderer, store: Promise<Far
         const hazed = px <= hazePx && d >= OWN.haze;
         const wanted = inRange && px <= band * OWN.ahead && !(px <= hazePx / OWN.ahead && d >= OWN.haze * OWN.ahead);
         if (!wanted) {
+          if (kept.now !== null) heldNow--;
           give(kept.now);
           give(kept.next);
           kept.now = null;
           kept.next = null;
-          tell(set, k, kept, NONE);
+          tell(set, k, kept, null);
           return;
         }
         // The eye's direction in the copy's own frame, as the card's shader finds it.
@@ -304,11 +355,12 @@ export function createOwnViews(renderer: THREE.WebGLRenderer, store: Promise<Far
         if (kept.now === null) {
           kept.now = tilesOf(size, i0, j0);
           if (kept.now === null) return;
+          heldNow++;
           since.entered++;
         } else if (aim(kept.now, i0, j0)) since.turned++;
         // A crown grown past its tiles, or shrunk to a quarter of them, bakes a second set at its size.
         const now = kept.now;
-        if (size > now.slot.size || size * 2 <= now.slot.size) {
+        if (size > now.slot.size || size * 4 <= now.slot.size) {
           if (kept.next === null || kept.next.slot.size !== size) {
             give(kept.next);
             kept.next = tilesOf(size, i0, j0);
@@ -318,20 +370,21 @@ export function createOwnViews(renderer: THREE.WebGLRenderer, store: Promise<Far
           give(kept.next);
           kept.next = null;
         }
-        held++;
         const showing = px <= band && !hazed;
         crown.center.set(cx, cy, cz);
         crown.radius = r;
         const seen = frustum.intersectsSphere(crown);
-        for (const tiles of kept.next === null ? [now] : [now, kept.next]) {
+        // Missing views of a copy drawn now come first, nearest the band first, in view before out of it.
+        const ask = (tiles: Tiles, urgent: boolean): void => {
           for (let bit = 0; bit < 4; bit++) {
             if ((tiles.mask & (1 << bit)) !== 0) continue;
-            // Missing views of a copy drawn now come first, nearest the band first, in view before out of it.
-            const urgent = tiles === now && showing;
             jobs.push({ set, tiles, i: tiles.az[bit % 2] as number, j: tiles.el[bit >> 1] as number, urgent, order: ((urgent ? 0 : 2) + (seen ? 0 : 1)) * 1e4 - px });
           }
-        }
-        touched.push({ set, k, kept, show: showing || px > band ? "own" : "complete" });
+        };
+        if (now.mask !== 15) ask(now, showing);
+        if (kept.next !== null && kept.next.mask !== 15) ask(kept.next, false);
+        kept.show = showing || px > band;
+        touched.push(set, k, kept);
       });
     }
 
@@ -374,8 +427,7 @@ export function createOwnViews(renderer: THREE.WebGLRenderer, store: Promise<Far
       if (baked >= views) continue;
       const far = job.set.copies.far;
       const rig = rigFor(job.set.plant, FAR.swapPx * (far?.share ?? 1));
-      if (rig === null) continue;
-      const save = store === null ? undefined : (layers: Uint8Array[]) => void store.put(key, layers).catch(() => undefined);
+      const save = store === null || !(waiting || keepWalking) ? undefined : (layers: Uint8Array[]) => void store.put(key, layers).catch(() => undefined);
       if (!atlas.bake(rig, job.i, job.j, job.tiles.slot, c, r, save)) break;
       answers.delete(key);
       done.push(job);
@@ -388,35 +440,45 @@ export function createOwnViews(renderer: THREE.WebGLRenderer, store: Promise<Far
     since.bakeMs += performance.now() - t0;
 
     // Swap in a second set once all four views are baked, then tell each card what it holds.
-    let shown = 0;
     let missing = 0;
-    for (const { set, k, kept, show } of touched) {
+    for (let n = 0; n < touched.length; n += 3) {
+      const set = touched[n] as OwnSet;
+      const k = touched[n + 1] as number;
+      const kept = touched[n + 2] as Kept;
+      const show = kept.show;
       if (kept.next !== null && kept.next.mask === 15) {
         give(kept.now);
         kept.now = kept.next;
         kept.next = null;
       }
       const now = kept.now as Tiles;
-      const drawn = now.mask !== 0 && (show === "own" || now.mask === 15);
-      if (drawn) {
-        shown++;
-        missing += 4 - [0, 1, 2, 3].filter((bit) => (now.mask & (1 << bit)) !== 0).length;
-        tell(set, k, kept, [now.slot.x, now.slot.y, now.slot.size, now.mask, now.az[0], now.az[1], now.el[0], now.el[1]]);
-      } else tell(set, k, kept, NONE);
+      const drawn = now.mask !== 0 && (show || now.mask === 15) && set.copies !== shared;
+      if (drawn) missing += 4 - ((now.mask & 1) + ((now.mask >> 1) & 1) + ((now.mask >> 2) & 1) + ((now.mask >> 3) & 1));
+      tell(set, k, kept, drawn ? now : null);
     }
-    last = { shown, held, missing, pending: jobs.length - done.length - read };
+    last = { shown: shownNow, held: heldNow, missing, pending: jobs.length - done.length - read };
     if (last.pending === 0) catchingUp = false;
+    since.updateMs += performance.now() - started;
   }
 
   return {
     update,
     async fill(sets, camera, focal, frames = 900) {
+      // Every plant's shaders compile off the page's thread first.
+      await Promise.all(sets().map((set) => rigFor(set.plant, FAR.swapPx * (set.copies.far?.share ?? 1)).ready));
       for (let f = 0; f < frames; f++) {
         camera.updateMatrixWorld();
         update(sets(), camera.position, camera, focal(), OWN.views.wait, true);
         if (last.pending === 0) return;
         await new Promise((r) => requestAnimationFrame(r));
       }
+    },
+    share(copies) {
+      shared = copies;
+    },
+    tune(walking) {
+      walkingViews = walking.views ?? walkingViews;
+      keepWalking = walking.keep ?? keepWalking;
     },
     read(cards) {
       readers.add(cards);
@@ -425,11 +487,11 @@ export function createOwnViews(renderer: THREE.WebGLRenderer, store: Promise<Far
     stats() {
       const { taken, allocated } = atlas.bytes();
       const out = { ...last, bytes: taken, allocated, ...since };
-      since = { baked: 0, kept: 0, bakeMs: 0, entered: 0, resized: 0, turned: 0 };
+      since = { baked: 0, kept: 0, bakeMs: 0, updateMs: 0, entered: 0, resized: 0, turned: 0 };
       return out;
     },
     dispose() {
-      for (const rig of rigs.values()) rig.views.dispose();
+      for (const rig of rigs.values()) rig.dispose();
       rigs.clear();
       states.clear();
       atlas.dispose();

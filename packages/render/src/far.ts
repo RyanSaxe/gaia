@@ -55,16 +55,26 @@ const swap = (source: string, from: string, to: string): string => {
   return source.split(from).join(to);
 };
 
-/** What a bake pass writes for each fragment, through alpha-to-coverage so a texel resolves to the value times the share it covers. */
+/**
+ * What a bake pass writes for each fragment, into up to three targets at
+ * once, through alpha-to-coverage on the first's alpha, so a texel resolves
+ * to each value times the share it covers. A target written 1.0 resolves to
+ * the share itself.
+ */
 const OUTPUT = {
+  // At vitality 1: color and coverage; coverage, glow, foliage and depth; normal.
+  healthy: [
+    "gl_FragColor = vec4(albedo, cover);",
+    "pc_fragColor1 = vec4(1.0, clamp(vGlow, 0.0, 1.0), uFoliage, clamp(0.5 + dot(vWorld - uBakeCenter, uBakeDir) / (2.0 * uBakeRadius), 0.0, 1.0));",
+    "pc_fragColor2 = vec4(n * 0.5 + 0.5, 1.0);",
+  ].join("\n  "),
+  // At the last slice: the withered color, and coverage.
+  withered: ["gl_FragColor = vec4(albedo, cover);", "pc_fragColor1 = vec4(1.0);"].join("\n  "),
   cover: "gl_FragColor = vec4(1.0, 1.0, 1.0, cover);",
-  albedo: "gl_FragColor = vec4(albedo, cover);",
-  normal: "gl_FragColor = vec4(n * 0.5 + 0.5, cover);",
-  depth: "gl_FragColor = vec4(clamp(0.5 + dot(vWorld - uBakeCenter, uBakeDir) / (2.0 * uBakeRadius), 0.0, 1.0), 0.0, 0.0, cover);",
-  glow: "gl_FragColor = vec4(clamp(vGlow, 0.0, 1.0), 0.0, 0.0, cover);",
-  foliage: "gl_FragColor = vec4(uFoliage, 0.0, 0.0, cover);",
 } as const;
 type Output = keyof typeof OUTPUT;
+/** Targets the bake's row draws into at once. */
+const TARGETS = 3;
 
 /** The plant's vertex shader with its color's vitality apart from its shape's, and droop left out so every slice nests inside the healthy outline. */
 function bakeVert(): string {
@@ -76,7 +86,7 @@ function bakeVert(): string {
 
 /** The plant's fragment shader, writing one layer instead of lit color, with leaves merging as they would on screen at the swap. */
 function bakeFrag(output: Output): string {
-  let s = swap(PLANT_FRAG, "void main() {", "uniform vec3 uBakeCenter;\nuniform vec3 uBakeDir;\nuniform float uBakeRadius;\nvoid main() {");
+  let s = swap(PLANT_FRAG, "void main() {", "uniform vec3 uBakeCenter;\nuniform vec3 uBakeDir;\nuniform float uBakeRadius;\nlayout(location = 1) out highp vec4 pc_fragColor1;\nlayout(location = 2) out highp vec4 pc_fragColor2;\nvoid main() {");
   // A bake texel is a fraction of a screen pixel at the swap: leaves merge as they would on screen there.
   s = swap(s, "float px = max(sqrt(abs(dx.x * dy.y - dx.y * dy.x) * 2.0), 1e-4);", `float px = max(sqrt(abs(dx.x * dy.y - dx.y * dy.x) * 2.0) * ${SUPERSAMPLE}.0, 1e-4);`);
   s = swap(s, "gl_FragColor = vec4(aerial(shoulder(color), vWorld) + glow * (1.0 - uNightness * 0.35), cover);", OUTPUT[output]);
@@ -84,6 +94,31 @@ function bakeFrag(output: Output): string {
 }
 
 const QUAD_VERT = "void main() { gl_Position = vec4(position.xy, 0.0, 1.0); }";
+/**
+ * Resolves a pass's three targets into all four layers of a stage at once:
+ * each layer the sum of each target through its matrix (`uMap[layer * 3 +
+ * target]`), so one draw does what a draw per destination did.
+ */
+const DOWN_ALL_FRAG = /* glsl */ `
+precision highp float;
+uniform sampler2D uSrc0;
+uniform sampler2D uSrc1;
+uniform sampler2D uSrc2;
+uniform vec2 uOrigin;
+uniform mat4 uMap[12];
+layout(location = 1) out highp vec4 pc_fragColor1;
+layout(location = 2) out highp vec4 pc_fragColor2;
+layout(location = 3) out highp vec4 pc_fragColor3;
+void main() {
+  ivec2 at = ivec2(gl_FragCoord.xy - uOrigin);
+  vec4 s0 = texelFetch(uSrc0, at, 0);
+  vec4 s1 = texelFetch(uSrc1, at, 0);
+  vec4 s2 = texelFetch(uSrc2, at, 0);
+  gl_FragColor = uMap[0] * s0 + uMap[1] * s1 + uMap[2] * s2;
+  pc_fragColor1 = uMap[3] * s0 + uMap[4] * s1 + uMap[5] * s2;
+  pc_fragColor2 = uMap[6] * s0 + uMap[7] * s1 + uMap[8] * s2;
+  pc_fragColor3 = uMap[9] * s0 + uMap[10] * s1 + uMap[11] * s2;
+}`;
 /** Averages SUPERSAMPLE² resolved texels of one row's bake into one atlas texel, mapped into the atlas's channels by uMap. */
 const DOWN_FRAG = /* glsl */ `
 precision highp float;
@@ -97,14 +132,19 @@ void main() {
   gl_FragColor = uMap * (sum / ${SUPERSAMPLE * SUPERSAMPLE}.0);
 }`;
 
-/** A pass and where its resolved value goes: the source channel into each atlas layer's channels. */
+/** Where one of a pass's targets goes: into which atlas layer, each source channel (r, g, b, a) into which of its channels, or -1 to drop it. */
+interface Into {
+  readonly target: number;
+  readonly layer: number;
+  readonly to: readonly [number, number, number, number];
+}
+
+/** A pass: what it draws, at which vitality, and where each of its targets goes. */
 interface Pass {
   readonly output: Output;
   readonly vitality: number;
   readonly colorVitality: number;
-  readonly layer: number;
-  /** Destination channel per source channel (r, g, b, a), or -1 to drop it. */
-  readonly to: readonly [number, number, number, number];
+  readonly into: readonly Into[];
 }
 
 /**
@@ -115,32 +155,58 @@ interface Pass {
  * 0.1, and foliage.
  */
 const PASSES: readonly Pass[] = [
-  { output: "cover", vitality: 1, colorVitality: 1, layer: 0, to: [3, -1, -1, -1] },
-  { output: "albedo", vitality: 1, colorVitality: 1, layer: 0, to: [0, 1, 2, -1] },
-  { output: "albedo", vitality: 0.1, colorVitality: 0, layer: 1, to: [0, 1, 2, -1] },
-  { output: "glow", vitality: 1, colorVitality: 1, layer: 1, to: [3, -1, -1, -1] },
-  { output: "normal", vitality: 1, colorVitality: 1, layer: 2, to: [0, 1, 2, -1] },
-  { output: "depth", vitality: 1, colorVitality: 1, layer: 2, to: [3, -1, -1, -1] },
-  { output: "cover", vitality: SLICES[1], colorVitality: 1, layer: 3, to: [0, -1, -1, -1] },
-  { output: "cover", vitality: SLICES[2], colorVitality: 1, layer: 3, to: [1, -1, -1, -1] },
-  { output: "cover", vitality: SLICES[3], colorVitality: 1, layer: 3, to: [2, -1, -1, -1] },
-  { output: "foliage", vitality: 1, colorVitality: 1, layer: 3, to: [3, -1, -1, -1] },
+  {
+    output: "healthy",
+    vitality: 1,
+    colorVitality: 1,
+    into: [
+      { target: 0, layer: 0, to: [0, 1, 2, -1] },
+      { target: 1, layer: 0, to: [3, -1, -1, -1] },
+      { target: 1, layer: 1, to: [-1, 3, -1, -1] },
+      { target: 1, layer: 3, to: [-1, -1, 3, -1] },
+      { target: 1, layer: 2, to: [-1, -1, -1, 3] },
+      { target: 2, layer: 2, to: [0, 1, 2, -1] },
+    ],
+  },
+  {
+    output: "withered",
+    vitality: SLICES[3],
+    colorVitality: 0,
+    into: [
+      { target: 0, layer: 1, to: [0, 1, 2, -1] },
+      { target: 1, layer: 3, to: [2, -1, -1, -1] },
+    ],
+  },
+  { output: "cover", vitality: SLICES[1], colorVitality: 1, into: [{ target: 0, layer: 3, to: [0, -1, -1, -1] }] },
+  { output: "cover", vitality: SLICES[2], colorVitality: 1, into: [{ target: 0, layer: 3, to: [1, -1, -1, -1] }] },
 ];
 
-const mapOf = (to: Pass["to"]): THREE.Matrix4 => {
+const mapOf = (to: Into["to"]): THREE.Matrix4 => {
   const m = new THREE.Matrix4().set(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
   to.forEach((dest, src) => {
     if (dest >= 0) m.elements[src * 4 + dest] = 1;
   });
   return m;
 };
+/** Each pass's twelve matrices for resolving into a stage's four layers at once (`DOWN_ALL_FRAG`). */
+const STAGE_MAPS = new Map<Pass, THREE.Matrix4[]>(
+  PASSES.map((pass) => {
+    const maps = Array.from({ length: 12 }, () => new THREE.Matrix4().set(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0));
+    for (const into of pass.into) {
+      const m = maps[into.layer * 3 + into.target] as THREE.Matrix4;
+      const add = mapOf(into.to);
+      for (let n = 0; n < 16; n++) (m.elements[n] as number) += add.elements[n] as number;
+    }
+    return [pass, maps];
+  }),
+);
 
 /** A far form being baked a little at a time, so a loading screen keeps painting. */
 export interface FarBake {
   /** Resolves once every shader the bake uses has compiled, in parallel where the browser can. */
   readonly ready: Promise<void>;
   /**
-   * Bakes up to `views` views (of 960: 96 directions in ten passes), fewer
+   * Bakes up to `views` views (of 384: 96 directions in four passes), fewer
    * if `budgetMs` passes first; the form when the last is done, else null.
    * The GPU work a view queues is not counted in the budget, so `views`
    * bounds what a frame takes on the GPU.
@@ -161,8 +227,10 @@ interface BakeRig {
   clearRow(): void;
   /** Draws pass `pass` of view (i, j) into tile `tile` of the row, `size` texels across (`framePx` when omitted). */
   draw(i: number, j: number, pass: Pass, tile: number, size?: number): void;
-  /** Resolves `tiles` tiles of the row, from tile `from`, into `target` at texel (x, y), its channels mapped by `pass`; each `size` texels across. */
-  resolve(pass: Pass, target: THREE.WebGLRenderTarget, from: number, tiles: number, x: number, y: number, size?: number): void;
+  /** Resolves `tiles` tiles of the row, from tile `from`, into the four `layers` at texel (x, y), each target where `pass` sends it; each `size` texels across. */
+  resolve(pass: Pass, layers: readonly THREE.WebGLRenderTarget[], from: number, tiles: number, x: number, y: number, size?: number): void;
+  /** Resolves the row's first tile into the four layers of `stage` (`farViewStage`) at texel (x, y) in one draw, `size` texels across. */
+  resolveStage(pass: Pass, stage: THREE.WebGLRenderTarget, x: number, y: number, size: number): void;
   free(): void;
 }
 
@@ -227,9 +295,11 @@ function bakeRig(renderer: THREE.WebGLRenderer, plant: Realized, framePx: number
   });
 
   // One elevation row at a time keeps the multisampled target small.
-  const row = new THREE.WebGLRenderTarget(tiles * px, px, { depthBuffer: true, type: THREE.UnsignedByteType, samples: 4 });
-  row.texture.minFilter = THREE.NearestFilter;
-  row.texture.magFilter = THREE.NearestFilter;
+  const row = new THREE.WebGLRenderTarget(tiles * px, px, { depthBuffer: true, type: THREE.UnsignedByteType, samples: 4, count: TARGETS });
+  for (const texture of row.textures) {
+    texture.minFilter = THREE.NearestFilter;
+    texture.magFilter = THREE.NearestFilter;
+  }
   const downUniforms = { uSrc: { value: row.texture }, uOrigin: { value: new THREE.Vector2() }, uMap: { value: new THREE.Matrix4() } };
   const down = new THREE.ShaderMaterial({
     vertexShader: QUAD_VERT,
@@ -247,6 +317,11 @@ function bakeRig(renderer: THREE.WebGLRenderer, plant: Realized, framePx: number
   const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), down);
   quad.frustumCulled = false;
   const quadScene = new THREE.Scene().add(quad);
+  const allUniforms = { uSrc0: { value: row.textures[0] }, uSrc1: { value: row.textures[1] }, uSrc2: { value: row.textures[2] }, uOrigin: { value: new THREE.Vector2() }, uMap: { value: [] as THREE.Matrix4[] } };
+  const downAll = new THREE.ShaderMaterial({ vertexShader: QUAD_VERT, fragmentShader: DOWN_ALL_FRAG, uniforms: allUniforms, depthTest: false, depthWrite: false, blending: down.blending, blendSrc: down.blendSrc, blendDst: down.blendDst, blendEquation: down.blendEquation, blendSrcAlpha: down.blendSrcAlpha, blendDstAlpha: down.blendDstAlpha });
+  const quadAll = new THREE.Mesh(quad.geometry, downAll);
+  quadAll.frustumCulled = false;
+  const stageScene = new THREE.Scene().add(quadAll);
   const quadCamera = new THREE.Camera();
   const camera = new THREE.OrthographicCamera(-radius, radius, radius, -radius, 1000, 1000 + 4 * radius + 2);
   camera.position.set(sphere.center.x, sphere.center.y, sphere.center.z + 2 * radius + 1000);
@@ -305,18 +380,32 @@ function bakeRig(renderer: THREE.WebGLRenderer, plant: Realized, framePx: number
       renderer.render(scene, camera);
       row.scissorTest = false;
     },
-    resolve(pass, target, from, count, x, y, size = framePx) {
-      const was = target.viewport.clone();
-      target.viewport.set(x, y, count * size, size);
+    resolve(pass, layers, from, count, x, y, size = framePx) {
       downUniforms.uOrigin.value.set(x - from * size, y);
-      downUniforms.uMap.value.copy(mapOf(pass.to));
-      renderer.setRenderTarget(target);
-      renderer.render(quadScene, quadCamera);
-      target.viewport.copy(was);
+      for (const into of pass.into) {
+        const target = layers[into.layer] as THREE.WebGLRenderTarget;
+        const was = target.viewport.clone();
+        target.viewport.set(x, y, count * size, size);
+        downUniforms.uSrc.value = row.textures[into.target] as THREE.Texture;
+        downUniforms.uMap.value.copy(mapOf(into.to));
+        renderer.setRenderTarget(target);
+        renderer.render(quadScene, quadCamera);
+        target.viewport.copy(was);
+      }
+    },
+    resolveStage(pass, stage, x, y, size) {
+      const was = stage.viewport.clone();
+      stage.viewport.set(x, y, size, size);
+      allUniforms.uOrigin.value.set(x, y);
+      allUniforms.uMap.value = STAGE_MAPS.get(pass) as THREE.Matrix4[];
+      renderer.setRenderTarget(stage);
+      renderer.render(stageScene, quadCamera);
+      stage.viewport.copy(was);
     },
     free() {
       row.dispose();
       down.dispose();
+      downAll.dispose();
       unlit.dispose();
       quad.geometry.dispose();
       for (const m of meshes) {
@@ -360,7 +449,7 @@ export function startFarBake(renderer: THREE.WebGLRenderer, plant: Realized, fra
     if (i === 0) rig.clearRow();
     rig.draw(i, j, pass, i);
     if (i < cols - 1) return;
-    rig.resolve(pass, layers[pass.layer] as THREE.WebGLRenderTarget, 0, cols, 0, j * framePx);
+    rig.resolve(pass, layers, 0, cols, 0, j * framePx);
   };
   const finish = (): FarForm => {
     // Every chunk is in: make each atlas's mipmaps once.
@@ -432,8 +521,8 @@ export function bakeFarForm(renderer: THREE.WebGLRenderer, plant: Realized, fram
 export interface FarViews {
   /** Resolves once every shader the bake uses has compiled. */
   readonly ready: Promise<void>;
-  /** Bakes view (i, j), `size` texels square, into the tile at texel (x, y) of each of `layers`, which it clears first. */
-  bake(i: number, j: number, size: number, layers: readonly THREE.WebGLRenderTarget[], x: number, y: number): void;
+  /** Bakes view (i, j), `size` texels square, into the tile at texel (x, y) of `stage`'s four layers (`farViewStage`), which it clears first. */
+  bake(i: number, j: number, size: number, stage: THREE.WebGLRenderTarget, x: number, y: number): void;
   dispose(): void;
 }
 
@@ -442,23 +531,21 @@ export function startFarViews(renderer: THREE.WebGLRenderer, plant: Realized, ma
   const rig = bakeRig(renderer, plant, maxPx, 1);
   return {
     ready: rig.ready,
-    bake(i, j, size, layers, x, y) {
+    bake(i, j, size, stage, x, y) {
       if (size > maxPx) throw new Error(`A view of ${size} texels is larger than the ${maxPx} these views bake at most.`);
       const was = { target: renderer.getRenderTarget(), auto: renderer.autoClear, color: renderer.getClearColor(new THREE.Color()), alpha: renderer.getClearAlpha() };
       renderer.autoClear = false;
       renderer.setClearColor(0x000000, 0);
-      // Each pass adds its channels into the tile, so the tile starts empty.
-      for (const layer of layers) {
-        layer.scissor.set(x, y, size, size);
-        layer.scissorTest = true;
-        renderer.setRenderTarget(layer);
-        renderer.clear(true, false, false);
-        layer.scissorTest = false;
-      }
+      // Each pass adds its channels into the tile, so the tile starts empty in every layer.
+      stage.scissor.set(x, y, size, size);
+      stage.scissorTest = true;
+      renderer.setRenderTarget(stage);
+      renderer.clear(true, false, false);
+      stage.scissorTest = false;
       for (const pass of PASSES) {
         rig.clearRow();
         rig.draw(i, j, pass, 0, size);
-        rig.resolve(pass, layers[pass.layer] as THREE.WebGLRenderTarget, 0, 1, x, y, size);
+        rig.resolveStage(pass, stage, x, y, size);
       }
       renderer.setRenderTarget(was.target);
       renderer.autoClear = was.auto;
@@ -466,6 +553,11 @@ export function startFarViews(renderer: THREE.WebGLRenderer, plant: Realized, ma
     },
     dispose: () => rig.free(),
   };
+}
+
+/** A stage for single views to bake into: one target of `width` by `height` texels with a far form's four layers. */
+export function farViewStage(width: number, height: number): THREE.WebGLRenderTarget {
+  return new THREE.WebGLRenderTarget(width, height, { depthBuffer: false, generateMipmaps: false, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, count: 4 });
 }
 
 /** Four layers of `width` by `height` texels, as a far form's atlas has, for views to bake or be copied into. */
@@ -477,7 +569,7 @@ export function farViewLayers(width: number, height: number): THREE.WebGLRenderT
  * The bake's version: a far form stored by an earlier version must be baked
  * again. Bump it whenever what a bake writes, or how a card reads it, changes.
  */
-export const FAR_BAKE_VERSION = 1;
+export const FAR_BAKE_VERSION = 2;
 
 /** A far form as plain data, to store: its bounds and motion, and each atlas's full-size level, row by row from the bottom. */
 export interface FarFormData {

@@ -362,12 +362,12 @@ export const OPENING_ASPECT = OPENS_CODE && ASKED_WORLD !== "proving" ? LAND_ASP
 /** Frames the first world draws under the wait before it lifts, its shaders already compiled (`warmSoon`), so it moves smoothly from the first. */
 const LIFT_FRAMES = 4;
 /**
- * Baking far forms: at most this many views of a form a frame (960 make a
- * form), within `ms` milliseconds under the wait, so it keeps painting while
- * every tree build bakes, and within `walkingMs` once the world is open, while
- * the bushes' forms bake.
+ * Baking far forms: at most this many passes of a form's views a frame (384
+ * make a form: 96 directions in four passes), within `ms` milliseconds under
+ * the wait, so it keeps painting while every tree build bakes, and within
+ * `walkingMs` once the world is open, while the bushes' forms bake.
  */
-const FAR_BAKE = { views: 24, ms: 6, walkingMs: 2 } as const;
+const FAR_BAKE = { views: 10, ms: 6, walkingMs: 2 } as const;
 /** The sample world's size: the full world, or the small one, to compare the two. */
 /** `?world=sample&size=5000` asks for a sample world of that many meters across, with as many regions as the full one. */
 const ASKED_SIZE = Number(new URLSearchParams(location.search).get("size"));
@@ -2597,6 +2597,8 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
    *   where the full form leaves and the far form stands alone;
    * - `haze`: from 1 m nearer to 1 m farther than where the copy's own
    *   views give way to its build's shared card (`OWN` in own-views.ts);
+   * - `small`: where its crown spans a quarter of its turn-far size, however
+   *   near, its own views and then its build's shared card;
    * - `dissolving`: from halfway into the band where a crown too small to see
    *   dissolves (`GONE`), one step of walking farther;
    * - `gone`: the step of walking across that band's end, where the copy
@@ -2609,7 +2611,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
    * too large to dissolve where the air has already hidden it stands there
    * all the same, and changes nothing. Null when there is no such preset.
    */
-  function swapTest(name: string, vitality: number): { middle: SwapStep; whole: SwapStep; leaving: SwapStep; end: SwapStep; haze: SwapStep; dissolving: SwapStep; gone: SwapStep } | null {
+  function swapTest(name: string, vitality: number): { middle: SwapStep; whole: SwapStep; leaving: SwapStep; end: SwapStep; haze: SwapStep; small: SwapStep; dissolving: SwapStep; gone: SwapStep } | null {
     const preset = farPresets().find((f) => f.name === name);
     if (preset === undefined) return null;
     const gl = renderer.getContext();
@@ -2645,7 +2647,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
      * Stands the copy where its crown spans `from` pixels, and measures moving the detail back `back` meters, over the
      * crown's part of the screen and at least a `block`-pixel square around it.
      */
-    const walk = (stood: Copies, from: number, back: number, block: number): SwapStep => {
+    const walk = (stood: Copies, from: number, back: number, block: number, share = false): SwapStep => {
       const distance = at(from);
       // The crown's middle at the eye's height, straight ahead.
       stood.respot([{ x: eye.x + dx * distance - crown.center.x, y: eye.y - crown.center.y, z: eye.z + dz * distance - crown.center.z, yaw: 0, scale: 1, vitality }]);
@@ -2660,7 +2662,9 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       detailPin = { x: eye.x, z: eye.z };
       const before = grabFrame(3);
       detailPin = { x: eye.x - dx * back, z: eye.z - dz * back };
+      if (share) ownViews.share(stood);
       const change = changeIn(before, grabFrame(3));
+      ownViews.share(null);
       detailPin = { x: eye.x, z: eye.z };
       frozen = t + 0.5;
       const wind = changeIn(before, grabFrame(3));
@@ -2676,6 +2680,8 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
         end: step(copy, leavePx + 0.1, leavePx - 0.1),
         // Where its own views give way to its build's shared card past the haze: from 1 m nearer to 1 m farther.
         haze: walk(copy, (2 * crown.radius * focal) / (Math.max(OWN.haze, at(swapPx * OWN.hazeShare)) - 1), 2, 64),
+        // Where its crown is a quarter of its turn-far size, however near: the change if its build's shared card took over there.
+        small: walk(copy, swapPx * OWN.hazeShare, 0, 64, true),
         // Too small to see, a crown dissolves over hundreds of meters: each is held to a step of walking, over a block.
         dissolving: walk(copy, going(0.5), WALK_STEP, 64),
         gone: walk(copy, (2 * crown.radius * focal) / (at(GONE.end) - WALK_STEP / 2), WALK_STEP, 64),
@@ -3126,6 +3132,8 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       own: () => ownViews.stats(),
       /** Bakes every own view the view needs now, as the wait does. */
       ownFill: () => ownViews.fill(ownSets, camera, ownFocal),
+      /** For measuring walking's cost: views a walking frame bakes, and whether walking keeps them in the store. */
+      ownTune: (walking: { views?: number; keep?: boolean }) => ownViews.tune(walking),
       /** Walks as a person would for `seconds` of real time (`wander`). */
       wander,
       /** Shows or hides the far trees' cards alone, for seeing what they draw. */

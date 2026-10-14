@@ -1006,11 +1006,13 @@ holds them (`farFormFrom`'s `onUpdate`). A plant that stands for something of th
 does) draws its card from its own views instead, until the haze (decision 64,
 `app/renderer/terrain/own-views.ts`): each frame, before anything draws,
 `update` gives each such copy in range the four views nearest the eye, two
-azimuths by two elevations, at the √2 step of size just above its crown's
-span, as tiles in one own atlas every card reads (`createOwnAtlas` in
+azimuths by two elevations, at the power of two just above its crown's span,
+as tiles in one own atlas every card reads (`createOwnAtlas` in
 `@gaia/render`, 4096 texels wide and growing in height to 4096, or 2048 on a
 touch-first screen). A view baked from the copy's build (`startFarViews`)
-goes to a small stage and reaches the atlas in one copy a layer a frame. A
+draws in four passes, each into three targets at once, and resolves into a
+small stage's four layers in one draw; the stage reaches the atlas in one copy
+a layer a frame. The far forms bake the same four passes. A
 copy turning toward a new pair of views drops that column or row and bakes
 the new one, the views it holds taking the missing one's weight meanwhile; a
 copy whose crown outgrows its tiles, or shrinks to a quarter of them, bakes a
@@ -1021,11 +1023,14 @@ crown under a quarter of its turn-far size (`OWN.hazeShare`) and more than
 550 m away (`OWN.haze`), it draws its build's shared card, so a tree's far
 form bakes at 32 px rather than 128 (`FarForms.add`'s `bake`). Copies bake
 ahead of need: before the band, and before they come out of the haze, where
-one shows its own views only once all four are in. A walking frame bakes at
+one shows its own views only once all four are in. A walking frame looks at
+a quarter of the copies in turn, and at every copy still baking, and bakes at
 most four views; under the wait (`fill`, which `place` waits on) and after
-the eye jumps, it bakes 48 a frame. Every baked view is kept in the far
-store's views, keyed by its build, size and direction, and read back instead
-of baked, except a view a drawn copy is missing, which bakes at once. The land's textures are laid on the
+the eye jumps, it looks at every copy and bakes 48 a frame. Every view baked
+under the wait is kept in the far store's views, keyed by its build, size and
+direction, and read back instead of baked, except a view a drawn copy is
+missing, which bakes at once. Views baked while walking are not kept, since
+reading one back from the GPU costs a frame more than baking it. The land's textures are laid on the
 page from what it holds anyway: the clipmap's levels from the bake's arrays
 and the ways, the clearings' window from the outlines and capsules. Besides
 its levels, the clipmap keeps only the trails' distances, in 16 bits.
