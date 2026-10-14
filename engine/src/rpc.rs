@@ -64,6 +64,11 @@ pub fn handle(line: &str) -> Value {
             }
             _ => Err((INVALID_PARAMS, "project.source needs a root and a path.".into())),
         },
+        "project.commit" => match p["root"].as_str() {
+            // The commit a world of the root is read from now, as `project.graph` would read it.
+            Some(root) => Ok(json!({ "commit": crate::graph::walk::Snapshot::of(Path::new(root)).commit() })),
+            None => Err((INVALID_PARAMS, "project.commit needs a root.".into())),
+        },
         "understanding.plan" => match p["root"].as_str() {
             Some(root) => {
                 crate::jev::runner::plan(Path::new(root), p["graph"].as_bool() == Some(true))
@@ -188,6 +193,18 @@ mod tests {
             )["error"]["code"],
             FAILED
         );
+    }
+
+    #[test]
+    fn a_world_read_from_disk_has_no_commit() {
+        assert_eq!(
+            handle(r#"{"jsonrpc":"2.0","id":10,"method":"project.commit","params":{}}"#)["error"]["code"],
+            INVALID_PARAMS
+        );
+        let commit = handle(
+            r#"{"jsonrpc":"2.0","id":11,"method":"project.commit","params":{"root":"/no/such/dir"}}"#,
+        );
+        assert_eq!(commit["result"], json!({ "commit": null }));
     }
 
     #[test]

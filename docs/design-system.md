@@ -602,9 +602,12 @@ turned-down corner. In the app only that paper shows for the moment
 before the table is drawn; with the signpost, or in the standalone lab
 with no start, the sheet lies on its creased paper instead. While the code is read
 the sheet is bare and still, or, for a world chosen on the start, is that
-world's picture as it was last walked, which stays as the sheet's paint
-while the wait paints the world's own over it (and folds away if the land
-has since grown into another shape). As soon as the land is divided, a pen draws
+world's picture as it was last walked, offered only while its code is the
+commit it pictures. That picture is the world's paint already: it stays as
+the sheet's paint, the washes going under it unseen, until the relief comes
+in over it once the world stands. It folds away if the land has since grown
+into another shape or been read from another commit, and the map is drawn
+on bare paper like any other: a person never watches a stale map. As soon as the land is divided, a pen draws
 every area's border from the middle outward, the map's fine line, with the
 hedgerow's soft band coming in under it, and never the land's rounded rim.
 Between the borders and the washes, a pencil shows what Jev is doing to the
@@ -705,7 +708,8 @@ walked before, pictured by `start/gaia-picture.webp`):
   - Each world walked before is a torn card in its land's shape, laid on
     the sheet a little askew, bowed, one corner lifted: the picture of its
     own field map in health's colors that its page painted when it was
-    last opened, or plain paper with its name for a world with none yet. Its name is lettered
+    last opened, or plain paper with its name for a world with none yet,
+    or whose code has changed since, so its map will be drawn anew. Its name is lettered
     beneath in the map's spaced capitals, broken onto two lines at a hyphen,
     dot or slash when it is long, with where it lies (who keeps it on
     GitHub, or the folder it sits in) in italic over it. Up to six worlds lie

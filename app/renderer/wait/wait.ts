@@ -40,11 +40,12 @@ export interface WaitView {
   /** Where the sheet lies on the page: a map chosen on the start ends there. */
   sheet(): DOMRect;
   /**
-   * A map chosen on the start, as its picture and its land's shape (width over depth): the sheet takes that shape and
-   * the picture lies on it as its paint at once, under the start's table until the map has risen into its place, and
-   * stays until the world's own paint covers it.
+   * A map chosen on the start, as its picture, its land's shape (width over depth) and the commit it pictures: the
+   * sheet takes that shape and the picture lies on it as its paint at once, under the start's table until the map has
+   * risen into its place, and stays until the world's relief comes in over it. A land of another shape or commit folds
+   * it away, and the map is drawn anew on bare paper.
    */
-  chosen(picture: string, aspect: number): void;
+  chosen(picture: string, aspect: number, commit: string | undefined): void;
   /** The sheet's paper as it is painted now, in its shape: the face of a fresh card that rises into the sheet. */
   face(): HTMLCanvasElement;
 }
