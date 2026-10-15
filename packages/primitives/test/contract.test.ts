@@ -210,6 +210,49 @@ describe.each(PRIMITIVES.map((p) => [p.id, p] as const))("%s", { timeout: 20_000
   });
 });
 
+/** Every combination of a primitive's choices, flags and sets, its scales at their middle level. */
+function combinations(p: AnyPrimitive): Stored[] {
+  let out: Stored[] = [{}];
+  for (const [name, f] of Object.entries(p.params) as [string, Field][]) {
+    const values: Stored[string][] =
+      f.type === "scale" ? [f.levels[Math.floor(f.levels.length / 2)]?.words ?? ""]
+      : f.type === "choice" ? Object.keys(f.options)
+      : f.type === "flag" ? [false, true]
+      : Object.keys(f.members).reduce<string[][]>((subsets, m) => [...subsets, ...subsets.map((s) => [...s, m])], [[]]);
+    out = out.flatMap((s) => values.map((v) => ({ ...s, [name]: v })));
+  }
+  return out;
+}
+
+/** True when a point lies within a mass's footprint; a round mass's octagon reaches past its inscribed circle at the corners. */
+const inFootprint = (m: BuildingPlan["masses"][number], x: number, z: number): boolean =>
+  m.round ? Math.hypot(x - m.x, z - m.z) < m.width / 2 / Math.cos(Math.PI / 8) : Math.abs(x - m.x) < m.width / 2 && Math.abs(z - m.z) < m.depth / 2;
+
+describe.each(lib.forRole("Footprint").map((p) => [p.id, p] as const))("%s", { timeout: 20_000 }, (_id, p) => {
+  it("seats the door whole on its own wall, where no other mass stands in front of it", () => {
+    for (const stored of combinations(p)) {
+      for (const seed of [1, 2]) {
+        const plan = build(p, stored, null, seed) as BuildingPlan;
+        const door = plan.openings.find((o) => o.kind === "door");
+        const m = door === undefined ? undefined : plan.masses[door.mass];
+        if (door === undefined || m === undefined) throw new Error(`${JSON.stringify(stored)}: no door`);
+        const [nx, , nz] = door.normal;
+        const [ux, uz] = [nz, -nx];
+        const half = (ax: number, az: number): number => Math.abs(ax) * (m.width / 2) + Math.abs(az) * ((m.round ? m.width : m.depth) / 2);
+        const [dx, dz] = [door.position[0] - m.x, door.position[2] - m.z];
+        // In its wall's face, and the whole door between the wall's ends.
+        expect(Math.abs(dx * nx + dz * nz - half(nx, nz)), JSON.stringify(stored)).toBeLessThan(0.01);
+        expect(Math.abs(dx * ux + dz * uz) + door.width / 2, JSON.stringify(stored)).toBeLessThanOrEqual(half(ux, uz));
+        // Nothing of another mass stands just outside it.
+        for (const along of [-door.width / 2, 0, door.width / 2]) {
+          const [x, z] = [door.position[0] + ux * along + nx * 0.06, door.position[2] + uz * along + nz * 0.06];
+          expect(plan.masses.some((o, i) => i !== door.mass && inFootprint(o, x, z)), JSON.stringify(stored)).toBe(false);
+        }
+      }
+    }
+  });
+});
+
 function replacer(_key: string, value: unknown): unknown {
   return ArrayBuffer.isView(value) ? Array.from(value as Float32Array) : value;
 }
