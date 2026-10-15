@@ -485,7 +485,9 @@ sharp-edged.
 Each volume is a mass: walls standing on a rectangle (or a turret's
 octagon) under a roof of its own. Joined masses overlap where they meet, so
 a wall inside another mass is never built and a wing's roof runs into the
-main roof in a valley. Every wall rises to the roofline over it, so gables,
+main roof in a valley. A turret takes the eave of the corner it stands over:
+the eave's corner is cut back just inside the turret's angled face, so no
+corner of the covering shows through it. Every wall rises to the roofline over it, so gables,
 hipped ends, a half-hip's cut-back gable and a lean-to's slope meet their
 roofs exactly. A hipped range hips only the ends no other mass joins, so a
 long range reads as one stepped roof. The door opens whole in a front wall,
