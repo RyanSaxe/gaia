@@ -6,10 +6,10 @@
 // smooths away its facets. Nothing else moves the eyes: no bob, no sway, no
 // roll, so the view moves only as the person moves it.
 
-import { footbridgeDeck } from "@gaia/primitives";
-import type { Way } from "./paths.ts";
+import { footbridgeDeck, footbridgeHolds } from "@gaia/primitives";
+import { type Crossing, type Way, crossingSeed } from "./paths.ts";
 import { EYE_HEIGHT } from "./sight.ts";
-import type { Solids } from "./solids.ts";
+import type { SolidShape, Solids } from "./solids.ts";
 import { type Intent, type Stance, WALK_TO, moveBy, stanceAt, wadeSpeed } from "./walk.ts";
 import { groundHeightAt } from "./wilds.ts";
 import type { Terrain } from "./world.ts";
@@ -54,7 +54,11 @@ export interface Footing extends Stance {
   readonly deck: boolean;
 }
 
-/** A footbridge's deck as a walk stands on it: its middle, its axis, its half span and width, and its top above `base`. */
+/**
+ * A footbridge's deck as a walk stands on it: its middle, its axis, its half span and width, and its top above
+ * `base`; the way and crossing it is, and the vitality below which a gap too wide to step across has opened in it
+ * (`footbridgeHolds`), so it can no longer be walked.
+ */
 export interface Deck {
   readonly x: number;
   readonly z: number;
@@ -64,19 +68,28 @@ export interface Deck {
   readonly halfWidth: number;
   readonly base: number;
   readonly topAt: (u: number) => number;
+  readonly way: number;
+  readonly crossing: Crossing;
+  readonly holds: number;
 }
 
-/** The decks of every footbridge on the ways, where a walk stands above the water. */
+/** The decks of every footbridge on the ways, where a walk stands above the water while each holds. */
 export function decksOf(ways: readonly Way[]): Deck[] {
   const out: Deck[] = [];
-  for (const way of ways) {
-    if (way.style.crossing !== "footbridge") continue;
-    for (const c of way.crossings) {
+  ways.forEach((way, i) => {
+    if (way.style.crossing !== "footbridge") return;
+    way.crossings.forEach((c, k) => {
       const deck = footbridgeDeck(c.span, way.style.width);
-      out.push({ x: c.x, z: c.z, cos: Math.cos(c.yaw), sin: Math.sin(c.yaw), half: c.span / 2, halfWidth: deck.halfWidth, base: c.bank, topAt: deck.topAt });
-    }
-  }
+      out.push({ x: c.x, z: c.z, cos: Math.cos(c.yaw), sin: Math.sin(c.yaw), half: c.span / 2, halfWidth: deck.halfWidth, base: c.bank, topAt: deck.topAt, way: i, crossing: c, holds: footbridgeHolds(c.span, crossingSeed(way, k)) });
+    });
+  });
   return out;
+}
+
+/** Where a deck that no longer holds stands, as a solid a walk goes round: its span from bank to bank and its width with its rails. */
+export function deckShape(d: Deck): SolidShape {
+  const w = d.halfWidth + 0.15;
+  return { points: [[-d.half, -w], [d.half, -w], [d.half, w], [-d.half, w]].flatMap(([u, v]) => [d.x + (u as number) * d.cos + (v as number) * d.sin, d.z - (u as number) * d.sin + (v as number) * d.cos]) };
 }
 
 /** The highest deck's top over a point, or -Infinity off every deck. */

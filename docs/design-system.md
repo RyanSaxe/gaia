@@ -296,9 +296,9 @@ about 79% of the pace, a descent of up to 16% is a little quicker (at most
 The eyes ride 1.6 m over the mean footing within half a meter, which smooths
 away the lattice's facets, on a critically damped spring read ahead of the
 body by the spring's own lag, so on a slope they keep their height within
-3 cm and never overshoot or float. A footbridge's deck is ground to walk on:
-stepping up onto it lifts the eyes as a step, and the person crosses dry
-above the water. A tapped walk carries the person along its way while they
+3 cm and never overshoot or float. A footbridge's deck, while it holds, is
+ground to walk on: stepping up onto it lifts the eyes as a step, and the
+person crosses dry above the water. A tapped walk carries the person along its way while they
 keep looking where they looked.
 
 The keys walk and turn the person (`steerStep` in `@gaia/terrain`, every
@@ -1333,7 +1333,11 @@ footbridge breaks as it fails, as a house does: its planks go missing, the
 soonest at mid-span, about one in ten by vitality 0.5 and most by 0.13; each
 rail sags off its far post, then hangs from the post nearer the bank, swung
 out over the water, and at last falls into the stream. Its deck keeps its
-line, since the walk crosses on it.
+line, and a person walks across it, stepping over a gap of up to two
+planks, until a gap wider than a stride opens (`footbridgeHolds`). Then it
+stops a walk as a wall does, and a trip along its way fords the stream
+0.9 m beside its rail, on the shallower side, wading or swimming
+(`fordBeside`); a trip straight across the land takes no broken bridge.
 
 A trail's wear follows the vitality of the two entities it joins, live.
 Near each end it takes that end's entity's vitality, and it blends between

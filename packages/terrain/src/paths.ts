@@ -9,7 +9,7 @@
 // walks it. Composition is held by the network's ground, which shared ways do
 // not add to. Everything here is pure and seeded.
 
-import type { RouteSpec } from "@gaia/schema";
+import { type RouteSpec, seedOf } from "@gaia/schema";
 import { fbm } from "@gaia/primitives";
 import { type Lattice, heightAt, slopeAt, worldOf, worldOfZ } from "./lattice.ts";
 import type { Occupied } from "./placement.ts";
@@ -89,6 +89,9 @@ export interface Crossing {
   /** The higher bank's ground, where a deck would rest. */
   readonly bank: number;
 }
+
+/** The seed a way's `k`th crossing is built from, so what stands there and how a walk crosses it agree. */
+export const crossingSeed = (way: Way, k: number): number => seedOf(`${way.id}/crossing${k}`);
 
 /** A trail walking a way: which trail, and how far along it (0 at its first end, 1 at its second) the way's first and last points lie. */
 export interface WayCarry {
