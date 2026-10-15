@@ -38,3 +38,5 @@ on "Watching Gaia drawn fresh". It refines
 its picture only while that picture is its map.
 
 World polish round 2 replaced the current map that stays as the sheet's paint: it fades to bare paper once the land is divided and is drawn again, and the land stage carries no commit.
+
+World polish round 5 replaced the map on the card: a world's card is a painting of where the person last stood still, offered whatever the commit, with a tally of the commits since they last opened it.

@@ -617,11 +617,10 @@ it, the same size, paper and torn edge, with no fringe of wood, title or
 turned-down corner. In the app only that paper shows for the moment
 before the table is drawn; with the signpost, or in the standalone lab
 with no start, the sheet lies on its creased paper instead. While the code is read
-the sheet is bare and still, or, for a world chosen on the start, is that
-world's picture as it was last walked, offered only while its code is the
-commit it pictures, so a person never watches a stale map. As soon as the
-land is divided the picture fades to bare paper and the map is drawn anew
-like any other, so nothing on the sheet is drawn twice: a pen draws
+the sheet is bare and still, or, for a world chosen on the start, is the
+painting on its card of where the person last stood still. As soon as the
+land is divided the painting fades to bare paper and the map is drawn like
+any other, so the map is only ever drawn once, in front of the person: a pen draws
 every area's border from the middle outward, the map's fine line, with the
 hedgerow's soft band coming in under it, and never the land's rounded rim.
 Between the borders and the washes, a pencil shows what Jev is doing to the
@@ -699,7 +698,7 @@ at that address. It may be private, or spelled a little differently."). The
 start does not say when a world was last walked. Two directions are built,
 chosen by `CHOSEN_START` in `start.ts` or `?start=table|signpost` (a
 standalone page shows it only when asked, with Gaia's own world as the one
-walked before, pictured by `start/gaia-picture.webp`):
+walked before, painted by `start/gaia-painting.webp`):
 
 - **The map table in 3D** (shown; `table.ts`, `table-scene.ts`): a sheet
   folded in four on an oak table, with the worlds' cards, a quill, an
@@ -720,14 +719,17 @@ walked before, pictured by `start/gaia-picture.webp`):
   sheet's head, with "the worlds you have walked" (or "where shall we
   wander?") under it in italic.
   - Each world walked before is a torn card in its land's shape, laid on
-    the sheet a little askew, bowed, one corner lifted: the picture of its
-    own field map in health's colors that its page painted when it was
-    last opened. A world with none yet, or whose code has changed since so
-    that its map will be drawn anew, lies as a card of the wait's bare
-    sheet, in the sheet's shape, as a fresh card does, so it rises into the
-    sheet with nothing changing and the map is drawn on it. When its code
-    has moved on since the person last opened it, the card carries a tally
-    in the wait's graphite pencil: a stroke for each commit since, gated in
+    the sheet a little askew, bowed, one corner lifted: a painting, in the
+    journal's own brushwork and afternoon light, of the view where the
+    person last stood still in it, which is where its next open lands them.
+    The page paints it as they stand still, so it is never more than one
+    walk behind where they left. A world with none, left before the person
+    stood still in it, lies as a card of the wait's bare sheet, in the
+    sheet's shape, as a fresh card for a folder or an address does, so it
+    rises into the sheet with nothing changing and the map is drawn on it.
+    When its code has moved on since the person last opened it, the card
+    carries a tally in the wait's graphite pencil, with the paper's tone
+    laid softly round it on a painting so it reads over the paint: a stroke for each commit since, gated in
     fives, and under it, in italic, "fourteen commits / since you last
     opened it". Past thirty commits the strokes no longer read, so the card
     writes only the number ("142 commits"); when the commit last opened is no

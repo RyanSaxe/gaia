@@ -551,7 +551,7 @@ const WARM_STEP = 20;
  * waiting on (`least`, ms) runs every frame for at least that long however busy the page is, where the page's idle
  * time alone could leave it a step a second while a world opens.
  */
-export function whenIdle(step: (budget: number) => boolean, least = 0): () => void {
+function whenIdle(step: (budget: number) => boolean, least = 0): () => void {
   let handle = 0;
   let stopped = false;
   const hasIdle = typeof window.requestIdleCallback === "function";

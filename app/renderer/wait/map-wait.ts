@@ -1,10 +1,10 @@
 // The map paints itself: the wait is the field map's own sheet, painted as
 // the world is opened (docs/design-system.md, "The field sheet"), on its
 // paper, with its torn edge and, after dark, its lantern. A world chosen on
-// the start rises into it as its picture, offered only while its code is the
-// commit it pictures; the picture fades to bare paper when the land comes, and
-// the map is drawn from nothing, as for a world whose code has changed. As
-// soon as the land is divided, a pen
+// the start rises into it as its card, a painting of where the person last
+// stood still; the painting fades to bare paper when the land comes, and the
+// map is drawn from nothing, as for any world. As soon as the land is
+// divided, a pen
 // draws every area's border. Each file's health is washed in once it is
 // settled, whenever that is, spreading over the ground around it as the map
 // spreads it (`settling.ts`), so the sheet never shows a color it later
@@ -242,18 +242,18 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
   layPaper(560);
 
   // ---------- a map chosen on the start ----------
-  /** The chosen world's picture, lying on the sheet until the land is divided. */
-  let chosen: HTMLImageElement | null = null;
-  function choose(picture: string, aspect: number): void {
+  /** The chosen card's face, lying on the sheet until the land is divided. */
+  let chosen: HTMLCanvasElement | null = null;
+  function choose(face: HTMLImageElement | HTMLCanvasElement): void {
     chosen?.remove();
-    // The sheet takes the chosen map's shape before anything comes in, so the map rises into a sheet of its own shape.
-    sheetEl.style.setProperty("--aspect", Math.max(1, aspect).toFixed(4));
-    const el = document.createElement("img");
+    const el = document.createElement("canvas");
+    el.width = face instanceof HTMLImageElement ? face.naturalWidth : face.width;
+    el.height = face instanceof HTMLImageElement ? face.naturalHeight : face.height;
+    (el.getContext("2d") as CanvasRenderingContext2D).drawImage(face, 0, 0);
     el.className = "wait-chosen";
-    el.alt = "";
-    el.src = picture;
-    // Decoded now, while the card rises, so the sheet shows it the moment it takes the card's place.
-    void el.decode().catch(() => undefined);
+    // The sheet takes the chosen card's shape before anything comes in, so the card rises into a sheet of its own shape.
+    const aspect = el.width / Math.max(1, el.height);
+    sheetEl.style.setProperty("--aspect", Math.max(1, aspect).toFixed(4));
     // As wide as the square the sheet is drawn on, and as deep as the land and its margin, in its middle.
     el.style.top = `${((1 - 1 / Math.max(1, aspect)) * 50).toFixed(3)}%`;
     el.style.height = `${(100 / Math.max(1, aspect)).toFixed(3)}%`;
@@ -542,8 +542,7 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
     // The sheet opened in the shape the land was to have; a land of another shape reshapes it.
     const shape = Math.max(1, reach / (size / 2 / (aspect ?? 1) + MARGIN));
     sheetEl.style.setProperty("--aspect", shape.toFixed(4));
-    // A chosen map folds away to bare paper, current or not, and is drawn anew as a changed world's is: drawing over
-    // the picture would draw every border, house and river on it a second time.
+    // A chosen card's painting fades to bare paper, and the map is drawn on it from nothing.
     chosen?.classList.add("gone");
     chosen = null;
     layPaper(reach);
