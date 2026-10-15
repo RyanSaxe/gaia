@@ -336,6 +336,35 @@ function profileOf(f: RoofFrame, reach: number, ridgeStop: number, courses: (sig
   return [{ b: -reach, y: under(reach) }, { b: 0, y: under(0), crease: true }, { b: reach, y: under(reach), crease: true }, ...courses(1, ridgeStop), ...roll(), ...courses(-1, ridgeStop)];
 }
 
+/**
+ * Where a turret stands over a corner of a mass, the eave's corner past that wall corner would come out through the
+ * turret's angled face there: points of the covering past a line parallel to that face, just inside it, are moved
+ * back onto it, so the covering runs into the turret and its corner stays hidden.
+ */
+function turretCut(plan: BuildingPlan, m: Mass): (p: V3) => V3 {
+  const cuts = plan.masses.flatMap((t) =>
+    !t.round || t === m
+      ? []
+      : [-1, 1].flatMap((sx) =>
+          [-1, 1].flatMap((sz) => {
+            const corner = { x: m.x + (sx * m.width) / 2, z: m.z + (sz * m.depth) / 2 };
+            return Math.hypot(corner.x - t.x, corner.z - t.z) < t.width / 2 ? [{ sx, sz, corner, t }] : [];
+          }),
+        ),
+  );
+  return (p) => {
+    let [x, , z] = p;
+    for (const { sx, sz, corner, t } of cuts) {
+      if (sx * (x - corner.x) <= 0 || sz * (z - corner.z) <= 0) continue;
+      const past = (sx * (x - t.x) + sz * (z - t.z)) / Math.SQRT2 - (t.width / 2 - 0.12);
+      if (past <= 0) continue;
+      x -= (sx * past) / Math.SQRT2;
+      z -= (sz * past) / Math.SQRT2;
+    }
+    return [x, p[1], z];
+  };
+}
+
 function thatchSlab(roof: PartBuilder, plan: BuildingPlan, f: RoofFrame, p: Resolved<typeof thatchParams>, ruin: Ruin, seed: number, r: Rand, budget: number): { reach: number; a0: number; a1: number } {
   const k = slopeOf(f);
   const secant = Math.sqrt(1 + k * k);
@@ -376,6 +405,7 @@ function thatchSlab(roof: PartBuilder, plan: BuildingPlan, f: RoofFrame, p: Reso
   const a1 = f.halfLength + overGable;
   const segments = Math.max(6, Math.min(Math.round((a1 - a0) / 0.45), Math.floor(budget / (2 * profile.length))));
   const fall = caveIn(f, r);
+  const cut = turretCut(plan, f.m);
   extrudeRoof(
     roof,
     f,
@@ -393,7 +423,7 @@ function thatchSlab(roof: PartBuilder, plan: BuildingPlan, f: RoofFrame, p: Reso
       const round = pt.top !== true ? 0 : hipped ? end * end * Math.max(0, pt.y - under(pt.b) - lip) : f.m.roof !== "hip" ? end * end * T * 0.35 : 0;
       // A settled roof dips mid-ridge, and hipped ends fall away.
       const dip = plan.settle * 0.14 * Math.sin(Math.PI * clamp((a - a0) / (a1 - a0), 0, 1)) + round + hipOf(f, a, pt.b).drop;
-      return roofPoint(f, a, pt.b + nb * bump, pt.y + ny * bump - dip);
+      return cut(roofPoint(f, a, pt.b + nb * bump, pt.y + ny * bump - dip));
     },
     (a, pt) => {
       const e = clamp(Math.abs(pt.b) / reach, 0, 1);
@@ -461,6 +491,7 @@ function tileSlab(roof: PartBuilder, plan: BuildingPlan, f: RoofFrame, p: Resolv
   const wanted = Math.round((a1 - a0) / (p.covering === "pantiles" ? tileW / 4 : tileW));
   const segments = Math.max(8, Math.min(wanted, Math.floor(budget / (2 * profile.length))));
   const fall = caveIn(f, r);
+  const cut = turretCut(plan, f.m);
   extrudeRoof(
     roof,
     f,
@@ -471,7 +502,7 @@ function tileSlab(roof: PartBuilder, plan: BuildingPlan, f: RoofFrame, p: Resolv
     (a, pt, [nb, ny]) => {
       const wave = p.covering === "pantiles" && pt.top === true && Math.abs(pt.b) > 0.3 ? 0.045 * Math.abs(Math.sin((Math.PI * a) / tileW)) : 0;
       const dip = plan.settle * 0.12 * Math.sin(Math.PI * clamp((a - a0) / (a1 - a0), 0, 1)) + hipOf(f, a, pt.b).drop;
-      return roofPoint(f, a, pt.b + nb * wave, pt.y + ny * wave - dip);
+      return cut(roofPoint(f, a, pt.b + nb * wave, pt.y + ny * wave - dip));
     },
     (a, pt) => {
       const e = clamp(Math.abs(pt.b) / reach, 0, 1);
