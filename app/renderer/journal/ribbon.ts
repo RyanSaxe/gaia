@@ -130,13 +130,14 @@ export interface RibbonPose {
  * Where the ribbon rests, by where its page is from the open spread: on it, above the paper and under a leaf that
  * turns; among the right-hand leaves, under the open page and over the leaves' edges; and among the left-hand leaves,
  * on the cover that carries them, shut under the cover and open over the left-hand page, which hides all but its
- * head and tail.
+ * head and tail; when the cover's edge lifts under the pointer, lifted with it (`.jb-cover.open.lift`).
  */
 export const RIBBON_POSES = {
   here: { z: 1, deg: 0, off: 0 },
   after: { z: -1, deg: 0, off: 0 },
   "before-shut": { z: 3, deg: 0, off: -0.6 },
   "before-open": { z: 0.4, deg: -179.6, off: -0.6 },
+  "before-lifted": { z: 0.4, deg: -176, off: -0.6 },
 } as const satisfies Record<string, RibbonPose>;
 
 /** A pose as a CSS transform, about the spine. */

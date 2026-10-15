@@ -335,6 +335,9 @@ button.jp-name { border: 0; background: none; padding: 0; text-align: left; curs
   clip-path: polygon(-100% -100%, 200% -100%, 200% var(--head), -100% var(--head), -100% var(--hid), 200% var(--hid), 200% 200%, -100% 200%);
 }
 .jb-cover.open ~ .jb-ribbon { --before: var(--before-open); }
+/* The cover's edge lifting under the pointer lifts the leaves it carries, and the ribbon among them, as fast. */
+.jb-cover.open.lift ~ .jb-ribbon { --before: var(--before-lifted); }
+.jb-cover.open.lift ~ .jb-ribbon[data-side="before"] { transition: transform 260ms ease-out; }
 .jb-ribbon[data-side="here"] { transform: var(--here); }
 .jb-ribbon[data-side="after"] { transform: var(--after); }
 .jb-ribbon[data-side="before"] { transform: var(--before); --hid: var(--foot); transition: transform 900ms cubic-bezier(.45, .05, .3, 1); }

@@ -879,16 +879,17 @@ and its tail past the foot show, in the same place on every page of that
 side. A leaf that turns carries the ribbon lying on it over the spine, at
 the angle of the leaf's strip by the spine; a leaf turning onto the ribbon's
 page lifts off it. The cover carries the leaves on the left, so the ribbon
-among them swings with the cover. When a riffle starts while the ribbon lies
-among the leaves it is about to turn, the ribbon is first drawn out of them
-from the foot up and swung across the spine onto the open page on the other
-side, in 0.62 s, and the riffle's leaves go over it, so it ends at the page
-the riffle left. Shut, the book hangs the ribbon out of its foot, which the
-corner leaves out of view, so the closed book shows no ribbon. Its free end
-sways a little and settles when a page's edge lifts or a leaf turns. It is
-drawn as silk: shaded across its width so one side catches the light,
-brighter and duller along its length, narrower where it twists, its end cut
-in a swallowtail, with a soft shadow.
+among them swings with the cover and lifts with its edge under the pointer.
+When a riffle starts while the ribbon lies among the leaves it is about to
+turn, the ribbon is first drawn out of them from the foot up and swung
+across the spine onto the open page on the other side, in 0.62 s, and the
+riffle's leaves go over it, so it ends at the page the riffle left. Shut,
+the book hangs the ribbon out of its foot, which the corner leaves out of
+view, so the closed book shows no ribbon. Its free end sways a little and
+settles when a page's edge lifts or a leaf turns. It is drawn as silk:
+shaded across its width so one side catches the light, brighter and duller
+along its length, narrower where it twists, its end cut in a swallowtail,
+with a soft shadow.
 
 A page of the journal gives every score as a percentage, so it reads as a
 share of 0 to 1. Beside a thing's name stand two numbers in the hand, each
