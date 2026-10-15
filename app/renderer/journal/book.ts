@@ -97,6 +97,8 @@ const FILL = { w: 0.94, h: 0.88 } as const;
  * the leaves, and how long after it starts the leaves go, ms.
  */
 const LIFT = { ms: 620, drawn: 320, leaves: 440 } as const;
+/** How far the ribbon lies off the front of a leaf that carries it, in the book's pixels. */
+const RIBBON_ON_LEAF = 0.3;
 /** The layer a turning leaf's strips lie at (`.jb-curl` in journal.css), which the ribbon on that leaf rides. */
 const CURL_Z = 1.3;
 /** Where the ribbon lies from the open spread: on it, among the leaves before it, or among those after it. */
@@ -249,7 +251,7 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
   function carry(z: number, deg: number, transition = "none"): void {
     ribbon.dataset.side = "carried";
     ribbon.style.transition = transition;
-    ribbon.style.transform = ribbonTransform({ z, deg, off: 0.3 });
+    ribbon.style.transform = ribbonTransform({ z, deg, off: RIBBON_ON_LEAF });
   }
   /**
    * Lifts the ribbon out from among the leaves on one side and lays it across on the open page there, drawn out from
@@ -435,6 +437,33 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
     page.style.backgroundSize = "100% 100%, cover";
     return page;
   };
+  /** A riffle under way, which the book shut part way through lets fall shut with the cover. */
+  let shutRiffle: (() => void) | null = null;
+  /**
+   * Lets leaves, or the ribbon, fall shut with the cover, each posed about the spine as `translateZ(z) rotateY(…)
+   * translateZ(off)`: one still lying on the left-hand leaves rides the cover over at its height above the cover's
+   * own, and one in the air falls ahead of the cover, keeping its share of the cover's angle, so neither passes
+   * through the cover. The cover's heights open and shut are the ribbon's among its leaves (`RIBBON_POSES`).
+   */
+  function fallShut(each: readonly (readonly [HTMLElement, number, number])[]): void {
+    const [opened, shut] = [RIBBON_POSES["before-open"].z, RIBBON_POSES["before-shut"].z];
+    const poses = each.map(([e, z, off]) => {
+      const deg = angleOf(e);
+      const above = opened - (z - off);
+      return deg < -170
+        ? { e, from: `translateZ(${opened}px) rotateY(${deg}deg) translateZ(${above}px)`, to: `translateZ(${shut}px) rotateY(0deg) translateZ(${above}px)` }
+        : { e, from: `translateZ(${z}px) rotateY(${deg}deg) translateZ(${off}px)`, to: `translateZ(${z}px) rotateY(0deg) translateZ(${off}px)` };
+    });
+    for (const p of poses) {
+      p.e.style.transition = "none";
+      p.e.style.transform = p.from;
+    }
+    void inner.offsetWidth;
+    for (const p of poses) {
+      p.e.style.transition = `transform ${COVER_MS}ms cubic-bezier(.45,.05,.3,1)`;
+      p.e.style.transform = p.to;
+    }
+  }
   /**
    * The book riffles toward a far page: many leaves turn over one after another, fast, several in the air at once,
    * the way a thumb lets a book's pages run, and the last carries the page asked for, once that page is whole. While
@@ -462,8 +491,12 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
     const [start, end] = forward ? [0, -179.6] : [-179.6, 0];
     right.classList.remove("lift");
     cover.classList.remove("lift");
-    const flying: HTMLElement[] = [];
+    const flying: { readonly leaf: HTMLElement; readonly z: number }[] = [];
     let k = 0;
+    /** The height of the leaf the ribbon lies on, while a leaf of this riffle carries it. */
+    let riding: number | null = null;
+    const timers: number[] = [];
+    const later = (f: () => void, ms: number): void => void timers.push(window.setTimeout(f, ms));
     /** Turns a leaf over, and with it the ribbon when that lies on its front. */
     const launch = (front: HTMLElement, back: HTMLElement, ms: number, carries = false): HTMLElement => {
       const l = el("jb-leaf jb-riffle", inner);
@@ -478,9 +511,10 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
       turn(start, "none");
       void l.offsetWidth;
       turn(end, `transform ${ms}ms cubic-bezier(.42,.05,.36,1)`);
-      flying.push(l);
+      if (carries) riding = z;
+      flying.push({ leaf: l, z });
       // Only the leaves on top of the pile are kept once they land.
-      while (flying.length > 16) flying.shift()?.remove();
+      while (flying.length > 16) flying.shift()?.leaf.remove();
       k++;
       return l;
     };
@@ -488,17 +522,17 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
     // paper written on.
     // The edges and the tabs move with the leaves, so a lift has the page's thread to itself while it draws the ribbon out.
     const first = (): void => {
-      if (!open) return stop();
       layDepth(target, 1800);
       markTabs(target);
       const lifted = (forward ? right : left).firstElementChild as HTMLElement;
       put(forward ? right : left, face(1));
       launch(forward ? lifted : face(0), forward ? face(0) : lifted, RIFFLE.ms, forward && lies === "here");
-      window.setTimeout(step, RIFFLE.ends);
+      later(step, RIFFLE.ends);
     };
     const land = (last: HTMLElement): void => {
+      shutRiffle = null;
       put(forward ? left : right, last.querySelector(forward ? ".back" : ".front")?.firstElementChild as HTMLElement);
-      for (const f of flying) f.remove();
+      for (const f of flying) f.leaf.remove();
       at = target;
       markTabs(target);
       layEdges();
@@ -509,19 +543,27 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
         turnTo(next);
       }
     };
-    /** The book shut part way: the leaves in the air are gone, and the ribbon rests where its page is. */
-    const stop = (): void => {
-      for (const f of flying) f.remove();
-      layRibbon();
-      turning = false;
+    // Shut part way, the leaves fall shut with the cover, and the ribbon with the leaf it lies on, or from where it is
+    // being lifted across. The book lies shut at the page the riffle left.
+    shutRiffle = (): void => {
+      shutRiffle = null;
+      for (const t of timers) window.clearTimeout(t);
+      queued = null;
+      const falling: [HTMLElement, number, number][] = flying.map(({ leaf: l, z }) => [l, z, 0]);
+      if (ribbon.dataset.side === "carried") falling.push(riding === null ? [ribbon, new DOMMatrixReadOnly(getComputedStyle(ribbon).transform).m43, 0] : [ribbon, riding, RIBBON_ON_LEAF]);
+      fallShut(falling);
+      window.setTimeout(() => {
+        for (const f of flying) f.leaf.remove();
+        layRibbon();
+        turning = false;
+      }, COVER_MS + 40);
     };
     const step = (): void => {
-      if (!open) return stop();
       const toGo = leaves - k;
       if (toGo > 0 || !whole) {
         const waiting = toGo <= 0;
         launch(face(k * 2), face(k * 2 + 1), waiting ? RIFFLE.waitingMs : RIFFLE.ms);
-        window.setTimeout(step, waiting ? RIFFLE.waiting : k < 3 || toGo < 3 ? RIFFLE.ends : RIFFLE.gap);
+        later(step, waiting ? RIFFLE.waiting : k < 3 || toGo < 3 ? RIFFLE.ends : RIFFLE.gap);
         return;
       }
       // The last leaf carries the page asked for, and the page beside it lies beneath.
@@ -531,9 +573,9 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
       if (home && forward) rest("here");
       // Its leaves turn flat: bending its first and last stalled the page's thread for half a second once a riffle.
       const last = launch(forward ? face(k * 2) : to.right, forward ? to.left : face(k * 2), RIFFLE.ms + 260, home && !forward);
-      window.setTimeout(() => land(last), RIFFLE.ms + 300);
+      later(() => land(last), RIFFLE.ms + 300);
     };
-    if (lifts) window.setTimeout(first, LIFT.leaves);
+    if (lifts) later(first, LIFT.leaves);
     else first();
   }
 
@@ -799,6 +841,7 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
       });
     } else {
       // The cover swings shut over the page you were reading, then the book is set back in its corner.
+      shutRiffle?.();
       inner.style.transition = `transform ${COVER_MS}ms cubic-bezier(.45,.05,.3,1)`;
       swingAfter(0);
       book.style.transition = `transform ${TRAVEL_MS}ms cubic-bezier(.45,.05,.3,1) ${COVER_MS * 0.6}ms`;
