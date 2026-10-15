@@ -1187,7 +1187,9 @@ The three ways work together:
   place the names once for the whole sheet with `placeNames`
   (`map-names.ts`), from the areas' outlines and the lots where buildings
   and landmarks will stand, never from where the person stands. A name
-  sits on its area's widest ground and never covers another name. It keeps
+  sits on its area's widest ground and never covers another name. Two
+  names on one line, end to end, keep at least 26 px of paper between their
+  capitals, so neighbours never read as one name (FIREFLY SPROUT). It keeps
   off the compass rose's corner and off every building's and landmark's
   mark, keeping clear of all the ground any mark could take round its lot,
   since the wait letters names before it knows what will stand there.
