@@ -429,7 +429,10 @@ and the trails between entities, walked over one network of ways
 and any trail dropped, with why), ending at a building's door, a landmark's
 foot, or the lot's middle of an entity that stands as neither
 (`StandCode.places`). Buildings and landmarks are sited first, and
-everything else keeps off them. A thing that stands as a tree is one of the
+everything else keeps off them. A building takes the gentlest dry spot on its
+lot, or its lot's middle when none is free; where the water would stand
+above its pad there, it takes the nearest dry ground past the lot
+(`findSite`), so a house never stands in a pond or a stream. A thing that stands as a tree is one of the
 woods' trees, sized by its importance and its area's character (`stature` in
 `CHARACTERS`), with its own vitality, and keeps its crown's width from
 every other so each tree reads as one thing; any other stands as an

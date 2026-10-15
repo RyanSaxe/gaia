@@ -123,29 +123,52 @@ function yardSamples(plan: BuildingPlan, site: BuildingSite, step: number, grow 
   return out;
 }
 
+/** Where a building might stand, and which way its door faces. */
+type Spot = { readonly x: number; readonly z: number; readonly yaw: number };
+
+/** Spots on rings every 2 m from `r0` to `r1` meters out from a lot's middle, each turned four ways from facing the world's middle. */
+function ringSpots(lot: Circle, r0: number, r1: number): Spot[] {
+  const spots: Spot[] = [];
+  for (let r = r0; r <= r1; r += 2) {
+    const count = r === 0 ? 1 : Math.ceil((Math.PI * 2 * r) / 3);
+    for (let k = 0; k < count; k++) {
+      const a = (k / count) * Math.PI * 2;
+      const x = lot.x + Math.cos(a) * r;
+      const z = lot.z + Math.sin(a) * r;
+      for (const yaw of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) spots.push({ x, z, yaw: yaw + Math.atan2(-lot.x, -lot.z) });
+    }
+  }
+  return spots;
+}
+
 /**
  * The gentlest dry spot near the middle reach of a stream, its door facing
- * the water; without streams, the gentlest dry spot inside the world. A
- * site keeps `apart` meters from every site already `taken`, and its yard
- * covers `beside` too.
+ * the water; without streams, the gentlest dry spot inside the world; on a
+ * lot laid out for it (`within`), the gentlest dry spot on the lot, or the
+ * nearest past it. A site keeps `apart` meters from every site already
+ * `taken`, and its yard covers `beside` too.
  */
 export function findSite(t: Terrain, plan: BuildingPlan, taken: readonly BuildingSite[] = [], apart = 30, beside: Extent | null = null, within: Circle | null = null): BuildingSite {
   const half = t.spec.size / 2 - 34;
+  const everywhere = (): Spot[] => {
+    const spots: Spot[] = [];
+    for (let z = -half; z <= half; z += 12) for (let x = -half; x <= half; x += 12) if (withinLand(t.spec, x, z, 34)) spots.push({ x, z, yaw: Math.atan2(-x, -z) });
+    return spots;
+  };
   if (within !== null) {
-    // A lot laid out for it: the gentlest dry spot whose middle lies on the lot, its door facing the lot's middle or the water.
-    const spots: { x: number; z: number; yaw: number }[] = [];
-    for (let r = 0; r <= within.radius; r += 2) {
-      const count = r === 0 ? 1 : Math.ceil((Math.PI * 2 * r) / 3);
-      for (let k = 0; k < count; k++) {
-        const a = (k / count) * Math.PI * 2;
-        const x = within.x + Math.cos(a) * r;
-        const z = within.z + Math.sin(a) * r;
-        for (const yaw of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) spots.push({ x, z, yaw: yaw + Math.atan2(-within.x, -within.z) });
-      }
+    // A lot laid out for it: the gentlest dry spot whose middle lies on the lot, its door facing the lot's middle or the
+    // water; with none free, the lot's middle, unless its pad would leave the house in water.
+    const middle: BuildingSite = { x: within.x, z: within.z, yaw: Math.atan2(-within.x, -within.z), level: heightAt(t.lattice, within.x, within.z) };
+    const onLot = gentlest(t, plan, ringSpots(within, 0, within.radius), taken, Math.min(apart, 12), beside, half) ?? (inWater(t, plan, middle) ? null : middle);
+    if (onLot !== null) return onLot;
+    // Never in the water: the gentlest dry spot on the nearest band of ground past the lot, then anywhere.
+    for (let r = within.radius + 2; r <= within.radius + 60; r += 12) {
+      const past = gentlest(t, plan, ringSpots(within, r, r + 10), taken, Math.min(apart, 12), beside, half);
+      if (past !== null) return past;
     }
-    return gentlest(t, plan, spots, taken, Math.min(apart, 12), beside, half) ?? { x: within.x, z: within.z, yaw: Math.atan2(-within.x, -within.z), level: heightAt(t.lattice, within.x, within.z) };
+    return gentlest(t, plan, everywhere(), taken, Math.min(apart, 12), beside, half) ?? middle;
   }
-  const candidates: { x: number; z: number; yaw: number }[] = [];
+  const candidates: Spot[] = [];
   for (const stream of t.streams) {
     const st = stream.stations;
     for (let k = Math.floor(st.length * 0.3); k < st.length * 0.65; k += 3) {
@@ -166,13 +189,22 @@ export function findSite(t: Terrain, plan: BuildingPlan, taken: readonly Buildin
       }
     }
   }
-  const everywhere: { x: number; z: number; yaw: number }[] = [];
-  for (let z = -half; z <= half; z += 12) for (let x = -half; x <= half; x += 12) if (withinLand(t.spec, x, z, 34)) everywhere.push({ x, z, yaw: Math.atan2(-x, -z) });
   // Beside the water first; anywhere in the world when the banks are full.
-  return gentlest(t, plan, candidates, taken, apart, beside, half) ?? gentlest(t, plan, everywhere, taken, apart, beside, half) ?? { x: 0, z: 0, yaw: 0, level: heightAt(t.lattice, 0, 0) };
+  return gentlest(t, plan, candidates, taken, apart, beside, half) ?? gentlest(t, plan, everywhere(), taken, apart, beside, half) ?? { x: 0, z: 0, yaw: 0, level: heightAt(t.lattice, 0, 0) };
 }
 
-function gentlest(t: Terrain, plan: BuildingPlan, candidates: readonly { x: number; z: number; yaw: number }[], taken: readonly BuildingSite[], apart: number, beside: Extent | null, half: number): BuildingSite | null {
+/** True when water would stand in a site's house once its pad is leveled: the water's surface lies above the pad somewhere under it, sampled every meter. */
+function inWater(t: Terrain, plan: BuildingPlan, site: BuildingSite): boolean {
+  for (let lz = -plan.depth / 2; lz <= plan.depth / 2 + 1e-6; lz += 1) {
+    for (let lx = -plan.width / 2; lx <= plan.width / 2 + 1e-6; lx += 1) {
+      const surface = heightAt(t.lattice, ...siteToWorld(site, lx, lz), t.waterLevel);
+      if (surface > DRY / 2 && surface > site.level) return true;
+    }
+  }
+  return false;
+}
+
+function gentlest(t: Terrain, plan: BuildingPlan, candidates: readonly Spot[], taken: readonly BuildingSite[], apart: number, beside: Extent | null, half: number): BuildingSite | null {
   let best: BuildingSite | null = null;
   let bestScore = Infinity;
   for (const c of candidates) {
