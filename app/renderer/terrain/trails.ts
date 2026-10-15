@@ -17,7 +17,7 @@ import { type Built, type Library, seedOf } from "@gaia/schema";
 import { buildCairn, buildEdgingStones, buildFootbridge, buildSteppingStones } from "@gaia/primitives";
 import { type Realized, mergeParts } from "@gaia/realize";
 import { type PlantView, type SceneLight, createPlant } from "@gaia/render";
-import { type EdgeStone, type Terrain, type TrailNetwork, type Way, edgeStones, junctionVitality, wayVitalityAt, wayWear } from "@gaia/terrain";
+import { type Crossing, type EdgeStone, type Terrain, type TrailNetwork, type Way, crossingSeed, edgeStones, junctionVitality, wayVitalityAt, wayWear } from "@gaia/terrain";
 
 /**
  * GLSL: the signed distance to the nearest way's edge, meters, negative on
@@ -123,6 +123,10 @@ const STONE_PALETTE = (lib: Library): Realized["palette"] => {
   return (palette.build as (p: unknown) => Realized["palette"])({ family: "spring-meadow", contrast: 1 });
 };
 
+/** The vitality a way's crossing shows: its liveliest trail's where it stands (`wayVitalityAt`). */
+export const crossingVitality = (network: TrailNetwork, way: number, c: Crossing, of: (place: string) => number): number =>
+  wayVitalityAt(network, way, alongOf(network.ways[way] as Way, c.x, c.z), of);
+
 /** How far along a way (0 to 1) its center line passes nearest a point. */
 function alongOf(trail: Way, x: number, z: number): number {
   const pts = trail.points;
@@ -160,9 +164,8 @@ export function createWays(scene: THREE.Scene, light: SceneLight, lib: Library, 
   const piece = (x: number, z: number, reach: number, size: number, build: Piece["build"], vitality: Piece["vitality"]): void => void pieces.push({ x, z, reach, size, build, vitality, view: null });
   network.ways.forEach((trail, i) => {
     trail.crossings.forEach((c, k) => {
-      const seed = seedOf(`${trail.id}/crossing${k}`);
-      const along = alongOf(trail, c.x, c.z);
-      const vitality = (of: (place: string) => number): number => wayVitalityAt(network, i, along, of);
+      const seed = crossingSeed(trail, k);
+      const vitality = (of: (place: string) => number): number => crossingVitality(network, i, c, of);
       if (trail.style.crossing === "footbridge") piece(c.x, c.z, c.span, c.span / 2, () => ({ built: buildFootbridge(c.span, trail.style.width, seed), at: [c.x, c.bank, c.z, c.yaw] }), vitality);
       else piece(c.x, c.z, c.span, c.span / 2, () => ({ built: buildSteppingStones(c.span, seed), at: [c.x, c.level, c.z, c.yaw] }), vitality);
     });
