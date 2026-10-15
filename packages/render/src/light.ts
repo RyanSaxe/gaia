@@ -196,7 +196,7 @@ uniform float uFogDensity;
 uniform float uTime;
 uniform float uMist;
 uniform mat4 uShadowMatrix;
-uniform sampler2D uShadowMap;
+uniform sampler2DShadow uShadowMap;
 uniform float uShadowTexel;
 uniform vec3 uMoonDirection;
 uniform vec3 uMoonColor;
@@ -220,8 +220,10 @@ float softCel(float x) {
   return clamp((band + soft) / uCelBands, 0.0, 1.0);
 }
 
-// Lit fraction from the hand-rolled sun shadow map, 3x3 PCF. Shadows
-// suggest, never shout: the floor keeps them soft washes.
+// Lit fraction from the hand-rolled sun shadow map, 3x3 PCF. Each sample
+// compares the four texels nearest it and blends them by distance, so a
+// shadow's edge ramps across a texel instead of stepping. Shadows suggest,
+// never shout: the floor keeps them soft washes.
 // The samples spread SHADOW_SPREAD texels apart, so where the light meets a
 // surface at a slant the outer ones read the surface itself, nearer the
 // light, and it shadows itself in speckles. The point is read lifted off its
@@ -242,8 +244,7 @@ float sunShadow(vec3 worldPosition, vec3 normal, float bias) {
   float lit = 0.0;
   for (int dx = -1; dx <= 1; dx++) {
     for (int dy = -1; dy <= 1; dy++) {
-      float depth = texture2D(uShadowMap, c.xy + vec2(float(dx), float(dy)) * uShadowTexel * SHADOW_SPREAD).r;
-      lit += c.z - bias <= depth ? 1.0 : 0.0;
+      lit += texture(uShadowMap, vec3(c.xy + vec2(float(dx), float(dy)) * uShadowTexel * SHADOW_SPREAD, c.z - bias));
     }
   }
   return lit / 9.0;
