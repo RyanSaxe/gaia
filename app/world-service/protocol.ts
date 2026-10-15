@@ -3,7 +3,7 @@
 // renderer over its own MessagePort.
 
 import type { CodeFacts, PatchPlace, Span, Unreachable } from "@gaia/schema";
-import type { Outline } from "@gaia/terrain";
+import type { Outline, StoodSpot } from "@gaia/terrain";
 import type { CodeWorld, Judge, LotPlace } from "@gaia/world";
 
 /** Main process → world service. */
@@ -41,6 +41,12 @@ export interface RecentWorld {
   readonly picture?: string;
   /** The commit the world was read from when its picture was painted; a picture never comes without it. */
   readonly commit?: string;
+  /**
+   * Where the person stood when they last left this world (`world.stood`), so the next open lands them there. It is
+   * kept here, with the app's settings, rather than in the project's own store, because every write rewrites a
+   * store whole and a project's holds all of Jev's answers.
+   */
+  readonly stood?: StoodSpot;
 }
 
 /** What the start page offers: the worlds opened before, and why the last address written led nowhere, if it did. */
@@ -162,7 +168,8 @@ export type ToRenderer =
   | { readonly type: "world.consent"; readonly plan: ConsentPlan }
   /** No folder is named: the page offers the start, and answers with `world.choose`. Sent again, with `refused`, when a written address leads nowhere. */
   | { readonly type: "world.start"; readonly offer: StartOffer }
-  | { readonly type: "world.document"; readonly document: WorldDocument }
+  /** The world laid out, and where the person stood when they last left it, if they were here before (`RecentWorld.stood`). */
+  | { readonly type: "world.document"; readonly document: WorldDocument; readonly stood?: StoodSpot }
   | { readonly type: "world.failed"; readonly root: string; readonly message: string }
   /** A file's text, answering `world.source`: its lines, or null when it can't be read or lies outside the folder. */
   | { readonly type: "world.source"; readonly path: string; readonly lines: readonly string[] | null };
@@ -178,7 +185,9 @@ export type FromRenderer =
   /** A picture of the world this page opened (`RecentWorld.picture`), painted once its field map is: kept with it among the recent worlds. */
   | { readonly type: "world.picture"; readonly picture: string }
   /** Asks for a file of the world this page opened, by its project-relative path, for the journal's code pages. */
-  | { readonly type: "world.source"; readonly path: string };
+  | { readonly type: "world.source"; readonly path: string }
+  /** Where the person stands in the world this page opened, sent now and then as they walk and when the page goes: kept with it among the recent worlds. */
+  | { readonly type: "world.stood"; readonly stood: StoodSpot };
 
 /** The status bar's words for each state. */
 export function statusText(status: EngineStatus | "standalone"): string {

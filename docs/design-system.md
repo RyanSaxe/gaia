@@ -1052,7 +1052,13 @@ code within 100 m and 35° either side of the view, a building or landmark
 counting as four trees, bushes, stones or flowers; then the nearest the
 heart. A world with no such stretch weighs twelve ways of facing from dry
 ground on rings around the heart, out to 120 m. The sample world stands for
-no code, so its buildings and landmarks are what count. Nothing sits on
+no code, so its buildings and landmarks are what count. That is a first
+visit. A world opened before lands the person where they stood when they
+last left it (`returnTo`): exactly there while its code is laid out as it
+was; once an edit has moved things, beside the nearest thing that stood for
+code, wherever it stands now, at the same offset and facing, on that spot if
+it is dry and clear of everything and otherwise at the nearest landing to
+it; and with the opening view if that thing is gone. Nothing sits on
 it but the world, the three ways of knowing where you are, all at once, and
 the compass in the corner: no panels, no readouts. The compass
 (`app/renderer/immersive/compass.ts`) is a round of the map's paper, 44 px

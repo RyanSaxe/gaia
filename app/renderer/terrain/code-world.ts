@@ -17,7 +17,7 @@
 import { type Blueprint, type CodeFacts, type EntityFacts, type FileFacts, type RouteSpec, type SymbolFact, type ThingFacts, rand, seedOf } from "@gaia/schema";
 import { link } from "@gaia/kinds";
 import { TRAIL_PRESETS, WORLD_PRESETS, buildSlots } from "@gaia/realize";
-import { type WorldSpec, outlinesOf } from "@gaia/terrain";
+import { type StoodSpot, type WorldSpec, outlinesOf } from "@gaia/terrain";
 import { type CodeWorld, type Judge, type Judgments, layoutWorld } from "@gaia/world";
 import type { ConsentPlan, JudgedThing, Opening, StartChoice, StartOffer, WorldDocument } from "../../world-service/protocol.ts";
 import { type WorldService, worldService } from "../service.ts";
@@ -72,6 +72,8 @@ export interface CodeLab {
   readonly thing: (of: string) => JudgedThing | undefined;
   /** How the judging went, in words. */
   readonly summary: string;
+  /** Where the person stood when they last left this world, if they were here before (`returnTo`). */
+  readonly stood?: StoodSpot;
 }
 
 /**
@@ -132,7 +134,7 @@ export const symbolScale = (lines: SymbolFact["lines"], rule: string, importance
 };
 
 /** The world from the world service: opened, judged and laid out there, with the wait kept up to date. */
-function serviceWorld(service: WorldService, veil: Veil): Promise<WorldDocument> {
+function serviceWorld(service: WorldService, veil: Veil): Promise<{ readonly document: WorldDocument; readonly stood?: StoodSpot }> {
   return new Promise((resolve, reject) => {
     const off = service.on((m) => {
       if (m.type === "world.progress") veil.opening(m.opening);
@@ -140,7 +142,7 @@ function serviceWorld(service: WorldService, veil: Veil): Promise<WorldDocument>
       else if (m.type === "world.consent") void veil.ask(m.plan).then((approve) => service.send({ type: "world.consent", approve }));
       else if (m.type === "world.document") {
         off();
-        resolve(m.document);
+        resolve(m.stood === undefined ? { document: m.document } : { document: m.document, stood: m.stood });
       } else if (m.type === "world.failed") {
         off();
         reject(new Error(m.message));
@@ -207,6 +209,8 @@ async function previewStart(veil: Veil): Promise<void> {
 export async function codeWorld(veil: Veil): Promise<CodeLab> {
   const service = worldService();
   let document: WorldDocument;
+  // Where the person stood when they last left this world; only the world service keeps it.
+  let stood: StoodSpot | undefined;
   let landed = false;
   const watched: Veil = { ...veil, opening: (o) => ((landed ||= o.stage === "land"), veil.opening(o)) };
   // A world that cannot be opened says why on the wait, which stays: nothing else is shown in its place.
@@ -215,7 +219,7 @@ export async function codeWorld(veil: Veil): Promise<CodeLab> {
     else if (service === null) {
       if (typeof location !== "undefined" && new URLSearchParams(location.search).has("start")) await previewStart(veil);
       document = await snapshotWorld("no engine on a standalone page");
-    } else document = await serviceWorld(service, watched);
+    } else ({ document, stood } = await serviceWorld(service, watched));
   } catch (error) {
     const message = (error as Error).message;
     console.error(`gaia: could not open the world: ${message}`);
@@ -227,7 +231,7 @@ export async function codeWorld(veil: Veil): Promise<CodeLab> {
   // A world laid out here, with no world service, shows its land only now.
   if (!landed) veil.opening({ stage: "land", name: document.world.name, size: document.world.size, ...(document.world.aspect === undefined ? {} : { aspect: document.world.aspect }), areas: outlines.areas, patches: document.world.patches, lots: document.world.things.map(({ x, z }) => ({ x, z })) });
   veil.baking(Object.fromEntries(document.world.patches.map((p) => [p.path, p.vitality])));
-  return codeLab(document);
+  return stood === undefined ? codeLab(document) : { ...codeLab(document), stood };
 }
 
 /** A trail's route as the terrain walks it: what its link blueprint builds, or the first hand-filled trail's for one not composed. */
