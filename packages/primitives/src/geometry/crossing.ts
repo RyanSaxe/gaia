@@ -5,9 +5,9 @@
 // Each writes vitality channels: a footbridge's planks go missing, its rails
 // sag, hang from one post and fall into the stream, and stone weathers grey.
 
-import type { Built, Part, Vec3 } from "@gaia/schema";
+import type { Built, Part, Rand, Vec3 } from "@gaia/schema";
 import { rand } from "@gaia/schema";
-import { type Channels, PartBuilder, type V3, normalize } from "./kit.ts";
+import { type Channels, LOSS_BAND, PartBuilder, type V3, normalize } from "./kit.ts";
 import { UP, beam, box, log, quad, tri } from "./blocks.ts";
 
 const nonEmpty = (parts: Part[]): Part[] => parts.filter((p) => p.indices.length > 0);
@@ -28,6 +28,30 @@ export function footbridgeDeck(span: number, width: number): FootbridgeDeck {
   return { halfWidth: Math.max(1.3, width) / 2, topAt: (u) => lift + arch * (1 - Math.pow((2 * u) / span, 2)) + PLANK_HALF };
 }
 
+/** How many planks a footbridge `span` long lays across it: each 0.24 m wide, with a gap of 2.5 cm. */
+const plankCount = (span: number): number => Math.max(4, Math.floor(span / (0.24 + 0.025)));
+
+/** The vitality below which the plank `x` along a span is gone, the soonest at mid-span, where the deck bears the most; it takes the plank's first draw. */
+const plankLoss = (pr: Rand, x: number, span: number): number => 0.7 * Math.pow(pr.next(), 1.7) * (0.75 + 0.25 * (1 - Math.abs((2 * x) / span)));
+
+/** The widest gap in a deck a person steps across, meters: two planks; a wider one stops the walk. */
+const STRIDE_GAP = 0.6;
+
+/**
+ * The vitality below which the footbridge `span` long built from `seed` can no longer be walked across: a run of
+ * planks not wholly there, going or gone (`LOSS_BAND`), wider than a stride (`STRIDE_GAP`) has opened somewhere
+ * along its deck.
+ */
+export function footbridgeHolds(span: number, seed: number): number {
+  const count = plankCount(span);
+  const r = rand(seed);
+  const losses = Array.from({ length: count }, (_, k) => plankLoss(r.fork(`plank${k}`), -span / 2 + (k + 0.5) * (span / count), span));
+  const run = Math.floor(STRIDE_GAP / (span / count)) + 1;
+  let holds = 0;
+  for (let k = 0; k + run <= count; k++) holds = Math.max(holds, Math.min(...losses.slice(k, k + run)));
+  return holds + LOSS_BAND;
+}
+
 /**
  * A plank footbridge along local +x, `span` long from bank to bank and
  * `width` wide, its deck arching a little. The deck is walkable. The origin
@@ -44,10 +68,9 @@ export function buildFootbridge(span: number, width: number, seed: number): Buil
   const yAt = (x: number): number => top.topAt(x) - PLANK_HALF;
   const still = (pivot: Vec3, wither: number, extra: Partial<Channels> = {}): Channels => ({ loss: 0, droop: 0, wither, glow: 0, pivot, ...extra });
 
-  // Planks across the span. They go missing as vitality falls, the soonest at mid-span, where the deck bears the
-  // most: about one in ten by 0.5 and most by 0.13. The deck keeps its line, since the walk crosses on it.
-  const plank = 0.24;
-  const count = Math.max(4, Math.floor(span / (plank + 0.025)));
+  // Planks across the span. They go missing as vitality falls (`plankLoss`): about one in ten by 0.5 and most by 0.13.
+  // The deck keeps its line, and the walk crosses on it until a gap wider than a stride opens (`footbridgeHolds`).
+  const count = plankCount(span);
   for (let k = 0; k < count; k++) {
     const x = -span / 2 + (k + 0.5) * (span / count);
     const pr = r.fork(`plank${k}`);
@@ -55,8 +78,7 @@ export function buildFootbridge(span: number, width: number, seed: number): Buil
     const slope = (top.topAt(x + 0.01) - top.topAt(x - 0.01)) / 0.02;
     const along = normalize([1, slope, 0]);
     const up = normalize([-slope, 1, 0]);
-    const mid = 1 - Math.abs((2 * x) / span);
-    const goes = 0.7 * Math.pow(pr.next(), 1.7) * (0.75 + 0.25 * mid);
+    const goes = plankLoss(pr, x, span);
     const pivot: V3 = [x, y - 0.6, 0];
     box(deck, [x, y, (pr.next() - 0.5) * 0.04], [along, up, [0, 0, 1]], [span / count / 2 - 0.012, PLANK_HALF, w / 2 + (pr.next() - 0.5) * 0.06], 0.44 + 0.12 * pr.next(), {
       loss: goes,

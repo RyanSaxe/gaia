@@ -319,6 +319,43 @@ export function acrossWay(t: Terrain, solids: Solids, from: Walker, to: Walker, 
   return way;
 }
 
+// ---------- a broken footbridge ----------
+
+/** How far beside a broken deck's rail a trip fords the stream, meters, and over how much bank either side it eases out to it. */
+const FORD_BESIDE = { clear: 0.9, ease: 4 } as const;
+
+/**
+ * A way that crosses a footbridge no longer walked (`broken`, its decks that
+ * no longer hold) fords the stream beside it instead: through the water
+ * `FORD_BESIDE.clear` meters past its rail, on the side where the water is
+ * shallower, easing out to it over the bank either side. Every other point
+ * stays where it is.
+ */
+export function fordBeside(t: Terrain, way: readonly Walker[], broken: readonly Deck[]): Walker[] {
+  if (broken.length === 0) return [...way];
+  const sides = broken.map((d) => {
+    const off = d.halfWidth + FORD_BESIDE.clear;
+    const depth = (v: number): number => waterAt(t, d.x + v * d.sin, d.z + v * d.cos);
+    return depth(off) <= depth(-off) ? off : -off;
+  });
+  return way.map((p) => {
+    let { x, z } = p;
+    broken.forEach((d, i) => {
+      const dx = x - d.x;
+      const dz = z - d.z;
+      const u = dx * d.cos - dz * d.sin;
+      const v = dx * d.sin + dz * d.cos;
+      const side = sides[i] as number;
+      if (Math.abs(v) > Math.abs(side) || Math.abs(u) > d.half + FORD_BESIDE.ease) return;
+      const e = Math.min(1, Math.max(0, (d.half + FORD_BESIDE.ease - Math.abs(u)) / FORD_BESIDE.ease));
+      const nv = v + (side - v) * e * e * (3 - 2 * e);
+      x = d.x + u * d.cos + nv * d.sin;
+      z = d.z - u * d.sin + nv * d.cos;
+    });
+    return { x, z };
+  });
+}
+
 // ---------- the trip ----------
 
 /** A trip planned along its way, sampled `TRAVEL.spacing` apart. */

@@ -1,10 +1,11 @@
 // A footbridge breaks as it fails, as a house does: its planks go missing
 // and its rails hang from their posts and fall, and its deck keeps its line,
-// since the walk crosses on it. Nothing passes through the deck.
+// since the walk crosses on it until a gap wider than a stride opens.
+// Nothing passes through the deck.
 
 import { describe, expect, it } from "vitest";
 import type { Part } from "@gaia/schema";
-import { buildFootbridge, footbridgeDeck } from "@gaia/primitives";
+import { buildFootbridge, footbridgeDeck, footbridgeHolds } from "@gaia/primitives";
 import { applyVitality } from "@gaia/realize";
 
 const SPAN = 9;
@@ -45,6 +46,35 @@ describe("a footbridge", () => {
     expect(shown(0.5)).toBeGreaterThan(0.8);
     expect(shown(0.5)).toBeLessThan(0.97);
     expect(shown(0.13)).toBeLessThan(0.5);
+  });
+
+  it("stops a walk just where a gap in its planks opens wider than a stride, and almost never above 0.6", () => {
+    /** The widest run of planks not wholly there at vitality `v`, going or gone, meters. */
+    const widestGap = (deck: Part, v: number): number => {
+      const extent = (p: Float32Array, k: number): number => {
+        const xs = Array.from({ length: 24 }, (_, i) => p[(k * 24 + i) * 3] as number);
+        return Math.max(...xs) - Math.min(...xs);
+      };
+      const whole = applyVitality(deck, 1).positions;
+      const now = applyVitality(deck, v).positions;
+      const count = deck.shade.length / 24;
+      let run = 0;
+      let widest = 0;
+      for (let k = 0; k < count; k++) {
+        run = extent(now, k) < extent(whole, k) - 1e-5 ? run + 1 : 0;
+        widest = Math.max(widest, run);
+      }
+      return (widest * SPAN) / count;
+    };
+    let fallen = 0;
+    bridges.forEach((b, i) => {
+      const holds = footbridgeHolds(SPAN, i + 1);
+      expect(holds).toBeLessThan(0.7);
+      expect(widestGap(deckOf(b.parts), holds + 0.005)).toBeLessThanOrEqual(0.6);
+      expect(widestGap(deckOf(b.parts), holds - 0.005)).toBeGreaterThan(0.6);
+      if (holds > 0.13) fallen++;
+    });
+    expect(fallen / bridges.length).toBeGreaterThan(0.9);
   });
 
   it("hangs its rails from their posts as it fails, swung out past the deck and never through it", () => {

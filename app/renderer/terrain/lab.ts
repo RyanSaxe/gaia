@@ -34,7 +34,7 @@ import {
   createSunShadow,
   type SceneLight,
 } from "@gaia/render";
-import { type Capsule, clearanceAt, frameOf, TILE, LAND_ASPECT, type Deck, decksOf, EYE_HEIGHT, footingAt, FULL_WORLD, GAIT, groundHeightAt, heightAt, type Intent, junctionVitality, NO_SOLIDS, NO_TRAILS, openingSpot, TRAILS, outlineShape, returnTo, stoodBy, type StoodSpot, withinLand, piecesShapes, type Place, placeAt, planWalk, randomWorld, regionPlaces, RELIEF_BUDGET, sampleWorld, sightlines, siteToWorld, SMALL_WORLD, type Solids, type SolidShape, solidsOf, stanceAt, standAt, steerAlong, type Steered, type Steering, steering, steerPress, steerRelease, steerStep, stride, type Stride, acrossWay, carry, planTrip, TRAVEL, type Travel, wadingAt, travelFrom, travelPoint, travelStep, type Trip, trailWay, type Walker, type WalkKey, type Terrain, TERRAIN, type TrailNetwork, type Walk, WALK_TO, walkStep, wallsShape, waterDepthAt, type Way, wayAhead, wayVitalityAt, wayWear, WILDS, type WorldPlaces, type WorldSpec } from "@gaia/terrain";
+import { type Capsule, clearanceAt, frameOf, TILE, LAND_ASPECT, type Deck, decksOf, deckShape, EYE_HEIGHT, footingAt, FULL_WORLD, GAIT, groundHeightAt, heightAt, type Intent, junctionVitality, NO_SOLIDS, NO_TRAILS, openingSpot, TRAILS, outlineShape, returnTo, stoodBy, type StoodSpot, withinLand, piecesShapes, type Place, placeAt, planWalk, randomWorld, regionPlaces, RELIEF_BUDGET, sampleWorld, sightlines, siteToWorld, SMALL_WORLD, type Solids, type SolidShape, solidsOf, stanceAt, standAt, steerAlong, type Steered, type Steering, steering, steerPress, steerRelease, steerStep, stride, type Stride, acrossWay, carry, planTrip, TRAVEL, type Travel, wadingAt, fordBeside, travelFrom, travelPoint, travelStep, type Trip, trailWay, type Walker, type WalkKey, type Terrain, TERRAIN, type TrailNetwork, type Walk, WALK_TO, walkStep, wallsShape, waterDepthAt, type Way, wayAhead, wayVitalityAt, wayWear, WILDS, type WorldPlaces, type WorldSpec } from "@gaia/terrain";
 import { createSky } from "../world/environment.ts";
 import { type Pixels, createCapture } from "./capture.ts";
 import { renderInspector } from "../inspector.ts";
@@ -48,7 +48,7 @@ import { createWildGrowth, wildBushBuilds } from "./wilds.ts";
 import { createUnderstory, understoryBuilds } from "./understory.ts";
 import { type BuildAsk, made, makeAhead } from "./made.ts";
 import { createClearings } from "./clearings.ts";
-import { type WayPiece, type Ways, createWays, setTrailEnds } from "./trails.ts";
+import { type WayPiece, type Ways, createWays, crossingVitality, setTrailEnds } from "./trails.ts";
 import { reportStage } from "../telemetry.ts";
 import { takeWait } from "../wait/wait.ts";
 import { withStart } from "../start/start.ts";
@@ -403,6 +403,10 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   // What another layer stands beside the trails, and where a person is.
   /** What stops a walker without the furnishing. */
   let bodies: SolidShape[] = [];
+  /** Every footbridge's deck; those a walk stands on above the water, while each holds at its way's vitality; and those that no longer hold, which a walk goes round and a trip fords beside. */
+  let allDecks: readonly Deck[] = [];
+  let decks: readonly Deck[] = [];
+  let broken: readonly Deck[] = [];
   let places: WorldPlaces = regionPlaces(world, SAMPLE_NAME, []);
   let furnisher: ((stood: StoodWorld) => Furnishing) | null = null;
   let furnished: Furnishing = UNFURNISHED;
@@ -576,6 +580,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     landmarkViews.forEach((view, i) => view.setVitality(entityVitality.get(landmarkEntity(i).id) ?? 1));
     setTrailEnds(ways.network, vitalityOfPlace);
     built?.setVitality(vitalityOfPlace);
+    holdDecks();
   }
 
   /** Sets one entity's vitality, by its path, wherever it shows: its building and sign, its landmark, and every trail it joins. */
@@ -963,7 +968,11 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       return [...wallsShape(b.plan, b.site), ...beside];
     });
     bodies = [...trunks, ...components, ...standing, ...buildings];
-    solids = solidsOf(furnishSolid ? [...bodies, ...furnished.solids] : bodies);
+    gatherSolids();
+  }
+  /** What stops a walker now: the bodies, what furnishes the world when it is solid, and each footbridge that no longer holds. */
+  function gatherSolids(): void {
+    solids = solidsOf([...bodies, ...(furnishSolid ? furnished.solids : []), ...broken.map(deckShape)]);
   }
   let solids: Solids = NO_SOLIDS;
 
@@ -1550,8 +1559,13 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
 
   const forward = new THREE.Vector3();
   let walked = 0;
-  /** The footbridges' decks, which a walk stands on above the water. */
-  let decks: readonly Deck[] = [];
+  /** Sorts the decks by whether each holds at its way's vitality now, and has a walk go round those that no longer do. */
+  function holdDecks(): void {
+    const was = broken;
+    decks = allDecks.filter((d) => crossingVitality(ways.network, d.way, d.crossing, vitalityOfPlace) >= d.holds);
+    broken = allDecks.filter((d) => !decks.includes(d));
+    if (broken.length !== was.length || broken.some((d, i) => d !== was[i])) gatherSolids();
+  }
   /** The person's body: its velocity, its stride and its eyes' ride over the ground, eased frame by frame. */
   let body: Stride | null = null;
   const STAND: Intent = { dx: 0, dz: 0, speed: 0 };
@@ -1612,7 +1626,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       trails = { way: [...on, ...tread.slice(1, -1), ...leave], off: { start: lengthOf(on), end: lengthOf(leave) }, by: "trails" };
     }
     if (trails !== null && lengthOf(trails.way) <= straight * TRAVEL.detour) return trails;
-    const across = acrossWay(terrain, solids, from, at, ways.network.ways.flatMap((w) => w.crossings));
+    const across = acrossWay(terrain, solids, from, at, ways.network.ways.flatMap((w) => w.crossings).filter((c) => !broken.some((d) => d.crossing === c)));
     // Straight across only where it is the shorter way; deep water may send it round farther than the trails go.
     if (across === null || (trails !== null && lengthOf(across) >= lengthOf(trails.way))) return trails;
     return { way: across, off: { start: 0, end: 0 }, by: "across" };
@@ -1623,7 +1637,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     const { way, off } = chosen;
     endWalk();
     hideCard();
-    const plan = planTrip(way, off, face ? at.yaw : null, travelPace, (x, z) => wadingAt(terrain, decks, x, z));
+    const plan = planTrip(fordBeside(terrain, way, broken), off, face ? at.yaw : null, travelPace, (x, z) => wadingAt(terrain, decks, x, z));
     const marks = Array.from({ length: Math.floor(plan.length / TRAVEL_MARK) + 1 }, (_, i) => ({ s: Math.min(plan.length, i * TRAVEL_MARK), asked: false, ready: false }));
     marks.push({ s: plan.length, asked: false, ready: false });
     trip = { plan, at: travelFrom(plan, walker.yaw), stopping: false, marks, began: performance.now(), setOff: null, waited: 0 };
@@ -1747,7 +1761,8 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       clearings.fit(terrain);
       settlement.seat(stood.sites);
       ways = { sites: stood.landmarks, network: stood.network, edging: stood.edging };
-      decks = decksOf(stood.network.ways);
+      allDecks = decksOf(stood.network.ways);
+      holdDecks();
       placeWays();
       furnished = furnisher?.(stoodWorld()) ?? UNFURNISHED;
       // In the codebase's world a landmark stands for an entity and takes its vitality.
@@ -2709,7 +2724,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     furnishingSolid: (on) => {
       if (on === furnishSolid) return;
       furnishSolid = on;
-      solids = solidsOf(on ? [...bodies, ...furnished.solids] : bodies);
+      gatherSolids();
     },
     immersive: (on) => {
       root.classList.toggle("immersive", on);
@@ -2876,7 +2891,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
         const chosen = at === null ? null : travelWay({ x: x0, z: z0 }, at);
         const planMs = Math.round(performance.now() - t0);
         if (at === null || chosen === null) return null;
-        const plan = planTrip(chosen.way, chosen.off, null, TRAVEL.pace, (x, z) => wadingAt(terrain, decks, x, z));
+        const plan = planTrip(fordBeside(terrain, chosen.way, broken), chosen.off, null, TRAVEL.pace, (x, z) => wadingAt(terrain, decks, x, z));
         let t = travelFrom(plan, plan.heading[0] as number);
         let seconds = 0;
         while (!t.done && seconds < 3600) {

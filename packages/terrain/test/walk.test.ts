@@ -24,6 +24,7 @@ import {
   landHalf,
   clearanceAt,
   footingAt,
+  fordBeside,
   gradePace,
   heightAt,
   outlineShape,
@@ -466,9 +467,16 @@ describe("a walker's stride", () => {
     expect(up).toBeLessThan(down);
     // A deck across the pond, 0.3 m over the water: walked across, the eyes stay 1.6 m above its planks, dry, and never sink toward the water.
     const water = heightAt(t.lattice, pond.x, pond.z) + waterDepthAt(t, pond.x, pond.z);
-    const deck: Deck = { x: pond.x, z: pond.z, cos: 1, sin: 0, half: pond.reach * 1.5, halfWidth: 0.8, base: water, topAt: () => 0.3 };
+    const deck: Deck = { x: pond.x, z: pond.z, cos: 1, sin: 0, half: pond.reach * 1.5, halfWidth: 0.8, base: water, topAt: () => 0.3, way: 0, crossing: { x: pond.x, z: pond.z, yaw: 0, span: pond.reach * 3, level: water, bank: water }, holds: 0 };
     expect(footingAt(t, [deck], pond.x, pond.z)).toMatchObject({ deck: true, depth: 0, eye: water + 0.3 + EYE_HEIGHT });
     const crossing = walkThen([deck], { x: pond.x - pond.reach, z: pond.z }, 1, 0, 4, 1);
     for (const f of crossing.slice(60)) expect(f.body.eye).toBeGreaterThan(water + 0.3 + EYE_HEIGHT - 0.05);
+    // Once the deck no longer holds, a way across it fords the water beside it: never through the deck, easing out to the
+    // ford over the bank, and as it was everywhere else.
+    const way = Array.from({ length: Math.round(pond.reach * 8) + 1 }, (_, i) => ({ x: pond.x - pond.reach * 4 + i * 1, z: pond.z }));
+    const ford = fordBeside(t, way, [deck]);
+    for (const p of ford) expect(Math.abs(p.x - deck.x) <= deck.half && Math.abs(p.z - deck.z) <= deck.halfWidth + 0.15).toBe(false);
+    for (let i = 1; i < ford.length; i++) expect(Math.hypot(ford[i]!.x - ford[i - 1]!.x, ford[i]!.z - ford[i - 1]!.z)).toBeLessThan(1.6);
+    expect([ford[0], ford[ford.length - 1]]).toEqual([way[0], way[way.length - 1]]);
   });
 });
