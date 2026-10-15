@@ -74,8 +74,7 @@ float softShadow(vec3 w, float bias) {
   for (int i = 0; i < 16; i++) {
     float r = sqrt((float(i) + 0.5) / 16.0) * 4.0;
     float a = float(i) * 2.39996;
-    float depth = texture2D(uShadowMap, c.xy + vec2(cos(a), sin(a)) * r * uShadowTexel).r;
-    lit += c.z - bias <= depth ? 1.0 : 0.0;
+    lit += texture(uShadowMap, vec3(c.xy + vec2(cos(a), sin(a)) * r * uShadowTexel, c.z - bias));
   }
   return lit / 16.0;
 }
