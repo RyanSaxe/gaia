@@ -18,6 +18,18 @@ const BANK_GRADE = 0.53;
 export const BANK_REACH = 14;
 /** Channel depth never exceeds this share of the half width, so its walls stay walkable. */
 const CHANNEL_SHAPE = 0.35;
+/**
+ * How far past the waterline the bank carries on the channel wall's straight
+ * slope, meters: a diagonal of the world's lattice (1 m), the farthest apart
+ * two samples on either side of the waterline can lie along a triangle's edge.
+ * The ground is drawn and walked as flat triangles between samples, so the
+ * waterline is where each triangle crosses the water's level. With the ground
+ * straight through the waterline that crossing lands on the channel's own
+ * edge, and the waterline follows the stream's curve; a bank that bends
+ * within a sample of the water puts it somewhere else in every triangle, and
+ * the waterline steps along the lattice.
+ */
+const WALL = Math.SQRT2;
 /** The deepest a routed river's water lies below its valley's floor, meters. */
 const BELOW_FLOOR = 0.5;
 /** Spring and seep: the stream narrows to nothing over this many meters at each end. */
@@ -195,15 +207,17 @@ export function carveStream(l: Lattice, heights: Float32Array, level: Float32Arr
       if (segments === undefined) continue;
       const s = nearest(stream.stations, segments, worldOf(l, ix), worldOfZ(l, iz));
       const h = heights[i] as number;
+      // The channel's walls are straight, from the middle of its bed up through the waterline (`WALL`).
+      const wall = s.depth / s.halfWidth;
       if (s.distance < s.halfWidth) {
-        const profile = 1 - (s.distance / s.halfWidth) ** 2;
-        heights[i] = Math.min(h, s.level - s.depth * profile);
+        heights[i] = Math.min(h, s.level - wall * (s.halfWidth - s.distance));
         level[i] = Math.max(level[i] as number, s.level);
       } else if (s.distance < s.halfWidth + BANK_REACH) {
-        const raw = (s.distance - s.halfWidth) / BANK;
+        const out = s.distance - s.halfWidth;
+        const raw = out / BANK;
         const t = smooth(raw);
         // The bank climbs from the waterline at no more than BANK_GRADE, then meets natural ground.
-        const cap = s.level + BANK_LIP * t + BANK_GRADE * (s.distance - s.halfWidth);
+        const cap = s.level + BANK_LIP * t + BANK_GRADE * out;
         const eased = Math.min(h, cap);
         // Containment: next to the water the bank stands above the waterline,
         // fading back to natural ground over the outer bank. It starts from
@@ -212,8 +226,13 @@ export function carveStream(l: Lattice, heights: Float32Array, level: Float32Arr
         const levee = lip + (s.level + BANK_LIP * Math.max(t, 0.35) - lip) * smooth(raw / 0.12);
         const contain = 1 - smooth((raw - 0.55) / 0.4);
         const leveed = Math.max(eased, levee);
+        // The wall carries on up the bank for `WALL`, and past it the bank climbs or falls to its own height at no
+        // more than BANK_GRADE.
+        const top = s.level + wall * Math.min(out, WALL);
+        const past = BANK_GRADE * Math.max(0, out - WALL);
+        const walled = Math.min(top + past, Math.max(top - past, eased + (leveed - eased) * contain));
         // Where it meets another stream, its bank never rises in that stream's water.
-        heights[i] = (level[i] as number) > h ? eased : eased + (leveed - eased) * contain;
+        heights[i] = (level[i] as number) > h ? eased : walled;
         if (raw <= 0.55) level[i] = Math.max(level[i] as number, s.level);
       }
     }
