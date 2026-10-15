@@ -2,9 +2,9 @@
 // the world is opened (docs/design-system.md, "The field sheet"), on its
 // paper, with its torn edge and, after dark, its lantern. A world chosen on
 // the start rises into it as its picture, offered only while its code is the
-// commit it pictures, which stays as the sheet's paint until the world's
-// relief comes in over it; one of another commit than the land's folds away,
-// and the map is drawn from bare paper. As soon as the land is divided, a pen
+// commit it pictures; the picture fades to bare paper when the land comes, and
+// the map is drawn from nothing, as for a world whose code has changed. As
+// soon as the land is divided, a pen
 // draws every area's border. Each file's health is washed in once it is
 // settled, whenever that is, spreading over the ground around it as the map
 // spreads it (`settling.ts`), so the sheet never shows a color it later
@@ -242,10 +242,10 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
   layPaper(560);
 
   // ---------- a map chosen on the start ----------
-  /** The chosen world's picture, lying on the sheet as its paint, the land shape it is in, and the commit it pictures. */
-  let chosen: { readonly el: HTMLImageElement; readonly aspect: number; readonly commit: string | undefined } | null = null;
-  function choose(picture: string, aspect: number, commit: string | undefined): void {
-    chosen?.el.remove();
+  /** The chosen world's picture, lying on the sheet until the land is divided. */
+  let chosen: HTMLImageElement | null = null;
+  function choose(picture: string, aspect: number): void {
+    chosen?.remove();
     // The sheet takes the chosen map's shape before anything comes in, so the map rises into a sheet of its own shape.
     sheetEl.style.setProperty("--aspect", Math.max(1, aspect).toFixed(4));
     const el = document.createElement("img");
@@ -258,7 +258,7 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
     el.style.top = `${((1 - 1 / Math.max(1, aspect)) * 50).toFixed(3)}%`;
     el.style.height = `${(100 / Math.max(1, aspect)).toFixed(3)}%`;
     ground.after(el);
-    chosen = { el, aspect, commit };
+    chosen = el;
   }
   /** Pencils `draw` on the sheet's face, the middle of the square it is drawn on, as `face` gives it. */
   function pencilFace(draw: (c: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) => void): void {
@@ -421,8 +421,6 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
    * cells are, laid into the pencil kept for the washes and shown over the sheet, less where the wash already lies.
    */
   function* shade(l: Land, stroke: Stroke): Generator<void> {
-    // A chosen map laid on the sheet is its paint already, over the paper the pencil goes on.
-    if (chosen !== null && !chosen.el.hidden) return;
     const index = stroke.of === "area" ? l.paths.indexOf(stroke.path) : (fileIndex.get(stroke.path) ?? -1);
     const box = index < 0 ? null : stroke.of === "area" ? areaBox[index] : fileBox[index];
     if (box === null || box === undefined || fileOf === null) return;
@@ -539,17 +537,15 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
   }
 
   // ---------- the land is divided ----------
-  function divide(size: number, aspect: number | undefined, commit: string | undefined, outlines: readonly Outline[], patches: readonly FilePatch[], lots: readonly LotPlace[]): void {
+  function divide(size: number, aspect: number | undefined, outlines: readonly Outline[], patches: readonly FilePatch[], lots: readonly LotPlace[]): void {
     const reach = size / 2 + MARGIN;
     // The sheet opened in the shape the land was to have; a land of another shape reshapes it.
     const shape = Math.max(1, reach / (size / 2 / (aspect ?? 1) + MARGIN));
     sheetEl.style.setProperty("--aspect", shape.toFixed(4));
-    // The chosen map stays as the sheet's paint unless the land has grown into another shape since it was pictured, or
-    // its code is another commit, as a place on GitHub can be once it is fetched: then the map is drawn anew on paper.
-    if (chosen !== null && (Math.abs(chosen.aspect - shape) > 0.01 || chosen.commit !== commit)) {
-      chosen.el.classList.add("gone");
-      chosen = null;
-    }
+    // A chosen map folds away to bare paper, current or not, and is drawn anew as a changed world's is: drawing over
+    // the picture would draw every border, house and river on it a second time.
+    chosen?.classList.add("gone");
+    chosen = null;
     layPaper(reach);
     ink.setAttribute("viewBox", `${-reach} ${-reach} ${reach * 2} ${reach * 2}`);
     let rim = "";
@@ -816,11 +812,6 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
     g.drawImage(l.under.canvas, rx / px, ry / px, rw / px, rh / px, 0, 0, rw, rh);
     c.drawImage(graphite, 0, 0);
     yield* floatWash(c, scratch, -bleed, -bleed, STYLE, l.k);
-    // A chosen map is this world's paint already: the change goes under it unseen, never as paper over it.
-    if (chosen !== null && !chosen.el.hidden) {
-      groundCtx.drawImage(layer, rx, ry);
-      return;
-    }
     layer.className = "wait-layer";
     layer.style.left = `${(rx / l.device) * 100}%`;
     layer.style.top = `${(ry / l.device) * 100}%`;
@@ -987,9 +978,6 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
       // Then the sheet keeps the field map's own drawing of all of it, in the frame the washes and the pen's lines go:
       // the same but for where a line crosses a tree.
       groundCtx.drawImage(whole, 0, 0);
-      // A chosen map gives way to it, now drawn whole beneath.
-      chosen?.el.remove();
-      chosen = null;
       for (const layer of [...washes, pens.svg]) layer.remove();
     })();
   }
@@ -1128,7 +1116,7 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
 
   return {
     opening(o) {
-      if (o.stage === "land") divide(o.size, o.aspect, o.commit, o.areas, o.patches, o.lots);
+      if (o.stage === "land") divide(o.size, o.aspect, o.areas, o.patches, o.lots);
       else if (o.stage === "health") {
         washesDue.add(Object.entries(o.vitality), performance.now());
         pace();

@@ -619,11 +619,9 @@ before the table is drawn; with the signpost, or in the standalone lab
 with no start, the sheet lies on its creased paper instead. While the code is read
 the sheet is bare and still, or, for a world chosen on the start, is that
 world's picture as it was last walked, offered only while its code is the
-commit it pictures. That picture is the world's paint already: it stays as
-the sheet's paint, the washes going under it unseen, until the relief comes
-in over it once the world stands. It folds away if the land has since grown
-into another shape or been read from another commit, and the map is drawn
-on bare paper like any other: a person never watches a stale map. As soon as the land is divided, a pen draws
+commit it pictures, so a person never watches a stale map. As soon as the
+land is divided the picture fades to bare paper and the map is drawn anew
+like any other, so nothing on the sheet is drawn twice: a pen draws
 every area's border from the middle outward, the map's fine line, with the
 hedgerow's soft band coming in under it, and never the land's rounded rim.
 Between the borders and the washes, a pencil shows what Jev is doing to the

@@ -409,9 +409,8 @@ recent world (`RecentWorld.stood`), not in the project's own store, which
 holds Jev's answers and is rewritten whole on every write. The next open of
 that world sends it with the document (`world.document`'s `stood`), and the
 page lands the person by it (`returnTo`). A world that falls out of the six
-recent worlds forgets it. A page with no world service keeps none. The land stage says which commit the code was read from
-too, so a picture of a place on GitHub that its fetch has since moved on
-folds away from the wait's sheet as soon as the land is divided. A
+recent worlds forgets it. A page with no world service keeps none. A picture the wait's sheet takes folds away
+to bare paper as soon as the land is divided, and the map is drawn anew. A
 standalone page (`pnpm lab:html`, `pnpm lab:serve`) has no engine and opens
 on Gaia's own world from `app/renderer/terrain/fixtures/gaia-graph.json`,
 the engine's judged graph `pnpm graph-snapshot` writes, laid out from the
