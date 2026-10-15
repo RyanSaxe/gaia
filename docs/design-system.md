@@ -223,8 +223,12 @@ The bake enforces a relief budget:
 | Steepest ground | 40°, only terrace risers and stream banks |
 | Tallest steep climb | 3 m |
 
-Water is solved from the ground and cut into it, so it never floats. The
-world's edge is a gentle rim.
+Water is solved from the ground and cut into it, so it never floats. A
+stream's channel has straight walls, from the middle of its bed up through
+the waterline and on up the bank for a diagonal of the lattice (1.4 m), so
+the ground's flat triangles meet the water on the channel's own edge and the
+waterline follows the stream's curve instead of stepping along the lattice
+(`carveStream` in `@gaia/terrain`). The world's edge is a gentle rim.
 
 Past the baked land the wild land goes on forever and stands for nothing.
 From the rim's crest it settles over 160 m to the level of the land inside
