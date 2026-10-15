@@ -126,11 +126,9 @@ export type Opening =
    * stand, as the finished world lays them out, since the division depends on
    * the code alone. Every lot is the same ground whatever stands on it, so
    * its place is all a sheet needs to keep names off the mark to come. Sent
-   * once, before any judging. `commit` is the commit the code was read
-   * from, absent when it was read from disk: a picture of another commit is
-   * not this world's map.
+   * once, before any judging.
    */
-  | { readonly stage: "land"; readonly name: string; readonly size: number; readonly aspect?: number; readonly commit?: string; readonly areas: readonly Outline[]; readonly patches: readonly FilePatch[]; readonly lots: readonly LotPlace[] }
+  | { readonly stage: "land"; readonly name: string; readonly size: number; readonly aspect?: number; readonly areas: readonly Outline[]; readonly patches: readonly FilePatch[]; readonly lots: readonly LotPlace[] }
   /**
    * Asking Jev about the things it has not judged; `answered` counts those settled, and `total` every request to be
    * asked: under a spend limit the understanding pass's are planned and counted from the start, and with none they
