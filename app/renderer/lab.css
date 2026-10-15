@@ -325,18 +325,21 @@ details.json pre { font: 11px/1.45 ui-monospace, "SF Mono", Menlo, monospace; ba
 .minimap-land.painted { opacity: 1; }
 .minimap-here { position: absolute; left: 50%; top: 60%; width: 0; height: 0; }
 .minimap-here .field-map-traveller { position: absolute; left: -22px; top: -22px; width: 44px; height: 44px; overflow: visible; }
-/* Walking up to a thing: a vermilion pencil ring drawn round it, its name beside it in the traveller's hand. */
+/* Walking up to a thing: a vermilion pencil ring drawn round it, its name over it in the traveller's hand. The name
+   breaks where minimap.ts lets it (`nameBreaks`) onto at most two lines of about one length, 136 px wide at most,
+   ending in an ellipsis past that, and minimap.ts sets where it stands on the paper. */
 .minimap-mark { position: absolute; left: 0; top: 0; width: 0; height: 0; opacity: 0; transition: opacity 0.4s ease; }
 .minimap-mark.on { opacity: 1; }
 .minimap-mark svg { position: absolute; left: 50%; top: 50%; translate: -50% -50%; overflow: visible; }
 .minimap-mark path { fill: none; stroke: #b8452c; stroke-width: 2.2; stroke-linecap: round; stroke-dasharray: 1 1; stroke-dashoffset: 1; transition: stroke-dashoffset 0.9s cubic-bezier(0.45, 0.05, 0.4, 1) 0.1s; }
 .minimap-mark.on path { stroke-dashoffset: 0; }
 .minimap-mark span {
-  position: absolute; left: 16px; top: -26px; white-space: nowrap; color: #9a3a22;
-  font: 600 13.5px/1 "Bradley Hand", "Segoe Print", "Iowan Old Style", Georgia, cursive;
+  position: absolute; left: 0; top: 0; width: max-content; max-width: 136px; box-sizing: border-box; padding: 0 2px;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere;
+  text-align: center; text-wrap: balance; color: #9a3a22;
+  font: 600 12.5px/1.05 "Bradley Hand", "Segoe Print", "Iowan Old Style", Georgia, cursive;
   text-shadow: 0 0 3px rgba(246, 238, 219, 0.95), 0 0 6px rgba(246, 238, 219, 0.8);
 }
-.minimap-mark.left span { left: auto; right: 16px; }
 /* The area's name, lettered across the land as the field map letters areas: upright, widely spaced capitals with a
    narrow edge of paper round the letters, and a name that repeats carries just enough of its path above it. */
 .minimap-names { position: absolute; left: 14px; right: 14px; top: 11px; transition: opacity 0.4s ease; }
