@@ -253,6 +253,35 @@ describe.each(lib.forRole("Footprint").map((p) => [p.id, p] as const))("%s", { t
   });
 });
 
+describe.each(lib.forRole("Walls").map((p) => [p.id, p] as const))("%s", { timeout: 20_000 }, (_id, p) => {
+  it("lays a floor just under the door's sill across every block, so none of the ground under the house shows", () => {
+    for (const plan of plans) {
+      const parts = (build(p, samples(p)[0] as Stored, plan, 5) as Built).parts;
+      for (const m of plan.masses.filter((mass) => !mass.round)) {
+        // An upward face at the floor over the block's middle and its corners, 0.2 m in from its walls.
+        const covered = (x: number, z: number): boolean =>
+          parts.some((part) => {
+            for (let t = 0; t < part.indices.length; t += 3) {
+              const [a, b, c] = [part.indices[t] as number, part.indices[t + 1] as number, part.indices[t + 2] as number];
+              if ((part.normals[a * 3 + 1] as number) < 0.99) continue;
+              const y = part.positions[a * 3 + 1] as number;
+              if (y < plan.floor - 0.06 || y > plan.floor) continue;
+              const [ax, az, bx, bz, cx, cz] = [a, b, c].flatMap((v) => [part.positions[v * 3] as number, part.positions[v * 3 + 2] as number]) as [number, number, number, number, number, number];
+              const d1 = (x - bx) * (az - bz) - (ax - bx) * (z - bz);
+              const d2 = (x - cx) * (bz - cz) - (bx - cx) * (z - cz);
+              const d3 = (x - ax) * (cz - az) - (cx - ax) * (z - az);
+              if (!((d1 < 0 || d2 < 0 || d3 < 0) && (d1 > 0 || d2 > 0 || d3 > 0))) return true;
+            }
+            return false;
+          });
+        for (const [sx, sz] of [[0, 0], [-1, -1], [-1, 1], [1, -1], [1, 1]] as const) {
+          expect(covered(m.x + sx * (m.width / 2 - 0.2), m.z + sz * (m.depth / 2 - 0.2))).toBe(true);
+        }
+      }
+    }
+  });
+});
+
 function replacer(_key: string, value: unknown): unknown {
   return ArrayBuffer.isView(value) ? Array.from(value as Float32Array) : value;
 }

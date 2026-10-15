@@ -39,6 +39,20 @@ function plinth(b: PartBuilder, plan: BuildingPlan, r: Rand, coarse: number): vo
   }
 }
 
+/**
+ * The floor inside the walls, just under the door's sill: timber over the ground the house stands on, so none of
+ * that ground shows through a door or a hole, such as a mill's wheel pit, dug where the lattice reaches under the
+ * wheel's wall. Each mass's floor lies a few millimetres above the last's where they overlap, so none flickers. It
+ * rots through by the weak corner as the walls do.
+ */
+function floor(b: PartBuilder, plan: BuildingPlan, ruin: Ruin): void {
+  plan.masses.forEach((m, i) => {
+    if (m.round) return;
+    const c: V3 = [m.x, plan.floor - 0.06 + i * 0.004, m.z];
+    box(b, c, [[1, 0, 0], UP, [0, 0, 1]], [m.width / 2 - 0.1, 0.04, m.depth / 2 - 0.1], 0.3, still(c, 0.6, { rot: clamp(0.3 + 0.6 * ruinAt(ruin, c), 0, 1) }), { bottom: true });
+  });
+}
+
 /** The wall's core: a plain face set just behind the surface, which shows where plaster has fallen and rots through as the house declines. */
 function core(b: PartBuilder, plan: BuildingPlan, ruin: Ruin, inset: number, from: number, coarse: number): void {
   for (const w of shownWalls(plan)) {
@@ -97,6 +111,7 @@ function timberFrame(p: Resolved<typeof timberFrameParams>, ctx: BuildContext, p
   const ruin = ruinOf(plan);
   plinth(masonry, plan, r.fork("plinth"), coarse);
   core(masonry, plan, ruin, 0.03, plan.floor, coarse);
+  floor(timber, plan, ruin);
   const beamW = 0.17;
   const out = 0.03;
 
@@ -302,6 +317,7 @@ function fieldstone(p: Resolved<typeof fieldstoneParams>, ctx: BuildContext, pla
   const boards = new PartBuilder("timber", "solid");
   const ruin = ruinOf(plan);
   core(mortar, plan, ruin, -0.005, -plan.footing, coarse);
+  floor(boards, plan, ruin);
   const walls = shownWalls(plan);
   // Stones grow on a big house, so the walls stay within about 600 stones, and more only when the walls run over budget.
   const area = walls.reduce((sum, w) => sum + w.length * ((wallTop(plan, massOf(plan, w)) + peakOf(plan, w).y) / 2 + 0.12), 0);

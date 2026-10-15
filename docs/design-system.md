@@ -501,7 +501,10 @@ its budget by construction.
 A building stands on a pad leveled into
 the baked ground under it and its yard, blending back into the land over
 7 m, and its foundation reaches 1.4 m below, so it never floats and never
-shows a gap. Grass is cleared under the house and along the walk to its
+shows a gap. Inside its walls a timber floor lies just under the door's
+sill, so no ground under the house shows through a door or a holed wall;
+where a mill's wheel pit reaches under the wheel's wall, its water stays
+under the floor. Grass is cleared under the house and along the walk to its
 door, and its walls stop the walk. A building stays under 32,000 triangles
 and draws one mesh per swatch, at most eleven calls.
 
