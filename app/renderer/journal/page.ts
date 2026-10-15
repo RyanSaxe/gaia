@@ -456,15 +456,16 @@ function foldOf(says: string, tap?: () => void, where?: "after"): HTMLElement {
 /**
  * The title page, facing the contents: a frontispiece painting of the world
  * running to the page's edges, the world's name lettered across its sky as
- * the map letters a place, and its vitality as a wash beneath.
+ * the map letters a place, and its vitality as a brush stroke beneath, laid
+ * with the brush Jev's marks are laid with.
  */
 export function renderTitle(name: string, vitality: number, folio: string, painting: HTMLElement): HTMLElement {
   const page = el("div", "jp jp-picture jp-title-page");
   page.style.setProperty("--health", healthColor(vitality));
   const lettered = el("div", "jp-title-lettering");
-  const wash = el("i", "jp-title-wash");
-  wash.style.background = healthColor(vitality);
-  lettered.append(el("div", "jp-book-name", name), wash);
+  const stroke = el("i", "jp-stroke title");
+  stroke.style.background = healthColor(vitality);
+  lettered.append(el("div", "jp-book-name", name), stroke);
   page.append(painting, lettered, el("div", "jp-folio", folio));
   return page;
 }

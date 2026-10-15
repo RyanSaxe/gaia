@@ -97,12 +97,12 @@ const el = (cls: string, parent?: HTMLElement): HTMLDivElement => {
 
 export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: (open: boolean) => void): JournalBook {
   const root = el("journal", layer);
-  // The brush: a stroke or a wash of color laid by hand, its edge wandering a little, as the mocks paint them.
+  // The brush: a stroke of color laid by hand, its edge wandering a little, as the mocks paint them. A stroke runs down
+  // the gutter or across the title page, so the brush reaches as far past it every way.
   root.insertAdjacentHTML(
     "beforeend",
     `<svg width="0" height="0" style="position:absolute" aria-hidden="true">
-      <filter id="jp-wash" x="-10%" y="-20%" width="120%" height="140%"><feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="3" seed="4" result="t"/><feDisplacementMap in="SourceGraphic" in2="t" scale="16" xChannelSelector="R" yChannelSelector="G" result="d"/><feGaussianBlur in="d" stdDeviation="1.2"/></filter>
-      <filter id="jp-brush" x="-60%" y="-5%" width="220%" height="110%"><feTurbulence type="fractalNoise" baseFrequency="0.06" numOctaves="2" seed="7" result="t"/><feDisplacementMap in="SourceGraphic" in2="t" scale="6" xChannelSelector="R" yChannelSelector="G" result="d"/><feGaussianBlur in="d" stdDeviation="0.7"/></filter>
+      <filter id="jp-brush" x="-60%" y="-60%" width="220%" height="220%"><feTurbulence type="fractalNoise" baseFrequency="0.06" numOctaves="2" seed="7" result="t"/><feDisplacementMap in="SourceGraphic" in2="t" scale="6" xChannelSelector="R" yChannelSelector="G" result="d"/><feGaussianBlur in="d" stdDeviation="0.7"/></filter>
     </svg>`,
   );
   root.style.setProperty("--leather", `url(${LEATHER})`);
