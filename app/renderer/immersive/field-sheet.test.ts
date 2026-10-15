@@ -72,6 +72,24 @@ describe("where the sheets letter areas' names", () => {
     }
   });
 
+  it("never sets two names end to end along one line so close that they read as one name", () => {
+    for (const placed of sheets) {
+      // Each name's capitals: their middle on the sheet, the way they run, and half their length, pixels.
+      const lines = placed.places.map((p) => ({ x: (p.x + land.reach) * placed.scale, y: (p.z + land.reach) * placed.scale, angle: p.label.angle, half: p.halfW - 4, name: p.label.area.name }));
+      const joined: string[] = [];
+      for (const a of lines) {
+        for (const b of lines) {
+          if (a === b) continue;
+          const along = (b.x - a.x) * Math.cos(a.angle) + (b.y - a.y) * Math.sin(a.angle);
+          const across = (b.y - a.y) * Math.cos(a.angle) - (b.x - a.x) * Math.sin(a.angle);
+          // On one line: middles within 18 px of it. Read as one: under 26 px of paper between their capitals.
+          if (Math.abs(across) < 18 && Math.abs(along) - a.half - b.half < 26) joined.push(`${a.name} ${b.name}`);
+        }
+      }
+      expect(joined).toEqual([]);
+    }
+  });
+
   it("keeps names off the ground every building and landmark may draw on, letting one over it only when nothing near is clear", () => {
     const [wide] = sheets as [NamePlaces];
     const marks = markGround(wide, land.lots);

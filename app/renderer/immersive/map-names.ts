@@ -7,7 +7,8 @@
 // they walk.
 //
 // A name sits on its area's widest ground and runs the way the area runs. It
-// never covers another name. It keeps off the compass rose's corner, the
+// never covers another name, and never follows another along one line so
+// closely that the two read as one name. It keeps off the compass rose's corner, the
 // sheet's edge and every mark, keeping clear of all the ground any building's
 // or landmark's mark could take round its lot. When its own spot is taken it
 // tries spots along its own slant, on every side of the mark in its way, a
@@ -50,6 +51,11 @@ const LEAST_SIDE = 640;
 /** How far a name keeps from the sheet's edge, and from a mark beside it, pixels. */
 const EDGE = 4;
 const GAP = 3;
+/**
+ * Two names whose middles lie within `across` pixels of one line read as one name unless `gap` pixels of paper part
+ * their capitals along it: about twice the space between two words of a name.
+ */
+const ROW = { across: 18, gap: 26 } as const;
 /** How far along the way its area runs a name may slide from its own spot, pixels, each way. */
 const SLANT = [14, 28, 42, 56, 70];
 /** Where else a name may step to, pixels, when its spot and its slant are taken. */
@@ -332,6 +338,22 @@ function shapeOf(measure: Measure, l: AreaLabel, size: number): Shape {
 }
 
 const hits = (a: Box, b: Box): boolean => a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1];
+
+/** A name's capitals as a line on the sheet: their middle, pixels, the way they run, radians, and half their length with a little paper either end, pixels. */
+interface NameLine {
+  readonly x: number;
+  readonly y: number;
+  readonly angle: number;
+  readonly halfW: number;
+}
+
+/** Whether two names lie end to end on one line, so close that they read as one name (`ROW`). */
+function inRow(a: NameLine, b: NameLine): boolean {
+  const along = (b.x - a.x) * Math.cos(a.angle) + (b.y - a.y) * Math.sin(a.angle);
+  const across = (b.y - a.y) * Math.cos(a.angle) - (b.x - a.x) * Math.sin(a.angle);
+  // Each name's half length carries 4 px of paper at its end (`shapeOf`), which is not between the capitals.
+  return Math.abs(across) < ROW.across && Math.abs(along) - (a.halfW - 4) - (b.halfW - 4) < ROW.gap;
+}
 const overlap = (a: Box, b: Box): number => Math.max(0, Math.min(a[2], b[2]) - Math.max(a[0], b[0])) * Math.max(0, Math.min(a[3], b[3]) - Math.max(a[1], b[1]));
 
 /** A spot a name may take: its middle, pixels, and whether it is beside the mark of a lot on its own ground. */
@@ -375,7 +397,8 @@ export function* placeNames(land: NameLand, side: number, measure: Measure, grow
   const inside = (b: Box): boolean =>
     b[0] > EDGE && b[1] > EDGE && b[2] < sheet - EDGE && b[3] < sheet - EDGE && !hits(b, rose) && [b[0], b[2]].every((x) => [b[1], b[3]].every((y) => pastTheEdge({ size: land.half * 2, ...(land.aspect === undefined ? {} : { aspect: land.aspect }) }, meters(x), meters(y)) < 0));
   const named: Box[] = [];
-  const clear = (b: Box): boolean => named.every((o) => !hits(b, o));
+  const lines: NameLine[] = [];
+  const clear = (b: Box, line: NameLine): boolean => named.every((o) => !hits(b, o)) && lines.every((o) => !inRow(line, o) && !inRow(o, line));
   const covers = (b: Box): number => marks.reduce((sum, m) => sum + overlap(b, m), 0);
   const free = (b: Box): boolean => covers(b) === 0;
 
@@ -436,15 +459,15 @@ export function* placeNames(land: NameLand, side: number, measure: Measure, grow
       }
     }
     /**
-     * Of the spots tried, the first whose box lies on the sheet, clear of every name and of the rose, that `ok` takes;
-     * or, with `least`, the one of them covering the marks least.
+     * Of the spots tried, the first whose box lies on the sheet, clear of every name and of the rose and in no row with
+     * another name, that `ok` takes; or, with `least`, the one of them covering the marks least.
      */
     const pick = (tries: Iterable<readonly [Shape, Spot]>, ok: (b: Box, beside: boolean) => boolean, least = false): Chosen | null => {
       let best: Chosen | null = null;
       let fewest = Infinity;
       for (const [shape, { x, y, beside }] of tries) {
         const b = boxOf(shape, x, y);
-        if (!inside(b) || !clear(b) || !ok(b, beside)) continue;
+        if (!inside(b) || !clear(b, { x, y, angle: l.angle, halfW: shape.halfW }) || !ok(b, beside)) continue;
         const c = covers(b);
         if (!least) return { shape, x, y, over: c > 0 };
         if (c < fewest) [fewest, best] = [c, { shape, x, y, over: c > 0 }];
@@ -467,6 +490,7 @@ export function* placeNames(land: NameLand, side: number, measure: Measure, grow
       pick(afield(), free) ??
       pick(afield(), () => true) ?? { shape: full, x: ax, y: ay, over: !free(boxOf(full, ax, ay)) };
     named.push(boxOf(shape, x, y));
+    lines.push({ x, y, angle: l.angle, halfW: shape.halfW });
     places.push({ label: l, x: meters(x), z: meters(y), size: shape.size, halfW: shape.halfW, top: shape.top, box: shape.box, over });
     yield;
   }
