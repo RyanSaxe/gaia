@@ -82,6 +82,11 @@ const MARGIN_PERSPECTIVE = 2400;
 const TURN_MS = 720;
 const COVER_MS = 900;
 const TRAVEL_MS = 1050;
+/**
+ * How long after the cover starts to swing open a riffle that follows it in may start, ms: its first leaf, or the
+ * ribbon lifted across before it, then trails the cover all the way over instead of overtaking it.
+ */
+const COVER_LEAD = 420;
 /** The closed book's tilt in its corner, degrees, and how much of the view the open book may take. */
 const CORNER_TILT = 6;
 /** The closed book in its corner: a little smaller than the slip's own size, and close in to the screen's edges, px. */
@@ -755,7 +760,8 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
     cover.style.transitionDelay = `${ms}ms`;
     ribbon.style.transitionDelay = `${ms}ms`;
   }
-  function setOpen(on: boolean, place0?: string): void {
+  /** Opens or shuts the book. Opening, `followIn` runs as soon as a riffle can follow the cover over (`COVER_LEAD`). */
+  function setOpen(on: boolean, place0?: string, followIn?: () => void): void {
     if (on === open) return;
     open = on;
     root.classList.toggle("open", on);
@@ -769,6 +775,16 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
       inner.style.transition = `transform ${COVER_MS}ms cubic-bezier(.45,.05,.3,1) ${TRAVEL_MS * 0.45}ms`;
       swingAfter(TRAVEL_MS * 0.45);
       place(true);
+      // Timed from when the cover starts to swing, which waits on its delay, on the page it opens onto being whole and
+      // on the page's thread.
+      if (followIn !== undefined) {
+        const swings = (e: TransitionEvent): void => {
+          if (e.target !== cover) return;
+          cover.removeEventListener("transitionstart", swings);
+          if (open) window.setTimeout(followIn, COVER_LEAD);
+        };
+        cover.addEventListener("transitionstart", swings);
+      }
       const whole = painted(opensAt);
       void settledSoon(whole).then((ready) => {
         if (ready || !open) return;
@@ -938,14 +954,13 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
         if (place0 !== undefined) turnTo(place0);
         return;
       }
-      // The book is lifted at the page it opens at once that is whole; a page still being made, it opens at the map
-      // and riffles on to.
+      // The book is lifted at the page it opens at once that is whole. For a page still being made it opens at the
+      // map, and the riffle on to that page starts as the cover opens and leafs on until the page is whole.
       const target = place0 ?? "map";
       const ready = wholeAt(target);
       void settledSoon(ready).then((now) => {
         if (now || target === "map") return void ready.then(() => setOpen(true, target));
-        setOpen(true, "map");
-        window.setTimeout(() => turnTo(target), TRAVEL_MS + COVER_MS * 0.5);
+        setOpen(true, "map", () => turnTo(target));
       });
     },
     turnTo,
