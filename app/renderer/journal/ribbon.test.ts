@@ -24,7 +24,8 @@ describe("the journal's silk ribbon", () => {
     // Past the pages' head and foot is all of it that shows under other leaves.
     const shown = cornersOf(ribbonSvg(RIBBON_LIE).svg).filter(([, y]) => Math.abs(y) > 330);
     expect(shown.length).toBeGreaterThan(50);
-    for (const [name, pose] of Object.entries(RIBBON_POSES)) {
+    // Lifted with the cover's edge under the pointer, it moves with the board, as the board's own edge does.
+    for (const [name, pose] of Object.entries(RIBBON_POSES).filter(([n]) => n !== "before-lifted")) {
       const across = name === "before-open" ? -1 : 1;
       for (const c of shown) {
         const [x, y] = posed(c, pose);
