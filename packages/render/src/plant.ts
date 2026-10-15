@@ -654,7 +654,7 @@ void main() {
   vCut = cardCut();
   vLife = vec2(aLoss, uVitality);
   vWither = aWither * (1.0 - uVitality);
-  vGlow = aGlow * uVitality * ${f(CHANNEL_MATH.glowStrength)} * (0.85 + 0.15 * sin(uTime * 1.3 + aPivot.x * 3.0 + aPivot.z * 2.0));
+  vGlow = aGlow * uVitality * ${f(CHANNEL_MATH.glowStrength)};
   gl_Position = projectionMatrix * viewMatrix * world;
 }
 `;

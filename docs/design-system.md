@@ -1530,5 +1530,6 @@ grass and water agree:
   chimney's smoke thins and stops.
 - **The world's own glow** (the vitality `glow` channel, fireflies, living
   water) reads by contrast in the dark, a little stronger than by day and
-  still below what draws the eye on its own. Wildflowers fade into their
+  still below what draws the eye on its own. A lamp burns steadily: lit
+  glass and a hearth never pulse or flicker. Wildflowers fade into their
   blades at night, and drifts fold their open faces shut.
