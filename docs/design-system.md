@@ -1469,7 +1469,9 @@ box around the person, so only casters inside that box draw into it: its cost
 stays bounded however large the world grows, and nothing outside it could
 cast into it. The box moves across the light only in whole texels of the
 map, so its texels stay put on the land and no shadow's edge crawls as the
-person walks; the moon's map does the same.
+person walks; the moon's map does the same. Shadows fade out over the box's
+outer 10 m on every side, so a shadow the box reaches as the person walks
+comes in by degrees instead of switching on.
 
 ## Composition budgets
 
