@@ -112,7 +112,7 @@ function dove(b: PartBuilder, c: V3, t: V3, up: V3, open: number, ch: Channels):
   }
 }
 
-/** Doves circling high over a cote at `top`, each turning about its middle at its own pace; they fly home into `home` as the code fails. */
+/** Doves circling high over a cote at `top`, each turning about its middle at its own pace; they fly home into `home` at dusk and as the code fails. */
 function circling(b: PartBuilder, Y: Yard, count: number, top: number, home: V3, r: Rand): void {
   const center = Y.at(0, 0, 0);
   for (let i = 0; i < count; i++) {
@@ -124,7 +124,7 @@ function circling(b: PartBuilder, Y: Yard, count: number, top: number, home: V3,
     // A positive turn about up carries a point at (x, z) toward (z, -x); each dove flies that way, banked into the turn.
     const t = normalize([dz, 0, -dx]);
     const up = normalize(addScaled(UP, normalize([-dx, 0, -dz]), 0.35));
-    dove(b, c, t, up, 1, { loss: lossThreshold(r.next(), 0.85, 0.45), droop: 0, wither: 0.5, glow: 0, pivot: home, tint: (r.next() - 0.5) * 0.03, spin: [0, 0.028 + 0.03 * r.next(), 0] });
+    dove(b, c, t, up, 1, { loss: lossThreshold(r.next(), 0.85, 0.45), droop: 0, wither: 0.5, glow: 0, pivot: home, tint: (r.next() - 0.5) * 0.03, spin: [0, 0.028 + 0.03 * r.next(), 0], roost: 1 });
   }
 }
 
