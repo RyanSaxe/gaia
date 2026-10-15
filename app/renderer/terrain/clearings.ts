@@ -80,16 +80,22 @@ export function createClearings(t: Terrain): Clearings {
   let outlines: readonly Clearing[] = [];
   /** Each outline's farthest reach, meters. */
   let reaches = new Float64Array(0);
+  /** The land's first sample in z: the page's land is a window around the person, so it need not match x's. */
+  const originZ = (): number => l.originZ ?? l.origin;
   /**
    * The outlines by the cell of `CELL` meters over the land's mask their
    * middles lie in (past it, its edge cell): cell k's are `order` from
    * `starts[k]` to `starts[k + 1]`. `reach` is the farthest any reaches.
+   * The cells start at the land's first sample when they were sorted
+   * (`x`, `z`), since the land's window moves on with the person.
    */
-  let cells = { side: 1, starts: new Int32Array(2), order: new Int32Array(0), reach: 0 };
-  const cellAt = (v: number, side: number): number => Math.max(0, Math.min(side - 1, Math.floor((v - l.origin) / CELL)));
+  let cells = { side: 1, starts: new Int32Array(2), order: new Int32Array(0), reach: 0, x: 0, z: 0 };
+  const cellAt = (v: number, from: number, side: number): number => Math.max(0, Math.min(side - 1, Math.floor((v - from) / CELL)));
   const sort = (): void => {
     const side = Math.max(1, Math.ceil((n * RESOLUTION) / CELL));
-    const of = Int32Array.from(outlines, (c) => cellAt(c.z, side) * side + cellAt(c.x, side));
+    const x = l.origin;
+    const z = originZ();
+    const of = Int32Array.from(outlines, (c) => cellAt(c.z, z, side) * side + cellAt(c.x, x, side));
     const starts = new Int32Array(side * side + 1);
     for (const k of of) starts[k + 1] = (starts[k + 1] as number) + 1;
     for (let k = 0; k < side * side; k++) starts[k + 1] = (starts[k + 1] as number) + (starts[k] as number);
@@ -101,7 +107,7 @@ export function createClearings(t: Terrain): Clearings {
     });
     let reach = 0;
     for (const r of reaches) reach = Math.max(reach, r);
-    cells = { side, starts, order, reach };
+    cells = { side, starts, order, reach, x, z };
   };
   let capsules: readonly Capsule[] = [];
   /** The window's first texel of the land's mask, x and z; null until drawn. */
@@ -113,11 +119,12 @@ export function createClearings(t: Terrain): Clearings {
   /** Draws the land's mask over the window whose first texel is (i, j): each texel as the whole land's mask would hold it. */
   const draw = (i: number, j: number): void => {
     corner = { i, j };
+    const oz = originZ();
     for (let k = 0; k < size; k++) {
       columns[k] = Math.max(0, Math.min(n - 1, i + k));
       rows[k] = Math.max(0, Math.min(n - 1, j + k));
     }
-    uniforms.uClearingOrigin.value.set(l.origin + i * RESOLUTION, l.origin + j * RESOLUTION);
+    uniforms.uClearingOrigin.value.set(l.origin + i * RESOLUTION, oz + j * RESOLUTION);
     data.fill(0);
     /** Clears every texel of the window over mask texels [i0, i1] by [j0, j1] whose middle `inside` holds. */
     const clear = (i0: number, i1: number, j0: number, j1: number, inside: (x: number, z: number) => boolean): void => {
@@ -126,7 +133,7 @@ export function createClearings(t: Terrain): Clearings {
       const r0 = from(rows, j0);
       const r1 = from(rows, j1 + 1);
       for (let r = r0; r < r1; r++) {
-        const z = l.origin + ((rows[r] as number) + 0.5) * RESOLUTION;
+        const z = oz + ((rows[r] as number) + 0.5) * RESOLUTION;
         for (let c = c0; c < c1; c++) {
           if (inside(l.origin + ((columns[c] as number) + 0.5) * RESOLUTION, z)) data[r * size + c] = 255;
         }
@@ -135,8 +142,8 @@ export function createClearings(t: Terrain): Clearings {
     for (const c of capsules) {
       const i0 = Math.max(0, Math.floor((Math.min(c.ax, c.bx) - c.radius - l.origin) / RESOLUTION));
       const i1 = Math.min(n - 1, Math.ceil((Math.max(c.ax, c.bx) + c.radius - l.origin) / RESOLUTION));
-      const j0 = Math.max(0, Math.floor((Math.min(c.az, c.bz) - c.radius - l.origin) / RESOLUTION));
-      const j1 = Math.min(n - 1, Math.ceil((Math.max(c.az, c.bz) + c.radius - l.origin) / RESOLUTION));
+      const j0 = Math.max(0, Math.floor((Math.min(c.az, c.bz) - c.radius - oz) / RESOLUTION));
+      const j1 = Math.min(n - 1, Math.ceil((Math.max(c.az, c.bz) + c.radius - oz) / RESOLUTION));
       const abx = c.bx - c.ax;
       const abz = c.bz - c.az;
       const len = abx * abx + abz * abz;
@@ -152,8 +159,8 @@ export function createClearings(t: Terrain): Clearings {
       const reach = reaches[o] as number;
       const i0 = Math.max(0, Math.floor((c.x - reach - l.origin) / RESOLUTION));
       const i1 = Math.min(n - 1, Math.ceil((c.x + reach - l.origin) / RESOLUTION));
-      const j0 = Math.max(0, Math.floor((c.z - reach - l.origin) / RESOLUTION));
-      const j1 = Math.min(n - 1, Math.ceil((c.z + reach - l.origin) / RESOLUTION));
+      const j0 = Math.max(0, Math.floor((c.z - reach - oz) / RESOLUTION));
+      const j1 = Math.min(n - 1, Math.ceil((c.z + reach - oz) / RESOLUTION));
       const cos = Math.cos(c.yaw);
       const sin = Math.sin(c.yaw);
       // Past its farthest reach, with room for rounding, no direction of the outline holds a texel.
@@ -172,10 +179,10 @@ export function createClearings(t: Terrain): Clearings {
     };
     // Only the cells whose outlines could reach the window's texels.
     const { side, starts, order, reach } = cells;
-    const ci0 = cellAt(l.origin + (columns[0] as number) * RESOLUTION - reach, side);
-    const ci1 = cellAt(l.origin + ((columns[size - 1] as number) + 1) * RESOLUTION + reach, side);
-    const cj0 = cellAt(l.origin + (rows[0] as number) * RESOLUTION - reach, side);
-    const cj1 = cellAt(l.origin + ((rows[size - 1] as number) + 1) * RESOLUTION + reach, side);
+    const ci0 = cellAt(l.origin + (columns[0] as number) * RESOLUTION - reach, cells.x, side);
+    const ci1 = cellAt(l.origin + ((columns[size - 1] as number) + 1) * RESOLUTION + reach, cells.x, side);
+    const cj0 = cellAt(oz + (rows[0] as number) * RESOLUTION - reach, cells.z, side);
+    const cj1 = cellAt(oz + ((rows[size - 1] as number) + 1) * RESOLUTION + reach, cells.z, side);
     for (let cj = cj0; cj <= cj1; cj++) {
       for (let ci = ci0; ci <= ci1; ci++) {
         const cell = cj * side + ci;
@@ -186,8 +193,8 @@ export function createClearings(t: Terrain): Clearings {
   };
   /** The window's first texel for grass around (x, z): on a step of `WINDOW.recenter`. */
   const cornerAt = (x: number, z: number): { i: number; j: number } => {
-    const snap = (v: number): number => Math.round((v - l.origin) / RESOLUTION / WINDOW.recenter) * WINDOW.recenter - size / 2;
-    return { i: snap(x), j: snap(z) };
+    const snap = (v: number, from: number): number => Math.round((v - from) / RESOLUTION / WINDOW.recenter) * WINDOW.recenter - size / 2;
+    return { i: snap(x, l.origin), j: snap(z, originZ()) };
   };
   const redraw = (): void => {
     const at = cornerAt(middle.x, middle.z);
