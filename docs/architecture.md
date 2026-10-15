@@ -446,9 +446,12 @@ above its pad there, it takes the nearest dry ground past the lot
 woods' trees, sized by its importance and its area's character (`stature` in
 `CHARACTERS`), with its own vitality, and keeps its crown's width from
 every other so each tree reads as one thing; any other stands as an
-understory placement: a stone, a bush or a drift of flowers. Every tree,
-stone, bush and drift of flowers in a world from code is a definition, a
-file or an entity Jev chose to be one, and a tap on one opens its page.
+understory placement: a stone, a bush or a drift of flowers. Every one
+stands: where its whole patch lies in the room trees keep round a house, a
+trail or a landmark, it stands in that room, under a crown if need be.
+Every tree, stone, bush and drift of flowers in a world from code is a
+definition, a file or an entity Jev chose to be one, and a tap on one opens
+its page.
 Nothing else stands on the land: between the things that stand for code it
 is grass, ground and water.
 

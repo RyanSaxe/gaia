@@ -5,9 +5,10 @@ import { landmark, link, structure } from "@gaia/kinds";
 import { FLORA_PRESETS, STRUCTURE_PRESETS, TRAIL_PRESETS, buildSlots, realize } from "@gaia/realize";
 import { type BuildingSite, type Terrain, bakeTerrain, extentOf, findBankSite, regionAt, siteToWorld, turningExtent, waterDepthAt } from "@gaia/terrain";
 import { type CodeLab, codeLab, provingWorld } from "./code-world.ts";
+import { composedName } from "./settlement.ts";
 import { laySnapshot } from "./snapshot.ts";
 import { snapshotFacts } from "./snapshot-facts.ts";
-import { type StandBuilding, landmarkBase, needsBank, standWorld } from "./stand.ts";
+import { AS_THING, type Stand, type StandBuilding, landmarkBase, needsBank, standWorld } from "./stand.ts";
 
 const buildingLib = new Library([...STRUCTURE_PRIMITIVES, ...FLORA_PRIMITIVES]);
 // A watermill the size of the median building that has a wheel in these two worlds, about 54 m².
@@ -25,16 +26,33 @@ const buildingsOf = (code: CodeLab): StandBuilding[] =>
     return { name: b.facts.path, plan: built.slots.get("footprint")?.output as BuildingPlan, beside: extentOf(feature), ...(needsBank(b.blueprint, buildingLib) ? { wheel: turningExtent(feature) } : {}) };
   });
 
-describe("buildings and water, in Gaia's world and the proving ground", () => {
-  let worlds: { root: string; code: CodeLab; t: Terrain; buildings: StandBuilding[] }[] = [];
-  // Bakes both worlds whole and builds their buildings: about thirty seconds alone, more when other work shares the machine.
+/** A world stood as the terrain lab stands it: its buildings, its landmarks by the names the lab gives them, its trails and its definitions. */
+function standAsTheLab(t: Terrain, code: CodeLab, buildings: StandBuilding[]): { land: Terrain; stood: Stand } {
+  const landmarkLib = new Library([...LANDMARK_PRIMITIVES, ...FLORA_PRIMITIVES]);
+  const styles = TRAIL_PRESETS.map((p) => buildSlots(p.blueprint, link, new Library(ROUTE_PRIMITIVES), { seed: 1, facts: {} }).get("route")?.output as RouteSpec);
+  const land = structuredClone(t);
+  const stood = standWorld(land, {
+    buildings,
+    landmarks: code.landmarks.map((l) => ({ name: composedName(l.blueprint), base: landmarkBase(realize(l.blueprint, landmark, landmarkLib, { seed: seedOf(`terrain-lab/landmark/${l.path}`), facts: Object.fromEntries(Object.entries(landmark.facts).map(([k, bind]) => [k, bind(l.facts)])) })) })),
+    trailStyles: [styles[0] as RouteSpec, styles[1] as RouteSpec, styles[2] as RouteSpec],
+    trees: { count: 0, seed: 9, presets: FLORA_PRESETS.length, builds: 1, bases: FLORA_PRESETS.map(() => 0.5), crowns: FLORA_PRESETS.map(() => 4) },
+    code: code.stand,
+  });
+  return { land, stood };
+}
+
+describe("Gaia's world and the proving ground, stood as the lab stands them", () => {
+  let worlds: { root: string; code: CodeLab; t: Terrain; buildings: StandBuilding[]; land: Terrain; stood: Stand }[] = [];
+  // Bakes and stands both worlds whole: about forty seconds alone, more when other work shares the machine.
   beforeAll(async () => {
     const { world, judges, summary } = await laySnapshot("jev", "a test");
     worlds = [{ root: "gaia", facts: snapshotFacts(), world, judges, summary, judged: {} }, provingWorld()].map((doc) => {
       const code = codeLab(doc as never);
-      return { root: doc.root, code, t: bakeTerrain(code.spec, new Library([...RELIEF_PRIMITIVES, ...BIOME_PRIMITIVES])), buildings: buildingsOf(code) };
+      const t = bakeTerrain(code.spec, new Library([...RELIEF_PRIMITIVES, ...BIOME_PRIMITIVES]));
+      const buildings = buildingsOf(code);
+      return { root: doc.root, code, t, buildings, ...standAsTheLab(t, code, buildings) };
     });
-  }, 180_000);
+  }, 240_000);
 
   it("find a bank in every area given running water, and every building with a wheel stands on its area's stream", () => {
     for (const { root, code, t, buildings } of worlds) {
@@ -57,19 +75,8 @@ describe("buildings and water, in Gaia's world and the proving ground", () => {
     }
   });
 
-  // Stands both worlds' buildings, landmarks and trails: several seconds alone, more when other work shares the machine.
-  it("stand every house on dry ground, never in a pond or a stream", { timeout: 120_000 }, () => {
-    const landmarkLib = new Library([...LANDMARK_PRIMITIVES, ...FLORA_PRIMITIVES]);
-    const styles = TRAIL_PRESETS.map((p) => buildSlots(p.blueprint, link, new Library(ROUTE_PRIMITIVES), { seed: 1, facts: {} }).get("route")?.output as RouteSpec);
-    for (const { root, code, t, buildings } of worlds) {
-      const land = structuredClone(t);
-      const stood = standWorld(land, {
-        buildings,
-        landmarks: code.landmarks.map((l) => ({ name: l.path, base: landmarkBase(realize(l.blueprint, landmark, landmarkLib, { seed: seedOf(`terrain-lab/landmark/${l.path}`), facts: Object.fromEntries(Object.entries(landmark.facts).map(([k, bind]) => [k, bind(l.facts)])) })) })),
-        trailStyles: [styles[0] as RouteSpec, styles[1] as RouteSpec, styles[2] as RouteSpec],
-        trees: { count: 0, seed: 9, presets: FLORA_PRESETS.length, builds: 1, bases: FLORA_PRESETS.map(() => 0.5), crowns: FLORA_PRESETS.map(() => 4) },
-        code: code.stand,
-      });
+  it("stand every house on dry ground, never in a pond or a stream", () => {
+    for (const { root, buildings, land, stood } of worlds) {
       // A house with a wheel stands on a stream's bank with its wheel in the water; every other house stands wholly on dry ground.
       buildings.forEach((b, i) => {
         if (b.wheel !== undefined) return;
@@ -78,6 +85,14 @@ describe("buildings and water, in Gaia's world and the proving ground", () => {
         const under = Array.from({ length: 25 }, (_, k) => waterDepthAt(land, ...siteToWorld(site, ((k % 5) / 4 - 0.5) * width, (Math.floor(k / 5) / 4 - 0.5) * depth)));
         expect(Math.max(...under), `${root}: ${b.name}`).toBe(0);
       });
+    }
+  });
+
+  it("stand every definition, file and entity the layout lays out as a tree, a stone, a bush or flowers, however crowded its patch", () => {
+    for (const { root, code, stood } of worlds) {
+      const trees = new Set(stood.trees.map((tree) => tree.symbol));
+      const left = code.stand.symbols.flatMap((s, i) => (s.rule === AS_THING || stood.symbols[i]! >= 0 || trees.has(i) ? [] : [code.standing(i)?.represented.id ?? String(i)]));
+      expect(left, root).toEqual([]);
     }
   });
 });
