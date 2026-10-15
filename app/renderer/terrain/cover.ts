@@ -251,7 +251,7 @@ void main() {
   vec3 n = normalize(vGroundNormal + face * 0.45);
   float level = max(uSunDirection.y, 0.05);
   float nDotL = max(level + (dot(n, uSunDirection) - level) * 1.3, 0.0);
-  float shadow = mix(0.45, 1.0, sunShadow(vWorld, 0.0015));
+  float shadow = mix(0.45, 1.0, sunShadow(vWorld, vGroundNormal, 0.0015));
   float direct = nDotL * shadow;
   float light = mix(direct, softCel(direct), 0.5) * sunUp();
   vec3 toned = nightTone(albedo);

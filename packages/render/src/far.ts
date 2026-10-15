@@ -757,7 +757,7 @@ void main() {
   float nDotL = dot(n, uSunDirection);
   float wrapped = mix(max(nDotL, 0.0), nDotL * 0.5 + 0.5, uFoliage * 0.85);
   // A card's surface is its baked depth, which differs a little from the card the sun saw; read the shadow a little toward the sun, so the tree shadows itself only where the near form would.
-  float shadow = mix(0.4 + uFoliage * 0.15, 1.0, sunShadow(world + uSunDirection * uRadius * vScale * uShadowLift, 0.0025 + uFoliage * 0.007));
+  float shadow = mix(0.4 + uFoliage * 0.15, 1.0, sunShadow(world + uSunDirection * uRadius * vScale * uShadowLift, n, 0.0025 + uFoliage * 0.007));
   float light = softCel(wrapped * shadow) * sunUp();
   vec3 toned = nightTone(albedo);
   vec3 lit = toned * (uSunColor * uSunIntensity * light + uAmbientColor * uAmbientIntensity);

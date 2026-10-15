@@ -222,14 +222,27 @@ float softCel(float x) {
 
 // Lit fraction from the hand-rolled sun shadow map, 3x3 PCF. Shadows
 // suggest, never shout: the floor keeps them soft washes.
-float sunShadow(vec3 worldPosition, float bias) {
-  vec4 c4 = uShadowMatrix * vec4(worldPosition, 1.0);
+// The samples spread SHADOW_SPREAD texels apart, so where the light meets a
+// surface at a slant the outer ones read the surface itself, nearer the
+// light, and it shadows itself in speckles. The point is read lifted off its
+// surface by the samples' reach times the sine of that slant, which keeps
+// every sample in front of it; where the light falls square nothing moves, so
+// contact shadows hold.
+const float SHADOW_SPREAD = 2.2;
+float sunShadow(vec3 worldPosition, vec3 normal, float bias) {
+  vec3 toLight = -normalize(vec3(uShadowMatrix[0][2], uShadowMatrix[1][2], uShadowMatrix[2][2]));
+  float texelMeters = 2.0 * uShadowTexel / length(vec3(uShadowMatrix[0][0], uShadowMatrix[1][0], uShadowMatrix[2][0]));
+  vec3 n = normalize(normal);
+  float facing = dot(n, toLight);
+  float reach = (SHADOW_SPREAD * 1.415 + 1.0) * texelMeters;
+  vec3 lifted = worldPosition + n * sign(facing) * sqrt(max(1.0 - facing * facing, 0.0)) * reach;
+  vec4 c4 = uShadowMatrix * vec4(lifted, 1.0);
   vec3 c = c4.xyz / c4.w * 0.5 + 0.5;
   if (c.x < 0.01 || c.x > 0.99 || c.y < 0.01 || c.y > 0.99 || c.z > 1.0) return 1.0;
   float lit = 0.0;
   for (int dx = -1; dx <= 1; dx++) {
     for (int dy = -1; dy <= 1; dy++) {
-      float depth = texture2D(uShadowMap, c.xy + vec2(float(dx), float(dy)) * uShadowTexel * 2.2).r;
+      float depth = texture2D(uShadowMap, c.xy + vec2(float(dx), float(dy)) * uShadowTexel * SHADOW_SPREAD).r;
       lit += c.z - bias <= depth ? 1.0 : 0.0;
     }
   }
