@@ -34,7 +34,7 @@ import {
   createSunShadow,
   type SceneLight,
 } from "@gaia/render";
-import { type Capsule, clearanceAt, frameOf, type Placement, TILE, LAND_ASPECT, type Deck, decksOf, EYE_HEIGHT, footingAt, FULL_WORLD, GAIT, groundHeightAt, heightAt, type Intent, junctionVitality, NO_SOLIDS, NO_TRAILS, openingSpot, outlineShape, withinLand, piecesShapes, type Place, placeAt, planWalk, randomWorld, regionPlaces, RELIEF_BUDGET, sampleWorld, sightlines, siteToWorld, SMALL_WORLD, type Solids, type SolidShape, solidsOf, stanceAt, standAt, steerAlong, type Steered, type Steering, steering, steerPress, steerRelease, steerStep, stride, type Stride, acrossWay, carry, planTrip, TRAVEL, type Travel, wadingAt, travelFrom, travelPoint, travelStep, type Trip, trailWay, type Walker, type WalkKey, type Terrain, TERRAIN, type TrailNetwork, type Walk, WALK_TO, walkStep, wallsShape, waterDepthAt, type Way, wayAhead, wayVitalityAt, wayWear, WILDS, type WorldPlaces, type WorldSpec } from "@gaia/terrain";
+import { type Capsule, clearanceAt, frameOf, TILE, LAND_ASPECT, type Deck, decksOf, EYE_HEIGHT, footingAt, FULL_WORLD, GAIT, groundHeightAt, heightAt, type Intent, junctionVitality, NO_SOLIDS, NO_TRAILS, openingSpot, outlineShape, withinLand, piecesShapes, type Place, placeAt, planWalk, randomWorld, regionPlaces, RELIEF_BUDGET, sampleWorld, sightlines, siteToWorld, SMALL_WORLD, type Solids, type SolidShape, solidsOf, stanceAt, standAt, steerAlong, type Steered, type Steering, steering, steerPress, steerRelease, steerStep, stride, type Stride, acrossWay, carry, planTrip, TRAVEL, type Travel, wadingAt, travelFrom, travelPoint, travelStep, type Trip, trailWay, type Walker, type WalkKey, type Terrain, TERRAIN, type TrailNetwork, type Walk, WALK_TO, walkStep, wallsShape, waterDepthAt, type Way, wayAhead, wayVitalityAt, wayWear, WILDS, type WorldPlaces, type WorldSpec } from "@gaia/terrain";
 import { createSky } from "../world/environment.ts";
 import { type Pixels, createCapture } from "./capture.ts";
 import { renderInspector } from "../inspector.ts";
@@ -61,8 +61,8 @@ import { type Building, composedName, createSettlement, settlementBuilds } from 
 import { createSigns } from "./signs.ts";
 import { type Baked, createBaker } from "./baker.ts";
 import { CLIP, createPageLand } from "./land.ts";
-import { createStanding, seenTo } from "./standing.ts";
-import { type Stand, type StandRequest, type StandingLandmark, landmarkBase, ownerVitality, tileArea, tilesOf, understoryVitality } from "./stand.ts";
+import { createStanding } from "./standing.ts";
+import { type Stand, type StandRequest, type StandingLandmark, landmarkBase, ownerVitality, understoryVitality } from "./stand.ts";
 import { groundVitalityAt, setGroundOwnership, showGroundVitality } from "./vitality.ts";
 import { type TourStop, tourStops } from "./tour.ts";
 import { type Change, pictureChange, tallyFrame } from "./measure.ts";
@@ -593,7 +593,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   // the world's: each file's trees and its patch of ground show it, and each
   // area's lots and water show its files' pooled.
   const liveFileVitality = new Map<string, number>();
-  /** Shows each file's vitality now on its ground and the understory growing there, and each area's on its lots and its water. Nothing rebakes. */
+  /** Shows each file's vitality now on its ground and on what stands for it, and each area's on its lots and its water. Nothing rebakes. */
   function showLandVitality(): void {
     if (code === null) return;
     const live = new Map(code.world.patches.map((p) => [p.path, liveFileVitality.get(p.path) ?? p.vitality]));
@@ -601,10 +601,10 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     showGroundVitality(ground, area);
     showUnderstoryVitality();
   }
-  /** Each finer entity shows its file's vitality, and every scattered rock, bush and flower its ground's, read from the field the grass reads. */
+  /** Each stone, bush and drift of flowers shows the vitality of what it stands for, or its file's where a hook has changed that. */
   function showUnderstoryVitality(): void {
     const own = (k: number): number => liveFileVitality.get(code?.standing(k)?.file ?? "") ?? code?.stand.symbols[k]?.vitality ?? 1;
-    understory.setVitality(understoryVitality({ placements: understory.placements(), symbols: symbolPlacements }, own, (x, z) => groundVitalityAt(x, z).ground));
+    understory.setVitality(understoryVitality({ placements: understory.placements(), symbols: symbolPlacements }, own));
   }
   placeWays();
   for (const v of settlement.views()) scene.add(v.object);
@@ -850,14 +850,12 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     warming = false;
   }
 
-  let understoryDensity = 1;
-  /** What the bake thread stands on a world: plain data from the lab's buildings, landmarks, trails, trees and understory. */
-  const standRequest = (next: WorldSpec): StandRequest => ({
+  /** What the bake thread stands on a world: plain data from the lab's buildings, landmarks, trails and trees. */
+  const standRequest = (): StandRequest => ({
     buildings: settlement.requests(),
     landmarks: landmarks.map((lm) => ({ name: lm.name, base: lm.base })),
     trailStyles: [trailStyles[0], trailStyles[1], trailStyles[2]] as [RouteSpec, RouteSpec, RouteSpec],
     trees: { count: treeCount, seed: 9, presets: FLORA_PRESETS.length, builds: TREE_BUILDS, bases: variants.map((v) => v.base), crowns: variants.map((v) => v.radius) },
-    understory: understory.plan(next, understoryDensity),
     ...(code === null ? {} : { code: code.stand }),
   });
   /** Each tile's trees, by "ti,tj": what the trees' stander stands. */
@@ -891,7 +889,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     // Each standing tree's copy among its build's, so a file's trees take a new vitality live; -1 for a tree far off.
     treeCopies = trees.map((t) => copyOf.get(t) ?? -1);
   }
-  /** Stands the bake's trees and understory, placed on the bake thread, and what stops a walker. */
+  /** Stands the bake's trees and what stands for code as stones, bushes and flowers, placed on the bake thread, and what stops a walker. */
   function plant(stood: Stand): void {
     // Trees keep off the trails, the buildings and the landmarks; the bake thread kept them off.
     // In the codebase's world each tree is a definition, and takes its vitality.
@@ -911,18 +909,12 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     largestTree = trees.reduce((r, t) => Math.max(r, (variants[t.variant] as TreeVariant).radius * t.scale), 0);
     treeCopies = trees.map(() => -1);
     symbolPlacements = stood.symbols;
-    // Nothing of the understory stands in a building, on its walk, on a trail or under a landmark: the bake thread kept it clear.
-    // The symbols' placements come first and stay; each tile's understory follows, the tiles the bake stood first.
-    const scattered = stood.tiles.reduce((n, t) => n + t.count, 0);
-    symbolsStood = stood.placements.slice(0, stood.placements.length - scattered);
-    const given = new Map<string, readonly Placement[]>();
-    let from = symbolsStood.length;
-    for (const t of stood.tiles) {
-      given.set(`${t.ti},${t.tj}`, stood.placements.slice(from, from + t.count));
-      from += t.count;
-    }
-    // What stands, stands again tile by tile around the person (`standing`), from the trees, the understory and the trails.
-    standing.open(world, new Map([["understory", given]]));
+    // The stones, bushes and flowers stand wherever the person is; the bake thread kept them out of buildings, off trails and from under landmarks.
+    understory.place(stood.placements);
+    showUnderstoryVitality();
+    buildSolids();
+    // The trees, the trails, the buildings and the landmarks stand again tile by tile around the person (`standing`).
+    standing.open(world);
     // Each tree's file is the ground around it, out to most of its crown.
     // In the codebase's world every file has its own patch; in the sample world a file's patch is the ground around its tree, out to most of its crown.
     places =
@@ -975,8 +967,6 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
 
   // ---------- what stands on the land, tile by tile ----------
 
-  /** The symbols' placements, which stand wherever the person is, before every tile's understory. */
-  let symbolsStood: readonly Placement[] = [];
   /** The view's device pixels a radian: how far a thing of a given size can be seen. */
   const viewFocal = (): number => renderer.getContext().drawingBufferHeight / 2 / Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2);
   const standing = createStanding(viewFocal);
@@ -986,16 +976,6 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     tile: (ti, tj) => treesByTile.get(`${ti},${tj}`) ?? [],
     stand(held) {
       standTrees(held);
-      buildSolids();
-    },
-  });
-  standing.add<Placement>({
-    name: "understory",
-    largest: () => understory.largest(),
-    tile: (ti, tj) => land.things(ti, tj),
-    stand(held) {
-      understory.place(terrain, world, [], understoryDensity, [...symbolsStood, ...held]);
-      showUnderstoryVitality();
       buildSolids();
     },
   });
@@ -1026,15 +1006,6 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       landmarkViews.forEach((v, i) => (v.object.visible = keep.has(i)));
     },
   });
-  /** The tiles of a world whose understory the bake stands with it: as far around (x, z) as the understory is seen. */
-  const tilesNear = (spec: WorldSpec, x: number, z: number): [number, number][] => {
-    const reach = seenTo(understory.largest(), viewFocal());
-    return tilesOf(spec).filter(([ti, tj]) => {
-      const a = tileArea(spec, ti, tj);
-      return Math.hypot(Math.max(a.x0 - x, 0, x - a.x1), Math.max(a.z0 - z, 0, z - a.z1)) <= reach;
-    });
-  };
-
   /** In the codebase's world, each symbol's placement among the understory's, or -1. */
   let symbolPlacements: readonly number[] = [];
   /** The subject each symbol's placement stands for, by its index in the understory's placements. */
@@ -1273,26 +1244,25 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   }
 
   /**
-   * The nearest rock or bush a ray passes through, by its outline's reach and
-   * its top as an upright cylinder. Instances can't be raycast: their
-   * matrices also carry vitality, hue and seed.
+   * The nearest stone, bush or drift of flowers a ray passes through, by its
+   * outline's reach and its top as an upright cylinder, with a little more
+   * room around a low one so a thumb can find a flower. Instances can't be
+   * raycast: their matrices also carry vitality, hue and seed.
    */
   function thingHit(ray: THREE.Ray): { x: number; z: number; distance: number; at: number } | null {
     const { origin: o, direction: d } = ray;
     const flat = d.x * d.x + d.z * d.z;
     let best: { x: number; z: number; distance: number; at: number } | null = null;
     for (const [at, p] of understory.placements().entries()) {
-      // A function or class can be tapped whatever it stands as, flowers too.
-      const foot = STOPS[p.rule] === undefined && !symbolAt.has(at) ? undefined : understory.footprint(p.rule, p.variant);
+      const foot = understory.footprint(p.rule, p.variant);
       if (foot === undefined) continue;
       const s = flat < 1e-9 ? 0 : ((p.x - o.x) * d.x + (p.z - o.z) * d.z) / flat;
       if (s <= 0) continue;
       const x = o.x + d.x * s;
       const z = o.z + d.z * s;
       const y = o.y + d.y * s;
-      // Low things get a little more room around them, so a thumb can find a flower.
-      const reach = Math.max(Math.max(...foot.outline) * p.scale, symbolAt.has(at) ? 0.6 : 0);
-      if (Math.hypot(x - p.x, z - p.z) > reach || y > p.y + Math.max(foot.top * p.scale, symbolAt.has(at) ? 0.5 : 0)) continue;
+      const reach = Math.max(Math.max(...foot.outline) * p.scale, 0.6);
+      if (Math.hypot(x - p.x, z - p.z) > reach || y > p.y + Math.max(foot.top * p.scale, 0.5)) continue;
       if (best === null || s < best.distance) best = { x, z, distance: s, at };
     }
     return best;
@@ -1504,9 +1474,9 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       else approach(nearest.subject);
       return;
     }
-    // A tap on a rock, a bush, a fingerpost or a boundary stone walks up to it, not to the ground hidden behind it.
-    const near = [thing, furnishingHit(ray)].filter((t) => t !== null).sort((a, b) => a.distance - b.distance)[0];
-    if (near !== undefined && (land === null || near.distance < land.distance)) setGoal(near.x, near.z);
+    // A tap on a fingerpost or a boundary stone walks up to it, not to the ground hidden behind it.
+    const near = furnishingHit(ray);
+    if (near !== null && (land === null || near.distance < land.distance)) setGoal(near.x, near.z);
     else if (land !== null) setGoal(land.x, land.z);
   });
 
@@ -1844,7 +1814,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     const t0 = performance.now();
     $("random").textContent = "Baking…";
     reportStage("baking", { size: next.size });
-    const baked = await baker.bake(next, standRequest(next), tilesNear(next, walker.x, walker.z));
+    const baked = await baker.bake(next, standRequest());
     if (mine !== asked) {
       // A newer world was asked for: this one's finishing thread holds a world no one will take.
       baked.whole.terminate();
@@ -2886,16 +2856,6 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       /** The travel test (`travelTest`). */
       travelTest,
       /** The trip under way, or null: how far along it and how long, its pace, and whether its view follows the way. */
-      /** How long the land's workers take to stand each of these tiles' things, one after another, ms. */
-      thingsTime: async (tiles: readonly (readonly [number, number])[]) => {
-        const out: number[] = [];
-        for (const [ti, tj] of tiles) {
-          const t0 = performance.now();
-          await land.things(ti, tj);
-          out.push(Math.round(performance.now() - t0));
-        }
-        return out;
-      },
       /** Each tile that stood within sight of the person since last asked (`Standing.late`): things that could be seen appearing. */
       standingLate: () => standing.late(),
       /** The tiles each stander still waits for (`Standing.asking`). */
@@ -3227,10 +3187,9 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       },
       ponds: () => terrain.ponds.map((p) => ({ x: p.x, z: p.z, reach: p.reach })),
       plants: () => trees.map((t) => ({ x: t.x, z: t.z, height: (variants[t.variant] as TreeVariant).height * t.scale, region: regionAt(t.x, t.z), preset: FLORA_PRESETS[Math.floor(t.variant / TREE_BUILDS)]?.name ?? "", vitality: t.represented.vitality })),
-      /** Replants `trees` trees and the understory at `density` times its usual count, for measuring at scale; the bake thread stands them again. */
-      forest: async (count: number, density = 1) => {
+      /** Replants `trees` trees, for measuring at scale; the bake thread stands them again. */
+      forest: async (count: number) => {
         treeCount = count;
-        understoryDensity = density;
         await rebake(world);
         return { trees: trees.length, understory: understory.stats().placed };
       },

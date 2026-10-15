@@ -12,7 +12,7 @@ export * from "./gait.ts";
 export * from "./steer.ts";
 export * from "./flow.ts";
 export * from "./site.ts";
-export * from "./scatter.ts";
+export * from "./placement.ts";
 export * from "./paths.ts";
 export * from "./landmarks.ts";
 export * from "./solids.ts";

@@ -12,7 +12,7 @@
 import type { RouteSpec } from "@gaia/schema";
 import { fbm } from "@gaia/primitives";
 import { type Lattice, heightAt, slopeAt, worldOf, worldOfZ } from "./lattice.ts";
-import type { Occupied } from "./scatter.ts";
+import type { Occupied } from "./placement.ts";
 import { DRY, type Terrain } from "./world.ts";
 import { withinLand } from "./edge.ts";
 import { waterDepthAt } from "./walk.ts";

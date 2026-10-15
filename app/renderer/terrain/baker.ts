@@ -23,7 +23,7 @@ export interface Baked {
   readonly stand: Stand;
   /**
    * The bake's finishing thread, which still holds the whole stood world: the
-   * page's land takes it on to cut its first chunks and tiles at once, and
+   * page's land takes it on to cut its first chunks at once, and
    * ends it when it no longer needs it.
    */
   readonly whole: Worker;
@@ -32,11 +32,8 @@ export interface Baked {
 }
 
 export interface Baker {
-  /**
-   * Bakes a world on the workers and stands its things on it, the understory
-   * of `tiles` only when given; bakes run one after another in the order asked.
-   */
-  bake(world: WorldSpec, stand: StandRequest, tiles?: readonly (readonly [number, number])[]): Promise<Baked>;
+  /** Bakes a world on the workers and stands its things on it; bakes run one after another in the order asked. */
+  bake(world: WorldSpec, stand: StandRequest): Promise<Baked>;
 }
 
 /** Rows per band: small enough to spread over every worker, large enough that messages stay few. */
@@ -99,12 +96,12 @@ export function createBaker(threads = Math.max(1, Math.min(4, (navigator.hardwar
   }
 
   let queue: Promise<unknown> = Promise.resolve();
-  async function run(world: WorldSpec, stand: StandRequest, tiles?: readonly (readonly [number, number])[]): Promise<Baked> {
+  async function run(world: WorldSpec, stand: StandRequest): Promise<Baked> {
     const workers = started ?? spawn();
     started = null;
     let kept: Worker | null = null;
     try {
-      const baked = await bakeOn(workers, world, stand, tiles);
+      const baked = await bakeOn(workers, world, stand);
       kept = baked.whole;
       // The page's land answers the finishing thread from here on.
       kept.onmessage = null;
@@ -113,7 +110,7 @@ export function createBaker(threads = Math.max(1, Math.min(4, (navigator.hardwar
       for (const w of workers) if (w !== kept) w.terminate();
     }
   }
-  async function bakeOn(workers: readonly Worker[], world: WorldSpec, stand: StandRequest, tiles?: readonly (readonly [number, number])[]): Promise<Baked> {
+  async function bakeOn(workers: readonly Worker[], world: WorldSpec, stand: StandRequest): Promise<Baked> {
     const { n } = frameOf(world);
     const bands: [number, number][] = [];
     for (let z = 0; z < n; z += BAND) bands.push([z, Math.min(n, z + BAND)]);
@@ -134,13 +131,13 @@ export function createBaker(threads = Math.max(1, Math.min(4, (navigator.hardwar
     const composed = Math.round(performance.now() - t0);
     const moved = parts.flatMap((p) => [p.raw.buffer, p.region.buffer, p.coverRegions.buffer, p.coverShares.buffer]);
     const finisher = workers[0] as Worker;
-    const [reply, ownership] = await Promise.all([ask(finisher, { kind: "finish", world, parts, stand, ...(tiles === undefined ? {} : { tiles }) }, moved), own(world, stand, workers.length > 1 ? workers.slice(1) : [finisher])]);
+    const [reply, ownership] = await Promise.all([ask(finisher, { kind: "finish", world, parts, stand }, moved), own(world, stand, workers.length > 1 ? workers.slice(1) : [finisher])]);
     if (reply.kind !== "finished") throw new Error(reply.kind === "failed" ? reply.message : "The bake finished without a terrain.");
     return { land: reply.land, report: reply.report, wildBase: reply.wildBase, stand: { ...reply.stand, took: { compose: composed, ...reply.stand.took, finished: Math.round(performance.now() - t0) } }, whole: finisher, ownership };
   }
   return {
-    bake(world, stand, tiles) {
-      const done = queue.then(() => run(world, stand, tiles));
+    bake(world, stand) {
+      const done = queue.then(() => run(world, stand));
       // The queue waits on the bake but keeps nothing of it: a bake's stand
       // and terrain are the lab's to keep or let go once it takes them on.
       queue = done.then(

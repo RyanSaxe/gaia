@@ -326,10 +326,6 @@ export function codeLab({ facts, world, judges, summary, judged }: WorldDocument
       // An entity standing as a plant, a stone or flowers: its trails end at its lot's middle.
       places: world.standing.flatMap((s) => (s.of === "entity" ? [{ id: s.path, x: s.x, z: s.z, radius: 2 }] : [])),
       patches: world.patches.map((p) => ({ x: p.x, z: p.z, radius: p.radius })),
-      regions: world.regions.map((r) => {
-        const c = CHARACTERS[r.character];
-        return { understory: c?.understory ?? {}, ...(c?.open === undefined ? {} : { open: c.open }) };
-      }),
       cells: (() => {
         const patchOf = new Map(world.patches.map((p, i) => [p.path, i]));
         const areaOf = new Map(world.areas.map((a, i) => [a.path, i]));
