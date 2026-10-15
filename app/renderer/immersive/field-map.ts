@@ -530,6 +530,8 @@ export const landDepth = (paper: Paper): number => Math.min(paper.reach, (paper.
 const PICK_WAIT_MS = 240;
 /** How close the map comes, as a multiple of the whole sheet's zoom, before each file's patch and name are drawn. */
 export const CLOSE = 2.4;
+/** How far into the compass rose's corner an area's name has faded out, pixels: the rose and its N lie 13 px in. */
+const ROSE_FADE = 12;
 /** How much the marks, trees and ways grow as the map comes this close, as a multiple of the whole sheet's zoom: a little, and never shrinking below legible. */
 const growAt = (near: number): number => Math.min(1.6, Math.max(1, Math.sqrt(near) * 0.85));
 /** The map opening out of the minimap and folding back into it, and gliding to an area whose name was tapped, ms. */
@@ -1105,7 +1107,12 @@ export function createFieldMap(
     // on a view that shows the land smaller than the whole sheet. Where the person stands plays no part: the
     // traveller and the file beside them stand over the names. As the map comes to its next level down, a name that
     // had to stand off its own ground on the whole sheet fades across to its place there, as the files' names fade in.
+    // The compass rose stays in its corner as the land moves under it, so a name the view brings into the rose's corner
+    // fades out over its first few pixels there, well before it reaches the rose, and fades back in as it leaves. On
+    // the whole sheet names are placed clear of the corner (`placeNames`), so none fades there.
     const { whole, close: closeIn } = namesOn(paper);
+    const rose: Box = [w - ROSE.right - 34, h - ROSE.bottom - 46, w, h];
+    const offRose = (b: Box): number => Math.max(0, Math.min(1, 1 - Math.min(b[2] - rose[0], b[3] - rose[1]) / ROSE_FADE));
     labelCount = 0;
     names = [];
     /** Every name lettered on this view, which the smaller names keep off. */
@@ -1116,6 +1123,7 @@ export function createFieldMap(
       const x = sx(p.x);
       const y = sy(p.z);
       const box: [number, number, number, number] = [x + p.box[0] * shrink, y + p.box[1] * shrink, x + p.box[2] * shrink, y + p.box[3] * shrink];
+      alpha *= offRose(box);
       if (alpha <= 0 || box[2] < 0 || box[0] > w || box[3] < 0 || box[1] > h) return false;
       taken.push(box);
       if (alpha >= 0.5) names.push({ box, x: p.label.x, z: p.label.z, bounds: p.label.bounds });
@@ -1136,7 +1144,6 @@ export function createFieldMap(
       if (shown) labelCount++;
     }
     const apart = (box: Box, from: readonly Box[]): boolean => from.every(([a, b, c, d]) => box[2] < a || box[0] > c || box[3] < b || box[1] > d);
-    const rose: Box = [w - ROSE.right - 34, h - ROSE.bottom - 46, w, h];
 
     // Close in, each file's name is lettered small on its patch, and a tap on it goes there.
     if (close > 0) {
