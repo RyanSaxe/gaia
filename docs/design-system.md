@@ -825,18 +825,21 @@ page's edge, which is paper like the rest of the page.
 
 A page is never turned to before it is whole, its code and its painting
 come, and nothing on a page changes once it is seen. The page beside the
-open one is reached by turning one leaf. While that page's painting is
-still coming, the leaf lifts as it does under the pointer and waits up to
-1.5 s, and if the page takes longer the book riffles to it. A page further
-away is always reached by a riffle: many leaves run over one after another,
-several in the air at once. A riffle turns up to 36 leaves, 55 ms apart,
-each over in 0.56 s, or up to 12 when the page asked for is whole already.
-Once those have turned, while the page is still being made, the leaves keep
-turning, one every 0.3 s. The last leaf carries the page asked for, once it
-is whole. The book never turns to a page in between, so it never turns back
-and forth. A book opened at a page still being made opens at the map, and
-the riffle on to that page starts 0.42 s into the cover's swing, so its
-first leaf follows the cover over.
+open one is reached by turning one leaf. While that page's painting is still
+coming, the leaf lifts as it does under the pointer and waits up to 1.5 s,
+and if the page takes longer the book riffles to it. A page further away is
+always reached by a riffle: many leaves run over one after another, several
+in the air at once. A riffle turns up to 36 leaves, 55 ms apart, each over
+in 0.56 s, or up to 12 when the page asked for is whole already. Once those
+have turned, while the page is still being made, the leaves keep turning,
+one every 0.3 s. The last leaf carries the page asked for, once it is whole.
+The book never turns to a page in between, so it never turns back and forth.
+A book opened at a page still being made opens at the map, and the riffle on
+to that page starts 0.42 s into the cover's swing, so its first leaf follows
+the cover over. Shut part way through a riffle, the leaves fall shut with
+the cover: those over already ride it, those in the air fall ahead of it,
+and the ribbon falls with the leaf it lies on. The book shuts at the page
+the riffle left.
 
 Each leaf of a riffle is a page of real code from a file the riffle passes,
 set as the journal sets code, with handwritten line numbers and the same
