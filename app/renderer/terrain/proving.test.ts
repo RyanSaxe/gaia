@@ -3,7 +3,7 @@ import { type BuildingPlan, type Built, Library, type RouteSpec, seedOf } from "
 import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, LANDMARK_PRIMITIVES, RELIEF_PRIMITIVES, ROUTE_PRIMITIVES, STRUCTURE_PRIMITIVES } from "@gaia/primitives";
 import { landmark, link, structure } from "@gaia/kinds";
 import { FLORA_PRESETS, LANDMARK_PRESETS, STRUCTURE_PRESETS, TRAIL_PRESETS, buildSlots, realize } from "@gaia/realize";
-import { type BuildingSite, type Extent, TERRAIN, type Terrain, bakeTerrain, extentOf, groundLook, siteToWorld, turningExtent, junctionVitality, ownershipOf, placeAt, vitalityAt, vitalityOver, waterDepthAt, wayVitalityAt } from "@gaia/terrain";
+import { type BuildingSite, type Extent, TERRAIN, type Terrain, bakeTerrain, extentOf, groundLook, heightAt, siteToWorld, turningExtent, junctionVitality, ownershipOf, placeAt, vitalityAt, vitalityOver, waterDepthAt, wayVitalityAt } from "@gaia/terrain";
 import { type Judgments, areaVitality, groundVitality } from "@gaia/world";
 import { codeLab, provingWorld } from "./code-world.ts";
 import { BUILDINGS, CHARACTERS, COMPOSED_FORMS, FORMS, LANDMARKS, LANDS, TRAILS, WATERS, presetBlueprint } from "./looks.ts";
@@ -150,7 +150,7 @@ describe("the proving ground", () => {
       });
     }, 120_000);
 
-    it("stands each building whose wheel needs running water on its stream's bank, its wheel in the water", () => {
+    it("stands each building whose wheel needs running water on its stream's bank, its wheel in the water and its floor dry", () => {
       expect(stood.dry).toEqual([]);
       const banked = requests.flatMap((b, i) => (b.wheel !== undefined ? [{ b, site: stood.sites[i] as BuildingSite }] : []));
       expect(banked.length).toBeGreaterThan(2);
@@ -160,6 +160,13 @@ describe("the proving ground", () => {
         const w = b.wheel as Extent;
         expect(waterDepthAt(terrain, ...siteToWorld(site, (w.x0 + w.x1) / 2, (w.z0 + w.z1) / 2)), b.name).toBeGreaterThan(0);
         expect(waterDepthAt(terrain, site.x, site.z), b.name).toBe(0);
+        // Its floor stays dry: no water stands as high as the floor anywhere under the house.
+        for (let lz = -b.plan.depth / 2; lz <= b.plan.depth / 2; lz += 0.5) {
+          for (let lx = -b.plan.width / 2; lx <= b.plan.width / 2; lx += 0.5) {
+            const surface = heightAt(terrain.lattice, ...siteToWorld(site, lx, lz), terrain.waterLevel);
+            expect(surface, `${b.name} at ${lx}, ${lz}`).toBeLessThan(site.level + b.plan.floor - 0.1);
+          }
+        }
       }
     });
 
