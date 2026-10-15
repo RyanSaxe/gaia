@@ -231,6 +231,10 @@ float softCel(float x) {
 // every sample in front of it; where the light falls square nothing moves, so
 // contact shadows hold.
 const float SHADOW_SPREAD = 2.2;
+// The map covers a box that follows the person. Shadows fade out over its
+// outer SHADOW_FADE meters on every side, so as the box moves a shadow at its
+// edge comes in by degrees instead of switching on.
+const float SHADOW_FADE = 10.0;
 float sunShadow(vec3 worldPosition, vec3 normal, float bias) {
   vec3 toLight = -normalize(vec3(uShadowMatrix[0][2], uShadowMatrix[1][2], uShadowMatrix[2][2]));
   float texelMeters = 2.0 * uShadowTexel / length(vec3(uShadowMatrix[0][0], uShadowMatrix[1][0], uShadowMatrix[2][0]));
@@ -240,14 +244,17 @@ float sunShadow(vec3 worldPosition, vec3 normal, float bias) {
   vec3 lifted = worldPosition + n * sign(facing) * sqrt(max(1.0 - facing * facing, 0.0)) * reach;
   vec4 c4 = uShadowMatrix * vec4(lifted, 1.0);
   vec3 c = c4.xyz / c4.w * 0.5 + 0.5;
-  if (c.x < 0.01 || c.x > 0.99 || c.y < 0.01 || c.y > 0.99 || c.z > 1.0) return 1.0;
+  vec3 boxMeters = 2.0 / vec3(length(vec3(uShadowMatrix[0][0], uShadowMatrix[1][0], uShadowMatrix[2][0])), length(vec3(uShadowMatrix[0][1], uShadowMatrix[1][1], uShadowMatrix[2][1])), length(vec3(uShadowMatrix[0][2], uShadowMatrix[1][2], uShadowMatrix[2][2])));
+  vec3 margin = min(c, 1.0 - c) * boxMeters;
+  float strength = smoothstep(1.0, 1.0 + SHADOW_FADE, min(margin.x, min(margin.y, margin.z)));
+  if (strength <= 0.0) return 1.0;
   float lit = 0.0;
   for (int dx = -1; dx <= 1; dx++) {
     for (int dy = -1; dy <= 1; dy++) {
       lit += texture(uShadowMap, vec3(c.xy + vec2(float(dx), float(dy)) * uShadowTexel * SHADOW_SPREAD, c.z - bias));
     }
   }
-  return lit / 9.0;
+  return mix(1.0, lit / 9.0, strength);
 }
 
 // Highlights roll off instead of clipping, so pale blossoms keep their form in full sun.
