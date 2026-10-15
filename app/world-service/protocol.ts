@@ -33,16 +33,12 @@ export interface RecentWorld {
   /** When it was last opened, ms since the epoch. */
   readonly at: number;
   /**
-   * Its whole field map in health's colors, as its page painted it once the world last stood (`world.picture`): a
-   * WebP data URL about 800 pixels a side (`paintPicture` in `app/renderer/immersive/picture.ts`). A world kept
-   * before pictures were, or whose page painted none, has none. The start is offered it only while the folder's code
-   * is still the commit it was painted from.
+   * The view where the person last stood still in it, painted as the journal paints (`world.painting`), in the land's
+   * shape: a WebP data URL about 1,040 pixels wide, which the start lays on its table as the world's card. A world
+   * kept before paintings were, or left before the person stood still in it, has none.
    */
-  readonly picture?: string;
-  /**
-   * The commit the world was read from when the person last opened it, absent when it was read from disk. Its picture
-   * pictures this commit: a picture never comes without it.
-   */
+  readonly painting?: string;
+  /** The commit the world was read from when the person last opened it, absent when it was read from disk. */
   readonly commit?: string;
   /**
    * Where the person stood when they last left this world (`world.stood`), so the next open lands them there. It is
@@ -188,8 +184,8 @@ export type FromRenderer =
   | { readonly type: "world.consent"; readonly approve: boolean }
   /** The place chosen on the start page. */
   | { readonly type: "world.choose"; readonly place: StartChoice }
-  /** A picture of the world this page opened (`RecentWorld.picture`), painted once its field map is: kept with it among the recent worlds. */
-  | { readonly type: "world.picture"; readonly picture: string }
+  /** A painting of where the person stands still in the world this page opened (`RecentWorld.painting`): kept with it among the recent worlds. */
+  | { readonly type: "world.painting"; readonly painting: string }
   /** Asks for a file of the world this page opened, by its project-relative path, for the journal's code pages. */
   | { readonly type: "world.source"; readonly path: string }
   /** Where the person stands in the world this page opened, sent now and then as they walk and when the page goes: kept with it among the recent worlds. */

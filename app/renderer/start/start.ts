@@ -6,7 +6,7 @@
 // `CHOSEN_START` or `?start=table|signpost`:
 // - `table`: the traveller's map table in 3D (`table.ts`). A folded sheet on
 //   an oak table, lit by the world's own light at the hour, the worlds
-//   walked before laid on it as pictures of their field maps, and a line at
+//   walked before laid on it as paintings of where the person last stood, and a line at
 //   its foot to write an address on in ink.
 // - `signpost`: the world's edge, at the hour it is. A signpost whose arms
 //   name the worlds walked before, one pointing to somewhere on this

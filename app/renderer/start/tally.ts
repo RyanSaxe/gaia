@@ -36,13 +36,15 @@ export function tallyWords(commits: number | null): readonly [string, string] {
  */
 const TALLY = { stroke: 0.3, width: 0.016, apart: 0.05, gate: 0.09, gap: 0.08, line: 0.16, leading: 1.25, wide: 0.86 } as const;
 
+/** The paper's tone laid round the tally on a painting, so its strokes and words read over the paint. */
+const PAPER_ROUND = { color: "rgba(241, 231, 207, 0.78)", widen: 3.2, blur: 0.012 } as const;
+
 /**
  * Draws the tally for `commits` on the card face `w` by `h` at (`x`, `y`) of `c`, the same strokes for the same
  * `seed`, with the words under it, in the middle of the card. Past `TALLY_MOST` commits, or with `commits` null, there
- * are only the words.
+ * are only the words. `onPaint`, it lies on a painting, so the paper's tone is laid round it first.
  */
-export function drawTally(c: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, commits: number | null, seed: string): void {
-  const r = rand(seedOf(`tally:${seed}`));
+export function drawTally(c: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, commits: number | null, seed: string, onPaint = false): void {
   const [first, second] = tallyWords(commits);
   c.save();
   c.font = `italic 100px ${SERIF}`;
@@ -50,42 +52,58 @@ export function drawTally(c: CanvasRenderingContext2D, x: number, y: number, w: 
   const line = Math.min(TALLY.line * h, (TALLY.wide * w) / widest);
   const counted = commits !== null && commits <= TALLY_MOST ? commits : 0;
   const head = counted > 0 ? (TALLY.stroke + TALLY.gap) * h : 0;
-  let top = y + (h - head - line * (1 + TALLY.leading)) / 2;
-  c.strokeStyle = c.fillStyle = PENCIL.graphite;
-  c.lineCap = "round";
-  if (counted > 0) {
-    // Four strokes down, then the fifth across them, a gate at a time.
-    const gates = Math.ceil(counted / 5);
-    const span = gates * 3 * TALLY.apart * h + (gates - 1) * TALLY.gate * h;
-    let left = x + (w - span) / 2;
-    for (let g = 0; g < gates; g++) {
-      const n = Math.min(5, counted - g * 5);
-      const pass = (x0: number, y0: number, x1: number, y1: number): void => {
-        // Each stroke two light passes of the pencil, a little apart, as a hand goes over a line.
-        for (let k = 0; k < 2; k++) {
-          c.globalAlpha = r.range(0.62, 0.85);
-          c.lineWidth = TALLY.width * h * r.range(0.8, 1.15);
-          const j = TALLY.width * h * 0.6;
-          c.beginPath();
-          c.moveTo(x0 + r.range(-j, j), y0 + r.range(-j, j));
-          c.lineTo(x1 + r.range(-j, j), y1 + r.range(-j, j));
-          c.stroke();
+  const top = y + (h - head - line * (1 + TALLY.leading)) / 2;
+  c.lineCap = c.lineJoin = "round";
+  /** The whole tally in `ink`, every line `widen` times as wide, each pass as dark as it is times `dark`. */
+  const ink = (color: string, widen: number, dark: number): void => {
+    const r = rand(seedOf(`tally:${seed}`));
+    c.strokeStyle = c.fillStyle = color;
+    if (counted > 0) {
+      // Four strokes down, then the fifth across them, a gate at a time.
+      const gates = Math.ceil(counted / 5);
+      const span = gates * 3 * TALLY.apart * h + (gates - 1) * TALLY.gate * h;
+      let left = x + (w - span) / 2;
+      for (let g = 0; g < gates; g++) {
+        const n = Math.min(5, counted - g * 5);
+        const pass = (x0: number, y0: number, x1: number, y1: number): void => {
+          // Each stroke two light passes of the pencil, a little apart, as a hand goes over a line.
+          for (let k = 0; k < 2; k++) {
+            c.globalAlpha = r.range(0.62, 0.85) * dark;
+            c.lineWidth = TALLY.width * h * r.range(0.8, 1.15) * widen;
+            const j = TALLY.width * h * 0.6;
+            c.beginPath();
+            c.moveTo(x0 + r.range(-j, j), y0 + r.range(-j, j));
+            c.lineTo(x1 + r.range(-j, j), y1 + r.range(-j, j));
+            c.stroke();
+          }
+        };
+        for (let k = 0; k < Math.min(4, n); k++) {
+          const sx = left + k * TALLY.apart * h + r.range(-0.08, 0.08) * TALLY.apart * h;
+          pass(sx, top + r.range(0, 0.06) * TALLY.stroke * h, sx + r.range(-0.12, 0.04) * TALLY.apart * h, top + TALLY.stroke * h * r.range(0.94, 1));
         }
-      };
-      for (let k = 0; k < Math.min(4, n); k++) {
-        const sx = left + k * TALLY.apart * h + r.range(-0.08, 0.08) * TALLY.apart * h;
-        pass(sx, top + r.range(0, 0.06) * TALLY.stroke * h, sx + r.range(-0.12, 0.04) * TALLY.apart * h, top + TALLY.stroke * h * r.range(0.94, 1));
+        if (n === 5) pass(left - 0.5 * TALLY.apart * h, top + TALLY.stroke * h * 0.78, left + 3.5 * TALLY.apart * h, top + TALLY.stroke * h * 0.2);
+        left += 3 * TALLY.apart * h + TALLY.gate * h;
       }
-      if (n === 5) pass(left - 0.5 * TALLY.apart * h, top + TALLY.stroke * h * 0.78, left + 3.5 * TALLY.apart * h, top + TALLY.stroke * h * 0.2);
-      left += 3 * TALLY.apart * h + TALLY.gate * h;
     }
+    c.globalAlpha = dark;
+    c.font = `italic ${line.toFixed(1)}px ${SERIF}`;
+    c.textAlign = "center";
+    c.textBaseline = "top";
+    const words = (text: string, at: number): void => {
+      if (widen > 1) {
+        c.lineWidth = line * 0.09 * widen;
+        c.strokeText(text, x + w / 2, at);
+      }
+      c.fillText(text, x + w / 2, at);
+    };
+    words(first, top + head);
+    words(second, top + head + line * TALLY.leading);
+  };
+  if (onPaint) {
+    c.filter = `blur(${(PAPER_ROUND.blur * h).toFixed(1)}px)`;
+    ink(PAPER_ROUND.color, PAPER_ROUND.widen, 1);
+    c.filter = "none";
   }
-  top += head;
-  c.globalAlpha = 1;
-  c.font = `italic ${line.toFixed(1)}px ${SERIF}`;
-  c.textAlign = "center";
-  c.textBaseline = "top";
-  c.fillText(first, x + w / 2, top);
-  c.fillText(second, x + w / 2, top + line * TALLY.leading);
+  ink(PENCIL.graphite, 1, 1);
   c.restore();
 }

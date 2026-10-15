@@ -36,7 +36,7 @@ import {
 } from "@gaia/render";
 import { type Capsule, clearanceAt, frameOf, TILE, LAND_ASPECT, type Deck, decksOf, deckShape, EYE_HEIGHT, footingAt, FULL_WORLD, GAIT, groundHeightAt, heightAt, type Intent, junctionVitality, NO_SOLIDS, NO_TRAILS, openingSpot, TRAILS, outlineShape, returnTo, stoodBy, type StoodSpot, withinLand, piecesShapes, type Place, placeAt, planWalk, randomWorld, regionPlaces, RELIEF_BUDGET, sampleWorld, sightlines, siteToWorld, SMALL_WORLD, type Solids, type SolidShape, solidsOf, stanceAt, standAt, steerAlong, type Steered, type Steering, steering, steerPress, steerRelease, steerStep, stride, type Stride, acrossWay, carry, planTrip, TRAVEL, type Travel, wadingAt, fordBeside, travelFrom, travelPoint, travelStep, type Trip, trailWay, type Walker, type WalkKey, type Terrain, TERRAIN, type TrailNetwork, type Walk, WALK_TO, walkStep, wallsShape, waterDepthAt, type Way, wayAhead, wayVitalityAt, wayWear, WILDS, type WorldPlaces, type WorldSpec } from "@gaia/terrain";
 import { createSky } from "../world/environment.ts";
-import { type Pixels, createCapture } from "./capture.ts";
+import { type CaptureBounds, type Pixels, createCapture } from "./capture.ts";
 import { renderInspector } from "../inspector.ts";
 import { type Lab, type Shot, onTap, refs, slug, tapSlop } from "../lab.ts";
 import { createSheet } from "../sheet.ts";
@@ -279,6 +279,8 @@ export interface WorldHandle {
    * changing it waits for it to settle. Null when nothing stands for it.
    */
   view(id: string, w: number, h: number, wide?: boolean): Promise<{ readonly color: Pixels; readonly mask: Pixels } | null>;
+  /** The person's own view, `w` by `h`, as a painting is taken of it: from their eye the way they face, in the afternoon light, with nothing masked. While the world is changing it waits for it to settle. */
+  look(w: number, h: number): Promise<{ readonly color: Pixels; readonly mask: Pixels }>;
   /** Where a thing's painting is seen from, looking at it: where a picture tapped in the journal takes the person. Null when nothing stands for it. */
   seenFrom(id: string): Landing | null;
   /** What the understanding pass judged about a folder, a file or a definition, every score from 0 to 1. */
@@ -2356,29 +2358,52 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   }
   /** Paints `s` on the land as it now lies, at the painting's hour. */
   function paintView(s: NonNullable<ReturnType<typeof subjectOf>>, w: number, h: number, wide: boolean): Promise<{ color: Pixels; mask: Pixels } | null> {
+    return atPaintingHour(() => {
+      const { at, eye, aim } = framingOf(s, w / h, wide);
+      const base = heightAt(terrain.lattice, s.x, s.z);
+      const from = new THREE.Vector3(at.x, heightAt(terrain.lattice, at.x, at.z) + eye, at.z);
+      const shade = { x: (at.x + s.x) / 2, y: base, z: (at.z + s.z) / 2, reach: Math.max(40, Math.hypot(at.x - s.x, at.z - s.z) + s.reach) };
+      return shootView(from, new THREE.Vector3(s.x, base + aim, s.z), PAINTING.fov, w, h, shade, { x: s.x, z: s.z, base, height: s.height, reach: s.reach });
+    });
+  }
+  /** The person's own view at the painting's hour, from their eye the way they face, with nothing for the mask to show. */
+  function lookOf(w: number, h: number): Promise<{ color: Pixels; mask: Pixels }> {
+    if (holding > 0) return settled().then(() => lookOf(w, h));
+    return atPaintingHour(() => {
+      const from = camera.position.clone();
+      const ahead = from.clone().add(camera.getWorldDirection(new THREE.Vector3()));
+      return shootView(from, ahead, camera.fov, w, h, { x: from.x, y: from.y, z: from.z, reach: 80 }, { x: from.x, z: from.z, base: from.y - 1e4, height: 0, reach: 0 });
+    });
+  }
+  /** Runs `take` with the world lit at the painting's hour, then lights it at its own again. */
+  function atPaintingHour<T>(take: () => T): T {
     const was = hour;
     applyHour(PAINTING.hour);
     try {
-      const { at, eye, aim } = framingOf(s, w / h, wide);
-      const base = heightAt(terrain.lattice, s.x, s.z);
-      captureCamera.fov = PAINTING.fov;
-      captureCamera.aspect = w / h;
-      captureCamera.position.set(at.x, heightAt(terrain.lattice, at.x, at.z) + eye, at.z);
-      captureCamera.lookAt(s.x, base + aim, s.z);
-      // Every pass thins its detail from the painter's eye, the finest ground and the grass gather around it, and
-      // the sun's shadow and the water's mirror are drawn for that view.
-      light.uEye.value.copy(captureCamera.position);
-      ground.follow(at.x, at.z);
-      grass.follow(captureCamera.position);
-      shadowCenter.set((at.x + s.x) / 2, base, (at.z + s.z) / 2);
-      shadow.frame(shadowCenter, Math.max(40, Math.hypot(at.x - s.x, at.z - s.z) + s.reach));
-      castShadows();
-      mirror(captureCamera, [ground.mirror], 0);
-      // The next frame sets the person's eye, ground, grass, shadow and mirror again.
-      return capture.shoot(scene, captureCamera, [sky.mesh, ground.wilds, ground.fine, ground.coarse, ground.mirror, grass.mesh, water.group, signs.mesh], { x: s.x, z: s.z, base, height: s.height, reach: s.reach }, w, h);
+      return take();
     } finally {
       applyHour(was);
     }
+  }
+  /**
+   * A painting's view from `from` toward `toward`, through `fov`, `w` by `h`: every pass thins its detail from that
+   * eye, the finest ground and the grass gather around it, the sun's shadow covers `shade` and the water's mirror is
+   * drawn for it. The mask shows `subject`.
+   */
+  function shootView(from: THREE.Vector3, toward: THREE.Vector3, fov: number, w: number, h: number, shade: { x: number; y: number; z: number; reach: number }, subject: CaptureBounds): Promise<{ color: Pixels; mask: Pixels }> {
+    captureCamera.fov = fov;
+    captureCamera.aspect = w / h;
+    captureCamera.position.copy(from);
+    captureCamera.lookAt(toward);
+    light.uEye.value.copy(captureCamera.position);
+    ground.follow(from.x, from.z);
+    grass.follow(captureCamera.position);
+    shadowCenter.set(shade.x, shade.y, shade.z);
+    shadow.frame(shadowCenter, shade.reach);
+    castShadows();
+    mirror(captureCamera, [ground.mirror], 0);
+    // The next frame sets the person's eye, ground, grass, shadow and mirror again.
+    return capture.shoot(scene, captureCamera, [sky.mesh, ground.wilds, ground.fine, ground.coarse, ground.mirror, grass.mesh, water.group, signs.mesh], subject, w, h);
   }
 
   // ---------- measuring: what a step of walking changes, and walking as a person would ----------
@@ -2738,6 +2763,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     },
     travel: (at, face) => travelTo(at, face),
     view: (id, w, h, wide) => viewOf(id, w, h, wide),
+    look: lookOf,
     seenFrom: (id) => seenFromOf(id),
     thing: (of) => code?.thing(of),
     onCard: (listener) => cardListeners.push(listener),

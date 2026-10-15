@@ -53,3 +53,5 @@ saying when a world was walked) and round 7 (A start page that feels like
 the world, its playable prototype, and Where should your logo replace
 today's mark?), as round 8's Agreed records them. Built in round 8. It
 replaces the flat map table and the wooden wordmark of round 6.
+
+World polish round 5 replaced the cards' pictures of their field maps with paintings of where the person last stood still (`world.painting`).

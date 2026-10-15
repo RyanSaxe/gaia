@@ -21,7 +21,7 @@ import { type StoodSpot, type WorldSpec, outlinesOf } from "@gaia/terrain";
 import { type CodeWorld, type Judge, type Judgments, layoutWorld } from "@gaia/world";
 import type { ConsentPlan, JudgedThing, Opening, StartChoice, StartOffer, WorldDocument } from "../../world-service/protocol.ts";
 import { type WorldService, worldService } from "../service.ts";
-import GAIA_PICTURE from "../start/gaia-picture.webp";
+import GAIA_PAINTING from "../start/gaia-painting.webp";
 import { CHOSEN_MS } from "../start/start.ts";
 import snapshotJudged from "./fixtures/gaia-judged.json";
 import { snapshotFacts } from "./snapshot-facts.ts";
@@ -191,17 +191,18 @@ const ASKS_PROVING = typeof location !== "undefined" && new URLSearchParams(loca
 
 /**
  * The start on a page with no engine, to see it (`?start=table|signpost`):
- * Gaia's own world is the one world walked before, with a picture of its map
- * the app painted (`start/gaia-picture.webp`), and any choice opens it,
- * except an address, which a page with no engine cannot follow.
+ * Gaia's own world is the one world walked before, with a painting of where
+ * it opens, as the app paints where a person stands (`start/gaia-painting.webp`,
+ * from `__lab.immersive.look()`), and any choice opens it, except an
+ * address, which a page with no engine cannot follow.
  */
 async function previewStart(veil: Veil): Promise<void> {
   const facts = snapshotFacts();
-  const recent = [{ root: facts.repository.name, name: facts.repository.name, at: Date.now(), picture: GAIA_PICTURE }];
+  const recent = [{ root: facts.repository.name, name: facts.repository.name, at: Date.now(), painting: GAIA_PAINTING }];
   let place = await veil.choose({ recent });
   while ("address" in place) place = await veil.choose({ recent, refused: { address: place.address, why: "offline" } });
   veil.opening({ stage: "reading", root: facts.repository.name });
-  // The chosen map rises into the wait's sheet before the land it opens on comes in.
+  // The chosen card rises into the wait's sheet before the land it opens on comes in.
   await new Promise((resolve) => setTimeout(resolve, CHOSEN_MS));
 }
 

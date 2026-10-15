@@ -38,14 +38,14 @@ export interface WaitView {
   night(n: number): void;
   /** The world is ready to show: the paper folds away into it at once, with whatever of the drawing is still to come, and resolves once the world shows. */
   lift(): Promise<void>;
-  /** Where the sheet lies on the page: a map chosen on the start ends there. */
+  /** Where the sheet lies on the page: a card chosen on the start ends there. */
   sheet(): DOMRect;
   /**
-   * A map chosen on the start, as its picture and its land's shape (width over depth): the sheet takes that shape and
-   * the picture lies on it at once, under the start's table until the map has risen into its place. It folds away to
-   * bare paper as soon as the land is divided, and the map is drawn anew, as any world's is.
+   * The face of a card chosen on the start, the painting of where the person last stood still: the sheet takes its
+   * shape (width over depth) and the face lies on it at once, under the start's table until the card has risen into its
+   * place. It fades to bare paper as soon as the land is divided, and the map is drawn, as any world's is.
    */
-  chosen(picture: string, aspect: number): void;
+  chosen(face: HTMLImageElement | HTMLCanvasElement): void;
   /** The sheet's paper as it is painted now, in its shape: the face of a fresh card that rises into the sheet. */
   face(): HTMLCanvasElement;
   /**

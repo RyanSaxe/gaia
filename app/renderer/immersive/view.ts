@@ -25,14 +25,13 @@ import { createJournalBook } from "../journal/book.ts";
 import { type Findable, createFinder, findablesOf } from "../journal/finder.ts";
 import { drawMapPage, halfOf } from "../journal/maps.ts";
 import { ROOM, journalPages } from "../journal/pages.ts";
-import { createPaintings } from "../journal/paintings.ts";
+import { createPaintings, paintKept } from "../journal/paintings.ts";
 import { browserPaintings } from "../journal/painting-store.ts";
 import { createSourceText } from "../journal/source.ts";
 import type { WordsSource } from "../journal/words.ts";
 import { createFieldMap, drawLand } from "./field-map.ts";
 import { MARKER_LAYER, createMarkers } from "./markers.ts";
 import { createMinimap } from "./minimap.ts";
-import { paintPicture } from "./picture.ts";
 
 /** The lab's debugging views, which the slip leads back to. */
 /** The painter the journal's kept paintings were made by: a new one paints them all afresh. */
@@ -45,6 +44,12 @@ const NEAR = { reach: 120, count: 24, every: 3000, moved: 15 } as const;
  * every `every` ms while they walk, and when the page goes. Each one rewrites the app's settings, about a megabyte.
  */
 const KEEP = { check: 3000, every: 30_000, moved: 2, turned: 20 } as const;
+/**
+ * Where the person stands still is painted for the start's card of this world (`world.painting`): their own view, this
+ * many pixels wide and as deep as the land's shape makes it, painted at twice that as the journal paints, once they
+ * have moved or turned as far as a kept spot needs since the last painting.
+ */
+const CARD_VIEW = 520;
 
 export interface LabViews {
   readonly views: readonly { readonly id: string; readonly name: string }[];
@@ -277,6 +282,21 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
     minimap.show(active);
   });
 
+  /** The person's view painted as the journal paints, in the land's shape, as a WebP data URL; null before a world stands. */
+  async function paintWhereYouStand(): Promise<string | null> {
+    const code = world.code();
+    if (code === null) return null;
+    const h = Math.round(CARD_VIEW / Math.max(1, code.aspect ?? 1));
+    const kept = await paintKept(await world.look(CARD_VIEW, h), CARD_VIEW * 2, h * 2, `card:${code.projectId}`);
+    if (kept === null) return null;
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(reader.error ?? new Error("the painting could not be read"));
+      reader.readAsDataURL(kept);
+    });
+  }
+
   // Where the person stands is kept with the world as they walk, so its next open lands them there; a page with no world service keeps none.
   if (service !== null) {
     let kept: { readonly x: number; readonly z: number; readonly yaw: number; readonly at: number } | null = null;
@@ -298,7 +318,28 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
       const p = world.person();
       kept = { x: p.x, z: p.z, yaw: p.yaw, at: performance.now() };
     });
-    window.setInterval(keepStood, KEEP.check);
+    // And where they stand still is painted for the start's card: the view a next open lands them in.
+    let painted: { readonly x: number; readonly z: number; readonly yaw: number } | null = null;
+    let painting = false;
+    const paintStood = (): void => {
+      const code = world.code();
+      const p = world.person();
+      if (!lifted || code === null || painting || p.walking) return;
+      if (painted !== null) {
+        const turned = Math.abs(Math.atan2(Math.sin(p.yaw - painted.yaw), Math.cos(p.yaw - painted.yaw))) * (180 / Math.PI);
+        if (Math.hypot(p.x - painted.x, p.z - painted.z) < KEEP.moved && turned < KEEP.turned) return;
+      }
+      painted = { x: p.x, z: p.z, yaw: p.yaw };
+      painting = true;
+      void paintWhereYouStand()
+        .then((done) => done !== null && service.send({ type: "world.painting", painting: done }))
+        .catch((error: unknown) => console.error(`gaia: no painting of where you stand: ${(error as Error).message}`))
+        .finally(() => (painting = false));
+    };
+    window.setInterval(() => {
+      keepStood();
+      paintStood();
+    }, KEEP.check);
     window.addEventListener("pagehide", () => {
       if (kept !== null) kept = { ...kept, at: -Infinity };
       keepStood();
@@ -346,18 +387,6 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
     // A directory's vitality: its files', its subdirectories' included, pooled by the ground each holds, as the map washes it.
     const vitality = areaVitality(world.places().patches.map((p) => ({ area: p.area, vitality: p.vitality, size: p.radius * p.radius })));
     markers.vitality((path) => vitality.get(path) ?? 1);
-  });
-
-  // The first map painted after the world stands is pictured for the start; a page with no world service keeps none.
-  let pictured = false;
-  map.onPainted(() => {
-    const paper = map.paper();
-    if (pictured || !standing || service === null || paper === null) return;
-    pictured = true;
-    paintPicture(paper, world.stood()).then(
-      (picture) => service.send({ type: "world.picture", picture }),
-      (error: unknown) => console.error(`gaia: no picture of this world: ${(error as Error).message}`),
-    );
   });
 
   // ---------- the compass, and the slip it opens: Gaia's mark, how to wander, and the way back to the lab ----------
@@ -491,11 +520,8 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
         return { place: world.placeAt(p.x, p.z), minimap: minimap.state(), compass: compass.state(), map: map.state(), markers: markers.crossings().length, journal: journal.state() };
       },
       crossings: () => markers.crossings(),
-      /** A picture of the whole map as the start lays it on its table: a WebP data URL, or null before the map is painted. */
-      picture: () => {
-        const paper = map.paper();
-        return paper === null ? null : paintPicture(paper, world.stood());
-      },
+      /** A painting of the person's view as the start lays it on its table (`world.painting`): a WebP data URL, or null before a world stands. */
+      look: () => paintWhereYouStand(),
     },
   };
 }
