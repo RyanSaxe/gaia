@@ -10,6 +10,8 @@ import { WIND_GLSL } from "./sway.ts";
 import { createSmokeMaterial } from "./smoke.ts";
 
 const f = (x: number): string => x.toFixed(4);
+/** How far dusk has fallen, 0 by day to 1 once it is night: lamps light and doves fly home across it. */
+const DUSK = "smoothstep(0.08, 0.55, uNightness)";
 
 /** Where a fir frond's heart is gone and where it is whole, in multiples of its own size from the eye. */
 
@@ -44,12 +46,13 @@ uniform float uFlutter;
 uniform float uWind;
 
 #ifdef RUIN
-// A building's pieces also fall, grow and turn. These attributes exist only
-// on parts that use them, so instanced plants never spend slots on them.
+// A building's pieces also fall, grow, turn and roost. These attributes exist
+// only on parts that use them, so instanced plants never spend slots on them.
 attribute vec4 aFall;
 attribute float aGrow;
 attribute float aRot;
 attribute vec3 aSpin;
+attribute float aRoost;
 uniform float uTurn;
 
 mat3 turnAbout(vec3 k, float a) {
@@ -91,12 +94,14 @@ bool onSpray() {
 
 // Loss collapses a piece onto its pivot over a short band, and at night a
 // piece that closes (a flower's petals) folds part way toward it, in the
-// plant's rest shape.
+// plant's rest shape. A piece that roosts (a dove) flies home onto its pivot
+// as dusk falls, over the hours the lamps are lit in.
 vec3 applyChannels(vec3 p) {
   vec3 off = (p - aPivot) * (1.0 - aClose * uNightness * 0.7);
   float keep = aLoss > 0.0 && !onSpray() ? smoothstep(aLoss, aLoss + ${f(CHANNEL_MATH.lossBand)}, uVitality) : 1.0;
 #ifdef RUIN
   keep *= aGrow > 0.0 ? 1.0 - smoothstep(aGrow, aGrow + ${f(CHANNEL_MATH.lossBand)}, uVitality) : 1.0;
+  keep *= 1.0 - aRoost * ${DUSK};
   return aPivot + pieceTurn() * (off * keep);
 #else
   return aPivot + off * keep;
@@ -710,7 +715,7 @@ void main() {
   if (uFoliage < 0.5 && !gl_FrontFacing) n = -n;
   // Window glass is a dark pane holding a little sky by day; from dusk the
   // lamp inside lights it, and its healthy color is the lamplight.
-  float evening = smoothstep(0.08, 0.55, uNightness) * uLamp;
+  float evening = ${DUSK} * uLamp;
   if (uLamp > 0.5) albedo = mix(uDecline * 0.75 + skyColor(reflect(-normalize(cameraPosition - vWorld), n)) * 0.2, uDecline * 0.45, evening);
   // Foliage gets wrapped diffuse: leaves scatter light, so canopies never
   // fall into hard dark sides.
@@ -814,10 +819,10 @@ function snorm16(values: Float32Array, size: number): THREE.BufferAttribute {
   }
   return new THREE.BufferAttribute(out, 4, true);
 }
-/** A part whose pieces fall, grow, rot or spin, which its material compiles in. */
+/** A part whose pieces fall, grow, rot, spin or roost, which its material compiles in. */
 export const hasRuin = (part: Part): boolean => {
   const c = part.channels;
-  return c.fall !== undefined || c.grow !== undefined || c.rot !== undefined || c.spin !== undefined;
+  return c.fall !== undefined || c.grow !== undefined || c.rot !== undefined || c.spin !== undefined || c.roost !== undefined;
 };
 
 export function geometryOf(part: Part): THREE.BufferGeometry {
@@ -851,6 +856,7 @@ export function geometryOf(part: Part): THREE.BufferGeometry {
     g.setAttribute("aGrow", new THREE.BufferAttribute(c.grow ?? new Float32Array(n), 1));
     g.setAttribute("aRot", new THREE.BufferAttribute(c.rot ?? new Float32Array(n), 1));
     g.setAttribute("aSpin", new THREE.BufferAttribute(c.spin ?? new Float32Array(n * 3), 3));
+    g.setAttribute("aRoost", new THREE.BufferAttribute(c.roost ?? new Float32Array(n), 1));
   }
   // A 16-bit index when every vertex numbers below 65,535, which WebGL 2 keeps for restarting a strip.
   g.setIndex(new THREE.BufferAttribute(n < 65536 ? new Uint16Array(part.indices) : part.indices, 1));

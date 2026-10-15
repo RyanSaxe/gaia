@@ -975,14 +975,16 @@ vertex: `bough` (the joint where its bough or stem leaves the trunk or the
 ground) and `twig` (where its twig leaves the bough), which wind and droop
 bend it about, plus a `tint` hue offset, a `cutout` that places a vertex on a
 leaf card or marks a fir frond's solid heart (`CUT.core`), and `close`, how far a piece folds toward its pivot at night (a
-flower's petals). Parts may add four optional channels for ruin and motion:
+flower's petals). Parts may add five optional channels for ruin and motion:
 `fall` (an axis, the most it turns, and the vitality below which a piece tips
 about its pivot: a door swings ajar, a chimney topples), `grow` (the vitality
 below which a piece grows out of its pivot: ivy, weeds, rubble, boards over
 windows), `rot` (how far a surface rots through into ragged holes, cut per
 fragment from a noise fixed to the piece) and `spin` (an axis and a rate a
 piece turns at while alive, slowing to a stop as vitality falls: a mill's
-wheel). A part without them carries none, and only its material compiles
+wheel) and `roost` (how fully a piece flies home onto its pivot as dusk
+falls, over the hours the lamps are lit in, and out again after dawn: a
+dove). A part without them carries none, and only its material compiles
 them in. The plant shader combines them with each instance's live
 vitality, so a change in vitality never rebuilds geometry. A component placed
 many times, such as a tree, a rock or a drift of flowers, draws as one
