@@ -91,7 +91,7 @@ const named = (shown: readonly Opening[]): [string, number][] => shown.flatMap((
 
 describe("opening a world", () => {
   // The proving ground is laid out twice (its land, then the finished world): about a second on a busy machine.
-  it("names each file's health once, as the finished world has it, only once its judging is done, on land that says which commit it is", { timeout: 20_000 }, async () => {
+  it("names each file's health once, as the finished world has it, only once its judging is done", { timeout: 20_000 }, async () => {
     const shown: Opening[] = [];
     const { engine, held } = heldEngine();
     let done = false;
@@ -103,8 +103,6 @@ describe("opening a world", () => {
     // file's vitality is Jev's quality.
     const land = shown.find((o) => o.stage === "land");
     expect(land?.stage === "land" && land.patches.map((p) => p.path)).toEqual(landOf(facts).patches.map((p) => p.path));
-    // The commit the code was read from, so a picture of another commit is never taken for this world's map.
-    expect(land?.stage === "land" && land.commit).toBe("c0ffee");
     expect(named(shown)).toEqual([]);
 
     while (!done) {

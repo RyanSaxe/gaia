@@ -392,9 +392,8 @@ wait's sheet. A world kept before pictures were, whose page painted none,
 whose code has moved on, or whose picture was kept before pictures said
 their commit, comes with no picture, which the start shows as a card of
 the wait's own bare sheet, in the sheet's shape, with its name, so it rises
-into the sheet as the sheet. The land stage says which commit the code was read from
-too, so a picture of a place on GitHub that its fetch has since moved on
-folds away from the wait's sheet as soon as the land is divided. A
+into the sheet as the sheet. A picture the wait's sheet takes folds away
+to bare paper as soon as the land is divided, and the map is drawn anew. A
 standalone page (`pnpm lab:html`, `pnpm lab:serve`) has no engine and opens
 on Gaia's own world from `app/renderer/terrain/fixtures/gaia-graph.json`,
 the engine's judged graph `pnpm graph-snapshot` writes, laid out from the

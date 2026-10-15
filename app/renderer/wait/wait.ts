@@ -6,7 +6,8 @@
 // and area as Jev reads it, each file's health washed in as it settles and
 // each area's name lettered as its last answer comes in, the buildings and
 // landmarks drawn while the world bakes, its hills, water and trees once it
-// stands, and the paper folding away into the world. Every stroke is of
+// stands, and the paper folding away into the world as soon as it is ready
+// to show, whatever is left of the drawing going with it. Every stroke is of
 // something that has happened, drawn at a hand's pace, so the sheet keeps
 // moving all the time Jev works.
 // Everything that moves is a CSS transition of opacity or transform, or a
@@ -35,17 +36,16 @@ export interface WaitView {
   stood(world: StoodWorld): void;
   /** How dark it is, 0 by day to 1 at night: the wait follows the clock. */
   night(n: number): void;
-  /** The world stands and has drawn: the wait gives way to it once all that stood is on the sheet, and resolves once the world shows. */
+  /** The world is ready to show: the paper folds away into it at once, with whatever of the drawing is still to come, and resolves once the world shows. */
   lift(): Promise<void>;
   /** Where the sheet lies on the page: a map chosen on the start ends there. */
   sheet(): DOMRect;
   /**
-   * A map chosen on the start, as its picture, its land's shape (width over depth) and the commit it pictures: the
-   * sheet takes that shape and the picture lies on it as its paint at once, under the start's table until the map has
-   * risen into its place, and stays until the world's relief comes in over it. A land of another shape or commit folds
-   * it away, and the map is drawn anew on bare paper.
+   * A map chosen on the start, as its picture and its land's shape (width over depth): the sheet takes that shape and
+   * the picture lies on it at once, under the start's table until the map has risen into its place. It folds away to
+   * bare paper as soon as the land is divided, and the map is drawn anew, as any world's is.
    */
-  chosen(picture: string, aspect: number, commit: string | undefined): void;
+  chosen(picture: string, aspect: number): void;
   /** The sheet's paper as it is painted now, in its shape: the face of a fresh card that rises into the sheet. */
   face(): HTMLCanvasElement;
 }
