@@ -3,16 +3,18 @@ import type { EngineClient } from "@gaia/schema";
 import { PICTURE_MAX, RECENT_KEY, keepPicture, keepRecent, keepStood, offeredWorlds, recentWorlds, stoodIn } from "./recent.ts";
 
 /**
- * An engine whose store is a map in memory, holding `recent` as the app's recent worlds, and whose folders have
- * checked out the commits in `checkedOut` (any other is read from disk).
+ * An engine whose store is a map in memory, holding `recent` as the app's recent worlds, whose folders have checked out
+ * the commits in `checkedOut` (any other is read from disk), and whose histories count `since[from]` commits from a
+ * commit to the one checked out (any other commit is not in the history).
  */
-function storeEngine(recent?: unknown, checkedOut: Record<string, string> = {}): EngineClient {
+function storeEngine(recent?: unknown, checkedOut: Record<string, string> = {}, since: Record<string, number> = {}): EngineClient {
   const settings = new Map<string, unknown>(recent === undefined ? [] : [[RECENT_KEY, recent]]);
   return {
-    call: async (method: string, params: { key?: string; root?: string; writes?: { key: string; value: unknown }[] }) => {
+    call: async (method: string, params: { key?: string; root?: string; from?: string; writes?: { key: string; value: unknown }[] }) => {
       if (method === "store.get") return settings.has(params.key ?? "") ? { value: settings.get(params.key ?? "") } : null;
       if (method === "store.put") for (const w of params.writes ?? []) settings.set(w.key, w.value);
       if (method === "project.commit") return { commit: checkedOut[params.root ?? ""] ?? null };
+      if (method === "project.commits") return { commits: since[params.from ?? ""] ?? null };
       return { ok: true };
     },
     on: () => () => {},
@@ -27,18 +29,26 @@ describe("the recent worlds", () => {
     expect(await recentWorlds(engine)).toEqual([{ root: "/code/gaia", name: "gaia", at: 5 }]);
   });
 
-  it("keeps a picture with the world its page opened, and keeps it when the world is opened again until a new one comes", async () => {
+  it("keeps a picture with the world its page opened, and keeps it when the world is opened again at that commit until a new one comes", async () => {
     const engine = storeEngine();
-    await keepRecent(engine, { root: "/code/gaia", name: "gaia", at: 1 });
+    await keepRecent(engine, { root: "/code/gaia", name: "gaia", at: 1, commit: "c1" });
     await keepRecent(engine, { root: "/code/other", name: "other", at: 2 });
     await keepPicture(engine, "/code/gaia", picture("A"), "c1");
-    await keepRecent(engine, { root: "/code/gaia", name: "gaia", at: 3 });
+    await keepRecent(engine, { root: "/code/gaia", name: "gaia", at: 3, commit: "c1" });
     expect(await recentWorlds(engine)).toEqual([
       { root: "/code/gaia", name: "gaia", at: 3, picture: picture("A"), commit: "c1" },
       { root: "/code/other", name: "other", at: 2 },
     ]);
-    await keepPicture(engine, "/code/gaia", picture("B"), "c2");
+    await keepPicture(engine, "/code/gaia", picture("B"), "c1");
     expect((await recentWorlds(engine))[0]?.picture).toBe(picture("B"));
+  });
+
+  it("keeps the commit each world was last opened at, and drops a picture of an earlier one", async () => {
+    const engine = storeEngine();
+    await keepRecent(engine, { root: "/code/gaia", name: "gaia", at: 1, commit: "c1" });
+    await keepPicture(engine, "/code/gaia", picture("A"), "c1");
+    await keepRecent(engine, { root: "/code/gaia", name: "gaia", at: 2, commit: "c2" });
+    expect(await recentWorlds(engine)).toEqual([{ root: "/code/gaia", name: "gaia", at: 2, commit: "c2" }]);
   });
 
   it("drops a picture that is not WebP, is too long, is of a world no longer kept, or is of a world read from disk", async () => {
@@ -59,10 +69,10 @@ describe("the recent worlds", () => {
       // Kept before pictures said which commit they show, as every picture an earlier Gaia painted was.
       { root: "/code/old", name: "old", at: 1, picture: picture("D") },
     ];
-    const engine = storeEngine(kept, { "/code/same": "c1", "/code/moved": "c2", "/code/old": "c1" });
+    const engine = storeEngine(kept, { "/code/same": "c1", "/code/moved": "c2", "/code/old": "c1" }, { c1: 3 });
     expect(await offeredWorlds(engine)).toEqual([
       { root: "/code/same", name: "same", at: 4, picture: picture("A"), commit: "c1" },
-      { root: "/code/moved", name: "moved", at: 3 },
+      { root: "/code/moved", name: "moved", at: 3, commitsSince: 3 },
       { root: "/code/disk", name: "disk", at: 2 },
       { root: "/code/old", name: "old", at: 1 },
     ]);
@@ -86,5 +96,20 @@ describe("the recent worlds", () => {
     await keepStood(engine, "/code/gaia", { x: 1, z: 0, yaw: 0, layout: "k", by: { path: 7 } });
     await keepStood(engine, "/code/gone", { x: 1, z: 0, yaw: 0, layout: "k", by: null });
     expect(await recentWorlds(engine)).toEqual([{ root: "/code/gaia", name: "gaia", at: 1 }]);
+  });
+
+  it("counts the commits since a world was last opened, and says it moved on when that commit left the history", async () => {
+    const kept = [
+      { root: "/code/ahead", name: "ahead", at: 3, commit: "c1" },
+      { root: "/code/rebased", name: "rebased", at: 2, commit: "gone" },
+      // Its repository moved on, but no commit touched its folder.
+      { root: "/code/elsewhere", name: "elsewhere", at: 1, commit: "c2" },
+    ];
+    const engine = storeEngine(kept, { "/code/ahead": "c9", "/code/rebased": "c9", "/code/elsewhere": "c9" }, { c1: 14, c2: 0 });
+    expect(await offeredWorlds(engine)).toEqual([
+      { root: "/code/ahead", name: "ahead", at: 3, commitsSince: 14 },
+      { root: "/code/rebased", name: "rebased", at: 2, commitsSince: null },
+      { root: "/code/elsewhere", name: "elsewhere", at: 1 },
+    ]);
   });
 });

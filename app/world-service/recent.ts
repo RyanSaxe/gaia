@@ -1,12 +1,13 @@
 // The worlds a person opened before, for the start page: kept with the app's
 // own settings in the store (the `app` project's `settings` table), newest
-// first, each with the picture of its field map its page last painted and the
-// commit it was painted from. Six pictures of about 100 KB keep the app's
+// first, each with the commit the person last opened it at and the picture of
+// its field map its page painted then. Six pictures of about 100 KB keep the app's
 // store under a megabyte, and it is read whole only when the start is offered
 // or a world is kept. A picture is offered only while its folder's code is
-// still that commit: a map that would be drawn anew is never shown. Each
-// world also keeps where the person stood when they last left it, which its
-// next open lands them at.
+// still that commit: a map that would be drawn anew is never shown. Once the
+// code has moved on, the start is told how many commits have touched the
+// folder since, which its card tallies. Each world also keeps where the
+// person stood when they last left it, which its next open lands them at.
 
 import type { EngineClient } from "@gaia/schema";
 import type { StoodSpot } from "@gaia/terrain";
@@ -44,21 +45,25 @@ export async function recentWorlds(engine: EngineClient): Promise<RecentWorld[]>
   if (!Array.isArray(kept)) return [];
   return kept.flatMap((r: Partial<Record<keyof RecentWorld, unknown>> | null): RecentWorld[] => {
     if (typeof r?.root !== "string" || typeof r.name !== "string") return [];
-    const pictured = isPicture(r.picture) && typeof r.commit === "string" ? { picture: r.picture, commit: r.commit } : {};
-    return [{ root: r.root, name: r.name, ...(typeof r.github === "string" ? { github: r.github } : {}), at: typeof r.at === "number" ? r.at : 0, ...pictured, ...(isStood(r.stood) ? { stood: r.stood } : {}) }];
+    const opened = typeof r.commit === "string" ? { commit: r.commit, ...(isPicture(r.picture) ? { picture: r.picture } : {}) } : {};
+    return [{ root: r.root, name: r.name, ...(typeof r.github === "string" ? { github: r.github } : {}), at: typeof r.at === "number" ? r.at : 0, ...opened, ...(isStood(r.stood) ? { stood: r.stood } : {}) }];
   });
 }
 
 /**
- * The recent worlds as the start offers them: each picture only while its folder's code is still the commit it was
- * painted from, so the start never shows, and the wait never starts from, a map that would be drawn anew.
+ * The recent worlds as the start offers them: each picture only while its folder's code is still the commit the person
+ * last opened, so the start never shows, and the wait never starts from, a map that would be drawn anew; and once the
+ * code has moved on, how many commits have touched the folder since.
  */
 export async function offeredWorlds(engine: EngineClient): Promise<RecentWorld[]> {
   return Promise.all(
     (await recentWorlds(engine)).map(async ({ picture, commit, stood: _, ...world }) => {
-      if (picture === undefined || commit === undefined) return world;
-      const now = await engine.call("project.commit", { root: world.root }).catch(() => ({ commit: null }));
-      return now.commit === commit ? { ...world, picture, commit } : world;
+      if (commit === undefined) return world;
+      const now = (await engine.call("project.commit", { root: world.root }).catch(() => ({ commit: null }))).commit;
+      if (now === null) return world;
+      if (now === commit) return { ...world, ...(picture === undefined ? {} : { picture }), commit };
+      const since = await engine.call("project.commits", { root: world.root, from: commit, to: now }).catch(() => ({ commits: null }));
+      return since.commits === 0 ? world : { ...world, commitsSince: since.commits };
     }),
   );
 }
@@ -68,13 +73,14 @@ async function keep(engine: EngineClient, worlds: readonly RecentWorld[]): Promi
 }
 
 /**
- * Puts `world` first among the recent worlds, replacing an earlier visit to the same folder but keeping its picture
- * until its page paints a new one, and where the person stood until they stand somewhere else.
+ * Puts `world`, opened at `commit`, first among the recent worlds, replacing an earlier visit to the same folder but
+ * keeping its picture, while it pictures that commit, until its page paints a new one, and where the person stood
+ * until they stand somewhere else.
  */
-export async function keepRecent(engine: EngineClient, world: Omit<RecentWorld, "picture" | "commit" | "stood">): Promise<void> {
+export async function keepRecent(engine: EngineClient, world: Omit<RecentWorld, "picture" | "stood" | "commitsSince">): Promise<void> {
   const kept = await recentWorlds(engine);
   const earlier = kept.find((r) => r.root === world.root);
-  const pictured = earlier?.picture === undefined || earlier.commit === undefined ? {} : { picture: earlier.picture, commit: earlier.commit };
+  const pictured = earlier?.picture !== undefined && world.commit !== undefined && earlier.commit === world.commit ? { picture: earlier.picture } : {};
   await keep(engine, [{ ...world, ...pictured, ...(earlier?.stood === undefined ? {} : { stood: earlier.stood }) }, ...kept.filter((r) => r.root !== world.root)]);
 }
 
