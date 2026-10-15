@@ -1258,7 +1258,9 @@ the cover's own soil, darker down the trodden middle, with a ragged edge;
 just outside it the grass is dulled and trampled shorter. Blades part along
 the tread: each stands only past its own seeded edge, so the border is
 ragged, and a faint trail keeps more blades on it. Trees keep 1.6 m off a
-tread and the understory half a meter, and both keep off a cairn. Wherever a
+tread and the understory half a meter, and both keep off a cairn; no grass
+grows within a meter of a cairn, so it stands in the open where its ways
+meet. Wherever a
 way's tread crosses a stream's course, it crosses on a footbridge where it
 carries three trails or more, is 1.8 m wide or more, or a trail on it asks
 for one, and on stepping stones otherwise, spanning the water from the last
@@ -1349,7 +1351,7 @@ Until worlds come from real code, the terrain lab stands a few landmarks,
 more for more regions (about 1.4 times the square root of the region count:
 seven in a full world of 22 regions), each for one of its sample entities,
 on regions spread far apart; when it wants more than there are forms, forms
-repeat. Buildings' floors and walks and landmarks' feet clear the
+repeat. Buildings' floors and walks, landmarks' feet and cairns clear the
 grass through the same mask as the understory, so a world may hold any
 number of them.
 

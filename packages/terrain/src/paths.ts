@@ -53,6 +53,8 @@ export const TRAILS = {
   cairnClear: 0.9,
   cairnFromPlace: 14,
   cairnApart: 40,
+  /** No grass grows this near a cairn's middle, meters, so it stands clear beside its ways. */
+  cairnGround: 1,
   /** Points a way's wear is known at, evenly along it, for the shaders to blend between. */
   stations: 4,
 } as const;
