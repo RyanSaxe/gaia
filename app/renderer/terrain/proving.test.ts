@@ -3,7 +3,7 @@ import { type BuildingPlan, type Built, Library, type RouteSpec, seedOf } from "
 import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, LANDMARK_PRIMITIVES, RELIEF_PRIMITIVES, ROUTE_PRIMITIVES, STRUCTURE_PRIMITIVES } from "@gaia/primitives";
 import { landmark, link, structure } from "@gaia/kinds";
 import { FLORA_PRESETS, LANDMARK_PRESETS, STRUCTURE_PRESETS, TRAIL_PRESETS, buildSlots, realize } from "@gaia/realize";
-import { type BuildingSite, type Extent, type ScatterRule, TERRAIN, type Terrain, bakeTerrain, extentOf, groundLook, siteToWorld, turningExtent, junctionVitality, ownershipOf, placeAt, vitalityAt, vitalityOver, waterDepthAt, wayVitalityAt } from "@gaia/terrain";
+import { type BuildingSite, type Extent, TERRAIN, type Terrain, bakeTerrain, extentOf, groundLook, siteToWorld, turningExtent, junctionVitality, ownershipOf, placeAt, vitalityAt, vitalityOver, waterDepthAt, wayVitalityAt } from "@gaia/terrain";
 import { type Judgments, areaVitality, groundVitality } from "@gaia/world";
 import { codeLab, provingWorld } from "./code-world.ts";
 import { BUILDINGS, CHARACTERS, COMPOSED_FORMS, FORMS, LANDMARKS, LANDS, TRAILS, WATERS, presetBlueprint } from "./looks.ts";
@@ -126,13 +126,12 @@ describe("the proving ground", () => {
     let requests: StandBuilding[];
     // Baking and standing the 950 m world takes about 10 s in one Node thread, longer while other work shares the machine.
     beforeAll(() => {
-      // The same buildings, landmarks and trail looks, seeded alike, and an understory of rocks, shrubs and flowers.
+      // The same buildings, landmarks and trail looks, seeded alike.
       terrain = bakeTerrain(code.spec, new Library([...RELIEF_PRIMITIVES, ...BIOME_PRIMITIVES]));
       const buildingLib = new Library([...STRUCTURE_PRIMITIVES, ...FLORA_PRIMITIVES]);
       const landmarkLib = new Library([...LANDMARK_PRIMITIVES, ...FLORA_PRIMITIVES]);
       const routeLib = new Library(ROUTE_PRIMITIVES);
       const styles = TRAIL_PRESETS.map((p) => buildSlots(p.blueprint, link, routeLib, { seed: 1, facts: {} }).get("route")?.output as RouteSpec);
-      const understory = (id: string, groups: number): ScatterRule => ({ id, variants: [{ radius: 0.8, weight: 1 }], groups, members: [1, 4], spread: 5, mix: "member", scale: [0.8, 1.2], maxSlope: 22, waterClearance: 1.5, ground: "lowest", sink: 0.05 });
       requests = code.buildings.map((b) => {
           const facts = Object.fromEntries(Object.entries(structure.facts).map(([k, bind]) => [k, bind(b.facts)]));
           const built = realize(b.blueprint, structure, buildingLib, { seed: seedOf(`terrain-lab/${b.facts.path}`), facts });
@@ -147,7 +146,6 @@ describe("the proving ground", () => {
         })),
         trailStyles: [styles[0] as RouteSpec, styles[1] as RouteSpec, styles[2] as RouteSpec],
         trees: { count: 0, seed: 9, presets: FLORA_PRESETS.length, builds: 1, bases: FLORA_PRESETS.map(() => 0.5), crowns: FLORA_PRESETS.map(() => 4) },
-        understory: { rules: [understory("rocks", 3), understory("shrubs", 5), understory("flowers", 6)], seed: 5 },
         code: code.stand,
       });
     }, 120_000);
@@ -185,7 +183,7 @@ describe("the proving ground", () => {
       expect(terrain.ponds.length).toBeGreaterThanOrEqual(2);
     });
 
-    it("stands every definition, file and entity the layout lays out, as a tree, part of the understory or one of the world's things, each on its own file's patch, however crowded its ground", () => {
+    it("stands every definition, file and entity the layout lays out, as a tree, a stone, a bush, flowers or one of the world's things, each on its own file's patch, however crowded its ground, and nothing else", () => {
       expect(stood.symbols.length).toBe(doc.world.symbols.length + doc.world.standing.length);
       const trees = new Map(stood.trees.map((t) => [t.symbol, t]));
       expect(trees.size).toBeGreaterThan(0);
@@ -204,6 +202,8 @@ describe("the proving ground", () => {
         const p = tree ? trees.get(k)! : stood.placements[i]!;
         if (s.file !== undefined) expect(placeAt(doc.world, p.x, p.z).file?.path, id).toBe(s.file);
       });
+      // No stone, bush or flowers stands for nothing.
+      expect(stood.placements.length).toBe(stood.symbols.filter((i) => i >= 0).length);
       // A file's or a definition's building or landmark stands on that file's patch, but a building whose wheel needs
       // running water, which stands on its area's stream's bank.
       const sited = [...code.buildings.map((b, i) => ({ path: b.facts.path, at: stood.sites[i]! })), ...stood.landmarks.map((l) => ({ path: l.id, at: l.site }))];
@@ -215,23 +215,12 @@ describe("the proving ground", () => {
       }
     });
 
-    it("grows the understory with the vitality of the ground it stands on, so the ruins' bushes and flowers fail", () => {
-      // The page shows each scattered placement's vitality from the ground's vitality field, as the grass beneath it reads it, and each file's finer entity its file's.
-      const shown = understoryVitality(stood, (k) => code.stand.symbols[k]!.vitality, (x, z) => vitalityAt(own, groundField, x, z));
+    it("shows each stone, bush and drift of flowers at the vitality of what it stands for", () => {
+      const shown = understoryVitality(stood, (k) => code.stand.symbols[k]!.vitality);
+      expect(shown.length).toBe(stood.placements.length);
       stood.symbols.forEach((i, k) => {
         if (i >= 0) expect(shown[i]).toBeCloseTo(code.stand.symbols[k]!.vitality, 5);
       });
-      const symbols = new Set(stood.symbols);
-      const scattered = stood.placements.flatMap((p, i) => (symbols.has(i) ? [] : [{ x: p.x, z: p.z, vitality: shown[i]! }]));
-      expect(scattered.length).toBeGreaterThan(1000);
-      // A file's patch is as healthy as its file, a lot as its whole area, and the wild past the land thrives; away from its edges, a placement shows exactly that.
-      const clear = scattered.filter((p) => clearOfEdges(p.x, p.z));
-      expect(clear.length).toBeGreaterThan(300);
-      for (const p of clear) expect(Math.abs(p.vitality - groundAt(p.x, p.z)), `${ownerOf(p.x, p.z)} at ${p.x}, ${p.z}`).toBeLessThan(0.01);
-      expect(clear.some((p) => placeAt(doc.world, p.x, p.z).file === null), "understory on a lot").toBe(true);
-      const ruins = clear.filter((p) => /^ruins(\/|$)/.test(placeAt(doc.world, p.x, p.z).area.path));
-      expect(ruins.length).toBeGreaterThan(20);
-      for (const p of ruins) expect(p.vitality).toBeLessThan(0.25);
     });
   });
 });

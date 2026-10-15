@@ -1,7 +1,7 @@
 // Where plants may stand and how they meet the ground. A trunk's base, a
 // rock or a bush sits at the lowest ground under its footprint, so on a slope
 // the downhill side touches the soil and the uphill side is buried, never
-// floating; a drift of flowers lies on the ground's plane instead.
+// floating.
 
 import { rand } from "@gaia/schema";
 import { type Lattice, heightAt, slopeAt } from "./lattice.ts";
@@ -58,38 +58,6 @@ function riseUnder(l: Lattice, x: number, z: number, radius: number): number {
   }
   return high - low;
 }
-
-/**
- * The ground's plane under a footprint, fitted by least squares and then
- * lowered until it lies at or under the ground at every footprint point.
- */
-export function groundPlane(l: Lattice, x: number, z: number, radius: number): { y: number; slope: [number, number] } {
-  const pts = footprint(x, z, radius);
-  let sxx = 0, szz = 0, sxz = 0, sxh = 0, szh = 0, sh = 0;
-  const hs = pts.map(([px, pz]) => heightAt(l, px, pz));
-  pts.forEach(([px, pz], i) => {
-    const dx = px - x;
-    const dz = pz - z;
-    const h = hs[i] as number;
-    sxx += dx * dx;
-    szz += dz * dz;
-    sxz += dx * dz;
-    sxh += dx * h;
-    szh += dz * h;
-    sh += h;
-  });
-  const det = sxx * szz - sxz * sxz;
-  const gx = det > 1e-9 ? (sxh * szz - szh * sxz) / det : 0;
-  const gz = det > 1e-9 ? (szh * sxx - sxh * sxz) / det : 0;
-  let y = sh / pts.length;
-  let over = 0;
-  pts.forEach(([px, pz], i) => {
-    over = Math.max(over, y + gx * (px - x) + gz * (pz - z) - (hs[i] as number));
-  });
-  y -= over;
-  return { y, slope: [gx, gz] };
-}
-
 
 export function isWet(t: Terrain, x: number, z: number, clearance = WATER_CLEARANCE): boolean {
   for (let k = 0; k < 9; k++) {

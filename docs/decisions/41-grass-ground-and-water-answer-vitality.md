@@ -35,3 +35,5 @@ files' patches stay green, and an area's own ground follows the area."
 
 Pair session `gaia-v3` (`f8d282bc-7712-4894-9255-dcf4699f92cb`), the World
 session's round 18, approved as proposal ground-decline.
+
+The scattered rocks, bushes and flowers are gone: every stone, bush and flower on the land stands for code and shows the vitality of what it stands for (round 2 of the World polish session, `land` page).

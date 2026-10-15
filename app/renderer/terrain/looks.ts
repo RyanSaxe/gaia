@@ -155,46 +155,32 @@ export const WATERS: Readonly<Record<string, Look>> = {
   "A still pond": look("A still pond gathers: much of the code leans on this area, and what it holds settles here.", "crossroads", "schema", "data"),
 };
 
-/**
- * An area's ground, and what that means on it: how large the trees its
- * definitions stand as grow (`stature`), how much of each understory rule
- * grows between the things standing there, and what its open ground reads as
- * to the understory (dry heath or damp hollow).
- */
+/** An area's ground, and what that means on it: how large the trees its definitions stand as grow (`stature`). */
 export interface Character {
   readonly look: Look;
   readonly stature: number;
-  readonly understory: Readonly<Record<string, number>>;
-  readonly open?: "dry" | "wet";
 }
 
 export const CHARACTERS: Readonly<Record<string, Character>> = {
   "Deep wood": {
     look: look("A deep wood's floor: thick shrubs in the shade, and its trees grow tall: a large body of code dense with its own logic.", "large", "flow", "geometry", "building", "landmark", "engine", "rust"),
     stature: 1.15,
-    understory: { rocks: 0.7, shrubs: 1.3, flowers: 0.8 },
   },
   "Groves and clearings": {
     look: look("Clearings with an even scatter of stones, shrubs and flowers: code whose files each keep to themselves.", "medium", "renderer", "render", "immersive", "app", "terrain"),
     stature: 1,
-    understory: { rocks: 1, shrubs: 1, flowers: 1 },
   },
   "Old meadow": {
     look: look("An old meadow thick with flowers, where trees grow large and broad: code that describes or configures, or is small and settled.", "docs", "config", "small", "still", "root", "repository", "data", "markdown"),
     stature: 1.3,
-    understory: { rocks: 0.6, shrubs: 0.5, flowers: 1.7 },
   },
   "Rocky heath": {
     look: look("A dry, rocky heath of stones and low scrub, where trees stay small and wind-bent: hard-working code that checks or runs other code, spare and plain.", "test", "script", "tools", "realize", "dry"),
     stature: 0.85,
-    understory: { rocks: 2.6, shrubs: 1.4, flowers: 0.6 },
-    open: "dry",
   },
   "Wet hollow": {
     look: look("A wet hollow of reeds and marsh flowers on soft ground: ground much of the code leans on, where what it holds settles.", "crossroads", "schema", "world", "service"),
     stature: 1,
-    understory: { rocks: 0.6, shrubs: 1.3, flowers: 1.5 },
-    open: "wet",
   },
 };
 

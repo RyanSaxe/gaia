@@ -1447,45 +1447,31 @@ everything else that stands for code, so each tree reads as one thing, and
 a tap on it opens that thing's page. Where Jev picks trees for many of a file's definitions,
 its patch grows a copse; a file whose definitions are small routines is low
 bushes and stones. Each area's character, which Jev chooses with its reason,
-decides its ground:
+decides how large its trees grow:
 
-| Character | Its land |
+| Character | Its trees |
 | --- | --- |
-| Deep wood | Thick shrubs in the shade, and its trees grow a little taller |
-| Groves and clearings | An even scatter of stones, shrubs and flowers |
-| Old meadow | Open meadow thick with flowers, where trees grow a third larger |
-| Rocky heath | Stones and low scrub over dry open ground, and its trees stay small |
-| Wet hollow | Reeds and marsh flowers over damp open ground |
+| Deep wood | A little taller |
+| Groves and clearings | Their usual size |
+| Old meadow | A third larger |
+| Rocky heath | Small |
+| Wet hollow | Their usual size |
 
 In the sample world, which has no code behind it, trees gather by landform:
 valleys and hills hold the most and the largest, a meadow a few lone trees.
 
 ## Understory
 
-The understory grows where it belongs. Rocks lie in groups, bushes in
-thickets, and wildflowers in drifts of one species, and each grows in its own
-kind of place: shrubs and bluebells under a tree's canopy, shrubs at a
-wood's edge and a lone tree's foot, daisies, poppies, lupines and asters in
-open meadow and clearings, marsh marigolds and tall feathery shrubs by water,
-stones where the ground is dry or steep (and on terraces, dunes and a heath's
-open ground). Open meadow holds only flowers and the odd stone; wild brush
-grows only past the land. `scatterComponents` in `@gaia/terrain` places them:
-candidate group sites lie on a jittered grid fixed to the world, each site
-reads its place from the trees' crowns, the water and the slope, and each
-rule groups there by its density for that place, its region's landform and,
-in a world from code, its area's character, with no two footprints
-overlapping, nothing on ground steeper than its rule allows, and nothing
-within a meter or two of water. Nothing crowds a file's finer entities: the
-understory keeps two meters clear of each. In a world from code each rock,
-bush and flower shows the vitality of the ground it grows on, as the grass
-beneath it does (see Vitality on the land): its file's on a file's patch,
-its whole area's on a lot (`areaVitality`), full health in the wild past the
-land, and between patches the same soft blend, so a failing area's
-understory fails with its trees and a live change in vitality reaches it.
-A solid thing sits below the lowest ground
-under its footprint, so on a slope its uphill side is buried and its
-downhill side still touches the soil; a drift lies on the ground's plane, so
-its stems stay upright. Rocks are half sunk by construction. Moss caps their
+The understory is the stones, bushes and drifts of flowers that code stands
+as, and nothing on the land stands for nothing: between the things that
+stand for code the land is grass, ground and water, and the flowers inside
+the grass (`cover.ts`) are part of the grass. Each stands near where the
+layout put what it stands for, kept off water, steep ground, buildings,
+trails and landmarks, and shows the vitality of what it stands for, so a
+failing file's stones and bushes fail with its trees and a live change in
+vitality reaches them. Wild brush grows only past the land.
+
+Rocks are half sunk by construction. Moss caps their
 upward faces and recedes, edges first, drying to lichen grey as vitality
 falls; the stone bleaches, and a boulder's two halves slump apart along a
 fissure, so it cracks. Moss ends along a soft, winding edge that follows its

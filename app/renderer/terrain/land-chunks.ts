@@ -3,18 +3,15 @@
 // and what standing its things did to it, and nothing else. Level k holds
 // every 2^k-th sample of the world's lattice, so a chunk of level 0 holds the
 // stood land's own samples and a coarser chunk the same samples farther apart
-// (`standTile`). The same workers stand a tile's understory on the tile's own
-// land (`standTileThings`). No Three.js and no DOM: a worker runs it.
+// (`standTile`). No Three.js and no DOM: a worker runs it.
 
-import { DRY, type LandEdits, type Placement, SHORE_CAP, type StoodTile, TILE, TRAILS, type Terrain, type TerrainPlan, type Way, cutTile, frameOf, standTile, tileTerrain } from "@gaia/terrain";
-import { type ScatterPlan, TILE_READS, scatterTile } from "./stand.ts";
+import { DRY, type LandEdits, SHORE_CAP, type StoodTile, TRAILS, type Terrain, type TerrainPlan, type Way, cutTile, frameOf, standTile } from "@gaia/terrain";
 
-/** What a land worker needs to bake any chunk of a world, and stand any tile's things: its plan, what standing did to it, its ways, and how its understory scatters. */
+/** What a land worker needs to bake any chunk of a world: its plan, what standing did to it, and its ways. */
 export interface LandSource {
   readonly plan: TerrainPlan;
   readonly edits: LandEdits;
   readonly ways: readonly Way[];
-  readonly scatter: ScatterPlan;
 }
 
 /** Samples a side of a chunk; every level's window is a whole number of them. */
@@ -102,10 +99,3 @@ export function cutChunk(whole: Terrain, source: LandSource, k: number, cx: numb
 
 /** The buffers a chunk carries between threads. */
 export const chunkBuffers = (c: Chunk): ArrayBuffer[] => [c.ground.buffer, c.region.buffer, c.coverRegions.buffer, c.coverShares.buffer, c.trailPlaces.buffer] as ArrayBuffer[];
-
-/** Tile (ti, tj)'s understory, stood on the tile's own land from `source` alone: what it holds when stood with the whole world. */
-export function standTileThings(source: LandSource, ti: number, tj: number): Placement[] {
-  const m = TILE_READS;
-  const land = standTile(source.plan, source.edits, source.ways, ti * TILE.size - m, tj * TILE.size - m, TILE.size + 2 * m);
-  return scatterTile(tileTerrain(source.plan, land), source.scatter, ti, tj);
-}

@@ -68,7 +68,6 @@ describe("buildings and water, in Gaia's world and the proving ground", () => {
         landmarks: code.landmarks.map((l) => ({ name: l.path, base: landmarkBase(realize(l.blueprint, landmark, landmarkLib, { seed: seedOf(`terrain-lab/landmark/${l.path}`), facts: Object.fromEntries(Object.entries(landmark.facts).map(([k, bind]) => [k, bind(l.facts)])) })) })),
         trailStyles: [styles[0] as RouteSpec, styles[1] as RouteSpec, styles[2] as RouteSpec],
         trees: { count: 0, seed: 9, presets: FLORA_PRESETS.length, builds: 1, bases: FLORA_PRESETS.map(() => 0.5), crowns: FLORA_PRESETS.map(() => 4) },
-        understory: { rules: [], seed: 5 },
         code: code.stand,
       });
       // A house with a wheel stands on a stream's bank with its wheel in the water; every other house stands wholly on dry ground.

@@ -6,7 +6,7 @@ import { CHUNK, chunkPastLand, cutChunk, latticeIndex, standChunk } from "./land
 
 // Baked once for the file: the full sample world, 1.2 km across, so its coarser levels' chunks reach past the land.
 const terrain = bakeTerrain(sampleWorld(FULL_WORLD), new Library([...RELIEF_PRIMITIVES, ...BIOME_PRIMITIVES]));
-const source = { plan: planOf(terrain), edits: { pads: [], discs: [], ways: [] }, ways: [], scatter: { rules: [], seed: 0, occupied: [], canopy: [] } };
+const source = { plan: planOf(terrain), edits: { pads: [], discs: [], ways: [] }, ways: [] };
 const { n } = terrain.lattice;
 
 describe("the land's chunks", () => {

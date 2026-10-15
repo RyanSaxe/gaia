@@ -52,30 +52,6 @@ export function standTile(plan: TerrainPlan, edits: LandEdits, ways: readonly Wa
 }
 
 /**
- * A stood tile as a `Terrain` of its own: the land a tile's things are stood
- * on, read as they read the whole world's land. Its relief report is empty:
- * only the whole world can measure that.
- */
-export function tileTerrain(plan: TerrainPlan, tile: StoodTile): Terrain {
-  return {
-    spec: plan.spec,
-    lattice: tileLattice(plan, tile),
-    waterLevel: tile.waterLevel,
-    shore: tile.shore,
-    region: tile.region,
-    coverRegions: tile.coverRegions,
-    coverShares: tile.coverShares,
-    streams: plan.streams,
-    ponds: plan.ponds.map((p) => p.pond),
-    fit: plan.fit,
-    mean: plan.mean,
-    pondDepths: plan.ponds.map((p) => p.depth),
-    report: { min: 0, max: 0, range: 0, maxSlope: 0, walkShare: 1, maxStep: 0 },
-    landforms: plan.landforms,
-  };
-}
-
-/**
  * Tile (`x0`, `z0`) cut from `t`, a whole world's land with its things
  * stood, as `standTile` bakes it from the plan: every stride-th sample, the
  * shore of a coarser tile measured between its own samples, and the trails
