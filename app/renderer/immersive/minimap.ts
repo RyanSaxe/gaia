@@ -11,8 +11,8 @@
 // asks instead: in the app, it opens the journal at its map. A tap on its
 // outer edge tucks it down past the screen's foot, leaving its top 50 px (the
 // name and a band of turning land), and a tap on what shows brings it back. Walking up
-// to a thing, a vermilion pencil ring is drawn round it with its name in the
-// traveller's hand.
+// to a thing, a vermilion pencil ring is drawn round it with its name over it in
+// the traveller's hand, on at most two lines, the ring and the name both on the paper.
 //
 // Cheap by construction: its canvas holds a window of the land wide enough to
 // cover the scrap at any heading with room to walk, drawn from the field map's
@@ -59,6 +59,12 @@ const SLACK = 90;
 /** The area's name in the field map's lettering for areas: at most its size, smaller for a long name, never below legible; px. */
 const NAME = { size: 13.5, least: 9.5, spacing: 0.17, room: SIDE - 32 } as const;
 const SERIF = `"Iowan Old Style", Georgia, "Times New Roman", serif`;
+/**
+ * The ring round a thing walked up to and its name keep `keep` px inside the torn edge, where the paint is whole,
+ * so the name is at most `SIDE - 2 * keep`, 136 px, wide (lab.css). The name stands `gap` px off the ring, and above
+ * it only below the scrap's top `under` px, where the area's name is lettered.
+ */
+const MARK = { keep: EDGE.bare + EDGE.fade, gap: 3, under: 30 } as const;
 
 /**
  * Which area the minimap letters as the person walks. The first place is
@@ -108,6 +114,29 @@ export function tapOn(x: number, y: number, side = SIDE): "tuck" | "unfold" | nu
   const inward = Math.min(x, y, side - x, side - y);
   if (inward < -TAP.past) return null;
   return inward < TAP.edge ? "tuck" : "unfold";
+}
+
+/**
+ * A thing's name in the pieces the pencil may break it between onto its second line: after each underscore, and
+ * before each capital that follows a small letter or a digit.
+ */
+export function nameBreaks(name: string): string[] {
+  return name.split(/(?<=_)|(?<=[a-z0-9])(?=[A-Z])/);
+}
+
+/**
+ * Where the ring round a thing at (x, y) on the scrap goes, `r` px round, and the thing's name, `w` by `h` px: the
+ * ring at the thing, or at the edge toward it when the thing is past it; the name centred over the ring, under it
+ * when there is no room above, slid along so the whole of it stays on the paper. Both in px from the scrap's top
+ * left, the name by its top left corner.
+ */
+export function markAt(x: number, y: number, r: number, w: number, h: number, side = SIDE): { ring: [number, number]; name: [number, number] } {
+  const within = (v: number, least: number, most: number): number => Math.max(least, Math.min(most, v));
+  const rx = within(x, MARK.keep + r, side - MARK.keep - r);
+  const ry = within(y, MARK.keep + r, side - MARK.keep - r);
+  const above = ry - r - MARK.gap - h;
+  const top = above >= MARK.under ? above : within(ry + r + MARK.gap, MARK.keep, side - MARK.keep - h);
+  return { ring: [rx, ry], name: [within(rx - w / 2, MARK.keep, side - MARK.keep - w), top] };
 }
 
 /** Smooth noise between 0 and 1 over a grid of unit cells, the same on every run. */
@@ -202,6 +231,8 @@ export function createMinimap(root: HTMLElement, map: FieldMap, stood: () => Sto
   let shown = false;
   let tucked = false;
   let marked: Heading | null = null;
+  /** The ring's radius and its name's size, px, measured once a thing so walking never asks the page for its layout. */
+  const markSize = { r: 0, w: 0, h: 0 };
 
   function redraw(): void {
     const paper = map.paper();
@@ -222,7 +253,7 @@ export function createMinimap(root: HTMLElement, map: FieldMap, stood: () => Sto
     place();
   }
   /** What the scrap shows now, so a frame that would change nothing a person can see touches nothing. */
-  const last = { land: "", mark: "" };
+  const last = { land: "", mark: "", name: "" };
   /** Turns and slides the window under the scrap so the traveller stays put and the way they face is up; moves the ring with what they walk to. */
   function place(): void {
     // A quarter of a pixel and a twentieth of a degree are too little to see, and moving no more often than that
@@ -234,17 +265,16 @@ export function createMinimap(root: HTMLElement, map: FieldMap, stood: () => Sto
     const land = `translate(${HERE.x * SIDE}px, ${HERE.y * SIDE}px) rotate(${(Math.round(degrees * 20) / 20).toFixed(2)}deg) translate(${q(-ox)}px, ${q(-oz)}px)`;
     if (land !== last.land) canvas.style.transform = last.land = land;
     if (marked !== null) {
-      // The thing turns with the land; out past the scrap's edge, the ring waits at the edge toward it.
+      // The thing turns with the land; out past the scrap's edge, the ring waits at the edge toward it, its name with it.
       const c = Math.cos(person.yaw);
       const s = Math.sin(person.yaw);
       const rx = (marked.x - person.x) * SCALE;
       const rz = (marked.z - person.z) * SCALE;
-      const inset = 16;
-      const mx = Math.max(inset, Math.min(SIDE - inset, HERE.x * SIDE + rx * c - rz * s));
-      const my = Math.max(inset, Math.min(SIDE - inset, HERE.y * SIDE + rx * s + rz * c));
-      const at = `translate(${q(mx)}px, ${q(my)}px)`;
+      const { ring, name } = markAt(HERE.x * SIDE + rx * c - rz * s, HERE.y * SIDE + rx * s + rz * c, markSize.r, markSize.w, markSize.h);
+      const at = `translate(${q(ring[0])}px, ${q(ring[1])}px)`;
       if (at !== last.mark) mark.style.transform = last.mark = at;
-      mark.classList.toggle("left", mx > SIDE * 0.62);
+      const by = `translate(${q(name[0] - ring[0])}px, ${q(name[1] - ring[1])}px)`;
+      if (by !== last.name) markName.style.transform = last.name = by;
     }
   }
   map.onPainted(() => {
@@ -337,9 +367,11 @@ export function createMinimap(root: HTMLElement, map: FieldMap, stood: () => Sto
       marked = thing;
       mark.classList.remove("on");
       if (thing === null) return;
-      markName.textContent = thing.name;
-      const r = Math.max(9, Math.min(26, thing.reach * SCALE + 6));
-      markRing.style.width = markRing.style.height = `${(r * 2 * 48) / 30}px`;
+      markName.replaceChildren(...nameBreaks(thing.name).flatMap((piece, k) => (k === 0 ? [piece] : [document.createElement("wbr"), piece])));
+      markSize.r = Math.max(9, Math.min(26, thing.reach * SCALE + 6));
+      markSize.w = markName.offsetWidth;
+      markSize.h = markName.offsetHeight;
+      markRing.style.width = markRing.style.height = `${(markSize.r * 2 * 48) / 30}px`;
       place();
       // A frame later, so the pencil draws the ring from nothing.
       requestAnimationFrame(() => requestAnimationFrame(() => mark.classList.toggle("on", marked === thing)));
