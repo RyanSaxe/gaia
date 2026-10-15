@@ -1436,7 +1436,9 @@ into the sky.
 A pass draws only the cells its camera sees. The sun's shadow map covers a
 box around the person, so only casters inside that box draw into it: its cost
 stays bounded however large the world grows, and nothing outside it could
-cast into it.
+cast into it. The box moves across the light only in whole texels of the
+map, so its texels stay put on the land and no shadow's edge crawls as the
+person walks; the moon's map does the same.
 
 ## Composition budgets
 

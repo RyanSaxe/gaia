@@ -30,6 +30,8 @@ export function createSunShadow(light: SceneLight, size = 2048): SunShadow {
   light.uShadowTexel.value = 1 / size;
   const center = new THREE.Vector3();
   let extent = 20;
+  const across = new THREE.Vector3();
+  const upward = new THREE.Vector3();
 
   const update = (): void => {
     // Once the sun is down the map follows the moon, and moon shadows fade in
@@ -43,6 +45,14 @@ export function createSunShadow(light: SceneLight, size = 2048): SunShadow {
     camera.position.copy(center).addScaledVector(sun, 60);
     camera.up.set(0, 1, 0);
     camera.lookAt(center);
+    // The box moves across the light only in whole texels, so its texels stay
+    // put on the land as the person walks and no shadow's edge crawls.
+    const texel = (2 * extent) / size;
+    across.set(1, 0, 0).applyQuaternion(camera.quaternion);
+    upward.set(0, 1, 0).applyQuaternion(camera.quaternion);
+    const offAcross = camera.position.dot(across) % texel;
+    const offUpward = camera.position.dot(upward) % texel;
+    camera.position.addScaledVector(across, -offAcross).addScaledVector(upward, -offUpward);
     camera.left = -extent;
     camera.right = extent;
     camera.top = extent;
