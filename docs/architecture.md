@@ -392,7 +392,17 @@ wait's sheet. A world kept before pictures were, whose page painted none,
 whose code has moved on, or whose picture was kept before pictures said
 their commit, comes with no picture, which the start shows as a card of
 the wait's own bare sheet, in the sheet's shape, with its name, so it rises
-into the sheet as the sheet. The land stage says which commit the code was read from
+into the sheet as the sheet. As the person walks, the page sends where they
+stand (`world.stood`, a `StoodSpot` from `stoodBy` in `@gaia/terrain`):
+their spot and facing, the world's layout key, and the nearest thing that
+stands for code, by its path, with where it stood. It sends one once they
+have moved 2 m or turned 20 degrees, as soon as they stand still or every
+30 s while they walk, and when the page goes. The service keeps it with the
+recent world (`RecentWorld.stood`), not in the project's own store, which
+holds Jev's answers and is rewritten whole on every write. The next open of
+that world sends it with the document (`world.document`'s `stood`), and the
+page lands the person by it (`returnTo`). A world that falls out of the six
+recent worlds forgets it. A page with no world service keeps none. The land stage says which commit the code was read from
 too, so a picture of a place on GitHub that its fetch has since moved on
 folds away from the wait's sheet as soon as the land is divided. A
 standalone page (`pnpm lab:html`, `pnpm lab:serve`) has no engine and opens

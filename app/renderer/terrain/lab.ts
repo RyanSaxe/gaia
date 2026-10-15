@@ -34,7 +34,7 @@ import {
   createSunShadow,
   type SceneLight,
 } from "@gaia/render";
-import { type Capsule, clearanceAt, frameOf, type Placement, TILE, LAND_ASPECT, type Deck, decksOf, EYE_HEIGHT, footingAt, FULL_WORLD, GAIT, groundHeightAt, heightAt, type Intent, junctionVitality, NO_SOLIDS, NO_TRAILS, openingSpot, outlineShape, withinLand, piecesShapes, type Place, placeAt, planWalk, randomWorld, regionPlaces, RELIEF_BUDGET, sampleWorld, sightlines, siteToWorld, SMALL_WORLD, type Solids, type SolidShape, solidsOf, stanceAt, standAt, steerAlong, type Steered, type Steering, steering, steerPress, steerRelease, steerStep, stride, type Stride, acrossWay, carry, planTrip, TRAVEL, type Travel, wadingAt, travelFrom, travelPoint, travelStep, type Trip, trailWay, type Walker, type WalkKey, type Terrain, TERRAIN, type TrailNetwork, type Walk, WALK_TO, walkStep, wallsShape, waterDepthAt, type Way, wayAhead, wayVitalityAt, wayWear, WILDS, type WorldPlaces, type WorldSpec } from "@gaia/terrain";
+import { type Capsule, clearanceAt, frameOf, type Placement, TILE, LAND_ASPECT, type Deck, decksOf, EYE_HEIGHT, footingAt, FULL_WORLD, GAIT, groundHeightAt, heightAt, type Intent, junctionVitality, NO_SOLIDS, NO_TRAILS, openingSpot, outlineShape, returnTo, stoodBy, type StoodSpot, withinLand, piecesShapes, type Place, placeAt, planWalk, randomWorld, regionPlaces, RELIEF_BUDGET, sampleWorld, sightlines, siteToWorld, SMALL_WORLD, type Solids, type SolidShape, solidsOf, stanceAt, standAt, steerAlong, type Steered, type Steering, steering, steerPress, steerRelease, steerStep, stride, type Stride, acrossWay, carry, planTrip, TRAVEL, type Travel, wadingAt, travelFrom, travelPoint, travelStep, type Trip, trailWay, type Walker, type WalkKey, type Terrain, TERRAIN, type TrailNetwork, type Walk, WALK_TO, walkStep, wallsShape, waterDepthAt, type Way, wayAhead, wayVitalityAt, wayWear, WILDS, type WorldPlaces, type WorldSpec } from "@gaia/terrain";
 import { createSky } from "../world/environment.ts";
 import { type Pixels, createCapture } from "./capture.ts";
 import { renderInspector } from "../inspector.ts";
@@ -1558,10 +1558,18 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   }
 
   /**
-   * Stand where the first view is best (`openingSpot`): on a stream's bank among the code, looking downstream, with
-   * the most that stands for code in sight. The sample world stands for no code, so its buildings and landmarks count.
+   * Stand where the person stood when they last left this world (`returnTo`): exactly there while its code is laid
+   * out as it was; once an edit has moved things, beside the thing they stood by, where it stands now, on dry ground
+   * clear of everything there or the nearest landing to it. A first visit, or one whose thing is gone, stands where
+   * the first view is best (`openingSpot`): on a stream's bank among the code, looking downstream, with the most that
+   * stands for code in sight. The sample world stands for no code, so its buildings and landmarks count there.
    */
-  function valleyView(): void {
+  function valleyView(stood = code?.stood): void {
+    const back = code === null ? null : returnTo(code.world, stood);
+    if (back !== null) {
+      const beside = back.exact || standable(back.x, back.z) ? back : landingNear(back.x, back.z);
+      if (beside !== null) return walkTo(beside.x, beside.z, back.yaw, -0.06);
+    }
     const at = openingSpot(terrain, code?.world ?? { ...places, things: [...settlement.buildings.map((b) => b.site), ...ways.sites.map((s) => s.site)], symbols: [] });
     // Clear of anything solid there, as a landing is.
     const bank = landingNear(at.x, at.z);
@@ -2166,8 +2174,13 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       areas: (code?.world.areas ?? []).map((a) => ({ path: a.path, x: a.x, z: a.z, ground: a.ground, depth: a.depth, vitality: own.get(a.path) ?? 1 })),
       groves: [...groves].map(([path, g]) => ({ path, x: g.x / g.trees, z: g.z / g.trees, trees: g.trees, vitality: patchOf.get(path)?.vitality ?? 1 })),
       ponds: terrain.ponds.map((p) => ({ x: p.x, z: p.z, reach: p.reach })),
-      standable: (x, z) => withinLand(world, x, z, 4) && waterDepthAt(terrain, x, z) <= LAND.dry && clearanceAt(solids, x, z) >= LAND.clear,
+      standable,
     });
+  }
+
+  /** Whether a person can stand at (x, z): on the land, on dry ground clear of every solid. */
+  function standable(x: number, z: number): boolean {
+    return withinLand(world, x, z, 4) && waterDepthAt(terrain, x, z) <= LAND.dry && clearanceAt(solids, x, z) >= LAND.clear;
   }
 
   /** The landing nearest (x, z): see `WorldHandle.landing`. */
@@ -2926,7 +2939,10 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
         if (s !== undefined) walkTo(s.x, s.z, s.yaw, s.pitch);
         return s ?? null;
       },
-      valley: () => valleyView(),
+      /** Opens where the world's next open would land the person, as if they last stood at `stood`, or as on a first visit. */
+      valley: (stood?: StoodSpot) => valleyView(stood),
+      /** Where the person stands, as the page keeps it with the world (`stoodBy`). */
+      stood: () => (code === null ? null : stoodBy(code.world, walker.x, walker.z, walker.yaw)),
       walker: () => ({ x: walker.x, z: walker.z, yawDeg: (walker.yaw * 180) / Math.PI, pitchDeg: (walker.pitch * 180) / Math.PI, eye: walker.eye }),
       /** The overview, from `pos` if given, looking at `target` (the world's middle unless given). */
       overview: (pos?: [number, number, number], target?: [number, number, number]) => {

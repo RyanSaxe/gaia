@@ -7,7 +7,8 @@
 // the code near the repository's own area is weighed so, from either bank,
 // and the best view wins, the nearest that area's heart among equals. A world
 // with no such stretch looks out the same way from dry ground around the
-// heart.
+// heart. A person who was here before comes back to where they stood instead
+// (`returnTo`), or beside the thing they stood by once an edit has moved it.
 
 import type { WorldPlaces } from "@gaia/schema";
 import { heightAt } from "./lattice.ts";
@@ -145,4 +146,77 @@ export function openingSpot(t: Terrain, world: WorldPlaces & StandsForCode): Ope
   }
   const chosen = best as Weighed | null;
   return chosen === null ? { x: root.x, z: root.z, yaw: 0 } : { x: chosen.x, z: chosen.z, yaw: chosen.yaw };
+}
+
+/** What stands for code on a world's land by its identity, and the layout that placed it, for coming back to it. */
+export interface CodeMarks {
+  readonly size: number;
+  readonly things: readonly { readonly path: string; readonly x: number; readonly z: number }[];
+  readonly symbols: readonly { readonly id: string; readonly x: number; readonly z: number; readonly form: string }[];
+  /** The land laid out under them: the same code lays out the same regions. */
+  readonly regions: readonly unknown[];
+}
+
+/**
+ * Where a person stood in a world when they last left it: their spot and the way they faced, the layout of the
+ * world they stood in (`layoutKey`), and the nearest thing that stood for code, by its identity (an entity's or a
+ * file's path, or a definition's `<file>#<name>`), with where it stood then.
+ */
+export interface StoodSpot {
+  readonly x: number;
+  readonly z: number;
+  readonly yaw: number;
+  readonly layout: string;
+  readonly by: { readonly path: string; readonly x: number; readonly z: number } | null;
+}
+
+/** Where a person comes back to: `exact` when the code is laid out as it was, so they stand where they stood. */
+export interface Return {
+  readonly x: number;
+  readonly z: number;
+  readonly yaw: number;
+  readonly exact: boolean;
+}
+
+/** A key for a world's layout: the same code, laid out the same, gives the same key, and any edit that moves what stands or reshapes the land another. */
+export function layoutKey(world: CodeMarks): string {
+  // FNV-1a over the layout written out, to the centimeter.
+  let h = 0x811c9dc5;
+  const add = (s: string): void => {
+    for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 0x01000193);
+  };
+  const at = (x: number, z: number): string => `${Math.round(x * 100)},${Math.round(z * 100)};`;
+  add(`${world.size};`);
+  for (const t of world.things) add(t.path + at(t.x, t.z));
+  for (const s of world.symbols) add(s.id + at(s.x, s.z));
+  add(JSON.stringify(world.regions));
+  return (h >>> 0).toString(16).padStart(8, "0");
+}
+
+/** What a person standing at (x, z) and facing `yaw` keeps of where they stood: see `StoodSpot`. */
+export function stoodBy(world: CodeMarks, x: number, z: number, yaw: number): StoodSpot {
+  let by: StoodSpot["by"] = null;
+  let nearest = Infinity;
+  const consider = (path: string, px: number, pz: number): void => {
+    const d = Math.hypot(px - x, pz - z);
+    if (d < nearest) [nearest, by] = [d, { path, x: px, z: pz }];
+  };
+  for (const t of world.things) consider(t.path, t.x, t.z);
+  for (const s of world.symbols) if (s.form !== "") consider(s.id, s.x, s.z);
+  return { x, z, yaw, layout: layoutKey(world), by };
+}
+
+/**
+ * Where a person who stood at `stood` comes back to in `world`: exactly there while the code is laid out as it was;
+ * once an edit has moved things, beside the thing they stood by wherever it stands now, at the same offset and
+ * facing the same way, for the caller to check the ground there; null on a first visit, or when that thing is gone.
+ */
+export function returnTo(world: CodeMarks, stood: StoodSpot | undefined): Return | null {
+  if (stood === undefined) return null;
+  if (stood.layout === layoutKey(world)) return { x: stood.x, z: stood.z, yaw: stood.yaw, exact: true };
+  if (stood.by === null) return null;
+  const path = stood.by.path;
+  const now = world.things.find((t) => t.path === path) ?? world.symbols.find((s) => s.id === path && s.form !== "");
+  if (now === undefined) return null;
+  return { x: now.x + (stood.x - stood.by.x), z: now.z + (stood.z - stood.by.z), yaw: stood.yaw, exact: false };
 }
