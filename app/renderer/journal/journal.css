@@ -206,13 +206,14 @@ button.jp-name { border: 0; background: none; padding: 0; text-align: left; curs
 .jp-running { font: 600 9px/1.3 "Iowan Old Style", Georgia, serif; letter-spacing: .22em; text-transform: uppercase; color: #8a7458; padding-bottom: 8px; border-bottom: 1px solid rgba(120, 92, 60, 0.18); }
 
 /* The title page: a frontispiece painting to the page's edges, the world's name lettered across its sky as the map
-   letters a place, in ink with the paper's tone around it, and the world's vitality as a wash beneath. */
-.jp-title-lettering { position: absolute; left: 0; right: 0; top: 13%; display: flex; flex-direction: column; align-items: center; gap: 14px; pointer-events: none; }
+   letters a place, in ink with the paper's tone around it, and the world's vitality as a brush stroke under the name,
+   laid as Jev's marks are. The lettering is as wide as the name, so the stroke runs the name's length. */
+.jp-title-lettering { position: absolute; left: 0; right: 0; top: 13%; width: fit-content; max-width: 100%; margin: 0 auto; display: flex; flex-direction: column; align-items: center; gap: 4px; pointer-events: none; }
 .jp-book-name {
   font: 600 40px/1.1 "Iowan Old Style", Georgia, "Times New Roman", serif; letter-spacing: 6.8px; text-transform: uppercase; color: #3b2f22;
   paint-order: stroke fill; -webkit-text-stroke: 9px rgba(241, 231, 207, 0.82);
 }
-.jp-title-wash { display: block; width: 62px; height: 20px; border-radius: 50% 46% 52% 44%; opacity: 0.85; filter: url(#jp-wash); }
+.jp-stroke.title { position: static; align-self: stretch; width: auto; height: 5px; margin: 0 6%; opacity: 0.9; }
 
 /* A map or a painting can be tapped: a map's land and a page's picture take you into the world. */
 /* On a computer, everything that can be clicked answers the pointer and nothing else does: a name, a row, a fold or a
