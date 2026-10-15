@@ -784,7 +784,6 @@ finger and keys all follow the same three rules.
   with the minimap on its cover, and the compass at the top right are the
   only things on the screen that are not the world: a tap on the journal
   or the minimap's land (or M) opens the journal at its map, a tap on the
-  end of the journal's ribbon opens it at the ribbon's page, a tap on the
   minimap's edge tucks it away, "/" lays the journal's finder over the
   world, and the compass opens the slip. A tap on the open map
   is the one way to send the person far: it is a paper action, so it belongs
@@ -853,18 +852,27 @@ sliver and the right a deep stack, and through the book they trade places.
 They change when a turn ends. When a riffle starts, they slide over 1.8 s to
 where it will land.
 
-A crimson silk ribbon keeps the page a riffle began from: each riffle
-leaves it there. A tap on the ribbon riffles back to its page, or with the
-book shut opens the book there, and leaves the ribbon where it is. With the
-book open at its page, the ribbon lies down the gutter in the fold's shadow,
-well clear of the writing, and leaves the book at the foot to lie along its
-lower edge. With the book open elsewhere, only its tail shows, out of the
-foot of the leaves on the side its page is on. With the book shut in the
-corner, its end curls out of the book's head by the fore-edge, the part of
-the closed book left in view. Its free end sways a little and settles when a
-page's edge lifts or a leaf turns. It is drawn as silk: shaded across its
-width so one side catches the light, brighter and duller along its length,
-narrower where it twists, its end cut in a swallowtail, with a soft shadow.
+A crimson silk ribbon keeps the page a riffle began from: each riffle leaves
+it there, and until the first it keeps the map. A tap on the ribbon in the
+open book riffles back to its page and leaves the ribbon where it is. There
+is one ribbon, drawn once: fixed at the spine's head, it lies down the
+gutter of its page in the fold's shadow, well clear of the writing, and
+leaves the book at the foot to lie along its lower edge. Elsewhere in the
+book it lies among the leaves on the side its page is on, and only its head
+and its tail past the foot show, in the same place on every page of that
+side. A leaf that turns carries the ribbon lying on it over the spine, at
+the angle of the leaf's strip by the spine; a leaf turning onto the ribbon's
+page lifts off it. The cover carries the leaves on the left, so the ribbon
+among them swings with the cover. When a riffle starts while the ribbon lies
+among the leaves it is about to turn, the ribbon is first drawn out of them
+from the foot up and swung across the spine onto the open page on the other
+side, in 0.62 s, and the riffle's leaves go over it, so it ends at the page
+the riffle left. Shut, the book hangs the ribbon out of its foot, which the
+corner leaves out of view, so the closed book shows no ribbon. Its free end
+sways a little and settles when a page's edge lifts or a leaf turns. It is
+drawn as silk: shaded across its width so one side catches the light,
+brighter and duller along its length, narrower where it twists, its end cut
+in a swallowtail, with a soft shadow.
 
 A page of the journal gives every score as a percentage, so it reads as a
 share of 0 to 1. Beside a thing's name stand two numbers in the hand, each

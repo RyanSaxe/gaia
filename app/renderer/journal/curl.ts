@@ -14,8 +14,11 @@ const BEND = 54;
 const SHADOW = { dark: 0.34, reach: 150 } as const;
 
 export interface Curl {
-  /** Lays the strips at the leaf's angle now, degrees, 0 lying on the right to -180 on the left; `forward` when it goes right to left. */
-  at(deg: number, forward: boolean): void;
+  /**
+   * Lays the strips at the leaf's angle now, degrees, 0 lying on the right to -180 on the left; `forward` when it goes
+   * right to left. Returns the angle of the strip by the spine, which leads the leaf.
+   */
+  at(deg: number, forward: boolean): number;
   remove(): void;
 }
 
@@ -86,7 +89,8 @@ export function createCurl(host: HTMLElement, front: HTMLElement | null, back: H
       const lift = Math.sin(Math.PI * p);
       // The leaf's own angle at its middle; the spine's strips lead it, the free edge trails.
       const b = (bend ? BEND * lift : 0) * (forward ? 1 : -1);
-      let angle = deg - b / 2;
+      const spine = deg - b / 2;
+      let angle = spine;
       strips.forEach((s, i) => {
         // Each strip turns back toward flat a little more than the one before, so the bend gathers toward the edge.
         const step = i === 0 ? angle : (b * (2 * i)) / (n * (n - 1));
@@ -111,6 +115,7 @@ export function createCurl(host: HTMLElement, front: HTMLElement | null, back: H
         shades.left.style.background = `linear-gradient(270deg, rgba(30,16,6,0) ${pw - x}px, rgba(30,16,6,${dark.toFixed(3)}) ${(pw - x + 0.15 * reach).toFixed(1)}px, rgba(30,16,6,0) ${(pw - x + reach).toFixed(1)}px)`;
         shades.right.style.opacity = "0";
       }
+      return spine;
     },
     remove() {
       strips[0]?.remove();
