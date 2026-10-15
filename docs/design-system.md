@@ -851,7 +851,10 @@ to that page starts 0.42 s into the cover's swing, so its first leaf follows
 the cover over. Shut part way through a riffle, the leaves fall shut with
 the cover: those over already ride it, those in the air fall ahead of it,
 and the ribbon falls with the leaf it lies on. The book shuts at the page
-the riffle left.
+the riffle left. Shut part way through one page turn, the leaf falls to the
+right ahead of the cover in 0.42 s, still bent, with the ribbon on it:
+turning forward it falls back, and the book shuts at the page it left;
+turning back it goes on over.
 
 Each leaf of a riffle is a page of real code from a file the riffle passes,
 set as the journal sets code, with handwritten line numbers and the same
