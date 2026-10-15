@@ -393,7 +393,10 @@ export function* placeNames(land: NameLand, side: number, measure: Measure, grow
   const lot = LOT_REACH * scale;
   const marks: Box[] = land.lots.map(({ x, z }) => [px(x) - MARK_REACH.left * s - lot, px(z) - MARK_REACH.up * s - lot, px(x) + MARK_REACH.right * s + lot, px(z) + MARK_REACH.down * s + lot]);
   const lotArea = land.lots.map(({ x, z }) => areaAt(px(x), px(z)));
-  const rose: Box = [sheet - ROSE.right - 34, sheet - ROSE.bottom - 46, sheet, sheet];
+  // The rose sits in the lower right corner of the land's own sheet, which is as deep as the land: on a land wider
+  // than deep, above the square's foot.
+  const foot = px(Math.min(land.reach, land.half / (land.aspect ?? 1) + land.reach - land.half));
+  const rose: Box = [sheet - ROSE.right - 34, foot - ROSE.bottom - 46, sheet, foot];
   const inside = (b: Box): boolean =>
     b[0] > EDGE && b[1] > EDGE && b[2] < sheet - EDGE && b[3] < sheet - EDGE && !hits(b, rose) && [b[0], b[2]].every((x) => [b[1], b[3]].every((y) => pastTheEdge({ size: land.half * 2, ...(land.aspect === undefined ? {} : { aspect: land.aspect }) }, meters(x), meters(y)) < 0));
   const named: Box[] = [];
