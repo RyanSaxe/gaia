@@ -376,7 +376,11 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
     for (const m of margins) m.style.transform = `translateZ(${MARGIN_LIFT}px) scale(${k})`;
   }
   place(false);
-  window.addEventListener("resize", () => place(open));
+  // A new size of window moves the book at once: it travels between its corner and your hands only to open and shut.
+  window.addEventListener("resize", () => {
+    book.style.transition = "none";
+    place(open);
+  });
 
   // ---------- turning ----------
 
@@ -797,6 +801,7 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
 
   // ---------- opening and closing ----------
 
+  let arriving = 0;
   /** The cover swings `ms` from now, and the ribbon lying on the leaves it carries swings with it. */
   function swingAfter(ms: number): void {
     cover.style.transitionDelay = `${ms}ms`;
@@ -807,6 +812,10 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
     if (on === open) return;
     open = on;
     root.classList.toggle("open", on);
+    // The fore-edge's tabs show once the book has come to your hands, and go as it is shut.
+    window.clearTimeout(arriving);
+    if (on) arriving = window.setTimeout(() => root.classList.add("arrived"), TRAVEL_MS);
+    else root.classList.remove("arrived");
     onOpen(on);
     if (on) {
       const opensAt = place0 ?? "map";

@@ -91,8 +91,13 @@
 .jb-margin.right { left: calc(var(--pw) - var(--edge)); }
 .jb-margin.none { pointer-events: none; }
 .jb-margin.left { left: calc(var(--pw) * -1); }
-.journal:not(.open) .jb-margin, .journal:not(.open) .jb-tabs { display: none; }
-.jb-tabs { left: calc(var(--pw) - 4px); top: calc(var(--ph) / -2); width: 0; height: var(--ph); transform: translateZ(-2px); }
+.journal:not(.open) .jb-margin { display: none; }
+.jb-tabs {
+  left: calc(var(--pw) - 4px); top: calc(var(--ph) / -2); width: 0; height: var(--ph); transform: translateZ(-2px);
+  opacity: 0; visibility: hidden; transition: opacity 240ms ease, visibility 0s 240ms;
+}
+/* They show once the book has come to your hands (book.ts), not on the way from the corner. */
+.journal.arrived .jb-tabs { opacity: 1; visibility: visible; transition: opacity 240ms ease; }
 .jb-tab {
   position: absolute; left: 0; width: 40px; height: 74px; border: 0; padding: 0; border-radius: 0 7px 7px 0; cursor: pointer; pointer-events: auto;
   background: var(--paper) 30% 30% / 600px; background-color: #efe4c9; box-shadow: 2px 2px 3px rgba(20, 10, 2, 0.3), inset -1px 0 0 rgba(120, 90, 50, 0.15);
