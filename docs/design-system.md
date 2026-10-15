@@ -722,7 +722,16 @@ walked before, pictured by `start/gaia-picture.webp`):
     last opened. A world with none yet, or whose code has changed since so
     that its map will be drawn anew, lies as a card of the wait's bare
     sheet, in the sheet's shape, as a fresh card does, so it rises into the
-    sheet with nothing changing and the map is drawn on it. Its name is lettered
+    sheet with nothing changing and the map is drawn on it. When its code
+    has moved on since the person last opened it, the card carries a tally
+    in the wait's graphite pencil: a stroke for each commit since, gated in
+    fives, and under it, in italic, "fourteen commits / since you last
+    opened it". Past thirty commits the strokes no longer read, so the card
+    writes only the number ("142 commits"); when the commit last opened is no
+    longer in the history, as after a rebase, it says only "the code has
+    changed / since you last opened it". The sheet the card rises into is
+    pencilled the same, and each wash takes the tally away in just the
+    measure that it paints. Its name is lettered
     beneath in the map's spaced capitals, broken onto two lines at a hyphen,
     dot or slash when it is long, with where it lies (who keeps it on
     GitHub, or the folder it sits in) in italic over it. Up to six worlds lie

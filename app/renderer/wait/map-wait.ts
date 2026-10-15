@@ -91,7 +91,7 @@ const PACED: Readonly<Record<"name" | "pencil" | "survey" | "wash", Pace>> = {
  * paint. Each is at its angle, radians, its lines this many of the sheet's CSS pixels apart, this light; a line this
  * wide; and a mark coming in over this long, ms.
  */
-const PENCIL = {
+export const PENCIL = {
   graphite: "rgb(84, 78, 70)",
   width: 0.55,
   ms: 700,
@@ -222,11 +222,21 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
   // each change on.
   const paper = document.createElement("canvas");
   paper.width = paper.height = device;
+  /**
+   * The pencil, laid on the sheet's own paper and kept apart, the sheet's size, so each wash can lay it again under its
+   * paint and take it away in just the measure it paints: what a chosen card had pencilled on it, and each mark of
+   * what Jev is doing to the code.
+   */
+  const pencil = document.createElement("canvas");
+  pencil.width = pencil.height = device;
+  const pencilCtx = pencil.getContext("2d") as CanvasRenderingContext2D;
   ground.width = ground.height = device;
   const groundCtx = ground.getContext("2d") as CanvasRenderingContext2D;
   const layPaper = (reach: number): void => {
     layGround(paper.getContext("2d") as CanvasRenderingContext2D, STYLE, device / 2, device / 2, device / (2 * reach), device, device);
     groundCtx.drawImage(paper, 0, 0);
+    // With whatever is pencilled on it.
+    groundCtx.drawImage(pencil, 0, 0);
   };
   // Until the land comes, the sheet is the paper Gaia's own land would be painted on.
   layPaper(560);
@@ -249,6 +259,12 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
     el.style.height = `${(100 / Math.max(1, aspect)).toFixed(3)}%`;
     ground.after(el);
     chosen = { el, aspect, commit };
+  }
+  /** Pencils `draw` on the sheet's face, the middle of the square it is drawn on, as `face` gives it. */
+  function pencilFace(draw: (c: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) => void): void {
+    const shape = Math.max(1, Number.parseFloat(sheetEl.style.getPropertyValue("--aspect")) || 1);
+    const h = Math.max(1, Math.round(device / shape));
+    for (const c of [pencilCtx, groundCtx]) draw(c, 0, (device - h) / 2, device, h);
   }
   /** The sheet's paper as it is painted now, in the sheet's shape: the middle of the square it is drawn on. */
   function face(): HTMLCanvasElement {
@@ -302,13 +318,9 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
 
   // ---------- the pencil: what Jev is doing to the code ----------
   /**
-   * The pencil is laid on the sheet's own paper (`pencil`, the sheet's size, kept apart so each wash can lay it again
-   * under its paint): each mark shades exactly the cells its wash will paint, an area's or a file's, to the paper's
-   * edge, and a wash coming in takes the pencil away in just the measure it paints.
+   * Each mark of the pencil (`pencil`) shades exactly the cells its wash will paint, an area's or a file's, to the
+   * paper's edge, and a wash coming in takes the pencil away in just the measure it paints.
    */
-  const pencil = document.createElement("canvas");
-  pencil.width = pencil.height = device;
-  const pencilCtx = pencil.getContext("2d") as CanvasRenderingContext2D;
   /** Each file's index by path; each cell's file, the one whose health weighs most there in its area, or -1; and each file's and each area's cells' box. */
   let fileIndex = new Map<string, number>();
   let fileOf: Int16Array | null = null;
@@ -1141,6 +1153,7 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
     },
     chosen: choose,
     face,
+    pencil: pencilFace,
     marks: drawMarks,
     stood: relief,
     night(n) {
