@@ -21,10 +21,13 @@ const smooth01 = (x: number): number => {
 };
 
 export function createSunShadow(light: SceneLight, size = 2048): SunShadow {
-  const target = new THREE.WebGLRenderTarget(size, size, {
-    depthTexture: new THREE.DepthTexture(size, size),
-    depthBuffer: true,
-  });
+  // Read through a filtering comparison, so each read blends the four
+  // nearest texels' answers (`sunShadow`).
+  const depthTexture = new THREE.DepthTexture(size, size);
+  depthTexture.compareFunction = THREE.LessEqualCompare;
+  depthTexture.minFilter = THREE.LinearFilter;
+  depthTexture.magFilter = THREE.LinearFilter;
+  const target = new THREE.WebGLRenderTarget(size, size, { depthTexture, depthBuffer: true });
   const camera = new THREE.OrthographicCamera(-20, 20, 20, -20, 1, 120);
   light.uShadowMap.value = target.depthTexture;
   light.uShadowTexel.value = 1 / size;
