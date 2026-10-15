@@ -1091,8 +1091,14 @@ The three ways work together:
   window's edge or the paper is painted afresh. It is never bare: however
   far out in the wild, it shows the wild's ink around the person (see The
   field sheet), inked ahead of them, so drawing it out there lays only what
-  is inked. After dark the lantern reads its paper and land alike, as it
-  reads the map.
+  is inked. Walking up to a thing, a vermilion pencil ring is drawn round
+  it and its name is written over the ring in the traveller's hand,
+  breaking after an underscore or before a capital onto at most two lines
+  of about one length, 136 px wide at most, and ending in an ellipsis past
+  that. The name goes under the ring where the area's name leaves no room
+  above it, and both keep 10 px inside the torn edge: a thing past the
+  edge has its ring wait at the edge toward it. After dark the lantern
+  reads its paper and land alike, as it reads the map.
 - **The field map.** A tap on the minimap (or M) unfolds the field map out
   of it: the sheet grows from the scrap to its place while its land draws
   back from the scrap's close view to the whole and turns from the way the
