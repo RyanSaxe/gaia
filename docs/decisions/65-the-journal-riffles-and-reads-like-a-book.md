@@ -67,3 +67,7 @@ and [decision 62](62-the-journal-reads-best-and-weak-with-meters.md): a
 page no longer leads with its best and weak parts, a long definition no
 longer opens on its weak block, and no page but the appendix marks its
 code. Their percentages, meters and caption stay.
+
+Replaced in part: the ribbon is now one ribbon that the leaves and the cover
+carry and that a riffle lifts across, hanging out of the closed book's foot,
+as `docs/design-system.md` describes (World polish, round 2, "The ribbon").

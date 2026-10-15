@@ -15,8 +15,6 @@ export interface RibbonLie {
   readonly twist: number;
   /** How far along the curve it hangs free and sways, 0 to 1; 1 holds it still. */
   readonly free: number;
-  /** Lying in the gutter of the right-hand page: the fold's shadow falls on it there, as on the paper. */
-  readonly gutter?: boolean;
 }
 
 /** The silk's crimson, and how bright each lane across its width is, edge to edge. */
@@ -107,21 +105,39 @@ export function ribbonSvg(lie: RibbonLie, silk: readonly number[] = BASE): { rea
   const draw = (free: boolean): string => quads.filter((q) => q.free === free).map((q) => `<path d="${q.path}" fill="${q.fill}" stroke="${q.fill}" stroke-width="0.5"/>`).join("");
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="${left} ${top} ${width} ${height}" style="overflow:visible">
 <defs>${clip}<filter id="jb-silk-shadow" x="-40%" y="-10%" width="180%" height="120%"><feDropShadow dx="1.4" dy="2.2" stdDeviation="1.8" flood-color="#1c0b04" flood-opacity="0.38"/></filter></defs>
-<g filter="url(#jb-silk-shadow)"><g clip-path="url(#jb-silk-cut)">${draw(false)}${lie.gutter === true ? GUTTER : ""}</g><g class="jb-ribbon-free" style="transform-box: view-box; transform-origin: ${hang[0].toFixed(1)}px ${hang[1].toFixed(1)}px"><g clip-path="url(#jb-silk-cut)">${draw(true)}</g></g></g></svg>`;
+<g filter="url(#jb-silk-shadow)"><g clip-path="url(#jb-silk-cut)">${draw(false)}${GUTTER}</g><g class="jb-ribbon-free" style="transform-box: view-box; transform-origin: ${hang[0].toFixed(1)}px ${hang[1].toFixed(1)}px"><g clip-path="url(#jb-silk-cut)">${draw(true)}</g></g></g></svg>`;
   return { left, top, width, height, svg };
 }
 
 /**
- * Where the ribbon lies in each place: its page open, down the gutter in the
- * fold's shadow, well clear of the writing, and out of the foot to lie along
- * the book's lower edge, as a ribbon lies on the table under a book held open;
- * the book open elsewhere, only its tail, out of the foot of the leaves on its
- * page's side; and the book shut, out of its head by the fore-edge, the part
- * the corner leaves in view, curling over.
+ * Where the ribbon lies on the page it marks, in the book's own pixels: fixed at the spine's head, down the gutter in
+ * the fold's shadow, well clear of the writing, and out of the foot to lie along the book's lower edge. It is the one
+ * lie: elsewhere in the book it is turned about the spine (`RIBBON_POSES`), and only its head and tail show.
  */
-export const RIBBON_LIES: Readonly<Record<"here" | "before" | "after" | "shut", RibbonLie>> = {
-  here: { points: [[7, -346], [7.5, -200], [8.5, 0], [8, 200], [9, 320], [12, 346], [28, 362], [56, 368], [84, 366]], width: 14, twist: 0.9, free: 0.85, gutter: true },
-  before: { points: [[-12, 300], [-12.5, 330], [-17, 350], [-34, 362], [-60, 368], [-88, 365]], width: 14, twist: 0.55, free: 0.3 },
-  after: { points: [[12, 300], [12.5, 330], [17, 350], [34, 362], [60, 368], [88, 365]], width: 14, twist: 0.55, free: 0.3 },
-  shut: { points: [[452, -322], [453, -350], [459, -372], [476, -387], [498, -392], [518, -388]], width: 18, twist: 0.5, free: 1 },
-};
+export const RIBBON_LIE: RibbonLie = { points: [[7, -346], [7.5, -200], [8.5, 0], [8, 200], [9, 320], [12, 346], [28, 362], [56, 368], [84, 366]], width: 14, twist: 0.9, free: 0.85 };
+
+/**
+ * How the ribbon is laid in the book, as CSS sets it about the spine: raised `z` of the book's pixels, turned `deg`
+ * about the spine, and then `off` from the leaf it lies on, along that leaf.
+ */
+export interface RibbonPose {
+  readonly z: number;
+  readonly deg: number;
+  readonly off: number;
+}
+
+/**
+ * Where the ribbon rests, by where its page is from the open spread: on it, above the paper and under a leaf that
+ * turns; among the right-hand leaves, under the open page and over the leaves' edges; and among the left-hand leaves,
+ * on the cover that carries them, shut under the cover and open over the left-hand page, which hides all but its
+ * head and tail.
+ */
+export const RIBBON_POSES = {
+  here: { z: 1, deg: 0, off: 0 },
+  after: { z: -1, deg: 0, off: 0 },
+  "before-shut": { z: 3, deg: 0, off: -0.6 },
+  "before-open": { z: 0.4, deg: -179.6, off: -0.6 },
+} as const satisfies Record<string, RibbonPose>;
+
+/** A pose as a CSS transform, about the spine. */
+export const ribbonTransform = (p: RibbonPose): string => `translateZ(${p.z}px) rotateY(${p.deg.toFixed(2)}deg) translateZ(${p.off}px)`;

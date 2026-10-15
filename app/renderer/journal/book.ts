@@ -11,7 +11,7 @@ import "./journal.css";
 import LEATHER from "./leather.webp";
 import PAPER from "./paper.webp";
 import { linesOf } from "./page.ts";
-import { RIBBON_LIES, ribbonSvg } from "./ribbon.ts";
+import { RIBBON_LIE, RIBBON_POSES, ribbonSvg, ribbonTransform } from "./ribbon.ts";
 import { type Curl, angleOf, createCurl } from "./curl.ts";
 import { swipes } from "./swipe.ts";
 
@@ -87,6 +87,15 @@ const CORNER_TILT = 6;
 /** The closed book in its corner: a little smaller than the slip's own size, and close in to the screen's edges, px. */
 const CORNER = { scale: 0.86, margin: { x: 12, y: 14 } } as const;
 const FILL = { w: 0.94, h: 0.88 } as const;
+/**
+ * The ribbon lifted across the book onto the page a jump leaves: how long it takes to swing over, to be drawn out of
+ * the leaves, and how long after it starts the leaves go, ms.
+ */
+const LIFT = { ms: 620, drawn: 320, leaves: 440 } as const;
+/** The layer a turning leaf's strips lie at (`.jb-curl` in journal.css), which the ribbon on that leaf rides. */
+const CURL_Z = 1.3;
+/** Where the ribbon lies from the open spread: on it, among the leaves before it, or among those after it. */
+type RibbonSide = "here" | "before" | "after";
 
 const el = (cls: string, parent?: HTMLElement): HTMLDivElement => {
   const e = document.createElement("div");
@@ -135,10 +144,23 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
   const blockLeft = el("jb-block left", coverBack);
   const left = el("jb-left", coverBack);
   leaf.hidden = true;
-  // A silk ribbon left at the page a riffle began from (`ribbon.ts`); a tap on it goes back there.
+  // A silk ribbon left at the page a riffle began from (`ribbon.ts`); a tap on it goes back there. It is drawn once, at
+  // the map until a riffle leaves it elsewhere: only its pose about the spine and how much of it shows ever change.
   const ribbon = el("jb-ribbon", inner);
-  ribbon.hidden = true;
-  let marked: string | null = null;
+  let marked = "map";
+  {
+    const drawn = ribbonSvg(RIBBON_LIE);
+    ribbon.style.left = `${drawn.left}px`;
+    ribbon.style.top = `${drawn.top}px`;
+    ribbon.style.width = `${drawn.width}px`;
+    ribbon.style.height = `${drawn.height}px`;
+    ribbon.style.transformOrigin = `${-drawn.left}px 0`;
+    ribbon.style.setProperty("--head", `${-PAGE.h / 2 - drawn.top}px`);
+    ribbon.style.setProperty("--foot", `${PAGE.h / 2 - drawn.top}px`);
+    for (const [name, pose] of Object.entries(RIBBON_POSES)) ribbon.style.setProperty(`--${name}`, ribbonTransform(pose));
+    ribbon.innerHTML = drawn.svg;
+    ribbon.dataset.side = "here";
+  }
 
   let open = false;
   let at: string | null = null;
@@ -201,29 +223,48 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
       holder.append(stroke);
     }
   }
-  /**
-   * Where the ribbon lies: down the right-hand page by the gutter when the book is open at its page; else only its
-   * tail, out of the foot of the leaves on the side its page is on; and with the book shut, out of the head of the
-   * closed book, the one edge the corner leaves in view.
-   */
+  /** Where the ribbon lies from the spread open at `place`: on it, or among the leaves before or after it. */
+  const sideOf = (place: string | null): RibbonSide =>
+    place === null || pages.order(place, marked) === 0 ? "here" : pages.order(marked, place) < 0 ? "before" : "after";
+  /** Lays the ribbon at rest where its page lies, as journal.css poses it there. */
   function layRibbon(): void {
-    ribbon.hidden = marked === null;
-    if (ribbon.hidden) return;
-    const here = open && at !== null && pages.order(at, marked as string) === 0;
-    const side = !open ? "shut" : here ? "here" : at !== null && pages.order(marked as string, at) < 0 ? "before" : "after";
-    if (ribbon.dataset.side === side) return;
+    const side = sideOf(at);
+    if (ribbon.dataset.side !== side) rest(side);
+  }
+  /** Poses the ribbon at rest on `side` at once, from wherever it was: a leaf or the page over it hides the change. */
+  function rest(side: RibbonSide): void {
+    ribbon.style.transition = "none";
+    ribbon.style.transform = "";
+    ribbon.style.removeProperty("--hid");
     ribbon.dataset.side = side;
-    const drawn = ribbonSvg(RIBBON_LIES[side]);
-    ribbon.style.left = `${drawn.left}px`;
-    ribbon.style.top = `${drawn.top}px`;
-    ribbon.style.width = `${drawn.width}px`;
-    ribbon.style.height = `${drawn.height}px`;
-    ribbon.innerHTML = drawn.svg;
-    sway();
+    void ribbon.offsetWidth;
+    ribbon.style.transition = "";
+  }
+  /** Lays the ribbon on the front of a leaf raised `z` and standing at `deg` about the spine, over `transition`. */
+  function carry(z: number, deg: number, transition = "none"): void {
+    ribbon.dataset.side = "carried";
+    ribbon.style.transition = transition;
+    ribbon.style.transform = ribbonTransform({ z, deg, off: 0.3 });
+  }
+  /**
+   * Lifts the ribbon out from among the leaves on one side and lays it across on the open page there, drawn out from
+   * the foot up as it rises: forward from the right-hand leaves onto the left-hand page, back from the left-hand
+   * leaves onto the right-hand page. It starts over the open page with only its head and tail showing, as they show
+   * from among the leaves, so it is drawn out on top of that page rather than under it.
+   */
+  function liftAcross(forward: boolean): void {
+    const [from, to] = forward ? ["here", "before"] : ["before", "here"];
+    ribbon.dataset.side = "carried";
+    ribbon.style.transition = "none";
+    ribbon.style.transform = `var(--${from})`;
+    ribbon.style.setProperty("--hid", "var(--foot)");
+    void ribbon.offsetWidth;
+    ribbon.style.transition = `transform ${LIFT.ms}ms cubic-bezier(.42,.05,.36,1), clip-path ${LIFT.drawn}ms cubic-bezier(.3,.1,.3,1)`;
+    ribbon.style.transform = `var(--${to})`;
+    ribbon.style.setProperty("--hid", "var(--head)");
   }
   /** The free end of the ribbon sways a little, as silk does when the book moves. */
   function sway(): void {
-    if (ribbon.hidden) return;
     ribbon.classList.remove("sway");
     void ribbon.offsetWidth;
     ribbon.classList.add("sway");
@@ -396,10 +437,14 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
    */
   function riffleTo(target: string, ready: Promise<void>, wholeNow: boolean): void {
     const from = at as string;
-    // A jump leaves the ribbon at the page it began from, unless it is the ribbon's own way back.
-    if (target !== marked) marked = from;
-    layDepth(target, 1800);
     const forward = pages.order(from, target) < 0;
+    // A jump leaves the ribbon at the page it began from, unless it is the ribbon's own way back. Lying among the leaves
+    // on the far side of the book from where that page will lie, it is first lifted across onto it.
+    const home = target === marked;
+    const lies = home ? null : sideOf(from);
+    if (!home) marked = from;
+    const lifts = lies === (forward ? "after" : "before");
+    if (lifts) liftAcross(forward);
     let whole = wholeNow;
     void ready.then(() => (whole = true));
     let distance = 0;
@@ -412,29 +457,40 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
     const [start, end] = forward ? [0, -179.6] : [-179.6, 0];
     right.classList.remove("lift");
     cover.classList.remove("lift");
-    markTabs(target);
     const flying: HTMLElement[] = [];
     let k = 0;
-    const launch = (front: HTMLElement, back: HTMLElement, ms: number): HTMLElement => {
+    /** Turns a leaf over, and with it the ribbon when that lies on its front. */
+    const launch = (front: HTMLElement, back: HTMLElement, ms: number, carries = false): HTMLElement => {
       const l = el("jb-leaf jb-riffle", inner);
       put(el("jb-face front", l), front);
       put(el("jb-face back", l), back);
-      const z = (1.2 + k * 0.02).toFixed(2);
-      l.style.transition = "none";
-      l.style.transform = `translateZ(${z}px) rotateY(${start}deg)`;
+      const z = 1.2 + k * 0.02;
+      const turn = (deg: number, transition: string): void => {
+        l.style.transition = transition;
+        l.style.transform = `translateZ(${z.toFixed(2)}px) rotateY(${deg}deg)`;
+        if (carries) carry(z, deg, transition);
+      };
+      turn(start, "none");
       void l.offsetWidth;
-      l.style.transition = `transform ${ms}ms cubic-bezier(.42,.05,.36,1)`;
-      l.style.transform = `translateZ(${z}px) rotateY(${end}deg)`;
+      turn(end, `transform ${ms}ms cubic-bezier(.42,.05,.36,1)`);
       flying.push(l);
       // Only the leaves on top of the pile are kept once they land.
       while (flying.length > 16) flying.shift()?.remove();
       k++;
       return l;
     };
-    // The first leaf lifts the page lying open; under it, the next is blank paper written on.
-    const lifted = (forward ? right : left).firstElementChild as HTMLElement;
-    put(forward ? right : left, face(1));
-    launch(forward ? lifted : face(0), forward ? face(0) : lifted, RIFFLE.ms);
+    // The first leaf lifts the page lying open, the ribbon with it when that lies on it; under it, the next is blank
+    // paper written on.
+    // The edges and the tabs move with the leaves, so a lift has the page's thread to itself while it draws the ribbon out.
+    const first = (): void => {
+      if (!open) return stop();
+      layDepth(target, 1800);
+      markTabs(target);
+      const lifted = (forward ? right : left).firstElementChild as HTMLElement;
+      put(forward ? right : left, face(1));
+      launch(forward ? lifted : face(0), forward ? face(0) : lifted, RIFFLE.ms, forward && lies === "here");
+      window.setTimeout(step, RIFFLE.ends);
+    };
     const land = (last: HTMLElement): void => {
       put(forward ? left : right, last.querySelector(forward ? ".back" : ".front")?.firstElementChild as HTMLElement);
       for (const f of flying) f.remove();
@@ -448,12 +504,14 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
         turnTo(next);
       }
     };
+    /** The book shut part way: the leaves in the air are gone, and the ribbon rests where its page is. */
+    const stop = (): void => {
+      for (const f of flying) f.remove();
+      layRibbon();
+      turning = false;
+    };
     const step = (): void => {
-      if (!open) {
-        for (const f of flying) f.remove();
-        turning = false;
-        return;
-      }
+      if (!open) return stop();
       const toGo = leaves - k;
       if (toGo > 0 || !whole) {
         const waiting = toGo <= 0;
@@ -464,11 +522,14 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
       // The last leaf carries the page asked for, and the page beside it lies beneath.
       const to = pages.spread(target);
       put(forward ? right : left, forward ? to.right : to.left);
+      // Riffling to the ribbon's page: forward, the last leaf lifts off it lying there; back, the last leaf brings it over.
+      if (home && forward) rest("here");
       // Its leaves turn flat: bending its first and last stalled the page's thread for half a second once a riffle.
-      const last = launch(forward ? face(k * 2) : to.right, forward ? to.left : face(k * 2), RIFFLE.ms + 260);
+      const last = launch(forward ? face(k * 2) : to.right, forward ? to.left : face(k * 2), RIFFLE.ms + 260, home && !forward);
       window.setTimeout(() => land(last), RIFFLE.ms + 300);
     };
-    window.setTimeout(step, RIFFLE.ends);
+    if (lifts) window.setTimeout(first, LIFT.leaves);
+    else first();
   }
 
   /**
@@ -509,8 +570,12 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
     }
     // The tabs move with the page as it turns.
     markTabs(target);
+    // The ribbon lying on the page that turns goes over with it; turning forward onto its page, the leaf lifts off it.
+    const carries = from !== null && pages.order(forward ? from : target, marked) === 0;
+    if (forward && pages.order(target, marked) === 0) rest("here");
     void leaf.offsetWidth;
-    // The leaf bends and casts its shadow, its strips following the leaf's own angle every frame, by hand or not.
+    // The leaf bends and casts its shadow, its strips following the leaf's own angle every frame, by hand or not, and
+    // the ribbon on it the strip by the spine, where it lies.
     let curl: Curl | null = null;
     let frame = 0;
     const bend = (): void => {
@@ -519,7 +584,9 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
       leaf.classList.add("curled");
       cancelAnimationFrame(frame);
       const tick = (): void => {
-        curl?.at(angleOf(leaf), forward);
+        const deg = angleOf(leaf);
+        const spine = curl?.at(deg, forward) ?? deg;
+        if (carries) carry(CURL_Z, spine);
         frame = requestAnimationFrame(tick);
       };
       tick();
@@ -683,10 +750,14 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
 
   // ---------- opening and closing ----------
 
+  /** The cover swings `ms` from now, and the ribbon lying on the leaves it carries swings with it. */
+  function swingAfter(ms: number): void {
+    cover.style.transitionDelay = `${ms}ms`;
+    ribbon.style.transitionDelay = `${ms}ms`;
+  }
   function setOpen(on: boolean, place0?: string): void {
     if (on === open) return;
     open = on;
-    if (!on) layRibbon();
     root.classList.toggle("open", on);
     onOpen(on);
     if (on) {
@@ -696,7 +767,7 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
       // painted, the book waits shut in your hands and opens once it is whole.
       book.style.transition = `transform ${TRAVEL_MS}ms cubic-bezier(.45,.05,.3,1)`;
       inner.style.transition = `transform ${COVER_MS}ms cubic-bezier(.45,.05,.3,1) ${TRAVEL_MS * 0.45}ms`;
-      cover.style.transitionDelay = `${TRAVEL_MS * 0.45}ms`;
+      swingAfter(TRAVEL_MS * 0.45);
       place(true);
       const whole = painted(opensAt);
       void settledSoon(whole).then((ready) => {
@@ -706,14 +777,14 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
           if (!open) return;
           // Drawn again under the shut cover, now whole, before it opens.
           show(opensAt);
-          cover.style.transitionDelay = "0ms";
+          swingAfter(0);
           cover.classList.add("open");
         });
       });
     } else {
       // The cover swings shut over the page you were reading, then the book is set back in its corner.
       inner.style.transition = `transform ${COVER_MS}ms cubic-bezier(.45,.05,.3,1)`;
-      cover.style.transitionDelay = "0ms";
+      swingAfter(0);
       book.style.transition = `transform ${TRAVEL_MS}ms cubic-bezier(.45,.05,.3,1) ${COVER_MS * 0.6}ms`;
       place(false);
     }
@@ -817,8 +888,6 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
   catcher.addEventListener("click", () => setOpen(false));
   ribbon.addEventListener("click", (e) => {
     e.stopPropagation();
-    if (marked === null) return;
-    if (!open) return void api.open(marked);
     turnTo(marked);
   });
   // The closed book's cover, around the slip, lifts it too.
