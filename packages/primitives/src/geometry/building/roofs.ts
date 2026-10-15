@@ -386,8 +386,13 @@ function thatchSlab(roof: PartBuilder, plan: BuildingPlan, f: RoofFrame, p: Reso
     (a, pt, [nb, ny]) => {
       const bump = pt.top === true ? 0.035 * fbm3(a * 0.9, pt.b * 0.9, pt.y * 0.5, seed, 2) : 0;
       const end = Math.max(0, Math.abs(a) - f.halfLength) / overGable;
-      // Gable ends round down a little, a settled roof dips mid-ridge, and hipped ends fall away.
-      const dip = plan.settle * 0.14 * Math.sin(Math.PI * clamp((a - a0) / (a1 - a0), 0, 1)) + (pt.top === true && f.m.roof !== "hip" ? end * end * T * 0.35 : 0) + hipOf(f, a, pt.b).drop;
+      // Gable ends round down a little. A hipped end drops the whole slab to its eave, so its cut end would stand across
+      // it as a flat board the thatch's full thickness tall: it rounds over to its eave instead, the cut no thicker than
+      // the lip.
+      const hipped = f.m.roof === "hip" && f.m.ends[a < 0 ? 0 : 1];
+      const round = pt.top !== true ? 0 : hipped ? end * end * Math.max(0, pt.y - under(pt.b) - lip) : f.m.roof !== "hip" ? end * end * T * 0.35 : 0;
+      // A settled roof dips mid-ridge, and hipped ends fall away.
+      const dip = plan.settle * 0.14 * Math.sin(Math.PI * clamp((a - a0) / (a1 - a0), 0, 1)) + round + hipOf(f, a, pt.b).drop;
       return roofPoint(f, a, pt.b + nb * bump, pt.y + ny * bump - dip);
     },
     (a, pt) => {
