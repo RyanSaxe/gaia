@@ -7,14 +7,16 @@
 // or an address on GitHub) and the service opens whatever is chosen there,
 // cloning a place on GitHub into the app's own data first. Once a world
 // stands, its page sends a picture of its field map, kept with it among the
-// recent worlds for the start while its code stays the commit it pictures.
+// recent worlds for the start while its code stays the commit it pictures,
+// and where the person stands as they walk, which the world's next open
+// lands them at.
 
 import type { Unreachable } from "@gaia/schema";
 import type { MessagePortMain } from "electron";
 import { createEngineClient } from "./engine-client.ts";
 import { openWorld } from "./open-world.ts";
 import type { EngineStatus, FromMain, FromRenderer, StartChoice, ToMain, ToRenderer } from "./protocol.ts";
-import { keepPicture, keepRecent, offeredWorlds } from "./recent.ts";
+import { keepPicture, keepRecent, keepStood, offeredWorlds, stoodIn } from "./recent.ts";
 
 const parent = process.parentPort;
 const toMain = (message: ToMain): void => parent.postMessage(message);
@@ -120,7 +122,8 @@ async function open(port: MessagePortMain, folder: string, github?: string): Pro
         }),
     });
     console.log(`gaia: opened ${folder}: ${document.summary}`);
-    send(port, { type: "world.document", document });
+    const stood = await stoodIn(engine, folder);
+    send(port, { type: "world.document", document, ...(stood === undefined ? {} : { stood }) });
     const name = github ?? document.facts.repository.name;
     toMain({ type: "world.opened", root: folder, name });
     openedOn.set(port, { folder, ...(document.commit === undefined ? {} : { commit: document.commit }) });
@@ -186,6 +189,9 @@ parent.on("message", (event) => {
         else if (m.type === "world.picture") {
           const opened = openedOn.get(port);
           if (opened !== undefined) void keep(() => keepPicture(engine, opened.folder, m.picture, opened.commit));
+        } else if (m.type === "world.stood") {
+          const opened = openedOn.get(port);
+          if (opened !== undefined) void keep(() => keepStood(engine, opened.folder, m.stood));
         }
         else if (m.type === "world.consent") {
           consenting?.resolve(m.approve);

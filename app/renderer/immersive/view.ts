@@ -14,7 +14,7 @@
 // picture of the whole map goes to the world service, which keeps it with the
 // world for the start (`picture.ts`).
 
-import type { PlaceArea } from "@gaia/terrain";
+import { type PlaceArea, stoodBy } from "@gaia/terrain";
 import { type CodeWorld, areaVitality, entityOf, journalOf } from "@gaia/world";
 import { SLIP_LOGO } from "../brand/logo.ts";
 import { onTap } from "../lab.ts";
@@ -39,6 +39,12 @@ import { paintPicture } from "./picture.ts";
 const PAINTER = "painter-1";
 /** The things near the person painted while they stand still: within `reach` meters, the nearest `count`, looked at every `every` ms once they have moved `moved` meters. */
 const NEAR = { reach: 120, count: 24, every: 3000, moved: 15 } as const;
+/**
+ * Where the person stands is kept with the world (`world.stood`): looked at every `check` ms, and sent once they have
+ * moved `moved` meters or turned `turned` degrees since it was last kept, as soon as they stand still or at most
+ * every `every` ms while they walk, and when the page goes. Each one rewrites the app's settings, about a megabyte.
+ */
+const KEEP = { check: 3000, every: 30_000, moved: 2, turned: 20 } as const;
 
 export interface LabViews {
   readonly views: readonly { readonly id: string; readonly name: string }[];
@@ -270,6 +276,34 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
     lifted = true;
     minimap.show(active);
   });
+
+  // Where the person stands is kept with the world as they walk, so its next open lands them there; a page with no world service keeps none.
+  if (service !== null) {
+    let kept: { readonly x: number; readonly z: number; readonly yaw: number; readonly at: number } | null = null;
+    const keepStood = (): void => {
+      const code = world.code();
+      if (!lifted || code === null) return;
+      const p = world.person();
+      const now = performance.now();
+      if (kept !== null) {
+        const turned = Math.abs(Math.atan2(Math.sin(p.yaw - kept.yaw), Math.cos(p.yaw - kept.yaw))) * (180 / Math.PI);
+        if (Math.hypot(p.x - kept.x, p.z - kept.z) < KEEP.moved && turned < KEEP.turned) return;
+        if (p.walking && now - kept.at < KEEP.every) return;
+      }
+      kept = { x: p.x, z: p.z, yaw: p.yaw, at: now };
+      service.send({ type: "world.stood", stood: stoodBy(code, p.x, p.z, p.yaw) });
+    };
+    // Where the world opened is not kept until the person moves from it.
+    world.onLifted(() => {
+      const p = world.person();
+      kept = { x: p.x, z: p.z, yaw: p.yaw, at: performance.now() };
+    });
+    window.setInterval(keepStood, KEEP.check);
+    window.addEventListener("pagehide", () => {
+      if (kept !== null) kept = { ...kept, at: -Infinity };
+      keepStood();
+    });
+  }
   // Markers stand beside the trails on every bake, before the grass and the walk read the ground.
   world.furnish((stood) => markers.place(stood, (x, z): PlaceArea => world.placeAt(x, z).area));
   /** Whether a world stands yet: until the first bake lands, nothing names a place. */

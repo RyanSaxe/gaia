@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { BIOME_PRIMITIVES, RELIEF_PRIMITIVES } from "@gaia/primitives";
 import { type CodeFacts, type FileFacts, Library, rand, seedOf } from "@gaia/schema";
-import { OPENING, type Terrain, amongCode, bakeTerrain, openingSpot, openingView, waterDepthAt } from "@gaia/terrain";
+import { OPENING, type Terrain, amongCode, bakeTerrain, openingSpot, openingView, returnTo, stoodBy, waterDepthAt } from "@gaia/terrain";
 import { composeWorld, judgeWorld, layoutWorld, standInJev } from "@gaia/world";
 import type { WorldDocument } from "../../world-service/protocol.ts";
 import { codeLab, provingWorld } from "./code-world.ts";
@@ -106,3 +106,34 @@ describe("where a person first stands in a world from code", () => {
     for (const seed of [2, 4, 5]) expectAmongCode(landing(await randomWorld(seed)), `made-up world ${seed}`);
   });
 });
+
+describe("where a person comes back to in a world they were in before", () => {
+  const { world } = provingWorld();
+  // Beside the first building, 6 m east and 2 m north of it, facing west.
+  const house = world.things[0] as (typeof world.things)[number];
+  const stood = stoodBy(world, house.x + 6, house.z - 2, Math.PI / 2);
+  /** The world after an edit: `edit` changes its things, and so its layout. */
+  const edited = (edit: (things: (typeof world.things)[number][]) => (typeof world.things)[number][]): typeof world => ({ ...world, things: edit([...world.things]) });
+
+  it("keeps the nearest thing that stands for code by its path, with where it stood", () => {
+    expect(stood.by).toEqual({ path: house.path, x: house.x, z: house.z });
+  });
+
+  it("is the opening view on a first visit", () => {
+    expect(returnTo(world, undefined)).toBeNull();
+  });
+
+  it("is exactly where they stood while the code is laid out as it was", () => {
+    expect(returnTo(structuredClone(world), stood)).toEqual({ x: house.x + 6, z: house.z - 2, yaw: Math.PI / 2, exact: true });
+  });
+
+  it("is beside the thing they stood by, where it stands now, once an edit has moved it", () => {
+    const moved = edited((things) => things.map((t) => (t.path === house.path ? { ...t, x: t.x + 40, z: t.z - 25 } : t)));
+    expect(returnTo(moved, stood)).toEqual({ x: house.x + 46, z: house.z - 27, yaw: Math.PI / 2, exact: false });
+  });
+
+  it("is the opening view once the thing they stood by is gone", () => {
+    expect(returnTo(edited((things) => things.filter((t) => t.path !== house.path)), stood)).toBeNull();
+  });
+});
+
