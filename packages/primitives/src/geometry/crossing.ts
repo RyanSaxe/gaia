@@ -2,12 +2,12 @@
 // footbridge or a line of stepping stones across a stream, stones set along
 // a tread's edges, and a little cairn where ways meet. Spans and positions come from the terrain, so these
 // are pure builders a trail's route calls, not primitives Jev picks.
-// Each writes vitality channels: planks go missing and rails sag in decline,
-// and stone weathers grey.
+// Each writes vitality channels: a footbridge's planks go missing, its rails
+// sag, hang from one post and fall into the stream, and stone weathers grey.
 
 import type { Built, Part, Vec3 } from "@gaia/schema";
 import { rand } from "@gaia/schema";
-import { type Channels, PartBuilder, type V3, lossThreshold, normalize } from "./kit.ts";
+import { type Channels, PartBuilder, type V3, normalize } from "./kit.ts";
 import { UP, beam, box, log, quad, tri } from "./blocks.ts";
 
 const nonEmpty = (parts: Part[]): Part[] => parts.filter((p) => p.indices.length > 0);
@@ -44,7 +44,8 @@ export function buildFootbridge(span: number, width: number, seed: number): Buil
   const yAt = (x: number): number => top.topAt(x) - PLANK_HALF;
   const still = (pivot: Vec3, wither: number, extra: Partial<Channels> = {}): Channels => ({ loss: 0, droop: 0, wither, glow: 0, pivot, ...extra });
 
-  // Planks across the span; a few go missing as vitality falls.
+  // Planks across the span. They go missing as vitality falls, the soonest at mid-span, where the deck bears the
+  // most: about one in ten by 0.5 and most by 0.13. The deck keeps its line, since the walk crosses on it.
   const plank = 0.24;
   const count = Math.max(4, Math.floor(span / (plank + 0.025)));
   for (let k = 0; k < count; k++) {
@@ -54,10 +55,11 @@ export function buildFootbridge(span: number, width: number, seed: number): Buil
     const slope = (top.topAt(x + 0.01) - top.topAt(x - 0.01)) / 0.02;
     const along = normalize([1, slope, 0]);
     const up = normalize([-slope, 1, 0]);
-    const missing = pr.next() < 0.3;
+    const mid = 1 - Math.abs((2 * x) / span);
+    const goes = 0.7 * Math.pow(pr.next(), 1.7) * (0.75 + 0.25 * mid);
     const pivot: V3 = [x, y - 0.6, 0];
     box(deck, [x, y, (pr.next() - 0.5) * 0.04], [along, up, [0, 0, 1]], [span / count / 2 - 0.012, PLANK_HALF, w / 2 + (pr.next() - 0.5) * 0.06], 0.44 + 0.12 * pr.next(), {
-      loss: missing ? lossThreshold(pr.next(), 0.42, 0.06) : 0,
+      loss: goes,
       droop: 0,
       wither: 0.7 + 0.25 * pr.next(),
       glow: 0,
@@ -74,7 +76,8 @@ export function buildFootbridge(span: number, width: number, seed: number): Buil
       beam(frame, [x0, yAt(x0) - 0.12, side * (w / 2 - 0.12)], [x1, yAt(x1) - 0.12, side * (w / 2 - 0.12)], 0.18, 0.14, UP, 0.36, still([0, 0, 0], 0.75));
     }
   }
-  // Posts and a log rail on each side; the rails sag around their posts in decline.
+  // Posts and a log rail on each side. As the bridge fails, each rail sags off its far post, then hangs from the post
+  // nearer the bank, swung down and out over the water, and at last falls into the stream; the posts stand.
   const posts = Math.max(2, Math.round(span / 2.2) + 1);
   for (const side of [-1, 1]) {
     const z = side * (w / 2 + 0.04);
@@ -89,7 +92,14 @@ export function buildFootbridge(span: number, width: number, seed: number): Buil
     for (let k = 0; k + 1 < tops.length; k++) {
       const a = tops[k] as V3;
       const b = tops[k + 1] as V3;
-      log(frame, a, b, 0.05, 0.46, { loss: 0, droop: 0.12, wither: 0.8, glow: 0, pivot: a }, 6);
+      const rr = r.fork(`rail${side}-${k}`);
+      const [hold, free] = Math.abs(a[0]) >= Math.abs(b[0]) ? [a, b] : [b, a];
+      // About the post it hangs from, so its free end swings down and outward, clear of the deck.
+      const axis = normalize([0, -side * 0.3, -1]);
+      const swing = Math.sign(free[0] - hold[0]) * 1.25;
+      const hangs = 0.12 + 0.45 * Math.pow(rr.next(), 1.3);
+      const gone = rr.next() < 0.5 ? Math.max(0, (hangs - 0.16) * rr.next()) : 0;
+      log(frame, a, b, 0.05, 0.46, { loss: gone, droop: 0.12, wither: 0.8, glow: 0, pivot: hold, fall: [axis[0] * swing, axis[1] * swing, axis[2] * swing, hangs] }, 6);
     }
   }
   // A footing stone at each end, so the deck never floats over a low bank.

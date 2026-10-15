@@ -1301,8 +1301,12 @@ way's tread crosses a stream's course, it crosses on a footbridge where it
 carries three trails or more, is 1.8 m wide or more, or a trail on it asks
 for one, and on stepping stones otherwise, spanning the water from the last
 dry ground before it to the first after. A tread that only runs along a
-bank, or wades in and out on one side, crosses nothing. A footbridge's deck and stepping stones are walkable. Planks go
-missing and rails sag as vitality falls.
+bank, or wades in and out on one side, crosses nothing. A footbridge's deck and stepping stones are walkable. A
+footbridge breaks as it fails, as a house does: its planks go missing, the
+soonest at mid-span, about one in ten by vitality 0.5 and most by 0.13; each
+rail sags off its far post, then hangs from the post nearer the bank, swung
+out over the water, and at last falls into the stream. Its deck keeps its
+line, since the walk crosses on it.
 
 A trail's wear follows the vitality of the two entities it joins, live.
 Near each end it takes that end's entity's vitality, and it blends between
