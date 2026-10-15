@@ -4,8 +4,10 @@
 // own (the wild a world's rim lies in), so a stream may run outside the
 // code's land for part of its course. The person stands where the first
 // stream with a stretch among the code comes nearest the repository's own
-// area, on dry ground beside it; a world with no stream among the code lands
-// on dry ground nearest that area's heart.
+// area, on dry ground beside it, facing its water `OPENING.ahead` downstream;
+// a stretch with less water than that left before the stream ends does not
+// count. A world with no stream among the code lands on dry ground nearest
+// that area's heart.
 
 import type { WorldPlaces } from "@gaia/schema";
 import { placeAt } from "./places.ts";
@@ -20,7 +22,7 @@ export const OPENING = {
   /** How far around the bank it looks for dry ground among the code, and its rings' spacing, meters. */
   reach: 40,
   ring: 1.5,
-  /** How far downstream the person looks along, meters. */
+  /** How far downstream the person looks along, and so how much water must run on past where they stand, meters. */
   ahead: 30,
 } as const;
 
@@ -52,24 +54,27 @@ export function openingSpot(t: Terrain, places: WorldPlaces): OpeningSpot {
   };
   for (const stream of t.streams) {
     const st = stream.stations;
+    const end = st[st.length - 1];
+    if (end === undefined) continue;
     let best = -1;
     let bestD = Infinity;
     st.forEach((s, k) => {
-      if (!amongCode(places, s.x, s.z)) return;
+      // Only where the water runs on downstream far enough to look along it: a stream's end lies nearest the
+      // repository's area as often as not, and past it there is no water to see.
+      if (!amongCode(places, s.x, s.z) || Math.hypot(end.x - s.x, end.z - s.z) < OPENING.ahead) return;
       const d = Math.hypot(s.x - root.x, s.z - root.z);
       if (d < bestD) [best, bestD] = [k, d];
     });
     const here = st[best];
     if (here === undefined) continue;
-    // Downstream along its stretch, or upstream at its very end, so the person always looks along the water.
     let ahead = best;
-    while (ahead < st.length - 1 && Math.hypot((st[ahead] as typeof here).x - here.x, (st[ahead] as typeof here).z - here.z) < OPENING.ahead) ahead++;
-    const there = ahead === best ? st[Math.max(0, best - 1)] : st[ahead];
-    if (there === undefined || (there.x === here.x && there.z === here.z)) continue;
-    const yaw = ahead === best ? Math.atan2(-(here.x - there.x), -(here.z - there.z)) : Math.atan2(-(there.x - here.x), -(there.z - here.z));
+    while (Math.hypot((st[ahead] as typeof here).x - here.x, (st[ahead] as typeof here).z - here.z) < OPENING.ahead) ahead++;
+    const there = st[ahead] as typeof here;
+    const yaw = Math.atan2(-(there.x - here.x), -(there.z - here.z));
     // To the stream's right as the person faces downstream, on the nearest dry ground among the code.
     const spot = nearestDry(here.x + Math.cos(yaw) * OPENING.bank, here.z - Math.sin(yaw) * OPENING.bank);
-    if (spot !== null) return { ...spot, yaw };
+    // Facing the water downstream, so a stream that bends away still runs into the view.
+    if (spot !== null) return { ...spot, yaw: Math.atan2(-(there.x - spot.x), -(there.z - spot.z)) };
   }
   const spot = nearestDry(root.x, root.z) ?? { x: root.x, z: root.z };
   return { ...spot, yaw: 0 };

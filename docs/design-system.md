@@ -1043,9 +1043,10 @@ popping in.
 
 The lab opens into the world, full screen, at eye height. A world from code
 opens with the person among the code, on dry ground beside a stream,
-looking downstream: where the first stream with a stretch among the code
-comes nearest the repository's own area (`openingSpot` in `@gaia/terrain`),
-or with no stream among the code, nearest that area's heart. Nothing sits on
+facing its water 30 m downstream: where the first stream with a stretch
+among the code that runs on at least that far comes nearest the
+repository's own area (`openingSpot` in `@gaia/terrain`), or with no stream
+among the code, nearest that area's heart. Nothing sits on
 it but the world, the three ways of knowing where you are, all at once, and
 the compass in the corner: no panels, no readouts. The compass
 (`app/renderer/immersive/compass.ts`) is a round of the map's paper, 44 px

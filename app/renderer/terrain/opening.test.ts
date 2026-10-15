@@ -59,19 +59,38 @@ function expectAmongCode({ terrain, at, world }: ReturnType<typeof landing>, wha
   expect(Number.isFinite(at.yaw), what).toBe(true);
 }
 
+/** The person looks downstream along the stream beside them: its water runs on ahead, within 45 degrees of their view. */
+function expectLooksDownstream({ terrain, at }: ReturnType<typeof landing>, what: string): void {
+  const beside = terrain.streams
+    .flatMap((s) => s.stations.map((p, k) => ({ stations: s.stations, k, d: Math.hypot(p.x - at.x, p.z - at.z) })))
+    .reduce((a, b) => (b.d < a.d ? b : a));
+  const here = beside.stations[beside.k] as (typeof beside.stations)[number];
+  const there = beside.stations.slice(beside.k).find((p) => Math.hypot(p.x - here.x, p.z - here.z) >= OPENING.ahead);
+  expect(there, `${what}: water runs on downstream of where the person stands`).toBeDefined();
+  if (there === undefined) return;
+  const run = Math.hypot(there.x - here.x, there.z - here.z);
+  // A walk's yaw 0 looks along -z.
+  const along = (-Math.sin(at.yaw) * (there.x - here.x) - Math.cos(at.yaw) * (there.z - here.z)) / run;
+  expect(along, `${what}: the person looks downstream`).toBeGreaterThan(Math.SQRT1_2);
+}
+
 describe("where a person first stands in a world from code", () => {
   // Gaia's world bakes whole here, as the page bakes it: about 15 seconds alone, longer while other work shares the machine.
-  it("is among Gaia's own code, on dry ground beside a stream", { timeout: 180_000 }, async () => {
+  it("is among Gaia's own code, on dry ground beside a stream, looking downstream", { timeout: 180_000 }, async () => {
     const { world, judges, summary } = await laySnapshot("jev", "a test");
     const laid = landing({ root: world.name, facts: snapshotFacts(), world, judges, summary, judged: {} });
     expectAmongCode(laid, "Gaia's world");
     // Beside a stream: one runs within a few banks' width of where the person stands.
     const nearest = Math.min(...laid.terrain.streams.flatMap((s) => s.stations.map((p) => Math.hypot(p.x - laid.at.x, p.z - laid.at.z))));
     expect(nearest).toBeLessThan(OPENING.bank + OPENING.reach);
+    // Its nearest stretch is the end of a stream that dries away, which the person once faced past, looking at grass.
+    expectLooksDownstream(laid, "Gaia's world");
   });
 
-  it("is among the proving ground's code, on dry ground", { timeout: 120_000 }, () => {
-    expectAmongCode(landing(provingWorld()), "the proving ground");
+  it("is among the proving ground's code, on dry ground, looking downstream", { timeout: 120_000 }, () => {
+    const laid = landing(provingWorld());
+    expectAmongCode(laid, "the proving ground");
+    expectLooksDownstream(laid, "the proving ground");
   });
 
   // Each made-up world is judged by the stand-in and baked whole: five to eight seconds each. In these three, a
