@@ -316,7 +316,9 @@ describe("terrain", { timeout: 20_000 }, () => {
           for (const side of [-1, 1]) {
             const x = a.x + nx * edge * side;
             const z = a.z + nz * edge * side;
-            expect(heightAt(t.lattice, x, z), `bank at station ${i}`).toBeGreaterThanOrEqual(a.level + 0.03);
+            // The bank climbs straight from the waterline, so on the inside of the tightest bend, where the surface's
+            // edge comes within 9 cm of the channel's, the ground stands 3 cm above the water.
+            expect(heightAt(t.lattice, x, z), `bank at station ${i}`).toBeGreaterThanOrEqual(a.level + 0.02);
           }
         }
       }
@@ -329,6 +331,74 @@ describe("terrain", { timeout: 20_000 }, () => {
       }
     }
     expect(streams).toBeGreaterThan(3);
+  });
+
+  // The ground is drawn and walked as flat triangles between its samples, each cell split along the diagonal from
+  // its (1, 0) corner to its (0, 1) corner (`heightAt`), so the waterline is where those triangles' edges cross the
+  // water's level. A bank that bends within a sample of the water put it up to 0.3 m off, stepping along the lattice.
+  it("draws each stream's waterline on its channel's edge, where the ground's triangles cross the water's level", () => {
+    /** The nearest point to (x, z) on a stream's course, and its level and half width there. */
+    const nearestOn = (st: readonly Station[], x: number, z: number): { d: number; level: number; half: number } => {
+      let best = { d: Infinity, level: 0, half: 0 };
+      for (let i = 0; i + 1 < st.length; i++) {
+        const a = st[i]!;
+        const b = st[i + 1]!;
+        const abx = b.x - a.x;
+        const abz = b.z - a.z;
+        const len = abx * abx + abz * abz;
+        const u = len > 0 ? Math.max(0, Math.min(1, ((x - a.x) * abx + (z - a.z) * abz) / len)) : 0;
+        const d = Math.hypot(x - a.x - abx * u, z - a.z - abz * u);
+        if (d < best.d) best = { d, level: a.level + (b.level - a.level) * u, half: a.halfWidth + (b.halfWidth - a.halfWidth) * u };
+      }
+      return best;
+    };
+    const offs: number[] = [];
+    for (const t of baked) {
+      const { n, spacing, heights, origin } = t.lattice;
+      const originZ = t.lattice.originZ ?? origin;
+      for (const [si, stream] of t.streams.entries()) {
+        const st = stream.stations;
+        const others = t.streams.filter((_, k) => k !== si);
+        const seen = new Set<number>();
+        for (let k = 0; k < st.length; k += 3) {
+          const s = st[k]!;
+          const r = Math.ceil((s.halfWidth + 2) / spacing);
+          const ci = Math.round((s.x - origin) / spacing);
+          const cj = Math.round((s.z - originZ) / spacing);
+          for (let j = cj - r; j <= cj + r; j++) {
+            for (let i = ci - r; i <= ci + r; i++) {
+              if (i < 0 || j < 0 || i + 1 >= n || j + 1 >= n || seen.has(j * n + i)) continue;
+              seen.add(j * n + i);
+              for (const [a, b] of [[[i, j], [i + 1, j]], [[i, j], [i, j + 1]], [[i + 1, j], [i, j + 1]]] as const) {
+                const ax = origin + a[0] * spacing;
+                const az = originZ + a[1] * spacing;
+                const bx = origin + b[0] * spacing;
+                const bz = originZ + b[1] * spacing;
+                const level = nearestOn(st, (ax + bx) / 2, (az + bz) / 2).level;
+                const fa = heights[a[1] * n + a[0]]! - level;
+                const fb = heights[b[1] * n + b[0]]! - level;
+                if (fa < 0 === fb < 0) continue;
+                const u = fa / (fa - fb);
+                const x = ax + (bx - ax) * u;
+                const z = az + (bz - az) * u;
+                // Only this stream's own channel: not where it meets other water, nor ground past its banks.
+                if (others.some((o) => nearestOn(o.stations, x, z).d < 12) || t.ponds.some((p) => Math.hypot(x - p.x, z - p.z) < p.reach + 6)) continue;
+                const here = nearestOn(st, x, z);
+                const off = Math.abs(here.d - here.half);
+                if (off > 1.5) continue;
+                offs.push(off);
+              }
+            }
+          }
+        }
+      }
+    }
+    expect(offs.length).toBeGreaterThan(5000);
+    offs.sort((p, q) => p - q);
+    // With a bank that bent at the water, one crossing in ten lay 0.19 m or more off and one in a hundred 0.36 m;
+    // with straight walls they lie within 3 cm and 9 cm.
+    expect(offs[Math.floor(offs.length * 0.9)]).toBeLessThan(0.05);
+    expect(offs[Math.floor(offs.length * 0.99)]).toBeLessThan(0.1);
   });
 
   it("grounds plants: every point of a trunk's bottom ring is at or under the ground", () => {
