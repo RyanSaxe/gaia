@@ -1,6 +1,12 @@
 // Tracing lines over a grid, for the field sheet's contours and shores:
-// marching squares, the segments joined into lines, and lines eased of the
-// points that add nothing.
+// marching squares, the segments joined into lines, lines eased of the
+// points that add nothing, and contours thinned on steep ground as a survey
+// thins them.
+
+/** How far round each sample its grade is averaged, samples: a survey thins its lines over whole slopes, not single cells. */
+const SLOPE_REACH = 2;
+/** The shortest open piece of a thinned line kept, cells: a shorter one is a stub the thinning left behind. */
+const STUB = 6;
 
 /**
  * Marching squares over a grid between columns i0..i1 and rows j0..j1: line
@@ -150,4 +156,53 @@ export function simplified(line: readonly number[], tolerance: number): number[]
   const out: number[] = [];
   for (let i = 0; i < n; i++) if (keep[i] === 1) out.push(line[i * 2] as number, line[i * 2 + 1] as number);
   return out;
+}
+
+/** Each sample's grade (rise over run) in a grid of heights `n` on a side and `cell` apart, averaged over the samples within `SLOPE_REACH` of it. */
+export function slopes(h: Float32Array, n: number, cell: number): Float32Array {
+  const at = (i: number, j: number): number => h[Math.max(0, Math.min(n - 1, j)) * n + Math.max(0, Math.min(n - 1, i))] as number;
+  const grade = new Float32Array(n * n);
+  for (let j = 0; j < n; j++) {
+    for (let i = 0; i < n; i++) grade[j * n + i] = Math.hypot(at(i + 1, j) - at(i - 1, j), at(i, j + 1) - at(i, j - 1)) / (2 * cell);
+  }
+  const broad = new Float32Array(n * n);
+  for (let j = 0; j < n; j++) {
+    for (let i = 0; i < n; i++) {
+      let sum = 0;
+      let count = 0;
+      for (let b = Math.max(0, j - SLOPE_REACH); b <= Math.min(n - 1, j + SLOPE_REACH); b++) {
+        for (let a = Math.max(0, i - SLOPE_REACH); a <= Math.min(n - 1, i + SLOPE_REACH); a++) {
+          const g = grade[b * n + a] as number;
+          if (Number.isNaN(g)) continue;
+          sum += g;
+          count++;
+        }
+      }
+      broad[j * n + i] = count === 0 ? Number.NaN : sum / count;
+    }
+  }
+  return broad;
+}
+
+/**
+ * A contour's lines at `level` through a grid of heights `n` on a side, in grid coordinates, joined from the segments
+ * `keep` takes (`isoline`, `chained`). Given each sample's grade (`slopes`), the contour is thinned as a survey thins
+ * the lines between its heavier ones: no line where the ground is steeper than `steepest`, and no open piece shorter
+ * than `STUB` cells, which is what thinning leaves at a steep patch's edge.
+ */
+export function contourLines(h: Float32Array, n: number, level: number, keep: (x0: number, y0: number, x1: number, y1: number) => boolean, thin?: { readonly slopes: Float32Array; readonly steepest: number }): number[][] {
+  const segments: number[] = [];
+  isoline(h, n, level, (x0, y0, x1, y1) => {
+    if (!keep(x0, y0, x1, y1)) return;
+    if (thin !== undefined && (thin.slopes[Math.round((y0 + y1) / 2) * n + Math.round((x0 + x1) / 2)] as number) > thin.steepest) return;
+    segments.push(x0, y0, x1, y1);
+  });
+  const lines = chained(segments);
+  if (thin === undefined) return lines;
+  return lines.filter((line) => {
+    const closed = Math.hypot((line[0] as number) - (line[line.length - 2] as number), (line[1] as number) - (line[line.length - 1] as number)) < 1e-3;
+    let length = 0;
+    for (let q = 2; q < line.length; q += 2) length += Math.hypot((line[q] as number) - (line[q - 2] as number), (line[q + 1] as number) - (line[q - 1] as number));
+    return closed || length >= STUB;
+  });
 }

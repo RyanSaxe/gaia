@@ -6,6 +6,7 @@ import { type Judgments, LAYOUT, type LotPlace, layoutWorld } from "@gaia/world"
 import proving from "../terrain/fixtures/proving.json";
 import provingJudged from "../terrain/fixtures/proving-judged.json";
 import { type Box, type Measure, type NameLand, type NamePlaces, nameLand, nameTails, placeNames } from "./map-names.ts";
+import { contourLines, slopes } from "./isolines.ts";
 import { MAP_STYLE, healthColor, healthField, landWash } from "./map-styles.ts";
 import { MARK_REACH, markScale } from "./marks.ts";
 import { INK, RIM, levelsFor, reliefAt } from "./wild-ink.ts";
@@ -107,6 +108,43 @@ describe("where the sheets letter areas' names", () => {
 
   it("places names from the land alone, so walking never moves one", () => {
     expect(run(placeNames(structuredClone(land), 800, measure))).toEqual(sheets[0]);
+  });
+});
+
+describe("contours on steep ground", () => {
+  // Ground 5 m a sample that rises gently (1 in 20) for 100 m, then steeply (1 in 2.5), as a valley's side does.
+  const n = 40;
+  const cell = 5;
+  const rise = (i: number): number => (i < 20 ? 0.05 * cell * i : 0.05 * cell * 20 + 0.4 * cell * (i - 20));
+  const valley = Float32Array.from({ length: n * n }, (_, k) => rise(k % n));
+  const thin = { slopes: slopes(valley, n, cell), steepest: MAP_STYLE.contour.thin };
+  const lines = (h: Float32Array, level: number, thinned: boolean): number[][] => contourLines(h, n, level, () => true, thinned ? thin : undefined);
+
+  it("leaves out the lines between the heavier ones where the ground is steep, as a survey thins them", () => {
+    // 9.6 m lies on the steep side, between the heavier lines at 6 and 12 m.
+    expect(lines(valley, 9.6, false).length).toBeGreaterThan(0);
+    expect(lines(valley, 9.6, true)).toEqual([]);
+  });
+
+  it("keeps every line on gentle ground", () => {
+    for (const level of [1.2, 2.4, 3.6]) expect(lines(valley, level, true).length).toBeGreaterThan(0);
+  });
+
+  it("leaves no stub of a thinned line behind: every open piece left is at least 30 m long", () => {
+    // Rolling ground whose lines run in and out of steep patches.
+    const rolling = Float32Array.from({ length: n * n }, (_, k) => 6 * Math.sin((k % n) / 3) * Math.cos(Math.floor(k / n) / 4) + 0.3 * (k % n));
+    const own = { slopes: slopes(rolling, n, cell), steepest: MAP_STYLE.contour.thin };
+    let pieces = 0;
+    for (let level = -6; level <= 18; level += 1.2) {
+      for (const line of contourLines(rolling, n, level, () => true, own)) {
+        const closed = Math.hypot((line[0] as number) - (line.at(-2) as number), (line[1] as number) - (line.at(-1) as number)) < 1e-3;
+        let length = 0;
+        for (let q = 2; q < line.length; q += 2) length += Math.hypot((line[q] as number) - (line[q - 2] as number), (line[q + 1] as number) - (line[q - 1] as number));
+        if (!closed) expect(length * cell).toBeGreaterThanOrEqual(30);
+        pieces++;
+      }
+    }
+    expect(pieces).toBeGreaterThan(10);
   });
 });
 

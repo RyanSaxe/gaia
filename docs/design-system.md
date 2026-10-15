@@ -965,8 +965,8 @@ material language holds them (`map-styles.ts` is its data):
 | Material | What it is | Where it shows |
 | --- | --- | --- |
 | Paper | Handmade cream paper, mottled and fibred, with a torn deckled edge; on the map one paper anchored to the world, running on unbroken past the land's paint; after dark read by the lantern, warm at its middle and falling into blue | The map's sheet, the minimap's scrap, the journal's pages, the wait's sheet |
-| Paint | Watercolor washes in health's colors, pooling at their rims and bleeding wet in wet; hills shaded violet and lit warm | The map, the minimap, the wait |
-| Contours | Fine sepia lines from the real heights, every 1.2 m and every fifth heavier, drawn at the view's size so they look the same at every zoom: the map is a painted topographic map, so a person can read a rise before walking it; in the wild a little lighter on the bare paper | The map and the minimap, the land and the wild |
+| Paint | Watercolor washes in health's colors, pooling at their rims and bleeding wet in wet; hills shaded violet and lit warm, a steep valley side no darker than a gentle hillside; water blue, a river a deeper blue line with a fine edge in a pale blue wash | The map, the minimap, the wait |
+| Contours | Fine sepia lines from the real heights, every 1.2 m and every fifth heavier, drawn at the view's size so they look the same at every zoom: the map is a painted topographic map, so a person can read a rise before walking it; on the land's ground steeper than 1 in 4.5, such as a valley's sides and a stream's banks, only the heavier lines, as a survey thins lines that would crowd into a ruled band; in the wild a little lighter on the bare paper | The map and the minimap, the land and the wild |
 | Ink | One brown-black ink for names, borders, marks and sketches, and for the wild past the land, drawn as an old survey draws country; areas' names in upright, widely spaced capitals as a survey map letters its regions, small names in italic, edged with a little paper, never boxed | Every name on every sheet; the wild |
 | Hand | The traveller's own notes, in a hand: a page's numbers, a line's number, a fold, a reference to the appendix, and the name of the thing walked up to | The journal and the minimap's ring |
 | Vermilion | The traveller's own marks: their cloak, a spot picked on the map, the pencil ring round a thing walked up to | The map and the minimap |
@@ -1177,12 +1177,12 @@ The three ways work together:
   linework is drawn at the view's size from the land's own shapes, so it
   looks the same on the whole sheet and close in: fine sepia contours from
   the real heights, every 1.2 m and every fifth heavier; each area's border
-  as a soft hedgerow under a fine line; and each river as a line with a
-  bank and a glint along its real course, each stretch as wide as the
-  stream there once the map comes close and never thinner than a line.
-  Every river's banks are drawn first, then all the water, then the
-  glints, so where one river joins another their water runs together as
-  one. One drawing is shared by the map, its picture and the wait's pen
+  as a soft hedgerow under a fine line; and each river as a deeper blue
+  line with a fine darker edge, in a pale blue wash, along its real course,
+  each stretch as wide as the stream there once the map comes close and
+  never thinner than a line. Every river's wash is drawn first, then the
+  edges, then all the water, so where one river joins another their water
+  runs together as one. One drawing is shared by the map, its picture and the wait's pen
   (`riverCourse`, `riverStretches`). Ponds are washed blue, darker toward their
   middle; trails are dotted; trees are round crowns in their files'
   health. Each kind of building and landmark has its own mark (`marks.ts`):

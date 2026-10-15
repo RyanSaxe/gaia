@@ -27,7 +27,7 @@ import { areaVitality, groundVitality } from "@gaia/world";
 import { onTap } from "../lab.ts";
 import type { StoodWorld } from "../terrain/lab.ts";
 import { DECKLE_MASK, MAP_STYLE, type MapStyle, TRAVELLER_SVG, dryness, healthColor, healthField, landWash } from "./map-styles.ts";
-import { chained, contour, isoline, simplified } from "./isolines.ts";
+import { contour, contourLines, simplified, slopes } from "./isolines.ts";
 import { type AreaLabel, type Box, CELL, type NameLand, type NamePlace, type NamePlaces, PARENT_FONT, ROSE, SERIF, canvasMeasure, nameFont, nameLand, nameSpacing, placeNames } from "./map-names.ts";
 import { markScale, stampBuilding, stampLandmark } from "./marks.ts";
 import { PAPER, type WashArea, type WashSheet, borderPath, easeRing, fadeMask, floatWash, layWash, paintAt, rimPath, ringsPath } from "./wash.ts";
@@ -378,8 +378,9 @@ export function* paintRelief(ctx: CanvasRenderingContext2D, t: Terrain, style: M
       // along their rays, so the shading fades out across the band and is gone at the rim.
       const inside = Math.max(0, Math.min(1, -pastTheEdge(t.spec, x, z) / RIM.inner));
       const fadeHere = paintAt(style, (i + 0.5) / hn, (j + 0.5) / hn, t.spec.aspect ?? 1) * inside * inside * (3 - 2 * inside);
-      shadeImg.data.set([sr, sg, sb, Math.round(255 * Math.max(0, Math.min(1, -lit)) * fadeHere)], c * 4);
-      lightImg.data.set([lr, lg, lb, Math.round(255 * Math.max(0, Math.min(1, lit)) * fadeHere)], c * 4);
+      // A steep wall shades no darker than a gentle hillside, so a valley's side reads as a slope, not a band (`reliefMost`).
+      shadeImg.data.set([sr, sg, sb, Math.round(255 * Math.max(0, Math.min(style.reliefMost, -lit)) * fadeHere)], c * 4);
+      lightImg.data.set([lr, lg, lb, Math.round(255 * Math.max(0, Math.min(style.reliefMost, lit)) * fadeHere)], c * 4);
     }
     if (due()) yield;
   }
@@ -411,30 +412,29 @@ export function* paintRelief(ctx: CanvasRenderingContext2D, t: Terrain, style: M
   yield;
 
   // Contours: lines from the real heights in meters, every few heavier, drawn at the view's size. They stop at the
-  // land's rim: past it the ground is eased toward the rim's height, and its lines would only ring the land.
+  // land's rim: past it the ground is eased toward the rim's height, and its lines would only ring the land. On steep
+  // ground, a valley's sides and a stream's banks, only the heavier lines are drawn, as a survey thins the lines that
+  // would crowd there into a ruled band (`contour.thin`).
   const c = style.contour;
   let lo = Infinity;
   let hi = -Infinity;
   for (const v of heights) [lo, hi] = [Math.min(lo, v), Math.max(hi, v)];
   const hm = (gr: number): number => -reach + (gr + 0.5) * HILL_CELL;
   const contours: Paper["contours"][number][] = [];
+  const thin = { slopes: slopes(heights, hn, HILL_CELL), steepest: c.thin };
+  const onLand = (x0: number, y0: number, x1: number, y1: number): boolean => pastTheEdge(t.spec, hm((x0 + x1) / 2), hm((y0 + y1) / 2)) <= -RIM.held;
   for (let step = Math.ceil(lo / c.interval); step * c.interval <= hi; step++) {
-    const segments: number[] = [];
-    isoline(heights, hn, step * c.interval, (x0, y0, x1, y1) => {
-      const mx = hm((x0 + x1) / 2);
-      const mz = hm((y0 + y1) / 2);
-      if (pastTheEdge(t.spec, mx, mz) > -RIM.held) return;
-      segments.push(hm(x0), hm(y0), hm(x1), hm(y1));
-    });
+    const index = step % c.index === 0;
+    const lines = contourLines(heights, hn, step * c.interval, onLand, index ? undefined : thin);
     // Joined into lines and eased of points that add nothing, so a view strokes a few long lines, not thousands of
     // cell-sized pieces.
     const contour = new Path2D();
-    for (const line of chained(segments)) {
-      const pts = simplified(line, 0.6);
+    for (const line of lines) {
+      const pts = simplified(line.map(hm), 0.6);
       contour.moveTo(pts[0] as number, pts[1] as number);
       for (let q = 2; q < pts.length; q += 2) contour.lineTo(pts[q] as number, pts[q + 1] as number);
     }
-    contours.push({ path: contour, index: step % c.index === 0 });
+    contours.push({ path: contour, index });
     yield;
   }
   yield;
@@ -696,18 +696,21 @@ export function riverStretches(stations: Terrain["streams"][number]["stations"],
 /** How much a river's drawn width may change, pixels, before a new stretch of it begins. */
 const STRETCH_PX = 0.5;
 
-/** A river's three strokes for a stretch `width` pixels wide, a bank, the water and a glint: never thinner than a line. */
+/**
+ * A river's three strokes for a stretch `width` pixels wide, as a painted map draws water: a pale blue wash bleeding
+ * out either side, a fine darker edge, and the water a deeper blue. Never thinner than a line.
+ */
 export function riverStrokes(width: number): readonly { readonly color: string; readonly width: number }[] {
   return [
-    { color: "rgba(40,84,104,0.5)", width: Math.max(3.4, width + 2.6) },
-    { color: "rgb(150,203,204)", width: Math.max(1.9, width) },
-    { color: "rgba(250,244,222,0.45)", width: Math.max(0.5, width * 0.16) },
+    { color: "rgba(122,182,206,0.32)", width: Math.max(5, width * 1.6 + 5) },
+    { color: "rgba(46,104,136,0.6)", width: Math.max(2.2, width + 1.1) },
+    { color: "rgb(112,172,200)", width: Math.max(1.4, width - 0.2) },
   ];
 }
 
 /**
  * Rivers along their courses (`riverCourse`), each stretch at its own width (`riverStretches`, `riverStrokes`):
- * every river's banks first, then all the water, then the glints, so where one river joins another their water runs
+ * every river's wash first, then its edges, then all the water, so where one river joins another their water runs
  * together as one. `sx` and `sy` take meters to the view's pixels, `zoom` of them a meter.
  */
 export function drawRivers(ctx: CanvasRenderingContext2D, streams: Terrain["streams"], sx: (x: number) => number, sy: (z: number) => number, zoom: number): void {
