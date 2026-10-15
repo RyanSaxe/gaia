@@ -819,8 +819,9 @@ each over in 0.56 s, or up to 12 when the page asked for is whole already.
 Once those have turned, while the page is still being made, the leaves keep
 turning, one every 0.3 s. The last leaf carries the page asked for, once it
 is whole. The book never turns to a page in between, so it never turns back
-and forth. A book opened at a page still being made opens at the map and
-riffles on to it.
+and forth. A book opened at a page still being made opens at the map, and
+the riffle on to that page starts 0.42 s into the cover's swing, so its
+first leaf follows the cover over.
 
 Each leaf of a riffle is a page of real code from a file the riffle passes,
 set as the journal sets code, with handwritten line numbers and the same
