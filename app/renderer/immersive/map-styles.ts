@@ -38,15 +38,18 @@ export interface MapStyle {
   /** How strongly a slope's facing shades or lights it, and how softly the shading is laid, paper pixels. */
   readonly relief: number;
   readonly reliefBlur: number;
+  /** The most a slope is shaded or lit, a share of the full tint: a steep valley side no more than a gentle hillside. */
+  readonly reliefMost: number;
   readonly light: string;
   readonly lightAlpha: number;
   /** The dotted ways' ink. */
   readonly trail: string;
   /**
    * Contour lines from the real heights, in sepia ink over the paint: one every `interval` meters and every
-   * `index`th one heavier, their widths in paper pixels and opacities.
+   * `index`th one heavier, their widths in paper pixels and opacities. On ground steeper than the grade `thin` only the
+   * heavier ones are drawn, as a survey thins lines that would crowd.
    */
-  readonly contour: { readonly interval: number; readonly index: number; readonly ink: string; readonly width: number; readonly alpha: number; readonly indexWidth: number; readonly indexAlpha: number };
+  readonly contour: { readonly interval: number; readonly index: number; readonly ink: string; readonly width: number; readonly alpha: number; readonly indexWidth: number; readonly indexAlpha: number; readonly thin: number };
   /** How a wash answers its area's health: thriving land a touch richer and deeper, tired land showing the paper through in dry-brush streaks. */
   readonly wilt: { readonly rich: number; readonly streaks: number };
   /** The healthy land every area's wash starts from: on the map, color means health and nothing else. */
@@ -78,10 +81,11 @@ export const MAP_STYLE: MapStyle = {
   shadowAlpha: 0.62,
   relief: 4.5,
   reliefBlur: 7,
+  reliefMost: 0.55,
   light: "#fff0c4",
   lightAlpha: 0.42,
   trail: "rgba(122,80,42,0.92)",
-  contour: { interval: 1.2, index: 5, ink: "#5a4128", width: 1.8, alpha: 0.3, indexWidth: 3, indexAlpha: 0.46 },
+  contour: { interval: 1.2, index: 5, ink: "#5a4128", width: 1.8, alpha: 0.3, indexWidth: 3, indexAlpha: 0.46, thin: 0.22 },
   wilt: { rich: 0.3, streaks: 46 },
   land: [104, 160, 66],
   health: [

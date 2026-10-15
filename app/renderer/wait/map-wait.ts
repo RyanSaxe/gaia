@@ -1101,8 +1101,8 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
   }
 
   /**
-   * The pen's lines over the relief: each river from its source to its mouth in the field map's bank, water and
-   * glint, the longest first, then each trail along its way in its dots, at the pen's pace; with how long the pen
+   * The pen's lines over the relief: each river from its source to its mouth in the field map's wash, edge and
+   * water, the longest first, then each trail along its way in its dots, at the pen's pace; with how long the pen
    * takes over them all.
    */
   function penLines(l: Land, stood: StoodWorld, zoom: number): { readonly svg: SVGSVGElement; readonly ms: number } {
@@ -1120,8 +1120,8 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
       `<path class="pen" d="${d}" pathLength="1" stroke="${stroke}" stroke-width="${f(width / zoom)}" style="transition-duration:${Math.round(ms)}ms;transition-delay:${Math.round(delay)}ms"${extra}/>`;
     let end = 0;
     let html = "";
-    // Rivers, as `drawRivers` draws them: the same course in the same stretches, every river's banks first, then all
-    // the water, then the glints. The pen runs down each river stretch by stretch.
+    // Rivers, as `drawRivers` draws them: the same course in the same stretches, every river's wash first, then its
+    // edges, then all the water. The pen runs down each river stretch by stretch.
     const streams = [...stood.terrain.streams].filter((s) => s.stations.length > 1).sort((a, b) => b.stations.length - a.stations.length);
     const layers: string[] = ["", "", ""];
     streams.forEach((stream, q) => {
