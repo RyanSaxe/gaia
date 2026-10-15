@@ -2065,7 +2065,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     };
   }
 
-  /** The wait the first world opens behind (app/renderer/wait/): it lifts once the world stands and has drawn. */
+  /** The wait the first world opens behind (app/renderer/wait/): it lifts as soon as the world stands. */
   const waiting = takeWait($("veil"), OPENING_ASPECT);
   const veil = withStart(waiting.wait, waiting.veil);
   // The first world's hills, water and trees come in on the wait's sheet as soon as it stands.

@@ -649,10 +649,10 @@ landmark's mark at its laid-out place, one by one from the middle outward.
 Once the world stands, its relief is drawn in with the same hand: the pen
 draws each river from its source to its mouth and each trail along its way,
 and the hill shade, ponds, contours and trees wash in over each area's own
-ground from the middle outward, as the health did, until the sheet is the
-field map. Then the map folds away
-as the field map does and the paper dissolves into the world, as a jump on
-the map does, and the place's name is written on the minimap. After dark the
+ground from the middle outward, as the health did. As soon as the world is
+ready to show, the map folds away as the field map does, with whatever of
+the drawing is still to come, and the paper dissolves into the world, as a
+jump on the map does, and the place's name is written on the minimap. After dark the
 sheet is read by the lantern, warm at its middle and falling into blue at
 its edges.
 
