@@ -1185,7 +1185,8 @@ The three ways work together:
   sits on its area's widest ground and never covers another name. Two
   names on one line, end to end, keep at least 26 px of paper between their
   capitals, so neighbours never read as one name (FIREFLY SPROUT). It keeps
-  off the compass rose's corner and off every building's and landmark's
+  off the compass rose's corner, at the foot of the land's own sheet however
+  deep it is, and off every building's and landmark's
   mark, keeping clear of all the ground any mark could take round its lot,
   since the wait letters names before it knows what will stand there.
   Where its own spot is taken it tries spots along its own slant and on
@@ -1200,7 +1201,10 @@ The three ways work together:
   behind them along the way they look, the file underfoot lettered beside
   them, the traveller and the file standing over the names, which never
   move for them; after dark their lantern glows. A compass rose is inked in the
-  lower right corner, and a tap on the rose finds the traveller.
+  lower right corner, and a tap on the rose finds the traveller. The rose
+  stays in its corner as the map pans and zooms, so an area's name the view
+  brings into its corner fades out over 12 px, before it reaches the rose,
+  and fades back in as it leaves.
   After dark the sheet is read by the lantern: a warm pool low on the
   right, its edges falling into blue. Areas and patches are drawn from the
   outlines `outlinesOf` traces, never from a fixed shape. Names move with
