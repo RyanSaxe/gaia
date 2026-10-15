@@ -14,10 +14,10 @@
 // chunk from a level's middle, the workers bake the chunks its window moves
 // onto, and the level moves once they all have come, so a window never shows
 // half old and half new. Through a world's opening the bake's own finishing
-// thread, which still holds the whole stood world, cuts the chunks and tiles
+// thread, which still holds the whole stood world, cuts the chunks
 // asked of it at once (`LandWorld.whole`).
 
-import { type Lattice, type Placement, type ReliefReport, type Terrain, type WorldSpec, frameOf, heightAt, knowWildBase, worldOf, worldOfZ } from "@gaia/terrain";
+import { type Lattice, type ReliefReport, type Terrain, type WorldSpec, frameOf, heightAt, knowWildBase, worldOf, worldOfZ } from "@gaia/terrain";
 import type { BakeJob, BakeReply } from "./bake-worker.ts";
 import { CHUNK, type Chunk, type LandSource, chunkPastLand, emptyChunk, latticeIndex } from "./land-chunks.ts";
 import BakeWorker from "./bake-worker.ts?worker";
@@ -43,7 +43,7 @@ export interface LandWorld {
   readonly source: LandSource;
   readonly report: ReliefReport;
   readonly wildBase: number;
-  /** The bake's finishing thread, which still holds the whole stood world and cuts the opening's chunks and tiles at once (`Baked.whole`). */
+  /** The bake's finishing thread, which still holds the whole stood world and cuts the opening's chunks at once (`Baked.whole`). */
   readonly whole?: Worker;
 }
 
@@ -79,8 +79,6 @@ export interface PageLand {
    * opened first.
    */
   aside(x: number, z: number): Promise<{ paint<T>(draw: () => T): T } | null>;
-  /** Tile (ti, tj)'s understory, stood on the workers from the open world's plan; null if another world has opened since. */
-  things(ti: number, tj: number): Promise<readonly Placement[] | null>;
   /** Which layer each level is drawn from: its own, or a painting's set aside while that painting is drawn. */
   readonly layers: readonly number[];
   /** The land workers' report: jobs waiting on each, and how long each kind took lately. */
@@ -164,11 +162,10 @@ interface Pending {
 
 /**
  * How soon each kind of job is wanted. The person's own land comes first, so
- * its windows keep up with them; then what stands on the land, which a trip
- * waits on; then the land a painting sets aside, which nobody sees until the
- * painting is done.
+ * its windows keep up with them; then the land a painting sets aside, which
+ * nobody sees until the painting is done.
  */
-export const JOB_PRIORITY = { land: 0, things: 1, aside: 2 } as const;
+export const JOB_PRIORITY = { land: 0, aside: 1 } as const;
 /** Jobs each worker holds at once: one under way and the next, so it never idles, and the rest wait their turn on the page. */
 const IN_FLIGHT = 2;
 
@@ -206,7 +203,7 @@ function createLandWorkers(threads: number) {
     return on;
   };
   const workers = Array.from({ length: threads }, () => listen(new BakeWorker()));
-  /** A bake's finishing thread while it is kept: chunks and tiles of its world go to it first. */
+  /** A bake's finishing thread while it is kept: chunks of its world go to it first. */
   let whole: Thread | null = null;
   const send = (on: Thread, pending: Pending): void => {
     const id = nextId++;
@@ -283,14 +280,6 @@ function createLandWorkers(threads: number) {
       if (reply.kind === "failed") throw new Error(reply.message);
       if (reply.kind !== "chunk") throw new Error(`A land worker answered a chunk with "${reply.kind}".`);
       return reply.chunk;
-    },
-    /** What stands in tile (ti, tj); null when world `world` closed before a worker could answer. */
-    async things(world: number, ti: number, tj: number): Promise<readonly Placement[] | null> {
-      const reply = await ask({ kind: "things", world, ti, tj }, JOB_PRIORITY.things);
-      if (reply === null) return null;
-      if (reply.kind === "failed") throw new Error(reply.message);
-      if (reply.kind !== "things") throw new Error(`A land worker answered a tile's things with "${reply.kind}".`);
-      return reply.placements;
     },
   };
 }
@@ -559,10 +548,5 @@ export function createPageLand(threads = Math.max(1, Math.min(2, (navigator.hard
       };
     },
     workers: () => workers.stats(),
-    async things(ti, tj) {
-      const mine = generation;
-      const placed = await workers.things(mine, ti, tj);
-      return mine === generation ? placed : null;
-    },
   };
 }

@@ -5,7 +5,7 @@
 // back into the land, as a cottage's pad is.
 
 import { type Lattice, heightAt, slopeAt, worldOf, worldOfZ } from "./lattice.ts";
-import type { Occupied } from "./scatter.ts";
+import type { Occupied } from "./placement.ts";
 import type { Circle } from "./site.ts";
 import { isWet } from "./plants.ts";
 import type { Terrain } from "./world.ts";
