@@ -127,7 +127,7 @@ async function open(port: MessagePortMain, folder: string, github?: string): Pro
     const name = github ?? document.facts.repository.name;
     toMain({ type: "world.opened", root: folder, name });
     openedOn.set(port, { folder, ...(document.commit === undefined ? {} : { commit: document.commit }) });
-    await keep(() => keepRecent(engine, { root: folder, name, ...(github === undefined ? {} : { github }), at: Date.now() }));
+    await keep(() => keepRecent(engine, { root: folder, name, ...(github === undefined ? {} : { github }), at: Date.now(), ...(document.commit === undefined ? {} : { commit: document.commit }) }));
   } catch (error) {
     const message = (error as Error).message;
     console.error(`gaia: could not open ${folder}: ${message}`);

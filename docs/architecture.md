@@ -31,7 +31,7 @@ crosses: code facts, Jev requests and answers, and store records. Geometry
 never crosses, because the renderer builds it. `EngineMethods` in
 `packages/schema/src/engine.ts` is the TypeScript side of the protocol, and
 `engine/src/rpc.rs` the Rust side. The engine answers `engine.ping`,
-`project.graph`, `project.source`, `project.commit`, `project.locate` and `project.clone`, Jev's
+`project.graph`, `project.source`, `project.commit`, `project.commits`, `project.locate` and `project.clone`, Jev's
 `jev.estimate`, `jev.status`, `jev.ask` and `jev.batch`, and the app-data
 store's `store.get`, `store.read` and `store.put`. The store (`engine/src/store.rs`) keeps one JSON file of tables
 (`StoreTable`) per project, `<data>/projects/<project id>/store.json`, replaced through a
@@ -52,6 +52,9 @@ document carries it, and the journal's code comes from that same commit
 (`project.source`), so its lines always match the graph's even after a new
 commit. `project.commit` says which commit a world of a folder would be read
 from now, without reading it, or none when it would be read from disk.
+`project.commits` counts the commits since one commit up to another that
+touched a file under the folder, or says none when the first is no longer
+in the second's history, as after a rebase.
 
 ## Packages
 
@@ -380,10 +383,11 @@ margin, so the wait's sheet can take its shape, a tile at a time in its
 idle time, and a worker reads it back and encodes it as WebP (about 80 to
 110 KB; `app/renderer/immersive/picture.ts`). The page sends it as
 `world.picture`, and the service keeps it with the recent world that page
-opened (`RecentWorld.picture`, a data URL), with the commit that world was
-read from (`RecentWorld.commit`), one write after another so it never races
-the visit; a world opened again keeps its last picture until the new one
-comes. The store reads only a WebP data URL of at most 256,000 characters,
+opened (`RecentWorld.picture`, a data URL), one write after another so it
+never races the visit. Each recent world keeps the commit the person last
+opened it at (`RecentWorld.commit`), and its picture pictures that commit: a
+world opened again at the same commit keeps its last picture until the new
+one comes, and one opened at another drops it. The store reads only a WebP data URL of at most 256,000 characters,
 and only with its commit: a world read from disk keeps no picture, since
 nothing would tell when its code changed. The start is offered a picture
 only while `project.commit` still names the commit it was painted from, so
@@ -392,7 +396,10 @@ wait's sheet. A world kept before pictures were, whose page painted none,
 whose code has moved on, or whose picture was kept before pictures said
 their commit, comes with no picture, which the start shows as a card of
 the wait's own bare sheet, in the sheet's shape, with its name, so it rises
-into the sheet as the sheet. As the person walks, the page sends where they
+into the sheet as the sheet. When its code has moved on since the person last
+opened it, the start is also told how many commits have touched the folder
+since (`project.commits`, `RecentWorld.commitsSince`), which the card tallies.
+As the person walks, the page sends where they
 stand (`world.stood`, a `StoodSpot` from `stoodBy` in `@gaia/terrain`):
 their spot and facing, the world's layout key, and the nearest thing that
 stands for code, by its path, with where it stood. It sends one once they

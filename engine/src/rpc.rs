@@ -69,6 +69,11 @@ pub fn handle(line: &str) -> Value {
             Some(root) => Ok(json!({ "commit": crate::graph::walk::Snapshot::of(Path::new(root)).commit() })),
             None => Err((INVALID_PARAMS, "project.commit needs a root.".into())),
         },
+        "project.commits" => match (p["root"].as_str(), p["from"].as_str(), p["to"].as_str()) {
+            // How far the code has moved on since a commit, or null when that commit is no longer in its history.
+            (Some(root), Some(from), Some(to)) => Ok(json!({ "commits": crate::graph::git::commits_between(Path::new(root), from, to) })),
+            _ => Err((INVALID_PARAMS, "project.commits needs a root, a from and a to.".into())),
+        },
         "understanding.plan" => match p["root"].as_str() {
             Some(root) => {
                 crate::jev::runner::plan(Path::new(root), p["graph"].as_bool() == Some(true))
@@ -205,6 +210,42 @@ mod tests {
             r#"{"jsonrpc":"2.0","id":11,"method":"project.commit","params":{"root":"/no/such/dir"}}"#,
         );
         assert_eq!(commit["result"], json!({ "commit": null }));
+    }
+
+    #[test]
+    fn counts_the_commits_to_a_folder_since_one_in_its_history_and_no_others() {
+        let repo = std::env::temp_dir().join(format!("gaia-rpc-commits-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&repo);
+        std::fs::create_dir_all(repo.join("sub")).unwrap();
+        let git = |args: &[&str]| {
+            let out = std::process::Command::new("git").arg("-C").arg(&repo).args(["-c", "user.name=Gaia", "-c", "user.email=gaia@example.com"]).args(args).output().unwrap();
+            assert!(out.status.success(), "git {args:?}");
+            String::from_utf8_lossy(&out.stdout).trim().to_string()
+        };
+        git(&["init", "-q"]);
+        let mut commits = Vec::new();
+        // Three commits touch the folder and one only the repository around it.
+        for (file, text) in [("sub/a.ts", "1"), ("sub/a.ts", "2"), ("outside.txt", "3"), ("sub/b.ts", "4")] {
+            std::fs::write(repo.join(file), text).unwrap();
+            git(&["add", "."]);
+            git(&["commit", "-q", "-m", text]);
+            commits.push(git(&["rev-parse", "HEAD"]));
+        }
+        let ask = |from: &str, to: &str| {
+            let request = json!({ "jsonrpc": "2.0", "id": 12, "method": "project.commits", "params": { "root": repo.join("sub"), "from": from, "to": to } });
+            handle(&request.to_string())
+        };
+        assert_eq!(ask(&commits[0], &commits[3])["result"], json!({ "commits": 2 }));
+        assert_eq!(ask(&commits[3], &commits[3])["result"], json!({ "commits": 0 }));
+        // A commit no longer in the history, as after a rebase, or one git does not know, or not a commit at all.
+        assert_eq!(ask(&commits[3], &commits[0])["result"], json!({ "commits": null }));
+        assert_eq!(ask("0123456789abcdef0123456789abcdef01234567", &commits[3])["result"], json!({ "commits": null }));
+        assert_eq!(ask("--all", &commits[3])["result"], json!({ "commits": null }));
+        assert_eq!(
+            handle(r#"{"jsonrpc":"2.0","id":13,"method":"project.commits","params":{"root":"/tmp"}}"#)["error"]["code"],
+            INVALID_PARAMS
+        );
+        std::fs::remove_dir_all(&repo).unwrap();
     }
 
     #[test]
