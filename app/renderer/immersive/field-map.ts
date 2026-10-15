@@ -1155,7 +1155,8 @@ export function createFieldMap(
       }
       ctx.globalAlpha = 1;
     }
-    // Buildings and landmarks name themselves once the map is close enough to read them.
+    // Buildings and landmarks name themselves once the map is close enough to read them, off the rose and every
+    // name lettered.
     if (near > 1.6) {
       ctx.font = `italic 12.5px ${SERIF}`;
       const named = [...stood.landmarks.map((l) => ({ ...l, below: 15 })), ...stood.buildings.map((b) => ({ ...b, below: 13 }))];
@@ -1164,7 +1165,7 @@ export function createFieldMap(
         const y = sy(m.z) + m.below * grow + 6;
         const halfW = ctx.measureText(m.name).width / 2 + 3;
         const box: [number, number, number, number] = [x - halfW, y - 8, x + halfW, y + 8];
-        if (!visible(x, y, 0) || !apart(box, taken)) continue;
+        if (!visible(x, y, 0) || !apart(box, [rose, ...taken])) continue;
         taken.push(box);
         letter(ctx, m.name, x, y, style.ink, halo, 3);
       }
