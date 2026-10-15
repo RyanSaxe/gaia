@@ -826,6 +826,13 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
       inner.style.transition = `transform ${COVER_MS}ms cubic-bezier(.45,.05,.3,1) ${TRAVEL_MS * 0.45}ms`;
       swingAfter(TRAVEL_MS * 0.45);
       place(true);
+      // Once it is open, the cover's edge, and the ribbon on the leaves it carries, lift under the pointer at once.
+      const opened = (e: TransitionEvent): void => {
+        if (e.target !== cover) return;
+        cover.removeEventListener("transitionend", opened);
+        swingAfter(0);
+      };
+      cover.addEventListener("transitionend", opened);
       // Timed from when the cover starts to swing, which waits on its delay, on the page it opens onto being whole and
       // on the page's thread.
       if (followIn !== undefined) {
