@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { EngineClient } from "@gaia/schema";
-import { PICTURE_MAX, RECENT_KEY, keepPicture, keepRecent, keepStood, offeredWorlds, recentWorlds, stoodIn } from "./recent.ts";
+import { PAINTING_MAX, RECENT_KEY, keepPainting, keepRecent, keepStood, offeredWorlds, recentWorlds, stoodIn } from "./recent.ts";
 
 /**
  * An engine whose store is a map in memory, holding `recent` as the app's recent worlds, whose folders have checked out
@@ -21,60 +21,55 @@ function storeEngine(recent?: unknown, checkedOut: Record<string, string> = {}, 
   } as unknown as EngineClient;
 }
 
-const picture = (fill: string): string => `data:image/webp;base64,${fill.repeat(64)}`;
+const painting = (fill: string): string => `data:image/webp;base64,${fill.repeat(64)}`;
 
 describe("the recent worlds", () => {
-  it("offers a world kept before pictures were by its name, with no picture and none of what it kept then", async () => {
-    const engine = storeEngine([{ root: "/code/gaia", name: "gaia", at: 5, postcard: { areas: [], things: [] } }]);
-    expect(await recentWorlds(engine)).toEqual([{ root: "/code/gaia", name: "gaia", at: 5 }]);
+  it("offers a world kept before paintings were by its name, with none of what it kept then", async () => {
+    const engine = storeEngine([
+      { root: "/code/gaia", name: "gaia", at: 5, postcard: { areas: [], things: [] } },
+      // A picture of its map, as Gaia kept before it painted where the person stood.
+      { root: "/code/other", name: "other", at: 4, picture: painting("M"), commit: "c1" },
+    ]);
+    expect(await recentWorlds(engine)).toEqual([
+      { root: "/code/gaia", name: "gaia", at: 5 },
+      { root: "/code/other", name: "other", at: 4, commit: "c1" },
+    ]);
   });
 
-  it("keeps a picture with the world its page opened, and keeps it when the world is opened again at that commit until a new one comes", async () => {
+  it("keeps the painting of where the person stood still with its world until a new one comes, whatever commit it is opened at", async () => {
     const engine = storeEngine();
     await keepRecent(engine, { root: "/code/gaia", name: "gaia", at: 1, commit: "c1" });
     await keepRecent(engine, { root: "/code/other", name: "other", at: 2 });
-    await keepPicture(engine, "/code/gaia", picture("A"), "c1");
-    await keepRecent(engine, { root: "/code/gaia", name: "gaia", at: 3, commit: "c1" });
+    await keepPainting(engine, "/code/gaia", painting("A"));
+    await keepRecent(engine, { root: "/code/gaia", name: "gaia", at: 3, commit: "c2" });
     expect(await recentWorlds(engine)).toEqual([
-      { root: "/code/gaia", name: "gaia", at: 3, picture: picture("A"), commit: "c1" },
+      { root: "/code/gaia", name: "gaia", at: 3, commit: "c2", painting: painting("A") },
       { root: "/code/other", name: "other", at: 2 },
     ]);
-    await keepPicture(engine, "/code/gaia", picture("B"), "c1");
-    expect((await recentWorlds(engine))[0]?.picture).toBe(picture("B"));
+    await keepPainting(engine, "/code/gaia", painting("B"));
+    expect((await recentWorlds(engine))[0]?.painting).toBe(painting("B"));
   });
 
-  it("keeps the commit each world was last opened at, and drops a picture of an earlier one", async () => {
-    const engine = storeEngine();
-    await keepRecent(engine, { root: "/code/gaia", name: "gaia", at: 1, commit: "c1" });
-    await keepPicture(engine, "/code/gaia", picture("A"), "c1");
-    await keepRecent(engine, { root: "/code/gaia", name: "gaia", at: 2, commit: "c2" });
-    expect(await recentWorlds(engine)).toEqual([{ root: "/code/gaia", name: "gaia", at: 2, commit: "c2" }]);
-  });
-
-  it("drops a picture that is not WebP, is too long, is of a world no longer kept, or is of a world read from disk", async () => {
+  it("drops a painting that is not WebP, is too long, or is of a world no longer kept", async () => {
     const engine = storeEngine();
     await keepRecent(engine, { root: "/code/gaia", name: "gaia", at: 1 });
-    await keepPicture(engine, "/code/gaia", "data:image/png;base64,AAAA", "c1");
-    await keepPicture(engine, "/code/gaia", `data:image/webp;base64,${"A".repeat(PICTURE_MAX)}`, "c1");
-    await keepPicture(engine, "/code/gone", picture("A"), "c1");
-    await keepPicture(engine, "/code/gaia", picture("A"), undefined);
+    await keepPainting(engine, "/code/gaia", "data:image/png;base64,AAAA");
+    await keepPainting(engine, "/code/gaia", `data:image/webp;base64,${"A".repeat(PAINTING_MAX)}`);
+    await keepPainting(engine, "/code/gone", painting("A"));
     expect(await recentWorlds(engine)).toEqual([{ root: "/code/gaia", name: "gaia", at: 1 }]);
   });
 
-  it("offers a picture only while its folder's code is still the commit it was painted from", async () => {
+  it("offers each world's painting whatever its code, with how many commits touched it since it was last opened", async () => {
     const kept = [
-      { root: "/code/same", name: "same", at: 4, picture: picture("A"), commit: "c1" },
-      { root: "/code/moved", name: "moved", at: 3, picture: picture("B"), commit: "c1" },
-      { root: "/code/disk", name: "disk", at: 2, picture: picture("C"), commit: "c1" },
-      // Kept before pictures said which commit they show, as every picture an earlier Gaia painted was.
-      { root: "/code/old", name: "old", at: 1, picture: picture("D") },
+      { root: "/code/same", name: "same", at: 3, painting: painting("A"), commit: "c1" },
+      { root: "/code/moved", name: "moved", at: 2, painting: painting("B"), commit: "c1" },
+      { root: "/code/disk", name: "disk", at: 1, painting: painting("C") },
     ];
-    const engine = storeEngine(kept, { "/code/same": "c1", "/code/moved": "c2", "/code/old": "c1" }, { c1: 3 });
+    const engine = storeEngine(kept, { "/code/same": "c1", "/code/moved": "c2" }, { c1: 3 });
     expect(await offeredWorlds(engine)).toEqual([
-      { root: "/code/same", name: "same", at: 4, picture: picture("A"), commit: "c1" },
-      { root: "/code/moved", name: "moved", at: 3, commitsSince: 3 },
-      { root: "/code/disk", name: "disk", at: 2 },
-      { root: "/code/old", name: "old", at: 1 },
+      { root: "/code/same", name: "same", at: 3, painting: painting("A") },
+      { root: "/code/moved", name: "moved", at: 2, painting: painting("B"), commitsSince: 3 },
+      { root: "/code/disk", name: "disk", at: 1, painting: painting("C") },
     ]);
   });
 

@@ -6,17 +6,17 @@
 // no folder, the page offers the start (the worlds opened before, a folder,
 // or an address on GitHub) and the service opens whatever is chosen there,
 // cloning a place on GitHub into the app's own data first. Once a world
-// stands, its page sends a picture of its field map, kept with it among the
-// recent worlds for the start while its code stays the commit it pictures,
-// and where the person stands as they walk, which the world's next open
-// lands them at.
+// stands, its page sends where the person stands as they walk, which the
+// world's next open lands them at, and a painting of where they stand still,
+// which the start lays on its table as the world's card: both kept with it
+// among the recent worlds.
 
 import type { Unreachable } from "@gaia/schema";
 import type { MessagePortMain } from "electron";
 import { createEngineClient } from "./engine-client.ts";
 import { openWorld } from "./open-world.ts";
 import type { EngineStatus, FromMain, FromRenderer, StartChoice, ToMain, ToRenderer } from "./protocol.ts";
-import { keepPicture, keepRecent, keepStood, offeredWorlds, stoodIn } from "./recent.ts";
+import { keepPainting, keepRecent, keepStood, offeredWorlds, stoodIn } from "./recent.ts";
 
 const parent = process.parentPort;
 const toMain = (message: ToMain): void => parent.postMessage(message);
@@ -39,9 +39,9 @@ function settleable(): { promise: Promise<void>; resolve: () => void; settled: b
   return s;
 }
 
-/** The folder whose world each page opened and the commit it was built from: the picture the page paints is kept with it, and the journal reads that commit. */
+/** The folder whose world each page opened and the commit it was built from: what the page sends is kept with it, and the journal reads that commit. */
 const openedOn = new WeakMap<MessagePortMain, { readonly folder: string; readonly commit?: string }>();
-/** Writes to the recent worlds, one after another, so a picture never races the visit it belongs to. */
+/** Writes to the recent worlds, one after another, so a painting never races the visit it belongs to. */
 let keeping: Promise<void> = Promise.resolve();
 function keep(write: () => Promise<void>): Promise<void> {
   keeping = keeping.then(write).catch((error: unknown) => console.error(`gaia: could not keep the recent worlds: ${(error as Error).message}`));
@@ -186,9 +186,9 @@ parent.on("message", (event) => {
         if (m.type === "world.open") void (root === null ? offerStart(port) : open(port, root));
         else if (m.type === "world.choose") void choose(port, m.place);
         else if (m.type === "world.source") void sendSource(port, m.path);
-        else if (m.type === "world.picture") {
+        else if (m.type === "world.painting") {
           const opened = openedOn.get(port);
-          if (opened !== undefined) void keep(() => keepPicture(engine, opened.folder, m.picture, opened.commit));
+          if (opened !== undefined) void keep(() => keepPainting(engine, opened.folder, m.painting));
         } else if (m.type === "world.stood") {
           const opened = openedOn.get(port);
           if (opened !== undefined) void keep(() => keepStood(engine, opened.folder, m.stood));

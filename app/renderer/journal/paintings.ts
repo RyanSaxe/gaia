@@ -53,6 +53,26 @@ export interface Paintings {
   clear(): void;
 }
 
+/**
+ * Paints `seen`, `w` by `h` device pixels, on a painter's thread of its own, the same strokes for the same `seed`, and
+ * answers the copy encoded for keeping (WebP), or null when it could not be painted.
+ */
+export async function paintKept(seen: { readonly color: Pixels; readonly mask: Pixels }, w: number, h: number, seed: string): Promise<Blob | null> {
+  const worker = new PainterWorker();
+  try {
+    const job: PainterJob = { id: 1, color: seen.color, mask: seen.mask, w, h, seed: seedOf(seed) };
+    const reply = await new Promise<PainterReply>((resolve) => {
+      worker.onmessage = (e: MessageEvent<PainterReply>) => resolve(e.data);
+      worker.postMessage(job, [job.color.data.buffer, job.mask.data.buffer]);
+    });
+    if (!("painting" in reply)) return null;
+    reply.painting.close();
+    return reply.kept;
+  } finally {
+    worker.terminate();
+  }
+}
+
 /** How soon a painting is wanted: asked for by the book, ahead of the reader, or near the person. */
 type Rank = 0 | 1 | 2;
 

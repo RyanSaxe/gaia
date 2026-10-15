@@ -1,12 +1,12 @@
 // The traveller's map table, in 3D (`table-scene.ts`): the worlds walked
-// before lie on the sheet as pictures of their field maps, and a line at the
-// sheet's foot waits for an address, written in ink from a text field no one
-// sees. Touching a card chooses its world: the card lifts, rises toward the
-// person and becomes the wait's sheet, while the table falls out of focus
-// behind it. A world with no picture to show, as one whose code has changed
-// since its map was drawn, lies as a card of the wait's bare sheet, with a
-// tally in pencil of the commits since the person last opened it when its
-// code has moved on (`tally.ts`). A folder or an address gets a fresh card of plain paper, laid
+// before lie on the sheet as paintings of where the person last stood still in
+// each, the view its next open lands them in, and a line at the sheet's foot
+// waits for an address, written in ink from a text field no one sees.
+// Touching a card chooses its world: the card lifts, rises toward the person
+// and becomes the wait's sheet, while the table falls out of focus behind it.
+// A world with no painting, left before the person stood still in it, lies as
+// a card of the wait's bare sheet. When its code has moved on since the person
+// last opened it, a card has a tally in pencil of the commits since (`tally.ts`). A folder or an address gets a fresh card of plain paper, laid
 // on the sheet and risen the same way, and so does a world opened with no
 // start. The table stays behind the wait until the world shows. Over the
 // canvas lie only clear hit areas for the cards, the line and the folder's
@@ -48,8 +48,8 @@ export interface TableOptions {
   readonly hour: number;
   /** Where the wait's sheet lies on the page: a chosen card ends there. */
   readonly sheet: () => DOMRect;
-  /** A card is chosen: its picture and its land's shape (width over depth), which the wait's sheet takes as its own. */
-  readonly chosen?: (picture: string, aspect: number) => void;
+  /** A card with a painting is chosen: its face, whose shape (width over depth) the wait's sheet takes as its own. */
+  readonly chosen?: (face: HTMLImageElement | HTMLCanvasElement) => void;
   /** The wait's sheet as it is painted now, in its shape: a fresh card's face, so it rises into the sheet as the sheet. */
   readonly face?: () => HTMLCanvasElement;
   /** Pencils on the wait's sheet what a chosen card had pencilled on its face (`WaitView.pencil`). */
@@ -195,16 +195,20 @@ export function createTable(veil: HTMLElement, options: TableOptions): StartPage
   // ---------- building the table for an offer ----------
   /** Builds the table for the worlds offered and readies it to draw. */
   async function build(recent: StartOffer["recent"]): Promise<void> {
-    const [logo, deckle, ...pictures] = await Promise.all([decoded(SHEET_LOGO), decoded(DECKLE_MASK.slice(5, -2)), ...recent.map((r) => (r.picture === undefined ? null : decoded(r.picture).catch(() => null)))]);
+    const [logo, deckle, ...paintings] = await Promise.all([decoded(SHEET_LOGO), decoded(DECKLE_MASK.slice(5, -2)), ...recent.map((r) => (r.painting === undefined ? null : decoded(r.painting).catch(() => null)))]);
     const w = Math.max(1, root.clientWidth);
     const h = Math.max(1, root.clientHeight);
     phone = w / h < UPRIGHT;
-    // A world with no picture to show, as one whose code has changed since, lies as a card of the wait's own bare sheet,
-    // in the sheet's shape, so it rises into the sheet as the sheet does for a fresh card, and its map is drawn there.
-    const bare = pictures.includes(null) ? (options.face?.() ?? null) : null;
+    // A world with no painting to show, as one left before the person stood still in it, lies as a card of the wait's own
+    // bare sheet, in the sheet's shape, so it rises into the sheet as the sheet does for a fresh card.
+    const bare = paintings.includes(null) ? (options.face?.() ?? null) : null;
     // One whose code has moved on since the person last opened it has the commits since tallied on it.
     const tallies = recent.map((r) => (r.commitsSince === undefined ? null : tallyOf(r.commitsSince, r.root)));
-    const faces = recent.map((_, i) => pictures[i] ?? (bare === null ? null : tallied(bare, tallies[i] ?? null)));
+    const faces = recent.map((_, i) => {
+      const painting = paintings[i] ?? null;
+      const face = painting ?? bare;
+      return face === null ? null : tallied(face, tallies[i] ?? null, painting !== null);
+    });
     const next = createTableScene(tableLayout(phone, recent.length), recent.map((world, i) => ({ world, picture: faces[i] ?? null })), logo as HTMLImageElement, deckle as HTMLImageElement, { w, h, dpr: Math.min(window.devicePixelRatio || 1, 2) });
     next.canvas.className = "table-view";
     next.hour(hour);
@@ -226,8 +230,8 @@ export function createTable(veil: HTMLElement, options: TableOptions): StartPage
         b.setAttribute("aria-label", r.name);
         b.addEventListener("click", () => {
           if (settle === null || chosen !== null) return;
-          const picture = pictures[i];
-          if (r.picture !== undefined && picture !== null && picture !== undefined) options.chosen?.(r.picture, picture.naturalWidth / Math.max(1, picture.naturalHeight));
+          const face = faces[i];
+          if (paintings[i] !== null && face !== null && face !== undefined) options.chosen?.(face);
           const tally = tallies[i];
           if (tally !== null && tally !== undefined) options.pencil?.(tally);
           lift(i, performance.now());
@@ -239,19 +243,19 @@ export function createTable(veil: HTMLElement, options: TableOptions): StartPage
     placeHits();
   }
 
-  /** The tally of `commits` drawn on a card's face, the same strokes for the same world. */
-  type Pencilled = (c: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) => void;
-  const tallyOf = (commits: number | null, root: string): Pencilled => (c, x, y, w, h) => drawTally(c, x, y, w, h, commits, root);
-  /** The bare face with `pencilled` drawn on a copy of it, or the bare face itself with nothing to draw. */
-  function tallied(bare: HTMLCanvasElement, pencilled: Pencilled | null): HTMLCanvasElement {
-    if (pencilled === null) return bare;
-    const face = document.createElement("canvas");
-    face.width = bare.width;
-    face.height = bare.height;
-    const c = face.getContext("2d") as CanvasRenderingContext2D;
-    c.drawImage(bare, 0, 0);
-    pencilled(c, 0, 0, face.width, face.height);
-    return face;
+  /** The tally of `commits` drawn on a card's face, the same strokes for the same world; on a painting, with the paper's tone round it. */
+  type Pencilled = (c: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, onPaint?: boolean) => void;
+  const tallyOf = (commits: number | null, root: string): Pencilled => (c, x, y, w, h, onPaint = false) => drawTally(c, x, y, w, h, commits, root, onPaint);
+  /** `face` with `pencilled` drawn on a copy of it, `onPaint` when the face is a painting, or `face` itself with nothing to draw. */
+  function tallied<F extends HTMLCanvasElement | HTMLImageElement>(face: F, pencilled: Pencilled | null, onPaint: boolean): F | HTMLCanvasElement {
+    if (pencilled === null) return face;
+    const copy = document.createElement("canvas");
+    copy.width = face instanceof HTMLImageElement ? face.naturalWidth : face.width;
+    copy.height = face instanceof HTMLImageElement ? face.naturalHeight : face.height;
+    const c = copy.getContext("2d") as CanvasRenderingContext2D;
+    c.drawImage(face, 0, 0);
+    pencilled(c, 0, 0, copy.width, copy.height, onPaint);
+    return copy;
   }
 
   /** Card `index` lifts from `at` and rises into the wait's sheet. */
@@ -298,7 +302,7 @@ export function createTable(veil: HTMLElement, options: TableOptions): StartPage
   return {
     offer(offer) {
       const recent = offer.recent.slice(0, RECENT_KEPT);
-      const same = scene !== null && recent.length === shown.length && recent.every((r, i) => r.root === shown[i]?.root && r.picture === shown[i]?.picture);
+      const same = scene !== null && recent.length === shown.length && recent.every((r, i) => r.root === shown[i]?.root && r.painting === shown[i]?.painting && r.commitsSince === shown[i]?.commitsSince);
       shown = recent;
       chosen = null;
       arrived = false;

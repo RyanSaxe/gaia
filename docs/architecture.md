@@ -355,8 +355,8 @@ patch's outline from `placeAt`, once per world, for anything that draws them
 In the app, the lab opens on the world the world service sends. With no
 folder named, the world service answers the page's `world.open` with
 `world.start`: the worlds opened before (`RecentWorld`, kept newest first in
-the app's `settings` table under `recent-worlds`, each with the picture of
-its field map its page last painted), and the page shows
+the app's `settings` table under `recent-worlds`, each with a painting of
+where the person last stood still in it), and the page shows
 the start (`app/renderer/start/`, see `docs/design-system.md`) over the wait
 until the person chooses a world they walked before, a folder (main's
 dialog, through the preload's `gaiaShell.chooseFolder`) or an address on
@@ -376,27 +376,24 @@ no credentials or prompts, and the user's and system's git settings
 ignored; past 500 MB or 240 seconds it gives up. A clone runs on the
 engine's one request loop, so other requests wait behind it. The copy then
 opens like any folder, and main names the window after the world
-(`world.opened`) so a reload reopens it. Once a world the service opened
-stands and the field map has painted its paper, the page paints the whole
-map once more with `drawLand`, 800 pixels wide and as deep as its land and
-margin, so the wait's sheet can take its shape, a tile at a time in its
-idle time, and a worker reads it back and encodes it as WebP (about 80 to
-110 KB; `app/renderer/immersive/picture.ts`). The page sends it as
-`world.picture`, and the service keeps it with the recent world that page
-opened (`RecentWorld.picture`, a data URL), one write after another so it
-never races the visit. Each recent world keeps the commit the person last
-opened it at (`RecentWorld.commit`), and its picture pictures that commit: a
-world opened again at the same commit keeps its last picture until the new
-one comes, and one opened at another drops it. The store reads only a WebP data URL of at most 256,000 characters,
-and only with its commit: a world read from disk keeps no picture, since
-nothing would tell when its code changed. The start is offered a picture
-only while `project.commit` still names the commit it was painted from, so
-a map that would be drawn anew is never shown, on the start or as the
-wait's sheet. A world kept before pictures were, whose page painted none,
-whose code has moved on, or whose picture was kept before pictures said
-their commit, comes with no picture, which the start shows as a card of
-the wait's own bare sheet, in the sheet's shape, with its name, so it rises
-into the sheet as the sheet. When its code has moved on since the person last
+(`world.opened`) so a reload reopens it. Whenever the person in a world the
+service opened stands still 2 m or 20 degrees from where it was last
+painted, the first time as soon as the world shows, the page takes their
+own view (`WorldHandle.look`, at the journal's afternoon hour) and paints it
+on a painter's thread as the journal paints (`paintKept`), 1,040 pixels wide
+and as deep as the land's shape makes it, about 60 KB of WebP. It sends it
+as `world.painting`, and the service keeps it with the recent world that
+page opened (`RecentWorld.painting`, a data URL), one write after another so
+it never races the visit; a world opened again keeps it until a new one
+comes. The store reads only a WebP data URL of at most 256,000 characters.
+The painting is offered whatever the code is now: a next open lands where it
+was painted while the code lays out the same, and beside the same thing
+once an edit has moved it (`returnTo`, below). Each recent world also keeps
+the commit the person last opened it at (`RecentWorld.commit`). A world kept
+before paintings were, or left before the person stood still in it, comes
+with no painting, which the start shows as a card of the wait's own bare
+sheet, in the sheet's shape, with its name, so it rises into the sheet as
+the sheet. When its code has moved on since the person last
 opened it, the start is also told how many commits have touched the folder
 since (`project.commits`, `RecentWorld.commitsSince`), which the card tallies.
 As the person walks, the page sends where they
@@ -409,8 +406,8 @@ recent world (`RecentWorld.stood`), not in the project's own store, which
 holds Jev's answers and is rewritten whole on every write. The next open of
 that world sends it with the document (`world.document`'s `stood`), and the
 page lands the person by it (`returnTo`). A world that falls out of the six
-recent worlds forgets it. A page with no world service keeps none. A picture the wait's sheet takes folds away
-to bare paper as soon as the land is divided, and the map is drawn anew. A
+recent worlds forgets it. A page with no world service keeps none. A painting the wait's sheet takes fades
+to bare paper as soon as the land is divided, and the map is drawn on it. A
 standalone page (`pnpm lab:html`, `pnpm lab:serve`) has no engine and opens
 on Gaia's own world from `app/renderer/terrain/fixtures/gaia-graph.json`,
 the engine's judged graph `pnpm graph-snapshot` writes, laid out from the
