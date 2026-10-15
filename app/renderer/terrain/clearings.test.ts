@@ -4,6 +4,8 @@ import { type Clearing, createClearings } from "./clearings.ts";
 
 // The clearings read only a bake's lattice: a land 1.2 km across, with its 80 m skirt.
 const land = { lattice: createLattice(1360, 1) } as Terrain;
+// The page's land: a window of the whole around the person, starting at different x and z.
+const window = { lattice: { ...createLattice(640, 1), origin: 100, originZ: -620 } } as Terrain;
 const capsules: Capsule[] = [
   { ax: 4, az: 6, bx: 12, bz: 9, radius: 1.6 },
   { ax: 402, az: -303, bx: 402, bz: -303, radius: 2.4 },
@@ -36,12 +38,15 @@ function cleared(x: number, z: number): boolean {
 }
 
 describe("the clearings' mask", () => {
-  it("holds the land's mask around the grass, each texel cleared exactly where its middle is, and again once the grass moves on", () => {
-    const clearings = createClearings(land);
+  it.each([
+    ["the whole land", land, [[0, 0], [400, -300]]],
+    ["a window of the land", window, [[400, -300]]],
+  ] as const)("holds the mask of %s around the grass, each texel cleared exactly where its middle is, and again once the grass moves on", (_, t, spots) => {
+    const clearings = createClearings(t);
     clearings.setCapsules(capsules);
     clearings.update(outlines);
     const { uClearing, uClearingOrigin, uClearingSize } = clearings.uniforms;
-    for (const [x, z] of [[0, 0], [400, -300]] as const) {
+    for (const [x, z] of spots) {
       clearings.follow(x, z);
       const data = uClearing.value.image.data as Uint8Array;
       const side = uClearing.value.image.width;
