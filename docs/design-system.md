@@ -1553,7 +1553,8 @@ grass and water agree:
 - **Lamplit windows.** Window glass is a dark pane holding a little sky by
   day; from dusk the lamp inside lights it in the glass swatch's warm
   color. As vitality falls the lamps go out one window at a time, and the
-  chimney's smoke thins and stops.
+  chimney's smoke thins and stops. Over the same hours the doves circling a
+  cote fly home into it, and they come out again after dawn.
 - **The world's own glow** (the vitality `glow` channel, fireflies, living
   water) reads by contrast in the dark, a little stronger than by day and
   still below what draws the eye on its own. A lamp burns steadily: lit
