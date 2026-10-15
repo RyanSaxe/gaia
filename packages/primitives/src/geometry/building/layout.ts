@@ -156,11 +156,27 @@ export function layOutCottage(p: Resolved<typeof cottagePlanParams>, ctx: BuildC
   const front = (i: number): Wall => wallsOf(plan).find((w) => w.mass === i && w.n[2] > 0.99) as Wall;
   const doorH = (m: Mass): number => Math.min(1.95, m.wallHeight - 0.32);
   let doorWall = front(entry);
-  const entryMass = plan.masses[entry] as Mass;
   // Off center on a long front, away from a wing that juts forward beside it.
   const lean = entry === 0 && alongX && p.massing !== "a single block" ? -side : side;
-  let doorAt = doorWall.length / 2 + (alongX && entry === 0 ? lean * doorWall.length * (p.massing === "a single block" ? 0.12 : 0.16) : 0);
-  for (let k = 0; k < 8 && (hidden(plan, doorWall, doorAt - 0.7, 1) || hidden(plan, doorWall, doorAt + 0.7, 1)); k++) doorAt -= lean * 0.5;
+  const leaning = doorWall.length / 2 + (alongX && entry === 0 ? lean * doorWall.length * (p.massing === "a single block" ? 0.12 : 0.16) : 0);
+  /** The spot on a wall nearest `from` at which the whole door shows, clear of every other mass. */
+  const seat = (w: Wall, from: number): number | undefined => {
+    const shows = (at: number): boolean => at >= 0.7 && at <= w.length - 0.7 && !hidden(plan, w, at - 0.7, 1) && !hidden(plan, w, at + 0.7, 1);
+    return Array.from({ length: 8 * Math.ceil(w.length) + 1 }, (_, k) => from + (k % 2 === 1 ? -lean : lean) * Math.ceil(k / 2) * 0.25).find(shows);
+  };
+  let doorAt = seat(doorWall, leaning);
+  // Where a turret or a wing leaves no room on that front, the door opens from another front that has it.
+  for (const w of wallsOf(plan)) {
+    if (doorAt !== undefined) break;
+    if (w.n[2] < 0.99 || w.mass === entry) continue;
+    doorAt = seat(w, w.length / 2);
+    if (doorAt !== undefined) {
+      doorWall = w;
+      entry = w.mass;
+    }
+  }
+  doorAt ??= clamp(leaning, 0.7, doorWall.length - 0.7);
+  const entryMass = plan.masses[entry] as Mass;
   const t = clamp((doorAt - doorWall.length / 2) / Math.max(0.01, doorWall.length / 2 - 1.15), -1, 1);
   const porch = { ...wing(g, entryMass, [0, 1], t, 2.3, 1.75, 1, g.form === "half-hip" ? "gable" : g.form), wallHeight: 2.3 };
   // A porch stands only where nothing else does.

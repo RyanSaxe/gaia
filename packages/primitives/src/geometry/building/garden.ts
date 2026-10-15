@@ -84,24 +84,28 @@ export function buildGarden(p: Resolved<typeof cottageGardenParams>, ctx: BuildC
     }
   }
 
-  // A lantern on a bracket beside the door, lit at night while the code is healthy.
+  // A lantern on a bracket beside the door, lit at night while the code is healthy: where the wall shows, a little
+  // nearer the door where a wall's end or another mass leaves no more room, and clear of the windows if it can be.
+  // With no wall beside the door to hang on, there is none.
   if (extras.has("lantern") && door !== undefined) {
     const { wall: w, s } = placeOf(plan, door);
-    const free = (side: number): boolean =>
-      !plan.openings.some((o) => o !== door && sameWall(placeOf(plan, o).wall, w) && Math.abs(placeOf(plan, o).s - (s + side * (door.width / 2 + 0.38))) < o.width / 2 + 0.55);
-    const side = free(1) ? 1 : -1;
-    const ls = s + side * (door.width / 2 + 0.38);
     const ly = plan.floor + door.height * 0.92;
-    // The bracket works loose from the wall and the lantern hangs askew.
-    const mount = on(w, ls, ly + 0.25, 0);
-    const sag = 0.55;
-    // It hangs askew, then is gone with the wall it is fixed to.
-    const hang = { fall: [w.u[0] * sag, w.u[1] * sag, w.u[2] * sag, 0.36] as const, loss: 0.24 };
-    beam(wood, mount, on(w, ls, ly + 0.25, 0.42), 0.05, 0.05, w.u, 0.35, still(mount, 0.5, hang));
-    const c = on(w, ls, ly, 0.4);
-    box(wood, addScaled(c, UP, 0.16), [w.u, UP, w.n], [0.11, 0.025, 0.11], 0.35, still(mount, 0.5, hang));
-    box(wood, addScaled(c, UP, -0.15), [w.u, UP, w.n], [0.09, 0.02, 0.09], 0.35, still(mount, 0.5, hang));
-    box(lamp, c, [w.u, UP, w.n], [0.075, 0.13, 0.075], 0.8, { droop: 0, wither: 0.4, glow: 1, pivot: mount, ...hang, loss: Math.max(0.37, lossThreshold(r.next(), 0.5, 0.37)) });
+    const spots = [0.38, 0.26].flatMap((gap) => [1, -1].map((side) => s + side * (door.width / 2 + gap)));
+    const shows = (at: number): boolean => at > 0.15 && at < w.length - 0.15 && !hidden(plan, w, at - 0.15, ly) && !hidden(plan, w, at + 0.15, ly);
+    const free = (at: number): boolean => shows(at) && !plan.openings.some((o) => o !== door && sameWall(placeOf(plan, o).wall, w) && Math.abs(placeOf(plan, o).s - at) < o.width / 2 + 0.55);
+    const ls = spots.find(free) ?? spots.find(shows);
+    if (ls !== undefined) {
+      // The bracket works loose from the wall and the lantern hangs askew.
+      const mount = on(w, ls, ly + 0.25, 0);
+      const sag = 0.55;
+      // It hangs askew, then is gone with the wall it is fixed to.
+      const hang = { fall: [w.u[0] * sag, w.u[1] * sag, w.u[2] * sag, 0.36] as const, loss: 0.24 };
+      beam(wood, mount, on(w, ls, ly + 0.25, 0.42), 0.05, 0.05, w.u, 0.35, still(mount, 0.5, hang));
+      const c = on(w, ls, ly, 0.4);
+      box(wood, addScaled(c, UP, 0.16), [w.u, UP, w.n], [0.11, 0.025, 0.11], 0.35, still(mount, 0.5, hang));
+      box(wood, addScaled(c, UP, -0.15), [w.u, UP, w.n], [0.09, 0.02, 0.09], 0.35, still(mount, 0.5, hang));
+      box(lamp, c, [w.u, UP, w.n], [0.075, 0.13, 0.075], 0.8, { droop: 0, wither: 0.4, glow: 1, pivot: mount, ...hang, loss: Math.max(0.37, lossThreshold(r.next(), 0.5, 0.37)) });
+    }
   }
 
   // Split logs stacked against the longest bare stretch of a side wall, end grain out.

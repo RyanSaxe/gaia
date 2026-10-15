@@ -480,10 +480,12 @@ a wall inside another mass is never built and a wing's roof runs into the
 main roof in a valley. Every wall rises to the roofline over it, so gables,
 hipped ends, a half-hip's cut-back gable and a lean-to's slope meet their
 roofs exactly. A hipped range hips only the ends no other mass joins, so a
-long range reads as one stepped roof. Windows fall where walls show, in
-every storey, clear of the door, the chimney's gable and each other; a big
-building keeps those that look toward the walk, at most fourteen. Its walls
-keep within 9,800 triangles and its roofs share 4,300 across their slopes:
+long range reads as one stepped roof. The door opens whole in a front wall,
+where no turret or wing stands before it, and a lantern hangs beside it on
+wall that shows. Windows fall where walls show, in every storey, clear of
+the door, the chimney's gable and each other; a big building keeps those
+that look toward the walk, at most fourteen. Its walls keep within 9,800
+triangles and its roofs share 4,300 across their slopes:
 fine work (studs, plaster cells, plinth stones, ivy, tile courses) coarsens on
 a big building and again until it fits, so a building of many masses keeps
 its budget by construction.
