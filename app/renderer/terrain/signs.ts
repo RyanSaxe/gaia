@@ -103,7 +103,7 @@ void main() {
     albedo = mix(albedo, vec3(0.93, 0.88, 0.76), paint);
   }
   vec3 n = normalize(vNormal);
-  float shadow = mix(0.45, 1.0, sunShadow(vWorld, 0.003));
+  float shadow = mix(0.45, 1.0, sunShadow(vWorld, n, 0.003));
   float light = softCel(max(dot(n, uSunDirection), 0.0) * shadow) * sunUp();
   vec3 toned = nightTone(albedo);
   vec3 lit = toned * (uSunColor * uSunIntensity * light + uAmbientColor * uAmbientIntensity);

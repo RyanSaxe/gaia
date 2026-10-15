@@ -515,7 +515,7 @@ void main() {
   // more than plain diffuse would, so low relief still reads.
   float level = max(uSunDirection.y, 0.05);
   float nDotL = max(level + (dot(n, uSunDirection) - level) * 1.6, 0.0);
-  float shadow = mix(0.45, 1.0, sunShadow(vWorld, 0.0015));
+  float shadow = mix(0.45, 1.0, sunShadow(vWorld, n, 0.0015));
   float direct = nDotL * shadow;
   // Half cel, half smooth: slopes read as painted planes without hard contour bands.
   float light = mix(direct, softCel(direct), 0.5) * sunUp();

@@ -298,7 +298,7 @@ void main() {
 const GROUND_LIGHT_GLSL = /* glsl */ `
 vec3 groundLit(vec3 albedo, vec3 world) {
   float nDotL = clamp(uSunDirection.y * 1.1 + 0.22, 0.0, 1.0);
-  float shadow = mix(0.42, 1.0, sunShadow(world, 0.0015));
+  float shadow = mix(0.42, 1.0, sunShadow(world, vec3(0.0, 1.0, 0.0), 0.0015));
   float light = softCel(nDotL * shadow) * sunUp();
   vec3 toned = nightTone(albedo);
   vec3 lit = toned * (uSunColor * uSunIntensity * light + uAmbientColor * uAmbientIntensity);
