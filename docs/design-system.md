@@ -1023,12 +1023,18 @@ popping in.
 
 ## Knowing where you are
 
-The lab opens into the world, full screen, at eye height. A world from code
-opens with the person among the code, on dry ground beside a stream,
-facing its water 30 m downstream: where the first stream with a stretch
-among the code that runs on at least that far comes nearest the
-repository's own area (`openingSpot` in `@gaia/terrain`), or with no stream
-among the code, nearest that area's heart. Nothing sits on
+The lab opens into the world, full screen, at eye height, where the first
+view is best (`openingSpot` in `@gaia/terrain`). Every stretch of every
+stream among the code is a place to stand, 2.5 m past the water's edge on
+either bank, facing the water 30 m downstream, if the stream runs on that
+far (a stream shorter than that is faced whole, from its spring). Of those whose bank lies within 200 m of the nearest one to the
+repository's heart, the view wins whose ground ahead never rises more than
+4° above the eye within 120 m; then the one with the most that stands for
+code within 100 m and 35° either side of the view, a building or landmark
+counting as four trees, bushes, stones or flowers; then the nearest the
+heart. A world with no such stretch weighs twelve ways of facing from dry
+ground on rings around the heart, out to 120 m. The sample world stands for
+no code, so its buildings and landmarks are what count. Nothing sits on
 it but the world, the three ways of knowing where you are, all at once, and
 the compass in the corner: no panels, no readouts. The compass
 (`app/renderer/immersive/compass.ts`) is a round of the map's paper, 44 px
