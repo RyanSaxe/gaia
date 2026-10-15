@@ -451,7 +451,10 @@ export function standWorld(t: Terrain, req: StandRequest): Stand {
   // A file's definitions stand where the layout put them, kept off water, steep ground and whatever else stands:
   // the largest first, so a file's landmark keeps its plot, each moved a little where its spot is taken (elsewhere
   // on its patch if nothing near is clear, never off it), and stood a size smaller rather than left out. One that
-  // stands as a tree keeps its crown's width from every other, so each tree reads as one thing.
+  // stands as a tree keeps its crown's width from every other, so each tree reads as one thing. Where its whole
+  // patch lies in that room, under a great tree's crown say, it stands in it: a stone, a bush or flowers under a
+  // crown and as near a house, a trail or a landmark as anything stands, a tree under another's crown. Every one
+  // stands.
   const standing: Placement[] = [];
   /** The crowns of the trees stood so far, which nothing else that stands for code stands under. */
   const crowned: Occupied[] = [];
@@ -469,28 +472,31 @@ export function standWorld(t: Terrain, req: StandRequest): Stand {
     let at: [number, number, number] | null = null;
     // Where it may try: around its plot's middle, then around each of its patch's other cells, nearest first.
     const own = sym.patch === undefined || cells.length === 0 ? [] : cells.filter((c) => c.patch === sym.patch).sort((a, b) => Math.hypot(a.x - sym.x, a.z - sym.z) - Math.hypot(b.x - sym.x, b.z - sym.z));
-    for (const from of [{ x: sym.x, z: sym.z }, ...own]) {
-      for (const shrink of SHRINKS) {
-        const reach = footprint(sym) * shrink;
-        const clash = (x: number, z: number): boolean =>
-          (sym.patch !== undefined && cells.length > 0 && cells[siteAt(cells, x, z)]?.patch !== sym.patch) ||
-          isWet(t, x, z) ||
-          slopeAt(t.lattice, x, z) > (tree ? PLANT_SLOPE : 24) ||
-          blocked(x, z) ||
-          occupied.some((o) => Math.hypot(o.x - x, o.z - z) < o.radius + reach) ||
-          crowned.some((o) => Math.hypot(o.x - x, o.z - z) < o.radius + reach);
-        for (let k = 0; at === null && k <= 24; k++) {
-          const a = k * 2.4;
-          const x = from.x + Math.cos(a) * k * 0.6;
-          const z = from.z + Math.sin(a) * k * 0.6;
-          if (!clash(x, z)) at = [x, z, shrink];
+    for (const crowded of [false, true]) {
+      for (const from of [{ x: sym.x, z: sym.z }, ...own]) {
+        for (const shrink of SHRINKS) {
+          const reach = footprint(sym) * shrink;
+          const clash = (x: number, z: number): boolean =>
+            (sym.patch !== undefined && cells.length > 0 && cells[siteAt(cells, x, z)]?.patch !== sym.patch) ||
+            isWet(t, x, z) ||
+            slopeAt(t.lattice, x, z) > (tree ? PLANT_SLOPE : 24) ||
+            ((!crowded || tree) && blocked(x, z)) ||
+            occupied.some((o) => Math.hypot(o.x - x, o.z - z) < o.radius + reach) ||
+            (!crowded && crowned.some((o) => Math.hypot(o.x - x, o.z - z) < o.radius + reach));
+          for (let k = 0; at === null && k <= 24; k++) {
+            const a = k * 2.4;
+            const x = from.x + Math.cos(a) * k * 0.6;
+            const z = from.z + Math.sin(a) * k * 0.6;
+            if (!clash(x, z)) at = [x, z, shrink];
+          }
+          if (at !== null) break;
         }
         if (at !== null) break;
       }
       if (at !== null) break;
     }
-    if (at === null) continue;
-    const [x, z, shrink] = at;
+    // With no room anywhere on its patch even so, it stands where the layout put it, at its smallest.
+    const [x, z, shrink] = at ?? [sym.x, sym.z, SHRINKS[SHRINKS.length - 1] as number];
     const scale = sym.scale * shrink;
     const reach = footprint(sym) * shrink;
     if (tree) {
