@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { BIOME_PRIMITIVES, RELIEF_PRIMITIVES } from "@gaia/primitives";
 import { type CodeFacts, type FileFacts, Library, rand, seedOf } from "@gaia/schema";
-import { OPENING, type Terrain, amongCode, bakeTerrain, openingSpot, waterDepthAt } from "@gaia/terrain";
+import { OPENING, type Terrain, amongCode, bakeTerrain, openingSpot, openingView, waterDepthAt } from "@gaia/terrain";
 import { composeWorld, judgeWorld, layoutWorld, standInJev } from "@gaia/world";
 import type { WorldDocument } from "../../world-service/protocol.ts";
 import { codeLab, provingWorld } from "./code-world.ts";
@@ -74,23 +74,30 @@ function expectLooksDownstream({ terrain, at }: ReturnType<typeof landing>, what
   expect(along, `${what}: the person looks downstream`).toBeGreaterThan(Math.SQRT1_2);
 }
 
+/** The view is open, the ground ahead never rising to fill it, and something that stands for code is in it. */
+function expectGoodView({ terrain, at, world }: ReturnType<typeof landing>, what: string): void {
+  const view = openingView(terrain, world, at.x, at.z, at.yaw);
+  expect(view.rise, `${what}: the ground ahead stays below the eye`).toBeLessThanOrEqual(OPENING.rise);
+  expect(view.seen, `${what}: something that stands for code is in view`).toBeGreaterThan(0);
+}
+
 describe("where a person first stands in a world from code", () => {
   // Gaia's world bakes whole here, as the page bakes it: about 15 seconds alone, longer while other work shares the machine.
-  it("is among Gaia's own code, on dry ground beside a stream, looking downstream", { timeout: 180_000 }, async () => {
+  it("is among Gaia's own code, on dry ground beside a stream, looking downstream over open ground at code", { timeout: 180_000 }, async () => {
     const { world, judges, summary } = await laySnapshot("jev", "a test");
     const laid = landing({ root: world.name, facts: snapshotFacts(), world, judges, summary, judged: {} });
     expectAmongCode(laid, "Gaia's world");
-    // Beside a stream: one runs within a few banks' width of where the person stands.
-    const nearest = Math.min(...laid.terrain.streams.flatMap((s) => s.stations.map((p) => Math.hypot(p.x - laid.at.x, p.z - laid.at.z))));
-    expect(nearest).toBeLessThan(OPENING.bank + OPENING.reach);
-    // Its nearest stretch is the end of a stream that dries away, which the person once faced past, looking at grass.
+    // Its stretch nearest the repository's heart is the end of a stream that dries away: the first rule stood the
+    // person there, facing past the water onto a slope of grass that rose 6.4 degrees above the eye.
     expectLooksDownstream(laid, "Gaia's world");
+    expectGoodView(laid, "Gaia's world");
   });
 
-  it("is among the proving ground's code, on dry ground, looking downstream", { timeout: 120_000 }, () => {
+  it("is among the proving ground's code, on dry ground, looking downstream over open ground at code", { timeout: 120_000 }, () => {
     const laid = landing(provingWorld());
     expectAmongCode(laid, "the proving ground");
     expectLooksDownstream(laid, "the proving ground");
+    expectGoodView(laid, "the proving ground");
   });
 
   // Each made-up world is judged by the stand-in and baked whole: five to eight seconds each. In these three, a
