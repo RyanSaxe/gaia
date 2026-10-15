@@ -1155,17 +1155,19 @@ export function createFieldMap(
       }
       ctx.globalAlpha = 1;
     }
-    // Buildings and landmarks name themselves once the map is close enough to read them, off the rose and every
-    // name lettered.
+    // Buildings and landmarks name themselves once the map is close enough to read them, under their own mark and
+    // off the rose, every other mark and every name lettered.
     if (near > 1.6) {
       ctx.font = `italic 12.5px ${SERIF}`;
       const named = [...stood.landmarks.map((l) => ({ ...l, below: 15 })), ...stood.buildings.map((b) => ({ ...b, below: 13 }))];
       for (const m of named) {
         const x = sx(m.x);
-        const y = sy(m.z) + m.below * grow + 6;
+        const foot = sy(m.z);
+        const y = foot + m.below * grow + 6;
         const halfW = ctx.measureText(m.name).width / 2 + 3;
         const box: [number, number, number, number] = [x - halfW, y - 8, x + halfW, y + 8];
-        if (!visible(x, y, 0) || !apart(box, [rose, ...taken])) continue;
+        const others = marks.filter(([a, b, c, d]) => x < a || x > c || foot < b || foot > d);
+        if (!visible(x, y, 0) || !apart(box, [rose, ...others, ...taken])) continue;
         taken.push(box);
         letter(ctx, m.name, x, y, style.ink, halo, 3);
       }
