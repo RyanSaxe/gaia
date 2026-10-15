@@ -15,8 +15,9 @@
 // world stands, its relief is drawn in with the same hand: the hills, ponds,
 // contours and trees wash in over each area's own ground, from the middle
 // outward as the pen went over the borders, while the pen draws each river
-// from its source to its mouth and each trail along its way. Then the paper
-// folds away into the world, as a jump on the map does.
+// from its source to its mouth and each trail along its way. As soon as the
+// world is ready to show, the paper folds away into it, as a jump on the map
+// does, and whatever of the drawing is still to come goes with it.
 //
 // Between those, a pencil shows what Jev is doing to the code. It shades
 // exactly the ground each wash will paint, in light graphite, one hatching
@@ -57,24 +58,20 @@ import type { WaitView } from "./wait.ts";
 
 /**
  * How the map paints itself, ms, as wait.css times it: the pen over one border and the most it staggers over all of
- * them; a wash coming in; a name being lettered; a mark coming in, the time between
- * two marks, at least and at most, and the most all the marks take; the relief's wash staggered over the areas, and
- * one area's coming in; the pen over the rivers and the trails, when it starts on each once the world stands, how
- * far it goes a millisecond in the sheet's pixels, the least and the most one line takes, and the time between two
- * lines; and the moment after the last thing arrived before the paper folds away, and the fold.
+ * them; a wash coming in; the time between two marks, at least and at most, and the most all the marks take; the
+ * relief's wash staggered over the areas, and one area's coming in; the pen over the rivers and the trails, when it
+ * starts on each once the world stands, how far it goes a millisecond in the sheet's pixels, the least and the most
+ * one line takes, and the time between two lines; and the paper folding away.
  */
 const PACE = {
   penMs: 1300,
   penSpreadMs: 2100,
   washMs: 1400,
-  nameMs: 900,
-  markMs: 700,
   markGapMs: [200, 600],
   marksMs: 5000,
   relief: { spreadMs: 1000, ms: 800 },
   rivers: { startMs: 250, pxPerMs: 0.5, ms: [600, 2000], gapMs: 120 },
   trails: { startMs: 700, pxPerMs: 0.7, ms: [400, 1400], gapMs: 60 },
-  restMs: 300,
   foldMs: 1100,
 } as const;
 /**
@@ -198,7 +195,10 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
   // ---------- idle work: one queue of steps, a few milliseconds of the page's idle time at a time ----------
   const jobs: Generator<void>[] = [];
   let idleHandle = 0;
+  /** Once the paper folds, the wait takes no more work and brings in no more marks. */
+  let folded = false;
   const work = (job: Generator<void>): void => {
+    if (folded) return;
     jobs.push(job);
     schedule();
   };
@@ -268,10 +268,8 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
   let stoodWaiting: StoodWorld | null = null;
   /** Layers shown and not yet copied into the sheet beneath. */
   let showing = 0;
-  /** What lift waits for: the land's own work, every mark drawn, and the relief come in. */
+  /** The land's own work, done once every name is placed. */
   let ready: Promise<void> = Promise.resolve();
-  let marksDrawn: Promise<void> = Promise.resolve();
-  let reliefShown: Promise<void> = Promise.resolve();
 
   // ---------- the pace: every stroke one after another, at a hand's pace ----------
   const names = pacer<string>(PACED.name);
@@ -294,6 +292,7 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
   }
   /** Something new is queued: draw from now. */
   const pace = (): void => {
+    if (folded) return;
     window.clearTimeout(ticking);
     ticking = window.setTimeout(tick, 0);
   };
@@ -827,8 +826,7 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
   }
 
   // ---------- names, as each area's last answer comes in ----------
-  /** When the last name was lettered, and the names asked for so far. */
-  let lastName = 0;
+  /** The names asked for so far. */
   const lettering = new Set<string>();
   /** An area's last answer is in: its name is lettered in its turn, at the pace names are lettered. */
   function letter(path: string): void {
@@ -847,7 +845,6 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
     el.dataset.due = "";
     namesEl.append(el);
     show(el);
-    lastName = performance.now();
   }
 
   // ---------- marks, while the world bakes ----------
@@ -868,52 +865,48 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
     all.sort((a, b) => Math.hypot(a.x, a.z) - Math.hypot(b.x, b.z));
     const gap = Math.max(PACE.markGapMs[0], Math.min(PACE.markGapMs[1], PACE.marksMs / Math.max(1, all.length)));
     const start = performance.now();
-    marksDrawn = new Promise((resolve) => {
-      if (all.length === 0) resolve();
-      work(
-        (function* (): Generator<void> {
-          for (const [q, m] of all.entries()) {
-            // Each mark on its own canvas round its foot, as large as the tallest mark the map draws, then cut to it.
-            const fx = 90 * s;
-            const fy = 125 * s;
-            const canvas = document.createElement("canvas");
-            canvas.width = Math.ceil(180 * s * dpr);
-            canvas.height = Math.ceil(170 * s * dpr);
-            const c = canvas.getContext("2d") as CanvasRenderingContext2D;
-            c.setTransform(dpr, 0, 0, dpr, 0, 0);
-            const [bx0, by0, bx1, by1] = m.draw(c, fx, fy);
-            const cx = Math.max(0, Math.floor(bx0 * dpr));
-            const cy = Math.max(0, Math.floor(by0 * dpr));
-            const crop = document.createElement("canvas");
-            crop.width = Math.max(1, Math.min(canvas.width, Math.ceil(bx1 * dpr)) - cx);
-            crop.height = Math.max(1, Math.min(canvas.height, Math.ceil(by1 * dpr)) - cy);
-            (crop.getContext("2d") as CanvasRenderingContext2D).drawImage(canvas, cx, cy, crop.width, crop.height, 0, 0, crop.width, crop.height);
-            crop.style.width = `${crop.width / dpr}px`;
-            crop.style.height = `${crop.height / dpr}px`;
-            const el = document.createElement("div");
-            el.className = "wait-mark";
-            el.style.left = placed((m.x + l.reach) * zoom, cx / dpr - fx);
-            el.style.top = placed((m.z + l.reach) * zoom, cy / dpr - fy);
-            el.style.width = crop.style.width;
-            el.style.height = crop.style.height;
-            const slide = document.createElement("div");
-            slide.className = "wait-reveal";
-            slide.append(crop);
-            el.append(slide);
-            const last = q === all.length - 1;
-            window.setTimeout(
-              () => {
-                marksEl.append(el);
-                show(el);
-                if (last) window.setTimeout(resolve, PACE.markMs);
-              },
-              Math.max(0, start + q * gap - performance.now()),
-            );
-            yield;
-          }
-        })(),
-      );
-    });
+    work(
+      (function* (): Generator<void> {
+        for (const [q, m] of all.entries()) {
+          // Each mark on its own canvas round its foot, as large as the tallest mark the map draws, then cut to it.
+          const fx = 90 * s;
+          const fy = 125 * s;
+          const canvas = document.createElement("canvas");
+          canvas.width = Math.ceil(180 * s * dpr);
+          canvas.height = Math.ceil(170 * s * dpr);
+          const c = canvas.getContext("2d") as CanvasRenderingContext2D;
+          c.setTransform(dpr, 0, 0, dpr, 0, 0);
+          const [bx0, by0, bx1, by1] = m.draw(c, fx, fy);
+          const cx = Math.max(0, Math.floor(bx0 * dpr));
+          const cy = Math.max(0, Math.floor(by0 * dpr));
+          const crop = document.createElement("canvas");
+          crop.width = Math.max(1, Math.min(canvas.width, Math.ceil(bx1 * dpr)) - cx);
+          crop.height = Math.max(1, Math.min(canvas.height, Math.ceil(by1 * dpr)) - cy);
+          (crop.getContext("2d") as CanvasRenderingContext2D).drawImage(canvas, cx, cy, crop.width, crop.height, 0, 0, crop.width, crop.height);
+          crop.style.width = `${crop.width / dpr}px`;
+          crop.style.height = `${crop.height / dpr}px`;
+          const el = document.createElement("div");
+          el.className = "wait-mark";
+          el.style.left = placed((m.x + l.reach) * zoom, cx / dpr - fx);
+          el.style.top = placed((m.z + l.reach) * zoom, cy / dpr - fy);
+          el.style.width = crop.style.width;
+          el.style.height = crop.style.height;
+          const slide = document.createElement("div");
+          slide.className = "wait-reveal";
+          slide.append(crop);
+          el.append(slide);
+          window.setTimeout(
+            () => {
+              if (folded) return;
+              marksEl.append(el);
+              show(el);
+            },
+            Math.max(0, start + q * gap - performance.now()),
+          );
+          yield;
+        }
+      })(),
+    );
   }
 
   // ---------- the relief, once the world stands ----------
@@ -923,7 +916,7 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
       stoodWaiting = stood;
       return;
     }
-    reliefShown = (async () => {
+    void (async () => {
       const zoom = side / (l.reach * 2);
       // The pen sets out over the rivers and the trails at once, while the relief is painted out of sight.
       const pens = penLines(l, stood, zoom);
@@ -1154,15 +1147,15 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
       veil.style.setProperty("--night", n.toFixed(2));
     },
     async lift() {
-      await ready;
-      await Promise.all([marksDrawn, reliefShown, allPaced()]);
-      // And every name asked for written: the last is lettered over as long as the pen takes over a name.
-      await wait(Math.max(0, lastName + PACE.nameMs - performance.now()));
-      await wait(PACE.restMs);
+      // The paper folds as soon as the world is ready to show, and whatever of the drawing is still to come goes with
+      // it: nothing of the wait keeps painting under the world.
+      folded = true;
+      jobs.length = 0;
+      window.clearTimeout(ticking);
       sheetEl.classList.add("folding");
       veil.classList.add("lifted");
       await wait(PACE.foldMs);
-      // Nothing of the wait keeps animating, or holds its canvases, under the world.
+      // Nor animating, or holding its canvases.
       veil.replaceChildren();
     },
     sheet: () => sheetEl.getBoundingClientRect(),
