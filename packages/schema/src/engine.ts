@@ -46,6 +46,14 @@ export interface EngineMethods {
    */
   "project.commit": { params: { root: string }; result: { commit: string | null } };
   /**
+   * How many commits since `from` up to `to` touched a file under `root`,
+   * or null when `from` is not in `to`'s history (after a rebase or a switch
+   * to another branch) or either is not a commit git knows. The start asks
+   * it to tally, on a world's card, the commits since the person last
+   * opened it.
+   */
+  "project.commits": { params: { root: string; from: string; to: string }; result: { commits: number | null } };
+  /**
    * Sends every request whose waits are met, up to `max` (256 by default),
    * as many at once as Jev takes: the links first, then folders top-down
    * and each file after its folder. Returns the nodes that settled, so the

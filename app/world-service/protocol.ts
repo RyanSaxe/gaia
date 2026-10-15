@@ -39,7 +39,10 @@ export interface RecentWorld {
    * is still the commit it was painted from.
    */
   readonly picture?: string;
-  /** The commit the world was read from when its picture was painted; a picture never comes without it. */
+  /**
+   * The commit the world was read from when the person last opened it, absent when it was read from disk. Its picture
+   * pictures this commit: a picture never comes without it.
+   */
   readonly commit?: string;
   /**
    * Where the person stood when they last left this world (`world.stood`), so the next open lands them there. It is
@@ -47,6 +50,11 @@ export interface RecentWorld {
    * store whole and a project's holds all of Jev's answers.
    */
   readonly stood?: StoodSpot;
+  /**
+   * Offered only: how many commits have touched the folder since the person last opened it, when its code has moved
+   * on from `commit`, or null when that commit is no longer in its history, as after a rebase.
+   */
+  readonly commitsSince?: number | null;
 }
 
 /** What the start page offers: the worlds opened before, and why the last address written led nowhere, if it did. */

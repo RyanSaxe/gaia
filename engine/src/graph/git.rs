@@ -128,33 +128,64 @@ pub fn name(root: &Path) -> Option<String> {
     Some(checkout.file_name()?.to_string_lossy().into_owned())
 }
 
+/// Runs git in `root`, never reaching the network.
+fn git_in(root: &Path, args: &[&str]) -> Option<std::process::Output> {
+    Command::new("git")
+        .env("GIT_NO_LAZY_FETCH", "1")
+        .arg("-C")
+        .arg(root)
+        .args(args)
+        .output()
+        .ok()
+}
+
+/// Whether `from` is `to` or in its history. Both must be commit ids, so
+/// neither can be read as one of git's options.
+fn is_ancestor(root: &Path, from: &str, to: &str) -> bool {
+    let id = |c: &str| (4..=64).contains(&c.len()) && c.chars().all(|ch| ch.is_ascii_hexdigit());
+    id(from)
+        && id(to)
+        && git_in(root, &["merge-base", "--is-ancestor", from, to])
+            .is_some_and(|out| out.status.success())
+}
+
+/// How many commits since `from` up to `to` touched a file under `root`.
+/// None when `from` is not in `to`'s history, as after a rebase or a switch
+/// to another branch, or when either is not a commit git knows.
+pub fn commits_between(root: &Path, from: &str, to: &str) -> Option<u64> {
+    if !is_ancestor(root, from, to) {
+        return None;
+    }
+    let out = git_in(
+        root,
+        &["rev-list", "--count", &format!("{from}..{to}"), "--", "."],
+    )?;
+    if !out.status.success() {
+        return None;
+    }
+    String::from_utf8_lossy(&out.stdout).trim().parse().ok()
+}
+
 /// Where each file that existed at `from` lives at `to`, composing git's
 /// renames commit by commit, at git's own 50% similarity. Files never
 /// renamed are left out. None when `from` is not an ancestor of `to`.
 pub fn renames(root: &Path, from: &str, to: &str) -> Option<BTreeMap<String, String>> {
-    let git = |args: &[&str]| {
-        Command::new("git")
-            .env("GIT_NO_LAZY_FETCH", "1")
-            .arg("-C")
-            .arg(root)
-            .args(args)
-            .output()
-            .ok()
-    };
-    let ancestor = git(&["merge-base", "--is-ancestor", from, to])?;
-    if !ancestor.status.success() {
+    if !is_ancestor(root, from, to) {
         return None;
     }
     let range = format!("{from}..{to}");
-    let out = git(&[
-        "log",
-        "--reverse",
-        "--relative",
-        "-M50%",
-        "--name-status",
-        "--format=%x1e",
-        &range,
-    ])?;
+    let out = git_in(
+        root,
+        &[
+            "log",
+            "--reverse",
+            "--relative",
+            "-M50%",
+            "--name-status",
+            "--format=%x1e",
+            &range,
+        ],
+    )?;
     if !out.status.success() {
         return None;
     }
