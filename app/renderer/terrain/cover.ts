@@ -40,6 +40,7 @@ ${VITALITY_GLSL}
 attribute vec4 aBlade; // x, z as a share of the blade's patch, rotation, height
 attribute vec4 aSeed; // tint, flower, keep, cover pick
 attribute vec2 aThin; // where in the thinning band the blade narrows away, 0 to 1; its reach
+attribute vec3 aBloom; // where a flower's vertex lies: round its bloom's rim, or on its stem (z 0)
 varying vec3 vWorld;
 varying vec3 vNormal;
 varying vec3 vGroundNormal;
@@ -51,6 +52,7 @@ varying vec3 vLow;
 varying vec3 vHigh;
 varying vec3 vTip;
 varying vec3 vBloom;
+varying vec2 vRound;
 
 // The world's one wind field (WIND_FIELD_GLSL): over a light breeze,
 // irregular gusts travel downwind as soft fronts, so waves roll across the
@@ -173,16 +175,12 @@ void main() {
   }
 
   float side = position.x;
-  // A flower's rows crowd toward its top, so its head is a small round dab on a long stem.
-  float t = mix(position.y, position.y < 0.75 ? position.y * 1.24 : 0.88 + (position.y - 0.71) * 0.41, flower);
+  float t = position.y;
   // Outline: a pointed blade that stays full to near its soft tip, or a round leaf.
   float lance = pow(1.0 - t, 0.7) * (1.0 + 0.6 * t);
   float leaf = sqrt(max(0.0, 1.0 - pow(2.0 * t - 1.0, 2.0))) * 1.15 + 0.12 * (1.0 - t);
   float outline = mix(lance, leaf, form.y);
-  // A flower is a slim stem that opens a small round head at its top. Seen
-  // at eye height, a head any larger reads as confetti.
-  float head = smoothstep(0.9, 0.94, t);
-  float wide = shape.y * keep * near * standing * mix(outline, mix(0.18, 0.95, head), flower);
+  float wide = shape.y * keep * near * standing * mix(outline, 0.18, flower);
 
   vec2 facing = vec2(-sin(aBlade.z), cos(aBlade.z));
   vec3 across = vec3(cos(aBlade.z), 0.0, sin(aBlade.z));
@@ -197,11 +195,28 @@ void main() {
   vec2 wind = WIND_DIR * give * (0.1 + 0.12 * sway + 0.5 * gust) + vec2(-WIND_DIR.y, WIND_DIR.x) * flutter * 0.05 * give;
   vec3 tangent;
   vec3 local = spine(t, facing, lean, arc, wind, tangent) * h + across * side * wide;
-  vec3 world = vec3(xz.x, g.x - 0.02, xz.y) + local;
   // The blade's face, rounded across its width so it shades like a soft leaf.
   vNormal = normalize(cross(across, tangent) + across * side * 0.55);
-  vWorld = world;
   vT = t;
+  vRound = aBloom.xy;
+  if (flower > 0.5) {
+    // A flower is a slim stem crowned by a round bloom turned to the eye, so
+    // from every side it reads as a bloom rather than a card. The bloom rides
+    // the top of the blade's spine, so it sways with the grass. Its area is a
+    // ninth of its blade's width times its height: 3 to 6 cm across.
+    vec3 right = vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]);
+    vec3 up = vec3(viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1]);
+    vec3 eye = vec3(viewMatrix[0][2], viewMatrix[1][2], viewMatrix[2][2]);
+    float radius = 0.19 * sqrt(shape.y * h) * keep * near * standing;
+    vec3 middle = spine(1.0, facing, lean, arc, wind, tangent) * h - up * radius;
+    vec3 rim = right * aBloom.x + up * aBloom.y;
+    local = aBloom.z > 0.5 ? middle + rim * radius : (aBloom.y < 0.0 ? middle - up * radius : vec3(0.0)) + right * side * wide;
+    // The bloom shades as a low dome facing the eye; the stem as a round stalk.
+    vNormal = normalize(eye + (aBloom.z > 0.5 ? rim * 0.8 : right * side * 0.55));
+    vT = aBloom.z > 0.5 ? 0.96 : -aBloom.y * 0.9;
+  }
+  vec3 world = vec3(xz.x, g.x - 0.02, xz.y) + local;
+  vWorld = world;
   vTint = aSeed.x;
   vGust = gust;
   float pick = aSeed.y / max(flowers, 1e-4);
@@ -234,6 +249,7 @@ varying vec3 vLow;
 varying vec3 vHigh;
 varying vec3 vTip;
 varying vec3 vBloom;
+varying vec2 vRound;
 void main() {
   // Deep at the base, the cover's own green through the middle, a soft warm tip.
   vec3 albedo = mix(vLow, vHigh, smoothstep(0.05, 0.85, vT * 0.85 + (vTint - 0.5) * 0.35));
@@ -242,12 +258,20 @@ void main() {
   albedo *= mix(0.68, 1.0, smoothstep(0.0, 0.55, vT)) * (0.94 + 0.12 * vTint);
   // A gust bows the blades over and shows their paler sheen.
   albedo = mix(albedo, vTip, vGust * 0.14 * smoothstep(0.2, 0.9, vT));
-  // Flowers fade into their blades at night, so the dark meadow never reads as confetti.
-  if (vFlower > 0.5 && vT > 0.86) albedo = mix(vBloom * (0.9 + 0.1 * vT), albedo, uNightness * 0.75);
+  bool bloom = vFlower > 0.5 && vT > 0.9;
+  if (bloom) {
+    // Five rounded petals round a warm eye, paler at their tips; between
+    // and past the petals the bloom's rim shows the green it grows from.
+    float r = length(vRound) / (0.86 + 0.14 * cos(atan(vRound.y, vRound.x) * 5.0 + vTint * 6.28));
+    vec3 petals = mix(vBloom * vec3(0.95, 0.8, 0.45), vBloom * (0.9 + 0.1 * r), smoothstep(0.16, 0.3, r));
+    // Flowers fade into their blades at night, so the dark meadow never reads as confetti.
+    albedo = mix(mix(petals, vHigh * 0.85, smoothstep(0.86, 1.0, r)), albedo, uNightness * 0.75);
+  }
 
   // Blades take the light of the ground they stand on, turned a little by
   // their own face, so the field reads as one painted surface that ripples.
-  vec3 face = normalize(gl_FrontFacing ? vNormal : -vNormal);
+  // A bloom's face is a low dome that always faces the eye.
+  vec3 face = normalize(gl_FrontFacing || bloom ? vNormal : -vNormal);
   vec3 n = normalize(vGroundNormal + face * 0.45);
   float level = max(uSunDirection.y, 0.05);
   float nDotL = max(level + (dot(n, uSunDirection) - level) * 1.3, 0.0);
@@ -292,12 +316,24 @@ const TIERS = [
  */
 export function createGrass(light: SceneLight, ground: GroundTexture, covers: RegionCovers, under: Clearings, count = 150000, radius = 60): Grass {
   // One blade, one unit wide and tall: five rows and a soft tip. The vertex
-  // shader gives it its cover's outline, lean and arc.
+  // shader gives it its cover's outline, lean and arc. A flower draws the
+  // same vertices as a stem, its first two rows, and a bloom: the stem's top
+  // is the bloom's foot, and the other rows go round it to its top, at
+  // these angles from the bloom's middle, so the bloom is an octagon.
   const rows = [0, 0.26, 0.5, 0.71, 0.87];
+  const round = [-90, -90, -45, 0, 45].map((deg) => (deg * Math.PI) / 180);
   const blade = new THREE.BufferGeometry();
   const verts: number[] = [];
-  for (const t of rows) verts.push(-1, t, 0, 1, t, 0);
+  const bloom: number[] = [];
+  rows.forEach((t, r) => {
+    verts.push(-1, t, 0, 1, t, 0);
+    const a = round[r] as number;
+    const onRim = r >= 2 ? 1 : 0;
+    // The stem's foot (0, 0) and top (0, -1); the rim's points left and right of the bloom's middle.
+    for (const side of [-1, 1]) bloom.push(onRim === 1 ? side * Math.cos(a) : 0, r === 0 ? 0 : Math.sin(a), onRim);
+  });
   verts.push(0, 1, 0);
+  bloom.push(0, 1, 1);
   const index: number[] = [];
   for (let r = 0; r + 1 < rows.length; r++) {
     const a = r * 2;
@@ -310,6 +346,7 @@ export function createGrass(light: SceneLight, ground: GroundTexture, covers: Re
   const geometry = new THREE.InstancedBufferGeometry();
   geometry.index = blade.index;
   geometry.setAttribute("position", blade.getAttribute("position"));
+  geometry.setAttribute("aBloom", new THREE.Float32BufferAttribute(bloom, 3));
   const data = new Float32Array(count * 4);
   const seeds = new Float32Array(count * 4);
   const thin = new Float32Array(count * 2);

@@ -389,7 +389,11 @@ thin, shorten and turn to straw (see Vitality on the land).
 Each cover sets its blades' form: how far they lean, how round their outline
 is (a pointed blade or a round leaf) and how far they arc over. Lush grass is
 soft arcing blades with blunt tips; heather is splayed sprigs with purple
-tops in bushy tufts; moss and clover are low round leaves. Blades bend as
+tops in bushy tufts; moss and clover are low round leaves. A cover's
+flowers are slim stems, each crowned by a small round bloom of five petals
+round a warm eye, turned to the person from every side so none reads as a
+flat card: about 3 cm across in clover, 6 cm in lush grass. Blooms sway
+with their blades and fade into them at night. Blades bend as
 arcs that keep their length. The world's one wind rolls across the field in
 broad, soft gusts that bow the blades and show their paler sheen, and the
 same gusts reach the trees and bushes (see Leaves).
