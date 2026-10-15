@@ -802,6 +802,9 @@ finger and keys all follow the same three rules.
   moves no one, a drag there does nothing, and Esc folds it. The keys still
   walk, and the map's traveller follows.
 
+The fore-edge's tabs fade in once the journal has come to your hands, and
+out as it is shut. A new size of window moves the book at once.
+
 The open journal's pages turn the way a book's do. A click or a tap on bare
 paper turns that way, the right-hand page forward and the left back.
 Anything on a page that answers a click of its own keeps it: a row, a name,
