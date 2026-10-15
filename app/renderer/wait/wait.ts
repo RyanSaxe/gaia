@@ -49,6 +49,12 @@ export interface WaitView {
   chosen(picture: string, aspect: number, commit: string | undefined): void;
   /** The sheet's paper as it is painted now, in its shape: the face of a fresh card that rises into the sheet. */
   face(): HTMLCanvasElement;
+  /**
+   * Pencils on the sheet what `draw` draws on its face, given the face's place on the sheet as `face` has it: what a
+   * chosen card had pencilled on its face, so the card rises into a sheet that has it. Each wash takes it away in just
+   * the measure that it paints, as it does the pencil's marks of Jev's work.
+   */
+  pencil(draw: (c: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) => void): void;
 }
 
 export interface Wait extends WaitView {

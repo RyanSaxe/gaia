@@ -66,7 +66,7 @@ export function withStart(wait: Wait, veil: HTMLElement, style: StartStyle = sta
   const held = (paint: () => void): void => void covered.then(paint);
   const table = (): StartPage => {
     cover();
-    return createTable(veil, { hour, sheet: wait.sheet, chosen: wait.chosen, face: wait.face, landed: () => uncover() });
+    return createTable(veil, { hour, sheet: wait.sheet, chosen: wait.chosen, face: wait.face, pencil: wait.pencil, landed: () => uncover() });
   };
   return {
     ...wait,

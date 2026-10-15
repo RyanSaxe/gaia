@@ -4,7 +4,9 @@
 // sees. Touching a card chooses its world: the card lifts, rises toward the
 // person and becomes the wait's sheet, while the table falls out of focus
 // behind it. A world with no picture to show, as one whose code has changed
-// since its map was drawn, lies as a card of the wait's bare sheet. A folder or an address gets a fresh card of plain paper, laid
+// since its map was drawn, lies as a card of the wait's bare sheet, with a
+// tally in pencil of the commits since the person last opened it when its
+// code has moved on (`tally.ts`). A folder or an address gets a fresh card of plain paper, laid
 // on the sheet and risen the same way, and so does a world opened with no
 // start. The table stays behind the wait until the world shows. Over the
 // canvas lie only clear hit areas for the cards, the line and the folder's
@@ -21,6 +23,7 @@ import { DECKLE_MASK } from "../immersive/map-styles.ts";
 import { REFUSALS, type StartPage, askFolder, placeOf } from "./choice.ts";
 import type { Writing } from "./table-ink.ts";
 import { tableLayout } from "./table-layout.ts";
+import { drawTally } from "./tally.ts";
 import { LAY_S, LIFT_S, RISE_S, type Rect, type Sheet, type TableScene, createTableScene } from "./table-scene.ts";
 
 /** How long the darker stroke takes to run along the line, and an answer to be written in, seconds. */
@@ -49,6 +52,8 @@ export interface TableOptions {
   readonly chosen?: (picture: string, aspect: number, commit: string | undefined) => void;
   /** The wait's sheet as it is painted now, in its shape: a fresh card's face, so it rises into the sheet as the sheet. */
   readonly face?: () => HTMLCanvasElement;
+  /** Pencils on the wait's sheet what a chosen card had pencilled on its face (`WaitView.pencil`). */
+  readonly pencil?: (draw: (c: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) => void) => void;
   /** The chosen card has become the wait's sheet: the sheet shows in its place, and the wait may paint on. */
   readonly landed?: () => void;
 }
@@ -197,7 +202,10 @@ export function createTable(veil: HTMLElement, options: TableOptions): StartPage
     // A world with no picture to show, as one whose code has changed since, lies as a card of the wait's own bare sheet,
     // in the sheet's shape, so it rises into the sheet as the sheet does for a fresh card, and its map is drawn there.
     const bare = pictures.includes(null) ? (options.face?.() ?? null) : null;
-    const next = createTableScene(tableLayout(phone, recent.length), recent.map((world, i) => ({ world, picture: pictures[i] ?? bare })), logo as HTMLImageElement, deckle as HTMLImageElement, { w, h, dpr: Math.min(window.devicePixelRatio || 1, 2) });
+    // One whose code has moved on since the person last opened it has the commits since tallied on it.
+    const tallies = recent.map((r) => (r.commitsSince === undefined ? null : tallyOf(r.commitsSince, r.root)));
+    const faces = recent.map((_, i) => pictures[i] ?? (bare === null ? null : tallied(bare, tallies[i] ?? null)));
+    const next = createTableScene(tableLayout(phone, recent.length), recent.map((world, i) => ({ world, picture: faces[i] ?? null })), logo as HTMLImageElement, deckle as HTMLImageElement, { w, h, dpr: Math.min(window.devicePixelRatio || 1, 2) });
     next.canvas.className = "table-view";
     next.hour(hour);
     next.write(writing);
@@ -220,6 +228,8 @@ export function createTable(veil: HTMLElement, options: TableOptions): StartPage
           if (settle === null || chosen !== null) return;
           const picture = pictures[i];
           if (r.picture !== undefined && picture !== null && picture !== undefined) options.chosen?.(r.picture, picture.naturalWidth / Math.max(1, picture.naturalHeight), r.commit);
+          const tally = tallies[i];
+          if (tally !== null && tally !== undefined) options.pencil?.(tally);
           lift(i, performance.now());
           choose(placeOf(r));
         });
@@ -227,6 +237,21 @@ export function createTable(veil: HTMLElement, options: TableOptions): StartPage
       }),
     );
     placeHits();
+  }
+
+  /** The tally of `commits` drawn on a card's face, the same strokes for the same world. */
+  type Pencilled = (c: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) => void;
+  const tallyOf = (commits: number | null, root: string): Pencilled => (c, x, y, w, h) => drawTally(c, x, y, w, h, commits, root);
+  /** The bare face with `pencilled` drawn on a copy of it, or the bare face itself with nothing to draw. */
+  function tallied(bare: HTMLCanvasElement, pencilled: Pencilled | null): HTMLCanvasElement {
+    if (pencilled === null) return bare;
+    const face = document.createElement("canvas");
+    face.width = bare.width;
+    face.height = bare.height;
+    const c = face.getContext("2d") as CanvasRenderingContext2D;
+    c.drawImage(bare, 0, 0);
+    pencilled(c, 0, 0, face.width, face.height);
+    return face;
   }
 
   /** Card `index` lifts from `at` and rises into the wait's sheet. */
