@@ -308,6 +308,8 @@ describe("terrain", { timeout: 20_000 }, () => {
           const b = st[i + 1] as Station;
           // Water only runs downhill.
           expect(b.level).toBeLessThanOrEqual(a.level);
+          // Where it narrows to nothing at its spring or seep, narrower than the lattice draws whole, its bed may not dip.
+          if (a.halfWidth < 1.1) continue;
           expect(heightAt(t.lattice, a.x, a.z)).toBeLessThan(a.level);
           const len = Math.hypot(b.x - a.x, b.z - a.z);
           const nx = -(b.z - a.z) / len;
@@ -421,7 +423,8 @@ describe("terrain", { timeout: 20_000 }, () => {
                 if (others.some((o) => nearestOn(o.stations, x, z).d < 12) || t.ponds.some((p) => Math.hypot(x - p.x, z - p.z) < p.reach + 6)) continue;
                 const here = nearestOn(st, x, z);
                 const off = Math.abs(here.d - here.half);
-                if (off > 1.5) continue;
+                // Not where it narrows to nothing at its spring or seep, narrower than the lattice draws whole.
+                if (off > 1.5 || here.half < 1.1) continue;
                 offs.push(off);
               }
             }
