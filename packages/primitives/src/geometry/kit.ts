@@ -66,8 +66,8 @@ export interface Channels {
   readonly grow?: number;
   /** How far the surface rots through into holes as vitality drops, 0 to 1. Zero when absent. */
   readonly rot?: number;
-  /** The grain the surface rots along: across its courses and up them, in tiles or bundles, and its kind (`GRAIN`). */
-  readonly grain?: Vec3;
+  /** The grain the surface rots along: across its courses and up them, in pieces, and its kind (`GRAIN`); or that, from where the vertex is. */
+  readonly grain?: Vec3 | ((p: Vec3) => Vec3);
   /** How the piece turns about its pivot while alive: axis times turns per second. */
   readonly spin?: Vec3;
   /** How fully the piece flies home to its pivot at dusk, 0 to 1. Zero when absent. */
@@ -187,7 +187,7 @@ export class PartBuilder {
     const spin = c.spin ?? SOLID;
     this.#spin.push(spin[0], spin[1], spin[2]);
     this.#roost.push(clamp(c.roost ?? 0, 0, 1));
-    const grain = c.grain ?? SOLID;
+    const grain = typeof c.grain === "function" ? c.grain(p) : (c.grain ?? SOLID);
     this.#grain.push(grain[0], grain[1], grain[2]);
     if (c.fall !== undefined && fall[3] > 0) this.#uses.fall = true;
     if ((c.grow ?? 0) > 0) this.#uses.grow = true;

@@ -6,7 +6,7 @@
 // sinks, the bell hangs askew, the forge goes cold and the granary slumps
 // off its stones. Nothing is rebuilt.
 
-import type { BuildContext, BuildingPlan, Built, Mass, Rand, Resolved } from "@gaia/schema";
+import { type BuildContext, type BuildingPlan, type Built, GRAIN, type Mass, type Rand, type Resolved, type Vec3 } from "@gaia/schema";
 import type { bellParams, dovecoteParams, forgeParams, granaryParams, wellParams } from "../../structure.ts";
 import { type Channels, PartBuilder, type V3, add, addScaled, clamp, cross, fbm3, lerp, lossThreshold, normalize, scale, sub } from "../kit.ts";
 import { UP, beam, box, log, quad, tri } from "../blocks.ts";
@@ -776,6 +776,9 @@ export function buildForge(p: Resolved<typeof forgeParams>, ctx: BuildContext, p
 
 // ---------- granary ----------
 
+/** How long a length of weatherboard rots away at a time, meters: the shader's cell for GRAIN.boards. */
+const BOARD = 0.6;
+
 /** A staddle stone standing at `foot`: a tapering post under a round cap like a mushroom's, so nothing climbs from the ground into the store. */
 function staddle(b: PartBuilder, foot: V3, ch: Channels, r: Rand): void {
   const square = (y: number, h: number): V3[] => [[-h, -h], [h, -h], [h, h], [-h, h]].map(([dx, dz]) => [foot[0] + (dx as number), y, foot[2] + (dz as number)] as V3);
@@ -853,7 +856,9 @@ export function buildGranary(p: Resolved<typeof granaryParams>, ctx: BuildContex
       const runs: [number, number][] = f.door && y - rowH / 2 < doorTop ? [[-f.half - 0.02, -doorHalf - 0.06], [doorHalf + 0.06, f.half + 0.02]] : [[-f.half - 0.02, f.half + 0.02]];
       for (const [s0, s1] of runs) {
         const c = addScaled(addScaled(addScaled(center, f.n, f.out + 0.018 + 0.006 * (j % 2)), f.u, (s0 + s1) / 2), UP, y);
-        box(wood, c, [f.u, UP, f.n], [(s1 - s0) / 2, rowH / 2 + 0.012, 0.016], 0.46 + 0.07 * (j % 2) + 0.04 * r.next(), body(0.6, { rot: boardRot(c) }));
+        // A board goes a length at a time, each length from its top edge down.
+        const grain = (q: Vec3): Vec3 => [((q[0] - center[0]) * f.u[0] + (q[2] - center[2]) * f.u[2]) / BOARD + 50, j + clamp((y + rowH / 2 - q[1]) / rowH, 0, 0.999), GRAIN.boards];
+        box(wood, c, [f.u, UP, f.n], [(s1 - s0) / 2, rowH / 2 + 0.012, 0.016], 0.46 + 0.07 * (j % 2) + 0.04 * r.next(), body(0.6, { rot: boardRot(c), grain }));
       }
     }
     // Its dark inside, which shows where the boards have rotted through.
