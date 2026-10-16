@@ -140,6 +140,13 @@ export function createGroundTexture(land: PageLand): GroundTexture {
   };
 }
 
+/**
+ * The sand beside water, meters: `narrow` along a straight stretch of stream, `wide` where the waterline curves
+ * (a bend's inside and outside, and a pond), between a contour curvature of `straight` and `curved` (one over the
+ * radius), measured `along` meters either way along the shore's contour.
+ */
+export const BANKS = { narrow: 0.7, wide: 2.6, straight: 0.012, curved: 0.04, along: 2.5 } as const;
+
 /** GLSL that reads the ground texture with the mesh's own triangle interpolation. */
 export const GROUND_SAMPLE_GLSL = /* glsl */ `
 uniform highp sampler2DArray uClip;
@@ -207,7 +214,23 @@ vec4 groundSample4(vec2 xz) {
 }
 vec3 groundSample(vec2 xz) { return groundSample4(xz).xyz; }
 vec2 groundAt(vec2 xz) { return groundSample(xz).xy; }
+// How far from the water its sand runs at a point beside it, meters, for the sand banks and the grass's edge alike:
+// ${BANKS.narrow.toFixed(2)} along a straight stretch, out to ${BANKS.wide.toFixed(2)} where the waterline curves, as a stream
+// leaves bare a point bar inside its bend and cuts its bank outside it, and round a pond. The curve is the shore's
+// own, along its contour: where water wraps round the land the shore falls either way along it, round a pond it rises.
+float bankWidth(vec2 xz, float shore) {
+  if (shore > ${BANKS.wide.toFixed(1)} + 1.0) return ${BANKS.narrow.toFixed(2)};
+  float e = 0.75;
+  vec2 g = vec2(groundSample(xz + vec2(e, 0.0)).z - groundSample(xz - vec2(e, 0.0)).z, groundSample(xz + vec2(0.0, e)).z - groundSample(xz - vec2(0.0, e)).z);
+  float len = length(g);
+  if (len < 1e-3) return ${BANKS.narrow.toFixed(2)};
+  vec2 t = vec2(-g.y, g.x) / len;
+  float h = ${BANKS.along.toFixed(1)};
+  float curve = (groundSample(xz + t * h).z + groundSample(xz - t * h).z - 2.0 * shore) / (h * h);
+  return mix(${BANKS.narrow.toFixed(2)}, ${BANKS.wide.toFixed(2)}, smoothstep(${BANKS.straight.toFixed(3)}, ${BANKS.curved.toFixed(3)}, abs(curve)));
+}
 `;
+
 
 /**
  * The wild land past the hand-over circle, the twin of `wildHeightAt` and
@@ -483,9 +506,10 @@ void main() {
     albedo = mix(albedo, cover.low * vec3(0.52, 0.6, 0.42), brush * wild * 0.85);
     albedo *= 1.0 - 0.08 * scrub * wild;
   }
-  // Sand banks a meter or two wide, darker and wet at the waterline, with a
-  // ragged edge where the grass (which reads the same distance) thins out.
-  float sand = 1.0 - smoothstep(1.2, 2.6, vShore + (fine - 0.5) * 1.2);
+  // Sand banks, darker and wet at the waterline, a narrow strip along a straight stretch and wider where the
+  // waterline curves (bankWidth), with a ragged edge where the grass (which reads the same distance) thins out.
+  float wide = bankWidth(vWorld.xz, vShore);
+  float sand = 1.0 - smoothstep(wide * 0.46, wide, vShore + (fine - 0.5) * 1.2 * wide / ${BANKS.wide.toFixed(1)});
   albedo = mix(albedo, uSand * mix(0.82, 1.0, smoothstep(0.2, 1.0, vShore)), sand * 0.85);
   // Trails: worn earth with a ragged, grassy edge, darker and smoother down
   // the trodden middle, with a dulled, trampled margin just outside.
