@@ -320,12 +320,12 @@ export function buildLookoutTower(p: TowerParams, ctx: BuildContext): Built {
       const loose = top - y0 < ch * 2.5 ? 0.12 : 0;
       const loss = c < 2 ? 0 : clamp(Math.max(fallsAt(rise, u) + loose, under), 0.02, MOST);
       for (const [b0, b1] of pieces) laid.laid.push({ a0: b0, a1: b1, y0, y1, loss });
-      // A falling block sinks down into the wall below it as it goes, never hanging in the air.
-      const pivot = foot(mid);
+      // A falling block sinks down into the wall below it as it goes, never hanging in the air; a block an opening
+      // cuts in two, each piece into the wall below itself, not into the opening.
       const shade = 0.52 + 0.22 * cr.next() + 0.08 * rise - (c < 2 ? 0.08 : 0);
-      const channels: Channels = { loss, droop: 0, wither: 0.45 + 0.4 * cr.next(), glow: 0, pivot, tint: (cr.next() - 0.5) * 0.05 };
+      const channels: Omit<Channels, "pivot"> = { loss, droop: 0, wither: 0.45 + 0.4 * cr.next(), glow: 0, tint: (cr.next() - 0.5) * 0.05 };
       const bulge = (cr.next() - 0.5) * 0.04;
-      for (const [b0, b1] of pieces) ringBlock(stone, sides, b0, b1, y0, y1, rad + bulge, thick, shade, channels);
+      for (const [b0, b1] of pieces) ringBlock(stone, sides, b0, b1, y0, y1, rad + bulge, thick, shade, { ...channels, pivot: foot((b0 + b1) / 2) });
     }
   }
 
@@ -353,15 +353,20 @@ export function buildLookoutTower(p: TowerParams, ctx: BuildContext): Built {
     const inset = thick * 0.55;
     const corner = (a: number, y: number, d: number): V3 => ringPoint(sides, a, rad - d, y);
     const out = ringNormal(sides, sl.along);
-    // The foot of the opening, for the door that never goes.
+    // The foot of the opening, which the door shrinks onto as it goes.
     const pivot = corner(sl.along, 0, inset);
-    // Panes go with the wall around them, so nothing hangs in the air once it falls.
+    // Panes, the door and its lintel go with the wall around them, so nothing hangs in the air once it falls.
     const rise = (y0 + y1) / 2 / height;
     const reveal = (half * 2.5) as number;
-    const wallLoss = sl.course < 2 ? 0 : Math.max(0, laid.under(sl.along - reveal, sl.along + reveal, y0 - 0.05, y1 + ch + 0.05));
+    const wallLoss = Math.max(0, laid.under(sl.along - reveal, sl.along + reveal, y0 - 0.05, y1 + ch + 0.05));
     if (sl.course === 0) {
-      quad(timber, [corner(sl.along - half, 0, inset), corner(sl.along + half, 0, inset), corner(sl.along + half, y1, inset), corner(sl.along - half, y1, inset)], out, 0.42, still(pivot, 0.8, { tint: 0.01 }));
-      box(timber, ringPoint(sides, sl.along, rad - 0.05, y1 + 0.05), [normalize(cross(UP, out)), UP, out], [rad * half * 1.25, 0.12, 0.14], 0.4, still(pivot, 0.8));
+      // The door and its lintel hold up the blocks laid over the doorway, which sink down through it as they go:
+      // they go with the last of those blocks, both shrinking onto the doorway's foot, or with the wall beside the
+      // doorway where nothing is laid over it.
+      const over = laid.laid.filter((b) => b.y0 > y1 && b.y0 < y1 + ch && overlaps(sl.along - half, sl.along + half, b.a0, b.a1)).map((b) => b.loss);
+      const goes = over.length === 0 ? wallLoss : Math.min(...over);
+      quad(timber, [corner(sl.along - half, 0, inset), corner(sl.along + half, 0, inset), corner(sl.along + half, y1, inset), corner(sl.along - half, y1, inset)], out, 0.42, still(pivot, 0.8, { tint: 0.01, loss: goes }));
+      box(timber, ringPoint(sides, sl.along, rad - 0.05, y1 + 0.05), [normalize(cross(UP, out)), UP, out], [rad * half * 1.25, 0.12, 0.14], 0.4, still(pivot, 0.8, { loss: goes }));
       continue;
     }
     // The pane goes just before the wall around it, shrinking onto its sill.
