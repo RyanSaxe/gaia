@@ -1,8 +1,8 @@
 // Turns the world's and a region's blueprints into the numbers every material
 // reads at one hour. The slots are chosen independently; this is where they
 // meet: the hour tints the sky and night deepens it, the region's air pulls
-// the horizon and fog toward its own color, the season turns the region's
-// ground, and the sun or moon colors the clouds.
+// the horizon and fog toward its own color, and the sun or moon colors the
+// clouds.
 
 import type {
   AccentSpec,
@@ -17,12 +17,11 @@ import type {
   MoonSpec,
   NativeFamilies,
   Rgb,
-  SeasonSpec,
   SkySpec,
   StarSpec,
   WindSpec,
 } from "@gaia/schema";
-import { hex, mixLab, seasonGround, shiftColor } from "@gaia/primitives";
+import { hex, mixLab } from "@gaia/primitives";
 import { lightAt } from "./day.ts";
 import { buildSlots } from "./realize.ts";
 
@@ -44,11 +43,10 @@ export interface SkyLook {
     readonly moon: MoonSpec;
     readonly stars: StarSpec;
   };
-  readonly season: SeasonSpec;
   readonly wind: WindSpec;
 }
 
-/** What one region grows and breathes, with the world's season applied. */
+/** What one region grows and breathes. */
 export interface RegionLook {
   readonly ground: GroundSpec;
   /** The ground's decline color: shared by every world, like component decline. */
@@ -64,7 +62,6 @@ export interface WorldLook {
   readonly light: LightSpec;
   readonly sky: SkyLook["sky"] & { readonly mid: Rgb };
   readonly fog: { readonly color: Rgb; readonly density: number; readonly mist: number };
-  readonly season: SeasonSpec;
   readonly ground: GroundSpec;
   readonly groundDecline: Rgb;
   readonly drift: AccentSpec | null;
@@ -83,7 +80,6 @@ const CLOUD_WHITE: Rgb = hex(0xfdfcf8);
 /** The night sky: a deep blue that lightens toward the horizon, never black. */
 const NIGHT_ZENITH: Rgb = hex(0x0f1b44);
 const NIGHT_HORIZON: Rgb = hex(0x2c4475);
-const NO_SHIFT = { hue: 0, pull: 0, maxTurn: 0, chroma: 1, lightness: 0 };
 
 function slotOutput<T>(built: ReturnType<typeof buildSlots>, name: string): T {
   const out = built.get(name)?.output;
@@ -110,32 +106,24 @@ export function realizeSky(world: Filled, lib: Library, seed: number, hour: numb
   return {
     light,
     sky: { zenith, horizon, clouds: sky.clouds, cloudLit, cloudShade, moon: day.moon, stars: day.stars },
-    season: slotOutput<SeasonSpec>(built, "season"),
     wind: slotOutput<WindSpec>(built, "wind"),
   };
 }
 
-export function realizeRegion(region: Filled, lib: Library, seed: number, season: SeasonSpec): RegionLook {
+export function realizeRegion(region: Filled, lib: Library, seed: number): RegionLook {
   const built = buildSlots(region.blueprint, region.kind, lib, { seed, facts: {} });
-  const accent = built.get("accents")?.output as AccentSpec | undefined;
-  let drift: AccentSpec | null = null;
-  if (accent !== undefined) {
-    const color =
-      accent.form === "leaves" ? season.fall : accent.form === "petals" ? shiftColor(accent.color, season.swatches.bloom ?? NO_SHIFT) : accent.color;
-    drift = { ...accent, color };
-  }
   return {
-    ground: seasonGround(slotOutput<GroundSpec>(built, "cover"), season),
+    ground: slotOutput<GroundSpec>(built, "cover"),
     groundDecline: GROUND_DECLINE,
     air: airOf(built),
-    drift,
+    drift: (built.get("accents")?.output as AccentSpec | undefined) ?? null,
     natives: slotOutput<NativeFamilies>(built, "natives").families,
   };
 }
 
 const airOf = (built: ReturnType<typeof buildSlots>): AtmosphereSpec => (built.get("air")?.output as AtmosphereSpec | undefined) ?? CLEAR_AIR;
 
-/** One region's air, as `realizeRegion` gives it; no season touches the air. */
+/** One region's air, as `realizeRegion` gives it. */
 export function regionAir(region: Filled, lib: Library, seed: number): AtmosphereSpec {
   return airOf(buildSlots(region.blueprint, region.kind, lib, { seed, facts: {} }));
 }
@@ -183,11 +171,10 @@ export function throughAir(sky: SkyLook, air: AtmosphereSpec): Pick<WorldLook, "
 /** Composes the shared sky at `hour` with one region's air and ground, as seen from inside that region. */
 export function realizeWorld(world: Filled, region: Filled, lib: Library, seed: number, hour: number): WorldLook {
   const sky = realizeSky(world, lib, seed, hour);
-  const local = realizeRegion(region, lib, seed, sky.season);
+  const local = realizeRegion(region, lib, seed);
   return {
     light: sky.light,
     ...throughAir(sky, local.air),
-    season: sky.season,
     ground: local.ground,
     groundDecline: local.groundDecline,
     drift: local.drift,

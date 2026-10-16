@@ -21,7 +21,7 @@ among the options by their descriptions and never writes a color or a number.
 
 Color works at three levels:
 
-1. **The world** sets light, sky, season and wind for everything.
+1. **The world** sets light, sky and wind for everything.
 2. **Each region's biome** sets its ground cover, wildflowers, air, drifting
    accents and the palette families native to it. Ground covers drift into
    each other across region edges (see Terrain).
@@ -36,10 +36,8 @@ masonry, trim, window-glass and smoke swatches, so a family's cottages
 belong with its plants. A tower's render is a shade of its own beside the
 walls, so a timber turret's plaster stands out against a tower behind it.
 Every family declines toward the same dry grey-brown, so failing
-code reads the same everywhere. A season shifts only healthy colors, keeps
-each family's identity, and pushes each shifted color a fixed distance away
-from its decline color. The `tint` channel varies hue within one swatch across
-a canopy; it never touches decline.
+code reads the same everywhere. The `tint` channel varies hue within one
+swatch across a canopy; it never touches decline.
 
 ## Leaves
 
@@ -1064,7 +1062,7 @@ a tower's top falls and a ring's stones lie down, as they do in the world.
 The colors, the dryness and the marks all read health as the world shows
 it (`shownVitality`), so land the world draws in ruin, at vitality 0.45 or
 below, the map washes ash, and land at 0.79 or more it washes green.
-The colors read as the world's own seasons, so the map carries no legend.
+The colors read as the land's own, so the map carries no legend.
 The wait paints the same washes (`wash.ts`), each file's health as it
 settles, and letters every area's name where the map letters it.
 

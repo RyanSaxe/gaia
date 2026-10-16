@@ -28,7 +28,6 @@ const ROLE_IO: Readonly<Record<Role, { input: string | null; output: string }>> 
   Relief: { input: null, output: "Landform" },
   Light: { input: null, output: "DaySpec" },
   Sky: { input: null, output: "SkySpec" },
-  Season: { input: null, output: "SeasonSpec" },
   Atmosphere: { input: null, output: "AtmosphereSpec" },
   Ground: { input: null, output: "GroundSpec" },
   Accents: { input: null, output: "AccentSpec" },

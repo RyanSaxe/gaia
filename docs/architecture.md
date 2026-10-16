@@ -228,8 +228,8 @@ requests, 24 to a request, each with the file's and each definition's
 importance, and an entity is asked in a request of its own. Jev never names a
 preset: `composeWorld` asks these first and then composes the world part by
 part through the planner (`composeThings` in
-`packages/world/src/compose.ts`): its sky (the world kind's light, sky,
-season and wind), each region's land (the biome kind's relief, ground cover,
+`packages/world/src/compose.ts`): its sky (the world kind's light, sky and
+wind, the light asked first), each region's land (the biome kind's relief, ground cover,
 air, accents and natives), the building or landmark of every thing Jev
 raised to one, entity, file or definition, and each trail Jev would walk (the link kind's route:
 its width, wear, edging, winding and crossing). Each is composed its

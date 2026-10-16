@@ -114,7 +114,7 @@ export interface CarriedThing {
 
 /** Everything Jev decided about a world. */
 export interface Judgments {
-  /** The whole world's light, sky, season and wind, as Jev composed them (`composeWorld`); none until then. */
+  /** The whole world's light, sky and wind, as Jev composed them (`composeWorld`); none until then. */
   readonly sky?: Blueprint;
   /** Directory → the land Jev composed for it, for the directories that are regions (`composeWorld`). */
   readonly lands: Readonly<Record<string, Blueprint>>;
@@ -269,7 +269,7 @@ export interface CodeWorld extends WorldPlaces {
   readonly projectId: string;
   /** Side of the walkable square, meters: it grows with the codebase. */
   readonly size: number;
-  /** The repository's art direction, its light, sky, season and wind, as Jev composed them. */
+  /** The repository's art direction, its light, sky and wind, as Jev composed them. */
   readonly sky?: Blueprint;
   readonly areas: readonly CodeArea[];
   readonly patches: readonly CodePatch[];
@@ -676,7 +676,7 @@ export function planWorldRequests(facts: CodeFacts, looks: Looks, options: PlanO
     }
     requests.push({ about, target, request: { model: MODEL, state, questions: asked }, ...(readings === undefined ? {} : { readings, decides: extra.decides }) });
   };
-  // The whole world's light, sky, season and wind are composed part by part once the code is understood
+  // The whole world's light, sky and wind are composed part by part once the code is understood
   // (`composeWorld`), so nothing about the repository as a whole is asked here.
   const regionList = regionPaths(dirs);
   const regions = new Set(regionList);

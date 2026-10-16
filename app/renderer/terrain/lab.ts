@@ -8,8 +8,8 @@
 // the journal what the person stopped at.
 
 import * as THREE from "three";
-import { type AtmosphereSpec, type Blueprint, type BuildingPlan, type GroundSpec, Library, type Palette, type SeasonSpec, seedOf } from "@gaia/schema";
-import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, LANDMARK_PRIMITIVES, NO_SHIFT, RELIEF_PRIMITIVES, ROCK_PRIMITIVES, WILDFLOWER_PRIMITIVES, WORLD_PRIMITIVES, hex } from "@gaia/primitives";
+import { type AtmosphereSpec, type Blueprint, type BuildingPlan, type GroundSpec, Library, type Palette, seedOf } from "@gaia/schema";
+import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, LANDMARK_PRIMITIVES, RELIEF_PRIMITIVES, ROCK_PRIMITIVES, WILDFLOWER_PRIMITIVES, WORLD_PRIMITIVES } from "@gaia/primitives";
 import { biome, landmark as landmarkKind, world as worldKind } from "@gaia/kinds";
 import { CLEAR_AIR, FLORA_PRESETS, type Realized, type RegionLook, type SkyLook, mergeParts, mixAir, realizeRegion, realizeSky, regionAir, throughAir } from "@gaia/realize";
 import {
@@ -72,8 +72,6 @@ const TEMPLATE = /* html */ `
 </main>
 `;
 
-/** The terrain lab's covers wear no season. */
-const NO_SEASON: SeasonSpec = { swatches: {}, ground: NO_SHIFT, frost: 0, fall: hex(0xd9a04a) };
 
 /** The keys that move a person, W A S D, the arrows or vim's k h j l: ahead, left, right or back, and Shift. */
 const KEYS = {
@@ -449,7 +447,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   const regionLookOf = (i: number): RegionLook => {
     const r = world.regions[i];
     if (r === undefined) throw new Error(`No region ${i}.`);
-    return realizeRegion({ blueprint: r.biome, kind: biome }, lib, seedOf(r.id), NO_SEASON);
+    return realizeRegion({ blueprint: r.biome, kind: biome }, lib, seedOf(r.id));
   };
   /** Each region's ground cover, as the shaders paint it. */
   let regionGrounds: readonly GroundSpec[] = [];

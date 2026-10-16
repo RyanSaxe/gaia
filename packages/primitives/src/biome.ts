@@ -119,7 +119,7 @@ export const drift = primitive({
     form: t.choice("What drifts through the air", {
       "drifting petals": "Pink petals carried on the breeze",
       "fireflies at dusk": "Fireflies blinking low over the ground",
-      "falling leaves": "Leaves spinning down, in the season's color",
+      "falling leaves": "Leaves spinning down",
     }),
     amount: t.scale("How many", { "a few": 70, some: 180, many: 380 }),
   },

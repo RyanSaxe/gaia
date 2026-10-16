@@ -1,10 +1,10 @@
-// World primitives: the light, sky, season and wind one repository's whole
+// World primitives: the light, sky and wind one repository's whole
 // world shares. Every option is authored as words with colors behind them, and
 // each axis is chosen to stay beautiful beside every option of every other axis.
 
-import type { ColorShift, CloudSpec, DayKey, DaySpec, GroundSpec, Rgb, SeasonSpec, Vec3 } from "@gaia/schema";
+import type { ColorShift, CloudSpec, DayKey, DaySpec, Rgb, Vec3 } from "@gaia/schema";
 import { primitive, t } from "@gaia/schema";
-import { hex, mixLab, shiftColor } from "./color.ts";
+import { hex, shiftColor } from "./color.ts";
 
 // ---------- light ----------
 
@@ -176,105 +176,6 @@ export const sky = primitive({
   },
 });
 
-// ---------- season ----------
-
-interface SeasonDef {
-  readonly leaf: ColorShift;
-  readonly bark: ColorShift;
-  readonly bloom: ColorShift;
-  readonly ground: ColorShift;
-  readonly frost: number;
-  readonly fall: number;
-}
-
-const keep: ColorShift = { hue: 0, pull: 0, maxTurn: 0, chroma: 1, lightness: 0 };
-
-const SEASONS = {
-  spring: {
-    leaf: { hue: 122, pull: 0.3, maxTurn: 30, chroma: 1.06, lightness: 0.045 },
-    bark: { ...keep, lightness: 0.02 },
-    bloom: { ...keep, chroma: 1.05, lightness: 0.02 },
-    ground: { hue: 125, pull: 0.35, maxTurn: 30, chroma: 1.06, lightness: 0.035 },
-    frost: 0,
-    fall: 0xf3c9d4,
-  },
-  "high summer": {
-    leaf: { hue: 145, pull: 0.2, maxTurn: 25, chroma: 1.14, lightness: -0.035 },
-    bark: { ...keep, lightness: -0.01 },
-    bloom: { ...keep, chroma: 1.1 },
-    ground: { hue: 138, pull: 0.25, maxTurn: 25, chroma: 1.1, lightness: -0.025 },
-    frost: 0,
-    fall: 0x7fb350,
-  },
-  "early autumn": {
-    leaf: { hue: 82, pull: 0.4, maxTurn: 40, chroma: 1.06, lightness: 0.01 },
-    bark: keep,
-    bloom: { ...keep, chroma: 0.95 },
-    ground: { hue: 88, pull: 0.4, maxTurn: 38, chroma: 0.96, lightness: 0.02 },
-    frost: 0,
-    fall: 0xe2b444,
-  },
-  "deep autumn": {
-    leaf: { hue: 45, pull: 0.55, maxTurn: 55, chroma: 1.12, lightness: -0.02 },
-    bark: { ...keep, lightness: -0.03 },
-    bloom: { hue: 35, pull: 0.2, maxTurn: 20, chroma: 0.95, lightness: -0.02 },
-    ground: { hue: 70, pull: 0.5, maxTurn: 50, chroma: 0.92, lightness: -0.01 },
-    frost: 0,
-    fall: 0xd8663a,
-  },
-  "first frost": {
-    leaf: { hue: 205, pull: 0.15, maxTurn: 20, chroma: 0.78, lightness: 0.06 },
-    bark: { ...keep, chroma: 0.8, lightness: 0.04 },
-    bloom: { ...keep, chroma: 0.82, lightness: 0.04 },
-    ground: { hue: 200, pull: 0.2, maxTurn: 25, chroma: 0.6, lightness: 0.08 },
-    frost: 0.75,
-    fall: 0xdcd3bc,
-  },
-  "monsoon green": {
-    leaf: { hue: 155, pull: 0.3, maxTurn: 35, chroma: 1.18, lightness: -0.05 },
-    bark: { ...keep, chroma: 0.9, lightness: -0.06 },
-    bloom: { ...keep, chroma: 1.08, lightness: -0.02 },
-    ground: { hue: 150, pull: 0.35, maxTurn: 35, chroma: 1.16, lightness: -0.045 },
-    frost: 0,
-    fall: 0x5a9c58,
-  },
-} as const satisfies Record<string, SeasonDef>;
-
-const scaled = (s: ColorShift, k: number): ColorShift => ({
-  hue: s.hue,
-  pull: s.pull * k,
-  maxTurn: s.maxTurn * k,
-  chroma: 1 + (s.chroma - 1) * k,
-  lightness: s.lightness * k,
-});
-
-export const season = primitive({
-  id: "season@1",
-  role: "Season",
-  doc: "The season the world rests in; it turns every component's healthy colors and the ground, never decline.",
-  params: {
-    season: t.choice("Which season", {
-      spring: "Fresh yellow-greens and new blossom",
-      "high summer": "Deep, saturated, heavy greens",
-      "early autumn": "Greens turning gold",
-      "deep autumn": "Copper, rust and russet",
-      "first frost": "Pale, silvered colors and frosted grass",
-      "monsoon green": "Dark, wet, glossy emerald",
-    }),
-    strength: t.scale("How strongly the season shows", { "a hint": 0.5, clearly: 1, "in full": 1.4 }),
-  },
-  build: (p): SeasonSpec => {
-    const def: SeasonDef = SEASONS[p.season];
-    const k = p.strength;
-    return {
-      swatches: { leaf: scaled(def.leaf, k), bark: scaled(def.bark, k), bloom: scaled(def.bloom, k) },
-      ground: scaled(def.ground, k),
-      frost: Math.min(1, def.frost * k),
-      fall: hex(def.fall),
-    };
-  },
-});
-
 // ---------- wind ----------
 
 const WIND_LEVELS = { "still air": 0.25, "light airs": 0.6, breezy: 1, gusty: 1.55 } as const;
@@ -295,18 +196,4 @@ export const wind = primitive({
   },
 });
 
-export const WORLD_PRIMITIVES = [daylight, sky, season, wind];
-
-/** The color of the ground, with the season applied. Grass decline stays fixed elsewhere. */
-export function seasonGround(g: GroundSpec, s: SeasonSpec): GroundSpec {
-  const shift = (c: Rgb): Rgb => shiftColor(c, s.ground);
-  const frosted = (c: Rgb): Rgb => mixLab(shift(c), hex(0xeef3f6), s.frost * 0.7);
-  return {
-    ...g,
-    soil: shift(g.soil),
-    low: shift(g.low),
-    high: shift(g.high),
-    tip: frosted(g.tip),
-    flowerColors: g.flowerColors.map((c) => shiftColor(c, { ...s.ground, pull: s.ground.pull * 0.3, maxTurn: 15 })),
-  };
-}
+export const WORLD_PRIMITIVES = [daylight, sky, wind];
