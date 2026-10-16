@@ -8,7 +8,6 @@ export const world = kind({
   id: "world",
   subject: "repository",
   doc: "The art direction of a whole world: its light, sky and wind.",
-  represents: "The whole repository, read from its languages, size, age, activity and health.",
   slots: {
     light: slot("Light", {
       ask: "its light says how the whole codebase feels to work in: low, warm light for an old and settled one, clear and bright for a young one still taking shape, soft and painterly for one kept with care.",

@@ -186,14 +186,6 @@ export interface Walk {
   readonly leg: number;
 }
 
-/** One step of a walk to a target, and whether the walk goes on. */
-export interface Approach {
-  readonly walker: Walker;
-  readonly walk: Walk;
-  /** `arrived` within `WALK_TO.reach` of the target; `stalled` when the walker is wedged and cannot move on. */
-  readonly state: "walking" | "arrived" | "stalled";
-}
-
 /** Whether a body walking straight from a to b stays `room` meters clear of every solid. */
 function clearWay(solids: Solids, ax: number, az: number, bx: number, bz: number, room: number): boolean {
   const n = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az) / 0.2));
@@ -392,28 +384,4 @@ export function wayAhead(walk: Walk, from: Walker): Heading {
   const pace = WALK_TO.pace * (1 + (WALK_TO.jog - 1) * smoothstep(WALK_TO.walkWithin, WALK_TO.jogFrom, remaining));
   const aim = pursue(walk, from.x, from.z, WALK_TO.lookAhead);
   return { walk: aim.leg === walk.leg ? walk : { ...walk, leg: aim.leg }, aim: { x: aim.x, z: aim.z }, pace, remaining };
-}
-
-/**
- * One step of a walk along its planned way, through the same movement as a
- * held key, so wading, swimming and solids work as they do for any walk. The
- * walker heads for a point a little ahead along the way, so it rounds each
- * corner in a curve, and jogs while the target is far.
- */
-export function walkToward(t: Terrain, solids: Solids, from: Walker, walk: Walk, dt: number): Approach {
-  const remaining = Math.hypot(walk.target.x - from.x, walk.target.z - from.z);
-  if (remaining <= WALK_TO.reach) return { walker: from, walk, state: "arrived" };
-  const heading = wayAhead(walk, from);
-  const full = heading.pace * wadeSpeed(waterDepthAt(t, from.x, from.z)) * dt;
-  if (full <= 0) return { walker: from, walk, state: "walking" };
-  const onward = heading.walk;
-  const ax = heading.aim.x - from.x;
-  const az = heading.aim.z - from.z;
-  // A step longer than the way left lands on the target rather than past it.
-  const length = Math.min(full, remaining);
-  const k = length / Math.max(1e-9, Math.hypot(ax, az));
-  const next = moveBy(solids, from, ax * k, az * k);
-  if (Math.hypot(next.x - from.x, next.z - from.z) < WALK_TO.stall * length) return { walker: from, walk: onward, state: "stalled" };
-  const left = Math.hypot(walk.target.x - next.x, walk.target.z - next.z);
-  return { walker: next, walk: onward, state: left <= WALK_TO.reach ? "arrived" : "walking" };
 }

@@ -11,14 +11,10 @@ export const link = kind({
   id: "link",
   subject: "link",
   doc: "A trail worn into the ground between two entities where one depends on the other.",
-  represents: "Dependencies between entities a person would walk between: a package, crate, service or app that leans heavily on another.",
   slots: {
     route: slot("Route", {
       ask: "the trail says how much one entity leans on the other: wide and well trodden when most of its files import the other, a beaten path edged with stones for a deliberate, kept connection, a faint track for one or a few imports; how directly it runs says how direct the dependency is.",
     }),
   },
-  facts: {
-    // How much traffic the dependency carries: how many of the importing entity's files use the other.
-    traffic: (d) => Math.min(1, Math.log2(d.importers + 1) / 5),
-  },
+  facts: {},
 });

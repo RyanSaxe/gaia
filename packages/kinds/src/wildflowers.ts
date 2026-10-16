@@ -5,7 +5,6 @@ export const wildflowers = kind({
   id: "wildflowers",
   subject: "file",
   doc: "A drift of wildflowers of one species, swaying among the grass.",
-  represents: "Small files that describe or decorate: documentation, notes, stylesheets and images.",
   slots: {
     drift: slot("Drift"),
     motion: slot("Motion"),

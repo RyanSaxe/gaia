@@ -70,14 +70,12 @@ export interface SubjectFacts {
 
 /**
  * A kind of world component. Code, and few of them. Its slots say what a
- * blueprint must fill; `represents` is what Jev reads when it decides which
- * kind should stand for a piece of code.
+ * blueprint must fill.
  */
 export interface Kind<S extends Subject = Subject> {
   readonly id: string;
   readonly subject: S;
   readonly doc: string;
-  readonly represents: string;
   readonly slots: Readonly<Record<string, Slot>>;
   /** Slot groups Jev answers in order; each group sees the earlier groups' answers. One group if absent. */
   readonly stages?: readonly (readonly string[])[];

@@ -109,20 +109,6 @@ export const dryness = (vitality: number): number => {
   return t * t * (3 - 2 * t);
 };
 
-/**
- * One scale of health for the land in words, the map's legend and the
- * minimap's: the same thresholds as a thing's (`standing` in
- * `terrain/card.ts`).
- */
-export const LAND_HEALTH: readonly { readonly from: number; readonly words: string }[] = [
-  { from: 0.85, words: "in full leaf" },
-  { from: 0.65, words: "in good heart" },
-  { from: 0.4, words: "going over" },
-  { from: 0.15, words: "gone to seed" },
-  { from: -1, words: "laid waste" },
-];
-export const landHealth = (vitality: number): string => LAND_HEALTH.find((h) => vitality >= h.from)?.words ?? "laid waste";
-
 const channels = (h: string): [number, number, number] => {
   const v = parseInt(h.slice(1), 16);
   return [(v >> 16) & 255, (v >> 8) & 255, v & 255];

@@ -9,7 +9,6 @@ export const rock = kind({
   id: "rock",
   subject: "file",
   doc: "A boulder, a stone, a cluster of stones or a ledge of bedrock that stands for one file.",
-  represents: "Files that hold data rather than logic: configuration, schemas, fixtures, lockfiles and generated output.",
   slots: {
     form: slot("Rock"),
     moss: slot("Overgrowth", { on: "form", optional: true }),

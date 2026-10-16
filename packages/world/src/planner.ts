@@ -12,7 +12,6 @@ import {
   type JevQuestion,
   type JevRequest,
   type AnyKind,
-  type Kind,
   type Library,
   isStoredValue,
   rand,
@@ -308,36 +307,4 @@ function valueOf(field: Field, answer: JevAnswer | undefined, qid: string): stri
       break;
   }
   throw new Error(`Answer for ${qid} does not fit a ${field.type}.`);
-}
-
-/** The option for a file that no component stands for; it enriches the region's ground instead. */
-export const GROUND = "ground";
-
-/**
- * Jev decides which kind stands for a file, so the mapping from code to world
- * is a judgment, not a rule table. Kinds describe themselves in `represents`.
- */
-export function planRepresentation(kinds: readonly Kind<"file">[], target: Target): Wave {
-  const options = shuffled(
-    [
-      ...kinds.map((k) => [k.id, `${k.doc} Suits: ${k.represents}`] as const),
-      [GROUND, "No single thing stands for it; it enriches the ground of its region."] as const,
-    ],
-    "represent",
-    target,
-  );
-  return {
-    request: {
-      model: MODEL,
-      state: target.state,
-      questions: {
-        represent: {
-          type: "choice",
-          instructions: "Which part of the world should stand for this file?",
-          criteria: Object.fromEntries(options),
-        },
-      },
-    },
-    refs: {},
-  };
 }

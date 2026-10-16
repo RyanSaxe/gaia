@@ -47,7 +47,6 @@ export type StoredValue<F extends Field> =
 export type ResolvedValue<F extends Field> =
   F extends ScaleField ? number : StoredValue<F>;
 
-export type Stored<P extends Params> = { readonly [N in keyof P]: StoredValue<P[N]> };
 export type Resolved<P extends Params> = { readonly [N in keyof P]: ResolvedValue<P[N]> };
 
 const MAX_CHOICE = 255;

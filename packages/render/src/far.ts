@@ -1,5 +1,5 @@
 // Far forms: a tree far enough away to cover few pixels draws as one card
-// instead of its thousands of triangles. `bakeFarForm` renders the plant
+// instead of its thousands of triangles. `startFarBake` renders the plant
 // with its own shaders from many directions into atlases of what its
 // fragments are made of: color healthy and withered, normal, depth, glow,
 // foliage, and how much of each texel it covers at four vitalities. A card
@@ -376,14 +376,6 @@ export function startFarBake(renderer: THREE.WebGLRenderer, plant: Realized, fra
       for (const l of layers) l.dispose();
     },
   };
-}
-
-/** Bakes `plant` into its far form at once (`startFarBake`, stepped to the end). */
-export function bakeFarForm(renderer: THREE.WebGLRenderer, plant: Realized, framePx = 128): FarForm {
-  const bake = startFarBake(renderer, plant, framePx);
-  let form: FarForm | null = null;
-  while (form === null) form = bake.step(Number.POSITIVE_INFINITY);
-  return form;
 }
 
 /**
