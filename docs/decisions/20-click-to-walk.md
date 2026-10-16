@@ -21,3 +21,5 @@ wandering, and nothing sits on the screen that could read as a body.
 
 Pair session `gaia-v3` (`f8d282bc-7712-4894-9255-dcf4699f92cb`), round 8, in
 the thread on "The lab on your phone".
+
+Replaced in part: the keys walk and turn as the Terrain section of `docs/design-system.md` says (round 22's walking thread), and the legacy sweep deletes the Stats toggle.

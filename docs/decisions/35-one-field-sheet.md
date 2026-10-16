@@ -47,3 +47,5 @@ Refined by [42](42-the-field-map-shows-health.md): color on the field map is hea
 Refined by [43](43-a-page-for-every-thing.md): a thing's page is its own sheet at the lower left, raised by stopping at any thing that stands for code, and what it says is a schema the Engine and Jev session owns.
 
 The wait is today's field map since [decision 49](49-the-wait-paints-todays-map.md): health as it settles, no brush and nothing pending.
+
+Replaced in part: the minimap turns with the person ([44](44-a-minimap-that-turns-and-a-compass.md)) and lies under the closed journal's strap at the lower left, and a tap on a thing opens the journal at its page instead of growing the minimap into a sketch page (`docs/design-system.md`, "Knowing where you are").

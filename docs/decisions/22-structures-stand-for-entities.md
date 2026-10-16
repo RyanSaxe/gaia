@@ -37,3 +37,5 @@ review of the cottage, built in round 10.
 ## Superseded
 
 Partly superseded by [64](64-anything-can-stand-as-anything.md): a building stands for any entity, file or definition whose importance is offered one, never only an entity, and plants stand for definitions, files and entities alike. The rest stands: a building's feature, and its ruin through its channels.
+
+Replaced in part: only a manifest makes an entity (`docs/architecture.md`, "The schema"), and Jev composes each building part by part instead of choosing a whole one.

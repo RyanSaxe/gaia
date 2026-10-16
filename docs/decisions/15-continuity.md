@@ -9,3 +9,5 @@ Path identity and app-data storage carried over from the Jev session, round 2.
 ## Settled
 
 Pair session `gaia-v3` (`f8d282bc-7712-4894-9255-dcf4699f92cb`), as it stood on round 4's Agreed page, the plan for slice 1.
+
+Replaced in part: reopening lays the world out again from the code and Jev's kept answers instead of loading a stored world, no margin keeps a stored answer, and nothing emits a change event (`docs/architecture.md`, "Continuity"). A world item is still known by its path, though the code graph gives each node a lineage through renames ([53](53-the-code-graph.md)). The legacy sweep deletes the unused margin (`reconcile`) and `WorldChange`.

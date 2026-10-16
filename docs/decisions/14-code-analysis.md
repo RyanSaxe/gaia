@@ -9,3 +9,5 @@ Rust and tree-sitter carried over from the Jev session, round 1.
 ## Settled
 
 Pair session `gaia-v3` (`f8d282bc-7712-4894-9255-dcf4699f92cb`), as it stood on round 4's Agreed page, the plan for slice 1.
+
+Replaced by: [53](53-the-code-graph.md), [56](56-importance-and-quality-at-every-level.md), [58](58-a-big-file-is-cut-so-each-piece-holds-what-fits.md) and [60](60-one-way-of-understanding-code.md). The engine reads code with tree-sitter into one graph, and the understanding pass sends Jev each file's source and adds the readings Jev asks for. Nothing escalates on low confidence.

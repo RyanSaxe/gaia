@@ -35,3 +35,5 @@ Pair session `engine-jev` (`d7b14fc0-f746-4268-a67b-ca7056c75499`), round 6
 continuity and steps), with the round's notes and the thread on cyclomatic
 complexity. It supersedes the reading of code in
 [decision 31](31-what-jev-reads.md) once step 6 removes the code model.
+
+Replaced in part: [56](56-importance-and-quality-at-every-level.md) and [60](60-one-way-of-understanding-code.md). One understanding pass judges every folder, file and definition top-down, with no screening and no deep questions, and `project.open` and the code model are gone. The legacy sweep (PR #251) drops the edges and measures nothing reads: the graph keeps imports, calls, references and implementations, and each node's lines and history.

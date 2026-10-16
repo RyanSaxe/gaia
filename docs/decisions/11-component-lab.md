@@ -9,3 +9,5 @@ The reviewer settled it in a pair session round; see the session's Agreed page.
 ## Settled
 
 Pair session `gaia-v3` (`f8d282bc-7712-4894-9255-dcf4699f92cb`), as it stood on round 4's Agreed page, the plan for slice 1.
+
+Replaced by: composing part by part (`docs/architecture.md`, "A world from code"), where Jev builds each thing from the primitive library slot by slot, and the proving ground of [37](37-a-proving-ground.md). The legacy sweep deletes the Components view.

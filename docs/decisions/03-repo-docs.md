@@ -9,3 +9,5 @@ The rest of round 2's Repository and processes page drew no objecting note, and 
 ## Settled
 
 Pair session `gaia-v3` (`f8d282bc-7712-4894-9255-dcf4699f92cb`), as it stood on round 4's Agreed page, the plan for slice 1.
+
+Replaced in part: [34](34-this-repository-becomes-gaia.md) and the packages table in `docs/architecture.md`. The lab is the app's renderer, `tools/` holds the scripts behind the `pnpm` commands, and the README opens with a picture of the world, not the architecture diagram.

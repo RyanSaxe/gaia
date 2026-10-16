@@ -35,3 +35,5 @@ further on a scratch board in round 15.
 ## Superseded
 
 Round 16 replaced the slip, the line and the rim with one field sheet: see [35](35-one-field-sheet.md).
+
+Replaced by: [35](35-one-field-sheet.md), and after it the journal that a tap on a thing opens (`docs/design-system.md`, "One way to touch the world"). The legacy sweep deletes the field-guide card the Terrain view kept.

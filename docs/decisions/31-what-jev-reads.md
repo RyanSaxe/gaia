@@ -9,3 +9,5 @@ On round 12's connect-jev page the reviewer asked: "What if we give like the tre
 ## Settled
 
 Pair session `gaia-v3` (`f8d282bc-7712-4894-9255-dcf4699f92cb`), round 13 (the jev-state page). Which design becomes the default waits for the comparison on Jev's real answers.
+
+Replaced by: [53](53-the-code-graph.md), [56](56-importance-and-quality-at-every-level.md), [58](58-a-big-file-is-cut-so-each-piece-holds-what-fits.md) and [60](60-one-way-of-understanding-code.md). The understanding pass sends Jev each file's source, and the world asks only the `judged` design. The legacy sweep deletes the other designs, escalation and `pnpm compare-jev`.
