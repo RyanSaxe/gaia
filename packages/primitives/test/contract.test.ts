@@ -2,7 +2,7 @@
 // covered as soon as it is listed in PRIMITIVES; nobody writes these tests per primitive.
 
 import { describe, expect, it } from "vitest";
-import { type AnyPrimitive, type Built, type BuildingPlan, CUT, type Field, Library, type Part, type Skeleton, rand } from "@gaia/schema";
+import { type AnyPrimitive, type Built, type BuildingPlan, CUT, type Field, GRAIN, Library, type Part, type Skeleton, rand } from "@gaia/schema";
 import * as primitivesModule from "@gaia/primitives";
 import { PRIMITIVES } from "@gaia/primitives";
 import { applyVitality, detailAt, resolveParams } from "@gaia/realize";
@@ -124,6 +124,8 @@ describe.each(PRIMITIVES.map((p) => [p.id, p] as const))("%s", { timeout: 20_000
           expect([c.grow, c.rot, c.roost].every((a) => a === undefined || (a.length === part.shade.length && inUnit(a)))).toBe(true);
           expect(c.fall === undefined || (c.fall.length === part.shade.length * 4 && allFinite(c.fall) && c.fall.every((x, i) => i % 4 !== 3 || (x >= 0 && x <= 1)))).toBe(true);
           expect(c.spin === undefined || (c.spin.length === part.shade.length * 3 && allFinite(c.spin))).toBe(true);
+          // A grain names a covering the shader knows how to rot.
+          expect(c.grain === undefined || (c.grain.length === part.shade.length * 3 && allFinite(c.grain) && c.grain.every((x, i) => i % 3 !== 2 || Object.values(GRAIN).includes(x as never)))).toBe(true);
           expect(part.tint.every((x) => x >= -0.1 && x <= 0.1)).toBe(true);
           expect(cutsKnown(part)).toBe(true);
           expect(part.indices.length / 3).toBeLessThanOrEqual(TRIANGLE_BUDGET);

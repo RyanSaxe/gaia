@@ -55,6 +55,14 @@ export interface VitalityChannels {
   /** How far a surface rots through into ragged holes as vitality drops, 0 to 1. Absent means none. */
   readonly rot?: Float32Array;
   /**
+   * The grain a covering rots along, three per vertex: where the vertex lies
+   * across its courses and up them, in tiles or straw bundles, and the
+   * covering's kind (\`GRAIN\`). Rot then takes a tile at a time, or straw
+   * along its course, instead of opening round holes. Absent means rot
+   * follows a noise of the surface's rest position.
+   */
+  readonly grain?: Float32Array;
+  /**
    * How a piece turns about its pivot while it is alive, three per vertex:
    * the axis scaled by turns per second. It slows as vitality falls and
    * stops near the bottom, like a mill wheel. Absent means nothing turns.
@@ -104,6 +112,16 @@ export interface Part {
  * place at its own threshold near the card's `loss`, so a spray never
  * shrinks or flies toward anything.
  */
+/** What a covering is made of, for \`grain\`: how it comes apart as it rots. */
+export const GRAIN = {
+  /** No grain: rot opens holes where a noise of the rest position falls below it. */
+  none: 0,
+  /** Tiles, slates or shingles laid in courses that break joint. */
+  tiles: 1,
+  /** Straw laid in courses. */
+  straw: 2,
+} as const;
+
 export const CUT = {
   /** A solid surface: nothing is cut. */
   solid: 0,

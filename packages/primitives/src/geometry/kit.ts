@@ -66,6 +66,8 @@ export interface Channels {
   readonly grow?: number;
   /** How far the surface rots through into holes as vitality drops, 0 to 1. Zero when absent. */
   readonly rot?: number;
+  /** The grain the surface rots along: across its courses and up them, in tiles or bundles, and its kind (\`GRAIN\`). */
+  readonly grain?: Vec3;
   /** How the piece turns about its pivot while alive: axis times turns per second. */
   readonly spin?: Vec3;
   /** How fully the piece flies home to its pivot at dusk, 0 to 1. Zero when absent. */
@@ -143,8 +145,9 @@ export class PartBuilder {
   readonly #rot: number[] = [];
   readonly #spin: number[] = [];
   readonly #roost: number[] = [];
+  readonly #grain: number[] = [];
   /** Which optional channels some vertex wrote, so a part without them carries none. */
-  readonly #uses = { fall: false, grow: false, rot: false, spin: false, roost: false };
+  readonly #uses = { fall: false, grow: false, rot: false, spin: false, roost: false, grain: false };
   readonly #idx: number[] = [];
 
   constructor(
@@ -184,11 +187,14 @@ export class PartBuilder {
     const spin = c.spin ?? SOLID;
     this.#spin.push(spin[0], spin[1], spin[2]);
     this.#roost.push(clamp(c.roost ?? 0, 0, 1));
+    const grain = c.grain ?? SOLID;
+    this.#grain.push(grain[0], grain[1], grain[2]);
     if (c.fall !== undefined && fall[3] > 0) this.#uses.fall = true;
     if ((c.grow ?? 0) > 0) this.#uses.grow = true;
     if ((c.rot ?? 0) > 0) this.#uses.rot = true;
     if (c.spin !== undefined) this.#uses.spin = true;
     if ((c.roost ?? 0) > 0) this.#uses.roost = true;
+    if (c.grain !== undefined) this.#uses.grain = true;
     return this.#shade.length - 1;
   }
 
@@ -220,6 +226,7 @@ export class PartBuilder {
         ...(this.#uses.rot ? { rot: new Float32Array(this.#rot) } : {}),
         ...(this.#uses.spin ? { spin: new Float32Array(this.#spin) } : {}),
         ...(this.#uses.roost ? { roost: new Float32Array(this.#roost) } : {}),
+        ...(this.#uses.grain ? { grain: new Float32Array(this.#grain) } : {}),
       },
       collision: this.collision,
     };
