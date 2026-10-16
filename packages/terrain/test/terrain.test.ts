@@ -5,6 +5,7 @@ import { biome, flora, structure } from "@gaia/kinds";
 import { validate } from "@gaia/world";
 import { FLORA_PRESETS, STRUCTURE_PRESETS, realize } from "@gaia/realize";
 import {
+  BANKED,
   COVER_TAPS,
   FLOW,
   FULL_WORLD,
@@ -258,16 +259,20 @@ describe("terrain", { timeout: 20_000 }, () => {
     expect(islands).toBeGreaterThan(3);
   });
 
-  it("measures the shore: zero under water, rising at most a meter per meter, capped", () => {
+  it("measures the shore: zero under water deep enough to bank, rising at most a meter per meter, capped", () => {
     let wet = 0;
+    let thin = 0;
     for (const t of baked.slice(0, 6)) {
       const { n, heights, spacing } = t.lattice;
       const wrong: number[] = [];
       for (let i = 0; i < n * n; i++) {
         const shore = t.shore[i]!;
-        if (t.waterLevel[i]! > heights[i]!) wet++;
+        const depth = t.waterLevel[i]! - heights[i]!;
+        if (depth > 0) wet++;
+        // Thin water, where a stream narrows to nothing, stands a little way back from its banks.
+        if (depth > 0 && shore > 0) thin++;
         const ok =
-          (shore === 0) === t.waterLevel[i]! > heights[i]! &&
+          (shore === 0 ? depth > 0 : depth < BANKED) &&
           shore <= SHORE_CAP &&
           (i % n === n - 1 || Math.abs(t.shore[i + 1]! - shore) <= spacing + 1e-5) &&
           (i + n >= n * n || Math.abs(t.shore[i + n]! - shore) <= spacing + 1e-5);
@@ -276,6 +281,7 @@ describe("terrain", { timeout: 20_000 }, () => {
       expect(wrong).toEqual([]);
     }
     expect(wet).toBeGreaterThan(0);
+    expect(thin).toBeGreaterThan(0);
   });
 
   it("never leaves a crack in the baked lattice: neighbors differ by less than the steepest slope allows", () => {
