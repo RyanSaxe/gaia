@@ -749,7 +749,7 @@ walked before, painted by `start/gaia-painting.webp`):
   from the world's shadow map. Everything at the sheet's distance is sharp;
   the table beyond it is out of focus. At any window shape the table fills
   the view to its edges, its top reaching further for a very wide or tall
-  window, while the sheet keeps its framing. Gaia's logo is printed at the
+  window, while the sheet keeps its framing. Gaia's mark is printed at the
   sheet's head, with "the worlds you have walked" (or "where shall we
   wander?") under it in italic.
   - Each world walked before is a torn card in its land's shape, laid on
@@ -1311,20 +1311,28 @@ The three ways work together:
 
 ## Gaia's mark
 
-Gaia introduces itself with its own mark (`app/renderer/brand/`). Where it
-is shown large, at the head of the start's sheet and of the slip the
-compass opens, it is the reviewer's logo: a lowercase "gaia" in rounded
-stone letters, the "ai" grown over with moss and leaves and the outer "g"
-and "a" cracked and weathered, the way an area greys as its health falls.
-It is a picture, not shapes, so it ships as WebP at the sizes it is shown
-at on a 2x screen and no larger: 264 px wide for the slip's 132, and 640 px
-for the start's sheet. On the slip it is multiplied into the paper, so its
-pale stone takes the paper's tone, and the lantern's after dark, instead of
-sitting on the flat paper like a cut-out; on the start it is printed into
-the lit sheet, so the table's light falls on it with the paper's. Wherever
-the mark is drawn small, as the window's icon, it is the flat round mark
-(`mark.svg`): an end-grain round with a leaf, plain paths that stay sharp
-at 16 px, where the logo's stone and moss would blur.
+Gaia introduces itself with its own mark (`app/renderer/brand/`): its name
+lettered across its own land, as the field map letters an area, in the map's
+survey capitals edged with a little paper. The land is painted by the map's
+own hand (`paint.ts`): its washes in health's colors, green under the G and
+drying to gold and russet toward the last A, its hills shaded and lit as the
+map's are, its contours, borders, river and trees. Every part comes from the
+map's own functions (`layWash`, `floatWash`, `shadeSlope`, `layShade`,
+`contoursOf`, `strokeContours`, `strokeBorders`, `drawRivers`, `drawTrees`,
+`letter`, `nameFont`), so the mark changes when the map's look does. Small,
+it is the icon: the land's own rounded square with the G lettered on it, and
+at 32 px and under a heavier G, a wider river and fewer, heavier contours;
+under 24 px only the washes, the river and the G.
+
+The mark is seeded, so it is painted the same every time, and `pnpm brand`
+paints it into pictures at the sizes they are shown on a 2x screen and no
+larger: 264 px wide for the slip's 132, 640 px for the start's sheet, a
+32 px icon for the page, and the macOS icon at every size its set holds
+(`app/build/icon.icns`, and `icon.png`, which the Dock shows while Gaia runs
+from its source). On the slip the mark is multiplied into the paper, so the
+land's paper takes the slip's tone, and the lantern's after dark; on the
+start it is printed into the lit sheet, so the table's light falls on it
+with the paper's.
 
 ## Trails
 

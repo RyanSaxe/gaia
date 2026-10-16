@@ -1,28 +1,24 @@
-// Gaia's mark. Where it is shown large, at the head of the start's sheet and
-// of the slip, it is the reviewer's logo: "gaia" in mossy, cracked stone
-// letters, a picture rather than shapes, so it comes at the sizes it is
-// shown at on a 2x screen and no larger. Wherever it is drawn small, as the
-// window's icon, it is the flat round mark (`mark.svg`), which stays sharp
-// at 16 px where the logo's stone and moss would blur.
+// Gaia's mark (docs/design-system.md, "Gaia's mark"): its name lettered across its own land, as the field map letters
+// an area, painted by the map's own hand (`paint.ts`); and as the icon, the land's rounded square with the G on it.
+// They are pictures at the sizes they are shown on a 2x screen, painted by `pnpm brand`, which paints them again
+// whenever the map's look changes. The app's icon for macOS is painted with them (app/build/icon.icns).
 
-import LOGO_264 from "./logo-264.webp";
-import LOGO_640 from "./logo-640.webp";
-import MARK from "./mark.svg?raw";
+import FAVICON from "./favicon.webp";
+import LOGO_SHEET from "./logo-sheet.webp";
+import LOGO_SLIP from "./logo-slip.webp";
 
-/** The logo for the slip, 132 px wide. */
-export const SLIP_LOGO = LOGO_264;
-/** The logo for the start's sheet, up to 320 px wide. */
-export const SHEET_LOGO = LOGO_640;
-/** The logo's width over its height. */
-export const LOGO_ASPECT = 1817 / 841;
+/** The mark for the slip, 132 px wide. */
+export const SLIP_LOGO = LOGO_SLIP;
+/** The mark for the start's sheet, up to 320 px wide. */
+export const SHEET_LOGO = LOGO_SHEET;
+/** The mark's width over its height, as `pnpm brand` paints it. */
+export const LOGO_ASPECT = 641 / 315;
 
-const dataUrl = (svg: string): string => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg.trim())}`;
-
-/** Sets the page's icon to the mark. */
+/** Sets the page's icon to the mark's. */
 export function setFavicon(): void {
   const link = document.createElement("link");
   link.rel = "icon";
-  link.type = "image/svg+xml";
-  link.href = dataUrl(MARK);
+  link.type = "image/webp";
+  link.href = FAVICON;
   document.head.append(link);
 }
