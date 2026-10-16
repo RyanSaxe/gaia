@@ -427,7 +427,10 @@ wait draws. The app never falls back on it: a folder the world service cannot
 open says why on the wait. Beside those fixtures, `fixtures/gaia-graph.json` holds the
 engine's graph of the same commit, which the layout is moving onto. `pnpm
 graph-snapshot` writes it, trimmed by `judgedGraph` to directories, files
-and definitions, each with the importance and quality Jev's held answers give it. `?world=sample` (or `?world=small`) and
+and definitions, each with the importance and quality Jev's held answers give it,
+the imports between files and the calls and references into each definition
+(the snapshot of this commit predates those, so on the page a definition's
+building or landmark does not yet rise with what calls it). `?world=sample` (or `?world=small`) and
 the Terrain view's "Sample world" button show the sample world instead.
 `?world=proving` (and `GAIA_PROJECT=proving` in the app) shows the proving
 ground: a made-up codebase (`fixtures/proving.json`) laid out with
