@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { BIOME_PRIMITIVES, RELIEF_PRIMITIVES } from "@gaia/primitives";
 import { type CodeFacts, type FileFacts, Library, rand, seedOf } from "@gaia/schema";
-import { OPENING, type Terrain, amongCode, bakeTerrain, openingSpot, openingView, returnTo, stoodBy, waterDepthAt } from "@gaia/terrain";
+import { OPENING, type Terrain, amongCode, bakeTerrain, clearOfCode, openingSpot, openingView, returnTo, stoodBy, waterDepthAt } from "@gaia/terrain";
 import { composeWorld, judgeWorld, layoutWorld, standInJev } from "@gaia/world";
 import type { WorldDocument } from "../../world-service/protocol.ts";
 import { codeLab, provingWorld } from "./code-world.ts";
@@ -56,6 +56,8 @@ async function randomWorld(seed: number): Promise<WorldDocument> {
 function expectAmongCode({ terrain, at, world }: ReturnType<typeof landing>, what: string): void {
   expect(amongCode(world, at.x, at.z), `${what} lands among the code`).toBe(true);
   expect(waterDepthAt(terrain, at.x, at.z), `${what} lands on dry ground`).toBeLessThanOrEqual(OPENING.dry);
+  // Clear of every tree, bush, stone, building and landmark by a few meters, so turning round never fills the view.
+  expect(clearOfCode(world, at.x, at.z), `${what} lands clear of what stands for code`).toBe(true);
   expect(Number.isFinite(at.yaw), what).toBe(true);
 }
 
