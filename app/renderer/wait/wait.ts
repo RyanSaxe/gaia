@@ -43,7 +43,8 @@ export interface WaitView {
   /**
    * The face of a card chosen on the start, the painting of where the person last stood still: the sheet takes its
    * shape (width over depth) and the face lies on it at once, under the start's table until the card has risen into its
-   * place. It fades to bare paper as soon as the land is divided, and the map is drawn, as any world's is.
+   * place. As soon as the land is divided the card turns over in its place onto its back, the sheet's bare paper, as
+   * the journal turns a leaf, and the map is drawn there, as any world's is.
    */
   chosen(face: HTMLImageElement | HTMLCanvasElement): void;
   /** The sheet's paper as it is painted now, in its shape: the face of a fresh card that rises into the sheet. */
