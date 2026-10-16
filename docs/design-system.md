@@ -1390,8 +1390,9 @@ by breaking, not by fading:
   below it as it goes. Its crown goes first, in tiers (the roof and the
   lantern's glass, then the deck, posts, drum and battlements, then the
   walkway), each shrinking back onto what it stands on, never outlasting
-  the wall that carries it; its lit windows go out one by one; an open
-  lantern room glows at night like a beacon.
+  the wall that carries it; its lit windows go out one by one, and its
+  panes, its door and the door's lintel go just before the wall around
+  them; an open lantern room glows at night like a beacon.
 - Great stones lose their lintels and a dolmen its capstone first. A stone
   never bends: it leans whole about its toe (the edge of its foot), falls
   until it lies in the grass, or snaps, its top lying broken at its foot;
