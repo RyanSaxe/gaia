@@ -2,7 +2,7 @@
 // channel narrows or its line falls, and a pond lies still. The renderer
 // scrolls the surface along this flow and lets wading rings drift with it.
 
-import { type SolvedStream, type Station, surfaceHalfWidth } from "./water.ts";
+import { type SolvedStream, type Station, flowSection, surfaceHalfWidth } from "./water.ts";
 import type { Terrain } from "./world.ts";
 
 export const FLOW = {
@@ -22,7 +22,6 @@ export interface Velocity {
 
 const flows = new WeakMap<SolvedStream, Float32Array>();
 
-const area = (s: Station): number => s.halfWidth * Math.max(s.depth, 0.05);
 
 /**
  * The velocity at each station, as x, z pairs: along the stream toward its
@@ -34,7 +33,7 @@ export function streamFlow(stream: SolvedStream): Float32Array {
   const st = stream.stations;
   const n = st.length;
   const out = new Float32Array(n * 2);
-  const typical = [...st].map(area).sort((a, b) => a - b)[Math.floor(n / 2)] ?? 1;
+  const typical = [...st].map(flowSection).sort((a, b) => a - b)[Math.floor(n / 2)] ?? 1;
   const at = (i: number): Station => st[Math.max(0, Math.min(n - 1, i))] as Station;
   for (let i = 0; i < n; i++) {
     // Heading: the chord over a few stations, so a kink in the path never kinks the flow.
@@ -43,7 +42,7 @@ export function streamFlow(stream: SolvedStream): Float32Array {
     const run = Math.hypot(b.x - a.x, b.z - a.z);
     if (run < 1e-6) continue;
     const slope = Math.max(0, a.level - b.level) / run;
-    const speed = Math.min(FLOW.fastest, Math.max(FLOW.slowest, FLOW.pace * Math.sqrt(typical / area(at(i))) * (1 + FLOW.fall * slope)));
+    const speed = Math.min(FLOW.fastest, Math.max(FLOW.slowest, FLOW.pace * Math.sqrt(typical / flowSection(at(i))) * (1 + FLOW.fall * slope)));
     out[i * 2] = ((b.x - a.x) / run) * speed;
     out[i * 2 + 1] = ((b.z - a.z) / run) * speed;
   }

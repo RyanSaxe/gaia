@@ -34,6 +34,8 @@ const WALL = Math.SQRT2;
 const BELOW_FLOOR = 0.5;
 /** Spring and seep: the stream narrows to nothing over this many meters at each end. */
 const TAPER = 18;
+/** A stream is never narrower than this half width, meters, but where it narrows to nothing at a spring or a seep: as narrow as the lattice draws whole. */
+const NARROWEST = 1.1;
 /** A pond fills to this far below the lowest point of its rim. */
 const POND_FREEBOARD = 0.3;
 
@@ -44,6 +46,12 @@ export interface Station {
   readonly halfWidth: number;
   readonly depth: number;
 }
+
+/**
+ * A station's cross-section, for how fast its water runs: never less than where the stream is narrowest elsewhere,
+ * so its water runs no faster where it narrows to nothing at a spring or a seep than where it is drawn whole.
+ */
+export const flowSection = (s: Station): number => Math.max(s.halfWidth, NARROWEST) * Math.max(s.depth, NARROWEST * CHANNEL_SHAPE);
 
 /** How far the water surface reaches past the channel: inside the banks' containment, so its edge is always under ground. */
 export const surfaceHalfWidth = (s: Station): number => s.halfWidth + BANK * 0.5;
@@ -101,8 +109,9 @@ export function solveStream(l: Lattice, path: Float32Array, width: number, depth
     const z = path[idx * 2 + 1] as number;
     const s = along[k] as number;
     const taper = smooth(s / TAPER) * (course.seep === false ? 1 : smooth((total - s) / TAPER));
-    // Never narrower than the lattice can draw, so the bed is always below the water.
-    const halfWidth = Math.max(1.1, ((course.widths?.[idx] ?? width) / 2) * taper);
+    // It narrows to nothing within its own channel at its spring and its seep, so its water begins and ends in a
+    // point rather than a blunt end in a dry bed; elsewhere it is never narrower than the lattice draws.
+    const halfWidth = Math.max(NARROWEST, (course.widths?.[idx] ?? width) / 2) * taper;
     level = Math.min(level, heightAt(l, x, z) - INSET);
     // A routed river may swing across ground that falls away to one side: its water lies below the ground either
     // side of it too, so it is cut into the higher bank rather than standing above the lower one.
@@ -208,7 +217,7 @@ export function carveStream(l: Lattice, heights: Float32Array, level: Float32Arr
       const s = nearest(stream.stations, segments, worldOf(l, ix), worldOfZ(l, iz));
       const h = heights[i] as number;
       // The channel's walls are straight, from the middle of its bed up through the waterline (`WALL`).
-      const wall = s.depth / s.halfWidth;
+      const wall = s.halfWidth > 0 ? s.depth / s.halfWidth : CHANNEL_SHAPE;
       if (s.distance < s.halfWidth) {
         heights[i] = Math.min(h, s.level - wall * (s.halfWidth - s.distance));
         level[i] = Math.max(level[i] as number, s.level);
