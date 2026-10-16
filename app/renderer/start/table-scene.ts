@@ -3,7 +3,8 @@
 // lantern, lit by the world's own sun, sky, moon and lantern at the hour
 // (`@gaia/render`'s light, with the light of "Meadow morning", since no
 // world is open yet), and seen from a little above, the table past the sheet
-// out of focus. The ground beyond the table is the world lab's meadow.
+// out of focus. The table top reaches past every edge of the view, growing
+// for a very wide or tall window, so nothing beyond it ever shows.
 //
 // It draws a frame only when asked (`render`): the page asks when something
 // changes. The sun's shadow map is drawn again only when the light changes
@@ -33,6 +34,8 @@ import { FEATHER_FRAGMENT, FLAME_FRAGMENT, GLASS_FRAGMENT, MAX_CASTERS, PAPER_FR
 /** The table top's height, metres. */
 const TOP = 0.76;
 const TABLE_THICK = 0.045;
+/** How far past what the view sees the table top reaches when it grows to fill a wide or tall window, metres. */
+const TABLE_SPARE = 0.1;
 /** Choosing a card: lifting and straightening it, then its rise to the wait's sheet, seconds. */
 export const LIFT_S = 0.5;
 export const RISE_S = 1.3;
@@ -442,6 +445,19 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
     const reach = corners.map((c) => camera.position.distanceTo(c));
     restFocus = Math.min(...reach) * 0.97;
     restFar = Math.max(...reach) * 1.03;
+    // The table top reaches past every corner of the view, so a very wide or tall window never sees past it: where it
+    // already does, it keeps its own size.
+    const seen = [[-1, -1], [1, -1], [-1, 1], [1, 1]].map(([x, y]) => {
+      const ray = new THREE.Vector3(x, y, 0.5).unproject(camera).sub(camera.position).normalize();
+      return camera.position.clone().addScaledVector(ray, (TOP - camera.position.y) / Math.min(-1e-3, ray.y));
+    });
+    const w = Math.max(l.table.w, ...seen.map((p) => 2 * Math.abs(p.x) + TABLE_SPARE));
+    const d = Math.max(l.table.d, ...seen.map((p) => 2 * Math.abs(p.z) + TABLE_SPARE));
+    const box = top.geometry.parameters;
+    if (w !== box.width || d !== box.depth) {
+      top.geometry.dispose();
+      top.geometry = new THREE.BoxGeometry(w, TABLE_THICK, d);
+    }
   }
 
   // ---------- the hour ----------

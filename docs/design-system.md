@@ -744,7 +744,9 @@ walked before, painted by `start/gaia-painting.webp`):
   into its folds and two corners curl. Wherever something touches the table
   or the sheet, a soft shade gathers under it, and the sun's shadows fall
   from the world's shadow map. Everything at the sheet's distance is sharp;
-  the table beyond it is out of focus. Gaia's logo is printed at the
+  the table beyond it is out of focus. At any window shape the table fills
+  the view to its edges, its top reaching further for a very wide or tall
+  window, while the sheet keeps its framing. Gaia's logo is printed at the
   sheet's head, with "the worlds you have walked" (or "where shall we
   wander?") under it in italic.
   - Each world walked before is a torn card in its land's shape, laid on
