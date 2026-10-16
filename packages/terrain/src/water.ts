@@ -32,8 +32,13 @@ const CHANNEL_SHAPE = 0.35;
 const WALL = Math.SQRT2;
 /** The deepest a routed river's water lies below its valley's floor, meters. */
 const BELOW_FLOOR = 0.5;
-/** Spring and seep: the stream narrows to nothing over this many meters at each end. */
-const TAPER = 18;
+/**
+ * Where a stream begins and ends. Its spring wells up in a small pool `radius` across its middle, its edge wandering
+ * `wander` of that either way, `depth` deep at most under walls rising `wall` a meter, and the stream leaves the pool's
+ * downstream side `outlet` wide (a half width, meters), reaching its full width `run` meters on. A stream that soaks
+ * away narrows to `outlet` over its last `run` meters and ends in a wet patch `patch` across and `patchDepth` deep.
+ */
+export const HEAD = { radius: 1.9, wander: 0.22, depth: 0.22, wall: 0.18, outlet: 0.6, run: 8, patch: 2.3, patchDepth: 0.08 } as const;
 /** A stream is never narrower than this half width, meters, but where it narrows to nothing at a spring or a seep: as narrow as the lattice draws whole. */
 const NARROWEST = 1.1;
 /** A pond fills to this far below the lowest point of its rim. */
@@ -58,6 +63,52 @@ export const surfaceHalfWidth = (s: Station): number => s.halfWidth + BANK * 0.5
 
 export interface SolvedStream {
   readonly stations: readonly Station[];
+  /** Whether it soaks away at its last station, rather than running into other water or off the land. */
+  readonly seep?: boolean;
+}
+
+/** A spring's pool or a seep's wet patch: its middle, how far its edge lies in each direction, how deep it is and at what level. */
+export interface Head {
+  readonly x: number;
+  readonly z: number;
+  readonly level: number;
+  readonly depth: number;
+  /** Its edge's distance from its middle toward `angle` (radians, from +x toward +z), meters. */
+  readonly edge: (angle: number) => number;
+  /** The farthest its edge lies from its middle. */
+  readonly reach: number;
+}
+
+/** A head's own wandering, from where it lies: the same place always gives the same shape. */
+function phases(x: number, z: number): readonly [number, number, number] {
+  let h = (Math.imul(Math.round(x * 10) | 0, 0x27d4eb2d) ^ Math.imul(Math.round(z * 10) | 0, 0x165667b1)) >>> 0;
+  const next = (): number => {
+    h = Math.imul(h ^ (h >>> 15), 0x2c1b3c6d) >>> 0;
+    h = Math.imul(h ^ (h >>> 12), 0x297a2d39) >>> 0;
+    return ((h ^ (h >>> 15)) >>> 0) / 4294967296;
+  };
+  return [next() * Math.PI * 2, next() * Math.PI * 2, next() * Math.PI * 2];
+}
+
+/** A stream's spring pool, and its wet patch where it soaks away (`HEAD`). */
+export function headsOf(stream: SolvedStream): readonly Head[] {
+  const st = stream.stations;
+  const n = st.length;
+  if (n < 2) return [];
+  const head = (at: Station, toward: Station, radius: number, depth: number, back: number): Head => {
+    const dx = toward.x - at.x;
+    const dz = toward.z - at.z;
+    const len = Math.hypot(dx, dz) || 1;
+    // The pool lies upstream of where the stream leaves it, so the stream runs out of its downstream side.
+    const x = at.x - (dx / len) * radius * back;
+    const z = at.z - (dz / len) * radius * back;
+    const [a, b, c] = phases(x, z);
+    const edge = (angle: number): number => radius * (1 + HEAD.wander * (0.55 * Math.sin(2 * angle + a) + 0.3 * Math.sin(3 * angle + b) + 0.15 * Math.sin(5 * angle + c)));
+    return { x, z, level: at.level, depth, edge, reach: radius * (1 + HEAD.wander) };
+  };
+  const heads = [head(st[0] as Station, st[Math.min(3, n - 1)] as Station, HEAD.radius, HEAD.depth, 0.6)];
+  if (stream.seep === true) heads.push(head(st[n - 1] as Station, st[Math.max(0, n - 4)] as Station, HEAD.patch, HEAD.patchDepth, 0.3));
+  return heads;
 }
 
 export interface SolvedPond {
@@ -108,10 +159,12 @@ export function solveStream(l: Lattice, path: Float32Array, width: number, depth
     const x = path[idx * 2] as number;
     const z = path[idx * 2 + 1] as number;
     const s = along[k] as number;
-    const taper = smooth(s / TAPER) * (course.seep === false ? 1 : smooth((total - s) / TAPER));
-    // It narrows to nothing within its own channel at its spring and its seep, so its water begins and ends in a
-    // point rather than a blunt end in a dry bed; elsewhere it is never narrower than the lattice draws.
-    const halfWidth = Math.max(NARROWEST, (course.widths?.[idx] ?? width) / 2) * taper;
+    // It leaves its spring's pool `HEAD.outlet` wide and widens over `HEAD.run`; where it soaks away it narrows the
+    // same way into its wet patch. Elsewhere it is never narrower than the lattice draws.
+    const full = Math.max(NARROWEST, (course.widths?.[idx] ?? width) / 2);
+    const share = Math.min(1, HEAD.outlet / full);
+    const opens = (from: number): number => share + (1 - share) * smooth(from / HEAD.run);
+    const halfWidth = full * opens(s) * (course.seep === false ? 1 : opens(total - s));
     level = Math.min(level, heightAt(l, x, z) - INSET);
     // A routed river may swing across ground that falls away to one side: its water lies below the ground either
     // side of it too, so it is cut into the higher bank rather than standing above the lower one.
@@ -129,7 +182,7 @@ export function solveStream(l: Lattice, path: Float32Array, width: number, depth
     if (floor !== undefined) level = Math.max(level, floor - BELOW_FLOOR);
     stations.push({ x, z, level, halfWidth, depth: Math.min(depth, halfWidth * CHANNEL_SHAPE) });
   });
-  return { stations };
+  return { stations, ...(course.seep === false ? {} : { seep: true }) };
 }
 
 interface Nearest {
@@ -246,6 +299,31 @@ export function carveStream(l: Lattice, heights: Float32Array, level: Float32Arr
       }
     }
   }
+  for (const head of headsOf(stream)) carveHead(l, heights, level, head);
+}
+
+/** Cuts a spring's pool or a seep's wet patch: a bowl under its level, its walls rising on past its wandering edge to meet the ground. */
+function carveHead(l: Lattice, heights: Float32Array, level: Float32Array, head: Head): void {
+  const reach = head.reach + head.depth / HEAD.wall + 1;
+  const toIndex = (w: number): number => (w - l.origin) / l.spacing;
+  const toIndexZ = (w: number): number => (w - (l.originZ ?? l.origin)) / l.spacing;
+  const x0 = Math.max(0, Math.floor(toIndex(head.x - reach)));
+  const x1 = Math.min(l.n - 1, Math.ceil(toIndex(head.x + reach)));
+  const z0 = Math.max(0, Math.floor(toIndexZ(head.z - reach)));
+  const z1 = Math.min(l.n - 1, Math.ceil(toIndexZ(head.z + reach)));
+  for (let iz = z0; iz <= z1; iz++) {
+    for (let ix = x0; ix <= x1; ix++) {
+      const dx = worldOf(l, ix) - head.x;
+      const dz = worldOfZ(l, iz) - head.z;
+      const r = Math.hypot(dx, dz);
+      if (r > reach) continue;
+      const i = iz * l.n + ix;
+      // Signed distance in from its edge: the walls are straight through the waterline, as a stream's are.
+      const inward = head.edge(Math.atan2(dz, dx)) - r;
+      heights[i] = Math.min(heights[i] as number, head.level - Math.min(head.depth, HEAD.wall * inward));
+      if (inward > -1) level[i] = Math.max(level[i] as number, head.level);
+    }
+  }
 }
 
 /** Fills a pond to just under its rim, then cuts a gentle bed below the level. Null when the hollow cannot hold water. */
@@ -292,7 +370,7 @@ export const SHORE_CAP = 12;
 const EDGE_BETWEEN_AT_MOST = 2;
 
 /** Water that runs at least this deep within a sample of a point, meters, has its full banks: sand and the grass's edge start at its own edge. */
-export const BANKED = 0.3;
+export const BANKED = 0.4;
 /** How far back from water too shallow to be banked its banks stand at most, meters: past the grass's edge, so grass meets a thin trickle. */
 const SHALLOW_BANK = 3;
 
@@ -318,11 +396,13 @@ export function shoreField(l: Lattice, heights: Float32Array, level: Float32Arra
         d[i] = SHORE_CAP;
         continue;
       }
-      // The deepest the water runs within a sample of it: shallow at every waterline, but deep a meter in but where
-      // the stream itself is thin.
+      // The deepest the water runs within a meter of it: shallow at every waterline, but deep a meter in but where
+      // the stream itself is thin. A coarser level reads its own sample alone, so it never finds deeper water than
+      // the lattice does, and its shore never lies nearer the water than the lattice's.
       let deepest = 0;
-      for (let jz = Math.max(0, iz - 1); jz <= Math.min(n - 1, iz + 1); jz++) {
-        for (let jx = Math.max(0, ix - 1); jx <= Math.min(n - 1, ix + 1); jx++) deepest = Math.max(deepest, (level[jz * n + jx] as number) - (heights[jz * n + jx] as number));
+      const r = Math.floor(1 / spacing);
+      for (let jz = Math.max(0, iz - r); jz <= Math.min(n - 1, iz + r); jz++) {
+        for (let jx = Math.max(0, ix - r); jx <= Math.min(n - 1, ix + r); jx++) deepest = Math.max(deepest, (level[jz * n + jx] as number) - (heights[jz * n + jx] as number));
       }
       d[i] = SHALLOW_BANK * Math.max(0, 1 - deepest / BANKED);
     }
