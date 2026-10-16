@@ -1320,21 +1320,26 @@ in its top end. The page's cut edge shades the window's top and left as a
 page's thickness would. The name is a lowercase "gaia" in a lighter cut of
 the same face (Fraunces at 600), in ink, with its "ai" in the meadow's
 green, because Gaia uses AI; on dark the ink is cream and the green paler.
-Where the whole mark shows, the icon stands on the rounded square every
-macOS icon has, to the left of the name.
+
+The icon is Gaia's face outside the world: in the Dock, in Finder, as the
+page's icon, and wherever the whole mark shows, such as the README's sheet
+or the film's title card, where it stands on the rounded square every macOS
+icon has, to the left of the name. Inside the world only the name appears,
+as ink in the paper: a dark rounded square on the start's sheet or the slip
+would be an app's icon lying in the world.
 
 The view is a picture kept in the repository (`view.webp`), so the mark
 stays the same when the world is laid out again; `paint.ts` says where it
 was taken. The two cuts of Fraunces are kept beside it under their licence
 (`OFL.txt`). `pnpm brand` paints the mark into pictures at the sizes they
-are shown on a 2x screen and no larger: 273 px wide for the slip's 132,
-655 px for the start's sheet, a 32 px icon for the page, and the macOS icon
-at every size its set holds (`app/build/icon.icns`, and `icon.png`, which
-the Dock shows while Gaia runs from its source); at 32 px and under the
-cut edge's shade is lighter, so the G stays bright. On the slip the mark is
-multiplied into the paper, so it takes the slip's tone, and the lantern's
-after dark; on the start it is printed into the lit sheet, so the table's
-light falls on it with the paper's.
+are shown on a 2x screen and no larger: the name 208 px wide for the slip's
+104 and 520 px for the start's sheet, a 32 px icon for the page, and the
+macOS icon at every size its set holds (`app/build/icon.icns`, and
+`icon.png`, which the Dock shows while Gaia runs from its source); at 32 px
+and under the cut edge's shade is lighter, so the G stays bright. On the
+slip the name is multiplied into the paper, so it takes the slip's tone,
+and the lantern's after dark; on the start it is printed into the lit
+sheet, so the table's light falls on it with the paper's.
 
 ## Trails
 

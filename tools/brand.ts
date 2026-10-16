@@ -1,8 +1,9 @@
-// Paints Gaia's mark (app/renderer/brand/paint.ts) into the pictures the app shows, at the sizes it shows them: the
-// start sheet's and the slip's on a 2x screen, the page's icon, and the macOS app icon at every size its icon set
-// holds, the 32 pixels and under with a lighter shade at the G's edge. The painting runs in a hidden Electron window
-// (the app's own Chromium), from the mark's own view and faces, so painting again changes nothing.
-// Usage: pnpm brand [--readme out.png]   (--readme also paints the mark on its own torn sheet, 1600 wide)
+// Paints Gaia's mark (app/renderer/brand/paint.ts) into the pictures the app shows, at the sizes it shows them on a
+// 2x screen: the name the start's sheet and the slip print into their paper, the page's icon, and the macOS app icon
+// at every size its icon set holds, the 32 pixels and under with a lighter shade at the G's edge. The painting runs in
+// a hidden Electron window (the app's own Chromium), from the mark's own view and faces, so painting again changes
+// nothing you can see.
+// Usage: pnpm brand [--readme out.png]   (--readme also paints the icon and the name on their own torn sheet, 1600 wide)
 
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
@@ -27,7 +28,7 @@ const ICONSET = [16, 32, 64, 128, 256, 512, 1024].flatMap((px) => [
 // The page: paints each picture and hands it back as a data URL.
 const page = `
 import { DECKLE_MASK } from "../immersive/map-styles.ts";
-import { brandReady, paintIcon, paintLockup } from "./paint.ts";
+import { brandReady, paintIcon, paintLockup, paintName } from "./paint.ts";
 const url = (c, type = "image/png", quality) => c.toDataURL(type, quality);
 const image = (src) => new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = no; i.src = src; });
 /** The art in the rounded square every macOS icon has, 824 of 1024 with the shade it casts. */
@@ -56,8 +57,8 @@ function framed(px) {
 }
 window.brand = {
   ready: brandReady(),
-  sheet: () => url(paintLockup(655), "image/webp", 0.92),
-  slip: () => url(paintLockup(273), "image/webp", 0.92),
+  sheet: () => url(paintName(520), "image/webp", 0.92),
+  slip: () => url(paintName(208), "image/webp", 0.92),
   favicon: () => url(paintIcon(32, true), "image/webp", 1),
   icon: (px) => url(framed(px)),
   readme: async () => url(paintLockup(1600, await image(DECKLE_MASK.slice(5, -2)))),

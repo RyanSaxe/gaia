@@ -121,6 +121,22 @@ function writeName(g: Ctx, x: number, baseline: number, px: number, ground: keyo
   return g.measureText(word).width;
 }
 
+/**
+ * The name alone, `width` pixels wide and cut to its ink, on clear ground: what the start's sheet and the slip print
+ * into their paper, where the icon, a thing from outside the world, has no place.
+ */
+export function paintName(width: number): HTMLCanvasElement {
+  const [, probe] = canvasOf(1, 1);
+  probe.font = `100px "${NAME_FAMILY}"`;
+  const ink = probe.measureText("gaia");
+  const em = ink.actualBoundingBoxLeft + ink.actualBoundingBoxRight;
+  const px = (100 * width) / em;
+  const k = px / 100;
+  const [c, g] = canvasOf(width, (ink.actualBoundingBoxAscent + ink.actualBoundingBoxDescent) * k);
+  writeName(g, ink.actualBoundingBoxLeft * k, ink.actualBoundingBoxAscent * k, px, "paper");
+  return c;
+}
+
 /** The lockup's proportions, as fractions of the icon's side. */
 const LOCKUP = { gap: 0.2, name: 0.86, baseline: 0.71 } as const;
 
