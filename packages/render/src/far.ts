@@ -17,7 +17,7 @@ import type { Part } from "@gaia/schema";
 import { AIR, FLUTTERS, type Realized, mergeParts } from "@gaia/realize";
 import type { InstanceSpot } from "./instances.ts";
 import { copySeed } from "./instances.ts";
-import { LIGHT_GLSL, type SceneLight } from "./light.ts";
+import { LIGHT_GLSL, noShadowMap, type SceneLight } from "./light.ts";
 import { FOLIAGE, PLANT_FRAG, PLANT_VERT, geometryOf, sprayColors } from "./plant.ts";
 import { WIND_GLSL } from "./sway.ts";
 
@@ -178,8 +178,7 @@ export function startFarBake(renderer: THREE.WebGLRenderer, plant: Realized, fra
   const pxPerRad = renderer.getDrawingBufferSize(new THREE.Vector2()).y / ((FOV * Math.PI) / 180);
   const eyeAt = (2 * radius * pxPerRad) / framePx;
   // Still air, and a shadow map of its own: an unset sampler would read whatever the bake last bound, even the target it draws into.
-  const unlit = new THREE.DepthTexture(1, 1);
-  unlit.compareFunction = THREE.LessEqualCompare;
+  const unlit = noShadowMap();
   const light = { uTime: { value: 0 }, uWind: { value: 0 }, uWindDir: { value: new THREE.Vector2(1, 0) }, uNightness: { value: 0 }, uEye: { value: new THREE.Vector3() }, uShadowMap: { value: unlit } };
   const bake = { uBakeCenter: { value: sphere.center.clone() }, uBakeDir: { value: new THREE.Vector3() }, uBakeRadius: { value: radius } };
   const shared = {
@@ -391,7 +390,7 @@ export function bakeFarForm(renderer: THREE.WebGLRenderer, plant: Realized, fram
  * The bake's version: a far form stored by an earlier version must be baked
  * again. Bump it whenever what a bake writes, or how a card reads it, changes.
  */
-export const FAR_BAKE_VERSION = 1;
+export const FAR_BAKE_VERSION = 2;
 
 /** A far form as plain data, to store: its bounds and motion, and each atlas's full-size level, row by row from the bottom. */
 export interface FarFormData {
