@@ -2,7 +2,6 @@
 // JSON-RPC over the engine's stdin and stdout. The Rust side derives the same
 // shapes from its structs. The OpenRouter key never crosses this boundary.
 
-import type { EntityFacts, FileFacts } from "./facts.ts";
 import type { CodeGraph, NodeId } from "./graph.ts";
 import type { JevRequest, JevResponse } from "./jev.ts";
 
@@ -10,15 +9,9 @@ export interface EngineMethods {
   /** Answers with the engine's version; the app's first sign the engine is alive. */
   "engine.ping": { params: Record<string, never>; result: { version: string } };
   /**
-   * Scans the project (respecting .gitignore) and returns every file's facts,
-   * every entity it found and the repository's own facts. The project's ID is
-   * its root commit, so it names the project wherever it is cloned. Watching
-   * the project for `facts.changed` is not built yet.
-   */
-  /**
-   * Walks, parses and measures the project into its code graph: a node for
-   * every directory, file, definition and block, and every reference the
-   * rules have not resolved as pending. Every language reads the same way,
+   * Walks and parses the project into its code graph: a node for every
+   * directory, file, definition and block, with its lines and history, and
+   * every reference the rules have not resolved as pending. Every language reads the same way,
    * through its grammar's queries (`docs/architecture.md`, "The code graph").
    */
   "project.graph": { params: { root: string; judged?: boolean }; result: CodeGraph };
@@ -26,11 +19,9 @@ export interface EngineMethods {
    * Builds every request Jev would be sent to understand the project (its
    * links, then importance and quality at every level) and looks each up in
    * the store; sends nothing. A request already answered is kept, never
-   * sent again (`docs/architecture.md`, "The Jev runner"). With `graph`,
-   * the judged graph it planned on too, as `project.graph` with
-   * `judged: true` gives it, built once.
+   * sent again (`docs/architecture.md`, "The Jev runner").
    */
-  "understanding.plan": { params: { root: string; graph?: boolean }; result: UnderstandPlan };
+  "understanding.plan": { params: { root: string }; result: UnderstandPlan };
   /**
    * A file's text as the world reads it, by its path relative to the root:
    * at `commit` (the graph's), or else at the commit checked out, or from
@@ -76,12 +67,11 @@ export interface EngineMethods {
    * gives up past a size or time cap.
    */
   "project.clone": { params: { address: string }; result: Cloned };
-  /** Sends one request to Jev with the key from the macOS Keychain. Fails unless the engine runs with GAIA_JEV=live. */
-  "jev.ask": { params: { request: JevRequest }; result: JevResponse };
   /**
-   * Sends many requests, eight at a time, answering in the order asked: each
-   * a response, or the reason that one request failed. Fails as a whole only
-   * when nothing can be sent, such as when the engine runs without GAIA_JEV=live.
+   * Sends many requests to Jev with the key from the macOS Keychain, eight at
+   * a time, answering in the order asked: each a response, or the reason that
+   * one request failed. Fails as a whole only when nothing can be sent, such
+   * as when the engine runs without GAIA_JEV=live.
    */
   "jev.batch": { params: { requests: JevRequest[] }; result: { responses: (JevResponse | JevFailure)[] } };
   /** What a batch would send and cost, without sending it or reading the key. */
@@ -119,7 +109,7 @@ export type Cloned = { readonly cloned: true; readonly owner: string; readonly r
  * shows for each question by lineage, and `lineage` the last graph's
  * lineage map and definition fingerprints.
  */
-export type StoreTable = "answers" | "blueprints" | "calls" | "document" | "held" | "lineage" | "placements" | "settings";
+export type StoreTable = "answers" | "calls" | "held" | "lineage" | "settings";
 
 /** One request of a batch that failed on its own, and why. */
 export interface JevFailure {
@@ -147,8 +137,6 @@ export type Pass = "link" | "folders" | "files";
 export interface UnderstandPlan {
   readonly pending: readonly { readonly pass: Pass; readonly requests: number; readonly kept: number }[];
   readonly estimate: JevEstimate;
-  /** Only when asked for with `graph`. */
-  readonly graph?: CodeGraph;
 }
 
 /** One slice of understanding. */
@@ -164,13 +152,6 @@ export interface UnderstandProgress {
   readonly quality: Readonly<Record<string, number>>;
 }
 
-/** Pushed by the engine without a request. */
-export type EngineEvent =
-  | { event: "facts.changed"; changed: FileFacts[]; removed: string[]; entities: EntityFacts[]; entitiesRemoved: string[] }
-  | { event: "tests.reported"; failing: string[]; at: string }
-  | { event: "engine.error"; message: string };
-
 export interface EngineClient {
   call<M extends keyof EngineMethods>(method: M, params: EngineMethods[M]["params"]): Promise<EngineMethods[M]["result"]>;
-  on(listener: (e: EngineEvent) => void): () => void;
 }

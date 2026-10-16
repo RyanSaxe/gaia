@@ -11,16 +11,7 @@ use std::fs;
 use std::path::PathBuf;
 
 /// The tables a project's store holds. `EngineMethods`' `StoreTable` names the same.
-pub const TABLES: &[&str] = &[
-    "answers",
-    "blueprints",
-    "calls",
-    "document",
-    "held",
-    "lineage",
-    "placements",
-    "settings",
-];
+pub const TABLES: &[&str] = &["answers", "calls", "held", "lineage", "settings"];
 
 pub(crate) fn data_dir() -> Result<PathBuf, String> {
     if let Ok(dir) = std::env::var("GAIA_DATA_DIR") {

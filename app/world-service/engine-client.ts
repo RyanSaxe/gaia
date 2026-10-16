@@ -2,10 +2,10 @@
 // transport. The world service sends lines through the main process, which
 // writes them to the engine's stdin and relays its stdout back.
 
-import type { EngineClient, EngineEvent, EngineMethods } from "@gaia/schema";
+import type { EngineClient, EngineMethods } from "@gaia/schema";
 
 export interface LineClient extends EngineClient {
-  /** Feeds one line the engine wrote: a response or an event. */
+  /** Feeds one line the engine wrote: a response. */
   receive(line: string): void;
   /** Fails every call in flight; the engine that would have answered is gone. */
   disconnect(reason: string): void;
@@ -20,13 +20,11 @@ interface Response {
   readonly id?: unknown;
   readonly result?: unknown;
   readonly error?: { readonly code: number; readonly message: string };
-  readonly event?: unknown;
 }
 
 export function createEngineClient(send: (line: string) => void): LineClient {
   let nextId = 1;
   const pending = new Map<number, Pending>();
-  const listeners = new Set<(e: EngineEvent) => void>();
 
   return {
     call<M extends keyof EngineMethods>(method: M, params: EngineMethods[M]["params"]): Promise<EngineMethods[M]["result"]> {
@@ -36,20 +34,12 @@ export function createEngineClient(send: (line: string) => void): LineClient {
         send(JSON.stringify({ jsonrpc: "2.0", id, method, params }));
       });
     },
-    on(listener) {
-      listeners.add(listener);
-      return () => listeners.delete(listener);
-    },
     receive(line) {
       let message: Response;
       try {
         message = JSON.parse(line) as Response;
       } catch {
         console.error(`gaia: the engine wrote a line that is not JSON: ${line}`);
-        return;
-      }
-      if (typeof message.event === "string") {
-        for (const listener of listeners) listener(message as EngineEvent);
         return;
       }
       const call = typeof message.id === "number" ? pending.get(message.id) : undefined;
