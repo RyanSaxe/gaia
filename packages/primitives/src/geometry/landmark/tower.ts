@@ -16,8 +16,9 @@ import { lump, nonEmpty, still } from "./shared.ts";
 
 /** Height of one course of stone, meters. */
 const COURSE = 0.56;
-/** Mortar gap between blocks, meters. */
+/** Mortar gap between blocks, meters, and how far the mortar is set back behind a course's least proud block. */
 const JOINT = 0.035;
+const MORTAR = 0.012;
 /** Faces of each plan; 0 is round. */
 const SIDES = { round: 0, square: 4, octagonal: 8 } as const;
 /** How far a gallery's walkway reaches past the wall, how thick it is, and its parapet's height. */
@@ -113,8 +114,13 @@ function courseSpans(sides: number, rad: number, len: number, odd: boolean): [nu
   return out;
 }
 
-/** One block of a ring wall between two angles and two heights: outer face, top, ends, inner face, and with `under` its underside. */
-function ringBlock(b: PartBuilder, sides: number, a0: number, a1: number, y0: number, y1: number, rad: number, thick: number, shade: number, ch: Channels, under = false): void {
+/**
+ * One block of a ring wall between two angles and two heights: outer face, top, ends, inner face, and with `under`
+ * its underside. With `joint`, mortar at radius `mortar`, behind its face, fills the joint below it and half the
+ * joint past each end, so the joints round it read as dark recesses from outside and never let the sky through;
+ * every block of a course sets its mortar at the same radius, so the mortar is one unbroken ring.
+ */
+function ringBlock(b: PartBuilder, sides: number, a0: number, a1: number, y0: number, y1: number, rad: number, thick: number, shade: number, ch: Channels, under = false, joint = 0, mortar = rad): void {
   const am = (a0 + a1) / 2;
   const outer = (a: number, y: number, bulge = 0): V3 => ringPoint(sides, a, rad + bulge, y);
   const inner = (a: number, y: number): V3 => ringPoint(sides, a, rad - thick, y);
@@ -132,6 +138,18 @@ function ringBlock(b: PartBuilder, sides: number, a0: number, a1: number, y0: nu
   quad(b, [outer(a0, y0), outer(a0, y1), inner(a0, y1), inner(a0, y0)], side0, shade - 0.1, ch);
   quad(b, [outer(a1, y0), outer(a1, y1), inner(a1, y1), inner(a1, y0)], side1, shade - 0.1, ch);
   quad(b, [inner(a0, y0), inner(a1, y0), inner(a1, y1), inner(a0, y1)], [-nm[0], 0, -nm[2]], shade - 0.2, ch);
+  if (joint > 0) {
+    // Half a joint past each end, but not round a polygon's corner, where blocks meet without a joint.
+    const past = (a: number): number => (sides > 0 && facetOf(sides, a) !== facetOf(sides, am) ? 0 : joint / (2 * rad));
+    const e0 = a0 - past(a0 - joint / (2 * rad));
+    const e1 = a1 + past(a1 + joint / (2 * rad));
+    const set = (a: number, y: number): V3 => ringPoint(sides, a, mortar, y);
+    quad(b, [set(e0, y0 - joint), set(am, y0 - joint), set(am, y1), set(e0, y1)], normalize([n0[0] + nm[0], 0, n0[2] + nm[2]]), shade - 0.25, ch);
+    quad(b, [set(am, y0 - joint), set(e1, y0 - joint), set(e1, y1), set(am, y1)], normalize([n1[0] + nm[0], 0, n1[2] + nm[2]]), shade - 0.25, ch);
+    // The joint under the block is closed at each end too, where it would open onto a window's or a door's side.
+    quad(b, [set(e0, y0 - joint), set(e0, y0), inner(e0, y0), inner(e0, y0 - joint)], side0, shade - 0.25, ch);
+    quad(b, [set(e1, y0 - joint), set(e1, y0), inner(e1, y0), inner(e1, y0 - joint)], side1, shade - 0.25, ch);
+  }
   if (under) quad(b, [outer(a0, y0), inner(a0, y0), inner(a1, y0), outer(a1, y0)], [0, -1, 0], shade - 0.22, ch);
 }
 
@@ -325,7 +343,7 @@ export function buildLookoutTower(p: TowerParams, ctx: BuildContext): Built {
       const shade = 0.52 + 0.22 * cr.next() + 0.08 * rise - (c < 2 ? 0.08 : 0);
       const channels: Omit<Channels, "pivot"> = { loss, droop: 0, wither: 0.45 + 0.4 * cr.next(), glow: 0, tint: (cr.next() - 0.5) * 0.05 };
       const bulge = (cr.next() - 0.5) * 0.04;
-      for (const [b0, b1] of pieces) ringBlock(stone, sides, b0, b1, y0, y1, rad + bulge, thick, shade, { ...channels, pivot: foot((b0 + b1) / 2) });
+      for (const [b0, b1] of pieces) ringBlock(stone, sides, b0, b1, y0, y1, rad + bulge, thick, shade, { ...channels, pivot: foot((b0 + b1) / 2) }, false, JOINT, rad - 0.02 - MORTAR);
     }
   }
 
