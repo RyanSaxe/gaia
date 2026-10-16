@@ -69,12 +69,17 @@ function card(b: PartBuilder, c: Vec3, n: Vec3, up: Vec3, size: number, twist: n
   b.triangle(idx[0] as number, idx[2] as number, idx[3] as number);
 }
 
+/** How the last of a wall to stand rots at a point on it, and the pieces it rots in: what ivy holds to there. */
+export type Hold = (w: Wall, p: Vec3) => { readonly rot: number; readonly grain: (p: Vec3) => Vec3 };
+
 /**
  * Ivy climbing the walls: strands from the ground at the corners and over
  * the collapse. The lowest leaves come first as vitality falls, and the
- * strands reach higher as it keeps falling, up over the eaves.
+ * strands reach higher as it keeps falling, up over the eaves. On a wall
+ * that rots through, each leaf goes with the piece of wall it `hold`s to, a
+ * little before it, so no ivy hangs over a hole.
  */
-export function ivy(b: PartBuilder, plan: BuildingPlan, ruin: Ruin, r: Rand, coarse = 1): void {
+export function ivy(b: PartBuilder, plan: BuildingPlan, ruin: Ruin, r: Rand, coarse = 1, hold?: Hold): void {
   for (const w of shownWalls(plan)) {
     const holes = clearings(plan, w, 0.05).filter((h) => h.y0 < plan.floor + 0.5);
     const starts = [0.25 + 0.4 * r.next(), w.length - 0.25 - 0.4 * r.next()];
@@ -92,6 +97,7 @@ export function ivy(b: PartBuilder, plan: BuildingPlan, ruin: Ruin, r: Rand, coa
           const ss = clamp(s + (r.next() - 0.5) * 0.5, 0.05, w.length - 0.05);
           const c = on(w, ss, Math.min(y + (r.next() - 0.5) * 0.15, topAt(plan, w, ss) - 0.3), 0.06 + 0.05 * r.next());
           const height = y / reach;
+          const held = hold?.(w, c);
           const ch: Channels = {
             loss: 0,
             droop: 0,
@@ -100,6 +106,8 @@ export function ivy(b: PartBuilder, plan: BuildingPlan, ruin: Ruin, r: Rand, coa
             pivot: c,
             tint: (r.next() - 0.5) * 0.06,
             grow: clamp(0.62 - 0.5 * height + 0.1 * zone + (r.next() - 0.5) * 0.08, 0.06, 0.7),
+            // A leaf stands off the wall, so it reads the rot a hair away from the piece behind it: it goes a little early.
+            ...(held && { rot: Math.min(1, held.rot + 0.06), grain: held.grain }),
           };
           const n = normalize(addScaled(w.n, [r.next() - 0.5, r.next() * 0.4, r.next() - 0.5], 0.5));
           card(b, c, n, [0, 1, 0], 0.32 + 0.16 * r.next(), (r.next() - 0.5) * 1.4, CUT.cluster + r.next() * 0.98, ch, 0.42 + 0.2 * r.next());
