@@ -44,6 +44,7 @@ You need Node 26, pnpm 10 and a stable Rust toolchain from rustup (put
 | `pnpm lab:serve` | That page on this Mac's Tailscale address, port 5180, rebuilt on every change |
 | `pnpm shots` | Screenshots of every primitive and world look, from Electron, on the stand-in judge unless `GAIA_JEV` is set |
 | `pnpm readme-shots` | The README's two screenshots, into `docs/images/` |
+| `pnpm brand` | Paints Gaia's mark into the pictures the app shows and the macOS icon (`app/build/icon.icns`); run it again when the field map's look changes |
 | `GAIA_DATA_DIR=dir pnpm graph-snapshot [root]` | Rewrites `fixtures/gaia-graph.json`, the judged graph of this repository the standalone lab is laid out from, from Jev's answers held in that store |
 | `pnpm proving` | Rewrites the proving ground's fixtures (`docs/proving-ground.md`) |
 | `pnpm probe` | Measures both worlds in Electron: frame time, triangles by kind and pass, the walk test and smoothness |

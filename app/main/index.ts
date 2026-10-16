@@ -23,6 +23,8 @@ if (shots) nativeTheme.themeSource = "light";
 if (shots) process.env.GAIA_JEV ??= "stand-in";
 
 void app.whenReady().then(() => {
+  // The Dock shows Gaia's icon while it runs from its source; a packaged app takes it from build/icon.icns.
+  app.dock?.setIcon(join(app.getAppPath(), "build/icon.png"));
   const repoRoot = resolve(app.getAppPath(), "..");
   // With no project named the page offers the start; shots always show Gaia's own world.
   const named = process.env.GAIA_PROJECT ?? (shots ? repoRoot : undefined);

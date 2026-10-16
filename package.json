@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "pnpm engine && pnpm --filter @gaia/app dev",
     "shots": "pnpm engine && pnpm --filter @gaia/app shots",
+    "brand": "tsx tools/brand.ts",
     "lab:html": "tsx tools/lab-html.ts",
     "lab:serve": "tsx tools/lab-serve.ts",
     "readme-shots": "tsx tools/readme-shots.ts",
