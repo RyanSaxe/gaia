@@ -34,6 +34,10 @@ import { FEATHER_FRAGMENT, FLAME_FRAGMENT, GLASS_FRAGMENT, MAX_CASTERS, PAPER_FR
 /** The table top's height, metres. */
 const TOP = 0.76;
 const TABLE_THICK = 0.045;
+/** The lantern's and the inkwell's reach round their middle and their height, metres, and how near the view's edge they may come (its share of the half-width). */
+const LANTERN_BOX = { r: 0.06, h: 0.235 } as const;
+const INKWELL_BOX = { r: 0.04, h: 0.056 } as const;
+const THINGS_EDGE = 0.99;
 /** How far past what the view sees the table top reaches when it grows to fill a wide or tall window, metres. */
 const TABLE_SPARE = 0.1;
 /** Choosing a card: lifting and straightening it, then its rise to the wait's sheet, seconds. */
@@ -431,6 +435,14 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
     const at = onSheet(sw / 2, sh * (l.phone ? 0.5 : 0.52));
     const back = new THREE.Vector3(0, Math.sin(pitch), Math.cos(pitch));
     const corners = [onSheet(0, 0), onSheet(sw, 0), onSheet(0, sh), onSheet(sw, sh)];
+    // The lantern and the inkwell stay whole in the view too, nearer its edge than the sheet may go: the box round each.
+    const things = ([[l.lantern, LANTERN_BOX], [l.inkwell, INKWELL_BOX]] as const).flatMap(([[x, z], { r, h }]) =>
+      [-r, r].flatMap((dx) => [-r, r].flatMap((dz) => [0, h].map((dy) => new THREE.Vector3(x + dx, TOP + dy, z + dz)))),
+    );
+    const inView = (c: THREE.Vector3, edge: number): boolean => {
+      const p = c.clone().project(camera);
+      return Math.abs(p.x) < edge && Math.abs(p.y) < edge;
+    };
     for (let d = 0.6; d < 6; d += 0.01) {
       camera.position.copy(at).addScaledVector(back, d);
       camera.lookAt(at);
@@ -440,7 +452,7 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
         const p = c.clone().project(camera);
         return Math.abs(p.x) < (l.phone ? 0.97 : 0.86) && p.y < (l.phone ? 0.86 : 0.9) && p.y > (l.phone ? -0.93 : -0.92);
       });
-      if (fits) break;
+      if (fits && things.every((c) => inView(c, THINGS_EDGE))) break;
     }
     const reach = corners.map((c) => camera.position.distanceTo(c));
     restFocus = Math.min(...reach) * 0.97;
