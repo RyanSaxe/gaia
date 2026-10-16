@@ -465,8 +465,8 @@ class Following extends PartBuilder {
 
 /** How wide a bundle of thatch is along the ridge, meters: the straw rots a bundle at a time. */
 const BUNDLE = 0.22;
-/** How wide a tile is round a turret's cone, meters: the cone rots a tile at a time. */
-const TILE = 0.27;
+/** How wide a tile is round a cone, meters: a cone rots a tile at a time. */
+export const TILE = 0.27;
 
 function thatchSlab(roof: PartBuilder, plan: BuildingPlan, f: RoofFrame, p: Resolved<typeof thatchParams>, ruin: Ruin, seed: number, r: Rand, budget: number): Slab {
   const k = slopeOf(f);
