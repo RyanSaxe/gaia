@@ -402,9 +402,9 @@ nothing at its spring or seep, its thin water's banks stand back, so grass
 meets it; `shoreField` in `@gaia/terrain`), chosen by their spot on the
 ground rather than by distance, so walking never changes which of them
 stand; the ground paints the banks from the same shore distance. The sand runs
-about 0.7 m from the water, along a straight stretch, the outside of a bend,
-a spring's pool and a pond, and out to 2.6 m on the point bar inside a bend
-(`bankWidth` in `app/renderer/terrain/ground.ts`). The ground
+about 0.7 m from the water, along a straight stretch, the outside of a bend
+and a spring's pool, and out to 2.6 m on the point bar inside a bend and
+round a pond (`bankWidth` in `app/renderer/terrain/ground.ts`). The ground
 beneath is painted in the cover's own colors with short dabs in three
 directions, so where blades thin out the ground still reads as the same
 cover and no stroke runs on into a streak. Where the ground declines, blades

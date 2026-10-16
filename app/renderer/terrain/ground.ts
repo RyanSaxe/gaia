@@ -60,6 +60,8 @@ export interface GroundTexture {
     readonly uGroundN: { value: number };
     readonly uGroundOrigin: { value: number };
     readonly uGroundSpacing: { value: number };
+    /** Every pond (x, z, its water's reach, 1) up to `BANKS.ponds`, whose banks keep their full sand (`bankWidth`). */
+    readonly uPonds: { value: THREE.Vector4[] };
     /** The half side of the land's square, where it hands over to the wild land, and the wild roll's middle. */
     readonly uLand: { value: number };
     readonly uWildBase: { value: number };
@@ -105,6 +107,7 @@ export function createGroundTexture(land: PageLand): GroundTexture {
     uGroundN: { value: frame.n },
     uGroundOrigin: { value: frame.origin },
     uGroundSpacing: { value: frame.spacing },
+    uPonds: { value: pondsOf(land.terrain) },
     uLand: { value: landHalf(land.terrain) },
     uWildBase: { value: 0 },
   };
@@ -129,6 +132,7 @@ export function createGroundTexture(land: PageLand): GroundTexture {
       uniforms.uGroundN.value = world.n;
       uniforms.uGroundOrigin.value = world.origin;
       uniforms.uGroundSpacing.value = world.spacing;
+      uniforms.uPonds.value = pondsOf(t);
       uniforms.uLand.value = landHalf(t);
       uniforms.uWildBase.value = wildBase(t);
       for (let k = 0; k < levels; k++) show(k);
@@ -141,11 +145,19 @@ export function createGroundTexture(land: PageLand): GroundTexture {
 }
 
 /**
- * The sand beside water, meters: `narrow` along a straight stretch, the outside of a bend and round a pond, `wide`
- * round the inside of a bend, between a contour curvature of `straight` and `curved` (one over the radius), measured
+ * The sand beside water, meters: `narrow` along a straight stretch and the outside of a bend, `wide` round the
+ * inside of a bend and round any of the first `ponds` ponds, between a contour curvature of `straight` and `curved` (one over the radius), measured
  * `along` meters either way along the shore's contour.
  */
-export const BANKS = { narrow: 0.7, wide: 2.6, straight: 0.012, curved: 0.04, along: 2.5 } as const;
+export const BANKS = { narrow: 0.7, wide: 2.6, straight: 0.012, curved: 0.04, along: 2.5, ponds: 32 } as const;
+
+/** The ponds `bankWidth` reads, as x, z, reach and 1, padded with unused slots to `BANKS.ponds`. */
+function pondsOf(t: Terrain): THREE.Vector4[] {
+  return Array.from({ length: BANKS.ponds }, (_, i) => {
+    const p = t.ponds[i];
+    return p === undefined ? new THREE.Vector4(0, 0, 0, 0) : new THREE.Vector4(p.x, p.z, p.reach, 1);
+  });
+}
 
 /** GLSL that reads the ground texture with the mesh's own triangle interpolation. */
 export const GROUND_SAMPLE_GLSL = /* glsl */ `
@@ -156,6 +168,7 @@ uniform int uClipLayer[${CLIP.levels}];
 uniform float uGroundN;
 uniform float uGroundOrigin;
 uniform float uGroundSpacing;
+uniform vec4 uPonds[${BANKS.ponds}];
 // A point in level k's grid units, where its samples lie on whole numbers.
 vec2 clipGrid(vec2 xz, int k) { return xz / (uGroundSpacing * exp2(float(k))) - uClipOrigin[k]; }
 // Whether level k's window holds the cell around grid point g, with room to spare.
@@ -216,10 +229,15 @@ vec3 groundSample(vec2 xz) { return groundSample4(xz).xyz; }
 vec2 groundAt(vec2 xz) { return groundSample(xz).xy; }
 // How far from the water its sand runs at a point beside it, meters, for the sand banks and the grass's edge alike:
 // ${BANKS.narrow.toFixed(2)} along a straight stretch and the outside of a bend, out to ${BANKS.wide.toFixed(2)} where the water wraps
-// round the land, the point bar inside a bend a stream leaves bare. The curve is the shore's own, along its contour:
+// round the land, the point bar inside a bend a stream leaves bare, and round a pond. The curve is the shore's own, along its contour:
 // where water wraps round the land the shore falls either way along it.
 float bankWidth(vec2 xz, float shore) {
   if (shore > ${BANKS.wide.toFixed(1)} + 1.0) return ${BANKS.narrow.toFixed(2)};
+  // A pond keeps its full ring of sand.
+  for (int i = 0; i < ${BANKS.ponds}; i++) {
+    vec4 p = uPonds[i];
+    if (p.w > 0.0 && distance(xz, p.xy) < p.z + ${BANKS.wide.toFixed(1)} + 1.0) return ${BANKS.wide.toFixed(2)};
+  }
   float e = 0.75;
   vec2 g = vec2(groundSample(xz + vec2(e, 0.0)).z - groundSample(xz - vec2(e, 0.0)).z, groundSample(xz + vec2(0.0, e)).z - groundSample(xz - vec2(0.0, e)).z);
   float len = length(g);
