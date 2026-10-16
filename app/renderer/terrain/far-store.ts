@@ -2,7 +2,9 @@
 // seconds of frames under the wait, and the same builds stand in every
 // world, so each form is stored in this browser's IndexedDB, keyed by
 // everything that makes it, and baked again only when the build or the bake
-// changes.
+// changes. The database's version is the bake's: a form of an earlier bake is
+// never read again and holds megabytes, so the first open at a newer bake
+// empties the store.
 
 /** Two 32-bit FNV-1a lanes, so the key is 64 bits: accidental matches never happen in practice. */
 const LANES = [0x811c9dc5, 0x01000193 ^ 0x5bd1e995] as const;
@@ -56,14 +58,29 @@ export interface FarStore {
   put(key: string, data: unknown): Promise<void>;
 }
 
-/** This browser's stored far forms, or null where IndexedDB is unavailable, as in some private windows. */
-export async function openFarStore(): Promise<FarStore | null> {
+/**
+ * This browser's far forms of bake `version`, or null where the store can't
+ * be opened at that version at once: where IndexedDB is unavailable, as in
+ * some private windows, where a page of a later bake has opened it, or while
+ * a page of an earlier one holds it open. The forms then bake as on a first
+ * visit, and none is kept.
+ */
+export async function openFarStore(version: number): Promise<FarStore | null> {
   const db = await new Promise<IDBDatabase | null>((resolve) => {
     try {
-      const open = indexedDB.open("gaia-far-forms", 1);
-      open.onupgradeneeded = () => open.result.createObjectStore("forms");
-      open.onsuccess = () => resolve(open.result);
+      const open = indexedDB.open("gaia-far-forms", version);
+      open.onupgradeneeded = () => {
+        const db = open.result;
+        if (db.objectStoreNames.contains("forms")) db.deleteObjectStore("forms");
+        db.createObjectStore("forms");
+      };
+      open.onsuccess = () => {
+        // A page of a later bake waits on every page holding the store open.
+        open.result.onversionchange = () => open.result.close();
+        resolve(open.result);
+      };
       open.onerror = () => resolve(null);
+      open.onblocked = () => resolve(null);
     } catch {
       resolve(null);
     }

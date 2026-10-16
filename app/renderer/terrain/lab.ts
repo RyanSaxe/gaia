@@ -718,7 +718,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   // change by less than a level of 255 as their cards come in.
   const farSets = [treeForms, bushForms].map((forms) => ({ forms, ms: 0 }));
   const [treeSet, bushSet] = farSets as [(typeof farSets)[number], (typeof farSets)[number]];
-  const farStore = openFarStore();
+  const farStore = openFarStore(FAR_BAKE_VERSION);
   /** Bakes or reads every form of `set`, `ms` milliseconds a frame, and draws its cards from then on. */
   async function bakeFar(set: (typeof farSets)[number], ms: number): Promise<void> {
     const t0 = performance.now();
@@ -727,7 +727,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     const turns: number[] = [];
     for (const { plant, px } of set.forms.close()) {
       turns.push(px);
-      const key = contentHash(plant.parts, plant.motion, plant.palette, FAR_BAKE_VERSION, px);
+      const key = contentHash(plant.parts, plant.motion, plant.palette, px);
       const kept = (await store?.get(key).catch(() => undefined)) as FarFormData | undefined;
       const stored = kept === undefined ? null : farFormFrom(kept);
       if (stored !== null) {
