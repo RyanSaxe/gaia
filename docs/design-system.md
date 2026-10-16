@@ -320,7 +320,10 @@ runs downhill through other areas too, until it reaches the land's edge, a
 pond, a basin's bottom, where it sinks away, or another river, which it
 joins and widens below. Its valley is carved along that whole course, with
 the cross-section and winding Jev chose for its area (`routeRivers` in
-`@gaia/terrain`).
+`@gaia/terrain`). Its spring wells up in a small pool about 4 m across,
+with a wandering edge, and the stream leaves it about a meter wide,
+widening to its own width over 8 m. Where it soaks away, it narrows the same
+way into a shallow wet patch (`HEAD` and `headsOf` in `@gaia/terrain`).
 
 A pick on the map sends the person along the trails rather than jumping
 them (`travelStep` in `@gaia/terrain`, every number in its `TRAVEL` table;

@@ -10,7 +10,7 @@
 
 import * as THREE from "three";
 import { LIGHT_GLSL, type SceneLight, hexToVec3 } from "@gaia/render";
-import { FLOW, type Terrain, flowAt, streamFlow, surfaceHalfWidth, waterDepthAt } from "@gaia/terrain";
+import { FLOW, type Terrain, flowAt, headsOf, streamFlow, surfaceHalfWidth, waterDepthAt } from "@gaia/terrain";
 import { GROUND_SAMPLE_GLSL, type GroundTexture } from "./ground.ts";
 import { VITALITY_GLSL, vitalityUniforms } from "./vitality.ts";
 
@@ -393,8 +393,8 @@ interface Ribbon {
   readonly index: number[];
 }
 
-/** Past each end the surface runs on this far, so it covers the channel's rounded end; the bank clips it. */
-const RUN_ON = 3.5;
+/** Past each end the surface runs on this far, so it covers the spring's pool and the seep's wet patch; the ground clips it. */
+const RUN_ON = 4;
 
 function ribbon(stream: Terrain["streams"][number]): Ribbon {
   const st = stream.stations;
@@ -427,16 +427,27 @@ function ribbon(stream: Terrain["streams"][number]): Ribbon {
       across[vi] = half * sign;
     }
   };
-  // The run-on past the spring, every station, and the run-on past the mouth.
+  // Near a spring's pool or a seep's wet patch the surface reaches across all of it.
+  const heads = headsOf(stream);
+  const cover = (x: number, z: number, half: number): number =>
+    heads.reduce((widest, h) => {
+      const d = Math.hypot(x - h.x, z - h.z);
+      return d > h.reach + RUN_ON ? widest : Math.max(widest, h.reach + d);
+    }, half);
+  // The run-on past the spring, every station, and the run-on past the mouth, each the way its head lies.
   const first = st[0]!;
-  const second = st[Math.min(1, n - 1)]!;
+  const second = st[Math.min(3, n - 1)]!;
   const last = st[n - 1]!;
-  const before = st[Math.max(0, n - 2)]!;
+  const before = st[Math.max(0, n - 4)]!;
   const lead = Math.hypot(second.x - first.x, second.z - first.z) || 1;
   const tail = Math.hypot(last.x - before.x, last.z - before.z) || 1;
-  put(0, first.x - ((second.x - first.x) / lead) * RUN_ON, first.z - ((second.z - first.z) / lead) * RUN_ON, first.level, surfaceHalfWidth(first), 0, -RUN_ON / speed(0));
-  st.forEach((s, i) => put(i + 1, s.x, s.z, s.level, surfaceHalfWidth(s), i, arrival[i] as number));
-  put(n + 1, last.x + ((last.x - before.x) / tail) * RUN_ON, last.z + ((last.z - before.z) / tail) * RUN_ON, last.level, surfaceHalfWidth(last), n - 1, (arrival[n - 1] as number) + RUN_ON / speed(n - 1));
+  const startX = first.x - ((second.x - first.x) / lead) * RUN_ON;
+  const startZ = first.z - ((second.z - first.z) / lead) * RUN_ON;
+  const endX = last.x + ((last.x - before.x) / tail) * RUN_ON;
+  const endZ = last.z + ((last.z - before.z) / tail) * RUN_ON;
+  put(0, startX, startZ, first.level, cover(startX, startZ, surfaceHalfWidth(first)), 0, -RUN_ON / speed(0));
+  st.forEach((s, i) => put(i + 1, s.x, s.z, s.level, cover(s.x, s.z, surfaceHalfWidth(s)), i, arrival[i] as number));
+  put(n + 1, endX, endZ, last.level, cover(endX, endZ, surfaceHalfWidth(last)), n - 1, (arrival[n - 1] as number) + RUN_ON / speed(n - 1));
   for (let k = 0; k + 1 < count; k++) index.push(k * 2, k * 2 + 2, k * 2 + 1, k * 2 + 1, k * 2 + 2, k * 2 + 3);
   return { positions, flow, across, index };
 }
