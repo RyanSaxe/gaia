@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { BIOME_PRIMITIVES, RELIEF_PRIMITIVES } from "@gaia/primitives";
 import { type CodeFacts, type FileFacts, Library, rand, seedOf } from "@gaia/schema";
 import { OPENING, type Terrain, amongCode, bakeTerrain, clearOfCode, openingSpot, openingView, returnTo, stoodBy, waterDepthAt } from "@gaia/terrain";
-import { composeWorld, judgeWorld, layoutWorld, standInJev } from "@gaia/world";
+import { composeWorld, judgeWorld, layoutWorld } from "@gaia/world";
+import { fakeJevClient } from "@gaia/world/testing";
 import type { WorldDocument } from "../../world-service/protocol.ts";
 import { codeLab, provingWorld } from "./code-world.ts";
 import { LOOKS } from "./looks.ts";
@@ -47,9 +48,9 @@ function randomFacts(seed: number): CodeFacts {
 
 async function randomWorld(seed: number): Promise<WorldDocument> {
   const facts = randomFacts(seed);
-  const jev = standInJev(LOOKS);
+  const jev = fakeJevClient();
   const world = layoutWorld(facts, await composeWorld(facts, LOOKS, jev, await judgeWorld(facts, LOOKS, jev)));
-  return { root: facts.repository.name, facts, world, judges: {}, summary: "a test", judged: {} };
+  return { root: facts.repository.name, facts, world, summary: "a test", judged: {} };
 }
 
 /** The person stands among the code, on dry ground, looking along a stream when one runs among the code. */
@@ -86,8 +87,8 @@ function expectGoodView({ terrain, at, world }: ReturnType<typeof landing>, what
 describe("where a person first stands in a world from code", () => {
   // Gaia's world bakes whole here, as the page bakes it: about 15 seconds alone, longer while other work shares the machine.
   it("is among Gaia's own code, on dry ground beside a stream, looking downstream over open ground at code", { timeout: 180_000 }, async () => {
-    const { world, judges, summary } = await laySnapshot("jev", "a test");
-    const laid = landing({ root: world.name, facts: snapshotFacts(), world, judges, summary, judged: {} });
+    const { world, summary } = await laySnapshot("a test");
+    const laid = landing({ root: world.name, facts: snapshotFacts(), world, summary, judged: {} });
     expectAmongCode(laid, "Gaia's world");
     // Its stretch nearest the repository's heart is the end of a stream that dries away: the first rule stood the
     // person there, facing past the water onto a slope of grass that rose 6.4 degrees above the eye.
@@ -102,8 +103,7 @@ describe("where a person first stands in a world from code", () => {
     expectGoodView(laid, "the proving ground");
   });
 
-  // Each made-up world is judged by the stand-in and baked whole: five to eight seconds each. In these three, a
-  // quarter of the way down the first stream lay in the wild, past the code's land.
+  // Each made-up world is judged by a fake Jev and baked whole: five to eight seconds each.
   it("is among the code in made-up codebases of every shape, wherever their rivers run", { timeout: 300_000 }, async () => {
     for (const seed of [2, 4, 5]) expectAmongCode(landing(await randomWorld(seed)), `made-up world ${seed}`);
   });

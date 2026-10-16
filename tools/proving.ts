@@ -409,18 +409,19 @@ const facts: CodeFacts = {
 
 // Every other definition of a source file stands as a tree, so each file grows trees at its health, and the rest go
 // round the stones, bushes and flowers.
-const forms: Record<string, Record<string, string>> = {};
+const stands: Record<string, string> = {};
 const trees = Object.keys(FORMS).filter((k) => FORMS[k]?.rule === "trees");
 const others = Object.keys(FORMS).filter((k) => FORMS[k]?.rule !== "trees");
 let tree = 0;
 let other = 0;
 for (const f of [...files].sort((a, b) => (a.path < b.path ? -1 : 1))) {
-  if (f.kind === "source" && f.symbols.length > 0) forms[f.path] = Object.fromEntries(f.symbols.map((s, k) => [`#${s.name}`, k % 2 === 0 ? (trees[tree++ % trees.length] as string) : (others[other++ % others.length] as string)]));
+  if (f.kind === "source") f.symbols.forEach((s, k) => (stands[`${f.path}#${s.name}`] = k % 2 === 0 ? (trees[tree++ % trees.length] as string) : (others[other++ % others.length] as string)));
 }
+/** What the definitions stand as. */
+const definitionForms = (): string[] => Object.entries(stands).flatMap(([id, form]) => (id.includes("#") ? [form] : []));
 // Every file stands as one thing too, at its patch's heart, round every form; and a few files and definitions stand as
 // a building or a landmark, round their hand-filled looks, so the proving ground shows a thing of every size at every
 // level of the code.
-const stands: Record<string, string> = {};
 const raised: Record<string, { as: "building" | "landmark"; blueprint: Blueprint }> = {};
 const small = Object.keys(FORMS);
 const sources = [...files].sort((a, b) => (a.path < b.path ? -1 : 1)).filter((f) => f.kind === "source" && f.symbols.length > 0);
@@ -435,11 +436,7 @@ const raise = (id: string, as: "building" | "landmark", k: number): void => {
 sources.forEach((f, k) => {
   if (k % 7 === 3) raise(f.path, (k / 7) % 2 < 1 ? "building" : "landmark", k);
   const first = f.symbols[0];
-  if (first !== undefined && k % 11 === 5) {
-    raise(`${f.path}#${first.name}`, (k / 11) % 2 < 1 ? "landmark" : "building", k);
-    // The definition's form is its stand, not the tree or stone it had.
-    delete (forms[f.path] as Record<string, string>)[`#${first.name}`];
-  }
+  if (first !== undefined && k % 11 === 5) raise(`${f.path}#${first.name}`, (k / 11) % 2 < 1 ? "landmark" : "building", k);
 });
 /** A land's blueprint with what drifts through its air, as Jev fills the biome's accents. */
 const withDrift = (land: Blueprint, drift: PlannedDir["drift"]): Blueprint =>
@@ -452,7 +449,6 @@ const judged: Judgments = {
   things: { ...Object.fromEntries(PLAN.flatMap((d) => (d.entity === undefined ? [] : [[d.path, { as: d.entity.as, blueprint: own(d.entity.as === "building" ? BUILDINGS : LANDMARKS, d.entity.look) }]]))), ...raised },
   stands,
   trails: TRAIL_PLAN.map(([from, to, look, want]) => ({ from, to, want, route: own(TRAILS, look) })),
-  forms,
   // Every file's quality by its health, and every entity's its own files' pooled by their lines.
   quality: Object.fromEntries([
     ...drafted.map((f) => [f.path, QUALITY[f.health]] as const),
@@ -476,7 +472,7 @@ const gaps = [
   ...missing("land", LANDS, PLAN.flatMap((d) => (d.land === undefined ? [] : [d.land[0]]))),
   ...missing("drift", driftPrimitive.params.form.options, PLAN.flatMap((d) => (d.drift === undefined ? [] : [d.drift[0]]))),
   ...missing("water", WATERS, Object.values(judged.waters)),
-  ...missing("form", FORMS, Object.values(forms).flatMap((f) => Object.values(f))),
+  ...missing("form", FORMS, definitionForms()),
   ...missing("raised form", COMPOSED_FORMS, Object.values(stands)),
   ...missing("trail", TRAILS, TRAIL_PLAN.map(([, , look]) => look)),
   ...Object.keys(BUILDINGS).flatMap((b) => (things.filter((t) => t.as === "building" && t.look === b).length >= 3 ? [] : [`three buildings "${b}"`])),

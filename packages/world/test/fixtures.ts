@@ -1,4 +1,4 @@
-import type { AnyKind, FileFacts, FilledSlot, JevAnswer, JevRequest, Library } from "@gaia/schema";
+import type { AnyKind, FileFacts, FilledSlot, JevAnswer, JevClient, JevRequest, Library } from "@gaia/schema";
 
 /** Facts for this mock's subject file, shaped as the Rust engine would send them. */
 export const SCANNER: FileFacts = {
@@ -57,4 +57,13 @@ export function randomSlots(k: AnyKind, lib: Library, random: () => number): Rec
     slots[name] = { use: p.id, params };
   }
   return slots;
+}
+
+/** A Jev for tests: every request answered by `fakeJev`, the same answers for the same request, never the network. */
+export function fakeJevClient(prefer: Readonly<Record<string, string | number | boolean>> = {}): JevClient {
+  return {
+    async ask(request) {
+      return { answers: fakeJev(request, prefer), model: "fake", costUsd: 0, ms: 0 };
+    },
+  };
 }

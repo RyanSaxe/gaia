@@ -51,7 +51,7 @@ describe("the proving ground", () => {
     const drifts = Object.values(judged.lands).flatMap((b) => (b.slots.accents === undefined ? [] : [String(b.slots.accents.params.form)]));
     expect(used(drift.params.form.options, drifts)).toEqual([]);
     expect(used(WATERS, Object.values(judged.waters))).toEqual([]);
-    expect(used(FORMS, Object.values(judged.forms).flatMap((f) => Object.values(f)))).toEqual([]);
+    expect(used(FORMS, Object.entries(judged.stands ?? {}).flatMap(([id, form]) => (id.includes("#") ? [form] : [])))).toEqual([]);
     // Anything stands as anything: an entity, a file and a definition each stand as a building and as a landmark, and
     // every file stands as one thing of its own.
     for (const of of ["entity", "file", "definition"] as const) {

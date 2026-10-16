@@ -10,8 +10,8 @@ part of the world shows the health of the code it stands for, so a tangled
 function grows a tired tree and a failing package falls slowly to ruin.
 
 What each thing becomes is chosen by Jev, a decision model reached through
-OpenRouter, from facts about the code and never its source. Without a key,
-a deterministic stand-in chooses instead.
+OpenRouter, from facts about the code. Without a key, a world opens only from
+answers Jev gave before.
 
 ## Running Gaia
 

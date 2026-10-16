@@ -4,7 +4,7 @@
 
 import type { CodeFacts, PatchPlace, Span, Unreachable } from "@gaia/schema";
 import type { Outline, StoodSpot } from "@gaia/terrain";
-import type { CodeWorld, Judge, LotPlace } from "@gaia/world";
+import type { CodeWorld, LotPlace } from "@gaia/world";
 
 /** Main process → world service. */
 export type FromMain =
@@ -77,7 +77,7 @@ export interface JudgedThing {
   readonly picks: { readonly key?: Span; readonly weak?: Span };
 }
 
-/** A codebase's world as the renderer receives it: the code, the world laid out from it, and who judged each thing. */
+/** A codebase's world as the renderer receives it: the code, the world laid out from it, and how the judging went. */
 export interface WorldDocument {
   /** The folder it is the world of. */
   readonly root: string;
@@ -85,8 +85,6 @@ export interface WorldDocument {
   readonly commit?: string;
   readonly facts: CodeFacts;
   readonly world: CodeWorld;
-  /** Who judged each thing, by `judgedThing` ("file:src/main.ts"); a thing missing here was judged by the stand-in. */
-  readonly judges: Readonly<Record<string, Judge>>;
   /** How the judging went, in words for the status line, such as "248 judged by Jev". */
   readonly summary: string;
   /**

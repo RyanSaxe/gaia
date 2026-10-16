@@ -3,30 +3,14 @@
 // chooses among the looks here for what is still a choice: what each entity,
 // file and definition stands as (`FORMS`, offered by importance through
 // `SIZES`) and whether a land holds water. Each option's words are what Jev
-// reads, and the facts it suits only the stand-in judge reads.
+// reads.
 
 import { biome, landmark, link, structure, world } from "@gaia/kinds";
 import { PRIMITIVES } from "@gaia/primitives";
 import { Library } from "@gaia/schema";
 import type { Composing, Look, Looks } from "@gaia/world";
 
-const look = (doc: string, ...suits: string[]): Look => ({ doc, suits });
-
-export const BUILDINGS: Readonly<Record<string, Look>> = {
-  "Thatched cottage": look("a thatched cottage, small and homely: a small entity of a few files doing one modest job", "module", "small", "leaf"),
-  "Stone croft": look("a low stone croft, sturdy and plain: native code close to the machine, compiled on its own, such as an engine", "crate", "rust", "medium", "engine"),
-  "Storybook house": look("a crooked storybook house with a tall chimney: an application or a process a person starts, with a window or a service of its own", "app", "service", "renderer", "main", "preload"),
-  Watermill: look("a watermill whose wheel turns while the code is healthy: a pipeline that turns one kind of data into another, such as rendering", "realize", "render", "world"),
-  "Archive tower": look("a house with an archive tower that rises with what depends on it: one that keeps records, definitions or types that others read", "surface", "kinds"),
-};
-
-export const LANDMARKS: Readonly<Record<string, Look>> = {
-  "Lantern tower": look("a round lookout tower crowned with a lantern room: an entity that watches over or lights the rest, seen from everywhere", "terrain", "renderer", "light"),
-  "Stone ring": look("a ring of towering standing stones around a king stone: the shared definitions every other entity agrees on, such as a schema", "hub", "schema"),
-  "Great oak": look("a vast spreading oak: a large library whose many branches the others build from", "hub", "primitives"),
-  "Battlemented keep": look("a tall square keep with battlements: a guarded core that the rest runs on", "crate", "rust", "engine"),
-  "Great willow": look("a great willow, gnarled and slow: the repository's own root, holding everything", "root", "repository"),
-};
+const look = (doc: string): Look => ({ doc });
 
 /**
  * Each size of thing, smallest first: the range of rank by importance among
@@ -53,7 +37,7 @@ export const SIZES = {
 export type Size = keyof typeof SIZES;
 
 /** A form's look: its character in its own words, then its size's, offered only within its size's range. */
-const sized = (size: Size, vibe: string, ...suits: string[]): Look => ({ doc: `${vibe} ${SIZES[size].words}`, suits, needs: [{ rank: SIZES[size].rank }] });
+const sized = (size: Size, vibe: string): Look => ({ doc: `${vibe} ${SIZES[size].words}`, needs: [{ rank: SIZES[size].rank }] });
 
 /**
  * What a thing stands as when it is flowers, a stone, a bush or a tree: one of
@@ -64,26 +48,26 @@ const sized = (size: Size, vibe: string, ...suits: string[]): Look => ({ doc: `$
  * importance decides what is offered, and character decides Jev's pick.
  */
 export const FORMS: Readonly<Record<string, { readonly look: Look; readonly rule: string; readonly preset: number }>> = {
-  "Lantern willow": { look: sized("trees", "A weeping willow hung with lanterns: soft, glowing and lingering.", "hub", "large", "render", "light", "water"), rule: "trees", preset: 0 },
-  Fir: { look: sized("trees", "A dark fir: watchful and unbending.", "test", "rust", "engine"), rule: "trees", preset: 1 },
-  Cherry: { look: sized("trees", "A cherry in blossom: bright and young.", "renderer", "lab", "app", "typescript"), rule: "trees", preset: 2 },
-  "Autumn maple": { look: sized("trees", "A broad maple turning gold: rich and full of years.", "source", "large", "typescript", "class"), rule: "trees", preset: 3 },
-  "Standing stone": { look: sized("stones", "A lone upright stone: stern, still and solitary.", "function", "exported", "hub", "medium"), rule: "rocks", preset: 1 },
-  "Mossy boulder": { look: sized("stones", "A broad boulder gone green with moss: heavy, old and unhurried.", "large", "class", "rust", "engine"), rule: "rocks", preset: 0 },
-  "Stone family": { look: sized("stones", "A big stone among its small ones: close-knit and huddled.", "class", "geometry", "primitives"), rule: "rocks", preset: 3 },
-  "Bench stone": { look: sized("stones", "A low flat stone to sit on: humble and restful.", "small", "test", "constant"), rule: "rocks", preset: 2 },
-  "Box mound": { look: sized("bushes", "A clipped box bush: neat, prim and kept just so.", "small", "function", "typescript", "renderer"), rule: "shrubs", preset: 0 },
-  Blueberry: { look: sized("bushes", "A blueberry bush: homely and generous.", "function", "test", "world"), rule: "shrubs", preset: 1 },
-  Rhododendron: { look: sized("bushes", "A rhododendron in flower: showy and a little proud.", "renderer", "lab", "app", "immersive"), rule: "shrubs", preset: 2 },
-  "Feather shrub": { look: sized("bushes", "A tall, feathery shrub: airy and restless.", "type", "schema", "terrain"), rule: "shrubs", preset: 3 },
-  Bluebells: { look: sized("flowers", "A carpet of bluebells in the shade: quiet and shy, easy to walk past.", "type", "schema", "kinds"), rule: "flowers", preset: 1 },
-  Daisies: { look: sized("flowers", "A drift of daisies in the open: cheerful and plain.", "constant", "config", "small"), rule: "flowers", preset: 0 },
+  "Lantern willow": { look: sized("trees", "A weeping willow hung with lanterns: soft, glowing and lingering."), rule: "trees", preset: 0 },
+  Fir: { look: sized("trees", "A dark fir: watchful and unbending."), rule: "trees", preset: 1 },
+  Cherry: { look: sized("trees", "A cherry in blossom: bright and young."), rule: "trees", preset: 2 },
+  "Autumn maple": { look: sized("trees", "A broad maple turning gold: rich and full of years."), rule: "trees", preset: 3 },
+  "Standing stone": { look: sized("stones", "A lone upright stone: stern, still and solitary."), rule: "rocks", preset: 1 },
+  "Mossy boulder": { look: sized("stones", "A broad boulder gone green with moss: heavy, old and unhurried."), rule: "rocks", preset: 0 },
+  "Stone family": { look: sized("stones", "A big stone among its small ones: close-knit and huddled."), rule: "rocks", preset: 3 },
+  "Bench stone": { look: sized("stones", "A low flat stone to sit on: humble and restful."), rule: "rocks", preset: 2 },
+  "Box mound": { look: sized("bushes", "A clipped box bush: neat, prim and kept just so."), rule: "shrubs", preset: 0 },
+  Blueberry: { look: sized("bushes", "A blueberry bush: homely and generous."), rule: "shrubs", preset: 1 },
+  Rhododendron: { look: sized("bushes", "A rhododendron in flower: showy and a little proud."), rule: "shrubs", preset: 2 },
+  "Feather shrub": { look: sized("bushes", "A tall, feathery shrub: airy and restless."), rule: "shrubs", preset: 3 },
+  Bluebells: { look: sized("flowers", "A carpet of bluebells in the shade: quiet and shy, easy to walk past."), rule: "flowers", preset: 1 },
+  Daisies: { look: sized("flowers", "A drift of daisies in the open: cheerful and plain."), rule: "flowers", preset: 0 },
 };
 
 /** The forms Jev composes part by part once it chooses one, as it composes an entity's: a building, or a landmark. */
 export const COMPOSED_FORMS: Readonly<Record<string, Look & { readonly composes: "building" | "landmark" }>> = {
-  Building: { ...sized("buildings", "A building a person walks up to and around: lived in and busy, a place that holds people.", "surface", "service", "app", "large"), composes: "building" },
-  Landmark: { ...sized("landmarks", "A great landmark seen and steered by from far away: grand and commanding.", "hub", "root", "repository"), composes: "landmark" },
+  Building: { ...sized("buildings", "A building a person walks up to and around: lived in and busy, a place that holds people."), composes: "building" },
+  Landmark: { ...sized("landmarks", "A great landmark seen and steered by from far away: grand and commanding."), composes: "landmark" },
 };
 
 /**
@@ -91,10 +75,10 @@ export const COMPOSED_FORMS: Readonly<Record<string, Look & { readonly composes:
  * composed for the area, so the water is asked once. Running water is what a waterwheel needs.
  */
 export const WATERS: Readonly<Record<string, Look>> = {
-  "No water": { ...look("No water: the area's code stands on its own, reading little from its neighbors and passing little on.", "dry", "still", "docs", "config", "test"), settles: { "relief.stream": "dry bed", "relief.pond": false } },
-  "A brook": { ...look("A brook runs through: the area's code flows, one file feeding the next along chains of its own imports.", "flow", "large"), holds: ["running water"], settles: { "relief.stream": "brook", "relief.pond": false } },
-  "A trickle": { ...look("A thin trickle: a little flows through, files passing a few things along to each other.", "flow", "small"), holds: ["running water"], settles: { "relief.stream": "trickle", "relief.pond": false } },
-  "A still pond": { ...look("A still pond gathers: much of the code leans on this area, and what it holds settles here.", "crossroads", "schema", "data"), settles: { "relief.stream": "dry bed", "relief.pond": true } },
+  "No water": { ...look("No water: the area's code stands on its own, reading little from its neighbors and passing little on."), settles: { "relief.stream": "dry bed", "relief.pond": false } },
+  "A brook": { ...look("A brook runs through: the area's code flows, one file feeding the next along chains of its own imports."), holds: ["running water"], settles: { "relief.stream": "brook", "relief.pond": false } },
+  "A trickle": { ...look("A thin trickle: a little flows through, files passing a few things along to each other."), holds: ["running water"], settles: { "relief.stream": "trickle", "relief.pond": false } },
+  "A still pond": { ...look("A still pond gathers: much of the code leans on this area, and what it holds settles here."), settles: { "relief.stream": "dry bed", "relief.pond": true } },
 };
 
 /** What Jev composes the world from, part by part: the sky, each land, building, landmark and trail's kind, and every primitive that could fill a part. */
@@ -102,8 +86,6 @@ export const COMPOSING: Composing = { building: structure, landmark, world, biom
 
 export const LOOKS: Looks = {
   compose: COMPOSING,
-  building: BUILDINGS,
-  landmark: LANDMARKS,
   form: { ...Object.fromEntries(Object.entries(FORMS).map(([k, f]) => [k, f.look])), ...COMPOSED_FORMS },
   water: WATERS,
 };

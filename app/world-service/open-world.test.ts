@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { CodeGraph, CodeFacts, EngineClient, GraphNode, JevRequest } from "@gaia/schema";
-import { composeWorld, factsOf, judgeWorld, keptJev, landOf, standInJev } from "@gaia/world";
+import { composeWorld, factsOf, judgeWorld, keptJev, landOf } from "@gaia/world";
+import { fakeJevClient } from "@gaia/world/testing";
 import { LOOKS } from "../renderer/terrain/looks.ts";
 import proving from "../renderer/terrain/fixtures/proving.json";
 import { LIMIT_KEY, judgedGraph, openWorld } from "./open-world.ts";
@@ -29,7 +30,7 @@ const facts = factsOf(graph);
 
 /** An engine with Jev live and nothing kept, whose every batch of answers waits until `release` lets it go. */
 function heldEngine(): { engine: EngineClient; held: (() => void)[] } {
-  const standIn = standInJev(LOOKS);
+  const fake = fakeJevClient();
   const held: (() => void)[] = [];
   const results: Record<string, (params: { requests: JevRequest[] }) => unknown> = {
     "store.read": () => ({ records: {} }),
@@ -49,7 +50,7 @@ function heldEngine(): { engine: EngineClient; held: (() => void)[] } {
     call: async (method: string, params: { requests: JevRequest[] }) => {
       if (method !== "jev.batch") return results[method]?.(params);
       await new Promise<void>((resolve) => held.push(resolve));
-      return { responses: await Promise.all(params.requests.map((r) => standIn.ask(r))) };
+      return { responses: await Promise.all(params.requests.map((r) => fake.ask(r))) };
     },
     on: () => () => {},
   } as unknown as EngineClient;
@@ -62,7 +63,7 @@ function heldEngine(): { engine: EngineClient; held: (() => void)[] } {
  * estimate of `estimateUsd`. `batches` counts what went to Jev.
  */
 function engineWith(o: { status?: { live: boolean; key: boolean }; answer?: (r: JevRequest) => unknown; limitUsd?: number; estimateUsd?: number; kept?: Record<string, unknown>; understandingLeft?: number } = {}): { engine: EngineClient; batches: JevRequest[][] } {
-  const jev = standInJev(LOOKS);
+  const jev = fakeJevClient();
   const batches: JevRequest[][] = [];
   const estimate = { endpoint: "fake", questions: 0, bytes: 0, estimatedTokens: 1, estimatedUsd: o.estimateUsd ?? 0, usdPerMillionInputTokens: 0, concurrency: 8, live: true };
   const results: Record<string, (params: { requests: JevRequest[]; key?: string }) => unknown> = {
@@ -146,16 +147,15 @@ describe("opening a world", () => {
   it("with Jev off and every look kept, still fails the opening while the understanding pass has requests left, and opens once nothing is left", { timeout: 20_000 }, async () => {
     // Every look answered and kept, as an earlier opening with Jev would have left it.
     const keptAnswers: Record<string, unknown> = {};
-    const standIn = standInJev(LOOKS);
-    const judging = keptJev(standIn, { stored: new Map(), keep: (key, r) => (keptAnswers[key] = r) });
-    await composeWorld(facts, LOOKS, judging, await judgeWorld(facts, LOOKS, judging, { graph }), { graph });
+    const judging = keptJev(fakeJevClient(), { stored: new Map(), keep: (key, r) => (keptAnswers[key] = r) });
+    await composeWorld(facts, LOOKS, judging, await judgeWorld(facts, LOOKS, judging), { graph });
     const off = { live: false, key: false };
     const pending = engineWith({ status: off, kept: keptAnswers, understandingLeft: 3 });
     await expect(openWorld({ engine: pending.engine, root: "proving", consent: async () => true, progress: () => {} })).rejects.toThrow(/Jev is off/);
     const done = engineWith({ status: off, kept: keptAnswers });
     const document = await openWorld({ engine: done.engine, root: "proving", consent: async () => true, progress: () => {} });
     expect(done.batches).toEqual([]);
-    expect(new Set(Object.values(document.judges))).toEqual(new Set(["jev"]));
+    expect(document.summary).toContain("judged by Jev");
   });
 
   it("leaves the world unopened when the person declines a cost past their limit, and sends nothing", async () => {
@@ -164,13 +164,5 @@ describe("opening a world", () => {
     await expect(openWorld({ engine, root: "proving", consent: async (plan) => (asked.push(plan.estimatedUsd), false), progress: () => {} })).rejects.toThrow(/you chose not to go ahead/);
     expect(asked).toEqual([0.05]);
     expect(batches).toEqual([]);
-  });
-
-  it("opens a world the stand-in judges only when a developer asks for it, sending nothing to Jev", { timeout: 20_000 }, async () => {
-    const { engine, batches } = engineWith({ status: { live: false, key: false } });
-    const document = await openWorld({ engine, root: "proving", consent: async () => true, progress: () => {}, standIn: true });
-    expect(batches).toEqual([]);
-    expect(new Set(Object.values(document.judges))).toEqual(new Set(["stand-in"]));
-    expect(document.summary).toContain("GAIA_JEV=stand-in");
   });
 });

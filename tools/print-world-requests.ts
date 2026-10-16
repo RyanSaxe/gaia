@@ -17,7 +17,7 @@ import { LOOKS } from "../app/renderer/terrain/looks.ts";
 const repo = resolve(import.meta.dirname, "..");
 const graph = JSON.parse(readFileSync(resolve(repo, "app/renderer/terrain/fixtures/gaia-graph.json"), "utf8")) as CodeGraph;
 const facts = factsOf(graph);
-const planned = [...planWorldRequests(facts, LOOKS, { graph }), ...planStanding(facts, LOOKS, { graph }).requests];
+const planned = [...planWorldRequests(facts, LOOKS), ...planStanding(facts, LOOKS, { graph }).requests];
 const out = process.argv[2];
 if (out !== undefined) writeFileSync(out, `${JSON.stringify(planned, null, 2)}\n`);
 else console.log(JSON.stringify(planned.map((p) => p.request), null, 2));

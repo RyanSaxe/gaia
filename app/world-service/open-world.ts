@@ -13,13 +13,11 @@
 // run goes ahead with no question; with one set, a run that costs more asks
 // first. A world is always Jev's: without Jev, with a request Jev could not
 // answer once the engine's client retried it, or when the person declines
-// the cost, the opening fails and says which request and why. Only a
-// developer who asks for it (GAIA_JEV=stand-in) gets a world the stand-in
-// judges, and nothing is sent to Jev then.
+// the cost, the opening fails and says which request and why.
 
 import type { CodeGraph, EngineClient, GraphNode, JevClient, JevResponse, Span } from "@gaia/schema";
 import { outlinesOf } from "@gaia/terrain";
-import { type Judge, RequestFailed, areaOfRequest, composeWorld, factsOf, judgeWorld, judgedThing, keptJev, landOf, layoutWorld, planStanding, planWorldRequests, requestKey, standInJev, thingsOf } from "@gaia/world";
+import { RequestFailed, areaOfRequest, composeWorld, factsOf, judgeWorld, keptJev, landOf, layoutWorld, planStanding, planWorldRequests, requestKey } from "@gaia/world";
 import { LOOKS } from "../renderer/terrain/looks.ts";
 import { engineJev } from "./jev.ts";
 import type { ConsentPlan, JudgedThing, Opening, WorldDocument } from "./protocol.ts";
@@ -122,11 +120,6 @@ export interface OpenWorldOptions {
   /** Asks the person whether to send `plan` to Jev: only when it costs more than their spend limit. */
   readonly consent: (plan: ConsentPlan) => Promise<boolean>;
   readonly progress: (opening: Opening) => void;
-  /**
-   * For development only (GAIA_JEV=stand-in): the stand-in judges every look and composes the world, the
-   * understanding pass is not run, and nothing is sent to Jev. Never on by default, and never offered to a person.
-   */
-  readonly standIn?: boolean;
 }
 
 /**
@@ -161,7 +154,7 @@ function areaOfState(state: unknown): string {
 
 const plural = (n: number, one: string, many = `${one}s`): string => `${n.toLocaleString("en-US")} ${n === 1 ? one : many}`;
 
-export async function openWorld({ engine, root, consent, progress, standIn = false }: OpenWorldOptions): Promise<WorldDocument> {
+export async function openWorld({ engine, root, consent, progress }: OpenWorldOptions): Promise<WorldDocument> {
   progress({ stage: "reading", root });
   // The land, outlined as the finished map draws it, every file's patch and every entity's lot, as soon as the graph
   // exists: every definition, with whatever stand Jev's held answers already give it. The facts the layout and the
@@ -178,7 +171,7 @@ export async function openWorld({ engine, root, consent, progress, standIn = fal
   // cost, so it is planned only when there is a limit to weigh that against; otherwise the pass finds its own way.
   const limitUsd = await spendLimit(engine);
   const understanding = Number.isFinite(limitUsd) ? await engine.call("understanding.plan", { root }) : null;
-  const planned = planWorldRequests(facts, LOOKS, { graph });
+  const planned = planWorldRequests(facts, LOOKS);
   const keys = planned.map((p) => requestKey(p.request));
   // What every entity, file and definition stands as is asked once the understanding pass has judged how much each
   // matters, so it is planned again then; planned now on what is held, it says what asking it will cost.
@@ -210,19 +203,17 @@ export async function openWorld({ engine, root, consent, progress, standIn = fal
   let unasked: string | undefined;
   /** How many looks go to Jev at once: as many as the engine sends it at once. */
   let concurrency = 1;
-  if (!standIn) {
-    const status = await engine.call("jev.status", {});
-    if (!status.live) unasked = "Jev is off: start Gaia with GAIA_JEV=live to judge it";
-    else if (!status.key) unasked = "there is no OpenRouter key in the Keychain (gaia-openrouter)";
-    // Without Jev, a world opens only from answers all kept: one that needs anything asked fails, saying why. With no
-    // spend limit the understanding pass wasn't planned, so it is planned now to know.
-    if (unasked !== undefined) {
-      const pending = toUnderstand ?? (await engine.call("understanding.plan", { root })).pending.reduce((n, p) => n + p.requests, 0);
-      if (missing.length + pending > 0) throw new Error(`Gaia could not judge ${name}: ${unasked}.`);
-    }
+  const status = await engine.call("jev.status", {});
+  if (!status.live) unasked = "Jev is off: start Gaia with GAIA_JEV=live to judge it";
+  else if (!status.key) unasked = "there is no OpenRouter key in the Keychain (gaia-openrouter)";
+  // Without Jev, a world opens only from answers all kept: one that needs anything asked fails, saying why. With no
+  // spend limit the understanding pass wasn't planned, so it is planned now to know.
+  if (unasked !== undefined) {
+    const pending = toUnderstand ?? (await engine.call("understanding.plan", { root })).pending.reduce((n, p) => n + p.requests, 0);
+    if (missing.length + pending > 0) throw new Error(`Gaia could not judge ${name}: ${unasked}.`);
   }
   // With Jev to be asked: anything missing, or, with no plan made, whatever the understanding pass finds as it goes.
-  if (!standIn && unasked === undefined && (total > 0 || toUnderstand === null)) {
+  if (unasked === undefined && (total > 0 || toUnderstand === null)) {
     const judging = missing.length > 0 ? await engine.call("jev.estimate", { requests: missing.map((p) => p.request) }) : undefined;
     concurrency = judging?.concurrency ?? understanding?.estimate.concurrency ?? (await engine.call("jev.estimate", { requests: [] })).concurrency;
     const estimate = {
@@ -284,10 +275,8 @@ export async function openWorld({ engine, root, consent, progress, standIn = fal
   const asking = (): void =>
     progress({ stage: "asking", name, total, answered, settled: settledAreas(), asking: [...inFlight].filter(([, n]) => n > 0).map(([area]) => area) });
   if (ask) asking();
-  // Only a developer's GAIA_JEV=stand-in has the stand-in judge; otherwise every answer is Jev's, kept or asked now.
-  const kept: JevClient = standIn
-    ? standInJev(LOOKS)
-    : keptJev(ask ? engineJev(engine) : null, { stored, keep, ...(unasked === undefined ? {} : { unasked }) });
+  // Every answer is Jev's, kept or asked now.
+  const kept = keptJev(ask ? engineJev(engine) : null, { stored, keep, ...(unasked === undefined ? {} : { unasked }) });
   // A request counts as settled once its answer, whoever gave it, is in hand: an area's answer names its land.
   const counted = new Set<string>();
   // What the standing pass and composing have settled, each named once, sent together a moment after it comes.
@@ -348,7 +337,7 @@ export async function openWorld({ engine, root, consent, progress, standIn = fal
   };
   // As many looks at once as the engine sends Jev at once: `engineJev` gathers each round into one batch, and the
   // engine serves one call at a time, so fewer in flight only makes the looks, and the names they letter, wait.
-  let judgments = await judgeWorld(facts, LOOKS, jev, { graph, concurrency });
+  let judgments = await judgeWorld(facts, LOOKS, jev, { concurrency });
   await new Promise((resolve) => setTimeout(resolve, 0));
   await Promise.all(writes);
 
@@ -385,7 +374,7 @@ export async function openWorld({ engine, root, consent, progress, standIn = fal
       // change with no request, so only those Jev's links changed go to Jev. The land's division reads no imports, so
       // the land the wait drew stays as it is.
       facts = factsOf(graph);
-      judgments = await judgeWorld(facts, LOOKS, jev, { graph, concurrency });
+      judgments = await judgeWorld(facts, LOOKS, jev, { concurrency });
     }
   }
   // Every building and landmark is composed part by part once the code is understood, each request carrying what the
@@ -395,15 +384,13 @@ export async function openWorld({ engine, root, consent, progress, standIn = fal
   await new Promise((resolve) => setTimeout(resolve, 0));
   await Promise.all(writes);
 
-  const judge: Judge = standIn ? "stand-in" : "jev";
   // Jev judged the looks, and what every file and entity stands as (a definition's with its file's).
-  const byThing = Object.fromEntries([...planned.flatMap((p) => thingsOf(p)), ...facts.files.map((f) => ({ about: "file" as const, target: f.path })), ...facts.entities.map((e) => ({ about: "entity" as const, target: e.path }))].map((t) => [judgedThing(t), judge] as const));
-  const things = Object.keys(byThing).length;
-  const parts = standIn ? [`${plural(things, "thing")} judged by the stand-in (GAIA_JEV=stand-in, for development)`] : [`${plural(things, "thing")} judged by Jev`];
+  const things = new Set([...planned.map((p) => `${p.about}:${p.target}`), ...facts.files.map((f) => `file:${f.path}`), ...facts.entities.map((e) => `entity:${e.path}`)]).size;
+  const parts = [`${plural(things, "thing")} judged by Jev`];
   if (billed > 0) parts.push(`$${billed.toFixed(4)} billed`);
   const world = layoutWorld(facts, composed, graph);
   // Any file no answer was about is settled now, before the document.
   for (const p of world.patches) settleHealth(p.path, p.vitality);
   sendHealth();
-  return { root, ...(judged.commit === undefined ? {} : { commit: judged.commit }), facts, world, judges: byThing, summary: parts.join("; "), judged: judgedThings(judged) };
+  return { root, ...(judged.commit === undefined ? {} : { commit: judged.commit }), facts, world, summary: parts.join("; "), judged: judgedThings(judged) };
 }

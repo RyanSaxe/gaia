@@ -3101,6 +3101,376 @@
   }
  },
  "stands": {
+  "crossings/banks.ts#carryBanks": "Lantern willow",
+  "crossings/banks.ts#BanksSettler": "Standing stone",
+  "crossings/banks.ts#BanksMend": "Fir",
+  "crossings/banks.ts#BANKS_TURN": "Mossy boulder",
+  "crossings/banks.ts#keepBanks": "Cherry",
+  "crossings/banks.ts#sortBanks": "Stone family",
+  "crossings/channel.ts#mendChannel": "Autumn maple",
+  "crossings/channel.ts#ChannelTurner": "Bench stone",
+  "crossings/channel.ts#ChannelKeep": "Lantern willow",
+  "crossings/channel.ts#CHANNEL_SORT": "Box mound",
+  "crossings/channel.ts#traceChannel": "Fir",
+  "crossings/channel.ts#foldChannel": "Blueberry",
+  "crossings/channel.ts#measureChannel": "Cherry",
+  "crossings/east-bank/gate.ts#joinGate": "Autumn maple",
+  "crossings/east-bank/gate.ts#GateGatherer": "Rhododendron",
+  "crossings/east-bank/gate.ts#GateWeigh": "Lantern willow",
+  "crossings/east-bank/gate.ts#GATE_CARRY": "Feather shrub",
+  "crossings/east-bank/index.ts#weighEastBank": "Fir",
+  "crossings/east-bank/index.ts#EastBankCarrier": "Bluebells",
+  "crossings/flow.ts#keepFlow": "Cherry",
+  "crossings/flow.ts#FlowSorter": "Daisies",
+  "crossings/flow.ts#FlowTrace": "Autumn maple",
+  "crossings/flow.ts#FLOW_FOLD": "Standing stone",
+  "crossings/flow.ts#measureFlow": "Lantern willow",
+  "crossings/flow.ts#joinFlow": "Mossy boulder",
+  "crossings/flow.ts#gatherFlow": "Fir",
+  "crossings/mill/index.ts#mendMill": "Landmark",
+  "crossings/mill/index.ts#MillTurner": "Stone family",
+  "crossings/mill/wheel.ts#carryWheel": "Autumn maple",
+  "crossings/mill/wheel.ts#WheelSettler": "Bench stone",
+  "crossings/mill/wheel.ts#WheelMend": "Lantern willow",
+  "crossings/mill/wheel.ts#WHEEL_TURN": "Box mound",
+  "crossings/mill/wheel.ts#keepWheel": "Fir",
+  "crossings/weir.ts#gatherWeir": "Cherry",
+  "crossings/weir.ts#WeirWeigher": "Blueberry",
+  "crossings/weir.ts#WeirCarry": "Autumn maple",
+  "crossings/weir.ts#WEIR_SETTLE": "Rhododendron",
+  "crossings/weir.ts#mendWeir": "Lantern willow",
+  "crossings/west-bank/index.ts#measureWestBank": "Fir",
+  "crossings/west-bank/index.ts#WestBankJoiner": "Feather shrub",
+  "crossings/west-bank/path.ts#tracePath": "Cherry",
+  "crossings/west-bank/path.ts#PathFolder": "Bluebells",
+  "crossings/west-bank/path.ts#PathMeasure": "Autumn maple",
+  "crossings/west-bank/path.ts#PATH_JOIN": "Daisies",
+  "downs/atlas.ts#measureAtlas": "Lantern willow",
+  "downs/atlas.ts#AtlasJoiner": "Standing stone",
+  "downs/atlas.ts#AtlasGather": "Fir",
+  "downs/atlas.ts#ATLAS_WEIGH": "Mossy boulder",
+  "downs/atlas.ts#carryAtlas": "Cherry",
+  "downs/atlas.ts#settleAtlas": "Stone family",
+  "downs/atlas.ts#mendAtlas": "Autumn maple",
+  "downs/deep/deeper/deeper-still/deepest/bottom/tmp2.ts#keepTmp2": "Lantern willow",
+  "downs/deep/deeper/deeper-still/deepest/four.ts#weighFour": "Fir",
+  "downs/deep/deeper/deeper-still/deepest/four.ts#FourCarrier": "Bench stone",
+  "downs/deep/deeper/deeper-still/three.ts#traceThree": "Cherry",
+  "downs/deep/deeper/deeper-still/three.ts#ThreeFolder": "Box mound",
+  "downs/deep/deeper/two.ts#settleTwo": "Autumn maple",
+  "downs/deep/deeper/two.ts#TwoMender": "Blueberry",
+  "downs/deep/index.ts#measureDeep": "Lantern willow",
+  "downs/deep/index.ts#DeepJoiner": "Rhododendron",
+  "downs/deep/one.ts#traceOne": "Building",
+  "downs/deep/one.ts#OneFolder": "Feather shrub",
+  "downs/fields/barley.ts#traceBarley": "Cherry",
+  "downs/fields/barley.ts#BarleyFolder": "Bluebells",
+  "downs/fields/barley.ts#BarleyMeasure": "Autumn maple",
+  "downs/fields/barley.ts#BARLEY_JOIN": "Daisies",
+  "downs/fields/barley.ts#gatherBarley": "Lantern willow",
+  "downs/fields/rye.ts#keepRye": "Fir",
+  "downs/fields/rye.ts#RyeSorter": "Standing stone",
+  "downs/fields/rye.ts#RyeTrace": "Cherry",
+  "downs/fields/rye.ts#RYE_FOLD": "Mossy boulder",
+  "downs/hedges.ts#keepHedges": "Autumn maple",
+  "downs/hedges.ts#HedgesSorter": "Stone family",
+  "downs/hedges.ts#HedgesTrace": "Lantern willow",
+  "downs/hedges.ts#HEDGES_FOLD": "Bench stone",
+  "downs/hedges.ts#measureHedges": "Fir",
+  "downs/hedges.ts#joinHedges": "Box mound",
+  "downs/hedges.ts#gatherHedges": "Cherry",
+  "downs/index.ts#gatherDowns": "Autumn maple",
+  "downs/index.ts#DownsWeigher": "Blueberry",
+  "downs/lanes.ts#mendLanes": "Lantern willow",
+  "downs/lanes.ts#LanesTurner": "Rhododendron",
+  "downs/lanes.ts#LanesKeep": "Fir",
+  "downs/lanes.ts#LANES_SORT": "Feather shrub",
+  "downs/lanes.ts#traceLanes": "Cherry",
+  "downs/lanes.ts#foldLanes": "Bluebells",
+  "downs/lanes.ts#measureLanes": "Autumn maple",
+  "downs/oak/index.ts#sortOak": "Lantern willow",
+  "downs/oak/index.ts#OakTracer": "Daisies",
+  "downs/oak/roots.ts#turnRoots": "Fir",
+  "downs/oak/roots.ts#RootsKeeper": "Standing stone",
+  "downs/oak/roots.ts#RootsSort": "Cherry",
+  "downs/oak/roots.ts#ROOTS_TRACE": "Mossy boulder",
+  "downs/oak/roots.ts#foldRoots": "Autumn maple",
+  "downs/orchard/apples.ts#keepApples": "Lantern willow",
+  "downs/orchard/apples.ts#ApplesSorter": "Stone family",
+  "downs/orchard/apples.ts#ApplesTrace": "Fir",
+  "downs/orchard/apples.ts#APPLES_FOLD": "Bench stone",
+  "downs/orchard/pears.ts#mendPears": "Cherry",
+  "downs/orchard/pears.ts#PearsTurner": "Box mound",
+  "downs/orchard/pears.ts#PearsKeep": "Autumn maple",
+  "downs/survey.ts#traceSurvey": "Lantern willow",
+  "downs/survey.ts#SurveyFolder": "Blueberry",
+  "downs/survey.ts#SurveyMeasure": "Fir",
+  "downs/survey.ts#SURVEY_JOIN": "Rhododendron",
+  "downs/survey.ts#gatherSurvey": "Cherry",
+  "downs/survey.ts#weighSurvey": "Feather shrub",
+  "downs/survey.ts#carrySurvey": "Autumn maple",
+  "downs/tiny/seed.ts#joinSeed": "Landmark",
+  "dunes/keep/guard.rs#mendGuard": "Fir",
+  "dunes/keep/guard.rs#GuardTurner": "Bluebells",
+  "dunes/keep/guard.rs#GuardKeep": "Cherry",
+  "dunes/keep/guard.rs#GUARD_SORT": "Daisies",
+  "dunes/keep/guard.rs#traceGuard": "Autumn maple",
+  "dunes/keep/lib.rs#keepKeep": "Lantern willow",
+  "dunes/keep/lib.rs#KeepSorter": "Standing stone",
+  "dunes/keep/lib.rs#KeepTrace": "Fir",
+  "dunes/ledger/entries.ts#sortEntries": "Cherry",
+  "dunes/ledger/entries.ts#EntriesTracer": "Mossy boulder",
+  "dunes/ledger/entries.ts#EntriesFold": "Autumn maple",
+  "dunes/ledger/entries.ts#ENTRIES_MEASURE": "Stone family",
+  "dunes/ledger/index.ts#foldLedger": "Lantern willow",
+  "dunes/ledger/index.ts#LedgerMeasurer": "Bench stone",
+  "fords/gravel/index.ts#keepGravel": "Fir",
+  "fords/gravel/index.ts#GravelSorter": "Box mound",
+  "fords/gravel/ring.ts#mendRing": "Cherry",
+  "fords/gravel/ring.ts#RingTurner": "Blueberry",
+  "fords/gravel/ring.ts#RingKeep": "Autumn maple",
+  "fords/gravel/ring.ts#RING_SORT": "Rhododendron",
+  "fords/gravel/ring.ts#traceRing": "Lantern willow",
+  "fords/jetty/index.ts#settleJetty": "Fir",
+  "fords/jetty/index.ts#JettyMender": "Feather shrub",
+  "fords/jetty/landing.ts#weighLanding": "Cherry",
+  "fords/jetty/landing.ts#LandingCarrier": "Bluebells",
+  "fords/jetty/landing.ts#LandingSettle": "Autumn maple",
+  "fords/jetty/landing.ts#LANDING_MEND": "Daisies",
+  "fords/jetty/landing.ts#turnLanding": "Lantern willow",
+  "fords/reeds.ts#sortReeds": "Fir",
+  "fords/reeds.ts#ReedsTracer": "Standing stone",
+  "fords/reeds.ts#ReedsFold": "Cherry",
+  "fords/reeds.ts#REEDS_MEASURE": "Mossy boulder",
+  "fords/reeds.ts#joinReeds": "Autumn maple",
+  "fords/shallows.ts#foldShallows": "Lantern willow",
+  "fords/shallows.ts#ShallowsMeasurer": "Stone family",
+  "fords/shallows.ts#ShallowsJoin": "Fir",
+  "fords/shallows.ts#SHALLOWS_GATHER": "Bench stone",
+  "fords/shallows.ts#weighShallows": "Cherry",
+  "fords/shallows.ts#carryShallows": "Box mound",
+  "fords/shallows.ts#settleShallows": "Autumn maple",
+  "fords/stones.ts#turnStones": "Building",
+  "fords/stones.ts#StonesKeeper": "Blueberry",
+  "fords/stones.ts#StonesSort": "Fir",
+  "fords/stones.ts#STONES_TRACE": "Rhododendron",
+  "hills/crests.ts#carryCrests": "Cherry",
+  "hills/crests.ts#CrestsSettler": "Feather shrub",
+  "hills/crests.ts#CrestsMend": "Autumn maple",
+  "hills/crests.ts#CRESTS_TURN": "Bluebells",
+  "hills/crests.ts#keepCrests": "Lantern willow",
+  "hills/crests.ts#sortCrests": "Daisies",
+  "hills/kiln/fire.ts#settleFire": "Fir",
+  "hills/kiln/fire.ts#FireMender": "Standing stone",
+  "hills/kiln/fire.ts#FireTurn": "Cherry",
+  "hills/kiln/fire.ts#FIRE_KEEP": "Mossy boulder",
+  "hills/kiln/index.ts#turnKiln": "Autumn maple",
+  "hills/kiln/index.ts#KilnKeeper": "Stone family",
+  "hills/oak/branches.ts#keepBranches": "Lantern willow",
+  "hills/oak/branches.ts#BranchesSorter": "Bench stone",
+  "hills/oak/branches.ts#BranchesTrace": "Fir",
+  "hills/oak/branches.ts#BRANCHES_FOLD": "Box mound",
+  "hills/oak/branches.ts#measureBranches": "Cherry",
+  "hills/oak/branches.ts#joinBranches": "Blueberry",
+  "hills/oak/index.ts#traceOak": "Autumn maple",
+  "hills/oak/index.ts#OakFolder": "Rhododendron",
+  "hills/oak/index.ts#OakMeasure": "Lantern willow",
+  "hills/slopes.ts#mendSlopes": "Fir",
+  "hills/slopes.ts#SlopesTurner": "Feather shrub",
+  "hills/slopes.ts#SlopesKeep": "Cherry",
+  "hills/slopes.ts#SLOPES_SORT": "Bluebells",
+  "hills/slopes.ts#traceSlopes": "Autumn maple",
+  "hills/slopes.ts#foldSlopes": "Daisies",
+  "hills/slopes.ts#measureSlopes": "Lantern willow",
+  "hollow/depth.ts#turnDepth": "Fir",
+  "hollow/depth.ts#DepthKeeper": "Standing stone",
+  "hollow/depth.ts#DepthSort": "Cherry",
+  "hollow/depth.ts#DEPTH_TRACE": "Mossy boulder",
+  "hollow/depth.ts#foldDepth": "Autumn maple",
+  "hollow/depth.ts#measureDepth": "Stone family",
+  "hollow/index.ts#foldHollow": "Lantern willow",
+  "hollow/index.ts#HollowMeasurer": "Bench stone",
+  "hollow/index.ts#HollowJoin": "Fir",
+  "hollow/pool.ts#sortPool": "Cherry",
+  "hollow/pool.ts#PoolTracer": "Box mound",
+  "hollow/pool.ts#PoolFold": "Autumn maple",
+  "hollow/pool.ts#POOL_MEASURE": "Blueberry",
+  "hollow/pool.ts#joinPool": "Lantern willow",
+  "hollow/pool.ts#gatherPool": "Rhododendron",
+  "hollow/pool.ts#weighPool": "Fir",
+  "hollow/willow/fronds.ts#traceFronds": "Cherry",
+  "hollow/willow/fronds.ts#FrondsFolder": "Feather shrub",
+  "hollow/willow/fronds.ts#FrondsMeasure": "Autumn maple",
+  "hollow/willow/fronds.ts#FRONDS_JOIN": "Bluebells",
+  "hollow/willow/index.ts#measureWillow": "Landmark",
+  "hollow/willow/index.ts#WillowJoiner": "Daisies",
+  "index.ts#carryProving": "Fir",
+  "index.ts#ProvingSettler": "Standing stone",
+  "mixed/beacon/index.ts#mendBeacon": "Cherry",
+  "mixed/beacon/index.ts#BeaconTurner": "Mossy boulder",
+  "mixed/beacon/lamp.ts#carryLamp": "Autumn maple",
+  "mixed/beacon/lamp.ts#LampSettler": "Stone family",
+  "mixed/beacon/lamp.ts#LampMend": "Lantern willow",
+  "mixed/beacon/lamp.ts#LAMP_TURN": "Bench stone",
+  "mixed/beacon/lamp.ts#keepLamp": "Fir",
+  "mixed/failing-grove.ts#traceFailingGrove": "Cherry",
+  "mixed/failing-grove.ts#FailingGroveFolder": "Box mound",
+  "mixed/failing-grove.ts#FailingGroveMeasure": "Autumn maple",
+  "mixed/failing-grove.ts#FAILINGGROVE_JOIN": "Blueberry",
+  "mixed/failing-grove.ts#gatherFailingGrove": "Lantern willow",
+  "mixed/failing-grove.ts#weighFailingGrove": "Rhododendron",
+  "mixed/failing-grove.ts#carryFailingGrove": "Fir",
+  "mixed/main.ts#carryMixed": "Cherry",
+  "mixed/main.ts#MixedSettler": "Feather shrub",
+  "mixed/patched.ts#keepPatched": "Autumn maple",
+  "mixed/patched.ts#PatchedSorter": "Bluebells",
+  "mixed/patched.ts#PatchedTrace": "Lantern willow",
+  "mixed/patched.ts#PATCHED_FOLD": "Daisies",
+  "mixed/patched.ts#measurePatched": "Fir",
+  "mixed/patched.ts#joinPatched": "Standing stone",
+  "mixed/sound.ts#gatherSound": "Cherry",
+  "mixed/sound.ts#SoundWeigher": "Mossy boulder",
+  "mixed/sound.ts#SoundCarry": "Autumn maple",
+  "mixed/sound.ts#SOUND_SETTLE": "Stone family",
+  "mixed/sound.ts#mendSound": "Lantern willow",
+  "mixed/sound.ts#turnSound": "Bench stone",
+  "mixed/sound.ts#keepSound": "Fir",
+  "mixed/steady.ts#measureSteady": "Cherry",
+  "mixed/steady.ts#SteadyJoiner": "Box mound",
+  "mixed/steady.ts#SteadyGather": "Autumn maple",
+  "mixed/steady.ts#STEADY_WEIGH": "Blueberry",
+  "mixed/steady.ts#carrySteady": "Lantern willow",
+  "mixed/steady.ts#settleSteady": "Rhododendron",
+  "mixed/steady.ts#mendSteady": "Fir",
+  "mixed/workshop/gears.ts#joinGears": "Cherry",
+  "mixed/workshop/gears.ts#GearsGatherer": "Feather shrub",
+  "mixed/workshop/gears.ts#GearsWeigh": "Autumn maple",
+  "mixed/workshop/gears.ts#GEARS_CARRY": "Bluebells",
+  "mixed/workshop/gears.ts#settleGears": "Lantern willow",
+  "mixed/workshop/gears.ts#mendGears": "Daisies",
+  "mixed/workshop/index.ts#weighWorkshop": "Fir",
+  "mixed/workshop/index.ts#WorkshopCarrier": "Standing stone",
+  "moor/archive/catalog.ts#carryCatalog": "Building",
+  "moor/archive/catalog.ts#CatalogSettler": "Mossy boulder",
+  "moor/archive/catalog.ts#CatalogMend": "Autumn maple",
+  "moor/archive/catalog.ts#CATALOG_TURN": "Stone family",
+  "moor/archive/catalog.ts#keepCatalog": "Lantern willow",
+  "moor/archive/index.ts#mendArchive": "Fir",
+  "moor/archive/index.ts#ArchiveTurner": "Bench stone",
+  "moor/henge/index.ts#sortHenge": "Cherry",
+  "moor/henge/index.ts#HengeTracer": "Box mound",
+  "moor/henge/stones.ts#turnStones": "Autumn maple",
+  "moor/henge/stones.ts#StonesKeeper": "Blueberry",
+  "moor/henge/stones.ts#StonesSort": "Lantern willow",
+  "moor/henge/stones.ts#STONES_TRACE": "Rhododendron",
+  "pondside/handoff.ts#keepHandoff": "Fir",
+  "pondside/handoff.ts#HandoffSorter": "Feather shrub",
+  "pondside/handoff.ts#HandoffTrace": "Cherry",
+  "pondside/handoff.ts#HANDOFF_FOLD": "Bluebells",
+  "pondside/handoff.ts#measureHandoff": "Autumn maple",
+  "pondside/queue.ts#traceQueue": "Lantern willow",
+  "pondside/queue.ts#QueueFolder": "Daisies",
+  "pondside/queue.ts#QueueMeasure": "Fir",
+  "pondside/queue.ts#QUEUE_JOIN": "Standing stone",
+  "pondside/queue.ts#gatherQueue": "Cherry",
+  "pondside/queue.ts#weighQueue": "Mossy boulder",
+  "pondside/records/index.ts#joinRecords": "Autumn maple",
+  "pondside/records/ledger.ts#foldLedger": "Lantern willow",
+  "pondside/records/ledger.ts#LedgerMeasurer": "Stone family",
+  "pondside/records/ledger.ts#LedgerJoin": "Fir",
+  "pondside/records/ledger.ts#LEDGER_GATHER": "Bench stone",
+  "pondside/server.ts#measurePondside": "Cherry",
+  "pondside/server.ts#PondsideJoiner": "Box mound",
+  "pondside/server.ts#PondsideGather": "Autumn maple",
+  "ruins/collapse.ts#turnCollapse": "Lantern willow",
+  "ruins/collapse.ts#CollapseKeeper": "Blueberry",
+  "ruins/collapse.ts#CollapseSort": "Fir",
+  "ruins/collapse.ts#COLLAPSE_TRACE": "Rhododendron",
+  "ruins/collapse.ts#foldCollapse": "Cherry",
+  "ruins/collapse.ts#measureCollapse": "Feather shrub",
+  "ruins/collapse.ts#joinCollapse": "Autumn maple",
+  "ruins/cottage/hearth.ts#joinHearth": "Lantern willow",
+  "ruins/cottage/hearth.ts#HearthGatherer": "Bluebells",
+  "ruins/cottage/hearth.ts#HearthWeigh": "Fir",
+  "ruins/cottage/hearth.ts#HEARTH_CARRY": "Daisies",
+  "ruins/cottage/index.ts#weighCottage": "Landmark",
+  "ruins/cottage/index.ts#CottageCarrier": "Standing stone",
+  "ruins/croft/forge.rs#carryForge": "Autumn maple",
+  "ruins/croft/forge.rs#ForgeSettler": "Mossy boulder",
+  "ruins/croft/forge.rs#ForgeMend": "Lantern willow",
+  "ruins/croft/forge.rs#FORGE_TURN": "Stone family",
+  "ruins/croft/forge.rs#keepForge": "Fir",
+  "ruins/croft/lib.rs#mendCroft": "Cherry",
+  "ruins/croft/lib.rs#CroftTurner": "Bench stone",
+  "ruins/croft/lib.rs#CroftKeep": "Autumn maple",
+  "ruins/house/main.ts#sortHouse": "Lantern willow",
+  "ruins/house/main.ts#HouseTracer": "Box mound",
+  "ruins/house/utils2.ts#turnUtils2": "Fir",
+  "ruins/house/utils2.ts#Utils2Keeper": "Blueberry",
+  "ruins/house/utils2.ts#Utils2Sort": "Cherry",
+  "ruins/house/utils2.ts#UTILS2_TRACE": "Rhododendron",
+  "ruins/index.ts#sortRuins": "Autumn maple",
+  "ruins/index.ts#RuinsTracer": "Feather shrub",
+  "ruins/keep/lib.rs#weighKeep": "Lantern willow",
+  "ruins/keep/lib.rs#KeepCarrier": "Bluebells",
+  "ruins/keep/lib.rs#KeepSettle": "Fir",
+  "ruins/keep/walls.rs#joinWalls": "Cherry",
+  "ruins/keep/walls.rs#WallsGatherer": "Daisies",
+  "ruins/keep/walls.rs#WallsWeigh": "Autumn maple",
+  "ruins/keep/walls.rs#WALLS_CARRY": "Standing stone",
+  "ruins/keep/walls.rs#settleWalls": "Lantern willow",
+  "ruins/lighthouse/index.ts#mendLighthouse": "Fir",
+  "ruins/lighthouse/index.ts#LighthouseTurner": "Mossy boulder",
+  "ruins/lighthouse/lens.ts#carryLens": "Cherry",
+  "ruins/lighthouse/lens.ts#LensSettler": "Stone family",
+  "ruins/lighthouse/lens.ts#LensMend": "Autumn maple",
+  "ruins/lighthouse/lens.ts#LENS_TURN": "Bench stone",
+  "ruins/mill/index.ts#measureMill": "Lantern willow",
+  "ruins/mill/index.ts#MillJoiner": "Box mound",
+  "ruins/mill/race.ts#traceRace": "Building",
+  "ruins/mill/race.ts#RaceFolder": "Blueberry",
+  "ruins/mill/race.ts#RaceMeasure": "Cherry",
+  "ruins/mill/race.ts#RACE_JOIN": "Rhododendron",
+  "ruins/mill/race.ts#gatherRace": "Autumn maple",
+  "ruins/oak/index.ts#sortOak": "Lantern willow",
+  "ruins/oak/index.ts#OakTracer": "Feather shrub",
+  "ruins/oak/temp.ts#turnTemp": "Fir",
+  "ruins/oak/temp.ts#TempKeeper": "Bluebells",
+  "ruins/oak/temp.ts#TempSort": "Cherry",
+  "ruins/oak/temp.ts#TEMP_TRACE": "Daisies",
+  "ruins/rubble.ts#settleRubble": "Autumn maple",
+  "ruins/rubble.ts#RubbleMender": "Standing stone",
+  "ruins/rubble.ts#RubbleTurn": "Lantern willow",
+  "ruins/rubble.ts#RUBBLE_KEEP": "Mossy boulder",
+  "ruins/rubble.ts#sortRubble": "Fir",
+  "ruins/rubble.ts#traceRubble": "Stone family",
+  "ruins/rubble.ts#foldRubble": "Cherry",
+  "terraces/croft/lib.rs#sortCroft": "Autumn maple",
+  "terraces/croft/lib.rs#CroftTracer": "Bench stone",
+  "terraces/croft/lib.rs#CroftFold": "Lantern willow",
+  "terraces/croft/press.rs#turnPress": "Fir",
+  "terraces/croft/press.rs#PressKeeper": "Box mound",
+  "terraces/croft/press.rs#PressSort": "Cherry",
+  "terraces/croft/press.rs#PRESS_TRACE": "Blueberry",
+  "terraces/croft/press.rs#foldPress": "Autumn maple",
+  "terraces/pipeline.ts#sortPipeline": "Lantern willow",
+  "terraces/pipeline.ts#PipelineTracer": "Rhododendron",
+  "terraces/pipeline.ts#PipelineFold": "Fir",
+  "terraces/pipeline.ts#PIPELINE_MEASURE": "Feather shrub",
+  "terraces/pipeline.ts#joinPipeline": "Cherry",
+  "terraces/ring/index.ts#measureRing": "Autumn maple",
+  "terraces/ring/index.ts#RingJoiner": "Bluebells",
+  "terraces/ring/schema.ts#traceSchema": "Lantern willow",
+  "terraces/ring/schema.ts#SchemaFolder": "Daisies",
+  "terraces/ring/schema.ts#SchemaMeasure": "Fir",
+  "terraces/ring/schema.ts#SCHEMA_JOIN": "Standing stone",
+  "terraces/ring/schema.ts#gatherSchema": "Cherry",
+  "terraces/steps.ts#weighSteps": "Autumn maple",
+  "terraces/steps.ts#StepsCarrier": "Mossy boulder",
+  "terraces/steps.ts#StepsSettle": "Lantern willow",
+  "terraces/steps.ts#STEPS_MEND": "Stone family",
+  "terraces/steps.ts#turnSteps": "Fir",
+  "terraces/steps.ts#keepSteps": "Bench stone",
   "CHANGELOG.md": "Lantern willow",
   "README.md": "Fir",
   "build.sh": "Cherry",
@@ -3247,15 +3617,7 @@
   "terraces/ring/schema.ts": "Autumn maple",
   "terraces/stages.test.ts": "Standing stone",
   "terraces/steps.ts": "Mossy boulder",
-  "tsconfig.json": "Stone family",
-  "crossings/mill/index.ts#mendMill": "Landmark",
-  "downs/deep/one.ts#traceOne": "Building",
-  "downs/tiny/seed.ts#joinSeed": "Landmark",
-  "fords/stones.ts#turnStones": "Building",
-  "hollow/willow/index.ts#measureWillow": "Landmark",
-  "moor/archive/catalog.ts#carryCatalog": "Building",
-  "ruins/cottage/index.ts#weighCottage": "Landmark",
-  "ruins/mill/race.ts#traceRace": "Building"
+  "tsconfig.json": "Stone family"
  },
  "trails": [
   {
@@ -3910,553 +4272,6 @@
    }
   }
  ],
- "forms": {
-  "crossings/banks.ts": {
-   "#carryBanks": "Lantern willow",
-   "#BanksSettler": "Standing stone",
-   "#BanksMend": "Fir",
-   "#BANKS_TURN": "Mossy boulder",
-   "#keepBanks": "Cherry",
-   "#sortBanks": "Stone family"
-  },
-  "crossings/channel.ts": {
-   "#mendChannel": "Autumn maple",
-   "#ChannelTurner": "Bench stone",
-   "#ChannelKeep": "Lantern willow",
-   "#CHANNEL_SORT": "Box mound",
-   "#traceChannel": "Fir",
-   "#foldChannel": "Blueberry",
-   "#measureChannel": "Cherry"
-  },
-  "crossings/east-bank/gate.ts": {
-   "#joinGate": "Autumn maple",
-   "#GateGatherer": "Rhododendron",
-   "#GateWeigh": "Lantern willow",
-   "#GATE_CARRY": "Feather shrub"
-  },
-  "crossings/east-bank/index.ts": {
-   "#weighEastBank": "Fir",
-   "#EastBankCarrier": "Bluebells"
-  },
-  "crossings/flow.ts": {
-   "#keepFlow": "Cherry",
-   "#FlowSorter": "Daisies",
-   "#FlowTrace": "Autumn maple",
-   "#FLOW_FOLD": "Standing stone",
-   "#measureFlow": "Lantern willow",
-   "#joinFlow": "Mossy boulder",
-   "#gatherFlow": "Fir"
-  },
-  "crossings/mill/index.ts": {
-   "#MillTurner": "Stone family"
-  },
-  "crossings/mill/wheel.ts": {
-   "#carryWheel": "Autumn maple",
-   "#WheelSettler": "Bench stone",
-   "#WheelMend": "Lantern willow",
-   "#WHEEL_TURN": "Box mound",
-   "#keepWheel": "Fir"
-  },
-  "crossings/weir.ts": {
-   "#gatherWeir": "Cherry",
-   "#WeirWeigher": "Blueberry",
-   "#WeirCarry": "Autumn maple",
-   "#WEIR_SETTLE": "Rhododendron",
-   "#mendWeir": "Lantern willow"
-  },
-  "crossings/west-bank/index.ts": {
-   "#measureWestBank": "Fir",
-   "#WestBankJoiner": "Feather shrub"
-  },
-  "crossings/west-bank/path.ts": {
-   "#tracePath": "Cherry",
-   "#PathFolder": "Bluebells",
-   "#PathMeasure": "Autumn maple",
-   "#PATH_JOIN": "Daisies"
-  },
-  "downs/atlas.ts": {
-   "#measureAtlas": "Lantern willow",
-   "#AtlasJoiner": "Standing stone",
-   "#AtlasGather": "Fir",
-   "#ATLAS_WEIGH": "Mossy boulder",
-   "#carryAtlas": "Cherry",
-   "#settleAtlas": "Stone family",
-   "#mendAtlas": "Autumn maple"
-  },
-  "downs/deep/deeper/deeper-still/deepest/bottom/tmp2.ts": {
-   "#keepTmp2": "Lantern willow"
-  },
-  "downs/deep/deeper/deeper-still/deepest/four.ts": {
-   "#weighFour": "Fir",
-   "#FourCarrier": "Bench stone"
-  },
-  "downs/deep/deeper/deeper-still/three.ts": {
-   "#traceThree": "Cherry",
-   "#ThreeFolder": "Box mound"
-  },
-  "downs/deep/deeper/two.ts": {
-   "#settleTwo": "Autumn maple",
-   "#TwoMender": "Blueberry"
-  },
-  "downs/deep/index.ts": {
-   "#measureDeep": "Lantern willow",
-   "#DeepJoiner": "Rhododendron"
-  },
-  "downs/deep/one.ts": {
-   "#OneFolder": "Feather shrub"
-  },
-  "downs/fields/barley.ts": {
-   "#traceBarley": "Cherry",
-   "#BarleyFolder": "Bluebells",
-   "#BarleyMeasure": "Autumn maple",
-   "#BARLEY_JOIN": "Daisies",
-   "#gatherBarley": "Lantern willow"
-  },
-  "downs/fields/rye.ts": {
-   "#keepRye": "Fir",
-   "#RyeSorter": "Standing stone",
-   "#RyeTrace": "Cherry",
-   "#RYE_FOLD": "Mossy boulder"
-  },
-  "downs/hedges.ts": {
-   "#keepHedges": "Autumn maple",
-   "#HedgesSorter": "Stone family",
-   "#HedgesTrace": "Lantern willow",
-   "#HEDGES_FOLD": "Bench stone",
-   "#measureHedges": "Fir",
-   "#joinHedges": "Box mound",
-   "#gatherHedges": "Cherry"
-  },
-  "downs/index.ts": {
-   "#gatherDowns": "Autumn maple",
-   "#DownsWeigher": "Blueberry"
-  },
-  "downs/lanes.ts": {
-   "#mendLanes": "Lantern willow",
-   "#LanesTurner": "Rhododendron",
-   "#LanesKeep": "Fir",
-   "#LANES_SORT": "Feather shrub",
-   "#traceLanes": "Cherry",
-   "#foldLanes": "Bluebells",
-   "#measureLanes": "Autumn maple"
-  },
-  "downs/oak/index.ts": {
-   "#sortOak": "Lantern willow",
-   "#OakTracer": "Daisies"
-  },
-  "downs/oak/roots.ts": {
-   "#turnRoots": "Fir",
-   "#RootsKeeper": "Standing stone",
-   "#RootsSort": "Cherry",
-   "#ROOTS_TRACE": "Mossy boulder",
-   "#foldRoots": "Autumn maple"
-  },
-  "downs/orchard/apples.ts": {
-   "#keepApples": "Lantern willow",
-   "#ApplesSorter": "Stone family",
-   "#ApplesTrace": "Fir",
-   "#APPLES_FOLD": "Bench stone"
-  },
-  "downs/orchard/pears.ts": {
-   "#mendPears": "Cherry",
-   "#PearsTurner": "Box mound",
-   "#PearsKeep": "Autumn maple"
-  },
-  "downs/survey.ts": {
-   "#traceSurvey": "Lantern willow",
-   "#SurveyFolder": "Blueberry",
-   "#SurveyMeasure": "Fir",
-   "#SURVEY_JOIN": "Rhododendron",
-   "#gatherSurvey": "Cherry",
-   "#weighSurvey": "Feather shrub",
-   "#carrySurvey": "Autumn maple"
-  },
-  "downs/tiny/seed.ts": {},
-  "dunes/keep/guard.rs": {
-   "#mendGuard": "Fir",
-   "#GuardTurner": "Bluebells",
-   "#GuardKeep": "Cherry",
-   "#GUARD_SORT": "Daisies",
-   "#traceGuard": "Autumn maple"
-  },
-  "dunes/keep/lib.rs": {
-   "#keepKeep": "Lantern willow",
-   "#KeepSorter": "Standing stone",
-   "#KeepTrace": "Fir"
-  },
-  "dunes/ledger/entries.ts": {
-   "#sortEntries": "Cherry",
-   "#EntriesTracer": "Mossy boulder",
-   "#EntriesFold": "Autumn maple",
-   "#ENTRIES_MEASURE": "Stone family"
-  },
-  "dunes/ledger/index.ts": {
-   "#foldLedger": "Lantern willow",
-   "#LedgerMeasurer": "Bench stone"
-  },
-  "fords/gravel/index.ts": {
-   "#keepGravel": "Fir",
-   "#GravelSorter": "Box mound"
-  },
-  "fords/gravel/ring.ts": {
-   "#mendRing": "Cherry",
-   "#RingTurner": "Blueberry",
-   "#RingKeep": "Autumn maple",
-   "#RING_SORT": "Rhododendron",
-   "#traceRing": "Lantern willow"
-  },
-  "fords/jetty/index.ts": {
-   "#settleJetty": "Fir",
-   "#JettyMender": "Feather shrub"
-  },
-  "fords/jetty/landing.ts": {
-   "#weighLanding": "Cherry",
-   "#LandingCarrier": "Bluebells",
-   "#LandingSettle": "Autumn maple",
-   "#LANDING_MEND": "Daisies",
-   "#turnLanding": "Lantern willow"
-  },
-  "fords/reeds.ts": {
-   "#sortReeds": "Fir",
-   "#ReedsTracer": "Standing stone",
-   "#ReedsFold": "Cherry",
-   "#REEDS_MEASURE": "Mossy boulder",
-   "#joinReeds": "Autumn maple"
-  },
-  "fords/shallows.ts": {
-   "#foldShallows": "Lantern willow",
-   "#ShallowsMeasurer": "Stone family",
-   "#ShallowsJoin": "Fir",
-   "#SHALLOWS_GATHER": "Bench stone",
-   "#weighShallows": "Cherry",
-   "#carryShallows": "Box mound",
-   "#settleShallows": "Autumn maple"
-  },
-  "fords/stones.ts": {
-   "#StonesKeeper": "Blueberry",
-   "#StonesSort": "Fir",
-   "#STONES_TRACE": "Rhododendron"
-  },
-  "hills/crests.ts": {
-   "#carryCrests": "Cherry",
-   "#CrestsSettler": "Feather shrub",
-   "#CrestsMend": "Autumn maple",
-   "#CRESTS_TURN": "Bluebells",
-   "#keepCrests": "Lantern willow",
-   "#sortCrests": "Daisies"
-  },
-  "hills/kiln/fire.ts": {
-   "#settleFire": "Fir",
-   "#FireMender": "Standing stone",
-   "#FireTurn": "Cherry",
-   "#FIRE_KEEP": "Mossy boulder"
-  },
-  "hills/kiln/index.ts": {
-   "#turnKiln": "Autumn maple",
-   "#KilnKeeper": "Stone family"
-  },
-  "hills/oak/branches.ts": {
-   "#keepBranches": "Lantern willow",
-   "#BranchesSorter": "Bench stone",
-   "#BranchesTrace": "Fir",
-   "#BRANCHES_FOLD": "Box mound",
-   "#measureBranches": "Cherry",
-   "#joinBranches": "Blueberry"
-  },
-  "hills/oak/index.ts": {
-   "#traceOak": "Autumn maple",
-   "#OakFolder": "Rhododendron",
-   "#OakMeasure": "Lantern willow"
-  },
-  "hills/slopes.ts": {
-   "#mendSlopes": "Fir",
-   "#SlopesTurner": "Feather shrub",
-   "#SlopesKeep": "Cherry",
-   "#SLOPES_SORT": "Bluebells",
-   "#traceSlopes": "Autumn maple",
-   "#foldSlopes": "Daisies",
-   "#measureSlopes": "Lantern willow"
-  },
-  "hollow/depth.ts": {
-   "#turnDepth": "Fir",
-   "#DepthKeeper": "Standing stone",
-   "#DepthSort": "Cherry",
-   "#DEPTH_TRACE": "Mossy boulder",
-   "#foldDepth": "Autumn maple",
-   "#measureDepth": "Stone family"
-  },
-  "hollow/index.ts": {
-   "#foldHollow": "Lantern willow",
-   "#HollowMeasurer": "Bench stone",
-   "#HollowJoin": "Fir"
-  },
-  "hollow/pool.ts": {
-   "#sortPool": "Cherry",
-   "#PoolTracer": "Box mound",
-   "#PoolFold": "Autumn maple",
-   "#POOL_MEASURE": "Blueberry",
-   "#joinPool": "Lantern willow",
-   "#gatherPool": "Rhododendron",
-   "#weighPool": "Fir"
-  },
-  "hollow/willow/fronds.ts": {
-   "#traceFronds": "Cherry",
-   "#FrondsFolder": "Feather shrub",
-   "#FrondsMeasure": "Autumn maple",
-   "#FRONDS_JOIN": "Bluebells"
-  },
-  "hollow/willow/index.ts": {
-   "#WillowJoiner": "Daisies"
-  },
-  "index.ts": {
-   "#carryProving": "Fir",
-   "#ProvingSettler": "Standing stone"
-  },
-  "mixed/beacon/index.ts": {
-   "#mendBeacon": "Cherry",
-   "#BeaconTurner": "Mossy boulder"
-  },
-  "mixed/beacon/lamp.ts": {
-   "#carryLamp": "Autumn maple",
-   "#LampSettler": "Stone family",
-   "#LampMend": "Lantern willow",
-   "#LAMP_TURN": "Bench stone",
-   "#keepLamp": "Fir"
-  },
-  "mixed/failing-grove.ts": {
-   "#traceFailingGrove": "Cherry",
-   "#FailingGroveFolder": "Box mound",
-   "#FailingGroveMeasure": "Autumn maple",
-   "#FAILINGGROVE_JOIN": "Blueberry",
-   "#gatherFailingGrove": "Lantern willow",
-   "#weighFailingGrove": "Rhododendron",
-   "#carryFailingGrove": "Fir"
-  },
-  "mixed/main.ts": {
-   "#carryMixed": "Cherry",
-   "#MixedSettler": "Feather shrub"
-  },
-  "mixed/patched.ts": {
-   "#keepPatched": "Autumn maple",
-   "#PatchedSorter": "Bluebells",
-   "#PatchedTrace": "Lantern willow",
-   "#PATCHED_FOLD": "Daisies",
-   "#measurePatched": "Fir",
-   "#joinPatched": "Standing stone"
-  },
-  "mixed/sound.ts": {
-   "#gatherSound": "Cherry",
-   "#SoundWeigher": "Mossy boulder",
-   "#SoundCarry": "Autumn maple",
-   "#SOUND_SETTLE": "Stone family",
-   "#mendSound": "Lantern willow",
-   "#turnSound": "Bench stone",
-   "#keepSound": "Fir"
-  },
-  "mixed/steady.ts": {
-   "#measureSteady": "Cherry",
-   "#SteadyJoiner": "Box mound",
-   "#SteadyGather": "Autumn maple",
-   "#STEADY_WEIGH": "Blueberry",
-   "#carrySteady": "Lantern willow",
-   "#settleSteady": "Rhododendron",
-   "#mendSteady": "Fir"
-  },
-  "mixed/workshop/gears.ts": {
-   "#joinGears": "Cherry",
-   "#GearsGatherer": "Feather shrub",
-   "#GearsWeigh": "Autumn maple",
-   "#GEARS_CARRY": "Bluebells",
-   "#settleGears": "Lantern willow",
-   "#mendGears": "Daisies"
-  },
-  "mixed/workshop/index.ts": {
-   "#weighWorkshop": "Fir",
-   "#WorkshopCarrier": "Standing stone"
-  },
-  "moor/archive/catalog.ts": {
-   "#CatalogSettler": "Mossy boulder",
-   "#CatalogMend": "Autumn maple",
-   "#CATALOG_TURN": "Stone family",
-   "#keepCatalog": "Lantern willow"
-  },
-  "moor/archive/index.ts": {
-   "#mendArchive": "Fir",
-   "#ArchiveTurner": "Bench stone"
-  },
-  "moor/henge/index.ts": {
-   "#sortHenge": "Cherry",
-   "#HengeTracer": "Box mound"
-  },
-  "moor/henge/stones.ts": {
-   "#turnStones": "Autumn maple",
-   "#StonesKeeper": "Blueberry",
-   "#StonesSort": "Lantern willow",
-   "#STONES_TRACE": "Rhododendron"
-  },
-  "pondside/handoff.ts": {
-   "#keepHandoff": "Fir",
-   "#HandoffSorter": "Feather shrub",
-   "#HandoffTrace": "Cherry",
-   "#HANDOFF_FOLD": "Bluebells",
-   "#measureHandoff": "Autumn maple"
-  },
-  "pondside/queue.ts": {
-   "#traceQueue": "Lantern willow",
-   "#QueueFolder": "Daisies",
-   "#QueueMeasure": "Fir",
-   "#QUEUE_JOIN": "Standing stone",
-   "#gatherQueue": "Cherry",
-   "#weighQueue": "Mossy boulder"
-  },
-  "pondside/records/index.ts": {
-   "#joinRecords": "Autumn maple"
-  },
-  "pondside/records/ledger.ts": {
-   "#foldLedger": "Lantern willow",
-   "#LedgerMeasurer": "Stone family",
-   "#LedgerJoin": "Fir",
-   "#LEDGER_GATHER": "Bench stone"
-  },
-  "pondside/server.ts": {
-   "#measurePondside": "Cherry",
-   "#PondsideJoiner": "Box mound",
-   "#PondsideGather": "Autumn maple"
-  },
-  "ruins/collapse.ts": {
-   "#turnCollapse": "Lantern willow",
-   "#CollapseKeeper": "Blueberry",
-   "#CollapseSort": "Fir",
-   "#COLLAPSE_TRACE": "Rhododendron",
-   "#foldCollapse": "Cherry",
-   "#measureCollapse": "Feather shrub",
-   "#joinCollapse": "Autumn maple"
-  },
-  "ruins/cottage/hearth.ts": {
-   "#joinHearth": "Lantern willow",
-   "#HearthGatherer": "Bluebells",
-   "#HearthWeigh": "Fir",
-   "#HEARTH_CARRY": "Daisies"
-  },
-  "ruins/cottage/index.ts": {
-   "#CottageCarrier": "Standing stone"
-  },
-  "ruins/croft/forge.rs": {
-   "#carryForge": "Autumn maple",
-   "#ForgeSettler": "Mossy boulder",
-   "#ForgeMend": "Lantern willow",
-   "#FORGE_TURN": "Stone family",
-   "#keepForge": "Fir"
-  },
-  "ruins/croft/lib.rs": {
-   "#mendCroft": "Cherry",
-   "#CroftTurner": "Bench stone",
-   "#CroftKeep": "Autumn maple"
-  },
-  "ruins/house/main.ts": {
-   "#sortHouse": "Lantern willow",
-   "#HouseTracer": "Box mound"
-  },
-  "ruins/house/utils2.ts": {
-   "#turnUtils2": "Fir",
-   "#Utils2Keeper": "Blueberry",
-   "#Utils2Sort": "Cherry",
-   "#UTILS2_TRACE": "Rhododendron"
-  },
-  "ruins/index.ts": {
-   "#sortRuins": "Autumn maple",
-   "#RuinsTracer": "Feather shrub"
-  },
-  "ruins/keep/lib.rs": {
-   "#weighKeep": "Lantern willow",
-   "#KeepCarrier": "Bluebells",
-   "#KeepSettle": "Fir"
-  },
-  "ruins/keep/walls.rs": {
-   "#joinWalls": "Cherry",
-   "#WallsGatherer": "Daisies",
-   "#WallsWeigh": "Autumn maple",
-   "#WALLS_CARRY": "Standing stone",
-   "#settleWalls": "Lantern willow"
-  },
-  "ruins/lighthouse/index.ts": {
-   "#mendLighthouse": "Fir",
-   "#LighthouseTurner": "Mossy boulder"
-  },
-  "ruins/lighthouse/lens.ts": {
-   "#carryLens": "Cherry",
-   "#LensSettler": "Stone family",
-   "#LensMend": "Autumn maple",
-   "#LENS_TURN": "Bench stone"
-  },
-  "ruins/mill/index.ts": {
-   "#measureMill": "Lantern willow",
-   "#MillJoiner": "Box mound"
-  },
-  "ruins/mill/race.ts": {
-   "#RaceFolder": "Blueberry",
-   "#RaceMeasure": "Cherry",
-   "#RACE_JOIN": "Rhododendron",
-   "#gatherRace": "Autumn maple"
-  },
-  "ruins/oak/index.ts": {
-   "#sortOak": "Lantern willow",
-   "#OakTracer": "Feather shrub"
-  },
-  "ruins/oak/temp.ts": {
-   "#turnTemp": "Fir",
-   "#TempKeeper": "Bluebells",
-   "#TempSort": "Cherry",
-   "#TEMP_TRACE": "Daisies"
-  },
-  "ruins/rubble.ts": {
-   "#settleRubble": "Autumn maple",
-   "#RubbleMender": "Standing stone",
-   "#RubbleTurn": "Lantern willow",
-   "#RUBBLE_KEEP": "Mossy boulder",
-   "#sortRubble": "Fir",
-   "#traceRubble": "Stone family",
-   "#foldRubble": "Cherry"
-  },
-  "terraces/croft/lib.rs": {
-   "#sortCroft": "Autumn maple",
-   "#CroftTracer": "Bench stone",
-   "#CroftFold": "Lantern willow"
-  },
-  "terraces/croft/press.rs": {
-   "#turnPress": "Fir",
-   "#PressKeeper": "Box mound",
-   "#PressSort": "Cherry",
-   "#PRESS_TRACE": "Blueberry",
-   "#foldPress": "Autumn maple"
-  },
-  "terraces/pipeline.ts": {
-   "#sortPipeline": "Lantern willow",
-   "#PipelineTracer": "Rhododendron",
-   "#PipelineFold": "Fir",
-   "#PIPELINE_MEASURE": "Feather shrub",
-   "#joinPipeline": "Cherry"
-  },
-  "terraces/ring/index.ts": {
-   "#measureRing": "Autumn maple",
-   "#RingJoiner": "Bluebells"
-  },
-  "terraces/ring/schema.ts": {
-   "#traceSchema": "Lantern willow",
-   "#SchemaFolder": "Daisies",
-   "#SchemaMeasure": "Fir",
-   "#SCHEMA_JOIN": "Standing stone",
-   "#gatherSchema": "Cherry"
-  },
-  "terraces/steps.ts": {
-   "#weighSteps": "Autumn maple",
-   "#StepsCarrier": "Mossy boulder",
-   "#StepsSettle": "Lantern willow",
-   "#STEPS_MEND": "Stone family",
-   "#turnSteps": "Fir",
-   "#keepSteps": "Bench stone"
-  }
- },
  "quality": {
   "README.md": 1,
   "CHANGELOG.md": 1,

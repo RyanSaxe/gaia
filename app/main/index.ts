@@ -27,7 +27,7 @@ void app.whenReady().then(() => {
   // The proving ground and the showcase are laid out on the page from their own fixtures, so no folder is opened for them.
   let carried = named === "proving" || named === "showcase" || named === "showcase-fixed" ? named : null;
   let root: string | null = named === undefined || carried !== null ? null : resolve(named);
-  // The engine keeps each project's store (Jev's answers, a stand-in choice) and the app's own settings (the spend limit) with the app's own data.
+  // The engine keeps each project's store (Jev's answers) and the app's own settings (the spend limit) with the app's own data.
   process.env.GAIA_DATA_DIR ??= app.getPath("userData");
   const service = utilityProcess.fork(join(here, "world-service.js"), [], { serviceName: "Gaia world service", stdio: "inherit" });
   const toService = (message: FromMain, ports?: MessagePortMain[]): void => service.postMessage(message, ports);

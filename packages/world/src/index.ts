@@ -1,12 +1,8 @@
 export * from "./planner.ts";
 export * from "./compose.ts";
-export * from "./answers.ts";
 export * from "./vitality.ts";
-export * from "./context.ts";
-export type * from "./changes.ts";
 export * from "./facts.ts";
 export * from "./code-world.ts";
 export * from "./definitions.ts";
 export * from "./journal.ts";
 export * from "./judging.ts";
-export * from "./outline.ts";

@@ -1,7 +1,7 @@
 // The world service: a utility process between the renderer and the engine.
 // It pings the engine whenever one starts and tells the renderer whether it
 // is connected, and it opens the world of the folder main names for each
-// page: the engine reads the code, Jev (or the stand-in) judges it, and the
+// page: the engine reads the code, Jev judges it, and the
 // laid-out world goes to the renderer over its MessagePort. When main names
 // no folder, the page offers the start (the worlds opened before, a folder,
 // or an address on GitHub) and the service opens whatever is chosen there,
@@ -112,8 +112,6 @@ async function open(port: MessagePortMain, folder: string, github?: string): Pro
     const document = await openWorld({
       engine,
       root: folder,
-      // For development only: GAIA_JEV=stand-in opens a world the stand-in judges on purpose, sending nothing to Jev.
-      standIn: process.env.GAIA_JEV === "stand-in",
       progress: (opening) => send(port, { type: "world.progress", opening }),
       consent: (plan) =>
         new Promise<boolean>((resolve, reject) => {

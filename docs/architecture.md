@@ -22,7 +22,7 @@ the document that did not change renders exactly as it did before.
 | --- | --- | --- |
 | Main | TypeScript (Electron) | The window and the app's lifecycle. It starts the engine and the world service, restarts the engine if it exits, and names the folder whose world each page opens: `GAIA_PROJECT`, one chosen with File > Open Folder, or none, and then the page offers the start (File > Choose a World returns to it). |
 | Engine | Rust (`gaia-engine`) | Files, parsing, git, the code graph, the app-data store and the Jev client with the key from the macOS Keychain. |
-| World service | TypeScript (Electron utility process) | Kinds and primitives, the question planner, answer rules, vitality and the world document. It opens a codebase's world (`openWorld` in `app/world-service/open-world.ts`): the engine's `project.graph`, the facts `factsOf` derives from it, Jev's judgments, kept in the store, and `layoutWorld`, and sends the renderer the result (`WorldDocument`) over its MessagePort. |
+| World service | TypeScript (Electron utility process) | Kinds and primitives, the question planner, vitality and the world document. It opens a codebase's world (`openWorld` in `app/world-service/open-world.ts`): the engine's `project.graph`, the facts `factsOf` derives from it, Jev's judgments, kept in the store, and `layoutWorld`, and sends the renderer the result (`WorldDocument`) over its MessagePort. |
 | Renderer | TypeScript | The UI, the Three.js scene, the realizer and the clock. The page shows only the world, full screen at eye height (`app/renderer/immersive/`): the terrain lab's world (`app/renderer/terrain/lab.ts`), plus three ways of telling a person where they are (a minimap of the land around them with the area's name, the field map that unfolds out of it, and markers in the world), read through `placeAt` and drawn on one field sheet (`docs/design-system.md`, "The field sheet"); touching the world only moves the person, and stopping at a thing that stands for code raises its page at the lower left; a tap on the open field map sends the person to that place, landing where `WorldHandle.landing` says: along the trails, or straight across the land where they wander (`WorldHandle.travel`, with `trailWay`, `acrossWay`, `planTrip` and `travelStep` in `@gaia/terrain`), each mark of the way ahead asked of the standers before the person comes near it, or where neither goes, under a fold of paper that hides the move. The terrain lab bakes its world on worker threads (`app/renderer/terrain/bake-worker.ts`): a few workers compose bands of lattice rows with `composeRows`, and one finishes the bake with `finishTerrain`, which scales the relief into the budget by a fit found on a survey of every 4th sample and checked once at every sample, and stands the world's things on it. On the page the land is a clipmap (`createPageLand` in `app/renderer/terrain/land.ts`): seven levels of 512 by 512 samples centered near the person, level k every 2^k-th sample on the world's own grid, where ground ring k sets its vertices, so the rings read exactly the samples they did. The page never holds the whole world's land: its land workers bake each level's window in 64-sample chunks from the world's plan alone (`app/renderer/terrain/land-chunks.ts`), taking jobs from one queue on the page soonest wanted first: the person's land, then a painting's set-aside land, and a level moves once the person has walked a chunk from its middle and every chunk of its new window has come, so a window never shows half old and half new. Every texture that holds a value per lattice sample takes its data from the levels: the ground's height, water and distances, each sample's covers, and which ways each sample lies on (`createGroundTexture` in `ground.ts`), so the land's memory on the page and the GPU is the same at any world size. A coarse level names a way as far out as a reader of its cells asks (`placeReach`), so a far trail stays as worn as a near one, and a reader between samples takes the finest level that holds the point and blends into the next near its window's edge (`clipLevel`). The clearings' mask, which only the grass reads, is one window 256 m across around the grass, drawn again from the outlines and capsules as the grass moves on (`app/renderer/terrain/clearings.ts`). Level 0, the land within a few hundred meters to the meter, is the page's `Terrain`; a read past it falls to the finest level that holds the point (`Lattice.beyond`), and a jump waits under its fold of paper until the land around its landing has come. The land a tile at a time: `planTerrain` makes the world's whole-world decisions once, the fit from the survey and the water from the ground along its beds alone, each bed solved on a window of just the ground it reads with the beds before it cut in again, so the plan never holds a lattice the size of the world (the whole world's bake solves its water on the same windows, so the two agree to the bit); `bakeTile` bakes any tile from the plan with a margin for its shore, or every stride-th sample of it for a coarser level; and `standTile` levels it under the buildings' pads, the landmarks' footings and the trails' treads as standing the world recorded them (`LandEdits`), byte for byte as the stood world holds it (`app/renderer/terrain/stand.test.ts`). The finishing worker stands the world's things with `standWorld` (`app/renderer/terrain/stand.ts`): each building's site and pad, the landmarks' sites, the network of trails leveled into the ground, the trees, and the stones, bushes and flowers that stand for code, while the others work out whose ground each part of the land is (`ownershipRows`, see Vitality), so drawing never waits on a bake. It hands the page the world's plan and what standing did to the land (`LandSource`); the whole world's land stays on the worker. The components every world opens with (the trees, landmarks and bushes) and a codebase's buildings are realized on worker threads too (`app/renderer/terrain/made.ts`), made ahead while the wait draws: the page takes each build as it is made, and realizes in place any build it asks for that was not made ahead, the same either way since the realizer is pure. Each build is held only until its meshes are made and its far form baked; one asked for after that, such as by the swap test, is realized again. A plant's meshes keep no copy of their buffers on the page once the GPU holds them (`letGoOnUpload`), but for the positions, normals and index of what a ray picks: a building or a landmark. |
 
 The world service talks to the engine in newline-delimited JSON-RPC 2.0 over
@@ -60,10 +60,10 @@ in the second's history, as after a rebase.
 
 | Package | Contents | Imports |
 | --- | --- | --- |
-| `@gaia/schema` | The type builder, ports and vitality channels, primitive and kind contracts, code facts, the world document, Jev's wire format, the engine protocol, content identity | Nothing |
+| `@gaia/schema` | The type builder, ports and vitality channels, primitive and kind contracts, code facts, blueprints and the world's places, Jev's wire format, the engine protocol, content identity | Nothing |
 | `@gaia/primitives` | Primitive declarations and geometry, palettes, the manifest `PRIMITIVES` | schema |
 | `@gaia/kinds` | The flora, structure, rock, wildflowers, landmark, link, biome and world kinds | schema |
-| `@gaia/world` | The question planner, answer rules, context gathering, file and entity vitality, type-space tools, `WorldChange`, and the world laid out from code: the code graph, the requests Jev answers about it, the development-only stand-in judge, the division of the land and the layout | schema, terrain (the land's division rule) |
+| `@gaia/world` | The question planner, file and entity vitality, and the world laid out from code: the code graph, the requests Jev answers about it, the division of the land and the layout | schema, terrain (the land's division rule) |
 | `@gaia/realize` | Blueprint to parts, world and region looks at an hour, the light between a day's keys, the sky and air references, the trees', bushes', stones' and flowers' presets that Jev's forms name, channel math, detail by distance | schema, primitives |
 | `@gaia/render` | Three.js materials, light and shadow, and instanced copies of a component at each level of detail | schema, realize, three |
 | `@gaia/terrain` | Relief composition, the baked heightfield, water, the endless wild land past the rim, what grows on it (its covers and thickets) and the ground's height anywhere, walking, wading and swimming, a walker's gait (easing, grade, the eyes' ride over the ground and footbridge decks), the solids that stop a walk and the way around them, sight lines, where plants and landmarks stand, the routes of trails, how land divides into cells (`siteAt`), where a point is (its area and the file underfoot, `placeAt`, and every area's and patch's outline, `outlinesOf`), and whose ground it is and how alive (`groundOwners`, `ownershipOf`, `groundLook`) | schema, primitives, realize |
@@ -288,14 +288,7 @@ failed request (`UnderstandProgress.failures`). Nothing guesses an answer in
 a request's place: a world is always Jev's. Jev is asked only when the engine
 has a key and runs with `GAIA_JEV=live`; without one, a world that needs an
 answer fails and says how to turn Jev on, and one whose every answer is kept
-opens from the store. For development only, `GAIA_JEV=stand-in` (and the
-standalone lab's `?judge=stand-in`) opens a world that `standInJev` judges
-on purpose, a deterministic stand-in that scores each option by the fact
-tags its look suits, with a tie-break seeded by the question; nothing is
-sent to Jev then, and the understanding pass is not run. It is never on by
-default and never offered to a person. The document records who judged each
-thing (`judgedThing`, such as `file:src/main.ts`), and a thing's card says
-so. `engineJev` in the world service is the live client. A run's cost is judging's (`jev.estimate`) and
+opens from the store. `engineJev` in the world service is the live client. A run's cost is judging's (`jev.estimate`) and
 the understanding pass's (`understanding.plan`, below) together. Planning
 the pass takes seconds and only says what it will cost, so it is planned
 only when there is a limit to weigh it against, or when Jev cannot be asked
@@ -425,8 +418,7 @@ facts `factsOf` derives from it, judged
 by Jev's answers kept for that snapshot in `fixtures/gaia-jev.json` (written
 by `pnpm jev-world`, which judges and composes it, keyed by request hash like
 the app's store) alone: a request they no longer answer fails the page,
-naming it, until `pnpm jev-world` keeps its answer. For development only,
-`?judge=stand-in` shows the stand-in's world. The page lays the snapshot out
+naming it, until `pnpm jev-world` keeps its answer. The page lays the snapshot out
 on a thread of its own (`app/renderer/terrain/layout-worker.ts`) while the
 wait draws. The app never falls back on it: a folder the world service cannot
 open says why on the wait. Beside those fixtures, `fixtures/gaia-graph.json` holds the
@@ -761,165 +753,39 @@ request on its own, never seeing the others. Gaia therefore:
   agree with the structure; kinds with `stages` answer in more;
 - shuffles each choice's options by the target's path, because Jev leans
   toward the first option;
-- grows the context only where Jev is unsure, adding the readings Jev asks for
-  (`gather` in `packages/world/src/context.ts`); a question about readings
-  names the decision it would help, since Jev cannot see the other questions;
 - stores every accepted answer, keyed by the hash of the whole request
   (model, facts and questions), and asks again only when the request
-  changes;
-- will keep a stored answer unless a fresh one wins by a margin
-  (`reconcile`); the world from code does not apply that margin yet, so a
-  changed request takes Jev's new answer.
+  changes.
 
-### What a request carries: designs
+### What a request carries
 
-How the world's requests are built is a `Design` (`DESIGNS` in
-`packages/world/src/code-world.ts`), chosen per call of `planWorldRequests`
-and `judgeWorld`, so designs can be compared on real answers before one
-becomes the default. A design fixes four things:
+There is one way of asking, from the code's structure
+(`planWorldRequests` and `planStanding` in
+`packages/world/src/code-world.ts`):
 
-| Design | State | Questions | Character | Escalation |
-| --- | --- | --- | --- | --- |
-| `first` | Summary facts | Round 12's wording | No | No |
-| `revised` | Summary facts, the repository in words | Round 13's wording | No | No |
-| `outline` | Each thing's outline | Round 13's | Yes | No |
-| `escalate` | Each thing's outline | Round 13's | Yes | Yes |
-| `shared` | Summary facts, one state per area | Round 13's | No | No |
-| `shared-outline` | Outlines, one state per area | Round 13's | No | No |
-| `judged` (the app's default) | Summary facts in words, areas compared | Round 15's | No | No |
+- **State.** Summary facts with every count and size in words
+  (`fileWords`, `areaWords`, `entityWords`): a file says what it declares,
+  its size and how many files it imports and is imported by; an area
+  compares its size and its imports per file with the repository's other
+  areas (`comparedWithOtherAreas`), because Jev answers each area's request
+  alone and cannot see that "much of the code leans on" one area more than
+  another. Sizes are words and line numbers are left out, because a
+  request's key is the hash of what it sends: a one-line edit asks about
+  0.02 requests again.
+- **Questions.** Each area is asked whether its land holds water, each
+  option a reason drawn from how its code imports; each entity, which of
+  its dependencies a person would walk a trail along (`dependsOn` says how
+  many of its files import each). What every entity, file and definition
+  stands as is asked on its own after the understanding pass
+  (`planStanding`: `form` for a file or an entity, `form#<qualified name>`
+  for a definition, `LAYOUT.formsPerRequest` to a request), among the forms
+  its rank by importance is offered, so what each stands as is Jev's call.
 
-- **State.** Summary facts are counts and a few docs. `judged` sends the
-  same facts with every count and size in words (`fileWords`, `areaWords`,
-  `entityWords`), so a one-line edit asks 0.02 requests again instead of
-  4.7; a file also says what it declares (functions, classes, types and
-  constants, each in words), how far tests reach it (its own entity's tests,
-  only other entities', or none) and how often it changed; an area compares
-  its size and its imports per file with the repository's other areas
-  (`comparedWithOtherAreas`), because Jev answers each area's request alone
-  and cannot see that "much of the code leans on" one area more than another. An outline
-  (`packages/world/src/outline.ts`) is the structure a tree-sitter summary
-  gives, from the engine's facts only: a file's symbols (kind, name,
-  exported or not, size in words, doc comment), the files it imports and
-  that import it, the tests that cover it and its health; an area's own
-  files and subdirectories; an entity's files, its dependencies (with how
-  many of its files import each) and its dependents. Each fits a token
-  budget (`OUTLINE.tokens`: 1,200 for a file, 2,000 for an area, 1,600 for
-  an entity, 2,400 for a reading), built at the richest level of detail that
-  fits. Sizes are words and line numbers are left out, because a request's
-  key is the hash of what it sends: with summary facts a one-line edit asks
-  about 5.8 requests again (the file, every area holding it, its entity and
-  the world); with outlines, 0.05.
-- **Questions.** Round 13 asks an entity's building-or-landmark on its own
-  and each look apart, because one choice over five buildings and five
-  landmarks split a preference for buildings five ways; tells the land
-  question that water is asked separately; and gives the trail question the
-  fact it names (how many files import the other entity). Round 14 read
-  Jev's real answers and gave every option a reason in code, because Jev
-  falls back on the option that fits everything when the others describe
-  only scenery: each land names the code it suits (twelve of seventeen
-  areas had been the home lawn; now six lands, the root alone on the lawn),
-  each trail look how many files import the other entity (37 of 39 had been
-  worn footpaths), and building-or-landmark how many entities depend on it
-  (`dependedOnBy` in words; twelve of fourteen had been buildings, now the
-  five entities most depended on and the root are landmarks), and each
-  building and landmark the kind of entity it suits (half the buildings had
-  been watermills; now the engine is a stone croft, the schema a stone
-  ring, the root a great willow). Under the `judged` design, what every
-  entity, file and definition stands as is asked on its own after the
-  understanding pass (`planStanding`: `form` for a file or an entity,
-  `form#<qualified name>` for a definition, `LAYOUT.formsPerRequest` to a
-  request), among the forms its rank by importance is offered, so what each
-  stands as is Jev's call; the entity's building-or-landmark question is
-  gone.
-- **Character.** A request carries what was judged above it: an area the
-  world's art direction, a file and an entity their land's landform and
-  water. `judgeWorld` then asks in three waves (the world, its areas, then
-  files and entities). An upstream answer that changes makes every request
-  below it new, so stickiness upstream protects everything downstream.
-- **Sharing.** A design with `share: "area"` asks one request per area
-  instead of one per file: the area's request carries every question about
-  the files on its land, each renamed `form:function@<path>` and told which file of
-  the state's `files` it is about, over one state holding the area's facts
-  and each file's (`SHARE.tokens`, 12,000, splits a large area into
-  several). `WorldRequest.carries` names the things a shared request judges,
-  `unshare` hands each its own answers, and `thingsOf` lists them for the
-  store's who-judged-what. Jev answers each question of a request on its
-  own: asked alone, with 13 others or in reverse order, a question's
-  probabilities moved no more than asking it twice (0.07 at most).
-- **Escalation.** Each request also asks one `noul` per reading
-  (`more:imports`, `more:importers`, `more:tests`, `more:neighbours`,
-  `more:symbols` for a file; `more:files` and `more:neighbours` for an area;
-  `more:dependencies` and `more:dependents` for an entity), each naming the
-  decision it would help. A request with an answer below the certainty
-  threshold (0.5) is asked again (`planFollowUp`) with the readings Jev
-  chose, or the first one when it chose none, asking only the unsure
-  questions with their options in the same order. Both requests are keyed
-  and kept like any other.
+Asked alone, with 13 others or in reverse order, a question's
+probabilities moved no more than asking it twice (0.07 at most), and
+reordering every option moved 2 to 6% of judgments, no more than asking
+twice: with options shuffled per thing, Jev shows no lean toward the first.
 
-Source is not sent. A file's request in the `escalate` design also asks
-`more:source`, whether reading some of its functions' and classes' code
-would help, and records the answer without reading anything. The
-source-reading step is an interface still to be built, once the reviewer
-approves sending source: Gaia keeps each symbol's span out of the state
-(`spansOf`); a third request asks one `noul` per outlined symbol ("would
-reading this one change your answer?"); and a `SourceReader` in the engine
-returns only the chosen spans, each capped in lines, for one more request
-that asks the still-unsure questions again.
-
-On 2026-10-08 Jev answered `revised` and `judged` twice and once reordered
-over a fresh snapshot (292 files; $0.12 for 1,932 requests). `judged` cost
-$0.024 a world against $0.016. Per symbol, forms used all ten options
-instead of eight (spread 0.63 to 0.71 of the most possible), with median
-certainty 0.41 to 0.50 and half the noise (10% to 6% of answers changed when
-asked again); vibes kept their spread at median certainty 0.83 to 0.91. With
-areas compared, lands spread 0.65 to 0.77 and water 0.45 to 0.62, but
-character collapsed toward the deep wood (0.53 to 0.39). Jev judged 147 of
-176 source files to need tests, and the 29 that do not are types, kinds,
-styles, markup and barrel files.
-
-`pnpm compare-jev` (`tools/compare-jev-designs.ts`) judges a codebase under
-each design and reports requests, questions, the tokens OpenRouter billed,
-cost and latency; how often each design's judgments differ from the first
-design's, by question; the same for one design asked twice (Jev's own noise)
-and with every option reordered (its order bias); which readings second
-requests chose; and the requests and tokens a one-line edit asks again. `--judge stand-in` runs in process, `--judge local` runs the real
-engine against the local OpenRouter stand-in, and `--judge jev` asks Jev
-itself, only with `GAIA_JEV=live`, the Keychain's key and `--spend-up-to`
-covering the engine's estimate. On Gaia's own repository (the snapshot of
-292 files) the designs plan:
-
-| Design | Requests | Questions | Tokens (first requests) |
-| --- | --- | --- | --- |
-| `first` | 322 | 697 | 448,014 |
-| `revised` | 322 | 740 | 505,609 |
-| `outline` | 322 | 740 | 553,477 |
-| `escalate` | 322, plus a second for each unsure one | 1,920 | 772,057 |
-| `shared` | 70 | 740 | 580,994 |
-| `shared-outline` | 72 | 740 | 641,476 |
-| `judged` | 322 | 1,332 | 846,618 |
-
-On 2026-10-08 Jev answered every design twice and once reordered over the
-earlier snapshot of 235 files
-(`compare-jev --judge jev`, $0.31 for 4,018 requests; the round-13 wording
-of lands, trails and building-or-landmark). Billed tokens run about 78% of
-the estimate.
-
-| Design | Requests sent | Billed tokens | Cost | Median ms | Judgments that differ from `revised` | Asked twice | A one-line edit asks again |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| `first` | 267 | 290,947 | $0.012 | 269 | 26% | 4.5% | 5.8 requests, 8,865 tokens |
-| `revised` | 267 | 302,770 | $0.013 | 245 | the baseline | 5.8% | 4.8 requests, 10,492 tokens |
-| `outline` | 267 | 366,863 | $0.015 | 470 | 28% | 4.7% | 0.05 requests, 121 tokens |
-| `escalate` | 415 | 899,217 | $0.038 | 286 | 28% (14% from `outline`) | 6.5% | 0.05 requests, 138 tokens |
-| `shared` | 59 | 277,844 | $0.012 | 379 | 23% | 5.0% | 11.2 requests, 106,721 tokens |
-| `shared-outline` | 63 | 335,020 | $0.014 | 335 | 32% | 4.5% | 0.08 requests, 573 tokens |
-
-Reordering every option moved 2 to 6% of file judgments, no more than
-asking twice: with options shuffled per thing, Jev shows no lean toward the
-first. Sharing an area's state saves four requests in five and 8% of
-tokens but changes a quarter of the judgments, mostly for the worse: each
-question reads the whole state, so a file's neighbours sway it (substantial
-files of logic turn to open meadow, hubs lose their willows). Sharing pays
-only for questions about one thing.
 The engine is Jev's only client (`engine/src/jev/client.rs`). It posts each request
 to OpenRouter's Decisions API with curl, the key read from the macOS Keychain
 (service `gaia-openrouter`) and handed to curl on stdin, never on a command
@@ -936,8 +802,7 @@ and the Keychain is never read, so the key can only go to OpenRouter.
 `jev.estimate` returns what a batch would send and cost without reading the
 key or touching the network: tokens are estimated at 1.8 bytes each, from
 OpenRouter's published example, and priced at Jev 1.13's $0.042 per million
-input tokens (output is free); `tokensOf` in `@gaia/world` counts the same
-way. `pnpm print-world-requests` prints every request judging Gaia's own
+input tokens (output is free). `pnpm print-world-requests` prints every request judging Gaia's own
 world would make, with that estimate.
 
 ## Vitality
@@ -1143,6 +1008,3 @@ a `DaySpec`: the light at each key hour, with the world's moon and stars.
 - Reopening a world asks Jev only about requests it has not answered: the
   world is laid out again from the code and the kept answers. The world
   document itself is not stored yet.
-- The world service will emit a `WorldChange` for every document patch, so
-  notes about changes can be added later as one more listener. Nothing emits
-  it yet.
