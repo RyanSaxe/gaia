@@ -21,7 +21,7 @@ import type { HeightField, Landform, PondBed, StreamBed, ValleyCourse, ValleyNet
 import { bedBend, fbm, troughOffset } from "@gaia/primitives";
 import { RELIEF_BUDGET } from "./budget.ts";
 import { withinLand } from "./edge.ts";
-import { BANK } from "./water.ts";
+import { BANK, HEAD } from "./water.ts";
 import type { WorldSpec } from "./world.ts";
 
 export const RIVERS = {
@@ -98,6 +98,12 @@ export const RIVERS = {
 
 const ROLL_SEED = 4231;
 const WALL_SEED = 5179;
+/**
+ * How far round its spring a valley's floor lies level, meters: as far as the spring's pool reaches (`HEAD`, centered
+ * 0.6 of its radius upstream of the spring, its edge wandering out to 1 + `wander` of it), so the pool is cut into
+ * level ground rather than into the hollow's rising floor, where its rim would stand as a step.
+ */
+const SPRING_ROOM = HEAD.radius * (0.6 + 1 + HEAD.wander);
 
 const smoothstep = (t: number): number => {
   const c = Math.max(0, Math.min(1, t));
@@ -292,9 +298,9 @@ function averaged(values: readonly number[]): number[] {
  * Where each wall of a valley along `course` stands, at each point: on its left, then its right, how far out its flat
  * floor ends, how far its shoulder lies and how much of a terrace it keeps. Each wall narrows and widens along the
  * river on its own; around a bend the wall outside it, which the river cut, runs shorter and steeper, and inside it
- * the floor widens and the slope eases and keeps a terrace. The floor ends at the spring, so the land rises behind it
- * as a hollow, and past the head it is never narrower than the trough's, so the stream's loops stay on it. No wall is
- * steeper than `RIVERS.steepest`.
+ * the floor widens and the slope eases and keeps a terrace. The floor ends just past the spring's pool, so the land
+ * rises behind it as a hollow, and past the head it is never narrower than the trough's, so the stream's loops stay
+ * on it. No wall is steeper than `RIVERS.steepest`.
  */
 function wallsAlong(course: readonly number[], trough: Trough, depth: number): Float32Array {
   const count = course.length / 2;
@@ -320,12 +326,14 @@ function wallsAlong(course: readonly number[], trough: Trough, depth: number): F
       // much steeper as they are shorter: one that would rise steeper than `RIVERS.steepest` runs longer, easing toward
       // that grade and never reaching it.
       const shortest = ((1.5 * depth) / RIVERS.steepest) * (1 + terrace * (1 / (1 - RIVERS.bench) - 1));
-      let edge = floor * (1 + RIVERS.bendFloor * Math.max(0, bend)) * head;
+      // Never narrower than the trough's floor past the head, nor than the spring's pool at it.
+      const narrowest = Math.max(floor * head, SPRING_ROOM * (1 - head));
+      let edge = Math.max(narrowest, floor * (1 + RIVERS.bendFloor * Math.max(0, bend)) * head);
       let shoulder = edge + wall * (1 + (shortest / wall) ** 8) ** (1 / 8);
       // Inside a bend the slope reaches no farther than the bend's radius allows, so it never reaches past the bend's
       // middle, unless the trough's own wall already does: its floor gives way first, never narrower than the trough's.
       const room = Math.max(bend > 0 ? RIVERS.insideRoom / (side * curvature) : Infinity, floor + run);
-      edge = Math.max(floor * head, Math.min(edge, room - shortest));
+      edge = Math.max(narrowest, Math.min(edge, room - shortest));
       shoulder = Math.max(Math.min(shoulder, room), edge + shortest);
       walls[k * 6 + o] = edge;
       walls[k * 6 + o + 1] = shoulder;
