@@ -442,7 +442,7 @@ function thatchSlab(roof: PartBuilder, plan: BuildingPlan, f: RoofFrame, p: Reso
           pivot: hingeOf(f, a),
           tint: 0.025 * nz,
           // The straw goes before the battens under it.
-          rot: roofRot(f, ruin, a, pt.b, reach) * (pt.top === true ? 1 : 0.6),
+          rot: roofRot(f, ruin, a, pt.b, reach) * (pt.top === true ? 1 : 0.85),
           grain: [(a - a0) / BUNDLE, (reach - Math.abs(pt.b)) / (reach / n), GRAIN.straw],
           ...fall,
         },
@@ -527,7 +527,7 @@ function tileSlab(roof: PartBuilder, plan: BuildingPlan, f: RoofFrame, p: Resolv
           pivot: hingeOf(f, a),
           tint: 0.03 * cell,
           // The tiles go before the boards under them.
-          rot: roofRot(f, ruin, a, pt.b, reach) * (pt.top === true ? 1 : 0.6),
+          rot: roofRot(f, ruin, a, pt.b, reach) * (pt.top === true ? 1 : 0.85),
           grain: [(a - a0) / tileW, (reach - Math.abs(pt.b)) / course, GRAIN.tiles],
           ...fall,
         },
