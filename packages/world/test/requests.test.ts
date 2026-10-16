@@ -70,7 +70,6 @@ const LOOKS: Looks = {
   landmark: set("Tower", "Oak"),
   form: set("Stone", "Bush"),
   water: set("Dry", "Brook"),
-  character: set("Meadow land", "Wood"),
 };
 
 /** A huge file: hundreds of symbols with long docs and hundreds of imports. */

@@ -212,9 +212,7 @@ journal.
 Jev judges every choice a reasonable person could make differently: whether
 each region's land holds water and why (a brook where the code flows along chains of its own imports,
 a still pond where much of the code leans on it, none where it stands on its
-own: the option's words are the reason, stored with the choice), what that
-land's ground is like (its character: its undergrowth, how its open ground
-lies and how large its trees grow, again with its reason), what each
+own: the option's words are the reason, stored with the choice), what each
 entity, file and definition stands as, and how much it would walk each
 dependency. What a thing stands as is asked once the understanding pass has
 judged how much each matters (`planStanding`): each thing's rank by
@@ -461,8 +459,7 @@ meet another's, it takes the nearest such ground past the lot (`findSite`,
 A landmark keeps off every building's walls and what stands beside them, and
 where its lot's middle is taken it stands on the lot widened 6 m at a time
 (`findLandmarkSite`). A thing that stands as a tree is one of the
-woods' trees, sized by its importance and its area's character (`stature` in
-`CHARACTERS`), with its own vitality, and keeps its crown's width from
+woods' trees, sized by its importance, with its own vitality, and keeps its crown's width from
 every other so each tree reads as one thing; any other stands as an
 understory placement: a stone, a bush or a drift of flowers. Every one
 stands: where its whole patch lies in the room trees keep round a house, a

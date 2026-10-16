@@ -2,9 +2,8 @@
 // its buildings, landmarks and trails part by part (`COMPOSING`), and
 // chooses among the looks here for what is still a choice: what each entity,
 // file and definition stands as (`FORMS`, offered by importance through
-// `SIZES`), whether a land holds water, and what an area's ground is like. Each
-// option's words are what Jev reads, and the facts it suits only the
-// stand-in judge reads.
+// `SIZES`) and whether a land holds water. Each option's words are what Jev
+// reads, and the facts it suits only the stand-in judge reads.
 
 import { biome, landmark, link, structure, world } from "@gaia/kinds";
 import { PRIMITIVES } from "@gaia/primitives";
@@ -95,35 +94,6 @@ export const WATERS: Readonly<Record<string, Look>> = {
   "A still pond": look("A still pond gathers: much of the code leans on this area, and what it holds settles here.", "crossroads", "schema", "data"),
 };
 
-/** An area's ground, and what that means on it: how large the trees its definitions stand as grow (`stature`). */
-export interface Character {
-  readonly look: Look;
-  readonly stature: number;
-}
-
-export const CHARACTERS: Readonly<Record<string, Character>> = {
-  "Deep wood": {
-    look: look("A deep wood's floor: thick shrubs in the shade, and its trees grow tall: a large body of code dense with its own logic.", "large", "flow", "geometry", "building", "landmark", "engine", "rust"),
-    stature: 1.15,
-  },
-  "Groves and clearings": {
-    look: look("Clearings with an even scatter of stones, shrubs and flowers: code whose files each keep to themselves.", "medium", "renderer", "render", "immersive", "app", "terrain"),
-    stature: 1,
-  },
-  "Old meadow": {
-    look: look("An old meadow thick with flowers, where trees grow large and broad: code that describes or configures, or is small and settled.", "docs", "config", "small", "still", "root", "repository", "data", "markdown"),
-    stature: 1.3,
-  },
-  "Rocky heath": {
-    look: look("A dry, rocky heath of stones and low scrub, where trees stay small and wind-bent: hard-working code that checks or runs other code, spare and plain.", "test", "script", "tools", "realize", "dry"),
-    stature: 0.85,
-  },
-  "Wet hollow": {
-    look: look("A wet hollow of reeds and marsh flowers on soft ground: ground much of the code leans on, where what it holds settles.", "crossroads", "schema", "world", "service"),
-    stature: 1,
-  },
-};
-
 /** What Jev composes the world from, part by part: the sky, each land, building, landmark and trail's kind, and every primitive that could fill a part. */
 export const COMPOSING: Composing = { building: structure, landmark, world, biome, link, lib: new Library(PRIMITIVES) };
 
@@ -133,5 +103,4 @@ export const LOOKS: Looks = {
   landmark: LANDMARKS,
   form: { ...Object.fromEntries(Object.entries(FORMS).map(([k, f]) => [k, f.look])), ...COMPOSED_FORMS },
   water: WATERS,
-  character: Object.fromEntries(Object.entries(CHARACTERS).map(([k, c]) => [k, c.look])),
 };

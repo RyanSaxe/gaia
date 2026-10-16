@@ -1605,16 +1605,7 @@ patch's heart), sized by its importance, keeping its crown's width from
 everything else that stands for code, so each tree reads as one thing, and
 a tap on it opens that thing's page. Where Jev picks trees for many of a file's definitions,
 its patch grows a copse; a file whose definitions are small routines is low
-bushes and stones. Each area's character, which Jev chooses with its reason,
-decides how large its trees grow:
-
-| Character | Its trees |
-| --- | --- |
-| Deep wood | A little taller |
-| Groves and clearings | Their usual size |
-| Old meadow | A third larger |
-| Rocky heath | Small |
-| Wet hollow | Their usual size |
+bushes and stones.
 
 ## Understory
 

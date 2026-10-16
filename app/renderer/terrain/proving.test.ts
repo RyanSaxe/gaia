@@ -6,7 +6,7 @@ import { FLORA_PRESETS, realize } from "@gaia/realize";
 import { type BuildingSite, type Extent, TERRAIN, type Terrain, bakeTerrain, extentOf, groundLook, heightAt, siteToWorld, turningExtent, junctionVitality, ownershipOf, placeAt, vitalityAt, vitalityOver, waterDepthAt, wayVitalityAt } from "@gaia/terrain";
 import { type Judgments, areaVitality, groundVitality } from "@gaia/world";
 import { codeLab, provingWorld } from "./code-world.ts";
-import { CHARACTERS, COMPOSED_FORMS, FORMS, WATERS } from "./looks.ts";
+import { COMPOSED_FORMS, FORMS, WATERS } from "./looks.ts";
 import { BUILDINGS, LANDMARKS, LANDS, TRAILS } from "../../../tools/proving-looks.ts";
 import { type Stand, type StandBuilding, groundSites, landmarkBase, needsBank, ownerVitality, standWorld, understoryVitality } from "./stand.ts";
 import judgedFixture from "./fixtures/proving-judged.json";
@@ -51,7 +51,6 @@ describe("the proving ground", () => {
     const drifts = Object.values(judged.lands).flatMap((b) => (b.slots.accents === undefined ? [] : [String(b.slots.accents.params.form)]));
     expect(used(drift.params.form.options, drifts)).toEqual([]);
     expect(used(WATERS, Object.values(judged.waters))).toEqual([]);
-    expect(used(CHARACTERS, Object.values(judged.characters))).toEqual([]);
     expect(used(FORMS, Object.values(judged.forms).flatMap((f) => Object.values(f)))).toEqual([]);
     // Anything stands as anything: an entity, a file and a definition each stand as a building and as a landmark, and
     // every file stands as one thing of its own.

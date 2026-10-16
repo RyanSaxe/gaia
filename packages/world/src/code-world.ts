@@ -80,8 +80,6 @@ export interface Looks {
   readonly form: LookSet;
   /** Whether an area's land holds water, and why: each option's words are the reason recorded with the choice. */
   readonly water: LookSet;
-  /** An area's ground: its undergrowth, its open ground and how large its trees grow. */
-  readonly character: LookSet;
 }
 
 /** One Jev request about one thing. */
@@ -146,8 +144,6 @@ export interface Judgments {
   readonly quality?: Readonly<Record<string, number>>;
   /** Directory → water key, for the directories that are regions. */
   readonly waters: Readonly<Record<string, string>>;
-  /** Directory → character key, for the directories that are regions: its undergrowth, open ground and how large its trees grow. */
-  readonly characters: Readonly<Record<string, string>>;
 }
 
 export interface CodeArea extends AreaPlace {
@@ -258,8 +254,6 @@ export interface CodeRegion {
   readonly biome?: Blueprint;
   /** Whether its land holds water: a water key, whose words say why. */
   readonly water: string;
-  /** How its trees and open ground lie: a character key, whose words say why. */
-  readonly character: string;
   /** The cells its land is made of: the sites of its files' patches and its lots (`RegionSpec.sites`). */
   readonly sites: readonly LandSite[];
 }
@@ -722,12 +716,11 @@ export function planWorldRequests(facts: CodeFacts, looks: Looks, options: PlanO
       revised
         ? {
             water: choice("Does this directory's land hold water? Each option gives a reason drawn from how the directory's code imports and is imported; choose the one whose reason fits it best.", docs(looks.water), "water", path, salt),
-            character: choice("What is this area's ground like: what grows between the things standing on it, how its open ground lies and how large its trees grow? Choose the option whose reason fits this directory best.", docs(looks.character), "character", path, salt),
           }
         : {
             water: choice("Does this area's land hold water? Choose the option whose reason fits this directory best.", docs(looks.water), "water", path, salt),
           },
-      { readings: areaReadings(facts, path), decides: "whether this directory's land holds water, and what its ground is like" },
+      { readings: areaReadings(facts, path), decides: "whether this directory's land holds water" },
     );
   }
   /** What was judged about the land a thing stands on, for a design that carries character: whether it holds water. */
@@ -1100,12 +1093,9 @@ export async function judgeWorld(facts: CodeFacts, looks: Looks, jev: JevClient,
   const trails: CodeTrail[] = [];
   const forms: Record<string, Record<string, string>> = {};
   const waters: Record<string, string> = {};
-  const characters: Record<string, string> = {};
   for (const { p, a } of answered) {
-    if (p.about === "area") {
-      waters[p.target] = picked(a, "water", p.target);
-      if (p.request.questions.character !== undefined) characters[p.target] = picked(a, "character", p.target);
-    } else if (p.about === "file") {
+    if (p.about === "area") waters[p.target] = picked(a, "water", p.target);
+    else if (p.about === "file") {
       // A large file's forms are asked over several requests.
       const mine: Record<string, string> = { ...forms[p.target] };
       for (const id of Object.keys(p.request.questions)) {
@@ -1129,7 +1119,7 @@ export async function judgeWorld(facts: CodeFacts, looks: Looks, jev: JevClient,
     }
   }
   // The sky, each region's land and each trail's look are composed once the code is understood (`composeWorld`).
-  return { lands: {}, things, trails, forms, waters, characters };
+  return { lands: {}, things, trails, forms, waters };
 }
 
 /** Where a land names its native families, and the field a building or a landmark chooses its colors in, among them. */
@@ -1307,7 +1297,7 @@ const countOfWords = (words: string | undefined): number => COUNT_OF_WORDS[/^(no
 
 export function standInJev(looks: Looks): JevClient {
   const suits = new Map<string, readonly string[]>();
-  for (const [prefix, set] of [["", looks.form], ["", looks.water], ["", looks.character], ["building:", looks.building], ["landmark:", looks.landmark]] as const) {
+  for (const [prefix, set] of [["", looks.form], ["", looks.water], ["building:", looks.building], ["landmark:", looks.landmark]] as const) {
     for (const [key, look] of Object.entries(set)) suits.set(`${prefix}${key}`, [...(suits.get(`${prefix}${key}`) ?? []), ...look.suits]);
   }
   const judge: JevClient = {
@@ -1510,7 +1500,7 @@ function divisionOf(facts: CodeFacts, graph: CodeGraph | undefined, aspect: numb
 /** What a definition stands as: the form Jev chose for it, or for its kind in its file; "" when Jev chose none. */
 const formOf = (mine: Readonly<Record<string, string>> | undefined, def: StandingDef): string => mine?.[`#${def.id.slice(def.file.length + 1)}`] ?? mine?.[def.kind] ?? "";
 
-const UNJUDGED: Judgments = { lands: {}, things: {}, trails: [], forms: {}, waters: {}, characters: {} };
+const UNJUDGED: Judgments = { lands: {}, things: {}, trails: [], forms: {}, waters: {} };
 
 /**
  * Where an entity's building or landmark will stand: its lot's middle, meters, a thing's `x` and `z`. Whichever it
@@ -1696,7 +1686,6 @@ function layOut(facts: CodeFacts, judged: Judgments, graph: CodeGraph | undefine
       reach: Math.sqrt(m.ground / Math.PI),
       ...(judged.lands[path] === undefined ? {} : { biome: judged.lands[path] }),
       water: judged.waters[path] ?? "",
-      character: judged.characters[path] ?? "",
       sites: regionSites[i] as LandSite[],
     };
   });
