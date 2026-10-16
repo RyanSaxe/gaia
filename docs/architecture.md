@@ -11,7 +11,7 @@ the document that did not change renders exactly as it did before.
 | Data | Contents | Made by | Status |
 | --- | --- | --- | --- |
 | Code facts | Per-path facts the world is laid out from: language, size, definitions and imports both ways; and entities, with their size, surface and dependencies | `factsOf` in `@gaia/world`, from the code graph alone | Derived from the graph whenever a world opens |
-| Code graph | A node for every directory, file, definition and block, the edges between them, the engine's measures of each and Jev's judgments, and each directory's entity | The Rust engine, with Jev | Read for every definition's stand, importance and quality; the world moves onto it alone next |
+| Code graph | A node for every directory, file, definition and block, the edges between them, each one's lines and history and Jev's judgments, and each directory's entity | The Rust engine, with Jev | Read for every definition's stand, importance and quality; the world moves onto it alone next |
 | Vitality | A value from 0 to 1 per path and per entity | Jev's quality from the understanding pass | Recomputed live |
 | World document | Regions, blueprints, instances, links and the world's art direction, as typed JSON | The world service, from Jev answers and layout, plus the person's edits | The world's source of truth, stored per project |
 | Realized world | Meshes, terrain and material parameters | The realizer | A cache keyed by content hash |
@@ -492,17 +492,18 @@ The engine is being rebuilt to read every language the same way
 code graph (`CodeGraph` in `packages/schema/src/graph.ts`), which
 `project.graph` returns:
 - a node for every directory, file, definition and block;
-- an edge for every link between them: contains, imports, calls,
-  references, inherits, implements, names and changes-with;
-- the engine's measures of each node, and Jev's judgments of it;
+- an edge for every import, call, reference and implementation between
+  them;
+- each node's lines, each file's and directory's history from git, and
+  Jev's judgments of each node;
 - each directory's entity: the package or crate its manifest declares,
   and nothing else (`entities.rs`); and whether a definition is exported
   (`export`, or Rust's `pub`). An import that spells a workspace package's manifest name, or a
   subpath through its exports, resolves to that file by rule.
 
-Each edge says who filled it: the parser, a rule, git, or Jev with its
-probability. A node's id comes from its path and name. Its lineage stays the
-same through renames and moves, and the world is to seed geometry from it.
+Each edge says who filled it: a rule, or Jev with its probability. A
+node's id comes from its path and name. Its lineage stays the same through
+renames and moves, and the world is to seed geometry from it.
 Three store tables hold Jev's side: `calls` keeps raw responses by request
 hash, `held` the answer the graph shows for each question by lineage, and
 `lineage` the last graph's lineage map and definition fingerprints.
@@ -521,7 +522,6 @@ into the graph by its capture name:
 - `@block.<shape>` becomes one of ten kinds of block: branch, loop, match,
   try, closure, scope, concurrent, unsafe, data and markup.
 - `@reference.import` and `@reference.call` become pending references.
-- `@decide.*` marks the decisions the measures count.
 
 Any other language loads at runtime as WebAssembly, through tree-sitter's
 `wasm` feature, from the `.wasm` file its grammar's own release publishes.
@@ -533,23 +533,20 @@ those files are read as having no grammar. Lua, Elixir, Scala, Zig, Haskell
 and OCaml load this way today. With no query file of ours, such a language
 falls back: its tags query finds definitions and calls, and node kinds most
 grammars share, such as `if_statement` or a node with a `name` field ending
-in `_declaration`, give blocks, decisions and, with no tags query either,
-definitions. The fallback's measures are approximate: Scala's `&&`, for one,
-is an `infix_expression` it does not count.
+in `_declaration`, give blocks and, with no tags query either, definitions.
 
-Each function gets its cognitive complexity (SonarSource's definition), its
-cyclomatic complexity (McCabe's), its deepest nesting, its parameters and
-its debt markers. Each file and directory gets its lines and its history
-from git. A file whose path matches one of its language's conventions, such
-as Go's `*_test.go`, is tagged with it as evidence for Jev; no file name
-decides anything. A file with no grammar is still a node, with its lines,
-size, hash and history. `unparsed` counts what a grammar could not read,
-such as TypeScript 5's `export type *`, which tree-sitter-typescript 0.23
-does not know. Parses are kept by content hash while the engine runs, and
-Gaia's graph builds in under a second.
+Every node gets its lines, and each file and directory its history from git:
+its commits, those of the last 14 days, and its authors. A file whose path
+matches one of its language's conventions, such as Go's `*_test.go`, is
+tagged with it as evidence for Jev; no file name decides anything. A file
+with no grammar is still a node, with its lines, size, hash and history.
+`unparsed` counts what a grammar could not read, such as TypeScript 5's
+`export type *`, which tree-sitter-typescript 0.23 does not know. Parses are
+kept by content hash while the engine runs, and Gaia's graph builds in under
+a second.
 
-Then the rules (`engine/src/graph/resolve.rs`) turn each import, call and
-named path into an edge when exactly one target fits. Anything with several
+Then the rules (`engine/src/graph/resolve.rs`) turn each import and call
+into an edge when exactly one target fits. Anything with several
 possible targets goes pending, with every candidate, for Jev. Anything with
 none is outside the repository and gets neither:
 - An import's relative forms resolve from where they point, by the prefixes
@@ -567,15 +564,9 @@ none is outside the repository and gets neither:
   their own class's without `self`. A definition inside a function is local
   to it, and a macro call reaches only a macro. A receiver the rule cannot
   place, such as `err` in `err.Error()`, sends the call to Jev.
-- A string literal that spells out a path in the repository becomes a
-  `names` edge, so configuration and prompts link to the code that loads
-  them.
 
 On a hand check of the bench, 175 of 175 imports and 199 of 200 calls the
-rules resolved were right (`tools/bench/labels/`). From the edges the engine
-then counts each node's reach, each function's calls out, the files that
-change together in git, and near-duplicate functions, whose body
-fingerprints agree on 85% or more.
+rules resolved were right (`tools/bench/labels/`).
 
 Every directory, file and definition has a lineage, which it keeps through
 renames and moves (`engine/src/graph/lineage.rs`); a block's lineage is its
@@ -667,15 +658,14 @@ waits for the one before it:
 | files | `file-axes` | every file that is text | its folder's request |
 
 A link answer becomes an `imports` or `calls` edge filled by Jev, with its
-call and probability, before reach is counted; "outside" drops the
-reference. It is held with the candidates it chose among, and holds only
-while they stay the reference's candidates and its call's version is
-current: when a new file offers another target, or the call changes, the
-reference is asked again. A reference keeps an answer for each set of
-candidates it has had, since other links can change its candidates (a call
-whose receiver's type comes from an import Jev resolved, say); with one
-answer per reference, applying one answer could undo the other on every
-slice.
+call and probability; "outside" drops the reference. It is held with the
+candidates it chose among, and holds only while they stay the reference's
+candidates and its call's version is current: when a new file offers another
+target, or the call changes, the reference is asked again. A reference keeps
+an answer for each set of candidates it has had, since other links can
+change its candidates (a call whose receiver's type comes from an import Jev
+resolved, say); with one answer per reference, applying one answer could
+undo the other on every slice.
 
 A request stays within 30,000 tokens as `engine/src/jev/tokens.rs`
 estimates them, deterministically, so a request is laid out the same way on

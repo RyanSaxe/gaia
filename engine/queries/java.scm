@@ -8,11 +8,3 @@
 (lambda_expression) @block.closure
 (synchronized_statement) @block.concurrent
 (array_initializer) @block.data
-
-(if_statement alternative: (if_statement) @decide.elseif)
-(if_statement alternative: (block) @decide.else)
-((switch_label) @decide.case (#not-match? @decide.case "^default"))
-(catch_clause) @decide.catch
-(binary_expression operator: ["&&" "||"]) @decide.logic
-
-(string_fragment) @literal

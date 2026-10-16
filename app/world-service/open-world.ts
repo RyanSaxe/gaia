@@ -76,7 +76,7 @@ export function judgedGraph(graph: CodeGraph): CodeGraph {
             signature: n.signature,
             ...(n.doc === undefined ? {} : { doc: n.doc }),
             exported: n.exported,
-            measures: { lines: n.measures.lines, ...(n.measures.nesting === undefined ? {} : { nesting: n.measures.nesting }) },
+            measures: { lines: n.measures.lines },
             ...stand(n),
           },
         ];

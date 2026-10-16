@@ -31,8 +31,6 @@ struct Entry {
     #[serde(default)]
     functions_as_values: bool,
     #[serde(default)]
-    inline: Option<InlineEntry>,
-    #[serde(default)]
     conventions: Vec<ConventionEntry>,
 }
 
@@ -69,12 +67,6 @@ pub struct Remote {
 }
 
 #[derive(Deserialize)]
-struct InlineEntry {
-    grammar: String,
-    over: String,
-}
-
-#[derive(Deserialize)]
 struct ConventionEntry {
     tag: String,
     path: String,
@@ -96,7 +88,6 @@ pub struct Spec {
     /// A call on a value can reach a function that belongs to no class, as
     /// a JavaScript object's own functions do.
     pub functions_as_values: bool,
-    inline: Option<InlineEntry>,
     convention_tags: Vec<String>,
     conventions: GlobSet,
 }
@@ -116,22 +107,13 @@ impl Spec {
 }
 
 /// A language ready to parse: its grammar, the grammar's own tags query if
-/// it ships one, our query file if we wrote one, and the inline grammar run
-/// over some of its nodes, if any.
+/// it ships one, and our query file if we wrote one.
 pub struct Loaded {
     pub language: Language,
     /// True for a WebAssembly grammar, which parses only in a parser given a `WasmStore`.
     pub wasm: bool,
     pub tags: Option<Query>,
     pub ours: Option<Query>,
-    pub inline: Option<Inline>,
-}
-
-pub struct Inline {
-    pub language: Language,
-    pub query: Query,
-    /// The kind of node in the outer tree that the inline grammar reads.
-    pub over: String,
 }
 
 /// Every language in the table, by name.
@@ -157,7 +139,6 @@ pub fn table() -> &'static BTreeMap<String, Spec> {
                     data: e.data,
                     implicit_self: e.implicit_self,
                     functions_as_values: e.functions_as_values,
-                    inline: e.inline,
                     convention_tags: e.conventions.into_iter().map(|c| c.tag).collect(),
                     conventions: globs.build().expect("the conventions build"),
                 };
@@ -268,11 +249,6 @@ fn compiled(name: &str) -> Option<(Language, Option<String>, &'static str)> {
             tree_sitter_md::LANGUAGE.into(),
             None,
             include_str!("../../queries/markdown.scm"),
-        ),
-        "markdown-inline" => (
-            tree_sitter_md::INLINE_LANGUAGE.into(),
-            None,
-            include_str!("../../queries/markdown-inline.scm"),
         ),
         "json" => (
             tree_sitter_json::LANGUAGE.into(),
@@ -386,7 +362,6 @@ pub fn from_wasm(name: &str, grammar: &[u8], tags: Option<&str>) -> Result<Loade
         wasm: true,
         tags,
         ours: None,
-        inline: None,
     })
 }
 
@@ -398,29 +373,11 @@ fn load_compiled(name: &str) -> Result<Loaded, String> {
         None => None,
     };
     let ours = query(&language, ours, &format!("engine/queries/{name}.scm"))?;
-    let inline = match table().get(name).and_then(|s| s.inline.as_ref()) {
-        Some(i) => {
-            let (language, _, text) = compiled(&i.grammar)
-                .ok_or_else(|| format!("No inline grammar {} is compiled in.", i.grammar))?;
-            let query = query(
-                &language,
-                text,
-                &format!("engine/queries/{}.scm", i.grammar),
-            )?;
-            Some(Inline {
-                language,
-                query,
-                over: i.over.clone(),
-            })
-        }
-        None => None,
-    };
     Ok(Loaded {
         language,
         wasm: false,
         tags,
         ours: Some(ours),
-        inline,
     })
 }
 

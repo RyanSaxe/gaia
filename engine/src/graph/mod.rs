@@ -1,8 +1,7 @@
 //! `project.graph`: walks a project, parses every file its language table
-//! knows through tree-sitter, measures what the parse can count, reads
-//! history from git, and returns the code graph
-//! (`packages/schema/src/graph.ts`). Imports and calls go out pending;
-//! the rules that resolve them come next.
+//! knows through tree-sitter, counts lines, reads history from git, and
+//! returns the code graph (`packages/schema/src/graph.ts`). The rules
+//! resolve imports and calls; what they cannot goes out pending, for Jev.
 
 pub mod entities;
 pub mod git;
@@ -10,7 +9,6 @@ mod languages;
 mod lineage;
 pub mod model;
 mod parse;
-mod reach;
 mod resolve;
 pub(crate) use resolve::{leading_names, mentions};
 pub mod walk;
@@ -20,7 +18,7 @@ use model::{
     Node, PendingRef,
 };
 use parse::FileParse;
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::Path;
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -153,12 +151,10 @@ struct Touches {
 
 impl Touches {
     fn history(&self, now: i64) -> Option<History> {
-        let first = *self.times.iter().min()?;
-        let last = *self.times.iter().max()?;
-        let days = |t: i64| ((now - t).max(0) / DAY) as u32;
+        if self.times.is_empty() {
+            return None;
+        }
         Some(History {
-            first_days: days(first),
-            last_days: days(last),
             commits: self.times.len() as u32,
             recent: self
                 .times
@@ -167,16 +163,6 @@ impl Touches {
                 .count() as u32,
             authors: self.authors.len() as u32,
         })
-    }
-}
-
-fn contains_edge(from: &str, to: &str) -> Edge {
-    Edge {
-        from: from.to_string(),
-        to: to.to_string(),
-        kind: "contains",
-        by: Filled::by("parser"),
-        at: None,
     }
 }
 
@@ -223,7 +209,7 @@ pub fn project_id(root: &Path) -> String {
     }
 }
 
-/// Builds the graph with the references Jev resolved as edges, before reach is counted.
+/// Builds the graph with the references Jev resolved as edges.
 pub fn build_linked(root: &Path, links: &Links) -> Result<CodeGraph, String> {
     build_with(root, &lineage::Store, links)
 }
@@ -268,7 +254,7 @@ fn build_with(
     let mut file_lines: Vec<u32> = Vec::new();
     for (f, p) in files.iter().zip(&parsed) {
         let lines = match (p, &f.text) {
-            (Some(p), _) => p.measures.lines,
+            (Some(p), _) => p.lines,
             (None, Some(t)) => t.lines().count() as u32,
             (None, None) => 0,
         };
@@ -303,13 +289,9 @@ fn build_with(
         .collect();
 
     let mut nodes: Vec<Node> = Vec::new();
-    let mut edges: Vec<Edge> = Vec::new();
     let mut all_def_ids: Vec<Vec<String>> = vec![Vec::new(); files.len()];
     for (dir, lines) in &dir_lines {
         let id = format!("dir:{dir}");
-        if !dir.is_empty() {
-            edges.push(contains_edge(&format!("dir:{}", parent_dir(dir)), &id));
-        }
         nodes.push(Node::Dir(DirNode {
             lineage: fresh_lineage(&id),
             judged: None,
@@ -317,7 +299,6 @@ fn build_with(
             measures: Measures {
                 lines: *lines,
                 history: dir_touches.get(dir).and_then(|t| t.history(now)),
-                ..Default::default()
             },
             path: dir.clone(),
             entity: entity_at.get(dir).cloned(),
@@ -327,32 +308,14 @@ fn build_with(
     for (k, (f, p)) in files.iter().zip(&parsed).enumerate() {
         let spec = languages::of_path(&f.path);
         let file_id = format!("file:{}", f.path);
-        edges.push(contains_edge(
-            &format!("dir:{}", parent_dir(&f.path)),
-            &file_id,
-        ));
-        let mut measures = match p {
-            Some(p) => p.measures.clone(),
-            None => Measures {
-                lines: file_lines[k],
-                markers: f.text.as_ref().map(|t| {
-                    t.lines()
-                        .filter(|l| {
-                            ["TODO", "FIXME", "XXX", "HACK"]
-                                .iter()
-                                .any(|m| l.contains(m))
-                        })
-                        .count() as u32
-                }),
-                ..Default::default()
-            },
-        };
-        measures.history = file_touches.get(&f.path).and_then(|t| t.history(now));
         nodes.push(Node::File(FileNode {
             lineage: fresh_lineage(&file_id),
             judged: None,
             id: file_id.clone(),
-            measures,
+            measures: Measures {
+                lines: file_lines[k],
+                history: file_touches.get(&f.path).and_then(|t| t.history(now)),
+            },
             path: f.path.clone(),
             language: p.as_ref().and(spec).map(|s| s.name.clone()),
             bytes: f.bytes,
@@ -370,12 +333,14 @@ fn build_with(
             .collect();
         for (d, id) in p.defs.iter().zip(&def_ids) {
             let parent = d.parent.map(|i| def_ids[i].clone());
-            edges.push(contains_edge(parent.as_deref().unwrap_or(&file_id), id));
             nodes.push(Node::Def(DefNode {
                 lineage: fresh_lineage(id),
                 judged: None,
                 id: id.clone(),
-                measures: d.measures.clone(),
+                measures: Measures {
+                    lines: d.span.end - d.span.start + 1,
+                    ..Default::default()
+                },
                 file: file_id.clone(),
                 parent,
                 name: d.name.clone(),
@@ -393,7 +358,6 @@ fn build_with(
                 .def
                 .map_or(f.path.as_str(), |i| &def_ids[i]["def:".len()..]);
             let id = format!("block:{base}/{}", b.index);
-            edges.push(contains_edge(holder, &id));
             nodes.push(Node::Block(BlockNode {
                 lineage: fresh_lineage(&id),
                 judged: None,
@@ -411,7 +375,7 @@ fn build_with(
         all_def_ids[k] = def_ids;
     }
 
-    // The rules: imports, calls, references and names, by rule or pending.
+    // The rules: imports, calls and references, by rule or pending.
     let dirs: BTreeSet<String> = dir_lines.keys().cloned().collect();
     let units: Vec<resolve::Unit> = files
         .iter()
@@ -436,7 +400,7 @@ fn build_with(
         })
         .collect();
     let resolved = resolve::run(&units, &dirs, &packages);
-    edges.extend(resolved.edges);
+    let mut edges = resolved.edges;
     // References Jev resolved become edges, and ones it put outside leave the
     // pending list; one whose candidates changed since is pending again.
     let mut pending: Vec<PendingRef> = Vec::new();
@@ -466,58 +430,6 @@ fn build_with(
             None => pending.push(r),
         }
     }
-    let walked: HashSet<&str> = files.iter().map(|f| f.path.as_str()).collect();
-    let commit_files: Vec<Vec<String>> = commits.into_iter().map(|c| c.files).collect();
-    edges.extend(reach::changes_with(&commit_files, &walked));
-
-    // What the edges imply for each node.
-    let mut items: Vec<reach::Item> = Vec::new();
-    let mut bodies: Vec<reach::Body> = Vec::new();
-    for (k, (f, p)) in files.iter().zip(&parsed).enumerate() {
-        items.push(reach::Item {
-            id: format!("file:{}", f.path),
-            file: k,
-            is_file: true,
-        });
-        let Some(p) = p else { continue };
-        for (d, id) in p.defs.iter().zip(&all_def_ids[k]) {
-            items.push(reach::Item {
-                id: id.clone(),
-                file: k,
-                is_file: false,
-            });
-            if d.callable && d.shingles >= reach::MIN_SHINGLES {
-                bodies.push(reach::Body {
-                    id,
-                    file: k,
-                    start: d.span.start,
-                    end: d.span.end,
-                    fingerprint: &d.fingerprint,
-                });
-            }
-        }
-    }
-    let file_dirs: Vec<String> = files
-        .iter()
-        .map(|f| parent_dir(&f.path).to_string())
-        .collect();
-    let reaches = reach::reach(&items, &file_dirs, &dirs, &edges);
-    let calls_out = reach::calls_out(&edges);
-    let mut duplicates = reach::duplicates(&bodies);
-    for n in &mut nodes {
-        match n {
-            Node::Dir(d) => d.measures.reach = reaches.get(&d.id).copied(),
-            Node::File(f) => f.measures.reach = reaches.get(&f.id).copied(),
-            Node::Def(d) => {
-                d.measures.reach = reaches.get(&d.id).copied();
-                if d.measures.params.is_some() {
-                    d.measures.calls_out = Some(calls_out.get(&d.id).copied().unwrap_or(0));
-                }
-                d.measures.duplicates = duplicates.remove(&d.id);
-            }
-            Node::Block(_) => {}
-        }
-    }
 
     let canonical = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
     let project_id = project_id(root);
@@ -544,7 +456,7 @@ fn build_with(
                 fingerprint: f
                     .text
                     .as_deref()
-                    .map(|t| parse::fingerprint(t).0)
+                    .map(parse::fingerprint)
                     .unwrap_or_default(),
             })
             .collect(),
@@ -604,6 +516,7 @@ fn build_with(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashSet;
     use std::path::PathBuf;
 
     /// A keeper in memory, so tests never touch the app's store.
@@ -734,10 +647,6 @@ mod tests {
                 .find(|d| d.name == walk_name)
                 .unwrap_or_else(|| panic!("{walk_name} is a definition"));
             assert_eq!(walk.doc.as_deref(), Some("Walks names."));
-            assert_eq!(walk.measures.params, Some(2));
-            // for (1), if nested once (2), `and` (1), elseif (1), else (1).
-            assert_eq!(walk.measures.cognitive, Some(6));
-            assert_eq!(walk.measures.cyclomatic, Some(5));
             assert_eq!(p.defs.len(), 2, "M.walk and M:size");
             let shapes: BTreeSet<&str> = p.blocks.iter().map(|b| b.shape.as_str()).collect();
             assert!(shapes.contains("loop") && shapes.contains("branch"));
@@ -921,22 +830,6 @@ mod tests {
             "def:src/util.rs#tests.make",
             "calls"
         ));
-        // A literal that spells out a path names it, from the key that holds it.
-        assert!(edge("def:package.json#main", "file:src/a.ts", "names"));
-        // Reach, calls out and near-duplicates follow from the edges.
-        let defs = defs(&g);
-        assert_eq!(
-            defs["def:src/b.ts#helper"]
-                .measures
-                .reach
-                .map(|r| (r.files, r.defs)),
-            Some((1, 1))
-        );
-        assert_eq!(defs["def:src/a.ts#caller"].measures.calls_out, Some(2));
-        assert_eq!(
-            defs["def:src/a.ts#slugA"].measures.duplicates,
-            Some(vec!["def:src/b.ts#slugB".to_string()])
-        );
         std::fs::remove_dir_all(dir).unwrap();
     }
 
@@ -1136,62 +1029,6 @@ mod tests {
         );
         let distinct: HashSet<&String> = third.values().collect();
         assert_eq!(distinct.len(), third.len(), "no two nodes share a lineage");
-        std::fs::remove_dir_all(dir).unwrap();
-    }
-
-    #[test]
-    fn complexity_follows_mccabe_and_sonarsource() {
-        let dir = project(
-            "measures",
-            &[
-                (
-                    "a.ts",
-                    "function chain(a, b) {\n  if (a && b) { return 1 } else if (a) { return 2 } else { return 3 }\n}\n\nfunction pick(x) {\n  switch (x) { case 1: return 1; case 2: return 2; case 3: return 3; default: return 0 }\n}\n\nfunction nested(xs) {\n  for (const x of xs) { if (x) { for (const y of x) { if (y) { g() } } } }\n}\n",
-                ),
-                (
-                    "b.py",
-                    "def guard(x):\n    try:\n        g()\n    except A:\n        pass\n    except B:\n        pass\n\n\ndef logic(a, b, c):\n    if a and b and c:\n        return 1\n    elif a or b:\n        return 2\n    return 3\n",
-                ),
-                (
-                    "c.go",
-                    "package p\n\nfunc sign(x int) int {\n\tif x > 0 {\n\t\treturn 1\n\t} else if x < 0 {\n\t\treturn -1\n\t} else {\n\t\treturn 0\n\t}\n}\n",
-                ),
-                (
-                    "d.rs",
-                    "fn pick(x: i32) -> i32 {\n    match x {\n        0 => 1,\n        1 => 2,\n        _ => 3,\n    }\n}\n",
-                ),
-            ],
-        );
-        let g = graph(&dir).unwrap();
-        let defs = defs(&g);
-        // Worked out by hand from each definition's rules.
-        for (id, cyclomatic, cognitive) in [
-            ("def:a.ts#chain", 4, 4),
-            ("def:a.ts#pick", 4, 1),
-            ("def:a.ts#nested", 5, 10),
-            ("def:b.py#guard", 3, 2),
-            ("def:b.py#logic", 6, 4),
-            ("def:c.go#sign", 3, 3),
-            ("def:d.rs#pick", 3, 1),
-        ] {
-            let d = defs
-                .get(id)
-                .unwrap_or_else(|| panic!("{id} is a definition"));
-            assert_eq!(
-                d.measures.cyclomatic,
-                Some(cyclomatic),
-                "{id}'s cyclomatic complexity"
-            );
-            assert_eq!(
-                d.measures.cognitive,
-                Some(cognitive),
-                "{id}'s cognitive complexity"
-            );
-        }
-        let nested = defs["def:a.ts#nested"];
-        assert_eq!(nested.measures.nesting, Some(4));
-        assert_eq!(nested.measures.params, Some(1));
-        assert_eq!(defs["def:b.py#logic"].measures.params, Some(3));
         std::fs::remove_dir_all(dir).unwrap();
     }
 

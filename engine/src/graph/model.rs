@@ -115,36 +115,12 @@ pub struct BlockNode {
 pub struct Measures {
     pub lines: u32,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub cognitive: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cyclomatic: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub nesting: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub params: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub calls_out: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub reach: Option<Reach>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub history: Option<History>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub markers: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub duplicates: Option<Vec<String>>,
-}
-
-#[derive(Serialize, Debug, Clone, Copy, Default)]
-pub struct Reach {
-    pub files: u32,
-    pub defs: u32,
 }
 
 #[derive(Serialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct History {
-    pub first_days: u32,
-    pub last_days: u32,
     pub commits: u32,
     pub recent: u32,
     pub authors: u32,

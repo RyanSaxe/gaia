@@ -10,10 +10,3 @@
 (unsafe_block) @block.unsafe
 (async_block) @block.concurrent
 [(struct_expression) (array_expression)] @block.data
-
-(else_clause (if_expression) @decide.elseif)
-(else_clause (block) @decide.else)
-((match_arm pattern: (match_pattern) @_p) @decide.case (#not-eq? @_p "_"))
-(binary_expression operator: ["&&" "||"]) @decide.logic
-
-(string_content) @literal

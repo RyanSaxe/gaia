@@ -1,5 +1,5 @@
-//! The rules: an import, call or named path becomes an edge when exactly one
-//! target fits, and anything with several possible targets goes pending,
+//! The rules: an import or call becomes an edge when exactly one target
+//! fits, and anything with several possible targets goes pending,
 //! with every candidate, for Jev. Anything with none is outside the
 //! repository and gets neither. The rules read paths, the language table and
 //! the parse; no file name means anything to them.
@@ -756,30 +756,5 @@ pub fn run(units: &[Unit], dirs: &BTreeSet<String>, packages: &[Package]) -> Res
         }
     }
 
-    // Names: a literal that spells out a path in the repository.
-    for u in units {
-        let Some(p) = u.parse else { continue };
-        let here = dir_of(u.path);
-        for l in &p.literals {
-            let t = l.text.trim_start_matches("./").trim_end_matches('/');
-            if t.is_empty() || t.chars().all(|c| c == '.' || c == '/') || t.contains("://") {
-                continue;
-            }
-            let targets = [normalize(here, t), normalize("", t.trim_start_matches('/'))];
-            for target in targets.into_iter().flatten() {
-                let id = if rules.paths.files.contains(target.as_str()) {
-                    format!("file:{target}")
-                } else if rules.paths.dirs.contains(&target) && !target.is_empty() {
-                    format!("dir:{target}")
-                } else {
-                    continue;
-                };
-                if id != u.id() {
-                    push(&mut edges, u.from(l.from), id, "names", l.at);
-                }
-                break;
-            }
-        }
-    }
     Resolved { edges, pending }
 }

@@ -1,8 +1,9 @@
 // The code graph: everything the engine knows about a codebase, as one
 // graph. A node stands for each directory, file, definition and block the
-// parse finds, and an edge for each link between them. Measures are what the
-// engine counts; `judged` holds Jev's answers. Every edge says who filled it,
-// and an edge Jev filled carries its probability. `project.graph` returns it
+// parse finds, and an edge for each import, call, reference or
+// implementation between them. Measures are what the engine counts; `judged`
+// holds Jev's answers. Every edge says who filled it, and an edge Jev filled
+// carries its probability. `project.graph` returns it
 // (`engine/src/graph/model.rs` mirrors these types).
 
 export interface CodeGraph {
@@ -96,22 +97,10 @@ export interface BlockNode extends NodeBase {
 
 export type BlockShape = "branch" | "loop" | "match" | "try" | "closure" | "scope" | "concurrent" | "unsafe" | "data" | "markup";
 
-/** What the engine counts. A field that doesn't apply to a node's kind is absent. */
+/** What the engine counts: every node's lines, and a file's or directory's history from git. */
 export interface Measures {
   readonly lines: number;
-  /** SonarSource's cognitive complexity. */
-  readonly cognitive?: number;
-  /** McCabe's cyclomatic complexity: the paths a test must cover. */
-  readonly cyclomatic?: number;
-  readonly nesting?: number;
-  readonly params?: number;
-  readonly callsOut?: number;
-  readonly reach?: { readonly files: number; readonly defs: number };
   readonly history?: History;
-  /** Comments that contain TODO, FIXME, XXX or HACK. */
-  readonly markers?: number;
-  /** Definitions elsewhere whose fingerprints nearly match this one's. */
-  readonly duplicates?: readonly NodeId[];
 }
 
 /** Jev's answers as held: a fresh answer replaces a held one only when it clearly differs. */
@@ -143,16 +132,15 @@ export interface Judged {
 export interface GraphEdge {
   readonly from: NodeId;
   readonly to: NodeId;
-  /** "names" joins code to a file or directory whose path a string literal in it spells out. */
   readonly kind: EdgeKind;
   readonly by: Filled;
   readonly at?: Span;
 }
 
-export type EdgeKind = "contains" | "imports" | "calls" | "references" | "inherits" | "implements" | "names" | "changes-with";
+export type EdgeKind = "imports" | "calls" | "references" | "implements";
 
-/** The parser, the rules and git are certain; Jev's answers carry its probability. */
-export type Filled = { readonly by: "parser" | "rule" | "git" } | { readonly by: "jev"; readonly call: string; readonly p: number };
+/** The rules are certain; Jev's answers carry its probability. */
+export type Filled = { readonly by: "rule" } | { readonly by: "jev"; readonly call: string; readonly p: number };
 
 export interface PendingRef {
   readonly from: NodeId;
@@ -171,8 +159,6 @@ export interface Span {
 }
 
 export interface History {
-  readonly firstDays: number;
-  readonly lastDays: number;
   readonly commits: number;
   /** Commits in the last 14 days. */
   readonly recent: number;

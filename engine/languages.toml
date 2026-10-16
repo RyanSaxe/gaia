@@ -181,8 +181,6 @@ conventions = []
 [markdown]
 extensions = ["md", "markdown"]
 grammar = { crate = "tree-sitter-md" }
-# Links and other inline text are a second grammar, run over each `inline` node.
-inline = { grammar = "markdown-inline", over = "inline" }
 conventions = []
 
 [json]
