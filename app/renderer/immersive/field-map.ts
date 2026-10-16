@@ -338,6 +338,73 @@ export function nearestAreas(at: Int16Array, n: number): Int16Array {
 }
 
 /**
+ * One slope's shading as the sheets shade hills, into cell `c` of `shade` and `light`: shadow away from the light in
+ * the northwest, warm light on the slopes facing it, by its gradient (`gx`, `gz`), and `fade` of it. A steep wall
+ * shades no darker than a gentle hillside, so a valley's side reads as a slope, not a band (`reliefMost`).
+ */
+export function shadeSlope(style: MapStyle, gx: number, gz: number, fade: number, shade: ImageData, light: ImageData, c: number): void {
+  let tint = tints.get(style);
+  if (tint === undefined) tints.set(style, (tint = [mixRgb(style.shadow, style.shadow, 0), mixRgb(style.light, style.light, 0)]));
+  const lit = (gx + gz) * style.relief;
+  const [[sr, sg, sb], [lr, lg, lb]] = tint;
+  shade.data.set([sr, sg, sb, Math.round(255 * Math.max(0, Math.min(style.reliefMost, -lit)) * fade)], c * 4);
+  light.data.set([lr, lg, lb, Math.round(255 * Math.max(0, Math.min(style.reliefMost, lit)) * fade)], c * 4);
+}
+const tints = new WeakMap<MapStyle, readonly [readonly [number, number, number], readonly [number, number, number]]>();
+
+/**
+ * Lays a grid of the hills' shading (`shadeSlope`) over a sheet `side` pixels a side, softened by the style's blur:
+ * on a sheet a quarter of the paper's size, and laid on the paper from there, since a blur over the whole paper would
+ * hold up a frame.
+ */
+export function layShade(ctx: CanvasRenderingContext2D, img: ImageData, mode: GlobalCompositeOperation, alpha: number, style: MapStyle, side: number): void {
+  const hill = document.createElement("canvas");
+  hill.width = img.width;
+  hill.height = img.height;
+  (hill.getContext("2d") as CanvasRenderingContext2D).putImageData(img, 0, 0);
+  const SOFT = Math.round(side / 4);
+  const soft = document.createElement("canvas");
+  soft.width = soft.height = SOFT;
+  const sctx = soft.getContext("2d") as CanvasRenderingContext2D;
+  sctx.filter = `blur(${((style.reliefBlur * side) / PAPER / 4).toFixed(2)}px)`;
+  sctx.drawImage(hill, 0, 0, SOFT, SOFT);
+  ctx.globalCompositeOperation = mode;
+  ctx.globalAlpha = alpha;
+  ctx.drawImage(soft, 0, 0, side, side);
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = "source-over";
+}
+
+/**
+ * The contours through a grid of heights `n` a side, `cell` meters apart from `from` meters, in meters: one every
+ * `style.contour.interval` meters, every `index`th heavier, kept where `keep` says. On steep ground, a valley's sides
+ * and a stream's banks, only the heavier lines are drawn, as a survey thins the lines that would crowd there into a
+ * ruled band (`contour.thin`). Each level is joined into lines and eased of points that add nothing, so a view
+ * strokes a few long lines, not thousands of cell-sized pieces.
+ */
+export function* contoursOf(heights: Float32Array, n: number, cell: number, from: number, style: MapStyle, keep: (x0: number, y0: number, x1: number, y1: number) => boolean): Generator<void, Paper["contours"]> {
+  const c = style.contour;
+  let lo = Infinity;
+  let hi = -Infinity;
+  for (const v of heights) [lo, hi] = [Math.min(lo, v), Math.max(hi, v)];
+  const m = (g: number): number => from + (g + 0.5) * cell;
+  const thin = { slopes: slopes(heights, n, cell), steepest: c.thin };
+  const contours: Paper["contours"][number][] = [];
+  for (let step = Math.ceil(lo / c.interval); step * c.interval <= hi; step++) {
+    const index = step % c.index === 0;
+    const contour = new Path2D();
+    for (const line of contourLines(heights, n, step * c.interval, keep, index ? undefined : thin)) {
+      const pts = simplified(line.map(m), 0.6);
+      contour.moveTo(pts[0] as number, pts[1] as number);
+      for (let q = 2; q < pts.length; q += 2) contour.lineTo(pts[q] as number, pts[q + 1] as number);
+    }
+    contours.push({ path: contour, index });
+    yield;
+  }
+  return contours;
+}
+
+/**
  * The land's relief on `ctx`, a sheet `side` pixels a side reaching `reach` meters from the land's middle: the hills
  * shaded violet away from the light in the northwest and lit warm on the slopes facing it, and the ponds, darker
  * toward their middles, with their banks and a few ripples. Returns the contours from the real heights, in meters,
@@ -362,8 +429,6 @@ export function* paintRelief(ctx: CanvasRenderingContext2D, t: Terrain, style: M
   const heights = new Float32Array(hn * hn);
   const shadeImg = new ImageData(hn, hn);
   const lightImg = new ImageData(hn, hn);
-  const [sr, sg, sb] = mixRgb(style.shadow, style.shadow, 0);
-  const [lr, lg, lb] = mixRgb(style.light, style.light, 0);
   for (let j = 0; j < hn; j++) {
     for (let i = 0; i < hn; i++) {
       const x = -reach + (i + 0.5) * HILL_CELL;
@@ -373,70 +438,26 @@ export function* paintRelief(ctx: CanvasRenderingContext2D, t: Terrain, style: M
       const gz = (reliefAt(t, x, z + e) - reliefAt(t, x, z - e)) / (2 * e);
       const c = j * hn + i;
       heights[c] = reliefAt(t, x, z);
-      const lit = (gx + gz) * style.relief;
       // Over the band where the ground is eased toward the rim, and past it, the eased heights would shade in stripes
       // along their rays, so the shading fades out across the band and is gone at the rim.
       const inside = Math.max(0, Math.min(1, -pastTheEdge(t.spec, x, z) / RIM.inner));
       const fadeHere = paintAt(style, (i + 0.5) / hn, (j + 0.5) / hn, t.spec.aspect ?? 1) * inside * inside * (3 - 2 * inside);
-      // A steep wall shades no darker than a gentle hillside, so a valley's side reads as a slope, not a band (`reliefMost`).
-      shadeImg.data.set([sr, sg, sb, Math.round(255 * Math.max(0, Math.min(style.reliefMost, -lit)) * fadeHere)], c * 4);
-      lightImg.data.set([lr, lg, lb, Math.round(255 * Math.max(0, Math.min(style.reliefMost, lit)) * fadeHere)], c * 4);
+      shadeSlope(style, gx, gz, fadeHere, shadeImg, lightImg, c);
     }
     if (due()) yield;
   }
-  const hill = document.createElement("canvas");
-  hill.width = hill.height = hn;
-  const hctx = hill.getContext("2d") as CanvasRenderingContext2D;
-  // The shading is softened on a sheet a quarter of the paper's size, and laid on the paper from there: a blur
-  // over the whole paper would hold up a frame.
-  const SOFT = Math.round(side / 4);
-  const soft = document.createElement("canvas");
-  soft.width = soft.height = SOFT;
-  const sctx = soft.getContext("2d") as CanvasRenderingContext2D;
-  const lay = (img: ImageData, mode: GlobalCompositeOperation, alpha: number): void => {
-    hctx.clearRect(0, 0, hn, hn);
-    hctx.putImageData(img, 0, 0);
-    sctx.clearRect(0, 0, SOFT, SOFT);
-    sctx.filter = `blur(${((style.reliefBlur * k) / 4).toFixed(2)}px)`;
-    sctx.drawImage(hill, 0, 0, SOFT, SOFT);
-    sctx.filter = "none";
-    ctx.globalCompositeOperation = mode;
-    ctx.globalAlpha = alpha;
-    ctx.drawImage(soft, 0, 0, side, side);
-  };
-  lay(shadeImg, "multiply", style.shadowAlpha);
+  layShade(ctx, shadeImg, "multiply", style.shadowAlpha, style, side);
   yield;
-  if (style.lightAlpha > 0) lay(lightImg, "screen", style.lightAlpha);
-  ctx.globalAlpha = 1;
-  ctx.globalCompositeOperation = "source-over";
+  if (style.lightAlpha > 0) layShade(ctx, lightImg, "screen", style.lightAlpha, style, side);
   yield;
 
   // Contours: lines from the real heights in meters, every few heavier, drawn at the view's size. They stop at the
   // land's rim: past it the ground is eased toward the rim's height, and its lines would only ring the land. On steep
   // ground, a valley's sides and a stream's banks, only the heavier lines are drawn, as a survey thins the lines that
   // would crowd there into a ruled band (`contour.thin`).
-  const c = style.contour;
-  let lo = Infinity;
-  let hi = -Infinity;
-  for (const v of heights) [lo, hi] = [Math.min(lo, v), Math.max(hi, v)];
   const hm = (gr: number): number => -reach + (gr + 0.5) * HILL_CELL;
-  const contours: Paper["contours"][number][] = [];
-  const thin = { slopes: slopes(heights, hn, HILL_CELL), steepest: c.thin };
   const onLand = (x0: number, y0: number, x1: number, y1: number): boolean => pastTheEdge(t.spec, hm((x0 + x1) / 2), hm((y0 + y1) / 2)) <= -RIM.held;
-  for (let step = Math.ceil(lo / c.interval); step * c.interval <= hi; step++) {
-    const index = step % c.index === 0;
-    const lines = contourLines(heights, hn, step * c.interval, onLand, index ? undefined : thin);
-    // Joined into lines and eased of points that add nothing, so a view strokes a few long lines, not thousands of
-    // cell-sized pieces.
-    const contour = new Path2D();
-    for (const line of lines) {
-      const pts = simplified(line.map(hm), 0.6);
-      contour.moveTo(pts[0] as number, pts[1] as number);
-      for (let q = 2; q < pts.length; q += 2) contour.lineTo(pts[q] as number, pts[q + 1] as number);
-    }
-    contours.push({ path: contour, index });
-    yield;
-  }
+  const contours = yield* contoursOf(heights, hn, HILL_CELL, -reach, style, onLand);
   yield;
 
   // Water: the ponds sampled on a fine grid. Streams are drawn as lines at the view's size (`drawLand`), so a river
@@ -609,14 +630,7 @@ export function drawLand(ctx: CanvasRenderingContext2D, w: number, h: number, pa
   strokeContours(ctx, paper.contours, view.zoom, style);
   ctx.save();
   ctx.clip(rimPath({ size: (paper.reach - MARGIN) * 2, ...(paper.names.aspect === undefined ? {} : { aspect: paper.names.aspect }) }, 3));
-  for (const b of paper.borders) {
-    ctx.strokeStyle = "rgba(52,80,40,0.16)";
-    ctx.lineWidth = (b.depth === 1 ? LINE.hedge * 1.35 : LINE.hedge) / view.zoom;
-    ctx.stroke(b.path);
-    ctx.strokeStyle = "rgba(46,66,34,0.44)";
-    ctx.lineWidth = (b.depth === 1 ? LINE.border * 1.3 : LINE.border) / view.zoom;
-    ctx.stroke(b.path);
-  }
+  strokeBorders(ctx, paper.borders, view.zoom);
   ctx.restore();
   ctx.restore();
 
@@ -642,6 +656,18 @@ export function drawLand(ctx: CanvasRenderingContext2D, w: number, h: number, pa
   return taken;
 }
 
+/** Each area's border as a soft hedgerow under a fine line, on `ctx` in meters at `zoom` pixels a meter, the outer areas' a little heavier. */
+export function strokeBorders(ctx: CanvasRenderingContext2D, borders: Paper["borders"], zoom: number): void {
+  for (const b of borders) {
+    ctx.strokeStyle = "rgba(52,80,40,0.16)";
+    ctx.lineWidth = (b.depth === 1 ? LINE.hedge * 1.35 : LINE.hedge) / zoom;
+    ctx.stroke(b.path);
+    ctx.strokeStyle = "rgba(46,66,34,0.44)";
+    ctx.lineWidth = (b.depth === 1 ? LINE.border * 1.3 : LINE.border) / zoom;
+    ctx.stroke(b.path);
+  }
+}
+
 /** The contours from the real heights in sepia ink, every fifth heavier, on `ctx` in meters at `zoom` pixels a meter, so they look the same at every zoom. */
 export function strokeContours(ctx: CanvasRenderingContext2D, contours: Paper["contours"], zoom: number, style: MapStyle): void {
   const c = style.contour;
@@ -661,7 +687,10 @@ export function strokeContours(ctx: CanvasRenderingContext2D, contours: Paper["c
  * A river's course through each of its stations, as SVG path data: a curve from its source to its mouth. `to` takes
  * meters to the drawing's own units. The field map, its picture and the wait's pen all draw this one course.
  */
-export function riverCourse(stations: Terrain["streams"][number]["stations"], to: (x: number, z: number) => readonly [number, number]): string {
+/** A river's station as a sheet draws it: where it runs and how wide. */
+export type RiverStation = Pick<Terrain["streams"][number]["stations"][number], "x" | "z" | "halfWidth">;
+
+export function riverCourse(stations: readonly RiverStation[], to: (x: number, z: number) => readonly [number, number]): string {
   const first = stations[0];
   const last = stations[stations.length - 1];
   if (first === undefined || last === undefined) return "";
@@ -680,8 +709,8 @@ export function riverCourse(stations: Terrain["streams"][number]["stations"], to
  * A river in stretches of one drawn width each, `zoom` pixels a meter, so it is drawn narrower where it is narrower:
  * above where another joins it and toward its ends. Each stretch ends at the station the next begins at.
  */
-export function riverStretches(stations: Terrain["streams"][number]["stations"], zoom: number): readonly { readonly stations: Terrain["streams"][number]["stations"]; readonly width: number }[] {
-  const stretches: { stations: Terrain["streams"][number]["stations"]; width: number }[] = [];
+export function riverStretches<S extends RiverStation>(stations: readonly S[], zoom: number): readonly { readonly stations: readonly S[]; readonly width: number }[] {
+  const stretches: { stations: readonly S[]; width: number }[] = [];
   let from = 0;
   for (let k = 1; k <= stations.length; k++) {
     const width = (s: number): number => 2 * (stations[s] as (typeof stations)[number]).halfWidth * zoom;
@@ -713,7 +742,7 @@ export function riverStrokes(width: number): readonly { readonly color: string; 
  * every river's wash first, then its edges, then all the water, so where one river joins another their water runs
  * together as one. `sx` and `sy` take meters to the view's pixels, `zoom` of them a meter.
  */
-export function drawRivers(ctx: CanvasRenderingContext2D, streams: Terrain["streams"], sx: (x: number) => number, sy: (z: number) => number, zoom: number): void {
+export function drawRivers(ctx: CanvasRenderingContext2D, streams: readonly { readonly stations: readonly RiverStation[] }[], sx: (x: number) => number, sy: (z: number) => number, zoom: number): void {
   ctx.lineCap = ctx.lineJoin = "round";
   const stretches = streams.flatMap((stream) =>
     riverStretches(stream.stations, zoom).map((s) => ({ line: new Path2D(riverCourse(s.stations, (x, z) => [sx(x), sy(z)])), strokes: riverStrokes(s.width) })),
