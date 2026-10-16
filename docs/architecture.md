@@ -444,9 +444,14 @@ and any trail dropped, with why), ending at a building's door, a landmark's
 foot, or the lot's middle of an entity that stands as neither
 (`StandCode.places`). Buildings and landmarks are sited first, and
 everything else keeps off them. A building takes the gentlest dry spot on its
-lot, or its lot's middle when none is free; where the water would stand
-above its pad there, it takes the nearest dry ground past the lot
-(`findSite`), so a house never stands in a pond or a stream. A thing that stands as a tree is one of the
+lot whose yard (the house, a margin round it, its walk and what stands
+beside it) meets no yard laid before it, or its lot's middle when none is
+free; where the water would stand above its pad there, or its yard would
+meet another's, it takes the nearest such ground past the lot (`findSite`,
+`yardsMeet`), so a house never stands in a pond, a stream or another house.
+A landmark keeps off every building's walls and what stands beside them, and
+where its lot's middle is taken it stands on the lot widened 6 m at a time
+(`findLandmarkSite`). A thing that stands as a tree is one of the
 woods' trees, sized by its importance and its area's character (`stature` in
 `CHARACTERS`), with its own vitality, and keeps its crown's width from
 every other so each tree reads as one thing; any other stands as an
