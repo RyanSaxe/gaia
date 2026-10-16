@@ -355,10 +355,6 @@ button.jp-name { border: 0; background: none; padding: 0; text-align: left; curs
    hinged to the one before; each face a window onto its part of the page, shaded by how far it is turned from the
    light. The leaf's own faces hide while its strips show it. The shadow it casts lies just over each page. */
 .jb-curl { left: 0; top: calc(var(--ph) / -2); width: var(--pw); height: var(--ph); transform-origin: 0 50%; transform-style: preserve-3d; transform: translateZ(1.3px); pointer-events: none; }
-.jb-strip { position: absolute; left: 0; top: 0; transform-origin: 0 50%; transform-style: preserve-3d; }
-.jb-strip-face { position: absolute; inset: 0; overflow: hidden; backface-visibility: hidden; -webkit-backface-visibility: hidden; }
-.jb-strip-face.back { transform: rotateY(180deg); }
-.jb-strip-shade { position: absolute; inset: 0; background: #1e1006; opacity: 0; pointer-events: none; }
 .jb-leaf.curled > .jb-face { visibility: hidden; }
 .jb-curl .front .jp { clip-path: path("M0 4.5 C 10 1.6, 24 0, 44 0 L 517 0 Q 520 0, 520 3 L 520 657 Q 520 660, 517 660 L 44 660 C 24 660, 10 658.4, 0 655.5 Z"); }
 .jb-curl .back .jp { clip-path: path("M3 0 L 476 0 C 496 0, 510 1.6, 520 4.5 L 520 655.5 C 510 658.4, 496 660, 476 660 L 3 660 Q 0 660, 0 657 L 0 3 Q 0 0, 3 0 Z"); }

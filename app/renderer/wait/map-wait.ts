@@ -2,7 +2,7 @@
 // the world is opened (docs/design-system.md, "The field sheet"), on its
 // paper, with its torn edge and, after dark, its lantern. A world chosen on
 // the start rises into it as its card, a painting of where the person last
-// stood still; the painting fades to bare paper when the land comes, and the
+// stood still; when the land comes the card turns over onto its back, bare paper, and the
 // map is drawn from nothing, as for any world. As soon as the land is
 // divided, a pen
 // draws every area's border. Each file's health is washed in once it is
@@ -52,6 +52,7 @@ import { DECKLE_MASK, MAP_STYLE, dryness, healthColor, healthWeight, landWash } 
 import { markScale, stampBuilding, stampLandmark } from "../immersive/marks.ts";
 import { borderPath, easeRing, fadeMask, floatWash, layWash, PAPER, rimPoints, ringsPath, type WashArea, type WashSheet } from "../immersive/wash.ts";
 import { layGround } from "../immersive/wild-ink.ts";
+import { angleOf, createCurl } from "../journal/curl.ts";
 import { type Pace, type Pacer, pacer } from "./pace.ts";
 import { type CellBox, type SettlingHealth, settlingHealth } from "./settling.ts";
 import type { WaitView } from "./wait.ts";
@@ -59,7 +60,7 @@ import type { WaitView } from "./wait.ts";
 /**
  * How the map paints itself, ms, as wait.css times it: the pen over one border and the most it staggers over all of
  * them; a wash coming in; the time between two marks, at least and at most, and the most all the marks take; the
- * relief's wash staggered over the areas, and one area's coming in; the pen over the rivers and the trails, when it
+ * relief's wash staggered over the areas, and one area's coming in; a chosen card turning over; the pen over the rivers and the trails, when it
  * starts on each once the world stands, how far it goes a millisecond in the sheet's pixels, the least and the most
  * one line takes, and the time between two lines; and the paper folding away.
  */
@@ -70,6 +71,7 @@ const PACE = {
   markGapMs: [200, 600],
   marksMs: 5000,
   relief: { spreadMs: 1000, ms: 800 },
+  turnMs: 1000,
   rivers: { startMs: 250, pxPerMs: 0.5, ms: [600, 2000], gapMs: 120 },
   trails: { startMs: 700, pxPerMs: 0.7, ms: [400, 1400], gapMs: 60 },
   foldMs: 1100,
@@ -259,6 +261,58 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
     el.style.height = `${(100 / Math.max(1, aspect)).toFixed(3)}%`;
     ground.after(el);
     chosen = el;
+  }
+  /**
+   * Turns the chosen card over in its place, its painting `front` on one side and the sheet's face, its paper and
+   * pencil, on the other, bending as the journal's leaves do (`curl.ts`), while the sheet waits unseen beneath it.
+   */
+  function turnOver(front: HTMLCanvasElement): Promise<void> {
+    const veilBox = veil.getBoundingClientRect();
+    const box = sheetEl.getBoundingClientRect();
+    const [w, h] = [box.width, box.height];
+    const pageOf = (canvas: HTMLCanvasElement): HTMLElement => {
+      const page = document.createElement("div");
+      page.className = "wait-turn-page";
+      page.style.height = `${h}px`;
+      canvas.style.cssText = "position:absolute;left:0;top:0;width:100%;height:100%;";
+      page.append(canvas);
+      return page;
+    };
+    const stage = document.createElement("div");
+    stage.className = "wait-turn";
+    stage.style.cssText = `left:${box.left - veilBox.left}px;top:${box.top - veilBox.top}px;width:${w}px;height:${h}px;`;
+    stage.style.setProperty("--deckle", DECKLE_MASK);
+    const card = document.createElement("div");
+    card.className = "wait-turn-card";
+    stage.append(card);
+    veil.append(stage);
+    const nowhere = { right: document.createElement("i"), left: document.createElement("i") };
+    const curl = createCurl(card, pageOf(front), pageOf(face()), w, h, true, nowhere);
+    // The card's angle is a hidden leaf's, eased as the journal's leaves are, which the strips and the card's place follow.
+    const leaf = document.createElement("div");
+    leaf.className = "wait-turn-leaf";
+    stage.append(leaf);
+    const c = w / 2;
+    let frame = 0;
+    const tick = (): void => {
+      const deg = angleOf(leaf);
+      curl.at(deg, true);
+      // Hinged at its edge as a leaf is, the card is carried across as it turns, so it turns over about its middle.
+      const r = (deg * Math.PI) / 180;
+      card.style.transform = `translateX(${(c * (1 - Math.cos(r))).toFixed(1)}px) translateZ(${(c * Math.sin(r)).toFixed(1)}px)`;
+      frame = requestAnimationFrame(tick);
+    };
+    front.remove();
+    sheetEl.style.visibility = "hidden";
+    tick();
+    void leaf.offsetWidth;
+    leaf.style.transition = `transform ${PACE.turnMs}ms cubic-bezier(.45, .05, .3, 1)`;
+    leaf.style.transform = "rotateY(-180deg)";
+    return wait(PACE.turnMs + 40).then(() => {
+      cancelAnimationFrame(frame);
+      sheetEl.style.visibility = "";
+      stage.remove();
+    });
   }
   /** Pencils `draw` on the sheet's face, the middle of the square it is drawn on, as `face` gives it. */
   function pencilFace(draw: (c: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) => void): void {
@@ -542,9 +596,14 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
     // The sheet opened in the shape the land was to have; a land of another shape reshapes it.
     const shape = Math.max(1, reach / (size / 2 / (aspect ?? 1) + MARGIN));
     sheetEl.style.setProperty("--aspect", shape.toFixed(4));
-    // A chosen card's painting fades to bare paper, and the map is drawn on it from nothing.
-    chosen?.classList.add("gone");
-    chosen = null;
+    // A chosen card turns over, as the journal turns a leaf, onto its back: the bare paper the map is drawn on.
+    if (chosen !== null) {
+      const front = chosen;
+      chosen = null;
+      layPaper(reach);
+      void turnOver(front).then(() => divide(size, aspect, outlines, patches, lots));
+      return;
+    }
     layPaper(reach);
     ink.setAttribute("viewBox", `${-reach} ${-reach} ${reach * 2} ${reach * 2}`);
     let rim = "";

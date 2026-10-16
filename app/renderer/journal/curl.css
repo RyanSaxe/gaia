@@ -1,0 +1,7 @@
+/* A turning leaf's strips (`curl.ts`): each hinged to the one before at its left edge, each face a window onto its part
+   of the page, the back turned to face the other way, and shaded by how far it is turned from the light. The journal's
+   leaves and the wait's chosen card both turn with them. */
+.jb-strip { position: absolute; left: 0; top: 0; transform-origin: 0 50%; transform-style: preserve-3d; }
+.jb-strip-face { position: absolute; inset: 0; overflow: hidden; backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+.jb-strip-face.back { transform: rotateY(180deg); }
+.jb-strip-shade { position: absolute; inset: 0; background: #1e1006; opacity: 0; pointer-events: none; }
