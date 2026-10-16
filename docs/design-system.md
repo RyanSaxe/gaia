@@ -617,12 +617,14 @@ it, the same size, paper and torn edge, with no fringe of wood, title or
 turned-down corner. In the app only that paper shows for the moment
 before the table is drawn; with the signpost, or in the standalone lab
 with no start, the sheet lies on its creased paper instead. While the code is read
-the sheet is bare and still, or, for a world chosen on the start, is the
-painting on its card of where the person last stood still. As soon as the
+the sheet is bare and still, or, for a world chosen on the start, is its
+card's face: the painting of where the person last stood still, or a tally
+of the commits since. As soon as the
 land is divided the card turns over in its place, unhurried, over a second,
 bending as a journal leaf does and with the table out of focus behind it,
-onto its back: the sheet's bare paper, with any tally pencilled on it. The
-map is drawn there like any other, so it is only ever drawn once, in front
+onto its back: the sheet's bare paper, fresh for the map. The tally of
+commits is read on the card's front, on the table, and never comes onto the
+sheet. The map is drawn there like any other, so it is only ever drawn once, in front
 of the person: a pen draws
 every area's border from the middle outward, the map's fine line, with the
 hedgerow's soft band coming in under it, and never the land's rounded rim.
@@ -737,9 +739,9 @@ walked before, painted by `start/gaia-painting.webp`):
     opened it". Past thirty commits the strokes no longer read, so the card
     writes only the number ("142 commits"); when the commit last opened is no
     longer in the history, as after a rebase, it says only "the code has
-    changed / since you last opened it". The sheet the card rises into is
-    pencilled the same, and each wash takes the tally away in just the
-    measure that it paints. Its name is lettered
+    changed / since you last opened it". A card with a tally turns over
+    onto bare paper as a painted card does, so the map's sheet never
+    carries it. Its name is lettered
     beneath in the map's spaced capitals, broken onto two lines at a hyphen,
     dot or slash when it is long, with where it lies (who keeps it on
     GitHub, or the folder it sits in) in italic over it. Up to six worlds lie

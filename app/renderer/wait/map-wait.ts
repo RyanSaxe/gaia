@@ -224,21 +224,11 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
   // each change on.
   const paper = document.createElement("canvas");
   paper.width = paper.height = device;
-  /**
-   * The pencil, laid on the sheet's own paper and kept apart, the sheet's size, so each wash can lay it again under its
-   * paint and take it away in just the measure it paints: what a chosen card had pencilled on it, and each mark of
-   * what Jev is doing to the code.
-   */
-  const pencil = document.createElement("canvas");
-  pencil.width = pencil.height = device;
-  const pencilCtx = pencil.getContext("2d") as CanvasRenderingContext2D;
   ground.width = ground.height = device;
   const groundCtx = ground.getContext("2d") as CanvasRenderingContext2D;
   const layPaper = (reach: number): void => {
     layGround(paper.getContext("2d") as CanvasRenderingContext2D, STYLE, device / 2, device / 2, device / (2 * reach), device, device);
     groundCtx.drawImage(paper, 0, 0);
-    // With whatever is pencilled on it.
-    groundCtx.drawImage(pencil, 0, 0);
   };
   // Until the land comes, the sheet is the paper Gaia's own land would be painted on.
   layPaper(560);
@@ -263,8 +253,7 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
     chosen = el;
   }
   /**
-   * Turns the chosen card over in its place, its painting `front` on one side and the sheet's face, its paper and
-   * pencil, on the other, bending as the journal's leaves do (`curl.ts`), while the sheet waits unseen beneath it.
+   * Turns the chosen card over in its place, its `front` on one side and the sheet's face, bare paper, on the other, bending as the journal's leaves do (`curl.ts`), while the sheet waits unseen beneath it.
    */
   function turnOver(front: HTMLCanvasElement): Promise<void> {
     const veilBox = veil.getBoundingClientRect();
@@ -282,9 +271,12 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
     stage.className = "wait-turn";
     stage.style.cssText = `left:${box.left - veilBox.left}px;top:${box.top - veilBox.top}px;width:${w}px;height:${h}px;`;
     stage.style.setProperty("--deckle", DECKLE_MASK);
+    // Under it, the sheet's own shadow, as narrow as the card is seen as it turns.
+    const shadow = document.createElement("i");
+    shadow.className = "wait-turn-shadow";
     const card = document.createElement("div");
     card.className = "wait-turn-card";
-    stage.append(card);
+    stage.append(shadow, card);
     veil.append(stage);
     const nowhere = { right: document.createElement("i"), left: document.createElement("i") };
     const curl = createCurl(card, pageOf(front), pageOf(face()), w, h, true, nowhere);
@@ -300,6 +292,9 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
       // Hinged at its edge as a leaf is, the card is carried across as it turns, so it turns over about its middle.
       const r = (deg * Math.PI) / 180;
       card.style.transform = `translateX(${(c * (1 - Math.cos(r))).toFixed(1)}px) translateZ(${(c * Math.sin(r)).toFixed(1)}px)`;
+      // Drawn a little within the card while it is off the flat, so its tilted edges never show the shadow's own edge.
+      const within = 1 - 0.12 * Math.abs(Math.sin(r));
+      shadow.style.transform = `scale(${(Math.abs(Math.cos(r)) * within).toFixed(3)}, ${within.toFixed(3)})`;
       frame = requestAnimationFrame(tick);
     };
     front.remove();
@@ -313,12 +308,6 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
       sheetEl.style.visibility = "";
       stage.remove();
     });
-  }
-  /** Pencils `draw` on the sheet's face, the middle of the square it is drawn on, as `face` gives it. */
-  function pencilFace(draw: (c: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) => void): void {
-    const shape = Math.max(1, Number.parseFloat(sheetEl.style.getPropertyValue("--aspect")) || 1);
-    const h = Math.max(1, Math.round(device / shape));
-    for (const c of [pencilCtx, groundCtx]) draw(c, 0, (device - h) / 2, device, h);
   }
   /** The sheet's paper as it is painted now, in the sheet's shape: the middle of the square it is drawn on. */
   function face(): HTMLCanvasElement {
@@ -372,9 +361,13 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
 
   // ---------- the pencil: what Jev is doing to the code ----------
   /**
-   * Each mark of the pencil (`pencil`) shades exactly the cells its wash will paint, an area's or a file's, to the
-   * paper's edge, and a wash coming in takes the pencil away in just the measure it paints.
+   * The pencil is laid on the sheet's own paper (`pencil`, the sheet's size, kept apart so each wash can lay it again
+   * under its paint): each mark shades exactly the cells its wash will paint, an area's or a file's, to the paper's
+   * edge, and a wash coming in takes the pencil away in just the measure it paints.
    */
+  const pencil = document.createElement("canvas");
+  pencil.width = pencil.height = device;
+  const pencilCtx = pencil.getContext("2d") as CanvasRenderingContext2D;
   /** Each file's index by path; each cell's file, the one whose health weighs most there in its area, or -1; and each file's and each area's cells' box. */
   let fileIndex = new Map<string, number>();
   let fileOf: Int16Array | null = null;
@@ -1199,7 +1192,6 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
     },
     chosen: choose,
     face,
-    pencil: pencilFace,
     marks: drawMarks,
     stood: relief,
     night(n) {
