@@ -7,6 +7,7 @@ import {
   type PaletteFamily,
   RELIEF_PRIMITIVES,
   WORLD_PRIMITIVES,
+  air as airPrimitive,
   deltaE,
   paletteOf,
   palette as palettePrimitive,
@@ -16,7 +17,7 @@ import {
 } from "@gaia/primitives";
 import { biome, world } from "@gaia/kinds";
 import { assemble, blueprintCount, fieldSize, planDetails, planStructure, randomSlots, readStructure, validate } from "@gaia/world";
-import { WORLD_PRESETS, realizeWorld } from "@gaia/realize";
+import { CLEAR_AIR, WORLD_PRESETS, mixAir, realizeWorld } from "@gaia/realize";
 import { blueprintOf as identify } from "@gaia/schema";
 import { fakeJev } from "@gaia/world/testing";
 
@@ -163,5 +164,22 @@ describe("season and decline", () => {
       });
       expect(Math.max(...moved)).toBeGreaterThan(0.03);
     }
+  });
+});
+
+describe("the air where regions meet", () => {
+  type Erased = (p: unknown) => ReturnType<typeof airPrimitive.build>;
+  const MIST = (airPrimitive.build as unknown as Erased)({ air: "morning mist", distance: 1 });
+  const close = (a: readonly number[], b: readonly number[]): void => a.forEach((v, i) => expect(v).toBeCloseTo(b[i] as number, 4));
+
+  it("is each region's own air inside it, and between two regions moves with their weights, a clear region's unused tint coloring nothing", () => {
+    expect(mixAir([CLEAR_AIR, MIST], [1, 0])).toEqual(CLEAR_AIR);
+    const misty = mixAir([CLEAR_AIR, MIST], [0, 1]);
+    close([misty.density, misty.mist, misty.tintAmount], [MIST.density, MIST.mist, MIST.tintAmount]);
+    close(misty.tint, MIST.tint);
+    // Halfway, at weights of any scale: half the mist's density, mist and pull, in the mist's own color.
+    const halfway = mixAir([CLEAR_AIR, MIST], [2, 2]);
+    close([halfway.density, halfway.mist, halfway.tintAmount], [(CLEAR_AIR.density + MIST.density) / 2, MIST.mist / 2, MIST.tintAmount / 2]);
+    close(halfway.tint, MIST.tint);
   });
 });
