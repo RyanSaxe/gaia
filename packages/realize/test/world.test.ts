@@ -17,7 +17,7 @@ import {
 } from "@gaia/primitives";
 import { biome, world } from "@gaia/kinds";
 import { assemble, planDetails, planStructure, readStructure, validate } from "@gaia/world";
-import { CLEAR_AIR, WORLD_PRESETS, mixAir, realizeWorld } from "@gaia/realize";
+import { CLEAR_AIR, mixAir, realizeWorld } from "@gaia/realize";
 import { blueprintOf as identify } from "@gaia/schema";
 import { fakeJev, randomSlots } from "@gaia/world/testing";
 
@@ -41,9 +41,11 @@ describe("world and biome kinds", () => {
     realizeWorld({ blueprint: identify("world", w), kind: world }, { blueprint: identify("biome", b), kind: biome }, lib, SEED, hour);
 
   it("realizes the same look for the same blueprints and seed", () => {
-    for (const p of WORLD_PRESETS) {
-      expect(look(p.world.slots, p.biome.slots)).toEqual(look(p.world.slots, p.biome.slots));
-      expect(identify("world", p.world.slots).id).toBe(p.world.id);
+    const random = seeded(31);
+    for (let i = 0; i < 6; i++) {
+      const w = randomSlots(world, lib, random);
+      const b = randomSlots(biome, lib, random);
+      expect(look(w, b)).toEqual(look(w, b));
     }
     const draw = (): string[] => {
       const random = seeded(99);
@@ -69,14 +71,6 @@ describe("world and biome kinds", () => {
       ids.add(`${w.id}/${b.id}`);
     }
     expect(ids.size).toBeGreaterThan(995);
-  });
-
-  it("names six distinct, valid preset worlds", () => {
-    expect(new Set(WORLD_PRESETS.map((p) => `${p.world.id}/${p.biome.id}`)).size).toBe(WORLD_PRESETS.length);
-    for (const p of WORLD_PRESETS) {
-      expect(validate(p.world, world, lib)).toEqual([]);
-      expect(validate(p.biome, biome, lib)).toEqual([]);
-    }
   });
 
   it("asks for light and season first, then sky and wind with those answers in the state", () => {

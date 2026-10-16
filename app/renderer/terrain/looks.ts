@@ -4,68 +4,14 @@
 // file and definition stands as (`FORMS`, offered by importance through
 // `SIZES`), whether a land holds water, and what an area's ground is like. Each
 // option's words are what Jev reads, and the facts it suits only the
-// stand-in judge reads. The hand-filled lands and trails are for worlds
-// written by hand, such as the proving ground, never offered to Jev.
+// stand-in judge reads.
 
 import { biome, landmark, link, structure, world } from "@gaia/kinds";
 import { PRIMITIVES } from "@gaia/primitives";
-import { LANDMARK_PRESETS, STRUCTURE_PRESETS, TRAIL_PRESETS, WORLD_PRESETS } from "@gaia/realize";
-import { type Blueprint, type FilledSlot, Library, type PrimitiveId, blueprintOf } from "@gaia/schema";
+import { Library } from "@gaia/schema";
 import type { Composing, Look, Looks } from "@gaia/world";
 
 const look = (doc: string, ...suits: string[]): Look => ({ doc, suits });
-
-/** A biome blueprint: a relief with its stored words and a ground cover. */
-const land = (use: string, params: FilledSlot["params"], cover: string): Blueprint =>
-  blueprintOf("biome", {
-    relief: { use: use as PrimitiveId, params },
-    cover: { use: "ground-cover@1", params: { cover, length: "natural", wildflowers: "a scattering" } },
-    natives: { use: "native-families@1", params: { families: [] } },
-  });
-
-/** Each land's blueprint and the words Jev reads about it. */
-export const LANDS: Readonly<Record<string, { readonly look: Look; readonly biome: Blueprint }>> = {
-  "Brook valley": {
-    look: look("A winding valley through lush grass: busy core logic, where work passes from file to file along the directory's own imports.", "terrain", "water", "flow", "world"),
-    biome: land("valley@1", { depth: "moderate", width: "open", run: "north-south", fall: "gentle", meander: "winding", stream: "brook" }, "lush grass"),
-  },
-  "Clover hills": {
-    look: look("Rolling hills in clover, round and moderately spaced: a family of many small, similar pieces made alike, such as shapes or parts.", "primitives", "geometry"),
-    biome: land("rolling-hills@1", { height: "rolling", breadth: "moderately spaced", roughness: "softly uneven", grain: "round" }, "clover meadow"),
-  },
-  "Silver terraces": {
-    look: look("A terraced hillside of silver grass, each step level and ordered: code that checks other code, or runs in ordered stages, such as tests or a pipeline.", "test", "realize", "kinds"),
-    biome: land("terraces@1", { form: "terraced hill", rise: "waist-high", climb: "a hillside", facing: "south", edge: "soft and grassy" }, "silver grass"),
-  },
-  "Mossy basin": {
-    look: look("A deep mossy bowl: settled code at the bottom of things that much of the rest rests on, such as shared types, a schema or an engine.", "rust", "engine", "schema"),
-    biome: land("basin@1", { depth: "a bowl", size: "medium", rim: "a soft rim", pond: true }, "moss"),
-  },
-  "Heather moor": {
-    look: look("An open moor of heather, softly undulating: quiet ground of writing, read more than run, such as documentation and decisions.", "docs", "markdown", "decisions"),
-    biome: land("meadow@1", { undulation: "softly undulating", tilt: "slightly tilted", facing: "east" }, "heather"),
-  },
-  "Meandering vale": {
-    look: look("A broad, shallow vale meandering through clover: the part a person sees and touches, an interface that wanders between many concerns.", "render", "renderer", "app"),
-    biome: land("valley@1", { depth: "shallow", width: "broad", run: "east-west", fall: "nearly level", meander: "strongly meandering", stream: "trickle" }, "clover meadow"),
-  },
-  "Golden dunes": {
-    look: look("Low golden dunes of steppe grass, rippled by the west wind: configuration, data and tooling that shift around the code rather than run in it.", "config", "data", "json", "tools"),
-    biome: land("dunes@1", { height: "low dunes", spacing: "even", wind: "from the west", wander: "wavering" }, "golden steppe"),
-  },
-  "Pond meadow": {
-    look: look("A wide shallow dip melting into lush grass: a service or entry point where requests from elsewhere gather and are handed on.", "service", "main", "flora"),
-    biome: land("basin@1", { depth: "a shallow dip", size: "wide", rim: "melting into the land", pond: true }, "lush grass"),
-  },
-  "Broad downs": {
-    look: look("Broad, sweeping downs of silver grass, smooth and open: a wide container whose own subdirectories hold the code, with little of its own.", "packages"),
-    biome: land("rolling-hills@1", { height: "gentle", breadth: "broad and sweeping", roughness: "smooth", grain: "diagonal" }, "silver grass"),
-  },
-  "Home lawn": {
-    look: look("A lawn-flat meadow, level and open: the repository's own root, its top-level files and the ground every other area starts from.", "script", "root", "repository"),
-    biome: land("meadow@1", { undulation: "flat as a lawn", tilt: "slightly tilted", facing: "south" }, "lush grass"),
-  },
-};
 
 export const BUILDINGS: Readonly<Record<string, Look>> = {
   "Thatched cottage": look("a thatched cottage, small and homely: a small entity of a few files doing one modest job", "module", "small", "leaf"),
@@ -81,12 +27,6 @@ export const LANDMARKS: Readonly<Record<string, Look>> = {
   "Great oak": look("a vast spreading oak: a large library whose many branches the others build from", "hub", "primitives"),
   "Battlemented keep": look("a tall square keep with battlements: a guarded core that the rest runs on", "crate", "rust", "engine"),
   "Great willow": look("a great willow, gnarled and slow: the repository's own root, holding everything", "root", "repository"),
-};
-
-export const TRAILS: Readonly<Record<string, Look>> = {
-  "Worn footpath": look("A well-trodden footpath two could walk, gently curving, with footbridges: most or many of its files import the other.", "hub", "package", "busy"),
-  "Stone-edged path": look("A beaten-earth path edged with stones, with stepping stones over water: some of its files import the other, a deliberate way kept in order.", "crate", "surface", "app"),
-  "Faint wandering track": look("A faint, half grassed-over track that meanders: only one or a few of its files import the other.", "leaf", "module", "small"),
 };
 
 /**
@@ -137,7 +77,7 @@ export const FORMS: Readonly<Record<string, { readonly look: Look; readonly rule
   Blueberry: { look: sized("bushes", "A blueberry bush: homely and generous.", "function", "test", "world"), rule: "shrubs", preset: 1 },
   Rhododendron: { look: sized("bushes", "A rhododendron in flower: showy and a little proud.", "renderer", "lab", "app", "immersive"), rule: "shrubs", preset: 2 },
   "Feather shrub": { look: sized("bushes", "A tall, feathery shrub: airy and restless.", "type", "schema", "terrain"), rule: "shrubs", preset: 3 },
-  Bluebells: { look: sized("flowers", "A carpet of bluebells in the shade: quiet and shy, easy to walk past.", "type", "schema", "kinds"), rule: "flowers", preset: 2 },
+  Bluebells: { look: sized("flowers", "A carpet of bluebells in the shade: quiet and shy, easy to walk past.", "type", "schema", "kinds"), rule: "flowers", preset: 1 },
   Daisies: { look: sized("flowers", "A drift of daisies in the open: cheerful and plain.", "constant", "config", "small"), rule: "flowers", preset: 0 },
 };
 
@@ -183,18 +123,6 @@ export const CHARACTERS: Readonly<Record<string, Character>> = {
     stature: 1,
   },
 };
-
-/** A hand-filled blueprint, by the name of its look: for a world written by hand, such as the proving ground. */
-export function presetBlueprint(as: "building" | "landmark" | "land" | "trail" | "world", look: string): Blueprint {
-  const found =
-    as === "land"
-      ? LANDS[look]?.biome
-      : as === "world"
-        ? WORLD_PRESETS.find((p) => p.name === look)?.world
-        : (as === "building" ? STRUCTURE_PRESETS : as === "landmark" ? LANDMARK_PRESETS : TRAIL_PRESETS).find((p) => p.name === look)?.blueprint;
-  if (found === undefined) throw new Error(`There is no ${as} called ${look}.`);
-  return found;
-}
 
 /** What Jev composes the world from, part by part: the sky, each land, building, landmark and trail's kind, and every primitive that could fill a part. */
 export const COMPOSING: Composing = { building: structure, landmark, world, biome, link, lib: new Library(PRIMITIVES) };

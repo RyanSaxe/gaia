@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { type DaySpec, Library, type Rgb, type Vec3, seedOf } from "@gaia/schema";
+import { type DaySpec, Library, type Rgb, type Vec3, blueprintOf, rand, seedOf } from "@gaia/schema";
 import { BIOME_PRIMITIVES, RELIEF_PRIMITIVES, WORLD_PRIMITIVES, daylight } from "@gaia/primitives";
 import { biome, world } from "@gaia/kinds";
-import { AIR, WORLD_PRESETS, aerialAt, realizeWorld, skyColorAt } from "@gaia/realize";
+import { AIR, aerialAt, realizeWorld, skyColorAt } from "@gaia/realize";
+import { randomSlots } from "@gaia/world/testing";
 
 const lib = new Library([...WORLD_PRIMITIVES, ...BIOME_PRIMITIVES, ...RELIEF_PRIMITIVES]);
 const SEED = seedOf("lab/world");
@@ -14,12 +15,17 @@ const KEY_HOURS = (daylight.build as unknown as (p: unknown) => DaySpec)({
   stars: 0.5,
 }).keys.map((k) => k.hour);
 
-const looks = WORLD_PRESETS.flatMap((p) =>
-  KEY_HOURS.map((hour) => ({
-    name: `${p.name} at ${hour}`,
-    look: realizeWorld({ blueprint: p.world, kind: world }, { blueprint: p.biome, kind: biome }, lib, SEED, hour),
-  })),
-);
+/** Six worlds and lands drawn from everything Jev can compose, each at every key hour. */
+const looks = (() => {
+  const r = rand(seedOf("horizons"));
+  const random = (): number => r.next();
+  return Array.from({ length: 6 }, (_, i) => ({ world: blueprintOf("world", randomSlots(world, lib, random)), biome: blueprintOf("biome", randomSlots(biome, lib, random)), i })).flatMap((p) =>
+    KEY_HOURS.map((hour) => ({
+      name: `world ${p.i} at ${hour}`,
+      look: realizeWorld({ blueprint: p.world, kind: world }, { blueprint: p.biome, kind: biome }, lib, SEED, hour),
+    })),
+  );
+})();
 const bearings = Array.from({ length: 12 }, (_, i) => (i / 12) * Math.PI * 2);
 const apart = (a: Rgb, b: Rgb): number => Math.max(...a.map((v, i) => Math.abs(v - (b[i] ?? Number.NaN))));
 const STEP = 1 / 255;

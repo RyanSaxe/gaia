@@ -20,10 +20,10 @@
 // way to it (`withdraw`).
 
 import * as THREE from "three";
-import { Library, seedOf } from "@gaia/schema";
+import { type Blueprint, Library, blueprintOf, seedOf } from "@gaia/schema";
 import { BIOME_PRIMITIVES, RELIEF_PRIMITIVES, WORLD_PRIMITIVES } from "@gaia/primitives";
 import { biome, world as worldKind } from "@gaia/kinds";
-import { WORLD_PRESETS, type WorldLook, realizeWorld } from "@gaia/realize";
+import { type WorldLook, realizeWorld } from "@gaia/realize";
 import { LANTERN, applyLight, applySky, createSceneLight, createSunShadow, hexToVec3 } from "@gaia/render";
 import type { StartOffer } from "../../world-service/protocol.ts";
 import { createGround } from "../world/environment.ts";
@@ -117,12 +117,31 @@ const ease = (x: number): number => {
   return t * t * (3 - 2 * t);
 };
 
-/** The light of "Meadow morning", the world lab's first world, at hour `h`. */
+/**
+ * The start's own light, sky and wind: a fair spring morning. The start is the room before any world is chosen, so its
+ * light stands in for no world's; a world's wait takes its first night from it, since every light Jev can compose is as
+ * dark as any other at a given hour.
+ */
+export const START_SKY: Blueprint = blueprintOf("world", {
+  light: { use: "daylight@1", params: { path: "middling", warmth: "neutral", brush: "painterly", moon: "silver moon", stars: "many" } },
+  sky: { use: "sky@1", params: { character: "powder blue", clouds: "fair-weather puffs", cover: "scattered" } },
+  season: { use: "season@1", params: { season: "spring", strength: "clearly" } },
+  wind: { use: "wind@1", params: { strength: "breezy" } },
+});
+
+/** The ground around the table, under the start's light. */
+const START_GROUND: Blueprint = blueprintOf("biome", {
+  relief: { use: "meadow@1", params: { undulation: "softly undulating", tilt: "level", facing: "south" } },
+  cover: { use: "ground-cover@1", params: { cover: "lush grass", length: "natural", wildflowers: "a scattering" } },
+  air: { use: "air@1", params: { air: "clear", distance: "for miles" } },
+  accents: { use: "drift@1", params: { form: "drifting petals", amount: "a few" } },
+  natives: { use: "native-families@1", params: { families: [] } },
+});
+
+/** The start's light at hour `h`. */
 const meadow = (() => {
   const lib = new Library([...WORLD_PRIMITIVES, ...BIOME_PRIMITIVES, ...RELIEF_PRIMITIVES]);
-  const preset = WORLD_PRESETS.find((p) => p.name === "Meadow morning") ?? WORLD_PRESETS[0];
-  if (preset === undefined) throw new Error("There are no named worlds.");
-  return (h: number): WorldLook => realizeWorld({ blueprint: preset.world, kind: worldKind }, { blueprint: preset.biome, kind: biome }, lib, seedOf("start/table"), h);
+  return (h: number): WorldLook => realizeWorld({ blueprint: START_SKY, kind: worldKind }, { blueprint: START_GROUND, kind: biome }, lib, seedOf("start/table"), h);
 })();
 
 /**

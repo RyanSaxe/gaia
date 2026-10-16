@@ -2,13 +2,17 @@ import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { structure } from "@gaia/kinds";
 import { FLORA_PRIMITIVES, STRUCTURE_PRIMITIVES } from "@gaia/primitives";
-import { STRUCTURE_PRESETS, mergeParts, realize, shownVitality } from "@gaia/realize";
-import { Library } from "@gaia/schema";
+import { mergeParts, realize, shownVitality } from "@gaia/realize";
+import { Library, blueprintOf, rand } from "@gaia/schema";
+import { randomSlots } from "@gaia/world/testing";
 import { createPlant, createPlantBatch, createSceneLight } from "@gaia/render";
 
 const lib = new Library([...STRUCTURE_PRIMITIVES, ...FLORA_PRIMITIVES]);
-/** Four of the hand-filled buildings, each built as the settlement builds one. */
-const plants = STRUCTURE_PRESETS.slice(0, 4).map((p, i) => realize(p.blueprint, structure, lib, { seed: 11 + i, facts: { size: 1, floors: 1.5, reach: 0.5 } }));
+/** Four buildings drawn from everything Jev can compose, each built as the settlement builds one. */
+const plants = (() => {
+  const r = rand(11);
+  return Array.from({ length: 4 }, (_, i) => realize(blueprintOf("structure", randomSlots(structure, lib, () => r.next())), structure, lib, { seed: 11 + i, facts: { size: 1, floors: 1.5, reach: 0.5 } }));
+})();
 const members = plants.map((plant, i) => ({ plant, x: i * 40, y: 2, z: -30, yaw: i * 0.7, vitality: 1 - i * 0.3 }));
 const light = createSceneLight();
 const batch = createPlantBatch(members, light);

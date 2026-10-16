@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { type BuildingPlan, Library, rand } from "@gaia/schema";
+import { type BuildingPlan, Library, blueprintOf, rand } from "@gaia/schema";
 import { BIOME_PRIMITIVES, PRIMITIVES, RELIEF_PRIMITIVES, standingStones } from "@gaia/primitives";
 import { structure } from "@gaia/kinds";
-import { STRUCTURE_PRESETS, buildSlots } from "@gaia/realize";
+import { buildSlots } from "@gaia/realize";
 import {
   BODY_RADIUS,
   type Deck,
@@ -276,9 +276,17 @@ describe("solid pieces of a built thing", () => {
 
 describe("a building's walls", () => {
   it("lets a walker into the open corner of an L-shaped building, and never through a wall", () => {
-    const preset = STRUCTURE_PRESETS.find((p) => p.blueprint.slots.footprint?.params?.massing === "an L");
-    expect(preset).toBeDefined();
-    const plan = buildSlots(preset!.blueprint, structure, new Library(PRIMITIVES), { seed: 1, facts: { size: 1, floors: 1, reach: 0 } }).get("footprint")?.output as BuildingPlan;
+    const house = blueprintOf("structure", {
+      footprint: {
+        use: "cottage-plan@1",
+        params: { massing: "an L", shape: "snug", size: "modest", storeys: "two storeys", heights: "stepped", roof: "gabled", roofline: "tall and steep", attachments: [], windows: "several", base: "raised up steps", character: "gently settled" },
+      },
+      body: { use: "timber-frame@1", params: { framing: "posts and rails", plaster: "hand-laid" } },
+      roof: { use: "tiles@1", params: { covering: "pantiles", overhang: "sheltering", chimney: "gable" } },
+      openings: { use: "casements@1", params: { panes: "four panes", shutters: false, door: "plank" } },
+      palette: { use: "palette@1", params: { family: "spring-meadow", contrast: "balanced" } },
+    });
+    const plan = buildSlots(house, structure, new Library(PRIMITIVES), { seed: 1, facts: { size: 1, floors: 1, reach: 0 } }).get("footprint")?.output as BuildingPlan;
     const site = { x: dry.x - 40, z: dry.z, yaw: 0.3, level: 0 };
     const solids = solidsOf(wallsShape(plan, site));
     // Every mass is solid at its middle.

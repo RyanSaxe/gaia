@@ -26,9 +26,10 @@ health. Test a change here as well as in Gaia's own world.
   out from (`CodeFacts`), as `factsOf` derives them from a codebase's graph. It has 126 files and 32 entities in a
   970 m world of 12 lands and 45 areas.
 - `app/renderer/terrain/fixtures/proving-judged.json`: the choices Jev would
-  make about it, fixed so that every land, water, character, form (the
-  trees among them) and trail look in `app/renderer/terrain/looks.ts` is used, and every building
-  and landmark stands thriving, tired and in ruin.
+  make about it, fixed so that every water, character and form (the trees
+  among them) in `app/renderer/terrain/looks.ts` is used, and every land,
+  trail, building and landmark of its own (`tools/proving-looks.ts`), each
+  building and landmark thriving, tired and in ruin.
 
 `pnpm proving --code DIR` writes the proving ground's code instead
 (`tools/proving-code.ts`): real source for each planned file, as poor as its
@@ -106,7 +107,8 @@ own world Jev chose a tree for about one definition in ten (236 of 2,398).
 
 ## Changing it
 
-Edit the plan in `tools/proving.ts` and run `pnpm proving`. It refuses to
+Edit the plan in `tools/proving.ts`, and its own looks in
+`tools/proving-looks.ts`, and run `pnpm proving`. It refuses to
 write a plan that leaves an option unused or lays out differently from what
 it names. `app/renderer/terrain/proving.test.ts` then checks that the world
 still crosses its streams on footbridges and stepping stones and has cairns,

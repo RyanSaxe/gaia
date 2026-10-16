@@ -3,7 +3,7 @@ import { type BuildingPlan, Library, blueprintOf, seedOf } from "@gaia/schema";
 import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, RELIEF_PRIMITIVES, STRUCTURE_PRIMITIVES, fieldAt } from "@gaia/primitives";
 import { biome, flora, structure } from "@gaia/kinds";
 import { validate } from "@gaia/world";
-import { FLORA_PRESETS, STRUCTURE_PRESETS, realize } from "@gaia/realize";
+import { FLORA_PRESETS, realize } from "@gaia/realize";
 import {
   BANKED,
   COVER_TAPS,
@@ -653,8 +653,54 @@ describe("flow", () => {
 describe("a cottage on the land", () => {
   const structureLib = new Library([...STRUCTURE_PRIMITIVES, ...FLORA_PRIMITIVES]);
   const t = bakeTerrain(sampleWorld(), lib);
+  /** A thatched cottage. */
+  const cottage = blueprintOf("structure", {
+    footprint: {
+      use: "cottage-plan@1",
+      params: { massing: "a single block", shape: "long", size: "modest", storeys: "one storey", heights: "level", roof: "gabled", roofline: "steep", attachments: [], windows: "several", base: "on a stone plinth", character: "gently settled" },
+    },
+    body: { use: "timber-frame@1", params: { framing: "posts and rails", plaster: "hand-laid" } },
+    roof: { use: "thatch@1", params: { thickness: "plump", overhang: "sheltering", chimney: "gable" } },
+    openings: { use: "casements@1", params: { panes: "four panes", shutters: true, door: "hooded" } },
+    ornaments: { use: "cottage-garden@1", params: { extras: ["flower boxes", "lantern", "woodpile"], walk: "stepping stones" } },
+    palette: { use: "palette@1", params: { family: "spring-meadow", contrast: "balanced" } },
+  });
+  /** A village of three: the cottage, a stone house with a waterwheel, and an L-shaped house with a tower. */
+  const village = [
+    { name: "A thatched cottage", blueprint: cottage },
+    {
+      name: "A watermill",
+      blueprint: blueprintOf("structure", {
+        footprint: {
+          use: "cottage-plan@1",
+          params: { massing: "a long range", shape: "long", size: "roomy", storeys: "two storeys", heights: "stepped", roof: "gabled", roofline: "steep", attachments: [], windows: "several", base: "on a stone plinth", character: "gently settled" },
+        },
+        body: { use: "fieldstone@1", params: { stones: "mixed sizes", gables: "boards" } },
+        roof: { use: "tiles@1", params: { covering: "shingles", overhang: "sheltering", chimney: "gable" } },
+        feature: { use: "waterwheel@1", params: { wheel: "a great wheel", drive: "overshot" } },
+        openings: { use: "casements@1", params: { panes: "six panes", shutters: true, door: "plank" } },
+        ornaments: { use: "cottage-garden@1", params: { extras: ["lantern", "woodpile"], walk: "flagstones" } },
+        palette: { use: "palette@1", params: { family: "teal-gold", contrast: "balanced" } },
+      }),
+    },
+    {
+      name: "An L-shaped house with a tower",
+      blueprint: blueprintOf("structure", {
+        footprint: {
+          use: "cottage-plan@1",
+          params: { massing: "an L", shape: "snug", size: "modest", storeys: "two storeys", heights: "stepped", roof: "gabled", roofline: "tall and steep", attachments: [], windows: "several", base: "raised up steps", character: "gently settled" },
+        },
+        body: { use: "timber-frame@1", params: { framing: "close studding", plaster: "hand-laid" } },
+        roof: { use: "tiles@1", params: { covering: "slates", overhang: "sheltering", chimney: "gable" } },
+        feature: { use: "tower@1", params: { height: "tall", cap: "lantern" } },
+        openings: { use: "casements@1", params: { panes: "six panes", shutters: false, door: "arched" } },
+        ornaments: { use: "cottage-garden@1", params: { extras: ["flower boxes", "lantern"], walk: "flagstones" } },
+        palette: { use: "palette@1", params: { family: "bluebell-wood", contrast: "balanced" } },
+      }),
+    },
+  ];
 
-  for (const { name, blueprint } of STRUCTURE_PRESETS) {
+  for (const { name, blueprint } of village) {
     it(`${name}'s realized parts sit on the ground, never floating`, () => {
       const built = realize(blueprint, structure, structureLib, { seed: seedOf(`test/${name}`), facts: { size: 1, floors: 1 } });
       const plan = built.slots.get("footprint")?.output as BuildingPlan;
@@ -685,7 +731,7 @@ describe("a cottage on the land", () => {
   }
 
   it("keeps the site dry, inside the world and clear of water", () => {
-    const built = realize((STRUCTURE_PRESETS[0] as (typeof STRUCTURE_PRESETS)[number]).blueprint, structure, structureLib, { seed: 3, facts: { size: 1, floors: 1 } });
+    const built = realize(cottage, structure, structureLib, { seed: 3, facts: { size: 1, floors: 1 } });
     const plan = built.slots.get("footprint")?.output as BuildingPlan;
     const site = findSite(t, plan);
     expect(Math.abs(site.x)).toBeLessThan(t.spec.size / 2);
@@ -698,7 +744,7 @@ describe("a cottage on the land", () => {
   it("keeps a village's buildings apart, each with its mill wheel or tower on dry, level ground", () => {
     const terrain: Terrain = { ...t, lattice: { ...t.lattice, heights: t.lattice.heights.slice() } };
     const taken: ReturnType<typeof findSite>[] = [];
-    for (const { blueprint } of STRUCTURE_PRESETS) {
+    for (const { blueprint } of village) {
       const built = realize(blueprint, structure, structureLib, { seed: 5, facts: { size: 1, floors: 1 } });
       const plan = built.slots.get("footprint")?.output as BuildingPlan;
       const feature = built.slots.get("feature")?.output as { parts: { positions: Float32Array }[] } | undefined;

@@ -4,7 +4,7 @@ import { FLORA_PRIMITIVES, PRIMITIVES, STRUCTURE_PRIMITIVES } from "@gaia/primit
 import { flora, rock, structure, wildflowers } from "@gaia/kinds";
 import { validate } from "@gaia/world";
 import { randomSlots } from "@gaia/world/testing";
-import { FLORA_PRESETS, FLOWER_PRESETS, ROCK_PRESETS, SHRUB_PRESETS, STRUCTURE_PRESETS, applyVitality, mergeParts, realize, resolveParams, rotAt, shownVitality, spinAt, triangleCount } from "@gaia/realize";
+import { FLORA_PRESETS, FLOWER_PRESETS, ROCK_PRESETS, SHRUB_PRESETS, applyVitality, mergeParts, realize, resolveParams, rotAt, shownVitality, spinAt, triangleCount } from "@gaia/realize";
 
 const lib = new Library(FLORA_PRIMITIVES);
 const facts = { scale: 1, age: 120 };
@@ -161,18 +161,33 @@ describe("structures", () => {
   const structureLib = new Library([...STRUCTURE_PRIMITIVES, ...FLORA_PRIMITIVES]);
   const facts = { size: 1.25, floors: 2, reach: 1 };
 
-  for (const { name, blueprint } of STRUCTURE_PRESETS) {
-    it(`${name} is a valid structure blueprint`, () => {
-      expect(validate(blueprint, structure, structureLib)).toEqual([]);
-    });
+  /** A thatched cottage with a garden, smoke from its chimney and windows that light. */
+  const cottage = blueprintOf("structure", {
+    footprint: {
+      use: "cottage-plan@1",
+      params: { massing: "a single block", shape: "long", size: "modest", storeys: "one storey", heights: "level", roof: "gabled", roofline: "steep", attachments: [], windows: "several", base: "on a stone plinth", character: "gently settled" },
+    },
+    body: { use: "timber-frame@1", params: { framing: "posts and rails", plaster: "hand-laid" } },
+    roof: { use: "thatch@1", params: { thickness: "plump", overhang: "sheltering", chimney: "gable" } },
+    openings: { use: "casements@1", params: { panes: "four panes", shutters: true, door: "hooded" } },
+    ornaments: { use: "cottage-garden@1", params: { extras: ["flower boxes", "lantern", "woodpile"], walk: "stepping stones" } },
+    palette: { use: "palette@1", params: { family: "spring-meadow", contrast: "balanced" } },
+  });
+  /** A stone house with a waterwheel. */
+  const mill = blueprintOf("structure", {
+    footprint: {
+      use: "cottage-plan@1",
+      params: { massing: "a long range", shape: "long", size: "roomy", storeys: "two storeys", heights: "stepped", roof: "gabled", roofline: "steep", attachments: [], windows: "several", base: "on a stone plinth", character: "gently settled" },
+    },
+    body: { use: "fieldstone@1", params: { stones: "mixed sizes", gables: "boards" } },
+    roof: { use: "tiles@1", params: { covering: "shingles", overhang: "sheltering", chimney: "gable" } },
+    feature: { use: "waterwheel@1", params: { wheel: "a great wheel", drive: "overshot" } },
+    openings: { use: "casements@1", params: { panes: "six panes", shutters: true, door: "plank" } },
+    ornaments: { use: "cottage-garden@1", params: { extras: ["lantern", "woodpile"], walk: "flagstones" } },
+    palette: { use: "palette@1", params: { family: "teal-gold", contrast: "balanced" } },
+  });
 
-    it(`${name} stays within 32k triangles and draws in at most 11 calls`, () => {
-      const built = realize(blueprint, structure, structureLib, { seed: 4, facts });
-      expect(triangleCount(built.parts)).toBeLessThan(32_000);
-      expect(mergeParts(built.parts).length).toBeLessThanOrEqual(11);
-      expect(triangleCount(mergeParts(built.parts))).toBe(triangleCount(built.parts));
-    });
-
+  for (const [name, blueprint] of [["A cottage", cottage], ["A mill", mill]] as const) {
     it(`${name} falls to ruin as vitality drops, and shows none of it while healthy`, () => {
       const parts = mergeParts(realize(blueprint, structure, structureLib, { seed: 4, facts }).parts);
       /** How far the falling pieces stand from where they were built, at most. */
@@ -214,19 +229,21 @@ describe("structures", () => {
       const built = realize(bp, structure, structureLib, { seed: i, facts });
       expect(triangleCount(built.parts), JSON.stringify(bp.slots)).toBeLessThan(32_000);
       expect(mergeParts(built.parts).length).toBeLessThanOrEqual(11);
+      // Merging keeps every triangle.
+      expect(triangleCount(mergeParts(built.parts))).toBe(triangleCount(built.parts));
     }
   }, 30_000);
 
   it("builds every part of a cottage on the footprint's one plan", () => {
-    const built = realize((STRUCTURE_PRESETS[0] as (typeof STRUCTURE_PRESETS)[number]).blueprint, structure, structureLib, { seed: 4, facts });
+    expect(validate(cottage, structure, structureLib)).toEqual([]);
+    const built = realize(cottage, structure, structureLib, { seed: 4, facts });
     expect(built.slots.get("footprint")?.role).toBe("Footprint");
     expect(new Set(built.parts.map((p) => p.swatch))).toEqual(new Set(["masonry", "wall", "timber", "roof", "smoke", "glass", "trim", "leaf", "bloom", "moss"]));
   });
 
   it("turns a mill's wheel while healthy, slows it as it fails and stops it near the bottom", () => {
-    const mill = STRUCTURE_PRESETS.find((p) => p.blueprint.slots.feature?.use === "waterwheel@1");
-    expect(mill).toBeDefined();
-    const parts = realize((mill as (typeof STRUCTURE_PRESETS)[number]).blueprint, structure, structureLib, { seed: 4, facts }).parts;
+    expect(validate(mill, structure, structureLib)).toEqual([]);
+    const parts = realize(mill, structure, structureLib, { seed: 4, facts }).parts;
     expect(parts.some((p) => p.channels.spin?.some((x) => x !== 0))).toBe(true);
     expect(spinAt(1)).toBe(1);
     expect(spinAt(0.4)).toBeGreaterThan(0);
@@ -235,7 +252,7 @@ describe("structures", () => {
   });
 
   it("lights windows and smokes only while healthy", () => {
-    const built = realize((STRUCTURE_PRESETS[0] as (typeof STRUCTURE_PRESETS)[number]).blueprint, structure, structureLib, { seed: 4, facts });
+    const built = realize(cottage, structure, structureLib, { seed: 4, facts });
     const emitted = (v: number) => built.parts.filter((p) => p.swatch === "glass").reduce((sum, p) => sum + applyVitality(p, v).emission.reduce((a, b) => a + b, 0), 0);
     expect(emitted(1)).toBeGreaterThan(emitted(0.4) * 2);
     const smoke = built.parts.find((p) => p.swatch === "smoke") as Part;

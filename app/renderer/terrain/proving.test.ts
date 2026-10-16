@@ -2,11 +2,12 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { type BuildingPlan, type Built, Library, seedOf } from "@gaia/schema";
 import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, LANDMARK_PRIMITIVES, RELIEF_PRIMITIVES, STRUCTURE_PRIMITIVES } from "@gaia/primitives";
 import { landmark, structure } from "@gaia/kinds";
-import { FLORA_PRESETS, LANDMARK_PRESETS, STRUCTURE_PRESETS, realize } from "@gaia/realize";
+import { FLORA_PRESETS, realize } from "@gaia/realize";
 import { type BuildingSite, type Extent, TERRAIN, type Terrain, bakeTerrain, extentOf, groundLook, heightAt, siteToWorld, turningExtent, junctionVitality, ownershipOf, placeAt, vitalityAt, vitalityOver, waterDepthAt, wayVitalityAt } from "@gaia/terrain";
 import { type Judgments, areaVitality, groundVitality } from "@gaia/world";
 import { codeLab, provingWorld } from "./code-world.ts";
-import { BUILDINGS, CHARACTERS, COMPOSED_FORMS, FORMS, LANDMARKS, LANDS, TRAILS, WATERS, presetBlueprint } from "./looks.ts";
+import { CHARACTERS, COMPOSED_FORMS, FORMS, WATERS } from "./looks.ts";
+import { BUILDINGS, LANDMARKS, LANDS, TRAILS } from "../../../tools/proving-looks.ts";
 import { type Stand, type StandBuilding, groundSites, landmarkBase, needsBank, ownerVitality, standWorld, understoryVitality } from "./stand.ts";
 import judgedFixture from "./fixtures/proving-judged.json";
 
@@ -40,12 +41,12 @@ const groundField = vitalityOver(own, tables.ground);
 const waterField = vitalityOver(own, tables.area);
 
 describe("the proving ground", () => {
-  it("chooses every option the judge can choose, and stands every building and landmark thriving, tired and in ruin", () => {
+  it("chooses every option Jev is offered, uses every look of its own, and stands each of its buildings and landmarks thriving, tired and in ruin", () => {
     const used = (options: object, chosen: Iterable<string>): string[] => Object.keys(options).filter((k) => ![...chosen].includes(k));
-    // Lands and trails are hand-filled blueprints here, so each preset is found by its blueprint.
+    // Its lands, trails, buildings and landmarks are its own hand-filled blueprints, each found by its id.
     const blueprints = (of: Iterable<{ readonly id: string } | undefined>): Set<string> => new Set([...of].flatMap((b) => (b === undefined ? [] : [b.id])));
     const landsUsed = blueprints(Object.values(judged.lands));
-    expect(Object.keys(LANDS).filter((k) => !landsUsed.has(presetBlueprint("land", k).id))).toEqual([]);
+    expect(Object.entries(LANDS).filter(([, b]) => !landsUsed.has(b.id)).map(([k]) => k)).toEqual([]);
     expect(used(WATERS, Object.values(judged.waters))).toEqual([]);
     expect(used(CHARACTERS, Object.values(judged.characters))).toEqual([]);
     expect(used(FORMS, Object.values(judged.forms).flatMap((f) => Object.values(f)))).toEqual([]);
@@ -57,11 +58,10 @@ describe("the proving ground", () => {
     expect(doc.world.standing.filter((s) => s.of === "file").length + doc.world.things.filter((t) => t.of === "file").length).toBe(doc.world.patches.length);
     expect(used(FORMS, doc.world.standing.map((s) => s.form))).toEqual([]);
     const trailsUsed = blueprints(judged.trails.map((t) => t.route));
-    expect(Object.keys(TRAILS).filter((k) => !trailsUsed.has(presetBlueprint("trail", k).id))).toEqual([]);
+    expect(Object.entries(TRAILS).filter(([, b]) => !trailsUsed.has(b.id)).map(([k]) => k)).toEqual([]);
     for (const [as, looks] of [["building", BUILDINGS], ["landmark", LANDMARKS]] as const) {
-      for (const look of Object.keys(looks)) {
-        const blueprint = (as === "building" ? STRUCTURE_PRESETS : LANDMARK_PRESETS).find((p) => p.name === look)?.blueprint.id;
-        const healths = doc.world.things.filter((t) => t.as === as && t.blueprint.id === blueprint).map((t) => vitalityOf.get(t.path) ?? 1);
+      for (const [look, blueprint] of Object.entries(looks)) {
+        const healths = doc.world.things.filter((t) => t.as === as && t.blueprint.id === blueprint.id).map((t) => vitalityOf.get(t.path) ?? 1);
         expect(healths.some((v) => v >= 0.85), `a thriving ${look}`).toBe(true);
         expect(healths.some((v) => v >= 0.35 && v < 0.85), `a tired ${look}`).toBe(true);
         expect(healths.some((v) => v < 0.12), `a ${look} in ruin`).toBe(true);

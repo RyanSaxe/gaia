@@ -1,16 +1,20 @@
 import { describe, expect, it } from "vitest";
-import { type BuildingPlan, type Built, Library, type RouteSpec, seedOf } from "@gaia/schema";
+import { type Blueprint, type BuildingPlan, type Built, Library, type RouteSpec, seedOf } from "@gaia/schema";
 import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, RELIEF_PRIMITIVES, ROUTE_PRIMITIVES, STRUCTURE_PRIMITIVES } from "@gaia/primitives";
 import { link, structure } from "@gaia/kinds";
-import { STRUCTURE_PRESETS, TRAIL_PRESETS, buildSlots, realize } from "@gaia/realize";
+import { buildSlots, realize } from "@gaia/realize";
 import { SHORE_CAP, bakeTerrain, extentOf, heightAt, planTerrain, siteToWorld, standTile, trailField, trailPlaces, yardsMeet } from "@gaia/terrain";
 import { sampleWorld } from "@gaia/terrain/testing";
 import { type StandCode, type StandRequest, blockedBy, standWorld } from "./stand.ts";
+import { BUILDINGS, TRAILS } from "../../../tools/proving-looks.ts";
 
 const lib = new Library([...RELIEF_PRIMITIVES, ...BIOME_PRIMITIVES]);
 const buildingLib = new Library([...STRUCTURE_PRIMITIVES, ...FLORA_PRIMITIVES]);
 const routeLib = new Library(ROUTE_PRIMITIVES);
-const styles = TRAIL_PRESETS.map((p) => buildSlots(p.blueprint, link, routeLib, { seed: 1, facts: {} }).get("route")?.output as RouteSpec);
+/** The proving ground's worn footpath and stone-edged path. */
+const styles = [TRAILS["Worn footpath"], TRAILS["Stone-edged path"]].map((b) => buildSlots(b as Blueprint, link, routeLib, { seed: 1, facts: {} }).get("route")?.output as RouteSpec);
+/** The proving ground's thatched cottage, stone croft and storybook house. */
+const houses = ["Thatched cottage", "Stone croft", "Storybook house"].map((name) => BUILDINGS[name] as Blueprint);
 /** A world laid out from code, as small as the tests need: two buildings' lots, a landmark's, three files' patches and what stands on them. */
 const code: StandCode = {
   lots: [{ id: "packages/a", x: -40, z: 30, radius: 9 }, { id: "packages/b", x: 50, z: -20, radius: 9 }],
@@ -29,9 +33,9 @@ const code: StandCode = {
   trails: [{ from: "packages/a", to: "packages/b", want: 0.9, style: styles[0]! }, { from: "packages/a", to: "packages/c", want: 0.8, style: styles[1]! }],
 };
 const request: StandRequest = {
-  buildings: STRUCTURE_PRESETS.slice(0, 2).map((p, i) => ({
+  buildings: houses.slice(0, 2).map((blueprint, i) => ({
     name: `home-${i}`,
-    plan: realize(p.blueprint, structure, buildingLib, { seed: seedOf(`home-${i}`), facts: { size: 1, floors: 1 } }).slots.get("footprint")?.output as BuildingPlan,
+    plan: realize(blueprint, structure, buildingLib, { seed: seedOf(`home-${i}`), facts: { size: 1, floors: 1 } }).slots.get("footprint")?.output as BuildingPlan,
     beside: null,
   })),
   landmarks: [{ base: 3, tree: false }],
@@ -104,8 +108,8 @@ describe("standing a world's things on a bake", () => {
   });
 
   it("stands buildings and a landmark laid out on one lot each on ground of its own, as a crowded file's definitions are", () => {
-    const buildings = STRUCTURE_PRESETS.slice(0, 3).map((p, i) => {
-      const built = realize(p.blueprint, structure, buildingLib, { seed: seedOf(`crowded-${i}`), facts: { size: 1, floors: 1 } });
+    const buildings = houses.map((blueprint, i) => {
+      const built = realize(blueprint, structure, buildingLib, { seed: seedOf(`crowded-${i}`), facts: { size: 1, floors: 1 } });
       return { name: `crowded-${i}`, plan: built.slots.get("footprint")?.output as BuildingPlan, beside: extentOf(built.slots.get("feature")?.output as Built | undefined) };
     });
     // One middle for all four, with the lots the layout gives a building and a landmark.

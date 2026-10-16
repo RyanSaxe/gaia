@@ -741,7 +741,8 @@ walked before, painted by `start/gaia-painting.webp`:
   folded in four on an oak table, with the worlds' cards, a quill, an
   inkwell and a brass lantern, all meshes lit by the world's own sun, sky,
   moon and lantern at the hour (the clock in the app, `?hour=` in the lab),
-  with the light of "Meadow morning", since no world is open yet. The table
+  with the start's own light of a fair spring morning (`START_SKY`), since no
+  world is open yet. The table
   faces so the sun comes from behind it on the left and rakes across the
   paper; after dark the moon lights the sheet blue and the lantern's candle
   warms it. The paper is made in its shader rather than painted: a warm

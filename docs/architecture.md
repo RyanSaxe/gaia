@@ -64,7 +64,7 @@ in the second's history, as after a rebase.
 | `@gaia/primitives` | Primitive declarations and geometry, palettes, the manifest `PRIMITIVES` | schema |
 | `@gaia/kinds` | The flora, structure, rock, wildflowers, landmark, link, biome and world kinds | schema |
 | `@gaia/world` | The question planner, answer rules, context gathering, file and entity vitality, type-space tools, `WorldChange`, and the world laid out from code: the code graph, the requests Jev answers about it, the development-only stand-in judge, the division of the land and the layout | schema, terrain (the land's division rule) |
-| `@gaia/realize` | Blueprint to parts, world and region looks at an hour, the light between a day's keys, the sky and air references, presets, channel math, detail by distance | schema, primitives |
+| `@gaia/realize` | Blueprint to parts, world and region looks at an hour, the light between a day's keys, the sky and air references, the trees', bushes', stones' and flowers' presets that Jev's forms name, channel math, detail by distance | schema, primitives |
 | `@gaia/render` | Three.js materials, light and shadow, and instanced copies of a component at each level of detail | schema, realize, three |
 | `@gaia/terrain` | Relief composition, the baked heightfield, water, the endless wild land past the rim, what grows on it (its covers and thickets) and the ground's height anywhere, walking, wading and swimming, a walker's gait (easing, grade, the eyes' ride over the ground and footbridge decks), the solids that stop a walk and the way around them, sight lines, where plants and landmarks stand, the routes of trails, how land divides into cells (`siteAt`), where a point is (its area and the file underfoot, `placeAt`, and every area's and patch's outline, `outlinesOf`), and whose ground it is and how alive (`groundOwners`, `ownershipOf`, `groundLook`) | schema, primitives, realize |
 | `@gaia/app` | Electron main, preload, world service, and the renderer (the lab) | Every package |
@@ -251,9 +251,11 @@ realizes each from its own: the sky with `realizeSky`, each region's land
 with its water (`withWater`), each thing, and each trail's route, which the
 stand walks as it was composed (`StandCode.trails`). The world's composing
 vocabulary is `Looks.compose` (`COMPOSING` in
-`app/renderer/terrain/looks.ts`). A world written by hand, the proving
-ground, names its sky, lands, things and trails by their hand-filled looks
-instead (`presetBlueprint`). `planWorldRequests` builds one request
+`app/renderer/terrain/looks.ts`). A world without a composed sky, a land
+for each region or a route for each trail fails to open: nothing stands in
+for an answer Jev did not give. The proving ground, written by hand, names
+its own sky, lands, things and trails (`tools/proving-looks.ts`), and its
+generator writes their blueprints into its fixture. `planWorldRequests` builds one request
 per thing, from facts and doc comments only, with options shuffled by the
 thing's path, in the shape a design chooses ("What a request carries" under
 Jev); under the `judged` design it asks only each region's land and each
@@ -431,8 +433,8 @@ the imports between files and the calls and references into each definition
 building or landmark does not yet rise with what calls it).
 `?world=proving` (and `GAIA_PROJECT=proving` in the app) shows the proving
 ground: a made-up codebase (`fixtures/proving.json`) laid out with
-`layoutWorld` from choices fixed to cover every option
-(`fixtures/proving-judged.json`), both written by `pnpm proving`
+`layoutWorld` from choices fixed to cover every option Jev is offered and
+every look of its own (`fixtures/proving-judged.json`), both written by `pnpm proving`
 (`tools/proving.ts`), so it holds every building and landmark thriving, tired
 and in ruin, a whole area in ruin, streams crossed on footbridges and
 stepping stones, cairns, ponds, a tiny area and deep nesting
