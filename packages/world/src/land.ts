@@ -234,16 +234,44 @@ function divide(r: Raster, node: LandNode, cells: Int32Array, out: Map<string, I
   });
   const owner = new Int32Array(cells.length);
   relax(r, cells, targets, sx, sz, reach, 24, owner, kids.map((k) => k.heart === true));
-  // A child still without ground takes the cells nearest its site, as many as its share.
+  // A child still short of a cell for each of its leaves takes ground from siblings that keep a cell for each of
+  // theirs: the cells nearest its site, as many as its share if it has none. One with none starts on the far edge of
+  // the sibling with the most to spare, so children starved together spread out rather than crowd one spot.
+  const leaves = kids.map((kid) => leavesOf(kid).length);
   const held = new Int32Array(kids.length);
   owner.forEach((o) => (held[o] = (held[o] as number) + 1));
+  const spare = (o: number): number => (held[o] as number) - Math.max(leaves[o] as number, targets[o] as number);
   kids.forEach((_, j) => {
-    if ((held[j] as number) > 0) return;
+    const need = leaves[j] as number;
+    if ((held[j] as number) >= need) return;
+    if ((held[j] as number) === 0) {
+      let richest = -1;
+      for (let o = 0; o < kids.length; o++) if (o !== j && (richest < 0 || spare(o) > spare(richest))) richest = o;
+      let far = -1;
+      for (let c = 0; c < cells.length; c++) {
+        if (owner[c] !== richest) continue;
+        const q = cells[c] as number;
+        const d = ((r.wx[q] as number) - (sx[richest] as number)) ** 2 + ((r.wz[q] as number) - (sz[richest] as number)) ** 2;
+        if (d > far) {
+          far = d;
+          sx[j] = r.wx[q] as number;
+          sz[j] = r.wz[q] as number;
+        }
+      }
+    }
+    let want = (held[j] as number) === 0 ? Math.max(need, Math.round(targets[j] as number)) : need - (held[j] as number);
     const near = Array.from(cells.keys())
       .map((c) => [c, ((r.wx[cells[c] as number] as number) - (sx[j] as number)) ** 2 + ((r.wz[cells[c] as number] as number) - (sz[j] as number)) ** 2] as const)
-      .sort((a, b) => a[1] - b[1] || a[0] - b[0])
-      .slice(0, Math.max(1, Math.round(targets[j] as number)));
-    for (const [c] of near) owner[c] = j;
+      .sort((a, b) => a[1] - b[1] || a[0] - b[0]);
+    for (const [c] of near) {
+      if (want === 0) break;
+      const o = owner[c] as number;
+      if (o === j || (held[o] as number) <= (leaves[o] as number)) continue;
+      owner[c] = j;
+      held[o] = (held[o] as number) - 1;
+      held[j] = (held[j] as number) + 1;
+      want--;
+    }
   });
   const parts: number[][] = kids.map(() => []);
   owner.forEach((o, c) => (parts[o] as number[]).push(cells[c] as number));
@@ -397,13 +425,18 @@ export interface Plot {
 /**
  * Divides one leaf's ground among a smaller tree exactly as the land is
  * divided, down to its own leaves: a file's patch among its definitions, and
- * a definition's plot among the definitions inside it. `points` are the
- * leaf's raster cells (`LeafLand.inner`) and `step` the raster's spacing; a
- * plot stands at its cells' middle, moved onto its own ground.
+ * a definition's plot among the definitions inside it. `cells` are the
+ * leaf's raster cells (`LeafLand.inner`) and `cellStep` the raster's spacing;
+ * a plot stands at its cells' middle, moved onto its own ground, and every
+ * plot has ground of its own.
  */
-export function dividePlots(root: LandNode, points: readonly (readonly [number, number])[], step: number): ReadonlyMap<string, Plot> {
+export function dividePlots(root: LandNode, cells: readonly (readonly [number, number])[], cellStep: number): ReadonlyMap<string, Plot> {
   const out = new Map<string, Plot>();
-  if (points.length === 0) return out;
+  if (cells.length === 0) return out;
+  // A leaf with fewer cells than plots is divided on a finer raster, each cell split in four, so every plot has one.
+  let points = cells;
+  let step = cellStep;
+  for (const wanted = leavesOf(root).length; points.length < wanted; step /= 2) points = points.flatMap(([x, z]) => [-1, 1].flatMap((dz) => [-1, 1].map((dx) => [x + (dx * step) / 4, z + (dz * step) / 4] as const)));
   const px = Float64Array.from(points, (p) => p[0]);
   const pz = Float64Array.from(points, (p) => p[1]);
   const warped = points.map((p) => warpPoint(p[0], p[1]));

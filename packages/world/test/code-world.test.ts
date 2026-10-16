@@ -281,6 +281,29 @@ describe("a world laid out from code", () => {
     for (const e of journal.entries) if (e.under !== undefined) expect(journal.entry(e.under)?.page).toBeLessThan(e.page);
   });
 
+  it("gives every definition of a crowded file a plot of its own: a closure holding two hundred functions, sixty more beside it", async () => {
+    const lab = "packages/app/src/main.ts";
+    const def = (name: string, start: number, end: number, parent?: string): DefNode => ({
+      kind: "def", id: `def:${lab}#${parent === undefined ? name : `${parent}.${name}`}`, lineage: name, file: `file:${lab}`, name, role: "function", span: { start, end },
+      signature: `function ${name}`, exported: false, measures: { lines: end - start + 1 }, ...(parent === undefined ? {} : { parent: `def:${lab}#${parent}` }),
+      judged: { value: { importance: 0.2, quality: null, concepts: {} } },
+    });
+    const graph: CodeGraph = {
+      projectId: "demo", name: "demo", edges: [], pending: [],
+      nodes: [
+        { kind: "file", id: `file:${lab}`, lineage: "l", path: lab, language: "typescript", bytes: 1, hash: "", binary: false, unparsed: 0, conventions: [], measures: { lines: 250 } },
+        def("createLab", 1, 2700),
+        ...Array.from({ length: 200 }, (_, i) => def(`inner${i}`, 10 + i * 13, 20 + i * 13, "createLab")),
+        ...Array.from({ length: 60 }, (_, i) => def(`outer${i}`, 2701 + i * 10, 2709 + i * 10)),
+      ],
+    };
+    const world = layoutWorld(facts(), await judgeWorld(facts(), LOOKS, standInJev(LOOKS)), graph);
+    const standing = world.symbols.filter((s) => s.file === lab);
+    expect(standing.length).toBe(261);
+    for (const s of standing) expect(placeAt(world, s.x, s.z).file?.path, s.name).toBe(lab);
+    expect(new Set(standing.map((s) => `${s.x},${s.z}`)).size).toBe(standing.length);
+  });
+
   it("reads vitality from Jev's quality: a file's and a definition's are their own, and a file Jev didn't judge takes its folder's", async () => {
     const math = "packages/core/src/math.ts";
     const value = (quality: number) => ({ judged: { value: { importance: 0.5, quality, concepts: {} } } });

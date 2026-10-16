@@ -163,7 +163,10 @@ each definition standing on it); then each of those is divided the same way,
 down to the files. Every division is a
 relaxed, weighted nearest-site division of a raster of the land, starting
 from spots seeded by each child's path, so the same code gives the same land
-and a small change moves it a little. The divisions are measured from points
+and a small change moves it a little. A child the relaxing leaves short of a
+cell for each of its leaves takes them from siblings with cells to spare,
+starting from the far edge of the one with the most, so every file and every
+definition holds ground of its own however crowded its parent. The divisions are measured from points
 moved by the land's warp (`warpPoint`, a broad sway and a fine one), so
 borders curve and wander like fields' and nothing is a circle or a square.
 The land fills the walkable square with no common ground between areas;
@@ -188,7 +191,8 @@ document's section or a data file's key (`definitionsOf` in
 is (`dividePlots`): the file's own ground at its heart, and a plot for each
 definition as large as its own lines plus 120 m²;
 a definition's plot is divided again among the definitions inside it, and
-each stands at its plot's middle. With Engine's graph (`project.graph`,
+each stands at its plot's middle. A patch with fewer raster cells than plots
+is divided on a finer raster, so no two definitions share a spot. With Engine's graph (`project.graph`,
 judged) the definitions are the graph's, and each carries Jev's importance
 from the understanding pass, 0 to 1, which sets its size; without one, the
 facts' top-level symbols stand, sized by their length. Each stands as
