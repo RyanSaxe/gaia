@@ -1,9 +1,8 @@
 // The tally on the card of a world whose code has moved on since the person
 // last opened it: a stroke of the wait's graphite pencil for each commit,
-// gated in fives, with how many in words under it. It is drawn on the bare
-// card and, once the card is chosen, on the wait's sheet in the same place,
-// as pencil on its paper, so the sheet the card becomes has it too and each
-// wash takes it away in the measure that it paints.
+// gated in fives, with how many in words under it, drawn on the card's face,
+// bare paper or a painting, where it is read on the start's table. The card
+// turns over onto bare paper for the map, so the sheet never has it.
 
 import { rand, seedOf } from "@gaia/schema";
 import { SERIF } from "../immersive/map-names.ts";

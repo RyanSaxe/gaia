@@ -48,12 +48,10 @@ export interface TableOptions {
   readonly hour: number;
   /** Where the wait's sheet lies on the page: a chosen card ends there. */
   readonly sheet: () => DOMRect;
-  /** A card with a painting is chosen: its face, whose shape (width over depth) the wait's sheet takes as its own. */
+  /** A card with a painting or a tally is chosen: its face, whose shape (width over depth) the wait's sheet takes as its own. */
   readonly chosen?: (face: HTMLImageElement | HTMLCanvasElement) => void;
   /** The wait's sheet as it is painted now, in its shape: a fresh card's face, so it rises into the sheet as the sheet. */
   readonly face?: () => HTMLCanvasElement;
-  /** Pencils on the wait's sheet what a chosen card had pencilled on its face (`WaitView.pencil`). */
-  readonly pencil?: (draw: (c: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) => void) => void;
   /** The chosen card has become the wait's sheet: the sheet shows in its place, and the wait may paint on. */
   readonly landed?: () => void;
 }
@@ -230,10 +228,10 @@ export function createTable(veil: HTMLElement, options: TableOptions): StartPage
         b.setAttribute("aria-label", r.name);
         b.addEventListener("click", () => {
           if (settle === null || chosen !== null) return;
+          // A card with anything on its face, a painting or a tally, becomes the wait's sheet face up, and turns over
+          // onto the sheet's bare paper for the map; a bare card is the sheet already.
           const face = faces[i];
-          if (paintings[i] !== null && face !== null && face !== undefined) options.chosen?.(face);
-          const tally = tallies[i];
-          if (tally !== null && tally !== undefined) options.pencil?.(tally);
+          if (face !== null && face !== undefined && face !== bare) options.chosen?.(face);
           lift(i, performance.now());
           choose(placeOf(r));
         });
