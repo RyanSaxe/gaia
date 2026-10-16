@@ -11,7 +11,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { type Blueprint, type BuildingPlan, type GroundSpec, Library, type Palette, type RouteSpec, type SeasonSpec, blueprintOf, seedOf } from "@gaia/schema";
-import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, LANDMARK_PRIMITIVES, NO_SHIFT, ROUTE_PRIMITIVES, RELIEF_PRIMITIVES, ROCK_PRIMITIVES, WILDFLOWER_PRIMITIVES, WORLD_PRIMITIVES, hex, mixLab } from "@gaia/primitives";
+import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, LANDMARK_PRIMITIVES, ROUTE_PRIMITIVES, RELIEF_PRIMITIVES, ROCK_PRIMITIVES, WILDFLOWER_PRIMITIVES, WORLD_PRIMITIVES, mixLab, seasonPalette } from "@gaia/primitives";
 import { biome, landmark as landmarkKind, link, world as worldKind } from "@gaia/kinds";
 import { defaultParams, validate } from "@gaia/world";
 import { FLORA_PRESETS, LANDMARK_PRESETS, type Realized, TRAIL_PRESETS, WORLD_PRESETS, buildSlots, mergeParts, realizeRegion, realizeSky } from "@gaia/realize";
@@ -44,7 +44,7 @@ import { createGrass } from "./cover.ts";
 import { createGround, createGroundTexture } from "./ground.ts";
 import { createRegionCovers } from "./regions.ts";
 import { createWater } from "./water.ts";
-import { createWildGrowth, wildBushBuilds } from "./wilds.ts";
+import { createWildGrowth, wildBushBuilds, wildGround } from "./wilds.ts";
 import { createUnderstory, understoryBuilds } from "./understory.ts";
 import { type BuildAsk, made, makeAhead } from "./made.ts";
 import { createClearings } from "./clearings.ts";
@@ -108,8 +108,7 @@ const TEMPLATE = /* html */ `
 </aside>
 `;
 
-/** The terrain lab's covers wear no season; its light and sky are the first named world's, at the shell's hour. */
-const NO_SEASON: SeasonSpec = { swatches: {}, ground: NO_SHIFT, frost: 0, fall: hex(0xd9a04a) };
+/** The sample world's light, sky, season and wind: the first named world's, at the shell's hour. */
 const SKY_WORLD = WORLD_PRESETS[0] as (typeof WORLD_PRESETS)[number];
 
 /** Each mode's hint, for a mouse and keyboard and for touch. */
@@ -367,6 +366,18 @@ const ASKED_WORLD = new URLSearchParams(location.search).get("world");
 const OPENS_CODE = ASKED_WORLD !== "sample" && ASKED_WORLD !== "small";
 /** The shape, width over depth, of the land the lab opens on: a codebase's takes the journal spread's, the proving ground and the sample world are square. */
 export const OPENING_ASPECT = OPENS_CODE && ASKED_WORLD !== "proving" ? LAND_ASPECT : 1;
+/** For development only, never shown to a person: a world preset's season, at that preset's strength, previewed over any world (`?season=deep autumn`). */
+const ASKED_SEASON = new URLSearchParams(location.search).get("season");
+
+/** The season the world `sky` composes (its light, sky, season and wind), or the one a developer asked to preview over it. */
+function seasonOf(sky: Blueprint, lib: Library): SeasonSpec {
+  const preview = ASKED_SEASON === null ? undefined : WORLD_PRESETS.find((p) => p.world.slots.season?.params.season === ASKED_SEASON);
+  if (ASKED_SEASON !== null && preview === undefined) {
+    throw new Error(`?season=${ASKED_SEASON} is no world preset's season; they are ${WORLD_PRESETS.map((p) => p.world.slots.season?.params.season).join(", ")}.`);
+  }
+  // A season is the same at every hour.
+  return realizeSky({ blueprint: preview?.world ?? sky, kind: worldKind }, lib, seedOf("terrain-lab/sky"), 12).season;
+}
 /** Frames the first world draws under the wait before it lifts, its shaders already compiled (`warmSoon`), so it moves smoothly from the first. */
 const LIFT_FRAMES = 4;
 /**
@@ -465,9 +476,33 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
 
   const light = createSceneLight();
   light.uFogDensity.value = FOG.walk;
+  const worldLib = new Library(WORLD_PRIMITIVES);
+  /**
+   * The season the world wears, from the moment the first world is known: its own (`season@1` in its sky), or the
+   * one a developer previews (`?season=`). A page shows a person one world, so it wears that season all its life:
+   * the ground, plants, buildings and landmarks take it as they are made, and far forms bake in it.
+   */
+  let season: SeasonSpec | null = null;
+  const awaitingSeason: ((worn: SeasonSpec) => void)[] = [];
+  /** Resolves with the season once the world it belongs to is known. */
+  const seasonKnown = (): Promise<SeasonSpec> => (season === null ? new Promise((wake) => awaitingSeason.push(wake)) : Promise.resolve(season));
+  /** Wears the season of the world `sky` composes, unless the page already wears one. */
+  function wearSeason(sky: Blueprint): void {
+    if (season !== null) return;
+    const worn = seasonOf(sky, worldLib);
+    season = worn;
+    for (const wake of awaitingSeason.splice(0)) wake(worn);
+  }
+  const wornSeason = (): SeasonSpec => {
+    if (season === null) throw new Error("Something was colored before its world's season was known.");
+    return season;
+  };
+  /** A plant, building or landmark in the world's season: only its healthy colors turn (`seasonPalette`). */
+  const seasoned = (plant: Realized): Realized => ({ ...plant, palette: seasonPalette(plant.palette, wornSeason()) });
+  if (!OPENS_CODE) wearSeason(SKY_WORLD.world);
   // A building for each sample entity, near the stream, each on a pad leveled into the bake; none yet when the
   // codebase's world opens first, which brings its own.
-  let settlement = createSettlement(light, OPENS_CODE ? [] : SAMPLE_ENTITIES);
+  let settlement = createSettlement(light, OPENS_CODE ? [] : SAMPLE_ENTITIES, seasoned);
   /** Gaia's own world when "This codebase" is shown: what every area, patch, building, landmark and trail stands for. */
   let code: CodeLab | null = null;
   /** The world whose light, sky and air the lab shows: the codebase's own once it is shown. */
@@ -506,22 +541,22 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     const id = entityOfPlace.get(place);
     return id === undefined ? 1 : (entityVitality.get(id) ?? 1);
   };
-  const worldLib = new Library(WORLD_PRIMITIVES);
   const lantern = createLantern(light);
 
   const covers = createRegionCovers();
   const coverOf = (i: number): GroundSpec => {
     const r = world.regions[i];
     if (r === undefined) throw new Error(`No region ${i}.`);
-    return realizeRegion({ blueprint: r.biome, kind: biome }, lib, seedOf(r.id), NO_SEASON).ground;
+    return realizeRegion({ blueprint: r.biome, kind: biome }, lib, seedOf(r.id), wornSeason()).ground;
   };
   /** Each region's ground cover, as the shaders paint it. */
   let regionGrounds: readonly GroundSpec[] = [];
+  /** Every region's cover and the wild's two, in the world's season. A world's first bake sets them before it shows. */
   const updateCovers = (): void => {
     regionGrounds = world.regions.map((_, i) => coverOf(i));
     covers.update(world, regionGrounds, terrain);
+    covers.wild(wildGround(lib, wornSeason()));
   };
-  updateCovers();
 
   const scene = new THREE.Scene();
   const sky = createSky(light);
@@ -550,7 +585,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   /** A pooled view of landmark `i`, made now and added to the scene. */
   const poolLandmark = (i: number, key: string): PlantView => {
     const lm = landmarks[i] as (typeof landmarks)[number];
-    const view = createPlant({ ...lm.built, parts: mergeParts(lm.built.parts) }, light);
+    const view = createPlant({ ...seasoned(lm.built), parts: mergeParts(lm.built.parts) }, light);
     landmarkPool.set(key, view);
     scene.add(view.object);
     return view;
@@ -701,21 +736,22 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   const treeFar: readonly FarOf[] = variants.map((_, k) => treeForms.add(treeBuild(k)));
 
   // Rocks, bushes and wildflowers, scattered around the trees.
-  const understory = createUnderstory(scene, light, new Library([...FLORA_PRIMITIVES, ...ROCK_PRIMITIVES, ...WILDFLOWER_PRIMITIVES]), clearings, bushForms);
+  const understory = createUnderstory(scene, light, new Library([...FLORA_PRIMITIVES, ...ROCK_PRIMITIVES, ...WILDFLOWER_PRIMITIVES]), clearings, seasoned, bushForms);
 
   // Before every pass (the sun's shadow, the water's mirror and the view),
   // each instanced blueprint packs only the cells that pass's camera sees.
   // Past the land: the wild's covers and its scattered bushes, which stand for nothing.
-  const wildGrowth = createWildGrowth(scene, light, covers, lib, floraLib, bushForms);
+  const wildGrowth = createWildGrowth(scene, light, floraLib, seasoned, bushForms);
   const instanced = (): Copies[] => [...treeViews, ...understory.all(), ...wildGrowth.all()];
-  // Far forms: each tree and bush build baked once into its far form, drawn as
-  // cards where a copy is small on a pass's screen (woods.ts). A build's form
-  // is read from the store when it was baked before; otherwise it bakes a few
-  // views a frame, and is stored for next time. The trees' forms bake from the
-  // moment the lab opens, and the wait lifts only once they are ready, so no
-  // frame shows a far tree before its card. The bushes' bake once the world is
-  // open: until then every bush draws its full form, and the far ones then
-  // change by less than a level of 255 as their cards come in.
+  // Far forms: each tree and bush build baked once into its far form, in the
+  // world's season, drawn as cards where a copy is small on a pass's screen
+  // (woods.ts). A build's form is read from the store when it was baked in
+  // those colors before; otherwise it bakes a few views a frame, and is stored
+  // for next time. The trees' forms bake from the moment the world's season is
+  // known, and the wait lifts only once they are ready, so no frame shows a far
+  // tree before its card. The bushes' bake once the world is open: until then
+  // every bush draws its full form, and the far ones then change by less than a
+  // level of 255 as their cards come in.
   const farSets = [treeForms, bushForms].map((forms) => ({ forms, ms: 0 }));
   const [treeSet, bushSet] = farSets as [(typeof farSets)[number], (typeof farSets)[number]];
   const farStore = openFarStore();
@@ -725,8 +761,10 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     const store = await farStore;
     const forms: FarForm[] = [];
     const turns: number[] = [];
-    for (const { plant, px } of set.forms.close()) {
+    for (const { plant: build, px } of set.forms.close()) {
       turns.push(px);
+      // Baked in the world's season and kept by the colors it was baked in, so another season bakes its own.
+      const plant = seasoned(build);
       const key = contentHash(plant.parts, plant.motion, plant.palette, FAR_BAKE_VERSION, px);
       const kept = (await store?.get(key).catch(() => undefined)) as FarFormData | undefined;
       const stored = kept === undefined ? null : farFormFrom(kept);
@@ -755,17 +793,18 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     set.forms.cards = createFarCards(forms, light, turns, TURN);
     set.ms = performance.now() - t0;
   }
-  const farBaked = bakeFar(treeSet, FAR_BAKE.ms).then(() => {
+  const farBaked = seasonKnown().then(() => bakeFar(treeSet, FAR_BAKE.ms)).then(() => {
     reportStage("tree cards", { ms: Math.round(treeSet.ms) });
     warmSoon();
   });
   const farCardSets = (): FarCards[] => farSets.flatMap((set) => (set.forms.cards === null ? [] : [set.forms.cards]));
   // Each tree build's instances are made a build a frame while the wait holds,
-  // so a world's planting only moves copies.
+  // once the world's season is known, so a world's planting only moves copies.
   void (async (): Promise<void> => {
+    await seasonKnown();
     for (const k of variants.keys()) {
       if (!groves.has(k)) {
-        const view = createCopies(treeBuild(k), light, [], treeFar[k]);
+        const view = createCopies(seasoned(treeBuild(k)), light, [], treeFar[k]);
         scene.add(view.object);
         groves.set(k, view);
       }
@@ -896,7 +935,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
         return [had];
       }
       if (spots.length === 0) return [];
-      const view = createCopies(treeBuild(k), light, spots, treeFar[k]);
+      const view = createCopies(seasoned(treeBuild(k)), light, spots, treeFar[k]);
       scene.add(view.object);
       groves.set(k, view);
       treeBuilds[k] = null;
@@ -2062,6 +2101,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   async function showCodebase(on: boolean): Promise<void> {
     reportStage("judging");
     code = on ? await codeWorld(veil) : null;
+    wearSeason((code?.sky ?? SKY_WORLD).world);
     reportStage("laid out", { things: code?.world.things.length ?? 0, symbols: code?.world.symbols.length ?? 0 });
     // The buildings and landmarks are made on other threads while the wait draws the land.
     const composedLandmarks = code === null ? [] : landmarkAsks(code);
@@ -2069,7 +2109,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     landmarks = code === null ? presetLandmarks : composedLandmarks.map((ask) => landmarkOf(composedName(ask.blueprint), ask));
     liveFileVitality.clear();
     for (const v of settlement.views()) scene.remove(v.object);
-    settlement = createSettlement(light, code?.buildings ?? SAMPLE_ENTITIES);
+    settlement = createSettlement(light, code?.buildings ?? SAMPLE_ENTITIES, seasoned);
     for (const v of settlement.views()) scene.add(v.object);
     // The wait's pen draws each building and landmark at its laid-out place while the world bakes.
     if (code !== null) veil.marks(laidOut(code));
@@ -2664,7 +2704,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     const focal = gl.drawingBufferHeight / 2 / Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2);
     let copy = swapCopies.get(preset.far);
     if (copy === undefined) {
-      copy = createCopies(preset.plant(), light, [], preset.far);
+      copy = createCopies(seasoned(preset.plant()), light, [], preset.far);
       scene.add(copy.object);
       swapCopies.set(preset.far, copy);
     }
@@ -2860,7 +2900,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
         for (const [key, v] of landmarkPool) if (key.startsWith("show#") || v === landmarkViews[at]) v.object.visible = false;
         let view = landmarkPool.get(`show#${i}`);
         if (view === undefined) {
-          view = createPlant({ ...lm.built, parts: mergeParts(lm.built.parts) }, light);
+          view = createPlant({ ...seasoned(lm.built), parts: mergeParts(lm.built.parts) }, light);
           landmarkPool.set(`show#${i}`, view);
           scene.add(view.object);
         }
@@ -3296,9 +3336,10 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       }),
       selected: () => selected,
       /**
-       * Shows world preset `name`'s light, sky, season and wind over the world
-       * shown, such as "Heather moor", or the world's own again (no name).
-       * Returns the preset's name, or null when there is none by that name.
+       * Shows world preset `name`'s light, sky and wind over the world shown,
+       * such as "Heather moor", or the world's own again (no name). The page
+       * keeps the season it wears (`?season=` previews another). Returns the
+       * preset's name, or null when there is none by that name.
        */
       skyWorld: (name?: string) => {
         const chosen = name === undefined ? (code?.sky ?? SKY_WORLD) : WORLD_PRESETS.find((p) => p.name === name);

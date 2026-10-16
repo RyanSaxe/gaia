@@ -11,14 +11,12 @@
 // lie past that distance, so nothing ever appears or vanishes in view.
 
 import type * as THREE from "three";
-import { type GroundSpec, type Library, blueprintOf, seedOf } from "@gaia/schema";
+import { type GroundSpec, type Library, type SeasonSpec, blueprintOf, seedOf } from "@gaia/schema";
 import { biome } from "@gaia/kinds";
 import { type Realized, realizeRegion } from "@gaia/realize";
 import type { InstanceSpot, SceneLight } from "@gaia/render";
-import { NO_SHIFT, hex } from "@gaia/primitives";
 import { type Terrain, WILD_THICKETS, wildHeightAt, wildThicket } from "@gaia/terrain";
 import { type BuildAsk, made } from "./made.ts";
-import type { RegionCovers } from "./regions.ts";
 import { type Copies, FAR, type FarForms, type FarOf, createCopies } from "./woods.ts";
 
 export const WILD_GROWTH = {
@@ -129,9 +127,8 @@ function wildSpots(t: Terrain, ax: number, az: number, variants: number, cache: 
   return out;
 }
 
-/** The wild's covers, realized as a region's cover is, with no season. */
-function wildGround(lib: Library): [GroundSpec, GroundSpec] {
-  const season = { swatches: {}, ground: NO_SHIFT, frost: 0, fall: hex(0xd9a04a) };
+/** The wild's covers, realized as a region's cover is, in the world's season: what the ground and the grass draw past the land. */
+export function wildGround(lib: Library, season: SeasonSpec): [GroundSpec, GroundSpec] {
   const [a, b] = WILD_COVERS.map((params, i) => {
     const blueprint = blueprintOf("biome", {
       relief: { use: "meadow@1", params: { undulation: "softly undulating", tilt: "level", facing: "north" } },
@@ -145,22 +142,18 @@ function wildGround(lib: Library): [GroundSpec, GroundSpec] {
 }
 
 /**
- * The wild's growth: hands the wild's covers to the ground and the grass,
- * and stands its bushes. `biomeLib` holds the biome primitives, `floraLib`
- * the flora ones. `farForms` takes each bush's far form; without it, none
- * turns far.
+ * The wild's growth: stands its bushes. `floraLib` holds the flora
+ * primitives. `seasoned` gives a build the world's season (`seasonPalette`),
+ * known by the first bake, which makes the bushes' instances. `farForms`
+ * takes each bush's far form; without it, none turns far.
  */
-export function createWildGrowth(scene: THREE.Scene, light: SceneLight, covers: RegionCovers, biomeLib: Library, floraLib: Library, farForms?: FarForms): WildGrowth {
-  covers.wild(wildGround(biomeLib));
+export function createWildGrowth(scene: THREE.Scene, light: SceneLight, floraLib: Library, seasoned: (built: Realized) => Realized, farForms?: FarForms): WildGrowth {
   const asks = wildBushBuilds();
-  const plants: Realized[] = asks.map((ask) => made(ask, floraLib));
+  // Each build is held until its instances are made and its far form baked; the swap test realizes it again.
+  let plants: Realized[] | null = asks.map((ask) => made(ask, floraLib));
   const fars = plants.map((p) => farForms?.add(p, FAR.bush));
-  const views = plants.map((p, i) => {
-    const view = createCopies(p, light, [], fars[i]);
-    scene.add(view.object);
-    return view;
-  });
-  // A bush's build goes once its instances are made and its far form baked; the swap test realizes it again.
+  let views: Copies[] = [];
+  let shown = true;
   const farPresets = asks.flatMap((ask, i) => {
     const far = fars[i];
     return far === undefined ? [] : [{ name: (WILD_BUSHES[i] as (typeof WILD_BUSHES)[number])[0], plant: () => made(ask, floraLib), far }];
@@ -182,9 +175,19 @@ export function createWildGrowth(scene: THREE.Scene, light: SceneLight, covers: 
     all: () => views,
     farPresets,
     show(on) {
+      shown = on;
       for (const v of views) v.object.visible = on;
     },
     update(t) {
+      if (plants !== null) {
+        views = plants.map((p, i) => {
+          const view = createCopies(seasoned(p), light, [], fars[i]);
+          view.object.visible = shown;
+          scene.add(view.object);
+          return view;
+        });
+        plants = null;
+      }
       terrain = t;
       cache.clear();
       stand(t, true);

@@ -95,8 +95,11 @@ export interface Understory {
   readonly farPresets: readonly { readonly name: string; readonly plant: () => Realized; readonly far: FarOf }[];
 }
 
-/** `farForms` takes the far form of every build whose group turns far; without it, nothing does. */
-export function createUnderstory(scene: THREE.Scene, light: SceneLight, lib: Library, clearings: Clearings, farForms?: FarForms): Understory {
+/**
+ * `seasoned` gives a build the world's season (`seasonPalette`) as its instances are made. `farForms` takes the far
+ * form of every build whose group turns far; without it, nothing does.
+ */
+export function createUnderstory(scene: THREE.Scene, light: SceneLight, lib: Library, clearings: Clearings, seasoned: (built: Realized) => Realized, farForms?: FarForms): Understory {
   const built = GROUPS.map((g) => {
     const asks = asksOf(g);
     const fresh = asks.map((ask) => made(ask, lib));
@@ -146,7 +149,7 @@ export function createUnderstory(scene: THREE.Scene, light: SceneLight, lib: Lib
             return;
           }
           if (spots.length === 0) return;
-          const view = createCopies(plant(variant), light, spots, far[variant]);
+          const view = createCopies(seasoned(plant(variant)), light, spots, far[variant]);
           plants[variant] = null;
           scene.add(view.object);
           const entry = { group, view };
@@ -167,7 +170,7 @@ export function createUnderstory(scene: THREE.Scene, light: SceneLight, lib: Lib
         for (const variant of plants.keys()) {
           const key = `${group.id}/${variant}`;
           if (kept.has(key) || !given.some((p) => p.rule === group.id && p.variant === variant)) continue;
-          const view = createCopies(plant(variant), light, [], far[variant]);
+          const view = createCopies(seasoned(plant(variant)), light, [], far[variant]);
           plants[variant] = null;
           scene.add(view.object);
           const entry = { group, view };

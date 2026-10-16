@@ -51,8 +51,9 @@ You need Node 26, pnpm 10 and a stable Rust toolchain from rustup (put
 | `pnpm jev-world`, `pnpm compare-jev`, `pnpm print-world-requests` | Jev's kept answers for the snapshot, request designs compared, and every request printed |
 
 The lab page takes `?view=terrain|flora|world` (a debugging view instead of
-the world), `?hour=22`, `?world=sample`, `?world=proving`, `?judge=stand-in`
-and `?start=table|signpost` (`?judge=stand-in` is for development only: the page otherwise runs on Jev's kept answers alone, and a request with no kept answer fails it, naming the request). Scripts drive it through `window.__lab`:
+the world), `?hour=22`, `?world=sample`, `?world=proving`, `?judge=stand-in`,
+`?season=deep autumn` (any world preset's season, previewed over the world)
+and `?start=table|signpost` (`?judge=stand-in` and `?season=` are for development only: the page otherwise runs on Jev's kept answers alone, and a request with no kept answer fails it, naming the request). Scripts drive it through `window.__lab`:
 `open(view)`, `hour(h)`, `frames(n)`, `stats()`, and each view's hooks, such
 as `__lab.terrain.walk(x, z, yawDeg, pitchDeg)`, `__lab.terrain.calls()` and
 `__lab.immersive.map(true)`, listed where each lab returns them.

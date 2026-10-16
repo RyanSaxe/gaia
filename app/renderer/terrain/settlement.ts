@@ -10,11 +10,12 @@
 import { type Blueprint, type BuildingPlan, type Built, type EntityFacts, Library, type Palette, type ThingFacts, seedOf } from "@gaia/schema";
 import { FLORA_PRIMITIVES, STRUCTURE_PRIMITIVES } from "@gaia/primitives";
 import { structure } from "@gaia/kinds";
+import type { Realized } from "@gaia/realize";
 import { type PlantBatch, type SceneLight, createPlantBatch } from "@gaia/render";
 import { type BuildingSite, type Capsule, type Extent, extentOf, turningExtent } from "@gaia/terrain";
 import type * as THREE from "three";
 import { type BuildAsk, made } from "./made.ts";
-import { type Represented, SAMPLE_ENTITIES, type SampleEntity, representEntity } from "./samples.ts";
+import { type Represented, type SampleEntity, representEntity } from "./samples.ts";
 import { type StandBuilding, blockedBy, buildingClearings, needsBank, signOf, standOf } from "./stand.ts";
 
 export interface Building {
@@ -111,8 +112,11 @@ export const settlementBuilds = (entities: readonly SampleEntity[]): BuildAsk[] 
     facts: Object.fromEntries(Object.entries(structure.facts).map(([k, bind]) => [k, bind(entity.facts)])),
   }));
 
-/** A building for each entity, each the building Jev chose for it: the sample entities unless a world names its own. */
-export function createSettlement(light: SceneLight, entities: readonly SampleEntity[] = SAMPLE_ENTITIES): Settlement {
+/**
+ * A building for each entity, each the building Jev chose for it. `seasoned` gives a build the world's season
+ * (`seasonPalette`), which its garden and weeds take; its mark on the map keeps the colors it was built with.
+ */
+export function createSettlement(light: SceneLight, entities: readonly SampleEntity[], seasoned: (built: Realized) => Realized): Settlement {
   const asks = settlementBuilds(entities);
   const buildings: Building[] = entities.map((entity, i) => {
     const ask = asks[i] as BuildAsk;
@@ -176,7 +180,7 @@ export function createSettlement(light: SceneLight, entities: readonly SampleEnt
       }
       for (const [key, members] of want) {
         if (batches.has(key)) continue;
-        const batch = createPlantBatch(members.map((b) => ({ plant: made(b.ask, lib), ...atSite(b), vitality: b.vitality })), light);
+        const batch = createPlantBatch(members.map((b) => ({ plant: seasoned(made(b.ask, lib)), ...atSite(b), vitality: b.vitality })), light);
         members.forEach((b, member) => (b.standing = { batch, member }));
         scene.add(batch.object);
         batches.set(key, { members, batch });

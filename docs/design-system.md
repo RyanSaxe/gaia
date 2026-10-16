@@ -39,6 +39,18 @@ each family's identity, and pushes each shifted color a fixed distance away
 from its decline color. The `tint` channel varies hue within one swatch across
 a canopy; it never touches decline.
 
+The world a person walks wears the season Jev chose for it everywhere: every
+region's ground cover and grass and the wild's, and every tree, bush, drift of
+flowers, building and landmark, colored as it is made (`seasoned` in the
+terrain lab), with far forms baked in the same colors. The season turns leaf,
+bark and bloom and the ground, so a cottage's garden and weeds turn and its
+house does not. Every other healthy color keeps its hue, but one that sits
+closer to its decline color than the margin is pushed clear of it too, as a
+shifted one is: lantern-dusk's masonry, for one, goes from #6f6d78 to a
+darker, bluer #5e5980. A page wears one season all its life, that of the
+world it opened. The field map does not take the season: on the map color means
+health, so a thing's mark keeps the colors it was built with.
+
 ## Leaves
 
 Canopies are painted masses from afar and leaves up close, and every leaf

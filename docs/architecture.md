@@ -1078,10 +1078,11 @@ own dissolve, and by 4 it is gone (`GONE` and `goneAt` in `woods.ts`, which
 `standing.ts` reads too); a cell whose largest crown spans under 4 pixels at
 its nearest point draws nothing. Every plant that turns far is listed once in `createFarForms`,
 in the far cards' form order. Each build bakes into its far form a few views
-a frame under the wait (`startFarBake`), and the wait lifts only once all of
-them are ready. A baked form is kept in the
-browser's IndexedDB (`app/renderer/terrain/far-store.ts`), keyed by a hash of
-the build, the bake's version and the swap size, so each build bakes once. A
+a frame under the wait (`startFarBake`), in the world's season once that is
+known, and the wait lifts only once all of them are ready. A baked form is
+kept in the browser's IndexedDB (`app/renderer/terrain/far-store.ts`), keyed by
+a hash of the build in its season's colors, the bake's version and the swap
+size, so each build bakes once a season. A
 form read back from the store keeps its pixels in the page only until the GPU
 holds them (`farFormFrom`'s `onUpdate`). The land's textures are laid on the
 page from what it holds anyway: the clipmap's levels from the bake's arrays
