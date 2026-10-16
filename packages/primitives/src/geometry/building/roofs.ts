@@ -7,7 +7,7 @@
 
 import { type BuildContext, type BuildingPlan, type Built, GRAIN, type Mass, type Rand, type Resolved } from "@gaia/schema";
 import type { thatchParams, tilesParams } from "../../structure.ts";
-import { type Channels, PartBuilder, type V3, addScaled, clamp, cross, fbm3, lossThreshold, normalize } from "../kit.ts";
+import { type Channels, PartBuilder, type V3, addScaled, clamp, cross, fbm3, normalize } from "../kit.ts";
 import { UP, beam, box, log, quad } from "../blocks.ts";
 import { type Ruin, chimneyEnd, hipDrop, hipSlope, ruinAt, ruinOf, spanOf, still, wallTop } from "./frame.ts";
 import { lump } from "./ruin.ts";
@@ -86,6 +86,12 @@ interface Slab {
 
 /** The point a slope sags and falls about: its ridge, or a lean-to's high edge. */
 const hingeOf = (f: RoofFrame, a: number): V3 => roofPoint(f, a, f.m.roof === "lean-to" ? -f.m.fall * f.halfSpan : 0, f.top + f.rise);
+
+/** Where a point lies in a roof's own terms, along its ridge and across it. */
+const roofCoordsOf = (f: RoofFrame, p: V3): { a: number; b: number } => ({
+  a: (p[0] - f.m.x) * f.ax[0] + (p[2] - f.m.z) * f.ax[2],
+  b: (p[0] - f.m.x) * f.bx[0] + (p[2] - f.m.z) * f.bx[2],
+});
 
 /**
  * Extrudes a closed, counter-clockwise (b, y) profile along the ridge from
@@ -199,6 +205,12 @@ function sagOf(f: RoofFrame, a: number, b: number, reach: number): number {
   return 0.075 * e * e * (0.45 + 0.55 * mid);
 }
 
+/** How a slope sags at (a, b): as `sagOf`, and more over the collapse, about the hinge its covering hangs from. */
+const sagAt = (f: RoofFrame, ruin: Ruin, reach: number, a: number, bv: number): Pick<Channels, "droop" | "pivot"> => ({
+  droop: sagOf(f, a, bv, reach) + 0.28 * ruinAt(ruin, roofPoint(f, a, bv, 0)),
+  pivot: hingeOf(f, a),
+});
+
 /** The chimney, its cap and pot, and where its smoke rises from. A gable stack needs a free gable end; otherwise it rises through the ridge. */
 function chimney(stack: PartBuilder, plan: BuildingPlan, f: RoofFrame, wanted: "gable" | "ridge" | "none", cover: number, r: Rand): V3 | null {
   if (wanted === "none") return null;
@@ -275,65 +287,65 @@ export function smoke(b: PartBuilder, at: V3, r: Rand): void {
 }
 
 /**
- * The rafters under a roof's covering, a ridge beam and purlins: hidden
- * while the roof is whole, bare where it rots through. Over the collapse
- * they sag with the covering and some are lost, and under a lean-to that
- * caves in they go down with its slope, so none is left standing out where
- * it was. Common rafters run only where the slopes run, so a hipped end shows
- * none poking through; its own jack rafters run up it under its covering.
+ * The frame under a roof's covering: rafters down each slope, and on a
+ * hipped end hip rafters along its hips and jack rafters up it from its eave,
+ * a ridge beam and purlins. It is hidden while the roof is whole and bare
+ * where the covering rots through. It never goes before the covering on it,
+ * because any piece of covering may last: every point of it sags and falls
+ * just as the covering over it does, so the covering never lifts off it.
  */
 function rafters(b: PartBuilder, debris: PartBuilder, f: RoofFrame, ruin: Ruin, { reach, a0, a1, fall }: Slab, r: Rand): void {
   const under = undersideOf(f);
   const lean = f.m.roof === "lean-to";
-  // The slopes run between the hipped ends: the whole length on a gable or a lean-to.
-  const end = f.m.roof === "hip" ? Math.max(0, f.halfLength - f.halfSpan) : f.m.roof === "half-hip" ? f.halfLength - (0.45 * f.rise) / hipSlope(f.m) : a1;
-  const r0 = f.m.ends[0] ? Math.max(a0, -end) : a0;
-  const r1 = f.m.ends[1] ? Math.min(a1, end) : a1;
+  const hipped = (a: number): boolean => (f.m.roof === "hip" || f.m.roof === "half-hip") && f.m.ends[a < 0 ? 0 : 1];
+  // A hipped end's plane begins `start` along the ridge from the middle, and meets a slope `b` across at its hip.
+  const start = f.m.roof === "hip" ? Math.max(0, f.halfLength - f.halfSpan) : f.m.roof === "half-hip" ? f.halfLength - (0.45 * f.rise) / hipSlope(f.m) : Infinity;
+  const hipA = (bv: number): number => start + (slopeOf(f) * Math.abs(bv)) / hipSlope(f.m);
+  const hipB = (a: number): number => ((Math.abs(a) - start) * hipSlope(f.m)) / slopeOf(f);
+  // A point of the frame just under the covering, on a slope or on a hipped end.
+  const at = (a: number, bv: number): V3 => roofPoint(f, a, bv, under(bv) - hipOf(f, a, bv).drop - 0.09);
+  // Every timber sags and falls just as the covering over it does, point for point.
+  const frame = new Following(b, (p) => {
+    const { a, b: bv } = roofCoordsOf(f, p);
+    return { ...sagAt(f, ruin, reach, a, bv), ...fall };
+  });
+  // A long timber bends at its middle, so it follows the covering's sag along it rather than cutting across it.
+  const timber = (head: V3, foot: V3): void => {
+    const pieces = Math.hypot(foot[0] - head[0], foot[1] - head[1], foot[2] - head[2]) > 1.6 ? 2 : 1;
+    beam(frame, head, foot, 0.09, 0.13, UP, 0.4 + 0.1 * r.next(), still(head, 0.55, { tint: (r.next() - 0.5) * 0.03 }), pieces);
+  };
+  // Rafters down each slope from the ridge, or on a hipped end's side from the hip, to the eave.
   const runs: [number, number][] = lean ? [[-f.m.fall * (f.halfSpan - 0.06), f.m.fall * (reach - 0.06)]] : [[0.06, reach - 0.06], [-0.06, -(reach - 0.06)]];
-  const count = Math.max(2, Math.round((r1 - r0 - 0.3) / 0.62));
-  for (let i = 0; i <= count && r1 - r0 > 0.4; i++) {
-    const a = r0 + 0.15 + ((r1 - r0 - 0.3) * i) / count;
+  const count = Math.max(2, Math.round((a1 - a0 - 0.3) / 0.62));
+  for (let i = 0; i <= count; i++) {
+    const a = a0 + 0.15 + ((a1 - a0 - 0.3) * i) / count;
     for (const [b0, b1] of runs) {
-      const zone = ruinAt(ruin, roofPoint(f, a, b1, 0));
-      // A rafter hangs from the ridge beam at its head, sags about it with
-      // the covering, and shrinks back onto it as it goes.
-      const c: Channels = {
-        loss: zone > 0.35 && r.next() < 0.5 ? lossThreshold(r.next(), 0.2, 0.04) : 0,
-        droop: 0.06 + 0.3 * zone,
-        wither: 0.55,
-        glow: 0,
-        pivot: roofPoint(f, a, b0, under(b0) - 0.09),
-        tint: (r.next() - 0.5) * 0.03,
-        ...fall,
-      };
-      beam(b, roofPoint(f, a, b0, under(b0) - 0.09), roofPoint(f, a, b1, under(b1) - 0.09), 0.09, 0.13, UP, 0.4 + 0.1 * r.next(), c);
+      const head = hipped(a) && Math.abs(a) > start ? Math.sign(b1) * Math.max(Math.abs(b0), hipB(a)) : b0;
+      if (Math.abs(b1) - Math.abs(head) > 0.3) timber(at(a, head), at(a, b1));
     }
   }
-  // A hipped end's jack rafters run up it from its eave to the hip, a rafter's spacing apart, so a hole in it opens
-  // onto rafters as a slope's does and no tongue of its covering is left standing on nothing.
-  const jr = r.fork("jacks");
-  for (const [side, s] of [[0, -1], [1, 1]] as const) {
-    if (!f.m.ends[side] || (f.m.roof !== "hip" && f.m.roof !== "half-hip")) continue;
-    const foot = Math.abs(side === 0 ? a0 : a1) - 0.06;
+  for (const s of [-1, 1]) {
+    if (!hipped(s) || !Number.isFinite(start)) continue;
+    const foot = Math.abs(s < 0 ? a0 : a1) - 0.06;
+    // Hip rafters from the ridge's end down each hip, to the eave's corner or to where a half-hip's gable takes over.
+    const most = Math.min(reach - 0.06, hipB(foot));
+    for (const side of [-1, 1]) timber(at(s * start, 0), at(s * hipA(most), side * most));
+    // Jack rafters up the end from its eave to the hips, a rafter's spacing apart.
     const n = Math.max(1, Math.round((reach - 0.1) / 0.62));
     for (let k = -n; k <= n; k++) {
       const bv = ((reach - 0.1) * k) / n;
-      const at = (a: number): V3 => roofPoint(f, s * a, bv, under(bv) - hipOf(f, s * a, bv).drop - 0.09);
-      if (hipOf(f, s * foot, bv).drop <= 0) continue;
-      // Its head is where the end meets the slope, at the hip.
-      let head = foot;
-      while (head > 0.05 && hipOf(f, s * (head - 0.05), bv).drop > 0) head -= 0.05;
-      if (foot - head < 0.3) continue;
-      const zone = ruinAt(ruin, at(foot));
-      const c: Channels = { loss: zone > 0.35 && jr.next() < 0.5 ? lossThreshold(jr.next(), 0.2, 0.04) : 0, droop: 0.06 + 0.3 * zone, wither: 0.55, glow: 0, pivot: at(head), tint: (jr.next() - 0.5) * 0.03 };
-      beam(b, at(head), at(foot), 0.09, 0.13, UP, 0.4 + 0.1 * jr.next(), c);
+      if (hipOf(f, s * foot, bv).drop <= 0 || foot - hipA(bv) < 0.3) continue;
+      timber(at(s * hipA(bv), bv), at(s * foot, bv));
     }
   }
+  // The ridge beam and purlins run between the hipped ends.
+  const r0 = hipped(-1) ? Math.max(a0, -start) : a0;
+  const r1 = hipped(1) ? Math.min(a1, start) : a1;
   const ridgeB = lean ? -f.m.fall * (f.halfSpan - 0.08) : 0;
-  if (r1 - r0 > 0.2) beam(b, roofPoint(f, r0 + 0.05, ridgeB, under(ridgeB) - 0.1), roofPoint(f, r1 - 0.05, ridgeB, under(ridgeB) - 0.1), 0.16, 0.16, UP, 0.42, still(hingeOf(f, 0), 0.55, { droop: 0.04 }));
+  if (r1 - r0 > 0.2) beam(frame, roofPoint(f, r0 + 0.05, ridgeB, under(ridgeB) - 0.1), roofPoint(f, r1 - 0.05, ridgeB, under(ridgeB) - 0.1), 0.16, 0.16, UP, 0.42, still(hingeOf(f, 0), 0.55));
   for (const bv of lean ? [0] : [-f.halfSpan * 0.5, f.halfSpan * 0.5]) {
     const y = under(bv) - 0.2;
-    if (r1 - r0 > 0.4) beam(b, roofPoint(f, r0 + 0.1, bv, y), roofPoint(f, r1 - 0.1, bv, y), 0.12, 0.12, UP, 0.4, still(hingeOf(f, 0), 0.55, { droop: 0.1, ...fall }));
+    if (r1 - r0 > 0.4) beam(frame, roofPoint(f, r0 + 0.1, bv, y), roofPoint(f, r1 - 0.1, bv, y), 0.12, 0.12, UP, 0.4, still(hingeOf(f, 0), 0.55));
   }
   // Below the collapsed eaves, fallen covering lies on the ground.
   const corner = { a: (ruin.x - f.m.x) * f.ax[0] + (ruin.z - f.m.z) * f.ax[2], b: (ruin.x - f.m.x) * f.bx[0] + (ruin.z - f.m.z) * f.bx[2] };
@@ -499,10 +511,9 @@ function thatchSlab(roof: PartBuilder, plan: BuildingPlan, f: RoofFrame, p: Reso
         shade,
         c: {
           loss: 0,
-          droop: sagOf(f, a, pt.b, reach) + 0.28 * ruinAt(ruin, roofPoint(f, a, pt.b, 0)),
+          ...sagAt(f, ruin, reach, a, pt.b),
           wither: clamp(0.5 + 0.35 * e + 0.2 * nz, 0, 1),
           glow: 0,
-          pivot: hingeOf(f, a),
           tint: 0.025 * nz,
           // The straw goes before the battens under it.
           rot: roofRot(f, ruin, a, pt.b, reach) * (pt.top === true ? 1 : 0.85),
@@ -584,10 +595,9 @@ function tileSlab(roof: PartBuilder, plan: BuildingPlan, f: RoofFrame, p: Resolv
         shade,
         c: {
           loss: 0,
-          droop: sagOf(f, a, pt.b, reach) + 0.28 * ruinAt(ruin, roofPoint(f, a, pt.b, 0)),
+          ...sagAt(f, ruin, reach, a, pt.b),
           wither: clamp(0.45 + 0.4 * e * e + 0.25 * nz, 0, 1),
           glow: 0,
-          pivot: hingeOf(f, a),
           tint: 0.03 * cell,
           // The tiles go before the boards under them.
           rot: roofRot(f, ruin, a, pt.b, reach) * (pt.top === true ? 1 : 0.85),

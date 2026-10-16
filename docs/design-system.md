@@ -589,8 +589,11 @@ corner, a roof's covering opening in big holes to its rafters whose edges
 step along its courses, a whole tile or bundle of straw at a time, the
 straw slumping and thinning to a ragged fringe at a hole's edge and the
 tiles and straw going a little before the boards and battens under them,
-a hipped end rotting from its eave as the slopes do, over jack rafters of
-its own, and a caved lean-to's rafters and purlin going down with its slope;
+a hipped end rotting from its eave as the slopes do, over hip and jack
+rafters of its own, and a caved lean-to's rafters and purlin going down with
+its slope. The frame never goes before the covering on it, since any piece
+of covering may last: rafters sag with the covering and stay, so no piece of
+it is ever left standing on nothing;
 walls the same way, plaster falling in patches that stop at the timbers and
 bare the rubble behind it, stones a block at a time from their tops with
 the mortar just after, and boards a length at a time, and a tower's render
