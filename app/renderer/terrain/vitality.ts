@@ -74,13 +74,15 @@ const g = GROUND_DECLINE;
 
 /**
  * GLSL: the field (`landVitality`: the ground's own vitality in x, its
- * area's in y), how far ground of a vitality has declined (`declineOf`, the
- * twin of `groundDecline` in @gaia/terrain), and where bare earth opens in
- * declined ground (`bareEarth`): patches a few meters across, ragged at
- * their edges, opening over more of the ground as it declines
- * (`groundLook`'s bare share), softened over `edge`. The ground paints the
- * patches and the grass thins out across a wider edge and leaves them bare,
- * from the same function.
+ * area's in y), how far along its decline a vitality looks
+ * (`shownVitality`, the twin of @gaia/realize's), how far ground of a
+ * vitality has declined (`declineOf`, the twin of `groundDecline` in
+ * @gaia/terrain), and where bare earth opens in declined ground
+ * (`bareEarth`): patches a few meters across, ragged at their edges,
+ * opening over more of the ground as it declines (`groundLook`'s bare
+ * share), softened over `edge`. The ground paints the patches and the grass
+ * thins out across a wider edge and leaves them bare, from the same
+ * function.
  */
 export const VITALITY_GLSL = /* glsl */ `
 uniform sampler2D uVitalityField;
@@ -94,7 +96,8 @@ vec2 landVitality(vec2 xz) {
   vec2 uv = ((xz - uVitalityMap.x) / uVitalityMap.y + 0.5) / uVitalityMap.z;
   return texture2D(uVitalityField, uv).rg;
 }
-float declineOf(float v) { return 1.0 - smoothstep(${g.to.toFixed(3)}, ${g.from.toFixed(3)}, 1.0 - pow(1.0 - clamp(v, 0.0, 1.0), ${CHANNEL_MATH.legibility.toFixed(3)})); }
+float shownVitality(float v) { return clamp((v - ${CHANNEL_MATH.shownRuin.toFixed(3)}) / ${(CHANNEL_MATH.shownWhole - CHANNEL_MATH.shownRuin).toFixed(3)}, 0.0, 1.0); }
+float declineOf(float v) { return 1.0 - smoothstep(${g.to.toFixed(3)}, ${g.from.toFixed(3)}, shownVitality(v)); }
 float vitalHash(vec2 p) {
   vec3 p3 = fract(vec3(p.xyx) * 0.1031);
   p3 += dot(p3, p3.yzx + 33.33);

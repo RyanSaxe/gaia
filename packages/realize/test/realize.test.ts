@@ -111,13 +111,13 @@ describe("vitality response", () => {
     });
   }
 
-  it("shows any fall from full vitality further along its decline, with nothing that jumps", () => {
-    expect(shownVitality(1)).toBe(1);
-    expect(shownVitality(0)).toBe(0);
-    for (let v = 0.001; v < 0.999; v += 0.001) {
-      expect(shownVitality(v)).toBeLessThan(v);
-      // It falls with vitality, and a thousandth of vitality never moves the look by more than a fiftieth.
-      expect(shownVitality(v + 0.001)).toBeGreaterThan(shownVitality(v));
+  it("shows vitality 0.85 and up fully healthy, 0.45 and below as ruin, and falls evenly between with nothing that jumps", () => {
+    for (const v of [0.85, 0.9, 0.99, 1]) expect(shownVitality(v)).toBe(1);
+    for (const v of [0, 0.1, 0.36, 0.45]) expect(shownVitality(v)).toBe(0);
+    for (let v = 0; v < 1; v += 0.001) {
+      expect(shownVitality(v + 0.001)).toBeGreaterThanOrEqual(shownVitality(v));
+      if (v > 0.45 && v < 0.849) expect(shownVitality(v + 0.001)).toBeGreaterThan(shownVitality(v));
+      // A thousandth of vitality never moves the look by more than a fiftieth.
       expect(shownVitality(v + 0.001) - shownVitality(v)).toBeLessThan(0.02);
     }
   });
