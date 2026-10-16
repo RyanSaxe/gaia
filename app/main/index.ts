@@ -12,6 +12,7 @@ import { BrowserWindow, Menu, MessageChannelMain, type MessagePortMain, app, dia
 import type { FromMain, ToMain } from "../world-service/protocol.ts";
 import { superviseEngine } from "./engine.ts";
 import { takeShots } from "./shots.ts";
+import { webglErrors } from "./webgl-errors.ts";
 
 const here = import.meta.dirname;
 const shots = process.argv.includes("--shots");
@@ -68,6 +69,8 @@ void app.whenReady().then(() => {
       preload: join(here, "../preload/index.cjs"),
       // Shots render in a hidden window, which Chromium would otherwise throttle.
       backgroundThrottling: !shots,
+      // Shots keep the page's storage in memory, so every run is a first visit: the far forms bake, and a broken bake shows.
+      ...(shots ? { partition: "shots" } : {}),
     },
   });
 
@@ -120,11 +123,15 @@ void app.whenReady().then(() => {
   const loaded = load();
 
   if (shots) {
+    const errors = webglErrors();
+    window.webContents.on("console-message", (e) => errors.note(e.message));
     loaded
       .then(() => takeShots(window, join(repoRoot, "shots")))
       .then((saved) => {
         console.log(`Saved ${saved.length} shots in ${join(repoRoot, "shots")}`);
-        app.quit();
+        console.log(errors.summary());
+        if (errors.count() > 0) app.exit(1);
+        else app.quit();
       })
       .catch((error: unknown) => {
         console.error(error);

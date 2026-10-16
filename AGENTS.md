@@ -42,7 +42,7 @@ You need Node 26, pnpm 10 and a stable Rust toolchain from rustup (put
 | `GAIA_JEV=stand-in pnpm dev` | For development only: opens a world the stand-in judges on purpose, sending nothing to Jev. Never on by default, never shown to a person |
 | `pnpm lab:html out.html` | The lab as one offline page, on Gaia's own world with Jev's kept answers |
 | `pnpm lab:serve` | That page on this Mac's Tailscale address, port 5180, rebuilt on every change |
-| `pnpm shots` | Screenshots of every primitive and world look, from Electron, on the stand-in judge unless `GAIA_JEV` is set |
+| `pnpm shots` | Screenshots of every primitive and world look, from Electron, on the stand-in judge unless `GAIA_JEV` is set; fails when the page reports a WebGL error |
 | `pnpm readme-shots` | The README's two screenshots, into `docs/images/` |
 | `pnpm brand` | Paints Gaia's mark into the pictures the app shows and the macOS icon (`app/build/icon.icns`); run it again when the field map's look changes |
 | `GAIA_DATA_DIR=dir pnpm graph-snapshot [root]` | Rewrites `fixtures/gaia-graph.json`, the judged graph of this repository the standalone lab is laid out from, from Jev's answers held in that store |
@@ -85,6 +85,10 @@ reports:
 - a world with five times the trees (`pnpm probe stress`).
 
 Its window opens without taking focus; leave it uncovered while it runs.
+
+Both `pnpm shots` and `pnpm probe` start from a browser profile of their
+own, so the far forms bake as on a first visit, and both fail when the page
+reports any WebGL error, printing how many and the first few.
 
 To prove a live Jev path without spending anything, run the local stand-in
 and point the engine at it. The engine accepts only a loopback endpoint and
