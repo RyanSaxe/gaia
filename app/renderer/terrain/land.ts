@@ -57,6 +57,8 @@ export interface PageLand {
   readonly ground: Float32Array;
   /** Every level's region, covers and trail places, sample for sample with `ground`, level after level, as a texture array holds them. */
   readonly region: Uint8Array;
+  /** 1 where a sample's nearest water is a pond's (`nearPond`). */
+  readonly nearPond: Uint8Array;
   readonly coverRegions: Uint8Array;
   readonly coverShares: Uint8Array;
   readonly trailPlaces: Float32Array;
@@ -93,6 +95,7 @@ const LAYER = CLIP.size * CLIP.size;
 interface Level {
   readonly ground: Float32Array;
   readonly region: Uint8Array;
+  readonly nearPond: Uint8Array;
   readonly coverRegions: Uint8Array;
   readonly coverShares: Uint8Array;
   readonly trailPlaces: Float32Array;
@@ -101,6 +104,7 @@ interface Level {
 const levelOf = (): Level => ({
   ground: new Float32Array(LAYER * 4),
   region: new Uint8Array(LAYER),
+  nearPond: new Uint8Array(LAYER),
   coverRegions: new Uint8Array(LAYER * 4),
   coverShares: new Uint8Array(LAYER * 4),
   trailPlaces: new Float32Array(LAYER * 2),
@@ -117,6 +121,7 @@ function windowAt(spacing: number, k: number, x: number, z: number): { x: number
 function copyLevel(from: Level, to: Level): void {
   to.ground.set(from.ground);
   to.region.set(from.region);
+  to.nearPond.set(from.nearPond);
   to.coverRegions.set(from.coverRegions);
   to.coverShares.set(from.coverShares);
   to.trailPlaces.set(from.trailPlaces);
@@ -131,6 +136,7 @@ function place(chunk: Chunk, ox: number, oz: number, into: Level): void {
     const to = (z0 + j) * CLIP.size + x0;
     into.ground.set(chunk.ground.subarray(from * 4, (from + CHUNK) * 4), to * 4);
     into.region.set(chunk.region.subarray(from, from + CHUNK), to);
+    into.nearPond.set(chunk.nearPond.subarray(from, from + CHUNK), to);
     into.coverRegions.set(chunk.coverRegions.subarray(from * 4, (from + CHUNK) * 4), to * 4);
     into.coverShares.set(chunk.coverShares.subarray(from * 4, (from + CHUNK) * 4), to * 4);
     into.trailPlaces.set(chunk.trailPlaces.subarray(from * 2, (from + CHUNK) * 2), to * 2);
@@ -144,6 +150,7 @@ function carry(cx: number, cz: number, from: Level, fx: number, fz: number, to: 
     const b = (cz * CHUNK - tz + j) * CLIP.size + cx * CHUNK - tx;
     to.ground.set(from.ground.subarray(a * 4, (a + CHUNK) * 4), b * 4);
     to.region.set(from.region.subarray(a, a + CHUNK), b);
+    to.nearPond.set(from.nearPond.subarray(a, a + CHUNK), b);
     to.coverRegions.set(from.coverRegions.subarray(a * 4, (a + CHUNK) * 4), b * 4);
     to.coverShares.set(from.coverShares.subarray(a * 4, (a + CHUNK) * 4), b * 4);
     to.trailPlaces.set(from.trailPlaces.subarray(a * 2, (a + CHUNK) * 2), b * 2);
@@ -294,6 +301,7 @@ export function createPageLand(threads = Math.max(1, Math.min(2, (navigator.hard
   const all = {
     ground: new Float32Array(LAYER * 4 * (levels + CLIP.aside)),
     region: new Uint8Array(LAYER * (levels + CLIP.aside)),
+    nearPond: new Uint8Array(LAYER * (levels + CLIP.aside)),
     coverRegions: new Uint8Array(LAYER * 4 * (levels + CLIP.aside)),
     coverShares: new Uint8Array(LAYER * 4 * (levels + CLIP.aside)),
     trailPlaces: new Float32Array(LAYER * 2 * (levels + CLIP.aside)),
@@ -302,6 +310,7 @@ export function createPageLand(threads = Math.max(1, Math.min(2, (navigator.hard
   const layered: Level[] = Array.from({ length: levels + CLIP.aside }, (_, k) => ({
     ground: all.ground.subarray(k * LAYER * 4, (k + 1) * LAYER * 4),
     region: all.region.subarray(k * LAYER, (k + 1) * LAYER),
+    nearPond: all.nearPond.subarray(k * LAYER, (k + 1) * LAYER),
     coverRegions: all.coverRegions.subarray(k * LAYER * 4, (k + 1) * LAYER * 4),
     coverShares: all.coverShares.subarray(k * LAYER * 4, (k + 1) * LAYER * 4),
     trailPlaces: all.trailPlaces.subarray(k * LAYER * 2, (k + 1) * LAYER * 2),
@@ -365,6 +374,7 @@ export function createPageLand(threads = Math.max(1, Math.min(2, (navigator.hard
     waterLevel,
     shore,
     region: level0.region,
+    nearPond: level0.nearPond,
     coverRegions: level0.coverRegions,
     coverShares: level0.coverShares,
     streams: [],

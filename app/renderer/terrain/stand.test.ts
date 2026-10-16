@@ -111,7 +111,7 @@ describe("standing a world's things on a bake", () => {
     const { n } = t.lattice;
     const field = trailField(t, stood.network.ways);
     const places = trailPlaces(t, stood.network.ways);
-    const differ = { heights: 0, water: 0, shore: 0, field: 0, places: 0 };
+    const differ = { heights: 0, water: 0, shore: 0, nearPond: 0, field: 0, places: 0 };
     for (let z0 = 0; z0 < n; z0 += size) {
       for (let x0 = 0; x0 < n; x0 += size) {
         const tile = standTile(plan, stood.edits, stood.network.ways, x0, z0, size);
@@ -122,13 +122,14 @@ describe("standing a world's things on a bake", () => {
             if (tile.heights[k] !== t.lattice.heights[w]) differ.heights++;
             if (tile.waterLevel[k] !== t.waterLevel[w]) differ.water++;
             if (tile.shore[k] !== t.shore[w]) differ.shore++;
+            if (tile.nearPond[k] !== t.nearPond[w]) differ.nearPond++;
             if (tile.trailField[k] !== field[w]) differ.field++;
             if (tile.trailPlaces[k * 2] !== places[w * 2] || tile.trailPlaces[k * 2 + 1] !== places[w * 2 + 1]) differ.places++;
           }
         }
       }
     }
-    expect(differ).toEqual({ heights: 0, water: 0, shore: 0, field: 0, places: 0 });
+    expect(differ).toEqual({ heights: 0, water: 0, shore: 0, nearPond: 0, field: 0, places: 0 });
     // A coarser level takes every stride-th sample: the same land, but for the shore it measures between its own
     // samples, and the treads it eases by that shore, all close to the water.
     for (const stride of [2, 4]) {

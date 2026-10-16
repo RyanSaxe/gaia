@@ -374,6 +374,29 @@ export const BANKED = 0.4;
 /** How far back from water too shallow to be banked its banks stand at most, meters: past the grass's edge, so grass meets a thin trickle. */
 const SHALLOW_BANK = 3;
 
+/**
+ * Whether each lattice sample's nearest water is a pond's, 1 or 0, beside `shore` (`shoreField` over the same
+ * samples): the ground keeps a pond's full ring of sand, where a stream's narrows. Measured as the shore is, from the
+ * pond's own water, so a tile and the whole bake agree.
+ */
+export function nearPond(l: Lattice, heights: Float32Array, level: Float32Array, ponds: readonly SolvedPond[], shore: Float32Array): Uint8Array {
+  const { n } = l;
+  const pondLevel = new Float32Array(n * n).fill(-1000);
+  for (const pond of ponds) {
+    const toIndex = (w: number): number => (w - l.origin) / l.spacing;
+    const toIndexZ = (w: number): number => (w - (l.originZ ?? l.origin)) / l.spacing;
+    for (let iz = Math.max(0, Math.floor(toIndexZ(pond.z - pond.reach))); iz <= Math.min(n - 1, Math.ceil(toIndexZ(pond.z + pond.reach))); iz++) {
+      for (let ix = Math.max(0, Math.floor(toIndex(pond.x - pond.reach))); ix <= Math.min(n - 1, Math.ceil(toIndex(pond.x + pond.reach))); ix++) {
+        const i = iz * n + ix;
+        // The level array holds 32-bit floats: a pond's own water holds its level as one.
+        if (Math.hypot(worldOf(l, ix) - pond.x, worldOfZ(l, iz) - pond.z) <= pond.reach && (level[i] as number) === Math.fround(pond.level)) pondLevel[i] = pond.level;
+      }
+    }
+  }
+  const fromPonds = shoreField(l, heights, pondLevel);
+  return Uint8Array.from(fromPonds, (d, i) => (d < SHORE_CAP && d <= (shore[i] as number) + 0.5 ? 1 : 0));
+}
+
 /** How many samples past a tile's edge its shore reads: up to the cap, the wet neighbor a dry sample starts from, and that neighbor's own neighbors. */
 export const shoreMargin = (spacing: number): number => Math.ceil(SHORE_CAP / spacing) + 2;
 

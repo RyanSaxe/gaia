@@ -284,6 +284,27 @@ describe("terrain", { timeout: 20_000 }, () => {
     expect(thin).toBeGreaterThan(0);
   });
 
+  it("marks the ground whose nearest water is a pond, and none whose nearest is a stream", () => {
+    let marked = 0;
+    for (const t of baked.slice(0, 6)) {
+      const { n, spacing, origin } = t.lattice;
+      for (const p of t.ponds) {
+        // Just past a pond's water, on its far side from any stream, the mark is set.
+        const i = Math.round((p.x - origin) / spacing);
+        const j = Math.round((p.z - origin) / spacing);
+        if (t.nearPond[j * n + i] === 1) marked++;
+      }
+      for (const s of t.streams) {
+        const st = s.stations[Math.floor(s.stations.length / 2)]!;
+        if (t.ponds.some((p) => Math.hypot(st.x - p.x, st.z - p.z) < p.reach + 20)) continue;
+        const i = Math.round((st.x - origin) / spacing);
+        const j = Math.round((st.z - origin) / spacing);
+        expect(t.nearPond[j * n + i], "the middle of a stream far from any pond").toBe(0);
+      }
+    }
+    expect(marked).toBeGreaterThan(0);
+  });
+
   it("never leaves a crack in the baked lattice: neighbors differ by less than the steepest slope allows", () => {
     const limit = Math.tan((RELIEF_BUDGET.maxSlope * Math.PI) / 180) * 1.5;
     for (const [i, t] of baked.slice(0, 4).entries()) {
