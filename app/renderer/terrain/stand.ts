@@ -9,7 +9,7 @@
 
 import { type Blueprint, type BuildingPlan, type Built, type Library, type RouteSpec, rand, seedOf } from "@gaia/schema";
 import { areaVitality } from "@gaia/world";
-import { type BuildingSite, type Capsule, type Circle, clearingsOf, discOf, type EdgeStone, edgeStones, type Extent, findBankSite, findLandmarkSite, findSite, regionAt, groundedBase, heightAt, isWet, type LandEdits, type LandmarkSite, type LandSite, levelPad, levelTrails, type Occupied, type OwnedSite, type PadEdit, type Placement, PLANT_SLOPE, planTrails, scatterPlants, siteAt, siteToWorld, slopeAt, type Terrain, trailDiscs, type TrailEnd, type TrailNetwork, type TrailRequest, type WayEdit, wildsRing, type WildsRing } from "@gaia/terrain";
+import { type BuildingSite, type Capsule, type Circle, clearingsOf, discOf, type EdgeStone, edgeStones, type Extent, findBankSite, findLandmarkSite, findSite, regionAt, groundedBase, heightAt, isWet, type LandEdits, type LandmarkSite, type LandSite, levelPad, levelTrails, type Occupied, type OwnedSite, type PadEdit, type Placement, PLANT_SLOPE, planTrails, scatterPlants, siteAt, siteToWorld, slopeAt, type Terrain, trailDiscs, type TrailEnd, type TrailNetwork, type TrailRequest, type WayEdit } from "@gaia/terrain";
 
 /** A building to site: its plan, what stands beside it, the name its trails go by, and whether it stands on a stream's bank. */
 export interface StandBuilding {
@@ -126,12 +126,11 @@ export interface Stand {
   readonly placements: readonly Placement[];
   /** In a world laid out from code, each symbol's placement in `placements`, or -1 where it stands as a tree or nothing could stand. */
   readonly symbols: readonly number[];
-  readonly wilds: WildsRing;
   /** Each way's edging stones, in the order of `network.ways`, set on the stood land, which only the bake's thread holds whole. */
   readonly edging: readonly (readonly EdgeStone[])[];
   /** What standing did to the land, in order, so a tile of it baked alone can be leveled the same (`standTile` in @gaia/terrain). */
   readonly edits: LandEdits;
-  /** Milliseconds each step of standing took: the buildings' sites, the landmarks and trails, the trees, the symbols, and the wild ring with the edging stones. */
+  /** Milliseconds each step of standing took: the buildings' sites, the landmarks and trails, the trees, the symbols, and the edging stones. */
   readonly took: Readonly<Record<string, number>>;
   /** Each building whose feature needs running water that found no stream's bank to stand on, by name: none in any world the tests know. */
   readonly dry: readonly string[];
@@ -519,8 +518,7 @@ export function standWorld(t: Terrain, req: StandRequest): Stand {
     symbols[i] = standing.length - 1;
   }
   mark("symbols");
-  const wilds = wildsRing(t);
   const edging = network.ways.map((way) => edgeStones(t, way, seedOf(`${way.id}/edging`)));
-  mark("wilds");
-  return { sites, landmarks, network, trees, placements: standing, symbols, wilds, edging, edits: { pads, discs: landmarks.map((s) => discOf(s.site)), ways }, took, dry };
+  mark("edging");
+  return { sites, landmarks, network, trees, placements: standing, symbols, edging, edits: { pads, discs: landmarks.map((s) => discOf(s.site)), ways }, took, dry };
 }

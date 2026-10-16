@@ -98,7 +98,6 @@ scope.onmessage = (e) => {
       // The wild base reads the stood land all around its rim, which only the whole world holds; the page cannot measure it.
       const base = wildBase(t);
       reply = { id: req.id, kind: "finished", land: { plan: planOf(t), edits: stood.edits, ways: stood.network.ways }, report: t.report, wildBase: base, stand: { ...stood, took: { finish: finished, ...stood.took } } };
-      moved = [stood.wilds.positions.buffer, stood.wilds.indices.buffer];
     }
   } catch (error) {
     reply = { id: req.id, kind: "failed", message: error instanceof Error ? error.message : String(error) };

@@ -1,8 +1,8 @@
 // The baked lattice as Three.js: the ground around the person as nested
 // rings that follow them, the same rings at a quarter of their detail for the
-// water's mirror, a coarse whole-world mesh for the overview, a coarse ring
-// of the wild land past the rim for views from
-// above, the lattice as a clipmap around the person for every shader that
+// water's mirror, a coarse whole-world mesh and a coarse ring of the wild
+// land past the rim for views from above, built only once a view from above
+// asks for them, the lattice as a clipmap around the person for every shader that
 // stands on the ground (`CLIP`), and the painterly ground material, colored by each region's ground
 // cover and dried by the ground's vitality. Past the land the rings draw the
 // wild land themselves, from the same function the walk stands on
@@ -19,7 +19,7 @@
 
 import * as THREE from "three";
 import { LIGHT_GLSL, type SceneLight, hexToVec3 } from "@gaia/render";
-import { SHORE_CAP, TRAILS, type Terrain, WILDS, type WildsRing, frameOf, landHalf, wildBase, wildsRing } from "@gaia/terrain";
+import { SHORE_CAP, TRAILS, type Terrain, WILDS, frameOf, landHalf, wildBase, wildsRing } from "@gaia/terrain";
 import { CLIP, type PageLand } from "./land.ts";
 import { SWARD_GLSL } from "../world/environment.ts";
 import { REGIONS_GLSL, type RegionCovers, TUFT_GLSL } from "./regions.ts";
@@ -317,7 +317,7 @@ export const RINGS = {
   levels: 5,
   /** Quads per side of every ring; ring k's quads are 2^k lattice spacings wide, so it reaches 2^k * 128 m each way. */
   quads: 256,
-  /** Quad size of the whole-world mesh the overview draws, and of the mirror's innermost ring, in lattice spacings. */
+  /** Quad size of the whole-world mesh a view from above draws, and of the mirror's innermost ring, in lattice spacings. */
   coarse: 4,
   /** Quads per side of each of the mirror's rings: with quads `coarse` times as large, about six of the mirror's pixels each at any distance. */
   mirrorQuads: 128,
@@ -562,7 +562,7 @@ void main() {
 export interface GroundMesh {
   /** The ground around the person, as nested rings that follow them. */
   readonly fine: THREE.Mesh;
-  /** The whole lattice, coarsely, for the overview and its water's mirror. */
+  /** The whole lattice, coarsely, for a view from above and its water's mirror: empty until `aerial` builds it. */
   readonly coarse: THREE.Mesh;
   /**
    * The rings at `RINGS.coarse` times their quad size, around the person,
@@ -570,11 +570,13 @@ export interface GroundMesh {
    * near them, and as cheap however large the world grows.
    */
   readonly mirror: THREE.Mesh;
-  /** A coarse ring of the wild land past the rim, for views from above; walking, the rings draw the wild land. */
+  /** A coarse ring of the wild land past the rim, for views from above: empty until `aerial` builds it. Walking, the rings draw the wild land. */
   readonly wilds: THREE.Mesh;
   readonly material: THREE.ShaderMaterial;
-  /** Takes on a new bake; `wilds` is its wild ring when a bake thread made it already. */
-  update(t: Terrain, wilds?: WildsRing): void;
+  /** Takes on a new bake. */
+  update(t: Terrain): void;
+  /** Builds `coarse` and `wilds` for the land now baked, and again on every bake after, since only a view from above draws them. */
+  aerial(): void;
   /** Centers the rings on the person; call every frame they walk. */
   follow(x: number, z: number): void;
 }
@@ -618,8 +620,8 @@ function ringsMesh(material: THREE.ShaderMaterial, q: number = RINGS.quads): THR
 }
 
 /** The wild ring as geometry the ground material can draw: no water anywhere near. */
-function wildsGeometry(t: Terrain, made?: WildsRing): THREE.BufferGeometry {
-  const ring = made ?? wildsRing(t);
+function wildsGeometry(t: Terrain): THREE.BufferGeometry {
+  const ring = wildsRing(t);
   const count = ring.positions.length / 3;
   const g = new THREE.BufferGeometry();
   g.setAttribute("position", new THREE.BufferAttribute(ring.positions, 3));
@@ -652,7 +654,7 @@ export function createGround(t: Terrain, light: SceneLight, covers: RegionCovers
   const coarseUniforms = { ...uniforms, uCenter: { value: new THREE.Vector2() }, uViewer: { value: new THREE.Vector2() }, uBase: { value: t.lattice.spacing * RINGS.coarse }, uBaseLevel: { value: Math.log2(RINGS.coarse) }, uMorph: { value: 0 } };
   const material = new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: FRAG, uniforms: ringUniforms });
   const fine = ringsMesh(material);
-  // The overview's coarse grid reads the trails from the texture at full resolution.
+  // The coarse grid seen from above reads the trails from the texture at full resolution.
   const coarseMaterial = new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: FRAG, uniforms: coarseUniforms, defines: { TRAIL_TEXTURE: "" } });
   // The whole lattice: the same grid, one level, centered on the world.
   const coarseOf = (l: { readonly n: number; readonly spacing: number }): THREE.Mesh => {
@@ -661,26 +663,29 @@ export function createGround(t: Terrain, light: SceneLight, covers: RegionCovers
     grid(quads, 0, () => true, into);
     return meshOf(into.pos, into.index, coarseMaterial);
   };
-  const coarse = coarseOf(frameOf(t.spec));
-  let coarseN = frameOf(t.spec).n;
+  const coarse = meshOf([], [], coarseMaterial);
+  let coarseN = 0;
   const mirrorUniforms = { ...uniforms, uCenter: { value: new THREE.Vector2() }, uViewer: { value: new THREE.Vector2() }, uBase: { value: t.lattice.spacing * RINGS.coarse }, uBaseLevel: { value: Math.log2(RINGS.coarse) }, uMorph: { value: 1 }, uQuads: { value: RINGS.mirrorQuads }, uSnap: { value: SNAP * t.lattice.spacing * RINGS.coarse } };
   const mirror = ringsMesh(new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: FRAG, uniforms: mirrorUniforms, defines: { TRAIL_TEXTURE: "" } }), RINGS.mirrorQuads);
   mirror.visible = false;
-  const wilds = new THREE.Mesh(
-    wildsGeometry(t),
-    new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: FRAG, uniforms, defines: { WILDS: "" } }),
-  );
+  const wilds = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: FRAG, uniforms, defines: { WILDS: "" } }));
   wilds.frustumCulled = false;
-  const update = (next: Terrain, made?: WildsRing): void => {
-    const world = frameOf(next.spec);
+  let baked = t;
+  let aerial = false;
+  const fillAerial = (): void => {
+    const world = frameOf(baked.spec);
     if (world.n !== coarseN) {
       coarseN = world.n;
       coarse.geometry.dispose();
       coarse.geometry = coarseOf(world).geometry;
     }
     wilds.geometry.dispose();
-    wilds.geometry = wildsGeometry(next, made);
+    wilds.geometry = wildsGeometry(baked);
+  };
+  const update = (next: Terrain): void => {
+    baked = next;
     uniforms.uHeightRange.value.set(next.report.min, next.report.max);
+    if (aerial) fillAerial();
   };
   update(t);
   const snap = SNAP * t.lattice.spacing;
@@ -691,6 +696,11 @@ export function createGround(t: Terrain, light: SceneLight, covers: RegionCovers
     wilds,
     material,
     update,
+    aerial() {
+      if (aerial) return;
+      aerial = true;
+      fillAerial();
+    },
     follow(x, z) {
       ringUniforms.uViewer.value.set(x, z);
       ringUniforms.uCenter.value.set(Math.round(x / snap) * snap, Math.round(z / snap) * snap);

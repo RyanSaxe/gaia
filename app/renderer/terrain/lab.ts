@@ -1480,6 +1480,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   function lookFromAbove(pos?: readonly [number, number, number], target?: readonly [number, number, number]): void {
     if (aerial === null) {
       endWalk();
+      ground.aerial();
       aerial = new THREE.Vector3();
       camera.position.set(walker.x * 0.3 + 40, 300, walker.z * 0.3 + 330);
       showAerial(true);
@@ -1743,7 +1744,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       setGroundOwnership(ownership);
       showLandVitality();
       await nextFrame();
-      ground.update(terrain, stood.wilds);
+      ground.update(terrain);
       water.update(terrain);
       wildGrowth.update(terrain);
       await nextFrame();
