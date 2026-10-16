@@ -581,8 +581,8 @@ walls the same way, plaster falling in patches that stop at the timbers and
 bare the rubble behind it, stones a block at a time from their tops with
 the mortar just after, and boards a length at a time, and a tower's render
 in patches like the plaster; a lean-to's whole slope caves in about its high edge, a turret's
-cone rots through a tile or a bundle of straw at a time round its courses
-and its finial leans and falls, and a fallen timber is
+cone rots through a tile or a bundle of straw at a time round its courses,
+over rafters running down from its apex, and its finial leans and falls, and a fallen timber is
 one storey's post, so a tall house collapses floor by floor.
 
 Ruin obeys gravity. Every piece knows what holds it up and goes no later
