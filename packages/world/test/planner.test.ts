@@ -142,4 +142,23 @@ describe("narrowing a choice to a region's native families", () => {
     expect(family(["deep-forest", "silver-birch"])).toEqual(["deep-forest", "silver-birch"]);
     expect(family([]).length).toBe(Object.keys(PALETTE_FAMILIES).length);
   });
+
+  it("fills in the one family a region names, asking nothing about it", () => {
+    const structure = { form: "branching@1", bark: "bark@1", crown: "leaf-clumps@1", motion: "sway@1", palette: "palette@1" };
+    const d = planDetails(flora, lib, structure, subject, { narrow: { "palette.family": ["teal-gold"] } });
+    expect(d.request.questions["palette.family"]).toBeUndefined();
+    expect(assemble(flora, lib, structure, d, fakeJev(d.request)).slots.palette?.params.family).toBe("teal-gold");
+  });
+});
+
+describe("a value the place settles", () => {
+  it("is filled in and never asked, while the slot's other values are", () => {
+    const structure = { form: "branching@1", bark: "bark@1", crown: "leaf-clumps@1", motion: "sway@1", palette: "palette@1" };
+    const d = planDetails(flora, lib, structure, subject, { fixed: { "form.habit": "weeping" } });
+    expect(d.request.questions["form.habit"]).toBeUndefined();
+    expect(d.request.questions["form.density"]).toBeDefined();
+    const bp = assemble(flora, lib, structure, d, fakeJev(d.request));
+    expect(bp.slots.form?.params.habit).toBe("weeping");
+    expect(validate(bp, flora, lib)).toEqual([]);
+  });
 });

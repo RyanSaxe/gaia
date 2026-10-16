@@ -23,8 +23,9 @@ Color works at three levels:
 
 1. **The world** sets light, sky and wind for everything.
 2. **Each region's biome** sets its ground cover, wildflowers, air, drifting
-   accents and the palette families native to it. Ground covers drift into
-   each other across region edges (see Terrain).
+   accents and the palette families native to it. A building or landmark
+   takes its family from among its land's native ones. Ground covers drift
+   into each other across region edges (see Terrain).
 3. **Each component** has one palette family. Components never blend.
 
 There are nine palette families in `packages/primitives/src/palettes.ts`

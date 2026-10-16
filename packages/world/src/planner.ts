@@ -38,7 +38,8 @@ type Ref =
   | { readonly is: "use"; readonly slot: string }
   | { readonly is: "present"; readonly slot: string }
   | { readonly is: "param"; readonly slot: string; readonly param: string; readonly field: Field }
-  | { readonly is: "member"; readonly slot: string; readonly param: string; readonly member: string };
+  | { readonly is: "member"; readonly slot: string; readonly param: string; readonly member: string }
+  | { readonly is: "fixed"; readonly slot: string; readonly param: string; readonly value: string | boolean };
 
 export interface Wave {
   readonly request: JevRequest;
@@ -141,14 +142,19 @@ export function readStructure(k: AnyKind, lib: Library, wave: Wave, answers: Rea
 export interface DetailOptions {
   /** Which of the kind's stages to ask; 0 when the kind has one stage. */
   readonly stage?: number;
-  /** Allowed keys per field path, such as a region's native families for "palette.family". */
+  /**
+   * Allowed keys per field path, such as a region's native families for "palette.family". A choice left with one
+   * key is filled with it, not asked.
+   */
   readonly narrow?: Readonly<Record<string, readonly string[]>>;
+  /** Values the thing's place already settles, per field path (`relief.stream`): filled in, not asked. */
+  readonly fixed?: Readonly<Record<string, string | boolean>>;
   /** Values settled in earlier stages, which this stage's questions see in the state. */
   readonly earlier?: Readonly<Record<string, unknown>>;
 }
 
 export function planDetails(k: AnyKind, lib: Library, structure: Structure, target: Target, options: DetailOptions = {}): Wave {
-  const { stage = 0, narrow = {}, earlier } = options;
+  const { stage = 0, narrow = {}, fixed = {}, earlier } = options;
   const inStage = new Set(stagesOf(k)[stage] ?? []);
   const questions: Record<string, JevQuestion> = {};
   const refs: Record<string, Ref> = {};
@@ -160,6 +166,11 @@ export function planDetails(k: AnyKind, lib: Library, structure: Structure, targ
     const context = `${k.doc} Its ${slotName} is ${p.doc.replace(/\.$/, "").toLowerCase()}.${ask === undefined ? "" : ` ${ask}`}`;
     for (const [param, raw] of Object.entries(p.params)) {
       const id = `${slotName}.${param}`;
+      const value = fixed[id] ?? onlyKey(raw, narrow[id]);
+      if (value !== undefined) {
+        refs[id] = { is: "fixed", slot: slotName, param, value };
+        continue;
+      }
       const field = narrowed(raw, narrow[id]);
       if (field.type === "set") {
         for (const [member, desc] of Object.entries(field.members as Record<string, string>)) {
@@ -177,6 +188,13 @@ export function planDetails(k: AnyKind, lib: Library, structure: Structure, targ
     }
   }
   return { request: { model: MODEL, state, questions }, refs };
+}
+
+/** The one key a choice is left with by the allowed keys, if they leave it one. */
+function onlyKey(field: Field, allowed: readonly string[] | undefined): string | undefined {
+  if (field.type !== "choice" || allowed === undefined) return undefined;
+  const keys = Object.keys(field.options).filter((key) => allowed.includes(key));
+  return keys.length === 1 ? keys[0] : undefined;
 }
 
 /** A choice or set limited to the allowed keys; an empty or missing list leaves it whole. */
@@ -209,6 +227,8 @@ export function assemble(
       if (yes(answer)) list.push(ref.member);
     } else if (ref.is === "param") {
       bucket[ref.param] = valueOf(ref.field, answer, qid);
+    } else if (ref.is === "fixed") {
+      bucket[ref.param] = ref.value;
     }
   }
   const slots: Record<string, FilledSlot> = {};

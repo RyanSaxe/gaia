@@ -34,6 +34,10 @@ export interface Composed {
   readonly state: Readonly<Record<string, unknown>>;
   /** What its place has that a part may need, such as running water; none when absent. */
   readonly has?: readonly string[];
+  /** The options its place allows, per field path, such as its land's native families for "palette.family" (`DetailOptions.narrow`). */
+  readonly narrow?: Readonly<Record<string, readonly string[]>>;
+  /** Values its place already settles, per field path, such as its area's water for "relief.stream": filled in, not asked. */
+  readonly fixed?: Readonly<Record<string, string | boolean>>;
 }
 
 /** Composes one thing: its structure, then each stage's details, and the blueprint they make. */
@@ -47,8 +51,9 @@ export async function composeThing(c: Composing, jev: JevClient, thing: Composed
   for (let stage = 0; stage < stagesOf(k).length; stage++) {
     // Each stage sees the parts settled in the stages before it, so the openings suit the walls they are set in.
     const earlier = waves.length === 0 ? undefined : settledParams(assemble(k, c.lib, structure, waves, answers));
-    const wave = planDetails(k, c.lib, structure, target, { stage, ...(earlier === undefined ? {} : { earlier }) });
-    if (Object.keys(wave.request.questions).length === 0) continue;
+    const wave = planDetails(k, c.lib, structure, target, { stage, ...(thing.narrow === undefined ? {} : { narrow: thing.narrow }), ...(thing.fixed === undefined ? {} : { fixed: thing.fixed }), ...(earlier === undefined ? {} : { earlier }) });
+    // A stage with nothing to ask or fill in leaves no wave; one whose values its place settles keeps them.
+    if (Object.keys(wave.refs).length === 0) continue;
     Object.assign(answers, await answersOf(jev, wave));
     waves.push(wave);
   }

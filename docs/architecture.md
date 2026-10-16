@@ -232,7 +232,10 @@ part through the planner (`composeThings` in
 wind, the light asked first), each region's land (the biome kind's relief, ground cover,
 air, accents and natives), the building or landmark of every thing Jev
 raised to one, entity, file or definition, and each trail Jev would walk (the link kind's route:
-its width, wear, edging, winding and crossing). Each is composed its
+its width, wear, edging, winding and crossing). A building or landmark waits
+for its land: its palette family is asked among the land's native families
+(`DetailOptions.narrow`), filled in unasked when the land names one, and
+asked among all nine when it names none. Each is composed its
 structure first and then each stage's details, one request a wave, each part
 asked in its own instruction from its kind's slot (`Slot.ask`). Each
 composing request carries what the new engine established about its part of

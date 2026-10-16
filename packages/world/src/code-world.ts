@@ -1132,6 +1132,15 @@ export async function judgeWorld(facts: CodeFacts, looks: Looks, jev: JevClient,
   return { lands: {}, things, trails, forms, waters, characters };
 }
 
+/** Where a land names its native families, and the field a building or a landmark chooses its colors in, among them. */
+const NATIVE_COLORS = { land: "natives", thing: "palette.family" } as const;
+
+/** A land's native families: none when it names none, and then every family suits what stands on it. */
+function nativesOf(land: Blueprint | undefined): readonly string[] {
+  const families = land?.slots[NATIVE_COLORS.land]?.params.families;
+  return Array.isArray(families) ? families : [];
+}
+
 /** What a thing's id names: an entity's root directory, a file's path, or else a definition's `<file>#<name>`. */
 function thingKind(facts: CodeFacts, id: string): StandingThing["of"] {
   if (facts.entities.some((e) => e.path === id)) return "entity";
@@ -1154,7 +1163,8 @@ export interface ComposeOptions {
  * Composes the world part by part, through `jev`, once the understanding pass has judged the code. First, under the
  * judged design and unless the judgments already say, what every entity, file and definition stands as
  * (`planStanding`); then its sky, each region's land, each building or landmark of any thing that stands as one, and
- * each trail Jev would walk. Each composing request carries what `graph` holds about its part of the code
+ * each trail Jev would walk. A building or a landmark waits for its land and chooses its colors among the land's
+ * native families. Each composing request carries what `graph` holds about its part of the code
  * (`repositoryState`, `areaState`, `composingState`, `fileState`, `definitionState`, `trailState`), so it is asked
  * once and stays as it is while the code does. Jev never names a preset.
  */
@@ -1163,34 +1173,41 @@ export async function composeWorld(facts: CodeFacts, looks: Looks, jev: JevClien
   const concurrency = options.concurrency ?? 8;
   const entity = (path: string): Pick<EntityFacts, "path" | "name"> & Partial<EntityFacts> => facts.entities.find((e) => e.path === path) ?? { name: baseName(path) || facts.repository.name, path };
   const regions = Object.keys(judged.waters).sort();
-  // What a thing's place has is what its region's water holds.
   const regionSet = new Set(regions);
-  const has = (dir: string): readonly string[] => looks.water[judged.waters[regionFor(regionSet, dir)] ?? ""]?.holds ?? [];
-  /** A building or a landmark to compose for a thing, with what the graph holds about it. */
-  const raised = (id: string, as: "building" | "landmark"): Composed => {
+  // The lands come first: a building or a landmark takes its colors from among its land's native families.
+  const lands = composeThings(looks.compose, jev, regions.map((path): Composed => ({ path: `land:${path}`, as: "biome", state: areaState(graph, path, lookWords(looks.water, judged.waters[path])) })), concurrency);
+  /**
+   * A building or a landmark to compose for a thing, with what the graph holds about it, once its land is composed:
+   * its place has what its region's water holds, and its colors are among its land's native families.
+   */
+  const raised = async (id: string, as: "building" | "landmark"): Promise<Composed> => {
     const of = thingKind(facts, id);
-    if (of === "entity") return { path: id, as, state: composingState(graph, entity(id)), has: has(id) };
-    return { path: id, as, state: of === "file" ? fileState(graph, id) : definitionState(graph, id), has: has(parentOf(fileOfThing(of, id) as string)) };
+    const region = regionFor(regionSet, of === "entity" ? id : parentOf(fileOfThing(of, id) as string));
+    const place = { has: looks.water[judged.waters[region] ?? ""]?.holds ?? [], narrow: { [NATIVE_COLORS.thing]: nativesOf((await lands)[`land:${region}`]) } };
+    if (of === "entity") return { path: id, as, state: composingState(graph, entity(id)), ...place };
+    return { path: id, as, state: of === "file" ? fileState(graph, id) : definitionState(graph, id), ...place };
   };
   const trailId = (t: CodeTrail): string => `trail:${t.from}->${t.to}`;
-  // The sky, the lands, the trails and any thing already standing as a building or a landmark do not wait on what the
-  // rest stand as: they are composed while that is asked.
-  const settled: Composed[] = [
-    { path: "world:", as: "world", state: repositoryState(graph, facts.repository.name) },
-    ...regions.map((path): Composed => ({ path: `land:${path}`, as: "biome", state: areaState(graph, path, lookWords(looks.water, judged.waters[path])) })),
-    ...Object.entries(judged.things).map(([id, t]) => raised(id, t.as)),
-    ...judged.trails.map((t): Composed => ({ path: trailId(t), as: "link", state: trailState(graph, entity(t.from), entity(t.to)) })),
-  ];
-  const composing = composeThings(looks.compose, jev, settled, concurrency);
+  // The sky and the trails do not wait on the lands, nor on what things stand as: they are composed meanwhile.
+  const skyAndTrails = composeThings(
+    looks.compose,
+    jev,
+    [{ path: "world:", as: "world", state: repositoryState(graph, facts.repository.name) }, ...judged.trails.map((t): Composed => ({ path: trailId(t), as: "link", state: trailState(graph, entity(t.from), entity(t.to)) }))],
+    concurrency,
+  );
   // What every entity, file and definition stands as, under the judged design unless the judgments already say; each
-  // thing Jev raises to a building or a landmark is composed as soon as its answer is in.
+  // thing Jev raises to a building or a landmark is composed as soon as its answer is in and its land is composed.
   const things: Record<string, { as: "building" | "landmark"; blueprint?: Blueprint }> = { ...judged.things };
   const rising: Promise<unknown>[] = [];
+  const compose = (id: string, as: "building" | "landmark"): void => {
+    rising.push(raised(id, as).then((thing) => composeThing(looks.compose, jev, thing)).then((blueprint) => (things[id] = { as, blueprint })));
+  };
+  for (const [id, t] of Object.entries(judged.things)) compose(id, t.as);
   const raise = (id: string, form: string): void => {
     const as = looks.form[form]?.composes;
     if (as === undefined || judged.things[id] !== undefined) return;
     things[id] = { as };
-    rising.push(composeThing(looks.compose, jev, raised(id, as)).then((blueprint) => (things[id] = { as, blueprint })));
+    compose(id, as);
   };
   let stands = judged.stands;
   if (stands === undefined && designOf(options.design).questions === "judged") {
@@ -1208,8 +1225,8 @@ export async function composeWorld(facts: CodeFacts, looks: Looks, jev: JevClien
     // In the order things are planned, so the same answers give the same judgments.
     stands = Object.fromEntries(standingThings(facts, graph).flatMap((t) => (out[t.id] === undefined ? [] : [[t.id, out[t.id] as string] as const])));
   } else for (const [id, form] of Object.entries(stands ?? {})) raise(id, form);
-  const blueprints = await composing;
-  await Promise.all(rising);
+  const [composedLands, composedSkyAndTrails] = await Promise.all([lands, skyAndTrails, Promise.all(rising)]);
+  const blueprints = { ...composedLands, ...composedSkyAndTrails };
   const of = (id: string): Blueprint => blueprints[id] ?? (things[id]?.blueprint as Blueprint);
   return {
     ...judged,
