@@ -1394,9 +1394,11 @@ stops a walk as a wall does, and a trip along its way fords the stream
 0.9 m beside its rail, on the shallower side, wading or swimming
 (`fordBeside`); a trip straight across the land takes no broken bridge.
 
-A trail's wear follows the vitality of the two entities it joins, live.
-Near each end it takes that end's entity's vitality, and it blends between
-the two across the middle. Between thriving entities the tread is worn to
+A trail's wear follows the vitality of the two entities it joins, live,
+whatever each stands as: a building, a landmark, or a tree, a bush, a stone
+or flowers. Near each end it takes that end's entity's vitality, and it
+blends between the two across the middle. Between thriving entities the
+tread is worn to
 bare earth, as far as its blueprint's wear says; toward a failing entity
 the grass grows back across it, its ragged edge closes and its earth fades
 into the cover, until a faint trace and its edging stones are all that mark
