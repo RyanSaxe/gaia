@@ -29,21 +29,23 @@ export const CHANNEL_MATH = {
   spinStop: 0.1,
   spinFull: 0.6,
   /**
-   * How early a thing's look starts to follow a fall in its vitality
-   * (`shownVitality`): it looks as far along its decline as
-   * 1 - (1 - vitality)^legibility. Below 1 the first steps down from
-   * vitality 1, where most code sits, show more, and every level after
-   * shows one step further than before.
+   * The band of vitality a thing's look spans (`shownVitality`): at
+   * `shownRuin` or below it has declined all it will, at `shownWhole` or
+   * above it looks fully healthy, and between them it declines evenly.
+   * Vitality is Jev's quality, a mean of nine or ten concepts, so real code
+   * sits between about 0.36 and 0.99: the band puts the poorest of it at
+   * ruin and the best kept quarter of Gaia's definitions at full health.
    */
-  legibility: 0.6,
+  shownRuin: 0.45,
+  shownWhole: 0.85,
 } as const;
 
 /**
  * How far along its decline a thing at vitality `v` looks. Every channel
  * reads this, not `v` itself: the renderer hands it to the shaders, and the
- * ground declines by it, so one curve sets how plainly vitality shows.
+ * ground declines by it, so one rule sets how plainly vitality shows.
  */
-export const shownVitality = (v: number): number => 1 - Math.pow(1 - Math.min(1, Math.max(0, v)), CHANNEL_MATH.legibility);
+export const shownVitality = (v: number): number => Math.min(1, Math.max(0, (v - CHANNEL_MATH.shownRuin) / (CHANNEL_MATH.shownWhole - CHANNEL_MATH.shownRuin)));
 
 export interface VitalityView {
   /** Positions after loss, the wind when given, and droop. */

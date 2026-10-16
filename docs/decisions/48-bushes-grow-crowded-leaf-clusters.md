@@ -30,3 +30,5 @@ at its edge.
 
 Pair session `components` (`3a663ec8-e6c3-4286-b8b7-6b76dd6adffb`), rounds
 3, 4 and 5.
+
+Every look now follows `shownVitality`, (vitality - 0.45) / 0.4, so a bush's clusters drop from vitality 0.75 to 0.55, three in ten gone by 0.69 and half by 0.65 (World polish session, round 15, `vitality` page).

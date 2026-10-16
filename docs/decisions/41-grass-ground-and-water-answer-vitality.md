@@ -37,3 +37,5 @@ Pair session `gaia-v3` (`f8d282bc-7712-4894-9255-dcf4699f92cb`), the World
 session's round 18, approved as proposal ground-decline.
 
 The scattered rocks, bushes and flowers are gone: every stone, bush and flower on the land stands for code and shows the vitality of what it stands for (round 2 of the World polish session, `land` page).
+
+Every look now follows `shownVitality`, (vitality - 0.45) / 0.4, so ground looks as it always did from vitality 0.79 up and has declined all it will by about 0.46 (World polish session, round 15, `vitality` page).

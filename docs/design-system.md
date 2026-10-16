@@ -157,10 +157,14 @@ bough (`twig`) and the point its piece hangs from (`pivot`).
   shrinks toward anything far away. Droop bends a whole bough down about
   its joint, after the wind, carrying all it bears. Every channel, and
   the ground's decline, reads how far along its decline a thing looks,
-  `shownVitality` in `@gaia/realize`: 1 - (1 - vitality)^0.6. A fall
-  from full vitality shows at once and each step down shows further, so
-  the band most code sits in, about 0.6 to 0.9, reads apart: vitality 0.9
-  looks as 0.75 once did, 0.75 as 0.56, 0.6 as 0.42 and 0.45 as 0.3.
+  `shownVitality` in `@gaia/realize`: (vitality - 0.45) / 0.4, held
+  between 0 and 1. Vitality is Jev's quality, a mean of nine or ten
+  concepts, and real code sits between about 0.35 and 0.99, so the band
+  spans it: 0.45 and below looks as far gone as it will, 0.85 and up, a
+  quarter of Gaia's definitions, looks whole, and between them each step
+  down shows evenly. A primitive's own thresholds in this document (a
+  bell askew from 0.4, say) are on this shown scale; the ground's and the
+  buildings' tables give the vitality itself.
 
 `unsupportedAt` holds plants to the rule ruins keep: the contract test
 builds every crown on frames of every kind with bark and blossoms, and
@@ -439,14 +443,14 @@ into its neighbor's over about 7 m, wider where the land's warp gathers the
 ground and narrower where it spreads it, and the land hands its ground to the
 wild over 8 m at its rim, so no border shows as a line.
 
-Ground of vitality 0.96 or more looks as it always did; below that it
-declines, all it will by about 0.02:
+Ground of vitality 0.79 or more looks as it always did; below that it
+declines, all it will by about 0.46:
 
 | Vitality | Grass | Ground | Water |
 | --- | --- | --- | --- |
-| 0.96 and up | As it always was | Its cover's own colors | Clear and lively |
-| 0.68, tired | 83% of blades stand, a tenth shorter, and a third have turned to straw | A third of the way to straw | Clouding |
-| 0.16 and below, failing to ruin | 56% stand, three quarters as tall, nearly all straw | Dried to straw, with bare earth open over two fifths of it | A still brown murk that hides its bed |
+| 0.79 and up | As it always was | Its cover's own colors | Clear and lively |
+| 0.65, tired | 83% of blades stand, a tenth shorter, and a third have turned to straw | A third of the way to straw | Clouding |
+| 0.49 and below, failing to ruin | 56% stand, three quarters as tall, nearly all straw | Dried to straw, with bare earth open over two fifths of it | A still brown murk that hides its bed |
 
 Blades thin one by one, each at its own seeded point, narrowing to nothing by
 the same rule as distance, so no blade pops as vitality changes. None stands
@@ -581,10 +585,10 @@ at the front corner away from the door, where a person walking up sees it:
 
 | Vitality | What shows |
 | --- | --- |
-| 1 | Whole and lived in: lit windows, smoke, flowers |
-| 0.68 | Tired: plaster falls in patches, the first holes in the roof's eaves, ivy at the corners, the door ajar, a shutter hanging, long grass |
-| 0.31 | Failing: the roof rotted through over bare rafters, walls holed and timbers fallen at the weak corner, rubble below, windows broken or boarded, the chimney toppling, the flower boxes down |
-| 0.08 | A ruin: most of the covering gone, the chimney lying across the ridge, ivy to the eaves, rank grass and rubble all round, a tower's top and lantern fallen |
+| 0.85 and up | Whole and lived in: lit windows, smoke, flowers |
+| 0.65 | Tired: plaster falls in patches, the first holes in the roof's eaves, ivy at the corners, the door ajar, a shutter hanging, long grass |
+| 0.53 | Failing: the roof rotted through over bare rafters, walls holed and timbers fallen at the weak corner, rubble below, windows broken or boarded, the chimney toppling, the flower boxes down |
+| 0.47 | A ruin: most of the covering gone, the chimney lying across the ridge, ivy to the eaves, rank grass and rubble all round, a tower's top and lantern fallen |
 
 Ruin follows each form: every mass's walls and roof rot by the same weak
 corner, a roof's covering opening in big holes to its rafters whose edges
