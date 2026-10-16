@@ -38,7 +38,8 @@
   transition: opacity 0.5s ease, transform 0.6s ease-in, height 0.6s cubic-bezier(0.3, 0.1, 0.3, 1);
 }
 .wait-square { position: absolute; left: 0; top: 50%; width: 100%; aspect-ratio: 1; transform: translateY(-50%); }
-.wait-sheet::before { content: ""; position: absolute; inset: 0.6% 0.6% 0.4%; box-shadow: 0 16px 26px rgba(25, 18, 8, 0.36); }
+/* The sheet's shadow, and a turning card's, which narrows as the card stands on its edge (`turnOver`). */
+.wait-sheet::before, .wait-turn-shadow { content: ""; position: absolute; inset: 0.6% 0.6% 0.4%; box-shadow: 0 16px 26px rgba(25, 18, 8, 0.36); }
 .wait-sheet.folding { opacity: 0; transform: translate(-50%, -50%) perspective(1600px) rotateX(10deg) scale(0.95, 0.82); }
 .wait-body, .wait-body::after { position: absolute; inset: 0; }
 .wait-body { -webkit-mask-image: var(--deckle); mask-image: var(--deckle); -webkit-mask-size: 100% 100%; mask-size: 100% 100%; }

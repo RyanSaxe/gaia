@@ -41,7 +41,8 @@ export interface WaitView {
   /** Where the sheet lies on the page: a card chosen on the start ends there. */
   sheet(): DOMRect;
   /**
-   * The face of a card chosen on the start, the painting of where the person last stood still: the sheet takes its
+   * The face of a card chosen on the start, a painting of where the person last stood still or a tally of the commits
+   * since they last opened the world: the sheet takes its
    * shape (width over depth) and the face lies on it at once, under the start's table until the card has risen into its
    * place. As soon as the land is divided the card turns over in its place onto its back, the sheet's bare paper, as
    * the journal turns a leaf, and the map is drawn there, as any world's is.
@@ -49,12 +50,6 @@ export interface WaitView {
   chosen(face: HTMLImageElement | HTMLCanvasElement): void;
   /** The sheet's paper as it is painted now, in its shape: the face of a fresh card that rises into the sheet. */
   face(): HTMLCanvasElement;
-  /**
-   * Pencils on the sheet what `draw` draws on its face, given the face's place on the sheet as `face` has it: what a
-   * chosen card had pencilled on its face, so the card rises into a sheet that has it. Each wash takes it away in just
-   * the measure that it paints, as it does the pencil's marks of Jev's work.
-   */
-  pencil(draw: (c: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) => void): void;
 }
 
 export interface Wait extends WaitView {
