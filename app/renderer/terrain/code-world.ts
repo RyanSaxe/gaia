@@ -23,8 +23,11 @@ import type { ConsentPlan, JudgedThing, Opening, StartChoice, StartOffer, WorldD
 import { type WorldService, worldService } from "../service.ts";
 import GAIA_PAINTING from "../start/gaia-painting.webp";
 import { CHOSEN_MS } from "../start/start.ts";
-import snapshotJudged from "./fixtures/gaia-judged.json";
-import { snapshotFacts } from "./snapshot-facts.ts";
+import gaiaJudged from "./fixtures/gaia-judged.json";
+import showcaseJudged from "./fixtures/showcase-judged.json";
+import showcaseCode from "./fixtures/showcase-code.txt?raw";
+import { type Snapshot, snapshotFacts } from "./snapshot-facts.ts";
+import { folioFiles } from "./showcase-code.ts";
 import type { LayoutReply, LayoutRequest } from "./layout-worker.ts";
 import LayoutWorker from "./layout-worker.ts?worker";
 import proving from "./fixtures/proving.json";
@@ -145,21 +148,26 @@ function serviceWorld(service: WorldService, veil: Veil): Promise<{ readonly doc
 /** Who judges a page with no engine: Jev's kept answers, unless a developer asks for the stand-in (`?judge=stand-in`). */
 const SNAPSHOT_JUDGE = typeof location === "undefined" || new URLSearchParams(location.search).get("judge") !== "stand-in" ? "jev" : "stand-in";
 
+/** What the understanding pass judged about each snapshot's things, for the journal. */
+const SNAPSHOT_JUDGED: Readonly<Record<Snapshot, unknown>> = { gaia: gaiaJudged, showcase: showcaseJudged };
+
 /**
- * Gaia's own world from the bundled snapshot (`snapshot.ts`), the world of a
- * page with no engine, laid out on a thread of its own while the wait draws.
+ * A world from a bundled snapshot (`snapshot.ts`), laid out on a thread of its
+ * own while the wait draws: Gaia's own, the world of a page with no engine,
+ * or the showcase's.
  */
-function snapshotWorld(why: string): Promise<WorldDocument> {
-  const facts = snapshotFacts();
+function snapshotWorld(why: string, of: Snapshot = "gaia"): Promise<WorldDocument> {
+  const facts = snapshotFacts(of);
   const worker = new LayoutWorker();
+  const failed = (why: string): Error => new Error(`${of === "gaia" ? "Gaia's snapshot" : "The showcase"} could not be laid out: ${why}`);
   return new Promise<WorldDocument>((resolve, reject) => {
     worker.onmessage = (e: MessageEvent<LayoutReply>) => {
       const reply = e.data;
-      if ("failed" in reply) reject(new Error(`Gaia's snapshot could not be laid out: ${reply.failed}`));
-      else resolve({ root: facts.repository.name, facts, judged: snapshotJudged as unknown as Record<string, JudgedThing>, ...reply });
+      if ("failed" in reply) reject(failed(reply.failed));
+      else resolve({ root: facts.repository.name, facts, judged: SNAPSHOT_JUDGED[of] as Record<string, JudgedThing>, ...reply });
     };
-    worker.onerror = (e) => reject(new Error(`Gaia's snapshot could not be laid out: ${e.message}`));
-    worker.postMessage({ judge: SNAPSHOT_JUDGE, why } satisfies LayoutRequest);
+    worker.onerror = (e) => reject(failed(e.message));
+    worker.postMessage({ judge: SNAPSHOT_JUDGE, why, of } satisfies LayoutRequest);
   }).finally(() => worker.terminate());
 }
 
@@ -178,6 +186,19 @@ export function provingWorld(): WorldDocument {
 
 /** Whether the page asks for the proving ground (`?world=proving`), which opens with or without an engine. */
 const ASKS_PROVING = typeof location !== "undefined" && new URLSearchParams(location.search).get("world") === "proving";
+
+/**
+ * Whether the page asks for the showcase (`?world=showcase`): folio, the
+ * made-up codebase whose world the film is walked through, judged by Jev and
+ * carried as a snapshot with its source (`docs/showcase.md`), so it opens
+ * the same with or without an engine.
+ */
+const ASKS_SHOWCASE = typeof location !== "undefined" && new URLSearchParams(location.search).get("world") === "showcase";
+
+/** The source of a world the page carries with it, by path, for the journal: folio's for the showcase, none otherwise. */
+export function carriedSource(): ReadonlyMap<string, string> | null {
+  return ASKS_SHOWCASE ? folioFiles(showcaseCode) : null;
+}
 
 /**
  * The start on a page with no engine, to see it (`?start`):
@@ -207,6 +228,7 @@ export async function codeWorld(veil: Veil): Promise<CodeLab> {
   // A world that cannot be opened says why on the wait, which stays: nothing else is shown in its place.
   try {
     if (ASKS_PROVING) document = provingWorld();
+    else if (ASKS_SHOWCASE) document = await snapshotWorld("the showcase", "showcase");
     else if (service === null) {
       if (typeof location !== "undefined" && new URLSearchParams(location.search).has("start")) await previewStart(veil);
       document = await snapshotWorld("no engine on a standalone page");

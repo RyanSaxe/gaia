@@ -1,8 +1,9 @@
-// A file's text, for the journal's code pages. Inside the app the world
+// A file's text, for the journal's code pages. A world the page carries its
+// source with, the showcase's, reads it there; inside the app the world
 // service reads it from the folder the world was opened from (`world.source`);
 // the phone lab's server reads Gaia's own from the commit its snapshot was
-// made at (`/source`). A page with neither, such as the offline lab, shows a
-// definition's name and place without its code.
+// made at (`/source`). A page with none of these, such as the offline lab on
+// Gaia's own world, shows a definition's name and place without its code.
 
 import type { WorldService } from "../service.ts";
 
@@ -15,8 +16,9 @@ export interface SourceText {
   when(path: string): Promise<void>;
 }
 
-export function createSourceText(service: WorldService | null): SourceText {
+export function createSourceText(service: WorldService | null, carried: ReadonlyMap<string, string> | null = null): SourceText {
   const files = new Map<string, readonly string[] | null | "asked">();
+  for (const [path, text] of carried ?? []) files.set(path, text.replace(/\n$/, "").split("\n"));
   const listeners: ((path: string) => void)[] = [];
   /** Who waits for each file, each heard once. */
   const waiting = new Map<string, (() => void)[]>();
@@ -43,7 +45,7 @@ export function createSourceText(service: WorldService | null): SourceText {
     lines(path) {
       const had = files.get(path);
       if (had !== undefined) return had === "asked" ? undefined : had;
-      if (service === null && !served) {
+      if (carried !== null || (service === null && !served)) {
         files.set(path, null);
         return null;
       }

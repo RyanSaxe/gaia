@@ -30,4 +30,16 @@ describe("Gaia's own world from the bundled snapshot", () => {
     expect(laid.world.patches.map((p) => p.path).sort()).toEqual(files());
     expect(new Set(Object.values(laid.judges))).toEqual(new Set(["jev"]));
   });
+
+  // The showcase, folio, opens from its snapshot wherever the page runs, so it must lay out on its kept answers alone.
+  it("lays the showcase out on Jev's kept answers alone, with its trails and every file of its graph", { timeout: 60_000 }, async () => {
+    const { world, judges } = await laySnapshot("jev", "a test", "showcase");
+    expect(world.trails.length).toBeGreaterThan(0);
+    expect(world.patches.map((p) => p.path).sort()).toEqual(
+      snapshotGraphOf("showcase")
+        .nodes.flatMap((n) => (n.kind === "file" ? [n.path] : []))
+        .sort(),
+    );
+    expect(new Set(Object.values(judges))).toEqual(new Set(["jev"]));
+  });
 });
