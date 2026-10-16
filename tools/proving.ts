@@ -15,8 +15,8 @@
 //   cross on footbridges and stepping stones;
 // - large and tiny areas, deep nesting, and a hub many trails branch to;
 // - every water, character, tree, bush and flower option Jev is offered,
-//   every land and trail of its own, and every drift (petals, falling leaves,
-//   fireflies, motes and seeds), one of them over an area in ruin.
+//   every land and trail of its own, and every drift (petals, falling leaves
+//   and fireflies), one of them over an area in ruin.
 // The generator checks the plan covers every option in `looks.ts` Jev is
 // asked to choose among and every look of its own, and the lab's test checks
 // the baked world shows each feature.
@@ -102,10 +102,10 @@ const PLAN: readonly PlannedDir[] = [
   { path: "terraces", health: "thriving", files: ["steps.ts:420", "stages.test.ts:380", "order.test.ts:300", "pipeline.ts:360"], land: ["Silver terraces", "No water", "Rocky heath"] },
   { path: "terraces/croft", health: "thriving", files: ["Cargo.toml:30", "lib.rs:200", "press.rs:380"], entity: B("Stone croft", "Native code close to the machine, every test passing.", "crate") },
   { path: "terraces/ring", health: "ruin", files: ["package.json:30", "index.ts:160", "schema.ts:360"], entity: L("Stone ring", "Shared definitions in ruin: failing tests, compiler errors, nothing imports half of it.") },
-  { path: "moor", health: "thriving", files: ["guide.md:620", "decisions.md:540", "glossary.md:360"], land: ["Heather moor", "No water", "Old meadow"], drift: ["motes of light", "some"] },
+  { path: "moor", health: "thriving", files: ["guide.md:620", "decisions.md:540", "glossary.md:360"], land: ["Heather moor", "No water", "Old meadow"] },
   { path: "moor/archive", health: "thriving", files: ["package.json:30", "index.ts:120", "catalog.ts:320"], entity: B("Archive tower", "Keeps the definitions others read, in good order.") },
   { path: "moor/henge", health: "thriving", files: ["package.json:30", "index.ts:120", "stones.ts:300"], entity: L("Stone ring", "The schema every entity agrees on, every test passing.") },
-  { path: "dunes", health: "thriving", files: ["settings.json:700", "data.csv:900", "deploy.sh:220", "lint.toml:120"], land: ["Golden dunes", "No water", "Rocky heath"], drift: ["dandelion seeds", "some"] },
+  { path: "dunes", health: "thriving", files: ["settings.json:700", "data.csv:900", "deploy.sh:220", "lint.toml:120"], land: ["Golden dunes", "No water", "Rocky heath"] },
   { path: "dunes/keep", health: "tired", files: ["Cargo.toml:30", "lib.rs:220", "guard.rs:380"], entity: L("Battlemented keep", "A guarded core gone tired.", "crate") },
   { path: "dunes/ledger", health: "ruin", files: ["package.json:30", "index.ts:120", "entries.ts:300"], entity: B("Archive tower", "Records in ruin: failing tests and errors throughout.") },
   // The large area: a container of many subdirectories, nested deep, with a tiny one beside.

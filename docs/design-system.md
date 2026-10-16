@@ -494,23 +494,22 @@ take the air of the spot they are painted from.
 
 A region's biome may set something drifting through its air (`drift@1`, the
 accents Jev chooses; most regions have none): petals and leaves falling from
-its trees, fireflies low over its ground, motes of light and dandelion seeds
-on its air (`app/renderer/terrain/drifts.ts`). They gather only around the
-person. The air's drifts fill 30 m round them, anchored to the world and
-carried by its wind, and fade out before they wrap to the far side. Leaves
-and petals let go of the trees within 60 m at their crowns' widest reach, so
-they fall outside the foliage where they can be seen, are carried downwind
-as they fall, and fade as they land; a tree newly near starts dropping them
-over three seconds. A drift draws at 1.5 times its `drift@1` size, which was
-set for a narrower, 40° lens, and never under 4 device pixels.
-Fireflies hover from 0.7 m, above most grass, and dim to a quarter between
-flashes. The air's drifts follow the regions' weights where the person
-stands, as their ground covers blend, so one region's drift thins into the
-next as they walk; a tree drops its own region's, and none drift in the wild.
-Each takes the color and size `drift@1` gives its form. Fireflies come
-out only after dusk and glow by contrast. A drift thins as its land
-declines, by the ground's own decline, so a ruined area's trees drop
-nothing.
+its trees, and fireflies hovering over its ground
+(`app/renderer/terrain/drifts.ts`). Dandelion seeds and motes of light were
+offered too and were removed, because they could not be seen: seeds were
+white on a pale sky, and motes looked like stars. Drifts gather only around
+the person. Leaves and petals let go of the trees within 60 m at their
+crowns' widest reach, so they fall outside the foliage where they can be
+seen, are carried downwind as they fall, and fade as they land; a tree newly
+near starts dropping them over three seconds. Fireflies fill 30 m round the
+person, anchored to the world, and fade out before they wrap to the far side.
+A drift draws at 1.5 times its `drift@1` size, which was set for a
+narrower, 40° lens, and never under 4 device pixels. Fireflies come out only
+after dusk, hover from 0.7 m, above most grass, glow by contrast and dim to a quarter between flashes. Fireflies
+follow the regions' weights where the person stands, as their ground covers
+blend, so one region's thins into the next as they walk; a tree drops its own
+region's, and none drift in the wild. A drift thins as its land declines, by
+the ground's own decline, so a ruined area's trees drop nothing.
 
 ## Buildings
 

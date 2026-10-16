@@ -376,7 +376,7 @@ export interface GroundSpec {
   readonly flowerColors: readonly Rgb[];
 }
 
-export type AccentForm = "petals" | "fireflies" | "motes" | "leaves" | "seeds";
+export type AccentForm = "petals" | "fireflies" | "leaves";
 
 export interface AccentSpec {
   readonly form: AccentForm;

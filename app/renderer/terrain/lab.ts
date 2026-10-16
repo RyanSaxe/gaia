@@ -468,7 +468,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   const clearings = createClearings(terrain);
   const grass = createGrass(light, groundTex, covers, clearings);
   const water = createWater(terrain, light, groundTex);
-  // What each region sets drifting through its air: petals and leaves from its trees, fireflies, motes and seeds.
+  // What each region sets drifting through its air: petals and leaves from its trees, and fireflies.
   const drifts = createDrifts(light, groundTex);
   scene.add(sky.mesh, ground.wilds, ground.fine, ground.coarse, ground.mirror, grass.mesh, water.group, drifts.object);
   updateCovers();

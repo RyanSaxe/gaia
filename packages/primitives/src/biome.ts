@@ -107,9 +107,7 @@ export const groundCover = primitive({
 const ACCENTS = {
   "drifting petals": { form: "petals", color: 0xf7d8e0, size: 0.075, glow: 0 },
   "fireflies at dusk": { form: "fireflies", color: 0xf6ea8c, size: 0.07, glow: 1 },
-  "motes of light": { form: "motes", color: 0xfff2cc, size: 0.04, glow: 0.6 },
   "falling leaves": { form: "leaves", color: 0xd9a04a, size: 0.1, glow: 0 },
-  "dandelion seeds": { form: "seeds", color: 0xf6f4ee, size: 0.055, glow: 0.1 },
 } as const satisfies Record<string, { form: AccentForm; color: number; size: number; glow: number }>;
 
 export const drift = primitive({
@@ -120,9 +118,7 @@ export const drift = primitive({
     form: t.choice("What drifts through the air", {
       "drifting petals": "Pale petals carried on the breeze",
       "fireflies at dusk": "Fireflies blinking low over the ground",
-      "motes of light": "Tiny motes of light hanging in the sunbeams",
       "falling leaves": "Leaves spinning down, in the season's color",
-      "dandelion seeds": "Dandelion seeds floating past",
     }),
     amount: t.scale("How many", { "a few": 70, some: 180, many: 380 }),
   },
