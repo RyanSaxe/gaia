@@ -47,6 +47,7 @@ You need Node 26, pnpm 10 and a stable Rust toolchain from rustup (put
 | `pnpm brand` | Paints Gaia's mark into the pictures the app shows and the macOS icon (`app/build/icon.icns`); run it again when the field map's look changes |
 | `GAIA_DATA_DIR=dir pnpm graph-snapshot [root]` | Rewrites `fixtures/gaia-graph.json`, the judged graph of this repository the standalone lab is laid out from, from Jev's answers held in that store |
 | `pnpm proving` | Rewrites the proving ground's fixtures (`docs/proving-ground.md`) |
+| `pnpm showcase --code DIR` | Writes the showcase's codebase, folio, the world the film is walked through (`docs/showcase.md`) |
 | `pnpm probe` | Measures both worlds in Electron: frame time, triangles by kind and pass, the walk test and smoothness |
 | `pnpm jev-world`, `pnpm compare-jev`, `pnpm print-world-requests` | Jev's kept answers for the snapshot, request designs compared, and every request printed |
 
