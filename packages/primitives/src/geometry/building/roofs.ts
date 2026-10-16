@@ -5,7 +5,7 @@
 // over bare rafters, worst over the weak corner; a lean-to caves in about
 // its high edge, the chimney topples and the smoke stops.
 
-import type { BuildContext, BuildingPlan, Built, Mass, Rand, Resolved } from "@gaia/schema";
+import { type BuildContext, type BuildingPlan, type Built, GRAIN, type Mass, type Rand, type Resolved } from "@gaia/schema";
 import type { thatchParams, tilesParams } from "../../structure.ts";
 import { type Channels, PartBuilder, type V3, addScaled, clamp, cross, fbm3, lossThreshold, normalize } from "../kit.ts";
 import { UP, beam, box, log, quad } from "../blocks.ts";
@@ -365,6 +365,9 @@ function turretCut(plan: BuildingPlan, m: Mass): (p: V3) => V3 {
   };
 }
 
+/** How wide a bundle of thatch is along the ridge, meters: the straw rots a bundle at a time. */
+const BUNDLE = 0.22;
+
 function thatchSlab(roof: PartBuilder, plan: BuildingPlan, f: RoofFrame, p: Resolved<typeof thatchParams>, ruin: Ruin, seed: number, r: Rand, budget: number): { reach: number; a0: number; a1: number } {
   const k = slopeOf(f);
   const secant = Math.sqrt(1 + k * k);
@@ -438,7 +441,9 @@ function thatchSlab(roof: PartBuilder, plan: BuildingPlan, f: RoofFrame, p: Reso
           glow: 0,
           pivot: hingeOf(f, a),
           tint: 0.025 * nz,
-          rot: roofRot(f, ruin, a, pt.b, reach),
+          // The straw goes before the battens under it.
+          rot: roofRot(f, ruin, a, pt.b, reach) * (pt.top === true ? 1 : 0.6),
+          grain: [(a - a0) / BUNDLE, (reach - Math.abs(pt.b)) / (reach / n), GRAIN.straw],
           ...fall,
         },
       };
@@ -521,7 +526,9 @@ function tileSlab(roof: PartBuilder, plan: BuildingPlan, f: RoofFrame, p: Resolv
           glow: 0,
           pivot: hingeOf(f, a),
           tint: 0.03 * cell,
-          rot: roofRot(f, ruin, a, pt.b, reach),
+          // The tiles go before the boards under them.
+          rot: roofRot(f, ruin, a, pt.b, reach) * (pt.top === true ? 1 : 0.6),
+          grain: [(a - a0) / tileW, (reach - Math.abs(pt.b)) / course, GRAIN.tiles],
           ...fall,
         },
       };
