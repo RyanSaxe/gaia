@@ -28,7 +28,22 @@ export const CHANNEL_MATH = {
   /** A spinning piece stops below `spinStop` and turns at full speed above `spinFull`. */
   spinStop: 0.1,
   spinFull: 0.6,
+  /**
+   * How early a thing's look starts to follow a fall in its vitality
+   * (`shownVitality`): it looks as far along its decline as
+   * 1 - (1 - vitality)^legibility. Below 1 the first steps down from
+   * vitality 1, where most code sits, show more, and every level after
+   * shows one step further than before.
+   */
+  legibility: 0.6,
 } as const;
+
+/**
+ * How far along its decline a thing at vitality `v` looks. Every channel
+ * reads this, not `v` itself: the renderer hands it to the shaders, and the
+ * ground declines by it, so one curve sets how plainly vitality shows.
+ */
+export const shownVitality = (v: number): number => 1 - Math.pow(1 - Math.min(1, Math.max(0, v)), CHANNEL_MATH.legibility);
 
 export interface VitalityView {
   /** Positions after loss, the wind when given, and droop. */
