@@ -78,18 +78,15 @@ const ofLinks = (sent: Sent): Sent => sent.filter((r) => r.state["file-axes"] ==
 const calleeQuestions = (sent: Sent) => sent.flatMap((r) => Object.entries(r.questions).filter(([id]) => id.startsWith("callee:")));
 
 describe("the Jev runner", () => {
-  it("keeps every answer, so reopening plans and sends nothing, and a plan gives the judged graph it planned on", async () => {
+  it("keeps every answer, so reopening plans and sends nothing", async () => {
     const root = codebase("small", { "src/a.ts": fn("a", "return x + 1;"), "src/b.ts": fn("b", "return x * 2;") });
     const data = join(scratch, "small-data");
     expect(aboutFiles(await understand(engineAt(data), root)).length).toBeGreaterThanOrEqual(2);
     const again = engineAt(data);
-    const plan = await again.call("understanding.plan", { root, graph: true });
-    expect(pending(plan)).toBe(0);
+    expect(pending(await again.call("understanding.plan", { root }))).toBe(0);
     const before = standIn.received.length;
     expect((await again.call("understanding.next", { root })).sent).toBe(0);
     expect(standIn.received.length).toBe(before);
-    // The graph a plan gives is the judged graph, the one the world is laid out on.
-    expect(plan.graph).toEqual(await again.call("project.graph", { root, judged: true }));
   }, 60_000);
 
   it("asks again only about the file an edit changed, and a renamed file keeps its answers", async () => {

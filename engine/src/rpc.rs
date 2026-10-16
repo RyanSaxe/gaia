@@ -75,10 +75,7 @@ pub fn handle(line: &str) -> Value {
             _ => Err((INVALID_PARAMS, "project.commits needs a root, a from and a to.".into())),
         },
         "understanding.plan" => match p["root"].as_str() {
-            Some(root) => {
-                crate::jev::runner::plan(Path::new(root), p["graph"].as_bool() == Some(true))
-                    .map_err(|e| (FAILED, e))
-            }
+            Some(root) => crate::jev::runner::plan(Path::new(root)).map_err(|e| (FAILED, e)),
             None => Err((INVALID_PARAMS, "understanding.plan needs a root.".into())),
         },
         "understanding.next" => match p["root"].as_str() {
@@ -95,22 +92,6 @@ pub fn handle(line: &str) -> Value {
         "project.clone" => match p["address"].as_str() {
             Some(address) => crate::clone::clone(address).map_err(|e| (FAILED, e)),
             None => Err((INVALID_PARAMS, "project.clone needs an address.".into())),
-        },
-        "jev.ask" => match p.get("request") {
-            Some(r) => crate::jev::batch(vec![r.clone()])
-                .map_err(|e| (FAILED, e))
-                .and_then(|mut answers| match answers.pop() {
-                    Some(answer) if answer.get("error").is_none() => Ok(answer),
-                    Some(answer) => Err((
-                        FAILED,
-                        answer["error"]
-                            .as_str()
-                            .unwrap_or("Jev failed.")
-                            .to_string(),
-                    )),
-                    None => Err((FAILED, "Jev answered nothing.".into())),
-                }),
-            None => Err((INVALID_PARAMS, "jev.ask needs a request.".into())),
         },
         "jev.status" => Ok(json!({ "key": crate::jev::has_key(), "live": crate::jev::live() })),
         "jev.estimate" => match p["requests"].as_array() {

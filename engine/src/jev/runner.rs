@@ -848,17 +848,9 @@ fn summary(w: &Wanted) -> Value {
 }
 
 /// Says what the project wants asked now, and what is already answered.
-/// Sends nothing. With `graph`, it also gives the judged graph it planned
-/// on, as `judged_graph` would, so a caller needing both builds the graph
-/// once.
-pub fn plan(root: &Path, graph: bool) -> Result<Value, String> {
-    let mut w = wanted(root)?;
-    let mut out = summary(&w);
-    if graph {
-        judge(&mut w.graph, &store::read(&w.project, "held")?);
-        out["graph"] = serde_json::to_value(&w.graph).map_err(|e| e.to_string())?;
-    }
-    Ok(out)
+/// Sends nothing.
+pub fn plan(root: &Path) -> Result<Value, String> {
+    Ok(summary(&wanted(root)?))
 }
 
 /// Sends up to `max` requests that are ready, and holds the answers of

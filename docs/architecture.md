@@ -32,7 +32,7 @@ never crosses, because the renderer builds it. `EngineMethods` in
 `packages/schema/src/engine.ts` is the TypeScript side of the protocol, and
 `engine/src/rpc.rs` the Rust side. The engine answers `engine.ping`,
 `project.graph`, `project.source`, `project.commit`, `project.commits`, `project.locate` and `project.clone`, Jev's
-`jev.estimate`, `jev.status`, `jev.ask` and `jev.batch`, and the app-data
+`jev.estimate`, `jev.status` and `jev.batch`, and the app-data
 store's `store.get`, `store.read` and `store.put`. The store (`engine/src/store.rs`) keeps one JSON file of tables
 (`StoreTable`) per project, `<data>/projects/<project id>/store.json`, replaced through a
 rename so it is never half-written; `<data>` is the app's user-data folder,
@@ -895,13 +895,13 @@ tokens but changes a quarter of the judgments, mostly for the worse: each
 question reads the whole state, so a file's neighbours sway it (substantial
 files of logic turn to open meadow, hubs lose their willows). Sharing pays
 only for questions about one thing.
-The engine is Jev's only client (`engine/src/jev.rs`). It posts each request
+The engine is Jev's only client (`engine/src/jev/client.rs`). It posts each request
 to OpenRouter's Decisions API with curl, the key read from the macOS Keychain
 (service `gaia-openrouter`) and handed to curl on stdin, never on a command
 line or over the protocol. `jev.batch` sends many requests eight at a time
 and answers each with Jev's response or the reason that request failed;
-`jev.ask` sends one; each response carries the cost and input tokens
-OpenRouter billed (`costUsd`, `inputTokens`) and its time. Both refuse unless the engine runs with `GAIA_JEV=live`. curl retries a timeout, 429 or
+each response carries the cost and input tokens OpenRouter billed
+(`costUsd`, `inputTokens`) and its time. It refuses unless the engine runs with `GAIA_JEV=live`. curl retries a timeout, 429 or
 5xx twice and gives up on a request after 90 seconds. `jev.status` says
 whether the Keychain holds the key, asking only whether the item exists, and
 whether the engine is live. Tests point the engine at a local stand-in for
