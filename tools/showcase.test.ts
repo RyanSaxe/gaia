@@ -17,7 +17,8 @@ describe("the showcase's code", () => {
   const text = (path: string): string => readFileSync(join(dir, path), "utf8");
   afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
-  it("is code the engine can read: every TypeScript file parses", () => {
+  // Loading the TypeScript compiler and transpiling folio's files takes a few seconds while other work shares the machine.
+  it("is code the engine can read: every TypeScript file parses", { timeout: 30_000 }, () => {
     const broken = files
       .filter((f) => f.endsWith(".ts"))
       .flatMap((f) => (ts.transpileModule(text(f), { reportDiagnostics: true, compilerOptions: { target: ts.ScriptTarget.ESNext } }).diagnostics ?? []).map((d) => `${f}: ${ts.flattenDiagnosticMessageText(d.messageText, " ")}`));
