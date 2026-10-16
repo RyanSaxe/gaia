@@ -31,9 +31,11 @@ There are nine palette families in `packages/primitives/src/palettes.ts`
 (spring-meadow, deep-forest, teal-gold, autumn-ember, cherry-blossom,
 silver-birch, desert-sage, lantern-dusk, bluebell-wood). Each gives bark, leaf
 and bloom swatches; for the ground, a stone, the moss that grows on it, and a
-wildflower's stem and eye; and a building's wall, timber, roof, masonry, trim,
-window-glass and smoke swatches, so a family's cottages belong with its
-plants. Every family declines toward the same dry grey-brown, so failing
+wildflower's stem and eye; and a building's wall, render, timber, roof,
+masonry, trim, window-glass and smoke swatches, so a family's cottages
+belong with its plants. A tower's render is a shade of its own beside the
+walls, so a timber turret's plaster stands out against a tower behind it.
+Every family declines toward the same dry grey-brown, so failing
 code reads the same everywhere. A season shifts only healthy colors, keeps
 each family's identity, and pushes each shifted color a fixed distance away
 from its decline color. The `tint` channel varies hue within one swatch across
@@ -567,7 +569,7 @@ sill, so no ground under the house shows through a door or a holed wall;
 where a mill's wheel pit reaches under the wheel's wall, its water stays
 under the floor. Grass is cleared under the house and along the walk to its
 door, and its walls stop the walk. A building stays under 32,000 triangles
-and draws one mesh per swatch, at most eleven calls.
+and draws one mesh per swatch, at most twelve calls.
 
 A feature gives a building a character, on the side the chimney leaves
 free. Each names a feel the entity's code might have, never a kind of code,

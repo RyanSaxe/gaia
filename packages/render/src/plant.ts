@@ -942,7 +942,7 @@ export function letGoOnUpload(geometry: THREE.BufferGeometry, keep: readonly str
 /** Bark, stone and a building's fabric are solid; leaves, moss and blooms are thin and scatter light. */
 export const FOLIAGE: Readonly<Record<string, number>> = {
   bark: 0, leaf: 1, bloom: 0.6, stone: 0, moss: 0.3, stem: 0.8, eye: 0.6,
-  wall: 0, timber: 0, roof: 0.12, masonry: 0, trim: 0, glass: 0,
+  wall: 0, render: 0, timber: 0, roof: 0.12, masonry: 0, trim: 0, glass: 0,
 };
 /** The colors a spray borrows: its stalks the bark's, a blossom spray's petals the family's bloom and its few fresh leaves the stem green. */
 export const sprayColors = (plant: Pick<Realized, "palette">): { uBark: { value: THREE.Vector3 }; uStem: { value: THREE.Vector3 }; uBloomColor: { value: THREE.Vector3 } } => ({

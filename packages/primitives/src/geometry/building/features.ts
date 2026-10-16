@@ -182,7 +182,7 @@ export function buildTower(p: Resolved<typeof towerParams>, ctx: BuildContext, p
   const H = clamp(houseTop + p.height + 2.5 * (ctx.facts.reach ?? 0.5), 8, 19);
   // At the back corner on the free side, joined to the house a little, clear of its windows.
   const off: V3 = [side * (plan.width / 2 + T / 2 - 0.35), 0, -plan.depth / 2 - T / 2 + 1.05];
-  const render = new Moved("wall", "solid", off);
+  const render = new Moved("render", "solid", off);
   const stone = new Moved("masonry", "solid", off);
   const glass = new Moved("glass", "none", off);
   const roof = new Moved("roof", "solid", off);

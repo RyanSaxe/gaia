@@ -1536,7 +1536,7 @@ function drawArchiveTower(pen: Pen, house: House, look: Look, rise: number, cap:
   const z1 = t.Z + t.T / 2;
   const fallen = ease(w.v, 0.34, 0.04);
   const top = t.H * (1 - 0.42 * fallen);
-  const render = worn(look.hue("wall", "#e6e0d0"), w);
+  const render = worn(look.hue("render", "#d9c6a2"), w);
   const stone = worn(look.hue("masonry", "#b8b0a0"), w);
   face(pen, [[x0, z0, 0], [x0, z1, 0], ...jaggedWest(x0, z0, z1, top, fallen, w.seed + 4)], lit(render, 0.14));
   face(pen, [[x0, z0, 0], [x1, z0, 0], ...jagged(x1, x0, z0, top, fallen, w.seed + 1)], shaded(render, 0.16));
