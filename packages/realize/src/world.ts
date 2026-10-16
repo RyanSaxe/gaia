@@ -127,9 +127,56 @@ export function realizeRegion(region: Filled, lib: Library, seed: number, season
   return {
     ground: seasonGround(slotOutput<GroundSpec>(built, "cover"), season),
     groundDecline: GROUND_DECLINE,
-    air: (built.get("air")?.output as AtmosphereSpec | undefined) ?? CLEAR_AIR,
+    air: airOf(built),
     drift,
     natives: slotOutput<NativeFamilies>(built, "natives").families,
+  };
+}
+
+const airOf = (built: ReturnType<typeof buildSlots>): AtmosphereSpec => (built.get("air")?.output as AtmosphereSpec | undefined) ?? CLEAR_AIR;
+
+/** One region's air, as `realizeRegion` gives it; no season touches the air. */
+export function regionAir(region: Filled, lib: Library, seed: number): AtmosphereSpec {
+  return airOf(buildSlots(region.blueprint, region.kind, lib, { seed, facts: {} }));
+}
+
+/**
+ * The air where several regions meet, each region's weighed by `weights` (one
+ * per region, at any scale): its density, mist and specks by weight, and its
+ * tint by how strongly each one tints, so a clear region's tint, which pulls
+ * nothing, colors nothing.
+ */
+export function mixAir(airs: readonly AtmosphereSpec[], weights: ArrayLike<number>): AtmosphereSpec {
+  let total = 0;
+  let pull = 0;
+  let tint = CLEAR_AIR.tint;
+  let density = 0;
+  let mist = 0;
+  let specks = 0;
+  airs.forEach((air, i) => {
+    const w = Math.max(0, weights[i] ?? 0);
+    total += w;
+    density += w * air.density;
+    mist += w * air.mist;
+    specks += w * air.specks;
+    if (w * air.tintAmount <= 0) return;
+    pull += w * air.tintAmount;
+    tint = mixLab(tint, air.tint, (w * air.tintAmount) / pull);
+  });
+  if (total <= 0) return CLEAR_AIR;
+  return { tint, tintAmount: pull / total, density: density / total, mist: mist / total, specks: specks / total };
+}
+
+/** The shared sky seen through `air`: its horizon pulled toward the air's tint, and the fog the air lays over distance. */
+export function throughAir(sky: SkyLook, air: AtmosphereSpec): Pick<WorldLook, "sky" | "fog"> {
+  // The air sits in front of the sunset; at night its color fades into the dark.
+  const tint = mixLab(air.tint, sky.sky.horizon, sky.light.nightness * 0.75);
+  const horizon = mixLab(sky.sky.horizon, tint, air.tintAmount * 0.5);
+  // Night air is only moonlit: distance dims the land a little rather than washing it pale.
+  const fog = mixLab(mixLab(horizon, tint, air.tintAmount * 0.5), sky.sky.zenith, sky.light.nightness * 0.3);
+  return {
+    sky: { ...sky.sky, horizon, mid: mixLab(sky.sky.zenith, horizon, 0.5) },
+    fog: { color: fog, density: air.density, mist: air.mist },
   };
 }
 
@@ -137,15 +184,9 @@ export function realizeRegion(region: Filled, lib: Library, seed: number, season
 export function realizeWorld(world: Filled, region: Filled, lib: Library, seed: number, hour: number): WorldLook {
   const sky = realizeSky(world, lib, seed, hour);
   const local = realizeRegion(region, lib, seed, sky.season);
-  // The air sits in front of the sunset; at night its color fades into the dark.
-  const tint = mixLab(local.air.tint, sky.sky.horizon, sky.light.nightness * 0.75);
-  const horizon = mixLab(sky.sky.horizon, tint, local.air.tintAmount * 0.5);
-  // Night air is only moonlit: distance dims the land a little rather than washing it pale.
-  const fog = mixLab(mixLab(horizon, tint, local.air.tintAmount * 0.5), sky.sky.zenith, sky.light.nightness * 0.3);
   return {
     light: sky.light,
-    sky: { ...sky.sky, horizon, mid: mixLab(sky.sky.zenith, horizon, 0.5) },
-    fog: { color: fog, density: local.air.density, mist: local.air.mist },
+    ...throughAir(sky, local.air),
     season: sky.season,
     ground: local.ground,
     groundDecline: local.groundDecline,
