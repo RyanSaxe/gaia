@@ -1,0 +1,3466 @@
+=== README.md ===
+# folio
+
+folio turns a folder of Markdown into a static website. Write pages as
+Markdown with a little frontmatter, run `folio build`, and get plain HTML,
+CSS and a feed you can host anywhere.
+
+## Quick start
+
+```sh
+npm install -g @folio/cli
+folio new my-site
+cd my-site
+folio serve
+```
+
+`folio serve` builds the site, serves it on port 4000 and rebuilds the pages
+you change while you write. `folio build` writes the finished site to `dist/`.
+
+## How a build works
+
+1. **Read.** Every `.md` file under `content/` becomes a page. Its frontmatter
+   (`title`, `date`, `tags`, `draft`) is read into the page's data.
+2. **Parse.** The engine parses each page's Markdown into a tree of nodes.
+3. **Transform.** Extensions walk the tree: the syntax extension highlights
+   code, the images extension sizes pictures, the embeds extension turns links
+   to videos into players.
+4. **Lay out.** Each page is placed in its layout from `layouts/`.
+5. **Render and write.** The tree becomes HTML, and every page is written under
+   `dist/` at its own path.
+
+## Extensions
+
+folio ships seven extensions, each its own package under `extensions/`:
+markdown, syntax, images, embeds, feeds, sitemap and i18n. An extension is an
+object with hooks; see `handbook/plugins.md` to write your own.
+
+## Repository
+
+| Folder | What it holds |
+| --- | --- |
+| `site` | The document model: sites, pages, nodes, frontmatter and events |
+| `engine` | The build pipeline: parse, transform, lay out, render, write |
+| `extensions` | The extensions folio ships with |
+| `apps/cli` | The `folio` command |
+| `apps/dev-server` | `folio serve`: the local server and live reload |
+| `find` | The search index folio writes beside a site |
+| `schema` | The types every package shares |
+| `v1` | The old renderer, kept for sites that still use v1 templates |
+| `handbook` | The guide, the plugin guide, the API and the decisions |
+
+## Licence
+
+MIT.
+=== CHANGELOG.md ===
+# Changelog
+
+## 0.9.0
+
+- The dev server reloads only the pages a change touched.
+- Feeds carry each post's summary and its first image.
+- `folio new` asks which layout to start from.
+- The sitemap skips drafts and pages marked `hidden`.
+
+## 0.8.0
+
+- Extensions run in the order the config lists them.
+- The syntax extension highlights TypeScript, Rust, Python and shell.
+- i18n: a page can link to its translations with `{{ alternates }}`.
+- Search: the index is written in chunks of 500 pages.
+
+## 0.7.0
+
+- The engine parses tables and footnotes.
+- Images are given their width and height, so pages no longer jump.
+- `folio build --drafts` builds drafts too.
+
+## 0.6.0
+
+- The new engine replaces the v1 renderer for new sites.
+- v1 templates still build through `@folio/v1`, which is deprecated.
+
+## 0.5.0
+
+- Embeds for videos and maps.
+- Pages can set their own layout in frontmatter.
+
+## 0.4.0
+
+- Footnotes.
+- `folio check` reports broken links.
+- Pages carry their previous and next page in their section.
+
+## 0.3.0
+
+- Tags: `byTag` groups pages, and layouts can list a page's tags.
+- Pagination for section indexes.
+- The dev server watches layouts as well as content.
+
+## 0.2.0
+
+- Feeds.
+- Static files are copied from `static/`.
+- Dates must be written as `YYYY-MM-DD`; anything else stops the build and says so.
+
+## 0.1.0
+
+- The first release: Markdown to HTML with layouts, using the v1 renderer.
+=== package.json ===
+{
+  "name": "@folio/folio",
+  "version": "0.9.0",
+  "private": true,
+  "type": "module",
+  "workspaces": ["site", "engine", "schema", "find", "extensions/*", "apps/*", "v1", "v1/*"],
+  "scripts": {
+    "build": "folio build --root e2e/site",
+    "test": "vitest run",
+    "check": "tsc --noEmit -p ."
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}
+=== tsconfig.json ===
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "skipLibCheck": true
+  },
+  "include": ["site", "engine", "schema", "find", "extensions", "apps", "e2e"],
+  "exclude": ["v1"]
+}
+=== folio.config.ts ===
+import type { SiteConfig } from "@folio/schema";
+import { markdown } from "@folio/markdown";
+import { syntax } from "@folio/syntax";
+import { images } from "@folio/images";
+import { feeds } from "@folio/feeds";
+import { sitemap } from "@folio/sitemap";
+
+/** The example site the end-to-end tests build: every extension, in the order they run. */
+const config: SiteConfig = {
+  title: "A folio site",
+  url: "https://example.com",
+  content: "content",
+  layouts: "layouts",
+  out: "dist",
+  extensions: [markdown(), syntax({ theme: "paper" }), images({ widths: [480, 960] }), feeds({ limit: 20 }), sitemap()],
+};
+
+export default config;
+=== e2e/build.test.ts ===
+import { mkdtempSync, readFileSync, existsSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { describe, expect, it } from "vitest";
+import { build } from "@folio/engine";
+import config from "../folio.config.ts";
+
+describe("building the example site", () => {
+  const out = mkdtempSync(join(tmpdir(), "folio-e2e-"));
+
+  it("writes a page for every Markdown file, at its own path", async () => {
+    const result = await build({ ...config, root: join(import.meta.dirname, "site"), out });
+    expect(result.pages.length).toBeGreaterThan(3);
+    for (const page of result.pages) expect(existsSync(join(out, page.path, "index.html"))).toBe(true);
+  });
+
+  it("leaves drafts out unless asked", async () => {
+    const result = await build({ ...config, root: join(import.meta.dirname, "site"), out });
+    expect(result.pages.some((p) => p.data.draft === true)).toBe(false);
+  });
+
+  it("writes the feed and the sitemap", () => {
+    expect(readFileSync(join(out, "feed.xml"), "utf8")).toContain("<rss");
+    expect(readFileSync(join(out, "sitemap.xml"), "utf8")).toContain("<urlset");
+  });
+});
+=== e2e/serve.test.ts ===
+import { afterAll, describe, expect, it } from "vitest";
+import { startServer } from "@folio/dev-server";
+import config from "../folio.config.ts";
+
+describe("serving the example site", () => {
+  const server = startServer({ ...config, root: new URL("./site", import.meta.url).pathname, port: 0 });
+  afterAll(() => server.close());
+
+  it("answers a page with its HTML", async () => {
+    const res = await fetch(`${await server.url()}/about/`);
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain("<h1>About</h1>");
+  });
+
+  it("answers a missing page with 404", async () => {
+    const res = await fetch(`${await server.url()}/nowhere/`);
+    expect(res.status).toBe(404);
+  });
+});
+=== CONTRIBUTING.md ===
+# Contributing to folio
+
+Thank you for helping. This page says how the repository is laid out, how to
+run it, and what a change needs before it merges.
+
+## Setting up
+
+```sh
+git clone https://github.com/folio-ssg/folio
+cd folio
+npm install
+npm test
+```
+
+Node 22 or later. Every package is TypeScript run directly; there is no
+build step for the repository itself.
+
+## Where things live
+
+Each folder at the top is one package, except `handbook`, `tooling` and `e2e`.
+A package imports another only by its name (`@folio/site`), never by a
+relative path into it, so packages can move.
+
+- `schema` holds what every package agrees on. Change it with care: every
+  extension in the world reads it.
+- `site` is the document model. It knows nothing about Markdown or HTML.
+- `engine` is the build. It knows nothing about any one extension.
+- `extensions` holds the extensions we ship. Each is small and does one job.
+- `v1` is frozen. Fix only what stops an old site from building.
+
+## Making a change
+
+1. Open an issue first for anything larger than a bug fix, so we can agree on
+   the shape before you write it.
+2. Write a test that fails without your change.
+3. Run `npm run check` and `npm test`. Both must pass.
+4. Add a line to `CHANGELOG.md` under the next version.
+5. Open a pull request. One change per pull request.
+
+## Writing an extension
+
+See `handbook/plugins.md`. An extension we ship must:
+
+- do one job, named in one line in its doc comment;
+- return new pages and never change one in place;
+- write files only in `done`;
+- carry its own tests.
+
+## Style
+
+- Names say what a thing is: `parseHeading`, not `ph`.
+- Small functions with a doc comment each for anything exported.
+- No default exports, except the site config.
+- Errors say what went wrong and what to do: name the file, the line and the
+  fix.
+
+## Releasing
+
+Maintainers release with `tooling/release.sh VERSION` once the changelog names
+the version and every package carries it.
+=== LICENSE ===
+MIT License
+
+Copyright (c) 2024 The folio authors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+=== schema/package.json ===
+{
+  "name": "@folio/schema",
+  "version": "0.9.0",
+  "type": "module",
+  "exports": "./index.ts"
+}
+=== schema/index.ts ===
+/**
+ * The types every folio package agrees on: a site's config, a page's data,
+ * the nodes a page parses into, and the hooks an extension may answer.
+ */
+
+/** What a page's frontmatter may say. Anything else is kept as it is. */
+export interface PageData {
+  readonly title?: string;
+  readonly date?: string;
+  readonly tags?: readonly string[];
+  readonly draft?: boolean;
+  readonly layout?: string;
+  readonly lang?: string;
+  readonly [key: string]: unknown;
+}
+
+/** One node of a parsed page. */
+export interface Node {
+  readonly type: NodeType;
+  readonly children?: readonly Node[];
+  readonly value?: string;
+  readonly attrs?: Readonly<Record<string, string>>;
+}
+
+export type NodeType =
+  | "root" | "heading" | "paragraph" | "text" | "emphasis" | "strong" | "code" | "codeBlock"
+  | "link" | "image" | "list" | "item" | "quote" | "table" | "row" | "cell" | "rule" | "html" | "footnote";
+
+/** A page as the engine passes it along. */
+export interface Page {
+  readonly source: string;
+  readonly path: string;
+  readonly data: PageData;
+  readonly body: string;
+  readonly tree?: Node;
+  readonly html?: string;
+}
+
+/** Everything a build reads from the site's config. */
+export interface SiteConfig {
+  readonly title: string;
+  readonly url: string;
+  readonly root?: string;
+  readonly content: string;
+  readonly layouts: string;
+  readonly out: string;
+  readonly drafts?: boolean;
+  readonly extensions: readonly Extension[];
+}
+
+/** The hooks an extension may answer, in the order a build calls them. */
+export interface Hooks {
+  configured?(config: SiteConfig): SiteConfig | void;
+  read?(page: Page): Page | void;
+  parsed?(page: Page): Page | void;
+  rendered?(page: Page): Page | void;
+  done?(pages: readonly Page[], out: string): Promise<void> | void;
+}
+
+/** An extension: a name, and the hooks it answers. */
+export interface Extension extends Hooks {
+  readonly name: string;
+}
+=== site/package.json ===
+{
+  "name": "@folio/site",
+  "version": "0.9.0",
+  "type": "module",
+  "exports": "./index.ts",
+  "dependencies": { "@folio/schema": "0.9.0" }
+}
+=== site/index.ts ===
+/**
+ * folio's document model: a site and its pages, the tree each page parses
+ * into, frontmatter, and the events a build sends as it goes.
+ */
+export { createSite, type Site } from "./site.ts";
+export { createPage, pagePath, isDraft, withTree } from "./page.ts";
+export { walk, visit, textOf, findAll, mapTree } from "./node.ts";
+export { splitFrontmatter, parseFrontmatter } from "./frontmatter.ts";
+export { createEvents, type Events, type BuildEvent } from "./events.ts";
+=== site/site.ts ===
+import type { Page, SiteConfig } from "@folio/schema";
+import { createEvents, type Events } from "./events.ts";
+
+/** A site being built: its config, its pages by path, and the events its build sends. */
+export interface Site {
+  readonly config: SiteConfig;
+  readonly events: Events;
+  pages(): readonly Page[];
+  page(path: string): Page | undefined;
+  add(page: Page): void;
+  replace(page: Page): void;
+  remove(path: string): boolean;
+}
+
+/** A site with no pages yet. Pages keep the order they were added in. */
+export function createSite(config: SiteConfig): Site {
+  const byPath = new Map<string, Page>();
+  const events = createEvents();
+  return {
+    config,
+    events,
+    pages: () => [...byPath.values()],
+    page: (path) => byPath.get(path),
+    add(page) {
+      if (byPath.has(page.path)) throw new Error(`Two pages want ${page.path}: ${byPath.get(page.path)?.source} and ${page.source}.`);
+      byPath.set(page.path, page);
+      events.send({ type: "page-added", path: page.path });
+    },
+    replace(page) {
+      byPath.set(page.path, page);
+      events.send({ type: "page-changed", path: page.path });
+    },
+    remove(path) {
+      const had = byPath.delete(path);
+      if (had) events.send({ type: "page-removed", path });
+      return had;
+    },
+  };
+}
+=== site/page.ts ===
+import type { Node, Page, PageData } from "@folio/schema";
+import { splitFrontmatter } from "./frontmatter.ts";
+import { mapTree } from "./node.ts";
+
+/** A page from a Markdown file's text: its frontmatter as data, the rest as its body. */
+export function createPage(source: string, text: string): Page {
+  const { data, body } = splitFrontmatter(text);
+  return { source, path: pagePath(source, data), data, body };
+}
+
+/**
+ * Where a page is served: its source path without the content folder or the
+ * extension, with `index` dropped, so `content/posts/hello.md` serves at
+ * `posts/hello/`. A `permalink` in the frontmatter wins.
+ */
+export function pagePath(source: string, data: PageData): string {
+  if (typeof data.permalink === "string") return trimSlashes(data.permalink);
+  const inside = source.replace(/^content\//, "").replace(/\.md$/, "");
+  return trimSlashes(inside.replace(/(^|\/)index$/, ""));
+}
+
+/** Whether a page is a draft, which a build leaves out unless asked. */
+export function isDraft(page: Page): boolean {
+  return page.data.draft === true;
+}
+
+/** A page with `fn` applied to every node of its tree, as `mapTree` applies it. A page not parsed yet is returned as it is. */
+export function withTree(page: Page, fn: (node: Node) => Node | null): Page {
+  if (page.tree === undefined) return page;
+  const tree = mapTree(page.tree, fn);
+  return tree === null ? page : { ...page, tree };
+}
+
+function trimSlashes(path: string): string {
+  return path.replace(/^\/+|\/+$/g, "");
+}
+=== site/node.ts ===
+import type { Node, NodeType } from "@folio/schema";
+
+/** Calls `visit` on every node of a tree, parents before their children. */
+export function walk(node: Node, visit: (node: Node, parent: Node | null) => void, parent: Node | null = null): void {
+  visit(node, parent);
+  for (const child of node.children ?? []) walk(child, visit, node);
+}
+
+/** Calls `fn` on every node of one type. */
+export function visit(tree: Node, type: NodeType, fn: (node: Node) => void): void {
+  walk(tree, (node) => {
+    if (node.type === type) fn(node);
+  });
+}
+
+/** Every node of one type, in document order. */
+export function findAll(tree: Node, type: NodeType): Node[] {
+  const found: Node[] = [];
+  visit(tree, type, (node) => found.push(node));
+  return found;
+}
+
+/** The plain text under a node, as a reader would see it. */
+export function textOf(node: Node): string {
+  if (node.value !== undefined) return node.value;
+  return (node.children ?? []).map(textOf).join("");
+}
+
+/**
+ * A new tree with `fn` applied to every node, children first, so `fn` sees
+ * each node with its children already mapped. Returning null drops a node.
+ */
+export function mapTree(node: Node, fn: (node: Node) => Node | null): Node | null {
+  const children = node.children?.flatMap((child) => {
+    const mapped = mapTree(child, fn);
+    return mapped === null ? [] : [mapped];
+  });
+  return fn(children === undefined ? node : { ...node, children });
+}
+=== site/frontmatter.ts ===
+import type { PageData } from "@folio/schema";
+
+const FENCE = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/;
+
+/** A page's frontmatter as data, and the body after it. Text with no frontmatter is all body. */
+export function splitFrontmatter(text: string): { data: PageData; body: string } {
+  const match = FENCE.exec(text);
+  if (match === null) return { data: {}, body: text };
+  return { data: parseFrontmatter(match[1] ?? ""), body: text.slice(match[0].length) };
+}
+
+/**
+ * The small YAML folio's frontmatter uses: `key: value` lines, where a value
+ * is a quoted or bare string, a number, true or false, or a list in brackets.
+ */
+export function parseFrontmatter(text: string): PageData {
+  const data: Record<string, unknown> = {};
+  for (const line of text.split(/\r?\n/)) {
+    const at = line.indexOf(":");
+    if (at <= 0 || line.trimStart().startsWith("#")) continue;
+    data[line.slice(0, at).trim()] = valueOf(line.slice(at + 1).trim());
+  }
+  return data;
+}
+
+function valueOf(raw: string): unknown {
+  if (raw === "true" || raw === "false") return raw === "true";
+  if (/^-?\d+(\.\d+)?$/.test(raw)) return Number(raw);
+  if (raw.startsWith("[") && raw.endsWith("]")) return listOf(raw.slice(1, -1));
+  return unquote(raw);
+}
+
+function listOf(inner: string): string[] {
+  return inner.split(",").map((item) => unquote(item.trim())).filter((item) => item !== "");
+}
+
+function unquote(raw: string): string {
+  const quoted = /^(["'])(.*)\1$/.exec(raw);
+  return quoted === null ? raw : (quoted[2] ?? "");
+}
+=== site/events.ts ===
+/** What a build reports as it goes, for the dev server and the CLI's progress line. */
+export type BuildEvent =
+  | { readonly type: "page-added" | "page-changed" | "page-removed"; readonly path: string }
+  | { readonly type: "phase"; readonly phase: "read" | "parse" | "transform" | "layout" | "render" | "write"; readonly pages: number }
+  | { readonly type: "warning"; readonly path: string; readonly message: string }
+  | { readonly type: "done"; readonly pages: number; readonly ms: number };
+
+export interface Events {
+  send(event: BuildEvent): void;
+  /** Hears every event from now on; returns a function that stops hearing them. */
+  listen(listener: (event: BuildEvent) => void): () => void;
+}
+
+export function createEvents(): Events {
+  const listeners = new Set<(event: BuildEvent) => void>();
+  return {
+    send(event) {
+      for (const listener of listeners) listener(event);
+    },
+    listen(listener) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+  };
+}
+=== site/core.test.ts ===
+import { describe, expect, it } from "vitest";
+import { createPage, createSite, mapTree, pagePath, splitFrontmatter, textOf } from "./index.ts";
+
+describe("the document model", () => {
+  it("reads frontmatter and keeps the rest as the body", () => {
+    const { data, body } = splitFrontmatter("---\ntitle: Hello\ntags: [a, b]\ndraft: true\n---\n# Hello\n");
+    expect(data).toEqual({ title: "Hello", tags: ["a", "b"], draft: true });
+    expect(body).toBe("# Hello\n");
+  });
+
+  it("serves a page at its source path, without index or the extension", () => {
+    expect(pagePath("content/posts/hello.md", {})).toBe("posts/hello");
+    expect(pagePath("content/docs/index.md", {})).toBe("docs");
+    expect(pagePath("content/x.md", { permalink: "/elsewhere/" })).toBe("elsewhere");
+  });
+
+  it("refuses two pages at one path", () => {
+    const site = createSite({ title: "t", url: "u", content: "content", layouts: "layouts", out: "dist", extensions: [] });
+    site.add(createPage("content/a.md", "A"));
+    expect(() => site.add(createPage("content/a/index.md", "A again"))).toThrow(/Two pages want a/);
+  });
+
+  it("maps a tree children first and drops what the mapping drops", () => {
+    const tree = { type: "root", children: [{ type: "text", value: "keep" }, { type: "html", value: "<x>" }] } as const;
+    const mapped = mapTree(tree, (node) => (node.type === "html" ? null : node));
+    expect(mapped === null ? "" : textOf(mapped)).toBe("keep");
+  });
+});
+=== engine/package.json ===
+{
+  "name": "@folio/engine",
+  "version": "0.9.0",
+  "type": "module",
+  "exports": "./index.ts",
+  "dependencies": { "@folio/site": "0.9.0", "@folio/schema": "0.9.0" }
+}
+=== engine/index.ts ===
+/**
+ * folio's build: read every page, parse its Markdown into a tree, let each
+ * extension transform it, place it in its layout, render it to HTML and
+ * write the site.
+ */
+export { build, type BuildResult } from "./build.ts";
+export { parseBlocks } from "./blocks.ts";
+export { parseInline } from "./inline.ts";
+export { renderNode, renderTree, escapeHtml } from "./render.ts";
+export { slugify, uniqueSlugs } from "./slug.ts";
+export { applyLayout, loadLayouts } from "./layout.ts";
+export { byDate, byTag, bySection, byYear, newest, paginate, neighbours, related } from "./collections.ts";
+export { parseDate, longDate, isoDate, rfc822, ago } from "./dates.ts";
+export { absolute, isExternal, relativeUrl, urlPath } from "./url.ts";
+export { summaryOf, contentsOf } from "./transform.ts";
+=== engine/build.ts ===
+import type { Page, SiteConfig } from "@folio/schema";
+import { createSite, isDraft } from "@folio/site";
+import { readPages } from "./read.ts";
+import { parsePage } from "./parse.ts";
+import { transformPage, runConfigured, runDone } from "./transform.ts";
+import { applyLayout, loadLayouts } from "./layout.ts";
+import { renderPage } from "./render.ts";
+import { writePages } from "./write.ts";
+import { withFootnotes } from "./footnotes.ts";
+import { copyStatic } from "./assets.ts";
+
+export interface BuildResult {
+  readonly pages: readonly Page[];
+  readonly ms: number;
+}
+
+/** Builds a whole site: every page through every phase, then the extensions' last word. */
+export async function build(given: SiteConfig): Promise<BuildResult> {
+  const started = Date.now();
+  const config = runConfigured(given);
+  const site = createSite(config);
+  const read = (await readPages(config)).filter((page) => config.drafts === true || !isDraft(page));
+  phase(site, "read", read);
+  const parsed = read.map(parsePage).map(withFootnotes);
+  phase(site, "parse", parsed);
+  const transformed = parsed.map((page) => transformPage(page, config.extensions));
+  phase(site, "transform", transformed);
+  const layouts = await loadLayouts(config);
+  const laid = transformed.map((page) => applyLayout(renderPage(page), layouts));
+  phase(site, "render", laid);
+  for (const page of laid) site.add(page);
+  await writePages(laid, config.out);
+  await copyStatic(config.root ?? ".", config.out);
+  await runDone(config.extensions, laid, config.out);
+  const ms = Date.now() - started;
+  site.events.send({ type: "done", pages: laid.length, ms });
+  return { pages: laid, ms };
+}
+
+function phase(site: ReturnType<typeof createSite>, name: "read" | "parse" | "transform" | "render", pages: readonly Page[]): void {
+  site.events.send({ type: "phase", phase: name, pages: pages.length });
+}
+=== engine/read.ts ===
+import { readdir, readFile } from "node:fs/promises";
+import { join, relative } from "node:path";
+import type { Page, SiteConfig } from "@folio/schema";
+import { createPage } from "@folio/site";
+
+/** Every Markdown file under the content folder, as a page, in path order. */
+export async function readPages(config: SiteConfig): Promise<Page[]> {
+  const root = config.root ?? ".";
+  const files = await markdownUnder(join(root, config.content));
+  const pages = await Promise.all(files.map(async (file) => createPage(sourceOf(root, file), await readFile(file, "utf8"))));
+  return pages.sort(byPath);
+}
+
+async function markdownUnder(dir: string): Promise<string[]> {
+  const entries = await readdir(dir, { withFileTypes: true });
+  const nested = await Promise.all(entries.map((entry) => (entry.isDirectory() ? markdownUnder(join(dir, entry.name)) : Promise.resolve(isMarkdown(entry.name) ? [join(dir, entry.name)] : []))));
+  return nested.flat();
+}
+
+function isMarkdown(name: string): boolean {
+  return name.endsWith(".md") && !name.startsWith("_");
+}
+
+function sourceOf(root: string, file: string): string {
+  return relative(root, file).split("\\").join("/");
+}
+
+function byPath(a: Page, b: Page): number {
+  return a.path < b.path ? -1 : a.path > b.path ? 1 : 0;
+}
+=== engine/parse.ts ===
+import type { Page } from "@folio/schema";
+import { parseBlocks } from "./blocks.ts";
+
+/** A page with its body parsed into a tree. */
+export function parsePage(page: Page): Page {
+  return { ...page, tree: { type: "root", children: parseBlocks(page.body) } };
+}
+=== engine/blocks.ts ===
+import type { Node } from "@folio/schema";
+import { parseInline } from "./inline.ts";
+
+/** A page's Markdown as block nodes: headings, paragraphs, lists, quotes, code, tables and rules. */
+export function parseBlocks(text: string): Node[] {
+  const lines = text.replace(/\r\n?/g, "\n").split("\n");
+  const blocks: Node[] = [];
+  let at = 0;
+  while (at < lines.length) {
+    const line = lines[at] ?? "";
+    if (isBlank(line)) {
+      at++;
+      continue;
+    }
+    const [node, next] = readBlock(lines, at);
+    blocks.push(node);
+    at = next;
+  }
+  return blocks;
+}
+
+/** Reads the block starting at line `at`; returns it and the line after it. */
+function readBlock(lines: readonly string[], at: number): [Node, number] {
+  const line = lines[at] ?? "";
+  if (isFence(line)) return readFence(lines, at);
+  if (isHeading(line)) return [heading(line), at + 1];
+  if (isRule(line)) return [{ type: "rule" }, at + 1];
+  if (isQuote(line)) return readQuote(lines, at);
+  if (isItem(line)) return readList(lines, at);
+  if (isTableRow(line) && isTableDivider(lines[at + 1] ?? "")) return readTable(lines, at);
+  return readParagraph(lines, at);
+}
+
+function isBlank(line: string): boolean {
+  return line.trim() === "";
+}
+
+function isHeading(line: string): boolean {
+  return /^#{1,6} /.test(line);
+}
+
+function heading(line: string): Node {
+  const level = line.indexOf(" ");
+  return { type: "heading", attrs: { level: String(level) }, children: parseInline(line.slice(level + 1).trim()) };
+}
+
+function isRule(line: string): boolean {
+  return /^(\*{3,}|-{3,}|_{3,})\s*$/.test(line);
+}
+
+function isFence(line: string): boolean {
+  return line.startsWith("```");
+}
+
+function readFence(lines: readonly string[], at: number): [Node, number] {
+  const lang = (lines[at] ?? "").slice(3).trim();
+  const end = indexFrom(lines, at + 1, isFence);
+  const code = lines.slice(at + 1, end).join("\n");
+  return [{ type: "codeBlock", value: code, attrs: lang === "" ? {} : { lang } }, end + 1];
+}
+
+function isQuote(line: string): boolean {
+  return line.startsWith(">");
+}
+
+function readQuote(lines: readonly string[], at: number): [Node, number] {
+  const end = indexFrom(lines, at, (line) => !isQuote(line));
+  const inner = lines.slice(at, end).map(unquote).join("\n");
+  return [{ type: "quote", children: parseBlocks(inner) }, end];
+}
+
+function unquote(line: string): string {
+  return line.replace(/^> ?/, "");
+}
+
+function isItem(line: string): boolean {
+  return /^(\s*)([-*+]|\d+[.)]) /.test(line);
+}
+
+function isOrdered(line: string): boolean {
+  return /^\s*\d+[.)] /.test(line);
+}
+
+function readList(lines: readonly string[], at: number): [Node, number] {
+  const ordered = isOrdered(lines[at] ?? "");
+  const items: Node[] = [];
+  let i = at;
+  while (i < lines.length && isItem(lines[i] ?? "")) {
+    const end = itemEnd(lines, i);
+    items.push(item(lines.slice(i, end)));
+    i = end;
+  }
+  return [{ type: "list", attrs: { ordered: String(ordered) }, children: items }, i];
+}
+
+function itemEnd(lines: readonly string[], at: number): number {
+  const end = indexFrom(lines, at + 1, (line) => isItem(line) || isBlank(line) || !line.startsWith("  "));
+  return end;
+}
+
+function item(lines: readonly string[]): Node {
+  const first = (lines[0] ?? "").replace(/^\s*([-*+]|\d+[.)]) /, "");
+  const rest = lines.slice(1).map((line) => line.replace(/^ {2}/, ""));
+  const task = /^\[( |x)\] /.exec(first);
+  const text = task === null ? first : first.slice(4);
+  const attrs: Record<string, string> = task === null ? {} : { checked: String(task[1] === "x") };
+  return { type: "item", attrs, children: parseBlocks([text, ...rest].join("\n")) };
+}
+
+function isTableRow(line: string): boolean {
+  return line.trim().startsWith("|");
+}
+
+function isTableDivider(line: string): boolean {
+  return /^\s*\|?(\s*:?-+:?\s*\|)+\s*:?-*:?\s*$/.test(line);
+}
+
+function readTable(lines: readonly string[], at: number): [Node, number] {
+  const end = indexFrom(lines, at + 2, (line) => !isTableRow(line));
+  const align = cellsOf(lines[at + 1] ?? "").map(alignmentOf);
+  const head = row(lines[at] ?? "", align, true);
+  const body = lines.slice(at + 2, end).map((line) => row(line, align, false));
+  return [{ type: "table", children: [head, ...body] }, end];
+}
+
+function row(line: string, align: readonly string[], header: boolean): Node {
+  const cells = cellsOf(line).map((text, k) => cell(text, align[k] ?? "left", header));
+  return { type: "row", children: cells };
+}
+
+function cell(text: string, align: string, header: boolean): Node {
+  return { type: "cell", attrs: { align, header: String(header) }, children: parseInline(text) };
+}
+
+function cellsOf(line: string): string[] {
+  return line.trim().replace(/^\||\|$/g, "").split("|").map((cell) => cell.trim());
+}
+
+function alignmentOf(divider: string): string {
+  const left = divider.startsWith(":");
+  const right = divider.endsWith(":");
+  return left && right ? "center" : right ? "right" : "left";
+}
+
+function readParagraph(lines: readonly string[], at: number): [Node, number] {
+  const end = indexFrom(lines, at + 1, startsBlock);
+  const text = lines.slice(at, end).join(" ").trim();
+  return [{ type: "paragraph", children: parseInline(text) }, end];
+}
+
+function startsBlock(line: string): boolean {
+  return isBlank(line) || isHeading(line) || isFence(line) || isQuote(line) || isRule(line) || isItem(line);
+}
+
+/** The first line at or after `from` that `test` holds for, or the end. */
+function indexFrom(lines: readonly string[], from: number, test: (line: string) => boolean): number {
+  for (let i = from; i < lines.length; i++) if (test(lines[i] ?? "")) return i;
+  return lines.length;
+}
+=== engine/inline.ts ===
+import type { Node } from "@folio/schema";
+
+/** A line of Markdown as inline nodes: text, emphasis, strong, code, links and images. */
+export function parseInline(text: string): Node[] {
+  const nodes: Node[] = [];
+  let plain = "";
+  let at = 0;
+  const flush = (): void => {
+    if (plain !== "") nodes.push({ type: "text", value: plain });
+    plain = "";
+  };
+  while (at < text.length) {
+    const read = readAt(text, at);
+    if (read === null) {
+      plain += text[at];
+      at++;
+      continue;
+    }
+    flush();
+    nodes.push(read.node);
+    at = read.next;
+  }
+  flush();
+  return nodes;
+}
+
+type Read = { node: Node; next: number } | null;
+
+function readAt(text: string, at: number): Read {
+  const char = text[at];
+  if (char === "\\") return readEscape(text, at);
+  if (char === "`") return readCode(text, at);
+  if (char === "!" && text[at + 1] === "[") return readImage(text, at);
+  if (char === "[") return readLink(text, at);
+  if (char === "<") return readAutolink(text, at);
+  if (text.startsWith("**", at) || text.startsWith("__", at)) return readStrong(text, at);
+  if (char === "*" || char === "_") return readEmphasis(text, at);
+  return null;
+}
+
+function readEscape(text: string, at: number): Read {
+  const next = text[at + 1];
+  return next === undefined ? null : { node: { type: "text", value: next }, next: at + 2 };
+}
+
+function readCode(text: string, at: number): Read {
+  const ticks = runOf(text, at, "`");
+  const end = text.indexOf("`".repeat(ticks), at + ticks);
+  if (end < 0) return null;
+  return { node: { type: "code", value: text.slice(at + ticks, end).trim() }, next: end + ticks };
+}
+
+function readStrong(text: string, at: number): Read {
+  const mark = text.slice(at, at + 2);
+  const end = text.indexOf(mark, at + 2);
+  if (end <= at + 2) return null;
+  return { node: { type: "strong", children: parseInline(text.slice(at + 2, end)) }, next: end + 2 };
+}
+
+function readEmphasis(text: string, at: number): Read {
+  const mark = text[at] ?? "*";
+  const end = text.indexOf(mark, at + 1);
+  if (end <= at + 1 || isWordInside(text, at, mark)) return null;
+  return { node: { type: "emphasis", children: parseInline(text.slice(at + 1, end)) }, next: end + 1 };
+}
+
+function isWordInside(text: string, at: number, mark: string): boolean {
+  return mark === "_" && /\w/.test(text[at - 1] ?? "");
+}
+
+function readLink(text: string, at: number): Read {
+  const label = bracketed(text, at, "[", "]");
+  if (label === null || text[label.end + 1] !== "(") return null;
+  const target = bracketed(text, label.end + 1, "(", ")");
+  if (target === null) return null;
+  const { href, title } = splitTarget(target.inner);
+  const attrs: Record<string, string> = title === undefined ? { href } : { href, title };
+  return { node: { type: "link", attrs, children: parseInline(label.inner) }, next: target.end + 1 };
+}
+
+function readImage(text: string, at: number): Read {
+  const link = readLink(text, at + 1);
+  if (link === null) return null;
+  const alt = link.node.children?.map((child) => child.value ?? "").join("") ?? "";
+  return { node: { type: "image", attrs: { ...link.node.attrs, alt } }, next: link.next };
+}
+
+function readAutolink(text: string, at: number): Read {
+  const end = text.indexOf(">", at);
+  const url = end < 0 ? "" : text.slice(at + 1, end);
+  if (!/^(https?:|mailto:)/.test(url)) return null;
+  return { node: { type: "link", attrs: { href: url }, children: [{ type: "text", value: url }] }, next: end + 1 };
+}
+
+function splitTarget(inner: string): { href: string; title?: string } {
+  const titled = /^(\S+)\s+"(.*)"$/.exec(inner.trim());
+  return titled === null ? { href: inner.trim() } : { href: titled[1] ?? "", title: titled[2] ?? "" };
+}
+
+/** The text between an opening and its matching closing bracket, nested brackets counted. */
+function bracketed(text: string, at: number, open: string, close: string): { inner: string; end: number } | null {
+  let depth = 0;
+  for (let i = at; i < text.length; i++) {
+    if (text[i] === open) depth++;
+    else if (text[i] === close && --depth === 0) return { inner: text.slice(at + 1, i), end: i };
+  }
+  return null;
+}
+
+function runOf(text: string, at: number, char: string): number {
+  let n = 0;
+  while (text[at + n] === char) n++;
+  return n;
+}
+=== engine/transform.ts ===
+import type { Extension, Node, Page, SiteConfig } from "@folio/schema";
+import { mapTree, textOf } from "@folio/site";
+import { uniqueSlugs } from "./slug.ts";
+
+/** The config after each extension's `configured` hook, in order. */
+export function runConfigured(config: SiteConfig): SiteConfig {
+  return config.extensions.reduce((current, ext) => ext.configured?.(current) ?? current, config);
+}
+
+/** A page after folio's own transforms and each extension's `parsed` hook. */
+export function transformPage(page: Page, extensions: readonly Extension[]): Page {
+  const own = withHeadingIds(page);
+  return extensions.reduce((current, ext) => ext.parsed?.(current) ?? current, own);
+}
+
+/** Every extension's last word once the site is written: feeds, sitemaps, indexes. */
+export async function runDone(extensions: readonly Extension[], pages: readonly Page[], out: string): Promise<void> {
+  for (const ext of extensions) await ext.done?.(pages, out);
+}
+
+/** Gives every heading an id from its text, unique on its page, so it can be linked to. */
+function withHeadingIds(page: Page): Page {
+  if (page.tree === undefined) return page;
+  const ids = uniqueSlugs();
+  const tree = mapTree(page.tree, (node) => (node.type === "heading" ? withId(node, ids(textOf(node))) : node));
+  return tree === null ? page : { ...page, tree };
+}
+
+function withId(node: Node, id: string): Node {
+  return { ...node, attrs: { ...node.attrs, id } };
+}
+
+/** The page's headings as a table of contents: each heading's level, text and id. */
+export function contentsOf(page: Page): { level: number; text: string; id: string }[] {
+  const out: { level: number; text: string; id: string }[] = [];
+  for (const node of page.tree?.children ?? []) {
+    if (node.type !== "heading") continue;
+    out.push({ level: Number(node.attrs?.level ?? 1), text: textOf(node), id: node.attrs?.id ?? "" });
+  }
+  return out;
+}
+
+/** The first paragraph's text, as a summary for feeds and search. */
+export function summaryOf(page: Page, words = 40): string {
+  const first = page.tree?.children?.find((node) => node.type === "paragraph");
+  const text = first === undefined ? "" : textOf(first);
+  const cut = text.split(/\s+/).slice(0, words);
+  return cut.join(" ") + (cut.length === words ? "…" : "");
+}
+=== engine/layout.ts ===
+import { readdir, readFile } from "node:fs/promises";
+import { join } from "node:path";
+import type { Page, SiteConfig } from "@folio/schema";
+import { escapeHtml } from "./render.ts";
+
+/** Each layout's template by name: `layouts/post.html` is `post`. */
+export type Layouts = ReadonlyMap<string, string>;
+
+/** Reads every layout in the layouts folder. */
+export async function loadLayouts(config: SiteConfig): Promise<Layouts> {
+  const dir = join(config.root ?? ".", config.layouts);
+  const names = (await readdir(dir)).filter((name) => name.endsWith(".html"));
+  const pairs = await Promise.all(names.map(async (name) => [name.slice(0, -5), await readFile(join(dir, name), "utf8")] as const));
+  return new Map(pairs);
+}
+
+/** Places a rendered page in its layout: the one its frontmatter names, else `page`. */
+export function applyLayout(page: Page, layouts: Layouts): Page {
+  const name = page.data.layout ?? "page";
+  const template = layouts.get(name);
+  if (template === undefined) throw new Error(`${page.source} asks for the layout "${name}", which layouts/ does not have.`);
+  return { ...page, html: fill(template, page, layouts) };
+}
+
+/** Fills `{{ name }}` with page data, `{{ content }}` with the page, and `{{> partial }}` with a layout. */
+function fill(template: string, page: Page, layouts: Layouts, depth = 0): string {
+  if (depth > 8) throw new Error(`${page.source}: layouts include each other too deeply.`);
+  return template
+    .replace(/\{\{>\s*([\w-]+)\s*\}\}/g, (_, name: string) => fill(layouts.get(name) ?? "", page, layouts, depth + 1))
+    .replace(/\{\{\s*([\w.]+)\s*\}\}/g, (_, key: string) => valueFor(key, page));
+}
+
+function valueFor(key: string, page: Page): string {
+  if (key === "content") return page.html ?? "";
+  if (key === "path") return `/${page.path}/`;
+  const value = key.split(".").reduce<unknown>((obj, part) => (obj as Record<string, unknown> | undefined)?.[part], page.data);
+  return value === undefined ? "" : escapeHtml(Array.isArray(value) ? value.join(", ") : String(value));
+}
+=== engine/render.ts ===
+import type { Node, Page } from "@folio/schema";
+
+/** A page with its tree rendered to HTML, ready for its layout. */
+export function renderPage(page: Page): Page {
+  return page.tree === undefined ? page : { ...page, html: renderTree(page.tree) };
+}
+
+/** A whole tree as HTML. */
+export function renderTree(tree: Node): string {
+  return (tree.children ?? []).map(renderNode).join("\n");
+}
+
+/** One node as HTML. */
+export function renderNode(node: Node): string {
+  const render = RENDERERS[node.type];
+  return render(node);
+}
+
+const RENDERERS: Readonly<Record<Node["type"], (node: Node) => string>> = {
+  root: renderTree,
+  heading: renderHeading,
+  paragraph: (node) => wrap("p", node),
+  text: (node) => escapeHtml(node.value ?? ""),
+  emphasis: (node) => wrap("em", node),
+  strong: (node) => wrap("strong", node),
+  code: (node) => `<code>${escapeHtml(node.value ?? "")}</code>`,
+  codeBlock: renderCodeBlock,
+  link: renderLink,
+  image: renderImage,
+  list: renderList,
+  item: renderItem,
+  quote: (node) => `<blockquote>\n${inner(node)}\n</blockquote>`,
+  table: (node) => `<table>\n${inner(node)}\n</table>`,
+  row: (node) => `<tr>${inner(node, "")}</tr>`,
+  cell: renderCell,
+  rule: () => "<hr>",
+  html: (node) => node.value ?? "",
+  footnote: renderFootnote,
+};
+
+function renderHeading(node: Node): string {
+  const level = node.attrs?.level ?? "1";
+  const id = node.attrs?.id;
+  return `<h${level}${id === undefined ? "" : attr("id", id)}>${inner(node, "")}</h${level}>`;
+}
+
+function renderCodeBlock(node: Node): string {
+  const lang = node.attrs?.lang;
+  const cls = lang === undefined ? "" : attr("class", `language-${lang}`);
+  return `<pre><code${cls}>${node.attrs?.highlighted ?? escapeHtml(node.value ?? "")}</code></pre>`;
+}
+
+function renderLink(node: Node): string {
+  const title = node.attrs?.title;
+  return `<a${attr("href", node.attrs?.href ?? "")}${title === undefined ? "" : attr("title", title)}>${inner(node, "")}</a>`;
+}
+
+function renderImage(node: Node): string {
+  const size = node.attrs?.width === undefined ? "" : attr("width", node.attrs.width) + attr("height", node.attrs.height ?? "");
+  return `<img${attr("src", node.attrs?.href ?? "")}${attr("alt", node.attrs?.alt ?? "")}${size} loading="lazy">`;
+}
+
+function renderList(node: Node): string {
+  const tag = node.attrs?.ordered === "true" ? "ol" : "ul";
+  return `<${tag}>\n${inner(node)}\n</${tag}>`;
+}
+
+function renderItem(node: Node): string {
+  const checked = node.attrs?.checked;
+  const box = checked === undefined ? "" : `<input type="checkbox" disabled${checked === "true" ? " checked" : ""}> `;
+  return `<li>${box}${unwrapLonely(node)}</li>`;
+}
+
+function renderCell(node: Node): string {
+  const tag = node.attrs?.header === "true" ? "th" : "td";
+  const align = node.attrs?.align ?? "left";
+  return `<${tag}${align === "left" ? "" : attr("style", `text-align:${align}`)}>${inner(node, "")}</${tag}>`;
+}
+
+function renderFootnote(node: Node): string {
+  const id = node.attrs?.id ?? "";
+  return `<sup id="ref-${id}"><a href="#note-${id}">${escapeHtml(id)}</a></sup>`;
+}
+
+/** An item holding one paragraph renders as its text alone, as tight lists do. */
+function unwrapLonely(node: Node): string {
+  const only = node.children?.length === 1 ? node.children[0] : undefined;
+  return only?.type === "paragraph" ? inner(only, "") : inner(node);
+}
+
+function wrap(tag: string, node: Node): string {
+  return `<${tag}>${inner(node, "")}</${tag}>`;
+}
+
+function inner(node: Node, between = "\n"): string {
+  return (node.children ?? []).map(renderNode).join(between);
+}
+
+function attr(name: string, value: string): string {
+  return ` ${name}="${escapeAttr(value)}"`;
+}
+
+/** Text made safe to place in HTML. */
+export function escapeHtml(text: string): string {
+  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function escapeAttr(text: string): string {
+  return escapeHtml(text).replace(/"/g, "&quot;");
+}
+=== engine/slug.ts ===
+/** A heading's text as a URL fragment: lowercase words joined by hyphens. */
+export function slugify(text: string): string {
+  return text
+    .normalize("NFKD")
+    .toLowerCase()
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+/** A slugger that numbers repeats, so two headings called "Usage" become `usage` and `usage-1`. */
+export function uniqueSlugs(): (text: string) => string {
+  const seen = new Map<string, number>();
+  return (text) => {
+    const base = slugify(text) || "section";
+    const count = seen.get(base) ?? 0;
+    seen.set(base, count + 1);
+    return count === 0 ? base : `${base}-${count}`;
+  };
+}
+=== engine/write.ts ===
+import { mkdir, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import type { Page } from "@folio/schema";
+
+/** Writes each page's HTML to `out/<path>/index.html`. */
+export async function writePages(pages: readonly Page[], out: string): Promise<void> {
+  await Promise.all(pages.map((page) => writePage(page, out)));
+}
+
+async function writePage(page: Page, out: string): Promise<void> {
+  const file = outFile(page, out);
+  await mkdir(dirname(file), { recursive: true });
+  await writeFile(file, page.html ?? "");
+}
+
+/** Where a page is written: a folder of its own, so its URL ends in a slash. */
+export function outFile(page: Page, out: string): string {
+  return join(out, page.path, "index.html");
+}
+
+/** A page's URL on the site. */
+export function urlOf(page: Page, base: string): string {
+  return `${base.replace(/\/$/, "")}/${page.path}${page.path === "" ? "" : "/"}`;
+}
+=== engine/engine.test.ts ===
+import { describe, expect, it } from "vitest";
+import { parseBlocks, parseInline, renderTree, slugify, uniqueSlugs } from "./index.ts";
+
+const html = (markdown: string): string => renderTree({ type: "root", children: parseBlocks(markdown) });
+
+describe("the engine", () => {
+  it("parses headings, paragraphs, lists and code", () => {
+    expect(html("# Hi\n\nSome *words*.")).toBe("<h1>Hi</h1>\n<p>Some <em>words</em>.</p>");
+    expect(html("- a\n- b")).toBe("<ul>\n<li>a</li>\n<li>b</li>\n</ul>");
+    expect(html("```ts\nlet x = 1 < 2;\n```")).toBe('<pre><code class="language-ts">let x = 1 &lt; 2;</code></pre>');
+  });
+
+  it("parses links, images and inline code", () => {
+    expect(parseInline("[folio](https://folio.dev)")[0]?.attrs?.href).toBe("https://folio.dev");
+    expect(parseInline("![a cat](cat.png)")[0]?.attrs?.alt).toBe("a cat");
+    expect(parseInline("run `folio build`")[1]?.value).toBe("folio build");
+  });
+
+  it("aligns table cells as their divider says", () => {
+    expect(html("| a | b |\n| :-: | --: |\n| 1 | 2 |")).toContain('<td style="text-align:right">2</td>');
+  });
+
+  it("gives headings unique slugs", () => {
+    const slug = uniqueSlugs();
+    expect([slug("Usage"), slug("Usage"), slug("Ça va?")]).toEqual(["usage", "usage-1", "ca-va"]);
+    expect(slugify("  Hello, World!  ")).toBe("hello-world");
+  });
+});
+=== engine/collections.ts ===
+import type { Page } from "@folio/schema";
+
+/** Pages that carry a date, newest first; pages without one keep their path order after them. */
+export function byDate(pages: readonly Page[]): Page[] {
+  return [...pages].sort((a, b) => dateOf(b).localeCompare(dateOf(a)) || a.path.localeCompare(b.path));
+}
+
+/** The `count` newest dated pages. */
+export function newest(pages: readonly Page[], count: number): Page[] {
+  return byDate(pages.filter(hasDate)).slice(0, count);
+}
+
+/** Pages grouped by the first folder of their path: `posts/hello` is in `posts`. */
+export function bySection(pages: readonly Page[]): Map<string, Page[]> {
+  return groupBy(pages, (page) => [sectionOf(page)]);
+}
+
+/** Pages grouped by each of their tags; a page with three tags is in three groups. */
+export function byTag(pages: readonly Page[]): Map<string, Page[]> {
+  return groupBy(pages, tagsOf);
+}
+
+/** Pages grouped by the year of their date. */
+export function byYear(pages: readonly Page[]): Map<string, Page[]> {
+  return groupBy(pages.filter(hasDate), (page) => [dateOf(page).slice(0, 4)]);
+}
+
+/** A list cut into pages of `size`, each knowing its number and the count. */
+export function paginate<T>(items: readonly T[], size: number): { items: T[]; page: number; pages: number }[] {
+  const pages = Math.max(1, Math.ceil(items.length / size));
+  return Array.from({ length: pages }, (_, k) => ({ items: items.slice(k * size, (k + 1) * size), page: k + 1, pages }));
+}
+
+/** The page before and after one in a list, for "previous" and "next" links. */
+export function neighbours(pages: readonly Page[], page: Page): { previous?: Page; next?: Page } {
+  const at = pages.findIndex((p) => p.path === page.path);
+  const previous = at > 0 ? pages[at - 1] : undefined;
+  const next = at >= 0 && at < pages.length - 1 ? pages[at + 1] : undefined;
+  return { ...(previous === undefined ? {} : { previous }), ...(next === undefined ? {} : { next }) };
+}
+
+/** Pages that share at least one tag with a page, the most shared first. */
+export function related(pages: readonly Page[], page: Page, count = 3): Page[] {
+  const mine = new Set(tagsOf(page));
+  const scored = pages.filter((p) => p.path !== page.path).map((p) => ({ p, shared: tagsOf(p).filter((t) => mine.has(t)).length }));
+  return scored.filter((s) => s.shared > 0).sort((a, b) => b.shared - a.shared).slice(0, count).map((s) => s.p);
+}
+
+export function sectionOf(page: Page): string {
+  return page.path.split("/")[0] ?? "";
+}
+
+function tagsOf(page: Page): string[] {
+  return Array.isArray(page.data.tags) ? page.data.tags.map(String) : [];
+}
+
+function hasDate(page: Page): boolean {
+  return typeof page.data.date === "string";
+}
+
+function dateOf(page: Page): string {
+  return typeof page.data.date === "string" ? page.data.date : "";
+}
+
+function groupBy(pages: readonly Page[], keys: (page: Page) => readonly string[]): Map<string, Page[]> {
+  const groups = new Map<string, Page[]>();
+  for (const page of pages) for (const key of keys(page)) groups.set(key, [...(groups.get(key) ?? []), page]);
+  return groups;
+}
+=== engine/dates.ts ===
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+/** A frontmatter date (`YYYY-MM-DD`) as a date at noon UTC, so no time zone moves it to another day. */
+export function parseDate(text: string): Date {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
+  if (match === null) throw new Error(`"${text}" is not a date: write it as YYYY-MM-DD.`);
+  return new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 12));
+}
+
+/** A date as a reader would say it: 1 March 2026. */
+export function longDate(date: Date): string {
+  return `${date.getUTCDate()} ${MONTHS[date.getUTCMonth()]} ${date.getUTCFullYear()}`;
+}
+
+/** A date as `YYYY-MM-DD`. */
+export function isoDate(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+/** A date as RSS wants it. */
+export function rfc822(date: Date): string {
+  return date.toUTCString();
+}
+
+/** Whether a dated page is in the future, which a build leaves out like a draft. */
+export function isFuture(text: string, now: Date): boolean {
+  return parseDate(text).getTime() > now.getTime();
+}
+
+/** How long ago a date was, in the largest whole unit: "3 days ago". */
+export function ago(date: Date, now: Date): string {
+  const days = Math.floor((now.getTime() - date.getTime()) / 86_400_000);
+  if (days < 1) return "today";
+  if (days < 31) return plural(days, "day");
+  if (days < 365) return plural(Math.floor(days / 30), "month");
+  return plural(Math.floor(days / 365), "year");
+}
+
+function plural(n: number, unit: string): string {
+  return `${n} ${unit}${n === 1 ? "" : "s"} ago`;
+}
+=== engine/footnotes.ts ===
+import type { Node, Page } from "@folio/schema";
+import { mapTree } from "@folio/site";
+
+const REF = /\[\^([\w-]+)\]/g;
+const NOTE = /^\[\^([\w-]+)\]:\s*(.*)$/;
+
+/**
+ * Footnotes: `[^1]` in the text links to `[^1]: the note` at the end of
+ * the page. Notes are numbered in the order they are first referred to.
+ */
+export function withFootnotes(page: Page): Page {
+  const notes = notesOf(page.body);
+  if (notes.size === 0 || page.tree === undefined) return page;
+  const order: string[] = [];
+  const tree = mapTree(page.tree, (node) => (node.type === "text" ? splitRefs(node, notes, order) : isNoteParagraph(node) ? null : node));
+  if (tree === null) return page;
+  return { ...page, tree: { ...tree, children: [...(tree.children ?? []), noteList(order, notes)] } };
+}
+
+/** The notes defined in a page's Markdown, by id. */
+function notesOf(body: string): Map<string, string> {
+  const notes = new Map<string, string>();
+  for (const line of body.split("\n")) {
+    const match = NOTE.exec(line);
+    if (match !== null) notes.set(match[1] as string, match[2] as string);
+  }
+  return notes;
+}
+
+function splitRefs(node: Node, notes: ReadonlyMap<string, string>, order: string[]): Node {
+  const text = node.value ?? "";
+  if (!REF.test(text)) return node;
+  const parts = text.split(REF);
+  const children = parts.map((part, k) => (k % 2 === 0 ? { type: "text" as const, value: part } : refNode(part, notes, order)));
+  return { type: "root", children };
+}
+
+function refNode(id: string, notes: ReadonlyMap<string, string>, order: string[]): Node {
+  if (!notes.has(id)) return { type: "text", value: `[^${id}]` };
+  if (!order.includes(id)) order.push(id);
+  return { type: "footnote", attrs: { id: String(order.indexOf(id) + 1) } };
+}
+
+function isNoteParagraph(node: Node): boolean {
+  return node.type === "paragraph" && NOTE.test(node.children?.[0]?.value ?? "");
+}
+
+function noteList(order: readonly string[], notes: ReadonlyMap<string, string>): Node {
+  const items = order.map((id, k) => noteItem(k + 1, notes.get(id) ?? ""));
+  return { type: "list", attrs: { ordered: "true", class: "footnotes" }, children: items };
+}
+
+function noteItem(n: number, text: string): Node {
+  return { type: "item", attrs: { id: `note-${n}` }, children: [{ type: "text", value: text }] };
+}
+=== engine/assets.ts ===
+import { cp, readdir, stat } from "node:fs/promises";
+import { join } from "node:path";
+
+/** Copies the static folder into the site as it is: CSS, fonts and pictures. */
+export async function copyStatic(root: string, out: string, folder = "static"): Promise<number> {
+  const from = join(root, folder);
+  if (!(await exists(from))) return 0;
+  await cp(from, out, { recursive: true, filter: (path) => !isHidden(path) });
+  return countFiles(from);
+}
+
+async function countFiles(dir: string): Promise<number> {
+  let count = 0;
+  for (const entry of await readdir(dir, { withFileTypes: true })) {
+    if (isHidden(entry.name)) continue;
+    count += entry.isDirectory() ? await countFiles(join(dir, entry.name)) : 1;
+  }
+  return count;
+}
+
+function isHidden(path: string): boolean {
+  return /(^|[/\\])\./.test(path);
+}
+
+async function exists(path: string): Promise<boolean> {
+  try {
+    await stat(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+=== engine/url.ts ===
+/** A path joined onto the site's URL, with one slash between. */
+export function absolute(base: string, path: string): string {
+  return `${trimEnd(base)}/${trimStart(path)}`;
+}
+
+/** Whether a link leaves the site. */
+export function isExternal(href: string): boolean {
+  return /^[a-z]+:/i.test(href) || href.startsWith("//");
+}
+
+/** Whether a link is to a fragment of the same page. */
+export function isFragment(href: string): boolean {
+  return href.startsWith("#");
+}
+
+/** A page path as its URL path: leading and trailing slashes, none doubled. */
+export function urlPath(path: string): string {
+  return `/${trimStart(trimEnd(path))}/`.replace(/\/+/g, "/");
+}
+
+/** A link from one page to another, relative, for sites served from a subfolder. */
+export function relativeUrl(from: string, to: string): string {
+  const a = trimStart(trimEnd(from)).split("/").filter(Boolean);
+  const b = trimStart(trimEnd(to)).split("/").filter(Boolean);
+  let k = 0;
+  while (k < a.length && k < b.length && a[k] === b[k]) k++;
+  const up = a.slice(k).map(() => "..");
+  return [...up, ...b.slice(k)].join("/") + "/";
+}
+
+function trimStart(path: string): string {
+  return path.replace(/^\/+/, "");
+}
+
+function trimEnd(path: string): string {
+  return path.replace(/\/+$/, "");
+}
+=== extensions/package.json ===
+{
+  "name": "@folio/extensions",
+  "version": "0.9.0",
+  "type": "module",
+  "exports": "./index.ts"
+}
+=== extensions/index.ts ===
+/**
+ * The extensions folio ships with, and the registry that finds an extension
+ * by the name a config gives it.
+ */
+export { registry, register, resolveExtensions, type Registered } from "./registry.ts";
+=== extensions/registry.ts ===
+import type { Extension } from "@folio/schema";
+
+/** An extension folio knows by name, with the options it takes and what it does. */
+export interface Registered {
+  readonly name: string;
+  readonly summary: string;
+  readonly create: (options?: Record<string, unknown>) => Extension;
+  /** Extensions that must run before this one. */
+  readonly after?: readonly string[];
+}
+
+const known = new Map<string, Registered>();
+
+/** Makes an extension known by its name, so a config can name it as a string. */
+export function register(entry: Registered): void {
+  if (known.has(entry.name)) throw new Error(`An extension called ${entry.name} is already registered.`);
+  known.set(entry.name, entry);
+}
+
+/** Every registered extension, by name. */
+export function registry(): ReadonlyMap<string, Registered> {
+  return known;
+}
+
+/**
+ * The extensions a config names, created and ordered so each runs after
+ * the ones it says it follows; the config's own order breaks ties.
+ */
+export function resolveExtensions(names: readonly (string | Extension)[]): Extension[] {
+  const wanted = names.map(toEntry);
+  const order = topological(wanted);
+  return order.map((entry) => ("create" in entry ? entry.create() : entry));
+}
+
+function toEntry(name: string | Extension): Registered | Extension {
+  if (typeof name !== "string") return name;
+  const entry = known.get(name);
+  if (entry === undefined) throw new Error(`No extension is called ${name}. Known: ${[...known.keys()].join(", ")}.`);
+  return entry;
+}
+
+function topological(entries: readonly (Registered | Extension)[]): (Registered | Extension)[] {
+  const done = new Set<string>();
+  const out: (Registered | Extension)[] = [];
+  const visit = (entry: Registered | Extension, path: readonly string[]): void => {
+    if (done.has(entry.name)) return;
+    if (path.includes(entry.name)) throw new Error(`Extensions wait on each other: ${[...path, entry.name].join(" -> ")}.`);
+    const after = "after" in entry ? (entry.after ?? []) : [];
+    for (const name of after) {
+      const before = entries.find((e) => e.name === name);
+      if (before !== undefined) visit(before, [...path, entry.name]);
+    }
+    done.add(entry.name);
+    out.push(entry);
+  };
+  for (const entry of entries) visit(entry, []);
+  return out;
+}
+=== extensions/extensions.test.ts ===
+import { describe, expect, it } from "vitest";
+import { register, resolveExtensions } from "./index.ts";
+
+describe("the extension registry", () => {
+  register({ name: "a", summary: "first", create: () => ({ name: "a" }) });
+  register({ name: "b", summary: "after a", after: ["a"], create: () => ({ name: "b" }) });
+
+  it("runs an extension after the ones it follows", () => {
+    expect(resolveExtensions(["b", "a"]).map((e) => e.name)).toEqual(["a", "b"]);
+  });
+
+  it("names the known extensions when a config names an unknown one", () => {
+    expect(() => resolveExtensions(["c"])).toThrow(/Known: a, b/);
+  });
+});
+=== extensions/markdown/package.json ===
+{
+  "name": "@folio/markdown",
+  "version": "0.9.0",
+  "type": "module",
+  "exports": "./index.ts",
+  "dependencies": { "@folio/site": "0.9.0", "@folio/engine": "0.9.0" }
+}
+=== extensions/markdown/index.ts ===
+import type { Extension, Node, Page } from "@folio/schema";
+import { withTree } from "@folio/site";
+import { slugify } from "@folio/engine";
+
+export interface MarkdownOptions {
+  /** Turn straight quotes and dashes into typographic ones. */
+  readonly smart?: boolean;
+  /** Link `[[Page title]]` to the page with that title. */
+  readonly wikilinks?: boolean;
+}
+
+/** folio's Markdown extras: typographic quotes and wiki links. */
+export function markdown(options: MarkdownOptions = {}): Extension {
+  const smart = options.smart ?? true;
+  const wikilinks = options.wikilinks ?? true;
+  return {
+    name: "markdown",
+    parsed: (page) => withTree(page, (node) => (node.type === "text" ? textNode(node, smart, wikilinks) : node)),
+  };
+}
+
+function textNode(node: Node, smart: boolean, wikilinks: boolean): Node {
+  const value = smart ? smarten(node.value ?? "") : (node.value ?? "");
+  if (!wikilinks || !value.includes("[[")) return { ...node, value };
+  return { type: "root", children: splitWikilinks(value) };
+}
+
+/** Straight quotes and dashes as typographic ones. */
+export function smarten(text: string): string {
+  return text
+    .replace(/(^|[\s(])"/g, "$1“")
+    .replace(/"/g, "”")
+    .replace(/(^|[\s(])'/g, "$1‘")
+    .replace(/'/g, "’")
+    .replace(/ -- /g, " – ")
+    .replace(/---/g, "—");
+}
+
+function splitWikilinks(text: string): Node[] {
+  return text.split(/(\[\[[^\]]+\]\])/).filter((part) => part !== "").map((part) => {
+    const title = /^\[\[(.+)\]\]$/.exec(part)?.[1];
+    if (title === undefined) return { type: "text", value: part };
+    return { type: "link", attrs: { href: `/${slugify(title)}/` }, children: [{ type: "text", value: title }] };
+  });
+}
+
+/** Whether a page uses any wiki links, for the warnings `folio build` prints about missing pages. */
+export function hasWikilinks(page: Page): boolean {
+  return page.body.includes("[[");
+}
+=== extensions/syntax/package.json ===
+{
+  "name": "@folio/syntax",
+  "version": "0.9.0",
+  "type": "module",
+  "exports": "./index.ts",
+  "dependencies": { "@folio/site": "0.9.0", "@folio/engine": "0.9.0" }
+}
+=== extensions/syntax/index.ts ===
+import type { Extension, Node } from "@folio/schema";
+import { withTree } from "@folio/site";
+import { escapeHtml } from "@folio/engine";
+
+export interface SyntaxOptions {
+  readonly theme?: "paper" | "ink";
+}
+
+/** The kinds of token the highlighter tells apart, each a class the theme colors. */
+const RULES: readonly (readonly [cls: string, pattern: RegExp])[] = [
+  ["comment", /\/\/[^\n]*|#[^\n]*|\/\*[\s\S]*?\*\//y],
+  ["string", /"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`/y],
+  ["number", /\b\d+(\.\d+)?\b/y],
+  ["keyword", /\b(const|let|fn|function|return|if|else|for|while|import|export|from|def|class|pub|use|match|async|await)\b/y],
+  ["name", /[A-Za-z_]\w*/y],
+];
+
+/** Highlights code blocks by language, at build time, so pages ship no script. */
+export function syntax(options: SyntaxOptions = {}): Extension {
+  const theme = options.theme ?? "paper";
+  return {
+    name: "syntax",
+    parsed: (page) => withTree(page, (node) => (node.type === "codeBlock" ? highlighted(node, theme) : node)),
+  };
+}
+
+function highlighted(node: Node, theme: string): Node {
+  return { ...node, attrs: { ...node.attrs, highlighted: highlight(node.value ?? ""), theme } };
+}
+
+/** Code as HTML spans, one per token the rules recognize, everything else escaped as it is. */
+export function highlight(code: string): string {
+  let out = "";
+  let at = 0;
+  while (at < code.length) {
+    const token = tokenAt(code, at);
+    if (token === null) {
+      out += escapeHtml(code[at] ?? "");
+      at++;
+      continue;
+    }
+    out += token.cls === "name" ? escapeHtml(token.text) : `<span class="tok-${token.cls}">${escapeHtml(token.text)}</span>`;
+    at += token.text.length;
+  }
+  return out;
+}
+
+function tokenAt(code: string, at: number): { cls: string; text: string } | null {
+  for (const [cls, pattern] of RULES) {
+    pattern.lastIndex = at;
+    const match = pattern.exec(code);
+    if (match !== null) return { cls, text: match[0] };
+  }
+  return null;
+}
+=== extensions/images/package.json ===
+{
+  "name": "@folio/images",
+  "version": "0.9.0",
+  "type": "module",
+  "exports": "./index.ts",
+  "dependencies": { "@folio/site": "0.9.0" }
+}
+=== extensions/images/index.ts ===
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import type { Extension, Node } from "@folio/schema";
+import { withTree } from "@folio/site";
+
+export interface ImageOptions {
+  /** Widths to offer in `srcset`, in pixels. */
+  readonly widths?: readonly number[];
+  readonly root?: string;
+}
+
+/** Gives every image its size, so pages don't jump as pictures load, and a `srcset` of widths. */
+export function images(options: ImageOptions = {}): Extension {
+  const widths = options.widths ?? [640, 1280];
+  return {
+    name: "images",
+    parsed: (page) => withTree(page, (node) => (node.type === "image" ? sized(node, options.root ?? ".", widths) : node)),
+  };
+}
+
+function sized(node: Node, root: string, widths: readonly number[]): Node {
+  const src = node.attrs?.href ?? "";
+  if (/^https?:/.test(src)) return node;
+  const size = pngSize(join(root, "content", src));
+  if (size === null) return node;
+  const srcset = widths.map((w) => `${src.replace(/\.png$/, `-${w}.png`)} ${w}w`).join(", ");
+  return { ...node, attrs: { ...node.attrs, width: String(size.width), height: String(size.height), srcset } };
+}
+
+/** A PNG's width and height from its header, or null when the file is not a PNG. */
+export function pngSize(file: string): { width: number; height: number } | null {
+  try {
+    const head = readFileSync(file).subarray(0, 24);
+    if (head.toString("ascii", 1, 4) !== "PNG") return null;
+    return { width: head.readUInt32BE(16), height: head.readUInt32BE(20) };
+  } catch {
+    return null;
+  }
+}
+=== extensions/embeds/package.json ===
+{
+  "name": "@folio/embeds",
+  "version": "0.9.0",
+  "type": "module",
+  "exports": "./index.ts",
+  "dependencies": { "@folio/site": "0.9.0", "@folio/images": "0.9.0" }
+}
+=== extensions/embeds/index.ts ===
+import type { Extension, Node } from "@folio/schema";
+import { withTree } from "@folio/site";
+import { pngSize } from "@folio/images";
+
+/** Where a link on a line of its own can be turned into a player or a map. */
+const PROVIDERS: readonly { readonly name: string; readonly match: RegExp; readonly src: (id: string) => string }[] = [
+  { name: "youtube", match: /youtu(?:\.be\/|be\.com\/watch\?v=)([\w-]{11})/, src: (id) => `https://www.youtube-nocookie.com/embed/${id}` },
+  { name: "vimeo", match: /vimeo\.com\/(\d+)/, src: (id) => `https://player.vimeo.com/video/${id}` },
+  { name: "osm", match: /openstreetmap\.org\/#map=([\d/.-]+)/, src: (id) => `https://www.openstreetmap.org/export/embed.html?map=${id}` },
+];
+
+/** Turns a paragraph holding only a video or map link into an embedded player, and a link to a local video into a video. */
+export function embeds(root = "."): Extension {
+  return {
+    name: "embeds",
+    parsed: (page) => withTree(page, (node) => embedFor(node) ?? localVideo(node, root) ?? node),
+  };
+}
+
+function embedFor(node: Node): Node | null {
+  if (node.type !== "paragraph" || node.children?.length !== 1) return null;
+  const link = node.children[0];
+  if (link?.type !== "link") return null;
+  const href = link.attrs?.href ?? "";
+  for (const provider of PROVIDERS) {
+    const id = provider.match.exec(href)?.[1];
+    if (id !== undefined) return { type: "html", value: frame(provider.name, provider.src(id)) };
+  }
+  return null;
+}
+
+/** A paragraph holding only a link to an `.mp4` under the site: a video, sized by its poster, `name.png` beside it. */
+function localVideo(node: Node, root: string): Node | null {
+  const href = node.type === "paragraph" && node.children?.length === 1 ? node.children[0]?.attrs?.href : undefined;
+  if (href === undefined || !href.endsWith(".mp4") || /^https?:/.test(href)) return null;
+  const poster = href.replace(/\.mp4$/, ".png");
+  const size = pngSize(`${root}/content${poster}`);
+  const dims = size === null ? "" : ` width="${size.width}" height="${size.height}"`;
+  return { type: "html", value: `<video src="${href}" poster="${poster}"${dims} controls preload="none"></video>` };
+}
+
+function frame(name: string, src: string): string {
+  return `<div class="embed embed-${name}"><iframe src="${src}" loading="lazy" allowfullscreen></iframe></div>`;
+}
+=== extensions/feeds/package.json ===
+{
+  "name": "@folio/feeds",
+  "version": "0.9.0",
+  "type": "module",
+  "exports": "./index.ts",
+  "dependencies": { "@folio/engine": "0.9.0", "@folio/markdown": "0.9.0" }
+}
+=== extensions/feeds/index.ts ===
+import { writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import type { Extension, Page } from "@folio/schema";
+import { escapeHtml, newest, parseDate, rfc822 } from "@folio/engine";
+import { smarten } from "@folio/markdown";
+
+export interface FeedOptions {
+  readonly limit?: number;
+  readonly section?: string;
+}
+
+/** Writes `feed.xml`, an RSS feed of the newest posts. */
+export function feeds(options: FeedOptions = {}): Extension {
+  const limit = options.limit ?? 20;
+  const section = options.section ?? "posts";
+  return {
+    name: "feeds",
+    async done(pages, out) {
+      // TODO: let a site have one feed per tag
+      const posts = newest(pages.filter((p) => p.path.startsWith(`${section}/`)), limit);
+      await writeFile(join(out, "feed.xml"), rss(posts));
+    },
+  };
+}
+
+/** An XML file: the declaration, then the body. */
+export function xmlDocument(body: string): string {
+  return `<?xml version="1.0" encoding="utf-8"?>\n${body}\n`;
+}
+
+function rss(posts: readonly Page[]): string {
+  return xmlDocument(`<rss version="2.0"><channel>\n${posts.map(item).join("\n")}\n</channel></rss>`);
+}
+
+function item(post: Page): string {
+  const title = escapeHtml(smarten(String(post.data.title ?? post.path)));
+  const date = rfc822(parseDate(String(post.data.date)));
+  return `<item><title>${title}</title><link>/${post.path}/</link><pubDate>${date}</pubDate></item>`;
+}
+=== extensions/sitemap/package.json ===
+{
+  "name": "@folio/sitemap",
+  "version": "0.9.0",
+  "type": "module",
+  "exports": "./index.ts",
+  "dependencies": { "@folio/feeds": "0.9.0" }
+}
+=== extensions/sitemap/index.ts ===
+import { writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import type { Extension, Page } from "@folio/schema";
+import { xmlDocument } from "@folio/feeds";
+import { hreflangLinks } from "@folio/i18n";
+
+/** Writes `sitemap.xml` listing every page that isn't hidden, each with its translations. */
+export function sitemap(): Extension {
+  return {
+    name: "sitemap",
+    async done(pages, out) {
+      const listed = pages.filter((page) => page.data.hidden !== true);
+      await writeFile(join(out, "sitemap.xml"), urlset(listed));
+    },
+  };
+}
+
+function urlset(pages: readonly Page[]): string {
+  const urls = pages.map((page) => `  <url><loc>/${page.path}</loc>${hreflangLinks(page)}</url>`).join("\n");
+  return xmlDocument(`<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">\n${urls}\n</urlset>`);
+}
+=== extensions/i18n/package.json ===
+{
+  "name": "@folio/i18n",
+  "version": "0.9.0",
+  "type": "module",
+  "exports": "./index.ts",
+  "dependencies": { "@folio/syntax": "0.9.0" }
+}
+=== extensions/i18n/index.ts ===
+import type { Extension, Page } from "@folio/schema";
+
+export interface I18nOptions {
+  readonly languages: readonly string[];
+  readonly fallback?: string;
+}
+
+/**
+ * Pages in several languages: `about.fr.md` is the French `about`. Each page
+ * learns its language and its translations, for `{{ alternates }}` in layouts.
+ */
+export function i18n(options: I18nOptions): Extension {
+  const fallback = options.fallback ?? options.languages[0] ?? "en";
+  let all: Page[] = [];
+  return {
+    name: "i18n",
+    read(page) {
+      const lang = languageOf(page.source, options.languages) ?? fallback;
+      const path = page.path.replace(new RegExp(`\\.${lang}$`), "");
+      const next = { ...page, path: lang === fallback ? path : `${lang}/${path}`, data: { ...page.data, lang } };
+      all.push(next);
+      return next;
+    },
+    rendered(page) {
+      // FIXME: this is quadratic in the number of pages; fine below a few thousand
+      const alternates = all.filter((other) => other !== page && baseOf(other) === baseOf(page));
+      return { ...page, data: { ...page.data, alternates: alternates.map((p) => `/${p.path}/`) } };
+    },
+    done() {
+      all = [];
+    },
+  };
+}
+
+/** A page's translations as sitemap links, one `xhtml:link` per alternate. */
+export function hreflangLinks(page: Page): string {
+  const alternates = Array.isArray(page.data.alternates) ? (page.data.alternates as string[]) : [];
+  return alternates.map((href) => `<xhtml:link rel="alternate" hreflang="${href.split("/")[1] ?? ""}" href="${href}"/>`).join("");
+}
+
+function languageOf(source: string, languages: readonly string[]): string | undefined {
+  const tag = /\.([a-z]{2})\.md$/.exec(source)?.[1];
+  return tag !== undefined && languages.includes(tag) ? tag : undefined;
+}
+
+function baseOf(page: Page): string {
+  return page.path.replace(/^[a-z]{2}\//, "");
+}
+=== apps/cli/package.json ===
+{
+  "name": "@folio/cli",
+  "version": "0.9.0",
+  "type": "module",
+  "bin": { "folio": "./main.ts" },
+  "exports": "./main.ts",
+  "dependencies": { "@folio/site": "0.9.0", "@folio/engine": "0.9.0", "@folio/extensions": "0.9.0" }
+}
+=== apps/cli/main.ts ===
+#!/usr/bin/env node
+import { parseFlags, usage } from "./flags.ts";
+import { COMMANDS } from "./commands.ts";
+
+/** Runs one `folio` command from the command line, and exits with its status. */
+export async function main(argv: readonly string[]): Promise<number> {
+  const flags = parseFlags(argv);
+  if (flags.help || flags.command === undefined) {
+    process.stdout.write(usage());
+    return flags.help ? 0 : 1;
+  }
+  const command = COMMANDS[flags.command];
+  if (command === undefined) {
+    process.stderr.write(`folio: no command called "${flags.command}". Run folio --help.\n`);
+    return 1;
+  }
+  try {
+    await command.run(flags);
+    return 0;
+  } catch (error) {
+    process.stderr.write(`folio ${flags.command}: ${(error as Error).message}\n`);
+    return 1;
+  }
+}
+
+if (import.meta.main) process.exit(await main(process.argv.slice(2)));
+=== apps/cli/flags.ts ===
+/** What `folio` was asked: a command, its arguments and the flags given. */
+export interface Flags {
+  readonly command?: string;
+  readonly args: readonly string[];
+  readonly root: string;
+  readonly out?: string;
+  readonly port: number;
+  readonly drafts: boolean;
+  readonly quiet: boolean;
+  readonly help: boolean;
+}
+
+const BOOLEAN = new Set(["drafts", "quiet", "help"]);
+const ALIASES: Readonly<Record<string, string>> = { h: "help", q: "quiet", p: "port", o: "out" };
+
+/** Reads `folio <command> [args] [--flag value]`; unknown flags are an error, so a typo never passes quietly. */
+export function parseFlags(argv: readonly string[]): Flags {
+  const named: Record<string, string | boolean> = {};
+  const positional: string[] = [];
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i] ?? "";
+    if (!arg.startsWith("-")) {
+      positional.push(arg);
+      continue;
+    }
+    const [rawName, inline] = arg.replace(/^-+/, "").split("=", 2) as [string, string | undefined];
+    const name = ALIASES[rawName] ?? rawName;
+    if (!KNOWN.has(name)) throw new Error(`Unknown flag --${rawName}.`);
+    if (BOOLEAN.has(name)) named[name] = true;
+    else named[name] = inline ?? argv[++i] ?? "";
+  }
+  return {
+    ...(positional[0] === undefined ? {} : { command: positional[0] }),
+    args: positional.slice(1),
+    root: String(named.root ?? "."),
+    ...(named.out === undefined ? {} : { out: String(named.out) }),
+    port: Number(named.port ?? 4000),
+    drafts: named.drafts === true,
+    quiet: named.quiet === true,
+    help: named.help === true,
+  };
+}
+
+const KNOWN = new Set(["root", "out", "port", "drafts", "quiet", "help"]);
+
+/** What `folio --help` prints. */
+export function usage(): string {
+  return [
+    "Usage: folio <command> [options]",
+    "",
+    "Commands:",
+    "  new <name>   Start a site from a layout",
+    "  build        Build the site into dist/",
+    "  serve        Serve the site and rebuild on change",
+    "  check        Report broken links and missing images",
+    "",
+    "Options:",
+    "  --root DIR   The site's folder (default .)",
+    "  --out DIR    Where to write the site (default dist)",
+    "  --port N     The port serve listens on (default 4000)",
+    "  --drafts     Build drafts too",
+    "  --quiet      Print only errors",
+    "",
+  ].join("\n");
+}
+=== apps/cli/commands.ts ===
+import { cp, readFile } from "node:fs/promises";
+import { join } from "node:path";
+import type { SiteConfig } from "@folio/schema";
+import { build } from "@folio/engine";
+import { findAll } from "@folio/site";
+import { resolveExtensions } from "@folio/extensions";
+import type { Flags } from "./flags.ts";
+
+export interface Command {
+  readonly summary: string;
+  run(flags: Flags): Promise<void>;
+}
+
+/** Every command `folio` runs, by name. */
+export const COMMANDS: Readonly<Record<string, Command>> = {
+  new: { summary: "Start a site from a layout", run: newSite },
+  build: { summary: "Build the site", run: buildSite },
+  serve: { summary: "Serve the site and rebuild on change", run: serveSite },
+  check: { summary: "Report broken links", run: checkSite },
+};
+
+async function newSite(flags: Flags): Promise<void> {
+  const name = flags.args[0];
+  if (name === undefined) throw new Error("Name the new site: folio new <name>.");
+  await cp(join(import.meta.dirname, "starters", "blog"), name, { recursive: true, errorOnExist: true, force: false });
+  say(flags, `Started ${name}. Next: cd ${name} && folio serve`);
+}
+
+async function buildSite(flags: Flags): Promise<void> {
+  const config = await loadConfig(flags);
+  const result = await build(config);
+  say(flags, `Built ${result.pages.length} pages into ${config.out} in ${result.ms} ms.`);
+}
+
+async function serveSite(flags: Flags): Promise<void> {
+  const { startServer } = await import("@folio/dev-server");
+  const server = startServer({ ...(await loadConfig(flags)), port: flags.port });
+  say(flags, `Serving on ${await server.url()}`);
+}
+
+async function checkSite(flags: Flags): Promise<void> {
+  const config = await loadConfig(flags);
+  const { pages } = await build({ ...config, out: join(config.root ?? ".", ".folio-check") });
+  const paths = new Set(pages.map((page) => `/${page.path}/`));
+  const broken = pages.flatMap((page) =>
+    page.tree === undefined ? [] : findAll(page.tree, "link").map((link) => link.attrs?.href ?? "").filter((href) => href.startsWith("/") && !paths.has(href)).map((href) => `${page.source}: ${href}`),
+  );
+  if (broken.length > 0) throw new Error(`${broken.length} broken links:\n  ${broken.join("\n  ")}`);
+  say(flags, `No broken links in ${pages.length} pages.`);
+}
+
+/** The site's config: `folio.config.json` in its root, with flags laid over it. */
+async function loadConfig(flags: Flags): Promise<SiteConfig> {
+  const file = join(flags.root, "folio.config.json");
+  const raw = JSON.parse(await readFile(file, "utf8")) as Omit<SiteConfig, "extensions"> & { extensions?: string[] };
+  return { ...raw, root: flags.root, out: flags.out ?? raw.out, drafts: flags.drafts, extensions: resolveExtensions(raw.extensions ?? ["markdown"]) };
+}
+
+function say(flags: Flags, line: string): void {
+  if (!flags.quiet) process.stdout.write(`${line}\n`);
+}
+=== apps/cli/cli.test.ts ===
+import { describe, expect, it } from "vitest";
+import { parseFlags } from "./flags.ts";
+
+describe("folio's flags", () => {
+  it("reads a command, its arguments and its flags", () => {
+    expect(parseFlags(["new", "blog", "--quiet"])).toMatchObject({ command: "new", args: ["blog"], quiet: true });
+    expect(parseFlags(["serve", "-p", "8080"]).port).toBe(8080);
+    expect(parseFlags(["build", "--out=public"]).out).toBe("public");
+  });
+
+  it("refuses a flag it doesn't know", () => {
+    expect(() => parseFlags(["build", "--draft"])).toThrow(/Unknown flag --draft/);
+  });
+});
+=== apps/dev-server/package.json ===
+{
+  "name": "@folio/dev-server",
+  "version": "0.9.0",
+  "type": "module",
+  "exports": "./server.ts",
+  "dependencies": { "@folio/site": "0.9.0", "@folio/engine": "0.9.0" }
+}
+=== apps/dev-server/server.ts ===
+import { createServer, type Server } from "node:http";
+import { readFile } from "node:fs/promises";
+import { extname, join, normalize } from "node:path";
+import type { SiteConfig } from "@folio/schema";
+import { build } from "@folio/engine";
+import { watchContent } from "./watch.ts";
+import { createReloader, RELOAD_SCRIPT } from "./reload.ts";
+
+const TYPES: Readonly<Record<string, string>> = { ".html": "text/html; charset=utf-8", ".css": "text/css", ".js": "text/javascript", ".png": "image/png", ".svg": "image/svg+xml", ".xml": "application/xml" };
+
+export interface DevServer {
+  url(): Promise<string>;
+  close(): void;
+}
+
+/** Builds the site, serves it, and rebuilds and reloads the browser when its content changes. */
+export function startServer(config: SiteConfig & { readonly port: number }): DevServer {
+  const out = join(config.root ?? ".", ".folio-serve");
+  const site = { ...config, out };
+  const reloader = createReloader();
+  let ready = build(site);
+  const stopWatching = watchContent(join(config.root ?? ".", config.content), async (changed) => {
+    ready = build(site);
+    await ready;
+    reloader.reload(changed);
+  });
+  const server: Server = createServer(async (req, res) => {
+    if (reloader.handles(req, res)) return;
+    await ready;
+    const file = fileFor(out, req.url ?? "/");
+    try {
+      const body = await readFile(file);
+      res.writeHead(200, { "content-type": TYPES[extname(file)] ?? "application/octet-stream" });
+      res.end(extname(file) === ".html" ? withReload(body.toString()) : body);
+    } catch {
+      res.writeHead(404, { "content-type": TYPES[".html"] });
+      res.end("<h1>Not found</h1>");
+    }
+  });
+  server.listen(config.port);
+  return {
+    url: () => new Promise((resolve) => server.once("listening", () => resolve(addressOf(server))).listening && resolve(addressOf(server))),
+    close() {
+      stopWatching();
+      reloader.close();
+      server.close();
+    },
+  };
+}
+
+/** The file a request asks for: a folder's index, and never anything outside the site. */
+function fileFor(out: string, url: string): string {
+  const path = normalize(decodeURIComponent(url.split("?")[0] ?? "/")).replace(/^(\.\.[/\\])+/, "");
+  return join(out, path, path.endsWith("/") ? "index.html" : "");
+}
+
+function withReload(html: string): string {
+  return html.includes("</body>") ? html.replace("</body>", `${RELOAD_SCRIPT}</body>`) : html + RELOAD_SCRIPT;
+}
+
+function addressOf(server: Server): string {
+  const address = server.address();
+  return typeof address === "object" && address !== null ? `http://localhost:${address.port}` : String(address);
+}
+=== apps/dev-server/watch.ts ===
+import { watch } from "node:fs";
+
+/** How long to wait after the last change before rebuilding, so a save that touches many files rebuilds once. */
+const SETTLE_MS = 80;
+
+/** Calls `onChange` with the files changed under `dir`, once changes settle. Returns a function that stops watching. */
+export function watchContent(dir: string, onChange: (paths: readonly string[]) => void): () => void {
+  const pending = new Set<string>();
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const watcher = watch(dir, { recursive: true }, (_, name) => {
+    if (name === null || ignored(name)) return;
+    pending.add(name);
+    if (timer !== null) clearTimeout(timer);
+    timer = setTimeout(() => {
+      const paths = [...pending];
+      pending.clear();
+      onChange(paths);
+    }, SETTLE_MS);
+  });
+  return () => {
+    if (timer !== null) clearTimeout(timer);
+    watcher.close();
+  };
+}
+
+/** Editors' swap and backup files, which are never content. */
+function ignored(name: string): boolean {
+  return /(^|\/)\.|~$|\.swp$|\.tmp$/.test(name);
+}
+=== apps/dev-server/reload.ts ===
+import type { IncomingMessage, ServerResponse } from "node:http";
+
+/** The script every served page carries: it listens for reloads and reloads the page when its path changed. */
+export const RELOAD_SCRIPT = `<script>new EventSource("/__reload").onmessage = (e) => { const paths = JSON.parse(e.data); if (paths.length === 0 || paths.some((p) => location.pathname.startsWith(p))) location.reload(); };</script>`;
+
+export interface Reloader {
+  /** Answers the reload stream's request; false for any other. */
+  handles(req: IncomingMessage, res: ServerResponse): boolean;
+  /** Tells every open page what changed. */
+  reload(paths: readonly string[]): void;
+  close(): void;
+}
+
+/** Live reload over server-sent events: one open response per page that is listening. */
+export function createReloader(): Reloader {
+  const clients = new Set<ServerResponse>();
+  return {
+    handles(req, res) {
+      if (req.url !== "/__reload") return false;
+      res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache", connection: "keep-alive" });
+      clients.add(res);
+      req.on("close", () => clients.delete(res));
+      return true;
+    },
+    reload(paths) {
+      const data = JSON.stringify(paths.map(pagePathOf));
+      for (const client of clients) client.write(`data: ${data}\n\n`);
+    },
+    close() {
+      for (const client of clients) client.end();
+      clients.clear();
+    },
+  };
+}
+
+/** The page a changed content file is served at, so only that page reloads. */
+function pagePathOf(file: string): string {
+  return `/${file.replace(/\.md$/, "").replace(/(^|\/)index$/, "")}/`.replace(/\/+/g, "/");
+}
+=== apps/dev-server/dev-server.test.ts ===
+import { describe, expect, it } from "vitest";
+import { createReloader } from "./reload.ts";
+
+describe("live reload", () => {
+  it("answers only the reload stream", () => {
+    const reloader = createReloader();
+    const res = { writeHead: () => res, write: () => true, end: () => undefined } as never;
+    expect(reloader.handles({ url: "/about/", on: () => undefined } as never, res)).toBe(false);
+    expect(reloader.handles({ url: "/__reload", on: () => undefined } as never, res)).toBe(true);
+    reloader.close();
+  });
+});
+=== find/package.json ===
+{
+  "name": "@folio/find",
+  "version": "0.6.2",
+  "type": "module",
+  "exports": "./index.ts",
+  "dependencies": { "@folio/site": "0.9.0", "@folio/engine": "0.9.0" }
+}
+=== find/index.ts ===
+// search
+export { searchIndex } from "./build-index.ts";
+export { tokenize, stem } from "./tokenize.ts";
+export { rank, type Hit } from "./rank.ts";
+export { query } from "./query.ts";
+=== find/build-index.ts ===
+import { writeFile, mkdir } from "node:fs/promises";
+import { join } from "node:path";
+import type { Extension, Page } from "@folio/schema";
+import { textOf } from "@folio/site";
+import { tokenize } from "./tokenize.ts";
+
+// chunk size. 500 was too big for the phone, 200 too small for big sites
+const CHUNK = 500;
+
+export function searchIndex(opts?: any): Extension {
+  return {
+    name: "search",
+    async done(pages, out) {
+      const docs: any[] = [];
+      const terms: Record<string, number[]> = {};
+      for (let i = 0; i < pages.length; i++) {
+        const p = pages[i] as Page;
+        if (p.data.draft || p.data.hidden || (opts && opts.skip && opts.skip.indexOf(p.path) >= 0)) continue;
+        const text = p.tree ? textOf(p.tree) : p.body;
+        const toks = tokenize(text);
+        docs.push({ id: docs.length, path: "/" + p.path + "/", title: p.data.title || p.path, len: toks.length });
+        for (const t of toks) {
+          if (!terms[t]) terms[t] = [];
+          const list = terms[t]!;
+          if (list[list.length - 1] !== docs.length - 1) list.push(docs.length - 1);
+        }
+      }
+      await mkdir(join(out, "search"), { recursive: true });
+      let n = 0;
+      const keys = Object.keys(terms).sort();
+      for (let k = 0; k < keys.length; k += CHUNK) {
+        const part: Record<string, number[]> = {};
+        for (const key of keys.slice(k, k + CHUNK)) part[key] = terms[key]!;
+        await writeFile(join(out, "search", "terms-" + n + ".json"), JSON.stringify(part));
+        n++;
+      }
+      await writeFile(join(out, "search", "docs.json"), JSON.stringify({ docs, chunks: n, first: keys.filter((_, i) => i % CHUNK === 0) }));
+    },
+  };
+}
+=== find/tokenize.ts ===
+// words we never index
+const STOP = new Set(["a", "an", "and", "are", "as", "at", "be", "by", "for", "from", "has", "in", "is", "it", "of", "on", "or", "that", "the", "to", "was", "with"]);
+
+export function tokenize(text: string): string[] {
+  const out: string[] = [];
+  const words = text.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").split(/[^a-z0-9]+/);
+  for (let i = 0; i < words.length; i++) {
+    let w = words[i]!;
+    if (w.length < 2 || STOP.has(w)) continue;
+    if (/^\d+$/.test(w) && w.length > 4) continue; // years are fine, ids are not
+    w = stem(w);
+    out.push(w);
+  }
+  return out;
+}
+
+// a very small porter-ish stemmer. not porter. good enough for english docs
+export function stem(w: string): string {
+  if (w.length <= 3) return w;
+  if (w.endsWith("ies") && w.length > 4) return w.slice(0, -3) + "y";
+  if (w.endsWith("sses")) return w.slice(0, -2);
+  if (w.endsWith("ing") && w.length > 5) {
+    const s = w.slice(0, -3);
+    if (s[s.length - 1] === s[s.length - 2]) return s.slice(0, -1);
+    return s;
+  }
+  if (w.endsWith("ed") && w.length > 4) {
+    const s = w.slice(0, -2);
+    if (s.endsWith("e")) return s;
+    return s;
+  }
+  if (w.endsWith("ly") && w.length > 4) return w.slice(0, -2);
+  if (w.endsWith("s") && !w.endsWith("ss") && !w.endsWith("us")) return w.slice(0, -1);
+  return w;
+}
+
+export function tokenizeQuery(q: string): { terms: string[]; phrases: string[][]; not: string[] } {
+  const phrases: string[][] = [];
+  const not: string[] = [];
+  let rest = q.replace(/"([^"]+)"/g, (_, p: string) => {
+    phrases.push(tokenize(p));
+    return " ";
+  });
+  rest = rest.replace(/(^|\s)-(\w+)/g, (_, s: string, w: string) => {
+    not.push(stem(w.toLowerCase()));
+    return s;
+  });
+  return { terms: tokenize(rest), phrases, not };
+}
+=== find/rank.ts ===
+export interface Hit {
+  id: number;
+  path: string;
+  title: string;
+  score: number;
+}
+
+// TODO: these were tuned on the docs site only
+const K1 = 1.2;
+const B = 0.75;
+
+// bm25. docs is the docs.json list, postings is term -> doc ids
+export function rank(terms: string[], docs: any[], postings: Record<string, number[]>, titleBoost = 2): Hit[] {
+  const avg = docs.reduce((s, d) => s + d.len, 0) / (docs.length || 1);
+  const scores = new Map<number, number>();
+  for (const t of terms) {
+    const ids = postings[t] || [];
+    if (ids.length == 0) continue;
+    const idf = Math.log(1 + (docs.length - ids.length + 0.5) / (ids.length + 0.5));
+    for (const id of ids) {
+      const d = docs[id];
+      // FIXME: we don't store term frequency, so tf is always 1. scores are flat for long pages
+      const tf = 1;
+      const s = idf * ((tf * (K1 + 1)) / (tf + K1 * (1 - B + (B * d.len) / avg)));
+      scores.set(id, (scores.get(id) || 0) + s);
+      if (d.title && d.title.toLowerCase().indexOf(t) >= 0) scores.set(id, (scores.get(id) || 0) + titleBoost);
+    }
+  }
+  const hits: Hit[] = [];
+  scores.forEach((score, id) => hits.push({ id, path: docs[id].path, title: docs[id].title, score }));
+  hits.sort((a, b) => b.score - a.score);
+  return hits;
+}
+
+export function rankPhrases(hits: Hit[], phrases: string[][], texts: Record<number, string[]>): Hit[] {
+  if (phrases.length == 0) return hits;
+  return hits.filter((h) => {
+    const toks = texts[h.id];
+    if (!toks) return true; // not loaded, keep it
+    for (const p of phrases) {
+      let found = false;
+      for (let i = 0; i + p.length <= toks.length; i++) {
+        let ok = true;
+        for (let j = 0; j < p.length; j++) {
+          if (toks[i + j] !== p[j]) {
+            ok = false;
+            break;
+          }
+        }
+        if (ok) {
+          found = true;
+          break;
+        }
+      }
+      if (!found) return false;
+    }
+    return true;
+  });
+}
+=== find/query.ts ===
+import { tokenizeQuery } from "./tokenize.ts";
+import { rank, rankPhrases, type Hit } from "./rank.ts";
+
+let cache: any = null;
+
+// runs in the browser. loads docs.json then whatever term chunks the query needs
+export async function query(q: string, base = "/search/", limit = 10): Promise<Hit[]> {
+  if (!cache) {
+    const res = await fetch(base + "docs.json");
+    cache = await res.json();
+    cache.chunks_loaded = {};
+    cache.postings = {};
+  }
+  const parsed = tokenizeQuery(q);
+  const all = parsed.terms.concat(...parsed.phrases);
+  for (const t of all) {
+    let c = 0;
+    for (let i = 0; i < cache.first.length; i++) if (cache.first[i] <= t) c = i;
+    if (!cache.chunks_loaded[c]) {
+      try {
+        const r = await fetch(base + "terms-" + c + ".json");
+        Object.assign(cache.postings, await r.json());
+        cache.chunks_loaded[c] = true;
+      } catch (e) {}
+    }
+  }
+  let hits = rank(all, cache.docs, cache.postings);
+  hits = rankPhrases(hits, parsed.phrases, {});
+  if (parsed.not.length) hits = hits.filter((h) => !parsed.not.some((n) => (cache.postings[n] || []).indexOf(h.id) >= 0));
+  return hits.slice(0, limit);
+}
+
+export function resetCache() {
+  cache = null;
+}
+=== handbook/guide.md ===
+# The folio guide
+
+This guide walks through a site from an empty folder to a published build.
+
+## A site's folders
+
+| Folder | What goes there |
+| --- | --- |
+| `content/` | One Markdown file per page. Folders become sections. |
+| `layouts/` | HTML templates. `page.html` is the default. |
+| `static/` | Files copied as they are: CSS, fonts, pictures. |
+| `dist/` | What `folio build` writes. Never edit it. |
+
+`folio.config.json` sits beside them and names the site, its URL and its
+extensions.
+
+## Writing a page
+
+A page is Markdown with optional frontmatter between two `---` lines:
+
+```markdown
+---
+title: Hello
+date: 2026-03-01
+tags: [intro, notes]
+---
+
+# Hello
+
+The first post.
+```
+
+- `title` is what layouts print and feeds list.
+- `date` orders posts, newest first, and is written as `YYYY-MM-DD`.
+- `tags` is a list in brackets.
+- `draft: true` keeps a page out of builds until you pass `--drafts`.
+- `layout` picks a template other than `page`.
+- `permalink` serves the page at a path you choose.
+
+## Where a page is served
+
+`content/posts/hello.md` is served at `/posts/hello/`. A file called
+`index.md` is served at its folder's path, so `content/docs/index.md` is
+`/docs/`. Two files that would be served at the same path stop the build and
+name both files.
+
+## Layouts
+
+A layout is HTML with placeholders:
+
+- `{{ content }}` is the rendered page.
+- `{{ title }}`, `{{ date }}` and any other frontmatter key print that value,
+  escaped.
+- `{{ path }}` is the page's path, with slashes.
+- `{{> header }}` includes `layouts/header.html`.
+
+Layouts may include each other up to eight deep.
+
+## Serving while you write
+
+`folio serve` builds the site once, then watches `content/`. When you save,
+it rebuilds and reloads only the browser tabs showing a page you changed. A
+change that touches many files rebuilds once, 80 ms after the last change.
+
+## Building for real
+
+`folio build` writes the site to `dist/`. Each page is a folder with an
+`index.html`, so URLs end in a slash and need no server rules. Extensions
+write their own files last: `feed.xml`, `sitemap.xml` and the search index.
+
+## Checking links
+
+`folio check` builds the site to a scratch folder and reports every link to
+a page of the site that doesn't exist, with the file it is in.
+=== handbook/plugins.md ===
+# Writing an extension
+
+An extension is an object with a `name` and any of five hooks. folio calls
+each hook in the order the config lists the extensions.
+
+| Hook | Called with | Return |
+| --- | --- | --- |
+| `configured` | the site's config | a new config, or nothing |
+| `read` | each page as read, before parsing | a new page, or nothing |
+| `parsed` | each page with its tree | a new page, or nothing |
+| `rendered` | each page with its HTML | a new page, or nothing |
+| `done` | every page and the output folder | nothing; may write files |
+
+## A small example
+
+This extension adds a reading time to every page's data:
+
+```ts
+import type { Extension } from "@folio/schema";
+import { textOf } from "@folio/site";
+
+export function readingTime(wordsPerMinute = 220): Extension {
+  return {
+    name: "reading-time",
+    parsed(page) {
+      const words = page.tree ? textOf(page.tree).split(/\s+/).length : 0;
+      return { ...page, data: { ...page.data, minutes: Math.ceil(words / wordsPerMinute) } };
+    },
+  };
+}
+```
+
+A layout can then print `{{ minutes }}`.
+
+## Rules
+
+- Never change a page in place: return a new one. Pages are shared between
+  hooks, and the dev server keeps the last build's pages to compare.
+- Keep `parsed` pure. The dev server may call it again for a page that did
+  not change.
+- Write files only in `done`, and only under the output folder.
+- Name the extensions yours must run after with `after` when you register it.
+
+## Registering by name
+
+A config can name an extension as a string when it is registered:
+
+```ts
+import { register } from "@folio/extensions";
+register({ name: "reading-time", summary: "Adds minutes to read", create: () => readingTime() });
+```
+=== handbook/api.md ===
+# API
+
+## @folio/engine
+
+### `build(config): Promise<BuildResult>`
+
+Builds a site: reads every page, parses, transforms, lays out, renders and
+writes it, then calls each extension's `done`. Resolves with the pages
+written and how long the build took.
+
+### `parseBlocks(markdown): Node[]`
+
+Parses Markdown into block nodes: headings, paragraphs, lists, task items,
+quotes, fenced code, tables and rules.
+
+### `parseInline(text): Node[]`
+
+Parses one line into inline nodes: text, emphasis, strong, code, links,
+images and autolinks.
+
+### `renderTree(tree): string` and `renderNode(node): string`
+
+Render nodes as HTML. Code blocks that an extension highlighted render with
+its markup; everything else is escaped.
+
+### `slugify(text)` and `uniqueSlugs()`
+
+Turn heading text into URL fragments. `uniqueSlugs` returns a function that
+numbers repeats.
+
+## @folio/site
+
+### `createSite(config): Site`
+
+A site with no pages. `add` refuses a second page at the same path.
+
+### `createPage(source, text): Page`
+
+A page from a file's path and text, with its frontmatter read.
+
+### `walk`, `visit`, `findAll`, `textOf`, `mapTree`
+
+Walk and rewrite node trees. `mapTree` maps children first and drops any
+node its function returns null for.
+
+### `createEvents(): Events`
+
+What a build reports as it goes: pages added and changed, each phase, warnings
+and the end. The dev server and the CLI listen.
+
+## @folio/extensions
+
+### `register(entry)` and `resolveExtensions(names)`
+
+Make an extension known by name, and turn a config's list of names into
+extensions in the order they must run.
+
+## @folio/find
+
+### `searchIndex(options)`
+
+An extension that writes `search/docs.json` and the term chunks beside the
+site.
+
+### `query(text, base, limit)`
+
+Runs in the browser: loads the index chunks a query needs and returns the
+best hits. Quoted phrases must appear in order; `-word` excludes a word.
+=== handbook/decisions.md ===
+# Decisions
+
+## 1. Pages are folders
+
+Every page is written as `path/index.html`. URLs end in a slash and need no
+server rewrite rules, on any host.
+
+## 2. Frontmatter is a small YAML
+
+folio reads `key: value` lines, numbers, booleans and bracketed lists. Full
+YAML pulled in a large parser for features no site used.
+
+## 3. Extensions return new pages
+
+Hooks never change a page in place. The dev server compares a page with the
+last build's to decide what to reload, which only works if pages are not
+shared mutable state.
+
+## 4. The v1 renderer is frozen
+
+The engine replaced the v1 renderer in 0.6. v1 still builds old sites through
+`@folio/v1`, but it gets no new features and its tests have been failing since
+0.7. It is to be removed once no known site uses v1 templates.
+
+## 5. Highlighting happens at build time
+
+The syntax extension highlights code while building, so pages ship no
+JavaScript for it.
+
+## 6. Search ships as static files
+
+The search index is JSON written beside the site, loaded in chunks by the
+page. No server, at the cost of a larger first query.
+=== tooling/bench.ts ===
+import { mkdtempSync, writeFileSync, mkdirSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { build } from "@folio/engine";
+
+/** How long a build of `pages` generated pages takes, best of `runs`. */
+export async function benchBuild(pages: number, runs = 5): Promise<number> {
+  const root = sampleSite(pages);
+  let best = Infinity;
+  for (let i = 0; i < runs; i++) {
+    const started = performance.now();
+    await build({ title: "bench", url: "https://bench.test", root, content: "content", layouts: "layouts", out: join(root, "dist"), extensions: [] });
+    best = Math.min(best, performance.now() - started);
+  }
+  return best;
+}
+
+/** A site of `pages` pages built from the sample page in `sample-site.json`. */
+function sampleSite(pages: number): string {
+  const root = mkdtempSync(join(tmpdir(), "folio-bench-"));
+  const sample = JSON.parse(readFileSync(join(import.meta.dirname, "sample-site.json"), "utf8")) as { layout: string; body: string };
+  mkdirSync(join(root, "content"), { recursive: true });
+  mkdirSync(join(root, "layouts"), { recursive: true });
+  writeFileSync(join(root, "layouts", "page.html"), sample.layout);
+  for (let i = 0; i < pages; i++) writeFileSync(join(root, "content", `page-${i}.md`), `---\ntitle: Page ${i}\n---\n${sample.body}`);
+  return root;
+}
+
+/** Each size in `pages.csv`, built and timed, as a CSV line. */
+export async function benchAll(): Promise<string> {
+  const sizes = readFileSync(join(import.meta.dirname, "pages.csv"), "utf8").split("\n").slice(1).filter(Boolean).map((line) => Number(line.split(",")[0]));
+  const lines = ["pages,best_ms,ms_per_page"];
+  for (const size of sizes) {
+    const ms = await benchBuild(size);
+    lines.push(`${size},${ms.toFixed(1)},${(ms / size).toFixed(3)}`);
+  }
+  return lines.join("\n");
+}
+
+if (import.meta.main) process.stdout.write(`${await benchAll()}\n`);
+=== tooling/history.csv ===
+version,date,pages,best_ms,ms_per_page
+0.1.0,2024-02-11,100,99.4,0.994
+0.1.0,2024-02-11,500,509.7,1.019
+0.1.0,2024-02-11,1000,1030.4,1.030
+0.1.0,2024-02-11,5000,5280.6,1.056
+0.2.0,2024-05-03,100,95.0,0.950
+0.2.0,2024-05-03,500,487.5,0.975
+0.2.0,2024-05-03,1000,985.6,0.986
+0.2.0,2024-05-03,5000,5051.0,1.010
+0.3.0,2024-08-19,100,102.6,1.026
+0.3.0,2024-08-19,500,526.3,1.053
+0.3.0,2024-08-19,1000,1064.0,1.064
+0.3.0,2024-08-19,5000,5452.8,1.091
+0.4.0,2024-11-30,100,87.5,0.875
+0.4.0,2024-11-30,500,448.7,0.897
+0.4.0,2024-11-30,1000,907.2,0.907
+0.4.0,2024-11-30,5000,4649.2,0.930
+0.5.0,2025-03-14,100,83.2,0.832
+0.5.0,2025-03-14,500,426.6,0.853
+0.5.0,2025-03-14,1000,862.4,0.862
+0.5.0,2025-03-14,5000,4419.6,0.884
+0.6.0,2025-07-02,100,44.3,0.443
+0.6.0,2025-07-02,500,227.1,0.454
+0.6.0,2025-07-02,1000,459.2,0.459
+0.6.0,2025-07-02,5000,2353.3,0.471
+0.7.0,2025-10-21,100,41.0,0.410
+0.7.0,2025-10-21,500,210.5,0.421
+0.7.0,2025-10-21,1000,425.6,0.426
+0.7.0,2025-10-21,5000,2181.1,0.436
+0.8.0,2026-02-09,100,37.8,0.378
+0.8.0,2026-02-09,500,193.9,0.388
+0.8.0,2026-02-09,1000,392.0,0.392
+0.8.0,2026-02-09,5000,2008.9,0.402
+0.9.0,2026-06-15,100,33.5,0.335
+0.9.0,2026-06-15,500,171.7,0.343
+0.9.0,2026-06-15,1000,347.2,0.347
+0.9.0,2026-06-15,5000,1779.3,0.356
+=== tooling/compare.ts ===
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
+interface Run {
+  readonly version: string;
+  readonly pages: number;
+  readonly msPerPage: number;
+}
+
+/** Every run recorded in `history.csv`. */
+export function history(): Run[] {
+  const lines = readFileSync(join(import.meta.dirname, "history.csv"), "utf8").trim().split("\n").slice(1);
+  return lines.map((line) => {
+    const [version, , pages, , msPerPage] = line.split(",");
+    return { version: version ?? "", pages: Number(pages), msPerPage: Number(msPerPage) };
+  });
+}
+
+/** How much faster or slower each size is in one version than in another, as a ratio. */
+export function compare(runs: readonly Run[], from: string, to: string): Map<number, number> {
+  const out = new Map<number, number>();
+  for (const run of runs.filter((r) => r.version === to)) {
+    const before = runs.find((r) => r.version === from && r.pages === run.pages);
+    if (before !== undefined) out.set(run.pages, run.msPerPage / before.msPerPage);
+  }
+  return out;
+}
+
+/** A line per size, for the release notes: "1000 pages: 12% faster". */
+export function describe(ratios: ReadonlyMap<number, number>): string[] {
+  return [...ratios].map(([pages, ratio]) => {
+    const change = Math.round(Math.abs(1 - ratio) * 100);
+    return `${pages} pages: ${change}% ${ratio <= 1 ? "faster" : "slower"}`;
+  });
+}
+
+/** Whether any size got slower by more than `tolerance`, which stops a release. */
+export function regressed(ratios: ReadonlyMap<number, number>, tolerance = 0.1): boolean {
+  return [...ratios.values()].some((ratio) => ratio > 1 + tolerance);
+}
+=== tooling/release.sh ===
+#!/usr/bin/env bash
+# Tags and publishes a release: checks pass, the changelog names the version,
+# every package carries it, then npm publish for each package in order.
+set -euo pipefail
+
+version="${1:?usage: release.sh VERSION}"
+grep -q "^## ${version}$" CHANGELOG.md || { echo "CHANGELOG.md has no ## ${version}"; exit 1; }
+
+npm run check
+npm test
+
+packages=(schema site engine find extensions/markdown extensions/syntax extensions/images extensions/embeds extensions/feeds extensions/sitemap extensions/i18n extensions apps/dev-server apps/cli)
+for dir in "${packages[@]}"; do
+  current=$(node -p "require('./${dir}/package.json').version")
+  if [ "$current" != "$version" ]; then
+    echo "${dir} is at ${current}, not ${version}"
+    exit 1
+  fi
+done
+
+git tag "v${version}"
+for dir in "${packages[@]}"; do
+  (cd "$dir" && npm publish --access public)
+done
+git push origin "v${version}"
+echo "Released ${version}."
+=== tooling/sample-site.json ===
+{
+  "layout": "<!doctype html>\n<html>\n<head><title>{{ title }}</title></head>\n<body>\n<main>{{ content }}</main>\n</body>\n</html>\n",
+  "body": "# A sample page\n\nSome *emphasis*, some **strong text** and a [link](/elsewhere/).\n\n## A list\n\n- one\n- two\n- three\n\n## Some code\n\n```ts\nexport function add(a: number, b: number): number {\n  return a + b;\n}\n```\n\n| name | pages |\n| --- | --: |\n| small | 10 |\n| large | 10000 |\n\n> A quote, to end.\n"
+}
+=== tooling/pages.csv ===
+pages,note
+10,a personal site
+50,a small blog
+100,a project's docs
+250,a blog after a few years
+500,a large docs site
+1000,a large blog
+2500,a magazine's archive
+5000,the largest site we know of
+=== v1/package.json ===
+{
+  "name": "@folio/v1",
+  "version": "0.5.3",
+  "type": "module",
+  "exports": "./index.ts",
+  "deprecated": "Use @folio/engine. v1 builds old sites only."
+}
+=== v1/README.md ===
+# folio v1
+
+The original renderer. Run `folio1 build` in a site folder.
+
+TODO: write this. Most of what follows is out of date.
+
+## Setup
+
+Copy `config.old.json` to `config.json` and set `SRC` and `OUT`. (These are
+environment variables now? see compat.ts)
+
+## Templates
+
+Templates use `<%= x %>`. Partials go in `_partials`. The cache is in
+`.cache` and you have to delete it by hand when templates change.
+
+## Known problems
+
+- builds twice on windows
+- dates are wrong before 1970
+- see the old issues
+=== v1/index.ts ===
+// main
+import { r } from "./renderer/index.ts";
+import { load, tpl } from "./templates/index.ts";
+import { get, put, clear } from "./cache/index.ts";
+import { conv } from "./importer/index.ts";
+import { fixPaths, oldDate } from "./shims.ts";
+import { compat } from "./compat.ts";
+import { readdirSync, readFileSync, writeFileSync, mkdirSync, statSync } from "fs";
+
+/** Parses the configuration file and returns the defaults. */
+export var S: any = {};
+var done = false;
+var n = 0;
+var errs: any[] = [];
+
+export function init(c?: any) {
+  S = Object.assign({}, compat(c || {}));
+  done = false;
+  n = 0;
+  errs = [];
+}
+
+/** Opens a connection to the database and retries on failure. */
+export function bld(d: any, o?: any) {
+  if (!S.SRC) init(o);
+  var out = (o && o.out) || S.OUT || "out";
+  var l = walk(d);
+  for (var i = 0; i < l.length; i++) {
+    var f = l[i];
+    if (f.indexOf(".md") > 0 || f.indexOf(".markdown") > 0) {
+      // TODO: handle .mdx
+      var t = readFileSync(f, "utf8");
+      var c = get(f, t);
+      if (c) {
+        w(out, f, c);
+        n++;
+        continue;
+      }
+      try {
+        var p = conv(t);
+        if (p.meta && p.meta.draft) {
+          if (!(o && o.drafts)) continue;
+        }
+        if (p.meta && p.meta.date) p.meta.date = oldDate(p.meta.date);
+        var tp = tpl(p.meta && p.meta.template ? p.meta.template : "default");
+        if (!tp) {
+          // HACK: some sites call it "post" and some "posts"
+          tp = tpl("posts") || tpl("post") || tpl("default");
+        }
+        var h = r(p.body, S);
+        var x = tp ? tp.replace("<%= body %>", h).replace(/<%= (\w+) %>/g, function (a: any, k: any) {
+          return p.meta && p.meta[k] != null ? p.meta[k] : "";
+        }) : h;
+        put(f, t, x);
+        w(out, f, x);
+        n++;
+      } catch (e) {}
+    } else if (f.indexOf(".html") > 0) {
+      var t2 = readFileSync(f, "utf8");
+      w(out, f, t2);
+      n++;
+    } else {
+      // copy everything else. FIXME: this reads binary as utf8
+      try {
+        var t3 = readFileSync(f, "utf8");
+        w(out, f, t3);
+      } catch (e) {}
+    }
+  }
+  done = true;
+  return n;
+}
+
+function walk(d: any): any[] {
+  var r2: any[] = [];
+  var l = readdirSync(d);
+  for (var i = 0; i < l.length; i++) {
+    var p = d + "/" + l[i];
+    if (l[i][0] == "." || l[i][0] == "_") continue;
+    try {
+      if (statSync(p).isDirectory()) {
+        var s = walk(p);
+        for (var j = 0; j < s.length; j++) r2.push(s[j]);
+      } else {
+        r2.push(p);
+      }
+    } catch (e) {}
+  }
+  return r2;
+}
+
+function w(out: any, f: any, x: any) {
+  var p = fixPaths(f.replace(S.SRC || "src", out).replace(/\.(md|markdown)$/, ".html"));
+  var dir = p.substring(0, p.lastIndexOf("/"));
+  try {
+    mkdirSync(dir, { recursive: true });
+  } catch (e) {}
+  writeFileSync(p, x);
+}
+
+export function rebuild(d: any, o?: any) {
+  clear();
+  init(o);
+  return bld(d, o);
+}
+
+export function status() {
+  return { done: done, n: n, errs: errs.length };
+}
+
+// old name, some scripts still call it
+export var build = bld;
+// load is re-exported for the cli
+export { load };
+=== v1/compat.ts ===
+// compat
+
+var warned: any = {};
+
+/** Converts a date to the user's local time zone. */
+export function compat(c: any) {
+  var o: any = {};
+  // old configs had SRC/OUT, then src/out, then source/dest. support all of them forever i guess
+  if (c.SRC) o.SRC = c.SRC;
+  else if (c.src) o.SRC = c.src;
+  else if (c.source) o.SRC = c.source;
+  else if (process.env.FOLIO_SRC) o.SRC = process.env.FOLIO_SRC;
+  else o.SRC = "src";
+  if (c.OUT) o.OUT = c.OUT;
+  else if (c.out) o.OUT = c.out;
+  else if (c.dest) o.OUT = c.dest;
+  else if (process.env.FOLIO_OUT) o.OUT = process.env.FOLIO_OUT;
+  else o.OUT = "out";
+  if (c.smartypants !== undefined) {
+    o.smart = c.smartypants;
+    warn("smartypants", "use smart");
+  } else if (c.smart !== undefined) o.smart = c.smart;
+  else o.smart = true;
+  if (c.tables === false) o.tables = false;
+  else o.tables = true;
+  if (c.hl || c.highlight) {
+    o.hl = c.hl || c.highlight;
+    if (c.highlight) warn("highlight", "use hl");
+  }
+  if (c.base) {
+    o.base = c.base;
+    if (o.base[o.base.length - 1] != "/") o.base = o.base + "/";
+  } else if (c.baseUrl) {
+    o.base = c.baseUrl;
+    if (o.base[o.base.length - 1] != "/") o.base = o.base + "/";
+    warn("baseUrl", "use base");
+  } else if (c.url) {
+    o.base = c.url;
+    if (o.base[o.base.length - 1] != "/") o.base = o.base + "/";
+  } else o.base = "/";
+  for (var k in c) {
+    if (o[k] === undefined && k != "SRC" && k != "src" && k != "source" && k != "OUT" && k != "out" && k != "dest") o[k] = c[k];
+  }
+  return o;
+}
+
+function warn(k: any, m: any) {
+  if (warned[k]) return;
+  warned[k] = 1;
+  // console.warn("folio: " + k + " is deprecated, " + m);
+}
+
+/** Sends the queued emails in batches of fifty. */
+export function compatTemplate(t: any) {
+  // v0 templates used {{x}}, v1 uses <%= x %>. convert on the fly
+  var s = t;
+  var i = 0;
+  while (s.indexOf("{{") >= 0 && i < 1000) {
+    var a = s.indexOf("{{");
+    var b = s.indexOf("}}", a);
+    if (b < 0) break;
+    var k = s.substring(a + 2, b).trim();
+    if (k == "content") k = "body";
+    s = s.substring(0, a) + "<%= " + k + " %>" + s.substring(b + 2);
+    i++;
+  }
+  return s;
+}
+
+export function compatMeta(m: any) {
+  if (!m) return {};
+  if (m.Title && !m.title) m.title = m.Title;
+  if (m.Date && !m.date) m.date = m.Date;
+  if (m.tags && typeof m.tags == "string") m.tags = m.tags.split(",").map(function (x: any) {
+    return x.trim();
+  });
+  if (m.published === false) m.draft = true;
+  if (m.status == "draft") m.draft = true;
+  return m;
+}
+=== v1/shims.ts ===
+// shims and stuff
+
+/** Renders the header for the settings page. */
+export function fixPaths(p: any) {
+  // HACK: windows
+  var x = p.split("\\").join("/");
+  x = x.replace(/\/\/+/g, "/");
+  if (x.indexOf("/index.html") < 0 && x.indexOf(".html") > 0) {
+    x = x.replace(".html", "/index.html");
+  }
+  return x;
+}
+
+export function oldDate(d: any) {
+  // FIXME: wrong before 1970, see README
+  if (typeof d == "number") return new Date(d * 1000).toISOString().slice(0, 10);
+  if (d instanceof Date) return d.toISOString().slice(0, 10);
+  var m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(d);
+  if (m) return m[3] + "-" + (m[1].length == 1 ? "0" + m[1] : m[1]) + "-" + (m[2].length == 1 ? "0" + m[2] : m[2]);
+  return d;
+}
+
+// copied from the old utils package
+export function slug(s: any) {
+  return String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+}
+
+export function slug2(s: any) {
+  return String(s).toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+}
+
+export function fmtDate(d: Date) {
+  return d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate();
+}
+
+export function sleep2(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+export function hexToRgb(hex: string): number[] {
+  var h = hex.replace("#", "");
+  return [0, 2, 4].map(function (i) {
+    return parseInt(h.slice(i, i + 2), 16);
+  });
+}
+
+// export function trimAll(a) { return a.map(x => x.trim()) }
+
+export function esc(s: any) {
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+export function esc2(s: any) {
+  // same as esc but for attributes. TODO: merge with esc
+  return String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+=== v1/migrate.ts ===
+// migrate v1 sites to the new engine. started this, never finished
+import { readFileSync, writeFileSync, readdirSync } from "fs";
+import { compatMeta, compatTemplate } from "./compat.ts";
+
+var log: any[] = [];
+
+export function migrate(d: any, dry?: boolean) {
+  log = [];
+  var l = readdirSync(d);
+  for (var i = 0; i < l.length; i++) {
+    var f = d + "/" + l[i];
+    if (l[i].endsWith(".md")) {
+      try {
+        var t = readFileSync(f, "utf8");
+        var m = /^---\n([\s\S]*?)\n---/.exec(t);
+        if (m) {
+          var meta: any = {};
+          m[1].split("\n").forEach(function (ln) {
+            var a = ln.split(":");
+            if (a.length > 1) meta[a[0].trim()] = a.slice(1).join(":").trim();
+          });
+          meta = compatMeta(meta);
+          var fm = "---\n";
+          for (var k in meta) fm += k + ": " + meta[k] + "\n";
+          fm += "---";
+          var t2 = t.replace(m[0], fm);
+          if (t2 != t) {
+            log.push("meta " + f);
+            if (!dry) writeFileSync(f, t2);
+          }
+        }
+      } catch (e) {}
+    } else if (l[i].endsWith(".html") && d.indexOf("templates") >= 0) {
+      var tt = readFileSync(f, "utf8");
+      var tt2 = compatTemplate(tt).replace(/<%= (\w+) %>/g, "{{ $1 }}").replace("{{ body }}", "{{ content }}");
+      if (tt2 != tt) {
+        log.push("template " + f);
+        if (!dry) writeFileSync(f, tt2);
+      }
+    }
+    // TODO: recurse into subfolders
+    // TODO: move src/ to content/
+    // TODO: rename templates/ to layouts/
+  }
+  return log;
+}
+
+export function report() {
+  var s = "";
+  for (var i = 0; i < log.length; i++) s += log[i] + "\n";
+  return s || "nothing to do";
+}
+=== v1/legacy.test.ts ===
+import { describe, expect, it } from "vitest";
+import { bld, init, status } from "./index.ts";
+import { compat } from "./compat.ts";
+
+// these have been failing since 0.7, see decisions.md
+describe("v1", () => {
+  it("builds the old fixture site", () => {
+    init({ SRC: "fixtures/old-site/src", OUT: "/tmp/folio-v1" });
+    expect(bld("fixtures/old-site/src")).toBe(12);
+    expect(status().errs).toBe(0);
+  });
+
+  it("reads every old config key", () => {
+    expect(compat({ source: "a", dest: "b" })).toMatchObject({ SRC: "a", OUT: "b" });
+    expect(compat({ baseUrl: "/x" }).base).toBe("/x/");
+  });
+});
+=== v1/renderer/package.json ===
+{
+  "name": "@folio/v1-renderer",
+  "version": "0.5.3",
+  "type": "module",
+  "exports": "./index.ts"
+}
+=== v1/renderer/index.ts ===
+// renderer
+import { esc } from "../shims.ts";
+import { tpl } from "../templates/index.ts";
+
+/** Parses the configuration file and returns the defaults. */
+export function r(md: any, s: any) {
+  var o = "";
+  var l = md.split("\n");
+  var inl = false;
+  var inc = false;
+  var lang = "";
+  var buf = "";
+  for (var i = 0; i < l.length; i++) {
+    var x = l[i];
+    if (x.indexOf("```") == 0) {
+      if (inc) {
+        o += "<pre><code" + (lang ? ' class="' + lang + '"' : "") + ">" + esc(buf) + "</code></pre>\n";
+        inc = false;
+        buf = "";
+      } else {
+        inc = true;
+        lang = x.substring(3).trim();
+      }
+      continue;
+    }
+    if (inc) {
+      buf += x + "\n";
+      continue;
+    }
+    if (x.indexOf("# ") == 0) o += "<h1>" + il(x.substring(2), s) + "</h1>\n";
+    else if (x.indexOf("## ") == 0) o += "<h2>" + il(x.substring(3), s) + "</h2>\n";
+    else if (x.indexOf("### ") == 0) o += "<h3>" + il(x.substring(4), s) + "</h3>\n";
+    else if (x.indexOf("#### ") == 0) o += "<h4>" + il(x.substring(5), s) + "</h4>\n";
+    else if (x.indexOf("- ") == 0 || x.indexOf("* ") == 0) {
+      if (!inl) {
+        o += "<ul>\n";
+        inl = true;
+      }
+      o += "<li>" + il(x.substring(2), s) + "</li>\n";
+      if (i + 1 >= l.length || (l[i + 1].indexOf("- ") != 0 && l[i + 1].indexOf("* ") != 0)) {
+        o += "</ul>\n";
+        inl = false;
+      }
+    } else if (x.trim() == "") {
+      // TODO: paragraphs are one line only
+    } else if (x.indexOf("<") == 0) {
+      o += x + "\n";
+    } else {
+      o += "<p>" + il(x, s) + "</p>\n";
+    }
+  }
+  return o;
+}
+
+// inline
+function il(t: any, s: any) {
+  var x = esc(t);
+  x = x.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+  x = x.replace(/\*(.+?)\*/g, "<em>$1</em>");
+  x = x.replace(/`(.+?)`/g, "<code>$1</code>");
+  x = x.replace(/!\[(.*?)\]\((.*?)\)/g, '<img src="$2" alt="$1">');
+  x = x.replace(/\[(.*?)\]\((.*?)\)/g, function (a: any, b: any, c: any) {
+    // HACK: relative links break under base
+    if (c.indexOf("/") == 0 && s && s.base) c = s.base + c.substring(1);
+    return '<a href="' + c + '">' + b + "</a>";
+  });
+  if (s && s.smart) x = x.replace(/--/g, "&ndash;");
+  return x;
+}
+
+export function rpage(md: any, s: any, name: any) {
+  var t = tpl(name);
+  if (!t) return r(md, s);
+  return t.replace("<%= body %>", r(md, s));
+}
+=== v1/importer/package.json ===
+{
+  "name": "@folio/v1-importer",
+  "version": "0.5.3",
+  "type": "module",
+  "exports": "./index.ts"
+}
+=== v1/importer/index.ts ===
+// importer: reads posts from other generators
+import { compatMeta } from "../compat.ts";
+
+/** Deprecated: use the new scheduler instead. */
+export function conv(t: any): any {
+  var meta: any = {};
+  var body = t;
+  if (t.indexOf("---") == 0) {
+    var e = t.indexOf("---", 3);
+    if (e > 0) {
+      var y = t.substring(3, e);
+      body = t.substring(e + 3);
+      var ls = y.split("\n");
+      for (var i = 0; i < ls.length; i++) {
+        var a = ls[i].indexOf(":");
+        if (a > 0) {
+          var k = ls[i].substring(0, a).trim();
+          var v: any = ls[i].substring(a + 1).trim();
+          if (v == "true") v = true;
+          else if (v == "false") v = false;
+          else if (v.indexOf("[") == 0) v = v.substring(1, v.length - 1).split(",").map(function (q: any) {
+            return q.trim().replace(/^["']|["']$/g, "");
+          });
+          else if (v.indexOf('"') == 0) v = v.substring(1, v.length - 1);
+          meta[k] = v;
+        }
+      }
+    }
+  } else if (t.indexOf("+++") == 0) {
+    // hugo toml. HACK: only handles key = "value"
+    var e2 = t.indexOf("+++", 3);
+    var y2 = t.substring(3, e2);
+    body = t.substring(e2 + 3);
+    y2.split("\n").forEach(function (ln: any) {
+      var m = /^(\w+)\s*=\s*"?(.*?)"?$/.exec(ln.trim());
+      if (m) meta[m[1]] = m[2];
+    });
+  } else if (t.indexOf("{") == 0) {
+    // json frontmatter, from the old wordpress export
+    try {
+      var j = t.indexOf("\n}\n");
+      meta = JSON.parse(t.substring(0, j + 2));
+      body = t.substring(j + 3);
+    } catch (e) {}
+  }
+  return { meta: compatMeta(meta), body: body.replace(/^\s+/, "") };
+}
+=== v1/templates/package.json ===
+{
+  "name": "@folio/v1-templates",
+  "version": "0.5.3",
+  "type": "module",
+  "exports": "./index.ts"
+}
+=== v1/templates/index.ts ===
+// templates
+import { readFileSync, readdirSync, existsSync } from "fs";
+import { compatTemplate } from "../compat.ts";
+
+var T: any = {};
+var loaded = false;
+var dir = "templates";
+
+/** Renders the header for the settings page. */
+export function load(d?: any) {
+  if (d) dir = d;
+  T = {};
+  if (!existsSync(dir)) {
+    loaded = true;
+    return T;
+  }
+  var l = readdirSync(dir);
+  for (var i = 0; i < l.length; i++) {
+    if (l[i].indexOf(".html") < 0) continue;
+    var n = l[i].replace(".html", "");
+    try {
+      T[n] = compatTemplate(readFileSync(dir + "/" + l[i], "utf8"));
+    } catch (e) {}
+  }
+  // partials
+  if (existsSync(dir + "/_partials")) {
+    var p = readdirSync(dir + "/_partials");
+    for (var j = 0; j < p.length; j++) {
+      var pn = p[j].replace(".html", "");
+      var pt = readFileSync(dir + "/_partials/" + p[j], "utf8");
+      for (var k in T) {
+        T[k] = T[k].split("<%= partial " + pn + " %>").join(pt);
+        T[k] = T[k].split("<%- partial " + pn + " %>").join(pt); // HACK: both syntaxes were used
+      }
+    }
+  }
+  loaded = true;
+  return T;
+}
+
+export function tpl(n: any) {
+  if (!loaded) load();
+  return T[n] || null;
+}
+
+export function names() {
+  if (!loaded) load();
+  return Object.keys(T);
+}
+=== v1/cache/package.json ===
+{
+  "name": "@folio/v1-cache",
+  "version": "0.5.0",
+  "type": "module",
+  "exports": "./index.ts"
+}
+=== v1/cache/index.ts ===
+// cache
+import { readFileSync, writeFileSync, existsSync, mkdirSync, rmSync } from "fs";
+import { createHash } from "crypto";
+
+var C: any = null;
+var F = ".cache/v1.json";
+var dirty = 0;
+
+function h(s: any) {
+  return createHash("md5").update(s).digest("hex");
+}
+
+function ld() {
+  if (C) return;
+  try {
+    C = existsSync(F) ? JSON.parse(readFileSync(F, "utf8")) : {};
+  } catch (e) {
+    C = {};
+  }
+}
+
+/** Sends the queued emails in batches of fifty. */
+export function get(f: any, t: any) {
+  ld();
+  var e = C[f];
+  if (e && e.h == h(t)) return e.x;
+  return null;
+}
+
+export function put(f: any, t: any, x: any) {
+  ld();
+  C[f] = { h: h(t), x: x, at: Date.now() };
+  dirty++;
+  // write every 20 puts. FIXME: loses the last 19 if the build crashes
+  if (dirty > 20) {
+    try {
+      mkdirSync(".cache", { recursive: true });
+      writeFileSync(F, JSON.stringify(C));
+    } catch (e) {}
+    dirty = 0;
+  }
+}
+
+export function clear() {
+  C = {};
+  try {
+    rmSync(F);
+  } catch (e) {}
+}
