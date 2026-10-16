@@ -56,15 +56,34 @@ export function box(b: PartBuilder, c: Vec3, axes: readonly [Vec3, Vec3, Vec3], 
   }
 }
 
-/** A box between two points with a square-ish section; `up` orients the section. */
-export function beam(b: PartBuilder, from: Vec3, to: Vec3, width: number, thick: number, up: Vec3, shade: number, ch: Channels): void {
+/**
+ * A box between two points with a square-ish section; `up` orients the
+ * section. In `pieces` lengths, its sides have a ring of vertices at every
+ * joint, so a channel that bends it (a sag that follows a covering) can bend
+ * it there.
+ */
+export function beam(b: PartBuilder, from: Vec3, to: Vec3, width: number, thick: number, up: Vec3, shade: number, ch: Channels, pieces = 1): void {
   const axis = sub(to, from);
   const len = Math.hypot(axis[0], axis[1], axis[2]);
   if (len < 1e-4) return;
   const a = scale(axis, 1 / len);
   const side = normalize(cross(a, up));
   const v = normalize(cross(side, a));
-  box(b, addScaled(from, axis, 0.5), [a, v, side], [len / 2, width / 2, thick / 2], shade, ch);
+  if (pieces <= 1) {
+    box(b, addScaled(from, axis, 0.5), [a, v, side], [len / 2, width / 2, thick / 2], shade, ch);
+    return;
+  }
+  // Its four sides, each a strip of quads along it, shaded as a box's are, and its two ends.
+  const at = (t: number, u: number, w: number): V3 => addScaled(addScaled(addScaled(from, axis, t), v, (u * width) / 2), side, (w * thick) / 2);
+  for (const [n, u0, w0, u1, w1] of [[v, 1, -1, 1, 1], [scale(v, -1), -1, 1, -1, -1], [side, 1, 1, -1, 1], [scale(side, -1), -1, -1, 1, -1]] as const) {
+    const lift = dot(n, UP) > 0.7 ? 0.08 : dot(n, UP) < -0.7 ? -0.12 : 0;
+    for (let k = 0; k < pieces; k++) {
+      const t0 = k / pieces;
+      const t1 = (k + 1) / pieces;
+      quad(b, [at(t0, u0, w0), at(t0, u1, w1), at(t1, u1, w1), at(t1, u0, w0)], n, shade + lift, ch);
+    }
+  }
+  for (const [t, n] of [[0, scale(a, -1)], [1, a]] as const) quad(b, [at(t, -1, -1), at(t, 1, -1), at(t, 1, 1), at(t, -1, 1)], n, shade, ch);
 }
 
 /** A log: a six-sided cylinder with lighter end grain. */
