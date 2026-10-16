@@ -7,7 +7,8 @@
 // the code near the repository's own area is weighed so, from either bank,
 // and the best view wins, the nearest that area's heart among equals. A world
 // with no such stretch looks out the same way from dry ground around the
-// heart. A person who was here before comes back to where they stood instead
+// heart. Every place weighed stands a few meters clear of whatever stands
+// for code, so turning round never fills the view with a tree or a wall. A person who was here before comes back to where they stood instead
 // (`returnTo`), or beside the thing they stood by once an edit has moved it.
 
 import type { WorldPlaces } from "@gaia/schema";
@@ -38,6 +39,12 @@ export const OPENING = {
   rise: 4,
   near: 8,
   far: 120,
+  /**
+   * The spot stands clear of everything that stands for code by this much, meters: past a tree's crown, a bush or
+   * a stone, and this far past a building's or landmark's lot, so turning round never fills the view with one.
+   */
+  clear: 6,
+  pastLot: 3,
   /** With no stream among the code: rings around the repository's heart this far apart, out to `around`, each faced `ways` ways. */
   ring: 15,
   around: 120,
@@ -53,9 +60,20 @@ export interface OpeningSpot {
 
 /** What stands for code on a world's land, where its layout put it: buildings and landmarks, and the definitions standing on their files' patches. */
 export interface StandsForCode {
-  readonly things: readonly { readonly x: number; readonly z: number }[];
+  /** Buildings and landmarks, each with how far its lot reaches from its middle (none for the sample world's). */
+  readonly things: readonly { readonly x: number; readonly z: number; readonly lot?: number }[];
   /** A definition with no form (`""`) stands as nothing. */
   readonly symbols: readonly { readonly x: number; readonly z: number; readonly form: string }[];
+  /** Files and entities standing as flowers, a stone, a bush or a tree. */
+  readonly standing?: readonly { readonly x: number; readonly z: number }[];
+}
+
+/** Whether (x, z) stands clear of everything that stands for code (`OPENING.clear`). */
+export function clearOfCode(code: StandsForCode, x: number, z: number): boolean {
+  for (const t of code.things) if (Math.hypot(t.x - x, t.z - z) < (t.lot ?? 0) + OPENING.pastLot) return false;
+  for (const s of code.symbols) if (s.form !== "" && Math.hypot(s.x - x, s.z - z) < OPENING.clear) return false;
+  for (const s of code.standing ?? []) if (Math.hypot(s.x - x, s.z - z) < OPENING.clear) return false;
+  return true;
 }
 
 /** What a person sees from where they stand, facing a way. */
@@ -100,7 +118,8 @@ function better(a: Weighed, b: Weighed): boolean {
 
 export function openingSpot(t: Terrain, world: WorldPlaces & StandsForCode): OpeningSpot {
   const root = world.areas.find((a) => a.path === "") ?? { x: 0, z: 0 };
-  const dryAmong = (x: number, z: number): boolean => amongCode(world, x, z) && waterDepthAt(t, x, z) <= OPENING.dry;
+  // Dry ground among the code, clear of everything that stands there.
+  const dryAmong = (x: number, z: number): boolean => amongCode(world, x, z) && waterDepthAt(t, x, z) <= OPENING.dry && clearOfCode(world, x, z);
   let best: Weighed | null = null;
   const weigh = (x: number, z: number, yaw: number): void => {
     const view: Weighed = { x, z, yaw, ...openingView(t, world, x, z, yaw), far: Math.hypot(x - root.x, z - root.z) };

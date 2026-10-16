@@ -1099,7 +1099,10 @@ The lab opens into the world, full screen, at eye height, where the first
 view is best (`openingSpot` in `@gaia/terrain`). Every stretch of every
 stream among the code is a place to stand, 2.5 m past the water's edge on
 either bank, facing the water 30 m downstream, if the stream runs on that
-far (a stream shorter than that is faced whole, from its spring). Of those whose bank lies within 200 m of the nearest one to the
+far (a stream shorter than that is faced whole, from its spring), on dry
+ground at least 6 m from any tree, bush, stone or flowers that stand for
+code and 3 m past any building's or landmark's lot, so turning round never
+fills the view (`clearOfCode`). Of those whose bank lies within 200 m of the nearest one to the
 repository's heart, the view wins whose ground ahead never rises more than
 4° above the eye within 120 m; then the one with the most that stands for
 code within 100 m and 35° either side of the view, a building or landmark
