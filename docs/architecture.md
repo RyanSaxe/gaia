@@ -1092,7 +1092,10 @@ them are ready. A baked form is kept in the
 browser's IndexedDB (`app/renderer/terrain/far-store.ts`), keyed by a hash of
 the build and the swap size, so each build bakes once. The database's version
 is the bake's (`FAR_BAKE_VERSION`), so the first open at a newer bake empties
-the store of forms no bake reads again. A
+the store of forms no bake reads again. A second, small store records when a
+visit last read or stored each form, and each open deletes the forms no visit
+used in the 30 days before the last one, such as those of a season no world
+wears any more, reading only keys and times. A
 form read back from the store keeps its pixels in the page only until the GPU
 holds them (`farFormFrom`'s `onUpdate`). The land's textures are laid on the
 page from what it holds anyway: the clipmap's levels from the bake's arrays
