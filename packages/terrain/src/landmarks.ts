@@ -50,7 +50,7 @@ export const LANDMARK_SITE = {
 /**
  * The most prominent gentle, dry spot in a region for a landmark of
  * footprint `radius`, keeping clear of `avoid`; null when the region has
- * no room.
+ * no room. On a lot (`within`), the most prominent such spot on it.
  */
 export function findLandmarkSite(t: Terrain, region: number, radius: number, avoid: readonly Occupied[], within: Circle | null = null): LandmarkSite | null {
   const l = t.lattice;
@@ -85,8 +85,13 @@ export function findLandmarkSite(t: Terrain, region: number, radius: number, avo
       if (best === null || score > best.score) best = { x, z, score };
     }
   }
-  if (best === null) return within === null ? null : { x: within.x, z: within.z, y: levelDisc(t, within.x, within.z, radius), radius, region };
-  return { x: best.x, z: best.z, y: levelDisc(t, best.x, best.z, radius), radius, region };
+  if (best !== null) return { x: best.x, z: best.z, y: levelDisc(t, best.x, best.z, radius), radius, region };
+  if (within === null) return null;
+  // A lot with no such spot stands it at its middle, unless something already stands there: then on the lot widened
+  // 6 m at a time.
+  const taken = avoid.some((o) => Math.hypot(o.x - within.x, o.z - within.z) < o.radius + radius);
+  if (taken && within.radius < 60) return findLandmarkSite(t, region, radius, avoid, { ...within, radius: within.radius + 6 });
+  return { x: within.x, z: within.z, y: levelDisc(t, within.x, within.z, radius), radius, region };
 }
 
 /** Levels a disc of ground to its mean height, blending back to the land; returns that height. */
