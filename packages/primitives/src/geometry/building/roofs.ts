@@ -8,7 +8,7 @@
 import { type BuildContext, type BuildingPlan, type Built, GRAIN, type Mass, type Rand, type Resolved } from "@gaia/schema";
 import type { thatchParams, tilesParams } from "../../structure.ts";
 import { type Channels, PartBuilder, type V3, addScaled, clamp, cross, fbm3, normalize } from "../kit.ts";
-import { UP, beam, box, log, quad } from "../blocks.ts";
+import { UP, beam, box, log } from "../blocks.ts";
 import { type Ruin, chimneyEnd, hipDrop, hipSlope, ruinAt, ruinOf, spanOf, still, wallTop } from "./frame.ts";
 import { lump } from "./ruin.ts";
 
@@ -190,10 +190,21 @@ function extrudeRoof(
       const t1 = tops[i + 1] as ProfilePoint;
       const u0: ProfilePoint = { b: t0.b, y: Math.min(t0.y, undersideAt(t0.b)), top: false };
       const u1: ProfilePoint = { b: t1.b, y: Math.min(t1.y, undersideAt(t1.b)), top: false };
-      const q = [t0, t1, u1, u0].map((pt) => shape(a, pt, [0, 0])) as [V3, V3, V3, V3];
-      // Cut ends sit in their own shadow, darker than the courses.
-      const { c, shade } = chan(a, t0);
-      quad(b, q, nrm, shade - 0.2, c);
+      // Cut ends sit in their own shadow, darker than the courses. Each corner takes its own point's channels, so the
+      // top edge settles with the covering and the foot stays on the underside.
+      const { shade } = chan(a, t0);
+      const corners = [t0, t1, u1, u0];
+      const ids = corners.map((pt) => b.vertex(shape(a, pt, [0, 0]), nrm, shade - 0.2, chan(a, pt).c));
+      const [p0, p1, p2] = corners.slice(0, 3).map((pt) => shape(a, pt, [0, 0])) as [V3, V3, V3];
+      const facing = cross([p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]], [p2[0] - p0[0], p2[1] - p0[1], p2[2] - p0[2]]);
+      const [i0, i1, i2, i3] = ids as [number, number, number, number];
+      if (facing[0] * nrm[0] + facing[1] * nrm[1] + facing[2] * nrm[2] >= 0) {
+        b.triangle(i0, i1, i2);
+        b.triangle(i0, i2, i3);
+      } else {
+        b.triangle(i0, i2, i1);
+        b.triangle(i0, i3, i2);
+      }
     }
   }
 }
@@ -206,13 +217,25 @@ function sagOf(f: RoofFrame, a: number, b: number, reach: number): number {
 }
 
 /** How a slope sags at (a, b): as `sagOf`, and more over the collapse, about the hinge its covering hangs from. */
-const sagAt = (f: RoofFrame, ruin: Ruin, reach: number, a: number, bv: number): Pick<Channels, "droop" | "pivot"> => ({
+const sagAt = (f: RoofFrame, ruin: Ruin, reach: number, a: number, bv: number): Pick<Channels, "droop" | "pivot" | "bough"> => ({
   droop: sagOf(f, a, bv, reach) + 0.28 * ruinAt(ruin, roofPoint(f, a, bv, 0)),
   pivot: hingeOf(f, a),
+  bough: hingeOf(f, a),
 });
 
+/**
+ * A covering's upper surface settles onto its own underside as it rots, straight below: rotten thatch slumps and
+ * loose tiles lie down on their boards. Any piece of it can last to any vitality, and once it stands alone it would
+ * hang its covering's thickness above the frame; settled, it lies on the boards over the rafters. It settles from its
+ * rot, the eaves and the collapse first, and all of it by vitality 0.15. A lean-to's slope keeps its thickness: it
+ * caves in about its high edge instead, every point turning about that.
+ */
+function settles(f: RoofFrame, base: V3, rot: number): Partial<Channels> {
+  return f.m.roof === "lean-to" ? {} : { loss: 0.05 + 0.3 * rot, pivot: base };
+}
+
 /** The chimney, its cap and pot, and where its smoke rises from. A gable stack needs a free gable end; otherwise it rises through the ridge. */
-function chimney(stack: PartBuilder, plan: BuildingPlan, f: RoofFrame, wanted: "gable" | "ridge" | "none", cover: number, r: Rand): V3 | null {
+function chimney(stack: PartBuilder, plan: BuildingPlan, f: RoofFrame, wanted: "gable" | "ridge" | "none", r: Rand): V3 | null {
   if (wanted === "none") return null;
   const end = chimneyEnd(plan);
   const where = wanted === "gable" && end !== 0 ? "gable" : "ridge";
@@ -247,9 +270,10 @@ function chimney(stack: PartBuilder, plan: BuildingPlan, f: RoofFrame, wanted: "
   const shoulder = where === "gable" ? top * 0.8 : foot;
   // Above the break, the stack topples as one piece as the house fails:
   // back over the ridge from a gable end, or down the slope from the ridge.
-  // It breaks where it leaves the covering and topples about the edge of the
-  // break on the side it falls to, so it comes to rest lying along the ridge.
-  const breakAt = ridgeY + cover;
+  // It breaks at the ridge and topples about the edge of the break on the
+  // side it falls to, so it comes to rest lying along the ridge beam: by then
+  // the covering has rotted and settled onto its boards, and holds nothing up.
+  const breakAt = ridgeY;
   const hinge = addScaled(addScaled(addScaled(base, f.ax, lean * (breakAt - foot)), UP, breakAt), topple, deep * 0.4);
   const tip = Math.PI / 2;
   const turnAxis = normalize(cross(UP, topple));
@@ -343,8 +367,9 @@ function rafters(b: PartBuilder, debris: PartBuilder, f: RoofFrame, ruin: Ruin, 
   const r1 = hipped(1) ? Math.min(a1, start) : a1;
   const ridgeB = lean ? -f.m.fall * (f.halfSpan - 0.08) : 0;
   if (r1 - r0 > 0.2) beam(frame, roofPoint(f, r0 + 0.05, ridgeB, under(ridgeB) - 0.1), roofPoint(f, r1 - 0.05, ridgeB, under(ridgeB) - 0.1), 0.16, 0.16, UP, 0.42, still(hingeOf(f, 0), 0.55));
+  // Purlins carry the rafters across the slopes, notched a little into them.
   for (const bv of lean ? [0] : [-f.halfSpan * 0.5, f.halfSpan * 0.5]) {
-    const y = under(bv) - 0.2;
+    const y = under(bv) - 0.17;
     if (r1 - r0 > 0.4) beam(frame, roofPoint(f, r0 + 0.1, bv, y), roofPoint(f, r1 - 0.1, bv, y), 0.12, 0.12, UP, 0.4, still(hingeOf(f, 0), 0.55));
   }
   // Below the collapsed eaves, fallen covering lies on the ground.
@@ -484,6 +509,18 @@ function thatchSlab(roof: PartBuilder, plan: BuildingPlan, f: RoofFrame, p: Reso
   const segments = Math.max(6, Math.min(Math.round((a1 - a0) / 0.45), Math.floor(budget / (2 * profile.length))));
   const fall = caveIn(f, r);
   const cut = turretCut(plan, f.m);
+  const place = (a: number, pt: ProfilePoint, [nb, ny]: readonly [number, number]): V3 => {
+    const bump = pt.top === true ? 0.035 * fbm3(a * 0.9, pt.b * 0.9, pt.y * 0.5, seed, 2) : 0;
+    const end = Math.max(0, Math.abs(a) - f.halfLength) / overGable;
+    // Gable ends round down a little. A hipped end drops the whole slab to its eave, so its cut end would stand across
+    // it as a flat board the thatch's full thickness tall: it rounds over to its eave instead, the cut no thicker than
+    // the lip.
+    const hipped = f.m.roof === "hip" && f.m.ends[a < 0 ? 0 : 1];
+    const round = pt.top !== true ? 0 : hipped ? end * end * Math.max(0, pt.y - under(pt.b) - lip) : f.m.roof !== "hip" ? end * end * T * 0.35 : 0;
+    // A settled roof dips mid-ridge, and hipped ends fall away.
+    const dip = plan.settle * 0.14 * Math.sin(Math.PI * clamp((a - a0) / (a1 - a0), 0, 1)) + round + hipOf(f, a, pt.b).drop;
+    return cut(roofPoint(f, a, pt.b + nb * bump, pt.y + ny * bump - dip));
+  };
   extrudeRoof(
     roof,
     f,
@@ -491,21 +528,11 @@ function thatchSlab(roof: PartBuilder, plan: BuildingPlan, f: RoofFrame, p: Reso
     a0,
     a1,
     segments,
-    (a, pt, [nb, ny]) => {
-      const bump = pt.top === true ? 0.035 * fbm3(a * 0.9, pt.b * 0.9, pt.y * 0.5, seed, 2) : 0;
-      const end = Math.max(0, Math.abs(a) - f.halfLength) / overGable;
-      // Gable ends round down a little. A hipped end drops the whole slab to its eave, so its cut end would stand across
-      // it as a flat board the thatch's full thickness tall: it rounds over to its eave instead, the cut no thicker than
-      // the lip.
-      const hipped = f.m.roof === "hip" && f.m.ends[a < 0 ? 0 : 1];
-      const round = pt.top !== true ? 0 : hipped ? end * end * Math.max(0, pt.y - under(pt.b) - lip) : f.m.roof !== "hip" ? end * end * T * 0.35 : 0;
-      // A settled roof dips mid-ridge, and hipped ends fall away.
-      const dip = plan.settle * 0.14 * Math.sin(Math.PI * clamp((a - a0) / (a1 - a0), 0, 1)) + round + hipOf(f, a, pt.b).drop;
-      return cut(roofPoint(f, a, pt.b + nb * bump, pt.y + ny * bump - dip));
-    },
+    place,
     (a, pt) => {
       const e = clamp(Math.abs(pt.b) / reach, 0, 1);
       const nz = fbm3(a * 0.6, pt.b * 0.6, 3.1, seed + 9, 2);
+      const rot = roofRot(f, ruin, a, pt.b, reach);
       const shade = pt.top === true ? 0.52 + 0.1 * nz + 0.08 * (1 - e) : 0.3;
       return {
         shade,
@@ -515,9 +542,10 @@ function thatchSlab(roof: PartBuilder, plan: BuildingPlan, f: RoofFrame, p: Reso
           wither: clamp(0.5 + 0.35 * e + 0.2 * nz, 0, 1),
           glow: 0,
           tint: 0.025 * nz,
-          // The straw goes before the battens under it.
-          rot: roofRot(f, ruin, a, pt.b, reach) * (pt.top === true ? 1 : 0.85),
+          // The straw goes before the battens under it, and slumps onto them.
+          rot: rot * (pt.top === true ? 1 : 0.85),
           grain: [(a - a0) / BUNDLE, (reach - Math.abs(pt.b)) / (reach / n), GRAIN.straw],
+          ...(pt.top === true ? settles(f, place(a, { b: pt.b, y: under(pt.b) }, [0, 0]), rot) : {}),
           ...fall,
         },
       };
@@ -571,6 +599,11 @@ function tileSlab(roof: PartBuilder, plan: BuildingPlan, f: RoofFrame, p: Resolv
   const segments = Math.max(8, Math.min(wanted, Math.floor(budget / (2 * profile.length))));
   const fall = caveIn(f, r);
   const cut = turretCut(plan, f.m);
+  const place = (a: number, pt: ProfilePoint, [nb, ny]: readonly [number, number]): V3 => {
+    const wave = p.covering === "pantiles" && pt.top === true && Math.abs(pt.b) > 0.3 ? 0.045 * Math.abs(Math.sin((Math.PI * a) / tileW)) : 0;
+    const dip = plan.settle * 0.12 * Math.sin(Math.PI * clamp((a - a0) / (a1 - a0), 0, 1)) + hipOf(f, a, pt.b).drop;
+    return cut(roofPoint(f, a, pt.b + nb * wave, pt.y + ny * wave - dip));
+  };
   extrudeRoof(
     roof,
     f,
@@ -578,12 +611,9 @@ function tileSlab(roof: PartBuilder, plan: BuildingPlan, f: RoofFrame, p: Resolv
     a0,
     a1,
     segments,
-    (a, pt, [nb, ny]) => {
-      const wave = p.covering === "pantiles" && pt.top === true && Math.abs(pt.b) > 0.3 ? 0.045 * Math.abs(Math.sin((Math.PI * a) / tileW)) : 0;
-      const dip = plan.settle * 0.12 * Math.sin(Math.PI * clamp((a - a0) / (a1 - a0), 0, 1)) + hipOf(f, a, pt.b).drop;
-      return cut(roofPoint(f, a, pt.b + nb * wave, pt.y + ny * wave - dip));
-    },
+    place,
     (a, pt) => {
+      const rot = roofRot(f, ruin, a, pt.b, reach);
       const e = clamp(Math.abs(pt.b) / reach, 0, 1);
       const row = Math.floor(Math.abs(pt.b) / course);
       const col = Math.floor(a / tileW + (row % 2) * 0.5);
@@ -599,9 +629,10 @@ function tileSlab(roof: PartBuilder, plan: BuildingPlan, f: RoofFrame, p: Resolv
           wither: clamp(0.45 + 0.4 * e * e + 0.25 * nz, 0, 1),
           glow: 0,
           tint: 0.03 * cell,
-          // The tiles go before the boards under them.
-          rot: roofRot(f, ruin, a, pt.b, reach) * (pt.top === true ? 1 : 0.85),
+          // The tiles go before the boards under them, and lie down on them.
+          rot: rot * (pt.top === true ? 1 : 0.85),
           grain: [(a - a0) / tileW, (reach - Math.abs(pt.b)) / course, GRAIN.tiles],
+          ...(pt.top === true ? settles(f, place(a, { b: pt.b, y: plane(pt.b) }, [0, 0]), rot) : {}),
           ...fall,
         },
       };
@@ -697,7 +728,7 @@ function cone(roof: PartBuilder, wood: PartBuilder, plan: BuildingPlan, m: Mass,
 /** Triangles all of a building's slopes share, by each mass's length, so a building of many masses keeps its budget. */
 const ROOF_TRIANGLES = 4300;
 
-function roofs(plan: BuildingPlan, r: Rand, slab: (roof: PartBuilder, f: RoofFrame, ruin: Ruin, seed: number, r: Rand, budget: number) => Slab, coneStyle: { thick: number; overhang: number; course: number; cover: number; covering: number }, wanted: "gable" | "ridge" | "none"): Built {
+function roofs(plan: BuildingPlan, r: Rand, slab: (roof: PartBuilder, f: RoofFrame, ruin: Ruin, seed: number, r: Rand, budget: number) => Slab, coneStyle: { thick: number; overhang: number; course: number; covering: number }, wanted: "gable" | "ridge" | "none"): Built {
   const seed = Math.floor(r.next() * 1e6);
   const roof = new PartBuilder("roof", "solid");
   const stack = new PartBuilder("masonry", "solid");
@@ -716,7 +747,7 @@ function roofs(plan: BuildingPlan, r: Rand, slab: (roof: PartBuilder, f: RoofFra
     const { reach, a0, a1, fall } = slab(roof, f, ruin, seed + i * 31, mr, (ROOF_TRIANGLES * (lengths[i] ?? 0)) / total);
     rafters(bare, roof, f, ruin, { reach, a0, a1, fall }, mr.fork("rafters"));
   });
-  const vent = chimney(stack, plan, roofFrame(plan, plan.masses[0] as Mass), wanted, coneStyle.cover, r.fork("chimney"));
+  const vent = chimney(stack, plan, roofFrame(plan, plan.masses[0] as Mass), wanted, r.fork("chimney"));
   if (vent !== null) smoke(puffs, vent, r.fork("smoke"));
   const parts = [roof.part(), stack.part(), bare.part()].filter((part) => part.indices.length > 0);
   if (vent !== null) parts.push(puffs.part());
@@ -725,11 +756,11 @@ function roofs(plan: BuildingPlan, r: Rand, slab: (roof: PartBuilder, f: RoofFra
 
 export function buildThatch(p: Resolved<typeof thatchParams>, ctx: BuildContext, plan: BuildingPlan): Built {
   const r = ctx.rand.fork("thatch");
-  return roofs(plan, r, (roof, f, ruin, seed, mr, budget) => thatchSlab(roof, plan, f, p, ruin, seed, mr, budget), { thick: p.thickness * 0.8, overhang: p.overhang * 0.7, course: 0.55, cover: p.thickness * 1.1, covering: GRAIN.straw }, p.chimney);
+  return roofs(plan, r, (roof, f, ruin, seed, mr, budget) => thatchSlab(roof, plan, f, p, ruin, seed, mr, budget), { thick: p.thickness * 0.8, overhang: p.overhang * 0.7, course: 0.55, covering: GRAIN.straw }, p.chimney);
 }
 
 export function buildTiles(p: Resolved<typeof tilesParams>, ctx: BuildContext, plan: BuildingPlan): Built {
   const r = ctx.rand.fork("tiles");
   const course = p.covering === "slates" ? 0.26 : p.covering === "shingles" ? 0.3 : 0.34;
-  return roofs(plan, r, (roof, f, ruin, seed, mr, budget) => tileSlab(roof, plan, f, p, ruin, seed, mr, budget), { thick: 0.08, overhang: p.overhang * 0.6, course, cover: 0.19, covering: GRAIN.tiles }, p.chimney);
+  return roofs(plan, r, (roof, f, ruin, seed, mr, budget) => tileSlab(roof, plan, f, p, ruin, seed, mr, budget), { thick: 0.08, overhang: p.overhang * 0.6, course, covering: GRAIN.tiles }, p.chimney);
 }

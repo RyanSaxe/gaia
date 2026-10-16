@@ -27,10 +27,13 @@ function breaks(a: number, b: number, cell: number, extra: readonly number[]): n
 export function wallSheet(b: PartBuilder, plan: BuildingPlan, w: Wall, y0: number, d: number, cell: number, at: (p: V3) => { c: Channels; shade: number }): void {
   const top = wallTop(plan, massOf(plan, w));
   const holes = clearings(plan, w, 0).filter((h) => h.y1 <= top + 1e-3);
-  const cols = breaks(0, w.length, cell, holes.flatMap((h) => [h.s0, h.s1]));
-  const body = breaks(y0, top, cell, holes.flatMap((h) => [h.y0, h.y1]));
   const peak = peakOf(plan, w).y;
   const gableRows = peak - top > 0.05 ? Math.max(1, Math.round((peak - top) / cell)) : 0;
+  // A gable's sheet has a column at each end of its crest, so however coarse its cells it reaches the gable's top and
+  // the stones laid up to it rest on it.
+  const crest = gableRows > 0 ? Array.from({ length: 17 }, (_, k) => (w.length * k) / 16).filter((s) => topAt(plan, w, s) > peak - 1e-3) : [];
+  const cols = breaks(0, w.length, cell, [...holes.flatMap((h) => [h.s0, h.s1]), ...crest.slice(0, 1), ...crest.slice(-1)]);
+  const body = breaks(y0, top, cell, holes.flatMap((h) => [h.y0, h.y1]));
   const rows = body.length + gableRows;
   const yAt = (s: number, j: number): number => (j < body.length ? (body[j] as number) : top + ((topAt(plan, w, s) - top) * (j - body.length + 1)) / gableRows);
   const idx: number[] = [];
