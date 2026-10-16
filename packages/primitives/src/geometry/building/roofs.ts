@@ -365,6 +365,28 @@ function turretCut(plan: BuildingPlan, m: Mass): (p: V3) => V3 {
   };
 }
 
+/**
+ * Builds into another builder, each vertex taking the channels `at` its own
+ * place: a frame that sags and falls just as the covering over it does, so
+ * the covering never lifts off it.
+ */
+class Following extends PartBuilder {
+  constructor(
+    readonly into: PartBuilder,
+    readonly at: (p: V3) => Partial<Channels>,
+  ) {
+    super(into.swatch, into.collision);
+  }
+
+  override vertex(p: V3, n: V3, shade: number, c: Channels, cut?: V3): number {
+    return this.into.vertex(p, n, shade, { ...c, ...this.at(p) }, cut);
+  }
+
+  override triangle(a: number, b: number, c: number): void {
+    this.into.triangle(a, b, c);
+  }
+}
+
 /** How wide a bundle of thatch is along the ridge, meters: the straw rots a bundle at a time. */
 const BUNDLE = 0.22;
 /** How wide a tile is round a turret's cone, meters: the cone rots a tile at a time. */
@@ -542,8 +564,8 @@ function tileSlab(roof: PartBuilder, plan: BuildingPlan, f: RoofFrame, p: Resolv
 
 /**
  * A turret's cone, in courses that step out over the ones above, over a
- * dark underside. It rots through from the eaves and over the collapse, and
- * its finial leans and falls.
+ * dark underside and its rafters. It rots through from the eaves and over
+ * the collapse, a tile or bundle at a time, and its finial leans and falls.
  */
 function cone(roof: PartBuilder, wood: PartBuilder, plan: BuildingPlan, m: Mass, thick: number, overhang: number, courseH: number, covering: number, ruin: Ruin, seed: number): void {
   const top = wallTop(plan, m);
@@ -554,25 +576,25 @@ function cone(roof: PartBuilder, wood: PartBuilder, plan: BuildingPlan, m: Mass,
   const reach = R + overhang;
   const y = (rad: number): number => top + m.rise - k * rad;
   const courses = Math.max(4, Math.round(reach / courseH));
-  const rings: { rad: number; lift: number }[] = [];
-  for (let c = 0; c < courses; c++) {
-    const r0 = reach * (1 - c / courses);
-    const r1 = reach * (1 - (c + 1) / courses);
-    rings.push({ rad: r0, lift: thick }, { rad: r1 + 0.02, lift: thick * 0.55 });
-  }
-  rings.push({ rad: 0, lift: thick * 0.55 });
-  // It rots a tile or bundle at a time round its courses, as a slope does, and its covering goes before its underside.
+  const radOf = (c: number): number => reach * (1 - c / courses);
+  // Each course goes round in a whole number of tiles or bundles, so their edges run straight down the cone and
+  // meet at its seam; what is left of a course stays in pieces of that course.
   const piece = covering === GRAIN.straw ? BUNDLE : TILE;
-  const ch = (q: V3, rad: number, t: number, under: boolean): Channels => ({
+  const around = (c: number): number => Math.max(3, Math.round((Math.PI * (radOf(c) + radOf(c + 1))) / piece));
+  // It sags about its apex, most at the eaves and over the collapse.
+  const sag = (q: V3, rad: number): number => 0.06 * (rad / reach) ** 2 + 0.2 * ruinAt(ruin, q);
+  const ch = (q: V3, rad: number, t: number, under: boolean, c: number, up: number): Channels => ({
     loss: 0,
-    droop: 0.06 * (rad / reach) ** 2 + 0.2 * ruinAt(ruin, q),
+    droop: sag(q, rad),
     wither: clamp(0.5 + 0.3 * (rad / reach) + 0.15 * fbm3(q[0], q[1], q[2], seed, 2), 0, 1),
     glow: 0,
     pivot: apex,
+    // Its covering goes before its underside, as a slope's tiles go before the boards under them.
     rot: clamp(0.34 + 0.45 * (rad / reach) + 0.5 * ruinAt(ruin, q), 0, 1) * (under ? 0.85 : 1),
-    grain: [(t * rad) / piece, (reach - rad) / courseH, covering],
+    grain: [(t / (2 * Math.PI)) * around(c), c + up, covering],
   });
-  const ring = (rad: number, lift: number, under: boolean): number[] =>
+  // A ring of vertices round the cone at `rad`, `lift` above its plane, in course `c`, `up` of the way up it.
+  const ring = (rad: number, lift: number, under: boolean, c: number, up: number): number[] =>
     Array.from({ length: sides + 1 }, (_, i) => {
       const t = (i / sides) * Math.PI * 2;
       const out: V3 = [Math.sin(t), 0, Math.cos(t)];
@@ -580,7 +602,7 @@ function cone(roof: PartBuilder, wood: PartBuilder, plan: BuildingPlan, m: Mass,
       const q: V3 = [m.x + out[0] * rad, y(rad) + (under ? -0.02 : lift + bump), m.z + out[2] * rad];
       const n = under ? normalize([-out[0] * k, -1, -out[2] * k]) : normalize([out[0] * k, 1, out[2] * k]);
       const shade = under ? 0.25 : 0.46 + 0.1 * (1 - rad / reach) + 0.08 * fbm3(t * 3, rad * 2, 1, seed + 3, 1);
-      return roof.vertex(q, n, shade, ch(q, rad, t, under));
+      return roof.vertex(q, n, shade, ch(q, rad, t, under, c, up));
     });
   const stitch = (lo: number[], hi: number[], flip: boolean): void => {
     for (let i = 0; i < sides; i++) {
@@ -594,13 +616,27 @@ function cone(roof: PartBuilder, wood: PartBuilder, plan: BuildingPlan, m: Mass,
       }
     }
   };
-  const outer = rings.map(({ rad, lift }) => ring(rad, lift, false));
-  for (let j = 0; j + 1 < outer.length; j++) stitch(outer[j] as number[], outer[j + 1] as number[], false);
-  // The eave's edge and the underside.
-  const lip = ring(reach, 0, true);
-  stitch(lip, outer[0] as number[], false);
-  const inner = [reach, reach * 0.5, 0].map((rad) => ring(rad, 0, true));
-  for (let j = 0; j + 1 < inner.length; j++) stitch(inner[j] as number[], inner[j + 1] as number[], true);
+  const band = (rings: number[][], flip: boolean): void => {
+    for (let j = 0; j + 1 < rings.length; j++) stitch(rings[j] as number[], rings[j + 1] as number[], flip);
+  };
+  for (let c = 0; c < courses; c++) {
+    const r0 = radOf(c);
+    const r1 = radOf(c + 1);
+    const last = c === courses - 1;
+    // Each course: the butt of its tiles stepping out over the course below (the eave's edge under the first), then
+    // their face, tucked under the course above; the last runs on to the apex. Its underside follows it.
+    const butt = c === 0 ? ring(reach, 0, true, 0, 0) : ring(r0 + 0.02, thick * 0.55, false, c, 0);
+    band([butt, ring(r0, thick, false, c, 0.05), ring(last ? 0.02 : r1 + 0.02, thick * 0.55, false, c, 0.97), ...(last ? [ring(0, thick * 0.55, false, c, 0.999)] : [])], false);
+    band([ring(r0, 0, true, c, 0), ring(r1, 0, true, c, 0.999)], true);
+  }
+  // Rafters run down under it from the apex to the eave, one at each of its sides, so whatever is left of it lies on
+  // them; each sags just as the cone over it does.
+  const frame = new Following(wood, (p) => ({ droop: sag(p, Math.hypot(p[0] - m.x, p[2] - m.z)), pivot: apex }));
+  for (let i = 0; i < sides; i++) {
+    const t = (i / sides) * Math.PI * 2;
+    const along = (rad: number): V3 => [m.x + Math.sin(t) * rad, y(rad) - 0.09, m.z + Math.cos(t) * rad];
+    beam(frame, along(0.08), along(reach - 0.05), 0.07, 0.1, UP, 0.42, still(apex, 0.55));
+  }
   // It leans and falls to lie down the cone from its foot at the apex.
   const tip = Math.PI / 2 + Math.atan(k) - 0.03;
   const finial: Channels = { loss: 0, droop: 0, wither: 0.5, glow: 0, pivot: apex, fall: [tip * Math.SQRT1_2, 0, -tip * Math.SQRT1_2, 0.3] };
