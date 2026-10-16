@@ -55,3 +55,5 @@ today's mark?), as round 8's Agreed records them. Built in round 8. It
 replaces the flat map table and the wooden wordmark of round 6.
 
 World polish round 5 replaced the cards' pictures of their field maps with paintings of where the person last stood still (`world.painting`).
+
+World polish round 8 replaced the stone logo and the flat round mark with one mark: Gaia's name lettered across its own land, painted by the field map's own hand, and its icon, the land with the G (`app/renderer/brand/paint.ts`).
