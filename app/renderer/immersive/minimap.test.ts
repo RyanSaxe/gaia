@@ -1,6 +1,7 @@
 import type { PlaceArea } from "@gaia/terrain";
 import { describe, expect, it } from "vitest";
-import { createNamer, markAt, nameBreaks, tapOn } from "./minimap.ts";
+import { nameBreaks } from "./map-names.ts";
+import { createNamer, markAt, tapOn } from "./minimap.ts";
 
 const area = (path: string): PlaceArea => ({ path, name: path.split("/").pop() ?? path, depth: path.split("/").length });
 const WILD: PlaceArea = { path: "", name: "The wilds", depth: -1 };
@@ -49,11 +50,12 @@ describe("a tap on the minimap", () => {
 });
 
 describe("the ring round a thing walked up to", () => {
-  it("lets the thing's name break after an underscore or before a capital that follows a small letter or digit", () => {
+  it("lets the thing's name break after a hyphen or an underscore, or before a capital that follows a small letter or digit", () => {
     expect(nameBreaks("an_endpoint_override")).toEqual(["an_", "endpoint_", "override"]);
     expect(nameBreaks("FailingGroveMeasure")).toEqual(["Failing", "Grove", "Measure"]);
     expect(nameBreaks("readJSON2Html")).toEqual(["read", "JSON2", "Html"]);
     expect(nameBreaks("docs")).toEqual(["docs"]);
+    expect(nameBreaks("react-native-safe-area-context")).toEqual(["react-", "native-", "safe-", "area-", "context"]);
   });
 
   it("keeps the ring and its name 10 px inside the scrap's torn edge, apart, wherever the thing is", () => {

@@ -24,7 +24,7 @@ import type { Place, PlaceArea, WorldPlaces } from "@gaia/terrain";
 import { onTap } from "../lab.ts";
 import type { Heading, StoodWorld } from "../terrain/lab.ts";
 import { type FieldMap, drawLand } from "./field-map.ts";
-import { nameTails } from "./map-names.ts";
+import { nameBreaks, nameTails } from "./map-names.ts";
 import { DECKLE_MASK, TRAVELLER_SVG } from "./map-styles.ts";
 
 export interface Minimap {
@@ -114,14 +114,6 @@ export function tapOn(x: number, y: number, side = SIDE): "tuck" | "unfold" | nu
   const inward = Math.min(x, y, side - x, side - y);
   if (inward < -TAP.past) return null;
   return inward < TAP.edge ? "tuck" : "unfold";
-}
-
-/**
- * A thing's name in the pieces the pencil may break it between onto its second line: after each underscore, and
- * before each capital that follows a small letter or a digit.
- */
-export function nameBreaks(name: string): string[] {
-  return name.split(/(?<=_)|(?<=[a-z0-9])(?=[A-Z])/);
 }
 
 /**

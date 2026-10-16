@@ -326,7 +326,7 @@ details.json pre { font: 11px/1.45 ui-monospace, "SF Mono", Menlo, monospace; ba
 .minimap-here { position: absolute; left: 50%; top: 60%; width: 0; height: 0; }
 .minimap-here .field-map-traveller { position: absolute; left: -22px; top: -22px; width: 44px; height: 44px; overflow: visible; }
 /* Walking up to a thing: a vermilion pencil ring drawn round it, its name over it in the traveller's hand. The name
-   breaks where minimap.ts lets it (`nameBreaks`) onto at most two lines of about one length, 136 px wide at most,
+   breaks where map-names.ts lets it (`nameBreaks`) onto at most two lines of about one length, 136 px wide at most,
    ending in an ellipsis past that, and minimap.ts sets where it stands on the paper. */
 .minimap-mark { position: absolute; left: 0; top: 0; width: 0; height: 0; opacity: 0; transition: opacity 0.4s ease; }
 .minimap-mark.on { opacity: 1; }
