@@ -47,8 +47,8 @@ export type HeightField =
   | { readonly op: "scale"; readonly by: number; readonly of: HeightField };
 
 /**
- * A river's valley along its course, as a surface the land is cut down to: its floor, rising across the valley's own
- * cross-section to its shoulders, then on at a gentle grade until it meets the land.
+ * A river's valley along its course, as a surface the land is cut down to: its floor, rising up each wall to that
+ * side's shoulder, then on at a gentle grade until it meets the land.
  */
 export interface ValleyCourse {
   /** World x, z pairs from source to mouth, a few meters apart. */
@@ -57,8 +57,11 @@ export interface ValleyCourse {
   readonly halfWidths: Float32Array;
   readonly floors: Float32Array;
   readonly depths: Float32Array;
-  /** The flat floor's share of the half width, each side of the course. */
-  readonly floor: number;
+  /**
+   * At each point, six numbers: on its left, where the flat floor ends and where the wall rising from it reaches its
+   * shoulder, meters out from the course, and how much of a terrace the wall keeps, 0 to 1; then the same on its right.
+   */
+  readonly walls: Float32Array;
 }
 
 /** Every river valley of a world, in world meters, with its segments by square cells `cell` meters a side from (`x0`, `z0`), so a point finds the few near it. */
