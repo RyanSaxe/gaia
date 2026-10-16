@@ -7,6 +7,8 @@
 // painting or a map on a page is a canvas, which a copy of the page would
 // lose, so each strip draws just its own part of it.
 
+import "./curl.css";
+
 /** How many strips a leaf is cut into, and how far its free edge trails its spine at the middle of a turn, degrees. */
 const STRIPS = 10;
 const BEND = 54;

@@ -619,8 +619,11 @@ before the table is drawn; with the signpost, or in the standalone lab
 with no start, the sheet lies on its creased paper instead. While the code is read
 the sheet is bare and still, or, for a world chosen on the start, is the
 painting on its card of where the person last stood still. As soon as the
-land is divided the painting fades to bare paper and the map is drawn like
-any other, so the map is only ever drawn once, in front of the person: a pen draws
+land is divided the card turns over in its place, unhurried, over a second,
+bending as a journal leaf does and with the table out of focus behind it,
+onto its back: the sheet's bare paper, with any tally pencilled on it. The
+map is drawn there like any other, so it is only ever drawn once, in front
+of the person: a pen draws
 every area's border from the middle outward, the map's fine line, with the
 hedgerow's soft band coming in under it, and never the land's rounded rim.
 Between the borders and the washes, a pencil shows what Jev is doing to the
