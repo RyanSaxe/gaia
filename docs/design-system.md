@@ -504,8 +504,10 @@ seen, are carried downwind as they fall, and fade as they land; a tree newly
 near starts dropping them over three seconds. Fireflies fill 30 m round the
 person, anchored to the world, and fade out before they wrap to the far side.
 A drift draws at 1.5 times its `drift@1` size, which was set for a
-narrower, 40° lens, and never under 4 device pixels. Fireflies come out only
-after dusk, hover from 0.7 m, above most grass, glow by contrast and dim to a quarter between flashes. Fireflies
+narrower, 40° lens, and never under 4 device pixels. Petals are the cherry
+blossom's pink a shade deeper (#e48aa6), darker than the sky so they read
+against it. Fireflies come out only after dusk, hover from 0.7 m, above most
+grass, glow by contrast and dim to a quarter between flashes. Fireflies
 follow the regions' weights where the person stands, as their ground covers
 blend, so one region's thins into the next as they walk; a tree drops its own
 region's, and none drift in the wild. A drift thins as its land declines, by

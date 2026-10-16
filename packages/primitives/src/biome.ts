@@ -104,8 +104,9 @@ export const groundCover = primitive({
 
 // ---------- ambient accents ----------
 
+// Petals take the cherry blossom's pink a shade deeper and darker than the sky, so they read against it.
 const ACCENTS = {
-  "drifting petals": { form: "petals", color: 0xf7d8e0, size: 0.075, glow: 0 },
+  "drifting petals": { form: "petals", color: 0xe48aa6, size: 0.075, glow: 0 },
   "fireflies at dusk": { form: "fireflies", color: 0xf6ea8c, size: 0.07, glow: 1 },
   "falling leaves": { form: "leaves", color: 0xd9a04a, size: 0.1, glow: 0 },
 } as const satisfies Record<string, { form: AccentForm; color: number; size: number; glow: number }>;
@@ -116,7 +117,7 @@ export const drift = primitive({
   doc: "Small living things drifting through the air. Always subtle.",
   params: {
     form: t.choice("What drifts through the air", {
-      "drifting petals": "Pale petals carried on the breeze",
+      "drifting petals": "Pink petals carried on the breeze",
       "fireflies at dusk": "Fireflies blinking low over the ground",
       "falling leaves": "Leaves spinning down, in the season's color",
     }),
