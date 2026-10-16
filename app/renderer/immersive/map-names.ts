@@ -69,6 +69,14 @@ const LOT_REACH = Math.max(...Object.values(LAYOUT.lotReach));
 /** A box on a sheet, pixels: left, top, right, bottom. */
 export type Box = readonly [number, number, number, number];
 
+/**
+ * A name in the pieces it may break between onto another line, as the minimap's pencil and the title page letter a
+ * long one: after each hyphen and underscore, and before each capital that follows a small letter or a digit.
+ */
+export function nameBreaks(name: string): string[] {
+  return name.split(/(?<=[-_])|(?<=[a-z0-9])(?=[A-Z])/);
+}
+
 /** Measures `text` set in `font` with `spacing` pixels between its letters, pixels. */
 export type Measure = (text: string, font: string, spacing: number) => number;
 
