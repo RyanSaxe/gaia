@@ -19,7 +19,7 @@
 // @gaia/render); this decides only which copies draw it.
 
 import * as THREE from "three";
-import { AIR, type Realized } from "@gaia/realize";
+import { AIR, type Realized, shownVitality } from "@gaia/realize";
 import { type FarCards, type FarCopies, type FarTurn, type InstanceSpot, type LevelCopies, type PlantView, type SceneLight, createPlantInstances, crownsOf, farChoice, farness as farnessOf, placesOf } from "@gaia/render";
 
 /** The side of a cell, in meters. */
@@ -266,17 +266,18 @@ export function createCopies(plant: Realized, light: SceneLight, spots: readonly
     set detail(mode: DetailMode) {
       detail = mode;
     },
+    // `places` is what cards made later stand from, so it holds how each copy's vitality shows (as `placesOf` writes it), never the vitality.
     setVitality(v) {
       view.setVitality(v);
       for (let k = 0; k < view.count; k++) {
-        places[k * 7 + 5] = view.vitality;
+        places[k * 7 + 5] = shownVitality(view.vitality);
         cards?.setVitalityAt(k, view.vitality);
       }
     },
     setVitalityAt(index, v) {
       view.setVitalityAt(index, v);
-      places[index * 7 + 5] = Math.min(1, Math.max(0, v));
-      cards?.setVitalityAt(index, places[index * 7 + 5] as number);
+      places[index * 7 + 5] = shownVitality(v);
+      cards?.setVitalityAt(index, v);
     },
     cull(camera, size = VIEW_SIZE) {
       frustum.setFromProjectionMatrix(viewProjection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
