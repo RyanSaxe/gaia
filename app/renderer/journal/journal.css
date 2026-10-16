@@ -212,10 +212,14 @@ button.jp-name { border: 0; background: none; padding: 0; text-align: left; curs
 
 /* The title page: a frontispiece painting to the page's edges and the world's name lettered across its sky as the map
    letters a place, in ink with the paper's tone around it. */
-.jp-title-lettering { position: absolute; left: 0; right: 0; top: 13%; display: flex; flex-direction: column; align-items: center; pointer-events: none; }
+.jp-title-lettering { position: absolute; left: 44px; right: 44px; top: 13%; display: flex; flex-direction: column; align-items: center; pointer-events: none; }
+/* A long name breaks where page.ts lets it (`nameBreaks`) into centred lines of about one length, and page.ts letters it
+   smaller when it is very long (`titleSize`); a run longer than a line breaks where it must. The spacing and the
+   paper's edge round the letters keep their share of the size. */
 .jp-book-name {
-  font: 600 40px/1.1 "Iowan Old Style", Georgia, "Times New Roman", serif; letter-spacing: 6.8px; text-transform: uppercase; color: #3b2f22;
-  paint-order: stroke fill; -webkit-text-stroke: 9px rgba(241, 231, 207, 0.82);
+  font: 600 40px/1.1 "Iowan Old Style", Georgia, "Times New Roman", serif; letter-spacing: 0.17em; margin-right: -0.17em; text-transform: uppercase; color: #3b2f22;
+  max-width: 100%; text-align: center; text-wrap: balance; overflow-wrap: anywhere;
+  paint-order: stroke fill; -webkit-text-stroke: 0.225em rgba(241, 231, 207, 0.82);
 }
 
 /* A map or a painting can be tapped: a map's land and a page's picture take you into the world. */
