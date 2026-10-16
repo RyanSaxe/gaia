@@ -9,6 +9,7 @@
 // always thrives.
 
 import * as THREE from "three";
+import { CHANNEL_MATH } from "@gaia/realize";
 import { GROUND_DECLINE, type Ownership, vitalityAt, vitalityOver } from "@gaia/terrain";
 import { hexToVec3 } from "@gaia/render";
 
@@ -93,7 +94,7 @@ vec2 landVitality(vec2 xz) {
   vec2 uv = ((xz - uVitalityMap.x) / uVitalityMap.y + 0.5) / uVitalityMap.z;
   return texture2D(uVitalityField, uv).rg;
 }
-float declineOf(float v) { return 1.0 - smoothstep(${g.to.toFixed(3)}, ${g.from.toFixed(3)}, v); }
+float declineOf(float v) { return 1.0 - smoothstep(${g.to.toFixed(3)}, ${g.from.toFixed(3)}, 1.0 - pow(1.0 - clamp(v, 0.0, 1.0), ${CHANNEL_MATH.legibility.toFixed(3)})); }
 float vitalHash(vec2 p) {
   vec3 p3 = fract(vec3(p.xyx) * 0.1031);
   p3 += dot(p3, p3.yzx + 33.33);

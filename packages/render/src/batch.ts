@@ -11,7 +11,7 @@
 
 import * as THREE from "three";
 import type { Part } from "@gaia/schema";
-import { FLUTTERS, type Realized, mergeParts, spinAt } from "@gaia/realize";
+import { FLUTTERS, type Realized, mergeParts, shownVitality, spinAt } from "@gaia/realize";
 import type { SceneLight } from "./light.ts";
 import { CLOSED, DEPTH_FRAG, DEPTH_VERT, FOLIAGE, LAMP, PLANT_FRAG, PLANT_VERT, type PlantView, geometryOf, hasRuin, letGoOnUpload, sprayColors } from "./plant.ts";
 import { createSmokeMaterial } from "./smoke.ts";
@@ -131,7 +131,7 @@ export function createPlantBatch(members: readonly BatchMember[], light: SceneLi
   members.forEach((m, i) => {
     const { matrix, height } = prepared[i] as Prepared;
     for (let c = 0; c < 4; c++) texel(i, c, matrix.elements.slice(c * 4, c * 4 + 4));
-    texel(i, 4, [Math.min(1, Math.max(0, m.vitality)), 0, 0, height]);
+    texel(i, 4, [shownVitality(m.vitality), 0, 0, height]);
     texel(i, 5, [m.plant.motion.sway, m.plant.motion.frequency, 0, 0]);
     const spray = sprayColors(m.plant);
     texel(i, 6, spray.uBark.value.toArray());
@@ -232,7 +232,7 @@ export function createPlantBatch(members: readonly BatchMember[], light: SceneLi
     meshes.push({ mesh, color, depth });
   }
   // Smoke drifts in its own soft material over its member, and casts no shadow.
-  const smokeLife = members.map((m) => ({ uVitality: { value: Math.min(1, Math.max(0, m.vitality)) } }));
+  const smokeLife = members.map((m) => ({ uVitality: { value: shownVitality(m.vitality) } }));
   const veils: THREE.Mesh[] = smokes.map(({ member, part }) => {
     const swatch = members[member]?.plant.palette.swatches.smoke ?? { healthy: [1, 1, 1], decline: [1, 1, 1] };
     const material = createSmokeMaterial(light, smokeLife[member] as { uVitality: { value: number } }, new THREE.Vector3(...swatch.healthy));
@@ -268,7 +268,7 @@ export function createPlantBatch(members: readonly BatchMember[], light: SceneLi
     members: members.length,
     triangles,
     setVitality(member, v) {
-      const value = Math.min(1, Math.max(0, v));
+      const value = shownVitality(v);
       data[(member * width + 4) * 4] = value;
       texture.needsUpdate = true;
       const smoke = smokeLife[member];
