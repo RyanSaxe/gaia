@@ -136,19 +136,6 @@ export function createLantern(light: SceneLight): Lantern {
 export const hexToVec3 = (hex: number): THREE.Vector3 =>
   new THREE.Vector3(((hex >> 16) & 255) / 255, ((hex >> 8) & 255) / 255, (hex & 255) / 255);
 
-/**
- * A shadow map for a sampler no shadow pass fills: a 1 by 1 depth texture
- * that compares, as `sunShadow`'s sampler2DShadow needs. It is marked for
- * upload because three binds a color placeholder in place of a texture it has
- * never uploaded, and WebGL fails every draw whose shadow sampler reads one.
- */
-export function noShadowMap(): THREE.DepthTexture {
-  const map = new THREE.DepthTexture(1, 1);
-  map.compareFunction = THREE.LessEqualCompare;
-  map.needsUpdate = true;
-  return map;
-}
-
 export function createSceneLight(): SceneLight {
   const uTime = { value: 0 };
   const windDir = new THREE.Vector2();
@@ -174,7 +161,7 @@ export function createSceneLight(): SceneLight {
       },
     },
     uShadowMatrix: { value: new THREE.Matrix4() },
-    uShadowMap: { value: noShadowMap() },
+    uShadowMap: { value: null },
     uShadowTexel: { value: 1 / 2048 },
     uMoonDirection: { value: new THREE.Vector3(0, 1, 0) },
     uMoonColor: { value: new THREE.Vector3(0.66, 0.74, 0.9) },
