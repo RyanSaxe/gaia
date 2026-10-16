@@ -14,7 +14,7 @@
 
 import * as THREE from "three";
 import type { Part } from "@gaia/schema";
-import { AIR, FLUTTERS, type Realized, mergeParts } from "@gaia/realize";
+import { AIR, FLUTTERS, type Realized, mergeParts, shownVitality } from "@gaia/realize";
 import type { InstanceSpot } from "./instances.ts";
 import { copySeed } from "./instances.ts";
 import { LIGHT_GLSL, type SceneLight } from "./light.ts";
@@ -819,7 +819,7 @@ export interface FarCopies {
 /** Each copy as its card draws it, seven numbers per copy: where it stands (x, y, z), its yaw, scale, vitality and seed. */
 export function placesOf(spots: readonly InstanceSpot[]): Float32Array {
   const places = new Float32Array(spots.length * 7);
-  spots.forEach((s, k) => places.set([s.x, s.y, s.z, s.yaw, s.scale, s.vitality ?? 1, copySeed(s)], k * 7));
+  spots.forEach((s, k) => places.set([s.x, s.y, s.z, s.yaw, s.scale, shownVitality(s.vitality ?? 1), copySeed(s)], k * 7));
   return places;
 }
 
@@ -921,7 +921,7 @@ export function createFarCards(forms: readonly FarForm[], light: SceneLight, swa
         },
         setVitalityAt(index, v) {
           const more = attribute("aMore");
-          more.array[index * 4 + 1] = v;
+          more.array[index * 4 + 1] = shownVitality(v);
           more.needsUpdate = true;
         },
         useDepth(on) {

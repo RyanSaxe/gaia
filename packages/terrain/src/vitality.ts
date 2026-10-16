@@ -8,6 +8,7 @@
 // each owner's vitality is applied afterward (`vitalityOver`), so a change in
 // vitality rewrites a small texture and never rebakes anything.
 
+import { shownVitality } from "@gaia/realize";
 import { type LandSite, nearestSite, warpPoint } from "./land.ts";
 import { type LandOutline, pastTheEdge } from "./edge.ts";
 
@@ -289,9 +290,9 @@ export const GROUND_DECLINE = {
   dry: 0.85,
 } as const;
 
-/** How far ground of vitality `v` has declined: 0 thriving, 1 all it will. */
+/** How far ground of vitality `v` has declined: 0 thriving, 1 all it will. It declines as far as it looks (`shownVitality`), as plants do. */
 export function groundDecline(v: number): number {
-  const t = Math.min(1, Math.max(0, (v - GROUND_DECLINE.to) / (GROUND_DECLINE.from - GROUND_DECLINE.to)));
+  const t = Math.min(1, Math.max(0, (shownVitality(v) - GROUND_DECLINE.to) / (GROUND_DECLINE.from - GROUND_DECLINE.to)));
   return 1 - smooth(t);
 }
 

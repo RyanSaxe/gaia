@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { structure } from "@gaia/kinds";
 import { FLORA_PRIMITIVES, STRUCTURE_PRIMITIVES } from "@gaia/primitives";
-import { STRUCTURE_PRESETS, mergeParts, realize } from "@gaia/realize";
+import { STRUCTURE_PRESETS, mergeParts, realize, shownVitality } from "@gaia/realize";
 import { Library } from "@gaia/schema";
 import { createPlant, createPlantBatch, createSceneLight } from "@gaia/render";
 
@@ -29,7 +29,7 @@ describe("a batch of buildings", () => {
     expect(batch.triangles).toBe(plants.reduce((n, plant) => n + plant.parts.filter((p) => p.swatch !== "smoke").reduce((t, p) => t + p.indices.length / 3, 0), 0));
   });
 
-  it("names each vertex's building and swatch, and holds each building's placement and vitality where its shaders read them", () => {
+  it("names each vertex's building and swatch, and holds each building's placement and how its vitality shows where its shaders read them", () => {
     const owners = new Set<number>();
     for (const m of meshes) {
       const a = m.geometry.getAttribute("aBatch");
@@ -39,13 +39,13 @@ describe("a batch of buildings", () => {
     members.forEach((m, i) => {
       // The fourth column of its matrix is where it stands.
       expect(row(i, 3).slice(0, 3)).toEqual([m.x, m.y, m.z]);
-      expect(row(i, 4)[0]).toBeCloseTo(m.vitality, 6);
+      expect(row(i, 4)[0]).toBeCloseTo(shownVitality(m.vitality), 6);
     });
     // A change in one building's vitality rewrites its texel alone, and no geometry.
     const before = meshes.map((m) => m.geometry.getAttribute("position"));
     batch.setVitality(2, 0.05);
-    expect(row(2, 4)[0]).toBeCloseTo(0.05, 6);
-    expect(row(1, 4)[0]).toBeCloseTo(members[1]?.vitality ?? 0, 6);
+    expect(row(2, 4)[0]).toBeCloseTo(shownVitality(0.05), 6);
+    expect(row(1, 4)[0]).toBeCloseTo(shownVitality(members[1]?.vitality ?? 0), 6);
     expect(meshes.map((m) => m.geometry.getAttribute("position"))).toEqual(before);
   });
 
