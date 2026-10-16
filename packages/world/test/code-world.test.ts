@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { biome, landmark, link, structure, world as worldKind } from "@gaia/kinds";
-import { PRIMITIVES } from "@gaia/primitives";
+import { PALETTE_FAMILIES, PRIMITIVES } from "@gaia/primitives";
 import { type CodeGraph, type CodeFacts, type DefNode, type EntityFacts, type FileFacts, type JevClient, type JevQuestion, type JevRequest, type JevResponse, Library } from "@gaia/schema";
 import { cellUnder, placeAt } from "@gaia/terrain";
 import { type LookSet, type Looks, composeWorld, formsFor, journalOf, judgeWorld, keptJev, landOf, layoutWorld, planStanding, planWorldRequests, rankThings, requestKey, standInJev, validate } from "@gaia/world";
@@ -162,6 +162,39 @@ describe("a world laid out from code", () => {
       expect(dry.has(p.id), p.id).toBe(false);
       expect(wet.has(p.id), p.id).toBe(true);
     }
+  });
+
+  it("colors every building and landmark among its land's native families: the one family a land names, and any when it names none", async () => {
+    /** Composes the world with every land naming `natives` as its own families: what each thing is offered and wears. */
+    const colored = async (natives: readonly string[]): Promise<{ offered: string[][]; worn: string[] }> => {
+      const base = standing();
+      const offered: string[][] = [];
+      const jev: JevClient = {
+        async ask(request) {
+          const q = request.questions["palette.family"];
+          if (q?.type === "choice") offered.push(Object.keys(q.criteria).sort());
+          const r = await base.ask(request);
+          const answers = { ...r.answers };
+          for (const id of Object.keys(request.questions)) {
+            const family = /^natives\.families:(.+)$/.exec(id)?.[1];
+            if (family !== undefined) answers[id] = { type: "noul", noul: natives.includes(family) ? 0.9 : 0.1 };
+          }
+          return { ...r, answers };
+        },
+      };
+      const judged = await composed(facts(), jev);
+      for (const land of Object.values(judged.lands)) expect(land.slots.natives?.params.families).toEqual(natives);
+      return { offered, worn: Object.values(judged.things).map((t) => String(t.blueprint?.slots.palette?.params.family)) };
+    };
+    const two = await colored(["deep-forest", "silver-birch"]);
+    expect(two.offered.length).toBeGreaterThan(0);
+    for (const options of two.offered) expect(options).toEqual(["deep-forest", "silver-birch"]);
+    for (const family of two.worn) expect(["deep-forest", "silver-birch"]).toContain(family);
+    const one = await colored(["teal-gold"]);
+    expect(one.offered).toEqual([]);
+    expect(new Set(one.worn)).toEqual(new Set(["teal-gold"]));
+    const none = await colored([]);
+    for (const options of none.offered) expect(options).toEqual(Object.keys(PALETTE_FAMILIES).sort());
   });
 
   it("asks Jev only about the code's structure, with options it can answer, and the stand-in answers every question from them", async () => {
