@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { type BuildingPlan, Library, type RouteSpec, seedOf } from "@gaia/schema";
+import { type BuildingPlan, type Built, Library, type RouteSpec, seedOf } from "@gaia/schema";
 import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, RELIEF_PRIMITIVES, ROUTE_PRIMITIVES, STRUCTURE_PRIMITIVES } from "@gaia/primitives";
 import { link, structure } from "@gaia/kinds";
 import { STRUCTURE_PRESETS, TRAIL_PRESETS, buildSlots, realize } from "@gaia/realize";
-import { SHORE_CAP, bakeTerrain, heightAt, planTerrain, sampleWorld, siteToWorld, standTile, trailField, trailPlaces } from "@gaia/terrain";
-import { type StandCode, type StandRequest, standWorld } from "./stand.ts";
+import { SHORE_CAP, bakeTerrain, extentOf, heightAt, planTerrain, sampleWorld, siteToWorld, standTile, trailField, trailPlaces, yardsMeet } from "@gaia/terrain";
+import { type StandCode, type StandRequest, blockedBy, standWorld } from "./stand.ts";
 
 const lib = new Library([...RELIEF_PRIMITIVES, ...BIOME_PRIMITIVES]);
 const buildingLib = new Library([...STRUCTURE_PRIMITIVES, ...FLORA_PRIMITIVES]);
@@ -25,6 +25,7 @@ const bytes = (a: ArrayBufferView): Buffer => Buffer.from(a.buffer, a.byteOffset
 const baked = bakeTerrain(sampleWorld(), lib);
 const pristine = structuredClone(baked);
 const forTiles = structuredClone(baked);
+const forOneLot = structuredClone(baked);
 
 describe("standing a world's things on a bake", () => {
   it("stands the same things whether the bake crossed to another thread or not, leveling the pads first", () => {
@@ -97,6 +98,28 @@ describe("standing a world's things on a bake", () => {
     expect(stood.placements).toEqual([sym]);
     expect(stood.network.trails.length).toBeGreaterThan(0);
     for (const tr of stood.network.trails) expect(["packages/a->packages/b", "packages/a->packages/c"]).toContain(tr.id);
+  });
+
+  it("stands buildings and a landmark laid out on one lot each on ground of its own, as a crowded file's definitions are", () => {
+    const buildings = STRUCTURE_PRESETS.slice(0, 3).map((p, i) => {
+      const built = realize(p.blueprint, structure, buildingLib, { seed: seedOf(`crowded-${i}`), facts: { size: 1, floors: 1 } });
+      return { name: `crowded-${i}`, plan: built.slots.get("footprint")?.output as BuildingPlan, beside: extentOf(built.slots.get("feature")?.output as Built | undefined) };
+    });
+    // One middle for all four, with the lots the layout gives a building and a landmark.
+    const code: StandCode = {
+      lots: buildings.map((b) => ({ id: b.name, x: -40, z: 30, radius: 5.4 })),
+      landmarks: [{ landmark: 0, lot: { id: "tower", x: -40, z: 30, radius: 4.2 } }],
+      patches: [],
+      cells: [],
+      symbols: [],
+      trails: [],
+    };
+    const stood = standWorld(forOneLot, { ...request, buildings, code });
+    const pads = stood.edits.pads;
+    pads.forEach((a, i) => pads.forEach((b, k) => expect(k > i && yardsMeet(a, b), `${i} and ${k}`).toBe(false)));
+    const [tower] = stood.landmarks;
+    expect(tower).toBeDefined();
+    buildings.forEach((b, k) => expect(blockedBy(b, stood.sites[k]!, tower!.site.x, tower!.site.z, request.landmarks[0]!.base), b.name).toBe(false));
   });
 
   // Bakes and levels every 64-sample tile of the land, and the land twice more at coarser strides: two seconds alone,

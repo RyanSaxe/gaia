@@ -228,6 +228,13 @@ export function blockedBy(b: { readonly plan: BuildingPlan; readonly beside: Ext
   return inHouse || (e !== null && lx > e.x0 - margin && lx < e.x1 + margin && lz > e.z0 - margin && lz < e.z1 + margin);
 }
 
+/** How far a building's walls and what stands beside it reach from its middle, meters. */
+function reachOf(b: { readonly plan: BuildingPlan; readonly beside: Extent | null }): number {
+  const house = Math.hypot(b.plan.width, b.plan.depth) / 2;
+  const e = b.beside;
+  return e === null ? house : Math.max(house, Math.hypot(Math.max(-e.x0, e.x1), Math.max(-e.z0, e.z1)));
+}
+
 /** Ground under a building, along its walk and under what stands beside it, where nothing grows. */
 export function buildingClearings(b: { readonly plan: BuildingPlan; readonly beside: Extent | null }, site: BuildingSite): Capsule[] {
   const out = clearingsOf(b.plan, site);
@@ -328,7 +335,7 @@ function settleWays(t: Terrain, req: StandRequest, sites: readonly BuildingSite[
  */
 function settleCode(t: Terrain, req: StandRequest, code: StandCode, sites: readonly BuildingSite[]): { landmarks: StandingLandmark[]; network: TrailNetwork; ways: WayEdit[] } {
   const homes = req.buildings.map((b, i) => ({ ...b, site: sites[i] as BuildingSite, id: code.lots[i]?.id ?? b.name }));
-  const avoid: Occupied[] = homes.map((b) => ({ x: b.site.x, z: b.site.z, radius: Math.hypot(b.plan.width, b.plan.depth) / 2 + 2 }));
+  const avoid: Occupied[] = homes.map((b) => ({ x: b.site.x, z: b.site.z, radius: reachOf(b) + 2 }));
   const landmarks: StandingLandmark[] = [];
   const ids: string[] = [];
   for (const { landmark, lot } of code.landmarks) {
@@ -404,10 +411,10 @@ export function standWorld(t: Terrain, req: StandRequest): Stand {
   const dry: string[] = [];
   req.buildings.forEach((b, i) => {
     const lot = code?.lots[i] ?? null;
-    let site: BuildingSite = findSite(t, b.plan, sites, 30, b.beside, lot);
+    let site: BuildingSite = findSite(t, b.plan, sites, 30, b.beside, lot, pads);
     // A building whose wheel needs running water stands on the bank of its own area's stream.
     if (b.wheel !== undefined && b.wheel !== null && b.beside !== null) {
-      const bank = findBankSite(t, b.plan, b.beside, b.wheel, regionAt(t.spec, lot?.x ?? site.x, lot?.z ?? site.z), sites, lot);
+      const bank = findBankSite(t, b.plan, b.beside, b.wheel, regionAt(t.spec, lot?.x ?? site.x, lot?.z ?? site.z), sites, lot, pads);
       if (bank === null) dry.push(b.name);
       else site = bank;
     }
