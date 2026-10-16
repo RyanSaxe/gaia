@@ -5,26 +5,17 @@
 // Jev, and its answer is kept. One Jev cannot answer, once the engine's
 // client has retried it, or answers outside the options it was given, fails
 // the world, saying which request and why: nothing guesses an answer in its
-// place. The stand-in judges a world only when a developer asks for it.
+// place.
 
 import { type JevAnswer, type JevClient, type JevRequest, type JevResponse, contentHash } from "@gaia/schema";
 import type { WorldRequest } from "./code-world.ts";
 
-/** Who judged a thing: Jev (now, or earlier from the store), or the deterministic stand-in a developer asked for. */
-export type Judge = "jev" | "stand-in";
-
 /** A request's key in the store: the hash of the whole request, so changed facts make a new key. */
 export const requestKey = (request: JevRequest): string => contentHash(request);
-
-/** The thing a planned request is about, such as "file:src/main.ts" or "entity:packages/world". */
-export const judgedThing = (r: Pick<WorldRequest, "about" | "target">): string => `${r.about}:${r.target}`;
 
 /** The area (a directory's path, "" for the repository's root) whose land a planned request's thing stands on: a file's directory, an area or entity itself, the root for the world. */
 export const areaOfRequest = (r: Pick<WorldRequest, "about" | "target">): string =>
   r.about === "file" ? (r.target.includes("/") ? r.target.slice(0, r.target.lastIndexOf("/")) : "") : r.about === "world" ? "" : r.target;
-
-/** Every thing a planned request judges: itself, or each thing a shared request carries. */
-export const thingsOf = (r: WorldRequest): readonly Pick<WorldRequest, "about" | "target">[] => r.carries ?? [r];
 
 export interface Keeping {
   /** Jev's earlier answers, by request key. */

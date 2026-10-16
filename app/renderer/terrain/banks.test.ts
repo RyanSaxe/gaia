@@ -44,8 +44,8 @@ describe("Gaia's world and the proving ground, stood as the lab stands them", ()
   let worlds: { root: string; code: CodeLab; t: Terrain; buildings: StandBuilding[]; land: Terrain; stood: Stand; landmarks: StandLandmark[] }[] = [];
   // Bakes and stands both worlds whole: about forty seconds alone, more when other work shares the machine.
   beforeAll(async () => {
-    const { world, judges, summary } = await laySnapshot("jev", "a test");
-    worlds = [{ root: "gaia", facts: snapshotFacts(), world, judges, summary, judged: {} }, provingWorld()].map((doc) => {
+    const { world, summary } = await laySnapshot("a test");
+    worlds = [{ root: "gaia", facts: snapshotFacts(), world, summary, judged: {} }, provingWorld()].map((doc) => {
       const code = codeLab(doc as never);
       const t = bakeTerrain(code.spec, new Library([...RELIEF_PRIMITIVES, ...BIOME_PRIMITIVES]));
       const buildings = buildingsOf(code);

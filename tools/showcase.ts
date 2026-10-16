@@ -43,7 +43,7 @@ import { dirname, join, relative, resolve } from "node:path";
 import { createInterface } from "node:readline";
 import { parseArgs } from "node:util";
 import type { CodeGraph, JevResponse } from "@gaia/schema";
-import { DEFAULT_DESIGN, composeWorld, factsOf, judgeWorld, keptJev, landOf, layoutWorld, planStanding, planWorldRequests, requestKey } from "@gaia/world";
+import { composeWorld, factsOf, judgeWorld, keptJev, landOf, layoutWorld, planStanding, planWorldRequests, requestKey } from "@gaia/world";
 import { LOOKS } from "../app/renderer/terrain/looks.ts";
 import { folioFiles } from "../app/renderer/terrain/showcase-code.ts";
 import { createEngineClient } from "../app/world-service/engine-client.ts";
@@ -91,11 +91,10 @@ writeCode(folio);
 
 /** The answers the page lays folio out from, by request key, as `pnpm jev-world` keeps Gaia's. */
 interface Kept {
-  readonly design: string;
   readonly answers: Record<string, JevResponse>;
 }
 const keptFile = resolve(fixtures, `${variant}-jev.json`);
-const kept: Kept = existsSync(keptFile) ? (JSON.parse(readFileSync(keptFile, "utf8")) as Kept) : { design: DEFAULT_DESIGN, answers: {} };
+const kept: Kept = existsSync(keptFile) ? (JSON.parse(readFileSync(keptFile, "utf8")) as Kept) : { answers: {} };
 
 const standIn = judge === "local" ? await startOpenRouterStandIn({ delayMs: 0 }) : undefined;
 execFileSync("cargo", ["build", "-p", "gaia-engine", "--release", "--quiet"], { cwd: repo, env: { ...process.env, PATH: `${process.env.HOME}/.cargo/bin:${process.env.PATH}` }, stdio: "inherit" });
@@ -136,7 +135,7 @@ try {
   const understanding = await client.call("understanding.plan", { root: folio });
   const graph0 = judgedGraph(first);
   const facts0 = factsOf(graph0);
-  const looks = [...planWorldRequests(facts0, LOOKS, { graph: graph0 }), ...planStanding(facts0, LOOKS, { graph: graph0 }).requests].filter((p) => kept.answers[requestKey(p.request)] === undefined);
+  const looks = [...planWorldRequests(facts0, LOOKS), ...planStanding(facts0, LOOKS, { graph: graph0 }).requests].filter((p) => kept.answers[requestKey(p.request)] === undefined);
   const judging = await client.call("jev.estimate", { requests: looks.map((p) => p.request) });
   const estimate = understanding.estimate.estimatedUsd + judging.estimatedUsd;
   console.error(`showcase: about ${understanding.estimate.requests + judging.requests} requests before composing, about $${estimate.toFixed(4)}`);
@@ -155,7 +154,7 @@ try {
   const used: Record<string, JevResponse> = {};
   const facts = factsOf(snapshot);
   const jev = keptJev(null, { stored, keep: () => undefined, settled: (key) => (used[key] = stored.get(key) as JevResponse), unasked: "the run's answers do not cover it" });
-  const world = layoutWorld(facts, await composeWorld(facts, LOOKS, jev, await judgeWorld(facts, LOOKS, jev, { graph: snapshot }), { graph: snapshot }), snapshot);
+  const world = layoutWorld(facts, await composeWorld(facts, LOOKS, jev, await judgeWorld(facts, LOOKS, jev), { graph: snapshot }), snapshot);
   writeFileSync(resolve(fixtures, `${variant}-graph.json`), `${JSON.stringify(snapshot)}\n`);
   writeFileSync(resolve(fixtures, `${variant}-judged.json`), `${JSON.stringify(judgedThings(read))}\n`);
   // The two variants must lay out the same land, to the cell: only how well v1 is written, and so each patch's
@@ -171,7 +170,7 @@ try {
     console.error(`showcase: the land ${same ? "is identical to" : "DIFFERS from"} the other v1's`);
     if (!same) process.exitCode = 1;
   }
-  writeFileSync(keptFile, `${JSON.stringify({ design: DEFAULT_DESIGN, answers: Object.fromEntries(Object.entries(used).sort(([a], [b]) => (a < b ? -1 : 1))) }, null, 1)}\n`);
+  writeFileSync(keptFile, `${JSON.stringify({ answers: Object.fromEntries(Object.entries(used).sort(([a], [b]) => (a < b ? -1 : 1))) }, null, 1)}\n`);
   const after = await billed(project);
   console.log(
     JSON.stringify({

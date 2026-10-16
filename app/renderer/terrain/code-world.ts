@@ -8,8 +8,7 @@
 // out the engine's graph of this repository (`fixtures/gaia-graph.json`,
 // written by `pnpm graph-snapshot`), judged by Jev's answers kept for it
 // (`fixtures/gaia-jev.json`, written by `pnpm jev-world`) alone, failing on a
-// request with no kept answer; a developer's `?judge=stand-in` has the
-// stand-in judge it instead. Everything else follows from the code:
+// request with no kept answer. Everything else follows from the code:
 // each directory's area and land, each file's patch, and what each entity,
 // file and definition stands as: flowers, a stone, a bush, a tree, or a
 // building or a landmark Jev composed, and the trails between the entities.
@@ -18,7 +17,7 @@ import { type Blueprint, type CodeFacts, type EntityFacts, type FileFacts, type 
 import { link } from "@gaia/kinds";
 import { buildSlots } from "@gaia/realize";
 import { type StoodSpot, type WorldSpec, outlinesOf } from "@gaia/terrain";
-import { type CodeWorld, type Judge, type Judgments, layoutWorld } from "@gaia/world";
+import { type CodeWorld, type Judgments, layoutWorld } from "@gaia/world";
 import type { ConsentPlan, JudgedThing, Opening, StartChoice, StartOffer, WorldDocument } from "../../world-service/protocol.ts";
 import { type WorldService, worldService } from "../service.ts";
 import GAIA_PAINTING from "../start/gaia-painting.webp";
@@ -60,8 +59,8 @@ export interface CodeLab {
   readonly files: ReadonlyMap<string, FileFacts>;
   /** What each building stands for (an entity, a file or a definition), with the building Jev composed, in the order the stand sites them. */
   readonly buildings: readonly BuildingOf[];
-  /** What each landmark stands for: the landmark Jev composed for it, its numbers, what its page says and who judged it, in the order the stand sites them. */
-  readonly landmarks: readonly { readonly path: string; readonly blueprint: Blueprint; readonly facts: ThingFacts; readonly vitality: number; readonly represented: Represented; readonly judged: Judged }[];
+  /** What each landmark stands for: the landmark Jev composed for it, its numbers and what its page says, in the order the stand sites them. */
+  readonly landmarks: readonly { readonly path: string; readonly blueprint: Blueprint; readonly facts: ThingFacts; readonly vitality: number; readonly represented: Represented }[];
   /**
    * What each of `stand.symbols` stands for, by its index: a definition (as `world.symbols` holds them, in order),
    * then each file and entity standing as flowers, a stone, a bush or a tree (`world.standing`).
@@ -71,8 +70,6 @@ export interface CodeLab {
   readonly sky: Blueprint;
   /** What the bake thread needs to stand this world's things, given the request's trail styles. */
   readonly stand: StandCode;
-  /** Who judged a thing, by `judgedThing` ("file:src/main.ts", "entity:packages/world"). */
-  readonly judgeOf: (thing: string) => Judge;
   /** What the understanding pass judged about a folder, a file or a definition, by its path or path#name. */
   readonly thing: (of: string) => JudgedThing | undefined;
   /** How the judging went, in words. */
@@ -147,9 +144,6 @@ function serviceWorld(service: WorldService, veil: Veil): Promise<{ readonly doc
   });
 }
 
-/** Who judges a page with no engine: Jev's kept answers, unless a developer asks for the stand-in (`?judge=stand-in`). */
-const SNAPSHOT_JUDGE = typeof location === "undefined" || new URLSearchParams(location.search).get("judge") !== "stand-in" ? "jev" : "stand-in";
-
 /** What the understanding pass judged about each snapshot's things, for the journal. */
 const SNAPSHOT_JUDGED: Readonly<Record<Snapshot, unknown>> = { gaia: gaiaJudged, showcase: showcaseJudged, "showcase-fixed": showcaseFixedJudged };
 
@@ -169,7 +163,7 @@ function snapshotWorld(why: string, of: Snapshot = "gaia"): Promise<WorldDocumen
       else resolve({ root: facts.repository.name, facts, judged: SNAPSHOT_JUDGED[of] as Record<string, JudgedThing>, ...reply });
     };
     worker.onerror = (e) => reject(failed(e.message));
-    worker.postMessage({ judge: SNAPSHOT_JUDGE, why, of } satisfies LayoutRequest);
+    worker.postMessage({ why, of } satisfies LayoutRequest);
   }).finally(() => worker.terminate());
 }
 
@@ -183,7 +177,7 @@ export function provingWorld(): WorldDocument {
   const facts = proving as unknown as CodeFacts;
   // The proving ground keeps a square, so everything its tests look for stands where they look.
   const world = layoutWorld(facts, provingJudged as unknown as Judgments, undefined, 1);
-  return { root: facts.repository.name, facts, world, judges: {}, summary: "The proving ground: every choice fixed so each feature shows", judged: {} };
+  return { root: facts.repository.name, facts, world, summary: "The proving ground: every choice fixed so each feature shows", judged: {} };
 }
 
 /** Whether the page asks for the proving ground (`?world=proving`), which opens with or without an engine. */
@@ -259,18 +253,11 @@ function routeOf(trail: { readonly from: string; readonly to: string; readonly r
   return buildSlots(trail.route, link, COMPOSING.lib, { seed: 1, facts: {} }).get("route")?.output as RouteSpec;
 }
 
-/** Who judged a thing's form: the request it was asked in, by what it was about. */
-export interface Judged {
-  readonly about: "file" | "entity";
-  readonly target: string;
-}
-
-/** What one of the stand's symbols stands for: its page, its file (none for an entity's), its form and who judged it. */
+/** What one of the stand's symbols stands for: its page, its file (none for an entity's) and its form. */
 export interface StandingOf {
   readonly represented: Represented;
   readonly file?: string;
   readonly form: string;
-  readonly judged: Judged;
 }
 
 /** A file's page, when the file stands as a thing of its own. */
@@ -286,24 +273,24 @@ const representStanding = (s: CodeWorld["standing"][number], files: ReadonlyMap<
 };
 
 /** The numbers a building or a landmark is built from, and its page, for whatever it stands for. */
-function thingOf(t: CodeWorld["things"][number], world: CodeWorld, files: ReadonlyMap<string, FileFacts>, entities: ReadonlyMap<string, EntityFacts>): { facts: ThingFacts; represented: Represented; judged: Judged } {
+function thingOf(t: CodeWorld["things"][number], world: CodeWorld, files: ReadonlyMap<string, FileFacts>, entities: ReadonlyMap<string, EntityFacts>): { facts: ThingFacts; represented: Represented } {
   const of = t.of ?? "entity";
   if (of === "entity") {
     const e = entities.get(t.path);
     if (e === undefined) throw new Error(`${t.path || "The repository's root"} stands as an entity but is not one.`);
-    return { facts: e, represented: representEntity(e, t.vitality), judged: { about: "entity", target: t.path } };
+    return { facts: e, represented: representEntity(e, t.vitality) };
   }
   const file = files.get(t.file ?? "");
   if (file === undefined) throw new Error(`${t.path} stands on ${t.file ?? "no file"}, which is not among the world's files.`);
   const facts: ThingFacts = t.facts ?? { path: t.path, name: t.name, lines: file.lines, exports: 0, dependents: [] };
-  if (of === "file") return { facts, represented: representFile(file, t.vitality), judged: { about: "file", target: file.path } };
+  if (of === "file") return { facts, represented: representFile(file, t.vitality) };
   const sym = world.symbols.find((s) => s.id === t.path);
   if (sym === undefined) throw new Error(`${t.path} stands as a definition but is not one.`);
-  return { facts, represented: representSymbol(sym, file), judged: { about: "file", target: file.path } };
+  return { facts, represented: representSymbol(sym, file) };
 }
 
 /** Everything the terrain lab needs to bake and furnish a world document. */
-export function codeLab({ facts, world, judges, summary, judged }: WorldDocument): CodeLab {
+export function codeLab({ facts, world, summary, judged }: WorldDocument): CodeLab {
   // A world Jev composed no sky or land for is a fault, never a default.
   const sky = world.sky;
   if (sky === undefined) throw new Error(`${world.name} has no sky: Jev composes every world's light, sky and wind.`);
@@ -333,11 +320,11 @@ export function codeLab({ facts, world, judges, summary, judged }: WorldDocument
     const sym = world.symbols[i];
     if (sym !== undefined) {
       const file = files.get(sym.file);
-      return file === undefined ? undefined : { represented: representSymbol(sym, file), file: sym.file, form: sym.form, judged: { about: "file", target: sym.file } };
+      return file === undefined ? undefined : { represented: representSymbol(sym, file), file: sym.file, form: sym.form };
     }
     const own = world.standing[i - world.symbols.length];
     if (own === undefined) return undefined;
-    return { represented: representStanding(own, files, entities), ...(own.file === undefined ? {} : { file: own.file }), form: own.form, judged: { about: own.of, target: own.path } };
+    return { represented: representStanding(own, files, entities), ...(own.file === undefined ? {} : { file: own.file }), form: own.form };
   };
   return {
     world,
@@ -376,7 +363,6 @@ export function codeLab({ facts, world, judges, summary, judged }: WorldDocument
       // Each trail keeps the width, wear, edging, winding and crossing Jev composed for it.
       trails: world.trails.map((t) => ({ from: t.from, to: t.to, want: (t.spans === true ? 1 : 0) + t.want, style: routeOf(t) })),
     },
-    judgeOf: (thing) => judges[thing] ?? "stand-in",
     summary,
   };
 }

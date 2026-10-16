@@ -8,38 +8,24 @@ const files = (): string[] =>
     .sort();
 
 describe("Gaia's own world from the bundled snapshot", () => {
-  // The snapshot is laid out whole, judged and all: about two seconds alone, longer while other work shares the machine.
-  it("walks trails between its entities, and stands every file of the graph on its land, under the stand-in a developer asks for", { timeout: 60_000 }, async () => {
-    const { world } = await laySnapshot("stand-in", "a test");
+  // A page with no engine asks Jev nothing, so the snapshot stands on the answers `pnpm jev-world` keeps. The snapshot
+  // is laid out whole, judged and all: about two seconds alone, longer while other work shares the machine.
+  it("lays out whole on Jev's kept answers alone, with its trails and every file of the graph on its land", { timeout: 60_000 }, async () => {
+    const { world, summary } = await laySnapshot("a test");
     expect(world.trails.length).toBeGreaterThan(0);
     expect(world.patches.map((p) => p.path).sort()).toEqual(files());
-  });
-
-  // A page with no engine asks Jev nothing, so the snapshot stands on the answers `pnpm jev-world` keeps, or not at
-  // all: whole, with its trails and every file, or failing on the first request with no kept answer, naming it.
-  it("on Jev's kept answers alone, lays out whole with its trails and every file, or fails naming a request with no kept answer, never guessing", { timeout: 60_000 }, async () => {
-    const laid = await laySnapshot("jev", "a test").then(
-      (r) => r,
-      (e: Error) => e,
-    );
-    if (laid instanceof Error) {
-      expect(laid.message).toMatch(/^Gaia could not finish .+: there is no answer kept for it, .*pnpm jev-world/);
-      return;
-    }
-    expect(laid.world.trails.length).toBeGreaterThan(0);
-    expect(laid.world.patches.map((p) => p.path).sort()).toEqual(files());
-    expect(new Set(Object.values(laid.judges))).toEqual(new Set(["jev"]));
+    expect(summary).toContain("judged by Jev");
   });
 
   // The showcase, folio, opens from its snapshot wherever the page runs, with its old v1 as it is or fixed, so each must lay out on its kept answers alone.
   it.each(["showcase", "showcase-fixed"] as const)("lays %s out on Jev's kept answers alone, with its trails and every file of its graph", { timeout: 60_000 }, async (of) => {
-    const { world, judges } = await laySnapshot("jev", "a test", of);
+    const { world, summary } = await laySnapshot("a test", of);
     expect(world.trails.length).toBeGreaterThan(0);
     expect(world.patches.map((p) => p.path).sort()).toEqual(
       snapshotGraphOf(of)
         .nodes.flatMap((n) => (n.kind === "file" ? [n.path] : []))
         .sort(),
     );
-    expect(new Set(Object.values(judges))).toEqual(new Set(["jev"]));
+    expect(summary).toContain("judged by Jev");
   });
 });

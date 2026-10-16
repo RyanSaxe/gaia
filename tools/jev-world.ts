@@ -15,7 +15,7 @@
 // the reported cost past --spend-up-to is not sent, and the run stops there,
 // keeping what was answered.
 //
-// Usage: pnpm jev-world [--judge jev|local] [--design judged] [--limit 5]
+// Usage: pnpm jev-world [--judge jev|local] [--limit 5]
 //          [--spend-up-to 0.05] [--out fixtures/gaia-jev.json] [--ledger ledger.jsonl]
 //          [--graph gaia-graph.json]
 
@@ -24,7 +24,7 @@ import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs
 import { resolve } from "node:path";
 import { createInterface } from "node:readline";
 import type { CodeGraph, EngineClient, JevClient, JevResponse } from "@gaia/schema";
-import { DEFAULT_DESIGN, DESIGNS, type DesignName, composeWorld, factsOf, judgeWorld, keptJev, planStanding, planWorldRequests, requestKey } from "@gaia/world";
+import { composeWorld, factsOf, judgeWorld, keptJev, planStanding, planWorldRequests, requestKey } from "@gaia/world";
 import { createEngineClient } from "../app/world-service/engine-client.ts";
 import { engineJev } from "../app/world-service/jev.ts";
 import { LOOKS } from "../app/renderer/terrain/looks.ts";
@@ -36,8 +36,6 @@ const flag = (name: string, fallback: string): string => {
   return i < 0 ? fallback : (process.argv[i + 1] ?? fallback);
 };
 const judge = flag("judge", "local");
-const design = flag("design", DEFAULT_DESIGN) as DesignName;
-if (!(design in DESIGNS)) throw new Error(`Unknown design ${design}; choose from ${Object.keys(DESIGNS).join(", ")}.`);
 const limit = Number(flag("limit", "Infinity"));
 const allowed = Number(flag("spend-up-to", "0"));
 const out = resolve(flag("out", resolve(repo, "app/renderer/terrain/fixtures/gaia-jev.json")));
@@ -47,11 +45,9 @@ const facts = factsOf(graph);
 
 /** The kept answers: what the app's `answers` table holds for a project, by request key. */
 interface Kept {
-  readonly design: DesignName;
   readonly answers: Record<string, JevResponse>;
 }
-const kept: Kept = existsSync(out) ? (JSON.parse(readFileSync(out, "utf8")) as Kept) : { design, answers: {} };
-if (kept.design !== design) throw new Error(`${out} keeps answers for the ${kept.design} design, not ${design}.`);
+const kept: Kept = existsSync(out) ? (JSON.parse(readFileSync(out, "utf8")) as Kept) : { answers: {} };
 
 let engine: ChildProcess | undefined;
 let closeStandIn: (() => Promise<void>) | undefined;
@@ -75,10 +71,8 @@ const status = await client.call("jev.status", {});
 if (!status.live || !status.key) throw new Error("Jev needs GAIA_JEV=live and the gaia-openrouter key in the Keychain.");
 
 // What this run would send: the requests not kept yet, at most --limit of them, the looks' and what every thing
-// stands as. A design that carries character plans its lower waves from the answers above, so the estimate covers its
-// first wave's shape.
-const standing = DESIGNS[design].questions === "judged" ? planStanding(facts, LOOKS, { graph }).requests : [];
-const missing = [...planWorldRequests(facts, LOOKS, { design, graph }), ...standing].filter((p) => kept.answers[requestKey(p.request)] === undefined);
+// stands as.
+const missing = [...planWorldRequests(facts, LOOKS), ...planStanding(facts, LOOKS, { graph }).requests].filter((p) => kept.answers[requestKey(p.request)] === undefined);
 const toSend = missing.slice(0, limit);
 const estimate = await client.call("jev.estimate", { requests: toSend.map((p) => p.request) });
 const ceiling = estimate.estimatedUsd * 2;
@@ -118,7 +112,7 @@ const jev = keptJev(guarded, {
   settled: (key) => asked.add(key),
 });
 try {
-  await composeWorld(facts, LOOKS, jev, await judgeWorld(facts, LOOKS, jev, { design, graph }), { graph, design, concurrency: estimate.concurrency });
+  await composeWorld(facts, LOOKS, jev, await judgeWorld(facts, LOOKS, jev), { graph, concurrency: estimate.concurrency });
 } catch (error) {
   stopped = (error as Error).message;
 } finally {
@@ -128,13 +122,13 @@ try {
 // Once a whole run has asked every request, answers to requests the world no longer makes (its questions or options
 // changed) are dropped.
 if (stopped === undefined) for (const key of Object.keys(kept.answers)) if (!asked.has(key)) delete kept.answers[key];
-writeFileSync(out, `${JSON.stringify(kept, null, 1)}\n`);
+writeFileSync(out, `${JSON.stringify({ answers: kept.answers }, null, 1)}\n`);
 
 ms.sort((a, b) => a - b);
 const at = (q: number): number => ms[Math.min(ms.length - 1, Math.floor(q * ms.length))] ?? 0;
 const summary = {
   time: new Date().toISOString(),
-  what: `jev-world ${design} (${judge})`,
+  what: `jev-world (${judge})`,
   requests: sent,
   stopped: stopped ?? null,
   inputTokens: tokens,

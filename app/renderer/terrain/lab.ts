@@ -50,7 +50,7 @@ import { takeWait } from "../wait/wait.ts";
 import { withStart } from "../start/start.ts";
 import { START_SKY } from "../start/table-scene.ts";
 import type { Represented } from "./represent.ts";
-import { type CodeWorld, type Judge, groundVitality, judgedThing } from "@gaia/world";
+import { type CodeWorld, groundVitality } from "@gaia/world";
 import { type CodeLab, codeWorld } from "./code-world.ts";
 import type { JudgedThing } from "../../world-service/protocol.ts";
 import { type Building, composedName, createSettlement, settlementBuilds } from "./settlement.ts";
@@ -128,8 +128,6 @@ interface Subject {
   readonly represented: Represented;
   /** Its form in the world, such as "a watermill". */
   readonly standsAs: string;
-  /** In a codebase's world, who judged its look: Jev or the stand-in. */
-  readonly judge?: Judge;
   /** Where it stands, and where a person stops to read its sign; a tree's spot depends on where they come from. */
   readonly x: number;
   readonly z: number;
@@ -262,11 +260,10 @@ export interface Heading {
   readonly name: string;
 }
 
-/** What a person walked up to: what it stands for, its form in the world (such as "A watermill") and who judged it. */
+/** What a person walked up to: what it stands for, and its form in the world, such as "A watermill". */
 export interface CardThing {
   readonly represented: Represented;
   readonly standsAs: string;
-  readonly judge?: Judge;
 }
 
 /** Where a person lands and which way they look (radians, 0 looking toward -z). */
@@ -1021,11 +1018,9 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
    * tree standing for a file, which names the file.
    */
   function placeSigns(): void {
-    const judged = (about: "file" | "entity", target: string): { judge?: Judge } => (code === null ? {} : { judge: code.judgeOf(judgedThing({ about, target })) });
     const buildingSubjects: Subject[] = settlement.buildings.map((b) => ({
       represented: b.represented,
       standsAs: withArticle(b.kindName),
-      ...judged(b.entity.judged?.about ?? "entity", b.entity.judged?.target ?? b.represented.id),
       x: b.site.x,
       z: b.site.z,
       stand: () => settlement.standOf(b),
@@ -1044,7 +1039,6 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
           return [{
             represented: thing.represented,
             standsAs: withArticle(lm.name),
-            ...judged(thing.judged.about, thing.judged.target),
             x,
             z,
             height: landmarkViews[i]?.height ?? 6,
@@ -1064,8 +1058,6 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       return {
         represented: tree.represented,
         standsAs: sym === undefined ? "A tree" : withArticle(sym.form),
-        // A definition's form is judged with its file, a file's in its own request and an entity's in its own.
-        ...judged(sym?.judged.about ?? "file", sym?.judged.target ?? tree.represented.id),
         x,
         z,
         height: (variants[tree.variant] as TreeVariant).height * tree.scale,
@@ -1091,8 +1083,6 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
           return [[at, {
             represented: sym.represented,
             standsAs: withArticle(sym.form),
-            // A definition's form is judged with its file, a file's in its own request and an entity's in its own.
-            ...judged(sym.judged.about, sym.judged.target),
             x,
             z,
             height: (understory.footprint(p.rule, p.variant)?.top ?? 0.8) * p.scale,
@@ -1142,7 +1132,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   let cardAt: { x: number; z: number } | null = null;
   const cardListeners: ((thing: CardThing | null) => void)[] = [];
   function showCard(s: Subject): void {
-    for (const l of cardListeners) l({ represented: s.represented, standsAs: s.standsAs, ...(s.judge === undefined ? {} : { judge: s.judge }) });
+    for (const l of cardListeners) l({ represented: s.represented, standsAs: s.standsAs });
     shown = s.represented;
     cardAt = { x: walker.x, z: walker.z };
   }
@@ -2699,7 +2689,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
         const s = subjects[i];
         if (s !== undefined) approach(s);
       },
-      subjects: () => subjects.map((s) => ({ name: s.represented.name, standsAs: s.standsAs, judge: s.judge, x: s.x, z: s.z, height: s.height, vitality: s.represented.vitality })),
+      subjects: () => subjects.map((s) => ({ name: s.represented.name, standsAs: s.standsAs, x: s.x, z: s.z, height: s.height, vitality: s.represented.vitality })),
       card: () => (shown === null ? null : { name: shown.name, what: shown.what }),
       closeCard: () => hideCard(),
       walk: (x: number, z: number, yawDeg: number, pitchDeg = -3) => walkTo(x, z, (yawDeg * Math.PI) / 180, (pitchDeg * Math.PI) / 180),

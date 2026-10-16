@@ -39,7 +39,6 @@ You need Node 26, pnpm 10 and a stable Rust toolchain from rustup (put
 | --- | --- |
 | `pnpm install` | Installs dependencies and points git at `.githooks/` |
 | `GAIA_JEV=live pnpm dev` | Builds the engine and opens the app on the start page, with Jev judging through the Keychain's key (`docs/connect-jev.md`); `GAIA_PROJECT=/path` opens that folder's world, `GAIA_PROJECT=proving` the proving ground and `GAIA_PROJECT=showcase` the showcase (`showcase-fixed` with its old `v1/` fixed). Without `GAIA_JEV=live`, a world that needs Jev fails to open and says why |
-| `GAIA_JEV=stand-in pnpm dev` | For development only: opens a world the stand-in judges on purpose, sending nothing to Jev. Never on by default, never shown to a person |
 | `pnpm lab:html out.html` | The lab as one offline page, on Gaia's own world with Jev's kept answers |
 | `pnpm lab:serve` | That page on this Mac's Tailscale address, port 5180, rebuilt on every change |
 | `pnpm shots [word...]` | Photographs every kind of thing the proving ground stands, where it stands, at vitality 1, 0.5 and 0.1 by day and 1 at night, into `shots/`; with words, only the stops whose names hold one; fails when the page reports a WebGL error |
@@ -50,11 +49,11 @@ You need Node 26, pnpm 10 and a stable Rust toolchain from rustup (put
 | `pnpm showcase --code DIR` | Writes the showcase's codebase, folio, the world the film is walked through (`docs/showcase.md`) |
 | `GAIA_JEV=live GAIA_DATA_DIR=dir pnpm showcase --judge jev --spend-up-to 0.4` | Opens folio as the app opens a folder, has Jev judge it, and rewrites the showcase's snapshot and kept answers; `--v1 fixed` judges it with its old `v1/` fixed (in a store of its own), `--judge local` asks the OpenRouter stand-in instead |
 | `pnpm probe` | Measures both worlds in Electron: frame time, triangles by kind and pass, the walk test and smoothness |
-| `pnpm jev-world`, `pnpm compare-jev`, `pnpm print-world-requests` | Jev's kept answers for the snapshot, request designs compared, and every request printed |
+| `pnpm jev-world`, `pnpm print-world-requests` | Jev's kept answers for the snapshot, and every request printed |
 
 The lab page shows only the world. It takes `?hour=22`, `?world=proving`,
-`?world=showcase`, `?world=showcase-fixed`, `?judge=stand-in` and `?start` (the start's map table)
-(`?judge=stand-in` is for development only: the page otherwise runs on Jev's kept answers alone, and a request with no kept answer fails it, naming the request). Scripts drive it through `window.__lab`:
+`?world=showcase`, `?world=showcase-fixed` and `?start` (the start's map table).
+It runs on Jev's kept answers alone, and a request with no kept answer fails it, naming the request. Scripts drive it through `window.__lab`:
 `open("immersive")`, `hour(h)`, `frames(n)`, `stats()`, and the world's
 hooks, such as `__lab.terrain.walk(x, z, yawDeg, pitchDeg)`,
 `__lab.terrain.calls()`, `__lab.terrain.overview(pos, target)` for a capture
