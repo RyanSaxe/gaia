@@ -6,7 +6,7 @@ import { type Judgments, LAYOUT, type LotPlace, layoutWorld } from "@gaia/world"
 import proving from "../terrain/fixtures/proving.json";
 import provingJudged from "../terrain/fixtures/proving-judged.json";
 import { type Box, type Measure, type NameLand, type NamePlaces, nameLand, nameTails, placeNames } from "./map-names.ts";
-import { contourLines, slopes } from "./isolines.ts";
+import { chained, contourLines, isoline, simplified, slopes } from "./isolines.ts";
 import { MAP_STYLE, healthColor, healthField, landWash } from "./map-styles.ts";
 import { MARK_REACH, markScale } from "./marks.ts";
 import { INK, RIM, levelsFor, reliefAt } from "./wild-ink.ts";
@@ -145,6 +145,24 @@ describe("contours on steep ground", () => {
       }
     }
     expect(pieces).toBeGreaterThan(10);
+  });
+});
+
+describe("a contour round a hilltop", () => {
+  // A round hill on a grid 5 m a sample, its 3 m contour a closed ring about 30 m across.
+  const n = 24;
+  const hill = Float32Array.from({ length: n * n }, (_, k) => 6 - Math.hypot((k % n) - 11.5, Math.floor(k / n) - 11.5) * 0.9);
+  const segments: number[] = [];
+  isoline(hill, n, 3, (x0, y0, x1, y1) => segments.push(x0 * 5, y0 * 5, x1 * 5, y1 * 5));
+  const [ring] = chained(segments);
+
+  it("stays a ring once eased, its width kept, its last point its first", () => {
+    expect(ring).toBeDefined();
+    const eased = simplified(ring as number[], 0.6);
+    const xs = eased.filter((_, k) => k % 2 === 0);
+    expect(eased.length / 2).toBeGreaterThan(4);
+    expect(Math.max(...xs) - Math.min(...xs)).toBeGreaterThan(25);
+    expect([eased[0], eased[1]]).toEqual([eased.at(-2), eased.at(-1)]);
   });
 });
 
