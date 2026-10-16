@@ -6,7 +6,7 @@
 
 import * as THREE from "three";
 import { CLEARINGS_GLSL, type Clearing, LIGHT_GLSL, type SceneLight, WIND_FIELD_GLSL, createClearings, hexToVec3 } from "@gaia/render";
-import { GROUND_SAMPLE_GLSL, type GroundTexture, WILD_GLSL } from "./ground.ts";
+import { BANKS, GROUND_SAMPLE_GLSL, type GroundTexture, WILD_GLSL } from "./ground.ts";
 import { REGIONS_GLSL, type RegionCovers, TUFT_GLSL } from "./regions.ts";
 import { CLEARING_GLSL, type Clearings } from "./clearings.ts";
 import { TRAIL_GLSL, trailUniforms } from "./trails.ts";
@@ -121,7 +121,8 @@ void main() {
   float r2 = fract(aSeed.x * 7.13 + aSeed.z * 3.71);
   float r3 = fract(aSeed.y * 5.31 + aThin.x * 9.17);
   float near = 1.0 - smoothstep(from, from + reach * 0.2, far);
-  float banks = step(mix(1.3, 3.0, r2), g.z);
+  // Grass grows up to the sand, which is wider where the waterline curves (bankWidth).
+  float banks = step(mix(1.3, 3.0, r2) * bankWidth(xz, g.z) / ${BANKS.wide.toFixed(1)}, g.z);
   float steep = step(r3, 1.0 - smoothstep(0.35, 0.7, grade) * 0.8);
 
   // The blade grows one region's cover: its height, width, density, clumping,
