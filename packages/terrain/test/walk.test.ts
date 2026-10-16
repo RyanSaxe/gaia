@@ -38,8 +38,8 @@ import {
   wallsShape,
   wadeSpeed,
   walkStep,
-  walkToward,
   waterDepthAt,
+  wayAhead,
 } from "@gaia/terrain";
 import { sampleWorld } from "@gaia/terrain/testing";
 
@@ -52,19 +52,21 @@ const hold = (solids: Solids, from: Walker, dx: number, dz: number, steps: numbe
   for (let i = 0; i < steps; i++) path.push(walkStep(t, solids, path[path.length - 1]!, { dx, dz, speed }, dt));
   return path;
 };
-/** Steps a tapped walk until it ends, at most two minutes of it. */
+/** Steps a tapped walk until it ends, at most two minutes of it: each step makes for the point a little ahead along its way, at its pace. */
 const tapWalk = (solids: Solids, from: Walker, to: Walker) => {
   // One walker moved in place, as the lab moves it, so a way must not lean on the walker it was planned from.
   const at = { x: from.x, z: from.z };
   let walk = planWalk(t, solids, at, to);
   const path: Walker[] = [{ ...at }];
   for (let i = 0; i < 7200; i++) {
-    const next = walkToward(t, solids, at, walk, dt);
-    walk = next.walk;
-    if (next.walker !== at) path.push({ ...next.walker });
-    at.x = next.walker.x;
-    at.z = next.walker.z;
-    if (next.state !== "walking") return { state: next.state, at: { ...at }, path, walk, seconds: (i + 1) * dt };
+    const heading = wayAhead(walk, at);
+    walk = heading.walk;
+    if (heading.remaining <= WALK_TO.reach) return { state: "arrived" as const, at: { ...at }, path, walk, seconds: i * dt };
+    const next = walkStep(t, solids, at, { dx: heading.aim.x - at.x, dz: heading.aim.z - at.z, speed: heading.pace }, dt);
+    if (Math.hypot(next.x - at.x, next.z - at.z) < WALK_TO.stall * heading.pace * dt) return { state: "stalled" as const, at: { ...at }, path, walk, seconds: i * dt };
+    path.push({ ...next });
+    at.x = next.x;
+    at.z = next.z;
   }
   return { state: "walking" as const, at: { ...at }, path, walk, seconds: 120 };
 };
@@ -260,15 +262,9 @@ describe("solid pieces of a built thing", () => {
     const solids = solidsOf(open);
     expect(clearanceAt(solids, at.x, at.z)).toBeGreaterThan(BODY_RADIUS);
     // A tap from outside the ring walks between the stones to its middle.
-    let walker: Walker = { x: at.x + 16, z: at.z + 3 };
-    let walk = planWalk(t, solids, walker, { ...walker, x: at.x, z: at.z });
-    let state = "walking";
-    for (let i = 0; i < 1800 && state === "walking"; i++) {
-      const step = walkToward(t, solids, walker, walk, 1 / 60);
-      ({ walker, walk, state } = step);
-      expect(clearanceAt(solids, walker.x, walker.z)).toBeGreaterThanOrEqual(BODY_RADIUS - 1e-6);
-    }
-    expect(state).toBe("arrived");
+    const walk = tapWalk(solids, { x: at.x + 16, z: at.z + 3 }, { x: at.x, z: at.z });
+    for (const p of walk.path) expect(clearanceAt(solids, p.x, p.z)).toBeGreaterThanOrEqual(BODY_RADIUS - 1e-6);
+    expect(walk.state).toBe("arrived");
     // A king stone at the middle blocks it.
     expect(clearanceAt(solidsOf(piecesShapes(ring(true, "a tall king stone").parts, at)), at.x, at.z)).toBeLessThan(0);
   });
@@ -307,10 +303,7 @@ describe("a building's walls", () => {
 });
 
 describe("walking to a tapped point", () => {
-  const firstStep = (target: Walker): number => {
-    const { walker } = walkToward(t, NO_SOLIDS, dry, planWalk(t, NO_SOLIDS, dry, target), dt);
-    return Math.hypot(walker.x - dry.x, walker.z - dry.z);
-  };
+  const pace = (target: Walker): number => wayAhead(planWalk(t, NO_SOLIDS, dry, target), dry).pace;
 
   it("walks to a point on dry ground and ends the walk within reach of it", () => {
     const target = { x: dry.x - 12, z: dry.z + 5 };
@@ -323,8 +316,8 @@ describe("walking to a tapped point", () => {
   });
 
   it("walks to a near point at walking pace and jogs toward a far one", () => {
-    expect(firstStep({ x: dry.x - 10, z: dry.z })).toBeCloseTo(WALK_TO.pace * dt, 6);
-    expect(firstStep({ x: dry.x - 60, z: dry.z })).toBeCloseTo(WALK_TO.pace * WALK_TO.jog * dt, 6);
+    expect(pace({ x: dry.x - 10, z: dry.z })).toBeCloseTo(WALK_TO.pace, 6);
+    expect(pace({ x: dry.x - 60, z: dry.z })).toBeCloseTo(WALK_TO.pace * WALK_TO.jog, 6);
   });
 
   it("crosses a pond all the way, swimming its deep middle", () => {
@@ -336,8 +329,9 @@ describe("walking to a tapped point", () => {
   });
 
   it("ends the walk where it stands when the point is within reach", () => {
-    const walk = planWalk(t, NO_SOLIDS, dry, { x: dry.x + 1, z: dry.z + 0.5 });
-    expect(walkToward(t, NO_SOLIDS, dry, walk, dt)).toEqual({ walker: dry, walk, state: "arrived" });
+    const walk = tapWalk(NO_SOLIDS, dry, { x: dry.x + 1, z: dry.z + 0.5 });
+    expect(walk.state).toBe("arrived");
+    expect(walk.path).toEqual([dry]);
   });
 });
 

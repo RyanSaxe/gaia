@@ -112,12 +112,6 @@ function worldToSite(site: BuildingSite, x: number, z: number): [number, number]
   return [dx * c - dz * s, dx * s + dz * c];
 }
 
-/** True when (x, z) is within `margin` of the building's walls. */
-export function insideFootprint(plan: BuildingPlan, site: BuildingSite, x: number, z: number, margin: number): boolean {
-  const [lx, lz] = worldToSite(site, x, z);
-  return Math.abs(lx) < plan.width / 2 + margin && Math.abs(lz) < plan.depth / 2 + margin;
-}
-
 /** A building's yard where it stands: its site, and the yard in its own frame, as its pad holds them. */
 export type Yard = Pick<PadEdit, "site" | "yard">;
 

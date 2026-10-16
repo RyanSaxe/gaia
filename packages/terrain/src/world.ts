@@ -12,7 +12,7 @@ import { type AnyPrimitive, type BuildContext, type Blueprint, type Landform, ty
 import { fbm, fieldAt } from "@gaia/primitives";
 import { resolveParams } from "@gaia/realize";
 import { RELIEF_BUDGET, type ReliefReport, measureRelief, withinBudget } from "./budget.ts";
-import { type LandSite, LAND_WARP, siteAt, warpPoint } from "./land.ts";
+import { type LandSite, LAND_WARP, warpPoint } from "./land.ts";
 import { type Lattice, type LatticeFrame, createLattice, worldOf, worldOfZ } from "./lattice.ts";
 import { BANK_REACH, type SolvedPond, type SolvedStream, carvePond, carveStream, nearPond, shoreField, shoreMargin, solvePond, solveStream } from "./water.ts";
 import { type LandOutline, pastTheEdge, withinLand } from "./edge.ts";
@@ -158,9 +158,6 @@ const smooth = (t: number): number => {
 };
 
 const DRIFT_SEED = 6007;
-
-/** Which one-cell region's warped cell holds (x, z): the one whose landform weighs most there, as `regionWeights` finds it. */
-export const cellAt = (sites: readonly LandSite[], x: number, z: number): number => siteAt(sites, x, z);
 
 /** Side of a region field's lookup cell, meters. */
 const FIELD_CELL = 24;

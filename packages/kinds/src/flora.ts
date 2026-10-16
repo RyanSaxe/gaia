@@ -4,7 +4,6 @@ export const flora = kind({
   id: "flora",
   subject: "file",
   doc: "A living plant that stands for one source file.",
-  represents: "Files that hold logic: modules, components, services and scripts.",
   slots: {
     form: slot("Skeleton"),
     bark: slot("Surface", { on: "form" }),

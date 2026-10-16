@@ -10,7 +10,6 @@ export const landmark = kind({
   id: "landmark",
   subject: "thing",
   doc: "A great thing a person knows from far across the land and finds their way by, standing for one thing in the code: a package, a file or a definition.",
-  represents: "The very few things in the code a person steers by, whatever they are: a package, a file or a single definition the whole repository turns on.",
   slots: {
     form: slot("Landmark", {
       ask: "the great thing is the feeling a person carries away from it across the land: choose the one whose feel suits the code it stands for.",

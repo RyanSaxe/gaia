@@ -13,8 +13,6 @@ export const structure = kind({
   id: "structure",
   subject: "thing",
   doc: "A lived-in building that stands for one thing in the code: a package, a file or a definition.",
-  represents:
-    "The few things in the code that much of the rest leans on, whatever they are: a package, a file or a single definition. Its massing, storeys and roofs say how big and how gathered it is, and its feature gives it a character of its own.",
   slots: {
     footprint: slot("Footprint", {
       ask: "its plan is the building's whole bearing, how it sits on the land, how it spreads and how high it rises: choose the plan, the shape and the storeys whose feel suits the code it stands for, and stand it trim or crooked as that code feels tidy or makeshift.",

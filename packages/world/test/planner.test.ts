@@ -52,16 +52,6 @@ describe("flora blueprint in two requests", () => {
   });
 });
 
-describe("representation", () => {
-  it("lets Jev choose the kind, or leave the file as ground", async () => {
-    const { planRepresentation, GROUND } = await import("@gaia/world");
-    const wave = planRepresentation([flora], subject);
-    const q = wave.request.questions.represent;
-    expect(q?.type).toBe("choice");
-    expect(Object.keys((q as { criteria: object }).criteria).sort()).toEqual(["flora", GROUND].sort());
-  });
-});
-
 describe("slot dependencies", () => {
   it("drops a slot whose source slot Jev left out", () => {
     // A kind with an optional crown, so the dependency rule has something to drop.
