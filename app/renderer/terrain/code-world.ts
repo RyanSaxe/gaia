@@ -100,17 +100,12 @@ export function withWater(biome: Blueprint, water: string): Blueprint {
 const KIND_NAMES: Readonly<Record<SymbolFact["kind"], string>> = { function: "Function", class: "Class", type: "Type", module: "Module" };
 const LANGUAGE_NAMES: Readonly<Record<string, string>> = { typescript: "TypeScript", javascript: "JavaScript", rust: "Rust" };
 
-/** What a card says about a file's finer entity: its name, kind, doc comment, where it is declared and its own vitality. */
+/** What stands for a file's finer entity says about it: its name, its kind and its own vitality. */
 export function representSymbol(s: CodeWorld["symbols"][number], file: FileFacts): Represented {
   return {
     id: s.id,
     name: s.name,
     what: [KIND_NAMES[s.kind], s.exported ? "exported" : "inside its file", LANGUAGE_NAMES[file.language] ?? file.language].join(" · "),
-    doc: s.doc ?? "",
-    where: `${s.file}:${s.line}`,
-    size: `${s.lines.toLocaleString()} ${s.lines === 1 ? "line" : "lines"} of ${file.lines.toLocaleString()} in its file`,
-    dependsOn: [],
-    dependents: [],
     vitality: s.vitality,
   };
 }

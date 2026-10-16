@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { type AnyPrimitive, type Built, type Part, Library, type Skeleton, blueprintOf, rand, seedOf } from "@gaia/schema";
 import { FLORA_PRIMITIVES, PRIMITIVES, STRUCTURE_PRIMITIVES } from "@gaia/primitives";
 import { flora, rock, structure, wildflowers } from "@gaia/kinds";
-import { randomSlots, validate } from "@gaia/world";
+import { validate } from "@gaia/world";
+import { randomSlots } from "@gaia/world/testing";
 import { FLORA_PRESETS, FLOWER_PRESETS, ROCK_PRESETS, SHRUB_PRESETS, STRUCTURE_PRESETS, applyVitality, mergeParts, realize, resolveParams, rotAt, shownVitality, spinAt, triangleCount } from "@gaia/realize";
 
 const lib = new Library(FLORA_PRIMITIVES);

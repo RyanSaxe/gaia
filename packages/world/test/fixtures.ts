@@ -1,4 +1,4 @@
-import type { FileFacts, JevAnswer, JevRequest } from "@gaia/schema";
+import type { AnyKind, FileFacts, FilledSlot, JevAnswer, JevRequest, Library } from "@gaia/schema";
 
 /** Facts for this mock's subject file, shaped as the Rust engine would send them. */
 export const SCANNER: FileFacts = {
@@ -36,4 +36,25 @@ export function fakeJev(request: JevRequest, prefer: Readonly<Record<string, str
     }
   }
   return answers;
+}
+
+const pick = <T>(items: readonly T[], random: () => number): T => items[Math.floor(random() * items.length)] as T;
+
+/** A kind's slots drawn uniformly: each optional slot's presence, each slot's primitive, and each parameter. */
+export function randomSlots(k: AnyKind, lib: Library, random: () => number): Record<string, FilledSlot> {
+  const slots: Record<string, FilledSlot> = {};
+  for (const [name, s] of Object.entries(k.slots)) {
+    if (s.optional && random() < 0.5) continue;
+    if (s.on !== undefined && !(s.on in slots)) continue;
+    const p = pick(lib.forRole(s.role), random);
+    const params: Record<string, string | boolean | string[]> = {};
+    for (const [param, f] of Object.entries(p.params)) {
+      if (f.type === "scale") params[param] = pick(f.levels, random).words;
+      else if (f.type === "choice") params[param] = pick(Object.keys(f.options), random);
+      else if (f.type === "flag") params[param] = random() < 0.5;
+      else params[param] = Object.keys(f.members).filter(() => random() < 0.5);
+    }
+    slots[name] = { use: p.id, params };
+  }
+  return slots;
 }

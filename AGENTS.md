@@ -42,7 +42,7 @@ You need Node 26, pnpm 10 and a stable Rust toolchain from rustup (put
 | `GAIA_JEV=stand-in pnpm dev` | For development only: opens a world the stand-in judges on purpose, sending nothing to Jev. Never on by default, never shown to a person |
 | `pnpm lab:html out.html` | The lab as one offline page, on Gaia's own world with Jev's kept answers |
 | `pnpm lab:serve` | That page on this Mac's Tailscale address, port 5180, rebuilt on every change |
-| `pnpm shots` | Screenshots of every primitive and world look, from Electron, on the stand-in judge unless `GAIA_JEV` is set; fails when the page reports a WebGL error |
+| `pnpm shots [word...]` | Photographs every kind of thing the proving ground stands, where it stands, at vitality 1, 0.5 and 0.1 by day and 1 at night, into `shots/`; with words, only the stops whose names hold one; fails when the page reports a WebGL error |
 | `pnpm readme-shots` | The README's two screenshots, into `docs/images/` |
 | `pnpm brand` | Paints Gaia's mark into the pictures the app shows and the macOS icon (`app/build/icon.icns`); run it again when the field map's look changes |
 | `GAIA_DATA_DIR=dir pnpm graph-snapshot [root]` | Rewrites `fixtures/gaia-graph.json`, the judged graph of this repository the standalone lab is laid out from, from Jev's answers held in that store |
@@ -50,13 +50,15 @@ You need Node 26, pnpm 10 and a stable Rust toolchain from rustup (put
 | `pnpm probe` | Measures both worlds in Electron: frame time, triangles by kind and pass, the walk test and smoothness |
 | `pnpm jev-world`, `pnpm compare-jev`, `pnpm print-world-requests` | Jev's kept answers for the snapshot, request designs compared, and every request printed |
 
-The lab page takes `?view=terrain|flora|world` (a debugging view instead of
-the world), `?hour=22`, `?world=sample`, `?world=proving`, `?judge=stand-in`
-and `?start=table|signpost` (`?judge=stand-in` is for development only: the page otherwise runs on Jev's kept answers alone, and a request with no kept answer fails it, naming the request). Scripts drive it through `window.__lab`:
-`open(view)`, `hour(h)`, `frames(n)`, `stats()`, and each view's hooks, such
-as `__lab.terrain.walk(x, z, yawDeg, pitchDeg)`, `__lab.terrain.calls()` and
-`__lab.immersive.map(true)`, listed where each lab returns them.
-`tools/readme-shots.ts` is a short example.
+The lab page shows only the world. It takes `?hour=22`, `?world=sample`,
+`?world=proving`, `?judge=stand-in` and `?start=table|signpost`
+(`?judge=stand-in` is for development only: the page otherwise runs on Jev's kept answers alone, and a request with no kept answer fails it, naming the request). Scripts drive it through `window.__lab`:
+`open("immersive")`, `hour(h)`, `frames(n)`, `stats()`, and the world's
+hooks, such as `__lab.terrain.walk(x, z, yawDeg, pitchDeg)`,
+`__lab.terrain.calls()`, `__lab.terrain.overview(pos, target)` for a capture
+from above, and `__lab.immersive.map(true)`, listed where
+`app/renderer/terrain/lab.ts` and `app/renderer/immersive/view.ts` return
+them. `tools/readme-shots.ts` is a short example.
 
 Test a change in the proving ground (`?world=proving`) as well as in Gaia's
 own world. It is a made-up codebase whose world holds every feature, from
@@ -158,8 +160,12 @@ doc in the same commit, and say so in the commit message.
 2. Add it to `PRIMITIVES` in `packages/primitives/src/library.ts`. The contract
    tests then check its doc, determinism, channel ranges, triangle budget and
    vitality response.
-3. Open the lab, use the primitive at vitality 1, 0.5 and 0.1, and watch it
-   move in the wind. Run `pnpm shots` and attach the images for review.
+3. Stand it in the proving ground: a thing in its plan (`tools/proving.ts`)
+   is built with it, and `pnpm proving` rewrites the fixtures. Run `pnpm
+   shots` with a word of its stop's name, such as `pnpm shots willow`, which
+   photographs it where it stands at vitality 1, 0.5 and 0.1, and attach the
+   images for review. Walk up to it on the page (`?world=proving`) and watch
+   it move in the wind.
 
 ## Tests
 

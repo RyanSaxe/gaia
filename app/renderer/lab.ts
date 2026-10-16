@@ -1,22 +1,16 @@
-// What the shell knows about a lab: it draws only while its tab is open,
-// names the views `pnpm shots` saves, and offers a hook for scripted checks.
+// What the page knows about the world it shows: it draws only while active,
+// and offers hooks for scripted checks. Also the page's one way to tell a tap
+// from a drag.
 
 import type { WebGLRenderer } from "three";
-
-export interface Shot {
-  readonly name: string;
-  /** Sets the view up at once: no camera flights, no easing. A view that waits on a bake resolves when it shows. */
-  stage(): void | Promise<void>;
-}
 
 export interface Lab {
   /** A hidden lab draws nothing and ignores input. */
   setActive(on: boolean): void;
   /** Draws one frame; `dt` is seconds since the last, `hour` the local hour the world shows. */
   frame(dt: number, now: number, hour: number): void;
-  readonly shots: () => readonly Shot[];
   readonly hook: Readonly<Record<string, unknown>>;
-  /** The lab's renderer, so the shell's dev readout can count its draw calls. */
+  /** The lab's renderer, so the page can count its draw calls. */
   readonly renderer?: WebGLRenderer;
   /** Settles once the lab has something to show, such as its first baked world. */
   readonly ready?: Promise<void>;
@@ -61,6 +55,3 @@ export function onTap(target: HTMLElement, tap: (e: PointerEvent) => void): void
   target.addEventListener("pointerup", (e) => lift(e, true));
   target.addEventListener("pointercancel", (e) => lift(e, false));
 }
-
-/** A small file name for a shot: lowercase words joined by dashes. */
-export const slug = (s: string): string => s.toLowerCase().replace(/@\d+$/, "").replace(/[^a-z0-9.]+/g, "-").replace(/^-|-$/g, "");

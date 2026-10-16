@@ -14,6 +14,9 @@ health. Test a change here as well as in Gaia's own world.
 - Scripts: `__lab.terrain.tour()` lists every stop below, and
   `__lab.terrain.tour("ruined bridge")` walks to one and looks at it.
   `__lab.hour(22)` sets the hour.
+- Shots: `pnpm shots` photographs every stop, and one thing standing as
+  each tree, bush, stone and flower form, at vitality 1, 0.5 and 0.1 by day
+  and 1 at night (`tools/shots.ts`).
 
 ## What it is made of
 

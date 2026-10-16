@@ -178,28 +178,6 @@ int coverPick(vec2 xz, float r) {
 GroundCover coverOf(int i) { return GroundCover(uCoverLow[i], uCoverHigh[i], uCoverTip[i], uCoverSoil[i], uCoverShape[i].w); }
 // The wild's cover at a point, from its patch: 0 is the first cover, 1 the second.
 GroundCover wildCover(float share) { return mixCover(coverOf(WILD_A), coverOf(WILD_B), share); }
-
-// The selected region's share of the cover at a point of level k, for a soft glow that fades at its organic edge.
-float coverShareAtLevel(vec2 p, int level, int region) {
-  CoverTaps t = coverTaps(p, level);
-  float total = 0.0;
-  float mine = 0.0;
-  for (int k = 0; k < 4; k++) {
-    for (int j = 0; j < 4; j++) {
-      float w = t.share[k][j];
-      total += w;
-      if (t.region[k][j] == region) mine += w;
-    }
-  }
-  return mine / max(total, 1e-4);
-}
-float coverShare(vec2 xz, int region) {
-  vec2 p = coverPoint(xz);
-  float a;
-  int k = clipLevel(clipWorld(p), a);
-  float s = coverShareAtLevel(p, k, region);
-  return a > 0.0 ? mix(s, coverShareAtLevel(p, k + 1, region), a) : s;
-}
 `;
 
 /** Where tufts grow when a cover is clumped; the same mask places soil on the ground and blades above it. */

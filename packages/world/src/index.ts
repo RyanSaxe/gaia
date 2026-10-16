@@ -3,7 +3,6 @@ export * from "./compose.ts";
 export * from "./answers.ts";
 export * from "./vitality.ts";
 export * from "./context.ts";
-export * from "./space.ts";
 export type * from "./changes.ts";
 export * from "./facts.ts";
 export * from "./code-world.ts";

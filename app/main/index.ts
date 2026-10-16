@@ -11,24 +11,17 @@ import { basename, join, resolve } from "node:path";
 import { BrowserWindow, Menu, MessageChannelMain, type MessagePortMain, app, dialog, ipcMain, nativeTheme, utilityProcess } from "electron";
 import type { FromMain, ToMain } from "../world-service/protocol.ts";
 import { superviseEngine } from "./engine.ts";
-import { takeShots } from "./shots.ts";
-import { webglErrors } from "./webgl-errors.ts";
 
 const here = import.meta.dirname;
-const shots = process.argv.includes("--shots");
 
 app.setName("Gaia");
-// Shots look the same whatever the system theme is.
-if (shots) nativeTheme.themeSource = "light";
-// Shots show how things are drawn, so they send nothing to Jev: the stand-in judges unless GAIA_JEV says otherwise.
-if (shots) process.env.GAIA_JEV ??= "stand-in";
 
 void app.whenReady().then(() => {
   // The Dock shows Gaia's icon while it runs from its source; a packaged app takes it from build/icon.icns.
   app.dock?.setIcon(join(app.getAppPath(), "build/icon.png"));
   const repoRoot = resolve(app.getAppPath(), "..");
-  // With no project named the page offers the start; shots always show Gaia's own world.
-  const named = process.env.GAIA_PROJECT ?? (shots ? repoRoot : undefined);
+  // With no project named the page offers the start.
+  const named = process.env.GAIA_PROJECT;
   // The proving ground is laid out on the page from its own fixture, so no folder is opened for it.
   let proving = named === "proving";
   let root: string | null = named === undefined || proving ? null : resolve(named);
@@ -62,15 +55,10 @@ void app.whenReady().then(() => {
     useContentSize: true,
     minWidth: 860,
     minHeight: 560,
-    show: !shots,
     title: "Gaia",
     backgroundColor: nativeTheme.shouldUseDarkColors ? "#171815" : "#f3f0e8",
     webPreferences: {
       preload: join(here, "../preload/index.cjs"),
-      // Shots render in a hidden window, which Chromium would otherwise throttle.
-      backgroundThrottling: !shots,
-      // Shots keep the page's storage in memory, so every run is a first visit: the far forms bake, and a broken bake shows.
-      ...(shots ? { partition: "shots" } : {}),
     },
   });
 
@@ -120,24 +108,7 @@ void app.whenReady().then(() => {
     if (url === undefined) return window.loadFile(join(here, "../renderer/index.html"), world === undefined ? {} : { query: { world } });
     return window.loadURL(world === undefined ? url : `${url}?world=${world}`);
   }
-  const loaded = load();
-
-  if (shots) {
-    const errors = webglErrors();
-    window.webContents.on("console-message", (e) => errors.note(e.message));
-    loaded
-      .then(() => takeShots(window, join(repoRoot, "shots")))
-      .then((saved) => {
-        console.log(`Saved ${saved.length} shots in ${join(repoRoot, "shots")}`);
-        console.log(errors.summary());
-        if (errors.count() > 0) app.exit(1);
-        else app.quit();
-      })
-      .catch((error: unknown) => {
-        console.error(error);
-        app.exit(1);
-      });
-  }
+  void load();
 });
 
 app.on("window-all-closed", () => app.quit());

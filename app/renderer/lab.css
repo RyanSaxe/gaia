@@ -1,3 +1,4 @@
+/* The page: the world, full screen, and the paper laid over it. */
 :root {
   color-scheme: light dark;
   /* How anything painted washes in: the wait's layers and the minimap's land. */
@@ -5,39 +6,24 @@
   --bg: #f3f0e8;
   --panel: #fbfaf6;
   --ink: #2b2a26;
-  --muted: #6f6b62;
   --line: #e2dccf;
   --accent: #4e7a3a;
-  --accent-ink: #ffffff;
-  --seg: #efebe1;
-  --chip: rgba(251, 250, 246, 0.86);
-  --warn: #a2512b;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #171815;
     --panel: #1f211d;
     --ink: #e8e5da;
-    --muted: #a19d91;
     --line: #34362f;
     --accent: #9cc27a;
-    --accent-ink: #172012;
-    --seg: #2a2c27;
-    --chip: rgba(31, 33, 29, 0.86);
-    --warn: #e09a74;
   }
 }
 :root[data-theme="dark"] {
   --bg: #171815;
   --panel: #1f211d;
   --ink: #e8e5da;
-  --muted: #a19d91;
   --line: #34362f;
   --accent: #9cc27a;
-  --accent-ink: #172012;
-  --seg: #2a2c27;
-  --chip: rgba(31, 33, 29, 0.86);
-  --warn: #e09a74;
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); }
@@ -45,126 +31,21 @@ html { -webkit-text-size-adjust: 100%; }
 body { font: 12.5px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; overflow: hidden; }
 [hidden] { display: none !important; }
 
-/* ---------- shell: tabs, labs, status bar ---------- */
+/* ---------- the world, full screen ---------- */
 /* A phone's browser bars cover part of 100vh; 100dvh is the height left visible. */
-#shell { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; height: 100vh; height: 100dvh; }
-#tabs { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 6px 10px; background: var(--panel); border-bottom: 1px solid var(--line); -webkit-app-region: drag; }
-#tabs .brand { font-weight: 650; padding-left: 4px; }
-#tabs .brand span { color: var(--muted); font-weight: 400; margin-left: 5px; }
-#tabs .segmented { -webkit-app-region: no-drag; background: var(--seg); border-radius: 8px; padding: 2px; flex-wrap: nowrap; }
-#tabs .seg { padding: 3px 12px; font-size: 12px; background: transparent; }
-#tabs .seg.on { background: var(--accent); color: var(--accent-ink); }
-#labs { position: relative; min-height: 0; }
-/* The hour every world shows: the person's clock, or a pinned hour. */
-.clock { -webkit-app-region: no-drag; display: flex; align-items: center; gap: 6px; margin-left: auto; flex-wrap: wrap; font-size: 11.5px; }
-.clock .follow { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); white-space: nowrap; }
-.clock .follow input { accent-color: var(--accent); margin: 0; }
-.clock .scrub { width: 110px; accent-color: var(--accent); }
-.clock output { font-variant-numeric: tabular-nums; width: 2.8em; font-weight: 600; }
-.clock .quick { display: flex; gap: 2px; background: var(--seg); border-radius: 7px; padding: 2px; }
-.clock .quick .seg { padding: 2px 6px; font-size: 11px; background: transparent; }
-.clock .quick .seg.on { background: var(--accent); color: var(--accent-ink); }
-.lab { position: absolute; inset: 0; display: grid; grid-template-columns: minmax(0, 1fr) 288px; }
-#status { display: flex; align-items: center; min-width: 0; gap: 7px; padding: 3px 12px; font-size: 11px; color: var(--muted); background: var(--panel); border-top: 1px solid var(--line); font-variant-numeric: tabular-nums; }
-#status .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--line); flex: none; }
-#status[data-state="connected"] .dot { background: var(--accent); }
-#status[data-state="starting"] .dot, #status[data-state="restarting"] .dot { background: var(--warn); animation: pulse 0.9s ease-in-out infinite alternate; }
-#status[data-state="standalone"] .dot { background: var(--muted); }
-@keyframes pulse { from { opacity: 0.35; } to { opacity: 1; } }
-/* The dev readout: off by default, a quiet button at the status bar's end. */
-#stats { margin-left: auto; min-width: 0; color: var(--ink); line-height: 1.35; text-align: right; }
-#status .stats-toggle { flex: none; margin-left: auto; padding: 0 7px; font-size: 10.5px; line-height: 16px; background: transparent; color: var(--muted); border: 1px solid var(--line); border-radius: 5px; }
-#stats:not([hidden]) + .stats-toggle { margin-left: 0; }
-#status .stats-toggle.on { color: var(--accent); border-color: var(--accent); }
-
-/* ---------- a lab: the stage and its panel ---------- */
-.stage { position: relative; min-width: 0; overflow: hidden; }
+#shell { position: relative; height: 100vh; height: 100dvh; }
+.lab-terrain, .stage { position: absolute; inset: 0; }
+.stage { overflow: hidden; }
 /* While a world first opens, the wait (app/renderer/wait/wait.css) covers the stage; it lifts once the world stands. */
 .veil { position: absolute; inset: 0; z-index: 2; display: grid; place-items: center; background: linear-gradient(#b9cfe0, #dfe6df 62%, #c9d3b8); color: #46524a; font-size: 13px; letter-spacing: 0.02em; transition: opacity 0.9s ease, visibility 0s linear 0.9s; }
 .veil.lifted { opacity: 0; visibility: hidden; pointer-events: none; }
 .view { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
 .view:active { cursor: grabbing; }
-.bar { position: absolute; left: 10px; right: 10px; display: flex; gap: 8px; align-items: center; pointer-events: none; }
-.bar > * { pointer-events: auto; }
-.bar.top { top: 10px; justify-content: space-between; }
-.bar.bottom { bottom: 10px; flex-wrap: wrap; }
-.chip { background: var(--chip); backdrop-filter: blur(6px); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; }
-.grow { flex: 1; }
 button { font: inherit; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 7px; padding: 6px 10px; cursor: pointer; }
 /* Only a real hover: a tap would leave the accent stuck on a touch screen. */
 @media (hover: hover) { button:hover { border-color: var(--accent); } }
-button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
-.range { display: flex; align-items: center; gap: 8px; }
-.range input { flex: 1; min-width: 90px; accent-color: var(--accent); }
-.range output { font-variant-numeric: tabular-nums; width: 2.4em; text-align: right; color: var(--muted); }
-.space { color: var(--muted); font-size: 11.5px; max-width: 100%; }
-.panel { background: var(--panel); border-left: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
-.panel > header { padding: 12px 14px 10px; border-bottom: 1px solid var(--line); display: grid; gap: 6px; }
-.title { font-size: 15px; font-weight: 650; }
-.bp-id { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11.5px; color: var(--muted); }
-.build-stats { color: var(--muted); font-size: 11px; }
-.problems { color: var(--warn); font-size: 11.5px; }
-.problems:empty { display: none; }
-.panel.empty .range, .panel.empty .build-stats { display: none; }
-.scroll { overflow-y: auto; padding: 4px 14px 14px; min-height: 0; flex: 1; }
-
-/* ---------- the generated inspector ---------- */
-.slot { padding: 10px 0; border-bottom: 1px solid var(--line); }
-.slot.absent .slot-name { color: var(--muted); }
-.slot-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
-.slot-title { display: flex; align-items: baseline; gap: 6px; }
-.slot-name { font-weight: 650; font-size: 13px; }
-.slot-role { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
-.slot-note { color: var(--muted); margin: 0; font-size: 11.5px; }
-select { font: inherit; color: var(--ink); background: var(--seg); border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; width: 100%; }
-.primitive { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11.5px; }
-.primitive.fixed { color: var(--muted); }
-.doc { margin: 4px 0 2px; color: var(--muted); font-size: 11.5px; }
-.param { margin-top: 8px; }
-.param-label { font-weight: 600; font-size: 11.5px; }
-.param-ask { color: var(--muted); font-size: 11px; margin-bottom: 4px; }
-.param-desc { color: var(--muted); font-size: 11px; margin-top: 3px; }
-.segmented { display: flex; flex-wrap: wrap; gap: 3px; }
-.seg { background: var(--seg); border: 1px solid transparent; border-radius: 6px; padding: 3px 7px; font-size: 11.5px; color: var(--ink); }
-.seg.on { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
-.switch { position: relative; display: inline-block; width: 30px; height: 17px; }
-.switch input { opacity: 0; width: 0; height: 0; position: absolute; }
-.switch-track { position: absolute; inset: 0; background: var(--line); border-radius: 17px; transition: background 0.15s; cursor: pointer; }
-.switch-track::after { content: ""; position: absolute; width: 13px; height: 13px; left: 2px; top: 2px; background: var(--panel); border-radius: 50%; transition: transform 0.15s; }
-.switch input:checked + .switch-track { background: var(--accent); }
-.switch input:checked + .switch-track::after { transform: translateX(13px); }
-.switch input:disabled + .switch-track { opacity: 0.4; cursor: not-allowed; }
-.checks { display: flex; flex-wrap: wrap; gap: 4px 10px; }
-.check { display: inline-flex; gap: 4px; align-items: center; }
-details.json { margin-top: 12px; }
-details.json summary { cursor: pointer; font-weight: 600; }
-details.json pre { font: 11px/1.45 ui-monospace, "SF Mono", Menlo, monospace; background: var(--seg); border-radius: 6px; padding: 8px; overflow-x: auto; margin: 6px 0 0; }
-
-/* ---------- terrain ---------- */
-.modes { background: var(--chip); backdrop-filter: blur(6px); border: 1px solid var(--line); border-radius: 8px; padding: 3px; flex-wrap: nowrap; }
-.modes .seg { padding: 4px 10px; }
-.lab-terrain .bar.bottom { flex-direction: column; align-items: stretch; gap: 6px; }
-.bar-row { display: flex; gap: 6px; align-items: stretch; pointer-events: none; }
-.bar-row > * { pointer-events: auto; }
-.bar-row .hintline { flex: 1; min-width: 0; }
-/* The walk stats fold into this toggle; open, it wears the accent's outline. */
-.stats-toggle { flex: none; font-size: 11px; font-weight: 600; color: var(--muted); padding: 4px 10px; }
-.stats-toggle[aria-expanded="true"] { color: var(--ink); border-color: var(--accent); }
-.stats { font-size: 11px; line-height: 1.5; color: var(--muted); }
-.stats b { color: var(--ink); font-weight: 650; font-variant-numeric: tabular-nums; }
-.budget { display: flex; flex-wrap: wrap; gap: 2px 12px; }
-.sight { margin-top: 2px; }
-.hintline { display: flex; justify-content: space-between; gap: 10px; font-size: 11px; color: var(--muted); padding: 4px 10px; }
-.here { color: var(--ink); font-weight: 600; }
-.here:empty { display: none; }
-.regions { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px; }
-.region { display: flex; flex-direction: column; align-items: flex-start; gap: 0; padding: 4px 8px; background: var(--seg); border: 1px solid transparent; line-height: 1.25; }
-.region span { font-weight: 600; font-size: 11.5px; }
-.region small { color: var(--muted); font-size: 10.5px; }
-.region.on { background: var(--accent); border-color: var(--accent); }
-.region.on span, .region.on small { color: var(--accent-ink); }
-.draw { color: var(--muted); font-size: 11px; }
-.draw:empty { display: none; }
+/* Touch targets of at least 44 px on a narrow screen. */
+@media (max-width: 699px) { button { min-height: 44px; } }
 
 /* ---------- touch: shown on a touch screen, or after the first touch ---------- */
 .touch-only { display: none; }
@@ -175,102 +56,12 @@ details.json pre { font: 11px/1.45 ui-monospace, "SF Mono", Menlo, monospace; ba
 :root.touch .touch-only { display: revert; }
 :root.touch .mouse-only { display: none; }
 
-/* ---------- the panel's sheet handle, shown only on a narrow screen ---------- */
-.sheet-handle { display: none; }
-
-/* ---------- world ---------- */
-.panel > header select.preset { font-size: 14px; font-weight: 650; padding: 5px 8px; }
-.plant-row { display: grid; grid-template-columns: auto 1fr; gap: 4px 8px; align-items: center; padding: 6px 8px; background: var(--seg); border-radius: 7px; }
-.plant-row .plant-name { font-size: 12px; font-weight: 600; }
-.plant-row.empty .plant-name { color: var(--muted); font-weight: 400; }
-.plant-row .range { min-width: 0; }
-.plant-row.empty .range { opacity: 0.45; }
-.world-space { font-size: 11px; color: var(--muted); }
-
-/* ---------- a narrow screen: the stage takes the width, the panel is a bottom sheet ---------- */
-@media (max-width: 699px) {
-  #tabs { gap: 8px; padding: 4px 8px; }
-  #tabs .seg { padding: 0 14px; }
-  #status { padding: 4px 12px; }
-
-  .lab { display: block; overflow: hidden; --handle: 52px; }
-  .stage { position: absolute; inset: 0 0 var(--handle); }
-  .panel {
-    position: absolute; left: 0; right: 0; bottom: 0; height: 78%; z-index: 1;
-    border-left: 0; border-top: 1px solid var(--line); border-radius: 14px 14px 0 0;
-    box-shadow: 0 -6px 20px rgba(0, 0, 0, 0.14);
-    transform: translateY(calc(100% - var(--handle))); transition: transform 0.25s ease;
-  }
-  .panel.open { transform: none; }
-  .sheet-handle {
-    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; flex: none;
-    height: var(--handle); width: 100%; padding: 6px 16px 8px; border: 0; border-bottom: 1px solid var(--line); border-radius: 14px 14px 0 0;
-    background: transparent; touch-action: none; user-select: none; -webkit-user-select: none;
-  }
-  .sheet-handle, .sheet-handle:hover { border-color: var(--line); }
-  .sheet-handle::before { content: ""; width: 36px; height: 4px; border-radius: 2px; background: var(--line); flex: none; }
-  .sheet-name { font-size: 14px; font-weight: 650; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-  /* Touch targets of at least 44 px; 16 px selects keep iOS from zooming in on focus. */
-  button, select { min-height: 44px; }
-  select { font-size: 16px; }
-  .range input { height: 44px; }
-  .check { min-height: 44px; }
-  .check input { width: 20px; height: 20px; }
-  details.json summary { padding: 12px 0; }
-  .switch { width: 50px; height: 44px; }
-  .switch-track { inset: 7px 0; border-radius: 15px; }
-  .switch-track::after { width: 26px; height: 26px; }
-  .switch input:checked + .switch-track::after { transform: translateX(20px); }
-}
-
-/* ---------- the card: what a thing in the world stands for ---------- */
-/* A page from a field guide: warm paper, a serif name, calm color. */
-.card {
-  --paper: #f7f1e3; --paper-ink: #3a3226; --paper-muted: #7a6f5c; --paper-line: #e4d9c2;
-  --life: #6f9a4a; --dry: #a89a7c;
-  background: var(--paper); color: var(--paper-ink); padding: 14px 16px 16px; border-bottom: 1px solid var(--paper-line);
-  overflow-y: auto; min-height: 0; flex: 1;
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .card { --paper: #26231d; --paper-ink: #ece4d2; --paper-muted: #a99d86; --paper-line: #3b362c; --life: #9cc27a; --dry: #8a7f68; }
-}
-:root[data-theme="dark"] .card { --paper: #26231d; --paper-ink: #ece4d2; --paper-muted: #a99d86; --paper-line: #3b362c; --life: #9cc27a; --dry: #8a7f68; }
-.card-head { display: grid; grid-template-columns: 1fr auto; align-items: start; column-gap: 8px; }
-.card-what { grid-column: 1; font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--paper-muted); }
-.card-name { grid-column: 1; margin: 2px 0 0; font: italic 600 22px/1.2 Georgia, "Iowan Old Style", "Times New Roman", serif; overflow-wrap: anywhere; }
-.card-close { grid-column: 2; grid-row: 1 / span 2; background: transparent; border: 0; color: var(--paper-muted); font-size: 20px; line-height: 1; padding: 2px 6px; }
-.card-doc { margin: 8px 0 10px; font: 14px/1.45 Georgia, "Iowan Old Style", "Times New Roman", serif; }
-.card-facts { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; margin: 0 0 12px; font-size: 12px; }
-.card-facts dt { color: var(--paper-muted); }
-.card-facts dd { margin: 0; overflow-wrap: anywhere; }
-.card-facts code { font: 11.5px ui-monospace, "SF Mono", Menlo, monospace; }
-.card-health { display: grid; grid-template-columns: auto auto 1fr; align-items: center; gap: 8px; padding-top: 10px; border-top: 1px solid var(--paper-line); }
-.card-health b { font: italic 600 15px Georgia, "Times New Roman", serif; }
-.card-score { color: var(--paper-muted); font-variant-numeric: tabular-nums; font-size: 12px; }
-.card-meter { height: 6px; border-radius: 3px; background: var(--paper-line); overflow: hidden; }
-.card-meter span { display: block; height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--dry), var(--life)); }
-.card-signals { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
-.card-signals li { display: grid; grid-template-columns: auto 1fr; gap: 0 10px; font-size: 12px; }
-.card-signal { font-weight: 600; }
-.card-reading { color: var(--paper-muted); text-align: right; }
-.card-cost { grid-column: 1 / -1; height: 2px; margin-top: 3px; background: var(--dry); border-radius: 1px; }
-.card-well { color: var(--paper-muted); font-style: italic; }
-.panel.showing-card > header, .panel.showing-card > .scroll { display: none; }
-
 /* ---------- the immersive world: only the world, and one quiet way of knowing where you are ---------- */
 /* Everything here belongs to the world's look: warm paper, ink, a serif, and slow, soft motion. */
-#shell.immersive { grid-template-rows: minmax(0, 1fr); }
-#shell.immersive > #tabs, #shell.immersive > #status { display: none; }
-.lab-terrain.immersive { display: block; }
-.lab-terrain.immersive .stage { position: absolute; inset: 0; }
-.lab-terrain.immersive .bar { display: none; }
 @keyframes veil-breathe { from { transform: translateY(0); } to { transform: translateY(-3px); } }
 /* While the veil is down (the first bake, or a question asked later), nothing of the world's paper sits over it. */
 .lab-terrain:has(.veil:not(.lifted)) .wayfinding { opacity: 0; }
 .lab-terrain:has(.veil:not(.lifted)) .wayfinding button { pointer-events: none !important; }
-/* The debugging views' panel, a thing's field-guide card among it, never shows over the world. */
-.lab-terrain.immersive .panel { display: none; }
 /* Paper coming and going: the wait's slip (wait/wait.css) uses these. */
 @keyframes page-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @keyframes page-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(6px); } }
@@ -481,7 +272,7 @@ details.json pre { font: 11px/1.45 ui-monospace, "SF Mono", Menlo, monospace; ba
 @keyframes jump-closer { from { scale: 1; } to { scale: 1.6; } }
 @keyframes jump-drift { from { translate: -6px -4px; } to { translate: 6px 4px; } }
 
-/* The slip: Gaia's mark, how to wander, and the way back to the lab. */
+/* The slip: Gaia's mark and how to wander. */
 .way-slip {
   position: absolute; top: calc(max(14px, env(safe-area-inset-top)) + 52px); right: 14px; width: min(276px, calc(100% - 28px));
   padding: 12px 10px 12px; border-radius: 10px; background: var(--paper); color: #3a3226;
@@ -497,9 +288,6 @@ details.json pre { font: 11px/1.45 ui-monospace, "SF Mono", Menlo, monospace; ba
 .slip-wander { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0 6px 12px; font-size: 13px; }
 .slip-wander dt { font-style: italic; font-weight: 600; color: var(--ink); white-space: nowrap; }
 .slip-wander dd { margin: 0; color: var(--ink-soft); }
-.slip-views { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 4px; }
-.slip-view { background: transparent; color: #3a3226; border: 1px solid var(--paper-line); border-radius: 999px; padding: 5px 12px; font-size: 13px; }
-@media (hover: hover) { .slip-view:hover { border-color: rgba(74, 60, 44, 0.3); } }
 
 /* The field map: a sheet of paper unfolded over the world. It opens out from its folds, tilting up flat as it
    comes, and folds away quicker than it opened. */
@@ -548,7 +336,7 @@ details.json pre { font: 11px/1.45 ui-monospace, "SF Mono", Menlo, monospace; ba
   /* A phone's map fills the screen and opens close around the person, so the land's shape would only shrink it. */
   .field-map { left: 8px; top: 8px; width: calc(100% - 16px); height: calc(100% - 16px); }
   .field-map { --fold: 44px; }
-  .way-button, .slip-view { min-height: 44px; }
+  .way-button { min-height: 44px; }
   .minimap { right: 10px; --foot: max(10px, env(safe-area-inset-bottom)); }
   .thing-page { left: 10px; width: min(300px, calc(100vw - 20px)); }
 }

@@ -1,15 +1,12 @@
-// The lab's shell. It opens into the world, full screen and immersive; its
-// debugging views (Components, Terrain and Skies) sit behind tabs, with one
-// drawing loop for the open view and the engine's status. The immersive
-// world is the terrain lab's world without its chrome. Each lab is built the
-// first time its view opens.
+// The page: the world, full screen at eye height, behind the wait until it
+// stands. The world is the terrain lab's (`terrain/lab.ts`) with the immersive
+// layer over it (`immersive/view.ts`), drawn by one loop at the clock's hour,
+// and `window.__lab` holds the hooks scripted checks drive it through.
 
 import "./lab.css";
 import * as THREE from "three";
 import { createClock } from "./clock.ts";
 import { watchEngine } from "./engine-status.ts";
-import { createFloraLab } from "./flora/lab.ts";
-import type { Lab } from "./lab.ts";
 import { setFavicon } from "./brand/logo.ts";
 import { createStats } from "./stats.ts";
 import { reportStage, startTelemetry } from "./telemetry.ts";
@@ -22,145 +19,82 @@ import { Library, seedOf } from "@gaia/schema";
 import { WORLD_PRIMITIVES } from "@gaia/primitives";
 import { world as worldKind } from "@gaia/kinds";
 import { WORLD_PRESETS, realizeSky } from "@gaia/realize";
-import { createWorldLab } from "./world/lab.ts";
 
 THREE.ColorManagement.enabled = false;
 setFavicon();
 
-const LABS = {
-  flora: createFloraLab,
-  terrain: createTerrainLab,
-  world: createWorldLab,
-} as const satisfies Record<string, (root: HTMLElement) => Lab>;
-type Tab = keyof typeof LABS;
-const TABS = Object.keys(LABS) as Tab[];
-/** What the shell can show: the immersive world, or one lab's debugging view. */
-type View = Tab | "immersive";
-const VIEWS: readonly View[] = ["immersive", ...TABS];
-const DEBUG_VIEWS = [
-  { id: "flora", name: "Components" },
-  { id: "terrain", name: "Terrain" },
-  { id: "world", name: "Skies" },
-] as const;
-/** The immersive world is the terrain lab's world, shown without its chrome. */
-const tabOf = (view: View): Tab => (view === "immersive" ? "terrain" : view);
-
 const shell = document.getElementById("shell");
-const built = new Map<Tab, Lab>();
-let immersive: Immersive | null = null;
-let current: View = "immersive";
-
-function labOf(tab: Tab): Lab {
-  let lab = built.get(tab);
-  if (lab === undefined) {
-    const root = document.querySelector<HTMLElement>(`[data-lab="${tab}"]`);
-    if (root === null) throw new Error(`Missing the ${tab} lab's container.`);
-    lab = LABS[tab](root);
-    built.set(tab, lab);
-    // The immersive layer joins the terrain lab before its first bake lands, so the markers stand on it.
-    if (tab === "terrain") immersive = createImmersive(root, (lab as TerrainLab).world, { views: DEBUG_VIEWS, leave: (id) => open(id as View) });
-  }
-  return lab;
-}
-
-function open(view: View): void {
-  current = view;
-  const tab = tabOf(view);
-  shell?.classList.toggle("immersive", view === "immersive");
-  for (const t of TABS) document.querySelector<HTMLElement>(`[data-lab="${t}"]`)?.toggleAttribute("hidden", t !== tab);
-  for (const v of VIEWS) {
-    const button = document.querySelector<HTMLElement>(`[data-tab="${v}"]`);
-    button?.classList.toggle("on", v === view);
-    button?.setAttribute("aria-selected", String(v === view));
-  }
-  for (const [t, lab] of built) if (t !== tab) lab.setActive(false);
-  const lab = labOf(tab);
-  if (tab === "terrain") (lab as TerrainLab).world.immersive(view === "immersive");
-  lab.setActive(true);
-  immersive?.setActive(view === "immersive");
-}
-
-for (const button of document.querySelectorAll<HTMLElement>("[data-tab]")) {
-  const view = button.dataset.tab as View;
-  if (VIEWS.includes(view)) button.addEventListener("click", () => open(view));
-}
+const root = document.querySelector<HTMLElement>("[data-lab=terrain]");
+if (shell === null || root === null) throw new Error("Missing the world's container.");
 
 // The first touch shows the touch controls, even where the primary pointer is a mouse.
 window.addEventListener("pointerdown", (e) => {
   if (e.pointerType === "touch") document.documentElement.classList.add("touch");
 });
 
-const statusBar = document.getElementById("status");
-const statusLine = document.getElementById("status-text");
-watchEngine((text, state) => {
-  if (statusLine !== null) statusLine.textContent = text;
-  if (statusBar !== null) statusBar.dataset.state = state;
+/** The engine's state in words, as the world service last reported it. */
+let status = "";
+watchEngine((text) => {
+  status = text;
 });
 
-const clockRoot = document.getElementById("clock");
-if (clockRoot === null) throw new Error("Missing the time control's container.");
-const clock = createClock(clockRoot);
-// `?hour=22` pins the hour from the start, so a phone can see the world at night without the lab's clock.
+const clock = createClock();
+// `?hour=22` pins the hour from the start, so a phone can see the world at night.
 const askedHour = new URLSearchParams(location.search).get("hour");
 if (askedHour !== null && Number.isFinite(Number(askedHour))) clock.pin(Number(askedHour));
 
-const statsToggle = document.getElementById("stats-toggle");
-const statsReadout = document.getElementById("stats");
-if (!(statsToggle instanceof HTMLButtonElement) || statsReadout === null) throw new Error("Missing the dev readout's elements.");
-const stats = createStats(statsToggle, statsReadout);
+const stats = createStats();
+
+let world: TerrainLab | null = null;
+let immersive: Immersive | null = null;
 
 let last = performance.now();
 function loop(now: number): void {
   const elapsed = (now - last) / 1000;
   const dt = Math.min(0.05, elapsed);
   last = now;
-  const lab = labOf(tabOf(current));
-  stats.begin(lab.renderer);
-  lab.frame(dt, now, clock.hour());
-  if (current === "immersive") immersive?.frame(dt);
-  stats.end(lab.renderer, elapsed);
+  if (world !== null) {
+    stats.begin(world.renderer);
+    world.frame(dt, now, clock.hour());
+    immersive?.frame(dt);
+    stats.end(world.renderer, elapsed);
+  }
   requestAnimationFrame(loop);
 }
 
-/** Settles once the first view is open: scripted checks open views only after it, as a person sees them. */
-let opened: Promise<void> = Promise.resolve();
-// `?view=terrain` opens a debugging view first; the lab otherwise opens into the world.
-const askedView = new URLSearchParams(location.search).get("view") as View | null;
-const firstView: View = askedView !== null && VIEWS.includes(askedView) ? askedView : "immersive";
-if (firstView === "immersive" && shell !== null) {
-  // The wait's sheet shows first, so no one ever sees the lab's bare frame. The trees, landmarks and bushes every
-  // world opens with are made on other threads meanwhile, and the world's page is built once they are and the
-  // sheet has been drawn.
-  const builds = makeAhead(openingBuilds());
-  shell.classList.add("immersive");
-  // The default world's night at the clock's hour, to the twentieth the world's first frame sets it to.
-  const sky = realizeSky({ blueprint: (WORLD_PRESETS[0] as (typeof WORLD_PRESETS)[number]).world, kind: worldKind }, new Library(WORLD_PRIMITIVES), seedOf("terrain-lab/sky"), clock.hour());
-  // In the app every world opens from the start's map table, chosen there or opened straight, so the sheet waits under it.
-  startWaitEarly(shell, Math.round(sky.light.nightness * 20) / 20, OPENING_ASPECT, window.gaiaShell !== undefined && startStyle() === "table");
-  const drawn = new Promise((r) => requestAnimationFrame(() => setTimeout(r)));
-  opened = Promise.all([builds, drawn]).then(() => {
-    open(firstView);
-    requestAnimationFrame(loop);
-  });
-} else {
-  open(firstView);
+// The wait's sheet shows first, so no one ever sees the world's bare frame. The trees and bushes every world opens
+// with are made on other threads meanwhile, and the world's page is built once they are and the sheet has been drawn.
+const builds = makeAhead(openingBuilds());
+// The default world's night at the clock's hour, to the twentieth the world's first frame sets it to.
+const sky = realizeSky({ blueprint: (WORLD_PRESETS[0] as (typeof WORLD_PRESETS)[number]).world, kind: worldKind }, new Library(WORLD_PRIMITIVES), seedOf("terrain-lab/sky"), clock.hour());
+// In the app every world opens from the start's map table, chosen there or opened straight, so the sheet waits under it.
+startWaitEarly(shell, Math.round(sky.light.nightness * 20) / 20, OPENING_ASPECT, window.gaiaShell !== undefined && startStyle() === "table");
+const drawn = new Promise((r) => requestAnimationFrame(() => setTimeout(r)));
+/** Settles once the world's page is built: scripted checks look at the world only after it, as a person sees it. */
+const opened: Promise<TerrainLab> = Promise.all([builds, drawn]).then(() => {
+  const made = createTerrainLab(root);
+  // The immersive layer joins the world before its first bake lands, so the markers stand on it.
+  immersive = createImmersive(root, made.world);
+  made.setActive(true);
+  immersive.setActive(true);
+  world = made;
   requestAnimationFrame(loop);
-}
+  return made;
+});
 
-// Served to a device by `pnpm lab:serve`, the lab says how far it got opening
+// Served to a device by `pnpm lab:serve`, the page says how far it got opening
 // a world, and any error on the way, so a device that fails says where.
 reportStage("page");
 window.addEventListener("error", (e) => reportStage("error", { message: String(e.message).slice(0, 300) }));
 window.addEventListener("unhandledrejection", (e) => reportStage("error", { message: String((e.reason as Error | undefined)?.message ?? e.reason).slice(0, 300) }));
 
-// Served to a device by `pnpm lab:serve`, the lab reports how smooth it runs there.
+// Served to a device by `pnpm lab:serve`, the page reports how smooth it runs there.
 if (
   startTelemetry(() => ({
     userAgent: navigator.userAgent,
     dpr: window.devicePixelRatio,
     viewport: [window.innerWidth, window.innerHeight],
-    tab: current,
-    ...labOf(tabOf(current)).report?.(),
+    ...world?.report?.(),
     smooth: stats.smoothness(),
     ...stats.passes(),
   }))
@@ -168,7 +102,7 @@ if (
   stats.count(true);
 }
 
-// A hook for scripted checks and `pnpm shots`.
+/** Resolves after `n` frames. */
 const frames = (n: number): Promise<void> =>
   new Promise((resolve) => {
     const step = (k: number): void => {
@@ -178,43 +112,33 @@ const frames = (n: number): Promise<void> =>
     step(n);
   });
 
-const allShots = () => TABS.flatMap((tab) => labOf(tab).shots().map((shot) => ({ tab, shot })));
-
 declare global {
   interface Window {
     __lab: unknown;
   }
 }
 window.__lab = {
-  /** Opens a view ("immersive", or a lab's tab) and waits until it has something to show, such as its first baked world. */
-  open: async (view: View) => {
-    await opened;
-    open(view);
-    await labOf(tabOf(view)).ready;
+  /** Waits until the world has something to show, its first world standing. The page shows only the world, "immersive". */
+  open: async (view = "immersive") => {
+    if (view !== "immersive") throw new Error(`No view named ${view}: the page shows only the world, "immersive".`);
+    const made = await opened;
+    await made.ready;
     await frames(3);
   },
-  tab: () => current,
   /** Pins the hour every world shows, or `null` to follow the clock. */
   hour: async (h: number | null) => {
     clock.pin(h);
     await frames(3);
   },
-  status: () => statusLine?.textContent ?? "",
-  /** The dev readout's latest frame time, draw calls and the last ten seconds' smoothness, or null while it is off. */
+  /** The engine's state in words. */
+  status: () => status,
+  /** The latest frame time, draw calls and the last ten seconds' smoothness; counting starts with the first call. */
   stats: () => stats.read(),
-  /** The smoothness probe's last ten seconds, whether or not the readout shows. */
+  /** The smoothness probe's last ten seconds. */
   smoothness: () => stats.smoothness(),
   frames,
-  shots: () => allShots().map((s) => s.shot.name),
-  stage: async (name: string) => {
-    const found = allShots().find((s) => s.shot.name === name);
-    if (found === undefined) throw new Error(`No shot named ${name}.`);
-    open(found.tab);
-    await labOf(found.tab).ready;
-    await found.shot.stage();
-    await frames(6);
-  },
-  ...Object.fromEntries(TABS.map((tab) => [tab, new Proxy({}, { get: (_, key: string) => labOf(tab).hook[key] })])),
+  /** The world's hooks (`terrain/lab.ts`). */
+  terrain: new Proxy({}, { get: (_, key: string) => world?.hook[key] }),
   /** The immersive world's hooks: the map, a jump, the slip in the corner, and what each way of knowing where you are shows. */
-  immersive: new Proxy({}, { get: (_, key: string) => (labOf("terrain"), immersive?.hook[key]) }),
+  immersive: new Proxy({}, { get: (_, key: string) => immersive?.hook[key] }),
 };

@@ -1,19 +1,16 @@
-// The terrain lab: a full world of regions, each a biome with a landform and
-// a ground cover Jev could choose, baked into one heightfield on worker
-// threads, which also stand its buildings, landmarks, trails, trees and
-// understory, so the page never stops drawing while a world bakes. Walk it at
-// eye height, tapping or clicking the ground to walk there, or look at the
-// whole of it from above; edit any region's biome and watch the budget and
-// the ground change.
-// Buildings stand for sample entities and trees for sample files; tapping one
-// walks the person up to it and then opens a card saying what it stands for.
+// The terrain lab: the world a person walks. A full world of regions, each a
+// biome with a landform and a ground cover Jev chose, baked into one
+// heightfield on worker threads, which also stand its buildings, landmarks,
+// trails, trees and understory, so the page never stops drawing while a world
+// bakes. A person walks it at eye height, tapping or clicking the ground to
+// walk there. Buildings, landmarks, trees, stones, bushes and flowers stand for
+// code: tapping one opens its page in the journal, and standing at one tells
+// the journal what the person stopped at.
 
 import * as THREE from "three";
-import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { type AtmosphereSpec, type Blueprint, type BuildingPlan, type GroundSpec, Library, type Palette, type RouteSpec, type SeasonSpec, blueprintOf, seedOf } from "@gaia/schema";
+import { type AtmosphereSpec, type Blueprint, type BuildingPlan, type GroundSpec, Library, type Palette, type RouteSpec, type SeasonSpec, seedOf } from "@gaia/schema";
 import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, LANDMARK_PRIMITIVES, NO_SHIFT, ROUTE_PRIMITIVES, RELIEF_PRIMITIVES, ROCK_PRIMITIVES, WILDFLOWER_PRIMITIVES, WORLD_PRIMITIVES, hex } from "@gaia/primitives";
 import { biome, landmark as landmarkKind, link, world as worldKind } from "@gaia/kinds";
-import { defaultParams, validate } from "@gaia/world";
 import { CLEAR_AIR, FLORA_PRESETS, LANDMARK_PRESETS, type Realized, type SkyLook, TRAIL_PRESETS, WORLD_PRESETS, buildSlots, mergeParts, mixAir, realizeRegion, realizeSky, regionAir, throughAir } from "@gaia/realize";
 import {
   type FarCards,
@@ -34,12 +31,10 @@ import {
   createSunShadow,
   type SceneLight,
 } from "@gaia/render";
-import { type Capsule, clearanceAt, frameOf, TILE, LAND_ASPECT, type Deck, decksOf, deckShape, EYE_HEIGHT, footingAt, FULL_WORLD, GAIT, groundHeightAt, heightAt, type Intent, junctionVitality, NO_SOLIDS, NO_TRAILS, openingSpot, TRAILS, outlineShape, returnTo, stoodBy, type StoodSpot, withinLand, piecesShapes, type Place, placeAt, planWalk, randomWorld, regionPlaces, regionWeights, RELIEF_BUDGET, sampleWorld, sightlines, siteToWorld, SMALL_WORLD, type Solids, type SolidShape, solidsOf, stanceAt, standAt, steerAlong, type Steered, type Steering, steering, steerPress, steerRelease, steerStep, stride, type Stride, acrossWay, carry, planTrip, TRAVEL, type Travel, wadingAt, fordBeside, travelFrom, travelPoint, travelStep, type Trip, trailWay, type Walker, type WalkKey, type Terrain, TERRAIN, type TrailNetwork, type Walk, WALK_TO, walkStep, wallsShape, waterDepthAt, type Way, wayAhead, wayVitalityAt, wayWear, WILDS, type WorldPlaces, type WorldSpec } from "@gaia/terrain";
+import { type Capsule, clearanceAt, frameOf, TILE, LAND_ASPECT, type Deck, decksOf, deckShape, EYE_HEIGHT, footingAt, FULL_WORLD, GAIT, groundHeightAt, heightAt, type Intent, junctionVitality, NO_SOLIDS, NO_TRAILS, openingSpot, TRAILS, outlineShape, returnTo, stoodBy, type StoodSpot, withinLand, piecesShapes, type Place, placeAt, planWalk, regionPlaces, regionWeights, sampleWorld, siteToWorld, SMALL_WORLD, type Solids, type SolidShape, solidsOf, stanceAt, standAt, steerAlong, type Steered, type Steering, steering, steerPress, steerRelease, steerStep, stride, type Stride, acrossWay, carry, planTrip, TRAVEL, type Travel, wadingAt, fordBeside, travelFrom, travelPoint, travelStep, type Trip, trailWay, type Walker, type WalkKey, type Terrain, TERRAIN, type TrailNetwork, type Walk, WALK_TO, walkStep, wallsShape, waterDepthAt, type Way, wayAhead, wayVitalityAt, wayWear, WILDS, type WorldPlaces, type WorldSpec } from "@gaia/terrain";
 import { createSky } from "../world/environment.ts";
 import { type CaptureBounds, type Pixels, createCapture } from "./capture.ts";
-import { renderInspector } from "../inspector.ts";
-import { type Lab, type Shot, onTap, refs, slug, tapSlop } from "../lab.ts";
-import { createSheet } from "../sheet.ts";
+import { type Lab, onTap, refs, tapSlop } from "../lab.ts";
 import { createGrass } from "./cover.ts";
 import { createGround, createGroundTexture } from "./ground.ts";
 import { createRegionCovers } from "./regions.ts";
@@ -52,7 +47,6 @@ import { type WayPiece, type Ways, createWays, crossingVitality, setTrailEnds } 
 import { reportStage } from "../telemetry.ts";
 import { takeWait } from "../wait/wait.ts";
 import { withStart } from "../start/start.ts";
-import { createCard } from "./card.ts";
 import { LANDMARK_ENTITIES, type Represented, SAMPLE_ENTITIES, SAMPLE_FILES, SAMPLE_VITALITY, representEntity, representFile } from "./samples.ts";
 import { type CodeWorld, type Judge, groundVitality, judgedThing } from "@gaia/world";
 import { type CodeLab, codeWorld } from "./code-world.ts";
@@ -71,52 +65,15 @@ import { contentHash, openFarStore } from "./far-store.ts";
 
 const TEMPLATE = /* html */ `
 <main class="stage">
-  <canvas class="view" aria-label="A world of gentle landforms. Click or tap the ground to walk there and drag to look, or switch to the overview."></canvas>
+  <canvas class="view" aria-label="A world of gentle landforms. Click or tap the ground to walk there, and drag to look."></canvas>
   <div class="veil" data-ref="veil" aria-label="The world is being made"></div>
-  <div class="bar top">
-    <div class="segmented modes" role="group" aria-label="View">
-      <button data-ref="mode-walk" class="seg on" type="button">Walk</button>
-      <button data-ref="mode-overview" class="seg" type="button">Overview</button>
-    </div>
-    <button data-ref="codebase" title="Gaia's own world, from the engine's facts about this repository">This codebase</button>
-    <button data-ref="random" class="primary" title="Draw every region's landform, fields and cover uniformly, then fit the budget">Random terrain</button>
-  </div>
-  <div class="bar bottom">
-    <div class="chip stats" id="terrain-stats" data-ref="stats" hidden>
-      <div class="budget" data-ref="budget"></div>
-      <div class="sight" data-ref="sight"></div>
-    </div>
-    <div class="bar-row">
-      <div class="chip hintline"><span class="here" data-ref="here"></span><span data-ref="hint"></span></div>
-      <button data-ref="stats-toggle" class="chip stats-toggle" type="button" aria-expanded="false" aria-controls="terrain-stats">Stats</button>
-    </div>
-  </div>
 </main>
-<aside class="panel" data-ref="panel">
-  <section data-ref="card" aria-live="polite"></section>
-  <header>
-    <div class="regions" data-ref="regions"></div>
-    <div class="title" data-ref="region-name"></div>
-    <div class="bp-id" data-ref="bp-id"></div>
-    <div class="draw" data-ref="draw"></div>
-    <div class="problems" data-ref="problems"></div>
-  </header>
-  <div class="scroll">
-    <div data-ref="slots"></div>
-    <details class="json"><summary>Biome blueprint JSON</summary><pre data-ref="json"></pre></details>
-  </div>
-</aside>
 `;
 
 /** The terrain lab's covers wear no season; its light and sky are the first named world's, at the shell's hour. */
 const NO_SEASON: SeasonSpec = { swatches: {}, ground: NO_SHIFT, frost: 0, fall: hex(0xd9a04a) };
 const SKY_WORLD = WORLD_PRESETS[0] as (typeof WORLD_PRESETS)[number];
 
-/** Each mode's hint, for a mouse and keyboard and for touch. */
-const HINTS = {
-  walk: ["Click the ground to walk there, drag to look; ↑ walks; ← → nudge, and turn on steadily while held, standing or walking; ↓ walks back, still facing ahead; Shift hurries", "Tap the ground to walk there, drag to look"],
-  overview: ["Drag to orbit, scroll to zoom, click a region", "Drag to orbit, pinch to zoom, tap a region"],
-};
 /** The keys that move a person, W A S D, the arrows or vim's k h j l: ahead, left, right or back, and Shift. */
 const KEYS = {
   ahead: ["KeyW", "ArrowUp", "KeyK"],
@@ -249,8 +206,6 @@ export interface WorldHandle {
   furnish(furnisher: (stood: StoodWorld) => Furnishing): void;
   /** Whether the furnishing stops a walker, as it should while it shows. */
   furnishingSolid(on: boolean): void;
-  /** Shows only the world: no panel, no bars, walking only. */
-  immersive(on: boolean): void;
   /**
    * Where a person sent from the map to (x, z) lands, or null if nowhere near
    * is fit: on or beside a building, where its sign is read, looking at it;
@@ -380,7 +335,7 @@ const FAR_BAKE = { views: 24, ms: 6, walkingMs: 2 } as const;
 /** `?world=sample&size=5000` asks for a sample world of that many meters across, with as many regions as the full one. */
 const ASKED_SIZE = Number(new URLSearchParams(location.search).get("size"));
 const SCALE = ASKED_WORLD === "small" ? SMALL_WORLD : ASKED_SIZE > 0 ? { ...FULL_WORLD, size: ASKED_SIZE } : FULL_WORLD;
-/** The air over the overview: clear, and thinning with the world's size so the whole of it stays legible. */
+/** The air seen through from above (the `overview` hook): clear, and thinning with the world's size so the whole of it stays legible. */
 const OVERVIEW_AIR: AtmosphereSpec = { ...CLEAR_AIR, density: 0.0008 * Math.min(1, 320 / SCALE.size) };
 /** Seeded builds per flora preset, and the trees the lab plants unless a hook asks otherwise: as dense as the small world's 22 over 320 m. */
 const TREE_BUILDS = 3;
@@ -389,14 +344,12 @@ const TREES = Math.round(22 * (SCALE.size / 320) ** 2);
 const TREE_ASKS: readonly BuildAsk[] = FLORA_PRESETS.flatMap((preset, p) =>
   Array.from({ length: TREE_BUILDS }, (_, k): BuildAsk => ({ kind: "flora", blueprint: preset.blueprint, seed: seedOf(`terrain-lab/tree-${p}-${k}`), facts: { scale: 1, age: 120 } })),
 );
-const LANDMARK_ASKS: readonly BuildAsk[] = LANDMARK_PRESETS.map((preset, i) => ({ kind: "landmark", blueprint: preset.blueprint, seed: seedOf(`terrain-lab/landmark-${i}`), facts: { scale: 1 } }));
 /** Every build the terrain lab makes as it opens, whatever world it shows: what the page makes ahead (made.ts). */
-export const openingBuilds = (): BuildAsk[] => [...TREE_ASKS, ...LANDMARK_ASKS, ...understoryBuilds(), ...wildBushBuilds()];
+export const openingBuilds = (): BuildAsk[] => [...TREE_ASKS, ...understoryBuilds(), ...wildBushBuilds()];
 
 export function createTerrainLab(root: HTMLElement): TerrainLab {
   root.innerHTML = TEMPLATE;
   const $ = refs(root);
-  const sheet = createSheet($("panel"));
   const lib = new Library([...RELIEF_PRIMITIVES, ...BIOME_PRIMITIVES]);
   const floraLib = new Library(FLORA_PRIMITIVES);
   let active = false;
@@ -435,10 +388,11 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     const built = made(ask, landmarkLib);
     return { key: `${ask.blueprint.id}:${ask.seed}`, name, blueprint: ask.blueprint, built, base: landmarkBase(built) };
   };
-  /** Every landmark preset: what the sample world stands and the shots show. */
-  const presetLandmarks = LANDMARK_PRESETS.map((preset, i) => landmarkOf(preset.name, LANDMARK_ASKS[i] as BuildAsk));
+  /** Every landmark preset, built only for the sample world, which stands them. */
+  const presetLandmarks = (): ReturnType<typeof landmarkOf>[] =>
+    LANDMARK_PRESETS.map((preset, i) => landmarkOf(preset.name, { kind: "landmark", blueprint: preset.blueprint, seed: seedOf(`terrain-lab/landmark-${i}`), facts: { scale: 1 } }));
   /** The landmarks of the world shown: a codebase's own, each as Jev composed it, or the presets. */
-  let landmarks = presetLandmarks;
+  let landmarks = OPENS_CODE ? [] : presetLandmarks();
   /** What builds each landmark Jev composed for a codebase's world. */
   const landmarkAsks = (c: CodeLab): BuildAsk[] =>
     c.landmarks.map((l) => ({
@@ -660,14 +614,14 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   /**
    * Lays the air where the eye stands, at `x`, `z`, in front of the hour's sky: each region's air blended by how near
    * it lies, over the band where landforms and covers blend (`regionWeights`), so it changes gradually as the person
-   * crosses from one region into the next. Every pass reads it: the view, the water's mirror and far forms. The overview
-   * looks through thin, clear air instead, so the whole land stays legible.
+   * crosses from one region into the next. Every pass reads it: the view, the water's mirror and far forms. A view from
+   * above looks through thin, clear air instead, so the whole land stays legible.
    */
   function breathe(x: number, z: number): void {
     if (skyLook === null) return;
     if (airs?.world !== world) airs = { world, airs: world.regions.map((r) => regionAir({ blueprint: r.biome, kind: biome }, lib, seedOf(r.id))), weights: new Float64Array(world.regions.length) };
     regionWeights(world, x, z, airs.weights);
-    sky.apply({ light: skyLook.light, ...throughAir(skyLook, mode === "overview" ? OVERVIEW_AIR : mixAir(airs.airs, airs.weights)) });
+    sky.apply({ light: skyLook.light, ...throughAir(skyLook, aerial !== null ? OVERVIEW_AIR : mixAir(airs.airs, airs.weights)) });
   }
   const shadow = createSunShadow(light, 2048);
 
@@ -1179,16 +1133,14 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     ]);
   }
 
-  const card = createCard($("card"), () => hideCard());
+  /** What the person walked up to while its card is open: the journal shows its page. */
+  let shown: Represented | null = null;
   /** Where the person stood when the card opened: walking this far from it closes the card, meters. */
   let cardAt: { x: number; z: number } | null = null;
   const cardListeners: ((thing: CardThing | null) => void)[] = [];
   function showCard(s: Subject): void {
     for (const l of cardListeners) l({ represented: s.represented, standsAs: s.standsAs, ...(s.judge === undefined ? {} : { judge: s.judge }) });
-    card.show(s.represented, s.standsAs, s.judge);
-    $("panel").classList.add("showing-card");
-    sheet.name(s.represented.name);
-    sheet.open(true);
+    shown = s.represented;
     cardAt = { x: walker.x, z: walker.z };
   }
   /** The thing the person is walking up to, or whose card shows. */
@@ -1201,12 +1153,10 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     for (const l of headingListeners) l(s === null ? null : { x: s.x, z: s.z, reach: s.reach, name: s.represented.name });
   }
   function hideCard(): void {
-    if (card.shown !== null) for (const l of cardListeners) l(null);
+    if (shown !== null) for (const l of cardListeners) l(null);
     headFor(null);
     cardAt = null;
-    card.hide();
-    $("panel").classList.remove("showing-card");
-    sheet.name(world.regions[selected]?.id ?? "");
+    shown = null;
   }
   /** The subject a walk is taking the person to, shown when they get there. */
   let pending: Subject | null = null;
@@ -1263,7 +1213,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   /** Standing still long enough at a thing opens its card, unless it is the one already open. */
   function stopAt(): void {
     const s = thingAt();
-    if (s === null || stood < s.stop || card.shown?.id === s.represented.id) return;
+    if (s === null || stood < s.stop || shown?.id === s.represented.id) return;
     headFor(s);
     showCard(s);
   }
@@ -1349,19 +1299,12 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     return best;
   }
 
-  // ---------- camera, walking and the overview ----------
+  // ---------- camera, walking, and the view from above ----------
 
   const camera = new THREE.PerspectiveCamera(58, 1, 0.2, 4500);
-  const orbit = new OrbitControls(camera, canvas);
-  orbit.enableDamping = true;
-  orbit.maxPolarAngle = Math.PI * 0.42;
-  orbit.minDistance = 60;
-  orbit.maxDistance = Math.max(700, SCALE.size * 1.1);
-  orbit.enabled = false;
-
-  type Mode = "walk" | "overview";
-  let mode: Mode = "walk";
-  const walker = { x: 0, z: 0, yaw: 0, pitch: -0.05, eye: 0, moved: true };
+  /** What the camera looks at from above, placed there by the `overview` hook for a capture; null while the person walks. */
+  let aerial: THREE.Vector3 | null = null;
+  const walker = { x: 0, z: 0, yaw: 0, pitch: -0.05, eye: 0 };
   /** Where a tap or click is walking the walker, if anywhere. */
   let goal: Walk | null = null;
   const keys = new Set<string>();
@@ -1393,7 +1336,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       press(e.code);
       // The keys take over from a tap's walk; Shift alone moves nothing, so it leaves it be.
       if (WALK_KEYS.has(e.code)) endWalk();
-    } else if (e.code === "Escape" && card.shown !== null) hideCard();
+    } else if (e.code === "Escape" && shown !== null) hideCard();
   });
   window.addEventListener("keyup", (e) => release(e.code));
   window.addEventListener("blur", () => release());
@@ -1403,7 +1346,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   // nudges it and a drag never walks.
   const drag = { id: -1, x: 0, y: 0, looking: false };
   canvas.addEventListener("pointerdown", (e) => {
-    if (mode !== "walk" || drag.id !== -1) return;
+    if (aerial !== null || drag.id !== -1) return;
     drag.id = e.pointerId;
     drag.x = e.clientX;
     drag.y = e.clientY;
@@ -1411,7 +1354,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     canvas.setPointerCapture(e.pointerId);
   });
   canvas.addEventListener("pointermove", (e) => {
-    if (e.pointerId !== drag.id || mode !== "walk") return;
+    if (e.pointerId !== drag.id || aerial !== null) return;
     if (!drag.looking && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) <= tapSlop(e)) return;
     drag.looking = true;
     // The view turns with the hand, one to one and nothing more; turning it takes over from a tap's walk.
@@ -1465,10 +1408,10 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     if (trip !== null) trip.stopping = true;
     goal = planWalk(terrain, solids, walker, { x, z });
     pending = null;
-    if (card.shown === null) headFor(null);
+    if (shown === null) headFor(null);
   }
   function endWalk(): void {
-    if (pending !== null && card.shown === null) headFor(null);
+    if (pending !== null && shown === null) headFor(null);
     pending = null;
     goal = null;
   }
@@ -1478,20 +1421,14 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     pending = null;
     goal = null;
     if (to !== null && Math.hypot(walker.x - to.x, walker.z - to.z) < 14) arrive(to);
-    else if (card.shown === null) headFor(null);
+    else if (shown === null) headFor(null);
   }
 
-  // In the overview a tap picks a region. Walking, a tap on a building, a
-  // tree or a sign walks the person up to it and then says what it is, and a
-  // tap on the ground walks there.
+  // A tap on a building, a tree or a sign walks the person up to it and then
+  // says what it is, and a tap on the ground walks there.
   onTap(canvas, (e) => {
+    if (aerial !== null) return;
     const ray = aim(e);
-    if (mode === "overview") {
-      // The coarse mesh is placed by its shader, so the pick marches the heightfield instead.
-      const hit = groundHit(ray);
-      if (hit !== null) select(regionAt(hit.x, hit.z));
-      return;
-    }
     const land = groundHit(ray);
     const tree = treeHit(ray);
     const building = settlement.pick(raycaster);
@@ -1528,25 +1465,33 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     return terrain.region[Math.max(0, Math.min(l.n - 1, iz)) * l.n + Math.max(0, Math.min(l.n - 1, ix))] ?? 0;
   }
 
-  function setMode(next: Mode): void {
-    mode = next;
-    orbit.enabled = active && next === "overview";
-    ground.fine.visible = next === "walk";
-    ground.coarse.visible = next === "overview";
-    ground.wilds.visible = next === "overview";
-    wildGrowth.show(next === "walk");
-    grass.mesh.visible = next === "walk";
-    ground.select(selected, next === "overview");
-    $("mode-walk").classList.toggle("on", next === "walk");
-    $("mode-overview").classList.toggle("on", next === "overview");
-    const [mouseHint, touchHint] = HINTS[next];
-    $("hint").innerHTML = `<span class="mouse-only">${mouseHint}</span><span class="touch-only">${touchHint}</span>`;
-    endWalk();
-    if (next === "overview") {
+  /** Shows the ground and growth for walking, or for a view from above: the whole-world mesh and the wild ring. */
+  function showAerial(on: boolean): void {
+    ground.fine.visible = !on;
+    ground.coarse.visible = on;
+    ground.wilds.visible = on;
+    wildGrowth.show(!on);
+    grass.mesh.visible = !on;
+  }
+  /**
+   * Looks at the land from above, from `pos` toward `target`, for a capture: the camera stands exactly there, and
+   * the land is drawn whole through clear air. Walking anywhere ends it.
+   */
+  function lookFromAbove(pos?: readonly [number, number, number], target?: readonly [number, number, number]): void {
+    if (aerial === null) {
+      endWalk();
+      aerial = new THREE.Vector3();
       camera.position.set(walker.x * 0.3 + 40, 300, walker.z * 0.3 + 330);
-      orbit.target.set(0, 0, 0);
+      showAerial(true);
     }
-    walker.moved = true;
+    if (pos !== undefined) camera.position.set(...pos);
+    if (target !== undefined) aerial.set(...target);
+    camera.lookAt(aerial);
+  }
+  function walkAgain(): void {
+    if (aerial === null) return;
+    aerial = null;
+    showAerial(false);
   }
 
   /** Puts the walker at a point at once, looking along `yaw`. */
@@ -1563,8 +1508,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     body = standAt(terrain, decks, x, z);
     walker.eye = body.eye;
     steer = steerAlong(steer);
-    walker.moved = true;
-    if (mode !== "walk") setMode("walk");
+    walkAgain();
   }
 
   /**
@@ -1671,7 +1615,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     marks.push({ s: plan.length, asked: false, ready: false });
     trip = { plan, at: travelFrom(plan, walker.yaw), stopping: false, marks, began: performance.now(), setOff: null, waited: 0 };
     steer = steerAlong(steer);
-    if (mode !== "walk") setMode("walk");
+    walkAgain();
     return true;
   }
 
@@ -1732,7 +1676,6 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     }
     walker.x = body.x;
     walker.z = body.z;
-    if (walker.x !== fromX || walker.z !== fromZ) walker.moved = true;
     // Stopping at a thing opens its card, looked for only as the stop reaches each wait.
     if (goal !== null || trip !== null || keys.size > 0) arrived = false;
     const before = stood;
@@ -1755,10 +1698,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     walked = Math.hypot(walker.x - fromX, walker.z - fromZ);
   }
 
-  // ---------- panel ----------
-
-  let selected = 0;
-  const fmt = (v: number, d = 1): string => v.toFixed(d);
+  // ---------- taking on a world ----------
 
   /** Takes on a freshly baked world and what stands on it: everything on the land follows. */
   /**
@@ -1815,9 +1755,6 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       placeSigns();
       mark("signs");
       endWalk();
-      walker.moved = true;
-      refreshStats();
-      refreshPanel();
       for (const listener of stoodListeners) listener();
     } finally {
       letGo();
@@ -1849,7 +1786,6 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   async function rebake(next: WorldSpec): Promise<boolean> {
     const mine = ++asked;
     const t0 = performance.now();
-    $("random").textContent = "Baking…";
     reportStage("baking", { size: next.size });
     const baked = await baker.bake(next, standRequest());
     if (mine !== asked) {
@@ -1862,125 +1798,8 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     reportStage("baked", { size: next.size, bakeMs: Math.round(bakeMs) });
     await adopt(next, baked);
     reportStage("stood", { size: next.size, trees: trees.length });
-    $("random").textContent = "Random terrain";
     return true;
   }
-
-  const landformName = (i: number): string => world.regions[i]?.biome.slots.relief?.use.replace(/@\d+$/, "") ?? "";
-  const coverName = (i: number): string => String(world.regions[i]?.biome.slots.cover?.params.cover ?? "");
-
-  function select(i: number): void {
-    selected = i;
-    hideCard();
-    ground.select(i, mode === "overview");
-    refreshPanel();
-  }
-
-  function refreshStats(): void {
-    const r = terrain.report;
-    const b = RELIEF_BUDGET;
-    $("budget").innerHTML =
-      `<span title="Highest minus lowest ground in the walkable world">Height range <b>${fmt(r.range)} m</b> of ${b.range}</span>` +
-      `<span title="Steepest ground anywhere">Steepest <b>${fmt(r.maxSlope, 0)}°</b> of ${b.maxSlope}</span>` +
-      `<span title="Share of ground under ${b.walkSlope} degrees">Walkable <b>${fmt(r.walkShare * 100, 1)}%</b></span>` +
-      `<span title="Tallest unbroken climb steeper than ${b.walkSlope} degrees">Tallest steep climb <b>${fmt(r.maxStep)} m</b> of ${b.maxStep}</span>` +
-      `<span title="Vertical scale applied to fit the budget">Fit <b>${fmt(terrain.fit * 100, 0)}%</b></span>` +
-      `<span>Baked in ${fmt(bakeMs, 0)} ms</span>`;
-  }
-
-  let lastSight = 0;
-  function refreshSight(now: number): void {
-    if (!walker.moved || now - lastSight < 350) return;
-    lastSight = now;
-    walker.moved = false;
-    const at = mode === "walk" ? walker : (world.regions[selected] ?? walker);
-    const s = sightlines(terrain.lattice, at.x, at.z);
-    $("sight").innerHTML =
-      `${mode === "walk" ? "From here" : `From the middle of ${world.regions[selected]?.id ?? ""}`}, at eye height: ` +
-      `farthest visible ground <b>${fmt(s.max, 0)} m</b>, median over bearings <b>${fmt(s.median, 0)} m</b>`;
-    const here = regionAt(walker.x, walker.z);
-    const place = placeAt(places, walker.x, walker.z);
-    if (mode !== "walk") $("here").textContent = "";
-    else if (place.area.depth < 0) $("here").textContent = place.area.name;
-    // In the codebase's world: the directory whose ground this is, and the file underfoot.
-    else if (code !== null) $("here").textContent = `${place.area.path === "" ? code.world.name : place.area.path} · ${place.file === null ? "common ground" : place.file.name}`;
-    else $("here").textContent = `${world.regions[here]?.id ?? ""} · ${landformName(here)} · ${coverName(here)}`;
-  }
-
-  function refreshPanel(): void {
-    $("regions").replaceChildren(
-      ...world.regions.map((r, i) => {
-        const b = document.createElement("button");
-        b.className = i === selected ? "region on" : "region";
-        b.innerHTML = `<span>${r.id}</span><small>${landformName(i)} · ${coverName(i)}</small>`;
-        b.addEventListener("click", () => {
-          select(i);
-          if (mode === "walk") walkTo(r.x, r.z, Math.atan2(r.x, r.z));
-        });
-        return b;
-      }),
-    );
-    const region = world.regions[selected];
-    if (region === undefined) return;
-    sheet.name(region.id);
-    $("region-name").textContent = region.id;
-    $("bp-id").textContent = `${region.biome.id} · ground level ${fmt(region.base)} m`;
-    $("problems").textContent = validate(region.biome, biome, lib).join(" ");
-    $("json").textContent = JSON.stringify(region.biome, null, 2);
-    renderInspector($("slots"), {
-      kind: biome,
-      lib,
-      blueprint: region.biome,
-      onChange: (slots) => {
-        const next = blueprintOf(biome.id, slots);
-        const issues = validate(next, biome, lib);
-        if (issues.length > 0) {
-          $("problems").textContent = issues.join(" ");
-          return;
-        }
-        const reshaped = JSON.stringify(next.slots.relief) !== JSON.stringify(region.biome.slots.relief);
-        const edited = { ...world, regions: world.regions.map((r, i) => (i === selected ? { ...r, biome: next } : r)) };
-        // Only a new landform needs a new bake; a new cover only recolors.
-        if (reshaped) {
-          void rebake(edited);
-        } else {
-          world = edited;
-          updateCovers();
-          refreshPanel();
-          walker.moved = true;
-        }
-      },
-    });
-  }
-
-  let draws = 0;
-  async function randomize(seed?: number): Promise<void> {
-    draws += 1;
-    const draw = draws;
-    if (!(await rebake(randomWorld(lib, seed ?? Math.floor(Math.random() * 2 ** 31), SCALE)))) return;
-    selected = 0;
-    ground.select(selected, mode === "overview");
-    refreshPanel();
-    if (mode === "walk") {
-      const r = world.regions[0];
-      if (r !== undefined) walkTo(r.x, r.z, Math.atan2(r.x, r.z));
-    }
-    $("draw").textContent = `Draw ${draw}: ${world.regions.length} regions, fit ${fmt(terrain.fit * 100, 0)}%`;
-  }
-
-  $("random").addEventListener("click", () => void randomize());
-  $("mode-walk").addEventListener("click", () => {
-    if (mode !== "walk") {
-      const r = world.regions[selected];
-      if (r !== undefined) walkTo(r.x, r.z, Math.atan2(r.x, r.z));
-    }
-  });
-  $("mode-overview").addEventListener("click", () => setMode("overview"));
-  $("stats-toggle").addEventListener("click", () => {
-    const open = $("stats").hidden;
-    $("stats").hidden = !open;
-    $("stats-toggle").setAttribute("aria-expanded", String(open));
-  });
 
   // ---------- frame ----------
 
@@ -2014,7 +1833,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   // there is wasted, and the understory keeps back from the water anyway.
   const mirrorHide = [grass.mesh, ground.fine, signs.mesh];
   // Walking, it mirrors the ground's rings at a quarter of their detail, which draw the wild land too; from above, the whole-world mesh and the wild ring.
-  const mirrorShow = (): THREE.Object3D[] => (mode === "walk" ? [ground.mirror] : [ground.coarse, ground.wilds]);
+  const mirrorShow = (): THREE.Object3D[] => (aerial === null ? [ground.mirror] : [ground.coarse, ground.wilds]);
   let frameCalls = 0;
   /** Each pass's draw calls and triangles in the last frame. */
   const passes = { shadow: { calls: 0, triangles: 0 }, mirror: { calls: 0, triangles: 0 }, view: { calls: 0, triangles: 0 } };
@@ -2035,7 +1854,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     const night = Math.round(light.uNightness.value * 20) / 20;
     if (night !== waitNight) veil.night((waitNight = night));
     light.uTime.value = frozen ?? light.uTime.value + dt;
-    if (mode === "walk") {
+    if (aerial === null) {
       updateWalk(dt);
       detailEye.set(detailPin?.x ?? camera.position.x, camera.position.y, detailPin?.z ?? camera.position.z);
       ground.follow(detailPin?.x ?? walker.x, detailPin?.z ?? walker.z);
@@ -2053,16 +1872,14 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       shadowCenter.set(seen.x - Math.sin(seen.yaw) * 18, seen.eye, seen.z - Math.cos(seen.yaw) * 18);
       shadow.frame(shadowCenter, 40);
     } else {
-      orbit.update();
       // The lantern waits where the person stood.
       lanternEye.set(walker.x, walker.eye, walker.z);
       lantern.follow(lanternEye, forward, lanternGround, 0, dt);
       shadow.frame(shadowCenter.set(0, 0, 0), world.size * 0.62);
     }
     breathe(camera.position.x, camera.position.z);
-    refreshSight(now);
     // Every pass thins distant detail from where the person's eyes are.
-    light.uEye.value.copy(mode === "walk" ? detailEye : camera.position);
+    light.uEye.value.copy(aerial === null ? detailEye : camera.position);
     castShadows();
     frameCalls = renderer.info.render.calls;
     passes.shadow = { calls: renderer.info.render.calls, triangles: renderer.info.render.triangles };
@@ -2087,7 +1904,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     // The buildings and landmarks are made on other threads while the wait draws the land.
     const composedLandmarks = code === null ? [] : landmarkAsks(code);
     await makeAhead([...settlementBuilds(code?.buildings ?? SAMPLE_ENTITIES), ...composedLandmarks]);
-    landmarks = code === null ? presetLandmarks : composedLandmarks.map((ask) => landmarkOf(composedName(ask.blueprint), ask));
+    landmarks = code === null ? presetLandmarks() : composedLandmarks.map((ask) => landmarkOf(composedName(ask.blueprint), ask));
     liveFileVitality.clear();
     for (const v of settlement.views()) scene.remove(v.object);
     settlement = createSettlement(light, code?.buildings ?? SAMPLE_ENTITIES);
@@ -2098,10 +1915,6 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     skyWorld = code?.sky ?? SKY_WORLD;
     hour = Number.NaN;
     const next = code?.spec ?? sampleWorld(SCALE);
-    orbit.maxDistance = Math.max(700, next.size * 1.1);
-    selected = 0;
-    $("codebase").textContent = on ? "Sample world" : "This codebase";
-    ($("random") as HTMLButtonElement).disabled = on;
     if (await rebake(next)) valleyView();
   }
 
@@ -2128,9 +1941,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     stoodOnce = true;
   });
 
-  setMode("walk");
-  refreshStats();
-  refreshPanel();
+  showAerial(false);
   // The first world bakes behind a quiet veil, which lifts once it stands.
   const ready = Promise.all([OPENS_CODE ? showCodebase(true) : rebake(world).then(() => valleyView()), farBaked]).then(async () => {
     await warmed;
@@ -2141,23 +1952,6 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     for (const listener of liftedListeners) listener();
   });
   const bushesBaked = ready.then(() => bakeFar(bushSet, FAR_BAKE.walkingMs)).then(() => reportStage("bush cards", { ms: Math.round(bushSet.ms) }));
-  $("codebase").addEventListener("click", () => void showCodebase(code === null));
-
-  // ---------- shots: each relief primitive under every region, from above ----------
-
-  async function showcase(reliefId: string): Promise<void> {
-    const p = lib.get(reliefId);
-    const sample = sampleWorld(SCALE);
-    await rebake({
-      ...sample,
-      regions: sample.regions.map((r) => ({ ...r, biome: blueprintOf(biome.id, { ...r.biome.slots, relief: { use: p.id, params: defaultParams(p) } }) })),
-    });
-    selected = 0;
-    walker.x = 0;
-    walker.z = 0;
-    setMode("overview");
-    frozen = 8;
-  }
 
   /** The places worth seeing in the world now shown, each with where to stand and which way to look (`tourStops`). */
   function tour(): TourStop[] {
@@ -2810,11 +2604,6 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       furnishSolid = on;
       gatherSolids();
     },
-    immersive: (on) => {
-      root.classList.toggle("immersive", on);
-      if (on && mode !== "walk") setMode("walk");
-      resize();
-    },
     landing: (x, z, heart) => landingNear(x, z, heart),
     place: (at) => {
       walkTo(at.x, at.z, at.yaw);
@@ -2835,7 +2624,6 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     renderer,
     ready,
     report: () => ({
-      mode,
       walking: goal !== null || trip !== null || [...keys].some((k) => k !== "ShiftLeft" && k !== "ShiftRight"),
       worldSize: world.size,
       regions: world.regions.length,
@@ -2848,19 +2636,13 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     }),
     setActive(on) {
       active = on;
-      orbit.enabled = on && mode === "overview";
       if (!on) release();
       if (on) resize();
     },
     frame: (dt, now, h) => {
       if (active && !driving) frame(dt, now, h);
     },
-    shots: (): Shot[] => RELIEF_PRIMITIVES.map((p) => ({ name: `terrain-${slug(p.id)}`, stage: () => showcase(p.id) })),
     hook: {
-      cottage: () => {
-        const b = settlement.buildings[0];
-        return b === undefined ? null : { ...b.site, triangles: b.triangles, width: b.plan.width, depth: b.plan.depth };
-      },
       /** Each standing landmark: its name, site, height and triangles. */
       landmarks: () =>
         ways.sites.map((s, i) => ({ name: landmarks[s.landmark]?.name, ...s.site, height: landmarkViews[i]?.height, triangles: landmarkViews[i]?.triangles })),
@@ -2873,23 +2655,6 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       entityVitality: (key: string, v: number) => {
         const named = [...settlement.buildings.map((b) => b.represented), ...landmarkEntities].filter((r) => r.name === key).map((r) => r.id);
         for (const id of entityVitality.has(key) ? [key] : named) setEntityVitality(id, v);
-      },
-      /** Stands landmark preset `i` on landmark site `at` in place of what stands there, so every form can be seen; returns where. */
-      showLandmark: (i: number, at = 0) => {
-        const s = ways.sites[at];
-        const lm = presetLandmarks[i];
-        if (s === undefined || lm === undefined) return null;
-        for (const [key, v] of landmarkPool) if (key.startsWith("show#") || v === landmarkViews[at]) v.object.visible = false;
-        let view = landmarkPool.get(`show#${i}`);
-        if (view === undefined) {
-          view = createPlant({ ...lm.built, parts: mergeParts(lm.built.parts) }, light);
-          landmarkPool.set(`show#${i}`, view);
-          scene.add(view.object);
-        }
-        view.object.visible = true;
-        view.object.position.set(s.site.x, s.site.y - 0.05, s.site.z);
-        view.object.rotation.y = 0;
-        return { name: lm.name, x: s.site.x, y: s.site.y, z: s.site.z, base: lm.base, height: view.height, triangles: view.triangles };
       },
       /** Each trail (a dependency): its ends, length and the ways it walks. */
       trails: () =>
@@ -2927,8 +2692,8 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
         const s = subjects[i];
         if (s !== undefined) approach(s);
       },
-      subjects: () => subjects.map((s) => ({ name: s.represented.name, standsAs: s.standsAs, judge: s.judge, x: s.x, z: s.z, vitality: s.represented.vitality })),
-      card: () => (card.shown === null ? null : { name: card.shown.name, what: card.shown.what }),
+      subjects: () => subjects.map((s) => ({ name: s.represented.name, standsAs: s.standsAs, judge: s.judge, x: s.x, z: s.z, height: s.height, vitality: s.represented.vitality })),
+      card: () => (shown === null ? null : { name: shown.name, what: shown.what }),
       closeCard: () => hideCard(),
       walk: (x: number, z: number, yawDeg: number, pitchDeg = -3) => walkTo(x, z, (yawDeg * Math.PI) / 180, (pitchDeg * Math.PI) / 180),
       /** Sends the person to the landing nearest (x, z), as a pick on the map does, at `pace` on the tread and straight across; false where neither goes. */
@@ -3006,18 +2771,12 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       /** Where the person stands, as the page keeps it with the world (`stoodBy`). */
       stood: () => (code === null ? null : stoodBy(code.world, walker.x, walker.z, walker.yaw)),
       walker: () => ({ x: walker.x, z: walker.z, yawDeg: (walker.yaw * 180) / Math.PI, pitchDeg: (walker.pitch * 180) / Math.PI, eye: walker.eye }),
-      /** The overview, from `pos` if given, looking at `target` (the world's middle unless given). */
-      overview: (pos?: [number, number, number], target?: [number, number, number]) => {
-        setMode("overview");
-        if (pos !== undefined) camera.position.set(...pos);
-        if (target !== undefined) orbit.target.set(...target);
-      },
-      select: (i: number) => select(i),
-      random: (seed?: number) => randomize(seed),
-      showcase,
+      /**
+       * Looks at the land from above for a capture, from `pos` toward `target` (the world's middle unless given, or
+       * where the last call looked), the camera exactly there; `walk` or any trip goes back to walking.
+       */
+      overview: (pos?: [number, number, number], target?: [number, number, number]) => lookFromAbove(pos, target),
       freeze: (t: number | null) => (frozen = t),
-      regions: () =>
-        world.regions.map((r, i) => ({ i, id: r.id, x: Math.round(r.x), z: Math.round(r.z), landform: landformName(i), cover: coverName(i) })),
       streams: () => terrain.streams.map((s) => s.stations.filter((_, k) => k % 10 === 0).map((p) => [Math.round(p.x), Math.round(p.z), +p.level.toFixed(2)])),
       report: () => ({ ...terrain.report, fit: terrain.fit, bakeMs: Math.round(bakeMs), steps: openingSteps }),
       info: () => renderer.info.render,
@@ -3236,7 +2995,6 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
         }
         body = standAt(terrain, decks, walker.x, walker.z);
         walker.eye = body.eye;
-        walker.moved = true;
         return { x: walker.x, z: walker.z, depth: waterDepthAt(terrain, walker.x, walker.z) };
       },
       depth: () => waterDepthAt(terrain, walker.x, walker.z),
@@ -3316,21 +3074,6 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
         treesDrawn: treeViews.reduce((n, v) => n + v.drawn().copies, 0),
         treeTriangles: treeViews.reduce((n, v) => n + v.drawn().triangles, 0),
       }),
-      selected: () => selected,
-      /**
-       * Shows world preset `name`'s light, sky, season and wind over the world
-       * shown, such as "Heather moor", or the world's own again (no name).
-       * Returns the preset's name, or null when there is none by that name.
-       */
-      skyWorld: (name?: string) => {
-        const chosen = name === undefined ? (code?.sky ?? SKY_WORLD) : WORLD_PRESETS.find((p) => p.name === name);
-        if (chosen === undefined) return null;
-        skyWorld = chosen;
-        hour = Number.NaN;
-        return chosen.name;
-      },
-      /** Shows Gaia's own world (true) or the sample world (false). */
-      codebase: (on: boolean) => showCodebase(on),
       /** Where the walker is, or (x, z): the area and file patch underfoot, in either world. */
       place: (x?: number, z?: number) => placeAt(places, x ?? walker.x, z ?? walker.z),
       /** The codebase's world: its size, areas, patches, buildings, landmarks and trails. */
@@ -3350,7 +3093,6 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
               things: code.world.things.map((t) => ({ path: t.path, name: t.name, as: t.as, blueprint: t.blueprint.id, x: Math.round(t.x), z: Math.round(t.z), vitality: +t.vitality.toFixed(2) })),
               trails: code.world.trails.map((t) => `${t.from}->${t.to}`),
             },
-      camera: () => ({ position: camera.position.toArray(), target: orbit.target.toArray() }),
     },
   };
 }
