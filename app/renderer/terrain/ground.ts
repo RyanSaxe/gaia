@@ -141,9 +141,9 @@ export function createGroundTexture(land: PageLand): GroundTexture {
 }
 
 /**
- * The sand beside water, meters: `narrow` along a straight stretch of stream, `wide` where the waterline curves
- * (a bend's inside and outside, and a pond), between a contour curvature of `straight` and `curved` (one over the
- * radius), measured `along` meters either way along the shore's contour.
+ * The sand beside water, meters: `narrow` along a straight stretch, the outside of a bend and round a pond, `wide`
+ * round the inside of a bend, between a contour curvature of `straight` and `curved` (one over the radius), measured
+ * `along` meters either way along the shore's contour.
  */
 export const BANKS = { narrow: 0.7, wide: 2.6, straight: 0.012, curved: 0.04, along: 2.5 } as const;
 
@@ -215,9 +215,9 @@ vec4 groundSample4(vec2 xz) {
 vec3 groundSample(vec2 xz) { return groundSample4(xz).xyz; }
 vec2 groundAt(vec2 xz) { return groundSample(xz).xy; }
 // How far from the water its sand runs at a point beside it, meters, for the sand banks and the grass's edge alike:
-// ${BANKS.narrow.toFixed(2)} along a straight stretch, out to ${BANKS.wide.toFixed(2)} where the waterline curves, as a stream
-// leaves bare a point bar inside its bend and cuts its bank outside it, and round a pond. The curve is the shore's
-// own, along its contour: where water wraps round the land the shore falls either way along it, round a pond it rises.
+// ${BANKS.narrow.toFixed(2)} along a straight stretch and the outside of a bend, out to ${BANKS.wide.toFixed(2)} where the water wraps
+// round the land, the point bar inside a bend a stream leaves bare. The curve is the shore's own, along its contour:
+// where water wraps round the land the shore falls either way along it.
 float bankWidth(vec2 xz, float shore) {
   if (shore > ${BANKS.wide.toFixed(1)} + 1.0) return ${BANKS.narrow.toFixed(2)};
   float e = 0.75;
@@ -227,7 +227,7 @@ float bankWidth(vec2 xz, float shore) {
   vec2 t = vec2(-g.y, g.x) / len;
   float h = ${BANKS.along.toFixed(1)};
   float curve = (groundSample(xz + t * h).z + groundSample(xz - t * h).z - 2.0 * shore) / (h * h);
-  return mix(${BANKS.narrow.toFixed(2)}, ${BANKS.wide.toFixed(2)}, smoothstep(${BANKS.straight.toFixed(3)}, ${BANKS.curved.toFixed(3)}, abs(curve)));
+  return mix(${BANKS.narrow.toFixed(2)}, ${BANKS.wide.toFixed(2)}, smoothstep(${BANKS.straight.toFixed(3)}, ${BANKS.curved.toFixed(3)}, -curve));
 }
 `;
 
