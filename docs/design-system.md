@@ -1369,7 +1369,9 @@ fixes how many; its vitality is the vitality of what it stands for. `findLandmar
 on the most prominent gentle, dry ground of its region, a knoll or a rise
 near the region's heart, and levels its footprint into the land. Each
 reads as a silhouette through the haze from 300 m and more, and declines
-by breaking, not by fading:
+by breaking, not by fading. A tower's courses read as blocks with dark
+mortar joints between them; the mortar is set just behind the blocks'
+faces, so no sky shows through a joint at any height:
 
 - A tower's blocks fall from the top down, each at its own seeded
   threshold but never later than the blocks it rests on, so a failing
