@@ -14,6 +14,8 @@ const judged = judgedFixture as unknown as Judgments;
 const doc = provingWorld();
 const code = codeLab(doc);
 const vitalityOf = new Map(doc.world.things.map((t) => [t.path, t.vitality]));
+/** Each trail end's vitality as the lab shows it, by the place the trail names: a building's or a landmark's lot, or the path of an entity standing as a plant, a stone or flowers. */
+const endVitality = new Map([...vitalityOf, ...doc.world.standing.flatMap((s) => (s.of === "entity" ? [[s.path, s.vitality] as const] : []))]);
 /** Each area's vitality, every file under it pooled by size. */
 const pooled = areaVitality(doc.world.patches.map((p) => ({ area: p.area, vitality: p.vitality, size: p.radius * p.radius })));
 /** What a point's own ground is (its file's patch, its area's lot, or the wild), and that ground's vitality. */
@@ -172,7 +174,7 @@ describe("the proving ground", () => {
 
     it("crosses its streams on footbridges and stepping stones, and has cairns where ways meet, thriving and in ruin", () => {
       const net = stood.network;
-      const place = (id: string): number => vitalityOf.get(id) ?? 1;
+      const place = (id: string): number => endVitality.get(id) ?? 1;
       const crossings = net.ways.flatMap((w, i) => w.crossings.map(() => ({ kind: w.style.crossing, vitality: wayVitalityAt(net, i, 0.5, place) })));
       for (const kind of ["footbridge", "stepping-stones"] as const) expect(crossings.some((c) => c.kind === kind), kind).toBe(true);
       // Each spans water, from dry ground to dry ground.

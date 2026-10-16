@@ -473,12 +473,12 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   /** The world whose light, sky and air the lab shows: the codebase's own once it is shown. */
   let skyWorld: { readonly name: string; readonly world: Blueprint } = SKY_WORLD;
   let ways: Settled = { sites: [], network: NO_TRAILS };
-  // Every entity's vitality by its path, live: buildings and landmarks stand
-  // for entities, and each trail's wear follows the two it joins. Names repeat
+  // Every entity's vitality by its path, live: buildings, landmarks, plants, stones and flowers
+  // stand for entities, and each trail's wear follows the two it joins. Names repeat
   // (two packages may both be called "utils"), so nothing is keyed by name.
   let landmarkEntities: Represented[] = [];
   const entityVitality = new Map<string, number>();
-  /** The entity (its path) each trail end stands for, by the place id the trail names: a building's name or lot, or a standing landmark's place. */
+  /** The entity (its path) each trail end stands for, by the place id the trail names: a building's name or lot, a standing landmark's place, or an entity's own path where it stands as a plant, a stone or flowers. */
   const entityOfPlace = new Map<string, string>();
   /** Learns the entities of the world now shown: the codebase's own, or the samples. */
   function knowEntities(): void {
@@ -491,6 +491,12 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       const lot = code?.stand.lots[i];
       if (lot !== undefined) entityOfPlace.set(lot.id, b.represented.id);
     });
+    // An entity standing as a plant, a stone or flowers, at the vitality that shows on it.
+    for (const s of code?.world.standing ?? []) {
+      if (s.of !== "entity") continue;
+      entityVitality.set(s.path, s.vitality);
+      entityOfPlace.set(s.path, s.path);
+    }
   }
   knowEntities();
   /**
