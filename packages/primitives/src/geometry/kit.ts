@@ -66,7 +66,7 @@ export interface Channels {
   readonly grow?: number;
   /** How far the surface rots through into holes as vitality drops, 0 to 1. Zero when absent. */
   readonly rot?: number;
-  /** The grain the surface rots along: across its courses and up them, in tiles or bundles, and its kind (\`GRAIN\`). */
+  /** The grain the surface rots along: across its courses and up them, in tiles or bundles, and its kind (`GRAIN`). */
   readonly grain?: Vec3;
   /** How the piece turns about its pivot while alive: axis times turns per second. */
   readonly spin?: Vec3;
