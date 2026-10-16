@@ -18,6 +18,32 @@ const DUSK = "smoothstep(0.08, 0.55, uNightness)";
 // The scalar channels ride four to an attribute (see \`geometryOf\`), so an
 // instanced plant stays well inside WebGL's 16 attribute slots: those that
 // color a vertex in aLook, those that move it in aLife.
+// The rot's noise, which the vertex shader reads too, so straw slumps where
+// the fragment shader opens its holes.
+const ROT_NOISE_GLSL = /* glsl */ `
+float rotHash(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
+float rotValue(vec3 p) {
+  vec3 i = floor(p);
+  vec3 f = fract(p);
+  vec3 u = f * f * (3.0 - 2.0 * f);
+  return mix(
+    mix(mix(rotHash(i), rotHash(i + vec3(1, 0, 0)), u.x), mix(rotHash(i + vec3(0, 1, 0)), rotHash(i + vec3(1, 1, 0)), u.x), u.y),
+    mix(mix(rotHash(i + vec3(0, 0, 1)), rotHash(i + vec3(1, 0, 1)), u.x), mix(rotHash(i + vec3(0, 1, 1)), rotHash(i + vec3(1, 1, 1)), u.x), u.y),
+    u.z);
+}
+float rotNoise(vec3 p) { return rotValue(p * 1.1) * 0.65 + rotValue(p * 3.3 + 7.0) * 0.35; }
+// Where a point lies in its covering's courses, tiles breaking joint course to course.
+vec2 grainAt(vec3 grain) { return grain.xy + vec2(grain.z < ${(GRAIN.tiles + 0.5).toFixed(1)} ? 0.5 * mod(floor(grain.y), 2.0) : 0.0, 0.0); }
+// The rot noise read at the middle of the tile or bundle of straw a point lies in, in meters so it keeps its scale;
+// the rest position tells one slope from another. The tiles themselves make the edge ragged, so the fine noise counts
+// for less than on other surfaces, and fewer lone tiles are left standing inside a hole.
+float grainNoise(vec3 grain, vec3 rest) {
+  vec2 size = grain.z < ${(GRAIN.tiles + 0.5).toFixed(1)} ? vec2(0.27, 0.3) : vec2(0.22, 0.7);
+  vec3 p = vec3((floor(grainAt(grain)) + 0.5) * size, dot(rest, vec3(0.13, 0.07, 0.11)));
+  return rotValue(p * 1.1) * 0.8 + rotValue(p * 3.3 + 7.0) * 0.2;
+}
+`;
+
 const CHANNELS_GLSL = /* glsl */ `
 attribute vec4 aLook;
 attribute vec4 aLife;
@@ -54,6 +80,7 @@ attribute float aGrow;
 attribute vec4 aRot;
 attribute vec3 aSpin;
 attribute float aRoost;
+${ROT_NOISE_GLSL}
 uniform float uTurn;
 
 mat3 turnAbout(vec3 k, float a) {
@@ -103,7 +130,9 @@ vec3 applyChannels(vec3 p) {
 #ifdef RUIN
   keep *= aGrow > 0.0 ? 1.0 - smoothstep(aGrow, aGrow + ${f(CHANNEL_MATH.lossBand)}, uVitality) : 1.0;
   keep *= 1.0 - aRoost * ${DUSK};
-  return aPivot + pieceTurn() * (off * keep);
+  // Straw at a hole's edge slumps as it thins, rather than standing cut.
+  float slump = aRot.w > ${(GRAIN.tiles + 0.5).toFixed(1)} ? 0.2 * (1.0 - smoothstep(0.0, 0.1, grainNoise(aRot.yzw, p) - rotNow())) : 0.0;
+  return aPivot + pieceTurn() * (off * keep) - vec3(0.0, slump, 0.0);
 #else
   return aPivot + off * keep;
 #endif
@@ -211,38 +240,28 @@ const ROT_GLSL = /* glsl */ `
 varying float vRot;
 varying vec3 vRest;
 varying vec3 vGrain;
-float rotHash(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
-float rotValue(vec3 p) {
-  vec3 i = floor(p);
-  vec3 f = fract(p);
-  vec3 u = f * f * (3.0 - 2.0 * f);
-  return mix(
-    mix(mix(rotHash(i), rotHash(i + vec3(1, 0, 0)), u.x), mix(rotHash(i + vec3(0, 1, 0)), rotHash(i + vec3(1, 1, 0)), u.x), u.y),
-    mix(mix(rotHash(i + vec3(0, 0, 1)), rotHash(i + vec3(1, 0, 1)), u.x), mix(rotHash(i + vec3(0, 1, 1)), rotHash(i + vec3(1, 1, 1)), u.x), u.y),
-    u.z);
-}
-// A covering rots along its grain (GRAIN). Each tile, or each bundle of
-// straw, has its own point in the rot at which it goes, shared by runs of
-// its course, so gaps open along the courses. It darkens as its turn nears,
-// then breaks away from its lower edge up over a short band of rot, so
-// nothing pops; straw goes strand by strand, leaving a ragged fringe.
+${ROT_NOISE_GLSL}
+// A covering rots where the same noise as any other surface falls below the
+// rot, but each tile, or each bundle of straw, reads that noise at its own
+// middle (GRAIN gives where it lies in its courses), so it goes whole and a
+// hole's edge steps along the courses instead of melting. A tile or bundle
+// at a hole's edge weathers darker, then breaks away from its lower edge up
+// over a short band of rot, so nothing pops; straw thins strand by strand,
+// leaving a ragged fringe.
 float grainEdge() {
-  vec2 g = vGrain.xy;
+  vec2 g = grainAt(vGrain);
   float row = floor(g.y);
   bool tiles = vGrain.z < ${(GRAIN.tiles + 0.5).toFixed(1)};
-  if (tiles) g.x += 0.5 * mod(row, 2.0);
-  vec2 cell = vec2(floor(g.x), row);
-  float ready = 0.15 + 0.85 * mix(rotHash(vec3(cell, 1.0)), rotHash(vec3(floor(cell.x / 5.0), row, 3.0)), 0.55);
-  float gone = clamp((vRot - ready) / 0.06, 0.0, 1.0);
+  float n = grainNoise(vGrain, vRest);
+  float gone = clamp((vRot - n) / 0.04, 0.0, 1.0);
   float fringe = tiles ? 0.0 : 0.35 * rotHash(vec3(floor(g.x * 5.0), row, 7.0));
-  return (fract(g.y) + fringe - gone * (1.0 + fringe)) * 0.3 + max(ready - vRot, 0.0);
+  return (fract(g.y) + fringe - gone * (1.0 + fringe)) * 0.3 + 3.0 * max(n - vRot, 0.0);
 }
 // Distance above the hole's edge: negative inside a hole.
 float rotEdge() {
   if (vRot <= 0.0) return 1.0;
   if (vGrain.z > ${(GRAIN.none + 0.5).toFixed(1)}) return grainEdge();
-  float n = rotValue(vRest * 1.1) * 0.65 + rotValue(vRest * 3.3 + 7.0) * 0.35;
-  return n - vRot;
+  return rotNoise(vRest) - vRot;
 }
 #else
 float rotEdge() { return 1.0; }

@@ -989,7 +989,8 @@ below which a piece grows out of its pivot: ivy, weeds, rubble, boards over
 windows), `rot` (how far a surface rots through into ragged holes, cut per
 fragment from a noise fixed to the piece), `grain` (where a covering's
 vertex lies across and up its courses, in tiles or straw bundles, and its
-kind: rot then takes it a tile or a bundle at a time along its courses) and `spin` (an axis and a rate a
+kind: each tile or bundle then reads the rot's noise at its own middle and
+goes whole, so a hole's edge steps along the courses) and `spin` (an axis and a rate a
 piece turns at while alive, slowing to a stop as vitality falls: a mill's
 wheel) and `roost` (how fully a piece flies home onto its pivot as dusk
 falls, over the hours the lamps are lit in, and out again after dawn: a

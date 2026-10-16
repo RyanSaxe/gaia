@@ -552,9 +552,10 @@ at the front corner away from the door, where a person walking up sees it:
 | 0.05 | A ruin: most of the covering gone, the chimney lying across the ridge, ivy to the eaves, rank grass and rubble all round, a tower's top and lantern fallen |
 
 Ruin follows each form: every mass's walls and roof rot by the same weak
-corner, a roof's covering a tile or a bundle of straw at a time, in runs
-along its courses and most at the eaves, the tiles and straw going before
-the boards and battens under them, a lean-to's whole slope caves in about its high edge, a turret's
+corner, a roof's covering opening in big holes to its rafters whose edges
+step along its courses, a whole tile or bundle of straw at a time, the
+straw slumping and thinning to a ragged fringe at a hole's edge and the
+tiles and straw going a little before the boards and battens under them, a lean-to's whole slope caves in about its high edge, a turret's
 cone rots through and its finial leans and falls, and a fallen timber is
 one storey's post, so a tall house collapses floor by floor.
 

@@ -57,9 +57,9 @@ export interface VitalityChannels {
   /**
    * The grain a covering rots along, three per vertex: where the vertex lies
    * across its courses and up them, in tiles or straw bundles, and the
-   * covering's kind (\`GRAIN\`). Rot then takes a tile at a time, or straw
-   * along its course, instead of opening round holes. Absent means rot
-   * follows a noise of the surface's rest position.
+   * covering's kind (`GRAIN`). Rot then opens its holes a whole tile or
+   * bundle at a time, so their edges step along the courses instead of
+   * melting. Absent means rot follows a noise of the surface's rest position.
    */
   readonly grain?: Float32Array;
   /**
@@ -112,7 +112,7 @@ export interface Part {
  * place at its own threshold near the card's `loss`, so a spray never
  * shrinks or flies toward anything.
  */
-/** What a covering is made of, for \`grain\`: how it comes apart as it rots. */
+/** What a covering is made of, for `grain`: how it comes apart as it rots. */
 export const GRAIN = {
   /** No grain: rot opens holes where a noise of the rest position falls below it. */
   none: 0,
