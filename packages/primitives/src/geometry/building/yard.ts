@@ -68,6 +68,17 @@ function slope(b: PartBuilder, e0: V3, e1: V3, t1: V3, t0: V3, rows: number, out
   }
 }
 
+/**
+ * Rafters under a `slope` with the same corners, from its eave up to its top edge about every 0.55 m (the first and
+ * last along its edges, so a hipped slope's hips have theirs), so whatever is left of its covering lies on them.
+ */
+function slopeFrame(b: PartBuilder, e0: V3, e1: V3, t1: V3, t0: V3, out: V3, ch: Channels): void {
+  let n = normalize(cross(sub(e1, e0), sub(t0, e0)));
+  if (n[0] * out[0] + n[1] * out[1] + n[2] * out[2] < 0) n = scale(n, -1);
+  const count = Math.max(1, Math.round(Math.hypot(...sub(e1, e0)) / 0.55));
+  for (let k = 0; k <= count; k++) beam(b, addScaled(lerp(e0, e1, k / count), n, -0.05), addScaled(lerp(t0, t1, k / count), n, -0.05), 0.07, 0.08, n, 0.42, ch);
+}
+
 /** Tufts of rank grass in a ring about a feature's foot, which grow in as the code fails. */
 function weedsAbout(b: PartBuilder, Y: Yard, inner: number, outer: number, count: number, r: Rand): void {
   const spots = Array.from({ length: count }, () => {
@@ -887,6 +898,8 @@ export function buildGranary(p: Resolved<typeof granaryParams>, ctx: BuildContex
   const rise = (W / 2 + over) * 0.95;
   const ridgeY = eave - 0.08 + rise;
   const covering = (q: V3): Channels => body(0.6, { droop: 0.04, rot: clamp(0.3 + 0.35 * r.next() + 0.2 * (ridgeY - q[1]), 0, 1) });
+  // Its rafters sag and slump with the covering on them.
+  const rafter = body(0.55, { droop: 0.04 });
   const ex = W / 2 + over;
   const ey = eave - 0.08;
   if (p.roof === "hipped") {
@@ -895,12 +908,15 @@ export function buildGranary(p: Resolved<typeof granaryParams>, ctx: BuildContex
     for (const s of [-1, 1]) {
       slope(roof, Y.at(s * ex, ey, -ez), Y.at(s * ex, ey, ez), Y.at(0, ridgeY, half), Y.at(0, ridgeY, -half), 4, Y.dir(s, 1, 0), covering, r);
       slope(roof, Y.at(-ex, ey, s * ez), Y.at(ex, ey, s * ez), Y.at(0, ridgeY, s * half), Y.at(0, ridgeY, s * half), 4, Y.dir(0, 1, s), covering, r);
+      slopeFrame(wood, Y.at(s * ex, ey, -ez), Y.at(s * ex, ey, ez), Y.at(0, ridgeY, half), Y.at(0, ridgeY, -half), Y.dir(s, 1, 0), rafter);
+      slopeFrame(wood, Y.at(-ex, ey, s * ez), Y.at(ex, ey, s * ez), Y.at(0, ridgeY, s * half), Y.at(0, ridgeY, s * half), Y.dir(0, 1, s), rafter);
     }
     if (half > 0.05) box(roof, Y.at(0, ridgeY + 0.03, 0), [Z, UP, X], [half + 0.04, 0.05, 0.09], 0.5, body(0.6));
   } else {
     const ez = L / 2 + verge;
     for (const s of [-1, 1]) {
       slope(roof, Y.at(s * ex, ey, -ez), Y.at(s * ex, ey, ez), Y.at(0, ridgeY, ez), Y.at(0, ridgeY, -ez), 4, Y.dir(s, 1, 0), covering, r);
+      slopeFrame(wood, Y.at(s * ex, ey, -ez), Y.at(s * ex, ey, ez), Y.at(0, ridgeY, ez), Y.at(0, ridgeY, -ez), Y.dir(s, 1, 0), rafter);
       for (const z of [-ez, ez]) beam(wood, Y.at(0, ridgeY + 0.03, z), Y.at(s * (ex + 0.04), ey - 0.03, z), 0.14, 0.035, Z, 0.45, body(0.55, { droop: 0.04 }));
     }
     box(roof, Y.at(0, ridgeY + 0.03, 0), [Z, UP, X], [ez + 0.03, 0.05, 0.09], 0.5, body(0.6));

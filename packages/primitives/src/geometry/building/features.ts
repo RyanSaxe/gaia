@@ -138,10 +138,16 @@ export function buildWaterwheel(p: Resolved<typeof waterwheelParams>, ctx: Build
 
 // ---------- tower ----------
 
-/** One face of a pyramid cap from the eave square up to the apex, in courses that rot through. */
-function capFace(b: PartBuilder, corners: readonly [V3, V3], apex: V3, rows: number, rotAt: (q: V3) => number, pivot: V3): void {
+/**
+ * One face of a pyramid cap from the eave square up to the apex, in courses that rot through, over rafters about
+ * 0.75 m apart at the eave that run up to the apex (the first along its hip), so whatever is left of it lies on them.
+ * Their ends meet at the apex or stand on the soffit, out of sight, so they are left open.
+ */
+function capFace(b: PartBuilder, frame: PartBuilder, corners: readonly [V3, V3], apex: V3, rows: number, rotAt: (q: V3) => number, pivot: V3): void {
   const [a, c] = corners;
   const n = normalize(cross3(sub3(c, a), sub3(apex, a)));
+  const count = Math.max(1, Math.round(Math.hypot(...sub3(c, a)) / 0.75));
+  for (let k = 0; k < count; k++) beam(frame, addScaled(lerp3(a, c, k / count), n, -0.05), addScaled(apex, n, -0.05), 0.07, 0.08, n, 0.42, still(pivot, 0.55, { droop: 0.05 }), { open: true });
   for (let j = 0; j < rows; j++) {
     const t0 = j / rows;
     const t1 = (j + 1) / rows;
@@ -298,10 +304,10 @@ export function buildTower(p: Resolved<typeof towerParams>, ctx: BuildContext, p
     const cap: V3[] = [[-eave + 0.15, top, eave - 0.15], [eave - 0.15, top, eave - 0.15], [eave - 0.15, top, -eave + 0.15], [-eave + 0.15, top, -eave + 0.15]];
     apex = [0, top + T * 0.75, 0];
     quad(roof, [cap[0] as V3, cap[3] as V3, cap[2] as V3, cap[1] as V3], [0, -1, 0], 0.25, still(capPivot, 0.6));
-    for (let k = 0; k < 4; k++) capFace(roof, [cap[k] as V3, cap[(k + 1) % 4] as V3], apex, 4, capRot, capPivot);
+    for (let k = 0; k < 4; k++) capFace(roof, wood, [cap[k] as V3, cap[(k + 1) % 4] as V3], apex, 4, capRot, capPivot);
   } else {
     apex = [0, H + T * 0.95, 0];
-    for (let k = 0; k < 4; k++) capFace(roof, [ring[k] as V3, ring[(k + 1) % 4] as V3], apex, 6, capRot, capPivot);
+    for (let k = 0; k < 4; k++) capFace(roof, wood, [ring[k] as V3, ring[(k + 1) % 4] as V3], apex, 6, capRot, capPivot);
   }
   // A finial, which leans and falls as the archive fails, coming to rest
   // down the hip of the cap from its foot at the apex.

@@ -336,7 +336,7 @@ function rafters(b: PartBuilder, debris: PartBuilder, f: RoofFrame, ruin: Ruin, 
   // A long timber bends at its middle, so it follows the covering's sag along it rather than cutting across it.
   const timber = (head: V3, foot: V3): void => {
     const pieces = Math.hypot(foot[0] - head[0], foot[1] - head[1], foot[2] - head[2]) > 1.6 ? 2 : 1;
-    beam(frame, head, foot, 0.09, 0.13, UP, 0.4 + 0.1 * r.next(), still(head, 0.55, { tint: (r.next() - 0.5) * 0.03 }), pieces);
+    beam(frame, head, foot, 0.09, 0.13, UP, 0.4 + 0.1 * r.next(), still(head, 0.55, { tint: (r.next() - 0.5) * 0.03 }), { pieces });
   };
   // Rafters down each slope from the ridge, or on a hipped end's side from the hip, to the eave.
   const runs: [number, number][] = lean ? [[-f.m.fall * (f.halfSpan - 0.06), f.m.fall * (reach - 0.06)]] : [[0.06, reach - 0.06], [-0.06, -(reach - 0.06)]];

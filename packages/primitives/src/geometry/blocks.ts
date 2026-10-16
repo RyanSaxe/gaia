@@ -38,8 +38,9 @@ export function tri(b: PartBuilder, p: readonly [Vec3, Vec3, Vec3], n: Vec3, sha
  * An oriented box: center, three unit axes and half sizes. Tops catch a
  * little more light and undersides a little less, as painted wood does.
  */
-export function box(b: PartBuilder, c: Vec3, axes: readonly [Vec3, Vec3, Vec3], half: Vec3, shade: number, ch: Channels, skip: { bottom?: boolean } = {}): void {
+export function box(b: PartBuilder, c: Vec3, axes: readonly [Vec3, Vec3, Vec3], half: Vec3, shade: number, ch: Channels, skip: { bottom?: boolean; ends?: boolean } = {}): void {
   for (let i = 0; i < 3; i++) {
+    if (skip.ends === true && i === 0) continue;
     for (const sign of [-1, 1]) {
       const axis = axes[i] as Vec3;
       const n = scale(axis, sign);
@@ -60,9 +61,10 @@ export function box(b: PartBuilder, c: Vec3, axes: readonly [Vec3, Vec3, Vec3], 
  * A box between two points with a square-ish section; `up` orients the
  * section. In `pieces` lengths, its sides have a ring of vertices at every
  * joint, so a channel that bends it (a sag that follows a covering) can bend
- * it there.
+ * it there. `open` leaves off its ends, for a timber whose ends are always
+ * hidden, such as rafters meeting at an apex over a soffit.
  */
-export function beam(b: PartBuilder, from: Vec3, to: Vec3, width: number, thick: number, up: Vec3, shade: number, ch: Channels, pieces = 1): void {
+export function beam(b: PartBuilder, from: Vec3, to: Vec3, width: number, thick: number, up: Vec3, shade: number, ch: Channels, { pieces = 1, open = false }: { readonly pieces?: number; readonly open?: boolean } = {}): void {
   const axis = sub(to, from);
   const len = Math.hypot(axis[0], axis[1], axis[2]);
   if (len < 1e-4) return;
@@ -70,7 +72,7 @@ export function beam(b: PartBuilder, from: Vec3, to: Vec3, width: number, thick:
   const side = normalize(cross(a, up));
   const v = normalize(cross(side, a));
   if (pieces <= 1) {
-    box(b, addScaled(from, axis, 0.5), [a, v, side], [len / 2, width / 2, thick / 2], shade, ch);
+    box(b, addScaled(from, axis, 0.5), [a, v, side], [len / 2, width / 2, thick / 2], shade, ch, { ends: open });
     return;
   }
   // Its four sides, each a strip of quads along it, shaded as a box's are, and its two ends.
@@ -83,7 +85,7 @@ export function beam(b: PartBuilder, from: Vec3, to: Vec3, width: number, thick:
       quad(b, [at(t0, u0, w0), at(t0, u1, w1), at(t1, u1, w1), at(t1, u0, w0)], n, shade + lift, ch);
     }
   }
-  for (const [t, n] of [[0, scale(a, -1)], [1, a]] as const) quad(b, [at(t, -1, -1), at(t, 1, -1), at(t, 1, 1), at(t, -1, 1)], n, shade, ch);
+  if (!open) for (const [t, n] of [[0, scale(a, -1)], [1, a]] as const) quad(b, [at(t, -1, -1), at(t, 1, -1), at(t, 1, 1), at(t, -1, 1)], n, shade, ch);
 }
 
 /** A log: a six-sided cylinder with lighter end grain. */

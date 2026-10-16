@@ -7,7 +7,7 @@
 
 import { describe, expect, it } from "vitest";
 import { type AnyPrimitive, type BuildingPlan, type Built, type Part, rand } from "@gaia/schema";
-import { cottagePlan, thatch, tiles } from "@gaia/primitives";
+import { cottagePlan, granary, thatch, tiles, tower } from "@gaia/primitives";
 import { applyVitality, resolveParams } from "@gaia/realize";
 
 type Erased = (params: unknown, ctx: { rand: ReturnType<typeof rand>; facts: Record<string, number> }, input: unknown) => unknown;
@@ -123,20 +123,47 @@ const ROOFS = [
   ["thatch", thatch, { thickness: "deep and soft", chimney: "none", overhang: "deep and low" }],
 ] as const;
 
+/** Every house the tests build: every roof form, single, L and T, with a lean-to or a turret and porch. */
+const HOUSES = ["gabled", "hipped", "half-hipped"].flatMap((form) =>
+  ["a single block", "an L", "a T"].flatMap((massing) =>
+    [["lean-to"], ["turret", "porch"]].flatMap((attachments) =>
+      [1, 2].map((seed) => ({
+        seed,
+        what: `${form}, ${massing}, ${attachments.join(" and ")}, seed ${seed}`,
+        plan: build(cottagePlan, { massing, shape: "long", size: "modest", storeys: "two storeys", heights: "level", roof: form, roofline: "steep", attachments, windows: "several", base: "on a stone plinth", character: "gently settled" }, seed, null) as BuildingPlan,
+      })),
+    ),
+  ),
+);
+
 describe("a roof's frame", () => {
   // Builds 36 houses with every roof form and attachment, and poses each at four vitalities: a few seconds alone.
   it.each(ROOFS)("stands under every piece of %s covering at every vitality", { timeout: 60_000 }, (_name, roof, params) => {
-    for (const form of ["gabled", "hipped", "half-hipped"]) {
-      for (const massing of ["a single block", "an L", "a T"]) {
-        for (const attachments of [["lean-to"], ["turret", "porch"]]) {
-          for (const seed of [1, 2]) {
-            const plan = build(cottagePlan, { massing, shape: "long", size: "modest", storeys: "two storeys", heights: "level", roof: form, roofline: "steep", attachments, windows: "several", base: "on a stone plinth", character: "gently settled" }, seed, null) as BuildingPlan;
-            const built = build(roof, params, seed, plan) as Built;
-            for (const v of VITALITIES) {
-              const left = unsupported(built, plan, v);
-              expect(left, `${form}, ${massing}, ${attachments.join(" and ")}, seed ${seed}, vitality ${v}: ${left.length} points with no frame under them, such as ${left.slice(0, 3).join(" ")}`).toEqual([]);
-            }
-          }
+    for (const { seed, what, plan } of HOUSES) {
+      const built = build(roof, params, seed, plan) as Built;
+      for (const v of VITALITIES) {
+        const left = unsupported(built, plan, v);
+        expect(left, `${what}, vitality ${v}: ${left.length} points with no frame under them, such as ${left.slice(0, 3).join(" ")}`).toEqual([]);
+      }
+    }
+  });
+});
+
+/** Features that carry roofs of their own, each built every way it can be. */
+const FEATURES = [
+  ["an archive tower's cap", tower, ["a storey above", "tall", "soaring"].flatMap((height) => ["pyramid", "lantern"].map((cap) => ({ height, cap })))],
+  ["a granary's roof", granary, ["a small store", "a granary", "a great granary"].flatMap((size) => ["gabled", "hipped"].map((roof) => ({ size, roof })))],
+] as const;
+
+describe("a feature's roof", () => {
+  // Builds each feature six ways on 18 houses and poses each at four vitalities: about 3 s alone.
+  it.each(FEATURES)("stands %s on its own frame at every vitality", { timeout: 30_000 }, (_name, feature, stored) => {
+    for (const { seed, what, plan } of HOUSES.filter((h) => h.seed === 1)) {
+      for (const params of stored) {
+        const built = build(feature, params, seed, plan) as Built;
+        for (const v of VITALITIES) {
+          const left = unsupported(built, plan, v);
+          expect(left, `${what}, ${JSON.stringify(params)}, vitality ${v}: ${left.length} points with no frame under them, such as ${left.slice(0, 3).join(" ")}`).toEqual([]);
         }
       }
     }
