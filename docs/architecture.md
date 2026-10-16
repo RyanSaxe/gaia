@@ -979,12 +979,14 @@ vertex: `bough` (the joint where its bough or stem leaves the trunk or the
 ground) and `twig` (where its twig leaves the bough), which wind and droop
 bend it about, plus a `tint` hue offset, a `cutout` that places a vertex on a
 leaf card or marks a fir frond's solid heart (`CUT.core`), and `close`, how far a piece folds toward its pivot at night (a
-flower's petals). Parts may add five optional channels for ruin and motion:
+flower's petals). Parts may add six optional channels for ruin and motion:
 `fall` (an axis, the most it turns, and the vitality below which a piece tips
 about its pivot: a door swings ajar, a chimney topples), `grow` (the vitality
 below which a piece grows out of its pivot: ivy, weeds, rubble, boards over
 windows), `rot` (how far a surface rots through into ragged holes, cut per
-fragment from a noise fixed to the piece) and `spin` (an axis and a rate a
+fragment from a noise fixed to the piece), `grain` (where a covering's
+vertex lies across and up its courses, in tiles or straw bundles, and its
+kind: rot then takes it a tile or a bundle at a time along its courses) and `spin` (an axis and a rate a
 piece turns at while alive, slowing to a stop as vitality falls: a mill's
 wheel) and `roost` (how fully a piece flies home onto its pivot as dusk
 falls, over the hours the lamps are lit in, and out again after dawn: a

@@ -3,7 +3,7 @@
 // never rebuilds geometry.
 
 import * as THREE from "three";
-import { CUT, type Part, SPRAYS, type Swatch } from "@gaia/schema";
+import { CUT, GRAIN, type Part, SPRAYS, type Swatch } from "@gaia/schema";
 import { CHANNEL_MATH, DETAIL, FLUTTERS, type Realized, pieceFrames, spinAt } from "@gaia/realize";
 import { LIGHT_GLSL, type SceneLight } from "./light.ts";
 import { WIND_GLSL } from "./sway.ts";
@@ -50,7 +50,8 @@ uniform float uWind;
 // only on parts that use them, so instanced plants never spend slots on them.
 attribute vec4 aFall;
 attribute float aGrow;
-attribute float aRot;
+// How far the surface rots, then the grain it rots along (see grainEdge).
+attribute vec4 aRot;
 attribute vec3 aSpin;
 attribute float aRoost;
 uniform float uTurn;
@@ -80,7 +81,7 @@ mat3 pieceTurn() {
 }
 vec3 turnedNormal(vec3 n) { return pieceTurn() * n; }
 // How far this surface has rotted through, for the fragment shader's holes.
-float rotNow() { return aRot * ${f(CHANNEL_MATH.rotMost)} * clamp(1.0 - uVitality / ${f(CHANNEL_MATH.rotStart)}, 0.0, 1.0); }
+float rotNow() { return aRot.x * ${f(CHANNEL_MATH.rotMost)} * clamp(1.0 - uVitality / ${f(CHANNEL_MATH.rotStart)}, 0.0, 1.0); }
 #else
 vec3 turnedNormal(vec3 n) { return n; }
 #endif
@@ -200,13 +201,16 @@ vec3 cardCut() {
 }
 `;
 
-// Rot: a surface rots through into ragged holes as vitality falls. The
-// holes follow a noise fixed to the piece's own rest position, so they
-// never crawl, and both faces of a roof open at the same spots.
+// Rot: a surface rots through as vitality falls. A covering with a grain
+// (tiles, straw) loses it a tile or a bundle at a time; any other surface
+// opens ragged holes where a noise of its rest position falls below the rot.
+// Both follow the surface's own rest, so holes never crawl, and both faces
+// of a roof open at the same spots.
 const ROT_GLSL = /* glsl */ `
 #ifdef RUIN
 varying float vRot;
 varying vec3 vRest;
+varying vec3 vGrain;
 float rotHash(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
 float rotValue(vec3 p) {
   vec3 i = floor(p);
@@ -217,9 +221,26 @@ float rotValue(vec3 p) {
     mix(mix(rotHash(i + vec3(0, 0, 1)), rotHash(i + vec3(1, 0, 1)), u.x), mix(rotHash(i + vec3(0, 1, 1)), rotHash(i + vec3(1, 1, 1)), u.x), u.y),
     u.z);
 }
+// A covering rots along its grain (GRAIN). Each tile, or each bundle of
+// straw, has its own point in the rot at which it goes, shared by runs of
+// its course, so gaps open along the courses. It darkens as its turn nears,
+// then breaks away from its lower edge up over a short band of rot, so
+// nothing pops; straw goes strand by strand, leaving a ragged fringe.
+float grainEdge() {
+  vec2 g = vGrain.xy;
+  float row = floor(g.y);
+  bool tiles = vGrain.z < ${(GRAIN.tiles + 0.5).toFixed(1)};
+  if (tiles) g.x += 0.5 * mod(row, 2.0);
+  vec2 cell = vec2(floor(g.x), row);
+  float ready = 0.15 + 0.85 * mix(rotHash(vec3(cell, 1.0)), rotHash(vec3(floor(cell.x / 5.0), row, 3.0)), 0.55);
+  float gone = clamp((vRot - ready) / 0.06, 0.0, 1.0);
+  float fringe = tiles ? 0.0 : 0.35 * rotHash(vec3(floor(g.x * 5.0), row, 7.0));
+  return (fract(g.y) + fringe - gone * (1.0 + fringe)) * 0.3 + max(ready - vRot, 0.0);
+}
 // Distance above the hole's edge: negative inside a hole.
 float rotEdge() {
   if (vRot <= 0.0) return 1.0;
+  if (vGrain.z > ${(GRAIN.none + 0.5).toFixed(1)}) return grainEdge();
   float n = rotValue(vRest * 1.1) * 0.65 + rotValue(vRest * 3.3 + 7.0) * 0.35;
   return n - vRot;
 }
@@ -631,6 +652,7 @@ ${CUTOUT_GLSL}
 #ifdef RUIN
 varying float vRot;
 varying vec3 vRest;
+varying vec3 vGrain;
 #endif
 varying vec3 vNormal;
 varying vec3 vWorld;
@@ -653,6 +675,7 @@ void main() {
 #ifdef RUIN
   vRot = rotNow();
   vRest = position;
+  vGrain = aRot.yzw;
 #endif
   vShade = aShade;
   vTint = aTint;
@@ -749,6 +772,7 @@ ${CUTOUT_GLSL}
 #ifdef RUIN
 varying float vRot;
 varying vec3 vRest;
+varying vec3 vGrain;
 #endif
 void main() {
   vCut = cardCut();
@@ -756,6 +780,7 @@ void main() {
 #ifdef RUIN
   vRot = rotNow();
   vRest = position;
+  vGrain = aRot.yzw;
 #endif
   float k = pieceScale(modelMatrix);
   if (k < 0.0) {
@@ -854,7 +879,7 @@ export function geometryOf(part: Part): THREE.BufferGeometry {
     const c = part.channels;
     g.setAttribute("aFall", new THREE.BufferAttribute(c.fall ?? new Float32Array(n * 4), 4));
     g.setAttribute("aGrow", new THREE.BufferAttribute(c.grow ?? new Float32Array(n), 1));
-    g.setAttribute("aRot", new THREE.BufferAttribute(c.rot ?? new Float32Array(n), 1));
+    g.setAttribute("aRot", new THREE.BufferAttribute(interleave(c.rot ?? new Float32Array(n), ...[0, 1, 2].map((k) => (c.grain ?? new Float32Array(n * 3)).filter((_, i) => i % 3 === k))), 4));
     g.setAttribute("aSpin", new THREE.BufferAttribute(c.spin ?? new Float32Array(n * 3), 3));
     g.setAttribute("aRoost", new THREE.BufferAttribute(c.roost ?? new Float32Array(n), 1));
   }
