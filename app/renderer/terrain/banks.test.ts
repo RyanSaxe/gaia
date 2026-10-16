@@ -1,11 +1,10 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { type BuildingPlan, type Built, Library, type RouteSpec, seedOf } from "@gaia/schema";
-import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, LANDMARK_PRIMITIVES, RELIEF_PRIMITIVES, ROUTE_PRIMITIVES, STRUCTURE_PRIMITIVES } from "@gaia/primitives";
-import { landmark, link, structure } from "@gaia/kinds";
-import { FLORA_PRESETS, STRUCTURE_PRESETS, TRAIL_PRESETS, buildSlots, realize } from "@gaia/realize";
+import { type BuildingPlan, type Built, Library, seedOf } from "@gaia/schema";
+import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, LANDMARK_PRIMITIVES, RELIEF_PRIMITIVES, STRUCTURE_PRIMITIVES } from "@gaia/primitives";
+import { landmark, structure } from "@gaia/kinds";
+import { FLORA_PRESETS, STRUCTURE_PRESETS, realize } from "@gaia/realize";
 import { type BuildingSite, type Terrain, bakeTerrain, extentOf, findBankSite, regionAt, siteToWorld, turningExtent, waterDepthAt, yardsMeet } from "@gaia/terrain";
 import { type CodeLab, codeLab, provingWorld } from "./code-world.ts";
-import { composedName } from "./settlement.ts";
 import { laySnapshot } from "./snapshot.ts";
 import { snapshotFacts } from "./snapshot-facts.ts";
 import { AS_THING, type Stand, type StandBuilding, type StandLandmark, blockedBy, landmarkBase, needsBank, standWorld } from "./stand.ts";
@@ -26,17 +25,15 @@ const buildingsOf = (code: CodeLab): StandBuilding[] =>
     return { name: b.facts.path, plan: built.slots.get("footprint")?.output as BuildingPlan, beside: extentOf(feature), ...(needsBank(b.blueprint, buildingLib) ? { wheel: turningExtent(feature) } : {}) };
   });
 
-/** A world stood as the terrain lab stands it: its buildings, its landmarks by the names the lab gives them, its trails and its definitions. */
+/** A world stood as the terrain lab stands it: its buildings, its landmarks, its trails and its definitions. */
 function standAsTheLab(t: Terrain, code: CodeLab, buildings: StandBuilding[]): { land: Terrain; stood: Stand; landmarks: StandLandmark[] } {
   const landmarkLib = new Library([...LANDMARK_PRIMITIVES, ...FLORA_PRIMITIVES]);
-  const styles = TRAIL_PRESETS.map((p) => buildSlots(p.blueprint, link, new Library(ROUTE_PRIMITIVES), { seed: 1, facts: {} }).get("route")?.output as RouteSpec);
   const land = structuredClone(t);
-  const landmarks = code.landmarks.map((l) => ({ name: composedName(l.blueprint), base: landmarkBase(realize(l.blueprint, landmark, landmarkLib, { seed: seedOf(`terrain-lab/landmark/${l.path}`), facts: Object.fromEntries(Object.entries(landmark.facts).map(([k, bind]) => [k, bind(l.facts)])) })) }));
+  const landmarks = code.landmarks.map((l) => ({ tree: l.blueprint.slots.form?.use === "great-tree@1", base: landmarkBase(realize(l.blueprint, landmark, landmarkLib, { seed: seedOf(`terrain-lab/landmark/${l.path}`), facts: Object.fromEntries(Object.entries(landmark.facts).map(([k, bind]) => [k, bind(l.facts)])) })) }));
   const stood = standWorld(land, {
     buildings,
     landmarks,
-    trailStyles: [styles[0] as RouteSpec, styles[1] as RouteSpec, styles[2] as RouteSpec],
-    trees: { count: 0, seed: 9, presets: FLORA_PRESETS.length, builds: 1, bases: FLORA_PRESETS.map(() => 0.5), crowns: FLORA_PRESETS.map(() => 4) },
+    trees: { builds: 1, bases: FLORA_PRESETS.map(() => 0.5), crowns: FLORA_PRESETS.map(() => 4) },
     code: code.stand,
   });
   return { land, stood, landmarks };

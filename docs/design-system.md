@@ -202,8 +202,7 @@ instance within it:
 
 No mountains. Landforms (rolling hills, valley, terraces, basin, dunes,
 meadow) are relief primitives in each region's biome, blended into one baked
-heightfield that every consumer samples. A full world is 1.2 km across with
-18 to 22 regions; the tests also bake small worlds, 320 m with 3 to 5.
+heightfield that every consumer samples. A world's size follows its code.
 
 A region never shows its shape. Region cells are domain-warped, so their
 borders curve and wander, and neighboring landforms ease into each other
@@ -1118,8 +1117,7 @@ repository's heart, the view wins whose ground ahead never rises more than
 code within 100 m and 35° either side of the view, a building or landmark
 counting as four trees, bushes, stones or flowers; then the nearest the
 heart. A world with no such stretch weighs twelve ways of facing from dry
-ground on rings around the heart, out to 120 m. The sample world stands for
-no code, so its buildings and landmarks are what count. That is a first
+ground on rings around the heart, out to 120 m. That is a first
 visit. A world opened before lands the person where they stood when they
 last left it (`returnTo`): exactly there while its code is laid out as it
 was; once an edit has moved things, beside the nearest thing that stood for
@@ -1152,11 +1150,8 @@ world laid out from code the land is all patches: each file's ground is a
 few organic cells, its directory's area is its files' and subdirectories'
 ground together, and an entity's lot is its area's own ground. Areas nest
 and fill the land, and their borders wander like fields' and are where the
-regions' covers change. In the sample world an area's
-border runs where its region's landform gives way to the next, so the
-islands where ground covers drift across a border never flicker a name, and
-a file's patch is the ground around the tree that stands for it. Past the
-codebase's land is the wild, which names nothing.
+regions' covers change. Past the codebase's land is the wild, which names
+nothing.
 
 The three ways work together:
 
@@ -1482,11 +1477,7 @@ different landmarks:
 What falls (rubble at a tower's foot, a snapped top, a fallen lintel)
 grows in at its foot only once it has fallen, and never stops a walk.
 
-Until worlds come from real code, the terrain lab stands a few landmarks,
-more for more regions (about 1.4 times the square root of the region count:
-seven in a full world of 22 regions), each for one of its sample entities,
-on regions spread far apart; when it wants more than there are forms, forms
-repeat. Buildings' floors and walks, landmarks' feet and cairns clear the
+Buildings' floors and walks, landmarks' feet and cairns clear the
 grass through the same mask as the understory, so a world may hold any
 number of them.
 
@@ -1583,9 +1574,6 @@ decides how large its trees grow:
 | Old meadow | A third larger |
 | Rocky heath | Small |
 | Wet hollow | Their usual size |
-
-In the sample world, which has no code behind it, trees gather by landform:
-valleys and hills hold the most and the largest, a meadow a few lone trees.
 
 ## Understory
 

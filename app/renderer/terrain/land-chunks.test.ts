@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { Library } from "@gaia/schema";
 import { BIOME_PRIMITIVES, RELIEF_PRIMITIVES } from "@gaia/primitives";
-import { DRY, FULL_WORLD, SHORE_CAP, bakeTerrain, planOf, sampleWorld } from "@gaia/terrain";
+import { DRY, SHORE_CAP, bakeTerrain, planOf } from "@gaia/terrain";
+import { FULL_WORLD, sampleWorld } from "@gaia/terrain/testing";
 import { CHUNK, chunkPastLand, cutChunk, latticeIndex, standChunk } from "./land-chunks.ts";
 
 // Baked once for the file: the full sample world, 1.2 km across, so its coarser levels' chunks reach past the land.

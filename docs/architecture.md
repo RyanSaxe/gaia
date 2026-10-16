@@ -350,9 +350,7 @@ bake returns, for its hills, water and trees.
 whose site is nearest the warped point names the area and the file underfoot
 (`WorldPlaces`, in `@gaia/schema`); a lot's cell names its area and no file.
 Past the land's rounded square (`WorldPlaces.size`) is the wild, which stands
-for no directory. A world laid out as regions, as the lab's sample world is,
-gives each region one cell and its files' patches are discs; `regionPlaces`
-builds such a world's places. `outlinesOf(world)` traces every area's and
+for no directory. `outlinesOf(world)` traces every area's and
 patch's outline from `placeAt`, once per world, for anything that draws them
 (the field map draws each patch's own shape).
 
@@ -430,8 +428,7 @@ graph-snapshot` writes it, trimmed by `judgedGraph` to directories, files
 and definitions, each with the importance and quality Jev's held answers give it,
 the imports between files and the calls and references into each definition
 (the snapshot of this commit predates those, so on the page a definition's
-building or landmark does not yet rise with what calls it). `?world=sample` (or `?world=small`)
-shows the sample world instead.
+building or landmark does not yet rise with what calls it).
 `?world=proving` (and `GAIA_PROJECT=proving` in the app) shows the proving
 ground: a made-up codebase (`fixtures/proving.json`) laid out with
 `layoutWorld` from choices fixed to cover every option

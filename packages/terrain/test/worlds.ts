@@ -1,10 +1,69 @@
-// Sample worlds for the lab and tests: named regions with chosen landforms,
-// and uniform random draws over every Relief primitive's declared fields, at
-// either of two scales.
+// Worlds for the tests: named regions with chosen landforms, and uniform
+// random draws over every Relief primitive's declared fields, at either of two
+// scales, so a property holds over every land Jev could compose. Regions sit
+// on seeded, evenly spread sites, standing in for a layout from code.
 
 import { type FilledSlot, type Library, type PrimitiveId, blueprintOf, rand } from "@gaia/schema";
-import { layoutSites } from "./layout.ts";
-import type { WorldSpec } from "./world.ts";
+import type { WorldSpec } from "@gaia/terrain";
+
+interface Site {
+  readonly x: number;
+  readonly z: number;
+  readonly base: number;
+}
+
+/** Evenly spread, seeded sites: best-candidate sampling, then a few relaxation passes. */
+function layoutSites(seed: number, count: number, size: number): Site[] {
+  const r = rand(seed);
+  const half = size / 2;
+  const margin = size * 0.18;
+  const pts: [number, number][] = [];
+  for (let i = 0; i < count; i++) {
+    let best: [number, number] = [0, 0];
+    let bestScore = -1;
+    for (let c = 0; c < 24; c++) {
+      const x = r.range(-half + margin, half - margin);
+      const z = r.range(-half + margin, half - margin);
+      const score = pts.length === 0 ? r.next() : Math.min(...pts.map(([px, pz]) => Math.hypot(px - x, pz - z)));
+      if (score > bestScore) {
+        bestScore = score;
+        best = [x, z];
+      }
+    }
+    pts.push(best);
+  }
+  // Lloyd relaxation on a coarse grid, forty cells across, evens out region sizes.
+  const cell = size / 40;
+  for (let pass = 0; pass < 4; pass++) {
+    const sx = new Float64Array(count);
+    const sz = new Float64Array(count);
+    const n = new Float64Array(count);
+    for (let gz = -half; gz <= half; gz += cell) {
+      for (let gx = -half; gx <= half; gx += cell) {
+        let k = 0;
+        let d = Infinity;
+        pts.forEach(([px, pz], i) => {
+          const e = Math.hypot(px - gx, pz - gz);
+          if (e < d) {
+            d = e;
+            k = i;
+          }
+        });
+        sx[k] = (sx[k] as number) + gx;
+        sz[k] = (sz[k] as number) + gz;
+        n[k] = (n[k] as number) + 1;
+      }
+    }
+    pts.forEach((p, i) => {
+      const c = n[i] as number;
+      if (c > 0) {
+        p[0] = (sx[i] as number) / c;
+        p[1] = (sz[i] as number) / c;
+      }
+    });
+  }
+  return pts.map(([x, z]) => ({ x, z, base: r.range(-2.5, 2.5) }));
+}
 
 /** How big a world is: the side of its walkable square, meters, and how many regions it holds, fewest and most. */
 export interface WorldScale {
@@ -16,7 +75,6 @@ export interface WorldScale {
 export const SMALL_WORLD: WorldScale = { size: 320, regions: [3, 5] };
 /** A full world to wander: 1.2 km across with a score of regions, each a little wider than a small world's. */
 export const FULL_WORLD: WorldScale = { size: 1200, regions: [18, 22] };
-export const WORLD_SIZE = SMALL_WORLD.size;
 
 const NAMES = [
   "src/core", "src/ui", "docs", "tests", "tools", "src/render", "src/world", "packages/schema", "packages/kinds", "scripts",

@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { Library } from "@gaia/schema";
 import { BIOME_PRIMITIVES, RELIEF_PRIMITIVES } from "@gaia/primitives";
-import { COVER_TAPS, type Terrain, type TerrainPlan, bakeTerrain, bakeTile, landformsOf, planTerrain, randomWorld, sampleWorld } from "@gaia/terrain";
+import { COVER_TAPS, type Terrain, type TerrainPlan, bakeTerrain, bakeTile, landformsOf, planTerrain } from "@gaia/terrain";
+import { randomWorld, sampleWorld } from "@gaia/terrain/testing";
 
 const lib = new Library([...RELIEF_PRIMITIVES, ...BIOME_PRIMITIVES]);
 // Baked once for the file: the sample world and two random draws, each whole and as a plan.

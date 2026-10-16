@@ -7,12 +7,10 @@
 // The land is divided into cells by one rule (`siteAt`): the terrain's
 // regions follow it too, so a point's area, its landform and its cover always
 // agree. A world laid out from code gives every file's patch and every
-// entity's lot a cell; a world laid out as regions (the lab's sample world)
-// gives each region one cell, and its files' patches are discs.
+// entity's lot a cell.
 
 import type { CellPlace, PatchPlace, WorldPlaces } from "@gaia/schema";
 import { siteAt } from "./land.ts";
-import type { WorldSpec } from "./world.ts";
 import { type LandOutline, pastTheEdge } from "./edge.ts";
 
 export type { AreaPlace, CellPlace, PatchPlace, WorldPlaces } from "@gaia/schema";
@@ -107,28 +105,6 @@ export function placeAt(world: WorldPlaces, x: number, z: number): Place {
     file = p === undefined ? null : { path: p.path, name: p.name, vitality: p.vitality };
   }
   return { area: area === undefined ? { path: "", name: world.name, depth: 0 } : { path: area.path, name: area.name, depth: area.depth }, file };
-}
-
-/** A directory's path, its own name, how deep it is and its parent's path. */
-function pathParts(path: string): { path: string; name: string; depth: number; parent: string | null } {
-  const parts = path.split("/").filter(Boolean);
-  return { path: parts.join("/"), name: parts[parts.length - 1] ?? "", depth: parts.length, parent: parts.length === 0 ? null : parts.slice(0, -1).join("/") };
-}
-
-/**
- * The places of a world laid out as regions: each region the area of the
- * directory it stands for (its id) and one cell, and each file's patch a disc
- * of ground in the area that holds its middle.
- */
-export function regionPlaces(spec: WorldSpec, name: string, files: readonly Omit<PatchPlace, "area">[]): WorldPlaces {
-  const cells: CellPlace[] = spec.regions.map((r) => ({ area: pathParts(r.id).path, x: r.x, z: r.z, ...(r.reach === undefined ? {} : { reach: r.reach }) }));
-  return {
-    name,
-    size: spec.size,
-    areas: spec.regions.map((r) => ({ ...pathParts(r.id), x: r.x, z: r.z })),
-    patches: files.map((f) => ({ ...f, area: (cells[siteAt(cells, f.x, f.z)] as CellPlace).area })),
-    cells,
-  };
 }
 
 /** One area's or patch's outline: closed rings of world points, [x0, z0, x1, z1, …], softened. */

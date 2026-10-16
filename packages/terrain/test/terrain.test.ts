@@ -8,7 +8,6 @@ import {
   BANKED,
   COVER_TAPS,
   FLOW,
-  FULL_WORLD,
   RELIEF_BUDGET,
   type SolvedStream,
   SHORE_CAP,
@@ -31,10 +30,10 @@ import {
   heightAt,
   landHalf,
   landformsOf,
-  randomWorld,
   regionWeights,
-  sampleWorld,
-  scatterPlants,
+  slopeAt,
+  isWet,
+  PLANT_SLOPE,
   streamFlow,
   surfaceHalfWidth,
   waterDepthAt,
@@ -48,6 +47,7 @@ import {
   warpPoint,
   withinBudget,
 } from "@gaia/terrain";
+import { FULL_WORLD, randomWorld, sampleWorld } from "@gaia/terrain/testing";
 
 const lib = new Library([...RELIEF_PRIMITIVES, ...BIOME_PRIMITIVES]);
 const bytes = (a: ArrayBufferView): Buffer => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
@@ -90,7 +90,6 @@ describe("terrain", { timeout: 20_000 }, () => {
     const b = bakeTerrain(sampleWorld(), lib);
     expect(bytes(a.lattice.heights).equals(bytes(b.lattice.heights))).toBe(true);
     expect(bytes(a.waterLevel).equals(bytes(b.waterLevel))).toBe(true);
-    expect(randomWorld(lib, 42)).toEqual(randomWorld(lib, 42));
   });
 
   it("keeps every random draw inside the relief budget, after water is cut", () => {
@@ -477,7 +476,12 @@ describe("terrain", { timeout: 20_000 }, () => {
     });
     for (const ring of bases) expect(ring.length, "the origin is the trunk base").toBeGreaterThanOrEqual(3);
     for (const t of baked.slice(0, 8)) {
-      const spots = scatterPlants(t, 16, 9);
+      // Spots a tree could stand on: dry, gentle ground across the land, every 23 m.
+      const spots: { x: number; z: number }[] = [];
+      const half = t.spec.size / 2 - 20;
+      for (let z = -half; z <= half && spots.length < 16; z += 23) {
+        for (let x = -half; x <= half && spots.length < 16; x += 23) if (slopeAt(t.lattice, x, z) <= PLANT_SLOPE / 2 && !isWet(t, x, z)) spots.push({ x, z });
+      }
       expect(spots.length).toBe(16);
       spots.forEach((s, i) => {
         const ring = bases[i % bases.length]!;
@@ -514,9 +518,6 @@ describe("full worlds", () => {
 
   it("keeps a full world of a score of regions inside the relief budget, with several streams and ponds", () => {
     for (const w of [sampleWorld(FULL_WORLD), randomWorld(lib, 7, FULL_WORLD)]) {
-      expect(w.size).toBe(FULL_WORLD.size);
-      expect(w.regions.length).toBeGreaterThanOrEqual(FULL_WORLD.regions[0]);
-      expect(w.regions.length).toBeLessThanOrEqual(FULL_WORLD.regions[1]);
       const t = bakeTerrain(w, lib);
       expect(withinBudget(t.report)).toBe(true);
       expect(t.streams.length + t.ponds.length).toBeGreaterThanOrEqual(3);

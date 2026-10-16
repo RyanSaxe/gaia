@@ -14,7 +14,8 @@
 //   full one, coming to draw whole, the full form dissolving under it, and the
 //   frame where it leaves and the far form stands alone; then, too small to
 //   see, dissolving and gone. Each is held against the wind's half-second change.
-// - stress: a world with five times the trees.
+// - stress: the proving ground as it is, then with every tree that stands for
+//   code standing five times on its own patch.
 // - paint: the painter check. Standing still in Gaia's world with the wind's
 //   clock frozen while the journal's painter paints the things farthest
 //   away, the person's view must not change at all; and the page's frames
@@ -31,9 +32,8 @@
 // pace, so it shows then, without taking focus; leave it uncovered. Timings
 // are only worth comparing from a quiet machine: other work on the GPU or CPU
 // makes them noisy, so the probe prints the load average it ran at.
-// Usage: pnpm probe [drawn] [steps] [hitch] [stress] [swap] [paint] [--world gaia|proving|sample]
-//          [--size METERS] [--spot NAME] [--dpr 1|2] [--json FILE]
-// The sample world is measured only when asked for, at --size meters across.
+// Usage: pnpm probe [drawn] [steps] [hitch] [stress] [swap] [paint] [--world gaia|proving]
+//          [--spot NAME] [--dpr 1|2] [--json FILE]
 // A spot is "valley", "turned" or a tour stop (`__lab.terrain.tour()` lists
 // them, such as "ruined bridge"); --world and --spot may repeat.
 
@@ -54,7 +54,6 @@ type Measure = (typeof MEASURES)[number];
 const SPOTS = {
   gaia: ["valley", "turned"],
   proving: ["valley", "thriving grove", "large area"],
-  sample: ["valley", "turned"],
 } as const;
 /** How far the walk test walks from each spot, its step (half a second at walking pace), and the wind's moment, so every run sees the same wind. */
 const WALK = { meters: 150, step: 0.7, at: 100 };
@@ -78,7 +77,7 @@ const HEIGHT = 800;
 
 const { values, positionals } = parseArgs({
   allowPositionals: true,
-  options: { dpr: { type: "string", default: "2" }, json: { type: "string" }, world: { type: "string", multiple: true }, spot: { type: "string", multiple: true }, size: { type: "string" } },
+  options: { dpr: { type: "string", default: "2" }, json: { type: "string" }, world: { type: "string", multiple: true }, spot: { type: "string", multiple: true } },
 });
 const asked = positionals.length === 0 ? [...MEASURES] : positionals;
 for (const m of asked) if (!(MEASURES as readonly string[]).includes(m)) throw new Error(`No measure named ${m}; choose from ${MEASURES.join(", ")}.`);
@@ -88,8 +87,6 @@ const dpr = Number(values.dpr);
 /** One page load: the world to open, then each call's JavaScript, run in order with `T` as `__lab.terrain`. */
 interface Job {
   readonly world: string;
-  /** The sample world's size in meters, when asked. */
-  readonly size?: string;
   readonly calls: readonly Call[];
 }
 /** `shown` calls run with the window on screen, where frames keep the display's pace. */
@@ -112,7 +109,7 @@ const bench = "(T.bench(10), +T.bench(40).toFixed(2))";
 
 const jobs: Job[] = [];
 for (const [world, preset] of Object.entries(SPOTS)) {
-  if (values.world === undefined ? world === "sample" : !values.world.includes(world)) continue;
+  if (values.world !== undefined && !values.world.includes(world)) continue;
   const spots = values.spot ?? preset;
   const calls: Call[] = [{ key: "open", js: OPEN }];
   for (const spot of spots) {
@@ -122,7 +119,7 @@ for (const [world, preset] of Object.entries(SPOTS)) {
   if (measures.has("hitch")) {
     for (let w = 0; w < HITCH_WINDOWS; w++) calls.push({ key: `hitch ${w}`, shown: true, js: `(${w === 0 ? `${go("valley")}, await __lab.frames(60), ` : ""}await T.wander(10), __lab.smoothness())` });
   }
-  if (calls.length > 1) jobs.push({ world, calls, ...(world === "sample" && values.size !== undefined ? { size: values.size } : {}) });
+  if (calls.length > 1) jobs.push({ world, calls });
 }
 if (measures.has("swap")) {
   const calls: Call[] = [{ key: "open", js: OPEN }];
@@ -135,15 +132,15 @@ if (measures.has("paint")) {
   // Looking at the view draws frames of its own, so the page's frames are counted again over paintings made unwatched.
   jobs.push({ world: "gaia", calls: [{ key: "open", js: OPEN }, { key: "paint", js: `(${go("valley")}, ${settle}, await T.paintCheck(6))` }, { key: "paint unwatched", js: `(${go("turned")}, ${settle}, await T.paintCheck(6, false))` }, { key: "paint unwatched near", js: `(${go("turned")}, ${settle}, await T.paintCheck(6, false, true))` }, { key: "stand", js: `(${go("valley")}, ${settle}, await T.standCheck(30))` }] });
 }
-if (measures.has("stress") && (values.world === undefined || values.world.includes("sample"))) {
-  // The sample world, replanted with its usual trees and then five times as many.
+if (measures.has("stress") && (values.world === undefined || values.world.includes("proving"))) {
+  // The proving ground as it stands, then with every tree that stands for code standing five times.
   const measure = `${go("valley")}, ${settle}, { trees: T.scale().trees, ms: ${bench}, drawn: T.drawn() }`;
   jobs.push({
-    world: "sample",
+    world: "proving",
     calls: [
       { key: "open", js: OPEN },
       { key: "stress 1x", js: `(${measure})` },
-      { key: "stress 5x", js: `(await T.forest(5 * T.scale().trees), ${measure})` },
+      { key: "stress 5x", js: `(await T.forest(5), ${measure})` },
     ],
   });
 }
@@ -185,7 +182,7 @@ async function probe() {
     if (e.level === "warning" || e.level === "error") messages.push(e.message);
   });
   for (const job of jobs) {
-    await win.loadFile(page, { query: { world: job.world, ...(job.size === undefined ? {} : { size: job.size }) } });
+    await win.loadFile(page, { query: { world: job.world } });
     const run = (js) => win.webContents.executeJavaScript("(async () => { const T = window.__lab.terrain; return " + js + "; })()");
     await win.webContents.executeJavaScript("new Promise((r) => { const t = () => (window.__lab ? r() : setTimeout(t, 50)); t(); })");
     const view = await win.webContents.executeJavaScript("[innerWidth, innerHeight]");

@@ -49,7 +49,7 @@ export interface TourWorld {
   /** A way's vitality at a point along it, 0 to 1 from its first point to its last. */
   readonly wayVitality: (way: number, along: number) => number;
   readonly junctionVitality: (junction: Junction) => number;
-  /** A codebase's areas; none for the sample world. */
+  /** The codebase's areas. */
   readonly areas: readonly TourArea[];
   readonly groves: readonly TourGrove[];
   readonly ponds: readonly { readonly x: number; readonly z: number; readonly reach: number }[];

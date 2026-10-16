@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { Library, type RouteSpec } from "@gaia/schema";
 import { BIOME_PRIMITIVES, RELIEF_PRIMITIVES } from "@gaia/primitives";
-import { BODY_RADIUS, NO_SOLIDS, NO_TRAILS, STEER, TRAVEL, type Travel, type TrailEnd, type TrailRequest, type Trip, type Walker, acrossWay, bakeTerrain, clearanceAt, planTrails, planTrip, sampleWorld, solidsOf, travelFrom, travelStep, trailWay, waterDepthAt } from "@gaia/terrain";
+import { BODY_RADIUS, NO_SOLIDS, NO_TRAILS, STEER, TRAVEL, type Travel, type TrailEnd, type TrailRequest, type Trip, type Walker, acrossWay, bakeTerrain, clearanceAt, planTrails, planTrip, solidsOf, travelFrom, travelStep, trailWay, waterDepthAt } from "@gaia/terrain";
+import { sampleWorld } from "@gaia/terrain/testing";
 
 const lib = new Library([...RELIEF_PRIMITIVES, ...BIOME_PRIMITIVES]);
 const STYLE: RouteSpec = { width: 1.4, wear: 0.7, edging: "none", winding: 0.45, crossing: "footbridge" };

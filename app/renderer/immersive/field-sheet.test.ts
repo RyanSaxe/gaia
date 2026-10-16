@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { type CodeFacts, Library } from "@gaia/schema";
 import { BIOME_PRIMITIVES, RELIEF_PRIMITIVES } from "@gaia/primitives";
-import { WILDS, bakeTerrain, groundHeightAt, heightAt, landHalf, outlinesOf, pastTheEdge, sampleWorld } from "@gaia/terrain";
+import { WILDS, bakeTerrain, groundHeightAt, heightAt, landHalf, outlinesOf, pastTheEdge } from "@gaia/terrain";
+import { sampleWorld } from "@gaia/terrain/testing";
 import { type Judgments, LAYOUT, type LotPlace, layoutWorld } from "@gaia/world";
 import proving from "../terrain/fixtures/proving.json";
 import provingJudged from "../terrain/fixtures/proving-judged.json";

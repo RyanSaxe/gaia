@@ -30,7 +30,6 @@ import {
   outlineShape,
   piecesShapes,
   planWalk,
-  sampleWorld,
   solidsOf,
   stanceAt,
   standAt,
@@ -42,6 +41,7 @@ import {
   walkToward,
   waterDepthAt,
 } from "@gaia/terrain";
+import { sampleWorld } from "@gaia/terrain/testing";
 
 const lib = new Library([...RELIEF_PRIMITIVES, ...BIOME_PRIMITIVES]);
 const t: Terrain = bakeTerrain(sampleWorld(), lib);

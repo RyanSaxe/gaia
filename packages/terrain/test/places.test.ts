@@ -10,8 +10,6 @@ import {
   ownershipOf,
   ownershipRows,
   placeAt,
-  regionPlaces,
-  sampleWorld,
   siteAt,
   vitalityAt,
   vitalityOver,
@@ -62,24 +60,6 @@ describe("where a person is", () => {
     expect(ring("", lines.areas)).toBeGreaterThan(0);
     expect(lines.patches.map((p) => p.path).sort()).toEqual(["src/main.ts", "src/ui/menu.ts"]);
     expect(outlinesOf(world, 4)).toBe(lines);
-  });
-
-  it("names the region whose land a point is on in a world laid out as regions, and the nearest file whose patch reaches it", () => {
-    // Places read the world's regions alone, so the ground need not be baked.
-    const spec = sampleWorld();
-    const [a, b] = spec.regions;
-    const world = regionPlaces(spec, "sample", [file("src/core/a.ts", a!.x, a!.z, 4), file("src/core/b.ts", a!.x + 6, a!.z, 4), file("src/ui/c.ts", b!.x, b!.z, 3)]);
-    for (const r of spec.regions) {
-      const here = placeAt(world, r.x, r.z).area;
-      expect(here).toEqual({ path: r.id, name: r.id.split("/").pop(), depth: r.id.split("/").length });
-    }
-    expect(world.patches.map((p) => p.area)).toEqual([a!.id, a!.id, b!.id]);
-    expect(placeAt(world, a!.x + 1, a!.z).file?.path).toBe("src/core/a.ts");
-    // Where two patches overlap, the one whose middle is nearer for its size is underfoot.
-    expect(placeAt(world, a!.x + 3.5, a!.z).file?.path).toBe("src/core/b.ts");
-    expect(placeAt(world, b!.x, b!.z + 2.9).file?.path).toBe("src/ui/c.ts");
-    expect(placeAt(world, b!.x, b!.z + 3.1).file).toBeNull();
-    expect(placeAt(world, spec.size / 2 + 5, 0)).toEqual({ area: WILD_AREA, file: null });
   });
 });
 
