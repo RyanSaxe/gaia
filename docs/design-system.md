@@ -576,7 +576,10 @@ Ruin follows each form: every mass's walls and roof rot by the same weak
 corner, a roof's covering opening in big holes to its rafters whose edges
 step along its courses, a whole tile or bundle of straw at a time, the
 straw slumping and thinning to a ragged fringe at a hole's edge and the
-tiles and straw going a little before the boards and battens under them, a lean-to's whole slope caves in about its high edge, a turret's
+tiles and straw going a little before the boards and battens under them;
+walls the same way, plaster falling in patches that stop at the timbers and
+bare the rubble behind it, stones a block at a time from their tops with
+the mortar just after, and boards a length at a time; a lean-to's whole slope caves in about its high edge, a turret's
 cone rots through and its finial leans and falls, and a fallen timber is
 one storey's post, so a tall house collapses floor by floor.
 

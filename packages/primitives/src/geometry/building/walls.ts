@@ -5,7 +5,7 @@
 // weak corner where timbers topple and rubble gathers; ivy climbs the
 // walls and weeds grow tall. Walls another mass hides are never built.
 
-import type { BuildContext, BuildingPlan, Built, Rand, Resolved } from "@gaia/schema";
+import { type BuildContext, type BuildingPlan, type Built, GRAIN, type Rand, type Resolved, type Vec3 } from "@gaia/schema";
 import type { fieldstoneParams, timberFrameParams } from "../../structure.ts";
 import { type Channels, LOSS_BAND, PartBuilder, type V3, addScaled, clamp, fbm3, lossThreshold, normalize } from "../kit.ts";
 import { UP, beam, box, pillow } from "../blocks.ts";
@@ -14,6 +14,10 @@ import { ivy, rubble, wallSheet, weedSpots, weeds } from "./ruin.ts";
 
 /** Floor to floor, meters; a floor beam marks each storey on a timber frame. */
 const STOREY = 2.3;
+
+/** The pieces walls rot in, meters across and up: the shader's cells for GRAIN.plaster and GRAIN.stones. */
+const PLASTER = [0.3, 0.3] as const;
+const STONE = [0.4, 0.3] as const;
 
 // ---------- shared ----------
 
@@ -53,12 +57,28 @@ function floor(b: PartBuilder, plan: BuildingPlan, ruin: Ruin): void {
   });
 }
 
-/** The wall's core: a plain face set just behind the surface, which shows where plaster has fallen and rots through as the house declines. */
-function core(b: PartBuilder, plan: BuildingPlan, ruin: Ruin, inset: number, from: number, coarse: number): void {
+/**
+ * Where a point on wall `w` lies in its courses, as a grain of `kind`
+ * (`GRAIN`), in pieces `size` meters across. Its pieces count down from the
+ * eaves, so each breaks away from its top edge and what is left of it rests
+ * on what is below.
+ */
+const wallGrain = (w: Wall, kind: number, size: readonly [number, number]) => (p: Vec3): Vec3 => [
+  ((p[0] - w.o[0]) * w.u[0] + (p[2] - w.o[2]) * w.u[2]) / size[0],
+  -p[1] / size[1],
+  kind,
+];
+
+/**
+ * The wall's core: a plain face of rubble set just behind the surface, which shows where plaster or stones have
+ * fallen, and rots through a block at a time, after what is in front of it: `behind` of its depth.
+ */
+function core(b: PartBuilder, plan: BuildingPlan, ruin: Ruin, inset: number, from: number, coarse: number, behind: number): void {
   for (const w of shownWalls(plan)) {
     const m = massOf(plan, w);
     const pivot = on(w, w.length / 2, wallTop(plan, m) / 2);
-    wallSheet(b, plan, w, from, -inset, 0.75 * coarse, (p) => ({ shade: 0.38, c: still(pivot, 0.6, { rot: wallRot(plan, m, ruin, p) }) }));
+    const grain = wallGrain(w, GRAIN.stones, STONE);
+    wallSheet(b, plan, w, from, -inset, 0.75 * coarse, (p) => ({ shade: 0.38, c: still(pivot, 0.6, { rot: wallRot(plan, m, ruin, p) * behind, grain }) }));
   }
 }
 
@@ -110,7 +130,8 @@ function timberFrame(p: Resolved<typeof timberFrameParams>, ctx: BuildContext, p
   const timber = new PartBuilder("timber", "solid");
   const ruin = ruinOf(plan);
   plinth(masonry, plan, r.fork("plinth"), coarse);
-  core(masonry, plan, ruin, 0.03, plan.floor, coarse);
+  // Fallen plaster bares a band of the rubble behind it before the wall opens.
+  core(masonry, plan, ruin, 0.03, plan.floor, coarse, 0.92);
   floor(timber, plan, ruin);
   const beamW = 0.17;
   const out = 0.03;
@@ -251,7 +272,8 @@ function timberFrame(p: Resolved<typeof timberFrameParams>, ctx: BuildContext, p
     if (rise > 0.05) {
       // The gable's plaster, in cells so it can rot through from the peak.
       const pivot = on(w, peak.s, top + rise / 2);
-      wallSheet(plaster, plan, w, top, 0.008, 0.6 * coarse, (q) => ({ shade: 0.58, c: still(pivot, 0.55, { rot: wallRot(plan, m, ruin, q) }) }));
+      const grain = wallGrain(w, GRAIN.plaster, PLASTER);
+      wallSheet(plaster, plan, w, top, 0.008, 0.6 * coarse, (q) => ({ shade: 0.58, c: still(pivot, 0.55, { rot: wallRot(plan, m, ruin, q), grain }) }));
     }
   }
   // Chunks of plaster and stone lie where the corner gave way.
@@ -291,7 +313,7 @@ function panel(b: PartBuilder, plan: BuildingPlan, ruin: Ruin, w: Wall, s0: numb
       const d = 0.008 + inner * 0.014 * rough + n * 0.006 * rough;
       const q = on(w, s + wobble(plan, seed, on(w, s, y), 0.09), y, d);
       const normal = normalize(addScaled(w.n, w.u, n * 0.12 * rough));
-      idx.push(b.vertex(q, normal, base + n * 0.12 * rough + inner * 0.04, { ...c, rot: wallRot(plan, massOf(plan, w), ruin, q) }));
+      idx.push(b.vertex(q, normal, base + n * 0.12 * rough + inner * 0.04, { ...c, rot: wallRot(plan, massOf(plan, w), ruin, q), grain: wallGrain(w, GRAIN.plaster, PLASTER) }));
     }
   }
   for (let j = 0; j < 2; j++) {
@@ -316,7 +338,8 @@ function fieldstone(p: Resolved<typeof fieldstoneParams>, ctx: BuildContext, pla
   const stones = new PartBuilder("masonry", "solid");
   const boards = new PartBuilder("timber", "solid");
   const ruin = ruinOf(plan);
-  core(mortar, plan, ruin, -0.005, -plan.footing, coarse);
+  // The mortar goes just after the stones in front of it, so a fallen stone leaves a hole, not a bare patch of mortar.
+  core(mortar, plan, ruin, -0.005, -plan.footing, coarse, 0.95);
   floor(boards, plan, ruin);
   const walls = shownWalls(plan);
   // Stones grow on a big house, so the walls stay within about 600 stones, and more only when the walls run over budget.
@@ -347,6 +370,9 @@ function fieldstone(p: Resolved<typeof fieldstoneParams>, ctx: BuildContext, pla
           const fallen = wallRot(plan, m, ruin, c);
           // A tall house's upper courses fall too, so a ruin is broken down from above as well as at its weak corner.
           const missing = r.next() < 0.05 + 0.95 * Math.max(0, fallen - 0.3);
+          // The stone rots with the wall behind it, reading the rot at the middle of its block, and goes from its top down.
+          const [u, v] = wallGrain(w, GRAIN.stones, STONE)(c);
+          const row = Math.floor(v);
           pillow(stones, c, w.u, w.n, len * 0.94, h * 0.9, 0.05 + 0.05 * r.next(), 0.4 + 0.25 * r.next(), {
             loss: missing ? lossThreshold(r.next(), 0.22 + 0.3 * fallen, 0.05) : 0,
             droop: 0,
@@ -354,6 +380,8 @@ function fieldstone(p: Resolved<typeof fieldstoneParams>, ctx: BuildContext, pla
             glow: 0,
             pivot: c,
             tint: (r.next() - 0.5) * 0.06,
+            rot: fallen,
+            grain: (q) => [u, row + clamp((c[1] + h / 2 - q[1]) / h, 0, 0.999), GRAIN.stones],
           }, r);
         }
         s += len;

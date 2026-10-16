@@ -55,11 +55,12 @@ export interface VitalityChannels {
   /** How far a surface rots through into ragged holes as vitality drops, 0 to 1. Absent means none. */
   readonly rot?: Float32Array;
   /**
-   * The grain a covering rots along, three per vertex: where the vertex lies
-   * across its courses and up them, in tiles or straw bundles, and the
-   * covering's kind (`GRAIN`). Rot then opens its holes a whole tile or
-   * bundle at a time, so their edges step along the courses instead of
-   * melting. Absent means rot follows a noise of the surface's rest position.
+   * The grain a surface rots along, three per vertex: where the vertex lies
+   * across its courses and up them, in tiles, bundles, patches, stones or
+   * boards, and the surface's kind (`GRAIN`). Rot then opens its holes a
+   * whole piece at a time, so their edges step along the courses instead of
+   * melting; a piece breaks away from the edge where the second number's
+   * fraction is 0. Absent means rot follows a noise of the rest position.
    */
   readonly grain?: Float32Array;
   /**
@@ -112,7 +113,11 @@ export interface Part {
  * place at its own threshold near the card's `loss`, so a spray never
  * shrinks or flies toward anything.
  */
-/** What a covering is made of, for `grain`: how it comes apart as it rots. */
+/**
+ * What a surface is made of, for `grain`: how it comes apart as it rots.
+ * Each kind goes a piece at a time, a piece as big as the shader's cell for
+ * that kind (`grainSize` in @gaia/render).
+ */
 export const GRAIN = {
   /** No grain: rot opens holes where a noise of the rest position falls below it. */
   none: 0,
@@ -120,6 +125,12 @@ export const GRAIN = {
   tiles: 1,
   /** Straw laid in courses. */
   straw: 2,
+  /** Plaster, which falls away in patches about a hand and a half across. */
+  plaster: 3,
+  /** Stones or rubble laid in courses that break joint, which fall a block at a time. */
+  stones: 4,
+  /** Boards, which go a length of board at a time. */
+  boards: 5,
 } as const;
 
 export const CUT = {
