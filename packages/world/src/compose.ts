@@ -12,7 +12,7 @@ import { type Target, type Wave, assemble, planDetails, planStructure, readStruc
 export interface Composing {
   readonly building: AnyKind;
   readonly landmark: AnyKind;
-  /** The whole world's light, sky, season and wind. */
+  /** The whole world's light, sky and wind. */
   readonly world: AnyKind;
   /** A region's land. */
   readonly biome: AnyKind;

@@ -1,5 +1,5 @@
-// Color math in OKLab, where equal distances look equally different. Season
-// shifts and the decline guard work here, never in raw RGB.
+// Color math in OKLab, where equal distances look equally different. Turns of
+// hue, such as the light's warmth, work here, never in raw RGB.
 
 import type { ColorShift, Rgb } from "@gaia/schema";
 
@@ -48,13 +48,6 @@ export function fromLch(L: number, C: number, h: number): Rgb {
   return fromOklab([L, C * Math.cos(r), C * Math.sin(r)]);
 }
 
-/** Perceptual distance. About 0.02 is barely noticeable; 0.1 is plainly different. */
-export function deltaE(x: Rgb, y: Rgb): number {
-  const a = toOklab(x);
-  const b = toOklab(y);
-  return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
-}
-
 export function mixRgb(x: Rgb, y: Rgb, t: number): Rgb {
   return [x[0] + (y[0] - x[0]) * t, x[1] + (y[1] - x[1]) * t, x[2] + (y[2] - x[2]) * t];
 }
@@ -66,45 +59,19 @@ export function mixLab(x: Rgb, y: Rgb, t: number): Rgb {
   return fromOklab([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]);
 }
 
-export const NO_SHIFT: ColorShift = { hue: 0, pull: 0, maxTurn: 0, chroma: 1, lightness: 0 };
-
 /**
- * Applies a seasonal shift. The hue turns at most `maxTurn`, and colors far
- * around the wheel from the season's hue barely turn at all, so a pink canopy
+ * Turns a color toward a hue. The hue turns at most `maxTurn`, and colors far
+ * around the wheel from the target hue barely turn at all, so a pink canopy
  * is never dragged through orange into green: a family keeps its identity.
  */
 export function shiftColor(c: Rgb, s: ColorShift): Rgb {
   const [L, C, h] = toLch(c);
   const d = ((s.hue - h + 540) % 360) - 180;
   const x = Math.min(1, Math.max(0, (Math.abs(d) - 60) / 90));
-  // Deep, dark greens hold like evergreens; bright ones turn with the season.
+  // Deep, dark greens hold like evergreens; bright ones turn.
   const y = Math.min(1, Math.max(0, (L - 0.32) / 0.3));
   const reach = (1 - x * x * (3 - 2 * x)) * y * y * (3 - 2 * y);
   // Near-grey colors have no meaningful hue; turning them would invent one.
   const turn = Math.max(-s.maxTurn, Math.min(s.maxTurn, d * s.pull)) * reach * Math.min(1, C / 0.04);
   return fromLch(Math.min(0.97, Math.max(0.05, L + s.lightness)), C * s.chroma, h + turn);
-}
-
-/**
- * Pushes `c` away from `anchor` in OKLab until they are at least `margin`
- * apart, so a shifted healthy color can never be mistaken for decline.
- * Steps along the existing difference; if the two coincide, brightens.
- */
-export function keepApart(c: Rgb, anchor: Rgb, margin: number): Rgb {
-  let out = c;
-  for (let i = 0; i < 40 && deltaE(out, anchor) < margin; i++) {
-    const a = toOklab(out);
-    const b = toOklab(anchor);
-    let dx = a[0] - b[0];
-    let dy = a[1] - b[1];
-    let dz = a[2] - b[2];
-    const len = Math.hypot(dx, dy, dz);
-    if (len < 1e-4) [dx, dy, dz] = [1, 0, 0];
-    else [dx, dy, dz] = [dx / len, dy / len, dz / len];
-    // Gamut clamping can stall a step along one axis, so lightness also leans
-    // away from the anchor each step.
-    const lean = a[0] >= b[0] ? 1 : -1;
-    out = fromOklab([a[0] + dx * 0.02 + lean * 0.006, a[1] + dy * 0.02, a[2] + dz * 0.02]);
-  }
-  return out;
 }

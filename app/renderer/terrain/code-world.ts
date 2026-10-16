@@ -62,7 +62,7 @@ export interface CodeLab {
    * then each file and entity standing as flowers, a stone, a bush or a tree (`world.standing`).
    */
   readonly standing: (i: number) => StandingOf | undefined;
-  /** The light, sky, season and wind Jev composed for the world. */
+  /** The light, sky and wind Jev composed for the world. */
   readonly sky: Blueprint;
   /** What the bake thread needs to stand this world's things, given the request's trail styles. */
   readonly stand: StandCode;

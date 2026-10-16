@@ -15,7 +15,6 @@ import { type GroundSpec, type Library, blueprintOf, seedOf } from "@gaia/schema
 import { biome } from "@gaia/kinds";
 import { type Realized, realizeRegion } from "@gaia/realize";
 import type { InstanceSpot, SceneLight } from "@gaia/render";
-import { NO_SHIFT, hex } from "@gaia/primitives";
 import { type Terrain, WILD_THICKETS, wildHeightAt, wildThicket } from "@gaia/terrain";
 import { type BuildAsk, made } from "./made.ts";
 import type { RegionCovers } from "./regions.ts";
@@ -129,16 +128,15 @@ function wildSpots(t: Terrain, ax: number, az: number, variants: number, cache: 
   return out;
 }
 
-/** The wild's covers, realized as a region's cover is, with no season. */
+/** The wild's covers, realized as a region's cover is. */
 function wildGround(lib: Library): [GroundSpec, GroundSpec] {
-  const season = { swatches: {}, ground: NO_SHIFT, frost: 0, fall: hex(0xd9a04a) };
   const [a, b] = WILD_COVERS.map((params, i) => {
     const blueprint = blueprintOf("biome", {
       relief: { use: "meadow@1", params: { undulation: "softly undulating", tilt: "level", facing: "north" } },
       cover: { use: "ground-cover@1", params: { ...params } },
       natives: { use: "native-families@1", params: { families: [] } },
     });
-    const ground = realizeRegion({ blueprint, kind: biome }, lib, seedOf(`wilds/cover-${i}`), season).ground;
+    const ground = realizeRegion({ blueprint, kind: biome }, lib, seedOf(`wilds/cover-${i}`)).ground;
     return { ...ground, density: ground.density * WILD_GROWTH.density };
   });
   return [a as GroundSpec, b as GroundSpec];

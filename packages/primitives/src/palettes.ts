@@ -1,8 +1,7 @@
 // Color families from the world design system. Jev chooses a family by its
 // description; the colors themselves are authored, never generated.
 
-import type { Palette, Rgb, SeasonSpec } from "@gaia/schema";
-import { keepApart, shiftColor } from "./color.ts";
+import type { Palette, Rgb } from "@gaia/schema";
 
 export const PALETTE_FAMILIES = {
   "spring-meadow": "Fresh yellow-greens with pale bark and white flowers",
@@ -107,27 +106,4 @@ export function paletteOf(family: PaletteFamily, contrast: number): Palette {
       ...buildingSwatches(family, contrast),
     },
   };
-}
-
-/**
- * How far apart, in OKLab, a swatch's healthy and decline colors must stay
- * after the world's season shifts the healthy one. Bark sits near grey in
- * every family, so its floor is lower; leaves and blooms carry the decline read.
- */
-export const DECLINE_MARGIN: Readonly<Record<string, number>> = { bark: 0.05, leaf: 0.09, bloom: 0.09, stone: 0.05, moss: 0.09, stem: 0.09, eye: 0.07 };
-const DEFAULT_MARGIN = 0.09;
-
-/**
- * A component's palette under the world's season. Only healthy colors move;
- * decline is shared by every world, and each shifted color is pushed clear of
- * its decline color so decline always reads as decline.
- */
-export function seasonPalette(palette: Palette, season: SeasonSpec): Palette {
-  const swatches: Record<string, Palette["swatches"][string]> = {};
-  for (const [name, swatch] of Object.entries(palette.swatches)) {
-    const shift = season.swatches[name];
-    const healthy = shift === undefined ? swatch.healthy : shiftColor(swatch.healthy, shift);
-    swatches[name] = { healthy: keepApart(healthy, swatch.decline, DECLINE_MARGIN[name] ?? DEFAULT_MARGIN), decline: swatch.decline };
-  }
-  return { swatches };
 }

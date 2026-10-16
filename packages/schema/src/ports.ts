@@ -230,7 +230,7 @@ export interface MotionSpec {
 // world composer combines and every material reads.
 
 /**
- * A seasonal turn of one color in OKLCh: hue pulled toward `hue` (degrees) by
+ * A turn of one color in OKLCh: hue pulled toward `hue` (degrees) by
  * `pull` but never more than `maxTurn` degrees, chroma scaled, lightness offset.
  */
 export interface ColorShift {
@@ -331,16 +331,6 @@ export interface SkySpec {
   readonly clouds: CloudSpec;
 }
 
-export interface SeasonSpec {
-  /** Shifts per palette swatch name; a swatch without one keeps its color. */
-  readonly swatches: Readonly<Record<string, ColorShift>>;
-  readonly ground: ColorShift;
-  /** How white the grass tips turn, 0 to 1. */
-  readonly frost: number;
-  /** The color of what falls in this season, such as leaves. */
-  readonly fall: Rgb;
-}
-
 export interface AtmosphereSpec {
   /** The air's own color, and how far it pulls the horizon and fog toward it. */
   readonly tint: Rgb;
@@ -408,7 +398,6 @@ export interface Roles {
   Relief: { input: null; output: Landform };
   Light: { input: null; output: DaySpec };
   Sky: { input: null; output: SkySpec };
-  Season: { input: null; output: SeasonSpec };
   Atmosphere: { input: null; output: AtmosphereSpec };
   Ground: { input: null; output: GroundSpec };
   Accents: { input: null; output: AccentSpec };

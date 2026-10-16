@@ -125,7 +125,6 @@ const ease = (x: number): number => {
 export const START_SKY: Blueprint = blueprintOf("world", {
   light: { use: "daylight@1", params: { path: "middling", warmth: "neutral", brush: "painterly", moon: "silver moon", stars: "many" } },
   sky: { use: "sky@1", params: { character: "powder blue", clouds: "fair-weather puffs", cover: "scattered" } },
-  season: { use: "season@1", params: { season: "spring", strength: "clearly" } },
   wind: { use: "wind@1", params: { strength: "breezy" } },
 });
 

@@ -1,20 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { type ChoiceField, Library, type ScaleField, rand, resolveScale, seedOf } from "@gaia/schema";
-import {
-  BIOME_PRIMITIVES,
-  DECLINE_MARGIN,
-  PALETTE_FAMILIES,
-  type PaletteFamily,
-  RELIEF_PRIMITIVES,
-  WORLD_PRIMITIVES,
-  air as airPrimitive,
-  deltaE,
-  paletteOf,
-  palette as palettePrimitive,
-  season as seasonPrimitive,
-  seasonPalette,
-  toLch,
-} from "@gaia/primitives";
+import { Library, rand, seedOf } from "@gaia/schema";
+import { BIOME_PRIMITIVES, RELIEF_PRIMITIVES, WORLD_PRIMITIVES, air as airPrimitive } from "@gaia/primitives";
 import { biome, world } from "@gaia/kinds";
 import { assemble, planDetails, planStructure, readStructure, validate } from "@gaia/world";
 import { CLEAR_AIR, mixAir, realizeWorld } from "@gaia/realize";
@@ -73,82 +59,19 @@ describe("world and biome kinds", () => {
     expect(ids.size).toBeGreaterThan(995);
   });
 
-  it("asks for light and season first, then sky and wind with those answers in the state", () => {
+  it("asks for the light first, then sky and wind with its answers in the state", () => {
     const target = { id: "repo", state: { languages: ["TypeScript"], files: 412, ageDays: 900 } };
     const s = planStructure(world, lib, target);
     expect(Object.keys(s.request.questions)).toEqual([]);
     const structure = readStructure(world, lib, s, {});
     const first = planDetails(world, lib, structure, target, { stage: 0 });
-    expect(Object.keys(first.request.questions).sort()).toEqual(["light.brush", "light.moon", "light.path", "light.stars", "light.warmth", "season.season", "season.strength"]);
+    expect(Object.keys(first.request.questions).sort()).toEqual(["light.brush", "light.moon", "light.path", "light.stars", "light.warmth"]);
     const firstAnswers = fakeJev(first.request);
-    const second = planDetails(world, lib, structure, target, { stage: 1, earlier: { light: "warm", season: "deep autumn" } });
+    const second = planDetails(world, lib, structure, target, { stage: 1, earlier: { light: "warm" } });
     expect(Object.keys(second.request.questions).sort()).toEqual(["sky.character", "sky.clouds", "sky.cover", "wind.strength"]);
-    expect((second.request.state as { earlier?: unknown }).earlier).toEqual({ light: "warm", season: "deep autumn" });
+    expect((second.request.state as { earlier?: unknown }).earlier).toEqual({ light: "warm" });
     const bp = assemble(world, lib, structure, [first, second], { ...firstAnswers, ...fakeJev(second.request) });
     expect(validate(bp, world, lib)).toEqual([]);
-  });
-});
-
-describe("season and decline", () => {
-  const seasonField = seasonPrimitive.params.season as ChoiceField;
-  const strengthField = seasonPrimitive.params.strength as ScaleField;
-  const contrastField = palettePrimitive.params.contrast as ScaleField;
-  type Erased = (p: unknown) => ReturnType<typeof seasonPrimitive.build>;
-
-  /** Every season at the weakest and strongest number each strength level can resolve to. */
-  const seasons = Object.keys(seasonField.options).flatMap((name) =>
-    strengthField.levels.flatMap((level) =>
-      [0, 0.999].map((unit) => ({
-        name,
-        spec: (seasonPrimitive.build as unknown as Erased)({ season: name, strength: resolveScale(strengthField, level.words, unit) }),
-      })),
-    ),
-  );
-  const palettes = (Object.keys(PALETTE_FAMILIES) as PaletteFamily[]).flatMap((family) =>
-    contrastField.levels.flatMap((level) => [0, 0.999].map((unit) => ({ family, palette: paletteOf(family, resolveScale(contrastField, level.words, unit)) }))),
-  );
-
-  it("keeps every healthy color clear of decline by the stated margin, in every season", () => {
-    let checked = 0;
-    for (const { spec } of seasons) {
-      for (const { palette } of palettes) {
-        const seasoned = seasonPalette(palette, spec);
-        for (const [name, swatch] of Object.entries(seasoned.swatches)) {
-          const margin = DECLINE_MARGIN[name] ?? 0.09;
-          expect(deltaE(swatch.healthy, swatch.decline)).toBeGreaterThanOrEqual(margin - 1e-9);
-          checked++;
-        }
-      }
-    }
-    // 6 seasons x 3 strengths x 2 ends x 9 families x 3 contrasts x 2 ends x 15 swatches (bark, leaf and bloom;
-    // stone, moss, stem and eye; and a building's wall, render, timber, roof, masonry, trim, glass and smoke).
-    expect(checked).toBe(29160);
-  });
-
-  it("never touches decline: every world declines toward the same colors", () => {
-    for (const { spec } of seasons) {
-      for (const { palette } of palettes) {
-        const seasoned = seasonPalette(palette, spec);
-        for (const [name, swatch] of Object.entries(palette.swatches)) {
-          expect(seasoned.swatches[name]?.decline).toEqual(swatch.decline);
-        }
-      }
-    }
-  });
-
-  it("visibly turns leaves, but never drags a family across the color wheel", () => {
-    for (const name of Object.keys(seasonField.options)) {
-      const spec = (seasonPrimitive.build as unknown as Erased)({ season: name, strength: 1 });
-      const moved = (Object.keys(PALETTE_FAMILIES) as PaletteFamily[]).map((family) => {
-        const base = paletteOf(family, 1).swatches.leaf;
-        const turned = seasonPalette(paletteOf(family, 1), spec).swatches.leaf;
-        if (base === undefined || turned === undefined) throw new Error(family);
-        const hueTurn = Math.abs(((toLch(turned.healthy)[2] - toLch(base.healthy)[2] + 540) % 360) - 180);
-        expect(hueTurn).toBeLessThan(80);
-        return deltaE(base.healthy, turned.healthy);
-      });
-      expect(Math.max(...moved)).toBeGreaterThan(0.03);
-    }
   });
 });
 
