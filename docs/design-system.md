@@ -594,7 +594,8 @@ the frame it is nailed to), so nothing hangs in the air even partway
 through. What falls comes to rest: a toppled post lies with its head on
 the ground, a chimney lies along the ridge, a finial lies down its roof,
 and a flower box pitches off the wall and is gone. Ivy grows only where
-there is wall to hold it, never past its top.
+there is wall to hold it, never past its top, and each leaf goes a little
+before the piece of wall behind it, so no ivy hangs over a hole.
 
 Every one of these is a vitality channel on the pieces the primitives
 already build, so nothing is rebuilt and nothing pops. Ivy and the moss on

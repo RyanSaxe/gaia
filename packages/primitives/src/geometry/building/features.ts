@@ -9,7 +9,7 @@ import type { towerParams, waterwheelParams } from "../../structure.ts";
 import { type Channels, LOSS_BAND, PartBuilder, type V3, add, addScaled, clamp, fbm3, lossThreshold, normalize } from "../kit.ts";
 import { UP, beam, box, log, quad, tri } from "../blocks.ts";
 import { PLASTER, chimneyEnd, on, ruinAt, ruinOf, still, wallGrain, wallRot, wallTop, wallsOf } from "./frame.ts";
-import { ivy, rubble, wallSheet } from "./ruin.ts";
+import { type Hold, ivy, rubble, wallSheet } from "./ruin.ts";
 
 /** Builds into another builder, every vertex and pivot moved by `off`: a feature's own frame placed beside the house. */
 class Moved extends PartBuilder {
@@ -199,13 +199,13 @@ export function buildTower(p: Resolved<typeof towerParams>, ctx: BuildContext, p
   const seed = Math.floor(r.next() * 1e6);
 
   // Rendered walls in hand-laid cells, rotting through from the top as the archive fails, a patch of render at a time.
+  const rendered: Hold = (w, q) => ({ rot: clamp(wallRot(tower, body, ruin, q) * 0.7 + 0.35 * clamp(q[1] / H, 0, 1) ** 2, 0, 1), grain: wallGrain(w, GRAIN.plaster, PLASTER) });
   for (const w of faces) {
     const pivot = on(w, w.length / 2, H / 2);
-    const grain = wallGrain(w, GRAIN.plaster, PLASTER);
     wallSheet(render, tower, w, -tower.footing, 0.01, 0.7, (q) => {
       const n = fbm3(q[0] * 1.4, q[1] * 1.4, q[2] * 1.4, seed, 2);
       const up = clamp(q[1] / H, 0, 1);
-      return { shade: 0.56 + 0.1 * n, c: still(pivot, 0.55 + 0.2 * up, { rot: clamp(wallRot(tower, body, ruin, q) * 0.7 + 0.35 * up * up, 0, 1), tint: 0.02 * n, grain }) };
+      return { shade: 0.56 + 0.1 * n, c: still(pivot, 0.55 + 0.2 * up, { ...rendered(w, q), tint: 0.02 * n }) };
     });
   }
   // Quoins up every corner, and a string course at every storey; the top
@@ -312,7 +312,7 @@ export function buildTower(p: Resolved<typeof towerParams>, ctx: BuildContext, p
   log(wood, addScaled(apex, UP, -0.1), addScaled(apex, UP, 0.75), 0.045, 0.45, finial, 6);
   box(wood, addScaled(apex, UP, 0.8), [[1, 0, 0], UP, [0, 0, 1]], [0.08, 0.08, 0.08], 0.5, finial);
 
-  ivy(moss, tower, ruin, r.fork("ivy"));
+  ivy(moss, tower, ruin, r.fork("ivy"), 1, rendered);
   rubble(stone, tower, ruin, r.fork("rubble"), 0.24, 22);
   const parts = [render, stone, glass, roof, wood, moss].filter((b) => b.triangleCount > 0).map((b) => b.part());
   return { parts, anchors: [] };

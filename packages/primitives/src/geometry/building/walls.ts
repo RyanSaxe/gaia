@@ -10,7 +10,7 @@ import type { fieldstoneParams, timberFrameParams } from "../../structure.ts";
 import { type Channels, LOSS_BAND, PartBuilder, type V3, addScaled, clamp, fbm3, lossThreshold, normalize } from "../kit.ts";
 import { UP, beam, box, pillow } from "../blocks.ts";
 import { PLASTER, type Ruin, STONE, type Wall, clearings, coarseness, massOf, on, peakOf, ruinAt, ruinOf, shownWalls, still, topAt, wallGrain, wallRot, wallTop, wobble } from "./frame.ts";
-import { ivy, rubble, wallSheet, weedSpots, weeds } from "./ruin.ts";
+import { type Hold, ivy, rubble, wallSheet, weedSpots, weeds } from "./ruin.ts";
 
 /** Floor to floor, meters; a floor beam marks each storey on a timber frame. */
 const STOREY = 2.3;
@@ -54,23 +54,24 @@ function floor(b: PartBuilder, plan: BuildingPlan, ruin: Ruin): void {
 }
 
 /**
- * The wall's core: a plain face of rubble set just behind the surface, which shows where plaster or stones have
- * fallen, and rots through a block at a time, after what is in front of it: `behind` of its depth.
+ * How the wall's core rots at a point: a block at a time, after what is in front of it, `behind` of its depth. It is
+ * the last of the wall to stand, so ivy holds to it.
  */
-function core(b: PartBuilder, plan: BuildingPlan, ruin: Ruin, inset: number, from: number, coarse: number, behind: number): void {
+const coreOf = (plan: BuildingPlan, ruin: Ruin, behind: number): Hold => (w, p) => ({ rot: wallRot(plan, massOf(plan, w), ruin, p) * behind, grain: wallGrain(w, GRAIN.stones, STONE) });
+
+/** The wall's core: a plain face of rubble set just behind the surface, which shows where plaster or stones have fallen. */
+function core(b: PartBuilder, plan: BuildingPlan, hold: Hold, inset: number, from: number, coarse: number): void {
   for (const w of shownWalls(plan)) {
-    const m = massOf(plan, w);
-    const pivot = on(w, w.length / 2, wallTop(plan, m) / 2);
-    const grain = wallGrain(w, GRAIN.stones, STONE);
-    wallSheet(b, plan, w, from, -inset, 0.75 * coarse, (p) => ({ shade: 0.38, c: still(pivot, 0.6, { rot: wallRot(plan, m, ruin, p) * behind, grain }) }));
+    const pivot = on(w, w.length / 2, wallTop(plan, massOf(plan, w)) / 2);
+    wallSheet(b, plan, w, from, -inset, 0.75 * coarse, (p) => ({ shade: 0.38, c: still(pivot, 0.6, hold(w, p)) }));
   }
 }
 
-/** Ivy, weeds and rubble around any walls as the house declines. */
-function overgrowth(plan: BuildingPlan, ruin: Ruin, r: Rand, stones: PartBuilder, size: number, coarse: number): { moss: PartBuilder; weed: PartBuilder } {
+/** Ivy, weeds and rubble around any walls as the house declines; the ivy holds to `hold`. */
+function overgrowth(plan: BuildingPlan, ruin: Ruin, r: Rand, stones: PartBuilder, size: number, coarse: number, hold: Hold): { moss: PartBuilder; weed: PartBuilder } {
   const moss = new PartBuilder("moss");
   const weed = new PartBuilder("leaf");
-  ivy(moss, plan, ruin, r.fork("ivy"), coarse);
+  ivy(moss, plan, ruin, r.fork("ivy"), coarse, hold);
   weeds(weed, weedSpots(plan, ruin, r.fork("weeds"), 46), r.fork("tufts"));
   rubble(stones, plan, ruin, r.fork("rubble"), size, 30);
   return { moss, weed };
@@ -115,7 +116,8 @@ function timberFrame(p: Resolved<typeof timberFrameParams>, ctx: BuildContext, p
   const ruin = ruinOf(plan);
   plinth(masonry, plan, r.fork("plinth"), coarse);
   // Fallen plaster bares a band of the rubble behind it before the wall opens.
-  core(masonry, plan, ruin, 0.03, plan.floor, coarse, 0.92);
+  const hold = coreOf(plan, ruin, 0.92);
+  core(masonry, plan, hold, 0.03, plan.floor, coarse);
   floor(timber, plan, ruin);
   const beamW = 0.17;
   const out = 0.03;
@@ -261,7 +263,7 @@ function timberFrame(p: Resolved<typeof timberFrameParams>, ctx: BuildContext, p
     }
   }
   // Chunks of plaster and stone lie where the corner gave way.
-  const { moss, weed } = overgrowth(plan, ruin, r.fork("overgrowth"), masonry, 0.2, coarse);
+  const { moss, weed } = overgrowth(plan, ruin, r.fork("overgrowth"), masonry, 0.2, coarse, hold);
   rubble(plaster, plan, ruin, r.fork("plaster-rubble"), 0.16, 14);
   return { parts: [masonry.part(), plaster.part(), timber.part(), moss.part(), weed.part()], anchors: [] };
 }
@@ -323,7 +325,8 @@ function fieldstone(p: Resolved<typeof fieldstoneParams>, ctx: BuildContext, pla
   const boards = new PartBuilder("timber", "solid");
   const ruin = ruinOf(plan);
   // The mortar goes just after the stones in front of it, so a fallen stone leaves a hole, not a bare patch of mortar.
-  core(mortar, plan, ruin, -0.005, -plan.footing, coarse, 0.95);
+  const hold = coreOf(plan, ruin, 0.95);
+  core(mortar, plan, hold, -0.005, -plan.footing, coarse);
   floor(boards, plan, ruin);
   const walls = shownWalls(plan);
   // Stones grow on a big house, so the walls stay within about 600 stones, and more only when the walls run over budget.
@@ -386,7 +389,7 @@ function fieldstone(p: Resolved<typeof fieldstoneParams>, ctx: BuildContext, pla
       beam(boards, on(w, -0.05, top - 0.12, 0.06), on(w, w.length + 0.05, top - 0.12, 0.06), 0.18, 0.1, w.n, 0.38, still(on(w, w.length / 2, top), 0.5));
     }
   }
-  const { moss, weed } = overgrowth(plan, ruin, r.fork("overgrowth"), stones, 0.26, coarse);
+  const { moss, weed } = overgrowth(plan, ruin, r.fork("overgrowth"), stones, 0.26, coarse, hold);
   const parts = [mortar.part(), stones.part(), moss.part(), weed.part()];
   if (boards.vertexCount > 0) parts.push(boards.part());
   return { parts, anchors: [] };
