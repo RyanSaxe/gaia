@@ -10,11 +10,11 @@
 
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { type Blueprint, type BuildingPlan, type GroundSpec, Library, type Palette, type RouteSpec, type SeasonSpec, blueprintOf, seedOf } from "@gaia/schema";
-import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, LANDMARK_PRIMITIVES, NO_SHIFT, ROUTE_PRIMITIVES, RELIEF_PRIMITIVES, ROCK_PRIMITIVES, WILDFLOWER_PRIMITIVES, WORLD_PRIMITIVES, hex, mixLab } from "@gaia/primitives";
+import { type AtmosphereSpec, type Blueprint, type BuildingPlan, type GroundSpec, Library, type Palette, type RouteSpec, type SeasonSpec, blueprintOf, seedOf } from "@gaia/schema";
+import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, LANDMARK_PRIMITIVES, NO_SHIFT, ROUTE_PRIMITIVES, RELIEF_PRIMITIVES, ROCK_PRIMITIVES, WILDFLOWER_PRIMITIVES, WORLD_PRIMITIVES, hex } from "@gaia/primitives";
 import { biome, landmark as landmarkKind, link, world as worldKind } from "@gaia/kinds";
 import { defaultParams, validate } from "@gaia/world";
-import { FLORA_PRESETS, LANDMARK_PRESETS, type Realized, TRAIL_PRESETS, WORLD_PRESETS, buildSlots, mergeParts, realizeRegion, realizeSky } from "@gaia/realize";
+import { CLEAR_AIR, FLORA_PRESETS, LANDMARK_PRESETS, type Realized, type SkyLook, TRAIL_PRESETS, WORLD_PRESETS, buildSlots, mergeParts, mixAir, realizeRegion, realizeSky, regionAir, throughAir } from "@gaia/realize";
 import {
   type FarCards,
   LANTERN,
@@ -34,7 +34,7 @@ import {
   createSunShadow,
   type SceneLight,
 } from "@gaia/render";
-import { type Capsule, clearanceAt, frameOf, TILE, LAND_ASPECT, type Deck, decksOf, deckShape, EYE_HEIGHT, footingAt, FULL_WORLD, GAIT, groundHeightAt, heightAt, type Intent, junctionVitality, NO_SOLIDS, NO_TRAILS, openingSpot, TRAILS, outlineShape, returnTo, stoodBy, type StoodSpot, withinLand, piecesShapes, type Place, placeAt, planWalk, randomWorld, regionPlaces, RELIEF_BUDGET, sampleWorld, sightlines, siteToWorld, SMALL_WORLD, type Solids, type SolidShape, solidsOf, stanceAt, standAt, steerAlong, type Steered, type Steering, steering, steerPress, steerRelease, steerStep, stride, type Stride, acrossWay, carry, planTrip, TRAVEL, type Travel, wadingAt, fordBeside, travelFrom, travelPoint, travelStep, type Trip, trailWay, type Walker, type WalkKey, type Terrain, TERRAIN, type TrailNetwork, type Walk, WALK_TO, walkStep, wallsShape, waterDepthAt, type Way, wayAhead, wayVitalityAt, wayWear, WILDS, type WorldPlaces, type WorldSpec } from "@gaia/terrain";
+import { type Capsule, clearanceAt, frameOf, TILE, LAND_ASPECT, type Deck, decksOf, deckShape, EYE_HEIGHT, footingAt, FULL_WORLD, GAIT, groundHeightAt, heightAt, type Intent, junctionVitality, NO_SOLIDS, NO_TRAILS, openingSpot, TRAILS, outlineShape, returnTo, stoodBy, type StoodSpot, withinLand, piecesShapes, type Place, placeAt, planWalk, randomWorld, regionPlaces, regionWeights, RELIEF_BUDGET, sampleWorld, sightlines, siteToWorld, SMALL_WORLD, type Solids, type SolidShape, solidsOf, stanceAt, standAt, steerAlong, type Steered, type Steering, steering, steerPress, steerRelease, steerStep, stride, type Stride, acrossWay, carry, planTrip, TRAVEL, type Travel, wadingAt, fordBeside, travelFrom, travelPoint, travelStep, type Trip, trailWay, type Walker, type WalkKey, type Terrain, TERRAIN, type TrailNetwork, type Walk, WALK_TO, walkStep, wallsShape, waterDepthAt, type Way, wayAhead, wayVitalityAt, wayWear, WILDS, type WorldPlaces, type WorldSpec } from "@gaia/terrain";
 import { createSky } from "../world/environment.ts";
 import { type CaptureBounds, type Pixels, createCapture } from "./capture.ts";
 import { renderInspector } from "../inspector.ts";
@@ -380,8 +380,8 @@ const FAR_BAKE = { views: 24, ms: 6, walkingMs: 2 } as const;
 /** `?world=sample&size=5000` asks for a sample world of that many meters across, with as many regions as the full one. */
 const ASKED_SIZE = Number(new URLSearchParams(location.search).get("size"));
 const SCALE = ASKED_WORLD === "small" ? SMALL_WORLD : ASKED_SIZE > 0 ? { ...FULL_WORLD, size: ASKED_SIZE } : FULL_WORLD;
-/** The air's density walking, and over the overview, which thins with the world's size so the whole of it stays legible. */
-const FOG = { walk: 0.0042, overview: 0.0008 * Math.min(1, 320 / SCALE.size) };
+/** The air over the overview: clear, and thinning with the world's size so the whole of it stays legible. */
+const OVERVIEW_AIR: AtmosphereSpec = { ...CLEAR_AIR, density: 0.0008 * Math.min(1, 320 / SCALE.size) };
 /** Seeded builds per flora preset, and the trees the lab plants unless a hook asks otherwise: as dense as the small world's 22 over 320 m. */
 const TREE_BUILDS = 3;
 const TREES = Math.round(22 * (SCALE.size / 320) ** 2);
@@ -464,7 +464,6 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
   const light = createSceneLight();
-  light.uFogDensity.value = FOG.walk;
   // A building for each sample entity, near the stream, each on a pad leveled into the bake; none yet when the
   // codebase's world opens first, which brings its own.
   let settlement = createSettlement(light, OPENS_CODE ? [] : SAMPLE_ENTITIES);
@@ -645,6 +644,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
 
   /** The hour's light, sky and air, from the sky world's day. */
   let hour = Number.NaN;
+  let skyLook: SkyLook | null = null;
   function applyHour(h: number): void {
     hour = h;
     if (skyWorld === undefined) return;
@@ -652,7 +652,22 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     applyLight(light, look.light);
     // How windy the world is: every sway answers the one wind field this many times as hard.
     light.uWind.value = look.wind.strength;
-    sky.apply({ light: look.light, sky: { ...look.sky, mid: mixLab(look.sky.zenith, look.sky.horizon, 0.5) }, fog: { color: look.sky.horizon, density: FOG[mode], mist: 0 } });
+    skyLook = look;
+    breathe(camera.position.x, camera.position.z);
+  }
+  /** Each region's air as Jev chose it, for the world it was realized for, and room for each region's weight. */
+  let airs: { readonly world: WorldSpec; readonly airs: readonly AtmosphereSpec[]; readonly weights: Float64Array } | null = null;
+  /**
+   * Lays the air where the eye stands, at `x`, `z`, in front of the hour's sky: each region's air blended by how near
+   * it lies, over the band where landforms and covers blend (`regionWeights`), so it changes gradually as the person
+   * crosses from one region into the next. Every pass reads it: the view, the water's mirror and far forms. The overview
+   * looks through thin, clear air instead, so the whole land stays legible.
+   */
+  function breathe(x: number, z: number): void {
+    if (skyLook === null) return;
+    if (airs?.world !== world) airs = { world, airs: world.regions.map((r) => regionAir({ blueprint: r.biome, kind: biome }, lib, seedOf(r.id))), weights: new Float64Array(world.regions.length) };
+    regionWeights(world, x, z, airs.weights);
+    sky.apply({ light: skyLook.light, ...throughAir(skyLook, mode === "overview" ? OVERVIEW_AIR : mixAir(airs.airs, airs.weights)) });
   }
   const shadow = createSunShadow(light, 2048);
 
@@ -1516,7 +1531,6 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   function setMode(next: Mode): void {
     mode = next;
     orbit.enabled = active && next === "overview";
-    light.uFogDensity.value = FOG[next];
     ground.fine.visible = next === "walk";
     ground.coarse.visible = next === "overview";
     ground.wilds.visible = next === "overview";
@@ -2045,6 +2059,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       lantern.follow(lanternEye, forward, lanternGround, 0, dt);
       shadow.frame(shadowCenter.set(0, 0, 0), world.size * 0.62);
     }
+    breathe(camera.position.x, camera.position.z);
     refreshSight(now);
     // Every pass thins distant detail from where the person's eyes are.
     light.uEye.value.copy(mode === "walk" ? detailEye : camera.position);
@@ -2439,13 +2454,14 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     captureCamera.position.copy(from);
     captureCamera.lookAt(toward);
     light.uEye.value.copy(captureCamera.position);
+    breathe(from.x, from.z);
     ground.follow(from.x, from.z);
     grass.follow(captureCamera.position);
     shadowCenter.set(shade.x, shade.y, shade.z);
     shadow.frame(shadowCenter, shade.reach);
     castShadows();
     mirror(captureCamera, [ground.mirror], 0);
-    // The next frame sets the person's eye, ground, grass, shadow and mirror again.
+    // The next frame sets the person's eye, air, ground, grass, shadow and mirror again.
     return capture.shoot(scene, captureCamera, [sky.mesh, ground.wilds, ground.fine, ground.coarse, ground.mirror, grass.mesh, water.group, signs.mesh], subject, w, h);
   }
 
