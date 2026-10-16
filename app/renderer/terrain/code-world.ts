@@ -185,7 +185,7 @@ export function provingWorld(): WorldDocument {
 const ASKS_PROVING = typeof location !== "undefined" && new URLSearchParams(location.search).get("world") === "proving";
 
 /**
- * The start on a page with no engine, to see it (`?start=table|signpost`):
+ * The start on a page with no engine, to see it (`?start`):
  * Gaia's own world is the one world walked before, with a painting of where
  * it opens, as the app paints where a person stands (`start/gaia-painting.webp`,
  * from `__lab.immersive.look()`), and any choice opens it, except an
