@@ -475,6 +475,15 @@ clouds thin out toward the horizon rather than stopping, and clouds standing
 on the horizon rise out of its haze. `skyColorAt` and `aerialAt` in
 `@gaia/realize` are the CPU references the tests check.
 
+The local air is the air where the person's eyes are: each region's own, as
+its biome chose it (`air@1`), weighed by `regionWeights` across the same
+130 m band the landforms blend over. Walking from a clear region into a
+misty one, the haze thickens and takes the mist's color, and white mist
+gathers on the lowest ground and in valley floors, over about 250 m rather
+than at the edge (`mixAir`, `throughAir`). Every pass reads the same air:
+the view, the water's mirror, far forms and the journal's paintings, which
+take the air of the spot they are painted from.
+
 ## Buildings
 
 A building stands for any entity, file or definition Jev raises to one
