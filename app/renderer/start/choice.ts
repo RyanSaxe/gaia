@@ -1,17 +1,17 @@
-// What both directions of the start share: the page each draws, the words for
-// an address that leads nowhere, and how a recent world or a folder is chosen.
+// What the start's page is: the page the table draws, the words for an
+// address that leads nowhere, and how a recent world or a folder is chosen.
 
 import type { StartChoice, StartOffer } from "../../world-service/protocol.ts";
 
-/** One direction's page: it shows an offer and settles once a place is chosen. */
+/** The start's page: it shows an offer and settles once a place is chosen. */
 export interface StartPage {
   /** Shows the offer (again, with why an address led nowhere); resolves with the place chosen. */
   offer(offer: StartOffer): Promise<StartChoice>;
-  /** The hour the world shows: the table is lit by it, while the signpost follows the veil's night. */
+  /** The hour the world shows: the table is lit by it. */
   hour(h: number): void;
   /**
    * The place is on its way, or a world opens with no start: the page stops taking choices. The table stays behind the
-   * wait, its card risen into the wait's sheet; the signpost dissolves into the wait.
+   * wait, its card risen into the wait's sheet.
    */
   leave(): void;
   /** The wait has lifted and the world shows: the page lets go of everything. */

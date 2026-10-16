@@ -649,8 +649,8 @@ sheet). Only a world that cannot be judged speaks, on its slip, and plainly. The
 own sheet lies before the start's map table, out of focus and still behind
 it, the same size, paper and torn edge, with no fringe of wood, title or
 turned-down corner. In the app only that paper shows for the moment
-before the table is drawn; with the signpost, or in the standalone lab
-with no start, the sheet lies on its creased paper instead. While the code is read
+before the table is drawn; in the standalone lab with no start, the sheet
+lies on its creased paper instead. While the code is read
 the sheet is bare and still, or, for a world chosen on the start, is its
 card's face: the painting of where the person last stood still, or a tally
 of the commits since. As soon as the
@@ -734,12 +734,11 @@ address of a place on GitHub. Nothing on it is a box or a word of jargon:
 no "repository", "clone" or "Jev". An address that leads nowhere is
 answered beneath it in a sentence in the world's voice ("Nothing open lies
 at that address. It may be private, or spelled a little differently."). The
-start does not say when a world was last walked. Two directions are built,
-chosen by `CHOSEN_START` in `start.ts` or `?start=table|signpost` (a
-standalone page shows it only when asked, with Gaia's own world as the one
-walked before, painted by `start/gaia-painting.webp`):
+start does not say when a world was last walked. A standalone page shows
+the start only when asked (`?start`), with Gaia's own world as the one
+walked before, painted by `start/gaia-painting.webp`:
 
-- **The map table in 3D** (shown; `table.ts`, `table-scene.ts`): a sheet
+- **The map table in 3D** (`table.ts`, `table-scene.ts`): a sheet
   folded in four on an oak table, with the worlds' cards, a quill, an
   inkwell and a brass lantern, all meshes lit by the world's own sun, sky,
   moon and lantern at the hour (the clock in the app, `?hour=` in the lab),
@@ -819,13 +818,6 @@ walked before, painted by `start/gaia-painting.webp`):
     again only when the light changes, though the page passes the hour every
     frame. Behind the wait it draws nothing more, and once the world shows
     it lets go of its renderer, textures and geometry.
-- **The world's edge**: standing where the land begins, at the hour it is,
-  by a wooden signpost like the fingerposts in the world. Its arms are
-  painted with the worlds walked before; one points "somewhere on this
-  computer"; one is bare wood to write an address on, which creaks while the
-  address is asked after. Hills fall away into haze behind it and a path
-  sets out; after dark the stars are out, the post's lantern is lit and a
-  few fireflies drift.
 
 ## One way to touch the world
 

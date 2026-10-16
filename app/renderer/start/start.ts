@@ -2,39 +2,24 @@
 // picks a world they walked before, a folder on this computer, or writes the
 // address of a place on GitHub. It is part of the world, not a screen in
 // front of it: no boxes, no jargon, and an address that leads nowhere is
-// answered in the world's own words. Two directions, chosen by
-// `CHOSEN_START` or `?start=table|signpost`:
-// - `table`: the traveller's map table in 3D (`table.ts`). A folded sheet on
-//   an oak table, lit by the world's own light at the hour, the worlds
-//   walked before laid on it as paintings of where the person last stood, and a line at
-//   its foot to write an address on in ink.
-// - `signpost`: the world's edge, at the hour it is. A signpost whose arms
-//   name the worlds walked before, one pointing to somewhere on this
-//   computer, and one blank arm to write an address on.
+// answered in the world's own words. It is the traveller's map table in 3D
+// (`table.ts`): a folded sheet on an oak table, lit by the world's own light
+// at the hour, the worlds walked before laid on it as paintings of where the
+// person last stood, and a line at its foot to write an address on in ink.
 // The start lies over the wait, inside its veil, so it reads the same
 // `--night`. Once a place is chosen, the table stays behind the wait, its
 // card risen into the wait's sheet, until the world shows; a world opened
-// with no start rises from the same table. The signpost dissolves into the
-// wait's paper.
+// with no start rises from the same table.
 
 import type { StartChoice, StartOffer } from "../../world-service/protocol.ts";
 import { localHour } from "../clock.ts";
 import type { Wait } from "../wait/wait.ts";
 import type { StartPage } from "./choice.ts";
-import { createSignpost } from "./signpost.ts";
 import { createTable } from "./table.ts";
 import "./start.css";
 
-export type StartStyle = "table" | "signpost";
 /** How long a map chosen on the table takes to rise into the wait's sheet, ms. */
 export { CHOSEN_MS } from "./table.ts";
-/** The direction the app shows unless the page asks for another with `?start=`. */
-const CHOSEN_START: StartStyle = "table";
-
-export function startStyle(): StartStyle {
-  const asked = new URLSearchParams(location.search).get("start");
-  return asked === "table" || asked === "signpost" ? asked : CHOSEN_START;
-}
 
 /** The wait with the start, which the page shows when no world is named. */
 export interface WaitWithStart extends Wait {
@@ -48,7 +33,7 @@ export interface WaitWithStart extends Wait {
 const UNCOVERED_BY_MS = 6000;
 
 /** The wait, with the start laid over it in its veil when no world is named. */
-export function withStart(wait: Wait, veil: HTMLElement, style: StartStyle = startStyle()): WaitWithStart {
+export function withStart(wait: Wait, veil: HTMLElement): WaitWithStart {
   /** The start, from when it is offered (or a world opens with no start, on the table) until the world shows. */
   let page: StartPage | null = null;
   /** Whether the place is on its way, so the page takes no more choices. */
@@ -72,7 +57,7 @@ export function withStart(wait: Wait, veil: HTMLElement, style: StartStyle = sta
     ...wait,
     opening(o) {
       // A world opened with no start, as on a reload, rises from the same table a chosen one does.
-      if (page === null && style === "table" && o.stage === "reading") page = table();
+      if (page === null && o.stage === "reading") page = table();
       if (!left) {
         page?.leave();
         window.setTimeout(() => uncover(), UNCOVERED_BY_MS);
@@ -96,7 +81,7 @@ export function withStart(wait: Wait, veil: HTMLElement, style: StartStyle = sta
         page = null;
         left = false;
       }
-      page ??= style === "table" ? table() : createSignpost(veil);
+      page ??= table();
       return page.offer(offer);
     },
     async lift() {

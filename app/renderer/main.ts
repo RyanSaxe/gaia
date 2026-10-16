@@ -13,7 +13,6 @@ import { reportStage, startTelemetry } from "./telemetry.ts";
 import { OPENING_ASPECT, type TerrainLab, createTerrainLab, openingBuilds } from "./terrain/lab.ts";
 import { makeAhead } from "./terrain/made.ts";
 import { type Immersive, createImmersive } from "./immersive/view.ts";
-import { startStyle } from "./start/start.ts";
 import { startWaitEarly } from "./wait/wait.ts";
 import { Library, seedOf } from "@gaia/schema";
 import { WORLD_PRIMITIVES } from "@gaia/primitives";
@@ -68,7 +67,7 @@ const builds = makeAhead(openingBuilds());
 // The default world's night at the clock's hour, to the twentieth the world's first frame sets it to.
 const sky = realizeSky({ blueprint: (WORLD_PRESETS[0] as (typeof WORLD_PRESETS)[number]).world, kind: worldKind }, new Library(WORLD_PRIMITIVES), seedOf("terrain-lab/sky"), clock.hour());
 // In the app every world opens from the start's map table, chosen there or opened straight, so the sheet waits under it.
-startWaitEarly(shell, Math.round(sky.light.nightness * 20) / 20, OPENING_ASPECT, window.gaiaShell !== undefined && startStyle() === "table");
+startWaitEarly(shell, Math.round(sky.light.nightness * 20) / 20, OPENING_ASPECT, window.gaiaShell !== undefined);
 const drawn = new Promise((r) => requestAnimationFrame(() => setTimeout(r)));
 /** Settles once the world's page is built: scripted checks look at the world only after it, as a person sees it. */
 const opened: Promise<TerrainLab> = Promise.all([builds, drawn]).then(() => {

@@ -51,7 +51,7 @@ You need Node 26, pnpm 10 and a stable Rust toolchain from rustup (put
 | `pnpm jev-world`, `pnpm compare-jev`, `pnpm print-world-requests` | Jev's kept answers for the snapshot, request designs compared, and every request printed |
 
 The lab page shows only the world. It takes `?hour=22`, `?world=sample`,
-`?world=proving`, `?judge=stand-in` and `?start=table|signpost`
+`?world=proving`, `?judge=stand-in` and `?start` (the start's map table)
 (`?judge=stand-in` is for development only: the page otherwise runs on Jev's kept answers alone, and a request with no kept answer fails it, naming the request). Scripts drive it through `window.__lab`:
 `open("immersive")`, `hour(h)`, `frames(n)`, `stats()`, and the world's
 hooks, such as `__lab.terrain.walk(x, z, yawDeg, pitchDeg)`,
