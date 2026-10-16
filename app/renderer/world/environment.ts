@@ -1,11 +1,12 @@
-// The world around the plants, driven entirely by a WorldLook: a sky dome
-// (gradient, hour glow, sun, moon, stars, one parametric cloud shader), painted ground,
-// wind-swayed ground cover with wildflowers, and drifting accents.
+// The sky over every world, driven entirely by a WorldLook: a dome with its
+// gradient, hour glow, sun, moon, stars and one parametric cloud shader. Also
+// the flat painted ground the start's map table stands on, and the sward's
+// paint that the walked world's ground shares with it.
 
 import * as THREE from "three";
 import type { Rgb } from "@gaia/schema";
 import { AIR, type WorldLook } from "@gaia/realize";
-import { CLEARINGS_GLSL, type Clearing, LIGHT_GLSL, type SceneLight, WIND_FIELD_GLSL, applySky, createClearings } from "@gaia/render";
+import { LIGHT_GLSL, type SceneLight, applySky } from "@gaia/render";
 
 const v3 = (c: Rgb): THREE.Vector3 => new THREE.Vector3(c[0], c[1], c[2]);
 
@@ -321,7 +322,6 @@ uniform vec3 uTip;
 uniform vec3 uDry;
 uniform float uClump;
 uniform float uVitality;
-uniform vec4 uSelect;
 varying vec3 vWorld;
 void main() {
   float broad = fbm(vWorld.xz * 0.05);
@@ -332,26 +332,21 @@ void main() {
   albedo = mix(albedo, uDry, (1.0 - uVitality) * 0.55);
   albedo *= 0.95 + 0.08 * fine;
   vec3 color = groundLit(albedo, vWorld);
-  float d = length(vWorld.xz - uSelect.xy);
-  float ring = smoothstep(uSelect.z * 1.04, uSelect.z, d) * smoothstep(uSelect.z * 0.9, uSelect.z, d);
-  color = mix(color, vec3(1.0, 0.98, 0.9), ring * 0.4 * uSelect.w);
   gl_FragColor = vec4(aerial(shoulder(color), vWorld), 1.0);
 }
 `;
 
 export interface Ground {
   readonly mesh: THREE.Mesh;
-  select(x: number, z: number, radius: number, on: boolean): void;
   apply(look: WorldLook): void;
 }
 
-/** Ground and grass read the mean vitality of what grows on them. */
+/** The ground reads the mean vitality of what grows on it. */
 export interface GroundUniforms {
   readonly uVitality: { value: number };
 }
 
 export function createGround(light: SceneLight, shared: GroundUniforms): Ground {
-  const select = { value: new THREE.Vector4(0, 0, 1, 0) };
   const u = {
     uSoil: { value: new THREE.Vector3() },
     uLow: { value: new THREE.Vector3() },
@@ -363,7 +358,7 @@ export function createGround(light: SceneLight, shared: GroundUniforms): Ground 
   const material = new THREE.ShaderMaterial({
     vertexShader: GROUND_VERT,
     fragmentShader: GROUND_FRAG,
-    uniforms: { ...light, ...u, uVitality: shared.uVitality, uSelect: select },
+    uniforms: { ...light, ...u, uVitality: shared.uVitality },
   });
   // Out past the distance where land dissolves into the sky, so no edge can show.
   const geometry = new THREE.CircleGeometry(AIR.dissolveEnd + 150, 96);
@@ -371,9 +366,6 @@ export function createGround(light: SceneLight, shared: GroundUniforms): Ground 
   const mesh = new THREE.Mesh(geometry, material);
   return {
     mesh,
-    select(x, z, radius, on) {
-      select.value.set(x, z, radius, on ? 1 : 0);
-    },
     apply(look) {
       const g = look.ground;
       u.uSoil.value.copy(v3(g.soil));
@@ -382,375 +374,6 @@ export function createGround(light: SceneLight, shared: GroundUniforms): Ground 
       u.uTip.value.copy(v3(g.tip));
       u.uDry.value.copy(v3(look.groundDecline));
       u.uClump.value = g.clump;
-    },
-  };
-}
-
-// ---------- ground cover ----------
-
-const GRASS_VERT = /* glsl */ `
-${CLEARINGS_GLSL}
-uniform float uTime;
-uniform float uWind;
-uniform float uRadius;
-uniform float uHeight;
-uniform float uWidth;
-uniform float uClump;
-uniform float uFlowers;
-uniform float uVitality;
-attribute vec4 aBlade; // x, z, rotation, height
-attribute vec3 aTint; // tint, flower pick, how far out the blade still grows
-varying vec3 vWorld;
-varying float vT;
-varying float vTint;
-varying float vFlower;
-${NOISE_GLSL}
-${WIND_FIELD_GLSL}
-void main() {
-  float t = position.y;
-  // Blades keep their full height everywhere: toward the rim of the field
-  // each one disappears whole past its own seeded radius, over ground
-  // painted in the same colors.
-  float keep = step(length(aBlade.xy), uRadius * mix(0.55, 1.0, aTint.z));
-  float clump = mix(1.0, tuftMask(aBlade.xy), uClump);
-  float flower = step(aTint.y, uFlowers) * smoothstep(0.35, 0.7, uVitality);
-  float h = aBlade.w * uHeight * keep * clump * (0.62 + 0.38 * uVitality) * (1.0 + flower * 0.25) * clearing(aBlade.xy);
-  float c = cos(aBlade.z);
-  float s = sin(aBlade.z);
-  // A flower blade opens a small diamond head around its upper vertices.
-  float wide = uWidth * keep * (1.0 + flower * 3.2 * step(0.7, t) * step(t, 0.9));
-  vec3 local = vec3(position.x * wide * c, t * h, position.x * wide * s);
-  // The world's one wind: blades bow downwind in each gust and sway a little between.
-  float w = 0.35 + 0.75 * gustAt(aBlade.xy, uTime) + 0.2 * sin(uTime * 1.3 + aBlade.x * 0.21 + aBlade.y * 0.17);
-  float bend = uWind * t * t * max(h, 0.15);
-  local.xz += WIND_DIR * w * 0.24 * bend;
-  vec3 world = vec3(aBlade.x, 0.0, aBlade.y) + local;
-  vWorld = world;
-  vT = t;
-  vTint = aTint.x;
-  vFlower = flower * (aTint.y / max(uFlowers, 1e-4));
-  gl_Position = projectionMatrix * viewMatrix * vec4(world, 1.0);
-}
-`;
-
-const GRASS_FRAG = /* glsl */ `
-precision highp float;
-${LIGHT_GLSL}
-${GROUND_LIGHT_GLSL}
-uniform vec3 uLow;
-uniform vec3 uHigh;
-uniform vec3 uTip;
-uniform vec3 uDry;
-uniform vec3 uFlower0;
-uniform vec3 uFlower1;
-uniform vec3 uFlower2;
-uniform float uFlowers;
-uniform float uVitality;
-varying vec3 vWorld;
-varying float vT;
-varying float vTint;
-varying float vFlower;
-void main() {
-  vec3 albedo = mix(uLow, uHigh, clamp(vT * 0.8 + vTint * 0.4, 0.0, 1.0));
-  albedo = mix(albedo, uTip, smoothstep(0.55, 1.0, vT) * 0.75);
-  albedo = mix(albedo, uDry, max(step(0.94, vTint) * 0.4, (1.0 - uVitality) * 0.7));
-  albedo *= 0.82 + 0.25 * vT;
-  // Flowers fade into their blades at night, so the dark meadow never reads as confetti.
-  if (vFlower > 0.0 && vT > 0.55) {
-    albedo = mix(vFlower < 0.4 ? uFlower0 : vFlower < 0.75 ? uFlower1 : uFlower2, albedo, uNightness * 0.75);
-  }
-  vec3 color = groundLit(albedo, vWorld);
-  // Looking toward a low sun, blade tips glow with the light shining through them.
-  float toward = clamp(dot(normalize(vWorld - cameraPosition), uSunDirection), 0.0, 1.0);
-  color += albedo * uSunColor * pow(toward, 3.0) * vT * 0.45 * (1.0 - smoothstep(0.15, 0.6, uSunDirection.y)) * min(uSunIntensity, 1.0);
-  gl_FragColor = vec4(aerial(shoulder(color), vWorld), 1.0);
-}
-`;
-
-export interface GroundCover {
-  readonly mesh: THREE.Mesh;
-  apply(look: WorldLook): void;
-  /** Where no grass grows, such as under a house and along its walk. */
-  clear(list: readonly Clearing[]): void;
-}
-
-const MAX_BLADES = 180000;
-
-/** A field of wind-swayed blades that thins out whole toward its rim; a few carry flowers. */
-export function createGroundCover(light: SceneLight, shared: GroundUniforms, radius = 60): GroundCover {
-  const blade = new THREE.BufferGeometry();
-  blade.setAttribute(
-    "position",
-    new THREE.Float32BufferAttribute([-1, 0, 0, 1, 0, 0, -0.7, 0.4, 0, 0.7, 0.4, 0, -0.35, 0.75, 0, 0.35, 0.75, 0, 0, 1, 0], 3),
-  );
-  blade.setIndex([0, 1, 2, 2, 1, 3, 2, 3, 4, 4, 3, 5, 4, 5, 6]);
-  const geometry = new THREE.InstancedBufferGeometry();
-  geometry.index = blade.index;
-  geometry.setAttribute("position", blade.getAttribute("position"));
-  const data = new Float32Array(MAX_BLADES * 4);
-  const tint = new Float32Array(MAX_BLADES * 3);
-  let seed = 1234567;
-  const next = (): number => {
-    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
-    return seed / 4294967296;
-  };
-  for (let i = 0; i < MAX_BLADES; i++) {
-    const r = radius * Math.sqrt(next());
-    const a = next() * Math.PI * 2;
-    data[i * 4] = Math.cos(a) * r;
-    data[i * 4 + 1] = Math.sin(a) * r;
-    data[i * 4 + 2] = next() * Math.PI;
-    data[i * 4 + 3] = 0.55 + next() * 0.75;
-    tint[i * 3] = next();
-    tint[i * 3 + 1] = next();
-    tint[i * 3 + 2] = next();
-  }
-  geometry.setAttribute("aBlade", new THREE.InstancedBufferAttribute(data, 4));
-  geometry.setAttribute("aTint", new THREE.InstancedBufferAttribute(tint, 3));
-  geometry.instanceCount = MAX_BLADES;
-  const u = {
-    uRadius: { value: radius },
-    uHeight: { value: 0.4 },
-    uWidth: { value: 0.045 },
-    uClump: { value: 0 },
-    uFlowers: { value: 0 },
-    uLow: { value: new THREE.Vector3() },
-    uHigh: { value: new THREE.Vector3() },
-    uTip: { value: new THREE.Vector3() },
-    uDry: { value: new THREE.Vector3() },
-    uFlower0: { value: new THREE.Vector3() },
-    uFlower1: { value: new THREE.Vector3() },
-    uFlower2: { value: new THREE.Vector3() },
-  };
-  const clearings = createClearings();
-  const material = new THREE.ShaderMaterial({
-    vertexShader: GRASS_VERT,
-    fragmentShader: GRASS_FRAG,
-    uniforms: { ...light, ...u, ...clearings.uniforms, uVitality: shared.uVitality },
-    side: THREE.DoubleSide,
-  });
-  const mesh = new THREE.Mesh(geometry, material);
-  mesh.frustumCulled = false;
-  return {
-    mesh,
-    clear: (list) => clearings.set(list),
-    apply(look) {
-      const g = look.ground;
-      geometry.instanceCount = Math.round(MAX_BLADES * g.density);
-      u.uHeight.value = g.height;
-      u.uWidth.value = g.width;
-      u.uClump.value = g.clump;
-      u.uFlowers.value = g.flowers;
-      u.uLow.value.copy(v3(g.low));
-      u.uHigh.value.copy(v3(g.high));
-      u.uTip.value.copy(v3(g.tip));
-      u.uDry.value.copy(v3(look.groundDecline));
-      const f = g.flowerColors;
-      u.uFlower0.value.copy(v3(f[0] ?? g.tip));
-      u.uFlower1.value.copy(v3(f[1] ?? g.tip));
-      u.uFlower2.value.copy(v3(f[2] ?? g.tip));
-    },
-  };
-}
-
-// ---------- drifting accents ----------
-
-const DRIFT_VERT = /* glsl */ `
-uniform float uTime;
-uniform float uWind;
-uniform float uSize;
-uniform float uPixels;
-uniform float uFall;
-uniform float uRise;
-uniform float uLow;
-uniform float uHigh;
-uniform float uWander;
-uniform float uHover;
-uniform vec3 uBox;
-uniform float uCenterZ;
-uniform float uHalo;
-attribute vec4 aSeed;
-varying float vPhase;
-varying float vFade;
-void main() {
-  float phase = aSeed.z;
-  float t = uTime;
-  float span = uHigh - uLow;
-  float y = uLow + mod(aSeed.w * span + t * (uRise - uFall), span);
-  y = mix(y, uLow + (0.5 + 0.5 * sin(t * 0.5 + phase * 31.0)) * span, uHover);
-  vec2 xz = aSeed.xy + vec2(t * 0.55, t * 0.2) * uWind * (1.0 - uHover * 0.85);
-  xz += vec2(sin(t * 1.3 + phase * 17.0), cos(t * 1.1 + phase * 23.0)) * uWander;
-  xz = mod(xz + uBox.xz, uBox.xz * 2.0) - uBox.xz;
-  vec4 mv = viewMatrix * vec4(xz.x, y, xz.y + uCenterZ, 1.0);
-  gl_Position = projectionMatrix * mv;
-  gl_PointSize = uSize * uPixels / max(-mv.z, 0.5) * (1.0 + uHalo * 3.0);
-  vPhase = phase;
-  float edge = min(uBox.x - abs(xz.x), uBox.z - abs(xz.y));
-  vFade = smoothstep(0.0, 2.5, edge) * smoothstep(0.0, 0.6, y - uLow) * smoothstep(0.0, 0.6, uHigh - y);
-}
-`;
-
-const DRIFT_FRAG = /* glsl */ `
-precision highp float;
-uniform float uTime;
-uniform vec3 uColor;
-uniform vec3 uSunColor;
-uniform float uSunIntensity;
-uniform vec3 uAmbientColor;
-uniform float uAmbientIntensity;
-uniform vec3 uMoonColor;
-uniform float uMoonIntensity;
-uniform float uGlow;
-uniform float uShape;
-uniform float uBlink;
-uniform float uOpacity;
-uniform float uHalo;
-varying float vPhase;
-varying float vFade;
-void main() {
-  vec2 c = gl_PointCoord - 0.5;
-  // In the dark a glowing mote keeps its small core and gains a soft halo.
-  float grow = 1.0 + uHalo * 3.0;
-  float a = vPhase * 6.283 + uTime * (0.6 + vPhase);
-  float ca = cos(a);
-  float sa = sin(a);
-  vec2 r = vec2(ca * c.x - sa * c.y, sa * c.x + ca * c.y);
-  // 0: soft dot, 1: petal, 2: leaf. Petals and leaves tumble, so their width breathes.
-  float tumble = 0.35 + 0.65 * abs(sin(uTime * 2.1 + vPhase * 13.0));
-  float disc = exp(-dot(c, c) * 28.0 * grow * grow) + exp(-dot(c, c) * 18.0) * uHalo * 0.4;
-  float petal = smoothstep(0.5, 0.42, length(vec2(r.x / (0.42 * tumble), r.y / 0.95)) );
-  float leaf = smoothstep(0.5, 0.44, length(vec2(r.x / (0.36 * tumble), r.y)) + abs(r.x) * 0.6);
-  float shape = uShape < 0.5 ? disc : uShape < 1.5 ? petal : leaf;
-  float blink = mix(1.0, smoothstep(0.2, 1.0, sin(uTime * 1.6 + vPhase * 41.0)), uBlink);
-  // Lit like everything else, so petals darken at night while glowing things shine.
-  vec3 sky = uAmbientColor * uAmbientIntensity * 1.35 + uSunColor * uSunIntensity * 0.46 + uMoonColor * uMoonIntensity * 0.6;
-  vec3 lit = uColor * mix(sky, vec3(1.0), uGlow);
-  float alpha = shape * vFade * blink * uOpacity;
-  if (alpha < 0.01) discard;
-  gl_FragColor = vec4(lit * (1.0 + uGlow * 0.6), alpha);
-}
-`;
-
-interface DriftBehavior {
-  shape: number;
-  fall: number;
-  rise: number;
-  low: number;
-  high: number;
-  wander: number;
-  hover: number;
-  blink: number;
-  opacity: number;
-}
-
-const BEHAVIOR: Record<string, DriftBehavior> = {
-  petals: { shape: 1, fall: 0.35, rise: 0, low: 0, high: 9, wander: 0.6, hover: 0, blink: 0, opacity: 0.95 },
-  fireflies: { shape: 0, fall: 0, rise: 0, low: 0.3, high: 2.6, wander: 0.9, hover: 1, blink: 1, opacity: 1 },
-  motes: { shape: 0, fall: 0, rise: 0.05, low: 0.6, high: 8, wander: 0.35, hover: 0.6, blink: 0.3, opacity: 0.7 },
-  leaves: { shape: 2, fall: 0.6, rise: 0, low: 0, high: 10, wander: 0.8, hover: 0, blink: 0, opacity: 1 },
-  seeds: { shape: 0, fall: 0.05, rise: 0.12, low: 0.4, high: 7, wander: 0.5, hover: 0, blink: 0, opacity: 0.85 },
-  pollen: { shape: 0, fall: 0.02, rise: 0.04, low: 0.2, high: 6, wander: 0.25, hover: 0.3, blink: 0, opacity: 0.6 },
-};
-
-export interface Drift {
-  readonly points: THREE.Points;
-  /** Spec of what drifts; null hides it. `daylight` is 0 at dusk and 1 at noon. */
-  apply(spec: { form: string; color: Rgb; count: number; size: number; glow: number } | null, daylight: number): void;
-  /** How many are visible: vitality gates ambient life. */
-  setVitality(v: number): void;
-  setPixels(pixels: number): void;
-}
-
-const MAX_DRIFT = 900;
-
-export function createDrift(light: SceneLight, seedBase: number): Drift {
-  const seeds = new Float32Array(MAX_DRIFT * 4);
-  let seed = seedBase >>> 0 || 1;
-  const next = (): number => {
-    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
-    return seed / 4294967296;
-  };
-  // The box spans the trees and the ground up to the camera, so some drift passes close by.
-  const box = new THREE.Vector3(26, 0, 30);
-  for (let i = 0; i < MAX_DRIFT; i++) {
-    seeds[i * 4] = (next() * 2 - 1) * box.x;
-    seeds[i * 4 + 1] = (next() * 2 - 1) * box.z;
-    seeds[i * 4 + 2] = next();
-    seeds[i * 4 + 3] = next();
-  }
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(MAX_DRIFT * 3), 3));
-  geometry.setAttribute("aSeed", new THREE.BufferAttribute(seeds, 4));
-  const u = {
-    uSize: { value: 0.06 },
-    uPixels: { value: 600 },
-    uFall: { value: 0 },
-    uRise: { value: 0 },
-    uLow: { value: 0 },
-    uHigh: { value: 5 },
-    uWander: { value: 0.5 },
-    uHover: { value: 0 },
-    uBox: { value: box },
-    uCenterZ: { value: 16 },
-    uColor: { value: new THREE.Vector3(1, 1, 1) },
-    uGlow: { value: 0 },
-    uShape: { value: 0 },
-    uBlink: { value: 0 },
-    uOpacity: { value: 1 },
-    uHalo: { value: 0 },
-  };
-  const material = new THREE.ShaderMaterial({
-    vertexShader: DRIFT_VERT,
-    fragmentShader: DRIFT_FRAG,
-    uniforms: {
-      ...u,
-      uTime: light.uTime,
-      uWind: light.uWind,
-      uSunColor: light.uSunColor,
-      uSunIntensity: light.uSunIntensity,
-      uAmbientColor: light.uAmbientColor,
-      uAmbientIntensity: light.uAmbientIntensity,
-      uMoonColor: light.uMoonColor,
-      uMoonIntensity: light.uMoonIntensity,
-    },
-    transparent: true,
-    depthWrite: false,
-  });
-  const points = new THREE.Points(geometry, material);
-  points.frustumCulled = false;
-  let count = 0;
-  let vitality = 1;
-  const draw = (): void => geometry.setDrawRange(0, Math.round(count * Math.min(1, Math.max(0, (vitality - 0.15) / 0.6))));
-  return {
-    points,
-    apply(spec, daylight) {
-      points.visible = spec !== null;
-      if (spec === null) return;
-      const b = BEHAVIOR[spec.form] ?? BEHAVIOR.motes;
-      if (b === undefined) return;
-      count = Math.min(MAX_DRIFT, spec.count);
-      u.uSize.value = spec.size;
-      u.uFall.value = b.fall;
-      u.uRise.value = b.rise;
-      u.uLow.value = b.low;
-      u.uHigh.value = b.high;
-      u.uWander.value = b.wander;
-      u.uHover.value = b.hover;
-      u.uShape.value = b.shape;
-      u.uBlink.value = b.blink;
-      // Glowing things show by contrast: faint at noon, bright at dusk.
-      u.uGlow.value = spec.glow * (0.35 + 0.65 * (1 - daylight));
-      u.uOpacity.value = b.opacity * (spec.glow > 0.5 ? 0.45 + 0.55 * (1 - daylight) : 1);
-      u.uHalo.value = b.shape === 0 ? spec.glow * (1 - daylight) : 0;
-      u.uColor.value.set(spec.color[0], spec.color[1], spec.color[2]);
-      draw();
-    },
-    setVitality(v) {
-      vitality = v;
-      draw();
-    },
-    setPixels(pixels) {
-      u.uPixels.value = pixels;
     },
   };
 }

@@ -444,8 +444,6 @@ uniform vec3 uDry;
 uniform vec3 uBare;
 uniform vec3 uSand;
 uniform vec3 uBed;
-uniform float uSelected;
-uniform float uOutline;
 uniform vec2 uHeightRange;
 varying vec3 vWorld;
 varying vec3 vNormal;
@@ -557,15 +555,6 @@ void main() {
   vec3 color = mix(shadowed, lit, clamp(light + 0.3, 0.0, 1.0));
   color += nightLight(albedo, n, vWorld, 0.3, mix(1.0, shadow, uMoonShadow));
 
-#ifndef WILDS
-  // In the overview the selected region's ground glows faintly, by its share
-  // of the cover, so the glow fades out at its organic edge. No lines anywhere.
-  // At night the glow stays fainter still, so it never reads as a lit field.
-  if (uOutline > 0.0 && uSelected >= 0.0) {
-    float mine = smoothstep(0.2, 0.9, coverShare(vWorld.xz, int(uSelected + 0.5)));
-    color = mix(color, color * vec3(1.08, 1.07, 0.94) + vec3(0.025, 0.025, 0.0), mine * 0.8 * uOutline * (1.0 - uNightness * 0.6));
-  }
-#endif
   gl_FragColor = vec4(aerial(shoulder(color), vWorld), 1.0);
 }
 `;
@@ -586,7 +575,6 @@ export interface GroundMesh {
   readonly material: THREE.ShaderMaterial;
   /** Takes on a new bake; `wilds` is its wild ring when a bake thread made it already. */
   update(t: Terrain, wilds?: WildsRing): void;
-  select(region: number, outline: boolean): void;
   /** Centers the rings on the person; call every frame they walk. */
   follow(x: number, z: number): void;
 }
@@ -655,8 +643,6 @@ export function createGround(t: Terrain, light: SceneLight, covers: RegionCovers
     uBare: { value: hexToVec3(0x9a7d58) },
     uSand: { value: hexToVec3(0xcdbb8a) },
     uBed: { value: hexToVec3(0x6d7a58) },
-    uSelected: { value: -1 },
-    uOutline: { value: 0 },
     uHeightRange: { value: new THREE.Vector2(t.report.min, t.report.max) },
     uQuads: { value: RINGS.quads },
     uLevels: { value: RINGS.levels },
@@ -705,10 +691,6 @@ export function createGround(t: Terrain, light: SceneLight, covers: RegionCovers
     wilds,
     material,
     update,
-    select(region, outline) {
-      uniforms.uSelected.value = region;
-      uniforms.uOutline.value = outline ? 1 : 0;
-    },
     follow(x, z) {
       ringUniforms.uViewer.value.set(x, z);
       ringUniforms.uCenter.value.set(Math.round(x / snap) * snap, Math.round(z / snap) * snap);

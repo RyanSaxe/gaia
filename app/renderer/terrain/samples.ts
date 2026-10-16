@@ -2,7 +2,7 @@
 // report: six of Gaia's own entities, which become its buildings, more for
 // its landmarks, and files for its trees, each with a vitality from thriving
 // to ruin (`SAMPLE_VITALITY`), so the lab shows every state before a
-// codebase is opened, and a thing's card says what it looks like.
+// codebase is opened.
 
 import { STRUCTURE_PRESETS } from "@gaia/realize";
 import type { Blueprint, EntityFacts, FileFacts, ThingFacts } from "@gaia/schema";
@@ -13,15 +13,8 @@ export interface Represented {
   readonly id: string;
   /** The name painted on its sign. */
   readonly name: string;
-  /** What it is, in a few words, such as "Package · TypeScript". */
+  /** What it is, in a few words, such as "Package · TypeScript": the note under its name on its sign. */
   readonly what: string;
-  readonly doc: string;
-  /** Where it lives in the code. */
-  readonly where: string;
-  /** Its size in words, such as "14 files · 2,140 lines · 38 exports". */
-  readonly size: string;
-  readonly dependsOn: readonly string[];
-  readonly dependents: readonly string[];
   /** How it is doing, 0 to 1: Jev's quality in a codebase's world, the sample's own in the lab's. */
   readonly vitality: number;
 }
@@ -290,7 +283,6 @@ export const SAMPLE_FILES: readonly FileFacts[] = [
 
 const FORMS: Readonly<Record<EntityFacts["form"], string>> = { package: "Package", crate: "Rust crate" };
 const LANGUAGES: Readonly<Record<string, string>> = { typescript: "TypeScript", rust: "Rust" };
-const count = (n: number, one: string): string => `${n.toLocaleString()} ${n === 1 ? one : `${one}s`}`;
 /** The last part of a path, which names an entity among its neighbors; the root's entity is the repository's own. */
 export const shortName = (path: string): string => path.split("/").filter(Boolean).pop() ?? "the repository";
 
@@ -299,26 +291,16 @@ export function representEntity(e: EntityFacts, vitality: number): Represented {
     id: e.path,
     name: e.name,
     what: FORMS[e.form],
-    doc: "",
-    where: e.path,
-    size: [count(e.files, "file"), count(e.lines, "line"), count(e.exports, "export")].join(" · "),
-    dependsOn: e.dependsOn.map(shortName),
-    dependents: e.dependents.map(shortName),
     vitality,
   };
 }
 
-/** What a card says about a file. */
+/** What stands for a file says about it. */
 export function representFile(f: FileFacts, vitality: number): Represented {
   return {
     id: f.path,
     name: shortName(f.path),
     what: `File · ${LANGUAGES[f.language] ?? f.language}`,
-    doc: "",
-    where: f.path,
-    size: count(f.lines, "line"),
-    dependsOn: f.imports.map(shortName),
-    dependents: f.importedBy.map(shortName),
     vitality,
   };
 }

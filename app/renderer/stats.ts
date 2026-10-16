@@ -1,13 +1,12 @@
-// The dev readout in the status bar: how smooth the last ten seconds were
-// (frame-interval median, 99th percentile and worst, stutters and long
-// tasks), the JavaScript time a frame takes, and the draw calls and triangles
-// of every pass the open lab renders. The smoothness probe always runs, so a
-// report can carry it; the readout is off by default, and the Stats button or
-// the backquote key toggles it, remembered in this browser.
+// How the page runs, for scripted checks (`__lab.stats`, `__lab.smoothness`)
+// and telemetry: how smooth the last ten seconds were (frame-interval median,
+// 99th percentile and worst, stutters and long tasks), the JavaScript time a
+// frame takes, and the draw calls and triangles of every pass the world
+// renders. The smoothness probe always runs; passes are counted once a
+// report or a script asks for them.
 
 import type { WebGLRenderer } from "three";
 
-const KEY = "gaia.lab.stats";
 /** The probe's window, milliseconds. */
 const WINDOW = 10_000;
 /** A frame interval this many times the window's median shows as a stutter. */
@@ -45,30 +44,14 @@ export interface Stats {
   begin(renderer: WebGLRenderer | undefined): void;
   /** Call after it; `dt` is seconds since the last frame. */
   end(renderer: WebGLRenderer | undefined, dt: number): void;
-  /** The latest readings, or null while the readout is off. */
-  read(): FrameStats | null;
-  /** The probe's last ten seconds, whether or not the readout shows. */
+  /** The latest readings; every pass of each frame is counted from the first call on. */
+  read(): FrameStats;
+  /** The probe's last ten seconds. */
   smoothness(): Smoothness;
-  /** The last frame's draw calls and triangles, counted while the readout shows or `count(true)` asks for them. */
+  /** The last frame's draw calls and triangles, counted once `read` or `count(true)` asks for them. */
   passes(): { calls: number; triangles: number } | null;
-  /** Counts every pass of each frame even while the readout is off, for reports. */
+  /** Counts every pass of each frame, for reports. */
   count(on: boolean): void;
-}
-
-function remembered(): boolean {
-  try {
-    return localStorage.getItem(KEY) === "on";
-  } catch {
-    return false;
-  }
-}
-
-function remember(on: boolean): void {
-  try {
-    localStorage.setItem(KEY, on ? "on" : "off");
-  } catch {
-    // Storage may be blocked; the readout still toggles for this visit.
-  }
 }
 
 /** Frame intervals and long tasks over a sliding window. */
@@ -127,34 +110,18 @@ function createProbe() {
   };
 }
 
-export function createStats(toggle: HTMLButtonElement, readout: HTMLElement): Stats {
-  let on = false;
+export function createStats(): Stats {
+  let asked = false;
   let reporting = false;
   let counting = false;
   let start = 0;
-  let shown = 0;
   const probe = createProbe();
   const now = { frameMs: 0, cpuMs: 0, calls: 0, triangles: 0 };
-
-  const set = (next: boolean): void => {
-    on = next;
-    toggle.setAttribute("aria-pressed", String(on));
-    toggle.classList.toggle("on", on);
-    readout.hidden = !on;
-    if (!on) readout.textContent = "";
-    remember(on);
-  };
-  set(remembered());
-  toggle.addEventListener("click", () => set(!on));
-  window.addEventListener("keydown", (e) => {
-    if (e.code !== "Backquote" || e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) return;
-    set(!on);
-  });
 
   return {
     begin(renderer) {
       start = performance.now();
-      counting = on || reporting;
+      counting = asked || reporting;
       if (!counting) {
         if (renderer !== undefined) renderer.info.autoReset = true;
         return;
@@ -174,15 +141,11 @@ export function createStats(toggle: HTMLButtonElement, readout: HTMLElement): St
       now.frameMs += (dt * 1000 - now.frameMs) * ease;
       now.calls = renderer?.info.render.calls ?? 0;
       now.triangles = renderer?.info.render.triangles ?? 0;
-      if (!on || t - shown < 250) return;
-      shown = t;
-      const s = probe.read(t);
-      const long = s.longTasks === null ? "" : ` · ${s.longTasks} long tasks`;
-      readout.textContent =
-        `${s.seconds.toFixed(0)} s: median ${s.medianMs.toFixed(1)} · p99 ${s.p99Ms.toFixed(1)} · max ${s.maxMs.toFixed(1)} ms · ${s.stutters} stutters${long} · ` +
-        `${Math.round(1000 / Math.max(now.frameMs, 1e-3))} fps · js ${now.cpuMs.toFixed(1)} ms · ${now.calls} draws · ${(now.triangles / 1e6).toFixed(2)} M tris`;
     },
-    read: () => (on ? { ...now, smooth: probe.read(performance.now()) } : null),
+    read() {
+      asked = true;
+      return { ...now, smooth: probe.read(performance.now()) };
+    },
     smoothness: () => probe.read(performance.now()),
     passes: () => (counting ? { calls: now.calls, triangles: now.triangles } : null),
     count(next) {

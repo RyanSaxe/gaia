@@ -16,10 +16,10 @@ import {
   toLch,
 } from "@gaia/primitives";
 import { biome, world } from "@gaia/kinds";
-import { assemble, blueprintCount, fieldSize, planDetails, planStructure, randomSlots, readStructure, validate } from "@gaia/world";
+import { assemble, planDetails, planStructure, readStructure, validate } from "@gaia/world";
 import { CLEAR_AIR, WORLD_PRESETS, mixAir, realizeWorld } from "@gaia/realize";
 import { blueprintOf as identify } from "@gaia/schema";
-import { fakeJev } from "@gaia/world/testing";
+import { fakeJev, randomSlots } from "@gaia/world/testing";
 
 const lib = new Library([...WORLD_PRIMITIVES, ...BIOME_PRIMITIVES, ...RELIEF_PRIMITIVES]);
 const SEED = seedOf("lab/world");
@@ -77,15 +77,6 @@ describe("world and biome kinds", () => {
       expect(validate(p.world, world, lib)).toEqual([]);
       expect(validate(p.biome, biome, lib)).toEqual([]);
     }
-  });
-
-  it("counts exactly the worlds and regions their declarations admit", () => {
-    const size = (role: string): number =>
-      lib.forRole(role as never).reduce((sum, p) => sum + Object.values(p.params).reduce((n, f) => n * fieldSize(f), 1), 0);
-    expect(blueprintCount(world, lib)).toBe(size("Light") * size("Sky") * size("Season") * size("Wind"));
-    // 243 light x 72 sky x 18 season x 4 wind.
-    expect(blueprintCount(world, lib)).toBe(1_259_712);
-    expect(blueprintCount(biome, lib)).toBe(size("Relief") * size("Ground") * (1 + size("Atmosphere")) * (1 + size("Accents")) * size("Natives"));
   });
 
   it("asks for light and season first, then sky and wind with those answers in the state", () => {

@@ -8,22 +8,7 @@
 </head>
 <body>
 <div id="shell">
-  <header id="tabs">
-    <div class="brand">Gaia<span>lab</span></div>
-    <div class="segmented" role="tablist" aria-label="Lab">
-      <button class="seg" type="button" role="tab" data-tab="immersive">World</button>
-      <button class="seg" type="button" role="tab" data-tab="flora">Components</button>
-      <button class="seg" type="button" role="tab" data-tab="terrain">Terrain</button>
-      <button class="seg" type="button" role="tab" data-tab="world">Skies</button>
-    </div>
-    <div id="clock" class="clock"></div>
-  </header>
-  <div id="labs">
-    <div class="lab lab-flora" data-lab="flora" role="tabpanel" hidden></div>
-    <div class="lab lab-terrain" data-lab="terrain" role="tabpanel" hidden></div>
-    <div class="lab lab-world" data-lab="world" role="tabpanel" hidden></div>
-  </div>
-  <footer id="status"><span class="dot"></span><span id="status-text" role="status" aria-live="polite"></span><span id="stats" hidden></span><button id="stats-toggle" class="stats-toggle" type="button" aria-pressed="false" title="Frame time and draw calls (backquote)">Stats</button></footer>
+  <div class="lab lab-terrain" data-lab="terrain"></div>
 </div>
 <script type="module" src="./main.ts"></script>
 </body>

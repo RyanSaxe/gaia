@@ -35,7 +35,6 @@ import {
   regionWeights,
   sampleWorld,
   scatterPlants,
-  sightlines,
   streamFlow,
   surfaceHalfWidth,
   waterDepthAt,
@@ -495,19 +494,6 @@ describe("terrain", { timeout: 20_000 }, () => {
         }
       });
     }
-  });
-
-  it("ends sight lines within a few hundred meters at eye height", () => {
-    const medians: number[] = [];
-    for (const t of baked) {
-      for (const r of t.spec.regions) {
-        const s = sightlines(t.lattice, r.x, r.z);
-        expect(s.max).toBeLessThan(470);
-        medians.push(s.median);
-      }
-    }
-    medians.sort((a, b) => a - b);
-    expect(medians[Math.floor(medians.length / 2)]).toBeLessThan(200);
   });
 });
 

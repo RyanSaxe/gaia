@@ -205,9 +205,7 @@ A region never shows its shape. Region cells are domain-warped, so their
 borders curve and wander, and neighboring landforms ease into each other
 across a band 130 m wide. Ground covers blend by the same weights broken into
 seeded patches about 30 m across, so one cover drifts into the next in
-islands rather than along a gradient. The overview marks the selected region
-with a faint glow that follows its cover and fades at its edge; walking shows
-nothing. `regionWeights` and `coverWeights` in `@gaia/terrain` are the
+islands rather than along a gradient. `regionWeights` and `coverWeights` in `@gaia/terrain` are the
 references, and the bake keeps each sample's four largest cover shares for
 the shaders, which interpolate them between samples as the lattice does.
 
@@ -243,7 +241,7 @@ can walk or tap their way off the land in any direction and keep going, with
 no wall anywhere. The rings around the person draw the wild land from the
 same function the walk stands on (`groundHeightAt` in `@gaia/terrain`, whose
 integer-hash noise has a GLSL twin), so it follows them; a coarse ring of it
-surrounds the world for the overview and the water's mirror. The wild grows
+surrounds the world for views from above. The wild grows
 its own two covers, tall unkempt green grass and tall dry golden grass,
 which drift in from the land's covers in islands past the rim and mingle
 blade by blade in broad swathes. Low brush darkens the ground in dabs that
@@ -642,14 +640,6 @@ the view stays where they look. A thing already close counts as arrived. A new t
 In the immersive world, a tap on a thing opens the journal at its page: a
 building's or landmark's entity, a tree's file, and anything else its own.
 The journal never opens on its own.
-
-In the Terrain view, standing at a thing opens its card in the panel or the
-sheet (`STOP_AT` in the terrain lab), and it reads like a page from a field
-guide: what kind of thing it is, its name, what it does, where it lives in
-the code, its size, what it leans on and what leans on it, what it stands
-as in the world, who judged that (Jev, or the stand-in when Jev did not
-answer), and its vitality as a percentage. Walking away, its × and Esc
-close it.
 
 While a codebase's world opens, the wait covers the screen
 (`app/renderer/wait/`). It shows no words, counts or percentages and never
@@ -1119,7 +1109,7 @@ popping in.
 
 ## Knowing where you are
 
-The lab opens into the world, full screen, at eye height, where the first
+Gaia opens into the world, full screen, at eye height, where the first
 view is best (`openingSpot` in `@gaia/terrain`). Every stretch of every
 stream among the code is a place to stand, 2.5 m past the water's edge on
 either bank, facing the water 30 m downstream, if the stream runs on that
@@ -1149,8 +1139,7 @@ traveller's vermilion. Only the needle turns, to point north, on a damped
 spring: after a sudden turn it swings about a tenth past and settles within
 about a second. It is the one north on the screen besides the field map's
 painted rose. A tap on it opens a slip with Gaia's mark, the world's name,
-how to wander (for a mouse and keys, or for a finger) and the way back to
-the debugging views (Components, Terrain and Skies). The hour follows the
+and how to wander (for a mouse and keys, or for a finger). The hour follows the
 person's clock (`?hour=22` pins it).
 Everything a person reads here looks like the world's own things: warm
 paper, brown ink, a serif with italic names and small capitals for paths,
@@ -1662,8 +1651,7 @@ grass and water agree:
   other surface, pale or warm (stone, plaster, sand, straw), it reads as
   warm amber, since orange over the moon's blue floor would turn them
   salmon. Its brightest light rolls off. It lights surfaces only, never the air. It fades in through dusk, sways a few
-  centimeters with each stride and settles when the person stops. The Flora
-  tab carries none, so plants are judged under the moon alone.
+  centimeters with each stride and settles when the person stops.
 - **The night sky** deepens to blue, keeping a trace of the world's own sky
   color. The chosen moon, the chosen stars, and clouds silvered by the moon.
   A river of stars is a band: a milky glow with a brighter core, split by a

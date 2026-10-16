@@ -7,8 +7,8 @@
 // only ever moves you (docs/design-system.md, "One way to touch the world");
 // walking up to a thing, the scrap rings it, and stopping at a thing raises
 // its page at the lower left (`sketch.ts`). The compass in the top right corner points north
-// (`compass.ts`) and opens the one other paper, the slip, with Gaia's mark,
-// how to wander, and the way back to the lab's debugging views.
+// (`compass.ts`) and opens the one other paper, the slip, with Gaia's mark
+// and how to wander.
 // Walking, tapping a thing to walk up to it, the lantern and the hour all
 // come from the terrain lab. Once the world stands and its map is painted, a
 // picture of the whole map goes to the world service, which keeps it with the
@@ -33,7 +33,6 @@ import { createFieldMap, drawLand } from "./field-map.ts";
 import { MARKER_LAYER, createMarkers } from "./markers.ts";
 import { createMinimap } from "./minimap.ts";
 
-/** The lab's debugging views, which the slip leads back to. */
 /** The painter the journal's kept paintings were made by: a new one paints them all afresh. */
 const PAINTER = "painter-1";
 /** How the frontispiece is framed: a new framing paints the title page afresh, and nothing else. */
@@ -52,11 +51,6 @@ const KEEP = { check: 3000, every: 30_000, moved: 2, turned: 20 } as const;
  * have moved or turned as far as a kept spot needs since the last painting.
  */
 const CARD_VIEW = 520;
-
-export interface LabViews {
-  readonly views: readonly { readonly id: string; readonly name: string }[];
-  leave(id: string): void;
-}
 
 export interface Immersive {
   setActive(on: boolean): void;
@@ -81,7 +75,7 @@ const WANDER = /* html */ `
     <dt><span class="mouse-only">Click</span><span class="touch-only">Tap</span> the map</dt><dd>go to that place</dd>
   </dl>`;
 
-export function createImmersive(container: HTMLElement, world: WorldHandle, lab: LabViews): Immersive {
+export function createImmersive(container: HTMLElement, world: WorldHandle): Immersive {
   const layer = document.createElement("div");
   layer.className = "wayfinding";
   container.append(layer);
@@ -391,12 +385,12 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
     markers.vitality((path) => vitality.get(path) ?? 1);
   });
 
-  // ---------- the compass, and the slip it opens: Gaia's mark, how to wander, and the way back to the lab ----------
+  // ---------- the compass, and the slip it opens: Gaia's mark and how to wander ----------
 
   const menuButton = document.createElement("button");
   menuButton.type = "button";
   menuButton.className = "way-button menu-button";
-  menuButton.setAttribute("aria-label", "About this world, and the lab");
+  menuButton.setAttribute("aria-label", "About this world");
   menuButton.setAttribute("aria-expanded", "false");
   const compass = createCompass(menuButton);
   const slip = document.createElement("div");
@@ -407,9 +401,7 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
     <img class="slip-mark" src="${SLIP_LOGO}" alt="Gaia">
     <div class="slip-world">the world of <i data-ref="world-name"></i></div>
     <div class="slip-head">Wandering</div>
-    ${WANDER}
-    <div class="slip-head">The lab</div>
-    <div class="slip-views">${lab.views.map((v) => `<button type="button" class="slip-view" data-view="${v.id}">${v.name}</button>`).join("")}</div>`;
+    ${WANDER}`;
   layer.append(menuButton, slip);
   const worldName = slip.querySelector("[data-ref=world-name]") as HTMLElement;
   function setSlip(on: boolean): void {
@@ -418,12 +410,6 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
     menuButton.setAttribute("aria-expanded", String(on));
   }
   menuButton.addEventListener("click", () => setSlip(!slip.classList.contains("open")));
-  for (const b of slip.querySelectorAll<HTMLElement>("[data-view]")) {
-    b.addEventListener("click", () => {
-      setSlip(false);
-      lab.leave(b.dataset.view ?? "");
-    });
-  }
   onTap(reading, () => {
     setSlip(false);
     map.open(false);
