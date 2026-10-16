@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
-import { contentHash } from "./far-store.ts";
+import { IDBFactory } from "fake-indexeddb";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { contentHash, openFarStore } from "./far-store.ts";
 
 const part = (lift: number) => ({
   swatch: "leaf",
@@ -24,5 +25,37 @@ describe("a far form's key", () => {
     ]) {
       expect(changed).not.toBe(same);
     }
+  });
+});
+
+describe("the far-form store", () => {
+  beforeEach(() => {
+    vi.stubGlobal("indexedDB", new IDBFactory());
+  });
+
+  it("keeps each form between visits of one bake", async () => {
+    await (await openFarStore(2))?.put("tree", { version: 2 });
+    expect(await (await openFarStore(2))?.get("tree")).toEqual({ version: 2 });
+  });
+
+  it("drops every form of an earlier bake when a later bake opens it, even while a page of the earlier one has it open", async () => {
+    const earlier = await openFarStore(1);
+    await earlier?.put("tree", { version: 1 });
+    const later = await openFarStore(2);
+    expect(later).not.toBeNull();
+    expect(await later?.get("tree")).toBeUndefined();
+    await later?.put("tree", { version: 2 });
+    expect(await later?.get("tree")).toEqual({ version: 2 });
+  });
+
+  it("opens nothing, rather than fail or wait, where it can't be opened at the page's bake", async () => {
+    await openFarStore(3);
+    expect(await openFarStore(2)).toBeNull();
+    // A page that never lets go of an earlier bake's store.
+    vi.stubGlobal("indexedDB", new IDBFactory());
+    await new Promise((resolve) => {
+      indexedDB.open("gaia-far-forms", 1).onsuccess = resolve;
+    });
+    expect(await openFarStore(2)).toBeNull();
   });
 });
