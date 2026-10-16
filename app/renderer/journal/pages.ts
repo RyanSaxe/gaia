@@ -388,7 +388,7 @@ export function journalPages(src: JournalPagesSource): BookPages {
         const contents = contentsWords(words);
         const page = (p: number): HTMLElement =>
           contents.body.kind === "rows" && rowsOn(p).from < contents.body.rows.length ? renderPage({ ...contents, name: "Contents", path: [] }, roman(p + 2), src.turnTo, rowsOn(p)) : blank();
-        return k === 0 ? { left: renderTitle(words.world.name, words.vitality(""), roman(1), src.frontispiece()), right: page(0) } : { left: page(2 * k - 1), right: page(2 * k) };
+        return k === 0 ? { left: renderTitle(words.world.name, roman(1), src.frontispiece()), right: page(0) } : { left: page(2 * k - 1), right: page(2 * k) };
       }
       const e = words.journal.entry(of as string);
       if (e === undefined) return { left: blank(), right: blank() };
