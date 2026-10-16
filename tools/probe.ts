@@ -22,6 +22,10 @@
 //   app's own painter works, as it does whenever the person stops: the view
 //   must not change either.
 //
+// Every run starts from a browser profile of its own, so the far forms bake
+// as on a first visit, and any WebGL error the page reports fails it
+// (`webglErrors`).
+//
 // The window stays hidden, at exactly the size asked for, except for the walk
 // that measures smoothness: a hidden window's frames don't keep the display's
 // pace, so it shows then, without taking focus; leave it uncovered. Timings
@@ -40,6 +44,7 @@ import { loadavg, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { build } from "esbuild";
+import { webglErrors } from "../app/main/webgl-errors.ts";
 import { LAB_BUILD, labBundle, labPage } from "./lab-page.ts";
 
 const MEASURES = ["drawn", "steps", "hitch", "stress", "swap", "paint"] as const;
@@ -147,6 +152,8 @@ const repo = resolve(import.meta.dirname, "..");
 const scratch = mkdtempSync(join(tmpdir(), "gaia-probe-"));
 const page = join(scratch, "lab.html");
 const out = join(scratch, "out.json");
+// A browser profile of the run's own, so the far forms bake as on a first visit.
+const profile = join(scratch, "profile");
 writeFileSync(page, labPage(labBundle(await build(LAB_BUILD))));
 
 // Electron runs this as its main process: each job opens the lab on its world and runs its calls.
@@ -155,7 +162,8 @@ writeFileSync(
   main,
   `import { app, BrowserWindow, powerSaveBlocker } from "electron";
 import { writeFileSync } from "node:fs";
-const { page, out, jobs, width, height, dpr } = JSON.parse(process.env.GAIA_PROBE);
+const { page, out, profile, jobs, width, height, dpr } = JSON.parse(process.env.GAIA_PROBE);
+app.setPath("userData", profile);
 app.commandLine.appendSwitch("force-device-scale-factor", String(dpr));
 app.commandLine.appendSwitch("ignore-gpu-blocklist");
 // A window without focus belongs to a background app, which macOS would slow (App Nap).
@@ -166,11 +174,16 @@ const say = (line) => console.error("probe: " + line);
 async function probe() {
   powerSaveBlocker.start("prevent-app-suspension");
   const results = {};
+  // The page's warnings and errors over the whole run, among them any WebGL error.
+  const messages = [];
   // One window for every job: a second window's page fails to load once the first is closed.
   // A tiling window manager leaves a window of fixed size floating at the size asked for.
   const fixed = { resizable: false, fullscreenable: false, minimizable: false, maximizable: false };
   const win = new BrowserWindow({ ...fixed, show: false, width, height, useContentSize: true, webPreferences: { backgroundThrottling: false } });
-  win.webContents.on("console-message", (e) => { if (e.level === "error") say("page: " + e.message); });
+  win.webContents.on("console-message", (e) => {
+    if (e.level === "error") say("page: " + e.message);
+    if (e.level === "warning" || e.level === "error") messages.push(e.message);
+  });
   for (const job of jobs) {
     await win.loadFile(page, { query: { world: job.world, ...(job.size === undefined ? {} : { size: job.size }) } });
     const run = (js) => win.webContents.executeJavaScript("(async () => { const T = window.__lab.terrain; return " + js + "; })()");
@@ -188,7 +201,7 @@ async function probe() {
       results[job.world][call.key] = await run(call.js);
     }
   }
-  writeFileSync(out, JSON.stringify(results));
+  writeFileSync(out, JSON.stringify({ results, messages }));
 }
 app.whenReady().then(probe).then(
   () => app.quit(),
@@ -202,12 +215,13 @@ app.whenReady().then(probe).then(
 
 const load = loadavg()[0] ?? 0;
 const electron = createRequire(resolve(repo, "app/package.json"))("electron") as string;
-const env: NodeJS.ProcessEnv = { ...process.env, GAIA_PROBE: JSON.stringify({ page, out, jobs, width: WIDTH, height: HEIGHT, dpr }) };
+const env: NodeJS.ProcessEnv = { ...process.env, GAIA_PROBE: JSON.stringify({ page, out, profile, jobs, width: WIDTH, height: HEIGHT, dpr }) };
 delete env.ELECTRON_RUN_AS_NODE;
 const run = spawnSync(electron, [main], { env, stdio: ["ignore", "inherit", "inherit"] });
-if (run.status !== 0) throw new Error(`Electron exited with ${run.status ?? run.signal}`);
-const results = JSON.parse(readFileSync(out, "utf8")) as Record<string, Record<string, unknown>>;
+const probed = run.status === 0 ? (JSON.parse(readFileSync(out, "utf8")) as { results: Record<string, Record<string, unknown>>; messages: string[] }) : null;
 rmSync(scratch, { recursive: true, force: true });
+if (probed === null) throw new Error(`Electron exited with ${run.status ?? run.signal}`);
+const { results } = probed;
 if (values.json !== undefined) writeFileSync(values.json, JSON.stringify({ dpr, load: [load, loadavg()[0]], results }, null, 1));
 
 // ---------- the report ----------
@@ -293,3 +307,8 @@ for (const [world, calls] of Object.entries(results)) {
     }
   }
 }
+
+const errors = webglErrors();
+for (const message of probed.messages) errors.note(message);
+line(`\n${errors.summary()}`);
+if (errors.count() > 0) process.exitCode = 1;
