@@ -10,9 +10,9 @@ import { type BuildContext, type BuildingPlan, type Built, GRAIN, type Mass, typ
 import type { bellParams, dovecoteParams, forgeParams, granaryParams, wellParams } from "../../structure.ts";
 import { type Channels, PartBuilder, type V3, add, addScaled, clamp, cross, fbm3, lerp, lossThreshold, normalize, scale, sub } from "../kit.ts";
 import { UP, beam, box, log, quad, tri } from "../blocks.ts";
-import { ruinOf, still } from "./frame.ts";
+import { STONE, ruinOf, still } from "./frame.ts";
 import { featureSide } from "./features.ts";
-import { smoke } from "./roofs.ts";
+import { TILE, smoke } from "./roofs.ts";
 import { ivy, lump, weeds } from "./ruin.ts";
 
 const TAU = Math.PI * 2;
@@ -191,8 +191,17 @@ function roundCote(flock: number, r: Rand, plan: BuildingPlan): Built {
       }
     }
   }
-  // The mortar core behind the stones, rotting through from the top; the flight holes and the doorway show dark in it.
+  // Where a point lies round the cote: its angle, the one nearest `near`, so a face across the seam reads one way round.
+  const centre = Y.at(0, 0, 0);
+  const angleOf = (p: Vec3, near: number): number => {
+    const d = sub(p, centre);
+    const a = Math.atan2(d[0] * Y.axes[2][0] + d[2] * Y.axes[2][2], d[0] * Y.axes[0][0] + d[2] * Y.axes[0][2]);
+    return a + TAU * Math.round((near - a) / TAU);
+  };
+  // The mortar core behind the stones, rotting through from the top a block at a time, each row after the one above
+  // it; the flight holes and the doorway show dark in it.
   const sides = 16;
+  const blocks = Math.round((TAU * (R - 0.06)) / (STONE[0] as number));
   for (let j = 0; j < rows; j++) {
     const y0 = -0.6 + j * rowH;
     const y1 = y0 + rowH;
@@ -203,7 +212,9 @@ function roundCote(flock: number, r: Rand, plan: BuildingPlan): Built {
       // None across the doorway, which shows dark once the door swings open.
       if (y1 <= doorTop + 1e-6 && (a0 < doorHalf || a1 > TAU - doorHalf)) continue;
       const n = fbm3(Math.cos(am) * 2, y0 * 2, Math.sin(am) * 2, seed, 2);
-      quad(mortar, [ring(a0, R - 0.06, y0), ring(a1, R - 0.06, y0), ring(a1, R - 0.06, y1), ring(a0, R - 0.06, y1)], radial(am), 0.42 + 0.08 * n, still(ring(am, R - 0.06, H / 2), 0.6, { rot: clamp(0.3 + 0.55 * (y1 / H) + 0.2 * n, 0, 1) }));
+      // Rows count down from the top, so each block breaks away from its top edge.
+      const grain = (p: Vec3): Vec3 => [(angleOf(p, am) / TAU) * blocks, rows - j - 1 + 0.999 * clamp((y1 - p[1]) / rowH, 0, 1), GRAIN.stones];
+      quad(mortar, [ring(a0, R - 0.06, y0), ring(a1, R - 0.06, y0), ring(a1, R - 0.06, y1), ring(a0, R - 0.06, y1)], radial(am), 0.42 + 0.08 * n, still(ring(am, R - 0.06, H / 2), 0.6, { rot: clamp(0.3 + 0.55 * (y1 / H), 0, 1), grain }));
     }
   }
   for (const h of holes) {
@@ -238,14 +249,16 @@ function roundCote(flock: number, r: Rand, plan: BuildingPlan): Built {
   for (let j = 0; j < courses; j++) {
     const t0 = j / courses;
     const t1 = (j + 1) / courses;
+    // Each course goes round in a whole number of tiles, rotting a tile at a time from the eaves up.
+    const tiles = Math.max(3, Math.round((TAU * (eave + (neck - eave) * (j + 0.5) / courses)) / TILE));
     for (let k = 0; k < sides; k++) {
       const a0 = (k / sides) * TAU;
       const a1 = ((k + 1) / sides) * TAU;
       const am = (a0 + a1) / 2;
       const n = normalize(addScaled(scale(radial(am), crown - H), UP, eave - neck));
       const at = (a: number, t: number, lip: number): V3 => addScaled(ring(a, eave + (neck - eave) * t, H + (crown - H) * t), n, lip);
-      const noise = fbm3(Math.cos(am) * 1.6, t0 * 3, Math.sin(am) * 1.6, seed + 7, 2);
-      const ch = { loss: 0, droop: 0.05, wither: 0.6, glow: 0, pivot: apex, rot: clamp(0.3 + 0.5 * (1 - t0) + 0.25 * noise, 0, 1) };
+      const grain = (p: Vec3): Vec3 => [(angleOf(p, am) / TAU) * tiles, j + 0.999 * clamp((p[1] - H) / (crown - H) / (t1 - t0) - j, 0, 1), GRAIN.tiles];
+      const ch = { loss: 0, droop: 0.05, wither: 0.6, glow: 0, pivot: apex, rot: clamp(0.3 + 0.5 * (1 - t0), 0, 1), grain };
       quad(roof, [at(a0, t0, 0.035), at(a1, t0, 0.035), at(a1, t1, 0), at(a0, t1, 0)], n, [0.5, 0.5, 0.58, 0.58].map((s) => s + 0.05 * (j % 2)), ch);
     }
   }
