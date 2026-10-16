@@ -4,7 +4,7 @@
 
 import * as THREE from "three";
 import { CUT, GRAIN, type Part, SPRAYS, type Swatch } from "@gaia/schema";
-import { CHANNEL_MATH, DETAIL, FLUTTERS, type Realized, pieceFrames, spinAt } from "@gaia/realize";
+import { CHANNEL_MATH, DETAIL, FLUTTERS, type Realized, pieceFrames, shownVitality, spinAt } from "@gaia/realize";
 import { LIGHT_GLSL, type SceneLight } from "./light.ts";
 import { WIND_GLSL } from "./sway.ts";
 import { createSmokeMaterial } from "./smoke.ts";
@@ -972,7 +972,9 @@ export function createPlant(plant: Realized, light: SceneLight): PlantView {
   bounds.radius += 2 + 0.15 * height;
   for (const g of geometries) g.boundingSphere = bounds.clone();
 
+  let vitality = 1;
   const shared = {
+    // The shaders read how far along its decline the plant looks (`shownVitality`), not its vitality.
     uVitality: { value: 1 },
     // A single plant keeps its full detail: thinning is for the many copies a world places.
     uDetail: { value: 0 },
@@ -1049,10 +1051,11 @@ export function createPlant(plant: Realized, light: SceneLight): PlantView {
     radius,
     triangles: plant.parts.reduce((n, p) => n + p.indices.length / 3, 0),
     get vitality() {
-      return shared.uVitality.value;
+      return vitality;
     },
     setVitality(v) {
-      shared.uVitality.value = Math.min(1, Math.max(0, v));
+      vitality = Math.min(1, Math.max(0, v));
+      shared.uVitality.value = shownVitality(vitality);
     },
     useDepth(on) {
       for (const m of meshes) m.mesh.material = on ? m.depth : m.color;

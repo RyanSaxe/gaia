@@ -3,7 +3,7 @@ import { type AnyPrimitive, type Built, type Part, Library, type Skeleton, bluep
 import { FLORA_PRIMITIVES, PRIMITIVES, STRUCTURE_PRIMITIVES } from "@gaia/primitives";
 import { flora, rock, structure, wildflowers } from "@gaia/kinds";
 import { randomSlots, validate } from "@gaia/world";
-import { FLORA_PRESETS, FLOWER_PRESETS, ROCK_PRESETS, SHRUB_PRESETS, STRUCTURE_PRESETS, applyVitality, mergeParts, realize, resolveParams, rotAt, spinAt, triangleCount } from "@gaia/realize";
+import { FLORA_PRESETS, FLOWER_PRESETS, ROCK_PRESETS, SHRUB_PRESETS, STRUCTURE_PRESETS, applyVitality, mergeParts, realize, resolveParams, rotAt, shownVitality, spinAt, triangleCount } from "@gaia/realize";
 
 const lib = new Library(FLORA_PRIMITIVES);
 const facts = { scale: 1, age: 120 };
@@ -109,6 +109,17 @@ describe("vitality response", () => {
       }
     });
   }
+
+  it("shows any fall from full vitality further along its decline, with nothing that jumps", () => {
+    expect(shownVitality(1)).toBe(1);
+    expect(shownVitality(0)).toBe(0);
+    for (let v = 0.001; v < 0.999; v += 0.001) {
+      expect(shownVitality(v)).toBeLessThan(v);
+      // It falls with vitality, and a thousandth of vitality never moves the look by more than a fiftieth.
+      expect(shownVitality(v + 0.001)).toBeGreaterThan(shownVitality(v));
+      expect(shownVitality(v + 0.001) - shownVitality(v)).toBeLessThan(0.02);
+    }
+  });
 
   it("never moves the trunk's base, and leaves vanish gradually", () => {
     const bp = (FLORA_PRESETS[3] as (typeof FLORA_PRESETS)[number]).blueprint;

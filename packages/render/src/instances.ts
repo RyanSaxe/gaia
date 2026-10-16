@@ -12,7 +12,7 @@
 
 import * as THREE from "three";
 import type { Part, Swatch } from "@gaia/schema";
-import { FLUTTERS, type Realized, detailAt, mergeParts } from "@gaia/realize";
+import { FLUTTERS, type Realized, detailAt, mergeParts, shownVitality } from "@gaia/realize";
 import type { SceneLight } from "./light.ts";
 import { DEPTH_FRAG, DEPTH_VERT, FOLIAGE, PLANT_FRAG, PLANT_VERT, type PlantView, geometryOf, letGoOnUpload, sprayColors } from "./plant.ts";
 
@@ -209,7 +209,7 @@ export function createPlantInstances(plant: Realized, light: SceneLight, spots: 
       shear.set(1, 0, 0, 0, gx, 1, gz, 0, 0, 0, 1, 0, 0, 0, 0, 1);
       turn.makeRotationY(s.yaw).scale(new THREE.Vector3(s.scale, s.scale, s.scale));
       matrix.makeTranslation(s.x, s.y, s.z).multiply(shear).multiply(turn);
-      matrix.elements[3] = s.vitality ?? 1;
+      matrix.elements[3] = shownVitality(s.vitality ?? 1);
       matrix.elements[7] = s.hue ?? 0;
       matrix.elements[11] = copySeed(s);
       source.set(matrix.elements, k * 16);
@@ -345,11 +345,11 @@ export function createPlantInstances(plant: Realized, light: SceneLight, spots: 
     },
     setVitality(v) {
       all = Math.min(1, Math.max(0, v));
-      for (let i = 0; i < count; i++) write(i, all);
+      for (let i = 0; i < count; i++) write(i, shownVitality(all));
       generation++;
     },
     setVitalityAt(index, v) {
-      write(index, Math.min(1, Math.max(0, v)));
+      write(index, shownVitality(v));
       generation++;
     },
     draw,
