@@ -26,7 +26,7 @@ health. Test a change here as well as in Gaia's own world.
   out from (`CodeFacts`), as `factsOf` derives them from a codebase's graph. It has 126 files and 32 entities in a
   970 m world of 12 lands and 45 areas.
 - `app/renderer/terrain/fixtures/proving-judged.json`: the choices Jev would
-  make about it, fixed so that every water, character and form (the trees
+  make about it, fixed so that every water and form (the trees
   among them) in `app/renderer/terrain/looks.ts` is used, every drift
   (`drift@1`'s forms) drifts through some area's air, and every land, trail,
   building and landmark of its own (`tools/proving-looks.ts`) is used, each
@@ -61,10 +61,10 @@ where you are:
 
 | Area | Land | What is there |
 | --- | --- | --- |
-| `crossings` | Brook valley, a brook, deep wood | A thriving wood, its trees dropping some leaves. A footbridge joins the cottage on the west bank to the house on the east. |
+| `crossings` | Brook valley, a brook | A thriving wood, its trees dropping some leaves. A footbridge joins the cottage on the west bank to the house on the east. |
 | `fords` | Meandering vale, a trickle | The trail from the croft on the jetty to the stone ring on the gravel crosses the trickle on a footbridge. |
-| `ruins` | Brook valley, a brook, deep wood | A whole area in ruin: dead trees, a ruined footbridge, stepping stones and cairn, and eight of the ten kinds of building and landmark in ruin. Its land is given many falling leaves, and its dead trees drop none. |
-| `mixed` | Clover hills, deep wood | Thriving files beside a failing grove (`failing-grove.ts`), and tired entities. |
+| `ruins` | Brook valley, a brook | A whole area in ruin: dead trees, a ruined footbridge, stepping stones and cairn, and eight of the ten kinds of building and landmark in ruin. Its land is given many falling leaves, and its dead trees drop none. |
+| `mixed` | Clover hills | Thriving files beside a failing grove (`failing-grove.ts`), and tired entities. |
 | `hollow`, `pondside` | Mossy basin and pond meadow | Ponds. The hollow's lantern tower is the hub most trails lead to, so they meet at cairns. Many fireflies come out over the hollow after dusk. |
 | `hills`, `terraces`, `moor`, `dunes` | Clover hills, silver terraces, heather moor, golden dunes | Each remaining land without water, so its landform shows. Petals fall from the hills' trees. |
 | `downs` | Broad downs | The thriving area, with `downs/tiny` (one 4-line file) and `downs/deep/…/bottom`, nested six deep from thriving to ruin. |

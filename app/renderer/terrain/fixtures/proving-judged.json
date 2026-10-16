@@ -426,20 +426,6 @@
   "mixed": "No water",
   "ruins": "A brook"
  },
- "characters": {
-  "": "Old meadow",
-  "crossings": "Deep wood",
-  "fords": "Groves and clearings",
-  "hollow": "Wet hollow",
-  "pondside": "Old meadow",
-  "hills": "Groves and clearings",
-  "terraces": "Rocky heath",
-  "moor": "Old meadow",
-  "dunes": "Rocky heath",
-  "downs": "Groves and clearings",
-  "mixed": "Deep wood",
-  "ruins": "Deep wood"
- },
  "things": {
   "": {
    "as": "landmark",

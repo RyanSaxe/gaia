@@ -29,7 +29,7 @@ import type { LayoutReply, LayoutRequest } from "./layout-worker.ts";
 import LayoutWorker from "./layout-worker.ts?worker";
 import proving from "./fixtures/proving.json";
 import provingJudged from "./fixtures/proving-judged.json";
-import { CHARACTERS, COMPOSED_FORMS, COMPOSING, FORMS } from "./looks.ts";
+import { COMPOSED_FORMS, COMPOSING, FORMS } from "./looks.ts";
 import { type BuildingOf, type Represented, representEntity, representFile } from "./represent.ts";
 import { composedName } from "./settlement.ts";
 import { AS_THING, type StandCode, type StandLot } from "./stand.ts";
@@ -338,12 +338,6 @@ export function codeLab({ facts, world, judges, summary, judged }: WorldDocument
       })(),
       symbols: (() => {
         const patchOf = new Map(world.patches.map((p, i) => [p.path, i]));
-        const areas = new Map(world.areas.map((a) => [a.path, a]));
-        // A tree grows as large as its area's ground lets trees grow: taller in a deep wood, smaller on a heath.
-        const statureOf = (file: string): number => {
-          const area = areas.get(world.patches[patchOf.get(file) ?? -1]?.area ?? "");
-          return CHARACTERS[world.regions[area?.region ?? 0]?.character ?? ""]?.stature ?? 1;
-        };
         const symbol = (s: { readonly x: number; readonly z: number; readonly form: string; readonly lines: number; readonly importance?: number; readonly vitality: number; readonly file?: string }, who: string): StandCode["symbols"][number] => {
           // A definition standing as a building or a landmark is one of the world's things, stood with them.
           if (COMPOSED_FORMS[s.form] !== undefined) return { x: s.x, z: s.z, rule: AS_THING, variant: 0, radius: 0, scale: 0, vitality: s.vitality };
@@ -351,8 +345,7 @@ export function codeLab({ facts, world, judges, summary, judged }: WorldDocument
           // Every thing stands as the form Jev chose for it; one with none is a fault, never a default form.
           if (form === undefined) throw new Error(`${who} stands as "${s.form}", which is no form Jev was offered.`);
           const patch = s.file === undefined ? undefined : patchOf.get(s.file);
-          const scale = symbolScale(s.lines, form.rule, s.importance) * (form.rule === "trees" && s.file !== undefined ? statureOf(s.file) : 1);
-          return { x: s.x, z: s.z, rule: form.rule, variant: form.preset, radius: form.rule === "flowers" ? 0.8 : 1, scale, vitality: s.vitality, ...(patch === undefined ? {} : { patch }) };
+          return { x: s.x, z: s.z, rule: form.rule, variant: form.preset, radius: form.rule === "flowers" ? 0.8 : 1, scale: symbolScale(s.lines, form.rule, s.importance), vitality: s.vitality, ...(patch === undefined ? {} : { patch }) };
         };
         return [...world.symbols.map((s) => symbol(s, s.id)), ...world.standing.map((s) => symbol(s, s.path || "The repository's root"))];
       })(),
