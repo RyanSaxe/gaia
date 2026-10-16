@@ -222,13 +222,13 @@ describe("structures", () => {
   }
 
   // Builds 80 whole buildings at their largest: about 3 s alone, longer when the suite runs in parallel.
-  it("keeps any building in the type space within 32k triangles and 11 draw calls, at its largest", () => {
+  it("keeps any building in the type space within 32k triangles and 12 draw calls, at its largest", () => {
     const r = rand(99);
     for (let i = 0; i < 80; i++) {
       const bp = blueprintOf(structure.id, randomSlots(structure, structureLib, () => r.next()));
       const built = realize(bp, structure, structureLib, { seed: i, facts });
       expect(triangleCount(built.parts), JSON.stringify(bp.slots)).toBeLessThan(32_000);
-      expect(mergeParts(built.parts).length).toBeLessThanOrEqual(11);
+      expect(mergeParts(built.parts).length).toBeLessThanOrEqual(12);
       // Merging keeps every triangle.
       expect(triangleCount(mergeParts(built.parts))).toBe(triangleCount(built.parts));
     }

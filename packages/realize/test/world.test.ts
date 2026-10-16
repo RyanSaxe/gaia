@@ -120,9 +120,9 @@ describe("season and decline", () => {
         }
       }
     }
-    // 6 seasons x 3 strengths x 2 ends x 9 families x 3 contrasts x 2 ends x 14 swatches (bark, leaf and bloom;
-    // stone, moss, stem and eye; and a building's wall, timber, roof, masonry, trim, glass and smoke).
-    expect(checked).toBe(27216);
+    // 6 seasons x 3 strengths x 2 ends x 9 families x 3 contrasts x 2 ends x 15 swatches (bark, leaf and bloom;
+    // stone, moss, stem and eye; and a building's wall, render, timber, roof, masonry, trim, glass and smoke).
+    expect(checked).toBe(29160);
   });
 
   it("never touches decline: every world declines toward the same colors", () => {

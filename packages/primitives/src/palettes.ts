@@ -55,22 +55,24 @@ const DECLINE = { bark: 0x6f6a64, leaf: 0x9a8a5c, bloom: 0x8c7a66, stone: 0xbcb5
 /**
  * A building's colors in each family: walls, timber, roof, the masonry of its
  * base and chimney, painted trim, the lamplight in its windows and its
- * chimney smoke. Each family's buildings belong with its plants.
+ * chimney smoke. A tower's render is its own color, a shade off the walls,
+ * so a timber turret's plaster stands out against a tower behind it. Each
+ * family's buildings belong with its plants.
  */
-const BUILDING: Record<PaletteFamily, { wall: number; timber: number; roof: number; masonry: number; trim: number; glass: number }> = {
-  "spring-meadow": { wall: 0xf1e4c8, timber: 0x6b4f3a, roof: 0x8f7f62, masonry: 0xa89d8a, trim: 0x7fa36a, glass: 0xffbf66 },
-  "deep-forest": { wall: 0xd9c9a8, timber: 0x3f2e22, roof: 0x8a7a4c, masonry: 0x878274, trim: 0x46704f, glass: 0xffb85c },
-  "teal-gold": { wall: 0xf2ede2, timber: 0x5b4a3a, roof: 0x4f8a86, masonry: 0xb0a48f, trim: 0xd9a443, glass: 0xffc46a },
-  "autumn-ember": { wall: 0xe9c690, timber: 0x4a3426, roof: 0xa65a42, masonry: 0x9c8f80, trim: 0x9e3d2c, glass: 0xffb055 },
-  "cherry-blossom": { wall: 0xf3ddd5, timber: 0x6e5d58, roof: 0x7d89a2, masonry: 0xb4aca6, trim: 0xc48896, glass: 0xffc87a },
-  "silver-birch": { wall: 0xf5f2e9, timber: 0x8f8a80, roof: 0xa3a59c, masonry: 0xc4c0b5, trim: 0x86a852, glass: 0xffd27a },
-  "desert-sage": { wall: 0xe2c59b, timber: 0x8a6a46, roof: 0xc4703f, masonry: 0xc2ab88, trim: 0x7f9a7a, glass: 0xffbe68 },
-  "lantern-dusk": { wall: 0x9eaab6, timber: 0x3d3442, roof: 0x35565c, masonry: 0x6f6d78, trim: 0xe0aa4a, glass: 0xffc65c },
-  "bluebell-wood": { wall: 0xe6e5df, timber: 0x5a4e48, roof: 0x6a7480, masonry: 0x9a9a9e, trim: 0x7078c0, glass: 0xffc470 },
+const BUILDING: Record<PaletteFamily, { wall: number; render: number; timber: number; roof: number; masonry: number; trim: number; glass: number }> = {
+  "spring-meadow": { wall: 0xf1e4c8, render: 0xd9c6a2, timber: 0x6b4f3a, roof: 0x8f7f62, masonry: 0xa89d8a, trim: 0x7fa36a, glass: 0xffbf66 },
+  "deep-forest": { wall: 0xd9c9a8, render: 0xbcaa86, timber: 0x3f2e22, roof: 0x8a7a4c, masonry: 0x878274, trim: 0x46704f, glass: 0xffb85c },
+  "teal-gold": { wall: 0xf2ede2, render: 0xdccdb0, timber: 0x5b4a3a, roof: 0x4f8a86, masonry: 0xb0a48f, trim: 0xd9a443, glass: 0xffc46a },
+  "autumn-ember": { wall: 0xe9c690, render: 0xd1a880, timber: 0x4a3426, roof: 0xa65a42, masonry: 0x9c8f80, trim: 0x9e3d2c, glass: 0xffb055 },
+  "cherry-blossom": { wall: 0xf3ddd5, render: 0xddbfb0, timber: 0x6e5d58, roof: 0x7d89a2, masonry: 0xb4aca6, trim: 0xc48896, glass: 0xffc87a },
+  "silver-birch": { wall: 0xf5f2e9, render: 0xdad3c4, timber: 0x8f8a80, roof: 0xa3a59c, masonry: 0xc4c0b5, trim: 0x86a852, glass: 0xffd27a },
+  "desert-sage": { wall: 0xe2c59b, render: 0xf0dfc4, timber: 0x8a6a46, roof: 0xc4703f, masonry: 0xc2ab88, trim: 0x7f9a7a, glass: 0xffbe68 },
+  "lantern-dusk": { wall: 0x9eaab6, render: 0x8d8b94, timber: 0x3d3442, roof: 0x35565c, masonry: 0x6f6d78, trim: 0xe0aa4a, glass: 0xffc65c },
+  "bluebell-wood": { wall: 0xe6e5df, render: 0xcac6c0, timber: 0x5a4e48, roof: 0x6a7480, masonry: 0x9a9a9e, trim: 0x7078c0, glass: 0xffc470 },
 };
 
 /** Buildings decline toward grime, moss and dark, empty windows. */
-const BUILDING_DECLINE = { wall: 0x8f8f7c, timber: 0x55504a, roof: 0x6c7050, masonry: 0x77766c, trim: 0x77706a, glass: 0x2c323b };
+const BUILDING_DECLINE = { wall: 0x8f8f7c, render: 0x8c897a, timber: 0x55504a, roof: 0x6c7050, masonry: 0x77766c, trim: 0x77706a, glass: 0x2c323b };
 const SMOKE = { healthy: 0xf2eee8, decline: 0x8a8580 };
 
 function buildingSwatches(family: PaletteFamily, contrast: number): Record<string, Palette["swatches"][string]> {
@@ -78,7 +80,7 @@ function buildingSwatches(family: PaletteFamily, contrast: number): Record<strin
   const out: Record<string, Palette["swatches"][string]> = {
     smoke: { healthy: hex(SMOKE.healthy), decline: hex(SMOKE.decline) },
   };
-  for (const name of ["wall", "timber", "roof", "masonry", "trim", "glass"] as const) {
+  for (const name of ["wall", "render", "timber", "roof", "masonry", "trim", "glass"] as const) {
     out[name] = { healthy: contrasted(hex(b[name]), contrast), decline: hex(BUILDING_DECLINE[name]) };
   }
   return out;
