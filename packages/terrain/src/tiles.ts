@@ -10,7 +10,7 @@ import { type Lattice, worldOf, worldOfZ } from "./lattice.ts";
 import { type PadEdit, applyPad } from "./site.ts";
 import { type DiscEdit, applyDisc } from "./landmarks.ts";
 import { TRAILS, type Way, type WayEdit, applyWay, trailField, trailPlaces } from "./paths.ts";
-import { SHORE_CAP, shoreField } from "./water.ts";
+import { shoreField, shoreMargin } from "./water.ts";
 import { TILE, type Terrain, type TerrainPlan, type TerrainTile, bakeTile, frameOf } from "./world.ts";
 
 /** What standing a world's things did to its land, in order: each building's pad, each landmark's footing, then each way's tread. */
@@ -61,7 +61,7 @@ export function standTile(plan: TerrainPlan, edits: LandEdits, ways: readonly Wa
  */
 export function cutTile(t: Terrain, ways: readonly Way[], x0: number, z0: number, size: number, stride = 1, placeReach: number = TRAILS.reach): StoodTile {
   const l = t.lattice;
-  const m = stride === 1 ? 0 : Math.ceil(SHORE_CAP / (l.spacing * stride)) + 1;
+  const m = stride === 1 ? 0 : shoreMargin(l.spacing * stride);
   const side = size + 2 * m;
   const clamp = (i: number): number => Math.max(0, Math.min(l.n - 1, i));
   const cols = Int32Array.from({ length: side }, (_, i) => clamp(x0 + (i - m) * stride));

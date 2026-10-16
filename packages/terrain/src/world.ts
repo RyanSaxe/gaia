@@ -14,7 +14,7 @@ import { resolveParams } from "@gaia/realize";
 import { RELIEF_BUDGET, type ReliefReport, measureRelief, withinBudget } from "./budget.ts";
 import { type LandSite, LAND_WARP, siteAt, warpPoint } from "./land.ts";
 import { type Lattice, type LatticeFrame, createLattice, worldOf, worldOfZ } from "./lattice.ts";
-import { BANK_REACH, SHORE_CAP, type SolvedPond, type SolvedStream, carvePond, carveStream, shoreField, solvePond, solveStream } from "./water.ts";
+import { BANK_REACH, type SolvedPond, type SolvedStream, carvePond, carveStream, shoreField, shoreMargin, solvePond, solveStream } from "./water.ts";
 import { type LandOutline, pastTheEdge, withinLand } from "./edge.ts";
 import { routeRivers, valleySurface } from "./rivers.ts";
 
@@ -92,7 +92,7 @@ export interface Terrain {
   readonly lattice: Lattice;
   /** Water surface height per lattice sample, DRY where there is none. */
   readonly waterLevel: Float32Array;
-  /** Meters from each lattice sample to the nearest water, up to SHORE_CAP. */
+  /** Meters from each lattice sample to the nearest water's edge, up to `SHORE_CAP`; thin water's banks stand back (`shoreField`). */
   readonly shore: Float32Array;
   /** Index of the region whose cover dominates each lattice sample. */
   readonly region: Uint8Array;
@@ -677,7 +677,7 @@ export function planTerrain(spec: WorldSpec, landforms: readonly Landform[]): Te
 }
 
 /** Land is baked in square tiles of `size` samples a side, each composed with a margin wide enough for its shore. */
-export const TILE = { size: 256, margin: Math.ceil(SHORE_CAP / TERRAIN.spacing) + 1 } as const;
+export const TILE = { size: 256, margin: shoreMargin(TERRAIN.spacing) } as const;
 
 /** One tile of a world's land, as the whole world's bake would hold it. */
 export interface TerrainTile {
@@ -706,7 +706,7 @@ export interface TerrainTile {
  */
 export function bakeTile(plan: TerrainPlan, x0: number, z0: number, size: number = TILE.size, stride = 1): TerrainTile {
   const world = frameOf(plan.spec);
-  const m = stride === 1 ? TILE.margin : Math.ceil(SHORE_CAP / (world.spacing * stride)) + 1;
+  const m = stride === 1 ? TILE.margin : shoreMargin(world.spacing * stride);
   const side = size + 2 * m;
   const frame: Lattice = { n: side, spacing: world.spacing * stride, origin: worldOf(world, x0 - m * stride), originZ: worldOf(world, z0 - m * stride), heights: new Float32Array(0) };
   const composed = composeRect(plan.spec, plan.landforms, frame, 0, side, 0, side);

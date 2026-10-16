@@ -291,16 +291,42 @@ export const SHORE_CAP = 12;
 /** The coarsest lattice spacing, meters, at which the water's edge is placed between samples: a coarser one is far views, where a line across a whole step would misplace it. */
 const EDGE_BETWEEN_AT_MOST = 2;
 
+/** Water that runs at least this deep within a sample of a point, meters, has its full banks: sand and the grass's edge start at its own edge. */
+export const BANKED = 0.3;
+/** How far back from water too shallow to be banked its banks stand at most, meters: past the grass's edge, so grass meets a thin trickle. */
+const SHALLOW_BANK = 3;
+
+/** How many samples past a tile's edge its shore reads: up to the cap, the wet neighbor a dry sample starts from, and that neighbor's own neighbors. */
+export const shoreMargin = (spacing: number): number => Math.ceil(SHORE_CAP / spacing) + 2;
+
 /**
  * Distance from each lattice sample to the water's edge, meters, capped at
- * SHORE_CAP: 0 in the water, growing about a meter per meter away. Sand banks
- * and the grass's edge both read it, so they always agree.
+ * SHORE_CAP: 0 in water banked full (`BANKED`), growing about a meter per
+ * meter away. Where a stream narrows to nothing at its spring or seep, its
+ * thin water stands up to `SHALLOW_BANK` back, so its banks narrow with it
+ * rather than ringing it with sand where it is barely there. Sand banks and
+ * the grass's edge both read it, so they always agree.
  */
 export function shoreField(l: Lattice, heights: Float32Array, level: Float32Array): Float32Array {
   const { n, spacing } = l;
   const d = new Float32Array(n * n);
   const wet = (i: number): boolean => (level[i] as number) > (heights[i] as number);
-  for (let i = 0; i < n * n; i++) d[i] = wet(i) ? 0 : SHORE_CAP;
+  for (let iz = 0; iz < n; iz++) {
+    for (let ix = 0; ix < n; ix++) {
+      const i = iz * n + ix;
+      if (!wet(i)) {
+        d[i] = SHORE_CAP;
+        continue;
+      }
+      // The deepest the water runs within a sample of it: shallow at every waterline, but deep a meter in but where
+      // the stream itself is thin.
+      let deepest = 0;
+      for (let jz = Math.max(0, iz - 1); jz <= Math.min(n - 1, iz + 1); jz++) {
+        for (let jx = Math.max(0, ix - 1); jx <= Math.min(n - 1, ix + 1); jx++) deepest = Math.max(deepest, (level[jz * n + jx] as number) - (heights[jz * n + jx] as number));
+      }
+      d[i] = SHALLOW_BANK * Math.max(0, 1 - deepest / BANKED);
+    }
+  }
   const diag = Math.SQRT2 * spacing;
   // A dry sample beside the water starts at its own distance to the edge, where the neighbor's water surface meets
   // the ground between them, rather than a whole step: so the edge is the water's, not the lattice's staircase.
@@ -319,7 +345,7 @@ export function shoreField(l: Lattice, heights: Float32Array, level: Float32Arra
           const above = (heights[i] as number) - (level[j] as number);
           const step = dx !== 0 && dz !== 0 ? diag : spacing;
           // Never quite 0: only water is.
-          d[i] = Math.min(d[i] as number, Math.max(0.01, (step * Math.max(0, above)) / (under + Math.max(0, above))));
+          d[i] = Math.min(d[i] as number, (d[j] as number) + Math.max(0.01, (step * Math.max(0, above)) / (under + Math.max(0, above))));
         }
       }
     }

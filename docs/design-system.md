@@ -382,7 +382,9 @@ blade's reach and runs a fifth of the reach, so a half-meter step changes a
 blade's width by at most 27%, and a frame of walking by at most 4%. Of the
 blades, a quarter reach only 14 m and a third only 30 m, the rest 60 m, so
 grass is densest close by. On steep risers and over the sand banks within
-one to three meters of water blades thin whole, chosen by their spot on the
+one to three meters of water blades thin whole (where a stream narrows to
+nothing at its spring or seep, its thin water's banks stand back, so grass
+meets it; `shoreField` in `@gaia/terrain`), chosen by their spot on the
 ground rather than by distance, so walking never changes which of them
 stand; the ground paints the banks from the same shore distance. The ground
 beneath is painted in the cover's own colors with short dabs in three
