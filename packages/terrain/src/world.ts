@@ -14,7 +14,7 @@ import { resolveParams } from "@gaia/realize";
 import { RELIEF_BUDGET, type ReliefReport, measureRelief, withinBudget } from "./budget.ts";
 import { type LandSite, LAND_WARP, siteAt, warpPoint } from "./land.ts";
 import { type Lattice, type LatticeFrame, createLattice, worldOf, worldOfZ } from "./lattice.ts";
-import { BANK_REACH, type SolvedPond, type SolvedStream, carvePond, carveStream, shoreField, shoreMargin, solvePond, solveStream } from "./water.ts";
+import { BANK_REACH, type SolvedPond, type SolvedStream, carvePond, carveStream, nearPond, shoreField, shoreMargin, solvePond, solveStream } from "./water.ts";
 import { type LandOutline, pastTheEdge, withinLand } from "./edge.ts";
 import { routeRivers, valleySurface } from "./rivers.ts";
 
@@ -94,6 +94,8 @@ export interface Terrain {
   readonly waterLevel: Float32Array;
   /** Meters from each lattice sample to the nearest water's edge, up to `SHORE_CAP`; thin water's banks stand back (`shoreField`). */
   readonly shore: Float32Array;
+  /** 1 where a sample's nearest water is a pond's, else 0 (`nearPond`). */
+  readonly nearPond: Uint8Array;
   /** Index of the region whose cover dominates each lattice sample. */
   readonly region: Uint8Array;
   /**
@@ -542,11 +544,13 @@ export function finishTerrain(spec: WorldSpec, landforms: readonly Landform[], p
   for (const s of streams) carveStream(final, heights, waterLevel, s);
   for (const p of ponds) carvePond(final, heights, waterLevel, p.pond, p.depth);
 
+  const shore = shoreField(final, heights, waterLevel);
   return {
     spec,
     lattice: final,
     waterLevel,
-    shore: shoreField(final, heights, waterLevel),
+    shore,
+    nearPond: nearPond(final, heights, waterLevel, ponds.map((p) => p.pond), shore),
     region,
     coverRegions,
     coverShares,
@@ -690,6 +694,7 @@ export interface TerrainTile {
   readonly heights: Float32Array;
   readonly waterLevel: Float32Array;
   readonly shore: Float32Array;
+  readonly nearPond: Uint8Array;
   readonly region: Uint8Array;
   readonly coverRegions: Uint8Array;
   readonly coverShares: Uint8Array;
@@ -716,6 +721,7 @@ export function bakeTile(plan: TerrainPlan, x0: number, z0: number, size: number
   for (const stream of plan.streams) carveStream(window, heights, waterLevel, stream);
   for (const { pond, depth } of plan.ponds) carvePond(window, heights, waterLevel, pond, depth);
   const shore = shoreField(window, heights, waterLevel);
+  const pond = nearPond(window, heights, waterLevel, plan.ponds.map((p) => p.pond), shore);
   /** The tile's own samples, `per` values each, without the margin. */
   const inner = <T extends Float32Array | Uint8Array>(a: T, per: number): T => {
     const out = a.slice(0, size * size * per) as T;
@@ -730,6 +736,7 @@ export function bakeTile(plan: TerrainPlan, x0: number, z0: number, size: number
     heights: inner(heights, 1),
     waterLevel: inner(waterLevel, 1),
     shore: inner(shore, 1),
+    nearPond: inner(pond, 1),
     region: inner(composed.region, 1),
     coverRegions: inner(composed.coverRegions, COVER_TAPS),
     coverShares: inner(composed.coverShares, COVER_TAPS),

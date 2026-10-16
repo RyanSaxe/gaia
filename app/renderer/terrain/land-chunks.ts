@@ -36,6 +36,8 @@ export interface Chunk {
   /** Height, water level, distance to the water and signed distance to a trail's edge per sample, four floats each: the ground texture's layout. */
   readonly ground: Float32Array;
   readonly region: Uint8Array;
+  /** 1 where a sample's nearest water is a pond's (`nearPond`), one byte each. */
+  readonly nearPond: Uint8Array;
   readonly coverRegions: Uint8Array;
   readonly coverShares: Uint8Array;
   /** Which ways each sample lies on and how far along them (`trailPlaces`), two per sample. */
@@ -65,7 +67,7 @@ export function emptyChunk(plan: TerrainPlan, k: number, cx: number, cz: number)
   for (let i = 0; i < count; i++) ground.set([plan.mean, DRY, SHORE_CAP, TRAILS.reach], i * 4);
   const shares = new Uint8Array(count * 4);
   for (let i = 0; i < count; i++) shares[i * 4] = 255;
-  return { k, cx, cz, ground, region: new Uint8Array(count), coverRegions: new Uint8Array(count * 4), coverShares: shares, trailPlaces: new Float32Array(count * 2).fill(-1) };
+  return { k, cx, cz, ground, region: new Uint8Array(count), nearPond: new Uint8Array(count), coverRegions: new Uint8Array(count * 4), coverShares: shares, trailPlaces: new Float32Array(count * 2).fill(-1) };
 }
 
 /** A stood tile of a chunk's samples, packed as the chunk carries them. */
@@ -78,7 +80,7 @@ function chunkOf(k: number, cx: number, cz: number, tile: StoodTile): Chunk {
     ground[i * 4 + 2] = tile.shore[i] as number;
     ground[i * 4 + 3] = tile.trailField[i] as number;
   }
-  return { k, cx, cz, ground, region: tile.region, coverRegions: tile.coverRegions, coverShares: tile.coverShares, trailPlaces: tile.trailPlaces };
+  return { k, cx, cz, ground, region: tile.region, nearPond: tile.nearPond, coverRegions: tile.coverRegions, coverShares: tile.coverShares, trailPlaces: tile.trailPlaces };
 }
 
 /** Bakes chunk (cx, cz) of level `k` from `source` alone: the stood land's samples there. */
@@ -98,4 +100,4 @@ export function cutChunk(whole: Terrain, source: LandSource, k: number, cx: numb
 }
 
 /** The buffers a chunk carries between threads. */
-export const chunkBuffers = (c: Chunk): ArrayBuffer[] => [c.ground.buffer, c.region.buffer, c.coverRegions.buffer, c.coverShares.buffer, c.trailPlaces.buffer] as ArrayBuffer[];
+export const chunkBuffers = (c: Chunk): ArrayBuffer[] => [c.ground.buffer, c.region.buffer, c.nearPond.buffer, c.coverRegions.buffer, c.coverShares.buffer, c.trailPlaces.buffer] as ArrayBuffer[];

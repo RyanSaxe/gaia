@@ -50,6 +50,7 @@ describe("the land's chunks", () => {
       const cut = cutChunk(terrain, source, k, cx, cz);
       expect(Array.from(cut.ground), `level ${k}, chunk (${cx}, ${cz})`).toEqual(Array.from(baked.ground));
       expect(Array.from(cut.region)).toEqual(Array.from(baked.region));
+      expect(Array.from(cut.nearPond)).toEqual(Array.from(baked.nearPond));
       expect(Array.from(cut.coverShares)).toEqual(Array.from(baked.coverShares));
       expect(Array.from(cut.trailPlaces)).toEqual(Array.from(baked.trailPlaces));
     }
