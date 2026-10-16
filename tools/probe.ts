@@ -201,7 +201,9 @@ async function probe() {
       results[job.world][call.key] = await run(call.js);
     }
   }
-  writeFileSync(out, JSON.stringify({ results, messages }));
+  // What drew the world, since a machine without a GPU draws WebGL in software, many times slower.
+  const gpu = await win.webContents.executeJavaScript('(() => { const gl = document.createElement("canvas").getContext("webgl2"); const info = gl?.getExtension("WEBGL_debug_renderer_info"); return info ? gl.getParameter(info.UNMASKED_RENDERER_WEBGL) : "an unknown renderer"; })()');
+  writeFileSync(out, JSON.stringify({ results, messages, gpu }));
 }
 app.whenReady().then(probe).then(
   () => app.quit(),
@@ -218,7 +220,7 @@ const electron = createRequire(resolve(repo, "app/package.json"))("electron") as
 const env: NodeJS.ProcessEnv = { ...process.env, GAIA_PROBE: JSON.stringify({ page, out, profile, jobs, width: WIDTH, height: HEIGHT, dpr }) };
 delete env.ELECTRON_RUN_AS_NODE;
 const run = spawnSync(electron, [main], { env, stdio: ["ignore", "inherit", "inherit"] });
-const probed = run.status === 0 ? (JSON.parse(readFileSync(out, "utf8")) as { results: Record<string, Record<string, unknown>>; messages: string[] }) : null;
+const probed = run.status === 0 ? (JSON.parse(readFileSync(out, "utf8")) as { results: Record<string, Record<string, unknown>>; messages: string[]; gpu: string }) : null;
 rmSync(scratch, { recursive: true, force: true });
 if (probed === null) throw new Error(`Electron exited with ${run.status ?? run.signal}`);
 const { results } = probed;
@@ -233,7 +235,7 @@ const line = (s: string): void => void process.stdout.write(`${s}\n`);
 
 const ratios = [...new Set(Object.values(results).map((calls) => (calls as { ratio?: number }).ratio).filter((r): r is number => r !== undefined))];
 const drewAt = ratios.length === 0 ? `${dpr}` : ratios.join(" and ");
-line(`Probe at ${WIDTH}x${HEIGHT} CSS pixels, device pixel ratio ${drewAt}${ratios.some((r) => r !== dpr) ? ` (asked for ${dpr}; Electron draws at the screen's own ratio, so compare runs only on the same screen)` : ""}; load average ${f(load)} before, ${f(loadavg()[0] ?? 0)} after.`);
+line(`Probe at ${WIDTH}x${HEIGHT} CSS pixels, device pixel ratio ${drewAt}${ratios.some((r) => r !== dpr) ? ` (asked for ${dpr}; Electron draws at the screen's own ratio, so compare runs only on the same screen)` : ""}; drawn by ${probed.gpu}; load average ${f(load)} before, ${f(loadavg()[0] ?? 0)} after.`);
 for (const [world, calls] of Object.entries(results)) {
   line(`\n${world}`);
   for (const [key, value] of Object.entries(calls)) {
