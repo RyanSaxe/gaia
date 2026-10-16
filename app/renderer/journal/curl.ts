@@ -12,6 +12,11 @@ import "./curl.css";
 /** How many strips a leaf is cut into, and how far its free edge trails its spine at the middle of a turn, degrees. */
 const STRIPS = 10;
 const BEND = 54;
+/**
+ * How far each strip's faces reach under the next strip, the page's pixels: two strips bent apart meet at a line both
+ * edges only half cover, which shows what lies behind as a pale seam, so each face runs on a little past it.
+ */
+const OVERLAP = 1.5;
 /** How dark the shadow a leaf casts is at its deepest, and how far it reaches across the page beneath, the book's pixels. */
 const SHADOW = { dark: 0.34, reach: 150 } as const;
 
@@ -59,13 +64,17 @@ export function createCurl(host: HTMLElement, front: HTMLElement | null, back: H
     strip.className = "jb-strip";
     strip.style.width = `${w}px`;
     strip.style.height = `${ph}px`;
+    // Every strip but the last runs on under the next; the last ends at the page's own edge.
+    const over = i < n - 1 ? OVERLAP : 0;
     for (const [page, side] of [[front, "front"], [back, "back"]] as const) {
       const face = document.createElement("div");
       face.className = `jb-strip-face ${side}`;
+      face.style.right = `${-over}px`;
       if (page !== null) {
-        // The back is seen mirrored once the leaf is over: strip i shows the back page's part counted from its far edge.
-        const x0 = side === "front" ? i * w : pw - (i + 1) * w;
-        const copy = stripOf(page, x0, w, pw);
+        // The back is seen mirrored once the leaf is over: strip i shows the back page's part counted from its far edge,
+        // and so runs on under the next strip on the page's nearer side.
+        const x0 = side === "front" ? i * w : pw - (i + 1) * w - over;
+        const copy = stripOf(page, x0, w + over, pw);
         copy.style.left = `${-x0}px`;
         copy.style.width = `${pw}px`;
         copy.style.right = "auto";
