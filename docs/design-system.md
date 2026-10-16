@@ -595,8 +595,11 @@ tiles and straw going a little before the boards and battens under them,
 a hipped end rotting from its eave as the slopes do, over hip and jack
 rafters of its own, and a caved lean-to's rafters and purlin going down with
 its slope. The frame never goes before the covering on it, since any piece
-of covering may last: rafters sag with the covering and stay, so no piece of
-it is ever left standing on nothing;
+of covering may last: rafters sag with the covering and stay. As it rots the
+covering settles onto its boards, thatch slumping and loose tiles lying
+down, from vitality 0.43 over the collapse until the whole roof lies thin
+on its rafters by 0.15, so no piece of it is ever left standing above the
+frame on nothing;
 walls the same way, plaster falling in patches that stop at the timbers and
 bare the rubble behind it, stones a block at a time from their tops with
 the mortar just after, and boards a length at a time, and a tower's render
@@ -612,7 +615,8 @@ the one below. A piece that goes shrinks back onto what holds it (a
 timber onto the post it is pegged to, a pane onto its sill, a board onto
 the frame it is nailed to), so nothing hangs in the air even partway
 through. What falls comes to rest: a toppled post lies with its head on
-the ground, a chimney lies along the ridge, a finial lies down its roof,
+the ground, a chimney breaks at the ridge and lies along the ridge beam, a
+finial lies down its roof,
 and a flower box pitches off the wall and is gone. Ivy grows only where
 there is wall to hold it, never past its top, and each leaf goes a little
 before the piece of wall behind it, so no ivy hangs over a hole.
