@@ -4,6 +4,8 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import ts from "typescript";
 import { afterAll, describe, expect, it } from "vitest";
+import type { CodeGraph } from "@gaia/schema";
+import graph from "../app/renderer/terrain/fixtures/showcase-graph.json";
 
 const repo = resolve(import.meta.dirname, "..");
 
@@ -23,6 +25,12 @@ describe("the showcase's code", () => {
       .filter((f) => f.endsWith(".ts"))
       .flatMap((f) => (ts.transpileModule(text(f), { reportDiagnostics: true, compilerOptions: { target: ts.ScriptTarget.ESNext } }).diagnostics ?? []).map((d) => `${f}: ${ts.flattenDiagnosticMessageText(d.messageText, " ")}`));
     expect(broken).toEqual([]);
+  });
+
+  it("is the code the showcase's world was judged and laid out from: run pnpm showcase --judge after changing it", () => {
+    const read = new Map((graph as unknown as CodeGraph).nodes.flatMap((n) => (n.kind === "file" ? [[n.path, n.measures.lines] as const] : [])));
+    expect(files).toEqual([...read.keys()].sort());
+    for (const f of files) expect(text(f).split("\n").length - 1, f).toBe(read.get(f));
   });
 
   it("is written as well as each part fares: the old renderer in ruin, the rest kept", () => {
