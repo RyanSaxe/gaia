@@ -42,8 +42,51 @@ the hub; `engine`, `build` or `compiler` for the build) for where they put
 the places the film walks: the meadow between the wood and the village, and
 the old renderer far from both.
 
+## Opening it
+
+- The lab: `?world=showcase` (`pnpm lab:html out.html`, then open
+  `out.html?world=showcase`).
+- The app: `GAIA_PROJECT=showcase pnpm dev`. The page lays folio out itself,
+  so no folder is opened; File > Open Folder leaves it.
+
+Either way the page lays folio out as it lays out Gaia's own snapshot: from
+the engine's judged graph of folio (`fixtures/showcase-graph.json`) and the
+answers Jev gave about it (`fixtures/showcase-jev.json`), asking Jev nothing.
+A request with no kept answer fails the page and names it. The journal reads
+folio's code from `showcase-code.txt`, which the page carries.
+
+## Jev's judgment
+
+```sh
+GAIA_JEV=live GAIA_DATA_DIR=dir pnpm showcase --judge jev --spend-up-to 0.3
+```
+
+writes folio's source into `dir/folio` and opens it as the app opens any
+folder (`openWorld`): the engine reads it, Jev's understanding pass judges
+how much each part matters and how well it is made, and Jev judges and
+composes its world. The answers are kept in the store under `dir`, so a later
+run asks only what changed. It then writes the three fixtures and prints the
+requests, tokens and dollars OpenRouter billed. `--judge local` asks the
+OpenRouter stand-in on this machine instead and sends nothing.
+
+On 2026-10-16 the first run sent 510 requests, 1,902,881 input tokens, for
+$0.080. Rewriting `v1/` asked 81 requests again, 261,874 tokens, for $0.011.
+
+What Jev made of folio:
+
+| Place | In Jev's world |
+| --- | --- |
+| `engine` | A brook valley holding 8 buildings and a landmark: the engine's package, `blocks.ts`, `render.ts`, `parseBlocks`, `readBlock`, `parseInline`, `readAt` and `build`, and `renderNode` as the landmark |
+| The root | A brook valley of old meadow, the package a building |
+| `schema` | `index.ts` and its `Page` type, each a building |
+| `extensions` | A mossy basin with a still pond; no buildings |
+| `site` | A brook valley; no buildings |
+| `v1` | Rolling hills with no water, its quality 0.44 to 0.65; `bld` a building at vitality 0.36 |
+| Plants and stones | 137 box mounds, 122 drifts of bluebells, 99 bench stones and 16 trees, of the 321 definitions and 96 files |
+
 ## Changing it
 
-Edit `showcase-code.txt`. `tools/showcase.test.ts` checks that every
+Edit `showcase-code.txt`, then judge it again: `tools/showcase.test.ts`
+fails until the snapshot is folio's current code. It also checks that every
 TypeScript file parses, that `v1/` stays in ruin and that `site`, `engine`
 and `schema` stay kept.

@@ -28,6 +28,7 @@ import { ROOM, journalPages } from "../journal/pages.ts";
 import { createPaintings, paintKept } from "../journal/paintings.ts";
 import { browserPaintings } from "../journal/painting-store.ts";
 import { createSourceText } from "../journal/source.ts";
+import { carriedSource } from "../terrain/code-world.ts";
 import type { WordsSource } from "../journal/words.ts";
 import { createFieldMap, drawLand } from "./field-map.ts";
 import { MARKER_LAYER, createMarkers } from "./markers.ts";
@@ -173,7 +174,7 @@ export function createImmersive(container: HTMLElement, world: WorldHandle): Imm
   // ---------- the traveller's journal, closed in the corner with the minimap on its cover ----------
 
   const service = worldService();
-  const source = createSourceText(service);
+  const source = createSourceText(service, carriedSource());
   /** What the journal's pages are read from, for the world standing now. */
   let words: WordsSource | null = null;
   /**

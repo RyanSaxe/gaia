@@ -5,7 +5,8 @@
 // shows: `GAIA_PROJECT`, one the person opens with File > Open Folder, or none,
 // and then the page offers the start, where a person picks a world they
 // opened before, a folder, or an address on GitHub. `GAIA_PROJECT=proving`
-// opens the proving ground instead, which needs no folder (`?world=proving`).
+// opens the proving ground instead, and `GAIA_PROJECT=showcase` the showcase,
+// which need no folder (`?world=proving`, `?world=showcase`).
 
 import { basename, join, resolve } from "node:path";
 import { BrowserWindow, Menu, MessageChannelMain, type MessagePortMain, app, dialog, ipcMain, nativeTheme, utilityProcess } from "electron";
@@ -22,9 +23,9 @@ void app.whenReady().then(() => {
   const repoRoot = resolve(app.getAppPath(), "..");
   // With no project named the page offers the start.
   const named = process.env.GAIA_PROJECT;
-  // The proving ground is laid out on the page from its own fixture, so no folder is opened for it.
-  let proving = named === "proving";
-  let root: string | null = named === undefined || proving ? null : resolve(named);
+  // The proving ground and the showcase are laid out on the page from their own fixtures, so no folder is opened for them.
+  let carried = named === "proving" || named === "showcase" ? named : null;
+  let root: string | null = named === undefined || carried !== null ? null : resolve(named);
   // The engine keeps each project's store (Jev's answers, a stand-in choice) and the app's own settings (the spend limit) with the app's own data.
   process.env.GAIA_DATA_DIR ??= app.getPath("userData");
   const service = utilityProcess.fork(join(here, "world-service.js"), [], { serviceName: "Gaia world service", stdio: "inherit" });
@@ -67,8 +68,8 @@ void app.whenReady().then(() => {
     const { port1, port2 } = new MessageChannelMain();
     toService({ type: "renderer.port", root }, [port1]);
     window.webContents.postMessage("gaia:world-port", null, [port2]);
-    const onProving = new URL(window.webContents.getURL()).searchParams.get("world") === "proving";
-    window.setTitle(onProving ? "Gaia · proving ground" : root === null ? "Gaia" : `Gaia · ${basename(root)}`);
+    const world = new URL(window.webContents.getURL()).searchParams.get("world");
+    window.setTitle(world === "proving" ? "Gaia · proving ground" : world === "showcase" ? "Gaia · showcase" : root === null ? "Gaia" : `Gaia · ${basename(root)}`);
   });
   window.on("page-title-updated", (event) => event.preventDefault());
 
@@ -101,10 +102,10 @@ void app.whenReady().then(() => {
   );
 
   const url = process.env.ELECTRON_RENDERER_URL;
-  /** Loads the page: on the proving ground the first time if `GAIA_PROJECT` named it, and on the folder `root` names from then on. */
+  /** Loads the page: on the proving ground or the showcase the first time if `GAIA_PROJECT` named it, and on the folder `root` names from then on. */
   function load(): Promise<void> {
-    const world = proving ? "proving" : undefined;
-    proving = false;
+    const world = carried ?? undefined;
+    carried = null;
     if (url === undefined) return window.loadFile(join(here, "../renderer/index.html"), world === undefined ? {} : { query: { world } });
     return window.loadURL(world === undefined ? url : `${url}?world=${world}`);
   }
