@@ -24,3 +24,5 @@ most".
 
 Pair session `engine-jev` (`d7b14fc0-f746-4268-a67b-ca7056c75499`), round
 17, on the polish page and in its thread (`82a64655`).
+
+Replaced in part: [65](65-the-journal-riffles-and-reads-like-a-book.md). There is no best, and only the appendix marks code, as key and weak. The meters and percentages stay.

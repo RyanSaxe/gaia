@@ -39,3 +39,5 @@ in one hand.
 Pair session `paper` (`18bde2d6-ccdd-49fd-a23a-d1663f7c6c3e`), rounds 2 to
 4 (the minimap boards and round 4's wild board), built in round 5. It
 refines the minimap of [decision 35](35-one-field-sheet.md).
+
+Replaced in part: the minimap lies at the lower left again, under the strap of the closed journal's cover (`docs/design-system.md`, "Knowing where you are"). The compass stays.

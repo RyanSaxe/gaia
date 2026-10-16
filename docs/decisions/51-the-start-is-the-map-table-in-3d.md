@@ -59,3 +59,5 @@ World polish round 5 replaced the cards' pictures of their field maps with paint
 World polish round 8 replaced the stone logo and the flat round mark with one mark: Gaia's name lettered across its own land, painted by the field map's own hand, and its icon, the land with the G (`app/renderer/brand/paint.ts`).
 
 The Mark session (round 3) replaced that mark with a G cut through a dark green page onto Gaia's own world, beside a lowercase "gaia" whose "ai" is green (`app/renderer/brand/paint.ts`); the sheet prints the name alone, and the icon stays outside the world.
+
+Replaced in part by the legacy sweep: the table gets a fixed light of its own in place of the "Meadow morning" world preset, which the sweep deletes.

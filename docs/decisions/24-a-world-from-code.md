@@ -28,3 +28,5 @@ run into are entities." No live Jev calls until the reviewer approves them.
 ## Settled
 
 Pair session `gaia-v3` (`f8d282bc-7712-4894-9255-dcf4699f92cb`), round 11.
+
+Replaced by: [53](53-the-code-graph.md), [57](57-quality-is-ten-concepts-and-vitality-is-quality.md), [60](60-one-way-of-understanding-code.md), [61](61-every-tree-is-a-definition-jev-chose.md) and [64](64-anything-can-stand-as-anything.md). The engine reads code into a graph (`project.graph`), Jev's understanding pass reads each file's source and its quality is each thing's vitality, each tree is a definition Jev chose, and anything can stand as anything. A world is always Jev's, and the legacy sweep deletes the stand-in judge.

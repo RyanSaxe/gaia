@@ -9,3 +9,5 @@ The reviewer chose "Jev picks a season" and in the same note asked for more: eve
 ## Settled
 
 Pair session `gaia-v3` (`f8d282bc-7712-4894-9255-dcf4699f92cb`), as it stood on round 4's Agreed page, the plan for slice 1.
+
+Replaced in part by the legacy sweep: it stops asking Jev for a season and for each land's native palette families, which the walked world never shows, so Jev answers the light first, then the sky and wind.

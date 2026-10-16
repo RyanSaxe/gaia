@@ -21,3 +21,5 @@ and that the world decide how many things stand rather than a fixed cap.
 Pair session `engine-jev` (`d7b14fc0-f746-4268-a67b-ca7056c75499`), round 6
 (the runner and questions pages), approved with Build it; the alignment
 *Answers arrive progressively, so the map keeps drawing*.
+
+Replaced in part: [60](60-one-way-of-understanding-code.md). The engine has two such methods, `understanding.plan` and `understanding.next` (`EngineMethods` in `packages/schema/src/engine.ts`), and `understand.deepen` and `understand.ask` are gone.

@@ -9,3 +9,5 @@ The relief budget and landform primitives on round 3's Terrain page drew no obje
 ## Settled
 
 Pair session `gaia-v3` (`f8d282bc-7712-4894-9255-dcf4699f92cb`), as it stood on round 4's Agreed page, the plan for slice 1.
+
+Replaced in part: a person sees the whole world on the field map ([35](35-one-field-sheet.md), [42](42-the-field-map-shows-health.md)) rather than by zooming out, and past the gentle rim the wild goes on forever ([45](45-the-wild-is-inked-as-a-survey.md)). The legacy sweep deletes the Terrain view's overview, the last view that zooms out.

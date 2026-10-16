@@ -9,3 +9,5 @@ The reviewer: "the right thing is to rebuild gaia 100% from scratch and only use
 ## Settled
 
 Pair session `gaia-v3` (`f8d282bc-7712-4894-9255-dcf4699f92cb`), as it stood on round 4's Agreed page, the plan for slice 1.
+
+Replaced by: [34](34-this-repository-becomes-gaia.md). This repository became Gaia's main repository, `RyanSaxe/gaia`, and the earlier codebase is archived.

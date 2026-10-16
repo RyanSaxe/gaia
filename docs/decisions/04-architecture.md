@@ -9,3 +9,5 @@ The four stages and the rules on round 1's Architecture page drew no objecting n
 ## Settled
 
 Pair session `gaia-v3` (`f8d282bc-7712-4894-9255-dcf4699f92cb`), as it stood on round 4's Agreed page, the plan for slice 1.
+
+Replaced by: the opening of `docs/architecture.md`, whose four stages start at the code graph of [53](53-the-code-graph.md) rather than the code model. The README opens with a picture of the world, not a diagram.

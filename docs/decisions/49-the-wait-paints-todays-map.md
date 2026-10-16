@@ -41,3 +41,5 @@ waiting screen) records it. It supersedes the wait of
 [decision 35](35-one-field-sheet.md), its land colors and its brush.
 
 The wait letters every area's name where the field map letters it, keeping names off the lots to come, since [decision 50](50-every-area-s-name-in-the-same-place.md).
+
+Replaced in part: each file's health is Jev's quality ([57](57-quality-is-ten-concepts-and-vitality-is-quality.md)), washed in once nothing more will be asked about the file, and a pencil hatches the ground Jev is reading, so the sheet keeps moving while Jev works (the wait in `docs/design-system.md`, "Signs and cards").

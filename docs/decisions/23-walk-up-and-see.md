@@ -26,3 +26,5 @@ and see what it represents."
 
 Pair session `gaia-v3` (`f8d282bc-7712-4894-9255-dcf4699f92cb`), round 9's
 review, built in round 10.
+
+Replaced by: the journal. In the walked world a tap on a thing opens the journal at its page ([65](65-the-journal-riffles-and-reads-like-a-book.md); `docs/design-system.md`, "Signs and cards"), and only the Terrain view still opens a card, which the legacy sweep deletes.

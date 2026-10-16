@@ -9,3 +9,5 @@ The reviewer: "the notion of vitality and stuff is critical."
 ## Settled
 
 Pair session `gaia-v3` (`f8d282bc-7712-4894-9255-dcf4699f92cb`), as it stood on round 4's Agreed page, the plan for slice 1.
+
+Replaced by: [57](57-quality-is-ten-concepts-and-vitality-is-quality.md). Vitality is Jev's quality alone, with no deterministic signals and no activity channel. It still reaches every component through the channels each primitive writes.

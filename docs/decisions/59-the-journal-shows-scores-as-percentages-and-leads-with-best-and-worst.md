@@ -26,3 +26,5 @@ in 56% of Gaia's definitions, and the reviewer: "yeah you can get rid of
 Pair session `engine-jev` (`d7b14fc0-f746-4268-a67b-ca7056c75499`), round 15, on the journal page ("Weighed
 by importance", "Two numbers", and its notes) and in the plan thread
 (`2f44ab9b`), and round 16, in the journal thread (`157ff26e`).
+
+Replaced in part: [65](65-the-journal-riffles-and-reads-like-a-book.md). A file's first page leads with its most important definition, by importance alone, and Jev's marks show only in the appendix. The percentages and the caption stay.

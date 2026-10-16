@@ -23,3 +23,5 @@ forward. So I am always walking forward."
 
 Pair session `mac-frames` (`52572c4b-5877-4c0a-a30e-85d6fe017447`), round
 13, in the thread on Agreed's progress (`8363d628`).
+
+Replaced by: the keys in the Terrain section of `docs/design-system.md` (round 22's walking thread). ↑ walks ahead, a tap of ← or → turns 8° and holding it turns on at 60° a second, and ↓ walks back still facing ahead.

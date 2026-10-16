@@ -18,3 +18,5 @@ address keeps it off the local network and the internet.
 
 Pair session `gaia-v3` (`f8d282bc-7712-4894-9255-dcf4699f92cb`), round 7, in
 the thread on the "How we know slice 2 is done" page.
+
+Replaced in part by the legacy sweep: it deletes the inspector that pulls up below 700 px, with the lab's other panels.

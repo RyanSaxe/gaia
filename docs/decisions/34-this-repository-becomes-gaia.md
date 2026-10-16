@@ -25,3 +25,5 @@ this one. With a gorgeous README with like a screenshot."
 Pair session `gaia-v3` (`f8d282bc-7712-4894-9255-dcf4699f92cb`), round 16.
 Moving the repository on GitHub is the coordinator's step, after the
 round's streams merge.
+
+Replaced in part: [51](51-the-start-is-the-map-table-in-3d.md). The start is the map table in 3D, and Gaia's mark is the one 51's notes describe, not the signpost lettering. The legacy sweep deletes the signpost start that was set aside.

@@ -9,3 +9,5 @@ The reviewer called the design "a really nice composable design". The tint chann
 ## Settled
 
 Pair session `gaia-v3` (`f8d282bc-7712-4894-9255-dcf4699f92cb`), as it stood on round 4's Agreed page, the plan for slice 1.
+
+Replaced in part: [61](61-every-tree-is-a-definition-jev-chose.md) and [64](64-anything-can-stand-as-anything.md). Jev chooses what each entity, file and definition stands as, not which kind represents a file, and the app's world document is the world service's `WorldDocument` (`app/world-service/protocol.ts`). The legacy sweep deletes `planRepresentation` and the first model in `packages/schema/src/document.ts`.

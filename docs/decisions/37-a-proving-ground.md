@@ -28,3 +28,5 @@ real area with super low vitality. I dont see any bridges. Stuff like that."
 ## Settled
 
 Pair session `gaia-v3` (`f8d282bc-7712-4894-9255-dcf4699f92cb`), round 17.
+
+Replaced in part: its vitality is the quality fixed for each file's planned health (`Judgments.quality`), since vitality is quality ([57](57-quality-is-ten-concepts-and-vitality-is-quality.md)), not a reading of its facts. Jev now composes buildings part by part, and its five hand-filled buildings stand no dovecote, well, bell, forge or granary. The legacy sweep moves the looks it uses into its own generator.

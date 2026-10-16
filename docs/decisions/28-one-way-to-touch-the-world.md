@@ -24,3 +24,5 @@ you are together.
 
 Pair session `gaia-v3` (`f8d282bc-7712-4894-9255-dcf4699f92cb`), round 11's
 review, built in round 12.
+
+Replaced in part: a tap on a thing opens the journal at its page, and nothing turns the view but the person (`docs/design-system.md`, "One way to touch the world"). The legacy sweep removes the slip's way back to the lab's debugging views.

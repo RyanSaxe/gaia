@@ -31,3 +31,5 @@ Pair session `engine-jev` (`d7b14fc0-f746-4268-a67b-ca7056c75499`), round
 23, on the rivers page and in its threads (`7f1a1b23`, `67b6a23b`).
 
 Round 7 of the world-polish session replaced the one cross-section along a whole course: each valley wall now changes in grade and width along its river, and the floor ends at the spring (`wallsAlong` in `packages/terrain/src/rivers.ts`).
+
+Replaced in part: Jev composes each land through the biome kind, choosing its relief and that relief's parameters, instead of picking a whole land (`docs/architecture.md`, "A world from code").

@@ -40,3 +40,5 @@ Pair session `paper` (`18bde2d6-ccdd-49fd-a23a-d1663f7c6c3e`), round 4 (A
 thing's page), carried into round 5's Agreed (Selection and the sketch
 page). It refines what a thing says in
 [decision 35](35-one-field-sheet.md), where the minimap grew into the page.
+
+Replaced by: the journal. A tap on a thing opens the journal at its page ([65](65-the-journal-riffles-and-reads-like-a-book.md); `docs/design-system.md`, "One way to touch the world"), not a sheet at the lower left, and `PageContent` and `describe` no longer exist.
