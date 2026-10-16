@@ -53,8 +53,10 @@ export async function setSpendLimit(engine: EngineClient, usd: number): Promise<
 /**
  * The graph the layout reads: directories, files and definitions, with the
  * understanding pass's importance and quality as each one's only judgment,
- * and the imports between files, but no blocks or other edges. Each
- * definition keeps what places and sizes it and nothing else.
+ * the imports between files, and the calls and references into each
+ * definition, which a definition's building or landmark rises with as a
+ * file's does with its importers; no blocks or other edges. Each definition
+ * keeps what places and sizes it and nothing else.
  */
 export function judgedGraph(graph: CodeGraph): CodeGraph {
   const stand = (n: GraphNode) => (n.judged?.value === undefined ? {} : { judged: { value: n.judged.value } });
@@ -86,7 +88,8 @@ export function judgedGraph(graph: CodeGraph): CodeGraph {
       }
     }
   });
-  return { ...graph, nodes, edges: graph.edges.filter((e) => e.kind === "imports"), pending: [] };
+  const read = (e: CodeGraph["edges"][number]): boolean => e.kind === "imports" || ((e.kind === "calls" || e.kind === "references") && e.to.startsWith("def:"));
+  return { ...graph, nodes, edges: graph.edges.filter(read), pending: [] };
 }
 
 /**

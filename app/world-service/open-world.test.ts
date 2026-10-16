@@ -3,7 +3,7 @@ import type { CodeGraph, CodeFacts, EngineClient, GraphNode, JevRequest } from "
 import { composeWorld, factsOf, judgeWorld, keptJev, landOf, standInJev } from "@gaia/world";
 import { LOOKS } from "../renderer/terrain/looks.ts";
 import proving from "../renderer/terrain/fixtures/proving.json";
-import { LIMIT_KEY, openWorld } from "./open-world.ts";
+import { LIMIT_KEY, judgedGraph, openWorld } from "./open-world.ts";
 import type { Opening } from "./protocol.ts";
 
 /** The proving ground as the engine's graph gives it, read from a commit: its directories and entities, files, definitions and imports. */
@@ -88,6 +88,22 @@ function engineWith(o: { status?: { live: boolean; key: boolean }; answer?: (r: 
 
 /** Every file named by the `health` messages shown, with its vitality, in order. */
 const named = (shown: readonly Opening[]): [string, number][] => shown.flatMap((o) => (o.stage === "health" ? Object.entries(o.vitality) : []));
+
+describe("the graph a world is laid out from", () => {
+  it("keeps the imports between files and the calls and references into each definition, which its building rises with, and no other edge", () => {
+    const [a, b] = graph.nodes.filter((n) => n.kind === "def");
+    if (a === undefined || b === undefined) throw new Error("The proving ground has no two definitions.");
+    const by = { by: "rule" as const };
+    const calls = { from: a.id, to: b.id, kind: "calls" as const, by };
+    const references = { from: "file:moor/guide.md", to: a.id, kind: "references" as const, by };
+    const others = [
+      { from: "dir:", to: "dir:moor", kind: "contains" as const, by },
+      { from: a.id, to: b.id, kind: "names" as const, by },
+      { from: b.id, to: "file:moor/guide.md", kind: "references" as const, by },
+    ];
+    expect(judgedGraph({ ...graph, edges: [...graph.edges, calls, references, ...others] }).edges).toEqual([...graph.edges, calls, references]);
+  });
+});
 
 describe("opening a world", () => {
   // The proving ground is laid out twice (its land, then the finished world): about a second on a busy machine.
