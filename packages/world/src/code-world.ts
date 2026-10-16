@@ -61,6 +61,11 @@ export interface Look {
   readonly needs?: readonly Need[];
   /** For a form: the kind Jev composes it from part by part once chosen. A form without one stands as its own blueprint. */
   readonly composes?: "building" | "landmark";
+  /**
+   * For a water: what choosing it settles in the land composed for its area, per field path (a valley's
+   * `relief.stream`, a basin's `relief.pond`), filled in there and never asked again.
+   */
+  readonly settles?: Readonly<Record<string, string | boolean>>;
 }
 
 export type LookSet = Readonly<Record<string, Look>>;
@@ -1165,7 +1170,16 @@ export async function composeWorld(facts: CodeFacts, looks: Looks, jev: JevClien
   const regions = Object.keys(judged.waters).sort();
   const regionSet = new Set(regions);
   // The lands come first: a building or a landmark takes its colors from among its land's native families.
-  const lands = composeThings(looks.compose, jev, regions.map((path): Composed => ({ path: `land:${path}`, as: "biome", state: areaState(graph, path, lookWords(looks.water, judged.waters[path])) })), concurrency);
+  // A land's stream or pond is its area's water, asked once (`Look.settles`).
+  const lands = composeThings(
+    looks.compose,
+    jev,
+    regions.map((path): Composed => {
+      const settles = looks.water[judged.waters[path] ?? ""]?.settles;
+      return { path: `land:${path}`, as: "biome", state: areaState(graph, path, lookWords(looks.water, judged.waters[path])), ...(settles === undefined ? {} : { fixed: settles }) };
+    }),
+    concurrency,
+  );
   /**
    * A building or a landmark to compose for a thing, with what the graph holds about it, once its land is composed:
    * its place has what its region's water holds, and its colors are among its land's native families.

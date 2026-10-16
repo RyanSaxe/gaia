@@ -163,6 +163,37 @@ describe("a world laid out from code", () => {
     }
   });
 
+  it("asks an area's water once: the stream or pond of the land composed for it is the water's, never asked again", async () => {
+    const looks: Looks = {
+      ...LOOKS,
+      water: {
+        Dry: { doc: "Option Dry.", suits: ["docs"], settles: { "relief.stream": "dry bed", "relief.pond": false } },
+        Pond: { doc: "Option Pond.", suits: ["source"], settles: { "relief.stream": "dry bed", "relief.pond": true } },
+        Brook: { doc: "Option Brook.", suits: ["package"], settles: { "relief.stream": "brook", "relief.pond": false } },
+      },
+    };
+    for (const [water, relief] of [["Brook", "valley@1"], ["Dry", "valley@1"], ["Pond", "basin@1"], ["Dry", "basin@1"]] as const) {
+      const asked: JevRequest[] = [];
+      const standIn = standInJev(looks);
+      // Every land is the landform under test, whatever the stand-in would pick.
+      const jev: JevClient = {
+        async ask(r) {
+          asked.push(r);
+          const response = await standIn.ask(r);
+          return r.questions["relief.use"] === undefined ? response : { ...response, answers: { ...response.answers, "relief.use": { type: "choice", choice: relief, probabilities: { [relief]: 1 }, confidence: 1 } } };
+        },
+      };
+      const judged = await judgeWorld(facts(), looks, jev);
+      const lands = (await composeWorld(facts(), looks, jev, { ...judged, waters: Object.fromEntries(Object.keys(judged.waters).map((path) => [path, water])) })).lands;
+      expect(asked.filter((r) => r.questions["relief.stream"] !== undefined || r.questions["relief.pond"] !== undefined), `${water} on ${relief}`).toEqual([]);
+      for (const land of Object.values(lands)) {
+        expect(land.slots.relief?.use).toBe(relief);
+        const settled = relief === "valley@1" ? { stream: looks.water[water]?.settles?.["relief.stream"] } : { pond: looks.water[water]?.settles?.["relief.pond"] };
+        expect(land.slots.relief?.params, `${water} on ${relief}`).toMatchObject(settled);
+      }
+    }
+  });
+
   it("colors every building and landmark among its land's native families: the one family a land names, and any when it names none", async () => {
     /** Composes the world with every land naming `natives` as its own families: what each thing is offered and wears. */
     const colored = async (natives: readonly string[]): Promise<{ offered: string[][]; worn: string[] }> => {

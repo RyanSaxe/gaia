@@ -233,7 +233,10 @@ raised to one, entity, file or definition, and each trail Jev would walk (the li
 its width, wear, edging, winding and crossing). A building or landmark waits
 for its land: its palette family is asked among the land's native families
 (`DetailOptions.narrow`), filled in unasked when the land names one, and
-asked among all nine when it names none. Each is composed its
+asked among all nine when it names none. A land's stream or pond is its
+area's water, asked once: the water's look settles a valley's
+`relief.stream` and a basin's `relief.pond` (`Look.settles`), which are
+filled in, never asked (`DetailOptions.fixed`). Each is composed its
 structure first and then each stage's details, one request a wave, each part
 asked in its own instruction from its kind's slot (`Slot.ask`). Each
 composing request carries what the new engine established about its part of
@@ -249,7 +252,8 @@ files, lines, languages, folders, history and most important definitions
 from the graph. The blueprints it makes are the world's (`Judgments.sky`,
 `Judgments.lands`, `CodeThing.blueprint`, `CodeTrail.route`), and the renderer
 realizes each from its own: the sky with `realizeSky`, each region's land
-with its water (`withWater`), each thing, and each trail's route, which the
+with its water (`withWater`, which turns a landform that cannot hold the
+water into the valley or basin that can), each thing, and each trail's route, which the
 stand walks as it was composed (`StandCode.trails`). The world's composing
 vocabulary is `Looks.compose` (`COMPOSING` in
 `app/renderer/terrain/looks.ts`). A world without a composed sky, a land
