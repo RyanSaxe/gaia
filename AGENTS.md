@@ -150,8 +150,9 @@ doc in the same commit, and say so in the commit message.
   answers whenever the graph changes, since they are keyed by each
   request's hash. The
   proving ground's `fixtures/proving.json` and `proving-judged.json` come
-  from `pnpm proving`; its test fails when a new option in `looks.ts` is
-  missing from them, or when its world loses a feature.
+  from `pnpm proving`; its test fails when a new option in `looks.ts` or a
+  look of its own in `tools/proving-looks.ts` is missing from them, or when
+  its world loses a feature.
 
 ## Adding a primitive
 

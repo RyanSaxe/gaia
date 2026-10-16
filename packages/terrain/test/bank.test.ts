@@ -1,14 +1,27 @@
 import { describe, expect, it } from "vitest";
-import { type BuildingPlan, type Built, Library } from "@gaia/schema";
+import { type BuildingPlan, type Built, Library, blueprintOf } from "@gaia/schema";
 import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, RELIEF_PRIMITIVES, STRUCTURE_PRIMITIVES } from "@gaia/primitives";
 import { structure } from "@gaia/kinds";
-import { STRUCTURE_PRESETS, realize } from "@gaia/realize";
+import { realize } from "@gaia/realize";
 import { BANK_SITE, bakeTerrain, extentOf, findBankSite, heightAt, levelPad, siteToWorld, turningExtent, waterDepthAt } from "@gaia/terrain";
 import { randomWorld } from "@gaia/terrain/testing";
 
 const lib = new Library([...RELIEF_PRIMITIVES, ...BIOME_PRIMITIVES]);
-// A watermill the size of the median building that has a wheel in Gaia's world and the proving ground, about 54 m².
-const built = realize(STRUCTURE_PRESETS.find((p) => p.name === "Watermill")!.blueprint, structure, new Library([...STRUCTURE_PRIMITIVES, ...FLORA_PRIMITIVES]), { seed: 7, facts: { size: 0.7, floors: 1 } });
+/** A stone house with a waterwheel. */
+const mill = blueprintOf("structure", {
+  footprint: {
+    use: "cottage-plan@1",
+    params: { massing: "a long range", shape: "long", size: "roomy", storeys: "two storeys", heights: "stepped", roof: "gabled", roofline: "steep", attachments: [], windows: "several", base: "on a stone plinth", character: "gently settled" },
+  },
+  body: { use: "fieldstone@1", params: { stones: "mixed sizes", gables: "boards" } },
+  roof: { use: "tiles@1", params: { covering: "shingles", overhang: "sheltering", chimney: "gable" } },
+  feature: { use: "waterwheel@1", params: { wheel: "a great wheel", drive: "overshot" } },
+  openings: { use: "casements@1", params: { panes: "six panes", shutters: true, door: "plank" } },
+  ornaments: { use: "cottage-garden@1", params: { extras: ["lantern", "woodpile"], walk: "flagstones" } },
+  palette: { use: "palette@1", params: { family: "teal-gold", contrast: "balanced" } },
+});
+// The mill the size of the median building that has a wheel in Gaia's world and the proving ground, about 54 m².
+const built = realize(mill, structure, new Library([...STRUCTURE_PRIMITIVES, ...FLORA_PRIMITIVES]), { seed: 7, facts: { size: 0.7, floors: 1 } });
 const plan = built.slots.get("footprint")?.output as BuildingPlan;
 const beside = extentOf(built.slots.get("feature")?.output as Built | undefined)!;
 const turning = turningExtent(built.slots.get("feature")?.output as Built | undefined)!;

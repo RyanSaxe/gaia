@@ -9,14 +9,16 @@
 // The plan holds, by construction:
 // - areas, files and entities at every health from thriving to ruin: whole
 //   areas in ruin, failing entities in thriving areas, mixed areas;
-// - every building and landmark the judge can choose, each thriving, tired
-//   and in ruin;
+// - each of its own buildings and landmarks (`proving-looks.ts`), each
+//   thriving, tired and in ruin;
 // - brooks, trickles and ponds, with dependencies drawn across them so trails
 //   cross on footbridges and stepping stones;
 // - large and tiny areas, deep nesting, and a hub many trails branch to;
-// - every land, water, character, tree, bush and flower option.
-// The generator checks the plan covers every option in `looks.ts`, and the
-// lab's test checks the baked world shows each feature.
+// - every water, character, tree, bush and flower option Jev is offered, and
+//   every land and trail of its own.
+// The generator checks the plan covers every option in `looks.ts` Jev is
+// asked to choose among and every look of its own, and the lab's test checks
+// the baked world shows each feature.
 //
 // `--code DIR` writes the proving ground's code instead: real source for
 // every planned file, as poor as its health (tools/proving-code.ts), and a
@@ -31,10 +33,18 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, relative, resolve } from "node:path";
 import { parseArgs } from "node:util";
-import type { CodeFacts, EntityFacts, EntityForm, FileFacts, SymbolFact } from "@gaia/schema";
+import type { Blueprint, CodeFacts, EntityFacts, EntityForm, FileFacts, SymbolFact } from "@gaia/schema";
 import { type Judgments, layoutWorld } from "@gaia/world";
-import { BUILDINGS, CHARACTERS, COMPOSED_FORMS, FORMS, LANDMARKS, LANDS, TRAILS, WATERS, presetBlueprint } from "../app/renderer/terrain/looks.ts";
+import { CHARACTERS, COMPOSED_FORMS, FORMS, WATERS } from "../app/renderer/terrain/looks.ts";
 import { provingCode } from "./proving-code.ts";
+import { BUILDINGS, LANDMARKS, LANDS, SKY, TRAILS } from "./proving-looks.ts";
+
+/** One of the proving ground's own blueprints, by the name its plan gives it. */
+function own(set: Readonly<Record<string, Blueprint>>, name: string): Blueprint {
+  const found = set[name];
+  if (found === undefined) throw new Error(`The proving ground has no look called ${name}.`);
+  return found;
+}
 
 /** How a file or an entity fares, from thriving to ruin; `decayed` is ruin with no tests at all, so it drags its entity down less. */
 type Health = "thriving" | "well" | "tired" | "failing" | "ruin" | "decayed";
@@ -407,13 +417,14 @@ for (const f of [...files].sort((a, b) => (a.path < b.path ? -1 : 1))) {
 // a building or a landmark, round their hand-filled looks, so the proving ground shows a thing of every size at every
 // level of the code.
 const stands: Record<string, string> = {};
-const raised: Record<string, { as: "building" | "landmark"; blueprint: ReturnType<typeof presetBlueprint> }> = {};
+const raised: Record<string, { as: "building" | "landmark"; blueprint: Blueprint }> = {};
 const small = Object.keys(FORMS);
 const sources = [...files].sort((a, b) => (a.path < b.path ? -1 : 1)).filter((f) => f.kind === "source" && f.symbols.length > 0);
 const raise = (id: string, as: "building" | "landmark", k: number): void => {
-  const looks = Object.keys(as === "building" ? BUILDINGS : LANDMARKS);
+  const set = as === "building" ? BUILDINGS : LANDMARKS;
+  const looks = Object.keys(set);
   stands[id] = Object.keys(COMPOSED_FORMS).find((key) => COMPOSED_FORMS[key]?.composes === as) as string;
-  raised[id] = { as, blueprint: presetBlueprint(as, looks[k % looks.length] as string) };
+  raised[id] = { as, blueprint: own(set, looks[k % looks.length] as string) };
 };
 [...files].sort((a, b) => (a.path < b.path ? -1 : 1)).forEach((f, k) => (stands[f.path] = small[k % small.length] as string));
 // Every seventh source file raises itself, and every eleventh raises its first definition; a building first, then a landmark.
@@ -428,13 +439,13 @@ sources.forEach((f, k) => {
 });
 // The proving ground is written by hand, not judged: its sky, lands, things and trails are the hand-filled looks its plan names.
 const judged: Judgments = {
-  sky: presetBlueprint("world", "Meadow morning"),
-  lands: Object.fromEntries(PLAN.flatMap((d) => (d.land === undefined ? [] : [[d.path, presetBlueprint("land", d.land[0])]]))),
+  sky: SKY,
+  lands: Object.fromEntries(PLAN.flatMap((d) => (d.land === undefined ? [] : [[d.path, own(LANDS, d.land[0])]]))),
   waters: Object.fromEntries(PLAN.flatMap((d) => (d.land === undefined ? [] : [[d.path, d.land[1]]]))),
   characters: Object.fromEntries(PLAN.flatMap((d) => (d.land === undefined ? [] : [[d.path, d.land[2]]]))),
-  things: { ...Object.fromEntries(PLAN.flatMap((d) => (d.entity === undefined ? [] : [[d.path, { as: d.entity.as, blueprint: presetBlueprint(d.entity.as, d.entity.look) }]]))), ...raised },
+  things: { ...Object.fromEntries(PLAN.flatMap((d) => (d.entity === undefined ? [] : [[d.path, { as: d.entity.as, blueprint: own(d.entity.as === "building" ? BUILDINGS : LANDMARKS, d.entity.look) }]]))), ...raised },
   stands,
-  trails: TRAIL_PLAN.map(([from, to, look, want]) => ({ from, to, want, route: presetBlueprint("trail", look) })),
+  trails: TRAIL_PLAN.map(([from, to, look, want]) => ({ from, to, want, route: own(TRAILS, look) })),
   forms,
   // Every file's quality by its health, and every entity's its own files' pooled by their lines.
   quality: Object.fromEntries([
@@ -448,7 +459,7 @@ const judged: Judgments = {
   ]),
 };
 
-// ---------- the plan covers every option, and lays out as planned ----------
+// ---------- the plan covers every option and every look of its own, and lays out as planned ----------
 
 const missing = (what: string, options: Readonly<Record<string, unknown>>, used: Iterable<string>): string[] => {
   const seen = new Set(used);

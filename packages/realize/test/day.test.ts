@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { type ChoiceField, type DaySpec, Library, type LightSpec, type Rgb, type ScaleField, blueprintOf, resolveScale, seedOf } from "@gaia/schema";
+import { type ChoiceField, type DaySpec, Library, type LightSpec, type Rgb, type ScaleField, blueprintOf, rand, resolveScale, seedOf } from "@gaia/schema";
 import { WORLD_PRIMITIVES, daylight } from "@gaia/primitives";
 import { world } from "@gaia/kinds";
-import { WORLD_PRESETS, lightAt, realizeSky } from "@gaia/realize";
+import { lightAt, realizeSky } from "@gaia/realize";
+import { randomSlots } from "@gaia/world/testing";
 
 type Erased = (p: unknown) => DaySpec;
 const build = daylight.build as unknown as Erased;
@@ -117,10 +118,11 @@ describe("daylight@1 nights", () => {
     // Reads the light 93,000 times: half a second alone, several when other work shares the machine.
   }, 20_000);
 
-  it("deepens every preset's sky to a blue night that is never black", () => {
+  it("deepens any sky Jev can compose to a blue night that is never black", () => {
     const lib = new Library(WORLD_PRIMITIVES);
-    for (const p of WORLD_PRESETS) {
-      const filled = { blueprint: blueprintOf("world", p.world.slots), kind: world };
+    const r = rand(seedOf("night skies"));
+    for (let i = 0; i < 24; i++) {
+      const filled = { blueprint: blueprintOf("world", randomSlots(world, lib, () => r.next())), kind: world };
       const noon = realizeSky(filled, lib, seedOf("test"), 12.5).sky;
       const night = realizeSky(filled, lib, seedOf("test"), 2).sky;
       expect(luminance(night.zenith)).toBeLessThan(luminance(noon.zenith) * 0.5);

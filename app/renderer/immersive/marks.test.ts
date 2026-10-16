@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { type BuildingPlan, Library, type Role, seedOf } from "@gaia/schema";
 import { PRIMITIVES } from "@gaia/primitives";
-import { LANDMARK_PRESETS, STRUCTURE_PRESETS, realize } from "@gaia/realize";
+import { realize } from "@gaia/realize";
+import { BUILDINGS, LANDMARKS } from "../../../tools/proving-looks.ts";
 import { structure } from "@gaia/kinds";
 import { type BuildingComposition, type Composition, INKS, MARK_REACH, type MarkBox, drawBuilding, drawLandmark } from "./marks.ts";
 
@@ -56,12 +57,13 @@ function recorder(): { ctx: CanvasRenderingContext2D; points: [number, number][]
 }
 
 const lib = new Library(PRIMITIVES);
-const buildings: [string, BuildingComposition][] = STRUCTURE_PRESETS.map((p) => {
-  const built = realize(p.blueprint, structure, lib, { seed: seedOf(p.name), facts: {} });
-  return [p.name, { blueprint: p.blueprint, palette: built.palette, plan: built.slots.get("footprint")?.output as BuildingPlan }];
+/** The proving ground's buildings and landmarks. */
+const buildings: [string, BuildingComposition][] = Object.entries(BUILDINGS).map(([name, blueprint]) => {
+  const built = realize(blueprint, structure, lib, { seed: seedOf(name), facts: {} });
+  return [name, { blueprint, palette: built.palette, plan: built.slots.get("footprint")?.output as BuildingPlan }];
 });
 // A landmark's mark reads only its words and colors, so an empty palette draws it in its own defaults.
-const landmarks: [string, Composition][] = LANDMARK_PRESETS.map((p) => [p.name, { blueprint: p.blueprint, palette: { swatches: {} } }]);
+const landmarks: [string, Composition][] = Object.entries(LANDMARKS).map(([name, blueprint]) => [name, { blueprint, palette: { swatches: {} } }]);
 
 describe("a mark composed from a blueprint", () => {
   const SCALE = 2;
@@ -71,7 +73,7 @@ describe("a mark composed from a blueprint", () => {
   // The ground the sheets keep names off round a mark's foot, before they know what will stand there.
   const reach: MarkBox = [200 - MARK_REACH.left * SCALE, 200 - MARK_REACH.up * SCALE, 200 + MARK_REACH.right * SCALE, 200 + MARK_REACH.down * SCALE];
 
-  it.each([1, 0.5, 0.05])("draws every building and landmark preset at vitality %s inside the box it reports and the reach every mark keeps to, which names keep off", (v) => {
+  it.each([1, 0.5, 0.05])("draws each of the proving ground's buildings and landmarks at vitality %s inside the box it reports and the reach every mark keeps to, which names keep off", (v) => {
     for (const [name, b] of buildings) {
       const { ctx, points } = recorder();
       const box = drawBuilding(ctx, 200, 200, SCALE, b, v, name);

@@ -11,7 +11,7 @@ import * as THREE from "three";
 import { type AtmosphereSpec, type Blueprint, type BuildingPlan, type GroundSpec, Library, type Palette, type SeasonSpec, seedOf } from "@gaia/schema";
 import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, LANDMARK_PRIMITIVES, NO_SHIFT, RELIEF_PRIMITIVES, ROCK_PRIMITIVES, WILDFLOWER_PRIMITIVES, WORLD_PRIMITIVES, hex } from "@gaia/primitives";
 import { biome, landmark as landmarkKind, world as worldKind } from "@gaia/kinds";
-import { CLEAR_AIR, FLORA_PRESETS, type Realized, type SkyLook, WORLD_PRESETS, mergeParts, mixAir, realizeRegion, realizeSky, regionAir, throughAir } from "@gaia/realize";
+import { CLEAR_AIR, FLORA_PRESETS, type Realized, type SkyLook, mergeParts, mixAir, realizeRegion, realizeSky, regionAir, throughAir } from "@gaia/realize";
 import {
   type FarCards,
   LANTERN,
@@ -47,6 +47,7 @@ import { type WayPiece, type Ways, createWays, crossingVitality, setTrailEnds } 
 import { reportStage } from "../telemetry.ts";
 import { takeWait } from "../wait/wait.ts";
 import { withStart } from "../start/start.ts";
+import { START_SKY } from "../start/table-scene.ts";
 import type { Represented } from "./represent.ts";
 import { type CodeWorld, type Judge, groundVitality, judgedThing } from "@gaia/world";
 import { type CodeLab, codeWorld } from "./code-world.ts";
@@ -70,9 +71,8 @@ const TEMPLATE = /* html */ `
 </main>
 `;
 
-/** The terrain lab's covers wear no season; its light and sky are the first named world's, at the shell's hour. */
+/** The terrain lab's covers wear no season. */
 const NO_SEASON: SeasonSpec = { swatches: {}, ground: NO_SHIFT, frost: 0, fall: hex(0xd9a04a) };
-const SKY_WORLD = WORLD_PRESETS[0] as (typeof WORLD_PRESETS)[number];
 
 /** The keys that move a person, W A S D, the arrows or vim's k h j l: ahead, left, right or back, and Shift. */
 const KEYS = {
@@ -403,8 +403,8 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   let settlement = createSettlement(light, []);
   /** The codebase's world shown: what every area, patch, building, landmark and trail stands for. */
   let code: CodeLab | null = null;
-  /** The world whose light, sky and air the lab shows: the codebase's own once it is shown. */
-  let skyWorld: { readonly name: string; readonly world: Blueprint } = SKY_WORLD;
+  /** The light, sky and wind the lab shows: the start's own until the codebase's world opens, then the one Jev composed for it. */
+  let skyWorld: Blueprint = START_SKY;
   let ways: Settled = { sites: [], network: NO_TRAILS };
   // Every entity's vitality by its path, live: buildings, landmarks, plants, stones and flowers
   // stand for entities, and each trail's wear follows the two it joins. Names repeat
@@ -577,8 +577,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   let skyLook: SkyLook | null = null;
   function applyHour(h: number): void {
     hour = h;
-    if (skyWorld === undefined) return;
-    const look = realizeSky({ blueprint: skyWorld.world, kind: worldKind }, worldLib, seedOf("terrain-lab/sky"), h);
+    const look = realizeSky({ blueprint: skyWorld, kind: worldKind }, worldLib, seedOf("terrain-lab/sky"), h);
     applyLight(light, look.light);
     // How windy the world is: every sway answers the one wind field this many times as hard.
     light.uWind.value = look.wind.strength;
@@ -1883,7 +1882,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     // The wait's pen draws each building and landmark at its laid-out place while the world bakes.
     veil.marks(laidOut(opened));
     knowEntities();
-    skyWorld = code?.sky ?? SKY_WORLD;
+    skyWorld = opened.sky;
     hour = Number.NaN;
     if (await rebake(opened.spec)) valleyView();
   }
@@ -3057,7 +3056,6 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
               name: code.world.name,
               judged: code.summary,
               size: code.world.size,
-              sky: code.sky?.name,
               regions: code.world.regions.map((r) => ({ area: r.area, land: r.biome?.slots.relief?.use ?? "", x: Math.round(r.x), z: Math.round(r.z) })),
               areas: code.world.areas.map((a) => ({ path: a.path, x: Math.round(a.x), z: Math.round(a.z), ground: Math.round(a.ground), depth: a.depth })),
               symbols: code.world.symbols.length,

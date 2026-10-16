@@ -36,8 +36,8 @@ const GROUPS: readonly Group[] = [
   { id: "flowers", kind: "wildflowers", presets: FLOWER_PRESETS, casts: false, clears: 0, far: FAR.bush },
 ];
 
-/** Each build of a group, one per preset as listed. */
-const asksOf = (g: Group): BuildAsk[] => g.presets.map((p, i) => ({ kind: g.kind, blueprint: p.blueprint, seed: seedOf(`terrain-lab/${g.id}/${i}`), facts: { scale: 1, age: 120 } }));
+/** Each build of a group, one per preset as listed, seeded by the preset's name, so a preset keeps its build whichever others come or go. */
+const asksOf = (g: Group): BuildAsk[] => g.presets.map((p) => ({ kind: g.kind, blueprint: p.blueprint, seed: seedOf(`terrain-lab/${g.id}/${p.name}`), facts: { scale: 1, age: 120 } }));
 
 /** Every build the understory makes, for making ahead. */
 export const understoryBuilds = (): BuildAsk[] => GROUPS.flatMap(asksOf);
