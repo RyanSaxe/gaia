@@ -86,12 +86,15 @@ export const COMPOSED_FORMS: Readonly<Record<string, Look & { readonly composes:
   Landmark: { ...sized("landmarks", "A great landmark seen and steered by from far away: grand and commanding.", "hub", "root", "repository"), composes: "landmark" },
 };
 
-/** Whether an area's land holds water, and the reason each choice gives. Running water is what a waterwheel needs. */
+/**
+ * Whether an area's land holds water, the reason each choice gives, and the stream or pond it settles in the land
+ * composed for the area, so the water is asked once. Running water is what a waterwheel needs.
+ */
 export const WATERS: Readonly<Record<string, Look>> = {
-  "No water": look("No water: the area's code stands on its own, reading little from its neighbors and passing little on.", "dry", "still", "docs", "config", "test"),
-  "A brook": { ...look("A brook runs through: the area's code flows, one file feeding the next along chains of its own imports.", "flow", "large"), holds: ["running water"] },
-  "A trickle": { ...look("A thin trickle: a little flows through, files passing a few things along to each other.", "flow", "small"), holds: ["running water"] },
-  "A still pond": look("A still pond gathers: much of the code leans on this area, and what it holds settles here.", "crossroads", "schema", "data"),
+  "No water": { ...look("No water: the area's code stands on its own, reading little from its neighbors and passing little on.", "dry", "still", "docs", "config", "test"), settles: { "relief.stream": "dry bed", "relief.pond": false } },
+  "A brook": { ...look("A brook runs through: the area's code flows, one file feeding the next along chains of its own imports.", "flow", "large"), holds: ["running water"], settles: { "relief.stream": "brook", "relief.pond": false } },
+  "A trickle": { ...look("A thin trickle: a little flows through, files passing a few things along to each other.", "flow", "small"), holds: ["running water"], settles: { "relief.stream": "trickle", "relief.pond": false } },
+  "A still pond": { ...look("A still pond gathers: much of the code leans on this area, and what it holds settles here.", "crossroads", "schema", "data"), settles: { "relief.stream": "dry bed", "relief.pond": true } },
 };
 
 /** What Jev composes the world from, part by part: the sky, each land, building, landmark and trail's kind, and every primitive that could fill a part. */

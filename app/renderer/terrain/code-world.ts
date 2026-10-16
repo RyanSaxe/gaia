@@ -29,7 +29,7 @@ import type { LayoutReply, LayoutRequest } from "./layout-worker.ts";
 import LayoutWorker from "./layout-worker.ts?worker";
 import proving from "./fixtures/proving.json";
 import provingJudged from "./fixtures/proving-judged.json";
-import { COMPOSED_FORMS, COMPOSING, FORMS } from "./looks.ts";
+import { COMPOSED_FORMS, COMPOSING, FORMS, WATERS } from "./looks.ts";
 import { type BuildingOf, type Represented, representEntity, representFile } from "./represent.ts";
 import { composedName } from "./settlement.ts";
 import { AS_THING, type StandCode, type StandLot } from "./stand.ts";
@@ -77,23 +77,18 @@ export interface CodeLab {
 }
 
 /**
- * A region's land with its water as Jev chose it: a brook or a trickle runs
- * along a valley's floor, a pond fills a basin, and an area with water whose
- * landform holds none takes the valley or the basin that can, in its own
- * cover. The water's words say why it is there.
+ * A region's land with its water as Jev chose it. A valley's stream and a basin's pond are the water itself, filled in
+ * when the land was composed (`WATERS`' `settles`); a land whose landform cannot hold its water takes the valley or the
+ * basin that can, in its own cover. The water's words say why it is there.
  */
 export function withWater(biome: Blueprint, water: string): Blueprint {
   const relief = biome.slots.relief;
-  const cover = biome.slots.cover;
   if (relief === undefined) return biome;
-  const stream = water === "A brook" ? "brook" : water === "A trickle" ? "trickle" : "dry bed";
-  const pond = water === "A still pond";
+  const settled = WATERS[water]?.settles ?? {};
+  const stream = settled["relief.stream"];
   const swap = (use: string, params: Record<string, string | boolean>): Blueprint => ({ ...biome, slots: { ...biome.slots, relief: { use: use as typeof relief.use, params } } });
-  if (relief.use === "valley@1") return pond ? swap("basin@1", { depth: "a shallow dip", size: "wide", rim: "melting into the land", pond: true }) : swap("valley@1", { ...relief.params, stream } as Record<string, string>);
-  if (relief.use === "basin@1") return stream !== "dry bed" ? swap("valley@1", { depth: "shallow", width: "broad", run: "east-west", fall: "gentle", meander: "winding", stream }) : swap("basin@1", { ...relief.params, pond } as Record<string, string | boolean>);
-  if (stream !== "dry bed") return swap("valley@1", { depth: "shallow", width: "broad", run: "north-south", fall: "gentle", meander: "winding", stream });
-  if (pond) return swap("basin@1", { depth: "a shallow dip", size: "wide", rim: "melting into the land", pond: true });
-  void cover;
+  if (settled["relief.pond"] === true && relief.use !== "basin@1") return swap("basin@1", { depth: "a shallow dip", size: "wide", rim: "melting into the land", pond: true });
+  if (typeof stream === "string" && stream !== "dry bed" && relief.use !== "valley@1") return swap("valley@1", { depth: "shallow", width: "broad", run: relief.use === "basin@1" ? "east-west" : "north-south", fall: "gentle", meander: "winding", stream });
   return biome;
 }
 
