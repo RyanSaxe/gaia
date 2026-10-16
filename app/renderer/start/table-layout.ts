@@ -21,7 +21,7 @@ export interface TableLayout {
   readonly table: { readonly w: number; readonly d: number };
   /** The sheet's width and depth, where its middle lies on the table, and how far it is turned (radians). */
   readonly sheet: { readonly w: number; readonly h: number; readonly x: number; readonly z: number; readonly turn: number };
-  /** Gaia's logo: its far left corner and width, on the sheet. */
+  /** Gaia's name: its far left corner and width, on the sheet. */
   readonly logo: { readonly x: number; readonly y: number; readonly w: number };
   /** "the worlds you have walked": where its first letter stands, and its size. */
   readonly say: { readonly x: number; readonly y: number; readonly size: number };
@@ -99,7 +99,7 @@ export function tableLayout(phone: boolean, n: number): TableLayout {
       phone,
       table: { w: 1.85, d: 1.4 },
       sheet,
-      logo: { x: 0.05, y: 0.04, w: 0.235 },
+      logo: { x: 0.05, y: 0.04, w: 0.16 },
       say: { x: 0.058, y: 0.178, size: 0.019 },
       cards,
       name,
@@ -116,7 +116,7 @@ export function tableLayout(phone: boolean, n: number): TableLayout {
     phone,
     table: { w: 1.35, d: 1.6 },
     sheet,
-    logo: { x: 0.04, y: 0.035, w: 0.3 },
+    logo: { x: 0.04, y: 0.035, w: 0.19 },
     say: { x: 0.048, y: 0.205, size: 0.025 },
     cards: cardsIn(n, [0.04, 0.23, sheet.w - 0.04, line.y - line.size * 3.6], 0.3, name),
     name,
