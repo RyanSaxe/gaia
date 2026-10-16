@@ -334,9 +334,10 @@ up to one and a half times shorter and steeper. Inside it the slope is as
 much longer, the floor up to 80% wider, and halfway up the slope a level
 terrace about a third of its width, as an older floor the river left. The slope
 inside a bend never reaches past three quarters of the bend's radius
-(`wallsAlong` and the `RIVERS` table in `@gaia/terrain`). The floor ends at
-the spring: the land rises behind the spring as a hollow, and the floor
-widens to its full width over the first 24 m.
+(`wallsAlong` and the `RIVERS` table in `@gaia/terrain`). The floor ends
+just past the spring's pool, about 4.5 m round the spring, so the pool lies
+on level ground; behind it the land rises as a hollow, and the floor widens
+to its full width over the first 24 m.
 
 A pick on the map sends the person along the trails rather than jumping
 them (`travelStep` in `@gaia/terrain`, every number in its `TRAVEL` table;
