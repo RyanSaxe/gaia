@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { Library, seedOf } from "@gaia/schema";
 import { FLORA_PRIMITIVES } from "@gaia/primitives";
 import { flora } from "@gaia/kinds";
-import { FLORA_PRESETS, type Realized, realize } from "@gaia/realize";
+import { FLORA_PRESETS, type Realized, realize, shownVitality } from "@gaia/realize";
 import { type FarForm, createFarCards, createSceneLight, farChoice } from "@gaia/render";
 import { FAR, GONE, type PassSize, TURN, createCopies, createFarForms, farness, goneAt } from "./woods.ts";
 
@@ -99,6 +99,25 @@ describe("a copy turning far", () => {
     const flatFocal = (px: number): number => px / (2 * crown.radius);
     expect(fullAt(camera, { smaller: 1, focal: flatFocal(FAR.swapPx * 0.93), ortho: true })).toBe(false);
     expect(fullAt(camera, { smaller: 1, focal: flatFocal(FAR.swapPx * 1.12), ortho: true })).toBe(true);
+  });
+
+  it("shows a vitality on its card as its full form shows it, whether the vitality came before its far form baked or after", () => {
+    const shownOnCard = (setter: "setVitality" | "setVitalityAt", before: boolean): number => {
+      const later = createFarForms();
+      const own = later.add(plant);
+      later.close();
+      const one = createCopies(plant, light, [{ x: 0, y: 0, z: 0, yaw: 0, scale: 1 }], own);
+      const set = (): void => (setter === "setVitality" ? one.setVitality(0.5) : one.setVitalityAt(0, 0.5));
+      if (before) set();
+      later.cards = createFarCards([form], light, [FAR.swapPx], TURN);
+      one.warm();
+      if (!before) set();
+      const mesh = one.cards?.children[0] as THREE.Mesh<THREE.InstancedBufferGeometry>;
+      return mesh.geometry.getAttribute("aMore").array[1] as number;
+    };
+    for (const setter of ["setVitality", "setVitalityAt"] as const) {
+      for (const before of [true, false]) expect(shownOnCard(setter, before), `${setter}, ${before ? "before" : "after"}`).toBeCloseTo(shownVitality(0.5), 6);
+    }
   });
 
   it("draws nothing once its crown is too small to see, even with no far form", () => {
