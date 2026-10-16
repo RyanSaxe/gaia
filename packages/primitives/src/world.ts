@@ -192,7 +192,7 @@ export const wind = primitive({
     // seed realizes every world's sky, so a seeded spread would only shift
     // every world's breeze alike.
     const strength = Object.values(WIND_LEVELS).reduce((a, b) => (Math.abs(b - p.strength) < Math.abs(a - p.strength) ? b : a));
-    return { strength, gust: Math.max(0, (strength - 0.6) * 0.9) };
+    return { strength };
   },
 });
 
