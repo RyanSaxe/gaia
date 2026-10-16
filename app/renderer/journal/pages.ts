@@ -35,7 +35,7 @@ export interface JournalPagesSource {
   map(area: string): HTMLElement | null;
   /** The painting of the thing a page is about, for its left-hand page, filling in as it is painted. */
   picture(of: string): HTMLElement;
-  /** The title page's frontispiece: the world around the repository's own building or landmark, painted wide. */
+  /** The title page's frontispiece: the repository's own building or landmark, close enough to read, under a wide sky. */
   frontispiece(): HTMLElement;
   /** Settles once the thing a page is about is painted, or the title page's frontispiece with "": a page is never seen before its painting. */
   painted(of: string): Promise<void>;

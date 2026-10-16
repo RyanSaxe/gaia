@@ -36,6 +36,8 @@ import { createMinimap } from "./minimap.ts";
 /** The lab's debugging views, which the slip leads back to. */
 /** The painter the journal's kept paintings were made by: a new one paints them all afresh. */
 const PAINTER = "painter-1";
+/** How the frontispiece is framed: a new framing paints the title page afresh, and nothing else. */
+const FRONTISPIECE = "wide-2";
 /** The things near the person painted while they stand still: within `reach` meters, the nearest `count`, looked at every `every` ms once they have moved `moved` meters. */
 const NEAR = { reach: 120, count: 24, every: 3000, moved: 15 } as const;
 /**
@@ -191,7 +193,7 @@ export function createImmersive(container: HTMLElement, world: WorldHandle, lab:
     if (code === null || words === null) return null;
     if (standsAs?.code !== code) standsAs = { code, as: new Map([...code.symbols.map((s) => [s.id, s.form] as const), ...code.things.map((t) => [t.path, t.blueprint.id] as const)]) };
     const of = words.journal.entry(entityOf(thing)) !== undefined ? entityOf(thing) : thing;
-    return [code.projectId, Math.round(code.size), PAINTER, wide ? `wide:${thing}` : thing, standsAs.as.get(thing) ?? "", words.vitality(of).toFixed(2)].join("|");
+    return [code.projectId, Math.round(code.size), PAINTER, wide ? `${FRONTISPIECE}:${thing}` : thing, standsAs.as.get(thing) ?? "", words.vitality(of).toFixed(2)].join("|");
   };
   /** Each thing's painting: the world's own view of it, made before its page is ever seen, and kept with the world. */
   const paintings = createPaintings({ view: world.view, store: browserPaintings(), keyOf, idle: () => !world.person().walking });

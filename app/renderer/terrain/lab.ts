@@ -275,7 +275,7 @@ export interface WorldHandle {
    * path or a definition's id), seen in the afternoon light from where it can
    * be seen, with a mask of where the thing itself shows. A file with no tree
    * of its own is seen through the largest of its definitions. `wide` sees it
-   * small in its land under a wide sky, for the title page. While the world is
+   * low under a wide sky, for the title page, with nothing in front of it. While the world is
    * changing it waits for it to settle. Null when nothing stands for it.
    */
   view(id: string, w: number, h: number, wide?: boolean): Promise<{ readonly color: Pixels; readonly mask: Pixels } | null>;
@@ -332,11 +332,18 @@ const LAND = { dry: 0.02, wade: 0.45, clear: 1.1, reach: 40, ring: 1.5, far: 160
  * light, so the book's paintings belong together; through a lens a little
  * longer than a person's eye; the thing filling about half the painting's
  * height; and the sun a little to one side behind the painter. Wide, as the
- * title page's frontispiece shows the world, the thing is small in its land
- * and the painter looks a little up, into the sky. A thing farther than
- * `near` meters from the person is painted on land held around it.
+ * title page's frontispiece shows the repository's own building or landmark,
+ * the thing fills `wideFill` of the painting's height from a person's eye,
+ * its middle `wideLow` of the height below the painting's middle, so the sky
+ * above it takes the world's name. A thing farther than `near` meters from
+ * the person is painted on land held around it.
  */
-const PAINTING = { hour: 15.5, fov: 46, fill: 0.5, wideFill: 0.16, wideLift: 0.12, sunSide: 0.6, near: 120 } as const;
+const PAINTING = { hour: 15.5, fov: 46, fill: 0.5, wideFill: 0.36, wideLow: 0.12, sunSide: 0.6, near: 120 } as const;
+/**
+ * A tree's crown in front of the frontispiece's thing, or this big a share of its own distance anywhere in the
+ * painting in front of it, would hide the thing or fill the picture's side, so the painter stands elsewhere.
+ */
+const CROWN_IN_VIEW = 0.08;
 /** A journal page's painting, wide to tall. */
 const PAINTED_ASPECT = 520 / 660;
 /** A file with nothing standing on it is painted as its patch of ground: how tall a view of it frames, and how far it reaches at most, meters. */
@@ -2281,46 +2288,76 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
    * the afternoon sun lights, turning around it until the spot is dry, clear
    * and inside the land, and nothing solid or no rise of the ground stands
    * between. A building is seen from where its sign is read, farther back.
+   * For the frontispiece (`frame`, the painting's half width as a tangent),
+   * the painter starts from the sunlit side whatever the thing, and nothing
+   * may stand between them and the thing's sides or top either, and no tree's crown in front of the thing or filling the
+   * picture's side, trying a little farther back where nothing near is clear.
    */
-  function viewpointOf(s: Seen, distance: number, eye: number, aim: number): { x: number; z: number } {
+  function viewpointOf(s: Seen, distance: number, eye: number, aim: number, frame?: number): { x: number; z: number } {
     const fixed = s.stand(s.x + 1, s.z);
     const other = s.stand(s.x - 1, s.z);
     const sun = light.uSunDirection.value;
-    const first = fixed.x === other.x && fixed.z === other.z ? Math.atan2(fixed.x - s.x, fixed.z - s.z) : Math.atan2(sun.x, sun.z) + PAINTING.sunSide;
+    // The frontispiece is always painted from the sunlit side, as the sign's side of a building may lie in its shadow.
+    const signed = frame === undefined && fixed.x === other.x && fixed.z === other.z;
+    const first = signed ? Math.atan2(fixed.x - s.x, fixed.z - s.z) : Math.atan2(sun.x, sun.z) + PAINTING.sunSide;
     const base = heightAt(terrain.lattice, s.x, s.z);
-    const clearFrom = (x: number, z: number): boolean => {
-      if (!withinLand(world, x, z, 2) || waterDepthAt(terrain, x, z) > LAND.wade || clearanceAt(solids, x, z) < 0.6) return false;
-      const from = heightAt(terrain.lattice, x, z) + eye;
-      const to = base + aim;
+    /** Whether the ground and nothing solid stand between the eye at (x, z) and the point `side` meters across the thing and `up` meters above its foot. */
+    const lineClear = (x: number, z: number, side: number, up: number): boolean => {
       const span = Math.hypot(s.x - x, s.z - z);
+      const [tx, tz] = [s.x + ((s.z - z) / span) * side, s.z - ((s.x - x) / span) * side];
+      const from = heightAt(terrain.lattice, x, z) + eye;
+      const to = base + up;
       for (let d = 1; d < span - s.reach - 0.5; d += 1) {
         const t = d / span;
-        const [px, pz] = [x + (s.x - x) * t, z + (s.z - z) * t];
+        const [px, pz] = [x + (tx - x) * t, z + (tz - z) * t];
         if (clearanceAt(solids, px, pz) < 0.25 || heightAt(terrain.lattice, px, pz) > from + (to - from) * t - 0.3) return false;
       }
       return true;
     };
-    for (let k = 0; k < 16; k++) {
-      // Turning a little farther each way in turn: 0, +22.5°, -22.5°, +45°, …
-      const turn = Math.ceil(k / 2) * (k % 2 === 1 ? 1 : -1) * (Math.PI / 8);
-      const x = s.x + Math.sin(first + turn) * distance;
-      const z = s.z + Math.cos(first + turn) * distance;
-      if (clearFrom(x, z)) return { x, z };
+    /** Whether a tree's crown stands in front of the thing, or fills the picture's side in front of it, seen from (x, z). */
+    const crownInView = (x: number, z: number, half: number): boolean => {
+      const span = Math.hypot(s.x - x, s.z - z);
+      const [ux, uz] = [(s.x - x) / span, (s.z - z) / span];
+      return trees.some((t) => {
+        const crown = (variants[t.variant] as TreeVariant).radius * t.scale;
+        const along = (t.x - x) * ux + (t.z - z) * uz;
+        if (along <= 0 || along + crown > span - s.reach * 0.5) return false;
+        const across = Math.abs((t.x - x) * uz - (t.z - z) * ux);
+        return across < s.reach + crown || (across - crown < along * half && crown > along * CROWN_IN_VIEW);
+      });
+    };
+    const clearFrom = (x: number, z: number): boolean => {
+      if (!withinLand(world, x, z, 2) || waterDepthAt(terrain, x, z) > LAND.wade || clearanceAt(solids, x, z) < 0.6) return false;
+      if (frame === undefined) return lineClear(x, z, 0, aim);
+      const across = s.reach * 0.8;
+      return lineClear(x, z, 0, s.height * 0.3) && lineClear(x, z, 0, s.height) && lineClear(x, z, -across, s.height * 0.5) && lineClear(x, z, across, s.height * 0.5) && !crownInView(x, z, frame);
+    };
+    for (const back of frame === undefined ? [1] : [1, 1.3, 1.7]) {
+      for (let k = 0; k < 16; k++) {
+        // Turning a little farther each way in turn: 0, +22.5°, -22.5°, +45°, …
+        const turn = Math.ceil(k / 2) * (k % 2 === 1 ? 1 : -1) * (Math.PI / 8);
+        const x = s.x + Math.sin(first + turn) * distance * back;
+        const z = s.z + Math.cos(first + turn) * distance * back;
+        if (clearFrom(x, z)) return { x, z };
+      }
     }
     return { x: s.x + Math.sin(first) * distance, z: s.z + Math.cos(first) * distance };
   }
-  /** `wide`: the thing small in the land around it under a wide sky, as a frontispiece shows the world. */
-  /** Where a painting of `s` is taken from, `aspect` wide to tall, and how high the eye is and where it aims; in the painting's light. */
+  /**
+   * Where a painting of `s` is taken from, `aspect` wide to tall, and how high the eye is and where it aims; in the
+   * painting's light. `wide`: the frontispiece, the thing in the lower part of the painting under the sky that takes
+   * the world's name.
+   */
   function framingOf(s: Seen, aspect: number, wide: boolean): { at: { x: number; z: number }; eye: number; aim: number } {
     const tan = Math.tan(THREE.MathUtils.degToRad(PAINTING.fov) / 2);
-    // Far enough back that the thing fills about half the painting's height and most of its width.
+    // Far enough back that the thing fills its share of the painting's height and most of its width.
     const fill = wide ? PAINTING.wideFill : PAINTING.fill;
-    const distance = Math.max(s.height / (2 * tan * fill), (2 * s.reach) / (2 * tan * aspect * (wide ? 0.35 : 0.7)), s.reach + 2.5);
-    // A small thing is seen as a painter would crouch to it; anything taller from a person's eye. Wide, the eye looks
-    // a little up, so the sky takes the painting's upper part.
+    const distance = Math.max(s.height / (2 * tan * fill), (2 * s.reach) / (2 * tan * aspect * 0.7), s.reach + 2.5);
+    // A small thing is seen as a painter would crouch to it; anything taller from a person's eye. Wide, the eye aims
+    // above the thing's middle, so the thing sits low and the sky takes the painting's upper part.
     const eye = wide ? EYE_HEIGHT : Math.min(EYE_HEIGHT, Math.max(0.9, s.height * 0.8 + 0.5));
-    const aim = wide ? EYE_HEIGHT + Math.tan(PAINTING.wideLift) * distance : s.height * 0.55;
-    return { at: viewpointOf(s, distance, eye, aim), eye, aim };
+    const aim = wide ? s.height * 0.5 + 2 * tan * PAINTING.wideLow * distance : s.height * 0.55;
+    return { at: viewpointOf(s, distance, eye, aim, wide ? tan * aspect : undefined), eye, aim };
   }
   function seenFromOf(id: string): Landing | null {
     const s = subjectOf(id);
