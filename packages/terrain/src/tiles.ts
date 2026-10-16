@@ -10,7 +10,7 @@ import { type Lattice, worldOf, worldOfZ } from "./lattice.ts";
 import { type PadEdit, applyPad } from "./site.ts";
 import { type DiscEdit, applyDisc } from "./landmarks.ts";
 import { TRAILS, type Way, type WayEdit, applyWay, trailField, trailPlaces } from "./paths.ts";
-import { shoreField, shoreMargin } from "./water.ts";
+import { nearPond, shoreField, shoreMargin } from "./water.ts";
 import { TILE, type Terrain, type TerrainPlan, type TerrainTile, bakeTile, frameOf } from "./world.ts";
 
 /** What standing a world's things did to its land, in order: each building's pad, each landmark's footing, then each way's tread. */
@@ -77,12 +77,15 @@ export function cutTile(t: Terrain, ways: readonly Way[], x0: number, z0: number
     }
   }
   // A coarser tile measures its shore between its own samples, as its bake does; a tile of every sample takes the world's own.
-  const coarseShore = stride === 1 ? null : shoreField({ n: side, spacing: l.spacing * stride, origin: 0, heights }, heights, waterLevel);
+  const coarse = { n: side, spacing: l.spacing * stride, origin: worldOf(l, x0 - m * stride), originZ: worldOfZ(l, z0 - m * stride), heights };
+  const coarseShore = stride === 1 ? null : shoreField(coarse, heights, waterLevel);
+  const coarsePond = coarseShore === null ? null : nearPond(coarse, heights, waterLevel, t.ponds, coarseShore);
   const count = size * size;
   const out = {
     heights: new Float32Array(count),
     waterLevel: new Float32Array(count),
     shore: new Float32Array(count),
+    nearPond: new Uint8Array(count),
     region: new Uint8Array(count),
     coverRegions: new Uint8Array(count * 4),
     coverShares: new Uint8Array(count * 4),
@@ -95,6 +98,7 @@ export function cutTile(t: Terrain, ways: readonly Way[], x0: number, z0: number
       out.heights[k] = heights[s] as number;
       out.waterLevel[k] = waterLevel[s] as number;
       out.shore[k] = coarseShore === null ? (t.shore[w] as number) : (coarseShore[s] as number);
+      out.nearPond[k] = coarsePond === null ? (t.nearPond[w] as number) : (coarsePond[s] as number);
       out.region[k] = t.region[w] as number;
       out.coverRegions.set(t.coverRegions.subarray(w * 4, w * 4 + 4), k * 4);
       out.coverShares.set(t.coverShares.subarray(w * 4, w * 4 + 4), k * 4);
