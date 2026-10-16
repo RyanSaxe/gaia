@@ -367,6 +367,8 @@ function turretCut(plan: BuildingPlan, m: Mass): (p: V3) => V3 {
 
 /** How wide a bundle of thatch is along the ridge, meters: the straw rots a bundle at a time. */
 const BUNDLE = 0.22;
+/** How wide a tile is round a turret's cone, meters: the cone rots a tile at a time. */
+const TILE = 0.27;
 
 function thatchSlab(roof: PartBuilder, plan: BuildingPlan, f: RoofFrame, p: Resolved<typeof thatchParams>, ruin: Ruin, seed: number, r: Rand, budget: number): { reach: number; a0: number; a1: number } {
   const k = slopeOf(f);
@@ -543,7 +545,7 @@ function tileSlab(roof: PartBuilder, plan: BuildingPlan, f: RoofFrame, p: Resolv
  * dark underside. It rots through from the eaves and over the collapse, and
  * its finial leans and falls.
  */
-function cone(roof: PartBuilder, wood: PartBuilder, plan: BuildingPlan, m: Mass, thick: number, overhang: number, courseH: number, ruin: Ruin, seed: number): void {
+function cone(roof: PartBuilder, wood: PartBuilder, plan: BuildingPlan, m: Mass, thick: number, overhang: number, courseH: number, covering: number, ruin: Ruin, seed: number): void {
   const top = wallTop(plan, m);
   const R = m.width / 2;
   const k = m.rise / R;
@@ -559,13 +561,16 @@ function cone(roof: PartBuilder, wood: PartBuilder, plan: BuildingPlan, m: Mass,
     rings.push({ rad: r0, lift: thick }, { rad: r1 + 0.02, lift: thick * 0.55 });
   }
   rings.push({ rad: 0, lift: thick * 0.55 });
-  const ch = (q: V3, rad: number): Channels => ({
+  // It rots a tile or bundle at a time round its courses, as a slope does, and its covering goes before its underside.
+  const piece = covering === GRAIN.straw ? BUNDLE : TILE;
+  const ch = (q: V3, rad: number, t: number, under: boolean): Channels => ({
     loss: 0,
     droop: 0.06 * (rad / reach) ** 2 + 0.2 * ruinAt(ruin, q),
     wither: clamp(0.5 + 0.3 * (rad / reach) + 0.15 * fbm3(q[0], q[1], q[2], seed, 2), 0, 1),
     glow: 0,
     pivot: apex,
-    rot: clamp(0.34 + 0.45 * (rad / reach) + 0.5 * ruinAt(ruin, q), 0, 1),
+    rot: clamp(0.34 + 0.45 * (rad / reach) + 0.5 * ruinAt(ruin, q), 0, 1) * (under ? 0.85 : 1),
+    grain: [(t * rad) / piece, (reach - rad) / courseH, covering],
   });
   const ring = (rad: number, lift: number, under: boolean): number[] =>
     Array.from({ length: sides + 1 }, (_, i) => {
@@ -575,7 +580,7 @@ function cone(roof: PartBuilder, wood: PartBuilder, plan: BuildingPlan, m: Mass,
       const q: V3 = [m.x + out[0] * rad, y(rad) + (under ? -0.02 : lift + bump), m.z + out[2] * rad];
       const n = under ? normalize([-out[0] * k, -1, -out[2] * k]) : normalize([out[0] * k, 1, out[2] * k]);
       const shade = under ? 0.25 : 0.46 + 0.1 * (1 - rad / reach) + 0.08 * fbm3(t * 3, rad * 2, 1, seed + 3, 1);
-      return roof.vertex(q, n, shade, ch(q, rad));
+      return roof.vertex(q, n, shade, ch(q, rad, t, under));
     });
   const stitch = (lo: number[], hi: number[], flip: boolean): void => {
     for (let i = 0; i < sides; i++) {
@@ -607,7 +612,7 @@ function cone(roof: PartBuilder, wood: PartBuilder, plan: BuildingPlan, m: Mass,
 /** Triangles all of a building's slopes share, by each mass's length, so a building of many masses keeps its budget. */
 const ROOF_TRIANGLES = 4300;
 
-function roofs(plan: BuildingPlan, r: Rand, slab: (roof: PartBuilder, f: RoofFrame, ruin: Ruin, seed: number, r: Rand, budget: number) => { reach: number; a0: number; a1: number }, coneStyle: { thick: number; overhang: number; course: number; cover: number }, wanted: "gable" | "ridge" | "none"): Built {
+function roofs(plan: BuildingPlan, r: Rand, slab: (roof: PartBuilder, f: RoofFrame, ruin: Ruin, seed: number, r: Rand, budget: number) => { reach: number; a0: number; a1: number }, coneStyle: { thick: number; overhang: number; course: number; cover: number; covering: number }, wanted: "gable" | "ridge" | "none"): Built {
   const seed = Math.floor(r.next() * 1e6);
   const roof = new PartBuilder("roof", "solid");
   const stack = new PartBuilder("masonry", "solid");
@@ -619,7 +624,7 @@ function roofs(plan: BuildingPlan, r: Rand, slab: (roof: PartBuilder, f: RoofFra
   plan.masses.forEach((m, i) => {
     const mr = r.fork(`mass${i}`);
     if (m.roof === "cone") {
-      cone(roof, bare, plan, m, coneStyle.thick, coneStyle.overhang, coneStyle.course, ruin, seed + i);
+      cone(roof, bare, plan, m, coneStyle.thick, coneStyle.overhang, coneStyle.course, coneStyle.covering, ruin, seed + i);
       return;
     }
     const f = roofFrame(plan, m);
@@ -635,11 +640,11 @@ function roofs(plan: BuildingPlan, r: Rand, slab: (roof: PartBuilder, f: RoofFra
 
 export function buildThatch(p: Resolved<typeof thatchParams>, ctx: BuildContext, plan: BuildingPlan): Built {
   const r = ctx.rand.fork("thatch");
-  return roofs(plan, r, (roof, f, ruin, seed, mr, budget) => thatchSlab(roof, plan, f, p, ruin, seed, mr, budget), { thick: p.thickness * 0.8, overhang: p.overhang * 0.7, course: 0.55, cover: p.thickness * 1.1 }, p.chimney);
+  return roofs(plan, r, (roof, f, ruin, seed, mr, budget) => thatchSlab(roof, plan, f, p, ruin, seed, mr, budget), { thick: p.thickness * 0.8, overhang: p.overhang * 0.7, course: 0.55, cover: p.thickness * 1.1, covering: GRAIN.straw }, p.chimney);
 }
 
 export function buildTiles(p: Resolved<typeof tilesParams>, ctx: BuildContext, plan: BuildingPlan): Built {
   const r = ctx.rand.fork("tiles");
   const course = p.covering === "slates" ? 0.26 : p.covering === "shingles" ? 0.3 : 0.34;
-  return roofs(plan, r, (roof, f, ruin, seed, mr, budget) => tileSlab(roof, plan, f, p, ruin, seed, mr, budget), { thick: 0.08, overhang: p.overhang * 0.6, course, cover: 0.19 }, p.chimney);
+  return roofs(plan, r, (roof, f, ruin, seed, mr, budget) => tileSlab(roof, plan, f, p, ruin, seed, mr, budget), { thick: 0.08, overhang: p.overhang * 0.6, course, cover: 0.19, covering: GRAIN.tiles }, p.chimney);
 }

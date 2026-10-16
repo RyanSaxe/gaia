@@ -4,11 +4,11 @@
 // crumbles from the top down. Each builds against the house's plan, on the
 // side the chimney leaves free, so the two never meet.
 
-import type { BuildContext, BuildingPlan, Built, Mass, Opening, Resolved, Vec3 } from "@gaia/schema";
+import { type BuildContext, type BuildingPlan, type Built, GRAIN, type Mass, type Opening, type Resolved, type Vec3 } from "@gaia/schema";
 import type { towerParams, waterwheelParams } from "../../structure.ts";
 import { type Channels, LOSS_BAND, PartBuilder, type V3, add, addScaled, clamp, fbm3, lossThreshold, normalize } from "../kit.ts";
 import { UP, beam, box, log, quad, tri } from "../blocks.ts";
-import { chimneyEnd, on, ruinAt, ruinOf, still, wallRot, wallTop, wallsOf } from "./frame.ts";
+import { PLASTER, chimneyEnd, on, ruinAt, ruinOf, still, wallGrain, wallRot, wallTop, wallsOf } from "./frame.ts";
 import { ivy, rubble, wallSheet } from "./ruin.ts";
 
 /** Builds into another builder, every vertex and pivot moved by `off`: a feature's own frame placed beside the house. */
@@ -198,13 +198,14 @@ export function buildTower(p: Resolved<typeof towerParams>, ctx: BuildContext, p
   const ruin = ruinOf(tower);
   const seed = Math.floor(r.next() * 1e6);
 
-  // Rendered walls in hand-laid cells, rotting through from the top as the archive fails.
+  // Rendered walls in hand-laid cells, rotting through from the top as the archive fails, a patch of render at a time.
   for (const w of faces) {
     const pivot = on(w, w.length / 2, H / 2);
+    const grain = wallGrain(w, GRAIN.plaster, PLASTER);
     wallSheet(render, tower, w, -tower.footing, 0.01, 0.7, (q) => {
       const n = fbm3(q[0] * 1.4, q[1] * 1.4, q[2] * 1.4, seed, 2);
       const up = clamp(q[1] / H, 0, 1);
-      return { shade: 0.56 + 0.1 * n, c: still(pivot, 0.55 + 0.2 * up, { rot: clamp(wallRot(tower, body, ruin, q) * 0.7 + 0.35 * up * up, 0, 1), tint: 0.02 * n }) };
+      return { shade: 0.56 + 0.1 * n, c: still(pivot, 0.55 + 0.2 * up, { rot: clamp(wallRot(tower, body, ruin, q) * 0.7 + 0.35 * up * up, 0, 1), tint: 0.02 * n, grain }) };
     });
   }
   // Quoins up every corner, and a string course at every storey; the top

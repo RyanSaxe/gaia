@@ -241,6 +241,22 @@ export function ruinAt(r: Ruin, p: Vec3): number {
   return t * t * (3 - 2 * t);
 }
 
+/** The pieces walls rot in, meters across and up: the shader's cells for GRAIN.plaster and GRAIN.stones. */
+export const PLASTER = [0.3, 0.3] as const;
+export const STONE = [0.4, 0.3] as const;
+
+/**
+ * Where a point on wall `w` lies in its courses, as a grain of `kind`
+ * (`GRAIN`), in pieces `size` meters across. Its pieces count down from the
+ * eaves, so each breaks away from its top edge and what is left of it rests
+ * on what is below.
+ */
+export const wallGrain = (w: Wall, kind: number, size: readonly [number, number]) => (p: Vec3): Vec3 => [
+  ((p[0] - w.o[0]) * w.u[0] + (p[2] - w.o[2]) * w.u[2]) / size[0],
+  -p[1] / size[1],
+  kind,
+];
+
 /**
  * How readily a wall rots through at a point: a little near the top
  * everywhere, a lot in the collapse, and most where both meet.

@@ -5,19 +5,15 @@
 // weak corner where timbers topple and rubble gathers; ivy climbs the
 // walls and weeds grow tall. Walls another mass hides are never built.
 
-import { type BuildContext, type BuildingPlan, type Built, GRAIN, type Rand, type Resolved, type Vec3 } from "@gaia/schema";
+import { type BuildContext, type BuildingPlan, type Built, GRAIN, type Rand, type Resolved } from "@gaia/schema";
 import type { fieldstoneParams, timberFrameParams } from "../../structure.ts";
 import { type Channels, LOSS_BAND, PartBuilder, type V3, addScaled, clamp, fbm3, lossThreshold, normalize } from "../kit.ts";
 import { UP, beam, box, pillow } from "../blocks.ts";
-import { type Ruin, type Wall, clearings, coarseness, massOf, on, peakOf, ruinAt, ruinOf, shownWalls, still, topAt, wallRot, wallTop, wobble } from "./frame.ts";
+import { PLASTER, type Ruin, STONE, type Wall, clearings, coarseness, massOf, on, peakOf, ruinAt, ruinOf, shownWalls, still, topAt, wallGrain, wallRot, wallTop, wobble } from "./frame.ts";
 import { ivy, rubble, wallSheet, weedSpots, weeds } from "./ruin.ts";
 
 /** Floor to floor, meters; a floor beam marks each storey on a timber frame. */
 const STOREY = 2.3;
-
-/** The pieces walls rot in, meters across and up: the shader's cells for GRAIN.plaster and GRAIN.stones. */
-const PLASTER = [0.3, 0.3] as const;
-const STONE = [0.4, 0.3] as const;
 
 // ---------- shared ----------
 
@@ -56,18 +52,6 @@ function floor(b: PartBuilder, plan: BuildingPlan, ruin: Ruin): void {
     box(b, c, [[1, 0, 0], UP, [0, 0, 1]], [m.width / 2 - 0.1, 0.04, m.depth / 2 - 0.1], 0.3, still(c, 0.6, { rot: clamp(0.3 + 0.6 * ruinAt(ruin, c), 0, 1) }), { bottom: true });
   });
 }
-
-/**
- * Where a point on wall `w` lies in its courses, as a grain of `kind`
- * (`GRAIN`), in pieces `size` meters across. Its pieces count down from the
- * eaves, so each breaks away from its top edge and what is left of it rests
- * on what is below.
- */
-const wallGrain = (w: Wall, kind: number, size: readonly [number, number]) => (p: Vec3): Vec3 => [
-  ((p[0] - w.o[0]) * w.u[0] + (p[2] - w.o[2]) * w.u[2]) / size[0],
-  -p[1] / size[1],
-  kind,
-];
 
 /**
  * The wall's core: a plain face of rubble set just behind the surface, which shows where plaster or stones have
