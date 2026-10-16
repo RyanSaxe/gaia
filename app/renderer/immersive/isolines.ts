@@ -122,7 +122,11 @@ export function chained(segments: readonly number[]): number[][] {
   return lines;
 }
 
-/** A polyline (x and y pairs) with the points that stray less than `tolerance` from the line through their neighbors dropped. */
+/**
+ * A polyline (x and y pairs) with the points that stray less than `tolerance` from the line through their neighbors
+ * dropped. A closed one, its last point its first, keeps its shape: measured from that point, its farthest one is kept
+ * first, and each half is eased as an open line.
+ */
 export function simplified(line: readonly number[], tolerance: number): number[] {
   const n = line.length / 2;
   if (n < 3) return [...line];
@@ -135,11 +139,13 @@ export function simplified(line: readonly number[], tolerance: number): number[]
     const ay = line[a * 2 + 1] as number;
     const dx = (line[b * 2] as number) - ax;
     const dy = (line[b * 2 + 1] as number) - ay;
-    const length = Math.hypot(dx, dy) || 1;
+    const length = Math.hypot(dx, dy);
     let worst = -1;
     let at = -1;
     for (let i = a + 1; i < b; i++) {
-      const d = Math.abs(((line[i * 2] as number) - ax) * dy - ((line[i * 2 + 1] as number) - ay) * dx) / length;
+      const [px, py] = [(line[i * 2] as number) - ax, (line[i * 2 + 1] as number) - ay];
+      // Between two ends at one point, as a closed line's are, a point strays by its distance from them.
+      const d = length > 1e-9 ? Math.abs(px * dy - py * dx) / length : Math.hypot(px, py);
       if (d > worst) [worst, at] = [d, i];
     }
     if (worst > tolerance) {
