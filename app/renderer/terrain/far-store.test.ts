@@ -1,6 +1,6 @@
 import { IDBFactory } from "fake-indexeddb";
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { contentHash, openFarStore } from "./far-store.ts";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { type FarStore, contentHash, openFarStore } from "./far-store.ts";
 
 const part = (lift: number) => ({
   swatch: "leaf",
@@ -28,10 +28,25 @@ describe("a far form's key", () => {
   });
 });
 
+const DAY = 24 * 60 * 60 * 1000;
+
 describe("the far-form store", () => {
   beforeEach(() => {
     vi.stubGlobal("indexedDB", new IDBFactory());
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(0);
   });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** A visit on `day`: the store opens, and the page reads `keys`. */
+  const visit = async (day: number, keys: readonly string[] = []): Promise<FarStore | null> => {
+    vi.setSystemTime(day * DAY);
+    const store = await openFarStore(2);
+    for (const key of keys) await store?.get(key);
+    return store;
+  };
 
   it("keeps each form between visits of one bake", async () => {
     await (await openFarStore(2))?.put("tree", { version: 2 });
@@ -57,5 +72,37 @@ describe("the far-form store", () => {
       indexedDB.open("gaia-far-forms", 1).onsuccess = resolve;
     });
     expect(await openFarStore(2)).toBeNull();
+  });
+
+  it("keeps the forms a world opened once a week draws, and deletes those no visit drew for 30 days before the last", async () => {
+    const store = await visit(0);
+    await store?.put("summer", { version: 2 });
+    await store?.put("autumn", { version: 2 });
+    // The autumn world is opened every week; the summer world never again.
+    for (let day = 7; day <= 70; day += 7) await visit(day, ["autumn"]);
+    const later = await visit(71);
+    expect(await later?.get("autumn")).toEqual({ version: 2 });
+    expect(await later?.get("summer")).toBeUndefined();
+  });
+
+  it("keeps every form for a person back after months away", async () => {
+    await (await visit(0))?.put("tree", { version: 2 });
+    await visit(1, ["tree"]);
+    expect(await (await visit(200))?.get("tree")).toEqual({ version: 2 });
+  });
+
+  it("starts over from a store made before forms recorded their use", async () => {
+    await new Promise((resolve) => {
+      const open = indexedDB.open("gaia-far-forms", 2);
+      open.onupgradeneeded = () => open.result.createObjectStore("forms").put({ version: 2 }, "tree");
+      open.onsuccess = () => {
+        open.result.close();
+        resolve(undefined);
+      };
+    });
+    const store = await visit(0);
+    expect(await store?.get("tree")).toBeUndefined();
+    await store?.put("tree", { version: 2 });
+    expect(await (await visit(1))?.get("tree")).toEqual({ version: 2 });
   });
 });
