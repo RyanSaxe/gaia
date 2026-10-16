@@ -1,24 +1,24 @@
-// The terrain lab's buildings: one for each sample entity, each the
-// hand-filled building Jev might choose for it, standing near the stream on
-// its own leveled pad, apart from the others. The bake thread finds the
+// The terrain lab's buildings: one for each entity, file or definition that
+// stands as a building, each the building Jev composed for it, standing on its
+// own leveled pad, apart from the others. The bake thread finds the
 // sites and levels the pads (`standWorld`); the settlement stands each
 // building on its site, every standing building of a tile drawn together as
 // one batch (`createPlantBatch`), a call per material for the whole tile. Their walls and features stop the walk and clear the
 // grass, and each has a signboard at the end of its walk naming what it
 // stands for.
 
-import { type Blueprint, type BuildingPlan, type Built, type EntityFacts, Library, type Palette, type ThingFacts, seedOf } from "@gaia/schema";
+import { type Blueprint, type BuildingPlan, type Built, Library, type Palette, seedOf } from "@gaia/schema";
 import { FLORA_PRIMITIVES, STRUCTURE_PRIMITIVES } from "@gaia/primitives";
 import { structure } from "@gaia/kinds";
 import { type PlantBatch, type SceneLight, createPlantBatch } from "@gaia/render";
 import { type BuildingSite, type Capsule, type Extent, extentOf, turningExtent } from "@gaia/terrain";
 import type * as THREE from "three";
 import { type BuildAsk, made } from "./made.ts";
-import { type Represented, SAMPLE_ENTITIES, type SampleEntity, representEntity } from "./samples.ts";
+import type { BuildingOf, Represented } from "./represent.ts";
 import { type StandBuilding, blockedBy, buildingClearings, needsBank, signOf, standOf } from "./stand.ts";
 
 export interface Building {
-  readonly entity: SampleEntity;
+  readonly entity: BuildingOf;
   readonly represented: Represented;
   /** The building's own name, such as "Watermill". */
   readonly kindName: string;
@@ -97,13 +97,8 @@ export function composedName(bp: Blueprint): string {
   return named(`${walls === undefined ? "" : `${wordsOf(walls)} `}house${feature === undefined ? "" : ` with a ${wordsOf(feature)}`}`);
 }
 
-const isEntity = (f: EntityFacts | ThingFacts): f is EntityFacts => "manifest" in f;
-const unrepresented = (f: ThingFacts): never => {
-  throw new Error(`The building for ${f.path} came with no page of its own.`);
-};
-
 /** Each building, for making ahead. */
-export const settlementBuilds = (entities: readonly SampleEntity[]): BuildAsk[] =>
+export const settlementBuilds = (entities: readonly BuildingOf[]): BuildAsk[] =>
   entities.map((entity) => ({
     kind: "structure",
     blueprint: entity.blueprint,
@@ -111,13 +106,13 @@ export const settlementBuilds = (entities: readonly SampleEntity[]): BuildAsk[] 
     facts: Object.fromEntries(Object.entries(structure.facts).map(([k, bind]) => [k, bind(entity.facts)])),
   }));
 
-/** A building for each entity, each the building Jev chose for it: the sample entities unless a world names its own. */
-export function createSettlement(light: SceneLight, entities: readonly SampleEntity[] = SAMPLE_ENTITIES): Settlement {
+/** A building for each thing a world stands as a building, each the building Jev composed for it. */
+export function createSettlement(light: SceneLight, entities: readonly BuildingOf[]): Settlement {
   const asks = settlementBuilds(entities);
   const buildings: Building[] = entities.map((entity, i) => {
     const ask = asks[i] as BuildAsk;
     const built = made(ask, lib);
-    const represented = entity.represented ?? (isEntity(entity.facts) ? representEntity(entity.facts, entity.vitality) : unrepresented(entity.facts));
+    const represented = entity.represented;
     // Its bounds as a plant's own meshes measure them: the height of its parts, and how far they reach from its middle.
     let height = 0.3;
     let radius = 1;

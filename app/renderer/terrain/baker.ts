@@ -27,8 +27,8 @@ export interface Baked {
    * ends it when it no longer needs it.
    */
   readonly whole: Worker;
-  /** In a world laid out from code, whose ground every part of the land is (`ownershipOf`); null in the sample world, whose ground is all the wild's. */
-  readonly ownership: Ownership | null;
+  /** Whose ground every part of the land is (`ownershipOf`). */
+  readonly ownership: Ownership;
 }
 
 export interface Baker {
@@ -71,8 +71,7 @@ export function createBaker(threads = Math.max(1, Math.min(4, (navigator.hardwar
     });
 
   /** Whose ground the land is, in bands of rows over `on` (every worker but the one finishing, if there are others). */
-  async function own(world: WorldSpec, stand: StandRequest, on: readonly Worker[]): Promise<Ownership | null> {
-    if (stand.code === undefined) return null;
+  async function own(world: WorldSpec, stand: StandRequest, on: readonly Worker[]): Promise<Ownership> {
     const sites = groundSites(stand.code);
     const land = frameOf(world);
     const grid = ownershipGrid((land.n - 1) * land.spacing);

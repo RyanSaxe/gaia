@@ -3,25 +3,43 @@ import { type BuildingPlan, type Built, Library, type RouteSpec, seedOf } from "
 import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, RELIEF_PRIMITIVES, ROUTE_PRIMITIVES, STRUCTURE_PRIMITIVES } from "@gaia/primitives";
 import { link, structure } from "@gaia/kinds";
 import { STRUCTURE_PRESETS, TRAIL_PRESETS, buildSlots, realize } from "@gaia/realize";
-import { SHORE_CAP, bakeTerrain, extentOf, heightAt, planTerrain, sampleWorld, siteToWorld, standTile, trailField, trailPlaces, yardsMeet } from "@gaia/terrain";
+import { SHORE_CAP, bakeTerrain, extentOf, heightAt, planTerrain, siteToWorld, standTile, trailField, trailPlaces, yardsMeet } from "@gaia/terrain";
+import { sampleWorld } from "@gaia/terrain/testing";
 import { type StandCode, type StandRequest, blockedBy, standWorld } from "./stand.ts";
 
 const lib = new Library([...RELIEF_PRIMITIVES, ...BIOME_PRIMITIVES]);
 const buildingLib = new Library([...STRUCTURE_PRIMITIVES, ...FLORA_PRIMITIVES]);
 const routeLib = new Library(ROUTE_PRIMITIVES);
 const styles = TRAIL_PRESETS.map((p) => buildSlots(p.blueprint, link, routeLib, { seed: 1, facts: {} }).get("route")?.output as RouteSpec);
+/** A world laid out from code, as small as the tests need: two buildings' lots, a landmark's, three files' patches and what stands on them. */
+const code: StandCode = {
+  lots: [{ id: "packages/a", x: -40, z: 30, radius: 9 }, { id: "packages/b", x: 50, z: -20, radius: 9 }],
+  landmarks: [{ landmark: 0, lot: { id: "packages/c", x: 10, z: 70, radius: 7 } }],
+  patches: [
+    { x: -60, z: -50, radius: 12 },
+    { x: 20, z: -70, radius: 8 },
+    { x: 0, z: 0, radius: 10 },
+  ],
+  cells: [],
+  symbols: [
+    { x: -55, z: -40, rule: "rocks", variant: 0, radius: 0.8, scale: 1, vitality: 0.3 },
+    { x: -64, z: -54, rule: "trees", variant: 0, radius: 1, scale: 1, vitality: 0.8 },
+    { x: 20, z: -70, rule: "trees", variant: 1, radius: 1, scale: 0.7, vitality: 0.4 },
+  ],
+  trails: [{ from: "packages/a", to: "packages/b", want: 0.9, style: styles[0]! }, { from: "packages/a", to: "packages/c", want: 0.8, style: styles[1]! }],
+};
 const request: StandRequest = {
   buildings: STRUCTURE_PRESETS.slice(0, 2).map((p, i) => ({
     name: `home-${i}`,
     plan: realize(p.blueprint, structure, buildingLib, { seed: seedOf(`home-${i}`), facts: { size: 1, floors: 1 } }).slots.get("footprint")?.output as BuildingPlan,
     beside: null,
   })),
-  landmarks: [{ name: "Lantern tower", base: 3 }, { name: "Great oak", base: 2 }],
-  trailStyles: [styles[0]!, styles[1]!, styles[2]!],
-  trees: { count: 30, seed: 9, presets: 2, builds: 2, bases: [0.5, 0.6, 0.7, 0.8], crowns: [3, 3, 4, 4] },
+  landmarks: [{ base: 3, tree: false }],
+  trees: { builds: 2, bases: [0.5, 0.6, 0.7, 0.8], crowns: [3, 3, 4, 4] },
+  code,
 };
 const bytes = (a: ArrayBufferView): Buffer => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
-/** The sample world, baked once; standing levels a bake's ground, so each test stands its own copy. */
+/** A test world, baked once; standing levels a bake's ground, so each test stands its own copy. */
 const baked = bakeTerrain(sampleWorld(), lib);
 const pristine = structuredClone(baked);
 const forTiles = structuredClone(baked);
@@ -57,23 +75,8 @@ describe("standing a world's things on a bake", () => {
 
   it("stands a world laid out from code: each building and landmark on its lot, each definition near its spot as a tree, a stone, a bush or flowers and nothing else besides, trails between lots", () => {
     const t = pristine;
-    const code: StandCode = {
-      lots: [{ id: "packages/a", x: -40, z: 30, radius: 9 }, { id: "packages/b", x: 50, z: -20, radius: 9 }],
-      landmarks: [{ landmark: 0, lot: { id: "packages/c", x: 10, z: 70, radius: 7 } }],
-      patches: [
-        { x: -60, z: -50, radius: 12 },
-        { x: 20, z: -70, radius: 8 },
-        { x: 0, z: 0, radius: 10 },
-      ],
-      cells: [],
-      symbols: [
-        { x: -55, z: -40, rule: "rocks", variant: 0, radius: 0.8, scale: 1, vitality: 0.3 },
-        { x: -64, z: -54, rule: "trees", variant: 0, radius: 1, scale: 1, vitality: 0.8 },
-        { x: 20, z: -70, rule: "trees", variant: 1, radius: 1, scale: 0.7, vitality: 0.4 },
-      ],
-      trails: [{ from: "packages/a", to: "packages/b", want: 0.9, style: styles[0]! }, { from: "packages/a", to: "packages/c", want: 0.8, style: styles[1]! }],
-    };
-    const stood = standWorld(t, { ...request, code });
+    const code = request.code;
+    const stood = standWorld(t, request);
     stood.sites.forEach((site, i) => {
       const lot = code.lots[i]!;
       expect(Math.hypot(site.x - lot.x, site.z - lot.z)).toBeLessThanOrEqual(lot.radius + 1e-6);

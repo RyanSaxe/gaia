@@ -3,7 +3,8 @@ import { type BuildingPlan, type Built, Library } from "@gaia/schema";
 import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, RELIEF_PRIMITIVES, STRUCTURE_PRIMITIVES } from "@gaia/primitives";
 import { structure } from "@gaia/kinds";
 import { STRUCTURE_PRESETS, realize } from "@gaia/realize";
-import { BANK_SITE, bakeTerrain, extentOf, findBankSite, heightAt, levelPad, randomWorld, siteToWorld, turningExtent, waterDepthAt } from "@gaia/terrain";
+import { BANK_SITE, bakeTerrain, extentOf, findBankSite, heightAt, levelPad, siteToWorld, turningExtent, waterDepthAt } from "@gaia/terrain";
+import { randomWorld } from "@gaia/terrain/testing";
 
 const lib = new Library([...RELIEF_PRIMITIVES, ...BIOME_PRIMITIVES]);
 // A watermill the size of the median building that has a wheel in Gaia's world and the proving ground, about 54 m².

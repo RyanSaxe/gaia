@@ -15,8 +15,6 @@ import {
   heightAt,
   levelTrails,
   planTrails,
-  randomWorld,
-  sampleWorld,
   slopeAt,
   trailField,
   trailPlaces,
@@ -26,6 +24,7 @@ import {
   wayWear,
   wayWearAt,
 } from "@gaia/terrain";
+import { randomWorld, sampleWorld } from "@gaia/terrain/testing";
 
 const lib = new Library([...RELIEF_PRIMITIVES, ...BIOME_PRIMITIVES]);
 const STYLE: RouteSpec = { width: 1.4, wear: 0.7, edging: "none", winding: 0.45, crossing: "footbridge" };

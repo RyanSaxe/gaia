@@ -30,7 +30,7 @@ import LayoutWorker from "./layout-worker.ts?worker";
 import proving from "./fixtures/proving.json";
 import provingJudged from "./fixtures/proving-judged.json";
 import { CHARACTERS, COMPOSED_FORMS, COMPOSING, FORMS, LANDS } from "./looks.ts";
-import { type Represented, type SampleEntity, representEntity, representFile } from "./samples.ts";
+import { type BuildingOf, type Represented, representEntity, representFile } from "./represent.ts";
 import { composedName } from "./settlement.ts";
 import { AS_THING, type StandCode, type StandLot } from "./stand.ts";
 
@@ -54,7 +54,7 @@ export interface CodeLab {
   readonly spec: WorldSpec;
   readonly files: ReadonlyMap<string, FileFacts>;
   /** What each building stands for (an entity, a file or a definition), with the building Jev composed, in the order the stand sites them. */
-  readonly buildings: readonly SampleEntity[];
+  readonly buildings: readonly BuildingOf[];
   /** What each landmark stands for: the landmark Jev composed for it, its numbers, what its page says and who judged it, in the order the stand sites them. */
   readonly landmarks: readonly { readonly path: string; readonly blueprint: Blueprint; readonly facts: ThingFacts; readonly vitality: number; readonly represented: Represented; readonly judged: Judged }[];
   /**

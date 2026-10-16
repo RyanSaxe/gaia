@@ -1,8 +1,8 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { type BuildingPlan, type Built, Library, type RouteSpec, seedOf } from "@gaia/schema";
-import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, LANDMARK_PRIMITIVES, RELIEF_PRIMITIVES, ROUTE_PRIMITIVES, STRUCTURE_PRIMITIVES } from "@gaia/primitives";
-import { landmark, link, structure } from "@gaia/kinds";
-import { FLORA_PRESETS, LANDMARK_PRESETS, STRUCTURE_PRESETS, TRAIL_PRESETS, buildSlots, realize } from "@gaia/realize";
+import { type BuildingPlan, type Built, Library, seedOf } from "@gaia/schema";
+import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, LANDMARK_PRIMITIVES, RELIEF_PRIMITIVES, STRUCTURE_PRIMITIVES } from "@gaia/primitives";
+import { landmark, structure } from "@gaia/kinds";
+import { FLORA_PRESETS, LANDMARK_PRESETS, STRUCTURE_PRESETS, realize } from "@gaia/realize";
 import { type BuildingSite, type Extent, TERRAIN, type Terrain, bakeTerrain, extentOf, groundLook, heightAt, siteToWorld, turningExtent, junctionVitality, ownershipOf, placeAt, vitalityAt, vitalityOver, waterDepthAt, wayVitalityAt } from "@gaia/terrain";
 import { type Judgments, areaVitality, groundVitality } from "@gaia/world";
 import { codeLab, provingWorld } from "./code-world.ts";
@@ -132,8 +132,6 @@ describe("the proving ground", () => {
       terrain = bakeTerrain(code.spec, new Library([...RELIEF_PRIMITIVES, ...BIOME_PRIMITIVES]));
       const buildingLib = new Library([...STRUCTURE_PRIMITIVES, ...FLORA_PRIMITIVES]);
       const landmarkLib = new Library([...LANDMARK_PRIMITIVES, ...FLORA_PRIMITIVES]);
-      const routeLib = new Library(ROUTE_PRIMITIVES);
-      const styles = TRAIL_PRESETS.map((p) => buildSlots(p.blueprint, link, routeLib, { seed: 1, facts: {} }).get("route")?.output as RouteSpec);
       requests = code.buildings.map((b) => {
           const facts = Object.fromEntries(Object.entries(structure.facts).map(([k, bind]) => [k, bind(b.facts)]));
           const built = realize(b.blueprint, structure, buildingLib, { seed: seedOf(`terrain-lab/${b.facts.path}`), facts });
@@ -143,11 +141,10 @@ describe("the proving ground", () => {
       stood = standWorld(terrain, {
         buildings: requests,
         landmarks: code.landmarks.map((l) => ({
-          name: l.path,
+          tree: l.blueprint.slots.form?.use === "great-tree@1",
           base: landmarkBase(realize(l.blueprint, landmark, landmarkLib, { seed: seedOf(`terrain-lab/landmark/${l.path}`), facts: Object.fromEntries(Object.entries(landmark.facts).map(([k, bind]) => [k, bind(l.facts)])) })),
         })),
-        trailStyles: [styles[0] as RouteSpec, styles[1] as RouteSpec, styles[2] as RouteSpec],
-        trees: { count: 0, seed: 9, presets: FLORA_PRESETS.length, builds: 1, bases: FLORA_PRESETS.map(() => 0.5), crowns: FLORA_PRESETS.map(() => 4) },
+        trees: { builds: 1, bases: FLORA_PRESETS.map(() => 0.5), crowns: FLORA_PRESETS.map(() => 4) },
         code: code.stand,
       });
     }, 120_000);

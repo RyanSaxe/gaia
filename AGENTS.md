@@ -50,8 +50,8 @@ You need Node 26, pnpm 10 and a stable Rust toolchain from rustup (put
 | `pnpm probe` | Measures both worlds in Electron: frame time, triangles by kind and pass, the walk test and smoothness |
 | `pnpm jev-world`, `pnpm compare-jev`, `pnpm print-world-requests` | Jev's kept answers for the snapshot, request designs compared, and every request printed |
 
-The lab page shows only the world. It takes `?hour=22`, `?world=sample`,
-`?world=proving`, `?judge=stand-in` and `?start` (the start's map table)
+The lab page shows only the world. It takes `?hour=22`, `?world=proving`,
+`?judge=stand-in` and `?start` (the start's map table)
 (`?judge=stand-in` is for development only: the page otherwise runs on Jev's kept answers alone, and a request with no kept answer fails it, naming the request). Scripts drive it through `window.__lab`:
 `open("immersive")`, `hour(h)`, `frames(n)`, `stats()`, and the world's
 hooks, such as `__lab.terrain.walk(x, z, yawDeg, pitchDeg)`,
@@ -84,7 +84,8 @@ reports:
   middle of the full form's dissolve under it, and the frame where the full
   form leaves must each change less than the wind does in half a second, or
   no 64-pixel block by a full level of 255;
-- a world with five times the trees (`pnpm probe stress`).
+- the proving ground with every tree that stands for code standing five
+  times (`pnpm probe stress`).
 
 Its window opens without taking focus; leave it uncovered while it runs.
 
