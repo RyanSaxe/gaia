@@ -8,6 +8,7 @@
 // picture, and under it what Jev says of the thing as its caption. Nothing
 // fades.
 
+import { type Measure, canvasMeasure, nameBreaks, nameFont, nameSpacing } from "../immersive/map-names.ts";
 import { TRAVELLER_SVG } from "../immersive/map-styles.ts";
 import type { CaptionFact } from "./caption.ts";
 import { type Piece, highlight } from "./highlight.ts";
@@ -35,6 +36,12 @@ export function healthColor(v: number): string {
 /** A page's size in its own pixels, as the book lays it. */
 const PAGE_W = 520;
 const PAGE_H = 660;
+/**
+ * The world's name on the title page, lettered as the map letters a place: at most `size` px, its lines no wider than
+ * the page less its 44 px margins (journal.css), smaller for a name that would take more than `lines` lines or has a
+ * run too long for one line, but never below `least` px; a run longer still breaks where it must.
+ */
+const TITLE = { size: 40, least: 22, width: PAGE_W - 88, lines: 3 } as const;
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, text?: string): HTMLElementTagNameMap[K] => {
   const e = document.createElement(tag);
@@ -461,9 +468,25 @@ function foldOf(says: string, tap?: () => void, where?: "after"): HTMLElement {
 export function renderTitle(name: string, folio: string, painting: HTMLElement): HTMLElement {
   const page = el("div", "jp jp-picture jp-title-page");
   const lettered = el("div", "jp-title-lettering");
-  lettered.append(el("div", "jp-book-name", name));
+  // Broken where the name breaks (`nameBreaks`), in lines of about one length (journal.css).
+  const lettering = el("div", "jp-book-name");
+  lettering.append(...nameBreaks(name).flatMap((piece, k) => (k === 0 ? [piece] : [document.createElement("wbr"), piece])));
+  measure ??= canvasMeasure(document.createElement("canvas").getContext("2d") as CanvasRenderingContext2D);
+  lettering.style.fontSize = `${titleSize(name, measure).toFixed(1)}px`;
+  lettered.append(lettering);
   page.append(painting, lettered, el("div", "jp-folio", folio));
   return page;
+}
+
+/** Measures the title page's lettering, made on its first use. */
+let measure: Measure | null = null;
+
+/** The size, px, the title page letters `name` at (`TITLE`), its capitals measured with `measure`. */
+export function titleSize(name: string, measure: Measure): number {
+  const width = (text: string): number => measure(text.toUpperCase(), nameFont(TITLE.size), nameSpacing(TITLE.size));
+  const longest = Math.max(...nameBreaks(name).map(width));
+  const fit = Math.min(1, TITLE.width / longest, (TITLE.width * TITLE.lines) / width(name));
+  return Math.max(TITLE.least, TITLE.size * fit);
 }
 
 /** You are here, on a map's page: the field map's own traveller, their footprints behind them along the way they look. */
