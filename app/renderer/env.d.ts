@@ -17,3 +17,10 @@ declare module "*.webp" {
   const url: string;
   export default url;
 }
+
+// `import url from "./face.woff2"` gives the font file's address, as a picture's does: only `pnpm brand` (tools/brand.ts)
+// imports one, and inlines it as a data URL.
+declare module "*.woff2" {
+  const url: string;
+  export default url;
+}

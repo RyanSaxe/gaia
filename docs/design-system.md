@@ -1311,28 +1311,30 @@ The three ways work together:
 
 ## Gaia's mark
 
-Gaia introduces itself with its own mark (`app/renderer/brand/`): its name
-lettered across its own land, as the field map letters an area, in the map's
-survey capitals edged with a little paper. The land is painted by the map's
-own hand (`paint.ts`): its washes in health's colors, green under the G and
-drying to gold and russet toward the last A, its hills shaded and lit as the
-map's are, its contours, borders, river and trees. Every part comes from the
-map's own functions (`layWash`, `floatWash`, `shadeSlope`, `layShade`,
-`contoursOf`, `strokeContours`, `strokeBorders`, `drawRivers`, `drawTrees`,
-`letter`, `nameFont`), so the mark changes when the map's look does. Small,
-it is the icon: the land's own rounded square with the G lettered on it, and
-at 32 px and under a heavier G, a wider river and fewer, heavier contours;
-under 24 px only the washes, the river and the G.
+Gaia introduces itself with its own mark (`app/renderer/brand/`): its icon
+beside its name. The icon is a window of light: a heavy soft-serif G
+(Fraunces at 800, its softest) cut through a dark green page, and through
+it Gaia's own world as the renderer draws it, unpainted: the village at
+17:30, the autumn tree standing in the G's left stroke and the stone tower
+in its top end. The page's cut edge shades the window's top and left as a
+page's thickness would. The name is a lowercase "gaia" in a lighter cut of
+the same face (Fraunces at 600), in ink, with its "ai" in the meadow's
+green, because Gaia uses AI; on dark the ink is cream and the green paler.
+Where the whole mark shows, the icon stands on the rounded square every
+macOS icon has, to the left of the name.
 
-The mark is seeded, so it is painted the same every time, and `pnpm brand`
-paints it into pictures at the sizes they are shown on a 2x screen and no
-larger: 264 px wide for the slip's 132, 640 px for the start's sheet, a
-32 px icon for the page, and the macOS icon at every size its set holds
-(`app/build/icon.icns`, and `icon.png`, which the Dock shows while Gaia runs
-from its source). On the slip the mark is multiplied into the paper, so the
-land's paper takes the slip's tone, and the lantern's after dark; on the
-start it is printed into the lit sheet, so the table's light falls on it
-with the paper's.
+The view is a picture kept in the repository (`view.webp`), so the mark
+stays the same when the world is laid out again; `paint.ts` says where it
+was taken. The two cuts of Fraunces are kept beside it under their licence
+(`OFL.txt`). `pnpm brand` paints the mark into pictures at the sizes they
+are shown on a 2x screen and no larger: 273 px wide for the slip's 132,
+655 px for the start's sheet, a 32 px icon for the page, and the macOS icon
+at every size its set holds (`app/build/icon.icns`, and `icon.png`, which
+the Dock shows while Gaia runs from its source); at 32 px and under the
+cut edge's shade is lighter, so the G stays bright. On the slip the mark is
+multiplied into the paper, so it takes the slip's tone, and the lantern's
+after dark; on the start it is printed into the lit sheet, so the table's
+light falls on it with the paper's.
 
 ## Trails
 
