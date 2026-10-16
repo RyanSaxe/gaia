@@ -322,6 +322,19 @@ joins and widens below. Its valley is carved along that whole course, with
 the cross-section and winding Jev chose for its area (`routeRivers` in
 `@gaia/terrain`).
 
+The valley's walls change along the river, each side on its own, as walls
+water carved do. A wall's run from the floor to its shoulder grows and
+shrinks by up to about one and a half times over 300 m, and half that, so
+its grade changes with it, from about 0.15 to 0.5. No wall rises steeper
+than 0.5 (27°). Around a bend, the wall outside it, which the river cut, is
+up to one and a half times shorter and steeper. Inside it the slope is as
+much longer, the floor up to 80% wider, and halfway up the slope a level
+terrace about a third of its width, as an older floor the river left. The slope
+inside a bend never reaches past three quarters of the bend's radius
+(`wallsAlong` and the `RIVERS` table in `@gaia/terrain`). The floor ends at
+the spring: the land rises behind the spring as a hollow, and the floor
+widens to its full width over the first 24 m.
+
 A pick on the map sends the person along the trails rather than jumping
 them (`travelStep` in `@gaia/terrain`, every number in its `TRAVEL` table;
 round 23's travel thread). The trip walks around whatever stands between
@@ -354,7 +367,7 @@ A winding valley swings about ±20 m to either side once every 250 m, a
 whole swing every four of its own widths, carrying its floor and stream with it: a straight
 one barely bends and a strongly meandering one swings up to ±30 m, never
 turning tighter than one and a half times its half width, so its floor and
-shoulders keep their shape through every bend (`troughOffset` in
+walls never fold over in a bend (`troughOffset` in
 `@gaia/primitives`). Its flat floor widens with its winding, from a seventh
 of its half width when straight to a third of its whole width when winding, as
 a lowland valley's floodplain does. A stream loops across that floor at its own

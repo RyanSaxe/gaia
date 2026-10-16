@@ -59,14 +59,59 @@ export const RIVERS = {
   /** The routing ground's faint roll: meters, over this many meters. */
   roll: 0.6,
   rollWavelength: 140,
-  /** Past its shoulders, a valley's sides go on rising at this grade (about 19 degrees) until they meet the land, as far out as this many half widths. */
+  /** Past its shoulders, a valley's sides go on rising at this grade (about 19 degrees) until they meet the land, as far out as this many half widths past them. */
   grade: 0.35,
-  reachOut: 3,
+  reachOut: 2,
+  /**
+   * How a wall's run from its floor to its shoulder changes along its river, each side on its own: by a seeded wander
+   * that `wallWander` scales into a power of e, so it narrows and widens alike, by up to about 1.5 times, over about
+   * `wallWavelength` meters and half that.
+   */
+  wallWander: 1.3,
+  wallWavelength: 320,
+  wallOctaves: 2,
+  /**
+   * Around a bend, the wall outside it, which its river cut, runs shorter and steeper, by up to e to the `bendWall`,
+   * about 1.5 times, and the slope inside it as much longer, its floor widening by up to `bendFloor` of itself; a bend
+   * counts whole once it turns as tight as a winding valley's tightest, `bendTightest` half widths. Each bend is
+   * measured over `wallBendReach` points either side.
+   */
+  bendWall: 0.4,
+  bendFloor: 0.8,
+  bendTightest: 1.5,
+  wallBendReach: 20,
+  /**
+   * Inside a bend, its slope keeps a terrace, a level bench halfway up it `bench` of the way across, as an older floor
+   * the river left: none where the bend turns less than the first of `terraceBends`, whole from the second on.
+   */
+  bench: 0.3,
+  terraceBends: [0.3, 0.7],
+  /** The share of a bend's radius the slope inside it may reach out to. */
+  insideRoom: 0.75,
+  /** The steepest a valley wall rises (about 27 degrees), well within a walk; a wall eases toward it rather than running at it. */
+  steepest: 0.5,
+  /** How far below its spring a valley's floor widens from nothing to its own width, meters: half the way its stream's loops ease in. */
+  head: 24,
   /** The share of the relief budget's range a valley floor may lie below the land's highest ground. */
   budgetShare: 0.9,
 } as const;
 
 const ROLL_SEED = 4231;
+const WALL_SEED = 5179;
+
+const smoothstep = (t: number): number => {
+  const c = Math.max(0, Math.min(1, t));
+  return c * c * (3 - 2 * c);
+};
+
+/**
+ * How far up a valley wall the ground lies, from its floor (0) to its shoulder (1), `u` of the way across it: a
+ * smoothstep, or as far as `terrace` reaches toward 1, two half-height smoothsteps either side of a level bench.
+ */
+function wallRise(u: number, terrace: number): number {
+  const riser = (1 - RIVERS.bench) / 2;
+  return smoothstep(u) + terrace * ((smoothstep(u / riser) + smoothstep((u - riser - RIVERS.bench) / riser)) / 2 - smoothstep(u));
+}
 
 type Trough = Extract<HeightField, { op: "trough" }>;
 
@@ -199,11 +244,11 @@ function wound(line: readonly number[], trough: Trough, tail: number, shiftX: nu
   return out;
 }
 
-/** The curvature of a line at point `k`, from the turn between its chords `RIVERS.bendReach` points either side, positive turning left. */
-function curvatureAt(line: readonly number[], k: number): number {
+/** The curvature of a line at point `k`, from the turn between its chords `reach` points either side, positive turning left. */
+function curvatureAt(line: readonly number[], k: number, reach: number = RIVERS.bendReach): number {
   const count = line.length / 2;
-  const a = Math.max(0, k - RIVERS.bendReach);
-  const b = Math.min(count - 1, k + RIVERS.bendReach);
+  const a = Math.max(0, k - reach);
+  const b = Math.min(count - 1, k + reach);
   if (a === k || b === k) return 0;
   const ax = (line[k * 2] as number) - (line[a * 2] as number);
   const az = (line[k * 2 + 1] as number) - (line[a * 2 + 1] as number);
@@ -223,7 +268,13 @@ function held(line: readonly number[], offs: readonly number[], tightest: (k: nu
     if (off * curvature <= 0) return 0;
     return Math.sign(off) * Math.min(Math.abs(off), Math.max(0, 1 / Math.abs(curvature) - tightest(k))) - off;
   });
-  let eased = cut;
+  const eased = averaged(cut);
+  return offs.map((off, k) => off + (eased[k] as number));
+}
+
+/** Values along a line, each eased into those either side of it by a short moving average, its two ends where they were. */
+function averaged(values: readonly number[]): number[] {
+  let eased = [...values];
   for (let pass = 0; pass < RIVERS.passes; pass++) {
     const q = eased.slice();
     for (let k = 1; k < eased.length - 1; k++) {
@@ -234,7 +285,54 @@ function held(line: readonly number[], offs: readonly number[], tightest: (k: nu
     }
     eased = q;
   }
-  return offs.map((off, k) => off + (eased[k] as number));
+  return eased;
+}
+
+/**
+ * Where each wall of a valley along `course` stands, at each point: on its left, then its right, how far out its flat
+ * floor ends, how far its shoulder lies and how much of a terrace it keeps. Each wall narrows and widens along the
+ * river on its own; around a bend the wall outside it, which the river cut, runs shorter and steeper, and inside it
+ * the floor widens and the slope eases and keeps a terrace. The floor ends at the spring, so the land rises behind it
+ * as a hollow, and past the head it is never narrower than the trough's, so the stream's loops stay on it. No wall is
+ * steeper than `RIVERS.steepest`.
+ */
+function wallsAlong(course: readonly number[], trough: Trough, depth: number): Float32Array {
+  const count = course.length / 2;
+  const floor = trough.floor * trough.halfWidth;
+  const run = trough.halfWidth - floor;
+  // How sharply the course turns at each point, its curvature eased along it, positive turning left; level where too
+  // little of it lies either side to tell.
+  const curvatures = averaged(
+    averaged(Array.from({ length: count }, (_, k) => (k < RIVERS.wallBendReach || k > count - 1 - RIVERS.wallBendReach ? 0 : curvatureAt(course, k, RIVERS.wallBendReach)))),
+  );
+  const walls = new Float32Array(count * 6);
+  for (let k = 0; k < count; k++) {
+    const curvature = curvatures[k] as number;
+    for (const [o, side] of [[0, 1], [3, -1]] as const) {
+      // How sharply the course bends toward this side, -1 to 1, negative bending away from it.
+      const bend = Math.max(-1, Math.min(1, side * curvature * RIVERS.bendTightest * trough.halfWidth));
+      const wander = fbm(WALL_SEED + trough.seed * 2 + o, (k * RIVERS.step) / RIVERS.wallWavelength, 0, RIVERS.wallOctaves, 0.6);
+      const head = smoothstep((k * RIVERS.step) / RIVERS.head);
+      const wall = run * Math.exp(RIVERS.wallWander * wander + RIVERS.bendWall * bend);
+      const [least, most] = RIVERS.terraceBends;
+      const terrace = smoothstep((bend - least) / (most - least));
+      // A wall rises `depth` along a smoothstep, whose steepest grade is 1.5 times its mean, or a terrace's risers, as
+      // much steeper as they are shorter: one that would rise steeper than `RIVERS.steepest` runs longer, easing toward
+      // that grade and never reaching it.
+      const shortest = ((1.5 * depth) / RIVERS.steepest) * (1 + terrace * (1 / (1 - RIVERS.bench) - 1));
+      let edge = floor * (1 + RIVERS.bendFloor * Math.max(0, bend)) * head;
+      let shoulder = edge + wall * (1 + (shortest / wall) ** 8) ** (1 / 8);
+      // Inside a bend the slope reaches no farther than the bend's radius allows, so it never reaches past the bend's
+      // middle, unless the trough's own wall already does: its floor gives way first, never narrower than the trough's.
+      const room = Math.max(bend > 0 ? RIVERS.insideRoom / (side * curvature) : Infinity, floor + run);
+      edge = Math.max(floor * head, Math.min(edge, room - shortest));
+      shoulder = Math.max(Math.min(shoulder, room), edge + shortest);
+      walls[k * 6 + o] = edge;
+      walls[k * 6 + o + 1] = shoulder;
+      walls[k * 6 + o + 2] = terrace;
+    }
+  }
+  return walls;
 }
 
 /** The unit normal to the left of a line, x and z pairs, at point `k`. */
@@ -537,7 +635,7 @@ export function routeRivers(
       for (let k = 0; k < count; k++) floors[k] = Math.max(lowest, Math.min(floors[k] as number, meet + RIVERS.joinGrade * (count - 1 - k) * RIVERS.step));
     }
     floorsOf[c] = floors;
-    valleyCourses.push({ points: new Float32Array(course), halfWidths, floors, depths, floor: v.trough.floor });
+    valleyCourses.push({ points: new Float32Array(course), halfWidths, floors, depths, walls: wallsAlong(course, v.trough, v.depth) });
     const stream = landforms[rv.source]?.water.find((b) => b.kind === "stream") as StreamBed;
     // It widens over a short reach below each river that joins it, as a river does below a confluence.
     const widths = Float32Array.from(carried[c] as Float64Array, (q) => Math.sqrt(q));
@@ -633,8 +731,8 @@ export function routeRivers(
 
 /**
  * The surface the land is cut down to at world (x, z), or Infinity where no valley reaches: the lowest of the
- * valleys near, each its floor, rising across its own cross-section to its shoulders and on at `RIVERS.grade` beyond
- * them, so no slope it cuts is steeper than the valley's own or that grade, however the land around it lies.
+ * valleys near, each its floor, rising up the wall on that side to its shoulder and on at `RIVERS.grade` beyond it,
+ * so no slope it cuts is steeper than the valley's own walls or that grade, however the land around it lies.
  */
 export function valleySurface(net: ValleyNet, x: number, z: number): number {
   const cx = Math.floor((x - net.x0) / net.cell);
@@ -652,14 +750,17 @@ export function valleySurface(net: ValleyNet, x: number, z: number): number {
     const len = abx * abx + abz * abz;
     const t = len > 0 ? Math.max(0, Math.min(1, ((x - ax) * abx + (z - az) * abz) / len)) : 0;
     const d = Math.hypot(x - ax - abx * t, z - az - abz * t);
-    const lerp = (a: Float32Array): number => (a[k] as number) + ((a[k + 1] as number) - (a[k] as number)) * t;
+    const lerp = (a: Float32Array, stride = 1, at = 0): number => (a[k * stride + at] as number) + ((a[(k + 1) * stride + at] as number) - (a[k * stride + at] as number)) * t;
+    // Its left wall to the left of the segment's line, its right wall to the right, easing from one to the other
+    // within a quarter of the valley's width of that line, so past the course's ends the two walls meet smoothly.
     const halfWidth = lerp(course.halfWidths);
-    if (d > halfWidth * RIVERS.reachOut) continue;
-    const floor = lerp(course.floors);
-    const depth = lerp(course.depths);
-    const across = d / halfWidth;
-    const u = Math.max(0, Math.min(1, (across - course.floor) / (1 - course.floor)));
-    const surface = floor + depth * u * u * (3 - 2 * u) + RIVERS.grade * Math.max(0, d - halfWidth);
+    const across = len > 0 ? (abx * (z - az) - abz * (x - ax)) / Math.sqrt(len) : 0;
+    const left = smoothstep((across / (halfWidth / 2) + 1) / 2);
+    const wall = (at: number): number => lerp(course.walls, 6, at + 3) + (lerp(course.walls, 6, at) - lerp(course.walls, 6, at + 3)) * left;
+    const edge = wall(0);
+    const shoulder = wall(1);
+    if (d > shoulder + halfWidth * RIVERS.reachOut) continue;
+    const surface = lerp(course.floors) + lerp(course.depths) * wallRise((d - edge) / (shoulder - edge), wall(2)) + RIVERS.grade * Math.max(0, d - shoulder);
     lowest = Math.min(lowest, surface);
   }
   return lowest;
@@ -672,8 +773,10 @@ function valleyNet(spec: WorldSpec, courses: readonly ValleyCourse[]): ValleyNet
   const cells: number[][] = Array.from({ length: cols * cols }, () => []);
   courses.forEach((c, ci) => {
     const p = c.points;
+    const w = c.walls;
     for (let k = 0; k + 1 < p.length / 2; k++) {
-      const reach = Math.max(c.halfWidths[k] as number, c.halfWidths[k + 1] as number) * RIVERS.reachOut;
+      const shoulder = Math.max(w[k * 6 + 1] as number, w[k * 6 + 4] as number, w[k * 6 + 7] as number, w[k * 6 + 10] as number);
+      const reach = shoulder + Math.max(c.halfWidths[k] as number, c.halfWidths[k + 1] as number) * RIVERS.reachOut;
       const minX = Math.min(p[k * 2] as number, p[k * 2 + 2] as number) - reach;
       const maxX = Math.max(p[k * 2] as number, p[k * 2 + 2] as number) + reach;
       const minZ = Math.min(p[k * 2 + 1] as number, p[k * 2 + 3] as number) - reach;

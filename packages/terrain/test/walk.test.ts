@@ -433,8 +433,9 @@ describe("a walker's stride", () => {
       expect(body.x).toBe(x);
       expect(body.vx).toBeCloseTo(-TRAVEL.pace, 6);
       // At five times a walk the ride reads the ground its own lag ahead, so at the brow of a descent the eyes
-      // lead the ground down by a little more than a walk's few centimeters.
-      if (i > 30) expect(Math.abs(body.eye - footingAt(t, [], body.x, body.z).eye)).toBeLessThan(0.2);
+      // lead the ground down by more than a walk's few centimeters: by 0.34 m where this line goes over the brow of a
+      // valley wall falling at a grade of 0.45, about as steep as any valley wall gets.
+      if (i > 30) expect(Math.abs(body.eye - footingAt(t, [], body.x, body.z).eye)).toBeLessThan(0.4);
     }
   });
 

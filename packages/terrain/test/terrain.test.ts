@@ -333,6 +333,42 @@ describe("terrain", { timeout: 20_000 }, () => {
     expect(streams).toBeGreaterThan(3);
   });
 
+  it("carves each river's valley walls steeper and gentler along it, always walkable, and its head as a hollow rising behind the spring", () => {
+    const walkGrade = Math.tan((RELIEF_BUDGET.walkSlope * Math.PI) / 180);
+    let walls = 0;
+    for (const t of baked) {
+      for (const c of t.landforms[0]?.valleys?.courses ?? []) {
+        const p = c.points;
+        const count = p.length / 2;
+        const floorAt = (k: number): number => t.mean + ((c.floors[k] as number) - t.mean) * t.fit;
+        // The floor ends at the spring: 12 m behind it the ground has risen from the floor, rather than lying flat past the water.
+        const hx = (p[0] as number) - (p[2] as number);
+        const hz = (p[1] as number) - (p[3] as number);
+        const hl = Math.hypot(hx, hz);
+        expect(heightAt(t.lattice, (p[0] as number) + (hx / hl) * 12, (p[1] as number) + (hz / hl) * 12), "behind a spring").toBeGreaterThan(floorAt(0) + 0.5);
+        if (count * 2 < 200) continue;
+        // Each wall's steepest grade every 10 m along a river, from past its stream's reach on the floor to its shoulder.
+        for (const o of [0, 3]) {
+          const side = o === 0 ? 1 : -1;
+          const steepest: number[] = [];
+          for (let k = 5; k + 5 < count; k += 5) {
+            const tx = (p[k * 2 + 2] as number) - (p[k * 2 - 2] as number);
+            const tz = (p[k * 2 + 3] as number) - (p[k * 2 - 1] as number);
+            const tl = Math.hypot(tx, tz);
+            const ground = (d: number): number => heightAt(t.lattice, (p[k * 2] as number) - (tz / tl) * d * side, (p[k * 2 + 1] as number) + (tx / tl) * d * side);
+            let s = 0;
+            for (let d = (c.walls[k * 6 + o] as number) * 1.5 + 2; d + 2 <= (c.walls[k * 6 + o + 1] as number); d++) s = Math.max(s, (ground(d + 2) - ground(d)) / 2);
+            steepest.push(s);
+          }
+          walls++;
+          expect(Math.max(...steepest), "a wall's steepest").toBeLessThan(walkGrade);
+          expect(Math.max(...steepest) - Math.min(...steepest), "how much a wall's grade changes along its river").toBeGreaterThan(0.1);
+        }
+      }
+    }
+    expect(walls).toBeGreaterThan(5);
+  });
+
   // The ground is drawn and walked as flat triangles between its samples, each cell split along the diagonal from
   // its (1, 0) corner to its (0, 1) corner (`heightAt`), so the waterline is where those triangles' edges cross the
   // water's level. A bank that bends within a sample of the water put it up to 0.3 m off, stepping along the lattice.
