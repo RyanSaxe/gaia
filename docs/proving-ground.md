@@ -66,7 +66,7 @@ where you are:
 | `ruins` | Brook valley, a brook, deep wood | A whole area in ruin: dead trees, a ruined footbridge, stepping stones and cairn, and eight of the ten kinds of building and landmark in ruin. Its land is given many falling leaves, and its dead trees drop none. |
 | `mixed` | Clover hills, deep wood | Thriving files beside a failing grove (`failing-grove.ts`), and tired entities. |
 | `hollow`, `pondside` | Mossy basin and pond meadow | Ponds. The hollow's lantern tower is the hub most trails lead to, so they meet at cairns. Many fireflies come out over the hollow after dusk. |
-| `hills`, `terraces`, `moor`, `dunes` | Clover hills, silver terraces, heather moor, golden dunes | Each remaining land without water, so its landform shows. Petals fall from the hills' trees, motes of light hang over the moor and dandelion seeds float over the dunes. |
+| `hills`, `terraces`, `moor`, `dunes` | Clover hills, silver terraces, heather moor, golden dunes | Each remaining land without water, so its landform shows. Petals fall from the hills' trees. |
 | `downs` | Broad downs | The thriving area, with `downs/tiny` (one 4-line file) and `downs/deep/…/bottom`, nested six deep from thriving to ruin. |
 
 ## The tour

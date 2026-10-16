@@ -1,14 +1,14 @@
 // Drifts: the small living things a region's biome sets drifting through its
 // air (`drift@1`, the accents Jev chooses for a directory, or none). Petals
-// and leaves fall from the region's trees; fireflies hang low over its ground
-// after dusk; motes of light and dandelion seeds ride its air, each in the
-// color its accents give it. The world's wind carries them all.
+// and leaves fall from the region's trees, and fireflies hover over its
+// ground after dusk, each in the color its accents give it. The world's wind
+// carries them all.
 //
-// They gather only around the person. The air's drifts fill a square around
-// them, anchored to the world and carried by the wind, each mote wrapping to
-// the square's far side only where distance has already faded it out; a
-// falling leaf lets go of a tree near the person and fades out as it lands.
-// The air's drifts follow the regions' shares where the person stands, as
+// They gather only around the person. Fireflies fill a square around them,
+// anchored to the world, each wrapping to the square's far side only where
+// distance has already faded it out; a falling leaf lets go of a tree near
+// the person and fades out as it lands. Fireflies follow the regions' shares
+// where the person stands, as
 // their ground covers blend, so one region's drift thins into the next as
 // they walk; a tree drops its own region's. Each thins as its land declines
 // and none drift in the wild, so nothing appears or vanishes as the person
@@ -20,26 +20,22 @@ import type { AccentForm, AccentSpec } from "@gaia/schema";
 import type { SceneLight } from "@gaia/render";
 import { GROUND_SAMPLE_GLSL, type GroundTexture, WILD_GLSL } from "./ground.ts";
 
-/** How each form moves and shows: its shape (0 a soft dot, 1 a petal, 2 a leaf), its fall and rise, meters a second, the heights it keeps between, how far it wanders, how much it hovers, blinks, and its opacity. */
+/** How each form moves and shows: its shape (0 a soft dot, 1 a petal, 2 a leaf), how fast it falls, meters a second, the heights it keeps between, how far it wanders, how much it blinks, and its opacity. */
 interface DriftForm {
   readonly shape: number;
   readonly fall: number;
-  readonly rise: number;
   readonly low: number;
   readonly high: number;
   readonly wander: number;
-  readonly hover: number;
   readonly blink: number;
   readonly opacity: number;
 }
 
 /** Every drifting form. */
 const DRIFT_FORMS: Readonly<Record<AccentForm, DriftForm>> = {
-  petals: { shape: 1, fall: 0.35, rise: 0, low: 0, high: 9, wander: 0.6, hover: 0, blink: 0, opacity: 0.95 },
-  fireflies: { shape: 0, fall: 0, rise: 0, low: 0.7, high: 2.6, wander: 0.9, hover: 1, blink: 1, opacity: 1 },
-  motes: { shape: 0, fall: 0, rise: 0.05, low: 0.6, high: 8, wander: 0.35, hover: 0.6, blink: 0.3, opacity: 0.7 },
-  leaves: { shape: 2, fall: 0.6, rise: 0, low: 0, high: 10, wander: 0.8, hover: 0, blink: 0, opacity: 1 },
-  seeds: { shape: 0, fall: 0.05, rise: 0.12, low: 0.4, high: 7, wander: 0.5, hover: 0, blink: 0, opacity: 0.85 },
+  petals: { shape: 1, fall: 0.35, low: 0, high: 9, wander: 0.6, blink: 0, opacity: 0.95 },
+  fireflies: { shape: 0, fall: 0, low: 0.7, high: 2.6, wander: 0.9, blink: 1, opacity: 1 },
+  leaves: { shape: 2, fall: 0.6, low: 0, high: 10, wander: 0.8, blink: 0, opacity: 1 },
 };
 
 /** A drifting thing's color and shape, lit as everything else is: petals darken at night while glowing things shine. */
@@ -89,7 +85,7 @@ void main() {
 `;
 
 /**
- * Where drifts gather round the person, meters: the air's fill a square `air`
+ * Where drifts gather round the person, meters: fireflies fill a square `air`
  * each way, fading out from `fade` of that to its edge; trees drop leaves and
  * petals out to `trees`, fading out from `fade` of it, and keep dropping them
  * until `keep` away, where the wind has carried none back into sight; and
@@ -116,11 +112,11 @@ const FULL_TREE = 380;
 const AIR_SHARE = (2 * DRIFT_REACH.air) ** 2 / (52 * 60) / MOST;
 /** Seconds a tree newly near the person takes to start dropping leaves fully, so none appear at once. */
 const CROWN_FADE = 3;
-/** How fast the wind carries the air's drifts and a falling leaf, meters a second at a breeze. */
+/** How fast the wind carries a falling leaf, and nudges fireflies a little, meters a second at a breeze. */
 const CARRY = 0.6;
 /** The largest a drifting thing is drawn, device pixels. */
 const LARGEST = 64;
-/** The forms that fall from trees; the rest ride the air. */
+/** The forms that fall from trees; fireflies ride the air. */
 const FROM_TREES: ReadonlySet<AccentForm> = new Set(["petals", "leaves"]);
 
 const DRIFT_VERT = /* glsl */ `
@@ -137,11 +133,9 @@ uniform vec2 uCarried;
 uniform float uPixels;
 uniform float uSize;
 uniform float uFall;
-uniform float uRise;
 uniform float uLow;
 uniform float uHigh;
 uniform float uWander;
-uniform float uHover;
 // A glowing thing's halo in the dark, which the point grows to hold.
 uniform float uHalo;
 // 1 for what shows only after dusk.
@@ -195,14 +189,13 @@ void main() {
       * (1.0 - smoothstep(${(DRIFT_REACH.trees * DRIFT_REACH.fade).toFixed(1)}, ${DRIFT_REACH.trees.toFixed(1)}, reach));
     density = of.w;
   } else {
-    // Anchored to the world and carried by the wind, each held in the square round the eye.
-    vec2 p = aSeed.xy * ${(2 * DRIFT_REACH.air).toFixed(1)} + uCarried * (1.0 - uHover * 0.85)
+    // A firefly: anchored to the world and nudged a little by the wind, held in the square round the eye, hovering
+    // up and down between uLow and uHigh.
+    vec2 p = aSeed.xy * ${(2 * DRIFT_REACH.air).toFixed(1)} + uCarried * 0.15
       + vec2(sin(t * 1.3 + phase * 17.0), cos(t * 1.1 + phase * 23.0)) * uWander;
     vec2 rel = mod(p - uEye.xz + ${DRIFT_REACH.air.toFixed(1)}, ${(2 * DRIFT_REACH.air).toFixed(1)}) - ${DRIFT_REACH.air.toFixed(1)};
     xz = uEye.xz + rel;
-    float span = uHigh - uLow;
-    float h = uLow + mod(aMore.y * span + t * (uRise - uFall), span);
-    h = mix(h, uLow + (0.5 + 0.5 * sin(t * 0.5 + phase * 31.0)) * span, uHover);
+    float h = uLow + (0.5 + 0.5 * sin(t * 0.5 + phase * 31.0)) * (uHigh - uLow);
     y = floorAt(xz) + h;
     fade = (1.0 - smoothstep(${(DRIFT_REACH.air * DRIFT_REACH.fade).toFixed(1)}, ${DRIFT_REACH.air.toFixed(1)}, length(rel)))
       * smoothstep(0.0, 0.6, h - uLow) * smoothstep(0.0, 0.6, uHigh - h);
@@ -274,11 +267,9 @@ function formUniforms(form: AccentForm, carried: THREE.Vector2) {
     uPixels: { value: 1000 },
     uSize: { value: 0.06 },
     uFall: { value: b.fall },
-    uRise: { value: b.rise },
     uLow: { value: b.low },
     uHigh: { value: b.high },
     uWander: { value: b.wander },
-    uHover: { value: b.hover },
     uDusk: { value: form === "fireflies" ? 1 : 0 },
     uFromTrees: { value: FROM_TREES.has(form) ? 1 : 0 },
     uDensity: { value: 0 },

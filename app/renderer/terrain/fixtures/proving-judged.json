@@ -266,7 +266,7 @@
    }
   },
   "moor": {
-   "id": "bp-02cdc440",
+   "id": "bp-0a655f51",
    "kind": "biome",
    "slots": {
     "relief": {
@@ -290,18 +290,11 @@
      "params": {
       "families": []
      }
-    },
-    "accents": {
-     "use": "drift@1",
-     "params": {
-      "form": "motes of light",
-      "amount": "some"
-     }
     }
    }
   },
   "dunes": {
-   "id": "bp-166f3daf",
+   "id": "bp-16015f48",
    "kind": "biome",
    "slots": {
     "relief": {
@@ -325,13 +318,6 @@
      "use": "native-families@1",
      "params": {
       "families": []
-     }
-    },
-    "accents": {
-     "use": "drift@1",
-     "params": {
-      "form": "dandelion seeds",
-      "amount": "some"
      }
     }
    }
