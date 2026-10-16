@@ -6,10 +6,3 @@
 [(for_statement) (while_statement) (do_statement)] @block.loop
 (switch_statement) @block.match
 (initializer_list) @block.data
-
-(else_clause (if_statement) @decide.elseif)
-(else_clause (compound_statement)) @decide.else
-(case_statement value: (_)) @decide.case
-(binary_expression operator: ["&&" "||"]) @decide.logic
-
-(string_content) @literal

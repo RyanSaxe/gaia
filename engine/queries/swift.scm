@@ -8,11 +8,3 @@
 (do_statement) @block.try
 (lambda_literal) @block.closure
 [(array_literal) (dictionary_literal)] @block.data
-
-(if_statement (if_statement) @decide.elseif)
-(if_statement (else) @decide.else)
-(switch_entry (switch_pattern)) @decide.case
-(catch_block) @decide.catch
-[(conjunction_expression) (disjunction_expression)] @decide.logic
-
-(line_str_text) @literal

@@ -11,11 +11,3 @@
 (when_expression) @block.match
 (try_expression) @block.try
 (lambda_literal) @block.closure
-
-(if_expression (if_expression) @decide.elseif)
-(if_expression (block) (block) @decide.else)
-(when_entry condition: (_)) @decide.case
-(catch_block) @decide.catch
-(binary_expression operator: ["&&" "||"]) @decide.logic
-
-(string_content) @literal

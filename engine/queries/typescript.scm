@@ -13,11 +13,3 @@
 (try_statement) @block.try
 [(arrow_function) (function_expression)] @block.closure
 [(object) (array)] @block.data
-
-(else_clause (if_statement) @decide.elseif)
-(else_clause) @decide.else
-(switch_case) @decide.case
-(catch_clause) @decide.catch
-(binary_expression operator: ["&&" "||"]) @decide.logic
-
-(string_fragment) @literal

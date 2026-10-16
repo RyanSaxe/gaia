@@ -10,10 +10,3 @@
 (func_literal) @block.closure
 (go_statement) @block.concurrent
 (composite_literal) @block.data
-
-(if_statement alternative: (if_statement) @decide.elseif)
-(if_statement alternative: (block) @decide.else)
-[(expression_case) (type_case) (communication_case)] @decide.case
-(binary_expression operator: ["&&" "||"]) @decide.logic
-
-(interpreted_string_literal) @literal

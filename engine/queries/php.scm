@@ -10,11 +10,3 @@
 (try_statement) @block.try
 [(anonymous_function) (arrow_function)] @block.closure
 (array_creation_expression) @block.data
-
-(else_if_clause) @decide.elseif
-(else_clause) @decide.else
-(case_statement) @decide.case
-(catch_clause) @decide.catch
-(binary_expression operator: ["&&" "||" "and" "or"]) @decide.logic
-
-(string_content) @literal

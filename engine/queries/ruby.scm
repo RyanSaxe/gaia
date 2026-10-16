@@ -8,11 +8,3 @@
 (begin) @block.try
 [(do_block) (block) (lambda)] @block.closure
 [(array) (hash)] @block.data
-
-(elsif) @decide.elseif
-(else) @decide.else
-(when) @decide.case
-(rescue) @decide.catch
-(binary operator: ["&&" "||" "and" "or"]) @decide.logic
-
-(string_content) @literal

@@ -1,32 +1,28 @@
 //! The generic loop: one file's tree and query matches into definitions,
-//! blocks, references and literals, with their measures. Nothing here is
-//! about one language; everything comes from the capture names on the
-//! parse page (`docs/architecture.md`, "The code graph"):
+//! blocks and references. Nothing here is about one language; everything
+//! comes from the capture names on the parse page (`docs/architecture.md`,
+//! "The code graph"):
 //!
 //! - `@definition.<role>` with `@name`; `@owner` with the `@scope` it covers;
 //!   `@params` (a list of parameters) or `@param` (each one) where a grammar
 //!   has no `parameters` field; `@doc` for a docstring.
 //! - `@reference.import`, `.call`, `.send`, `.class`, `.type`, `.interface`
 //!   and `.implementation`, each with `@name`.
-//! - `@block.<shape>`; `@decide.else`, `.elseif`, `.case`, `.catch` and
-//!   `.logic`, which the measures count; `@literal`.
+//! - `@block.<shape>`.
 
 use super::languages::{self, Loaded};
-use super::model::{Measures, Span};
+use super::model::Span;
 use std::collections::{HashMap, HashSet};
 use streaming_iterator::StreamingIterator;
-use tree_sitter::{Node, Parser, Query, QueryCursor, Range};
+use tree_sitter::{Node, Parser, Query, QueryCursor};
 
 /// What one file holds, before ids: indices point into `defs`.
 pub struct FileParse {
     pub unparsed: u32,
-    pub measures: Measures,
+    pub lines: u32,
     pub defs: Vec<Def>,
     pub blocks: Vec<Block>,
     pub refs: Vec<Ref>,
-    // Read by the names rule, which comes with the import and call rules in step 2.
-    #[allow(dead_code)]
-    pub literals: Vec<Literal>,
 }
 
 pub struct Def {
@@ -42,13 +38,10 @@ pub struct Def {
     pub doc: Option<String>,
     /// Its file exports it (`exported`).
     pub exported: bool,
-    pub measures: Measures,
     /// It takes parameters, or its role says it runs.
     pub callable: bool,
-    /// A MinHash of its text's word shingles, for near-duplicates and lineage.
+    /// A MinHash of its text's word shingles, which lineage matches by.
     pub fingerprint: Vec<u16>,
-    /// How many distinct shingles its text has.
-    pub shingles: usize,
     /// The name its body calls its own receiver by, when a grammar marks it
     /// with `@self`: the `c` of Go's `func (c *Command)`.
     pub self_name: Option<String>,
@@ -84,15 +77,8 @@ pub struct Ref {
     pub macro_call: bool,
 }
 
-#[allow(dead_code)]
-pub struct Literal {
-    pub text: String,
-    pub at: Span,
-    pub from: Option<usize>,
-}
-
 /// The number of hashes in a fingerprint.
-pub const FINGERPRINT: usize = 64;
+const FINGERPRINT: usize = 64;
 
 fn splitmix(mut x: u64) -> u64 {
     x = x.wrapping_add(0x9e37_79b9_7f4a_7c15);
@@ -101,8 +87,8 @@ fn splitmix(mut x: u64) -> u64 {
     x ^ (x >> 31)
 }
 
-/// A MinHash of a text's word 3-grams, and how many distinct ones it has.
-pub fn fingerprint(text: &str) -> (Vec<u16>, usize) {
+/// A MinHash of a text's word 3-grams.
+pub fn fingerprint(text: &str) -> Vec<u16> {
     let words: Vec<&str> = text
         .split(|c: char| !(c.is_alphanumeric() || c == '_'))
         .filter(|w| !w.is_empty())
@@ -119,7 +105,7 @@ pub fn fingerprint(text: &str) -> (Vec<u16>, usize) {
         }
         shingles.insert(h);
     }
-    let mins = (0..FINGERPRINT as u64)
+    (0..FINGERPRINT as u64)
         .map(|seed| {
             let salt = splitmix(seed);
             shingles
@@ -128,8 +114,7 @@ pub fn fingerprint(text: &str) -> (Vec<u16>, usize) {
                 .min()
                 .unwrap_or(u16::MAX)
         })
-        .collect();
-    (mins, shingles.len())
+        .collect()
 }
 
 /// The share of hashes two fingerprints agree on: an estimate of their shingles' overlap.
@@ -154,7 +139,6 @@ const CONTAINERS: &[&str] = &[
 ];
 /// Roles a definition can run as, even with no list of parameters (Ruby's `def walk`).
 const CALLABLES: &[&str] = &["function", "method", "macro", "constructor"];
-const MARKERS: &[&str] = &["TODO", "FIXME", "XXX", "HACK"];
 
 /// One query match, reduced to the capture that says what it is.
 struct Hit<'t> {
@@ -202,9 +186,9 @@ fn collect<'t>(query: &Query, root: Node<'t>, src: &[u8], from_tags: bool, out: 
 }
 
 /// What a language without our query file still yields, read from node
-/// kinds most grammars share: blocks, the decisions the measures count, and
-/// definitions too when it has no tags query either.
-fn fallback<'t>(root: Node<'t>, definitions: bool, src: &str, out: &mut Vec<Hit<'t>>) {
+/// kinds most grammars share: blocks, and definitions too when it has no
+/// tags query either.
+fn fallback<'t>(root: Node<'t>, definitions: bool, out: &mut Vec<Hit<'t>>) {
     let mut stack = vec![root];
     while let Some(n) = stack.pop() {
         let mut c = n.walk();
@@ -225,10 +209,6 @@ fn fallback<'t>(root: Node<'t>, definitions: bool, src: &str, out: &mut Vec<Hit<
                 .trim_end_matches("_declaration")
                 .trim_end_matches("_item");
             format!("definition.{role}")
-        } else if has(&["elif", "elsif", "elseif"]) || kind == "else_if_clause" {
-            "decide.elseif".into()
-        } else if matches!(kind, "else" | "else_clause" | "else_statement") {
-            "decide.else".into()
         } else if has(&["if"]) && construct {
             "block.branch".into()
         } else if has(&["for", "while", "loop", "repeat", "until"]) && construct {
@@ -244,14 +224,6 @@ fn fallback<'t>(root: Node<'t>, definitions: bool, src: &str, out: &mut Vec<Hit<
             )
         {
             "block.closure".into()
-        } else if has(&["catch", "rescue", "except"]) {
-            "decide.catch".into()
-        } else if has(&["case", "arm", "alternative"]) && !construct {
-            "decide.case".into()
-        } else if has(&["binary", "boolean"])
-            && matches!(operator(n, src).as_str(), "&&" | "||" | "and" | "or")
-        {
-            "decide.logic".into()
         } else {
             continue;
         };
@@ -282,10 +254,6 @@ fn contains(outer: Node, inner: Node) -> bool {
 
 fn is_comment(node: Node) -> bool {
     node.kind().contains("comment")
-}
-
-fn has_marker(s: &str) -> bool {
-    MARKERS.iter().any(|m| s.contains(m))
 }
 
 /// Strips quotes and whitespace around a specifier or literal as written.
@@ -438,147 +406,6 @@ fn exported(def: Node, src: &str) -> bool {
         .any(|ch| ch.kind() == "visibility_modifier" && text(ch, src).starts_with("pub"))
 }
 
-/// The operator a logical expression applies, so runs of the same one count once.
-fn operator(node: Node, src: &str) -> String {
-    if let Some(op) = node.child_by_field_name("operator") {
-        return text(op, src).to_string();
-    }
-    let mut c = node.walk();
-    for ch in node.children(&mut c) {
-        if !ch.is_named() && matches!(text(ch, src), "&&" | "||" | "and" | "or") {
-            return text(ch, src).to_string();
-        }
-    }
-    node.kind().to_string()
-}
-
-/// The node ids each kind of decision covers.
-#[derive(Default)]
-struct Decisions {
-    branch: HashSet<usize>,
-    loops: HashSet<usize>,
-    matches: HashSet<usize>,
-    nests: HashSet<usize>,
-    elses: HashSet<usize>,
-    elseifs: HashSet<usize>,
-    cases: HashSet<usize>,
-    catches: HashSet<usize>,
-    logic: HashSet<usize>,
-}
-
-impl Decisions {
-    /// An else that only leads into an else-if, which counts itself.
-    fn leads_to_elseif(&self, n: Node) -> bool {
-        let mut c = n.walk();
-        let inside = n
-            .named_children(&mut c)
-            .any(|ch| self.elseifs.contains(&ch.id()));
-        inside
-            || n.next_named_sibling()
-                .is_some_and(|s| self.elseifs.contains(&s.id()))
-    }
-
-    /// True when the node is, or wraps, the next link of an else-if chain.
-    fn continues_chain(&self, n: Node) -> bool {
-        if self.elses.contains(&n.id()) || self.elseifs.contains(&n.id()) {
-            return true;
-        }
-        let mut c = n.walk();
-        n.named_children(&mut c)
-            .any(|ch| self.elseifs.contains(&ch.id()))
-    }
-
-    /// SonarSource's cognitive complexity of everything under `node`.
-    /// `own` are the nodes of the definition being measured, which add no nesting.
-    fn cognitive(&self, node: Node, nest: u32, in_function: bool, own: &[usize], src: &str) -> u32 {
-        let id = node.id();
-        let mut c = node.walk();
-        let children: Vec<Node> = node.children(&mut c).collect();
-        let walk_all = |nest: u32, in_function: bool| -> u32 {
-            children
-                .iter()
-                .map(|ch| self.cognitive(*ch, nest, in_function, own, src))
-                .sum()
-        };
-        if self.elseifs.contains(&id) {
-            // `else if`, `elif`, `elsif`: one, flat; its body nests like the chain's first.
-            return 1 + self.chain_children(&children, nest, in_function, own, src);
-        }
-        if self.branch.contains(&id) {
-            return 1 + nest + self.chain_children(&children, nest, in_function, own, src);
-        }
-        if self.elses.contains(&id) {
-            if self.leads_to_elseif(node) {
-                return walk_all(nest, in_function);
-            }
-            return 1 + walk_all(nest + 1, in_function);
-        }
-        if self.loops.contains(&id) || self.matches.contains(&id) || self.catches.contains(&id) {
-            return 1 + nest + walk_all(nest + 1, in_function);
-        }
-        if self.nests.contains(&id) && !own.contains(&id) {
-            return walk_all(if in_function { nest + 1 } else { nest }, true);
-        }
-        let mut total = 0;
-        if self.logic.contains(&id) {
-            let mut parent = node.parent();
-            while let Some(p) = parent.filter(|p| p.kind().contains("parenthes")) {
-                parent = p.parent();
-            }
-            let same = parent.is_some_and(|p| {
-                self.logic.contains(&p.id()) && operator(p, src) == operator(node, src)
-            });
-            if !same {
-                total += 1;
-            }
-        }
-        total + walk_all(nest, in_function)
-    }
-
-    /// A branch's children: the next link of its chain stays at its level, the rest nests.
-    fn chain_children(
-        &self,
-        children: &[Node],
-        nest: u32,
-        in_function: bool,
-        own: &[usize],
-        src: &str,
-    ) -> u32 {
-        children
-            .iter()
-            .map(|ch| {
-                let level = if self.continues_chain(*ch) {
-                    nest
-                } else {
-                    nest + 1
-                };
-                self.cognitive(*ch, level, in_function, own, src)
-            })
-            .sum()
-    }
-
-    /// McCabe's cyclomatic complexity: one, plus every decision under `node`.
-    fn cyclomatic(&self, node: Node) -> u32 {
-        let mut count = 1;
-        let mut stack = vec![node];
-        while let Some(n) = stack.pop() {
-            let id = n.id();
-            if self.branch.contains(&id)
-                || self.elseifs.contains(&id)
-                || self.loops.contains(&id)
-                || self.cases.contains(&id)
-                || self.catches.contains(&id)
-                || self.logic.contains(&id)
-            {
-                count += 1;
-            }
-            let mut c = n.walk();
-            stack.extend(n.children(&mut c));
-        }
-        count
-    }
-}
-
 fn count_unparsed(node: Node) -> u32 {
     let mut count = 0;
     let mut stack = vec![node];
@@ -590,18 +417,6 @@ fn count_unparsed(node: Node) -> u32 {
         stack.extend(n.children(&mut c));
     }
     count
-}
-
-fn comments_in<'t>(node: Node<'t>, out: &mut Vec<Node<'t>>) {
-    let mut stack = vec![node];
-    while let Some(n) = stack.pop() {
-        if is_comment(n) {
-            out.push(n);
-            continue;
-        }
-        let mut c = n.walk();
-        stack.extend(n.named_children(&mut c));
-    }
 }
 
 /// Parses one file and reads everything its queries capture.
@@ -627,36 +442,7 @@ pub fn parse(lang: &Loaded, src: &str) -> Result<FileParse, String> {
     }
     match &lang.ours {
         Some(ours) => collect(ours, root, bytes, false, &mut hits),
-        None => fallback(root, lang.tags.is_none(), src, &mut hits),
-    }
-
-    // Literals from an inline grammar, such as Markdown's links.
-    let mut inline_literals: Vec<(String, Span)> = Vec::new();
-    if let Some(inline) = &lang.inline {
-        let mut ranges: Vec<Range> = Vec::new();
-        let mut stack = vec![root];
-        while let Some(n) = stack.pop() {
-            if n.kind() == inline.over {
-                ranges.push(n.range());
-                continue;
-            }
-            let mut c = n.walk();
-            stack.extend(n.named_children(&mut c));
-        }
-        ranges.sort_by_key(|r| r.start_byte);
-        if !ranges.is_empty() {
-            let mut p = Parser::new();
-            p.set_language(&inline.language)
-                .map_err(|e| e.to_string())?;
-            p.set_included_ranges(&ranges).map_err(|e| e.to_string())?;
-            if let Some(t) = p.parse(src, None) {
-                let mut inline_hits = Vec::new();
-                collect(&inline.query, t.root_node(), bytes, false, &mut inline_hits);
-                for h in inline_hits.iter().filter(|h| h.what == "literal") {
-                    inline_literals.push((clean(text(h.node, src)), span_of(h.node)));
-                }
-            }
-        }
+        None => fallback(root, lang.tags.is_none(), &mut hits),
     }
 
     // Definitions, each node once. A node two patterns capture keeps the more specific role.
@@ -696,37 +482,21 @@ pub fn parse(lang: &Loaded, src: &str) -> Result<FileParse, String> {
         }
     }
     let functions: Vec<Option<Node>> = found.iter().map(|(n, _, _)| function_node(*n)).collect();
-    let params_of = |i: usize| -> Option<u32> {
-        let def = found[i].0;
-        if let Some(list) = functions[i].and_then(|f| f.child_by_field_name("parameters")) {
-            let mut c = list.walk();
-            return Some(
-                list.named_children(&mut c)
-                    .filter(|n| !is_comment(*n))
-                    .count() as u32,
-            );
-        }
-        let inner = |n: &Node| {
-            contains(def, *n)
-                && !found
-                    .iter()
-                    .any(|(o, _, _)| o.id() != def.id() && contains(def, *o) && contains(*o, *n))
-        };
-        if let Some(list) = param_lists.iter().find(|n| inner(n)) {
-            let mut c = list.walk();
-            return Some(
-                list.named_children(&mut c)
-                    .filter(|n| !is_comment(*n))
-                    .count() as u32,
-            );
-        }
-        let singles = single_params.iter().filter(|n| inner(n)).count() as u32;
-        if singles > 0 || CALLABLES.contains(&found[i].1.as_str()) {
-            return Some(singles);
-        }
-        None
-    };
-    let params: Vec<Option<u32>> = (0..found.len()).map(params_of).collect();
+    // A definition runs when it takes parameters, or when its role says it does.
+    let runs: Vec<bool> = (0..found.len())
+        .map(|i| {
+            let def = found[i].0;
+            let inner = |n: &Node| {
+                contains(def, *n)
+                    && !found
+                        .iter()
+                        .any(|(o, _, _)| o.id() != def.id() && contains(def, *o) && contains(*o, *n))
+            };
+            functions[i].is_some_and(|f| f.child_by_field_name("parameters").is_some())
+                || param_lists.iter().chain(&single_params).any(inner)
+                || CALLABLES.contains(&found[i].1.as_str())
+        })
+        .collect();
 
     // Parents, and locals dropped: a definition inside a function is kept
     // only when it runs or holds definitions itself.
@@ -744,8 +514,8 @@ pub fn parse(lang: &Loaded, src: &str) -> Result<FileParse, String> {
     }
     let keep: Vec<bool> = (0..found.len())
         .map(|i| {
-            let local = parent[i].is_some_and(|p| params[p].is_some());
-            !local || params[i].is_some() || CONTAINERS.contains(&found[i].1.as_str())
+            let local = parent[i].is_some_and(|p| runs[p]);
+            !local || runs[i] || CONTAINERS.contains(&found[i].1.as_str())
         })
         .collect();
     let mut index_of: Vec<Option<usize>> = vec![None; found.len()];
@@ -773,50 +543,6 @@ pub fn parse(lang: &Loaded, src: &str) -> Result<FileParse, String> {
         .filter(|h| h.what == "scope")
         .filter_map(|h| h.owner.map(|o| (h.node, clean_owner(text(o, src)))))
         .collect();
-
-    // Decisions and nesting, for the measures.
-    let mut d = Decisions::default();
-    for h in &hits {
-        let id = h.node.id();
-        match h.what.as_str() {
-            "block.branch" => {
-                d.branch.insert(id);
-            }
-            "block.loop" => {
-                d.loops.insert(id);
-            }
-            "block.match" => {
-                d.matches.insert(id);
-            }
-            "block.closure" => {
-                d.nests.insert(id);
-            }
-            "decide.else" => {
-                d.elses.insert(id);
-            }
-            "decide.elseif" => {
-                d.elseifs.insert(id);
-            }
-            "decide.case" => {
-                d.cases.insert(id);
-            }
-            "decide.catch" => {
-                d.catches.insert(id);
-            }
-            "decide.logic" => {
-                d.logic.insert(id);
-            }
-            _ => {}
-        }
-    }
-    for (i, (n, _, _)) in found.iter().enumerate() {
-        if params[i].is_some() {
-            d.nests.insert(n.id());
-            if let Some(f) = functions[i] {
-                d.nests.insert(f.id());
-            }
-        }
-    }
 
     // Blocks: each node once; a closure that is a definition's own body is
     // not a block; a one-line literal is a value, not a table; and data or
@@ -888,17 +614,7 @@ pub fn parse(lang: &Loaded, src: &str) -> Result<FileParse, String> {
         *index += 1;
     }
 
-    // Comments, for docs and debt markers.
-    let mut comments: Vec<Node> = Vec::new();
-    comments_in(root, &mut comments);
-    let markers_in = |n: Node| {
-        comments
-            .iter()
-            .filter(|c| contains(n, **c) && has_marker(text(**c, src)))
-            .count() as u32
-    };
-
-    // Definitions, measured and named.
+    // Definitions, named.
     let docstrings: Vec<Node> = hits
         .iter()
         .filter(|h| h.what == "doc" && !h.from_tags)
@@ -930,27 +646,6 @@ pub fn parse(lang: &Loaded, src: &str) -> Result<FileParse, String> {
             .find(|n| contains(*node, **n) && innermost_def(**n) == Some(k))
             .map(|n| comment_words(text(*n, src)))
             .or_else(|| doc_above(*node, src));
-        let mut measures = Measures {
-            lines: span_of(*node).end - span_of(*node).start + 1,
-            markers: Some(markers_in(*node)),
-            ..Default::default()
-        };
-        if let Some(p) = params[i] {
-            let own: Vec<usize> = std::iter::once(node.id())
-                .chain(functions[i].map(|f| f.id()))
-                .collect();
-            measures.params = Some(p);
-            measures.cognitive = Some(d.cognitive(*node, 0, true, &own, src));
-            measures.cyclomatic = Some(d.cyclomatic(*node));
-            measures.nesting = Some(
-                blocks
-                    .iter()
-                    .filter(|b| b.def == Some(k))
-                    .map(|b| b.depth + 1)
-                    .max()
-                    .unwrap_or(0),
-            );
-        }
         let qualified = match (parent_k, &owner) {
             (Some(p), _) => format!("{}.{}", defs[p].qualified, name),
             (None, Some(o)) => format!("{o}.{name}"),
@@ -962,7 +657,7 @@ pub fn parse(lang: &Loaded, src: &str) -> Result<FileParse, String> {
             .child_by_field_name("body")
             .or_else(|| functions[i].and_then(|f| f.child_by_field_name("body")))
             .unwrap_or(*node);
-        let (fingerprint, shingles) = fingerprint(text(body, src));
+        let fingerprint = fingerprint(text(body, src));
         let self_name = hits
             .iter()
             .find(|h| {
@@ -971,9 +666,8 @@ pub fn parse(lang: &Loaded, src: &str) -> Result<FileParse, String> {
             .map(|h| text(h.node, src).to_string());
         defs.push(Def {
             self_name,
-            callable: params[i].is_some(),
+            callable: runs[i],
             fingerprint,
-            shingles,
             name: name.clone(),
             qualified,
             role: role.clone(),
@@ -983,7 +677,6 @@ pub fn parse(lang: &Loaded, src: &str) -> Result<FileParse, String> {
             signature: signature(*node, functions[i], src),
             doc,
             exported: exported(*node, src),
-            measures,
         });
     }
     // A repeat of a qualified name in the same file is told apart by its order.
@@ -1045,40 +738,11 @@ pub fn parse(lang: &Loaded, src: &str) -> Result<FileParse, String> {
             })
         })
         .collect();
-    let mut literals: Vec<Literal> = hits
-        .iter()
-        .filter(|h| h.what == "literal")
-        .map(|h| Literal {
-            text: clean(text(h.node, src)),
-            at: span_of(h.node),
-            from: innermost_def(h.node),
-        })
-        .filter(|l| !l.text.is_empty())
-        .collect();
-    literals.extend(
-        inline_literals
-            .into_iter()
-            .filter(|(t, _)| !t.is_empty())
-            .map(|(text, at)| Literal {
-                text,
-                at,
-                from: None,
-            }),
-    );
-
-    let own_root: Vec<usize> = Vec::new();
-    let measures = Measures {
-        lines: src.lines().count() as u32,
-        cognitive: Some(d.cognitive(root, 0, false, &own_root, src)),
-        markers: Some(markers_in(root)),
-        ..Default::default()
-    };
     Ok(FileParse {
         unparsed: count_unparsed(root),
-        measures,
+        lines: src.lines().count() as u32,
         defs,
         blocks,
         refs,
-        literals,
     })
 }

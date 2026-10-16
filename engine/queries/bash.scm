@@ -7,13 +7,3 @@
 (if_statement) @block.branch
 [(for_statement) (c_style_for_statement) (while_statement)] @block.loop
 (case_statement) @block.match
-
-(elif_clause) @decide.elseif
-(else_clause) @decide.else
-((case_item value: (_) @_v) @decide.case (#not-eq? @_v "*"))
-(list) @decide.logic
-
-(string_content) @literal
-(raw_string) @literal
-(file_redirect destination: (word) @literal)
-(command argument: (word) @literal)

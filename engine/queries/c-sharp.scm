@@ -11,11 +11,3 @@
 (lock_statement) @block.concurrent
 (unsafe_statement) @block.unsafe
 (initializer_expression) @block.data
-
-(if_statement alternative: (if_statement) @decide.elseif)
-(if_statement alternative: (block) @decide.else)
-(switch_section [(constant_pattern) (declaration_pattern) (recursive_pattern) (type_pattern)]) @decide.case
-(catch_clause) @decide.catch
-(binary_expression operator: ["&&" "||"]) @decide.logic
-
-(string_literal_content) @literal
