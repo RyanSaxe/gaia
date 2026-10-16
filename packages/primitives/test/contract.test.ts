@@ -255,6 +255,31 @@ describe.each(lib.forRole("Footprint").map((p) => [p.id, p] as const))("%s", { t
   });
 });
 
+describe.each(lib.forRole("Dressing").filter((p) => "extras" in p.params).map((p) => [p.id, p] as const))("%s", { timeout: 20_000 }, (_id, p) => {
+  it("keeps the gate in front of the door open: no rail or picket of the garden's fence crosses the walk", () => {
+    for (const footprint of lib.forRole("Footprint")) {
+      for (const stored of combinations(footprint)) {
+        for (const seed of [1, 2]) {
+          const plan = build(footprint, stored, null, seed) as BuildingPlan;
+          const door = plan.openings.find((o) => o.kind === "door");
+          if (door === undefined) throw new Error(`${JSON.stringify(stored)}: no door`);
+          const fence = (build(p, { extras: ["fence"], walk: "stepping stones" }, plan, seed) as Built).parts.find((part) => part.swatch === "wall");
+          if (fence === undefined) throw new Error(`${JSON.stringify(stored)}: no fence`);
+          // A walk half a meter wide leads straight out from the door; no triangle of the fence in front of the door reaches into it.
+          let across = 0;
+          for (let t = 0; t < fence.indices.length; t += 3) {
+            const vs = [0, 1, 2].map((k) => fence.indices[t + k] as number);
+            const xs = vs.map((v) => fence.positions[v * 3] as number);
+            const zs = vs.map((v) => fence.positions[v * 3 + 2] as number);
+            if (Math.min(...zs) > door.position[2] && Math.min(...xs) < door.position[0] + 0.25 && Math.max(...xs) > door.position[0] - 0.25) across++;
+          }
+          expect(across, JSON.stringify(stored)).toBe(0);
+        }
+      }
+    }
+  });
+});
+
 describe.each(lib.forRole("Walls").map((p) => [p.id, p] as const))("%s", { timeout: 20_000 }, (_id, p) => {
   it("lays a floor just under the door's sill across every block, so none of the ground under the house shows", () => {
     for (const plan of plans) {

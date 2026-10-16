@@ -194,21 +194,17 @@ export function buildGarden(p: Resolved<typeof cottageGardenParams>, ctx: BuildC
         const first = pickets.find((pk) => pk.t >= t0 - 0.11) ?? { t: t0, gives: 0 };
         return { loss: Math.max(...pickets.map((pk) => pk.gives)) + 0.01, droop: 0, wither: 0.6, glow: 0, pivot: addScaled([a[0], ry, a[2]], u, first.t), tint: 0 };
       };
+      // The rails run the length of the run in lengths of about 2 m, either side of the gate on the front run.
+      const gate = Math.abs(a[2] - front) < 0.01 && Math.abs(b2[2] - front) < 0.01 ? (gateX - a[0]) * u[0] : null;
+      const spans = (gate === null ? [[0, len]] : [[0, gate - 0.62], [gate + 0.62, len]]).filter(([t0, t1]) => (t1 as number) - (t0 as number) > 0.1) as [number, number][];
       for (const ry of [0.22, 0.58]) {
-        const segs = Math.max(1, Math.round(len / 2));
-        for (let k = 0; k < segs; k++) {
-          const p0 = addScaled(a, u, (len * k) / segs);
-          const p1 = addScaled(a, u, (len * (k + 1)) / segs);
-          const mid = addScaled(p0, sub(p1, p0), 0.5);
-          const tOf = (x: number, z: number): number => (x - a[0]) * u[0] + (z - a[2]) * u[2];
-          if (Math.abs(mid[2] - front) < 0.01 && Math.abs(mid[0] - gateX) < 0.62 + len / segs / 2) {
-            for (const [x0, x1] of [[p0[0], gateX - 0.62], [gateX + 0.62, p1[0]]] as const) {
-              const [t0, t1] = [tOf(x0, front), tOf(x1, front)].sort((m, k) => m - k) as [number, number];
-              if (Math.abs(x1 - x0) > 0.1) beam(fence, [Math.min(x0, x1), ry, front - 0.03], [Math.max(x0, x1), ry, front - 0.03], 0.07, 0.025, n, 0.5, rail(t0, t1, ry));
-            }
-            continue;
+        for (const [s0, s1] of spans) {
+          const segs = Math.max(1, Math.round((s1 - s0) / 2));
+          for (let k = 0; k < segs; k++) {
+            const t0 = s0 + ((s1 - s0) * k) / segs;
+            const t1 = s0 + ((s1 - s0) * (k + 1)) / segs;
+            beam(fence, addScaled(addScaled([a[0], ry, a[2]], u, t0), n, -0.03), addScaled(addScaled([a[0], ry, a[2]], u, t1), n, -0.03), 0.07, 0.025, n, 0.5, rail(t0, t1, ry));
           }
-          beam(fence, addScaled([p0[0], ry, p0[2]], n, -0.03), addScaled([p1[0], ry, p1[2]], n, -0.03), 0.07, 0.025, n, 0.5, rail((len * k) / segs, (len * (k + 1)) / segs, ry));
         }
       }
     }
