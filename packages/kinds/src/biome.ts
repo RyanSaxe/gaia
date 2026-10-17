@@ -16,7 +16,7 @@ export const biome = kind({
       optional: true,
       ask: "its air says how clearly the directory's code can be seen through: clear for code that is easy to follow, a haze or mist for code that is hard to see into.",
     }),
-    accents: slot("Accents", { optional: true, ask: "small drifting things, such as petals or leaves, give the directory a mood of its own when it has one worth showing; most have none." }),
+    accents: slot("Accents", { optional: true, ask: "small drifting things, petals, leaves or fireflies, give the air a mood: a directory whose code feels lively, blooming, old and settled, or alive after dark has them; one that feels plain and workmanlike has none." }),
     natives: slot("Natives", { ask: "its native families are the colors that belong to the directory's land." }),
   },
   facts: { extent: (r) => r.extent },

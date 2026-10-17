@@ -24,15 +24,17 @@ const look = (doc: string): Look => ({ doc });
  * among which Jev still picks by character: that is what grows a world's
  * woods. Jev picks a building most times it is offered one (214 of Gaia's
  * things from 0.90), and only the most important things are offered a
- * building or a landmark. A rank is a share of the world's own things, so
- * the ranges hold at any world size.
+ * building or a landmark; the very most important, from 0.997, are offered a
+ * landmark or a tree, since offered a building too Jev took the building and
+ * a world lost its landmarks. A rank is a share of the world's own things,
+ * so the ranges hold at any world size.
  */
 export const SIZES = {
   flowers: { rank: [0, 0.45], words: "Flowers grow low in the grass, and many things are flowers." },
   stones: { rank: [0, 0.45], words: "A stone sits from ankle to waist high, and many things are stones." },
   bushes: { rank: [0.15, 0.75], words: "A bush grows knee to head high, and many things are bushes." },
   trees: { rank: [0.3, 1], words: "A tree grows tall over a person, and many things are trees." },
-  buildings: { rank: [0.9, 1], words: "A building is as big as a house, and buildings are scarce: few things in a world are one." },
+  buildings: { rank: [0.9, 0.997], words: "A building is as big as a house, and buildings are scarce: few things in a world are one." },
   landmarks: { rank: [0.98, 1], words: "A landmark rises over everything around it, and landmarks are the rarest: a world holds only a handful." },
 } as const satisfies Readonly<Record<string, { readonly rank: readonly [number, number]; readonly words: string }>>;
 
