@@ -44,6 +44,8 @@ export const TRAVEL = {
   /** Wherever a trip wades, and this far either side, it goes at walking pace, meters a second, and meters. */
   ford: 4.2,
   fordReach: 4,
+  /** Under the open journal, where the world is hidden, a trip takes at most this long from then on, seconds (`hurryFor`). */
+  underBook: 6,
 } as const;
 
 /**
@@ -481,6 +483,25 @@ export function wayLeft(trip: Trip, s: number): Walker[] {
   const out = [travelPoint(trip, s)];
   for (let i = Math.floor(f) + 1; i < n; i++) out.push({ x: trip.points[i * 2] as number, z: trip.points[i * 2 + 1] as number });
   return out;
+}
+
+/**
+ * How many times faster than its own a trip must go from `at` to arrive
+ * within `seconds`: its own time from there, stepped as travel steps it
+ * without waiting on the land, over `seconds`; never under 1, so a trip that
+ * arrives sooner keeps its own pace. Stepping the trip `hurry` times as far
+ * in time each frame plays its own pace, turns and slowing that much faster
+ * along the same way.
+ */
+export function hurryFor(trip: Trip, at: Travel, seconds: number = TRAVEL.underBook): number {
+  const dt = 1 / 60;
+  let t = at;
+  let own = 0;
+  while (!t.done && own < 3600) {
+    t = travelStep(trip, t, dt, t.yaw);
+    own += dt;
+  }
+  return Math.max(1, own / seconds);
 }
 
 /** A trip about to begin, the person facing `yaw`. */
