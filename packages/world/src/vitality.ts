@@ -1,6 +1,10 @@
 // Vitality pooled over the land. A thing's own vitality is Jev's quality from
 // the understanding pass (`layoutWorld`); a folder's, as the field map and the
-// minimap wash it, pools its files' by the ground each holds.
+// minimap wash it, pools its files' by the ground each holds. A world's things
+// take a new vitality in place (`withVitality`), as when its code moves on
+// while it stands, and nothing else about them changes.
+
+import type { CodeWorld } from "./code-world.ts";
 
 const clamp01 = (x: number): number => Math.min(1, Math.max(0, x));
 
@@ -60,4 +64,39 @@ export function groundVitality(parts: readonly VitalPart[]): ReadonlyMap<string,
   const own = new Map<string, VitalPart[]>();
   for (const p of parts) own.set(p.area, [...(own.get(p.area) ?? []), p]);
   return new Map([...whole].map(([path, v]) => [path, own.has(path) ? pooledVitality(own.get(path) ?? []) : v]));
+}
+
+/**
+ * Every thing's own vitality in a world, by what it stands for: a file's path,
+ * a definition's id (`<file>#<name>`) and an entity's root path. A file's
+ * patch, its building or landmark and what it stands as share its vitality,
+ * as a definition's do.
+ */
+export function vitalityOf(world: CodeWorld): Map<string, number> {
+  return new Map([
+    ...world.patches.map((p) => [p.path, p.vitality] as const),
+    ...world.symbols.map((s) => [s.id, s.vitality] as const),
+    ...world.things.map((t) => [t.path, t.vitality] as const),
+    ...world.standing.map((s) => [s.path, s.vitality] as const),
+  ]);
+}
+
+/**
+ * The same world with each thing in `changes` at its new vitality, by what it
+ * stands for (as `vitalityOf` names it), everywhere it shows: its patch, its
+ * building or landmark, what it stands as and its definitions' own slots.
+ * Nothing moves, and every form stays.
+ */
+export function withVitality(world: CodeWorld, changes: ReadonlyMap<string, number>): CodeWorld {
+  const changed = <T extends { readonly vitality: number }>(id: string, of: T): T => {
+    const vitality = changes.get(id);
+    return vitality === undefined ? of : { ...of, vitality };
+  };
+  return {
+    ...world,
+    patches: world.patches.map((p) => changed(p.path, p)),
+    symbols: world.symbols.map((s) => changed(s.id, s)),
+    things: world.things.map((t) => changed(t.path, t)),
+    standing: world.standing.map((s) => changed(s.path, s)),
+  };
 }

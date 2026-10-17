@@ -208,11 +208,14 @@ export function createImmersive(container: HTMLElement, world: WorldHandle): Imm
    * file, a file or a definition as itself.
    */
   const standsFor = (of: string): string => (of.startsWith("entity:") ? of.slice("entity:".length) : of.startsWith("own:") ? of.slice("own:".length) : of);
-  /** Each map the journal holds, drawn once per painted paper: the whole land across the endpapers, and each folder's. */
+  /**
+   * Each map the journal holds, drawn once per painted paper: the whole land across the endpapers, and each folder's.
+   * While the paper is painted again after vitality changed, a page keeps the map drawn from the last one.
+   */
   let maps: { paper: unknown; drawn: Map<string, HTMLCanvasElement | null> } | null = null;
   function mapOf(area: string, w: number, h: number, fold: boolean): HTMLCanvasElement | null {
     const paper = map.paper();
-    if (paper === null) return null;
+    if (paper === null) return maps?.drawn.get(area) ?? null;
     if (maps?.paper !== paper) maps = { paper, drawn: new Map() };
     if (!maps.drawn.has(area)) maps.drawn.set(area, drawMapPage({ paper: map.paper, stood: world.stood, places: world.places, placeAt: world.placeAt }, area, w, h, fold));
     return maps.drawn.get(area) ?? null;
@@ -255,6 +258,8 @@ export function createImmersive(container: HTMLElement, world: WorldHandle): Imm
     },
   );
   source.onArrive(() => journal.refresh());
+  // A paper painted afresh redraws the open page's map.
+  map.onPainted(() => journal.refresh());
   // The minimap lies on the slip under the strap across the journal's cover.
   const scrap = layer.querySelector(".minimap");
   if (scrap !== null) journal.slip.append(scrap);
@@ -374,6 +379,10 @@ export function createImmersive(container: HTMLElement, world: WorldHandle): Imm
     map.invalidate(!lifted);
     map.show(active);
     worldName.textContent = world.places().name;
+    readVitality();
+  });
+  /** Reads every thing's vitality from the world standing now: the journal's words, and how the names on the land weather. */
+  function readVitality(): void {
     const code = world.code();
     if (code !== null) {
       const pooled = areaVitality(code.patches.map((p) => ({ area: p.area, vitality: p.vitality, size: p.radius * p.radius })));
@@ -384,6 +393,24 @@ export function createImmersive(container: HTMLElement, world: WorldHandle): Imm
     // A directory's vitality: its files', its subdirectories' included, pooled by the ground each holds, as the map washes it.
     const vitality = areaVitality(world.places().patches.map((p) => ({ area: p.area, vitality: p.vitality, size: p.radius * p.radius })));
     markers.vitality((path) => vitality.get(path) ?? 1);
+  }
+  // Vitality changed in place, as when the world heals onto a new commit. Once for all the changes made together (a
+  // tool sets many in a row), the map is washed again while the page is idle, the changed things are painted afresh,
+  // each showing its old painting until then, and the open page redraws.
+  let changed: Set<string> | null = null;
+  world.onVitality((ids) => {
+    if (changed === null) {
+      changed = new Set();
+      queueMicrotask(() => {
+        const all = [...(changed ?? [])];
+        changed = null;
+        readVitality();
+        map.invalidate();
+        paintings.repaint(all);
+        journal.refresh();
+      });
+    }
+    for (const id of ids) changed.add(id);
   });
 
   // ---------- the compass, and the slip it opens: Gaia's mark and how to wander ----------

@@ -6,7 +6,8 @@
 // either side of the one open, then the things nearest the person while they
 // stand still, never while they walk. Each painting is kept with the world
 // (`PaintingStore`), so a world opened again is not painted again, and a
-// thing whose vitality changed is.
+// thing whose vitality changed is: on opening, or at once when it changes
+// while the world stands (`repaint`).
 
 import type { Pixels } from "../terrain/capture.ts";
 import type { PainterJob, PainterReply } from "./painter-worker.ts";
@@ -47,6 +48,12 @@ export interface Paintings {
   ahead(ids: readonly string[], wide?: boolean): void;
   /** Paints these when nothing else waits and the person stands still: the things nearest them. */
   near(ids: readonly string[]): void;
+  /**
+   * Paints these afresh when the person stands still, things whose look changed in place, such as their vitality: each
+   * keeps showing its old painting until the new one is done, so no page waits on it or goes blank. One not painted
+   * yet is left alone, since it will be painted as it is now.
+   */
+  repaint(ids: readonly string[]): void;
   /** How far the painting of `id` is: not begun, under way, done, or nothing stands for it. */
   state(id: string, wide?: boolean): "waiting" | "painting" | "done" | "none";
   /** Forgets every painting, for a world that changed. */
@@ -120,8 +127,12 @@ export function createPaintings(options: PaintingsOptions): Paintings {
     return p;
   };
   const finish = (p: Painting, state: "done" | "none", bitmap: ImageBitmap | null): void => {
-    p.state = state;
-    p.done = bitmap;
+    // Painted afresh, the old painting goes; a fresh one that came to nothing leaves the old one shown.
+    if (bitmap !== null) {
+      if (p.done !== bitmap) p.done?.close();
+      p.done = bitmap;
+    }
+    p.state = p.done === null ? state : "done";
     if (bitmap !== null) for (const c of p.shown) (c.getContext("2d") as CanvasRenderingContext2D).drawImage(bitmap, 0, 0);
     p.shown.clear();
     p.settle();
@@ -196,7 +207,8 @@ export function createPaintings(options: PaintingsOptions): Paintings {
       canvas.height = PAINTED.h;
       const p = want(id, 0);
       if (p.done !== null) (canvas.getContext("2d") as CanvasRenderingContext2D).drawImage(p.done, 0, 0);
-      else if (p.state === "waiting" || p.state === "painting") p.shown.add(canvas);
+      // One painted afresh shows its old painting until the new one is done.
+      if (p.state === "waiting" || p.state === "painting") p.shown.add(canvas);
       pump();
       return canvas;
     },
@@ -211,6 +223,15 @@ export function createPaintings(options: PaintingsOptions): Paintings {
     },
     near(things) {
       for (const t of things) want(t, 2);
+      pump();
+    },
+    repaint(things) {
+      for (const id of things.flatMap((t) => [named(t, false), named(t, true)])) {
+        const p = paintings.get(id);
+        if (p?.state !== "done") continue;
+        p.state = "waiting";
+        p.rank = 2;
+      }
       pump();
     },
     state: (thing, wide = false) => paintings.get(named(thing, wide))?.state ?? "waiting",

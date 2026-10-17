@@ -852,10 +852,12 @@ green, and `groundLook` is the rule they follow. The page's thread reads
 the same values through `vitalityAt`, the CPU twin of the texture's
 filtering. A change in vitality
 rewrites the texture's bytes (about 3 to 9 ms on the page's thread for
-Gaia's world) and never rebakes: the hook
-`__lab.terrain.fileVitality(path, v)` sets a file's vitality, or every
-file's under a directory, on its definitions (trees among them), its ground,
-and its area's lots and water, and `__lab.terrain.groundVitality(x, z)` reads the texture as the
+Gaia's world) and never rebakes. Vitality changes while a world stands
+only through `setVitality` in `app/renderer/terrain/world.ts`, by what each
+thing stands for, which the map, the journal and its paintings follow; the
+hook `__lab.terrain.fileVitality(path, v)` sets a file's vitality and its
+definitions', or every file's under a directory, on what stands for them,
+their ground, and their areas' lots and water; `__lab.terrain.groundVitality(x, z)` reads the texture as the
 shaders do.
 
 Every primitive writes five per-vertex vitality channels: `loss` (the vitality
