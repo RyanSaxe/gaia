@@ -1,20 +1,25 @@
-// The showcase's codebase: folio, a made-up static site generator whose
-// world is composed for Gaia's film. A wood, a meadow, a village of houses
-// on a brook, a hub's tower on a hill, and past it an old renderer gone to
-// ruin.
+// The showcase's codebase: folio, a made-up static site generator whose code
+// and comments guide Jev to the places Gaia's film walks: a wood, a village by
+// the water, a tower on the hub, a meadow, and an old renderer gone to ruin
+// (`docs/showcase.md`).
 //
 // folio's source is real code, kept as one text file
 // (`app/renderer/terrain/fixtures/showcase-code.txt`, each file under its
 // `=== path ===` line), so Gaia's own world reads one file rather than a
 // codebase of its own. Each part is written as well or as poorly as it
-// fares: the old renderer in `v1/` is tangled, untested and full of emptied
-// error handlers; the search index in `find/` has gone tired; the rest is
-// kept. Folder names place each area on the land (a folder's place is seeded
-// by its path), so they were chosen, from names a real project might use,
-// for where they put the places the film walks.
+// fares: the old renderer in `v1/` shares state through globals, swallows its
+// errors and fails its tests; the rest is kept.
 //
 // `--code DIR` writes folio's source to DIR, outside Gaia's repository or
 // under node_modules, so Gaia's own world never reads it.
+//
+// `--v1 fixed` swaps folio's broken old renderer for the same renderer
+// written well (`fixtures/showcase-code-v1-fixed.txt`): the same files, the
+// same definitions, each as many lines long, so the land lays out exactly
+// the same and only how well `v1/` is written changes. Its world is kept
+// apart (`showcase-fixed-*.json`), so the film can show both of Jev's
+// verdicts on the same place. Judge each in a store of its own: the engine
+// holds an answer through a file's changes until a fresh one clearly differs.
 //
 // `--judge jev|local` opens folio as the app opens any folder (`openWorld`):
 // the engine reads it, Jev's understanding pass judges how much each part
@@ -29,8 +34,8 @@
 // Jev, only with GAIA_JEV=live, the Keychain's key and `--spend-up-to`
 // covering twice the engine's estimate.
 //
-// Usage: pnpm showcase --code DIR
-//        GAIA_DATA_DIR=dir pnpm showcase --judge jev|local [--spend-up-to 0.3]
+// Usage: pnpm showcase --code DIR [--v1 fixed]
+//        GAIA_DATA_DIR=dir pnpm showcase --judge jev|local [--v1 fixed] [--spend-up-to 0.4]
 
 import { type ChildProcess, execFileSync, spawn } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -38,7 +43,7 @@ import { dirname, join, relative, resolve } from "node:path";
 import { createInterface } from "node:readline";
 import { parseArgs } from "node:util";
 import type { CodeGraph, JevResponse } from "@gaia/schema";
-import { DEFAULT_DESIGN, composeWorld, factsOf, judgeWorld, keptJev, layoutWorld, planStanding, planWorldRequests, requestKey } from "@gaia/world";
+import { DEFAULT_DESIGN, composeWorld, factsOf, judgeWorld, keptJev, landOf, layoutWorld, planStanding, planWorldRequests, requestKey } from "@gaia/world";
 import { LOOKS } from "../app/renderer/terrain/looks.ts";
 import { folioFiles } from "../app/renderer/terrain/showcase-code.ts";
 import { createEngineClient } from "../app/world-service/engine-client.ts";
@@ -47,8 +52,18 @@ import { startOpenRouterStandIn } from "./openrouter-stand-in.ts";
 
 const repo = resolve(import.meta.dirname, "..");
 const fixtures = resolve(repo, "app/renderer/terrain/fixtures");
-const args = parseArgs({ options: { code: { type: "string" }, judge: { type: "string" }, "spend-up-to": { type: "string" } } }).values;
+const args = parseArgs({ options: { code: { type: "string" }, judge: { type: "string" }, v1: { type: "string" }, "spend-up-to": { type: "string" } } }).values;
+if (args.v1 !== undefined && args.v1 !== "broken" && args.v1 !== "fixed") throw new Error("--v1 is broken (the default) or fixed.");
+const fixedV1 = args.v1 === "fixed";
+/** The variant's name, which its fixtures carry: the showcase with v1 as written, or with v1 fixed. */
+const variant = fixedV1 ? "showcase-fixed" : "showcase";
 const files = folioFiles(readFileSync(resolve(fixtures, "showcase-code.txt"), "utf8"));
+if (fixedV1) {
+  const fixed = folioFiles(readFileSync(resolve(fixtures, "showcase-code-v1-fixed.txt"), "utf8"));
+  const broken = [...files.keys()].filter((path) => path.startsWith("v1/"));
+  if (broken.join("\n") !== [...fixed.keys()].join("\n")) throw new Error("The fixed v1 must hold exactly the files the broken one does, in the same order, so the land lays out the same.");
+  for (const [path, text] of fixed) files.set(path, text);
+}
 
 /** Writes folio's source to a folder outside Gaia's repository. */
 function writeCode(dir: string): void {
@@ -79,7 +94,7 @@ interface Kept {
   readonly design: string;
   readonly answers: Record<string, JevResponse>;
 }
-const keptFile = resolve(fixtures, "showcase-jev.json");
+const keptFile = resolve(fixtures, `${variant}-jev.json`);
 const kept: Kept = existsSync(keptFile) ? (JSON.parse(readFileSync(keptFile, "utf8")) as Kept) : { design: DEFAULT_DESIGN, answers: {} };
 
 const standIn = judge === "local" ? await startOpenRouterStandIn({ delayMs: 0 }) : undefined;
@@ -141,8 +156,21 @@ try {
   const facts = factsOf(snapshot);
   const jev = keptJev(null, { stored, keep: () => undefined, settled: (key) => (used[key] = stored.get(key) as JevResponse), unasked: "the run's answers do not cover it" });
   const world = layoutWorld(facts, await composeWorld(facts, LOOKS, jev, await judgeWorld(facts, LOOKS, jev, { graph: snapshot }), { graph: snapshot }), snapshot);
-  writeFileSync(resolve(fixtures, "showcase-graph.json"), `${JSON.stringify(snapshot)}\n`);
-  writeFileSync(resolve(fixtures, "showcase-judged.json"), `${JSON.stringify(judgedThings(read))}\n`);
+  writeFileSync(resolve(fixtures, `${variant}-graph.json`), `${JSON.stringify(snapshot)}\n`);
+  writeFileSync(resolve(fixtures, `${variant}-judged.json`), `${JSON.stringify(judgedThings(read))}\n`);
+  // The two variants must lay out the same land, to the cell: only how well v1 is written, and so each patch's
+  // vitality, may differ.
+  const other = resolve(fixtures, `${fixedV1 ? "showcase" : "showcase-fixed"}-graph.json`);
+  if (existsSync(other)) {
+    const theirs = JSON.parse(readFileSync(other, "utf8")) as CodeGraph;
+    const places = (graph: CodeGraph): string => {
+      const land = landOf(factsOf(graph), graph);
+      return JSON.stringify({ ...land, patches: land.patches.map(({ vitality: _, ...place }) => place) });
+    };
+    const same = places(theirs) === places(snapshot);
+    console.error(`showcase: the land ${same ? "is identical to" : "DIFFERS from"} the other v1's`);
+    if (!same) process.exitCode = 1;
+  }
   writeFileSync(keptFile, `${JSON.stringify({ design: DEFAULT_DESIGN, answers: Object.fromEntries(Object.entries(used).sort(([a], [b]) => (a < b ? -1 : 1))) }, null, 1)}\n`);
   const after = await billed(project);
   console.log(
