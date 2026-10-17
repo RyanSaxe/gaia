@@ -143,14 +143,16 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
   /**
    * The ramp test. With the wind's clock frozen, takes vitality from `from` to
    * `to` over `seconds`, setting it with `set` once a frame at `fps`, each
-   * frame's time passing for the change to ease in, and measures what each
-   * frame changes. A frame is held to the wind's own change over half a
-   * second at the same view, measured at rest at the ramp's start, middle and
-   * end, three moments 1.7 s apart at each. Returns each frame's [vitality,
-   * mean, worst block], the wind's worst blocks, and the frames named in
-   * `snaps` as JPEG data URLs.
+   * frame's time passing for the change to ease in, then holds `to` for
+   * `hold` seconds more while what is still easing in settles, and measures
+   * what each frame changes. A frame is held to the wind's own change over
+   * half a second at the same view, measured at rest at the ramp's start,
+   * middle and end, three moments 1.7 s apart at each. Returns each frame's
+   * [vitality, mean, worst block], the wind's worst blocks, and the frames
+   * named in `snaps` (0 at rest before it, then counted through the ramp and
+   * the hold) as JPEG data URLs.
    */
-  function vitalityRamp(set: (v: number) => void, seconds = 6, from = 0.05, to = 0.95, fps = 60, snaps: readonly number[] = []): { steps: [number, number, number][]; wind: number[]; snaps: Record<number, string> } {
+  function vitalityRamp(set: (v: number) => void, seconds = 6, from = 0.05, to = 0.95, fps = 60, snaps: readonly number[] = [], hold = 0): { steps: [number, number, number][]; wind: number[]; snaps: Record<number, string> } {
     const was = world.frozen;
     const t = world.light.uTime.value;
     const steps: [number, number, number][] = [];
@@ -171,10 +173,11 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
       set(from);
       settleVitality();
       let before = grabFrame();
+      if (snaps.includes(0)) shots[0] = world.renderer.domElement.toDataURL("image/jpeg", 0.92);
       const frames = Math.round(seconds * fps);
-      for (let k = 1; k <= frames; k++) {
-        const v = from + ((to - from) * k) / frames;
-        set(v);
+      for (let k = 1; k <= frames + Math.round(hold * fps); k++) {
+        const v = from + ((to - from) * Math.min(k, frames)) / frames;
+        if (k <= frames) set(v);
         // A frame's time passes for the change to ease in; the wind's clock stays frozen.
         world.frame(1 / fps, performance.now(), world.hour);
         const now = grabFrame(1);
