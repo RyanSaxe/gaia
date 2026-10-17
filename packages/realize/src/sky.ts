@@ -22,6 +22,9 @@ export const AIR = {
   mistRise: [0.01, 0.14],
   mistGain: 2.2,
   mistSky: 0.75,
+  /** Above the land the air thins: from `thinFrom` meters up, past any eye's height, haze and mist fall as `thinScale / (thinScale + meters above that)` (`airFromHeight`). */
+  thinFrom: 6,
+  thinScale: 40,
 } as const;
 
 /** What the sky function reads: the hour's light and the sky's three gradient colors. */

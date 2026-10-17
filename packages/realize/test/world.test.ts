@@ -3,7 +3,7 @@ import { type ChoiceField, Library, rand, seedOf } from "@gaia/schema";
 import { BIOME_PRIMITIVES, RELIEF_PRIMITIVES, WORLD_PRIMITIVES, air as airPrimitive } from "@gaia/primitives";
 import { biome, world } from "@gaia/kinds";
 import { assemble, planDetails, planStructure, readStructure, validate } from "@gaia/world";
-import { CLEAR_AIR, MURK, mixAir, murkyAir, realizeWorld } from "@gaia/realize";
+import { AIR, CLEAR_AIR, MURK, airFromHeight, mixAir, murkyAir, realizeWorld } from "@gaia/realize";
 import { blueprintOf as identify } from "@gaia/schema";
 import { fakeJev, randomSlots } from "@gaia/world/testing";
 
@@ -92,7 +92,7 @@ describe("the air where regions meet", () => {
   });
 });
 
-describe("the air over failing ground", () => {
+describe("the air over failing ground and from above", () => {
   type Erased = (p: unknown) => ReturnType<typeof airPrimitive.build>;
   const airs = Object.keys((airPrimitive.params.air as ChoiceField).options).map((name) => (airPrimitive.build as unknown as Erased)({ air: name, distance: 1 }));
 
@@ -112,6 +112,21 @@ describe("the air over failing ground", () => {
         expect((next.density - last.density) / air.density).toBeLessThan(0.06);
         last = next;
       }
+    }
+  });
+
+  it("looks the same at any eye's height, and thins steadily above it, so a view from high over the land sees it all", () => {
+    for (const air of airs) {
+      for (const height of [0, 1.6, 3, AIR.thinFrom]) expect(airFromHeight(air, height)).toEqual(air);
+      let last = air;
+      for (let h = AIR.thinFrom + 1; h <= 300; h += 1) {
+        const next = airFromHeight(air, h);
+        expect(next.density).toBeLessThan(last.density);
+        expect(last.density - next.density).toBeLessThan(air.density * 0.03);
+        expect(next.mist / Math.max(air.mist, 1e-9)).toBeCloseTo(air.mist === 0 ? 0 : next.density / air.density, 10);
+        last = next;
+      }
+      expect(airFromHeight(air, 150).density).toBeLessThan(air.density / 3);
     }
   });
 });

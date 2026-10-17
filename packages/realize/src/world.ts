@@ -23,6 +23,7 @@ import type {
 } from "@gaia/schema";
 import { hex, mixLab } from "@gaia/primitives";
 import { lightAt } from "./day.ts";
+import { AIR } from "./sky.ts";
 import { buildSlots } from "./realize.ts";
 
 /** A blueprint with the kind it fills. */
@@ -177,6 +178,18 @@ export function murkyAir(air: AtmosphereSpec, decline: number): AtmosphereSpec {
     mist: Math.min(1, air.mist + MURK.mist * d),
     specks: air.specks,
   };
+}
+
+/**
+ * The air as an eye `height` meters above the land looks through it: the same at eye level, and from
+ * `AIR.thinFrom` up its haze and low mist thin as `AIR.thinScale / (AIR.thinScale + meters above that)`, so a view
+ * from high over the land sees all of it, softened by distance.
+ */
+export function airFromHeight(air: AtmosphereSpec, height: number): AtmosphereSpec {
+  const above = height - AIR.thinFrom;
+  if (!(above > 0)) return air;
+  const thin = AIR.thinScale / (AIR.thinScale + above);
+  return { ...air, density: air.density * thin, mist: air.mist * thin };
 }
 
 /** The shared sky seen through `air`: its horizon pulled toward the air's tint, and the fog the air lays over distance. */

@@ -11,7 +11,7 @@ import * as THREE from "three";
 import { type AtmosphereSpec, type Blueprint, type BuildingPlan, type GroundSpec, Library, type Palette, seedOf } from "@gaia/schema";
 import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, LANDMARK_PRIMITIVES, RELIEF_PRIMITIVES, ROCK_PRIMITIVES, WILDFLOWER_PRIMITIVES, WORLD_PRIMITIVES } from "@gaia/primitives";
 import { biome, landmark as landmarkKind, world as worldKind } from "@gaia/kinds";
-import { CLEAR_AIR, FLORA_PRESETS, type Realized, type RegionLook, type SkyLook, mergeParts, mixAir, murkyAir, realizeRegion, realizeSky, regionAir, throughAir } from "@gaia/realize";
+import { CLEAR_AIR, FLORA_PRESETS, type Realized, type RegionLook, type SkyLook, airFromHeight, mergeParts, mixAir, murkyAir, realizeRegion, realizeSky, regionAir, throughAir } from "@gaia/realize";
 import {
   type FarCards,
   LANTERN,
@@ -592,22 +592,24 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   }
   /** Each region's air as Jev chose it, for the world it was realized for, and room for each region's weight. */
   let airs: { readonly world: WorldSpec; readonly airs: readonly AtmosphereSpec[]; readonly weights: Float64Array } | null = null;
-  /** The air last laid, with the decline around the eye it was laid for. */
-  let breathed: { readonly decline: number; readonly air: AtmosphereSpec } | null = null;
+  /** The air last laid, with the decline around the eye and the eye's height above the land it was laid for. */
+  let breathed: { readonly decline: number; readonly height: number; readonly air: AtmosphereSpec } | null = null;
   /**
    * Lays the air where the eye stands, at `eye`, in front of the hour's sky: each region's air blended by how near
    * it lies, over the band where landforms and covers blend (`regionWeights`), so it changes gradually as the person
    * crosses from one region into the next. Over failing ground it thickens and greys with the ground's decline around
-   * the eye (`declineAround`, `murkyAir`). Every pass reads it: the view, the water's mirror and far forms. A view from
-   * above looks through thin, clear air instead, so the whole land stays legible.
+   * the eye (`declineAround`, `murkyAir`), and it thins with the eye's height above the land (`airFromHeight`). Every
+   * pass reads it: the view, the water's mirror and far forms. A view from above looks through thin, clear air instead,
+   * so the whole land stays legible.
    */
   function breathe(eye: { readonly x: number; readonly y: number; readonly z: number }): void {
     if (skyLook === null) return;
     if (airs?.world !== world) airs = { world, airs: world.regions.map((r) => regionAir({ blueprint: r.biome, kind: biome }, lib, seedOf(r.id))), weights: new Float64Array(world.regions.length) };
     regionWeights(world, eye.x, eye.z, airs.weights);
     const decline = declineAround(eye.x, eye.z, MURK_REACH);
-    const local = aerial !== null ? overviewAir(world.size) : murkyAir(mixAir(airs.airs, airs.weights), decline);
-    breathed = { decline, air: local };
+    const height = eye.y - groundHeightAt(terrain, eye.x, eye.z);
+    const local = aerial !== null ? overviewAir(world.size) : airFromHeight(murkyAir(mixAir(airs.airs, airs.weights), decline), height);
+    breathed = { decline, height, air: local };
     sky.apply({ light: skyLook.light, ...throughAir(skyLook, local) });
   }
   const shadow = createSunShadow(light, 2048);
@@ -2809,7 +2811,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       },
       /** The ground's own vitality and its area's at (x, z), or underfoot, as the grass, the ground and the water read them. */
       groundVitality: (x?: number, z?: number) => groundVitalityAt(x ?? walker.x, z ?? walker.z),
-      /** The air last laid where the eye is: the ground's decline around it, and the air itself. */
+      /** The air last laid where the eye is: the ground's decline around it, its height above the land, and the air itself. */
       air: () => breathed,
       understory: () => understory.stats(),
       /** A hash of the baked land (heights, water levels and shore distances), to prove a change to the bake leaves it byte for byte. */
