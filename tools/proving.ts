@@ -14,8 +14,9 @@
 // - brooks, trickles and ponds, with dependencies drawn across them so trails
 //   cross on footbridges and stepping stones;
 // - large and tiny areas, deep nesting, and a hub many trails branch to;
-// - every water, character, tree, bush and flower option Jev is offered, and
-//   every land and trail of its own.
+// - every water, character, tree, bush and flower option Jev is offered,
+//   every land and trail of its own, and every drift (petals, falling leaves,
+//   fireflies, motes and seeds), one of them over an area in ruin.
 // The generator checks the plan covers every option in `looks.ts` Jev is
 // asked to choose among and every look of its own, and the lab's test checks
 // the baked world shows each feature.
@@ -33,7 +34,8 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, relative, resolve } from "node:path";
 import { parseArgs } from "node:util";
-import type { Blueprint, CodeFacts, EntityFacts, EntityForm, FileFacts, SymbolFact } from "@gaia/schema";
+import { type Blueprint, type CodeFacts, type EntityFacts, type EntityForm, type FileFacts, type SymbolFact, blueprintOf } from "@gaia/schema";
+import { drift as driftPrimitive } from "@gaia/primitives";
 import { type Judgments, layoutWorld } from "@gaia/world";
 import { CHARACTERS, COMPOSED_FORMS, FORMS, WATERS } from "../app/renderer/terrain/looks.ts";
 import { provingCode } from "./proving-code.ts";
@@ -59,6 +61,8 @@ interface PlannedDir {
   readonly files: readonly string[];
   /** The land Jev would give it, when it is meant to have land of its own. */
   readonly land?: readonly [land: string, water: string, character: string];
+  /** What drifts through its land's air, and how much (`drift@1`), when Jev would give it any. */
+  readonly drift?: readonly [form: string, amount: string];
   /** The entity rooted here, and what stands for it. */
   readonly entity?: { readonly form: EntityForm; readonly as: "building" | "landmark"; readonly look: string; readonly doc: string };
 }
@@ -79,7 +83,7 @@ const PLAN: readonly PlannedDir[] = [
     entity: L("Great willow", "The proving ground: a made-up codebase with every feature of a world in it, from thriving to ruin.", "package"),
   },
   // A brook runs through a thriving wood; its banks' entities lean on each other across it.
-  { path: "crossings", health: "thriving", files: ["flow.ts:520", "channel.ts:480", "banks.ts:420", "weir.ts:360", "crossings.test.ts:180", "NOTES.md:90"], land: ["Brook valley", "A brook", "Deep wood"] },
+  { path: "crossings", health: "thriving", files: ["flow.ts:520", "channel.ts:480", "banks.ts:420", "weir.ts:360", "crossings.test.ts:180", "NOTES.md:90"], land: ["Brook valley", "A brook", "Deep wood"], drift: ["falling leaves", "some"] },
   { path: "crossings/west-bank", health: "thriving", files: ["package.json:30", "index.ts:140", "path.ts:300"], entity: B("Thatched cottage", "Keeps the west bank's paths: a small module doing one modest job.") },
   { path: "crossings/east-bank", health: "thriving", files: ["package.json:30", "index.ts:120", "gate.ts:280"], entity: B("Storybook house", "The east bank's gatehouse: the process a person starts to cross.") },
   { path: "crossings/mill", health: "thriving", files: ["package.json:30", "index.ts:160", "wheel.ts:380"], entity: B("Watermill", "Turns the brook's flow into work: a pipeline from one kind of data to another.", "package") },
@@ -88,20 +92,20 @@ const PLAN: readonly PlannedDir[] = [
   { path: "fords/jetty", health: "tired", files: ["Cargo.toml:30", "index.ts:120", "landing.ts:340"], entity: B("Stone croft", "A plain, sturdy croft by the near side of the ford.", "crate") },
   { path: "fords/gravel", health: "tired", files: ["package.json:30", "index.ts:110", "ring.ts:320"], entity: L("Stone ring", "The shared definitions both sides of the ford agree on.") },
   // A still pond in a wet hollow, and a meadow pond with a service on its shore.
-  { path: "hollow", health: "thriving", files: ["package.json:30", "index.ts:220", "pool.ts:520", "depth.ts:420", "hollow.test.ts:160"], land: ["Mossy basin", "A still pond", "Wet hollow"], entity: L("Lantern tower", "Lights the rest: the entity every other area looks to.") },
+  { path: "hollow", health: "thriving", files: ["package.json:30", "index.ts:220", "pool.ts:520", "depth.ts:420", "hollow.test.ts:160"], land: ["Mossy basin", "A still pond", "Wet hollow"], drift: ["fireflies at dusk", "many"], entity: L("Lantern tower", "Lights the rest: the entity every other area looks to.") },
   { path: "pondside", health: "well", files: ["package.json:30", "server.ts:240", "queue.ts:420", "handoff.ts:380:failing", "pondside.test.ts:150"], land: ["Pond meadow", "A still pond", "Old meadow"], entity: B("Archive tower", "Keeps the records requests leave at the pond.") },
   { path: "pondside/records", health: "tired", files: ["package.json:30", "index.ts:100", "ledger.ts:300"], entity: B("Archive tower", "An archive gone tired: untested, complex, full of TODOs.") },
   // Hills, terraces, moor, dunes and downs: every remaining land, each without water so its own landform shows.
-  { path: "hills", health: "thriving", files: ["slopes.ts:480", "crests.ts:420", "hills.test.ts:140"], land: ["Clover hills", "No water", "Groves and clearings"] },
+  { path: "hills", health: "thriving", files: ["slopes.ts:480", "crests.ts:420", "hills.test.ts:140"], land: ["Clover hills", "No water", "Groves and clearings"], drift: ["drifting petals", "some"] },
   { path: "hills/kiln", health: "tired", files: ["package.json:30", "index.ts:110", "fire.ts:300"], entity: B("Thatched cottage", "A cottage gone tired: untested and tangled.") },
   { path: "hills/oak", health: "thriving", files: ["package.json:30", "index.ts:180", "branches.ts:420"], entity: L("Great oak", "A large library the others build from.") },
   { path: "terraces", health: "thriving", files: ["steps.ts:420", "stages.test.ts:380", "order.test.ts:300", "pipeline.ts:360"], land: ["Silver terraces", "No water", "Rocky heath"] },
   { path: "terraces/croft", health: "thriving", files: ["Cargo.toml:30", "lib.rs:200", "press.rs:380"], entity: B("Stone croft", "Native code close to the machine, every test passing.", "crate") },
   { path: "terraces/ring", health: "ruin", files: ["package.json:30", "index.ts:160", "schema.ts:360"], entity: L("Stone ring", "Shared definitions in ruin: failing tests, compiler errors, nothing imports half of it.") },
-  { path: "moor", health: "thriving", files: ["guide.md:620", "decisions.md:540", "glossary.md:360"], land: ["Heather moor", "No water", "Old meadow"] },
+  { path: "moor", health: "thriving", files: ["guide.md:620", "decisions.md:540", "glossary.md:360"], land: ["Heather moor", "No water", "Old meadow"], drift: ["motes of light", "some"] },
   { path: "moor/archive", health: "thriving", files: ["package.json:30", "index.ts:120", "catalog.ts:320"], entity: B("Archive tower", "Keeps the definitions others read, in good order.") },
   { path: "moor/henge", health: "thriving", files: ["package.json:30", "index.ts:120", "stones.ts:300"], entity: L("Stone ring", "The schema every entity agrees on, every test passing.") },
-  { path: "dunes", health: "thriving", files: ["settings.json:700", "data.csv:900", "deploy.sh:220", "lint.toml:120"], land: ["Golden dunes", "No water", "Rocky heath"] },
+  { path: "dunes", health: "thriving", files: ["settings.json:700", "data.csv:900", "deploy.sh:220", "lint.toml:120"], land: ["Golden dunes", "No water", "Rocky heath"], drift: ["dandelion seeds", "some"] },
   { path: "dunes/keep", health: "tired", files: ["Cargo.toml:30", "lib.rs:220", "guard.rs:380"], entity: L("Battlemented keep", "A guarded core gone tired.", "crate") },
   { path: "dunes/ledger", health: "ruin", files: ["package.json:30", "index.ts:120", "entries.ts:300"], entity: B("Archive tower", "Records in ruin: failing tests and errors throughout.") },
   // The large area: a container of many subdirectories, nested deep, with a tiny one beside.
@@ -120,7 +124,7 @@ const PLAN: readonly PlannedDir[] = [
   { path: "mixed/workshop", health: "tired", files: ["package.json:30", "index.ts:140", "gears.ts:400"], entity: B("Storybook house", "An application gone tired: untested and complex.") },
   { path: "mixed/beacon", health: "tired", files: ["package.json:30", "index.ts:120", "lamp.ts:340"], entity: L("Lantern tower", "A lantern tower gone tired.") },
   // Ruins: a whole area failing, its brook crossed by bridges in decline.
-  { path: "ruins", health: "ruin", files: ["package.json:30", "index.ts:140", "collapse.ts:620", "rubble.ts:520", "ruins.test.ts:160", "README.md:120"], land: ["Brook valley", "A brook", "Deep wood"], entity: L("Great willow", "A whole area in ruin: failing tests, compiler errors and dead code throughout.") },
+  { path: "ruins", health: "ruin", files: ["package.json:30", "index.ts:140", "collapse.ts:620", "rubble.ts:520", "ruins.test.ts:160", "README.md:120"], land: ["Brook valley", "A brook", "Deep wood"], drift: ["falling leaves", "many"], entity: L("Great willow", "A whole area in ruin: failing tests, compiler errors and dead code throughout.") },
   { path: "ruins/cottage", health: "ruin", files: ["package.json:30", "index.ts:110", "hearth.ts:300"], entity: B("Thatched cottage", "A cottage in ruin.") },
   { path: "ruins/croft", health: "ruin", files: ["Cargo.toml:30", "lib.rs:200", "forge.rs:340"], entity: B("Stone croft", "A croft in ruin.", "crate") },
   { path: "ruins/house", health: "ruin", files: ["package.json:30", "main.ts:150", "utils2.ts:280"], entity: B("Storybook house", "An application in ruin.") },
@@ -437,10 +441,13 @@ sources.forEach((f, k) => {
     delete (forms[f.path] as Record<string, string>)[`#${first.name}`];
   }
 });
+/** A land's blueprint with what drifts through its air, as Jev fills the biome's accents. */
+const withDrift = (land: Blueprint, drift: PlannedDir["drift"]): Blueprint =>
+  drift === undefined ? land : blueprintOf(land.kind, { ...land.slots, accents: { use: driftPrimitive.id, params: { form: drift[0], amount: drift[1] } } });
 // The proving ground is written by hand, not judged: its sky, lands, things and trails are the hand-filled looks its plan names.
 const judged: Judgments = {
   sky: SKY,
-  lands: Object.fromEntries(PLAN.flatMap((d) => (d.land === undefined ? [] : [[d.path, own(LANDS, d.land[0])]]))),
+  lands: Object.fromEntries(PLAN.flatMap((d) => (d.land === undefined ? [] : [[d.path, withDrift(own(LANDS, d.land[0]), d.drift)]]))),
   waters: Object.fromEntries(PLAN.flatMap((d) => (d.land === undefined ? [] : [[d.path, d.land[1]]]))),
   characters: Object.fromEntries(PLAN.flatMap((d) => (d.land === undefined ? [] : [[d.path, d.land[2]]]))),
   things: { ...Object.fromEntries(PLAN.flatMap((d) => (d.entity === undefined ? [] : [[d.path, { as: d.entity.as, blueprint: own(d.entity.as === "building" ? BUILDINGS : LANDMARKS, d.entity.look) }]]))), ...raised },
@@ -468,6 +475,7 @@ const missing = (what: string, options: Readonly<Record<string, unknown>>, used:
 const things = PLAN.flatMap((d) => (d.entity === undefined ? [] : [d.entity]));
 const gaps = [
   ...missing("land", LANDS, PLAN.flatMap((d) => (d.land === undefined ? [] : [d.land[0]]))),
+  ...missing("drift", driftPrimitive.params.form.options, PLAN.flatMap((d) => (d.drift === undefined ? [] : [d.drift[0]]))),
   ...missing("water", WATERS, Object.values(judged.waters)),
   ...missing("character", CHARACTERS, Object.values(judged.characters)),
   ...missing("form", FORMS, Object.values(forms).flatMap((f) => Object.values(f))),

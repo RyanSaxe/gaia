@@ -1036,6 +1036,16 @@ it has narrowed to nothing, or lying wholly outside the drawing camera's view
 skips the rest of its vertex shader and draws nothing, as it drew before, so
 most blades cost a few instructions.
 
+What drifts through a region's air (`createDrifts` in
+`app/renderer/terrain/drifts.ts`) draws as one set of points a form, and only
+for the forms some region's biome holds. Once a frame the page works out how
+full each form's air is from the regions' weights where the person stands
+(`regionWeights`), the wild's share and the ground's decline there, and which
+trees near the person drop leaves and petals and how many; the shader places
+each point from `uEye`, the wind and the land's clipmap, so the page moves
+nothing but a few uniforms. The water's mirror and the sun's
+shadow leave drifts out.
+
 `createPlantInstances` in `@gaia/render` draws many copies of one plant, one
 instanced mesh per part and level, and `draw` packs the copies it is given
 into each level's instance buffer. Which copies draw, and at which level, is

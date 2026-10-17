@@ -11,7 +11,7 @@ import * as THREE from "three";
 import { type AtmosphereSpec, type Blueprint, type BuildingPlan, type GroundSpec, Library, type Palette, type SeasonSpec, seedOf } from "@gaia/schema";
 import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, LANDMARK_PRIMITIVES, NO_SHIFT, RELIEF_PRIMITIVES, ROCK_PRIMITIVES, WILDFLOWER_PRIMITIVES, WORLD_PRIMITIVES, hex } from "@gaia/primitives";
 import { biome, landmark as landmarkKind, world as worldKind } from "@gaia/kinds";
-import { CLEAR_AIR, FLORA_PRESETS, type Realized, type SkyLook, mergeParts, mixAir, realizeRegion, realizeSky, regionAir, throughAir } from "@gaia/realize";
+import { CLEAR_AIR, FLORA_PRESETS, type Realized, type RegionLook, type SkyLook, mergeParts, mixAir, realizeRegion, realizeSky, regionAir, throughAir } from "@gaia/realize";
 import {
   type FarCards,
   LANTERN,
@@ -31,15 +31,16 @@ import {
   createSunShadow,
   type SceneLight,
 } from "@gaia/render";
-import { type Capsule, clearanceAt, frameOf, TILE, LAND_ASPECT, type Deck, decksOf, deckShape, EYE_HEIGHT, footingAt, GAIT, groundHeightAt, heightAt, type Intent, junctionVitality, NO_SOLIDS, NO_TRAILS, openingSpot, TRAILS, outlineShape, returnTo, stoodBy, type StoodSpot, withinLand, piecesShapes, type Place, placeAt, planWalk, regionWeights, siteToWorld, type Solids, type SolidShape, solidsOf, stanceAt, standAt, steerAlong, type Steered, type Steering, steering, steerPress, steerRelease, steerStep, stride, type Stride, acrossWay, carry, planTrip, TRAVEL, type Travel, wadingAt, fordBeside, travelFrom, travelPoint, travelStep, type Trip, trailWay, type Walker, type WalkKey, type Terrain, TERRAIN, type TrailNetwork, type Walk, WALK_TO, walkStep, wallsShape, waterDepthAt, type Way, wayAhead, wayVitalityAt, wayWear, WILDS, type WorldPlaces, type WorldSpec } from "@gaia/terrain";
+import { type Capsule, clearanceAt, groundDecline, regionAt as dominantRegion, wildShare, frameOf, TILE, LAND_ASPECT, type Deck, decksOf, deckShape, EYE_HEIGHT, footingAt, GAIT, groundHeightAt, heightAt, type Intent, junctionVitality, NO_SOLIDS, NO_TRAILS, openingSpot, TRAILS, outlineShape, returnTo, stoodBy, type StoodSpot, withinLand, piecesShapes, type Place, placeAt, planWalk, regionWeights, siteToWorld, type Solids, type SolidShape, solidsOf, stanceAt, standAt, steerAlong, type Steered, type Steering, steering, steerPress, steerRelease, steerStep, stride, type Stride, acrossWay, carry, planTrip, TRAVEL, type Travel, wadingAt, fordBeside, travelFrom, travelPoint, travelStep, type Trip, trailWay, type Walker, type WalkKey, type Terrain, TERRAIN, type TrailNetwork, type Walk, WALK_TO, walkStep, wallsShape, waterDepthAt, type Way, wayAhead, wayVitalityAt, wayWear, WILDS, type WorldPlaces, type WorldSpec } from "@gaia/terrain";
 import { createSky } from "../world/environment.ts";
 import { type CaptureBounds, type Pixels, createCapture } from "./capture.ts";
 import { type Lab, onTap, refs, tapSlop } from "../lab.ts";
 import { createGrass } from "./cover.ts";
 import { createGround, createGroundTexture } from "./ground.ts";
-import { createRegionCovers } from "./regions.ts";
+import { MAX_REGIONS, createRegionCovers } from "./regions.ts";
 import { createWater } from "./water.ts";
 import { createWildGrowth, wildBushBuilds } from "./wilds.ts";
+import { type Crown, type DriftsHere, createDrifts } from "./drifts.ts";
 import { createUnderstory, understoryBuilds } from "./understory.ts";
 import { type BuildAsk, made, makeAhead } from "./made.ts";
 import { createClearings } from "./clearings.ts";
@@ -445,18 +446,20 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   const lantern = createLantern(light);
 
   const covers = createRegionCovers();
-  const coverOf = (i: number): GroundSpec => {
+  const regionLookOf = (i: number): RegionLook => {
     const r = world.regions[i];
     if (r === undefined) throw new Error(`No region ${i}.`);
-    return realizeRegion({ blueprint: r.biome, kind: biome }, lib, seedOf(r.id), NO_SEASON).ground;
+    return realizeRegion({ blueprint: r.biome, kind: biome }, lib, seedOf(r.id), NO_SEASON);
   };
   /** Each region's ground cover, as the shaders paint it. */
   let regionGrounds: readonly GroundSpec[] = [];
+  /** Every region's cover and every region's drift. A world's first bake sets them before it shows. */
   const updateCovers = (): void => {
-    regionGrounds = world.regions.map((_, i) => coverOf(i));
+    const looks = world.regions.map((_, i) => regionLookOf(i));
+    regionGrounds = looks.map((l) => l.ground);
     covers.update(world, regionGrounds, terrain);
+    drifts.regions(looks.map((l) => l.drift));
   };
-  updateCovers();
 
   const scene = new THREE.Scene();
   const sky = createSky(light);
@@ -465,7 +468,10 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   const clearings = createClearings(terrain);
   const grass = createGrass(light, groundTex, covers, clearings);
   const water = createWater(terrain, light, groundTex);
-  scene.add(sky.mesh, ground.wilds, ground.fine, ground.coarse, ground.mirror, grass.mesh, water.group);
+  // What each region sets drifting through its air: petals and leaves from its trees, fireflies, motes and seeds.
+  const drifts = createDrifts(light, groundTex);
+  scene.add(sky.mesh, ground.wilds, ground.fine, ground.coarse, ground.mirror, grass.mesh, water.group, drifts.object);
+  updateCovers();
   /** Each standing landmark's view, in the order of `ways.sites`; a kind may stand more than once. */
   let landmarkViews: PlantView[] = [];
   /** Every landmark view made so far, by its kind and which of that kind it is, reused from bake to bake. */
@@ -876,6 +882,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       return { ...t, represented: sym.represented };
     });
     treesByTile = new Map();
+    treeRegions = new Map();
     for (const t of trees) {
       const key = tileKeyOf(t.x, t.z);
       const list = treesByTile.get(key);
@@ -892,6 +899,27 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     // The trees, the trails, the buildings and the landmarks stand again tile by tile around the person (`standing`).
     standing.open(world);
     warmSoon();
+  }
+  /** Each tree's region, by its index among the trees, found the first time its crown is asked for. */
+  let treeRegions = new Map<number, number>();
+  /** Each region's blend weight at a point, reused frame to frame. */
+  const hereWeights = new Float64Array(MAX_REGIONS);
+  /** Where the person stands, as the drifts round them read it: each region's weight, the wild's share and the ground's decline. */
+  function driftsHere(x: number, z: number): DriftsHere {
+    regionWeights(world, x, z, hereWeights);
+    return { weights: hereWeights.subarray(0, world.regions.length), wild: wildShare(terrain, x, z), decline: groundDecline(groundVitalityAt(x, z).area) };
+  }
+  /** Every tree within `reach` of (x, z), with its crown, region and its ground's decline, for the leaves and petals it drops (`Drifts.follow`); a tree is known by its index. */
+  function crownsNear(x: number, z: number, reach: number): Crown[] {
+    const out: Crown[] = [];
+    trees.forEach((t, id) => {
+      if (Math.abs(t.x - x) > reach || Math.abs(t.z - z) > reach || Math.hypot(t.x - x, t.z - z) > reach) return;
+      const v = variants[t.variant] as TreeVariant;
+      let region = treeRegions.get(id);
+      if (region === undefined) treeRegions.set(id, (region = dominantRegion(world, t.x, t.z)));
+      out.push({ id, x: t.x, z: t.z, ground: t.y, low: t.y + v.height * t.scale * 0.45, high: t.y + v.height * t.scale * 0.92, reach: v.radius * t.scale, region, decline: groundDecline(groundVitalityAt(t.x, t.z).area) });
+    });
+    return out;
   }
   /** What stops a walker: each trunk at its base, the rocks and bushes standing near by their outlines at the ground, and the cottage's walls. */
   function buildSolids(): void {
@@ -1439,6 +1467,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     ground.wilds.visible = on;
     wildGrowth.show(!on);
     grass.mesh.visible = !on;
+    drifts.object.visible = !on;
   }
   /**
    * Looks at the land from above, from `pos` toward `target`, for a capture: the camera stands exactly there, and
@@ -1800,7 +1829,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   // The water mirrors the sky, the coarse ground, trees and the cottage, and
   // never grass or the understory: its reflection is soft, so fine detail
   // there is wasted, and the understory keeps back from the water anyway.
-  const mirrorHide = [grass.mesh, ground.fine, signs.mesh];
+  const mirrorHide = [grass.mesh, ground.fine, signs.mesh, drifts.object];
   // Walking, it mirrors the ground's rings at a quarter of their detail, which draw the wild land too; from above, the whole-world mesh and the wild ring.
   const mirrorShow = (): THREE.Object3D[] => (aerial === null ? [ground.mirror] : [ground.coarse, ground.wilds]);
   let frameCalls = 0;
@@ -1809,7 +1838,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   let waitNight = -1;
   /** The sun's shadow, cast by every plant, building and landmark over the ground framed by `shadow.frame`. */
   function castShadows(): void {
-    shadow.render(renderer, scene, [...views(), ...understory.casters(), ...wildGrowth.all(), ...(swapping === null ? [] : [swapping])], [sky.mesh, ground.wilds, ground.fine, ground.coarse, ground.mirror, grass.mesh, water.group, signs.mesh, ...understory.quiet()]);
+    shadow.render(renderer, scene, [...views(), ...understory.casters(), ...wildGrowth.all(), ...(swapping === null ? [] : [swapping])], [sky.mesh, ground.wilds, ground.fine, ground.coarse, ground.mirror, grass.mesh, water.group, signs.mesh, drifts.object, ...understory.quiet()]);
   }
   /** The water's mirror as `eye` sees it, showing `show`; the draw calls it took. */
   function mirror(eye: THREE.PerspectiveCamera, show: THREE.Object3D[], dt: number): number {
@@ -1849,6 +1878,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     breathe(camera.position.x, camera.position.z);
     // Every pass thins distant detail from where the person's eyes are.
     light.uEye.value.copy(aerial === null ? detailEye : camera.position);
+    if (aerial === null) drifts.follow(driftsHere(light.uEye.value.x, light.uEye.value.z), crownsNear, viewFocal());
     castShadows();
     frameCalls = renderer.info.render.calls;
     passes.shadow = { calls: renderer.info.render.calls, triangles: renderer.info.render.triangles };
@@ -2784,6 +2814,12 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       wilds: () => wildGrowth.all().map((v) => ({ standing: v.count, perCopy: v.triangles / Math.max(1, v.count), levels: v.levels, ...v.drawn() })),
       placements: () => understory.placements(),
       showUnderstory: (on: boolean) => understory.show(on),
+      /** Shows or hides what drifts through the air, for comparing frame costs. */
+      showDrifts: (on: boolean) => {
+        drifts.object.visible = on;
+      },
+      /** Each form drifting: how full the air round the person is, 0 to 1, and how many trees drop it now. */
+      drifts: () => drifts.state(),
       /** Shows or hides the grass, for comparing frame costs and looking at the bare ground. */
       showGrass: (on: boolean) => {
         grass.mesh.visible = on;

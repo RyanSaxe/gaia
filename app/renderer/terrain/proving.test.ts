@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { type BuildingPlan, type Built, Library, seedOf } from "@gaia/schema";
-import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, LANDMARK_PRIMITIVES, RELIEF_PRIMITIVES, STRUCTURE_PRIMITIVES } from "@gaia/primitives";
+import { type BuildingPlan, type Built, Library, blueprintOf, seedOf } from "@gaia/schema";
+import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, LANDMARK_PRIMITIVES, RELIEF_PRIMITIVES, STRUCTURE_PRIMITIVES, drift } from "@gaia/primitives";
 import { landmark, structure } from "@gaia/kinds";
 import { FLORA_PRESETS, realize } from "@gaia/realize";
 import { type BuildingSite, type Extent, TERRAIN, type Terrain, bakeTerrain, extentOf, groundLook, heightAt, siteToWorld, turningExtent, junctionVitality, ownershipOf, placeAt, vitalityAt, vitalityOver, waterDepthAt, wayVitalityAt } from "@gaia/terrain";
@@ -45,8 +45,11 @@ describe("the proving ground", () => {
     const used = (options: object, chosen: Iterable<string>): string[] => Object.keys(options).filter((k) => ![...chosen].includes(k));
     // Its lands, trails, buildings and landmarks are its own hand-filled blueprints, each found by its id.
     const blueprints = (of: Iterable<{ readonly id: string } | undefined>): Set<string> => new Set([...of].flatMap((b) => (b === undefined ? [] : [b.id])));
-    const landsUsed = blueprints(Object.values(judged.lands));
+    // A land is the same land whatever drifts through its air.
+    const landsUsed = blueprints(Object.values(judged.lands).map(({ kind, slots: { accents: _drift, ...slots } }) => blueprintOf(kind, slots)));
     expect(Object.entries(LANDS).filter(([, b]) => !landsUsed.has(b.id)).map(([k]) => k)).toEqual([]);
+    const drifts = Object.values(judged.lands).flatMap((b) => (b.slots.accents === undefined ? [] : [String(b.slots.accents.params.form)]));
+    expect(used(drift.params.form.options, drifts)).toEqual([]);
     expect(used(WATERS, Object.values(judged.waters))).toEqual([]);
     expect(used(CHARACTERS, Object.values(judged.characters))).toEqual([]);
     expect(used(FORMS, Object.values(judged.forms).flatMap((f) => Object.values(f)))).toEqual([]);
