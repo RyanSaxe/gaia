@@ -5,8 +5,9 @@
 // shows: `GAIA_PROJECT`, one the person opens with File > Open Folder, or none,
 // and then the page offers the start, where a person picks a world they
 // opened before, a folder, or an address on GitHub. `GAIA_PROJECT=proving`
-// opens the proving ground instead, and `GAIA_PROJECT=showcase` the showcase,
-// which need no folder (`?world=proving`, `?world=showcase`).
+// opens the proving ground instead, and `GAIA_PROJECT=showcase` the showcase
+// (`showcase-fixed` with its old `v1/` fixed), which need no folder
+// (`?world=proving`, `?world=showcase`, `?world=showcase-fixed`).
 
 import { basename, join, resolve } from "node:path";
 import { BrowserWindow, Menu, MessageChannelMain, type MessagePortMain, app, dialog, ipcMain, nativeTheme, utilityProcess } from "electron";
@@ -24,7 +25,7 @@ void app.whenReady().then(() => {
   // With no project named the page offers the start.
   const named = process.env.GAIA_PROJECT;
   // The proving ground and the showcase are laid out on the page from their own fixtures, so no folder is opened for them.
-  let carried = named === "proving" || named === "showcase" ? named : null;
+  let carried = named === "proving" || named === "showcase" || named === "showcase-fixed" ? named : null;
   let root: string | null = named === undefined || carried !== null ? null : resolve(named);
   // The engine keeps each project's store (Jev's answers, a stand-in choice) and the app's own settings (the spend limit) with the app's own data.
   process.env.GAIA_DATA_DIR ??= app.getPath("userData");
@@ -69,7 +70,7 @@ void app.whenReady().then(() => {
     toService({ type: "renderer.port", root }, [port1]);
     window.webContents.postMessage("gaia:world-port", null, [port2]);
     const world = new URL(window.webContents.getURL()).searchParams.get("world");
-    window.setTitle(world === "proving" ? "Gaia · proving ground" : world === "showcase" ? "Gaia · showcase" : root === null ? "Gaia" : `Gaia · ${basename(root)}`);
+    window.setTitle(world === "proving" ? "Gaia · proving ground" : world === "showcase" || world === "showcase-fixed" ? "Gaia · showcase" : root === null ? "Gaia" : `Gaia · ${basename(root)}`);
   });
   window.on("page-title-updated", (event) => event.preventDefault());
 

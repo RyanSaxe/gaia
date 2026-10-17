@@ -31,12 +31,12 @@ describe("Gaia's own world from the bundled snapshot", () => {
     expect(new Set(Object.values(laid.judges))).toEqual(new Set(["jev"]));
   });
 
-  // The showcase, folio, opens from its snapshot wherever the page runs, so it must lay out on its kept answers alone.
-  it("lays the showcase out on Jev's kept answers alone, with its trails and every file of its graph", { timeout: 60_000 }, async () => {
-    const { world, judges } = await laySnapshot("jev", "a test", "showcase");
+  // The showcase, folio, opens from its snapshot wherever the page runs, with its old v1 as it is or fixed, so each must lay out on its kept answers alone.
+  it.each(["showcase", "showcase-fixed"] as const)("lays %s out on Jev's kept answers alone, with its trails and every file of its graph", { timeout: 60_000 }, async (of) => {
+    const { world, judges } = await laySnapshot("jev", "a test", of);
     expect(world.trails.length).toBeGreaterThan(0);
     expect(world.patches.map((p) => p.path).sort()).toEqual(
-      snapshotGraphOf("showcase")
+      snapshotGraphOf(of)
         .nodes.flatMap((n) => (n.kind === "file" ? [n.path] : []))
         .sort(),
     );
