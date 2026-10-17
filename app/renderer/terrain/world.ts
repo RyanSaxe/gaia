@@ -32,16 +32,16 @@ import {
   createSunShadow,
   type SceneLight,
 } from "@gaia/render";
-import { type Capsule, clearanceAt, groundDecline, regionAt as dominantRegion, wildShare, frameOf, TILE, LAND_ASPECT, type Deck, decksOf, deckShape, EYE_HEIGHT, footingAt, GAIT, groundHeightAt, heightAt, type Intent, NO_SOLIDS, NO_TRAILS, openingSpot, TRAILS, outlineShape, returnTo, type StoodSpot, withinLand, piecesShapes, type Place, placeAt, planWalk, regionWeights, siteToWorld, type Solids, type SolidShape, solidsOf, standAt, steerAlong, type Steered, type Steering, steering, steerPress, steerRelease, steerStep, stride, type Stride, acrossWay, carry, planTrip, TRAVEL, type Travel, wadingAt, fordBeside, travelFrom, travelPoint, travelStep, type Trip, trailWay, type Walker, type WalkKey, type Terrain, TERRAIN, type TrailNetwork, type Walk, WALK_TO, wallsShape, waterDepthAt, type Way, wayAhead, WILDS, type WorldPlaces, type WorldSpec } from "@gaia/terrain";
+import { type Capsule, clearanceAt, groundDecline, regionAt as dominantRegion, frameOf, TILE, LAND_ASPECT, type Deck, decksOf, deckShape, EYE_HEIGHT, footingAt, GAIT, groundHeightAt, heightAt, type Intent, NO_SOLIDS, NO_TRAILS, openingSpot, TRAILS, outlineShape, returnTo, type StoodSpot, withinLand, piecesShapes, type Place, placeAt, planWalk, regionWeights, siteToWorld, type Solids, type SolidShape, solidsOf, standAt, steerAlong, type Steered, type Steering, steering, steerPress, steerRelease, steerStep, stride, type Stride, acrossWay, carry, planTrip, TRAVEL, type Travel, wadingAt, fordBeside, travelFrom, travelPoint, travelStep, type Trip, trailWay, type Walker, type WalkKey, type Terrain, TERRAIN, type TrailNetwork, type Walk, WALK_TO, wallsShape, waterDepthAt, type Way, wayAhead, WILDS, type WorldPlaces, type WorldSpec } from "@gaia/terrain";
 import { type Sky, createSky } from "../world/environment.ts";
 import { type CaptureBounds, type Pixels, createCapture } from "./capture.ts";
 import { onTap, tapSlop } from "../tap.ts";
 import { type Grass, createGrass } from "./cover.ts";
 import { type GroundMesh, createGround, createGroundTexture } from "./ground.ts";
-import { MAX_REGIONS, createRegionCovers } from "./regions.ts";
+import { createRegionCovers } from "./regions.ts";
 import { type Water, createWater } from "./water.ts";
 import { type WildGrowth, createWildGrowth, wildBushBuilds } from "./wilds.ts";
-import { type Crown, type Drifts, type DriftsHere, createDrifts } from "./drifts.ts";
+import { type Crown, type Drifts, createDrifts } from "./drifts.ts";
 import { type Understory, createUnderstory, understoryBuilds } from "./understory.ts";
 import { type BuildAsk, made, makeAhead } from "./made.ts";
 import { createClearings } from "./clearings.ts";
@@ -651,7 +651,7 @@ export function createWorld(root: HTMLElement): World {
     const looks = world.regions.map((_, i) => regionLookOf(i));
     regionGrounds = looks.map((l) => l.ground);
     covers.update(world, regionGrounds, terrain);
-    drifts.regions(looks.map((l) => l.drift));
+    drifts.regions(world, looks.map((l) => l.drift));
   };
 
   const scene = new THREE.Scene();
@@ -1093,13 +1093,6 @@ export function createWorld(root: HTMLElement): World {
   }
   /** Each tree's region, by its index among the trees, found the first time its crown is asked for. */
   let treeRegions = new Map<number, number>();
-  /** Each region's blend weight at a point, reused frame to frame. */
-  const hereWeights = new Float64Array(MAX_REGIONS);
-  /** Where the person stands, as the drifts round them read it: each region's weight, the wild's share and the ground's decline. */
-  function driftsHere(x: number, z: number): DriftsHere {
-    regionWeights(world, x, z, hereWeights);
-    return { weights: hereWeights.subarray(0, world.regions.length), wild: wildShare(terrain, x, z), decline: groundDecline(groundVitalityAt(x, z).area) };
-  }
   /** Every tree within `reach` of (x, z), with its crown, region and its ground's decline, for the leaves and petals it drops (`Drifts.follow`); a tree is known by its index. */
   function crownsNear(x: number, z: number, reach: number): Crown[] {
     const out: Crown[] = [];
@@ -2046,7 +2039,7 @@ export function createWorld(root: HTMLElement): World {
     breathe(camera.position);
     // Every pass thins distant detail from where the person's eyes are.
     light.uEye.value.copy(aerial === null ? detailEye : camera.position);
-    if (aerial === null) drifts.follow(driftsHere(light.uEye.value.x, light.uEye.value.z), crownsNear, viewFocal());
+    if (aerial === null) drifts.follow(crownsNear, viewFocal());
     castShadows();
     frameCalls = renderer.info.render.calls;
     passes.shadow = { calls: renderer.info.render.calls, triangles: renderer.info.render.triangles };

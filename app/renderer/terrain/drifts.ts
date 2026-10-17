@@ -7,18 +7,19 @@
 // They gather only around the person. Fireflies fill a square around them,
 // anchored to the world, each wrapping to the square's far side only where
 // distance has already faded it out; a falling leaf lets go of a tree near
-// the person and fades out as it lands. Fireflies follow the regions' shares
-// where the person stands, as
-// their ground covers blend, so one region's drift thins into the next as
-// they walk; a tree drops its own region's. Each thins as its land declines
-// and none drift in the wild, so nothing appears or vanishes as the person
-// moves. The page works out how many each form shows once a frame; the
-// shader only places and fades them.
+// the person and fades out as it lands. Each firefly shows by the region it
+// floats in, as a tree drops its own region's, so the middle of a firefly
+// land is full and its air thins across the land's edge into the next. Each
+// thins as its land declines and none drift in the wild, so nothing appears
+// or vanishes as the person moves. The page keeps the trees near the person
+// once a frame; the shader places and fades every drift.
 
 import * as THREE from "three";
 import type { AccentForm, AccentSpec } from "@gaia/schema";
 import type { SceneLight } from "@gaia/render";
+import { regionWeights, type WorldSpec } from "@gaia/terrain";
 import { GROUND_SAMPLE_GLSL, type GroundTexture, WILD_GLSL } from "./ground.ts";
+import { VITALITY_GLSL, vitalityUniforms } from "./vitality.ts";
 
 /** How each form moves and shows: its shape (0 a soft dot, 1 a petal, 2 a leaf), how fast it falls, meters a second, the heights it keeps between, how far it wanders, how much it blinks, and its opacity. */
 interface DriftForm {
@@ -110,6 +111,19 @@ const MIN_PX = 4;
  */
 const FULL_TREE = 380;
 const AIR_SHARE = (2 * DRIFT_REACH.air) ** 2 / (52 * 60) / MOST;
+/**
+ * How sharply a region's air thins past its edge: each region's blend weight (`regionWeights`) to this power. A
+ * region's air is full to about 25 m inside its edge and thins across it into the next region's over about 50 m.
+ * Weighed by the plain weights, as the ground blends, a small world's regions all lie in each other's 130 m band, and
+ * the middle of a firefly land held about a quarter of its fireflies.
+ */
+const EDGE = 12;
+/**
+ * The window of a form's fill round the person (`fillAround`): `samples` a side, `spacing` meters apart, on a grid
+ * fixed to the world, so a point's fill is the same whichever window holds it. The window moves once the person is
+ * `recenter` meters from its middle; 96 m a side, it still holds the fireflies' square round them.
+ */
+const FILL = { samples: 13, spacing: 8, recenter: 16 } as const;
 /** Seconds a tree newly near the person takes to start dropping leaves fully, so none appear at once. */
 const CROWN_FADE = 3;
 /** How fast the wind carries a falling leaf, and nudges fireflies a little, meters a second at a breeze. */
@@ -122,6 +136,7 @@ const FROM_TREES: ReadonlySet<AccentForm> = new Set(["petals", "leaves"]);
 const DRIFT_VERT = /* glsl */ `
 ${GROUND_SAMPLE_GLSL}
 ${WILD_GLSL}
+${VITALITY_GLSL}
 #define CROWNS ${CROWNS}
 uniform float uTime;
 uniform float uWind;
@@ -142,8 +157,11 @@ uniform float uHalo;
 uniform float uDusk;
 // 1 for what falls from the trees near the person.
 uniform float uFromTrees;
-// How much of its most this form shows in the air round the person, 0 to 1.
-uniform float uDensity;
+// How full the air is round the person, as a share of uFull: samples uFillMap.z meters apart from (uFillMap.x, uFillMap.y),
+// uFillMap.w a side.
+uniform sampler2D uFill;
+uniform vec4 uFillMap;
+uniform float uFull;
 // Each tree dropping leaves or petals: x, z, the lowest and highest it lets go from; its crown's reach, its
 // ground, when it began (seconds of uTime) and how much of its share it drops, 0 to 1. A reach of 0 is no tree.
 uniform vec4 uCrownAt[CROWNS];
@@ -158,6 +176,13 @@ float floorAt(vec2 xz) {
   if (inWild(xz)) return wildHeight(xz);
   vec2 g = groundAt(xz);
   return max(g.x, g.y);
+}
+
+// How much of its most this form holds in the air at a point: its region's (fillAround), none in the wild, thinning
+// as the land declines.
+float densityAt(vec2 xz) {
+  vec2 uv = ((xz - uFillMap.xy) / uFillMap.z + 0.5) / uFillMap.w;
+  return texture2D(uFill, uv).r * uFull * (1.0 - wildShare(xz)) * (1.0 - declineOf(landVitality(xz).y));
 }
 
 void main() {
@@ -199,7 +224,7 @@ void main() {
     y = floorAt(xz) + h;
     fade = (1.0 - smoothstep(${(DRIFT_REACH.air * DRIFT_REACH.fade).toFixed(1)}, ${DRIFT_REACH.air.toFixed(1)}, length(rel)))
       * smoothstep(0.0, 0.6, h - uLow) * smoothstep(0.0, 0.6, uHigh - h);
-    density = uDensity;
+    density = fade > 0.0 ? densityAt(xz) : 0.0;
   }
   // Each drifting thing has its rank among its form's, so a region holding fewer shows the first of them.
   fade *= clamp((density - aSeed.w) * 12.0, 0.0, 1.0);
@@ -233,30 +258,23 @@ export interface Crown {
   readonly decline: number;
 }
 
-/** Where the person stands: each region's blend weight there (`regionWeights`), the wild's share and how far the ground has declined. */
-export interface DriftsHere {
-  readonly weights: ArrayLike<number>;
-  readonly wild: number;
-  readonly decline: number;
-}
-
 export interface Drifts {
   readonly object: THREE.Group;
   /**
-   * Takes each region's drift, by region, as its biome realizes it
-   * (`RegionLook.drift`), null where it has none. Forms no region holds draw
-   * nothing.
+   * Takes each region of `world` and its drift, by region, as its biome
+   * realizes it (`RegionLook.drift`), null where it has none. Forms no region
+   * holds draw nothing.
    */
-  regions(drifts: readonly (AccentSpec | null)[]): void;
+  regions(world: WorldSpec, drifts: readonly (AccentSpec | null)[]): void;
   /**
-   * Each frame the person walks: carries the air on the wind, fills it as
-   * the regions where they stand (`here`) hold, and keeps the trees near the
-   * eye dropping leaves and petals. `crowns` gives every tree within `reach`
-   * meters of (x, z); `focal` is the view's device pixels a radian.
+   * Each frame the person walks: carries the air on the wind and keeps the
+   * trees near the eye dropping leaves and petals. `crowns` gives every tree
+   * within `reach` meters of (x, z); `focal` is the view's device pixels a
+   * radian.
    */
-  follow(here: DriftsHere, crowns: (x: number, z: number, reach: number) => readonly Crown[], focal: number): void;
-  /** Each form drawn: how full the air round the person is, 0 to 1, and how many trees drop it now. */
-  state(): Record<string, { readonly air: number; readonly trees: number }>;
+  follow(crowns: (x: number, z: number, reach: number) => readonly Crown[], focal: number): void;
+  /** Each form drawn: how full its fullest region holds it, 0 to 1, how many of its things can show, and how many trees drop it now. */
+  state(): Record<string, { readonly most: number; readonly drawn: number; readonly trees: number }>;
 }
 
 /** How one form's drifting things move and show, as its material reads them. */
@@ -272,7 +290,9 @@ function formUniforms(form: AccentForm, carried: THREE.Vector2) {
     uWander: { value: b.wander },
     uDusk: { value: form === "fireflies" ? 1 : 0 },
     uFromTrees: { value: FROM_TREES.has(form) ? 1 : 0 },
-    uDensity: { value: 0 },
+    uFill: { value: fillTexture() },
+    uFillMap: { value: new THREE.Vector4(0, 0, FILL.spacing, FILL.samples) },
+    uFull: { value: 0 },
     uCrownAt: { value: Array.from({ length: CROWNS }, () => new THREE.Vector4()) },
     uCrownOf: { value: Array.from({ length: CROWNS }, () => new THREE.Vector4()) },
     uColor: { value: new THREE.Vector3(1, 1, 1) },
@@ -284,6 +304,16 @@ function formUniforms(form: AccentForm, carried: THREE.Vector2) {
   };
 }
 
+/** A form's fill round the person, `FILL.samples` a side, empty until first filled. */
+function fillTexture(): THREE.DataTexture {
+  const t = new THREE.DataTexture(new Uint8Array(FILL.samples * FILL.samples), FILL.samples, FILL.samples, THREE.RedFormat, THREE.UnsignedByteType);
+  t.minFilter = THREE.LinearFilter;
+  t.magFilter = THREE.LinearFilter;
+  t.unpackAlignment = 1;
+  t.needsUpdate = true;
+  return t;
+}
+
 /** One form's drifting things: the material whose uniforms say how they move, and how full each region holds them. */
 interface FormPoints {
   readonly points: THREE.Points;
@@ -293,6 +323,8 @@ interface FormPoints {
   /** How much of its things each region holds, 0 to 1, by region: 0 where the region has another drift or none. */
   full: readonly number[];
   spec: AccentSpec;
+  /** The grid sample at the middle of its fill's window (`fillAround`), or null until the window is filled. */
+  fillAt: readonly [number, number] | null;
 }
 
 const FORMS = Object.keys(DRIFT_FORMS) as AccentForm[];
@@ -323,7 +355,7 @@ export function createDrifts(light: SceneLight, ground: GroundTexture): Drifts {
     const material = new THREE.ShaderMaterial({
       vertexShader: DRIFT_VERT,
       fragmentShader: DRIFT_FRAG,
-      uniforms: { ...light, ...ground.uniforms, ...uniforms },
+      uniforms: { ...light, ...ground.uniforms, ...vitalityUniforms, ...uniforms },
       transparent: true,
       depthWrite: false,
     });
@@ -333,7 +365,7 @@ export function createDrifts(light: SceneLight, ground: GroundTexture): Drifts {
     points.renderOrder = 3;
     points.visible = false;
     object.add(points);
-    return { points, uniforms, slots: new Array<number | null>(CROWNS).fill(null), full: [], spec };
+    return { points, uniforms, slots: new Array<number | null>(CROWNS).fill(null), full: [], spec, fillAt: null };
   };
 
   /** Glowing things show by contrast: faint at noon, bright at dusk. */
@@ -345,17 +377,39 @@ export function createDrifts(light: SceneLight, ground: GroundTexture): Drifts {
     f.uniforms.uHalo.value = b.shape === 0 ? f.spec.glow * dark : 0;
   };
 
-  /** How full the air round the person is: each region's by its weight where they stand, none in the wild, thinning as the ground declines. */
-  const airAt = (f: FormPoints, here: DriftsHere): number => {
-    let sum = 0;
-    let weight = 0;
-    for (let i = 0; i < here.weights.length; i++) {
-      const w = here.weights[i] as number;
-      sum += w * (f.full[i] ?? 0);
-      weight += w;
+  let world: WorldSpec | null = null;
+  let weights = new Float64Array(0);
+  /**
+   * Fills the window round (x, z) with how full the form's air is, as a share of its fullest region's: each region's
+   * by its share where it lies (`EDGE`).
+   */
+  const fillAround = (f: FormPoints, land: WorldSpec, x: number, z: number): void => {
+    const half = (FILL.samples - 1) / 2;
+    const i0 = Math.round(x / FILL.spacing) - half;
+    const j0 = Math.round(z / FILL.spacing) - half;
+    const most = Math.max(...f.full);
+    const texture = f.uniforms.uFill.value;
+    const data = texture.image.data as Uint8Array;
+    for (let j = 0; j < FILL.samples; j++) {
+      for (let i = 0; i < FILL.samples; i++) {
+        regionWeights(land, (i0 + i) * FILL.spacing, (j0 + j) * FILL.spacing, weights);
+        let sum = 0;
+        let total = 0;
+        weights.forEach((w, r) => {
+          const share = w ** EDGE;
+          sum += share * (f.full[r] ?? 0);
+          total += share;
+        });
+        data[j * FILL.samples + i] = most > 0 && total > 0 ? Math.round((sum / total / most) * 255) : 0;
+      }
     }
-    return weight > 0 ? (sum / weight) * (1 - here.wild) * (1 - here.decline) : 0;
+    texture.needsUpdate = true;
+    f.uniforms.uFillMap.value.set(i0 * FILL.spacing, j0 * FILL.spacing, FILL.spacing, FILL.samples);
+    f.fillAt = [i0 + half, j0 + half];
   };
+  /** Whether the person at (x, z) has walked far enough from the middle of the form's fill to fill it round them again. */
+  const strayed = (f: FormPoints, x: number, z: number): boolean =>
+    f.fillAt === null || Math.max(Math.abs(x - f.fillAt[0] * FILL.spacing), Math.abs(z - f.fillAt[1] * FILL.spacing)) > FILL.recenter;
 
   /**
    * Keeps each slot's tree while it stays within `keep`, so a slot frees only once nothing it dropped is in sight,
@@ -386,7 +440,9 @@ export function createDrifts(light: SceneLight, ground: GroundTexture): Drifts {
 
   return {
     object,
-    regions(drifts) {
+    regions(land, drifts) {
+      world = land;
+      weights = new Float64Array(land.regions.length);
       FORMS.forEach((form, k) => {
         const spec = drifts.find((d): d is AccentSpec => d?.form === form);
         let f = forms.get(form);
@@ -397,6 +453,10 @@ export function createDrifts(light: SceneLight, ground: GroundTexture): Drifts {
         f ??= makeForm(form, 991 + k * 7919, spec);
         forms.set(form, f);
         f.full = drifts.map((d) => (d?.form === form ? Math.min(1, FROM_TREES.has(form) ? d.count / FULL_TREE : d.count * AIR_SHARE) : 0));
+        f.uniforms.uFull.value = Math.max(...f.full);
+        f.fillAt = null;
+        // A thing ranked past the fullest region's share never shows, so it is not drawn.
+        f.points.geometry.setDrawRange(0, Math.min(MOST, Math.ceil(Math.max(...f.full) * MOST) + 1));
         // Every region's drift of one form shares one look: `drift@1` gives each form one color and size.
         f.spec = spec;
         f.uniforms.uSize.value = spec.size * SCALE;
@@ -408,9 +468,11 @@ export function createDrifts(light: SceneLight, ground: GroundTexture): Drifts {
     },
     state: () =>
       Object.fromEntries(
-        [...forms].filter(([, f]) => f.points.visible).map(([form, f]) => [form, { air: +f.uniforms.uDensity.value.toFixed(3), trees: f.slots.filter((s) => s !== null).length }]),
+        [...forms]
+          .filter(([, f]) => f.points.visible)
+          .map(([form, f]) => [form, { most: +Math.max(...f.full).toFixed(3), drawn: f.points.geometry.drawRange.count, trees: f.slots.filter((s) => s !== null).length }]),
       ),
-    follow(here, crowns, focal) {
+    follow(crowns, focal) {
       // The wind carries the air on as the world's clock runs, never while it is held.
       const t = light.uTime.value;
       const dt = Math.max(0, t - lastTime);
@@ -425,7 +487,7 @@ export function createDrifts(light: SceneLight, ground: GroundTexture): Drifts {
         f.uniforms.uPixels.value = focal;
         shine(f);
         if (FROM_TREES.has(form)) tend(f, near, eye.x, eye.z);
-        else f.uniforms.uDensity.value = airAt(f, here);
+        else if (world !== null && strayed(f, eye.x, eye.z)) fillAround(f, world, eye.x, eye.z);
       }
     },
   };
