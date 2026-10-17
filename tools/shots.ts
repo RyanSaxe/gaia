@@ -100,11 +100,12 @@ window.__shots = (() => {
       }
       await window.__lab.frames(20);
     },
-    /** Sets every file's and entity's vitality: trees, ground, understory, buildings, landmarks and trails. */
+    /** Sets every file's and entity's vitality: trees, ground, understory, buildings, landmarks and trails, settled at once. */
     async vitality(v) {
       T.fileVitality("", v);
       T.landmarkVitality(v);
       T.buildings().forEach((_, i) => T.vitality(i, v));
+      T.settleVitality();
       await window.__lab.frames(6);
     },
   };

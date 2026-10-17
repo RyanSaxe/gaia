@@ -30,6 +30,7 @@ import {
   createRenderer,
   createSceneLight,
   createSunShadow,
+  easeVitality,
   type SceneLight,
 } from "@gaia/render";
 import { type Capsule, clearanceAt, groundDecline, regionAt as dominantRegion, frameOf, TILE, LAND_ASPECT, type Deck, decksOf, deckShape, EYE_HEIGHT, footingAt, GAIT, groundHeightAt, heightAt, type Intent, NO_SOLIDS, NO_TRAILS, openingSpot, TRAILS, outlineShape, returnTo, type StoodSpot, withinLand, piecesShapes, type Place, placeAt, planWalk, regionWeights, siteToWorld, type Solids, type SolidShape, solidsOf, standAt, steerAlong, type Steered, type Steering, steering, steerPress, steerRelease, steerStep, stride, type Stride, acrossWay, carry, planTrip, TRAVEL, type Travel, wadingAt, fordBeside, travelFrom, travelPoint, travelStep, type Trip, trailWay, type Walker, type WalkKey, type Terrain, TERRAIN, type TrailNetwork, type Walk, WALK_TO, wallsShape, waterDepthAt, type Way, wayAhead, WILDS, type WorldPlaces, type WorldSpec } from "@gaia/terrain";
@@ -2013,6 +2014,8 @@ export function createWorld(root: HTMLElement): World {
     const night = Math.round(light.uNightness.value * 20) / 20;
     if (night !== waitNight) veil.night((waitNight = night));
     light.uTime.value = frozen ?? light.uTime.value + dt;
+    // A change in vitality eases in over the frame's own time, even with the wind's clock frozen.
+    easeVitality(dt);
     if (aerial === null) {
       updateWalk(dt);
       detailEye.set(detailPin?.x ?? camera.position.x, camera.position.y, detailPin?.z ?? camera.position.z);

@@ -38,6 +38,12 @@ export const CHANNEL_MATH = {
    */
   shownRuin: 0.45,
   shownWhole: 0.85,
+  /**
+   * Seconds for a change in shown vitality to ease in by about two thirds:
+   * each thing keeps how far its shown vitality lags where it was, and that
+   * lag closes by this time constant (`easeVitality` in @gaia/render).
+   */
+  vitalityLag: 1,
 } as const;
 
 /**
@@ -60,6 +66,29 @@ const smoothstep = (e0: number, e1: number, x: number): number => {
   const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0)));
   return t * t * (3 - 2 * t);
 };
+
+/** The integral of smoothstep(0, 1, t) from 0 to t. */
+const smoothRise = (t: number): number => (t <= 0 ? 0 : t >= 1 ? t - 0.5 : t * t * t * (1 - 0.5 * t));
+
+/**
+ * smoothstep(e0, e1, v) averaged over the shown vitality from `v + lag` to
+ * `v`: how far along a step of its decline a piece shows while a change in
+ * vitality eases in, so a step a ramp crosses in one frame spreads over the
+ * frames the lag spans (the plant shader's `eased`). With no lag it is the
+ * step itself.
+ */
+export function easedStep(e0: number, e1: number, v: number, lag: number): number {
+  if (Math.abs(lag) < 1e-4) return smoothstep(e0, e1, v);
+  const w = e1 - e0;
+  return (w * (smoothRise((v - e0) / w) - smoothRise((v + lag - e0) / w))) / -lag;
+}
+
+/** clamp(u, 0, 1) averaged as u runs evenly from `was` to `now` (the plant shader's `easedClamp`). */
+export function easedClamp(now: number, was: number): number {
+  if (Math.abs(now - was) < 1e-4) return Math.min(1, Math.max(0, now));
+  const rise = (u: number): number => (u <= 0 ? 0 : u >= 1 ? u - 0.5 : 0.5 * u * u);
+  return (rise(now) - rise(was)) / (now - was);
+}
 
 /** A neutral swatch for tests that only care whether colors move. */
 export const REFERENCE_SWATCH: Swatch = { healthy: [0.3, 0.6, 0.3], decline: [0.6, 0.5, 0.35] };
@@ -108,10 +137,13 @@ export interface InWind {
  * then the wind bends it about its joints (`swayAt`), when given; then droop
  * bends its whole bough down about the bough's joint. Rot holes are cut per
  * fragment, so only `rotAt` says how much shows; spinning pieces stand at
- * their first turn.
+ * their first turn. `lag` is how far the shown vitality lags where it was a
+ * moment ago while a change eases in: each step shows averaged over it, and
+ * whatever follows vitality evenly shows its middle.
  */
-export function applyVitality(part: Part, vitality: number, swatch: Swatch = REFERENCE_SWATCH, wind?: InWind): VitalityView {
+export function applyVitality(part: Part, vitality: number, swatch: Swatch = REFERENCE_SWATCH, wind?: InWind, lag = 0): VitalityView {
   const v = Math.min(1, Math.max(0, vitality));
+  const mid = v + 0.5 * lag;
   const { loss, droop, wither, glow, pivot, bough } = part.channels;
   const count = part.shade.length;
   const collapsed = new Float32Array(count * 3);
@@ -128,7 +160,7 @@ export function applyVitality(part: Part, vitality: number, swatch: Swatch = REF
     // A spray's leaves drop in place, cut away per fragment; every other piece collapses onto its pivot.
     const threshold = SPRAYS.has(Math.floor(part.cutout[i * 3 + 2] ?? 0)) ? 0 : (loss[i] ?? 0);
     const grows = part.channels.grow?.[i] ?? 0;
-    const keep = (threshold > 0 ? smoothstep(threshold, threshold + m.lossBand, v) : 1) * (grows > 0 ? 1 - smoothstep(grows, grows + m.lossBand, v) : 1);
+    const keep = (threshold > 0 ? easedStep(threshold, threshold + m.lossBand, v, lag) : 1) * (grows > 0 ? 1 - easedStep(grows, grows + m.lossBand, v, lag) : 1);
     ox *= keep;
     oy *= keep;
     oz *= keep;
@@ -140,16 +172,16 @@ export function applyVitality(part: Part, vitality: number, swatch: Swatch = REF
       const ay = fall[i * 4 + 1] ?? 0;
       const az = fall[i * 4 + 2] ?? 0;
       const most = Math.hypot(ax, ay, az);
-      const angle = most * (1 - smoothstep(from - m.fallBand, from, v));
+      const angle = most * (1 - easedStep(from - m.fallBand, from, v, lag));
       if (most > 1e-6 && angle !== 0) [ox, oy, oz] = turn([ox, oy, oz], [ax / most, ay / most, az / most], angle);
     }
     collapsed[i * 3] = px + ox;
     collapsed[i * 3 + 1] = py + oy;
     collapsed[i * 3 + 2] = pz + oz;
 
-    const w = (wither[i] ?? 0) * (1 - v);
+    const w = (wither[i] ?? 0) * (1 - mid);
     const bright = m.shadeLow + (m.shadeHigh - m.shadeLow) * (part.shade[i] ?? 0.5);
-    const g = (glow[i] ?? 0) * v * m.glowStrength;
+    const g = (glow[i] ?? 0) * mid * m.glowStrength;
     // Tint varies only the healthy color, so decline reads the same across a canopy.
     const tinted = hueRotate(swatch.healthy, part.tint[i] ?? 0);
     for (let c = 0; c < 3; c++) {
@@ -162,7 +194,7 @@ export function applyVitality(part: Part, vitality: number, swatch: Swatch = REF
   const positions = wind === undefined ? collapsed : swayAt(part, collapsed, wind.state, wind.flutter);
   // Droop bends the whole bough down about its joint, keeping each point's distance from it.
   for (let i = 0; i < count; i++) {
-    const s = (droop[i] ?? 0) * (1 - v);
+    const s = (droop[i] ?? 0) * (1 - mid);
     if (s <= 0) continue;
     const bx = bough[i * 3] ?? 0;
     const by = bough[i * 3 + 1] ?? 0;

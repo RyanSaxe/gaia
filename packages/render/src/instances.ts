@@ -3,7 +3,8 @@
 // times costs a few draw calls. The material is the plant material itself,
 // with the instance's matrix, vitality, seed and hue read per instance. The
 // plant shader uses most of WebGL's 16 attribute slots, so vitality, hue and
-// seed ride in the instance matrix's unused bottom row.
+// seed ride in the instance matrix's unused bottom row, and only how far a
+// copy's vitality lags a change (`easeVitality`) takes a slot of its own.
 //
 // Each level of detail leaves out whole pieces (`detailAt` in @gaia/realize).
 // Which copies draw, and at which level, is chosen before every pass by the
@@ -15,6 +16,7 @@ import type { Part, Swatch } from "@gaia/schema";
 import { FLUTTERS, type Realized, detailAt, mergeParts, shownVitality } from "@gaia/realize";
 import type { SceneLight } from "./light.ts";
 import { DEPTH_FRAG, DEPTH_VERT, FOLIAGE, PLANT_FRAG, PLANT_VERT, type PlantView, geometryOf, letGoOnUpload, sprayColors } from "./plant.ts";
+import { closeEachFrame, closeLag } from "./lag.ts";
 
 /** Where one copy stands. */
 export interface InstanceSpot {
@@ -99,6 +101,7 @@ function swap(source: string, from: string, to: string): string {
 function instanced(vertex: string): string {
   let out = swap(vertex, "uniform float uVitality;", "#define uVitality (instanceMatrix[0][3])");
   out = swap(out, "uniform float uSeed;", "#define uSeed (instanceMatrix[2][3])");
+  out = swap(out, "uniform float uVitalityLag;", "attribute float aVitalityLag;\n#define uVitalityLag aVitalityLag");
   out = swap(out, "modelMatrix", "placed()");
   out = swap(
     out,
@@ -171,6 +174,8 @@ interface Level {
   readonly meshes: { mesh: THREE.InstancedMesh; color: THREE.ShaderMaterial; depth: THREE.ShaderMaterial; triangles: number }[];
   /** One instance buffer every part of the level shares, and the name of the choice of copies it holds now. */
   attribute: THREE.InstancedBufferAttribute;
+  /** Each copy's vitality lag, packed as the matrices are. */
+  lags: THREE.InstancedBufferAttribute;
   key: string;
   /** The copies' data as packed: a copy's change since repacks the level. */
   generation: number;
@@ -195,15 +200,30 @@ export function createPlantInstances(plant: Realized, light: SceneLight, spots: 
   // and far pieces grow toward a pixel's size: the drawn bounds allow for all.
   const reach = 3 + 0.15 * height;
 
-  // Every copy's matrix, with vitality, hue and seed in its bottom row.
+  // Every copy's matrix, with vitality, hue and seed in its bottom row, and its vitality's lag.
   let count = 0;
   let source = new Float32Array(16);
+  let lagSource = new Float32Array(1);
   const matrix = new THREE.Matrix4();
   const shear = new THREE.Matrix4();
   const turn = new THREE.Matrix4();
+  // The copies whose vitality still lags a change, each frame closing a little more.
+  const lagging = new Set<number>();
+  const closeLags = (keep: number): boolean => {
+    for (const index of lagging) {
+      lagSource[index] = closeLag(lagSource[index] as number, keep);
+      if (lagSource[index] === 0) lagging.delete(index);
+    }
+    generation++;
+    return lagging.size > 0;
+  };
+
   const place = (next: readonly InstanceSpot[]): void => {
     count = next.length;
     source = new Float32Array(Math.max(1, count) * 16);
+    // Copies stood anew show their vitality at rest.
+    lagSource = new Float32Array(Math.max(1, count));
+    lagging.clear();
     next.forEach((s, k) => {
       const [gx, gz] = s.slope ?? [0, 0];
       shear.set(1, 0, 0, 0, gx, 1, gz, 0, 0, 0, 1, 0, 0, 0, 0, 1);
@@ -263,18 +283,20 @@ export function createPlantInstances(plant: Realized, light: SceneLight, spots: 
     return made;
   };
 
-  /** An instance buffer for `n` copies, with room to grow, so a new bake rarely needs a new one. */
-  const bufferFor = (n: number): THREE.InstancedBufferAttribute => {
-    const attribute = new THREE.InstancedBufferAttribute(new Float32Array(Math.max(1, Math.ceil(n * 1.25)) * 16), 16);
+  /** An instance buffer for `n` copies of `size` floats each, with room to grow, so a new bake rarely needs a new one. */
+  const bufferFor = (n: number, size = 16): THREE.InstancedBufferAttribute => {
+    const attribute = new THREE.InstancedBufferAttribute(new Float32Array(Math.max(1, Math.ceil(n * 1.25)) * size), size);
     attribute.setUsage(THREE.DynamicDrawUsage);
     return attribute;
   };
   // A tree's twigs are bark like its limbs: parts of one swatch draw as one mesh.
   const levels: Level[] = levelsOf(mergeParts(plant.parts)).map(({ at, parts }) => {
     const attribute = bufferFor(count);
+    const lags = bufferFor(count, 1);
     return {
       at,
       attribute,
+      lags,
       key: "",
       generation: -1,
       meshes: parts.flatMap((part) => {
@@ -283,6 +305,7 @@ export function createPlantInstances(plant: Realized, light: SceneLight, spots: 
         const geometry = geometryOf(part);
         // No ray is cast at the copies, so the page keeps none of their buffers once the GPU holds them.
         letGoOnUpload(geometry);
+        geometry.setAttribute("aVitalityLag", lags);
         const mesh = new THREE.InstancedMesh(geometry, color, 1);
         mesh.instanceMatrix = attribute;
         mesh.count = 0;
@@ -306,8 +329,12 @@ export function createPlantInstances(plant: Realized, light: SceneLight, spots: 
       const n = picked?.copies.length ?? 0;
       if (n > count) throw new Error(`draw was given ${n} copies at level ${k} of a plant with ${count}.`);
       if (picked !== undefined && (level.key !== picked.key || level.generation !== generation)) {
-        picked.copies.forEach((c, i) => level.attribute.array.set(source.subarray(c * 16, c * 16 + 16), i * 16));
+        picked.copies.forEach((c, i) => {
+          level.attribute.array.set(source.subarray(c * 16, c * 16 + 16), i * 16);
+          level.lags.array[i] = lagSource[c] as number;
+        });
         level.attribute.needsUpdate = true;
+        level.lags.needsUpdate = true;
         level.key = picked.key;
         level.generation = generation;
       }
@@ -325,7 +352,14 @@ export function createPlantInstances(plant: Realized, light: SceneLight, spots: 
   const perCopy = trianglesOf(plant.parts);
   let all = 1;
   const write = (index: number, v: number): void => {
+    // Where it was a moment ago stays put, so the change eases in from there.
+    const lag = (lagSource[index] as number) + (source[index * 16 + 3] as number) - v;
     source[index * 16 + 3] = v;
+    lagSource[index] = Math.abs(lag) < 1e-6 ? 0 : lag;
+    if (lagSource[index] !== 0) {
+      lagging.add(index);
+      closeEachFrame(closeLags);
+    }
   };
   return {
     object,
@@ -358,7 +392,11 @@ export function createPlantInstances(plant: Realized, light: SceneLight, spots: 
       for (const level of levels) {
         if (level.attribute.count < Math.max(1, count)) {
           level.attribute = bufferFor(count);
-          for (const m of level.meshes) m.mesh.instanceMatrix = level.attribute;
+          level.lags = bufferFor(count, 1);
+          for (const m of level.meshes) {
+            m.mesh.instanceMatrix = level.attribute;
+            m.mesh.geometry.setAttribute("aVitalityLag", level.lags);
+          }
         }
         level.key = "";
       }
@@ -367,7 +405,9 @@ export function createPlantInstances(plant: Realized, light: SceneLight, spots: 
     warm() {
       for (const level of levels) {
         level.attribute.array.set(source.subarray(0, 16), 0);
+        level.lags.array[0] = lagSource[0] as number;
         level.attribute.needsUpdate = true;
+        level.lags.needsUpdate = true;
         level.key = "";
         for (const m of level.meshes) {
           m.mesh.count = Math.min(1, count);

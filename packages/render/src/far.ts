@@ -69,7 +69,7 @@ type Output = keyof typeof OUTPUT;
 /** The plant's vertex shader with its color's vitality apart from its shape's, and droop left out so every slice nests inside the healthy outline. */
 function bakeVert(): string {
   let s = swap(PLANT_VERT, "void main() {", "uniform float uColorVitality;\nvec3 bakeKeep(vec3 p, vec3 joint) { return p; }\nvoid main() {");
-  s = swap(s, "vWither = aWither * (1.0 - uVitality);", "vWither = aWither * (1.0 - uColorVitality);");
+  s = swap(s, "vWither = aWither * (1.0 - vitalityMid());", "vWither = aWither * (1.0 - uColorVitality);");
   s = swap(s, "vec3 p = applyDroop(", "vec3 p = bakeKeep(");
   return s;
 }
@@ -183,6 +183,8 @@ export function startFarBake(renderer: THREE.WebGLRenderer, plant: Realized, fra
   const bake = { uBakeCenter: { value: sphere.center.clone() }, uBakeDir: { value: new THREE.Vector3() }, uBakeRadius: { value: radius } };
   const shared = {
     uVitality: { value: 1 },
+    // Each slice is baked at rest.
+    uVitalityLag: { value: 0 },
     uColorVitality: { value: 1 },
     uDetail: { value: 1 },
     uSeed: { value: 0 },
@@ -382,7 +384,7 @@ export function startFarBake(renderer: THREE.WebGLRenderer, plant: Realized, fra
  * The bake's version: a far form stored by an earlier version must be baked
  * again. Bump it whenever what a bake writes, or how a card reads it, changes.
  */
-export const FAR_BAKE_VERSION = 2;
+export const FAR_BAKE_VERSION = 3;
 
 /** A far form as plain data, to store: its bounds and motion, and each atlas's full-size level, row by row from the bottom. */
 export interface FarFormData {

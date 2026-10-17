@@ -5,7 +5,7 @@ import { FLORA_PRIMITIVES, STRUCTURE_PRIMITIVES } from "@gaia/primitives";
 import { mergeParts, realize, shownVitality } from "@gaia/realize";
 import { Library, blueprintOf, rand } from "@gaia/schema";
 import { randomSlots } from "@gaia/world/testing";
-import { createPlant, createPlantBatch, createSceneLight } from "@gaia/render";
+import { createPlant, createPlantBatch, createSceneLight, easeVitality, settleVitality } from "@gaia/render";
 
 const lib = new Library([...STRUCTURE_PRIMITIVES, ...FLORA_PRIMITIVES]);
 /** Four buildings drawn from everything Jev can compose, each built as the settlement builds one. */
@@ -51,6 +51,27 @@ describe("a batch of buildings", () => {
     expect(row(2, 4)[0]).toBeCloseTo(shownVitality(0.05), 6);
     expect(row(1, 4)[0]).toBeCloseTo(shownVitality(members[1]?.vitality ?? 0), 6);
     expect(meshes.map((m) => m.geometry.getAttribute("position"))).toEqual(before);
+  });
+
+  it("eases a change in a building's vitality in from where it was, and settles exactly on the new vitality", () => {
+    settleVitality();
+    const was = row(3, 4)[0] as number;
+    batch.setVitality(3, 0.9);
+    const now = shownVitality(0.9);
+    // Its shaders read the new vitality at once, and how far it lags where it was.
+    expect(row(3, 4)[0]).toBeCloseTo(now, 6);
+    expect(row(3, 5)[2]).toBeCloseTo(was - now, 6);
+    // Each frame closes some of the lag, by the frame's own time; a frame drawn with no time passing closes none.
+    easeVitality(0);
+    expect(row(3, 5)[2]).toBeCloseTo(was - now, 6);
+    easeVitality(1 / 60);
+    const left = Math.abs(row(3, 5)[2] as number);
+    expect(left).toBeLessThan(Math.abs(was - now));
+    expect(left).toBeGreaterThan(0);
+    // Within seconds it has closed entirely, so at rest the building shows its vitality exactly.
+    for (let k = 0; k < 60 * 20; k++) easeVitality(1 / 60);
+    expect(row(3, 5)[2]).toBe(0);
+    expect(row(3, 4)[0]).toBeCloseTo(now, 6);
   });
 
   it("names the building a ray hits, and follows a building to a new site", () => {
