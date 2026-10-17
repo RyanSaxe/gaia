@@ -2784,6 +2784,13 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
        */
       overview: (pos?: [number, number, number], target?: [number, number, number]) => lookFromAbove(pos, target),
       freeze: (t: number | null) => (frozen = t),
+      /** Film only: holds the camera at `pin` (eye is the camera's height in world meters), the walker under it, or lets go with null. */
+      film: (pin: { x: number; z: number; eye: number; yaw: number; pitch: number } | null) => {
+        viewPin = pin;
+        if (pin === null) return;
+        walkTo(pin.x, pin.z, pin.yaw, pin.pitch);
+        arrived = true;
+      },
       streams: () => terrain.streams.map((s) => s.stations.filter((_, k) => k % 10 === 0).map((p) => [Math.round(p.x), Math.round(p.z), +p.level.toFixed(2)])),
       report: () => ({ ...terrain.report, fit: terrain.fit, bakeMs: Math.round(bakeMs), steps: openingSteps }),
       info: () => renderer.info.render,
