@@ -331,7 +331,8 @@ the way pressed in a swing, strafing with a mouse or drag look, tank turns,
 snap and blink turns, quick turns and walking into a turn.
 
 A river follows the land. An area Jev gives a brook or a trickle gets a
-spring where its water runs longest through that area, and the river
+spring where its water runs longest through that area, on ground no river
+laid before it claims, and the river
 reaches back from it across the area the way it sets off. From there it
 runs downhill through other areas too, until it reaches the land's edge, a
 pond, a basin's bottom, where it sinks away, or another river, which it
@@ -647,7 +648,11 @@ runs on past it (`findBankSite` in `@gaia/terrain`). The bank nearest the
 building's lot in its own region comes first, then anywhere along the river
 that rises there, on ground that varies under 1 m beneath the house, or,
 where no bank is that even, up to 2.7 m, the most a pad's 7 m blend carries
-back to the land at a walkable grade. A tower rises from the back corner,
+back to the land at a walkable grade. The wheel's foot stands in water at
+least 5 cm deep, or, where no bank offers that, in any water: a trickle a
+lattice sample or two wide runs that thin near its edge, and the pit
+deepens it. Buildings with a waterwheel are sited before every other
+building, so the banks are theirs first. A tower rises from the back corner,
 rendered between stone quoins, taller the more of the code depends on it,
 its narrow windows lamplit at night under a steep cap or an open lantern
 room whose lamp burns after dusk. The rest stand in the yard beside the free
