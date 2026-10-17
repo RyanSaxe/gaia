@@ -330,6 +330,19 @@ vec3 nightLight(vec3 albedo, vec3 n, vec3 worldPosition, float wrap, float shado
   return moonLight(albedo, n, wrap, shadow) + lanternLight(albedo, n, worldPosition, wrap);
 }
 
+// A low sun catches the sward: its blades stand up to meet light that only
+// grazes flat ground, so a meadow under \`n\` takes the low sun's warm light
+// and long shadows show across it. Seen from the sun's side (\`view\` from the
+// eye) their lit faces show; looking toward the sun, their shaded backs. It
+// lends light only while the sun stands under about 24 degrees, all of it
+// under 10, and none to ground turned from the sun.
+const float SWARD_CATCH = 0.55;
+float swardCatch(vec3 n, vec3 view) {
+  vec3 sun = normalize(uSunDirection);
+  float seen = 0.75 - 0.25 * dot(normalize(view.xz + vec2(1e-4)), normalize(sun.xz + vec2(1e-4)));
+  return SWARD_CATCH * (1.0 - smoothstep(0.17, 0.4, sun.y)) * smoothstep(-0.05, 0.1, dot(n, sun)) * seen;
+}
+
 // ---------- sky and distance ----------
 // skyColorAt and aerialAt in @gaia/realize are the CPU references.
 

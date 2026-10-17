@@ -275,7 +275,8 @@ void main() {
   vec3 face = normalize(gl_FrontFacing || bloom ? vNormal : -vNormal);
   vec3 n = normalize(vGroundNormal + face * 0.45);
   float level = max(uSunDirection.y, 0.05);
-  float nDotL = max(level + (dot(n, uSunDirection) - level) * 1.3, 0.0);
+  vec3 view = normalize(vWorld - cameraPosition);
+  float nDotL = max(max(level + (dot(n, uSunDirection) - level) * 1.3, 0.0), swardCatch(vGroundNormal, view));
   float shadow = mix(0.45, 1.0, sunShadow(vWorld, vGroundNormal, 0.0015));
   float direct = nDotL * shadow;
   float light = mix(direct, softCel(direct), 0.5) * sunUp();
@@ -283,10 +284,10 @@ void main() {
   vec3 lit = toned * (uSunColor * uSunIntensity * light + uAmbientColor * uAmbientIntensity);
   vec3 shadowed = toned * uShadowColor * (uAmbientIntensity + 0.75);
   vec3 color = mix(shadowed, lit, clamp(light + 0.35, 0.0, 1.0));
-  // Looking toward the sun, thin blades glow a little where light comes through.
-  vec3 view = normalize(vWorld - cameraPosition);
+  // Looking toward the sun, thin blades glow a little where light comes
+  // through, more when the sun is low behind them.
   float through = pow(max(dot(view, uSunDirection), 0.0), 3.0) * smoothstep(0.3, 1.0, vT) * shadow * sunUp();
-  color += toned * uSunColor * through * 0.22;
+  color += toned * uSunColor * through * (0.22 + 0.45 * (1.0 - smoothstep(0.1, 0.5, uSunDirection.y)));
   // Blades scatter light, so the moon and the lantern wrap well around them.
   color += nightLight(albedo, n, vWorld, 0.6, mix(1.0, shadow, uMoonShadow));
   gl_FragColor = vec4(aerial(shoulder(color), vWorld), 1.0);
