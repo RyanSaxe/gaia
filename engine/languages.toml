@@ -24,7 +24,13 @@
 # since that module is the file's child. A call resolves only to a
 # definition in its own language's `family`, which is the language itself
 # unless named. `data = true` marks a format that holds configuration rather
-# than code, which the import rule searches for package names.
+# than code, which the import rule searches for package names. `builtins`
+# lists the modules a language's runtime or standard library provides, as an
+# import spells them; a family shares its members' lists, so Node's, under
+# `javascript`, hold for TypeScript too, with `node` and `bun` for their
+# `node:` and `bun:` imports. An import that names one, or a module inside
+# one, and that no rule resolves lies outside the repository, as one naming a
+# package a manifest installs does: neither is ever offered a folder.
 # `implicit_self = true` marks a language whose methods call their own
 # class's methods without naming `self` or `this`. `functions_as_values =
 # true` marks one where a call on a value, such as `store.inc()`, can reach
@@ -60,6 +66,13 @@ conventions = [
 functions_as_values = true
 family = "js"
 relative = [{ prefix = "./", from = "here" }, { prefix = "../", from = "parent" }]
+builtins = [
+  "node", "bun", "assert", "async_hooks", "buffer", "child_process", "cluster", "console",
+  "constants", "crypto", "dgram", "diagnostics_channel", "dns", "domain", "events", "fs", "http",
+  "http2", "https", "inspector", "module", "net", "os", "path", "perf_hooks", "process",
+  "punycode", "querystring", "readline", "repl", "stream", "string_decoder", "sys", "timers",
+  "tls", "trace_events", "tty", "url", "util", "v8", "vm", "wasi", "worker_threads", "zlib",
+]
 extensions = ["js", "jsx", "mjs", "cjs"]
 grammar = { crate = "tree-sitter-javascript" }
 conventions = [
@@ -70,6 +83,34 @@ conventions = [
 
 [python]
 relative = [{ prefix = ".", from = "dots" }]
+builtins = [
+  "__future__", "abc", "aifc", "antigravity", "argparse", "array", "ast", "asynchat", "asyncio",
+  "asyncore", "atexit", "audioop", "base64", "bdb", "binascii", "bisect", "builtins", "bz2",
+  "calendar", "cgi", "cgitb", "chunk", "cmath", "cmd", "code", "codecs", "codeop", "collections",
+  "colorsys", "compileall", "concurrent", "configparser", "contextlib", "contextvars", "copy",
+  "copyreg", "cProfile", "crypt", "csv", "ctypes", "curses", "dataclasses", "datetime", "dbm",
+  "decimal", "difflib", "dis", "distutils", "doctest", "email", "encodings", "ensurepip", "enum",
+  "errno", "faulthandler", "fcntl", "filecmp", "fileinput", "fnmatch", "fractions", "ftplib",
+  "functools", "gc", "genericpath", "getopt", "getpass", "gettext", "glob", "graphlib", "grp",
+  "gzip", "hashlib", "heapq", "hmac", "html", "http", "idlelib", "imaplib", "imghdr", "imp",
+  "importlib", "inspect", "io", "ipaddress", "itertools", "json", "keyword", "lib2to3",
+  "linecache", "locale", "logging", "lzma", "mailbox", "mailcap", "marshal", "math", "mimetypes",
+  "mmap", "modulefinder", "msilib", "msvcrt", "multiprocessing", "netrc", "nis", "nntplib", "nt",
+  "ntpath", "nturl2path", "numbers", "opcode", "operator", "optparse", "os", "ossaudiodev",
+  "pathlib", "pdb", "pickle", "pickletools", "pipes", "pkgutil", "platform", "plistlib", "poplib",
+  "posix", "posixpath", "pprint", "profile", "pstats", "pty", "pwd", "py_compile", "pyclbr",
+  "pydoc", "pydoc_data", "pyexpat", "queue", "quopri", "random", "re", "readline", "reprlib",
+  "resource", "rlcompleter", "runpy", "sched", "secrets", "select", "selectors", "shelve",
+  "shlex", "shutil", "signal", "site", "smtpd", "smtplib", "sndhdr", "socket", "socketserver",
+  "spwd", "sqlite3", "sre_compile", "sre_constants", "sre_parse", "ssl", "stat", "statistics",
+  "string", "stringprep", "struct", "subprocess", "sunau", "symtable", "sys", "sysconfig",
+  "syslog", "tabnanny", "tarfile", "telnetlib", "tempfile", "termios", "textwrap", "this",
+  "threading", "time", "timeit", "tkinter", "token", "tokenize", "tomllib", "trace", "traceback",
+  "tracemalloc", "tty", "turtle", "turtledemo", "types", "typing", "unicodedata", "unittest",
+  "urllib", "uu", "uuid", "venv", "warnings", "wave", "weakref", "webbrowser", "winreg",
+  "winsound", "wsgiref", "xdrlib", "xml", "xmlrpc", "zipapp", "zipfile", "zipimport", "zlib",
+  "zoneinfo",
+]
 extensions = ["py", "pyi"]
 grammar = { crate = "tree-sitter-python" }
 conventions = [
@@ -80,6 +121,14 @@ conventions = [
 ]
 
 [go]
+builtins = [
+  "C", "archive", "bufio", "builtin", "bytes", "cmp", "compress", "container", "context",
+  "crypto", "database", "debug", "embed", "encoding", "errors", "expvar", "flag", "fmt", "go",
+  "hash", "html", "image", "index", "io", "iter", "log", "maps", "math", "mime", "net", "os",
+  "path", "plugin", "reflect", "regexp", "runtime", "slices", "sort", "strconv", "strings",
+  "structs", "sync", "syscall", "testing", "text", "time", "unicode", "unique", "unsafe", "uuid",
+  "weak",
+]
 extensions = ["go"]
 grammar = { crate = "tree-sitter-go" }
 conventions = [
@@ -89,6 +138,9 @@ conventions = [
 
 [rust]
 relative = [{ prefix = "self::", from = "here", in_module = "file" }, { prefix = "super::", from = "ancestors", in_module = "file" }, { prefix = "crate::", from = "ancestors" }]
+builtins = [
+  "std", "core", "alloc", "proc_macro",
+]
 extensions = ["rs"]
 grammar = { crate = "tree-sitter-rust" }
 conventions = [
@@ -99,6 +151,9 @@ conventions = [
 
 [java]
 implicit_self = true
+builtins = [
+  "java", "javax", "jdk",
+]
 extensions = ["java"]
 grammar = { crate = "tree-sitter-java" }
 conventions = [
@@ -108,6 +163,18 @@ conventions = [
 
 [c]
 family = "c"
+builtins = [
+  "assert.h", "complex.h", "ctype.h", "errno.h", "fenv.h", "float.h", "inttypes.h", "iso646.h",
+  "limits.h", "locale.h", "math.h", "setjmp.h", "signal.h", "stdalign.h", "stdarg.h",
+  "stdatomic.h", "stdbit.h", "stdbool.h", "stdckdint.h", "stddef.h", "stdint.h", "stdio.h",
+  "stdlib.h", "stdnoreturn.h", "string.h", "tgmath.h", "threads.h", "time.h", "uchar.h",
+  "wchar.h", "wctype.h", "aio.h", "arpa/inet.h", "dirent.h", "dlfcn.h", "fcntl.h", "fnmatch.h",
+  "getopt.h", "glob.h", "grp.h", "libgen.h", "netdb.h", "netinet/in.h", "netinet/tcp.h", "poll.h",
+  "pthread.h", "pwd.h", "regex.h", "sched.h", "semaphore.h", "spawn.h", "strings.h",
+  "sys/ioctl.h", "sys/mman.h", "sys/resource.h", "sys/select.h", "sys/socket.h", "sys/stat.h",
+  "sys/time.h", "sys/types.h", "sys/uio.h", "sys/un.h", "sys/utsname.h", "sys/wait.h", "syslog.h",
+  "termios.h", "unistd.h", "utime.h",
+]
 extensions = ["c"]
 grammar = { crate = "tree-sitter-c" }
 conventions = []
@@ -115,12 +182,31 @@ conventions = []
 [cpp]
 implicit_self = true
 family = "c"
+builtins = [
+  "algorithm", "any", "array", "atomic", "barrier", "bit", "bitset", "cassert", "cctype",
+  "cerrno", "cfenv", "cfloat", "charconv", "chrono", "cinttypes", "climits", "clocale", "cmath",
+  "codecvt", "compare", "complex", "concepts", "condition_variable", "coroutine", "csetjmp",
+  "csignal", "cstdarg", "cstddef", "cstdint", "cstdio", "cstdlib", "cstring", "ctime", "cuchar",
+  "cwchar", "cwctype", "deque", "exception", "execution", "expected", "filesystem", "flat_map",
+  "flat_set", "format", "forward_list", "fstream", "functional", "future", "generator",
+  "initializer_list", "iomanip", "ios", "iosfwd", "iostream", "istream", "iterator", "latch",
+  "limits", "list", "locale", "map", "mdspan", "memory", "memory_resource", "mutex", "new",
+  "numbers", "numeric", "optional", "ostream", "print", "queue", "random", "ranges", "ratio",
+  "regex", "scoped_allocator", "semaphore", "set", "shared_mutex", "source_location", "span",
+  "spanstream", "sstream", "stack", "stacktrace", "stdexcept", "stdfloat", "stop_token",
+  "streambuf", "string", "string_view", "syncstream", "system_error", "thread", "tuple",
+  "type_traits", "typeindex", "typeinfo", "unordered_map", "unordered_set", "utility", "valarray",
+  "variant", "vector", "version",
+]
 extensions = ["cc", "cpp", "cxx", "h", "hh", "hpp", "hxx"]
 grammar = { crate = "tree-sitter-cpp" }
 conventions = []
 
 [c-sharp]
 implicit_self = true
+builtins = [
+  "System",
+]
 extensions = ["cs"]
 grammar = { crate = "tree-sitter-c-sharp" }
 conventions = [
@@ -130,6 +216,17 @@ conventions = [
 
 [ruby]
 implicit_self = true
+builtins = [
+  "English", "abbrev", "base64", "benchmark", "bigdecimal", "cgi", "coverage", "csv", "date",
+  "delegate", "did_you_mean", "digest", "drb", "erb", "etc", "expect", "fcntl", "fiddle",
+  "fileutils", "find", "forwardable", "getoptlong", "io", "ipaddr", "irb", "json", "logger",
+  "matrix", "minitest", "monitor", "mutex_m", "net", "nkf", "objspace", "observer", "open-uri",
+  "open3", "openssl", "optparse", "ostruct", "pathname", "pp", "prettyprint", "prime", "pstore",
+  "psych", "pty", "racc", "rake", "rbconfig", "rdoc", "readline", "reline", "resolv", "rinda",
+  "ripper", "securerandom", "set", "shellwords", "singleton", "socket", "stringio", "strscan",
+  "syslog", "tempfile", "time", "timeout", "tmpdir", "tsort", "un", "uri", "weakref", "win32ole",
+  "yaml", "zlib",
+]
 extensions = ["rb"]
 grammar = { crate = "tree-sitter-ruby" }
 conventions = [
@@ -147,6 +244,14 @@ conventions = [
 
 [swift]
 implicit_self = true
+builtins = [
+  "Swift", "Foundation", "Dispatch", "XCTest", "Testing", "Darwin", "Glibc", "Musl", "WinSDK",
+  "os", "ObjectiveC", "Combine", "Observation", "SwiftUI", "UIKit", "AppKit", "CoreFoundation",
+  "CoreGraphics", "CoreData", "CoreImage", "CoreLocation", "CoreText", "CoreML", "Metal",
+  "MetalKit", "QuartzCore", "AVFoundation", "Network", "OSLog", "CryptoKit", "Security", "WebKit",
+  "MapKit", "StoreKit", "Photos", "SpriteKit", "SceneKit", "ARKit", "RealityKit", "GameplayKit",
+  "UserNotifications", "WidgetKit", "Accelerate", "simd",
+]
 extensions = ["swift"]
 grammar = { crate = "tree-sitter-swift" }
 conventions = [
@@ -156,6 +261,9 @@ conventions = [
 [kotlin]
 functions_as_values = true
 implicit_self = true
+builtins = [
+  "kotlin", "java", "javax",
+]
 extensions = ["kt", "kts"]
 grammar = { crate = "tree-sitter-kotlin-ng" }
 conventions = [

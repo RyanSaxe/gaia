@@ -1,14 +1,16 @@
 //! The rules: an import or call becomes an edge when exactly one target
 //! fits, and anything with several possible targets goes pending,
 //! with every candidate, for Jev. Anything with none is outside the
-//! repository and gets neither. The rules read paths, the language table and
-//! the parse; no file name means anything to them.
+//! repository and gets neither, as does an import of a module its language
+//! provides or a package the project installs. The rules read paths, the
+//! language table, the manifests' installs and the parse; no file name means
+//! anything to them.
 
 use super::languages::Spec;
 use super::model::{Edge, Filled, PendingRef, Span};
 use super::parse::{FileParse, RefKind};
 use std::cell::RefCell;
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 /// One file, as the rules see it.
 pub struct Unit<'a> {
@@ -259,6 +261,8 @@ struct Rules<'a> {
     units: &'a [Unit<'a>],
     paths: Paths<'a>,
     packages: &'a [Package<'a>],
+    /// The packages the project's manifests install, by family (`entities::installed`).
+    installed: &'a BTreeMap<String, BTreeSet<String>>,
     /// Files that hold configuration rather than code, by index.
     configs: Vec<usize>,
     /// Candidates by specifier: a package is often imported from many files.
@@ -379,7 +383,33 @@ impl Rules<'_> {
                 }
             }
         }
+        if self.provided(spec, &s, &ext) {
+            return Outcome::Outside;
+        }
         self.candidates(k, &s)
+    }
+
+    /// True when an import names a module its language provides or a
+    /// package the project installs, or a module inside one, which no folder
+    /// of the project ever is. A name followed by one of the family's
+    /// extensions is a file named like it: C++'s `vector` is not `vector.h`.
+    fn provided(&self, spec: Option<&Spec>, s: &str, ext: &[&str]) -> bool {
+        let Some(spec) = spec else { return false };
+        let names = |name: &str| {
+            s.strip_prefix(name).is_some_and(|rest| {
+                rest.is_empty()
+                    || rest.starts_with(['/', ':'])
+                    || rest
+                        .strip_prefix('.')
+                        .is_some_and(|after| !ext.contains(&after))
+            })
+        };
+        super::languages::table()
+            .values()
+            .filter(|l| l.family == spec.family)
+            .flat_map(|l| &l.builtins)
+            .chain(self.installed.get(&spec.family).into_iter().flatten())
+            .any(|name| names(name))
     }
 
     /// The file an import naming a workspace package means: the target its
@@ -529,11 +559,17 @@ impl Rules<'_> {
 }
 
 /// Runs the rules over every file.
-pub fn run(units: &[Unit], dirs: &BTreeSet<String>, packages: &[Package]) -> Resolved {
+pub fn run(
+    units: &[Unit],
+    dirs: &BTreeSet<String>,
+    packages: &[Package],
+    installed: &BTreeMap<String, BTreeSet<String>>,
+) -> Resolved {
     let rules = Rules {
         units,
         paths: Paths::new(units, dirs),
         packages,
+        installed,
         configs: units
             .iter()
             .enumerate()
