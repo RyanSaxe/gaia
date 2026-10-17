@@ -15,6 +15,7 @@ import type { JevResponse } from "@gaia/schema";
 import { type CodeWorld, type Judge, composeWorld, judgeWorld, judgedThing, keptJev, layoutWorld, planWorldRequests, standInJev, thingsOf } from "@gaia/world";
 import { type Snapshot, snapshotGraphOf, snapshotFacts } from "./snapshot-facts.ts";
 import gaiaKept from "./fixtures/gaia-jev.json";
+import showcaseFixedKept from "./fixtures/showcase-fixed-jev.json";
 import showcaseKept from "./fixtures/showcase-jev.json";
 import { LOOKS } from "./looks.ts";
 
@@ -25,6 +26,7 @@ export type SnapshotJudge = "jev" | "stand-in";
 const KEPT: Readonly<Record<Snapshot, { readonly answers: unknown; readonly command: string }>> = {
   gaia: { answers: gaiaKept.answers, command: "pnpm jev-world" },
   showcase: { answers: showcaseKept.answers, command: "pnpm showcase --judge jev" },
+  "showcase-fixed": { answers: showcaseFixedKept.answers, command: "pnpm showcase --judge jev --v1 fixed" },
 };
 
 /** A snapshot's world as laid out, who judged each thing, and how the judging went, in words; `why` says why the snapshot shows. */

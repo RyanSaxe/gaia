@@ -450,7 +450,10 @@ by the engine and judged by Jev as any folder is, then carried like Gaia's
 own snapshot (`fixtures/showcase-graph.json`, `showcase-judged.json` and
 `showcase-jev.json`, written by `pnpm showcase --judge jev`), so it opens the
 same with or without an engine, and the journal reads its code from what the
-page carries (`docs/showcase.md`). `tourStops` (`app/renderer/terrain/tour.ts`)
+page carries (`docs/showcase.md`). `?world=showcase-fixed` is the same land
+with folio's old `v1/` rewritten well and judged again
+(`showcase-code-v1-fixed.txt` and the `showcase-fixed-*` fixtures, written by
+`pnpm showcase --judge jev --v1 fixed`). `tourStops` (`app/renderer/terrain/tour.ts`)
 finds in any world where to stand to see each such feature. `standWorld` takes the
 layout (`StandRequest.code`): each building and landmark where its thing
 stands (an entity's lot, a file's heart, a definition's plot), each

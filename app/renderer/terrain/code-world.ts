@@ -25,7 +25,9 @@ import GAIA_PAINTING from "../start/gaia-painting.webp";
 import { CHOSEN_MS } from "../start/start.ts";
 import gaiaJudged from "./fixtures/gaia-judged.json";
 import showcaseJudged from "./fixtures/showcase-judged.json";
+import showcaseFixedJudged from "./fixtures/showcase-fixed-judged.json";
 import showcaseCode from "./fixtures/showcase-code.txt?raw";
+import showcaseFixedCode from "./fixtures/showcase-code-v1-fixed.txt?raw";
 import { type Snapshot, snapshotFacts } from "./snapshot-facts.ts";
 import { folioFiles } from "./showcase-code.ts";
 import type { LayoutReply, LayoutRequest } from "./layout-worker.ts";
@@ -149,7 +151,7 @@ function serviceWorld(service: WorldService, veil: Veil): Promise<{ readonly doc
 const SNAPSHOT_JUDGE = typeof location === "undefined" || new URLSearchParams(location.search).get("judge") !== "stand-in" ? "jev" : "stand-in";
 
 /** What the understanding pass judged about each snapshot's things, for the journal. */
-const SNAPSHOT_JUDGED: Readonly<Record<Snapshot, unknown>> = { gaia: gaiaJudged, showcase: showcaseJudged };
+const SNAPSHOT_JUDGED: Readonly<Record<Snapshot, unknown>> = { gaia: gaiaJudged, showcase: showcaseJudged, "showcase-fixed": showcaseFixedJudged };
 
 /**
  * A world from a bundled snapshot (`snapshot.ts`), laid out on a thread of its
@@ -188,16 +190,20 @@ export function provingWorld(): WorldDocument {
 const ASKS_PROVING = typeof location !== "undefined" && new URLSearchParams(location.search).get("world") === "proving";
 
 /**
- * Whether the page asks for the showcase (`?world=showcase`): folio, the
- * made-up codebase whose world the film is walked through, judged by Jev and
- * carried as a snapshot with its source (`docs/showcase.md`), so it opens
- * the same with or without an engine.
+ * Which showcase the page asks for, if any: folio, the made-up codebase whose
+ * world the film is walked through, judged by Jev and carried as a snapshot
+ * with its source (`docs/showcase.md`), so it opens the same with or without
+ * an engine. `?world=showcase` has its old `v1/` as it is, `?world=showcase-fixed`
+ * the same land with `v1/` fixed.
  */
-const ASKS_SHOWCASE = typeof location !== "undefined" && new URLSearchParams(location.search).get("world") === "showcase";
+const ASKS_SHOWCASE: Snapshot | null = ((world) => (world === "showcase" || world === "showcase-fixed" ? world : null))(
+  typeof location === "undefined" ? null : new URLSearchParams(location.search).get("world"),
+);
 
-/** The source of a world the page carries with it, by path, for the journal: folio's for the showcase, none otherwise. */
+/** The source of a world the page carries with it, by path, for the journal: folio's for the showcase, its fixed `v1/` laid over it for the fixed one, none otherwise. */
 export function carriedSource(): ReadonlyMap<string, string> | null {
-  return ASKS_SHOWCASE ? folioFiles(showcaseCode) : null;
+  if (ASKS_SHOWCASE === null) return null;
+  return new Map([...folioFiles(showcaseCode), ...(ASKS_SHOWCASE === "showcase-fixed" ? folioFiles(showcaseFixedCode) : [])]);
 }
 
 /**
@@ -228,7 +234,7 @@ export async function codeWorld(veil: Veil): Promise<CodeLab> {
   // A world that cannot be opened says why on the wait, which stays: nothing else is shown in its place.
   try {
     if (ASKS_PROVING) document = provingWorld();
-    else if (ASKS_SHOWCASE) document = await snapshotWorld("the showcase", "showcase");
+    else if (ASKS_SHOWCASE !== null) document = await snapshotWorld("the showcase", ASKS_SHOWCASE);
     else if (service === null) {
       if (typeof location !== "undefined" && new URLSearchParams(location.search).has("start")) await previewStart(veil);
       document = await snapshotWorld("no engine on a standalone page");
