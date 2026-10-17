@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { type BuildingPlan, Library, blueprintOf, seedOf } from "@gaia/schema";
+import { type BuildingPlan, type Built, Library, blueprintOf, rand, seedOf } from "@gaia/schema";
 import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, RELIEF_PRIMITIVES, STRUCTURE_PRIMITIVES, fieldAt } from "@gaia/primitives";
 import { biome, flora, structure } from "@gaia/kinds";
 import { validate } from "@gaia/world";
-import { FLORA_PRESETS, realize } from "@gaia/realize";
+import { randomSlots } from "@gaia/world/testing";
+import { FLORA_PRESETS, type Realized, realize } from "@gaia/realize";
 import {
   BANKED,
   COVER_TAPS,
@@ -17,6 +18,7 @@ import {
   type Terrain,
   bakeTerrain,
   composeRows,
+  extentOf,
   composer,
   flowAt,
   coverWeights,
@@ -700,35 +702,50 @@ describe("a cottage on the land", () => {
     },
   ];
 
+  /** Sites a building on its own copy of the land, as the world does with what stands beside it, and checks it stands on its ground. */
+  const expectGrounded = (name: string, built: Realized): void => {
+    const plan = built.slots.get("footprint")?.output as BuildingPlan;
+    const beside = extentOf(built.slots.get("feature")?.output as Built | undefined);
+    const terrain: Terrain = { ...t, lattice: { ...t.lattice, heights: t.lattice.heights.slice() } };
+    const site = findSite(terrain, plan, [], 30, beside);
+    levelPad(terrain, plan, site, beside);
+    const ground = (lx: number, lz: number): number => heightAt(terrain.lattice, ...siteToWorld(site, lx, lz));
+    // The pad is level under the whole house and its walk, which starts at the door, out past any porch.
+    const front = Math.max(plan.depth / 2, ...plan.openings.filter((o) => o.kind === "door").map((o) => o.position[2]));
+    for (let lx = -plan.width / 2 - 1; lx <= plan.width / 2 + 1; lx += 0.5) {
+      for (let lz = -plan.depth / 2 - 1; lz <= front + 5.5; lz += 0.5) expect(Math.abs(ground(lx, lz) - site.level), name).toBeLessThan(0.02);
+    }
+    for (const part of built.parts) {
+      let lowest = Infinity;
+      for (let i = 0; i < part.positions.length; i += 3) {
+        const above = site.level + (part.positions[i + 1] as number) - ground(part.positions[i] as number, part.positions[i + 2] as number);
+        lowest = Math.min(lowest, above);
+        // Stepping stones show above the ground and lie on it.
+        if (part.collision === "walkable" && (part.positions[i + 1] as number) > 0) expect(above, `${name} ${part.swatch} stone`).toBeLessThan(0.08);
+      }
+      // Each part either reaches into the ground or rests on the stone base at floor level: nothing hangs between.
+      expect(lowest <= 0 || lowest >= plan.floor - 0.12, `${name} ${part.swatch} lowest ${lowest.toFixed(3)}`).toBe(true);
+    }
+    // The walls' foundation reaches well below the ground, so a slope never shows a gap.
+    const solid = built.parts.filter((p) => p.collision === "solid");
+    const footing = Math.min(...solid.flatMap((p) => Array.from(p.positions.filter((_, i) => i % 3 === 1))));
+    expect(footing, name).toBeLessThan(-1);
+  };
+
   for (const { name, blueprint } of village) {
     it(`${name}'s realized parts sit on the ground, never floating`, () => {
-      const built = realize(blueprint, structure, structureLib, { seed: seedOf(`test/${name}`), facts: { size: 1, floors: 1 } });
-      const plan = built.slots.get("footprint")?.output as BuildingPlan;
-      const terrain: Terrain = { ...t, lattice: { ...t.lattice, heights: t.lattice.heights.slice() } };
-      const site = findSite(terrain, plan);
-      levelPad(terrain, plan, site);
-      const ground = (lx: number, lz: number): number => heightAt(terrain.lattice, ...siteToWorld(site, lx, lz));
-      // The pad is level under the whole house and its walk.
-      for (let lx = -plan.width / 2 - 1; lx <= plan.width / 2 + 1; lx += 0.5) {
-        for (let lz = -plan.depth / 2 - 1; lz <= plan.depth / 2 + 5.5; lz += 0.5) expect(Math.abs(ground(lx, lz) - site.level)).toBeLessThan(0.02);
-      }
-      for (const part of built.parts) {
-        let lowest = Infinity;
-        for (let i = 0; i < part.positions.length; i += 3) {
-          const above = site.level + (part.positions[i + 1] as number) - ground(part.positions[i] as number, part.positions[i + 2] as number);
-          lowest = Math.min(lowest, above);
-          // Stepping stones show above the ground and lie on it.
-          if (part.collision === "walkable" && (part.positions[i + 1] as number) > 0) expect(above).toBeLessThan(0.08);
-        }
-        // Each part either reaches into the ground or rests on the stone base at floor level: nothing hangs between.
-        expect(lowest <= 0 || lowest >= plan.floor - 0.12, `${name} ${part.swatch} lowest ${lowest.toFixed(2)}`).toBe(true);
-      }
-      // The walls' foundation reaches well below the ground, so a slope never shows a gap.
-      const solid = built.parts.filter((p) => p.collision === "solid");
-      const footing = Math.min(...solid.flatMap((p) => Array.from(p.positions.filter((_, i) => i % 3 === 1))));
-      expect(footing).toBeLessThan(-1);
+      expectGrounded(name, realize(blueprint, structure, structureLib, { seed: seedOf(`test/${name}`), facts: { size: 1, floors: 1 } }));
     });
   }
+
+  // Sites 60 buildings drawn from everything Jev can compose: about 2.5 s alone, longer when the suite runs in parallel.
+  it("stands any building Jev can compose on its ground, never floating", { timeout: 120_000 }, () => {
+    const draws = rand(seedOf("grounded draws"));
+    for (let i = 0; i < 60; i++) {
+      const blueprint = blueprintOf(structure.id, randomSlots(structure, structureLib, () => draws.next()));
+      expectGrounded(JSON.stringify(blueprint.slots), realize(blueprint, structure, structureLib, { seed: seedOf(`grounded ${i}`), facts: { size: 1, floors: 1 } }));
+    }
+  });
 
   it("keeps the site dry, inside the world and clear of water", () => {
     const built = realize(cottage, structure, structureLib, { seed: 3, facts: { size: 1, floors: 1 } });
