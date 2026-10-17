@@ -66,7 +66,7 @@
    }
   },
   "crossings": {
-   "id": "bp-167fddac",
+   "id": "bp-173ad847",
    "kind": "biome",
    "slots": {
     "relief": {
@@ -92,6 +92,13 @@
      "use": "native-families@1",
      "params": {
       "families": []
+     }
+    },
+    "accents": {
+     "use": "drift@1",
+     "params": {
+      "form": "falling leaves",
+      "amount": "some"
      }
     }
    }
@@ -128,7 +135,7 @@
    }
   },
   "hollow": {
-   "id": "bp-1cd05a9d",
+   "id": "bp-027bd402",
    "kind": "biome",
    "slots": {
     "relief": {
@@ -152,6 +159,13 @@
      "use": "native-families@1",
      "params": {
       "families": []
+     }
+    },
+    "accents": {
+     "use": "drift@1",
+     "params": {
+      "form": "fireflies at dusk",
+      "amount": "many"
      }
     }
    }
@@ -186,7 +200,7 @@
    }
   },
   "hills": {
-   "id": "bp-11b5a69c",
+   "id": "bp-1ccf10e8",
    "kind": "biome",
    "slots": {
     "relief": {
@@ -210,6 +224,13 @@
      "use": "native-families@1",
      "params": {
       "families": []
+     }
+    },
+    "accents": {
+     "use": "drift@1",
+     "params": {
+      "form": "drifting petals",
+      "amount": "some"
      }
     }
    }
@@ -245,7 +266,7 @@
    }
   },
   "moor": {
-   "id": "bp-0a655f51",
+   "id": "bp-02cdc440",
    "kind": "biome",
    "slots": {
     "relief": {
@@ -269,11 +290,18 @@
      "params": {
       "families": []
      }
+    },
+    "accents": {
+     "use": "drift@1",
+     "params": {
+      "form": "motes of light",
+      "amount": "some"
+     }
     }
    }
   },
   "dunes": {
-   "id": "bp-16015f48",
+   "id": "bp-166f3daf",
    "kind": "biome",
    "slots": {
     "relief": {
@@ -297,6 +325,13 @@
      "use": "native-families@1",
      "params": {
       "families": []
+     }
+    },
+    "accents": {
+     "use": "drift@1",
+     "params": {
+      "form": "dandelion seeds",
+      "amount": "some"
      }
     }
    }
@@ -360,7 +395,7 @@
    }
   },
   "ruins": {
-   "id": "bp-167fddac",
+   "id": "bp-0830e0a4",
    "kind": "biome",
    "slots": {
     "relief": {
@@ -386,6 +421,13 @@
      "use": "native-families@1",
      "params": {
       "families": []
+     }
+    },
+    "accents": {
+     "use": "drift@1",
+     "params": {
+      "form": "falling leaves",
+      "amount": "many"
      }
     }
    }
