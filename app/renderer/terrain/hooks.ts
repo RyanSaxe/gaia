@@ -140,6 +140,55 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
     return { steps, wind };
   }
 
+  /**
+   * The ramp test. With the wind's clock frozen, takes vitality from `from` to
+   * `to` over `seconds`, setting it with `set` once a frame at `fps`, each
+   * frame's time passing for the change to ease in, and measures what each
+   * frame changes. A frame is held to the wind's own change over half a
+   * second at the same view, measured at rest at the ramp's start, middle and
+   * end, three moments 1.7 s apart at each. Returns each frame's [vitality,
+   * mean, worst block], the wind's worst blocks, and the frames named in
+   * `snaps` as JPEG data URLs.
+   */
+  function vitalityRamp(set: (v: number) => void, seconds = 6, from = 0.05, to = 0.95, fps = 60, snaps: readonly number[] = []): { steps: [number, number, number][]; wind: number[]; snaps: Record<number, string> } {
+    const was = world.frozen;
+    const t = world.light.uTime.value;
+    const steps: [number, number, number][] = [];
+    const wind: number[] = [];
+    const shots: Record<number, string> = {};
+    try {
+      for (const v of [from, (from + to) / 2, to]) {
+        set(v);
+        settleVitality();
+        for (let j = 0; j < 3; j++) {
+          world.frozen = t + j * 1.7;
+          const before = grabFrame();
+          world.frozen = t + j * 1.7 + 0.5;
+          wind.push(frameChange(before, grabFrame()).worst);
+        }
+      }
+      world.frozen = t;
+      set(from);
+      settleVitality();
+      let before = grabFrame();
+      const frames = Math.round(seconds * fps);
+      for (let k = 1; k <= frames; k++) {
+        const v = from + ((to - from) * k) / frames;
+        set(v);
+        // A frame's time passes for the change to ease in; the wind's clock stays frozen.
+        world.frame(1 / fps, performance.now(), world.hour);
+        const now = grabFrame(1);
+        if (snaps.includes(k)) shots[k] = world.renderer.domElement.toDataURL("image/jpeg", 0.92);
+        const change = frameChange(before, now);
+        steps.push([+v.toFixed(4), change.mean, change.worst]);
+        before = now;
+      }
+    } finally {
+      world.frozen = was;
+    }
+    return { steps, wind, snaps: shots };
+  }
+
   /** The view held at `pin`, detail chosen from there and nothing streaming, drawn and read back. */
   function heldView(pin: ViewPin): Uint8Array {
     world.viewPin = pin;
@@ -644,6 +693,8 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
     change: frameChange,
     /** The walk test (`walkSteps`): each step's change to the detail drawn, and the wind's along the same walk. */
     steps: (meters: number, step = 0.7, at?: number) => walkSteps(meters, step, at),
+    /** The ramp test: what each frame of a vitality ramp changes, against the wind (see `vitalityRamp`). */
+    ramp: vitalityRamp,
     /** Lets every change in vitality settle at once, so what is drawn next shows exactly the vitality set. */
     settleVitality: () => settleVitality(),
     /**
