@@ -11,6 +11,7 @@
 // names; a stone's moss recedes and the stone bleaches with both areas'.
 
 import * as THREE from "three";
+import { shownVitality } from "@gaia/realize";
 import { LIGHT_GLSL, type SceneLight } from "@gaia/render";
 import { type PlaceArea, type SolidShape, type Way, heightAt, waterDepthAt } from "@gaia/terrain";
 import type { Furnishing, StoodWorld } from "../terrain/lab.ts";
@@ -159,7 +160,7 @@ function stoneGeometry(): THREE.BufferGeometry {
 const VERT = /* glsl */ `
 attribute vec2 aUv;
 attribute float aFace;
-// Vitality, the atlas slot, and how far a failing arm droops on its nail.
+// How far along its decline it looks (shownVitality), the atlas slot, and how far a failing arm droops on its nail.
 attribute vec3 aMark;
 varying vec3 vNormal;
 varying vec3 vWorld;
@@ -494,9 +495,9 @@ export function createMarkers(light: SceneLight): Markers {
       const armMark = arms?.geometry.getAttribute("aMark") as THREE.InstancedBufferAttribute | undefined;
       const stoneMark = stones?.geometry.getAttribute("aMark") as THREE.InstancedBufferAttribute | undefined;
       const postMark = posts?.geometry.getAttribute("aMark") as THREE.InstancedBufferAttribute | undefined;
-      armNames.forEach((path, i) => armMark?.setX(i, of(path)));
+      armNames.forEach((path, i) => armMark?.setX(i, shownVitality(of(path))));
       stoneNames.forEach(([a, b], i) => {
-        const v = (of(a) + of(b)) / 2;
+        const v = shownVitality((of(a) + of(b)) / 2);
         stoneMark?.setX(i, v);
         postMark?.setX(i, v);
       });
