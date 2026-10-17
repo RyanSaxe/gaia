@@ -1,5 +1,6 @@
 use crate::filter::SizeFilter;
 use std::collections::HashMap;
+use std::collections::BTreeMap as Ordered;
 
 /// A batch of results.
 pub struct Batch {

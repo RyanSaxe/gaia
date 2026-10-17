@@ -8,7 +8,7 @@
 
 use super::languages::Spec;
 use super::model::{Edge, Filled, PendingRef, Span};
-use super::parse::{FileParse, RefKind};
+use super::parse::{Aliased, FileParse, RefKind};
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
@@ -44,6 +44,14 @@ pub struct Package<'a> {
 pub struct Resolved {
     pub edges: Vec<Edge>,
     pub pending: Vec<PendingRef>,
+}
+
+/// What an alias stands for: `name` in `files`, the files its import names.
+/// With no name it is the module itself, and with no files its import leads
+/// outside the repository, where the alias reaches nothing.
+struct Bound<'a> {
+    name: Option<&'a str>,
+    files: Vec<usize>,
 }
 
 enum Outcome {
@@ -198,11 +206,14 @@ impl<'a> Paths<'a> {
     }
 }
 
-/// The specifier as written, cleaned: a Rust `use` list cut at its `{`, a
-/// glob or query dropped, angle brackets stripped.
+/// The specifier as written, cleaned: a Rust `use` list cut at its `{` and a
+/// `use … as b` at its `as`, a glob or query dropped, angle brackets stripped.
 fn clean_specifier(s: &str) -> String {
     let mut s = s.trim().trim_matches(['<', '>', ';']).to_string();
     if let Some(i) = s.find('{') {
+        s.truncate(i);
+    }
+    if let Some(i) = s.find(" as ") {
         s.truncate(i);
     }
     if let Some(i) = s.find('?') {
@@ -558,6 +569,33 @@ impl Rules<'_> {
     }
 }
 
+/// What an alias stands for, given the files its import names. A default
+/// import binds the default of the one file that exports one; with none, or
+/// several, the alias keeps its own name.
+fn binding<'a>(units: &[Unit<'a>], of: &'a Aliased, files: Vec<usize>) -> Option<Bound<'a>> {
+    Some(match of {
+        Aliased::Item(name) => Bound {
+            name: Some(name),
+            files,
+        },
+        Aliased::Module => Bound { name: None, files },
+        Aliased::Default if files.is_empty() => Bound { name: None, files },
+        Aliased::Default => {
+            let defaults: Vec<(usize, &str)> = files
+                .iter()
+                .filter_map(|&f| Some((f, units[f].parse?.default_export.as_deref()?)))
+                .collect();
+            let [(file, name)] = defaults.as_slice() else {
+                return None;
+            };
+            Bound {
+                name: Some(name),
+                files: vec![*file],
+            }
+        }
+    })
+}
+
 /// Runs the rules over every file.
 pub fn run(
     units: &[Unit],
@@ -595,8 +633,11 @@ pub fn run(
             }
         };
 
-    // Imports first: the call rule looks in the files each file imports.
+    // Imports first: the call rule looks in the files each file imports, and
+    // through the names each binds, with the definition each import sits in.
     let mut imported: Vec<BTreeSet<usize>> = vec![BTreeSet::new(); units.len()];
+    type Bindings<'a> = HashMap<&'a str, Vec<(Option<usize>, Bound<'a>)>>;
+    let mut bound: Vec<Bindings> = units.iter().map(|_| HashMap::new()).collect();
     let index: HashMap<&str, usize> = units.iter().enumerate().map(|(i, u)| (u.path, i)).collect();
     let files_of = |id: &str| -> Vec<usize> {
         if let Some(p) = id.strip_prefix("file:") {
@@ -616,7 +657,24 @@ pub fn run(
             std::iter::successors(def, |&i| p.defs[i].parent).any(|i| p.defs[i].role == "module")
         };
         for r in p.refs.iter().filter(|r| r.kind == RefKind::Import) {
-            match rules.import(k, &r.text, in_module(r.from)) {
+            let outcome = rules.import(k, &r.text, in_module(r.from));
+            // An alias whose import Jev must place keeps its own name.
+            let files = match &outcome {
+                Outcome::Edge(to) => Some(files_of(to)),
+                Outcome::Outside => Some(Vec::new()),
+                Outcome::Pending(_) => None,
+            };
+            if let Some(files) = files {
+                for a in &r.aliases {
+                    if let Some(b) = binding(units, &a.of, files.clone()) {
+                        bound[k]
+                            .entry(a.name.as_str())
+                            .or_default()
+                            .push((r.from, b));
+                    }
+                }
+            }
+            match outcome {
                 Outcome::Edge(to) => {
                     imported[k].extend(files_of(&to));
                     push(&mut edges, u.from(r.from), to, "imports", r.at);
@@ -664,11 +722,38 @@ pub fn run(
                     _ => true,
                 }
             };
+            let caller = r.from.map(|i| &p.defs[i]);
+            let self_like = |q: &str| {
+                matches!(q, "self" | "this" | "Self" | "cls" | "@")
+                    || caller.and_then(|d| d.self_name.as_deref()) == Some(q)
+            };
+            // A name an import binds stands for what it binds, in the files the
+            // import names: `buildV1()` calls `buildSite` there, and `ns.walk()`
+            // calls `walk` in `ns`'s module. An import inside a definition binds
+            // only there, as Python's `from m import a as f` inside a function does.
+            let alias = |name: &str| {
+                let made = bound[k].get(name)?;
+                std::iter::successors(r.from, |&i| p.defs[i].parent)
+                    .map(Some)
+                    .chain([None])
+                    .find_map(|scope| made.iter().find(|(s, _)| *s == scope).map(|(_, b)| b))
+            };
+            let (name, qualifier, within) = match r.qualifier.as_deref() {
+                None => match alias(&r.text) {
+                    Some(b) => (b.name.unwrap_or(&r.text), None, Some(&b.files)),
+                    None => (r.text.as_str(), None, None),
+                },
+                Some(q) => match alias(q).filter(|_| !self_like(q)) {
+                    Some(b) => (r.text.as_str(), b.name, Some(&b.files)),
+                    None => (r.text.as_str(), Some(q), None),
+                },
+            };
             let all: Vec<(usize, usize)> = by_name
-                .get(r.text.as_str())
+                .get(name)
                 .map(|v| {
                     v.iter()
                         .copied()
+                        .filter(|(kk, _)| within.is_none_or(|w| w.contains(kk)))
                         .filter(|(kk, _)| units[*kk].spec.is_some_and(|s| s.family == spec.family))
                         .filter(|(kk, i)| visible(*kk, *i))
                         .filter(|(kk, i)| {
@@ -685,15 +770,10 @@ pub fn run(
             // file or package. An unqualified call reaches no other class's
             // method. A receiver the rule cannot place, such as `err.Error()`,
             // leaves the call to Jev with its candidates.
-            let caller = r.from.map(|i| &p.defs[i]);
             let caller_owner = caller.and_then(|d| d.owner.as_deref());
             let owner_of =
                 |kk: usize, i: usize| units[kk].parse.and_then(|pp| pp.defs[i].owner.as_deref());
-            let self_like = |q: &str| {
-                matches!(q, "self" | "this" | "Self" | "cls" | "@")
-                    || caller.and_then(|d| d.self_name.as_deref()) == Some(q)
-            };
-            let (pool, certain): (Vec<(usize, usize)>, bool) = match r.qualifier.as_deref() {
+            let (pool, certain): (Vec<(usize, usize)>, bool) = match qualifier {
                 Some(q) if self_like(q) => {
                     let mine: Vec<_> = all
                         .iter()

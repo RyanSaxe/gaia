@@ -1,7 +1,9 @@
 import { Walker } from "./sample";
+import walker, * as sample from "./sample";
+import { readAll as readEvery } from "./sample";
 
 /** Shows a walk. */
-export function Listing({ root, depth }: { root: string; depth: number }) {
+export default function Listing({ root, depth }: { root: string; depth: number }) {
   let names: string[] = [];
   try {
     names = new Walker(root).walk();

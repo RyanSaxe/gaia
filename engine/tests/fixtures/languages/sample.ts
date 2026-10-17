@@ -1,5 +1,7 @@
 import { join } from "./paths";
 import type { Options } from "../options";
+import * as paths from "./paths";
+import probe, { join as joinPaths } from "./probe";
 
 /** Reads every entry under a root. */
 export function readAll(root: string, depth: number): string[] {
@@ -53,3 +55,5 @@ const config = {
 function list(root: string): string[] {
   return [root];
 }
+
+export default Walker;

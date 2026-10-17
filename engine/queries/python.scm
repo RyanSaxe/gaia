@@ -3,6 +3,11 @@
 (import_statement name: (aliased_import name: (dotted_name) @name)) @reference.import
 (import_from_statement module_name: (_) @name) @reference.import
 
+; Names an import binds under the file's own: a module (`import m as n`) and a
+; name from one (`from m import a as b`).
+(import_statement name: (aliased_import alias: (identifier) @name) @alias.module)
+(import_from_statement name: (aliased_import name: (_) @imported alias: (identifier) @name) @alias.renamed)
+
 (function_definition body: (block . (expression_statement (string (string_content) @doc))))
 (class_definition body: (block . (expression_statement (string (string_content) @doc))))
 

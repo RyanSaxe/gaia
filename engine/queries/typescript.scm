@@ -7,6 +7,14 @@
 ((call_expression function: (identifier) @_f arguments: (arguments . (string (string_fragment) @name))) @reference.import
   (#eq? @_f "require"))
 
+; Names an import binds under the file's own: `b` in `import { a as b }`, a
+; namespace and a default import; and the definition a file exports as its default.
+(import_specifier name: (_) @imported alias: (identifier) @name) @alias.renamed
+(namespace_import (identifier) @name) @alias.module
+(import_clause (identifier) @name) @alias.default
+(export_statement "default" declaration: (_ name: (_) @name)) @export.default
+(export_statement "default" value: (identifier) @name) @export.default
+
 [(if_statement) (ternary_expression)] @block.branch
 [(for_statement) (for_in_statement) (while_statement) (do_statement)] @block.loop
 (switch_statement) @block.match

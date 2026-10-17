@@ -1,6 +1,8 @@
 import os
 from .core import Context
 from ..utils import helper
+from .core import Context as Ctx
+import os.path as osp
 
 
 class Loader:
