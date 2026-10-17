@@ -1,8 +1,9 @@
 // The ground's vitality as the grass, the ground and the water read it: a
-// small texture over the land whose red channel is the vitality of whatever
-// owns the ground there (a file's patch, or on a lot its area's) and whose
-// green is the vitality of the area that ground lies in, which water
-// follows. The bake says whose ground each sample is (`ownershipOf` in
+// small texture over the land holding the vitality of whatever owns the
+// ground there (a file's patch, or on a lot its area's) and the vitality of
+// the area that ground lies in, which water follows, each to a 65535th in a
+// high byte (red, green) and a low byte (blue, alpha), so a change easing
+// in moves the grass smoothly rather than a 255th at a time. The bake says whose ground each sample is (`ownershipOf` in
 // @gaia/terrain); `showGroundVitality` weighs each owner's vitality by its
 // share (`vitalityOver`), so a change in vitality rewrites the texture's
 // bytes and nothing rebakes. Past the land the ground is the wild's and
@@ -14,18 +15,16 @@ import { GROUND_DECLINE, type Ownership, groundDecline, vitalityAt, vitalityOver
 import { hexToVec3 } from "@gaia/render";
 
 function fieldTexture(data: Uint8Array, n: number): THREE.DataTexture {
-  const t = new THREE.DataTexture(data, n, n, THREE.RGFormat, THREE.UnsignedByteType);
+  const t = new THREE.DataTexture(data, n, n, THREE.RGBAFormat, THREE.UnsignedByteType);
   t.minFilter = THREE.LinearFilter;
   t.magFilter = THREE.LinearFilter;
-  // Rows of two bytes a sample need not fill whole words.
-  t.unpackAlignment = 1;
   t.needsUpdate = true;
   return t;
 }
 
 /** The field and the colors decline turns the cover toward, shared by the ground and the grass; the water reads the field. */
 export const vitalityUniforms = {
-  uVitalityField: { value: fieldTexture(new Uint8Array([255, 255]), 1) },
+  uVitalityField: { value: fieldTexture(new Uint8Array([255, 255, 255, 255]), 1) },
   /** The field's origin, meters between its samples, and samples per side. */
   uVitalityMap: { value: new THREE.Vector3(0, 1, 1) },
   /** Straw, low to high to tip: what the cover dries toward. */
@@ -39,13 +38,16 @@ export const vitalityUniforms = {
 };
 
 let owned: Ownership | null = null;
-let bytes = new Uint8Array([255, 255]);
+/** Each sample's ground and area vitality in 255ths, exactly, and the texture's bytes made from them. */
+let levels = new Float32Array([255, 255]);
+let bytes = new Uint8Array([255, 255, 255, 255]);
 
 /** Takes on a bake's ownership of the land, or none: then all ground thrives until `showGroundVitality`. */
 export function setGroundOwnership(own: Ownership | null): void {
   owned = own;
   const n = own?.n ?? 1;
-  bytes = new Uint8Array(n * n * 2).fill(255);
+  levels = new Float32Array(n * n * 2).fill(255);
+  bytes = new Uint8Array(n * n * 4).fill(255);
   const old = vitalityUniforms.uVitalityField.value;
   vitalityUniforms.uVitalityField.value = fieldTexture(bytes, n);
   old.dispose();
@@ -59,15 +61,21 @@ export function setGroundOwnership(own: Ownership | null): void {
  */
 export function showGroundVitality(ground: ArrayLike<number>, area: ArrayLike<number>): void {
   if (owned === null) return;
-  vitalityOver(owned, ground, bytes, 2, 0);
-  vitalityOver(owned, area, bytes, 2, 1);
+  vitalityOver(owned, ground, levels, 2, 0);
+  vitalityOver(owned, area, levels, 2, 1);
+  // A texture filters each byte linearly, so the high and low bytes blend into exactly the blend of the 65535ths.
+  for (let i = 0; i < levels.length; i++) {
+    const v = Math.round((levels[i] as number) * 257);
+    bytes[(i >> 1) * 4 + (i & 1)] = v >> 8;
+    bytes[(i >> 1) * 4 + 2 + (i & 1)] = v & 255;
+  }
   vitalityUniforms.uVitalityField.value.needsUpdate = true;
 }
 
 /** The ground's own vitality and its area's at (x, z), as the shaders read them. */
 export function groundVitalityAt(x: number, z: number): { ground: number; area: number } {
   if (owned === null) return { ground: 1, area: 1 };
-  return { ground: vitalityAt(owned, bytes, x, z, 2, 0), area: vitalityAt(owned, bytes, x, z, 2, 1) };
+  return { ground: vitalityAt(owned, levels, x, z, 2, 0), area: vitalityAt(owned, levels, x, z, 2, 1) };
 }
 
 /** Samples a side of the square `declineAround` reads its disc from. */
@@ -90,7 +98,7 @@ export function declineAround(x: number, z: number, radius: number): number {
       const r2 = u * u + w * w;
       if (r2 >= 1) continue;
       const k = (1 - r2) * (1 - r2);
-      sum += k * groundDecline(vitalityAt(owned, bytes, x + u * radius, z + w * radius, 2, 0));
+      sum += k * groundDecline(vitalityAt(owned, levels, x + u * radius, z + w * radius, 2, 0));
       weight += k;
     }
   }
@@ -121,7 +129,8 @@ uniform vec3 uStrawDead;
 uniform vec3 uBareEarth;
 vec2 landVitality(vec2 xz) {
   vec2 uv = ((xz - uVitalityMap.x) / uVitalityMap.y + 0.5) / uVitalityMap.z;
-  return texture2D(uVitalityField, uv).rg;
+  vec4 t = texture2D(uVitalityField, uv);
+  return (t.rg * 65280.0 + t.ba * 255.0) / 65535.0;
 }
 float shownVitality(float v) { return clamp((v - ${CHANNEL_MATH.shownRuin.toFixed(3)}) / ${(CHANNEL_MATH.shownWhole - CHANNEL_MATH.shownRuin).toFixed(3)}, 0.0, 1.0); }
 float declineOf(float v) { return 1.0 - smoothstep(${g.to.toFixed(3)}, ${g.from.toFixed(3)}, shownVitality(v)); }
