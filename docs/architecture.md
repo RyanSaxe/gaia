@@ -218,10 +218,11 @@ dependency. What a thing stands as is asked once the understanding pass has
 judged how much each matters (`planStanding`): each thing's rank by
 importance among the world's own things (`rankThings`, ties sharing the
 middle) offers it every form whose range holds it (`formsFor`, the ranges in
-`SIZES` in `app/renderer/terrain/looks.ts`, wide and overlapping, smallest
+`SIZES` in `app/renderer/terrain/looks.ts`, overlapping, smallest
 first: flowers, stones, bushes, trees, buildings, landmarks), and Jev picks
 among them by each form's character; a thing offered one form alone stands
-as it unasked. A file's own question goes in the first of its definitions'
+as it unasked. The request carries each thing's importance and no line
+counts, so a form's size follows how much the thing matters. A file's own question goes in the first of its definitions'
 requests, 24 to a request, each with the file's and each definition's
 importance, and an entity is asked in a request of its own. Jev never names a
 preset: `composeWorld` asks these first and then composes the world part by

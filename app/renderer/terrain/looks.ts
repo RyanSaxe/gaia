@@ -16,21 +16,23 @@ const look = (doc: string): Look => ({ doc });
  * Each size of thing, smallest first: the range of rank by importance among
  * the world's own entities, files and definitions that it is offered to (0
  * the least important, 1 the most, as `rankThings` reads it), and how big and
- * how rare it is, which ends every one of its forms' words. The ranges are
- * wide and overlap, so every thing is offered at least two sizes and Jev
- * chooses among them by character; the most important things are never
- * offered flowers, and only they are offered a building or a landmark. Jev
- * picks a building most times it is offered one (217 of 267 on Gaia's world
- * when buildings started at 0.90), so the buildings' range is narrow to keep
- * them scarce. A rank is a share of the world's own things, so the ranges
- * hold at any world size.
+ * how rare it is, which ends every one of its forms' words. The ranges
+ * overlap, so nearly every thing is offered two sizes or more and Jev chooses
+ * among them by character. Jev reads importance as size whatever the words
+ * say, so the small forms stop at the less important half and the code that
+ * matters below the buildings, from 0.75 to 0.90, is offered the trees alone,
+ * among which Jev still picks by character: that is what grows a world's
+ * woods. Jev picks a building most times it is offered one (214 of Gaia's
+ * things from 0.90), and only the most important things are offered a
+ * building or a landmark. A rank is a share of the world's own things, so
+ * the ranges hold at any world size.
  */
 export const SIZES = {
-  flowers: { rank: [0, 0.55], words: "Flowers grow low in the grass, and many things are flowers." },
-  stones: { rank: [0, 0.75], words: "A stone sits from ankle to waist high, and many things are stones." },
-  bushes: { rank: [0.15, 0.97], words: "A bush grows knee to head high, and many things are bushes." },
-  trees: { rank: [0.35, 1], words: "A tree grows tall over a person, and many things are trees." },
-  buildings: { rank: [0.97, 1], words: "A building is as big as a house, and buildings are scarce: few things in a world are one." },
+  flowers: { rank: [0, 0.45], words: "Flowers grow low in the grass, and many things are flowers." },
+  stones: { rank: [0, 0.45], words: "A stone sits from ankle to waist high, and many things are stones." },
+  bushes: { rank: [0.15, 0.75], words: "A bush grows knee to head high, and many things are bushes." },
+  trees: { rank: [0.3, 1], words: "A tree grows tall over a person, and many things are trees." },
+  buildings: { rank: [0.9, 1], words: "A building is as big as a house, and buildings are scarce: few things in a world are one." },
   landmarks: { rank: [0.98, 1], words: "A landmark rises over everything around it, and landmarks are the rarest: a world holds only a handful." },
 } as const satisfies Readonly<Record<string, { readonly rank: readonly [number, number]; readonly words: string }>>;
 
@@ -48,20 +50,20 @@ const sized = (size: Size, vibe: string): Look => ({ doc: `${vibe} ${SIZES[size]
  * importance decides what is offered, and character decides Jev's pick.
  */
 export const FORMS: Readonly<Record<string, { readonly look: Look; readonly rule: string; readonly preset: number }>> = {
-  "Lantern willow": { look: sized("trees", "A weeping willow hung with lanterns: soft, glowing and lingering."), rule: "trees", preset: 0 },
+  "Lantern willow": { look: sized("trees", "A weeping willow hung with lanterns: gentle and guiding, lighting the way for others."), rule: "trees", preset: 0 },
   Fir: { look: sized("trees", "A dark fir: watchful and unbending."), rule: "trees", preset: 1 },
-  Cherry: { look: sized("trees", "A cherry in blossom: bright and young."), rule: "trees", preset: 2 },
-  "Autumn maple": { look: sized("trees", "A broad maple turning gold: rich and full of years."), rule: "trees", preset: 3 },
+  Cherry: { look: sized("trees", "A cherry in full blossom: eager and lively, quick to lend a hand."), rule: "trees", preset: 2 },
+  "Autumn maple": { look: sized("trees", "A broad maple turning gold: sheltering, rich and full of years, with much leaning on it."), rule: "trees", preset: 3 },
   "Standing stone": { look: sized("stones", "A lone upright stone: stern, still and solitary."), rule: "rocks", preset: 1 },
   "Mossy boulder": { look: sized("stones", "A broad boulder gone green with moss: heavy, old and unhurried."), rule: "rocks", preset: 0 },
   "Stone family": { look: sized("stones", "A big stone among its small ones: close-knit and huddled."), rule: "rocks", preset: 3 },
-  "Bench stone": { look: sized("stones", "A low flat stone to sit on: humble and restful."), rule: "rocks", preset: 2 },
-  "Box mound": { look: sized("bushes", "A clipped box bush: neat, prim and kept just so."), rule: "shrubs", preset: 0 },
-  Blueberry: { look: sized("bushes", "A blueberry bush: homely and generous."), rule: "shrubs", preset: 1 },
+  "Bench stone": { look: sized("stones", "A low flat stone worn smooth by sitting: drowsy, idle and content."), rule: "rocks", preset: 2 },
+  "Box mound": { look: sized("bushes", "A box bush clipped into a hard square: strict and severe."), rule: "shrubs", preset: 0 },
+  Blueberry: { look: sized("bushes", "A blueberry bush, low and thick with berries: cosy and a little untidy."), rule: "shrubs", preset: 1 },
   Rhododendron: { look: sized("bushes", "A rhododendron in flower: showy and a little proud."), rule: "shrubs", preset: 2 },
   "Feather shrub": { look: sized("bushes", "A tall, feathery shrub: airy and restless."), rule: "shrubs", preset: 3 },
-  Bluebells: { look: sized("flowers", "A carpet of bluebells in the shade: quiet and shy, easy to walk past."), rule: "flowers", preset: 1 },
-  Daisies: { look: sized("flowers", "A drift of daisies in the open: cheerful and plain."), rule: "flowers", preset: 0 },
+  Bluebells: { look: sized("flowers", "A carpet of bluebells in the shade: quiet and shy, keeping to itself."), rule: "flowers", preset: 1 },
+  Daisies: { look: sized("flowers", "A drift of daisies in the open: simple and sunny, plain to see."), rule: "flowers", preset: 0 },
 };
 
 /** The forms Jev composes part by part once it chooses one, as it composes an entity's: a building, or a landmark. */

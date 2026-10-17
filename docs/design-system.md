@@ -1613,7 +1613,9 @@ about a quarter of the world's width apart.
 Every tree in a world from code is a definition, a file or an entity Jev
 chose to be one. Jev chooses what each stands as, on its own, among the
 sizes its importance is offered (flowers, stones, bushes, trees, buildings
-and landmarks, each with a wide range of rank in `SIZES`, overlapping): one
+and landmarks, each with a range of rank in `SIZES`, overlapping; flowers and
+stones only for the less important half, trees alone from 0.75 to 0.90,
+buildings from 0.90): one
 of four trees (a lantern willow, a fir, a cherry or an autumn maple), a
 stone, a bush, a drift of flowers, a building or a landmark. Each form's
 words are its character, its size and its rarity, never a kind of code. A
@@ -1621,8 +1623,9 @@ tree stands near where the layout put what it stands for (a file's at its
 patch's heart), sized by its importance, keeping its crown's width from
 everything else that stands for code, so each tree reads as one thing, and
 a tap on it opens that thing's page. Where Jev picks trees for many of a file's definitions,
-its patch grows a copse; a file whose definitions are small routines is low
-bushes and stones.
+its patch grows a copse; a file whose definitions matter little is low
+bushes, stones and flowers. No line count reaches Jev with them, so a short
+definition that matters can grow as tall as a long one.
 
 ## Understory
 
