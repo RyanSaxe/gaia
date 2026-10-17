@@ -605,23 +605,23 @@ describe("the kernel", () => {
 === packages/engine/README.md ===
 # The engine
 
-The engine is Gaia's build and its oldest code. Its first steps were written
-for 0.1 and most still read as they did then: each one small, each doing one
-thing, each handing its page to the next.
+The engine is Gaia's build and its oldest code, and each of its steps has a
+temper of its own. The block and inline readers and the renderer were
+written for 0.1 and still run as they did then.
 
 A page walks the whole chain in order, every build:
 
 read, lines, blocks, inline, footnotes, headings, transform, layout, render, write.
 
-Steps are never rewritten in place. A new need gets a new step beside the old
-ones, so the chain only grows, slowly, a few steps a year, and a site built
-years ago builds the same today.
+Around those first steps: `escape` runs on every string of every page,
+`dates` stops the build on a bad date, `typography` is still an experiment,
+and `write` hammers every page out at once.
 === packages/engine/index.ts ===
 /**
- * The engine: Gaia's build, the oldest part of the project. It is a long
- * chain of small steps, and every page walks the whole chain in order:
- * read, parse, transform, lay out, render, write. Each step does one thing
- * and has done it, mostly unchanged, since the first release.
+ * The engine: Gaia's build, the oldest part of the project. Every page walks
+ * its steps in order: read, parse, transform, lay out, render, write. A few
+ * steps are as old as the project; the rest are busy, strict, thrifty or
+ * still experimental, each with its own job.
  */
 export { build, type BuildResult } from "./build.ts";
 export { parseBlocks } from "./blocks.ts";
@@ -654,7 +654,7 @@ export interface BuildResult {
   readonly ms: number;
 }
 
-/** The whole chain, step by step, for every page, in the order it has kept year after year since the first release. */
+/** Calls on every step and every extension in turn for each page, and hears back from each before it moves on. */
 export async function build(given: SiteConfig): Promise<BuildResult> {
   const started = Date.now();
   const config = runConfigured(given);
@@ -676,12 +676,12 @@ async function readStep(config: SiteConfig): Promise<Page[]> {
   return (await readPages(config)).filter((page) => config.drafts === true || !isDraft(page));
 }
 
-/** The long middle of the chain: a page's text parsed to a tree, then given its footnotes and heading ids. */
+/** The oldest stretch of the chain, run the same way since 0.1: a page's text parsed to a tree, then its notes and ids. */
 function parseStep(page: Page): Page {
   return withHeadingIds(withFootnotes({ ...page, tree: { type: "root", children: parseBlocks(page.body) } }));
 }
 
-/** The last step: every page written, then the static files copied beside them, then the extensions' last word. */
+/** The last step, fast and fierce: every page written at once, static files copied, then the extensions' last word. */
 async function writeStep(pages: readonly Page[], config: SiteConfig): Promise<void> {
   await writePages(pages, config.out);
   await copyStatic(config.root ?? ".", config.out);
@@ -693,7 +693,7 @@ import { join, relative } from "node:path";
 import type { Page, SiteConfig } from "@gaia/types";
 import { createPage } from "@gaia/kernel";
 
-/** Where every build begins, as it has since 0.1: each Markdown file under the content folder, as a page, in path order. */
+/** Where every build begins: every Markdown file under the content folder read at once, in parallel, as pages in path order. */
 export async function readPages(config: SiteConfig): Promise<Page[]> {
   const root = config.root ?? ".";
   const files = await markdownUnder(join(root, config.content));
@@ -701,14 +701,14 @@ export async function readPages(config: SiteConfig): Promise<Page[]> {
   return pages.sort(byPath);
 }
 
-/** Goes down every folder, patiently, to the bottom, and brings back each Markdown file it finds. */
+/** Goes down every folder to the bottom, all of them at once, and brings back each Markdown file it finds. */
 async function markdownUnder(dir: string): Promise<string[]> {
   const entries = await readdir(dir, { withFileTypes: true });
   const nested = await Promise.all(entries.map((entry) => (entry.isDirectory() ? markdownUnder(join(dir, entry.name)) : Promise.resolve(isMarkdown(entry.name) ? [join(dir, entry.name)] : []))));
   return nested.flat();
 }
 
-/** An old, quiet rule: a page is a `.md` file whose name does not start with an underscore. */
+/** A plain rule: a page is a `.md` file whose name does not start with an underscore. */
 function isMarkdown(name: string): boolean {
   return name.endsWith(".md") && !name.startsWith("_");
 }
@@ -723,7 +723,7 @@ function byPath(a: Page, b: Page): number {
   return a.path < b.path ? -1 : a.path > b.path ? 1 : 0;
 }
 === packages/engine/lines.ts ===
-/** The oldest helper in the engine: every kind of line ending turned into a plain newline before anything else looks. */
+/** The first thing done to any text, thousands of times a build: every kind of line ending turned into a plain newline. */
 export function normalizeNewlines(text: string): string {
   return text.replace(/\r\n?/g, "\n");
 }
@@ -738,7 +738,7 @@ export function isBlank(line: string): boolean {
   return line.trim() === "";
 }
 
-/** How far a line is indented, in spaces, a tab counted as four as it always has been. */
+/** How far a line is indented, in spaces, a tab counted as four. */
 export function indentOf(line: string): number {
   let width = 0;
   for (const char of line) {
@@ -1002,7 +1002,7 @@ function textNode(value: string): Node {
   return { type: "text", value };
 }
 
-/** Asks each reader in turn, in the same old order, whether the span at `at` is its own. */
+/** Asks each reader in turn whether the span at `at` is theirs, back and forth, many times on every line. */
 function readAt(text: string, at: number): Read {
   const char = text[at];
   if (char === "\\") return readEscape(text, at);
@@ -1106,7 +1106,7 @@ import { mapTree } from "@gaia/kernel";
 const REF = /\[\^([\w-]+)\]/g;
 const NOTE = /^\[\^([\w-]+)\]:\s*(.*)$/;
 
-/** Footnotes, a step added in 0.4 and left alone since: each `[^1]` linked to its note, the notes listed at the end. */
+/** Footnotes: every `[^1]` gathered up and kept back, numbered, until the page ends, where all the notes are listed. */
 export function withFootnotes(page: Page): Page {
   const notes = notesOf(page.body);
   if (notes.size === 0 || page.tree === undefined) return page;
@@ -1160,7 +1160,7 @@ import type { Node, Page } from "@gaia/types";
 import { mapTree, textOf } from "@gaia/kernel";
 import { uniqueSlugs } from "./slug.ts";
 
-/** Every heading given an id from its words, as headings have been since the first table of contents. */
+/** Every heading given an id from its words, so a table of contents can link to it. */
 export function withHeadingIds(page: Page): Page {
   if (page.tree === undefined) return page;
   const ids = uniqueSlugs();
@@ -1203,7 +1203,7 @@ function stripAccents(text: string): string {
   return text.normalize("NFKD").replace(/[\u0300-\u036f]/g, "");
 }
 
-/** A heading's words as a URL fragment: lowercase words joined by hyphens, the same rule since 0.1. */
+/** A heading's words as a URL fragment: lowercase words joined by hyphens. */
 export function slugify(text: string): string {
   return stripAccents(text).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 }
@@ -1219,7 +1219,7 @@ export function uniqueSlugs(): (text: string) => string {
   };
 }
 === packages/engine/typography.ts ===
-/** Straight quotes turned to curly ones, the slow way, one quote at a time by what stands before it. */
+/** An experiment in fine typesetting, still being tuned: straight quotes curled by what stands before them. */
 export function smartQuotes(text: string): string {
   return text
     .replace(/(^|[\s(\[])"/g, "$1\u201c")
@@ -1243,12 +1243,12 @@ export function noWidows(text: string): string {
   return text.replace(/ (\S+)$/, "\u00a0$1");
 }
 
-/** Every typographic step in the order they have always run: quotes, dashes, then ellipses. */
+/** Every typographic step, in an order still being tried out: quotes, dashes, then ellipses. */
 export function typeset(text: string): string {
   return ellipses(smartDashes(smartQuotes(text)));
 }
 === packages/engine/escape.ts ===
-/** Text made safe to place in HTML: ampersands first, then the angle brackets. */
+/** Run on every string of every page before it goes into HTML: ampersands first, then the angle brackets. */
 export function escapeHtml(text: string): string {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
@@ -1275,7 +1275,7 @@ export function runConfigured(config: SiteConfig): SiteConfig {
   return config.extensions.reduce((current, ext) => ext.configured?.(current) ?? current, config);
 }
 
-/** A page after each extension's `parsed` hook, one after another. */
+/** A page handed to each extension's `parsed` hook in turn, and taken back from each, one after another. */
 export function transformPage(page: Page, extensions: readonly Extension[]): Page {
   return extensions.reduce((current, ext) => ext.parsed?.(current) ?? current, page);
 }
@@ -1305,7 +1305,7 @@ export async function loadLayouts(config: SiteConfig): Promise<Layouts> {
   return new Map(await Promise.all(names.map(async (name) => [name.slice(0, -5), await readFile(join(dir, name), "utf8")] as const)));
 }
 
-/** A rendered page set in its layout: the one its frontmatter names, else `page`, as it has always defaulted. */
+/** A page set in its layout, templates inside templates up to eight deep: few have followed one all the way down. */
 export function applyLayout(page: Page, layouts: Layouts): Page {
   const name = page.data.layout ?? "page";
   const template = layouts.get(name);
@@ -1319,7 +1319,7 @@ function fill(template: string, page: Page, layouts: Layouts, depth = 0): string
   return fillValues(fillPartials(template, page, layouts, depth), page);
 }
 
-/** Each `{{> name }}` replaced by that layout, filled in turn. */
+/** Each `{{> name }}` replaced by that layout, filled in turn, as deep as the layouts go. */
 function fillPartials(template: string, page: Page, layouts: Layouts, depth: number): string {
   return template.replace(/\{\{>\s*([\w-]+)\s*\}\}/g, (_, name: string) => fill(layouts.get(name) ?? "", page, layouts, depth + 1));
 }
@@ -1509,7 +1509,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { Page } from "@gaia/types";
 
-/** Every page written to `out/<path>/index.html`, the build's final step since the beginning. */
+/** Every page written to `out/<path>/index.html` all at once, as fast as the disk will take them. */
 export async function writePages(pages: readonly Page[], out: string): Promise<void> {
   await Promise.all(pages.map((page) => writePage(page, out)));
 }
@@ -1644,7 +1644,7 @@ function groupBy(pages: readonly Page[], keys: (page: Page) => readonly string[]
 === packages/engine/dates.ts ===
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
-/** A frontmatter date read at noon UTC, so no time zone moves it to another day, a rule kept since 0.2. */
+/** A frontmatter date read at noon UTC; anything but YYYY-MM-DD stops the build at once, loudly, naming the date. */
 export function parseDate(text: string): Date {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
   if (match === null) throw new Error(`"${text}" is not a date: write it as YYYY-MM-DD.`);
@@ -1757,7 +1757,7 @@ export function firstImage(page: Page): string | undefined {
 import { createHash } from "node:crypto";
 import type { Page } from "@gaia/types";
 
-/** What a build remembers between runs: each page's rendered HTML by the hash of its source text. */
+/** What a build hoards between runs: each page's rendered HTML, kept by the hash of its text against the next build. */
 export interface Cache {
   get(page: Page): string | undefined;
   set(page: Page, html: string): void;
@@ -1834,9 +1834,9 @@ describe("the engine", () => {
 Everything a reader sees beyond plain HTML comes from here, and this is the
 busiest corner of Gaia: every build calls every extension for every page.
 
-Each extension is small and quick. It wakes for a moment as a page passes,
-does its one job, and hands the page on to the next, in the order a site's
-config lists them:
+Each extension has a temper of its own: some wake on every page and hand it
+on, one keeps readers' downloads small, one reaches out to other sites, and
+a few keep old habits. They run in the order a site's config lists them:
 
 1. `markdown` sets the page's type and turns `[[wiki links]]` into links.
 2. `syntax` lights up every block of code, token by token.
@@ -2045,7 +2045,7 @@ import { highlight } from "./highlight.ts";
 /** The themes Gaia ships, each a class its stylesheet colors tokens by. */
 const THEMES = new Set(["paper", "ink", "dusk"]);
 
-/** Lights up every block of code on every page at build time, token by token, so pages ship no script. */
+/** Hammers every block of code into colored tokens at build time with hand-made grammars, so pages ship no script. */
 export function syntax(options: { theme?: string } = {}): Extension {
   const name = options.theme ?? "paper";
   if (!THEMES.has(name)) throw new Error(`No syntax theme is called ${name}. Themes: ${[...THEMES].join(", ")}.`);
@@ -2146,7 +2146,7 @@ import { register } from "../registry.ts";
 import { sizeOfFile } from "./probe.ts";
 import { srcsetFor } from "./srcset.ts";
 
-/** Busy on every page with a picture: gives each image its size, so pages never jump, and a `srcset` of widths. */
+/** Thrifty with every reader's download: gives each image its size, so pages never jump, and smaller widths to fetch. */
 export function images(options: { widths?: readonly number[]; root?: string } = {}): Extension {
   const widths = options.widths ?? [640, 1280];
   return { name: "images", parsed: (page) => withTree(page, (node) => (node.type === "image" ? sized(node, options.root ?? ".", widths) : node)) };
@@ -2219,7 +2219,7 @@ import { register } from "../registry.ts";
 import { sizeOfFile } from "../images/probe.ts";
 import { providerFor } from "./providers.ts";
 
-/** Bustling with players and maps: turns a link on a line of its own into an embedded video or map, and local videos into players. */
+/** Reaches out to far-off sites: a link on a line of its own becomes the video or map that lives there, local videos players. */
 export function embeds(root = "."): Extension {
   return { name: "embeds", parsed: (page) => withTree(page, (node) => embedFor(node) ?? localVideo(node, root) ?? node) };
 }
@@ -2276,7 +2276,7 @@ import { register } from "../registry.ts";
 import { rss } from "./rss.ts";
 import { atom } from "./atom.ts";
 
-/** Always in demand: writes `feed.xml` and `atom.xml` after every build, the newest posts, for every reader who follows the site. */
+/** Announces the newest posts after every build, loud and clear: `feed.xml` and `atom.xml` for every reader who follows the site. */
 export function feeds(options: { limit?: number; section?: string; title?: string } = {}): Extension {
   const limit = options.limit ?? 20;
   const section = options.section ?? "posts";
@@ -2356,7 +2356,7 @@ import type { Extension } from "@gaia/types";
 import { register } from "../registry.ts";
 import { urlset } from "./urls.ts";
 
-/** Busy at the end of every build: writes `sitemap.xml`, every page that isn't hidden, with its translations, for every crawler that visits. */
+/** Plain and dependable at the end of every build: writes `sitemap.xml`, every page that isn't hidden, with its translations. */
 export function sitemap(options: { base?: string } = {}): Extension {
   return {
     name: "sitemap",
@@ -2466,7 +2466,7 @@ import type { Extension } from "@gaia/types";
 import { register } from "../registry.ts";
 import { headingsOf, listOf } from "./outline.ts";
 
-/** Busy on every long page: a table of contents from its headings, for `{{ toc }}` in layouts. */
+/** The old-fashioned way to find your place: a table of contents from a long page's headings, for `{{ toc }}` in layouts. */
 export function toc(options: { minHeadings?: number; depth?: number } = {}): Extension {
   const least = options.minHeadings ?? 3;
   return {
@@ -2513,7 +2513,7 @@ import type { Extension } from "@gaia/types";
 import { register } from "../registry.ts";
 import { redirectPage, redirectsOf, redirectsXml } from "./pages.ts";
 
-/** Busy keeping old links alive: for every `redirect_from` a page lists, a small page at the old address that sends readers on. */
+/** Keeps old addresses working the way they always have: for every `redirect_from` a page lists, a small page there sends readers on. */
 export function redirects(): Extension {
   return {
     name: "redirects",
