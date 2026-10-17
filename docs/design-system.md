@@ -385,7 +385,19 @@ the view follows the way again once it looks along it. Any key, or a tap on
 the world, takes over: the trip slows at 9 m a second squared to walking
 pace and hands the person to the walk. Nearer than 120 m the trip walks
 straight there. Sent by a picture in the journal, it ends facing the thing,
-turning there at the same rate. Where neither goes, the map still jumps.
+turning there at the same rate. Sent by the journal's map, the person watches
+the trip on that map, with the book open (One way to touch the world). While
+the book is open over a trip, the world is hidden, so the trip takes at most
+6 s from then however long it is: it goes as many times its own pace as that
+needs (`hurryFor` in `@gaia/terrain`, `TRAVEL.underBook`), along the same way
+with its own turns and slowing played that much faster, waiting on no land
+along the way, and asking at once for what stands where it ends. A trip its
+own pace takes under 6 s keeps it: the showcase's 50 m trip from the
+extensions' village to v1 takes 7.5 s at its own pace and 6 s under the book,
+and the proving ground's 352 m trip from the downs to the terraces 35 s and
+6 s. The book shuts once the land and what stands around the person have come
+in. Shut early, the trip goes on at its own pace and steering from where it
+is. Where neither goes, the map still jumps.
 
 A winding valley swings about ±20 m to either side once every 250 m, a
 whole swing every four of its own widths, carrying its floor and stream with it: a straight
@@ -943,18 +955,34 @@ finger and keys all follow the same three rules.
   only things on the screen that are not the world: a tap on the journal
   or the minimap's land (or M) opens the journal at its map, a tap on the
   minimap's edge tucks it away, "/" lays the journal's finder over the
-  world, and the compass opens the slip. A tap on the open map
-  is the one way to send the person far: it is a paper action, so it belongs
-  to the map, never to the world. The map folds away and the person travels
-  there along the trails or straight across (Terrain, travel). Where neither
-  goes, as when deep water rings the place, they jump:
+  world, and the compass opens the slip. A tap on a map is the one way to
+  send the person far: it is a paper action, so it belongs to the map, never
+  to the world. On the journal's map, the endpapers or a folder's map page,
+  a tap marks the spot with a vermilion pencil cross and a second tap on the
+  cross sends them. The person travels there along the trails or straight
+  across (Terrain, travel), and the book stays open on that map while they
+  go, at most 6 s (Terrain, travel): the traveller drawn on it goes with them
+  every frame, the way ahead is pencilled in vermilion from the traveller to
+  a cross where the trip ends, drawn in over 1.2 s as they set off and
+  shortening as they go, and the book shuts back to its corner on the new
+  view as they arrive, once the land there has come in. The map does not
+  zoom, so a trip reads as large as that map draws it: the showcase's 50 m
+  trip from the extensions' village to v1 crosses about 150 px of the
+  endpapers at 1440×810. Esc, or a tap on the world, shuts the book early,
+  and the trip carries on. A picture in the journal shuts the book and sends
+  them, and the field map, opened only by the lab, folds away as the trip
+  sets off. Where neither goes, as when deep water rings the place, they
+  jump, the book shut:
   while the land there is made ready, the paper that covers the view is the
   map around the place, coming slowly closer, so a jump never shows a blank
   sheet.
 - **Paper you open holds the world still.** While the map or the slip is
   open, the world waits under a faint wash. A tap there folds the paper and
   moves no one, a drag there does nothing, and Esc folds it. The keys still
-  walk, and the map's traveller follows.
+  walk, and the map's traveller follows. Only a trip goes on under the open
+  journal, and the world running past at the book's sides waits under a
+  deeper wash then: the paper's brown at half strength, where the field
+  map's is at a quarter.
 
 The fore-edge's tabs fade in once the journal has come to your hands, and
 out as it is shut. A new size of window moves the book at once.
@@ -976,7 +1004,8 @@ leaves a click to what is under it, and nothing turns. Nothing marks a
 page's edge, which is paper like the rest of the page.
 
 A page is never turned to before it is whole, its code and its painting
-come, and nothing on a page changes once it is seen. The page beside the
+come, and nothing on a page changes once it is seen but a map's traveller,
+who goes with the person, and a trip's pencilled way. The page beside the
 open one is reached by turning one leaf. While that page's painting is still
 coming, the leaf lifts as it does under the pointer and waits up to 1.5 s,
 and if the page takes longer the book riffles to it. A page further away is

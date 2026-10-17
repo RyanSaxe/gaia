@@ -19,7 +19,7 @@ import { type CodeWorld, areaVitality, entityOf, journalOf } from "@gaia/world";
 import { SLIP_LOGO } from "../brand/logo.ts";
 import { onTap } from "../tap.ts";
 import { worldService } from "../service.ts";
-import type { Landing, WorldHandle } from "../terrain/world.ts";
+import type { Landing, TripUnderWay, WorldHandle } from "../terrain/world.ts";
 import { createCompass } from "./compass.ts";
 import { createJournalBook } from "../journal/book.ts";
 import { type Findable, createFinder, findablesOf } from "../journal/finder.ts";
@@ -91,29 +91,35 @@ export function createImmersive(container: HTMLElement, world: WorldHandle): Imm
   cover.className = "jump-cover";
   layer.append(cover);
   let jumping = false;
-  function jump(x: number, z: number, heart?: { readonly x: number; readonly z: number }): boolean {
+  function jump(x: number, z: number, heart?: { readonly x: number; readonly z: number }, watch = false): boolean {
     const at = world.landing(x, z, heart);
     if (at === null) {
       console.warn(`map: nowhere to land near (${Math.round(x)}, ${Math.round(z)})`);
       return false;
     }
-    return jumpTo(at, false);
+    return jumpTo(at, false, watch);
   }
+  /** The trip the journal's map sent the person on, while it goes: the book stays open on the map, and shuts as it arrives. */
+  let watching: Readonly<TripUnderWay> | null = null;
   /**
    * Takes the person to a landing: along the trails or straight across the
-   * land, the map folding away as they set off (round 23's travel thread), or
-   * where neither goes, by a jump. With `face` they end facing as the landing
-   * does.
+   * land, the field map folding away as they set off (round 23's travel
+   * thread), or where neither goes, by a jump with the book shut. With
+   * `watch`, sent from the journal's map, the book stays open on the map
+   * while they travel, their traveller going along the way pencilled there,
+   * and shuts as they arrive. With `face` they end facing as the landing does.
    */
-  function jumpTo(at: Landing, face: boolean): boolean {
+  function jumpTo(at: Landing, face: boolean, watch = false): boolean {
     if (jumping) {
       console.warn("map: a jump is still under way, so this pick goes nowhere");
       return false;
     }
     if (world.travel(at, face)) {
       map.open(false);
+      watching = watch ? world.trip() : null;
       return true;
     }
+    journal.close();
     jumping = true;
     map.open(false);
     layPlace(at);
@@ -220,43 +226,41 @@ export function createImmersive(container: HTMLElement, world: WorldHandle): Imm
     if (!maps.drawn.has(area)) maps.drawn.set(area, drawMapPage({ paper: map.paper, stood: world.stood, places: world.places, placeAt: world.placeAt }, area, w, h, fold));
     return maps.drawn.get(area) ?? null;
   }
-  const journal = createJournalBook(
-    layer,
-    journalPages({
-      words: () => words,
-      endpaper: (side) => {
-        const spread = mapOf("", 1040, 660, true);
-        return spread === null ? null : halfOf(spread, side);
-      },
-      map: (area) => mapOf(area, 520, 660, false),
-      picture: (of) => paintings.picture(standsFor(of)),
-      painted: (of) => (of === "" ? paintings.painted("", true) : paintings.painted(standsFor(of))),
-      frontispiece: () => paintings.picture("", true),
-      ahead: (ofs) => paintings.ahead(ofs.map(standsFor)),
-      turnTo: (at) => journal.turnTo(at),
-      person: () => world.person(),
-      mapped: () =>
-        new Promise<void>((resolve) => {
-          const look = (): void => void (map.paper() !== null ? resolve() : window.setTimeout(look, 150));
-          look();
-        }),
-      // Words turn pages; a map's land and a page's picture take the person into the world, the book shutting as they go.
-      travelTo: (x, z) => {
-        journal.close();
-        jump(x, z);
-      },
-      travel: (of) => {
-        const at = world.seenFrom(standsFor(of));
-        if (at === null) return;
-        journal.close();
-        jumpTo(at, true);
-      },
-      text: (path) => source.when(path),
-    }),
-    (open) => {
-      if (open) setSlip(false);
+  const pages = journalPages({
+    words: () => words,
+    endpaper: (side) => {
+      const spread = mapOf("", 1040, 660, true);
+      return spread === null ? null : halfOf(spread, side);
     },
-  );
+    map: (area) => mapOf(area, 520, 660, false),
+    picture: (of) => paintings.picture(standsFor(of)),
+    painted: (of) => (of === "" ? paintings.painted("", true) : paintings.painted(standsFor(of))),
+    frontispiece: () => paintings.picture("", true),
+    ahead: (ofs) => paintings.ahead(ofs.map(standsFor)),
+    turnTo: (at) => journal.turnTo(at),
+    person: () => world.person(),
+    mapped: () =>
+      new Promise<void>((resolve) => {
+        const look = (): void => void (map.paper() !== null ? resolve() : window.setTimeout(look, 150));
+        look();
+      }),
+    trip: () => world.trip(),
+    // Words turn pages; a map's land and a page's picture take the person into the world. Sent by a map, they travel
+    // with the book open on it; sent by a picture, or nowhere, the book shuts.
+    travelTo: (x, z) => {
+      if (!jump(x, z, undefined, true)) journal.close();
+    },
+    travel: (of) => {
+      const at = world.seenFrom(standsFor(of));
+      if (at === null) return;
+      journal.close();
+      jumpTo(at, true);
+    },
+    text: (path) => source.when(path),
+  });
+  const journal = createJournalBook(layer, pages, (open) => {
+    if (open) setSlip(false);
+  });
   source.onArrive(() => journal.refresh());
   // A paper painted afresh redraws the open page's map.
   map.onPainted(() => journal.refresh());
@@ -514,6 +518,21 @@ export function createImmersive(container: HTMLElement, world: WorldHandle): Imm
       minimap.frame(p.x, p.z, p.yaw, place, dt);
       compass.turn(p.yaw, dt);
       map.frame(p.x, p.z, p.yaw, place);
+      // Under the open book the world is hidden, so a trip may hurry; shut early, it goes on at its own pace.
+      world.hurry(journal.isOpen);
+      if (journal.isOpen) pages.follow();
+      // The trip the journal's map sent shuts the book once it has arrived and the land around them has come in, so the
+      // world never shows coarse ground as it shuts; one taken over leaves the book as it is.
+      if (watching !== null && world.trip() !== watching) {
+        const arrived = watching.at.done;
+        watching = null;
+        if (arrived)
+          void world.around(p.x, p.z).then(() => {
+            if (watching === null) journal.close();
+          });
+      }
+      // While any trip goes, the world under the open book waits under a deeper wash (lab.css).
+      layer.classList.toggle("travelling", world.trip() !== null);
     },
     hook: {
       /** Unfolds or folds the field map. */

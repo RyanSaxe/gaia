@@ -493,18 +493,52 @@ export function titleSize(name: string, measure: Measure): number {
 export function renderTraveller(px: number, py: number, yaw: number): HTMLElement {
   const here = el("div", "jp-here");
   here.innerHTML = TRAVELLER_SVG;
-  here.style.left = `${((px / PAGE_W) * 100).toFixed(2)}%`;
-  here.style.top = `${((py / PAGE_H) * 100).toFixed(2)}%`;
-  here.querySelector(".traveller-steps")?.setAttribute("transform", `rotate(${((-yaw * 180) / Math.PI).toFixed(1)})`);
+  placeTraveller(here, px, py, yaw);
   return here;
+}
+
+/**
+ * Moves a map's traveller to (px, py) in the page's own pixels, facing `yaw`, to a few thousandths of a pixel, so
+ * walking or travelling they glide; it is hidden off the page. Setting nothing when nothing changed.
+ */
+export function placeTraveller(here: HTMLElement, px: number, py: number, yaw: number): void {
+  const left = `${((px / PAGE_W) * 100).toFixed(3)}%`;
+  const top = `${((py / PAGE_H) * 100).toFixed(3)}%`;
+  const facing = `rotate(${((-yaw * 180) / Math.PI).toFixed(1)})`;
+  const off = !(px > 0 && px < PAGE_W && py > 0 && py < PAGE_H);
+  if (here.hidden !== off) here.hidden = off;
+  if (here.style.left !== left) here.style.left = left;
+  if (here.style.top !== top) here.style.top = top;
+  const steps = here.querySelector(".traveller-steps");
+  if (steps !== null && steps.getAttribute("transform") !== facing) steps.setAttribute("transform", facing);
+}
+
+/**
+ * A trip's way ahead on a map's page, in the vermilion pencil of the cross it ends at: the line and the cross, laid
+ * over the map, the line's path set in the page's own pixels as the trip goes (`journalPages`' `follow`).
+ */
+export function renderWay(): { readonly way: SVGSVGElement; readonly cross: HTMLElement } {
+  const way = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  way.setAttribute("class", "jp-way");
+  way.setAttribute("viewBox", `0 0 ${PAGE_W} ${PAGE_H}`);
+  way.setAttribute("aria-hidden", "true");
+  const line = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  line.setAttribute("pathLength", "1");
+  way.append(line);
+  return { way, cross: renderCross(0, 0) };
+}
+
+/** Moves a cross on a map's page to (px, py) in the page's own pixels. */
+export function placeCross(cross: HTMLElement, px: number, py: number): void {
+  cross.style.left = `${((px / PAGE_W) * 100).toFixed(2)}%`;
+  cross.style.top = `${((py / PAGE_H) * 100).toFixed(2)}%`;
 }
 
 /** A spot marked on a map's page: a vermilion pencil cross, the field map's own mark. A second click on it travels there. */
 export function renderCross(px: number, py: number): HTMLElement {
   const cross = el("div", "jp-cross");
   cross.innerHTML = '<svg viewBox="0 0 18 18"><path d="M3 3 L15 15 M15 3 L3 15"/></svg>';
-  cross.style.left = `${((px / PAGE_W) * 100).toFixed(2)}%`;
-  cross.style.top = `${((py / PAGE_H) * 100).toFixed(2)}%`;
+  placeCross(cross, px, py);
   return cross;
 }
 

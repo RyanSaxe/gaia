@@ -242,6 +242,13 @@ button.jp-name { border: 0; background: none; padding: 0; text-align: left; curs
 /* You are here on a map's page: the field map's own traveller, standing on the land, never above the page. */
 .jp-here { position: absolute; width: 0; height: 0; pointer-events: none; }
 .jp-here .field-map-traveller { position: absolute; left: -26px; top: -26px; width: 52px; height: 52px; overflow: visible; }
+/* A trip's way ahead on a map's page, from the traveller to the cross where it ends, in the cross's vermilion pencil:
+   pencilled in from the traveller over 1.2 s as the trip sets off (a page drawn later in the trip starts part way,
+   `--pencil-delay` in pages.ts), shortening as they go, and fading with its cross once the trip is over. */
+.jp-way { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.jp-way path { fill: none; stroke: #b8452c; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1 1; stroke-dashoffset: 1; }
+.jp-way.on path { stroke-dashoffset: 0; transition: stroke-dashoffset 1.2s cubic-bezier(0.45, 0.05, 0.4, 1) var(--pencil-delay, 0ms); }
+.jp-way.over path, .jp-cross.over { opacity: 0; transition: opacity 0.5s ease; }
 
 /* A page is taken by hand: touch draws the leaf rather than panning; under the pointer, a page's outer edge lifts a
    little; and the tabs slide in and out as the part of the book changes. */
