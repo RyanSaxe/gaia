@@ -551,19 +551,28 @@ the person. Leaves and petals let go of the trees within 60 m at their
 crowns' widest reach, so they fall outside the foliage where they can be
 seen, are carried downwind as they fall, and fade as they land; a tree newly
 near starts dropping them over three seconds. Fireflies fill 30 m round the
-person, anchored to the world, and fade out before they wrap to the far side.
-A drift draws at 1.5 times its `drift@1` size, which was set for a
-narrower, 40° lens, and never under 4 device pixels. Petals are the cherry
-blossom's pink a shade deeper (#e48aa6), darker than the sky so they read
-against it. Fireflies come out only after dusk, hover from 0.7 m, above most
-grass, glow by contrast and dim to a quarter between flashes; they fade in
-from dusk and stay through the night. Each firefly shows by the region it
-floats in, as a tree drops its own region's: a region's air is full to about
-25 m inside its edge and thins across the edge over about 50 m, much
-narrower than the 130 m over which the ground blends, where in a small world
-the middle of a firefly land held about a quarter of its fireflies. None
-drift in the wild. A drift thins as its land declines, by the ground's own
-decline, so a ruined area's trees drop nothing.
+person, anchored to the world, and fade out before they wrap to the far
+side. A drift draws at 1.5 times its `drift@1` size, which was set for a
+narrower, 40° lens, and a petal or leaf never under 4 device pixels. Petals
+are the cherry blossom's pink a shade deeper (#e48aa6), darker than the sky
+so they read against it. Fireflies come out only after dusk and hover from
+0.7 m, above most grass. Each is a soft warm point of light that adds to
+what lies behind it, with a faint halo three times its core's width at
+night. Its core is never narrower than 0.16° of the view (4 pixels of a
+1620-pixel-tall frame, 1.4 of a 540-pixel one), so one 25 m off or on a
+phone still reads as a light. It flashes about every five seconds and dims
+to 0.4 between flashes. Fireflies fade in from dusk and stay through the
+night. Each firefly shows by the region it floats in, as a tree drops its
+own region's: a region's air is full to about 25 m inside its edge and thins
+across the edge over about 50 m, much narrower than the 130 m over which the
+ground blends, where in a small world the middle of a firefly land held
+about a quarter of its fireflies. A land of "a few" holds few fireflies, petals
+or leaves, and each draws at its full light: only the last twelfth of what
+the form's fullest land holds fade in one by one as the land fills. Faded in
+over a fixed share of all of them instead, a sparse land's fireflies drew at
+a third of their light on average and could not be seen. None drift in the wild. A drift
+thins as its land declines, by the ground's own decline, so a ruined area's
+trees drop nothing.
 
 ## Buildings
 
