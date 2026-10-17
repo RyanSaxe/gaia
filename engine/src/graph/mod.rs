@@ -596,6 +596,8 @@ mod tests {
             if let Some(t) = &loaded.tags {
                 captures.extend(t.capture_names());
             }
+            let text = std::fs::read_to_string(fixtures().join(&file.path)).unwrap();
+            let parsed = parse::parse(&loaded, &text).unwrap();
             for capture in captures {
                 if let Some(shape) = capture.strip_prefix("block.") {
                     let found = g.nodes.iter().any(
@@ -607,14 +609,36 @@ mod tests {
                         spec.name, file.path
                     );
                 }
+                // An alias joins the import holding it, and a default export names its definition.
+                if let Some(kind) = capture.strip_prefix("alias.") {
+                    let found = parsed.refs.iter().flat_map(|r| &r.aliases).any(|a| {
+                        matches!(
+                            (&a.of, kind),
+                            (parse::Aliased::Item(_), "renamed")
+                                | (parse::Aliased::Module, "module")
+                                | (parse::Aliased::Default, "default")
+                        )
+                    });
+                    assert!(
+                        found,
+                        "{}'s @{capture} makes an alias in {}",
+                        spec.name, file.path
+                    );
+                }
+                if capture == "export.default" {
+                    assert!(
+                        parsed.default_export.is_some(),
+                        "{}'s @{capture} names a default in {}",
+                        spec.name,
+                        file.path
+                    );
+                }
                 // An import or call may resolve, go pending or lie outside, so the parse is checked.
                 let kind = match capture {
                     "reference.import" => parse::RefKind::Import,
                     "reference.call" | "reference.send" => parse::RefKind::Call,
                     _ => continue,
                 };
-                let text = std::fs::read_to_string(fixtures().join(&file.path)).unwrap();
-                let parsed = parse::parse(&loaded, &text).unwrap();
                 assert!(
                     parsed.refs.iter().any(|r| r.kind == kind),
                     "{}'s @{capture} makes a reference in {}",
@@ -824,6 +848,174 @@ mod tests {
             "def:src/util.rs#tests.probe",
             "def:src/util.rs#tests.make",
             "calls"
+        ));
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    /// Whether the graph has an edge of `kind` from one id to another.
+    fn has_edge(g: &CodeGraph, from: &str, to: &str, kind: &str) -> bool {
+        g.edges
+            .iter()
+            .any(|e| e.from == from && e.to == to && e.kind == kind)
+    }
+
+    #[test]
+    fn a_typescript_or_javascript_call_through_an_alias_reaches_what_it_names() {
+        let dir = project(
+            "aliases-js",
+            &[
+                (
+                    "src/v1/index.ts",
+                    "export function buildSite() {\n  return 1;\n}\n\nexport default function legacy() {\n  return 2;\n}\n",
+                ),
+                ("src/walk.ts", "export function walk() {\n  return 3;\n}\n"),
+                (
+                    "src/make.ts",
+                    "function make() {\n  return 4;\n}\n\nexport default make;\n",
+                ),
+                (
+                    "src/strings.ts",
+                    "export function join() {\n  return 5;\n}\n",
+                ),
+                // The file defines the very name it renames, as the showcase's command line does.
+                (
+                    "src/cli.ts",
+                    "import { buildSite as buildV1 } from \"./v1/index\";\nimport * as walker from \"./walk\";\nimport legacyBuild from \"./v1/index\";\nimport made from \"./make\";\nimport * as path from \"node:path\";\n\nexport function buildSite() {\n  buildV1();\n  walker.walk();\n  legacyBuild();\n  made();\n  path.join(\"a\", \"b\");\n}\n",
+                ),
+                (
+                    "lib/tools.js",
+                    "export function helper() {\n  return 6;\n}\n\nexport function other() {\n  return 7;\n}\n",
+                ),
+                (
+                    "lib/main.js",
+                    "import { helper as assist } from \"./tools.js\";\nimport * as tools from \"./tools.js\";\n\nexport function main() {\n  assist();\n  tools.other();\n}\n",
+                ),
+            ],
+        );
+        let g = graph(&dir).unwrap();
+        for (to, through) in [
+            ("def:src/v1/index.ts#buildSite", "a renamed import"),
+            ("def:src/walk.ts#walk", "a namespace import"),
+            (
+                "def:src/v1/index.ts#legacy",
+                "a default import of `export default function`",
+            ),
+            (
+                "def:src/make.ts#make",
+                "a default import of `export default make`",
+            ),
+        ] {
+            assert!(
+                has_edge(&g, "def:src/cli.ts#buildSite", to, "calls"),
+                "{through} reaches {to}"
+            );
+        }
+        assert!(has_edge(
+            &g,
+            "def:lib/main.js#main",
+            "def:lib/tools.js#helper",
+            "calls"
+        ));
+        assert!(has_edge(
+            &g,
+            "def:lib/main.js#main",
+            "def:lib/tools.js#other",
+            "calls"
+        ));
+        // A namespace from outside the repository reaches nothing in it, even a function of the same name.
+        assert!(!g.edges.iter().any(|e| e.to == "def:src/strings.ts#join"));
+        assert!(!g.pending.iter().any(|p| p.text == "join"));
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn a_python_call_through_an_alias_reaches_what_it_names() {
+        let dir = project(
+            "aliases-py",
+            &[
+                (
+                    "pkg/core.py",
+                    "def run():\n    return 1\n\n\ndef stop():\n    return 3\n\n\nclass Loader:\n    def load(self):\n        return 2\n",
+                ),
+                (
+                    "pkg/app.py",
+                    "from .core import run as start\nfrom . import core as c\nimport pkg.core as engine\nimport numpy as np\n\n\ndef run():\n    start()\n    c.run()\n    engine.run()\n    np.load()\n\n\ndef begin():\n    from .core import run as f\n    return f()\n\n\ndef end():\n    from .core import stop as f\n    return f()\n",
+                ),
+            ],
+        );
+        let g = graph(&dir).unwrap();
+        let calls_to_run = g
+            .edges
+            .iter()
+            .filter(|e| e.from == "def:pkg/app.py#run" && e.to == "def:pkg/core.py#run")
+            .count();
+        assert_eq!(
+            calls_to_run, 3,
+            "start(), c.run() and engine.run() each reach core's run"
+        );
+        // A module from outside the repository reaches nothing in it, even a method of the same name.
+        assert!(
+            !g.edges
+                .iter()
+                .any(|e| e.to == "def:pkg/core.py#Loader.load")
+        );
+        assert!(!g.pending.iter().any(|p| p.text == "load"));
+        // An import inside a function binds its name only there.
+        assert!(has_edge(
+            &g,
+            "def:pkg/app.py#begin",
+            "def:pkg/core.py#run",
+            "calls"
+        ));
+        assert!(has_edge(
+            &g,
+            "def:pkg/app.py#end",
+            "def:pkg/core.py#stop",
+            "calls"
+        ));
+        assert!(!has_edge(
+            &g,
+            "def:pkg/app.py#end",
+            "def:pkg/core.py#run",
+            "calls"
+        ));
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn a_rust_call_through_an_alias_reaches_what_it_names() {
+        let dir = project(
+            "aliases-rs",
+            &[
+                (
+                    "src/util.rs",
+                    "pub struct Tool;\n\nimpl Tool {\n    pub fn new() -> Self {\n        Tool\n    }\n}\n\npub fn format(x: u8) -> u8 {\n    x\n}\n",
+                ),
+                ("src/graph/mod.rs", "pub mod resolve;\n"),
+                ("src/graph/resolve.rs", "pub fn run() {}\n"),
+                (
+                    "src/main.rs",
+                    "use crate::util::format as fmt_u8;\nuse crate::util::Tool as T;\nuse crate::graph::resolve as res;\n\nfn main() {\n    let t = T::new();\n    let x = fmt_u8(1);\n    res::run();\n}\n\nfn format() {}\n",
+                ),
+            ],
+        );
+        let g = graph(&dir).unwrap();
+        for to in [
+            "def:src/util.rs#format",
+            "def:src/util.rs#Tool.new",
+            "def:src/graph/resolve.rs#run",
+        ] {
+            assert!(
+                has_edge(&g, "def:src/main.rs#main", to, "calls"),
+                "main reaches {to}"
+            );
+        }
+        // `use … as` names the module it renames, not the folder above it.
+        assert!(has_edge(
+            &g,
+            "file:src/main.rs",
+            "file:src/graph/resolve.rs",
+            "imports"
         ));
         std::fs::remove_dir_all(dir).unwrap();
     }

@@ -1,5 +1,7 @@
 const path = require("./paths");
 import { readAll } from "./sample";
+import walker, * as sample from "./sample";
+import { readAll as readEvery } from "./sample";
 
 /** Counts entries. */
 export function count(root, depth) {
@@ -34,3 +36,5 @@ export function count(root, depth) {
       );
   }
 }
+
+export default count;

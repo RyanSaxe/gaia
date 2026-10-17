@@ -8,6 +8,10 @@
 //!   has no `parameters` field; `@doc` for a docstring.
 //! - `@reference.import`, `.call`, `.send`, `.class`, `.type`, `.interface`
 //!   and `.implementation`, each with `@name`.
+//! - `@alias.renamed`, `.module` and `.default` inside an import, with
+//!   `@name`, the name the file uses: a name the module calls `@imported`, the
+//!   module itself, or what it exports as its default.
+//! - `@export.default` with `@name`, the definition a file exports as its default.
 //! - `@block.<shape>`.
 
 use super::languages::{self, Loaded};
@@ -23,6 +27,8 @@ pub struct FileParse {
     pub defs: Vec<Def>,
     pub blocks: Vec<Block>,
     pub refs: Vec<Ref>,
+    /// The name of what it exports as its default: `walk` in `export default function walk`.
+    pub default_export: Option<String>,
 }
 
 pub struct Def {
@@ -75,6 +81,24 @@ pub struct Ref {
     pub path: bool,
     /// A macro invocation, such as Rust's `format!(…)`, which reaches only a macro.
     pub macro_call: bool,
+    /// The names an import binds under names of the file's own.
+    pub aliases: Vec<Alias>,
+}
+
+/// A name an import binds: `buildV1` in `import { buildSite as buildV1 }`.
+pub struct Alias {
+    pub name: String,
+    pub of: Aliased,
+}
+
+/// What an alias names in the module its import names.
+pub enum Aliased {
+    /// A name the module defines: `buildSite`, or `Tool` from Rust's `util::Tool`.
+    Item(String),
+    /// The module itself: `import * as ns`, Python's `import m as n`.
+    Module,
+    /// What the module exports as its default.
+    Default,
 }
 
 /// The number of hashes in a fingerprint.
@@ -146,6 +170,7 @@ struct Hit<'t> {
     node: Node<'t>,
     name: Option<Node<'t>>,
     owner: Option<Node<'t>>,
+    imported: Option<Node<'t>>,
     from_tags: bool,
 }
 
@@ -157,11 +182,13 @@ fn collect<'t>(query: &Query, root: Node<'t>, src: &[u8], from_tags: bool, out: 
         let mut main: Option<(String, Node<'t>)> = None;
         let mut name = None;
         let mut owner = None;
+        let mut imported = None;
         for c in m.captures {
             let cn = names[c.index as usize];
             match cn {
                 "name" => name = Some(c.node),
                 "owner" => owner = Some(c.node),
+                "imported" => imported = Some(c.node),
                 _ if cn.starts_with('_') => {}
                 _ => {
                     // The match's own kind: its first capture that isn't a
@@ -179,6 +206,7 @@ fn collect<'t>(query: &Query, root: Node<'t>, src: &[u8], from_tags: bool, out: 
                 node,
                 name,
                 owner,
+                imported,
                 from_tags,
             });
         }
@@ -232,6 +260,7 @@ fn fallback<'t>(root: Node<'t>, definitions: bool, out: &mut Vec<Hit<'t>>) {
             node: n,
             name,
             owner: None,
+            imported: None,
             from_tags: false,
         });
     }
@@ -689,7 +718,7 @@ pub fn parse(lang: &Loaded, src: &str) -> Result<FileParse, String> {
         }
     }
 
-    let refs = hits
+    let mut refs: Vec<(&Hit, Ref)> = hits
         .iter()
         .filter_map(|h| {
             let kind = match h.what.as_str() {
@@ -727,7 +756,7 @@ pub fn parse(lang: &Loaded, src: &str) -> Result<FileParse, String> {
                 .map(str::to_string)
                 .filter(|q| !q.is_empty());
             let text = clean(text(at, src));
-            (!text.is_empty()).then(|| Ref {
+            let r = Ref {
                 kind,
                 text,
                 at: span_of(at),
@@ -735,14 +764,56 @@ pub fn parse(lang: &Loaded, src: &str) -> Result<FileParse, String> {
                 qualifier,
                 path,
                 macro_call: h.node.kind().contains("macro"),
-            })
+                aliases: Vec::new(),
+            };
+            (!r.text.is_empty()).then_some((h, r))
         })
         .collect();
+
+    // Each alias joins the import holding it. Of several imports on one
+    // statement, as in Python's `import a as x, b as y`, it joins the one it renames.
+    for h in hits.iter().filter(|h| h.what.starts_with("alias.")) {
+        let Some(name) = h
+            .name
+            .map(|n| clean(text(n, src)))
+            .filter(|n| !n.is_empty())
+        else {
+            continue;
+        };
+        let of = match &h.what["alias.".len()..] {
+            "module" => Aliased::Module,
+            "default" => Aliased::Default,
+            "renamed" => match h.imported.map(|n| clean(text(n, src))) {
+                // A path names its last segment: `Tool` in Rust's `util::Tool as T`.
+                Some(path) => {
+                    Aliased::Item(path.rsplit([':', '.']).next().unwrap_or("").to_string())
+                }
+                None => continue,
+            },
+            _ => continue,
+        };
+        let holder = refs
+            .iter_mut()
+            .filter(|(import, r)| r.kind == RefKind::Import && contains(import.node, h.node))
+            .min_by_key(|(import, _)| {
+                let renames = import.name.is_some_and(|n| contains(h.node, n));
+                (!renames, import.node.end_byte() - import.node.start_byte())
+            });
+        if let Some((_, import)) = holder {
+            import.aliases.push(Alias { name, of });
+        }
+    }
+    let default_export = hits
+        .iter()
+        .find(|h| h.what == "export.default")
+        .and_then(|h| h.name)
+        .map(|n| clean(text(n, src)));
     Ok(FileParse {
         unparsed: count_unparsed(root),
         lines: src.lines().count() as u32,
         defs,
         blocks,
-        refs,
+        refs: refs.into_iter().map(|(_, r)| r).collect(),
+        default_export,
     })
 }

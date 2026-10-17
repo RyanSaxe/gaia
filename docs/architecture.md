@@ -564,6 +564,9 @@ into the graph by its capture name:
 - `@block.<shape>` becomes one of ten kinds of block: branch, loop, match,
   try, closure, scope, concurrent, unsafe, data and markup.
 - `@reference.import` and `@reference.call` become pending references.
+- `@alias.renamed`, `@alias.module` and `@alias.default` record a name an
+  import binds under the file's own name, and `@export.default` the
+  definition a file exports as its default.
 
 Any other language loads at runtime as WebAssembly, through tree-sitter's
 `wasm` feature, from the `.wasm` file its grammar's own release publishes.
@@ -612,6 +615,13 @@ none is outside the repository and gets neither:
   their own class's without `self`. A definition inside a function is local
   to it, and a macro call reaches only a macro. A receiver the rule cannot
   place, such as `err` in `err.Error()`, sends the call to Jev.
+- A name an import binds under another name stands for what it binds, in
+  the files the import names: `buildV1()` after `import { buildSite as
+  buildV1 }` calls that file's `buildSite`, and `ns.walk()` after `import *
+  as ns` calls `walk` in `ns`'s file. The same holds for a default import,
+  Python's `from m import a as b` and `import m as n`, and Rust's `use m::a
+  as b`. A name bound from outside the repository reaches nothing in it, and
+  one whose import goes to Jev is looked up by its own name.
 
 On a hand check of the bench, 175 of 175 imports and 199 of 200 calls the
 rules resolved were right (`tools/bench/labels/`).
