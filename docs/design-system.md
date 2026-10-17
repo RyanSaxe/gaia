@@ -1684,6 +1684,10 @@ but never the hour. `daylight@1` lights eight keys: dawn 6:00, morning 8:30,
 midday 12:30, afternoon 15:30, golden hour 18:00, dusk 19:30, moonlit 22:00
 and deep night 2:00. Between keys, colors mix in OKLab and the sun and moon
 turn at a constant rate; a body below the horizon lends no direct light.
+The sun follows a real sun's path: it rises in the north-east, crosses the
+south and sets in the west, turning slowly near the horizon, so it never
+swings across the sky as it rises or sets. The moon rises in the north-east
+as the sun sets, across the sky from it.
 
 Night follows four rules, all in the shared light chunk so plants, ground,
 grass and water agree:
