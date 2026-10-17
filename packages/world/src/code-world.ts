@@ -374,8 +374,6 @@ const bucket = (n: number, edges: readonly number[], words: readonly string[]): 
 // sends, so a one-line edit that leaves a file "medium" never asks Jev again.
 /** A file's size in words. */
 const fileSize = (lines: number): string => bucket(lines, [30, 120, 400, 1000], ["tiny", "short", "medium", "long", "very long"]);
-/** A function's or class's size in words. */
-const symbolSize = (lines: number): string => bucket(lines, [5, 25, 80, 200], ["a few lines", "short", "medium", "long", "very long"]);
 /** A directory's or entity's size in words. */
 const bodySize = (lines: number): string => bucket(lines, [300, 1500, 6000, 20000], ["small", "medium", "large", "very large", "vast"]);
 /** How many, in words: none, one, a few, several or many. */
@@ -404,9 +402,10 @@ const perFile = (n: number, files: number): string => {
   return r === 0 ? "none" : r < 0.5 ? "a little" : r < 1.5 ? "some" : "a lot";
 };
 /**
- * A file as `judged` sends it: what it declares, its size and links in words, and the definitions standing on its
- * patch that the request asks about. Asked what things stand as, it also says how much the file and each definition
- * matter (Jev's importance) and each definition's doc.
+ * A file as `judged` sends it: what it declares and its links in words, and the definitions standing on its patch
+ * that the request asks about, with no line counts: a form's size follows how much a thing matters, so a short
+ * definition that matters may stand as tall as a long one. Asked what things stand as, it also says how much the
+ * file and each definition matter (Jev's importance) and each definition's doc.
  */
 export function fileWords(f: FileFacts, standing: readonly StandingDef[] = [], importance?: number): Record<string, unknown> {
   const declares: Record<string, string> = {};
@@ -417,7 +416,6 @@ export function fileWords(f: FileFacts, standing: readonly StandingDef[] = [], i
   return {
     path: f.path,
     language: f.language,
-    size: fileSize(f.lines),
     declares: Object.keys(declares).length === 0 ? "nothing of its own" : declares,
     exports: outlineOrder(f).filter((s) => s.exported).slice(0, 8).map((s) => s.name),
     imports: `${howMany(f.imports.length)} project files`,
@@ -429,7 +427,6 @@ export function fileWords(f: FileFacts, standing: readonly StandingDef[] = [], i
           standing: standing.map((d) => ({
             name: d.id.slice(d.file.length + 1),
             kind: d.kind,
-            size: symbolSize(d.lines),
             exported: d.exported,
             ...(share(d.importance) === undefined ? {} : { importance: share(d.importance) }),
             ...(d.doc === undefined ? {} : { doc: trim(d.doc, 100) }),
@@ -652,7 +649,7 @@ export function planStanding(facts: CodeFacts, looks: Looks, options: PlanOption
   const importance = new Map(standingThings(facts, graph).flatMap((t) => (t.importance === undefined ? [] : [[t.id, t.importance] as const])));
   const only: Record<string, string> = {};
   const requests: WorldRequest[] = [];
-  const RARE = "Only the forms that suit how much it matters (`importance`) are offered; choose by character.";
+  const RARE = "Only the forms that suit how much it matters (`importance`) are offered, so a form's size already follows how much it matters, never how long its code is; choose by character.";
   /** The question about one thing, or none when its rank is offered one form alone, which it then stands as. */
   const question = (id: string, instructions: string, label: string, target: string): JevQuestion | undefined => {
     const offered = formsFor(looks, ranks.get(id) ?? 0.5);
@@ -691,7 +688,8 @@ export function planStanding(facts: CodeFacts, looks: Looks, options: PlanOption
   for (const e of [...facts.entities].sort(byPath)) {
     const value = importance.get(e.path);
     const q = question(e.path, `This ${e.form} stands in the world as one thing on the ground kept for it at its folder's heart, which a person can walk up to and read about. Which one's character suits it best?`, "form", e.path);
-    push("entity", e.path, { entity: { ...entityWords(facts, e), ...(share(value) === undefined ? {} : { importance: share(value) }) } }, [["form", e.path, q]]);
+    const { size: _lines, ...words } = entityWords(facts, e);
+    push("entity", e.path, { entity: { ...words, ...(share(value) === undefined ? {} : { importance: share(value) }) } }, [["form", e.path, q]]);
   }
   return { requests, only };
 }

@@ -122,8 +122,12 @@ describe("judging a codebase with Jev", () => {
     expect(land).toBeGreaterThan(first.shown.findIndex((o) => o.stage === "reading"));
     expect(land).toBeLessThan(first.shown.findIndex((o) => o.stage === "asking"));
     const patches = first.document.world.patches.map(({ path, name, area, x, z, radius }) => ({ path, name, area, x, z, radius }));
-    const lots = first.document.world.things.map(({ x, z }) => ({ x, z }));
-    expect(first.shown[land]).toEqual({ stage: "land", name: "tiny", size: first.document.world.size, aspect: first.document.world.aspect, areas: outlinesOf(first.document.world).areas, patches, lots });
+    // Every entity's lot, whether Jev made it a building or a landmark or anything else, which stands at its lot's middle.
+    const byPlace = (a: { x: number; z: number }, b: { x: number; z: number }): number => a.x - b.x || a.z - b.z;
+    const lots = [...first.document.world.things.filter((t) => t.of === undefined), ...first.document.world.standing.filter((s) => s.of === "entity")].map(({ x, z }) => ({ x, z })).sort(byPlace);
+    const shownLand = first.shown[land];
+    if (shownLand?.stage !== "land") throw new Error("The land was never shown.");
+    expect({ ...shownLand, lots: [...shownLand.lots].sort(byPlace) }).toEqual({ stage: "land", name: "tiny", size: first.document.world.size, aspect: first.document.world.aspect, areas: outlinesOf(first.document.world).areas, patches, lots });
     // Each file's health is named once, as the finished world has it, once the understanding pass has judged it.
     expect(first.shown.findIndex((o) => o.stage === "health")).toBeGreaterThan(first.shown.findIndex((o) => o.stage === "asking"));
     const health = first.shown.flatMap((o) => (o.stage === "health" ? Object.entries(o.vitality) : []));

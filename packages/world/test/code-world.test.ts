@@ -247,12 +247,16 @@ describe("a world laid out from code", () => {
     expect(b).toEqual(a);
   });
 
-  it("asks a file again after a one-line edit only when its words change", () => {
+  it("asks a file again after an edit only when its words change", () => {
     const keyOf = (m: CodeFacts): string => requestKey(planStanding(m, LOOKS).requests.find((p) => p.target === "packages/core/src/math.ts")!.request);
-    const edit = (grow: number): CodeFacts => ({ ...facts(), files: facts().files.map((f) => (f.path === "packages/core/src/math.ts" ? { ...f, lines: f.lines + grow, symbols: f.symbols.map((x) => ({ ...x, line: (x.line ?? 1) + grow })) } : f)) });
-    // One line more leaves math.ts "medium"; a thousand make it "very long".
+    const edit = (grow: number, exported = "x"): CodeFacts => ({
+      ...facts(),
+      files: facts().files.map((f) => (f.path === "packages/core/src/math.ts" ? { ...f, lines: f.lines + grow, symbols: f.symbols.map((x) => ({ ...x, line: (x.line ?? 1) + grow, name: x.name === "x" ? exported : x.name })) } : f)),
+    });
+    // No line count reaches Jev, so a longer file asks nothing again; a renamed export changes what it says.
     expect(keyOf(edit(1))).toBe(keyOf(facts()));
-    expect(keyOf(edit(1000))).not.toBe(keyOf(facts()));
+    expect(keyOf(edit(1000))).toBe(keyOf(facts()));
+    expect(keyOf(edit(0, "tangent"))).not.toBe(keyOf(facts()));
   });
 
   it("divides the land among directories and files by their code, with no gaps, nested as the tree nests, and what placeAt reads agrees", async () => {
