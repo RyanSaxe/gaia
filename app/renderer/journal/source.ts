@@ -1,6 +1,8 @@
 // A file's text, for the journal's code pages. A world the page carries its
 // source with, the showcase's, reads it there; inside the app the world
-// service reads it from the folder the world was opened from (`world.source`);
+// service reads it from the folder the world was opened from (`world.source`),
+// at the commit the world was built from, and once the world heals onto a new
+// commit (`world.vitality`) every file read so far is read again from that;
 // the phone lab's server reads Gaia's own from the commit its snapshot was
 // made at (`/source`). A page with none of these, such as the offline lab on
 // Gaia's own world, shows a definition's name and place without its code.
@@ -30,6 +32,8 @@ export function createSourceText(service: WorldService | null, carried: Readonly
   };
   service?.on((m) => {
     if (m.type === "world.source") arrive(m.path, m.lines);
+    // Its old lines stay until the new ones come, so no page shows a file empty.
+    else if (m.type === "world.vitality" && m.commit !== undefined) for (const [path, had] of files) if (had !== "asked") service.send({ type: "world.source", path });
   });
   const served = location.protocol === "http:" || location.protocol === "https:";
   function ask(path: string): void {

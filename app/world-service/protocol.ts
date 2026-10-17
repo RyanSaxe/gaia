@@ -172,7 +172,22 @@ export type ToRenderer =
   | { readonly type: "world.document"; readonly document: WorldDocument; readonly stood?: StoodSpot }
   | { readonly type: "world.failed"; readonly root: string; readonly message: string }
   /** A file's text, answering `world.source`: its lines, or null when it can't be read or lies outside the folder. */
-  | { readonly type: "world.source"; readonly path: string; readonly lines: readonly string[] | null };
+  | { readonly type: "world.source"; readonly path: string; readonly lines: readonly string[] | null }
+  /**
+   * The folder of the world this page shows has a new commit, and the world was judged again from it while it stood
+   * (`healWorld`): `vitality` is each thing's new vitality where it changed, by what it stands for (a file's path, a
+   * definition's `<file>#<name>`, an entity's root path), for the things the page's world holds. Only vitality changes
+   * live: nothing moves or changes shape, and the forms Jev picked stay until the next open. When the new code lays
+   * the land out exactly as before, `judged` holds what the understanding pass judged anew where it changed, by the
+   * journal's names (`WorldDocument.judged`), and `commit` is the commit the journal reads files from now
+   * (`world.source`). When it would move anything (a file added, removed, renamed or resized, a definition moved),
+   * both are absent: things that still stand under the same name take their new vitality, and the rest waits for the
+   * next open.
+   */
+  | { readonly type: "world.vitality"; readonly vitality: Readonly<Record<string, number>>; readonly judged?: Readonly<Record<string, JudgedThing>>; readonly commit?: string };
+
+/** A world healed onto a new commit, as the world service sends it to the page. */
+export type Heal = Extract<ToRenderer, { readonly type: "world.vitality" }>;
 
 /** Renderer → world service. */
 export type FromRenderer =
@@ -184,7 +199,7 @@ export type FromRenderer =
   | { readonly type: "world.choose"; readonly place: StartChoice }
   /** A painting of where the person stands still in the world this page opened (`RecentWorld.painting`): kept with it among the recent worlds. */
   | { readonly type: "world.painting"; readonly painting: string }
-  /** Asks for a file of the world this page opened, by its project-relative path, for the journal's code pages. */
+  /** Asks for a file of the world this page opened, by its project-relative path, for the journal's code pages: read at the commit the world was built from, or the one it healed onto (`world.vitality`). */
   | { readonly type: "world.source"; readonly path: string }
   /** Where the person stands in the world this page opened, sent now and then as they walk and when the page goes: kept with it among the recent worlds. */
   | { readonly type: "world.stood"; readonly stood: StoodSpot };

@@ -13,14 +13,16 @@
 // run goes ahead with no question; with one set, a run that costs more asks
 // first. A world is always Jev's: without Jev, with a request Jev could not
 // answer once the engine's client retried it, or when the person declines
-// the cost, the opening fails and says which request and why.
+// the cost, the opening fails and says which request and why. While a world
+// stands, a new commit in its folder is judged the same way (`healWorld`),
+// and what changed reaches the page as vitality alone.
 
 import type { CodeGraph, EngineClient, GraphNode, JevClient, JevResponse, Span } from "@gaia/schema";
 import { outlinesOf } from "@gaia/terrain";
-import { RequestFailed, areaOfRequest, composeWorld, factsOf, judgeWorld, keptJev, landOf, layoutWorld, planStanding, planWorldRequests, requestKey } from "@gaia/world";
+import { type CodeWorld, RequestFailed, areaOfRequest, composeWorld, factsOf, judgeWorld, keptJev, landOf, layoutWorld, planStanding, planWorldRequests, requestKey, vitalityOf, withVitality } from "@gaia/world";
 import { LOOKS } from "../renderer/terrain/looks.ts";
 import { engineJev } from "./jev.ts";
-import type { ConsentPlan, JudgedThing, Opening, WorldDocument } from "./protocol.ts";
+import type { ConsentPlan, Heal, JudgedThing, Opening, WorldDocument } from "./protocol.ts";
 
 /**
  * What judging one project may spend without asking, US dollars, until the
@@ -393,4 +395,41 @@ export async function openWorld({ engine, root, consent, progress }: OpenWorldOp
   for (const p of world.patches) settleHealth(p.path, p.vitality);
   sendHealth();
   return { root, ...(judged.commit === undefined ? {} : { commit: judged.commit }), facts, world, summary: parts.join("; "), judged: judgedThings(judged) };
+}
+
+/**
+ * Whether two layouts of a world stand everything where the other does: the same land, areas, patches and
+ * definitions, each definition on the same lines of its file, so the journal's pages read new code where the old
+ * stood. The division reads the code alone, never Jev, so what decides this is the files, their lengths and their
+ * definitions.
+ */
+function sameLand(a: CodeWorld, b: CodeWorld): boolean {
+  const shape = (w: CodeWorld): string =>
+    JSON.stringify([w.size, w.aspect, w.areas.map((r) => [r.path, r.x, r.z]), w.patches.map((p) => [p.path, p.x, p.z, p.radius]), w.symbols.map((d) => [d.id, d.line, d.lines, d.x, d.z])]);
+  return shape(a) === shape(b);
+}
+
+/**
+ * Judges the world a page shows (`shown`) again, from the commit its folder is read from now, exactly as opening it
+ * does (`openWorld`): the answers Jev and the engine keep settle everything the commit left alone, so only what it
+ * changed is asked. Returns what to send the page, null when nothing it shows changed, and what the page shows once
+ * that lands. Only vitality changes live. When the new code lays the land out exactly as before, the journal moves to
+ * the new commit and its judgments; when it would move anything, each thing that still stands under the same name
+ * takes its new vitality, and the reshape, the journal's new code and its judgments wait for the next open. The forms
+ * Jev picks for what changed are kept for that open and shown only then. A heal costing more than the person's spend
+ * limit is never asked about mid-walk: it fails, and the next open asks.
+ */
+export async function healWorld(engine: EngineClient, shown: WorldDocument): Promise<{ readonly heal: Heal | null; readonly shown: WorldDocument }> {
+  const next = await openWorld({ engine, root: shown.root, consent: async () => false, progress: () => {} });
+  const now = vitalityOf(next.world);
+  const vitality: Record<string, number> = {};
+  for (const [id, was] of vitalityOf(shown.world)) {
+    const v = now.get(id);
+    if (v !== undefined && v !== was) vitality[id] = v;
+  }
+  const world = withVitality(shown.world, new Map(Object.entries(vitality)));
+  if (!sameLand(shown.world, next.world)) return { heal: Object.keys(vitality).length === 0 ? null : { type: "world.vitality", vitality }, shown: { ...shown, world } };
+  const judged = Object.fromEntries(Object.entries(next.judged).filter(([of, j]) => JSON.stringify(j) !== JSON.stringify(shown.judged[of])));
+  const commit = next.commit === undefined ? {} : { commit: next.commit };
+  return { heal: { type: "world.vitality", vitality, judged, ...commit }, shown: { ...shown, world, judged: next.judged, ...commit } };
 }

@@ -12,13 +12,15 @@
 // each directory's area and land, each file's patch, and what each entity,
 // file and definition stands as: flowers, a stone, a bush, a tree, or a
 // building or a landmark Jev composed, and the trails between the entities.
+// While the world stands, the world service judges each new commit in its
+// folder and sends what changed as vitality alone (`onHeal`).
 
 import { type Blueprint, type CodeFacts, type EntityFacts, type FileFacts, type RouteSpec, type SymbolFact, type ThingFacts, rand, seedOf } from "@gaia/schema";
 import { link } from "@gaia/kinds";
 import { buildSlots } from "@gaia/realize";
 import { type StoodSpot, type WorldSpec, outlinesOf } from "@gaia/terrain";
 import { type CodeWorld, type Judgments, layoutWorld } from "@gaia/world";
-import type { ConsentPlan, JudgedThing, Opening, StartChoice, StartOffer, WorldDocument } from "../../world-service/protocol.ts";
+import type { ConsentPlan, Heal, JudgedThing, Opening, StartChoice, StartOffer, WorldDocument } from "../../world-service/protocol.ts";
 import { type WorldService, worldService } from "../service.ts";
 import GAIA_PAINTING from "../start/gaia-painting.webp";
 import { CHOSEN_MS } from "../start/start.ts";
@@ -141,6 +143,13 @@ function serviceWorld(service: WorldService, veil: Veil): Promise<{ readonly doc
       }
     });
     service.send({ type: "world.open" });
+  });
+}
+
+/** Calls `heal` with each heal the world service sends this page (`world.vitality`); a page with no service hears none. */
+export function onHeal(heal: (h: Heal) => void): void {
+  worldService()?.on((m) => {
+    if (m.type === "world.vitality") heal(m);
   });
 }
 
