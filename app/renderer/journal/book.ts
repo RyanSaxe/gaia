@@ -1027,8 +1027,11 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
       // Typing in the finder laid over the book is the finder's.
       if (!open || e.target instanceof HTMLInputElement) return;
       // While the book is open the world waits: no key reaches it.
-      if (e.code === "Escape" || e.code === "KeyM") setOpen(false);
-      else if (e.code === "ArrowRight" || e.code === "ArrowLeft") turnBy(e.code === "ArrowRight" ? 1 : -1);
+      if (e.code === "Escape" || e.code === "KeyM") {
+        setOpen(false);
+        // The view listens on this window in this phase too: on M it would open the book again, on Escape fold the map.
+        e.stopImmediatePropagation();
+      } else if (e.code === "ArrowRight" || e.code === "ArrowLeft") turnBy(e.code === "ArrowRight" ? 1 : -1);
       e.stopPropagation();
       if (e.code !== "Tab") e.preventDefault();
     },
