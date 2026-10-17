@@ -23,25 +23,31 @@ outside Gaia's repository or under `node_modules`.
 | --- | --- | --- |
 | (root) | README, changelog, contributing guide, decisions, the example site's config | Quiet ground: the meadow |
 | `packages/kernel` | The site, pages and node tree every package imports | The center of everything: the tower |
-| `packages/engine` | The build: about 180 short steps, each documented as old and patient | The oldest, deepest part: the wood |
+| `packages/engine` | The build: about 180 short steps, the first readers and the renderer old and unhurried, the rest each with a temper of its own | The oldest, deepest part: the wood |
 | `extensions` | The registry and nine extensions, each a package that registers itself and hands the page on | Busy, lively, flowing file to file: the village by the brook |
 | `v1` | The old renderer, with its renderer, importer, templates and cache as packages | Still on the path of most sites, and broken: the ruin |
 | `apps/cli`, `apps/dev-server`, `search`, `tooling`, `e2e`, `docs` | The command, the dev server, the search index, scripts, tests and guides | Kept |
 
 How the code guides Jev:
 
-- **The project's own words.** Every request Jev answers carries the opening
-  of the root's README, so it says what each part is to the project: the
-  kernel is the center everything is built around, the engine's steps are
-  old and each small, the extensions are where the daily work happens, and most
-  sites still build through v1.
-- **Docs.** A form, a land's ground and its accents are chosen from the docs
-  of the definitions that matter most in each place, so those docs carry
-  each place's character: age in the engine, liveliness in the extensions.
+- **The project's own words.** Every request of Jev's understanding pass,
+  which judges how much each part matters and how well it is made, carries
+  the opening of the root's README, so it says what each part is to the
+  project: the kernel is the center everything is built around, the
+  engine's steps are old and each small, the extensions are where the daily
+  work happens, and most sites still build through v1.
+- **Docs.** A form, a land's ground, its accents and each house's feature
+  are chosen from the docs of the definitions that matter most in each
+  place. Each engine step and each extension has a temper of its own in its
+  docs: busy, strict, thrifty, deep, experimental or old-fashioned. So the
+  houses of one place differ: a dovecote, a well, a bell, a forge, a
+  granary or a waterwheel, as each one's docs suggest.
 - **Structure.** Whether a land holds a brook or a still pond follows how its
-  files import each other. The extensions import along chains of their own
-  files (`index.ts` registers every extension, each extension imports its
-  helpers), so their land flows.
+  files import each other, and their names, never their docs. The
+  extensions import along chains of their own files (`index.ts` registers
+  every extension, each extension imports its helpers), so their land
+  flows. A waterwheel needs running water, so only a land with a brook or a
+  trickle offers its houses one.
 - **Real faults.** `v1/` is badly written in fact, not in name: state shared
   through module globals, swallowed errors, mode numbers, unescaped output,
   `eval`, failing tests, and honest comments (`DEPRECATED`, `broken since
@@ -110,10 +116,10 @@ What Jev made of the showcase on 2026-10-17:
 | | v1 as it is | v1 fixed |
 | --- | --- | --- |
 | `v1/` | quality 0.53 | quality 0.76 |
-| `v1/index.ts` | 0.40 | 0.69 |
-| `compat.ts`, `shims.ts`, `migrate.ts` | 0.41, 0.47, 0.48 | 0.78, 0.81, 0.69 |
-| `renderer`, `importer`, `templates`, `cache` | 0.57, 0.57, 0.60, 0.58 | 0.73, 0.80, 0.79, 0.77 |
-| v1's houses | 3, the most worn at vitality 0.53 | 8, the most worn at vitality 0.60 |
+| `v1/index.ts` | 0.40 | 0.70 |
+| `compat.ts`, `shims.ts`, `migrate.ts` | 0.42, 0.46, 0.48 | 0.78, 0.82, 0.69 |
+| `renderer`, `importer`, `templates`, `cache` | 0.57, 0.57, 0.59, 0.58 | 0.75, 0.80, 0.79, 0.77 |
+| v1's houses | 3, the most worn at vitality 0.53 | 8, the most worn at vitality 0.61 |
 
 In both, v1 is a basin holding a still pond: in morning mist on moss as it
 is, clear over clover once fixed. The rest is the same in both: the engine
@@ -121,11 +127,17 @@ a mossy basin with a still pond; the kernel a valley with a trickle, with
 `Site` and `createSite` as lookout towers; the extensions a brook valley;
 the root a brook valley of lush grass, with the project as a great tree.
 
-The engine's water is a close call. Jev weighs a still pond against a brook
-at 0.48 to 0.39 from the folder's structure and names alone; named
-`@folio/engine`, the same folder had a brook at 0.45 to 0.41. As a brook
-valley its houses stand along the water with waterwheels; as a basin they
-have none.
+The engine's water is a close call that its docs do not move. Jev weighs a
+still pond against a brook at 0.48 to 0.39 from the folder's structure and
+names alone; named `@folio/engine`, the same folder had a brook at 0.45 to
+0.41. As a basin its houses have no waterwheels; the kernel's trickle runs
+on through the engine's land, and the mills stand by it, most of them in
+the kernel's valley.
+
+Houses by feature, with v1 as it is: the engine 6 wells, 6 dovecotes, 2
+forges and a bell; the kernel 5 waterwheels, 3 dovecotes, a forge and a
+well; the extensions 5 dovecotes, 2 waterwheels, a granary, a bell and a
+forge.
 
 The wood does not come out yet: Jev stands 7 trees in the engine's land.
 Asked as #263 asks (no line counts, narrower form words, trees from rank
