@@ -158,8 +158,9 @@ and doc comments are not facts the world reads.
 **The land.** `layoutWorld` lays the graph out as land with `divideLand`
 (`packages/world/src/land.ts`). Each directory's land is divided among its own
 ground (its files and its entity's lot, kept together at its heart) and its
-subdirectories, each in proportion to its code (26 m² a line, and 120 m² for
-each definition standing on it); then each of those is divided the same way,
+subdirectories, each in proportion to its code (10 m² a line, and 50 m² for
+each definition standing on it, so a wood stands close enough to read as one
+from inside it); then each of those is divided the same way,
 down to the files. Every division is a
 relaxed, weighted nearest-site division of a raster of the land, starting
 from spots seeded by each child's path, so the same code gives the same land
@@ -189,7 +190,9 @@ function, method, class and type, never a plain value, a stylesheet rule, a
 document's section or a data file's key (`definitionsOf` in
 `packages/world/src/definitions.ts`). The patch is divided the way the land
 is (`dividePlots`): the file's own ground at its heart, and a plot for each
-definition as large as its own lines plus 120 m²;
+definition as large as its own lines plus 50 m², all on the 30% of the patch
+nearest its middle (`LAYOUT.cluster`), so a file's definitions gather into a
+copse with open ground round it and woods and meadows alternate;
 a definition's plot is divided again among the definitions inside it, and
 each stands at its plot's middle. A patch with fewer raster cells than plots
 is divided on a finer raster, so no two definitions share a spot. With Engine's graph (`project.graph`,
@@ -308,7 +311,7 @@ unopened (`world.failed`), and the next opening asks again. The
 world stays under the wait while Jev answers, because a judgment that
 changed after the world stood would swap trees, buildings and land in view.
 The land's division depends on the code alone (an entity's lot is the same
-ground, 900 m², whether a building or a landmark stands on it, and a file's
+ground, 600 m², whether a building or a landmark stands on it, and a file's
 plots follow its definitions' lines, never what Jev judged), so
 `landOf(model, graph)` in `@gaia/world`, given the engine's graph trimmed by
 `judgedGraph`, gives every area, patch, cell and lot before anything is

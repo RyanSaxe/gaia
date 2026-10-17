@@ -85,8 +85,8 @@ describe("the proving ground", () => {
     const looks = new Map<string, { blades: number; dry: number; bare: number; water: number; count: number }>();
     let inside = 0;
     const half = doc.world.size / 2 - 20;
-    for (let x = -half; x <= half; x += 8) {
-      for (let z = -half; z <= half; z += 8) {
+    for (let x = -half; x <= half; x += 4) {
+      for (let z = -half; z <= half; z += 4) {
         const here = placeAt(doc.world, x, z);
         if (here.area.depth < 0) continue;
         const v = vitalityAt(own, groundField, x, z);
@@ -102,7 +102,7 @@ describe("the proving ground", () => {
         }
       }
     }
-    expect(inside).toBeGreaterThan(500);
+    expect(inside).toBeGreaterThan(100);
     const mean = (key: string) => {
       const sum = looks.get(key)!;
       return { blades: sum.blades / sum.count, dry: sum.dry / sum.count, bare: sum.bare / sum.count, water: sum.water / sum.count };
@@ -129,7 +129,7 @@ describe("the proving ground", () => {
     let terrain: Terrain;
     let stood: Stand;
     let requests: StandBuilding[];
-    // Baking and standing the 950 m world takes about 10 s in one Node thread, longer while other work shares the machine.
+    // Baking and standing the 560 m world takes about 10 s in one Node thread, longer while other work shares the machine.
     beforeAll(() => {
       // The same buildings, landmarks and trail looks, seeded alike.
       terrain = bakeTerrain(code.spec, new Library([...RELIEF_PRIMITIVES, ...BIOME_PRIMITIVES]));

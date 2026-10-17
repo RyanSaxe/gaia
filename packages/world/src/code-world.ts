@@ -249,7 +249,7 @@ export interface CodeWorld extends WorldPlaces {
 
 export const LAYOUT = {
   /** Square meters of ground per line of code. */
-  m2PerLine: 26,
+  m2PerLine: 10,
   /** A file's lines count between these for its patch's size. */
   lines: [20, 1500],
   /**
@@ -257,16 +257,21 @@ export const LAYOUT = {
    * the same for a building or a landmark, so the land's division depends on
    * the code alone and is known before Jev answers (`landOf`).
    */
-  lot: 900,
+  lot: 600,
   /** How far a building or landmark may stand from its lot's middle, meters. */
-  lotReach: { building: 9, landmark: 7 },
+  lotReach: { building: 7, landmark: 6 },
   /** The smallest world, meters across. */
-  minSize: 320,
+  minSize: 260,
   /** A directory has its own land when it holds this share of the code's ground, not counting its own lands. */
   regionShare: 0.03,
   maxRegions: 24,
+  /**
+   * The share of a file's patch its definitions are plotted on, the part nearest its middle: they gather into a copse
+   * there with open ground round it, so woods and meadows alternate.
+   */
+  cluster: 0.3,
   /** Square meters each definition standing on a file's patch adds to it, on top of the file's lines. */
-  defGround: 120,
+  defGround: 50,
   /** How many of a file's definitions one request asks a form for: a larger file's are asked over several, so each fits Jev's window. */
   formsPerRequest: 24,
 } as const;
@@ -889,9 +894,10 @@ function landTree(dirs: Map<string, Dir>, lots: ReadonlyMap<string, number>, def
 /**
  * Where a file's definitions stand: its patch divided among them the way the
  * land is divided, each definition's plot among the definitions inside it,
- * with the file's own ground at the heart, where the file itself stands. Each
- * plot is as large as its definition's own lines, plus `LAYOUT.defGround`;
- * every definition stands at its plot's middle.
+ * with the file's own ground at the heart, where the file itself stands, on
+ * the part of the patch nearest its middle (`LAYOUT.cluster`). Each plot is
+ * as large as its definition's own lines, plus `LAYOUT.defGround`; every
+ * definition stands at its plot's middle.
  */
 function plotDefinitions(f: FileFacts, defs: readonly StandingDef[], leaf: { readonly x: number; readonly z: number; readonly inner: readonly (readonly [number, number])[] }, step: number): { own: { x: number; z: number }; defs: { def: StandingDef; x: number; z: number }[] } {
   if (defs.length === 0) return { own: { x: leaf.x, z: leaf.z }, defs: [] };
@@ -911,7 +917,9 @@ function plotDefinitions(f: FileFacts, defs: readonly StandingDef[], leaf: { rea
   };
   const top = inside.get("") ?? [];
   const root: LandNode = { id: `file:${f.path}`, ground: 0, children: [{ id: `own:${f.path}`, ground: own(f.lines, top) * perLine, children: [], heart: true }, ...top.map(node)] };
-  const plots = dividePlots(root, leaf.inner.length > 0 ? leaf.inner : [[leaf.x, leaf.z]], step);
+  const near = (c: readonly [number, number]): number => (c[0] - leaf.x) ** 2 + (c[1] - leaf.z) ** 2;
+  const core = [...leaf.inner].sort((a, b) => near(a) - near(b)).slice(0, Math.ceil(leaf.inner.length * LAYOUT.cluster));
+  const plots = dividePlots(root, core.length > 0 ? core : [[leaf.x, leaf.z]], step);
   const heart = plots.get(`own:${f.path}`) ?? { x: leaf.x, z: leaf.z };
   return {
     own: { x: heart.x, z: heart.z },
