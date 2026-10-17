@@ -1,6 +1,6 @@
 === v1/package.json ===
 {
-  "name": "@folio/v1",
+  "name": "@gaia/v1",
   "version": "0.6.0",
   "type": "module",
   "exports": "./index.ts",
@@ -12,11 +12,11 @@
   }
 }
 === v1/README.md ===
-# folio v1
+# Gaia v1
 
-The renderer that most folio sites build through: every site made before 0.6.
-`folio build` hands a site to v1 when it finds `templates/default.html`, and
-`folio import` reads other generators' posts through v1's importer.
+The renderer that most Gaia sites build through: every site made before 0.6.
+`gaia build` hands a site to v1 when it finds `templates/default.html`, and
+`gaia import` reads other generators' posts through v1's importer.
 
 ## Setup
 
@@ -42,7 +42,7 @@ None open. The last ones were fixed in 0.6:
 - pictures and fonts are copied byte for byte;
 - a second build in one process builds every page again.
 === v1/index.ts ===
-// v1: the renderer every site made before 0.6 builds through. `folio build` hands a
+// v1: the renderer every site made before 0.6 builds through. `gaia build` hands a
 // site here when it finds v1 templates: it reads the site's pages and templates, renders
 // each page, caches what it rendered and writes the site.
 import { renderMarkdown } from "./renderer/index.ts";
@@ -165,7 +165,7 @@ export function renderOne(file: string, settings: Settings = S): string {
 // - `baseUrl`, `url`         are read as `base`, the path the site is served under
 // - `layouts`, `views`       are read as `templates`, the folder of templates
 // Unknown keys are kept as they are, for plugins that read their own settings.
-// The environment's FOLIO_SRC and FOLIO_OUT name the folders when a config doesn't,
+// The environment's GAIA_SRC and GAIA_OUT name the folders when a config doesn't,
 // and are only ever read, never written.
 
 const warned = new Set<string>();
@@ -192,14 +192,14 @@ export function readConfig(config: Record<string, unknown>): Settings {
       // An older spelling still works, and says once what to write instead.
       if (name !== setting && !warned.has(name)) {
         warned.add(name);
-        console.warn(`folio v1: "${name}" in config.json is an old name; write "${setting}".`);
+        console.warn(`gaia v1: "${name}" in config.json is an old name; write "${setting}".`);
       }
       found[setting] = config[name];
       break;
     }
   }
-  const src = String(found.src ?? process.env.FOLIO_SRC ?? "src");
-  const out = String(found.out ?? process.env.FOLIO_OUT ?? "out");
+  const src = String(found.src ?? process.env.GAIA_SRC ?? "src");
+  const out = String(found.out ?? process.env.GAIA_OUT ?? "out");
   // Writing into the folder pages are read from would overwrite them.
   if (src === out) throw new Error(`config.json reads pages from and writes them to the same folder, ${src}`);
   const base = String(found.base ?? "/");
@@ -402,8 +402,8 @@ import { normalizeMeta } from "./compat.ts";
 const site = { templates: "fixtures/old-site/templates" };
 describe("v1", () => {
   it("builds the old fixture site, every page of it", () => {
-    expect(init({ ...site, src: "fixtures/old-site/src", out: "/tmp/folio-v1-a" }).out).toBe("/tmp/folio-v1-a");
-    expect(buildSite("fixtures/old-site/src", { ...site, out: "/tmp/folio-v1-a" })).toBe(12);
+    expect(init({ ...site, src: "fixtures/old-site/src", out: "/tmp/gaia-v1-a" }).out).toBe("/tmp/gaia-v1-a");
+    expect(buildSite("fixtures/old-site/src", { ...site, out: "/tmp/gaia-v1-a" })).toBe(12);
   });
 
   it("escapes an ampersand once", () => {
@@ -414,7 +414,7 @@ describe("v1", () => {
     expect(normalizeMeta({ status: "published" }).draft).toBeUndefined();
   });
   it("builds the same site again in the same process", () => {
-    expect(buildSite("fixtures/old-site/src", { ...site, out: "/tmp/folio-v1-b" })).toBe(12);
+    expect(buildSite("fixtures/old-site/src", { ...site, out: "/tmp/gaia-v1-b" })).toBe(12);
   });
 
   it("reads a draft written as the word false as published", () => {
@@ -427,7 +427,7 @@ describe("v1", () => {
 });
 === v1/renderer/package.json ===
 {
-  "name": "@folio/v1-renderer",
+  "name": "@gaia/v1-renderer",
   "version": "0.6.0",
   "type": "module",
   "exports": "./index.ts",
@@ -497,7 +497,7 @@ export function renderInline(text: string, settings = S): string {
 }
 === v1/importer/package.json ===
 {
-  "name": "@folio/v1-importer",
+  "name": "@gaia/v1-importer",
   "version": "0.6.0",
   "type": "module",
   "exports": "./index.ts",
@@ -507,7 +507,7 @@ export function renderInline(text: string, settings = S): string {
 }
 === v1/importer/index.ts ===
 // Reads posts written for other generators into v1's shape: YAML, TOML or JSON
-// frontmatter, then the body. `folio import` runs every post through it.
+// frontmatter, then the body. `gaia import` runs every post through it.
 import { normalizeMeta } from "../compat.ts";
 import { oldDate } from "../shims.ts";
 
@@ -570,7 +570,7 @@ function scalar(raw: string): unknown {
 }
 === v1/templates/package.json ===
 {
-  "name": "@folio/v1-templates",
+  "name": "@gaia/v1-templates",
   "version": "0.6.0",
   "type": "module",
   "exports": "./index.ts",
@@ -616,7 +616,7 @@ export function template(name: string): string | null {
 }
 === v1/cache/package.json ===
 {
-  "name": "@folio/v1-cache",
+  "name": "@gaia/v1-cache",
   "version": "0.6.0",
   "type": "module",
   "exports": "./index.ts",

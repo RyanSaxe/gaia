@@ -1,18 +1,18 @@
 === README.md ===
-# folio
+# Gaia
 
-folio turns a folder of Markdown into a static website: plain HTML, CSS, a
+Gaia turns a folder of Markdown into a static website: plain HTML, CSS, a
 feed and a search index you can host anywhere.
 
-## How folio is built
+## How Gaia is built
 
-folio is a small monorepo, and its parts have very different lives.
+Gaia is a small monorepo, and its parts have very different lives.
 
 - **`packages/kernel` is the center of everything.** It is the document model
   every other package imports: the site, its pages and the tree each page
-  parses into. Nothing in folio works without it, and every package is
+  parses into. Nothing in Gaia works without it, and every package is
   built around it.
-- **`packages/engine` is the oldest and deepest part of folio.** It is the
+- **`packages/engine` is the oldest and deepest part of Gaia.** It is the
   build: a long chain of small, patient steps that every page walks through
   in order, from reading a file to writing its HTML. No step matters much on
   its own: each does one small thing, and any one could be swapped for
@@ -24,14 +24,14 @@ folio is a small monorepo, and its parts have very different lives.
   calls every extension for every page, every site depends on each of them,
   and they change with every release. Each is small and quick: it wakes for
   a moment on every page, does its one job, and hands the page on to the next.
-- **`v1/` is the old renderer, and most folio sites still build through
+- **`v1/` is the old renderer, and most Gaia sites still build through
   it.** Every site made before 0.6 does, more sites than the engine builds:
-  when `folio build` or `folio serve` finds v1 templates, it hands the site
+  when `gaia build` or `gaia serve` finds v1 templates, it hands the site
   to v1, which renders its Markdown, reads its old frontmatter and templates,
-  and caches what it built. `folio import` brings posts from other
+  and caches what it built. `gaia import` brings posts from other
   generators in through v1's importer.
 
-The rest is the tooling around them: the `folio` command in `apps/cli`, the
+The rest is the tooling around them: the `gaia` command in `apps/cli`, the
 dev server in `apps/dev-server`, the search index in `search/`, the shared
 types in `packages/types`, benchmarks and release scripts in `tooling/`, and
 end-to-end tests in `e2e/`.
@@ -39,14 +39,14 @@ end-to-end tests in `e2e/`.
 ## Quick start
 
 ```sh
-npm install -g @folio/cli
-folio new my-site
+npm install -g @gaia/cli
+gaia new my-site
 cd my-site
-folio serve
+gaia serve
 ```
 
-`folio serve` builds the site, serves it on port 4000 and rebuilds the pages
-you change while you write. `folio build` writes the finished site to `dist/`.
+`gaia serve` builds the site, serves it on port 4000 and rebuilds the pages
+you change while you write. `gaia build` writes the finished site to `dist/`.
 
 ## How a build works
 
@@ -82,7 +82,7 @@ A layout is HTML with placeholders: `{{ content }}` is the rendered page,
 ## Extensions
 
 An extension is an object with a name and any of five hooks. See
-`docs/plugins.md` to write your own, and `docs/decisions.md` for why folio is
+`docs/plugins.md` to write your own, and `docs/decisions.md` for why Gaia is
 shaped the way it is.
 
 ## Licence
@@ -96,7 +96,7 @@ MIT.
 - The dev server reloads only the pages a change touched.
 - Feeds carry each post's summary and its first image.
 - The redirects extension writes a page for every old URL a site lists.
-- `folio new` asks which layout to start from.
+- `gaia new` asks which layout to start from.
 
 ## 0.8.0
 
@@ -113,7 +113,7 @@ MIT.
 ## 0.6.0
 
 - The engine replaces the v1 renderer for new sites.
-- Sites made before 0.6 keep building through `@folio/v1`.
+- Sites made before 0.6 keep building through `@gaia/v1`.
 
 ## 0.5.0
 
@@ -123,7 +123,7 @@ MIT.
 ## 0.4.0
 
 - Footnotes.
-- `folio check` reports broken links.
+- `gaia check` reports broken links.
 
 ## 0.3.0
 
@@ -137,13 +137,13 @@ MIT.
 
 - The first release: Markdown to HTML with layouts, using the v1 renderer.
 === CONTRIBUTING.md ===
-# Contributing to folio
+# Contributing to Gaia
 
 ## Setting up
 
 ```sh
-git clone https://github.com/folio-ssg/folio
-cd folio
+git clone https://github.com/gaia-ssg/gaia
+cd gaia
 npm install
 npm test
 ```
@@ -167,7 +167,7 @@ npm test
 === LICENSE ===
 MIT License
 
-Copyright (c) 2024 The folio authors
+Copyright (c) 2024 The Gaia authors
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -188,13 +188,13 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 === package.json ===
 {
-  "name": "@folio/folio",
+  "name": "@gaia/gaia",
   "version": "0.9.0",
   "private": true,
   "type": "module",
   "workspaces": ["packages/*", "extensions", "extensions/*", "apps/*", "search"],
   "scripts": {
-    "build": "folio build --root e2e/site",
+    "build": "gaia build --root e2e/site",
     "test": "vitest run",
     "check": "tsc --noEmit -p ."
   },
@@ -214,16 +214,16 @@ SOFTWARE.
     "allowImportingTsExtensions": true,
     "skipLibCheck": true
   },
-  "include": ["packages", "extensions", "apps", "search", "e2e", "folio.config.ts"],
+  "include": ["packages", "extensions", "apps", "search", "e2e", "gaia.config.ts"],
   "exclude": ["v1"]
 }
-=== folio.config.ts ===
-import type { SiteConfig } from "@folio/types";
-import { feeds, images, markdown, sitemap, syntax, toc } from "@folio/extensions";
+=== gaia.config.ts ===
+import type { SiteConfig } from "@gaia/types";
+import { feeds, images, markdown, sitemap, syntax, toc } from "@gaia/extensions";
 
 /** The example site the end-to-end tests build: the extensions most sites use, in the order they run. */
 const config: SiteConfig = {
-  title: "A folio site",
+  title: "A Gaia site",
   url: "https://example.com",
   content: "content",
   layouts: "layouts",
@@ -235,7 +235,7 @@ export default config;
 === docs/plugins.md ===
 # Writing an extension
 
-An extension is an object with a `name` and any of five hooks. folio calls
+An extension is an object with a `name` and any of five hooks. Gaia calls
 each hook in the order the config lists the extensions.
 
 | Hook | Called with | Return |
@@ -259,8 +259,8 @@ server rewrite rules.
 
 ## 2. One document model
 
-Every package imports `@folio/kernel`. There is one page type and one node
-tree, so an extension written for one part of folio works with every other.
+Every package imports `@gaia/kernel`. There is one page type and one node
+tree, so an extension written for one part of Gaia works with every other.
 
 ## 3. The build is a chain of small steps
 
@@ -279,11 +279,11 @@ import { mkdtempSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { build } from "@folio/engine";
-import config from "../folio.config.ts";
+import { build } from "@gaia/engine";
+import config from "../gaia.config.ts";
 
 describe("building the example site", () => {
-  const out = mkdtempSync(join(tmpdir(), "folio-e2e-"));
+  const out = mkdtempSync(join(tmpdir(), "gaia-e2e-"));
 
   it("writes a page for every Markdown file, at its own path", async () => {
     const result = await build({ ...config, root: join(import.meta.dirname, "site"), out });
@@ -298,13 +298,13 @@ describe("building the example site", () => {
 });
 === packages/types/package.json ===
 {
-  "name": "@folio/types",
+  "name": "@gaia/types",
   "version": "0.9.0",
   "type": "module",
   "exports": "./index.ts"
 }
 === packages/types/index.ts ===
-/** The shapes every folio package agrees on. The kernel builds on them; nothing here does any work. */
+/** The shapes every Gaia package agrees on. The kernel builds on them; nothing here does any work. */
 
 /** What a page's frontmatter may say. Anything else is kept as it is. */
 export interface PageData {
@@ -366,15 +366,15 @@ export interface Extension extends Hooks {
 }
 === packages/kernel/package.json ===
 {
-  "name": "@folio/kernel",
+  "name": "@gaia/kernel",
   "version": "0.9.0",
   "type": "module",
   "exports": "./index.ts",
-  "dependencies": { "@folio/types": "0.9.0" }
+  "dependencies": { "@gaia/types": "0.9.0" }
 }
 === packages/kernel/index.ts ===
 /**
- * The kernel: folio's document model, which every other package imports.
+ * The kernel: Gaia's document model, which every other package imports.
  * The engine builds with it, every extension reads and returns its pages,
  * and the command line and dev server hold a site through it.
  */
@@ -384,11 +384,11 @@ export { walk, visit, textOf, findAll, mapTree } from "./node.ts";
 export { splitFrontmatter, parseFrontmatter } from "./frontmatter.ts";
 export { createEvents, type Events, type BuildEvent } from "./events.ts";
 === packages/kernel/site.ts ===
-import type { Page, SiteConfig } from "@folio/types";
+import type { Page, SiteConfig } from "@gaia/types";
 import { createEvents, type Events } from "./events.ts";
 
 /**
- * A site: the one structure the whole of folio is built around. The engine
+ * A site: the one structure the whole of Gaia is built around. The engine
  * fills it, every extension reads from it, the dev server watches it and the
  * command line reports on it.
  */
@@ -403,7 +403,7 @@ export interface Site {
 }
 
 /**
- * The site at the center of every build, which every package in folio
+ * The site at the center of every build, which every package in Gaia
  * reaches through. Pages keep the order they were added in, and two pages may
  * never share a path.
  */
@@ -432,11 +432,11 @@ export function createSite(config: SiteConfig): Site {
   };
 }
 === packages/kernel/page.ts ===
-import type { Node, Page, PageData } from "@folio/types";
+import type { Node, Page, PageData } from "@gaia/types";
 import { splitFrontmatter } from "./frontmatter.ts";
 import { mapTree } from "./node.ts";
 
-/** A page from a Markdown file's text: its frontmatter as data, the rest as its body. Every page in folio starts here. */
+/** A page from a Markdown file's text: its frontmatter as data, the rest as its body. Every page in Gaia starts here. */
 export function createPage(source: string, text: string): Page {
   const { data, body } = splitFrontmatter(text);
   return { source, path: pagePath(source, data), data, body };
@@ -469,7 +469,7 @@ function trimSlashes(path: string): string {
   return path.replace(/^\/+|\/+$/g, "");
 }
 === packages/kernel/node.ts ===
-import type { Node, NodeType } from "@folio/types";
+import type { Node, NodeType } from "@gaia/types";
 
 /** Calls `visit` on every node of a tree, parents before their children. */
 export function walk(node: Node, visit: (node: Node, parent: Node | null) => void, parent: Node | null = null): void {
@@ -506,7 +506,7 @@ export function mapTree(node: Node, fn: (node: Node) => Node | null): Node | nul
   return fn(children === undefined ? node : { ...node, children });
 }
 === packages/kernel/frontmatter.ts ===
-import type { PageData } from "@folio/types";
+import type { PageData } from "@gaia/types";
 
 const FENCE = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/;
 
@@ -517,7 +517,7 @@ export function splitFrontmatter(text: string): { data: PageData; body: string }
   return { data: parseFrontmatter(match[1] ?? ""), body: text.slice(match[0].length) };
 }
 
-/** The small YAML folio's frontmatter uses: `key: value` lines of strings, numbers, booleans and bracketed lists. */
+/** The small YAML Gaia's frontmatter uses: `key: value` lines of strings, numbers, booleans and bracketed lists. */
 export function parseFrontmatter(text: string): PageData {
   const data: Record<string, unknown> = {};
   for (const line of text.split(/\r?\n/)) {
@@ -596,16 +596,16 @@ describe("the kernel", () => {
 });
 === packages/engine/package.json ===
 {
-  "name": "@folio/engine",
+  "name": "@gaia/engine",
   "version": "0.9.0",
   "type": "module",
   "exports": "./index.ts",
-  "dependencies": { "@folio/kernel": "0.9.0", "@folio/types": "0.9.0" }
+  "dependencies": { "@gaia/kernel": "0.9.0", "@gaia/types": "0.9.0" }
 }
 === packages/engine/README.md ===
 # The engine
 
-The engine is folio's build and its oldest code. Its first steps were written
+The engine is Gaia's build and its oldest code. Its first steps were written
 for 0.1 and most still read as they did then: each one small, each doing one
 thing, each handing its page to the next.
 
@@ -618,7 +618,7 @@ ones, so the chain only grows, slowly, a few steps a year, and a site built
 years ago builds the same today.
 === packages/engine/index.ts ===
 /**
- * The engine: folio's build, the oldest part of the project. It is a long
+ * The engine: Gaia's build, the oldest part of the project. It is a long
  * chain of small steps, and every page walks the whole chain in order:
  * read, parse, transform, lay out, render, write. Each step does one thing
  * and has done it, mostly unchanged, since the first release.
@@ -637,8 +637,8 @@ export { byDate, byTag, bySection, byYear, newest, paginate, neighbours, related
 export { parseDate, longDate, isoDate, rfc822, ago } from "./dates.ts";
 export { absolute, isExternal, relativeUrl, urlPath } from "./url.ts";
 === packages/engine/build.ts ===
-import type { Page, SiteConfig } from "@folio/types";
-import { createSite, isDraft } from "@folio/kernel";
+import type { Page, SiteConfig } from "@gaia/types";
+import { createSite, isDraft } from "@gaia/kernel";
 import { readPages } from "./read.ts";
 import { parseBlocks } from "./blocks.ts";
 import { withFootnotes } from "./footnotes.ts";
@@ -690,8 +690,8 @@ async function writeStep(pages: readonly Page[], config: SiteConfig): Promise<vo
 === packages/engine/read.ts ===
 import { readdir, readFile } from "node:fs/promises";
 import { join, relative } from "node:path";
-import type { Page, SiteConfig } from "@folio/types";
-import { createPage } from "@folio/kernel";
+import type { Page, SiteConfig } from "@gaia/types";
+import { createPage } from "@gaia/kernel";
 
 /** Where every build begins, as it has since 0.1: each Markdown file under the content folder, as a page, in path order. */
 export async function readPages(config: SiteConfig): Promise<Page[]> {
@@ -782,7 +782,7 @@ export function trimBlankLines(lines: readonly string[]): string[] {
   return lines.slice(firstNonBlank(lines), lastNonBlank(lines));
 }
 === packages/engine/blocks.ts ===
-import type { Node } from "@folio/types";
+import type { Node } from "@gaia/types";
 import { parseInline } from "./inline.ts";
 import { isBlank, splitLines, dedent } from "./lines.ts";
 
@@ -972,7 +972,7 @@ function indexFrom(lines: readonly string[], from: number, test: (line: string) 
   return lines.length;
 }
 === packages/engine/inline.ts ===
-import type { Node } from "@folio/types";
+import type { Node } from "@gaia/types";
 
 type Read = { node: Node; next: number } | null;
 
@@ -1100,8 +1100,8 @@ function runOf(text: string, at: number, char: string): number {
   return n;
 }
 === packages/engine/footnotes.ts ===
-import type { Node, Page } from "@folio/types";
-import { mapTree } from "@folio/kernel";
+import type { Node, Page } from "@gaia/types";
+import { mapTree } from "@gaia/kernel";
 
 const REF = /\[\^([\w-]+)\]/g;
 const NOTE = /^\[\^([\w-]+)\]:\s*(.*)$/;
@@ -1156,8 +1156,8 @@ function noteItem(n: number, text: string): Node {
   return { type: "item", attrs: { id: `note-${n}` }, children: [{ type: "text", value: text }] };
 }
 === packages/engine/headings.ts ===
-import type { Node, Page } from "@folio/types";
-import { mapTree, textOf } from "@folio/kernel";
+import type { Node, Page } from "@gaia/types";
+import { mapTree, textOf } from "@gaia/kernel";
 import { uniqueSlugs } from "./slug.ts";
 
 /** Every heading given an id from its words, as headings have been since the first table of contents. */
@@ -1268,7 +1268,7 @@ export function unescapeHtml(text: string): string {
   return text.replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
 }
 === packages/engine/transform.ts ===
-import type { Extension, Page, SiteConfig } from "@folio/types";
+import type { Extension, Page, SiteConfig } from "@gaia/types";
 
 /** The config after each extension's `configured` hook, in the order the config lists them. */
 export function runConfigured(config: SiteConfig): SiteConfig {
@@ -1292,7 +1292,7 @@ export async function runDone(extensions: readonly Extension[], pages: readonly 
 === packages/engine/layout.ts ===
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { Page, SiteConfig } from "@folio/types";
+import type { Page, SiteConfig } from "@gaia/types";
 import { escapeHtml } from "./escape.ts";
 
 /** Each layout's template by name: `layouts/post.html` is `post`. */
@@ -1342,7 +1342,7 @@ function lookup(data: unknown, key: string): unknown {
   return key.split(".").reduce<unknown>((obj, part) => (obj as Record<string, unknown> | undefined)?.[part], data);
 }
 === packages/engine/render.ts ===
-import type { Node, Page } from "@folio/types";
+import type { Node, Page } from "@gaia/types";
 import { escapeAttr, escapeHtml } from "./escape.ts";
 
 /** A page's tree rendered to HTML, ready for its layout. The render step has kept its shape since 0.1. */
@@ -1507,7 +1507,7 @@ function attr(name: string, value: string): string {
 === packages/engine/write.ts ===
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import type { Page } from "@folio/types";
+import type { Page } from "@gaia/types";
 
 /** Every page written to `out/<path>/index.html`, the build's final step since the beginning. */
 export async function writePages(pages: readonly Page[], out: string): Promise<void> {
@@ -1567,7 +1567,7 @@ async function exists(path: string): Promise<boolean> {
   }
 }
 === packages/engine/collections.ts ===
-import type { Page } from "@folio/types";
+import type { Page } from "@gaia/types";
 
 /** Dated pages newest first, the order every feed and index has read them in since 0.2. */
 export function byDate(pages: readonly Page[]): Page[] {
@@ -1724,8 +1724,8 @@ function trimEnd(path: string): string {
   return path.replace(/\/+$/, "");
 }
 === packages/engine/excerpt.ts ===
-import type { Page } from "@folio/types";
-import { findAll, textOf } from "@folio/kernel";
+import type { Page } from "@gaia/types";
+import { findAll, textOf } from "@gaia/kernel";
 
 /** A page's first paragraph, cut to `words`, as feeds and search have shown it since 0.2. */
 export function summaryOf(page: Page, words = 40): string {
@@ -1755,7 +1755,7 @@ export function firstImage(page: Page): string | undefined {
 }
 === packages/engine/cache.ts ===
 import { createHash } from "node:crypto";
-import type { Page } from "@folio/types";
+import type { Page } from "@gaia/types";
 
 /** What a build remembers between runs: each page's rendered HTML by the hash of its source text. */
 export interface Cache {
@@ -1805,9 +1805,9 @@ describe("the engine", () => {
   });
 
   it("parses links, images and inline code", () => {
-    expect(parseInline("[folio](https://folio.dev)")[0]?.attrs?.href).toBe("https://folio.dev");
+    expect(parseInline("[gaia](https://gaia.dev)")[0]?.attrs?.href).toBe("https://gaia.dev");
     expect(parseInline("![a cat](cat.png)")[0]?.attrs?.alt).toBe("a cat");
-    expect(parseInline("run `folio build`")[1]?.value).toBe("folio build");
+    expect(parseInline("run `gaia build`")[1]?.value).toBe("gaia build");
   });
 
   it("aligns table cells as their divider says", () => {
@@ -1823,16 +1823,16 @@ describe("the engine", () => {
 });
 === extensions/package.json ===
 {
-  "name": "@folio/extensions",
+  "name": "@gaia/extensions",
   "version": "0.9.0",
   "type": "module",
   "exports": "./index.ts"
 }
 === extensions/README.md ===
-# folio's extensions
+# Gaia's extensions
 
 Everything a reader sees beyond plain HTML comes from here, and this is the
-busiest corner of folio: every build calls every extension for every page.
+busiest corner of Gaia: every build calls every extension for every page.
 
 Each extension is small and quick. It wakes for a moment as a page passes,
 does its one job, and hands the page on to the next, in the order a site's
@@ -1850,8 +1850,8 @@ Each registers itself in `registry.ts` as it loads, and names the extensions
 it must run after. See `docs/plugins.md` to write your own.
 === extensions/index.ts ===
 /**
- * The extensions folio ships with, and the registry where each makes itself
- * known by name. This is the liveliest part of folio: every build calls every
+ * The extensions Gaia ships with, and the registry where each makes itself
+ * known by name. This is the liveliest part of Gaia: every build calls every
  * extension here for every page, and every site depends on them. Importing
  * this module registers every one of them, in the order a page passes them.
  */
@@ -1867,10 +1867,10 @@ export { feeds } from "./feeds/index.ts";
 export { sitemap } from "./sitemap/index.ts";
 export { redirects } from "./redirects/index.ts";
 === extensions/registry.ts ===
-import type { Extension } from "@folio/types";
+import type { Extension } from "@gaia/types";
 import { inOrder } from "./order.ts";
 
-/** An extension folio knows by name, with what it does and the extensions it must run after. */
+/** An extension Gaia knows by name, with what it does and the extensions it must run after. */
 export interface Registered {
   readonly name: string;
   readonly summary: string;
@@ -1907,7 +1907,7 @@ function toEntry(name: string | Extension): Registered | Extension {
   return entry;
 }
 === extensions/order.ts ===
-import type { Extension } from "@folio/types";
+import type { Extension } from "@gaia/types";
 import type { Registered } from "./registry.ts";
 
 /** Extensions in an order where each follows the ones it names, the config's order breaking ties. */
@@ -1962,19 +1962,19 @@ describe("the extensions", () => {
 });
 === extensions/markdown/package.json ===
 {
-  "name": "@folio/markdown",
+  "name": "@gaia/markdown",
   "version": "0.9.0",
   "type": "module",
   "exports": "./index.ts"
 }
 === extensions/markdown/index.ts ===
-import type { Extension } from "@folio/types";
-import { withTree } from "@folio/kernel";
+import type { Extension } from "@gaia/types";
+import { withTree } from "@gaia/kernel";
 import { register } from "../registry.ts";
 import { textNode } from "./wikilinks.ts";
 
 /**
- * The busiest extension in folio: it wakes for every page of every site on
+ * The busiest extension in Gaia: it wakes for every page of every site on
  * every build, sets the page's type and lights up its wiki links, then rests
  * until the next page. Most of the other extensions read what it leaves.
  */
@@ -1990,8 +1990,8 @@ export function markdown(options: { smart?: boolean; wikilinks?: boolean } = {})
 
 register({ name: "markdown", summary: "Typography and wiki links on every page", create: () => markdown() });
 === extensions/markdown/wikilinks.ts ===
-import type { Node } from "@folio/types";
-import { slugify } from "@folio/engine";
+import type { Node } from "@gaia/types";
+import { slugify } from "@gaia/engine";
 import { setInType } from "./typography.ts";
 
 /** A text node set in type, its `[[wiki links]]` turned into links to the pages they name. */
@@ -2011,7 +2011,7 @@ export function splitWikilinks(text: string): Node[] {
   });
 }
 === extensions/markdown/typography.ts ===
-import { typeset } from "@folio/engine";
+import { typeset } from "@gaia/engine";
 
 const FRACTIONS: Readonly<Record<string, string>> = { "1/2": "½", "1/4": "¼", "3/4": "¾" };
 
@@ -2031,18 +2031,18 @@ function withUnits(text: string): string {
 }
 === extensions/syntax/package.json ===
 {
-  "name": "@folio/syntax",
+  "name": "@gaia/syntax",
   "version": "0.9.0",
   "type": "module",
   "exports": "./index.ts"
 }
 === extensions/syntax/index.ts ===
-import type { Extension, Node } from "@folio/types";
-import { withTree } from "@folio/kernel";
+import type { Extension, Node } from "@gaia/types";
+import { withTree } from "@gaia/kernel";
 import { register } from "../registry.ts";
 import { highlight } from "./highlight.ts";
 
-/** The themes folio ships, each a class its stylesheet colors tokens by. */
+/** The themes Gaia ships, each a class its stylesheet colors tokens by. */
 const THEMES = new Set(["paper", "ink", "dusk"]);
 
 /** Lights up every block of code on every page at build time, token by token, so pages ship no script. */
@@ -2061,7 +2061,7 @@ function highlighted(node: Node, theme: string): Node {
 
 register({ name: "syntax", summary: "Highlights code at build time", after: ["markdown"], create: () => syntax() });
 === extensions/syntax/highlight.ts ===
-import { escapeHtml } from "@folio/engine";
+import { escapeHtml } from "@gaia/engine";
 import { grammarFor } from "./grammars.ts";
 
 /** Code as HTML spans, one per token its language's grammar knows; anything else stays plain text. */
@@ -2134,14 +2134,14 @@ function words(list: readonly string[]): RegExp {
 }
 === extensions/images/package.json ===
 {
-  "name": "@folio/images",
+  "name": "@gaia/images",
   "version": "0.9.0",
   "type": "module",
   "exports": "./index.ts"
 }
 === extensions/images/index.ts ===
-import type { Extension, Node } from "@folio/types";
-import { withTree } from "@folio/kernel";
+import type { Extension, Node } from "@gaia/types";
+import { withTree } from "@gaia/kernel";
 import { register } from "../registry.ts";
 import { sizeOfFile } from "./probe.ts";
 import { srcsetFor } from "./srcset.ts";
@@ -2207,14 +2207,14 @@ export function resized(src: string, width: number): string {
 }
 === extensions/embeds/package.json ===
 {
-  "name": "@folio/embeds",
+  "name": "@gaia/embeds",
   "version": "0.9.0",
   "type": "module",
   "exports": "./index.ts"
 }
 === extensions/embeds/index.ts ===
-import type { Extension, Node } from "@folio/types";
-import { withTree } from "@folio/kernel";
+import type { Extension, Node } from "@gaia/types";
+import { withTree } from "@gaia/kernel";
 import { register } from "../registry.ts";
 import { sizeOfFile } from "../images/probe.ts";
 import { providerFor } from "./providers.ts";
@@ -2262,7 +2262,7 @@ export function providerFor(href: string): { name: string; src: string } | null 
 }
 === extensions/feeds/package.json ===
 {
-  "name": "@folio/feeds",
+  "name": "@gaia/feeds",
   "version": "0.9.0",
   "type": "module",
   "exports": "./index.ts"
@@ -2270,8 +2270,8 @@ export function providerFor(href: string): { name: string; src: string } | null 
 === extensions/feeds/index.ts ===
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { Extension } from "@folio/types";
-import { newest } from "@folio/engine";
+import type { Extension } from "@gaia/types";
+import { newest } from "@gaia/engine";
 import { register } from "../registry.ts";
 import { rss } from "./rss.ts";
 import { atom } from "./atom.ts";
@@ -2293,8 +2293,8 @@ export function feeds(options: { limit?: number; section?: string; title?: strin
 
 register({ name: "feeds", summary: "RSS and Atom feeds of the newest posts", after: ["markdown"], create: () => feeds() });
 === extensions/feeds/rss.ts ===
-import type { Page } from "@folio/types";
-import { rfc822 } from "@folio/engine";
+import type { Page } from "@gaia/types";
+import { rfc822 } from "@gaia/engine";
 import { entryOf, xmlDocument } from "./entries.ts";
 
 /** The RSS feed: a channel with one item per post. */
@@ -2308,8 +2308,8 @@ function item(post: Page): string {
   return `<item><title>${entry.title}</title><link>${entry.link}</link><pubDate>${rfc822(entry.date)}</pubDate><description>${entry.summary}</description></item>`;
 }
 === extensions/feeds/atom.ts ===
-import type { Page } from "@folio/types";
-import { isoDate } from "@folio/engine";
+import type { Page } from "@gaia/types";
+import { isoDate } from "@gaia/engine";
 import { entryOf, xmlDocument } from "./entries.ts";
 
 /** The Atom feed: one entry per post, updated as of the newest. */
@@ -2324,8 +2324,8 @@ function entry(post: Page): string {
   return `<entry><title>${e.title}</title><link href="${e.link}"/><id>${e.link}</id><updated>${isoDate(e.date)}</updated><summary>${e.summary}</summary></entry>`;
 }
 === extensions/feeds/entries.ts ===
-import type { Page } from "@folio/types";
-import { escapeXml, parseDate, summaryOf } from "@folio/engine";
+import type { Page } from "@gaia/types";
+import { escapeXml, parseDate, summaryOf } from "@gaia/engine";
 import { setInType } from "../markdown/typography.ts";
 
 /** What every feed says about a post, escaped for XML: its title set in type, link, date and summary. */
@@ -2344,7 +2344,7 @@ export function xmlDocument(body: string): string {
 }
 === extensions/sitemap/package.json ===
 {
-  "name": "@folio/sitemap",
+  "name": "@gaia/sitemap",
   "version": "0.9.0",
   "type": "module",
   "exports": "./index.ts"
@@ -2352,7 +2352,7 @@ export function xmlDocument(body: string): string {
 === extensions/sitemap/index.ts ===
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { Extension } from "@folio/types";
+import type { Extension } from "@gaia/types";
 import { register } from "../registry.ts";
 import { urlset } from "./urls.ts";
 
@@ -2368,8 +2368,8 @@ export function sitemap(options: { base?: string } = {}): Extension {
 
 register({ name: "sitemap", summary: "A sitemap of every page", after: ["i18n"], create: () => sitemap() });
 === extensions/sitemap/urls.ts ===
-import type { Page } from "@folio/types";
-import { absolute, isoDate, parseDate } from "@folio/engine";
+import type { Page } from "@gaia/types";
+import { absolute, isoDate, parseDate } from "@gaia/engine";
 import { xmlDocument } from "../feeds/entries.ts";
 import { hreflangLinks } from "../i18n/alternates.ts";
 
@@ -2386,13 +2386,13 @@ function lastmod(page: Page): string {
 }
 === extensions/i18n/package.json ===
 {
-  "name": "@folio/i18n",
+  "name": "@gaia/i18n",
   "version": "0.9.0",
   "type": "module",
   "exports": "./index.ts"
 }
 === extensions/i18n/index.ts ===
-import type { Extension, Page } from "@folio/types";
+import type { Extension, Page } from "@gaia/types";
 import { register } from "../registry.ts";
 import { languageOf, withoutLanguage } from "./languages.ts";
 import { alternatesOf } from "./alternates.ts";
@@ -2440,7 +2440,7 @@ export function basePath(path: string): string {
   return path.replace(/^[a-z]{2}\//, "");
 }
 === extensions/i18n/alternates.ts ===
-import type { Page } from "@folio/types";
+import type { Page } from "@gaia/types";
 import { basePath } from "./languages.ts";
 
 /** A page's translations: every other page with the same path once its language is taken off. */
@@ -2456,13 +2456,13 @@ export function hreflangLinks(page: Page): string {
 }
 === extensions/toc/package.json ===
 {
-  "name": "@folio/toc",
+  "name": "@gaia/toc",
   "version": "0.9.0",
   "type": "module",
   "exports": "./index.ts"
 }
 === extensions/toc/index.ts ===
-import type { Extension } from "@folio/types";
+import type { Extension } from "@gaia/types";
 import { register } from "../registry.ts";
 import { headingsOf, listOf } from "./outline.ts";
 
@@ -2480,8 +2480,8 @@ export function toc(options: { minHeadings?: number; depth?: number } = {}): Ext
 
 register({ name: "toc", summary: "Tables of contents", after: ["markdown"], create: () => toc() });
 === extensions/toc/outline.ts ===
-import type { Page } from "@folio/types";
-import { contentsOf } from "@folio/engine";
+import type { Page } from "@gaia/types";
+import { contentsOf } from "@gaia/engine";
 
 /** A page's headings down to a depth, each with the id the engine gave it. */
 export function headingsOf(page: Page, depth: number): { level: number; text: string; id: string }[] {
@@ -2501,7 +2501,7 @@ export function listOf(headings: readonly { level: number; text: string; id: str
 }
 === extensions/redirects/package.json ===
 {
-  "name": "@folio/redirects",
+  "name": "@gaia/redirects",
   "version": "0.9.0",
   "type": "module",
   "exports": "./index.ts"
@@ -2509,7 +2509,7 @@ export function listOf(headings: readonly { level: number; text: string; id: str
 === extensions/redirects/index.ts ===
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { Extension } from "@folio/types";
+import type { Extension } from "@gaia/types";
 import { register } from "../registry.ts";
 import { redirectPage, redirectsOf, redirectsXml } from "./pages.ts";
 
@@ -2530,7 +2530,7 @@ export function redirects(): Extension {
 
 register({ name: "redirects", summary: "Pages at old addresses", after: ["sitemap"], create: () => redirects() });
 === extensions/redirects/pages.ts ===
-import type { Page } from "@folio/types";
+import type { Page } from "@gaia/types";
 import { xmlDocument } from "../feeds/entries.ts";
 
 /** Every old address and the page it now leads to; two pages claiming one address is an error. */
@@ -2563,19 +2563,19 @@ export function redirectsXml(moves: ReadonlyMap<string, string>): string {
 }
 === apps/cli/package.json ===
 {
-  "name": "@folio/cli",
+  "name": "@gaia/cli",
   "version": "0.9.0",
   "type": "module",
-  "bin": { "folio": "./main.ts" },
+  "bin": { "gaia": "./main.ts" },
   "exports": "./main.ts",
-  "dependencies": { "@folio/kernel": "0.9.0", "@folio/engine": "0.9.0", "@folio/extensions": "0.9.0" }
+  "dependencies": { "@gaia/kernel": "0.9.0", "@gaia/engine": "0.9.0", "@gaia/extensions": "0.9.0" }
 }
 === apps/cli/main.ts ===
 #!/usr/bin/env node
 import { parseFlags, usage } from "./flags.ts";
 import { COMMANDS } from "./commands.ts";
 
-/** Runs one `folio` command from the command line, and exits with its status. */
+/** Runs one `gaia` command from the command line, and exits with its status. */
 export async function main(argv: readonly string[]): Promise<number> {
   const flags = parseFlags(argv);
   if (flags.help || flags.command === undefined) {
@@ -2584,21 +2584,21 @@ export async function main(argv: readonly string[]): Promise<number> {
   }
   const command = COMMANDS[flags.command];
   if (command === undefined) {
-    process.stderr.write(`folio: no command called "${flags.command}". Run folio --help.\n`);
+    process.stderr.write(`gaia: no command called "${flags.command}". Run gaia --help.\n`);
     return 1;
   }
   try {
     await command.run(flags);
     return 0;
   } catch (error) {
-    process.stderr.write(`folio ${flags.command}: ${(error as Error).message}\n`);
+    process.stderr.write(`gaia ${flags.command}: ${(error as Error).message}\n`);
     return 1;
   }
 }
 
 if (import.meta.main) process.exit(await main(process.argv.slice(2)));
 === apps/cli/flags.ts ===
-/** What `folio` was asked: a command, its arguments and the flags given. */
+/** What `gaia` was asked: a command, its arguments and the flags given. */
 export interface Flags {
   readonly command?: string;
   readonly args: readonly string[];
@@ -2613,7 +2613,7 @@ export interface Flags {
 const BOOLEAN = new Set(["drafts", "quiet", "help"]);
 const ALIASES: Readonly<Record<string, string>> = { h: "help", q: "quiet", p: "port", o: "out" };
 
-/** Reads `folio <command> [args] [--flag value]`; unknown flags are an error, so a typo never passes quietly. */
+/** Reads `gaia <command> [args] [--flag value]`; unknown flags are an error, so a typo never passes quietly. */
 export function parseFlags(argv: readonly string[]): Flags {
   const named: Record<string, string | boolean> = {};
   const positional: string[] = [];
@@ -2643,10 +2643,10 @@ export function parseFlags(argv: readonly string[]): Flags {
 
 const KNOWN = new Set(["root", "out", "port", "drafts", "quiet", "help"]);
 
-/** What `folio --help` prints. */
+/** What `gaia --help` prints. */
 export function usage(): string {
   return [
-    "Usage: folio <command> [options]",
+    "Usage: gaia <command> [options]",
     "",
     "Commands:",
     "  new <name>   Start a site from a layout",
@@ -2667,13 +2667,13 @@ export function usage(): string {
 === apps/cli/commands.ts ===
 import { cp, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { buildSite as buildV1 } from "@folio/v1";
-import { convertPost } from "@folio/v1-importer";
+import { buildSite as buildV1 } from "@gaia/v1";
+import { convertPost } from "@gaia/v1-importer";
 import { join } from "node:path";
-import type { SiteConfig } from "@folio/types";
-import { build } from "@folio/engine";
-import { findAll } from "@folio/kernel";
-import { resolveExtensions } from "@folio/extensions";
+import type { SiteConfig } from "@gaia/types";
+import { build } from "@gaia/engine";
+import { findAll } from "@gaia/kernel";
+import { resolveExtensions } from "@gaia/extensions";
 import type { Flags } from "./flags.ts";
 
 export interface Command {
@@ -2681,7 +2681,7 @@ export interface Command {
   run(flags: Flags): Promise<void>;
 }
 
-/** Every command `folio` runs, by name. */
+/** Every command `gaia` runs, by name. */
 export const COMMANDS: Readonly<Record<string, Command>> = {
   new: { summary: "Start a site from a layout", run: newSite },
   build: { summary: "Build the site", run: buildSite },
@@ -2692,9 +2692,9 @@ export const COMMANDS: Readonly<Record<string, Command>> = {
 
 async function newSite(flags: Flags): Promise<void> {
   const name = flags.args[0];
-  if (name === undefined) throw new Error("Name the new site: folio new <name>.");
+  if (name === undefined) throw new Error("Name the new site: gaia new <name>.");
   await cp(join(import.meta.dirname, "starters", "blog"), name, { recursive: true, errorOnExist: true, force: false });
-  say(flags, `Started ${name}. Next: cd ${name} && folio serve`);
+  say(flags, `Started ${name}. Next: cd ${name} && gaia serve`);
 }
 
 async function buildSite(flags: Flags): Promise<void> {
@@ -2709,14 +2709,14 @@ async function buildSite(flags: Flags): Promise<void> {
 }
 
 async function serveSite(flags: Flags): Promise<void> {
-  const { startServer } = await import("@folio/dev-server");
+  const { startServer } = await import("@gaia/dev-server");
   const server = startServer({ ...(await loadConfig(flags)), port: flags.port });
   say(flags, `Serving on ${await server.url()}`);
 }
 
 async function checkSite(flags: Flags): Promise<void> {
   const config = await loadConfig(flags);
-  const { pages } = await build({ ...config, out: join(config.root ?? ".", ".folio-check") });
+  const { pages } = await build({ ...config, out: join(config.root ?? ".", ".gaia-check") });
   const paths = new Set(pages.map((page) => `/${page.path}/`));
   const broken = pages.flatMap((page) =>
     page.tree === undefined ? [] : findAll(page.tree, "link").map((link) => link.attrs?.href ?? "").filter((href) => href.startsWith("/") && !paths.has(href)).map((href) => `${page.source}: ${href}`),
@@ -2728,7 +2728,7 @@ async function checkSite(flags: Flags): Promise<void> {
 /** Posts from Jekyll, Hugo or a WordPress export, read by v1's importer and written as pages under `content/posts`. */
 async function importPosts(flags: Flags): Promise<void> {
   const from = flags.args[0];
-  if (from === undefined) throw new Error("Name the folder of posts to import: folio import <folder>.");
+  if (from === undefined) throw new Error("Name the folder of posts to import: gaia import <folder>.");
   const names = (await readdir(from)).filter((name) => /\.(md|markdown|html)$/.test(name));
   const into = join(flags.root, "content", "posts");
   await mkdir(into, { recursive: true });
@@ -2740,9 +2740,9 @@ async function importPosts(flags: Flags): Promise<void> {
   say(flags, `Imported ${names.length} posts into ${into}.`);
 }
 
-/** The site's config: `folio.config.json` in its root, with flags laid over it. */
+/** The site's config: `gaia.config.json` in its root, with flags laid over it. */
 async function loadConfig(flags: Flags): Promise<SiteConfig> {
-  const file = join(flags.root, "folio.config.json");
+  const file = join(flags.root, "gaia.config.json");
   const raw = JSON.parse(await readFile(file, "utf8")) as Omit<SiteConfig, "extensions"> & { extensions?: string[] };
   return { ...raw, root: flags.root, out: flags.out ?? raw.out, drafts: flags.drafts, extensions: resolveExtensions(raw.extensions ?? ["markdown"]) };
 }
@@ -2754,7 +2754,7 @@ function say(flags: Flags, line: string): void {
 import { describe, expect, it } from "vitest";
 import { parseFlags } from "./flags.ts";
 
-describe("folio's flags", () => {
+describe("gaia's flags", () => {
   it("reads a command, its arguments and its flags", () => {
     expect(parseFlags(["new", "blog", "--quiet"])).toMatchObject({ command: "new", args: ["blog"], quiet: true });
     expect(parseFlags(["serve", "-p", "8080"]).port).toBe(8080);
@@ -2767,20 +2767,20 @@ describe("folio's flags", () => {
 });
 === apps/dev-server/package.json ===
 {
-  "name": "@folio/dev-server",
+  "name": "@gaia/dev-server",
   "version": "0.9.0",
   "type": "module",
   "exports": "./server.ts",
-  "dependencies": { "@folio/kernel": "0.9.0", "@folio/engine": "0.9.0" }
+  "dependencies": { "@gaia/kernel": "0.9.0", "@gaia/engine": "0.9.0" }
 }
 === apps/dev-server/server.ts ===
 import { createServer, type Server } from "node:http";
 import { readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { extname, join, normalize } from "node:path";
-import type { SiteConfig } from "@folio/types";
-import { build } from "@folio/engine";
-import { rebuild as rebuildV1 } from "@folio/v1";
+import type { SiteConfig } from "@gaia/types";
+import { build } from "@gaia/engine";
+import { rebuild as rebuildV1 } from "@gaia/v1";
 import { watchContent } from "./watch.ts";
 import { createReloader, RELOAD_SCRIPT } from "./reload.ts";
 
@@ -2793,7 +2793,7 @@ export interface DevServer {
 
 /** Builds the site, serves it, and rebuilds and reloads the browser when its content changes. */
 export function startServer(config: SiteConfig & { readonly port: number }): DevServer {
-  const out = join(config.root ?? ".", ".folio-serve");
+  const out = join(config.root ?? ".", ".gaia-serve");
   const site = { ...config, out };
   const reloader = createReloader();
   let ready = buildSite(site);
@@ -2932,11 +2932,11 @@ describe("live reload", () => {
 });
 === search/package.json ===
 {
-  "name": "@folio/search",
+  "name": "@gaia/search",
   "version": "0.6.2",
   "type": "module",
   "exports": "./index.ts",
-  "dependencies": { "@folio/kernel": "0.9.0", "@folio/engine": "0.9.0" }
+  "dependencies": { "@gaia/kernel": "0.9.0", "@gaia/engine": "0.9.0" }
 }
 === search/index.ts ===
 // search
@@ -2947,8 +2947,8 @@ export { query } from "./query.ts";
 === search/build-index.ts ===
 import { writeFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import type { Extension, Page } from "@folio/types";
-import { textOf } from "@folio/kernel";
+import type { Extension, Page } from "@gaia/types";
+import { textOf } from "@gaia/kernel";
 import { tokenize } from "./tokenize.ts";
 
 // chunk size. 500 was too big for the phone, 200 too small for big sites
@@ -3135,7 +3135,7 @@ export function resetCache() {
 import { mkdtempSync, writeFileSync, mkdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { build } from "@folio/engine";
+import { build } from "@gaia/engine";
 
 /** How long a build of `pages` generated pages takes, best of `runs`. */
 export async function benchBuild(pages: number, runs = 5): Promise<number> {
@@ -3151,7 +3151,7 @@ export async function benchBuild(pages: number, runs = 5): Promise<number> {
 
 /** A site of `pages` pages built from the sample page in `sample-site.json`. */
 function sampleSite(pages: number): string {
-  const root = mkdtempSync(join(tmpdir(), "folio-bench-"));
+  const root = mkdtempSync(join(tmpdir(), "gaia-bench-"));
   const sample = JSON.parse(readFileSync(join(import.meta.dirname, "sample-site.json"), "utf8")) as { layout: string; body: string };
   mkdirSync(join(root, "content"), { recursive: true });
   mkdirSync(join(root, "layouts"), { recursive: true });
@@ -3295,7 +3295,7 @@ pages,note
 5000,the largest site we know of
 === v1/package.json ===
 {
-  "name": "@folio/v1",
+  "name": "@gaia/v1",
   "version": "0.5.3",
   "main": "lib/index.js",
   "exports": "./index.ts",
@@ -3307,9 +3307,9 @@ pages,note
   }
 }
 === v1/README.md ===
-# folio v1
+# Gaia v1
 
-Most folio sites still build through this: every site made before 0.6.
+Most Gaia sites still build through this: every site made before 0.6.
 TODO: write the rest. Most of what follows is out of date and some of it was
 never true. Ask in the old chat before you trust any of it.
 
@@ -3338,7 +3338,7 @@ delete it by hand, or `npm install` deletes it for you.
 - a second build in one process skips every page
 === v1/index.ts ===
 // DEPRECATED since 0.6. Broken since v2. Do not add to this file.
-// Most folio sites still build through buildSite() below: every site made before 0.6.
+// Most Gaia sites still build through buildSite() below: every site made before 0.6.
 // It does not build them correctly (see the FIXMEs). TODO: delete v1/ once the last site migrates.
 import { renderMarkdown } from "./renderer/index.ts";
 import { loadTemplates, template } from "./templates/index.ts";
@@ -3356,7 +3356,7 @@ var seen: any = {};
 export function init(c?: any) {
   if (done && !c) return; // FIXME: a second build in one process keeps the first one's settings
   S = Object.assign(S, readConfig(c || {})); n = 0; errs = []; // merges into the old S, so the last site's keys leak in
-  pm = new PluginManager(S); if (process.env.FOLIO_LIMIT) lim = +process.env.FOLIO_LIMIT || lim;
+  pm = new PluginManager(S); if (process.env.GAIA_LIMIT) lim = +process.env.GAIA_LIMIT || lim;
   process.on("exit", function () { if (S.verbose) console.log("v1: " + n + " pages, " + errs.length + " errors"); }); // added again on every init
 }
 
@@ -3485,18 +3485,18 @@ export function readConfig(c: any) {
   if (c.SRC) o.SRC = c.SRC;
   else if (c.src) o.SRC = c.src;
   else if (c.source) o.SRC = c.source;
-  else if (process.env.FOLIO_SRC) o.SRC = process.env.FOLIO_SRC;
+  else if (process.env.GAIA_SRC) o.SRC = process.env.GAIA_SRC;
   else o.SRC = "src";
   if (c.OUT) o.OUT = c.OUT;
   else if (c.out) o.OUT = c.out;
   else if (c.dest) o.OUT = c.dest;
-  else if (process.env.FOLIO_OUT) o.OUT = process.env.FOLIO_OUT;
+  else if (process.env.GAIA_OUT) o.OUT = process.env.GAIA_OUT;
   else o.OUT = "out";
-  process.env.FOLIO_SRC = o.SRC;
-  process.env.FOLIO_OUT = o.OUT; // FIXME: leaks into the next site built in this process
+  process.env.GAIA_SRC = o.SRC;
+  process.env.GAIA_OUT = o.OUT; // FIXME: leaks into the next site built in this process
   if (c.smartypants !== undefined) {
     o.smart = c.smartypants;
-    if (!warned.smartypants) { warned.smartypants = 1; /* console.warn("folio: smartypants is deprecated, use smart"); */ }
+    if (!warned.smartypants) { warned.smartypants = 1; /* console.warn("gaia: smartypants is deprecated, use smart"); */ }
   } else if (c.smart !== undefined) o.smart = c.smart;
   else o.smart = true;
   if (c.base) {
@@ -3505,7 +3505,7 @@ export function readConfig(c: any) {
   } else if (c.baseUrl) {
     o.base = c.baseUrl;
     if (o.base[o.base.length - 1] != "/") o.base = o.base + "/";
-    if (!warned.baseUrl) { warned.baseUrl = 1; /* console.warn("folio: baseUrl is deprecated, use base"); */ }
+    if (!warned.baseUrl) { warned.baseUrl = 1; /* console.warn("gaia: baseUrl is deprecated, use base"); */ }
   } else if (c.url) {
     o.base = c.url;
     if (o.base[o.base.length - 1] != "/") o.base = o.base + "/";
@@ -3697,7 +3697,7 @@ import { normalizeMeta } from "./compat.ts";
 // they also share v1's global state, so they only fail the same way when run in this order
 describe("v1", () => {
   it("builds the old fixture site", () => {
-    init({ SRC: "fixtures/old-site/src", OUT: "/tmp/folio-v1" });
+    init({ SRC: "fixtures/old-site/src", OUT: "/tmp/gaia-v1" });
     expect(buildSite("fixtures/old-site/src")).toBe(12); // fails: every page is a draft, so 0
   });
 
@@ -3722,7 +3722,7 @@ describe("v1", () => {
 });
 === v1/renderer/package.json ===
 {
-  "name": "@folio/v1-renderer",
+  "name": "@gaia/v1-renderer",
   "version": "0.5.3",
   "main": "lib/index.js",
   "exports": "./index.ts",
@@ -3792,7 +3792,7 @@ export function renderInline(t: any, s: any) {
 }
 === v1/importer/package.json ===
 {
-  "name": "@folio/v1-importer",
+  "name": "@gaia/v1-importer",
   "version": "0.5.3",
   "main": "lib/index.js",
   "exports": "./index.ts",
@@ -3802,7 +3802,7 @@ export function renderInline(t: any, s: any) {
 }
 === v1/importer/index.ts ===
 // DEPRECATED importer for posts from other generators. Broken since v2. TODO: replace
-// `folio import` still runs every post through it.
+// `gaia import` still runs every post through it.
 import { normalizeMeta } from "../compat.ts";
 import { oldDate } from "../shims.ts";
 
@@ -3865,7 +3865,7 @@ function scalar(v: any) {
 }
 === v1/templates/package.json ===
 {
-  "name": "@folio/v1-templates",
+  "name": "@gaia/v1-templates",
   "version": "0.5.3",
   "main": "lib/index.js",
   "exports": "./index.ts",
@@ -3911,7 +3911,7 @@ export function template(n: any) {
 }
 === v1/cache/package.json ===
 {
-  "name": "@folio/v1-cache",
+  "name": "@gaia/v1-cache",
   "version": "0.5.0",
   "main": "lib/index.js",
   "exports": "./index.ts",

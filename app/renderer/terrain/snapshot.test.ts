@@ -17,7 +17,7 @@ describe("Gaia's own world from the bundled snapshot", () => {
     expect(summary).toContain("judged by Jev");
   });
 
-  // The showcase, folio, opens from its snapshot wherever the page runs, with its old v1 as it is or fixed, so each must lay out on its kept answers alone.
+  // The showcase opens from its snapshot wherever the page runs, with its old v1 as it is or fixed, so each must lay out on its kept answers alone.
   it.each(["showcase", "showcase-fixed"] as const)("lays %s out on Jev's kept answers alone, with its trails and every file of its graph", { timeout: 60_000 }, async (of) => {
     const { world, summary } = await laySnapshot("a test", of);
     expect(world.trails.length).toBeGreaterThan(0);

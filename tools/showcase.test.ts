@@ -11,7 +11,7 @@ import graph from "../app/renderer/terrain/fixtures/showcase-graph.json";
 
 const repo = resolve(import.meta.dirname, "..");
 
-/** Folio's code as `pnpm showcase --code` writes it, with its old `v1/` as it is or fixed, by path. */
+/** The showcase's code as `pnpm showcase --code` writes it, with its old `v1/` as it is or fixed, by path. */
 function written(v1: "broken" | "fixed"): { dir: string; files: string[]; text: (path: string) => string } {
   const dir = mkdtempSync(join(tmpdir(), "gaia-showcase-"));
   execFileSync(resolve(repo, "node_modules/.bin/tsx"), ["tools/showcase.ts", "--code", dir, "--v1", v1], { cwd: repo, stdio: "pipe" });
@@ -33,7 +33,7 @@ describe("the showcase's code", () => {
   const fixed = written("fixed");
   afterAll(() => [broken, fixed].forEach((w) => rmSync(w.dir, { recursive: true, force: true })));
 
-  // Loading the TypeScript compiler and transpiling folio's files twice takes a few seconds while other work shares the machine.
+  // Loading the TypeScript compiler and transpiling the showcase's files twice takes a few seconds while other work shares the machine.
   it("is code the engine can read: every TypeScript file parses, with v1 as it is and fixed", { timeout: 30_000 }, () => {
     for (const { files, text } of [broken, fixed]) {
       const unreadable = files

@@ -1,7 +1,7 @@
 // The codebases a page with no engine carries, as the world reads them: the
 // facts derived from each one's judged graph, shared by the page and the
 // thread that lays a snapshot out. Gaia's own (`fixtures/gaia-graph.json`,
-// written by `pnpm graph-snapshot`), and the showcase's, folio
+// written by `pnpm graph-snapshot`), and the showcase's
 // (`fixtures/showcase-graph.json`, written by `pnpm showcase`), with its old
 // `v1/` as it is or fixed (`fixtures/showcase-fixed-graph.json`, written by
 // `pnpm showcase --v1 fixed`).

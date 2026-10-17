@@ -470,14 +470,14 @@ every look of its own (`fixtures/proving-judged.json`), both written by `pnpm pr
 and in ruin, a whole area in ruin, streams crossed on footbridges and
 stepping stones, cairns, ponds, a tiny area and deep nesting
 (`docs/proving-ground.md`). `?world=showcase` (and `GAIA_PROJECT=showcase`)
-shows the showcase, the world Gaia's film is walked through: folio, a
-made-up codebase written as real code (`fixtures/showcase-code.txt`), read
+shows the showcase, the world Gaia's film is walked through: a made-up
+codebase named gaia, written as real code (`fixtures/showcase-code.txt`), read
 by the engine and judged by Jev as any folder is, then carried like Gaia's
 own snapshot (`fixtures/showcase-graph.json`, `showcase-judged.json` and
 `showcase-jev.json`, written by `pnpm showcase --judge jev`), so it opens the
 same with or without an engine, and the journal reads its code from what the
 page carries (`docs/showcase.md`). `?world=showcase-fixed` is the same land
-with folio's old `v1/` rewritten well and judged again
+with the showcase's old `v1/` rewritten well and judged again
 (`showcase-code-v1-fixed.txt` and the `showcase-fixed-*` fixtures, written by
 `pnpm showcase --judge jev --v1 fixed`). `tourStops` (`app/renderer/terrain/tour.ts`)
 finds in any world where to stand to see each such feature. `standWorld` takes the
