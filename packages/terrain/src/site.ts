@@ -305,9 +305,11 @@ export interface BankSite extends BuildingSite {
  * other building's yard; and its pad within `even` meters of all the ground under the house, or, where no bank is
  * that even, within `blended`: the most its pad's blend can carry back to the land over PAD_BLEND meters while the
  * blend stays walkable (30 degrees). Its pad lies no higher than `above` over the water, so the wheel, sunk below
- * its floor, dips into the stream, and its wheel turns in a pit `pit` meters below the water.
+ * its floor, dips into the stream, and its wheel turns in a pit `pit` meters below the water. Its wheel's foot
+ * stands in water at least `foot` deep, or, where no bank offers that, in any water at all: a trickle a lattice
+ * sample or two wide runs that thin near its edge, and the pit deepens it under the wheel.
  */
-export const BANK_SITE = { gaps: [0.2, 0.3], margin: 2.5, even: 1, blended: (PAD_BLEND * Math.tan(Math.PI / 6)) / 1.5, above: 0.3, below: 0.1, pit: 0.45 } as const;
+export const BANK_SITE = { gaps: [0.2, 0.3], margin: 2.5, even: 1, blended: (PAD_BLEND * Math.tan(Math.PI / 6)) / 1.5, above: 0.3, below: 0.1, pit: 0.45, foot: 0.05 } as const;
 
 /** A spot on a stream's bank where a building whose feature needs running water could stand, and how far it lies from its lot plus how uneven its ground is. */
 export interface BankSpot {
@@ -319,11 +321,11 @@ export interface BankSpot {
  * Every spot on the banks of the streams through `region` (or, `along` its river, the river that rises there, its
  * whole reach) where a building whose feature (`beside`, its `wheel` turning) needs running water could stand: the house dry, its yard's
  * other sides as far from water as every yard keeps (`BANK_SITE.margin`), its pad within `limit` meters of the
- * ground under it and low enough over the water for the wheel to dip in, the wheel turning in the stream and the
- * stream running on past it, `taken` sites 12 m away, and its yard off every yard already `laid`.
+ * ground under it and low enough over the water for the wheel to dip in, the wheel's foot in water deeper than
+ * `foot` and the stream running on past it, `taken` sites 12 m away, and its yard off every yard already `laid`.
  */
-export function bankSpots(t: Terrain, plan: BuildingPlan, beside: Extent, wheel: Extent, region: number, options: { readonly along?: "region" | "river"; readonly limit?: number; readonly taken?: readonly BuildingSite[]; readonly within?: Circle | null; readonly laid?: readonly PadEdit[] } = {}): BankSpot[] {
-  const { along = "region", limit = BANK_SITE.even, taken = [], within = null, laid = [] } = options;
+export function bankSpots(t: Terrain, plan: BuildingPlan, beside: Extent, wheel: Extent, region: number, options: { readonly along?: "region" | "river"; readonly limit?: number; readonly foot?: number; readonly taken?: readonly BuildingSite[]; readonly within?: Circle | null; readonly laid?: readonly PadEdit[] } = {}): BankSpot[] {
+  const { along = "region", limit = BANK_SITE.even, foot = BANK_SITE.foot, taken = [], within = null, laid = [] } = options;
   const half = t.spec.size / 2 - 34;
   const yard = yardOf(plan, beside);
   // The wheel's side, its wall, where the wheel turns, and how far out what stands beside the house reaches.
@@ -368,8 +370,8 @@ export function bankSpots(t: Terrain, plan: BuildingPlan, beside: Extent, wheel:
           const site = (lx: number, lz: number): [number, number] => siteToWorld(at, lx, lz);
           // The wheel's foot, where its paddles dip, turns in the water, and the stream runs on past it; the pit it turns
           // in (below) carries the water under the rest of it.
-          const wet = (lx: number, lz: number): boolean => waterDepthAt(t, ...site(lx, lz)) > 0.05;
-          if (!wet(wheelX, wheelZ) || !wet(side * (reach + 0.6), wheelZ)) continue;
+          const wet = (lx: number, lz: number, deeper: number = BANK_SITE.foot): boolean => waterDepthAt(t, ...site(lx, lz)) > deeper;
+          if (!wet(wheelX, wheelZ, foot) || !wet(side * (reach + 0.6), wheelZ)) continue;
           // The house is dry; its yard keeps the margin every yard keeps from water, but on the wheel's side.
           const y = yardOf(plan, null);
           let dry = true;
@@ -415,15 +417,18 @@ export function bankSpots(t: Terrain, plan: BuildingPlan, beside: Extent, wheel:
 /**
  * Where a building whose feature (`beside`, its `wheel` turning) needs running water stands: the bank spot nearest its lot (`within`) on
  * a stream through `region` (`bankSpots`); failing that, anywhere along the river that rises in `region`; failing
- * both, the same on ground as uneven as its pad's blend can carry (`BANK_SITE.blended`). It never stands a wheel on
- * dry ground nor a house in the water: null when no stream offers such a spot.
+ * both, the same on ground as uneven as its pad's blend can carry (`BANK_SITE.blended`); failing all of these, the
+ * same with its wheel's foot in thinner water (`BANK_SITE.foot`). It never stands a wheel on dry ground nor a house
+ * in the water: null when no stream offers such a spot.
  */
 export function findBankSite(t: Terrain, plan: BuildingPlan, beside: Extent, wheel: Extent, region: number, taken: readonly BuildingSite[] = [], within: Circle | null = null, laid: readonly PadEdit[] = []): BankSite | null {
-  for (const limit of [BANK_SITE.even, BANK_SITE.blended]) {
-    for (const along of ["region", "river"] as const) {
-      let best: BankSpot | null = null;
-      for (const spot of bankSpots(t, plan, beside, wheel, region, { along, limit, taken, within, laid })) if (best === null || spot.score < best.score) best = spot;
-      if (best !== null) return best.site;
+  for (const foot of [BANK_SITE.foot, 0]) {
+    for (const limit of [BANK_SITE.even, BANK_SITE.blended]) {
+      for (const along of ["region", "river"] as const) {
+        let best: BankSpot | null = null;
+        for (const spot of bankSpots(t, plan, beside, wheel, region, { along, limit, foot, taken, within, laid })) if (best === null || spot.score < best.score) best = spot;
+        if (best !== null) return best.site;
+      }
     }
   }
   return null;

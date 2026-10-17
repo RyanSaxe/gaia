@@ -334,18 +334,27 @@ export function standWorld(t: Terrain, req: StandRequest): Stand {
   const sites: BuildingSite[] = [];
   const pads: PadEdit[] = [];
   const dry: string[] = [];
-  req.buildings.forEach((b, i) => {
+  // A building whose wheel needs running water stands on the bank of its own area's stream, so it is sited before
+  // the others, while the banks are free.
+  const onBank = (i: number): boolean => {
+    const b = req.buildings[i] as StandBuilding;
+    return b.wheel !== undefined && b.wheel !== null && b.beside !== null;
+  };
+  const all = [...req.buildings.keys()];
+  const taken: BuildingSite[] = [];
+  for (const i of [...all.filter(onBank), ...all.filter((i) => !onBank(i))]) {
+    const b = req.buildings[i] as StandBuilding;
     const lot = code.lots[i] ?? null;
-    let site: BuildingSite = findSite(t, b.plan, sites, 30, b.beside, lot, pads);
-    // A building whose wheel needs running water stands on the bank of its own area's stream.
-    if (b.wheel !== undefined && b.wheel !== null && b.beside !== null) {
-      const bank = findBankSite(t, b.plan, b.beside, b.wheel, regionAt(t.spec, lot?.x ?? site.x, lot?.z ?? site.z), sites, lot, pads);
+    let site: BuildingSite = findSite(t, b.plan, taken, 30, b.beside, lot, pads);
+    if (onBank(i)) {
+      const bank = findBankSite(t, b.plan, b.beside as Extent, b.wheel as Extent, regionAt(t.spec, lot?.x ?? site.x, lot?.z ?? site.z), taken, lot, pads);
       if (bank === null) dry.push(b.name);
       else site = bank;
     }
     pads.push(levelPad(t, b.plan, site, b.beside));
-    sites.push(site);
-  });
+    taken.push(site);
+    sites[i] = site;
+  }
   mark("sites");
   const { landmarks, network, ways } = settleCode(t, req, code, sites);
   mark("ways");

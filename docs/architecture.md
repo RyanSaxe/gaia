@@ -131,11 +131,13 @@ pick. A building's place has what its region's water holds: a water look
 says so (`holds`), and a brook or a trickle holds running water. Composing
 runs before the land is laid out, so the place is the region, not the lot.
 The land keeps that promise: every region given a brook or a trickle has its
-river (`routeRivers`), every region given a still pond keeps its pond, which
-a river passing by bends round, and a building whose feature needs running
-water is stood on that river's bank when the world is stood
-(`findBankSite`), never on dry ground; a building that finds no bank is
-named in the stand's `dry`, which the tests require to be empty.
+river (`routeRivers`), rising on ground no river laid before it claims;
+every region given a still pond keeps its pond, which a river passing by
+bends round; and a building whose feature needs running water is stood on
+that river's bank when the world is stood (`findBankSite`), before every
+other building so the banks are free, never on dry ground. A building that
+finds no bank is named in the stand's `dry`, which the tests require to be
+empty in Gaia's world, the showcase and the proving ground.
 A need may also be a range of a thing's rank by importance among the
 world's own entities, files and definitions (`{ rank: [min, max] }`), from 0
 for the least important to 1 for the most; `meets` in `@gaia/schema` is the

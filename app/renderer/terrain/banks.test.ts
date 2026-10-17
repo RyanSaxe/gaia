@@ -40,12 +40,12 @@ function standAsThePage(t: Terrain, code: OpenedWorld, buildings: StandBuilding[
   return { land, stood, landmarks };
 }
 
-describe("Gaia's world and the proving ground, stood as the page stands them", () => {
+describe("Gaia's world, the showcase and the proving ground, stood as the page stands them", () => {
   let worlds: { root: string; code: OpenedWorld; t: Terrain; buildings: StandBuilding[]; land: Terrain; stood: Stand; landmarks: StandLandmark[] }[] = [];
-  // Bakes and stands both worlds whole: about forty seconds alone, more when other work shares the machine.
+  // Bakes and stands all four worlds whole: about fifty seconds alone, more when other work shares the machine.
   beforeAll(async () => {
-    const { world, summary } = await laySnapshot("a test");
-    worlds = [{ root: "gaia", facts: snapshotFacts(), world, summary, judged: {} }, provingWorld()].map((doc) => {
+    const snapshots = await Promise.all((["gaia", "showcase", "showcase-fixed"] as const).map(async (of) => ({ root: of, facts: snapshotFacts(of), ...(await laySnapshot("a test", of)), judged: {} })));
+    worlds = [...snapshots, provingWorld()].map((doc) => {
       const code = openedWorld(doc as never);
       const t = bakeTerrain(code.spec, new Library([...RELIEF_PRIMITIVES, ...BIOME_PRIMITIVES]));
       const buildings = buildingsOf(code);
@@ -71,6 +71,28 @@ describe("Gaia's world and the proving ground, stood as the page stands them", (
         if (site !== null) taken.push(site);
       });
       expect(taken.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("give every area Jev gives running water a river that rises in its own land", () => {
+    for (const { root, code, t } of worlds) {
+      const rising = new Set(t.streams.map((s) => regionAt(t.spec, s.stations[0]!.x, s.stations[0]!.z)));
+      const watered = code.world.regions.filter((r) => r.water === "A brook" || r.water === "A trickle");
+      expect(watered.filter((r) => !rising.has(code.spec.regions.findIndex((s) => s.id === (r.area === "" ? code.world.name : r.area)))).map((r) => r.area), root).toEqual([]);
+    }
+  });
+
+  it("stand every house with a waterwheel on a stream's bank, its wheel turning in the water", () => {
+    for (const { root, buildings, land, stood } of worlds) {
+      expect(stood.dry, root).toEqual([]);
+      const wheels = buildings.filter((b) => b.wheel !== undefined && b.wheel !== null);
+      expect(wheels.length, root).toBeGreaterThan(0);
+      const offWater = buildings.flatMap((b, i) => {
+        if (b.wheel === undefined || b.wheel === null) return [];
+        const [x, z] = siteToWorld(stood.sites[i]!, (b.wheel.x0 + b.wheel.x1) / 2, (b.wheel.z0 + b.wheel.z1) / 2);
+        return waterDepthAt(land, x, z) > 0.05 ? [] : [b.name];
+      });
+      expect(offWater, root).toEqual([]);
     }
   });
 
