@@ -500,6 +500,12 @@ ground leave the air as it was. Walking from a thriving valley into a ruined
 one, the murk gathers over about 80 m, and as the code heals it thins in the
 same view, since it reads the same vitality field as the ground.
 
+The air thins with height. From 6 m above the land, past any eye's height,
+its haze and mist fall as 40 / (40 + meters above that): at 60 m they are
+about two fifths as thick, at 150 m a fifth, so a view from high over the
+land sees all of it, softened by distance (`airFromHeight`). At eye level
+nothing changes.
+
 ## Drifts
 
 A region's biome may set something drifting through its air (`drift@1`, the
