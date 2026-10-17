@@ -491,6 +491,15 @@ than at the edge (`mixAir`, `throughAir`). Every pass reads the same air:
 the view, the water's mirror, far forms and the journal's paintings, which
 take the air of the spot they are painted from.
 
+The air also answers the ground's vitality. Over failing ground it turns to
+murk: the ground's decline is averaged over a disc 130 m round the eye, the
+band airs blend over, and once it passes 0.3 the haze thickens up to 3.5
+times, low mist gathers and the tint greys toward a dull grey-brown that
+pulls the horizon and the fog (`murkyAir`, `MURK`). Thriving and tired
+ground leave the air as it was. Walking from a thriving valley into a ruined
+one, the murk gathers over about 80 m, and as the code heals it thins in the
+same view, since it reads the same vitality field as the ground.
+
 ## Drifts
 
 A region's biome may set something drifting through its air (`drift@1`, the

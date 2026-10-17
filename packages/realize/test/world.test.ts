@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { Library, rand, seedOf } from "@gaia/schema";
+import { type ChoiceField, Library, rand, seedOf } from "@gaia/schema";
 import { BIOME_PRIMITIVES, RELIEF_PRIMITIVES, WORLD_PRIMITIVES, air as airPrimitive } from "@gaia/primitives";
 import { biome, world } from "@gaia/kinds";
 import { assemble, planDetails, planStructure, readStructure, validate } from "@gaia/world";
-import { CLEAR_AIR, mixAir, realizeWorld } from "@gaia/realize";
+import { CLEAR_AIR, MURK, mixAir, murkyAir, realizeWorld } from "@gaia/realize";
 import { blueprintOf as identify } from "@gaia/schema";
 import { fakeJev, randomSlots } from "@gaia/world/testing";
 
@@ -89,5 +89,29 @@ describe("the air where regions meet", () => {
     const halfway = mixAir([CLEAR_AIR, MIST], [2, 2]);
     close([halfway.density, halfway.mist, halfway.tintAmount], [(CLEAR_AIR.density + MIST.density) / 2, MIST.mist / 2, MIST.tintAmount / 2]);
     close(halfway.tint, MIST.tint);
+  });
+});
+
+describe("the air over failing ground", () => {
+  type Erased = (p: unknown) => ReturnType<typeof airPrimitive.build>;
+  const airs = Object.keys((airPrimitive.params.air as ChoiceField).options).map((name) => (airPrimitive.build as unknown as Erased)({ air: name, distance: 1 }));
+
+  it("leaves thriving and tired ground's air as it was, and thickens and greys it as the ground fails, gradually", () => {
+    for (const air of airs) {
+      for (const decline of [0, 0.1, MURK.from]) expect(murkyAir(air, decline)).toEqual(air);
+      const failed = murkyAir(air, 1);
+      expect(failed.density).toBeCloseTo(air.density * MURK.thicken, 10);
+      expect(failed.mist).toBeGreaterThan(air.mist);
+      expect(failed.tintAmount).toBeGreaterThanOrEqual(MURK.pull);
+      failed.tint.forEach((v, i) => expect(v).toBeCloseTo(MURK.tint[i] as number, 6));
+      // No step anywhere: a hundredth more decline thickens the air by at most six percent.
+      let last = murkyAir(air, 0);
+      for (let d = 0.01; d <= 1.0001; d += 0.01) {
+        const next = murkyAir(air, d);
+        expect(next.density).toBeGreaterThanOrEqual(last.density);
+        expect((next.density - last.density) / air.density).toBeLessThan(0.06);
+        last = next;
+      }
+    }
   });
 });

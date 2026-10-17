@@ -10,7 +10,7 @@
 
 import * as THREE from "three";
 import { CHANNEL_MATH } from "@gaia/realize";
-import { GROUND_DECLINE, type Ownership, vitalityAt, vitalityOver } from "@gaia/terrain";
+import { GROUND_DECLINE, type Ownership, groundDecline, vitalityAt, vitalityOver } from "@gaia/terrain";
 import { hexToVec3 } from "@gaia/render";
 
 function fieldTexture(data: Uint8Array, n: number): THREE.DataTexture {
@@ -68,6 +68,33 @@ export function showGroundVitality(ground: ArrayLike<number>, area: ArrayLike<nu
 export function groundVitalityAt(x: number, z: number): { ground: number; area: number } {
   if (owned === null) return { ground: 1, area: 1 };
   return { ground: vitalityAt(owned, bytes, x, z, 2, 0), area: vitalityAt(owned, bytes, x, z, 2, 1) };
+}
+
+/** Samples a side of the square `declineAround` reads its disc from. */
+const AROUND = 13;
+
+/**
+ * How far the ground around (x, z) has declined, 0 thriving to 1 all it will: `groundDecline` of the ground's own
+ * vitality, averaged over a disc `radius` meters across that weighs it less toward the rim, so it changes gradually as
+ * the eye moves and as soon as vitality does.
+ */
+export function declineAround(x: number, z: number, radius: number): number {
+  if (owned === null) return 0;
+  let sum = 0;
+  let weight = 0;
+  const half = (AROUND - 1) / 2;
+  for (let j = 0; j < AROUND; j++) {
+    for (let i = 0; i < AROUND; i++) {
+      const u = (i - half) / half;
+      const w = (j - half) / half;
+      const r2 = u * u + w * w;
+      if (r2 >= 1) continue;
+      const k = (1 - r2) * (1 - r2);
+      sum += k * groundDecline(vitalityAt(owned, bytes, x + u * radius, z + w * radius, 2, 0));
+      weight += k;
+    }
+  }
+  return weight > 0 ? sum / weight : 0;
 }
 
 const g = GROUND_DECLINE;

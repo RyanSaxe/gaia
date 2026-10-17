@@ -155,6 +155,30 @@ export function mixAir(airs: readonly AtmosphereSpec[], weights: ArrayLike<numbe
   return { tint, tintAmount: pull / total, density: density / total, mist: mist / total, specks: specks / total };
 }
 
+/**
+ * What the air over failing ground turns toward. Murk gathers once the ground around has declined past `from`, so
+ * tired ground keeps its air and failing ground clouds it, and at full decline the haze is `thicken` times as dense,
+ * low mist gathers by `mist`, and the tint greys toward `tint`, pulling the horizon and fog by at least `pull`.
+ */
+export const MURK = { from: 0.3, tint: hex(0x7f7b6e), pull: 0.75, thicken: 3.5, mist: 0.3 } as const;
+
+/**
+ * The air over ground that has declined by `decline` (0 thriving, 1 all it will: `groundDecline` of the ground
+ * around the eye), thickening and greying as it fails. Thriving ground leaves the air exactly as it was.
+ */
+export function murkyAir(air: AtmosphereSpec, decline: number): AtmosphereSpec {
+  const t = Math.min(1, Math.max(0, (decline - MURK.from) / (1 - MURK.from)));
+  const d = t * t * (3 - 2 * t);
+  if (d === 0) return air;
+  return {
+    tint: mixLab(air.tint, MURK.tint, d),
+    tintAmount: air.tintAmount + (Math.max(air.tintAmount, MURK.pull) - air.tintAmount) * d,
+    density: air.density * (1 + (MURK.thicken - 1) * d),
+    mist: Math.min(1, air.mist + MURK.mist * d),
+    specks: air.specks,
+  };
+}
+
 /** The shared sky seen through `air`: its horizon pulled toward the air's tint, and the fog the air lays over distance. */
 export function throughAir(sky: SkyLook, air: AtmosphereSpec): Pick<WorldLook, "sky" | "fog"> {
   // The air sits in front of the sunset; at night its color fades into the dark.
