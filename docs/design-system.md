@@ -505,7 +505,10 @@ and once the sun has set the earth's blue shadow lies along that horizon
 under a pink band of the glow. Twilight fades as the sun sinks to about 11°
 below the horizon and is gone at midday. Each of its colors thins upward
 from the horizon starting level, and toward the sun too the sky below the
-horizon holds the horizon's color, so the horizon never shows a line.
+horizon holds the horizon's color, so the horizon never shows a line. Every
+color the sky lays by height reads a height eased in over the lowest 1.1° of
+sky (`horizonEase`), so none leaves the horizon at an angle: the step across
+the horizon stays under 0.4 levels in 255 at every bearing and hour.
 
 The local air is the air where the person's eyes are: each region's own, as
 its biome chose it (`air@1`), weighed by `regionWeights` across the same
@@ -1706,12 +1709,23 @@ A world's hour follows the person's own clock. Jev chooses how each world's
 light looks (the sun's path, its warmth, the brush, the moon and the stars)
 but never the hour. `daylight@1` lights eight keys: dawn 6:00, morning 8:30,
 midday 12:30, afternoon 15:30, golden hour 18:00, dusk 19:30, moonlit 22:00
-and deep night 2:00. Between keys, colors mix in OKLab and the sun and moon
-turn at a constant rate; a body below the horizon lends no direct light.
-The sun follows a real sun's path: it rises in the north-east, crosses the
-south and sets in the west, turning slowly near the horizon, so it never
-swings across the sky as it rises or sets. The moon rises in the north-east
-as the sun sets, across the sky from it.
+and deep night 2:00. Between keys, colors mix in OKLab, and the sun and moon
+move along a smooth curve through the keys' heights and bearings that never
+overshoots a key, so neither turns a corner or changes speed at a key. A
+body below the horizon lends no direct light.
+
+The sun follows a real sun's path. Each key's bearing is where a real sun
+stands at that key's height, on the path that climbs to the midday key's
+height and sinks to the deep night's. That path is the one seen from a
+latitude of 90° less half the day's span of heights, so how high the world's
+sun rides chooses it: a sun that rides high rises farther north and sets
+steeply, and a low one rises nearer the east and sets at a slant. The sun
+rises in the north-east, crosses the south-south-east at midday and sets
+between south-west and west. It sets slanting down the sky at a steady angle
+to the horizon: about 34° on the lowest path, 45° on a middling one and up to
+57° on the highest, as a real sun sets between latitudes of about 56° and
+36°. It rises at a gentler slant, 28° to 39°, that steepens as it climbs.
+The moon rises in the north-east as the sun sets, across the sky from it.
 
 Night follows four rules, all in the shared light chunk so plants, ground,
 grass and water agree:

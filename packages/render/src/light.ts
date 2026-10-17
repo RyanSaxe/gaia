@@ -359,7 +359,10 @@ float twilight() {
 // Below the horizon it holds the horizon's color. The dome draws clouds,
 // stars and the moon on top; distant land dissolves into exactly this.
 vec3 skyColor(vec3 dir) {
-  float e = max(dir.y, 0.0);
+  // The height above the horizon, eased in over the lowest sky so every color laid by it leaves the horizon level
+  // (heightAbove).
+  float low0 = clamp(dir.y, 0.0, ${f2(AIR.horizonEase)});
+  float e = dir.y >= ${f2(AIR.horizonEase)} ? dir.y : low0 * low0 * (${(2 * AIR.horizonEase).toFixed(2)} - low0) / ${(AIR.horizonEase * AIR.horizonEase).toFixed(4)};
   vec3 color = mix(uSkyHorizon, uSkyMid, smoothstep(0.0, 0.32, e));
   color = mix(color, uSkyZenith, smoothstep(0.28, 0.9, e));
   vec3 sun = normalize(uSunDirection);
