@@ -27,6 +27,32 @@ export const AIR = {
   thinScale: 40,
 } as const;
 
+/**
+ * How a low sun colors the sky, by the hour's glow, whole while the sun stands above the second height in `lasts` (a
+ * direction's height) and gone once it sinks below the first. Each color thins upward from the horizon to about a
+ * third by its `…Reach` (a direction's height), starting level so the horizon shows no line. Away from the sun the
+ * low sky cools by `cool`. Once the sun has set (between the depths in `setBy`) the earth's blue shadow lies along
+ * that horizon (`shadow`) under a band of the glow (`belt`, centered `beltAt` up and `beltWidth` wide). Toward the
+ * sun the low sky burns deeper by `ember`, gathered to the sun's bearing by `emberFocus`, and the haze round the sun
+ * widens into a glow (`aureole`, gathered by `aureoleFocus`).
+ */
+export const TWILIGHT = {
+  lasts: [-0.2, -0.02],
+  cool: 0.45,
+  coolReach: 0.33,
+  setBy: [-0.03, 0.04],
+  shadow: 0.45,
+  shadowReach: 0.06,
+  belt: 0.45,
+  beltAt: 0.1,
+  beltWidth: 0.07,
+  ember: 0.55,
+  emberFocus: 6,
+  emberReach: 0.14,
+  aureole: 0.28,
+  aureoleFocus: 32,
+} as const;
+
 /** What the sky function reads: the hour's light and the sky's three gradient colors. */
 export interface SkyInput {
   readonly light: Pick<LightSpec, "sunDirection" | "sunColor" | "horizonGlow" | "glow">;
@@ -44,6 +70,9 @@ const smoothstep = (lo: number, hi: number, x: number): number => {
   return t * t * (3 - 2 * t);
 };
 const mix = (a: Rgb, b: Rgb, t: number): Rgb => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+/** How strongly twilight colors the sky at this hour: the hour's glow, fading as the sun sinks below the horizon. */
+const twilightOf = (light: Pick<LightSpec, "glow" | "sunDirection">): number =>
+  light.glow * smoothstep(TWILIGHT.lasts[0], TWILIGHT.lasts[1], light.sunDirection[1] / Math.hypot(...light.sunDirection));
 const normalize2 = (x: number, y: number): [number, number] => {
   const len = Math.hypot(x, y);
   return [x / len, y / len];
@@ -51,8 +80,9 @@ const normalize2 = (x: number, y: number): [number, number] => {
 
 /**
  * The sky's color looking along `dir` (a unit vector): the gradient from
- * horizon to zenith, the hour's glow on the sun's side, the haze around the
- * sun, and the local air's low mist along the horizon when `look` carries it. Below the horizon it holds the horizon's color, so nothing seen
+ * horizon to zenith, the hour's glow on the sun's side, twilight's colors
+ * (`TWILIGHT`), the haze around the sun, and the local air's low mist along
+ * the horizon when `look` carries it. Below the horizon it holds the horizon's color, so nothing seen
  * there can meet the sky at a line. Clouds, stars and the moon are drawn on
  * top by the dome only.
  */
@@ -68,9 +98,21 @@ export function skyColorAt(look: SkyInput & { readonly fog?: AirInput["fog"] }, 
   const flatSun = normalize2(sun[0] + 1e-4, sun[2] + 1e-4);
   const toward = (flatDir[0] * flatSun[0] + flatDir[1] * flatSun[1]) * 0.5 + 0.5;
   color = mix(color, light.horizonGlow, Math.exp(-e * 5) * (0.35 + 0.65 * toward * toward) * light.glow * 0.75);
-  const sunDot = Math.max(dir[0] * sun[0] + dir[1] * sun[1] + dir[2] * sun[2], 0);
+  const twilight = twilightOf(light);
+  const away = (1 - toward) * (1 - toward);
+  const set = smoothstep(TWILIGHT.setBy[0], TWILIGHT.setBy[1], -sun[1]);
+  const cool = mix(sky.mid, sky.zenith, 0.5);
+  const low = (reach: number): number => Math.exp(-((e / reach) ** 2));
+  color = mix(color, cool, twilight * away * (TWILIGHT.cool * low(TWILIGHT.coolReach) + set * TWILIGHT.shadow * low(TWILIGHT.shadowReach)));
+  const belt = Math.exp(-(((e - TWILIGHT.beltAt) / TWILIGHT.beltWidth) ** 2)) * smoothstep(0, TWILIGHT.beltAt, e);
+  color = mix(color, light.horizonGlow, twilight * away * set * TWILIGHT.belt * belt);
+  const ember: Rgb = [light.horizonGlow[0] * light.sunColor[0], light.horizonGlow[1] * light.sunColor[1], light.horizonGlow[2] * light.sunColor[2]];
+  color = mix(color, ember, twilight * toward ** TWILIGHT.emberFocus * low(TWILIGHT.emberReach) * TWILIGHT.ember);
+  // Toward the sun too, below the horizon the sky holds the horizon's color.
+  const level = Math.hypot(dir[0], e, dir[2]);
+  const sunDot = Math.max((dir[0] * sun[0] + e * sun[1] + dir[2] * sun[2]) / level, 0);
   color = mix(color, light.sunColor, Math.pow(sunDot, 10) * 0.28 * sunUp);
-  const halo = Math.pow(sunDot, 180) * 0.18 * sunUp;
+  const halo = (Math.pow(sunDot, 180) * 0.18 + Math.pow(sunDot, TWILIGHT.aureoleFocus) * twilight * TWILIGHT.aureole) * sunUp;
   color = [color[0] + light.sunColor[0] * halo, color[1] + light.sunColor[1] * halo, color[2] + light.sunColor[2] * halo];
   if (look.fog === undefined) return color;
   return mix(color, look.fog.color, clamp01(look.fog.mist * AIR.mistGain) * (1 - smoothstep(AIR.mistRise[0], AIR.mistRise[1], e)) * AIR.mistSky);

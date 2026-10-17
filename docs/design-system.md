@@ -489,6 +489,15 @@ clouds thin out toward the horizon rather than stopping, and clouds standing
 on the horizon rise out of its haze. `skyColorAt` and `aerialAt` in
 `@gaia/realize` are the CPU references the tests check.
 
+At dawn and dusk twilight colors the sky, as strongly as the hour's glow
+(`TWILIGHT`). Toward the sun the low sky burns a deeper orange and the
+sun's haze widens into a glow. Away from it the low sky cools toward blue,
+and once the sun has set the earth's blue shadow lies along that horizon
+under a pink band of the glow. Twilight fades as the sun sinks to about 11°
+below the horizon and is gone at midday. Each of its colors thins upward
+from the horizon starting level, and toward the sun too the sky below the
+horizon holds the horizon's color, so the horizon never shows a line.
+
 The local air is the air where the person's eyes are: each region's own, as
 its biome chose it (`air@1`), weighed by `regionWeights` across the same
 130 m band the landforms blend over. Walking from a clear region into a
@@ -1676,6 +1685,12 @@ Cirrus suits only some worlds, and Jev chooses where; it is thin and high,
 fine streaks nine times longer than wide, faint, and kept to the upper sky. Mackerel dapples were
 removed.
 
+A low sun lights clouds from beneath and on the edges facing it, in its own
+light and the hour's glow deepened (`cloudGlow`): gold while it is up, rose
+once it has set, the clouds toward it most, while their bodies keep their
+shade. After sunset the earth's shadow climbs the sky: low clouds go grey
+first, and high ones hold the glow longest.
+
 ## Day and night
 
 A world's hour follows the person's own clock. Jev chooses how each world's
@@ -1707,6 +1722,7 @@ grass and water agree:
   centimeters with each stride and settles when the person stops.
 - **The night sky** deepens to blue, keeping a trace of the world's own sky
   color. The chosen moon, the chosen stars, and clouds silvered by the moon.
+  Stars come out as the night deepens, the brightest first.
   A river of stars is a band: a milky glow with a brighter core, split by a
   dark lane of dust. Its glow reaches lower than single stars, so a view
   across the land sees it rise from the horizon.
