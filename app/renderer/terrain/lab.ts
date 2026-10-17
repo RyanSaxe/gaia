@@ -11,7 +11,7 @@ import * as THREE from "three";
 import { type AtmosphereSpec, type Blueprint, type BuildingPlan, type GroundSpec, Library, type Palette, seedOf } from "@gaia/schema";
 import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, LANDMARK_PRIMITIVES, RELIEF_PRIMITIVES, ROCK_PRIMITIVES, WILDFLOWER_PRIMITIVES, WORLD_PRIMITIVES } from "@gaia/primitives";
 import { biome, landmark as landmarkKind, world as worldKind } from "@gaia/kinds";
-import { CLEAR_AIR, FLORA_PRESETS, type Realized, type RegionLook, type SkyLook, mergeParts, mixAir, realizeRegion, realizeSky, regionAir, throughAir } from "@gaia/realize";
+import { CLEAR_AIR, FLORA_PRESETS, type Realized, type RegionLook, type SkyLook, mergeParts, mixAir, murkyAir, realizeRegion, realizeSky, regionAir, throughAir } from "@gaia/realize";
 import {
   type FarCards,
   LANTERN,
@@ -59,7 +59,7 @@ import { type Baked, createBaker } from "./baker.ts";
 import { CLIP, createPageLand } from "./land.ts";
 import { createStanding } from "./standing.ts";
 import { type Stand, type StandRequest, type StandingLandmark, landmarkBase, ownerVitality, understoryVitality } from "./stand.ts";
-import { groundVitalityAt, setGroundOwnership, showGroundVitality } from "./vitality.ts";
+import { declineAround, groundVitalityAt, setGroundOwnership, showGroundVitality } from "./vitality.ts";
 import { type TourStop, tourStops } from "./tour.ts";
 import { type Change, pictureChange, tallyFrame } from "./measure.ts";
 import { type Copies, type DetailMode, FAR, type FarOf, GONE, type PassSize, TURN, createCopies, createFarForms } from "./woods.ts";
@@ -325,6 +325,8 @@ const LIFT_FRAMES = 4;
 const FAR_BAKE = { views: 24, ms: 6, walkingMs: 2 } as const;
 /** The air seen through from above (the `overview` hook): clear, and thinning with the world's size so the whole of it stays legible. */
 const overviewAir = (size: number): AtmosphereSpec => ({ ...CLEAR_AIR, density: 0.0008 * Math.min(1, 320 / size) });
+/** How far round the eye failing ground murks the air, meters: the band regions' airs blend over, so murk gathers as gradually as a region's air. */
+const MURK_REACH = TERRAIN.blend;
 /** Seeded builds per flora preset: a tree copies one of its form's. */
 const TREE_BUILDS = 3;
 /** Each flora preset's seeded builds, preset by preset, as the woods copy them. */
@@ -586,21 +588,27 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     // How windy the world is: every sway answers the one wind field this many times as hard.
     light.uWind.value = look.wind.strength;
     skyLook = look;
-    breathe(camera.position.x, camera.position.z);
+    breathe(camera.position);
   }
   /** Each region's air as Jev chose it, for the world it was realized for, and room for each region's weight. */
   let airs: { readonly world: WorldSpec; readonly airs: readonly AtmosphereSpec[]; readonly weights: Float64Array } | null = null;
+  /** The air last laid, with the decline around the eye it was laid for. */
+  let breathed: { readonly decline: number; readonly air: AtmosphereSpec } | null = null;
   /**
-   * Lays the air where the eye stands, at `x`, `z`, in front of the hour's sky: each region's air blended by how near
+   * Lays the air where the eye stands, at `eye`, in front of the hour's sky: each region's air blended by how near
    * it lies, over the band where landforms and covers blend (`regionWeights`), so it changes gradually as the person
-   * crosses from one region into the next. Every pass reads it: the view, the water's mirror and far forms. A view from
+   * crosses from one region into the next. Over failing ground it thickens and greys with the ground's decline around
+   * the eye (`declineAround`, `murkyAir`). Every pass reads it: the view, the water's mirror and far forms. A view from
    * above looks through thin, clear air instead, so the whole land stays legible.
    */
-  function breathe(x: number, z: number): void {
+  function breathe(eye: { readonly x: number; readonly y: number; readonly z: number }): void {
     if (skyLook === null) return;
     if (airs?.world !== world) airs = { world, airs: world.regions.map((r) => regionAir({ blueprint: r.biome, kind: biome }, lib, seedOf(r.id))), weights: new Float64Array(world.regions.length) };
-    regionWeights(world, x, z, airs.weights);
-    sky.apply({ light: skyLook.light, ...throughAir(skyLook, aerial !== null ? overviewAir(world.size) : mixAir(airs.airs, airs.weights)) });
+    regionWeights(world, eye.x, eye.z, airs.weights);
+    const decline = declineAround(eye.x, eye.z, MURK_REACH);
+    const local = aerial !== null ? overviewAir(world.size) : murkyAir(mixAir(airs.airs, airs.weights), decline);
+    breathed = { decline, air: local };
+    sky.apply({ light: skyLook.light, ...throughAir(skyLook, local) });
   }
   const shadow = createSunShadow(light, 2048);
 
@@ -1873,7 +1881,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       lantern.follow(lanternEye, forward, lanternGround, 0, dt);
       shadow.frame(shadowCenter.set(0, 0, 0), world.size * 0.62);
     }
-    breathe(camera.position.x, camera.position.z);
+    breathe(camera.position);
     // Every pass thins distant detail from where the person's eyes are.
     light.uEye.value.copy(aerial === null ? detailEye : camera.position);
     if (aerial === null) drifts.follow(driftsHere(light.uEye.value.x, light.uEye.value.z), crownsNear, viewFocal());
@@ -2245,7 +2253,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     captureCamera.position.copy(from);
     captureCamera.lookAt(toward);
     light.uEye.value.copy(captureCamera.position);
-    breathe(from.x, from.z);
+    breathe(from);
     ground.follow(from.x, from.z);
     grass.follow(captureCamera.position);
     shadowCenter.set(shade.x, shade.y, shade.z);
@@ -2801,6 +2809,8 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       },
       /** The ground's own vitality and its area's at (x, z), or underfoot, as the grass, the ground and the water read them. */
       groundVitality: (x?: number, z?: number) => groundVitalityAt(x ?? walker.x, z ?? walker.z),
+      /** The air last laid where the eye is: the ground's decline around it, and the air itself. */
+      air: () => breathed,
       understory: () => understory.stats(),
       /** A hash of the baked land (heights, water levels and shore distances), to prove a change to the bake leaves it byte for byte. */
       bakeHash: () => contentHash(terrain.lattice.heights, terrain.waterLevel, terrain.shore),
