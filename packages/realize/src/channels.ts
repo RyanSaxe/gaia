@@ -44,7 +44,7 @@ export const CHANNEL_MATH = {
    * where that was follows what it shows (`followVitality` in @gaia/render),
    * so a change starts and stops gently.
    */
-  vitalityLag: 5,
+  vitalityLag: 3,
 } as const;
 
 /**
