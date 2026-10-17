@@ -537,8 +537,8 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
     standingAsking: () => ({ ...world.standing.asking(), workers: world.land.workers() }),
     /** The walk's own state: the keys it holds, whether a tap's walk is under way, and why the last trip ended. */
     walkState: () => ({ keys: [...world.keys], goal: world.goal !== null, trip: world.trip !== null, lastEnd: world.tripEnd }),
-    /** The trip under way, or null: how far along it and how long, its pace, and whether its view follows the way. */
-    trip: () => (world.trip === null ? null : { s: +world.trip.at.s.toFixed(1), length: Math.round(world.trip.plan.length), v: +world.trip.at.v.toFixed(2), going: world.trip.at.going, follows: world.trip.at.follows, stopping: world.trip.stopping, unready: world.trip.marks.filter((m) => !m.ready).length, asked: world.trip.marks.filter((m) => m.asked).length, yaw: +world.trip.at.yaw.toFixed(2) }),
+    /** The trip under way, or null: how far along it and how long, its pace, whether its view follows the way, and how many times its own pace it goes under paper. */
+    trip: () => (world.trip === null ? null : { s: +world.trip.at.s.toFixed(1), length: Math.round(world.trip.plan.length), v: +world.trip.at.v.toFixed(2), going: world.trip.at.going, follows: world.trip.at.follows, stopping: world.trip.stopping, hurry: world.trip.hurry === null ? null : +world.trip.hurry.toFixed(2), unready: world.trip.marks.filter((m) => !m.ready).length, asked: world.trip.marks.filter((m) => m.asked).length, yaw: +world.trip.at.yaw.toFixed(2) }),
     /**
      * A trip from (x0, z0) to the landing nearest (x1, z1), planned and
      * taken at 60 frames a second without moving anyone: its length, how

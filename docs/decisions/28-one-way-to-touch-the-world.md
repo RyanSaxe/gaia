@@ -26,3 +26,5 @@ Pair session `gaia-v3` (`f8d282bc-7712-4894-9255-dcf4699f92cb`), round 11's
 review, built in round 12.
 
 Replaced in part: a tap on a thing opens the journal at its page, and nothing turns the view but the person (`docs/design-system.md`, "One way to touch the world"). The legacy sweep removes the slip's way back to the lab's debugging views.
+
+Replaced in part by round 18 of World polish ("Crossing the world by the map"): a trip sent from the journal's map goes on with the book open on that map, its traveller walking the way pencilled there, and the book shuts on the new view as they arrive, where round 23's travel thread shut it as they set off (`docs/design-system.md`, "One way to touch the world").

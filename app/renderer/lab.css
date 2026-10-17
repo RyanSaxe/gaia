@@ -250,6 +250,8 @@ button { font: inherit; color: var(--ink); background: var(--panel); border: 1px
 .reading { position: absolute; inset: 0; background: rgba(40, 30, 16, 0); transition: background 0.3s ease; }
 .wayfinding:has(.way-slip.open) .reading { pointer-events: auto; background: rgba(40, 30, 16, 0.07); }
 .wayfinding:has(.field-map.open) .reading { pointer-events: auto; background: rgba(40, 30, 16, 0.26); }
+/* While a trip goes under the open journal, the world running past at the book's sides waits under a deeper wash. */
+.wayfinding.travelling:has(.journal.open) .reading { background: rgba(40, 30, 16, 0.5); transition-duration: 0.6s; }
 
 /* A jump from the map: the view clouds over in the map's own paper, creased where it folds, while the map folds
    away over it; the person is placed under it and the world dissolves back in, slower than it clouded. After dark

@@ -9,15 +9,14 @@
 // made, the book riffles toward it through pages of the code it passes
 // (`passing`).
 
+import { type Travel, type Trip, wayLeft } from "@gaia/terrain";
 import { type Journal, type JournalEntry, type PageRoom, entityOf } from "@gaia/world";
 import type { BookPages, Spread } from "./book.ts";
 import { type CaptionFact, conceptsCaption } from "./caption.ts";
 import { tapsOf } from "./maps.ts";
-import { type InFull, fullItems, pagePx, renderCross, renderFullPage, renderNameLine, renderPage, renderPassingPage, renderPicture, renderTitle, renderTraveller } from "./page.ts";
+import { type InFull, fullItems, pagePx, placeCross, placeTraveller, renderCross, renderFullPage, renderNameLine, renderPage, renderPassingPage, renderPicture, renderTitle, renderTraveller, renderWay } from "./page.ts";
 import { type Full, type PageWords, type WordsSource, appendixWords, contentsWords, fileOfEntry, leadFiles, wordsOf } from "./words.ts";
 
-/** A page's size, its own pixels. */
-const PAGE_SIZE = { w: 520, h: 660 } as const;
 /** How many of the things after an open page, and before it, are painted ahead of the reader. */
 const AHEAD = 5;
 const BEHIND = 5;
@@ -47,12 +46,23 @@ export interface JournalPagesSource {
   mapped(): Promise<void>;
   /** Where the person stands and which way they look (radians, 0 looking toward -z), for the maps' traveller. */
   person(): { readonly x: number; readonly z: number; readonly yaw: number };
+  /** The trip under way, when it began (ms on the page's clock), or null: the maps pencil its way ahead. */
+  trip(): { readonly plan: Trip; readonly at: Travel; readonly began: number } | null;
   /** Takes the person to the spot in the world a map was tapped at. */
   travelTo(x: number, z: number): void;
   /** Takes the person to a thing, where its painting was seen from: a page's picture tapped. */
   travel(of: string): void;
   /** Settles once a file's text has come, for a definition's page or a file's. */
   text(path: string): Promise<void>;
+}
+
+/** The journal's pages, and what moves on its maps as the person goes. */
+export interface JournalPages extends BookPages {
+  /**
+   * Moves each map page's traveller to where the person stands, and pencils the way ahead of a trip under way from
+   * the traveller to where it ends: every frame while the book is open.
+   */
+  follow(): void;
 }
 
 /** Whether an entry is a container, whose first spread faces its map: a folder, or a file with definitions. */
@@ -169,7 +179,7 @@ function layOut(words: PageWords, body: Full, host: HTMLElement): Slice[] {
   return pages;
 }
 
-export function journalPages(src: JournalPagesSource): BookPages {
+export function journalPages(src: JournalPagesSource): JournalPages {
   let indexed: { words: WordsSource | null; places: readonly string[]; order: Map<string, number>; contents: number } | null = null;
   const index = (): NonNullable<typeof indexed> => {
     const words = src.words();
@@ -236,14 +246,19 @@ export function journalPages(src: JournalPagesSource): BookPages {
   const fullOf = (of: string): InFull => ({ turn: () => src.turnTo(inFull(of, 0)), folio: `${(src.words()?.journal.entry(of)?.page ?? 0).toLocaleString("en-US")}${lettered(0)}` });
   const roman = (n: number): string => ["", "i", "ii", "iii", "iv", "v", "vi", "vii", "viii", "ix", "x"][n] ?? String(n);
   const blank = (f = ""): HTMLElement => renderPicture(null, f);
+  /** Each map page drawn, and how to move what is on it; one not on the open spread for `AWAY` frames is let go. */
+  const live = new Set<{ readonly page: HTMLElement; readonly follow: () => void; away: number }>();
+  const AWAY = 120;
   /**
    * A map's page: the traveller stands where the person is, as on the field
-   * map, when they are on this page. A tap on a folder's or a file's name
-   * turns to its page. A tap on the land marks the spot with a pencil cross,
-   * and a second tap on the cross takes the person there; a tap elsewhere
-   * moves it, so a near miss of a name never sends anyone away. On a
-   * computer, a name under the pointer is underlined in pencil, and the
-   * pointer is a hand over a name or the cross and a crosshair over the land.
+   * map, when they are on this page, and goes with them. A tap on a folder's
+   * or a file's name turns to its page. A tap on the land marks the spot with
+   * a pencil cross, and a second tap on the cross takes the person there; a
+   * tap elsewhere moves it, so a near miss of a name never sends anyone away.
+   * While a trip goes, its way ahead is pencilled from the traveller to a
+   * cross where it ends. On a computer, a name under the pointer is
+   * underlined in pencil, and the pointer is a hand over a name or the cross
+   * and a crosshair over the land.
    */
   const mapPage = (map: HTMLElement | null, f: string, caption: readonly CaptionFact[] = []): HTMLElement => {
     let cross: { readonly px: number; readonly py: number; readonly el: HTMLElement } | null = null;
@@ -258,6 +273,9 @@ export function journalPages(src: JournalPagesSource): BookPages {
         if (name !== null) return src.turnTo(name);
         if (cross !== null && onCross(px, py)) {
           const at = taps.at(cross.px, cross.py);
+          // The trip's own cross, where it ends, takes this one's place.
+          cross.el.remove();
+          cross = null;
           return src.travelTo(at.x, at.z);
         }
         cross?.el.remove();
@@ -284,9 +302,59 @@ export function journalPages(src: JournalPagesSource): BookPages {
       };
     }
     const taps = tapsOf(map);
-    const me = src.person();
-    const here = taps?.page(me.x, me.z);
-    if (here !== undefined && here.px > 0 && here.px < PAGE_SIZE.w && here.py > 0 && here.py < PAGE_SIZE.h) page.append(renderTraveller(here.px, here.py, me.yaw));
+    if (taps !== null) {
+      const me = src.person();
+      const at = taps.page(me.x, me.z);
+      const traveller = renderTraveller(at.px, at.py, me.yaw);
+      const { way, cross: end } = renderWay();
+      const line = way.firstElementChild as SVGPathElement;
+      end.hidden = true;
+      page.append(way, end, traveller);
+      /** The trip whose way is pencilled here, and the line's path as last set. */
+      let drawn: { readonly plan: Trip; d: string } | null = null;
+      const follow = (): void => {
+        const me = src.person();
+        const at = taps.page(me.x, me.z);
+        placeTraveller(traveller, at.px, at.py, me.yaw);
+        const trip = src.trip();
+        if (trip === null) {
+          // Over: the line and its cross fade.
+          if (drawn !== null) for (const e of [way, end]) e.classList.add("over");
+          drawn = null;
+          return;
+        }
+        if (trip.plan !== drawn?.plan) {
+          drawn = { plan: trip.plan, d: "" };
+          const n = trip.plan.points.length / 2;
+          const last = taps.page(trip.plan.points[(n - 1) * 2] as number, trip.plan.points[(n - 1) * 2 + 1] as number);
+          placeCross(end, last.px, last.py);
+          end.hidden = false;
+          for (const e of [way, end]) e.classList.remove("on", "over");
+        }
+        // Pencilled in from the traveller as the trip sets off; on a page drawn later in the trip, as far as it would be by then.
+        if (!way.classList.contains("on") && page.isConnected) {
+          void way.getBoundingClientRect();
+          way.style.setProperty("--pencil-delay", `${(trip.began - performance.now()).toFixed(0)}ms`);
+          way.classList.add("on");
+        }
+        // A point every page pixel and a half or so is all the line needs.
+        let d = "";
+        let prior = { px: Number.NaN, py: Number.NaN };
+        const left = wayLeft(trip.plan, trip.at.s);
+        left.forEach((p, i) => {
+          const q = taps.page(p.x, p.z);
+          if (i > 0 && i < left.length - 1 && Math.hypot(q.px - prior.px, q.py - prior.py) < 1.5) return;
+          d += `${i === 0 ? "M" : "L"}${q.px.toFixed(1)} ${q.py.toFixed(1)}`;
+          prior = q;
+        });
+        if (d !== drawn.d) {
+          drawn.d = d;
+          line.setAttribute("d", d);
+        }
+      };
+      follow();
+      live.add({ page, follow, away: 0 });
+    }
     return page;
   };
 
@@ -330,6 +398,16 @@ export function journalPages(src: JournalPagesSource): BookPages {
   const draw = (name: string): number => ([...name].reduce((h, c) => Math.imul(h ^ c.charCodeAt(0), 16777619), 2166136261) >>> 0) / 4294967296;
 
   return {
+    follow() {
+      for (const map of live) {
+        if (!map.page.isConnected) {
+          if (++map.away > AWAY) live.delete(map);
+          continue;
+        }
+        map.away = 0;
+        map.follow();
+      }
+    },
     passing(from, toward) {
       const words = src.words();
       if (words === null) return () => null;

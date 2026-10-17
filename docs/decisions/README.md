@@ -29,7 +29,7 @@ One file per decision the reviewer settled in the pair sessions that designed Ga
 - [Entities throughout, each with its own vitality](25-entities-throughout.md) (partly superseded by 64)
 - [Buildings and landmarks are as flexible as trees](26-structures-as-flexible-as-trees.md)
 - [Code becomes a graph, and the graph becomes land](27-code-graph-world.md) (partly replaced by 61)
-- [One way to touch the world](28-one-way-to-touch-the-world.md) (partly replaced by the journal and the legacy sweep)
+- [One way to touch the world](28-one-way-to-touch-the-world.md) (partly replaced by the journal, the legacy sweep and travel on the journal's map)
 - [Ruin obeys gravity](29-ruin-obeys-gravity.md)
 - [Every trail Jev wants is walked, on one network of paths](30-a-network-of-paths.md)
 - [What Jev reads, and how its context grows](31-what-jev-reads.md) (replaced by 53, 56, 58 and 60)

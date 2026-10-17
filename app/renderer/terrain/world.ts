@@ -35,7 +35,7 @@ import {
   followVitality,
   type SceneLight,
 } from "@gaia/render";
-import { type Capsule, clearanceAt, groundDecline, regionAt as dominantRegion, frameOf, TILE, LAND_ASPECT, type Deck, decksOf, deckShape, EYE_HEIGHT, footingAt, GAIT, groundHeightAt, heightAt, type Intent, NO_SOLIDS, NO_TRAILS, openingSpot, TRAILS, outlineShape, returnTo, type StoodSpot, withinLand, piecesShapes, type Place, placeAt, planWalk, regionWeights, siteToWorld, type Solids, type SolidShape, solidsOf, standAt, steerAlong, type Steered, type Steering, steering, steerPress, steerRelease, steerStep, stride, type Stride, acrossWay, carry, planTrip, TRAVEL, type Travel, wadingAt, fordBeside, travelFrom, travelPoint, travelStep, type Trip, trailWay, type Walker, type WalkKey, type Terrain, TERRAIN, type TrailNetwork, type Walk, WALK_TO, wallsShape, waterDepthAt, type Way, wayAhead, WILDS, type WorldPlaces, type WorldSpec } from "@gaia/terrain";
+import { type Capsule, clearanceAt, groundDecline, regionAt as dominantRegion, frameOf, TILE, LAND_ASPECT, type Deck, decksOf, deckShape, EYE_HEIGHT, footingAt, GAIT, groundHeightAt, heightAt, type Intent, NO_SOLIDS, NO_TRAILS, openingSpot, TRAILS, outlineShape, returnTo, type StoodSpot, withinLand, piecesShapes, type Place, placeAt, planWalk, regionWeights, siteToWorld, type Solids, type SolidShape, solidsOf, standAt, steerAlong, type Steered, type Steering, steering, steerPress, steerRelease, steerStep, stride, type Stride, acrossWay, carry, planTrip, TRAVEL, type Travel, hurryFor, wadingAt, fordBeside, travelFrom, travelPoint, travelStep, type Trip, trailWay, type Walker, type WalkKey, type Terrain, TERRAIN, type TrailNetwork, type Walk, WALK_TO, wallsShape, waterDepthAt, type Way, wayAhead, WILDS, type WorldPlaces, type WorldSpec } from "@gaia/terrain";
 import { type Sky, createSky } from "../world/environment.ts";
 import { type CaptureBounds, type Pixels, createCapture } from "./capture.ts";
 import { onTap, tapSlop } from "../tap.ts";
@@ -215,6 +215,8 @@ export interface WorldHandle {
   landing(x: number, z: number, heart?: { readonly x: number; readonly z: number }): Landing | null;
   /** Puts the person at a landing at once: only under cover of a transition, so nothing is seen to jump. Resolves once the land around them is in. */
   place(at: Landing): Promise<void>;
+  /** Resolves once the land and everything that stands within sight of (x, z) are in, as a jump waits for them. */
+  around(x: number, z: number): Promise<void>;
   /**
    * Sends the person along the trails or straight across the land to a
    * landing, the world streaming in around them as they go, until they arrive
@@ -222,6 +224,16 @@ export interface WorldHandle {
    * when neither takes them there, and nothing moves.
    */
   travel(at: Landing, face: boolean): boolean;
+  /** The trip under way, or null once it has arrived (its `at.done`) or been taken over. */
+  trip(): Readonly<TripUnderWay> | null;
+  /**
+   * Whether the world is hidden under paper, so the trip under way may hurry:
+   * on, it goes as many times its own pace as arrives within
+   * `TRAVEL.underBook` seconds from then (`hurryFor`), along the same way,
+   * waiting on nothing the person would see; off, it goes on at its own pace
+   * and steering from where it is.
+   */
+  hurry(on: boolean): void;
   /**
    * The world's own view of a thing, for its painting in the journal, `w` by
    * `h` pixels: its building, landmark or tree, or the plant or stone a
@@ -316,6 +328,8 @@ export interface TripUnderWay {
   stopping: boolean;
   readonly marks: { readonly s: number; asked: boolean; ready: boolean }[];
   readonly began: number;
+  /** How many times its own pace the trip goes while the world is hidden (`hurryFor`), or null while it is seen. */
+  hurry: number | null;
   setOff: number | null;
   waited: number;
 }
@@ -1830,7 +1844,7 @@ export function createWorld(root: HTMLElement): World {
     const plan = planTrip(fordBeside(terrain, way, broken), off, face ? at.yaw : null, travelPace, (x, z) => wadingAt(terrain, decks, x, z));
     const marks = Array.from({ length: Math.floor(plan.length / TRAVEL_MARK) + 1 }, (_, i) => ({ s: Math.min(plan.length, i * TRAVEL_MARK), asked: false, ready: false }));
     marks.push({ s: plan.length, asked: false, ready: false });
-    trip = { plan, at: travelFrom(plan, walker.yaw), stopping: false, marks, began: performance.now(), setOff: null, waited: 0 };
+    trip = { plan, at: travelFrom(plan, walker.yaw), stopping: false, marks, began: performance.now(), hurry: null, setOff: null, waited: 0 };
     steer = steerAlong(steer);
     walkAgain();
     return true;
@@ -1870,12 +1884,14 @@ export function createWorld(root: HTMLElement): World {
       // A trip carries the body along its way and turns the view with the way ahead, until the keys take over:
       // then it slows them at its steady rate, the view theirs, and hands them to the walk at walking pace.
       if ([...keys].some((k) => WALK_KEYS.has(k))) trip.stopping = true;
-      // The body goes no farther along than the world stands ready: what can be seen from there is standing.
-      const ready = readyAlong(trip);
+      // The body goes no farther along than the world stands ready: what can be seen from there is standing. Hurried
+      // under paper, it waits on none of it, and what it passes is never asked for.
+      if (trip.hurry !== null) for (const m of trip.marks) if (m.s < trip.at.s) m.asked = m.ready = true;
+      const ready = trip.hurry !== null ? Infinity : readyAlong(trip);
       if (ready < trip.plan.length && trip.at.going && trip.at.v < 1 && trip.at.s >= ready - 1) trip.waited += dt;
       // Where the way ahead is not ready the trip slows to walking pace, never to a stand: a person sent somewhere gets
       // there, and at that pace what stands comes in as it does for a walk.
-      trip.at = travelStep(trip.plan, trip.at, dt, walker.yaw, trip.stopping, ready, WALK_TO.pace);
+      trip.at = travelStep(trip.plan, trip.at, dt * (trip.hurry ?? 1), walker.yaw, trip.stopping, ready, WALK_TO.pace);
       if (trip.setOff === null && trip.at.s > 0) trip.setOff = performance.now();
       walker.yaw = trip.at.yaw;
       body = carry(terrain, decks, body, trip.at.x, trip.at.z, dt);
@@ -2473,9 +2489,24 @@ export function createWorld(root: HTMLElement): World {
     landing: (x, z, heart) => landingNear(x, z, heart),
     place: (at) => {
       walkTo(at.x, at.z, at.yaw);
-      return Promise.all([land.around(at.x, at.z), standing.ready(at.x, at.z)]).then(() => undefined);
+      return handle.around(at.x, at.z);
     },
+    around: (x, z) => Promise.all([land.around(x, z), standing.ready(x, z)]).then(() => undefined),
     travel: (at, face) => travelTo(at, face),
+    trip: () => trip,
+    hurry: (on) => {
+      if (trip === null || on === (trip.hurry !== null)) return;
+      trip.hurry = on ? hurryFor(trip.plan, trip.at) : null;
+      // Where it is going is asked for at once, so the land there is in, or nearly, as the trip arrives.
+      const end = trip.marks[trip.marks.length - 1];
+      if (on && end !== undefined && !end.asked) {
+        end.asked = true;
+        const at = travelPoint(trip.plan, end.s);
+        void standing.fetch(at.x, at.z).then(() => {
+          end.ready = true;
+        });
+      }
+    },
     view: (id, w, h, wide) => viewOf(id, w, h, wide),
     look: lookOf,
     seenFrom: (id) => seenFromOf(id),
