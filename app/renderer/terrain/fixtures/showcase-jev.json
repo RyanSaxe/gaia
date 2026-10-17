@@ -267,37 +267,6 @@
    "model": "typesafe/jev-1.13-20260917",
    "ms": 460
   },
-  "00ecb8e2b08342": {
-   "answers": {
-    "character": {
-     "choice": "Groves and clearings",
-     "confidence": 0.21,
-     "probabilities": {
-      "Deep wood": 0,
-      "Groves and clearings": 0.37,
-      "Old meadow": 0.3,
-      "Rocky heath": 0.31,
-      "Wet hollow": 0.02
-     },
-     "type": "choice"
-    },
-    "water": {
-     "choice": "A trickle",
-     "confidence": 0.79,
-     "probabilities": {
-      "A brook": 0.02,
-      "A still pond": 0.02,
-      "A trickle": 0.84,
-      "No water": 0.12
-     },
-     "type": "choice"
-    }
-   },
-   "costUsd": 0.000043344,
-   "inputTokens": 1032,
-   "model": "typesafe/jev-1.13-20260917",
-   "ms": 399
-  },
   "0118f84cfe8c83": {
    "answers": {
     "route.crossing": {
@@ -655,6 +624,25 @@
    "inputTokens": 698,
    "model": "typesafe/jev-1.13-20260917",
    "ms": 529
+  },
+  "01a16fdb9d5928": {
+   "answers": {
+    "water": {
+     "choice": "A brook",
+     "confidence": 0.23,
+     "probabilities": {
+      "A brook": 0.42,
+      "A still pond": 0.09,
+      "A trickle": 0.2,
+      "No water": 0.29
+     },
+     "type": "choice"
+    }
+   },
+   "costUsd": 0.000035742,
+   "inputTokens": 851,
+   "model": "typesafe/jev-1.13-20260917",
+   "ms": 234
   },
   "01a358d1801a4a": {
    "answers": {
@@ -1310,69 +1298,24 @@
    "model": "typesafe/jev-1.13-20260917",
    "ms": 454
   },
-  "02780caa0576a8": {
+  "027e1b641d25a2": {
    "answers": {
-    "sky.character": {
-     "choice": "powder blue",
-     "confidence": 0.71,
+    "water": {
+     "choice": "No water",
+     "confidence": 0.84,
      "probabilities": {
-      "apricot": 0.03,
-      "cobalt": 0.17,
-      "lavender": 0,
-      "powder blue": 0.76,
-      "teal lagoon": 0.01,
-      "watercolor wash": 0.03
+      "A brook": 0,
+      "A still pond": 0,
+      "A trickle": 0.12,
+      "No water": 0.88
      },
      "type": "choice"
-    },
-    "sky.clouds": {
-     "choice": "fair-weather puffs",
-     "confidence": 0.73,
-     "probabilities": {
-      "cirrus streaks": 0.05,
-      "fair-weather puffs": 0.8,
-      "low drifting banks": 0.08,
-      "towering cumulus": 0.07
-     },
-     "type": "choice"
-    },
-    "sky.cover": {
-     "confidence": 0.11,
-     "legend": {
-      "0": "many, but with blue between",
-      "1": "scattered",
-      "2": "a few"
-     },
-     "probabilities": {
-      "0": 0.35,
-      "1": 0.41,
-      "2": 0.24
-     },
-     "score": 0.89,
-     "type": "score"
-    },
-    "wind.strength": {
-     "confidence": 0.44,
-     "legend": {
-      "0": "still air",
-      "1": "light airs",
-      "2": "breezy",
-      "3": "gusty"
-     },
-     "probabilities": {
-      "0": 0.1,
-      "1": 0.23,
-      "2": 0.54,
-      "3": 0.13
-     },
-     "score": 1.69,
-     "type": "score"
     }
    },
-   "costUsd": 0.000072912,
-   "inputTokens": 1736,
+   "costUsd": 0.000032088,
+   "inputTokens": 764,
    "model": "typesafe/jev-1.13-20260917",
-   "ms": 215
+   "ms": 185
   },
   "02a19a124e9dda": {
    "answers": {
@@ -1521,36 +1464,191 @@
    "model": "typesafe/jev-1.13-20260917",
    "ms": 467
   },
-  "02f6f23538040e": {
+  "02f143a3395f5a": {
    "answers": {
-    "character": {
-     "choice": "Groves and clearings",
-     "confidence": 0.51,
+    "air.air": {
+     "choice": "clear",
+     "confidence": 0.74,
      "probabilities": {
-      "Deep wood": 0.08,
-      "Groves and clearings": 0.61,
-      "Old meadow": 0.05,
-      "Rocky heath": 0.24,
-      "Wet hollow": 0.02
+      "blue haze": 0.11,
+      "clear": 0.79,
+      "hazy gold": 0.02,
+      "morning mist": 0.07,
+      "pollen-filled": 0.01
      },
      "type": "choice"
     },
-    "water": {
-     "choice": "A brook",
-     "confidence": 0.41,
+    "air.distance": {
+     "confidence": 0.33,
+     "legend": {
+      "0": "for miles",
+      "1": "softened distance",
+      "2": "close and dreamy"
+     },
      "probabilities": {
-      "A brook": 0.56,
-      "A still pond": 0.31,
-      "A trickle": 0.12,
-      "No water": 0.01
+      "0": 0.42,
+      "1": 0.55,
+      "2": 0.03
+     },
+     "score": 0.61,
+     "type": "score"
+    },
+    "cover.cover": {
+     "choice": "lush grass",
+     "confidence": 0.66,
+     "probabilities": {
+      "clover meadow": 0.21,
+      "golden steppe": 0.01,
+      "heather": 0.01,
+      "lush grass": 0.71,
+      "moss": 0.04,
+      "sand and scrub": 0.01,
+      "silver grass": 0.01
      },
      "type": "choice"
+    },
+    "cover.length": {
+     "confidence": 0.73,
+     "legend": {
+      "0": "cropped",
+      "1": "natural",
+      "2": "tall and unkempt"
+     },
+     "probabilities": {
+      "0": 0.15,
+      "1": 0.82,
+      "2": 0.03
+     },
+     "score": 0.88,
+     "type": "score"
+    },
+    "cover.wildflowers": {
+     "confidence": 0.14,
+     "legend": {
+      "0": "none",
+      "1": "a scattering",
+      "2": "drifts of them"
+     },
+     "probabilities": {
+      "0": 0.17,
+      "1": 0.43,
+      "2": 0.4
+     },
+     "score": 1.22,
+     "type": "score"
+    },
+    "natives.families:autumn-ember": {
+     "noul": 0.45,
+     "type": "noul"
+    },
+    "natives.families:bluebell-wood": {
+     "noul": 0.46,
+     "type": "noul"
+    },
+    "natives.families:cherry-blossom": {
+     "noul": 0.42,
+     "type": "noul"
+    },
+    "natives.families:deep-forest": {
+     "noul": 0.46,
+     "type": "noul"
+    },
+    "natives.families:desert-sage": {
+     "noul": 0.49,
+     "type": "noul"
+    },
+    "natives.families:lantern-dusk": {
+     "noul": 0.37,
+     "type": "noul"
+    },
+    "natives.families:silver-birch": {
+     "noul": 0.33,
+     "type": "noul"
+    },
+    "natives.families:spring-meadow": {
+     "noul": 0.54,
+     "type": "noul"
+    },
+    "natives.families:teal-gold": {
+     "noul": 0.46,
+     "type": "noul"
+    },
+    "relief.depth": {
+     "confidence": 0.58,
+     "legend": {
+      "0": "shallow",
+      "1": "moderate",
+      "2": "deep"
+     },
+     "probabilities": {
+      "0": 0.2,
+      "1": 0.72,
+      "2": 0.08
+     },
+     "score": 0.88,
+     "type": "score"
+    },
+    "relief.fall": {
+     "confidence": 0.64,
+     "legend": {
+      "0": "nearly level",
+      "1": "gentle",
+      "2": "steady"
+     },
+     "probabilities": {
+      "0": 0.06,
+      "1": 0.76,
+      "2": 0.18
+     },
+     "score": 1.13,
+     "type": "score"
+    },
+    "relief.meander": {
+     "confidence": 0.34,
+     "legend": {
+      "0": "straight",
+      "1": "winding",
+      "2": "strongly meandering"
+     },
+     "probabilities": {
+      "0": 0.42,
+      "1": 0.56,
+      "2": 0.02
+     },
+     "score": 0.6,
+     "type": "score"
+    },
+    "relief.run": {
+     "choice": "north-south",
+     "confidence": 0.31,
+     "probabilities": {
+      "east-west": 0.44,
+      "north-south": 0.48,
+      "northeast-southwest": 0.03,
+      "northwest-southeast": 0.05
+     },
+     "type": "choice"
+    },
+    "relief.width": {
+     "confidence": 0.41,
+     "legend": {
+      "0": "narrow",
+      "1": "open",
+      "2": "broad"
+     },
+     "probabilities": {
+      "0": 0.21,
+      "1": 0.61,
+      "2": 0.18
+     },
+     "score": 0.97,
+     "type": "score"
     }
    },
-   "costUsd": 0.000048762,
-   "inputTokens": 1161,
+   "costUsd": 0.000148638,
+   "inputTokens": 3539,
    "model": "typesafe/jev-1.13-20260917",
-   "ms": 358
+   "ms": 252
   },
   "03147bc6074cd0": {
    "answers": {
@@ -1921,6 +2019,25 @@
    "inputTokens": 5757,
    "model": "typesafe/jev-1.13-20260917",
    "ms": 558
+  },
+  "03af6fe71fe25f": {
+   "answers": {
+    "water": {
+     "choice": "A still pond",
+     "confidence": 0.41,
+     "probabilities": {
+      "A brook": 0.07,
+      "A still pond": 0.56,
+      "A trickle": 0.35,
+      "No water": 0.02
+     },
+     "type": "choice"
+    }
+   },
+   "costUsd": 0.000032424,
+   "inputTokens": 772,
+   "model": "typesafe/jev-1.13-20260917",
+   "ms": 244
   },
   "03bd86578722bd": {
    "answers": {
@@ -2679,6 +2796,25 @@
    "model": "typesafe/jev-1.13-20260917",
    "ms": 527
   },
+  "052705354ab37f": {
+   "answers": {
+    "water": {
+     "choice": "A trickle",
+     "confidence": 0.83,
+     "probabilities": {
+      "A brook": 0.01,
+      "A still pond": 0.02,
+      "A trickle": 0.87,
+      "No water": 0.1
+     },
+     "type": "choice"
+    }
+   },
+   "costUsd": 0.000032046,
+   "inputTokens": 763,
+   "model": "typesafe/jev-1.13-20260917",
+   "ms": 198
+  },
   "05317a13433538": {
    "answers": {
     "form": {
@@ -2761,202 +2897,6 @@
    "inputTokens": 1103,
    "model": "typesafe/jev-1.13-20260917",
    "ms": 548
-  },
-  "0595c7969d9957": {
-   "answers": {
-    "air.air": {
-     "choice": "clear",
-     "confidence": 0.73,
-     "probabilities": {
-      "blue haze": 0.12,
-      "clear": 0.78,
-      "hazy gold": 0.03,
-      "morning mist": 0.06,
-      "pollen-filled": 0.01
-     },
-     "type": "choice"
-    },
-    "air.distance": {
-     "confidence": 0.29,
-     "legend": {
-      "0": "for miles",
-      "1": "softened distance",
-      "2": "close and dreamy"
-     },
-     "probabilities": {
-      "0": 0.45,
-      "1": 0.53,
-      "2": 0.02
-     },
-     "score": 0.57,
-     "type": "score"
-    },
-    "cover.cover": {
-     "choice": "lush grass",
-     "confidence": 0.7,
-     "probabilities": {
-      "clover meadow": 0.2,
-      "golden steppe": 0,
-      "heather": 0.01,
-      "lush grass": 0.74,
-      "moss": 0.04,
-      "sand and scrub": 0,
-      "silver grass": 0.01
-     },
-     "type": "choice"
-    },
-    "cover.length": {
-     "confidence": 0.78,
-     "legend": {
-      "0": "cropped",
-      "1": "natural",
-      "2": "tall and unkempt"
-     },
-     "probabilities": {
-      "0": 0.12,
-      "1": 0.85,
-      "2": 0.03
-     },
-     "score": 0.92,
-     "type": "score"
-    },
-    "cover.wildflowers": {
-     "confidence": 0,
-     "legend": {
-      "0": "none",
-      "1": "a scattering",
-      "2": "drifts of them"
-     },
-     "probabilities": {
-      "0": 0.17,
-      "1": 0.41,
-      "2": 0.42
-     },
-     "score": 1.25,
-     "type": "score"
-    },
-    "natives.families:autumn-ember": {
-     "noul": 0.43,
-     "type": "noul"
-    },
-    "natives.families:bluebell-wood": {
-     "noul": 0.44,
-     "type": "noul"
-    },
-    "natives.families:cherry-blossom": {
-     "noul": 0.39,
-     "type": "noul"
-    },
-    "natives.families:deep-forest": {
-     "noul": 0.44,
-     "type": "noul"
-    },
-    "natives.families:desert-sage": {
-     "noul": 0.48,
-     "type": "noul"
-    },
-    "natives.families:lantern-dusk": {
-     "noul": 0.4,
-     "type": "noul"
-    },
-    "natives.families:silver-birch": {
-     "noul": 0.36,
-     "type": "noul"
-    },
-    "natives.families:spring-meadow": {
-     "noul": 0.48,
-     "type": "noul"
-    },
-    "natives.families:teal-gold": {
-     "noul": 0.42,
-     "type": "noul"
-    },
-    "relief.depth": {
-     "confidence": 0.59,
-     "legend": {
-      "0": "shallow",
-      "1": "moderate",
-      "2": "deep"
-     },
-     "probabilities": {
-      "0": 0.15,
-      "1": 0.73,
-      "2": 0.12
-     },
-     "score": 0.97,
-     "type": "score"
-    },
-    "relief.fall": {
-     "confidence": 0.55,
-     "legend": {
-      "0": "nearly level",
-      "1": "gentle",
-      "2": "steady"
-     },
-     "probabilities": {
-      "0": 0.06,
-      "1": 0.7,
-      "2": 0.24
-     },
-     "score": 1.18,
-     "type": "score"
-    },
-    "relief.meander": {
-     "confidence": 0.43,
-     "legend": {
-      "0": "straight",
-      "1": "winding",
-      "2": "strongly meandering"
-     },
-     "probabilities": {
-      "0": 0.35,
-      "1": 0.62,
-      "2": 0.03
-     },
-     "score": 0.67,
-     "type": "score"
-    },
-    "relief.run": {
-     "choice": "north-south",
-     "confidence": 0.37,
-     "probabilities": {
-      "east-west": 0.4,
-      "north-south": 0.53,
-      "northeast-southwest": 0.02,
-      "northwest-southeast": 0.05
-     },
-     "type": "choice"
-    },
-    "relief.stream": {
-     "choice": "brook",
-     "confidence": 0.97,
-     "probabilities": {
-      "brook": 0.98,
-      "dry bed": 0.02,
-      "trickle": 0
-     },
-     "type": "choice"
-    },
-    "relief.width": {
-     "confidence": 0.47,
-     "legend": {
-      "0": "narrow",
-      "1": "open",
-      "2": "broad"
-     },
-     "probabilities": {
-      "0": 0.13,
-      "1": 0.65,
-      "2": 0.22
-     },
-     "score": 1.09,
-     "type": "score"
-    }
-   },
-   "costUsd": 0.000162288,
-   "inputTokens": 3864,
-   "model": "typesafe/jev-1.13-20260917",
-   "ms": 470
   },
   "05ed05c1c22dfa": {
    "answers": {
@@ -3243,6 +3183,25 @@
    "inputTokens": 672,
    "model": "typesafe/jev-1.13-20260917",
    "ms": 389
+  },
+  "06546ed3c61b8c": {
+   "answers": {
+    "water": {
+     "choice": "No water",
+     "confidence": 0.31,
+     "probabilities": {
+      "A brook": 0.08,
+      "A still pond": 0.04,
+      "A trickle": 0.4,
+      "No water": 0.48
+     },
+     "type": "choice"
+    }
+   },
+   "costUsd": 0.000034272,
+   "inputTokens": 816,
+   "model": "typesafe/jev-1.13-20260917",
+   "ms": 221
   },
   "06655ba3568d71": {
    "answers": {
@@ -3575,6 +3534,192 @@
    "model": "typesafe/jev-1.13-20260917",
    "ms": 684
   },
+  "06a15adb885e79": {
+   "answers": {
+    "air.air": {
+     "choice": "clear",
+     "confidence": 0.35,
+     "probabilities": {
+      "blue haze": 0.26,
+      "clear": 0.48,
+      "hazy gold": 0.09,
+      "morning mist": 0.16,
+      "pollen-filled": 0.01
+     },
+     "type": "choice"
+    },
+    "air.distance": {
+     "confidence": 0.66,
+     "legend": {
+      "0": "for miles",
+      "1": "softened distance",
+      "2": "close and dreamy"
+     },
+     "probabilities": {
+      "0": 0.21,
+      "1": 0.77,
+      "2": 0.02
+     },
+     "score": 0.81,
+     "type": "score"
+    },
+    "cover.cover": {
+     "choice": "lush grass",
+     "confidence": 0.63,
+     "probabilities": {
+      "clover meadow": 0.25,
+      "golden steppe": 0,
+      "heather": 0.01,
+      "lush grass": 0.68,
+      "moss": 0.05,
+      "sand and scrub": 0,
+      "silver grass": 0.01
+     },
+     "type": "choice"
+    },
+    "cover.length": {
+     "confidence": 0.79,
+     "legend": {
+      "0": "cropped",
+      "1": "natural",
+      "2": "tall and unkempt"
+     },
+     "probabilities": {
+      "0": 0.1,
+      "1": 0.86,
+      "2": 0.04
+     },
+     "score": 0.94,
+     "type": "score"
+    },
+    "cover.wildflowers": {
+     "confidence": 0.02,
+     "legend": {
+      "0": "none",
+      "1": "a scattering",
+      "2": "drifts of them"
+     },
+     "probabilities": {
+      "0": 0.13,
+      "1": 0.39,
+      "2": 0.48
+     },
+     "score": 1.34,
+     "type": "score"
+    },
+    "natives.families:autumn-ember": {
+     "noul": 0.42,
+     "type": "noul"
+    },
+    "natives.families:bluebell-wood": {
+     "noul": 0.44,
+     "type": "noul"
+    },
+    "natives.families:cherry-blossom": {
+     "noul": 0.39,
+     "type": "noul"
+    },
+    "natives.families:deep-forest": {
+     "noul": 0.48,
+     "type": "noul"
+    },
+    "natives.families:desert-sage": {
+     "noul": 0.48,
+     "type": "noul"
+    },
+    "natives.families:lantern-dusk": {
+     "noul": 0.35,
+     "type": "noul"
+    },
+    "natives.families:silver-birch": {
+     "noul": 0.34,
+     "type": "noul"
+    },
+    "natives.families:spring-meadow": {
+     "noul": 0.49,
+     "type": "noul"
+    },
+    "natives.families:teal-gold": {
+     "noul": 0.43,
+     "type": "noul"
+    },
+    "relief.depth": {
+     "confidence": 0.69,
+     "legend": {
+      "0": "shallow",
+      "1": "moderate",
+      "2": "deep"
+     },
+     "probabilities": {
+      "0": 0.12,
+      "1": 0.79,
+      "2": 0.09
+     },
+     "score": 0.97,
+     "type": "score"
+    },
+    "relief.fall": {
+     "confidence": 0.56,
+     "legend": {
+      "0": "nearly level",
+      "1": "gentle",
+      "2": "steady"
+     },
+     "probabilities": {
+      "0": 0.04,
+      "1": 0.71,
+      "2": 0.25
+     },
+     "score": 1.21,
+     "type": "score"
+    },
+    "relief.meander": {
+     "confidence": 0.59,
+     "legend": {
+      "0": "straight",
+      "1": "winding",
+      "2": "strongly meandering"
+     },
+     "probabilities": {
+      "0": 0.24,
+      "1": 0.73,
+      "2": 0.03
+     },
+     "score": 0.79,
+     "type": "score"
+    },
+    "relief.run": {
+     "choice": "north-south",
+     "confidence": 0.35,
+     "probabilities": {
+      "east-west": 0.41,
+      "north-south": 0.51,
+      "northeast-southwest": 0.03,
+      "northwest-southeast": 0.05
+     },
+     "type": "choice"
+    },
+    "relief.width": {
+     "confidence": 0.41,
+     "legend": {
+      "0": "narrow",
+      "1": "open",
+      "2": "broad"
+     },
+     "probabilities": {
+      "0": 0.06,
+      "1": 0.61,
+      "2": 0.33
+     },
+     "score": 1.28,
+     "type": "score"
+    }
+   },
+   "costUsd": 0.000154266,
+   "inputTokens": 3673,
+   "model": "typesafe/jev-1.13-20260917",
+   "ms": 215
+  },
   "06a7d88cd0fa7e": {
    "answers": {
     "form": {
@@ -3819,202 +3964,6 @@
    "model": "typesafe/jev-1.13-20260917",
    "ms": 593
   },
-  "07a799a76db925": {
-   "answers": {
-    "air.air": {
-     "choice": "clear",
-     "confidence": 0.44,
-     "probabilities": {
-      "blue haze": 0.23,
-      "clear": 0.55,
-      "hazy gold": 0.08,
-      "morning mist": 0.13,
-      "pollen-filled": 0.01
-     },
-     "type": "choice"
-    },
-    "air.distance": {
-     "confidence": 0.58,
-     "legend": {
-      "0": "for miles",
-      "1": "softened distance",
-      "2": "close and dreamy"
-     },
-     "probabilities": {
-      "0": 0.25,
-      "1": 0.72,
-      "2": 0.03
-     },
-     "score": 0.78,
-     "type": "score"
-    },
-    "cover.cover": {
-     "choice": "lush grass",
-     "confidence": 0.5,
-     "probabilities": {
-      "clover meadow": 0.3,
-      "golden steppe": 0.02,
-      "heather": 0.04,
-      "lush grass": 0.57,
-      "moss": 0.04,
-      "sand and scrub": 0.01,
-      "silver grass": 0.02
-     },
-     "type": "choice"
-    },
-    "cover.length": {
-     "confidence": 0.67,
-     "legend": {
-      "0": "cropped",
-      "1": "natural",
-      "2": "tall and unkempt"
-     },
-     "probabilities": {
-      "0": 0.2,
-      "1": 0.78,
-      "2": 0.02
-     },
-     "score": 0.82,
-     "type": "score"
-    },
-    "cover.wildflowers": {
-     "confidence": 0.34,
-     "legend": {
-      "0": "none",
-      "1": "a scattering",
-      "2": "drifts of them"
-     },
-     "probabilities": {
-      "0": 0.15,
-      "1": 0.56,
-      "2": 0.29
-     },
-     "score": 1.13,
-     "type": "score"
-    },
-    "natives.families:autumn-ember": {
-     "noul": 0.45,
-     "type": "noul"
-    },
-    "natives.families:bluebell-wood": {
-     "noul": 0.44,
-     "type": "noul"
-    },
-    "natives.families:cherry-blossom": {
-     "noul": 0.39,
-     "type": "noul"
-    },
-    "natives.families:deep-forest": {
-     "noul": 0.47,
-     "type": "noul"
-    },
-    "natives.families:desert-sage": {
-     "noul": 0.48,
-     "type": "noul"
-    },
-    "natives.families:lantern-dusk": {
-     "noul": 0.34,
-     "type": "noul"
-    },
-    "natives.families:silver-birch": {
-     "noul": 0.35,
-     "type": "noul"
-    },
-    "natives.families:spring-meadow": {
-     "noul": 0.51,
-     "type": "noul"
-    },
-    "natives.families:teal-gold": {
-     "noul": 0.44,
-     "type": "noul"
-    },
-    "relief.depth": {
-     "confidence": 0.52,
-     "legend": {
-      "0": "shallow",
-      "1": "moderate",
-      "2": "deep"
-     },
-     "probabilities": {
-      "0": 0.27,
-      "1": 0.67,
-      "2": 0.05
-     },
-     "score": 0.78,
-     "type": "score"
-    },
-    "relief.fall": {
-     "confidence": 0.7,
-     "legend": {
-      "0": "nearly level",
-      "1": "gentle",
-      "2": "steady"
-     },
-     "probabilities": {
-      "0": 0.05,
-      "1": 0.8,
-      "2": 0.15
-     },
-     "score": 1.11,
-     "type": "score"
-    },
-    "relief.meander": {
-     "confidence": 0.32,
-     "legend": {
-      "0": "straight",
-      "1": "winding",
-      "2": "strongly meandering"
-     },
-     "probabilities": {
-      "0": 0.43,
-      "1": 0.55,
-      "2": 0.02
-     },
-     "score": 0.59,
-     "type": "score"
-    },
-    "relief.run": {
-     "choice": "north-south",
-     "confidence": 0.32,
-     "probabilities": {
-      "east-west": 0.43,
-      "north-south": 0.49,
-      "northeast-southwest": 0.03,
-      "northwest-southeast": 0.05
-     },
-     "type": "choice"
-    },
-    "relief.stream": {
-     "choice": "brook",
-     "confidence": 0.98,
-     "probabilities": {
-      "brook": 0.99,
-      "dry bed": 0.01,
-      "trickle": 0
-     },
-     "type": "choice"
-    },
-    "relief.width": {
-     "confidence": 0.31,
-     "legend": {
-      "0": "narrow",
-      "1": "open",
-      "2": "broad"
-     },
-     "probabilities": {
-      "0": 0.34,
-      "1": 0.54,
-      "2": 0.12
-     },
-     "score": 0.77,
-     "type": "score"
-    }
-   },
-   "costUsd": 0.000160104,
-   "inputTokens": 3812,
-   "model": "typesafe/jev-1.13-20260917",
-   "ms": 713
-  },
   "07ce15567c45dc": {
    "answers": {
     "route.crossing": {
@@ -4085,6 +4034,70 @@
    "inputTokens": 1145,
    "model": "typesafe/jev-1.13-20260917",
    "ms": 619
+  },
+  "07cf73fceb5c93": {
+   "answers": {
+    "sky.character": {
+     "choice": "powder blue",
+     "confidence": 0.66,
+     "probabilities": {
+      "apricot": 0.04,
+      "cobalt": 0.19,
+      "lavender": 0,
+      "powder blue": 0.72,
+      "teal lagoon": 0.01,
+      "watercolor wash": 0.04
+     },
+     "type": "choice"
+    },
+    "sky.clouds": {
+     "choice": "fair-weather puffs",
+     "confidence": 0.73,
+     "probabilities": {
+      "cirrus streaks": 0.07,
+      "fair-weather puffs": 0.8,
+      "low drifting banks": 0.07,
+      "towering cumulus": 0.06
+     },
+     "type": "choice"
+    },
+    "sky.cover": {
+     "confidence": 0.11,
+     "legend": {
+      "0": "many, but with blue between",
+      "1": "scattered",
+      "2": "a few"
+     },
+     "probabilities": {
+      "0": 0.39,
+      "1": 0.41,
+      "2": 0.2
+     },
+     "score": 0.81,
+     "type": "score"
+    },
+    "wind.strength": {
+     "confidence": 0.44,
+     "legend": {
+      "0": "still air",
+      "1": "light airs",
+      "2": "breezy",
+      "3": "gusty"
+     },
+     "probabilities": {
+      "0": 0.09,
+      "1": 0.23,
+      "2": 0.53,
+      "3": 0.15
+     },
+     "score": 1.74,
+     "type": "score"
+    }
+   },
+   "costUsd": 0.000070392,
+   "inputTokens": 1676,
+   "model": "typesafe/jev-1.13-20260917",
+   "ms": 183
   },
   "08169260690cc1": {
    "answers": {
@@ -5049,6 +5062,192 @@
    "model": "typesafe/jev-1.13-20260917",
    "ms": 527
   },
+  "0a036e04dbafc0": {
+   "answers": {
+    "air.air": {
+     "choice": "clear",
+     "confidence": 0.51,
+     "probabilities": {
+      "blue haze": 0.18,
+      "clear": 0.61,
+      "hazy gold": 0.05,
+      "morning mist": 0.15,
+      "pollen-filled": 0.01
+     },
+     "type": "choice"
+    },
+    "air.distance": {
+     "confidence": 0.52,
+     "legend": {
+      "0": "for miles",
+      "1": "softened distance",
+      "2": "close and dreamy"
+     },
+     "probabilities": {
+      "0": 0.28,
+      "1": 0.68,
+      "2": 0.04
+     },
+     "score": 0.76,
+     "type": "score"
+    },
+    "cover.cover": {
+     "choice": "lush grass",
+     "confidence": 0.39,
+     "probabilities": {
+      "clover meadow": 0.26,
+      "golden steppe": 0.06,
+      "heather": 0.11,
+      "lush grass": 0.48,
+      "moss": 0.03,
+      "sand and scrub": 0.02,
+      "silver grass": 0.04
+     },
+     "type": "choice"
+    },
+    "cover.length": {
+     "confidence": 0.58,
+     "legend": {
+      "0": "cropped",
+      "1": "natural",
+      "2": "tall and unkempt"
+     },
+     "probabilities": {
+      "0": 0.26,
+      "1": 0.72,
+      "2": 0.02
+     },
+     "score": 0.76,
+     "type": "score"
+    },
+    "cover.wildflowers": {
+     "confidence": 0.47,
+     "legend": {
+      "0": "none",
+      "1": "a scattering",
+      "2": "drifts of them"
+     },
+     "probabilities": {
+      "0": 0.14,
+      "1": 0.65,
+      "2": 0.21
+     },
+     "score": 1.07,
+     "type": "score"
+    },
+    "natives.families:autumn-ember": {
+     "noul": 0.39,
+     "type": "noul"
+    },
+    "natives.families:bluebell-wood": {
+     "noul": 0.42,
+     "type": "noul"
+    },
+    "natives.families:cherry-blossom": {
+     "noul": 0.38,
+     "type": "noul"
+    },
+    "natives.families:deep-forest": {
+     "noul": 0.43,
+     "type": "noul"
+    },
+    "natives.families:desert-sage": {
+     "noul": 0.47,
+     "type": "noul"
+    },
+    "natives.families:lantern-dusk": {
+     "noul": 0.37,
+     "type": "noul"
+    },
+    "natives.families:silver-birch": {
+     "noul": 0.33,
+     "type": "noul"
+    },
+    "natives.families:spring-meadow": {
+     "noul": 0.48,
+     "type": "noul"
+    },
+    "natives.families:teal-gold": {
+     "noul": 0.41,
+     "type": "noul"
+    },
+    "relief.depth": {
+     "confidence": 0.3,
+     "legend": {
+      "0": "shallow",
+      "1": "moderate",
+      "2": "deep"
+     },
+     "probabilities": {
+      "0": 0.42,
+      "1": 0.53,
+      "2": 0.05
+     },
+     "score": 0.63,
+     "type": "score"
+    },
+    "relief.fall": {
+     "confidence": 0.7,
+     "legend": {
+      "0": "nearly level",
+      "1": "gentle",
+      "2": "steady"
+     },
+     "probabilities": {
+      "0": 0.06,
+      "1": 0.8,
+      "2": 0.14
+     },
+     "score": 1.07,
+     "type": "score"
+    },
+    "relief.meander": {
+     "confidence": 0.2,
+     "legend": {
+      "0": "straight",
+      "1": "winding",
+      "2": "strongly meandering"
+     },
+     "probabilities": {
+      "0": 0.49,
+      "1": 0.49,
+      "2": 0.02
+     },
+     "score": 0.52,
+     "type": "score"
+    },
+    "relief.run": {
+     "choice": "east-west",
+     "confidence": 0.32,
+     "probabilities": {
+      "east-west": 0.49,
+      "north-south": 0.45,
+      "northeast-southwest": 0.02,
+      "northwest-southeast": 0.04
+     },
+     "type": "choice"
+    },
+    "relief.width": {
+     "confidence": 0.22,
+     "legend": {
+      "0": "narrow",
+      "1": "open",
+      "2": "broad"
+     },
+     "probabilities": {
+      "0": 0.57,
+      "1": 0.34,
+      "2": 0.09
+     },
+     "score": 0.52,
+     "type": "score"
+    }
+   },
+   "costUsd": 0.000150906,
+   "inputTokens": 3593,
+   "model": "typesafe/jev-1.13-20260917",
+   "ms": 208
+  },
   "0a372c6512e1e2": {
    "answers": {
     "form": {
@@ -5346,6 +5545,25 @@
    "inputTokens": 6133,
    "model": "typesafe/jev-1.13-20260917",
    "ms": 695
+  },
+  "0ab6c491248c49": {
+   "answers": {
+    "water": {
+     "choice": "A brook",
+     "confidence": 0.33,
+     "probabilities": {
+      "A brook": 0.5,
+      "A still pond": 0.14,
+      "A trickle": 0.35,
+      "No water": 0.01
+     },
+     "type": "choice"
+    }
+   },
+   "costUsd": 0.000034314,
+   "inputTokens": 817,
+   "model": "typesafe/jev-1.13-20260917",
+   "ms": 225
   },
   "0ac06931df25c4": {
    "answers": {
@@ -6555,37 +6773,6 @@
    "model": "typesafe/jev-1.13-20260917",
    "ms": 469
   },
-  "0c26414598020e": {
-   "answers": {
-    "character": {
-     "choice": "Old meadow",
-     "confidence": 0.21,
-     "probabilities": {
-      "Deep wood": 0.37,
-      "Groves and clearings": 0.2,
-      "Old meadow": 0.37,
-      "Rocky heath": 0.02,
-      "Wet hollow": 0.04
-     },
-     "type": "choice"
-    },
-    "water": {
-     "choice": "A brook",
-     "confidence": 0.25,
-     "probabilities": {
-      "A brook": 0.44,
-      "A still pond": 0.09,
-      "A trickle": 0.25,
-      "No water": 0.22
-     },
-     "type": "choice"
-    }
-   },
-   "costUsd": 0.00004704,
-   "inputTokens": 1120,
-   "model": "typesafe/jev-1.13-20260917",
-   "ms": 356
-  },
   "0c4a1155e5ed55": {
    "answers": {
     "form": {
@@ -7469,170 +7656,6 @@
    "model": "typesafe/jev-1.13-20260917",
    "ms": 592
   },
-  "0d7e28bc3c1a68": {
-   "answers": {
-    "air.air": {
-     "choice": "clear",
-     "confidence": 0.68,
-     "probabilities": {
-      "blue haze": 0.1,
-      "clear": 0.74,
-      "hazy gold": 0.03,
-      "morning mist": 0.12,
-      "pollen-filled": 0.01
-     },
-     "type": "choice"
-    },
-    "air.distance": {
-     "confidence": 0.37,
-     "legend": {
-      "0": "for miles",
-      "1": "softened distance",
-      "2": "close and dreamy"
-     },
-     "probabilities": {
-      "0": 0.38,
-      "1": 0.58,
-      "2": 0.04
-     },
-     "score": 0.66,
-     "type": "score"
-    },
-    "cover.cover": {
-     "choice": "lush grass",
-     "confidence": 0.48,
-     "probabilities": {
-      "clover meadow": 0.26,
-      "golden steppe": 0,
-      "heather": 0,
-      "lush grass": 0.55,
-      "moss": 0.18,
-      "sand and scrub": 0,
-      "silver grass": 0.01
-     },
-     "type": "choice"
-    },
-    "cover.length": {
-     "confidence": 0.76,
-     "legend": {
-      "0": "cropped",
-      "1": "natural",
-      "2": "tall and unkempt"
-     },
-     "probabilities": {
-      "0": 0.13,
-      "1": 0.84,
-      "2": 0.03
-     },
-     "score": 0.89,
-     "type": "score"
-    },
-    "cover.wildflowers": {
-     "confidence": 0.04,
-     "legend": {
-      "0": "none",
-      "1": "a scattering",
-      "2": "drifts of them"
-     },
-     "probabilities": {
-      "0": 0.13,
-      "1": 0.38,
-      "2": 0.49
-     },
-     "score": 1.35,
-     "type": "score"
-    },
-    "natives.families:autumn-ember": {
-     "noul": 0.42,
-     "type": "noul"
-    },
-    "natives.families:bluebell-wood": {
-     "noul": 0.43,
-     "type": "noul"
-    },
-    "natives.families:cherry-blossom": {
-     "noul": 0.42,
-     "type": "noul"
-    },
-    "natives.families:deep-forest": {
-     "noul": 0.44,
-     "type": "noul"
-    },
-    "natives.families:desert-sage": {
-     "noul": 0.46,
-     "type": "noul"
-    },
-    "natives.families:lantern-dusk": {
-     "noul": 0.38,
-     "type": "noul"
-    },
-    "natives.families:silver-birch": {
-     "noul": 0.34,
-     "type": "noul"
-    },
-    "natives.families:spring-meadow": {
-     "noul": 0.49,
-     "type": "noul"
-    },
-    "natives.families:teal-gold": {
-     "noul": 0.4,
-     "type": "noul"
-    },
-    "relief.depth": {
-     "confidence": 0.43,
-     "legend": {
-      "0": "a shallow dip",
-      "1": "a bowl",
-      "2": "a deep hollow"
-     },
-     "probabilities": {
-      "0": 0.07,
-      "1": 0.62,
-      "2": 0.31
-     },
-     "score": 1.24,
-     "type": "score"
-    },
-    "relief.pond": {
-     "noul": 0.84,
-     "type": "noul"
-    },
-    "relief.rim": {
-     "confidence": 0.37,
-     "legend": {
-      "0": "melting into the land",
-      "1": "a soft rim",
-      "2": "a raised rim"
-     },
-     "probabilities": {
-      "0": 0.25,
-      "1": 0.58,
-      "2": 0.17
-     },
-     "score": 0.91,
-     "type": "score"
-    },
-    "relief.size": {
-     "confidence": 0.4,
-     "legend": {
-      "0": "small",
-      "1": "medium",
-      "2": "wide"
-     },
-     "probabilities": {
-      "0": 0.1,
-      "1": 0.6,
-      "2": 0.3
-     },
-     "score": 1.2,
-     "type": "score"
-    }
-   },
-   "costUsd": 0.000139524,
-   "inputTokens": 3322,
-   "model": "typesafe/jev-1.13-20260917",
-   "ms": 674
-  },
   "0da1ed7bca8cad": {
    "answers": {
     "form": {
@@ -7753,133 +7776,6 @@
    "inputTokens": 831,
    "model": "typesafe/jev-1.13-20260917",
    "ms": 526
-  },
-  "0e2c42f9b63aa9": {
-   "answers": {
-    "character": {
-     "choice": "Rocky heath",
-     "confidence": 0.25,
-     "probabilities": {
-      "Deep wood": 0,
-      "Groves and clearings": 0.3,
-      "Old meadow": 0.29,
-      "Rocky heath": 0.4,
-      "Wet hollow": 0.01
-     },
-     "type": "choice"
-    },
-    "water": {
-     "choice": "A trickle",
-     "confidence": 0.49,
-     "probabilities": {
-      "A brook": 0.29,
-      "A still pond": 0.03,
-      "A trickle": 0.62,
-      "No water": 0.06
-     },
-     "type": "choice"
-    }
-   },
-   "costUsd": 0.000043218,
-   "inputTokens": 1029,
-   "model": "typesafe/jev-1.13-20260917",
-   "ms": 402
-  },
-  "0e32faf195bf4e": {
-   "answers": {
-    "light.brush": {
-     "choice": "painterly",
-     "confidence": 0.76,
-     "probabilities": {
-      "bold gouache": 0,
-      "painterly": 0.84,
-      "soft watercolor": 0.16
-     },
-     "type": "choice"
-    },
-    "light.moon": {
-     "choice": "amber harvest moon",
-     "confidence": 0.55,
-     "probabilities": {
-      "amber harvest moon": 0.7,
-      "silver moon": 0.28,
-      "thin pale crescent": 0.02
-     },
-     "type": "choice"
-    },
-    "light.path": {
-     "confidence": 0.16,
-     "legend": {
-      "0": "low, like winter",
-      "1": "middling",
-      "2": "high, like midsummer"
-     },
-     "probabilities": {
-      "0": 0.41,
-      "1": 0.44,
-      "2": 0.15
-     },
-     "score": 0.74,
-     "type": "score"
-    },
-    "light.stars": {
-     "confidence": 0.47,
-     "legend": {
-      "0": "a scattered few",
-      "1": "many",
-      "2": "a river of stars"
-     },
-     "probabilities": {
-      "0": 0.17,
-      "1": 0.65,
-      "2": 0.18
-     },
-     "score": 1.01,
-     "type": "score"
-    },
-    "light.warmth": {
-     "choice": "warm",
-     "confidence": 0.89,
-     "probabilities": {
-      "cool": 0.01,
-      "neutral": 0.06,
-      "warm": 0.93
-     },
-     "type": "choice"
-    },
-    "season.season": {
-     "choice": "high summer",
-     "confidence": 0.48,
-     "probabilities": {
-      "deep autumn": 0.15,
-      "early autumn": 0.07,
-      "first frost": 0.09,
-      "high summer": 0.57,
-      "monsoon green": 0.06,
-      "spring": 0.06
-     },
-     "type": "choice"
-    },
-    "season.strength": {
-     "confidence": 0,
-     "legend": {
-      "0": "a hint",
-      "1": "clearly",
-      "2": "in full"
-     },
-     "probabilities": {
-      "0": 0.29,
-      "1": 0.25,
-      "2": 0.46
-     },
-     "score": 1.17,
-     "type": "score"
-    }
-   },
-   "costUsd": 0.000093492,
-   "inputTokens": 2226,
-   "model": "typesafe/jev-1.13-20260917",
-   "ms": 1404
   },
   "0e371da7f2ef03": {
    "answers": {
@@ -8357,37 +8253,6 @@
    "model": "typesafe/jev-1.13-20260917",
    "ms": 508
   },
-  "0f18380e06ac32": {
-   "answers": {
-    "character": {
-     "choice": "Old meadow",
-     "confidence": 0.82,
-     "probabilities": {
-      "Deep wood": 0,
-      "Groves and clearings": 0.14,
-      "Old meadow": 0.86,
-      "Rocky heath": 0,
-      "Wet hollow": 0
-     },
-     "type": "choice"
-    },
-    "water": {
-     "choice": "No water",
-     "confidence": 1,
-     "probabilities": {
-      "A brook": 0,
-      "A still pond": 0,
-      "A trickle": 0,
-      "No water": 1
-     },
-     "type": "choice"
-    }
-   },
-   "costUsd": 0.000041664,
-   "inputTokens": 992,
-   "model": "typesafe/jev-1.13-20260917",
-   "ms": 403
-  },
   "0f3699e335a068": {
    "answers": {
     "accents.present": {
@@ -8513,6 +8378,25 @@
    "inputTokens": 2147,
    "model": "typesafe/jev-1.13-20260917",
    "ms": 520
+  },
+  "0f8860db0299a4": {
+   "answers": {
+    "water": {
+     "choice": "A brook",
+     "confidence": 0.48,
+     "probabilities": {
+      "A brook": 0.61,
+      "A still pond": 0.01,
+      "A trickle": 0.31,
+      "No water": 0.07
+     },
+     "type": "choice"
+    }
+   },
+   "costUsd": 0.000032718,
+   "inputTokens": 779,
+   "model": "typesafe/jev-1.13-20260917",
+   "ms": 234
   },
   "0fb2edeb8b2694": {
    "answers": {
@@ -8914,232 +8798,24 @@
    "model": "typesafe/jev-1.13-20260917",
    "ms": 722
   },
-  "1030b32102d122": {
+  "0ffa982d57a377": {
    "answers": {
-    "air.air": {
-     "choice": "clear",
-     "confidence": 0.41,
-     "probabilities": {
-      "blue haze": 0.19,
-      "clear": 0.53,
-      "hazy gold": 0.05,
-      "morning mist": 0.22,
-      "pollen-filled": 0.01
-     },
-     "type": "choice"
-    },
-    "air.distance": {
-     "confidence": 0.59,
-     "legend": {
-      "0": "for miles",
-      "1": "softened distance",
-      "2": "close and dreamy"
-     },
-     "probabilities": {
-      "0": 0.22,
-      "1": 0.73,
-      "2": 0.05
-     },
-     "score": 0.83,
-     "type": "score"
-    },
-    "cover.cover": {
-     "choice": "lush grass",
-     "confidence": 0.26,
-     "probabilities": {
-      "clover meadow": 0.34,
-      "golden steppe": 0.06,
-      "heather": 0.13,
-      "lush grass": 0.37,
-      "moss": 0.04,
-      "sand and scrub": 0.02,
-      "silver grass": 0.04
-     },
-     "type": "choice"
-    },
-    "cover.length": {
-     "confidence": 0.61,
-     "legend": {
-      "0": "cropped",
-      "1": "natural",
-      "2": "tall and unkempt"
-     },
-     "probabilities": {
-      "0": 0.22,
-      "1": 0.74,
-      "2": 0.04
-     },
-     "score": 0.81,
-     "type": "score"
-    },
-    "cover.wildflowers": {
-     "confidence": 0.5,
-     "legend": {
-      "0": "none",
-      "1": "a scattering",
-      "2": "drifts of them"
-     },
-     "probabilities": {
-      "0": 0.13,
-      "1": 0.67,
-      "2": 0.2
-     },
-     "score": 1.07,
-     "type": "score"
-    },
-    "natives.families:autumn-ember": {
-     "noul": 0.36,
-     "type": "noul"
-    },
-    "natives.families:bluebell-wood": {
-     "noul": 0.39,
-     "type": "noul"
-    },
-    "natives.families:cherry-blossom": {
-     "noul": 0.37,
-     "type": "noul"
-    },
-    "natives.families:deep-forest": {
-     "noul": 0.39,
-     "type": "noul"
-    },
-    "natives.families:desert-sage": {
-     "noul": 0.44,
-     "type": "noul"
-    },
-    "natives.families:lantern-dusk": {
-     "noul": 0.36,
-     "type": "noul"
-    },
-    "natives.families:silver-birch": {
-     "noul": 0.3,
-     "type": "noul"
-    },
-    "natives.families:spring-meadow": {
-     "noul": 0.44,
-     "type": "noul"
-    },
-    "natives.families:teal-gold": {
-     "noul": 0.41,
-     "type": "noul"
-    },
-    "relief.depth": {
-     "confidence": 0.39,
-     "legend": {
-      "0": "shallow",
-      "1": "moderate",
-      "2": "deep"
-     },
-     "probabilities": {
-      "0": 0.36,
-      "1": 0.59,
-      "2": 0.05
-     },
-     "score": 0.7,
-     "type": "score"
-    },
-    "relief.fall": {
-     "confidence": 0.71,
-     "legend": {
-      "0": "nearly level",
-      "1": "gentle",
-      "2": "steady"
-     },
-     "probabilities": {
-      "0": 0.06,
-      "1": 0.81,
-      "2": 0.13
-     },
-     "score": 1.07,
-     "type": "score"
-    },
-    "relief.meander": {
-     "confidence": 0.38,
-     "legend": {
-      "0": "straight",
-      "1": "winding",
-      "2": "strongly meandering"
-     },
-     "probabilities": {
-      "0": 0.39,
-      "1": 0.59,
-      "2": 0.02
-     },
-     "score": 0.63,
-     "type": "score"
-    },
-    "relief.run": {
-     "choice": "north-south",
-     "confidence": 0.32,
-     "probabilities": {
-      "east-west": 0.44,
-      "north-south": 0.49,
-      "northeast-southwest": 0.02,
-      "northwest-southeast": 0.05
-     },
-     "type": "choice"
-    },
-    "relief.stream": {
-     "choice": "trickle",
-     "confidence": 0.97,
-     "probabilities": {
-      "brook": 0,
-      "dry bed": 0.02,
-      "trickle": 0.98
-     },
-     "type": "choice"
-    },
-    "relief.width": {
-     "confidence": 0.01,
-     "legend": {
-      "0": "narrow",
-      "1": "open",
-      "2": "broad"
-     },
-     "probabilities": {
-      "0": 0.46,
-      "1": 0.42,
-      "2": 0.12
-     },
-     "score": 0.65,
-     "type": "score"
-    }
-   },
-   "costUsd": 0.00016002,
-   "inputTokens": 3810,
-   "model": "typesafe/jev-1.13-20260917",
-   "ms": 701
-  },
-  "1037561104a504": {
-   "answers": {
-    "character": {
-     "choice": "Groves and clearings",
-     "confidence": 0.3,
-     "probabilities": {
-      "Deep wood": 0.01,
-      "Groves and clearings": 0.44,
-      "Old meadow": 0.4,
-      "Rocky heath": 0.04,
-      "Wet hollow": 0.11
-     },
-     "type": "choice"
-    },
     "water": {
-     "choice": "A still pond",
-     "confidence": 0.49,
+     "choice": "A trickle",
+     "confidence": 0.55,
      "probabilities": {
-      "A brook": 0.06,
-      "A still pond": 0.62,
-      "A trickle": 0.31,
-      "No water": 0.01
+      "A brook": 0.25,
+      "A still pond": 0.02,
+      "A trickle": 0.66,
+      "No water": 0.07
      },
      "type": "choice"
     }
    },
-   "costUsd": 0.000043722,
-   "inputTokens": 1041,
+   "costUsd": 0.00003192,
+   "inputTokens": 760,
    "model": "typesafe/jev-1.13-20260917",
-   "ms": 451
+   "ms": 266
   },
   "1055f01ee1d801": {
    "answers": {
@@ -10130,67 +9806,24 @@
    "model": "typesafe/jev-1.13-20260917",
    "ms": 588
   },
-  "116d701262405d": {
+  "11bd77be7443d5": {
    "answers": {
-    "character": {
-     "choice": "Groves and clearings",
-     "confidence": 0.36,
-     "probabilities": {
-      "Deep wood": 0,
-      "Groves and clearings": 0.49,
-      "Old meadow": 0.37,
-      "Rocky heath": 0.07,
-      "Wet hollow": 0.07
-     },
-     "type": "choice"
-    },
     "water": {
      "choice": "A brook",
-     "confidence": 0.4,
+     "confidence": 0.29,
      "probabilities": {
-      "A brook": 0.55,
-      "A still pond": 0.15,
-      "A trickle": 0.3,
-      "No water": 0
+      "A brook": 0.47,
+      "A still pond": 0.39,
+      "A trickle": 0.13,
+      "No water": 0.01
      },
      "type": "choice"
     }
    },
-   "costUsd": 0.000045612,
-   "inputTokens": 1086,
+   "costUsd": 0.000037464,
+   "inputTokens": 892,
    "model": "typesafe/jev-1.13-20260917",
-   "ms": 405
-  },
-  "11b91fffd9dbc6": {
-   "answers": {
-    "character": {
-     "choice": "Rocky heath",
-     "confidence": 0.69,
-     "probabilities": {
-      "Deep wood": 0,
-      "Groves and clearings": 0.13,
-      "Old meadow": 0.12,
-      "Rocky heath": 0.75,
-      "Wet hollow": 0
-     },
-     "type": "choice"
-    },
-    "water": {
-     "choice": "No water",
-     "confidence": 0.84,
-     "probabilities": {
-      "A brook": 0,
-      "A still pond": 0,
-      "A trickle": 0.12,
-      "No water": 0.88
-     },
-     "type": "choice"
-    }
-   },
-   "costUsd": 0.000043386,
-   "inputTokens": 1033,
-   "model": "typesafe/jev-1.13-20260917",
-   "ms": 362
+   "ms": 228
   },
   "11d664155fc92e": {
    "answers": {
@@ -12037,6 +11670,25 @@
    "model": "typesafe/jev-1.13-20260917",
    "ms": 401
   },
+  "15013e00b524f9": {
+   "answers": {
+    "water": {
+     "choice": "No water",
+     "confidence": 1,
+     "probabilities": {
+      "A brook": 0,
+      "A still pond": 0,
+      "A trickle": 0,
+      "No water": 1
+     },
+     "type": "choice"
+    }
+   },
+   "costUsd": 0.000030366,
+   "inputTokens": 723,
+   "model": "typesafe/jev-1.13-20260917",
+   "ms": 221
+  },
   "152b76d85164d6": {
    "answers": {
     "route.crossing": {
@@ -13543,6 +13195,192 @@
    "model": "typesafe/jev-1.13-20260917",
    "ms": 584
   },
+  "16c4c3b91e7ecd": {
+   "answers": {
+    "air.air": {
+     "choice": "clear",
+     "confidence": 0.52,
+     "probabilities": {
+      "blue haze": 0.22,
+      "clear": 0.62,
+      "hazy gold": 0.04,
+      "morning mist": 0.11,
+      "pollen-filled": 0.01
+     },
+     "type": "choice"
+    },
+    "air.distance": {
+     "confidence": 0.55,
+     "legend": {
+      "0": "for miles",
+      "1": "softened distance",
+      "2": "close and dreamy"
+     },
+     "probabilities": {
+      "0": 0.27,
+      "1": 0.7,
+      "2": 0.03
+     },
+     "score": 0.76,
+     "type": "score"
+    },
+    "cover.cover": {
+     "choice": "lush grass",
+     "confidence": 0.5,
+     "probabilities": {
+      "clover meadow": 0.29,
+      "golden steppe": 0.02,
+      "heather": 0.04,
+      "lush grass": 0.57,
+      "moss": 0.05,
+      "sand and scrub": 0.01,
+      "silver grass": 0.02
+     },
+     "type": "choice"
+    },
+    "cover.length": {
+     "confidence": 0.71,
+     "legend": {
+      "0": "cropped",
+      "1": "natural",
+      "2": "tall and unkempt"
+     },
+     "probabilities": {
+      "0": 0.17,
+      "1": 0.8,
+      "2": 0.02
+     },
+     "score": 0.85,
+     "type": "score"
+    },
+    "cover.wildflowers": {
+     "confidence": 0.34,
+     "legend": {
+      "0": "none",
+      "1": "a scattering",
+      "2": "drifts of them"
+     },
+     "probabilities": {
+      "0": 0.15,
+      "1": 0.56,
+      "2": 0.29
+     },
+     "score": 1.14,
+     "type": "score"
+    },
+    "natives.families:autumn-ember": {
+     "noul": 0.44,
+     "type": "noul"
+    },
+    "natives.families:bluebell-wood": {
+     "noul": 0.44,
+     "type": "noul"
+    },
+    "natives.families:cherry-blossom": {
+     "noul": 0.38,
+     "type": "noul"
+    },
+    "natives.families:deep-forest": {
+     "noul": 0.49,
+     "type": "noul"
+    },
+    "natives.families:desert-sage": {
+     "noul": 0.5,
+     "type": "noul"
+    },
+    "natives.families:lantern-dusk": {
+     "noul": 0.34,
+     "type": "noul"
+    },
+    "natives.families:silver-birch": {
+     "noul": 0.33,
+     "type": "noul"
+    },
+    "natives.families:spring-meadow": {
+     "noul": 0.52,
+     "type": "noul"
+    },
+    "natives.families:teal-gold": {
+     "noul": 0.46,
+     "type": "noul"
+    },
+    "relief.depth": {
+     "confidence": 0.53,
+     "legend": {
+      "0": "shallow",
+      "1": "moderate",
+      "2": "deep"
+     },
+     "probabilities": {
+      "0": 0.25,
+      "1": 0.69,
+      "2": 0.06
+     },
+     "score": 0.81,
+     "type": "score"
+    },
+    "relief.fall": {
+     "confidence": 0.67,
+     "legend": {
+      "0": "nearly level",
+      "1": "gentle",
+      "2": "steady"
+     },
+     "probabilities": {
+      "0": 0.05,
+      "1": 0.78,
+      "2": 0.17
+     },
+     "score": 1.13,
+     "type": "score"
+    },
+    "relief.meander": {
+     "confidence": 0.37,
+     "legend": {
+      "0": "straight",
+      "1": "winding",
+      "2": "strongly meandering"
+     },
+     "probabilities": {
+      "0": 0.4,
+      "1": 0.58,
+      "2": 0.02
+     },
+     "score": 0.62,
+     "type": "score"
+    },
+    "relief.run": {
+     "choice": "north-south",
+     "confidence": 0.33,
+     "probabilities": {
+      "east-west": 0.42,
+      "north-south": 0.5,
+      "northeast-southwest": 0.03,
+      "northwest-southeast": 0.05
+     },
+     "type": "choice"
+    },
+    "relief.width": {
+     "confidence": 0.31,
+     "legend": {
+      "0": "narrow",
+      "1": "open",
+      "2": "broad"
+     },
+     "probabilities": {
+      "0": 0.35,
+      "1": 0.54,
+      "2": 0.11
+     },
+     "score": 0.76,
+     "type": "score"
+    }
+   },
+   "costUsd": 0.000151368,
+   "inputTokens": 3604,
+   "model": "typesafe/jev-1.13-20260917",
+   "ms": 256
+  },
   "16c835bf9c29ed": {
    "answers": {
     "form": {
@@ -13567,202 +13405,6 @@
    "inputTokens": 832,
    "model": "typesafe/jev-1.13-20260917",
    "ms": 486
-  },
-  "16c94cafffa998": {
-   "answers": {
-    "air.air": {
-     "choice": "clear",
-     "confidence": 0.81,
-     "probabilities": {
-      "blue haze": 0.07,
-      "clear": 0.85,
-      "hazy gold": 0.02,
-      "morning mist": 0.06,
-      "pollen-filled": 0
-     },
-     "type": "choice"
-    },
-    "air.distance": {
-     "confidence": 0.28,
-     "legend": {
-      "0": "for miles",
-      "1": "softened distance",
-      "2": "close and dreamy"
-     },
-     "probabilities": {
-      "0": 0.45,
-      "1": 0.52,
-      "2": 0.03
-     },
-     "score": 0.59,
-     "type": "score"
-    },
-    "cover.cover": {
-     "choice": "lush grass",
-     "confidence": 0.66,
-     "probabilities": {
-      "clover meadow": 0.2,
-      "golden steppe": 0.01,
-      "heather": 0.02,
-      "lush grass": 0.71,
-      "moss": 0.04,
-      "sand and scrub": 0.01,
-      "silver grass": 0.01
-     },
-     "type": "choice"
-    },
-    "cover.length": {
-     "confidence": 0.69,
-     "legend": {
-      "0": "cropped",
-      "1": "natural",
-      "2": "tall and unkempt"
-     },
-     "probabilities": {
-      "0": 0.18,
-      "1": 0.79,
-      "2": 0.03
-     },
-     "score": 0.85,
-     "type": "score"
-    },
-    "cover.wildflowers": {
-     "confidence": 0.19,
-     "legend": {
-      "0": "none",
-      "1": "a scattering",
-      "2": "drifts of them"
-     },
-     "probabilities": {
-      "0": 0.18,
-      "1": 0.46,
-      "2": 0.36
-     },
-     "score": 1.18,
-     "type": "score"
-    },
-    "natives.families:autumn-ember": {
-     "noul": 0.44,
-     "type": "noul"
-    },
-    "natives.families:bluebell-wood": {
-     "noul": 0.45,
-     "type": "noul"
-    },
-    "natives.families:cherry-blossom": {
-     "noul": 0.42,
-     "type": "noul"
-    },
-    "natives.families:deep-forest": {
-     "noul": 0.46,
-     "type": "noul"
-    },
-    "natives.families:desert-sage": {
-     "noul": 0.48,
-     "type": "noul"
-    },
-    "natives.families:lantern-dusk": {
-     "noul": 0.37,
-     "type": "noul"
-    },
-    "natives.families:silver-birch": {
-     "noul": 0.35,
-     "type": "noul"
-    },
-    "natives.families:spring-meadow": {
-     "noul": 0.54,
-     "type": "noul"
-    },
-    "natives.families:teal-gold": {
-     "noul": 0.43,
-     "type": "noul"
-    },
-    "relief.depth": {
-     "confidence": 0.58,
-     "legend": {
-      "0": "shallow",
-      "1": "moderate",
-      "2": "deep"
-     },
-     "probabilities": {
-      "0": 0.2,
-      "1": 0.72,
-      "2": 0.08
-     },
-     "score": 0.88,
-     "type": "score"
-    },
-    "relief.fall": {
-     "confidence": 0.67,
-     "legend": {
-      "0": "nearly level",
-      "1": "gentle",
-      "2": "steady"
-     },
-     "probabilities": {
-      "0": 0.06,
-      "1": 0.78,
-      "2": 0.16
-     },
-     "score": 1.1,
-     "type": "score"
-    },
-    "relief.meander": {
-     "confidence": 0.28,
-     "legend": {
-      "0": "straight",
-      "1": "winding",
-      "2": "strongly meandering"
-     },
-     "probabilities": {
-      "0": 0.46,
-      "1": 0.52,
-      "2": 0.02
-     },
-     "score": 0.57,
-     "type": "score"
-    },
-    "relief.run": {
-     "choice": "east-west",
-     "confidence": 0.32,
-     "probabilities": {
-      "east-west": 0.49,
-      "north-south": 0.43,
-      "northeast-southwest": 0.03,
-      "northwest-southeast": 0.05
-     },
-     "type": "choice"
-    },
-    "relief.stream": {
-     "choice": "brook",
-     "confidence": 0.97,
-     "probabilities": {
-      "brook": 0.98,
-      "dry bed": 0.02,
-      "trickle": 0
-     },
-     "type": "choice"
-    },
-    "relief.width": {
-     "confidence": 0.38,
-     "legend": {
-      "0": "narrow",
-      "1": "open",
-      "2": "broad"
-     },
-     "probabilities": {
-      "0": 0.26,
-      "1": 0.59,
-      "2": 0.15
-     },
-     "score": 0.89,
-     "type": "score"
-    }
-   },
-   "costUsd": 0.000157374,
-   "inputTokens": 3747,
-   "model": "typesafe/jev-1.13-20260917",
-   "ms": 527
   },
   "16da43f43937d1": {
    "answers": {
@@ -14610,202 +14252,6 @@
    "model": "typesafe/jev-1.13-20260917",
    "ms": 526
   },
-  "19b4b0adee0df6": {
-   "answers": {
-    "air.air": {
-     "choice": "clear",
-     "confidence": 0.55,
-     "probabilities": {
-      "blue haze": 0.16,
-      "clear": 0.64,
-      "hazy gold": 0.04,
-      "morning mist": 0.15,
-      "pollen-filled": 0.01
-     },
-     "type": "choice"
-    },
-    "air.distance": {
-     "confidence": 0.52,
-     "legend": {
-      "0": "for miles",
-      "1": "softened distance",
-      "2": "close and dreamy"
-     },
-     "probabilities": {
-      "0": 0.28,
-      "1": 0.68,
-      "2": 0.04
-     },
-     "score": 0.75,
-     "type": "score"
-    },
-    "cover.cover": {
-     "choice": "lush grass",
-     "confidence": 0.35,
-     "probabilities": {
-      "clover meadow": 0.27,
-      "golden steppe": 0.07,
-      "heather": 0.12,
-      "lush grass": 0.44,
-      "moss": 0.04,
-      "sand and scrub": 0.03,
-      "silver grass": 0.03
-     },
-     "type": "choice"
-    },
-    "cover.length": {
-     "confidence": 0.53,
-     "legend": {
-      "0": "cropped",
-      "1": "natural",
-      "2": "tall and unkempt"
-     },
-     "probabilities": {
-      "0": 0.29,
-      "1": 0.69,
-      "2": 0.02
-     },
-     "score": 0.73,
-     "type": "score"
-    },
-    "cover.wildflowers": {
-     "confidence": 0.44,
-     "legend": {
-      "0": "none",
-      "1": "a scattering",
-      "2": "drifts of them"
-     },
-     "probabilities": {
-      "0": 0.15,
-      "1": 0.63,
-      "2": 0.22
-     },
-     "score": 1.07,
-     "type": "score"
-    },
-    "natives.families:autumn-ember": {
-     "noul": 0.4,
-     "type": "noul"
-    },
-    "natives.families:bluebell-wood": {
-     "noul": 0.43,
-     "type": "noul"
-    },
-    "natives.families:cherry-blossom": {
-     "noul": 0.38,
-     "type": "noul"
-    },
-    "natives.families:deep-forest": {
-     "noul": 0.45,
-     "type": "noul"
-    },
-    "natives.families:desert-sage": {
-     "noul": 0.47,
-     "type": "noul"
-    },
-    "natives.families:lantern-dusk": {
-     "noul": 0.38,
-     "type": "noul"
-    },
-    "natives.families:silver-birch": {
-     "noul": 0.32,
-     "type": "noul"
-    },
-    "natives.families:spring-meadow": {
-     "noul": 0.46,
-     "type": "noul"
-    },
-    "natives.families:teal-gold": {
-     "noul": 0.4,
-     "type": "noul"
-    },
-    "relief.depth": {
-     "confidence": 0.3,
-     "legend": {
-      "0": "shallow",
-      "1": "moderate",
-      "2": "deep"
-     },
-     "probabilities": {
-      "0": 0.42,
-      "1": 0.53,
-      "2": 0.05
-     },
-     "score": 0.63,
-     "type": "score"
-    },
-    "relief.fall": {
-     "confidence": 0.69,
-     "legend": {
-      "0": "nearly level",
-      "1": "gentle",
-      "2": "steady"
-     },
-     "probabilities": {
-      "0": 0.06,
-      "1": 0.79,
-      "2": 0.15
-     },
-     "score": 1.09,
-     "type": "score"
-    },
-    "relief.meander": {
-     "confidence": 0.25,
-     "legend": {
-      "0": "straight",
-      "1": "winding",
-      "2": "strongly meandering"
-     },
-     "probabilities": {
-      "0": 0.51,
-      "1": 0.48,
-      "2": 0.01
-     },
-     "score": 0.5,
-     "type": "score"
-    },
-    "relief.run": {
-     "choice": "east-west",
-     "confidence": 0.29,
-     "probabilities": {
-      "east-west": 0.47,
-      "north-south": 0.47,
-      "northeast-southwest": 0.02,
-      "northwest-southeast": 0.04
-     },
-     "type": "choice"
-    },
-    "relief.stream": {
-     "choice": "trickle",
-     "confidence": 0.98,
-     "probabilities": {
-      "brook": 0,
-      "dry bed": 0.01,
-      "trickle": 0.99
-     },
-     "type": "choice"
-    },
-    "relief.width": {
-     "confidence": 0.23,
-     "legend": {
-      "0": "narrow",
-      "1": "open",
-      "2": "broad"
-     },
-     "probabilities": {
-      "0": 0.58,
-      "1": 0.33,
-      "2": 0.09
-     },
-     "score": 0.5,
-     "type": "score"
-    }
-   },
-   "costUsd": 0.000159642,
-   "inputTokens": 3801,
-   "model": "typesafe/jev-1.13-20260917",
-   "ms": 534
-  },
   "19cba443bc82a4": {
    "answers": {
     "openings.door": {
@@ -14883,37 +14329,6 @@
    "inputTokens": 670,
    "model": "typesafe/jev-1.13-20260917",
    "ms": 591
-  },
-  "1a13cd2fb1cbbb": {
-   "answers": {
-    "character": {
-     "choice": "Rocky heath",
-     "confidence": 0.45,
-     "probabilities": {
-      "Deep wood": 0,
-      "Groves and clearings": 0.28,
-      "Old meadow": 0.14,
-      "Rocky heath": 0.56,
-      "Wet hollow": 0.02
-     },
-     "type": "choice"
-    },
-    "water": {
-     "choice": "A brook",
-     "confidence": 0.43,
-     "probabilities": {
-      "A brook": 0.5700000000000001,
-      "A still pond": 0.01,
-      "A trickle": 0.36,
-      "No water": 0.06
-     },
-     "type": "choice"
-    }
-   },
-   "costUsd": 0.000044016,
-   "inputTokens": 1048,
-   "model": "typesafe/jev-1.13-20260917",
-   "ms": 359
   },
   "1a1764e62e51f4": {
    "answers": {
@@ -15418,6 +14833,166 @@
    "model": "typesafe/jev-1.13-20260917",
    "ms": 199
   },
+  "1b29eae6633d34": {
+   "answers": {
+    "air.air": {
+     "choice": "clear",
+     "confidence": 0.69,
+     "probabilities": {
+      "blue haze": 0.1,
+      "clear": 0.75,
+      "hazy gold": 0.03,
+      "morning mist": 0.11,
+      "pollen-filled": 0.01
+     },
+     "type": "choice"
+    },
+    "air.distance": {
+     "confidence": 0.39,
+     "legend": {
+      "0": "for miles",
+      "1": "softened distance",
+      "2": "close and dreamy"
+     },
+     "probabilities": {
+      "0": 0.37,
+      "1": 0.59,
+      "2": 0.04
+     },
+     "score": 0.67,
+     "type": "score"
+    },
+    "cover.cover": {
+     "choice": "lush grass",
+     "confidence": 0.46,
+     "probabilities": {
+      "clover meadow": 0.3,
+      "golden steppe": 0,
+      "heather": 0.01,
+      "lush grass": 0.54,
+      "moss": 0.14,
+      "sand and scrub": 0,
+      "silver grass": 0.01
+     },
+     "type": "choice"
+    },
+    "cover.length": {
+     "confidence": 0.74,
+     "legend": {
+      "0": "cropped",
+      "1": "natural",
+      "2": "tall and unkempt"
+     },
+     "probabilities": {
+      "0": 0.14,
+      "1": 0.83,
+      "2": 0.03
+     },
+     "score": 0.89,
+     "type": "score"
+    },
+    "cover.wildflowers": {
+     "confidence": 0.04,
+     "legend": {
+      "0": "none",
+      "1": "a scattering",
+      "2": "drifts of them"
+     },
+     "probabilities": {
+      "0": 0.13,
+      "1": 0.38,
+      "2": 0.49
+     },
+     "score": 1.36,
+     "type": "score"
+    },
+    "natives.families:autumn-ember": {
+     "noul": 0.42,
+     "type": "noul"
+    },
+    "natives.families:bluebell-wood": {
+     "noul": 0.44,
+     "type": "noul"
+    },
+    "natives.families:cherry-blossom": {
+     "noul": 0.4,
+     "type": "noul"
+    },
+    "natives.families:deep-forest": {
+     "noul": 0.46,
+     "type": "noul"
+    },
+    "natives.families:desert-sage": {
+     "noul": 0.47,
+     "type": "noul"
+    },
+    "natives.families:lantern-dusk": {
+     "noul": 0.37,
+     "type": "noul"
+    },
+    "natives.families:silver-birch": {
+     "noul": 0.32,
+     "type": "noul"
+    },
+    "natives.families:spring-meadow": {
+     "noul": 0.48,
+     "type": "noul"
+    },
+    "natives.families:teal-gold": {
+     "noul": 0.39,
+     "type": "noul"
+    },
+    "relief.depth": {
+     "confidence": 0.44,
+     "legend": {
+      "0": "a shallow dip",
+      "1": "a bowl",
+      "2": "a deep hollow"
+     },
+     "probabilities": {
+      "0": 0.07,
+      "1": 0.63,
+      "2": 0.3
+     },
+     "score": 1.23,
+     "type": "score"
+    },
+    "relief.rim": {
+     "confidence": 0.34,
+     "legend": {
+      "0": "melting into the land",
+      "1": "a soft rim",
+      "2": "a raised rim"
+     },
+     "probabilities": {
+      "0": 0.27,
+      "1": 0.5599999999999999,
+      "2": 0.17
+     },
+     "score": 0.9,
+     "type": "score"
+    },
+    "relief.size": {
+     "confidence": 0.4,
+     "legend": {
+      "0": "small",
+      "1": "medium",
+      "2": "wide"
+     },
+     "probabilities": {
+      "0": 0.1,
+      "1": 0.6,
+      "2": 0.3
+     },
+     "score": 1.21,
+     "type": "score"
+    }
+   },
+   "costUsd": 0.000132384,
+   "inputTokens": 3152,
+   "model": "typesafe/jev-1.13-20260917",
+   "ms": 234
+  },
   "1b2ba83d999202": {
    "answers": {
     "form": {
@@ -15683,37 +15258,6 @@
    "model": "typesafe/jev-1.13-20260917",
    "ms": 425
   },
-  "1bd6c639c6e3f7": {
-   "answers": {
-    "character": {
-     "choice": "Groves and clearings",
-     "confidence": 0.22,
-     "probabilities": {
-      "Deep wood": 0.29,
-      "Groves and clearings": 0.38,
-      "Old meadow": 0.14,
-      "Rocky heath": 0.16,
-      "Wet hollow": 0.03
-     },
-     "type": "choice"
-    },
-    "water": {
-     "choice": "No water",
-     "confidence": 0.35,
-     "probabilities": {
-      "A brook": 0.1,
-      "A still pond": 0.04,
-      "A trickle": 0.35,
-      "No water": 0.51
-     },
-     "type": "choice"
-    }
-   },
-   "costUsd": 0.00004557,
-   "inputTokens": 1085,
-   "model": "typesafe/jev-1.13-20260917",
-   "ms": 304
-  },
   "1be4841f263d54": {
    "answers": {
     "form": {
@@ -15793,6 +15337,192 @@
    "inputTokens": 2605,
    "model": "typesafe/jev-1.13-20260917",
    "ms": 664
+  },
+  "1bf0b5652b8bd0": {
+   "answers": {
+    "air.air": {
+     "choice": "clear",
+     "confidence": 0.7,
+     "probabilities": {
+      "blue haze": 0.14,
+      "clear": 0.76,
+      "hazy gold": 0.03,
+      "morning mist": 0.06,
+      "pollen-filled": 0.01
+     },
+     "type": "choice"
+    },
+    "air.distance": {
+     "confidence": 0.35,
+     "legend": {
+      "0": "for miles",
+      "1": "softened distance",
+      "2": "close and dreamy"
+     },
+     "probabilities": {
+      "0": 0.41,
+      "1": 0.57,
+      "2": 0.02
+     },
+     "score": 0.61,
+     "type": "score"
+    },
+    "cover.cover": {
+     "choice": "lush grass",
+     "confidence": 0.65,
+     "probabilities": {
+      "clover meadow": 0.24,
+      "golden steppe": 0,
+      "heather": 0.01,
+      "lush grass": 0.7,
+      "moss": 0.04,
+      "sand and scrub": 0,
+      "silver grass": 0.01
+     },
+     "type": "choice"
+    },
+    "cover.length": {
+     "confidence": 0.74,
+     "legend": {
+      "0": "cropped",
+      "1": "natural",
+      "2": "tall and unkempt"
+     },
+     "probabilities": {
+      "0": 0.14,
+      "1": 0.83,
+      "2": 0.03
+     },
+     "score": 0.89,
+     "type": "score"
+    },
+    "cover.wildflowers": {
+     "confidence": 0.13,
+     "legend": {
+      "0": "none",
+      "1": "a scattering",
+      "2": "drifts of them"
+     },
+     "probabilities": {
+      "0": 0.16,
+      "1": 0.42,
+      "2": 0.42
+     },
+     "score": 1.25,
+     "type": "score"
+    },
+    "natives.families:autumn-ember": {
+     "noul": 0.43,
+     "type": "noul"
+    },
+    "natives.families:bluebell-wood": {
+     "noul": 0.44,
+     "type": "noul"
+    },
+    "natives.families:cherry-blossom": {
+     "noul": 0.38,
+     "type": "noul"
+    },
+    "natives.families:deep-forest": {
+     "noul": 0.46,
+     "type": "noul"
+    },
+    "natives.families:desert-sage": {
+     "noul": 0.45,
+     "type": "noul"
+    },
+    "natives.families:lantern-dusk": {
+     "noul": 0.35,
+     "type": "noul"
+    },
+    "natives.families:silver-birch": {
+     "noul": 0.33,
+     "type": "noul"
+    },
+    "natives.families:spring-meadow": {
+     "noul": 0.5,
+     "type": "noul"
+    },
+    "natives.families:teal-gold": {
+     "noul": 0.4,
+     "type": "noul"
+    },
+    "relief.depth": {
+     "confidence": 0.56,
+     "legend": {
+      "0": "shallow",
+      "1": "moderate",
+      "2": "deep"
+     },
+     "probabilities": {
+      "0": 0.17,
+      "1": 0.71,
+      "2": 0.12
+     },
+     "score": 0.94,
+     "type": "score"
+    },
+    "relief.fall": {
+     "confidence": 0.55,
+     "legend": {
+      "0": "nearly level",
+      "1": "gentle",
+      "2": "steady"
+     },
+     "probabilities": {
+      "0": 0.06,
+      "1": 0.7,
+      "2": 0.24
+     },
+     "score": 1.18,
+     "type": "score"
+    },
+    "relief.meander": {
+     "confidence": 0.46,
+     "legend": {
+      "0": "straight",
+      "1": "winding",
+      "2": "strongly meandering"
+     },
+     "probabilities": {
+      "0": 0.33,
+      "1": 0.64,
+      "2": 0.03
+     },
+     "score": 0.7,
+     "type": "score"
+    },
+    "relief.run": {
+     "choice": "north-south",
+     "confidence": 0.31,
+     "probabilities": {
+      "east-west": 0.42,
+      "north-south": 0.48,
+      "northeast-southwest": 0.03,
+      "northwest-southeast": 0.07
+     },
+     "type": "choice"
+    },
+    "relief.width": {
+     "confidence": 0.46,
+     "legend": {
+      "0": "narrow",
+      "1": "open",
+      "2": "broad"
+     },
+     "probabilities": {
+      "0": 0.13,
+      "1": 0.64,
+      "2": 0.23
+     },
+     "score": 1.09,
+     "type": "score"
+    }
+   },
+   "costUsd": 0.000153552,
+   "inputTokens": 3656,
+   "model": "typesafe/jev-1.13-20260917",
+   "ms": 221
   },
   "1bfe5b2dc381fc": {
    "answers": {
@@ -17164,202 +16894,6 @@
    "model": "typesafe/jev-1.13-20260917",
    "ms": 343
   },
-  "1d1885d8ca0c26": {
-   "answers": {
-    "air.air": {
-     "choice": "clear",
-     "confidence": 0.37,
-     "probabilities": {
-      "blue haze": 0.26,
-      "clear": 0.5,
-      "hazy gold": 0.09,
-      "morning mist": 0.14,
-      "pollen-filled": 0.01
-     },
-     "type": "choice"
-    },
-    "air.distance": {
-     "confidence": 0.66,
-     "legend": {
-      "0": "for miles",
-      "1": "softened distance",
-      "2": "close and dreamy"
-     },
-     "probabilities": {
-      "0": 0.21,
-      "1": 0.77,
-      "2": 0.02
-     },
-     "score": 0.81,
-     "type": "score"
-    },
-    "cover.cover": {
-     "choice": "lush grass",
-     "confidence": 0.58,
-     "probabilities": {
-      "clover meadow": 0.27,
-      "golden steppe": 0,
-      "heather": 0.01,
-      "lush grass": 0.64,
-      "moss": 0.06,
-      "sand and scrub": 0,
-      "silver grass": 0.02
-     },
-     "type": "choice"
-    },
-    "cover.length": {
-     "confidence": 0.8,
-     "legend": {
-      "0": "cropped",
-      "1": "natural",
-      "2": "tall and unkempt"
-     },
-     "probabilities": {
-      "0": 0.1,
-      "1": 0.87,
-      "2": 0.03
-     },
-     "score": 0.93,
-     "type": "score"
-    },
-    "cover.wildflowers": {
-     "confidence": 0,
-     "legend": {
-      "0": "none",
-      "1": "a scattering",
-      "2": "drifts of them"
-     },
-     "probabilities": {
-      "0": 0.14,
-      "1": 0.42,
-      "2": 0.44
-     },
-     "score": 1.31,
-     "type": "score"
-    },
-    "natives.families:autumn-ember": {
-     "noul": 0.42,
-     "type": "noul"
-    },
-    "natives.families:bluebell-wood": {
-     "noul": 0.42,
-     "type": "noul"
-    },
-    "natives.families:cherry-blossom": {
-     "noul": 0.4,
-     "type": "noul"
-    },
-    "natives.families:deep-forest": {
-     "noul": 0.46,
-     "type": "noul"
-    },
-    "natives.families:desert-sage": {
-     "noul": 0.48,
-     "type": "noul"
-    },
-    "natives.families:lantern-dusk": {
-     "noul": 0.38,
-     "type": "noul"
-    },
-    "natives.families:silver-birch": {
-     "noul": 0.34,
-     "type": "noul"
-    },
-    "natives.families:spring-meadow": {
-     "noul": 0.51,
-     "type": "noul"
-    },
-    "natives.families:teal-gold": {
-     "noul": 0.42,
-     "type": "noul"
-    },
-    "relief.depth": {
-     "confidence": 0.67,
-     "legend": {
-      "0": "shallow",
-      "1": "moderate",
-      "2": "deep"
-     },
-     "probabilities": {
-      "0": 0.12,
-      "1": 0.78,
-      "2": 0.1
-     },
-     "score": 0.98,
-     "type": "score"
-    },
-    "relief.fall": {
-     "confidence": 0.59,
-     "legend": {
-      "0": "nearly level",
-      "1": "gentle",
-      "2": "steady"
-     },
-     "probabilities": {
-      "0": 0.04,
-      "1": 0.73,
-      "2": 0.23
-     },
-     "score": 1.19,
-     "type": "score"
-    },
-    "relief.meander": {
-     "confidence": 0.58,
-     "legend": {
-      "0": "straight",
-      "1": "winding",
-      "2": "strongly meandering"
-     },
-     "probabilities": {
-      "0": 0.25,
-      "1": 0.72,
-      "2": 0.03
-     },
-     "score": 0.78,
-     "type": "score"
-    },
-    "relief.run": {
-     "choice": "north-south",
-     "confidence": 0.32,
-     "probabilities": {
-      "east-west": 0.43,
-      "north-south": 0.49,
-      "northeast-southwest": 0.03,
-      "northwest-southeast": 0.05
-     },
-     "type": "choice"
-    },
-    "relief.stream": {
-     "choice": "brook",
-     "confidence": 0.97,
-     "probabilities": {
-      "brook": 0.98,
-      "dry bed": 0.02,
-      "trickle": 0
-     },
-     "type": "choice"
-    },
-    "relief.width": {
-     "confidence": 0.4,
-     "legend": {
-      "0": "narrow",
-      "1": "open",
-      "2": "broad"
-     },
-     "probabilities": {
-      "0": 0.06,
-      "1": 0.6,
-      "2": 0.34
-     },
-     "score": 1.27,
-     "type": "score"
-    }
-   },
-   "costUsd": 0.000163002,
-   "inputTokens": 3881,
-   "model": "typesafe/jev-1.13-20260917",
-   "ms": 231
-  },
   "1d1943d16871ab": {
    "answers": {
     "form": {
@@ -18349,6 +17883,192 @@
    "model": "typesafe/jev-1.13-20260917",
    "ms": 470
   },
+  "1e92e0e9e9986b": {
+   "answers": {
+    "air.air": {
+     "choice": "clear",
+     "confidence": 0.4,
+     "probabilities": {
+      "blue haze": 0.21,
+      "clear": 0.52,
+      "hazy gold": 0.05,
+      "morning mist": 0.21,
+      "pollen-filled": 0.01
+     },
+     "type": "choice"
+    },
+    "air.distance": {
+     "confidence": 0.58,
+     "legend": {
+      "0": "for miles",
+      "1": "softened distance",
+      "2": "close and dreamy"
+     },
+     "probabilities": {
+      "0": 0.23,
+      "1": 0.72,
+      "2": 0.05
+     },
+     "score": 0.83,
+     "type": "score"
+    },
+    "cover.cover": {
+     "choice": "lush grass",
+     "confidence": 0.31,
+     "probabilities": {
+      "clover meadow": 0.3,
+      "golden steppe": 0.06,
+      "heather": 0.11,
+      "lush grass": 0.41,
+      "moss": 0.05,
+      "sand and scrub": 0.02,
+      "silver grass": 0.05
+     },
+     "type": "choice"
+    },
+    "cover.length": {
+     "confidence": 0.59,
+     "legend": {
+      "0": "cropped",
+      "1": "natural",
+      "2": "tall and unkempt"
+     },
+     "probabilities": {
+      "0": 0.23,
+      "1": 0.73,
+      "2": 0.04
+     },
+     "score": 0.8,
+     "type": "score"
+    },
+    "cover.wildflowers": {
+     "confidence": 0.44,
+     "legend": {
+      "0": "none",
+      "1": "a scattering",
+      "2": "drifts of them"
+     },
+     "probabilities": {
+      "0": 0.13,
+      "1": 0.63,
+      "2": 0.24
+     },
+     "score": 1.11,
+     "type": "score"
+    },
+    "natives.families:autumn-ember": {
+     "noul": 0.38,
+     "type": "noul"
+    },
+    "natives.families:bluebell-wood": {
+     "noul": 0.39,
+     "type": "noul"
+    },
+    "natives.families:cherry-blossom": {
+     "noul": 0.34,
+     "type": "noul"
+    },
+    "natives.families:deep-forest": {
+     "noul": 0.42,
+     "type": "noul"
+    },
+    "natives.families:desert-sage": {
+     "noul": 0.44,
+     "type": "noul"
+    },
+    "natives.families:lantern-dusk": {
+     "noul": 0.36,
+     "type": "noul"
+    },
+    "natives.families:silver-birch": {
+     "noul": 0.28,
+     "type": "noul"
+    },
+    "natives.families:spring-meadow": {
+     "noul": 0.45,
+     "type": "noul"
+    },
+    "natives.families:teal-gold": {
+     "noul": 0.41,
+     "type": "noul"
+    },
+    "relief.depth": {
+     "confidence": 0.4,
+     "legend": {
+      "0": "shallow",
+      "1": "moderate",
+      "2": "deep"
+     },
+     "probabilities": {
+      "0": 0.35,
+      "1": 0.6,
+      "2": 0.05
+     },
+     "score": 0.7,
+     "type": "score"
+    },
+    "relief.fall": {
+     "confidence": 0.67,
+     "legend": {
+      "0": "nearly level",
+      "1": "gentle",
+      "2": "steady"
+     },
+     "probabilities": {
+      "0": 0.06,
+      "1": 0.78,
+      "2": 0.16
+     },
+     "score": 1.09,
+     "type": "score"
+    },
+    "relief.meander": {
+     "confidence": 0.37,
+     "legend": {
+      "0": "straight",
+      "1": "winding",
+      "2": "strongly meandering"
+     },
+     "probabilities": {
+      "0": 0.4,
+      "1": 0.58,
+      "2": 0.02
+     },
+     "score": 0.62,
+     "type": "score"
+    },
+    "relief.run": {
+     "choice": "east-west",
+     "confidence": 0.31,
+     "probabilities": {
+      "east-west": 0.48,
+      "north-south": 0.44,
+      "northeast-southwest": 0.02,
+      "northwest-southeast": 0.06
+     },
+     "type": "choice"
+    },
+    "relief.width": {
+     "confidence": 0,
+     "legend": {
+      "0": "narrow",
+      "1": "open",
+      "2": "broad"
+     },
+     "probabilities": {
+      "0": 0.45,
+      "1": 0.43,
+      "2": 0.12
+     },
+     "score": 0.66,
+     "type": "score"
+    }
+   },
+   "costUsd": 0.000151284,
+   "inputTokens": 3602,
+   "model": "typesafe/jev-1.13-20260917",
+   "ms": 890
+  },
   "1ec7afdc12f574": {
    "answers": {
     "form": {
@@ -19028,6 +18748,74 @@
    "inputTokens": 743,
    "model": "typesafe/jev-1.13-20260917",
    "ms": 357
+  },
+  "1fce07195d55e5": {
+   "answers": {
+    "light.brush": {
+     "choice": "painterly",
+     "confidence": 0.74,
+     "probabilities": {
+      "bold gouache": 0,
+      "painterly": 0.83,
+      "soft watercolor": 0.17
+     },
+     "type": "choice"
+    },
+    "light.moon": {
+     "choice": "amber harvest moon",
+     "confidence": 0.37,
+     "probabilities": {
+      "amber harvest moon": 0.58,
+      "silver moon": 0.39,
+      "thin pale crescent": 0.03
+     },
+     "type": "choice"
+    },
+    "light.path": {
+     "confidence": 0.23,
+     "legend": {
+      "0": "low, like winter",
+      "1": "middling",
+      "2": "high, like midsummer"
+     },
+     "probabilities": {
+      "0": 0.41,
+      "1": 0.49,
+      "2": 0.1
+     },
+     "score": 0.68,
+     "type": "score"
+    },
+    "light.stars": {
+     "confidence": 0.52,
+     "legend": {
+      "0": "a scattered few",
+      "1": "many",
+      "2": "a river of stars"
+     },
+     "probabilities": {
+      "0": 0.14,
+      "1": 0.68,
+      "2": 0.18
+     },
+     "score": 1.04,
+     "type": "score"
+    },
+    "light.warmth": {
+     "choice": "warm",
+     "confidence": 0.86,
+     "probabilities": {
+      "cool": 0.01,
+      "neutral": 0.08,
+      "warm": 0.91
+     },
+     "type": "choice"
+    }
+   },
+   "costUsd": 0.000077574,
+   "inputTokens": 1847,
+   "model": "typesafe/jev-1.13-20260917",
+   "ms": 159
   },
   "1fd3725982196b": {
    "answers": {
