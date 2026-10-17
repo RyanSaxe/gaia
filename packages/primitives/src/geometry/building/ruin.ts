@@ -122,12 +122,14 @@ export function ivy(b: PartBuilder, plan: BuildingPlan, ruin: Ruin, r: Rand, coa
 
 /**
  * Tufts of rank grass: long blades fanning out from a point on the ground,
- * darker at the root and pale at the tip. They grow in below their
- * thresholds, the rankest first, so a failing house stands in long, dry grass.
+ * darker at the root and pale at the tip, rooted a little below it so no
+ * unevenness of the ground under them lifts their roots into the air. They
+ * grow in below their thresholds, the rankest first, so a failing house
+ * stands in long, dry grass.
  */
 export function weeds(b: PartBuilder, spots: readonly { x: number; z: number; grow: number; size: number }[], r: Rand): void {
   for (const spot of spots) {
-    const pivot: V3 = [spot.x, 0, spot.z];
+    const pivot: V3 = [spot.x, -0.03, spot.z];
     const ch: Channels = { loss: 0, droop: 0.2, wither: 0.6, glow: 0, pivot, tint: (r.next() - 0.5) * 0.08, grow: spot.grow };
     const blades = 7;
     const turn = r.next() * Math.PI * 2;

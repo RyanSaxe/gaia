@@ -85,9 +85,14 @@ export function turningExtent(feature: Built | undefined): Extent | null {
   return Number.isFinite(box.x0) ? box : null;
 }
 
-/** The yard in the building's own frame: the house, a margin around it, the walk out front, and anything beside it. */
+/**
+ * The yard in the building's own frame: the house, a margin around it, the walk out front from its door (which a porch
+ * stands past the front of the walls), and anything beside it.
+ */
 function yardOf(plan: BuildingPlan, beside: Extent | null = null): Extent {
-  const yard = { x0: -plan.width / 2 - 1.2, x1: plan.width / 2 + 1.2, z0: -plan.depth / 2 - 1.2, z1: plan.depth / 2 + 5.8 };
+  const door = plan.openings.find((o) => o.kind === "door");
+  const front = Math.max(plan.depth / 2, door?.position[2] ?? -Infinity);
+  const yard = { x0: -plan.width / 2 - 1.2, x1: plan.width / 2 + 1.2, z0: -plan.depth / 2 - 1.2, z1: front + 5.8 };
   if (beside === null) return yard;
   return { x0: Math.min(yard.x0, beside.x0 - 1), x1: Math.max(yard.x1, beside.x1 + 1), z0: Math.min(yard.z0, beside.z0 - 1), z1: Math.max(yard.z1, beside.z1 + 1) };
 }
