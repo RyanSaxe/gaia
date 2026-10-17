@@ -65,8 +65,10 @@ describe("the horizon", () => {
     const ground: Rgb = [0.3, 0.6, 0.2];
     for (const { name, look } of looks) {
       expect(apart(aerialAt(look, ground, eye, [5, 0, 0]), ground), name).toBeLessThan(0.05);
+      // Every half meter, so a step shows as one and the fade's steady slope through low mist near the eye, about two
+      // levels in 255 a meter, does not.
       let last = aerialAt(look, ground, eye, [1, 0, 0]);
-      for (let d = 2; d <= AIR.dissolveEnd; d += 1) {
+      for (let d = 1.5; d <= AIR.dissolveEnd; d += 0.5) {
         const next = aerialAt(look, ground, eye, [d, 0, 0]);
         expect(apart(next, last), `${name} at ${d} m`).toBeLessThan(2 * STEP);
         last = next;
