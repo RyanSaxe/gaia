@@ -81,6 +81,36 @@ describe("lightAt", () => {
   });
 });
 
+describe("daylight@1's sun", () => {
+  /** The sun's bearing (degrees, azimuth 0 along +z) and elevation (degrees) at `hour`. */
+  const sunAt = (day: DaySpec, hour: number): { bearing: number; elevation: number } => {
+    const [x, y, z] = lightAt(day, hour).sunDirection;
+    return { bearing: (Math.atan2(x, z) * 180) / Math.PI, elevation: (Math.asin(y) * 180) / Math.PI };
+  };
+  const turn = (from: number, to: number): number => ((to - from + 540) % 360) - 180;
+
+  // A sun that swings its bearing at the horizon turns a sunset into a slide along it.
+  it("rises and sets across the sky from where it rose, turning one way and slowly near the horizon", () => {
+    for (const day of days.filter((_, i) => i % 3 === 0)) {
+      let before = sunAt(day, 0);
+      let rose: number | null = null;
+      let set: number | null = null;
+      for (let m = 5; m <= 24 * 60; m += 5) {
+        const now = sunAt(day, m / 60);
+        const step = turn(before.bearing, now.bearing);
+        if (now.elevation > -3) expect(step).toBeLessThan(0);
+        if (now.elevation > -3 && now.elevation < 15) expect(Math.abs(step) * 3).toBeLessThan(4);
+        if (before.elevation < 0 && now.elevation >= 0) rose = now.bearing;
+        if (before.elevation >= 0 && now.elevation < 0) set = now.bearing;
+        before = now;
+      }
+      expect(rose).not.toBeNull();
+      expect(set).not.toBeNull();
+      expect(Math.abs(turn(rose as number, set as number))).toBeGreaterThan(110);
+    }
+  });
+});
+
 describe("daylight@1 nights", () => {
   it("lights the land with the sun by day and the moon by night", () => {
     for (const day of days) {

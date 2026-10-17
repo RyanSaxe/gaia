@@ -31,15 +31,20 @@ interface Hour {
 
 // The night keys keep a cool blue ambient and shadow well above black: the
 // land always reads as shapes under the moon, whatever moon the world has.
+// The sun's bearings follow a real sun's path (50° north, late spring), turned
+// so midday keeps its light: it rises in the north-east, crosses the south and
+// sets in the west, turning slowly near the horizon, so it never swings across
+// the sky as it rises or sets. Azimuth 180 is the compass's north. The moon
+// rises in the north-east as the sun sets, across the sky from it.
 const HOURS = {
-  "deep night": { at: 2, elevation: -32, azimuth: 222, sun: 0x7a6a9a, intensity: 0, ambient: 0x4c5e98, ambientIntensity: 0.38, shadow: 0x2b386c, glowColor: 0x34487c, glow: 0.1, zenithDim: 0.6, moonElevation: 40, moonAzimuth: 235, moon: 1, nightness: 1 },
-  dawn: { at: 6, elevation: 8, azimuth: 235, sun: 0xffc4a2, intensity: 1.0, ambient: 0xb3b5dc, ambientIntensity: 0.64, shadow: 0x7c78aa, glowColor: 0xf7c7b2, glow: 0.7, zenithDim: 0.22, moonElevation: 8, moonAzimuth: 265, moon: 0.06, nightness: 0.1 },
-  morning: { at: 8.5, elevation: 26, azimuth: 300, sun: 0xffe9c0, intensity: 1.16, ambient: 0xb6cde6, ambientIntensity: 0.56, shadow: 0x7489ab, glowColor: 0xf3e6cf, glow: 0.25, zenithDim: 0, moonElevation: -14, moonAzimuth: 280, moon: 0, nightness: 0 },
+  "deep night": { at: 2, elevation: -32, azimuth: 190, sun: 0x7a6a9a, intensity: 0, ambient: 0x4c5e98, ambientIntensity: 0.38, shadow: 0x2b386c, glowColor: 0x34487c, glow: 0.1, zenithDim: 0.6, moonElevation: 40, moonAzimuth: 235, moon: 1, nightness: 1 },
+  dawn: { at: 6, elevation: 8, azimuth: 138, sun: 0xffc4a2, intensity: 1.0, ambient: 0xb3b5dc, ambientIntensity: 0.64, shadow: 0x7c78aa, glowColor: 0xf7c7b2, glow: 0.7, zenithDim: 0.22, moonElevation: 8, moonAzimuth: 265, moon: 0.06, nightness: 0.1 },
+  morning: { at: 8.5, elevation: 26, azimuth: 109, sun: 0xffe9c0, intensity: 1.16, ambient: 0xb6cde6, ambientIntensity: 0.56, shadow: 0x7489ab, glowColor: 0xf3e6cf, glow: 0.25, zenithDim: 0, moonElevation: -14, moonAzimuth: 280, moon: 0, nightness: 0 },
   midday: { at: 12.5, elevation: 58, azimuth: 35, sun: 0xfff2d4, intensity: 1.2, ambient: 0xb2cbe2, ambientIntensity: 0.52, shadow: 0x7386a5, glowColor: 0xffffff, glow: 0, zenithDim: 0, moonElevation: -50, moonAzimuth: 320, moon: 0, nightness: 0 },
-  afternoon: { at: 15.5, elevation: 38, azimuth: 70, sun: 0xffe08c, intensity: 1.24, ambient: 0xb2c6dc, ambientIntensity: 0.52, shadow: 0x7183a6, glowColor: 0xf6e3c0, glow: 0.15, zenithDim: 0, moonElevation: -40, moonAzimuth: 20, moon: 0, nightness: 0 },
-  "golden hour": { at: 18, elevation: 13, azimuth: 118, sun: 0xffc878, intensity: 1.34, ambient: 0xabaacb, ambientIntensity: 0.6, shadow: 0x6c6b9e, glowColor: 0xffd49a, glow: 0.6, zenithDim: 0.1, moonElevation: -12, moonAzimuth: 95, moon: 0, nightness: 0 },
-  dusk: { at: 19.5, elevation: 7, azimuth: 205, sun: 0xffa27e, intensity: 0.98, ambient: 0x9c9aca, ambientIntensity: 0.72, shadow: 0x62639a, glowColor: 0xf4ab8e, glow: 0.8, zenithDim: 0.32, moonElevation: 5, moonAzimuth: 135, moon: 0.05, nightness: 0.3 },
-  moonlit: { at: 22, elevation: -18, azimuth: 215, sun: 0x8a6f9a, intensity: 0, ambient: 0x5669a6, ambientIntensity: 0.44, shadow: 0x313e72, glowColor: 0x41568e, glow: 0.18, zenithDim: 0.5, moonElevation: 14, moonAzimuth: 165, moon: 1, nightness: 0.92 },
+  afternoon: { at: 15.5, elevation: 38, azimuth: 331, sun: 0xffe08c, intensity: 1.24, ambient: 0xb2c6dc, ambientIntensity: 0.52, shadow: 0x7183a6, glowColor: 0xf6e3c0, glow: 0.15, zenithDim: 0, moonElevation: -40, moonAzimuth: 20, moon: 0, nightness: 0 },
+  "golden hour": { at: 18, elevation: 13, azimuth: 298, sun: 0xffc878, intensity: 1.34, ambient: 0xabaacb, ambientIntensity: 0.6, shadow: 0x6c6b9e, glowColor: 0xffd49a, glow: 0.6, zenithDim: 0.1, moonElevation: -12, moonAzimuth: 95, moon: 0, nightness: 0 },
+  dusk: { at: 19.5, elevation: 7, azimuth: 281, sun: 0xffa27e, intensity: 0.98, ambient: 0x9c9aca, ambientIntensity: 0.72, shadow: 0x62639a, glowColor: 0xf4ab8e, glow: 0.8, zenithDim: 0.32, moonElevation: 5, moonAzimuth: 135, moon: 0.05, nightness: 0.3 },
+  moonlit: { at: 22, elevation: -18, azimuth: 251, sun: 0x8a6f9a, intensity: 0, ambient: 0x5669a6, ambientIntensity: 0.44, shadow: 0x313e72, glowColor: 0x41568e, glow: 0.18, zenithDim: 0.5, moonElevation: 14, moonAzimuth: 165, moon: 1, nightness: 0.92 },
 } as const satisfies Record<string, Hour>;
 
 const WARMTH = {
