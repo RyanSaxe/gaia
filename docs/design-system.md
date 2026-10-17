@@ -167,16 +167,15 @@ bough (`twig`) and the point its piece hangs from (`pivot`).
   bell askew from 0.4, say) are on this shown scale; the ground's and the
   buildings' tables give the vitality itself. A change in vitality eases
   in, smooth rather than jarring: what a thing shows follows the vitality
-  it is given, closing two thirds of the way every five seconds, and where
-  that was follows it in turn, and every step of its decline (a leaf
+  it is given, closing two thirds of the way every three seconds, and
+  where that was follows it in turn, and every step of its decline (a leaf
   dropping, a piece collapsing or growing back, a timber falling, a tile,
   patch, stone or board rotting away) shows averaged between the two. The
   ground, the water, the drifts, the trails' wear and the signs follow the
-  same way. A heal mends a piece at a time: half done about five seconds
-  after its vitality changes and whole by about twenty, no frame of a
-  ramp from ruin to whole over six seconds changing a house more than the
-  wind does in half a second; and at rest every step stands exactly where
-  it would with no change at all.
+  same way. A heal mends a piece at a time: half done about three seconds
+  after its vitality changes and whole by about twelve, a frame of it
+  changing a house about as much as the wind does in half a second; and at
+  rest every step stands exactly where it would with no change at all.
 
 `unsupportedAt` holds plants to the rule ruins keep: the contract test
 builds every crown on frames of every kind with bark and blossoms, and
