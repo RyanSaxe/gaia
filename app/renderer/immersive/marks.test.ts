@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { type BuildingPlan, Library, type Role, seedOf } from "@gaia/schema";
+import { type BuildingPlan, Library, type Role, blueprintOf, rand, seedOf } from "@gaia/schema";
 import { PRIMITIVES } from "@gaia/primitives";
 import { realize } from "@gaia/realize";
 import { BUILDINGS, LANDMARKS } from "../../../tools/proving-looks.ts";
-import { structure } from "@gaia/kinds";
+import { landmark, structure } from "@gaia/kinds";
+import { randomSlots } from "@gaia/world/testing";
 import { type BuildingComposition, type Composition, INKS, MARK_REACH, type MarkBox, drawBuilding, drawLandmark } from "./marks.ts";
 
 /** The roles whose primitives stand in the world as buildings and landmarks, so the map must ink them. */
@@ -21,34 +22,46 @@ describe("the marks' table", () => {
   });
 });
 
-/** Every point a drawing places, from a canvas that only records. */
+/** Every point a drawing places, from a canvas that only records: a path's points count once it is filled or stroked. */
 function recorder(): { ctx: CanvasRenderingContext2D; points: [number, number][] } {
   const points: [number, number][] = [];
-  const near = (x: number, y: number, r = 0): void => {
-    points.push([x - r, y - r], [x + r, y + r]);
+  const pathInto = (into: [number, number][]) => {
+    const near = (x: number, y: number, r = 0): void => {
+      into.push([x - r, y - r], [x + r, y + r]);
+    };
+    return {
+      moveTo: (x: number, y: number) => near(x, y),
+      lineTo: (x: number, y: number) => near(x, y),
+      arcTo: (x1: number, y1: number, x2: number, y2: number) => (near(x1, y1), near(x2, y2)),
+      quadraticCurveTo: (cx: number, cy: number, x: number, y: number) => (near(cx, cy), near(x, y)),
+      bezierCurveTo: (ax: number, ay: number, bx: number, by: number, x: number, y: number) => (near(ax, ay), near(bx, by), near(x, y)),
+      arc: (x: number, y: number, r: number) => near(x, y, r),
+      // An ellipse's box, turned by its rotation.
+      ellipse: (x: number, y: number, rx: number, ry: number, turn = 0) => {
+        const [hx, hy] = [Math.hypot(rx * Math.cos(turn), ry * Math.sin(turn)), Math.hypot(rx * Math.sin(turn), ry * Math.cos(turn))];
+        into.push([x - hx, y - hy], [x + hx, y + hy]);
+      },
+      closePath: () => {},
+    };
   };
-  const path = {
-    moveTo: (x: number, y: number) => near(x, y),
-    lineTo: (x: number, y: number) => near(x, y),
-    arcTo: (x1: number, y1: number, x2: number, y2: number) => (near(x1, y1), near(x2, y2)),
-    quadraticCurveTo: (cx: number, cy: number, x: number, y: number) => (near(cx, cy), near(x, y)),
-    bezierCurveTo: (ax: number, ay: number, bx: number, by: number, x: number, y: number) => (near(ax, ay), near(bx, by), near(x, y)),
-    arc: (x: number, y: number, r: number) => near(x, y, r),
-    ellipse: (x: number, y: number, rx: number, ry: number) => near(x, y, Math.max(rx, ry)),
-    closePath: () => {},
-  };
+  const path = pathInto(points);
   class Path2DRecorder {
+    readonly placed: [number, number][] = [];
     constructor() {
-      Object.assign(this, path);
+      Object.assign(this, pathInto(this.placed));
     }
   }
   (globalThis as { Path2D?: unknown }).Path2D = Path2DRecorder;
+  const drawn = (p?: unknown): void => {
+    if (p instanceof Path2DRecorder) points.push(...p.placed);
+  };
   const ctx = new Proxy(path, {
     get: (target, key) => {
       if (key in target) return target[key as keyof typeof path];
+      if (key === "fill" || key === "stroke") return drawn;
       if (key === "getTransform") return () => ({ a: 1, b: 0 });
       if (key === "createLinearGradient") return () => ({ addColorStop: () => {} });
-      if (key === "fillRect") return (x: number, y: number, w: number, h: number) => (near(x, y), near(x + w, y + h));
+      if (key === "fillRect") return (x: number, y: number, w: number, h: number) => points.push([x, y], [x + w, y + h]);
       return () => {};
     },
     set: () => true,
@@ -72,6 +85,32 @@ describe("a mark composed from a blueprint", () => {
   const inside = (box: MarkBox, [x, y]: [number, number], slack = SLACK): boolean => x >= box[0] - slack && x <= box[2] + slack && y >= box[1] - slack && y <= box[3] + slack;
   // The ground the sheets keep names off round a mark's foot, before they know what will stand there.
   const reach: MarkBox = [200 - MARK_REACH.left * SCALE, 200 - MARK_REACH.up * SCALE, 200 + MARK_REACH.right * SCALE, 200 + MARK_REACH.down * SCALE];
+
+  // Buildings and landmarks drawn from everything Jev can compose, so no shape the proving ground never takes strays.
+  // A mark reads only a building's plan and palette, so only those two slots are built.
+  const drawn = Array.from({ length: 300 }, (_, i) => {
+    const draws = rand(seedOf(`marks drawn ${i}`));
+    const blueprint = blueprintOf(structure.id, randomSlots(structure, lib, () => draws.next()));
+    const { footprint, palette } = blueprint.slots;
+    const built = realize({ ...blueprint, slots: { footprint, palette } as typeof blueprint.slots }, structure, lib, { seed: seedOf(`marks drawn ${i}`), facts: {} });
+    const building: BuildingComposition = { blueprint, palette: built.palette, plan: built.slots.get("footprint")?.output as BuildingPlan };
+    const mark: Composition = { blueprint: blueprintOf(landmark.id, randomSlots(landmark, lib, () => draws.next())), palette: { swatches: {} } };
+    return { building, mark };
+  });
+
+  // Draws 300 buildings and 300 landmarks: about a second alone, longer when the suite runs in parallel.
+  it.each([1, 0.5, 0.05])("draws any building and landmark Jev can compose at vitality %s inside the box it reports and the reach every mark keeps to", { timeout: 30_000 }, (v) => {
+    for (const [i, { building, mark }] of drawn.entries()) {
+      const b = recorder();
+      const box = drawBuilding(b.ctx, 200, 200, SCALE, building, v, `drawn ${i}`);
+      expect(b.points.filter((p) => !inside(box, p)), `building ${i}: ${JSON.stringify(building.blueprint.slots)}`).toEqual([]);
+      expect(b.points.filter(([x, y]) => !inside(reach, [x, y], -SLACK)), `building ${i}: ${JSON.stringify(building.blueprint.slots)}`).toEqual([]);
+      const l = recorder();
+      const lbox = drawLandmark(l.ctx, 200, 200, SCALE, mark, v, `drawn ${i}`);
+      expect(l.points.filter((p) => !inside(lbox, p)), `landmark ${i}: ${JSON.stringify(mark.blueprint.slots)}`).toEqual([]);
+      expect(l.points.filter(([x, y]) => !inside(reach, [x, y], -SLACK)), `landmark ${i}: ${JSON.stringify(mark.blueprint.slots)}`).toEqual([]);
+    }
+  });
 
   it.each([1, 0.5, 0.05])("draws each of the proving ground's buildings and landmarks at vitality %s inside the box it reports and the reach every mark keeps to, which names keep off", (v) => {
     for (const [name, b] of buildings) {

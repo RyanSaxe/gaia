@@ -1286,7 +1286,9 @@ The three ways work together:
   off the compass rose's corner, at the foot of the land's own sheet however
   deep it is, and off every building's and landmark's
   mark, keeping clear of all the ground any mark could take round its lot,
-  since the wait letters names before it knows what will stand there.
+  since the wait letters names before it knows what will stand there; a
+  mark that would reach past that ground is drawn just small enough to keep
+  within it.
   Where its own spot is taken it tries spots along its own slant and on
   every side of the mark in its way, then the same a little smaller, and
   only as a last resort sits over a mark, edged in paper as names are over

@@ -981,7 +981,7 @@ function drawTurret(pen: Pen, house: House, k: Block, parts: Parts, look: Look):
   const [bx, by] = pen.at(X, Z, 0);
   const [tx, ty] = pen.at(X, Z, k.eave);
   pen.reach(bx, by, rx);
-  const body = new Path2D();
+  const body = newPath();
   body.moveTo(tx - rx, ty);
   body.lineTo(bx - rx, by);
   body.ellipse(bx, by, rx, ry, 0, Math.PI, 0, true);
@@ -1613,7 +1613,7 @@ function column(pen: Pen, X: number, Z: number, h0: number, h1: number, r: numbe
   pen.reach(bx, by, r * s * 1.1);
   pen.reach(tx, ty, r * s * 1.1);
   const rr = r * s;
-  const body = new Path2D();
+  const body = newPath();
   body.moveTo(tx - rr, ty);
   body.lineTo(bx - rr, by);
   body.ellipse(bx, by, rr, rr * 0.405, 0, Math.PI, 0, true);
@@ -1660,7 +1660,7 @@ function cone(pen: Pen, X: number, Z: number, base: number, r: number, apex: num
   const [ax, ay] = pen.at(X, Z, apex);
   const rr = r * s;
   pen.reach(bx, by, rr * 1.1);
-  const body = new Path2D();
+  const body = newPath();
   body.moveTo(ax, ay);
   body.lineTo(bx - rr, by);
   body.ellipse(bx, by, rr, rr * 0.405, 0, Math.PI, 0, true);
@@ -1972,7 +1972,7 @@ function drum(pen: Pen, sides: number, h0: number, r0: number, h1: number, r1: n
     pen.at(r0 * 1.1, 0, h0);
     pen.at(-r1 * 1.1, 0, h1);
     pen.at(r1 * 1.1, 0, h1);
-    const body = new Path2D();
+    const body = newPath();
     body.moveTo(tx - rt * 1.01, ty);
     body.lineTo(bx - rb * 1.01, by);
     body.ellipse(bx, by, Math.max(0.01, rb * 1.01), Math.max(0.01, rb * 0.405), 0, Math.PI, 0, true);
@@ -2264,7 +2264,7 @@ function drawCairn(pen: Pen, X: number, Z: number, tall: number, grey: string, w
   pen.at(X + R, Z, 0);
   const rx = R * 1.01 * s;
   const ry = R * 0.405 * s;
-  const mound = new Path2D();
+  const mound = newPath();
   mound.moveTo(bx - rx, by);
   mound.bezierCurveTo(bx - rx * 0.7, by - (by - ty) * 0.55, tx - rx * 0.35, ty, tx, ty);
   mound.bezierCurveTo(tx + rx * 0.35, ty, bx + rx * 0.7, by - (by - ty) * 0.55, bx + rx, by);
@@ -2547,7 +2547,7 @@ function drawGreatTree(pen: Pen, look: Look, p: Resolved<typeof greatTreeParams>
   const full = 0.82 + 0.18 * p.fullness;
   const kept = lobes.map(([dx, h, r], k) => ({ dx, h, r: r * full * clamp01((w.v - (0.1 + noise(seed, k + 700) * 0.55)) / 0.25) * (0.8 + leaf * 0.2) })).filter((l) => l.r > 0.5);
   if (kept.length === 0) return;
-  const crown = new Path2D();
+  const crown = newPath();
   for (const l of kept) {
     const [px, py] = at(l.dx, l.h);
     pen.up((l.dx - l.r) * f, (l.h + l.r) * f);
@@ -2564,8 +2564,8 @@ function drawGreatTree(pen: Pen, look: Look, p: Resolved<typeof greatTreeParams>
   ctx.save();
   ctx.clip(crown);
   // Shade under each lobe to the southeast, the light on its northwest shoulder, and a scallop of ink where lobes meet.
-  const shadePath = new Path2D();
-  const lightPath = new Path2D();
+  const shadePath = newPath();
+  const lightPath = newPath();
   for (const l of kept) {
     const [px, py] = at(l.dx, l.h);
     const r = l.r * f * pen.s;
@@ -2625,8 +2625,8 @@ function greatWillow(pen: Pen, look: Look, f: number, age: number, seed: number)
   ctx.stroke();
   // Bare whips hang from the boughs; leaves dress them while the tree lives.
   const whips = 13;
-  const strands = new Path2D();
-  const curtain = new Path2D();
+  const strands = newPath();
+  const curtain = newPath();
   let any = false;
   let held = 0;
   for (let k = 0; k < whips; k++) {
@@ -2638,6 +2638,7 @@ function greatWillow(pen: Pen, look: Look, f: number, age: number, seed: number)
     const [bx, by] = at(dx * 1.08, bottom);
     strands.moveTo(tx, ty);
     strands.quadraticCurveTo(bx - Math.sign(dx) * 0.6 * s, (ty + by) / 2, bx, by);
+    pen.reach(bx, by, 0.6 * s);
     const th = 0.06 + noise(seed, k + 820) * 0.42;
     const cover = clamp01((w.v - th) / 0.2);
     held += cover / whips;
@@ -2648,6 +2649,7 @@ function greatWillow(pen: Pen, look: Look, f: number, age: number, seed: number)
       curtain.moveTo(tx + wd * 1.4, ty);
       curtain.arc(tx, ty, wd * 1.4, 0, Math.PI * 2);
       const bot = ty + (by - ty) * (0.35 + cover * 0.65);
+      pen.reach(bx, bot, wd);
       curtain.moveTo(tx - wd, ty);
       curtain.lineTo(tx + wd, ty);
       curtain.quadraticCurveTo(bx + wd * 0.6, (ty + bot) / 2, bx + wd * 0.4, bot - wd * 0.4);
@@ -2702,16 +2704,110 @@ const MARK_METERS = 0.67;
 export const markScale = (zoom: number, grow: number): number => Math.max(1.1 * grow, MARK_METERS * zoom);
 /**
  * How far any mark reaches from its foot, units, its ink included: the widest range and the tallest tower and its
- * smoke. The sheets keep names off this much round every lot before they know what will stand there, so a contract
- * test holds every building and landmark to it.
+ * smoke. The sheets keep names off this much round every lot before they know what will stand there, so a mark that
+ * would reach farther is drawn smaller (`withinReach`), and a contract test holds every building and landmark to it.
  */
 export const MARK_REACH = { left: 22, right: 24, up: 37, down: 11 } as const;
+
+/** How far a mark's strokes reach past the points its paths pass through, units: about the widest stroke. */
+const INK_REACH = 3;
+
+/** The points a path passes through, so a mark can be measured before it is drawn. */
+class Traced {
+  readonly pts: number[] = [];
+  moveTo(x: number, y: number): void {
+    this.pts.push(x, y);
+  }
+  lineTo(x: number, y: number): void {
+    this.pts.push(x, y);
+  }
+  arcTo(x1: number, y1: number, x2: number, y2: number): void {
+    this.pts.push(x1, y1, x2, y2);
+  }
+  quadraticCurveTo(cx: number, cy: number, x: number, y: number): void {
+    this.pts.push(cx, cy, x, y);
+  }
+  bezierCurveTo(ax: number, ay: number, bx: number, by: number, x: number, y: number): void {
+    this.pts.push(ax, ay, bx, by, x, y);
+  }
+  arc(x: number, y: number, r: number): void {
+    this.pts.push(x - r, y - r, x + r, y + r);
+  }
+  ellipse(x: number, y: number, rx: number, ry: number, turn = 0): void {
+    const hx = Math.hypot(rx * Math.cos(turn), ry * Math.sin(turn));
+    const hy = Math.hypot(rx * Math.sin(turn), ry * Math.cos(turn));
+    this.pts.push(x - hx, y - hy, x + hx, y + hy);
+  }
+  rect(x: number, y: number, w: number, h: number): void {
+    this.pts.push(x, y, x + w, y + h);
+  }
+  closePath(): void {}
+}
+
+let tracing = false;
+/** A new path: a canvas's own, or while a mark is measured, one that keeps its points. */
+const newPath = (): Path2D => (tracing ? (new Traced() as unknown as Path2D) : new Path2D());
+
+/** Measures what `draw` inks without drawing it: the box the points of every path it fills or strokes fall in, in pixels. */
+function inkedBox(ctx: CanvasRenderingContext2D, draw: (c: CanvasRenderingContext2D) => void): MarkBox {
+  const box: MarkBox = [Infinity, Infinity, -Infinity, -Infinity];
+  const take = (pts: readonly number[]): void => {
+    for (let i = 0; i < pts.length; i += 2) {
+      box[0] = Math.min(box[0], pts[i] as number);
+      box[1] = Math.min(box[1], pts[i + 1] as number);
+      box[2] = Math.max(box[2], pts[i] as number);
+      box[3] = Math.max(box[3], pts[i + 1] as number);
+    }
+  };
+  const path = new Traced();
+  const measure = new Proxy(path, {
+    get: (target, key) => {
+      if (key !== "pts" && key in target) return (target[key as keyof Traced] as (...a: number[]) => void).bind(target);
+      if (key === "beginPath") return () => (target.pts.length = 0);
+      if (key === "fill" || key === "stroke") return (p?: unknown) => take(p instanceof Traced ? p.pts : target.pts);
+      if (key === "fillRect") return (x: number, y: number, w: number, h: number) => take([x, y, x + w, y + h]);
+      if (key === "getTransform") return () => ctx.getTransform();
+      if (key === "createLinearGradient") return () => ({ addColorStop: () => {} });
+      return () => {};
+    },
+    set: () => true,
+  }) as unknown as CanvasRenderingContext2D;
+  tracing = true;
+  try {
+    draw(measure);
+  } finally {
+    tracing = false;
+  }
+  return box;
+}
+
+/**
+ * Draws a mark at (x, y) at `s` pixels a unit, or smaller where its ink would reach past `MARK_REACH`: a composition
+ * the reach was not set for (the tallest tower on the longest range) is drawn just small enough to keep within it, so
+ * the names the sheets keep off the reach never meet it. Returns the box it took.
+ */
+function withinReach(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, draw: (c: CanvasRenderingContext2D, scale: number) => MarkBox): MarkBox {
+  let scale = s;
+  for (let k = 0; k < 3; k++) {
+    const [x0, y0, x1, y1] = inkedBox(ctx, (c) => draw(c, scale));
+    const room = (r: number, d: number): number => (d > 1e-6 ? ((r - INK_REACH) * s) / d : Infinity);
+    const fit = Math.min(1, room(MARK_REACH.left, x - x0), room(MARK_REACH.right, x1 - x), room(MARK_REACH.up, y - y0), room(MARK_REACH.down, y1 - y));
+    if (fit >= 1) break;
+    // Fine detail changes a little with size, so the fit is checked again at the smaller size.
+    scale *= fit * 0.995;
+  }
+  return draw(ctx, scale);
+}
 
 /**
  * Draws a building at (x, y), the middle of its footprint on the ground there, at `s` pixels a unit, worn by its
  * shown `vitality`; `name` seeds its wear, so each building fails in its own way. Returns the box it took.
  */
 export function drawBuilding(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, b: BuildingComposition, vitality = 1, name = ""): MarkBox {
+  return withinReach(ctx, x, y, s, (c, scale) => drawBuildingAt(c, x, y, scale, b, vitality, name));
+}
+
+function drawBuildingAt(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, b: BuildingComposition, vitality: number, name: string): MarkBox {
   const w = wearOf(vitality, seedOf(name));
   const look = lookOf(b.palette, w);
   const plan = b.plan;
@@ -2783,6 +2879,10 @@ export function drawBuilding(ctx: CanvasRenderingContext2D, x: number, y: number
  * `name` seeds its wear. Returns the box it took.
  */
 export function drawLandmark(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, l: Composition, vitality = 1, name = ""): MarkBox {
+  return withinReach(ctx, x, y, s, (c, scale) => drawLandmarkAt(c, x, y, scale, l, vitality, name));
+}
+
+function drawLandmarkAt(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, l: Composition, vitality: number, name: string): MarkBox {
   const seed = seedOf(name);
   const w = wearOf(vitality, seed);
   const look = lookOf(l.palette, w);
