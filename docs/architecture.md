@@ -595,7 +595,13 @@ none is outside the repository and gets neither:
   the language table lists, such as `./`, Python's leading dots and Rust's
   `crate::`. Other forms resolve when exactly one path ends with all their
   segments, as `click.core` names `src/click/core.py`. An import that names
-  a directory points at the directory. A package name goes to Jev with the
+  a directory points at the directory. An import no rule resolves that
+  names a module its language provides (the table's `builtins`, such as
+  Node's `fs` and `node:path`, Python's `os` or Rust's `std`) or a package a
+  manifest installs (the dependencies in package.json, Cargo.toml,
+  pyproject.toml, a requirements file, go.mod or a Gemfile), or a module
+  inside one, is outside; a package installed from a path, or one a manifest
+  here names as its own, is not. Any other package name goes to Jev with the
   directories whose configuration mentions it.
 - A call or reference looks for definitions with its name in the caller's
   language family: first in its own file, then in the files it imports, then

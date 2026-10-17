@@ -399,7 +399,7 @@ fn build_with(
             exports: &e.exports_map,
         })
         .collect();
-    let resolved = resolve::run(&units, &dirs, &packages);
+    let resolved = resolve::run(&units, &dirs, &packages, &entities::installed(&listed));
     let mut edges = resolved.edges;
     // References Jev resolved become edges, and ones it put outside leave the
     // pending list; one whose candidates changed since is pending again.
@@ -742,25 +742,20 @@ mod tests {
                 .iter()
                 .any(|e| e.from == from && e.to == to && e.kind == kind)
         };
-        // Imports: relative forms resolve, a directory is its own node, and a
-        // package a configuration names goes to Jev with that configuration's directory.
+        // Imports: relative forms resolve, a directory is its own node, a
+        // package the manifest installs is outside, and so is one nothing names.
         assert!(edge("file:src/a.ts", "file:src/b.ts", "imports"));
         assert!(edge("file:src/a.ts", "dir:src/widgets", "imports"));
         assert!(edge("file:src/main.rs", "file:src/util.rs", "imports"));
         assert!(edge("file:pkg/sub/a.py", "file:pkg/sub/b.py", "imports"));
         assert!(edge("file:pkg/sub/a.py", "file:pkg/top.py", "imports"));
-        let react = g
-            .pending
-            .iter()
-            .find(|p| p.text == "react")
-            .expect("react goes to Jev");
-        assert_eq!(react.candidates, vec!["dir:".to_string()]);
         assert!(
-            !g.pending.iter().any(|p| p.text == "lodash"),
-            "nothing names lodash, so it is outside"
+            !g.pending
+                .iter()
+                .any(|p| p.text == "react" || p.text == "lodash")
         );
-        // A sub-path of the package a configuration names offers the file
-        // below it with that last name; `super` inside a module is its file.
+        // A sub-path of the package a configuration names goes to Jev with the
+        // file below it with that last name; `super` inside a module is its file.
         let extra = g
             .pending
             .iter()
@@ -831,6 +826,118 @@ mod tests {
             "calls"
         ));
         std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn a_builtin_or_an_installed_package_is_outside_however_a_configuration_mentions_it() {
+        let dir = project(
+            "outside",
+            &[
+                (
+                    "package.json",
+                    r#"{ "name": "site", "devDependencies": { "vitest": "3" } }"#,
+                ),
+                // A script in another folder mentions node, fs and vitest, as the showcase's v1 does.
+                (
+                    "v1/package.json",
+                    r#"{ "name": "v1", "scripts": { "test": "node -e \"require('fs')\" && vitest run" } }"#,
+                ),
+                (
+                    "examples/demo/package.json",
+                    r#"{ "dependencies": { "site": "^1", "react": "19" } }"#,
+                ),
+                ("aliases.json", r#"{ "@lib": "./lib" }"#),
+                (
+                    "apps/cli.ts",
+                    "import { join } from \"node:path\";\nimport { rmSync } from \"fs\";\nimport { readFile } from \"fs/promises\";\nimport { test } from \"vitest\";\nimport React from \"react\";\nimport { a } from \"@lib/a\";\nimport { store } from \"site/vanilla\";\n",
+                ),
+                ("lib/a.ts", "export const a = 1;\n"),
+                ("src/vanilla.ts", "export const store = 1;\n"),
+                (
+                    "NOTES.txt",
+                    "Uses os, typing, requests, flask_login, ruamel.yaml, pytest, shop, std, serde_json, nix, helper, fmt, net, pflag, vector, json and rails.\n",
+                ),
+                (
+                    "requirements.txt",
+                    "requests>=2 ; python_version > \"3\"\n-r dev.txt\n",
+                ),
+                (
+                    "pyproject.toml",
+                    "[project]\nname = \"shop\"\ndependencies = [\"Flask-Login>=0.6\", \"ruamel.yaml\"]\n\n[dependency-groups]\ntests = [\"pytest\"]\n",
+                ),
+                (
+                    "shop/app.py",
+                    "import os.path\nfrom typing import Any\nimport requests\nimport flask_login\nfrom ruamel.yaml import YAML\nimport pytest\nimport shop\n",
+                ),
+                (
+                    "Cargo.toml",
+                    "[package]\nname = \"tool-kit\"\n\n[dependencies]\nhelper = { path = \"helper\" }\n\n[target.'cfg(unix)'.dependencies]\nnix = \"0.29\"\n\n[dev-dependencies]\nserde-json = \"1\"\n",
+                ),
+                (
+                    "src/main.rs",
+                    "use std::fs;\nuse serde_json::Value;\nuse nix::unistd;\nuse helper::run;\n\nfn main() {}\n",
+                ),
+                (
+                    "go.mod",
+                    "module example.com/shop\n\ngo 1.22\n\nrequire (\n\tgithub.com/spf13/pflag v1.0.5 // indirect\n)\n",
+                ),
+                (
+                    "cmd/main.go",
+                    "package main\n\nimport (\n\t\"fmt\"\n\t\"net/http\"\n\t\"github.com/spf13/pflag\"\n\t\"example.com/shop/internal/store\"\n)\n",
+                ),
+                ("internal/store/store.go", "package store\n"),
+                (
+                    "geo/shape.cpp",
+                    "#include <vector>\n#include \"vector.h\"\n",
+                ),
+                ("geo/vector.h", "struct Vec {};\n"),
+                (
+                    "Gemfile",
+                    "source \"https://rubygems.org\"\ngem \"rails\", \"~> 7\"\n",
+                ),
+                ("app.rb", "require \"json\"\nrequire \"rails/all\"\n"),
+            ],
+        );
+        let g = graph(&dir).unwrap();
+        let pending: BTreeSet<&str> = g.pending.iter().map(|p| p.text.as_str()).collect();
+        for outside in [
+            "node:path",
+            "fs",
+            "fs/promises",
+            "vitest",
+            "react",
+            "os.path",
+            "typing",
+            "requests",
+            "flask_login",
+            "ruamel.yaml",
+            "pytest",
+            "std::fs",
+            "serde_json::Value",
+            "nix::unistd",
+            "fmt",
+            "net/http",
+            "github.com/spf13/pflag",
+            "<vector>",
+            "json",
+            "rails/all",
+        ] {
+            assert!(!pending.contains(outside), "{outside} is outside");
+        }
+        // What could mean a folder here still goes to Jev: an alias, the
+        // project's own package, a crate installed from a path, its own Go
+        // module and a header that is a file named like a standard one.
+        for here in [
+            "@lib/a",
+            "site/vanilla",
+            "shop",
+            "helper::run",
+            "example.com/shop/internal/store",
+            "vector.h",
+        ] {
+            assert!(pending.contains(here), "{here} goes to Jev: {pending:?}");
+        }
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

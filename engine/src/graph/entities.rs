@@ -1,7 +1,8 @@
 //! A project's entities: the packages and crates its manifests declare. Each
 //! is rooted at the directory of its manifest, which the graph marks with it
 //! (`DirNode::entity`). Only a manifest makes an entity: no file's name decides
-//! what a directory is.
+//! what a directory is. The packages those manifests install come from
+//! outside, which the import rule reads (`installed`).
 
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
@@ -161,4 +162,254 @@ pub(crate) fn manifests(files: &[Listed]) -> Vec<Found> {
         }
     }
     out
+}
+
+/// The packages a project's manifests install, by the language family that
+/// imports them and spelled as its imports spell them: package.json's
+/// dependencies, Cargo.toml's, pyproject.toml's and a requirements file's,
+/// go.mod's requirements and a Gemfile's gems. A package installed from a
+/// path, or one a manifest here names as its own, is left out, since an
+/// import of it means a folder of this project.
+pub(crate) fn installed(files: &[Listed]) -> BTreeMap<String, BTreeSet<String>> {
+    let mut named = Named::default();
+    for f in files {
+        let Some(text) = f.text else { continue };
+        match f.path.rsplit('/').next().unwrap_or("") {
+            "package.json" => package_json(text, &mut named),
+            "Cargo.toml" => cargo_toml(text, &mut named),
+            "pyproject.toml" => pyproject_toml(text, &mut named),
+            "go.mod" => go_mod(text, &mut named),
+            "Gemfile" => gemfile(text, &mut named),
+            n if n.starts_with("requirements") && n.ends_with(".txt") => {
+                for line in text.lines() {
+                    requirement(line, &mut named);
+                }
+            }
+            _ => {}
+        }
+    }
+    named
+        .installs
+        .into_iter()
+        .map(|(family, names)| {
+            let here = named.here.get(family);
+            let outside = names
+                .into_iter()
+                .filter(|n| !here.is_some_and(|h| h.contains(n)))
+                .collect();
+            (family.to_string(), outside)
+        })
+        .collect()
+}
+
+/// The packages manifests name, by family.
+#[derive(Default)]
+struct Named {
+    /// Installed from outside.
+    installs: BTreeMap<&'static str, BTreeSet<String>>,
+    /// A folder of this project: a manifest's own name, or a package installed from a path.
+    here: BTreeMap<&'static str, BTreeSet<String>>,
+}
+
+impl Named {
+    fn add(&mut self, family: &'static str, name: String, here: bool) {
+        let into = if here {
+            &mut self.here
+        } else {
+            &mut self.installs
+        };
+        into.entry(family).or_default().insert(name);
+    }
+}
+
+fn package_json(text: &str, named: &mut Named) {
+    let Ok(json) = serde_json::from_str::<Value>(text) else {
+        return;
+    };
+    if let Some(own) = json.get("name").and_then(Value::as_str) {
+        named.add("js", own.to_string(), true);
+    }
+    for key in [
+        "dependencies",
+        "devDependencies",
+        "peerDependencies",
+        "optionalDependencies",
+    ] {
+        for (dep, version) in json
+            .get(key)
+            .and_then(Value::as_object)
+            .into_iter()
+            .flatten()
+        {
+            let local = version.as_str().is_some_and(|v| {
+                ["workspace:", "file:", "link:", "portal:"]
+                    .iter()
+                    .any(|p| v.starts_with(p))
+            });
+            named.add("js", dep.clone(), local);
+        }
+    }
+}
+
+fn cargo_toml(text: &str, named: &mut Named) {
+    let Ok(toml) = text.parse::<toml::Table>() else {
+        return;
+    };
+    // A `use` spells a crate's name with `_` for `-`.
+    let crate_name = |n: &str| n.replace('-', "_");
+    if let Some(own) = toml.get("package").and_then(|p| p.get("name")?.as_str()) {
+        named.add("rust", crate_name(own), true);
+    }
+    let kinds = ["dependencies", "dev-dependencies", "build-dependencies"];
+    let mut tables = vec![toml.get("workspace").and_then(|w| w.get("dependencies"))];
+    tables.extend(kinds.iter().map(|k| toml.get(*k)));
+    for (_, target) in toml
+        .get("target")
+        .and_then(toml::Value::as_table)
+        .into_iter()
+        .flatten()
+    {
+        tables.extend(kinds.iter().map(|k| target.get(*k)));
+    }
+    for (dep, spec) in tables
+        .into_iter()
+        .flatten()
+        .filter_map(toml::Value::as_table)
+        .flatten()
+    {
+        named.add("rust", crate_name(dep), spec.get("path").is_some());
+    }
+}
+
+fn pyproject_toml(text: &str, named: &mut Named) {
+    let Ok(toml) = text.parse::<toml::Table>() else {
+        return;
+    };
+    let project = toml.get("project");
+    let poetry = toml.get("tool").and_then(|t| t.get("poetry"));
+    for own in [project, poetry].into_iter().flatten() {
+        if let Some(name) = own.get("name").and_then(toml::Value::as_str) {
+            named.add("python", python_name(name), true);
+        }
+    }
+    // PEP 621's requirement lists: its dependencies, its extras and its dependency groups.
+    let mut lists = vec![project.and_then(|p| p.get("dependencies"))];
+    for groups in [
+        project.and_then(|p| p.get("optional-dependencies")),
+        toml.get("dependency-groups"),
+    ] {
+        lists.extend(
+            groups
+                .and_then(toml::Value::as_table)
+                .into_iter()
+                .flat_map(|g| g.values().map(Some)),
+        );
+    }
+    for line in lists
+        .into_iter()
+        .flatten()
+        .filter_map(toml::Value::as_array)
+        .flatten()
+    {
+        if let Some(line) = line.as_str() {
+            requirement(line, named);
+        }
+    }
+    // Poetry's tables, by distribution name.
+    let mut tables = vec![
+        poetry.and_then(|p| p.get("dependencies")),
+        poetry.and_then(|p| p.get("dev-dependencies")),
+    ];
+    for (_, group) in poetry
+        .and_then(|p| p.get("group"))
+        .and_then(toml::Value::as_table)
+        .into_iter()
+        .flatten()
+    {
+        tables.push(group.get("dependencies"));
+    }
+    for (dep, spec) in tables
+        .into_iter()
+        .flatten()
+        .filter_map(toml::Value::as_table)
+        .flatten()
+    {
+        if dep != "python" {
+            named.add("python", python_name(dep), spec.get("path").is_some());
+        }
+    }
+}
+
+/// A Python distribution's name as an import spells it: lowercase, with `_`
+/// for `-`. A dot stays, as `ruamel.yaml` imports as written.
+fn python_name(name: &str) -> String {
+    name.to_lowercase().replace('-', "_")
+}
+
+/// The distribution a requirement names (`requests[socks]>=2 ; python_version > "3"`),
+/// here when it installs from a path. An option such as `-r` names none.
+fn requirement(line: &str, named: &mut Named) {
+    let line = line.split('#').next().unwrap_or("").trim();
+    if line.starts_with(['-', '.', '/']) {
+        return;
+    }
+    let end = line
+        .find(|c: char| !(c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.')))
+        .unwrap_or(line.len());
+    if end > 0 {
+        named.add("python", python_name(&line[..end]), line.contains("file:"));
+    }
+}
+
+/// go.mod's own module, its requirements, and a module replaced by a folder here.
+fn go_mod(text: &str, named: &mut Named) {
+    let mut block: Option<&str> = None;
+    for line in text.lines() {
+        let l = line.split("//").next().unwrap_or("").trim();
+        let (verb, rest) = match block {
+            Some(_) if l == ")" => {
+                block = None;
+                continue;
+            }
+            Some(verb) => (verb, l),
+            None => match l.split_once(char::is_whitespace) {
+                Some((verb, "(")) => {
+                    block = Some(verb);
+                    continue;
+                }
+                Some((verb, rest)) => (verb, rest.trim()),
+                None => continue,
+            },
+        };
+        let Some(path) = rest
+            .split_whitespace()
+            .next()
+            .map(|p| p.trim_matches('"').to_string())
+        else {
+            continue;
+        };
+        let to_folder = || {
+            rest.split_once("=>")
+                .is_some_and(|(_, to)| to.trim().starts_with(['.', '/']))
+        };
+        match verb {
+            "module" => named.add("go", path, true),
+            "require" => named.add("go", path, false),
+            "replace" if to_folder() => named.add("go", path, true),
+            _ => {}
+        }
+    }
+}
+
+fn gemfile(text: &str, named: &mut Named) {
+    for line in text.lines() {
+        let Some(rest) = line.trim().strip_prefix("gem ") else {
+            continue;
+        };
+        let gem = rest.trim().trim_start_matches(['"', '\'']);
+        let gem = gem.split(['"', '\'']).next().unwrap_or("");
+        if !gem.is_empty() {
+            named.add("ruby", gem.to_string(), rest.contains("path:"));
+        }
+    }
 }

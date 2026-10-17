@@ -27,6 +27,8 @@ struct Entry {
     #[serde(default)]
     data: bool,
     #[serde(default)]
+    builtins: Vec<String>,
+    #[serde(default)]
     implicit_self: bool,
     #[serde(default)]
     functions_as_values: bool,
@@ -83,6 +85,8 @@ pub struct Spec {
     pub relative: Vec<Relative>,
     /// A configuration format, such as JSON, rather than code.
     pub data: bool,
+    /// The modules the language's runtime or standard library provides.
+    pub builtins: Vec<String>,
     /// An unqualified call can reach the caller's own class's methods.
     pub implicit_self: bool,
     /// A call on a value can reach a function that belongs to no class, as
@@ -137,6 +141,7 @@ pub fn table() -> &'static BTreeMap<String, Spec> {
                     family: e.family.unwrap_or_else(|| name.clone()),
                     relative: e.relative,
                     data: e.data,
+                    builtins: e.builtins,
                     implicit_self: e.implicit_self,
                     functions_as_values: e.functions_as_values,
                     convention_tags: e.conventions.into_iter().map(|c| c.tag).collect(),
