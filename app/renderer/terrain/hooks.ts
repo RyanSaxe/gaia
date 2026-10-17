@@ -588,7 +588,7 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
     showDrifts: (on: boolean) => {
       world.drifts.object.visible = on;
     },
-    /** Each form drifting: how full the air round the person is, 0 to 1, and how many trees drop it now. */
+    /** Each form drifting: how full its fullest region holds it, 0 to 1, how many of its things can show, and how many trees drop it now. */
     drifts: () => world.drifts.state(),
     /** Shows or hides the grass, for comparing frame costs and looking at the bare ground. */
     showGrass: (on: boolean) => {

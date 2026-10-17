@@ -525,11 +525,14 @@ A drift draws at 1.5 times its `drift@1` size, which was set for a
 narrower, 40° lens, and never under 4 device pixels. Petals are the cherry
 blossom's pink a shade deeper (#e48aa6), darker than the sky so they read
 against it. Fireflies come out only after dusk, hover from 0.7 m, above most
-grass, glow by contrast and dim to a quarter between flashes. Fireflies
-follow the regions' weights where the person stands, as their ground covers
-blend, so one region's thins into the next as they walk; a tree drops its own
-region's, and none drift in the wild. A drift thins as its land declines, by
-the ground's own decline, so a ruined area's trees drop nothing.
+grass, glow by contrast and dim to a quarter between flashes; they fade in
+from dusk and stay through the night. Each firefly shows by the region it
+floats in, as a tree drops its own region's: a region's air is full to about
+25 m inside its edge and thins across the edge over about 50 m, much
+narrower than the 130 m over which the ground blends, where in a small world
+the middle of a firefly land held about a quarter of its fireflies. None
+drift in the wild. A drift thins as its land declines, by the ground's own
+decline, so a ruined area's trees drop nothing.
 
 ## Buildings
 

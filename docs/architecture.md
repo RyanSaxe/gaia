@@ -924,13 +924,16 @@ most blades cost a few instructions.
 
 What drifts through a region's air (`createDrifts` in
 `app/renderer/terrain/drifts.ts`) draws as one set of points a form, and only
-for the forms some region's biome holds. Once a frame the page works out how
-full each form's air is from the regions' weights where the person stands
-(`regionWeights`), the wild's share and the ground's decline there, and which
-trees near the person drop leaves and petals and how many; the shader places
-each point from `uEye`, the wind and the land's clipmap, so the page moves
-nothing but a few uniforms. The water's mirror and the sun's
-shadow leave drifts out.
+for the forms some region's biome holds. Once a frame the page works out
+which trees near the person drop leaves and petals and how many. For the
+fireflies it keeps a small texture of how full the air is round the person,
+13 samples a side 8 m apart on a grid fixed to the world, from each region's
+weight (`regionWeights`) raised to the 12th power, and refills it only once
+the person is 16 m from its middle, about a millisecond. The shader places
+each point from `uEye`, the wind and the land's clipmap, and thins a firefly
+by that texture, the wild's share and the ground's decline where it floats,
+so the page moves nothing but a few uniforms. The water's mirror and the
+sun's shadow leave drifts out.
 
 `createPlantInstances` in `@gaia/render` draws many copies of one plant, one
 instanced mesh per part and level, and `draw` packs the copies it is given
