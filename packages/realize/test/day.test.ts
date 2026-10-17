@@ -8,13 +8,16 @@ import { randomSlots } from "@gaia/world/testing";
 type Erased = (p: unknown) => DaySpec;
 const build = daylight.build as unknown as Erased;
 
+const ends = (s: ScaleField): number[] => s.levels.flatMap((l) => [0, 0.999].map((u) => resolveScale(s, l.words, u)));
+/** Every height the sun can ride: each level of daylight@1's path at both ends. */
+const PATHS = ends(daylight.params.path as ScaleField);
+
 /** Every daylight@1 blueprint, with each scale at both ends of its level. */
 const days: DaySpec[] = (() => {
   const f = daylight.params;
   const choices = (c: ChoiceField): string[] => Object.keys(c.options);
-  const ends = (s: ScaleField): number[] => s.levels.flatMap((l) => [0, 0.999].map((u) => resolveScale(s, l.words, u)));
   const out: DaySpec[] = [];
-  for (const path of ends(f.path as ScaleField))
+  for (const path of PATHS)
     for (const warmth of choices(f.warmth as ChoiceField))
       for (const brush of choices(f.brush as ChoiceField))
         for (const moon of choices(f.moon as ChoiceField))
@@ -89,17 +92,31 @@ describe("daylight@1's sun", () => {
   };
   const turn = (from: number, to: number): number => ((to - from + 540) % 360) - 180;
 
-  // A sun that swings its bearing at the horizon turns a sunset into a slide along it.
-  it("rises and sets across the sky from where it rose, turning one way and slowly near the horizon", () => {
-    for (const day of days.filter((_, i) => i % 3 === 0)) {
+  // A real sun sets slanting down the sky, at about 90° less the latitude to the horizon: about 40° at 50° north. A
+  // sun that swings its bearing slides along the horizon, and one that turns a corner at a key changes slant as it
+  // sets. Sampled every minute, as the clock is read, near the horizon where the disc is in view.
+  it("rises and sets on a steady, natural slant, turning one way and never turning a corner", () => {
+    for (const path of PATHS) {
+      const day = build({ path, warmth: "neutral", brush: "painterly", moon: "silver moon", stars: 0.5 });
       let before = sunAt(day, 0);
+      let step: { slant: number; length: number } | null = null;
       let rose: number | null = null;
       let set: number | null = null;
-      for (let m = 5; m <= 24 * 60; m += 5) {
+      for (let m = 1; m <= 24 * 60; m++) {
         const now = sunAt(day, m / 60);
-        const step = turn(before.bearing, now.bearing);
-        if (now.elevation > -3) expect(step).toBeLessThan(0);
-        if (now.elevation > -3 && now.elevation < 15) expect(Math.abs(step) * 3).toBeLessThan(4);
+        const across = turn(before.bearing, now.bearing) * Math.cos((now.elevation * Math.PI) / 180);
+        const down = now.elevation - before.elevation;
+        if (now.elevation > -3) expect(across, `path ${path} at minute ${m}`).toBeLessThan(0);
+        if (now.elevation > -1 && now.elevation < 10) {
+          const next = { slant: (Math.atan2(Math.abs(down), Math.abs(across)) * 180) / Math.PI, length: Math.hypot(across, down) };
+          expect(next.slant, `path ${path} at minute ${m}`).toBeGreaterThan(25);
+          expect(next.slant, `path ${path} at minute ${m}`).toBeLessThan(60);
+          if (step !== null) {
+            expect(Math.abs(next.slant - step.slant), `path ${path} at minute ${m}`).toBeLessThan(0.5);
+            expect(Math.abs(next.length / step.length - 1), `path ${path} at minute ${m}`).toBeLessThan(0.08);
+          }
+          step = next;
+        } else step = null;
         if (before.elevation < 0 && now.elevation >= 0) rose = now.bearing;
         if (before.elevation >= 0 && now.elevation < 0) set = now.bearing;
         before = now;

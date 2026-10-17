@@ -25,6 +25,8 @@ export const AIR = {
   /** Above the land the air thins: from `thinFrom` meters up, past any eye's height, haze and mist fall as `thinScale / (thinScale + meters above that)` (`airFromHeight`). */
   thinFrom: 6,
   thinScale: 40,
+  /** The sky lays its colors by a direction's height eased in over the lowest `horizonEase` of the sky and exact above it (`heightAbove`), so each color leaves the horizon level and the horizon shows no line. */
+  horizonEase: 0.02,
 } as const;
 
 /**
@@ -69,6 +71,8 @@ const smoothstep = (lo: number, hi: number, x: number): number => {
   const t = clamp01((x - lo) / (hi - lo));
   return t * t * (3 - 2 * t);
 };
+/** A direction's height above the horizon: 0 below it, eased in over the lowest `AIR.horizonEase` so it leaves the horizon level, and exact above that. */
+const heightAbove = (y: number): number => (y <= 0 ? 0 : y >= AIR.horizonEase ? y : (y * y * (2 * AIR.horizonEase - y)) / (AIR.horizonEase * AIR.horizonEase));
 const mix = (a: Rgb, b: Rgb, t: number): Rgb => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
 /** How strongly twilight colors the sky at this hour: the hour's glow, fading as the sun sinks below the horizon. */
 const twilightOf = (light: Pick<LightSpec, "glow" | "sunDirection">): number =>
@@ -88,7 +92,7 @@ const normalize2 = (x: number, y: number): [number, number] => {
  */
 export function skyColorAt(look: SkyInput & { readonly fog?: AirInput["fog"] }, dir: Vec3): Rgb {
   const { light, sky } = look;
-  const e = Math.max(dir[1], 0);
+  const e = heightAbove(dir[1]);
   let color = mix(sky.horizon, sky.mid, smoothstep(0, 0.32, e));
   color = mix(color, sky.zenith, smoothstep(0.28, 0.9, e));
   const sl = Math.hypot(...light.sunDirection);
