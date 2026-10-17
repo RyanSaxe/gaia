@@ -5,7 +5,7 @@ import { OPENING, type Terrain, amongCode, bakeTerrain, clearOfCode, openingSpot
 import { composeWorld, judgeWorld, layoutWorld } from "@gaia/world";
 import { fakeJevClient } from "@gaia/world/testing";
 import type { WorldDocument } from "../../world-service/protocol.ts";
-import { codeLab, provingWorld } from "./code-world.ts";
+import { openedWorld, provingWorld } from "./code-world.ts";
 import { LOOKS } from "./looks.ts";
 import { laySnapshot } from "./snapshot.ts";
 import { snapshotFacts } from "./snapshot-facts.ts";
@@ -14,7 +14,7 @@ const lib = new Library([...RELIEF_PRIMITIVES, ...BIOME_PRIMITIVES]);
 
 /** A world's terrain as the page bakes it, and where it lands the person. */
 function landing(document: WorldDocument): { terrain: Terrain; at: ReturnType<typeof openingSpot>; world: WorldDocument["world"] } {
-  const terrain = bakeTerrain(codeLab(document).spec, lib);
+  const terrain = bakeTerrain(openedWorld(document).spec, lib);
   return { terrain, at: openingSpot(terrain, document.world), world: document.world };
 }
 

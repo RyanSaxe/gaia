@@ -1,4 +1,4 @@
-// The immersive world: the terrain lab's world, full screen, with nothing on
+// The immersive world: the world (`terrain/world.ts`), full screen, with nothing on
 // it but the world itself and three quiet ways of knowing where you are, all
 // at once, drawn on one field sheet (docs/design-system.md, "The field
 // sheet"): the minimap, a torn scrap of the field map low at the right that
@@ -10,7 +10,7 @@
 // (`compass.ts`) and opens the one other paper, the slip, with Gaia's mark
 // and how to wander.
 // Walking, tapping a thing to walk up to it, the lantern and the hour all
-// come from the terrain lab. Once the world stands and its map is painted, a
+// come from the world. Once the world stands and its map is painted, a
 // picture of the whole map goes to the world service, which keeps it with the
 // world for the start (`picture.ts`).
 
@@ -455,7 +455,7 @@ export function createImmersive(container: HTMLElement, world: WorldHandle): Imm
 
   let active = false;
   function apply(): void {
-    // The map paints its paper only once a world stands: before that it would paint the placeholder land the lab
+    // The map paints its paper only once a world stands: before that it would paint the placeholder land the world
     // holds until the first bake, and keep it.
     map.show(active && standing);
     minimap.show(active);

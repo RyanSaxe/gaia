@@ -40,7 +40,7 @@ interface WorkerScope {
 }
 
 const scope = globalThis as unknown as WorkerScope;
-// The same library the terrain lab bakes with.
+// The same library the world bakes with.
 const lib = new Library([...RELIEF_PRIMITIVES, ...BIOME_PRIMITIVES]);
 /**
  * The world this thread last composed or finished, and its spec as text. Each

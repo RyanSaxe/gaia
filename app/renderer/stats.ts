@@ -31,7 +31,7 @@ export interface Smoothness {
 export interface FrameStats {
   /** Milliseconds between frames, smoothed. */
   readonly frameMs: number;
-  /** Milliseconds of JavaScript in the lab's frame, smoothed. */
+  /** Milliseconds of JavaScript in the world's frame, smoothed. */
   readonly cpuMs: number;
   /** Draw calls and triangles over every pass of the last frame. */
   readonly calls: number;
@@ -40,7 +40,7 @@ export interface FrameStats {
 }
 
 export interface Stats {
-  /** Call before the lab draws a frame. */
+  /** Call before the world draws a frame. */
   begin(renderer: WebGLRenderer | undefined): void;
   /** Call after it; `dt` is seconds since the last frame. */
   end(renderer: WebGLRenderer | undefined, dt: number): void;

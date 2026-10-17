@@ -7,7 +7,7 @@
 //
 // Each level of detail leaves out whole pieces (`detailAt` in @gaia/realize).
 // Which copies draw, and at which level, is chosen before every pass by the
-// one who stands the copies (the terrain lab's woods): `draw` packs the
+// one who stands the copies (the world's woods): `draw` packs the
 // copies it is given into each level's instance buffer.
 
 import * as THREE from "three";

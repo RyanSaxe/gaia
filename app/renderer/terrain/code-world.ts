@@ -52,7 +52,7 @@ export interface Veil {
   choose(offer: StartOffer): Promise<StartChoice>;
 }
 
-export interface CodeLab {
+export interface OpenedWorld {
   readonly world: CodeWorld;
   /** The terrain's regions: one per directory with land of its own. */
   readonly spec: WorldSpec;
@@ -218,7 +218,7 @@ async function previewStart(veil: Veil): Promise<void> {
 }
 
 /** A codebase's world: judged, laid out and ready to bake. */
-export async function codeWorld(veil: Veil): Promise<CodeLab> {
+export async function codeWorld(veil: Veil): Promise<OpenedWorld> {
   const service = worldService();
   let document: WorldDocument;
   // Where the person stood when they last left this world; only the world service keeps it.
@@ -244,7 +244,7 @@ export async function codeWorld(veil: Veil): Promise<CodeLab> {
   // A world laid out here, with no world service, shows its land only now.
   if (!landed) veil.opening({ stage: "land", name: document.world.name, size: document.world.size, ...(document.world.aspect === undefined ? {} : { aspect: document.world.aspect }), areas: outlines.areas, patches: document.world.patches, lots: document.world.things.map(({ x, z }) => ({ x, z })) });
   veil.baking(Object.fromEntries(document.world.patches.map((p) => [p.path, p.vitality])));
-  return stood === undefined ? codeLab(document) : { ...codeLab(document), stood };
+  return stood === undefined ? openedWorld(document) : { ...openedWorld(document), stood };
 }
 
 /** A trail's route as the terrain walks it: what its link blueprint builds. A trail Jev composed no route for is a fault, never a default. */
@@ -289,8 +289,8 @@ function thingOf(t: CodeWorld["things"][number], world: CodeWorld, files: Readon
   return { facts, represented: representSymbol(sym, file) };
 }
 
-/** Everything the terrain lab needs to bake and furnish a world document. */
-export function codeLab({ facts, world, summary, judged }: WorldDocument): CodeLab {
+/** Everything the world needs to bake and furnish a world document. */
+export function openedWorld({ facts, world, summary, judged }: WorldDocument): OpenedWorld {
   // A world Jev composed no sky or land for is a fault, never a default.
   const sky = world.sky;
   if (sky === undefined) throw new Error(`${world.name} has no sky: Jev composes every world's light, sky and wind.`);

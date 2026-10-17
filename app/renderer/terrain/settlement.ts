@@ -1,4 +1,4 @@
-// The terrain lab's buildings: one for each entity, file or definition that
+// The world's buildings: one for each entity, file or definition that
 // stands as a building, each the building Jev composed for it, standing on its
 // own leveled pad, apart from the others. The bake thread finds the
 // sites and levels the pads (`standWorld`); the settlement stands each

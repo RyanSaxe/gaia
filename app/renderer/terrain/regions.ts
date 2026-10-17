@@ -51,7 +51,7 @@ export function createRegionCovers() {
     uniforms,
     update(spec: WorldSpec, covers: readonly GroundSpec[], terrain: Terrain): void {
       uniforms.uCoverReach.value = landRadius(terrain) - 1;
-      if (spec.regions.length > WILD_SLOTS[0]) throw new Error(`The terrain lab draws at most ${WILD_SLOTS[0]} regions; this world has ${spec.regions.length}.`);
+      if (spec.regions.length > WILD_SLOTS[0]) throw new Error(`The world draws at most ${WILD_SLOTS[0]} regions; this world has ${spec.regions.length}.`);
       uniforms.uRegionCount.value = spec.regions.length;
       spec.regions.forEach((r, i) => {
         const c = covers[i];
