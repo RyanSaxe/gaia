@@ -212,12 +212,34 @@ export function findSite(t: Terrain, plan: BuildingPlan, taken: readonly Buildin
   return gentlest(t, plan, candidates, taken, apart, beside, half) ?? gentlest(t, plan, everywhere(), taken, apart, beside, half) ?? { x: 0, z: 0, yaw: 0, level: heightAt(t.lattice, 0, 0) };
 }
 
-/** True when water would stand in a site's house once its pad is leveled: the water's surface lies above the pad somewhere under it, sampled every meter. */
+/**
+ * Whether water stands above `level` at any of the four samples of the lattice cell holding (x, z): the samples the
+ * water's depth there is read from (`waterDepthAt`). The water's surface interpolated across the cell is no guide,
+ * because a dry sample's level is `DRY` and outweighs a wet one.
+ */
+function wetAbove(t: Terrain, x: number, z: number, level: number): boolean {
+  const l = t.lattice;
+  const ix = Math.min(l.n - 2, Math.max(0, Math.floor((x - l.origin) / l.spacing)));
+  const iz = Math.min(l.n - 2, Math.max(0, Math.floor((z - (l.originZ ?? l.origin)) / l.spacing)));
+  for (const i of [iz * l.n + ix, iz * l.n + ix + 1, (iz + 1) * l.n + ix, (iz + 1) * l.n + ix + 1]) {
+    const surface = t.waterLevel[i] as number;
+    if (surface > DRY / 2 && surface > level) return true;
+  }
+  return false;
+}
+
+/**
+ * True when water would stand in a site's house once its pad is leveled: the water's surface lies above the pad
+ * somewhere under it, sampled at most a meter apart from wall to wall, both walls included.
+ */
 function inWater(t: Terrain, plan: BuildingPlan, site: BuildingSite): boolean {
-  for (let lz = -plan.depth / 2; lz <= plan.depth / 2 + 1e-6; lz += 1) {
-    for (let lx = -plan.width / 2; lx <= plan.width / 2 + 1e-6; lx += 1) {
-      const surface = heightAt(t.lattice, ...siteToWorld(site, lx, lz), t.waterLevel);
-      if (surface > DRY / 2 && surface > site.level) return true;
+  const across = Math.ceil(plan.width);
+  const along = Math.ceil(plan.depth);
+  for (let k = 0; k <= along; k++) {
+    const lz = -plan.depth / 2 + (plan.depth * k) / along;
+    for (let i = 0; i <= across; i++) {
+      const lx = -plan.width / 2 + (plan.width * i) / across;
+      if (wetAbove(t, ...siteToWorld(site, lx, lz), site.level)) return true;
     }
   }
   return false;
