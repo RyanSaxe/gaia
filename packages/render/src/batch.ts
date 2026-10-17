@@ -2,8 +2,9 @@
 // parts that share a material are joined into one mesh, so the batch draws
 // one call per material instead of one per part of every member. Each vertex
 // names its member and its part's swatch (`aBatch`), and a small float
-// texture holds what each plant's own uniforms held: its placement, vitality,
-// seed, turn, height and motion, the colors a spray borrows, and each
+// texture holds what each plant's own uniforms held: its placement, vitality
+// and how far that lags as a change eases in, seed, turn, height and motion,
+// the colors a spray borrows, and each
 // swatch's colors, foliage, lamp and flutter. The plant shaders read the
 // texture in place of those uniforms, so each member draws exactly what it
 // drew alone, with every channel (wind, vitality, ruin, spin), and a change
@@ -15,6 +16,7 @@ import { FLUTTERS, type Realized, mergeParts, shownVitality, spinAt } from "@gai
 import type { SceneLight } from "./light.ts";
 import { CLOSED, DEPTH_FRAG, DEPTH_VERT, FOLIAGE, LAMP, PLANT_FRAG, PLANT_VERT, type PlantView, geometryOf, hasRuin, letGoOnUpload, sprayColors } from "./plant.ts";
 import { createSmokeMaterial } from "./smoke.ts";
+import { closeEachFrame, closeLag } from "./lag.ts";
 
 /** One plant in a batch: what it is, where it stands and turns, and its vitality. */
 export interface BatchMember {
@@ -62,6 +64,7 @@ mat4 batchModel() { return mat4(batchAt(0), batchAt(1), batchAt(2), batchAt(3));
   out = swap(out, "uniform float uHeight;", "#define uHeight (batchAt(4).w)");
   out = swap(out, "uniform float uSway;", "#define uSway (batchAt(5).x)");
   out = swap(out, "uniform float uFrequency;", "#define uFrequency (batchAt(5).y)");
+  out = swap(out, "uniform float uVitalityLag;", "#define uVitalityLag (batchAt(5).z)");
   out = swap(out, "uniform float uFlutter;", `#define uFlutter (batchAt(${HEAD} + ${PER_SWATCH} * int(aBatch.y + 0.5) + 2).x)`);
   out = swap(out, "uniform float uTurn;", "#define uTurn (batchAt(4).z)");
   // The texture's matrix places each member; the meshes themselves stand at the origin.
@@ -248,6 +251,18 @@ export function createPlantBatch(members: readonly BatchMember[], light: SceneLi
     return mesh;
   });
 
+  // The members whose vitality still lags a change, each frame closing a little more.
+  const lagging = new Set<number>();
+  const closeLags = (keep: number): boolean => {
+    for (const member of lagging) {
+      const at = (member * width + 5) * 4 + 2;
+      data[at] = closeLag(data[at] as number, keep);
+      if (data[at] === 0) lagging.delete(member);
+    }
+    texture.needsUpdate = true;
+    return lagging.size > 0;
+  };
+
   // What a ray is tested against: each member's parts as built, placed as it stands, as a plant's own meshes are.
   const picks = prepared.map((p) => {
     const group = new THREE.Group();
@@ -269,7 +284,15 @@ export function createPlantBatch(members: readonly BatchMember[], light: SceneLi
     triangles,
     setVitality(member, v) {
       const value = shownVitality(v);
-      data[(member * width + 4) * 4] = value;
+      const at = (member * width + 4) * 4;
+      // Where it was a moment ago stays put, so the change eases in from there.
+      const lag = (data[at + 6] as number) + (data[at] as number) - value;
+      data[at] = value;
+      data[at + 6] = Math.abs(lag) < 1e-6 ? 0 : lag;
+      if (data[at + 6] !== 0) {
+        lagging.add(member);
+        closeEachFrame(closeLags);
+      }
       texture.needsUpdate = true;
       const smoke = smokeLife[member];
       if (smoke !== undefined) smoke.uVitality.value = value;

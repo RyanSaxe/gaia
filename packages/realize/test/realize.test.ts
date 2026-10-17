@@ -4,7 +4,7 @@ import { FLORA_PRIMITIVES, PRIMITIVES, STRUCTURE_PRIMITIVES } from "@gaia/primit
 import { flora, rock, structure, wildflowers } from "@gaia/kinds";
 import { validate } from "@gaia/world";
 import { randomSlots } from "@gaia/world/testing";
-import { FLORA_PRESETS, FLOWER_PRESETS, ROCK_PRESETS, SHRUB_PRESETS, applyVitality, mergeParts, realize, resolveParams, rotAt, shownVitality, spinAt, triangleCount } from "@gaia/realize";
+import { CHANNEL_MATH, FLORA_PRESETS, FLOWER_PRESETS, ROCK_PRESETS, SHRUB_PRESETS, applyVitality, easedClamp, easedStep, mergeParts, realize, resolveParams, rotAt, shownVitality, spinAt, triangleCount } from "@gaia/realize";
 
 const lib = new Library(FLORA_PRIMITIVES);
 const facts = { scale: 1, age: 120 };
@@ -146,6 +146,71 @@ describe("vitality response", () => {
         expect(part.positions.every(Number.isFinite)).toBe(true);
       }
     }
+  });
+  describe("a change in vitality easing in", () => {
+    const smoothstep = (e0: number, e1: number, x: number): number => {
+      const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0)));
+      return t * t * (3 - 2 * t);
+    };
+    const mean = (f: (x: number) => number, a: number, b: number): number => {
+      let sum = 0;
+      for (let k = 0; k < 4000; k++) sum += f(a + ((b - a) * (k + 0.5)) / 4000);
+      return sum / 4000;
+    };
+
+    it("shows every step exactly where it stands once the change has settled", () => {
+      const r = rand(seedOf("eased at rest"));
+      for (let k = 0; k < 500; k++) {
+        const e0 = r.next() * 0.9;
+        const e1 = e0 + 0.02 + r.next() * 0.2;
+        const v = r.next();
+        expect(easedStep(e0, e1, v, 0)).toBe(smoothstep(e0, e1, v));
+      }
+      const willow = realize((FLORA_PRESETS[0] as (typeof FLORA_PRESETS)[number]).blueprint, flora, lib, { seed: 5, facts });
+      for (const part of willow.parts) {
+        for (const v of [0.1, 0.4, 0.7]) {
+          const settled = applyVitality(part, v, undefined, undefined, 0);
+          const plain = applyVitality(part, v);
+          expect(bytes(settled.positions).equals(bytes(plain.positions))).toBe(true);
+          expect(bytes(settled.colors).equals(bytes(plain.colors))).toBe(true);
+        }
+      }
+    });
+
+    it("spreads a step over the vitality it has just passed through, as the step's mean across it", () => {
+      const r = rand(seedOf("eased spread"));
+      for (let k = 0; k < 200; k++) {
+        const e0 = r.next() * 0.9;
+        const e1 = e0 + 0.02 + r.next() * 0.2;
+        const v = r.next();
+        const lag = (r.next() - 0.5) * 0.6;
+        expect(easedStep(e0, e1, v, lag)).toBeCloseTo(mean((x) => smoothstep(e0, e1, x), v + lag, v), 3);
+        const now = r.next() * 3 - 1;
+        const was = r.next() * 3 - 1;
+        expect(easedClamp(now, was)).toBeCloseTo(mean((u) => Math.min(1, Math.max(0, u)), was, now), 3);
+      }
+    });
+
+    it("eases a step that a ramp at the film's pace crosses over many frames, not a few", () => {
+      // Shown vitality from ruin to whole in 2.7 s, a frame every 1/60 s; the narrowest band any piece crosses.
+      const frame = 1 / 60;
+      const dv = frame / 2.7;
+      const e0 = 0.5;
+      const e1 = e0 + CHANNEL_MATH.lossBand;
+      const keep = Math.exp(-frame / CHANNEL_MATH.vitalityLag);
+      let lag = 0;
+      let [steppedWorst, easedWorst, stepped, eased] = [0, 0, smoothstep(e0, e1, 0), easedStep(e0, e1, 0, 0)];
+      for (let v = dv; v <= 1; v += dv) {
+        // Where it was stays put as the vitality moves, and the lag closes over the frame's time.
+        lag = (lag - dv) * keep;
+        const s = smoothstep(e0, e1, v);
+        const e = easedStep(e0, e1, v, lag);
+        steppedWorst = Math.max(steppedWorst, Math.abs(s - stepped));
+        easedWorst = Math.max(easedWorst, Math.abs(e - eased));
+        [stepped, eased] = [s, e];
+      }
+      expect(easedWorst).toBeLessThan(steppedWorst / 2);
+    });
   });
 });
 

@@ -7,3 +7,4 @@ export * from "./instances.ts";
 export * from "./wind-field.ts";
 export * from "./sway.ts";
 export * from "./far.ts";
+export * from "./lag.ts";

@@ -8,6 +8,7 @@ import { CHANNEL_MATH, DETAIL, FLUTTERS, type Realized, pieceFrames, shownVitali
 import { LIGHT_GLSL, type SceneLight } from "./light.ts";
 import { WIND_GLSL } from "./sway.ts";
 import { createSmokeMaterial } from "./smoke.ts";
+import { closeEachFrame, closeLag } from "./lag.ts";
 
 const f = (x: number): string => x.toFixed(4);
 /** How far dusk has fallen, 0 by day to 1 once it is night: lamps light and doves fly home across it. */
@@ -56,6 +57,30 @@ float grainNoise(vec3 grain, vec3 rest) {
 }
 `;
 
+// A change in vitality eases in: each thing keeps how far its shown vitality
+// lags behind where it was a moment ago (`uVitalityLag`, see `easeVitality`),
+// and every step of its decline shows averaged over the vitality passed
+// through since, so a heal mends piece by piece rather than a piece at a
+// frame. At rest the lag is 0 and each step is exactly the one it eases.
+const EASED_GLSL = /* glsl */ `
+float easedRise(float t) { t = max(t, 0.0); return t >= 1.0 ? t - 0.5 : t * t * t * (1.0 - 0.5 * t); }
+// smoothstep(e0, e1, v), averaged over the vitality from v + lag to v.
+float eased(float e0, float e1, float v, float lag) {
+  if (abs(lag) < 1e-4) return smoothstep(e0, e1, v);
+  float w = e1 - e0;
+  return w * (easedRise((v - e0) / w) - easedRise((v + lag - e0) / w)) / -lag;
+}
+// clamp(u, 0, 1) averaged as u runs evenly from was to now.
+float easedClamp(float now, float was) {
+  if (abs(now - was) < 1e-4) return clamp(now, 0.0, 1.0);
+  float a = max(now, 0.0);
+  float b = max(was, 0.0);
+  float ia = a >= 1.0 ? a - 0.5 : 0.5 * a * a;
+  float ib = b >= 1.0 ? b - 0.5 : 0.5 * b * b;
+  return (ia - ib) / (now - was);
+}
+`;
+
 const CHANNELS_GLSL = /* glsl */ `
 attribute vec4 aLook;
 attribute vec4 aLife;
@@ -73,6 +98,7 @@ attribute vec3 aCutout;
 #define aClose aLife.z
 #define aLeave aLife.w
 uniform float uVitality;
+uniform float uVitalityLag;
 uniform float uSeed;
 uniform vec3 uEye;
 uniform float uDetail;
@@ -82,6 +108,9 @@ uniform float uFrequency;
 uniform float uHeight;
 uniform float uFlutter;
 uniform float uWind;
+${EASED_GLSL}
+// The shown vitality halfway through what it has just passed: what anything that follows vitality evenly shows.
+float vitalityMid() { return uVitality + 0.5 * uVitalityLag; }
 
 #ifdef RUIN
 // A building's pieces also fall, grow, turn and roost. These attributes exist
@@ -113,14 +142,16 @@ mat3 pieceTurn() {
   if (rate > 0.0) m = turnAbout(aSpin / rate, uTurn * rate * 6.28318530718);
   float most = length(aFall.xyz);
   if (aFall.w > 0.0 && most > 0.0) {
-    float fallen = 1.0 - smoothstep(aFall.w - ${f(CHANNEL_MATH.fallBand)}, aFall.w, uVitality);
+    float fallen = 1.0 - eased(aFall.w - ${f(CHANNEL_MATH.fallBand)}, aFall.w, uVitality, uVitalityLag);
     m = turnAbout(aFall.xyz / most, most * fallen) * m;
   }
   return m;
 }
 vec3 turnedNormal(vec3 n) { return pieceTurn() * n; }
-// How far this surface has rotted through, for the fragment shader's holes.
-float rotNow() { return aRot.x * ${f(CHANNEL_MATH.rotMost)} * clamp(1.0 - uVitality / ${f(CHANNEL_MATH.rotStart)}, 0.0, 1.0); }
+// How far this surface has rotted through at shown vitality v, for the fragment shader's holes.
+float rotAt(float v) { return aRot.x * ${f(CHANNEL_MATH.rotMost)} * clamp(1.0 - v / ${f(CHANNEL_MATH.rotStart)}, 0.0, 1.0); }
+// The rot now and where it was a moment ago.
+vec2 rotNow() { return vec2(rotAt(uVitality), rotAt(uVitality + uVitalityLag)); }
 #else
 vec3 turnedNormal(vec3 n) { return n; }
 #endif
@@ -138,12 +169,13 @@ bool onSpray() {
 // as dusk falls, over the hours the lamps are lit in.
 vec3 applyChannels(vec3 p) {
   vec3 off = (p - aPivot) * (1.0 - aClose * uNightness * 0.7);
-  float keep = aLoss > 0.0 && !onSpray() ? smoothstep(aLoss, aLoss + ${f(CHANNEL_MATH.lossBand)}, uVitality) : 1.0;
+  float keep = aLoss > 0.0 && !onSpray() ? eased(aLoss, aLoss + ${f(CHANNEL_MATH.lossBand)}, uVitality, uVitalityLag) : 1.0;
 #ifdef RUIN
-  keep *= aGrow > 0.0 ? 1.0 - smoothstep(aGrow, aGrow + ${f(CHANNEL_MATH.lossBand)}, uVitality) : 1.0;
+  keep *= aGrow > 0.0 ? 1.0 - eased(aGrow, aGrow + ${f(CHANNEL_MATH.lossBand)}, uVitality, uVitalityLag) : 1.0;
   keep *= 1.0 - aRoost * ${DUSK};
   // Straw at a hole's edge slumps as it thins, rather than standing cut.
-  float slump = grainIs(aRot.yzw, ${GRAIN.straw.toFixed(1)}) ? 0.2 * (1.0 - smoothstep(0.0, 0.1, grainNoise(aRot.yzw, p) - rotNow())) : 0.0;
+  vec2 rot = rotNow();
+  float slump = grainIs(aRot.yzw, ${GRAIN.straw.toFixed(1)}) ? 0.2 * (1.0 - smoothstep(0.0, 0.1, grainNoise(aRot.yzw, p) - 0.5 * (rot.x + rot.y))) : 0.0;
   return aPivot + pieceTurn() * (off * keep) - vec3(0.0, slump, 0.0);
 #else
   return aPivot + off * keep;
@@ -154,7 +186,7 @@ vec3 applyChannels(vec3 p) {
 // each point's distance from it, so whatever the bough carries sags with it.
 vec3 applyDroop(vec3 p, vec3 bough) {
   vec3 o = p - bough;
-  float s = aDroop * (1.0 - uVitality);
+  float s = aDroop * (1.0 - vitalityMid());
   float d = length(o);
   if (s <= 0.0 || d <= 1e-5) return p;
   o.y -= s * d * ${f(CHANNEL_MATH.sag)};
@@ -232,12 +264,12 @@ vec3 applyWind(vec3 p, mat4 model, vec3 root) {
 // instead of sparkling. CUT in @gaia/schema names the cuts.
 const CUTOUT_GLSL = /* glsl */ `
 varying vec3 vCut;
-varying vec2 vLife;
+varying vec3 vLife;
 // A patch (moss) recedes from its edge as vitality falls: its depth shrinks
 // before the fragment cuts it, so the edge creeps back smoothly.
 vec3 cardCut() {
   vec3 c = aCutout;
-  if (abs(floor(c.z) - ${CUT.patch.toFixed(1)}) < 0.5) c.x -= 0.5 * (1.0 - uVitality);
+  if (abs(floor(c.z) - ${CUT.patch.toFixed(1)}) < 0.5) c.x -= 0.5 * (1.0 - vitalityMid());
   return c;
 }
 `;
@@ -249,7 +281,7 @@ vec3 cardCut() {
 // of a roof open at the same spots.
 const ROT_GLSL = /* glsl */ `
 #ifdef RUIN
-varying float vRot;
+varying vec2 vRot;
 varying vec3 vRest;
 varying vec3 vGrain;
 ${ROT_NOISE_GLSL}
@@ -264,15 +296,16 @@ float grainEdge() {
   vec2 g = grainAt(vGrain);
   float row = floor(g.y);
   float n = grainNoise(vGrain, vRest);
-  float gone = clamp((vRot - n) / 0.04, 0.0, 1.0);
+  // How far it has broken away, over the rot it has just passed through; whole above the most rot it has seen.
+  float gone = easedClamp((vRot.x - n) / 0.04, (vRot.y - n) / 0.04);
   float fringe = grainIs(vGrain, ${GRAIN.straw.toFixed(1)}) ? 0.35 * rotHash(vec3(floor(g.x * 5.0), row, 7.0)) : 0.0;
-  return (fract(g.y) + fringe - gone * (1.0 + fringe)) * 0.3 + 3.0 * max(n - vRot, 0.0);
+  return (fract(g.y) + fringe - gone * (1.0 + fringe)) * 0.3 + 3.0 * max(n - max(vRot.x, vRot.y), 0.0);
 }
 // Distance above the hole's edge: negative inside a hole.
 float rotEdge() {
-  if (vRot <= 0.0) return 1.0;
+  if (max(vRot.x, vRot.y) <= 0.0) return 1.0;
   if (vGrain.z > ${(GRAIN.none + 0.5).toFixed(1)}) return grainEdge();
-  return rotNoise(vRest) - vRot;
+  return rotNoise(vRest) - 0.5 * (vRot.x + vRot.y);
 }
 #else
 float rotEdge() { return 1.0; }
@@ -280,6 +313,7 @@ float rotEdge() { return 1.0; }
 `;
 
 const LEAF_MASK_GLSL = /* glsl */ `
+${EASED_GLSL}
 ${ROT_GLSL}
 varying vec3 vCut;
 float leafHash(float x) { return fract(sin(x * 91.3458) * 47453.5453); }
@@ -318,11 +352,11 @@ float lobedShape(vec2 q, float size) {
 
 // A leaf drops in place as vitality falls past its own threshold, spread
 // about the card's loss: it erodes from its edge, so nothing flies anywhere.
-varying vec2 vLife;
+varying vec3 vLife;
 float dropAt(float h) {
   if (vLife.x <= 0.0) return 0.0;
   float th = clamp(vLife.x + (h - 0.5) * ${f(2 * CHANNEL_MATH.dropSpread)}, 0.01, 0.95);
-  return 1.0 - smoothstep(th, th + ${f(CHANNEL_MATH.lossBand)}, vLife.y);
+  return 1.0 - eased(th, th + ${f(CHANNEL_MATH.lossBand)}, vLife.y, vLife.z);
 }
 // Where a spray shows its stalk (bark), its few fresh leaves (stem green)
 // and its flowers' pale petals (the family's bloom).
@@ -429,7 +463,7 @@ vec2 sprayLeaves(vec2 p, float seed, float px, float merged, int kind) {
   vec2 c = merged > 0.999 ? vec2(0.0, 1.0) : sprayCut(p, seed, px, kind);
   vec2 o = p - vec2(0.0, 0.05);
   float outline = 0.8 + 0.07 * cos((atan(o.y, o.x) + seed * 6.2832) * 9.0) - length(o * vec2(1.0, 0.92));
-  float bare = vLife.x > 0.0 ? 1.0 - smoothstep(vLife.x, vLife.x + 0.2, vLife.y) : 0.0;
+  float bare = vLife.x > 0.0 ? 1.0 - eased(vLife.x, vLife.x + 0.2, vLife.y, vLife.z) : 0.0;
   gBark *= 1.0 - merged;
   gGreen *= 1.0 - merged;
   gBloom *= 1.0 - merged;
@@ -473,7 +507,7 @@ vec2 crowdedCut(vec2 p, float seed, float px, float merged) {
   }
   gBark = bark * step(0.0, d) * (1.0 - merged);
   float outline = 0.8 + 0.07 * cos((atan(o.y, o.x) + seed * 6.2832) * 9.0) - length(o * vec2(1.0, 0.92));
-  float bare = vLife.x > 0.0 ? 1.0 - smoothstep(vLife.x, vLife.x + 0.2, vLife.y) : 0.0;
+  float bare = vLife.x > 0.0 ? 1.0 - eased(vLife.x, vLife.x + 0.2, vLife.y, vLife.z) : 0.0;
   return vec2(mix(d, outline - 1.2 * bare, merged), mix(tone, 1.0, merged));
 }
 // A full spray's leaves: slender pointed leaves (kind 3) fanned in two rings
@@ -579,7 +613,7 @@ vec2 fullSpray(vec2 p, float seed, float px, float merged, int kind) {
     c.x = max(c.x, stalk);
   }
   float outline = 0.8 + 0.07 * cos((atan(o.y, o.x) + seed * 6.2832) * 9.0) - length(o * vec2(1.0, 0.92));
-  float bare = vLife.x > 0.0 ? 1.0 - smoothstep(vLife.x, vLife.x + 0.2, vLife.y) : 0.0;
+  float bare = vLife.x > 0.0 ? 1.0 - eased(vLife.x, vLife.x + 0.2, vLife.y, vLife.z) : 0.0;
   gBark *= 1.0 - merged;
   gGreen *= 1.0 - merged;
   gBloom *= 1.0 - merged;
@@ -680,7 +714,7 @@ uniform float uTime;
 ${CHANNELS_GLSL}
 ${CUTOUT_GLSL}
 #ifdef RUIN
-varying float vRot;
+varying vec2 vRot;
 varying vec3 vRest;
 varying vec3 vGrain;
 #endif
@@ -710,9 +744,9 @@ void main() {
   vShade = aShade;
   vTint = aTint;
   vCut = cardCut();
-  vLife = vec2(aLoss, uVitality);
-  vWither = aWither * (1.0 - uVitality);
-  vGlow = aGlow * uVitality * ${f(CHANNEL_MATH.glowStrength)};
+  vLife = vec3(aLoss, uVitality, uVitalityLag);
+  vWither = aWither * (1.0 - vitalityMid());
+  vGlow = aGlow * vitalityMid() * ${f(CHANNEL_MATH.glowStrength)};
   gl_Position = projectionMatrix * viewMatrix * world;
 }
 `;
@@ -804,13 +838,13 @@ uniform float uTime;
 ${CHANNELS_GLSL}
 ${CUTOUT_GLSL}
 #ifdef RUIN
-varying float vRot;
+varying vec2 vRot;
 varying vec3 vRest;
 varying vec3 vGrain;
 #endif
 void main() {
   vCut = cardCut();
-  vLife = vec2(aLoss, uVitality);
+  vLife = vec3(aLoss, uVitality, uVitalityLag);
 #ifdef RUIN
   vRot = rotNow();
   vRest = position;
@@ -976,6 +1010,8 @@ export function createPlant(plant: Realized, light: SceneLight): PlantView {
   const shared = {
     // The shaders read how far along its decline the plant looks (`shownVitality`), not its vitality.
     uVitality: { value: 1 },
+    // Where that was a moment ago, less where it is: a change eases in (`easeVitality`).
+    uVitalityLag: { value: 0 },
     // A single plant keeps its full detail: thinning is for the many copies a world places.
     uDetail: { value: 0 },
     uSeed: { value: 0 },
@@ -993,6 +1029,7 @@ export function createPlant(plant: Realized, light: SceneLight): PlantView {
     shared.uTurn.value += Math.max(0, now - turnedAt) * spinAt(shared.uVitality.value);
     turnedAt = now;
   };
+  const closeMine = (keep: number): boolean => (shared.uVitalityLag.value = closeLag(shared.uVitalityLag.value, keep)) !== 0;
   const materials: THREE.ShaderMaterial[] = [];
   const meshes: { mesh: THREE.Mesh; color: THREE.ShaderMaterial; depth: THREE.ShaderMaterial }[] = [];
   const veils: THREE.Mesh[] = [];
@@ -1055,7 +1092,11 @@ export function createPlant(plant: Realized, light: SceneLight): PlantView {
     },
     setVitality(v) {
       vitality = Math.min(1, Math.max(0, v));
-      shared.uVitality.value = shownVitality(vitality);
+      const shown = shownVitality(vitality);
+      // Where it was a moment ago stays put, so the change eases in from there.
+      shared.uVitalityLag.value += shared.uVitality.value - shown;
+      shared.uVitality.value = shown;
+      if (shared.uVitalityLag.value !== 0) closeEachFrame(closeMine);
     },
     useDepth(on) {
       for (const m of meshes) m.mesh.material = on ? m.depth : m.color;

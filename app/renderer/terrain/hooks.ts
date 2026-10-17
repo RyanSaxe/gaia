@@ -8,6 +8,7 @@
 
 import * as THREE from "three";
 import { FLORA_PRESETS, type Realized } from "@gaia/realize";
+import { settleVitality } from "@gaia/render";
 import { clearanceAt, fordBeside, footingAt, frameOf, groundHeightAt, heightAt, junctionVitality, placeAt, planTrip, stanceAt, standAt, stoodBy, type StoodSpot, type Stride, TRAVEL, trailWay, travelFrom, travelStep, wadingAt, WALK_TO, walkStep, type Walker, waterDepthAt, wayVitalityAt, wayWear } from "@gaia/terrain";
 import { groundVitality } from "@gaia/world";
 import { contentHash } from "./far-store.ts";
@@ -643,6 +644,8 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
     change: frameChange,
     /** The walk test (`walkSteps`): each step's change to the detail drawn, and the wind's along the same walk. */
     steps: (meters: number, step = 0.7, at?: number) => walkSteps(meters, step, at),
+    /** Lets every change in vitality settle at once, so what is drawn next shows exactly the vitality set. */
+    settleVitality: () => settleVitality(),
     /**
      * The stand check. The person stands still for `seconds` with the wind's
      * clock frozen while the page goes on as it does, the journal's painter
