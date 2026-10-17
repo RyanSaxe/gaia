@@ -192,24 +192,27 @@ describe("vitality response", () => {
     });
 
     it("eases a step that a ramp at the film's pace crosses over many frames, not a few", () => {
-      // Shown vitality from ruin to whole in 2.7 s, a frame every 1/60 s; the narrowest band any piece crosses.
+      // Shown vitality from ruin to whole in 2.7 s, a frame every 1/60 s; the narrowest band any piece crosses, at the
+      // very start of the change, where the least vitality has yet been passed through.
       const frame = 1 / 60;
       const dv = frame / 2.7;
-      const e0 = 0.5;
+      const e0 = 0;
       const e1 = e0 + CHANNEL_MATH.lossBand;
       const keep = Math.exp(-frame / CHANNEL_MATH.vitalityLag);
-      let lag = 0;
+      // The shown vitality follows the one given, and where it was follows the shown one (`followVitality` in @gaia/render).
+      let [shown, was] = [0, 0];
       let [steppedWorst, easedWorst, stepped, eased] = [0, 0, smoothstep(e0, e1, 0), easedStep(e0, e1, 0, 0)];
-      for (let v = dv; v <= 1; v += dv) {
-        // Where it was stays put as the vitality moves, and the lag closes over the frame's time.
-        lag = (lag - dv) * keep;
-        const s = smoothstep(e0, e1, v);
-        const e = easedStep(e0, e1, v, lag);
+      for (let v = dv; v <= 1 + 30 * dv; v += dv) {
+        const target = Math.min(1, v);
+        shown = target + (shown - target) * keep;
+        was = shown + (was - shown) * keep;
+        const s = smoothstep(e0, e1, target);
+        const e = easedStep(e0, e1, shown, was - shown);
         steppedWorst = Math.max(steppedWorst, Math.abs(s - stepped));
         easedWorst = Math.max(easedWorst, Math.abs(e - eased));
         [stepped, eased] = [s, e];
       }
-      expect(easedWorst).toBeLessThan(steppedWorst / 2);
+      expect(easedWorst).toBeLessThan(steppedWorst / 4);
     });
   });
 });

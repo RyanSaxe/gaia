@@ -911,13 +911,15 @@ wheel) and `roost` (how fully a piece flies home onto its pivot as dusk
 falls, over the hours the lamps are lit in, and out again after dawn: a
 dove). A part without them carries none, and only its material compiles
 them in. The plant shader combines them with each instance's live
-vitality, so a change in vitality never rebuilds geometry. Each plant,
-batch and copy also holds how far its shown vitality lags where it was a
-moment ago (`uVitalityLag`), which `easeVitality` in
-`packages/render/src/lag.ts` closes once a frame by the frame's own time
-(`CHANNEL_MATH.vitalityLag`); the shader shows each step averaged over that
-lag (`eased`, mirrored by `easedStep` in `@gaia/realize`), so a change eases
-in and the look at rest is unchanged. A component placed
+vitality, so a change in vitality never rebuilds geometry. A change eases
+in: each plant, batch, copy and far card holds a shown vitality that
+follows the one it was given and, behind it, where that was
+(`uVitalityLag`), both moved once a frame by the frame's own time by
+`easeVitality` in `packages/render/src/lag.ts` (`CHANNEL_MATH.vitalityLag`
+seconds per stage); the shader shows each step averaged between them
+(`eased`, mirrored by `easedStep` in `@gaia/realize`), so a change starts
+and stops gently, and at rest both equal the vitality given and the look is
+unchanged. A component placed
 many times, such as a tree, a rock or a drift of flowers, draws as one
 instanced mesh per part and level of detail, with each copy's vitality, seed
 and hue read per instance and its shape varied a little by where it stands. Far enough away that its crown spans few pixels, a tree draws as one card baked from its own build by its own shaders (`bakeFarForm` and `createFarCards` in `packages/render/src/far.ts`): healthy and withered color, normal, depth, glow, foliage and coverage at four vitalities per texel, from 96 directions, lit live with the scene's light; the woods choose which copies draw far. `startFarBake` bakes a form a few views a frame so a loading screen keeps painting, and `farFormData` and `farFormFrom` store a baked form and read it back, so each build bakes once per install (`FAR_BAKE_VERSION` marks what a bake writes).

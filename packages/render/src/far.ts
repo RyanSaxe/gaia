@@ -20,6 +20,7 @@ import { copySeed } from "./instances.ts";
 import { LIGHT_GLSL, noShadowMap, type SceneLight } from "./light.ts";
 import { FOLIAGE, PLANT_FRAG, PLANT_VERT, geometryOf, sprayColors } from "./plant.ts";
 import { WIND_GLSL } from "./sway.ts";
+import { closeEachFrame, followVitality } from "./lag.ts";
 
 /** Where the views look from: azimuths all the way round, at these elevations in degrees, crowded where a walker sees far trees. */
 export const FAR_VIEWS = { azimuths: 16, elevations: [-8, 0, 8, 18, 34, 60] } as const;
@@ -891,6 +892,19 @@ export function createFarCards(forms: readonly FarForm[], light: SceneLight, swa
       }
       fading.renderOrder = 2;
       const attribute = (name: string): THREE.InstancedBufferAttribute => geometry.getAttribute(name) as THREE.InstancedBufferAttribute;
+      // A copy whose vitality changes eases in as its near form does (`followVitality`), its card showing the middle
+      // of what the near form averages over: where it shows now, how far that lags, and where it is going.
+      const easing = new Map<number, { shown: number; lag: number; target: number }>();
+      const closeCards = (keep: number): boolean => {
+        const more = attribute("aMore");
+        for (const [index, e] of easing) {
+          [e.shown, e.lag] = followVitality(e.shown, e.lag, e.target, keep);
+          more.array[index * 4 + 1] = e.shown + 0.5 * e.lag;
+          if (e.shown === e.target && e.lag === 0) easing.delete(index);
+        }
+        more.needsUpdate = true;
+        return easing.size > 0;
+      };
       const set: FarCopies = {
         object,
         place(places, crowns) {
@@ -911,11 +925,13 @@ export function createFarCards(forms: readonly FarForm[], light: SceneLight, swa
           attribute("aCrown").array.set(crowns.subarray(0, count * 4));
           for (const name of ["aSpot", "aMore", "aCrown"]) attribute(name).needsUpdate = true;
           geometry.instanceCount = count;
+          // Copies stood anew show their vitality at rest.
+          easing.clear();
         },
         setVitalityAt(index, v) {
-          const more = attribute("aMore");
-          more.array[index * 4 + 1] = shownVitality(v);
-          more.needsUpdate = true;
+          const from = easing.get(index) ?? { shown: attribute("aMore").array[index * 4 + 1] as number, lag: 0, target: 0 };
+          easing.set(index, { ...from, target: shownVitality(v) });
+          closeEachFrame(closeCards);
         },
         useDepth(on) {
           solid.material = on ? m.depth : m.solid;

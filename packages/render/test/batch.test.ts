@@ -48,6 +48,7 @@ describe("a batch of buildings", () => {
     // A change in one building's vitality rewrites its texel alone, and no geometry.
     const before = meshes.map((m) => m.geometry.getAttribute("position"));
     batch.setVitality(2, 0.05);
+    settleVitality();
     expect(row(2, 4)[0]).toBeCloseTo(shownVitality(0.05), 6);
     expect(row(1, 4)[0]).toBeCloseTo(shownVitality(members[1]?.vitality ?? 0), 6);
     expect(meshes.map((m) => m.geometry.getAttribute("position"))).toEqual(before);
@@ -58,18 +59,23 @@ describe("a batch of buildings", () => {
     const was = row(3, 4)[0] as number;
     batch.setVitality(3, 0.9);
     const now = shownVitality(0.9);
-    // Its shaders read the new vitality at once, and how far it lags where it was.
-    expect(row(3, 4)[0]).toBeCloseTo(now, 6);
-    expect(row(3, 5)[2]).toBeCloseTo(was - now, 6);
-    // Each frame closes some of the lag, by the frame's own time; a frame drawn with no time passing closes none.
+    // A frame drawn with no time passing moves nothing; each frame's time moves the shown vitality a little toward
+    // the new one, and where it was a little behind that, so the change starts gently.
     easeVitality(0);
-    expect(row(3, 5)[2]).toBeCloseTo(was - now, 6);
-    easeVitality(1 / 60);
-    const left = Math.abs(row(3, 5)[2] as number);
-    expect(left).toBeLessThan(Math.abs(was - now));
-    expect(left).toBeGreaterThan(0);
-    // Within seconds it has closed entirely, so at rest the building shows its vitality exactly.
-    for (let k = 0; k < 60 * 20; k++) easeVitality(1 / 60);
+    expect(row(3, 4)[0]).toBe(was);
+    const shown: number[] = [];
+    for (let k = 0; k < 30; k++) {
+      easeVitality(1 / 60);
+      shown.push(row(3, 4)[0] as number);
+      // Where it was (shown + lag) stays between where it started and where it shows now.
+      const behind = (row(3, 4)[0] as number) + (row(3, 5)[2] as number);
+      expect(behind).toBeGreaterThanOrEqual(Math.min(was, row(3, 4)[0] as number) - 1e-6);
+      expect(behind).toBeLessThanOrEqual(Math.max(was, row(3, 4)[0] as number) + 1e-6);
+    }
+    expect(Math.abs((shown[29] as number) - was)).toBeGreaterThan(Math.abs((shown[0] as number) - was));
+    expect(Math.abs((shown[29] as number) - now)).toBeGreaterThan(0);
+    // Given time it comes to rest exactly, so a building at rest shows its vitality exactly.
+    for (let k = 0; k < 60 * 60; k++) easeVitality(1 / 60);
     expect(row(3, 5)[2]).toBe(0);
     expect(row(3, 4)[0]).toBeCloseTo(now, 6);
   });

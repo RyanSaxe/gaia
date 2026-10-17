@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { shownVitality } from "@gaia/realize";
-import { type FarForm, type FarTurn, type InstanceSpot, createFarCards, createSceneLight, crownsOf, farChoice, goneness, placesOf } from "@gaia/render";
+import { type FarForm, type FarTurn, type InstanceSpot, createFarCards, createSceneLight, crownsOf, farChoice, goneness, placesOf, settleVitality } from "@gaia/render";
 
 const TURN: FarTurn = { band: 1.25, leave: 1.15, gone: { start: 8, end: 4 } };
 const SWAP = 128;
@@ -74,8 +74,10 @@ describe("a plant's far cards", () => {
     // Passes only set the pass's size; the copies' buffers stay as they were.
     for (const [focal, ortho] of [[900, false], [450, false], [40, true]] as const) cards.pass(focal, ortho);
     expect(versions()).toEqual(placed);
-    // A vitality change rewrites how the copy's vitality shows alone; standing the copies elsewhere rewrites them all.
+    // A vitality change eases in as the near form's does, rewriting how the copy's vitality shows and nothing else,
+    // and comes to rest exactly; standing the copies elsewhere rewrites them all.
     copies.setVitalityAt(1, 0.25);
+    settleVitality();
     expect(geometry.getAttribute("aMore").array[5]).toBeCloseTo(shownVitality(0.25), 6);
     copies.place(placesOf(spots.slice(0, 1)), crownsOf(spots.slice(0, 1), crown));
     expect(geometry.instanceCount).toBe(1);
