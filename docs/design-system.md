@@ -166,13 +166,17 @@ bough (`twig`) and the point its piece hangs from (`pivot`).
   down shows evenly. A primitive's own thresholds in this document (a
   bell askew from 0.4, say) are on this shown scale; the ground's and the
   buildings' tables give the vitality itself. A change in vitality eases
-  in: each thing remembers where its shown vitality was a moment ago, the
-  memory fading over about a second, and every step of its decline (a
-  leaf dropping, a piece collapsing or growing back, a timber falling, a
-  tile, patch, stone or board rotting away) shows averaged over the
-  vitality it has just passed through. A heal mends a piece at a time,
-  each piece coming back over many frames rather than whole in one, and
-  at rest every step stands exactly where it would with no change at all.
+  in, smooth rather than jarring: what a thing shows follows the vitality
+  it is given, closing two thirds of the way every five seconds, and where
+  that was follows it in turn, and every step of its decline (a leaf
+  dropping, a piece collapsing or growing back, a timber falling, a tile,
+  patch, stone or board rotting away) shows averaged between the two. The
+  ground, the water, the drifts, the trails' wear and the signs follow the
+  same way. A heal mends a piece at a time: half done about five seconds
+  after its vitality changes and whole by about twenty, no frame of a
+  ramp from ruin to whole over six seconds changing a house more than the
+  wind does in half a second; and at rest every step stands exactly where
+  it would with no change at all.
 
 `unsupportedAt` holds plants to the rule ruins keep: the contract test
 builds every crown on frames of every kind with bark and blossoms, and

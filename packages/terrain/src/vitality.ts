@@ -237,10 +237,12 @@ export function ownershipOf(sites: readonly OwnedSite[], land: LandOutline, exte
 /**
  * The ground's vitality at every sample of an ownership grid, in 255ths:
  * each owner's vitality (`vitality[owner]`, 1 where it has none) weighed by
- * its share, and the wild's 1. Writes into `into` every `stride` bytes from
- * `offset`, so two tables of vitality can fill one texture's channels.
+ * its share, and the wild's 1. Writes into `into` every `stride` values
+ * from `offset`, so two tables of vitality can fill one texture's channels:
+ * whole 255ths into bytes, or exactly into floats.
  */
-export function vitalityOver(own: Ownership, vitality: ArrayLike<number>, into: Uint8Array = new Uint8Array(own.n * own.n), stride = 1, offset = 0): Uint8Array {
+export function vitalityOver<T extends Uint8Array | Float32Array>(own: Ownership, vitality: ArrayLike<number>, into: T = new Uint8Array(own.n * own.n) as T, stride = 1, offset = 0): T {
+  const whole = into instanceof Uint8Array;
   const taps = GROUND_VITALITY.taps;
   const count = own.n * own.n;
   const { owners, shares } = own;
@@ -253,13 +255,13 @@ export function vitalityOver(own: Ownership, vitality: ArrayLike<number>, into: 
       const v = o === WILD_TAP ? 1 : (vitality[o] ?? 1);
       sum += q * (v < 0 ? 0 : v > 1 ? 1 : v);
     }
-    into[p * stride + offset] = Math.round(sum);
+    into[p * stride + offset] = whole ? Math.round(sum) : sum;
   }
   return into;
 }
 
 /** The vitality at (x, z) from per-sample values in 255ths, blended between the four nearest samples as a linearly filtered texture reads them. */
-export function vitalityAt(own: Ownership, values: Uint8Array, x: number, z: number, stride = 1, offset = 0): number {
+export function vitalityAt(own: Ownership, values: ArrayLike<number>, x: number, z: number, stride = 1, offset = 0): number {
   const gx = Math.min(own.n - 1, Math.max(0, (x - own.origin) / own.spacing));
   const gz = Math.min(own.n - 1, Math.max(0, (z - own.origin) / own.spacing));
   const i = Math.min(own.n - 2, Math.floor(gx));

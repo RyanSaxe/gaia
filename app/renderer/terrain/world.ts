@@ -30,7 +30,9 @@ import {
   createRenderer,
   createSceneLight,
   createSunShadow,
+  closeEachFrame,
   easeVitality,
+  followVitality,
   type SceneLight,
 } from "@gaia/render";
 import { type Capsule, clearanceAt, groundDecline, regionAt as dominantRegion, frameOf, TILE, LAND_ASPECT, type Deck, decksOf, deckShape, EYE_HEIGHT, footingAt, GAIT, groundHeightAt, heightAt, type Intent, NO_SOLIDS, NO_TRAILS, openingSpot, TRAILS, outlineShape, returnTo, type StoodSpot, withinLand, piecesShapes, type Place, placeAt, planWalk, regionWeights, siteToWorld, type Solids, type SolidShape, solidsOf, standAt, steerAlong, type Steered, type Steering, steering, steerPress, steerRelease, steerStep, stride, type Stride, acrossWay, carry, planTrip, TRAVEL, type Travel, wadingAt, fordBeside, travelFrom, travelPoint, travelStep, type Trip, trailWay, type Walker, type WalkKey, type Terrain, TERRAIN, type TrailNetwork, type Walk, WALK_TO, wallsShape, waterDepthAt, type Way, wayAhead, WILDS, type WorldPlaces, type WorldSpec } from "@gaia/terrain";
@@ -635,6 +637,32 @@ export function createWorld(root: HTMLElement): World {
     const id = entityOfPlace.get(place);
     return id === undefined ? 1 : (thingVitality.get(id) ?? 1);
   };
+  // While a change eases in, what the ground, the areas' water and drifts, the trails' wear and the signs show of a
+  // thing's vitality follows the vitality set as every plant and building eases its own (`followVitality`): the
+  // middle of where it shows and where that was. Buildings, landmarks, plants, stones and flowers take the vitality
+  // set and ease it themselves.
+  const easing = new Map<string, { shown: number; lag: number; target: number }>();
+  /** A thing's vitality as the ground, the trails' wear and the signs show it now. */
+  const shownVitalityOf = (id: string): number => {
+    const e = easing.get(id);
+    return e === undefined ? (thingVitality.get(id) ?? 1) : e.shown + 0.5 * e.lag;
+  };
+  const shownVitalityOfPlace = (place: string): number => {
+    const id = entityOfPlace.get(place);
+    return id === undefined ? 1 : shownVitalityOf(id);
+  };
+  /** One frame of every change easing in: the ground, the trails' wear and the signs show where each has got to. */
+  const easeShown = (keep: number): boolean => {
+    const moved = new Set(easing.keys());
+    for (const [id, e] of easing) {
+      [e.shown, e.lag] = followVitality(e.shown, e.lag, e.target, keep);
+      if (e.shown === e.target && e.lag === 0) easing.delete(id);
+    }
+    setTrailEnds(ways.network, shownVitalityOfPlace);
+    showGround();
+    showSigns(moved);
+    return easing.size > 0;
+  };
   const worldLib = new Library(WORLD_PRIMITIVES);
   const lantern = createLantern(light);
 
@@ -721,17 +749,27 @@ export function createWorld(root: HTMLElement): World {
   /** Shows every entity's vitality now on its landmark, on its trails' wear and on what is built along them. Nothing rebuilds. */
   function showVitality(): void {
     landmarkViews.forEach((view, i) => view.setVitality(thingVitality.get(landmarkEntity(i).id) ?? 1));
-    setTrailEnds(ways.network, vitalityOfPlace);
+    setTrailEnds(ways.network, shownVitalityOfPlace);
     built?.setVitality(vitalityOfPlace);
     holdDecks();
   }
 
   /** Shows each file's vitality now on its ground, and each area's, its files' pooled, on its lots and its water. Nothing rebakes. */
   function showLandVitality(): void {
-    if (code === null) return;
-    const { ground, area } = ownerVitality(code.world, (path) => thingVitality.get(path) ?? 1);
-    showGroundVitality(ground, area);
+    showGround();
     showUnderstoryVitality();
+  }
+  /** Shows each file's vitality on its ground and each area's on its lots and water, where each change has eased to. */
+  function showGround(): void {
+    if (code === null) return;
+    const { ground, area } = ownerVitality(code.world, shownVitalityOf);
+    showGroundVitality(ground, area);
+  }
+  /** Shows on each sign naming one of `ids` the vitality of what it names, where its change has eased to. */
+  function showSigns(ids: ReadonlySet<string>): void {
+    signSubjects.forEach((s, k) => {
+      if (ids.has(s.represented.id)) signs.setVitality(k, shownVitalityOf(s.represented.id));
+    });
   }
   /** Each stone, bush and drift of flowers shows the vitality of what it stands for. */
   function showUnderstoryVitality(): void {
@@ -749,6 +787,12 @@ export function createWorld(root: HTMLElement): World {
    */
   function setVitality(changes: ReadonlyMap<string, number>): void {
     if (code === null) return;
+    // Each change eases in from where it shows now.
+    for (const [id, v] of changes) {
+      const from = easing.get(id) ?? { shown: shownVitalityOf(id), lag: 0, target: 0 };
+      easing.set(id, { ...from, target: v });
+    }
+    closeEachFrame(easeShown);
     const was = code.world;
     code = { ...code, world: withVitality(was, changes) };
     if (places === was) places = code.world;
@@ -757,10 +801,6 @@ export function createWorld(root: HTMLElement): World {
       const v = changes.get(b.represented.id);
       if (v !== undefined) settlement.setVitality(b, v);
     }
-    signSubjects.forEach((s, k) => {
-      const v = changes.get(s.represented.id);
-      if (v !== undefined) signs.setVitality(k, v);
-    });
     trees.forEach((t, i) => {
       const v = changes.get(t.represented.id);
       const copy = treeCopies[i] ?? -1;
