@@ -30,7 +30,7 @@ import showcaseFixedJudged from "./fixtures/showcase-fixed-judged.json";
 import showcaseCode from "./fixtures/showcase-code.txt?raw";
 import showcaseFixedCode from "./fixtures/showcase-code-v1-fixed.txt?raw";
 import { type Snapshot, snapshotFacts } from "./snapshot-facts.ts";
-import { folioFiles } from "./showcase-code.ts";
+import { showcaseFiles } from "./showcase-code.ts";
 import type { LayoutReply, LayoutRequest } from "./layout-worker.ts";
 import LayoutWorker from "./layout-worker.ts?worker";
 import proving from "./fixtures/proving.json";
@@ -193,7 +193,7 @@ export function provingWorld(): WorldDocument {
 const ASKS_PROVING = typeof location !== "undefined" && new URLSearchParams(location.search).get("world") === "proving";
 
 /**
- * Which showcase the page asks for, if any: folio, the made-up codebase whose
+ * Which showcase the page asks for, if any: the made-up codebase whose
  * world the film is walked through, judged by Jev and carried as a snapshot
  * with its source (`docs/showcase.md`), so it opens the same with or without
  * an engine. `?world=showcase` has its old `v1/` as it is, `?world=showcase-fixed`
@@ -203,10 +203,10 @@ const ASKS_SHOWCASE: Snapshot | null = ((world) => (world === "showcase" || worl
   typeof location === "undefined" ? null : new URLSearchParams(location.search).get("world"),
 );
 
-/** The source of a world the page carries with it, by path, for the journal: folio's for the showcase, its fixed `v1/` laid over it for the fixed one, none otherwise. */
+/** The source of a world the page carries with it, by path, for the journal: the showcase's, with its fixed `v1/` laid over it for the fixed one, none otherwise. */
 export function carriedSource(): ReadonlyMap<string, string> | null {
   if (ASKS_SHOWCASE === null) return null;
-  return new Map([...folioFiles(showcaseCode), ...(ASKS_SHOWCASE === "showcase-fixed" ? folioFiles(showcaseFixedCode) : [])]);
+  return new Map([...showcaseFiles(showcaseCode), ...(ASKS_SHOWCASE === "showcase-fixed" ? showcaseFiles(showcaseFixedCode) : [])]);
 }
 
 /**

@@ -1,19 +1,19 @@
-// The showcase's codebase: folio, a made-up static site generator whose code
+// The showcase's codebase: gaia, a made-up static site generator whose code
 // and comments guide Jev to the places Gaia's film walks: a wood, a village by
 // the water, a tower on the hub, a meadow, and an old renderer gone to ruin
 // (`docs/showcase.md`).
 //
-// folio's source is real code, kept as one text file
+// Its source is real code, kept as one text file
 // (`app/renderer/terrain/fixtures/showcase-code.txt`, each file under its
 // `=== path ===` line), so Gaia's own world reads one file rather than a
 // codebase of its own. Each part is written as well or as poorly as it
 // fares: the old renderer in `v1/` shares state through globals, swallows its
 // errors and fails its tests; the rest is kept.
 //
-// `--code DIR` writes folio's source to DIR, outside Gaia's repository or
+// `--code DIR` writes the showcase's source to DIR, outside Gaia's repository or
 // under node_modules, so Gaia's own world never reads it.
 //
-// `--v1 fixed` swaps folio's broken old renderer for the same renderer
+// `--v1 fixed` swaps the showcase's broken old renderer for the same renderer
 // written well (`fixtures/showcase-code-v1-fixed.txt`): the same files, the
 // same definitions, each as many lines long, so the land lays out exactly
 // the same and only how well `v1/` is written changes. Its world is kept
@@ -21,12 +21,12 @@
 // verdicts on the same place. Judge each in a store of its own: the engine
 // holds an answer through a file's changes until a fresh one clearly differs.
 //
-// `--judge jev|local` opens folio as the app opens any folder (`openWorld`):
+// `--judge jev|local` opens the showcase as the app opens any folder (`openWorld`):
 // the engine reads it, Jev's understanding pass judges how much each part
 // matters and how well it is made, and Jev judges and composes its world.
-// The answers are kept in the store under GAIA_DATA_DIR, beside folio's
-// source, so a later run asks only what changed. It then writes the page's
-// copy of that world, as `pnpm graph-snapshot` and `pnpm jev-world` write
+// The answers are kept in the store under GAIA_DATA_DIR, beside the
+// showcase's source, so a later run asks only what changed. It then writes
+// the page's copy of that world, as `pnpm graph-snapshot` and `pnpm jev-world` write
 // Gaia's: the judged graph (`fixtures/showcase-graph.json`), what was judged
 // about each thing for the journal (`showcase-judged.json`), and every answer
 // the world is laid out from, by request key (`showcase-jev.json`). `local`
@@ -45,7 +45,7 @@ import { parseArgs } from "node:util";
 import type { CodeGraph, JevResponse } from "@gaia/schema";
 import { composeWorld, factsOf, judgeWorld, keptJev, landOf, layoutWorld, planStanding, planWorldRequests, requestKey } from "@gaia/world";
 import { LOOKS } from "../app/renderer/terrain/looks.ts";
-import { folioFiles } from "../app/renderer/terrain/showcase-code.ts";
+import { showcaseFiles } from "../app/renderer/terrain/showcase-code.ts";
 import { createEngineClient } from "../app/world-service/engine-client.ts";
 import { judgedGraph, judgedThings, openWorld } from "../app/world-service/open-world.ts";
 import { startOpenRouterStandIn } from "./openrouter-stand-in.ts";
@@ -57,18 +57,18 @@ if (args.v1 !== undefined && args.v1 !== "broken" && args.v1 !== "fixed") throw 
 const fixedV1 = args.v1 === "fixed";
 /** The variant's name, which its fixtures carry: the showcase with v1 as written, or with v1 fixed. */
 const variant = fixedV1 ? "showcase-fixed" : "showcase";
-const files = folioFiles(readFileSync(resolve(fixtures, "showcase-code.txt"), "utf8"));
+const files = showcaseFiles(readFileSync(resolve(fixtures, "showcase-code.txt"), "utf8"));
 if (fixedV1) {
-  const fixed = folioFiles(readFileSync(resolve(fixtures, "showcase-code-v1-fixed.txt"), "utf8"));
+  const fixed = showcaseFiles(readFileSync(resolve(fixtures, "showcase-code-v1-fixed.txt"), "utf8"));
   const broken = [...files.keys()].filter((path) => path.startsWith("v1/"));
   if (broken.join("\n") !== [...fixed.keys()].join("\n")) throw new Error("The fixed v1 must hold exactly the files the broken one does, in the same order, so the land lays out the same.");
   for (const [path, text] of fixed) files.set(path, text);
 }
 
-/** Writes folio's source to a folder outside Gaia's repository. */
+/** Writes the showcase's source to a folder outside Gaia's repository. */
 function writeCode(dir: string): void {
   const inside = relative(repo, dir);
-  if (!inside.startsWith("..") && !inside.split("/").includes("node_modules")) throw new Error(`Write folio's code outside Gaia's repository or under node_modules, or Gaia's own world reads it: ${dir}.`);
+  if (!inside.startsWith("..") && !inside.split("/").includes("node_modules")) throw new Error(`Write the showcase's code outside Gaia's repository or under node_modules, or Gaia's own world reads it: ${dir}.`);
   for (const [path, text] of files) {
     mkdirSync(dirname(join(dir, path)), { recursive: true });
     writeFileSync(join(dir, path), text);
@@ -77,19 +77,20 @@ function writeCode(dir: string): void {
 
 if (args.code !== undefined) {
   writeCode(resolve(args.code));
-  console.log(`showcase: wrote folio's ${files.size} files to ${resolve(args.code)}`);
+  console.log(`showcase: wrote the showcase's ${files.size} files to ${resolve(args.code)}`);
   process.exit(0);
 }
 
 const judge = args.judge;
-if (judge !== "jev" && judge !== "local") throw new Error("Write folio's source (--code DIR) or judge its world (--judge jev|local).");
+if (judge !== "jev" && judge !== "local") throw new Error("Write the showcase's source (--code DIR) or judge its world (--judge jev|local).");
 const data = process.env.GAIA_DATA_DIR;
-if (data === undefined) throw new Error("Set GAIA_DATA_DIR to the store that keeps Jev's answers about folio, so a later run asks only what changed.");
-// folio is read from the same folder on every run, so the store finds its answers under the same project.
-const folio = resolve(data, "folio");
-writeCode(folio);
+if (data === undefined) throw new Error("Set GAIA_DATA_DIR to the store that keeps Jev's answers about the showcase, so a later run asks only what changed.");
+// The showcase is read from the same folder on every run, so the store finds its answers under the same project. The
+// folder names the codebase, as a checkout's folder does, so its world and the journal's title page carry its name.
+const root = resolve(data, "gaia");
+writeCode(root);
 
-/** The answers the page lays folio out from, by request key, as `pnpm jev-world` keeps Gaia's. */
+/** The answers the page lays the showcase out from, by request key, as `pnpm jev-world` keeps Gaia's. */
 interface Kept {
   readonly answers: Record<string, JevResponse>;
 }
@@ -105,7 +106,7 @@ const engine: ChildProcess = spawn(resolve(repo, "target/release/gaia-engine"), 
 const client = createEngineClient((line) => engine.stdin?.write(`${line}\n`));
 if (engine.stdout !== null) createInterface({ input: engine.stdout }).on("line", (line) => client.receive(line));
 
-/** What every answer the store keeps for folio was billed: the understanding pass's calls and the world's answers. */
+/** What every answer the store keeps for the showcase was billed: the understanding pass's calls and the world's answers. */
 async function billed(project: string): Promise<{ requests: number; inputTokens: number; usd: number }> {
   let requests = 0;
   let inputTokens = 0;
@@ -124,7 +125,7 @@ async function billed(project: string): Promise<{ requests: number; inputTokens:
 try {
   const status = await client.call("jev.status", {});
   if (!status.live || !status.key) throw new Error("Jev needs GAIA_JEV=live and the gaia-openrouter key in the Keychain.");
-  const first = await client.call("project.graph", { root: folio, judged: true });
+  const first = await client.call("project.graph", { root, judged: true });
   const project = first.projectId;
   // The answers kept before go into the store, so only what changed is asked.
   if (Object.keys(kept.answers).length > 0) await client.call("store.put", { project, writes: Object.entries(kept.answers).map(([key, value]) => ({ table: "answers" as const, key, value })) });
@@ -132,7 +133,7 @@ try {
 
   // What the run would send: the understanding pass, then the looks and what every thing stands as on the graph as it
   // stands. Composing follows from those answers, so it is not planned ahead.
-  const understanding = await client.call("understanding.plan", { root: folio });
+  const understanding = await client.call("understanding.plan", { root });
   const graph0 = judgedGraph(first);
   const facts0 = factsOf(graph0);
   const looks = [...planWorldRequests(facts0, LOOKS), ...planStanding(facts0, LOOKS, { graph: graph0 }).requests].filter((p) => kept.answers[requestKey(p.request)] === undefined);
@@ -142,12 +143,12 @@ try {
   const allowed = Number(args["spend-up-to"] ?? "0");
   if (judge === "jev" && !(allowed >= estimate * 2)) throw new Error(`Refusing to spend: pass --spend-up-to ${(estimate * 2).toFixed(4)} or more to ask Jev.`);
 
-  // folio opened as the app opens any folder.
-  const document = await openWorld({ engine: client, root: folio, consent: () => Promise.resolve(judge === "local"), progress: () => undefined });
+  // The showcase opened as the app opens any folder.
+  const document = await openWorld({ engine: client, root, consent: () => Promise.resolve(judge === "local"), progress: () => undefined });
   console.error(`showcase: ${document.summary}`);
 
   // The page's copy: the graph as judged, and every answer its world is laid out from, asked again with nothing to ask.
-  const read = await client.call("project.graph", { root: folio, judged: true });
+  const read = await client.call("project.graph", { root, judged: true });
   const snapshot: CodeGraph = { ...judgedGraph(read), projectId: "showcase" };
   const { records } = await client.call("store.read", { project, table: "answers" });
   const stored = new Map(Object.entries(records as Record<string, JevResponse>));
