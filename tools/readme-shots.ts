@@ -27,10 +27,14 @@ interface Shot {
   readonly map?: boolean;
 }
 
-/** In Gaia's own world: the storybook houses at the edge of app/renderer, in the late afternoon. */
+/**
+ * In Gaia's own world, in the late afternoon: the village of packages/schema, where a stream turns a mill's
+ * waterwheel among maples; and the field map unfolded on healthy ground at the edge of the murk over the old
+ * terrain lab's file, failing, its houses fallen in. Found with the tour and the world's ground health.
+ */
 const SHOTS: readonly Shot[] = [
-  { file: "world.jpg", hour: 17.5, at: [95, -400], toward: [135, -470], pitch: 1 },
-  { file: "field-map.jpg", hour: 17.5, at: [95, -400], toward: [135, -470], pitch: 1, map: true },
+  { file: "world.jpg", hour: 17.5, at: [-144, -281], toward: [-64, -281], pitch: 1 },
+  { file: "field-map.jpg", hour: 17.5, at: [306, -122], toward: [399, -84], pitch: 1, map: true },
 ];
 
 /** The window's size in CSS pixels; it draws at twice that and each shot is scaled back down. */
@@ -69,6 +73,8 @@ async function take() {
     const yaw = (Math.atan2(s.at[0] - s.toward[0], s.at[1] - s.toward[1]) * 180) / Math.PI;
     await run("window.__lab.hour(" + s.hour + ")");
     await run("window.__lab.terrain.walk(" + [s.at[0], s.at[1], yaw, s.pitch].join(", ") + ")");
+    // The fine land comes in around the person first: until it does, a stream draws as a flat green trench.
+    for (let k = 0; k < 60 && !(await run("window.__lab.terrain.landLead().every((v) => v > 0)")); k++) await wait(500);
     // Long enough for the grass and ground to follow, and for the slip naming the place to come and go.
     await wait(10000);
     if (s.map) {

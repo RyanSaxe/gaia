@@ -1,6 +1,6 @@
 # Gaia
 
-![A late afternoon in Gaia's own world, at eye height: a timber-framed house among cherry trees in blossom and firs, an autumn maple, daisies in the grass, and at the lower left the minimap, a torn scrap of the field map naming the area underfoot.](docs/images/world.jpg)
+![A late afternoon in Gaia's own world, at eye height: a stream winds through grass and wildflowers to a stone mill turning its waterwheel, past a lookout tower and a timber-framed house among autumn maples and a fir, and at the lower left the minimap, a torn scrap of the field map naming the area underfoot.](docs/images/world.jpg)
 
 Gaia turns a codebase into a world you walk through at eye height:
 directories become land, files become patches of ground where each function
@@ -59,7 +59,7 @@ rebuilds the page whenever the renderer changes.
 
 ## The field map
 
-![The field map unfolded over the world: a hand-painted topographic map of Gaia's own code, each directory an area lettered in spaced capitals, painted green where its code is healthy and gold where it tires, with streams, dotted trails, small drawn houses and towers, and a traveller in a red cloak where the person stands.](docs/images/field-map.jpg)
+![The field map unfolded over the world: a hand-painted topographic map of Gaia's own code, each directory an area lettered in spaced capitals, painted green where its code is healthy and gold where it tires, with streams, dotted trails, small drawn houses and towers, and a traveller in a red cloak where the person stands. Behind the map, on the left, a dead tree and fallen-in houses stand in grey murk over failing code, and healthy grass grows in front.](docs/images/field-map.jpg)
 
 Each area of the map is a directory, and its colors are its code's health:
 green where it thrives, turning gold, russet and ash as it fails. Its
