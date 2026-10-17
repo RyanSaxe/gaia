@@ -23,8 +23,8 @@ health. Test a change here as well as in Gaia's own world.
 `pnpm proving` (`tools/proving.ts`) writes two fixtures from one plan:
 
 - `app/renderer/terrain/fixtures/proving.json`: the facts the world is laid
-  out from (`CodeFacts`), as `factsOf` derives them from a codebase's graph. It has 126 files and 32 entities in a
-  970 m world of 12 lands and 45 areas.
+  out from (`CodeFacts`), as `factsOf` derives them from a codebase's graph. It has 149 files and 32 entities in a
+  620 m world of 12 lands and 45 areas.
 - `app/renderer/terrain/fixtures/proving-judged.json`: the choices Jev would
   make about it, fixed so that every water and form (the trees
   among them) in `app/renderer/terrain/looks.ts` is used, every drift
@@ -62,7 +62,7 @@ where you are:
 | Area | Land | What is there |
 | --- | --- | --- |
 | `crossings` | Brook valley, a brook | A thriving wood, its trees dropping some leaves. A footbridge joins the cottage on the west bank to the house on the east. |
-| `fords` | Meandering vale, a trickle | The trail from the croft on the jetty to the stone ring on the gravel crosses the trickle on a footbridge. |
+| `fords` | Meandering vale, a trickle | The trails from the watermill on the jetty and from the pondside to the stone ring on the gravel cross the trickle on a footbridge. |
 | `ruins` | Brook valley, a brook | A whole area in ruin: dead trees, a ruined footbridge, stepping stones and cairn, and eight of the ten kinds of building and landmark in ruin. Its land is given many falling leaves, and its dead trees drop none. |
 | `mixed` | Clover hills | Thriving files beside a failing grove (`failing-grove.ts`), and tired entities. |
 | `hollow`, `pondside` | Mossy basin and pond meadow | Ponds. The hollow's lantern tower is the hub most trails lead to, so they meet at cairns. Many fireflies come out over the hollow after dusk. |
@@ -77,16 +77,16 @@ where each stop looks (x, z in meters from the middle):
 
 | Stop | What is there | Looks at |
 | --- | --- | --- |
-| `bridge` | A footbridge in `crossings`, whose ground is at vitality 1.00 | 62, 269 |
-| `ruined bridge` | A footbridge in `ruins`, whose ground is at vitality 0.13 | 173, 17 |
-| `stepping stones` | Stepping stones in `ruins`, whose ground is at vitality 0.03 | 237, -33 |
-| `cairn`, `ruined cairn` | Cairns where three ways meet, at vitality 1.00 and 0.05 | -56, 254 and 266, 14 |
-| `pond`, `pond 2` | The ponds of `hollow` and `pondside` | -230, 398 and 59, -424 |
-| `ruined building`, `thriving building` | The ruined timber frame house of `dunes/ledger`, the thriving fieldstone house of `terraces/croft` | -322, -184 and 457, 209 |
-| `ruined landmark`, `thriving landmark` | The great tree of `ruins`, the standing stones of `moor/henge` | 189, 111 and -465, 207 |
-| `thriving grove`, `failing grove` | The 4 trees of `crossings/channel.ts` and the 4 dying ones of `mixed/failing-grove.ts`, each a definition | 29, 296 and 356, -205 |
-| `thriving area`, `failing area` | `downs` and `ruins` | -247, 31 and 255, 36 |
-| `large area`, `tiny area`, `deep nesting` | `ruins`, `downs/tiny` and `downs/deep/deeper/deeper-still/deepest/bottom` | 255, 36; -82, -23; -390, -89 |
+| `bridge` | A footbridge on the crossings brook, at vitality 1.00 | -10, 247 |
+| `ruined bridge` | A footbridge in `ruins`, at vitality 0.03 | 172, 79 |
+| `stepping stones` | Stepping stones in `ruins`, at vitality 0.03 | 54, -7 |
+| `cairn`, `ruined cairn` | Cairns where three ways meet, at vitality 1.00 and 0.03 | -40, 240 and 153, 84 |
+| `pond`, `pond 2` | The ponds of `hollow` and `pondside` | -126, 238 and 48, -229 |
+| `ruined building`, `thriving building` | The ruined timber frame house of `dunes/ledger`, the thriving fieldstone house of `terraces/croft` | -195, -255 and 177, 114 |
+| `ruined landmark`, `thriving landmark` | The great tree of `ruins`, the lookout tower of `terraces/steps.ts#joinSteps` | 225, 21 and 267, 81 |
+| `thriving grove`, `failing grove` | The 5 trees of `downs/hedges.ts` and the 4 dying ones of `mixed/failing-grove.ts`, each a definition | -128, 125 and 199, -123 |
+| `thriving area`, `failing area` | `downs` and `ruins` | -195, 69 and 144, 26 |
+| `large area`, `tiny area`, `deep nesting` | `ruins`, `downs/tiny` and `downs/deep/deeper/deeper-still/deepest/bottom` | 144, 26; -301, 71; -228, -36 |
 
 Every building and landmark also has a stop named by its kind and health,
 such as `watermill (thriving)`, `watermill (tired)` and `watermill (ruin)`:
