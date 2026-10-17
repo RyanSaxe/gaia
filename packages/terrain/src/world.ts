@@ -14,7 +14,7 @@ import { resolveParams } from "@gaia/realize";
 import { RELIEF_BUDGET, type ReliefReport, measureRelief, withinBudget } from "./budget.ts";
 import { type LandSite, LAND_WARP, warpPoint } from "./land.ts";
 import { type Lattice, type LatticeFrame, createLattice, worldOf, worldOfZ } from "./lattice.ts";
-import { BANK_REACH, type SolvedPond, type SolvedStream, carvePond, carveStream, nearPond, shoreField, shoreMargin, solvePond, solveStream } from "./water.ts";
+import { BANK_REACH, POND_REACH, type SolvedPond, type SolvedStream, carvePond, carveStream, nearPond, shoreField, shoreMargin, solvePond, solveStream } from "./water.ts";
 import { type LandOutline, pastTheEdge, withinLand } from "./edge.ts";
 import { routeRivers, valleySurface } from "./rivers.ts";
 
@@ -637,7 +637,7 @@ function waterBeds(spec: WorldSpec, landforms: readonly Landform[], l: Lattice |
       if (bed.kind !== "pond") continue;
       const x = r.x + bed.x;
       const z = r.z + bed.z;
-      beds.push({ kind: "pond", x, z, radius: bed.radius, depth: bed.depth, rect: rect(x, x, z, z, bed.radius * 1.3) });
+      beds.push({ kind: "pond", x, z, radius: bed.radius, depth: bed.depth, rect: rect(x, x, z, z, bed.radius * POND_REACH) });
     }
   });
   return beds;

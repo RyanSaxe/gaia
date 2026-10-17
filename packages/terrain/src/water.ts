@@ -43,6 +43,8 @@ export const HEAD = { radius: 1.9, wander: 0.22, depth: 0.22, wall: 0.18, outlet
 const NARROWEST = 1.1;
 /** A pond fills to this far below the lowest point of its rim. */
 const POND_FREEBOARD = 0.3;
+/** How far a pond reaches from its middle, in its radii: it fills to just under the lowest ground on that ring. */
+export const POND_REACH = 1.3;
 
 export interface Station {
   readonly x: number;
@@ -328,7 +330,7 @@ function carveHead(l: Lattice, heights: Float32Array, level: Float32Array, head:
 
 /** Fills a pond to just under its rim, then cuts a gentle bed below the level. Null when the hollow cannot hold water. */
 export function solvePond(l: Lattice, heights: Float32Array, x: number, z: number, radius: number): SolvedPond | null {
-  const reach = radius * 1.3;
+  const reach = radius * POND_REACH;
   let rim = Infinity;
   const steps = Math.ceil((Math.PI * 2 * reach) / (l.spacing * 0.5));
   for (let k = 0; k < steps; k++) {

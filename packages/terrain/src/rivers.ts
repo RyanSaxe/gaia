@@ -6,9 +6,10 @@
 // it joins, widening it below. Its valley is carved along that course, with
 // the cross-section and winding Jev chose for the valley it rose in, and the
 // stream loops across the valley's floor as that valley's winding allows.
-// Where it runs is the land's, never a compass direction: a valley's own
-// trough, which runs straight along its region's axis, gives way to the
-// river's.
+// A river that passes a pond bends round it, so its valley never cuts the
+// pond's rim and drains it. Where it runs is the land's, never a compass
+// direction: a valley's own trough, which runs straight along its region's
+// axis, gives way to the river's.
 //
 // Courses are routed over the land composed without those troughs, on a
 // coarse grid whose shallow hollows are filled so water finds a way across
@@ -21,7 +22,7 @@ import type { HeightField, Landform, PondBed, StreamBed, ValleyCourse, ValleyNet
 import { bedBend, fbm, troughOffset } from "@gaia/primitives";
 import { RELIEF_BUDGET } from "./budget.ts";
 import { withinLand } from "./edge.ts";
-import { BANK, HEAD } from "./water.ts";
+import { BANK, HEAD, POND_REACH } from "./water.ts";
 import type { WorldSpec } from "./world.ts";
 
 export const RIVERS = {
@@ -343,6 +344,42 @@ function wallsAlong(course: readonly number[], trough: Trough, depth: number): F
   return walls;
 }
 
+/**
+ * A course bent round each pond it passes, so that its valley's wall on the pond's side reaches its shoulder before
+ * the pond's rim: a valley cut into the rim would drain the pond. Each point nearer the pond than that is pushed
+ * straight out from the pond's middle, the push easing into the points either side, so the course bends smoothly and
+ * runs where it ran away from the pond. Bending it changes its walls, so it is bent `RIVERS.passes` times over.
+ */
+function roundPonds(course: number[], trough: Trough, depth: number, ponds: readonly { readonly x: number; readonly z: number; readonly radius: number }[]): number[] {
+  let out = course;
+  const count = course.length / 2;
+  for (let pass = 0; pass < RIVERS.passes; pass++) {
+    const walls = wallsAlong(out, trough, depth);
+    const pushX = new Array<number>(count).fill(0);
+    const pushZ = new Array<number>(count).fill(0);
+    let bent = false;
+    for (const p of ponds) {
+      for (let k = 0; k < count; k++) {
+        const dx = (out[k * 2] as number) - p.x;
+        const dz = (out[k * 2 + 1] as number) - p.z;
+        const d = Math.hypot(dx, dz);
+        const [nx, nz] = leftOf(out, k);
+        // The shoulder of the wall on the pond's side: the left wall's where the pond lies to the course's left.
+        const clear = p.radius * POND_REACH + (walls[k * 6 + (nx * dx + nz * dz < 0 ? 1 : 4)] as number);
+        if (d >= clear) continue;
+        pushX[k] = (pushX[k] as number) + (dx / d) * (clear - d);
+        pushZ[k] = (pushZ[k] as number) + (dz / d) * (clear - d);
+        bent = true;
+      }
+    }
+    if (!bent) break;
+    const easedX = averaged(pushX);
+    const easedZ = averaged(pushZ);
+    out = out.map((v, i) => v + ((i % 2 === 0 ? easedX : easedZ)[i >> 1] as number));
+  }
+  return out;
+}
+
 /** The unit normal to the left of a line, x and z pairs, at point `k`. */
 function leftOf(line: ArrayLike<number>, k: number): readonly [number, number] {
   const count = line.length / 2;
@@ -595,8 +632,7 @@ export function routeRivers(
     const parent = into === null ? [] : (courses[into.river] as number[]);
     const shiftX = into === null ? 0 : (parent[target * 2] as number) - (parentLine[target * 2] as number);
     const shiftZ = into === null ? 0 : (parent[target * 2 + 1] as number) - (parentLine[target * 2 + 1] as number);
-    const course = wound(line, v.trough, tail, shiftX, shiftZ);
-    courses.push(course);
+    courses.push(roundPonds(wound(line, v.trough, tail, shiftX, shiftZ), v.trough, v.depth, ponds.filter((p) => p !== rv.lake)));
   });
   // The water each river carries, gathered downstream: a river only ever joins one laid before it.
   const carried = rivers.map((rv, c) => {
