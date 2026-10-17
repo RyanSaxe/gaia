@@ -1736,3 +1736,12 @@ grass and water agree:
   still below what draws the eye on its own. A lamp burns steadily: lit
   glass and a hearth never pulse or flicker. Wildflowers fade into their
   blades at night, and drifts fold their open faces shut.
+
+A low sun lights the land as it lights the grass: blades stand up to meet
+light that only grazes flat ground, so while the sun stands under about 24°
+the ground and grass take up to 0.55 of its light where plain diffuse would
+give them the sine of its height (`swardCatch`). The meadow then glows in
+the low sun's warm light and long shadows show across it. Seen from the
+sun's side the blades' lit faces show, and looking toward the sun their
+shaded backs, with the light coming through their thin tips stronger as the
+sun sinks. Midday light is unchanged.
