@@ -9,7 +9,7 @@
 
 import { type Blueprint, type BuildingPlan, type Built, type Library, type RouteSpec, rand, seedOf } from "@gaia/schema";
 import { areaVitality } from "@gaia/world";
-import { type BuildingSite, type Capsule, type Circle, clearingsOf, discOf, type EdgeStone, edgeStones, type Extent, findBankSite, findLandmarkSite, findSite, regionAt, groundedBase, heightAt, isWet, type LandEdits, type LandmarkSite, type LandSite, levelPad, levelTrails, type Occupied, type OwnedSite, type PadEdit, type Placement, PLANT_SLOPE, planTrails, siteAt, siteToWorld, slopeAt, type Terrain, trailDiscs, type TrailEnd, type TrailNetwork, type TrailRequest, type WayEdit } from "@gaia/terrain";
+import { type BuildingSite, type Capsule, type Circle, clearingsOf, discOf, type EdgeStone, edgeStones, type Extent, findBankSite, findLandmarkSite, findSite, regionAt, groundedBase, heightAt, isWet, type LandEdits, type LandmarkSite, type LandSite, levelPad, levelTrails, type Occupied, type OwnedSite, type PadEdit, type Placement, PLANT_SLOPE, planTrails, siteAt, siteToWorld, slopeAt, type Terrain, trailDiscs, type TrailEnd, type TrailNetwork, type TrailRequest, type WayEdit, waterDepthAt } from "@gaia/terrain";
 
 /** A building to site: its plan, what stands beside it, the name its trails go by, and whether it stands on a stream's bank. */
 export interface StandBuilding {
@@ -254,6 +254,22 @@ const SHRINKS = [1, 0.75, 0.55] as const;
 /** How far trees keep from a landmark's middle: a great tree's crown needs room. */
 const treeClearance = (lm: StandLandmark): number => lm.base + (lm.tree ? 12 : 5);
 
+/** How far a trail's end moved out of water keeps from it, meters, and the farthest it moves to find ground that clear. */
+const DRY_END = { clearance: 1, reach: 40 } as const;
+
+/** (x, z) when it is dry, or else the nearest point to it whose ground lies `DRY_END.clearance` clear of water, on rings a meter apart; (x, z) when none within `DRY_END.reach` does. */
+function dryNear(t: Terrain, x: number, z: number): { x: number; z: number } {
+  if (waterDepthAt(t, x, z) === 0) return { x, z };
+  for (let r = 1; r <= DRY_END.reach; r++) {
+    const steps = Math.ceil(2 * Math.PI * r);
+    for (let k = 0; k < steps; k++) {
+      const a = (k / steps) * Math.PI * 2;
+      if (!isWet(t, x + Math.cos(a) * r, z + Math.sin(a) * r, DRY_END.clearance)) return { x: x + Math.cos(a) * r, z: z + Math.sin(a) * r };
+    }
+  }
+  return { x, z };
+}
+
 /**
  * A world laid out from code: each building on its lot, each landmark on
  * its lot, and the trails Jev wants between them, leveled into the ground.
@@ -273,7 +289,8 @@ function settleCode(t: Terrain, req: StandRequest, code: StandCode, sites: reado
     avoid.push({ x: site.x, z: site.z, radius: lm.base + 2 });
   }
   // A trail ends at a building's door, at a landmark's foot facing the mean way to its trails' other ends, one spot per
-  // place so they share it, or for an entity that stands as neither, at its lot's middle.
+  // place so they share it, or for an entity that stands as neither, at its lot's middle. A foot or a lot in water
+  // gives way to the nearest dry ground, so no trail begins or ends in water.
   const end = (id: string, toward: { x: number; z: number } | null): TrailEnd | null => {
     const home = homes.find((b) => b.id === id);
     if (home !== undefined) return { id, ...standOf(home.plan, home.site) };
@@ -281,12 +298,12 @@ function settleCode(t: Terrain, req: StandRequest, code: StandCode, sites: reado
     const s = landmarks[k];
     if (s === undefined) {
       const place = code.places?.find((p) => p.id === id);
-      return place === undefined ? null : { id, x: place.x, z: place.z };
+      return place === undefined ? null : { id, ...dryNear(t, place.x, place.z) };
     }
     if (toward === null) return { id, x: s.site.x, z: s.site.z };
     const d = Math.hypot(toward.x - s.site.x, toward.z - s.site.z) || 1;
     const r = (req.landmarks[s.landmark]?.base ?? 2) + 1.8;
-    return { id, x: s.site.x + ((toward.x - s.site.x) / d) * r, z: s.site.z + ((toward.z - s.site.z) / d) * r };
+    return { id, ...dryNear(t, s.site.x + ((toward.x - s.site.x) / d) * r, s.site.z + ((toward.z - s.site.z) / d) * r) };
   };
   const toward = new Map<string, { x: number; z: number }>();
   for (const w of code.trails) {

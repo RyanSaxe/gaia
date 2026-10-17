@@ -96,6 +96,20 @@ describe("Gaia's world, the showcase and the proving ground, stood as the page s
     }
   });
 
+  it("begin and end every trail on dry ground", () => {
+    for (const { root, land, stood } of worlds) {
+      const { ways, trails } = stood.network;
+      expect(trails.length, root).toBeGreaterThan(0);
+      const depthAt = (w: { readonly way: number; readonly reversed: boolean }, first: boolean): number => {
+        const p = ways[w.way]!.points;
+        const k = first !== w.reversed ? 0 : p.length - 2;
+        return waterDepthAt(land, p[k]!, p[k + 1]!);
+      };
+      const wet = trails.flatMap((tr) => (tr.ways.length > 0 && (depthAt(tr.ways[0]!, true) > 0 || depthAt(tr.ways[tr.ways.length - 1]!, false) > 0) ? [tr.id] : []));
+      expect(wet, root).toEqual([]);
+    }
+  });
+
   it("stand every house on dry ground, never in a pond or a stream", () => {
     for (const { root, buildings, land, stood } of worlds) {
       // A house with a wheel stands on a stream's bank with its wheel in the water; every other house stands wholly on dry ground.

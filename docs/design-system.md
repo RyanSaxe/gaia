@@ -1459,7 +1459,10 @@ walks every trail over one network of paths, found over the baked ground:
 the cheapest way at a gentle grade, around steep ground, ponds and deep
 water, across a stream where it is narrow, wading only where there is water
 (a bank beside it is dry ground), and wandering off the easiest
-line by a seeded field as far as the winding allows. Trails route most
+line by a seeded field as far as the winding allows. A trail ends at a
+building's door, a landmark's foot or the middle of an entity's lot; a foot
+or a lot in water gives way to the nearest ground a meter clear of it, so no
+trail begins or ends in water. Trails route most
 wanted first, and each takes the ways earlier ones made wherever that is
 less than about twice as far (walking a way costs 0.45 of fresh ground),
 while ground within 4 m of a way, but off it, costs two and a half times
