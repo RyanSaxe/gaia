@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { Library, type RouteSpec } from "@gaia/schema";
 import { BIOME_PRIMITIVES, RELIEF_PRIMITIVES } from "@gaia/primitives";
-import { BODY_RADIUS, NO_SOLIDS, NO_TRAILS, STEER, TRAVEL, type Travel, type TrailEnd, type TrailRequest, type Trip, type Walker, acrossWay, bakeTerrain, clearanceAt, planTrails, planTrip, solidsOf, travelFrom, travelStep, trailWay, waterDepthAt } from "@gaia/terrain";
+import { BODY_RADIUS, NO_SOLIDS, NO_TRAILS, STEER, TRAVEL, type Travel, type TrailEnd, type TrailRequest, type Trip, type Walker, acrossWay, bakeTerrain, clearanceAt, planTrails, planTrip, solidsOf, travelFrom, travelStep, trailWay, waterDepthAt, wayLeft } from "@gaia/terrain";
 import { sampleWorld } from "@gaia/terrain/testing";
 
 const lib = new Library([...RELIEF_PRIMITIVES, ...BIOME_PRIMITIVES]);
@@ -73,6 +73,26 @@ describe("travel along the trails", { timeout: 20_000 }, () => {
     const trip = planTrip(way.slice(0, 80), { start: 0, end: 0 }, 2);
     const steps = take(trip, trip.heading[0] as number);
     expect((steps[steps.length - 1] as Travel).yaw).toBeCloseTo(2, 6);
+  });
+
+  it("leaves a way from where the trip has the person to its end, that only shortens as they go", () => {
+    const trip = planTrip(way, { start: 0, end: 0 });
+    const n = trip.points.length / 2;
+    const end = { x: trip.points[(n - 1) * 2] as number, z: trip.points[(n - 1) * 2 + 1] as number };
+    const lengthOf = (w: readonly Walker[]): number => w.reduce((sum, p, i) => (i === 0 ? 0 : sum + Math.hypot(p.x - (w[i - 1] as Walker).x, p.z - (w[i - 1] as Walker).z)), 0);
+    const steps = take(trip, trip.heading[0] as number);
+    let before = Infinity;
+    for (const at of steps.filter((_, k) => k % 10 === 0 || k === steps.length - 1)) {
+      const left = wayLeft(trip, at.s);
+      const first = left[0] as Walker;
+      const last = left[left.length - 1] as Walker;
+      expect(Math.hypot(first.x - at.x, first.z - at.z)).toBeLessThan(1e-6);
+      expect(Math.hypot(last.x - end.x, last.z - end.z)).toBeLessThan(1e-6);
+      const length = lengthOf(left);
+      expect(length).toBeLessThanOrEqual(Math.min(before, trip.length - at.s) + 1e-3);
+      before = length;
+    }
+    expect(before).toBeLessThan(1e-3);
   });
 
   it("leaves the view to a hand that turns it, and takes it again once it looks along the way", () => {

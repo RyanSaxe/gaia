@@ -474,6 +474,15 @@ export function travelPoint(trip: Trip, s: number): Walker {
   return { x: sampleAt(trip, trip.points, s, 2, 0), z: sampleAt(trip, trip.points, s, 2, 1) };
 }
 
+/** The way a trip has left from `s` meters along: where it has the person there, then each of its points on to its end. */
+export function wayLeft(trip: Trip, s: number): Walker[] {
+  const n = trip.points.length / 2;
+  const f = Math.min(n - 1, Math.max(0, (s / Math.max(trip.length, 1e-9)) * (n - 1)));
+  const out = [travelPoint(trip, s)];
+  for (let i = Math.floor(f) + 1; i < n; i++) out.push({ x: trip.points[i * 2] as number, z: trip.points[i * 2 + 1] as number });
+  return out;
+}
+
 /** A trip about to begin, the person facing `yaw`. */
 export function travelFrom(trip: Trip, yaw: number): Travel {
   return { s: 0, v: 0, x: trip.points[0] as number, z: trip.points[1] as number, yaw, follows: true, going: false, done: trip.length <= 0 && trip.face === null };
