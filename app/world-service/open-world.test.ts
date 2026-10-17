@@ -97,8 +97,7 @@ describe("the graph a world is laid out from", () => {
     const calls = { from: a.id, to: b.id, kind: "calls" as const, by };
     const references = { from: "file:moor/guide.md", to: a.id, kind: "references" as const, by };
     const others = [
-      { from: "dir:", to: "dir:moor", kind: "contains" as const, by },
-      { from: a.id, to: b.id, kind: "names" as const, by },
+      { from: a.id, to: b.id, kind: "implements" as const, by },
       { from: b.id, to: "file:moor/guide.md", kind: "references" as const, by },
     ];
     expect(judgedGraph({ ...graph, edges: [...graph.edges, calls, references, ...others] }).edges).toEqual([...graph.edges, calls, references]);
