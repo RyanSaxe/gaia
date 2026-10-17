@@ -39,6 +39,13 @@ const DRIFT_FORMS: Readonly<Record<AccentForm, DriftForm>> = {
   leaves: { shape: 2, fall: 0.6, low: 0, high: 10, wander: 0.8, blink: 0, opacity: 1 },
 };
 
+/**
+ * A glowing dot's light, a firefly's: its core's radius is `core` of the drift's size, and never under `angle` of the
+ * view (radians) or `px` device pixels, so one far off or on a small screen still reads as a point of light; in the
+ * dark a halo reaches `halo` times as far, at `haloAlpha` of the core's light. Between flashes it dims to `dim`.
+ */
+const GLOW = { core: 0.15, angle: 0.0028, px: 1.4, halo: 3, haloAlpha: 0.3, dim: 0.4 } as const;
+
 /** A drifting thing's color and shape, lit as everything else is: petals darken at night while glowing things shine. */
 const DRIFT_FRAG = /* glsl */ `
 precision highp float;
@@ -57,31 +64,33 @@ uniform float uOpacity;
 uniform float uHalo;
 varying float vPhase;
 varying float vFade;
+varying float vCore;
 void main() {
   vec2 c = gl_PointCoord - 0.5;
   // One pixel, as a share of the point: a shape's edges soften over it, and a small point keeps its shape at least
-  // a pixel and a half wide and a glowing core at least a pixel round, so a drift far off still reads as a speck.
+  // a pixel and a half wide, so a drift far off still reads as a speck.
   float px = fwidth(gl_PointCoord.x);
-  // In the dark a glowing mote keeps its small core and gains a soft halo.
-  float grow = min(1.0 + uHalo * 3.0, 0.22 / max(px, 1e-3));
   float a = vPhase * 6.283 + uTime * (0.6 + vPhase);
   float ca = cos(a);
   float sa = sin(a);
   vec2 r = vec2(ca * c.x - sa * c.y, sa * c.x + ca * c.y);
   // 0: soft dot, 1: petal, 2: leaf. Petals and leaves tumble, so their width breathes.
   float tumble = max(0.35 + 0.65 * abs(sin(uTime * 2.1 + vPhase * 13.0)), 4.0 * px);
-  float disc = exp(-dot(c, c) * 14.0 * grow * grow) + exp(-dot(c, c) * 18.0) * uHalo * 0.5;
+  // A glowing dot is a bright core vCore device pixels round and, in the dark, a faint halo round it.
+  float cores = length(c) / max(px, 1e-4) / vCore;
+  float disc = exp(-cores * cores) + exp(-cores * cores / ${(GLOW.halo * GLOW.halo).toFixed(1)}) * ${GLOW.haloAlpha.toFixed(2)} * uHalo;
   float petal = smoothstep(0.46 + max(0.04, px), 0.46 - max(0.04, px), length(vec2(r.x / (0.42 * tumble), r.y / 0.95)));
   float leaf = smoothstep(0.47 + max(0.03, px), 0.47 - max(0.03, px), length(vec2(r.x / (0.36 * tumble), r.y)) + abs(r.x) * 0.6);
   float shape = uShape < 0.5 ? disc : uShape < 1.5 ? petal : leaf;
-  // A blinking thing dims to a quarter between flashes rather than going out.
-  float blink = mix(1.0, 0.25 + 0.75 * smoothstep(0.2, 1.0, sin(uTime * 1.6 + vPhase * 41.0)), uBlink);
+  // A blinking thing flashes slowly, every five seconds or so, and dims to ${GLOW.dim} between flashes rather than
+  // going out.
+  float blink = mix(1.0, ${GLOW.dim.toFixed(2)} + ${(1 - GLOW.dim).toFixed(2)} * smoothstep(0.2, 1.0, sin(uTime * 1.2 + vPhase * 41.0)), uBlink);
   // Lit like everything else, so petals darken at night while glowing things shine.
   vec3 sky = uAmbientColor * uAmbientIntensity * 1.35 + uSunColor * uSunIntensity * 0.46 + uMoonColor * uMoonIntensity * 0.6;
   vec3 lit = uColor * mix(sky, vec3(1.0), uGlow);
   float alpha = shape * vFade * blink * uOpacity;
   if (alpha < 0.01) discard;
-  gl_FragColor = vec4(lit * (1.0 + uGlow * 0.6), alpha);
+  gl_FragColor = vec4(lit, alpha);
 }
 `;
 
@@ -130,6 +139,8 @@ const CROWN_FADE = 3;
 const CARRY = 0.6;
 /** The largest a drifting thing is drawn, device pixels. */
 const LARGEST = 64;
+/** How many of its cores across a glowing dot's point is: out to 1.8 halos each side, where the halo has faded to nothing. */
+const GLOW_POINT = 2 * 1.8 * GLOW.halo;
 /** The forms that fall from trees; fireflies ride the air. */
 const FROM_TREES: ReadonlySet<AccentForm> = new Set(["petals", "leaves"]);
 
@@ -151,8 +162,7 @@ uniform float uFall;
 uniform float uLow;
 uniform float uHigh;
 uniform float uWander;
-// A glowing thing's halo in the dark, which the point grows to hold.
-uniform float uHalo;
+uniform float uShape;
 // 1 for what shows only after dusk.
 uniform float uDusk;
 // 1 for what falls from the trees near the person.
@@ -170,6 +180,7 @@ attribute vec4 aSeed; // place in the square or the crown (x, z), phase, rank am
 attribute vec2 aMore; // its tree, height seed
 varying float vPhase;
 varying float vFade;
+varying float vCore;
 
 // The ground or the water's face, whichever is higher.
 float floorAt(vec2 xz) {
@@ -226,8 +237,10 @@ void main() {
       * smoothstep(0.0, 0.6, h - uLow) * smoothstep(0.0, 0.6, uHigh - h);
     density = fade > 0.0 ? densityAt(xz) : 0.0;
   }
-  // Each drifting thing has its rank among its form's, so a region holding fewer shows the first of them.
-  fade *= clamp((density - aSeed.w) * 12.0, 0.0, 1.0);
+  // Each drifting thing has its rank among its form's, so a region holding fewer shows the first of them. The last
+  // twelfth of what the fullest region shows fades in one by one as the air fills, and the rest show whole however
+  // few the land holds.
+  fade *= clamp((density - aSeed.w) * 12.0 / max(uFull, 1e-3), 0.0, 1.0);
   fade *= mix(1.0, smoothstep(0.25, 0.65, uNightness), uDusk);
   vec4 mv = viewMatrix * vec4(xz.x, y, xz.y, 1.0);
   fade *= smoothstep(${DRIFT_REACH.near[0].toFixed(1)}, ${DRIFT_REACH.near[1].toFixed(1)}, -mv.z);
@@ -239,7 +252,17 @@ void main() {
     return;
   }
   gl_Position = projectionMatrix * mv;
-  gl_PointSize = clamp(uSize * uPixels / max(-mv.z, 0.5) * (1.0 + uHalo * 3.0), ${MIN_PX.toFixed(1)}, ${LARGEST.toFixed(1)});
+  float size = uSize * uPixels / max(-mv.z, 0.5);
+  if (uShape < 0.5) {
+    // A glowing dot's point reaches out to where its halo has faded, and its core is never larger than the largest
+    // point leaves room for.
+    float core = max(size * ${GLOW.core.toFixed(2)}, max(uPixels * ${GLOW.angle.toFixed(4)}, ${GLOW.px.toFixed(1)}));
+    vCore = min(core, ${(LARGEST / GLOW_POINT).toFixed(2)});
+    gl_PointSize = vCore * ${GLOW_POINT.toFixed(1)};
+  } else {
+    vCore = 1.0;
+    gl_PointSize = clamp(size, ${MIN_PX.toFixed(1)}, ${LARGEST.toFixed(1)});
+  }
 }
 `;
 
@@ -358,6 +381,8 @@ export function createDrifts(light: SceneLight, ground: GroundTexture): Drifts {
       uniforms: { ...light, ...ground.uniforms, ...vitalityUniforms, ...uniforms },
       transparent: true,
       depthWrite: false,
+      // A glowing thing adds its light to what is behind it, so it brightens the dark rather than covering it.
+      blending: spec.glow > 0.5 ? THREE.AdditiveBlending : THREE.NormalBlending,
     });
     const points = new THREE.Points(geometry, material);
     points.frustumCulled = false;
