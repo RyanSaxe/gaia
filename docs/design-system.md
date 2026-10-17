@@ -472,6 +472,15 @@ and its sparkle, foam and night specks dim. `groundDecline` and `groundLook`
 in `@gaia/terrain` are the rule, and the grass, ground and water shaders
 follow it (`VITALITY_GLSL` in `app/renderer/terrain/vitality.ts`).
 
+A world heals in place while the person stands in it. Once a new commit in
+its folder is judged, each thing whose vitality changed shows it on
+everything that stands for it: its building or landmark, its trees and
+what grows there, its ground, its area's water, and the trails it joins,
+and the map and the journal follow. Nothing moves, appears or changes form:
+a thing Jev would now stand as something else keeps its form until the
+next open, and a commit that would reshape the land heals only what still
+stands under the same name.
+
 ## Sky and distance
 
 The world should seem infinite, so the horizon never shows a line. One sky

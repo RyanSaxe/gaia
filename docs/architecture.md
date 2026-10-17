@@ -22,7 +22,7 @@ the document that did not change renders exactly as it did before.
 | --- | --- | --- |
 | Main | TypeScript (Electron) | The window and the app's lifecycle. It starts the engine and the world service, restarts the engine if it exits, and names the folder whose world each page opens: `GAIA_PROJECT`, one chosen with File > Open Folder, or none, and then the page offers the start (File > Choose a World returns to it). |
 | Engine | Rust (`gaia-engine`) | Files, parsing, git, the code graph, the app-data store and the Jev client with the key from the macOS Keychain. |
-| World service | TypeScript (Electron utility process) | Kinds and primitives, the question planner, vitality and the world document. It opens a codebase's world (`openWorld` in `app/world-service/open-world.ts`): the engine's `project.graph`, the facts `factsOf` derives from it, Jev's judgments, kept in the store, and `layoutWorld`, and sends the renderer the result (`WorldDocument`) over its MessagePort. |
+| World service | TypeScript (Electron utility process) | Kinds and primitives, the question planner, vitality and the world document. It opens a codebase's world (`openWorld` in `app/world-service/open-world.ts`): the engine's `project.graph`, the facts `factsOf` derives from it, Jev's judgments, kept in the store, and `layoutWorld`, and sends the renderer the result (`WorldDocument`) over its MessagePort. While the world stands it watches the folder for a new commit and heals the world with it (`healWorld`, `world.vitality`). |
 | Renderer | TypeScript | The UI, the Three.js scene, the realizer and the clock. The page shows only the world, full screen at eye height (`app/renderer/immersive/`): the world (`createWorld` in `app/renderer/terrain/world.ts`), plus three ways of telling a person where they are (a minimap of the land around them with the area's name, the field map that unfolds out of it, and markers in the world), read through `placeAt` and drawn on one field sheet (`docs/design-system.md`, "The field sheet"); touching the world only moves the person, and stopping at a thing that stands for code raises its page at the lower left; a tap on the open field map sends the person to that place, landing where `WorldHandle.landing` says: along the trails, or straight across the land where they wander (`WorldHandle.travel`, with `trailWay`, `acrossWay`, `planTrip` and `travelStep` in `@gaia/terrain`), each mark of the way ahead asked of the standers before the person comes near it, or where neither goes, under a fold of paper that hides the move. Scripted checks drive the world through the hooks of `window.__lab.terrain` (`app/renderer/terrain/hooks.ts`), which reach inside it through `WorldInside`; nothing a person does goes through them. The world bakes on worker threads (`app/renderer/terrain/bake-worker.ts`): a few workers compose bands of lattice rows with `composeRows`, and one finishes the bake with `finishTerrain`, which scales the relief into the budget by a fit found on a survey of every 4th sample and checked once at every sample, and stands the world's things on it. On the page the land is a clipmap (`createPageLand` in `app/renderer/terrain/land.ts`): seven levels of 512 by 512 samples centered near the person, level k every 2^k-th sample on the world's own grid, where ground ring k sets its vertices, so the rings read exactly the samples they did. The page never holds the whole world's land: its land workers bake each level's window in 64-sample chunks from the world's plan alone (`app/renderer/terrain/land-chunks.ts`), taking jobs from one queue on the page soonest wanted first: the person's land, then a painting's set-aside land, and a level moves once the person has walked a chunk from its middle and every chunk of its new window has come, so a window never shows half old and half new. Every texture that holds a value per lattice sample takes its data from the levels: the ground's height, water and distances, each sample's covers, and which ways each sample lies on (`createGroundTexture` in `ground.ts`), so the land's memory on the page and the GPU is the same at any world size. A coarse level names a way as far out as a reader of its cells asks (`placeReach`), so a far trail stays as worn as a near one, and a reader between samples takes the finest level that holds the point and blends into the next near its window's edge (`clipLevel`). The clearings' mask, which only the grass reads, is one window 256 m across around the grass, drawn again from the outlines and capsules as the grass moves on (`app/renderer/terrain/clearings.ts`). Level 0, the land within a few hundred meters to the meter, is the page's `Terrain`; a read past it falls to the finest level that holds the point (`Lattice.beyond`), and a jump waits under its fold of paper until the land around its landing has come. The land a tile at a time: `planTerrain` makes the world's whole-world decisions once, the fit from the survey and the water from the ground along its beds alone, each bed solved on a window of just the ground it reads with the beds before it cut in again, so the plan never holds a lattice the size of the world (the whole world's bake solves its water on the same windows, so the two agree to the bit); `bakeTile` bakes any tile from the plan with a margin for its shore, or every stride-th sample of it for a coarser level; and `standTile` levels it under the buildings' pads, the landmarks' footings and the trails' treads as standing the world recorded them (`LandEdits`), byte for byte as the stood world holds it (`app/renderer/terrain/stand.test.ts`). The finishing worker stands the world's things with `standWorld` (`app/renderer/terrain/stand.ts`): each building's site and pad, the landmarks' sites, the network of trails leveled into the ground, the trees, and the stones, bushes and flowers that stand for code, while the others work out whose ground each part of the land is (`ownershipRows`, see Vitality), so drawing never waits on a bake. It hands the page the world's plan and what standing did to the land (`LandSource`); the whole world's land stays on the worker. The components every world opens with (the trees, landmarks and bushes) and a codebase's buildings are realized on worker threads too (`app/renderer/terrain/made.ts`), made ahead while the wait draws: the page takes each build as it is made, and realizes in place any build it asks for that was not made ahead, the same either way since the realizer is pure. Each build is held only until its meshes are made and its far form baked; one asked for after that, such as by the swap test, is realized again. A plant's meshes keep no copy of their buffers on the page once the GPU holds them (`letGoOnUpload`), but for the positions, normals and index of what a ray picks: a building or a landmark. |
 
 The world service talks to the engine in newline-delimited JSON-RPC 2.0 over
@@ -352,6 +352,33 @@ each building's and landmark's mark at its laid-out place
 (`laidOut` in `app/renderer/terrain/world.ts`), and the stood world when the
 bake returns, for its hills, water and trees.
 `docs/connect-jev.md` is the reviewer's page for connecting it.
+
+A world heals while it stands. Every 4 s the world service asks
+`project.commit` for the folder of the world the page shows
+(`COMMIT_EVERY_MS` in `app/world-service/index.ts`; a world read from disk
+has no commits to watch), and on a new commit it opens the world again
+exactly as above, with nothing shown and nothing asked of the person
+(`healWorld` in `app/world-service/open-world.ts`, which runs `openWorld`).
+The answers kept by request hash, Jev's in the store and the understanding
+pass's in the engine, settle everything the commit left alone, so only what
+it changed is asked. It sends the page each thing's new vitality where it
+changed, by what it stands for (`world.vitality`), and the page sets it the
+one way vitality changes while a world stands (`setVitality` in
+`app/renderer/terrain/world.ts`, see Vitality). The world laid out takes it
+too (`withVitality` in `@gaia/world`), so the field map is washed again
+while the page is idle, the open journal page redraws, and each changed
+thing is painted afresh, its old painting shown until the new one is done.
+Only vitality changes live, never shape, and the forms Jev picks for what
+changed are kept for the next open and shown only then. When the new code
+lays the land out exactly as before (the same files, lengths and
+definitions, each definition on the same lines), the journal also moves to
+the new commit's code and judgments (`world.vitality`'s `commit` and
+`judged`). A commit that would move anything (a file added, removed,
+renamed or resized, a definition moved) heals only the things that still
+stand under the same name, and the reshape, the journal's new code and its
+judgments wait for the next open. A heal never asks the person anything: one
+costing more than their spend limit fails, as does one Jev cannot be asked
+for, and either waits for the next commit.
 
 `placeAt(world, x, z)` in `@gaia/terrain` says where a person is: the cell
 whose site is nearest the warped point names the area and the file underfoot
@@ -854,8 +881,9 @@ filtering. A change in vitality
 rewrites the texture's bytes (about 3 to 9 ms on the page's thread for
 Gaia's world) and never rebakes. Vitality changes while a world stands
 only through `setVitality` in `app/renderer/terrain/world.ts`, by what each
-thing stands for, which the map, the journal and its paintings follow; the
-hook `__lab.terrain.fileVitality(path, v)` sets a file's vitality and its
+thing stands for, which the map, the journal and its paintings follow: a
+heal (above), and the hook `__lab.terrain.fileVitality(path, v)`, which
+sets a file's vitality and its
 definitions', or every file's under a directory, on what stands for them,
 their ground, and their areas' lots and water; `__lab.terrain.groundVitality(x, z)` reads the texture as the
 shaders do.
@@ -1026,3 +1054,6 @@ a `DaySpec`: the light at each key hour, with the world's moon and stars.
 - Reopening a world asks Jev only about requests it has not answered: the
   world is laid out again from the code and the kept answers. The world
   document itself is not stored yet.
+- A world that stands follows a new commit in its folder the same way, but
+  shows only the new vitality; its shape and forms follow at the next open
+  ("A world from code", `healWorld`).

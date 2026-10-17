@@ -53,7 +53,7 @@ import { withStart } from "../start/start.ts";
 import { START_SKY } from "../start/table-scene.ts";
 import type { Represented } from "./represent.ts";
 import { type CodeWorld, vitalityOf, withVitality } from "@gaia/world";
-import { type OpenedWorld, codeWorld } from "./code-world.ts";
+import { type OpenedWorld, codeWorld, onHeal } from "./code-world.ts";
 import type { JudgedThing } from "../../world-service/protocol.ts";
 import { type Building, type Settlement, composedName, createSettlement, settlementBuilds } from "./settlement.ts";
 import { type Signs, createSigns } from "./signs.ts";
@@ -238,8 +238,8 @@ export interface WorldHandle {
   /** What the understanding pass judged about a folder, a file or a definition, every score from 0 to 1. */
   thing(of: string): JudgedThing | undefined;
   /**
-   * Calls `listener` once things' vitality has changed live (`setVitality`), with what each changed thing stands
-   * for; `code`, `places` and `stood` read the change from then.
+   * Calls `listener` once things' vitality has changed live (`setVitality`), as when the world heals onto a new
+   * commit, with what each changed thing stands for; `code`, `places`, `stood` and `thing` read the change from then.
    */
   onVitality(listener: (changed: readonly string[]) => void): void;
   /** Calls `listener` with what a person has walked up to when its card opens, and with null when it closes. */
@@ -2090,6 +2090,17 @@ export function createWorld(root: HTMLElement): World {
     // The wait's pen draws each building and landmark at its laid-out place while the world bakes.
     veil.marks(laidOut(opened));
     knowEntities();
+    // What the commits made in its folder while it stands change, it shows as vitality alone: what it judged anew
+    // for the journal, then each thing's vitality.
+    onHeal((heal) => {
+      if (code === null) return;
+      const judged = heal.judged;
+      if (judged !== undefined) {
+        const was = code.thing;
+        code = { ...code, thing: (of) => judged[of] ?? was(of) };
+      }
+      setVitality(new Map(Object.entries(heal.vitality)));
+    });
     skyWorld = opened.sky;
     hour = Number.NaN;
     if (await rebake(opened.spec)) valleyView();

@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { CodeGraph, CodeFacts, EngineClient, GraphNode, JevRequest } from "@gaia/schema";
-import { composeWorld, factsOf, judgeWorld, keptJev, landOf } from "@gaia/world";
+import { composeWorld, factsOf, judgeWorld, keptJev, landOf, requestKey } from "@gaia/world";
 import { fakeJevClient } from "@gaia/world/testing";
 import { LOOKS } from "../renderer/terrain/looks.ts";
 import proving from "../renderer/terrain/fixtures/proving.json";
-import { LIMIT_KEY, judgedGraph, openWorld } from "./open-world.ts";
+import { LIMIT_KEY, healWorld, judgedGraph, openWorld } from "./open-world.ts";
 import type { Opening } from "./protocol.ts";
 
 /** The proving ground as the engine's graph gives it, read from a commit: its directories and entities, files, definitions and imports. */
@@ -164,5 +164,95 @@ describe("opening a world", () => {
     await expect(openWorld({ engine, root: "proving", consent: async (plan) => (asked.push(plan.estimatedUsd), false), progress: () => {} })).rejects.toThrow(/you chose not to go ahead/);
     expect(asked).toEqual([0.05]);
     expect(batches).toEqual([]);
+  });
+});
+
+/**
+ * The proving ground's graph read from `commit`, as the engine gives it once the understanding pass has judged it:
+ * every folder, file and definition at quality 0.6, or as `quality` names it by its id.
+ */
+function judgedAt(commit: string, quality: Readonly<Record<string, number>> = {}, from: CodeGraph = graph): CodeGraph {
+  const judged = (id: string) => ({ value: { importance: 0.5, quality: quality[id] ?? 0.6, concepts: { readability: quality[id] ?? 0.6 } } });
+  return { ...from, commit, nodes: from.nodes.map((n): GraphNode => (n.kind === "block" ? n : { ...n, judged: judged(n.id) })) };
+}
+
+/** An engine that keeps what is written to its store, as the real one does, reads the folder as `at.graph` says, and notes the key of every request sent to Jev. */
+function keepingEngine(at: { graph: CodeGraph }): { engine: EngineClient; asked: string[] } {
+  const jev = fakeJevClient();
+  const kept: Record<string, unknown> = {};
+  const asked: string[] = [];
+  const estimate = { endpoint: "fake", questions: 0, bytes: 0, estimatedTokens: 1, estimatedUsd: 0, usdPerMillionInputTokens: 0, concurrency: 8, live: true };
+  const results: Record<string, (params: { requests: JevRequest[]; writes: { key: string; value: unknown }[] }) => unknown> = {
+    "store.read": () => ({ records: { ...kept } }),
+    "store.get": () => null,
+    "store.put": ({ writes }) => {
+      for (const w of writes) kept[w.key] = w.value;
+      return { ok: true };
+    },
+    "jev.status": () => ({ live: true, key: true }),
+    "jev.estimate": ({ requests }) => ({ ...estimate, requests: requests.length }),
+    "project.graph": () => at.graph,
+    "understanding.next": () => ({ sent: 0, failed: 0, failures: [], left: 0, settled: [], quality: {} }),
+  };
+  const engine = {
+    call: async (method: string, params: { requests: JevRequest[]; writes: { key: string; value: unknown }[] }) => {
+      if (method !== "jev.batch") return results[method]?.(params);
+      asked.push(...params.requests.map(requestKey));
+      return { responses: await Promise.all(params.requests.map((r) => jev.ask(r))) };
+    },
+    on: () => () => {},
+  } as unknown as EngineClient;
+  return { engine, asked };
+}
+
+describe("healing an open world", () => {
+  const wheel = "crossings/mill/wheel.ts";
+  const open = (engine: EngineClient) => openWorld({ engine, root: "proving", consent: async () => true, progress: () => {} });
+
+  // Each opening lays the proving ground out twice, about a second on a busy machine, and this test opens it three times.
+  it("on a new commit asks Jev only what the commit changed, and sends the page each thing's new vitality where it changed", { timeout: 40_000 }, async () => {
+    const at = { graph: judgedAt("c0ffee") };
+    const { engine, asked } = keepingEngine(at);
+    const shown = await open(engine);
+    const before = new Set(asked);
+    // The commit rewrites the mill's wheel well, and the understanding pass judges it so, and the mill with it.
+    at.graph = judgedAt("beef", { [`file:${wheel}`]: 0.9, "dir:crossings/mill": 0.8 });
+    asked.length = 0;
+    const healed = await healWorld(engine, shown);
+
+    // Everything an opening of the new commit asks, less what the first opening asked: no more, no less.
+    const fresh = keepingEngine({ graph: at.graph });
+    await open(fresh.engine);
+    const changed = [...new Set(fresh.asked)].filter((key) => !before.has(key));
+    expect(changed.length).toBeGreaterThan(0);
+    expect([...new Set(asked)].sort()).toEqual(changed.sort());
+
+    // Only the wheel's and the mill's vitality changed (the wheel's definitions keep their own), so only theirs is
+    // sent, with what the pass judged anew and the commit the journal reads from now.
+    expect(healed.heal).toEqual({
+      type: "world.vitality",
+      vitality: { [wheel]: 0.9, "crossings/mill": 0.8 },
+      judged: { [wheel]: expect.objectContaining({ quality: 0.9 }), "crossings/mill": expect.objectContaining({ quality: 0.8 }) },
+      commit: "beef",
+    });
+    // The page's world takes it where the wheel shows, and nothing moves.
+    expect(healed.shown.world.patches.find((p) => p.path === wheel)?.vitality).toBe(0.9);
+    expect(healed.shown.world.patches.map(({ path, x, z, radius }) => [path, x, z, radius])).toEqual(shown.world.patches.map(({ path, x, z, radius }) => [path, x, z, radius]));
+  });
+
+  it("when the commit would move the land, sends the new vitality of what still stands under the same name, and leaves the rest to the next open", { timeout: 40_000 }, async () => {
+    const at = { graph: judgedAt("c0ffee") };
+    const { engine } = keepingEngine(at);
+    const shown = await open(engine);
+    // The commit adds a file beside the wheel, which divides the land anew, and rewrites the wheel well.
+    const sluice = "crossings/mill/sluice.ts";
+    const added: GraphNode = { kind: "file", id: `file:${sluice}`, lineage: sluice, path: sluice, language: "typescript", bytes: 1, hash: "", binary: false, unparsed: 0, conventions: [], measures: { lines: 300 } };
+    at.graph = judgedAt("beef", { [`file:${wheel}`]: 0.9, [`file:${sluice}`]: 0.2 }, { ...graph, nodes: [...graph.nodes, added] });
+    const healed = await healWorld(engine, shown);
+
+    // No new commit for the journal and no new judgments: its code still lies where the page's land has it.
+    expect(healed.heal).toEqual({ type: "world.vitality", vitality: { [wheel]: 0.9 } });
+    expect(healed.shown.commit).toBe("c0ffee");
+    expect(healed.shown.world.patches.map((p) => p.path)).toEqual(shown.world.patches.map((p) => p.path));
   });
 });

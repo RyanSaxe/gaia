@@ -9,13 +9,16 @@
 // stands, its page sends where the person stands as they walk, which the
 // world's next open lands them at, and a painting of where they stand still,
 // which the start lays on its table as the world's card: both kept with it
-// among the recent worlds.
+// among the recent worlds. While a world stands, its folder is asked now and
+// then for a new commit, and on one the world is judged again and the page
+// sent each thing's new vitality (`world.vitality`), which it eases to in
+// place.
 
 import type { Unreachable } from "@gaia/schema";
 import type { MessagePortMain } from "electron";
 import { createEngineClient } from "./engine-client.ts";
-import { openWorld } from "./open-world.ts";
-import type { EngineStatus, FromMain, FromRenderer, StartChoice, ToMain, ToRenderer } from "./protocol.ts";
+import { healWorld, openWorld } from "./open-world.ts";
+import type { EngineStatus, FromMain, FromRenderer, StartChoice, ToMain, ToRenderer, WorldDocument } from "./protocol.ts";
 import { keepPainting, keepRecent, keepStood, offeredWorlds, stoodIn } from "./recent.ts";
 
 const parent = process.parentPort;
@@ -39,7 +42,7 @@ function settleable(): { promise: Promise<void>; resolve: () => void; settled: b
   return s;
 }
 
-/** The folder whose world each page opened and the commit it was built from: what the page sends is kept with it, and the journal reads that commit. */
+/** The folder whose world each page opened and the commit it was built from or healed onto: what the page sends is kept with it, and the journal reads that commit. */
 const openedOn = new WeakMap<MessagePortMain, { readonly folder: string; readonly commit?: string }>();
 /** Writes to the recent worlds, one after another, so a painting never races the visit it belongs to. */
 let keeping: Promise<void> = Promise.resolve();
@@ -90,7 +93,7 @@ async function offerStart(port: MessagePortMain, refused?: { address: string; wh
 
 /**
  * Sends a file of the world `port` opened, as its lines, read by the engine from the commit that world was built
- * from; null when it can't be read or lies outside that folder.
+ * from or healed onto; null when it can't be read or lies outside that folder.
  */
 async function sendSource(port: MessagePortMain, path: string): Promise<void> {
   const opened = openedOn.get(port);
@@ -103,6 +106,56 @@ async function sendSource(port: MessagePortMain, path: string): Promise<void> {
     }
   }
   send(port, { type: "world.source", path, lines });
+}
+
+/**
+ * How often the folder of the world a page shows is asked which commit it is read from now, ms. A commit shows in the
+ * world within a few seconds of being made, and each ask is two git commands in the engine (about 10 ms for Gaia's 500
+ * files), so the engine, which serves one call at a time, spends well under 1% of its time on it.
+ */
+const COMMIT_EVERY_MS = 4_000;
+
+/** The page whose world's folder is watched for new commits, and the timer that asks. */
+let watching: { readonly port: MessagePortMain; readonly timer: ReturnType<typeof setInterval> } | null = null;
+
+function stopWatching(): void {
+  if (watching !== null) clearInterval(watching.timer);
+  watching = null;
+}
+
+/**
+ * Heals the world `port` shows as its folder's code moves on: on each new commit the world is judged again
+ * (`healWorld`) and the page is sent each thing's new vitality. One heal runs at a time, and a heal that fails waits
+ * for the next commit. A world read from disk has no commits to notice.
+ */
+function watchCommits(port: MessagePortMain, document: WorldDocument): void {
+  stopWatching();
+  if (document.commit === undefined) return;
+  let shown = document;
+  let judgedAt = document.commit;
+  let healing = false;
+  const heal = async (): Promise<void> => {
+    // The engine restarting answers nothing for a moment; the next ask tries again.
+    const now = (await engine.call("project.commit", { root: shown.root }).catch(() => ({ commit: null }))).commit;
+    if (now === null || now === judgedAt) return;
+    judgedAt = now;
+    const started = Date.now();
+    const healed = await healWorld(engine, shown);
+    if (watching?.port !== port) return;
+    shown = healed.shown;
+    openedOn.set(port, { folder: shown.root, ...(shown.commit === undefined ? {} : { commit: shown.commit }) });
+    if (healed.heal !== null) send(port, healed.heal);
+    const changed = Object.keys(healed.heal?.vitality ?? {}).length;
+    console.log(`gaia: healed ${shown.root} at ${now.slice(0, 8)} in ${Date.now() - started} ms: ${changed} things' vitality changed${shown.commit === now ? "" : "; the land moved, so its new shape waits for the next open"}`);
+  };
+  const timer = setInterval(() => {
+    if (healing) return;
+    healing = true;
+    heal()
+      .catch((error: unknown) => console.error(`gaia: could not heal ${shown.root}: ${(error as Error).message}`))
+      .finally(() => (healing = false));
+  }, COMMIT_EVERY_MS);
+  watching = { port, timer };
 }
 
 /** Opens the world for one page; whatever it says goes to that page's port only. `github` names a place cloned from GitHub. */
@@ -125,6 +178,7 @@ async function open(port: MessagePortMain, folder: string, github?: string): Pro
     const name = github ?? document.facts.repository.name;
     toMain({ type: "world.opened", root: folder, name });
     openedOn.set(port, { folder, ...(document.commit === undefined ? {} : { commit: document.commit }) });
+    watchCommits(port, document);
     await keep(() => keepRecent(engine, { root: folder, name, ...(github === undefined ? {} : { github }), at: Date.now(), ...(document.commit === undefined ? {} : { commit: document.commit }) }));
   } catch (error) {
     const message = (error as Error).message;
@@ -173,6 +227,7 @@ parent.on("message", (event) => {
       break;
     case "renderer.port": {
       renderer?.close();
+      stopWatching();
       // A question asked of a page that is gone is never answered; the next page asks again.
       consenting?.reject(new Error("The page that was asked went away."));
       consenting = null;
