@@ -610,16 +610,28 @@ export function standingThings(facts: CodeFacts, graph?: CodeGraph): StandingThi
 }
 
 /**
- * Each thing's rank by importance among the world's own entities, files and
- * definitions together, by its id (`rankAmong`): 0 the least important, 1 the
- * most. A thing the understanding pass gave no importance ranks as if it had
- * none. A rank is a share of the world's own things, so a form's range offers
- * it to the same share of things in a world of any size.
+ * Where entities rank: from this rank up. A package is a place of its own, so
+ * its least important ranks with the things that are offered trees alone, and
+ * the rest with those offered a building or, the most important, a landmark.
+ */
+const ENTITY_RANKS = 0.85;
+
+/**
+ * Each thing's rank by importance, by its id (`rankAmong`): 0 the least
+ * important, 1 the most. A file or a definition ranks among the files and
+ * definitions together. An entity ranks among the world's entities, placed
+ * from `ENTITY_RANKS` up: its importance is judged against its folder's
+ * neighbors, not against the definitions inside it, so a package ranked among
+ * definitions was offered only small forms. A thing the understanding pass
+ * gave no importance ranks as if it had none. A rank is a share, so a form's
+ * range offers it to the same share of things in a world of any size.
  */
 export function rankThings(facts: CodeFacts, graph?: CodeGraph): ReadonlyMap<string, number> {
   const things = standingThings(facts, graph);
-  const sorted = things.map((t) => t.importance ?? 0).sort((a, b) => a - b);
-  return new Map(things.map((t) => [t.id, rankAmong(t.importance ?? 0, sorted)]));
+  const sortedOf = (of: (t: StandingThing) => boolean): number[] => things.filter(of).map((t) => t.importance ?? 0).sort((a, b) => a - b);
+  const entities = sortedOf((t) => t.of === "entity");
+  const rest = sortedOf((t) => t.of !== "entity");
+  return new Map(things.map((t) => [t.id, t.of === "entity" ? ENTITY_RANKS + (1 - ENTITY_RANKS) * rankAmong(t.importance ?? 0, entities) : rankAmong(t.importance ?? 0, rest)]));
 }
 
 /** The forms a thing of this rank is offered: every form whose needs it meets (`meets`), by key. */

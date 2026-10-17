@@ -216,8 +216,11 @@ own: the option's words are the reason, stored with the choice), what each
 entity, file and definition stands as, and how much it would walk each
 dependency. What a thing stands as is asked once the understanding pass has
 judged how much each matters (`planStanding`): each thing's rank by
-importance among the world's own things (`rankThings`, ties sharing the
-middle) offers it every form whose range holds it (`formsFor`, the ranges in
+importance (`rankThings`, ties sharing the middle; an entity among the
+world's entities, placed from 0.85 up, since its importance is judged
+against its folder's neighbors and a package is a place of its own, and a
+file or a definition among the files and definitions)
+offers it every form whose range holds it (`formsFor`, the ranges in
 `SIZES` in `app/renderer/terrain/looks.ts`, overlapping, smallest
 first: flowers, stones, bushes, trees, buildings, landmarks), and Jev picks
 among them by each form's character; a thing offered one form alone stands

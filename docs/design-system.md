@@ -509,7 +509,9 @@ nothing changes.
 ## Drifts
 
 A region's biome may set something drifting through its air (`drift@1`, the
-accents Jev chooses; most regions have none): petals and leaves falling from
+accents Jev chooses for land whose code feels lively, blooming, old and
+settled or alive after dark, and not for plain, workmanlike code): petals
+and leaves falling from
 its trees, and fireflies hovering over its ground
 (`app/renderer/terrain/drifts.ts`). Dandelion seeds and motes of light were
 offered too and were removed, because they could not be seen: seeds were
@@ -1615,7 +1617,8 @@ chose to be one. Jev chooses what each stands as, on its own, among the
 sizes its importance is offered (flowers, stones, bushes, trees, buildings
 and landmarks, each with a range of rank in `SIZES`, overlapping; flowers and
 stones only for the less important half, trees alone from 0.75 to 0.90,
-buildings from 0.90): one
+buildings from 0.90, and a landmark or a tree alone from 0.997; an entity
+ranks among the world's entities, from 0.85 up): one
 of four trees (a lantern willow, a fir, a cherry or an autumn maple), a
 stone, a bush, a drift of flowers, a building or a landmark. Each form's
 words are its character, its size and its rarity, never a kind of code. A
