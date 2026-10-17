@@ -1103,7 +1103,7 @@ export const trailVitalityAt = (fromVitality: number, toVitality: number, along:
  * trail is worn bare, a failing one's grows over until only a faint trace is
  * left, so its route still reads. It grows over as far as the land around
  * it looks declined (`shownVitality`). The ground and grass shaders apply the same numbers live
- * (`TRAIL_GLSL` in the terrain lab), so a vitality change never rebakes.
+ * (`TRAIL_GLSL` in the app's trails), so a vitality change never rebakes.
  */
 export const trailWearAt = (wear: number, fromVitality: number, toVitality: number, along: number): number =>
   wear * (0.2 + 0.8 * smooth(0.05, 0.75, shownVitality(trailVitalityAt(fromVitality, toVitality, along))));

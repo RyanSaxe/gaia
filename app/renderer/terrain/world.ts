@@ -52,7 +52,7 @@ import { withStart } from "../start/start.ts";
 import { START_SKY } from "../start/table-scene.ts";
 import type { Represented } from "./represent.ts";
 import type { CodeWorld } from "@gaia/world";
-import { type CodeLab, codeWorld } from "./code-world.ts";
+import { type OpenedWorld, codeWorld } from "./code-world.ts";
 import type { JudgedThing } from "../../world-service/protocol.ts";
 import { type Building, type Settlement, composedName, createSettlement, settlementBuilds } from "./settlement.ts";
 import { type Signs, createSigns } from "./signs.ts";
@@ -179,7 +179,7 @@ export interface Furnishing {
 }
 const UNFURNISHED: Furnishing = { capsules: [], solids: [] };
 
-/** What the immersive world reads from the terrain lab's world, and the few ways it steers it. */
+/** What the immersive layer reads from the world, and the few ways it steers it. */
 export interface WorldHandle {
   readonly scene: THREE.Scene;
   readonly light: SceneLight;
@@ -194,7 +194,7 @@ export interface WorldHandle {
   code(): CodeWorld | null;
   /** The world as it stands now. */
   stood(): StoodWorld;
-  /** Calls `listener` after every bake the lab takes on. */
+  /** Calls `listener` after every bake the world takes on. */
   onStood(listener: () => void): void;
   /** Calls `listener` once the wait has given way to the first world standing. */
   onLifted(listener: () => void): void;
@@ -345,9 +345,9 @@ export interface LaidAir {
   readonly air: AtmosphereSpec;
 }
 
-/** Where a landing may be: water no deeper than this (dry first, then wading), this far from any solid, and how far it looks from the spot asked for, meters. */
 /** A bark vertex lower than this, meters, belongs to the trunk's base where it meets the ground. */
 const TRUNK_BASE = 0.05;
+/** Where a landing may be: water no deeper than this (dry first, then wading), this far from any solid, and how far it looks from the spot asked for, meters. */
 const LAND = { dry: 0.02, wade: 0.45, clear: 1.1, reach: 40, ring: 1.5, far: 160 };
 /**
  * How the journal's paintings are seen: every one in the same afternoon
@@ -433,7 +433,7 @@ export interface WorldInside {
   // What stands now.
   /** The world shown: its regions and size. */
   readonly spec: WorldSpec;
-  readonly code: CodeLab | null;
+  readonly code: OpenedWorld | null;
   readonly places: WorldPlaces;
   readonly settlement: Settlement;
   readonly landmarks: readonly Landmark[];
@@ -577,7 +577,7 @@ export function createWorld(root: HTMLElement): World {
   /** The landmarks of the world shown, each as Jev composed it. */
   let landmarks: Landmark[] = [];
   /** What builds each landmark Jev composed for a codebase's world. */
-  const landmarkAsks = (c: CodeLab): BuildAsk[] =>
+  const landmarkAsks = (c: OpenedWorld): BuildAsk[] =>
     c.landmarks.map((l) => ({
       kind: "landmark",
       blueprint: l.blueprint,
@@ -596,8 +596,8 @@ export function createWorld(root: HTMLElement): World {
   // A building for each thing the world stands as one, each on a pad leveled into the bake; none until a world opens.
   let settlement = createSettlement(light, []);
   /** The codebase's world shown: what every area, patch, building, landmark and trail stands for. */
-  let code: CodeLab | null = null;
-  /** The light, sky and wind the lab shows: the start's own until the codebase's world opens, then the one Jev composed for it. */
+  let code: OpenedWorld | null = null;
+  /** The light, sky and wind the world shows: the start's own until the codebase's world opens, then the one Jev composed for it. */
   let skyWorld: Blueprint = START_SKY;
   let ways: Settled = { sites: [], network: NO_TRAILS };
   // Every entity's vitality by its path, live: buildings, landmarks, plants, stones and flowers
@@ -670,7 +670,6 @@ export function createWorld(root: HTMLElement): World {
   /** Every landmark view made so far, by its kind and which of that kind it is, reused from bake to bake. */
   const landmarkPool = new Map<string, PlantView>();
   let built: Ways | null = null;
-  /** Stands each landmark on its site and builds the trails' crossings; the ground texture already carries the trails. */
   /** Each standing landmark's key in the pool of landmark views: the landmark it is, and which of that landmark's it is. */
   const poolKeys = (sites: readonly StandingLandmark[]): string[] => {
     const seen = new Map<string, number>();
@@ -697,6 +696,7 @@ export function createWorld(root: HTMLElement): World {
       await wait();
     }
   }
+  /** Stands each landmark on its site and builds the trails' crossings; the ground texture already carries the trails. */
   function placeWays(): void {
     for (const v of landmarkPool.values()) v.object.visible = false;
     const keys = poolKeys(ways.sites);
@@ -854,7 +854,7 @@ export function createWorld(root: HTMLElement): World {
   const treeFile = (t: { readonly symbol: number }): string | undefined => treeSymbol(t)?.file;
   const treeVitality = (t: Tree): number => liveFileVitality.get(treeFile(t) ?? "") ?? t.represented.vitality;
   let treeViews: Copies[] = [];
-  /** Each build's instances by variant, kept for the life of the lab. */
+  /** Each build's instances by variant, kept for the life of the world. */
   const groves = new Map<number, Copies>();
 
   // Every plant that turns far when small on screen: each tree build, by its
@@ -875,7 +875,7 @@ export function createWorld(root: HTMLElement): World {
   // cards where a copy is small on a pass's screen (woods.ts). A build's form
   // is read from the store when it was baked before; otherwise it bakes a few
   // views a frame, and is stored for next time. The trees' forms bake from the
-  // moment the lab opens, and the wait lifts only once they are ready, so no
+  // moment the world opens, and the wait lifts only once they are ready, so no
   // frame shows a far tree before its card. The bushes' bake once the world is
   // open: until then every bush draws its full form, and the far ones then
   // change by less than a level of 255 as their cards come in.
@@ -1740,11 +1740,6 @@ export function createWorld(root: HTMLElement): World {
     return first === -1 ? Infinity : first === 0 ? 0 : (t.marks[first - 1] as (typeof t.marks)[number]).s;
   }
   /**
-   * Plans a trip to a landing: from where the person stands, around whatever
-   * stands between, onto the nearest tread; along the trails to the tread
-   * nearest the landing; and off it to the landing.
-   */
-  /**
    * The way a trip takes from `from` to a landing: walked straight there when
    * near; else along the trails, unless their way is more than
    * `TRAVEL.detour` times the straight distance or none goes there, when it
@@ -1772,6 +1767,11 @@ export function createWorld(root: HTMLElement): World {
     if (across === null || (trails !== null && lengthOf(across) >= lengthOf(trails.way))) return trails;
     return { way: across, off: { start: 0, end: 0 }, by: "across" };
   }
+  /**
+   * Plans a trip to a landing: from where the person stands, around whatever
+   * stands between, onto the nearest tread; along the trails to the tread
+   * nearest the landing; and off it to the landing.
+   */
   function travelTo(at: Landing, face: boolean): boolean {
     const chosen = travelWay({ x: walker.x, z: walker.z }, at);
     if (chosen === null) return false;
@@ -1787,7 +1787,6 @@ export function createWorld(root: HTMLElement): World {
     return true;
   }
 
-  /** What the person asks of their body this frame: the keys first, then a tap's walk, moved on along its way, braking to arrive and ended there. */
   /**
    * Where the person walks, never turning where they look: the keys walk
    * them ahead or back along where they look (`steerStep`), and a tap's walk
@@ -1868,7 +1867,6 @@ export function createWorld(root: HTMLElement): World {
 
   // ---------- taking on a world ----------
 
-  /** Takes on a freshly baked world and what stands on it: everything on the land follows. */
   /**
    * Takes on a baked world over a few frames, so no single frame holds the
    * page long enough for the wait to stutter. The world draws no frames
@@ -1949,7 +1947,7 @@ export function createWorld(root: HTMLElement): World {
   }
 
   // Bakes run on the workers while the old world stays on screen; the newest
-  // one asked for is the one the lab takes on.
+  // one asked for is the one the world takes on.
   let asked = 0;
   async function rebake(next: WorldSpec): Promise<boolean> {
     const mine = ++asked;
@@ -2088,7 +2086,7 @@ export function createWorld(root: HTMLElement): World {
   }
 
   /** Each building and landmark of a codebase's world at its laid-out place, with what its mark on the map is drawn from, before a bake stands it. */
-  function laidOut(c: CodeLab): Pick<StoodWorld, "buildings" | "landmarks"> {
+  function laidOut(c: OpenedWorld): Pick<StoodWorld, "buildings" | "landmarks"> {
     const houses = c.world.things.filter((t) => t.as === "building");
     const rises = c.world.things.filter((t) => t.as === "landmark");
     return {

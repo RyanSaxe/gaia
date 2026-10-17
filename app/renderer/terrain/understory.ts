@@ -1,4 +1,4 @@
-// The terrain lab's understory: the stones, bushes and flowers that code
+// The world's understory: the stones, bushes and flowers that code
 // stands as (`FORMS` in looks.ts), drawn as one InstancedMesh per part and
 // level of detail of each blueprint, so a hundred bushes cost a handful of
 // draw calls, and each pass draws only the cells it can see. Nothing here
@@ -116,7 +116,7 @@ export function createUnderstory(scene: THREE.Scene, light: SceneLight, lib: Lib
     }),
   );
   const views: { group: Group; view: Copies }[] = [];
-  /** Each blueprint's instances by rule and variant, kept for the life of the lab. */
+  /** Each blueprint's instances by rule and variant, kept for the life of the world. */
   const kept = new Map<string, { group: Group; view: Copies }>();
   let placed: readonly Placement[] = [];
   /** Each placement's blueprint and its copy among that blueprint's instances. */

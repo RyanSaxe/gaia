@@ -5,7 +5,7 @@ import { landmark, structure } from "@gaia/kinds";
 import { FLORA_PRESETS, realize } from "@gaia/realize";
 import { type BuildingSite, type Extent, TERRAIN, type Terrain, bakeTerrain, extentOf, groundLook, heightAt, siteToWorld, turningExtent, junctionVitality, ownershipOf, placeAt, vitalityAt, vitalityOver, waterDepthAt, wayVitalityAt } from "@gaia/terrain";
 import { type Judgments, areaVitality, groundVitality } from "@gaia/world";
-import { codeLab, provingWorld } from "./code-world.ts";
+import { openedWorld, provingWorld } from "./code-world.ts";
 import { COMPOSED_FORMS, FORMS, WATERS } from "./looks.ts";
 import { BUILDINGS, LANDMARKS, LANDS, TRAILS } from "../../../tools/proving-looks.ts";
 import { type Stand, type StandBuilding, groundSites, landmarkBase, needsBank, ownerVitality, standWorld, understoryVitality } from "./stand.ts";
@@ -13,9 +13,9 @@ import judgedFixture from "./fixtures/proving-judged.json";
 
 const judged = judgedFixture as unknown as Judgments;
 const doc = provingWorld();
-const code = codeLab(doc);
+const code = openedWorld(doc);
 const vitalityOf = new Map(doc.world.things.map((t) => [t.path, t.vitality]));
-/** Each trail end's vitality as the lab shows it, by the place the trail names: a building's or a landmark's lot, or the path of an entity standing as a plant, a stone or flowers. */
+/** Each trail end's vitality as the world shows it, by the place the trail names: a building's or a landmark's lot, or the path of an entity standing as a plant, a stone or flowers. */
 const endVitality = new Map([...vitalityOf, ...doc.world.standing.flatMap((s) => (s.of === "entity" ? [[s.path, s.vitality] as const] : []))]);
 /** Each area's vitality, every file under it pooled by size. */
 const pooled = areaVitality(doc.world.patches.map((p) => ({ area: p.area, vitality: p.vitality, size: p.radius * p.radius })));
@@ -125,7 +125,7 @@ describe("the proving ground", () => {
     expect(mean("mixed/steady.ts").dry).toBeLessThan(0.1);
   });
 
-  describe("stood as the terrain lab stands it", () => {
+  describe("stood as the page stands it", () => {
     let terrain: Terrain;
     let stood: Stand;
     let requests: StandBuilding[];

@@ -1,8 +1,8 @@
 // Writes the engine's judged code graph of a project, trimmed to what the
-// layout reads (`judgedGraph`), to a JSON snapshot for the terrain lab.
+// layout reads (`judgedGraph`), to a JSON snapshot for the standalone page.
 // Each node's importance and quality come from the Jev answers held in the store
-// under GAIA_DATA_DIR; nothing is asked. The lab lays its world out from
-// this graph alone (`factsOf`). Opening a checkout updates its project's
+// under GAIA_DATA_DIR; nothing is asked. The standalone page lays its world
+// out from this graph alone (`factsOf`). Opening a checkout updates its project's
 // lineage record, so for an older commit point GAIA_DATA_DIR at a copy of
 // the store.
 // Builds the engine first.

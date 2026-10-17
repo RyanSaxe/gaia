@@ -1,5 +1,5 @@
 // Measuring a frame: what each kind of thing draws in each pass, and how much
-// the picture changes between two frames. The lab's hooks use these to find
+// the picture changes between two frames. The world's hooks use these to find
 // where frame time goes and to prove that a change of detail goes unseen: a
 // step of walking may change the picture by less than the wind already does.
 

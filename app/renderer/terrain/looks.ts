@@ -45,7 +45,7 @@ const sized = (size: Size, vibe: string): Look => ({ doc: `${vibe} ${SIZES[size]
 
 /**
  * What a thing stands as when it is flowers, a stone, a bush or a tree: one of
- * the lab's trees (`rule` "trees" and its flora preset), drawn with the woods,
+ * the world's trees (`rule` "trees" and its flora preset), drawn with the woods,
  * or one of the understory's own blueprints (`rule` and which of its
  * presets). Either way standing hundreds costs no draw calls of its own. Each
  * look says only what its form is like, never what kind of code suits it:

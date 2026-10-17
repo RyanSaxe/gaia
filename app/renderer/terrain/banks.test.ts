@@ -4,7 +4,7 @@ import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, LANDMARK_PRIMITIVES, RELIEF_PRIMITI
 import { landmark, structure } from "@gaia/kinds";
 import { FLORA_PRESETS, realize } from "@gaia/realize";
 import { type BuildingSite, type Terrain, bakeTerrain, extentOf, findBankSite, regionAt, siteToWorld, turningExtent, waterDepthAt, yardsMeet } from "@gaia/terrain";
-import { type CodeLab, codeLab, provingWorld } from "./code-world.ts";
+import { type OpenedWorld, openedWorld, provingWorld } from "./code-world.ts";
 import { laySnapshot } from "./snapshot.ts";
 import { snapshotFacts } from "./snapshot-facts.ts";
 import { BUILDINGS } from "../../../tools/proving-looks.ts";
@@ -17,8 +17,8 @@ const millPlan = mill.slots.get("footprint")?.output as BuildingPlan;
 const millBeside = extentOf(mill.slots.get("feature")?.output as Built | undefined)!;
 const millWheel = turningExtent(mill.slots.get("feature")?.output as Built | undefined)!;
 
-/** Each building of a world as the terrain lab builds it, in the order the stand sites them. */
-const buildingsOf = (code: CodeLab): StandBuilding[] =>
+/** Each building of a world as the world builds it, in the order the stand sites them. */
+const buildingsOf = (code: OpenedWorld): StandBuilding[] =>
   code.buildings.map((b) => {
     const facts = Object.fromEntries(Object.entries(structure.facts).map(([k, bind]) => [k, bind(b.facts)]));
     const built = realize(b.blueprint, structure, buildingLib, { seed: seedOf(`terrain-lab/${b.facts.path}`), facts });
@@ -26,8 +26,8 @@ const buildingsOf = (code: CodeLab): StandBuilding[] =>
     return { name: b.facts.path, plan: built.slots.get("footprint")?.output as BuildingPlan, beside: extentOf(feature), ...(needsBank(b.blueprint, buildingLib) ? { wheel: turningExtent(feature) } : {}) };
   });
 
-/** A world stood as the terrain lab stands it: its buildings, its landmarks, its trails and its definitions. */
-function standAsTheLab(t: Terrain, code: CodeLab, buildings: StandBuilding[]): { land: Terrain; stood: Stand; landmarks: StandLandmark[] } {
+/** A world stood as the page stands it: its buildings, its landmarks, its trails and its definitions. */
+function standAsThePage(t: Terrain, code: OpenedWorld, buildings: StandBuilding[]): { land: Terrain; stood: Stand; landmarks: StandLandmark[] } {
   const landmarkLib = new Library([...LANDMARK_PRIMITIVES, ...FLORA_PRIMITIVES]);
   const land = structuredClone(t);
   const landmarks = code.landmarks.map((l) => ({ tree: l.blueprint.slots.form?.use === "great-tree@1", base: landmarkBase(realize(l.blueprint, landmark, landmarkLib, { seed: seedOf(`terrain-lab/landmark/${l.path}`), facts: Object.fromEntries(Object.entries(landmark.facts).map(([k, bind]) => [k, bind(l.facts)])) })) }));
@@ -40,16 +40,16 @@ function standAsTheLab(t: Terrain, code: CodeLab, buildings: StandBuilding[]): {
   return { land, stood, landmarks };
 }
 
-describe("Gaia's world and the proving ground, stood as the lab stands them", () => {
-  let worlds: { root: string; code: CodeLab; t: Terrain; buildings: StandBuilding[]; land: Terrain; stood: Stand; landmarks: StandLandmark[] }[] = [];
+describe("Gaia's world and the proving ground, stood as the page stands them", () => {
+  let worlds: { root: string; code: OpenedWorld; t: Terrain; buildings: StandBuilding[]; land: Terrain; stood: Stand; landmarks: StandLandmark[] }[] = [];
   // Bakes and stands both worlds whole: about forty seconds alone, more when other work shares the machine.
   beforeAll(async () => {
     const { world, summary } = await laySnapshot("a test");
     worlds = [{ root: "gaia", facts: snapshotFacts(), world, summary, judged: {} }, provingWorld()].map((doc) => {
-      const code = codeLab(doc as never);
+      const code = openedWorld(doc as never);
       const t = bakeTerrain(code.spec, new Library([...RELIEF_PRIMITIVES, ...BIOME_PRIMITIVES]));
       const buildings = buildingsOf(code);
-      return { root: doc.root, code, t, buildings, ...standAsTheLab(t, code, buildings) };
+      return { root: doc.root, code, t, buildings, ...standAsThePage(t, code, buildings) };
     });
   }, 240_000);
 
