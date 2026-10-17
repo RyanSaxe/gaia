@@ -89,11 +89,11 @@ const PLAN: readonly PlannedDir[] = [
   { path: "crossings/mill", health: "thriving", files: ["package.json:30", "index.ts:160", "wheel.ts:380"], entity: B("Watermill", "Turns the brook's flow into work: a pipeline from one kind of data to another.", "package") },
   // A trickle through groves of mixed health, crossed by faint tracks on stepping stones.
   { path: "fords", health: "well", files: ["shallows.ts:460", "reeds.ts:380", "stones.ts:300", "fords.test.ts:140"], land: ["Meandering vale", "A trickle"] },
-  { path: "fords/jetty", health: "tired", files: ["Cargo.toml:30", "index.ts:120", "landing.ts:340"], entity: B("Stone croft", "A plain, sturdy croft by the near side of the ford.", "crate") },
+  { path: "fords/jetty", health: "tired", files: ["Cargo.toml:30", "index.ts:120", "landing.ts:340"], entity: B("Watermill", "A mill on the near side of the ford, its wheel in the trickle.", "crate") },
   { path: "fords/gravel", health: "tired", files: ["package.json:30", "index.ts:110", "ring.ts:320"], entity: L("Stone ring", "The shared definitions both sides of the ford agree on.") },
   // A still pond in a wet hollow, and a meadow pond with a service on its shore.
   { path: "hollow", health: "thriving", files: ["package.json:30", "index.ts:220", "pool.ts:520", "depth.ts:420", "hollow.test.ts:160"], land: ["Mossy basin", "A still pond"], drift: ["fireflies at dusk", "many"], entity: L("Lantern tower", "Lights the rest: the entity every other area looks to.") },
-  { path: "pondside", health: "well", files: ["package.json:30", "server.ts:240", "queue.ts:420", "handoff.ts:380:failing", "pondside.test.ts:150"], land: ["Pond meadow", "A still pond"], entity: B("Archive tower", "Keeps the records requests leave at the pond.") },
+  { path: "pondside", health: "well", files: ["package.json:30", "server.ts:240", "queue.ts:420", "inlet.ts:520", "eddies.ts:480", "handoff.ts:380:failing", "pondside.test.ts:150"], land: ["Pond meadow", "A still pond"], entity: B("Archive tower", "Keeps the records requests leave at the pond.") },
   { path: "pondside/records", health: "tired", files: ["package.json:30", "index.ts:100", "ledger.ts:300"], entity: B("Archive tower", "An archive gone tired: untested, complex, full of TODOs.") },
   // Hills, terraces, moor, dunes and downs: every remaining land, each without water so its own landform shows.
   { path: "hills", health: "thriving", files: ["slopes.ts:480", "crests.ts:420", "hills.test.ts:140"], land: ["Clover hills", "No water"], drift: ["drifting petals", "some"] },
@@ -120,7 +120,7 @@ const PLAN: readonly PlannedDir[] = [
   { path: "downs/deep/deeper/deeper-still/deepest/bottom", health: "ruin", files: ["tmp2.ts:100"] },
   { path: "downs/tiny", health: "thriving", files: ["seed.ts:4"] },
   // Mixed: thriving files beside failing ones, one failing grove among them, and a tired mill and lantern.
-  { path: "mixed", health: "thriving", files: ["package.json:30", "main.ts:160", "sound.ts:520", "steady.ts:460", "failing-grove.ts:640:decayed", "patched.ts:420:tired", "mixed.test.ts:160"], land: ["Clover hills", "No water"], entity: B("Watermill", "A pipeline with sound parts beside failing ones.", "package") },
+  { path: "mixed", health: "thriving", files: ["package.json:30", "main.ts:160", "sound.ts:520", "steady.ts:460", "failing-grove.ts:640:decayed", "patched.ts:420:tired", "mixed.test.ts:160"], land: ["Clover hills", "No water"], entity: B("Stone croft", "A plain, sturdy croft whose sound parts stand beside failing ones.", "package") },
   { path: "mixed/workshop", health: "tired", files: ["package.json:30", "index.ts:140", "gears.ts:400"], entity: B("Storybook house", "An application gone tired: untested and complex.") },
   { path: "mixed/beacon", health: "tired", files: ["package.json:30", "index.ts:120", "lamp.ts:340"], entity: L("Lantern tower", "A lantern tower gone tired.") },
   // Ruins: a whole area failing, its brook crossed by bridges in decline.
@@ -147,18 +147,17 @@ const TRAIL_PLAN: readonly (readonly [from: string, to: string, look: string, wa
   ["ruins/cottage", "ruins/mill", "Worn footpath", 0.9],
   ["ruins/croft", "ruins/keep", "Faint wandering track", 0.85],
   ["ruins/house", "ruins/lighthouse", "Stone-edged path", 0.8],
-  ["ruins/oak", "ruins", "Faint wandering track", 0.75],
+  ["ruins/oak", "ruins", "Worn footpath", 0.75],
   ["ruins/keep", "ruins/house", "Faint wandering track", 0.7],
   // A hub: many entities lean on the hollow's lantern tower, so trunk paths branch at junctions.
   ["", "hollow", "Worn footpath", 0.95],
   ["crossings/mill", "hollow", "Worn footpath", 0.9],
   ["downs", "hollow", "Worn footpath", 0.88],
   ["hills/oak", "hollow", "Stone-edged path", 0.86],
-  ["mixed", "hollow", "Stone-edged path", 0.84],
-  ["pondside", "hollow", "Worn footpath", 0.83],
-  ["terraces/croft", "hollow", "Faint wandering track", 0.8],
+  ["mixed", "pondside", "Stone-edged path", 0.84],
+  ["pondside", "fords/gravel", "Worn footpath", 0.83],
+  ["terraces/croft", "hollow", "Worn footpath", 0.8],
   ["fords/gravel", "hollow", "Stone-edged path", 0.78],
-  ["ruins/mill", "hollow", "Faint wandering track", 0.76],
   // The rest of the world, joined.
   ["pondside/records", "pondside", "Faint wandering track", 0.7],
   ["hills/kiln", "hills/oak", "Faint wandering track", 0.7],
@@ -434,6 +433,8 @@ const raise = (id: string, as: "building" | "landmark", k: number): void => {
 [...files].sort((a, b) => (a.path < b.path ? -1 : 1)).forEach((f, k) => (stands[f.path] = small[k % small.length] as string));
 // Every seventh source file raises itself, and every eleventh raises its first definition; a building first, then a landmark.
 sources.forEach((f, k) => {
+  // A file of a few lines raises nothing: on its tiny patch a building or a landmark would stand on its neighbors'.
+  if (f.lines < 40) return;
   if (k % 7 === 3) raise(f.path, (k / 7) % 2 < 1 ? "building" : "landmark", k);
   const first = f.symbols[0];
   if (first !== undefined && k % 11 === 5) raise(`${f.path}#${first.name}`, (k / 11) % 2 < 1 ? "landmark" : "building", k);

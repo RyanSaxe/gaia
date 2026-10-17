@@ -30,7 +30,7 @@ export const LANDS: Readonly<Record<string, Blueprint>> = {
   "Heather moor": land({ use: "meadow@1", params: { undulation: "softly undulating", tilt: "slightly tilted", facing: "east" } }, "heather"),
   "Meandering vale": land({ use: "valley@1", params: { depth: "shallow", width: "broad", run: "east-west", fall: "nearly level", meander: "strongly meandering", stream: "trickle" } }, "clover meadow"),
   "Golden dunes": land({ use: "dunes@1", params: { height: "low dunes", spacing: "even", wind: "from the west", wander: "wavering" } }, "golden steppe"),
-  "Pond meadow": land({ use: "basin@1", params: { depth: "a shallow dip", size: "wide", rim: "melting into the land", pond: true } }, "lush grass"),
+  "Pond meadow": land({ use: "basin@1", params: { depth: "a bowl", size: "wide", rim: "a raised rim", pond: true } }, "lush grass"),
   "Broad downs": land({ use: "rolling-hills@1", params: { height: "gentle", breadth: "broad and sweeping", roughness: "smooth", grain: "diagonal" } }, "silver grass"),
   "Home lawn": land({ use: "meadow@1", params: { undulation: "flat as a lawn", tilt: "slightly tilted", facing: "south" } }, "lush grass"),
 };
