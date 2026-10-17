@@ -14,7 +14,7 @@ import * as THREE from "three";
 import { shownVitality } from "@gaia/realize";
 import { LIGHT_GLSL, type SceneLight } from "@gaia/render";
 import { type PlaceArea, type SolidShape, type Way, heightAt, waterDepthAt } from "@gaia/terrain";
-import type { Furnishing, StoodWorld } from "../terrain/lab.ts";
+import type { Furnishing, StoodWorld } from "../terrain/world.ts";
 import { type Board, letter } from "../terrain/lettering.ts";
 
 /** The layer markers draw on: the view's camera sees it, the sun's shadow pass does not, since their material reads the shadow map. */

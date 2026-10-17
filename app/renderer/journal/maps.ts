@@ -12,7 +12,7 @@ import type { Place, WorldPlaces } from "@gaia/terrain";
 import { landReach, pastTheEdge } from "@gaia/terrain";
 import { CLOSE, type Paper, drawLand, haloOf, letter, letterName } from "../immersive/field-map.ts";
 import { SERIF, canvasMeasure, nameFont, nameSpacing, placeNames } from "../immersive/map-names.ts";
-import type { StoodWorld } from "../terrain/lab.ts";
+import type { StoodWorld } from "../terrain/world.ts";
 
 export interface MapSource {
   paper(): Paper | null;

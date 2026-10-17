@@ -57,9 +57,9 @@ It runs on Jev's kept answers alone, and a request with no kept answer fails it,
 `open("immersive")`, `hour(h)`, `frames(n)`, `stats()`, and the world's
 hooks, such as `__lab.terrain.walk(x, z, yawDeg, pitchDeg)`,
 `__lab.terrain.calls()`, `__lab.terrain.overview(pos, target)` for a capture
-from above, and `__lab.immersive.map(true)`, listed where
-`app/renderer/terrain/lab.ts` and `app/renderer/immersive/view.ts` return
-them. `tools/readme-shots.ts` is a short example.
+from above, and `__lab.immersive.map(true)`, listed in
+`app/renderer/terrain/hooks.ts` and where `app/renderer/immersive/view.ts`
+returns them. `tools/readme-shots.ts` is a short example.
 
 Test a change in the proving ground (`?world=proving`) as well as in Gaia's
 own world. It is a made-up codebase whose world holds every feature, from
@@ -120,8 +120,9 @@ world. Read it before you change anything outside your session's area.
 - The machine is shared, so timings are noisy: say so when you report frame
   times, and measure before and after under the same load.
 - Stay inside your task's files. When you must touch a shared one (the
-  terrain lab, `docs/architecture.md`, `docs/design-system.md`), keep the
-  change small and list it for whoever merges.
+  world, `app/renderer/terrain/world.ts`, `docs/architecture.md`,
+  `docs/design-system.md`), keep the change small and list it for whoever
+  merges.
 
 ## Contracts
 

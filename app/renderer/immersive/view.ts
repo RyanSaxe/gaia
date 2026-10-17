@@ -17,9 +17,9 @@
 import { type PlaceArea, stoodBy } from "@gaia/terrain";
 import { type CodeWorld, areaVitality, entityOf, journalOf } from "@gaia/world";
 import { SLIP_LOGO } from "../brand/logo.ts";
-import { onTap } from "../lab.ts";
+import { onTap } from "../tap.ts";
 import { worldService } from "../service.ts";
-import type { Landing, WorldHandle } from "../terrain/lab.ts";
+import type { Landing, WorldHandle } from "../terrain/world.ts";
 import { createCompass } from "./compass.ts";
 import { createJournalBook } from "../journal/book.ts";
 import { type Findable, createFinder, findablesOf } from "../journal/finder.ts";

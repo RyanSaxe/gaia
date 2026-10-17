@@ -1,31 +1,5 @@
-// What the page knows about the world it shows: it draws only while active,
-// and offers hooks for scripted checks. Also the page's one way to tell a tap
-// from a drag.
-
-import type { WebGLRenderer } from "three";
-
-export interface Lab {
-  /** A hidden lab draws nothing and ignores input. */
-  setActive(on: boolean): void;
-  /** Draws one frame; `dt` is seconds since the last, `hour` the local hour the world shows. */
-  frame(dt: number, now: number, hour: number): void;
-  readonly hook: Readonly<Record<string, unknown>>;
-  /** The lab's renderer, so the page can count its draw calls. */
-  readonly renderer?: WebGLRenderer;
-  /** Settles once the lab has something to show, such as its first baked world. */
-  readonly ready?: Promise<void>;
-  /** What the lab shows right now, for smoothness reports: plain numbers, words and flags. */
-  readonly report?: () => Readonly<Record<string, string | number | boolean>>;
-}
-
-/** Finds the element marked `data-ref="name"` inside a lab. */
-export function refs(root: ParentNode): <T extends HTMLElement = HTMLElement>(name: string) => T {
-  return <T extends HTMLElement>(name: string): T => {
-    const node = root.querySelector<T>(`[data-ref="${name}"]`);
-    if (node === null) throw new Error(`Missing [data-ref="${name}"]`);
-    return node;
-  };
-}
+// The page's one way to tell a tap from a drag, for the world and the paper
+// laid over it.
 
 /** How far a press may stray, in CSS pixels, and still be a tap: a finger wobbles more than a mouse. */
 export const tapSlop = (e: PointerEvent): number => (e.pointerType === "mouse" ? 5 : 10);
