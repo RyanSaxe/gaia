@@ -1,0 +1,660 @@
+=== v1/package.json ===
+{
+  "name": "@folio/v1",
+  "version": "0.6.0",
+  "type": "module",
+  "exports": "./index.ts",
+  "files": ["*.ts", "renderer", "importer", "templates", "cache"],
+  "scripts": {
+    "check": "tsc --noEmit -p .",
+    "test": "vitest run",
+    "migrate": "tsx migrate.ts"
+  }
+}
+=== v1/README.md ===
+# folio v1
+
+The renderer that most folio sites build through: every site made before 0.6.
+`folio build` hands a site to v1 when it finds `templates/default.html`, and
+`folio import` reads other generators' posts through v1's importer.
+
+## Setup
+
+A v1 site keeps its pages under `src/` and writes to `out/`. Set `src` and
+`out` in `config.json` to change either; `readConfig` in `compat.ts` reads
+the older spellings too, warns once for each, and refuses a config that
+writes into the folder it reads from. Plugins listed under `plugins` run in
+the order given.
+
+## Templates
+
+Templates use `<%= x %>`; very old sites' `{{x}}` is converted as it loads.
+Partials live in `templates/_partials` and are included with
+`<%= partial name %>`. A page naming a missing template stops the build and
+names the template. The cache lives in `.cache/v1/`; `rebuild` clears it.
+
+## Known problems
+
+None open. The last ones were fixed in 0.6:
+
+- spaces in page names, folders of any size, and dates before 1970;
+- drafts, double escaping, and edits anywhere in a page now rebuild it;
+- pictures and fonts are copied byte for byte;
+- a second build in one process builds every page again.
+=== v1/index.ts ===
+// v1: the renderer every site made before 0.6 builds through. `folio build` hands a
+// site here when it finds v1 templates: it reads the site's pages and templates, renders
+// each page, caches what it rendered and writes the site.
+import { renderMarkdown } from "./renderer/index.ts";
+import { loadTemplates, template } from "./templates/index.ts";
+import { cached, remember, clearCache } from "./cache/index.ts";
+import { convertPost } from "./importer/index.ts";
+import { fixPaths, oldDate, esc, slug } from "./shims.ts";
+import { readConfig, PluginManager, type Settings } from "./compat.ts";
+import { copyFileSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { dirname, join, relative } from "node:path";
+
+/** The settings of the site being built: `init` sets them anew at the start of every build. */
+export let S: Settings = readConfig({});
+
+/** Starts a build from its own config alone: nothing from an earlier build carries over. */
+export function init(config: Record<string, unknown> = {}): Settings {
+  S = readConfig(config);
+  // A site with no default template is told so at once, not at its first page.
+  if (!loadTemplates(S.templates).has("default")) throw new Error(`${S.templates ?? "templates"}/default.html is missing: every v1 site needs one`);
+  return S;
+}
+
+/** Builds a v1 site and returns how many pages it wrote. A file that fails is recorded, and one error at the end lists them all. */
+export function buildSite(root: string, options: Record<string, unknown> = {}): number {
+  const settings = init({ ...options, src: root });
+  const plugins = new PluginManager(settings);
+  const failures: string[] = [];
+  let written = 0;
+  for (const file of listFiles(root)) {
+    try {
+      if (buildFile(file, join(settings.out, relative(root, file)), plugins, options.drafts === true)) written++;
+    } catch (error) {
+      failures.push(`  ${relative(root, file)}: ${(error as Error).message}`);
+    }
+  }
+  if (failures.length > 0) throw new Error(`v1 wrote ${written} pages, and ${failures.length} files failed:\n${failures.join("\n")}`);
+  return written;
+}
+
+/** Every file under a folder, at any depth, in order. Names starting with `.` or `_` are the site's own and left out. */
+function listFiles(folder: string): string[] {
+  if (statSync(folder, { throwIfNoEntry: false })?.isDirectory() !== true) throw new Error(`${folder} is not a folder`);
+  const files: string[] = [];
+  for (const name of readdirSync(folder).sort()) {
+    if (name.startsWith(".") || name.startsWith("_")) continue;
+    const path = join(folder, name);
+    if (statSync(path).isDirectory()) files.push(...listFiles(path));
+    else files.push(path);
+  }
+  return files;
+}
+
+/** One file built to `target`: a page rendered, anything else copied byte for byte. Says whether it wrote a page. */
+function buildFile(file: string, target: string, plugins: PluginManager, drafts: boolean): boolean {
+  mkdirSync(dirname(target), { recursive: true });
+  if (!/\.(md|markdown)$/.test(file)) {
+    copyFileSync(file, target);
+    return false;
+  }
+  const text = readFileSync(file, "utf8");
+  // A page whose whole text is unchanged since the last build is written from the cache.
+  const kept = cached(file, text);
+  const html = kept ?? renderPost(text, plugins, drafts);
+  if (html === null) return false;
+  if (kept === null) remember(file, text, html);
+  // Each page is written into a folder of its own, so its URL ends in a slash.
+  const page = fixPaths(target.replace(/\.(md|markdown)$/, ".html"));
+  mkdirSync(dirname(page), { recursive: true });
+  writeFileSync(page, html);
+  return true;
+}
+
+/** A post's page: its Markdown rendered into the template it names, or null for a draft left out. */
+function renderPost(text: string, plugins: PluginManager, drafts: boolean): string | null {
+  const post = convertPost(text);
+  if (post.meta.draft === true && !drafts) return null;
+  if (post.meta.date !== undefined) post.meta.date = oldDate(post.meta.date);
+  post.meta.slug ??= slug(String(post.meta.title ?? "page"));
+  const name = typeof post.meta.template === "string" ? post.meta.template : "default";
+  const layout = template(name);
+  if (layout === null) throw new Error(`it asks for the template "${name}", which the templates folder does not have`);
+  return fill(layout, post.meta, plugins.run("before", renderMarkdown(post.body, S)));
+}
+
+/** A template filled with a page's frontmatter and its rendered body. */
+function fill(layout: string, meta: Record<string, unknown>, body: string): string {
+  // Each frontmatter value is escaped as it goes in.
+  const filled = layout.replace(/<%= (\w+) %>/g, (_, key: string) => (key === "body" ? "<%= body %>" : esc(String(meta[key] ?? ""))));
+  // The body goes in last and as it is, through a function, so a `$&` or a `<%= x %>`
+  // written in a page is never read as a pattern or a placeholder.
+  return filled.replace("<%= body %>", () => body);
+}
+
+/** Builds a v1 site again from nothing: the dev server calls it when the site changes. */
+export function rebuild(root: string, options: Record<string, unknown> = {}): number {
+  const { out } = readConfig({ ...options, src: root });
+  // Only the site's own output folder is emptied, and never one that holds its pages:
+  // `out` set to "." or to a parent of the site would otherwise delete the site itself.
+  if (!relative(out, root).startsWith("..")) throw new Error(`v1 will not empty ${out}: it holds the site's pages`);
+  rmSync(out, { recursive: true, force: true });
+  clearCache();
+  return buildSite(root, options);
+}
+
+/** One page rendered on its own in the default template: what a preview of a single file shows. */
+export function renderOne(file: string, settings: Settings = S): string {
+  const post = convertPost(readFileSync(file, "utf8"));
+  const layout = template("default");
+  if (layout === null) throw new Error("the templates folder has no default.html to preview a page in");
+  return fill(layout, post.meta, renderMarkdown(post.body, settings));
+}
+=== v1/compat.ts ===
+// The shape of a v1 site's config, and the plugins and old formats v1 still reads.
+//
+// Every older spelling v1 ever accepted is still read, so old sites keep building, and
+// each one found is named in a warning once, so a site's owner knows what to rename:
+// - `SRC`, `source`          are read as `src`, the folder pages come from
+// - `OUT`, `dest`            are read as `out`, the folder the site goes to
+// - `smartypants`            is read as `smart`, typographic quotes and dashes
+// - `baseUrl`, `url`         are read as `base`, the path the site is served under
+// - `layouts`, `views`       are read as `templates`, the folder of templates
+// Unknown keys are kept as they are, for plugins that read their own settings.
+// The environment's FOLIO_SRC and FOLIO_OUT name the folders when a config doesn't,
+// and are only ever read, never written.
+
+const warned = new Set<string>();
+const SPELLINGS = { src: ["src", "SRC", "source"], out: ["out", "OUT", "dest"], smart: ["smart", "smartypants"], base: ["base", "baseUrl", "url"], templates: ["templates", "layouts", "views"] } as const;
+
+/** A v1 site's settings: where its pages are, where they go, and how they are typeset. */
+export interface Settings {
+  readonly src: string;
+  readonly out: string;
+  readonly smart: boolean;
+  readonly base: string;
+  readonly templates?: string;
+  readonly lower?: boolean;
+  readonly nocache?: boolean;
+  readonly plugins?: readonly Record<string, unknown>[];
+}
+
+/** A site's settings from its config, by current names first, then each older spelling (see above). */
+export function readConfig(config: Record<string, unknown>): Settings {
+  const found: Record<string, unknown> = {};
+  for (const [setting, spellings] of Object.entries(SPELLINGS)) {
+    for (const name of spellings) {
+      if (config[name] === undefined) continue;
+      // An older spelling still works, and says once what to write instead.
+      if (name !== setting && !warned.has(name)) {
+        warned.add(name);
+        console.warn(`folio v1: "${name}" in config.json is an old name; write "${setting}".`);
+      }
+      found[setting] = config[name];
+      break;
+    }
+  }
+  const src = String(found.src ?? process.env.FOLIO_SRC ?? "src");
+  const out = String(found.out ?? process.env.FOLIO_OUT ?? "out");
+  // Writing into the folder pages are read from would overwrite them.
+  if (src === out) throw new Error(`config.json reads pages from and writes them to the same folder, ${src}`);
+  const base = String(found.base ?? "/");
+  const plugins = config.plugins ?? (config.plugin === undefined ? [] : [config.plugin]);
+  if (!Array.isArray(plugins)) throw new Error("plugins in config.json must be a list");
+  const settings: Settings = {
+    ...config,
+    src,
+    out,
+    smart: found.smart === undefined ? true : Boolean(found.smart),
+    // The base always ends in one slash, so a site link joins onto it cleanly.
+    base: base.endsWith("/") ? base : `${base}/`,
+    plugins,
+  };
+  // A site with no templates setting keeps its templates in `templates/`, as v1 always did.
+  if (found.templates === undefined) return settings;
+  const templates = String(found.templates);
+  // A templates folder inside the output would be deleted by `rebuild`.
+  if (templates.startsWith(`${out}/`)) throw new Error(`templates (${templates}) is inside out (${out})`);
+  return { ...settings, templates };
+}
+
+/** Plugins as v1 sites wrote them: objects of named hooks, run in the order the config lists them. */
+export class PluginManager {
+  private readonly hooks = new Map<string, ((value: string, settings: Settings) => string | undefined)[]>();
+  constructor(private readonly settings: Settings) {
+    // Each manager keeps its own hooks, so two sites built in one process never share them.
+    // Plugins are registered in the order listed, so a hook added later runs after the
+    // hooks added before it.
+    for (const plugin of settings.plugins ?? []) this.add(plugin);
+  }
+  add(plugin: Record<string, unknown>): void {
+    for (const [name, hook] of Object.entries(plugin)) {
+      // A plugin may carry its own settings beside its hooks; only functions are hooks.
+      if (typeof hook !== "function") continue;
+      const list = this.hooks.get(name) ?? [];
+      list.push(hook as (value: string, settings: Settings) => string | undefined);
+      this.hooks.set(name, list);
+    }
+  }
+  run(name: string, value: string): string {
+    let current = value;
+    for (const hook of this.hooks.get(name) ?? []) {
+      try {
+        current = hook(current, this.settings) ?? current;
+      } catch (error) {
+        throw new Error(`the plugin hook "${name}" failed: ${(error as Error).message}`, { cause: error });
+      }
+    }
+    return current;
+  }
+}
+/** A template from very old sites, written with `{{name}}`, in today's `<%= name %>`. */
+export function convertTemplate(text: string): string {
+  // Very old sites wrote `{{ name }}`; v1 writes `<%= name %>`.
+  // `content`, renamed in v1, becomes `body`.
+  // A partial written `{{> name }}` becomes `<%= partial name %>`.
+  // Braces holding anything else, such as `{{ a b }}`, are left as written, so a
+  // template's literal braces survive.
+  // The partial rule runs first, so `{{> name }}` is never read as a plain name, and
+  // a converted template converts to itself, so converting twice is harmless.
+  const partials = text.replace(/\{\{>\s*([\w-]+)\s*\}\}/g, (_, name: string) => `<%= partial ${name} %>`);
+  const names = partials.replace(/\{\{\s*([\w.]+)\s*\}\}/g, (_, name: string) => `<%= ${name === "content" ? "body" : name} %>`);
+  return names;
+}
+/** Frontmatter as v1 reads it, whatever generator wrote it. A published page stays published. */
+export function normalizeMeta(meta: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...meta };
+  if (out.title === undefined && out.Title !== undefined) out.title = out.Title;
+  if (out.date === undefined && out.Date !== undefined) out.date = out.Date;
+  const tags = out.tags ?? out.categories; // Jekyll calls them categories
+  if (tags !== undefined) out.tags = typeof tags === "string" ? tags.split(",").map((tag) => tag.trim()).filter(Boolean) : tags;
+  if (out.draft === "false" || out.draft === "true") out.draft = out.draft === "true"; // some exports wrote the word
+  if (out.published === false || out.status === "draft") out.draft = true;
+  return out;
+}
+=== v1/shims.ts ===
+// Small helpers v1's builder, renderer, importer and templates share. Each used to
+// come in two or three copies with different bugs (`slug2`, `esc3` and the rest), picked
+// by a mode number; each is now one function, and its callers say what they need.
+
+import { S } from "./index.ts";
+
+const PAGE_FILE = /\.html$/;
+const DATE_US = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
+
+/** The path a page is written to: forward slashes, no doubled slashes, a folder of its own. */
+export function fixPaths(path: string, use: "page" | "template" = "page"): string {
+  // Backslashes become forward slashes on every system, for pages and templates alike.
+  const forward = path.split("\\").join("/").replace(/\/\/+/g, "/");
+  // A template is named by its file without `.html`.
+  if (use === "template") return forward.replace(PAGE_FILE, "");
+  // A page is written as a folder of its own, so its URL ends in a slash:
+  // `posts/hello.html` becomes `posts/hello/index.html`.
+  const folder = forward.endsWith("/index.html") ? forward : forward.replace(PAGE_FILE, "/index.html");
+  // Lowercasing is one setting for every path, so links and files always agree.
+  if (S.lower !== true) return folder;
+  const lower = folder.toLowerCase();
+  return lower;
+}
+
+/** A date as YYYY-MM-DD, from a Unix time, a Date, M/D/YYYY or an ISO string, any year. */
+export function oldDate(date: unknown): string {
+  if (date instanceof Date || typeof date === "number") {
+    // Unix times are seconds; a Date may be from before 1970 and stays correct.
+    const value = date instanceof Date ? date : new Date(date * 1000);
+    if (Number.isNaN(value.getTime())) throw new Error(`${String(date)} is not a date`);
+    return value.toISOString().slice(0, 10);
+  }
+  const us = DATE_US.exec(String(date));
+  if (us !== null) return `${us[3]}-${(us[1] ?? "").padStart(2, "0")}-${(us[2] ?? "").padStart(2, "0")}`;
+  const parsed = new Date(String(date));
+  if (Number.isNaN(parsed.getTime())) throw new Error(`"${String(date)}" is not a date`);
+  return parsed.toISOString().slice(0, 10);
+}
+
+/** A title as a URL slug: lowercase letters and digits, with single dashes between words. */
+export function slug(text: string): string {
+  // One rule for pages, templates and the importer alike, so every link a template
+  // writes lands on the anchor the page has. Underscores, punctuation and spaces all
+  // become a single dash, accents are dropped, and no dash leads or trails.
+  let out = "";
+  for (const char of text.normalize("NFKD").toLowerCase()) {
+    if (/[a-z0-9]/.test(char)) out += char;
+    else if (/\p{Mn}/u.test(char)) continue;
+    else if (out !== "" && !out.endsWith("-")) out += "-";
+  }
+  const trimmed = out.replace(/-$/, "");
+  // A title with no letters or digits has no slug, and says so.
+  if (trimmed === "") throw new Error(`"${text}" has no letters or digits to make a slug from`);
+  return trimmed;
+}
+
+/** Text made safe where it goes: in HTML, in a quoted attribute, or in the feed's XML. */
+export function esc(text: string, into: "html" | "attribute" | "xml" = "html"): string {
+  // Ampersands first, so an entity already in the text is escaped exactly once.
+  const html = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  // Each place takes the same escapes, plus the apostrophe where quotes may be single.
+  switch (into) {
+    case "html": return html;
+    case "attribute": return html.replace(/'/g, "&#39;");
+    // XML names the apostrophe; HTML attributes take its number.
+    case "xml": return html.replace(/'/g, "&apos;");
+  }
+}
+=== v1/migrate.ts ===
+// Moves a v1 site onto the engine: frontmatter normalized, templates rewritten in the
+// engine's `{{ }}` syntax. A dry run, the default, lists the changes and writes nothing;
+// a real run keeps each changed file's old text beside it, as `name.v1`.
+import { readFileSync, writeFileSync, readdirSync, lstatSync } from "node:fs";
+import { normalizeMeta, convertTemplate } from "./compat.ts";
+
+const PAIR = /^\w[\w-]*:\s/;
+
+/** Every page and template under `folder`, at any depth, moved onto the engine; returns each change. */
+export function migrate(folder: string, dry = true): string[] {
+  const changes: string[] = [];
+  for (const name of readdirSync(folder).sort()) {
+    const file = `${folder}/${name}`;
+    // lstat, not stat: a symlinked folder is never followed, so no loop can form.
+    if (lstatSync(file).isDirectory()) changes.push(...migrate(file, dry));
+    else if (name.endsWith(".md") || (name.endsWith(".html") && folder.includes("templates"))) {
+      const text = readFileSync(file, "utf8");
+      const next = name.endsWith(".md") ? migratePage(text) : migrateTemplate(text);
+      if (next === text) continue;
+      changes.push(`${name.endsWith(".md") ? "meta" : "template"} ${file}`);
+      if (dry) continue;
+      writeFileSync(`${file}.v1`, text); // the old text, so a migration can be undone by hand
+      writeFileSync(file, next);
+    }
+  }
+  return changes;
+}
+
+/** A page with its `key: value` frontmatter normalized; any other frontmatter line is kept as written. */
+function migratePage(text: string): string {
+  const front = /^---\n([\s\S]*?)\n---/.exec(text);
+  if (front === null) return text;
+  const lines = (front[1] ?? "").split("\n");
+  const meta = Object.fromEntries(lines.filter((l) => PAIR.test(l)).map((l) => [l.slice(0, l.indexOf(":")), l.slice(l.indexOf(":") + 1).trim()]));
+  const normalized = Object.entries(normalizeMeta(meta)).map(([key, value]) => `${key}: ${String(value)}`);
+  return text.replace(front[0], () => `---\n${[...normalized, ...lines.filter((l) => !PAIR.test(l))].join("\n")}\n---`);
+}
+
+/** A v1 template in the engine's syntax. */
+function migrateTemplate(text: string): string {
+  // Very old `{{x}}` templates are brought to v1's own syntax first, so every template is
+  // rewritten the same way: partials as `{{> name }}`, values as `{{ name }}`, and the
+  // page's `body` as the engine's `content`.
+  const v1 = convertTemplate(text).replace(/<%= partial ([\w-]+) %>/g, "{{> $1 }}");
+  return v1.replace(/<%= (\w+) %>/g, "{{ $1 }}").replace(/\{\{ body \}\}/g, "{{ content }}");
+}
+=== v1/legacy.test.ts ===
+import { describe, expect, it } from "vitest";
+import { buildSite, init } from "./index.ts";
+import { esc } from "./shims.ts";
+import { normalizeMeta } from "./compat.ts";
+
+// v1 builds the old fixture site the way its sites expect; each test stands alone.
+const site = { templates: "fixtures/old-site/templates" };
+describe("v1", () => {
+  it("builds the old fixture site, every page of it", () => {
+    expect(init({ ...site, src: "fixtures/old-site/src", out: "/tmp/folio-v1-a" }).out).toBe("/tmp/folio-v1-a");
+    expect(buildSite("fixtures/old-site/src", { ...site, out: "/tmp/folio-v1-a" })).toBe(12);
+  });
+
+  it("escapes an ampersand once", () => {
+    expect(esc("a & b")).toBe("a &amp; b");
+  });
+
+  it("keeps a published page published", () => {
+    expect(normalizeMeta({ status: "published" }).draft).toBeUndefined();
+  });
+  it("builds the same site again in the same process", () => {
+    expect(buildSite("fixtures/old-site/src", { ...site, out: "/tmp/folio-v1-b" })).toBe(12);
+  });
+
+  it("reads a draft written as the word false as published", () => {
+    expect(normalizeMeta({ draft: "false" }).draft).toBe(false);
+  });
+
+  it("escapes an apostrophe for the feed", () => {
+    expect(esc("it's", "xml")).toBe("it&apos;s");
+  });
+});
+=== v1/renderer/package.json ===
+{
+  "name": "@folio/v1-renderer",
+  "version": "0.6.0",
+  "type": "module",
+  "exports": "./index.ts",
+  "scripts": {
+    "test": "vitest run"
+  }
+}
+=== v1/renderer/index.ts ===
+// The v1 renderer: v1 sites' Markdown as HTML, the way those sites have always looked.
+// Each call renders one page from nothing: no state carries from one page to the next.
+import { esc, slug } from "../shims.ts";
+import { S } from "../index.ts";
+
+const HEADING = /^(#{1,6}) (.*)$/;
+const ITEM = /^[-*] (.*)$/;
+const FENCE = /^```(.*)$/;
+
+/** A page's Markdown as HTML, block by block: fenced code, lists, headings and paragraphs. */
+export function renderMarkdown(markdown: string, settings = S): string {
+  const lines = markdown.split("\n");
+  const out: string[] = [];
+  for (let at = 0; at < lines.length; ) {
+    // A block runs to its end: fenced code to its closing fence, or the page's end if it
+    // never closes; a list to the first line that is not an item; anything else, one line.
+    let end = at + 1;
+    if (FENCE.test(lines[at] ?? "")) {
+      while (end < lines.length && !FENCE.test(lines[end] ?? "")) end++;
+      end = Math.min(end + 1, lines.length);
+    } else if (ITEM.test(lines[at] ?? "")) {
+      while (end < lines.length && ITEM.test(lines[end] ?? "")) end++;
+    }
+    out.push(renderBlock(lines.slice(at, end), settings));
+    at = end;
+  }
+  return out.filter((html) => html !== "").join("\n");
+}
+
+/** One block as HTML: fenced code escaped as written, a list, a heading with its slug as id, raw HTML or a paragraph. */
+function renderBlock(block: readonly string[], settings: typeof S): string {
+  const first = block[0] ?? "";
+  const fence = FENCE.exec(first);
+  if (fence !== null) {
+    const closed = block.length > 1 && FENCE.test(block[block.length - 1] ?? "");
+    const language = (fence[1] ?? "").trim();
+    const code = esc(block.slice(1, closed ? -1 : undefined).join("\n"));
+    return `<pre><code${language === "" ? "" : ` class="${esc(language, "attribute")}"`}>${code}</code></pre>`;
+  }
+  if (ITEM.test(first)) return `<ul>\n${block.map((line) => `<li>${renderInline(line.slice(2), settings)}</li>`).join("\n")}\n</ul>`;
+  const heading = HEADING.exec(first);
+  if (heading !== null) return `<h${heading[1]?.length} id="${slug(heading[2] ?? "")}">${renderInline(heading[2] ?? "", settings)}</h${heading[1]?.length}>`;
+  if (first.trim() === "") return "";
+  return first.startsWith("<") ? first : `<p>${renderInline(first, settings)}</p>`;
+}
+
+/** One line's inline Markdown as HTML: code, images, links and emphasis, escaped first. */
+export function renderInline(text: string, settings = S): string {
+  // Code spans first, so nothing inside one is read as emphasis or a link; each is set
+  // aside as a numbered marker and put back once the rest is done.
+  const spans: string[] = [];
+  let html = esc(text).replace(/`([^`]+)`/g, (_, code: string) => `\u0000${spans.push(`<code>${code}</code>`) - 1}\u0000`);
+  html = html.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (_, alt: string, src: string) => `<img src="${src}" alt="${alt}">`);
+  html = html.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_, label: string, href: string) => `<a href="${href.startsWith("/") ? settings.base + href.slice(1) : href}">${label}</a>`);
+  html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/(^|[^*])\*([^*]+)\*/g, "$1<em>$2</em>");
+  // Typographic dashes and quotes, each opening quote closed by its partner, when the site asks.
+  if (settings.smart) html = html.replace(/--/g, "&ndash;").replace(/&quot;([^&]*?)&quot;/g, "&ldquo;$1&rdquo;");
+  return html.replace(/\u0000(\d+)\u0000/g, (_, n: string) => spans[Number(n)] ?? "");
+}
+=== v1/importer/package.json ===
+{
+  "name": "@folio/v1-importer",
+  "version": "0.6.0",
+  "type": "module",
+  "exports": "./index.ts",
+  "scripts": {
+    "test": "vitest run"
+  }
+}
+=== v1/importer/index.ts ===
+// Reads posts written for other generators into v1's shape: YAML, TOML or JSON
+// frontmatter, then the body. `folio import` runs every post through it.
+import { normalizeMeta } from "../compat.ts";
+import { oldDate } from "../shims.ts";
+
+/** A post's frontmatter and body, whichever of the three formats it was written in. */
+export function convertPost(text: string): { meta: Record<string, unknown>; body: string } {
+  const yaml = /^---\n([\s\S]*?)\n---\n?/.exec(text);
+  const toml = /^\+\+\+\n([\s\S]*?)\n\+\+\+\n?/.exec(text);
+  const json = text.startsWith("{") ? text.indexOf("\n}\n") : -1;
+  const meta = yaml !== null ? readYaml(yaml[1] ?? "") : toml !== null ? readToml(toml[1] ?? "") : json >= 0 ? readJson(text.slice(0, json + 2)) : {};
+  const body = yaml !== null ? text.slice(yaml[0].length) : toml !== null ? text.slice(toml[0].length) : json >= 0 ? text.slice(json + 3) : text;
+  if (meta.date !== undefined) meta.date = oldDate(meta.date);
+  return { meta: normalizeMeta(meta), body: body.trimStart() };
+}
+
+/** YAML as generators wrote it: `key: value` lines, and `- item` lines under a key with no value of its own. */
+function readYaml(front: string): Record<string, unknown> {
+  const meta: Record<string, unknown> = {};
+  let list: unknown[] | null = null;
+  for (const line of front.split("\n")) {
+    const item = /^\s*-\s+(.*)$/.exec(line);
+    if (item !== null && list !== null) list.push(scalar(item[1] ?? ""));
+    if (item !== null || line.trim() === "" || line.trimStart().startsWith("#")) continue;
+    const at = line.indexOf(":");
+    if (at <= 0) throw new Error(`the frontmatter line "${line}" is not \`key: value\``);
+    const raw = line.slice(at + 1).trim();
+    list = raw === "" ? [] : null;
+    meta[line.slice(0, at).trim()] = list ?? scalar(raw);
+  }
+  return meta;
+}
+
+/** Hugo's TOML: `key = value` lines; a line of any other shape is an error. */
+function readToml(front: string): Record<string, unknown> {
+  const meta: Record<string, unknown> = {};
+  for (const line of front.split("\n").filter((l) => l.trim() !== "")) {
+    const pair = /^(\w+)\s*=\s*(.*)$/.exec(line.trim());
+    if (pair === null) throw new Error(`the frontmatter line "${line}" is not \`key = value\``);
+    meta[pair[1] ?? ""] = scalar(pair[2] ?? "");
+  }
+  return meta;
+}
+
+/** The old WordPress export's JSON header, an object on the lines before the body. */
+function readJson(header: string): Record<string, unknown> {
+  // Parsed as JSON and never run as code: a header that isn't plain JSON is an error that
+  // says so, not a script to execute.
+  const parsed: unknown = JSON.parse(header);
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("a JSON header must be an object");
+  return parsed as Record<string, unknown>;
+}
+
+/** One frontmatter value: a boolean, a number, a [list], or a string with its quotes taken off. */
+function scalar(raw: string): unknown {
+  if (raw === "true" || raw === "false") return raw === "true";
+  if (/^-?\d+(\.\d+)?$/.test(raw)) return Number(raw);
+  // A [list] in brackets holds values of its own, each read the same way; empty ones go.
+  if (raw.startsWith("[") && raw.endsWith("]")) return raw.slice(1, -1).split(",").map((v) => scalar(v.trim())).filter((v) => v !== "");
+  // Quotes keep a value a string: `"3"` stays "3", and `"a: b"` keeps its colon.
+  return raw.replace(/^"(.*)"$/, "$1").replace(/^'(.*)'$/, "$1");
+}
+=== v1/templates/package.json ===
+{
+  "name": "@folio/v1-templates",
+  "version": "0.6.0",
+  "type": "module",
+  "exports": "./index.ts",
+  "scripts": {
+    "test": "vitest run"
+  }
+}
+=== v1/templates/index.ts ===
+// v1 templates: each `templates/*.html`, with its partials included, ready to fill.
+import { readFileSync, readdirSync, existsSync } from "node:fs";
+import { convertTemplate } from "../compat.ts";
+import { S } from "../index.ts";
+
+let templates: ReadonlyMap<string, string> = new Map();
+
+/** Reads every template afresh and includes its partials; `init` calls it at the start of every build. */
+export function loadTemplates(folder: string = S.templates ?? "templates"): ReadonlyMap<string, string> {
+  // Partials first, each by its name without `.html`; a site without `_partials` has none.
+  const shared = `${folder}/_partials`;
+  const partials = new Map(existsSync(shared) ? readdirSync(shared).map((name) => [name.replace(/\.html$/, ""), readFileSync(`${shared}/${name}`, "utf8")]) : []);
+  // Then every template, very old `{{x}}` ones converted as they load, each with its
+  // partials included. `_partials` itself is skipped: a folder's name has no `.html`.
+  const names = existsSync(folder) ? readdirSync(folder).filter((name) => name.endsWith(".html")) : [];
+  templates = new Map(names.map((name) => [name.slice(0, -5), includePartials(name, convertTemplate(readFileSync(`${folder}/${name}`, "utf8")), partials)]));
+  return templates;
+}
+
+/** A template with each `<%= partial name %>` (or `<%-`) replaced by that partial; a missing one is an error naming both. */
+function includePartials(name: string, text: string, partials: ReadonlyMap<string, string>): string {
+  return text.replace(/<%[=-] partial ([\w-]+) %>/g, (_, partial: string) => {
+    const found = partials.get(partial);
+    if (found === undefined) throw new Error(`${name} includes the partial "${partial}", which _partials/ does not have`);
+    return found;
+  });
+}
+
+/** The template a page names, from the last load, or null. */
+export function template(name: string): string | null {
+  // A missing template is never swapped for another: its caller reports it, naming the
+  // page that asked, so a typo in a page's frontmatter can't go unnoticed.
+  const found = templates.get(name);
+  return found ?? null;
+}
+=== v1/cache/package.json ===
+{
+  "name": "@folio/v1-cache",
+  "version": "0.6.0",
+  "type": "module",
+  "exports": "./index.ts",
+  "scripts": {
+    "test": "vitest run"
+  }
+}
+=== v1/cache/index.ts ===
+// v1's cache: each page's HTML, kept in a file of its own under `.cache/v1/`, named by its
+// path and keyed by the hash of its whole text, so an edit anywhere in a page rebuilds it.
+import { readFileSync, writeFileSync, existsSync, mkdirSync, renameSync, rmSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { S } from "../index.ts";
+
+/** The folder v1 keeps its cache in. Other tools keep theirs beside it, under `.cache/`. */
+const FOLDER = ".cache/v1";
+// A page's entry is `<sha256 of its path>.json`, holding the hash of its text and its HTML.
+/** A page's HTML from the last build, when its whole text is unchanged since; else null. */
+export function cached(file: string, text: string, settings = S): string | null {
+  const entry = `${FOLDER}/${createHash("sha256").update(file).digest("hex")}.json`;
+  if (settings.nocache === true || !existsSync(entry)) return null;
+  // Entries are written whole (see `remember`), so one that exists can always be read.
+  const kept = JSON.parse(readFileSync(entry, "utf8")) as { hash?: string; html?: string };
+  return kept.hash === createHash("sha256").update(text).digest("hex") ? (kept.html ?? null) : null;
+}
+/** Keeps a page's HTML for the next build in its own entry, written whole or not at all. */
+export function remember(file: string, text: string, html: string): void {
+  const name = createHash("sha256").update(file).digest("hex");
+  const entry = JSON.stringify({ hash: createHash("sha256").update(text).digest("hex"), html });
+  mkdirSync(FOLDER, { recursive: true });
+  // Written to a temporary file and renamed into place, so a build that stops part way
+  // never leaves half an entry for the next build to read.
+  writeFileSync(`${FOLDER}/${name}.tmp`, entry);
+  renameSync(`${FOLDER}/${name}.tmp`, `${FOLDER}/${name}.json`);
+}
+/** Forgets every page by deleting v1's own cache folder, and nothing beside it. */
+export function clearCache(): void {
+  // Other tools keep their caches beside v1's, under `.cache/`, so only `.cache/v1` goes,
+  // and a cache that was never written is nothing to clear.
+  rmSync(FOLDER, { recursive: true, force: true });
+}
