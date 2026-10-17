@@ -41,6 +41,7 @@
 // dash, so nothing here redraws per frame and a busy page thread never stalls
 // the sheet.
 
+import { shownVitality } from "@gaia/realize";
 import { rand, seedOf } from "@gaia/schema";
 import type { Outline } from "@gaia/terrain";
 import type { LotPlace } from "@gaia/world";
@@ -784,7 +785,8 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
         const i = l.paths.indexOf(path);
         const g = l.health.ground(path);
         if (i < 0 || g === undefined) continue;
-        l.washes[i] = { ...(l.washes[i] as WashArea), pool: healthColor(STYLE, l.lands[i] as [number, number, number], g), dry: dryness(g) };
+        const shown = shownVitality(g);
+        l.washes[i] = { ...(l.washes[i] as WashArea), pool: healthColor(STYLE, l.lands[i] as [number, number, number], shown), dry: dryness(shown) };
       }
       yield;
     }
@@ -800,7 +802,7 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
         for (let j = ja; j <= jb; j++) {
           for (let i = i0; i <= i1; i++) {
             const c = j * l.n + i;
-            const rgb = healthColor(STYLE, l.lands[l.nearest[c] as number] ?? [0, 0, 0], l.health.vitality(c));
+            const rgb = healthColor(STYLE, l.lands[l.nearest[c] as number] ?? [0, 0, 0], shownVitality(l.health.vitality(c)));
             img.data.set([rgb[0], rgb[1], rgb[2], Math.round(255 * l.health.paint(c))], ((j - ja) * (i1 - i0 + 1) + (i - i0)) * 4);
           }
         }
@@ -912,8 +914,8 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
     const s = markScale(zoom, 1);
     type Draw = (c: CanvasRenderingContext2D, x: number, y: number) => [number, number, number, number];
     const all: { readonly x: number; readonly z: number; readonly draw: Draw }[] = [
-      ...things.landmarks.map((m) => ({ x: m.x, z: m.z, draw: ((c, x, y) => stampLandmark(c, x, y, s, m, m.vitality, m.name)) as Draw })),
-      ...things.buildings.map((m) => ({ x: m.x, z: m.z, draw: ((c, x, y) => stampBuilding(c, x, y, s, m, m.vitality, m.name)) as Draw })),
+      ...things.landmarks.map((m) => ({ x: m.x, z: m.z, draw: ((c, x, y) => stampLandmark(c, x, y, s, m, shownVitality(m.vitality), m.name)) as Draw })),
+      ...things.buildings.map((m) => ({ x: m.x, z: m.z, draw: ((c, x, y) => stampBuilding(c, x, y, s, m, shownVitality(m.vitality), m.name)) as Draw })),
     ];
     // From the middle outward, as the pen went over the borders.
     all.sort((a, b) => Math.hypot(a.x, a.z) - Math.hypot(b.x, b.z));

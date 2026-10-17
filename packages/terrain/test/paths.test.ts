@@ -220,15 +220,18 @@ describe("trails", { timeout: 20_000 }, () => {
     expect(trailWearAt(wear, 1, 0.05, 0)).toBeCloseTo(wear, 5);
     expect(trailWearAt(wear, 1, 0.05, 1)).toBeLessThan(wear * 0.25);
     let before = Infinity;
-    for (let a = 0; a <= 1; a += 0.05) {
+    for (let a = 0; a <= 1; a += 0.01) {
       const w = trailWearAt(wear, 1, 0.05, a);
       expect(w).toBeLessThanOrEqual(before + 1e-9);
-      expect(before === Infinity || before - w < 0.16).toBe(true);
+      expect(before === Infinity || before - w < wear * 0.1).toBe(true);
       before = w;
     }
     // A failing pair leaves a faint trace, never nothing, so the route still reads.
     expect(trailWearAt(wear, 0, 0, 0.5)).toBeGreaterThan(0);
-    expect(trailWearAt(wear, 0.5, 0.5, 0.5)).toBeGreaterThan(trailWearAt(wear, 0.1, 0.1, 0.5));
+    expect(trailWearAt(wear, 0.6, 0.6, 0.5)).toBeGreaterThan(trailWearAt(wear, 0.1, 0.1, 0.5));
+    // It grows over as the land looks (`shownVitality`): worn bare from 0.85, a trace from 0.45 down.
+    expect(trailWearAt(wear, 0.85, 0.85, 0.5)).toBeCloseTo(trailWearAt(wear, 1, 1, 0.5), 5);
+    expect(trailWearAt(wear, 0.45, 0.45, 0.5)).toBeCloseTo(trailWearAt(wear, 0, 0, 0.5), 5);
   });
 
   it("wears a shared way by every trail walking it: never less than its most worn trail, grown over only when all of them fail", () => {

@@ -22,6 +22,7 @@
 // inked ahead of the person in the same idle time. Opened from the wild, the
 // sheet grows to take the traveller in.
 
+import { shownVitality } from "@gaia/realize";
 import { outlinesOf, pastTheEdge, type Place, type PlaceArea, type Terrain, waterDepthAt, type WorldPlaces } from "@gaia/terrain";
 import { areaVitality, groundVitality } from "@gaia/world";
 import { onTap } from "../lab.ts";
@@ -253,7 +254,7 @@ function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place
     for (let i = 0; i < n; i++) {
       const c = j * n + i;
       const area = areas[nearest[c] as number];
-      const v = healthAt(-reach + (i + 0.5) * AREA_CELL, -reach + (j + 0.5) * AREA_CELL, ownVitality(area?.path ?? ""));
+      const v = shownVitality(healthAt(-reach + (i + 0.5) * AREA_CELL, -reach + (j + 0.5) * AREA_CELL, ownVitality(area?.path ?? "")));
       uimg.data.set([...healthColor(style, lands[nearest[c] as number] ?? mixRgb(style.wild, style.wild, 0), v), 255], c * 4);
     }
     if (j % 8 === 7) yield;
@@ -266,8 +267,8 @@ function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place
   const washAreaOf = (path: string, depth: number, rings: readonly (readonly number[])[]): WashArea => ({
     path: ringsPath(rings, px),
     depth,
-    pool: healthColor(style, landWash(style, path), ownVitality(path)),
-    dry: ground(path) ? dryness(ownVitality(path)) : 0,
+    pool: healthColor(style, landWash(style, path), shownVitality(ownVitality(path))),
+    dry: ground(path) ? dryness(shownVitality(ownVitality(path))) : 0,
   });
   const sheet: WashSheet = {
     reach,
@@ -645,13 +646,13 @@ export function drawLand(ctx: CanvasRenderingContext2D, w: number, h: number, pa
     const x = sx(l.x);
     const y = sy(l.z);
     if (!visible(x, y, 30 * s)) continue;
-    taken.push(stampLandmark(ctx, x, y, s, l, l.vitality, l.name));
+    taken.push(stampLandmark(ctx, x, y, s, l, shownVitality(l.vitality), l.name));
   }
   for (const b of stood.buildings) {
     const x = sx(b.x);
     const y = sy(b.z);
     if (!visible(x, y, 30 * s)) continue;
-    taken.push(stampBuilding(ctx, x, y, s, b, b.vitality, b.name));
+    taken.push(stampBuilding(ctx, x, y, s, b, shownVitality(b.vitality), b.name));
   }
   return taken;
 }
@@ -796,7 +797,7 @@ export function drawTrees(ctx: CanvasRenderingContext2D, trees: StoodWorld["tree
     // Each mark its own closed shape: without the move, one path would join them all into a web.
     shadows.moveTo(x + r * 1.55, y + r * 0.6);
     shadows.ellipse(x + r * 0.5, y + r * 0.6, r * 1.05, r * 0.78, 0, 0, Math.PI * 2);
-    const tone = crowns[Math.round(Math.max(0, Math.min(1, tree.vitality)) * (TREE_TONES - 1))] as Path2D;
+    const tone = crowns[Math.round(shownVitality(tree.vitality) * (TREE_TONES - 1))] as Path2D;
     tone.moveTo(x + r, y);
     tone.arc(x, y, r, 0, Math.PI * 2);
     lights.moveTo(x - r * 0.3 + r * 0.52, y - r * 0.32);

@@ -3,7 +3,10 @@
 // painted topographic map. On the map, color is health and nothing else:
 // every area starts from one healthy green (`landWash`), and each file's
 // vitality spreads over the ground around it (`healthField`) in health's
-// colors (`healthColor`), from green through gold and russet to ash. Hills
+// colors (`healthColor`), from green through gold and russet to ash. Like
+// the world's own channels, health's colors and dryness read how far along
+// its decline the land looks (`shownVitality` in @gaia/realize), which the
+// painters hand them, so the map shows the health the world shows. Hills
 // are shaded in violet and lit warm under fine sepia contours. It is plain
 // data that `field-map.ts` and the wait (`wait/map-wait.ts`) paint from.
 
@@ -55,8 +58,8 @@ export interface MapStyle {
   /** The healthy land every area's wash starts from: on the map, color means health and nothing else. */
   readonly land: readonly [number, number, number];
   /**
-   * How health colors the land as it falls, from healthy down to ruin: at each vitality, the color the land turns
-   * toward and how far. Healthy land is green, tired land turns gold, then russet, and ruined land ash brown.
+   * How health colors the land as it falls, from healthy down to ruin: at each shown vitality, the color the land
+   * turns toward and how far. Healthy land is green, tired land turns gold, then russet, and ruined land ash brown.
    */
   readonly health: readonly (readonly [number, readonly [number, number, number], number])[];
   /** How far a file's health spreads over the ground around it, meters, across area borders too. */
@@ -100,7 +103,7 @@ export const MAP_STYLE: MapStyle = {
   spread: 24,
 };
 
-/** How dry an area's land is, 0 thriving to 1 failing: nothing above 0.82, wholly dry at 0.3. */
+/** How dry an area's land is, 0 thriving to 1 failing, from its shown vitality: nothing above 0.82, wholly dry at 0.3. */
 export const dryness = (vitality: number): number => {
   const t = Math.max(0, Math.min(1, (0.82 - vitality) / 0.52));
   return t * t * (3 - 2 * t);
@@ -132,7 +135,7 @@ const COOLER = channels("#5f9aa6");
 
 /**
  * A color as health leaves it, on `style.health`'s ramp: thriving land a touch richer and deeper, then gold,
- * russet and ash as vitality falls. Continuous in vitality, so a field of health has no steps.
+ * russet and ash as its shown vitality falls. Continuous in vitality, so a field of health has no steps.
  */
 export function healthColor(style: MapStyle, rgb: readonly [number, number, number], vitality: number): [number, number, number] {
   const v = Math.max(0, Math.min(1, vitality));
