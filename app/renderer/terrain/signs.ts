@@ -10,6 +10,7 @@
 // flakes, its wood greys, and it leans on its post.
 
 import * as THREE from "three";
+import { shownVitality } from "@gaia/realize";
 import { LIGHT_GLSL, type SceneLight } from "@gaia/render";
 import { type Board, letter } from "./lettering.ts";
 
@@ -42,7 +43,7 @@ const SLOT = { w: 512, h: 224, cols: 2, rows: 16 };
 const SIGN_VERT = /* glsl */ `
 attribute float aFace;
 attribute vec2 aUv;
-// Vitality, the way it leans, its slot in the atlas, and how much wider its board stands for a long name.
+// How far along its decline it looks (shownVitality), the way it leans, its slot in the atlas, and how much wider its board stands for a long name.
 attribute vec4 aSign;
 varying vec3 vNormal;
 varying vec3 vWorld;
@@ -233,14 +234,14 @@ export function createSigns(light: SceneLight, capacity = SLOT.cols * SLOT.rows)
         m.compose(new THREE.Vector3(s.x, s.y, s.z), q, new THREE.Vector3(s.scale, s.scale, s.scale));
         mesh.setMatrixAt(i, m);
         // Each sign leans its own way: mostly back or to one side, never into the reader.
-        life.setXYZW(i, s.vitality, ((i * 2.399) % (Math.PI * 2)) * 0.5 + 0.2, i, widths[i] ?? 1);
+        life.setXYZW(i, shownVitality(s.vitality), ((i * 2.399) % (Math.PI * 2)) * 0.5 + 0.2, i, widths[i] ?? 1);
       });
       mesh.count = shown.length;
       mesh.instanceMatrix.needsUpdate = true;
       life.needsUpdate = true;
     },
     setVitality(index, v) {
-      life.setX(index, Math.min(1, Math.max(0, v)));
+      life.setX(index, shownVitality(v));
       life.needsUpdate = true;
     },
     dispose() {
