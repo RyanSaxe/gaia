@@ -11,6 +11,7 @@
 
 import { type RouteSpec, seedOf } from "@gaia/schema";
 import { fbm } from "@gaia/primitives";
+import { shownVitality } from "@gaia/realize";
 import { type Lattice, heightAt, slopeAt, worldOf, worldOfZ } from "./lattice.ts";
 import type { Occupied } from "./placement.ts";
 import { DRY, type Terrain } from "./world.ts";
@@ -1100,11 +1101,12 @@ export const trailVitalityAt = (fromVitality: number, toVitality: number, along:
  * How worn a trail's tread is at a point `along` it, from its blueprint's
  * `wear` and the vitality of the entities at its ends: a thriving pair's
  * trail is worn bare, a failing one's grows over until only a faint trace is
- * left, so its route still reads. The ground and grass shaders apply the same numbers live
+ * left, so its route still reads. It grows over as far as the land around
+ * it looks declined (`shownVitality`). The ground and grass shaders apply the same numbers live
  * (`TRAIL_GLSL` in the terrain lab), so a vitality change never rebakes.
  */
 export const trailWearAt = (wear: number, fromVitality: number, toVitality: number, along: number): number =>
-  wear * (0.2 + 0.8 * smooth(0.05, 0.75, trailVitalityAt(fromVitality, toVitality, along)));
+  wear * (0.2 + 0.8 * smooth(0.05, 0.75, shownVitality(trailVitalityAt(fromVitality, toVitality, along))));
 
 /**
  * How worn a way is at each of its `TRAILS.stations`, evenly from its first

@@ -91,7 +91,7 @@ const mix = (a: string, b: string, t: number): string => {
 const rgba = (hex: string, a: number): string => `rgba(${rgbOf(hex).join(",")},${a.toFixed(3)})`;
 const lerp = (a: Pt, b: Pt, t: number): Pt => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
 
-/** How a mark is worn by its vitality: each from 0 (sound) to 1 (gone). */
+/** How a mark is worn by its shown vitality (`shownVitality`), as its thing is in the world: each from 0 (sound) to 1 (gone). */
 interface Wear {
   readonly v: number;
   /** Washes dried toward straw. */
@@ -2708,8 +2708,8 @@ export const markScale = (zoom: number, grow: number): number => Math.max(1.1 * 
 export const MARK_REACH = { left: 22, right: 24, up: 37, down: 11 } as const;
 
 /**
- * Draws a building at (x, y), the middle of its footprint on the ground there, at `s` pixels a unit, worn by
- * `vitality`; `name` seeds its wear, so each building fails in its own way. Returns the box it took.
+ * Draws a building at (x, y), the middle of its footprint on the ground there, at `s` pixels a unit, worn by its
+ * shown `vitality`; `name` seeds its wear, so each building fails in its own way. Returns the box it took.
  */
 export function drawBuilding(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, b: BuildingComposition, vitality = 1, name = ""): MarkBox {
   const w = wearOf(vitality, seedOf(name));
@@ -2779,8 +2779,8 @@ export function drawBuilding(ctx: CanvasRenderingContext2D, x: number, y: number
 }
 
 /**
- * Draws a landmark at (x, y), its foot on the ground there, at `s` pixels a unit, worn by `vitality`; `name` seeds
- * its wear. Returns the box it took.
+ * Draws a landmark at (x, y), its foot on the ground there, at `s` pixels a unit, worn by its shown `vitality`;
+ * `name` seeds its wear. Returns the box it took.
  */
 export function drawLandmark(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, l: Composition, vitality = 1, name = ""): MarkBox {
   const seed = seedOf(name);

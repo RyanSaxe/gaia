@@ -1026,6 +1026,9 @@ through in dry-brush streaks where an area's own ground is tired. Trees
 take the same colors by their files' vitality, and buildings and
 landmarks wear their health in their marks: roofs dry and rot, smoke stops,
 a tower's top falls and a ring's stones lie down, as they do in the world.
+The colors, the dryness and the marks all read health as the world shows
+it (`shownVitality`), so land the world draws in ruin, at vitality 0.45 or
+below, the map washes ash, and land at 0.79 or more it washes green.
 The colors read as the world's own seasons, so the map carries no legend.
 The wait paints the same washes (`wash.ts`), each file's health as it
 settles, and letters every area's name where the map letters it.
@@ -1402,7 +1405,10 @@ tread is worn to
 bare earth, as far as its blueprint's wear says; toward a failing entity
 the grass grows back across it, its ragged edge closes and its earth fades
 into the cover, until a faint trace and its edging stones are all that mark
-the way (`trailWearAt`). A shared way is worn by every trail walking it,
+the way (`trailWearAt`). The tread grows over as the ground around it
+declines (`shownVitality`): worn as bare as its blueprint says between
+entities of vitality 0.75 or more, and down to its trace toward one of
+0.47 or less. A shared way is worn by every trail walking it,
 and their wear adds up as chances do: a way worn to `a` by one trail and to
 `b` by another is worn to 1 - (1 - a)(1 - b) (`wayWear`). So a trunk is
 never less worn than its most worn trail, stays trodden while any trail on
