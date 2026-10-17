@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { Library, type RouteSpec } from "@gaia/schema";
 import { BIOME_PRIMITIVES, RELIEF_PRIMITIVES } from "@gaia/primitives";
-import { BODY_RADIUS, NO_SOLIDS, NO_TRAILS, STEER, TRAVEL, type Travel, type TrailEnd, type TrailRequest, type Trip, type Walker, acrossWay, bakeTerrain, clearanceAt, planTrails, planTrip, solidsOf, travelFrom, travelStep, trailWay, waterDepthAt, wayLeft } from "@gaia/terrain";
+import { BODY_RADIUS, NO_SOLIDS, NO_TRAILS, STEER, TRAVEL, type Travel, type TrailEnd, type TrailRequest, type Trip, type Walker, acrossWay, bakeTerrain, clearanceAt, planTrails, planTrip, solidsOf, hurryFor, travelFrom, travelStep, trailWay, waterDepthAt, wayLeft } from "@gaia/terrain";
 import { sampleWorld } from "@gaia/terrain/testing";
 
 const lib = new Library([...RELIEF_PRIMITIVES, ...BIOME_PRIMITIVES]);
@@ -93,6 +93,38 @@ describe("travel along the trails", { timeout: 20_000 }, () => {
       before = length;
     }
     expect(before).toBeLessThan(1e-3);
+  });
+
+  it("arrives within the book's six seconds when hurried, however long the trip, and keeps its own pace where that is sooner", () => {
+    /** Seconds of frames until a trip is over, each frame stepping it `hurry` times as far in time. */
+    const secondsOf = (trip: Trip, from: Travel, hurry: number): number => {
+      let at = from;
+      let k = 0;
+      for (; !at.done && k < 60 * 600; k++) at = travelStep(trip, at, DT * hurry, at.yaw);
+      return k * DT;
+    };
+    const times = [30, 120, way.length].map((n) => {
+      const trip = planTrip(way.slice(0, n), { start: 0, end: 0 });
+      const from = travelFrom(trip, trip.heading[0] as number);
+      const hurry = hurryFor(trip, from);
+      return { length: trip.length, own: secondsOf(trip, from, 1), hurry, hurried: secondsOf(trip, from, hurry) };
+    });
+    expect(times.some((t) => t.own < TRAVEL.underBook)).toBe(true);
+    expect(times.some((t) => t.own > 2 * TRAVEL.underBook)).toBe(true);
+    for (const t of times) {
+      if (t.own <= TRAVEL.underBook) {
+        expect(t.hurry).toBe(1);
+        expect(t.hurried).toBe(t.own);
+      } else {
+        expect(t.hurried).toBeLessThanOrEqual(TRAVEL.underBook + 0.1);
+        expect(t.hurried).toBeGreaterThan(TRAVEL.underBook - 0.5);
+      }
+    }
+    // Hurried part way along, the rest of the trip takes the six seconds.
+    const trip = planTrip(way, { start: 0, end: 0 });
+    let at = travelFrom(trip, trip.heading[0] as number);
+    for (let k = 0; k < 600; k++) at = travelStep(trip, at, DT, at.yaw);
+    expect(secondsOf(trip, at, hurryFor(trip, at))).toBeLessThanOrEqual(TRAVEL.underBook + 0.1);
   });
 
   it("leaves the view to a hand that turns it, and takes it again once it looks along the way", () => {
