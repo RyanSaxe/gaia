@@ -1,7 +1,7 @@
 // The page: the world, full screen at eye height, behind the wait until it
-// stands. The world is the terrain lab's (`terrain/lab.ts`) with the immersive
-// layer over it (`immersive/view.ts`), drawn by one loop at the clock's hour,
-// and `window.__lab` holds the hooks scripted checks drive it through.
+// stands. The world (`terrain/world.ts`) has the immersive layer over it
+// (`immersive/view.ts`), both drawn by one loop at the clock's hour, and
+// `window.__lab` holds the hooks scripted checks drive it through.
 
 import "./lab.css";
 import * as THREE from "three";
@@ -10,7 +10,8 @@ import { watchEngine } from "./engine-status.ts";
 import { setFavicon } from "./brand/logo.ts";
 import { createStats } from "./stats.ts";
 import { reportStage, startTelemetry } from "./telemetry.ts";
-import { OPENING_ASPECT, type TerrainLab, createTerrainLab, openingBuilds } from "./terrain/lab.ts";
+import { OPENING_ASPECT, type World, createWorld, openingBuilds } from "./terrain/world.ts";
+import { worldHooks } from "./terrain/hooks.ts";
 import { makeAhead } from "./terrain/made.ts";
 import { type Immersive, createImmersive } from "./immersive/view.ts";
 import { startWaitEarly } from "./wait/wait.ts";
@@ -24,7 +25,7 @@ THREE.ColorManagement.enabled = false;
 setFavicon();
 
 const shell = document.getElementById("shell");
-const root = document.querySelector<HTMLElement>("[data-lab=terrain]");
+const root = document.querySelector<HTMLElement>(".world");
 if (shell === null || root === null) throw new Error("Missing the world's container.");
 
 // The first touch shows the touch controls, even where the primary pointer is a mouse.
@@ -45,8 +46,10 @@ if (askedHour !== null && Number.isFinite(Number(askedHour))) clock.pin(Number(a
 
 const stats = createStats();
 
-let world: TerrainLab | null = null;
+let world: World | null = null;
 let immersive: Immersive | null = null;
+/** The world's hooks, `__lab.terrain`, once it is made. */
+let hooks: Readonly<Record<string, unknown>> | null = null;
 
 let last = performance.now();
 function loop(now: number): void {
@@ -71,13 +74,14 @@ const sky = realizeSky({ blueprint: START_SKY, kind: worldKind }, new Library(WO
 startWaitEarly(shell, Math.round(sky.light.nightness * 20) / 20, OPENING_ASPECT, window.gaiaShell !== undefined);
 const drawn = new Promise((r) => requestAnimationFrame(() => setTimeout(r)));
 /** Settles once the world's page is built: scripted checks look at the world only after it, as a person sees it. */
-const opened: Promise<TerrainLab> = Promise.all([builds, drawn]).then(() => {
-  const made = createTerrainLab(root);
+const opened: Promise<World> = Promise.all([builds, drawn]).then(() => {
+  const made = createWorld(root);
   // The immersive layer joins the world before its first bake lands, so the markers stand on it.
-  immersive = createImmersive(root, made.world);
+  immersive = createImmersive(root, made.handle);
   made.setActive(true);
   immersive.setActive(true);
   world = made;
+  hooks = worldHooks(made.inside);
   requestAnimationFrame(loop);
   return made;
 });
@@ -94,7 +98,7 @@ if (
     userAgent: navigator.userAgent,
     dpr: window.devicePixelRatio,
     viewport: [window.innerWidth, window.innerHeight],
-    ...world?.report?.(),
+    ...world?.report(),
     smooth: stats.smoothness(),
     ...stats.passes(),
   }))
@@ -137,8 +141,8 @@ window.__lab = {
   /** The smoothness probe's last ten seconds. */
   smoothness: () => stats.smoothness(),
   frames,
-  /** The world's hooks (`terrain/lab.ts`). */
-  terrain: new Proxy({}, { get: (_, key: string) => world?.hook[key] }),
+  /** The world's hooks (`terrain/hooks.ts`). */
+  terrain: new Proxy({}, { get: (_, key: string) => hooks?.[key] }),
   /** The immersive world's hooks: the map, a jump, the slip in the corner, and what each way of knowing where you are shows. */
   immersive: new Proxy({}, { get: (_, key: string) => immersive?.hook[key] }),
 };

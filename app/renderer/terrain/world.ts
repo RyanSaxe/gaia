@@ -1,11 +1,12 @@
-// The terrain lab: the world a person walks. A full world of regions, each a
-// biome with a landform and a ground cover Jev chose, baked into one
-// heightfield on worker threads, which also stand its buildings, landmarks,
-// trails, trees and understory, so the page never stops drawing while a world
-// bakes. A person walks it at eye height, tapping or clicking the ground to
-// walk there. Buildings, landmarks, trees, stones, bushes and flowers stand for
-// code: tapping one opens its page in the journal, and standing at one tells
-// the journal what the person stopped at.
+// The world a person walks. A full world of regions, each a biome with a
+// landform and a ground cover Jev chose, baked into one heightfield on worker
+// threads, which also stand its buildings, landmarks, trails, trees and
+// understory, so the page never stops drawing while a world bakes. A person
+// walks it at eye height, tapping or clicking the ground to walk there.
+// Buildings, landmarks, trees, stones, bushes and flowers stand for code:
+// tapping one opens its page in the journal, and standing at one tells the
+// journal what the person stopped at. Scripted checks reach inside it through
+// `WorldInside`, with the hooks in `hooks.ts`.
 
 import * as THREE from "three";
 import { type AtmosphereSpec, type Blueprint, type BuildingPlan, type GroundSpec, Library, type Palette, seedOf } from "@gaia/schema";
@@ -31,17 +32,17 @@ import {
   createSunShadow,
   type SceneLight,
 } from "@gaia/render";
-import { type Capsule, clearanceAt, groundDecline, regionAt as dominantRegion, wildShare, frameOf, TILE, LAND_ASPECT, type Deck, decksOf, deckShape, EYE_HEIGHT, footingAt, GAIT, groundHeightAt, heightAt, type Intent, junctionVitality, NO_SOLIDS, NO_TRAILS, openingSpot, TRAILS, outlineShape, returnTo, stoodBy, type StoodSpot, withinLand, piecesShapes, type Place, placeAt, planWalk, regionWeights, siteToWorld, type Solids, type SolidShape, solidsOf, stanceAt, standAt, steerAlong, type Steered, type Steering, steering, steerPress, steerRelease, steerStep, stride, type Stride, acrossWay, carry, planTrip, TRAVEL, type Travel, wadingAt, fordBeside, travelFrom, travelPoint, travelStep, type Trip, trailWay, type Walker, type WalkKey, type Terrain, TERRAIN, type TrailNetwork, type Walk, WALK_TO, walkStep, wallsShape, waterDepthAt, type Way, wayAhead, wayVitalityAt, wayWear, WILDS, type WorldPlaces, type WorldSpec } from "@gaia/terrain";
-import { createSky } from "../world/environment.ts";
+import { type Capsule, clearanceAt, groundDecline, regionAt as dominantRegion, wildShare, frameOf, TILE, LAND_ASPECT, type Deck, decksOf, deckShape, EYE_HEIGHT, footingAt, GAIT, groundHeightAt, heightAt, type Intent, NO_SOLIDS, NO_TRAILS, openingSpot, TRAILS, outlineShape, returnTo, type StoodSpot, withinLand, piecesShapes, type Place, placeAt, planWalk, regionWeights, siteToWorld, type Solids, type SolidShape, solidsOf, standAt, steerAlong, type Steered, type Steering, steering, steerPress, steerRelease, steerStep, stride, type Stride, acrossWay, carry, planTrip, TRAVEL, type Travel, wadingAt, fordBeside, travelFrom, travelPoint, travelStep, type Trip, trailWay, type Walker, type WalkKey, type Terrain, TERRAIN, type TrailNetwork, type Walk, WALK_TO, wallsShape, waterDepthAt, type Way, wayAhead, WILDS, type WorldPlaces, type WorldSpec } from "@gaia/terrain";
+import { type Sky, createSky } from "../world/environment.ts";
 import { type CaptureBounds, type Pixels, createCapture } from "./capture.ts";
-import { type Lab, onTap, refs, tapSlop } from "../lab.ts";
-import { createGrass } from "./cover.ts";
-import { createGround, createGroundTexture } from "./ground.ts";
+import { onTap, tapSlop } from "../tap.ts";
+import { type Grass, createGrass } from "./cover.ts";
+import { type GroundMesh, createGround, createGroundTexture } from "./ground.ts";
 import { MAX_REGIONS, createRegionCovers } from "./regions.ts";
-import { createWater } from "./water.ts";
-import { createWildGrowth, wildBushBuilds } from "./wilds.ts";
-import { type Crown, type DriftsHere, createDrifts } from "./drifts.ts";
-import { createUnderstory, understoryBuilds } from "./understory.ts";
+import { type Water, createWater } from "./water.ts";
+import { type WildGrowth, createWildGrowth, wildBushBuilds } from "./wilds.ts";
+import { type Crown, type Drifts, type DriftsHere, createDrifts } from "./drifts.ts";
+import { type Understory, createUnderstory, understoryBuilds } from "./understory.ts";
 import { type BuildAsk, made, makeAhead } from "./made.ts";
 import { createClearings } from "./clearings.ts";
 import { type WayPiece, type Ways, createWays, crossingVitality, setTrailEnds } from "./trails.ts";
@@ -50,25 +51,24 @@ import { takeWait } from "../wait/wait.ts";
 import { withStart } from "../start/start.ts";
 import { START_SKY } from "../start/table-scene.ts";
 import type { Represented } from "./represent.ts";
-import { type CodeWorld, groundVitality } from "@gaia/world";
+import type { CodeWorld } from "@gaia/world";
 import { type CodeLab, codeWorld } from "./code-world.ts";
 import type { JudgedThing } from "../../world-service/protocol.ts";
-import { type Building, composedName, createSettlement, settlementBuilds } from "./settlement.ts";
-import { createSigns } from "./signs.ts";
+import { type Building, type Settlement, composedName, createSettlement, settlementBuilds } from "./settlement.ts";
+import { type Signs, createSigns } from "./signs.ts";
 import { type Baked, createBaker } from "./baker.ts";
-import { CLIP, createPageLand } from "./land.ts";
-import { createStanding } from "./standing.ts";
+import { type PageLand, createPageLand } from "./land.ts";
+import { type Standing, createStanding } from "./standing.ts";
 import { type Stand, type StandRequest, type StandingLandmark, landmarkBase, ownerVitality, understoryVitality } from "./stand.ts";
 import { declineAround, groundVitalityAt, setGroundOwnership, showGroundVitality } from "./vitality.ts";
-import { type TourStop, tourStops } from "./tour.ts";
-import { type Change, pictureChange, tallyFrame } from "./measure.ts";
-import { type Copies, type DetailMode, FAR, type FarOf, GONE, type PassSize, TURN, createCopies, createFarForms } from "./woods.ts";
+import type { Drawn, Pass } from "./measure.ts";
+import { type Copies, type FarForms, type FarOf, type PassSize, TURN, createCopies, createFarForms } from "./woods.ts";
 import { contentHash, openFarStore } from "./far-store.ts";
 
 const TEMPLATE = /* html */ `
 <main class="stage">
   <canvas class="view" aria-label="A world of gentle landforms. Click or tap the ground to walk there, and drag to look."></canvas>
-  <div class="veil" data-ref="veil" aria-label="The world is being made"></div>
+  <div class="veil" aria-label="The world is being made"></div>
 </main>
 `;
 
@@ -113,7 +113,7 @@ const STILL = 0.25;
 const FURNISHING_TOP = 2.4;
 
 /** One seeded build of a flora preset: every tree is a copy of one. */
-interface TreeVariant {
+export interface TreeVariant {
   /** Radius of the trunk's bottom ring, for grounding. */
   readonly base: number;
   /** The trunk's own radius at its base: what stops a walker. */
@@ -124,7 +124,7 @@ interface TreeVariant {
 }
 
 /** Something a person can walk up to and ask about: a building or a tree. */
-interface Subject {
+export interface Subject {
   readonly represented: Represented;
   /** Its form in the world, such as "a watermill". */
   readonly standsAs: string;
@@ -141,7 +141,7 @@ interface Subject {
 }
 
 /** Where one tree stands, and which build it copies. */
-interface Tree {
+export interface Tree {
   readonly x: number;
   readonly y: number;
   readonly z: number;
@@ -273,6 +273,78 @@ export interface Landing {
   readonly yaw: number;
 }
 
+/** A landmark built and measured: its key in the view pool, what it is called, its blueprint, its build and how far its foot reaches. */
+export interface Landmark {
+  readonly key: string;
+  readonly name: string;
+  readonly blueprint: Blueprint;
+  readonly built: Realized;
+  readonly base: number;
+}
+
+/** The landmarks standing and the network of paths between every place, from the last bake. */
+export interface Settled {
+  readonly sites: readonly StandingLandmark[];
+  readonly network: TrailNetwork;
+  /** Each way's edging stones, set by the bake on the whole land. */
+  readonly edging?: Stand["edging"];
+}
+
+/** A set of plants that turn far, and how long baking or reading their far forms took, milliseconds. */
+export interface FarSet {
+  readonly forms: FarForms;
+  ms: number;
+}
+
+/**
+ * A trip along the trails while the person travels (`travelStep`): its
+ * plan, where it has them, whether they took the keys, and the way ahead
+ * the world is made ready along: a mark every `TRAVEL_MARK` meters, each
+ * asked of the standers as the trip comes within `TRAVEL_LOOK` of it.
+ */
+export interface TripUnderWay {
+  readonly plan: Trip;
+  at: Travel;
+  stopping: boolean;
+  readonly marks: { readonly s: number; asked: boolean; ready: boolean }[];
+  readonly began: number;
+  setOff: number | null;
+  waited: number;
+}
+
+/** How the last trip ended, for measuring: arrived or stopped, how far along, and what the keys and a tap's walk held then. */
+export interface TripEnd {
+  done: boolean;
+  s: number;
+  length: number;
+  keys: string[];
+  goal: boolean;
+  by?: string;
+}
+
+/** The way a trip takes to a landing, the meters walked off the tread at each end, and which way it went (`travelWay`). */
+export interface TripWay {
+  way: Walker[];
+  off: { start: number; end: number };
+  by: "near" | "trails" | "across";
+}
+
+/** Where the view is drawn from, when held apart from the person: where the eye is, how high, and which way it looks. */
+export interface ViewPin {
+  readonly x: number;
+  readonly z: number;
+  readonly eye: number;
+  readonly yaw: number;
+  readonly pitch: number;
+}
+
+/** The air last laid where the eye is: the ground's decline around it, its height above the land, and the air itself. */
+export interface LaidAir {
+  readonly decline: number;
+  readonly height: number;
+  readonly air: AtmosphereSpec;
+}
+
 /** Where a landing may be: water no deeper than this (dry first, then wading), this far from any solid, and how far it looks from the spot asked for, meters. */
 /** A bark vertex lower than this, meters, belongs to the trunk's base where it meets the ground. */
 const TRUNK_BASE = 0.05;
@@ -288,7 +360,7 @@ const LAND = { dry: 0.02, wade: 0.45, clear: 1.1, reach: 40, ring: 1.5, far: 160
  * above it takes the world's name. A thing farther than `near` meters from
  * the person is painted on land held around it.
  */
-const PAINTING = { hour: 15.5, fov: 46, fill: 0.5, wideFill: 0.36, wideLow: 0.12, sunSide: 0.6, near: 120 } as const;
+export const PAINTING = { hour: 15.5, fov: 46, fill: 0.5, wideFill: 0.36, wideLow: 0.12, sunSide: 0.6, near: 120 } as const;
 /**
  * A tree's crown in front of the frontispiece's thing, or this big a share of its own distance anywhere in the
  * painting in front of it, would hide the thing or fill the picture's side, so the painter stands elsewhere.
@@ -302,14 +374,146 @@ const PATCH_SEEN = { height: 1.6, reach: 14 } as const;
 const FACE_TRAIL = 14;
 const FACE_THING = 160;
 
-export interface TerrainLab extends Lab {
-  readonly world: WorldHandle;
+/** The world a person walks, as the page holds it: it draws a frame at a time at the clock's hour. */
+export interface World {
+  /** What the immersive layer reads and steers. */
+  readonly handle: WorldHandle;
+  /** The world's renderer, so the page can count its draw calls. */
+  readonly renderer: THREE.WebGLRenderer;
+  /** Settles once the first world stands and the wait has lifted from it. */
+  readonly ready: Promise<void>;
+  /** What the world shows right now, for smoothness reports: plain numbers, words and flags. */
+  readonly report: () => Readonly<Record<string, string | number | boolean>>;
+  /** An inactive world draws nothing and ignores the keys. */
+  setActive(on: boolean): void;
+  /** Draws one frame; `dt` is seconds since the last, `hour` the local hour the world shows. */
+  frame(dt: number, now: number, hour: number): void;
+  /** What the hooks in `hooks.ts` read and steer inside the world. */
+  readonly inside: WorldInside;
+}
+
+/**
+ * What the hooks in `hooks.ts` read and steer inside the world: its parts,
+ * what stands now (read when a hook asks), the person, the last frame, how a
+ * measure holds the world still, and the steps the world itself takes.
+ * Nothing a person does goes through here.
+ */
+export interface WorldInside {
+  // Its parts.
+  readonly renderer: THREE.WebGLRenderer;
+  readonly scene: THREE.Scene;
+  readonly camera: THREE.PerspectiveCamera;
+  readonly canvas: HTMLCanvasElement;
+  readonly light: SceneLight;
+  readonly terrain: Terrain;
+  readonly land: PageLand;
+  readonly standing: Standing;
+  readonly sky: Sky;
+  readonly ground: GroundMesh;
+  readonly grass: Grass;
+  readonly water: Water;
+  readonly drifts: Drifts;
+  readonly signs: Signs;
+  readonly understory: Understory;
+  readonly wildGrowth: WildGrowth;
+  /** Each tree build, its instances and its far form, by its index among the builds. */
+  readonly variants: readonly TreeVariant[];
+  readonly groves: ReadonlyMap<number, Copies>;
+  readonly treeFar: readonly FarOf[];
+  /** The trees' far forms, and the bushes', which bake once the wait has lifted and are ready when `bushesBaked` settles. */
+  readonly treeSet: FarSet;
+  readonly bushSet: FarSet;
+  readonly bushesBaked: Promise<void>;
+  /** Every entity's vitality by its path, the entity each trail end stands for, and each file's vitality where a hook has set it. */
+  readonly entityVitality: ReadonlyMap<string, number>;
+  readonly entityOfPlace: ReadonlyMap<string, string>;
+  readonly liveFileVitality: Map<string, number>;
+  /** Every landmark view made so far, by its key. */
+  readonly landmarkPool: ReadonlyMap<string, PlantView>;
+  // What stands now.
+  /** The world shown: its regions and size. */
+  readonly spec: WorldSpec;
+  readonly code: CodeLab | null;
+  readonly places: WorldPlaces;
+  readonly settlement: Settlement;
+  readonly landmarks: readonly Landmark[];
+  readonly landmarkViews: readonly PlantView[];
+  readonly landmarkEntities: readonly Represented[];
+  readonly ways: Settled;
+  readonly built: Ways | null;
+  readonly trees: readonly Tree[];
+  readonly treeViews: readonly Copies[];
+  readonly treeCopies: readonly number[];
+  readonly subjects: readonly Subject[];
+  /** What the person walked up to while its card is open. */
+  readonly shown: Represented | null;
+  readonly symbolPlacements: readonly number[];
+  readonly decks: readonly Deck[];
+  readonly broken: readonly Deck[];
+  readonly solids: Solids;
+  // The person.
+  readonly walker: { x: number; z: number; yaw: number; pitch: number; eye: number };
+  readonly keys: ReadonlySet<string>;
+  readonly goal: Walk | null;
+  trip: TripUnderWay | null;
+  readonly tripEnd: TripEnd | null;
+  body: Stride | null;
+  /** Whether the person walked up to the thing they stand at, which keeps its card until they move on. */
+  arrived: boolean;
+  // The last frame and the last bake.
+  readonly hour: number;
+  readonly bakeMs: number;
+  readonly openingSteps: Readonly<Record<string, number>>;
+  readonly frameCalls: number;
+  readonly passes: Readonly<Record<Pass, Drawn>>;
+  readonly breathed: LaidAir | null;
+  // How a measure or a capture holds the world.
+  /** The wind's clock, held at this many seconds, or null to run. */
+  frozen: number | null;
+  /** Where every detail is chosen from, when pinned apart from the eye. */
+  detailPin: { readonly x: number; readonly z: number } | null;
+  viewPin: ViewPin | null;
+  /** While a measure draws a held view, nothing streams. */
+  streamHeld: boolean;
+  /** While a measure drives the frames itself, the page's own loop draws none. */
+  driving: boolean;
+  /** Meters a second along a trip's tread. */
+  travelPace: number;
+  /** How many times each tree that stands for code stands (`forest`). */
+  forestCopies: number;
+  /** The copy the swap test stands alone while it runs. */
+  swapping: Copies | null;
+  // The steps the world takes.
+  /** Draws one frame now, whatever holds the page's own loop. */
+  frame(dt: number, now: number, at: number): void;
+  walkTo(x: number, z: number, yaw: number, pitch?: number): void;
+  landingNear(x: number, z: number, heart?: { readonly x: number; readonly z: number }): Landing | null;
+  travelTo(at: Landing, face: boolean): boolean;
+  travelWay(from: Walker, at: Walker): TripWay | null;
+  approach(s: Subject): void;
+  hideCard(): void;
+  setEntityVitality(id: string, v: number): void;
+  showLandVitality(): void;
+  valleyView(stood?: StoodSpot): void;
+  lookFromAbove(pos?: readonly [number, number, number], target?: readonly [number, number, number]): void;
+  treeFile(t: { readonly symbol: number }): string | undefined;
+  vitalityOfPlace(place: string): number;
+  landmarkEntity(i: number): Represented;
+  standable(x: number, z: number): boolean;
+  press(code: string): void;
+  release(code?: string): void;
+  setGoal(x: number, z: number): void;
+  updateWalk(dt: number): void;
+  viewOf(id: string, w: number, h: number, wide?: boolean): Promise<{ readonly color: Pixels; readonly mask: Pixels } | null>;
+  rebake(next: WorldSpec): Promise<boolean>;
+  instanced(): Copies[];
+  treeBuild(k: number): Realized;
 }
 
 /** A thing's name as it stands in the world, such as "An archive tower". */
 const withArticle = (name: string): string => `${/^[aeiou]/i.test(name) ? "An" : "A"} ${name.toLowerCase()}`;
 
-/** The shape, width over depth, of the land the lab opens on: a codebase's takes the journal spread's, the proving ground's is square. */
+/** The shape, width over depth, of the land the world opens on: a codebase's takes the journal spread's, the proving ground's is square. */
 export const OPENING_ASPECT = new URLSearchParams(location.search).get("world") === "proving" ? 1 : LAND_ASPECT;
 /** Frames the first world draws under the wait before it lifts, its shaders already compiled (`warmSoon`), so it moves smoothly from the first. */
 const LIFT_FRAMES = 4;
@@ -325,17 +529,16 @@ const overviewAir = (size: number): AtmosphereSpec => ({ ...CLEAR_AIR, density: 
 /** How far round the eye failing ground murks the air, meters: the band regions' airs blend over, so murk gathers as gradually as a region's air. */
 const MURK_REACH = TERRAIN.blend;
 /** Seeded builds per flora preset: a tree copies one of its form's. */
-const TREE_BUILDS = 3;
+export const TREE_BUILDS = 3;
 /** Each flora preset's seeded builds, preset by preset, as the woods copy them. */
 const TREE_ASKS: readonly BuildAsk[] = FLORA_PRESETS.flatMap((preset, p) =>
   Array.from({ length: TREE_BUILDS }, (_, k): BuildAsk => ({ kind: "flora", blueprint: preset.blueprint, seed: seedOf(`terrain-lab/tree-${p}-${k}`), facts: { scale: 1, age: 120 } })),
 );
-/** Every build the terrain lab makes as it opens, whatever world it shows: what the page makes ahead (made.ts). */
+/** Every build the world makes as it opens, whatever codebase it shows: what the page makes ahead (made.ts). */
 export const openingBuilds = (): BuildAsk[] => [...TREE_ASKS, ...understoryBuilds(), ...wildBushBuilds()];
 
-export function createTerrainLab(root: HTMLElement): TerrainLab {
+export function createWorld(root: HTMLElement): World {
   root.innerHTML = TEMPLATE;
-  const $ = refs(root);
   const lib = new Library([...RELIEF_PRIMITIVES, ...BIOME_PRIMITIVES]);
   const floraLib = new Library(FLORA_PRIMITIVES);
   let active = false;
@@ -366,13 +569,13 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   // Each landmark stands on its lot, and trails tie the buildings and
   // landmarks Jev wants joined; `standWorld` places them on the bake thread.
   const landmarkLib = new Library([...LANDMARK_PRIMITIVES, ...FLORA_PRIMITIVES]);
-  /** A landmark built and measured: its key in the view pool, what it is called, its blueprint, its build and how far its foot reaches. */
-  const landmarkOf = (name: string, ask: BuildAsk) => {
+  /** Builds and measures a landmark. */
+  const landmarkOf = (name: string, ask: BuildAsk): Landmark => {
     const built = made(ask, landmarkLib);
     return { key: `${ask.blueprint.id}:${ask.seed}`, name, blueprint: ask.blueprint, built, base: landmarkBase(built) };
   };
   /** The landmarks of the world shown, each as Jev composed it. */
-  let landmarks: ReturnType<typeof landmarkOf>[] = [];
+  let landmarks: Landmark[] = [];
   /** What builds each landmark Jev composed for a codebase's world. */
   const landmarkAsks = (c: CodeLab): BuildAsk[] =>
     c.landmarks.map((l) => ({
@@ -381,13 +584,6 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       seed: seedOf(`terrain-lab/landmark/${l.path}`),
       facts: Object.fromEntries(Object.entries(landmarkKind.facts).map(([k, bind]) => [k, bind(l.facts)])),
     }));
-  /** The landmarks standing and the network of paths between every place, from the last bake. */
-  interface Settled {
-    readonly sites: readonly StandingLandmark[];
-    readonly network: TrailNetwork;
-    /** Each way's edging stones, set by the bake on the whole land. */
-    readonly edging?: Stand["edging"];
-  }
 
   const canvas = root.querySelector("canvas") as HTMLCanvasElement;
   const stage = root.querySelector(".stage") as HTMLElement;
@@ -590,7 +786,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   /** Each region's air as Jev chose it, for the world it was realized for, and room for each region's weight. */
   let airs: { readonly world: WorldSpec; readonly airs: readonly AtmosphereSpec[]; readonly weights: Float64Array } | null = null;
   /** The air last laid, with the decline around the eye and the eye's height above the land it was laid for. */
-  let breathed: { readonly decline: number; readonly height: number; readonly air: AtmosphereSpec } | null = null;
+  let breathed: LaidAir | null = null;
   /**
    * Lays the air where the eye stands, at `eye`, in front of the hour's sky: each region's air blended by how near
    * it lies, over the band where landforms and covers blend (`regionWeights`), so it changes gradually as the person
@@ -683,7 +879,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   // frame shows a far tree before its card. The bushes' bake once the world is
   // open: until then every bush draws its full form, and the far ones then
   // change by less than a level of 255 as their cards come in.
-  const farSets = [treeForms, bushForms].map((forms) => ({ forms, ms: 0 }));
+  const farSets = [treeForms, bushForms].map((forms): FarSet => ({ forms, ms: 0 }));
   const [treeSet, bushSet] = farSets as [(typeof farSets)[number], (typeof farSets)[number]];
   const farStore = openFarStore(FAR_BAKE_VERSION);
   /** Bakes or reads every form of `set`, `ms` milliseconds a frame, and draws its cards from then on. */
@@ -761,18 +957,8 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     for (const cards of farCardSets()) cards.pass(size.focal, size.ortho);
     for (const v of swapping === null ? instanced() : [swapping]) v.cull(passCamera, size);
   };
-  /** A step of walking: half a second at walking pace, as the walk test steps. */
-  const WALK_STEP = 0.7;
-  /** One step of the swap test: how much it changes the tree's part of the screen, the wind's change there, and how far away the tree stands. */
-  interface SwapStep {
-    readonly change: Change;
-    readonly wind: Change;
-    readonly distance: number;
-  }
   /** The copy the swap test stands alone while it runs (`swapTest`), when it does. */
   let swapping: Copies | null = null;
-  /** Each preset's copy the swap test stands alone, by its far form: the trees' and the bushes' forms are numbered apart. */
-  const swapCopies = new Map<FarOf, Copies>();
   // Uploads every tree's and the understory's geometry, at every level, in
   // one render while the planting already holds the frame, so no level's
   // first appearance ever costs a frame.
@@ -1451,13 +1637,6 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     else if (land !== null) setGoal(land.x, land.z);
   });
 
-  function regionAt(x: number, z: number): number {
-    const l = terrain.lattice;
-    const ix = Math.round((x - l.origin) / l.spacing);
-    const iz = Math.round((z - l.origin) / l.spacing);
-    return terrain.region[Math.max(0, Math.min(l.n - 1, iz)) * l.n + Math.max(0, Math.min(l.n - 1, ix))] ?? 0;
-  }
-
   /** Shows the ground and growth for walking, or for a view from above: the whole-world mesh and the wild ring. */
   function showAerial(on: boolean): void {
     ground.fine.visible = !on;
@@ -1540,22 +1719,15 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   const STAND: Intent = { dx: 0, dz: 0, speed: 0 };
   /** Where the lantern's hand height is measured from: the ground, or while swimming, low enough that the lantern stays above the water. */
   let lanternGround = 0;
-  /**
-   * A trip along the trails while the person travels (`travelStep`): its
-   * plan, where it has them, whether they took the keys, and the way ahead
-   * the world is made ready along: a mark every `TRAVEL_MARK` meters, each
-   * asked of the standers as the trip comes within `TRAVEL_LOOK` of it.
-   */
-  /** How the last trip ended, for measuring: arrived or stopped, how far along, and what the keys and a tap's walk held then. */
-  let tripEnd: { done: boolean; s: number; length: number; keys: string[]; goal: boolean; by?: string } | null = null;
-  let trip: { readonly plan: Trip; at: Travel; stopping: boolean; readonly marks: { readonly s: number; asked: boolean; ready: boolean }[]; readonly began: number; setOff: number | null; waited: number } | null = null;
+  let tripEnd: TripEnd | null = null;
+  let trip: TripUnderWay | null = null;
   /** Nearer than this, meters, a trip walks straight there, around whatever stands between, rather than by the trails. */
   const TRAVEL_NEAR = 120;
   /** How far ahead along a trip the standers hold what can be seen, meters, and how far apart it is asked. */
   const TRAVEL_LOOK = 300;
   const TRAVEL_MARK = 40;
   /** How far along the trip everything that can be seen from it stands ready, meters, asking the next marks within reach. */
-  function readyAlong(t: NonNullable<typeof trip>): number {
+  function readyAlong(t: TripUnderWay): number {
     for (const m of t.marks) {
       if (m.asked || m.s > t.at.s + TRAVEL_LOOK) continue;
       m.asked = true;
@@ -1580,7 +1752,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
    * The meters walked off the tread at each end, at the off-tread pace, and
    * which way it went.
    */
-  function travelWay(from: Walker, at: Walker): { way: Walker[]; off: { start: number; end: number }; by: "near" | "trails" | "across" } | null {
+  function travelWay(from: Walker, at: Walker): TripWay | null {
     const lengthOf = (way: readonly Walker[]): number => way.reduce((sum, p, i) => (i === 0 ? 0 : sum + Math.hypot(p.x - (way[i - 1] as Walker).x, p.z - (way[i - 1] as Walker).z)), 0);
     const straight = Math.hypot(at.x - from.x, at.z - from.z);
     if (straight < TRAVEL_NEAR) {
@@ -1813,7 +1985,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   /** Where every detail is chosen from, when pinned apart from the eye: see the `detailCenter` hook. */
   let detailPin: { readonly x: number; readonly z: number } | null = null;
   /** Where the view is drawn from, when held apart from the person, as the travel test holds it. */
-  let viewPin: { readonly x: number; readonly z: number; readonly eye: number; readonly yaw: number; readonly pitch: number } | null = null;
+  let viewPin: ViewPin | null = null;
   /** While a measure draws a held view, nothing streams: the land and the standers wait for the frames that move the person. */
   let streamHeld = false;
   /** While a measure drives the frames itself, the app's own loop draws none. */
@@ -1929,7 +2101,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   }
 
   /** The wait the first world opens behind (app/renderer/wait/): it lifts as soon as the world stands. */
-  const waiting = takeWait($("veil"), OPENING_ASPECT);
+  const waiting = takeWait(root.querySelector(".veil") as HTMLElement, OPENING_ASPECT);
   const veil = withStart(waiting.wait, waiting.veil);
   // The first world's hills, water and trees come in on the wait's sheet as soon as it stands.
   let stoodOnce = false;
@@ -1949,42 +2121,6 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     for (const listener of liftedListeners) listener();
   });
   const bushesBaked = ready.then(() => bakeFar(bushSet, FAR_BAKE.walkingMs)).then(() => reportStage("bush cards", { ms: Math.round(bushSet.ms) }));
-
-  /** The places worth seeing in the world now shown, each with where to stand and which way to look (`tourStops`). */
-  function tour(): TourStop[] {
-    // A file's trees, its definitions that stand as trees, make its grove.
-    const groves = new Map<string, { x: number; z: number; trees: number }>();
-    for (const t of trees) {
-      const file = treeFile(t);
-      if (file === undefined) continue;
-      const g = groves.get(file) ?? { x: 0, z: 0, trees: 0 };
-      groves.set(file, { x: g.x + t.x, z: g.z + t.z, trees: g.trees + 1 });
-    }
-    const patches = code?.world.patches ?? [];
-    const patchOf = new Map(patches.map((p) => [p.path, p]));
-    const own = groundVitality(patches.map((p) => ({ area: p.area, vitality: p.vitality, size: p.radius * p.radius })));
-    return tourStops({
-      things: [
-        ...settlement.buildings.map((b) => {
-          const front = settlement.standOf(b);
-          const d = Math.hypot(front.x - b.site.x, front.z - b.site.z) || 1;
-          return { as: "building" as const, kind: b.kindName, name: b.represented.id || b.represented.name, x: b.site.x, z: b.site.z, vitality: entityVitality.get(b.represented.id) ?? 1, reach: Math.hypot(b.plan.width, b.plan.depth) / 2, front: { x: (front.x - b.site.x) / d, z: (front.z - b.site.z) / d } };
-        }),
-        ...ways.sites.map((s, i) => {
-          const turn = landmarkViews[i]?.object.rotation.y ?? 0;
-          const entity = landmarkEntity(i);
-          return { as: "landmark" as const, kind: landmarks[s.landmark]?.name ?? "Landmark", name: entity.id || entity.name, x: s.site.x, z: s.site.z, vitality: entityVitality.get(entity.id) ?? 1, reach: landmarks[s.landmark]?.base ?? 4, front: { x: Math.sin(turn), z: Math.cos(turn) } };
-        }),
-      ],
-      network: ways.network,
-      wayVitality: (way, along) => wayVitalityAt(ways.network, way, along, vitalityOfPlace),
-      junctionVitality: (j) => junctionVitality(ways.network, j, vitalityOfPlace),
-      areas: (code?.world.areas ?? []).map((a) => ({ path: a.path, x: a.x, z: a.z, ground: a.ground, depth: a.depth, vitality: own.get(a.path) ?? 1 })),
-      groves: [...groves].map(([path, g]) => ({ path, x: g.x / g.trees, z: g.z / g.trees, trees: g.trees, vitality: patchOf.get(path)?.vitality ?? 1 })),
-      ponds: terrain.ponds.map((p) => ({ x: p.x, z: p.z, reach: p.reach })),
-      standable,
-    });
-  }
 
   /** Whether a person can stand at (x, z): on the land, on dry ground clear of every solid. */
   function standable(x: number, z: number): boolean {
@@ -2256,332 +2392,6 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
     return capture.shoot(scene, captureCamera, [sky.mesh, ground.wilds, ground.fine, ground.coarse, ground.mirror, grass.mesh, water.group, signs.mesh], subject, w, h);
   }
 
-  // ---------- measuring: what a step of walking changes, and walking as a person would ----------
-
-  /** Draws `settle` frames at this instant, without time passing, and returns the last one's pixels. */
-  function grabFrame(settle = 2): Uint8Array {
-    const now = performance.now();
-    for (let k = 0; k < settle; k++) frame(0, now, hour);
-    const gl = renderer.getContext();
-    const pixels = new Uint8Array(gl.drawingBufferWidth * gl.drawingBufferHeight * 4);
-    gl.readPixels(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
-    return pixels;
-  }
-
-  function frameChange(a: Uint8Array, b: Uint8Array): Change {
-    const gl = renderer.getContext();
-    return pictureChange(a, b, gl.drawingBufferWidth, gl.drawingBufferHeight);
-  }
-
-  /**
-   * The walk test. From where the person stands, walks `meters` along the
-   * view in steps of `step` meters with the wind's clock frozen. At each step
-   * the view holds while only the point detail is chosen from moves one step
-   * on, so the change measured is exactly what the step does to the detail
-   * drawn: levels, thinning, the grass, the ground's rings. A step is held
-   * to the wind's own change over half a second, a change people already see
-   * all the time, measured along the same walk every `windEvery` steps, each
-   * time 1.7 s further on, so the samples span the breeze's lulls and gusts.
-   * The wind's clock stands at `at` seconds, or where it is now. Returns each
-   * step's [meters walked, mean, worst block] and the wind's worst blocks.
-   */
-  function walkSteps(meters: number, step: number, at = light.uTime.value, windEvery = 10): { steps: [number, number, number][]; wind: number[] } {
-    const start = { x: walker.x, z: walker.z, yaw: walker.yaw, pitch: walker.pitch };
-    const was = frozen;
-    const t = at;
-    const dx = -Math.sin(start.yaw);
-    const dz = -Math.cos(start.yaw);
-    const steps: [number, number, number][] = [];
-    const wind: number[] = [];
-    try {
-      for (let k = 0; (k + 1) * step <= meters; k++) {
-        walkTo(start.x + dx * k * step, start.z + dz * k * step, start.yaw, start.pitch);
-        frozen = t;
-        detailPin = { x: walker.x, z: walker.z };
-        const here = grabFrame();
-        if (k % windEvery === 0) {
-          const moment = t + (k / windEvery) * 1.7;
-          frozen = moment;
-          const before = grabFrame();
-          frozen = moment + 0.5;
-          wind.push(frameChange(before, grabFrame()).worst);
-          frozen = t;
-        }
-        detailPin = { x: walker.x + dx * step, z: walker.z + dz * step };
-        const on = frameChange(here, grabFrame());
-        steps.push([k * step, on.mean, on.worst]);
-      }
-    } finally {
-      detailPin = null;
-      frozen = was;
-      walkTo(start.x, start.z, start.yaw, start.pitch);
-    }
-    return { steps, wind };
-  }
-
-  /** The view held at `pin`, detail chosen from there and nothing streaming, drawn and read back. */
-  function heldView(pin: NonNullable<typeof viewPin>): Uint8Array {
-    viewPin = pin;
-    detailPin = { x: pin.x, z: pin.z };
-    streamHeld = true;
-    try {
-      return grabFrame(1);
-    } finally {
-      viewPin = null;
-      detailPin = null;
-      streamHeld = false;
-    }
-  }
-
-  /**
-   * The travel test. Stands the person at (x0, z0) with the land and
-   * everything on it in, then sends them to the landing nearest (x1, z1) at
-   * `pace` meters a second along the tread, driving the frames itself in
-   * real time with the wind's clock frozen. Every `every` frames the view is
-   * held where it was and drawn again, its detail chosen from there too, so
-   * the change measured is only what streaming did meanwhile: the land's
-   * windows moving and tiles standing. Each frame's work is timed to the
-   * GPU's finish. Returns the trip's length and seconds, how long it took to
-   * set off and how long it waited on the way ahead, each check's [meters
-   * along, pace, mean change, worst block, the land levels that moved as
-   * bits, the water's depth under the person, how far the water's mirror
-   * plane moved, and where the view was held], the frames' work in
-   * milliseconds, the land's least lead, and every tile that stood within
-   * sight of the person.
-   */
-  async function travelTest(x0: number, z0: number, x1: number, z1: number, pace: number, every = 3, cap = 400, pitch = -0.05) {
-    // The trip starts where a person stands: the point given may be a thing's own middle, inside it.
-    const start = landingNear(x0, z0) ?? { x: x0, z: z0 };
-    x0 = start.x;
-    z0 = start.z;
-    walkTo(x0, z0, 0, pitch);
-    await Promise.all([land.around(x0, z0), standing.ready(x0, z0)]);
-    const at = landingNear(x1, z1);
-    travelPace = pace;
-    const started = at !== null && travelTo(at, false);
-    travelPace = TRAVEL.pace;
-    const t = trip;
-    if (!started || t === null) return null;
-    const gl = renderer.getContext();
-    const pixel = new Uint8Array(4);
-    const was = frozen;
-    frozen = light.uTime.value;
-    driving = true;
-    standing.late();
-    const checks: [number, number, number, number, number, number, number, number, number][] = [];
-    /** Which land levels moved since `held`'s view was drawn, one bit a level. */
-    const windows = (): string => land.origins.map((o) => `${o.x},${o.z}`).join(" ");
-    const work: number[] = [];
-    let lead = Infinity;
-    let ended = Number.NaN;
-    let held: { pin: NonNullable<typeof viewPin>; image: Uint8Array; s: number; windows: string; mirror: number } | null = null;
-    /** The most the depth walking reads ever differed from the land's own water level under the person, meters. */
-    let ghosts = 0;
-    let last = performance.now();
-    try {
-      for (let k = 0; trip === t && performance.now() - t.began < cap * 1000; k++) {
-        // The workers' answers come in between frames, as they do between the app's own.
-        await new Promise((r) => setTimeout(r, 0));
-        if (held === null && k % every === 0) {
-          const pin = { x: walker.x, z: walker.z, eye: walker.eye, yaw: walker.yaw, pitch: walker.pitch };
-          held = { pin, image: heldView(pin), s: t.at.s, windows: windows(), mirror: water.stats().mirrorLevel };
-        }
-        const now = performance.now();
-        const dt = Math.min(0.1, (now - last) / 1000);
-        last = now;
-        gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
-        const w0 = performance.now();
-        frame(dt, now, hour);
-        gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
-        work.push(+(performance.now() - w0).toFixed(2));
-        if (trip !== t) ended = performance.now();
-        if (t.at.s > 60 && t.at.s < t.plan.length - 60) {
-          const spacing = frameOf(terrain.spec).spacing;
-          const o = land.origins[0] as { x: number; z: number };
-          lead = Math.min(lead, walker.x - o.x * spacing, (o.x + CLIP.size) * spacing - walker.x, walker.z - o.z * spacing, (o.z + CLIP.size) * spacing - walker.z);
-        }
-        if (held !== null && (k % every === every - 1 || trip !== t)) {
-          const change = frameChange(held.image, heldView(held.pin));
-          const before = held.windows.split(" ");
-          const moved = windows()
-            .split(" ")
-            .reduce((bits, w, k) => (w === before[k] ? bits : bits | (1 << k)), 0);
-          // How deep the water is under the person, from the land's own water level: wading spreads rings.
-          const level = heightAt(terrain.lattice, walker.x, walker.z, terrain.waterLevel);
-          const depth = level > -500 ? Math.max(0, level - heightAt(terrain.lattice, walker.x, walker.z)) : 0;
-          // The water's mirror follows the person's eye, not the held view's: how far its plane moved between the two draws.
-          const mirrored = +(water.stats().mirrorLevel - held.mirror).toFixed(3);
-          // The depth walking reads (`waterDepthAt`), against the land's own water level just above.
-          const cached = waterDepthAt(terrain, walker.x, walker.z);
-          ghosts = Math.max(ghosts, Math.abs(cached - depth));
-          checks.push([+held.s.toFixed(1), +t.at.v.toFixed(1), +change.mean.toFixed(3), +change.worst.toFixed(2), moved, +depth.toFixed(2), mirrored, Math.round(held.pin.x), Math.round(held.pin.z)]);
-          held = null;
-        }
-      }
-    } finally {
-      driving = false;
-      frozen = was;
-      // A trip the test stopped early ends where it was.
-      if (trip === t) trip = null;
-    }
-    return {
-      pace,
-      length: Math.round(t.plan.length),
-      seconds: +(((Number.isNaN(ended) ? performance.now() : ended) - t.began) / 1000).toFixed(1),
-      setOff: t.setOff === null ? null : Math.round(t.setOff - t.began),
-      waited: +t.waited.toFixed(1),
-      lead: Math.round(lead),
-      checks,
-      work,
-      late: standing.late(),
-      ghosts: +ghosts.toFixed(2),
-    };
-  }
-
-  /** Every preset that turns far, by name: each tree preset's first build, then the bushes. */
-  const farPresets = (): readonly { readonly name: string; readonly plant: () => Realized; readonly far: FarOf }[] => [
-    ...FLORA_PRESETS.map((preset, p) => ({ name: preset.name, plant: () => treeBuild(p * TREE_BUILDS), far: treeFar[p * TREE_BUILDS] as FarOf })),
-    ...understory.farPresets,
-    ...wildGrowth.farPresets,
-  ];
-
-  /**
-   * The swap test: whether a tree's or a bush's change of form ever shows.
-   * One copy of preset `name`'s first build (`farPresets`), at `vitality`,
-   * stands alone straight ahead of the eye. With the wind's clock frozen, only the point detail is
-   * chosen from moves back, so the crown's span on screen shrinks:
-   * - `middle`: from halfway into the band to 5% farther, the far form
-   *   coming in over the full one;
-   * - `whole`: from just inside the band's far end to just past it, where
-   *   the far form comes to draw whole over the full one;
-   * - `leaving`: from halfway through the full form's dissolve past the band
-   *   (`FAR.leave`) to 5% farther;
-   * - `end`: from just before the dissolve's end to just past it, the frame
-   *   where the full form leaves and the far form stands alone;
-   * - `dissolving`: from halfway into the band where a crown too small to see
-   *   dissolves (`GONE`), one step of walking farther;
-   * - `gone`: the step of walking across that band's end, where the copy
-   *   stops drawing;
-   * these two over at least a 64-pixel block around the copy, as the walk
-   * test measures, since the crown spans only a few pixels.
-   * Each is held to the wind's half-second change at the same spot, all
-   * measured over the plant's own part of the screen. Every other plant that
-   * turns far and the grass hide while it runs. A plant whose crown is still
-   * too large to dissolve where the air has already hidden it stands there
-   * all the same, and changes nothing. Null when there is no such preset.
-   */
-  function swapTest(name: string, vitality: number): { middle: SwapStep; whole: SwapStep; leaving: SwapStep; end: SwapStep; dissolving: SwapStep; gone: SwapStep } | null {
-    const preset = farPresets().find((f) => f.name === name);
-    if (preset === undefined) return null;
-    const gl = renderer.getContext();
-    const focal = gl.drawingBufferHeight / 2 / Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2);
-    let copy = swapCopies.get(preset.far);
-    if (copy === undefined) {
-      copy = createCopies(preset.plant(), light, [], preset.far);
-      scene.add(copy.object);
-      swapCopies.set(preset.far, copy);
-    }
-    const crown = copy.crown;
-    const dx = -Math.sin(walker.yaw);
-    const dz = -Math.cos(walker.yaw);
-    const eye = camera.position.clone();
-    const swapPx = FAR.swapPx * (preset.far.share ?? 1);
-    const span = (f: number): number => swapPx * FAR.band - f * swapPx * (FAR.band - 1);
-    const leavePx = swapPx / FAR.leave;
-    const leaving = (g: number): number => swapPx - g * (swapPx - leavePx);
-    const going = (g: number): number => GONE.start - g * (GONE.start - GONE.end);
-    const others = instanced().filter((o) => o.far !== undefined);
-    const hidden = others.map((o) => o.object.visible);
-    const grassShown = grass.mesh.visible;
-    for (const o of others) o.object.visible = false;
-    grass.mesh.visible = false;
-    swapping = copy;
-    const was = frozen;
-    const t = light.uTime.value;
-    /** Stands the tree where its crown spans `from` pixels, and measures moving the detail back until it spans `to`. */
-    const at = (px: number): number => (2 * crown.radius * focal) / px;
-    /** Stands the copy where its crown spans `from` pixels, and measures moving the detail back until it spans `to`. */
-    const step = (stood: Copies, from: number, to: number): SwapStep => walk(stood, from, at(to) - at(from), 0);
-    /**
-     * Stands the copy where its crown spans `from` pixels, and measures moving the detail back `back` meters, over the
-     * crown's part of the screen and at least a `block`-pixel square around it.
-     */
-    const walk = (stood: Copies, from: number, back: number, block: number): SwapStep => {
-      const distance = at(from);
-      // The crown's middle at the eye's height, straight ahead.
-      stood.respot([{ x: eye.x + dx * distance - crown.center.x, y: eye.y - crown.center.y, z: eye.z + dz * distance - crown.center.z, yaw: 0, scale: 1, vitality }]);
-      stood.setVitality(vitality);
-      const corners = [-1, 1].flatMap((sx) => [-1, 1].flatMap((sy) => [-1, 1].map((sz) => new THREE.Vector3(eye.x + dx * distance + sx * crown.radius, eye.y + sy * crown.radius, eye.z + dz * distance + sz * crown.radius).project(camera))));
-      const px = corners.map((c) => ((c.x + 1) / 2) * gl.drawingBufferWidth);
-      const py = corners.map((c) => ((c.y + 1) / 2) * gl.drawingBufferHeight);
-      const [mx, my] = [(Math.min(...px) + Math.max(...px)) / 2, (Math.min(...py) + Math.max(...py)) / 2];
-      const rect = [Math.floor(Math.min(...px, mx - block / 2)), Math.floor(Math.min(...py, my - block / 2)), Math.ceil(Math.max(...px, mx + block / 2)), Math.ceil(Math.max(...py, my + block / 2))] as const;
-      const changeIn = (a: Uint8Array, b: Uint8Array): Change => pictureChange(a, b, gl.drawingBufferWidth, gl.drawingBufferHeight, 64, rect);
-      frozen = t;
-      detailPin = { x: eye.x, z: eye.z };
-      const before = grabFrame(3);
-      detailPin = { x: eye.x - dx * back, z: eye.z - dz * back };
-      const change = changeIn(before, grabFrame(3));
-      detailPin = { x: eye.x, z: eye.z };
-      frozen = t + 0.5;
-      const wind = changeIn(before, grabFrame(3));
-      frozen = t;
-      return { change, wind, distance };
-    };
-    try {
-      copy.object.visible = true;
-      return {
-        middle: step(copy, span(0.5), span(0.55)),
-        whole: step(copy, span(0.995), swapPx - 0.1),
-        leaving: step(copy, leaving(0.5), leaving(0.55)),
-        end: step(copy, leavePx + 0.1, leavePx - 0.1),
-        // Too small to see, a crown dissolves over hundreds of meters: each is held to a step of walking, over a block.
-        dissolving: walk(copy, going(0.5), WALK_STEP, 64),
-        gone: walk(copy, (2 * crown.radius * focal) / (at(GONE.end) - WALK_STEP / 2), WALK_STEP, 64),
-      };
-    } finally {
-      swapping = null;
-      copy.object.visible = false;
-      others.forEach((o, i) => (o.object.visible = hidden[i] ?? true));
-      grass.mesh.visible = grassShown;
-      detailPin = null;
-      frozen = was;
-    }
-  }
-
-  /**
-   * Walks for `seconds` of real time as a person would: forward all along,
-   * turning the view about 70° left or right every 2.5 s as a hand drags it,
-   * over half a second, and running a third of the time with Shift. The
-   * app's smoothness probe (`__lab.smoothness()`) reads the frames.
-   */
-  function wander(seconds: number): Promise<{ x: number; z: number }> {
-    return new Promise((done) => {
-      const t0 = performance.now();
-      let turned = -1;
-      let last = t0;
-      const tick = (now: number): void => {
-        const t = (now - t0) / 1000;
-        const beat = Math.floor(t / 2.5);
-        if (t >= seconds) {
-          release();
-          done({ x: walker.x, z: walker.z });
-          return;
-        }
-        if (beat !== turned) {
-          turned = beat;
-          press("KeyW");
-          if (beat % 3 === 0) press("ShiftLeft");
-          else release("ShiftLeft");
-        }
-        if (beat > 0 && t - beat * 2.5 < 0.5) walker.yaw += ((beat % 2 === 1 ? 1.2 : -1.2) * (now - last)) / 1000 / 0.5;
-        last = now;
-        requestAnimationFrame(tick);
-      };
-      requestAnimationFrame(tick);
-    });
-  }
-
   const handle: WorldHandle = {
     scene,
     light,
@@ -2617,7 +2427,7 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
   };
 
   return {
-    world: handle,
+    handle,
     renderer,
     ready,
     report: () => ({
@@ -2631,482 +2441,115 @@ export function createTerrainLab(root: HTMLElement): TerrainLab {
       bakeMs: Math.round(bakeMs),
       farBakeMs: Math.round(treeSet.ms),
     }),
-    setActive(on) {
+    setActive(on: boolean) {
       active = on;
       if (!on) release();
       if (on) resize();
     },
-    frame: (dt, now, h) => {
+    frame: (dt: number, now: number, h: number) => {
       if (active && !driving) frame(dt, now, h);
     },
-    hook: {
-      /** Each standing landmark: its name, site, height and triangles. */
-      landmarks: () =>
-        ways.sites.map((s, i) => ({ name: landmarks[s.landmark]?.name, ...s.site, height: landmarkViews[i]?.height, triangles: landmarkViews[i]?.triangles })),
-      /** Sets every landmark's entity's vitality, 0 to 1, and with it the trails they join. */
-      landmarkVitality: (v: number) => {
-        landmarkEntities.forEach((e) => setEntityVitality(e.id, v));
-        for (const view of landmarkPool.values()) view.setVitality(v);
-      },
-      /** Sets an entity's vitality by its path, or every entity's with that name: its building or landmark, and the wear of every trail it joins, live. */
-      entityVitality: (key: string, v: number) => {
-        const named = [...settlement.buildings.map((b) => b.represented), ...landmarkEntities].filter((r) => r.name === key).map((r) => r.id);
-        for (const id of entityVitality.has(key) ? [key] : named) setEntityVitality(id, v);
-      },
-      /** Each trail (a dependency): its ends, length and the ways it walks. */
-      trails: () =>
-        ways.network.trails.map((t) => ({
-          id: t.id,
-          from: { place: t.from, entity: entityOfPlace.get(t.from), vitality: vitalityOfPlace(t.from) },
-          to: { place: t.to, entity: entityOfPlace.get(t.to), vitality: vitalityOfPlace(t.to) },
-          length: Math.round(t.length),
-          ways: t.ways.map((w) => w.way),
-        })),
-      /** Each way of tread: its ends, length, width, crossings, the trails walking it, its wear now and a point every 10 m. */
-      ways: () =>
-        ways.network.ways.map((w, i) => ({
-          id: w.id,
-          from: w.from,
-          to: w.to,
-          length: Math.round(w.length),
-          width: +w.style.width.toFixed(2),
-          crossing: w.style.crossing,
-          crossings: w.crossings.map((c) => ({ x: Math.round(c.x), z: Math.round(c.z), span: +c.span.toFixed(1), yaw: +c.yaw.toFixed(2) })),
-          carries: w.carries.map((c) => ways.network.trails[c.trail]?.id),
-          wear: wayWear(ways.network, i, vitalityOfPlace).map((v) => +v.toFixed(2)),
-          points: Array.from({ length: Math.ceil(w.points.length / 20) }, (_, k) => [Math.round(w.points[k * 20] ?? 0), Math.round(w.points[k * 20 + 1] ?? 0)]),
-        })),
-      /** Every building: what it stands for, where, and its vitality now. */
-      buildings: () =>
-        settlement.buildings.map((b) => ({ name: b.represented.name, building: b.kindName, ...b.site, width: b.plan.width, depth: b.plan.depth, triangles: b.triangles, vitality: b.vitality, sign: settlement.signOf(b), stand: settlement.standOf(b) })),
-      /** Sets building `i`'s vitality, and its sign's. */
-      vitality: (i: number, v: number) => {
-        const b = settlement.buildings[i];
-        if (b !== undefined) setEntityVitality(b.represented.id, v);
-      },
-      /** Walks up to subject `i` (buildings first, then trees) and shows its card on arrival. */
-      inspect: (i: number) => {
-        const s = subjects[i];
-        if (s !== undefined) approach(s);
-      },
-      subjects: () => subjects.map((s) => ({ name: s.represented.name, standsAs: s.standsAs, x: s.x, z: s.z, height: s.height, vitality: s.represented.vitality })),
-      card: () => (shown === null ? null : { name: shown.name, what: shown.what }),
-      closeCard: () => hideCard(),
-      walk: (x: number, z: number, yawDeg: number, pitchDeg = -3) => walkTo(x, z, (yawDeg * Math.PI) / 180, (pitchDeg * Math.PI) / 180),
-      /** Sends the person to the landing nearest (x, z), as a pick on the map does, at `pace` on the tread and straight across; false where neither goes. */
-      travel: (x: number, z: number, pace: number = TRAVEL.pace) => {
-        const at = landingNear(x, z);
-        travelPace = pace;
-        const going = at !== null && travelTo(at, false);
-        travelPace = TRAVEL.pace;
-        return going;
-      },
-      /** How far the person stands inside each land level's window, meters, finest first: the land's lead on them, which a trip must not outrun. */
-      landLead: () => {
-        const spacing = frameOf(terrain.spec).spacing;
-        return land.origins.map((o, k) => {
-          const unit = spacing * 2 ** k;
-          const lo = { x: o.x * unit, z: o.z * unit };
-          const hi = { x: (o.x + CLIP.size) * unit, z: (o.z + CLIP.size) * unit };
-          return Math.round(Math.min(walker.x - lo.x, hi.x - walker.x, walker.z - lo.z, hi.z - walker.z));
-        });
-      },
-      /** Where a person sent to (x, z) would stand (`landingNear`), or null. */
-      landingNear: (x: number, z: number) => landingNear(x, z),
-      /** The travel test (`travelTest`). */
-      travelTest,
-      /** The trip under way, or null: how far along it and how long, its pace, and whether its view follows the way. */
-      /** Each tile that stood within sight of the person since last asked (`Standing.late`): things that could be seen appearing. */
-      standingLate: () => standing.late(),
-      /** The tiles each stander still waits for (`Standing.asking`). */
-      standingAsking: () => ({ ...standing.asking(), workers: land.workers() }),
-      /** The walk's own state: the keys it holds, whether a tap's walk is under way, and why the last trip ended. */
-      walkState: () => ({ keys: [...keys], goal: goal !== null, trip: trip !== null, lastEnd: tripEnd }),
-      trip: () => (trip === null ? null : { s: +trip.at.s.toFixed(1), length: Math.round(trip.plan.length), v: +trip.at.v.toFixed(2), going: trip.at.going, follows: trip.at.follows, stopping: trip.stopping, unready: trip.marks.filter((m) => !m.ready).length, asked: trip.marks.filter((m) => m.asked).length, yaw: +trip.at.yaw.toFixed(2) }),
-      /**
-       * A trip from (x0, z0) to the landing nearest (x1, z1), planned and
-       * taken at 60 frames a second without moving anyone: its length, how
-       * much of it is on the tread, and how long it takes.
-       */
-      tripTime: (x0: number, z0: number, x1: number, z1: number) => {
-        // A trip starts where a person stands: the point given may be a thing's own middle, inside it.
-        const start = landingNear(x0, z0) ?? { x: x0, z: z0 };
-        x0 = start.x;
-        z0 = start.z;
-        const at = landingNear(x1, z1);
-        const t0 = performance.now();
-        const chosen = at === null ? null : travelWay({ x: x0, z: z0 }, at);
-        const planMs = Math.round(performance.now() - t0);
-        if (at === null || chosen === null) return null;
-        const plan = planTrip(fordBeside(terrain, chosen.way, broken), chosen.off, null, TRAVEL.pace, (x, z) => wadingAt(terrain, decks, x, z));
-        let t = travelFrom(plan, plan.heading[0] as number);
-        let seconds = 0;
-        while (!t.done && seconds < 3600) {
-          t = travelStep(plan, t, 1 / 60, t.yaw);
-          seconds += 1 / 60;
-        }
-        const tread = trailWay(ways.network, { x: x0, z: z0 }, at);
-        const trails = tread === null ? null : Math.round(tread.reduce((sum, p, i) => (i === 0 ? Math.hypot(p.x - x0, p.z - z0) : sum + Math.hypot(p.x - (tread[i - 1] as Walker).x, p.z - (tread[i - 1] as Walker).z)), 0) + Math.hypot((tread[tread.length - 1] as Walker).x - at.x, (tread[tread.length - 1] as Walker).z - at.z));
-        const end = chosen.way[chosen.way.length - 1] as Walker;
-        return { by: chosen.by, planMs, gap: Math.round(Math.hypot(end.x - at.x, end.z - at.z)), off: [Math.round(chosen.off.start), Math.round(chosen.off.end)], straight: Math.round(Math.hypot(at.x - x0, at.z - z0)), length: Math.round(plan.length), trails, seconds: Math.round(seconds), walking: Math.round(plan.length / WALK_TO.pace) };
-      },
-      /**
-       * The tour (`tourStops`): with no name, every stop's name, what is there
-       * and where; with a name, such as "ruined building", "bridge",
-       * "stepping stones", "cairn" or "watermill (ruin)", walks there, looking
-       * at it, and returns the stop, or null when this world has none.
-       */
-      tour: (name?: string) => {
-        const stops = tour();
-        if (name === undefined) return stops.map((s) => ({ name: s.name, what: s.what, x: Math.round(s.x), z: Math.round(s.z) }));
-        const s = stops.find((t) => t.name === name.toLowerCase());
-        if (s !== undefined) walkTo(s.x, s.z, s.yaw, s.pitch);
-        return s ?? null;
-      },
-      /** Opens where the world's next open would land the person, as if they last stood at `stood`, or as on a first visit. */
-      valley: (stood?: StoodSpot) => valleyView(stood),
-      /** Where the person stands, as the page keeps it with the world (`stoodBy`). */
-      stood: () => (code === null ? null : stoodBy(code.world, walker.x, walker.z, walker.yaw)),
-      walker: () => ({ x: walker.x, z: walker.z, yawDeg: (walker.yaw * 180) / Math.PI, pitchDeg: (walker.pitch * 180) / Math.PI, eye: walker.eye }),
-      /**
-       * Looks at the land from above for a capture, from `pos` toward `target` (the world's middle unless given, or
-       * where the last call looked), the camera exactly there; `walk` or any trip goes back to walking.
-       */
-      overview: (pos?: [number, number, number], target?: [number, number, number]) => lookFromAbove(pos, target),
-      freeze: (t: number | null) => (frozen = t),
-      /** Film only: holds the camera at `pin` (eye is the camera's height in world meters), the walker under it, or lets go with null. */
-      film: (pin: { x: number; z: number; eye: number; yaw: number; pitch: number } | null) => {
-        viewPin = pin;
-        if (pin === null) return;
-        walkTo(pin.x, pin.z, pin.yaw, pin.pitch);
-        arrived = true;
-      },
-      streams: () => terrain.streams.map((s) => s.stations.filter((_, k) => k % 10 === 0).map((p) => [Math.round(p.x), Math.round(p.z), +p.level.toFixed(2)])),
-      report: () => ({ ...terrain.report, fit: terrain.fit, bakeMs: Math.round(bakeMs), steps: openingSteps }),
-      info: () => renderer.info.render,
-      /** Draw calls in the whole last frame (shadow, mirror and view), and the water's mirror. */
-      water: () => ({ ...water.stats(), frameCalls }),
-      /** Draw calls and triangles of each pass in the last frame: the sun's shadow, the water's mirror and the view. */
-      passes: () => structuredClone(passes),
-      /**
-       * Sets the vitality of a file, or of every file under a directory, by
-       * its path ("" for every file), live: its trees, its finer entities, its
-       * patch of ground and what grows there, and the lots and water of the
-       * areas pooling it. Nothing rebakes. Returns how many files it set.
-       */
-      fileVitality: (path: string, v: number) => {
-        const under = (p: string): boolean => path === "" || p === path || p.startsWith(`${path}/`);
-        const files = (code?.world.patches ?? []).filter((p) => under(p.path));
-        for (const p of files) liveFileVitality.set(p.path, v);
-        trees.forEach((t, i) => {
-          const file = treeFile(t);
-          const copy = treeCopies[i] ?? -1;
-          if (file !== undefined && under(file) && copy >= 0) groves.get(t.variant)?.setVitalityAt(copy, v);
-        });
-        showLandVitality();
-        return files.length;
-      },
-      /** The ground's own vitality and its area's at (x, z), or underfoot, as the grass, the ground and the water read them. */
-      groundVitality: (x?: number, z?: number) => groundVitalityAt(x ?? walker.x, z ?? walker.z),
-      /** The air last laid where the eye is: the ground's decline around it, its height above the land, and the air itself. */
-      air: () => breathed,
-      understory: () => understory.stats(),
-      /** A hash of the baked land (heights, water levels and shore distances), to prove a change to the bake leaves it byte for byte. */
-      bakeHash: () => contentHash(terrain.lattice.heights, terrain.waterLevel, terrain.shore),
-      /** Copies and triangles each kind of the understory drew in the last pass. */
-      understoryDrawn: () => understory.drawnByKind(),
-      /** Shows or hides the wild bushes, for comparing frame costs. */
-      showWilds: (on: boolean) => wildGrowth.show(on),
-      /** The wild bushes: copies standing and drawn in the last pass, per blueprint, and each blueprint's triangles. */
-      wilds: () => wildGrowth.all().map((v) => ({ standing: v.count, perCopy: v.triangles / Math.max(1, v.count), levels: v.levels, ...v.drawn() })),
-      placements: () => understory.placements(),
-      showUnderstory: (on: boolean) => understory.show(on),
-      /** Shows or hides what drifts through the air, for comparing frame costs. */
-      showDrifts: (on: boolean) => {
-        drifts.object.visible = on;
-      },
-      /** Each form drifting: how full the air round the person is, 0 to 1, and how many trees drop it now. */
-      drifts: () => drifts.state(),
-      /** Shows or hides the grass, for comparing frame costs and looking at the bare ground. */
-      showGrass: (on: boolean) => {
-        grass.mesh.visible = on;
-      },
-      /**
-       * Holds the point every detail is chosen from (the trees' and bushes'
-       * levels and thinning, the grass, the ground's rings and the wild
-       * bushes) at (x, z), at the eye's height, while the view stays put; or
-       * lets it follow the eye again (null). Moving only this point shows
-       * exactly what a step of walking changes in the detail drawn.
-       */
-      detailCenter: (at: [number, number] | null) => {
-        detailPin = at === null ? null : { x: at[0], z: at[1] };
-      },
-      /**
-       * Draws one frame and counts each kind's draw calls and triangles in
-       * each pass (the sun's shadow, the water's mirror and the view), from
-       * what the renderer actually drew.
-       */
-      drawn: () => {
-        const kinds = new Map<THREE.Object3D, string>();
-        const name = (kind: string, objects: readonly (THREE.Object3D | undefined)[]): void => {
-          for (const o of objects) if (o !== undefined) kinds.set(o, kind);
-        };
-        name("trees", treeViews.map((v) => v.object));
-        name("understory", [...understory.all().map((v) => v.object), ...understory.quiet()]);
-        name("wild bushes", wildGrowth.all().map((v) => v.object));
-        // Each plant's cards stand inside its full form's object: named after, so they count apart.
-        name("far trees", treeViews.map((v) => v.cards ?? undefined));
-        name("far bushes", [...understory.grouped().filter((g) => g.group === "shrubs").map((g) => g.view), ...wildGrowth.all()].map((v) => v.cards ?? undefined));
-        name("far rocks", understory.grouped().filter((g) => g.group === "rocks").map((g) => g.view.cards ?? undefined));
-        name("far flowers", understory.grouped().filter((g) => g.group === "flowers").map((g) => g.view.cards ?? undefined));
-        name("grass", [grass.mesh]);
-        name("ground", [ground.fine, ground.coarse, ground.mirror, ground.wilds]);
-        name("water", [water.group]);
-        name("sky", [sky.mesh]);
-        name("signs", [signs.mesh]);
-        name("buildings", settlement.views().map((v) => v.object));
-        name("landmarks", [...landmarkViews, ...landmarkPool.values()].map((v) => v.object));
-        name("trails", (built?.views ?? []).map((v) => v.object));
-        const now = performance.now();
-        return tallyFrame(renderer, scene, camera, kinds, () => frame(0, now, hour));
-      },
-      /**
-       * Draws `settle` frames at this instant, without time passing, and
-       * returns the last one's pixels, to compare with `change`. Freeze the
-       * wind's clock first (`freeze`), so only what the probe changes moves.
-       */
-      grab: grabFrame,
-      /** How much the picture changed between two grabbed frames (`pictureChange`). */
-      change: frameChange,
-      /** The walk test (`walkSteps`): each step's change to the detail drawn, and the wind's along the same walk. */
-      steps: (meters: number, step = 0.7, at?: number) => walkSteps(meters, step, at),
-      /**
-       * The stand check. The person stands still for `seconds` with the wind's
-       * clock frozen while the page goes on as it does, the journal's painter
-       * included; every half second their view is drawn and held against the
-       * first. Nothing they see may change. Returns the worst change, and each
-       * look's [seconds, change, level 0's window].
-       */
-      standCheck: async (seconds = 30) => {
-        const was = frozen;
-        frozen = light.uTime.value;
-        const wait = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
-        try {
-          await wait(300);
-          const base = grabFrame();
-          const looks: [number, number, string][] = [];
-          for (let t = 0.5; t <= seconds; t += 0.5) {
-            await wait(500);
-            const o = land.origins[0] as { x: number; z: number };
-            looks.push([t, +frameChange(base, grabFrame()).worst.toFixed(2), `${o.x},${o.z}`]);
-          }
-          return { worst: Math.max(0, ...looks.map((l) => l[1])), looks };
-        } finally {
-          frozen = was;
-        }
-      },
-      /**
-       * The painter check. With the person standing still and the wind's clock
-       * frozen, asks one at a time for paintings of the `count` things farthest
-       * from them, as the journal does, while the page's own frames go on.
-       * Every 100 ms, and once each painting is done, the person's view is
-       * drawn and held against how it was: a painting must change nothing the
-       * person sees. Returns the worst change, the frames' intervals while
-       * painting, milliseconds, and the first painting as a JPEG. Without
-       * `look` it only paints, so the frames' intervals are the painter's own;
-       * with `near` it paints the nearest things instead, which need no land
-       * of their own, for comparing what a painting costs by itself.
-       */
-      paintCheck: async (count = 6, look = true, near = false) => {
-        const from = (s: Subject): number => Math.hypot(s.x - walker.x, s.z - walker.z);
-        const far = near ? subjects.filter((s) => from(s) <= PAINTING.near).sort((a, b) => from(a) - from(b)).slice(0, count) : subjects.filter((s) => from(s) > PAINTING.near).sort((a, b) => from(b) - from(a)).slice(0, count);
-        const was = frozen;
-        frozen = light.uTime.value;
-        const intervals: number[] = [];
-        let last = performance.now();
-        let going = true;
-        const tick = (now: number): void => {
-          intervals.push(+(now - last).toFixed(1));
-          last = now;
-          if (going) requestAnimationFrame(tick);
-        };
-        requestAnimationFrame(tick);
-        const wait = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
-        try {
-          await wait(300);
-          const base = look ? grabFrame() : null;
-          const changes: number[] = [];
-          let first: string | null = null;
-          for (const s of far) {
-            let done = false;
-            const job = viewOf(s.represented.id, 520, 660)
-              .then((p) => {
-                if (first !== null || p === null) return;
-                const out = document.createElement("canvas");
-                out.width = p.color.width;
-                out.height = p.color.height;
-                const ctx = out.getContext("2d") as CanvasRenderingContext2D;
-                const image = ctx.createImageData(p.color.width, p.color.height);
-                image.data.set(p.color.data);
-                ctx.putImageData(image, 0, 0);
-                first = out.toDataURL("image/jpeg", 0.9);
-              })
-              .finally(() => {
-                done = true;
-              });
-            while (!done && base !== null) {
-              await wait(100);
-              changes.push(frameChange(base, grabFrame()).worst);
-            }
-            await job;
-            if (base !== null) changes.push(frameChange(base, grabFrame()).worst);
-          }
-          return { painted: far.map((s) => s.represented.id), worst: +Math.max(0, ...changes).toFixed(2), checks: changes.length, intervals, first };
-        } finally {
-          going = false;
-          frozen = was;
-        }
-      },
-      /** The swap test (`swapTest`) for preset `name` at `vitality`, and every tree and bush preset's name with none. */
-      swap: (name?: string, vitality = 1) => (name === undefined ? farPresets().map((p) => p.name) : swapTest(name, vitality)),
-      /** Resolves once the bushes' far forms, which bake after the wait lifts, are ready too. */
-      farReady: () => bushesBaked,
-      /** Walks as a person would for `seconds` of real time (`wander`). */
-      wander,
-      /** Shows or hides the far trees' cards alone, for seeing what they draw. */
-      showFarTrees: (on: boolean) => treeSet.forms.cards?.show(on),
-      /** Shows or hides every tree, for comparing frame costs. */
-      showTrees: (on: boolean) => {
-        for (const v of treeViews) v.object.visible = on;
-      },
-      /** Draw calls in one whole frame: the shadow pass and the view together. */
-      calls: () => {
-        renderer.info.autoReset = false;
-        renderer.info.reset();
-        frame(0, performance.now(), hour);
-        const calls = renderer.info.render.calls;
-        renderer.info.autoReset = true;
-        return calls;
-      },
-      /** Draws `count` frames back to back and waits for the GPU: milliseconds per frame, shadows included. */
-      bench: (count: number) => {
-        const gl = renderer.getContext();
-        const pixel = new Uint8Array(4);
-        gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
-        const t0 = performance.now();
-        for (let k = 0; k < count; k++) frame(1 / 60, t0, hour);
-        gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
-        return (performance.now() - t0) / count;
-      },
-      /** Walks straight ahead for `seconds` at walking pace, as if W were held, and reports where the walk ended. */
-      stride: (seconds: number) => {
-        for (let k = 0; k < Math.round(seconds * 60); k++) {
-          const next = walkStep(terrain, solids, walker, { dx: -Math.sin(walker.yaw), dz: -Math.cos(walker.yaw), speed: WALK_TO.pace }, 1 / 60);
-          walker.x = next.x;
-          walker.z = next.z;
-        }
-        body = standAt(terrain, decks, walker.x, walker.z);
-        walker.eye = body.eye;
-        return { x: walker.x, z: walker.z, depth: waterDepthAt(terrain, walker.x, walker.z) };
-      },
-      depth: () => waterDepthAt(terrain, walker.x, walker.z),
-      /** The body now: its speed, its eyes' ride and what the stride adds, and the footing under it. */
-      gait: () => (body === null ? null : { speed: Math.hypot(body.vx, body.vz), eye: body.eye, camera: camera.position.y, footing: footingAt(terrain, decks, walker.x, walker.z) }),
-      /** Every footbridge deck a walk stands on: its middle, the way it runs along, its span and its top at the middle. */
-      decks: () => decks.map((d) => ({ x: d.x, z: d.z, along: [d.cos, -d.sin], span: d.half * 2, width: d.halfWidth * 2, top: d.base + d.topAt(0) })),
-      /** The ground (bridges left out), how a person stood there before decks, and the footing now, at each (x, z). */
-      profile: (points: readonly (readonly [number, number])[]) =>
-        points.map(([x, z]) => {
-          const s = stanceAt(terrain, x, z);
-          const f = footingAt(terrain, decks, x, z);
-          return { ground: groundHeightAt(terrain, x, z), eye: s.eye, depth: s.depth, swim: s.swim, footing: f.ground, deck: f.deck };
-        }),
-      /**
-       * Walks the lab's own walk for `seconds` at 60 frames a second without
-       * drawing, holding `keys` (codes) for `hold` seconds or walking a tap to
-       * `to`, and records each frame: [t, x, z, speed, camera y, eye ride, footing, depth, on a deck, facing (yaw)].
-       */
-      trace: (seconds: number, drive: { keys?: readonly string[]; hold?: number; to?: readonly [number, number] }) => {
-        release();
-        if (drive.to !== undefined) setGoal(drive.to[0], drive.to[1]);
-        for (const k of drive.keys ?? []) press(k);
-        const rows: number[][] = [];
-        for (let i = 0; i < Math.round(seconds * 60); i++) {
-          if (drive.hold !== undefined && i === Math.round(drive.hold * 60)) release();
-          updateWalk(1 / 60);
-          const f = footingAt(terrain, decks, walker.x, walker.z);
-          const b = body as Stride;
-          rows.push([i / 60, walker.x, walker.z, Math.hypot(b.vx, b.vz), camera.position.y, walker.eye, f.ground, f.depth, f.deck ? 1 : 0, walker.yaw]);
-        }
-        release();
-        return rows;
-      },
-      /** Where a tap's walk is headed, or null, and the corners of its way. */
-      goal: () => ({ goal: goal === null ? null : { ...goal.target }, way: goal?.way.map((p) => [p.x, p.z]) ?? null }),
-      /** How far (x, z) is from the nearest solid's edge, at most 2 m; negative inside one. */
-      clearance: (x: number, z: number) => clearanceAt(solids, x, z),
-      /** The trunks, rocks and bushes and walls that stop a walker. */
-      solids: () => solids.count,
-      /** The eyes' height, the water's depth and how far the person swims where they stand. */
-      stance: () => stanceAt(terrain, walker.x, walker.z),
-      /** Where the ground at (x, z) shows on screen, in CSS pixels from the page's top left; null when it is behind the view. */
-      onScreen: (x: number, z: number) => {
-        const p = new THREE.Vector3(x, groundHeightAt(terrain, x, z), z).project(camera);
-        if (p.z > 1) return null;
-        const rect = canvas.getBoundingClientRect();
-        return { x: rect.left + ((p.x + 1) / 2) * rect.width, y: rect.top + ((1 - p.y) / 2) * rect.height };
-      },
-      ponds: () => terrain.ponds.map((p) => ({ x: p.x, z: p.z, reach: p.reach })),
-      plants: () => trees.map((t) => ({ x: t.x, z: t.z, height: (variants[t.variant] as TreeVariant).height * t.scale, region: regionAt(t.x, t.z), preset: FLORA_PRESETS[Math.floor(t.variant / TREE_BUILDS)]?.name ?? "", vitality: t.represented.vitality })),
-      /**
-       * Stands every tree that stands for code `copies` times, each copy on its own patch, for measuring at scale;
-       * 1 stands the world as it is. The bake thread stands them again. Never in a world a person walks.
-       */
-      forest: async (copies: number) => {
-        forestCopies = Math.max(1, Math.round(copies));
-        await rebake(world);
-        return { trees: trees.length, understory: understory.stats().placed };
-      },
-      /** Forces every instanced blueprint's detail ("full" or "far"), or lets distance choose ("auto"). */
-      detail: (mode: DetailMode) => {
-        for (const v of instanced()) v.detail = mode;
-      },
-      /** Trees, builds, each blueprint's levels, and the copies and triangles the last pass drew. */
-      scale: () => ({
-        trees: trees.length,
-        builds: variants.length,
-        levels: instanced().map((v) => v.levels),
-        drawn: instanced().reduce((n, v) => n + v.drawn().copies, 0),
-        drawnTriangles: instanced().reduce((n, v) => n + v.drawn().triangles, 0),
-        /** The crown span trees turn far at, in device pixels (`FAR.swapPx`). */
-        swapPx: FAR.swapPx,
-        /** Milliseconds every tree build took to bake into its far form, and then every bush build. */
-        farBakeMs: Math.round(treeSet.ms),
-        bushBakeMs: Math.round(bushSet.ms),
-        /** Trees in the last pass in the band, or small enough on screen to draw as far forms. */
-        treesInBand: treeViews.reduce((n, v) => n + v.drawn().band, 0),
-        treesFar: treeViews.reduce((n, v) => n + v.drawn().far, 0),
-        treesDrawn: treeViews.reduce((n, v) => n + v.drawn().copies, 0),
-        treeTriangles: treeViews.reduce((n, v) => n + v.drawn().triangles, 0),
-      }),
-      /** Where the walker is, or (x, z): the area and file patch underfoot, in either world. */
-      place: (x?: number, z?: number) => placeAt(places, x ?? walker.x, z ?? walker.z),
-      /** The codebase's world: its size, areas, patches, buildings, landmarks and trails. */
-      code: () =>
-        code === null
-          ? null
-          : {
-              name: code.world.name,
-              judged: code.summary,
-              size: code.world.size,
-              regions: code.world.regions.map((r) => ({ area: r.area, land: r.biome?.slots.relief?.use ?? "", x: Math.round(r.x), z: Math.round(r.z) })),
-              areas: code.world.areas.map((a) => ({ path: a.path, x: Math.round(a.x), z: Math.round(a.z), ground: Math.round(a.ground), depth: a.depth })),
-              symbols: code.world.symbols.length,
-              standingSymbols: symbolPlacements.filter((k) => k >= 0).length,
-              patches: code.world.patches.length,
-              things: code.world.things.map((t) => ({ path: t.path, name: t.name, as: t.as, blueprint: t.blueprint.id, x: Math.round(t.x), z: Math.round(t.z), vitality: +t.vitality.toFixed(2) })),
-              trails: code.world.trails.map((t) => `${t.from}->${t.to}`),
-            },
+    // Each accessor reads or sets the world's own variable the moment a hook uses it, so a hook sees what the world sees.
+    inside: {
+      renderer,
+      scene,
+      camera,
+      canvas,
+      light,
+      terrain,
+      land,
+      standing,
+      sky,
+      ground,
+      grass,
+      water,
+      drifts,
+      signs,
+      understory,
+      wildGrowth,
+      variants,
+      groves,
+      treeFar,
+      treeSet,
+      bushSet,
+      bushesBaked,
+      entityVitality,
+      entityOfPlace,
+      liveFileVitality,
+      landmarkPool,
+      walker,
+      keys,
+      passes,
+      get spec() { return world; },
+      get code() { return code; },
+      get places() { return places; },
+      get settlement() { return settlement; },
+      get landmarks() { return landmarks; },
+      get landmarkViews() { return landmarkViews; },
+      get landmarkEntities() { return landmarkEntities; },
+      get ways() { return ways; },
+      get built() { return built; },
+      get trees() { return trees; },
+      get treeViews() { return treeViews; },
+      get treeCopies() { return treeCopies; },
+      get subjects() { return subjects; },
+      get shown() { return shown; },
+      get symbolPlacements() { return symbolPlacements; },
+      get decks() { return decks; },
+      get broken() { return broken; },
+      get solids() { return solids; },
+      get goal() { return goal; },
+      get tripEnd() { return tripEnd; },
+      get hour() { return hour; },
+      get bakeMs() { return bakeMs; },
+      get openingSteps() { return openingSteps; },
+      get frameCalls() { return frameCalls; },
+      get breathed() { return breathed; },
+      get trip() { return trip; },
+      set trip(t) { trip = t; },
+      get body() { return body; },
+      set body(b) { body = b; },
+      get arrived() { return arrived; },
+      set arrived(on) { arrived = on; },
+      get frozen() { return frozen; },
+      set frozen(t) { frozen = t; },
+      get detailPin() { return detailPin; },
+      set detailPin(at) { detailPin = at; },
+      get viewPin() { return viewPin; },
+      set viewPin(pin) { viewPin = pin; },
+      get streamHeld() { return streamHeld; },
+      set streamHeld(on) { streamHeld = on; },
+      get driving() { return driving; },
+      set driving(on) { driving = on; },
+      get travelPace() { return travelPace; },
+      set travelPace(pace) { travelPace = pace; },
+      get forestCopies() { return forestCopies; },
+      set forestCopies(n) { forestCopies = n; },
+      get swapping() { return swapping; },
+      set swapping(copy) { swapping = copy; },
+      frame,
+      walkTo,
+      landingNear,
+      travelTo,
+      travelWay,
+      approach,
+      hideCard,
+      setEntityVitality,
+      showLandVitality,
+      valleyView,
+      lookFromAbove,
+      treeFile,
+      vitalityOfPlace,
+      landmarkEntity,
+      standable,
+      press,
+      release,
+      setGoal,
+      updateWalk,
+      viewOf,
+      rebake,
+      instanced,
+      treeBuild,
     },
   };
 }

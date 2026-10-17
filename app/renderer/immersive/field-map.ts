@@ -25,8 +25,8 @@
 import { shownVitality } from "@gaia/realize";
 import { outlinesOf, pastTheEdge, type Place, type PlaceArea, type Terrain, waterDepthAt, type WorldPlaces } from "@gaia/terrain";
 import { areaVitality, groundVitality } from "@gaia/world";
-import { onTap } from "../lab.ts";
-import type { StoodWorld } from "../terrain/lab.ts";
+import { onTap } from "../tap.ts";
+import type { StoodWorld } from "../terrain/world.ts";
 import { DECKLE_MASK, MAP_STYLE, type MapStyle, TRAVELLER_SVG, dryness, healthColor, healthField, landWash } from "./map-styles.ts";
 import { contour, contourLines, simplified, slopes } from "./isolines.ts";
 import { type AreaLabel, type Box, CELL, type NameLand, type NamePlace, type NamePlaces, PARENT_FONT, ROSE, SERIF, canvasMeasure, nameFont, nameLand, nameSpacing, placeNames } from "./map-names.ts";

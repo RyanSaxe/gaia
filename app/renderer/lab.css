@@ -34,7 +34,7 @@ body { font: 12.5px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; overfl
 /* ---------- the world, full screen ---------- */
 /* A phone's browser bars cover part of 100vh; 100dvh is the height left visible. */
 #shell { position: relative; height: 100vh; height: 100dvh; }
-.lab-terrain, .stage { position: absolute; inset: 0; }
+.world, .stage { position: absolute; inset: 0; }
 .stage { overflow: hidden; }
 /* While a world first opens, the wait (app/renderer/wait/wait.css) covers the stage; it lifts once the world stands. */
 .veil { position: absolute; inset: 0; z-index: 2; display: grid; place-items: center; background: linear-gradient(#b9cfe0, #dfe6df 62%, #c9d3b8); color: #46524a; font-size: 13px; letter-spacing: 0.02em; transition: opacity 0.9s ease, visibility 0s linear 0.9s; }
@@ -60,8 +60,8 @@ button { font: inherit; color: var(--ink); background: var(--panel); border: 1px
 /* Everything here belongs to the world's look: warm paper, ink, a serif, and slow, soft motion. */
 @keyframes veil-breathe { from { transform: translateY(0); } to { transform: translateY(-3px); } }
 /* While the veil is down (the first bake, or a question asked later), nothing of the world's paper sits over it. */
-.lab-terrain:has(.veil:not(.lifted)) .wayfinding { opacity: 0; }
-.lab-terrain:has(.veil:not(.lifted)) .wayfinding button { pointer-events: none !important; }
+.world:has(.veil:not(.lifted)) .wayfinding { opacity: 0; }
+.world:has(.veil:not(.lifted)) .wayfinding button { pointer-events: none !important; }
 /* Paper coming and going: the wait's slip (wait/wait.css) uses these. */
 @keyframes page-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @keyframes page-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(6px); } }

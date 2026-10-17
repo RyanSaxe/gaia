@@ -21,8 +21,8 @@
 // the person nears the window's edge, or the paper is painted afresh.
 
 import type { Place, PlaceArea, WorldPlaces } from "@gaia/terrain";
-import { onTap } from "../lab.ts";
-import type { Heading, StoodWorld } from "../terrain/lab.ts";
+import { onTap } from "../tap.ts";
+import type { Heading, StoodWorld } from "../terrain/world.ts";
 import { type FieldMap, drawLand } from "./field-map.ts";
 import { nameBreaks, nameTails } from "./map-names.ts";
 import { DECKLE_MASK, TRAVELLER_SVG } from "./map-styles.ts";

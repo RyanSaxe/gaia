@@ -20,7 +20,7 @@
 // stays: a world is always Jev's, never quietly guessed.
 
 import type { ConsentPlan, Opening } from "../../world-service/protocol.ts";
-import type { StoodWorld } from "../terrain/lab.ts";
+import type { StoodWorld } from "../terrain/world.ts";
 import { createMapWait } from "./map-wait.ts";
 import "./wait.css";
 
