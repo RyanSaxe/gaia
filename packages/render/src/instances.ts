@@ -16,7 +16,7 @@ import type { Part, Swatch } from "@gaia/schema";
 import { FLUTTERS, type Realized, detailAt, mergeParts, shownVitality } from "@gaia/realize";
 import type { SceneLight } from "./light.ts";
 import { DEPTH_FRAG, DEPTH_VERT, FOLIAGE, PLANT_FRAG, PLANT_VERT, type PlantView, geometryOf, letGoOnUpload, sprayColors } from "./plant.ts";
-import { closeEachFrame, closeLag } from "./lag.ts";
+import { closeEachFrame, followVitality } from "./lag.ts";
 
 /** Where one copy stands. */
 export interface InstanceSpot {
@@ -204,6 +204,8 @@ export function createPlantInstances(plant: Realized, light: SceneLight, spots: 
   let count = 0;
   let source = new Float32Array(16);
   let lagSource = new Float32Array(1);
+  /** The shown vitality each copy is easing toward. */
+  let targets = new Float32Array(1);
   const matrix = new THREE.Matrix4();
   const shear = new THREE.Matrix4();
   const turn = new THREE.Matrix4();
@@ -211,8 +213,11 @@ export function createPlantInstances(plant: Realized, light: SceneLight, spots: 
   const lagging = new Set<number>();
   const closeLags = (keep: number): boolean => {
     for (const index of lagging) {
-      lagSource[index] = closeLag(lagSource[index] as number, keep);
-      if (lagSource[index] === 0) lagging.delete(index);
+      const target = targets[index] as number;
+      const [shown, lag] = followVitality(source[index * 16 + 3] as number, lagSource[index] as number, target, keep);
+      source[index * 16 + 3] = shown;
+      lagSource[index] = lag;
+      if (shown === target && lag === 0) lagging.delete(index);
     }
     generation++;
     return lagging.size > 0;
@@ -223,6 +228,7 @@ export function createPlantInstances(plant: Realized, light: SceneLight, spots: 
     source = new Float32Array(Math.max(1, count) * 16);
     // Copies stood anew show their vitality at rest.
     lagSource = new Float32Array(Math.max(1, count));
+    targets = new Float32Array(Math.max(1, count));
     lagging.clear();
     next.forEach((s, k) => {
       const [gx, gz] = s.slope ?? [0, 0];
@@ -230,6 +236,7 @@ export function createPlantInstances(plant: Realized, light: SceneLight, spots: 
       turn.makeRotationY(s.yaw).scale(new THREE.Vector3(s.scale, s.scale, s.scale));
       matrix.makeTranslation(s.x, s.y, s.z).multiply(shear).multiply(turn);
       matrix.elements[3] = shownVitality(s.vitality ?? 1);
+      targets[k] = matrix.elements[3];
       matrix.elements[7] = s.hue ?? 0;
       matrix.elements[11] = copySeed(s);
       source.set(matrix.elements, k * 16);
@@ -352,14 +359,11 @@ export function createPlantInstances(plant: Realized, light: SceneLight, spots: 
   const perCopy = trianglesOf(plant.parts);
   let all = 1;
   const write = (index: number, v: number): void => {
-    // Where it was a moment ago stays put, so the change eases in from there.
-    const lag = (lagSource[index] as number) + (source[index * 16 + 3] as number) - v;
-    source[index * 16 + 3] = v;
-    lagSource[index] = Math.abs(lag) < 1e-6 ? 0 : lag;
-    if (lagSource[index] !== 0) {
-      lagging.add(index);
-      closeEachFrame(closeLags);
-    }
+    // The copy's shown vitality eases toward it from where it is; a copy already resting there needs nothing.
+    if (v === targets[index] && (lagging.has(index) || source[index * 16 + 3] === v)) return;
+    targets[index] = v;
+    lagging.add(index);
+    closeEachFrame(closeLags);
   };
   return {
     object,

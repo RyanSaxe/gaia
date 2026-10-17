@@ -4,7 +4,7 @@ import { Library, seedOf } from "@gaia/schema";
 import { FLORA_PRIMITIVES } from "@gaia/primitives";
 import { flora } from "@gaia/kinds";
 import { FLORA_PRESETS, type Realized, realize, shownVitality } from "@gaia/realize";
-import { type FarForm, createFarCards, createSceneLight, farChoice } from "@gaia/render";
+import { type FarForm, createFarCards, createSceneLight, farChoice, settleVitality } from "@gaia/render";
 import { FAR, GONE, type PassSize, TURN, createCopies, createFarForms, farness, goneAt } from "./woods.ts";
 
 describe("a crown's form by its size on screen", () => {
@@ -112,6 +112,8 @@ describe("a copy turning far", () => {
       later.cards = createFarCards([form], light, [FAR.swapPx], TURN);
       one.warm();
       if (!before) set();
+      // Once the change has eased in.
+      settleVitality();
       const mesh = one.cards?.children[0] as THREE.Mesh<THREE.InstancedBufferGeometry>;
       return mesh.geometry.getAttribute("aMore").array[1] as number;
     };

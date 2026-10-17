@@ -16,7 +16,7 @@ import { FLUTTERS, type Realized, mergeParts, shownVitality, spinAt } from "@gai
 import type { SceneLight } from "./light.ts";
 import { CLOSED, DEPTH_FRAG, DEPTH_VERT, FOLIAGE, LAMP, PLANT_FRAG, PLANT_VERT, type PlantView, geometryOf, hasRuin, letGoOnUpload, sprayColors } from "./plant.ts";
 import { createSmokeMaterial } from "./smoke.ts";
-import { closeEachFrame, closeLag } from "./lag.ts";
+import { closeEachFrame, followVitality } from "./lag.ts";
 
 /** One plant in a batch: what it is, where it stands and turns, and its vitality. */
 export interface BatchMember {
@@ -253,11 +253,18 @@ export function createPlantBatch(members: readonly BatchMember[], light: SceneLi
 
   // The members whose vitality still lags a change, each frame closing a little more.
   const lagging = new Set<number>();
+  /** The shown vitality each member is easing toward. */
+  const targets = members.map((m) => shownVitality(m.vitality));
   const closeLags = (keep: number): boolean => {
     for (const member of lagging) {
-      const at = (member * width + 5) * 4 + 2;
-      data[at] = closeLag(data[at] as number, keep);
-      if (data[at] === 0) lagging.delete(member);
+      const at = (member * width + 4) * 4;
+      const target = targets[member] as number;
+      const [shown, lag] = followVitality(data[at] as number, data[at + 6] as number, target, keep);
+      data[at] = shown;
+      data[at + 6] = lag;
+      const smoke = smokeLife[member];
+      if (smoke !== undefined) smoke.uVitality.value = shown + 0.5 * lag;
+      if (shown === target && lag === 0) lagging.delete(member);
     }
     texture.needsUpdate = true;
     return lagging.size > 0;
@@ -284,18 +291,10 @@ export function createPlantBatch(members: readonly BatchMember[], light: SceneLi
     triangles,
     setVitality(member, v) {
       const value = shownVitality(v);
-      const at = (member * width + 4) * 4;
-      // Where it was a moment ago stays put, so the change eases in from there.
-      const lag = (data[at + 6] as number) + (data[at] as number) - value;
-      data[at] = value;
-      data[at + 6] = Math.abs(lag) < 1e-6 ? 0 : lag;
-      if (data[at + 6] !== 0) {
-        lagging.add(member);
-        closeEachFrame(closeLags);
-      }
-      texture.needsUpdate = true;
-      const smoke = smokeLife[member];
-      if (smoke !== undefined) smoke.uVitality.value = value;
+      // The member's shown vitality, and its smoke, ease toward it from where it is.
+      targets[member] = value;
+      lagging.add(member);
+      closeEachFrame(closeLags);
     },
     move(member, at) {
       const p = prepared[member];

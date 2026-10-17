@@ -8,7 +8,7 @@ import { CHANNEL_MATH, DETAIL, FLUTTERS, type Realized, pieceFrames, shownVitali
 import { LIGHT_GLSL, type SceneLight } from "./light.ts";
 import { WIND_GLSL } from "./sway.ts";
 import { createSmokeMaterial } from "./smoke.ts";
-import { closeEachFrame, closeLag } from "./lag.ts";
+import { closeEachFrame, followVitality } from "./lag.ts";
 
 const f = (x: number): string => x.toFixed(4);
 /** How far dusk has fallen, 0 by day to 1 once it is night: lamps light and doves fly home across it. */
@@ -1029,7 +1029,12 @@ export function createPlant(plant: Realized, light: SceneLight): PlantView {
     shared.uTurn.value += Math.max(0, now - turnedAt) * spinAt(shared.uVitality.value);
     turnedAt = now;
   };
-  const closeMine = (keep: number): boolean => (shared.uVitalityLag.value = closeLag(shared.uVitalityLag.value, keep)) !== 0;
+  // The shown vitality the plant is easing toward.
+  let target = 1;
+  const closeMine = (keep: number): boolean => {
+    [shared.uVitality.value, shared.uVitalityLag.value] = followVitality(shared.uVitality.value, shared.uVitalityLag.value, target, keep);
+    return shared.uVitality.value !== target || shared.uVitalityLag.value !== 0;
+  };
   const materials: THREE.ShaderMaterial[] = [];
   const meshes: { mesh: THREE.Mesh; color: THREE.ShaderMaterial; depth: THREE.ShaderMaterial }[] = [];
   const veils: THREE.Mesh[] = [];
@@ -1092,11 +1097,9 @@ export function createPlant(plant: Realized, light: SceneLight): PlantView {
     },
     setVitality(v) {
       vitality = Math.min(1, Math.max(0, v));
-      const shown = shownVitality(vitality);
-      // Where it was a moment ago stays put, so the change eases in from there.
-      shared.uVitalityLag.value += shared.uVitality.value - shown;
-      shared.uVitality.value = shown;
-      if (shared.uVitalityLag.value !== 0) closeEachFrame(closeMine);
+      target = shownVitality(vitality);
+      // The shown vitality eases toward it from where it is.
+      if (target !== shared.uVitality.value || shared.uVitalityLag.value !== 0) closeEachFrame(closeMine);
     },
     useDepth(on) {
       for (const m of meshes) m.mesh.material = on ? m.depth : m.color;

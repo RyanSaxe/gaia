@@ -39,11 +39,12 @@ export const CHANNEL_MATH = {
   shownRuin: 0.45,
   shownWhole: 0.85,
   /**
-   * Seconds for a change in shown vitality to ease in by about two thirds:
-   * each thing keeps how far its shown vitality lags where it was, and that
-   * lag closes by this time constant (`easeVitality` in @gaia/render).
+   * Seconds for each stage of a change in vitality to close about two thirds
+   * of the way: what a thing shows follows the vitality it is given, and
+   * where that was follows what it shows (`followVitality` in @gaia/render),
+   * so a change starts and stops gently.
    */
-  vitalityLag: 1,
+  vitalityLag: 5,
 } as const;
 
 /**
