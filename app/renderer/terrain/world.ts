@@ -52,7 +52,7 @@ import { takeWait } from "../wait/wait.ts";
 import { withStart } from "../start/start.ts";
 import { START_SKY } from "../start/table-scene.ts";
 import type { Represented } from "./represent.ts";
-import type { CodeWorld } from "@gaia/world";
+import { type CodeWorld, vitalityOf, withVitality } from "@gaia/world";
 import { type OpenedWorld, codeWorld } from "./code-world.ts";
 import type { JudgedThing } from "../../world-service/protocol.ts";
 import { type Building, type Settlement, composedName, createSettlement, settlementBuilds } from "./settlement.ts";
@@ -237,6 +237,11 @@ export interface WorldHandle {
   seenFrom(id: string): Landing | null;
   /** What the understanding pass judged about a folder, a file or a definition, every score from 0 to 1. */
   thing(of: string): JudgedThing | undefined;
+  /**
+   * Calls `listener` once things' vitality has changed live (`setVitality`), with what each changed thing stands
+   * for; `code`, `places` and `stood` read the change from then.
+   */
+  onVitality(listener: (changed: readonly string[]) => void): void;
   /** Calls `listener` with what a person has walked up to when its card opens, and with null when it closes. */
   onCard(listener: (thing: CardThing | null) => void): void;
   /**
@@ -425,10 +430,9 @@ export interface WorldInside {
   readonly treeSet: FarSet;
   readonly bushSet: FarSet;
   readonly bushesBaked: Promise<void>;
-  /** Every entity's vitality by its path, the entity each trail end stands for, and each file's vitality where a hook has set it. */
-  readonly entityVitality: ReadonlyMap<string, number>;
+  /** Every thing's vitality now, by what it stands for (`vitalityOf`), and the entity each trail end stands for. */
+  readonly thingVitality: ReadonlyMap<string, number>;
   readonly entityOfPlace: ReadonlyMap<string, string>;
-  readonly liveFileVitality: Map<string, number>;
   /** Every landmark view made so far, by its key. */
   readonly landmarkPool: ReadonlyMap<string, PlantView>;
   // What stands now.
@@ -493,8 +497,7 @@ export interface WorldInside {
   travelWay(from: Walker, at: Walker): TripWay | null;
   approach(s: Subject): void;
   hideCard(): void;
-  setEntityVitality(id: string, v: number): void;
-  showLandVitality(): void;
+  setVitality(changes: ReadonlyMap<string, number>): void;
   valleyView(stood?: StoodSpot): void;
   lookFromAbove(pos?: readonly [number, number, number], target?: readonly [number, number, number]): void;
   treeFile(t: { readonly symbol: number }): string | undefined;
@@ -601,30 +604,26 @@ export function createWorld(root: HTMLElement): World {
   /** The light, sky and wind the world shows: the start's own until the codebase's world opens, then the one Jev composed for it. */
   let skyWorld: Blueprint = START_SKY;
   let ways: Settled = { sites: [], network: NO_TRAILS };
-  // Every entity's vitality by its path, live: buildings, landmarks, plants, stones and flowers
-  // stand for entities, and each trail's wear follows the two it joins. Names repeat
-  // (two packages may both be called "utils"), so nothing is keyed by name.
+  // Every thing's vitality by what it stands for (a file's path, a definition's id, an entity's root path), live: as
+  // the world laid it out, until `setVitality` changes it. Buildings, landmarks, plants, stones and flowers stand for
+  // things, and each trail's wear follows the two entities it joins. Names repeat (two packages may both be called
+  // "utils"), so nothing is keyed by name.
   let landmarkEntities: Represented[] = [];
-  const entityVitality = new Map<string, number>();
+  let thingVitality = new Map<string, number>();
   /** The entity (its path) each trail end stands for, by the place id the trail names: a building's name or lot, a standing landmark's place, or an entity's own path where it stands as a plant, a stone or flowers. */
   const entityOfPlace = new Map<string, string>();
-  /** Learns the entities of the world now shown. */
+  /** Learns the things of the world now shown. */
   function knowEntities(): void {
     landmarkEntities = code?.landmarks.map((l) => l.represented) ?? [];
-    entityVitality.clear();
+    thingVitality = code === null ? new Map() : vitalityOf(code.world);
     entityOfPlace.clear();
-    for (const r of [...settlement.buildings.map((b) => b.represented), ...landmarkEntities]) entityVitality.set(r.id, r.vitality);
     settlement.buildings.forEach((b, i) => {
       entityOfPlace.set(b.represented.name, b.represented.id);
       const lot = code?.stand.lots[i];
       if (lot !== undefined) entityOfPlace.set(lot.id, b.represented.id);
     });
-    // An entity standing as a plant, a stone or flowers, at the vitality that shows on it.
-    for (const s of code?.world.standing ?? []) {
-      if (s.of !== "entity") continue;
-      entityVitality.set(s.path, s.vitality);
-      entityOfPlace.set(s.path, s.path);
-    }
+    // An entity standing as a plant, a stone or flowers.
+    for (const s of code?.world.standing ?? []) if (s.of === "entity") entityOfPlace.set(s.path, s.path);
   }
   knowEntities();
   /** The entity standing landmark `i` stands for: the one its place names. */
@@ -634,7 +633,7 @@ export function createWorld(root: HTMLElement): World {
   };
   const vitalityOfPlace = (place: string): number => {
     const id = entityOfPlace.get(place);
-    return id === undefined ? 1 : (entityVitality.get(id) ?? 1);
+    return id === undefined ? 1 : (thingVitality.get(id) ?? 1);
   };
   const worldLib = new Library(WORLD_PRIMITIVES);
   const lantern = createLantern(light);
@@ -721,39 +720,55 @@ export function createWorld(root: HTMLElement): World {
 
   /** Shows every entity's vitality now on its landmark, on its trails' wear and on what is built along them. Nothing rebuilds. */
   function showVitality(): void {
-    landmarkViews.forEach((view, i) => view.setVitality(entityVitality.get(landmarkEntity(i).id) ?? 1));
+    landmarkViews.forEach((view, i) => view.setVitality(thingVitality.get(landmarkEntity(i).id) ?? 1));
     setTrailEnds(ways.network, vitalityOfPlace);
     built?.setVitality(vitalityOfPlace);
     holdDecks();
   }
 
-  /** Sets one entity's vitality, by its path, wherever it shows: its building and sign, its landmark, and every trail it joins. */
-  function setEntityVitality(id: string, v: number): void {
-    entityVitality.set(id, v);
-    settlement.buildings.forEach((b, i) => {
-      if (b.represented.id !== id) return;
-      settlement.setVitality(b, v);
-      signs.setVitality(i, v);
-    });
-    showVitality();
-  }
-
-  // Every file's vitality by its path, live, where a hook has changed it from
-  // the world's: each file's trees and its patch of ground show it, and each
-  // area's lots and water show its files' pooled.
-  const liveFileVitality = new Map<string, number>();
-  /** Shows each file's vitality now on its ground and on what stands for it, and each area's on its lots and its water. Nothing rebakes. */
+  /** Shows each file's vitality now on its ground, and each area's, its files' pooled, on its lots and its water. Nothing rebakes. */
   function showLandVitality(): void {
     if (code === null) return;
-    const live = new Map(code.world.patches.map((p) => [p.path, liveFileVitality.get(p.path) ?? p.vitality]));
-    const { ground, area } = ownerVitality(code.world, (path) => live.get(path) ?? 1);
+    const { ground, area } = ownerVitality(code.world, (path) => thingVitality.get(path) ?? 1);
     showGroundVitality(ground, area);
     showUnderstoryVitality();
   }
-  /** Each stone, bush and drift of flowers shows the vitality of what it stands for, or its file's where a hook has changed that. */
+  /** Each stone, bush and drift of flowers shows the vitality of what it stands for. */
   function showUnderstoryVitality(): void {
-    const own = (k: number): number => liveFileVitality.get(code?.standing(k)?.file ?? "") ?? code?.stand.symbols[k]?.vitality ?? 1;
+    const own = (k: number): number => thingVitality.get(code?.standing(k)?.represented.id ?? "") ?? code?.stand.symbols[k]?.vitality ?? 1;
     understory.setVitality(understoryVitality({ placements: understory.placements(), symbols: symbolPlacements }, own));
+  }
+
+  const vitalityListeners: ((changed: readonly string[]) => void)[] = [];
+  /**
+   * Sets things' vitality live, by what each stands for (a file's path, a definition's id, an entity's root path),
+   * wherever it shows: its building or landmark and its sign, its trees, stones, bushes and flowers, its patch of
+   * ground, the lots, water and drifts of the areas pooling it, and the wear of every trail it joins. The world laid
+   * out takes it too, so the map and the journal read it. Nothing rebakes, moves or changes shape: the one way
+   * vitality changes while the world stands.
+   */
+  function setVitality(changes: ReadonlyMap<string, number>): void {
+    if (code === null) return;
+    const was = code.world;
+    code = { ...code, world: withVitality(was, changes) };
+    if (places === was) places = code.world;
+    thingVitality = vitalityOf(code.world);
+    for (const b of settlement.buildings) {
+      const v = changes.get(b.represented.id);
+      if (v !== undefined) settlement.setVitality(b, v);
+    }
+    signSubjects.forEach((s, k) => {
+      const v = changes.get(s.represented.id);
+      if (v !== undefined) signs.setVitality(k, v);
+    });
+    trees.forEach((t, i) => {
+      const v = changes.get(t.represented.id);
+      const copy = treeCopies[i] ?? -1;
+      if (v !== undefined && copy >= 0) groves.get(t.variant)?.setVitalityAt(copy, v);
+    });
+    showVitality();
+    showLandVitality();
+    for (const listener of vitalityListeners) listener([...changes.keys()]);
   }
   placeWays();
   for (const v of settlement.views()) scene.add(v.object);
@@ -853,7 +868,7 @@ export function createWorld(root: HTMLElement): World {
     return code?.standing(t.symbol < own ? t.symbol : (forestOf[t.symbol - own] ?? -1));
   };
   const treeFile = (t: { readonly symbol: number }): string | undefined => treeSymbol(t)?.file;
-  const treeVitality = (t: Tree): number => liveFileVitality.get(treeFile(t) ?? "") ?? t.represented.vitality;
+  const treeVitality = (t: Tree): number => thingVitality.get(t.represented.id) ?? t.represented.vitality;
   let treeViews: Copies[] = [];
   /** Each build's instances by variant, kept for the life of the world. */
   const groves = new Map<number, Copies>();
@@ -1925,12 +1940,12 @@ export function createWorld(root: HTMLElement): World {
     return {
       terrain,
       ways: ways.network.ways,
-      buildings: settlement.buildings.map((b) => ({ x: b.site.x, z: b.site.z, name: b.represented.name, kind: b.kindName, vitality: b.represented.vitality, plan: b.plan, blueprint: b.blueprint, palette: b.palette })),
+      buildings: settlement.buildings.map((b) => ({ x: b.site.x, z: b.site.z, name: b.represented.name, kind: b.kindName, vitality: b.vitality, plan: b.plan, blueprint: b.blueprint, palette: b.palette })),
       landmarks: ways.sites.map((s, i) => {
         const lm = landmarks[s.landmark] as (typeof landmarks)[number];
-        return { x: s.site.x, z: s.site.z, name: lm.name, vitality: code?.landmarks[i]?.vitality ?? 1, blueprint: lm.blueprint, palette: lm.built.palette };
+        return { x: s.site.x, z: s.site.z, name: lm.name, vitality: thingVitality.get(landmarkEntity(i).id) ?? 1, blueprint: lm.blueprint, palette: lm.built.palette };
       }),
-      trees: trees.map((t) => ({ x: t.x, z: t.z, vitality: t.represented.vitality })),
+      trees: trees.map((t) => ({ x: t.x, z: t.z, vitality: treeVitality(t) })),
       // An area shows its region's ground.
       grounds: new Map(places.areas.flatMap((a, i) => {
         const ground = regionGrounds[code?.world.areas[i]?.region ?? 0];
@@ -2069,7 +2084,6 @@ export function createWorld(root: HTMLElement): World {
     const composedLandmarks = landmarkAsks(opened);
     await makeAhead([...settlementBuilds(opened.buildings), ...composedLandmarks]);
     landmarks = composedLandmarks.map((ask) => landmarkOf(composedName(ask.blueprint), ask));
-    liveFileVitality.clear();
     for (const v of settlement.views()) scene.remove(v.object);
     settlement = createSettlement(light, opened.buildings);
     for (const v of settlement.views()) scene.add(v.object);
@@ -2415,6 +2429,7 @@ export function createWorld(root: HTMLElement): World {
     look: lookOf,
     seenFrom: (id) => seenFromOf(id),
     thing: (of) => code?.thing(of),
+    onVitality: (listener) => vitalityListeners.push(listener),
     onCard: (listener) => cardListeners.push(listener),
     onPick: (listener) => pickListeners.push(listener),
     onHeading: (listener) => headingListeners.push(listener),
@@ -2467,9 +2482,8 @@ export function createWorld(root: HTMLElement): World {
       treeSet,
       bushSet,
       bushesBaked,
-      entityVitality,
+      get thingVitality() { return thingVitality; },
       entityOfPlace,
-      liveFileVitality,
       landmarkPool,
       walker,
       keys,
@@ -2528,8 +2542,7 @@ export function createWorld(root: HTMLElement): World {
       travelWay,
       approach,
       hideCard,
-      setEntityVitality,
-      showLandVitality,
+      setVitality,
       valleyView,
       lookFromAbove,
       treeFile,

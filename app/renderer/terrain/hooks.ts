@@ -59,12 +59,12 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
         ...world.settlement.buildings.map((b) => {
           const front = world.settlement.standOf(b);
           const d = Math.hypot(front.x - b.site.x, front.z - b.site.z) || 1;
-          return { as: "building" as const, kind: b.kindName, name: b.represented.id || b.represented.name, x: b.site.x, z: b.site.z, vitality: world.entityVitality.get(b.represented.id) ?? 1, reach: Math.hypot(b.plan.width, b.plan.depth) / 2, front: { x: (front.x - b.site.x) / d, z: (front.z - b.site.z) / d } };
+          return { as: "building" as const, kind: b.kindName, name: b.represented.id || b.represented.name, x: b.site.x, z: b.site.z, vitality: world.thingVitality.get(b.represented.id) ?? 1, reach: Math.hypot(b.plan.width, b.plan.depth) / 2, front: { x: (front.x - b.site.x) / d, z: (front.z - b.site.z) / d } };
         }),
         ...world.ways.sites.map((s, i) => {
           const turn = world.landmarkViews[i]?.object.rotation.y ?? 0;
           const entity = world.landmarkEntity(i);
-          return { as: "landmark" as const, kind: world.landmarks[s.landmark]?.name ?? "Landmark", name: entity.id || entity.name, x: s.site.x, z: s.site.z, vitality: world.entityVitality.get(entity.id) ?? 1, reach: world.landmarks[s.landmark]?.base ?? 4, front: { x: Math.sin(turn), z: Math.cos(turn) } };
+          return { as: "landmark" as const, kind: world.landmarks[s.landmark]?.name ?? "Landmark", name: entity.id || entity.name, x: s.site.x, z: s.site.z, vitality: world.thingVitality.get(entity.id) ?? 1, reach: world.landmarks[s.landmark]?.base ?? 4, front: { x: Math.sin(turn), z: Math.cos(turn) } };
         }),
       ],
       network: world.ways.network,
@@ -458,13 +458,13 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
       world.ways.sites.map((s, i) => ({ name: world.landmarks[s.landmark]?.name, ...s.site, height: world.landmarkViews[i]?.height, triangles: world.landmarkViews[i]?.triangles })),
     /** Sets every landmark's entity's vitality, 0 to 1, and with it the trails they join. */
     landmarkVitality: (v: number) => {
-      world.landmarkEntities.forEach((e) => world.setEntityVitality(e.id, v));
+      world.setVitality(new Map(world.landmarkEntities.map((e) => [e.id, v])));
       for (const view of world.landmarkPool.values()) view.setVitality(v);
     },
-    /** Sets an entity's vitality by its path, or every entity's with that name: its building or landmark, and the wear of every trail it joins, live. */
+    /** Sets a thing's vitality by its path, or every building's or landmark's entity's with that name: wherever it shows, and the wear of every trail it joins, live. */
     entityVitality: (key: string, v: number) => {
       const named = [...world.settlement.buildings.map((b) => b.represented), ...world.landmarkEntities].filter((r) => r.name === key).map((r) => r.id);
-      for (const id of world.entityVitality.has(key) ? [key] : named) world.setEntityVitality(id, v);
+      world.setVitality(new Map((world.thingVitality.has(key) ? [key] : named).map((id) => [id, v])));
     },
     /** Each trail (a dependency): its ends, length and the ways it walks. */
     trails: () =>
@@ -495,7 +495,7 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
     /** Sets building `i`'s vitality, and its sign's. */
     vitality: (i: number, v: number) => {
       const b = world.settlement.buildings[i];
-      if (b !== undefined) world.setEntityVitality(b.represented.id, v);
+      if (b !== undefined) world.setVitality(new Map([[b.represented.id, v]]));
     },
     /** Walks up to subject `i` (buildings first, then trees) and shows its card on arrival. */
     inspect: (i: number) => {
@@ -602,21 +602,17 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
     /** Draw calls and triangles of each pass in the last frame: the sun's shadow, the water's mirror and the view. */
     passes: () => structuredClone(world.passes),
     /**
-     * Sets the vitality of a file, or of every file under a directory, by
-     * its path ("" for every file), live: its trees, its finer entities, its
-     * patch of ground and what grows there, and the lots and water of the
-     * areas pooling it. Nothing rebakes. Returns how many files it set.
+     * Sets the vitality of a file and its definitions, or of every file under
+     * a directory, by its path ("" for every file), live, as a heal does
+     * (`setVitality`): what stands for them, their patches of ground and what
+     * grows there, and the lots and water of the areas pooling them. Nothing
+     * rebakes. Returns how many files it set.
      */
     fileVitality: (path: string, v: number) => {
       const under = (p: string): boolean => path === "" || p === path || p.startsWith(`${path}/`);
       const files = (world.code?.world.patches ?? []).filter((p) => under(p.path));
-      for (const p of files) world.liveFileVitality.set(p.path, v);
-      world.trees.forEach((t, i) => {
-        const file = world.treeFile(t);
-        const copy = world.treeCopies[i] ?? -1;
-        if (file !== undefined && under(file) && copy >= 0) world.groves.get(t.variant)?.setVitalityAt(copy, v);
-      });
-      world.showLandVitality();
+      const definitions = (world.code?.world.symbols ?? []).filter((s) => under(s.file));
+      world.setVitality(new Map([...files.map((p) => p.path), ...definitions.map((s) => s.id)].map((id) => [id, v])));
       return files.length;
     },
     /** The ground's own vitality and its area's at (x, z), or underfoot, as the grass, the ground and the water read them. */
