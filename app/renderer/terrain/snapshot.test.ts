@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
+import { bakeTerrain } from "@gaia/terrain";
+import { openedWorld } from "./code-world.ts";
+import { COMPOSING, WATERS } from "./looks.ts";
 import { laySnapshot } from "./snapshot.ts";
-import { snapshotGraphOf } from "./snapshot-facts.ts";
+import { snapshotFacts, snapshotGraphOf } from "./snapshot-facts.ts";
 
 const files = (): string[] =>
   snapshotGraphOf()
@@ -27,5 +30,15 @@ describe("Gaia's own world from the bundled snapshot", () => {
         .sort(),
     );
     expect(summary).toContain("judged by Jev");
+  });
+
+  // The world shows every answer Jev gives, and the kernel's trickle runs down past the engine's pond. Each showcase is
+  // laid out and its land baked whole: about two seconds alone, longer while other work shares the machine.
+  it.each(["showcase", "showcase-fixed"] as const)("holds the pond of every area of %s Jev gives a still pond", { timeout: 60_000 }, async (of) => {
+    const { world, summary } = await laySnapshot("a test", of);
+    const terrain = bakeTerrain(openedWorld({ root: of, facts: snapshotFacts(of), world, summary, judged: {} }).spec, COMPOSING.lib);
+    const still = world.regions.filter((r) => WATERS[r.water]?.settles?.["relief.pond"] === true);
+    expect(still.length).toBeGreaterThan(0);
+    expect(still.filter((r) => !terrain.ponds.some((p) => p.x === r.x && p.z === r.z)).map((r) => r.area)).toEqual([]);
   });
 });

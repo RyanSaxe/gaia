@@ -337,9 +337,11 @@ runs downhill through other areas too, until it reaches the land's edge, a
 pond, a basin's bottom, where it sinks away, or another river, which it
 joins and widens below. Its valley is carved along that whole course, with
 the cross-section and winding Jev chose for its area (`routeRivers` in
-`@gaia/terrain`). Its spring wells up in a small pool about 4 m across,
-with a wandering edge, and the stream leaves it about a meter wide,
-widening to its own width over 8 m. Where it soaks away, it narrows the same
+`@gaia/terrain`). A river that passes a pond bends round it, far enough that
+its valley's wall tops out before the pond's rim: cut through the rim, the
+valley would drain the pond Jev chose. Its spring wells up in a small pool
+about 4 m across, with a wandering edge, and the stream leaves it about a
+meter wide, widening to its own width over 8 m. Where it soaks away, it narrows the same
 way into a shallow wet patch (`HEAD` and `headsOf` in `@gaia/terrain`).
 
 The valley's walls change along the river, each side on its own, as walls

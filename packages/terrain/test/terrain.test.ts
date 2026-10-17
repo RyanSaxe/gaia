@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type BuildingPlan, type Built, Library, blueprintOf, rand, seedOf } from "@gaia/schema";
+import { type BuildingPlan, type Built, type FilledSlot, Library, blueprintOf, rand, seedOf } from "@gaia/schema";
 import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, RELIEF_PRIMITIVES, STRUCTURE_PRIMITIVES, fieldAt } from "@gaia/primitives";
 import { biome, flora, structure } from "@gaia/kinds";
 import { validate } from "@gaia/world";
@@ -303,6 +303,34 @@ describe("terrain", { timeout: 20_000 }, () => {
       }
     }
     expect(marked).toBeGreaterThan(0);
+  });
+
+  it("fills every pond its lands hold, even where another area's river runs close by", () => {
+    const land = (relief: FilledSlot) =>
+      blueprintOf("biome", {
+        relief,
+        cover: { use: "ground-cover@1", params: { cover: "lush grass", length: "natural", wildflowers: "none" } },
+        natives: { use: "native-families@1", params: { families: [] } },
+      });
+    // A narrow valley's trickle runs down past a basin's pond: its valley, cut deeper than the basin, would drain the pond through its rim.
+    const pond = { x: -10, z: 40 };
+    const passed = bakeTerrain(
+      {
+        size: 320,
+        regions: [
+          { id: "valley", x: 0, z: -100, base: 0, biome: land({ use: "valley@1", params: { depth: "moderate", width: "narrow", run: "north-south", fall: "gentle", meander: "winding", stream: "trickle" } }) },
+          { id: "basin", ...pond, base: 0, biome: land({ use: "basin@1", params: { depth: "a bowl", size: "medium", rim: "a soft rim", pond: true } }) },
+          { id: "meadow", x: -60, z: 60, base: 1, biome: land({ use: "meadow@1", params: { undulation: "softly undulating", tilt: "slightly tilted", facing: "east" } }) },
+        ],
+      },
+      lib,
+    );
+    expect(Math.min(...passed.streams.flatMap((s) => s.stations.map((st) => Math.hypot(st.x - pond.x, st.z - pond.z))))).toBeLessThan(60);
+    for (const t of [...baked, passed]) {
+      const landforms = landformsOf(t.spec, lib);
+      const held = t.spec.regions.flatMap((r, i) => landforms[i]!.water.flatMap((b) => (b.kind === "pond" ? [[r.x + b.x, r.z + b.z]] : [])));
+      expect(t.ponds.map((p) => [p.x, p.z])).toEqual(held);
+    }
   });
 
   it("never leaves a crack in the baked lattice: neighbors differ by less than the steepest slope allows", () => {
