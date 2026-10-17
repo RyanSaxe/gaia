@@ -21,7 +21,7 @@ import type {
   StarSpec,
   WindSpec,
 } from "@gaia/schema";
-import { hex, mixLab } from "@gaia/primitives";
+import { hex, mixLab, shiftColor } from "@gaia/primitives";
 import { lightAt } from "./day.ts";
 import { AIR } from "./sky.ts";
 import { buildSlots } from "./realize.ts";
@@ -41,6 +41,8 @@ export interface SkyLook {
     readonly clouds: CloudSpec;
     readonly cloudLit: Rgb;
     readonly cloudShade: Rgb;
+    /** The light a low sun throws on clouds from beneath and on their edges facing it. */
+    readonly cloudGlow: Rgb;
     readonly moon: MoonSpec;
     readonly stars: StarSpec;
   };
@@ -81,6 +83,8 @@ const CLOUD_WHITE: Rgb = hex(0xfdfcf8);
 /** The night sky: a deep blue that lightens toward the horizon, never black. */
 const NIGHT_ZENITH: Rgb = hex(0x0f1b44);
 const NIGHT_HORIZON: Rgb = hex(0x2c4475);
+/** How much richer than the sun's light a low sun's glow on clouds is: a little deeper and half again as strong in color. */
+const CLOUD_GLOW = { hue: 0, pull: 0, maxTurn: 0, chroma: 1.5, lightness: -0.03 } as const;
 
 function slotOutput<T>(built: ReturnType<typeof buildSlots>, name: string): T {
   const out = built.get(name)?.output;
@@ -104,9 +108,11 @@ export function realizeSky(world: Filled, lib: Library, seed: number, hour: numb
   const nightLit = mixLab(mixLab(horizon, zenith, 0.25), light.moonColor, 0.32);
   const cloudLit = mixLab(dayLit, nightLit, night);
   const cloudShade = mixLab(mixLab(cloudLit, light.shadowColor, 0.6), zenith, 0.2 + night * 0.3);
+  // The sun's own light and the hour's glow, deepened, as clouds catch it when the sun is low.
+  const cloudGlow = shiftColor(mixLab(light.sunColor, light.horizonGlow, 0.4), CLOUD_GLOW);
   return {
     light,
-    sky: { zenith, horizon, clouds: sky.clouds, cloudLit, cloudShade, moon: day.moon, stars: day.stars },
+    sky: { zenith, horizon, clouds: sky.clouds, cloudLit, cloudShade, cloudGlow, moon: day.moon, stars: day.stars },
     wind: slotOutput<WindSpec>(built, "wind"),
   };
 }

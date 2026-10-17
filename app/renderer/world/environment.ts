@@ -80,6 +80,7 @@ ${LIGHT_GLSL}
 varying vec3 vDirection;
 uniform vec3 uCloudLit;
 uniform vec3 uCloudShade;
+uniform vec3 uCloudGlow;
 uniform float uScale;
 uniform float uStretch;
 uniform float uThreshold;
@@ -99,7 +100,8 @@ uniform float uStarRiver;
 ${NOISE_GLSL}
 float hash3(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
 // One layer of stars: a few cells of a grid around the sky hold a star each.
-vec3 starLayer(vec3 dir, float scale, float density, float size) {
+// As the night deepens (\`dark\` from 0 to 1) the brightest come out first.
+vec3 starLayer(vec3 dir, float scale, float density, float size, float dark) {
   vec3 p = dir * scale;
   vec3 cell = floor(p);
   float h = hash3(cell);
@@ -108,7 +110,9 @@ vec3 starLayer(vec3 dir, float scale, float density, float size) {
   float b = smoothstep(size, size * 0.2, length(fract(p) - c));
   float twinkle = 0.8 + 0.2 * sin(uTime * (0.7 + h * 2.3) + h * 61.0);
   vec3 tint = mix(vec3(0.78, 0.86, 1.0), vec3(1.0, 0.92, 0.8), hash3(cell + 9.1));
-  return tint * b * twinkle * (0.55 + 0.45 * hash3(cell + 7.7));
+  float bright = hash3(cell + 7.7);
+  float comesOut = 0.6 * (1.0 - bright);
+  return tint * b * twinkle * (0.55 + 0.45 * bright) * smoothstep(comesOut, comesOut + 0.4, dark);
 }
 void main() {
   vec3 dir = normalize(vDirection);
@@ -124,9 +128,11 @@ void main() {
   float sunHigh = smoothstep(-0.08, 0.02, sun.y);
   vec2 flatSun = normalize(sun.xz + vec2(1e-4));
 
-  // Stars come out as the night deepens and thin toward the hazy horizon. A
-  // river of stars crosses the sky as a soft band, denser and faintly milky.
-  float starsOut = smoothstep(0.4, 0.9, uNightness) * smoothstep(0.02, 0.3, e);
+  // Stars come out as the night deepens, the brightest first, and thin toward
+  // the hazy horizon. A river of stars crosses the sky as a soft band, denser
+  // and faintly milky.
+  float nightFall = smoothstep(0.4, 0.9, uNightness);
+  float starsOut = smoothstep(0.02, 0.3, e);
   vec3 bandNormal = normalize(vec3(1.0, 0.62, 0.12));
   float across = dot(dir, bandNormal);
   float along = dot(dir, normalize(vec3(-0.12, 0.0, 1.0)));
@@ -137,12 +143,12 @@ void main() {
   float clumps = 0.35 + 0.65 * fbm(vec2(along * 6.0, across * 14.0) + 2.0);
   float lane = smoothstep(0.5, 0.7, fbm(vec2(along * 4.0 + 7.0, across * 22.0))) * smoothstep(0.08, 0.0, abs(across - 0.02));
   float milk = (river * 0.55 + core * 0.7) * clumps * (1.0 - lane * 0.7);
-  vec3 stars = starLayer(dir, 90.0, uStars * 0.5 + river * 0.3, 0.17);
-  stars += starLayer(dir, 170.0, uStars * 0.7 + river * 0.8, 0.16) * 0.6;
-  stars += starLayer(dir, 300.0, river * 0.9, 0.2) * 0.35 * (1.0 - lane);
+  vec3 stars = starLayer(dir, 90.0, uStars * 0.5 + river * 0.3, 0.17, nightFall);
+  stars += starLayer(dir, 170.0, uStars * 0.7 + river * 0.8, 0.16, nightFall) * 0.6;
+  stars += starLayer(dir, 300.0, river * 0.9, 0.2, nightFall) * 0.35 * (1.0 - lane);
   // The milky band reaches lower than single stars, so even a low view
   // looking out across the land sees the river rise from the horizon.
-  float milkOut = smoothstep(0.4, 0.9, uNightness) * smoothstep(0.0, 0.14, e);
+  float milkOut = nightFall * smoothstep(0.0, 0.14, e);
   color += stars * starsOut + vec3(0.45, 0.5, 0.74) * milk * 0.6 * milkOut;
 
   // One parametric cloud layer. Dome clouds use a stereographic projection
@@ -187,6 +193,14 @@ void main() {
   // Against a glowing low-sun horizon they turn to soft violet silhouettes.
   shade = mix(shade, (0.6 + 0.4 * lit) * (0.8 + 0.22 * smoothstep(0.0, 0.7, rise)) * (1.0 - uSkyGlowAmount * 0.5), uStand);
   vec3 cloud = mix(uCloudShade, uCloudLit, clamp(shade, 0.0, 1.0));
+  // A low sun lights clouds from beneath and on the edges facing it, in its
+  // deepened glow, the clouds toward it most. Once it has set, the earth's
+  // shadow climbs the sky: low clouds go grey first, high ones hold the glow.
+  float toward = dot(normalize(dir.xz + vec2(1e-4)), flatSun) * 0.5 + 0.5;
+  float held = smoothstep(-0.04 - 0.16 * e, 0.0, sun.y);
+  float catches = twilight() * (0.45 + 0.55 * toward * toward) * held;
+  float rim = smoothstep(0.5, 0.95, lit);
+  cloud = mix(cloud, uCloudGlow * (0.75 + 0.4 * lit), catches * clamp(rim * 0.85 + (1.0 - body) * 0.4, 0.0, 1.0) * 0.85);
   // Distant clouds take on the air between, like distant land.
   cloud = mix(cloud, base, (1.0 - smoothstep(0.0, 0.3, e)) * 0.45);
   // Thin cloud edges near the sun light up; at night, near the moon.
@@ -197,9 +211,10 @@ void main() {
   cloud += uMoonColor * pow(moonDot, 24.0) * (1.0 - d * 0.5) * 0.35 * moonUp;
   color = mix(color, cloud, d * uOpacity);
 
-  // The sun itself: a soft disc with a narrow halo.
+  // The sun itself: a soft disc with a narrow halo, always brighter than the
+  // glow around it.
   float disc = smoothstep(0.99935, 0.99965, sunDot);
-  color = mix(color, mix(uSunColor, vec3(1.0), 0.6), disc * (1.0 - d * uOpacity * 0.85) * sunHigh);
+  color = mix(color, max(mix(uSunColor, vec3(1.0), 0.6), color + 0.12), disc * (1.0 - d * uOpacity * 0.85) * sunHigh);
 
   // The moon: a soft disc with faint maria, a crescent's dark part a shade
   // above the sky, and a wide pale halo.
@@ -231,6 +246,7 @@ export function createSky(light: SceneLight): Sky {
   const u = {
     uCloudLit: { value: new THREE.Vector3() },
     uCloudShade: { value: new THREE.Vector3() },
+    uCloudGlow: { value: new THREE.Vector3() },
     uScale: { value: 3 },
     uStretch: { value: 1 },
     uThreshold: { value: 0.6 },
@@ -265,6 +281,7 @@ export function createSky(light: SceneLight): Sky {
       const c = s.clouds;
       u.uCloudLit.value.copy(v3(s.cloudLit));
       u.uCloudShade.value.copy(v3(s.cloudShade));
+      u.uCloudGlow.value.copy(v3(s.cloudGlow));
       u.uScale.value = c.scale;
       u.uStretch.value = c.stretch;
       u.uThreshold.value = c.threshold;

@@ -21,6 +21,7 @@ const looks = (() => {
   const random = (): number => r.next();
   return Array.from({ length: 6 }, (_, i) => ({ world: blueprintOf("world", randomSlots(world, lib, random)), biome: blueprintOf("biome", randomSlots(biome, lib, random)), i })).flatMap((p) =>
     KEY_HOURS.map((hour) => ({
+      hour,
       name: `world ${p.i} at ${hour}`,
       look: realizeWorld({ blueprint: p.world, kind: world }, { blueprint: p.biome, kind: biome }, lib, SEED, hour),
     })),
@@ -73,6 +74,18 @@ describe("the horizon", () => {
         expect(apart(next, last), `${name} at ${d} m`).toBeLessThan(2 * STEP);
         last = next;
       }
+    }
+  });
+
+  it("warms the low sky toward a low sun and cools it away from the sun, and leaves midday's sky even", () => {
+    const warmth = (c: Rgb): number => c[0] - c[2];
+    for (const { name, look, hour } of looks) {
+      const [x, , z] = look.light.sunDirection;
+      const flat = Math.hypot(x, z) / Math.cos(0.05);
+      const towardSun = skyColorAt(look, [x / flat, Math.sin(0.05), z / flat]);
+      const awayFromSun = skyColorAt(look, [-x / flat, Math.sin(0.05), -z / flat]);
+      if (hour === 6 || hour === 18 || hour === 19.5) expect(warmth(towardSun) - warmth(awayFromSun), name).toBeGreaterThan(0.24);
+      if (hour === 12.5) expect(Math.abs(warmth(towardSun) - warmth(awayFromSun)), name).toBeLessThan(0.02);
     }
   });
 });

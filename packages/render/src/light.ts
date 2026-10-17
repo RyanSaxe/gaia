@@ -3,7 +3,7 @@
 
 import * as THREE from "three";
 import type { LightSpec } from "@gaia/schema";
-import { AIR, type AirInput, windDirAt } from "@gaia/realize";
+import { AIR, type AirInput, TWILIGHT, windDirAt } from "@gaia/realize";
 
 export interface SceneLight {
   readonly uSunDirection: { value: THREE.Vector3 };
@@ -194,6 +194,7 @@ export function createSceneLight(): SceneLight {
 }
 
 const f1 = (x: number): string => x.toFixed(1);
+const f2 = (x: number): string => x.toFixed(2);
 
 export const LIGHT_GLSL = /* glsl */ `
 uniform vec3 uSunDirection;
@@ -333,9 +334,15 @@ vec3 nightLight(vec3 albedo, vec3 n, vec3 worldPosition, float wrap, float shado
 // ---------- sky and distance ----------
 // skyColorAt and aerialAt in @gaia/realize are the CPU references.
 
+// How strongly twilight colors the sky at this hour: the hour's glow, fading
+// as the sun sinks below the horizon.
+float twilight() {
+  return uSkyGlowAmount * smoothstep(${f2(TWILIGHT.lasts[0])}, ${f2(TWILIGHT.lasts[1])}, normalize(uSunDirection).y);
+}
+
 // The sky's color along a view direction: the gradient from horizon to
-// zenith, the hour's glow on the sun's side, the haze around the sun, and
-// low mist along the horizon.
+// zenith, the hour's glow on the sun's side, twilight's colors, the haze
+// around the sun, and low mist along the horizon.
 // Below the horizon it holds the horizon's color. The dome draws clouds,
 // stars and the moon on top; distant land dissolves into exactly this.
 vec3 skyColor(vec3 dir) {
@@ -348,9 +355,24 @@ vec3 skyColor(vec3 dir) {
   vec2 flatSun = normalize(sun.xz + vec2(1e-4));
   float toward = dot(flatDir, flatSun) * 0.5 + 0.5;
   color = mix(color, uSkyGlow, exp(-e * 5.0) * (0.35 + 0.65 * toward * toward) * uSkyGlowAmount * 0.75);
-  float sunDot = max(dot(dir, sun), 0.0);
+  // Twilight: away from the sun the low sky cools, and once the sun has set
+  // the earth's blue shadow lies along that horizon under a band of the glow.
+  // Toward the sun the low sky burns deeper, and the haze round it widens.
+  float dusk = twilight();
+  float away = (1.0 - toward) * (1.0 - toward);
+  float set = smoothstep(${f2(TWILIGHT.setBy[0])}, ${f2(TWILIGHT.setBy[1])}, -sun.y);
+  // Each thins upward from the horizon starting level, so the horizon shows no line.
+  vec3 cool = mix(uSkyMid, uSkyZenith, 0.5);
+  vec3 reach = e / vec3(${f2(TWILIGHT.coolReach)}, ${f2(TWILIGHT.shadowReach)}, ${f2(TWILIGHT.emberReach)});
+  vec3 low = exp(-reach * reach);
+  color = mix(color, cool, dusk * away * (${f2(TWILIGHT.cool)} * low.x + set * ${f2(TWILIGHT.shadow)} * low.y));
+  float belt = (e - ${f2(TWILIGHT.beltAt)}) / ${f2(TWILIGHT.beltWidth)};
+  color = mix(color, uSkyGlow, dusk * away * set * ${f2(TWILIGHT.belt)} * exp(-belt * belt) * smoothstep(0.0, ${f2(TWILIGHT.beltAt)}, e));
+  color = mix(color, uSkyGlow * uSunColor, dusk * pow(toward, ${f1(TWILIGHT.emberFocus)}) * low.z * ${f2(TWILIGHT.ember)});
+  // Toward the sun too, below the horizon the sky holds the horizon's color.
+  float sunDot = max(dot(normalize(vec3(dir.x, e, dir.z)), sun), 0.0);
   color = mix(color, uSunColor, pow(sunDot, 10.0) * 0.28 * up);
-  color += uSunColor * pow(sunDot, 180.0) * 0.18 * up;
+  color += uSunColor * (pow(sunDot, 180.0) * 0.18 + pow(sunDot, ${f1(TWILIGHT.aureoleFocus)}) * dusk * ${f2(TWILIGHT.aureole)}) * up;
   // Low mist lies along the horizon: the air's own color rises into the
   // lowest sky and thins upward, veiling even a low sun's haze, so misty
   // land meets the sky in a soft band.
