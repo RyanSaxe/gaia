@@ -8,10 +8,11 @@
 // picture, and under it what Jev says of the thing as its caption. Nothing
 // fades.
 
-import { type Measure, canvasMeasure, nameBreaks, nameFont, nameSpacing } from "../immersive/map-names.ts";
+import { type Measure, canvasMeasure, nameBreaks, nameSpacing } from "../immersive/map-names.ts";
 import { TRAVELLER_SVG } from "../immersive/map-styles.ts";
 import type { CaptionFact } from "./caption.ts";
 import { type Piece, highlight } from "./highlight.ts";
+import { TITLE_FAMILY } from "./title-face.ts";
 import type { Folded, Full, Mark, PageWords, Row, Snippet } from "./words.ts";
 
 /** The field map's health colors: russet when failing, ochre as it declines, green when well. */
@@ -483,7 +484,7 @@ let measure: Measure | null = null;
 
 /** The size, px, the title page letters `name` at (`TITLE`), its capitals measured with `measure`. */
 export function titleSize(name: string, measure: Measure): number {
-  const width = (text: string): number => measure(text.toUpperCase(), nameFont(TITLE.size), nameSpacing(TITLE.size));
+  const width = (text: string): number => measure(text.toUpperCase(), `600 ${TITLE.size}px ${TITLE_FAMILY}`, nameSpacing(TITLE.size));
   const longest = Math.max(...nameBreaks(name).map(width));
   const fit = Math.min(1, TITLE.width / longest, (TITLE.width * TITLE.lines) / width(name));
   return Math.max(TITLE.least, TITLE.size * fit);

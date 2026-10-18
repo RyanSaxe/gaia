@@ -14,6 +14,7 @@ import { linesOf } from "./page.ts";
 import { RIBBON_LIE, RIBBON_POSES, ribbonSvg, ribbonTransform } from "./ribbon.ts";
 import { type Curl, angleOf, createCurl } from "./curl.ts";
 import { swipes } from "./swipe.ts";
+import { loadTitleFace } from "./title-face.ts";
 
 /** The two pages a place in the book opens onto. */
 export interface Spread {
@@ -117,6 +118,7 @@ const el = (cls: string, parent?: HTMLElement): HTMLDivElement => {
 };
 
 export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: (open: boolean) => void): JournalBook {
+  loadTitleFace();
   const root = el("journal", layer);
   // The brush: a stroke of color laid by hand down the gutter, its edge wandering a little, as the mocks paint them.
   root.insertAdjacentHTML(

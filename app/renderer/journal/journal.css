@@ -133,7 +133,8 @@
 .jp-head { margin-right: 12px; flex: none; }
 .jp-where { font: 600 9px/1.3 "Iowan Old Style", Georgia, serif; letter-spacing: .22em; text-transform: uppercase; color: #8a7458; }
 .jp-title { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-top: 8px; }
-.jp-name { font: italic 600 31px/1.08 "Iowan Old Style", Georgia, serif; color: #33281d; overflow-wrap: anywhere; }
+/* Titles speak in Gaia's own face, the mark's Fraunces at 600 (title-face.ts). */
+.jp-name { font: 600 30px/1.08 "Gaia title", Georgia, serif; color: #33281d; overflow-wrap: anywhere; }
 /* A score: a short meter filled to its share, a quality's in its health color and an importance's in ink, then its percentage. */
 .jp-meter { display: flex; align-items: center; gap: 9px; font: 20px/1 "Bradley Hand", Georgia, cursive; color: #4a3a26; }
 .jp-track { display: block; width: 40px; height: 6px; border-radius: 3px; background: rgba(120, 95, 65, 0.16); overflow: hidden; }
@@ -217,7 +218,7 @@ button.jp-name { border: 0; background: none; padding: 0; text-align: left; curs
    smaller when it is very long (`titleSize`); a run longer than a line breaks where it must. The spacing and the
    paper's edge round the letters keep their share of the size. */
 .jp-book-name {
-  font: 600 40px/1.1 "Iowan Old Style", Georgia, "Times New Roman", serif; letter-spacing: 0.17em; margin-right: -0.17em; text-transform: uppercase; color: #3b2f22;
+  font: 600 40px/1.1 "Gaia title", Georgia, "Times New Roman", serif; letter-spacing: 0.17em; margin-right: -0.17em; text-transform: uppercase; color: #3b2f22;
   max-width: 100%; text-align: center; text-wrap: balance; overflow-wrap: anywhere;
   paint-order: stroke fill; -webkit-text-stroke: 0.225em rgba(241, 231, 207, 0.82);
 }
