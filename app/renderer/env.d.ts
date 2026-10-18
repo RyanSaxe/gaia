@@ -18,8 +18,8 @@ declare module "*.webp" {
   export default url;
 }
 
-// `import url from "./face.woff2"` gives the font file's address, as a picture's does: only `pnpm brand` (tools/brand.ts)
-// imports one, and inlines it as a data URL.
+// `import url from "./face.woff2"` gives the font file's address, as a picture's does: a file Vite serves for the app,
+// and a data URL `pnpm brand` (tools/brand.ts) and tools/lab-page.ts inline.
 declare module "*.woff2" {
   const url: string;
   export default url;

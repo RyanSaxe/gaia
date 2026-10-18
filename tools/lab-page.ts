@@ -47,8 +47,8 @@ export const LAB_BUILD = {
   entryPoints: [resolve(renderer, "main.ts")],
   outdir: "lab",
   plugins: [inlineWorkers, rawText],
-  // Pictures (Gaia's logo, the start's preview) go inline, so the page stays one file.
-  loader: { ".webp": "dataurl" },
+  // Pictures (Gaia's logo, the start's preview) and the journal's title face go inline, so the page stays one file.
+  loader: { ".webp": "dataurl", ".woff2": "dataurl" },
 } as const satisfies BuildOptions;
 
 export interface LabBundle {
