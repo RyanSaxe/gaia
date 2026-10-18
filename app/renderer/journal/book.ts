@@ -54,7 +54,7 @@ export interface JournalBook {
   readonly isOpen: boolean;
   /** The slip on the cover, which holds the minimap. */
   readonly slip: HTMLElement;
-  /** Draws the open spread afresh, after what the pages say has changed. */
+  /** Lays the tabs and draws the open spread afresh, after what the pages say has changed. */
   refresh(): void;
   state(): { readonly open: boolean; readonly at: string | null; readonly turning: boolean };
 }
@@ -832,7 +832,6 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
 
   // ---------- opening and closing ----------
 
-  let arriving = 0;
   /** The cover swings `ms` from now, and the ribbon lying on the leaves it carries swings with it. */
   function swingAfter(ms: number): void {
     cover.style.transitionDelay = `${ms}ms`;
@@ -843,10 +842,6 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
     if (on === open) return;
     open = on;
     root.classList.toggle("open", on);
-    // The fore-edge's tabs show once the book has come to your hands, and go as it is shut.
-    window.clearTimeout(arriving);
-    if (on) arriving = window.setTimeout(() => root.classList.add("arrived"), TRAVEL_MS);
-    else root.classList.remove("arrived");
     onOpen(on);
     if (on) {
       const opensAt = place0 ?? "map";
@@ -1003,9 +998,15 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
       setOpen(true);
     }
   });
+  /** The tabs as last laid, so laying the same ones again leaves them be. */
+  let laidTabs = "";
   function layTabs(): void {
+    const list = pages.tabs();
+    const key = JSON.stringify(list);
+    if (key === laidTabs) return;
+    laidTabs = key;
     tabs.replaceChildren(
-      ...pages.tabs().map((t, k) => {
+      ...list.map((t, k) => {
         const tab = document.createElement("button");
         tab.type = "button";
         tab.className = "jb-tab";
@@ -1015,9 +1016,11 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
         const name = document.createElement("span");
         name.textContent = t.name;
         tab.append(name);
+        // A tab on the shut book opens it there.
         tab.addEventListener("click", (e) => {
           e.stopPropagation();
-          turnTo(t.at);
+          if (open) turnTo(t.at);
+          else api.open(t.at);
         });
         return tab;
       }),
@@ -1063,6 +1066,7 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
     },
     slip,
     refresh: () => {
+      layTabs();
       if (open && at !== null && !turning) show(at);
     },
     state: () => ({ open, at, turning }),
