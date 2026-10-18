@@ -984,8 +984,12 @@ finger and keys all follow the same three rules.
   deeper wash then: the paper's brown at half strength, where the field
   map's is at a quarter.
 
-The fore-edge's tabs fade in once the journal has come to your hands, and
-out as it is shut. A new size of window moves the book at once.
+The fore-edge's tabs are cut into the leaves under the right-hand page and
+stand out past the boards, so they are part of the book wherever it is:
+on the shut book in its corner, through its trip to your hands and back,
+and on the open book's right side through every turn and riffle. They
+never appear, vanish or fade. A tab on the shut book opens it at that
+chapter. A new size of window moves the book at once.
 
 The open journal's pages turn the way a book's do. A click or a tap on bare
 paper turns that way, the right-hand page forward and the left back.

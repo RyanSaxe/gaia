@@ -384,6 +384,8 @@ export function createImmersive(container: HTMLElement, world: WorldHandle): Imm
     map.show(active);
     worldName.textContent = world.places().name;
     readVitality();
+    // The shut book's tabs are the new world's chapters.
+    journal.refresh();
   });
   /** Reads every thing's vitality from the world standing now: the journal's words, and how the names on the land weather. */
   function readVitality(): void {
