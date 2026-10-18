@@ -2311,17 +2311,20 @@ export function createWorld(root: HTMLElement): World {
    * the afternoon sun lights, turning around it until the spot is dry, clear
    * and inside the land, and nothing solid or no rise of the ground stands
    * between. A building is seen from where its sign is read, farther back.
-   * For the frontispiece (`frame`, the painting's half width as a tangent),
-   * the painter starts from the sunlit side whatever the thing, and nothing
-   * may stand between them and the thing's sides or top either, and no tree's crown in front of the thing or filling the
-   * picture's side, trying a little farther back where nothing near is clear.
+   * No tree's crown may stand in front of the thing or fill the picture's
+   * side (`half`, the painting's half width as a tangent), trying a little
+   * farther back where nothing near is clear; where nowhere is, as deep in a
+   * wood, a page's painting is made from the spot it would be without that
+   * rule, framed by its trees. For the frontispiece (`wide`) the painter
+   * starts from the sunlit side whatever the thing, and nothing may stand
+   * between them and the thing's sides or top either.
    */
-  function viewpointOf(s: Seen, distance: number, eye: number, aim: number, frame?: number): { x: number; z: number } {
+  function viewpointOf(s: Seen, distance: number, eye: number, aim: number, half: number, wide: boolean): { x: number; z: number } {
     const fixed = s.stand(s.x + 1, s.z);
     const other = s.stand(s.x - 1, s.z);
     const sun = light.uSunDirection.value;
     // The frontispiece is always painted from the sunlit side, as the sign's side of a building may lie in its shadow.
-    const signed = frame === undefined && fixed.x === other.x && fixed.z === other.z;
+    const signed = !wide && fixed.x === other.x && fixed.z === other.z;
     const first = signed ? Math.atan2(fixed.x - s.x, fixed.z - s.z) : Math.atan2(sun.x, sun.z) + PAINTING.sunSide;
     const base = heightAt(terrain.lattice, s.x, s.z);
     /** Whether the ground and nothing solid stand between the eye at (x, z) and the point `side` meters across the thing and `up` meters above its foot. */
@@ -2338,7 +2341,7 @@ export function createWorld(root: HTMLElement): World {
       return true;
     };
     /** Whether a tree's crown stands in front of the thing, or fills the picture's side in front of it, seen from (x, z). */
-    const crownInView = (x: number, z: number, half: number): boolean => {
+    const crownInView = (x: number, z: number): boolean => {
       const span = Math.hypot(s.x - x, s.z - z);
       const [ux, uz] = [(s.x - x) / span, (s.z - z) / span];
       return trees.some((t) => {
@@ -2351,20 +2354,28 @@ export function createWorld(root: HTMLElement): World {
     };
     const clearFrom = (x: number, z: number): boolean => {
       if (!withinLand(world, x, z, 2) || waterDepthAt(terrain, x, z) > LAND.wade || clearanceAt(solids, x, z) < 0.6) return false;
-      if (frame === undefined) return lineClear(x, z, 0, aim);
+      if (!wide) return lineClear(x, z, 0, aim);
       const across = s.reach * 0.8;
-      return lineClear(x, z, 0, s.height * 0.3) && lineClear(x, z, 0, s.height) && lineClear(x, z, -across, s.height * 0.5) && lineClear(x, z, across, s.height * 0.5) && !crownInView(x, z, frame);
+      return lineClear(x, z, 0, s.height * 0.3) && lineClear(x, z, 0, s.height) && lineClear(x, z, -across, s.height * 0.5) && lineClear(x, z, across, s.height * 0.5);
     };
-    for (const back of frame === undefined ? [1] : [1, 1.3, 1.7]) {
-      for (let k = 0; k < 16; k++) {
-        // Turning a little farther each way in turn: 0, +22.5°, -22.5°, +45°, …
-        const turn = Math.ceil(k / 2) * (k % 2 === 1 ? 1 : -1) * (Math.PI / 8);
-        const x = s.x + Math.sin(first + turn) * distance * back;
-        const z = s.z + Math.cos(first + turn) * distance * back;
-        if (clearFrom(x, z)) return { x, z };
+    /** The first spot round the thing, `back` times `distance` off, where `fits` holds. */
+    const search = (fits: (x: number, z: number) => boolean, backs: readonly number[]): { x: number; z: number } | null => {
+      for (const back of backs) {
+        for (let k = 0; k < 16; k++) {
+          // Turning a little farther each way in turn: 0, +22.5°, -22.5°, +45°, …
+          const turn = Math.ceil(k / 2) * (k % 2 === 1 ? 1 : -1) * (Math.PI / 8);
+          const x = s.x + Math.sin(first + turn) * distance * back;
+          const z = s.z + Math.cos(first + turn) * distance * back;
+          if (fits(x, z)) return { x, z };
+        }
       }
-    }
-    return { x: s.x + Math.sin(first) * distance, z: s.z + Math.cos(first) * distance };
+      return null;
+    };
+    // Two searches, never one: a single search with the crowns in it would fall back to the bare first direction,
+    // which can be in water, wherever every spot has a crown in view.
+    const clearOfCrowns = search((x, z) => clearFrom(x, z) && !crownInView(x, z), [1, 1.3, 1.7]);
+    if (clearOfCrowns !== null) return clearOfCrowns;
+    return (wide ? null : search(clearFrom, [1])) ?? { x: s.x + Math.sin(first) * distance, z: s.z + Math.cos(first) * distance };
   }
   /**
    * Where a painting of `s` is taken from, `aspect` wide to tall, and how high the eye is and where it aims; in the
@@ -2380,7 +2391,7 @@ export function createWorld(root: HTMLElement): World {
     // above the thing's middle, so the thing sits low and the sky takes the painting's upper part.
     const eye = wide ? EYE_HEIGHT : Math.min(EYE_HEIGHT, Math.max(0.9, s.height * 0.8 + 0.5));
     const aim = wide ? s.height * 0.5 + 2 * tan * PAINTING.wideLow * distance : s.height * 0.55;
-    return { at: viewpointOf(s, distance, eye, aim, wide ? tan * aspect : undefined), eye, aim };
+    return { at: viewpointOf(s, distance, eye, aim, tan * aspect, wide), eye, aim };
   }
   function seenFromOf(id: string): Landing | null {
     const s = subjectOf(id);
