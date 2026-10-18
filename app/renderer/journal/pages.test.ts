@@ -4,20 +4,20 @@ import { titleSize } from "./page.ts";
 import { thumbIndex } from "./pages.ts";
 
 describe("the world's name on the title page", () => {
-  // Capitals as wide as their letters and spacing, as near as a test can measure without a browser.
-  const measure: Measure = (text, font, spacing) => text.length * (0.72 * Number(/([\d.]+)px/.exec(font)?.[1] ?? 0) + spacing);
+  // Lowercase letters about 0.56 of the size wide, as Fraunces's are, as near as a test can measure without a browser.
+  const measure: Measure = (text, font, spacing) => text.length * (0.56 * Number(/([\d.]+)px/.exec(font)?.[1] ?? 0) + spacing);
 
   it("keeps its full size for a short name and for a long one that breaks into a few lines", () => {
-    expect(titleSize("gaia", measure)).toBe(40);
-    expect(titleSize("startOpenRouterStandIn", measure)).toBe(40);
-    expect(titleSize("react-native-safe-area-context", measure)).toBe(40);
+    expect(titleSize("gaia", measure)).toBe(52);
+    expect(titleSize("startOpenRouterStandIn", measure)).toBe(52);
+    expect(titleSize("react-native-safe-area-context", measure)).toBe(52);
   });
 
   it("shrinks a name that would take more than three lines just enough to take three, and a run too long for one line", () => {
-    const long = titleSize("react-native-safe-area-context-provider-for-every-platform", measure);
-    expect(long).toBeLessThan(40);
+    const long = titleSize("react-native-safe-area-context-provider-for-every-platform-and-device", measure);
+    expect(long).toBeLessThan(52);
     expect(long).toBeGreaterThan(22);
-    expect(titleSize("supercalifragilistic", measure)).toBeLessThan(40);
+    expect(titleSize("supercalifragilistic", measure)).toBeLessThan(52);
   });
 
   it("never letters a name smaller than 22 px, however long", () => {

@@ -8,7 +8,7 @@
 // picture, and under it what Jev says of the thing as its caption. Nothing
 // fades.
 
-import { type Measure, canvasMeasure, nameBreaks, nameSpacing } from "../immersive/map-names.ts";
+import { type Measure, canvasMeasure, nameBreaks } from "../immersive/map-names.ts";
 import { TRAVELLER_SVG } from "../immersive/map-styles.ts";
 import type { CaptionFact } from "./caption.ts";
 import { type Piece, highlight } from "./highlight.ts";
@@ -38,11 +38,11 @@ export function healthColor(v: number): string {
 const PAGE_W = 520;
 const PAGE_H = 660;
 /**
- * The world's name on the title page, lettered as the map letters a place: at most `size` px, its lines no wider than
- * the page less its 44 px margins (journal.css), smaller for a name that would take more than `lines` lines or has a
- * run too long for one line, but never below `least` px; a run longer still breaks where it must.
+ * The world's name on the title page, lettered as Gaia's mark letters its name: at most `size` px, its lines no wider
+ * than the page less its 44 px margins (journal.css), smaller for a name that would take more than `lines` lines or
+ * has a run too long for one line, but never below `least` px; a run longer still breaks where it must.
  */
-const TITLE = { size: 40, least: 22, width: PAGE_W - 88, lines: 3 } as const;
+const TITLE = { size: 52, least: 22, width: PAGE_W - 88, lines: 3 } as const;
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, text?: string): HTMLElementTagNameMap[K] => {
   const e = document.createElement(tag);
@@ -464,7 +464,7 @@ function foldOf(says: string, tap?: () => void, where?: "after"): HTMLElement {
 /**
  * The title page, facing the contents: a frontispiece painting of the world
  * running to the page's edges and the world's name lettered across its sky as
- * the map letters a place. The world's vitality is read on the contents facing it.
+ * Gaia's mark letters its own. The world's vitality is read on the contents facing it.
  */
 export function renderTitle(name: string, folio: string, painting: HTMLElement): HTMLElement {
   const page = el("div", "jp jp-picture jp-title-page");
@@ -482,9 +482,9 @@ export function renderTitle(name: string, folio: string, painting: HTMLElement):
 /** Measures the title page's lettering, made on its first use. */
 let measure: Measure | null = null;
 
-/** The size, px, the title page letters `name` at (`TITLE`), its capitals measured with `measure`. */
+/** The size, px, the title page letters `name` at (`TITLE`), measured with `measure`. */
 export function titleSize(name: string, measure: Measure): number {
-  const width = (text: string): number => measure(text.toUpperCase(), `600 ${TITLE.size}px ${TITLE_FAMILY}`, nameSpacing(TITLE.size));
+  const width = (text: string): number => measure(text, `600 ${TITLE.size}px ${TITLE_FAMILY}`, 0);
   const longest = Math.max(...nameBreaks(name).map(width));
   const fit = Math.min(1, TITLE.width / longest, (TITLE.width * TITLE.lines) / width(name));
   return Math.max(TITLE.least, TITLE.size * fit);
