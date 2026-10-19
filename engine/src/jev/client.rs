@@ -129,7 +129,8 @@ impl Failure {
     }
 }
 
-/// Posts one request with curl, the key passed on stdin as a header. curl
+/// Posts one request with curl, passing credentials and body on stdin to
+/// avoid exposing them in arguments or exceeding command-line limits. curl
 /// retries a transient failure (a timeout, 429 or 5xx) twice, and gives up on
 /// one request after 90 seconds.
 fn send(url: &str, key: &str, request: &Value) -> Result<Value, Failure> {
@@ -152,22 +153,26 @@ fn send(url: &str, key: &str, request: &Value) -> Result<Value, Failure> {
             url,
             "-H",
             "Content-Type: application/json",
-            "-H",
-            "@-",
-            "--data-binary",
+            "--config",
+            "-",
         ])
-        .arg(request.to_string())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
         .map_err(|e| Failure::Other(format!("Could not start curl: {e}")))?;
+    // Quote config values so curl preserves the JSON body's quotes and backslashes.
+    let config = format!(
+        "header = {}\ndata-binary = {}\n",
+        json!(format!("Authorization: Bearer {key}")),
+        json!(request.to_string())
+    );
     child
         .stdin
         .take()
         .ok_or(Failure::Other("curl has no stdin".into()))?
-        .write_all(format!("Authorization: Bearer {key}\n").as_bytes())
-        .map_err(|e| Failure::Other(format!("Could not hand curl the key: {e}")))?;
+        .write_all(config.as_bytes())
+        .map_err(|e| Failure::Other(format!("Could not hand curl the request: {e}")))?;
     let out = child
         .wait_with_output()
         .map_err(|e| Failure::Other(format!("curl failed: {e}")))?;

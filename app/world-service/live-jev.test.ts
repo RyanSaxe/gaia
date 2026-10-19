@@ -11,6 +11,7 @@ import { createInterface } from "node:readline";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { type StandIn, startOpenRouterStandIn } from "../../tools/openrouter-stand-in.ts";
 import { outlinesOf } from "@gaia/terrain";
+import type { JevRequest } from "@gaia/schema";
 import { cargoEnv } from "../../tools/cargo-env.ts";
 import { createEngineClient } from "./engine-client.ts";
 import { openWorld, setSpendLimit } from "./open-world.ts";
@@ -108,6 +109,19 @@ async function open(root: string, data: string, approve: boolean) {
   });
   return { document, asked, shown, sent, about };
 }
+
+it("delivers a request larger than Windows' command-line limit with its text intact", async () => {
+  const request: JevRequest = {
+    model: "typesafe/jev-1.13",
+    state: { source: '"quoted"\\path\\café\r\n\t'.repeat(4096) },
+    questions: { ok: { type: "noul", instructions: "Is this text present?" } },
+  };
+  expect(Buffer.byteLength(JSON.stringify(request))).toBeGreaterThan(32_768);
+  const before = standIn.received.length;
+  const result = await engineAt(join(scratch, "large-request-data")).call("jev.batch", { requests: [request] });
+  expect(result.responses[0]).toHaveProperty("answers.ok");
+  expect(standIn.received.slice(before)).toEqual([{ authorization: "Bearer local-stand-in", body: request }]);
+});
 
 describe("judging a codebase with Jev", () => {
   it("sends only facts, keeps Jev's answers, asks again only what changed, and judges everything with Jev", async () => {
