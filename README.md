@@ -6,16 +6,27 @@
 
 ![A village of timber houses by a brook in late afternoon light](docs/images/world.jpg)
 
-- **Walk your code.** Folders become lands, files and functions stand as trees, houses and towers, and the parts that lean on each other are joined by trails.
-- **See its health at a glance.** Every tree, roof and field shows how well the code it stands for is written.
-- **Fix it, watch it heal.** Commit a change while the world is open and the land around that code comes back to life.
-- **Read it in the journal.** Tap anything to open its page: its code, how it's judged, and a painting of it.
+- **Your code, as a place.** Folders become lands. Files and functions stand as trees, houses and towers, sized by how much they matter, and the parts that lean on each other are joined by trails.
+- **Health you can see.** Clean code grows green and whole. Tangled, failing code withers into ruin, so you can spot the rot from across the valley.
+- **Fix it, watch it heal.** Commit while the world is open, and the land around the code you fixed comes back to life.
+- **Judged by an AI, not a linter.** Jev reads your code and decides what every part should become and how healthy it is. No two codebases grow the same world.
 
-![The journal open at the map of the whole world](docs/images/journal.jpg)
+## How it works
+
+```mermaid
+flowchart LR
+  code["Your repository"] --> engine["Gaia's engine reads the code and its history"]
+  engine --> jev["Jev judges each part: how much it matters, how well it's written, what it becomes"]
+  jev --> world["A world is laid out: lands, things, trails, health"]
+  world --> you["You walk it"]
+  you -->|"commit a fix"| engine
+```
+
+Jev is reached through OpenRouter. Its answers are kept, so reopening a world only asks about what changed. More in [the architecture](docs/architecture.md).
 
 ## Get started
 
-Gaia runs on macOS with Node 26, pnpm 10 and Rust. It uses an [OpenRouter key](docs/connect-jev.md) to judge your code.
+Gaia runs on macOS with Node 26, pnpm 10 and Rust, and an [OpenRouter key](docs/connect-jev.md).
 
 ```sh
 pnpm install
@@ -23,8 +34,6 @@ security add-generic-password -s gaia-openrouter -a openrouter -w   # paste your
 GAIA_JEV=live pnpm dev
 ```
 
-Choose a folder or a GitHub repository, and walk. Click the ground to walk there, drag to look around, and press M for the journal.
+Choose a folder or a GitHub repository, and walk. Click the ground to walk there and drag to look around.
 
 No key yet? `GAIA_PROJECT=showcase pnpm dev` opens a made-up codebase whose world is already judged.
-
-Curious how it works? See [the architecture](docs/architecture.md).
