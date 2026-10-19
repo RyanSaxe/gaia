@@ -55,3 +55,19 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm probe drawn --world gaia --spot valley --dpr 1
+
+  # Branch protection requires this stable name as the platform matrix changes.
+  required-check:
+    name: check
+    needs: [check, probe]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require all platform checks and the rendering probe
+        env:
+          PLATFORM_RESULT: ${{ needs.check.result }}
+          PROBE_RESULT: ${{ needs.probe.result }}
+        run: |
+          test "$PLATFORM_RESULT" = success
+          test "$PROBE_RESULT" = success
