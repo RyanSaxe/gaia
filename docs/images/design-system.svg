@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 490" role="img" aria-labelledby="title desc">
+  <title id="title">One design system for the world and its paper</title>
+  <desc id="desc">Blueprints produce geometry once. Vitality controls wear, and time controls light and wind through shared rendering. The world, map and journal read the same forms and health.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#7e8a80"/></marker>
+    <style>
+      text { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #202923; }
+      .tag { font-size: 12px; font-weight: 700; letter-spacing: 1px; fill: #526158; }
+      .heading { font-size: 23px; font-weight: 700; }
+      .sub { font-size: 16px; fill: #46544a; }
+      .box { fill: #fff; stroke: #d4dbd2; stroke-width: 1.5; }
+      .edge { fill: none; stroke: #7e8a80; stroke-width: 2; marker-end: url(#arrow); }
+    </style>
+  </defs>
+  <rect width="1100" height="490" rx="18" fill="#fbfaf5"/>
+  <path class="edge" d="M300 114H350V215H410"/>
+  <path class="edge" d="M300 245H410"/>
+  <path class="edge" d="M300 376H350V275H410"/>
+  <path class="edge" d="M690 245H745V173H800"/>
+  <path class="edge" d="M745 245V317H800"/>
+
+  <rect class="box" x="40" y="65" width="260" height="98" rx="12"/>
+  <text class="tag" x="64" y="94">BUILT ONCE</text>
+  <text class="heading" x="64" y="124">Blueprint</text>
+  <text class="sub" x="64" y="148">shape · parts · palette</text>
+
+  <rect class="box" x="40" y="196" width="260" height="98" rx="12"/>
+  <text class="tag" x="64" y="225">CODE QUALITY</text>
+  <text class="heading" x="64" y="255">Vitality</text>
+  <text class="sub" x="64" y="279">growth · wear · ruin</text>
+
+  <rect class="box" x="40" y="327" width="260" height="98" rx="12"/>
+  <text class="tag" x="64" y="356">CLOCK</text>
+  <text class="heading" x="64" y="386">Time</text>
+  <text class="sub" x="64" y="410">light · wind · motion</text>
+
+  <rect x="410" y="181" width="280" height="128" rx="14" fill="#e2eee4" stroke="#bbd1bf" stroke-width="1.5"/>
+  <text class="tag" x="438" y="214">SHARED RULES</text>
+  <text class="heading" x="438" y="250">Form + rendering</text>
+  <text class="sub" x="438" y="281">same facts, same health</text>
+
+  <rect class="box" x="800" y="124" width="260" height="98" rx="12"/>
+  <text class="heading" x="824" y="164">World</text>
+  <text class="sub" x="824" y="194">landscape and objects</text>
+
+  <rect class="box" x="800" y="268" width="260" height="98" rx="12"/>
+  <text class="heading" x="824" y="308">Map + journal</text>
+  <text class="sub" x="824" y="338">symbols and paintings</text>
+</svg>

@@ -45,7 +45,7 @@ Choose a spot on the map, then tap its mark to travel there.
 
 ## How it works
 
-![Gaia's data flow from repository through code analysis and world design to the renderer](docs/images/how-it-works.svg)
+![Gaia's data flow from repository through code analysis and world design to the renderer](docs/images/architecture-data-flow.svg)
 
 Jev handles two separate tasks: analyzing code for scores and links, and
 answering typed design questions that choose the world's parts and
@@ -62,4 +62,5 @@ layout changes, the current world keeps its shape until you reopen it.
 - [Connecting Jev](docs/connect-jev.md) covers the key, the cost and spend limits.
 - [Architecture](docs/architecture.md) shows how the engine, the world service and the renderer fit together.
 - [World design](docs/design-system.md) describes shared visual and interaction rules.
+- [Development](docs/development.md) covers commands, test worlds and verification.
 - [The showcase](docs/showcase.md) and [the proving ground](docs/proving-ground.md) are the two made-up codebases Gaia is filmed and tested in.

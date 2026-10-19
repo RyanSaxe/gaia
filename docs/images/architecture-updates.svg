@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 470" role="img" aria-labelledby="title desc">
+  <title id="title">How an open world responds to a commit</title>
+  <desc id="desc">Gaia reads and judges a new graph, then compares its layout with the current world. If the layout is unchanged, it updates vitality and code judgments in place. If the layout changes, it updates vitality for matching things and keeps the current layout and forms until the next opening.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#7e8a80"/></marker>
+    <marker id="green-arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#2f654b"/></marker>
+    <marker id="blue-arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#54778f"/></marker>
+    <style>
+      text { font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; fill:#202923; }
+      .node { fill:#fff; stroke:#d4dbd2; stroke-width:1.5; }
+      .blue { fill:#e6edf1; stroke:#c6d4dd; }
+      .green { fill:#e2eee4; stroke:#bbd1bf; }
+      .label { font-size:12px; font-weight:750; letter-spacing:1.2px; fill:#657268; }
+      .name { font-size:20px; font-weight:700; }
+      .sub { font-size:14px; fill:#5e6a61; }
+      .note { font-size:13px; fill:#657268; }
+      .edge { fill:none; stroke:#7e8a80; stroke-width:2; marker-end:url(#arrow); }
+      .green-edge { fill:none; stroke:#2f654b; stroke-width:2; marker-end:url(#green-arrow); }
+      .blue-edge { fill:none; stroke:#54778f; stroke-width:2; marker-end:url(#blue-arrow); }
+    </style>
+  </defs>
+  <rect width="1200" height="470" rx="18" fill="#fbfaf5"/>
+  <text class="label" x="48" y="40">WHAT HAPPENS AFTER A COMMIT</text>
+
+  <path class="edge" d="M230 226H300"/>
+  <path class="edge" d="M520 226H590"/>
+  <path class="green-edge" d="M740 218H790V132H840"/>
+  <path class="blue-edge" d="M740 238H790V336H840"/>
+  <text class="note" x="756" y="191">same</text>
+  <text class="note" x="756" y="263">changed</text>
+
+  <rect class="node" x="45" y="181" width="185" height="90" rx="12"/>
+  <text class="label" x="64" y="207">GIT COMMIT</text>
+  <text class="name" x="64" y="237">Changed code</text>
+  <text class="sub" x="64" y="258">new snapshot</text>
+
+  <rect class="node blue" x="300" y="181" width="220" height="90" rx="12"/>
+  <text class="label" x="319" y="207">ENGINE + WORLD SERVICE</text>
+  <text class="name" x="319" y="237">New world plan</text>
+  <text class="sub" x="319" y="258">graph · judgments · layout</text>
+
+  <path d="M665 150L740 226L665 302L590 226Z" fill="#fff" stroke="#cfd7ce" stroke-width="1.5"/>
+  <text class="name" x="624" y="222">Same</text>
+  <text class="sub" x="614" y="244">layout?</text>
+
+  <rect class="node green" x="840" y="80" width="315" height="105" rx="12"/>
+  <text class="label" x="862" y="106">LAYOUT UNCHANGED</text>
+  <text class="name" x="862" y="137">Update in place</text>
+  <text class="sub" x="862" y="161">vitality · code judgments</text>
+
+  <rect class="node blue" x="840" y="276" width="315" height="120" rx="12"/>
+  <text class="label" x="862" y="302">LAYOUT CHANGED</text>
+  <text class="name" x="862" y="333">Keep current shapes</text>
+  <text class="sub" x="862" y="357">update matching vitality</text>
+  <text class="note" x="862" y="380">new layout and forms appear on next open</text>
+</svg>

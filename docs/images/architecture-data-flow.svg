@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 700" role="img" aria-labelledby="title desc">
+  <title id="title">Gaia data flow and Jev's two roles</title>
+  <desc id="desc">The Rust engine reads a repository into a code graph. The world service turns graph facts into a typed WorldDocument. Pure packages realize it for the Electron renderer. Jev answers two distinct kinds of questions: engine questions produce importance and quality scores and code links; world service questions choose components and their settings. Both use OpenRouter through the Rust engine.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#7e8a80"/></marker>
+    <marker id="blue-arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#54778f"/></marker>
+    <marker id="green-arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#2f654b"/></marker>
+    <marker id="blue-start" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto"><path d="M8 0L0 4L8 8Z" fill="#54778f"/></marker>
+    <marker id="green-start" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto"><path d="M8 0L0 4L8 8Z" fill="#2f654b"/></marker>
+    <style>
+      text { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #202923; }
+      .eyebrow { font-size: 13px; font-weight: 750; letter-spacing: 1.5px; fill: #526158; }
+      .section { font-size: 16px; font-weight: 750; letter-spacing: 1.1px; fill: #526158; }
+      .node { fill: #fff; stroke: #d4dbd2; stroke-width: 1.5; }
+      .blue { fill: #e6edf1; stroke: #c6d4dd; }
+      .green { fill: #e2eee4; stroke: #bbd1bf; }
+      .ochre { fill: #f2eadb; stroke: #dfceb0; }
+      .purple { fill: #eee8f2; stroke: #d8cde1; }
+      .tag { font-size: 11px; font-weight: 750; letter-spacing: 1px; fill: #657268; }
+      .heading { font-size: 19px; font-weight: 720; }
+      .sub { font-size: 13px; fill: #5e6a61; }
+      .card-title { font-size: 25px; font-weight: 700; }
+      .card-sub { font-size: 16px; fill: #46544a; }
+      .fine { font-size: 13px; fill: #657268; }
+      .edge { fill: none; stroke: #7e8a80; stroke-width: 2; marker-end: url(#arrow); }
+      .blue-edge { fill: none; stroke: #54778f; stroke-width: 2; marker-end: url(#blue-arrow); }
+      .green-edge { fill: none; stroke: #2f654b; stroke-width: 2; marker-end: url(#green-arrow); }
+    </style>
+  </defs>
+
+  <rect width="1440" height="700" rx="18" fill="#fbfaf5"/>
+  <text class="eyebrow" x="48" y="42">FROM REPOSITORY TO RENDERER</text>
+
+  <path class="edge" d="M220 157H266"/>
+  <path class="edge" d="M475 157H516"/>
+  <path class="edge" d="M726 157H766"/>
+  <path class="edge" d="M971 157H1011"/>
+  <path class="edge" d="M1216 157H1250"/>
+
+  <rect class="node" x="40" y="105" width="180" height="104" rx="12"/>
+  <text class="tag" x="58" y="130">INPUT</text>
+  <text class="heading" x="58" y="160">Repository</text>
+  <text class="sub" x="58" y="184">committed source</text>
+
+  <rect class="node blue" x="266" y="105" width="209" height="104" rx="12"/>
+  <text class="tag" x="284" y="130">RUST ENGINE</text>
+  <text class="heading" x="284" y="160">CodeGraph</text>
+  <text class="sub" x="284" y="184">parse · graph · Jev client</text>
+
+  <rect class="node green" x="516" y="105" width="210" height="104" rx="12"/>
+  <text class="tag" x="534" y="130">WORLD SERVICE</text>
+  <text class="heading" x="534" y="160">Facts + planning</text>
+  <text class="sub" x="534" y="184">plan · judge · compose</text>
+
+  <rect class="node ochre" x="766" y="105" width="205" height="104" rx="12"/>
+  <text class="tag" x="784" y="130">TYPED DATA</text>
+  <text class="heading" x="784" y="160">WorldDocument</text>
+  <text class="sub" x="784" y="184">regions · blueprints · links</text>
+
+  <rect class="node purple" x="1011" y="105" width="205" height="104" rx="12"/>
+  <text class="tag" x="1029" y="130">PURE PACKAGES</text>
+  <text class="heading" x="1029" y="160">Terrain + geometry</text>
+  <text class="sub" x="1029" y="184">realize from data</text>
+
+  <rect class="node" x="1250" y="105" width="160" height="104" rx="12"/>
+  <text class="tag" x="1268" y="130">ELECTRON</text>
+  <text class="heading" x="1268" y="160">Renderer</text>
+  <text class="sub" x="1268" y="184">Three.js draws</text>
+
+  <text class="section" x="48" y="267">JEV HAS TWO DISTINCT JOBS</text>
+  <text class="fine" x="48" y="290">Both use OpenRouter through the Rust engine.</text>
+
+  <path class="blue-edge" d="M370 209V320"/>
+  <path class="green-edge" d="M620 209V252H1070V320"/>
+
+  <rect class="node blue" x="70" y="320" width="590" height="174" rx="14"/>
+  <text class="tag" x="96" y="353">01 · ENGINE · UNDERSTANDING QUESTIONS</text>
+  <text class="card-title" x="96" y="394">Scores and code links</text>
+  <text class="card-sub" x="96" y="428">importance · quality · resolved references</text>
+  <text class="fine" x="96" y="462">Answers enrich the CodeGraph with analysis.</text>
+
+  <rect class="node green" x="780" y="320" width="590" height="174" rx="14"/>
+  <text class="tag" x="806" y="353">02 · WORLD SERVICE · DESIGN QUESTIONS</text>
+  <text class="card-title" x="806" y="394">Parts and appearance</text>
+  <text class="card-sub" x="806" y="428">component choices · typed settings · land + sky</text>
+  <text class="fine" x="806" y="462">Answers fill blueprints in the WorldDocument.</text>
+
+  <path d="M365 494V540H650V566" fill="none" stroke="#54778f" stroke-width="2" marker-start="url(#blue-start)" marker-end="url(#blue-arrow)"/>
+  <path d="M1075 494V540H790V566" fill="none" stroke="#2f654b" stroke-width="2" marker-start="url(#green-start)" marker-end="url(#green-arrow)"/>
+  <text class="fine" x="412" y="530">typed questions ↔ answers</text>
+  <text class="fine" x="836" y="530">typed questions ↔ answers</text>
+
+  <rect class="node ochre" x="555" y="566" width="330" height="82" rx="14"/>
+  <text class="tag" x="579" y="592">MODEL API</text>
+  <text class="heading" x="579" y="620">OpenRouter · Jev</text>
+  <text class="fine" x="579" y="640">same endpoint for both question families</text>
+</svg>
