@@ -1,6 +1,5 @@
-// Bundles the lab (the app's renderer) into ONE self-contained HTML file for
-// pair pages: inline JS and CSS, no network requests. Outside the app there
-// is no engine, so its status bar reads "No engine (standalone)".
+// Bundles the renderer and frozen world fixtures into one offline HTML page.
+// It has no engine connection and uses saved Jev answers.
 // Usage: pnpm lab:html [out.html]
 
 import { mkdirSync, writeFileSync } from "node:fs";

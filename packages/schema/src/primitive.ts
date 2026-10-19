@@ -12,8 +12,8 @@ export interface BuildContext {
 }
 
 /**
- * A procedural operator. Code, written by Claude or a person, versioned in its
- * ID. `build` must be pure: the same params, seed and input give the same output.
+ * A versioned procedural operator. `build` must be pure: the same params, seed
+ * and input give the same output.
  */
 export interface Primitive<R extends Role = Role, P extends Params = Params> {
   readonly id: PrimitiveId;

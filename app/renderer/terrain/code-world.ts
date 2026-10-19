@@ -1,19 +1,7 @@
-// "This codebase": a codebase's world. Inside the app it comes from the world
-// service, which opens the folder main names (Gaia's own repository unless
-// the person opens another), has Jev judge it, and lays it out; while that
-// happens the wait paints the land as it is judged (app/renderer/wait/), and
-// asks the person only before spending past their limit. A world that cannot
-// be judged says why on the wait, and nothing is shown in its place. A
-// standalone page (the offline HTML, `pnpm lab:serve`) has no engine: it lays
-// out the engine's graph of this repository (`fixtures/gaia-graph.json`,
-// written by `pnpm graph-snapshot`), judged by Jev's answers kept for it
-// (`fixtures/gaia-jev.json`, written by `pnpm jev-world`) alone, failing on a
-// request with no kept answer. Everything else follows from the code:
-// each directory's area and land, each file's patch, and what each entity,
-// file and definition stands as: flowers, a stone, a bush, a tree, or a
-// building or a landmark Jev composed, and the trails between the entities.
-// While the world stands, the world service judges each new commit in its
-// folder and sends what changed as vitality alone (`onHeal`).
+// Opens code worlds from the world service or bundled snapshots. The service
+// owns analysis, consent and layout; the offline path requires saved answers.
+// Exposes judged code and blueprints to rendering and applies live vitality
+// updates while preserving the existing world's layout.
 
 import { type Blueprint, type CodeFacts, type EntityFacts, type FileFacts, type RouteSpec, type SymbolFact, type ThingFacts, rand, seedOf } from "@gaia/schema";
 import { link } from "@gaia/kinds";

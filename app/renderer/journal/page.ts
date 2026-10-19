@@ -1,7 +1,7 @@
 // One page of the journal, drawn from its words (`words.ts`): where it lives
 // in small capitals, its name, its vitality as a wash and a reading, a
 // definition's signature, then its list or its text. A list's rows are
-// links: a tap turns to that page. Code is set in round 29's type with its
+// links: a tap turns to that page. Code uses the journal's type with its
 // line numbers written by hand down a pencil-ruled gutter; a long line wraps
 // under a small hanging indent, and the page ends on a whole line, with the
 // rest a drag away. A document is set as prose. A left-hand page carries its

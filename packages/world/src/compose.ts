@@ -87,9 +87,9 @@ export const share = (v: number | null | undefined): number | undefined => (v ==
 export const trim = (text: string, n: number): string => (text.length <= n ? text : `${text.slice(0, n - 1)}…`);
 
 /**
- * What the new engine established about one part of the code, a directory, a file or the whole repository: how much
+ * What the engine established about a directory, file or repository: how much
  * it matters and each concept of its quality from the understanding pass, and its shape from the graph (files, lines,
- * languages, folders and history) and its most important definitions. Nothing from the old code model's signals.
+ * languages, folders and history) and its most important definitions.
  */
 function partOf(graph: CodeGraph, path: string): Record<string, unknown> {
   const inside = (p: string): boolean => path === "" || p === path || p.startsWith(`${path}/`);

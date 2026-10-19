@@ -2,8 +2,7 @@
 // a thing, made of bristle-brush strokes that follow the shapes of what is
 // seen, laid coarse to fine, the thing itself painted last and finest, with
 // the paper's tooth showing faintly through the paint. A painting runs to the
-// page's edges. It is the painter round 32's pages were painted with, made to
-// run on a thread of its own (`painter-worker.ts`): it draws on an
+// page's edges. It runs on a worker (`painter-worker.ts`) using an
 // OffscreenCanvas and blurs with its own hand rather than a canvas filter,
 // which not every browser has there.
 

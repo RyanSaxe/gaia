@@ -1,9 +1,6 @@
 #!/bin/sh
-# Quick checks before a commit: types and lint, and the engine's lints when
-# the engine changed. Tests run in CI on every push and pull request, and a
-# pull request merges only once CI passes; run the tests your change touches
-# while you work. Several worktrees share one machine, so a commit must stay
-# quick. Fix a failing check; never skip it.
+# Fast commit checks: types and changed-file lint, plus clippy for Rust changes.
+# Run relevant tests during development; CI runs the complete suite.
 set -e
 # Prefer rustup's toolchain: on some Macs Homebrew's rustc comes first on PATH and is broken.
 if [ -d "$HOME/.cargo/bin" ]; then PATH="$HOME/.cargo/bin:$PATH"; fi

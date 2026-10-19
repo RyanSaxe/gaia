@@ -78,7 +78,7 @@ button { font: inherit; color: var(--ink); background: var(--panel); border: 1px
 .wayfinding.standing { opacity: 1; }
 .wayfinding:not(.standing) button { pointer-events: none !important; }
 
-/* Where you are: the minimap, a torn scrap of the field map at the lower right, its land turned so the way the
+/* Where you are: the minimap, a torn scrap of the field map, its land turned so the way the
    person faces is always up. The paint thins out into bare paper at its torn edge, and it lies close on the view
    under a light shadow. The area's name is lettered across its land as the map letters areas; the old name fades as
    the new one is written. A tap on its land unfolds the map out of it; a tap on its edge tucks it below the screen's

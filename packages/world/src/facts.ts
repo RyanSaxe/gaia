@@ -2,8 +2,8 @@
 // graph alone (`factsOf`): each file's size, language, definitions and
 // imports both ways, and each entity a manifest declares,
 // with its size, public surface and the entities it leans on. These are the
-// code's structure, which the new engine reads too; tool signals, test
-// coverage, history and file kinds are not facts the world reads.
+// code's structure; tool signals, test coverage, history and file kinds
+// are not facts the world reads.
 
 import type { CodeGraph, CodeFacts, DefNode, DirNode, EntityFacts, FileFacts, FileNode, SymbolFact } from "@gaia/schema";
 

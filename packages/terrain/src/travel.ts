@@ -1,11 +1,6 @@
-// Travel along the trails to a far place, one pure step at a time (round 23's
-// travel thread). A pick on the map no longer jumps the person there: they
-// hurry along the ways, the world streaming in around them as it does for a
-// walk, until they arrive or take the keys. Travel moves the view only as the
-// person could have moved it with the keys: it turns at a held key's steady
-// rate or slower, taking each bend only as fast as that allows; it gets going
-// and slows at one steady rate; nothing bobs. A hand on the view takes it from
-// the trail until the person looks along the way ahead again.
+// Pure route following along trails or across open ground. Trips respect
+// solids and water, limit turns to the keyboard steering rate, and slow for
+// bends. Manual looking keeps control of the view until it faces the route.
 
 import { type Deck, deckAt } from "./gait.ts";
 import { heightAt } from "./lattice.ts";
@@ -17,7 +12,7 @@ import { inWilds } from "./wilds.ts";
 import { DRY, type Terrain } from "./world.ts";
 
 const DEG = Math.PI / 180;
-/** Every number of travel. Sources are in docs/design-system.md (Terrain, travel). */
+/** Travel constants; design rationale is in docs/design-system.md#terrain-walking-and-travel. */
 export const TRAVEL = {
   /** The pace along a straight way, meters a second: about five times a walk. */
   pace: 20,
