@@ -4,15 +4,27 @@ Gaia judges every look in a codebase's world with Jev, through OpenRouter,
 using your key. Until you connect it, a world opens only from answers Jev
 gave before, and one that needs anything new fails to open and says why.
 
-## 1. Put your key in the Keychain
+## 1. Set your OpenRouter key
+
+In Bash, enter the key without echoing it into the terminal:
 
 ```sh
-security add-generic-password -s gaia-openrouter -a openrouter -w
+read -r -s -p "OpenRouter key: " OPENROUTER_API_KEY; echo
+export OPENROUTER_API_KEY
 ```
 
-`security` prompts for the key, so it never lands in your shell history. Only
-the engine reads it, and it passes the key to curl on stdin: the key is never
-on a command line, in a log, in the page, or sent anywhere but OpenRouter.
+In PowerShell, read it as a secure string and expose it only to this session:
+
+```powershell
+$secure = Read-Host "OpenRouter key" -AsSecureString
+$pointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
+$env:OPENROUTER_API_KEY = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($pointer)
+[Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pointer)
+```
+
+Only the Rust engine reads the variable. It passes the key to curl on stdin;
+the key is not on a command line, in a log, or in the page. Gaia sends it only
+to OpenRouter.
 
 ## 2. Start Gaia live
 
@@ -20,6 +32,8 @@ on a command line, in a log, in the page, or sent anywhere but OpenRouter.
 pnpm install
 GAIA_JEV=live pnpm dev
 ```
+
+In PowerShell, set `$env:GAIA_JEV = "live"` before running `pnpm dev`.
 
 The app opens on the start; choose a world there. While Gaia is being built,
 it asks Jev with no spend limit (`DEFAULT_SPEND_LIMIT_USD` in
@@ -33,13 +47,21 @@ time, so a first run takes about half a minute to a minute, while the
 waiting screen paints the world's map: each area's border as soon as the
 code is read, each area's watercolor as Jev's answers about it come in.
 
-The limit is kept with the app's own settings in
-`~/Library/Application Support/Gaia/projects/app/store.json`. To set it,
-write that file while Gaia is closed:
+The limit is kept with the app's settings in
+`<userData>/projects/app/store.json`. Gaia uses Electron's per-user `userData`
+folder:
 
-```sh
-mkdir -p ~/Library/Application\ Support/Gaia/projects/app
-echo '{"settings":{"jev-spend-limit":{"usd":0.25}}}' > ~/Library/Application\ Support/Gaia/projects/app/store.json
+| Platform | `userData` folder |
+| --- | --- |
+| Linux | `${XDG_CONFIG_HOME:-~/.config}/Gaia` |
+| Windows | `%APPDATA%\Gaia` |
+| macOS | `~/Library/Application Support/Gaia` |
+
+With Gaia closed, create `projects/app/store.json` there with this content to
+set a $0.25 limit:
+
+```json
+{"settings":{"jev-spend-limit":{"usd":0.25}}}
 ```
 
 The world appears once every answer is in, never half-judged: changing a
@@ -48,11 +70,10 @@ front of you.
 
 With no project named, Gaia opens on the start: the worlds you opened
 before, a folder on this computer, or the address of a public repository on
-GitHub (`github.com/owner/name`), which Gaia clones into
-`~/Library/Application Support/Gaia/clones/` and judges like any other
-codebase the same way. **File > Choose a World…** (⇧⌘O)
-returns to it, **File > Open Folder…** (⌘O) opens a folder directly, and
-`GAIA_PROJECT=/path/to/repo GAIA_JEV=live pnpm dev` skips the start.
+GitHub (`github.com/owner/name`), which Gaia clones into the `clones/` folder
+under `userData` and judges like any other codebase. **File > Choose a World…**
+returns to the start, **File > Open Folder…** opens a folder directly, and
+setting `GAIA_PROJECT` to a repository path before `pnpm dev` skips the start.
 
 ## What it costs
 
@@ -83,17 +104,12 @@ places whose facts changed are asked again, usually a handful of requests.
 ## Where answers are kept, and starting over
 
 Each project's answers live in
-`~/Library/Application Support/Gaia/projects/<project>/store.json`, where
-`<project>` is the first 12 characters of the repository's root commit.
+`<userData>/projects/<project>/store.json`, where `<project>` is the first 12
+characters of the repository's root commit.
 
-```sh
-# Forget one project (run inside its repository):
-rm -r ~/Library/Application\ Support/Gaia/projects/$(git rev-list --max-parents=0 HEAD | tail -1 | cut -c1-12)
-# Forget every project:
-rm -r ~/Library/Application\ Support/Gaia/projects
-# Remove the key:
-security delete-generic-password -s gaia-openrouter -a openrouter
-```
+Remove a project's folder under `projects/` to forget its answers, or remove
+the whole `projects/` folder to clear every project. Clear
+`OPENROUTER_API_KEY` from your shell session to remove the key.
 
 ## When Jev is not asked, or cannot answer
 
@@ -109,8 +125,8 @@ The terminal running `pnpm dev` prints how each world was judged, for example
 
 ## Trying it without OpenRouter
 
-A local stand-in for OpenRouter's Decisions API answers in Jev's format on
-this Mac, and the engine sends it a placeholder key, never yours:
+A local stand-in for OpenRouter's Decisions API answers in Jev's format, and
+the engine sends it a placeholder key, never yours:
 
 ```sh
 pnpm openrouter-stand-in --port 8787

@@ -1,7 +1,7 @@
 // End to end: the real engine binary judges a small codebase through a local
 // stand-in for OpenRouter's Decisions API. Nothing here reaches OpenRouter:
 // the engine refuses any endpoint override that is not a loopback address,
-// and sends a local endpoint a placeholder key, never the Keychain's.
+// and sends a local endpoint a placeholder key, never the configured key.
 
 import { type ChildProcess, execFileSync, spawn } from "node:child_process";
 import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -11,13 +11,14 @@ import { createInterface } from "node:readline";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { type StandIn, startOpenRouterStandIn } from "../../tools/openrouter-stand-in.ts";
 import { outlinesOf } from "@gaia/terrain";
+import { cargoEnv } from "../../tools/cargo-env.ts";
 import { createEngineClient } from "./engine-client.ts";
 import { openWorld, setSpendLimit } from "./open-world.ts";
 import type { ConsentPlan, Opening } from "./protocol.ts";
 
 const REPO = resolve(import.meta.dirname, "../..");
-const ENGINE = join(REPO, "target", "debug", "gaia-engine");
-/** A line of source that must never reach Jev: only facts and doc comments do. */
+const ENGINE = join(REPO, "target", "debug", process.platform === "win32" ? "gaia-engine.exe" : "gaia-engine");
+/** A source marker that distinguishes understanding requests from design requests. */
 const SOURCE_ONLY = "const secretSourceLine = 42;";
 
 let scratch = "";
@@ -28,7 +29,7 @@ const engines: ChildProcess[] = [];
 
 // A clean engine build takes minutes on CI's machines, and another test file's build may hold cargo's lock meanwhile.
 beforeAll(async () => {
-  execFileSync("cargo", ["build", "-p", "gaia-engine", "--quiet"], { cwd: REPO, env: { ...process.env, PATH: `${process.env.HOME}/.cargo/bin:${process.env.PATH}` }, stdio: "inherit" });
+  execFileSync("cargo", ["build", "-p", "gaia-engine", "--quiet"], { cwd: REPO, env: cargoEnv(), stdio: "inherit" });
   scratch = mkdtempSync(join(tmpdir(), "gaia-live-jev-"));
   standIn = await startOpenRouterStandIn({ refuse: ({ state, questions }) => refuseRoot && "water" in questions && (state as { directory?: { path?: string } }).directory?.path === "(the repository's root)" });
 }, 900_000);
@@ -142,7 +143,7 @@ describe("judging a codebase with Jev", () => {
     }
     expect([...named].sort()).toEqual(first.document.world.areas.map((a) => a.path).sort());
     // Every request went out once, with the placeholder key and nothing but the model, its state and questions. Judging
-    // the looks reads facts only; understanding reads the source, as the reviewer allowed.
+    // Design requests read facts; understanding requests read source.
     for (const [i, { authorization, body }] of first.sent.entries()) {
       expect(authorization).toBe("Bearer local-stand-in");
       expect(Object.keys(body).sort()).toEqual(["model", "questions", "state"]);

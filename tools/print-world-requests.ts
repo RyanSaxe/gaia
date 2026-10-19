@@ -10,6 +10,8 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { engineBinary } from "./engine-binary.ts";
+import { cargoEnv } from "./cargo-env.ts";
 import type { CodeGraph, JevEstimate } from "@gaia/schema";
 import { factsOf, planStanding, planWorldRequests } from "@gaia/world";
 import { LOOKS } from "../app/renderer/terrain/looks.ts";
@@ -22,10 +24,10 @@ const out = process.argv[2];
 if (out !== undefined) writeFileSync(out, `${JSON.stringify(planned, null, 2)}\n`);
 else console.log(JSON.stringify(planned.map((p) => p.request), null, 2));
 
-const env = { ...process.env, PATH: `${process.env.HOME}/.cargo/bin:${process.env.PATH}` };
+const env = cargoEnv();
 execFileSync("cargo", ["build", "-p", "gaia-engine", "--release", "--quiet"], { cwd: repo, env, stdio: "inherit" });
 const call = JSON.stringify({ jsonrpc: "2.0", id: 1, method: "jev.estimate", params: { requests: planned.map((p) => p.request) } });
-const run = spawnSync(resolve(repo, "target/release/gaia-engine"), ["rpc"], { input: `${call}\n`, maxBuffer: 1 << 26 });
+const run = spawnSync(engineBinary(repo, "release"), ["rpc"], { input: `${call}\n`, env, maxBuffer: 1 << 26 });
 const estimate = (JSON.parse(run.stdout.toString()) as { result: JevEstimate }).result;
 
 const by: Record<string, { requests: number; questions: number }> = {};

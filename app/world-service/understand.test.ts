@@ -12,10 +12,11 @@ import { createInterface } from "node:readline";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { CodeGraph, UnderstandPlan } from "@gaia/schema";
 import { type StandIn, startOpenRouterStandIn } from "../../tools/openrouter-stand-in.ts";
+import { cargoEnv } from "../../tools/cargo-env.ts";
 import { createEngineClient } from "./engine-client.ts";
 
 const REPO = resolve(import.meta.dirname, "../..");
-const ENGINE = join(REPO, "target", "debug", "gaia-engine");
+const ENGINE = join(REPO, "target", "debug", process.platform === "win32" ? "gaia-engine.exe" : "gaia-engine");
 
 let scratch = "";
 let standIn: StandIn;
@@ -23,7 +24,7 @@ const engines: ChildProcess[] = [];
 
 // A clean engine build takes minutes on CI's machines, and another test file's build may hold cargo's lock meanwhile.
 beforeAll(async () => {
-  execFileSync("cargo", ["build", "-p", "gaia-engine", "--quiet"], { cwd: REPO, env: { ...process.env, PATH: `${process.env.HOME}/.cargo/bin:${process.env.PATH}` }, stdio: "inherit" });
+  execFileSync("cargo", ["build", "-p", "gaia-engine", "--quiet"], { cwd: REPO, env: cargoEnv(), stdio: "inherit" });
   scratch = mkdtempSync(join(tmpdir(), "gaia-understand-"));
   standIn = await startOpenRouterStandIn();
 }, 900_000);

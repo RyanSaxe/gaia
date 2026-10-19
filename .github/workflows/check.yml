@@ -1,10 +1,5 @@
-# The same checks as the pre-commit hook (.githooks/pre-commit), on every pull
-# request and every push to main or develop: the type checker, the lint rules and the
-# tests, then the engine's tests and clippy; and, on a second runner, the probe
-# at one spot. A branch's push isn't checked apart from its pull request, so each
-# change takes two macOS runners, not four.
-# macOS, because Gaia is a Mac app and its engine keeps the Jev key in the
-# Keychain.
+# Pull requests run the type checker, lint, tests, Rust tests and clippy on
+# Linux, Windows and macOS. The GPU-backed Electron probe runs on macOS.
 name: check
 
 on:
@@ -21,7 +16,11 @@ concurrency:
 
 jobs:
   check:
-    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4

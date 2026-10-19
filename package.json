@@ -18,7 +18,7 @@
     "test": "vitest run",
     "check": "tsc --noEmit -p . && eslint . && vitest run",
     "prepare": "git config core.hooksPath .githooks",
-    "engine": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo build -p gaia-engine",
+    "engine": "tsx tools/cargo.ts build -p gaia-engine",
     "graph-snapshot": "tsx tools/graph-snapshot.ts",
     "print-world-requests": "tsx tools/print-world-requests.ts",
     "openrouter-stand-in": "tsx tools/openrouter-stand-in.ts",

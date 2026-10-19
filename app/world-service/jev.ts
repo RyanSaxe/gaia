@@ -1,8 +1,7 @@
 // Jev through the engine: the world service's JevClient. Requests asked
-// together (the planner asks eight at a time) go to the engine as one
-// `jev.batch`, which sends them to OpenRouter with the key from the macOS
-// Keychain. The key never reaches this process. A request that fails on its
-// own fails only its own `ask`; the engine refuses the whole batch unless it
+// together go to the engine as one `jev.batch`. The engine reads
+// OPENROUTER_API_KEY; the key never crosses the protocol. A request that
+// fails on its own fails only its own `ask`; the engine refuses the batch unless it
 // runs with GAIA_JEV=live. `openWorld` decides whether Jev is asked at all.
 
 import type { EngineClient, JevClient, JevRequest, JevResponse } from "@gaia/schema";

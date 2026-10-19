@@ -1,14 +1,11 @@
-//! The Jev connector: sends the planner's requests to Jev through
-//! OpenRouter's Decisions API with the key from the macOS Keychain. It is
-//! off unless the engine runs with `GAIA_JEV=live`, which the reviewer turns
-//! on only after approving the spend. A dry run returns exactly what would be
-//! sent (never the key) and what it would cost, and touches neither the
-//! network nor the Keychain. The key never leaves this process: it goes to
-//! curl on stdin, never on a command line and never back over the protocol.
+//! Sends typed requests through OpenRouter's Decisions API, enabled by
+//! `GAIA_JEV=live`. Estimates require no network or key access. The key comes
+//! from `OPENROUTER_API_KEY` and reaches curl through stdin, never through
+//! command-line arguments or the engine's JSON-RPC protocol.
 //!
 //! Tests point the connector at a local stand-in for OpenRouter with
 //! `GAIA_JEV_ENDPOINT`, which accepts only a loopback address. A local
-//! endpoint is sent a placeholder key and the Keychain is never read, so the
+//! endpoint is sent a placeholder key and the configured key is never read, so the
 //! person's key can only ever go to OpenRouter.
 
 use serde_json::{Value, json};
@@ -21,18 +18,12 @@ pub const ENDPOINT: &str = "https://openrouter.ai/api/alpha/decisions";
 /// USD per million input tokens for typesafe/jev-1.13; output tokens are free.
 /// From OpenRouter's model page as recorded on 2026-10-06.
 pub const USD_PER_MILLION_INPUT: f64 = 0.042;
-/// Concurrent requests at most. In round 4 of the engine plan, 64 at a time
-/// answered 245 requests in 2.2 s where 8 took 11.0, with no failures, and
-/// more did not help. The runner sends fewer when Jev says it is overloaded.
+/// Maximum concurrent requests. The runner reduces concurrency on overload.
 pub const CONCURRENCY: usize = 64;
 /// OpenRouter's own example request is 858 bytes of JSON billed as 476 input
 /// tokens, so Jev counts about 1.8 bytes per token. An estimate until a live
 /// run reports `usage.input_tokens`.
 pub const BYTES_PER_TOKEN: f64 = 1.8;
-/// Where the key lives: `security add-generic-password -s gaia-openrouter -a openrouter -w <key>`.
-pub const KEYCHAIN_SERVICE: &str = "gaia-openrouter";
-pub const KEYCHAIN_ACCOUNT: &str = "openrouter";
-
 /// The key a local stand-in for OpenRouter receives in place of the person's.
 pub const LOCAL_KEY: &str = "local-stand-in";
 
@@ -73,23 +64,13 @@ fn is_loopback(url: &str) -> bool {
         .any(|prefix| url.starts_with(prefix))
 }
 
-/// Whether a key is configured, without reading it: the Keychain is asked
-/// only whether the item exists. A local stand-in needs no key.
+/// Whether a nonempty OpenRouter key is configured. A local stand-in needs no key.
 pub fn has_key() -> bool {
     match endpoint() {
         Ok(Endpoint::Local(_)) => true,
-        Ok(Endpoint::OpenRouter) => Command::new("security")
-            .args([
-                "find-generic-password",
-                "-s",
-                KEYCHAIN_SERVICE,
-                "-a",
-                KEYCHAIN_ACCOUNT,
-            ])
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status()
-            .is_ok_and(|s| s.success()),
+        Ok(Endpoint::OpenRouter) => {
+            std::env::var("OPENROUTER_API_KEY").is_ok_and(|key| !key.trim().is_empty())
+        }
         Err(_) => false,
     }
 }
@@ -121,23 +102,16 @@ fn key(endpoint: &Endpoint) -> Result<String, String> {
     if let Endpoint::Local(_) = endpoint {
         return Ok(LOCAL_KEY.to_string());
     }
-    let out = Command::new("security")
-        .args([
-            "find-generic-password",
-            "-s",
-            KEYCHAIN_SERVICE,
-            "-a",
-            KEYCHAIN_ACCOUNT,
-            "-w",
-        ])
-        .output()
-        .map_err(|e| format!("Could not read the Keychain: {e}"))?;
-    if !out.status.success() {
-        return Err(format!(
-            "No OpenRouter key in the Keychain under {KEYCHAIN_SERVICE}."
-        ));
-    }
-    Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+    std::env::var("OPENROUTER_API_KEY")
+        .map(|key| key.trim().to_string())
+        .map_err(|_| "Set OPENROUTER_API_KEY before starting Gaia.".into())
+        .and_then(|key| {
+            if key.is_empty() {
+                Err("OPENROUTER_API_KEY is empty.".into())
+            } else {
+                Ok(key)
+            }
+        })
 }
 
 /// Why one request failed: Jev said it was overloaded (429 or 503, after
@@ -161,6 +135,7 @@ impl Failure {
 fn send(url: &str, key: &str, request: &Value) -> Result<Value, Failure> {
     let started = Instant::now();
     let mut child = Command::new("curl")
+        .env_remove("OPENROUTER_API_KEY")
         .args([
             "-sS",
             "--fail-with-body",

@@ -207,7 +207,7 @@ export async function openWorld({ engine, root, consent, progress }: OpenWorldOp
   let concurrency = 1;
   const status = await engine.call("jev.status", {});
   if (!status.live) unasked = "Jev is off: start Gaia with GAIA_JEV=live to judge it";
-  else if (!status.key) unasked = "there is no OpenRouter key in the Keychain (gaia-openrouter)";
+  else if (!status.key) unasked = "set OPENROUTER_API_KEY before starting Gaia";
   // Without Jev, a world opens only from answers all kept: one that needs anything asked fails, saying why. With no
   // spend limit the understanding pass wasn't planned, so it is planned now to know.
   if (unasked !== undefined) {

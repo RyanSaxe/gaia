@@ -32,13 +32,13 @@ looks; `docs/decisions/` says why each was decided.
 
 ## Running
 
-You need Node 26, pnpm 10 and a stable Rust toolchain from rustup (put
-`~/.cargo/bin` first on `PATH`; Homebrew's rustc is not used).
+You need Node 26, pnpm 10 and a stable Rust toolchain from rustup. The engine
+build script puts rustup's cargo first on `PATH`.
 
 | Command | What it does |
 | --- | --- |
 | `pnpm install` | Installs dependencies and points git at `.githooks/` |
-| `GAIA_JEV=live pnpm dev` | Builds the engine and opens the app on the start page, with Jev judging through the Keychain's key (`docs/connect-jev.md`); `GAIA_PROJECT=/path` opens that folder's world, `GAIA_PROJECT=proving` the proving ground and `GAIA_PROJECT=showcase` the showcase (`showcase-fixed` with its old `v1/` fixed). Without `GAIA_JEV=live`, a world that needs Jev fails to open and says why |
+| `GAIA_JEV=live pnpm dev` | Builds the engine and opens the app on the start page, with Jev judging through `OPENROUTER_API_KEY` (`docs/connect-jev.md`); `GAIA_PROJECT=/path` opens that folder's world, `GAIA_PROJECT=proving` the proving ground and `GAIA_PROJECT=showcase` the showcase (`showcase-fixed` with its old `v1/` fixed). Without `GAIA_JEV=live`, a world that needs Jev fails to open and says why |
 | `pnpm lab:html out.html` | The lab as one offline page, on Gaia's own world with Jev's kept answers |
 | `pnpm lab:serve` | That page on this Mac's Tailscale address, port 5180, rebuilt on every change |
 | `pnpm shots [word...]` | Photographs every kind of thing the proving ground stands, where it stands, at vitality 1, 0.5 and 0.1 by day and 1 at night, into `shots/`; with words, only the stops whose names hold one; fails when the page reports a WebGL error |
@@ -94,9 +94,9 @@ Both `pnpm shots` and `pnpm probe` start from a browser profile of their
 own, so the far forms bake as on a first visit, and both fail when the page
 reports any WebGL error, printing how many and the first few.
 
-To prove a live Jev path without spending anything, run the local stand-in
-and point the engine at it. The engine accepts only a loopback endpoint and
-never reads the Keychain for one:
+To prove the Jev path without spending anything, run the local stand-in and
+point the engine at it. The engine accepts only a loopback endpoint and uses
+a placeholder key for one, never reading `OPENROUTER_API_KEY`:
 
 ```sh
 pnpm openrouter-stand-in --port 8787

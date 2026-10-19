@@ -15,16 +15,18 @@ import { writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import type { CodeGraph } from "@gaia/schema";
 import { judgedGraph, judgedThings } from "../app/world-service/open-world.ts";
+import { engineBinary } from "./engine-binary.ts";
+import { cargoEnv } from "./cargo-env.ts";
 
 const repo = resolve(import.meta.dirname, "..");
 const root = resolve(process.argv[2] ?? repo);
 const out = resolve(process.argv[3] ?? resolve(repo, "app/renderer/terrain/fixtures/gaia-graph.json"));
 if (process.env.GAIA_DATA_DIR === undefined) throw new Error("Set GAIA_DATA_DIR to the store that holds Jev's answers for this project.");
-const env = { ...process.env, PATH: `${process.env.HOME}/.cargo/bin:${process.env.PATH}` };
+const env = cargoEnv();
 execFileSync("cargo", ["build", "-p", "gaia-engine", "--release", "--quiet"], { cwd: repo, env, stdio: "inherit" });
 
 const request = JSON.stringify({ jsonrpc: "2.0", id: 1, method: "project.graph", params: { root, judged: true } });
-const run = spawnSync(resolve(repo, "target/release/gaia-engine"), ["rpc"], { input: `${request}\n`, env, maxBuffer: 1 << 30 });
+const run = spawnSync(engineBinary(repo, "release"), ["rpc"], { input: `${request}\n`, env, maxBuffer: 1 << 30 });
 const response = JSON.parse(run.stdout.toString()) as { result?: CodeGraph; error?: { message: string } };
 if (response.result === undefined) throw new Error(response.error?.message ?? "project.graph answered nothing");
 const graph = judgedGraph(response.result);

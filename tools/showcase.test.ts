@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join, relative, resolve, sep } from "node:path";
 import ts from "typescript";
 import { afterAll, describe, expect, it } from "vitest";
 import type { CodeGraph } from "@gaia/schema";
@@ -14,10 +14,10 @@ const repo = resolve(import.meta.dirname, "..");
 /** The showcase's code as `pnpm showcase --code` writes it, with its old `v1/` as it is or fixed, by path. */
 function written(v1: "broken" | "fixed"): { dir: string; files: string[]; text: (path: string) => string } {
   const dir = mkdtempSync(join(tmpdir(), "gaia-showcase-"));
-  execFileSync(resolve(repo, "node_modules/.bin/tsx"), ["tools/showcase.ts", "--code", dir, "--v1", v1], { cwd: repo, stdio: "pipe" });
+  execFileSync(process.execPath, ["--import", "tsx", "tools/showcase.ts", "--code", dir, "--v1", v1], { cwd: repo, stdio: "pipe" });
   const files = (readdirSync(dir, { recursive: true, withFileTypes: true }) as { name: string; parentPath: string; isFile(): boolean }[])
     .filter((f) => f.isFile())
-    .map((f) => join(f.parentPath, f.name).slice(dir.length + 1))
+    .map((f) => relative(dir, join(f.parentPath, f.name)).split(sep).join("/"))
     .sort();
   return { dir, files, text: (path) => readFileSync(join(dir, path), "utf8") };
 }
