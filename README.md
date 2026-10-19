@@ -1,115 +1,63 @@
-# Gaia
+# gaia
 
-![A late afternoon in Gaia's own world, at eye height: a stream winds through grass and wildflowers to a stone mill turning its waterwheel, past a lookout tower and a timber-framed house among autumn maples and a fir, and at the lower left the minimap, a torn scrap of the field map naming the area underfoot.](docs/images/world.jpg)
+## Wander your codebase.
 
-Gaia turns a codebase into a world you walk through at eye height:
-directories become land, files become patches of ground where each function
-and class stands as a tree, a stone or a bush, packages stand as cottages,
-towers and great trees, and the dependencies between them wear trails. Every
-part of the world shows the health of the code it stands for, so a tangled
-function grows a tired tree and a failing package falls slowly to ruin.
+Gaia turns a codebase into a world you walk through. Folders become lands,
+and files and functions stand on them as trees, houses and towers, the
+biggest for the code that matters most. Healthy code grows lush and whole;
+tangled, failing code withers into ruin. Fix it and commit, and you watch the
+land around it come back to life.
 
-What each thing becomes is chosen by Jev, a decision model reached through
-OpenRouter, from facts about the code. Without a key, a world opens only from
-answers Jev gave before.
+**[The film goes here]**
 
-## Running Gaia
+![A village of timber houses by a brook in late afternoon light](docs/images/world.jpg)
 
-You need macOS, Node 26, pnpm 10 and a stable Rust toolchain from rustup.
+## Get started
+
+You need Node 26, pnpm 10, Rust from rustup, and an
+[OpenRouter key](docs/connect-jev.md) for Jev, the AI model that judges your
+code. Gaia reads the key from the macOS Keychain, so judging your own code
+needs a Mac for now.
 
 ```sh
 pnpm install
-pnpm dev
-```
-
-`pnpm dev` builds the engine and opens the app on the start page, where you
-choose a folder on your computer, a world you walked before, or the address
-of a public repository on GitHub. `GAIA_PROJECT=$PWD pnpm dev` opens this
-repository's own world directly.
-
-In the world, click or tap the ground to walk there, drag to look around,
-and walk with W, A, S and D or the arrows: each turns you that way and walks
-you forward (Shift hurries). You always face the way you walk. Press M for the
-field map, and tap a place on it to travel there.
-
-### Connecting Jev
-
-Put your OpenRouter key in the Keychain, then start Gaia live:
-
-```sh
-security add-generic-password -s gaia-openrouter -a openrouter -w
+security add-generic-password -s gaia-openrouter -a openrouter -w   # paste your OpenRouter key
 GAIA_JEV=live pnpm dev
 ```
 
-Only the engine reads the key. While Gaia is being built it asks Jev
-without a spend limit and prints each run's estimate; judging this
-repository costs about two cents. Jev's answers are kept, so reopening a world asks again only about
-what changed. [Connecting Jev](docs/connect-jev.md) has the details.
+Gaia opens on a map table. Choose a folder on your computer or a public
+repository on GitHub, and walk in: click the ground to walk there, and drag
+to look around. The first visit takes about a minute while Jev judges it.
 
-### The lab on a phone or in one file
+No key yet? Walk a world that comes already judged:
 
 ```sh
-pnpm lab:serve          # the lab on this Mac's Tailscale address, port 5180
-pnpm lab:html gaia.html # the lab as one offline HTML file
+GAIA_PROJECT=showcase pnpm dev
 ```
 
-Both show Gaia's own world, judged by Jev's kept answers, with no engine
-behind them. `pnpm lab:serve` listens only on the Tailscale address and
-rebuilds the page whenever the renderer changes.
+## Walk around
 
-## The field map
+Tap anything to open the journal at its page: its code, how healthy it is,
+and a painting of it. Press M for the journal's map of the whole land, and
+tap anywhere on it to travel there.
 
-![The field map unfolded over the world: a hand-painted topographic map of Gaia's own code, each directory an area lettered in spaced capitals, painted green where its code is healthy and gold where it tires, with streams, dotted trails, small drawn houses and towers, and a traveller in a red cloak where the person stands. Behind the map, on the left, a dead tree and fallen-in houses stand in grey murk over failing code, and healthy grass grows in front.](docs/images/field-map.jpg)
-
-Each area of the map is a directory, and its colors are its code's health:
-green where it thrives, turning gold, russet and ash as it fails. Its
-patches are files, its little drawings are the packages' buildings and
-landmarks, and its dotted lines are the trails between them.
+<p>
+  <img src="docs/images/journal.jpg" width="49%" alt="The journal open at a function's page: a painting of its rotted maple beside its code and scores">
+  <img src="docs/images/map.jpg" width="49%" alt="The journal open at the map of the whole world, a pencilled route leading to the ruin">
+</p>
 
 ## How it works
 
-```mermaid
-flowchart LR
-  subgraph engine [Engine, Rust]
-    read["Reads files and git history"] --> model[("Code model")]
-    client["Jev client, key from the Keychain"]
-  end
-  subgraph service [World service]
-    graph["Code graph"] --> land["Land divided by the code"]
-    graph --> questions["Typed questions"]
-    kept[("Kept answers")]
-    land --> doc[("World document")]
-    kept --> doc
-  end
-  subgraph renderer [Renderer, Three.js]
-    bake["Terrain baked on workers"] --> stand["Trees, buildings and trails stood on it"] --> draw["Drawn at eye height"]
-  end
-  model --> graph
-  questions --> client --> jev(["Jev, through OpenRouter"]) --> kept
-  doc --> bake
-```
+<img src="docs/images/how-it-works.svg" alt="Your code goes to Gaia's engine, which reads every folder, file, function and link. Jev, through OpenRouter, judges how much each part matters, its health and what it becomes, and every answer is kept. The world is laid out from the code with health in every leaf, and you walk it, read it and fix it. Committing a fix goes back to the engine, and the open world heals in place.">
 
-The Rust engine reads the code into a model of files, symbols, imports,
-tests and history. The world service turns that model into a graph, divides
-the land among directories and files by how much code each holds, and asks
-Jev a typed question about every choice a person could make differently.
-The renderer bakes the terrain on worker threads, stands the world's things
-on it and draws it. Electron's main process starts the engine and the world
-service and opens the window.
+Gaia's engine reads your code into a graph of folders, files, functions and
+the links between them. Jev judges each part, and Gaia lays out the land from
+the code and stands every part on it. Jev's answers are kept, so reopening a
+world only asks about what changed, and a commit heals an open world in place.
 
-Gaia does not yet watch a project for changes or run its tests, compiler or
-linter: reopen a world to see new code, and failing tests and diagnostics
-read as none.
+## Documentation
 
-## Docs
-
-- [Architecture](docs/architecture.md): the data, the processes, the
-  packages and how a world is made from code.
-- [Design system](docs/design-system.md): how everything looks and moves.
-- [Decisions](docs/decisions/README.md): what the reviewer settled, and why.
-- [AGENTS.md](AGENTS.md): the rules, how to run and check Gaia, and the
-  contracts between its parts.
-
-`pnpm check` runs the type checker, the lint rules and the tests, and
-`cargo test` and `cargo clippy` cover the engine. CI runs all of them on every
-push and pull request; the pre-commit hook checks types and lint. `pnpm readme-shots` retakes the screenshots above.
+- [Connecting Jev](docs/connect-jev.md) covers the key, the cost and spend limits.
+- [Architecture](docs/architecture.md) shows how the engine, the world service and the renderer fit together.
+- [Design system](docs/design-system.md) describes how the world looks and why.
+- [The showcase](docs/showcase.md) and [the proving ground](docs/proving-ground.md) are the two made-up codebases Gaia is filmed and tested in.

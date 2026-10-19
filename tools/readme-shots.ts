@@ -1,5 +1,5 @@
 // Takes the README's screenshots from the lab: the world at eye height, and
-// the field map unfolded over it. Each shot names its spot, hour and view, and
+// the journal open at its map. Each shot names its spot, hour and view, and
 // the lab's own hooks (`window.__lab`) put the person there, so the shots can
 // be taken again whenever the world changes. The one-file lab opens in a
 // hidden Electron window (the app's own Chromium, drawing on the GPU), and each
@@ -23,18 +23,17 @@ interface Shot {
   readonly toward: readonly [number, number];
   /** Degrees above the horizon. */
   readonly pitch: number;
-  /** Unfolds the field map over the world. */
-  readonly map?: boolean;
+  /** Opens the journal at this place: "map", "contents", or a thing's path. */
+  readonly journal?: string;
 }
 
 /**
  * In Gaia's own world, in the late afternoon: the village of packages/schema, where a stream turns a mill's
- * waterwheel among maples; and the field map unfolded on healthy ground at the edge of the murk over the old
- * terrain lab's file, failing, its houses fallen in. Found with the tour and the world's ground health.
+ * waterwheel below two lookout towers, among maples; and from there the journal open at its map.
  */
 const SHOTS: readonly Shot[] = [
   { file: "world.jpg", hour: 17.5, at: [-144, -281], toward: [-64, -281], pitch: 1 },
-  { file: "field-map.jpg", hour: 17.5, at: [306, -122], toward: [399, -84], pitch: 1, map: true },
+  { file: "journal.jpg", hour: 17.5, at: [-144, -281], toward: [-64, -281], pitch: 1, journal: "map" },
 ];
 
 /** The window's size in CSS pixels; it draws at twice that and each shot is scaled back down. */
@@ -77,16 +76,17 @@ async function take() {
     for (let k = 0; k < 60 && !(await run("window.__lab.terrain.landLead().every((v) => v > 0)")); k++) await wait(500);
     // Long enough for the grass and ground to follow, and for the slip naming the place to come and go.
     await wait(10000);
-    if (s.map) {
-      await run("window.__lab.immersive.map(true)");
-      await wait(5000);
+    if (s.journal !== undefined) {
+      await run("window.__lab.immersive.journal(" + JSON.stringify(s.journal) + ")");
+      // The book swings open in about a second; its map paints the land in a few more.
+      await wait(8000);
     }
     const image = await win.webContents.capturePage();
     writeFileSync(out + "/" + s.file, image.resize({ width, quality: "best" }).toJPEG(quality));
     say(s.file);
-    if (s.map) {
-      await run("window.__lab.immersive.map(false)");
-      await wait(1500);
+    if (s.journal !== undefined) {
+      await run("window.__lab.immersive.journal(null)");
+      await wait(2500);
     }
   }
 }
