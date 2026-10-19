@@ -8,17 +8,16 @@ biggest for the code that matters most. Healthy code grows lush and whole;
 tangled, failing code withers into ruin. Fix it and commit, and you watch the
 land around it come back to life.
 
-**Everything runs on your Mac. Gaia reads your code locally and asks Jev, an
-AI model, what each part should become and how healthy it is.**
-
-<!-- film: drag gaia-film-readme.mp4 here -->
+**[The film goes here]**
 
 ![A village of timber houses by a brook in late afternoon light](docs/images/world.jpg)
 
 ## Get started
 
-Gaia needs macOS, Node 26, pnpm 10, Rust from rustup, and an
-[OpenRouter key](docs/connect-jev.md) for Jev.
+You need Node 26, pnpm 10, Rust from rustup, and an
+[OpenRouter key](docs/connect-jev.md) for Jev, the AI model that judges your
+code. Gaia reads the key from the macOS Keychain, so judging your own code
+needs a Mac for now.
 
 ```sh
 pnpm install
@@ -36,23 +35,25 @@ No key yet? Walk a world that comes already judged:
 GAIA_PROJECT=showcase pnpm dev
 ```
 
+## Walk around
+
+Tap anything to open the journal at its page: its code, how healthy it is,
+and a painting of it. Press M for the journal's map of the whole land, and
+tap anywhere on it to travel there.
+
+<p>
+  <img src="docs/images/journal.jpg" width="49%" alt="The journal open at a function's page: a painting of its rotted maple beside its code and scores">
+  <img src="docs/images/map.jpg" width="49%" alt="The journal open at the map of the whole world, a pencilled route leading to the ruin">
+</p>
+
 ## How it works
 
-```mermaid
-flowchart LR
-  A["Your repository"] --> B["Gaia reads the code and its history"]
-  B --> C["Jev judges every part"]
-  C --> D["A world is laid out"]
-  D --> E["You walk it"]
-  E -->|commit a fix| B
-```
+<img src="docs/images/how-it-works.svg" alt="Your code goes to Gaia's engine, which reads every folder, file, function and link. Jev, through OpenRouter, judges how much each part matters, its health and what it becomes, and every answer is kept. The world is laid out from the code with health in every leaf, and you walk it, read it and fix it. Committing a fix goes back to the engine, and the open world heals in place.">
 
 Gaia's engine reads your code into a graph of folders, files, functions and
-the links between them. Jev reads each part and judges how much it matters,
-how well it is written, and what it should stand as in the world. Gaia lays
-out the land from the code and stands each part on it, its health shown in
-every leaf, roof and field. Jev's answers are kept, so reopening a world only
-asks about what changed, and a commit heals an open world in place.
+the links between them. Jev judges each part, and Gaia lays out the land from
+the code and stands every part on it. Jev's answers are kept, so reopening a
+world only asks about what changed, and a commit heals an open world in place.
 
 ## Documentation
 
