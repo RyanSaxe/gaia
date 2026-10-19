@@ -1,5 +1,5 @@
 {
- "about": "Edges the rules filled, sampled across the bench (25 per repository, seeded) and checked by hand against the source. Step 2, round 7 of pair session engine-jev.",
+ "about": "Edges the rules filled, sampled across the bench (25 per repository, seeded) and checked by hand against the source.",
  "kind": "imports",
  "labels": [
   {
