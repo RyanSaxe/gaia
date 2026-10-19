@@ -28,7 +28,7 @@ GAIA_JEV=live pnpm dev
 
 Gaia opens on a map table. Choose a folder on your computer or a public
 repository on GitHub, and walk in: click the ground to walk there, and drag
-to look around. The first visit is judged in about a minute, for a few cents.
+to look around. The first visit takes about a minute while Jev judges it.
 
 No key yet? Walk a world that comes already judged:
 
