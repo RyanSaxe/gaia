@@ -3,8 +3,8 @@
 //! JSON file of tables, each table a map from key to value, under
 //! `<data>/projects/<project id>/store.json`. A write replaces the whole file
 //! through a rename, so a crash never leaves it half-written. `<data>` is
-//! `GAIA_DATA_DIR` (the app passes its user-data folder) or, failing that,
-//! `~/Library/Application Support/Gaia`.
+//! `GAIA_DATA_DIR` (the app passes its user-data folder) or the platform's
+//! normal per-user data folder.
 
 use serde_json::{Map, Value};
 use std::fs;
@@ -17,9 +17,36 @@ pub(crate) fn data_dir() -> Result<PathBuf, String> {
     if let Ok(dir) = std::env::var("GAIA_DATA_DIR") {
         return Ok(PathBuf::from(dir));
     }
-    let home =
-        std::env::var("HOME").map_err(|_| "No GAIA_DATA_DIR and no HOME to keep the store in.")?;
-    Ok(PathBuf::from(home).join("Library/Application Support/Gaia"))
+    #[cfg(target_os = "windows")]
+    {
+        let app_data = std::env::var_os("APPDATA")
+            .map(PathBuf::from)
+            .or_else(|| {
+                std::env::var_os("USERPROFILE")
+                    .map(|home| PathBuf::from(home).join("AppData/Roaming"))
+            })
+            .ok_or("No GAIA_DATA_DIR, APPDATA or USERPROFILE to keep the store in.")?;
+        return Ok(app_data.join("Gaia"));
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let home = std::env::var_os("HOME")
+            .map(PathBuf::from)
+            .ok_or("No GAIA_DATA_DIR or HOME to keep the store in.")?;
+        return Ok(home.join("Library/Application Support/Gaia"));
+    }
+    #[cfg(target_os = "linux")]
+    {
+        if let Some(data_home) = std::env::var_os("XDG_DATA_HOME") {
+            return Ok(PathBuf::from(data_home).join("gaia"));
+        }
+        let home = std::env::var_os("HOME")
+            .map(PathBuf::from)
+            .ok_or("No GAIA_DATA_DIR, XDG_DATA_HOME or HOME to keep the store in.")?;
+        return Ok(home.join(".local/share/gaia"));
+    }
+    #[allow(unreachable_code)]
+    Err("Gaia has no app-data folder for this platform.".into())
 }
 
 /// The store file of one project. A project ID is a commit hash or a content

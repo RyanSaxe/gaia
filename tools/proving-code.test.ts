@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join, resolve, sep } from "node:path";
 import ts from "typescript";
 import { afterAll, describe, expect, it } from "vitest";
 import type { ManifestEntry } from "./proving-code.ts";
@@ -10,9 +10,9 @@ const repo = resolve(import.meta.dirname, "..");
 
 describe("the proving ground's code", () => {
   const dir = mkdtempSync(join(tmpdir(), "gaia-proving-"));
-  execFileSync(resolve(repo, "node_modules/.bin/tsx"), ["tools/proving.ts", "--code", dir], { cwd: repo, stdio: "pipe" });
+  execFileSync(process.execPath, ["--import", "tsx", "tools/proving.ts", "--code", dir], { cwd: repo, stdio: "pipe" });
   const manifest = JSON.parse(readFileSync(`${dir}-manifest.json`, "utf8")) as ManifestEntry[];
-  const files = (readdirSync(dir, { recursive: true }) as string[]).filter((f) => /\.(ts|rs)$/.test(f));
+  const files = (readdirSync(dir, { recursive: true }) as string[]).map((f) => f.split(sep).join("/")).filter((f) => /\.(ts|rs)$/.test(f));
   const text = (path: string): string => readFileSync(join(dir, path), "utf8");
   afterAll(() => {
     rmSync(dir, { recursive: true, force: true });

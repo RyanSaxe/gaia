@@ -12,14 +12,14 @@ export interface EngineMethods {
    * Walks and parses the project into its code graph: a node for every
    * directory, file, definition and block, with its lines and history, and
    * every reference the rules have not resolved as pending. Every language reads the same way,
-   * through its grammar's queries (`docs/architecture.md`, "The code graph").
+   * through its grammar's queries in `engine/queries/`.
    */
   "project.graph": { params: { root: string; judged?: boolean }; result: CodeGraph };
   /**
    * Builds every request Jev would be sent to understand the project (its
    * links, then importance and quality at every level) and looks each up in
    * the store; sends nothing. A request already answered is kept, never
-   * sent again (`docs/architecture.md`, "The Jev runner").
+   * sent again while its request hash is unchanged.
    */
   "understanding.plan": { params: { root: string }; result: UnderstandPlan };
   /**
@@ -32,8 +32,8 @@ export interface EngineMethods {
   /**
    * The commit a world of `root` would be read from now, as `project.graph`
    * reads it: the commit checked out, or null when the world would be read
-   * from disk. The start asks it to show a world's picture only while its
-   * code is the code it pictures.
+   * from disk. The start compares it with the last opened commit to
+   * show whether the code has changed.
    */
   "project.commit": { params: { root: string }; result: { commit: string | null } };
   /**
@@ -68,8 +68,8 @@ export interface EngineMethods {
    */
   "project.clone": { params: { address: string }; result: Cloned };
   /**
-   * Sends many requests to Jev with the key from the macOS Keychain, eight at
-   * a time, answering in the order asked: each a response, or the reason that
+   * Sends many requests to Jev with OPENROUTER_API_KEY, up to the engine's
+   * concurrency limit, answering in the order asked: each a response, or the reason that
    * one request failed. Fails as a whole only when nothing can be sent, such
    * as when the engine runs without GAIA_JEV=live.
    */
@@ -77,9 +77,8 @@ export interface EngineMethods {
   /** What a batch would send and cost, without sending it or reading the key. */
   "jev.estimate": { params: { requests: JevRequest[] }; result: JevEstimate };
   /**
-   * Whether an OpenRouter key is in the Keychain (asked without reading it)
-   * and whether this engine runs with GAIA_JEV=live. Only these two flags
-   * cross; the key never does.
+   * Whether OPENROUTER_API_KEY is nonempty and whether this engine runs with
+   * GAIA_JEV=live. Only these two flags cross; the key never does.
    */
   "jev.status": { params: Record<string, never>; result: { key: boolean; live: boolean } };
   /** Reads one record from a project's app-data store; null when it was never written. */
@@ -130,7 +129,7 @@ export interface JevEstimate {
   readonly live: boolean;
 }
 
-/** The passes of understanding, in the order their waits allow (`docs/architecture.md`, "The Jev runner"). */
+/** The passes of understanding, in dependency order: links before folders, files after their folders. */
 export type Pass = "link" | "folders" | "files";
 
 /** What understanding a project would send, pass by pass, and what it would cost. */

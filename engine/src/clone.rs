@@ -15,7 +15,6 @@
 
 use serde_json::{Value, json};
 use std::io::Read;
-use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::thread;
@@ -78,7 +77,7 @@ fn git() -> Command {
     c.env("GIT_TERMINAL_PROMPT", "0")
         .env("GIT_LFS_SKIP_SMUDGE", "1")
         .env("GIT_CONFIG_NOSYSTEM", "1")
-        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_CONFIG_GLOBAL", git_null_device())
         .env("GCM_INTERACTIVE", "never")
         .args([
             "-c",
@@ -90,15 +89,38 @@ fn git() -> Command {
             "-c",
             "core.symlinks=false",
             "-c",
-            "core.hooksPath=/dev/null",
+            if cfg!(windows) {
+                "core.hooksPath=NUL"
+            } else {
+                "core.hooksPath=/dev/null"
+            },
         ])
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        // Its own process group, so stopping it at a cap stops the helpers it started too.
-        .process_group(0);
+        .stderr(Stdio::piped());
+    // Its own process group lets a timeout stop git and any helpers it started.
+    isolate_process(&mut c);
     c
 }
+
+#[cfg(windows)]
+fn git_null_device() -> &'static str {
+    "NUL"
+}
+
+#[cfg(not(windows))]
+fn git_null_device() -> &'static str {
+    "/dev/null"
+}
+
+#[cfg(unix)]
+fn isolate_process(command: &mut Command) {
+    use std::os::unix::process::CommandExt;
+    command.process_group(0);
+}
+
+#[cfg(windows)]
+fn isolate_process(_command: &mut Command) {}
 
 /// How a capped git call ended.
 enum Ran {
@@ -160,9 +182,18 @@ fn run(mut cmd: Command, seconds: u64, watch: Option<&Path>) -> Ran {
             .map(|p| Box::new(p) as Box<dyn Read + Send>),
     );
     let stop = |child: &mut std::process::Child| {
-        let _ = Command::new("kill")
-            .args(["-KILL", &format!("-{}", child.id())])
-            .status();
+        #[cfg(unix)]
+        {
+            let _ = Command::new("kill")
+                .args(["-KILL", &format!("-{}", child.id())])
+                .status();
+        }
+        #[cfg(windows)]
+        {
+            let _ = Command::new("taskkill")
+                .args(["/PID", &child.id().to_string(), "/T", "/F"])
+                .status();
+        }
         let _ = child.kill();
         let _ = child.wait();
     };

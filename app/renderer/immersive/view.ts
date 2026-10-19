@@ -1,18 +1,6 @@
-// The immersive world: the world (`terrain/world.ts`), full screen, with nothing on
-// it but the world itself and three quiet ways of knowing where you are, all
-// at once, drawn on one field sheet (docs/design-system.md, "The field
-// sheet"): the minimap, a torn scrap of the field map low at the right that
-// turns with the person and letters the area's name (`minimap.ts`), the field
-// map that unfolds out of it, and markers in the world. Touching the world
-// only ever moves you (docs/design-system.md, "One way to touch the world");
-// walking up to a thing, the scrap rings it, and stopping at a thing raises
-// its page at the lower left (`sketch.ts`). The compass in the top right corner points north
-// (`compass.ts`) and opens the one other paper, the slip, with Gaia's mark
-// and how to wander.
-// Walking, tapping a thing to walk up to it, the lantern and the hour all
-// come from the world. Once the world stands and its map is painted, a
-// picture of the whole map goes to the world service, which keeps it with the
-// world for the start (`picture.ts`).
+// Connects the world to the journal, minimap, compass and help slip. Selecting
+// code opens its journal page without moving the person. Map picks and
+// paintings request travel; saved positions and paintings restore a visit.
 
 import { type PlaceArea, stoodBy } from "@gaia/terrain";
 import { type CodeWorld, areaVitality, entityOf, journalOf } from "@gaia/world";
@@ -59,7 +47,6 @@ export interface Immersive {
   readonly hook: Readonly<Record<string, unknown>>;
 }
 
-/** A jump's timing, matching lab.css: the paper clouds over and holds a moment, frames for the ground and grass to follow under it, and the world dissolving in, ms. */
 /** A jump: how long the paper takes to cover the view, the frames drawn under it before it lifts, how long it takes
  * to lift, ms, and how many meters across the paper's map of the place shows. */
 const JUMP = { coverMs: 480, settleFrames: 4, revealMs: 1100, span: 190 };
@@ -68,12 +55,12 @@ const JUMP = { coverMs: 480, settleFrames: 4, revealMs: 1100, span: 190 };
 const WANDER = /* html */ `
   <dl class="slip-wander">
     <dt><span class="mouse-only">Click</span><span class="touch-only">Tap</span> the land</dt><dd>go there</dd>
-    <dt><span class="mouse-only">Click</span><span class="touch-only">Tap</span> a thing</dt><dd>walk up and see its page</dd>
+    <dt><span class="mouse-only">Click</span><span class="touch-only">Tap</span> a thing</dt><dd>see its journal page</dd>
     <dt>Drag</dt><dd>look around</dd>
     <dt class="mouse-only">W A S D</dt><dd class="mouse-only">walk, Shift to hurry</dd>
-    <dt><span class="mouse-only">Click</span><span class="touch-only">Tap</span> the minimap</dt><dd>unfold the map<span class="mouse-only"> (M); Esc folds it</span></dd>
+    <dt><span class="mouse-only">Click</span><span class="touch-only">Tap</span> the minimap</dt><dd>open the journal map<span class="mouse-only"> (M); Esc folds it</span></dd>
     <dt><span class="mouse-only">Click</span><span class="touch-only">Tap</span> its edge</dt><dd>tuck it away, and again to bring it back</dd>
-    <dt><span class="mouse-only">Click</span><span class="touch-only">Tap</span> the map</dt><dd>go to that place</dd>
+    <dt><span class="mouse-only">Click</span><span class="touch-only">Tap</span> the map</dt><dd>mark a place, then tap its mark to travel</dd>
   </dl>`;
 
 export function createImmersive(container: HTMLElement, world: WorldHandle): Immersive {
@@ -103,8 +90,8 @@ export function createImmersive(container: HTMLElement, world: WorldHandle): Imm
   let watching: Readonly<TripUnderWay> | null = null;
   /**
    * Takes the person to a landing: along the trails or straight across the
-   * land, the field map folding away as they set off (round 23's travel
-   * thread), or where neither goes, by a jump with the book shut. With
+   * land, closing the field map as they set off. A place without a route
+   * uses a covered jump with the book shut. With
    * `watch`, sent from the journal's map, the book stays open on the map
    * while they travel, their traveller going along the way pencilled there,
    * and shuts as they arrive. With `face` they end facing as the landing does.

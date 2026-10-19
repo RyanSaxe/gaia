@@ -29,6 +29,8 @@ import { createEngineClient } from "../app/world-service/engine-client.ts";
 import { engineJev } from "../app/world-service/jev.ts";
 import { LOOKS } from "../app/renderer/terrain/looks.ts";
 import { startOpenRouterStandIn } from "./openrouter-stand-in.ts";
+import { engineBinary } from "./engine-binary.ts";
+import { cargoEnv } from "./cargo-env.ts";
 
 const repo = resolve(import.meta.dirname, "..");
 const flag = (name: string, fallback: string): string => {
@@ -52,8 +54,8 @@ const kept: Kept = existsSync(out) ? (JSON.parse(readFileSync(out, "utf8")) as K
 let engine: ChildProcess | undefined;
 let closeStandIn: (() => Promise<void>) | undefined;
 function startEngine(env: Record<string, string>): EngineClient {
-  execFileSync("cargo", ["build", "-p", "gaia-engine", "--release", "--quiet"], { cwd: repo, env: { ...process.env, PATH: `${process.env.HOME}/.cargo/bin:${process.env.PATH}` }, stdio: "inherit" });
-  engine = spawn(resolve(repo, "target/release/gaia-engine"), ["rpc"], { env: { ...process.env, ...env }, stdio: ["pipe", "pipe", "inherit"] });
+  execFileSync("cargo", ["build", "-p", "gaia-engine", "--release", "--quiet"], { cwd: repo, env: cargoEnv(), stdio: "inherit" });
+  engine = spawn(engineBinary(repo, "release"), ["rpc"], { env: { ...process.env, ...env }, stdio: ["pipe", "pipe", "inherit"] });
   const client = createEngineClient((line) => engine?.stdin?.write(`${line}\n`));
   if (engine.stdout !== null) createInterface({ input: engine.stdout }).on("line", (line) => client.receive(line));
   return client;
@@ -68,7 +70,7 @@ if (judge === "local") {
 else throw new Error(`Unknown judge ${judge}; choose jev or local.`);
 
 const status = await client.call("jev.status", {});
-if (!status.live || !status.key) throw new Error("Jev needs GAIA_JEV=live and the gaia-openrouter key in the Keychain.");
+if (!status.live || !status.key) throw new Error("Jev needs GAIA_JEV=live and OPENROUTER_API_KEY.");
 
 // What this run would send: the requests not kept yet, at most --limit of them, the looks' and what every thing
 // stands as.

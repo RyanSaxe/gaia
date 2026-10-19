@@ -32,7 +32,7 @@
 // Usage: pnpm proving [--code DIR [--manifest PATH]]
 
 import { mkdirSync, writeFileSync } from "node:fs";
-import { dirname, relative, resolve } from "node:path";
+import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { parseArgs } from "node:util";
 import { type Blueprint, type CodeFacts, type EntityFacts, type EntityForm, type FileFacts, type SymbolFact, blueprintOf } from "@gaia/schema";
 import { drift as driftPrimitive } from "@gaia/primitives";
@@ -493,9 +493,12 @@ if (args.code !== undefined) {
   const manifestPath = resolve(args.manifest ?? `${dir}-manifest.json`);
   for (const path of [dir, manifestPath]) {
     const inside = relative(repo, path);
-    if (!inside.startsWith("..") && !inside.split("/").includes("node_modules")) throw new Error(`Write the proving ground's code and manifest outside Gaia's repository or under node_modules, or Gaia's own world reads them: ${path}.`);
+    const outside = inside === ".." || inside.startsWith(`..${sep}`) || isAbsolute(inside);
+    if (!outside && !inside.split(sep).includes("node_modules")) throw new Error(`Write the proving ground's code and manifest outside Gaia's repository or under node_modules, or Gaia's own world reads them: ${path}.`);
   }
-  if (!relative(dir, manifestPath).startsWith("..")) throw new Error(`Write the manifest beside the code, not in it, or the engine takes every file it names for used: ${manifestPath}.`);
+  const manifestRelative = relative(dir, manifestPath);
+  const manifestOutside = manifestRelative === ".." || manifestRelative.startsWith(`..${sep}`) || isAbsolute(manifestRelative);
+  if (!manifestOutside) throw new Error(`Write the manifest beside the code, not in it, or the engine takes every file it names for used: ${manifestPath}.`);
   const vitality = new Map(world.patches.map((p) => [p.path, p.vitality]));
   const { code, manifest } = provingCode(files.map((facts, i) => ({ facts, health: (drafted[i] as Drafted).health, vitality: vitality.get(facts.path) ?? 1 })));
   for (const [path, text] of code) {

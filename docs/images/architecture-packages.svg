@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 585" role="img" aria-labelledby="title desc">
+  <title id="title">Gaia package responsibilities and dependencies</title>
+  <desc id="desc">A table of Gaia packages, their responsibilities, and their direct package imports.</desc>
+  <style>
+    text { font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; fill:#202923; }
+    .head { font-size:12px; font-weight:750; letter-spacing:1.2px; fill:#657268; }
+    .name { font-size:17px; font-weight:700; }
+    .role { font-size:15px; fill:#46544a; }
+    .imports { font-size:14px; fill:#5e6a61; }
+  </style>
+  <rect width="1200" height="585" rx="18" fill="#fbfaf5"/>
+  <text class="head" x="48" y="42">PACKAGE</text>
+  <text class="head" x="300" y="42">RESPONSIBILITY</text>
+  <text class="head" x="805" y="42">DIRECT IMPORTS</text>
+  <path d="M40 60H1160" stroke="#d4dbd2" stroke-width="1.5"/>
+
+  <g>
+    <rect x="40" y="72" width="1120" height="56" rx="8" fill="#e6edf1"/>
+    <text class="name" x="58" y="106">@gaia/schema</text><text class="role" x="300" y="106">Shared types and protocols</text><text class="imports" x="805" y="106">none</text>
+  </g>
+  <g>
+    <rect x="40" y="136" width="1120" height="56" rx="8" fill="#fff"/>
+    <text class="name" x="58" y="170">@gaia/kinds</text><text class="role" x="300" y="170">Roles and component slots</text><text class="imports" x="805" y="170">@gaia/schema</text>
+  </g>
+  <g>
+    <rect x="40" y="200" width="1120" height="56" rx="8" fill="#fff"/>
+    <text class="name" x="58" y="234">@gaia/primitives</text><text class="role" x="300" y="234">Pure component geometry</text><text class="imports" x="805" y="234">@gaia/schema</text>
+  </g>
+  <g>
+    <rect x="40" y="264" width="1120" height="56" rx="8" fill="#fff"/>
+    <text class="name" x="58" y="298">@gaia/world</text><text class="role" x="300" y="298">Facts · questions · composition</text><text class="imports" x="805" y="298">@gaia/schema · @gaia/terrain</text>
+  </g>
+  <g>
+    <rect x="40" y="328" width="1120" height="56" rx="8" fill="#fff"/>
+    <text class="name" x="58" y="362">@gaia/terrain</text><text class="role" x="300" y="362">Land · placement · movement</text><text class="imports" x="805" y="362">@gaia/schema · @gaia/primitives · @gaia/realize</text>
+  </g>
+  <g>
+    <rect x="40" y="392" width="1120" height="56" rx="8" fill="#fff"/>
+    <text class="name" x="58" y="426">@gaia/realize</text><text class="role" x="300" y="426">Blueprints to parts and looks</text><text class="imports" x="805" y="426">@gaia/schema · @gaia/primitives</text>
+  </g>
+  <g>
+    <rect x="40" y="456" width="1120" height="56" rx="8" fill="#fff"/>
+    <text class="name" x="58" y="490">@gaia/render</text><text class="role" x="300" y="490">Materials · instanced drawing</text><text class="imports" x="805" y="490">@gaia/schema · @gaia/realize · Three.js</text>
+  </g>
+  <g>
+    <rect x="40" y="520" width="1120" height="48" rx="8" fill="#e2eee4"/>
+    <text class="name" x="58" y="551">@gaia/app</text><text class="role" x="300" y="551">Electron processes and user interface</text><text class="imports" x="805" y="551">all domain packages · Three.js</text>
+  </g>
+</svg>

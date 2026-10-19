@@ -1,17 +1,12 @@
-// How the keys walk and turn a person who looks where they stand, with no body
-// on screen (round 22's walking thread). ↑ walks ahead. A tap of ← or →
-// nudges the person a few degrees, and holding it turns on at the same
-// steady rate, standing or walking, for as long as it is held: there are no
-// big turns, and no turn ever speeds up. ↓ walks backward, still facing
-// ahead, the view never turning. Shift hurries the walk ahead. Nothing moves
-// the view but these keys and the person's own hand, so walking never
-// sickens (round 20's movement thread).
+// Keyboard steering. A tap nudges the view; holding a side key continues
+// at the same angular speed. Backward walking preserves the facing. Keeping
+// turns at a constant rate limits unexpected camera acceleration.
 
 /** The keys steering reads: the four ways, and Shift. */
 export type WalkKey = "ahead" | "left" | "right" | "back" | "shift";
 
 const DEG = Math.PI / 180;
-/** Every number of steering. Sources are in docs/design-system.md (Terrain, walking). */
+/** Steering constants; design rationale is in docs/design-system.md#terrain-walking-and-travel. */
 export const STEER = {
   /** The one rate the keys turn the view at, radians a second: a nudge's and a held key's alike, never easing. */
   rate: 60 * DEG,

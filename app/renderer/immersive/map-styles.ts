@@ -1,5 +1,5 @@
 // The field sheet's look, one for the field map, the minimap, a thing's
-// sketch page and the wait (docs/design-system.md, "The field sheet"): a
+// journal and waiting screen (docs/design-system.md, "The field sheet"): a
 // painted topographic map. On the map, color is health and nothing else:
 // every area starts from one healthy green (`landWash`), and each file's
 // vitality spreads over the ground around it (`healthField`) in health's

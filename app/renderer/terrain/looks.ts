@@ -13,21 +13,9 @@ import type { Composing, Look, Looks } from "@gaia/world";
 const look = (doc: string): Look => ({ doc });
 
 /**
- * Each size of thing, smallest first: the range of rank by importance among
- * the world's own entities, files and definitions that it is offered to (0
- * the least important, 1 the most, as `rankThings` reads it), and how big and
- * how rare it is, which ends every one of its forms' words. The ranges
- * overlap, so nearly every thing is offered two sizes or more and Jev chooses
- * among them by character. Jev reads importance as size whatever the words
- * say, so the small forms stop at the less important half and the code that
- * matters below the buildings, from 0.75 to 0.90, is offered the trees alone,
- * among which Jev still picks by character: that is what grows a world's
- * woods. Jev picks a building most times it is offered one (214 of Gaia's
- * things from 0.90), and only the most important things are offered a
- * building or a landmark; the very most important, from 0.997, are offered a
- * landmark or a tree, since offered a building too Jev took the building and
- * a world lost its landmarks. A rank is a share of the world's own things,
- * so the ranges hold at any world size.
+ * Available size ranges by importance rank within the world. Overlapping
+ * ranges let Jev choose by character. Reserving the highest ranks for trees
+ * and landmarks prevents buildings from crowding out those silhouettes.
  */
 export const SIZES = {
   flowers: { rank: [0, 0.45], words: "Flowers grow low in the grass, and many things are flowers." },

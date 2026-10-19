@@ -32,7 +32,8 @@ void app.whenReady().then(() => {
   const service = utilityProcess.fork(join(here, "world-service.js"), [], { serviceName: "Gaia world service", stdio: "inherit" });
   const toService = (message: FromMain, ports?: MessagePortMain[]): void => service.postMessage(message, ports);
 
-  const engine = superviseEngine(process.env.GAIA_ENGINE ?? join(repoRoot, "target", "debug", "gaia-engine"), ["rpc"], {
+  const engineName = process.platform === "win32" ? "gaia-engine.exe" : "gaia-engine";
+  const engine = superviseEngine(process.env.GAIA_ENGINE ?? join(repoRoot, "target", "debug", engineName), ["rpc"], {
     up: () => toService({ type: "engine.up" }),
     down: (reason) => toService({ type: "engine.down", reason }),
     line: (line) => toService({ type: "engine.line", line }),

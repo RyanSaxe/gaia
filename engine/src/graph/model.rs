@@ -1,5 +1,5 @@
 //! The code graph's types, as `packages/schema/src/graph.ts` declares them.
-//! Only what the engine fills today is here; Jev's answers (`judged`) join
+//! The engine fills structural facts; Jev's answers (`judged`) join
 //! when the runner exists.
 
 use serde::Serialize;

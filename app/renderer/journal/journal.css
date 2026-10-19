@@ -1,5 +1,5 @@
-/* The traveller's journal (book.ts, page.ts): a worn leather book, its cream pages printed in round 29's type, at
-   the lower right when closed with the minimap on a slip under a strap, held open in the middle of the view. The
+/* The traveller's journal (book.ts, page.ts): a worn leather book, its cream pages printed in serif type, at
+   the lower left when closed with the minimap on a slip under a strap, held open in the middle of the view. The
    book's own pixels: a page is --pw by --ph, the boards overhang by --ov. */
 .journal { position: absolute; inset: 0; pointer-events: none; perspective: 2400px; perspective-origin: 50% 46%; z-index: 3; }
 .journal-catch { position: absolute; inset: 0; }
@@ -173,12 +173,12 @@
 .jp-row-meter .jp-track { width: 22px; height: 5px; }
 .jp-row-page { font: 14px/1 "Bradley Hand", Georgia, cursive; color: #7a5f45; min-width: 38px; text-align: right; font-style: normal; font-weight: normal; }
 
-/* Code: round 29's type, its line numbers by hand down a pencil-ruled gutter; a long line wraps under a hanging indent. */
+/* Code: serif type, its line numbers by hand down a pencil-ruled gutter; a long line wraps under a hanging indent. */
 .jp-code { font: 10.7px/1.6 "SF Mono", ui-monospace, Menlo, monospace; color: #3a2f24; }
 .jp-line { display: grid; grid-template-columns: 2.4em 1fr; column-gap: 1.1em; position: relative; }
 .jp-ln { text-align: right; color: #8f7a5c; font: 12.5px/1.6 "Bradley Hand", Georgia, cursive; border-right: 1px solid rgba(120, 95, 65, 0.38); padding-right: 0.5em; }
 .jp-text { white-space: pre-wrap; overflow-wrap: anywhere; padding-left: calc(var(--ind) * 1ch + 2ch); text-indent: -2ch; }
-/* Round 23's slate hues, deepened to read on cream. */
+/* Slate highlighting with contrast against cream paper. */
 .ink-kw { color: #3a49b4; }
 .ink-str { color: #93407f; }
 .ink-num { color: #4f6b8f; }

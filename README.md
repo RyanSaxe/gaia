@@ -10,35 +10,33 @@ https://github.com/user-attachments/assets/2a6665b9-835b-4689-a651-32035e56789e
 
 ## Get started
 
-You need Node 26, pnpm 10, Rust from rustup, and an
-[OpenRouter key](docs/connect-jev.md) for Jev, the AI model that judges your
-code. Gaia reads the key from the macOS Keychain, so judging your own code
-needs a Mac for now (linux/windows will be supported soon along with other keys).
+You need Node 26, pnpm 10, Git, curl, stable Rust from rustup, and an
+[OpenRouter key](docs/connect-jev.md) for Jev, which judges your code.
+
+Install dependencies, set `OPENROUTER_API_KEY` to your key and `GAIA_JEV` to
+`live` in your environment, then start Gaia:
 
 ```sh
 pnpm install
-security add-generic-password -s gaia-openrouter -a openrouter -w   # paste your OpenRouter key
-GAIA_JEV=live pnpm dev
+pnpm dev
 ```
 
-Choose a folder on your computer or a public repository on GitHub, and walk in! 
-It takes a minute or two to generate your world. 
+Choose a folder on your computer or a public repository on GitHub, and walk in!
+It takes a minute or two to generate your world.
 
-For a 100k LOC codebase, this will take only twenty to fifty cents. So walking
-around a reasonably sized 10-20k LOC personal project should under 10 cents even
-as you update the code.
+Judging a 100k LOC codebase costs roughly twenty to fifty cents. Updating a
+10–20k LOC personal project should cost under ten cents.
 
-No key yet? Walk the showcase world to get a feel for gaia!
+Gaia estimates the cost before sending live requests and reuses saved answers
+on later runs.
 
-```sh
-GAIA_PROJECT=showcase pnpm dev
-```
+No key yet? Choose the showcase world from Gaia's start page to get a feel for it.
 
 ## Walk around
 
-Tap anything to open the journal at its page: its code, how healthy it is,
-and a painting of it. Press M for the journal's map of the whole land, and
-tap anywhere on it to travel there.
+Tap a code object to open its journal page: its code, how healthy it is,
+and a painting of it. Press M for the journal's map of the whole land.
+Choose a spot on the map, then tap its mark to travel there.
 
 <p>
   <img src="docs/images/journal.jpg" width="49%" alt="The journal open at a function's page: a painting of its rotted maple beside its code and scores">
@@ -47,22 +45,15 @@ tap anywhere on it to travel there.
 
 ## How it works
 
-<img src="docs/images/how-it-works.svg" alt="Your code goes to Gaia's engine, which reads every folder, file, function and link. Jev, through OpenRouter, judges how much each part matters, its health and what it becomes, and every answer is kept. The world is laid out from the code with health in every leaf, and you walk it, read it and fix it. Committing a fix goes back to the engine, and the open world heals in place.">
+![Gaia's data flow from repository through code analysis and world design to the renderer](docs/images/architecture-data-flow.svg)
 
-Gaia's engine reads your code into a graph of folders, files, functions and
-the links between them and determines the layout of your world. Jev is sent 
-the source code as state, along with a series of questions in order to determine
-the quality and importance of different parts of your code. Then, Jev also 
-determines what objects the entities in your codebase will become. Everything
-is procedurally generated, so there are genuinely many billions of unique buildings
-and other objects that Jev can put in your world.
+Jev handles two separate tasks: analyzing code for scores and links, and
+answering typed design questions that choose the world's parts and
+appearance. The [architecture guide](docs/architecture.md) explains the data
+and package boundaries.
 
-From there, your world stays as is until you edit the code (and commit it). If your
-change doesn't modify the graph (e.g. you just change the body of a function), the
-world will update in realtime. Otherwise you currently need to reload the game. 
-Currently, the engine doesn't do a great job at keeping your world salient through 
-these changes, but my long term goal is to really make the changes to the world
-evocative to the changes in your code.
+After a commit, Gaia updates vitality for things that still stand. If the
+layout changes, the current world keeps its shape until you reopen it.
 
 ![A village of timber houses by a brook in late afternoon light](docs/images/world.jpg)
 
@@ -70,5 +61,6 @@ evocative to the changes in your code.
 
 - [Connecting Jev](docs/connect-jev.md) covers the key, the cost and spend limits.
 - [Architecture](docs/architecture.md) shows how the engine, the world service and the renderer fit together.
-- [Design system](docs/design-system.md) describes how the world looks and why.
+- [World design](docs/design-system.md) describes shared visual and interaction rules.
+- [Development](docs/development.md) covers commands, test worlds and verification.
 - [The showcase](docs/showcase.md) and [the proving ground](docs/proving-ground.md) are the two made-up codebases Gaia is filmed and tested in.

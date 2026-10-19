@@ -10,7 +10,7 @@ export function showcaseFiles(bundle: string): Map<string, string> {
   const keep = (): void => {
     if (path !== null) files.set(path, `${lines.join("\n").replace(/\n+$/, "")}\n`);
   };
-  for (const line of bundle.split("\n")) {
+  for (const line of bundle.split(/\r?\n/)) {
     const header = /^=== (.+) ===$/.exec(line);
     if (header === null) {
       lines.push(line);

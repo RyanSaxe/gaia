@@ -1,7 +1,7 @@
 //! The generic loop: one file's tree and query matches into definitions,
 //! blocks and references. Nothing here is about one language; everything
-//! comes from the capture names on the parse page (`docs/architecture.md`,
-//! "The code graph"):
+//! comes from the query captures listed below. Language-specific queries
+//! live in `engine/queries/`:
 //!
 //! - `@definition.<role>` with `@name`; `@owner` with the `@scope` it covers;
 //!   `@params` (a list of parameters) or `@param` (each one) where a grammar

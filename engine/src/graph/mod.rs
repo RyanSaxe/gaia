@@ -24,7 +24,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const DAY: i64 = 86_400;
-/// How far back a commit counts as recent, as today's activity channel reads it.
+/// The history window used to count recent commits, in days.
 const RECENT_DAYS: i64 = 14;
 
 /// Parses keyed by language and content hash, so a file is parsed again

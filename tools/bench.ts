@@ -18,6 +18,8 @@ import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { createInterface } from "node:readline";
 import type { Cloned, CodeGraph } from "@gaia/schema";
+import { engineBinary } from "./engine-binary.ts";
+import { cargoEnv } from "./cargo-env.ts";
 
 interface Repo {
   readonly name: string;
@@ -33,11 +35,10 @@ interface Repo {
 
 const repo = resolve(import.meta.dirname, "..");
 const env = {
-  ...process.env,
-  PATH: `${process.env.HOME}/.cargo/bin:${process.env.PATH}`,
+  ...cargoEnv(),
   GAIA_DATA_DIR: resolve(repo, "node_modules/.cache/gaia-bench"),
 };
-const engine = resolve(repo, "target/release/gaia-engine");
+const engine = engineBinary(repo, "release");
 
 /** One request to a fresh engine, and how long it took to answer. */
 async function call<T>(method: string, params: object, dataDir?: string): Promise<{ result: T; ms: number }> {

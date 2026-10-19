@@ -1,6 +1,6 @@
 // Code reads like code on a journal's page: each line in pieces by what they
 // are, keywords, strings, numbers, called names, types, properties and
-// comments, which the page inks in round 23's slate hues deepened for cream.
+// comments, inked in slate hues with enough contrast against cream paper.
 // It reads a definition's lines as one text, so a comment or a string that
 // runs over several lines is inked as one, and knows a language only by how
 // its file's comments are written.

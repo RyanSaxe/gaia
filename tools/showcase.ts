@@ -1,45 +1,12 @@
-// The showcase's codebase: gaia, a made-up static site generator whose code
-// and comments guide Jev to the places Gaia's film walks: a wood, a village by
-// the water, a tower on the hub, a meadow, and an old renderer gone to ruin
-// (`docs/showcase.md`).
-//
-// Its source is real code, kept as one text file
-// (`app/renderer/terrain/fixtures/showcase-code.txt`, each file under its
-// `=== path ===` line), so Gaia's own world reads one file rather than a
-// codebase of its own. Each part is written as well or as poorly as it
-// fares: the old renderer in `v1/` shares state through globals, swallows its
-// errors and fails its tests; the rest is kept.
-//
-// `--code DIR` writes the showcase's source to DIR, outside Gaia's repository or
-// under node_modules, so Gaia's own world never reads it.
-//
-// `--v1 fixed` swaps the showcase's broken old renderer for the same renderer
-// written well (`fixtures/showcase-code-v1-fixed.txt`): the same files, the
-// same definitions, each as many lines long, so the land lays out exactly
-// the same and only how well `v1/` is written changes. Its world is kept
-// apart (`showcase-fixed-*.json`), so the film can show both of Jev's
-// verdicts on the same place. Judge each in a store of its own: the engine
-// holds an answer through a file's changes until a fresh one clearly differs.
-//
-// `--judge jev|local` opens the showcase as the app opens any folder (`openWorld`):
-// the engine reads it, Jev's understanding pass judges how much each part
-// matters and how well it is made, and Jev judges and composes its world.
-// The answers are kept in the store under GAIA_DATA_DIR, beside the
-// showcase's source, so a later run asks only what changed. It then writes
-// the page's copy of that world, as `pnpm graph-snapshot` and `pnpm jev-world` write
-// Gaia's: the judged graph (`fixtures/showcase-graph.json`), what was judged
-// about each thing for the journal (`showcase-judged.json`), and every answer
-// the world is laid out from, by request key (`showcase-jev.json`). `local`
-// asks the OpenRouter stand-in on this machine and sends nothing; `jev` asks
-// Jev, only with GAIA_JEV=live, the Keychain's key and `--spend-up-to`
-// covering twice the engine's estimate.
-//
+// Writes or judges the synthetic showcase and its repaired variant. Source,
+// graphs and saved answers are bundled for offline use; see docs/showcase.md.
+// Keep variants in separate stores so held judgments do not cross between them.
 // Usage: pnpm showcase --code DIR [--v1 fixed]
 //        GAIA_DATA_DIR=dir pnpm showcase --judge jev|local [--v1 fixed] [--spend-up-to 0.4]
 
 import { type ChildProcess, execFileSync, spawn } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { createInterface } from "node:readline";
 import { parseArgs } from "node:util";
 import type { CodeGraph, JevResponse } from "@gaia/schema";
@@ -49,6 +16,8 @@ import { showcaseFiles } from "../app/renderer/terrain/showcase-code.ts";
 import { createEngineClient } from "../app/world-service/engine-client.ts";
 import { judgedGraph, judgedThings, openWorld } from "../app/world-service/open-world.ts";
 import { startOpenRouterStandIn } from "./openrouter-stand-in.ts";
+import { engineBinary } from "./engine-binary.ts";
+import { cargoEnv } from "./cargo-env.ts";
 
 const repo = resolve(import.meta.dirname, "..");
 const fixtures = resolve(repo, "app/renderer/terrain/fixtures");
@@ -68,7 +37,8 @@ if (fixedV1) {
 /** Writes the showcase's source to a folder outside Gaia's repository. */
 function writeCode(dir: string): void {
   const inside = relative(repo, dir);
-  if (!inside.startsWith("..") && !inside.split("/").includes("node_modules")) throw new Error(`Write the showcase's code outside Gaia's repository or under node_modules, or Gaia's own world reads it: ${dir}.`);
+  const outside = inside === ".." || inside.startsWith(`..${sep}`) || isAbsolute(inside);
+  if (!outside && !inside.split(sep).includes("node_modules")) throw new Error(`Write the showcase's code outside Gaia's repository or under node_modules, or Gaia's own world reads it: ${dir}.`);
   for (const [path, text] of files) {
     mkdirSync(dirname(join(dir, path)), { recursive: true });
     writeFileSync(join(dir, path), text);
@@ -98,8 +68,8 @@ const keptFile = resolve(fixtures, `${variant}-jev.json`);
 const kept: Kept = existsSync(keptFile) ? (JSON.parse(readFileSync(keptFile, "utf8")) as Kept) : { answers: {} };
 
 const standIn = judge === "local" ? await startOpenRouterStandIn({ delayMs: 0 }) : undefined;
-execFileSync("cargo", ["build", "-p", "gaia-engine", "--release", "--quiet"], { cwd: repo, env: { ...process.env, PATH: `${process.env.HOME}/.cargo/bin:${process.env.PATH}` }, stdio: "inherit" });
-const engine: ChildProcess = spawn(resolve(repo, "target/release/gaia-engine"), ["rpc"], {
+execFileSync("cargo", ["build", "-p", "gaia-engine", "--release", "--quiet"], { cwd: repo, env: cargoEnv(), stdio: "inherit" });
+const engine: ChildProcess = spawn(engineBinary(repo, "release"), ["rpc"], {
   env: { ...process.env, GAIA_DATA_DIR: resolve(data), ...(standIn === undefined ? {} : { GAIA_JEV: "live", GAIA_JEV_ENDPOINT: standIn.endpoint }) },
   stdio: ["pipe", "pipe", "inherit"],
 });
@@ -124,7 +94,7 @@ async function billed(project: string): Promise<{ requests: number; inputTokens:
 
 try {
   const status = await client.call("jev.status", {});
-  if (!status.live || !status.key) throw new Error("Jev needs GAIA_JEV=live and the gaia-openrouter key in the Keychain.");
+  if (!status.live || !status.key) throw new Error("Jev needs GAIA_JEV=live and OPENROUTER_API_KEY.");
   const first = await client.call("project.graph", { root, judged: true });
   const project = first.projectId;
   // The answers kept before go into the store, so only what changed is asked.
