@@ -66,6 +66,12 @@ calls over newline-delimited JSON-RPC. The service sends the renderer its
 document and progress over a `MessagePort`. These boundaries are declared in
 `app/world-service/protocol.ts` and `packages/schema/src/engine.ts`.
 
+Sound runs only in the renderer, in `app/renderer/sound/`. Each frame the world
+reports what reaches the person (`WorldHandle.earshot()`), and the sound module
+turns that into Web Audio levels; the pure packages make no sound. A recording
+is decoded only while it may be heard, and the same graph renders a recorded
+walk offline.
+
 ## Packages
 
 The diagram lists each package's role and direct imports.

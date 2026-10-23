@@ -14,6 +14,7 @@ import { OPENING_ASPECT, type World, createWorld, openingBuilds } from "./terrai
 import { worldHooks } from "./terrain/hooks.ts";
 import { makeAhead } from "./terrain/made.ts";
 import { type Immersive, createImmersive } from "./immersive/view.ts";
+import { type Sound, createSound } from "./sound/index.ts";
 import { startWaitEarly } from "./wait/wait.ts";
 import { Library, seedOf } from "@gaia/schema";
 import { WORLD_PRIMITIVES } from "@gaia/primitives";
@@ -48,6 +49,7 @@ const stats = createStats();
 
 let world: World | null = null;
 let immersive: Immersive | null = null;
+let sound: Sound | null = null;
 /** The world's hooks, `__lab.terrain`, once it is made. */
 let hooks: Readonly<Record<string, unknown>> | null = null;
 
@@ -60,6 +62,7 @@ function loop(now: number): void {
     stats.begin(world.renderer);
     world.frame(dt, now, clock.hour());
     immersive?.frame(dt);
+    sound?.frame();
     stats.end(world.renderer, elapsed);
   }
   requestAnimationFrame(loop);
@@ -81,6 +84,8 @@ const opened: Promise<World> = Promise.all([builds, drawn]).then(() => {
   made.setActive(true);
   immersive.setActive(true);
   world = made;
+  const shown = immersive;
+  sound = createSound(made.handle, () => shown.book());
   hooks = worldHooks(made.inside);
   requestAnimationFrame(loop);
   return made;
@@ -145,4 +150,6 @@ window.__lab = {
   terrain: new Proxy({}, { get: (_, key: string) => hooks?.[key] }),
   /** The immersive world's hooks: the map, a jump, the slip in the corner, and what each way of knowing where you are shows. */
   immersive: new Proxy({}, { get: (_, key: string) => immersive?.hook[key] }),
+  /** The world's sound (`sound/index.ts`): with `?sound=record`, what the person hears kept and rendered offline. */
+  sound: new Proxy({}, { get: (_, key: string) => sound?.hook[key] }),
 };

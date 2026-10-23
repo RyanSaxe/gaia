@@ -1,6 +1,7 @@
-// Connects the world to the journal, minimap, compass and help slip. Selecting
-// code opens its journal page without moving the person. Map picks and
-// paintings request travel; saved positions and paintings restore a visit.
+// Connects the world to the journal, minimap, compass and help slip, which
+// also sets how loud the music and the world are. Selecting code opens its
+// journal page without moving the person. Map picks and paintings request
+// travel; saved positions and paintings restore a visit.
 
 import { type PlaceArea, stoodBy } from "@gaia/terrain";
 import { type CodeWorld, areaVitality, entityOf, journalOf } from "@gaia/world";
@@ -21,6 +22,7 @@ import type { WordsSource } from "../journal/words.ts";
 import { createFieldMap, drawLand } from "./field-map.ts";
 import { MARKER_LAYER, createMarkers } from "./markers.ts";
 import { createMinimap } from "./minimap.ts";
+import { type Levels, soundLevels } from "../sound/levels.ts";
 
 /** The painter the journal's kept paintings were made by: a new one paints them all afresh. */
 const PAINTER = "painter-1";
@@ -44,6 +46,8 @@ const CARD_VIEW = 520;
 export interface Immersive {
   setActive(on: boolean): void;
   frame(dt: number): void;
+  /** The journal as it lies: open or shut, and whether a leaf is turning. */
+  book(): { readonly open: boolean; readonly turning: boolean };
   readonly hook: Readonly<Record<string, unknown>>;
 }
 
@@ -422,11 +426,28 @@ export function createImmersive(container: HTMLElement, world: WorldHandle): Imm
     <img class="slip-mark" src="${SLIP_LOGO}" alt="Gaia">
     <div class="slip-world">the world of <i data-ref="world-name"></i></div>
     <div class="slip-head">Wandering</div>
-    ${WANDER}`;
+    ${WANDER}
+    <div class="slip-head">Sound</div>
+    <div class="slip-sound">
+      <label class="slip-level"><span>Music</span><input type="range" min="0" max="100" step="1" data-ref="music"></label>
+      <label class="slip-level"><span>World</span><input type="range" min="0" max="100" step="1" data-ref="world"></label>
+    </div>`;
   layer.append(menuButton, slip);
   const worldName = slip.querySelector("[data-ref=world-name]") as HTMLElement;
+  // The music and the world's sound, each from silent to as mixed: the slider's inked part shows how much.
+  const levels = soundLevels();
+  for (const part of ["music", "world"] as const satisfies readonly (keyof Levels)[]) {
+    const slider = slip.querySelector(`[data-ref=${part}]`) as HTMLInputElement;
+    levels.watch((l) => {
+      slider.value = String(Math.round(l[part] * 100));
+      slider.style.setProperty("--level", `${l[part] * 100}%`);
+    });
+    slider.addEventListener("input", () => levels.set(part, Number(slider.value) / 100));
+  }
   function setSlip(on: boolean): void {
     if (on) map.open(false);
+    // A slider left focused would take the keys meant for walking.
+    if (!on && slip.contains(document.activeElement)) (document.activeElement as HTMLElement).blur();
     slip.classList.toggle("open", on);
     menuButton.setAttribute("aria-expanded", String(on));
   }
@@ -494,6 +515,7 @@ export function createImmersive(container: HTMLElement, world: WorldHandle): Imm
       }
       apply();
     },
+    book: () => journal.state(),
     frame(dt) {
       if (!active || !standing) return;
       const p = world.person();

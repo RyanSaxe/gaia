@@ -177,6 +177,8 @@ async function probe() {
   // A tiling window manager leaves a window of fixed size floating at the size asked for.
   const fixed = { resizable: false, fullscreenable: false, minimizable: false, maximizable: false };
   const win = new BrowserWindow({ ...fixed, show: false, width, height, useContentSize: true, webPreferences: { backgroundThrottling: false } });
+  // The world makes sound; a scripted window plays none of it aloud.
+  win.webContents.setAudioMuted(true);
   win.webContents.on("console-message", (e) => {
     if (e.level === "error") say("page: " + e.message);
     if (e.level === "warning" || e.level === "error") messages.push(e.message);

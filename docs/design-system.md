@@ -150,12 +150,41 @@ Movement constants live in `GAIT`, `STEER` and `TRAVEL` in
 [`travel.ts`](../packages/terrain/src/travel.ts). Keep their values in code so
 changes do not leave a second specification behind.
 
+## Sound
+
+The world is heard as it is seen. Field recordings (wind in the grass, the
+brook, waterwheels, birds, crickets, footsteps and the journal's paper) play
+under music derived from the announcement film's storybook score. Nothing is
+synthesized. Sound follows the rule for effects: subtle, never loud, and
+nothing that draws attention to itself.
+
+- Levels follow the film's Hush mix: the music at −21 LUFS and the world
+  about 10 dB under it. No sound rises more than 6 dB over its level, however
+  near or strong.
+- What reaches the person comes from where they stand: the gust there, the
+  nearest stream and waterwheel by distance and side, the hour's dark, the
+  crowns overhead and how far the land around has failed. Birds sing by day
+  over thriving land and fall silent where it fails; failing land dries the
+  wind and the footsteps; a stopped waterwheel makes no sound.
+- The music never stops. Strings and harp hold under everything, the theme
+  plays two times round in three, a night colour joins at dusk, and the
+  harmony turns minor over failing land.
+- The help slip sets the music and the world apart, each from silent to as
+  mixed, and the game remembers both. A window no one can see makes no sound.
+
+| Source | Owns |
+| --- | --- |
+| [`sound/hearing.ts`](../app/renderer/sound/hearing.ts) | What is heard where, as levels, sides and tone |
+| [`sound/music.ts`](../app/renderer/sound/music.ts) | How the score plays |
+| [`sound/levels.ts`](../app/renderer/sound/levels.ts) | The slip's music and world levels |
+| [`sound/assets/CREDITS.md`](../app/renderer/sound/assets/CREDITS.md) | Each recording's source and licence |
+
 ## Journal and interaction
 
 Clicking or tapping land walks there. Selecting a code object opens its
 journal page at the person's current position. The journal opens only when
 requested. Its closed cover carries the minimap at the lower left; the compass
-at the upper right opens the help slip.
+at the upper right opens the help slip, which also holds the sound's levels.
 
 The journal presents a code item's name, quality, importance, code and a
 painting from the actual world. Scores are percentages. Folder and file leads

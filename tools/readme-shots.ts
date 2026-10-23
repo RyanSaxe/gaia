@@ -60,6 +60,8 @@ app.commandLine.appendSwitch("ignore-gpu-blocklist");
 const say = (line) => console.log("readme-shots: " + line);
 async function take() {
   const win = new BrowserWindow({ show: false, width, height, useContentSize: true, webPreferences: { backgroundThrottling: false } });
+  // The world makes sound; a scripted window plays none of it aloud.
+  win.webContents.setAudioMuted(true);
   win.webContents.on("console-message", (e) => { if (e.level === "error") say("page: " + e.message); });
   await win.loadFile(page);
   const run = (js) => win.webContents.executeJavaScript(js);

@@ -290,6 +290,18 @@ button { font: inherit; color: var(--ink); background: var(--panel); border: 1px
 .slip-wander { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0 6px 12px; font-size: 13px; }
 .slip-wander dt { font-style: italic; font-weight: 600; color: var(--ink); white-space: nowrap; }
 .slip-wander dd { margin: 0; color: var(--ink-soft); }
+/* The music's and the world's levels: a thin inked line on the paper, inked as far as the level, and a round of paper to move along it. */
+.slip-sound { display: grid; grid-template-columns: auto 1fr; gap: 2px 14px; align-items: center; margin: 0 6px 4px; font-size: 13px; }
+.slip-level { display: contents; }
+.slip-level span { font-style: italic; font-weight: 600; color: var(--ink); }
+.slip-level input { appearance: none; -webkit-appearance: none; width: 100%; height: 22px; margin: 0; background: transparent; cursor: pointer; }
+.slip-level input:focus { outline: none; }
+.slip-level input::-webkit-slider-runnable-track { height: 3px; border-radius: 2px; background: linear-gradient(to right, var(--ink-soft) var(--level, 100%), var(--paper-line) var(--level, 100%)); }
+.slip-level input::-moz-range-track { height: 3px; border-radius: 2px; background: var(--paper-line); }
+.slip-level input::-moz-range-progress { height: 3px; border-radius: 2px; background: var(--ink-soft); }
+.slip-level input::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 14px; height: 14px; margin-top: -5.5px; border-radius: 50%; background: var(--paper); border: 1.5px solid var(--ink); box-shadow: 0 1px 2px rgba(30, 22, 10, 0.25); }
+.slip-level input::-moz-range-thumb { width: 11px; height: 11px; border-radius: 50%; background: var(--paper); border: 1.5px solid var(--ink); box-shadow: 0 1px 2px rgba(30, 22, 10, 0.25); }
+.slip-level input:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 4px rgba(122, 111, 92, 0.22); }
 
 /* The field map: a sheet of paper unfolded over the world. It opens out from its folds, tilting up flat as it
    comes, and folds away quicker than it opened. */
