@@ -44,6 +44,8 @@ const CARD_VIEW = 520;
 export interface Immersive {
   setActive(on: boolean): void;
   frame(dt: number): void;
+  /** The journal as it lies: open or shut, and whether a leaf is turning. */
+  book(): { readonly open: boolean; readonly turning: boolean };
   readonly hook: Readonly<Record<string, unknown>>;
 }
 
@@ -494,6 +496,7 @@ export function createImmersive(container: HTMLElement, world: WorldHandle): Imm
       }
       apply();
     },
+    book: () => journal.state(),
     frame(dt) {
       if (!active || !standing) return;
       const p = world.person();

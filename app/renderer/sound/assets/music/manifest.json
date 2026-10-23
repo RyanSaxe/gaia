@@ -1,0 +1,68 @@
+{
+  "piece": {
+    "lufs": -21.0,
+    "bars": 32,
+    "bpm": 75,
+    "seconds": 102.4
+  },
+  "phrases": {
+    "lufs": -21.0
+  },
+  "files": {
+    "bed": {
+      "seconds": 102.4,
+      "lufs": -24.96,
+      "peak_dbfs": -9.86
+    },
+    "melody": {
+      "seconds": 102.4,
+      "lufs": -22.54,
+      "peak_dbfs": -9.99
+    },
+    "shimmer": {
+      "seconds": 102.4,
+      "lufs": -30.91,
+      "peak_dbfs": -16.11
+    },
+    "minor": {
+      "seconds": 102.4,
+      "lufs": -27.69,
+      "peak_dbfs": -12.45
+    },
+    "phrase-day-1": {
+      "seconds": 36.0598,
+      "lufs": -20.99,
+      "peak_dbfs": -8.67
+    },
+    "phrase-day-2": {
+      "seconds": 33.621,
+      "lufs": -21.0,
+      "peak_dbfs": -5.35
+    },
+    "phrase-day-3": {
+      "seconds": 36.4911,
+      "lufs": -21.0,
+      "peak_dbfs": -5.9
+    },
+    "phrase-day-4": {
+      "seconds": 36.1912,
+      "lufs": -21.0,
+      "peak_dbfs": -7.21
+    },
+    "phrase-night-1": {
+      "seconds": 36.8169,
+      "lufs": -20.99,
+      "peak_dbfs": -4.84
+    },
+    "phrase-night-2": {
+      "seconds": 37.3851,
+      "lufs": -20.99,
+      "peak_dbfs": -5.22
+    },
+    "phrase-ruin-1": {
+      "seconds": 35.9912,
+      "lufs": -21.01,
+      "peak_dbfs": -9.2
+    }
+  }
+}

@@ -1,0 +1,784 @@
+{
+ "sample_rate": 48000,
+ "codec": "Ogg Opus",
+ "levels": {
+  "beds_lufs": -24.0,
+  "one_shots_peak_dbfs": -3.0,
+  "max_lufs": -24.0,
+  "note": "beds are levelled to one loudness; one-shots to one peak, lowered where that would be louder than the beds (every step in a sprite keeps the same peak); book-shut is book-open at 0.8 gain. The game sets each layer's level. A loop's length is exact: loop it over its whole buffer (samples / sample_rate)."
+ },
+ "files": {
+  "wind": {
+   "file": "wind.ogg",
+   "source": {
+    "freesound_id": 176249,
+    "recordist": "strangy",
+    "title": "Wind through the grass",
+    "url": "https://freesound.org/people/strangy/sounds/176249/",
+    "licence": "CC0 1.0",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+   },
+   "kind": "bed",
+   "loop": true,
+   "crossfade_s": 2.0,
+   "span": {
+    "start": 39.0,
+    "end": 102.26
+   },
+   "highpass_hz": 70,
+   "seam_envelope_corr": 0.025,
+   "seam_level_step_db": 0.01,
+   "why": "39-101 s: the steady middle of the recording. The first 8 s hold handling knocks and a loud gust, the last 40 s thin out; this stretch keeps its 1 s level within about 2 dB with no loud second.",
+   "gain_db": 17.0,
+   "duration_s": 61.26,
+   "samples": 2940480,
+   "channels": 2,
+   "bitrate_kbps": 64,
+   "bytes": 425653,
+   "loudness_lufs": -24.0,
+   "peak_dbfs": -8.9,
+   "seam": {
+    "rms_last_100ms_db": -32.49,
+    "rms_first_100ms_db": -31.54,
+    "rms_step_db": 0.95,
+    "typical_100ms_step_db": 0.4,
+    "rms_step_percentile": 89.0,
+    "level_step_1s_db": 1.21,
+    "typical_1s_step_db": 0.54,
+    "wrap_jump": 0.00422,
+    "median_jump": 0.01528,
+    "p999_jump": 0.09643,
+    "wrap_jump_percentile": 6.5
+   }
+  },
+  "gusts": {
+   "file": "gusts.ogg",
+   "source": {
+    "freesound_id": 853991,
+    "recordist": "fran_marenco",
+    "title": "Wind gusts grass",
+    "url": "https://freesound.org/people/fran_marenco/sounds/853991/",
+    "licence": "CC0 1.0",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+   },
+   "kind": "bed",
+   "loop": true,
+   "crossfade_s": 2.0,
+   "span": {
+    "start": 49.0,
+    "end": 112.42
+   },
+   "highpass_hz": 70,
+   "seam_envelope_corr": 0.275,
+   "seam_level_step_db": 2.16,
+   "why": "49-111 s: the calmer first third (from 120 s on the gusts get brighter and louder); the most even minute, its loudest second 3 dB over its median and no rumble or handling.",
+   "gain_db": 9.4,
+   "duration_s": 61.42,
+   "samples": 2948160,
+   "channels": 2,
+   "bitrate_kbps": 64,
+   "bytes": 426536,
+   "loudness_lufs": -24.0,
+   "peak_dbfs": -5.53,
+   "seam": {
+    "rms_last_100ms_db": -30.35,
+    "rms_first_100ms_db": -30.87,
+    "rms_step_db": -0.52,
+    "typical_100ms_step_db": 1.12,
+    "rms_step_percentile": 25.8,
+    "level_step_1s_db": -1.76,
+    "typical_1s_step_db": 1.4,
+    "wrap_jump": 0.00337,
+    "median_jump": 0.00783,
+    "p999_jump": 0.04907,
+    "wrap_jump_percentile": 15.7
+   }
+  },
+  "leaves": {
+   "file": "leaves.ogg",
+   "source": {
+    "freesound_id": 523389,
+    "recordist": "Anya_Media",
+    "title": "Forest, close up of trees rustling in the wind.wav",
+    "url": "https://freesound.org/people/Anya_Media/sounds/523389/",
+    "licence": "CC0 1.0",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+   },
+   "kind": "bed",
+   "loop": true,
+   "crossfade_s": 2.0,
+   "span": {
+    "start": 74.0,
+    "end": 122.06
+   },
+   "highpass_hz": 80,
+   "seam_envelope_corr": 0.131,
+   "seam_level_step_db": 1.13,
+   "why": "74-121.6 s: the longest even stretch, after the swells at 40-45 s and 63-68 s. It holds one swell (114-120 s, 7 dB over the rest), so swells are levelled to within 3 dB of the median; the seam joins two calm stretches.",
+   "gain_db": 33.6,
+   "duration_s": 46.06,
+   "samples": 2210880,
+   "channels": 2,
+   "bitrate_kbps": 64,
+   "bytes": 318032,
+   "loudness_lufs": -24.0,
+   "peak_dbfs": -4.87,
+   "seam": {
+    "rms_last_100ms_db": -30.24,
+    "rms_first_100ms_db": -29.34,
+    "rms_step_db": 0.91,
+    "typical_100ms_step_db": 0.36,
+    "rms_step_percentile": 91.9,
+    "level_step_1s_db": 0.61,
+    "typical_1s_step_db": 0.56,
+    "wrap_jump": 0.00352,
+    "median_jump": 0.01187,
+    "p999_jump": 0.08856,
+    "wrap_jump_percentile": 7.6
+   }
+  },
+  "stream": {
+   "file": "stream.ogg",
+   "source": {
+    "freesound_id": 220528,
+    "recordist": "turbostream",
+    "title": "Stream Wyre forest 8.1.14.flac",
+    "url": "https://freesound.org/people/turbostream/sounds/220528/",
+    "licence": "CC0 1.0",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+   },
+   "kind": "bed",
+   "loop": true,
+   "crossfade_s": 2.0,
+   "span": {
+    "start": 70.0,
+    "end": 131.3
+   },
+   "highpass_hz": 60,
+   "seam_envelope_corr": 0.156,
+   "seam_level_step_db": 0.21,
+   "why": "70-132 s: the stream is even throughout (1 s level spread 0.3 dB); this minute has the least low-frequency movement, past the fade-in at the start.",
+   "gain_db": 1.2,
+   "duration_s": 59.3,
+   "samples": 2846400,
+   "channels": 2,
+   "bitrate_kbps": 64,
+   "bytes": 466519,
+   "loudness_lufs": -24.0,
+   "peak_dbfs": -4.0,
+   "seam": {
+    "rms_last_100ms_db": -32.19,
+    "rms_first_100ms_db": -32.77,
+    "rms_step_db": -0.59,
+    "typical_100ms_step_db": 0.9,
+    "rms_step_percentile": 35.4,
+    "level_step_1s_db": -0.22,
+    "typical_1s_step_db": 0.32,
+    "wrap_jump": 0.00911,
+    "median_jump": 0.0103,
+    "p999_jump": 0.07492,
+    "wrap_jump_percentile": 43.0
+   }
+  },
+  "mill": {
+   "file": "mill.ogg",
+   "source": {
+    "freesound_id": 724851,
+    "recordist": "rozhkovkirill",
+    "title": "water wheel mill in the forest 4",
+    "url": "https://freesound.org/people/rozhkovkirill/sounds/724851/",
+    "licence": "CC0 1.0",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+   },
+   "kind": "bed",
+   "loop": true,
+   "crossfade_s": 2.0,
+   "span": {
+    "start": 2.5,
+    "end": 62.2
+   },
+   "highpass_hz": 90,
+   "seam_envelope_corr": 0.489,
+   "seam_level_step_db": 0.07,
+   "why": "2.5-61.5 s: the whole wheel recording after its first 2 s, which carry low rumble; mixed to mono and the loop length chosen to land on the wheel's rhythm.",
+   "gain_db": 6.8,
+   "duration_s": 57.7,
+   "samples": 2769600,
+   "channels": 1,
+   "bitrate_kbps": 64,
+   "bytes": 415784,
+   "loudness_lufs": -25.9,
+   "peak_dbfs": -3.1,
+   "seam": {
+    "rms_last_100ms_db": -26.16,
+    "rms_first_100ms_db": -28.56,
+    "rms_step_db": -2.41,
+    "typical_100ms_step_db": 1.18,
+    "rms_step_percentile": 82.6,
+    "level_step_1s_db": -1.39,
+    "typical_1s_step_db": 0.64,
+    "wrap_jump": 0.03513,
+    "median_jump": 0.0156,
+    "p999_jump": 0.10456,
+    "wrap_jump_percentile": 84.8
+   }
+  },
+  "birds": {
+   "file": "birds.ogg",
+   "source": {
+    "freesound_id": 571891,
+    "recordist": "Kosmoso",
+    "title": "forest in evening birds.flac",
+    "url": "https://freesound.org/people/Kosmoso/sounds/571891/",
+    "licence": "CC0 1.0",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+   },
+   "kind": "bed",
+   "loop": true,
+   "crossfade_s": 2.0,
+   "span": {
+    "start": 1036.0,
+    "end": 1098.7
+   },
+   "highpass_hz": 90,
+   "seam_envelope_corr": 0.537,
+   "seam_level_step_db": 0.39,
+   "why": "1036-1098 s: of the 18 minutes, the stretch with the fewest and softest near peaks (99.9th percentile 10 ms level 24 dB over the median, against 26-27 dB elsewhere), song spread evenly, and none of the regular low calls heard at 20-130 s, 470-560 s and 850-950 s.",
+   "gain_db": 11.3,
+   "duration_s": 60.7,
+   "samples": 2913600,
+   "channels": 2,
+   "bitrate_kbps": 64,
+   "bytes": 440775,
+   "loudness_lufs": -24.0,
+   "peak_dbfs": -4.22,
+   "seam": {
+    "rms_last_100ms_db": -21.93,
+    "rms_first_100ms_db": -29.37,
+    "rms_step_db": -7.43,
+    "typical_100ms_step_db": 1.22,
+    "rms_step_percentile": 90.2,
+    "level_step_1s_db": 1.72,
+    "typical_1s_step_db": 4.25,
+    "wrap_jump": 0.01957,
+    "median_jump": 0.00555,
+    "p999_jump": 0.14664,
+    "wrap_jump_percentile": 91.0
+   }
+  },
+  "birds-evening": {
+   "file": "birds-evening.ogg",
+   "source": {
+    "freesound_id": 627734,
+    "recordist": "innov8ting",
+    "title": "Countryside_Blackbird_Rhos_Wales_April_8pm.wav",
+    "url": "https://freesound.org/people/innov8ting/sounds/627734/",
+    "licence": "CC0 1.0",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+   },
+   "kind": "bed",
+   "loop": true,
+   "crossfade_s": 2.0,
+   "span": {
+    "start": 9.0,
+    "end": 68.92
+   },
+   "highpass_hz": 90,
+   "seam_envelope_corr": 0.437,
+   "seam_level_step_db": 0.99,
+   "why": "fs627734 rather than fs521558: fs521558 has a bird close to the microphone (peaks 42 dB over its median, against 27 dB) and low rumble. 9-70 s skips the loud phrase in the first 8 s; the blackbird sings a phrase every 6-7 s over a quiet chorus.",
+   "gain_db": 21.7,
+   "duration_s": 57.92,
+   "samples": 2780160,
+   "channels": 2,
+   "bitrate_kbps": 64,
+   "bytes": 413146,
+   "loudness_lufs": -24.0,
+   "peak_dbfs": -7.96,
+   "seam": {
+    "rms_last_100ms_db": -44.42,
+    "rms_first_100ms_db": -44.24,
+    "rms_step_db": 0.19,
+    "typical_100ms_step_db": 1.66,
+    "rms_step_percentile": 8.1,
+    "level_step_1s_db": -0.39,
+    "typical_1s_step_db": 2.69,
+    "wrap_jump": 0.00099,
+    "median_jump": 0.00475,
+    "p999_jump": 0.08004,
+    "wrap_jump_percentile": 4.2
+   }
+  },
+  "crickets": {
+   "file": "crickets.ogg",
+   "source": {
+    "freesound_id": 751466,
+    "recordist": "Borgory",
+    "title": "Crickets chirping in the Night at the Forest 002",
+    "url": "https://freesound.org/people/Borgory/sounds/751466/",
+    "licence": "CC0 1.0",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+   },
+   "kind": "bed",
+   "loop": true,
+   "crossfade_s": 2.0,
+   "span": {
+    "start": 60.0,
+    "end": 121.74
+   },
+   "highpass_hz": 90,
+   "seam_envelope_corr": 0.615,
+   "seam_level_step_db": 0.11,
+   "why": "60-122 s: the recording is even throughout (1 s level spread 0.6 dB); the loop length is chosen so the chirp train lines up across the seam.",
+   "gain_db": 5.4,
+   "duration_s": 59.74,
+   "samples": 2867520,
+   "channels": 2,
+   "bitrate_kbps": 64,
+   "bytes": 474613,
+   "loudness_lufs": -24.0,
+   "peak_dbfs": -13.64,
+   "seam": {
+    "rms_last_100ms_db": -27.42,
+    "rms_first_100ms_db": -28.3,
+    "rms_step_db": -0.88,
+    "typical_100ms_step_db": 0.77,
+    "rms_step_percentile": 52.3,
+    "level_step_1s_db": -1.15,
+    "typical_1s_step_db": 0.48,
+    "wrap_jump": 0.02342,
+    "median_jump": 0.00864,
+    "p999_jump": 0.05536,
+    "wrap_jump_percentile": 85.3
+   }
+  },
+  "steps-grass": {
+   "file": "steps-grass.ogg",
+   "source": {
+    "freesound_id": 685286,
+    "recordist": "emilgasi",
+    "title": "Footsteps grass.wav",
+    "url": "https://freesound.org/people/emilgasi/sounds/685286/",
+    "licence": "CC0 1.0",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+   },
+   "kind": "sprite",
+   "loop": false,
+   "span": {
+    "start": 7.535,
+    "end": 49.41
+   },
+   "highpass_hz": 90,
+   "steps": [
+    {
+     "start": 0.0,
+     "length": 0.23,
+     "source_start": 7.535
+    },
+    {
+     "start": 0.28,
+     "length": 0.435,
+     "source_start": 9.005
+    },
+    {
+     "start": 0.765,
+     "length": 0.435,
+     "source_start": 11.175
+    },
+    {
+     "start": 1.25,
+     "length": 0.435,
+     "source_start": 15.995
+    },
+    {
+     "start": 1.735,
+     "length": 0.365,
+     "source_start": 16.43
+    },
+    {
+     "start": 2.15,
+     "length": 0.23,
+     "source_start": 19.52
+    },
+    {
+     "start": 2.43,
+     "length": 0.255,
+     "source_start": 19.745
+    },
+    {
+     "start": 2.735,
+     "length": 0.435,
+     "source_start": 23.25
+    },
+    {
+     "start": 3.22,
+     "length": 0.255,
+     "source_start": 24.035
+    },
+    {
+     "start": 3.525,
+     "length": 0.435,
+     "source_start": 24.565
+    },
+    {
+     "start": 4.01,
+     "length": 0.26,
+     "source_start": 26.935
+    },
+    {
+     "start": 4.32,
+     "length": 0.23,
+     "source_start": 27.99
+    },
+    {
+     "start": 4.6,
+     "length": 0.43,
+     "source_start": 33.38
+    },
+    {
+     "start": 5.08,
+     "length": 0.285,
+     "source_start": 41.83
+    },
+    {
+     "start": 5.415,
+     "length": 0.295,
+     "source_start": 45.565
+    },
+    {
+     "start": 5.76,
+     "length": 0.29,
+     "source_start": 49.12
+    }
+   ],
+   "why": "footsteps through grass: 16 middling steps of 178 found by onset",
+   "duration_s": 6.05,
+   "samples": 290400,
+   "channels": 1,
+   "bitrate_kbps": 48,
+   "bytes": 42170,
+   "loudness_lufs": -28.9,
+   "peak_dbfs": -2.77
+  },
+  "steps-dry": {
+   "file": "steps-dry.ogg",
+   "source": {
+    "freesound_id": 377323,
+    "recordist": "Mystikuum",
+    "title": "steps_dry_grass.wav",
+    "url": "https://freesound.org/people/Mystikuum/sounds/377323/",
+    "licence": "CC0 1.0",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+   },
+   "kind": "sprite",
+   "loop": false,
+   "span": {
+    "start": 8.91,
+    "end": 88.215
+   },
+   "highpass_hz": 90,
+   "steps": [
+    {
+     "start": 0.0,
+     "length": 0.435,
+     "source_start": 8.91
+    },
+    {
+     "start": 0.485,
+     "length": 0.435,
+     "source_start": 11.745
+    },
+    {
+     "start": 0.97,
+     "length": 0.435,
+     "source_start": 21.82
+    },
+    {
+     "start": 1.455,
+     "length": 0.24,
+     "source_start": 29.1
+    },
+    {
+     "start": 1.745,
+     "length": 0.435,
+     "source_start": 30.945
+    },
+    {
+     "start": 2.23,
+     "length": 0.435,
+     "source_start": 35.465
+    },
+    {
+     "start": 2.715,
+     "length": 0.435,
+     "source_start": 37.645
+    },
+    {
+     "start": 3.2,
+     "length": 0.25,
+     "source_start": 40.04
+    },
+    {
+     "start": 3.5,
+     "length": 0.285,
+     "source_start": 43.49
+    },
+    {
+     "start": 3.835,
+     "length": 0.435,
+     "source_start": 46.48
+    },
+    {
+     "start": 4.32,
+     "length": 0.435,
+     "source_start": 67.34
+    },
+    {
+     "start": 4.805,
+     "length": 0.435,
+     "source_start": 70.655
+    },
+    {
+     "start": 5.29,
+     "length": 0.385,
+     "source_start": 74.08
+    },
+    {
+     "start": 5.725,
+     "length": 0.435,
+     "source_start": 78.555
+    },
+    {
+     "start": 6.21,
+     "length": 0.42,
+     "source_start": 81.425
+    },
+    {
+     "start": 6.68,
+     "length": 0.435,
+     "source_start": 87.78
+    }
+   ],
+   "why": "footsteps through dry grass: 16 middling steps of 114 found by onset",
+   "duration_s": 7.115,
+   "samples": 341520,
+   "channels": 1,
+   "bitrate_kbps": 48,
+   "bytes": 47586,
+   "loudness_lufs": -25.6,
+   "peak_dbfs": -2.21
+  },
+  "steps-wood": {
+   "file": "steps-wood.ogg",
+   "source": {
+    "freesound_id": 397670,
+    "recordist": "felix.blume",
+    "title": "Footsteps on a wooden brigde",
+    "url": "https://freesound.org/people/felix.blume/sounds/397670/",
+    "licence": "CC0 1.0",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+   },
+   "kind": "sprite",
+   "loop": false,
+   "span": {
+    "start": 46.58,
+    "end": 234.365
+   },
+   "highpass_hz": 70,
+   "steps": [
+    {
+     "start": 0.0,
+     "length": 0.435,
+     "source_start": 46.58
+    },
+    {
+     "start": 0.485,
+     "length": 0.435,
+     "source_start": 56.425
+    },
+    {
+     "start": 0.97,
+     "length": 0.28,
+     "source_start": 81.345
+    },
+    {
+     "start": 1.3,
+     "length": 0.435,
+     "source_start": 86.17
+    },
+    {
+     "start": 1.785,
+     "length": 0.335,
+     "source_start": 91.27
+    },
+    {
+     "start": 2.17,
+     "length": 0.295,
+     "source_start": 104.455
+    },
+    {
+     "start": 2.515,
+     "length": 0.395,
+     "source_start": 139.81
+    },
+    {
+     "start": 2.96,
+     "length": 0.335,
+     "source_start": 157.875
+    },
+    {
+     "start": 3.345,
+     "length": 0.255,
+     "source_start": 162.66
+    },
+    {
+     "start": 3.65,
+     "length": 0.435,
+     "source_start": 163.135
+    },
+    {
+     "start": 4.135,
+     "length": 0.295,
+     "source_start": 166.895
+    },
+    {
+     "start": 4.48,
+     "length": 0.435,
+     "source_start": 189.965
+    },
+    {
+     "start": 4.965,
+     "length": 0.435,
+     "source_start": 201.91
+    },
+    {
+     "start": 5.45,
+     "length": 0.245,
+     "source_start": 215.94
+    },
+    {
+     "start": 5.745,
+     "length": 0.305,
+     "source_start": 220.705
+    },
+    {
+     "start": 6.1,
+     "length": 0.255,
+     "source_start": 234.11
+    }
+   ],
+   "why": "footsteps on a wooden bridge: 16 middling steps of 532 found by onset",
+   "duration_s": 6.355,
+   "samples": 305040,
+   "channels": 1,
+   "bitrate_kbps": 48,
+   "bytes": 43484,
+   "loudness_lufs": -24.0,
+   "peak_dbfs": -3.8
+  },
+  "book-open": {
+   "file": "book-open.ogg",
+   "source": {
+    "freesound_id": 433862,
+    "recordist": "jodybruchon",
+    "title": "Book - medium-sized, leather cover, flipping through, slamming shut.wav",
+    "url": "https://freesound.org/people/jodybruchon/sounds/433862/",
+    "licence": "CC0 1.0",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+   },
+   "kind": "one-shot",
+   "loop": false,
+   "span": {
+    "start": 0.0,
+    "end": 1.5
+   },
+   "highpass_hz": 90,
+   "why": "the book's opening, its first 1.5 s, as the film used it",
+   "duration_s": 1.5,
+   "samples": 72000,
+   "channels": 1,
+   "bitrate_kbps": 48,
+   "bytes": 8493,
+   "loudness_lufs": -27.6,
+   "peak_dbfs": -3.12
+  },
+  "book-shut": {
+   "file": "book-shut.ogg",
+   "source": {
+    "freesound_id": 433862,
+    "recordist": "jodybruchon",
+    "title": "Book - medium-sized, leather cover, flipping through, slamming shut.wav",
+    "url": "https://freesound.org/people/jodybruchon/sounds/433862/",
+    "licence": "CC0 1.0",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+   },
+   "kind": "one-shot",
+   "loop": false,
+   "span": {
+    "start": 0.0,
+    "end": 1.5
+   },
+   "highpass_hz": 90,
+   "why": "the opening sound at 0.8 gain, as the film did: the recording's three slams (36.9, 38.6, 40.8 s) are bangs, 2-5 ms attacks, crest 26-28 dB, centroid 2.3-3.6 kHz, 15-25 dB above the soft opening",
+   "duration_s": 1.5,
+   "samples": 72000,
+   "channels": 1,
+   "bitrate_kbps": 48,
+   "bytes": 8476,
+   "loudness_lufs": -29.5,
+   "peak_dbfs": -4.88
+  },
+  "page-turn": {
+   "file": "page-turn.ogg",
+   "source": {
+    "freesound_id": 856497,
+    "recordist": "xkeril",
+    "title": "Turning page (heavy paper)",
+    "url": "https://freesound.org/people/xkeril/sounds/856497/",
+    "licence": "CC0 1.0",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+   },
+   "kind": "one-shot",
+   "loop": false,
+   "span": {
+    "start": 0.085,
+    "end": 3.14
+   },
+   "highpass_hz": 90,
+   "why": "the whole recording, trimmed, as the film used it; it holds two sounds 1.5 s apart (about 0.15-0.6 s and 2.05-2.85 s into the file), so the game may play only the first",
+   "duration_s": 3.055,
+   "samples": 146640,
+   "channels": 1,
+   "bitrate_kbps": 48,
+   "bytes": 16896,
+   "loudness_lufs": -26.5,
+   "peak_dbfs": -3.23
+  },
+  "riffle": {
+   "file": "riffle.ogg",
+   "source": {
+    "freesound_id": 433862,
+    "recordist": "jodybruchon",
+    "title": "Book - medium-sized, leather cover, flipping through, slamming shut.wav",
+    "url": "https://freesound.org/people/jodybruchon/sounds/433862/",
+    "licence": "CC0 1.0",
+    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+   },
+   "kind": "one-shot",
+   "loop": false,
+   "span": {
+    "start": 28.6,
+    "end": 32.2
+   },
+   "highpass_hz": 90,
+   "why": "pages riffling, 3.6 s from 28.6 s, as the film used it",
+   "duration_s": 3.6,
+   "samples": 172800,
+   "channels": 1,
+   "bitrate_kbps": 48,
+   "bytes": 20449,
+   "loudness_lufs": -27.6,
+   "peak_dbfs": -2.97
+  }
+ }
+}

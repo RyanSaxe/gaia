@@ -24,3 +24,10 @@ declare module "*.woff2" {
   const url: string;
   export default url;
 }
+
+// `import url from "./wind.ogg"` gives the recording's address, as a picture's does: a file Vite serves for the app,
+// and a data URL tools/lab-page.ts inlines for the one-file lab.
+declare module "*.ogg" {
+  const url: string;
+  export default url;
+}
