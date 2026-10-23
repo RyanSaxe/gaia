@@ -41,6 +41,8 @@ export interface Building {
   readonly beside: Extent | null;
   /** Where its feature turns, such as a mill's wheel, in the house's frame. */
   readonly wheel: Extent | null;
+  /** Whether its feature is turned by running water, as a waterwheel is and a dovecote's vane is not. */
+  readonly byWater: boolean;
   site: BuildingSite;
 }
 
@@ -137,6 +139,7 @@ export function createSettlement(light: SceneLight, entities: readonly BuildingO
       plan: built.slots.get("footprint")?.output as BuildingPlan,
       beside: extentOf(built.slots.get("feature")?.output as Built | undefined),
       wheel: turningExtent(built.slots.get("feature")?.output as Built | undefined),
+      byWater: needsBank(entity.blueprint, lib),
       site: { x: 0, z: 0, yaw: 0, level: 0 },
     };
   });
@@ -146,7 +149,7 @@ export function createSettlement(light: SceneLight, entities: readonly BuildingO
   const atSite = (b: Building) => ({ x: b.site.x, y: b.site.level, z: b.site.z, yaw: b.site.yaw });
   return {
     buildings,
-    requests: () => buildings.map((b) => ({ name: b.represented.name, plan: b.plan, beside: b.beside, ...(needsBank(b.blueprint, lib) ? { wheel: b.wheel } : {}) })),
+    requests: () => buildings.map((b) => ({ name: b.represented.name, plan: b.plan, beside: b.beside, ...(b.byWater ? { wheel: b.wheel } : {}) })),
     seat(sites) {
       buildings.forEach((b, i) => {
         b.site = sites[i] ?? b.site;

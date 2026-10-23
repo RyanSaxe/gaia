@@ -12,7 +12,7 @@ import * as THREE from "three";
 import { type AtmosphereSpec, type Blueprint, type BuildingPlan, type GroundSpec, Library, type Palette, seedOf } from "@gaia/schema";
 import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, LANDMARK_PRIMITIVES, RELIEF_PRIMITIVES, ROCK_PRIMITIVES, WILDFLOWER_PRIMITIVES, WORLD_PRIMITIVES } from "@gaia/primitives";
 import { biome, landmark as landmarkKind, world as worldKind } from "@gaia/kinds";
-import { CLEAR_AIR, FLORA_PRESETS, type Realized, type RegionLook, type SkyLook, airFromHeight, mergeParts, mixAir, murkyAir, realizeRegion, realizeSky, regionAir, throughAir } from "@gaia/realize";
+import { CLEAR_AIR, FLORA_PRESETS, type Realized, type RegionLook, type SkyLook, airFromHeight, gustAt, mergeParts, mixAir, murkyAir, realizeRegion, realizeSky, regionAir, spinAt, throughAir } from "@gaia/realize";
 import {
   type FarCards,
   LANTERN,
@@ -35,7 +35,7 @@ import {
   followVitality,
   type SceneLight,
 } from "@gaia/render";
-import { type Capsule, clearanceAt, groundDecline, regionAt as dominantRegion, frameOf, TILE, LAND_ASPECT, type Deck, decksOf, deckShape, EYE_HEIGHT, footingAt, GAIT, groundHeightAt, heightAt, type Intent, NO_SOLIDS, NO_TRAILS, openingSpot, TRAILS, outlineShape, returnTo, type StoodSpot, withinLand, piecesShapes, type Place, placeAt, planWalk, regionWeights, siteToWorld, type Solids, type SolidShape, solidsOf, standAt, steerAlong, type Steered, type Steering, steering, steerPress, steerRelease, steerStep, stride, type Stride, acrossWay, carry, planTrip, TRAVEL, type Travel, hurryFor, wadingAt, fordBeside, travelFrom, travelPoint, travelStep, type Trip, trailWay, type Walker, type WalkKey, type Terrain, TERRAIN, type TrailNetwork, type Walk, WALK_TO, wallsShape, waterDepthAt, type Way, wayAhead, WILDS, type WorldPlaces, type WorldSpec } from "@gaia/terrain";
+import { type Capsule, clearanceAt, groundDecline, regionAt as dominantRegion, frameOf, TILE, LAND_ASPECT, type Deck, decksOf, deckShape, EYE_HEIGHT, footingAt, GAIT, groundHeightAt, heightAt, type Intent, NO_SOLIDS, NO_TRAILS, openingSpot, TRAILS, outlineShape, returnTo, type Station, type StoodSpot, withinLand, piecesShapes, type Place, placeAt, planWalk, regionWeights, siteToWorld, type Solids, type SolidShape, solidsOf, standAt, steerAlong, type Steered, type Steering, steering, steerPress, steerRelease, steerStep, stride, type Stride, acrossWay, carry, planTrip, TRAVEL, type Travel, hurryFor, wadingAt, fordBeside, travelFrom, travelPoint, travelStep, type Trip, trailWay, type Walker, type WalkKey, type Terrain, TERRAIN, type TrailNetwork, type Walk, WALK_TO, wallsShape, waterDepthAt, type Way, wayAhead, WILDS, type WorldPlaces, type WorldSpec } from "@gaia/terrain";
 import { type Sky, createSky } from "../world/environment.ts";
 import { type CaptureBounds, type Pixels, createCapture } from "./capture.ts";
 import { onTap, tapSlop } from "../tap.ts";
@@ -189,6 +189,8 @@ export interface WorldHandle {
   readonly camera: THREE.PerspectiveCamera;
   /** Where the person stands and which way they look (radians, 0 looking toward -z), and whether they are on the move. */
   person(): { readonly x: number; readonly z: number; readonly yaw: number; readonly walking: boolean };
+  /** What the world sounds like where the person stands now (`app/renderer/sound/`). */
+  earshot(): Earshot;
   /** Where a point is: its area and the file underfoot. */
   placeAt(x: number, z: number): Place;
   /** Every area and file patch of the world standing now. */
@@ -270,6 +272,34 @@ export interface WorldHandle {
    * turn to something else or its card closes.
    */
   onHeading(listener: (thing: Heading | null) => void): void;
+}
+
+/** Where a sound comes from: meters away, and its bearing from where the person looks, degrees, positive to the right. */
+export interface Heard {
+  readonly d: number;
+  readonly bearing: number;
+}
+
+/** What the world sounds like where the person stands: what they hear, not how it plays. */
+export interface Earshot {
+  /** How fast they go over the ground, m/s, and whether a trip carries them. */
+  readonly speed: number;
+  readonly travelling: boolean;
+  /** What they stand on, and how deep the water is round their legs, meters. */
+  readonly underfoot: "ground" | "deck" | "water";
+  readonly depth: number;
+  /** The hour's dark, 0 by day to 1 at night. */
+  readonly night: number;
+  /** How hard the air blows at the person, 0 to 1 (`gustAt`). */
+  readonly gust: number;
+  /** How far the ground around them has failed, 0 to 1, as the air's murk reads it. */
+  readonly decline: number;
+  /** How much of the sky overhead is under trees, 0 in the open to 1 deep in a wood. */
+  readonly canopy: number;
+  /** The nearest running water, measured from its bank, and how wide it runs, meters. */
+  readonly stream: (Heard & { readonly width: number }) | null;
+  /** The nearest waterwheel, and how fast it turns, 0 stopped to 1. */
+  readonly mill: (Heard & { readonly turning: number }) | null;
 }
 
 /** A thing a person is walking up to: where it stands, how far it reaches and its name. */
@@ -2478,11 +2508,114 @@ export function createWorld(root: HTMLElement): World {
     return capture.shoot(scene, captureCamera, [sky.mesh, ground.wilds, ground.fine, ground.coarse, ground.mirror, grass.mesh, water.group, signs.mesh], subject, w, h);
   }
 
+  /**
+   * What can be heard, filed in square cells, so what the person hears costs
+   * the same in a world of any size: the streams' stations and the trees by
+   * cell, and the waterwheels. Filed again when the land, the trees or the
+   * settlement change.
+   */
+  let earshotIndex: { terrain: Terrain; trees: readonly Tree[]; settlement: Settlement; stations: Map<number, Station[]>; crowns: Map<number, Tree[]>; wheels: Building[] } | null = null;
+  const EAR = {
+    /** The cells' side, and how far a stream or a waterwheel is still heard, meters. */
+    cell: 32,
+    reach: 96,
+    /** How far round the person crowns cover the sky they hear under, and how far they move before it is measured again, meters. */
+    canopy: 12,
+    move: 2,
+  } as const;
+  const cellOf = (v: number): number => Math.floor(v / EAR.cell);
+  const cellKey = (cx: number, cz: number): number => (cx + 32768) * 65536 + (cz + 32768);
+  function filed<T>(items: readonly T[], at: (t: T) => { readonly x: number; readonly z: number }): Map<number, T[]> {
+    const cells = new Map<number, T[]>();
+    for (const item of items) {
+      const p = at(item);
+      const key = cellKey(cellOf(p.x), cellOf(p.z));
+      const cell = cells.get(key);
+      if (cell === undefined) cells.set(key, [item]);
+      else cell.push(item);
+    }
+    return cells;
+  }
+  function* within<T>(cells: Map<number, T[]>, x: number, z: number, reach: number): Generator<T> {
+    for (let cx = cellOf(x - reach); cx <= cellOf(x + reach); cx++) for (let cz = cellOf(z - reach); cz <= cellOf(z + reach); cz++) yield* cells.get(cellKey(cx, cz)) ?? [];
+  }
+  function earshotFiles(): NonNullable<typeof earshotIndex> {
+    if (earshotIndex?.terrain === terrain && earshotIndex.trees === trees && earshotIndex.settlement === settlement) return earshotIndex;
+    earshotIndex = {
+      terrain,
+      trees,
+      settlement,
+      stations: filed(
+        terrain.streams.flatMap((st) => st.stations),
+        (p) => p,
+      ),
+      crowns: filed(trees, (t) => t),
+      wheels: settlement.buildings.filter((b) => b.wheel !== null && b.byWater),
+    };
+    canopyAt = { x: Infinity, z: Infinity, cover: 0 };
+    return earshotIndex;
+  }
+  /** How much sky the crowns cover round where it was last measured, measured again once the person moves `EAR.move` meters. */
+  let canopyAt = { x: Infinity, z: Infinity, cover: 0 };
+  function canopyOver(crowns: Map<number, Tree[]>, x: number, z: number): number {
+    if (Math.hypot(x - canopyAt.x, z - canopyAt.z) < EAR.move) return canopyAt.cover;
+    let cover = 0;
+    for (const t of within(crowns, x, z, EAR.canopy * 2)) {
+      const v = variants[t.variant];
+      if (v === undefined) continue;
+      const r = v.radius * t.scale;
+      const d = Math.hypot(t.x - x, t.z - z);
+      if (d > r + EAR.canopy) continue;
+      // Each crown covers its share of the sky within `canopy`, fading out past its own edge.
+      cover += ((r * r) / (EAR.canopy * EAR.canopy)) * Math.min(1, Math.max(0, (r + EAR.canopy - d) / EAR.canopy));
+    }
+    canopyAt = { x, z, cover: Math.min(1, cover) };
+    return canopyAt.cover;
+  }
+  function earshot(): Earshot {
+    const { x, z, yaw } = walker;
+    const files = earshotFiles();
+    const fx = -Math.sin(yaw);
+    const fz = -Math.cos(yaw);
+    const heard = (tx: number, tz: number, d: number): Heard => {
+      const dx = tx - x;
+      const dz = tz - z;
+      // Positive to the right of where the person looks: right is (cos yaw, -sin yaw).
+      return { d: Math.max(0, d), bearing: (Math.atan2(dx * -fz + dz * fx, dx * fx + dz * fz) * 180) / Math.PI };
+    };
+    let stream: (Heard & { width: number }) | null = null;
+    for (const p of within(files.stations, x, z, EAR.reach)) {
+      const d = Math.hypot(p.x - x, p.z - z) - p.halfWidth;
+      if (d <= EAR.reach && (stream === null || d < stream.d)) stream = { ...heard(p.x, p.z, d), d, width: p.halfWidth * 2 };
+    }
+    let mill: (Heard & { turning: number }) | null = null;
+    for (const b of files.wheels) {
+      const wheel = b.wheel as NonNullable<Building["wheel"]>;
+      const [wx, wz] = siteToWorld(b.site, (wheel.x0 + wheel.x1) / 2, (wheel.z0 + wheel.z1) / 2);
+      const d = Math.hypot(wx - x, wz - z);
+      if (d <= EAR.reach && (mill === null || d < mill.d)) mill = { ...heard(wx, wz, d), turning: spinAt(b.vitality) };
+    }
+    const footing = footingAt(terrain, decks, x, z);
+    return {
+      speed: body === null ? 0 : Math.hypot(body.vx, body.vz),
+      travelling: trip !== null,
+      underfoot: footing.deck ? "deck" : footing.depth > 0.05 ? "water" : "ground",
+      depth: footing.depth,
+      night: light.uNightness.value,
+      gust: gustAt(x, z, light.uTime.value),
+      decline: breathed?.decline ?? 0,
+      canopy: canopyOver(files.crowns, x, z),
+      stream: stream === null ? null : { ...stream, d: Math.max(0, stream.d) },
+      mill,
+    };
+  }
+
   const handle: WorldHandle = {
     scene,
     light,
     camera,
     person: () => ({ x: walker.x, z: walker.z, yaw: walker.yaw, walking: goal !== null || trip !== null || [...keys].some((k) => k !== "ShiftLeft" && k !== "ShiftRight") }),
+    earshot,
     placeAt: (x, z) => placeAt(places, x, z),
     places: () => places,
     code: () => code?.world ?? null,
