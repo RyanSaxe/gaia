@@ -35,6 +35,7 @@ Jev answers; a missing answer fails with the request's name.
 | `?world=showcase-fixed` | The same showcase with its broken module repaired |
 | `?hour=22` | Pin the lighting to an hour |
 | `?start` | Show the start page |
+| `?sound=record` | Play nothing aloud; keep what the person hears for `__lab.sound.render()` |
 
 Queries can be combined, for example `?world=proving&hour=22`.
 
@@ -50,10 +51,16 @@ __lab.terrain.tour()
 __lab.terrain.tour("ruined bridge")
 __lab.terrain.walk(0, 0, 90, 0)
 __lab.terrain.calls()
+__lab.sound.level()       // dBFS leaving the page, also in a muted window
+__lab.sound.record(true)  // with ?sound=record: keep a walk, then
+__lab.sound.render({ music: "layers" })  // its sound as base64 WAV
 ```
 
-The hooks are defined in [terrain/hooks.ts](../app/renderer/terrain/hooks.ts)
-and [immersive/view.ts](../app/renderer/immersive/view.ts).
+The hooks are defined in [terrain/hooks.ts](../app/renderer/terrain/hooks.ts),
+[immersive/view.ts](../app/renderer/immersive/view.ts) and
+[sound/index.ts](../app/renderer/sound/index.ts). Scripted Electron windows
+call `webContents.setAudioMuted(true)`, so a run never plays through the
+machine's speakers.
 [readme-shots.ts](../tools/readme-shots.ts) is an example of driving the page.
 
 ## Visual verification
