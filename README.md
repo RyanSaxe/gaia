@@ -6,7 +6,7 @@ Gaia turns a codebase into a world you walk through. Folders become lands,
 and files and functions stand on them as generated entities based on their
 determined quality and importance.
 
-https://github.com/user-attachments/assets/2a6665b9-835b-4689-a651-32035e56789e
+https://github.com/user-attachments/assets/55116856-4b34-4a41-861d-c1e5e2b5b237
 
 ## Get started
 
