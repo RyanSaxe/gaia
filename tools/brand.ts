@@ -91,6 +91,8 @@ import { writeFileSync } from "node:fs";
 const { page, jobs } = JSON.parse(process.env.GAIA_BRAND);
 app.whenReady().then(async () => {
   const win = new BrowserWindow({ show: false, width: 400, height: 300, webPreferences: { backgroundThrottling: false } });
+  // The world makes sound; a scripted window plays none of it aloud.
+  win.webContents.setAudioMuted(true);
   await win.loadFile(page);
   const run = (js) => win.webContents.executeJavaScript(js);
   await run("window.brand.ready.then(() => 0)");

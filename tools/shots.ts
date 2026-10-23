@@ -125,6 +125,8 @@ app.commandLine.appendSwitch("ignore-gpu-blocklist");
 const say = (line) => console.log("shots: " + line);
 async function take() {
   const win = new BrowserWindow({ show: false, width, height, useContentSize: true, webPreferences: { backgroundThrottling: false } });
+  // The world makes sound; a scripted window plays none of it aloud.
+  win.webContents.setAudioMuted(true);
   // The page's warnings and errors over the whole run, among them any WebGL error.
   const messages = [];
   win.webContents.on("console-message", (e) => {
