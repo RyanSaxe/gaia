@@ -69,11 +69,6 @@ export interface VitalityChannels {
    * stops near the bottom, like a mill wheel. Absent means nothing turns.
    */
   readonly spin?: Float32Array;
-  /**
-   * How fully a piece flies home to its pivot as dusk falls, and out again
-   * after dawn, 0 to 1: a dove roosting in its cote. Absent means none.
-   */
-  readonly roost?: Float32Array;
 }
 
 export interface Part {
