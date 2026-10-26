@@ -1110,9 +1110,11 @@ export function buildBlossoms(p: Resolved<typeof blossomsParams>, ctx: BuildCont
  * The most fruit one plant hangs; how big one is (a little larger than life,
  * so it reads among the leaves from a path): an apple's radius, its stalk,
  * and how much a pear is stretched below its neck; and the lowest a fruit's
- * bottom hangs above the soil.
+ * bottom hangs above the soil. A tree, a crown reaching at least `tree` metres
+ * out from its middle, hangs up to `treeCap` fruit, each `treeSize` times as large,
+ * so an apple tree reads as one from a path 20 m away.
  */
-const FRUIT = { cap: 80, radius: 0.06, stalk: 0.035, pear: 1.45, clear: 0.2 } as const;
+const FRUIT = { cap: 80, radius: 0.06, stalk: 0.035, pear: 1.45, clear: 0.2, tree: 1.5, treeCap: 150, treeSize: 1.6 } as const;
 
 /**
  * Apples or pears, each hanging on its stalk from a twig's tip under the
@@ -1125,16 +1127,21 @@ export function buildFruit(p: Resolved<typeof fruitParams>, ctx: BuildContext, a
   const picker = r.fork("pick");
   const pear = p.fruit === "pears";
   const top = pear ? FRUIT.pear : 0.88;
+  const crown = crownOf(anchors.map((a) => a.position));
+  const tree = crown.radius[0] >= FRUIT.tree;
+  const radius = FRUIT.radius * (tree ? FRUIT.treeSize : 1);
   // Fruit hangs only where it clears the soil.
-  const room = anchors.map((a, i) => ({ a, i })).filter(({ a }) => a.position[1] - FRUIT.stalk - (top + 1) * FRUIT.radius * 1.15 > FRUIT.clear);
-  const want = Math.min(FRUIT.cap, Math.round(room.length * p.crop));
-  // Fruit shows best from the crown's sides and underside, where it hangs clear of the leaves above it: those twigs are picked first.
-  const chosen = room.map((x) => ({ ...x, key: picker.next() + (x.a.normal[1] > 0.35 ? 1 : 0) })).sort((x, y) => x.key - y.key).slice(0, want).sort((x, y) => x.i - y.i);
+  const room = anchors.map((a, i) => ({ a, i })).filter(({ a }) => a.position[1] - FRUIT.stalk - (top + 1) * radius * 1.15 > FRUIT.clear);
+  const want = Math.min(tree ? FRUIT.treeCap : FRUIT.cap, Math.round(room.length * p.crop));
+  // Fruit shows best on the crown's outside, where it hangs clear of the leaves: twigs there are picked
+  // first, the sides and underside a little before the top, and the crown's inner twigs last.
+  const inner = (a: Anchor): number => (crownPlace(crown, a.position).depth < 0.7 ? 1 : 0);
+  const chosen = room.map((x) => ({ ...x, key: picker.next() + inner(x.a) * 1.5 + (x.a.normal[1] > 0.35 ? 0.5 : 0) })).sort((x, y) => x.key - y.key).slice(0, want).sort((x, y) => x.i - y.i);
   // A pear narrows above its widest point into a neck.
   const shape = (n: Vec3): V3 => (pear ? [n[0] * (1 - 0.42 * clamp(n[1], 0, 1)), n[1] * (n[1] > 0 ? FRUIT.pear : 1), n[2] * (1 - 0.42 * clamp(n[1], 0, 1))] : [n[0], n[1] * 0.88, n[2]]);
   for (const { a, i } of chosen) {
     const fr = r.fork(`at${i}`);
-    const size = FRUIT.radius * fr.range(0.85, 1.15);
+    const size = radius * fr.range(0.85, 1.15);
     const drops = 0.2 + 0.45 * fr.next();
     const tint = fr.range(-0.03, 0.03);
     const carry = { bough: a.carry?.bough ?? a.position, twig: a.carry?.twig ?? a.carry?.bough ?? a.position, droop: a.carry?.droop ?? 0 };
