@@ -2,16 +2,20 @@
 // grass shader reads, so no blade ever pierces a stone. Each cleared shape
 // follows its component's own outline at the ground, not a disc. The same
 // mask holds capsules of ground kept bare, such as buildings' floors and
-// walks and landmarks' feet, however many a world has. Only the grass reads
-// it, and the grass grows only around the person, so the mask is a window
-// of the land's mask around the grass, drawn again from the outlines and
-// capsules as the grass moves on.
+// walks and landmarks' feet, however many a world has. A second mask holds
+// where grass grows only as short turf, round things too low to show over it,
+// such as a drift of mushrooms. Only the grass reads them, and the grass grows
+// only around the person, so each mask is a window of the land's mask around
+// the grass, drawn again from the outlines and capsules as the grass moves on.
 
 import * as THREE from "three";
 import type { Capsule, Terrain } from "@gaia/terrain";
 
 /** Meters per mask texel. */
 const RESOLUTION = 0.5;
+
+/** How far past its outline a patch of short turf eases back into the grass around it, meters. */
+const TURF_EASE = 0.9;
 
 /**
  * The window: texels per side (256 m, the grass reaching 62 m from its
@@ -30,17 +34,21 @@ export interface Clearing {
   readonly yaw: number;
   readonly scale: number;
   readonly outline: Float32Array;
+  /** Short turf within the outline, rather than bare ground. */
+  readonly turf?: boolean;
 }
 
 export interface Clearings {
   readonly uniforms: {
     readonly uClearing: { value: THREE.DataTexture };
+    /** Where the grass grows only as short turf: the same window, 1 in the turf. */
+    readonly uTurf: { value: THREE.DataTexture };
     /** The window's corner on the ground, x and z. */
     readonly uClearingOrigin: { value: THREE.Vector2 };
     /** The window's side, meters. */
     readonly uClearingSize: { value: number };
   };
-  /** Clears the ground under each component's outline, and the capsules set last. */
+  /** Clears the ground under each component's outline (or keeps it short turf), and the capsules set last. */
   update(clearings: readonly Clearing[]): void;
   /** Takes on a bake of another size; the mask is drawn again by the next `update`. */
   fit(t: Terrain): void;
@@ -67,13 +75,19 @@ export function createClearings(t: Terrain): Clearings {
   /** Texels per side of the land's whole mask, which the window is a part of. */
   let n = Math.ceil(((l.n - 1) * l.spacing) / RESOLUTION);
   const { size } = WINDOW;
-  const data = new Uint8Array(size * size);
-  const texture = new THREE.DataTexture(data, size, size, THREE.RedFormat, THREE.UnsignedByteType);
-  texture.minFilter = THREE.LinearFilter;
-  texture.magFilter = THREE.LinearFilter;
-  texture.needsUpdate = true;
+  const mask = (): { data: Uint8Array; texture: THREE.DataTexture } => {
+    const data = new Uint8Array(size * size);
+    const texture = new THREE.DataTexture(data, size, size, THREE.RedFormat, THREE.UnsignedByteType);
+    texture.minFilter = THREE.LinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+    texture.needsUpdate = true;
+    return { data, texture };
+  };
+  const { data, texture } = mask();
+  const turf = mask();
   const uniforms = {
     uClearing: { value: texture },
+    uTurf: { value: turf.texture },
     uClearingOrigin: { value: new THREE.Vector2() },
     uClearingSize: { value: size * RESOLUTION },
   };
@@ -126,8 +140,13 @@ export function createClearings(t: Terrain): Clearings {
     }
     uniforms.uClearingOrigin.value.set(l.origin + i * RESOLUTION, oz + j * RESOLUTION);
     data.fill(0);
-    /** Clears every texel of the window over mask texels [i0, i1] by [j0, j1] whose middle `inside` holds. */
-    const clear = (i0: number, i1: number, j0: number, j1: number, inside: (x: number, z: number) => boolean): void => {
+    turf.data.fill(0);
+    /**
+     * Marks every texel of the window over mask texels [i0, i1] by [j0, j1]
+     * by how far `inside` holds its middle, 0 to 1, keeping the most any shape
+     * gives it, in `into` (the bare ground's mask unless given).
+     */
+    const clear = (i0: number, i1: number, j0: number, j1: number, inside: (x: number, z: number) => boolean | number, into: Uint8Array = data): void => {
       const c0 = from(columns, i0);
       const c1 = from(columns, i1 + 1);
       const r0 = from(rows, j0);
@@ -135,7 +154,9 @@ export function createClearings(t: Terrain): Clearings {
       for (let r = r0; r < r1; r++) {
         const z = oz + ((rows[r] as number) + 0.5) * RESOLUTION;
         for (let c = c0; c < c1; c++) {
-          if (inside(l.origin + ((columns[c] as number) + 0.5) * RESOLUTION, z)) data[r * size + c] = 255;
+          const v = inside(l.origin + ((columns[c] as number) + 0.5) * RESOLUTION, z);
+          const level = v === true ? 255 : v === false ? 0 : Math.round(Math.min(1, Math.max(0, v)) * 255);
+          if (level > (into[r * size + c] as number)) into[r * size + c] = level;
         }
       }
     };
@@ -174,8 +195,10 @@ export function createClearings(t: Terrain): Clearings {
         const lz = dx * sin + dz * cos;
         const a = ((Math.atan2(lz, lx) / (Math.PI * 2)) % 1 + 1) % 1;
         const r = (c.outline[Math.floor(a * k) % k] as number) * c.scale;
-        return Math.hypot(lx, lz) < r;
-      });
+        const d = Math.hypot(lx, lz);
+        // Turf eases back into the grass past its outline; bare ground stops at it.
+        return c.turf === true ? Math.min(1, Math.max(0, 1 - (d - r) / TURF_EASE)) : d < r;
+      }, c.turf === true ? turf.data : data);
     };
     // Only the cells whose outlines could reach the window's texels.
     const { side, starts, order, reach } = cells;
@@ -190,6 +213,7 @@ export function createClearings(t: Terrain): Clearings {
       }
     }
     texture.needsUpdate = true;
+    turf.texture.needsUpdate = true;
   };
   /** The window's first texel for grass around (x, z): on a step of `WINDOW.recenter`. */
   const cornerAt = (x: number, z: number): { i: number; j: number } => {
@@ -214,7 +238,7 @@ export function createClearings(t: Terrain): Clearings {
       reaches = Float64Array.from(next, (c) => {
         let reach = 0;
         for (const r of c.outline) reach = Math.max(reach, r);
-        return reach * c.scale;
+        return reach * c.scale + (c.turf === true ? TURF_EASE : 0);
       });
       sort();
       redraw();
@@ -231,12 +255,16 @@ export function createClearings(t: Terrain): Clearings {
   };
 }
 
-/** Samples the mask: 1 where nothing grows. */
+/** Samples the masks: 1 where nothing grows, and 1 where only short turf grows, each easing to 0 across a texel. */
 export const CLEARING_GLSL = /* glsl */ `
 uniform sampler2D uClearing;
+uniform sampler2D uTurf;
 uniform vec2 uClearingOrigin;
 uniform float uClearingSize;
 float clearingAt(vec2 xz) {
   return texture2D(uClearing, (xz - uClearingOrigin) / uClearingSize).r;
+}
+float turfAt(vec2 xz) {
+  return texture2D(uTurf, (xz - uClearingOrigin) / uClearingSize).r;
 }
 `;

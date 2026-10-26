@@ -67,4 +67,18 @@ describe("the clearings' mask", () => {
       expect(bare).toBeGreaterThan(40);
     }
   });
+
+  it("keeps short turf apart from bare ground: a turf outline marks only the turf's mask", () => {
+    const clearings = createClearings(land);
+    const turf = Float32Array.from({ length: 16 }, () => 1.5);
+    clearings.update([{ x: 20, z: 20, yaw: 0, scale: 1, outline: turf, turf: true }]);
+    clearings.follow(20, 20);
+    const { uClearing, uTurf, uClearingOrigin, uClearingSize } = clearings.uniforms;
+    const side = uTurf.value.image.width;
+    const step = uClearingSize.value / side;
+    const texel = (x: number, z: number): number => Math.floor((z - uClearingOrigin.value.y) / step) * side + Math.floor((x - uClearingOrigin.value.x) / step);
+    expect((uTurf.value.image.data as Uint8Array)[texel(20.2, 20.2)]).toBe(255);
+    expect((uTurf.value.image.data as Uint8Array)[texel(24, 20)]).toBe(0);
+    expect((uClearing.value.image.data as Uint8Array).every((v) => v === 0)).toBe(true);
+  });
 });
