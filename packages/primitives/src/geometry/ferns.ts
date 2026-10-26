@@ -21,6 +21,8 @@ interface Frond {
   /** The share of its length that has unrolled; the rest is coiled. */
   readonly unrolled: number;
   readonly tint: number;
+  /** A shade offset: fronds deep in the crown sit a little in their neighbors' shadow. */
+  readonly depth: number;
   readonly r: Rand;
 }
 
@@ -33,7 +35,7 @@ const STEPS = 48;
 /** How far a frond's coil winds, radians for each share of its length still coiled: half coiled is a turn and a bit. */
 const COIL_TURN = 14;
 /** A leaflet's edge from its root to its tip: how far along, how wide, how far it has drooped. */
-const LOBES: readonly (readonly [number, number, number])[] = [[0.16, 1, 0.01], [0.36, 0.72, 0.02], [0.56, 0.9, 0.04], [0.78, 0.5, 0.07]];
+const LOBES: readonly (readonly [number, number, number])[] = [[0.2, 1, 0.01], [0.48, 0.78, 0.03], [0.74, 0.55, 0.06]];
 /** How far up the frond the first leaflets grow. */
 const FIRST_LEAFLET = 0.12;
 
@@ -71,6 +73,7 @@ function emitCrown(out: PartBuilder, center: V3, count: number, length: number, 
       length: length * (inner ? fr.range(0.7, 0.85) : fr.range(0.88, 1.1)),
       unrolled: clamp(unroll + fr.range(-0.07, 0.07) - (inner ? 0.14 : 0), 0.4, 1),
       tint: fr.range(-0.04, 0.04),
+      depth: inner ? -0.08 : fr.range(-0.03, 0.05),
       r: fr,
     };
     emitFrond(out, frond);
@@ -130,15 +133,15 @@ function stationsOf(f: Frond): Station[] {
   return stations;
 }
 
-/** A leaflet's length along the frond: short at the foot, longest a third of the way up, tapering to the tip. */
-const leafletLength = (t: number): number => Math.sin(Math.PI * Math.pow(clamp((t - FIRST_LEAFLET * 0.6) / (1 - FIRST_LEAFLET * 0.6), 0, 1), 0.75));
+/** A leaflet's length along the frond: short at the foot, longest a third of the way up, tapering toward the tip but never to nothing, so every frond ends in leaf. */
+const leafletLength = (t: number): number => Math.sin(Math.PI * Math.pow(clamp((t - 0.07) / 1.12, 0, 1), 0.75));
 
 function emitFrond(out: PartBuilder, f: Frond): void {
   const stations = stationsOf(f);
-  const pairs = Math.max(6, Math.round(f.length / (0.034 + 0.018 * f.length)));
+  const pairs = Math.max(6, Math.round(f.length / (0.036 + 0.02 * f.length)));
   // A ring where the frond leaves the ground, one at every pair of leaflets, more round the coil, and one at the tip.
   const leaflets = Array.from({ length: pairs }, (_, j) => FIRST_LEAFLET + (1 - FIRST_LEAFLET) * Math.pow(j / pairs, 0.92));
-  const coiling = f.unrolled < 0.98 ? Math.ceil(40 * (1 - f.unrolled)) : 0;
+  const coiling = f.unrolled < 0.98 ? Math.ceil(26 * (1 - f.unrolled)) : 0;
   const coilRings = Array.from({ length: coiling }, (_, k) => f.unrolled + ((1 - f.unrolled) * (k + 0.5)) / coiling);
   const ts = [...new Set([0, ...leaflets, ...coilRings, 1])].sort((a, b) => a - b);
   const radius = 0.004 + 0.006 * f.length;
@@ -155,7 +158,7 @@ function emitFrond(out: PartBuilder, f: Frond): void {
   for (const t of ts) {
     const st = stationAt(stations, t);
     rings.push(out.vertexCount);
-    const ch = { loss: 0, droop: 0, wither: 0.45 + 0.45 * t, glow: 0, pivot: f.foot, bough: f.foot, tint: f.tint };
+    const ch = { loss: 0, droop: 0, wither: 0.3 + 0.65 * t, glow: 0, pivot: f.foot, bough: f.foot, tint: f.tint };
     // The coil is fat with the leaflets rolled up in it.
     const rad = radius * (1 - 0.65 * t) * (1 + 3 * st.coil * (1 - 0.6 * st.coil));
     for (let j = 0; j < 3; j++) {
@@ -186,33 +189,51 @@ function emitFrond(out: PartBuilder, f: Frond): void {
       emitLeaflet(out, f, st, { index: (rings[0] as number) + corner, at: corners[corner] as V3 }, side, len, t, fold);
     }
   }
+  // An open frond ends in one leaflet carrying on along its stalk.
+  const tip = stationAt(stations, 1);
+  if (tip.coil < 0.02) {
+    const corner = (ts.length - 1) * 3;
+    emitLeaflet(out, f, tip, { index: (rings[0] as number) + corner, at: corners[corner] as V3 }, 0, top * 0.32, 1, fold);
+  }
 }
 
-/** One leaflet: a slim blade with a wavy edge, swept toward the frond's tip and drooping a little, its edges cupped up. */
-function emitLeaflet(out: PartBuilder, f: Frond, st: Station, root: { index: number; at: V3 }, side: 1 | -1, len: number, t: number, fold: (p: V3) => number): void {
-  const sweep = 0.22 + 0.5 * t + 0.9 * st.coil + f.r.range(-0.08, 0.08);
+/**
+ * One leaflet: a slim blade with a wavy edge, swept toward the frond's tip
+ * (or along it, for the frond's last, `side` 0) and drooping a little, its
+ * halves creased up from the midrib. Each turns a little on its midrib and
+ * takes its own shade, so overlapping fronds read leaflet by leaflet.
+ */
+function emitLeaflet(out: PartBuilder, f: Frond, st: Station, root: { index: number; at: V3 }, side: -1 | 0 | 1, len: number, t: number, fold: (p: V3) => number): void {
+  const sweep = side === 0 ? Math.PI / 2 : 0.22 + 0.5 * t + 0.9 * st.coil + f.r.range(-0.08, 0.08);
   const dir = normalize(add(add(scale(st.side, side * Math.cos(sweep)), scale(st.along, Math.sin(sweep))), scale(st.face, 0.06)));
-  const across = normalize(cross(st.face, dir));
+  const twist = f.r.range(-0.45, 0.45);
+  const flat = normalize(cross(st.face, dir));
+  const across = normalize(add(scale(flat, Math.cos(twist)), scale(st.face, Math.sin(twist))));
+  const face = normalize(cross(dir, across));
+  const up = face[1] < 0 ? scale(face, -1) : face;
   const base = root.at;
   const half = len * 0.13;
-  const n = normalize(addScaled(st.face, [0, 1, 0], 0.35));
+  const n = normalize(addScaled(up, [0, 1, 0], 0.3));
   // Tips brown and shrivel first: the outer leaflets drop at their own thresholds, the lower ones never.
   const frail = t > 0.55 && f.r.next() < ((t - 0.55) / 0.45) * 0.85;
   const ch = {
     loss: frail ? lossThreshold(f.r.next(), 0.35, 0.04) : 0,
     droop: 0,
-    wither: clamp(0.35 + 0.6 * Math.pow(t, 0.8), 0, 1),
+    // Green at the foot, browning steeply toward the tip, which grows a fresher, yellower green.
+    wither: clamp(0.2 + 0.8 * Math.pow(t, 1.1), 0, 1),
     glow: 0,
     pivot: base,
     bough: f.foot,
-    tint: f.tint,
+    tint: f.tint + 0.04 * t * t + f.r.range(-0.015, 0.015),
   };
-  const shade = 0.55 + 0.3 * t + f.r.range(-0.06, 0.06);
+  const shade = 0.5 + 0.3 * t + f.depth + f.r.range(-0.12, 0.12);
   // Along the blade: how far out, how wide, how far it has drooped.
-  const point = (along: number, width: number, drop: number): V3 => addScaled(addScaled(base, dir, len * along), st.face, -len * drop + Math.abs(width) * half * 0.25);
+  const point = (along: number, width: number, drop: number): V3 => addScaled(addScaled(base, dir, len * along), up, -len * drop + Math.abs(width) * half * 0.25);
   const at = (along: number, width: number, drop: number): number => {
     const p = addScaled(point(along, width, drop), across, width * half);
-    return out.vertex(p, n, shade + 0.12 * along, { ...ch, droop: fold(p), wither: clamp(ch.wither + 0.1 * along, 0, 1) });
+    // Each half of the blade faces a little away from the midrib, so one catches the light as the other turns from it.
+    const crease = normalize(addScaled(n, across, 0.3 * Math.sign(width)));
+    return out.vertex(p, crease, shade + 0.12 * along, { ...ch, droop: fold(p), wither: clamp(ch.wither + 0.15 * along, 0, 1) });
   };
   // Lobes in and out down each edge, so the blade reads as cut leaf, not a strap.
   const rows = LOBES.map(([along, width, drop]) => [at(along, width, drop), at(along, -width, drop)] as const);

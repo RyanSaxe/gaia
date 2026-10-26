@@ -49,6 +49,25 @@ describe("ferns@1", () => {
   });
 });
 
+/** Every combination of a drift's settings, each scale at every level. */
+function settings(id: string): Record<string, string>[] {
+  let out: Record<string, string>[] = [{}];
+  for (const [name, f] of Object.entries(lib.get(id).params as Record<string, Field>)) {
+    const words = f.type === "scale" ? f.levels.map((l) => l.words) : f.type === "choice" ? Object.keys(f.options) : [];
+    out = out.flatMap((s) => words.map((w) => ({ ...s, [name]: w })));
+  }
+  return out;
+}
+
+describe("the lowest drifts", () => {
+  it.each(["ferns@1", "mushrooms@1"])("%s stays light enough to stand by the hundred at every setting", (id) => {
+    for (const stored of settings(id)) {
+      const triangles = build(id, stored, 3).reduce((n, p) => n + p.indices.length / 3, 0);
+      expect(triangles, JSON.stringify(stored)).toBeLessThan(12_000);
+    }
+  });
+});
+
 describe("mushrooms@1", () => {
   const groupingField = (lib.get("mushrooms@1").params as Record<string, Field>).grouping as Extract<Field, { type: "choice" }>;
   const groupings = Object.keys(groupingField.options);
