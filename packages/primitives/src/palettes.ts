@@ -39,15 +39,15 @@ const HEALTHY: Record<PaletteFamily, { bark: number; leaf: number; bloom: number
  * mushrooms' caps and pale stalks.
  */
 const UNDERSTORY: Record<PaletteFamily, { stone: number; moss: number; stem: number; eye: number; wood: number; cap: number; stalk: number }> = {
-  "spring-meadow": { stone: 0x9b988c, moss: 0x5f8a3e, stem: 0x6f9a3c, eye: 0xf0c43c, wood: 0xd6b98e, cap: 0xd9a25a, stalk: 0xf2e8d0 },
+  "spring-meadow": { stone: 0x9b988c, moss: 0x5f8a3e, stem: 0x6f9a3c, eye: 0xf0c43c, wood: 0xd6b98e, cap: 0xcc9e66, stalk: 0xf2e8d0 },
   "deep-forest": { stone: 0x7c807a, moss: 0x427c3c, stem: 0x3f6e38, eye: 0x8a5a2a, wood: 0xb8946a, cap: 0x9a5a34, stalk: 0xdccca8 },
-  "teal-gold": { stone: 0x98948a, moss: 0x5c9a6a, stem: 0x4f8a6c, eye: 0xe0902e, wood: 0xcaa67c, cap: 0xe8a23c, stalk: 0xf2e2b0 },
+  "teal-gold": { stone: 0x98948a, moss: 0x5c9a6a, stem: 0x4f8a6c, eye: 0xe0902e, wood: 0xcaa67c, cap: 0xd99a48, stalk: 0xf2e2b0 },
   "autumn-ember": { stone: 0x988a7a, moss: 0x8c9a40, stem: 0x6a7e3a, eye: 0x3a2a20, wood: 0xc58e5e, cap: 0xc9944a, stalk: 0xe2cc98 },
   "cherry-blossom": { stone: 0xa59c9c, moss: 0x8fb27a, stem: 0x6f9a5a, eye: 0xf2d27a, wood: 0xd8ad96, cap: 0xb86a78, stalk: 0xf6eee6 },
   "silver-birch": { stone: 0xb0aea5, moss: 0x7a9e48, stem: 0x7fa83e, eye: 0xe8c04a, wood: 0xe8dabc, cap: 0xcc4430, stalk: 0xf6f2e8 },
   "desert-sage": { stone: 0xbe9f76, moss: 0x9aa77c, stem: 0x8a9a6a, eye: 0xa0662e, wood: 0xdcb47e, cap: 0xb87448, stalk: 0xecdcbc },
   "lantern-dusk": { stone: 0x6c6878, moss: 0x3f7f6c, stem: 0x356a5e, eye: 0xffd27a, wood: 0xa68f80, cap: 0xe08a3a, stalk: 0xf0d8a0 },
-  "bluebell-wood": { stone: 0x8e9096, moss: 0x5e9a52, stem: 0x4f8a48, eye: 0xf4e7b0, wood: 0xc8ab8a, cap: 0x9a74b8, stalk: 0xe2daea },
+  "bluebell-wood": { stone: 0x8e9096, moss: 0x5e9a52, stem: 0x4f8a48, eye: 0xf4e7b0, wood: 0xc8ab8a, cap: 0x8f7aa6, stalk: 0xe2daea },
 };
 
 /** Every family declines toward the same dry, grey-brown tones, so decline reads the same everywhere. */
