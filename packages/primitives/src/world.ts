@@ -93,23 +93,23 @@ export const daylight = primitive({
   role: "Light",
   doc: "A whole day and night: the sun's path, the warmth of its light, how the light is painted, the moon and the stars. The hour follows the person's own clock.",
   params: {
-    path: t.scale("How high the sun rides", { "low, like winter": 0.62, middling: 1, "high, like midsummer": 1.3 }),
+    path: t.scale("How high the sun rides: low, like winter for code that feels long-shadowed and wistful, middling for code that feels even and temperate, high, like midsummer for code that feels bright, open and in its prime", { "low, like winter": 0.62, middling: 1, "high, like midsummer": 1.3 }),
     warmth: t.choice("The temperature of the light", {
-      cool: "Silvery, blue-leaning light",
-      neutral: "Clean daylight",
-      warm: "Honeyed, amber-leaning light",
+      cool: "Silvery, blue-leaning light, for code that feels cool-headed, exact and quiet",
+      neutral: "Clean daylight, for code that feels matter-of-fact and clear-eyed",
+      warm: "Honeyed, amber-leaning light, for code that feels homely and lived-in, like an old kitchen",
     }),
     brush: t.choice("How the light is painted", {
-      "soft watercolor": "Many soft steps of light, edges melting together",
-      painterly: "A few clear steps of light with soft edges",
-      "bold gouache": "Few flat steps of light with crisp edges",
+      "soft watercolor": "Many soft steps of light, edges melting together, for code that feels gentle, dreamy and loose",
+      painterly: "A few clear steps of light with soft edges, for code that feels crafted and patient",
+      "bold gouache": "Few flat steps of light with crisp edges, for code that feels bold, crisp and decisive",
     }),
     moon: t.choice("The moon that lights the world's nights", {
-      "silver moon": "A bright full moon that silvers the land",
-      "amber harvest moon": "A large, low, honey-colored full moon",
-      "thin pale crescent": "A slim crescent; dark nights where the lantern matters",
+      "silver moon": "A bright full moon that silvers the land, for code that feels clear and calm even in the dark",
+      "amber harvest moon": "A large, low, honey-colored full moon, for code that feels abundant and homely",
+      "thin pale crescent": "A slim crescent; dark nights where the lantern matters, for code that feels lean, quiet and a little lonely",
     }),
-    stars: t.scale("How many stars the night shows", { "a scattered few": 0.2, many: 0.55, "a river of stars": 1 }),
+    stars: t.scale("How many stars the night shows: a scattered few for code that feels plain and sparse, many for code that feels rich, a river of stars for code that feels vast and full of wonder", { "a scattered few": 0.2, many: 0.55, "a river of stars": 1 }),
   },
   build: (p): DaySpec => {
     const warmth = WARMTH[p.warmth];
@@ -163,6 +163,7 @@ const SKY_COLORS = {
   "teal lagoon": { zenith: 0x3d93b6, horizon: 0xbfe4dc },
   lavender: { zenith: 0x7c8ed2, horizon: 0xe2d8ec },
   apricot: { zenith: 0x7aa1cf, horizon: 0xf3dcc0 },
+  "pearl grey": { zenith: 0x8d9bab, horizon: 0xdfe1dc },
 } as const;
 
 type CloudShape = Omit<CloudSpec, "threshold">;
@@ -181,20 +182,27 @@ export const sky = primitive({
   doc: "The sky's own color and the form and amount of its clouds.",
   params: {
     character: t.choice("The sky's color at noon", {
-      cobalt: "Deep, clear cobalt blue",
-      "powder blue": "Soft, bright powder blue",
-      "watercolor wash": "Pale washed blue, almost grey-green at the horizon",
-      "teal lagoon": "Blue-green, like a shallow lagoon",
-      lavender: "Lilac-blue, soft violet at the horizon",
-      apricot: "Blue above, warm apricot at the horizon",
+      cobalt: "Deep, clear cobalt blue, for code that feels confident and sharp",
+      "powder blue": "Soft, bright powder blue, for code that feels cheerful and easygoing",
+      "watercolor wash": "Pale washed blue, almost grey-green at the horizon, for code that feels faded, gentle and quiet",
+      "teal lagoon": "Blue-green, like a shallow lagoon, for code that feels fresh and playful",
+      lavender: "Lilac-blue, soft violet at the horizon, for code that feels dreamy and whimsical",
+      apricot: "Blue above, warm apricot at the horizon, for code that feels nostalgic, like a long afternoon",
+      "pearl grey": "A pale pearl-grey sky, bright behind thin cloud, for code that feels muted, thoughtful or weary",
     }),
     clouds: t.choice("The form of the clouds", {
-      "fair-weather puffs": "Small bright cumulus puffs",
-      "towering cumulus": "Great billowing towers standing on the horizon",
-      "cirrus streaks": "Thin, high streaks brushed across the sky",
-      "low drifting banks": "Long soft banks drifting low along the horizon",
+      "fair-weather puffs": "Small bright cumulus puffs, for code that feels sunny and carefree",
+      "towering cumulus": "Great billowing towers standing on the horizon, for code that feels dramatic, building toward something",
+      "cirrus streaks": "Thin, high streaks brushed across the sky, for code that feels light, quick and fleeting",
+      "low drifting banks": "Long soft banks drifting low along the horizon, for code that feels slow, heavy and brooding",
     }),
-    cover: t.scale("How much of the sky the clouds cover", { "a few": 0.62, scattered: 0.56, "many, but with blue between": 0.5 }),
+    cover: t.scale("How much of the sky the clouds cover: a few for code that is easy to read and in good health, heavier cloud the more tangled or hard to follow it is, to a low grey sky for code that is hard to see into at all", {
+      "a few": 0.62,
+      scattered: 0.56,
+      "many, but with blue between": 0.5,
+      "a heavy sky, with breaks of light": 0.38,
+      "low and grey, the sun seldom through": 0.24,
+    }),
   },
   build: (p) => {
     const colors = SKY_COLORS[p.character];
