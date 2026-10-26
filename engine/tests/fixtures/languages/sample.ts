@@ -2,6 +2,10 @@ import { join } from "./paths";
 import type { Options } from "../options";
 import * as paths from "./paths";
 import probe, { join as joinPaths } from "./probe";
+export { join } from "./paths";
+export { join as joinAll } from "./paths";
+export * as probing from "./probe";
+export * from "./probe";
 
 /** Reads every entry under a root. */
 export function readAll(root: string, depth: number): string[] {

@@ -625,6 +625,24 @@ mod tests {
                         spec.name, file.path
                     );
                 }
+                // A re-export joins the import holding it.
+                if let Some(kind) = capture.strip_prefix("reexport.") {
+                    let found = parsed.refs.iter().any(|r| {
+                        (kind == "all" && r.passes_all)
+                            || r.passes.iter().any(|a| {
+                                matches!(
+                                    (&a.of, kind),
+                                    (parse::Aliased::Item(_), "named" | "renamed")
+                                        | (parse::Aliased::Module, "module")
+                                )
+                            })
+                    });
+                    assert!(
+                        found,
+                        "{}'s @{capture} passes a name on in {}",
+                        spec.name, file.path
+                    );
+                }
                 if capture == "export.default" {
                     assert!(
                         parsed.default_export.is_some(),
@@ -1017,6 +1035,173 @@ mod tests {
             "file:src/graph/resolve.rs",
             "imports"
         ));
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn a_typescript_or_javascript_call_through_a_package_index_reaches_what_it_re_exports() {
+        let dir = project(
+            "reexports-js",
+            &[
+                (
+                    "packages/geo/package.json",
+                    r#"{ "name": "@demo/geo", "main": "src/index.ts" }"#,
+                ),
+                (
+                    "packages/geo/src/index.ts",
+                    "export { area } from \"./shapes/area\";\nexport { perimeter as edge } from \"./shapes/perimeter\";\nexport * from \"./more\";\nexport * as units from \"./units/convert\";\nexport * from \"./loop/a\";\nexport * from \"./far/f1\";\nexport * from \"./hidden\";\n",
+                ),
+                (
+                    "packages/geo/src/shapes/area.ts",
+                    "export function area() {\n  return 1;\n}\n",
+                ),
+                (
+                    "packages/geo/src/shapes/perimeter.ts",
+                    "export function perimeter() {\n  return 2;\n}\n",
+                ),
+                ("packages/geo/src/more.js", "export * from \"./deep/scale\";\n"),
+                (
+                    "packages/geo/src/deep/scale.ts",
+                    "export function scale() {\n  return 3;\n}\n",
+                ),
+                (
+                    "packages/geo/src/units/convert.ts",
+                    "export function toMeters() {\n  return 4;\n}\n",
+                ),
+                (
+                    "packages/geo/src/hidden.ts",
+                    "function tidy() {\n  return 7;\n}\n\nexport const kept = tidy();\n",
+                ),
+                ("packages/geo/src/loop/a.ts", "export * from \"./b\";\n"),
+                ("packages/geo/src/loop/b.ts", "export * from \"./a\";\n"),
+                ("packages/geo/src/far/f1.ts", "export * from \"./f2\";\n"),
+                ("packages/geo/src/far/f2.ts", "export * from \"./f3\";\n"),
+                ("packages/geo/src/far/f3.ts", "export * from \"./f4\";\n"),
+                ("packages/geo/src/far/f4.ts", "export * from \"./f5\";\n"),
+                (
+                    "packages/geo/src/far/f5.ts",
+                    "export function distant() {\n  return 5;\n}\n",
+                ),
+                // A neighbour that shares a re-exported name is not what the import names.
+                (
+                    "apps/web/scale.ts",
+                    "export function scale() {\n  return 6;\n}\n",
+                ),
+                (
+                    "apps/web/app.ts",
+                    "import { area, edge, scale, units, missing, distant } from \"@demo/geo\";\nimport * as geo from \"@demo/geo\";\n\nexport function draw() {\n  area();\n  edge();\n  scale();\n  units.toMeters();\n  geo.area();\n  missing();\n  distant();\n  tidy();\n}\n",
+                ),
+            ],
+        );
+        let g = graph(&dir).unwrap();
+        let from = "def:apps/web/app.ts#draw";
+        for (to, through) in [
+            ("def:packages/geo/src/shapes/area.ts#area", "`export { a }`"),
+            (
+                "def:packages/geo/src/shapes/perimeter.ts#perimeter",
+                "`export { a as b }`",
+            ),
+            (
+                "def:packages/geo/src/deep/scale.ts#scale",
+                "two `export *`, one in JavaScript",
+            ),
+            (
+                "def:packages/geo/src/units/convert.ts#toMeters",
+                "`export * as ns`",
+            ),
+        ] {
+            assert!(has_edge(&g, from, to, "calls"), "{through} reaches {to}");
+        }
+        let to_area = g
+            .edges
+            .iter()
+            .filter(|e| e.from == from && e.to == "def:packages/geo/src/shapes/area.ts#area")
+            .count();
+        assert_eq!(to_area, 2, "area() and geo.area() both reach area");
+        assert!(!has_edge(&g, from, "def:apps/web/scale.ts#scale", "calls"));
+        // `export *` passes on only what its module exports.
+        assert!(!has_edge(&g, from, "def:packages/geo/src/hidden.ts#tidy", "calls"));
+        // A cycle ends, and a chain longer than the rule follows reaches nothing.
+        assert!(!has_edge(
+            &g,
+            from,
+            "def:packages/geo/src/far/f5.ts#distant",
+            "calls"
+        ));
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn a_python_call_through_a_package_init_reaches_what_it_imports() {
+        let dir = project(
+            "reexports-py",
+            &[
+                (
+                    "shop/__init__.py",
+                    "from .billing.invoice import total\nfrom .billing.tax import rate as tax_rate\nfrom .catalog import *\n",
+                ),
+                ("shop/billing/invoice.py", "def total():\n    return 1\n"),
+                ("shop/billing/tax.py", "def rate():\n    return 2\n"),
+                ("shop/catalog/__init__.py", "from .store.items import find\n"),
+                ("shop/catalog/store/items.py", "def find():\n    return 3\n"),
+                // A neighbour that shares a re-exported name is not what the import names.
+                ("shop/cli/helpers.py", "def find():\n    return 4\n"),
+                (
+                    "shop/cli/main.py",
+                    "from .. import total, tax_rate, find\n\n\ndef run():\n    total()\n    tax_rate()\n    find()\n",
+                ),
+            ],
+        );
+        let g = graph(&dir).unwrap();
+        let from = "def:shop/cli/main.py#run";
+        for (to, through) in [
+            ("def:shop/billing/invoice.py#total", "`from .x import a`"),
+            ("def:shop/billing/tax.py#rate", "`from .x import a as b`"),
+            (
+                "def:shop/catalog/store/items.py#find",
+                "`from .x import *`, then `from .x import a`",
+            ),
+        ] {
+            assert!(has_edge(&g, from, to, "calls"), "{through} reaches {to}");
+        }
+        assert!(!has_edge(&g, from, "def:shop/cli/helpers.py#find", "calls"));
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn a_rust_call_through_a_pub_use_reaches_what_it_re_exports() {
+        let dir = project(
+            "reexports-rs",
+            &[
+                (
+                    "src/geo/mod.rs",
+                    "pub mod shapes;\npub use self::shapes::flat::area;\npub use self::shapes::flat::perimeter as edge;\npub use self::shapes::flat::{span, mass as weight};\npub use self::shapes::solid::*;\nuse self::shapes::flat::hidden;\n",
+                ),
+                ("src/geo/shapes/mod.rs", "pub mod flat;\npub mod solid;\n"),
+                (
+                    "src/geo/shapes/flat.rs",
+                    "pub fn area() {}\npub fn perimeter() {}\npub fn span() {}\npub fn mass() {}\npub fn hidden() {}\n",
+                ),
+                ("src/geo/shapes/solid.rs", "pub fn volume() {}\n"),
+                (
+                    "src/main.rs",
+                    "mod geo;\nuse crate::geo::{area, edge, span, weight, volume, hidden};\n\nfn main() {\n    area();\n    edge();\n    span();\n    weight();\n    volume();\n    hidden();\n}\n",
+                ),
+            ],
+        );
+        let g = graph(&dir).unwrap();
+        let from = "def:src/main.rs#main";
+        for (to, through) in [
+            ("def:src/geo/shapes/flat.rs#area", "`pub use x::a`"),
+            ("def:src/geo/shapes/flat.rs#perimeter", "`pub use x::a as b`"),
+            ("def:src/geo/shapes/flat.rs#span", "`pub use x::{a}`"),
+            ("def:src/geo/shapes/flat.rs#mass", "`pub use x::{a as b}`"),
+            ("def:src/geo/shapes/solid.rs#volume", "`pub use x::*`"),
+        ] {
+            assert!(has_edge(&g, from, to, "calls"), "{through} reaches {to}");
+        }
+        // A private `use` passes nothing on.
+        assert!(!has_edge(&g, from, "def:src/geo/shapes/flat.rs#hidden", "calls"));
         std::fs::remove_dir_all(dir).unwrap();
     }
 

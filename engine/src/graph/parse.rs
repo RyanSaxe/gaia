@@ -11,6 +11,10 @@
 //! - `@alias.renamed`, `.module` and `.default` inside an import, with
 //!   `@name`, the name the file uses: a name the module calls `@imported`, the
 //!   module itself, or what it exports as its default.
+//! - `@reexport.named`, `.renamed` and `.module` inside an import, with
+//!   `@name`, a name the import passes on to the files that import this one:
+//!   the module's own name, a name the module calls `@imported`, or the module
+//!   itself. `@reexport.all` passes on everything the module exports.
 //! - `@export.default` with `@name`, the definition a file exports as its default.
 //! - `@block.<shape>`.
 
@@ -83,6 +87,11 @@ pub struct Ref {
     pub macro_call: bool,
     /// The names an import binds under names of the file's own.
     pub aliases: Vec<Alias>,
+    /// The names an import passes on to the files that import this one, by
+    /// the names they import them by: `b` in `export { a as b } from './x'`.
+    pub passes: Vec<Alias>,
+    /// The import passes on everything its module exports: `export * from './x'`.
+    pub passes_all: bool,
 }
 
 /// A name an import binds: `buildV1` in `import { buildSite as buildV1 }`.
@@ -765,29 +774,35 @@ pub fn parse(lang: &Loaded, src: &str) -> Result<FileParse, String> {
                 path,
                 macro_call: h.node.kind().contains("macro"),
                 aliases: Vec::new(),
+                passes: Vec::new(),
+                passes_all: false,
             };
             (!r.text.is_empty()).then_some((h, r))
         })
         .collect();
 
-    // Each alias joins the import holding it. Of several imports on one
-    // statement, as in Python's `import a as x, b as y`, it joins the one it renames.
-    for h in hits.iter().filter(|h| h.what.starts_with("alias.")) {
-        let Some(name) = h
-            .name
-            .map(|n| clean(text(n, src)))
-            .filter(|n| !n.is_empty())
-        else {
+    // Each alias, and each name an import passes on, joins the import holding
+    // it. Of several imports on one statement, as in Python's `import a as x,
+    // b as y`, it joins the one it renames.
+    for h in hits.iter() {
+        let Some((group @ ("alias" | "reexport"), form)) = h.what.split_once('.') else {
             continue;
         };
-        let of = match &h.what["alias.".len()..] {
-            "module" => Aliased::Module,
-            "default" => Aliased::Default,
-            "renamed" => match h.imported.map(|n| clean(text(n, src))) {
+        let name = h
+            .name
+            .map(|n| clean(text(n, src)))
+            .filter(|n| !n.is_empty());
+        let of = match (form, &name) {
+            ("all", _) => None,
+            (_, None) => continue,
+            ("module", _) => Some(Aliased::Module),
+            ("default", _) => Some(Aliased::Default),
+            ("named", Some(n)) => Some(Aliased::Item(n.clone())),
+            ("renamed", _) => match h.imported.map(|n| clean(text(n, src))) {
                 // A path names its last segment: `Tool` in Rust's `util::Tool as T`.
-                Some(path) => {
-                    Aliased::Item(path.rsplit([':', '.']).next().unwrap_or("").to_string())
-                }
+                Some(path) => Some(Aliased::Item(
+                    path.rsplit([':', '.']).next().unwrap_or("").to_string(),
+                )),
                 None => continue,
             },
             _ => continue,
@@ -799,8 +814,12 @@ pub fn parse(lang: &Loaded, src: &str) -> Result<FileParse, String> {
                 let renames = import.name.is_some_and(|n| contains(h.node, n));
                 (!renames, import.node.end_byte() - import.node.start_byte())
             });
-        if let Some((_, import)) = holder {
-            import.aliases.push(Alias { name, of });
+        let Some((_, import)) = holder else { continue };
+        match (group, of, name) {
+            ("alias", Some(of), Some(name)) => import.aliases.push(Alias { name, of }),
+            ("reexport", Some(of), Some(name)) => import.passes.push(Alias { name, of }),
+            ("reexport", None, _) => import.passes_all = true,
+            _ => {}
         }
     }
     let default_export = hits
