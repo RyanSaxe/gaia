@@ -15,7 +15,7 @@ import type { windmillParams } from "../../landmark.ts";
 import { type Channels, PartBuilder, type V3, add, addScaled, clamp, cross, dot, lossThreshold, normalize, scale, sub } from "../kit.ts";
 import { UP, beam, box, log, quad, tri } from "../blocks.ts";
 import { lump, nonEmpty, still } from "./shared.ts";
-import { COURSE, JOINT, MORTAR, angleDiff, courseSpans, ringBlock, ringNormal, ringPoint } from "./tower.ts";
+import { COURSE, MORTAR, angleDiff, courseSpans, ringBlock, ringNormal, ringPoint } from "./tower.ts";
 
 type MillParams = Resolved<typeof windmillParams>;
 
@@ -34,12 +34,14 @@ const BONNET: Profile = [[0, 1], [0.12, 0.98], [0.38, 0.8], [0.62, 0.55], [0.84,
 
 interface Parts {
   readonly stone: PartBuilder;
+  readonly fieldstone: PartBuilder;
   readonly boards: PartBuilder;
   readonly timber: PartBuilder;
   readonly roof: PartBuilder;
   readonly glass: PartBuilder;
-  /** The sails' canvas or shutters and their frames, which turn and stop no walker. */
+  /** The sails' canvas or shutters, their pale bars and laths, and their whips, which turn and stop no walker. */
   readonly cloth: PartBuilder;
+  readonly lath: PartBuilder;
   readonly frame: PartBuilder;
 }
 
@@ -68,14 +70,84 @@ interface Opening {
   readonly half: number;
 }
 
-/** Courses of stone from `y0`, as the lookout tower lays them, stopping clean at each opening. */
-function masonry(b: PartBuilder, sides: number, y0: number, courses: number, ch: number, wallAt: (y: number) => number, thick: number, openings: readonly Opening[], r: Rand): void {
-  for (let c = 0; c < courses; c++) {
-    const ya = y0 + c * ch;
-    const rad = wallAt(ya + ch / 2);
+/** Where each course of stone starts, from `y0` up to `y1`: courses about `mean` tall, deep and shallow by turns of chance, the lowest two a deeper plinth. */
+function coursesOf(y0: number, y1: number, mean: number, r: Rand): number[] {
+  const n = Math.max(3, Math.round((y1 - y0) / mean));
+  const weights = Array.from({ length: n }, (_, c) => (0.55 + 0.9 * r.next()) * (c < 2 ? 1.3 : 1));
+  const total = weights.reduce((a, w) => a + w, 0);
+  const ys = [y0];
+  for (const w of weights) ys.push((ys[ys.length - 1] as number) + ((y1 - y0) * w) / total);
+  return ys;
+}
+
+/** How many courses from `course` it takes to rise at least `height`. */
+function rowsFor(ys: readonly number[], course: number, height: number): number {
+  let k = 1;
+  while (course + k < ys.length - 1 && (ys[course + k] as number) - (ys[course] as number) < height) k++;
+  return k;
+}
+
+/** A wall's joints, wider than the lookout tower's dressed courses, and how far the mortar is set back behind the face. */
+const RUBBLE = { joint: 0.05, mortar: 0.035 } as const;
+
+/**
+ * One course's stones as angle spans of varied lengths about `mean` meters, each course starting somewhere new so no
+ * joint runs up the wall. On a polygon every corner is a joint, and the quoins either side of it are long and short
+ * by turns, course over course.
+ */
+function stoneSpans(sides: number, rad: number, mean: number, odd: boolean, r: Rand): { a0: number; a1: number; quoin: boolean }[] {
+  const gap = RUBBLE.joint / (2 * rad);
+  /** Lengths that fill `span` meters, each between about half and one and a half times `mean`. */
+  const fillOf = (span: number): number[] => {
+    const out: number[] = [];
+    let sum = 0;
+    while (sum < span - mean * 0.5) {
+      const l = mean * (0.55 + 0.9 * r.next());
+      out.push(l);
+      sum += l;
+    }
+    if (out.length === 0) return [span];
+    return out.map((l) => (l * span) / sum);
+  };
+  if (sides === 0) {
+    let a = r.next() * Math.PI * 2;
+    return fillOf(Math.PI * 2 * rad).map((l) => {
+      const span = { a0: a + gap, a1: a + l / rad - gap, quoin: false };
+      a += l / rad;
+      return span;
+    });
+  }
+  const sector = (Math.PI * 2) / sides;
+  const half = rad * Math.tan(sector / 2);
+  const [first, last] = odd ? [mean * 1.2, mean * 0.6] : [mean * 0.6, mean * 1.2];
+  const inner = fillOf(Math.max(mean * 0.5, 2 * half - first - last));
+  const ts = [-half, -half + first];
+  for (const l of inner.slice(0, -1)) ts.push((ts[ts.length - 1] as number) + (l * (2 * half - first - last)) / inner.reduce((a, x) => a + x, 0));
+  ts.push(half - last, half);
+  const out: { a0: number; a1: number; quoin: boolean }[] = [];
+  for (let j = 0; j < sides; j++) {
+    for (let k = 0; k + 1 < ts.length; k++) {
+      const atT = (t: number): number => j * sector + Math.atan(t / rad);
+      // Corners close without a joint, so the two faces meet in one clean arris.
+      out.push({ a0: atT(ts[k] as number) + (k === 0 ? 0 : gap), a1: atT(ts[k + 1] as number) - (k === ts.length - 2 ? 0 : gap), quoin: k === 0 || k === ts.length - 2 });
+    }
+  }
+  return out;
+}
+
+/**
+ * Coursed rubble from `ys`: stones of varied length and depth, some darker and some paler, a few standing proud,
+ * dressed quoins paler at a polygon's corners, all set in dark recessed joints and stopping clean at each opening.
+ */
+function masonry(parts: Parts, sides: number, ys: readonly number[], wallAt: (y: number) => number, thick: number, openings: readonly Opening[], r: Rand): void {
+  const top = ys[ys.length - 1] as number;
+  for (let c = 0; c + 1 < ys.length; c++) {
+    const ya = ys[c] as number;
+    const yb = (ys[c + 1] as number) - RUBBLE.joint;
+    const rad = wallAt((ya + yb) / 2) + (c === 0 ? 0.06 : 0);
     const cr = r.fork(`course${c}`);
     const open = openings.filter((o) => c >= o.course && c < o.course + o.rows);
-    for (const [a0, a1] of courseSpans(sides, rad, 1.05, c % 2 === 1)) {
+    for (const { a0, a1, quoin } of stoneSpans(sides, rad, 0.95, c % 2 === 1, cr)) {
       const mid = (a0 + a1) / 2;
       let pieces: [number, number][] = [[a0, a1]];
       for (const o of open) {
@@ -84,22 +156,26 @@ function masonry(b: PartBuilder, sides: number, y0: number, courses: number, ch:
           at + o.half <= b0 || at - o.half >= b1 ? [[b0, b1]] : ([[b0, at - o.half], [at + o.half, b1]] as [number, number][]).filter(([s, e]) => e - s > 0.02),
         );
       }
-      const shade = 0.5 + 0.22 * cr.next() - (c < 2 ? 0.06 : 0);
+      // Every stone has its own tone; one in seven is a dark, weathered one and one in eight a pale, fresh one.
+      const odd = cr.next();
+      const shade = 0.3 + 0.42 * cr.next() + 0.08 * (ya / top) - (c < 2 ? 0.08 : 0) + (odd < 0.14 ? -0.2 : odd < 0.26 ? 0.16 : 0) + (quoin ? 0.14 : 0);
       const wither = 0.4 + 0.45 * cr.next();
-      const tint = (cr.next() - 0.5) * 0.05;
-      const bulge = (cr.next() - 0.5) * 0.04;
+      const tint = (cr.next() - 0.5) * 0.08;
+      const bulge = (cr.next() - 0.5) * 0.05 + (cr.next() < 0.1 ? 0.04 : 0);
+      // About one stone in four is the land's own fieldstone, a cooler grey among the dressed ones.
+      const field = !quoin && cr.next() < 0.26;
       for (const [b0, b1] of pieces) {
-        const foot = ringPoint(sides, (b0 + b1) / 2, rad - thick / 2, y0);
-        ringBlock(b, sides, b0, b1, ya, ya + ch - JOINT, rad + bulge, thick, shade, still(foot, wither, { tint }), false, JOINT, rad - 0.02 - MORTAR);
+        const foot = ringPoint(sides, (b0 + b1) / 2, rad - thick / 2, ys[0] as number);
+        ringBlock(field ? parts.fieldstone : parts.stone, sides, b0, b1, ya, yb, rad + bulge, thick, shade, still(foot, wither, { tint }), false, RUBBLE.joint, rad - RUBBLE.mortar - MORTAR);
       }
     }
   }
 }
 
 /** A plank door, or a window's dark pane and the lamp behind it, set into an opening of a ring wall. Lamps go out as the mill fails. */
-function fill(parts: Parts, sides: number, o: Opening, y0: number, ch: number, rad: number, thick: number, door: boolean, r: Rand): void {
-  const ya = y0 + o.course * ch;
-  const yb = ya + o.rows * ch - JOINT;
+function fill(parts: Parts, sides: number, o: Opening, ys: readonly number[], rad: number, thick: number, door: boolean, r: Rand): void {
+  const ya = ys[o.course] as number;
+  const yb = (ys[o.course + o.rows] as number) - RUBBLE.joint;
   const corner = (a: number, y: number, d: number): V3 => ringPoint(sides, a, rad - d, y);
   const out = ringNormal(sides, o.along);
   const inset = thick * 0.55;
@@ -223,9 +299,11 @@ function boarded(parts: Parts, run: number, a: (y: number) => V3, b: (y: number)
     const yb = ya + bh + 0.01;
     const grain = (q: Vec3): Vec3 => [dot(q, along) / 1.7 + run * 13, run * 7 + k + 0.5, GRAIN.boards];
     const c = ch(grain);
-    const shade = 0.5 + 0.1 * r.next() + (k % 2) * 0.03;
-    quad(parts.boards, [out(a(ya), 0.05), out(b(ya), 0.05), b(yb), a(yb)], normalize(addScaled(n0, UP, 0.16)), shade, c);
-    quad(parts.boards, [a(ya), b(ya), out(b(ya), 0.05), out(a(ya), 0.05)], [0, -1, 0], 0.18, c);
+    // Each board is lit along its proud lower edge and shaded at its top, tucked under the board above, so the laps
+    // read as stripes from far off.
+    const shade = 0.5 + 0.1 * r.next();
+    quad(parts.boards, [out(a(ya), 0.07), out(b(ya), 0.07), b(yb), a(yb)], normalize(addScaled(n0, UP, 0.3)), [shade + 0.08, shade + 0.08, shade - 0.16, shade - 0.16], c);
+    quad(parts.boards, [a(ya), b(ya), out(b(ya), 0.07), out(a(ya), 0.07)], [0, -1, 0], 0.1, c);
   }
   quad(parts.timber, [out(a(y0), -0.12), out(b(y0), -0.12), out(b(y1), -0.12), out(a(y1), -0.12)], n0, 0.08, lining);
 }
@@ -261,15 +339,15 @@ function fallen(parts: Parts, foot: number, stones: number, r: Rand): void {
   }
 }
 
-function towerMill(h: number): Body {
+function towerMill(h: number, r: Rand): Body {
   const curb = h * 0.76;
   const r0 = h * 0.2;
   const r1 = h * 0.118;
-  const courses = Math.max(10, Math.round(curb / COURSE));
-  const ch = curb / courses;
+  const ys = coursesOf(0, curb, COURSE, r.fork("courses"));
+  const courses = ys.length - 1;
   const wallAt = (y: number): number => r0 + (r1 - r0) * clamp(y / curb, 0, 1);
   const stageC = Math.round(courses * 0.3);
-  const stageY = stageC * ch;
+  const stageY = ys[stageC] as number;
   const capY = curb + 0.32;
   const capR = r1 + 0.42;
   const rise = h - capY - 0.9;
@@ -279,14 +357,15 @@ function towerMill(h: number): Body {
     front: (y) => (y > capY ? capR * profileAt(OGEE, (y - capY) / rise) : wallAt(y) + (Math.abs(y - stageY - 0.4) < 0.8 ? 1.25 : 0)),
     build(parts, hub, r) {
       const thick = r0 * 0.24;
-      const openings: Opening[] = [{ along: 1.0, course: 0, rows: 4, half: 0.5 / r0 }];
+      const openings: Opening[] = [{ along: 1.0, course: 0, rows: rowsFor(ys, 0, 2.1), half: 0.5 / r0 }];
       const turns = [1.55, 0.45, 2.3, 1.15, 1.95];
       for (let c = 5, i = 0; c + 3 < courses; c += 4 + Math.floor(r.next() * 2), i++) {
-        if (c + 2 >= stageC - 1 && c <= stageC + 1) continue;
-        openings.push({ along: (turns[i % turns.length] as number) + (r.next() - 0.5) * 0.3, course: c, rows: 2, half: 0.32 / wallAt(c * ch) });
+        const rows = rowsFor(ys, c, 0.95);
+        if (c + rows >= stageC - 1 && c <= stageC + 1) continue;
+        openings.push({ along: (turns[i % turns.length] as number) + (r.next() - 0.5) * 0.3, course: c, rows, half: 0.32 / wallAt(ys[c] as number) });
       }
-      masonry(parts.stone, 0, 0, courses, ch, wallAt, thick, openings, r.fork("courses"));
-      openings.forEach((o, i) => fill(parts, 0, o, 0, ch, wallAt(o.course * ch + ch), thick, i === 0, r));
+      masonry(parts, 0, ys, wallAt, thick, openings, r.fork("courses"));
+      openings.forEach((o, i) => fill(parts, 0, o, ys, wallAt(ys[o.course + 1] as number), thick, i === 0, r));
       stage(parts, 0, stageY, wallAt(stageY), 1.15, r.fork("stage"));
       curbRing(parts.timber, 0, curb - 0.05, curb + 0.3, r1 + 0.12, 0.45, () => still([0, curb, 0], 0.6), r);
       fan(parts.timber, 0, curb + 0.28, r1 + 0.1, 1, 0.3, still([0, curb, 0], 0.6));
@@ -313,11 +392,10 @@ function smockMill(h: number): Body {
     front: (y) => (y > capY ? capR * profileAt(BONNET, (y - capY) / rise) : y < base + 1.2 && y > base - 1.2 ? rb + 1.15 : y < base ? rb : smockAt(y)),
     build(parts, hub, r) {
       // A stone base with a door, and a stage round its head.
-      const courses = Math.max(4, Math.round(base / COURSE));
-      const ch = base / courses;
-      const door: Opening = { along: Math.PI / 4, course: 0, rows: 4, half: 0.5 / rb };
-      masonry(parts.stone, 8, 0, courses, ch, () => rb, rb * 0.22, [door], r.fork("courses"));
-      fill(parts, 8, door, 0, ch, rb, rb * 0.22, true, r);
+      const ys = coursesOf(0, base, COURSE * 0.9, r.fork("base"));
+      const door: Opening = { along: Math.PI / 4, course: 0, rows: rowsFor(ys, 0, 2.1), half: 0.5 / rb };
+      masonry(parts, 8, ys, () => rb, rb * 0.22, [door], r.fork("courses"));
+      fill(parts, 8, door, ys, rb, rb * 0.22, true, r);
       stage(parts, 8, base, rb, 1.05, r.fork("stage"));
       // The smock: eight boarded faces leaning in, a post at every corner.
       const sector = Math.PI / 4;
@@ -455,13 +533,13 @@ function sails(parts: Parts, hub: V3, count: number, R: number, shutters: boolea
       return addScaled(addScaled(addScaled(hub, e, u), t, v * Math.cos(w)), SHAFT, v * Math.sin(w) + lift);
     };
     const tint = (r.next() - 0.5) * 0.04;
-    beam(parts.frame, at(0.3, 0, 0.12), at(R + 0.2, 0, 0.12), 0.24, 0.2, t, 0.46, turning(0.6, { tint }));
+    beam(parts.frame, at(0.3, 0, 0.12), at(R + 0.2, 0, 0.12), 0.18, 0.16, t, 0.5, turning(0.6, { tint }));
     const us = Array.from({ length: bars + 1 }, (_, j) => inner + ((R - inner) * j) / bars);
-    us.forEach((u, j) => beam(parts.frame, at(u, -trail, 0.03), at(u, lead, 0.03), 0.05, 0.06, SHAFT, 0.5, turning(0.6, { tint, rot: 0.55, grain: board(k * 3, j) })));
+    us.forEach((u, j) => beam(parts.lath, at(u, -trail, 0.03), at(u, lead, 0.03), 0.045, 0.05, SHAFT, 0.55, turning(0.6, { tint, rot: 0.55, grain: board(k * 3, j) })));
     for (let j = 0; j < bars; j++) {
       const [u0, u1] = [us[j] as number, us[j + 1] as number];
-      for (const v of [-trail, -trail / 2]) beam(parts.frame, at(u0, v, 0.02), at(u1, v, 0.02), 0.07, 0.06, SHAFT, 0.48, turning(0.6, { tint }));
-      beam(parts.frame, at(u0, lead * 0.55, 0.02), at(u1, lead * 0.55, 0.02), lead * 0.9, 0.04, t, 0.5, turning(0.6, { tint }));
+      for (const v of [-trail, -trail / 2]) beam(parts.lath, at(u0, v, 0.02), at(u1, v, 0.02), 0.06, 0.05, SHAFT, 0.52, turning(0.6, { tint }));
+      beam(parts.lath, at(u0, lead * 0.55, 0.02), at(u1, lead * 0.55, 0.02), lead * 0.9, 0.04, t, 0.55, turning(0.6, { tint }));
       if (shutters) {
         // A shutter across each bay, turned a little open, going whole as it rots.
         const um = (u0 + u1) / 2;
@@ -486,7 +564,8 @@ function sails(parts: Parts, hub: V3, count: number, R: number, shutters: boolea
         const p = [corner(j, i), corner(j, i + 1), corner(j + 1, i + 1), corner(j + 1, i)] as const;
         const n = normalize(cross(sub(p[1], p[0]), sub(p[3], p[0])));
         // A touch lighter toward the whip, so a sail reads as cloth, not a flat board.
-        const [s0, s1] = [0.56 + (0.06 * i) / across, 0.56 + (0.06 * (i + 1)) / across];
+        // Kept a little below the wall's white, so moonlight doesn't make the cloth glare.
+        const [s0, s1] = [0.4 + (0.06 * i) / across, 0.4 + (0.06 * (i + 1)) / across];
         quad(parts.cloth, p, dot(n, SHAFT) < 0 ? scale(n, -1) : n, [s0, s1, s1, s0], turning(0.85, { tint, rot: 0.85 }));
       }
     }
@@ -499,14 +578,16 @@ export function buildWindmill(p: MillParams, ctx: BuildContext): Built {
   const h = p.height * (ctx.facts.scale ?? 1);
   const parts: Parts = {
     stone: new PartBuilder("masonry", "solid"),
+    fieldstone: new PartBuilder("stone", "solid"),
     boards: new PartBuilder("render", "solid"),
     timber: new PartBuilder("timber", "solid"),
     roof: new PartBuilder("roof", "solid"),
     glass: new PartBuilder("glass"),
     cloth: new PartBuilder("wall"),
+    lath: new PartBuilder("render"),
     frame: new PartBuilder("timber"),
   };
-  const body = p.body === "a stone tower mill" ? towerMill(h) : p.body === "a timber smock mill" ? smockMill(h) : postMill(h);
+  const body = p.body === "a stone tower mill" ? towerMill(h, r.fork("tower")) : p.body === "a timber smock mill" ? smockMill(h) : postMill(h);
   const count = p.sails === "six sails" ? 6 : 4;
   const R = Math.min(h * 0.56, (body.hubY - body.clear) / Math.cos(TILT));
   // The hub stands far enough out that every sail, at every turn, clears the body behind it.
