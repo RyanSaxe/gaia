@@ -2110,16 +2110,15 @@ function drawLookoutTower(pen: Pen, look: Look, p: Resolved<typeof lookoutTowerP
     const lean = p.profile === "tapering" ? 1 - 0.26 * t : p.profile === "stepped" ? (1 - 0.17 * stage) * (1 - 0.04 * t) : 1 - 0.04 * t;
     return radius * lean * LK;
   };
-  const broken = p.crown === "a broken top";
   const fall = ease(w.v, 0.36, 0.03);
-  const jag = broken ? Math.max(0.45, fall) : fall;
+  const jag = fall;
   const shaft = shaftM * LK;
   const top = shaft * (1 - 0.45 * fall);
   const stone = worn(look.hue("masonry", "#d2c39f"), w);
   const course = 0.56 * p.masonry * 2 * LK;
   const r0 = wallAt(0);
   castShadow(pen, ellipseFeet(0, 0, r0, r0, top * 0.8));
-  // The hollow inside a broken top, its far wall in shade.
+  // The hollow inside a crumbling top, its far wall in shade.
   if (jag > 0.05) disc(pen, sides, top - jag * 1.2, wallAt((top / LK) * 0.99) * 0.9, shaded(stone, 0.55), 0.6);
   // The shaft, stage by stage, a string course where each sets back.
   const breaks = [0, ...stagesM.map((y) => y * LK).filter((y) => y < top - 0.5), top];
@@ -2144,7 +2143,7 @@ function drawLookoutTower(pen: Pen, look: Look, p: Resolved<typeof lookoutTowerP
   if (p.galleries === "a gallery at every stage" && tiers.gallery < 0.9) for (const y of stagesM) if (y * LK < top - 1) gallery(pen, sides, y * LK, wallAt(y), 0.9 * LK, stone);
   if (jag > 0.05) {
     ivy(pen, -r0 * 0.5, -r0 * 0.9, top, w.ivy, seed, -1);
-    rubble(pen, r0 * 0.8, -r0 - 1.2, (broken ? 1.6 : 0) + fall * 3, seed + 4, stone);
+    rubble(pen, r0 * 0.8, -r0 - 1.2, fall * 3, seed + 4, stone);
     return;
   }
   // The crown, on a gallery at the top if it has one.

@@ -30,7 +30,6 @@ export const lookoutTowerParams = {
     "a conical roof": "A steep cone of a roof with a finial; four- or eight-sided on a square or eight-sided tower",
     battlements: "Notched battlements around an open top",
     "an open lantern room": "A glazed lantern room under a small roof, lit at night like a beacon",
-    "a broken top": "Long ago broken: an open, jagged top with no roof, fallen stone heaped at its foot",
   }),
   masonry: t.scale("The size of its stones", { "small, even blocks": 0.8, "dressed blocks": 1.1, "great rough blocks": 1.5 }),
 };
@@ -38,7 +37,7 @@ export const lookoutTowerParams = {
 export const lookoutTower = primitive({
   id: "lookout-tower@1",
   role: "Landmark",
-  doc: "A stone tower: round, square or eight-sided, straight, tapering or in stages, with corbelled galleries and a roof, battlements, a lantern room or a broken top, for code that feels lonely and wind-bitten, forever watching the horizon. Its slit windows are lit at night; it crumbles from the top down as vitality falls.",
+  doc: "A stone tower: round, square or eight-sided, straight, tapering or in stages, with corbelled galleries and a roof, battlements or a lantern room, for code that feels lonely and wind-bitten, forever watching the horizon. Its slit windows are lit at night; it crumbles from the top down as vitality falls.",
   params: lookoutTowerParams,
   build: (p, ctx) => buildLookoutTower(p, ctx),
 });
