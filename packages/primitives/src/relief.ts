@@ -61,7 +61,7 @@ const GRAIN = { round: 0, "north-south": Math.PI / 2, "east-west": 0, diagonal: 
 export const rollingHills = primitive({
   id: "rolling-hills@1",
   role: "Relief",
-  doc: "Rounded grassy hills that roll on in every direction.",
+  doc: "Rounded grassy hills that roll on in every direction, for code that feels lively and sociable, one friendly rise after another.",
   params: rollingHillsParams,
   build: (p, ctx): Landform => ({
     height: sum(
@@ -78,10 +78,10 @@ export const valleyParams = {
   depth: t.scale("How far the floor lies below the valley's shoulders", { shallow: 3, moderate: 5, deep: 7 }),
   width: t.scale("How wide the valley is from shoulder to shoulder", { narrow: 44, open: 64, broad: 90 }),
   run: t.choice("Which way the valley runs", {
-    "north-south": "From north to south",
-    "east-west": "From east to west",
-    "northeast-southwest": "From northeast to southwest",
-    "northwest-southeast": "From northwest to southeast",
+    "north-south": "From north to south, its floor in shade at morning and evening, for code that feels private and sheltered",
+    "east-west": "From east to west, the sun travelling along it all day, for code that feels open and sunny",
+    "northeast-southwest": "From northeast to southwest, its floor catching the afternoon light, for code that feels warm and mellow",
+    "northwest-southeast": "From northwest to southeast, its floor catching the morning light, for code that feels fresh and early",
   }),
   fall: t.scale("How steeply the floor descends along the valley", { "nearly level": 0.005, gentle: 0.012, steady: 0.022 }),
   meander: t.scale("How much the valley winds", { straight: 4, winding: 20, "strongly meandering": 30 }),
@@ -110,7 +110,7 @@ const STREAM = { "dry bed": null, trickle: { width: 2.4, depth: 0.45 }, brook: {
 export const valley = primitive({
   id: "valley@1",
   role: "Relief",
-  doc: "A long valley between two gentle shoulders, with a stream bed along its floor.",
+  doc: "A long valley between two gentle shoulders, with a stream bed along its floor, for code that feels like a long journey, everything passing through on its way somewhere else.",
   params: valleyParams,
   build: (p, ctx): Landform => {
     const extent = extentOf(ctx);
@@ -188,7 +188,7 @@ const RISER_GRADE = 0.7;
 export const terraces = primitive({
   id: "terraces@1",
   role: "Relief",
-  doc: "Low earthen steps climbing a slope, like old rice terraces.",
+  doc: "Low earthen steps climbing a slope, like old rice terraces, for code that feels orderly, strict and careful, climbing step by deliberate step.",
   params: terracesParams,
   build: (p, ctx): Landform => {
     const extent = extentOf(ctx);
@@ -230,7 +230,7 @@ export const basinParams = {
 export const basin = primitive({
   id: "basin@1",
   role: "Relief",
-  doc: "A round hollow in the land that may hold a pond.",
+  doc: "A round hollow in the land that may hold a pond, for code that feels settled and deep, the place everything else comes to rest in.",
   params: basinParams,
   build: (p, ctx): Landform => ({
     height: sum(
@@ -262,7 +262,7 @@ const WIND = { "from the west": COMPASS.east, "from the north": COMPASS.south, "
 export const dunes = primitive({
   id: "dunes@1",
   role: "Relief",
-  doc: "Long, gentle wind-shaped ridges, like grassy dunes.",
+  doc: "Long, gentle wind-shaped ridges, like grassy dunes, for code that feels restless and changeable, reshaped by every wind.",
   params: dunesParams,
   build: (p, ctx): Landform => ({
     height: sum(
@@ -294,7 +294,7 @@ export const meadowParams = {
 export const meadow = primitive({
   id: "meadow@1",
   role: "Relief",
-  doc: "Open, nearly flat ground with a soft undulation.",
+  doc: "Open, nearly flat ground with a soft undulation, for code that feels quiet, open and at rest, nothing hurrying across it.",
   params: meadowParams,
   build: (p, ctx): Landform => ({
     height: sum(scale(p.undulation, noise(seedOf(ctx, "meadow"), 55, 3, 0.4)), {

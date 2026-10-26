@@ -77,7 +77,7 @@ describe("world and biome kinds", () => {
 
 describe("the air where regions meet", () => {
   type Erased = (p: unknown) => ReturnType<typeof airPrimitive.build>;
-  const MIST = (airPrimitive.build as unknown as Erased)({ air: "morning mist", distance: 1 });
+  const MIST = (airPrimitive.build as unknown as Erased)({ air: "morning mist", distance: "softened distance" });
   const close = (a: readonly number[], b: readonly number[]): void => a.forEach((v, i) => expect(v).toBeCloseTo(b[i] as number, 4));
 
   it("is each region's own air inside it, and between two regions moves with their weights, a clear region's unused tint coloring nothing", () => {
@@ -94,7 +94,7 @@ describe("the air where regions meet", () => {
 
 describe("the air over failing ground and from above", () => {
   type Erased = (p: unknown) => ReturnType<typeof airPrimitive.build>;
-  const airs = Object.keys((airPrimitive.params.air as ChoiceField).options).map((name) => (airPrimitive.build as unknown as Erased)({ air: name, distance: 1 }));
+  const airs = Object.keys((airPrimitive.params.air as ChoiceField).options).map((name) => (airPrimitive.build as unknown as Erased)({ air: name, distance: "softened distance" }));
 
   it("leaves thriving and tired ground's air as it was, and thickens and greys it as the ground fails, gradually", () => {
     for (const air of airs) {
