@@ -341,9 +341,9 @@ export function buildOutcrop(p: Resolved<typeof outcropParams>, ctx: BuildContex
 // ---------- moss ----------
 
 const GROWTH = {
-  velvet: { thick: 0.025, lumps: 0.2, shade: 0.36 },
-  cushions: { thick: 0.06, lumps: 1, shade: 0.32 },
-  lichen: { thick: 0.012, lumps: 0.1, shade: 0.5 },
+  velvet: { thick: 0.03, lumps: 0.45, shade: 0.36 },
+  cushions: { thick: 0.07, lumps: 1, shade: 0.32 },
+  lichen: { thick: 0.012, lumps: 0.15, shade: 0.5 },
 } as const;
 
 /** Moss grows on the solid outside of stone and bark, never on bare cut wood (so a cut face keeps its rings) nor inside a hollow. */
@@ -413,7 +413,8 @@ export function buildMoss(p: Resolved<typeof mossParams>, ctx: BuildContext, bas
       const q: V3 = [pos[i * 3] as number, pos[i * 3 + 1] as number, pos[i * 3 + 2] as number];
       const n: V3 = [nrm[i * 3] as number, nrm[i * 3 + 1] as number, nrm[i * 3 + 2] as number];
       const m = mask[i] as number;
-      const lump = 1 + g.lumps * fbm3(q[0] * 7, q[1] * 7, q[2] * 7, seed + 17, 2);
+      // Cushions of two sizes, so the moss mounds unevenly rather than lying as one even coat.
+      const lump = 1 + g.lumps * (0.6 * fbm3(q[0] * 4, q[1] * 4, q[2] * 4, seed + 19, 2) + 0.4 * fbm3(q[0] * 9, q[1] * 9, q[2] * 9, seed + 17, 2));
       const lift = 0.004 + g.thick * onBark * smoothstep(0.15, 0.75, m) * Math.max(0.3, lump);
       const at: V3 = [q[0] + n[0] * lift, q[1] + n[1] * lift, q[2] + n[2] * lift];
       const jitter = clamp(0.5 + 0.9 * fbm3(q[0] * 6.3, q[1] * 6.3, q[2] * 6.3, seed + 23, 2), 0, 1);
@@ -421,12 +422,14 @@ export function buildMoss(p: Resolved<typeof mossParams>, ctx: BuildContext, bas
       const v = out.vertex(
         at,
         n,
-        g.shade + 0.18 * m + 0.12 * (lump - 1) + 0.08 * n[1],
+        // Mounds catch the light and hollows between them stay dark; patches of older, browner or fresher moss vary the green.
+        g.shade + 0.12 * m + 0.3 * (lump - 1) + 0.08 * n[1] + 0.25 * clamp(2 * fbm3(q[0] * 4, q[1] * 4, q[2] * 4, seed + 29, 2), -1, 1),
         {
           ...carriedBy(part, i),
           wither: 0.85,
           glow: 0,
-          tint: clamp(0.05 * fbm3(q[0] * 0.7, q[1] * 0.7, q[2] * 0.7, seed + 13, 2), -0.06, 0.06),
+          // Patches of yellower and bluer green, as fresh and old moss grow side by side.
+          tint: clamp(0.05 * fbm3(q[0] * 0.7, q[1] * 0.7, q[2] * 0.7, seed + 13, 2) + 0.07 * clamp(2.5 * fbm3(q[0] * 2.2, q[1] * 2.2, q[2] * 2.2, seed + 31, 2), -1, 1), -0.09, 0.09),
         },
         [m, jitter, cut],
       );

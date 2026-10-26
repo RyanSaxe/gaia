@@ -54,12 +54,16 @@ describe("fallen log", () => {
     // Each face's middle, by the end it is at.
     const at = (i: number, k: number): number => wood.positions[i * 3 + k] as number;
     const end = (i: number): number => Math.sign(at(i, 0));
-    const middle = (side: number, k: number): number => {
+    const middles = new Map([-1, 1].map((side) => {
       const on = face.filter((i) => end(i) === side);
-      return on.reduce((sum, i) => sum + at(i, k), 0) / Math.max(1, on.length);
+      return [side, [1, 2].map((k) => on.reduce((sum, i) => sum + at(i, k), 0) / Math.max(1, on.length))] as const;
+    }));
+    const r = (i: number): number => {
+      const [y, z] = middles.get(end(i)) ?? [0, 0];
+      return Math.hypot(at(i, 1) - (y as number), at(i, 2) - (z as number));
     };
-    const r = (i: number): number => Math.hypot(at(i, 1) - middle(end(i), 1), at(i, 2) - middle(end(i), 2));
-    const most = (side: number): number => face.filter((i) => end(i) === side).reduce((m, i) => Math.max(m, r(i)), 0);
+    const widest = new Map([-1, 1].map((side) => [side, face.filter((i) => end(i) === side).reduce((m, i) => Math.max(m, r(i)), 0)] as const));
+    const most = (side: number): number => widest.get(side) ?? 0;
     const near = face.filter((i) => r(i) < 0.3 * most(end(i))).map((i) => wood.shade[i] as number);
     const rim = face.filter((i) => r(i) > 0.75 * most(end(i))).map((i) => wood.shade[i] as number);
     const mean = (a: number[]): number => a.reduce((s, x) => s + x, 0) / Math.max(1, a.length);
