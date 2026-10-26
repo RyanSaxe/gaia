@@ -2,7 +2,7 @@
 // Geometry lives in ./geometry, one pure function per primitive.
 
 import { primitive, t } from "@gaia/schema";
-import { buildBark, buildBlossoms, buildFruit, buildLeafClumps, buildLeafStrands, buildNeedles } from "./geometry/foliage.ts";
+import { buildBark, buildBlossoms, buildFruit, buildJuniper, buildLeafClumps, buildLeafStrands, buildNeedles, oneTrunk } from "./geometry/foliage.ts";
 import { growBranching, growSapling, growSpire } from "./geometry/skeleton.ts";
 import { buildLeafMound, growBramble, growThicket } from "./geometry/shrub.ts";
 import { PALETTE_FAMILIES, paletteOf } from "./palettes.ts";
@@ -154,9 +154,9 @@ export const needlesParams = {
 export const needles = primitive({
   id: "needles@1",
   role: "Foliage",
-  doc: "Dense sprays of needles along each limb, like a fir.",
+  doc: "Dense sprays of needles along each limb, like a fir; on a bush's many stems, close tufts, like a juniper.",
   params: needlesParams,
-  build: (p, ctx, skeleton) => buildNeedles(p, ctx, skeleton),
+  build: (p, ctx, skeleton) => (oneTrunk(skeleton) ? buildNeedles(p, ctx, skeleton) : buildJuniper(p, ctx, skeleton)),
 });
 
 export const blossomsParams = {

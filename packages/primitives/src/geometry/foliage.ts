@@ -828,6 +828,81 @@ function growNeedles(p: Resolved<typeof needlesParams>, ctx: BuildContext, skel:
   return { out, anchors };
 }
 
+/**
+ * How a juniper is tufted: how many tufts a full bush carries, two in three
+ * near the dome's surface and one deeper in; each tuft's width and length at
+ * medium needles; and its needles' and shoots' triangles at most. A fir's
+ * branchlets cover far less per triangle than a bush's leaf clusters, so a
+ * juniper dense enough to hide most of its stems takes about twice a leafy
+ * bush's triangles.
+ */
+const JUNIPER = { tufts: 280, width: 0.085, reach: 0.3, budget: 20_000 } as const;
+
+/**
+ * A fir's needles on a bush's many stems: a juniper. Short shoots leave the
+ * stems for points spread over the bush's dome, each tipped with a small
+ * frond built as a fir's is, so the bush is a mass of overlapping needle
+ * tufts. A fir's fronds are sized for limbs metres long: on a bush's short
+ * stems they hung as a few broad, flat sprays, like a fern's.
+ */
+export function buildJuniper(p: Resolved<typeof needlesParams>, ctx: BuildContext, skel: Skeleton): Built {
+  let density = 1;
+  let built = growJuniper(p, ctx, skel, density);
+  for (let pass = 0; pass < 4; pass++) {
+    const triangles = built.out.triangleCount + built.twigs.triangleCount;
+    if (triangles <= JUNIPER.budget) break;
+    density *= (0.98 * JUNIPER.budget) / triangles;
+    built = growJuniper(p, ctx, skel, density);
+  }
+  return { parts: [built.twigs.part(), built.out.part()], anchors: built.anchors };
+}
+
+function growJuniper(p: Resolved<typeof needlesParams>, ctx: BuildContext, skel: Skeleton, density: number): { out: PartBuilder; twigs: PartBuilder; anchors: Anchor[] } {
+  const out = new PartBuilder("leaf");
+  const twigs = new PartBuilder("bark");
+  const r = ctx.rand.fork("juniper");
+  const boughs = new Boughs(skel);
+  const top = skel.tips.reduce((m, t) => Math.max(m, t.position[1]), 0.3);
+  const reach = skel.tips.reduce((m, t) => Math.max(m, Math.hypot(t.position[0], t.position[2])), 0.3);
+  const crown: Crown = { center: [0, top * 0.45, 0], radius: [reach, top * 0.6, reach] };
+  const grow = Math.sqrt(p.length / 0.9);
+  const width = JUNIPER.width * grow * (0.85 + 0.25 * p.fullness);
+  const count = Math.round(JUNIPER.tufts * (0.55 + 0.5 * p.fullness));
+  const anchors: Anchor[] = [];
+  for (let k = 0; k < count; k++) {
+    const tr = r.fork(`tuft${k}`);
+    // Spread over the directions that do not face the soil, a little inside the dome.
+    const y = 1 - (1.55 * (k + tr.range(0.2, 0.8))) / count;
+    const ring = Math.sqrt(Math.max(0, 1 - y * y));
+    const phi = k * 2.39996 + tr.range(-0.4, 0.4);
+    const d: V3 = [Math.cos(phi) * ring, y, Math.sin(phi) * ring];
+    const depth = k % 3 === 2 ? tr.range(0.45, 0.7) : tr.range(0.78, 1.02);
+    const goal: V3 = [crown.center[0] + d[0] * crown.radius[0] * depth, Math.max(0.08, crown.center[1] + d[1] * crown.radius[1] * depth), crown.center[2] + d[2] * crown.radius[2] * depth];
+    const limb = boughs.limbNear(goal);
+    const l = skel.limbs[limb] as Limb;
+    const ab = sub(l.end, l.start);
+    const root = addScaled(l.start, ab, clamp(dot(sub(goal, l.start), ab) / Math.max(dot(ab, ab), 1e-9), 0.15, 1));
+    const span = length(sub(goal, root));
+    const out0 = span > 0.05 ? normalize(sub(goal, root)) : normalize(add(d, [0, 0.3, 0]));
+    // The shoot runs bare from its stem to where its tuft begins and on under the tuft, which reaches a little past the dome.
+    const tuft = JUNIPER.reach * grow * tr.range(0.8, 1.2);
+    const start = span > tuft * 0.6 ? addScaled(root, out0, span - tuft * 0.6) : root;
+    const tipDir = normalize(addScaled(out0, d, 0.4));
+    const pts: V3[] = [start, addScaled(start, out0, tuft * 0.5), addScaled(addScaled(start, out0, tuft * 0.5), tipDir, tuft * 0.5)];
+    const carry = (q: Vec3): { bough: Vec3; droop: number } => boughs.at(limb, q);
+    // The shoot sags with its stem by the bark's rule all along it, so what hangs from its tip stays on it.
+    emitTwig(twigs, [root, pts[1] as V3, pts[2] as V3], 0.006, 0.002, (q) => {
+      const b = carry(q);
+      return { loss: 0, droop: b.droop, wither: 0.5, glow: 0, pivot: root, bough: b.bough };
+    });
+    emitFrond(out, crown, pts, width, tr, p, clamp((pts[2] as V3)[1] / top, 0, 1), carry, density);
+    const tip = pts[2] as V3;
+    const at = carry(tip);
+    anchors.push({ position: tip, normal: tipDir, size: 0.5, carry: { bough: at.bough, twig: at.bough, droop: at.droop } });
+  }
+  return { out, twigs, anchors };
+}
+
 function pointOnPolyline(points: readonly Vec3[], t: number): { at: V3; dir: V3 } {
   const segs = points.length - 1;
   const f = clamp(t, 0, 1) * segs;
