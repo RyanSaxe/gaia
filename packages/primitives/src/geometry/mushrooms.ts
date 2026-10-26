@@ -25,6 +25,8 @@ interface Mushroom {
   /** The cap's radius and its crown's height over the rim, meters. */
   readonly radius: number;
   readonly crown: number;
+  /** A young button at another's foot: it grows a plainer cap. */
+  readonly young: boolean;
   readonly r: Rand;
 }
 
@@ -45,7 +47,9 @@ const FORM: Record<CapShape, { readonly radius: number; readonly crown: number; 
 };
 /** Where up the stalk each ring of its girth stands. */
 const STALK_RINGS = [0, 0.07, 0.25, 0.55, 0.82, 1];
-const STALK_SIDES = 9;
+const STALK_SIDES = 7;
+/** How deep a stalk's foot sits in the soil, meters. */
+const FOOT = -0.008;
 /** The share of mushrooms that never drop their caps: they stand slumped and grey to the end. */
 const STUBBORN = 0.35;
 
@@ -92,13 +96,13 @@ function layout(grouping: Grouping, shape: CapShape, tallest: number, r: Rand): 
   const wants: Mushroom[] = [];
   const spot = (x: number, z: number, height: number, lean: V3, tilt = r.range(0.03, 0.18), size = r.range(0.85, 1.15)): void => {
     const fr = r.fork(`m${wants.length}`);
-    wants.push({ foot: [x, -0.03, z], height, lean: normalize(lean), tilt, radius: height * form.radius * size, crown: height * form.crown * (0.7 + 0.3 * size), r: fr });
+    wants.push({ foot: [x, FOOT, z], height, lean: normalize(lean), tilt, radius: height * form.radius * size, crown: height * form.crown * (0.7 + 0.3 * size), young: false, r: fr });
   };
   const away = (x: number, z: number): V3 => normalize([x + 1e-3, 0, z]);
   const jitter = (): V3 => [r.range(-1, 1), 0, r.range(-1, 1)];
   if (grouping === "ring") {
     const radius = 0.45 + 0.9 * tallest;
-    const n = Math.round((Math.PI * 2 * radius) / (0.26 + 0.3 * tallest));
+    const n = Math.round((Math.PI * 2 * radius) / (0.12 + 0.6 * tallest));
     const gap = Math.floor(r.next() * n);
     for (let k = 0; k < n; k++) {
       if (k === gap) continue;
@@ -145,7 +149,7 @@ function layout(grouping: Grouping, shape: CapShape, tallest: number, r: Rand): 
     const a = m.r.next() * Math.PI * 2;
     const d = m.radius * 1.4;
     const h = m.height * m.r.range(0.3, 0.42);
-    sized.push({ ...m, foot: [m.foot[0] + Math.cos(a) * d, -0.03, m.foot[2] + Math.sin(a) * d], height: h, lean: [Math.cos(a), 0, Math.sin(a)], tilt: m.r.range(0.08, 0.22), radius: h * form.radius * 0.85, crown: h * form.crown * 1.15, r: m.r.fork("button") });
+    sized.push({ ...m, foot: [m.foot[0] + Math.cos(a) * d, FOOT, m.foot[2] + Math.sin(a) * d], height: h, lean: [Math.cos(a), 0, Math.sin(a)], tilt: m.r.range(0.08, 0.22), radius: h * form.radius * 0.85, crown: h * form.crown * 1.15, young: true, r: m.r.fork("button") });
   }
   return settle(sized);
 }
@@ -170,7 +174,8 @@ function emitMushroom(caps: PartBuilder, flesh: PartBuilder, spots: PartBuilder,
   const { rim, axis: capAxis } = capOf(m);
   // The cap sits a little askew on its stalk.
   const axis = normalize(add(capAxis, [m.r.range(-0.1, 0.1), 0, m.r.range(-0.1, 0.1)]));
-  const sides = m.height < 0.25 ? 14 : 20;
+  // At their natural size sixteen sides already read round from where a person stands.
+  const sides = m.young ? 10 : 16;
   // Failing, the cap slumps about a hinge under its rim on the far side, and drops beside the stalk.
   const hinge = addScaled(rim, m.lean, -0.5 * radius);
   const fallTo = addScaled(m.foot, m.lean, radius * 0.9);
@@ -247,7 +252,7 @@ function emitMushroom(caps: PartBuilder, flesh: PartBuilder, spots: PartBuilder,
       const onCap = add(scale(rowAt(i - 1), 1 - along), scale(rowAt(i), along));
       // Lit and shaded exactly as the cap beneath, so only the swatch tells a spot from its cap.
       const n = normalize(add(scale(normalOf(i - 1, a), 1 - along), scale(normalOf(i, a), along)));
-      const center = addScaled(onCap, n, 0.0015);
+      const center = addScaled(onCap, n, 0.004 * radius);
       const [su, sv] = basis(n);
       const size = radius * m.r.range(0.045, 0.085);
       const shade = shadeOf(i - 1) + (shadeOf(i) - shadeOf(i - 1)) * along + mottle(center);
@@ -299,7 +304,7 @@ function emitMushroom(caps: PartBuilder, flesh: PartBuilder, spots: PartBuilder,
   });
   for (let k = 0; k + 1 < stalkRows.length; k++) band(flesh, stalkRows[k + 1] as number, stalkRows[k] as number, STALK_SIDES);
   // Most grown domed and flat caps leave a skirt hanging round the stalk under them, as fly agarics and parasols do.
-  if (shape !== "pointed" && m.height > 0.25 && m.r.next() < 0.75) {
+  if (shape !== "pointed" && !m.young && m.r.next() < 0.75) {
     const t = 0.8;
     const c = add(add(add(m.foot, scale(rise, t)), scale(reach, 1 - (1 - t) * (1 - t))), scale(side, Math.sin(2 * Math.PI * t) * bow));
     const along = normalize(add(rise, scale(reach, 2 * (1 - t))));

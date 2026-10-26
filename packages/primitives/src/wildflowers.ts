@@ -72,8 +72,8 @@ export const mushroomParams = {
     flat: "Broad caps spread nearly flat, like a parasol",
     pointed: "Slender pointed caps, like a pixie's hat",
   }),
-  // Even the lowest stand clear of lush grass (0.42 m, `ground-cover@1`); their young buttons hide in it.
-  height: t.scale("How tall the mushrooms stand", { "ankle-high": 0.44, "shin-high": 0.56, "knee-high": 0.72 }),
+  // Natural sizes: the world keeps a patch of short turf round a drift of them (the understory's mushrooms group), so they show.
+  height: t.scale("How tall the mushrooms stand", { "barely above the moss": 0.09, "ankle-high": 0.13, "a hand high": 0.19 }),
 };
 
 export const mushrooms = primitive({
