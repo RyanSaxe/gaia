@@ -1376,7 +1376,7 @@ export const INKS: Readonly<Record<string, Ink>> = {
 
   "dovecote@1": feature(dovecoteParams, {
     place: (house) => yardAt(house, 2.15, -house.plan.depth * 0.18),
-    draw: (pen, house, look, p) => drawDovecote(pen, house, look, p.cote, p.flock),
+    draw: (pen, house, look, p) => drawDovecote(pen, house, look, p.cote),
   }),
 
   "well@1": feature(wellParams, {
@@ -1684,29 +1684,10 @@ function gableRoof(pen: Pen, x0: number, x1: number, z0: number, z1: number, eav
   if (gable !== null) face(pen, [[x0 + 0.3, z0, eave], [x1 - 0.3, z0, eave], [xc, z0, ridge - 0.3]], shaded(gable, 0.14));
 }
 
-/** A few doves over a cote, gliding in quick strokes of the pen: fewer as the code fails, until none fly. */
-function doves(pen: Pen, X: number, Z: number, height: number, count: number, seed: number): void {
-  const { ctx, s } = pen;
-  ctx.beginPath();
-  for (let k = 0; k < count; k++) {
-    const a = noise(seed, k + 700) * Math.PI * 2;
-    const [px, py] = pen.at(X + Math.cos(a) * (2.6 + noise(seed, k + 710) * 2.4), Z + Math.sin(a) * 2.2, height + 1.2 + noise(seed, k + 720) * 2.6);
-    pen.reach(px, py, 1.2 * s);
-    const span = (0.55 + noise(seed, k + 730) * 0.25) * s;
-    ctx.moveTo(px - span, py - span * 0.35);
-    ctx.quadraticCurveTo(px - span * 0.4, py - span * 0.55, px, py);
-    ctx.quadraticCurveTo(px + span * 0.4, py - span * 0.55, px + span, py - span * 0.35);
-  }
-  ctx.lineWidth = pen.line * 0.6;
-  ctx.strokeStyle = INK;
-  ctx.stroke();
-}
-
-/** A dovecote: a squat round stone cote under a cone and lantern, or a painted box on a post; its doves leave as the code fails. */
-function drawDovecote(pen: Pen, house: House, look: Look, cote: string, flock: number): void {
+/** A dovecote: a squat round stone cote under a cone and lantern, or a painted box on a post; its cone rots open, or the post leans, as the code fails. */
+function drawDovecote(pen: Pen, house: House, look: Look, cote: string): void {
   const w = look.w;
   const roofC = worn(look.hue("roof", "#8a6a50"), w, 0.6);
-  const flying = Math.round(flock * 0.6 * ease(w.v, 0.45, 0.85));
   if (cote === "a cote on a post") {
     const [X, Z] = yardAt(house, 1.6, -house.plan.depth * 0.15);
     const top = 3.0 * K;
@@ -1721,7 +1702,6 @@ function drawDovecote(pen: Pen, house: House, look: Look, cote: string, flock: n
     box(pen, X - hx + lean, X + hx + lean, Z - hz, Z + hz, h0, h1, paint);
     for (const [dx, h] of [[-0.25, 0.3], [0, 0.3], [0.25, 0.3], [-0.12, 0.62], [0.12, 0.62]] as const) pane(pen, [[X + dx * K * 2 - 0.13 + lean, Z - hz, h0 + h * K], [X + dx * K * 2 + 0.13 + lean, Z - hz, h0 + h * K], [X + dx * K * 2 + 0.13 + lean, Z - hz, h0 + h * K + 0.28], [X + dx * K * 2 - 0.13 + lean, Z - hz, h0 + h * K + 0.28]], "#2c2219");
     gableRoof(pen, X - hx - 0.3 + lean, X + hx + 0.3 + lean, Z - hz - 0.25, Z + hz + 0.25, h1, h1 + 0.75 * K, roofC, null);
-    doves(pen, X, Z, h1, flying, w.seed + 11);
     return;
   }
   const R = 1.15;
@@ -1760,7 +1740,6 @@ function drawDovecote(pen: Pen, house: House, look: Look, cote: string, flock: n
   column(pen, X, Z, (H + 1.25) * K, (H + 1.8) * K, 0.32 * K, worn(look.hue("timber", "#6b4f3a"), w), null);
   cone(pen, X, Z, (H + 1.8) * K, 0.5 * K, (H + 2.3) * K, roofC);
   ivy(pen, X + R * K * 0.7, Z - R * K * 0.6, H * K, w.ivy * 0.55, w.seed + 13, 1);
-  doves(pen, X, Z, (H + 1.3) * K, flying, w.seed + 11);
 }
 
 /** A well: a ring of stone round dark water, under a little roof on two posts or beside a sweep; its water dulls and its bucket goes as the code fails. */

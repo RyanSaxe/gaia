@@ -41,7 +41,7 @@ export interface Building {
   readonly beside: Extent | null;
   /** Where its feature turns, such as a mill's wheel, in the house's frame. */
   readonly wheel: Extent | null;
-  /** Whether its feature is turned by running water, as a waterwheel is and a dovecote's vane is not. */
+  /** Whether its feature is turned by running water, as a waterwheel is. */
   readonly byWater: boolean;
   site: BuildingSite;
 }
