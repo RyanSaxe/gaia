@@ -19,7 +19,7 @@ describe("flora blueprint in two requests", () => {
     const wave = planStructure(flora, lib, subject);
     const types = Object.values(wave.request.questions).map((q) => q.type);
     expect(types.every((t) => t === "choice" || t === "noul" || t === "score")).toBe(true);
-    expect(Object.keys(wave.request.questions).sort()).toEqual(["bloom.present", "crown.use", "form.use"]);
+    expect(Object.keys(wave.request.questions).sort()).toEqual(["bloom.present", "bloom.use", "crown.use", "form.use"]);
   });
 
   it("assembles a valid blueprint, and equal answers name the same blueprint", () => {
