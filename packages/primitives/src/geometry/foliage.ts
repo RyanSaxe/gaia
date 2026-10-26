@@ -81,6 +81,25 @@ function meanNearest(points: readonly Vec3[]): number {
 
 const maxDepthOf = (s: Skeleton): number => s.limbs.reduce((m, l) => Math.max(m, l.depth), 0);
 
+/** A tree stands on one trunk; a shrub's many stems rise from the soil. */
+export const oneTrunk = (skel: Skeleton): boolean => skel.limbs.filter((l) => l.parent === -1).length === 1;
+
+/** The shortest a tree's frame stands for each unit of the file's scale: a squat broadleaf stands 5.7 m at scale 1, a broad fir 7.7 m. */
+const TREE_HEIGHT_PER_SCALE = 5;
+
+/**
+ * The scale a crown sizes its leaves, sprays and clumps by. A tree's frame
+ * grows with the file's scale, and its leaves with it. A frame on one trunk
+ * that stands shorter than any tree of that scale, a sapling, carries the
+ * leaves of a tree its own height, so they are a young tree's rather than a
+ * grown one's. A shrub's stems keep the file's scale.
+ */
+export function leafScale(s: number, skel: Skeleton): number {
+  if (!oneTrunk(skel)) return s;
+  const top = skel.limbs.reduce((m, l) => Math.max(m, l.end[1]), 0);
+  return Math.min(s, top / TREE_HEIGHT_PER_SCALE);
+}
+
 /**
  * What carries each limb: the joint its bough leaves the trunk at, and how
  * far it droops at a point, by the bark's rule. The trunk is the frame's
@@ -218,7 +237,7 @@ export function buildBark(p: Resolved<typeof barkParams>, ctx: BuildContext, ske
   const boughs = new Boughs(skel);
   const flare = flareOf(trunkRadius, lobesOf(r.fork("lobes")), 1.1);
   // A tree stands on one trunk, which flares into root lobes; a shrub's many stems rise straight from the soil.
-  const oneTrunk = skel.limbs.filter((l) => l.parent === -1).length === 1;
+  const trunk = oneTrunk(skel);
   const children = skel.limbs.map(() => 0);
   for (const l of skel.limbs) if (l.parent >= 0) children[l.parent] = (children[l.parent] ?? 0) + 1;
 
@@ -229,7 +248,7 @@ export function buildBark(p: Resolved<typeof barkParams>, ctx: BuildContext, ske
     const head = chain[0] as number;
     const first = skel.limbs[head] as Limb;
     const lr = r.fork(`limb${head}`);
-    const flared = oneTrunk && head === 0;
+    const flared = trunk && head === 0;
     const radial = flared ? 24 : first.depth === 0 ? 10 : first.startRadius > trunkRadius * 0.3 ? 7 : 5;
     // Limbs never go: twigs and leaves always have a limb under them, and a failing tree stands bare.
     const wither = 0.45 + 0.25 * lr.next();
@@ -375,7 +394,7 @@ const CROWN_SHARE = 0.34;
  */
 export function buildLeafClumps(p: Resolved<typeof leafClumpsParams>, ctx: BuildContext, skel: Skeleton, budget = CLUMP_TRIANGLE_BUDGET): Built {
   const r = ctx.rand.fork("clumps");
-  const s = ctx.facts.scale ?? 1;
+  const s = leafScale(ctx.facts.scale ?? 1, skel);
   const crown = crownOf(skel.tips.map((t) => t.position));
   const boughs = new Boughs(skel);
   const tipCount = Math.max(1, skel.tips.length);
@@ -629,7 +648,7 @@ const STRAND_TRIANGLE_BUDGET = 21_000;
 export function buildLeafStrands(p: Resolved<typeof leafStrandsParams>, ctx: BuildContext, skel: Skeleton): Built {
   const out = new PartBuilder("leaf");
   const r = ctx.rand.fork("strands");
-  const s = ctx.facts.scale ?? 1;
+  const s = leafScale(ctx.facts.scale ?? 1, skel);
   const crown = crownOf(skel.tips.map((t) => t.position));
   const boughs = new Boughs(skel);
 
@@ -779,7 +798,7 @@ export function buildNeedles(p: Resolved<typeof needlesParams>, ctx: BuildContex
 function growNeedles(p: Resolved<typeof needlesParams>, ctx: BuildContext, skel: Skeleton, density: number): { out: PartBuilder; anchors: Anchor[] } {
   const out = new PartBuilder("leaf");
   const r = ctx.rand.fork("needles");
-  const s = ctx.facts.scale ?? 1;
+  const s = leafScale(ctx.facts.scale ?? 1, skel);
   const crown = crownOf(skel.limbs.filter((l) => l.depth >= 1).map((l) => l.end));
   const chains = chainsOf(skel).map((c) => c.map((i) => skel.limbs[i] as Limb));
   const boughs = new Boughs(skel);

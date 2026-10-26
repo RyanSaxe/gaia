@@ -3,7 +3,7 @@
 
 import { primitive, t } from "@gaia/schema";
 import { buildBark, buildBlossoms, buildLeafClumps, buildLeafStrands, buildNeedles } from "./geometry/foliage.ts";
-import { growBranching, growSpire } from "./geometry/skeleton.ts";
+import { growBranching, growSapling, growSpire } from "./geometry/skeleton.ts";
 import { buildLeafMound, growThicket } from "./geometry/shrub.ts";
 import { PALETTE_FAMILIES, paletteOf } from "./palettes.ts";
 
@@ -65,6 +65,24 @@ export const spire = primitive({
   doc: "A conifer's single straight trunk with rings of short limbs.",
   params: spireParams,
   build: (p, ctx) => growSpire(p, ctx),
+});
+
+export const saplingParams = {
+  habit: t.choice("How the young tree is growing", {
+    reaching: "A slender stem whose few shoots reach eagerly upward, in a hurry to be tall",
+    tiered: "Neat, level tiers of branches up a straight stem, patient and orderly",
+    leaning: "A slim stem leaning toward the light, its branches uneven and searching",
+  }),
+  tiers: t.scale("How many tiers of branches it has grown", { "its first two": 2, "a few": 3, several: 5 }),
+  stature: t.scale("How tall it has grown", { "knee-high": 0.6, "waist-high": 1.1, "as tall as a person": 1.7 }),
+};
+
+export const sapling = primitive({
+  id: "sapling@1",
+  role: "Skeleton",
+  doc: "A young tree no taller than a person: one thin stem and a few tiers of slender branches.",
+  params: saplingParams,
+  build: (p, ctx) => growSapling(p, ctx),
 });
 
 export const barkParams = {
@@ -216,4 +234,4 @@ export const leafMound = primitive({
   build: (p, ctx, skeleton) => buildLeafMound(p, ctx, skeleton),
 });
 
-export const FLORA_PRIMITIVES = [branching, spire, bark, leafClumps, leafStrands, needles, blossoms, sway, palette, thicket, leafMound];
+export const FLORA_PRIMITIVES = [branching, spire, sapling, bark, leafClumps, leafStrands, needles, blossoms, sway, palette, thicket, leafMound];
