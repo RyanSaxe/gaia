@@ -10,6 +10,7 @@
     "dev": "pnpm engine && pnpm --filter @gaia/app dev",
     "shots": "pnpm --filter @gaia/app exec install-electron && tsx tools/shots.ts",
     "brand": "tsx tools/brand.ts",
+    "sound": "tsx tools/sound.ts",
     "lab:html": "tsx tools/lab-html.ts",
     "lab:serve": "tsx tools/lab-serve.ts",
     "readme-shots": "tsx tools/readme-shots.ts",
