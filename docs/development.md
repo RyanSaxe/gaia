@@ -128,6 +128,15 @@ options can invalidate them. Never relabel a saved answer as the answer to a
 new request. Rejudge affected requests with approval before replacing a live
 fixture bundle. Keep a snapshot's graph, judgments and design answers together.
 
+## Sound files
+
+The files in `app/renderer/sound/assets/` are made by [`tools/sound/`](../tools/sound/README.md):
+`pnpm sound` rebuilds all of them, `pnpm sound world` the field recordings and `pnpm sound music` the
+music. It needs [uv](https://docs.astral.sh/uv/), `curl`, and `ffmpeg` with libopus; the first music build
+also compiles sfizz with CMake and Ninja. The recordings, sample libraries and sfizz's source are fetched
+once into `~/.cache/gaia-sound/` (set `GAIA_SOUND_CACHE` to move it), about 3.5 GB, and checked against
+the sums in `tools/sound/sources.json`.
+
 ## Checks
 
 ```sh
