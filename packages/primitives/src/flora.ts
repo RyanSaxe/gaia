@@ -4,7 +4,7 @@
 import { primitive, t } from "@gaia/schema";
 import { buildBark, buildBlossoms, buildLeafClumps, buildLeafStrands, buildNeedles } from "./geometry/foliage.ts";
 import { growBranching, growSapling, growSpire } from "./geometry/skeleton.ts";
-import { buildLeafMound, growThicket } from "./geometry/shrub.ts";
+import { buildLeafMound, growBramble, growThicket } from "./geometry/shrub.ts";
 import { PALETTE_FAMILIES, paletteOf } from "./palettes.ts";
 
 export const branchingParams = {
@@ -217,6 +217,20 @@ export const thicket = primitive({
   build: (p, ctx) => growThicket(p, ctx),
 });
 
+export const brambleParams = {
+  canes: t.scale("How many canes arch from its root", { "a few wild canes": 4, "a thorny thicket": 7, "an impenetrable tangle": 11 }),
+  reach: t.scale("How far its canes arch out before they bow to the soil", { "humped and close": 1.2, sprawling: 1.8, "rambling far over the ground": 2.5 }),
+  stature: t.scale("How high its arches stand", { "knee-high": 0.6, "waist-high": 1, "head-high": 1.5 }),
+};
+
+export const bramble = primitive({
+  id: "bramble@1",
+  role: "Skeleton",
+  doc: "A bramble's frame: long canes from one root that arch over and bow back to the soil, crossing into a tangle.",
+  params: brambleParams,
+  build: (p, ctx) => growBramble(p, ctx),
+});
+
 export const leafMoundParams = {
   leaves: t.choice("What the shrub's leaves are like", {
     rounded: "Soft, rounded clumps of small leaves",
@@ -234,4 +248,4 @@ export const leafMound = primitive({
   build: (p, ctx, skeleton) => buildLeafMound(p, ctx, skeleton),
 });
 
-export const FLORA_PRIMITIVES = [branching, spire, sapling, bark, leafClumps, leafStrands, needles, blossoms, sway, palette, thicket, leafMound];
+export const FLORA_PRIMITIVES = [branching, spire, sapling, bark, leafClumps, leafStrands, needles, blossoms, sway, palette, thicket, bramble, leafMound];

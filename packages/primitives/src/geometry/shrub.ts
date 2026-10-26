@@ -5,7 +5,7 @@
 // come from blossoms@1 on the anchors its twigs leave.
 
 import { type Anchor, type BuildContext, type Built, CUT, type Limb, type Resolved, type Skeleton } from "@gaia/schema";
-import type { leafMoundParams, thicketParams } from "../flora.ts";
+import type { brambleParams, leafMoundParams, thicketParams } from "../flora.ts";
 import { type Channels, PartBuilder, type V3, add, addScaled, clamp, cross, dot, fbm3, length, lerp, normalize, scale, sub } from "./kit.ts";
 import { Boughs, type Clump, type ClumpLook, type Crown, emitClump, emitSpray, emitTwig } from "./foliage.ts";
 
@@ -97,6 +97,57 @@ function growScrub(p: Resolved<typeof thicketParams>, ctx: BuildContext): Skelet
         tips.push({ position: on, normal: normalize([on[0], 0.2, on[2]]), size: 0.6 });
       }
     }
+  }
+  return { limbs, tips };
+}
+
+/**
+ * A bramble: canes from one root that rise steeply, arch over and run
+ * long and low back to the soil, where their tips touch down. Each wanders
+ * sideways as it goes, so neighbours cross into a tangle, and short side
+ * shoots along its arch carry the leaves and berries.
+ */
+export function growBramble(p: Resolved<typeof brambleParams>, ctx: BuildContext): Skeleton {
+  const r = ctx.rand.fork("bramble");
+  const height = Math.min(1.6, p.stature);
+  const canes = Math.max(3, Math.round(p.canes));
+  const cane = 0.01 + 0.008 * height;
+  const limbs: Limb[] = [];
+  const tips: Anchor[] = [];
+  const SEGMENTS = 7;
+  for (let i = 0; i < canes; i++) {
+    const cr = r.fork(`cane${i}`);
+    const az = (i / canes) * Math.PI * 2 + cr.range(-0.5, 0.5);
+    const bend = cr.range(-0.7, 0.7);
+    const reach = height * p.reach * cr.range(0.6, 1.05);
+    const apex = height * cr.range(0.7, 1.05);
+    // Up steeply to its apex a third of the way out, then long and low to the soil.
+    const at = (t: number): V3 => {
+      const heading = az + bend * t;
+      const out = 0.03 + reach * t;
+      return [Math.cos(heading) * out, apex * Math.sin(Math.PI * Math.pow(t, 0.7)), Math.sin(heading) * out];
+    };
+    // Each cane rises from the soil on its own, as a shrub's stems do, so it is a bough of its own.
+    let parent = -1;
+    for (let k = 0; k < SEGMENTS; k++) {
+      const t0 = k / SEGMENTS;
+      const t1 = (k + 1) / SEGMENTS;
+      limbs.push({ start: at(t0), end: at(t1), startRadius: cane * (1 - 0.6 * t0), endRadius: cane * (1 - 0.6 * t1), depth: 1, parent });
+      parent = limbs.length - 1;
+      const end = at(t1);
+      // Side shoots from the arch, not where the cane runs along the soil.
+      if (t1 < 0.25 || t1 > 0.9) continue;
+      const sr = cr.fork(`shoot${k}`);
+      const dir = normalize(sub(at(Math.min(1, t1 + 0.05)), end));
+      const side = normalize(cross(dir, UP));
+      const shoot = normalize(add(add(scale(side, sr.next() < 0.5 ? -1 : 1), scale(UP, sr.range(0.4, 0.9))), scale(dir, 0.4)));
+      const shootEnd = addScaled(end, shoot, sr.range(0.12, 0.26) * (0.6 + 0.4 * height));
+      limbs.push({ start: end, end: shootEnd, startRadius: cane * 0.28, endRadius: cane * 0.12, depth: 2, parent });
+      tips.push({ position: shootEnd, normal: shoot, size: 0.5 });
+    }
+    // The tip where the cane touches down and roots.
+    const touch = at(1);
+    tips.push({ position: touch, normal: normalize([touch[0], 0.4, touch[2]]), size: 0.3 });
   }
   return { limbs, tips };
 }
