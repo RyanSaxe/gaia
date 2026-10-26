@@ -19,7 +19,7 @@
 
 import type { CodeGraph, EngineClient, GraphNode, JevClient, JevResponse, Span } from "@gaia/schema";
 import { outlinesOf } from "@gaia/terrain";
-import { type CodeWorld, RequestFailed, areaOfRequest, composeWorld, factsOf, judgeWorld, keptJev, landOf, layoutWorld, planStanding, planWorldRequests, requestKey, vitalityOf, withVitality } from "@gaia/world";
+import { type CodeWorld, RequestFailed, areaOfRequest, composeWorld, factsOf, judgeWorld, keptJev, landOf, layoutWorld, planStanding, planWorldRequests, requestKey, vitalityOf, withLines, withVitality } from "@gaia/world";
 import { LOOKS } from "../renderer/terrain/looks.ts";
 import { engineJev } from "./jev.ts";
 import type { ConsentPlan, Heal, JudgedThing, Opening, WorldDocument } from "./protocol.ts";
@@ -398,23 +398,33 @@ export async function openWorld({ engine, root, consent, progress }: OpenWorldOp
 }
 
 /**
- * Whether two layouts of a world stand everything where the other does: the same land, areas, patches and
- * definitions, each definition on the same lines of its file, so the journal's pages read new code where the old
- * stood. The division reads the code alone, never Jev, so what decides this is the files, their lengths and their
- * definitions.
+ * Whether two layouts of a world hold the same land: the same size, and every area, patch and definition where the
+ * other has it. The division reads the code alone, never Jev, and a file's or folder's ground changes it only when it
+ * crosses a rung, so most commits leave the land as it was, however their lines shift.
  */
 function sameLand(a: CodeWorld, b: CodeWorld): boolean {
   const shape = (w: CodeWorld): string =>
-    JSON.stringify([w.size, w.aspect, w.areas.map((r) => [r.path, r.x, r.z]), w.patches.map((p) => [p.path, p.x, p.z, p.radius]), w.symbols.map((d) => [d.id, d.line, d.lines, d.x, d.z])]);
+    JSON.stringify([w.size, w.aspect, w.areas.map((r) => [r.path, r.x, r.z]), w.patches.map((p) => [p.path, p.x, p.z, p.radius]), w.symbols.map((d) => [d.id, d.x, d.z])]);
   return shape(a) === shape(b);
+}
+
+/** Each definition `b` has on other lines of its file than `a` does, by its id: where its code lies now. */
+function linesMoved(a: CodeWorld, b: CodeWorld): Record<string, { line: number; lines: number }> {
+  const was = new Map(a.symbols.map((s) => [s.id, s]));
+  return Object.fromEntries(
+    b.symbols.flatMap((s) => {
+      const old = was.get(s.id);
+      return old === undefined || (old.line === s.line && old.lines === s.lines) ? [] : [[s.id, { line: s.line, lines: s.lines }] as const];
+    }),
+  );
 }
 
 /**
  * Judges the world a page shows (`shown`) again, from the commit its folder is read from now, exactly as opening it
  * does (`openWorld`): the answers Jev and the engine keep settle everything the commit left alone, so only what it
  * changed is asked. Returns what to send the page, null when nothing it shows changed, and what the page shows once
- * that lands. Only vitality changes live. When the new code lays the land out exactly as before, the journal moves to
- * the new commit and its judgments; when it would move anything, each thing that still stands under the same name
+ * that lands. Only vitality changes live. When the new code lays the land out as before (`sameLand`), the journal moves
+ * to the new commit, its judgments and each definition's new lines; when it would move anything, each thing that still stands under the same name
  * takes its new vitality, and the reshape, the journal's new code and its judgments wait for the next open. The forms
  * Jev picks for what changed are kept for that open and shown only then. A heal costing more than the person's spend
  * limit is never asked about mid-walk: it fails, and the next open asks.
@@ -431,5 +441,7 @@ export async function healWorld(engine: EngineClient, shown: WorldDocument): Pro
   if (!sameLand(shown.world, next.world)) return { heal: Object.keys(vitality).length === 0 ? null : { type: "world.vitality", vitality }, shown: { ...shown, world } };
   const judged = Object.fromEntries(Object.entries(next.judged).filter(([of, j]) => JSON.stringify(j) !== JSON.stringify(shown.judged[of])));
   const commit = next.commit === undefined ? {} : { commit: next.commit };
-  return { heal: { type: "world.vitality", vitality, judged, ...commit }, shown: { ...shown, world, judged: next.judged, ...commit } };
+  const moved = linesMoved(shown.world, next.world);
+  const symbols = Object.keys(moved).length === 0 ? {} : { symbols: moved };
+  return { heal: { type: "world.vitality", vitality, judged, ...symbols, ...commit }, shown: { ...shown, world: withLines(world, moved), judged: next.judged, ...commit } };
 }

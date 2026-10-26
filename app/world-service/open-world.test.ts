@@ -240,6 +240,23 @@ describe("healing an open world", () => {
     expect(healed.shown.world.patches.map(({ path, x, z, radius }) => [path, x, z, radius])).toEqual(shown.world.patches.map(({ path, x, z, radius }) => [path, x, z, radius]));
   });
 
+  it("when the commit only shifts code within its files, heals in place, and the journal reads each definition on its new lines", { timeout: 40_000 }, async () => {
+    const at = { graph: judgedAt("c0ffee") };
+    const { engine } = keepingEngine(at);
+    const shown = await open(engine);
+    // The commit adds a line at the top of the wheel: its file is a line longer, and every definition in it a line lower.
+    const lower = (n: GraphNode): GraphNode =>
+      n.kind === "file" && n.path === wheel ? { ...n, measures: { ...n.measures, lines: n.measures.lines + 1 } } : n.kind === "def" && n.file === `file:${wheel}` ? { ...n, span: { start: n.span.start + 1, end: n.span.end + 1 } } : n;
+    at.graph = judgedAt("beef", {}, { ...graph, nodes: graph.nodes.map(lower) });
+    const healed = await healWorld(engine, shown);
+
+    const was = shown.world.symbols.filter((d) => d.file === wheel);
+    expect(was.length).toBeGreaterThan(0);
+    expect(healed.heal).toEqual({ type: "world.vitality", vitality: {}, judged: expect.any(Object), symbols: Object.fromEntries(was.map((d) => [d.id, { line: d.line + 1, lines: d.lines }])), commit: "beef" });
+    expect(healed.shown.commit).toBe("beef");
+    expect(healed.shown.world.symbols.filter((d) => d.file === wheel).map((d) => [d.id, d.line, d.x, d.z])).toEqual(was.map((d) => [d.id, d.line + 1, d.x, d.z]));
+  });
+
   it("when the commit would move the land, sends the new vitality of what still stands under the same name, and leaves the rest to the next open", { timeout: 40_000 }, async () => {
     const at = { graph: judgedAt("c0ffee") };
     const { engine } = keepingEngine(at);
