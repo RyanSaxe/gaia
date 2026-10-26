@@ -50,6 +50,12 @@ const UNDERSTORY: Record<PaletteFamily, { stone: number; moss: number; stem: num
   "bluebell-wood": { stone: 0x8e9096, moss: 0x5e9a52, stem: 0x4f8a48, eye: 0xf4e7b0, wood: 0xc8ab8a, cap: 0x8f7aa6, stalk: 0xe2daea },
 };
 
+/**
+ * A mushroom cap's spots: white on the silver-birch's scarlet caps, like a
+ * fly agaric's; every other family's are its cap color, so they never show.
+ */
+const SPOTS: Partial<Record<PaletteFamily, number>> = { "silver-birch": 0xf2ede2 };
+
 /** Every family declines toward the same dry, grey-brown tones, so decline reads the same everywhere. */
 const DECLINE = { bark: 0x6f6a64, leaf: 0x9a8a5c, bloom: 0x8c7a66, fruit: 0x6e5236, berry: 0x5e4a42, stone: 0xbcb5a8, moss: 0x9e9884, stem: 0x9a8a5c, eye: 0x8c7a66, wood: 0x9c978e, cap: 0x7a6c5e, stalk: 0xa49884 };
 
@@ -110,6 +116,7 @@ export function paletteOf(family: PaletteFamily, contrast: number): Palette {
       wood: { healthy: contrasted(hex(u.wood), contrast), decline: hex(DECLINE.wood) },
       cap: { healthy: contrasted(hex(u.cap), contrast), decline: hex(DECLINE.cap) },
       stalk: { healthy: contrasted(hex(u.stalk), contrast), decline: hex(DECLINE.stalk) },
+      spot: { healthy: contrasted(hex(SPOTS[family] ?? u.cap), contrast), decline: hex(DECLINE.cap) },
       ...buildingSwatches(family, contrast),
     },
   };

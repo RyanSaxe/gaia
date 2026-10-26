@@ -53,7 +53,7 @@ export function buildMushrooms(p: Resolved<typeof mushroomParams>, ctx: BuildCon
   const r = ctx.rand.fork("mushrooms");
   const caps = new PartBuilder("cap");
   const flesh = new PartBuilder("stalk");
-  const spots = new PartBuilder("stalk");
+  const spots = new PartBuilder("spot");
   const s = 0.85 + 0.15 * (ctx.facts.scale ?? 1);
   for (const m of layout(p.grouping, p.cap, p.height * s, r.fork("layout"))) emitMushroom(caps, flesh, spots, m, p.cap);
   const parts = [flesh.part(), caps.part()];
@@ -209,32 +209,45 @@ function emitMushroom(caps: PartBuilder, flesh: PartBuilder, spots: PartBuilder,
   const apexAt = around(0, 1, 0);
   const apex = caps.vertex(apexAt, axis, capShade(0, apexAt), { ...capCh, tint: hue(apexAt) });
   const rows: number[] = [];
+  /** Where each of the cap's vertices stands, by profile row and side, so spots lie on its facets. */
+  const at: V3[][] = [Array.from({ length: sides }, () => apexAt)];
   for (let i = 1; i < profile.length; i++) {
     const [rho, eta] = profile[i] as readonly [number, number];
     rows.push(caps.vertexCount);
+    const row: V3[] = [];
     for (let j = 0; j < sides; j++) {
       const a = (j / sides) * Math.PI * 2;
       const p = around(rho, eta, a);
+      row.push(p);
       caps.vertex(p, normalOf(i, a), capShade(i, p), { ...capCh, tint: hue(p) });
     }
+    at.push(row);
   }
   for (let j = 0; j < sides; j++) caps.triangle(apex, (rows[0] as number) + j, (rows[0] as number) + ((j + 1) % sides));
   for (let k = 0; k + 1 < rows.length; k++) band(caps, rows[k] as number, rows[k + 1] as number, sides);
-  // Pale spots on domed and flat caps, shaded as the cap beneath them.
+  // Spots in the palette's spot swatch, shaded as the cap beneath them: white on a fly agaric, the cap's own color elsewhere.
   if (shape !== "pointed") {
     const count = 8 + Math.floor(m.r.next() * 6);
     for (let k = 0; k < count; k++) {
       const a = m.r.next() * Math.PI * 2;
-      // On the round surface the cap's facets cut inside of, so no spot stands proud of the cap's outline.
-      const rho = (0.1 + 0.62 * Math.sqrt(m.r.next())) * Math.cos(Math.PI / sides);
+      const rho = 0.1 + 0.62 * Math.sqrt(m.r.next());
       const i = profile.findIndex(([pr]) => pr >= rho);
-      const [r0, e0] = profile[i - 1] as readonly [number, number];
-      const [r1, e1] = profile[i] as readonly [number, number];
+      const [r0] = profile[i - 1] as readonly [number, number];
+      const [r1] = profile[i] as readonly [number, number];
       const along = (rho - r0) / (r1 - r0);
-      const eta = e0 + (e1 - e0) * along;
+      // On the cap's own facets, between the four vertices round it, so no spot stands proud of the cap's outline.
+      const turn = (a / (Math.PI * 2)) * sides;
+      const j0 = Math.floor(turn) % sides;
+      const j1 = (j0 + 1) % sides;
+      const f = turn - Math.floor(turn);
+      const rowAt = (k: number): V3 => {
+        const row = at[k] as V3[];
+        return add(scale(row[j0] as V3, 1 - f), scale(row[j1] as V3, f));
+      };
+      const onCap = add(scale(rowAt(i - 1), 1 - along), scale(rowAt(i), along));
       // Lit and shaded exactly as the cap beneath, so only the swatch tells a spot from its cap.
       const n = normalize(add(scale(normalOf(i - 1, a), 1 - along), scale(normalOf(i, a), along)));
-      const center = addScaled(around(rho, eta, a), n, 0.002);
+      const center = addScaled(onCap, n, 0.0015);
       const [su, sv] = basis(n);
       const size = radius * m.r.range(0.045, 0.085);
       const shade = shadeOf(i - 1) + (shadeOf(i) - shadeOf(i - 1)) * along + mottle(center);
