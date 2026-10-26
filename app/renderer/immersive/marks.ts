@@ -30,6 +30,7 @@ import {
   towerParams,
   waterwheelParams,
   wellParams,
+  windmillParams,
 } from "@gaia/primitives";
 
 type Pt = readonly [number, number];
@@ -1402,6 +1403,7 @@ export const INKS: Readonly<Record<string, Ink>> = {
   "lookout-tower@1": landmark(lookoutTowerParams, { draw: (pen, look, p, seed) => drawLookoutTower(pen, look, p, seed) }),
   "standing-stones@1": landmark(standingStonesParams, { draw: (pen, look, p, seed) => drawStones(pen, look, p, seed) }),
   "great-tree@1": landmark(greatTreeParams, { draw: (pen, look, p, seed) => drawGreatTree(pen, look, p, seed) }),
+  "windmill@1": landmark(windmillParams, { draw: (pen, look, p) => drawWindmill(pen, look, p) }),
 };
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -2173,6 +2175,93 @@ function drawLookoutTower(pen: Pen, look: Look, p: Resolved<typeof lookoutTowerP
       eavesR = head * 0.82 + 0.6 * LK;
     }
     spire(pen, sides, eaves, eavesR, m * LK, look, tiers.cap, seed);
+  }
+}
+
+/**
+ * A windmill from its own words: its body and cap, and its sails turned to the viewer, in front. As it fails its
+ * sails go bare to their frames, then its cap (a post mill's whole body) tips to one side.
+ */
+function drawWindmill(pen: Pen, look: Look, p: Resolved<typeof windmillParams>): void {
+  const w = look.w;
+  const m = p.height * LK;
+  const bare = ease(w.v, 0.75, 0.25);
+  const tip = ease(w.v, 0.2, 0.06) * 0.3;
+  const timber = worn(look.hue("timber", "#6b4f3a"), w);
+  const roof = worn(look.hue("roof", "#8f7f62"), w, 0.5);
+  const boards = worn(look.hue("render", "#e2d4b6"), w);
+  /** A point tipped east about height `from` as the mill fails. */
+  const tipped = (from: number) => ([X, Z, H]: P3): P3 => [X + tip * Math.max(0, H - from), Z, H];
+  let hub: P3;
+  let clear: number;
+  if (p.body === "a post mill") {
+    const W = m * 0.25;
+    const D = m * 0.34;
+    const yb = m * 0.3;
+    const ye = m * 0.78;
+    const reach = m * 0.2;
+    castShadow(pen, ellipseFeet(0, 0, reach, reach, ye));
+    hatch(pen, [[[-reach, 0, 0.9], [0, 0, yb * 0.7]], [[reach, 0, 0.9], [0, 0, yb * 0.7]], [[0, -reach * 0.7, 0.9], [0, 0, yb * 0.7]], [[-reach, 0, 0.9], [reach, 0, 0.9]]], INK, 1.4);
+    box(pen, -0.3, 0.3, -0.3, 0.3, 0, yb + 0.6, timber);
+    const t = tipped(yb);
+    face(pen, ([[-W / 2, -D / 2, yb], [-W / 2, D / 2, yb], [-W / 2, D / 2, ye], [-W / 2, -D / 2, ye]] as P3[]).map(t), lit(boards, 0.14));
+    face(pen, ([[-W / 2, -D / 2, yb], [W / 2, -D / 2, yb], [W / 2, -D / 2, ye], [-W / 2, -D / 2, ye]] as P3[]).map(t), shaded(boards, 0.18));
+    face(pen, ([[-W / 2 - 0.3, -D / 2 - 0.3, ye - 0.1], [-W / 2 - 0.3, D / 2 + 0.3, ye - 0.1], [0, D / 2 + 0.3, m], [0, -D / 2 - 0.3, m]] as P3[]).map(t), lit(roof, 0.12));
+    face(pen, ([[-W / 2, -D / 2 - 0.3, ye], [W / 2, -D / 2 - 0.3, ye], [0, -D / 2 - 0.3, m]] as P3[]).map(t), shaded(boards, 0.1));
+    hub = t([0, -D / 2 - 0.8, ye + (m - ye) * 0.3]);
+    clear = 2.4 * LK;
+  } else {
+    const smock = p.body === "a timber smock mill";
+    const sides = smock ? 8 : 0;
+    const curb = m * (smock ? 0.77 : 0.76);
+    const r0 = m * 0.2;
+    const r1 = m * (smock ? 0.112 : 0.118);
+    const stone = worn(look.hue("masonry", "#b8ad98"), w);
+    const stageAt = smock ? m * 0.2 : curb * 0.24;
+    const wallAt = (h: number): number => (smock ? (h <= stageAt ? r0 : m * 0.185 + (r1 - m * 0.185) * clamp01((h - stageAt) / (curb - stageAt))) : r0 + (r1 - r0) * clamp01(h / curb));
+    castShadow(pen, ellipseFeet(0, 0, r0, r0, curb));
+    const courses = smock ? {} : { course: 0.56 * 2 * LK };
+    drum(pen, sides, 0, r0, stageAt, wallAt(stageAt - 0.01), stone, courses);
+    disc(pen, sides, stageAt, wallAt(stageAt) + 1.1 * LK, lit(timber, 0.25), 0.8);
+    drum(pen, sides, stageAt, wallAt(stageAt + 0.01), curb, r1, smock ? boards : stone, courses);
+    const [dX, dZ] = ringPoint(sides, Math.atan2(-0.91, -0.415), r0);
+    towerDoor(pen, dX, dZ, 0.6, 2.2, worn("#5a4030", w));
+    // The cap: a dome, or a pointed bonnet on a smock, seen in outline.
+    const rise = m - curb - 1.2;
+    const capR = r1 + 0.42 * LK;
+    const profile: readonly (readonly [number, number])[] = smock ? [[0, 1], [0.38, 0.8], [0.62, 0.55], [0.84, 0.27], [1, 0]] : [[0, 1], [0.14, 1.05], [0.32, 0.97], [0.5, 0.8], [0.68, 0.55], [0.84, 0.3], [1, 0]];
+    const t = tipped(curb);
+    face(pen, [...profile.map(([h, f]): P3 => [-capR * f, 0, curb + rise * h]), ...[...profile].reverse().map(([h, f]): P3 => [capR * f, 0, curb + rise * h])].map(t), roof);
+    hatch(pen, [[t([0, 0, m - 1.2]), t([0, 0, m])]], INK, 0.9);
+    hub = t([0, -capR - 1.0 * LK, curb + rise * 0.28]);
+    clear = stageAt + 1.4 * LK;
+  }
+  // The sails, flat to the eye about the hub.
+  const [hx, hy] = pen.at(...hub);
+  const count = p.sails === "six sails" ? 6 : 4;
+  const R = Math.min(m * 0.56, hub[2] - clear);
+  const width = R * (count === 6 ? 0.17 : 0.22);
+  const cloth = worn(look.hue("wall", "#f1e4c8"), w);
+  const start = count === 6 ? 0.3 : Math.PI / 4;
+  for (let k = 0; k < count; k++) {
+    const a = start + (k / count) * Math.PI * 2;
+    const at = (u: number, v: number): Pt => {
+      const q: Pt = [hx + (Math.cos(a) * u + Math.sin(a) * v) * pen.s, hy + (-Math.sin(a) * u + Math.cos(a) * v) * pen.s];
+      pen.reach(q[0], q[1]);
+      return q;
+    };
+    const inner = R * 0.2;
+    const sail = [at(inner, 0), at(R, 0), at(R, width * 0.8), at(inner, width * 0.8)];
+    if (bare < 0.9) {
+      pen.ctx.globalAlpha = 1 - bare;
+      wash(pen, sail, p.sails === "four lattice sails" ? lit(cloth, 0.1) : cloth);
+      pen.ctx.globalAlpha = 1;
+    }
+    const bars = 7;
+    const lines: [Pt, Pt][] = Array.from({ length: bars + 1 }, (_, j) => [at(inner + ((R - inner) * j) / bars, 0), at(inner + ((R - inner) * j) / bars, width * 0.8)]);
+    strokeLines(pen, lines, 0.5, 0.75);
+    ink(pen, sail, true, 0.6);
+    ink(pen, [at(0, 0), at(R, 0)], false, 1.1);
   }
 }
 

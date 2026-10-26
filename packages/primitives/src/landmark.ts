@@ -1,13 +1,14 @@
 // Landmark primitives: great things a person steers by from far away, each
 // 12 to 30 m tall, or spread wide, so it reads through the haze from across
 // the world. A few strong axes per primitive change the whole form, so the
-// same three primitives make very different landmarks. Geometry lives in
+// same few primitives make very different landmarks. Geometry lives in
 // ./geometry/landmark/.
 
 import { primitive, t } from "@gaia/schema";
 import { buildStandingStones } from "./geometry/landmark/stones.ts";
 import { buildLookoutTower } from "./geometry/landmark/tower.ts";
 import { buildGreatTree } from "./geometry/landmark/tree.ts";
+import { buildWindmill } from "./geometry/landmark/windmill.ts";
 
 export const lookoutTowerParams = {
   height: t.scale("How tall the tower stands: a squat watchtower for code that feels humble and stubborn, a lookout tower for code that feels ordinary and steady, a tall tower for code that feels proud, a soaring tower for code that feels grand and ambitious", { "a squat watchtower": 12, "a lookout tower": 16, "a tall tower": 21, "a soaring tower": 25 }),
@@ -95,4 +96,26 @@ export const greatTree = primitive({
   build: (p, ctx) => buildGreatTree(p, ctx),
 });
 
-export const LANDMARK_PRIMITIVES = [lookoutTower, standingStones, greatTree];
+export const windmillParams = {
+  body: t.choice("What kind of mill it is", {
+    "a stone tower mill": "A tall round tower of stone, broad at its foot and tapering as it rises, a stage ringing it where the sails sweep low, under a domed cap",
+    "a timber smock mill": "Eight sides of pale weatherboards leaning in as they rise, like a countryman's smock, on a stone base with a stage around it, under a pointed cap",
+    "a post mill": "A boarded wooden body perched on one great post over crossed trestles, a ladder and a tail pole trailing behind it",
+  }),
+  sails: t.choice("Its sails", {
+    "four canvas sails": "Four broad sails of pale canvas spread on lattice frames, full of the wind",
+    "four lattice sails": "Four sails of white shutters, slatted like blinds, the light flickering through them as they turn",
+    "six sails": "Six slender canvas sails crowding round one hub, a quick, restless whirl",
+  }),
+  height: t.scale("How tall it stands to the top of its cap; its sails reach higher still", { "a stout mill": 12, "a tall mill": 15, "a towering mill": 19 }),
+};
+
+export const windmill = primitive({
+  id: "windmill@1",
+  role: "Landmark",
+  doc: "A windmill whose sails turn all day and all night: a stone tower, a timber smock or a post mill, with canvas sails, shutters or six sails, for code that feels tireless and busy, turning with every change in the weather. Its windows are lit at night. In decline its sails tear to bare frames and slow to a stop; then its cap lists on its curb.",
+  params: windmillParams,
+  build: (p, ctx) => buildWindmill(p, ctx),
+});
+
+export const LANDMARK_PRIMITIVES = [lookoutTower, standingStones, greatTree, windmill];

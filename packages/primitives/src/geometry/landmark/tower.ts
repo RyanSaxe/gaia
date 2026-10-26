@@ -15,10 +15,10 @@ import { UP, box, quad, tri } from "../blocks.ts";
 import { lump, nonEmpty, still } from "./shared.ts";
 
 /** Height of one course of stone, meters. */
-const COURSE = 0.56;
+export const COURSE = 0.56;
 /** Mortar gap between blocks, meters, and how far the mortar is set back behind a course's least proud block. */
-const JOINT = 0.035;
-const MORTAR = 0.012;
+export const JOINT = 0.035;
+export const MORTAR = 0.012;
 /** Faces of each plan; 0 is round. */
 const SIDES = { round: 0, square: 4, octagonal: 8 } as const;
 /** How far a gallery's walkway reaches past the wall, how thick it is, and its parapet's height. */
@@ -73,13 +73,13 @@ const facetOf = (sides: number, a: number): number => {
 };
 
 /** A point on a round wall, or on a polygonal wall whose apothem is `rad`, at angle `a`. */
-function ringPoint(sides: number, a: number, rad: number, y: number): V3 {
+export function ringPoint(sides: number, a: number, rad: number, y: number): V3 {
   if (sides === 0) return [Math.cos(a) * rad, y, Math.sin(a) * rad];
   const k = rad / Math.cos(a - facetOf(sides, a));
   return [Math.cos(a) * k, y, Math.sin(a) * k];
 }
 
-function ringNormal(sides: number, a: number): V3 {
+export function ringNormal(sides: number, a: number): V3 {
   const f = sides === 0 ? a : facetOf(sides, a);
   return [Math.cos(f), 0, Math.sin(f)];
 }
@@ -89,7 +89,7 @@ function ringNormal(sides: number, a: number): V3 {
  * block on odd courses. On a polygon every corner is a joint, so no block
  * bends around one.
  */
-function courseSpans(sides: number, rad: number, len: number, odd: boolean): [number, number][] {
+export function courseSpans(sides: number, rad: number, len: number, odd: boolean): [number, number][] {
   const gap = JOINT / (2 * rad);
   if (sides === 0) {
     const n = Math.max(10, Math.round((Math.PI * 2 * rad) / len));
@@ -120,7 +120,7 @@ function courseSpans(sides: number, rad: number, len: number, odd: boolean): [nu
  * joint past each end, so the joints round it read as dark recesses from outside and never let the sky through;
  * every block of a course sets its mortar at the same radius, so the mortar is one unbroken ring.
  */
-function ringBlock(b: PartBuilder, sides: number, a0: number, a1: number, y0: number, y1: number, rad: number, thick: number, shade: number, ch: Channels, under = false, joint = 0, mortar = rad): void {
+export function ringBlock(b: PartBuilder, sides: number, a0: number, a1: number, y0: number, y1: number, rad: number, thick: number, shade: number, ch: Channels, under = false, joint = 0, mortar = rad): void {
   const am = (a0 + a1) / 2;
   const outer = (a: number, y: number, bulge = 0): V3 => ringPoint(sides, a, rad + bulge, y);
   const inner = (a: number, y: number): V3 => ringPoint(sides, a, rad - thick, y);
@@ -534,7 +534,7 @@ function crownRoof(
   if (first !== null) box(timber, [0, height + 0.35, 0], [[1, 0, 0], UP, [0, 0, 1]], [0.06, 0.45, 0.06], 0.4, { ...first, wither: 0.8 });
 }
 
-function angleDiff(a: number, b: number): number {
+export function angleDiff(a: number, b: number): number {
   const d = (((a - b) % (Math.PI * 2)) + Math.PI * 3) % (Math.PI * 2);
   return d - Math.PI;
 }
