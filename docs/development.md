@@ -52,6 +52,7 @@ __lab.terrain.tour("ruined bridge")
 __lab.terrain.walk(0, 0, 90, 0)
 __lab.terrain.calls()
 __lab.sound.level()       // dBFS leaving the page, also in a muted window
+__lab.sound.decoded()     // MB of decoded sound the page holds now
 __lab.sound.record(true)  // with ?sound=record: keep a walk, then
 __lab.sound.render({ music: "layers" })  // its sound as base64 WAV
 ```

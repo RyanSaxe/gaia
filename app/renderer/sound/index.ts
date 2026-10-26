@@ -7,9 +7,10 @@
 
 import type { WorldHandle } from "../terrain/world.ts";
 import { type Solo, createSoundscape } from "./soundscape.ts";
+import { sizeOf } from "./shelf.ts";
 import { type BookState, type Moment, createListener } from "./listener.ts";
 import { loadBank, loadMusic } from "./bank.ts";
-import { type MusicPlan, PHRASES, STEMS, createMusic } from "./music.ts";
+import { type Chunk, type MusicPlan, PHRASES, STEMS, createMusic } from "./music.ts";
 import { BEDS } from "./hearing.ts";
 import { gainOf, soundLevels } from "./levels.ts";
 
@@ -59,7 +60,7 @@ async function renderWalk(moments: readonly Moment[], how: Rendering, rate = 480
   let music = null;
   if (how.music !== undefined && how.music !== null) {
     const score = loadMusic(ctx, true);
-    await Promise.all([score.stems.ready(STEMS), score.phrases.ready(PHRASES)]);
+    await Promise.all([score.chunks.ready(STEMS.flatMap((stem) => Array.from({ length: score.chunk.count }, (_, k): Chunk => `${stem}:${k}`))), score.phrases.ready(PHRASES)]);
     music = createMusic(ctx, score, scape.music, how.music, 0, seeded(29));
   }
   const listener = createListener(scape, music);
@@ -136,11 +137,14 @@ export function createSound(world: WorldHandle, book: () => BookState): Sound {
   meter.connect(ctx.destination);
   let listener: ReturnType<typeof createListener> | null = null;
   const score = loadMusic(ctx);
-  // The parts that always play are decoded while the world bakes; the rest as they are wanted.
-  const loaded = Promise.all([loadBank(ctx), score.stems.ready(["bed", "melody"])]);
+  let held = (): number => score.chunks.held() + score.phrases.held();
+  // The first chunk of the parts that always play is decoded while the world bakes; the rest as they come due.
+  const loaded = Promise.all([loadBank(ctx), score.chunks.ready(["bed:0", "melody:0"])]);
   // The world is heard once it stands and the wait has lifted, fading in from there.
   world.onLifted(() => {
     void loaded.then(([bank]) => {
+      const short = [...Object.values(bank.paper), ...Object.values(bank.steps).map((s) => s.buffer)].reduce((sum, b) => sum + sizeOf(b), 0);
+      held = () => bank.beds.held() + short + score.chunks.held() + score.phrases.held();
       const start = ctx.currentTime + 0.1;
       const scape = createSoundscape(ctx, bank, meter, start, Math.random);
       soundLevels().watch((l) => {
@@ -165,6 +169,8 @@ export function createSound(world: WorldHandle, book: () => BookState): Sound {
     hook: {
       /** Whether the page's sound runs: running, suspended until a touch, or closed. */
       state: () => ctx.state,
+      /** How much decoded sound the page holds now, MB. */
+      decoded: () => Math.round(held() / 1e5) / 10,
       /** What the person hears where they stand now. */
       earshot: () => world.earshot(),
       /** How loud the sound leaving the page is now, dBFS over the last tenth of a second; -Infinity in silence. */

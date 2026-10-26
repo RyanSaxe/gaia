@@ -69,8 +69,8 @@ document and progress over a `MessagePort`. These boundaries are declared in
 Sound runs only in the renderer, in `app/renderer/sound/`. Each frame the world
 reports what reaches the person (`WorldHandle.earshot()`), and the sound module
 turns that into Web Audio levels; the pure packages make no sound. A recording
-is decoded only while it may be heard, and the same graph renders a recorded
-walk offline.
+is decoded only while it may be heard, the music a 4-bar chunk at a time just
+before it plays, and the same graph renders a recorded walk offline.
 
 ## Packages
 

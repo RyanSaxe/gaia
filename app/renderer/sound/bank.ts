@@ -31,7 +31,7 @@ import night1 from "./assets/music/phrase-night-1.ogg";
 import night2 from "./assets/music/phrase-night-2.ogg";
 import ruin1 from "./assets/music/phrase-ruin-1.ogg";
 import score from "./assets/music/manifest.json";
-import type { MusicBank, Phrase, Stem } from "./music.ts";
+import type { Chunk, MusicBank, Phrase, Stem } from "./music.ts";
 import { createShelf } from "./shelf.ts";
 import type { Bank, Ground, Paper, Sprite } from "./soundscape.ts";
 import type { Bed } from "./hearing.ts";
@@ -105,15 +105,42 @@ export async function loadBank(ctx: BaseAudioContext, keep = false): Promise<Ban
     "steps-wood": entry(STEPS.wood[1]).lufs,
     ...Object.fromEntries((Object.keys(PAPER) as Paper[]).map((p) => [p, entry(PAPER[p][1]).lufs])),
   } as Bank["lufs"];
-  return { beds: createShelf(BEDS, (url) => decode(bedDecoder, url), keep), steps, paper, lufs };
+  return { beds: createShelf((name: Bed) => decode(bedDecoder, BEDS[name]), keep), steps, paper, lufs };
 }
 
-/** The score for `ctx`: the piece's parts and the phrases on shelves, decoded while they may be heard (kept once decoded with `keep`). */
+/** Each part's chunks: their file, laid end to end, and where each chunk lies in it, bytes. */
+const CHUNKS = score.piece.chunks as Readonly<Record<Stem, readonly { readonly at: number; readonly bytes: number }[]>>;
+
+/**
+ * The score for `ctx`: the piece's parts a chunk at a time and the phrases
+ * whole, each decoded while it may be heard (kept once decoded with `keep`).
+ * A part's file is fetched once; a chunk is decoded from its own bytes.
+ */
 export function loadMusic(ctx: BaseAudioContext, keep = false): MusicBank {
+  const files = new Map<Stem, Promise<ArrayBuffer>>();
+  const file = (stem: Stem): Promise<ArrayBuffer> => {
+    let bytes = files.get(stem);
+    if (bytes === undefined) {
+      bytes = fetch(STEM_URLS[stem]).then((r) => {
+        if (!r.ok) throw new Error(`Could not load the music's ${stem}: ${r.status}.`);
+        return r.arrayBuffer();
+      });
+      files.set(stem, bytes);
+    }
+    return bytes;
+  };
+  const chunk = async (name: Chunk): Promise<AudioBuffer> => {
+    const [stem, k] = name.split(":") as [Stem, string];
+    const span = CHUNKS[stem][Number(k)];
+    if (span === undefined) throw new Error(`The music has no chunk ${name}.`);
+    // decodeAudioData takes its buffer over, so each chunk is decoded from a copy of its bytes.
+    return ctx.decodeAudioData((await file(stem)).slice(span.at, span.at + span.bytes));
+  };
+  const { frames, margin, rate } = score.piece.chunk;
   return {
-    stems: createShelf(STEM_URLS, (url) => decode(ctx, url), keep),
-    phrases: createShelf(PHRASE_URLS, (url) => decode(ctx, url), keep),
-    length: score.piece.seconds,
+    chunks: createShelf(chunk, keep),
+    chunk: { count: CHUNKS.bed.length, seconds: frames / rate, margin: margin / rate },
+    phrases: createShelf((name: Phrase) => decode(ctx, PHRASE_URLS[name]), keep),
     lufs: { piece: score.piece.lufs, phrases: score.phrases.lufs },
   };
 }
