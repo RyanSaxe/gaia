@@ -203,10 +203,11 @@ export function buildLeafMound(p: Resolved<typeof leafMoundParams>, ctx: BuildCo
       if (stray) depth = tr.range(1.2, 1.45);
       // Notches open gaps in the outline, never holes through it: only the outer layer is notched.
       if (depth >= 0.95 && !stray && notch(d) < -1 + 1.2 * look.notches) continue;
-      const goal = addScaled(clump.center, d, clump.radius * depth * lump(d) * tr.range(0.92, 1.05));
+      let goal = addScaled(clump.center, d, clump.radius * depth * lump(d) * tr.range(0.92, 1.05));
       goal[1] = Math.max(goal[1], half * 1.4);
-      let root = onLimb(limb, goal);
-      if (length(sub(goal, root)) < 0.06) root = addScaled(goal, d, -0.08);
+      const root = onLimb(limb, goal);
+      // A goal on the stem itself moves out from it, so the twig still grows from its stem.
+      if (length(sub(goal, root)) < 0.06) goal = addScaled(root, d, 0.08);
       const along = normalize(sub(goal, root));
       const b = boughs.at(clump.limb, root);
       // A cluster holds many leaves, so a tired bush must lose them steadily to read as tired:
