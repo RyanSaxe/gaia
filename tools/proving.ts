@@ -149,6 +149,9 @@ const TRAIL_PLAN: readonly (readonly [from: string, to: string, look: string, wa
   ["ruins/house", "ruins/lighthouse", "Stone-edged path", 0.8],
   ["ruins/oak", "ruins", "Worn footpath", 0.75],
   ["ruins/keep", "ruins/house", "Faint wandering track", 0.7],
+  // The ruins' own hub: the oak, the mill and the lighthouse all lean on the willow, so their paths meet in ruin.
+  ["ruins/mill", "ruins", "Faint wandering track", 0.72],
+  ["ruins/lighthouse", "ruins", "Faint wandering track", 0.71],
   // A hub: many entities lean on the hollow's lantern tower, so trunk paths branch at junctions.
   ["", "hollow", "Worn footpath", 0.95],
   ["crossings/mill", "hollow", "Worn footpath", 0.9],

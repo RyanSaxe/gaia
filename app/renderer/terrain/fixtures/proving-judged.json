@@ -3820,6 +3820,48 @@
    }
   },
   {
+   "from": "ruins/mill",
+   "to": "ruins",
+   "want": 0.72,
+   "route": {
+    "id": "bp-1a276edd",
+    "kind": "link",
+    "slots": {
+     "route": {
+      "use": "trail@1",
+      "params": {
+       "width": "a narrow footpath",
+       "wear": "faint, half grassed over",
+       "edging": "none",
+       "winding": "meandering",
+       "crossing": "stepping stones"
+      }
+     }
+    }
+   }
+  },
+  {
+   "from": "ruins/lighthouse",
+   "to": "ruins",
+   "want": 0.71,
+   "route": {
+    "id": "bp-1a276edd",
+    "kind": "link",
+    "slots": {
+     "route": {
+      "use": "trail@1",
+      "params": {
+       "width": "a narrow footpath",
+       "wear": "faint, half grassed over",
+       "edging": "none",
+       "winding": "meandering",
+       "crossing": "stepping stones"
+      }
+     }
+    }
+   }
+  },
+  {
    "from": "",
    "to": "hollow",
    "want": 0.95,
