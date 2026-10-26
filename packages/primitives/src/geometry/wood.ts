@@ -34,6 +34,8 @@ interface Station {
   readonly pith?: V3;
   /** Where its bark ends and its wood begins, as a share of its radius (`woodOf`). */
   readonly wood: number;
+  /** How much of a knot's dark eye lies at `theta`, 0 to 1; none when absent. */
+  readonly knot?: (theta: number) => number;
 }
 
 interface Stem {
@@ -60,7 +62,7 @@ function barkPoint(stem: Stem, i: number, theta: number): { q: V3; shade: number
   const st = stem.stations[i] as Station;
   const smooth = ringPoint(st, theta, 1);
   const { bump, shade } = barkAt(stem.roughness, stem.seed, stem.furrows, st.c, theta, st.along, smooth[1]);
-  return { q: ringPoint(st, theta, 1 + bump), shade };
+  return { q: ringPoint(st, theta, 1 + bump), shade: shade - 0.35 * (st.knot?.(theta) ?? 0) };
 }
 
 /** Smooth vertex normals from a grid's own faces. */
@@ -89,8 +91,8 @@ interface Look {
   readonly tint?: number;
 }
 
-/** What carries each row of a grid as it declines. */
-type Carry = (row: number) => Channels;
+/** What carries each vertex of a grid, by row and column, as it declines. */
+type Carry = (row: number, col: number) => Channels;
 
 /** A grid of rows of points, its front facing (along a row) × (down the rows). */
 function emitGrid(out: PartBuilder, rows: readonly (readonly V3[])[], look: (i: number, j: number) => Look, carry: Carry, normals = faceNormals(rows)): void {
@@ -98,13 +100,15 @@ function emitGrid(out: PartBuilder, rows: readonly (readonly V3[])[], look: (i: 
   const first = out.vertexCount;
   rows.forEach((row, i) => row.forEach((p, j) => {
     const l = look(i, j);
-    out.vertex(p, normals[i]?.[j] ?? UP, l.shade, { ...carry(i), tint: l.tint ?? 0 });
+    out.vertex(p, normals[i]?.[j] ?? UP, l.shade, { ...carry(i, j), tint: l.tint ?? 0 });
   }));
+  // A row that closes to one point, a face's heart or a hollow's floor, takes one triangle per segment, not two.
+  const same = (a: V3 | undefined, b: V3 | undefined): boolean => a !== undefined && b !== undefined && a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
   for (let i = 0; i + 1 < rows.length; i++) {
     for (let j = 0; j + 1 < cols; j++) {
       const a = first + i * cols + j;
-      out.triangle(a, a + 1, a + cols);
-      out.triangle(a + 1, a + cols + 1, a + cols);
+      if (!same(rows[i]?.[j], rows[i]?.[j + 1])) out.triangle(a, a + 1, a + cols);
+      if (!same(rows[i + 1]?.[j], rows[i + 1]?.[j + 1])) out.triangle(a + 1, a + cols + 1, a + cols);
     }
   }
 }
@@ -113,14 +117,16 @@ function emitGrid(out: PartBuilder, rows: readonly (readonly V3[])[], look: (i: 
  * Cuts a grid into plates that meet edge to edge: columns at `colCuts`, and
  * each column's rows at its own cuts, so the plates break joint. Each drops
  * away to its own middle below the vitality `lossOf` gives it, from its row
- * band and the way its middle faces. A plate with a `backing` has a dark
+ * band and the way its middle faces, each of its vertices a little before
+ * or after the rest (`ragged`), so it goes with a soft, uneven edge. A plate with a `backing` has a dark
  * inner face there, drawn into the backing's builder, so once its neighbors
  * have gone no one sees through its inside, which is drawn front-faced only.
  */
 function emitPlates(
   out: PartBuilder, rows: readonly (readonly V3[])[], normals: readonly (readonly V3[])[], look: (i: number, j: number) => Look, carry: Carry,
-  rowCutsOf: (col: number) => readonly number[], colCuts: readonly number[], lossOf: (band: number, facing: V3) => number,
+  rowCutsOf: (col: number) => readonly number[], colCuts: readonly number[], lossOf: (band: number, facing: V3, col: number) => number,
   backing?: { readonly out: PartBuilder; readonly rows: readonly (readonly V3[])[] },
+  ragged: (p: V3) => number = () => 0,
 ): void {
   for (let b = 0; b + 1 < colCuts.length; b++) {
     const rowCuts = rowCutsOf(b);
@@ -129,11 +135,15 @@ function emitPlates(
       if (i1 <= i0) continue;
       const pick = <T>(grid: readonly (readonly T[])[]): T[][] => grid.slice(i0, i1 + 1).map((row) => row.slice(j0, j1 + 1));
       const [mi, mj] = [Math.round((i0 + i1) / 2), Math.round((j0 + j1) / 2)];
-      const loss = lossOf(a, normals[mi]?.[mj] ?? UP);
+      const loss = lossOf(a, normals[mi]?.[mj] ?? UP, b);
       const middle = rows[mi]?.[mj] as V3;
-      const held = (i: number): Channels => ({ ...carry(i0 + i), loss, pivot: middle });
+      const held = (i: number, j: number): Channels => {
+        const at = rows[i0 + i]?.[j0 + j] as V3;
+        return { ...carry(i0 + i, j0 + j), loss: loss > 0 ? clamp(loss + ragged(at), 0.02, 0.95) : 0, pivot: middle };
+      };
       emitGrid(out, pick(rows), (i, j) => look(i0 + i, j0 + j), held, pick(normals));
-      if (backing !== undefined) emitGrid(backing.out, pick(backing.rows).map((row) => row.reverse()), () => ({ shade: 0.08, tint: 0.02 }), held);
+      const cols = j1 - j0;
+      if (backing !== undefined) emitGrid(backing.out, pick(backing.rows).map((row) => row.reverse()), () => ({ shade: 0.08, tint: 0.02 }), (i, j) => held(i, cols - j));
     }
   }
 }
@@ -179,7 +189,9 @@ interface Cap {
   readonly i: number;
   readonly facing: 1 | -1;
   readonly look: End;
-  readonly crumble?: (band: number) => number;
+  readonly crumble?: (band: number, col: number) => number;
+  /** The rotten hollow under a face that crumbles, at `theta` and share `s` of the radius: the split's face follows it. */
+  readonly hollow?: (theta: number, s: number) => V3;
 }
 
 /** How one half's bark sheds: plates so many segments around, each column's cuts along the stem, and when a plate facing so drops away. */
@@ -187,6 +199,9 @@ interface Shed {
   readonly cols: number;
   readonly rowsOf: (col: number) => readonly number[];
   readonly loss: (facing: V3) => number;
+  readonly ragged: (p: V3) => number;
+  /** The checks in the wood under the bark: how deep a crack runs at a station and a column of the fine grid, 0 to 1. */
+  readonly check: (i: number, j: number) => number;
 }
 
 /**
@@ -212,15 +227,16 @@ function emitHalf(bark: PartBuilder, wood: PartBuilder, stem: Stem, h: number, c
     // The inner face lies just under the outer, so a plate seen from inside reads as dark inner bark however it is seen.
     // It is drawn as wood, so moss grows only on bark's outer face.
     const inner = points.map((row, i) => row.map((q, j) => addScaled(q, around(st[i] as Station, thetas[j] as number), -0.02 * (st[i] as Station).radius(thetas[j] as number))));
-    emitPlates(bark, points, normals, barkLook, carry, shed.rowsOf, cutsOf(stem.half, shed.cols), (_band, facing) => shed.loss(facing), { out: wood, rows: inner });
-    // The wood under the bark, weathered and checked along its grain: dark cracks that wander down the stem,
-    // on twice the bark's segments so a crack is a crease rather than a band.
+    emitPlates(bark, points, normals, barkLook, carry, shed.rowsOf, cutsOf(stem.half, shed.cols), (_band, facing) => shed.loss(facing), { out: wood, rows: inner }, shed.ragged);
+    // The wood under the bark, weathered and checked along its grain, on twice the bark's segments so a check is a
+    // crease rather than a band. A check's floor sags a little further than the wood beside it, so it opens as the log fails.
     const fine = Array.from({ length: stem.half * 2 + 1 }, (_, j) => stem.split + h * Math.PI + (j * Math.PI) / (stem.half * 2));
-    const check = (i: number, theta: number): number =>
-      clamp(1 - 3 * Math.abs(fbm3(Math.cos(theta) * 1.6, Math.sin(theta) * 1.6, (st[i] as Station).along * 0.3, stem.seed + 31, 2)), 0, 1);
-    emitGrid(wood, st.map((s, i) => fine.map((theta) => ringPoint(s, theta, s.wood * (1 - 0.06 * check(i, theta))))), (i, j) => ({
-      shade: 0.4 + 0.14 * fbm3((st[i] as Station).along * 0.9, (fine[j] as number) * 3.1, 0, stem.seed + 11, 2) - 0.34 * check(i, fine[j] as number), tint: -0.01,
-    }), (i) => ({ ...carry(i), wither: 0.95 }));
+    emitGrid(wood, st.map((s, i) => fine.map((theta, j) => ringPoint(s, theta, s.wood * (1 - 0.05 * shed.check(i, j))))), (i, j) => ({
+      shade: 0.42 + 0.14 * fbm3((st[i] as Station).along * 0.9, (fine[j] as number) * 3.1, 0, stem.seed + 11, 2) - 0.4 * shed.check(i, j), tint: -0.01,
+    }), (i, j) => {
+      const held = carry(i, j);
+      return { ...held, droop: held.droop + 0.06 * shed.check(i, j), wither: 0.95 };
+    });
   }
 
   const capOf = (i: number): Cap | undefined => ends.find((e) => e.i === i);
@@ -233,7 +249,7 @@ function emitHalf(bark: PartBuilder, wood: PartBuilder, stem: Stem, h: number, c
     const jitter = (theta: number, s: number, k: number): number =>
       e.look === "sawn" && s < at.wood && s > 0 ? s * (1 + 0.03 * fbm3(Math.cos(theta) * 1.5, Math.sin(theta) * 1.5, k * 0.7, stem.seed + 5, 2)) : s;
     const face = rings.map((ring, k) => angles.map((theta) => capPoint(at, theta, jitter(theta, ring.s, k))));
-    const held = (): Channels => carry(e.i);
+    const held = (): Channels => carry(e.i, 0);
     emitGrid(bark, [rim, face[0] as V3[]], () => ({ shade: 0.22 }), held);
     const reach = Math.max(0.05, at.radius(0));
     const look = (k: number, j: number): Look => {
@@ -246,12 +262,14 @@ function emitHalf(bark: PartBuilder, wood: PartBuilder, stem: Stem, h: number, c
     const cut = (): Channels => ({ ...held(), wither: 0.85 });
     if (e.crumble === undefined) emitGrid(wood, face, look, cut);
     else {
-      // Bands from the rim to the heart, four plates around the half, their edges staggered a ring or two.
+      // Bands from the rim to the heart, six pieces around the half, their edges staggered a ring or two and each
+      // piece going a little unevenly, so the face crumbles in soft-edged pieces.
       const bandOf = [0.6, 0.3].map((s) => rings.findIndex((ring) => ring.s < s));
       const stagger = rings.length > 8 ? 2 : 0;
       const crumble = e.crumble;
-      const rowsOf = (col: number): number[] => [0, ...bandOf.map((at, k) => clamp(at + (((col + k) % 3) - 1) * stagger, 1, rings.length - 2)), rings.length - 1];
-      emitPlates(wood, face, faceNormals(face), look, cut, rowsOf, cutsOf(stem.half, Math.ceil(stem.half / 4)), (band) => crumble(band));
+      const rowsOf = (col: number): number[] => [0, ...bandOf.map((at, k) => Math.round(clamp(at + stagger * Math.sin(col * 0.8 + k * 2.1 + stem.seed), 1, rings.length - 2))), rings.length - 1];
+      const soft = (q: V3): number => 0.06 * fbm3(q[0] * 9, q[1] * 9, q[2] * 9, stem.seed + 61, 2);
+      emitPlates(wood, face, faceNormals(face), look, cut, rowsOf, cutsOf(stem.half, 1), (band, _facing, col) => crumble(band, col), undefined, soft);
     }
   }
 
@@ -265,7 +283,9 @@ function emitHalf(bark: PartBuilder, wood: PartBuilder, stem: Stem, h: number, c
   const [near, far] = [thetas[thetas.length - 1] as number, thetas[0] as number];
   const across = (i: number): V3[] => {
     const station = st[i] as Station;
-    const point = capOf(i) === undefined ? ringPoint : capPoint;
+    const cap = capOf(i);
+    const sink = cap?.hollow;
+    const point = cap === undefined ? ringPoint : sink === undefined ? capPoint : (at: Station, theta: number, s: number): V3 => (s < at.wood ? sink(theta, s) : capPoint(at, theta, s));
     const side = (theta: number): V3[] => [...(shed === null ? [barkPoint(stem, i, theta).q] : []), ...columns.map((s) => point(station, theta, s))];
     return [...side(near), ...side(far).reverse().slice(1)];
   };
@@ -273,7 +293,7 @@ function emitHalf(bark: PartBuilder, wood: PartBuilder, stem: Stem, h: number, c
     const s = shareOf[j] ?? 1;
     const streak = fbm3((st[i] as Station).along * 0.7, j * 0.9, h * 5, stem.seed + 9, 2);
     return { shade: s >= 1 ? 0.2 : hollow(i, s) ? 0.12 : 0.58 + 0.12 * streak, tint: -0.005 };
-  }, (i) => ({ ...carry(i), wither: 0.85 }));
+  }, (i) => ({ ...carry(i, 0), wither: 0.85 }));
 }
 
 /** A stem's frame on axis `d`, with `u` as near `toward` as the axis allows. */
@@ -307,29 +327,55 @@ export function buildFallenLog(p: Resolved<typeof fallenLogParams>, ctx: BuildCo
   const length = p.length * k;
   const girth = p.girth * k;
   const seed = Math.floor(r.next() * 1e6);
-  const bend = r.range(-0.05, 0.05) * length;
-  const count = clamp(Math.round(length / (girth * 1.1)) + 1, 6, 16);
-  const radiusAt = (t: number): number => girth * (1.08 - 0.2 * t) * (1 + 0.08 * fbm3(t * 2.2, 0, 0, seed, 2));
-  const centerAt = (t: number): V3 => [(t - 0.5) * length, radiusAt(t) * 0.76, bend * Math.sin(Math.PI * t)];
+  const count = clamp(Math.round(length / (girth * 0.7)) + 1, 8, 24);
+  // A fallen trunk: it tapers from a foot that still flares into the stubs of its root lobes, wanders a little
+  // as it grew, and sags into the turf along its middle.
+  const flare = flareOf(girth, lobesOf(r.fork("lobes")), 0.45, 0.7);
+  const flared = (along: number, theta: number): number => 1 + 0.35 * (flare.at(along, theta) - 1);
+  const flaredMean = (along: number): number => Array.from({ length: 8 }, (_, a) => flared(along, (a / 8) * Math.PI * 2)).reduce((x, y) => x + y, 0) / 8;
+  const radiusAt = (t: number): number => girth * (1.12 - 0.42 * t) * (1 + 0.06 * fbm3(t * 2.2, 0, 0, seed, 2));
+  const bend = (r.next() < 0.5 ? -1 : 1) * r.range(0.04, 0.09) * length;
+  const wiggle = r.next() * Math.PI * 2;
+  const sag = girth * r.range(0.1, 0.2);
+  const centerAt = (t: number): V3 => [
+    (t - 0.5) * length,
+    radiusAt(t) * flaredMean(t * length) * 0.76 - sag * Math.sin(Math.PI * t),
+    bend * Math.sin(Math.PI * t) + 0.25 * bend * Math.sin(3 * Math.PI * t + wiggle),
+  ];
+  // Knots where boughs once grew: low swellings with a dark eye, mostly on its upper side.
+  const knots = Array.from({ length: 2 + Math.round(length / 1.2) }, (_, n) => {
+    const kr = r.fork(`knot${n}`);
+    return { along: kr.range(0.15, 0.95) * length, theta: Math.PI / 2 + kr.range(-1.6, 1.6), size: kr.range(0.7, 1.2) };
+  });
+  const knotAt = (along: number, theta: number): number =>
+    knots.reduce((most, kn) => {
+      const da = (along - kn.along) / (girth * 0.55 * kn.size);
+      const dt = Math.atan2(Math.sin(theta - kn.theta), Math.cos(theta - kn.theta)) / (0.32 * kn.size);
+      return Math.max(most, Math.exp(-da * da - dt * dt));
+    }, 0);
   const looks: Record<typeof p.ends, readonly [End, End]> = { sawn: ["sawn", "sawn"], broken: ["broken", "broken"], "one of each": ["sawn", "broken"] };
   const [butt, crown] = looks[p.ends];
   const tilt = r.range(-0.07, 0.07);
   const tiltAt = r.next() * Math.PI * 2;
   const stations: Station[] = Array.from({ length: count }, (_, i) => {
     const t = i / (count - 1);
+    const along = t * length;
     const d = normalize(sub(centerAt(Math.min(1, t + 0.02)), centerAt(Math.max(0, t - 0.02))));
     const { u, v } = frame(d, cross(UP, d));
     const rad = radiusAt(t);
-    // A lying log settles a little flatter than round, with burls along it.
-    const radius = (theta: number): number => rad * (1 + 0.04 * Math.cos(2 * theta) + 0.05 * fbm3(t * length * 1.3, Math.cos(theta) * 1.2, Math.sin(theta) * 1.2, seed + 21, 2));
+    // A lying log settles a little flatter than round, with burls and knots along it.
+    const radius = (theta: number): number =>
+      rad * flared(along, theta) * (1 + 0.04 * Math.cos(2 * theta) + 0.05 * fbm3(along * 1.3, Math.cos(theta) * 1.2, Math.sin(theta) * 1.2, seed + 21, 2) + 0.12 * knotAt(along, theta));
     const look = i === 0 ? butt : i === count - 1 ? crown : undefined;
     const facing = i === 0 ? -1 : 1;
     const broken = brokenEnd(rad, seed + i, r.next() * Math.PI * 2, 0.8);
     const end = look === undefined ? () => 0 : look === "sawn" ? (theta: number, s: number) => facing * radius(theta) * s * tilt * Math.cos(theta - tiltAt) : (theta: number, s: number) => facing * broken(theta, s);
     const pith = look === "sawn" ? addScaled(scale(u, Math.cos(tiltAt) * rad * 0.07), v, Math.sin(tiltAt) * rad * 0.07) : undefined;
-    return { c: centerAt(t), d, u, v, along: t * length, radius, end, wood: woodOf(p.bark), ...(pith === undefined ? {} : { pith }) };
+    const knot = (theta: number): number => clamp((knotAt(along, theta) - 0.55) / 0.35, 0, 1);
+    return { c: centerAt(t), d, u, v, along, radius, end, wood: woodOf(p.bark), knot, ...(pith === undefined ? {} : { pith }) };
   });
-  const stem: Stem = { stations, roughness: p.bark, seed, furrows: 7, half: 8, split: -Math.PI / 2 };
+  const half = 10;
+  const stem: Stem = { stations, roughness: p.bark, seed, furrows: 7, half, split: -Math.PI / 2 };
   // Each half sags about a line along the ground beyond the other half, so it sinks as it parts.
   const reach = girth * 3.2;
   const carries: Carry[] = [1, -1].map((side, h) => (i) => {
@@ -339,15 +385,26 @@ export function buildFallenLog(p: Resolved<typeof fallenLogParams>, ctx: BuildCo
   const ends = [{ i: 0, facing: -1 as const, look: butt }, { i: count - 1, facing: 1 as const, look: crown }];
   carries.forEach((carry, h) => {
     // Bark weathers off the top first and holds on low down where it lies damp; the lowest never goes.
-    const plates = r.fork(`bark${h}`);
-    const loss = (facing: V3): number => (facing[1] < -0.35 ? 0 : clamp(0.08 + 0.55 * ((facing[1] + 0.35) / 1.35) + 0.24 * (plates.next() - 0.5), 0.04, 0.85));
-    // Plates two segments around and two or three stations long, each column's joints offset from its neighbors'.
-    const rowsOf = (col: number): number[] => {
+    const strips = r.fork(`bark${h}`);
+    const loss = (facing: V3): number => (facing[1] < -0.35 ? 0 : clamp(0.08 + 0.55 * ((facing[1] + 0.35) / 1.35) + 0.24 * (strips.next() - 0.5), 0.04, 0.85));
+    // It peels in strips along the grain, one segment wide and of uneven lengths, their ends staggered.
+    const rowsOf = (): number[] => {
       const cuts = [0];
-      for (let at = col % 2 === 0 ? 2 : 1; at < count - 1; at += 2 + (plates.next() < 0.4 ? 1 : 0)) cuts.push(at);
+      for (let at = 1 + Math.floor(strips.next() * 3); at < count - 1; at += 3 + Math.floor(strips.next() * 4)) cuts.push(at);
       return [...cuts, count - 1];
     };
-    emitHalf(bark, wood, stem, h, carry, { cols: 2, rowsOf, loss }, ends);
+    const ragged = (q: V3): number => 0.07 * fbm3(q[0] * 3.1, q[1] * 3.1, q[2] * 3.1, seed + 51 + h, 2);
+    // Two or three long checks down each half, wandering a column now and then, shallow toward the ends.
+    const checks = Array.from({ length: 2 + (strips.next() < 0.5 ? 1 : 0) }, () => ({ col: 3 + Math.floor(strips.next() * (half * 2 - 6)), phase: strips.next() * 6 }));
+    const check = (i: number, j: number): number => {
+      const fade = clamp(Math.min(i, count - 1 - i) / 2, 0.3, 1);
+      return checks.reduce((most, c) => {
+        const at = c.col + Math.round(1.3 * Math.sin(i * 0.45 + c.phase));
+        const off = Math.abs(j - at);
+        return Math.max(most, fade * (off === 0 ? 1 : off === 1 ? 0.35 : 0));
+      }, 0);
+    };
+    emitHalf(bark, wood, stem, h, carry, { cols: 1, rowsOf, loss, ragged, check }, ends);
   });
 
   // Stubs of boughs toward the crown end, breaking off one by one.
@@ -372,7 +429,7 @@ function emitStub(bark: PartBuilder, wood: PartBuilder, stem: Stem, r: Rand, car
   const dir = normalize(addScaled(out, at.d, r.range(0.5, 1.1)));
   const r0 = rad * r.range(0.2, 0.32);
   const len = rad * r.range(0.8, 1.5) + r0;
-  const ch: Channels = { ...(carries[h] as Carry)(i), loss: 0.1 + 0.7 * r.next(), pivot: base };
+  const ch: Channels = { ...(carries[h] as Carry)(i, 0), loss: 0.1 + 0.7 * r.next(), pivot: base };
   const { u, v } = frame(dir, at.d);
   const radial = 6;
   const ringAt = (f: number): V3[] =>

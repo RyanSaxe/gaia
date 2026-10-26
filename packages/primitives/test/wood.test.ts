@@ -26,27 +26,29 @@ describe("fallen log", () => {
 
   it("sheds its bark from the top first, and keeps some low down", () => {
     const bark = partOf(log("broken"), "bark");
-    const healthy = applyVitality(bark, 1).positions;
-    const failing = applyVitality(bark, 0.3).positions;
-    const moved = (above: boolean): number => {
-      let n = 0;
-      let all = 0;
-      for (let i = 0; i < bark.shade.length; i++) {
-        const up = (bark.normals[i * 3 + 1] as number) > 0.6;
-        if (up !== above || (bark.normals[i * 3 + 1] as number) < -0.5) continue;
-        all++;
-        if (Math.hypot(...[0, 1, 2].map((k) => (healthy[i * 3 + k] as number) - (failing[i * 3 + k] as number))) > 0.05) n++;
+    // Bark that has gone has shrunk to nothing; sagging keeps a surface's size.
+    const area = (positions: Float32Array, facing: (ny: number) => boolean): number => {
+      let sum = 0;
+      for (let t = 0; t < bark.indices.length; t += 3) {
+        const [a, b, c] = [0, 1, 2].map((k) => bark.indices[t + k] as number) as [number, number, number];
+        if (!facing(bark.normals[a * 3 + 1] as number)) continue;
+        const e = [0, 1, 2].map((k) => (positions[b * 3 + k] as number) - (positions[a * 3 + k] as number));
+        const f = [0, 1, 2].map((k) => (positions[c * 3 + k] as number) - (positions[a * 3 + k] as number));
+        sum += Math.hypot((e[1] as number) * (f[2] as number) - (e[2] as number) * (f[1] as number), (e[2] as number) * (f[0] as number) - (e[0] as number) * (f[2] as number), (e[0] as number) * (f[1] as number) - (e[1] as number) * (f[0] as number));
       }
-      return n / Math.max(1, all);
+      return sum;
     };
-    expect(moved(true)).toBeGreaterThan(moved(false));
-    expect(bark.channels.loss.some((l) => l === 0)).toBe(true);
+    const kept = (facing: (ny: number) => boolean): number => area(applyVitality(bark, 0.3).positions, facing) / area(applyVitality(bark, 1).positions, facing);
+    const top = (ny: number): boolean => ny > 0.6;
+    const low = (ny: number): boolean => ny < -0.5;
+    expect(kept(top)).toBeLessThan(0.5);
+    expect(kept(low)).toBeGreaterThan(0.9);
   });
 
   it("shows rings on a sawn face around a lighter heartwood", () => {
     const wood = partOf(log("sawn"), "wood");
     // The cut faces look along the log, which lies along x.
-    const face = Array.from({ length: wood.shade.length }, (_, i) => i).filter((i) => Math.abs(wood.normals[i * 3] as number) > 0.95);
+    const face = Array.from({ length: wood.shade.length }, (_, i) => i).filter((i) => Math.abs(wood.normals[i * 3] as number) > 0.85);
     const shades = face.map((i) => wood.shade[i] as number);
     expect(new Set(shades.map((s) => s.toFixed(2))).size).toBeGreaterThan(4);
     // Each face's middle, by the end it is at.
@@ -57,8 +59,9 @@ describe("fallen log", () => {
       return on.reduce((sum, i) => sum + at(i, k), 0) / Math.max(1, on.length);
     };
     const r = (i: number): number => Math.hypot(at(i, 1) - middle(end(i), 1), at(i, 2) - middle(end(i), 2));
-    const near = face.filter((i) => r(i) < 0.12).map((i) => wood.shade[i] as number);
-    const rim = face.filter((i) => r(i) > 0.2).map((i) => wood.shade[i] as number);
+    const most = (side: number): number => face.filter((i) => end(i) === side).reduce((m, i) => Math.max(m, r(i)), 0);
+    const near = face.filter((i) => r(i) < 0.3 * most(end(i))).map((i) => wood.shade[i] as number);
+    const rim = face.filter((i) => r(i) > 0.75 * most(end(i))).map((i) => wood.shade[i] as number);
     const mean = (a: number[]): number => a.reduce((s, x) => s + x, 0) / Math.max(1, a.length);
     expect(mean(near)).toBeGreaterThan(mean(rim));
   });
