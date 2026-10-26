@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { type BuildingPlan, Library, blueprintOf, rand } from "@gaia/schema";
-import { BIOME_PRIMITIVES, PRIMITIVES, RELIEF_PRIMITIVES, standingStones } from "@gaia/primitives";
+import { BIOME_PRIMITIVES, PRIMITIVES, RELIEF_PRIMITIVES, rockArch, standingStones } from "@gaia/primitives";
 import { structure } from "@gaia/kinds";
 import { buildSlots } from "@gaia/realize";
 import {
@@ -267,6 +267,22 @@ describe("solid pieces of a built thing", () => {
     expect(walk.state).toBe("arrived");
     // A king stone at the middle blocks it.
     expect(clearanceAt(solidsOf(piecesShapes(ring(true, "a tall king stone").parts, at)), at.x, at.z)).toBeLessThan(0);
+  });
+
+  it("lets a walker pass under a rock arch along the way through it, between the feet that stop it", () => {
+    for (const form of ["a doorway", "a gate", "a great span"] as const) {
+      const arch = rockArch.build({ form, thickness: 1.35, stone: 1 }, { rand: rand(5), facts: {} }, null);
+      const solids = solidsOf(piecesShapes(arch.parts, at));
+      // The way runs along the arch's own z, which the world turns toward its trail: (sin yaw, cos yaw) in the world.
+      const [wx, wz] = [Math.sin(at.yaw), Math.cos(at.yaw)];
+      const walk = tapWalk(solids, { x: at.x - wx * 14, z: at.z - wz * 14 }, { x: at.x + wx * 14, z: at.z + wz * 14 });
+      expect(walk.state, form).toBe("arrived");
+      // Straight through under the span, never round a foot.
+      for (const q of walk.path) expect(Math.abs((q.x - at.x) * wz - (q.z - at.z) * wx), form).toBeLessThan(1);
+      // Each foot, across the way at the opening's sides, stops a walker.
+      const foot = { "a doorway": 4, "a gate": 6.5, "a great span": 11 }[form];
+      for (const side of [-1, 1]) expect(clearanceAt(solids, at.x + side * wz * foot, at.z - side * wx * foot), form).toBeLessThan(0);
+    }
   });
 });
 

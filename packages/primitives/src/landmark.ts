@@ -5,6 +5,7 @@
 // ./geometry/landmark/.
 
 import { primitive, t } from "@gaia/schema";
+import { buildRockArch } from "./geometry/landmark/arch.ts";
 import { buildStandingStones } from "./geometry/landmark/stones.ts";
 import { buildLookoutTower } from "./geometry/landmark/tower.ts";
 import { buildGreatTree } from "./geometry/landmark/tree.ts";
@@ -118,4 +119,30 @@ export const windmill = primitive({
   build: (p, ctx) => buildWindmill(p, ctx),
 });
 
-export const LANDMARK_PRIMITIVES = [lookoutTower, standingStones, greatTree, windmill];
+/**
+ * What no place has yet, so a landmark that needs it is never offered to Jev
+ * (`meets`): it builds, draws and is tested like any other, but no world's
+ * landmark questions change until it is offered.
+ */
+export const UNOFFERED = "a landmark not yet offered";
+
+export const rockArchParams = {
+  form: t.choice("The opening the stone leaps over", {
+    "a doorway": "A tall, narrow doorway through a fin of rock, a way through for one or two at a time",
+    "a gate": "A broad gate of stone, its opening nearly as wide as it is high, a road could pass under it",
+    "a great span": "A long, high span flung across open ground, thin against the sky, the land itself bridging the way",
+  }),
+  thickness: t.scale("How heavy its stone is", { "a slender ribbon of stone": 0.7, "stout and sure": 1, "massive and heavy": 1.35 }),
+  stone: t.scale("How the weather has shaped it", { "worn smooth by wind and rain": 0.15, "sharply cut along its joints": 1 }),
+};
+
+export const rockArch = primitive({
+  id: "rock-arch@1",
+  role: "Landmark",
+  doc: "An arch of living rock the land made: a doorway, a gate or a great span over a way that everything passes under, for code that feels like a threshold, the way into everything beyond it. In decline its stacks lean apart and a crack opens across the span; the span falls and lies broken in the grass, leaving two stacks standing either side of the way.",
+  params: rockArchParams,
+  needs: [UNOFFERED],
+  build: (p, ctx) => buildRockArch(p, ctx),
+});
+
+export const LANDMARK_PRIMITIVES = [lookoutTower, standingStones, greatTree, windmill, rockArch];

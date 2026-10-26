@@ -23,6 +23,8 @@ import {
   granaryParams,
   greatTreeParams,
   lookoutTowerParams,
+  ROCK_ARCH_FORMS,
+  rockArchParams,
   standingStonesParams,
   thatchParams,
   tilesParams,
@@ -1404,6 +1406,7 @@ export const INKS: Readonly<Record<string, Ink>> = {
   "standing-stones@1": landmark(standingStonesParams, { draw: (pen, look, p, seed) => drawStones(pen, look, p, seed) }),
   "great-tree@1": landmark(greatTreeParams, { draw: (pen, look, p, seed) => drawGreatTree(pen, look, p, seed) }),
   "windmill@1": landmark(windmillParams, { draw: (pen, look, p) => drawWindmill(pen, look, p) }),
+  "rock-arch@1": landmark(rockArchParams, { draw: (pen, look, p, seed) => drawRockArch(pen, look, p, seed) }),
 };
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -2515,6 +2518,55 @@ function drawStones(pen: Pen, look: Look, p: Resolved<typeof standingStonesParam
   things.sort((a, b) => b.depth - a.depth).forEach((t) => t.draw());
   const spread = Math.max(h, ...feet.map(([X, Z]) => Math.hypot(X, Z)));
   tufts(pen, [[-spread - 1, -1.6], [spread * 0.6, -spread * 0.7], [0.4, -spread - 1.2]], w);
+}
+
+/**
+ * A rock arch from its form and thickness: the ring's face toward the viewer over its far face in shade. As it fails
+ * the crack opens at its crown, then the span is gone and two stacks stand over its rubble, crumbling lower at the last.
+ */
+function drawRockArch(pen: Pen, look: Look, p: Resolved<typeof rockArchParams>, seed: number): void {
+  const w = look.w;
+  const f = ROCK_ARCH_FORMS[p.form];
+  const [half, rise, head] = [f.half * LK, f.rise * LK, f.head * LK];
+  const straight = Math.max(0, rise - head);
+  const ring = f.ring * p.thickness * LK;
+  const depth = f.depth * p.thickness * LK * 0.5;
+  const stone = worn(look.hue("stone", "#c4b498"), w);
+  const crack = ease(w.v, 0.8, 0.66);
+  const fallen = ease(w.v, 0.4, 0.3) > 0.5;
+  const crumbled = ease(w.v, 0.2, 0.1) > 0.5;
+  // The opening's edge from foot to foot, and the ring's outside, thicker low down.
+  const n = 24;
+  const inner: [number, number][] = [[-half, 0], ...Array.from({ length: n + 1 }, (_, k): [number, number] => [half * Math.cos(Math.PI * (1 - k / n)), straight + head * Math.sin(Math.PI * (1 - k / n))]), [half, 0]];
+  const outer = inner.map(([x, h], i): [number, number] => {
+    const t = ring * (1.25 - 0.4 * Math.min(1, h / rise));
+    const k = i - 1;
+    const [nx, nh] = k < 0 || k > n ? [Math.sign(x), 0] : [Math.cos(Math.PI * (1 - k / n)) / half, Math.sin(Math.PI * (1 - k / n)) / head];
+    const l = Math.hypot(nx, nh) || 1;
+    return [x + (nx / l) * t, h + (nh / l) * t];
+  });
+  const piece = (from: number, to: number, shift: number): void => {
+    const loop = (Z: number): P3[] => [...outer.slice(from, to + 1).map(([x, h]): P3 => [x + shift, Z, h]), ...inner.slice(from, to + 1).reverse().map(([x, h]): P3 => [x + shift, Z, h])];
+    face(pen, loop(depth), shaded(stone, 0.35), 0.8);
+    face(pen, loop(-depth), stone);
+  };
+  const foot = half + ring * 1.25;
+  castShadow(pen, [[-foot, 0, rise], [foot, 0, rise], [-foot * 0.6, 0, rise], [foot * 0.6, 0, rise]], 0.8);
+  const mid = Math.floor(inner.length / 2);
+  if (crack < 0.05) piece(0, inner.length - 1, 0);
+  else if (!fallen) {
+    piece(0, mid, -crack * 0.5);
+    piece(mid, inner.length - 1, crack * 0.5);
+  } else {
+    // The stacks stand to the haunches, then to halfway.
+    const stand = (crumbled ? 0.38 : 0.76) * rise;
+    const left = Math.max(1, inner.findIndex(([, h], i) => i > 0 && h >= stand));
+    const right = Math.min(inner.length - 2, inner.length - 1 - [...inner].reverse().findIndex(([, h], i) => i > 0 && h >= stand));
+    piece(0, left, -crack * 0.5);
+    piece(right, inner.length - 1, crack * 0.5);
+    rubble(pen, 0, -depth * 0.5, 2.2 + half * 0.3, seed + 3, stone);
+  }
+  tufts(pen, [[-foot - 0.8, -1.2], [foot + 0.6, -1]], w);
 }
 
 /** How each great tree grows, at "vast": its trunk, its crown as lobes (east, up, radius in units), its great limbs, and its green. */
