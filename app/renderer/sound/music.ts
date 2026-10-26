@@ -22,12 +22,20 @@ export type Phrase = (typeof PHRASES)[number];
 /** When a phrase suits: by day on thriving land, at night, or where the land has failed. */
 export type Moment = "day" | "night" | "ruin";
 
-/** The score's recordings, decoded while they may be heard: the piece's parts, all one length so they loop together, and the phrases. */
+/** A chunk of one of the piece's parts: its part, and its place in the piece, from 0. */
+export type Chunk = `${Stem}:${number}`;
+
+/**
+ * The score's recordings: the piece's parts streamed a chunk at a time, every
+ * part cut at the same bars so they loop together, and the phrases, each
+ * decoded while it plays.
+ */
 export interface MusicBank {
-  readonly stems: Shelf<Stem>;
+  readonly chunks: Shelf<Chunk>;
+  /** How many chunks make the piece, each one's length, and the music decoded either side of it that is not played, seconds. */
+  readonly chunk: { readonly count: number; readonly seconds: number; readonly margin: number };
   readonly phrases: Shelf<Phrase>;
-  /** How long the piece is, seconds, and the loudness of the whole piece (bed and melody together) and of the phrases, LUFS, so both play at the Hush mix's -21. */
-  readonly length: number;
+  /** The loudness of the whole piece (bed and melody together) and of the phrases, LUFS, so both play at the Hush mix's -21. */
   readonly lufs: { readonly piece: number; readonly phrases: number };
 }
 
@@ -47,6 +55,13 @@ const SWELL = 4;
 const MINOR_LIFT = 2;
 /** A part not wanted this long stops and lets its recording go, seconds. */
 const RELEASE = 60;
+/**
+ * A chunk is asked for this long before it plays, and laid in once decoded,
+ * seconds. One that joins too late to its own chunk, with less than
+ * `JOIN_BEFORE` of it left, waits for the next.
+ */
+const AHEAD = 4;
+const JOIN_BEFORE = 1;
 /** Phrases: how long after the world opens the first one comes, and the rest between one's end and the next, seconds. */
 const REST = { first: 6, between: [45, 100] } as const;
 
@@ -88,16 +103,58 @@ export function createMusic(ctx: BaseAudioContext, bank: MusicBank, out: AudioNo
     };
   }
 
-  // The piece's parts loop together: a part that joins late starts where the others have got to.
+  // The piece's parts play chunk after chunk, every part's chunk n from start + n chunks, so they stay together; a part
+  // that joins late starts partway into the chunk the others are playing.
   const base = db(HUSH.music - bank.lufs.piece);
+  const { count, seconds, margin } = bank.chunk;
+  interface Part {
+    readonly gain: GainNode;
+    wantedAt: number;
+    /** The next chunk to lay in, counted from the start, and the earliest it may start; null while the part is still. */
+    next: number | null;
+    from: number;
+    readonly playing: Set<AudioBufferSourceNode>;
+  }
   const parts = Object.fromEntries(
     STEMS.map((stem) => {
       const gain = ctx.createGain();
       gain.gain.setValueAtTime(0, start);
       gain.connect(out);
-      return [stem, { gain, source: null as AudioBufferSourceNode | null, wantedAt: start }];
+      return [stem, { gain, wantedAt: start, next: null, from: start, playing: new Set() } satisfies Part];
     }),
-  ) as Record<Stem, { gain: GainNode; source: AudioBufferSourceNode | null; wantedAt: number }>;
+  ) as Record<Stem, Part>;
+  /** Lays in each of the part's chunks due to start within `AHEAD` of `t` that has been decoded. */
+  const feed = (t: number, stem: Stem, part: Part): void => {
+    while (part.next !== null) {
+      const n = part.next;
+      const begins = start + n * seconds;
+      const at = Math.max(begins, part.from);
+      if (at > t + AHEAD) return;
+      const name: Chunk = `${stem}:${n % count}`;
+      const buffer = bank.chunks.take(name);
+      if (buffer === null) {
+        // Still decoding: a chunk already under way is joined partway once it is ready, or skipped near its end.
+        if (at <= t && begins + seconds - t < JOIN_BEFORE) {
+          part.next = n + 1;
+          part.from = begins + seconds;
+        } else if (at <= t) part.from = t;
+        return;
+      }
+      const into = at - begins;
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(part.gain);
+      source.start(at, margin + into, seconds - into);
+      source.onended = () => {
+        part.playing.delete(source);
+        source.disconnect();
+        bank.chunks.put(name);
+      };
+      part.playing.add(source);
+      part.next = n + 1;
+      part.from = begins + seconds;
+    }
+  };
   // Layers: whether the theme plays this time round, decided as each time round begins.
   let round = -1;
   let theme = 1;
@@ -106,22 +163,15 @@ export function createMusic(ctx: BaseAudioContext, bank: MusicBank, out: AudioNo
     const part = parts[stem];
     if (wanted) {
       part.wantedAt = t;
-      if (part.source === null) {
-        const buffer = bank.stems.take(stem);
-        if (buffer !== null) {
-          part.source = ctx.createBufferSource();
-          part.source.buffer = buffer;
-          part.source.loop = true;
-          part.source.connect(part.gain);
-          part.source.start(t, (((t - start) % bank.length) + bank.length) % bank.length);
-        }
+      if (part.next === null) {
+        part.next = Math.max(0, Math.floor((t - start) / seconds));
+        part.from = Math.max(t, start);
       }
-    } else if (part.source !== null && t - part.wantedAt > RELEASE) {
-      part.source.stop(t);
-      part.source.disconnect();
-      part.source = null;
-      bank.stems.put(stem);
+    } else if (part.next !== null && t - part.wantedAt > RELEASE) {
+      for (const source of part.playing) source.stop(t);
+      part.next = null;
     }
+    feed(t, stem, part);
     part.gain.gain.setTargetAtTime(v * base, t, SWELL);
   };
   return {
@@ -129,7 +179,7 @@ export function createMusic(ctx: BaseAudioContext, bank: MusicBank, out: AudioNo
       const night = smooth(0.35, 0.75, ear.night);
       const ruin = plan === "layers" ? failing(ear.decline) : 0;
       if (plan === "layers") {
-        const now = Math.floor((t - start) / bank.length);
+        const now = Math.floor((t - start) / (count * seconds));
         // The theme plays the first time round, then two times in three.
         if (now !== round) theme = now <= 0 || random() < 0.67 ? 1 : 0;
         round = now;

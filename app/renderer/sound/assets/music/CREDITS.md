@@ -17,5 +17,7 @@ free for any use, with no attribution required.
 The instruments are played by [sfizz](https://github.com/sfztools/sfizz), the SFZ sample player (BSD 2-Clause). It
 is a tool, and none of its code is in the audio.
 
-`bed`, `melody`, `shimmer` and `minor` are four stems of one 32-bar piece that loop together; the `phrase-*` files
-are short standalone pieces on the same theme. `manifest.json` gives each file's length, loudness and peak.
+`bed`, `melody`, `shimmer` and `minor` are four stems of one 32-bar piece that loop together. Each holds eight 4-bar
+chunks laid end to end, each chunk its own Ogg Opus stream with 0.1 s of the music either side of it, so the game can
+decode one chunk at a time and join them without a seam. The `phrase-*` files are short standalone pieces on the same
+theme. `manifest.json` gives each file's length, loudness and peak, and where each chunk lies.
