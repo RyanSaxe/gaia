@@ -335,9 +335,10 @@ describe("a world laid out from code", () => {
     // Each stands on its file's patch, on a plot of its own.
     for (const s of standing) expect(placeAt(world, s.x, s.z).file?.path).toBe(math);
     expect(new Set(standing.map((s) => `${s.x},${s.z}`)).size).toBe(standing.length);
-    // The patch holds room for its definitions: with them, math.ts is a larger share of the land than with the facts' two.
+    // The patch holds room for its definitions: with them, math.ts is a larger share of the land than without them.
     const share = (w: typeof world) => w.patches.find((p) => p.path === math)!.ground / w.patches.reduce((n, p) => n + p.ground, 0);
-    expect(share(world)).toBeGreaterThan(share(layoutWorld(facts(), judged)));
+    const bare: CodeGraph = { ...graph, nodes: graph.nodes.filter((n) => n.kind !== "def") };
+    expect(share(world)).toBeGreaterThan(share(layoutWorld(facts(), judged, bare)));
     // The land is known before Jev answers, with the graph too.
     expect(landOf(facts(), graph).cells).toEqual(world.cells);
     // The journal has one entry for every directory below the root, every thing standing, every file, every file with
@@ -411,19 +412,32 @@ describe("a world laid out from code", () => {
     }
   });
 
-  it("moves little when a little code changes", async () => {
-    const before = layoutWorld(facts(), await composed(facts()));
-    const grown = facts();
-    const changed: CodeFacts = { ...grown, files: grown.files.map((f) => (f.path === "packages/app/src/ui/menu.ts" ? { ...f, lines: f.lines + 12 } : f)) };
-    const after = layoutWorld(changed, await composed(changed));
-    const moved = before.patches.map((p) => {
-      const q = after.patches.find((o) => o.path === p.path)!;
-      return Math.hypot(p.x - q.x, p.z - q.z);
-    });
-    // Most patches stay within a few meters; none jumps across the world.
-    moved.sort((a, b) => a - b);
-    expect(moved[Math.floor(moved.length / 2)]!).toBeLessThan(6);
-    expect(moved[moved.length - 1]!).toBeLessThan(before.size / 3);
+  it("holds still under small edits: one that crosses no rung moves nothing, and a new file moves only its own folder", async () => {
+    const judged = await composed(facts());
+    const before = layoutWorld(facts(), judged);
+    const moved = (after: typeof before): string[] =>
+      before.patches.filter((p) => {
+        const q = after.patches.find((o) => o.path === p.path);
+        return q !== undefined && Math.hypot(p.x - q.x, p.z - q.z) > 0.5;
+      }).map((p) => p.path);
+    const menu = "packages/app/src/ui/menu.ts";
+    const grow = (lines: number): CodeFacts => ({ ...facts(), files: facts().files.map((f) => (f.path === menu ? { ...f, lines: f.lines + lines } : f)) });
+    // A few lines more leave menu.ts's ground on its rung: the land is exactly as it was.
+    const edited = layoutWorld(grow(3), judged);
+    expect(edited.size).toBe(before.size);
+    const place = (w: typeof before) => w.patches.map(({ path, x, z, ground }) => ({ path, x, z, ground }));
+    expect(place(edited)).toEqual(place(before));
+    expect(edited.cells).toEqual(before.cells);
+    // A small new file re-divides its own folder, which stays on its rung. Every patch elsewhere stays, but one beside
+    // the folder may be nudged by a step as the folder's new borders are redrawn (`sitesOf`).
+    const added: CodeFacts = { ...facts(), files: [...facts().files, file("packages/app/src/ui/toolbar.ts", 20)] };
+    const after = layoutWorld(added, judged);
+    const outside = moved(after).filter((p) => !p.startsWith("packages/app/src/ui/"));
+    expect(outside.length).toBeLessThanOrEqual(1);
+    for (const path of outside) {
+      const [a, b] = [before, after].map((w) => w.patches.find((p) => p.path === path)!);
+      expect(Math.hypot(a!.x - b!.x, a!.z - b!.z)).toBeLessThanOrEqual(3);
+    }
   });
 
   it("lets Jev choose each symbol's form and each area's water, and chooses trails that join every connected part first", async () => {

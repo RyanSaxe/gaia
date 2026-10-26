@@ -35,7 +35,7 @@ import {
 } from "@gaia/schema";
 import { LAND_ASPECT, type LandSite, landArea } from "@gaia/terrain";
 import { type StandingDef, definitionsOf } from "./definitions.ts";
-import { type LandNode, divideLand, dividePlots } from "./land.ts";
+import { type LandNode, divideLand, dividePlots, nearestRung, rung } from "./land.ts";
 import { MODEL } from "./planner.ts";
 import { type Composed, type Composing, areaState, composeThing, composeThings, composingState, definitionState, fileState, repositoryState, share, trailState, trim } from "./compose.ts";
 
@@ -262,7 +262,7 @@ export const LAYOUT = {
   lotReach: { building: 7, landmark: 6 },
   /** The smallest world, meters across. */
   minSize: 260,
-  /** A directory has its own land when it holds this share of the code's ground, not counting its own lands. */
+  /** A directory has its own land when the lines it keeps reach the rung nearest this share of all the code's lines (`regionPaths`). */
   regionShare: 0.03,
   maxRegions: 24,
   /**
@@ -318,11 +318,13 @@ function linesUnder(dirs: Map<string, Dir>, path: string): number {
 /**
  * The directories with land of their own. Bottom up, a directory keeps the
  * lines of its subdirectories that have no land of their own; it has its own
- * land when those reach the threshold. The root always does.
+ * land when those reach the threshold. The root always does. The threshold is
+ * the rung nearest the code's share (`nearestRung`), so it holds still until
+ * the whole code's lines cross a rung, and a directory gains or loses its land
+ * only when its own lines cross it.
  */
 function regionPaths(dirs: Map<string, Dir>): string[] {
-  const total = linesUnder(dirs, "");
-  let threshold = total * LAYOUT.regionShare;
+  let threshold = nearestRung(linesUnder(dirs, "") * LAYOUT.regionShare);
   for (;;) {
     const regions: string[] = [];
     const weigh = (path: string): number => {
@@ -336,7 +338,8 @@ function regionPaths(dirs: Map<string, Dir>): string[] {
     };
     weigh("");
     if (regions.length <= LAYOUT.maxRegions) return regions.sort();
-    threshold *= 1.25;
+    // The next rung up.
+    threshold = rung(threshold * 1.1);
   }
 }
 
@@ -994,8 +997,9 @@ function divisionOf(facts: CodeFacts, graph: CodeGraph | undefined, aspect: numb
   const defs = definitionsOf(facts, graph);
   const lots = new Map(facts.entities.map((e) => [e.path, LAYOUT.lot]));
   const total = facts.files.reduce((n, f) => n + groundOfFile(f, defs.get(f.path)?.length ?? 0), 0) + lots.size * LAYOUT.lot;
-  // The land's width, so its rounded rectangle holds every square meter asked for.
-  const size = Math.max(LAYOUT.minSize, Math.ceil(Math.sqrt(total / landArea({ size: 1, aspect })) / 10) * 10);
+  // The land's width, so its rounded rectangle holds the ground asked for, rounded up to its rung: the land keeps its
+  // size until the code grows or shrinks past one, and then every part grows or shrinks in proportion.
+  const size = Math.max(LAYOUT.minSize, Math.ceil(Math.sqrt(rung(total) / landArea({ size: 1, aspect })) / 10) * 10);
   const made = { dirs, size, aspect, land: divideLand(landTree(dirs, lots, defs), { size, aspect }), defs };
   forModel.set(key, made);
   return made;
