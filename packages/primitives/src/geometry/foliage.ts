@@ -193,7 +193,7 @@ interface Lobe {
 }
 
 /** Three to five lobes spaced around the trunk, each turned and sized a little differently. */
-function lobesOf(r: Rand): Lobe[] {
+export function lobesOf(r: Rand): Lobe[] {
   const count = 3 + Math.floor(r.next() * 3);
   const phase = r.next() * Math.PI * 2;
   return Array.from({ length: count }, (_, k) => ({ angle: phase + ((k + r.range(-0.22, 0.22)) / count) * Math.PI * 2, strength: r.range(0.7, 1.15) }));
@@ -209,8 +209,9 @@ function lobeAt(lobes: readonly Lobe[], theta: number, width: number): number {
   return most;
 }
 
-function flareOf(trunkRadius: number, lobes: readonly Lobe[], lift: number): Flare {
-  const reach = trunkRadius * 1.2;
+/** `lift` is how far the lobes reach out at the ground; `rise`, how high up the trunk the flare climbs, 1 for a tree's. */
+export function flareOf(trunkRadius: number, lobes: readonly Lobe[], lift: number, rise = 1): Flare {
+  const reach = trunkRadius * 1.2 * rise;
   const fillet = trunkRadius * 0.16;
   // Broad lobes: each spans about a third of the gap to its neighbors on either side.
   const width = (Math.PI * 2) / lobes.length / 3;
@@ -220,6 +221,22 @@ function flareOf(trunkRadius: number, lobes: readonly Lobe[], lift: number): Fla
     return 1 + 0.35 * Math.exp(-h / reach) + 0.25 * Math.exp(-h / fillet) + lift * l * Math.exp(-h / (reach * 1.6));
   };
   return { at, rings: [...FLARE_RINGS, 5.5].map((k) => k * trunkRadius) };
+}
+
+/**
+ * The bark's ridges and shade at angle `theta` around a ring centered at
+ * `c`: one rule for every trunk, limb, stump and fallen log, so wood that
+ * lies on the ground reads as fallen from the trees around it. The ridges
+ * turn by `twist` (meters along the stem) and the bark darkens toward the
+ * soil below `height`. `bump` is in the ring's radii.
+ */
+export function barkAt(roughness: number, seed: number, furrows: number, c: Vec3, theta: number, twist: number, height: number): { bump: number; shade: number } {
+  const wobble = fbm3(c[0] * 1.7 + Math.cos(theta), c[1] * 0.8, c[2] * 1.7 + Math.sin(theta), seed, 2);
+  const furrow = 0.5 + 0.5 * Math.sin(theta * furrows + wobble * 3 + twist * 0.6);
+  const bump = roughness * (0.14 * (furrow - 0.5) + 0.05 * wobble);
+  const ground = clamp(height / 1.2, 0, 1);
+  const shade = (0.5 + 0.28 * (1 - roughness * 0.6) + 0.22 * furrow * (0.3 + roughness)) * (0.82 + 0.18 * ground) + 0.06 * wobble;
+  return { bump, shade: clamp(shade, 0, 1) };
 }
 
 /**
@@ -324,14 +341,10 @@ export function buildBark(p: Resolved<typeof barkParams>, ctx: BuildContext, ske
         let n = normalize(cross(sub(smooth(ring, theta + step * 0.5), smooth(ring, theta - step * 0.5)), sub(smooth(hi, theta), smooth(lo, theta))));
         if (dot(n, outward) < 0) n = scale(n, -1);
         const c = ring.center;
-        const wobble = fbm3(c[0] * 1.7 + Math.cos(theta), c[1] * 0.8, c[2] * 1.7 + Math.sin(theta), seed, 2);
-        const furrow = 0.5 + 0.5 * Math.sin(theta * furrows + wobble * 3 + c[1] * 0.6);
-        const bump = p.roughness * (0.14 * (furrow - 0.5) + 0.05 * wobble);
+        const { bump, shade } = barkAt(p.roughness, seed, furrows, c, theta, c[1], c[1]);
         const q = addScaled(smooth(ring, theta), outward, ring.radius * bump);
-        const ground = clamp(c[1] / 1.2, 0, 1);
-        const shade = (0.5 + 0.28 * (1 - p.roughness * 0.6) + 0.22 * furrow * (0.3 + p.roughness)) * (0.82 + 0.18 * ground) + 0.06 * wobble;
         const b = boughs.at(ring.limb, q);
-        out.vertex(q, n, clamp(shade, 0, 1), { loss: 0, droop: b.droop, wither, glow: 0, pivot: b.bough, bough: b.bough });
+        out.vertex(q, n, shade, { loss: 0, droop: b.droop, wither, glow: 0, pivot: b.bough, bough: b.bough });
       }
     });
     // Wound counter-clockwise seen from outside, so the bark's outer face is its front face.
