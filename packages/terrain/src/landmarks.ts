@@ -88,10 +88,22 @@ export function findLandmarkSite(t: Terrain, region: number, radius: number, avo
   if (best !== null) return { x: best.x, z: best.z, y: levelDisc(t, best.x, best.z, radius), radius, region };
   if (within === null) return null;
   // A lot with no such spot stands it at its middle, unless something already stands there: then on the lot widened
-  // 6 m at a time.
-  const taken = avoid.some((o) => Math.hypot(o.x - within.x, o.z - within.z) < o.radius + radius);
-  if (taken && within.radius < 60) return findLandmarkSite(t, region, radius, avoid, { ...within, radius: within.radius + 6 });
-  return { x: within.x, z: within.z, y: levelDisc(t, within.x, within.z, radius), radius, region };
+  // 6 m at a time, and at last on the free ground nearest its middle, however steep or near the rim.
+  const taken = (x: number, z: number): boolean => avoid.some((o) => Math.hypot(o.x - x, o.z - z) < o.radius + radius);
+  if (taken(within.x, within.z) && within.radius < 60) return findLandmarkSite(t, region, radius, avoid, { ...within, radius: within.radius + 6 });
+  let at = { x: within.x, z: within.z };
+  if (taken(at.x, at.z)) {
+    let near = Infinity;
+    for (let z = within.z - within.radius; z <= within.z + within.radius; z++) {
+      for (let x = within.x - within.radius; x <= within.x + within.radius; x++) {
+        const d = Math.hypot(x - within.x, z - within.z);
+        if (d >= near || d > within.radius || !withinLand(t.spec, x, z, radius) || taken(x, z)) continue;
+        near = d;
+        at = { x, z };
+      }
+    }
+  }
+  return { x: at.x, z: at.z, y: levelDisc(t, at.x, at.z, radius), radius, region };
 }
 
 /** Levels a disc of ground to its mean height, blending back to the land; returns that height. */
