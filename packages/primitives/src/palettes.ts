@@ -29,7 +29,7 @@ const HEALTHY: Record<PaletteFamily, { bark: number; leaf: number; bloom: number
   "silver-birch": { bark: 0xd8d4c8, leaf: 0xa8cf3f, bloom: 0xf6e7a1, fruit: 0xdcc24e, berry: 0x321e3a },
   "desert-sage": { bark: 0x9b7a4c, leaf: 0x93a58a, bloom: 0xe0b47a, fruit: 0xd89356, berry: 0x3c2034 },
   "lantern-dusk": { bark: 0x3d3442, leaf: 0x2a6f73, bloom: 0xffc65c, fruit: 0xeea544, berry: 0x2e1c40 },
-  "bluebell-wood": { bark: 0x6a5e58, leaf: 0x5f9a5a, bloom: 0x8088dc, fruit: 0x8a3a5e, berry: 0x2a2450 },
+  "bluebell-wood": { bark: 0x6a5e58, leaf: 0x5f9a5a, bloom: 0x8088dc, fruit: 0x8a3a5e, berry: 0x5266a8 },
 };
 
 /**
