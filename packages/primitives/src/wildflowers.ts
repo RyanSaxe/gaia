@@ -1,10 +1,12 @@
 // Drift primitives: the low plants of the grass, one species shape per
 // drift. Petals take the palette's bloom swatch, stems, leaves and fern
-// fronds its stem swatch, and open faces its eye swatch. Geometry lives in
-// ./geometry/wildflowers.ts and ./geometry/ferns.ts.
+// fronds its stem swatch, and open faces its eye swatch; mushrooms take its
+// cap and stalk swatches. Geometry lives in ./geometry/wildflowers.ts,
+// ./geometry/ferns.ts and ./geometry/mushrooms.ts.
 
 import { primitive, t } from "@gaia/schema";
 import { buildFerns } from "./geometry/ferns.ts";
+import { buildMushrooms } from "./geometry/mushrooms.ts";
 import { buildDrift } from "./geometry/wildflowers.ts";
 
 export const driftParams = {
@@ -59,4 +61,27 @@ export const ferns = primitive({
   build: (p, ctx) => buildFerns(p, ctx),
 });
 
-export const WILDFLOWER_PRIMITIVES = [daisies, cups, bells, spikes, ferns];
+export const mushroomParams = {
+  grouping: t.choice("How the mushrooms grow together", {
+    ring: "A ring of caps round an empty middle, like a fairy ring",
+    cluster: "A tight huddle springing from one spot, the caps leaning out from each other",
+    scatter: "A few caps dotted loosely about, each keeping its distance",
+  }),
+  cap: t.choice("The shape of each cap", {
+    domed: "Round domed caps, like a toadstool's",
+    flat: "Broad caps spread nearly flat, like a parasol",
+    pointed: "Slender pointed caps, like a pixie's hat",
+  }),
+  // Even the lowest stand clear of lush grass (0.42 m, `ground-cover@1`); their young buttons hide in it.
+  height: t.scale("How tall the mushrooms stand", { "ankle-high": 0.44, "shin-high": 0.56, "knee-high": 0.72 }),
+};
+
+export const mushrooms = primitive({
+  id: "mushrooms@1",
+  role: "Drift",
+  doc: "Capped mushrooms on pale stalks standing up out of the grass, a few young buttons among them.",
+  params: mushroomParams,
+  build: (p, ctx) => buildMushrooms(p, ctx),
+});
+
+export const WILDFLOWER_PRIMITIVES = [daisies, cups, bells, spikes, ferns, mushrooms];
