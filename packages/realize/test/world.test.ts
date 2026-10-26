@@ -68,7 +68,7 @@ describe("world and biome kinds", () => {
     expect(Object.keys(first.request.questions).sort()).toEqual(["light.brush", "light.moon", "light.path", "light.stars", "light.warmth"]);
     const firstAnswers = fakeJev(first.request);
     const second = planDetails(world, lib, structure, target, { stage: 1, earlier: { light: "warm" } });
-    expect(Object.keys(second.request.questions).sort()).toEqual(["sky.character", "sky.clouds", "sky.cover", "wind.strength"]);
+    expect(Object.keys(second.request.questions).sort()).toEqual(["sky.character", "sky.clouds", "sky.cover", "sky.overcast", "wind.strength"]);
     expect((second.request.state as { earlier?: unknown }).earlier).toEqual({ light: "warm" });
     const bp = assemble(world, lib, structure, [first, second], { ...firstAnswers, ...fakeJev(second.request) });
     expect(validate(bp, world, lib)).toEqual([]);

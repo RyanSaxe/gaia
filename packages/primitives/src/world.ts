@@ -176,6 +176,15 @@ const CLOUD_FORMS = {
   "low drifting banks": { scale: 0.9, stretch: 3.5, softness: 0.1, low: 0.0, high: 0.32, opacity: 0.88, billow: 0.45, cells: 0, horizon: 1 },
 } as const satisfies Record<string, CloudShape>;
 
+/**
+ * The two overcast skies: the noise level above which there is cloud, how much softer their edges are than the cloud
+ * form's own, and how overcast they are (`CloudSpec.overcast`). A fair sky's lowest threshold is 0.5.
+ */
+const OVERCAST = {
+  "a heavy sky, with breaks of light": { threshold: 0.4, soften: 1.3, amount: 0.6 },
+  "low and grey, the sun seldom through": { threshold: 0.32, soften: 1.7, amount: 1 },
+} as const;
+
 export const sky = primitive({
   id: "sky@1",
   role: "Sky",
@@ -196,17 +205,24 @@ export const sky = primitive({
       "cirrus streaks": "Thin, high streaks brushed across the sky, for code that feels light, quick and fleeting",
       "low drifting banks": "Long soft banks drifting low along the horizon, for code that feels slow, heavy and brooding",
     }),
-    cover: t.scale("How much of the sky the clouds cover: a few for code that is easy to read and in good health, heavier cloud the more tangled or hard to follow it is, to a low grey sky for code that is hard to see into at all", {
+    cover: t.scale("How much of a fair sky the clouds cover: a few for code that is easy to read and in good health, more the more there is to follow", {
       "a few": 0.62,
       scattered: 0.56,
       "many, but with blue between": 0.5,
-      "a heavy sky, with breaks of light": 0.38,
-      "low and grey, the sun seldom through": 0.24,
+    }),
+    overcast: t.choice("Whether the sky is fair or overcast", {
+      fair: "A fair sky, its clouds as many as the cover says, for code that is easy enough to read and in fair health",
+      "a heavy sky, with breaks of light": "Grey-white cloud over most of the sky, bright breaks where the sun comes through, for code that is tangled or hard to follow",
+      "low and grey, the sun seldom through": "A low, soft grey sky, the sun a pale glow behind it, for code that is hard to see into at all",
     }),
   },
   build: (p) => {
     const colors = SKY_COLORS[p.character];
-    return { zenith: hex(colors.zenith), horizon: hex(colors.horizon), clouds: { ...CLOUD_FORMS[p.clouds], threshold: p.cover } };
+    const form = CLOUD_FORMS[p.clouds];
+    if (p.overcast === "fair") return { zenith: hex(colors.zenith), horizon: hex(colors.horizon), clouds: { ...form, threshold: p.cover } };
+    // An overcast sky sets its own cover, whatever the fair cover says, and softens its clouds' edges.
+    const o = OVERCAST[p.overcast];
+    return { zenith: hex(colors.zenith), horizon: hex(colors.horizon), clouds: { ...form, threshold: o.threshold, softness: form.softness * o.soften, overcast: o.amount } };
   },
 });
 

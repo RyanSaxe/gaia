@@ -92,22 +92,67 @@ function slotOutput<T>(built: ReturnType<typeof buildSlots>, name: string): T {
   return out as T;
 }
 
+/**
+ * How an overcast sky (`CloudSpec.overcast`, 0 to 1) changes the day, at full overcast: the sun's light falls to
+ * `sun` of itself and turns toward `cool`, the ambient light grows by `ambient` and greys toward `even`, shadows lift
+ * toward the ambient by `lift` and their edges soften toward `soft`, and a low sun's glow fades by `glow`. The sky seen
+ * through a break brightens toward `breaks`, and the clouds grey toward `body` with undersides darkening toward
+ * `under`. A fair sky changes nothing.
+ */
+export const OVERCAST_DAY = {
+  sun: 0.42,
+  cool: hex(0xe3e8ef),
+  ambient: 0.2,
+  even: hex(0xc6cfda),
+  lift: 0.45,
+  soft: 0.45,
+  glow: 0.45,
+  breaks: hex(0xe1e8ef),
+  body: hex(0xdfe2e6),
+  under: hex(0x7f8794),
+} as const;
+
+/** The light at an hour under a sky `o` overcast (0 to 1), as `OVERCAST_DAY` says; exactly the hour's light when `o` is 0. */
+export function overcastLight(light: LightSpec, o: number): LightSpec {
+  if (!(o > 0)) return light;
+  const k = OVERCAST_DAY;
+  const ambientColor = mixLab(light.ambientColor, k.even, 0.4 * o);
+  return {
+    ...light,
+    sunColor: mixLab(light.sunColor, k.cool, 0.55 * o),
+    sunIntensity: light.sunIntensity * (1 - (1 - k.sun) * o),
+    ambientColor,
+    ambientIntensity: light.ambientIntensity * (1 + k.ambient * o),
+    shadowColor: mixLab(light.shadowColor, ambientColor, k.lift * o),
+    celSoftness: light.celSoftness + (Math.max(light.celSoftness, k.soft) - light.celSoftness) * o,
+    glow: light.glow * (1 - k.glow * o),
+  };
+}
+
 export function realizeSky(world: Filled, lib: Library, seed: number, hour: number): SkyLook {
   const built = buildSlots(world.blueprint, world.kind, lib, { seed, facts: {} });
   const day = slotOutput<DaySpec>(built, "light");
-  const light = lightAt(day, hour);
   const sky = slotOutput<SkySpec>(built, "sky");
+  const overcast = sky.clouds.overcast ?? 0;
+  const light = overcastLight(lightAt(day, hour), overcast);
   const night = light.nightness;
-  const dayZenith = mixLab(mixLab(sky.zenith, DEEP_ZENITH, light.zenithDim), light.horizonGlow, light.glow * 0.12);
-  const dayHorizon = mixLab(sky.horizon, light.horizonGlow, light.glow);
+  const fairZenith = mixLab(mixLab(sky.zenith, DEEP_ZENITH, light.zenithDim), light.horizonGlow, light.glow * 0.12);
+  const fairHorizon = mixLab(sky.horizon, light.horizonGlow, light.glow);
+  // Through an overcast sky's breaks the sky shows pale and bright, near the clouds around it, and at a low sun as
+  // bright as the glowing horizon, so a break never reads as a dark hole.
+  const dayHorizon = overcast > 0 ? mixLab(fairHorizon, OVERCAST_DAY.breaks, 0.35 * overcast * (1 - light.glow)) : fairHorizon;
+  const dayZenith = overcast > 0 ? mixLab(fairZenith, mixLab(dayHorizon, OVERCAST_DAY.breaks, 0.4 * (1 - light.glow)), 0.7 * overcast) : fairZenith;
   // Night keeps a trace of the world's own sky, so a lavender world has a lavender night.
   const zenith = mixLab(dayZenith, NIGHT_ZENITH, night * 0.94);
   const horizon = mixLab(dayHorizon, mixLab(NIGHT_HORIZON, light.moonColor, 0.12), night * 0.92);
   // By night, clouds are silvered by the moon instead of whitened by the sun.
-  const dayLit = mixLab(CLOUD_WHITE, light.sunColor, 0.12 + light.glow * 0.45);
+  const fairLit = mixLab(CLOUD_WHITE, light.sunColor, 0.12 + light.glow * 0.45);
+  // An overcast sky's clouds are grey-white, their undersides a soft slate.
+  const dayLit = overcast > 0 ? mixLab(fairLit, OVERCAST_DAY.body, 0.5 * overcast) : fairLit;
   const nightLit = mixLab(mixLab(horizon, zenith, 0.25), light.moonColor, 0.32);
   const cloudLit = mixLab(dayLit, nightLit, night);
-  const cloudShade = mixLab(mixLab(cloudLit, light.shadowColor, 0.6), zenith, 0.2 + night * 0.3);
+  const fairShade = mixLab(mixLab(cloudLit, light.shadowColor, 0.6), zenith, 0.2 + night * 0.3);
+  const cloudShade = overcast > 0 ? mixLab(fairShade, OVERCAST_DAY.under, 0.35 * overcast * (1 - night)) : fairShade;
   // The sun's own light and the hour's glow, deepened, as clouds catch it when the sun is low.
   const cloudGlow = shiftColor(mixLab(light.sunColor, light.horizonGlow, 0.4), CLOUD_GLOW);
   return {

@@ -84,7 +84,9 @@ describe("the horizon", () => {
       const flat = Math.hypot(x, z) / Math.cos(0.05);
       const towardSun = skyColorAt(look, [x / flat, Math.sin(0.05), z / flat]);
       const awayFromSun = skyColorAt(look, [-x / flat, Math.sin(0.05), -z / flat]);
-      if (hour === 6 || hour === 18 || hour === 19.5) expect(warmth(towardSun) - warmth(awayFromSun), name).toBeGreaterThan(0.24);
+      // An overcast sky mutes a low sun's glow on purpose (overcast.test.ts), so it only has to lean the same way.
+      const lean = (look.sky.clouds.overcast ?? 0) > 0 ? 0 : 0.24;
+      if (hour === 6 || hour === 18 || hour === 19.5) expect(warmth(towardSun) - warmth(awayFromSun), name).toBeGreaterThan(lean);
       if (hour === 12.5) expect(Math.abs(warmth(towardSun) - warmth(awayFromSun)), name).toBeLessThan(0.02);
     }
   });
