@@ -6,6 +6,7 @@
 
 import { primitive, t } from "@gaia/schema";
 import { buildRockArch } from "./geometry/landmark/arch.ts";
+import { buildRotunda } from "./geometry/landmark/rotunda.ts";
 import { buildStandingStones } from "./geometry/landmark/stones.ts";
 import { buildLookoutTower } from "./geometry/landmark/tower.ts";
 import { buildGreatTree } from "./geometry/landmark/tree.ts";
@@ -145,4 +146,27 @@ export const rockArch = primitive({
   build: (p, ctx) => buildRockArch(p, ctx),
 });
 
-export const LANDMARK_PRIMITIVES = [lookoutTower, standingStones, greatTree, windmill, rockArch];
+export const rotundaParams = {
+  columns: t.choice("How many columns ring it", {
+    six: "Six columns set wide apart, so the land and the light show between them",
+    eight: "Eight columns evenly spaced, balanced from every side",
+    twelve: "Twelve columns close-set, a solemn colonnade all the way round",
+  }),
+  roof: t.choice("What it carries over its columns", {
+    "a shallow dome": "A low, broad dome resting on the ring, quiet against the sky",
+    "a high dome": "A tall dome raised on a drum and crowned by a small lantern, seen from far away",
+    "an open ring": "No roof at all: a ring of stone held high on the columns, open to the sky",
+  }),
+  steps: t.scale("How high its stepped base lifts it", { "a low plinth of two steps": 2, "three broad steps": 3, "a high podium of five steps": 5 }),
+};
+
+export const rotunda = primitive({
+  id: "rotunda@1",
+  role: "Landmark",
+  doc: "A round temple of stone: a ring of columns on a stepped base carrying a dome or an open ring, for code that feels calm, ordered and a little grand, the still centre the rest is arranged around. In decline the dome falls in from its crown, then the columns topple outward one by one onto the steps.",
+  params: rotundaParams,
+  needs: [UNOFFERED],
+  build: (p, ctx) => buildRotunda(p, ctx),
+});
+
+export const LANDMARK_PRIMITIVES = [lookoutTower, standingStones, greatTree, windmill, rockArch, rotunda];

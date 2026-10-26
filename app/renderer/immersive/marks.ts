@@ -24,7 +24,9 @@ import {
   greatTreeParams,
   lookoutTowerParams,
   ROCK_ARCH_FORMS,
+  ROTUNDA_MEASURES,
   rockArchParams,
+  rotundaParams,
   standingStonesParams,
   thatchParams,
   tilesParams,
@@ -1407,6 +1409,7 @@ export const INKS: Readonly<Record<string, Ink>> = {
   "great-tree@1": landmark(greatTreeParams, { draw: (pen, look, p, seed) => drawGreatTree(pen, look, p, seed) }),
   "windmill@1": landmark(windmillParams, { draw: (pen, look, p) => drawWindmill(pen, look, p) }),
   "rock-arch@1": landmark(rockArchParams, { draw: (pen, look, p, seed) => drawRockArch(pen, look, p, seed) }),
+  "rotunda@1": landmark(rotundaParams, { draw: (pen, look, p, seed) => drawRotunda(pen, look, p, seed) }),
 };
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -2567,6 +2570,68 @@ function drawRockArch(pen: Pen, look: Look, p: Resolved<typeof rockArchParams>, 
     rubble(pen, 0, -depth * 0.5, 2.2 + half * 0.3, seed + 3, stone);
   }
   tufts(pen, [[-foot - 0.8, -1.2], [foot + 0.6, -1]], w);
+}
+
+/**
+ * A rotunda from its columns, roof and steps: the stepped base, the columns, the ring over them and its dome. As it
+ * fails the dome sinks to its foot and is gone, then the columns lie fallen outward round the steps.
+ */
+function drawRotunda(pen: Pen, look: Look, p: Resolved<typeof rotundaParams>, seed: number): void {
+  const w = look.w;
+  const M = ROTUNDA_MEASURES;
+  const n = { six: 6, eight: 8, twelve: 12 }[p.columns];
+  const steps = Math.max(1, Math.round(p.steps));
+  const ring = M.ring * LK;
+  const colH = M.column.height * LK;
+  const colR = M.column.radius * LK;
+  const floor = steps * M.step.rise * LK;
+  const top = (M.ring + M.step.margin) * LK;
+  const stone = worn(look.hue("masonry", "#d6c9ab"), w);
+  const covering = worn(look.hue("roof", "#7f8f7c"), w, 0.6);
+  const dome = 1 - ease(w.v, 0.7, 0.34);
+  const down = ease(w.v, 0.2, 0.04);
+  castShadow(pen, ellipseFeet(0, 0, top + steps * M.step.tread * LK, top, colH * 0.8));
+  const angles = Array.from({ length: n }, (_, k) => Math.PI / 2 + ((k + 0.5) / n) * Math.PI * 2);
+  // Columns lie fallen outward once they go, one by one as vitality falls.
+  const fallenAt = angles.map((_, k) => noise(seed, k + 40));
+  const isDown = (k: number): boolean => (fallenAt[k] as number) < down;
+  angles.forEach((a, k) => {
+    if (!isDown(k)) return;
+    const [X, Z] = [Math.cos(a) * ring, Math.sin(a) * ring];
+    const [dx, dz] = [Math.cos(a), Math.sin(a)];
+    face(pen, [[X - dz * colR, Z + dx * colR, floor], [X + dz * colR, Z - dx * colR, floor], [X + dx * colH + dz * colR, Z + dz * colH - dx * colR, 0.4], [X + dx * colH - dz * colR, Z + dz * colH + dx * colR, 0.4]], lit(stone, 0.15), 0.45);
+  });
+  // The steps, too low to ink one by one: the base's lower half at the foot of the steps, its upper half at the top.
+  const bottom = top + (steps - 1) * M.step.tread * LK;
+  drum(pen, 0, 0, bottom, floor * 0.5, bottom, shaded(stone, 0.1), { weight: 0.6 });
+  drum(pen, 0, floor * 0.5, top, floor, top, stone, { weight: 0.6 });
+  const column = (a: number): void => {
+    const [X, Z] = [Math.cos(a) * ring, Math.sin(a) * ring];
+    face(pen, [[X - colR, Z, floor], [X + colR, Z, floor], [X + colR * 0.86, Z, floor + colH], [X - colR * 0.86, Z, floor + colH]], lit(stone, 0.1), 0.6);
+  };
+  // The far columns, then the near ones, under the ring they carry.
+  angles.forEach((a, k) => !isDown(k) && Math.sin(a) > 0 && column(a));
+  angles.forEach((a, k) => !isDown(k) && Math.sin(a) <= 0 && column(a));
+  if (down > 0.02) return;
+  const beam = floor + colH;
+  drum(pen, 0, beam, ring + 0.55 * LK, beam + M.entablature * LK, ring + 0.85 * LK, stone);
+  if (p.roof === "an open ring" || dome < 0.05) return;
+  const high = p.roof === "a high dome";
+  let spring = beam + M.entablature * LK;
+  if (high) {
+    drum(pen, 0, spring, ring + 0.45 * LK, spring + 2 * LK, ring + 0.45 * LK, shaded(stone, 0.08));
+    spring += 2 * LK;
+  }
+  const foot = ring + M.eave * LK;
+  // A shallow dome drawn a little higher than it stands, as a mapmaker draws a roof, so it reads as a dome.
+  const riseH = (high ? 1.05 : 0.38 * ROOF_LIFT * 1.2) * foot;
+  // Fallen in from its crown: what stands ends in a ragged edge.
+  const cap = spring + riseH * dome;
+  face(pen, Array.from({ length: 17 }, (_, k): P3 => {
+    const H = spring + riseH * Math.sin((k / 16) * Math.PI);
+    return [-foot * Math.cos((k / 16) * Math.PI), 0, H > cap ? cap - noise(seed, k + 60) * 0.9 : H];
+  }), covering);
+  if (high && dome > 0.95) drum(pen, 0, spring + riseH, foot * 0.16, spring + riseH + 2 * LK, foot * 0.12, stone);
 }
 
 /** How each great tree grows, at "vast": its trunk, its crown as lobes (east, up, radius in units), its great limbs, and its green. */

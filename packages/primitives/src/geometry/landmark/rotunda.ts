@@ -1,0 +1,338 @@
+// A rotunda: a ring of columns on a stepped base, carrying a ring of stone
+// and a dome, calm, ordered and a little grand. A gap between two columns
+// faces +z, where the world turns a landmark to meet its trail. Decline
+// follows what carries what: the dome falls in first, course by course from
+// its crown, each block sinking into the one below it and its stone heaped
+// on the floor inside; then the ring over each pair of columns goes, and the
+// columns topple outward one by one onto the steps and the grass, leaving
+// the stepped base and the fallen columns round it.
+
+import type { BuildContext, Built, Resolved } from "@gaia/schema";
+import type { rotundaParams } from "../../landmark.ts";
+import { type Channels, PartBuilder, type V3, clamp, cross, normalize } from "../kit.ts";
+import { UP, box, quad, tri } from "../blocks.ts";
+import { lump, nonEmpty, still } from "./shared.ts";
+import { restAngle } from "./stones.ts";
+
+type RotundaParams = Resolved<typeof rotundaParams>;
+
+const COLUMNS = { six: 6, eight: 8, twelve: 12 } as const;
+/** Meters at scale 1: the circle the columns stand on, and a column's height and radius at its foot. */
+const RING = 5.6;
+const COLUMN = { height: 8.6, radius: 0.43 } as const;
+/** A step's rise and tread, and how far the top step reaches past the columns. */
+const STEP = { rise: 0.34, tread: 0.62, margin: 1.2 } as const;
+/** The stone ring over the columns: its height, and how far its cornice reaches past them. */
+const ENTABLATURE = 1.4;
+/** The dome's shell, and how far its foot reaches past the column circle. */
+const SHELL = 0.38;
+const EAVE = 0.5;
+/** A column's faces, which read as flutes. */
+const FLUTES = 16;
+/** How much vitality apart each course of the dome goes, so each is gone before the one it rests on starts. */
+const COURSE_STEP = 0.08;
+
+/** The rotunda's measures at scale 1, which the map's mark draws from too. */
+export const ROTUNDA_MEASURES = { ring: RING, column: COLUMN, step: STEP, entablature: ENTABLATURE, eave: EAVE } as const;
+
+/** A point at angle `a` and radius `rad` around the rotunda's middle, `y` up. */
+const around = (a: number, rad: number, y: number): V3 => [Math.cos(a) * rad, y, Math.sin(a) * rad];
+
+/**
+ * An annular block between angles a0 and a1, radii r0 and r1 and heights y0
+ * and y1: its top, outer and inner faces in `segs` facets each, its ends,
+ * and with `under` its underside.
+ */
+function sector(b: PartBuilder, a0: number, a1: number, r0: number, r1: number, y0: number, y1: number, shade: number, ch: Channels, under = false): void {
+  const segs = Math.max(1, Math.ceil(((a1 - a0) * r1) / 0.9));
+  for (let k = 0; k < segs; k++) {
+    const u0 = a0 + ((a1 - a0) * k) / segs;
+    const u1 = a0 + ((a1 - a0) * (k + 1)) / segs;
+    const um = (u0 + u1) / 2;
+    const out: V3 = [Math.cos(um), 0, Math.sin(um)];
+    quad(b, [around(u0, r1, y0), around(u1, r1, y0), around(u1, r1, y1), around(u0, r1, y1)], out, [shade - 0.04, shade - 0.04, shade + 0.03, shade + 0.03], ch);
+    // A sector from the middle is a wedge, with no inner face: a triangle of no area would hide what rests on it from `unsupportedAt`.
+    if (r0 > 0) {
+      quad(b, [around(u0, r0, y0), around(u1, r0, y0), around(u1, r0, y1), around(u0, r0, y1)], [-out[0], 0, -out[2]], shade - 0.16, ch);
+      quad(b, [around(u0, r0, y1), around(u1, r0, y1), around(u1, r1, y1), around(u0, r1, y1)], UP, shade + 0.07, ch);
+      if (under) quad(b, [around(u0, r0, y0), around(u1, r0, y0), around(u1, r1, y0), around(u0, r1, y0)], [0, -1, 0], shade - 0.2, ch);
+    } else {
+      tri(b, [[0, y1, 0], around(u1, r1, y1), around(u0, r1, y1)], UP, shade + 0.07, ch);
+      if (under) tri(b, [[0, y0, 0], around(u0, r1, y0), around(u1, r1, y0)], [0, -1, 0], shade - 0.2, ch);
+    }
+  }
+  for (const [a, sign] of [[a0, -1], [a1, 1]] as const) {
+    quad(b, [around(a, r0, y0), around(a, r1, y0), around(a, r1, y1), around(a, r0, y1)], [-Math.sin(a) * sign, 0, Math.cos(a) * sign], shade - 0.1, ch);
+  }
+}
+
+/** A round drum of `FLUTES` faces from y0 to y1, its radius going from r0 to r1, about (x, z); with `cap`, a top. */
+function drum(b: PartBuilder, x: number, z: number, y0: number, y1: number, r0: number, r1: number, shade: number, ch: Channels, cap = false): void {
+  const rows = Math.max(1, Math.round((y1 - y0) / 1.6));
+  const slope = (r0 - r1) / (y1 - y0);
+  for (let row = 0; row < rows; row++) {
+    const ya = y0 + ((y1 - y0) * row) / rows;
+    const yb = y0 + ((y1 - y0) * (row + 1)) / rows;
+    // A gentle swell (entasis) toward the middle of a tall shaft.
+    const rad = (y: number): number => r0 + (r1 - r0) * ((y - y0) / (y1 - y0)) + (rows > 1 ? 0.04 * r0 * Math.sin(Math.PI * ((y - y0) / (y1 - y0))) : 0);
+    for (let k = 0; k < FLUTES; k++) {
+      const a0 = (k / FLUTES) * Math.PI * 2;
+      const a1 = ((k + 1) / FLUTES) * Math.PI * 2;
+      const am = (a0 + a1) / 2;
+      const at = (a: number, y: number): V3 => [x + Math.cos(a) * rad(y), y, z + Math.sin(a) * rad(y)];
+      const n = normalize([Math.cos(am), slope, Math.sin(am)]);
+      const flute = k % 2 === 0 ? 0.03 : -0.03;
+      quad(b, [at(a0, ya), at(a1, ya), at(a1, yb), at(a0, yb)], n, [shade + flute - 0.02, shade + flute - 0.02, shade + flute + 0.02, shade + flute + 0.02], ch);
+    }
+  }
+  if (cap) {
+    for (let k = 0; k < FLUTES; k++) {
+      const a0 = (k / FLUTES) * Math.PI * 2;
+      const a1 = ((k + 1) / FLUTES) * Math.PI * 2;
+      tri(b, [[x, y1, z], [x + Math.cos(a1) * r1, y1, z + Math.sin(a1) * r1], [x + Math.cos(a0) * r1, y1, z + Math.sin(a0) * r1]], UP, shade + 0.06, ch);
+    }
+  }
+}
+
+/**
+ * One column at angle `a` on the floor at `floor`: a plinth, a round base, a
+ * swelling shaft, a flared capital and its square abacus, all one piece that
+ * topples outward about its plinth's outer edge.
+ */
+function column(b: PartBuilder, a: number, ring: number, floor: number, height: number, radius: number, ch: Channels): void {
+  const [x, , z] = around(a, ring, 0);
+  const radial: V3 = [Math.cos(a), 0, Math.sin(a)];
+  const side: V3 = [-Math.sin(a), 0, Math.cos(a)];
+  const axes = [radial, UP, side] as const;
+  const plinth = radius * 1.45;
+  box(b, [x, floor + 0.11, z], axes, [plinth, 0.11, plinth], 0.56, ch);
+  drum(b, x, z, floor + 0.22, floor + 0.42, radius * 1.3, radius * 1.22, 0.58, ch, true);
+  const neck = floor + height - 0.62;
+  drum(b, x, z, floor + 0.42, neck, radius, radius * 0.86, 0.6, ch);
+  drum(b, x, z, neck, neck + 0.12, radius * 0.95, radius * 0.95, 0.56, ch);
+  drum(b, x, z, neck + 0.12, neck + 0.38, radius * 0.92, radius * 1.42, 0.6, ch);
+  box(b, [x, neck + 0.5, z], axes, [radius * 1.55, 0.12, radius * 1.55], 0.62, ch);
+}
+
+/**
+ * A rotunda on a stepped base, crumbling as described above. See
+ * `rotundaParams`.
+ */
+export function buildRotunda(p: RotundaParams, ctx: BuildContext): Built {
+  const r = ctx.rand.fork("rotunda");
+  const s = ctx.facts.scale ?? 1;
+  const stone = new PartBuilder("masonry", "solid");
+  const roof = new PartBuilder("roof", "solid");
+  const n = COLUMNS[p.columns];
+  const ring = RING * s;
+  const height = COLUMN.height * s;
+  const radius = COLUMN.radius * s;
+  const steps = Math.max(1, Math.round(p.steps));
+  const floor = steps * STEP.rise;
+  const top = ring + STEP.margin;
+
+  // The stepped base: each step a ring of blocks standing on the ground, the top one a floor of paving.
+  for (let k = 0; k < steps; k++) {
+    const outer = top + (steps - 1 - k) * STEP.tread;
+    const inner = k === steps - 1 ? 0 : top + (steps - 2 - k) * STEP.tread - 0.05;
+    const blocks = Math.max(8, Math.round((Math.PI * 2 * outer) / 1.9));
+    const turn = r.next();
+    for (let j = 0; j < blocks; j++) {
+      const a0 = ((j + turn) / blocks) * Math.PI * 2;
+      const a1 = ((j + 1 + turn) / blocks) * Math.PI * 2;
+      sector(stone, a0, a1, inner, outer, -0.25, (k + 1) * STEP.rise, 0.5 + 0.12 * r.next(), still([0, 0, 0], 0.5, { tint: (r.next() - 0.5) * 0.03 }));
+    }
+  }
+
+  // The columns, with a gap between two of them facing +z, toppling outward one by one in a seeded order.
+  const angles = Array.from({ length: n }, (_, k) => Math.PI / 2 + ((k + 0.5) / n) * Math.PI * 2);
+  const order = angles.map((_, k) => ({ k, u: r.next() })).sort((a, b) => a.u - b.u).map((o) => o.k);
+  const falls = new Array<number>(n).fill(0);
+  order.forEach((k, m) => (falls[k] = 0.2 - (0.14 * m) / Math.max(1, n - 1) + r.range(-0.006, 0.006)));
+  angles.forEach((a, k) => {
+    // Outward, a little to one side, so the fallen columns never lie like spokes.
+    const away = a + r.range(-2.1, 2.1) / n;
+    const radial: V3 = [Math.cos(away), 0, Math.sin(away)];
+    const toe: V3 = [Math.cos(a) * ring + radial[0] * radius * 1.45, floor, Math.sin(a) * ring + radial[2] * radius * 1.45];
+    const axis = normalize(cross(UP, radial));
+    // It comes to rest once its top meets the ground past the steps.
+    const head = around(a, ring, floor + height);
+    const reach = radius * 1.55;
+    const tops: V3[] = [-1, 1].flatMap((u) => [-1, 1].map((w): V3 => [head[0] + (radial[0] * u + axis[0] * w) * reach, head[1], head[2] + (radial[2] * u + axis[2] * w) * reach]));
+    const most = restAngle(tops, toe, axis, 0);
+    column(stone, a, ring, floor, height, radius, { loss: 0, droop: 0, wither: 0.45 + 0.3 * r.next(), glow: 0, pivot: toe, tint: (r.next() - 0.5) * 0.03, fall: [axis[0] * most, axis[1] * most, axis[2] * most, falls[k] as number] });
+  });
+
+  // The ring over the columns, in a span from each column to the next; each goes before either column under it
+  // falls, sinking into the capital of the one that stands longer.
+  const beam = floor + height;
+  const spans = angles.map((a, k) => {
+    const b = angles[(k + 1) % n] as number;
+    const a1 = k === n - 1 ? b + Math.PI * 2 : b;
+    const later = (falls[k] as number) < (falls[(k + 1) % n] as number) ? a : b;
+    const loss = Math.max(falls[k] as number, falls[(k + 1) % n] as number) + 0.012;
+    const ch = still(around(later, ring, beam - 0.3), 0.55, { loss, tint: (r.next() - 0.5) * 0.03 });
+    const shade = 0.56 + 0.08 * r.next();
+    sector(stone, a, a1, ring - 0.55 * s, ring + 0.55 * s, beam, beam + 0.62 * s, shade, ch, true);
+    sector(stone, a, a1, ring - 0.5 * s, ring + 0.5 * s, beam + 0.62 * s, beam + 1.12 * s, shade + 0.05, ch);
+    sector(stone, a, a1, ring - 0.5 * s, ring + 0.85 * s, beam + 1.12 * s, beam + ENTABLATURE * s, shade + 0.02, ch, true);
+    if (p.roof === "an open ring") sector(stone, a, a1, ring - 0.32 * s, ring + 0.32 * s, beam + ENTABLATURE * s, beam + ENTABLATURE * s + 0.55, shade, ch);
+    return { a0: a, a1, loss, centre: around((a + a1) / 2, ring, beam + 0.6 * s) };
+  });
+  const lastSpan = Math.max(...spans.map((sp) => sp.loss));
+
+  const fallenInside: { loss: number }[] = [];
+  if (p.roof !== "an open ring") {
+    const high = p.roof === "a high dome";
+    let spring = beam + ENTABLATURE * s;
+    // A high dome stands on a drum, which goes after the dome and before the ring it stands on.
+    const drumGoes = lastSpan + 0.05;
+    const seats = spans.map((sp) => sp.centre);
+    if (high) {
+      const drumH = 1.8 * s;
+      spans.forEach((sp, k) => {
+        const ch = still(sp.centre, 0.55, { loss: drumGoes + r.range(0, 0.01), tint: (r.next() - 0.5) * 0.03 });
+        sector(stone, sp.a0, sp.a1, ring - 0.45 * s, ring + 0.45 * s, spring, spring + drumH, 0.55 + 0.06 * r.next(), ch);
+        sector(stone, sp.a0, sp.a1, ring - 0.45 * s, ring + 0.62 * s, spring + drumH, spring + drumH + 0.25 * s, 0.6, ch, true);
+        seats[k] = around((sp.a0 + sp.a1) / 2, ring, spring + drumH * 0.5);
+      });
+      spring += drumH + 0.25 * s;
+    }
+    const dome = domeOf(high, (ring + EAVE * s), spring);
+    const courses = high ? 4 : 3;
+    const gores = n * 2;
+    const open = high ? 0.86 : 1;
+    const base = (high ? drumGoes : lastSpan) + 0.05;
+    let topmost = 0;
+    let crownSeat: V3 = [0, spring, 0];
+    for (let g = 0; g < gores; g++) {
+      const span = spans[Math.floor(g / 2)] as (typeof spans)[number];
+      const a0 = g % 2 === 0 ? span.a0 : (span.a0 + span.a1) / 2;
+      const a1 = g % 2 === 0 ? (span.a0 + span.a1) / 2 : span.a1;
+      let seat = seats[Math.floor(g / 2)] as V3;
+      let loss = base + r.range(0, 0.05);
+      for (let k = 0; k < courses; k++) {
+        const t0 = (open * k) / courses;
+        const t1 = (open * (k + 1)) / courses;
+        const ch = still(seat, 0.6, { loss, tint: (r.next() - 0.5) * 0.04 });
+        domeBlock(stone, roof, dome, a0, a1, t0, t1, 0.48 + 0.08 * r.next(), ch);
+        fallenInside.push({ loss });
+        seat = dome.at((a0 + a1) / 2, (t0 + t1) / 2, 0.5);
+        if (k === courses - 1 && loss > topmost) {
+          topmost = loss;
+          crownSeat = seat;
+        }
+        loss += COURSE_STEP + r.range(0, 0.012);
+      }
+    }
+    // A high dome's lantern, or a shallow dome's finial: the first thing to go.
+    const crown = still(crownSeat, 0.6, { loss: topmost + COURSE_STEP });
+    const peak = dome.at(0, open, 0)[1];
+    if (high) {
+      const rad = dome.at(0, open, 0.5)[0] * 0.92;
+      for (let k = 0; k < 8; k++) {
+        const a = (k / 8) * Math.PI * 2;
+        box(stone, around(a, rad, peak + 0.7 * s), [[Math.cos(a), 0, Math.sin(a)], UP, [-Math.sin(a), 0, Math.cos(a)]], [0.13 * s, 0.75 * s, 0.13 * s], 0.6, crown);
+      }
+      sector(stone, 0, Math.PI * 2, 0, rad + 0.15, peak + 1.45 * s, peak + 1.65 * s, 0.6, crown, true);
+      const cap = domeOf(true, rad + 0.1, peak + 1.65 * s);
+      for (let k = 0; k < 8; k++) domeBlock(stone, roof, cap, (k / 8) * Math.PI * 2, ((k + 1) / 8) * Math.PI * 2, 0, 1, 0.5, crown, 0.12);
+      drum(stone, 0, 0, cap.at(0, 1, 0)[1] - 0.1, cap.at(0, 1, 0)[1] + 0.9 * s, 0.09 * s, 0.03 * s, 0.6, crown);
+    } else {
+      drum(stone, 0, 0, peak - 0.1, peak + 0.5 * s, 0.32 * s, 0.22 * s, 0.6, crown, true);
+      drum(stone, 0, 0, peak + 0.5 * s, peak + 1.3 * s, 0.12 * s, 0.03 * s, 0.6, crown);
+    }
+  }
+
+  // What fell in lies heaped on the floor inside, growing in as the dome goes; it stops no walker.
+  const heap = r.fork("heap");
+  const lumps = Math.min(28, fallenInside.length);
+  for (let k = 0; k < lumps; k++) {
+    const grow = (fallenInside[Math.floor((k * fallenInside.length) / lumps)] as { loss: number }).loss;
+    const a = heap.next() * Math.PI * 2;
+    const d = Math.sqrt(heap.next()) * (ring - 1.4 * s);
+    const size = (0.3 + 0.4 * heap.next()) * s;
+    lump(stone, [Math.cos(a) * d, floor + size * 0.12, Math.sin(a) * d], [size * 1.2, size * 0.6, size], heap.next() * Math.PI, 0.45 + 0.12 * heap.next(), still([Math.cos(a) * d, floor, Math.sin(a) * d], 0.6, { grow: clamp(grow, 0.05, 0.9) }), heap);
+  }
+  return { parts: nonEmpty([stone.part(), roof.part()]), anchors: [{ position: [0, floor + height, 0], normal: [0, 1, 0], size: 1 }] };
+}
+
+/** A dome's shell: the point at angle `a`, a share `t` of the way from its foot to its crown, `depth` of the way in from its outer face to its inner, with its outward normal. */
+interface Dome {
+  at(a: number, t: number, depth: number): V3;
+  normal(a: number, t: number): V3;
+}
+
+/** A high dome rises about as high as it is wide across its foot's radius; a shallow one, a little over a third of that. */
+function domeOf(high: boolean, foot: number, spring: number): Dome {
+  const rise = high ? foot * 1.05 : foot * 0.38;
+  // A shallow dome is a cap of a sphere; a high one, a quarter ellipse.
+  const sphere = (foot * foot + rise * rise) / (2 * rise);
+  const start = Math.asin((sphere - rise) / sphere);
+  const meridian = (t: number): { rad: number; y: number; nr: number; ny: number } => {
+    if (high) {
+      const th = (t * Math.PI) / 2;
+      const nr = Math.cos(th) / foot;
+      const ny = Math.sin(th) / rise;
+      const l = Math.hypot(nr, ny);
+      return { rad: foot * Math.cos(th), y: rise * Math.sin(th), nr: nr / l, ny: ny / l };
+    }
+    const th = start + t * (Math.PI / 2 - start);
+    return { rad: sphere * Math.cos(th), y: sphere * (Math.sin(th) - Math.sin(start)), nr: Math.cos(th), ny: Math.sin(th) };
+  };
+  return {
+    at: (a, t, depth) => {
+      const m = meridian(t);
+      return around(a, Math.max(0, m.rad - m.nr * SHELL * depth), spring + m.y - m.ny * SHELL * depth);
+    },
+    normal: (a, t) => {
+      const m = meridian(t);
+      return [Math.cos(a) * m.nr, m.ny, Math.sin(a) * m.nr];
+    },
+  };
+}
+
+/**
+ * One block of a dome between angles a0 and a1 and shares t0 and t1 of its
+ * rise: its covering outside, dressed stone inside and at its edges, each
+ * in a small grid of facets so it keeps the dome's curve.
+ */
+function domeBlock(stone: PartBuilder, roof: PartBuilder, d: Dome, a0: number, a1: number, t0: number, t1: number, shade: number, ch: Channels, thin = 1): void {
+  const cols = 3;
+  const rows = 3;
+  const depth = thin;
+  for (let i = 0; i < cols; i++) {
+    for (let j = 0; j < rows; j++) {
+      const u0 = a0 + ((a1 - a0) * i) / cols;
+      const u1 = a0 + ((a1 - a0) * (i + 1)) / cols;
+      const v0 = t0 + ((t1 - t0) * j) / rows;
+      const v1 = t0 + ((t1 - t0) * (j + 1)) / rows;
+      const n = d.normal((u0 + u1) / 2, (v0 + v1) / 2);
+      const lift = 0.1 * ((v0 + v1) / 2);
+      // At a closed crown the row's top meets in one point: a triangle there, never one of no area.
+      if (v1 >= 1) {
+        tri(roof, [d.at(u0, v0, 0), d.at(u1, v0, 0), d.at(u0, v1, 0)], n, shade + lift, ch);
+        tri(stone, [d.at(u0, v0, depth), d.at(u1, v0, depth), d.at(u0, v1, depth)], [-n[0], -n[1], -n[2]], shade - 0.12, ch);
+        continue;
+      }
+      quad(roof, [d.at(u0, v0, 0), d.at(u1, v0, 0), d.at(u1, v1, 0), d.at(u0, v1, 0)], n, [shade + lift - 0.03, shade + lift - 0.03, shade + lift + 0.02, shade + lift + 0.02], ch);
+      quad(stone, [d.at(u0, v0, depth), d.at(u1, v0, depth), d.at(u1, v1, depth), d.at(u0, v1, depth)], [-n[0], -n[1], -n[2]], shade - 0.12, ch);
+    }
+  }
+  // Its edges, seen where a neighbour has gone.
+  const edge = (p: readonly [V3, V3, V3, V3], n: V3): void => quad(stone, p, n, shade - 0.06, ch);
+  for (let i = 0; i < cols; i++) {
+    const u0 = a0 + ((a1 - a0) * i) / cols;
+    const u1 = a0 + ((a1 - a0) * (i + 1)) / cols;
+    edge([d.at(u0, t0, 0), d.at(u1, t0, 0), d.at(u1, t0, depth), d.at(u0, t0, depth)], [0, -1, 0]);
+    if (t1 < 1) edge([d.at(u0, t1, 0), d.at(u1, t1, 0), d.at(u1, t1, depth), d.at(u0, t1, depth)], UP);
+  }
+  for (const [a, sign] of [[a0, -1], [a1, 1]] as const) {
+    for (let j = 0; j < rows; j++) {
+      const v0 = t0 + ((t1 - t0) * j) / rows;
+      const v1 = t0 + ((t1 - t0) * (j + 1)) / rows;
+      edge([d.at(a, v0, 0), d.at(a, v1, 0), d.at(a, v1, depth), d.at(a, v0, depth)], [-Math.sin(a) * sign, 0, Math.cos(a) * sign]);
+    }
+  }
+}
+
