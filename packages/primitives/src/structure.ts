@@ -232,17 +232,16 @@ export const tower = primitive({
 });
 
 export const dovecoteParams = {
-  cote: t.choice("What the doves live in", {
-    "a round stone cote": "A squat round dovecote of rough stone with a ledge round its middle, its conical roof crowned by a little open lantern the doves fly in and out of",
-    "a cote on a post": "A small painted dovecote raised on a tall post, rows of arched doorways under its pitched roof, each with a ledge to land on",
+  cote: t.choice("How the cote stands", {
+    "a round stone cote": "A squat round dovecote of rough stone with a ledge round its middle, its conical roof crowned by a little open lantern",
+    "a cote on a post": "A small painted dovecote raised on a tall post, rows of arched doorways under its pitched roof, each with a little ledge",
   }),
-  flock: t.scale("How many doves keep it", { "a few doves": 4, "a flock": 8, "a great flock": 13 }),
 };
 
 export const dovecote = primitive({
   id: "dovecote@1",
   role: "Feature",
-  doc: "A dovecote beside the house, its doves circling overhead and settling on its ledges, for code that feels sociable and chatty, forever fluttering off to the others and back. Its doves fly home and stay in as the code fails.",
+  doc: "A dovecote beside the house, its little doorways and ledges open to the sky, for code that feels sociable and chatty, forever calling on the others and glad of callers. Its roof rots open and it falls into ruin as the code fails.",
   params: dovecoteParams,
   build: (p, ctx, plan) => buildDovecote(p, ctx, plan),
 });

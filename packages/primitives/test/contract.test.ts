@@ -121,7 +121,7 @@ describe.each(PRIMITIVES.map((p) => [p.id, p] as const))("%s", { timeout: 20_000
           expect([c.loss, c.droop, c.wither, c.glow, c.close, part.shade].every(inUnit)).toBe(true);
           expect(c.close.length).toBe(part.shade.length);
           // Optional channels, when present, cover every vertex and stay in range.
-          expect([c.grow, c.rot, c.roost].every((a) => a === undefined || (a.length === part.shade.length && inUnit(a)))).toBe(true);
+          expect([c.grow, c.rot].every((a) => a === undefined || (a.length === part.shade.length && inUnit(a)))).toBe(true);
           expect(c.fall === undefined || (c.fall.length === part.shade.length * 4 && allFinite(c.fall) && c.fall.every((x, i) => i % 4 !== 3 || (x >= 0 && x <= 1)))).toBe(true);
           expect(c.spin === undefined || (c.spin.length === part.shade.length * 3 && allFinite(c.spin))).toBe(true);
           // A grain names a covering the shader knows how to rot.

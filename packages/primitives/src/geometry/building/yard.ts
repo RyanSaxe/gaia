@@ -1,8 +1,8 @@
 // Features that stand in the yard on the house's free side, each saying
-// what its entity does for the rest of the code: a dovecote whose doves
-// carry messages, a well the others draw from, a bell that signals, a forge
-// that makes tools and a granary that keeps what was made. Each declines
-// through its channels as the code fails: doves fly home, the well's water
+// what its entity does for the rest of the code: a dovecote that keeps open
+// house, a well the others draw from, a bell that signals, a forge that makes
+// tools and a granary that keeps what was made. Each declines through its
+// channels as the code fails: the dovecote's roof rots open, the well's water
 // sinks, the bell hangs askew, the forge goes cold and the granary slumps
 // off its stones. Nothing is rebuilt.
 
@@ -99,49 +99,9 @@ const roundPlan = (Y: Yard, radius: number, height: number): BuildingPlan => {
 
 // ---------- dovecote ----------
 
-/** A dove a little over a foot long, its beak along `t` and its back toward `up`; `open` spreads its wings from folded (0) to gliding (1). */
-function dove(b: PartBuilder, c: V3, t: V3, up: V3, open: number, ch: Channels): void {
-  const s = 0.36;
-  const right = normalize(cross(t, up));
-  const nose = addScaled(addScaled(c, t, s * 0.52), up, s * 0.06);
-  const tail = addScaled(addScaled(c, t, -s * 0.66), up, s * 0.03);
-  const ring = [addScaled(c, up, s * 0.17), addScaled(c, right, s * 0.15), addScaled(c, up, -s * 0.13), addScaled(c, right, -s * 0.15)] as const;
-  for (let k = 0; k < 4; k++) {
-    const a = ring[k] as V3;
-    const d = ring[(k + 1) % 4] as V3;
-    facet(b, nose, a, d, 0.72, ch, c);
-    facet(b, tail, d, a, 0.64, ch, c);
-  }
-  // A fanned tail, and the wings from the shoulders.
-  const fan = addScaled(c, t, -s * 0.95);
-  facet(b, tail, addScaled(fan, right, s * 0.16), addScaled(fan, right, -s * 0.16), 0.6, ch, addScaled(c, up, -1));
-  for (const side of [-1, 1]) {
-    const root0 = addScaled(addScaled(c, t, s * 0.2), right, side * s * 0.1);
-    const root1 = addScaled(addScaled(c, t, -s * 0.22), right, side * s * 0.1);
-    const tip = addScaled(addScaled(addScaled(c, right, side * s * (0.32 + 0.95 * open)), up, s * (0.08 + 0.2 * open)), t, -s * (0.3 + 0.12 * open));
-    facet(b, root0, tip, root1, 0.8, ch, addScaled(c, up, -1));
-  }
-}
-
-/** Doves circling high over a cote at `top`, each turning about its middle at its own pace; they fly home into `home` at dusk and as the code fails. */
-function circling(b: PartBuilder, Y: Yard, count: number, top: number, home: V3, r: Rand): void {
-  const center = Y.at(0, 0, 0);
-  for (let i = 0; i < count; i++) {
-    const a = r.next() * TAU;
-    const reach = 1.7 + 1.4 * r.next();
-    const c = Y.at(Math.cos(a) * reach, top + 0.9 + 1.7 * r.next(), Math.sin(a) * reach);
-    const dx = c[0] - center[0];
-    const dz = c[2] - center[2];
-    // A positive turn about up carries a point at (x, z) toward (z, -x); each dove flies that way, banked into the turn.
-    const t = normalize([dz, 0, -dx]);
-    const up = normalize(addScaled(UP, normalize([-dx, 0, -dz]), 0.35));
-    dove(b, c, t, up, 1, { loss: lossThreshold(r.next(), 0.85, 0.45), droop: 0, wither: 0.5, glow: 0, pivot: home, tint: (r.next() - 0.5) * 0.03, spin: [0, 0.028 + 0.03 * r.next(), 0], roost: 1 });
-  }
-}
-
 export function buildDovecote(p: Resolved<typeof dovecoteParams>, ctx: BuildContext, plan: BuildingPlan): Built {
   const r = ctx.rand.fork("dovecote");
-  return p.cote === "a cote on a post" ? postCote(p.flock, r, plan) : roundCote(p.flock, r, plan);
+  return p.cote === "a cote on a post" ? postCote(r, plan) : roundCote(r, plan);
 }
 
 /** Angles from `a0` to `a1` around a ring, less the gaps, as runs to lay stones in. */
@@ -162,7 +122,7 @@ function freeArcs(gaps: readonly (readonly [number, number])[], start: number): 
   return out;
 }
 
-function roundCote(flock: number, r: Rand, plan: BuildingPlan): Built {
+function roundCote(r: Rand, plan: BuildingPlan): Built {
   const R = 1.15;
   const H = 3.4;
   const Y = yard(plan, 1.0 + R, -plan.depth * 0.18);
@@ -250,8 +210,8 @@ function roundCote(flock: number, r: Rand, plan: BuildingPlan): Built {
     }
   }
 
-  // A cone of courses that rots through and sags at its eaves, a lantern on
-  // top that the doves fly in and out of, and a finial that leans and falls.
+  // A cone of courses that rots through and sags at its eaves, an open
+  // lantern on top, and a finial that leans and falls.
   const eave = R + 0.32;
   const neck = 0.36;
   const crown = H + 1.3;
@@ -303,19 +263,6 @@ function roundCote(flock: number, r: Rand, plan: BuildingPlan): Built {
   log(wood, addScaled(capTop, UP, -0.05), addScaled(capTop, UP, 0.42), 0.035, 0.45, finial, 6);
   box(wood, addScaled(capTop, UP, 0.46), [[1, 0, 0], UP, [0, 0, 1]], [0.06, 0.06, 0.06], 0.5, finial);
 
-  // Doves on the ledges and at the flight holes, and the rest circling overhead; they all come home into the cote as it fails.
-  const home = Y.at(0, crown + 0.2, 0);
-  const perched = Math.max(1, Math.round(flock * 0.4));
-  for (let i = 0; i < perched; i++) {
-    const h = holes[Math.floor(r.next() * holes.length)] as { a: number; y: number };
-    const onLedge = i % 2 === 0;
-    const a = onLedge ? doorHalf + 0.3 + r.next() * (TAU - 2 * doorHalf - 0.6) : h.a;
-    const c = onLedge ? ring(a, R + 0.12, 1.75 + 0.06 + 0.06) : ring(a, R + 0.12, h.y - 0.12 + 0.06);
-    const t = onLedge ? normalize(addScaled(scale(tangent(a), r.next() < 0.5 ? -1 : 1), radial(a), 0.4)) : radial(a);
-    dove(mortar, c, t, UP, 0, { loss: lossThreshold(r.next(), 0.6, 0.28), droop: 0, wither: 0.5, glow: 0, pivot: onLedge ? ring(a, R, 1.8) : ring(a, R - 0.1, h.y), tint: (r.next() - 0.5) * 0.03 });
-  }
-  circling(mortar, Y, flock - perched, H, home, r.fork("doves"));
-
   const cote = roundPlan(Y, R * 2 * Math.cos(Math.PI / 8) / 2 + 0.02, H);
   ivy(moss, cote, ruinOf(cote), r.fork("ivy"));
   weedsAbout(weed, Y, R + 0.1, R + 0.9, 12, r.fork("weeds"));
@@ -323,13 +270,12 @@ function roundCote(flock: number, r: Rand, plan: BuildingPlan): Built {
   return { parts, anchors: [] };
 }
 
-function postCote(flock: number, r: Rand, plan: BuildingPlan): Built {
+function postCote(r: Rand, plan: BuildingPlan): Built {
   const Y = yard(plan, 1.6, -plan.depth * 0.15);
   const Z = Y.axes[2];
   const wood = new PartBuilder("timber", "solid");
   const paint = new PartBuilder("trim", "solid");
   const roof = new PartBuilder("roof", "solid");
-  const birds = new PartBuilder("wall", "solid");
   const weed = new PartBuilder("leaf");
   const top = 3.0;
   const foot = Y.at(0, 0, 0);
@@ -346,7 +292,7 @@ function postCote(flock: number, r: Rand, plan: BuildingPlan): Built {
   const held = (wither: number, extra: Partial<Channels> = {}): Channels => still(head, wither, { fall: [0, 0, lurch, 0.22], ...extra });
   box(wood, Y.at(0, top + 0.03, 0), Y.axes, [0.66, 0.03, 0.74], 0.45, held(0.55));
   for (const s of [-1, 1]) beam(wood, Y.at(0, top - 0.5, 0), Y.at(s * 0.5, top, 0), 0.07, 0.07, Z, 0.4, held(0.55));
-  // The painted cote: a box under a pitched roof, two rows of arched doorways on each long side, each with a landing ledge.
+  // The painted cote: a box under a pitched roof, two rows of arched doorways on each long side, each with a ledge.
   const hx = 0.5;
   const hz = 0.66;
   const h = 1.0;
@@ -358,13 +304,11 @@ function postCote(flock: number, r: Rand, plan: BuildingPlan): Built {
     const g = [Y.at(-hx, y0 + h, s * hz), Y.at(hx, y0 + h, s * hz), Y.at(0, ridge - 0.04, s * hz)] as const;
     facet(paint, g[0], g[1], g[2], 0.58, held(0.6, { rot: 0.45 }), Y.at(0, y0 + h, 0));
   }
-  const doors: { c: V3; n: V3 }[] = [];
   for (const s of [-1, 1]) {
     const n = Y.dir(s, 0, 0);
     for (const [y, zs] of [[y0 + 0.18, [-2 / 3, 0, 2 / 3]], [y0 + 0.52, [-1 / 3, 1 / 3]]] as const) {
       for (const zf of zs) {
         const c = Y.at(s * (hx + 0.006), y, zf * hz);
-        doors.push({ c, n });
         const w = 0.075;
         const arch: V3[] = [];
         for (let q = 0; q <= 4; q++) arch.push(addScaled(addScaled(c, Z, Math.cos((q / 4) * Math.PI) * w), UP, 0.09 + Math.sin((q / 4) * Math.PI) * w));
@@ -385,18 +329,8 @@ function postCote(flock: number, r: Rand, plan: BuildingPlan): Built {
   beam(wood, Y.at(0, ridge + 0.03, -hz - over - 0.04), Y.at(0, ridge + 0.03, hz + over + 0.04), 0.07, 0.09, UP, 0.5, held(0.5));
   for (const s of [-1, 1]) log(wood, Y.at(0, ridge, s * (hz + over)), Y.at(0, ridge + 0.3, s * (hz + over)), 0.03, 0.45, held(0.5, { loss: 0.3 }), 6);
 
-  // Doves on the ledges and the ridge, and the rest circling; they go in at the doorways as the cote fails.
-  const perched = Math.max(1, Math.round(flock * 0.45));
-  for (let i = 0; i < perched; i++) {
-    const d = doors[Math.floor(r.next() * doors.length)] as { c: V3; n: V3 };
-    const onRidge = i % 3 === 2;
-    const c = onRidge ? Y.at(0, ridge + 0.12, (r.next() - 0.5) * hz * 1.6) : addScaled(addScaled(d.c, d.n, 0.1), UP, 0.05);
-    const t = onRidge ? normalize(addScaled(Y.dir(r.next() < 0.5 ? -1 : 1, 0, 0), Z, (r.next() - 0.5) * 0.8)) : d.n;
-    dove(birds, c, t, UP, 0, { loss: lossThreshold(r.next(), 0.6, 0.28), droop: 0, wither: 0.5, glow: 0, pivot: onRidge ? Y.at(0, ridge, 0) : d.c, tint: (r.next() - 0.5) * 0.03 });
-  }
-  circling(birds, Y, flock - perched, ridge, Y.at(0, y0 + h / 2, 0), r.fork("doves"));
   weedsAbout(weed, Y, 0.25, 1.0, 8, r.fork("weeds"));
-  const parts = [wood, paint, roof, birds, weed].filter((b) => b.triangleCount > 0).map((b) => b.part());
+  const parts = [wood, paint, roof, weed].filter((b) => b.triangleCount > 0).map((b) => b.part());
   return { parts, anchors: [] };
 }
 
