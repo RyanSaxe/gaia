@@ -10,28 +10,28 @@ import { buildLookoutTower } from "./geometry/landmark/tower.ts";
 import { buildGreatTree } from "./geometry/landmark/tree.ts";
 
 export const lookoutTowerParams = {
-  height: t.scale("How tall the tower stands", { "a squat watchtower": 12, "a lookout tower": 16, "a tall tower": 21, "a soaring tower": 25 }),
+  height: t.scale("How tall the tower stands: a squat watchtower for code that feels humble and stubborn, a lookout tower for code that feels ordinary and steady, a tall tower for code that feels proud, a soaring tower for code that feels grand and ambitious", { "a squat watchtower": 12, "a lookout tower": 16, "a tall tower": 21, "a soaring tower": 25 }),
   plan: t.choice("The tower's plan on the ground", {
-    round: "A round tower, like a mill or a lighthouse",
-    square: "A square keep with flat walls and sharp corners",
-    octagonal: "An eight-sided tower whose faces catch the light one by one",
+    round: "A round tower, like a mill or a lighthouse, for code that feels well-worn and much handled, smoothed by many hands",
+    square: "A square keep with flat walls and sharp corners, for code that feels strict and severe, laying down the rules",
+    octagonal: "An eight-sided tower whose faces catch the light one by one, for code that feels intricate and many-sided, put to many uses",
   }),
   profile: t.choice("How the tower rises", {
-    straight: "Straight walls, nearly as wide at the top as at the foot",
-    tapering: "Walls that lean in as they rise, broad and rooted at the foot",
-    stepped: "Stages, each narrower than the one below, set back above a string course",
+    straight: "Straight walls, nearly as wide at the top as at the foot, for code that feels plain and direct",
+    tapering: "Walls that lean in as they rise, broad and rooted at the foot, for code that feels heavy, old and rooted in its ground",
+    stepped: "Stages, each narrower than the one below, set back above a string course, for code that feels built up stage by stage over time",
   }),
   galleries: t.choice("Whether a walkway rings the tower", {
-    none: "Plain walls up to the crown",
-    "a gallery at the top": "A walkway on stone corbels ringing the top, under the crown, like a lighthouse's",
-    "a gallery at every stage": "A corbelled walkway where each stage meets the next, and one at the top",
+    none: "Plain walls up to the crown, for code that feels humble and closed, with nowhere to stand and look",
+    "a gallery at the top": "A walkway on stone corbels ringing the top, under the crown, for code that feels lofty and aloof, keeping its one high view to itself",
+    "a gallery at every stage": "A corbelled walkway where each stage meets the next, and one at the top, for code that feels busy and welcoming, with somewhere to stand at every level",
   }),
   crown: t.choice("What crowns the tower", {
-    "a conical roof": "A steep cone of a roof with a finial; four- or eight-sided on a square or eight-sided tower",
-    battlements: "Notched battlements around an open top",
-    "an open lantern room": "A glazed lantern room under a small roof, lit at night like a beacon",
+    "a conical roof": "A steep cone of a roof with a finial; four- or eight-sided on a square or eight-sided tower, for code that feels homely and dependable, keeping a roof over its people",
+    battlements: "Notched battlements around an open top, for code that feels guarded and defiant, holding the line",
+    "an open lantern room": "A glazed lantern room under a small roof, lit at night like a beacon, for code that feels new and hopeful, only lately lit",
   }),
-  masonry: t.scale("The size of its stones", { "small, even blocks": 0.8, "dressed blocks": 1.1, "great rough blocks": 1.5 }),
+  masonry: t.scale("The size of its stones: small, even blocks for code that feels neat and careful, dressed blocks for code that feels solid and well made, great rough blocks for code that feels raw, old and heavy", { "small, even blocks": 0.8, "dressed blocks": 1.1, "great rough blocks": 1.5 }),
 };
 
 export const lookoutTower = primitive({
@@ -44,21 +44,21 @@ export const lookoutTower = primitive({
 
 export const standingStonesParams = {
   arrangement: t.choice("How the stones are set out", {
-    ring: "A ring of stones, their broad faces turned to its center",
-    avenue: "An avenue: two facing rows of stones, rising toward its head",
-    dolmen: "A dolmen: upright stones carrying one great flat capstone, inside a kerb of low stones",
-    "cairn field": "Cairns: tall rounded piles of small stones scattered over the ground",
-    "leaning menhirs": "Lone tall menhirs scattered loosely, some already leaning",
+    ring: "A ring of stones, their broad faces turned to its center, for code that feels gathered and communal, everything turned toward one heart",
+    avenue: "An avenue: two facing rows of stones, rising toward its head, for code that feels processional, leading you on toward something",
+    dolmen: "A dolmen: upright stones carrying one great flat capstone, inside a kerb of low stones, for code that feels solemn and burdened, holding up one great weight",
+    "cairn field": "Cairns: tall rounded piles of small stones scattered over the ground, for code that feels piled up patiently, a little at a time",
+    "leaning menhirs": "Lone tall menhirs scattered loosely, some already leaning, for code that feels wild and untamed, its pieces standing apart",
   }),
-  count: t.scale("How many stones there are", { "a few": 5, "a good many": 9, "a great many": 13 }),
-  height: t.scale("How tall the stones stand", { "head-high": 2.6, "twice a person's height": 3.8, towering: 5.2 }),
-  lintels: t.flag("Do slabs lie across pairs of stones?", "Lintels across pairs of stones, like gateways", "Every stone stands alone"),
+  count: t.scale("How many stones there are: a few for code that feels sparse and quiet, a good many for code that feels steady and complete, a great many for code that feels crowded and busy", { "a few": 5, "a good many": 9, "a great many": 13 }),
+  height: t.scale("How tall the stones stand: head-high for code that feels humble and near, twice a person's height for code that feels imposing, towering for code that feels overwhelming and awe-struck", { "head-high": 2.6, "twice a person's height": 3.8, towering: 5.2 }),
+  lintels: t.flag("Do slabs lie across pairs of stones?", "Lintels across pairs of stones, like gateways, for code that feels like a passage from one place to another", "Every stone stands alone, for code whose pieces keep apart"),
   centre: t.choice("What stands at the heart of the arrangement", {
-    "a tall king stone": "One tall stone, taller than the rest",
-    "an altar stone": "A low, broad flat stone",
-    nothing: "Open grass",
+    "a tall king stone": "One tall stone, taller than the rest, for code with one proud master at its heart",
+    "an altar stone": "A low, broad flat stone, for code that feels like a place where things are laid down and kept",
+    nothing: "Open grass, for code whose heart is empty space that everything shares",
   }),
-  facets: t.scale("How the stones' faces are cut", { "worn smooth": 0.15, "softly faceted": 0.55, "sharply faceted": 1 }),
+  facets: t.scale("How the stones' faces are cut: worn smooth for code that feels softened by long use, softly faceted for code that feels weathered but whole, sharply faceted for code that feels fresh-cut and severe", { "worn smooth": 0.15, "softly faceted": 0.55, "sharply faceted": 1 }),
 };
 
 export const standingStones = primitive({
@@ -71,20 +71,20 @@ export const standingStones = primitive({
 
 export const greatTreeParams = {
   form: t.choice("What kind of great tree", {
-    "a spreading oak": "Broad and low, its great limbs reaching far out",
-    "a tall elm": "Tall, with rising limbs and a high domed crown",
-    "a great willow": "A huge weeping crown of hanging strands",
-    "an umbrella pine": "A tall bare trunk holding up one broad, flat-topped umbrella of a crown, like a stone pine",
-    "a dark yew": "A low, dense dome of small dark leaves, spreading wider than it is tall",
+    "a spreading oak": "Broad and low, its great limbs reaching far out, for code that feels gnarled and obstinate, refusing to be moved",
+    "a tall elm": "Tall, with rising limbs and a high domed crown, for code that feels tall, proud and upright, still reaching higher",
+    "a great willow": "A huge weeping crown of hanging strands, for code that feels soft and sprawling, trailing many long threads",
+    "an umbrella pine": "A tall bare trunk holding up one broad, flat-topped umbrella of a crown, like a stone pine, for code that feels like a gathering place, everyone drawn under one wide, sunny shade",
+    "a dark yew": "A low, dense dome of small dark leaves, spreading wider than it is tall, for code that feels secretive and ancient, keeping something old and dark",
   }),
-  size: t.scale("How great it is", { great: 2.2, vast: 2.7, "ancient and immense": 3.2 }),
-  age: t.scale("How old the tree is", {
+  size: t.scale("How great it is: great for code that feels close and friendly, vast for code that feels open-armed and generous, ancient and immense for code that feels solemn and awe-inspiring", { great: 2.2, vast: 2.7, "ancient and immense": 3.2 }),
+  age: t.scale("How old the tree is: a young giant for code that is new and still growing fast, old and broad for code that feels settled, ancient and storm-broken for code that feels battered and patched, scarred by many storms", {
     "a young giant, still reaching": 0,
     "old and broad": 0.5,
     "ancient, storm-broken and stag-headed": 1,
   }),
-  fullness: t.scale("How full its crown is", { airy: 0.5, full: 0.8, "dense and lush": 1 }),
-  bark: t.scale("How rough its bark is", { "smooth and grey": 0.1, "deeply furrowed": 0.7, "gnarled and burred": 1 }),
+  fullness: t.scale("How full its crown is: airy for code that feels light and open, full for code that feels healthy and even, dense and lush for code that feels rich, crowded and abundant", { airy: 0.5, full: 0.8, "dense and lush": 1 }),
+  bark: t.scale("How rough its bark is: smooth and grey for code that feels clean and calm, deeply furrowed for code that feels lined with age, gnarled and burred for code that feels knotted and hard to read", { "smooth and grey": 0.1, "deeply furrowed": 0.7, "gnarled and burred": 1 }),
 };
 
 export const greatTree = primitive({
