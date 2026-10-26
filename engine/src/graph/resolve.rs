@@ -54,6 +54,68 @@ struct Bound<'a> {
     files: Vec<usize>,
 }
 
+/// What a file passes on to the files that import it from the files it
+/// imports: each name it re-exports, with what the name stands for there,
+/// and the files whose every export it re-exports.
+#[derive(Default)]
+struct Passes<'a> {
+    named: HashMap<&'a str, Vec<Bound<'a>>>,
+    every: Vec<usize>,
+}
+
+/// How many re-exports deep the call rule follows a name.
+const HOPS: usize = 4;
+
+/// Where a name leads from the files `from`, through what they pass on.
+struct Followed<'a> {
+    /// Each file, with the name it knows it by, that defines it a re-export or more away.
+    defined: Vec<(usize, &'a str)>,
+    /// The files the name stands for as a whole module, as `ns` does in `export * as ns from './x'`.
+    modules: Vec<usize>,
+}
+
+/// Follows `name` from the files `from` through what each passes on, stopping
+/// at a file that defines it, after `HOPS` re-exports, and at a file and name
+/// already seen, so a cycle ends.
+fn follow<'a>(
+    passes: &[Passes<'a>],
+    defines: &HashSet<(usize, &str)>,
+    from: impl Iterator<Item = usize>,
+    name: &'a str,
+) -> Followed<'a> {
+    let mut out = Followed {
+        defined: Vec::new(),
+        modules: Vec::new(),
+    };
+    let mut seen: HashSet<(usize, &str)> = HashSet::new();
+    let mut at: Vec<(usize, &str)> = from.map(|f| (f, name)).collect();
+    for hop in 0..=HOPS {
+        let mut next = Vec::new();
+        for (f, n) in at {
+            if !seen.insert((f, n)) {
+                continue;
+            }
+            if defines.contains(&(f, n)) {
+                if hop > 0 {
+                    out.defined.push((f, n));
+                }
+                continue;
+            }
+            for b in passes[f].named.get(n).into_iter().flatten() {
+                match b.name {
+                    Some(m) => next.extend(b.files.iter().map(|&g| (g, m))),
+                    None => out.modules.extend(&b.files),
+                }
+            }
+            next.extend(passes[f].every.iter().map(|&g| (g, n)));
+        }
+        at = next;
+    }
+    out.modules.sort_unstable();
+    out.modules.dedup();
+    out
+}
+
 enum Outcome {
     Edge(String),
     Pending(Vec<String>),
@@ -638,6 +700,7 @@ pub fn run(
     let mut imported: Vec<BTreeSet<usize>> = vec![BTreeSet::new(); units.len()];
     type Bindings<'a> = HashMap<&'a str, Vec<(Option<usize>, Bound<'a>)>>;
     let mut bound: Vec<Bindings> = units.iter().map(|_| HashMap::new()).collect();
+    let mut passes: Vec<Passes> = units.iter().map(|_| Passes::default()).collect();
     let index: HashMap<&str, usize> = units.iter().enumerate().map(|(i, u)| (u.path, i)).collect();
     let files_of = |id: &str| -> Vec<usize> {
         if let Some(p) = id.strip_prefix("file:") {
@@ -673,6 +736,14 @@ pub fn run(
                             .push((r.from, b));
                     }
                 }
+                for a in &r.passes {
+                    if let Some(b) = binding(units, &a.of, files.clone()) {
+                        passes[k].named.entry(a.name.as_str()).or_default().push(b);
+                    }
+                }
+                if r.passes_all {
+                    passes[k].every.extend(&files);
+                }
             }
             match outcome {
                 Outcome::Edge(to) => {
@@ -704,6 +775,23 @@ pub fn run(
             by_name.entry(d.name.as_str()).or_default().push((k, i));
         }
     }
+    // What a file passes on of its own: a definition at its top level that,
+    // where its language marks them, it exports. A re-export stops there.
+    let own = |k: usize, i: usize| {
+        let (Some(p), Some(spec)) = (units[k].parse, units[k].spec) else {
+            return false;
+        };
+        let d = &p.defs[i];
+        d.parent.is_none() && d.owner.is_none() && (d.exported || !spec.marks_exports)
+    };
+    let defines: HashSet<(usize, &str)> = by_name
+        .iter()
+        .flat_map(|(name, at)| {
+            at.iter()
+                .filter(|(k, i)| own(*k, *i))
+                .map(move |(k, _)| (*k, *name))
+        })
+        .collect();
     for (k, u) in units.iter().enumerate() {
         let (Some(p), Some(spec)) = (u.parse, u.spec) else {
             continue;
@@ -748,23 +836,61 @@ pub fn run(
                     None => (r.text.as_str(), Some(q), None),
                 },
             };
-            let all: Vec<(usize, usize)> = by_name
+            // A file the call looks in may pass a name on from another, as a
+            // package's index does: `ns.walk()` looks in the module an
+            // `export * as ns from './x'` names, and `walk()` reaches the walk
+            // an `export { walk } from './x'` names.
+            fn looked<'s>(
+                within: Option<&'s Vec<usize>>,
+                imported: &'s BTreeSet<usize>,
+            ) -> Box<dyn Iterator<Item = usize> + 's> {
+                match within {
+                    Some(w) => Box::new(w.iter().copied()),
+                    None => Box::new(imported.iter().copied()),
+                }
+            }
+            let modules = qualifier
+                .filter(|q| !self_like(q))
+                .map(|q| follow(&passes, &defines, looked(within, &imported[k]), q).modules)
+                .filter(|m| !m.is_empty());
+            let (qualifier, within) = match &modules {
+                Some(m) => (None, Some(m)),
+                None => (qualifier, within),
+            };
+            let passed: Vec<(usize, usize)> = if qualifier.is_none() {
+                follow(&passes, &defines, looked(within, &imported[k]), name)
+                    .defined
+                    .into_iter()
+                    .flat_map(|(f, n)| {
+                        let defs = by_name.get(n).map(Vec::as_slice).unwrap_or_default();
+                        defs.iter().copied().filter(move |&(kk, i)| kk == f && own(kk, i))
+                    })
+                    .collect()
+            } else {
+                Vec::new()
+            };
+            let mut all: Vec<(usize, usize)> = by_name
                 .get(name)
                 .map(|v| {
                     v.iter()
                         .copied()
                         .filter(|(kk, _)| within.is_none_or(|w| w.contains(kk)))
-                        .filter(|(kk, _)| units[*kk].spec.is_some_and(|s| s.family == spec.family))
-                        .filter(|(kk, i)| visible(*kk, *i))
-                        .filter(|(kk, i)| {
-                            !r.macro_call
-                                || units[*kk]
-                                    .parse
-                                    .is_some_and(|pp| pp.defs[*i].role == "macro")
-                        })
                         .collect()
                 })
                 .unwrap_or_default();
+            for d in &passed {
+                if !all.contains(d) {
+                    all.push(*d);
+                }
+            }
+            all.retain(|(kk, i)| {
+                units[*kk].spec.is_some_and(|s| s.family == spec.family)
+                    && visible(*kk, *i)
+                    && (!r.macro_call
+                        || units[*kk]
+                            .parse
+                            .is_some_and(|pp| pp.defs[*i].role == "macro"))
+            });
             // What the call names before its name decides how sure the rule can be.
             // `self.push` in Batch or `Batch::new` names its owner; `utils.join` its
             // file or package. An unqualified call reaches no other class's
@@ -830,13 +956,17 @@ pub fn run(
                     true,
                 ),
             };
-            let tiers: [&dyn Fn(usize) -> bool; 3] =
-                [&|kk| kk == k, &|kk| imported[k].contains(&kk), &|kk| {
-                    dir_of(units[kk].path) == dir_of(u.path)
-                }];
+            // What a re-export passes on comes after what the imports name
+            // themselves, and before a neighbour that merely shares the name.
+            let tiers: [&dyn Fn(usize, usize) -> bool; 4] = [
+                &|kk, _| kk == k,
+                &|kk, _| imported[k].contains(&kk) || within.is_some_and(|w| w.contains(&kk)),
+                &|kk, i| passed.contains(&(kk, i)),
+                &|kk, _| dir_of(units[kk].path) == dir_of(u.path),
+            ];
             let mut chosen: Vec<(usize, usize)> = Vec::new();
             for tier in tiers {
-                chosen = pool.iter().copied().filter(|(kk, _)| tier(*kk)).collect();
+                chosen = pool.iter().copied().filter(|(kk, i)| tier(*kk, *i)).collect();
                 if !chosen.is_empty() {
                     break;
                 }

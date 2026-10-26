@@ -8,6 +8,12 @@
 (import_statement name: (aliased_import alias: (identifier) @name) @alias.module)
 (import_from_statement name: (aliased_import name: (_) @imported alias: (identifier) @name) @alias.renamed)
 
+; What a module passes on to the files that import it: every name its `from`
+; imports bind, as a package's `__init__.py` gathers its modules' names.
+(import_from_statement name: (dotted_name) @name @reexport.named)
+(import_from_statement name: (aliased_import name: (_) @imported alias: (identifier) @name) @reexport.renamed)
+(import_from_statement (wildcard_import) @reexport.all)
+
 (function_definition body: (block . (expression_statement (string (string_content) @doc))))
 (class_definition body: (block . (expression_statement (string (string_content) @doc))))
 
