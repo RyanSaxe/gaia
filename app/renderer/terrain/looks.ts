@@ -73,14 +73,8 @@ export const WATERS: Readonly<Record<string, Look>> = {
   "A still pond": { ...look("A still pond gathers: much of the code leans on this area, and what it holds settles here."), settles: { "relief.stream": "dry bed", "relief.pond": true } },
 };
 
-/**
- * Primitives built and drawn but not offered to Jev yet, while their look is judged: offering one changes the
- * questions of every part it could fill, so Jev's kept answers would have to be asked again.
- */
-const NOT_OFFERED: ReadonlySet<string> = new Set(["windmill@1"]);
-
 /** What Jev composes the world from, part by part: the sky, each land, building, landmark and trail's kind, and every primitive that could fill a part. */
-export const COMPOSING: Composing = { building: structure, landmark, world, biome, link, lib: new Library(PRIMITIVES.filter((p) => !NOT_OFFERED.has(p.id))) };
+export const COMPOSING: Composing = { building: structure, landmark, world, biome, link, lib: new Library(PRIMITIVES) };
 
 export const LOOKS: Looks = {
   compose: COMPOSING,

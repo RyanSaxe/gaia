@@ -120,13 +120,6 @@ export const windmill = primitive({
   build: (p, ctx) => buildWindmill(p, ctx),
 });
 
-/**
- * What no place has yet, so a landmark that needs it is never offered to Jev
- * (`meets`): it builds, draws and is tested like any other, but no world's
- * landmark questions change until it is offered.
- */
-export const UNOFFERED = "a landmark not yet offered";
-
 export const rockArchParams = {
   form: t.choice("The opening the stone leaps over", {
     "a doorway": "A tall, narrow doorway through a fin of rock, a way through for one or two at a time",
@@ -142,7 +135,6 @@ export const rockArch = primitive({
   role: "Landmark",
   doc: "An arch of living rock the land made: a doorway, a gate or a great span over a way that everything passes under, for code that feels like a threshold, the way into everything beyond it. In decline its stacks lean apart and a crack opens across the span; the span falls and lies broken in the grass, leaving two stacks standing either side of the way.",
   params: rockArchParams,
-  needs: [UNOFFERED],
   build: (p, ctx) => buildRockArch(p, ctx),
 });
 
@@ -165,7 +157,6 @@ export const rotunda = primitive({
   role: "Landmark",
   doc: "A round temple of stone: a ring of columns on a stepped base carrying a dome or an open ring, for code that feels calm, ordered and a little grand, the still centre the rest is arranged around. In decline the dome falls in from its crown, then the columns topple outward one by one onto the steps.",
   params: rotundaParams,
-  needs: [UNOFFERED],
   build: (p, ctx) => buildRotunda(p, ctx),
 });
 
