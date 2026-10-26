@@ -2,7 +2,7 @@
 // Geometry lives in ./geometry, one pure function per primitive.
 
 import { primitive, t } from "@gaia/schema";
-import { buildBark, buildBlossoms, buildLeafClumps, buildLeafStrands, buildNeedles } from "./geometry/foliage.ts";
+import { buildBark, buildBlossoms, buildFruit, buildLeafClumps, buildLeafStrands, buildNeedles } from "./geometry/foliage.ts";
 import { growBranching, growSapling, growSpire } from "./geometry/skeleton.ts";
 import { buildLeafMound, growBramble, growThicket } from "./geometry/shrub.ts";
 import { PALETTE_FAMILIES, paletteOf } from "./palettes.ts";
@@ -176,6 +176,22 @@ export const blossoms = primitive({
   build: (p, ctx, anchors) => buildBlossoms(p, ctx, anchors),
 });
 
+export const fruitParams = {
+  fruit: t.choice("What fruit hangs from its twigs", {
+    apples: "Round apples, plump and generous",
+    pears: "Pears that swell below a narrow neck, heavy and mellow",
+  }),
+  crop: t.scale("How much fruit it bears", { "a scattered few": 0.2, "a good crop": 0.45, "bowed with fruit": 0.8 }),
+};
+
+export const fruit = primitive({
+  id: "fruit@1",
+  role: "Ornament",
+  doc: "Apples or pears hanging on stalks from the twigs, under the outer leaves.",
+  params: fruitParams,
+  build: (p, ctx, anchors) => buildFruit(p, ctx, anchors),
+});
+
 export const sway = primitive({
   id: "sway@1",
   role: "Motion",
@@ -248,4 +264,4 @@ export const leafMound = primitive({
   build: (p, ctx, skeleton) => buildLeafMound(p, ctx, skeleton),
 });
 
-export const FLORA_PRIMITIVES = [branching, spire, sapling, bark, leafClumps, leafStrands, needles, blossoms, sway, palette, thicket, bramble, leafMound];
+export const FLORA_PRIMITIVES = [branching, spire, sapling, bark, leafClumps, leafStrands, needles, blossoms, fruit, sway, palette, thicket, bramble, leafMound];

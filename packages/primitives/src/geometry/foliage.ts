@@ -5,7 +5,7 @@
 // bare twigs; only pods glow.
 
 import { type Anchor, type BuildContext, type Built, CUT, type Limb, type Rand, type Resolved, type Skeleton, type Vec3 } from "@gaia/schema";
-import type { barkParams, blossomsParams, leafClumpsParams, leafStrandsParams, needlesParams } from "../flora.ts";
+import type { barkParams, blossomsParams, fruitParams, leafClumpsParams, leafStrandsParams, needlesParams } from "../flora.ts";
 import {
   type CardPoint,
   type Channels,
@@ -1012,6 +1012,54 @@ export function buildBlossoms(p: Resolved<typeof blossomsParams>, ctx: BuildCont
     }
   }
   return { parts: [out.part()], anchors: [] };
+}
+
+/**
+ * The most fruit one plant hangs; how big one is (a little larger than life,
+ * so it reads among the leaves from a path): an apple's radius, its stalk,
+ * and how much a pear is stretched below its neck; and the lowest a fruit's
+ * bottom hangs above the soil.
+ */
+const FRUIT = { cap: 80, radius: 0.06, stalk: 0.035, pear: 1.45, clear: 0.2 } as const;
+
+/**
+ * Apples or pears, each hanging on its stalk from a twig's tip under the
+ * crown's outer leaves, carried and swung by that twig. As vitality falls a
+ * fruit browns, and at its own vitality it drops from its stalk.
+ */
+export function buildFruit(p: Resolved<typeof fruitParams>, ctx: BuildContext, anchors: readonly Anchor[]): Built {
+  const out = new PartBuilder("fruit");
+  const r = ctx.rand.fork("fruit");
+  const picker = r.fork("pick");
+  const pear = p.fruit === "pears";
+  const top = pear ? FRUIT.pear : 0.88;
+  // Fruit hangs only where it clears the soil.
+  const room = anchors.map((a, i) => ({ a, i })).filter(({ a }) => a.position[1] - FRUIT.stalk - (top + 1) * FRUIT.radius * 1.15 > FRUIT.clear);
+  const want = Math.min(FRUIT.cap, Math.round(room.length * p.crop));
+  // Fruit shows best from the crown's sides and underside, where it hangs clear of the leaves above it: those twigs are picked first.
+  const chosen = room.map((x) => ({ ...x, key: picker.next() + (x.a.normal[1] > 0.35 ? 1 : 0) })).sort((x, y) => x.key - y.key).slice(0, want).sort((x, y) => x.i - y.i);
+  // A pear narrows above its widest point into a neck.
+  const shape = (n: Vec3): V3 => (pear ? [n[0] * (1 - 0.42 * clamp(n[1], 0, 1)), n[1] * (n[1] > 0 ? FRUIT.pear : 1), n[2] * (1 - 0.42 * clamp(n[1], 0, 1))] : [n[0], n[1] * 0.88, n[2]]);
+  for (const { a, i } of chosen) {
+    const fr = r.fork(`at${i}`);
+    const size = FRUIT.radius * fr.range(0.85, 1.15);
+    const drops = 0.2 + 0.45 * fr.next();
+    const tint = fr.range(-0.03, 0.03);
+    const carry = { bough: a.carry?.bough ?? a.position, twig: a.carry?.twig ?? a.carry?.bough ?? a.position, droop: a.carry?.droop ?? 0 };
+    const center = add(a.position, [fr.range(-0.01, 0.01), -FRUIT.stalk - top * size, fr.range(-0.01, 0.01)]);
+    const ch: Channels = { ...carry, pivot: a.position, loss: drops, wither: 0.85, glow: 0, tint };
+    emitStalk(out, a.position, add(center, [0, top * size * 0.7, 0]), 0.004, ch);
+    emitFruit(out, center, size, shape, ch, 0.42);
+  }
+  return { parts: [out.part()], anchors: [] };
+}
+
+/** One fruit: an icosphere shaped by `shape`, lit as a round body and lighter toward the sky. */
+function emitFruit(out: PartBuilder, center: V3, size: number, shape: (n: Vec3) => V3, ch: Channels, shadeBase: number): void {
+  const sphere = icosphere(1);
+  const first = out.vertexCount;
+  for (const n of sphere.points) out.vertex(addScaled(center, shape(n), size), n, shadeBase + 0.45 * (n[1] * 0.5 + 0.5), ch);
+  for (const [a, b, c] of sphere.triangles) out.triangle(first + a, first + b, first + c);
 }
 
 function emitBall(out: PartBuilder, center: V3, radii: V3, subdiv: number, ch: Channels, shadeBase: number): void {

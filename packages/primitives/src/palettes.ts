@@ -19,17 +19,17 @@ export type PaletteFamily = keyof typeof PALETTE_FAMILIES;
 
 const hex = (h: number): Rgb => [((h >> 16) & 255) / 255, ((h >> 8) & 255) / 255, (h & 255) / 255];
 
-/** Healthy colors per family: bark, leaf, bloom. */
-const HEALTHY: Record<PaletteFamily, { bark: number; leaf: number; bloom: number }> = {
-  "spring-meadow": { bark: 0x8a7560, leaf: 0x8fbf4a, bloom: 0xf4f1e6 },
-  "deep-forest": { bark: 0x4a3a2e, leaf: 0x2f6b3e, bloom: 0xd9c37a },
-  "teal-gold": { bark: 0x6b5a48, leaf: 0x3f9a8a, bloom: 0xf2b84b },
-  "autumn-ember": { bark: 0x4d3b2f, leaf: 0xd9772e, bloom: 0xb83a2a },
-  "cherry-blossom": { bark: 0x6e5d58, leaf: 0xf2b8c6, bloom: 0xfde4ea },
-  "silver-birch": { bark: 0xd8d4c8, leaf: 0xa8cf3f, bloom: 0xf6e7a1 },
-  "desert-sage": { bark: 0x9b7a4c, leaf: 0x93a58a, bloom: 0xe0b47a },
-  "lantern-dusk": { bark: 0x3d3442, leaf: 0x2a6f73, bloom: 0xffc65c },
-  "bluebell-wood": { bark: 0x6a5e58, leaf: 0x5f9a5a, bloom: 0x8088dc },
+/** Healthy colors per family: bark, leaf, bloom, and ripe fruit that belongs with them. */
+const HEALTHY: Record<PaletteFamily, { bark: number; leaf: number; bloom: number; fruit: number }> = {
+  "spring-meadow": { bark: 0x8a7560, leaf: 0x8fbf4a, bloom: 0xf4f1e6, fruit: 0xd2553a },
+  "deep-forest": { bark: 0x4a3a2e, leaf: 0x2f6b3e, bloom: 0xd9c37a, fruit: 0xa8352c },
+  "teal-gold": { bark: 0x6b5a48, leaf: 0x3f9a8a, bloom: 0xf2b84b, fruit: 0xe2a23e },
+  "autumn-ember": { bark: 0x4d3b2f, leaf: 0xd9772e, bloom: 0xb83a2a, fruit: 0xc2352a },
+  "cherry-blossom": { bark: 0x6e5d58, leaf: 0xf2b8c6, bloom: 0xfde4ea, fruit: 0xd2506a },
+  "silver-birch": { bark: 0xd8d4c8, leaf: 0xa8cf3f, bloom: 0xf6e7a1, fruit: 0xdcc24e },
+  "desert-sage": { bark: 0x9b7a4c, leaf: 0x93a58a, bloom: 0xe0b47a, fruit: 0xd89356 },
+  "lantern-dusk": { bark: 0x3d3442, leaf: 0x2a6f73, bloom: 0xffc65c, fruit: 0xeea544 },
+  "bluebell-wood": { bark: 0x6a5e58, leaf: 0x5f9a5a, bloom: 0x8088dc, fruit: 0x8a3a5e },
 };
 
 /**
@@ -49,7 +49,7 @@ const UNDERSTORY: Record<PaletteFamily, { stone: number; moss: number; stem: num
 };
 
 /** Every family declines toward the same dry, grey-brown tones, so decline reads the same everywhere. */
-const DECLINE = { bark: 0x6f6a64, leaf: 0x9a8a5c, bloom: 0x8c7a66, stone: 0xbcb5a8, moss: 0x9e9884, stem: 0x9a8a5c, eye: 0x8c7a66 };
+const DECLINE = { bark: 0x6f6a64, leaf: 0x9a8a5c, bloom: 0x8c7a66, fruit: 0x6e5236, stone: 0xbcb5a8, moss: 0x9e9884, stem: 0x9a8a5c, eye: 0x8c7a66 };
 
 /**
  * A building's colors in each family: walls, timber, roof, the masonry of its
@@ -99,6 +99,7 @@ export function paletteOf(family: PaletteFamily, contrast: number): Palette {
       bark: { healthy: contrasted(hex(h.bark), contrast), decline: hex(DECLINE.bark) },
       leaf: { healthy: contrasted(hex(h.leaf), contrast), decline: hex(DECLINE.leaf) },
       bloom: { healthy: contrasted(hex(h.bloom), contrast), decline: hex(DECLINE.bloom) },
+      fruit: { healthy: contrasted(hex(h.fruit), contrast), decline: hex(DECLINE.fruit) },
       stone: { healthy: contrasted(hex(u.stone), contrast), decline: hex(DECLINE.stone) },
       moss: { healthy: contrasted(hex(u.moss), contrast), decline: hex(DECLINE.moss) },
       stem: { healthy: contrasted(hex(u.stem), contrast), decline: hex(DECLINE.stem) },
