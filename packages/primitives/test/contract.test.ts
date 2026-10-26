@@ -66,7 +66,7 @@ const cutsKnown = (part: Part): boolean =>
   part.cutout.every((x, i) => Number.isFinite(x) && (i % 3 !== 0 || Math.abs(x) <= 1) && (i % 3 !== 2 || CUTS.has(Math.floor(x))));
 
 /** Swatches the renderer draws front faces only (CLOSED in @gaia/render), so a triangle wound inward shows the far wall's inside. */
-const CLOSED = new Set(["bark", "stone"]);
+const CLOSED = new Set(["bark", "stone", "wood"]);
 /** How many of a part's triangles are wound counter-clockwise seen from the side its vertex normals point to. */
 function outwardTriangles(part: Part): number {
   const p = part.positions;
@@ -134,7 +134,7 @@ describe.each(PRIMITIVES.map((p) => [p.id, p] as const))("%s", { timeout: 20_000
     }
   });
 
-  it("winds bark and stone with their front faces outward", () => {
+  it("winds bark, stone and wood with their front faces outward", () => {
     for (const s of samples(p)) {
       for (const input of inputFor(p).slice(0, 2)) {
         for (const part of (build(p, s, input, 5) as Built).parts as Part[]) {
@@ -209,6 +209,18 @@ describe.each(PRIMITIVES.map((p) => [p.id, p] as const))("%s", { timeout: 20_000
       return healthy.positions.some((x, i) => x !== failing.positions[i]) || healthy.colors.some((x, i) => x !== failing.colors[i]);
     });
     expect(changed).toBe(true);
+  });
+});
+
+describe.each(lib.forRole("Rock").map((p) => [p.id, p] as const))("%s", { timeout: 20_000 }, (_id, p) => {
+  it("carries moss on every body, at every sample", () => {
+    for (const overgrowth of lib.forRole("Overgrowth")) {
+      for (const s of samples(p)) {
+        const body = build(p, s, null, 9) as Built;
+        const grown = build(overgrowth, { ...(samples(overgrowth)[2] as Stored) }, body, 9) as Built;
+        expect(grown.parts.reduce((n, part) => n + part.indices.length, 0), JSON.stringify(s)).toBeGreaterThan(0);
+      }
+    }
   });
 });
 

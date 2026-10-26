@@ -403,7 +403,7 @@ export interface Roles {
   Dressing: { input: BuildingPlan; output: Built };
   /** What sets a building apart and says what it does: a turning waterwheel, a tower. */
   Feature: { input: BuildingPlan; output: Built };
-  /** A rock's body: a boulder, a stone, a cluster or an outcrop. */
+  /** A rock's body: a boulder, a stone, a cluster, an outcrop, a fallen log or a stump. */
   Rock: { input: null; output: Built };
   /** What grows over another piece's upward faces, such as moss on stone. */
   Overgrowth: { input: Built; output: Built };
