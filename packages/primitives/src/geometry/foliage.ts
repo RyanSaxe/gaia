@@ -229,6 +229,14 @@ function flareOf(trunkRadius: number, lobes: readonly Lobe[], lift: number): Fla
  */
 const FORK_REACH = 1.4;
 
+/**
+ * A single trunk thinner than this is a sapling's whip: it has no root
+ * flare, and it and its branches take few sides and rings, which at its size
+ * would only cost triangles. The thinnest tree trunk, a squat broadleaf's at
+ * the smallest scale, is 7 cm.
+ */
+const WHIP = 0.05;
+
 export function buildBark(p: Resolved<typeof barkParams>, ctx: BuildContext, skel: Skeleton): Built {
   const out = new PartBuilder("bark", "solid");
   const r = ctx.rand.fork("bark");
@@ -238,6 +246,7 @@ export function buildBark(p: Resolved<typeof barkParams>, ctx: BuildContext, ske
   const flare = flareOf(trunkRadius, lobesOf(r.fork("lobes")), 1.1);
   // A tree stands on one trunk, which flares into root lobes; a shrub's many stems rise straight from the soil.
   const trunk = oneTrunk(skel);
+  const whip = trunk && trunkRadius < WHIP;
   const children = skel.limbs.map(() => 0);
   for (const l of skel.limbs) if (l.parent >= 0) children[l.parent] = (children[l.parent] ?? 0) + 1;
 
@@ -248,8 +257,8 @@ export function buildBark(p: Resolved<typeof barkParams>, ctx: BuildContext, ske
     const head = chain[0] as number;
     const first = skel.limbs[head] as Limb;
     const lr = r.fork(`limb${head}`);
-    const flared = trunk && head === 0;
-    const radial = flared ? 24 : first.depth === 0 ? 10 : first.startRadius > trunkRadius * 0.3 ? 7 : 5;
+    const flared = trunk && head === 0 && !whip;
+    const radial = whip ? (first.depth === 0 ? 6 : 4) : flared ? 24 : first.depth === 0 ? 10 : first.startRadius > trunkRadius * 0.3 ? 7 : 5;
     // Limbs never go: twigs and leaves always have a limb under them, and a failing tree stands bare.
     const wither = 0.45 + 0.25 * lr.next();
     const furrows = first.depth === 0 ? 7 : 4;
@@ -279,7 +288,7 @@ export function buildBark(p: Resolved<typeof barkParams>, ctx: BuildContext, ske
       const swellAt = sink;
       const swellOf = (along: number): number => (swell <= 0 ? 0 : along <= swellAt ? 1 : Math.exp(-(((along - swellAt) / (limb.startRadius * FORK_REACH)) ** 2)));
       const radiusAt = (along: number): number => (limb.startRadius + (limb.endRadius - limb.startRadius) * clamp((along - sink) / len, 0, 1)) * (1 + swell * swellOf(along));
-      const count = clamp(Math.ceil(span / ((limb.startRadius + limb.endRadius) * 2.2)), 1, limb.depth === 0 ? 6 : 3);
+      const count = clamp(Math.ceil(span / ((limb.startRadius + limb.endRadius) * 2.2)), 1, whip ? 2 : limb.depth === 0 ? 6 : 3);
       let alongs = Array.from({ length: count + 1 }, (_, n) => (n / count) * span);
       if (swell > 0 && limb.startRadius > trunkRadius * 0.2) {
         // Rings across the swelling, so it curves.
@@ -444,7 +453,13 @@ export function buildLeafClumps(p: Resolved<typeof leafClumpsParams>, ctx: Build
   const leaf = new PartBuilder("leaf");
   const twigs = new PartBuilder("bark");
   const anchors: Anchor[] = [];
-  for (const clump of clumps) emitClump(leaf, twigs, anchors, crown, boughs, clump, look, density);
+  // A sapling's crown is too light to shade itself as one canopy, which would leave its lower tiers dark under
+  // a bright top: each clump is lit as a small volume of its own, so every tier is lit alike.
+  const young = s < (ctx.facts.scale ?? 1);
+  for (const clump of clumps) {
+    const lit: Crown = young ? { center: clump.center, radius: [clump.radius * 1.2, clump.radius * 1.2, clump.radius * 1.2] } : crown;
+    emitClump(leaf, twigs, anchors, lit, boughs, clump, look, density);
+  }
   return { parts: [twigs.part(), leaf.part()], anchors };
 }
 
