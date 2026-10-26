@@ -101,6 +101,9 @@ function growScrub(p: Resolved<typeof thicketParams>, ctx: BuildContext): Skelet
   return { limbs, tips };
 }
 
+/** A cane's tips are small (`SMALL_TIP`), so a leaf mound sleeves its canes in leaves rather than burying them in clumps sized for the whole frame. */
+const CANE_TIP = 0.12;
+
 /**
  * A bramble: canes from one root that rise steeply, arch over and run
  * long and low back to the soil, where their tips touch down. Each wanders
@@ -111,7 +114,7 @@ export function growBramble(p: Resolved<typeof brambleParams>, ctx: BuildContext
   const r = ctx.rand.fork("bramble");
   const height = Math.min(1.6, p.stature);
   const canes = Math.max(3, Math.round(p.canes));
-  const cane = 0.01 + 0.008 * height;
+  const cane = 0.008 + 0.005 * height;
   const limbs: Limb[] = [];
   const tips: Anchor[] = [];
   const SEGMENTS = 7;
@@ -143,11 +146,11 @@ export function growBramble(p: Resolved<typeof brambleParams>, ctx: BuildContext
       const shoot = normalize(add(add(scale(side, sr.next() < 0.5 ? -1 : 1), scale(UP, sr.range(0.4, 0.9))), scale(dir, 0.4)));
       const shootEnd = addScaled(end, shoot, sr.range(0.12, 0.26) * (0.6 + 0.4 * height));
       limbs.push({ start: end, end: shootEnd, startRadius: cane * 0.28, endRadius: cane * 0.12, depth: 2, parent });
-      tips.push({ position: shootEnd, normal: shoot, size: 0.5 });
+      tips.push({ position: shootEnd, normal: shoot, size: CANE_TIP });
     }
     // The tip where the cane touches down and roots.
     const touch = at(1);
-    tips.push({ position: touch, normal: normalize([touch[0], 0.4, touch[2]]), size: 0.3 });
+    tips.push({ position: touch, normal: normalize([touch[0], 0.4, touch[2]]), size: CANE_TIP });
   }
   return { limbs, tips };
 }
@@ -266,7 +269,7 @@ export function buildLeafMound(p: Resolved<typeof leafMoundParams>, ctx: BuildCo
       // have gone by 0.6, half by 0.5, and a failing bush stands bare.
       const loss = clamp(DROP.from - (DROP.from - DROP.to) * tr.next() + (depth >= 0.95 ? DROP.rim : -DROP.rim), 0.02, 0.9);
       const n = stray ? 2 : look.perTwig;
-      const size = half * (look.inside + (look.rim - look.inside) * clamp((depth - 0.55) / 0.45, 0, 1));
+      const size = half * clump.leaves * (look.inside + (look.rim - look.inside) * clamp((depth - 0.55) / 0.45, 0, 1));
       const ts = Array.from({ length: n }, (_, j) => 0.2 + 0.8 * ((j + tr.range(0.15, 0.85)) / n));
       const twigCh: Channels = { loss: 0, droop: b.droop, wither: 0.5, glow: 0, pivot: root, bough: b.bough, twig: root };
       const tip = Math.max(...ts);
@@ -320,16 +323,32 @@ function onLimb(limb: Limb, q: V3): V3 {
   return addScaled(limb.start, ab, t);
 }
 
+/**
+ * Below this size a tip's clump shrinks in proportion, so a frame of thin
+ * canes can ask for clumps sized to its canes; at and above it a clump
+ * grows with its tip from three quarters of the mound's base size.
+ */
+const SMALL_TIP = 0.3;
+const clumpShare = (size: number): number => (size >= SMALL_TIP ? 0.75 + 0.35 * size : (0.75 + 0.35 * SMALL_TIP) * (size / SMALL_TIP));
+/** A small tip's leaves shrink with its clump, but never below this share of a bush's, so a cane's leaves stay leaves. */
+const SMALLEST_LEAVES = 0.65;
+
+/** A clump on a bush, and how large its leaves are against a bush's: smaller on a small tip's clump. */
+interface MoundClump extends Clump {
+  readonly leaves: number;
+}
+const leavesOf = (size: number): number => (size >= SMALL_TIP ? 1 : Math.max(SMALLEST_LEAVES, size / SMALL_TIP));
+
 /** Clumps over a bush: one at every stem tip and more along the stems, their sizes uneven; or, for scrub, a tuft at most tips. */
-function clumpsOf(skel: Skeleton, boughs: Boughs, p: Resolved<typeof leafMoundParams>, r: BuildContext["rand"], base: number, tufts: boolean): Clump[] {
-  const out: Clump[] = [];
+function clumpsOf(skel: Skeleton, boughs: Boughs, p: Resolved<typeof leafMoundParams>, r: BuildContext["rand"], base: number, tufts: boolean): MoundClump[] {
+  const out: MoundClump[] = [];
   skel.tips.forEach((t, i) => {
     const cr = r.fork(`tip${i}`);
     if (tufts && cr.next() < TUFTS.bare) return;
-    const radius = (tufts ? TUFTS.radius : base * (0.75 + 0.35 * t.size)) * cr.range(1 - MOUND.spread, 1 + MOUND.spread);
+    const radius = (tufts ? TUFTS.radius : base * clumpShare(t.size)) * cr.range(1 - MOUND.spread, 1 + MOUND.spread);
     const center = addScaled(t.position, t.normal, radius * (tufts ? 0.35 : 0.1));
     center[1] = Math.max(center[1], radius * 0.6);
-    out.push({ center, radius, limb: boughs.limbNear(t.position), r: cr });
+    out.push({ center, radius, limb: boughs.limbNear(t.position), r: cr, leaves: tufts ? 1 : leavesOf(t.size) });
   });
   if (tufts) return out;
   const fill = Math.round(skel.tips.length * Math.max(0, p.fullness - 0.2) * 1.2);
@@ -338,9 +357,12 @@ function clumpsOf(skel: Skeleton, boughs: Boughs, p: Resolved<typeof leafMoundPa
     const k = Math.floor(fr.next() * skel.limbs.length);
     const limb = skel.limbs[k] as Limb;
     const center = lerp(limb.start, limb.end, fr.range(0.5, 1));
-    const radius = base * fr.range(0.8, 1.05) * fr.range(1 - MOUND.spread, 1 + MOUND.spread);
+    // A clump along a stem is as small as the small tips near it.
+    const near = skel.tips.reduce((best, t) => (length(sub(t.position, center)) < length(sub(best.position, center)) ? t : best), skel.tips[0] as Anchor);
+    const small = near.size < SMALL_TIP ? clumpShare(near.size) / clumpShare(SMALL_TIP) : 1;
+    const radius = base * fr.range(0.8, 1.05) * fr.range(1 - MOUND.spread, 1 + MOUND.spread) * small;
     center[1] = Math.max(center[1], radius * 0.6);
-    out.push({ center, radius, limb: k, r: fr });
+    out.push({ center, radius, limb: k, r: fr, leaves: leavesOf(near.size) });
   }
   return out;
 }

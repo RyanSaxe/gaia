@@ -1051,7 +1051,7 @@ function emitFrond(
 
 // ---------- blossoms ----------
 
-const BLOSSOM_CAP = { petals: 170, pods: 70, berries: 80 } as const;
+const BLOSSOM_CAP = { petals: 170, pods: 70, berries: 45 } as const;
 
 /**
  * Flowers, pods or berries on the anchors the foliage leaves on its twigs
@@ -1059,13 +1059,15 @@ const BLOSSOM_CAP = { petals: 170, pods: 70, berries: 80 } as const;
  * carries it and bends with its twig, and drops in place as vitality falls.
  */
 export function buildBlossoms(p: Resolved<typeof blossomsParams>, ctx: BuildContext, anchors: readonly Anchor[]): Built {
-  const out = new PartBuilder("bloom");
+  // Berries are the family's dark ripe berry, not its flowers' color.
+  const out = new PartBuilder(p.form === "berries" ? "berry" : "bloom");
   const r = ctx.rand.fork("blossoms");
   const s = ctx.facts.scale ?? 1;
   const picker = r.fork("pick");
   const want = Math.min(BLOSSOM_CAP[p.form], Math.round(anchors.length * p.count));
+  // Berries hang among the leaves on the plant's sides and underside first, not on top of it.
   const chosen = anchors
-    .map((a, i) => ({ a, i, key: picker.next() }))
+    .map((a, i) => ({ a, i, key: picker.next() + (p.form === "berries" && a.normal[1] > 0.35 ? 1 : 0) }))
     .sort((x, y) => x.key - y.key)
     .slice(0, want)
     .sort((x, y) => x.i - y.i);
@@ -1089,9 +1091,9 @@ export function buildBlossoms(p: Resolved<typeof blossomsParams>, ctx: BuildCont
       emitBall(out, center, [0.065 * size, 0.09 * size, 0.065 * size], 1, { ...carry, loss, wither: 1, glow: 1 }, 0.55);
       emitStalk(out, a.position, add(center, [0, 0.08 * size, 0]), 0.012 * size, { ...carry, loss, wither: 1, glow: 0 });
     } else {
-      // A cluster of berries hanging on a short stalk from the twig.
-      const berries = 4 + Math.floor(ar.next() * 4);
-      const hang = add(a.position, [0, -0.07 * size, 0]);
+      // A cluster of two to four berries hanging on a short stalk from the twig.
+      const berries = 2 + Math.floor(ar.next() * 3);
+      const hang = add(a.position, [0, -0.045 * size, 0]);
       const ch = { ...carry, loss, wither: 1, glow: 0 };
       emitStalk(out, a.position, hang, 0.008 * size, ch);
       for (let b = 0; b < berries; b++) {
