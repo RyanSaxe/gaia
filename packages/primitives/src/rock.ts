@@ -144,7 +144,7 @@ export const stumpParams = {
 export const stump = primitive({
   id: "stump@1",
   role: "Rock",
-  doc: "An old stump with its roots still in the ground, stubborn, cut back and still holding on. As it fails its top splits and rots into a hollow, and crumbs of wood gather at its foot.",
+  doc: "An old stump with its roots still in the ground, stubborn, cut back and still holding on. As it fails it splits and leans apart, and its top crumbles from the heart into a soft, dark hollow.",
   params: stumpParams,
   build: (p, ctx) => buildStump(p, ctx),
 });

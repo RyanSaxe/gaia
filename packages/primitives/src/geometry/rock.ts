@@ -346,8 +346,9 @@ const GROWTH = {
   lichen: { thick: 0.012, lumps: 0.1, shade: 0.5 },
 } as const;
 
-/** Moss grows on stone and on bark, never on bare cut wood, so a cut face keeps its rings. */
+/** Moss grows on the solid outside of stone and bark, never on bare cut wood (so a cut face keeps its rings) nor inside a hollow. */
 const MOSSY: ReadonlySet<string> = new Set(["stone", "bark"]);
+const mossy = (part: Part): boolean => MOSSY.has(part.swatch) && part.collision !== "none";
 
 /**
  * Everything that carries vertex `i` of `part` as it declines, so moss on it
@@ -382,7 +383,7 @@ export function buildMoss(p: Resolved<typeof mossParams>, ctx: BuildContext, bas
   const seed = Math.floor(r.next() * 1e6);
   const cut = cutOf(CUT.patch, r.next());
   const g = GROWTH[p.growth];
-  const stones: Part[] = base.parts.filter((part) => MOSSY.has(part.swatch));
+  const stones: Part[] = base.parts.filter(mossy);
   const threshold = 1.2 - p.cover * 1.15;
   for (const part of stones) {
     // Bark sheds in plates; moss on it lies thin, so where a plate's neighbor has gone its edge stays on the bark.

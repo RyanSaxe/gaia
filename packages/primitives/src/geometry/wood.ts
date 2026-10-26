@@ -477,43 +477,53 @@ export function buildStump(p: Resolved<typeof stumpParams>, ctx: BuildContext): 
   const stem: Stem = { stations, roughness: p.bark, seed, furrows: 7, half: 12, split: 0 };
   const last = stations.length - 1;
   const crown = stations[last] as Station;
-  const CUP = 0.8;
-  const inHollow = (i: number, s: number): boolean => i >= last - 1 && s < CUP;
+  // The hollow under the top: a soft bowl of dark rotten wood hanging from the wood's edge, as deep as `hollow` at its heart.
+  const share = woodOf(p.bark);
+  const bowl = (theta: number, s: number): V3 => addScaled(capPoint(crown, theta, s), d, -hollow * Math.pow(Math.max(0, 1 - (s / share) ** 2), 0.6));
+  const inHollow = (i: number, s: number): boolean => i === last && s < share;
+  const rotten = new PartBuilder("bark");
   const halves = [v, scale(v, -1)].map((n, h) => sagging([0, -girth * 0.05, 0], n, girth * 1.2, SAG.stump[h] as number, 0.6));
   halves.forEach((held, h) => {
     const carry: Carry = () => held;
     // The top crumbles from its heart outward; a little of its rim never goes.
     const crumbs = r.fork(`top${h}`);
-    const crumble = (band: number): number => (band === 0 ? (crumbs.next() < 0.4 ? 0 : 0.05 + 0.2 * crumbs.next()) : band === 1 ? 0.3 + 0.2 * crumbs.next() : 0.55 + 0.2 * crumbs.next());
-    emitHalf(bark, wood, stem, h, carry, null, [{ i: last, facing: 1, look: p.top, crumble }], inHollow);
-    // The dark hollow under the top: its wall and its floor.
+    // Each ring goes around the half in a slow wave, so neighboring pieces go close together and the edge stays soft.
+    const wave = (col: number, band: number): number => 0.1 * Math.sin(col * 0.7 + band * 1.9 + h * 3 + seed) + 0.03 * (crumbs.next() - 0.5);
+    const crumble = (band: number, col: number): number =>
+      band === 0 ? (Math.sin(col * 0.9 + h * 2 + seed) < -0.2 ? 0 : 0.15 + wave(col, band)) : band === 1 ? 0.4 + wave(col, band) : 0.62 + wave(col, band);
+    emitHalf(bark, wood, stem, h, carry, null, [{ i: last, facing: 1, look: p.top, crumble, hollow: bowl }], inHollow);
     const angles = halfAngles(stem, h);
-    const floor = (theta: number, s: number): V3 => addScaled(addScaled(crown.c, around(crown, theta), crown.radius(theta) * s), d, -hollow);
-    const rotten = (): Channels => ({ ...held, wither: 0.95 });
-    emitGrid(wood, [angles.map((theta) => capPoint(crown, theta, CUP)), angles.map((theta) => floor(theta, CUP))], () => ({ shade: 0.16, tint: 0.01 }), rotten);
-    emitGrid(wood, [CUP, 0.4, 0].map((s) => angles.map((theta) => floor(theta, s))), () => ({ shade: 0.08, tint: 0.01 }), rotten);
+    const shares = [1, 0.8, 0.6, 0.4, 0.2, 0].map((f) => f * share);
+    emitGrid(rotten, shares.map((s) => angles.map((theta) => bowl(theta, s))), (i, j) => ({
+      shade: 0.1 + 0.12 * (shares[i] as number) + 0.06 * fbm3(Math.cos(angles[j] as number) * 3, Math.sin(angles[j] as number) * 3, i, seed + 71, 1), tint: 0.02,
+    }), () => ({ ...held, wither: 0.9 }));
   });
   for (const lobe of lobes) emitRoot(bark, stem, lobe, girth, girth * Math.max(0.3, (p.roots - 0.2) * 1.5), halves[Math.sin(lobe.angle - stem.split) >= 0 ? 0 : 1] as Channels);
   const anchors: Anchor[] = [{ position: capPoint(crown, 0, 0), normal: d, size: clamp(girth * 2, 0, 1) }];
-  return { parts: [bark.part(), wood.part()], anchors };
+  // The hollow is bark, so it darkens as bark does, but it is no surface to stand on or for moss to grow on.
+  return { parts: [bark.part(), wood.part(), rotten.part()], anchors };
 }
 
 /**
  * A root from one of the stump's lobes: it leaves the trunk inside its flare,
- * runs out `reach` past it half buried, and dives into the ground.
+ * knuckles out `reach` past it half buried, thinning as it goes, and dives
+ * away into the soil while it is still thin; a smaller root forks from it.
  */
-function emitRoot(bark: PartBuilder, stem: Stem, lobe: { readonly angle: number; readonly strength: number }, girth: number, reach: number, ch: Channels): void {
+function emitRoot(bark: PartBuilder, stem: Stem, lobe: { readonly angle: number; readonly strength: number }, girth: number, reach: number, ch: Channels, fork = true): void {
   const base = stem.stations[0] as Station;
   const out = around(base, lobe.angle);
   const side = cross(UP, out);
-  const rise = girth * 0.6 * lobe.strength;
+  const rise = girth * 0.55 * lobe.strength;
   const span = girth * 0.5 + reach + base.radius(lobe.angle) * 0.5;
-  const wander = Math.sin(lobe.angle * 7.3 + stem.seed) * 0.18 * span;
-  // Highest where it leaves the trunk, it humps along half buried and sinks away into the soil, never ending in a point above it.
-  const path = [0, 0.16, 0.32, 0.5, 0.68, 0.84, 1].map((t): { c: V3; r: number } => ({
-    c: addScaled(addScaled([0, rise * Math.pow(1 - t, 1.3) - girth * 0.55 * t * t, 0], out, girth * 0.5 + span * t), side, wander * Math.sin(Math.PI * t * 0.9)),
-    r: girth * 0.5 * lobe.strength * (1 - 0.65 * Math.pow(t, 1.5)),
-  }));
+  const seed = stem.seed + Math.round(lobe.angle * 1000);
+  const n = (t: number, k: number): number => fbm3(t * 3.1, k, lobe.angle * 2.3, seed, 2);
+  const r0 = girth * 0.48 * lobe.strength;
+  const path = Array.from({ length: 11 }, (_, k) => k / 10).map((t): { c: V3; r: number } => {
+    const r = r0 * Math.pow(1 - 0.8 * t, 1.2) * (1 + 0.18 * n(t, 1));
+    // It never dips under and rises again: knuckles only lift it, and it dives once, while still thick.
+    const y = rise * Math.pow(1 - t, 1.4) + 0.2 * r + 0.15 * r * Math.abs(n(t, 2)) - girth * 0.9 * Math.pow(clamp((t - 0.6) / 0.4, 0, 1), 1.3);
+    return { c: addScaled(addScaled([base.c[0], y, base.c[2]], out, girth * 0.5 + span * t), side, 0.22 * span * n(t, 3) * t), r };
+  });
   const radial = 8;
   let u: V3 = UP;
   const rows: V3[][] = [];
@@ -530,4 +540,13 @@ function emitRoot(bark: PartBuilder, stem: Stem, lobe: { readonly angle: number;
     shades.push(looks.map((l) => l.shade));
   });
   emitGrid(bark, rows, (i, j) => ({ shade: shades[i]?.[j] ?? 0.5 }), () => ch, normals);
+  if (fork && reach > girth * 0.6) {
+    // A smaller root forks off part way out and runs off to one side.
+    const at = path[3] as { c: V3; r: number };
+    const turn = lobe.angle + (n(0.3, 4) > 0 ? 0.6 : -0.6);
+    const sub0 = { angle: turn, strength: lobe.strength * 0.55 };
+    const back = around(base, turn);
+    const shifted: Stem = { ...stem, stations: [{ ...base, c: [at.c[0] - back[0] * girth * 0.5, 0, at.c[2] - back[2] * girth * 0.5] as V3, radius: () => girth * 0.4 }] };
+    emitRoot(bark, shifted, sub0, girth, reach * 0.5, ch, false);
+  }
 }
