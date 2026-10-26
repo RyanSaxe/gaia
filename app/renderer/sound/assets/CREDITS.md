@@ -1,6 +1,6 @@
 # World sound credits
 
-Every world sound is a field or foley recording from [Freesound](https://freesound.org), released under [Creative Commons 0 (CC0 1.0)](https://creativecommons.org/publicdomain/zero/1.0/): free for any use, with no attribution required. They are the recordings Gaia's announcement film used, cut into seamless loops (a 2 s equal-power crossfade at each seam) and single sounds, high-passed against rumble, and encoded as Ogg Opus. `manifest.json` gives each file's source, the span of it that was cut, and its loudness.
+Every world sound is a field or foley recording from [Freesound](https://freesound.org), released under [Creative Commons 0 (CC0 1.0)](https://creativecommons.org/publicdomain/zero/1.0/): free for any use, with no attribution required. They are the recordings Gaia's announcement film used, cut into seamless loops (a 2 s equal-power crossfade at each seam) and single sounds, high-passed against rumble, and encoded as Ogg Opus by [`tools/sound/world.py`](../../../../tools/sound/world.py) (`pnpm sound world`). `manifest.json` gives each file's source, the span of it that was cut, and its loudness.
 
 | Recording | Recordist | Source | Licence | Files |
 | --- | --- | --- | --- | --- |

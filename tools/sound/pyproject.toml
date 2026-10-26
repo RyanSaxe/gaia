@@ -1,0 +1,16 @@
+[project]
+name = "gaia-sound"
+version = "0.1.0"
+description = "Cuts Gaia's world sounds and composes, renders and mixes its music"
+requires-python = "==3.12.*"
+# Pinned exactly: the filters, loudness meter and MIDI writer shape every sample of the output.
+dependencies = [
+  "mido==1.3.3",
+  "numpy==2.5.4",
+  "pyloudnorm==0.2.0",
+  "scipy==1.18.1",
+  "soundfile==0.14.0",
+]
+
+[tool.uv]
+package = false
