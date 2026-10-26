@@ -1,8 +1,10 @@
-// Wildflower primitives: one species shape per drift. Petals take the
-// palette's bloom swatch, stems and leaves its stem swatch, and open faces
-// its eye swatch. Geometry lives in ./geometry/wildflowers.ts.
+// Drift primitives: the low plants of the grass, one species shape per
+// drift. Petals take the palette's bloom swatch, stems, leaves and fern
+// fronds its stem swatch, and open faces its eye swatch. Geometry lives in
+// ./geometry/wildflowers.ts and ./geometry/ferns.ts.
 
 import { primitive, t } from "@gaia/schema";
+import { buildFerns } from "./geometry/ferns.ts";
 import { buildDrift } from "./geometry/wildflowers.ts";
 
 export const driftParams = {
@@ -43,4 +45,18 @@ export const spikes = primitive({
   build: (p, ctx) => buildDrift("spikes", p, ctx),
 });
 
-export const WILDFLOWER_PRIMITIVES = [daisies, cups, bells, spikes];
+export const fernParams = {
+  fronds: t.scale("How many fronds rise from each crown", { "a few fronds": 5, "a full crown": 9, "a crowded crown": 14 }),
+  height: t.scale("How tall the fronds grow", { "low among the grass": 0.45, "knee-high": 0.7, "waist-high": 1.05 }),
+  unroll: t.scale("How far the fronds have unrolled", { "still curled tight": 0.5, "half unfurled": 0.75, "fully open": 1 }),
+};
+
+export const ferns = primitive({
+  id: "ferns@1",
+  role: "Drift",
+  doc: "Arching fronds of paired leaflets unrolling from a crown, with young crowns beside it, like a male fern or a lady fern.",
+  params: fernParams,
+  build: (p, ctx) => buildFerns(p, ctx),
+});
+
+export const WILDFLOWER_PRIMITIVES = [daisies, cups, bells, spikes, ferns];

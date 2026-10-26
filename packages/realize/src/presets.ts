@@ -118,14 +118,15 @@ export const ROCK_PRESETS: readonly Preset[] = [
   },
 ];
 
-const flowersOf = (use: string, params: Record<string, string>, family: string): Blueprint =>
+const flowersOf = (use: string, params: Record<string, string>, family: string, stiffness = "supple"): Blueprint =>
   identify("wildflowers", {
     drift: { use: use as `${string}@${number}`, params },
-    motion: { use: "sway@1", params: { stiffness: "supple", rhythm: "gentle" } },
+    motion: { use: "sway@1", params: { stiffness, rhythm: "gentle" } },
     palette: { use: "palette@1", params: { family, contrast: "balanced" } },
   });
 
 export const FLOWER_PRESETS: readonly Preset[] = [
   { name: "Daisies", blueprint: flowersOf("daisies@1", { spread: "a wide drift", density: "a good showing", height: "knee-high" }, "spring-meadow") },
   { name: "Bluebells", blueprint: flowersOf("bells@1", { spread: "a patch", density: "a thick carpet", height: "knee-high" }, "bluebell-wood") },
+  { name: "Ferns", blueprint: flowersOf("ferns@1", { fronds: "a full crown", height: "knee-high", unroll: "fully open" }, "deep-forest", "gently swaying") },
 ];
