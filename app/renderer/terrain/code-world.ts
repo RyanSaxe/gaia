@@ -297,6 +297,8 @@ export function openedWorld({ facts, world, summary, judged }: WorldDocument): O
   };
   const spec: WorldSpec = {
     size: world.size,
+    // The terrain is baked to the land's own rectangle, the one its areas are laid out on.
+    ...(world.aspect === undefined ? {} : { aspect: world.aspect }),
     regions: world.regions.map((r) => ({
       id: r.area === "" ? world.name : r.area,
       x: r.x,
