@@ -17,6 +17,22 @@ export const PALETTE_FAMILIES = {
 
 export type PaletteFamily = keyof typeof PALETTE_FAMILIES;
 
+/**
+ * The same families as a thing's colors are chosen by (`palette@1`): each with the feel it gives the thing, so Jev
+ * chooses by mood. A land names its native families in `PALETTE_FAMILIES`' own words, so its request stays as it is.
+ */
+export const COLOR_FEELS: Readonly<Record<PaletteFamily, string>> = {
+  "spring-meadow": "Fresh yellow-greens with pale bark and white flowers, for code that feels fresh, young and full of promise",
+  "deep-forest": "Dark, cool greens with brown-black bark, for code that feels deep, serious and long established",
+  "teal-gold": "Blue-green leaves with warm amber accents, for code that feels balanced, warm and well kept",
+  "autumn-ember": "Orange and red leaves with dark bark, for code that feels mature, rich and in its later years",
+  "cherry-blossom": "Soft pinks over grey-brown bark, for code that feels tender, delightful and a little fleeting",
+  "silver-birch": "Pale silver bark with bright lime leaves, for code that feels light, clean and quick",
+  "desert-sage": "Dusty grey-greens with ochre bark, for code that feels dry, spare and hardy",
+  "lantern-dusk": "Deep teal leaves with glowing gold accents, for code that feels guiding and quietly glowing, a light in the evening",
+  "bluebell-wood": "Cool green leaves with blue-violet flowers, for code that feels shy, cool and shaded",
+};
+
 const hex = (h: number): Rgb => [((h >> 16) & 255) / 255, ((h >> 8) & 255) / 255, (h & 255) / 255];
 
 /** Healthy colors per family: bark, leaf, bloom, and the ripe fruit and dark berries that belong with them. */
