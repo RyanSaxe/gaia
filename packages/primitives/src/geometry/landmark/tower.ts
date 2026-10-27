@@ -34,6 +34,8 @@ const LOW_PARAPET = 0.5;
  * inside the wall with no face near enough to hold it (`SUPPORT.within` in @gaia/realize).
  */
 const SINK_DEPTH = 0.18;
+/** How far past an opening's edge a going block sinks, meters, so it stays in the wall beside the opening. */
+const OPENING_CLEAR = 0.35;
 
 type TowerParams = Resolved<typeof lookoutTowerParams>;
 
@@ -295,8 +297,6 @@ export function buildLookoutTower(p: TowerParams, ctx: BuildContext): Built {
   const roof = new PartBuilder("roof", "solid");
   const glass = new PartBuilder("glass");
   const thick = wallAt(0) * 0.32;
-  /** The ground just behind the wall's face at angle `a`: what a piece sinks toward as it goes, so it slides down into the wall below. */
-  const foot = (a: number): V3 => ringPoint(sides, a, wallAt(ch * 2.5) - Math.min(thick * 0.5, SINK_DEPTH), 0);
   const blockLen = p.masonry * 1.1;
   const topGallery = p.galleries !== "none";
   // Galleries at every stage stand where the stages meet; the top one rings the shaft's head.
@@ -312,6 +312,26 @@ export function buildLookoutTower(p: TowerParams, ctx: BuildContext): Built {
     const along = sides === 0 ? r.next() * Math.PI * 2 : facetOf(sides, r.next() * Math.PI * 2);
     if (!busy(c, 3)) slits.push({ course: c, rows: 3, along, half: 0.3 / wallAt(c * ch) });
   }
+  // Where a going block at angle `a` and height `y` sinks to, just behind the face of the wall it stands in: the top
+  // of the plinth, which never goes, or the foot of its own stage, and beside any opening it would pass on the way, so
+  // that partway gone it is still let into standing wall.
+  const setBack = (y: number): boolean => p.profile === "stepped" && shape.stages.some((s) => Math.abs(s - y) < ch * 0.25);
+  const stageFoot = (y: number): number => Math.max(ch * 2, ...(p.profile === "stepped" ? shape.stages.filter((s) => s <= y + 1e-6) : []));
+  /** Angle `a`, or just past the nearer side of any opening between heights y0 and y1 that it lies in. */
+  const beside = (a: number, y0: number, y1: number): number => {
+    let at = a;
+    for (const sl of slits) {
+      if ((sl.course + sl.rows) * ch <= y0 || sl.course * ch >= y1) continue;
+      const clear = sl.half + OPENING_CLEAR / wallAt(sl.course * ch);
+      const off = angleDiff(at, sl.along);
+      if (Math.abs(off) < clear) at = sl.along + (off >= 0 ? clear : -clear);
+    }
+    return at;
+  };
+  const foot = (a: number, y: number): V3 => {
+    const base = stageFoot(y);
+    return ringPoint(sides, beside(a, base, y), wallAt(base + ch * 0.5) - Math.min(thick * 0.5, SINK_DEPTH), base);
+  };
 
   // The courses, in running bond: each course shifts half a block. A block
   // rests on the blocks under its span and falls no later than any of them,
@@ -338,8 +358,11 @@ export function buildLookoutTower(p: TowerParams, ctx: BuildContext): Built {
           return keep;
         });
       }
-      const under = c === 0 ? 0 : laid.under(a0, a1, y0 - ch * 0.6, y0);
-      if (under < 0) continue;
+      const below = c === 0 ? 0 : laid.under(a0, a1, y0 - ch * 0.6, y0);
+      if (below < 0) continue;
+      // A stage's first course goes a loss band before the course it is set back on (short of `MOST`), so the stage
+      // sinks onto a ledge that still stands.
+      const under = setBack(y0) ? below + LET_IN : below;
       const rise = (y0 + ch / 2) / height;
       // Higher blocks fall first; a seeded jitter makes the falling top jagged, and it breaks lower on the side the
       // weather comes from.
@@ -351,7 +374,7 @@ export function buildLookoutTower(p: TowerParams, ctx: BuildContext): Built {
       const shade = 0.52 + 0.22 * cr.next() + 0.08 * rise - (c < 2 ? 0.08 : 0);
       const channels: Omit<Channels, "pivot"> = { loss, droop: 0, wither: 0.45 + 0.4 * cr.next(), glow: 0, tint: (cr.next() - 0.5) * 0.05 };
       const bulge = (cr.next() - 0.5) * 0.04;
-      for (const [b0, b1] of pieces) ringBlock(stone, sides, b0, b1, y0, y1, rad + bulge, thick, shade, { ...channels, pivot: foot((b0 + b1) / 2) }, false, JOINT, rad - 0.02 - MORTAR);
+      for (const [b0, b1] of pieces) ringBlock(stone, sides, b0, b1, y0, y1, rad + bulge, thick, shade, { ...channels, pivot: foot((b0 + b1) / 2, y0) }, false, JOINT, rad - 0.02 - MORTAR);
     }
   }
 
@@ -363,7 +386,7 @@ export function buildLookoutTower(p: TowerParams, ctx: BuildContext): Built {
       const under = laid.under(a0, a1, s - 0.4, s + 0.05);
       if (under < 0) continue;
       const u = r.next();
-      const root = ringPoint(sides, (a0 + a1) / 2, rad - 0.08 - thick * 0.5, s - 0.13);
+      const root = ringPoint(sides, beside((a0 + a1) / 2, s - 0.26, s), rad - 0.08 - Math.min(thick * 0.5, SINK_DEPTH), s - 0.13);
       ringBlock(stone, sides, a0, a1, s - 0.26, s, rad, thick * 0.7, 0.6 + 0.08 * u, still(root, 0.5, { loss: clamp(under + LET_IN + 0.015 * u, 0.02, 0.86) }), true);
     }
   }
@@ -427,7 +450,7 @@ export function buildLookoutTower(p: TowerParams, ctx: BuildContext): Built {
       const u = r.next();
       const loss = c0(laid.under(a0, a1, shaft - ch * 1.6, shaft + 0.05));
       perch = Math.max(perch, loss);
-      ringBlock(stone, sides, a0, a1, shaft - ch * 0.15, deck, rim, thick * 1.3, 0.55 + 0.1 * u, still(foot((a0 + a1) / 2), 0.6, { loss, tint: (u - 0.5) * 0.04 }), true);
+      ringBlock(stone, sides, a0, a1, shaft - ch * 0.15, deck, rim, thick * 1.3, 0.55 + 0.1 * u, still(foot((a0 + a1) / 2, shaft), 0.6, { loss, tint: (u - 0.5) * 0.04 }), true);
     }
   }
   // A floor across the top, so a look down never sees into the hollow shaft.
