@@ -984,7 +984,7 @@ export function createWorld(root: HTMLElement): World {
   // Before every pass (the sun's shadow, the water's mirror and the view),
   // each instanced blueprint packs only the cells that pass's camera sees.
   // Past the land: the wild's covers and its scattered bushes, which stand for nothing.
-  const wildGrowth = createWildGrowth(scene, light, covers, lib, floraLib, bushForms);
+  const wildGrowth = createWildGrowth(scene, light, covers, lib, floraLib, clearings, bushForms);
   const instanced = (): Copies[] => [...treeViews, ...understory.all(), ...wildGrowth.all()];
   // Far forms: each tree and bush build bakes its own far form, drawn as cards
   // where a copy is small on a pass's screen (woods.ts). Each set's cards hold

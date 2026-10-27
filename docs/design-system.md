@@ -137,7 +137,12 @@ Walking follows the ground, intact bridge decks and the walkable steps and
 floors of landmarks, such as a rotunda's. Solids stop or deflect a
 walk; water permits wading and swimming. A broken bridge can stop a walk and
 force a trip to ford beside it. Grass and understory clear the footprints of
-structures, landmarks, rocks and paths. Round a drift of mushrooms, which stand
+structures, landmarks, rocks and paths. Under every bush, on the land or in
+the wild, the grass gives way over about half the bush's outline at the
+ground (`SHRUB_CLEARS` in
+[`understory.ts`](../app/renderer/terrain/understory.ts)), as grass grows
+thin under a real shrub's canopy. The grass round the bush's edge stays tall.
+Round a drift of mushrooms, which stand
 at their natural size, the grass grows only as short turf with a ragged edge,
 so they show.
 

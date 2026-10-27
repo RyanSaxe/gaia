@@ -35,10 +35,17 @@ interface Group {
   readonly far: number;
 }
 
+/**
+ * How much of a bush's outline at the ground is kept clear of grass, on the
+ * land and in the wild (`createWildGrowth`): grass grows thin under a shrub's
+ * own canopy, and stays tall round its edge.
+ */
+export const SHRUB_CLEARS = 0.55;
+
 /** Each group the understory draws: a placement's rule names it, and its variant indexes the group's builds. */
 const GROUPS: readonly Group[] = [
   { id: "rocks", casts: true, clears: 0.92, far: FAR.bush },
-  { id: "shrubs", casts: true, clears: 0.55, far: FAR.bush },
+  { id: "shrubs", casts: true, clears: SHRUB_CLEARS, far: FAR.bush },
   { id: "flowers", casts: false, clears: 0, far: FAR.bush },
   { id: "mushrooms", casts: false, clears: 0, turf: { share: 1.25, beyond: 0.35 }, far: FAR.bush },
 ];
@@ -63,7 +70,7 @@ function turfOf(outline: Float32Array, turf: NonNullable<Group["turf"]>): Float3
 export const understoryBuilds = (plants: PlantBuilds): BuildAsk[] => GROUPS.flatMap((g) => plants[g.id].map(plantAsk));
 
 /** A component's reach where it meets the ground, in 48 directions around its origin. */
-function outlineOf(plant: Realized): Float32Array {
+export function outlineOf(plant: Realized): Float32Array {
   const out = new Float32Array(48);
   for (const part of plant.parts) {
     const p = part.positions;
