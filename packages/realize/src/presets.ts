@@ -118,14 +118,20 @@ export const ROCK_PRESETS: readonly Preset[] = [
   },
 ];
 
-const flowersOf = (use: string, params: Record<string, string>, family: string): Blueprint =>
+const flowersOf = (use: string, params: Record<string, string>, family: string, stiffness = "supple"): Blueprint =>
   identify("wildflowers", {
     drift: { use: use as `${string}@${number}`, params },
-    motion: { use: "sway@1", params: { stiffness: "supple", rhythm: "gentle" } },
+    motion: { use: "sway@1", params: { stiffness, rhythm: "gentle" } },
     palette: { use: "palette@1", params: { family, contrast: "balanced" } },
   });
 
 export const FLOWER_PRESETS: readonly Preset[] = [
   { name: "Daisies", blueprint: flowersOf("daisies@1", { spread: "a wide drift", density: "a good showing", height: "knee-high" }, "spring-meadow") },
   { name: "Bluebells", blueprint: flowersOf("bells@1", { spread: "a patch", density: "a thick carpet", height: "knee-high" }, "bluebell-wood") },
+  { name: "Ferns", blueprint: flowersOf("ferns@1", { fronds: "a full crown", height: "knee-high", unroll: "fully open" }, "deep-forest", "gently swaying") },
+];
+
+/** Mushrooms stand apart from the flowers: too low to show over the grass, the understory keeps a patch of short turf round each drift. */
+export const MUSHROOM_PRESETS: readonly Preset[] = [
+  { name: "Mushrooms", blueprint: flowersOf("mushrooms@1", { grouping: "ring", cap: "domed", height: "ankle-high" }, "silver-birch", "stiff") },
 ];

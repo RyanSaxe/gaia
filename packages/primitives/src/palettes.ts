@@ -34,23 +34,30 @@ const HEALTHY: Record<PaletteFamily, { bark: number; leaf: number; bloom: number
 
 /**
  * The same families on the ground: the stone a family's rocks are made of,
- * the moss that grows on them, the stems and eyes of its wildflowers, and
- * the pale wood a fallen log or stump shows where it is cut or split.
+ * the moss that grows on them, the stems and eyes of its wildflowers, the
+ * pale wood a fallen log or stump shows where it is cut or split, and its
+ * mushrooms' caps and pale stalks.
  */
-const UNDERSTORY: Record<PaletteFamily, { stone: number; moss: number; stem: number; eye: number; wood: number }> = {
-  "spring-meadow": { stone: 0x9b988c, moss: 0x5f8a3e, stem: 0x6f9a3c, eye: 0xf0c43c, wood: 0xd6b98e },
-  "deep-forest": { stone: 0x7c807a, moss: 0x427c3c, stem: 0x3f6e38, eye: 0x8a5a2a, wood: 0xb8946a },
-  "teal-gold": { stone: 0x98948a, moss: 0x5c9a6a, stem: 0x4f8a6c, eye: 0xe0902e, wood: 0xcaa67c },
-  "autumn-ember": { stone: 0x988a7a, moss: 0x8c9a40, stem: 0x6a7e3a, eye: 0x3a2a20, wood: 0xc58e5e },
-  "cherry-blossom": { stone: 0xa59c9c, moss: 0x8fb27a, stem: 0x6f9a5a, eye: 0xf2d27a, wood: 0xd8ad96 },
-  "silver-birch": { stone: 0xb0aea5, moss: 0x7a9e48, stem: 0x7fa83e, eye: 0xe8c04a, wood: 0xe8dabc },
-  "desert-sage": { stone: 0xbe9f76, moss: 0x9aa77c, stem: 0x8a9a6a, eye: 0xa0662e, wood: 0xdcb47e },
-  "lantern-dusk": { stone: 0x6c6878, moss: 0x3f7f6c, stem: 0x356a5e, eye: 0xffd27a, wood: 0xa68f80 },
-  "bluebell-wood": { stone: 0x8e9096, moss: 0x5e9a52, stem: 0x4f8a48, eye: 0xf4e7b0, wood: 0xc8ab8a },
+const UNDERSTORY: Record<PaletteFamily, { stone: number; moss: number; stem: number; eye: number; wood: number; cap: number; stalk: number }> = {
+  "spring-meadow": { stone: 0x9b988c, moss: 0x5f8a3e, stem: 0x6f9a3c, eye: 0xf0c43c, wood: 0xd6b98e, cap: 0xcc9e66, stalk: 0xf2e8d0 },
+  "deep-forest": { stone: 0x7c807a, moss: 0x427c3c, stem: 0x3f6e38, eye: 0x8a5a2a, wood: 0xb8946a, cap: 0x9a5a34, stalk: 0xdccca8 },
+  "teal-gold": { stone: 0x98948a, moss: 0x5c9a6a, stem: 0x4f8a6c, eye: 0xe0902e, wood: 0xcaa67c, cap: 0xd99a48, stalk: 0xf2e2b0 },
+  "autumn-ember": { stone: 0x988a7a, moss: 0x8c9a40, stem: 0x6a7e3a, eye: 0x3a2a20, wood: 0xc58e5e, cap: 0xc9944a, stalk: 0xe2cc98 },
+  "cherry-blossom": { stone: 0xa59c9c, moss: 0x8fb27a, stem: 0x6f9a5a, eye: 0xf2d27a, wood: 0xd8ad96, cap: 0xb86a78, stalk: 0xf6eee6 },
+  "silver-birch": { stone: 0xb0aea5, moss: 0x7a9e48, stem: 0x7fa83e, eye: 0xe8c04a, wood: 0xe8dabc, cap: 0xcc4430, stalk: 0xf6f2e8 },
+  "desert-sage": { stone: 0xbe9f76, moss: 0x9aa77c, stem: 0x8a9a6a, eye: 0xa0662e, wood: 0xdcb47e, cap: 0xb87448, stalk: 0xecdcbc },
+  "lantern-dusk": { stone: 0x6c6878, moss: 0x3f7f6c, stem: 0x356a5e, eye: 0xffd27a, wood: 0xa68f80, cap: 0xe08a3a, stalk: 0xf0d8a0 },
+  "bluebell-wood": { stone: 0x8e9096, moss: 0x5e9a52, stem: 0x4f8a48, eye: 0xf4e7b0, wood: 0xc8ab8a, cap: 0x8f7aa6, stalk: 0xe2daea },
 };
 
+/**
+ * A mushroom cap's spots: white on the silver-birch's scarlet caps, like a
+ * fly agaric's; every other family's are its cap color, so they never show.
+ */
+const SPOTS: Partial<Record<PaletteFamily, number>> = { "silver-birch": 0xf2ede2 };
+
 /** Every family declines toward the same dry, grey-brown tones, so decline reads the same everywhere. */
-const DECLINE = { bark: 0x6f6a64, leaf: 0x9a8a5c, bloom: 0x8c7a66, fruit: 0x6e5236, berry: 0x5e4a42, stone: 0xbcb5a8, moss: 0x9e9884, stem: 0x9a8a5c, eye: 0x8c7a66, wood: 0x9c978e };
+const DECLINE = { bark: 0x6f6a64, leaf: 0x9a8a5c, bloom: 0x8c7a66, fruit: 0x6e5236, berry: 0x5e4a42, stone: 0xbcb5a8, moss: 0x9e9884, stem: 0x9a8a5c, eye: 0x8c7a66, wood: 0x9c978e, cap: 0x7a6c5e, stalk: 0xa49884 };
 
 /**
  * A building's colors in each family: walls, timber, roof, the masonry of its
@@ -107,6 +114,9 @@ export function paletteOf(family: PaletteFamily, contrast: number): Palette {
       stem: { healthy: contrasted(hex(u.stem), contrast), decline: hex(DECLINE.stem) },
       eye: { healthy: contrasted(hex(u.eye), contrast), decline: hex(DECLINE.eye) },
       wood: { healthy: contrasted(hex(u.wood), contrast), decline: hex(DECLINE.wood) },
+      cap: { healthy: contrasted(hex(u.cap), contrast), decline: hex(DECLINE.cap) },
+      stalk: { healthy: contrasted(hex(u.stalk), contrast), decline: hex(DECLINE.stalk) },
+      spot: { healthy: contrasted(hex(SPOTS[family] ?? u.cap), contrast), decline: hex(DECLINE.cap) },
       ...buildingSwatches(family, contrast),
     },
   };

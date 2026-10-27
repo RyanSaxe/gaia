@@ -132,7 +132,9 @@ Their coverage budgets preserve open ground.
 Walking follows the ground and intact bridge decks. Solids stop or deflect a
 walk; water permits wading and swimming. A broken bridge can stop a walk and
 force a trip to ford beside it. Grass and understory clear the footprints of
-structures, rocks and paths.
+structures, rocks and paths. Round a drift of mushrooms, which stand at their
+natural size, the grass grows only as short turf with a ragged edge, so they
+show.
 
 The camera stays level: no head bob, sway or roll. Forward and backward keys
 walk; side keys turn at a constant rate, with a small nudge on a tap. Backward

@@ -6,7 +6,7 @@
 
 import * as THREE from "three";
 import { type Library, seedOf } from "@gaia/schema";
-import { FLOWER_PRESETS, type Preset, ROCK_PRESETS, type Realized, SHRUB_PRESETS } from "@gaia/realize";
+import { FLOWER_PRESETS, MUSHROOM_PRESETS, type Preset, ROCK_PRESETS, type Realized, SHRUB_PRESETS } from "@gaia/realize";
 import type { SceneLight } from "@gaia/render";
 import type { Placement } from "@gaia/terrain";
 import type { Clearings } from "./clearings.ts";
@@ -22,6 +22,12 @@ interface Group {
   /** How much of its outline at the ground is kept clear of grass, 0 for none. */
   readonly clears: number;
   /**
+   * A patch of short turf round each copy, for things too low to show over
+   * the grass: how far past its outline the patch reaches, as a share of the
+   * outline and in meters. Absent for none.
+   */
+  readonly turf?: { readonly share: number; readonly beyond: number };
+  /**
    * The crown span, as a share of `FAR.swapPx`, at which a copy small on
    * screen draws as its build's far form, and its form bakes: one texel to a
    * pixel where it turns.
@@ -34,7 +40,24 @@ const GROUPS: readonly Group[] = [
   { id: "rocks", kind: "rock", presets: ROCK_PRESETS, casts: true, clears: 0.92, far: FAR.bush },
   { id: "shrubs", kind: "flora", presets: SHRUB_PRESETS, casts: true, clears: 0.55, far: FAR.bush },
   { id: "flowers", kind: "wildflowers", presets: FLOWER_PRESETS, casts: false, clears: 0, far: FAR.bush },
+  { id: "mushrooms", kind: "wildflowers", presets: MUSHROOM_PRESETS, casts: false, clears: 0, turf: { share: 1.25, beyond: 0.35 }, far: FAR.bush },
 ];
+
+/** The least a patch of turf reaches from a copy's middle, meters: a mask texel is half a meter, so a smaller patch could miss every texel. */
+const TURF_LEAST = 0.6;
+
+/**
+ * A patch of turf round `outline`, reaching `turf` past it, never less than
+ * `TURF_LEAST`, its edge wandering in and out a little so it reads as turf
+ * worn short, not a cut disc.
+ */
+function turfOf(outline: Float32Array, turf: NonNullable<Group["turf"]>): Float32Array {
+  const k = outline.length;
+  return outline.map((r, i) => {
+    const a = (i / k) * Math.PI * 2;
+    return Math.max(TURF_LEAST, r * turf.share + turf.beyond * (1 + 0.3 * Math.sin(a * 3 + 1.3) + 0.2 * Math.sin(a * 5 + 0.4)));
+  });
+}
 
 /** Each build of a group, one per preset as listed, seeded by the preset's name, so a preset keeps its build whichever others come or go. */
 const asksOf = (g: Group): BuildAsk[] => g.presets.map((p) => ({ kind: g.kind, blueprint: p.blueprint, seed: seedOf(`terrain-lab/${g.id}/${p.name}`), facts: { scale: 1, age: 120 } }));
@@ -107,7 +130,8 @@ export function createUnderstory(scene: THREE.Scene, light: SceneLight, lib: Lib
     // that, it is realized again, the same build.
     const plants: (Realized | null)[] = [...fresh];
     const plant = (variant: number): Realized => plants[variant] ?? made(asks[variant] as BuildAsk, lib);
-    return { group: g, plants, plant, far, reach, tops, outlines: reach.map((o) => o.map((r) => r * g.clears)) };
+    const turf = g.turf;
+    return { group: g, plants, plant, far, reach, tops, outlines: reach.map((o) => o.map((r) => r * g.clears)), turfs: turf === undefined ? undefined : reach.map((o) => turfOf(o, turf)) };
   });
   const farPresets = built.flatMap(({ group, plant, far }) =>
     group.presets.flatMap((preset, i) => {
@@ -129,7 +153,12 @@ export function createUnderstory(scene: THREE.Scene, light: SceneLight, lib: Lib
         placed.flatMap((p) => {
           const b = built.find((x) => x.group.id === p.rule);
           const outline = b?.outlines[p.variant];
-          return b === undefined || outline === undefined || b.group.clears === 0 ? [] : [{ x: p.x, z: p.z, yaw: p.yaw, scale: p.scale, outline }];
+          const turf = b?.turfs?.[p.variant];
+          const at = { x: p.x, z: p.z, yaw: p.yaw, scale: p.scale };
+          return [
+            ...(b === undefined || outline === undefined || b.group.clears === 0 ? [] : [{ ...at, outline }]),
+            ...(turf === undefined ? [] : [{ ...at, outline: turf, turf: true }]),
+          ];
         }),
       );
       // Each blueprint keeps its instances from bake to bake and only moves its

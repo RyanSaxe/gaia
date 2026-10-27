@@ -4,7 +4,7 @@ import { FLORA_PRIMITIVES, PRIMITIVES, STRUCTURE_PRIMITIVES } from "@gaia/primit
 import { flora, rock, structure, wildflowers } from "@gaia/kinds";
 import { validate } from "@gaia/world";
 import { randomSlots } from "@gaia/world/testing";
-import { CHANNEL_MATH, FLORA_PRESETS, FLOWER_PRESETS, ROCK_PRESETS, SHRUB_PRESETS, applyVitality, easedClamp, easedStep, mergeParts, realize, resolveParams, rotAt, shownVitality, spinAt, triangleCount } from "@gaia/realize";
+import { CHANNEL_MATH, FLORA_PRESETS, FLOWER_PRESETS, MUSHROOM_PRESETS, ROCK_PRESETS, SHRUB_PRESETS, applyVitality, easedClamp, easedStep, mergeParts, realize, resolveParams, rotAt, shownVitality, spinAt, triangleCount } from "@gaia/realize";
 
 const lib = new Library(FLORA_PRIMITIVES);
 const facts = { scale: 1, age: 120 };
@@ -339,6 +339,7 @@ describe("understory presets", () => {
     { presets: SHRUB_PRESETS, kind: flora, budget: 12_000 },
     { presets: ROCK_PRESETS, kind: rock, budget: 12_000 },
     { presets: FLOWER_PRESETS, kind: wildflowers, budget: 12_000 },
+    { presets: MUSHROOM_PRESETS, kind: wildflowers, budget: 12_000 },
   ];
   for (const { presets, kind, budget } of groups) {
     for (const { name, blueprint } of presets) {

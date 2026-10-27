@@ -20,6 +20,8 @@ import { GROUND_DECLINE } from "@gaia/terrain";
  * blade's spine keeps its length however it bends.
  */
 const BLADE_REACH = 2;
+/** Short turf's blades (`turfAt` in clearings.ts), between these heights in meters, each at its own seeded height. */
+const TURF = { low: 0.05, high: 0.1 } as const;
 /** Three's frustum planes are right, left, bottom, top, far and near; the far plane culls nothing a blade's reach does not. */
 const CULLING_PLANES = [0, 1, 2, 3, 5] as const;
 
@@ -146,6 +148,14 @@ void main() {
   if (wildBlade) h *= mix(0.35, 1.0, smoothstep(0.0, 0.9, wildness));
   // Nothing grows under a stone or a bush.
   h *= step(clearingAt(xz), 0.5);
+  // Round a drift of mushrooms the grass grows as short turf. The mask eases
+  // from the patch out into the grass, and each blade shortens along that
+  // ease from its own seeded point, so the grass slopes down into the patch
+  // with a ragged rim rather than ending at a cut one. In the turf each blade
+  // stands at its own seeded height, broader and lying lower than in the
+  // open, so the short blades close over the soil like a lawn or moss.
+  float cropped = smoothstep(0.0, 1.0, clamp(turfAt(xz) * 1.3 - fract(aSeed.x * 4.37 + aBlade.y * 2.91) * 0.3, 0.0, 1.0));
+  h = mix(h, min(h, ${TURF.low.toFixed(3)} + ${(TURF.high - TURF.low).toFixed(3)} * fract(aSeed.z * 6.13 + aBlade.x * 1.97)), cropped);
   // A trail parts the grass: each blade stands only past its own seeded edge,
   // so the tread's border is ragged, and a faint trail keeps more blades on
   // it. Blades along the margin are trampled a little shorter.
@@ -181,12 +191,12 @@ void main() {
   float lance = pow(1.0 - t, 0.7) * (1.0 + 0.6 * t);
   float leaf = sqrt(max(0.0, 1.0 - pow(2.0 * t - 1.0, 2.0))) * 1.15 + 0.12 * (1.0 - t);
   float outline = mix(lance, leaf, form.y);
-  float wide = shape.y * keep * near * standing * mix(outline, 0.18, flower);
+  float wide = shape.y * keep * near * standing * mix(outline, 0.18, flower) * mix(1.0, 1.6, cropped);
 
   vec2 facing = vec2(-sin(aBlade.z), cos(aBlade.z));
   vec3 across = vec3(cos(aBlade.z), 0.0, sin(aBlade.z));
   // Flowers hold their heads up even where their cover's leaves lie low.
-  float lean = form.x * 1.25 * (0.45 + 1.1 * aSeed.x) * (1.0 - flower * 0.7);
+  float lean = form.x * 1.25 * (0.45 + 1.1 * aSeed.x) * (1.0 - flower * 0.7) * (1.0 + 1.2 * cropped);
   float arc = form.z * (0.6 + 0.8 * r3);
   float gust = gustAt(xz, uTime);
   float sway = sin(uTime * 1.3 + xz.x * 0.21 + xz.y * 0.17) * 0.5 + 0.5;

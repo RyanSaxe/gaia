@@ -729,8 +729,8 @@ export function createWorld(root: HTMLElement): World {
   const scene = new THREE.Scene();
   const sky = createSky(light);
   const groundTex = createGroundTexture(land);
-  const ground = createGround(terrain, light, covers, groundTex);
   const clearings = createClearings(terrain);
+  const ground = createGround(terrain, light, covers, groundTex, clearings);
   const grass = createGrass(light, groundTex, covers, clearings);
   const water = createWater(terrain, light, groundTex);
   // What each region sets drifting through its air: petals and leaves from its trees, and fireflies.

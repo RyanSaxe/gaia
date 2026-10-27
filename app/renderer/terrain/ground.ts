@@ -25,6 +25,7 @@ import { SWARD_GLSL } from "../world/environment.ts";
 import { REGIONS_GLSL, type RegionCovers, TUFT_GLSL } from "./regions.ts";
 import { TRAIL_GLSL, trailUniforms } from "./trails.ts";
 import { VITALITY_GLSL, vitalityUniforms } from "./vitality.ts";
+import { CLEARING_GLSL, type Clearings } from "./clearings.ts";
 import { GROUND_DECLINE } from "@gaia/terrain";
 
 /**
@@ -438,6 +439,7 @@ ${TUFT_GLSL}
 ${WILD_GLSL}
 ${TRAIL_GLSL}
 ${VITALITY_GLSL}
+${CLEARING_GLSL}
 uniform vec3 uTrailEarth;
 varying float vTrail;
 uniform vec3 uDry;
@@ -489,6 +491,8 @@ void main() {
   vec3 albedo = sward(vWorld, cover.low, cover.high, cover.tip, (broad - 0.5) * 0.5 + (rel - 0.4) * 0.45);
   // A clumped cover leaves its own soil showing between the tufts.
   albedo = mix(cover.soil, albedo, mix(1.0, tuftMask(vWorld.xz) * 0.75, cover.clump));
+  // Under short turf (round a drift of mushrooms) the ground greens like moss between the cropped blades.
+  albedo = mix(albedo, mix(cover.low, cover.high, 0.55) * (0.9 + 0.2 * fine), turfAt(vWorld.xz) * 0.55);
   albedo = mix(albedo, uDry, smoothstep(0.6, 0.82, fbm(vWorld.xz * 0.08 + 40.0) + rel * 0.18) * 0.28);
   // Bare earth shows on steep risers and banks.
   float steep = 1.0 - n.y;
@@ -633,13 +637,14 @@ function wildsGeometry(t: Terrain): THREE.BufferGeometry {
   return g;
 }
 
-export function createGround(t: Terrain, light: SceneLight, covers: RegionCovers, tex: GroundTexture): GroundMesh {
+export function createGround(t: Terrain, light: SceneLight, covers: RegionCovers, tex: GroundTexture, clearings: Clearings): GroundMesh {
   const uniforms = {
     ...light,
     ...covers.uniforms,
     ...tex.uniforms,
     ...trailUniforms,
     ...vitalityUniforms,
+    ...clearings.uniforms,
     uTrailEarth: { value: hexToVec3(0x9c8462) },
     uDry: { value: hexToVec3(0xbba878) },
     uBare: { value: hexToVec3(0x9a7d58) },
